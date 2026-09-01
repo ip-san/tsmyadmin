@@ -112,7 +112,8 @@ jobs:
           PGPASSWORD=tsmyadmin psql -h 127.0.0.1 -p 15433 -U tsmyadmin -d tsmyadmin_test -v ON_ERROR_STOP=1 -f docker/fixtures/postgres/01-schema.sql
       - run: bunx playwright install --with-deps chromium
       - run: bun run build
-      - run: bun run test:e2e
+      # Visual regression baselines are platform-specific (fonts) and maintained locally; CI runs functional + a11y.
+      - run: bunx playwright test --project=chromium --project=a11y
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

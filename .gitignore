@@ -15,4 +15,3 @@ playwright-report/
 .claude/tmp/
 .claude/worktrees/
 .claude/scheduled_tasks.lock
-e2e/**/*-snapshots/*-darwin.png

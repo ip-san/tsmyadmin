@@ -2,7 +2,9 @@
 /** Runs type-coverage (strict, ≥ 99%) for every workspace project in parallel. */
 import { spawn } from 'node:child_process'
 
-const projects = ['packages/shared', 'packages/adapter', 'apps/api', 'apps/web']
+// apps/web uses a dedicated tsconfig: type-coverage only resolves the "@/" alias with baseUrl,
+// which TypeScript 6 deprecates for regular builds.
+const projects = ['packages/shared', 'packages/adapter', 'apps/api', 'apps/web/tsconfig.type-coverage.json']
 const args = [
   'type-coverage',
   '--strict',

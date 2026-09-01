@@ -25,10 +25,13 @@ const app = createApp({
 
 app.use(logger())
 
-const webDist = process.env.WEB_DIST ?? path.resolve(import.meta.dir, '../../web/dist')
+// hono/bun serveStatic resolves paths relative to the process cwd (it prefixes "./"), so keep this relative.
+const webDist = process.env.WEB_DIST ?? path.relative(process.cwd(), path.resolve(import.meta.dir, '../../web/dist'))
 if (existsSync(webDist)) {
   app.use('*', serveStatic({ root: webDist }))
   app.get('*', serveStatic({ path: path.join(webDist, 'index.html') }))
+} else {
+  console.warn(`[api] web build not found at ${webDist}; serving API only`)
 }
 
 const shutdown = async () => {

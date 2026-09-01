@@ -4,7 +4,7 @@ import type { Context } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
 
-export const STATUS_BY_CODE: Record<ApiErrorCode, ContentfulStatusCode> = {
+const STATUS_BY_CODE: Record<ApiErrorCode, ContentfulStatusCode> = {
   UNAUTHENTICATED: 401,
   VALIDATION: 400,
   CONNECTION_FAILED: 502,
@@ -21,7 +21,7 @@ export function apiError(code: ApiErrorCode, message: string, detail?: string): 
 }
 
 /** Normalises anything thrown by a route into { code, message, detail }. */
-export function toApiError(err: unknown): ApiError {
+function toApiError(err: unknown): ApiError {
   if (err instanceof AdapterError) return apiError(err.code, err.message, err.detail)
   if (err instanceof HTTPException) {
     const code: ApiErrorCode = err.status === 401 ? 'UNAUTHENTICATED' : err.status === 404 ? 'NOT_FOUND' : 'INTERNAL'

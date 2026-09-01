@@ -38,7 +38,7 @@ const e2e = all
   .reduce((n, f) => n + count(f, IT), 0)
 const routes = all
   .filter((f) => relative(ROOT, f).startsWith('apps/api/src/routes/') && f.endsWith('.ts') && !f.includes('.test.'))
-  .reduce((n, f) => n + count(f, /\.(get|post|put|patch|delete)\(\s*['"]/g), 0)
+  .reduce((n, f) => n + count(f, /\.(get|post|put|patch|delete)\(\s*['"]\//g), 0)
 
 const expected = {
   'unit-tests': unitTests,

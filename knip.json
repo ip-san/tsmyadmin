@@ -13,9 +13,6 @@
         "scripts/**/*.mjs",
         "e2e/**/*.ts"
       ],
-      "ignoreBinaries": [
-        "wait"
-      ],
       "ignoreDependencies": [
         "type-coverage"
       ]
