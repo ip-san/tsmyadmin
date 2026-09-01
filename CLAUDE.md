@@ -9,6 +9,7 @@ MySQL / PostgreSQL 両対応の、モダン TypeScript 製 phpMyAdmin クロー�
 - **画面構成**: phpMyAdmin と同じ 3 階層（サーバー: DB 一覧/ステータス/変数/プロセス/ユーザー、DB: 構造/SQL/エクスポート/インポート/権限、テーブル: 表示/構造/SQL/検索/挿入/エクスポート/インポート/操作）
 - **型の流れ**: `packages/shared` の Zod → API (`@hono/zod-validator`) → web (`hc<AppType>`)
 - **テスト DB**: `docker compose`（MySQL `13306` / PostgreSQL `15433`、fixtures 自動投入）
+- **本番運用**: 設定は `apps/api/src/config.ts` で起動時検証（環境変数の一覧は `docs/deployment.md` が唯一の正）。接続先 allowlist・ログイン レート制限・CSP・リクエスト ID 付き構造化ログ・`/healthz` `/readyz`
 - **品質**: Vitest / Playwright / Biome / knip / madge / jscpd / type-coverage / size-limit + 自前検査（`check:arch`, `check:sql-safety`, `docs:validate`）
 
 ## 開発コマンド
@@ -26,9 +27,9 @@ bun run test:e2e          # Playwright
 
 ## 現在の規模（`scripts/validate-docs.mjs` が同期）
 
-- ユニット/API/Web テスト定義: <!-- stat:unit-tests -->129<!-- /stat --> 件
+- ユニット/API/Web テスト定義: <!-- stat:unit-tests -->144<!-- /stat --> 件
 - Adapter conformance: <!-- stat:conformance -->50<!-- /stat --> 件 × 2 方言
-- E2E: <!-- stat:e2e -->29<!-- /stat --> 件
+- E2E: <!-- stat:e2e -->30<!-- /stat --> 件
 - API ルート: <!-- stat:routes -->24<!-- /stat -->
 
 ## 詳細ルール（path-scoped）
@@ -48,6 +49,8 @@ IMPORTANT: コンテキスト圧縮後も以下を必ず守ること。
 - **YOU MUST** `DdlOp` を追加したら `test/ddl.test.ts` の `SAMPLE_OPS` に両方言のスナップショットを追加する
 - **YOU MUST** API の入出力は先に `packages/shared` の Zod スキーマを定義し、web は `hc<AppType>` 経由でのみ呼ぶ（例外: ダウンロード等ブラウザのナビゲーションで開く GET は URL ビルダー経由の `<a href>` 可）
 - **YOU MUST** DDL は `/ddl/preview` → ユーザー確認 → `/sql` 実行、アカウント操作は `/users/preview`（パスワードはマスク）→ `/users/execute`。プレビューなしで実行する UI を作らない（`usePreviewFlow` + `PreviewDialog` を使う）
+- **YOU MUST** 環境変数を追加したら `apps/api/src/config.ts`・`.env.example`・`docs/deployment.md` の 3 か所を同時に更新する（表は deployment.md だけに置き、他は参照する）
+- **YOU MUST** ログにパスワード・行の値・SQL 全文を出さない（イベント名 + 識別子 + 要約のみ）
 - **YOU MUST** フィクスチャ（`docker/fixtures/**`）を変えたら `bun run db:reset`。既存の checkout でも MySQL の `WITH GRANT OPTION` 追加以降はリセットが必要
 - **YOU MUST** web の日本語文字列は `apps/web/src/config/locales/ja.ts` に定義し `locale.*` で参照する。Tailwind の色指定には `dark:` 対応を付ける
 - **YOU MUST** 統合テストは `*.integration.test.ts` 命名（DB 不要の `bun run test` / pre-commit から除外される）

@@ -13,6 +13,8 @@ const STATUS_BY_CODE: Record<ApiErrorCode, ContentfulStatusCode> = {
   QUERY_FAILED: 400,
   KEY_MISMATCH: 409,
   UNSUPPORTED: 400,
+  FORBIDDEN: 403,
+  RATE_LIMITED: 429,
   INTERNAL: 500,
 }
 

@@ -42,17 +42,33 @@ function fixtureAdapter(overrides: ConstructorParameters<typeof FakeAdapter>[0] 
   })
 }
 
-function harness(adapter: FakeAdapter = fixtureAdapter()) {
+interface HarnessOptions {
+  allowedHosts?: string[]
+  loginRateLimit?: { max: number; windowMs: number }
+  now?: () => number
+  trustProxy?: boolean
+}
+
+function harness(adapter: FakeAdapter = fixtureAdapter(), options: HarnessOptions = {}) {
   const store = new MemorySessionStore({ sweepIntervalMs: 0 })
-  const app = createApp({ adapterFactory: () => adapter, store, secret: SECRET, secure: false })
+  const app = createApp({
+    adapterFactory: () => adapter,
+    store,
+    secret: SECRET,
+    secure: false,
+    allowedHosts: options.allowedHosts ?? ['db', '127.0.0.1'],
+    ...(options.loginRateLimit ? { loginRateLimit: options.loginRateLimit } : {}),
+    ...(options.now ? { now: options.now } : {}),
+    ...(options.trustProxy !== undefined ? { trustProxy: options.trustProxy } : {}),
+  })
   let cookie = ''
   const req = (path: string, init: RequestInit = {}) =>
     app.request(path, {
       ...init,
       headers: { 'content-type': 'application/json', ...(cookie ? { cookie } : {}), ...(init.headers ?? {}) },
     })
-  const login = async () => {
-    const res = await req('/api/session', { method: 'POST', body: JSON.stringify(LOGIN) })
+  const login = async (body: Record<string, unknown> = LOGIN, headers: Record<string, string> = {}) => {
+    const res = await req('/api/session', { method: 'POST', body: JSON.stringify(body), headers })
     cookie = res.headers.get('set-cookie')?.split(';')[0] ?? ''
     return res
   }
@@ -127,6 +143,65 @@ describe('session', () => {
     expect(res.headers.get('set-cookie')).toMatch(/Max-Age=0/)
     expect(h.adapter.closed).toBe(true)
     expect((await h.req('/api/session')).status).toBe(401)
+  })
+})
+
+describe('hardening', () => {
+  it('refuses hosts outside the allowlist with 403 FORBIDDEN before touching the adapter', async () => {
+    const h = harness(fixtureAdapter(), { allowedHosts: ['db.internal', '*.rds.amazonaws.com'] })
+    stores.push(h.store)
+    const res = await h.login({ ...LOGIN, host: 'evil.example' })
+    expect(res.status).toBe(403)
+    expect(ApiErrorSchema.parse(await res.json()).code).toBe('FORBIDDEN')
+    expect(h.adapter.calls).toHaveLength(0)
+    expect((await h.login({ ...LOGIN, host: 'prod.rds.amazonaws.com' })).status).toBe(201)
+  })
+
+  it('rate-limits login attempts per IP + user and recovers after the window', async () => {
+    let t = 0
+    const h = harness(fixtureAdapter({ failWith: new AdapterError('AUTH_FAILED', 'denied') }), {
+      loginRateLimit: { max: 2, windowMs: 1000 },
+      now: () => t,
+    })
+    stores.push(h.store)
+    expect((await h.login()).status).toBe(401)
+    expect((await h.login()).status).toBe(401)
+    const blocked = await h.login()
+    expect(blocked.status).toBe(429)
+    expect(blocked.headers.get('retry-after')).toBe('1')
+    expect(ApiErrorSchema.parse(await blocked.json()).code).toBe('RATE_LIMITED')
+    expect((await h.login({ ...LOGIN, user: 'other' })).status).toBe(401)
+    t = 1000
+    expect((await h.login()).status).toBe(401)
+  })
+
+  it('keys the limiter by X-Forwarded-For only when the proxy is trusted', async () => {
+    const trusted = harness(fixtureAdapter({ failWith: new AdapterError('AUTH_FAILED', 'denied') }), {
+      loginRateLimit: { max: 1, windowMs: 60_000 },
+      trustProxy: true,
+    })
+    stores.push(trusted.store)
+    expect((await trusted.login(LOGIN, { 'x-forwarded-for': '203.0.113.1' })).status).toBe(401)
+    expect((await trusted.login(LOGIN, { 'x-forwarded-for': '203.0.113.2' })).status).toBe(401)
+    expect((await trusted.login(LOGIN, { 'x-forwarded-for': '203.0.113.1' })).status).toBe(429)
+  })
+
+  it('sets security headers, a request id and answers health probes', async () => {
+    const h = harness()
+    stores.push(h.store)
+    const res = await h.req('/healthz')
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-security-policy')).toContain("default-src 'self'")
+    expect(res.headers.get('content-security-policy')).toContain("frame-ancestors 'none'")
+    expect(res.headers.get('x-content-type-options')).toBe('nosniff')
+    expect(res.headers.get('x-request-id')).toMatch(/[0-9a-f-]{36}/)
+    expect((await h.req('/readyz')).status).toBe(200)
+    const broken = new MemorySessionStore({ sweepIntervalMs: 0 })
+    broken.ping = async () => {
+      throw new Error('store down')
+    }
+    const app = createApp({ adapterFactory: () => fixtureAdapter(), store: broken, secret: SECRET, secure: false })
+    expect((await app.request('/readyz')).status).toBe(503)
   })
 })
 

@@ -355,6 +355,8 @@ export const ja = {
     QUERY_FAILED: 'クエリの実行に失敗しました',
     KEY_MISMATCH: '対象行を一意に特定できませんでした（変更は取り消されました）',
     UNSUPPORTED: 'この操作はサポートされていません',
+    FORBIDDEN: '許可されていない操作です',
+    RATE_LIMITED: '試行回数が多すぎます。しばらく待ってから再度お試しください',
     INTERNAL: '内部エラーが発生しました',
     NETWORK: 'ネットワークエラー',
   },

@@ -9,11 +9,17 @@ export interface Session {
   lastUsedAt: number
 }
 
+/**
+ * Session persistence. The interface is async so process-external stores (SQLite / Redis) can implement it;
+ * adapters (connection pools) are always process-local and rebuilt lazily by the store.
+ */
 export interface SessionStore {
-  create(config: ConnectRequest, adapter: DatabaseAdapter): Session
+  create(config: ConnectRequest, adapter: DatabaseAdapter): Promise<Session>
   /** Returns the session and refreshes its TTL. */
-  get(id: string): Session | undefined
+  get(id: string): Promise<Session | undefined>
   delete(id: string): Promise<void>
+  /** Liveness of the backing store (used by /readyz). */
+  ping(): Promise<void>
   /** Closes every session (shutdown / tests). */
   closeAll(): Promise<void>
 }
@@ -27,11 +33,12 @@ export const SESSION_TTL_MS = 30 * 60 * 1000
 
 /**
  * In-memory store with sliding TTL. Credentials never leave the server process;
- * sessions are lost on restart (accepted for now — see plan: Redis/SQLite later).
+ * sessions are lost on restart (use the SQLite store in production).
  */
 export class MemorySessionStore implements SessionStore {
   private readonly sessions = new Map<string, Session>()
   private readonly ttlMs: number
+  private readonly now: () => number
   private timer: ReturnType<typeof setInterval> | null = null
 
   constructor(options: { ttlMs?: number; sweepIntervalMs?: number; now?: () => number } = {}) {
@@ -44,13 +51,11 @@ export class MemorySessionStore implements SessionStore {
     }
   }
 
-  private readonly now: () => number
-
   get size(): number {
     return this.sessions.size
   }
 
-  create(config: ConnectRequest, adapter: DatabaseAdapter): Session {
+  async create(config: ConnectRequest, adapter: DatabaseAdapter): Promise<Session> {
     const id = crypto.randomUUID()
     const now = this.now()
     const session: Session = { id, config, adapter, createdAt: now, lastUsedAt: now }
@@ -58,11 +63,11 @@ export class MemorySessionStore implements SessionStore {
     return session
   }
 
-  get(id: string): Session | undefined {
+  async get(id: string): Promise<Session | undefined> {
     const s = this.sessions.get(id)
     if (!s) return undefined
     if (this.now() - s.lastUsedAt > this.ttlMs) {
-      void this.delete(id)
+      await this.delete(id)
       return undefined
     }
     s.lastUsedAt = this.now()
@@ -74,6 +79,10 @@ export class MemorySessionStore implements SessionStore {
     if (!s) return
     this.sessions.delete(id)
     await s.adapter.close().catch(() => undefined)
+  }
+
+  async ping(): Promise<void> {
+    // Nothing external to check.
   }
 
   async sweep(): Promise<void> {

@@ -49,6 +49,8 @@ export const ApiErrorCodeSchema = z.enum([
   'QUERY_FAILED',
   'KEY_MISMATCH',
   'UNSUPPORTED',
+  'FORBIDDEN',
+  'RATE_LIMITED',
   'INTERNAL',
 ])
 export type ApiErrorCode = z.infer<typeof ApiErrorCodeSchema>

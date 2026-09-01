@@ -16,6 +16,17 @@ test.describe('login', () => {
     await expect(page).toHaveURL(/\/login$/)
   })
 
+  test('serves the SPA with a Content-Security-Policy and still boots under it', async ({ page }) => {
+    const errors: string[] = []
+    page.on('console', (m) => {
+      if (m.type() === 'error') errors.push(m.text())
+    })
+    const res = await page.goto('/login')
+    expect(res?.headers()['content-security-policy']).toContain("script-src 'self'")
+    await expect(page.getByLabel('ホスト')).toBeVisible()
+    expect(errors.filter((e) => /Content Security Policy/i.test(e))).toEqual([])
+  })
+
   test('redirects unauthenticated visitors to /login', async ({ page }) => {
     await page.goto('/db/tsmyadmin_test')
     await expect(page).toHaveURL(/\/login$/)

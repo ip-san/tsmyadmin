@@ -45,7 +45,13 @@ docker build -t tsmyadmin .
 docker run -p 3100:3100 -e SESSION_SECRET=$(openssl rand -hex 32) tsmyadmin
 ```
 
-単一コンテナで API が SPA を配信します。セッションはプロセス内メモリ（再起動で切れます）。
+単一コンテナで API が SPA を配信します。本番では HTTPS 終端のリバースプロキシ配下に置き、`TSMYADMIN_ALLOWED_HOSTS` で接続先を絞ってください（詳細は `docs/deployment.md`）。
+
+## 本番運用
+
+- [docs/deployment.md](docs/deployment.md) — 環境変数一覧、Docker / compose 例、リバースプロキシと TLS、上限値
+- [docs/security.md](docs/security.md) — 前提、認証・セッション、接続先 allowlist、レート制限、CSP、SQL 組み立ての方針
+- [docs/operations.md](docs/operations.md) — ヘルスチェック、ログイベント、トラブルシュート、監視
 
 ## ドキュメント
 

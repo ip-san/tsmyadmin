@@ -18,7 +18,13 @@ const targets = [
 ]
 
 const store = new MemorySessionStore({ sweepIntervalMs: 0 })
-const app = createApp({ adapterFactory: createAdapter, store, secret: 'integration', secure: false })
+const app = createApp({
+  adapterFactory: createAdapter,
+  store,
+  secret: 'integration',
+  secure: false,
+  allowedHosts: ['*'],
+})
 afterAll(() => store.closeAll())
 
 describe.each(targets)('API integration ($dialect)', ({ dialect, url }) => {
