@@ -97,7 +97,14 @@ export function RowsGrid({ tableRef, options, page, onChange }: RowsGridProps) {
 
   return (
     <div className="space-y-2" aria-busy={rows.isFetching}>
-      <Pagination page={page} limit={options.limit} total={data.total} shown={data.rows.length} onChange={onChange} />
+      <Pagination
+        page={page}
+        limit={options.limit}
+        total={data.total}
+        approximate={data.approximate}
+        shown={data.rows.length}
+        onChange={onChange}
+      />
       <FilterChips options={options} onClear={() => onChange({ filters: undefined, page: 1 })} />
       <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400">
         <span>{locale.browse.keyHint[data.keyKind]}</span>

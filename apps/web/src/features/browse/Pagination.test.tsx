@@ -31,3 +31,10 @@ describe('Pagination', () => {
     expect(screen.getByRole('button', { name: '最後' })).toBeDisabled()
   })
 })
+
+describe('Pagination (approximate totals)', () => {
+  it('labels catalog estimates as approximate', () => {
+    render(<Pagination page={1} limit={50} total={1234567} approximate shown={50} onChange={vi.fn()} />)
+    expect(screen.getByText(/約 1,234,567 件（概算）/)).toBeInTheDocument()
+  })
+})

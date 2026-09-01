@@ -195,6 +195,7 @@ export class FakeAdapter implements DatabaseAdapter {
       rows: page.map((r) => columns.map((c) => r[c.name] ?? null)),
       truncated: false,
       total: rows.length,
+      approximate: false,
       keyKind: t.schema.primaryKey.length > 0 ? 'pk' : 'none',
       keyColumns: t.schema.primaryKey,
     }

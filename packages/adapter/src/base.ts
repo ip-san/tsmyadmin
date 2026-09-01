@@ -18,7 +18,7 @@ import type {
   UserInfo,
   UserRef,
 } from '@tsmyadmin/shared'
-import { isBinaryCell } from '@tsmyadmin/shared'
+import { EXACT_COUNT_MAX_ROWS, isBinaryCell } from '@tsmyadmin/shared'
 import { Params, quoteIdent, quoteTable } from './sql/quote.ts'
 import { splitStatements } from './sql/split.ts'
 import {
@@ -75,6 +75,15 @@ const FILTER_SQL: Record<Filter['op'], string> = {
   is_not_null: 'IS NOT NULL',
 }
 
+/** Exact COUNT(*) unless the browse is unfiltered and the catalog says the table is large. */
+export function countMode(
+  hasFilters: boolean,
+  estimate: number | null,
+  threshold = EXACT_COUNT_MAX_ROWS
+): 'exact' | 'estimate' {
+  return !hasFilters && estimate !== null && estimate > threshold ? 'estimate' : 'exact'
+}
+
 export function firstResult(r: RawResult | RawResult[]): RawResult {
   if (Array.isArray(r)) {
     const first = r[0]
@@ -114,6 +123,8 @@ export abstract class BaseAdapter implements DatabaseAdapter {
   protected abstract acquire(ns: Namespace): Promise<Conn>
   /** Applies / clears a per-session statement timeout. 0 clears. */
   protected abstract setStatementTimeout(conn: Conn, ms: number): Promise<void>
+  /** Catalog row-count estimate for the table (TABLE_ROWS / reltuples); null when unknown. */
+  protected abstract estimateRows(conn: Conn, ns: Namespace, table: string): Promise<number | null>
   /** Backend/connection id of `conn` as seen by the server (CONNECTION_ID() / pg_backend_pid()). */
   protected abstract backendId(conn: Conn): Promise<string>
   /** Interrupts the statement running on backend `id` from a fresh connection (KILL QUERY / pg_cancel_backend). */
@@ -212,6 +223,19 @@ export abstract class BaseAdapter implements DatabaseAdapter {
 
     return this.withConn(ns, async (conn) => {
       const data = firstResult(await conn.query(dataSql, params.values))
+      // Large unfiltered tables: COUNT(*) is a full scan on InnoDB / PostgreSQL, so use the catalog estimate.
+      const estimate = opts.filters.length === 0 ? await this.estimateRows(conn, ns, table) : null
+      if (countMode(opts.filters.length > 0, estimate) === 'estimate') {
+        return {
+          columns: data.columns,
+          rows: data.rows,
+          truncated: false,
+          total: estimate,
+          approximate: true,
+          keyKind: key.keyKind,
+          keyColumns: key.keyColumns,
+        }
+      }
       const count = firstResult(await conn.query(countSql, countParams.values))
       const totalCell = count.rows[0]?.[0]
       const total = typeof totalCell === 'number' ? totalCell : typeof totalCell === 'string' ? Number(totalCell) : null
@@ -220,6 +244,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
         rows: data.rows,
         truncated: false,
         total: total !== null && Number.isFinite(total) ? total : null,
+        approximate: false,
         keyKind: key.keyKind,
         keyColumns: key.keyColumns,
       }

@@ -107,7 +107,12 @@ export const ja = {
     noForeignKeys: '外部キーはありません',
   },
   browse: {
-    total: (n: number | null) => (n === null ? '件数不明' : `全 ${n.toLocaleString('ja-JP')} 件`),
+    total: (n: number | null, approximate = false) =>
+      n === null
+        ? '件数不明'
+        : approximate
+          ? `約 ${n.toLocaleString('ja-JP')} 件（概算）`
+          : `全 ${n.toLocaleString('ja-JP')} 件`,
     range: (from: number, to: number) => `${from.toLocaleString('ja-JP')}–${to.toLocaleString('ja-JP')} 件目`,
     perPage: '表示件数',
     prev: '前へ',

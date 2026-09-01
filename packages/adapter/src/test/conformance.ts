@@ -180,6 +180,7 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         expect(r.columns.map((c) => c.name)).toEqual(['id', 'name', 'email', 'age', 'created_at'])
         expect(r.rows).toHaveLength(5)
         expect(r.total).toBe(5)
+        expect(r.approximate).toBe(false)
         expect(r.truncated).toBe(false)
         expect(r.keyKind).toBe('pk')
         expect(r.keyColumns).toEqual(['id'])

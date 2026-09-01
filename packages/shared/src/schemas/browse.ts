@@ -42,9 +42,14 @@ export type BrowseOptionsInput = z.input<typeof BrowseOptionsSchema>
 export const RowKeyKindSchema = z.enum(['pk', 'ctid', 'all-columns', 'none'])
 export type RowKeyKind = z.infer<typeof RowKeyKindSchema>
 
+/** Tables whose catalog estimate exceeds this are not COUNT(*)ed on unfiltered browses (phpMyAdmin behaves the same). */
+export const EXACT_COUNT_MAX_ROWS = 100_000
+
 export const BrowseResultSchema = ResultSetSchema.extend({
-  /** Exact COUNT(*) with the same filters, null when unavailable. */
+  /** Row count with the same filters, null when unavailable. Approximate when `approximate` is true. */
   total: z.number().nullable(),
+  /** True when `total` is the catalog's estimate (large unfiltered table) instead of an exact COUNT(*). */
+  approximate: z.boolean(),
   keyKind: RowKeyKindSchema,
   /** For 'pk': key column names. For 'ctid': ['ctid'] (a hidden trailing column in rows). */
   keyColumns: z.array(z.string()),

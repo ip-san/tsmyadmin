@@ -10,6 +10,7 @@ const base: BrowseResult = {
   rows: [[1, '(0,1)']],
   truncated: false,
   total: 1,
+  approximate: false,
   keyKind: 'ctid',
   keyColumns: ['ctid'],
 }

@@ -7,12 +7,14 @@ export interface Statement {
   line: number
 }
 
+const DELIMITER_LINE = /^[ \t]*DELIMITER[ \t]+(\S+)[ \t]*(?:\r?\n|$)/i
+
 /**
- * Splits a multi-statement script on top-level semicolons.
+ * Splits a multi-statement script on top-level statement terminators (`;` by default).
  * Handles: '...' / "..." strings (with '' and MySQL backslash escapes), `...` identifiers (MySQL),
- * -- and # (MySQL) line comments, block comments, and PostgreSQL dollar quoting ($$ / $tag$).
+ * -- and # (MySQL) line comments, block comments, PostgreSQL dollar quoting ($$ / $tag$), and the MySQL client's
+ * `DELIMITER xx` command (a line on its own; `DELIMITER ;` restores the default) so stored routines can be pasted as-is.
  * Chunks that contain only comments/whitespace are dropped.
- * Not supported: the MySQL client `DELIMITER` command (a client-side feature, not SQL).
  */
 export function splitStatements(input: string, dialect: Dialect): Statement[] {
   const out: Statement[] = []
@@ -22,6 +24,7 @@ export function splitStatements(input: string, dialect: Dialect): Statement[] {
   let line = 1
   let startLine = 1
   let hasCode = false
+  let delimiter = ';'
 
   const flush = (end: number) => {
     const sql = input.slice(start, end).trim()
@@ -44,6 +47,16 @@ export function splitStatements(input: string, dialect: Dialect): Statement[] {
       start = i
       startLine = line
       continue
+    }
+    if (i === start && dialect === 'mysql' && (ch === 'D' || ch === 'd')) {
+      const m = DELIMITER_LINE.exec(input.slice(i))
+      if (m) {
+        delimiter = m[1] as string
+        skipTo(i + m[0].length)
+        start = i
+        startLine = line
+        continue
+      }
     }
     if (ch === '-' && input[i + 1] === '-') {
       const end = input.indexOf('\n', i)
@@ -91,9 +104,9 @@ export function splitStatements(input: string, dialect: Dialect): Statement[] {
         continue
       }
     }
-    if (ch === ';') {
+    if (input.startsWith(delimiter, i)) {
       flush(i)
-      i++
+      i += delimiter.length
       start = i
       startLine = line
       continue

@@ -142,6 +142,18 @@ export class PostgresAdapter extends BaseAdapter {
     await conn.query(`SET statement_timeout = ${Math.max(0, Math.floor(ms))}`)
   }
 
+  protected async estimateRows(conn: Conn, ns: Namespace, table: string): Promise<number | null> {
+    const r = firstResult(
+      await conn.query(
+        'SELECT c.reltuples FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = $1 AND c.relname = $2',
+        [ns.schema ?? 'public', table]
+      )
+    )
+    const n = Number(r.rows[0]?.[0])
+    // reltuples is -1 until the table has been analysed/vacuumed.
+    return Number.isFinite(n) && n >= 0 ? Math.round(n) : null
+  }
+
   protected async backendId(conn: Conn): Promise<string> {
     const r = firstResult(await conn.query('SELECT pg_backend_pid()'))
     return String(r.rows[0]?.[0] ?? '')

@@ -92,3 +92,38 @@ describe('splitStatements', () => {
     ])
   })
 })
+
+describe('splitStatements: MySQL DELIMITER', () => {
+  it('switches the terminator so routine bodies with ; stay intact, and restores it', () => {
+    const sql = [
+      'DELIMITER $$',
+      'CREATE PROCEDURE p()',
+      'BEGIN',
+      '  SELECT 1;',
+      '  SELECT 2;',
+      'END$$',
+      'DELIMITER ;',
+      'CALL p();',
+    ].join('\n')
+    expect(splitStatements(sql, 'mysql')).toEqual([
+      { sql: 'CREATE PROCEDURE p()\nBEGIN\n  SELECT 1;\n  SELECT 2;\nEND', line: 2 },
+      { sql: 'CALL p()', line: 8 },
+    ])
+  })
+
+  it('supports multi-character delimiters and ignores DELIMITER for postgres', () => {
+    expect(
+      splitStatements('DELIMITER //\nSELECT 1;//\nSELECT 2//\nDELIMITER ;\nSELECT 3;', 'mysql').map((s) => s.sql)
+    ).toEqual(['SELECT 1;', 'SELECT 2', 'SELECT 3'])
+    expect(splitStatements('DELIMITER $$\nSELECT 1$$', 'postgres').map((s) => s.sql)).toEqual([
+      'DELIMITER $$\nSELECT 1$$',
+    ])
+  })
+
+  it('treats DELIMITER inside a statement or a string as ordinary text', () => {
+    expect(splitStatements("SELECT 'DELIMITER //'; SELECT 2", 'mysql').map((s) => s.sql)).toEqual([
+      "SELECT 'DELIMITER //'",
+      'SELECT 2',
+    ])
+  })
+})
