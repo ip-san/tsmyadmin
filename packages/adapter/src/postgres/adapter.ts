@@ -1,4 +1,4 @@
-import type { ColumnMeta, Namespace, TableInfo, TableSchema } from '@tsmyadmin/shared'
+import type { ColumnMeta, Namespace, TableInfo, TableSchema, UserInfo, UserRef } from '@tsmyadmin/shared'
 import pg, { type FieldDef, type PoolClient, type QueryResult } from 'pg'
 import { BaseAdapter, type Conn, firstResult, type RawResult } from '../base.ts'
 import { quoteIdent, quoteTable } from '../sql/quote.ts'
@@ -6,6 +6,7 @@ import { AdapterError, type AdapterErrorCode, type ConnectionConfig } from '../t
 import { pgCreateStatements, pgDdl } from './ddl.ts'
 import { pgExporter } from './export.ts'
 import { pgDescribeTable, pgListSchemas, pgListTables } from './introspect.ts'
+import { pgListUsers, pgShowGrants, pgUsers } from './users.ts'
 import { PG_TYPE_NAMES, pgToCell, pgTypes } from './values.ts'
 
 const AUTH_CODES = new Set(['28P01', '28000'])
@@ -26,6 +27,7 @@ export class PostgresAdapter extends BaseAdapter {
   readonly dialect = 'postgres' as const
   readonly ddl = pgDdl
   readonly exporter = pgExporter
+  readonly users = pgUsers
   private readonly pools = new Map<string, pg.Pool>()
   private readonly typeNames = new Map<number, string>(Object.entries(PG_TYPE_NAMES).map(([k, v]) => [Number(k), v]))
 
@@ -162,6 +164,14 @@ export class PostgresAdapter extends BaseAdapter {
 
   describeTable(ns: Namespace, table: string): Promise<TableSchema> {
     return this.withConn(ns, (conn) => pgDescribeTable(conn, ns, table))
+  }
+
+  listUsers(): Promise<UserInfo[]> {
+    return this.withConn({ database: this.defaultDatabase() }, (conn) => pgListUsers(conn))
+  }
+
+  showGrants(user: UserRef): Promise<string[]> {
+    return this.withConn({ database: this.defaultDatabase() }, (conn) => pgShowGrants(conn, user))
   }
 
   /**

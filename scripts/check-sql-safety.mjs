@@ -19,6 +19,8 @@ const SQL_BUILDER_ALLOWLIST = [
   /^packages\/adapter\/src\/(mysql|postgres)\/(ddl|adapter)\.ts$/,
   // Dump exporters: INSERT statements assembled from quoteIdent() identifiers and cellLiteral() values.
   /^packages\/adapter\/src\/(mysql|postgres)\/export\.ts$/,
+  // Account management: CREATE/ALTER/DROP USER|ROLE and GRANT/REVOKE built from quoted identifiers and literals.
+  /^packages\/adapter\/src\/(mysql|postgres)\/users\.ts$/,
   // Editor prefill text shown to the user; executed only when they press Run (identifiers quoted).
   /^apps\/web\/src\/features\/sql\/prefill\.ts$/,
 ]

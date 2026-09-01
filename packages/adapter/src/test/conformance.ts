@@ -535,6 +535,58 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
       })
     })
 
+    describe('listUsers', () => {
+      it('includes the connected account with attributes', async () => {
+        const users = await db.listUsers()
+        const me = users.find((u) => u.name === 'tsmyadmin')
+        expect(me).toBeDefined()
+        expect(me?.canLogin).toBe(true)
+        expect(Array.isArray(me?.attributes)).toBe(true)
+        expect(dialect === 'mysql' ? me?.host : me?.host === null).toBeTruthy()
+      })
+    })
+
+    describe('showGrants', () => {
+      it('returns grant statements for an account', async () => {
+        const me = (await db.listUsers()).find((u) => u.name === 'tsmyadmin')
+        const grants = await db.showGrants({ name: 'tsmyadmin', ...(me?.host ? { host: me.host } : {}) })
+        expect(grants.length).toBeGreaterThan(0)
+        expect(grants.join('\n')).toMatch(
+          dialect === 'mysql' ? /GRANT .* ON \*\.\* TO/ : /ALTER ROLE "tsmyadmin" SUPERUSER/
+        )
+      })
+    })
+
+    describe('users', () => {
+      it('create → grant → password → revoke → drop through the builder', async () => {
+        const name = `u_${scratch}`
+        const user = dialect === 'mysql' ? { name, host: '%' } : { name }
+        const serverNs = dialect === 'mysql' ? { database: 'information_schema' } : { database: ns.database }
+        const runOp = async (op: Parameters<typeof db.users.build>[0]) => {
+          const target = db.users.namespace(op, serverNs.database)
+          for (const sql of db.users.build(op)) {
+            const r = await db.executeSql(target, sql, EXEC)
+            for (const x of r) if (x.kind === 'error') throw new Error(`${x.message}\n${x.sql}`)
+          }
+        }
+        await runOp({
+          op: 'createUser',
+          user,
+          password: "s3cret'!",
+          attributes: { superuser: false, createdb: false, createrole: false },
+        })
+        expect((await db.listUsers()).some((u) => u.name === name)).toBe(true)
+        await runOp({ op: 'grantAll', user, database: ns.database, ...(ns.schema ? { schema: ns.schema } : {}) })
+        const grants = await db.showGrants(user)
+        // MySQL grants are per database; PostgreSQL grants are per schema/table inside the current database.
+        expect(grants.join('\n')).toContain(dialect === 'mysql' ? ns.database : (ns.schema ?? 'public'))
+        await runOp({ op: 'setPassword', user, password: 'changed' })
+        await runOp({ op: 'revokeAll', user, database: ns.database, ...(ns.schema ? { schema: ns.schema } : {}) })
+        await runOp({ op: 'dropUser', user })
+        expect((await db.listUsers()).some((u) => u.name === name)).toBe(false)
+      })
+    })
+
     describe('ddl', () => {
       it('generated DDL executes and is reflected by describeTable', async () => {
         await runDdl({

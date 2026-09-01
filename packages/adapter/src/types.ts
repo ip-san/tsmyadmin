@@ -12,6 +12,9 @@ import type {
   StatementResult,
   TableInfo,
   TableSchema,
+  UserInfo,
+  UserOp,
+  UserRef,
 } from '@tsmyadmin/shared'
 
 export interface ConnectionConfig {
@@ -51,6 +54,13 @@ export interface DdlBuilder {
   build(ns: Namespace, op: DdlOp): string[]
 }
 
+/** Builds account-management SQL. `mask` replaces passwords with PASSWORD_MASK for previews. */
+export interface UserSqlBuilder {
+  build(op: UserOp, options?: { mask?: boolean }): string[]
+  /** Namespace the statements must run in (PostgreSQL GRANTs are per database). */
+  namespace(op: UserOp, defaultDatabase: string): Namespace
+}
+
 export interface RowBatch {
   columns: ColumnMeta[]
   rows: Cell[][]
@@ -84,8 +94,13 @@ export interface DatabaseAdapter {
   showCreateTable(ns: Namespace, table: string): Promise<string[]>
   /** Reads every row in stable order, `batchSize` rows at a time (for exports). */
   iterateRows(ns: Namespace, table: string, opts: { batchSize: number }): AsyncIterable<RowBatch>
+  /** Login accounts (MySQL mysql.user, PostgreSQL pg_roles). Requires read privileges on the catalog. */
+  listUsers(): Promise<UserInfo[]>
+  /** Effective grants as SQL statements (MySQL SHOW GRANTS; PostgreSQL reconstructed from the catalog). */
+  showGrants(user: UserRef): Promise<string[]>
   readonly ddl: DdlBuilder
   readonly exporter: SqlExporter
+  readonly users: UserSqlBuilder
 }
 
 export type { Cell }
@@ -106,4 +121,6 @@ export const ADAPTER_METHOD_NAMES = [
   'executeSql',
   'showCreateTable',
   'iterateRows',
+  'listUsers',
+  'showGrants',
 ] as const satisfies readonly (keyof DatabaseAdapter)[]

@@ -398,6 +398,67 @@ describe('import', () => {
   })
 })
 
+describe('users', () => {
+  const withUsers = () =>
+    fixtureAdapter({
+      // Real drivers return affected-row results for account statements (never the SQL text).
+      onSql: (_ns, sql) => [{ kind: 'affected', sql, affectedRows: 0, durationMs: 1 }],
+      users: [
+        { name: 'root', host: 'localhost', canLogin: true, attributes: [] },
+        { name: 'app', host: '%', canLogin: false, attributes: ['LOCKED'] },
+      ],
+    })
+
+  it('lists users and shows grants', async () => {
+    const h = harness(withUsers())
+    stores.push(h.store)
+    await h.login()
+    const users = await (await h.req('/api/users')).json()
+    expect(users).toHaveLength(2)
+    const grants = await (await h.req('/api/users/grants?name=app&host=%25')).json()
+    expect(grants).toEqual({ statements: ["GRANT USAGE ON *.* TO 'app'@'%'"] })
+    expect((await h.req('/api/users/grants?name=ghost')).status).toBe(404)
+  })
+
+  it('previews masked SQL and executes the real statements without echoing the password', async () => {
+    const h = harness(withUsers())
+    stores.push(h.store)
+    await h.login()
+    const op = {
+      op: 'createUser',
+      user: { name: 'new', host: '%' },
+      password: 'hunter2',
+      attributes: { createdb: true },
+    }
+    const preview = (await (
+      await h.req('/api/users/preview', { method: 'POST', body: JSON.stringify({ op }) })
+    ).json()) as { sql: string[] }
+    expect(preview.sql[0]).toBe("CREATE USER 'new'@'%' IDENTIFIED BY '****'")
+    expect(JSON.stringify(preview)).not.toContain('hunter2')
+    const res = await h.req('/api/users/execute', { method: 'POST', body: JSON.stringify({ op }) })
+    expect(res.status).toBe(200)
+    const body = await res.text()
+    expect(body).not.toContain('hunter2')
+    const executed = h.adapter.calls.filter((c) => c.method === 'executeSql')
+    expect(executed.map((c) => c.args[1])).toEqual([
+      "CREATE USER 'new'@'%' IDENTIFIED BY 'hunter2'",
+      "GRANT CREATE ON *.* TO 'new'@'%'",
+    ])
+    expect(executed[0]?.args[0]).toEqual({ database: 'information_schema' })
+  })
+
+  it('validates user ops', async () => {
+    const h = harness(withUsers())
+    stores.push(h.store)
+    await h.login()
+    expect(
+      (await h.req('/api/users/preview', { method: 'POST', body: JSON.stringify({ op: { op: 'nuke' } }) })).status
+    ).toBe(400)
+    expect((await h.req('/api/users')).status).toBe(200)
+    expect((await h.app.request('/api/users')).status).toBe(401)
+  })
+})
+
 describe('errors', () => {
   it('normalises unexpected errors as 500 INTERNAL without leaking stack traces', async () => {
     const adapter = fixtureAdapter()

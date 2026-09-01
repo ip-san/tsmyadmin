@@ -10,6 +10,8 @@ import type {
   StatementResult,
   TableInfo,
   TableSchema,
+  UserInfo,
+  UserRef,
 } from '@tsmyadmin/shared'
 import { buildBrowseQuery } from '@tsmyadmin/shared'
 import { api, isApiError, unwrap } from './api.ts'
@@ -75,6 +77,17 @@ export const rowsQuery = (ref: TableRef, options: BrowseOptions) =>
         })
       ),
     placeholderData: (prev) => prev,
+  })
+
+export const usersQuery = queryOptions({
+  queryKey: ['users'],
+  queryFn: () => unwrap<UserInfo[]>(api.users.$get()),
+})
+
+export const grantsQuery = (user: UserRef) =>
+  queryOptions({
+    queryKey: ['users', 'grants', user.name, user.host ?? ''],
+    queryFn: () => unwrap<{ statements: string[] }>(api.users.grants.$get({ query: user })),
   })
 
 export const mutations = {

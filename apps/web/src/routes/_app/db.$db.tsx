@@ -27,6 +27,7 @@ function DatabaseLayout() {
           { label: locale.tabs.sql, to: '/db/$db/sql', params: { db }, search },
           { label: locale.tabs.export, to: '/db/$db/export', params: { db }, search },
           { label: locale.tabs.import, to: '/db/$db/import', params: { db }, search },
+          { label: locale.tabs.privileges, to: '/db/$db/privileges', params: { db }, search },
         ]}
       />
       <Outlet />

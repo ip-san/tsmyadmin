@@ -25,7 +25,7 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
-      testMatch: /(flow|rows|sql|structure|export|import)\.spec/,
+      testMatch: /(flow|rows|sql|structure|export|import|users)\.spec/,
     },
     { name: 'a11y', use: { ...devices['Desktop Chrome'] }, testMatch: /a11y\.spec/ },
     { name: 'visual-light', use: { ...devices['Desktop Chrome'], colorScheme: 'light' }, testMatch: /visual\.spec/ },

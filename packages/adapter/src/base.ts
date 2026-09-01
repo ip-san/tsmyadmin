@@ -12,6 +12,8 @@ import type {
   StatementResult,
   TableInfo,
   TableSchema,
+  UserInfo,
+  UserRef,
 } from '@tsmyadmin/shared'
 import { isBinaryCell } from '@tsmyadmin/shared'
 import { Params, quoteIdent, quoteTable } from './sql/quote.ts'
@@ -23,6 +25,7 @@ import {
   type ExecuteOptions,
   type RowBatch,
   type SqlExporter,
+  type UserSqlBuilder,
 } from './types.ts'
 
 /** Normalised driver result: rows already converted to wire Cells. */
@@ -86,6 +89,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
   abstract readonly dialect: Dialect
   abstract readonly ddl: DdlBuilder
   abstract readonly exporter: SqlExporter
+  abstract readonly users: UserSqlBuilder
 
   abstract ping(): Promise<void>
   abstract close(): Promise<void>
@@ -94,6 +98,8 @@ export abstract class BaseAdapter implements DatabaseAdapter {
   abstract listTables(ns: Namespace): Promise<TableInfo[]>
   abstract describeTable(ns: Namespace, table: string): Promise<TableSchema>
   abstract showCreateTable(ns: Namespace, table: string): Promise<string[]>
+  abstract listUsers(): Promise<UserInfo[]>
+  abstract showGrants(user: UserRef): Promise<string[]>
 
   /** Checks a connection out of the pool for `ns` (MySQL: `USE db` applied; PG: pool of that database). */
   protected abstract acquire(ns: Namespace): Promise<Conn>

@@ -12,10 +12,12 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as AppUsersRouteImport } from './routes/_app/users'
 import { Route as AppDbDbRouteImport } from './routes/_app/db.$db'
 import { Route as AppDbDbIndexRouteImport } from './routes/_app/db.$db/index'
 import { Route as AppDbDbExportRouteImport } from './routes/_app/db.$db/export'
 import { Route as AppDbDbImportRouteImport } from './routes/_app/db.$db/import'
+import { Route as AppDbDbPrivilegesRouteImport } from './routes/_app/db.$db/privileges'
 import { Route as AppDbDbSqlRouteImport } from './routes/_app/db.$db/sql'
 import { Route as AppDbDbTableTableRouteImport } from './routes/_app/db.$db/table.$table'
 import { Route as AppDbDbTableTableIndexRouteImport } from './routes/_app/db.$db/table.$table/index'
@@ -41,6 +43,11 @@ const AppIndexRoute = AppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRoute,
 } as any)
+const AppUsersRoute = AppUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppDbDbRoute = AppDbDbRouteImport.update({
   id: '/db/$db',
   path: '/db/$db',
@@ -59,6 +66,11 @@ const AppDbDbExportRoute = AppDbDbExportRouteImport.update({
 const AppDbDbImportRoute = AppDbDbImportRouteImport.update({
   id: '/import',
   path: '/import',
+  getParentRoute: () => AppDbDbRoute,
+} as any)
+const AppDbDbPrivilegesRoute = AppDbDbPrivilegesRouteImport.update({
+  id: '/privileges',
+  path: '/privileges',
   getParentRoute: () => AppDbDbRoute,
 } as any)
 const AppDbDbSqlRoute = AppDbDbSqlRouteImport.update({
@@ -117,9 +129,11 @@ const AppDbDbTableTableStructureRoute =
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/login': typeof LoginRoute
+  '/users': typeof AppUsersRoute
   '/db/$db': typeof AppDbDbRouteWithChildren
   '/db/$db/export': typeof AppDbDbExportRoute
   '/db/$db/import': typeof AppDbDbImportRoute
+  '/db/$db/privileges': typeof AppDbDbPrivilegesRoute
   '/db/$db/sql': typeof AppDbDbSqlRoute
   '/db/$db/': typeof AppDbDbIndexRoute
   '/db/$db/table/$table': typeof AppDbDbTableTableRouteWithChildren
@@ -134,9 +148,11 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
+  '/users': typeof AppUsersRoute
   '/': typeof AppIndexRoute
   '/db/$db/export': typeof AppDbDbExportRoute
   '/db/$db/import': typeof AppDbDbImportRoute
+  '/db/$db/privileges': typeof AppDbDbPrivilegesRoute
   '/db/$db/sql': typeof AppDbDbSqlRoute
   '/db/$db': typeof AppDbDbIndexRoute
   '/db/$db/table/$table/export': typeof AppDbDbTableTableExportRoute
@@ -152,10 +168,12 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
+  '/_app/users': typeof AppUsersRoute
   '/_app/': typeof AppIndexRoute
   '/_app/db/$db': typeof AppDbDbRouteWithChildren
   '/_app/db/$db/export': typeof AppDbDbExportRoute
   '/_app/db/$db/import': typeof AppDbDbImportRoute
+  '/_app/db/$db/privileges': typeof AppDbDbPrivilegesRoute
   '/_app/db/$db/sql': typeof AppDbDbSqlRoute
   '/_app/db/$db/': typeof AppDbDbIndexRoute
   '/_app/db/$db/table/$table': typeof AppDbDbTableTableRouteWithChildren
@@ -173,9 +191,11 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/login'
+    | '/users'
     | '/db/$db'
     | '/db/$db/export'
     | '/db/$db/import'
+    | '/db/$db/privileges'
     | '/db/$db/sql'
     | '/db/$db/'
     | '/db/$db/table/$table'
@@ -190,9 +210,11 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
+    | '/users'
     | '/'
     | '/db/$db/export'
     | '/db/$db/import'
+    | '/db/$db/privileges'
     | '/db/$db/sql'
     | '/db/$db'
     | '/db/$db/table/$table/export'
@@ -207,10 +229,12 @@ export interface FileRouteTypes {
     | '__root__'
     | '/_app'
     | '/login'
+    | '/_app/users'
     | '/_app/'
     | '/_app/db/$db'
     | '/_app/db/$db/export'
     | '/_app/db/$db/import'
+    | '/_app/db/$db/privileges'
     | '/_app/db/$db/sql'
     | '/_app/db/$db/'
     | '/_app/db/$db/table/$table'
@@ -252,6 +276,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/users': {
+      id: '/_app/users'
+      path: '/users'
+      fullPath: '/users'
+      preLoaderRoute: typeof AppUsersRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/db/$db': {
       id: '/_app/db/$db'
       path: '/db/$db'
@@ -278,6 +309,13 @@ declare module '@tanstack/react-router' {
       path: '/import'
       fullPath: '/db/$db/import'
       preLoaderRoute: typeof AppDbDbImportRouteImport
+      parentRoute: typeof AppDbDbRoute
+    }
+    '/_app/db/$db/privileges': {
+      id: '/_app/db/$db/privileges'
+      path: '/privileges'
+      fullPath: '/db/$db/privileges'
+      preLoaderRoute: typeof AppDbDbPrivilegesRouteImport
       parentRoute: typeof AppDbDbRoute
     }
     '/_app/db/$db/sql': {
@@ -381,6 +419,7 @@ const AppDbDbTableTableRouteWithChildren =
 interface AppDbDbRouteChildren {
   AppDbDbExportRoute: typeof AppDbDbExportRoute
   AppDbDbImportRoute: typeof AppDbDbImportRoute
+  AppDbDbPrivilegesRoute: typeof AppDbDbPrivilegesRoute
   AppDbDbSqlRoute: typeof AppDbDbSqlRoute
   AppDbDbIndexRoute: typeof AppDbDbIndexRoute
   AppDbDbTableTableRoute: typeof AppDbDbTableTableRouteWithChildren
@@ -389,6 +428,7 @@ interface AppDbDbRouteChildren {
 const AppDbDbRouteChildren: AppDbDbRouteChildren = {
   AppDbDbExportRoute: AppDbDbExportRoute,
   AppDbDbImportRoute: AppDbDbImportRoute,
+  AppDbDbPrivilegesRoute: AppDbDbPrivilegesRoute,
   AppDbDbSqlRoute: AppDbDbSqlRoute,
   AppDbDbIndexRoute: AppDbDbIndexRoute,
   AppDbDbTableTableRoute: AppDbDbTableTableRouteWithChildren,
@@ -398,11 +438,13 @@ const AppDbDbRouteWithChildren =
   AppDbDbRoute._addFileChildren(AppDbDbRouteChildren)
 
 interface AppRouteChildren {
+  AppUsersRoute: typeof AppUsersRoute
   AppIndexRoute: typeof AppIndexRoute
   AppDbDbRoute: typeof AppDbDbRouteWithChildren
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppUsersRoute: AppUsersRoute,
   AppIndexRoute: AppIndexRoute,
   AppDbDbRoute: AppDbDbRouteWithChildren,
 }

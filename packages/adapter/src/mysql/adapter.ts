@@ -1,4 +1,4 @@
-import type { Namespace, TableInfo, TableSchema } from '@tsmyadmin/shared'
+import type { Namespace, TableInfo, TableSchema, UserInfo, UserRef } from '@tsmyadmin/shared'
 import mysql, { type FieldPacket, type Pool, type PoolConnection, type ResultSetHeader } from 'mysql2/promise'
 import { BaseAdapter, type Conn, firstResult, type RawResult } from '../base.ts'
 import { quoteIdent, quoteTable } from '../sql/quote.ts'
@@ -6,6 +6,7 @@ import { AdapterError, type AdapterErrorCode, type ConnectionConfig } from '../t
 import { mysqlDdl } from './ddl.ts'
 import { mysqlExporter } from './export.ts'
 import { mysqlDescribeTable, mysqlListTables } from './introspect.ts'
+import { mysqlListUsers, mysqlShowGrants, mysqlUsers } from './users.ts'
 import { mysqlColumnMeta, mysqlToCell } from './values.ts'
 
 const AUTH_CODES = new Set(['ER_ACCESS_DENIED_ERROR', 'ER_DBACCESS_DENIED_ERROR', 'ER_ACCESS_DENIED_NO_PASSWORD_ERROR'])
@@ -62,6 +63,7 @@ export class MysqlAdapter extends BaseAdapter {
   readonly dialect = 'mysql' as const
   readonly ddl = mysqlDdl
   readonly exporter = mysqlExporter
+  readonly users = mysqlUsers
   private pool: Pool | null = null
 
   constructor(private readonly config: ConnectionConfig) {
@@ -169,6 +171,19 @@ export class MysqlAdapter extends BaseAdapter {
 
   describeTable(ns: Namespace, table: string): Promise<TableSchema> {
     return this.withConn(ns, (conn) => mysqlDescribeTable(conn, ns, table))
+  }
+
+  /** information_schema is readable by every account, so it is a safe namespace for server-level queries. */
+  private serverNs(): Namespace {
+    return { database: 'information_schema' }
+  }
+
+  listUsers(): Promise<UserInfo[]> {
+    return this.withConn(this.serverNs(), (conn) => mysqlListUsers(conn))
+  }
+
+  showGrants(user: UserRef): Promise<string[]> {
+    return this.withConn(this.serverNs(), (conn) => mysqlShowGrants(conn, user))
   }
 
   showCreateTable(ns: Namespace, table: string): Promise<string[]> {

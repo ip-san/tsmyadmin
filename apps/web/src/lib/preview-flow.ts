@@ -1,0 +1,76 @@
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import type { StatementResult } from '@tsmyadmin/shared'
+import { useState } from 'react'
+
+export interface PreviewFlow<Op> {
+  /** Operation currently being previewed (null = dialog closed). */
+  op: Op | null
+  sql: string[]
+  previewing: boolean
+  running: boolean
+  error: unknown
+  /** First failing statement of the last execution, if any. */
+  failed: StatementResult | null
+  preview: (op: Op) => void
+  confirm: () => void
+  cancel: () => void
+}
+
+export interface PreviewFlowConfig<Op> {
+  preview: (op: Op) => Promise<{ sql: string[] }>
+  execute: (op: Op, sql: string[]) => Promise<StatementResult[]>
+  /** Query keys to invalidate after success (default: everything but the session). */
+  invalidate?: (key: readonly unknown[]) => boolean
+  onSuccess?: (op: Op) => void | Promise<void>
+}
+
+/**
+ * Preview → confirm → execute. Nothing runs until the user confirms the generated SQL.
+ * Shared by DDL (structure, create table, operations) and account management.
+ */
+export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<Op> {
+  const queryClient = useQueryClient()
+  const [op, setOp] = useState<Op | null>(null)
+  const [sql, setSql] = useState<string[]>([])
+  const [failed, setFailed] = useState<StatementResult | null>(null)
+  const previewM = useMutation({ mutationFn: config.preview, onSuccess: (r) => setSql(r.sql) })
+  const runM = useMutation({
+    mutationFn: (o: Op) => config.execute(o, sql),
+    onSuccess: async (results, o) => {
+      const err = results.find((r) => r.kind === 'error')
+      if (err) {
+        setFailed(err)
+        return
+      }
+      const invalidate = config.invalidate ?? ((key) => key[0] !== 'session')
+      await queryClient.invalidateQueries({ predicate: (q) => invalidate(q.queryKey) })
+      setOp(null)
+      setSql([])
+      await config.onSuccess?.(o)
+    },
+  })
+  return {
+    op,
+    sql,
+    previewing: previewM.isPending,
+    running: runM.isPending,
+    error: previewM.error ?? runM.error,
+    failed,
+    preview: (o) => {
+      setOp(o)
+      setSql([])
+      setFailed(null)
+      previewM.reset()
+      runM.reset()
+      previewM.mutate(o)
+    },
+    confirm: () => {
+      if (op !== null && sql.length > 0 && !runM.isPending) runM.mutate(op)
+    },
+    cancel: () => {
+      setOp(null)
+      setSql([])
+      setFailed(null)
+    },
+  }
+}

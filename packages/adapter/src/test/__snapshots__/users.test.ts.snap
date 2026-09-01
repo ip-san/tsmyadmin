@@ -1,0 +1,71 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`user SQL builders > mysql: createUser 1`] = `
+[
+  "CREATE USER 'o''brien'@'10.0.%' IDENTIFIED BY 'p''w\\\\d'",
+  "GRANT CREATE ON *.* TO 'o''brien'@'10.0.%'",
+  "GRANT CREATE USER ON *.* TO 'o''brien'@'10.0.%'",
+]
+`;
+
+exports[`user SQL builders > mysql: dropUser 1`] = `
+[
+  "DROP USER 'o''brien'@'10.0.%'",
+]
+`;
+
+exports[`user SQL builders > mysql: grantAll 1`] = `
+[
+  "GRANT ALL PRIVILEGES ON \`shop\`.* TO 'o''brien'@'10.0.%'",
+]
+`;
+
+exports[`user SQL builders > mysql: revokeAll 1`] = `
+[
+  "REVOKE ALL PRIVILEGES ON \`shop\`.* FROM 'o''brien'@'10.0.%'",
+]
+`;
+
+exports[`user SQL builders > mysql: setPassword 1`] = `
+[
+  "ALTER USER 'o''brien'@'10.0.%' IDENTIFIED BY 'new'",
+]
+`;
+
+exports[`user SQL builders > postgres: createUser 1`] = `
+[
+  "CREATE ROLE "o'brien" LOGIN CREATEDB CREATEROLE PASSWORD 'p''w\\d'",
+]
+`;
+
+exports[`user SQL builders > postgres: dropUser 1`] = `
+[
+  "DROP ROLE "o'brien"",
+]
+`;
+
+exports[`user SQL builders > postgres: grantAll 1`] = `
+[
+  "GRANT CONNECT, TEMP ON DATABASE "shop" TO "o'brien"",
+  "GRANT USAGE, CREATE ON SCHEMA "app" TO "o'brien"",
+  "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA "app" TO "o'brien"",
+  "GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA "app" TO "o'brien"",
+  "ALTER DEFAULT PRIVILEGES IN SCHEMA "app" GRANT ALL PRIVILEGES ON TABLES TO "o'brien"",
+]
+`;
+
+exports[`user SQL builders > postgres: revokeAll 1`] = `
+[
+  "ALTER DEFAULT PRIVILEGES IN SCHEMA "app" REVOKE ALL PRIVILEGES ON TABLES FROM "o'brien"",
+  "REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA "app" FROM "o'brien"",
+  "REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA "app" FROM "o'brien"",
+  "REVOKE ALL PRIVILEGES ON SCHEMA "app" FROM "o'brien"",
+  "REVOKE ALL PRIVILEGES ON DATABASE "shop" FROM "o'brien"",
+]
+`;
+
+exports[`user SQL builders > postgres: setPassword 1`] = `
+[
+  "ALTER ROLE "o'brien" PASSWORD 'new'",
+]
+`;

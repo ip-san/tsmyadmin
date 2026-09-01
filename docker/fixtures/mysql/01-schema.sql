@@ -1,6 +1,6 @@
 -- tsmyadmin test fixtures (MySQL). Runs as root on first container start.
 -- Every "tricky" column type used by the adapter conformance suite lives in `types_all`.
-GRANT ALL PRIVILEGES ON *.* TO 'tsmyadmin'@'%';
+GRANT ALL PRIVILEGES ON *.* TO 'tsmyadmin'@'%' WITH GRANT OPTION;
 CREATE DATABASE IF NOT EXISTS tsmyadmin_other;
 CREATE TABLE tsmyadmin_other.marker (id INT PRIMARY KEY);
 

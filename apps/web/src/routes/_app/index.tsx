@@ -14,7 +14,13 @@ function ServerPage() {
   return (
     <>
       <PageTitle>{locale.server.title}</PageTitle>
-      <TabNav label={locale.nav.server} items={[{ label: locale.tabs.databases, to: '/', exact: true }]} />
+      <TabNav
+        label={locale.nav.server}
+        items={[
+          { label: locale.tabs.databases, to: '/', exact: true },
+          { label: locale.tabs.users, to: '/users' },
+        ]}
+      />
       <h2 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-200">{locale.server.databasesTitle}</h2>
       {databases.isPending ? (
         <Spinner />

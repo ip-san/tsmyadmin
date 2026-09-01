@@ -9,11 +9,15 @@ import type {
   StatementResult,
   TableInfo,
   TableSchema,
+  UserInfo,
+  UserRef,
 } from '@tsmyadmin/shared'
 import { mysqlDdl } from '../mysql/ddl.ts'
 import { mysqlExporter } from '../mysql/export.ts'
+import { mysqlUsers } from '../mysql/users.ts'
 import { pgDdl } from '../postgres/ddl.ts'
 import { pgExporter } from '../postgres/export.ts'
+import { pgUsers } from '../postgres/users.ts'
 import { AdapterError, type DatabaseAdapter, type ExecuteOptions, type RowBatch } from '../types.ts'
 
 export interface FakeTable {
@@ -33,6 +37,7 @@ export interface FakeAdapterOptions {
   onSql?: (ns: Namespace, sql: string, opts: ExecuteOptions) => StatementResult[]
   /** When set, every method rejects with this error (simulates a dead connection). */
   failWith?: AdapterError
+  users?: UserInfo[]
 }
 
 export function fakeColumn(name: string, dataType = 'int', nullable = false): TableSchema['columns'][number] {
@@ -79,9 +84,11 @@ export class FakeAdapter implements DatabaseAdapter {
   readonly dialect: Dialect
   readonly ddl
   readonly exporter
+  readonly users
   readonly calls: { method: string; args: unknown[] }[] = []
   closed = false
   private readonly databases: Record<string, FakeDatabase>
+  private readonly userList: UserInfo[]
   private readonly onSql: FakeAdapterOptions['onSql']
   private readonly failWith: AdapterError | undefined
 
@@ -89,6 +96,8 @@ export class FakeAdapter implements DatabaseAdapter {
     this.dialect = options.dialect ?? 'mysql'
     this.ddl = this.dialect === 'mysql' ? mysqlDdl : pgDdl
     this.exporter = this.dialect === 'mysql' ? mysqlExporter : pgExporter
+    this.users = this.dialect === 'mysql' ? mysqlUsers : pgUsers
+    this.userList = options.users ?? []
     this.databases = options.databases ?? {}
     this.onSql = options.onSql
     this.failWith = options.failWith
@@ -222,6 +231,18 @@ export class FakeAdapter implements DatabaseAdapter {
       affected++
     }
     return { affectedRows: affected }
+  }
+
+  async listUsers(): Promise<UserInfo[]> {
+    this.record('listUsers')
+    return structuredClone(this.userList)
+  }
+
+  async showGrants(user: UserRef): Promise<string[]> {
+    this.record('showGrants', user)
+    if (!this.userList.some((u) => u.name === user.name))
+      throw new AdapterError('NOT_FOUND', `Unknown user: ${user.name}`)
+    return [`GRANT USAGE ON *.* TO '${user.name}'@'${user.host ?? '%'}'`]
   }
 
   async showCreateTable(ns: Namespace, table: string): Promise<string[]> {
