@@ -102,7 +102,7 @@ server {
 | ブラウズ 1 ページ | 最大 1,000 行 | `BROWSE_MAX_LIMIT` |
 | SQL コンソール結果 | 既定 1,000 / 最大 10,000 行、既定タイムアウト 30 秒 | `SQL_MAX_ROWS_*`, `SQL_TIMEOUT_DEFAULT_MS` |
 | インポートファイル | 64 MB | `IMPORT_MAX_BYTES` |
-| エクスポート | メモリ上で組み立て（巨大テーブルは CSV/テーブル単位で） | `apps/api/src/lib/export.ts` |
+| エクスポート | ストリーミング（500 行ずつ読み出して逐次送信。テーブルサイズに依存するメモリ使用なし） | `apps/api/src/lib/export.ts` |
 | バイナリ値の表示 | 先頭 64 KB | `MAX_BINARY_BYTES` |
 | DB 接続プール | セッションごとに最大 4 接続、30 分無操作で破棄 | adapter |
 

@@ -15,6 +15,7 @@ import {
 } from '@tsmyadmin/shared'
 import { Hono } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
+import { stream } from 'hono/streaming'
 import { apiError } from '../lib/errors.ts'
 import { buildExport, contentDisposition } from '../lib/export.ts'
 import { ImportValidationError, importCsv, importSql } from '../lib/import.ts'
@@ -99,13 +100,16 @@ export function databaseRoutes(cfg: SessionConfig) {
         requested.length > 0
           ? requested
           : (await adapter.listTables(namespace)).filter((t) => t.kind === 'table').map((t) => t.name)
-      if (q.format === 'csv' && tables.length !== 1)
+      if (q.format === 'csv' && tables.length !== 1) {
         return c.json(apiError('VALIDATION', 'CSV export needs exactly one table'), 400)
+      }
       const baseName = requested.length === 1 ? `${namespace.database}_${requested[0]}` : namespace.database
-      const file = await buildExport(adapter, namespace, tables, q, baseName)
-      return c.body(file.body, 200, {
-        'content-type': file.contentType,
-        'content-disposition': contentDisposition(file.filename),
+      const file = buildExport(adapter, namespace, tables, q, baseName)
+      c.header('content-type', file.contentType)
+      c.header('content-disposition', contentDisposition(file.filename))
+      // Streamed so a large table is never held in memory; batches come from adapter.iterateRows.
+      return stream(c, async (s) => {
+        for await (const chunk of file.body) await s.write(chunk)
       })
     })
     .post(

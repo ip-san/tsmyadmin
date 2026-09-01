@@ -3,7 +3,8 @@ import type { Cell, ExportQuery, Namespace } from '@tsmyadmin/shared'
 import { CSV_NULL, EXPORT_BATCH_SIZE, isBinaryCell } from '@tsmyadmin/shared'
 
 export interface ExportFile {
-  body: string
+  /** Chunks are produced lazily so a large table never has to fit in memory at once. */
+  body: AsyncIterable<string>
   contentType: string
   filename: string
 }
@@ -14,82 +15,109 @@ function csvField(cell: Cell): string {
   return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text
 }
 
-/** Builds a dump of `tables` in the requested format. Whole document in memory (batched reads keep the DB side bounded). */
-/** `baseName` is the file name without extension (db, or db_table when one table was requested explicitly). */
-export async function buildExport(
+async function* csvBody(adapter: DatabaseAdapter, ns: Namespace, table: string, bom: boolean): AsyncIterable<string> {
+  if (bom) yield '﻿'
+  let header = false
+  for await (const b of adapter.iterateRows(ns, table, { batchSize: EXPORT_BATCH_SIZE })) {
+    if (!header) {
+      yield `${b.columns.map((c) => csvField(c.name)).join(',')}\r\n`
+      header = true
+    }
+    if (b.rows.length > 0) yield `${b.rows.map((row) => row.map(csvField).join(',')).join('\r\n')}\r\n`
+  }
+}
+
+async function* jsonBody(adapter: DatabaseAdapter, ns: Namespace, tables: string[]): AsyncIterable<string> {
+  yield '{\n'
+  for (const [t, table] of tables.entries()) {
+    yield `${t > 0 ? ',\n' : ''}  ${JSON.stringify(table)}: [`
+    let first = true
+    for await (const b of adapter.iterateRows(ns, table, { batchSize: EXPORT_BATCH_SIZE })) {
+      for (const row of b.rows) {
+        const obj = Object.fromEntries(b.columns.map((c, i) => [c.name, row[i] ?? null]))
+        yield `${first ? '\n' : ',\n'}    ${JSON.stringify(obj)}`
+        first = false
+      }
+    }
+    yield first ? ']' : '\n  ]'
+  }
+  yield '\n}\n'
+}
+
+async function* sqlBody(
   adapter: DatabaseAdapter,
   ns: Namespace,
   tables: string[],
-  q: ExportQuery,
-  baseName: string = ns.database
-): Promise<ExportFile> {
-  const base = baseName
-  const batch = { batchSize: EXPORT_BATCH_SIZE }
-
-  if (q.format === 'csv') {
-    const table = tables[0]
-    if (tables.length !== 1 || !table) throw new Error('CSV export needs exactly one table')
-    const lines: string[] = []
-    let header = false
-    for await (const b of adapter.iterateRows(ns, table, batch)) {
-      if (!header) {
-        lines.push(b.columns.map((c) => csvField(c.name)).join(','))
-        header = true
-      }
-      for (const row of b.rows) lines.push(row.map(csvField).join(','))
-    }
-    const body = `${q.bom === '1' ? '﻿' : ''}${lines.join('\r\n')}\r\n`
-    return { body, contentType: 'text/csv; charset=utf-8', filename: `${base}.csv` }
-  }
-
-  if (q.format === 'json') {
-    const out: Record<string, Record<string, unknown>[]> = {}
-    for (const table of tables) {
-      const rows: Record<string, unknown>[] = []
-      for await (const b of adapter.iterateRows(ns, table, batch)) {
-        for (const row of b.rows) rows.push(Object.fromEntries(b.columns.map((c, i) => [c.name, row[i] ?? null])))
-      }
-      out[table] = rows
-    }
-    return {
-      body: `${JSON.stringify(out, null, 2)}\n`,
-      contentType: 'application/json; charset=utf-8',
-      filename: `${base}.json`,
-    }
-  }
-
-  const parts: string[] = [
-    `-- tsmyadmin SQL dump`,
+  q: ExportQuery
+): AsyncIterable<string> {
+  yield [
+    '-- tsmyadmin SQL dump',
     `-- Dialect: ${adapter.dialect}`,
     `-- Database: ${ns.database}${ns.schema ? ` / schema ${ns.schema}` : ''}`,
     `-- Generated: ${new Date().toISOString()}`,
     '',
-  ]
+    '',
+  ].join('\n')
   for (const table of tables) {
-    parts.push(
-      `-- ----------------------------------------`,
-      `-- Table: ${table}`,
-      `-- ----------------------------------------`,
-      ''
-    )
+    yield `-- ----------------------------------------\n-- Table: ${table}\n-- ----------------------------------------\n\n`
     // One catalog round trip per table, shared by the DDL reconstruction and the row scan.
     const schema = await adapter.describeTable(ns, table)
     if (q.structure === '1') {
-      for (const stmt of await adapter.showCreateTable(ns, table, schema)) parts.push(`${stmt};`, '')
+      for (const stmt of await adapter.showCreateTable(ns, table, schema)) yield `${stmt};\n\n`
     }
     if (q.data === '1') {
-      for await (const b of adapter.iterateRows(ns, table, { ...batch, schema })) {
+      for await (const b of adapter.iterateRows(ns, table, { batchSize: EXPORT_BATCH_SIZE, schema })) {
         const stmt = adapter.exporter.insert(
           ns,
           table,
           b.columns.map((c) => c.name),
           b.rows
         )
-        if (stmt) parts.push(stmt, '')
+        if (stmt) yield `${stmt}\n\n`
       }
     }
   }
-  return { body: `${parts.join('\n')}\n`, contentType: 'application/sql; charset=utf-8', filename: `${base}.sql` }
+}
+
+/**
+ * Builds a dump of `tables` in the requested format as a lazy chunk stream.
+ * `baseName` is the file name without extension (db, or db_table when one table was requested explicitly).
+ */
+export function buildExport(
+  adapter: DatabaseAdapter,
+  ns: Namespace,
+  tables: string[],
+  q: ExportQuery,
+  baseName: string = ns.database
+): ExportFile {
+  if (q.format === 'csv') {
+    const table = tables[0]
+    if (tables.length !== 1 || !table) throw new Error('CSV export needs exactly one table')
+    return {
+      body: csvBody(adapter, ns, table, q.bom === '1'),
+      contentType: 'text/csv; charset=utf-8',
+      filename: `${baseName}.csv`,
+    }
+  }
+  if (q.format === 'json') {
+    return {
+      body: jsonBody(adapter, ns, tables),
+      contentType: 'application/json; charset=utf-8',
+      filename: `${baseName}.json`,
+    }
+  }
+  return {
+    body: sqlBody(adapter, ns, tables, q),
+    contentType: 'application/sql; charset=utf-8',
+    filename: `${baseName}.sql`,
+  }
+}
+
+/** Collects a chunk stream into one string (tests, small exports). */
+export async function collect(body: AsyncIterable<string>): Promise<string> {
+  let out = ''
+  for await (const chunk of body) out += chunk
+  return out
 }
 
 /** RFC 6266 / 5987 Content-Disposition with an ASCII fallback for non-Latin names. */
