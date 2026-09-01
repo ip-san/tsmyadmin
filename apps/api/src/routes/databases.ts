@@ -12,6 +12,7 @@ import {
   SqlCancelRequestSchema,
   SqlRequestSchema,
   type SqlStreamEvent,
+  TriggerQuerySchema,
   UpdateRowRequestSchema,
 } from '@tsmyadmin/shared'
 import { Hono } from 'hono'
@@ -37,6 +38,14 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
       .get('/databases/:db/tables', validate('query', SchemaQuerySchema), async (c) => {
         const q = c.req.valid('query')
         return c.json(await c.get('session').adapter.listTables(ns(c.req.param('db'), q.schema)))
+      })
+      .get('/databases/:db/routines', validate('query', SchemaQuerySchema), async (c) => {
+        const q = c.req.valid('query')
+        return c.json(await c.get('session').adapter.listRoutines(ns(c.req.param('db'), q.schema)))
+      })
+      .get('/databases/:db/triggers', validate('query', TriggerQuerySchema), async (c) => {
+        const q = c.req.valid('query')
+        return c.json(await c.get('session').adapter.listTriggers(ns(c.req.param('db'), q.schema), q.table))
       })
       .get('/databases/:db/tables/:table/structure', validate('query', SchemaQuerySchema), async (c) => {
         const q = c.req.valid('query')

@@ -87,3 +87,19 @@ INSERT INTO types_all (big_col, dec_col, float_col, double_col, bool_col, date_c
 INSERT INTO no_pk (a, b) VALUES (1, 'one'), (1, 'one'), (2, 'two'), (NULL, NULL);
 INSERT INTO unique_only (code, val) VALUES ('A', 1), ('B', 2);
 INSERT INTO composite_pk (a, b, val) VALUES (1, 1, 'one-one'), (1, 2, 'one-two'), (2, 1, 'two-one');
+
+-- Routines and triggers (read-only listing in the "ルーチン" / "トリガー" tabs)
+DELIMITER $$
+CREATE PROCEDURE count_users(OUT total INT)
+BEGIN
+  SELECT COUNT(*) INTO total FROM users;
+END$$
+CREATE FUNCTION user_label(uid INT) RETURNS VARCHAR(120) DETERMINISTIC READS SQL DATA
+BEGIN
+  RETURN (SELECT CONCAT(name, ' <', email, '>') FROM users WHERE id = uid);
+END$$
+CREATE TRIGGER posts_before_insert BEFORE INSERT ON posts FOR EACH ROW
+BEGIN
+  IF NEW.title = '' THEN SET NEW.title = '(untitled)'; END IF;
+END$$
+DELIMITER ;

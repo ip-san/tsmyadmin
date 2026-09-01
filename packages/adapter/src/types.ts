@@ -9,12 +9,14 @@ import type {
   KeyValue,
   Namespace,
   ProcessInfo,
+  RoutineInfo,
   RowKey,
   RowValues,
   ServerInfo,
   StatementResult,
   TableInfo,
   TableSchema,
+  TriggerInfo,
   UserInfo,
   UserOp,
   UserRef,
@@ -114,6 +116,10 @@ export interface DatabaseAdapter {
   listSchemas(database: string): Promise<string[]>
   listTables(ns: Namespace): Promise<TableInfo[]>
   describeTable(ns: Namespace, table: string): Promise<TableSchema>
+  /** Stored procedures and functions in the namespace (definitions when readable). */
+  listRoutines(ns: Namespace): Promise<RoutineInfo[]>
+  /** Triggers in the namespace, optionally only for one table. */
+  listTriggers(ns: Namespace, table?: string): Promise<TriggerInfo[]>
   browseRows(ns: Namespace, table: string, opts: BrowseOptions): Promise<BrowseResult>
   insertRow(ns: Namespace, table: string, values: RowValues): Promise<{ affectedRows: number }>
   /** Bulk insert (imports): parameterised multi-row INSERTs inside one transaction; all-or-nothing. */
@@ -162,6 +168,8 @@ export const ADAPTER_METHOD_NAMES = [
   'listSchemas',
   'listTables',
   'describeTable',
+  'listRoutines',
+  'listTriggers',
   'browseRows',
   'insertRow',
   'insertRows',

@@ -179,6 +179,30 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
       })
     })
 
+    describe('listRoutines', () => {
+      it('lists the fixture procedure and function with definitions', async () => {
+        const routines = await db.listRoutines(ns)
+        const proc = routines.find((r) => r.name === 'count_users')
+        const fn = routines.find((r) => r.name === 'user_label')
+        expect(proc?.kind).toBe('procedure')
+        expect(fn?.kind).toBe('function')
+        expect(fn?.returns?.toLowerCase()).toMatch(/varchar|text/)
+        expect(fn?.parameters.toLowerCase()).toContain('uid')
+        expect(fn?.definition?.toUpperCase()).toContain('CREATE')
+      })
+    })
+
+    describe('listTriggers', () => {
+      it('lists the fixture trigger and filters by table', async () => {
+        const all = await db.listTriggers(ns)
+        const trg = all.find((t) => t.name === 'posts_before_insert')
+        expect(trg).toMatchObject({ table: 'posts', timing: 'BEFORE', events: 'INSERT', orientation: 'ROW' })
+        expect(trg?.definition).toBeTruthy()
+        expect((await db.listTriggers(ns, 'posts')).map((t) => t.name)).toContain('posts_before_insert')
+        expect(await db.listTriggers(ns, 'users')).toEqual([])
+      })
+    })
+
     describe('browseRows', () => {
       it('returns rows as arrays with column metadata and total', async () => {
         const r = await browseAll('users')

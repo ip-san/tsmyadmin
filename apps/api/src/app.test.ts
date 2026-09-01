@@ -316,6 +316,16 @@ describe('databases & tables', () => {
     expect(structure.primaryKey).toEqual(['id'])
   })
 
+  it('lists routines and triggers (table filter passed through)', async () => {
+    const h = harness()
+    stores.push(h.store)
+    await h.login()
+    expect(await (await h.req('/api/databases/shop/routines?schema=app')).json()).toEqual([])
+    expect(h.adapter.calls.at(-1)).toEqual({ method: 'listRoutines', args: [{ database: 'shop', schema: 'app' }] })
+    expect(await (await h.req('/api/databases/shop/triggers?table=users')).json()).toEqual([])
+    expect(h.adapter.calls.at(-1)).toEqual({ method: 'listTriggers', args: [{ database: 'shop' }, 'users'] })
+  })
+
   it('passes ?schema through as the namespace', async () => {
     const h = harness()
     stores.push(h.store)

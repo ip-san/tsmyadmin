@@ -5,6 +5,7 @@ import type {
   DdlOp,
   KeyValue,
   ProcessInfo,
+  RoutineInfo,
   RowKey,
   RowValues,
   ServerInfo,
@@ -14,6 +15,7 @@ import type {
   StatementResult,
   TableInfo,
   TableSchema,
+  TriggerInfo,
   UserInfo,
   UserRef,
 } from '@tsmyadmin/shared'
@@ -62,6 +64,25 @@ export const tablesQuery = (db: string, schema?: string) =>
   queryOptions({
     queryKey: ['tables', db, schema ?? ''],
     queryFn: () => unwrap<TableInfo[]>(api.databases[':db'].tables.$get({ param: { db }, query: schemaQuery(schema) })),
+  })
+
+export const routinesQuery = (db: string, schema?: string) =>
+  queryOptions({
+    queryKey: ['routines', db, schema ?? ''],
+    queryFn: () =>
+      unwrap<RoutineInfo[]>(api.databases[':db'].routines.$get({ param: { db }, query: schemaQuery(schema) })),
+  })
+
+export const triggersQuery = (db: string, schema?: string, table?: string) =>
+  queryOptions({
+    queryKey: ['triggers', db, schema ?? '', table ?? ''],
+    queryFn: () =>
+      unwrap<TriggerInfo[]>(
+        api.databases[':db'].triggers.$get({
+          param: { db },
+          query: { ...schemaQuery(schema), ...(table ? { table } : {}) },
+        })
+      ),
   })
 
 export const structureQuery = (ref: TableRef) =>

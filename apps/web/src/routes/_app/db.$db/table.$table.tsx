@@ -29,6 +29,7 @@ function TableLayout() {
           { label: locale.tabs.insert, to: '/db/$db/table/$table/insert', params, search },
           { label: locale.tabs.export, to: '/db/$db/table/$table/export', params, search },
           { label: locale.tabs.import, to: '/db/$db/table/$table/import', params, search },
+          { label: locale.tabs.triggers, to: '/db/$db/table/$table/triggers', params, search },
           { label: locale.tabs.operations, to: '/db/$db/table/$table/operations', params, search },
         ]}
       />

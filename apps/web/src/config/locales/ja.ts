@@ -83,6 +83,8 @@ export const ja = {
     status: 'ステータス',
     variables: '変数',
     processes: 'プロセス',
+    routines: 'ルーチン',
+    triggers: 'トリガー',
   },
   database: {
     title: (db: string) => `データベース: ${db}`,
@@ -388,6 +390,32 @@ export const ja = {
       const m = Math.floor((sec % 3600) / 60)
       return `${d > 0 ? `${d} 日 ` : ''}${h} 時間 ${m} 分`
     },
+  },
+  routines: {
+    title: 'ストアドプロシージャ / 関数',
+    name: '名前',
+    kind: '種類',
+    procedure: 'プロシージャ',
+    function: '関数',
+    language: '言語',
+    returns: '戻り値',
+    parameters: '引数',
+    definition: '定義',
+    comment: 'コメント',
+    none: 'ルーチンはありません',
+    show: '定義を表示',
+    hide: '定義を隠す',
+    noDefinition: '定義を読む権限がありません',
+  },
+  triggers: {
+    title: 'トリガー',
+    name: '名前',
+    table: 'テーブル',
+    timing: 'タイミング',
+    events: 'イベント',
+    orientation: '単位',
+    definition: '定義',
+    none: 'トリガーはありません',
   },
   errors: {
     UNAUTHENTICATED: '接続が切れています。再度接続してください',

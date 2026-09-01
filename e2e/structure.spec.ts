@@ -113,6 +113,24 @@ for (const t of TARGETS) {
       await expect(page.getByRole('row').filter({ hasText: dbName })).toHaveCount(0)
     })
 
+    test('lists routines and triggers with collapsible definitions', async ({ page }) => {
+      await page.goto(t.schema ? `/db/${t.database}/routines?schema=${t.schema}` : `/db/${t.database}/routines`)
+      const routines = page.getByRole('table', { name: 'ストアドプロシージャ / 関数' })
+      await expect(routines.getByRole('row').filter({ hasText: 'count_users' })).toContainText('プロシージャ')
+      await expect(routines.getByRole('row').filter({ hasText: 'user_label' })).toContainText('関数')
+      await page.getByRole('button', { name: 'user_label: 定義を表示' }).click()
+      await expect(routines.getByText(/CREATE/i).first()).toBeVisible()
+
+      await page.goto(tableUrl(t, 'posts', '/triggers'))
+      const triggers = page.getByRole('table', { name: 'トリガー' })
+      await expect(triggers.getByRole('row').filter({ hasText: 'posts_before_insert' })).toContainText('BEFORE')
+      await page.getByRole('button', { name: 'posts_before_insert: 定義を表示' }).click()
+      // MySQL shows the trigger body; PostgreSQL shows the CREATE TRIGGER statement (body lives in the function).
+      await expect(triggers.getByText(t.dialect === 'mysql' ? /untitled/ : /posts_default_title/).first()).toBeVisible()
+      await page.goto(tableUrl(t, 'users', '/triggers'))
+      await expect(page.getByText('トリガーはありません')).toBeVisible()
+    })
+
     test('creates a schema on PostgreSQL from the database page', async ({ page }) => {
       test.skip(t.dialect !== 'postgres', 'schemas are a PostgreSQL concept')
       const schemaName = `e2e_schema_${Date.now().toString(36)}`

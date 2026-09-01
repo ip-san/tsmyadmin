@@ -8,6 +8,7 @@ import type {
   KeyValue,
   Namespace,
   ProcessInfo,
+  RoutineInfo,
   RowKey,
   RowKeyKind,
   RowValues,
@@ -15,6 +16,7 @@ import type {
   StatementResult,
   TableInfo,
   TableSchema,
+  TriggerInfo,
   UserInfo,
   UserRef,
 } from '@tsmyadmin/shared'
@@ -105,6 +107,8 @@ export abstract class BaseAdapter implements DatabaseAdapter {
   abstract listSchemas(database: string): Promise<string[]>
   abstract listTables(ns: Namespace): Promise<TableInfo[]>
   abstract describeTable(ns: Namespace, table: string): Promise<TableSchema>
+  abstract listRoutines(ns: Namespace): Promise<RoutineInfo[]>
+  abstract listTriggers(ns: Namespace, table?: string): Promise<TriggerInfo[]>
   abstract readonly serverNamespace: Namespace
   abstract showCreateTable(ns: Namespace, table: string, schema?: TableSchema): Promise<string[]>
   abstract serverInfo(): Promise<ServerInfo>

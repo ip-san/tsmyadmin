@@ -3,9 +3,11 @@ import type {
   KeyValue,
   Namespace,
   ProcessInfo,
+  RoutineInfo,
   ServerInfo,
   TableInfo,
   TableSchema,
+  TriggerInfo,
   UserInfo,
   UserRef,
 } from '@tsmyadmin/shared'
@@ -16,6 +18,7 @@ import { AdapterError, type AdapterErrorCode, type ConnectionConfig } from '../t
 import { pgCreateStatements, pgDdl } from './ddl.ts'
 import { pgExporter } from './export.ts'
 import { pgDescribeTable, pgListSchemas, pgListTables } from './introspect.ts'
+import { pgListRoutines, pgListTriggers } from './routines.ts'
 import { pgKillProcess, pgListProcesses, pgListStatus, pgListVariables, pgServerInfo } from './server.ts'
 import { pgListUsers, pgShowGrants, pgUsers } from './users.ts'
 import { PG_TYPE_NAMES, pgToCell, pgTypes } from './values.ts'
@@ -197,6 +200,14 @@ export class PostgresAdapter extends BaseAdapter {
 
   listTables(ns: Namespace): Promise<TableInfo[]> {
     return this.withConn(ns, (conn) => pgListTables(conn, ns))
+  }
+
+  listRoutines(ns: Namespace): Promise<RoutineInfo[]> {
+    return this.withConn(ns, (conn) => pgListRoutines(conn, ns))
+  }
+
+  listTriggers(ns: Namespace, table?: string): Promise<TriggerInfo[]> {
+    return this.withConn(ns, (conn) => pgListTriggers(conn, ns, table))
   }
 
   describeTable(ns: Namespace, table: string): Promise<TableSchema> {

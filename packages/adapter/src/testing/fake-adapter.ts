@@ -6,12 +6,14 @@ import type {
   KeyValue,
   Namespace,
   ProcessInfo,
+  RoutineInfo,
   RowKey,
   RowValues,
   ServerInfo,
   StatementResult,
   TableInfo,
   TableSchema,
+  TriggerInfo,
   UserInfo,
   UserRef,
 } from '@tsmyadmin/shared'
@@ -156,6 +158,16 @@ export class FakeAdapter implements DatabaseAdapter {
       engine: t.schema.engine,
       comment: t.schema.comment,
     }))
+  }
+
+  async listRoutines(ns: Namespace): Promise<RoutineInfo[]> {
+    this.record('listRoutines', ns)
+    return []
+  }
+
+  async listTriggers(ns: Namespace, table?: string): Promise<TriggerInfo[]> {
+    this.record('listTriggers', ns, table)
+    return []
   }
 
   async describeTable(ns: Namespace, table: string): Promise<TableSchema> {

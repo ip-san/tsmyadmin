@@ -28,6 +28,8 @@ function DatabaseLayout() {
           { label: locale.tabs.export, to: '/db/$db/export', params: { db }, search },
           { label: locale.tabs.import, to: '/db/$db/import', params: { db }, search },
           { label: locale.tabs.privileges, to: '/db/$db/privileges', params: { db }, search },
+          { label: locale.tabs.routines, to: '/db/$db/routines', params: { db }, search },
+          { label: locale.tabs.triggers, to: '/db/$db/triggers', params: { db }, search },
         ]}
       />
       <Outlet />

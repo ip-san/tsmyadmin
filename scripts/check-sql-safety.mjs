@@ -20,6 +20,8 @@ const SQL_BUILDER_ALLOWLIST = [
   // ddl (ALTER/CREATE), adapter (USE/SET/SHOW CREATE), export (INSERT dumps), users (accounts/GRANT), server (KILL id, regex-validated).
   // introspect.ts / values.ts are deliberately NOT listed: they must stay static SQL + parameters.
   /^packages\/adapter\/src\/(mysql|postgres)\/(ddl|adapter|export|users|server)\.ts$/,
+  // routines: SHOW CREATE PROCEDURE|FUNCTION <quoted db>.<quoted name> (MySQL has no parameterisable form).
+  /^packages\/adapter\/src\/mysql\/routines\.ts$/,
   // Editor prefill text shown to the user; executed only when they press Run (identifiers quoted).
   /^apps\/web\/src\/features\/sql\/prefill\.ts$/,
 ]

@@ -94,3 +94,20 @@ INSERT INTO no_pk (a, b) VALUES (1, 'one'), (1, 'one'), (2, 'two'), (NULL, NULL)
 INSERT INTO unique_only (code, val) VALUES ('A', 1), ('B', 2);
 INSERT INTO composite_pk (a, b, val) VALUES (1, 1, 'one-one'), (1, 2, 'one-two'), (2, 1, 'two-one');
 INSERT INTO app.settings (key, value) VALUES ('theme', 'dark');
+
+-- Routines and triggers (read-only listing in the "ルーチン" / "トリガー" tabs)
+CREATE FUNCTION user_label(uid INT) RETURNS TEXT LANGUAGE sql STABLE AS $$
+  SELECT name || ' <' || email || '>' FROM users WHERE id = uid
+$$;
+CREATE PROCEDURE count_users(INOUT total INT) LANGUAGE plpgsql AS $$
+BEGIN
+  SELECT COUNT(*) INTO total FROM users;
+END
+$$;
+CREATE FUNCTION posts_default_title() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.title = '' THEN NEW.title := '(untitled)'; END IF;
+  RETURN NEW;
+END
+$$;
+CREATE TRIGGER posts_before_insert BEFORE INSERT ON posts FOR EACH ROW EXECUTE FUNCTION posts_default_title();

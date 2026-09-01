@@ -21,7 +21,9 @@ import { Route as AppDbDbIndexRouteImport } from './routes/_app/db.$db/index'
 import { Route as AppDbDbExportRouteImport } from './routes/_app/db.$db/export'
 import { Route as AppDbDbImportRouteImport } from './routes/_app/db.$db/import'
 import { Route as AppDbDbPrivilegesRouteImport } from './routes/_app/db.$db/privileges'
+import { Route as AppDbDbRoutinesRouteImport } from './routes/_app/db.$db/routines'
 import { Route as AppDbDbSqlRouteImport } from './routes/_app/db.$db/sql'
+import { Route as AppDbDbTriggersRouteImport } from './routes/_app/db.$db/triggers'
 import { Route as AppDbDbTableTableRouteImport } from './routes/_app/db.$db/table.$table'
 import { Route as AppDbDbTableTableIndexRouteImport } from './routes/_app/db.$db/table.$table/index'
 import { Route as AppDbDbTableTableExportRouteImport } from './routes/_app/db.$db/table.$table/export'
@@ -31,6 +33,7 @@ import { Route as AppDbDbTableTableOperationsRouteImport } from './routes/_app/d
 import { Route as AppDbDbTableTableSearchRouteImport } from './routes/_app/db.$db/table.$table/search'
 import { Route as AppDbDbTableTableSqlRouteImport } from './routes/_app/db.$db/table.$table/sql'
 import { Route as AppDbDbTableTableStructureRouteImport } from './routes/_app/db.$db/table.$table/structure'
+import { Route as AppDbDbTableTableTriggersRouteImport } from './routes/_app/db.$db/table.$table/triggers'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -91,9 +94,19 @@ const AppDbDbPrivilegesRoute = AppDbDbPrivilegesRouteImport.update({
   path: '/privileges',
   getParentRoute: () => AppDbDbRoute,
 } as any)
+const AppDbDbRoutinesRoute = AppDbDbRoutinesRouteImport.update({
+  id: '/routines',
+  path: '/routines',
+  getParentRoute: () => AppDbDbRoute,
+} as any)
 const AppDbDbSqlRoute = AppDbDbSqlRouteImport.update({
   id: '/sql',
   path: '/sql',
+  getParentRoute: () => AppDbDbRoute,
+} as any)
+const AppDbDbTriggersRoute = AppDbDbTriggersRouteImport.update({
+  id: '/triggers',
+  path: '/triggers',
   getParentRoute: () => AppDbDbRoute,
 } as any)
 const AppDbDbTableTableRoute = AppDbDbTableTableRouteImport.update({
@@ -143,6 +156,12 @@ const AppDbDbTableTableStructureRoute =
     path: '/structure',
     getParentRoute: () => AppDbDbTableTableRoute,
   } as any)
+const AppDbDbTableTableTriggersRoute =
+  AppDbDbTableTableTriggersRouteImport.update({
+    id: '/triggers',
+    path: '/triggers',
+    getParentRoute: () => AppDbDbTableTableRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
@@ -155,7 +174,9 @@ export interface FileRoutesByFullPath {
   '/db/$db/export': typeof AppDbDbExportRoute
   '/db/$db/import': typeof AppDbDbImportRoute
   '/db/$db/privileges': typeof AppDbDbPrivilegesRoute
+  '/db/$db/routines': typeof AppDbDbRoutinesRoute
   '/db/$db/sql': typeof AppDbDbSqlRoute
+  '/db/$db/triggers': typeof AppDbDbTriggersRoute
   '/db/$db/': typeof AppDbDbIndexRoute
   '/db/$db/table/$table': typeof AppDbDbTableTableRouteWithChildren
   '/db/$db/table/$table/export': typeof AppDbDbTableTableExportRoute
@@ -165,6 +186,7 @@ export interface FileRoutesByFullPath {
   '/db/$db/table/$table/search': typeof AppDbDbTableTableSearchRoute
   '/db/$db/table/$table/sql': typeof AppDbDbTableTableSqlRoute
   '/db/$db/table/$table/structure': typeof AppDbDbTableTableStructureRoute
+  '/db/$db/table/$table/triggers': typeof AppDbDbTableTableTriggersRoute
   '/db/$db/table/$table/': typeof AppDbDbTableTableIndexRoute
 }
 export interface FileRoutesByTo {
@@ -177,7 +199,9 @@ export interface FileRoutesByTo {
   '/db/$db/export': typeof AppDbDbExportRoute
   '/db/$db/import': typeof AppDbDbImportRoute
   '/db/$db/privileges': typeof AppDbDbPrivilegesRoute
+  '/db/$db/routines': typeof AppDbDbRoutinesRoute
   '/db/$db/sql': typeof AppDbDbSqlRoute
+  '/db/$db/triggers': typeof AppDbDbTriggersRoute
   '/db/$db': typeof AppDbDbIndexRoute
   '/db/$db/table/$table/export': typeof AppDbDbTableTableExportRoute
   '/db/$db/table/$table/import': typeof AppDbDbTableTableImportRoute
@@ -186,6 +210,7 @@ export interface FileRoutesByTo {
   '/db/$db/table/$table/search': typeof AppDbDbTableTableSearchRoute
   '/db/$db/table/$table/sql': typeof AppDbDbTableTableSqlRoute
   '/db/$db/table/$table/structure': typeof AppDbDbTableTableStructureRoute
+  '/db/$db/table/$table/triggers': typeof AppDbDbTableTableTriggersRoute
   '/db/$db/table/$table': typeof AppDbDbTableTableIndexRoute
 }
 export interface FileRoutesById {
@@ -201,7 +226,9 @@ export interface FileRoutesById {
   '/_app/db/$db/export': typeof AppDbDbExportRoute
   '/_app/db/$db/import': typeof AppDbDbImportRoute
   '/_app/db/$db/privileges': typeof AppDbDbPrivilegesRoute
+  '/_app/db/$db/routines': typeof AppDbDbRoutinesRoute
   '/_app/db/$db/sql': typeof AppDbDbSqlRoute
+  '/_app/db/$db/triggers': typeof AppDbDbTriggersRoute
   '/_app/db/$db/': typeof AppDbDbIndexRoute
   '/_app/db/$db/table/$table': typeof AppDbDbTableTableRouteWithChildren
   '/_app/db/$db/table/$table/export': typeof AppDbDbTableTableExportRoute
@@ -211,6 +238,7 @@ export interface FileRoutesById {
   '/_app/db/$db/table/$table/search': typeof AppDbDbTableTableSearchRoute
   '/_app/db/$db/table/$table/sql': typeof AppDbDbTableTableSqlRoute
   '/_app/db/$db/table/$table/structure': typeof AppDbDbTableTableStructureRoute
+  '/_app/db/$db/table/$table/triggers': typeof AppDbDbTableTableTriggersRoute
   '/_app/db/$db/table/$table/': typeof AppDbDbTableTableIndexRoute
 }
 export interface FileRouteTypes {
@@ -226,7 +254,9 @@ export interface FileRouteTypes {
     | '/db/$db/export'
     | '/db/$db/import'
     | '/db/$db/privileges'
+    | '/db/$db/routines'
     | '/db/$db/sql'
+    | '/db/$db/triggers'
     | '/db/$db/'
     | '/db/$db/table/$table'
     | '/db/$db/table/$table/export'
@@ -236,6 +266,7 @@ export interface FileRouteTypes {
     | '/db/$db/table/$table/search'
     | '/db/$db/table/$table/sql'
     | '/db/$db/table/$table/structure'
+    | '/db/$db/table/$table/triggers'
     | '/db/$db/table/$table/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -248,7 +279,9 @@ export interface FileRouteTypes {
     | '/db/$db/export'
     | '/db/$db/import'
     | '/db/$db/privileges'
+    | '/db/$db/routines'
     | '/db/$db/sql'
+    | '/db/$db/triggers'
     | '/db/$db'
     | '/db/$db/table/$table/export'
     | '/db/$db/table/$table/import'
@@ -257,6 +290,7 @@ export interface FileRouteTypes {
     | '/db/$db/table/$table/search'
     | '/db/$db/table/$table/sql'
     | '/db/$db/table/$table/structure'
+    | '/db/$db/table/$table/triggers'
     | '/db/$db/table/$table'
   id:
     | '__root__'
@@ -271,7 +305,9 @@ export interface FileRouteTypes {
     | '/_app/db/$db/export'
     | '/_app/db/$db/import'
     | '/_app/db/$db/privileges'
+    | '/_app/db/$db/routines'
     | '/_app/db/$db/sql'
+    | '/_app/db/$db/triggers'
     | '/_app/db/$db/'
     | '/_app/db/$db/table/$table'
     | '/_app/db/$db/table/$table/export'
@@ -281,6 +317,7 @@ export interface FileRouteTypes {
     | '/_app/db/$db/table/$table/search'
     | '/_app/db/$db/table/$table/sql'
     | '/_app/db/$db/table/$table/structure'
+    | '/_app/db/$db/table/$table/triggers'
     | '/_app/db/$db/table/$table/'
   fileRoutesById: FileRoutesById
 }
@@ -375,11 +412,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppDbDbPrivilegesRouteImport
       parentRoute: typeof AppDbDbRoute
     }
+    '/_app/db/$db/routines': {
+      id: '/_app/db/$db/routines'
+      path: '/routines'
+      fullPath: '/db/$db/routines'
+      preLoaderRoute: typeof AppDbDbRoutinesRouteImport
+      parentRoute: typeof AppDbDbRoute
+    }
     '/_app/db/$db/sql': {
       id: '/_app/db/$db/sql'
       path: '/sql'
       fullPath: '/db/$db/sql'
       preLoaderRoute: typeof AppDbDbSqlRouteImport
+      parentRoute: typeof AppDbDbRoute
+    }
+    '/_app/db/$db/triggers': {
+      id: '/_app/db/$db/triggers'
+      path: '/triggers'
+      fullPath: '/db/$db/triggers'
+      preLoaderRoute: typeof AppDbDbTriggersRouteImport
       parentRoute: typeof AppDbDbRoute
     }
     '/_app/db/$db/table/$table': {
@@ -445,6 +496,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppDbDbTableTableStructureRouteImport
       parentRoute: typeof AppDbDbTableTableRoute
     }
+    '/_app/db/$db/table/$table/triggers': {
+      id: '/_app/db/$db/table/$table/triggers'
+      path: '/triggers'
+      fullPath: '/db/$db/table/$table/triggers'
+      preLoaderRoute: typeof AppDbDbTableTableTriggersRouteImport
+      parentRoute: typeof AppDbDbTableTableRoute
+    }
   }
 }
 
@@ -456,6 +514,7 @@ interface AppDbDbTableTableRouteChildren {
   AppDbDbTableTableSearchRoute: typeof AppDbDbTableTableSearchRoute
   AppDbDbTableTableSqlRoute: typeof AppDbDbTableTableSqlRoute
   AppDbDbTableTableStructureRoute: typeof AppDbDbTableTableStructureRoute
+  AppDbDbTableTableTriggersRoute: typeof AppDbDbTableTableTriggersRoute
   AppDbDbTableTableIndexRoute: typeof AppDbDbTableTableIndexRoute
 }
 
@@ -467,6 +526,7 @@ const AppDbDbTableTableRouteChildren: AppDbDbTableTableRouteChildren = {
   AppDbDbTableTableSearchRoute: AppDbDbTableTableSearchRoute,
   AppDbDbTableTableSqlRoute: AppDbDbTableTableSqlRoute,
   AppDbDbTableTableStructureRoute: AppDbDbTableTableStructureRoute,
+  AppDbDbTableTableTriggersRoute: AppDbDbTableTableTriggersRoute,
   AppDbDbTableTableIndexRoute: AppDbDbTableTableIndexRoute,
 }
 
@@ -477,7 +537,9 @@ interface AppDbDbRouteChildren {
   AppDbDbExportRoute: typeof AppDbDbExportRoute
   AppDbDbImportRoute: typeof AppDbDbImportRoute
   AppDbDbPrivilegesRoute: typeof AppDbDbPrivilegesRoute
+  AppDbDbRoutinesRoute: typeof AppDbDbRoutinesRoute
   AppDbDbSqlRoute: typeof AppDbDbSqlRoute
+  AppDbDbTriggersRoute: typeof AppDbDbTriggersRoute
   AppDbDbIndexRoute: typeof AppDbDbIndexRoute
   AppDbDbTableTableRoute: typeof AppDbDbTableTableRouteWithChildren
 }
@@ -486,7 +548,9 @@ const AppDbDbRouteChildren: AppDbDbRouteChildren = {
   AppDbDbExportRoute: AppDbDbExportRoute,
   AppDbDbImportRoute: AppDbDbImportRoute,
   AppDbDbPrivilegesRoute: AppDbDbPrivilegesRoute,
+  AppDbDbRoutinesRoute: AppDbDbRoutinesRoute,
   AppDbDbSqlRoute: AppDbDbSqlRoute,
+  AppDbDbTriggersRoute: AppDbDbTriggersRoute,
   AppDbDbIndexRoute: AppDbDbIndexRoute,
   AppDbDbTableTableRoute: AppDbDbTableTableRouteWithChildren,
 }

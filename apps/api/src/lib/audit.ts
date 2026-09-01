@@ -25,6 +25,8 @@ export const PASSTHROUGH_METHODS = [
   'listSchemas',
   'listTables',
   'describeTable',
+  'listRoutines',
+  'listTriggers',
   'browseRows',
   'showCreateTable',
   'iterateRows',

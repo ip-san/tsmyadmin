@@ -23,6 +23,7 @@ export const SessionStateSchema = SessionInfoSchema.extend({ serverDatabase: z.s
 export type SessionState = z.infer<typeof SessionStateSchema>
 
 export const SchemaQuerySchema = z.object({ schema: z.string().min(1).optional() })
+export const TriggerQuerySchema = SchemaQuerySchema.extend({ table: z.string().min(1).optional() })
 
 export const InsertRowRequestSchema = z.object({ values: RowValuesSchema })
 export const UpdateRowRequestSchema = z.object({ key: RowKeySchema, values: RowValuesSchema })
