@@ -4,16 +4,15 @@ import { isBinaryCell } from '@tsmyadmin/shared'
 import { ArrowDown, ArrowUp, Pencil } from 'lucide-react'
 import { useState } from 'react'
 import { RowForm } from '@/components/rows/RowForm.tsx'
-import { Button } from '@/components/ui/Button.tsx'
 import { Dialog } from '@/components/ui/Dialog.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
 import { cn } from '@/lib/cn.ts'
 import { mutations, rowsQuery, structureQuery, type TableRef } from '@/lib/queries.ts'
+import { BrowseToolbar } from './BrowseToolbar.tsx'
 import { encodeColumns, visibleColumnNames } from './browse-search.ts'
 import { CellEditor } from './CellEditor.tsx'
-import { ColumnPicker } from './ColumnPicker.tsx'
 import { DeleteRowsDialog } from './DeleteRowsDialog.tsx'
 import { FilterChips } from './FilterChips.tsx'
 import { FkCell } from './FkCell.tsx'
@@ -123,27 +122,16 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
         onChange={onChange}
       />
       <FilterChips options={options} onClear={() => onChange({ filters: undefined, page: 1 })} />
-      <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400">
-        <ColumnPicker
-          columns={allNames}
-          visible={picked}
-          onChange={(next) => onChange({ cols: encodeColumns(next, allNames) })}
-        />
-        <span>{locale.browse.keyHint[data.keyKind]}</span>
-        {editable ? (
-          <>
-            <span>{locale.browse.selected(selected.size)}</span>
-            <Button
-              size="sm"
-              variant="danger"
-              disabled={selectedKeys.length === 0}
-              onClick={() => setConfirmDelete(true)}
-            >
-              {locale.browse.deleteSelected}
-            </Button>
-          </>
-        ) : null}
-      </div>
+      <BrowseToolbar
+        columns={allNames}
+        visible={picked}
+        onColumns={(next) => onChange({ cols: encodeColumns(next, allNames) })}
+        keyKind={data.keyKind}
+        editable={editable}
+        selectedCount={selected.size}
+        canDelete={selectedKeys.length > 0}
+        onDelete={() => setConfirmDelete(true)}
+      />
       {notice ? (
         <Notice>
           <output aria-live="polite">{notice}</output>
