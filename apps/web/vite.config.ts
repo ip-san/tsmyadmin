@@ -10,8 +10,9 @@ export default defineConfig({
   plugins: [tanstackRouter({ target: 'react', autoCodeSplitting: true }), react(), tailwindcss()],
   resolve: { alias: { '@': path.resolve(import.meta.dirname, './src') } },
   server: {
+    host: '127.0.0.1',
     port: Number(process.env.WEB_PORT ?? 5175),
     proxy: { '/api': { target: `http://127.0.0.1:${apiPort}`, changeOrigin: true } },
   },
-  preview: { port: Number(process.env.WEB_PORT ?? 5175) },
+  preview: { host: '127.0.0.1', port: Number(process.env.WEB_PORT ?? 5175) },
 })

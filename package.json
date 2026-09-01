@@ -10,7 +10,7 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "bun run --filter '*' dev",
+    "dev": "node scripts/dev.mjs",
     "db:up": "docker compose up -d --wait",
     "db:down": "docker compose down",
     "db:reset": "docker compose down -v && docker compose up -d --wait",
@@ -42,8 +42,8 @@
   "size-limit": [
     {
       "path": "apps/web/dist/assets/index-*.js",
-      "name": "Initial JS",
-      "limit": "300 kB"
+      "name": "Initial JS (brotli)",
+      "limit": "100 kB"
     }
   ],
   "devDependencies": {
