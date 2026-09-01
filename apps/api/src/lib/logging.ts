@@ -1,8 +1,8 @@
 import type { MiddlewareHandler } from 'hono'
 
 export type LogFormat = 'json' | 'pretty'
-export type LogLevel = 'info' | 'warn' | 'error'
-export type LogFields = Record<string, unknown>
+type LogLevel = 'info' | 'warn' | 'error'
+type LogFields = Record<string, unknown>
 
 export interface Logger {
   log(level: LogLevel, event: string, fields?: LogFields): void

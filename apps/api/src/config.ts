@@ -10,7 +10,7 @@ const csv = (s: string) =>
  * Process configuration, validated once at startup. Every variable is documented in docs/deployment.md
  * (the single source of truth for the env table); .env.example mirrors the defaults.
  */
-export const EnvSchema = z.object({
+const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   API_PORT: z.coerce.number().int().min(1).max(65535).default(3100),
   /** Signs the session cookie. Required (≥ 32 chars) in production. */
