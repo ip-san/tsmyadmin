@@ -23,6 +23,7 @@ bun run check:all         # check + knip + circular + cpd + arch + sql-safety + 
 bun run test              # DB 不要のテスト
 bun run test:integration  # 両 DB の adapter conformance（compose 必須）
 bun run test:e2e          # Playwright
+bun run lighthouse        # Lighthouse CI（警告のみ、要 Chrome）
 ```
 
 ## 現在の規模（`scripts/validate-docs.mjs` が同期）

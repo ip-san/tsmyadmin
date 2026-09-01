@@ -34,7 +34,8 @@
     "check:all": "bun run check && bun run knip && bun run circular && bun run cpd && bun run check:arch && bun run check:sql-safety && bun run docs:validate && bun run test:integration",
     "build": "bun run --filter './apps/web' build",
     "size": "size-limit",
-    "prepare": "husky"
+    "prepare": "husky",
+    "lighthouse": "lhci autorun --config=lighthouserc.cjs"
   },
   "lint-staged": {
     "*.{ts,tsx,mjs,js}": "biome check --write --no-errors-on-unmatched"
@@ -49,6 +50,7 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
     "@biomejs/biome": "^2.5.11",
+    "@lhci/cli": "^0.15.1",
     "@playwright/test": "^1.62.1",
     "@size-limit/preset-app": "^12.1.0",
     "@types/node": "^25.9.2",

@@ -119,6 +119,25 @@ jobs:
           name: playwright-report
           path: playwright-report
 
+  lighthouse:
+    runs-on: ubuntu-latest
+    needs: check
+    # Quality signal only: budgets are asserted at "warn" level and never block a merge.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun run build
+      - run: bun run lighthouse
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lighthouse-report
+          path: .lighthouseci
+
   build:
     runs-on: ubuntu-latest
     needs: check

@@ -24,6 +24,7 @@ bun run dev        # API http://localhost:3100 + Web http://localhost:5175
 bun run check            # typecheck + lint + ユニット/API/Web テスト + type-coverage（pre-push でも実行）
 bun run check:all        # + knip / 循環依存 / クローン検出 / アーキテクチャ検査 / SQL 安全性検査 / docs 同期 / 両 DB の統合テスト
 bun run test:e2e         # Playwright（機能 × 両方言 / axe a11y / VRT light+dark）。事前に db:up
+bun run lighthouse       # Lighthouse CI（ログイン画面の性能 / a11y / ベストプラクティス、警告のみ。要 Chrome）
 ```
 
 自前の検査:
@@ -36,7 +37,7 @@ bun run test:e2e         # Playwright（機能 × 両方言 / axe a11y / VRT lig
 
 ## 未実装（次の候補）
 
-SQL コンソール結果のストリーミング、複数レプリカで共有できるセッションストア（Redis 等）、Lighthouse CI、MySQL 側の DELIMITER 対応。
+SQL コンソール結果のストリーミング、複数レプリカで共有できるセッションストア（Redis 等）、MySQL 側の DELIMITER 対応。
 
 ## 本番ビルド
 

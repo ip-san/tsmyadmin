@@ -6,8 +6,9 @@
   "workspaces": {
     ".": {
       "entry": [
-        "scripts/*.mjs",
-        "e2e/**/*.ts"
+        "e2e/**/*.ts",
+        "lighthouserc.cjs",
+        "scripts/*.mjs"
       ],
       "project": [
         "scripts/**/*.mjs",
