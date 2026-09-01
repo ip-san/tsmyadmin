@@ -87,6 +87,24 @@ for (const t of TARGETS) {
       await expect(grid.getByText(/バイナリ 4 bytes/).first()).toBeVisible()
     })
 
+    test('keyboard shortcuts: help dialog, sidebar search focus, page navigation', async ({ page }) => {
+      await page.goto(`${tableUrl(t, 'users')}${t.schema ? '&' : '?'}limit=2&sort=id:asc`)
+      await expect(page.getByText('全 5 件')).toBeVisible()
+      await page.keyboard.press('Shift+?')
+      await expect(page.getByRole('dialog', { name: 'キーボードショートカット' })).toBeVisible()
+      await page.keyboard.press('Escape')
+      await expect(page.getByRole('dialog', { name: 'キーボードショートカット' })).toBeHidden()
+      await page.keyboard.press('ControlOrMeta+K')
+      await expect(page.getByLabel('テーブルを絞り込む')).toBeFocused()
+      await page.keyboard.press('Escape')
+      await page.locator('main').click()
+      await page.keyboard.press('ArrowRight')
+      await expect(page).toHaveURL(/page=2/)
+      await expect(page.getByRole('cell', { name: 'Carol', exact: true })).toBeVisible()
+      await page.keyboard.press('ArrowLeft')
+      await expect(page).toHaveURL(/page=1/)
+    })
+
     test('column picker hides columns and keeps the choice in the URL', async ({ page }) => {
       await page.goto(tableUrl(t, 'users'))
       await page.getByRole('button', { name: '列 5/5' }).click()

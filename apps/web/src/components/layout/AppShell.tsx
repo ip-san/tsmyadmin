@@ -5,6 +5,7 @@ import type { ReactNode } from 'react'
 import { locale } from '@/config/locale.ts'
 import { useTheme } from '@/lib/theme.ts'
 import { Button } from '../ui/Button.tsx'
+import { ShortcutHelp } from './ShortcutHelp.tsx'
 
 export function AppShell({
   session,
@@ -37,6 +38,7 @@ export function AppShell({
           </span>
         </div>
         <div className="flex items-center gap-1">
+          <ShortcutHelp />
           <Button
             variant="ghost"
             size="sm"

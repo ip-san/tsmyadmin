@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { BrowseSearchSchema, browseOptionsFromSearch } from '@/features/browse/browse-search.ts'
 import { RowsGrid } from '@/features/browse/RowsGrid.tsx'
+import { useShortcuts } from '@/lib/shortcuts.ts'
 
 export const Route = createFileRoute('/_app/db/$db/table/$table/')({
   validateSearch: BrowseSearchSchema,
@@ -11,6 +12,13 @@ function BrowsePage() {
   const { db, table } = Route.useParams()
   const search = Route.useSearch()
   const navigate = Route.useNavigate()
+  useShortcuts([
+    {
+      keys: 'arrowleft',
+      handler: () => search.page > 1 && navigate({ search: (prev) => ({ ...prev, page: search.page - 1 }) }),
+    },
+    { keys: 'arrowright', handler: () => navigate({ search: (prev) => ({ ...prev, page: search.page + 1 }) }) },
+  ])
   return (
     <RowsGrid
       tableRef={{ db, schema: search.schema, table }}

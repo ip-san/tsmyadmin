@@ -2,11 +2,12 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import type { Dialect } from '@tsmyadmin/shared'
 import { ChevronDown, ChevronRight, Database } from 'lucide-react'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { ErrorBox, Spinner } from '@/components/ui/Feedback.tsx'
 import { Input } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
 import { databasesQuery, schemasQuery } from '@/lib/queries.ts'
+import { useShortcuts } from '@/lib/shortcuts.ts'
 import { TableList } from './TableList.tsx'
 
 function SchemaNodes({ db, filter }: { db: string; filter: string }) {
@@ -42,6 +43,8 @@ export function DbTree({ dialect, activeDb }: { dialect: Dialect; activeDb?: str
   const databases = useQuery(databasesQuery)
   const [open, setOpen] = useState<Record<string, boolean>>(activeDb ? { [activeDb]: true } : {})
   const [filter, setFilter] = useState('')
+  const searchRef = useRef<HTMLInputElement>(null)
+  useShortcuts([{ keys: 'mod+k', global: true, handler: () => searchRef.current?.focus() }])
   if (databases.isPending)
     return (
       <div className="p-3">
@@ -57,6 +60,7 @@ export function DbTree({ dialect, activeDb }: { dialect: Dialect; activeDb?: str
   return (
     <div className="p-2">
       <Input
+        ref={searchRef}
         type="search"
         value={filter}
         onChange={(e) => setFilter(e.target.value)}

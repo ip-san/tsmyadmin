@@ -1,6 +1,16 @@
 /** All user-facing Japanese strings. Components must reference `locale.*`, never literal Japanese. */
 export const ja = {
   app: { name: 'tsmyadmin', tagline: 'MySQL / PostgreSQL 管理ツール' },
+  shortcuts: {
+    title: 'キーボードショートカット',
+    open: 'ショートカット一覧',
+    search: 'サイドバーのテーブル検索へ',
+    prevPage: '前のページ',
+    nextPage: '次のページ',
+    runSql: 'SQL を実行',
+    help: 'この一覧を表示',
+    editHint: '入力欄にフォーカスがある間、ページ移動キーは無効です',
+  },
   common: {
     loading: '読み込み中…',
     error: 'エラー',
