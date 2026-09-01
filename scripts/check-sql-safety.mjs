@@ -34,6 +34,27 @@ function walk(dir, out = []) {
   return out
 }
 
+/** Static text of a template literal with every ${...} interpolation removed (one level of nested braces). */
+function staticText(text) {
+  let out = ''
+  let i = 0
+  while (i < text.length) {
+    if (text[i] === '$' && text[i + 1] === '{') {
+      let depth = 1
+      i += 2
+      while (i < text.length && depth > 0) {
+        if (text[i] === '{') depth++
+        else if (text[i] === '}') depth--
+        i++
+      }
+      continue
+    }
+    out += text[i]
+    i++
+  }
+  return out
+}
+
 /** Extracts template literals (handles one level of ${} nesting containing backticks). */
 function templateLiterals(source) {
   const out = []
@@ -87,7 +108,8 @@ for (const file of files) {
   // 1. Interpolated SQL
   for (const tl of templateLiterals(source)) {
     if (!tl.text.includes('${')) continue
-    if (!SQL_KEYWORD.test(tl.text)) continue
+    // Only the literal SQL text counts; identifiers inside ${} (e.g. locale.ddl.drop) must not trigger.
+    if (!SQL_KEYWORD.test(staticText(tl.text))) continue
     if (allowed) {
       // 3. Even in builders, raw quoting of interpolations is forbidden: `\`${x}\`` or "${x}"
       if (/`\$\{[^}]+\}`|"\$\{[^}]+\}"/.test(tl.text)) {

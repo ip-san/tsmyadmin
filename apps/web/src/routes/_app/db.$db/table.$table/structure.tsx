@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, useRouteContext } from '@tanstack/react-router'
 import { StructureView } from '@/features/structure/StructureView.tsx'
 
 export const Route = createFileRoute('/_app/db/$db/table/$table/structure')({ component: StructurePage })
@@ -6,5 +6,6 @@ export const Route = createFileRoute('/_app/db/$db/table/$table/structure')({ co
 function StructurePage() {
   const { db, table } = Route.useParams()
   const { schema } = Route.useSearch()
-  return <StructureView tableRef={{ db, schema, table }} />
+  const { session } = useRouteContext({ from: '/_app' })
+  return <StructureView tableRef={{ db, schema, table }} dialect={session.dialect} />
 }

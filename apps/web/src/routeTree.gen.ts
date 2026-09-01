@@ -18,6 +18,7 @@ import { Route as AppDbDbSqlRouteImport } from './routes/_app/db.$db/sql'
 import { Route as AppDbDbTableTableRouteImport } from './routes/_app/db.$db/table.$table'
 import { Route as AppDbDbTableTableIndexRouteImport } from './routes/_app/db.$db/table.$table/index'
 import { Route as AppDbDbTableTableInsertRouteImport } from './routes/_app/db.$db/table.$table/insert'
+import { Route as AppDbDbTableTableOperationsRouteImport } from './routes/_app/db.$db/table.$table/operations'
 import { Route as AppDbDbTableTableSearchRouteImport } from './routes/_app/db.$db/table.$table/search'
 import { Route as AppDbDbTableTableSqlRouteImport } from './routes/_app/db.$db/table.$table/sql'
 import { Route as AppDbDbTableTableStructureRouteImport } from './routes/_app/db.$db/table.$table/structure'
@@ -66,6 +67,12 @@ const AppDbDbTableTableInsertRoute = AppDbDbTableTableInsertRouteImport.update({
   path: '/insert',
   getParentRoute: () => AppDbDbTableTableRoute,
 } as any)
+const AppDbDbTableTableOperationsRoute =
+  AppDbDbTableTableOperationsRouteImport.update({
+    id: '/operations',
+    path: '/operations',
+    getParentRoute: () => AppDbDbTableTableRoute,
+  } as any)
 const AppDbDbTableTableSearchRoute = AppDbDbTableTableSearchRouteImport.update({
   id: '/search',
   path: '/search',
@@ -91,6 +98,7 @@ export interface FileRoutesByFullPath {
   '/db/$db/': typeof AppDbDbIndexRoute
   '/db/$db/table/$table': typeof AppDbDbTableTableRouteWithChildren
   '/db/$db/table/$table/insert': typeof AppDbDbTableTableInsertRoute
+  '/db/$db/table/$table/operations': typeof AppDbDbTableTableOperationsRoute
   '/db/$db/table/$table/search': typeof AppDbDbTableTableSearchRoute
   '/db/$db/table/$table/sql': typeof AppDbDbTableTableSqlRoute
   '/db/$db/table/$table/structure': typeof AppDbDbTableTableStructureRoute
@@ -102,6 +110,7 @@ export interface FileRoutesByTo {
   '/db/$db/sql': typeof AppDbDbSqlRoute
   '/db/$db': typeof AppDbDbIndexRoute
   '/db/$db/table/$table/insert': typeof AppDbDbTableTableInsertRoute
+  '/db/$db/table/$table/operations': typeof AppDbDbTableTableOperationsRoute
   '/db/$db/table/$table/search': typeof AppDbDbTableTableSearchRoute
   '/db/$db/table/$table/sql': typeof AppDbDbTableTableSqlRoute
   '/db/$db/table/$table/structure': typeof AppDbDbTableTableStructureRoute
@@ -117,6 +126,7 @@ export interface FileRoutesById {
   '/_app/db/$db/': typeof AppDbDbIndexRoute
   '/_app/db/$db/table/$table': typeof AppDbDbTableTableRouteWithChildren
   '/_app/db/$db/table/$table/insert': typeof AppDbDbTableTableInsertRoute
+  '/_app/db/$db/table/$table/operations': typeof AppDbDbTableTableOperationsRoute
   '/_app/db/$db/table/$table/search': typeof AppDbDbTableTableSearchRoute
   '/_app/db/$db/table/$table/sql': typeof AppDbDbTableTableSqlRoute
   '/_app/db/$db/table/$table/structure': typeof AppDbDbTableTableStructureRoute
@@ -132,6 +142,7 @@ export interface FileRouteTypes {
     | '/db/$db/'
     | '/db/$db/table/$table'
     | '/db/$db/table/$table/insert'
+    | '/db/$db/table/$table/operations'
     | '/db/$db/table/$table/search'
     | '/db/$db/table/$table/sql'
     | '/db/$db/table/$table/structure'
@@ -143,6 +154,7 @@ export interface FileRouteTypes {
     | '/db/$db/sql'
     | '/db/$db'
     | '/db/$db/table/$table/insert'
+    | '/db/$db/table/$table/operations'
     | '/db/$db/table/$table/search'
     | '/db/$db/table/$table/sql'
     | '/db/$db/table/$table/structure'
@@ -157,6 +169,7 @@ export interface FileRouteTypes {
     | '/_app/db/$db/'
     | '/_app/db/$db/table/$table'
     | '/_app/db/$db/table/$table/insert'
+    | '/_app/db/$db/table/$table/operations'
     | '/_app/db/$db/table/$table/search'
     | '/_app/db/$db/table/$table/sql'
     | '/_app/db/$db/table/$table/structure'
@@ -233,6 +246,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppDbDbTableTableInsertRouteImport
       parentRoute: typeof AppDbDbTableTableRoute
     }
+    '/_app/db/$db/table/$table/operations': {
+      id: '/_app/db/$db/table/$table/operations'
+      path: '/operations'
+      fullPath: '/db/$db/table/$table/operations'
+      preLoaderRoute: typeof AppDbDbTableTableOperationsRouteImport
+      parentRoute: typeof AppDbDbTableTableRoute
+    }
     '/_app/db/$db/table/$table/search': {
       id: '/_app/db/$db/table/$table/search'
       path: '/search'
@@ -259,6 +279,7 @@ declare module '@tanstack/react-router' {
 
 interface AppDbDbTableTableRouteChildren {
   AppDbDbTableTableInsertRoute: typeof AppDbDbTableTableInsertRoute
+  AppDbDbTableTableOperationsRoute: typeof AppDbDbTableTableOperationsRoute
   AppDbDbTableTableSearchRoute: typeof AppDbDbTableTableSearchRoute
   AppDbDbTableTableSqlRoute: typeof AppDbDbTableTableSqlRoute
   AppDbDbTableTableStructureRoute: typeof AppDbDbTableTableStructureRoute
@@ -267,6 +288,7 @@ interface AppDbDbTableTableRouteChildren {
 
 const AppDbDbTableTableRouteChildren: AppDbDbTableTableRouteChildren = {
   AppDbDbTableTableInsertRoute: AppDbDbTableTableInsertRoute,
+  AppDbDbTableTableOperationsRoute: AppDbDbTableTableOperationsRoute,
   AppDbDbTableTableSearchRoute: AppDbDbTableTableSearchRoute,
   AppDbDbTableTableSqlRoute: AppDbDbTableTableSqlRoute,
   AppDbDbTableTableStructureRoute: AppDbDbTableTableStructureRoute,
