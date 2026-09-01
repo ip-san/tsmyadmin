@@ -1,12 +1,11 @@
 import type { ColumnDef, ForeignKeyDef, IndexDef, Namespace, TableInfo, TableSchema } from '@tsmyadmin/shared'
 import { type Conn, firstResult } from '../base.ts'
+import { str, strOrNull } from '../sql/format.ts'
 import { quoteTable } from '../sql/quote.ts'
 import { AdapterError } from '../types.ts'
 
 /** ASCII unit separator used with string_agg so names containing commas survive. */
 const SEP = String.fromCharCode(31)
-const str = (v: unknown): string => (v === null || v === undefined ? '' : String(v))
-const strOrNull = (v: unknown): string | null => (v === null || v === undefined ? null : String(v))
 const list = (v: unknown): string[] => (v === null || v === undefined || v === '' ? [] : String(v).split(SEP))
 const bool = (v: unknown): boolean => v === true || v === 't'
 

@@ -25,31 +25,45 @@ describe('user SQL builders', () => {
 
   for (const name of USER_OP_NAMES) {
     it(`mysql: ${name}`, () => {
-      expect(mysqlUsers.build(SAMPLE_OPS[name])).toMatchSnapshot()
+      expect(mysqlUsers.build(SAMPLE_OPS[name]).map((s) => s.sql)).toMatchSnapshot()
     })
     it(`postgres: ${name}`, () => {
-      expect(pgUsers.build(SAMPLE_OPS[name])).toMatchSnapshot()
+      expect(pgUsers.build(SAMPLE_OPS[name]).map((s) => s.sql)).toMatchSnapshot()
     })
   }
 
-  it('masks passwords for previews and never leaks them', () => {
+  it('masks passwords in display text and never leaks them', () => {
     for (const b of [mysqlUsers, pgUsers]) {
-      const masked = b.build(SAMPLE_OPS.createUser, { mask: true }).join('\n')
-      expect(masked).toContain('****')
-      expect(masked).not.toContain("p'w")
-      expect(b.build(SAMPLE_OPS.setPassword, { mask: true }).join('\n')).not.toContain('new')
+      const display = b
+        .build(SAMPLE_OPS.createUser)
+        .map((s) => s.display)
+        .join('\n')
+      expect(display).toContain('****')
+      expect(display).not.toContain("p'w")
+      expect(
+        b
+          .build(SAMPLE_OPS.setPassword)
+          .map((s) => s.display)
+          .join('\n')
+      ).not.toContain('new')
+      expect(b.build(SAMPLE_OPS.dropUser)[0]?.display).toBe(b.build(SAMPLE_OPS.dropUser)[0]?.sql)
     }
   })
 
   it('escapes user names and passwords', () => {
-    expect(mysqlUsers.build(SAMPLE_OPS.dropUser)[0]).toBe("DROP USER 'o''brien'@'10.0.%'")
-    expect(pgUsers.build(SAMPLE_OPS.dropUser)[0]).toBe('DROP ROLE "o\'brien"')
-    expect(mysqlUsers.build(SAMPLE_OPS.setPassword)[0]).toContain("IDENTIFIED BY 'new'")
+    expect(mysqlUsers.build(SAMPLE_OPS.dropUser)[0]?.sql).toBe("DROP USER 'o''brien'@'10.0.%'")
+    expect(pgUsers.build(SAMPLE_OPS.dropUser)[0]?.sql).toBe('DROP ROLE "o\'brien"')
+    expect(mysqlUsers.build(SAMPLE_OPS.setPassword)[0]?.sql).toContain("IDENTIFIED BY 'new'")
   })
 
   it('runs PostgreSQL grants inside the target database', () => {
-    expect(pgUsers.namespace(SAMPLE_OPS.grantAll, 'postgres')).toEqual({ database: 'shop', schema: 'app' })
-    expect(pgUsers.namespace(SAMPLE_OPS.dropUser, 'postgres')).toEqual({ database: 'postgres' })
-    expect(mysqlUsers.namespace(SAMPLE_OPS.grantAll, 'information_schema')).toEqual({ database: 'information_schema' })
+    expect(pgUsers.namespace(SAMPLE_OPS.grantAll, { database: 'postgres' })).toEqual({
+      database: 'shop',
+      schema: 'app',
+    })
+    expect(pgUsers.namespace(SAMPLE_OPS.dropUser, { database: 'postgres' })).toEqual({ database: 'postgres' })
+    expect(mysqlUsers.namespace(SAMPLE_OPS.grantAll, { database: 'information_schema' })).toEqual({
+      database: 'information_schema',
+    })
   })
 })

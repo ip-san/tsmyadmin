@@ -57,11 +57,17 @@ export interface DdlBuilder {
   build(ns: Namespace, op: DdlOp): string[]
 }
 
-/** Builds account-management SQL. `mask` replaces passwords with PASSWORD_MASK for previews. */
+/** One account-management statement: `sql` is executed, `display` (passwords masked) is what the user sees. */
+export interface UserStatement {
+  sql: string
+  display: string
+}
+
+/** Builds account-management SQL. */
 export interface UserSqlBuilder {
-  build(op: UserOp, options?: { mask?: boolean }): string[]
+  build(op: UserOp): UserStatement[]
   /** Namespace the statements must run in (PostgreSQL GRANTs are per database). */
-  namespace(op: UserOp, defaultDatabase: string): Namespace
+  namespace(op: UserOp, serverNamespace: Namespace): Namespace
 }
 
 export interface RowBatch {
@@ -93,11 +99,19 @@ export interface DatabaseAdapter {
   updateRow(ns: Namespace, table: string, key: RowKey, values: RowValues): Promise<{ affectedRows: number }>
   deleteRows(ns: Namespace, table: string, keys: RowKey[]): Promise<{ affectedRows: number }>
   executeSql(ns: Namespace, sql: string, opts: ExecuteOptions): Promise<StatementResult[]>
-  /** DDL statements that recreate the table (MySQL: SHOW CREATE TABLE; PostgreSQL: reconstructed from the catalog). */
-  showCreateTable(ns: Namespace, table: string): Promise<string[]>
-  /** Reads every row in stable order, `batchSize` rows at a time (for exports). */
-  iterateRows(ns: Namespace, table: string, opts: { batchSize: number }): AsyncIterable<RowBatch>
+  /**
+   * DDL statements that recreate the table (MySQL: SHOW CREATE TABLE; PostgreSQL: reconstructed from the catalog).
+   * Pass an already-fetched `schema` to avoid a second catalog round trip.
+   */
+  showCreateTable(ns: Namespace, table: string, schema?: TableSchema): Promise<string[]>
+  /**
+   * Reads every row in stable order, `batchSize` rows at a time (for exports). An empty table yields one
+   * batch with `columns` and no rows, so callers always learn the column list.
+   */
+  iterateRows(ns: Namespace, table: string, opts: { batchSize: number; schema?: TableSchema }): AsyncIterable<RowBatch>
   /** Login accounts (MySQL mysql.user, PostgreSQL pg_roles). Requires read privileges on the catalog. */
+  /** Namespace that any account can use for server-level statements (MySQL: information_schema; PostgreSQL: the login database). */
+  readonly serverNamespace: Namespace
   serverInfo(): Promise<ServerInfo>
   /** Configuration variables (SHOW GLOBAL VARIABLES / pg_settings). */
   listVariables(): Promise<KeyValue[]>

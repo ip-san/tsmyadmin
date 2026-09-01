@@ -16,13 +16,10 @@ const errors = []
 const SQL_BUILDER_ALLOWLIST = [
   /^packages\/adapter\/src\/base\.ts$/,
   /^packages\/adapter\/src\/sql\/.*\.ts$/,
-  /^packages\/adapter\/src\/(mysql|postgres)\/(ddl|adapter)\.ts$/,
-  // Dump exporters: INSERT statements assembled from quoteIdent() identifiers and cellLiteral() values.
-  /^packages\/adapter\/src\/(mysql|postgres)\/export\.ts$/,
-  // Account management: CREATE/ALTER/DROP USER|ROLE and GRANT/REVOKE built from quoted identifiers and literals.
-  /^packages\/adapter\/src\/(mysql|postgres)\/users\.ts$/,
-  // Server status: KILL <numeric id> (validated by regex before interpolation).
-  /^packages\/adapter\/src\/(mysql|postgres)\/server\.ts$/,
+  // Per-dialect builders that assemble statements from quoteIdent() identifiers and literal helpers:
+  // ddl (ALTER/CREATE), adapter (USE/SET/SHOW CREATE), export (INSERT dumps), users (accounts/GRANT), server (KILL id, regex-validated).
+  // introspect.ts / values.ts are deliberately NOT listed: they must stay static SQL + parameters.
+  /^packages\/adapter\/src\/(mysql|postgres)\/(ddl|adapter|export|users|server)\.ts$/,
   // Editor prefill text shown to the user; executed only when they press Run (identifiers quoted).
   /^apps\/web\/src\/features\/sql\/prefill\.ts$/,
 ]

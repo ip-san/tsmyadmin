@@ -14,10 +14,6 @@ function csvField(cell: Cell): string {
   return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text
 }
 
-function jsonCell(cell: Cell): unknown {
-  return cell
-}
-
 /** Builds a dump of `tables` in the requested format. Whole document in memory (batched reads keep the DB side bounded). */
 /** `baseName` is the file name without extension (db, or db_table when one table was requested explicitly). */
 export async function buildExport(
@@ -42,7 +38,6 @@ export async function buildExport(
       }
       for (const row of b.rows) lines.push(row.map(csvField).join(','))
     }
-    if (!header) lines.push((await adapter.describeTable(ns, table)).columns.map((c) => csvField(c.name)).join(','))
     const body = `${q.bom === '1' ? '﻿' : ''}${lines.join('\r\n')}\r\n`
     return { body, contentType: 'text/csv; charset=utf-8', filename: `${base}.csv` }
   }
@@ -52,8 +47,7 @@ export async function buildExport(
     for (const table of tables) {
       const rows: Record<string, unknown>[] = []
       for await (const b of adapter.iterateRows(ns, table, batch)) {
-        for (const row of b.rows)
-          rows.push(Object.fromEntries(b.columns.map((c, i) => [c.name, jsonCell(row[i] ?? null)])))
+        for (const row of b.rows) rows.push(Object.fromEntries(b.columns.map((c, i) => [c.name, row[i] ?? null])))
       }
       out[table] = rows
     }
@@ -78,11 +72,13 @@ export async function buildExport(
       `-- ----------------------------------------`,
       ''
     )
+    // One catalog round trip per table, shared by the DDL reconstruction and the row scan.
+    const schema = await adapter.describeTable(ns, table)
     if (q.structure === '1') {
-      for (const stmt of await adapter.showCreateTable(ns, table)) parts.push(`${stmt};`, '')
+      for (const stmt of await adapter.showCreateTable(ns, table, schema)) parts.push(`${stmt};`, '')
     }
     if (q.data === '1') {
-      for await (const b of adapter.iterateRows(ns, table, batch)) {
+      for await (const b of adapter.iterateRows(ns, table, { ...batch, schema })) {
         const stmt = adapter.exporter.insert(
           ns,
           table,

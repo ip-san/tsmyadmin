@@ -3,7 +3,7 @@ import { PASSWORD_MASK } from '@tsmyadmin/shared'
 import { type Conn, firstResult } from '../base.ts'
 import { pgLiteral } from '../sql/literal.ts'
 import { quoteIdent } from '../sql/quote.ts'
-import type { UserSqlBuilder } from '../types.ts'
+import type { UserSqlBuilder, UserStatement } from '../types.ts'
 
 const id = (s: string) => quoteIdent('postgres', s)
 
@@ -30,7 +30,9 @@ export async function pgListUsers(conn: Conn): Promise<UserInfo[]> {
 export async function pgShowGrants(conn: Conn, user: UserRef): Promise<string[]> {
   const role = firstResult(
     await conn.query(
-      'SELECT rolsuper, rolcreaterole, rolcreatedb, rolcanlogin, rolinherit FROM pg_roles WHERE rolname = $1',
+      `SELECT rolsuper, rolcreaterole, rolcreatedb, rolcanlogin, rolinherit,
+              current_database(), has_database_privilege($1, current_database(), 'CREATE')
+       FROM pg_roles WHERE rolname = $1`,
       [user.name]
     )
   )
@@ -52,14 +54,7 @@ export async function pgShowGrants(conn: Conn, user: UserRef): Promise<string[]>
     )
   )
   for (const row of members.rows) out.push(`GRANT ${id(String(row[0]))} TO ${id(user.name)}`)
-  const db = firstResult(
-    await conn.query('SELECT current_database(), has_database_privilege($1, current_database(), $2)', [
-      user.name,
-      'CREATE',
-    ])
-  )
-  const dbRow = db.rows[0]
-  if (dbRow && dbRow[1] === true) out.push(`GRANT CREATE ON DATABASE ${id(String(dbRow[0]))} TO ${id(user.name)}`)
+  if (attrs[6] === true) out.push(`GRANT CREATE ON DATABASE ${id(String(attrs[5]))} TO ${id(user.name)}`)
   const schemas = firstResult(
     await conn.query(
       `SELECT nspname FROM pg_namespace WHERE nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast') AND nspname NOT LIKE 'pg\\_%'
@@ -81,27 +76,33 @@ export async function pgShowGrants(conn: Conn, user: UserRef): Promise<string[]>
   return out
 }
 
+const plain = (sql: string): UserStatement => ({ sql, display: sql })
+/** Statement with a password: `display` carries the mask, `sql` the real value. */
+const secret = (template: (password: string) => string, password: string): UserStatement => ({
+  sql: template(pgLiteral(password)),
+  display: template(pgLiteral(PASSWORD_MASK)),
+})
+
 export const pgUsers: UserSqlBuilder = {
-  namespace(op: UserOp, defaultDatabase: string): Namespace {
+  namespace(op: UserOp, serverNamespace: Namespace): Namespace {
     if (op.op === 'grantAll' || op.op === 'revokeAll')
       return op.schema ? { database: op.database, schema: op.schema } : { database: op.database }
-    return { database: defaultDatabase }
+    return serverNamespace
   },
-  build(op: UserOp, options = {}): string[] {
+  build(op: UserOp): UserStatement[] {
     const role = id(op.user.name)
-    const pw = (p: string) => pgLiteral(options.mask ? PASSWORD_MASK : p)
     switch (op.op) {
       case 'createUser': {
         const flags = ['LOGIN']
         if (op.attributes.superuser) flags.push('SUPERUSER')
         if (op.attributes.createdb) flags.push('CREATEDB')
         if (op.attributes.createrole) flags.push('CREATEROLE')
-        return [`CREATE ROLE ${role} ${flags.join(' ')} PASSWORD ${pw(op.password)}`]
+        return [secret((pw) => `CREATE ROLE ${role} ${flags.join(' ')} PASSWORD ${pw}`, op.password)]
       }
       case 'dropUser':
-        return [`DROP ROLE ${role}`]
+        return [plain(`DROP ROLE ${role}`)]
       case 'setPassword':
-        return [`ALTER ROLE ${role} PASSWORD ${pw(op.password)}`]
+        return [secret((pw) => `ALTER ROLE ${role} PASSWORD ${pw}`, op.password)]
       case 'grantAll': {
         const schema = id(op.schema ?? 'public')
         return [
@@ -110,7 +111,7 @@ export const pgUsers: UserSqlBuilder = {
           `GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA ${schema} TO ${role}`,
           `GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA ${schema} TO ${role}`,
           `ALTER DEFAULT PRIVILEGES IN SCHEMA ${schema} GRANT ALL PRIVILEGES ON TABLES TO ${role}`,
-        ]
+        ].map(plain)
       }
       case 'revokeAll': {
         const schema = id(op.schema ?? 'public')
@@ -120,7 +121,7 @@ export const pgUsers: UserSqlBuilder = {
           `REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA ${schema} FROM ${role}`,
           `REVOKE ALL PRIVILEGES ON SCHEMA ${schema} FROM ${role}`,
           `REVOKE ALL PRIVILEGES ON DATABASE ${id(op.database)} FROM ${role}`,
-        ]
+        ].map(plain)
       }
     }
   },

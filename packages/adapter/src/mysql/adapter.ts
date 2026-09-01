@@ -192,8 +192,10 @@ export class MysqlAdapter extends BaseAdapter {
   }
 
   /** information_schema is readable by every account, so it is a safe namespace for server-level queries. */
+  readonly serverNamespace: Namespace = { database: 'information_schema' }
+
   private serverNs(): Namespace {
-    return { database: 'information_schema' }
+    return this.serverNamespace
   }
 
   serverInfo(): Promise<ServerInfo> {

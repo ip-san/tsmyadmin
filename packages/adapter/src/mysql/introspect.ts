@@ -1,9 +1,8 @@
 import type { ColumnDef, ForeignKeyDef, IndexDef, Namespace, TableInfo, TableSchema } from '@tsmyadmin/shared'
 import { type Conn, firstResult } from '../base.ts'
+import { str, strOrNull } from '../sql/format.ts'
 import { AdapterError } from '../types.ts'
 
-const str = (v: unknown): string => (v === null || v === undefined ? '' : String(v))
-const strOrNull = (v: unknown): string | null => (v === null || v === undefined ? null : String(v))
 const num = (v: unknown): number | null => {
   if (v === null || v === undefined) return null
   const n = Number(v)

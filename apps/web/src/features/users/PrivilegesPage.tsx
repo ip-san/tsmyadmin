@@ -1,14 +1,12 @@
 import { useQuery } from '@tanstack/react-query'
-import type { Dialect, UserInfo, UserRef } from '@tsmyadmin/shared'
+import type { Dialect } from '@tsmyadmin/shared'
 import { UserOpPreviewDialog } from '@/components/ddl/UserOpPreviewDialog.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
 import { usersQuery } from '@/lib/queries.ts'
-import { useUserOpFlow } from '@/lib/user-ops.ts'
-
-const ref = (u: UserInfo): UserRef => (u.host ? { name: u.name, host: u.host } : { name: u.name })
+import { userLabel, userRef, useUserOpFlow } from '@/lib/user-ops.ts'
 
 export function PrivilegesPage({ db, schema, dialect }: { db: string; schema?: string | undefined; dialect: Dialect }) {
   const users = useQuery(usersQuery)
@@ -32,8 +30,8 @@ export function PrivilegesPage({ db, schema, dialect }: { db: string; schema?: s
           {users.data
             .filter((u) => u.canLogin)
             .map((u) => {
-              const r = ref(u)
-              const key = r.host ? `${r.name}@${r.host}` : r.name
+              const r = userRef(u)
+              const key = userLabel(r)
               return (
                 <Tr key={key}>
                   <Td className="font-medium">{u.name}</Td>

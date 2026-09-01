@@ -443,11 +443,35 @@ describe('users', () => {
     const body = await res.text()
     expect(body).not.toContain('hunter2')
     const executed = h.adapter.calls.filter((c) => c.method === 'executeSql')
-    expect(executed.map((c) => c.args[1])).toEqual([
-      "CREATE USER 'new'@'%' IDENTIFIED BY 'hunter2'",
-      "GRANT CREATE ON *.* TO 'new'@'%'",
-    ])
+    expect(executed).toHaveLength(1)
+    expect(executed[0]?.args[1]).toBe(
+      "CREATE USER 'new'@'%' IDENTIFIED BY 'hunter2';\nGRANT CREATE ON *.* TO 'new'@'%'"
+    )
     expect(executed[0]?.args[0]).toEqual({ database: 'information_schema' })
+  })
+
+  it('scrubs the password from error messages that quote the failing SQL', async () => {
+    const adapter = fixtureAdapter({
+      onSql: (_ns, sql) => [
+        {
+          kind: 'error',
+          sql,
+          message: `You have an error in your SQL syntax near 'IDENTIFIED BY 'hunter2'' at line 1`,
+          code: 'QUERY_FAILED',
+        },
+      ],
+      users: [],
+    })
+    const h = harness(adapter)
+    stores.push(h.store)
+    await h.login()
+    const res = await h.req('/api/users/execute', {
+      method: 'POST',
+      body: JSON.stringify({ op: { op: 'setPassword', user: { name: 'x', host: '%' }, password: 'hunter2' } }),
+    })
+    const body = await res.text()
+    expect(body).not.toContain('hunter2')
+    expect(body).toContain('****')
   })
 
   it('validates user ops', async () => {

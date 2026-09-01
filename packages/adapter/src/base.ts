@@ -100,7 +100,8 @@ export abstract class BaseAdapter implements DatabaseAdapter {
   abstract listSchemas(database: string): Promise<string[]>
   abstract listTables(ns: Namespace): Promise<TableInfo[]>
   abstract describeTable(ns: Namespace, table: string): Promise<TableSchema>
-  abstract showCreateTable(ns: Namespace, table: string): Promise<string[]>
+  abstract readonly serverNamespace: Namespace
+  abstract showCreateTable(ns: Namespace, table: string, schema?: TableSchema): Promise<string[]>
   abstract serverInfo(): Promise<ServerInfo>
   abstract listVariables(): Promise<KeyValue[]>
   abstract listStatus(): Promise<KeyValue[]>
@@ -120,22 +121,36 @@ export abstract class BaseAdapter implements DatabaseAdapter {
   /** Extra SELECT-list expression that exposes the fallback key (PG: ctid), or null. */
   protected abstract fallbackKeySelect(): string | null
 
-  protected async withConn<T>(
-    ns: Namespace,
-    fn: (conn: Conn) => Promise<T>,
-    timeoutMs = DEFAULT_TIMEOUT_MS
-  ): Promise<T> {
+  /** Checks out a connection with the statement timeout applied; `done()` mirrors withConn's cleanup. */
+  private async borrow(ns: Namespace, timeoutMs: number): Promise<{ conn: Conn; done: () => Promise<void> }> {
     const conn = await this.acquire(ns)
     try {
       await this.setStatementTimeout(conn, timeoutMs)
-      return await fn(conn)
-    } finally {
+    } catch (err) {
+      conn.release()
+      throw err
+    }
+    const done = async () => {
       try {
         await this.setStatementTimeout(conn, 0)
       } catch {
         // connection may already be broken; releasing is all we can do
       }
       conn.release()
+    }
+    return { conn, done }
+  }
+
+  protected async withConn<T>(
+    ns: Namespace,
+    fn: (conn: Conn) => Promise<T>,
+    timeoutMs = DEFAULT_TIMEOUT_MS
+  ): Promise<T> {
+    const { conn, done } = await this.borrow(ns, timeoutMs)
+    try {
+      return await fn(conn)
+    } finally {
+      await done()
     }
   }
 
@@ -335,8 +350,12 @@ export abstract class BaseAdapter implements DatabaseAdapter {
    * PostgreSQL without a key → ordered by ctid; MySQL without a key → a single unordered batch
    * (OFFSET paging without a total order would repeat/skip rows).
    */
-  async *iterateRows(ns: Namespace, table: string, opts: { batchSize: number }): AsyncIterable<RowBatch> {
-    const schema = await this.describeTable(ns, table)
+  async *iterateRows(
+    ns: Namespace,
+    table: string,
+    opts: { batchSize: number; schema?: TableSchema }
+  ): AsyncIterable<RowBatch> {
+    const schema = opts.schema ?? (await this.describeTable(ns, table))
     const key = this.resolveRowKey(schema)
     const d = this.dialect
     const selectList = schema.columns.map((c) => quoteIdent(d, c.name)).join(', ')
@@ -349,9 +368,10 @@ export abstract class BaseAdapter implements DatabaseAdapter {
           : ''
     const single = orderBy === ''
     const batchSize = Math.max(1, Math.floor(opts.batchSize))
-    const conn = await this.acquire(ns)
+    // Generators cannot run inside withConn's callback, so the borrow/done pair is shared instead
+    // (no statement timeout: full scans may legitimately be long).
+    const { conn, done } = await this.borrow(ns, 0)
     try {
-      await this.setStatementTimeout(conn, 0)
       let offset = 0
       for (;;) {
         const params = new Params(d)
@@ -359,12 +379,13 @@ export abstract class BaseAdapter implements DatabaseAdapter {
         const r = firstResult(
           await conn.query(`SELECT ${selectList} FROM ${tableSql}${orderBy}${limit}`, params.values)
         )
-        if (r.rows.length > 0) yield { columns: r.columns, rows: r.rows }
+        // An empty table still yields one batch so callers learn the column list.
+        if (r.rows.length > 0 || offset === 0) yield { columns: r.columns, rows: r.rows }
         if (single || r.rows.length < batchSize) return
         offset += batchSize
       }
     } finally {
-      conn.release()
+      await done()
     }
   }
 

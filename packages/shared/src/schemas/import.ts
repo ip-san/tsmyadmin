@@ -1,11 +1,10 @@
 import { z } from 'zod'
+import { FlagSchema } from './common.ts'
 
 export const ImportFormatSchema = z.enum(['sql', 'csv'])
 export type ImportFormat = z.infer<typeof ImportFormatSchema>
 
 export const IMPORT_MAX_BYTES = 64 * 1024 * 1024
-
-const flag = z.enum(['0', '1'])
 
 /** multipart/form-data fields of POST /databases/:db/import. */
 export const ImportFormSchema = z.object({
@@ -15,12 +14,12 @@ export const ImportFormSchema = z.object({
   /** csv: target table */
   table: z.string().min(1).optional(),
   /** csv: first row holds column names (else positional, table column order) */
-  header: flag.default('1'),
+  header: FlagSchema.default('1'),
   /** csv: field value that means NULL */
   nullMarker: z.string().default('\\N'),
   delimiter: z.string().min(1).max(1).default(','),
   /** sql: stop at the first failing statement */
-  stopOnError: flag.default('1'),
+  stopOnError: FlagSchema.default('1'),
 })
 export type ImportForm = z.infer<typeof ImportFormSchema>
 

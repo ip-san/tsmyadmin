@@ -89,6 +89,7 @@ export class FakeAdapter implements DatabaseAdapter {
   readonly ddl
   readonly exporter
   readonly users
+  readonly serverNamespace: Namespace = { database: 'information_schema' }
   readonly calls: { method: string; args: unknown[] }[] = []
   closed = false
   private readonly databases: Record<string, FakeDatabase>
@@ -287,16 +288,21 @@ export class FakeAdapter implements DatabaseAdapter {
     return [`GRANT USAGE ON *.* TO '${user.name}'@'${user.host ?? '%'}'`]
   }
 
-  async showCreateTable(ns: Namespace, table: string): Promise<string[]> {
+  async showCreateTable(ns: Namespace, table: string, _schema?: TableSchema): Promise<string[]> {
     this.record('showCreateTable', ns, table)
     const t = this.table(ns, table)
     return [`-- fake CREATE TABLE ${t.schema.name} (${t.schema.columns.map((c) => c.name).join(', ')})`]
   }
 
-  async *iterateRows(ns: Namespace, table: string, opts: { batchSize: number }): AsyncIterable<RowBatch> {
+  async *iterateRows(
+    ns: Namespace,
+    table: string,
+    opts: { batchSize: number; schema?: TableSchema }
+  ): AsyncIterable<RowBatch> {
     this.record('iterateRows', ns, table, opts)
     const t = this.table(ns, table)
     const columns = t.schema.columns.map((c) => ({ name: c.name, dataType: c.dataType }))
+    if (t.rows.length === 0) yield { columns, rows: [] }
     for (let i = 0; i < t.rows.length; i += opts.batchSize) {
       yield { columns, rows: t.rows.slice(i, i + opts.batchSize).map((r) => columns.map((c) => r[c.name] ?? null)) }
     }

@@ -1,9 +1,9 @@
 import type { Dialect, UserOp } from '@tsmyadmin/shared'
 import { type FormEvent, useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
-import { Notice } from '@/components/ui/Feedback.tsx'
 import { Field, Input } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
+import { PasswordFields, usePasswordConfirm } from './PasswordFields.tsx'
 
 export function UserForm({
   dialect,
@@ -16,19 +16,17 @@ export function UserForm({
 }) {
   const [name, setName] = useState('')
   const [host, setHost] = useState('%')
-  const [password, setPassword] = useState('')
-  const [confirm, setConfirm] = useState('')
+  const pw = usePasswordConfirm()
   const [superuser, setSuperuser] = useState(false)
   const [createdb, setCreatedb] = useState(false)
   const [createrole, setCreaterole] = useState(false)
-  const mismatch = password !== confirm
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    if (!name.trim() || mismatch) return
+    if (!name.trim() || pw.mismatch) return
     onSubmit({
       op: 'createUser',
       user: dialect === 'mysql' ? { name: name.trim(), host: host.trim() || '%' } : { name: name.trim() },
-      password,
+      password: pw.password,
       attributes: { superuser, createdb, createrole },
     })
   }
@@ -43,26 +41,8 @@ export function UserForm({
             <Input id="user-host" value={host} onChange={(e) => setHost(e.target.value)} />
           </Field>
         ) : null}
-        <Field id="user-password" label={locale.users.password}>
-          <Input
-            id="user-password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="new-password"
-          />
-        </Field>
-        <Field id="user-password2" label={locale.users.passwordConfirm}>
-          <Input
-            id="user-password2"
-            type="password"
-            value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
-            autoComplete="new-password"
-          />
-        </Field>
+        <PasswordFields state={pw} idPrefix="user" />
       </div>
-      {mismatch ? <Notice>{locale.users.passwordMismatch}</Notice> : null}
       <div className="flex flex-wrap gap-4 text-sm">
         <label className="flex items-center gap-1">
           <input type="checkbox" checked={superuser} onChange={(e) => setSuperuser(e.target.checked)} />
@@ -79,7 +59,7 @@ export function UserForm({
       </div>
       <div className="flex justify-end gap-2">
         <Button onClick={onCancel}>{locale.common.cancel}</Button>
-        <Button type="submit" variant="primary" disabled={!name.trim() || mismatch}>
+        <Button type="submit" variant="primary" disabled={!name.trim() || pw.mismatch}>
           {locale.ddl.submit}
         </Button>
       </div>

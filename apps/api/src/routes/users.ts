@@ -1,13 +1,7 @@
-import { type Namespace, UserOpRequestSchema, UserRefSchema } from '@tsmyadmin/shared'
+import { PASSWORD_MASK, type StatementResult, type UserOp, UserOpRequestSchema, UserRefSchema } from '@tsmyadmin/shared'
 import { Hono } from 'hono'
 import { validate } from '../lib/validate.ts'
 import { type AppEnv, requireSession, type SessionConfig } from '../session/middleware.ts'
-import type { Session } from '../session/store.ts'
-
-/** Namespace for server-level statements: MySQL information_schema (readable by all), PostgreSQL the login database. */
-function serverDatabase(session: Session): string {
-  return session.config.dialect === 'mysql' ? 'information_schema' : (session.config.database ?? 'postgres')
-}
 
 export function userRoutes(cfg: SessionConfig) {
   return new Hono<AppEnv>()
@@ -20,22 +14,33 @@ export function userRoutes(cfg: SessionConfig) {
     })
     .post('/users/preview', validate('json', UserOpRequestSchema), (c) => {
       const { op } = c.req.valid('json')
-      return c.json({ sql: c.get('session').adapter.users.build(op, { mask: true }) })
+      return c.json({
+        sql: c
+          .get('session')
+          .adapter.users.build(op)
+          .map((s) => s.display),
+      })
     })
     .post('/users/execute', validate('json', UserOpRequestSchema), async (c) => {
       const { op } = c.req.valid('json')
-      const session = c.get('session')
-      const adapter = session.adapter
-      const target: Namespace = adapter.users.namespace(op, serverDatabase(session))
+      const adapter = c.get('session').adapter
       const statements = adapter.users.build(op)
-      const results = []
-      for (const sql of statements) {
-        const r = await adapter.executeSql(target, sql, { maxRows: 1, timeoutMs: 30_000, stopOnError: true })
-        results.push(...r)
-        if (r.some((x) => x.kind === 'error')) break
-      }
-      // Never echo passwords back: statements containing them are replaced by their masked form.
-      const masked = adapter.users.build(op, { mask: true })
-      return c.json(results.map((r, i) => ({ ...r, sql: masked[i] ?? masked[masked.length - 1] ?? '' })))
+      // One connection for the whole operation; executeSql splits the script and stops at the first error.
+      const results = await adapter.executeSql(
+        adapter.users.namespace(op, adapter.serverNamespace),
+        statements.map((s) => s.sql).join(';\n'),
+        { maxRows: 1, timeoutMs: 30_000, stopOnError: true }
+      )
+      return c.json(results.map((r, i) => redactPassword({ ...r, sql: statements[i]?.display ?? '' }, op)))
     })
+}
+
+/**
+ * Never echo passwords back. The SQL shown is the masked `display` form, and error messages are scrubbed too:
+ * MySQL syntax errors quote the failing fragment (`... near 'IDENTIFIED BY 'x''`).
+ */
+function redactPassword(result: StatementResult, op: UserOp): StatementResult {
+  const password = 'password' in op ? op.password : ''
+  if (password === '' || result.kind !== 'error') return result
+  return { ...result, message: result.message.split(password).join(PASSWORD_MASK) }
 }

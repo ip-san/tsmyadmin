@@ -1,9 +1,7 @@
 import type { KeyValue, ProcessInfo, ServerInfo } from '@tsmyadmin/shared'
 import { type Conn, firstResult } from '../base.ts'
+import { joinParts, str, strOrNull } from '../sql/format.ts'
 import { AdapterError } from '../types.ts'
-
-const str = (v: unknown): string => (v === null || v === undefined ? '' : String(v))
-const strOrNull = (v: unknown): string | null => (v === null || v === undefined ? null : String(v))
 
 export async function mysqlServerInfo(conn: Conn): Promise<ServerInfo> {
   const r = firstResult(await conn.query('SELECT VERSION(), CURRENT_USER(), @@version_comment, @@hostname, @@port'))
@@ -41,7 +39,7 @@ export async function mysqlListProcesses(conn: Conn): Promise<ProcessInfo[]> {
     user: strOrNull(row[1]),
     host: strOrNull(row[2]),
     database: strOrNull(row[3]),
-    state: [strOrNull(row[4]), strOrNull(row[6])].filter((x): x is string => !!x).join(' / ') || null,
+    state: joinParts(row[4], row[6]),
     timeSec: row[5] === null || row[5] === undefined ? null : Number(row[5]),
     query: strOrNull(row[7]),
   }))

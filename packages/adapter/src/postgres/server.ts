@@ -1,9 +1,7 @@
 import type { KeyValue, ProcessInfo, ServerInfo } from '@tsmyadmin/shared'
 import { type Conn, firstResult } from '../base.ts'
+import { joinParts, str, strOrNull } from '../sql/format.ts'
 import { AdapterError } from '../types.ts'
-
-const str = (v: unknown): string => (v === null || v === undefined ? '' : String(v))
-const strOrNull = (v: unknown): string | null => (v === null || v === undefined ? null : String(v))
 
 export async function pgServerInfo(conn: Conn): Promise<ServerInfo> {
   const r = firstResult(
@@ -70,7 +68,7 @@ export async function pgListProcesses(conn: Conn): Promise<ProcessInfo[]> {
     user: strOrNull(row[1]),
     host: strOrNull(row[2]),
     database: strOrNull(row[3]),
-    state: [strOrNull(row[4]), strOrNull(row[5])].filter((x): x is string => !!x).join(' / ') || null,
+    state: joinParts(row[4], row[5]),
     timeSec: row[6] === null || row[6] === undefined ? null : Number(row[6]),
     query: strOrNull(row[7]),
   }))

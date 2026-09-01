@@ -499,9 +499,11 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         let total = 0
         for await (const b of db.iterateRows(ns, 'no_pk', { batchSize: 3 })) total += b.rows.length
         expect(total).toBe(4)
-        const empty: unknown[] = []
+        const empty: { columns: { name: string }[]; rows: unknown[] }[] = []
         for await (const b of db.iterateRows(ns, `${scratch}_empty`, { batchSize: 10 })) empty.push(b)
-        expect(empty).toEqual([])
+        expect(empty).toHaveLength(1)
+        expect(empty[0]?.rows).toEqual([])
+        expect(empty[0]?.columns.map((c) => c.name)).toEqual(['id'])
       })
     })
 
@@ -620,13 +622,17 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
       it('create → grant → password → revoke → drop through the builder', async () => {
         const name = `u_${scratch}`
         const user = dialect === 'mysql' ? { name, host: '%' } : { name }
-        const serverNs = dialect === 'mysql' ? { database: 'information_schema' } : { database: ns.database }
         const runOp = async (op: Parameters<typeof db.users.build>[0]) => {
-          const target = db.users.namespace(op, serverNs.database)
-          for (const sql of db.users.build(op)) {
-            const r = await db.executeSql(target, sql, EXEC)
-            for (const x of r) if (x.kind === 'error') throw new Error(`${x.message}\n${x.sql}`)
-          }
+          const target = db.users.namespace(op, db.serverNamespace)
+          const r = await db.executeSql(
+            target,
+            db.users
+              .build(op)
+              .map((s) => s.sql)
+              .join(';\n'),
+            EXEC
+          )
+          for (const x of r) if (x.kind === 'error') throw new Error(`${x.message}\n${x.sql}`)
         }
         await runOp({
           op: 'createUser',

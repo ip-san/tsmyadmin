@@ -191,8 +191,12 @@ export class PostgresAdapter extends BaseAdapter {
     return this.withConn(ns, (conn) => pgDescribeTable(conn, ns, table))
   }
 
-  private serverNs(): Namespace {
+  get serverNamespace(): Namespace {
     return { database: this.defaultDatabase() }
+  }
+
+  private serverNs(): Namespace {
+    return this.serverNamespace
   }
 
   serverInfo(): Promise<ServerInfo> {
@@ -216,11 +220,11 @@ export class PostgresAdapter extends BaseAdapter {
   }
 
   listUsers(): Promise<UserInfo[]> {
-    return this.withConn({ database: this.defaultDatabase() }, (conn) => pgListUsers(conn))
+    return this.withConn(this.serverNs(), (conn) => pgListUsers(conn))
   }
 
   showGrants(user: UserRef): Promise<string[]> {
-    return this.withConn({ database: this.defaultDatabase() }, (conn) => pgShowGrants(conn, user))
+    return this.withConn(this.serverNs(), (conn) => pgShowGrants(conn, user))
   }
 
   /**
@@ -228,9 +232,9 @@ export class PostgresAdapter extends BaseAdapter {
    * (columns, defaults, identity, PK, indexes, foreign keys, comments). Not covered:
    * collations, storage parameters, partitioning, check constraints, ownership/grants.
    */
-  showCreateTable(ns: Namespace, table: string): Promise<string[]> {
+  showCreateTable(ns: Namespace, table: string, known?: TableSchema): Promise<string[]> {
     return this.withConn(ns, async (conn) => {
-      const schema = await pgDescribeTable(conn, ns, table)
+      const schema = known ?? (await pgDescribeTable(conn, ns, table))
       if (schema.kind === 'view') {
         const r = firstResult(
           await conn.query('SELECT pg_get_viewdef($1::regclass, true)', [quoteTable('postgres', ns, table)])

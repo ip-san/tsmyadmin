@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { Fragment } from 'react'
 import { ErrorBox, Spinner } from '@/components/ui/Feedback.tsx'
 import { locale } from '@/config/locale.ts'
 import { serverInfoQuery, statusQuery } from '@/lib/queries.ts'
@@ -26,10 +27,10 @@ export function StatusPage() {
             <dt className="text-zinc-500 dark:text-zinc-400">{locale.server.currentUser}</dt>
             <dd className="font-mono">{info.data.currentUser}</dd>
             {Object.entries(info.data.extra).map(([k, v]) => (
-              <dt key={k} className="text-zinc-500 dark:text-zinc-400">
-                {k}
-                <dd className="font-mono text-zinc-800 dark:text-zinc-100">{v}</dd>
-              </dt>
+              <Fragment key={k}>
+                <dt className="text-zinc-500 dark:text-zinc-400">{k}</dt>
+                <dd className="font-mono">{v}</dd>
+              </Fragment>
             ))}
           </dl>
         )}

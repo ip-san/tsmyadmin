@@ -3,7 +3,7 @@ import { PASSWORD_MASK } from '@tsmyadmin/shared'
 import { type Conn, firstResult } from '../base.ts'
 import { mysqlLiteral } from '../sql/literal.ts'
 import { quoteIdent } from '../sql/quote.ts'
-import type { UserSqlBuilder } from '../types.ts'
+import type { UserSqlBuilder, UserStatement } from '../types.ts'
 
 /** 'user'@'host' account literal. */
 function mysqlAccount(user: UserRef): string {
@@ -27,29 +27,35 @@ export async function mysqlShowGrants(conn: Conn, user: UserRef): Promise<string
   return r.rows.map((row) => String(row[0] ?? ''))
 }
 
+const plain = (sql: string): UserStatement => ({ sql, display: sql })
+/** Statement with a password: `display` carries the mask, `sql` the real value. */
+const secret = (template: (password: string) => string, password: string): UserStatement => ({
+  sql: template(mysqlLiteral(password)),
+  display: template(mysqlLiteral(PASSWORD_MASK)),
+})
+
 export const mysqlUsers: UserSqlBuilder = {
-  namespace(_op: UserOp, defaultDatabase: string): Namespace {
-    return { database: defaultDatabase }
+  namespace(_op: UserOp, serverNamespace: Namespace): Namespace {
+    return serverNamespace
   },
-  build(op: UserOp, options = {}): string[] {
+  build(op: UserOp): UserStatement[] {
     const account = mysqlAccount(op.user)
-    const pw = (p: string) => mysqlLiteral(options.mask ? PASSWORD_MASK : p)
     switch (op.op) {
       case 'createUser': {
-        const out = [`CREATE USER ${account} IDENTIFIED BY ${pw(op.password)}`]
-        if (op.attributes.superuser) out.push(`GRANT ALL PRIVILEGES ON *.* TO ${account} WITH GRANT OPTION`)
-        else if (op.attributes.createdb) out.push(`GRANT CREATE ON *.* TO ${account}`)
-        if (op.attributes.createrole) out.push(`GRANT CREATE USER ON *.* TO ${account}`)
+        const out = [secret((pw) => `CREATE USER ${account} IDENTIFIED BY ${pw}`, op.password)]
+        if (op.attributes.superuser) out.push(plain(`GRANT ALL PRIVILEGES ON *.* TO ${account} WITH GRANT OPTION`))
+        else if (op.attributes.createdb) out.push(plain(`GRANT CREATE ON *.* TO ${account}`))
+        if (op.attributes.createrole) out.push(plain(`GRANT CREATE USER ON *.* TO ${account}`))
         return out
       }
       case 'dropUser':
-        return [`DROP USER ${account}`]
+        return [plain(`DROP USER ${account}`)]
       case 'setPassword':
-        return [`ALTER USER ${account} IDENTIFIED BY ${pw(op.password)}`]
+        return [secret((pw) => `ALTER USER ${account} IDENTIFIED BY ${pw}`, op.password)]
       case 'grantAll':
-        return [`GRANT ALL PRIVILEGES ON ${quoteIdent('mysql', op.database)}.* TO ${account}`]
+        return [plain(`GRANT ALL PRIVILEGES ON ${quoteIdent('mysql', op.database)}.* TO ${account}`)]
       case 'revokeAll':
-        return [`REVOKE ALL PRIVILEGES ON ${quoteIdent('mysql', op.database)}.* FROM ${account}`]
+        return [plain(`REVOKE ALL PRIVILEGES ON ${quoteIdent('mysql', op.database)}.* FROM ${account}`)]
     }
   },
 }
