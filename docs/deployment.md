@@ -56,6 +56,11 @@ services:
       - "127.0.0.1:3100:3100"
     volumes:
       - tsmyadmin-data:/app/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "10"
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:3100/readyz || exit 1"]
       interval: 30s

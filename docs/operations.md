@@ -22,6 +22,24 @@
 
 `audit` は DDL（`/sql` 経由）やインポート（`executeSql` / `insertRows`）も含みます。SQL コンソールで実行した文の全文が必要な場合は、ログの `sql` は 500 文字で切り詰められている点に注意してください（値を含み得るため意図的に短くしています）。
 
+### ログの保管とローテーション
+
+tsmyadmin はログを **標準出力にのみ** 書き、ファイルへの書き込みやローテーションは行いません（12-factor 方式）。保管はコンテナ / プロセス基盤側で行ってください。
+
+| 環境 | 推奨設定 |
+|---|---|
+| Docker 単体 | `--log-driver json-file --log-opt max-size=50m --log-opt max-file=10`（compose では `logging:` セクション）。`audit` イベントを長期保管するなら `--log-driver` を `journald` / `fluentd` / `awslogs` などに |
+| Kubernetes | 標準の stdout 収集（Fluent Bit / Vector 等）。`event: audit` のみを別インデックスへルーティングすると監査照会が楽になる |
+| systemd（直接起動） | journald に入るため `journalctl -u tsmyadmin -o cat \| jq 'select(.event=="audit")'` で抽出。`SystemMaxUse=` で容量を制御 |
+
+監査ログの保持期間は組織のポリシーに合わせてください。1 行あたり数百バイト、変更操作 1 回につき 1 行なので、日に 1 万操作でも数 MB です。
+
+`audit` 行の抽出例:
+
+```bash
+docker logs tsmyadmin 2>&1 | jq -c 'select(.event=="audit") | {time, dbUser, action, database, table, ok}'
+```
+
 すべてのレスポンスに `X-Request-Id` が付きます。利用者からの問い合わせにはこの ID で `http` ログを引いてください。
 
 ## よくある事象
