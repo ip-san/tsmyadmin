@@ -17,6 +17,8 @@ const SQL_BUILDER_ALLOWLIST = [
   /^packages\/adapter\/src\/base\.ts$/,
   /^packages\/adapter\/src\/sql\/.*\.ts$/,
   /^packages\/adapter\/src\/(mysql|postgres)\/(ddl|adapter)\.ts$/,
+  // Editor prefill text shown to the user; executed only when they press Run (identifiers quoted).
+  /^apps\/web\/src\/features\/sql\/prefill\.ts$/,
 ]
 const SQL_KEYWORD =
   /\b(SELECT|INSERT|UPDATE|DELETE|ALTER|CREATE|DROP|TRUNCATE|GRANT|REVOKE|SET SESSION|SET search_path|USE)\b/i

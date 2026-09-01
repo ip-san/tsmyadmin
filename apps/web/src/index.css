@@ -1,2 +1,12 @@
 @import "tailwindcss";
 @custom-variant dark (&:where(.dark, .dark *));
+
+/* CodeMirror (SQL editor) */
+.cm-editor { font-size: 13px; }
+.cm-editor.cm-focused { outline: 2px solid #3b82f6; outline-offset: -1px; }
+.dark .cm-editor { background: #18181b; color: #e4e4e7; }
+.dark .cm-gutters { background: #27272a; color: #a1a1aa; border-color: #3f3f46; }
+.dark .cm-activeLine, .dark .cm-activeLineGutter { background: #27272a; }
+.dark .cm-cursor { border-left-color: #e4e4e7; }
+.dark .cm-selectionBackground, .dark .cm-content ::selection { background: #3f3f46 !important; }
+.dark .cm-tooltip { background: #27272a; color: #e4e4e7; border-color: #3f3f46; }
