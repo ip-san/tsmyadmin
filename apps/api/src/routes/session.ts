@@ -1,9 +1,7 @@
-import type { DatabaseAdapter } from '@tsmyadmin/adapter'
-import { type ConnectRequest, ConnectRequestSchema } from '@tsmyadmin/shared'
+import { ConnectRequestSchema } from '@tsmyadmin/shared'
 import { type Context, Hono } from 'hono'
 import { deleteCookie, getSignedCookie, setSignedCookie } from 'hono/cookie'
 import { isHostAllowed } from '../lib/allowlist.ts'
-import { withAudit } from '../lib/audit.ts'
 import { apiError, errorResponse } from '../lib/errors.ts'
 import type { Logger } from '../lib/logging.ts'
 import type { RateLimiter } from '../lib/rate-limit.ts'
@@ -11,10 +9,7 @@ import { validate } from '../lib/validate.ts'
 import { type AppEnv, requireSession, SESSION_COOKIE, type SessionConfig } from '../session/middleware.ts'
 import { sessionInfo } from '../session/store.ts'
 
-export type AdapterFactory = (config: ConnectRequest) => DatabaseAdapter
-
 export interface SessionRouteDeps {
-  adapterFactory: AdapterFactory
   allowedHosts: readonly string[]
   loginLimiter: RateLimiter
   /** Client IP resolver shared with the access log. */
@@ -27,6 +22,7 @@ export function sessionRoutes(cfg: SessionConfig, deps: SessionRouteDeps) {
     .post('/session', validate('json', ConnectRequestSchema), async (c) => {
       const body = c.req.valid('json')
       const ip = deps.ip(c)
+      const rateKey = `${ip}|${body.user}`
       const audit = {
         requestId: c.get('requestId'),
         ip,
@@ -36,7 +32,7 @@ export function sessionRoutes(cfg: SessionConfig, deps: SessionRouteDeps) {
         user: body.user,
       }
 
-      const limit = deps.loginLimiter.hit(`${ip}|${body.user}`)
+      const limit = deps.loginLimiter.hit(rateKey)
       if (!limit.allowed) {
         deps.logger.log('warn', 'login.rate_limited', audit)
         c.header('Retry-After', String(limit.retryAfterSec))
@@ -50,17 +46,15 @@ export function sessionRoutes(cfg: SessionConfig, deps: SessionRouteDeps) {
         )
       }
 
-      const adapter = deps.adapterFactory(body)
+      let session: Awaited<ReturnType<typeof cfg.store.create>>
       try {
-        await adapter.ping()
+        // The store builds the (audited) adapter, pings it and persists the session in one step.
+        session = await cfg.store.create(body)
       } catch (err) {
-        await adapter.close().catch(() => undefined)
         deps.logger.log('warn', 'login.failed', audit)
         return errorResponse(c, err, deps.logger)
       }
-      deps.loginLimiter.reset(`${ip}|${body.user}`)
-      const { password: _password, ...who } = body
-      const session = await cfg.store.create(body, withAudit(adapter, who, deps.logger))
+      deps.loginLimiter.reset(rateKey)
       deps.logger.log('info', 'login.ok', { ...audit, sessionId: session.id })
       await setSignedCookie(c, SESSION_COOKIE, session.id, cfg.secret, {
         httpOnly: true,

@@ -60,6 +60,7 @@ export function fakeTable(
       kind: 'table',
       comment: null,
       engine: null,
+      rowEstimate: rows.length,
       columns: columns.map((c) => fakeColumn(c, c === 'id' ? 'int' : 'varchar')),
       primaryKey,
       indexes:

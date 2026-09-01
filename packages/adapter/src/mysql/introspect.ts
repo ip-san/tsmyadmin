@@ -28,7 +28,7 @@ export async function mysqlListTables(conn: Conn, ns: Namespace): Promise<TableI
 export async function mysqlDescribeTable(conn: Conn, ns: Namespace, table: string): Promise<TableSchema> {
   const info = firstResult(
     await conn.query(
-      'SELECT TABLE_TYPE, ENGINE, TABLE_COMMENT FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?',
+      'SELECT TABLE_TYPE, ENGINE, TABLE_COMMENT, TABLE_ROWS FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?',
       [ns.database, table]
     )
   )
@@ -105,6 +105,7 @@ export async function mysqlDescribeTable(conn: Conn, ns: Namespace, table: strin
     kind: str(infoRow[0]).includes('VIEW') ? 'view' : 'table',
     comment: strOrNull(infoRow[2]) || null,
     engine: strOrNull(infoRow[1]),
+    rowEstimate: num(infoRow[3]),
     columns,
     primaryKey,
     indexes,

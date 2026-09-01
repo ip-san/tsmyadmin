@@ -1,18 +1,24 @@
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { DatabaseSync } from 'node:sqlite'
+import { DatabaseSync, type StatementSync } from 'node:sqlite'
 import type { DatabaseAdapter } from '@tsmyadmin/adapter'
 import { type ConnectRequest, ConnectRequestSchema } from '@tsmyadmin/shared'
 import { deriveSessionKey, open, seal } from './crypto.ts'
-import { SESSION_TTL_MS, type Session, type SessionStore } from './store.ts'
+import {
+  type AdapterFactory,
+  connectAdapter,
+  SESSION_TTL_MS,
+  type Session,
+  type SessionStore,
+  startSweep,
+} from './store.ts'
 
 export interface SqliteSessionStoreOptions {
   /** File path, or ':memory:' for tests. Parent directories are created. */
   path: string
   /** Session secret; the at-rest key is derived from it (rotating it invalidates stored sessions). */
   secret: string
-  /** Rebuilds an adapter for a session that was created by a previous process. */
-  rebuild: (config: ConnectRequest) => DatabaseAdapter
+  adapterFactory: AdapterFactory
   ttlMs?: number
   sweepIntervalMs?: number
   now?: () => number
@@ -27,6 +33,14 @@ interface Row {
   last_used_at: number
 }
 
+/** Process-local part of a session: the decrypted config (validated once) and the live adapter. */
+interface Live {
+  config: ConnectRequest
+  adapter: DatabaseAdapter
+  createdAt: number
+  lastTouch: number
+}
+
 /**
  * Sessions persisted in SQLite so a restart (or a rolling deploy) does not log everyone out.
  * Credentials are stored encrypted (AES-256-GCM, key derived from SESSION_SECRET); connection pools are
@@ -38,10 +52,17 @@ export class SqliteSessionStore implements SessionStore {
   private readonly ttlMs: number
   private readonly now: () => number
   private readonly touchIntervalMs: number
-  private readonly rebuild: SqliteSessionStoreOptions['rebuild']
-  private readonly adapters = new Map<string, DatabaseAdapter>()
-  private readonly lastTouch = new Map<string, number>()
-  private timer: ReturnType<typeof setInterval> | null = null
+  private readonly factory: AdapterFactory
+  private readonly live = new Map<string, Live>()
+  private timer: ReturnType<typeof setInterval> | null
+  private readonly stmt: {
+    insert: StatementSync
+    select: StatementSync
+    touch: StatementSync
+    remove: StatementSync
+    stale: StatementSync
+    count: StatementSync
+  }
 
   constructor(options: SqliteSessionStoreOptions) {
     if (options.path !== ':memory:') mkdirSync(dirname(options.path), { recursive: true })
@@ -56,77 +77,75 @@ export class SqliteSessionStore implements SessionStore {
       );
       CREATE INDEX IF NOT EXISTS sessions_last_used ON sessions (last_used_at);
     `)
+    this.stmt = {
+      insert: this.db.prepare('INSERT INTO sessions (id, payload, created_at, last_used_at) VALUES (?, ?, ?, ?)'),
+      select: this.db.prepare('SELECT id, payload, created_at, last_used_at FROM sessions WHERE id = ?'),
+      touch: this.db.prepare('UPDATE sessions SET last_used_at = ? WHERE id = ?'),
+      remove: this.db.prepare('DELETE FROM sessions WHERE id = ?'),
+      stale: this.db.prepare('SELECT id FROM sessions WHERE last_used_at < ?'),
+      count: this.db.prepare('SELECT COUNT(*) AS n FROM sessions'),
+    }
     this.key = deriveSessionKey(options.secret)
     this.ttlMs = options.ttlMs ?? SESSION_TTL_MS
     this.now = options.now ?? Date.now
     this.touchIntervalMs = options.touchIntervalMs ?? 60_000
-    this.rebuild = options.rebuild
-    const sweep = options.sweepIntervalMs ?? 60_000
-    if (sweep > 0) {
-      this.timer = setInterval(() => void this.sweep(), sweep)
-      if (typeof this.timer === 'object' && 'unref' in this.timer) this.timer.unref()
-    }
+    this.factory = options.adapterFactory
+    this.timer = startSweep(options.sweepIntervalMs ?? 60_000, () => void this.sweep())
   }
 
   get size(): number {
-    const row = this.db.prepare('SELECT COUNT(*) AS n FROM sessions').get() as { n: number }
-    return row.n
+    return (this.stmt.count.get() as { n: number }).n
   }
 
-  async create(config: ConnectRequest, adapter: DatabaseAdapter): Promise<Session> {
+  async create(config: ConnectRequest): Promise<Session> {
+    const adapter = await connectAdapter(this.factory, config)
     const id = crypto.randomUUID()
     const now = this.now()
-    this.db
-      .prepare('INSERT INTO sessions (id, payload, created_at, last_used_at) VALUES (?, ?, ?, ?)')
-      .run(id, seal(this.key, JSON.stringify(config)), now, now)
-    this.adapters.set(id, adapter)
-    this.lastTouch.set(id, now)
+    this.stmt.insert.run(id, seal(this.key, JSON.stringify(config)), now, now)
+    this.live.set(id, { config, adapter, createdAt: now, lastTouch: now })
     return { id, config, adapter, createdAt: now, lastUsedAt: now }
   }
 
   async get(id: string): Promise<Session | undefined> {
-    const row = this.db.prepare('SELECT id, payload, created_at, last_used_at FROM sessions WHERE id = ?').get(id) as
-      | Row
-      | undefined
+    const row = this.stmt.select.get(id) as Row | undefined
     if (!row) return undefined
     const now = this.now()
     if (now - row.last_used_at > this.ttlMs) {
       await this.delete(id)
       return undefined
     }
-    let config: ConnectRequest
-    try {
-      config = ConnectRequestSchema.parse(JSON.parse(open(this.key, row.payload)))
-    } catch {
-      // Undecryptable (secret rotated) or corrupt: drop it rather than fail every request.
-      await this.delete(id)
-      return undefined
+    let live = this.live.get(id)
+    if (!live) {
+      // First use after a restart: decrypt + validate once, then keep the config with the rebuilt pool.
+      let config: ConnectRequest
+      try {
+        config = ConnectRequestSchema.parse(JSON.parse(open(this.key, row.payload)))
+      } catch {
+        // Undecryptable (secret rotated) or corrupt: drop it rather than fail every request.
+        await this.delete(id)
+        return undefined
+      }
+      live = { config, adapter: this.factory(config), createdAt: row.created_at, lastTouch: row.last_used_at }
+      this.live.set(id, live)
     }
-    let adapter = this.adapters.get(id)
-    if (!adapter) {
-      adapter = this.rebuild(config)
-      this.adapters.set(id, adapter)
+    if (now - live.lastTouch >= this.touchIntervalMs) {
+      this.stmt.touch.run(now, id)
+      live.lastTouch = now
     }
-    if (now - (this.lastTouch.get(id) ?? 0) >= this.touchIntervalMs) {
-      this.db.prepare('UPDATE sessions SET last_used_at = ? WHERE id = ?').run(now, id)
-      this.lastTouch.set(id, now)
-    }
-    return { id, config, adapter, createdAt: row.created_at, lastUsedAt: now }
+    return { id, config: live.config, adapter: live.adapter, createdAt: live.createdAt, lastUsedAt: now }
   }
 
   async delete(id: string): Promise<void> {
-    this.db.prepare('DELETE FROM sessions WHERE id = ?').run(id)
-    this.lastTouch.delete(id)
-    await this.closeAdapter(id)
+    this.stmt.remove.run(id)
+    await this.closeLive(id)
   }
 
   async ping(): Promise<void> {
-    this.db.prepare('SELECT 1').get()
+    this.stmt.count.get()
   }
 
   async sweep(): Promise<void> {
-    const cutoff = this.now() - this.ttlMs
-    const stale = this.db.prepare('SELECT id FROM sessions WHERE last_used_at < ?').all(cutoff) as { id: string }[]
+    const stale = this.stmt.stale.all(this.now() - this.ttlMs) as { id: string }[]
     for (const { id } of stale) await this.delete(id)
   }
 
@@ -134,13 +153,13 @@ export class SqliteSessionStore implements SessionStore {
   async closeAll(): Promise<void> {
     if (this.timer) clearInterval(this.timer)
     this.timer = null
-    for (const id of [...this.adapters.keys()]) await this.closeAdapter(id)
+    for (const id of [...this.live.keys()]) await this.closeLive(id)
     this.db.close()
   }
 
-  private async closeAdapter(id: string): Promise<void> {
-    const adapter = this.adapters.get(id)
-    this.adapters.delete(id)
-    if (adapter) await adapter.close().catch(() => undefined)
+  private async closeLive(id: string): Promise<void> {
+    const live = this.live.get(id)
+    this.live.delete(id)
+    if (live) await live.adapter.close().catch(() => undefined)
   }
 }

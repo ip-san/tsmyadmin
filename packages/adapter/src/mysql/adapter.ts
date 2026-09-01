@@ -141,17 +141,6 @@ export class MysqlAdapter extends BaseAdapter {
     await conn.query(`SET SESSION max_execution_time = ${Math.max(0, Math.floor(ms))}`)
   }
 
-  protected async estimateRows(conn: Conn, ns: Namespace, table: string): Promise<number | null> {
-    const r = firstResult(
-      await conn.query('SELECT TABLE_ROWS FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?', [
-        ns.database,
-        table,
-      ])
-    )
-    const n = Number(r.rows[0]?.[0])
-    return Number.isFinite(n) && n >= 0 ? n : null
-  }
-
   protected async backendId(conn: Conn): Promise<string> {
     const r = firstResult(await conn.query('SELECT CONNECTION_ID()'))
     return String(r.rows[0]?.[0] ?? '')
@@ -159,7 +148,6 @@ export class MysqlAdapter extends BaseAdapter {
 
   /** KILL QUERY interrupts the statement but keeps the connection usable (unlike KILL). */
   protected async cancelBackend(ns: Namespace, id: string): Promise<void> {
-    if (!/^\d+$/.test(id)) throw new AdapterError('QUERY_FAILED', 'backend id must be numeric')
     await this.withConn(ns, (conn) => conn.query(`KILL QUERY ${id}`))
   }
 

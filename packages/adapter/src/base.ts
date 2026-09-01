@@ -75,13 +75,9 @@ const FILTER_SQL: Record<Filter['op'], string> = {
   is_not_null: 'IS NOT NULL',
 }
 
-/** Exact COUNT(*) unless the browse is unfiltered and the catalog says the table is large. */
-export function countMode(
-  hasFilters: boolean,
-  estimate: number | null,
-  threshold = EXACT_COUNT_MAX_ROWS
-): 'exact' | 'estimate' {
-  return !hasFilters && estimate !== null && estimate > threshold ? 'estimate' : 'exact'
+/** Exact COUNT(*) unless the catalog says the table is large (callers pass null when the browse is filtered). */
+export function countMode(estimate: number | null, threshold = EXACT_COUNT_MAX_ROWS): 'exact' | 'estimate' {
+  return estimate !== null && estimate > threshold ? 'estimate' : 'exact'
 }
 
 export function firstResult(r: RawResult | RawResult[]): RawResult {
@@ -123,8 +119,6 @@ export abstract class BaseAdapter implements DatabaseAdapter {
   protected abstract acquire(ns: Namespace): Promise<Conn>
   /** Applies / clears a per-session statement timeout. 0 clears. */
   protected abstract setStatementTimeout(conn: Conn, ms: number): Promise<void>
-  /** Catalog row-count estimate for the table (TABLE_ROWS / reltuples); null when unknown. */
-  protected abstract estimateRows(conn: Conn, ns: Namespace, table: string): Promise<number | null>
   /** Backend/connection id of `conn` as seen by the server (CONNECTION_ID() / pg_backend_pid()). */
   protected abstract backendId(conn: Conn): Promise<string>
   /** Interrupts the statement running on backend `id` from a fresh connection (KILL QUERY / pg_cancel_backend). */
@@ -223,9 +217,10 @@ export abstract class BaseAdapter implements DatabaseAdapter {
 
     return this.withConn(ns, async (conn) => {
       const data = firstResult(await conn.query(dataSql, params.values))
-      // Large unfiltered tables: COUNT(*) is a full scan on InnoDB / PostgreSQL, so use the catalog estimate.
-      const estimate = opts.filters.length === 0 ? await this.estimateRows(conn, ns, table) : null
-      if (countMode(opts.filters.length > 0, estimate) === 'estimate') {
+      // Large unfiltered tables: COUNT(*) is a full scan on InnoDB / PostgreSQL, so use the catalog estimate
+      // that describeTable already fetched (no extra round trip).
+      const estimate = opts.filters.length === 0 ? schema.rowEstimate : null
+      if (countMode(estimate) === 'estimate') {
         return {
           columns: data.columns,
           rows: data.rows,
@@ -418,17 +413,30 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     }
   }
 
-  /** Running executeSql calls by queryId → backend id + namespace, for cancelQuery. */
-  private readonly running = new Map<string, { ns: Namespace; backend: string }>()
+  /**
+   * Running executeSql calls by queryId. The entry is registered synchronously when executeSql starts so a
+   * cancel that arrives while the connection is still being acquired waits for the backend id instead of missing.
+   */
+  private readonly running = new Map<
+    string,
+    { ns: Namespace; backend: Promise<string>; resolve: (id: string) => void }
+  >()
 
   async executeSql(ns: Namespace, script: string, opts: ExecuteOptions): Promise<StatementResult[]> {
     const statements = splitStatements(script, this.dialect)
     const results: StatementResult[] = []
-    await this.withConn(
-      ns,
-      async (conn) => {
-        if (opts.queryId) this.running.set(opts.queryId, { ns, backend: await this.backendId(conn) })
-        try {
+    let resolveBackend: (id: string) => void = () => undefined
+    if (opts.queryId) {
+      const backend = new Promise<string>((resolve) => {
+        resolveBackend = resolve
+      })
+      this.running.set(opts.queryId, { ns, backend, resolve: resolveBackend })
+    }
+    try {
+      await this.withConn(
+        ns,
+        async (conn) => {
+          if (opts.queryId) resolveBackend(await this.backendId(conn))
           for (const st of statements) {
             const started = performance.now()
             try {
@@ -454,22 +462,31 @@ export abstract class BaseAdapter implements DatabaseAdapter {
               if (opts.stopOnError) break
             }
           }
-        } finally {
-          if (opts.queryId) this.running.delete(opts.queryId)
-        }
-        // Each execution is autocommitted: a transaction the script left open (or aborted) must not
-        // leak into the next borrower of this pooled connection.
-        await conn.query('ROLLBACK').catch(() => undefined)
-      },
-      opts.timeoutMs
-    )
+          // Each execution is autocommitted: a transaction the script left open (or aborted) must not
+          // leak into the next borrower of this pooled connection.
+          await conn.query('ROLLBACK').catch(() => undefined)
+        },
+        opts.timeoutMs
+      )
+    } finally {
+      if (opts.queryId) {
+        this.running.delete(opts.queryId)
+        resolveBackend('') // release any waiting cancelQuery
+      }
+    }
     return results
   }
 
-  async cancelQuery(queryId: string): Promise<boolean> {
+  /** Cancels a registered run. Waits up to `waitMs` for the run to reach the server (pool acquisition). */
+  async cancelQuery(queryId: string, waitMs = 10_000): Promise<boolean> {
     const entry = this.running.get(queryId)
     if (!entry) return false
-    await this.cancelBackend(entry.ns, entry.backend)
+    const backend = await Promise.race([
+      entry.backend,
+      new Promise<string>((resolve) => setTimeout(() => resolve(''), waitMs)),
+    ])
+    if (!/^\d+$/.test(backend)) return false
+    await this.cancelBackend(entry.ns, backend)
     return true
   }
 

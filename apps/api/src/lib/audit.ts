@@ -1,6 +1,7 @@
 import { ADAPTER_METHOD_NAMES, type DatabaseAdapter } from '@tsmyadmin/adapter'
-import type { Namespace, RowKey, SessionInfo } from '@tsmyadmin/shared'
+import type { ConnectRequest, Namespace, RowKey, SessionInfo } from '@tsmyadmin/shared'
 import { PASSWORD_MASK } from '@tsmyadmin/shared'
+import { type AdapterFactory, sessionIdentity } from '../session/store.ts'
 import type { Logger } from './logging.ts'
 import { currentRequest } from './request-context.ts'
 
@@ -135,4 +136,15 @@ export function withAudit(adapter: DatabaseAdapter, who: SessionInfo, logger: Lo
       }
     },
   })
+}
+
+/**
+ * The one place adapters get their audit wrapper: every session store builds adapters through this factory,
+ * on login and when resuming after a restart, so no code path can hand out an unaudited adapter.
+ */
+export function auditedAdapterFactory(
+  base: (config: ConnectRequest) => DatabaseAdapter,
+  logger: Logger
+): AdapterFactory {
+  return (config) => withAudit(base(config), sessionIdentity(config), logger)
 }

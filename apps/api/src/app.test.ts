@@ -15,7 +15,9 @@ import {
 import { afterEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { createApp } from './app.ts'
-import { createLogger } from './lib/logging.ts'
+import { type AppConfig, loadConfig } from './config.ts'
+import { auditedAdapterFactory } from './lib/audit.ts'
+import { createLogger, type Logger } from './lib/logging.ts'
 import { MemorySessionStore } from './session/store.ts'
 
 const SECRET = 'test-secret'
@@ -49,21 +51,31 @@ interface HarnessOptions {
   now?: () => number
   trustProxy?: boolean
   remoteAddress?: (c: { req: { header: (name: string) => string | undefined } }) => string | undefined
+  servers?: AppConfig['servers']
+  logger?: Logger
+}
+
+/** Development defaults from loadConfig, overridden per test. */
+function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
+  return { ...loadConfig({}), sessionSecret: SECRET, allowedHosts: ['db', '127.0.0.1'], ...overrides }
 }
 
 function harness(adapter: FakeAdapter = fixtureAdapter(), options: HarnessOptions = {}) {
-  const store = new MemorySessionStore({ sweepIntervalMs: 0 })
-  const app = createApp({
-    adapterFactory: () => adapter,
-    store,
-    secret: SECRET,
-    secure: false,
-    allowedHosts: options.allowedHosts ?? ['db', '127.0.0.1'],
-    ...(options.loginRateLimit ? { loginRateLimit: options.loginRateLimit } : {}),
-    ...(options.now ? { now: options.now } : {}),
-    ...(options.trustProxy !== undefined ? { trustProxy: options.trustProxy } : {}),
-    ...(options.remoteAddress ? { remoteAddress: options.remoteAddress } : {}),
-  })
+  const store = new MemorySessionStore({ adapterFactory: () => adapter, sweepIntervalMs: 0 })
+  const app = createApp(
+    testConfig({
+      ...(options.allowedHosts ? { allowedHosts: options.allowedHosts } : {}),
+      ...(options.loginRateLimit ? { loginRateLimit: options.loginRateLimit } : {}),
+      ...(options.trustProxy !== undefined ? { trustProxy: options.trustProxy } : {}),
+      ...(options.servers ? { servers: options.servers } : {}),
+    }),
+    {
+      store,
+      ...(options.now ? { now: options.now } : {}),
+      ...(options.remoteAddress ? { remoteAddress: options.remoteAddress } : {}),
+      ...(options.logger ? { logger: options.logger } : {}),
+    }
+  )
   let cookie = ''
   const req = (path: string, init: RequestInit = {}) =>
     app.request(path, {
@@ -219,11 +231,11 @@ describe('hardening', () => {
     expect(res.headers.get('x-content-type-options')).toBe('nosniff')
     expect(res.headers.get('x-request-id')).toMatch(/[0-9a-f-]{36}/)
     expect((await h.req('/readyz')).status).toBe(200)
-    const broken = new MemorySessionStore({ sweepIntervalMs: 0 })
+    const broken = new MemorySessionStore({ adapterFactory: () => fixtureAdapter(), sweepIntervalMs: 0 })
     broken.ping = async () => {
       throw new Error('store down')
     }
-    const app = createApp({ adapterFactory: () => fixtureAdapter(), store: broken, secret: SECRET, secure: false })
+    const app = createApp(testConfig(), { store: broken })
     expect((await app.request('/readyz')).status).toBe(503)
   })
 })
@@ -236,16 +248,12 @@ describe('audit log', () => {
       onSql: (_ns, sql) => [{ kind: 'affected', sql, affectedRows: 0, durationMs: 1 }],
       users: [],
     })
-    const store = new MemorySessionStore({ sweepIntervalMs: 0 })
-    stores.push(store)
-    const app = createApp({
-      adapterFactory: () => adapter,
-      store,
-      secret: SECRET,
-      secure: false,
-      allowedHosts: ['db'],
-      logger,
+    const store = new MemorySessionStore({
+      adapterFactory: auditedAdapterFactory(() => adapter, logger),
+      sweepIntervalMs: 0,
     })
+    stores.push(store)
+    const app = createApp(testConfig({ allowedHosts: ['db'] }), { store, logger })
     const login = await app.request('/api/session', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -273,22 +281,18 @@ describe('audit log', () => {
 
 describe('server presets', () => {
   it('exposes configured presets without authentication and never credentials', async () => {
-    const store = new MemorySessionStore({ sweepIntervalMs: 0 })
-    stores.push(store)
-    const app = createApp({
-      adapterFactory: () => fixtureAdapter(),
-      store,
-      secret: SECRET,
-      secure: false,
+    const h = harness(fixtureAdapter(), {
       servers: [{ name: 'prod', dialect: 'postgres', host: 'db.internal', port: 5432, database: 'app' }],
     })
-    const res = await app.request('/api/servers')
+    stores.push(h.store)
+    const res = await h.app.request('/api/servers')
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual([
       { name: 'prod', dialect: 'postgres', host: 'db.internal', port: 5432, database: 'app' },
     ])
-    const none = createApp({ adapterFactory: () => fixtureAdapter(), store, secret: SECRET, secure: false })
-    expect(await (await none.request('/api/servers')).json()).toEqual([])
+    const none = harness()
+    stores.push(none.store)
+    expect(await (await none.app.request('/api/servers')).json()).toEqual([])
   })
 })
 

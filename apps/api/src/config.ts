@@ -1,6 +1,8 @@
 import { type ServerPreset, ServerPresetsSchema } from '@tsmyadmin/shared'
 import { z } from 'zod'
 
+const formatIssues = (e: z.ZodError) => e.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')
+
 const csv = (s: string) =>
   s
     .split(',')
@@ -73,8 +75,7 @@ export class ConfigError extends Error {
 export function loadConfig(env: Record<string, string | undefined>): AppConfig {
   const parsed = EnvSchema.safeParse(env)
   if (!parsed.success) {
-    const detail = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')
-    throw new ConfigError(`Invalid environment: ${detail}`)
+    throw new ConfigError(`Invalid environment: ${formatIssues(parsed.error)}`)
   }
   const e = parsed.data
   const isProd = e.NODE_ENV === 'production'

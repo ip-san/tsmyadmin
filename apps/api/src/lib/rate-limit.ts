@@ -1,20 +1,26 @@
+import { startSweep } from '../session/store.ts'
+
 /**
  * Fixed-window in-process rate limiter (single-process deployment model).
- * Keys are arbitrary strings (e.g. "ip|user"); expired windows are swept lazily.
+ * Keys are arbitrary strings (e.g. "ip|user"); expired windows are swept on a background timer so a request
+ * never pays for the scan.
  */
 export class RateLimiter {
   private readonly windows = new Map<string, { count: number; resetAt: number }>()
+  private timer: ReturnType<typeof setInterval> | null
 
   constructor(
     private readonly max: number,
     private readonly windowMs: number,
-    private readonly now: () => number = Date.now
-  ) {}
+    private readonly now: () => number = Date.now,
+    sweepIntervalMs = 60_000
+  ) {
+    this.timer = startSweep(sweepIntervalMs, () => this.sweep())
+  }
 
   /** Records an attempt and reports whether it is allowed. */
   hit(key: string): { allowed: boolean; remaining: number; retryAfterSec: number } {
     const t = this.now()
-    if (this.windows.size > 10_000) this.sweep(t)
     let w = this.windows.get(key)
     if (!w || w.resetAt <= t) {
       w = { count: 0, resetAt: t + this.windowMs }
@@ -32,5 +38,10 @@ export class RateLimiter {
 
   sweep(t = this.now()): void {
     for (const [k, w] of this.windows) if (w.resetAt <= t) this.windows.delete(k)
+  }
+
+  stop(): void {
+    if (this.timer) clearInterval(this.timer)
+    this.timer = null
   }
 }

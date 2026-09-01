@@ -9,53 +9,88 @@ export interface Session {
   lastUsedAt: number
 }
 
+/** Builds the (already audited) adapter for a connection; owned by the session store. */
+export type AdapterFactory = (config: ConnectRequest) => DatabaseAdapter
+
 /**
- * Session persistence. The interface is async so process-external stores (SQLite / Redis) can implement it;
- * adapters (connection pools) are always process-local and rebuilt lazily by the store.
+ * Session persistence. The interface is async so process-external stores (SQLite / Redis) can implement it.
+ * Adapters (connection pools) are always process-local: the store builds them through its single factory,
+ * both on login and when resuming a session after a restart.
  */
 export interface SessionStore {
-  create(config: ConnectRequest, adapter: DatabaseAdapter): Promise<Session>
+  /** Builds the adapter, verifies the connection (ping) and persists the session. Throws when the DB rejects. */
+  create(config: ConnectRequest): Promise<Session>
   /** Returns the session and refreshes its TTL. */
   get(id: string): Promise<Session | undefined>
   delete(id: string): Promise<void>
   /** Liveness of the backing store (used by /readyz). */
   ping(): Promise<void>
-  /** Closes every session (shutdown / tests). */
+  /** Closes every adapter (shutdown / tests). */
   closeAll(): Promise<void>
 }
 
-export function sessionInfo(session: Session): SessionInfo {
-  const { password: _password, ...info } = session.config
+/** Everything about a connection except the password (what logs, audit lines and the client may see). */
+export function sessionIdentity(config: ConnectRequest): SessionInfo {
+  const { password: _password, ...info } = config
   return info
+}
+
+export function sessionInfo(session: Session): SessionInfo {
+  return sessionIdentity(session.config)
 }
 
 export const SESSION_TTL_MS = 30 * 60 * 1000
 
+/** Interval timer that never keeps the process alive; null when disabled. */
+export function startSweep(intervalMs: number, fn: () => void): ReturnType<typeof setInterval> | null {
+  if (intervalMs <= 0) return null
+  const timer = setInterval(fn, intervalMs)
+  if (typeof timer === 'object' && 'unref' in timer) timer.unref()
+  return timer
+}
+
+/** Builds an adapter and proves the credentials work; a failed ping never leaks a pool. */
+export async function connectAdapter(factory: AdapterFactory, config: ConnectRequest): Promise<DatabaseAdapter> {
+  const adapter = factory(config)
+  try {
+    await adapter.ping()
+  } catch (err) {
+    await adapter.close().catch(() => undefined)
+    throw err
+  }
+  return adapter
+}
+
+export interface MemorySessionStoreOptions {
+  adapterFactory: AdapterFactory
+  ttlMs?: number
+  sweepIntervalMs?: number
+  now?: () => number
+}
+
 /**
- * In-memory store with sliding TTL. Credentials never leave the server process;
- * sessions are lost on restart (use the SQLite store in production).
+ * In-memory store with sliding TTL. Sessions are lost on restart (use the SQLite store in production).
  */
 export class MemorySessionStore implements SessionStore {
   private readonly sessions = new Map<string, Session>()
+  private readonly factory: AdapterFactory
   private readonly ttlMs: number
   private readonly now: () => number
-  private timer: ReturnType<typeof setInterval> | null = null
+  private timer: ReturnType<typeof setInterval> | null
 
-  constructor(options: { ttlMs?: number; sweepIntervalMs?: number; now?: () => number } = {}) {
+  constructor(options: MemorySessionStoreOptions) {
+    this.factory = options.adapterFactory
     this.ttlMs = options.ttlMs ?? SESSION_TTL_MS
     this.now = options.now ?? Date.now
-    const sweep = options.sweepIntervalMs ?? 60_000
-    if (sweep > 0) {
-      this.timer = setInterval(() => void this.sweep(), sweep)
-      if (typeof this.timer === 'object' && 'unref' in this.timer) this.timer.unref()
-    }
+    this.timer = startSweep(options.sweepIntervalMs ?? 60_000, () => void this.sweep())
   }
 
   get size(): number {
     return this.sessions.size
   }
 
-  async create(config: ConnectRequest, adapter: DatabaseAdapter): Promise<Session> {
+  async create(config: ConnectRequest): Promise<Session> {
+    const adapter = await connectAdapter(this.factory, config)
     const id = crypto.randomUUID()
     const now = this.now()
     const session: Session = { id, config, adapter, createdAt: now, lastUsedAt: now }

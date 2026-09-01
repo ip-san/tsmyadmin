@@ -1,5 +1,5 @@
 import { expect, type Page, test } from '@playwright/test'
-import { login, TARGETS, tableUrl } from './helpers.ts'
+import { login, slowSql, TARGETS, tableUrl } from './helpers.ts'
 
 async function typeSql(page: Page, sql: string) {
   const editor = page.getByRole('textbox', { name: 'SQL エディタ' })
@@ -42,10 +42,7 @@ for (const t of TARGETS) {
 
     test('a running statement can be cancelled', async ({ page }) => {
       await page.goto(t.schema ? `/db/${t.database}/sql?schema=${t.schema}` : `/db/${t.database}/sql`)
-      const slow =
-        t.dialect === 'postgres'
-          ? 'SELECT pg_sleep(20)'
-          : `SELECT COUNT(*) FROM ${Array.from({ length: 12 }, (_, i) => `users u${i}`).join(', ')} WHERE ${Array.from({ length: 12 }, (_, i) => `u${i}.id`).join(' + ')} > 0`
+      const slow = slowSql(t.dialect)
       await typeSql(page, slow)
       await page.getByRole('button', { name: '実行', exact: true }).click()
       await page.getByRole('button', { name: 'キャンセル' }).click()

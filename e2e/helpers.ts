@@ -52,3 +52,13 @@ export function tableUrl(t: Target, table: string, sub = ''): string {
   const base = `/db/${t.database}/table/${table}${sub}`
   return t.schema ? `${base}?schema=${t.schema}` : base
 }
+
+/** A read-only statement that runs for seconds and can be interrupted (see the adapter conformance fixtures). */
+export function slowSql(dialect: Target['dialect']): string {
+  if (dialect === 'postgres') return 'SELECT pg_sleep(20)'
+  // SLEEP() returns 1 instead of failing when interrupted, and a bare cross join is optimised away,
+  // so use a cross join with a WHERE clause that must be evaluated per row.
+  const tables = Array.from({ length: 12 }, (_, i) => `users u${i}`).join(', ')
+  const cond = Array.from({ length: 12 }, (_, i) => `u${i}.id`).join(' + ')
+  return `SELECT COUNT(*) FROM ${tables} WHERE ${cond} > 0`
+}

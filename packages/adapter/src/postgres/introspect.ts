@@ -56,7 +56,7 @@ export async function pgDescribeTable(conn: Conn, ns: Namespace, table: string):
   const regclass = quoteTable('postgres', ns, table)
   const info = firstResult(
     await conn.query(
-      `SELECT c.relkind, obj_description(c.oid, 'pg_class')
+      `SELECT c.relkind, obj_description(c.oid, 'pg_class'), c.reltuples
        FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
        WHERE n.nspname = $1 AND c.relname = $2`,
       [ns.schema ?? 'public', table]
@@ -144,11 +144,14 @@ export async function pgDescribeTable(conn: Conn, ns: Namespace, table: string):
   }))
 
   const relkind = str(infoRow[0])
+  // reltuples is -1 until the table has been analysed/vacuumed.
+  const tuples = Number(infoRow[2])
   return {
     name: table,
     kind: relkind === 'v' || relkind === 'm' ? 'view' : 'table',
     comment: strOrNull(infoRow[1]),
     engine: null,
+    rowEstimate: Number.isFinite(tuples) && tuples >= 0 ? Math.round(tuples) : null,
     columns,
     primaryKey,
     indexes,

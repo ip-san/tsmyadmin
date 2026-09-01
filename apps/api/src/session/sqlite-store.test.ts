@@ -16,30 +16,37 @@ const tmpFile = () => {
   dirs.push(dir)
   return join(dir, 'nested', 'sessions.sqlite')
 }
+const factory =
+  (made: FakeAdapter[] = []) =>
+  () => {
+    const a = new FakeAdapter()
+    made.push(a)
+    return a
+  }
 
 describe('SqliteSessionStore', () => {
   it('creates, fetches, deletes and closes adapters like the memory store', async () => {
+    const made: FakeAdapter[] = []
     const store = new SqliteSessionStore({
       path: ':memory:',
       secret: 's',
-      rebuild: () => new FakeAdapter(),
+      adapterFactory: factory(made),
       sweepIntervalMs: 0,
     })
-    const adapter = new FakeAdapter()
-    const s = await store.create(config, adapter)
-    expect((await store.get(s.id))?.adapter).toBe(adapter)
+    const s = await store.create(config)
+    expect((await store.get(s.id))?.adapter).toBe(made[0])
     expect((await store.get(s.id))?.config.password).toBe('secret-pw')
     await store.delete(s.id)
     expect(await store.get(s.id)).toBeUndefined()
-    expect(adapter.closed).toBe(true)
+    expect(made[0]?.closed).toBe(true)
     await store.ping()
     await store.closeAll()
   })
 
   it('stores credentials encrypted at rest', async () => {
     const path = tmpFile()
-    const store = new SqliteSessionStore({ path, secret: 's', rebuild: () => new FakeAdapter(), sweepIntervalMs: 0 })
-    await store.create(config, new FakeAdapter())
+    const store = new SqliteSessionStore({ path, secret: 's', adapterFactory: factory(), sweepIntervalMs: 0 })
+    await store.create(config)
     await store.closeAll()
     const raw = new DatabaseSync(path)
     const row = raw.prepare('SELECT payload FROM sessions').get() as { payload: Uint8Array }
@@ -47,37 +54,35 @@ describe('SqliteSessionStore', () => {
     raw.close()
   })
 
-  it('survives a restart: a new process rebuilds the adapter from the stored config', async () => {
+  it('survives a restart: a new process rebuilds the adapter once from the stored config', async () => {
     const path = tmpFile()
-    const first = new SqliteSessionStore({ path, secret: 's', rebuild: () => new FakeAdapter(), sweepIntervalMs: 0 })
-    const s = await first.create(config, new FakeAdapter())
+    const first = new SqliteSessionStore({ path, secret: 's', adapterFactory: factory(), sweepIntervalMs: 0 })
+    const s = await first.create(config)
     await first.closeAll()
 
     const rebuilt: FakeAdapter[] = []
     const second = new SqliteSessionStore({
       path,
       secret: 's',
-      rebuild: (cfg) => {
+      adapterFactory: (cfg) => {
         expect(cfg).toEqual(config)
-        const a = new FakeAdapter()
-        rebuilt.push(a)
-        return a
+        return factory(rebuilt)()
       },
       sweepIntervalMs: 0,
     })
     const resumed = await second.get(s.id)
     expect(resumed?.config.user).toBe('u')
     expect(rebuilt).toHaveLength(1)
-    expect((await second.get(s.id))?.adapter).toBe(rebuilt[0]) // cached, not rebuilt again
+    expect((await second.get(s.id))?.adapter).toBe(rebuilt[0]) // cached: no second rebuild, no second decrypt
     await second.closeAll()
   })
 
   it('drops sessions sealed with a different secret instead of failing', async () => {
     const path = tmpFile()
-    const a = new SqliteSessionStore({ path, secret: 'one', rebuild: () => new FakeAdapter(), sweepIntervalMs: 0 })
-    const s = await a.create(config, new FakeAdapter())
+    const a = new SqliteSessionStore({ path, secret: 'one', adapterFactory: factory(), sweepIntervalMs: 0 })
+    const s = await a.create(config)
     await a.closeAll()
-    const b = new SqliteSessionStore({ path, secret: 'two', rebuild: () => new FakeAdapter(), sweepIntervalMs: 0 })
+    const b = new SqliteSessionStore({ path, secret: 'two', adapterFactory: factory(), sweepIntervalMs: 0 })
     expect(await b.get(s.id)).toBeUndefined()
     expect(b.size).toBe(0)
     await b.closeAll()
@@ -85,31 +90,30 @@ describe('SqliteSessionStore', () => {
 
   it('applies a sliding TTL, throttles touch writes and sweeps stale rows', async () => {
     let t = 1000
+    const made: FakeAdapter[] = []
     const store = new SqliteSessionStore({
       path: ':memory:',
       secret: 's',
-      rebuild: () => new FakeAdapter(),
+      adapterFactory: factory(made),
       ttlMs: 100,
       touchIntervalMs: 50,
       sweepIntervalMs: 0,
       now: () => t,
     })
-    const adapter = new FakeAdapter()
-    const s = await store.create(config, adapter)
+    const s = await store.create(config)
     t += 80
     expect(await store.get(s.id)).toBeDefined() // touched (80 ≥ 50)
     t += 80
     expect(await store.get(s.id)).toBeDefined() // still alive thanks to the touch
     t += 150
     expect(await store.get(s.id)).toBeUndefined()
-    expect(adapter.closed).toBe(true)
+    expect(made[0]?.closed).toBe(true)
 
-    const b = new FakeAdapter()
-    const sb = await store.create(config, b)
+    const sb = await store.create(config)
     t += 200
     await store.sweep()
     expect(store.size).toBe(0)
-    expect(b.closed).toBe(true)
+    expect(made[1]?.closed).toBe(true)
     expect(await store.get(sb.id)).toBeUndefined()
     await store.closeAll()
   })

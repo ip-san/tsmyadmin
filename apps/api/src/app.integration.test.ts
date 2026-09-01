@@ -4,6 +4,7 @@ import { BrowseResultSchema, SessionInfoSchema, StatementResultSchema, TableSche
 import { afterAll, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { createApp } from './app.ts'
+import { loadConfig } from './config.ts'
 import { MemorySessionStore } from './session/store.ts'
 
 const targets = [
@@ -17,14 +18,8 @@ const targets = [
   },
 ]
 
-const store = new MemorySessionStore({ sweepIntervalMs: 0 })
-const app = createApp({
-  adapterFactory: createAdapter,
-  store,
-  secret: 'integration',
-  secure: false,
-  allowedHosts: ['*'],
-})
+const store = new MemorySessionStore({ adapterFactory: createAdapter, sweepIntervalMs: 0 })
+const app = createApp({ ...loadConfig({}), sessionSecret: 'integration-secret', allowedHosts: ['*'] }, { store })
 afterAll(() => store.closeAll())
 
 describe.each(targets)('API integration ($dialect)', ({ dialect, url }) => {

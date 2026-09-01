@@ -129,6 +129,7 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         expect(users.comment).toBe('application users')
         expect(users.columns.map((c) => c.name)).toEqual(['id', 'name', 'email', 'age', 'created_at'])
         expect(users.primaryKey).toEqual(['id'])
+        expect(users.rowEstimate === null || typeof users.rowEstimate === 'number').toBe(true)
         const name = users.columns.find((c) => c.name === 'name')
         expect(name?.nullable).toBe(false)
         expect(name?.comment).toBe('display name')
@@ -477,12 +478,8 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
       it('interrupts a running script from another connection and keeps the pool usable', async () => {
         const queryId = crypto.randomUUID()
         const run = db.executeSql(ns, ctx.slowSql, { ...EXEC, timeoutMs: 60_000, queryId })
-        let cancelled = false
-        for (let i = 0; i < 50 && !cancelled; i++) {
-          await new Promise((r) => setTimeout(r, 100))
-          cancelled = await db.cancelQuery(queryId)
-        }
-        expect(cancelled).toBe(true)
+        // Registration is synchronous: a cancel issued immediately waits for the backend id and succeeds.
+        expect(await db.cancelQuery(queryId)).toBe(true)
         const results = await run
         expect(results[0]?.kind).toBe('error')
         expect(await db.cancelQuery(queryId)).toBe(false)

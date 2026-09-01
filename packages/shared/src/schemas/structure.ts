@@ -52,6 +52,8 @@ export const TableSchemaSchema = z.object({
   kind: TableKindSchema,
   comment: z.string().nullable(),
   engine: z.string().nullable(),
+  /** Catalog row-count estimate (TABLE_ROWS / reltuples); null for views or before the table was analysed. */
+  rowEstimate: z.number().nullable(),
   columns: z.array(ColumnDefSchema),
   primaryKey: z.array(z.string()),
   indexes: z.array(IndexDefSchema),

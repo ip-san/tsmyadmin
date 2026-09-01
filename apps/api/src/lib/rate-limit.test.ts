@@ -4,7 +4,7 @@ import { RateLimiter } from './rate-limit.ts'
 describe('RateLimiter', () => {
   it('allows up to max attempts per window and then blocks with a retry hint', () => {
     let t = 1_000
-    const rl = new RateLimiter(3, 10_000, () => t)
+    const rl = new RateLimiter(3, 10_000, () => t, 0)
     expect(rl.hit('a')).toMatchObject({ allowed: true, remaining: 2 })
     expect(rl.hit('a')).toMatchObject({ allowed: true, remaining: 1 })
     expect(rl.hit('a')).toMatchObject({ allowed: true, remaining: 0 })
@@ -16,7 +16,7 @@ describe('RateLimiter', () => {
 
   it('reset forgets a key and sweep drops expired windows', () => {
     let t = 0
-    const rl = new RateLimiter(1, 100, () => t)
+    const rl = new RateLimiter(1, 100, () => t, 0)
     rl.hit('a')
     expect(rl.hit('a').allowed).toBe(false)
     rl.reset('a')

@@ -104,7 +104,7 @@ export function splitStatements(input: string, dialect: Dialect): Statement[] {
         continue
       }
     }
-    if (input.startsWith(delimiter, i)) {
+    if (delimiter.length === 1 ? ch === delimiter : input.startsWith(delimiter, i)) {
       flush(i)
       i += delimiter.length
       start = i

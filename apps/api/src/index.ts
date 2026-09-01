@@ -4,7 +4,7 @@ import { createAdapter } from '@tsmyadmin/adapter'
 import { getConnInfo, serveStatic } from 'hono/bun'
 import { createApp } from './app.ts'
 import { ConfigError, loadConfig } from './config.ts'
-import { withAudit } from './lib/audit.ts'
+import { auditedAdapterFactory } from './lib/audit.ts'
 import { createLogger } from './lib/logging.ts'
 import { SqliteSessionStore } from './session/sqlite-store.ts'
 import { MemorySessionStore, type SessionStore } from './session/store.ts'
@@ -22,30 +22,21 @@ const logger = createLogger(config.logFormat)
 if (!process.env.SESSION_SECRET)
   logger.log('warn', 'config.dev_secret', { hint: 'SESSION_SECRET not set; using a development secret' })
 
+// Every adapter a session ever sees goes through this factory, so auditing cannot be bypassed.
+const adapterFactory = auditedAdapterFactory(createAdapter, logger)
 const store: SessionStore =
   config.sessionStore === 'sqlite'
     ? new SqliteSessionStore({
         path: config.sessionDbPath,
         secret: config.sessionSecret,
         ttlMs: config.sessionTtlMs,
-        // Sessions resumed after a restart get the same audited adapter as freshly created ones.
-        rebuild: (cfg) => {
-          const { password: _password, ...who } = cfg
-          return withAudit(createAdapter(cfg), who, logger)
-        },
+        adapterFactory,
       })
-    : new MemorySessionStore({ ttlMs: config.sessionTtlMs })
+    : new MemorySessionStore({ ttlMs: config.sessionTtlMs, adapterFactory })
 
-const app = createApp({
-  adapterFactory: createAdapter,
+const app = createApp(config, {
   store,
-  secret: config.sessionSecret,
-  secure: config.isProd,
-  sessionTtlMs: config.sessionTtlMs,
-  allowedHosts: config.allowedHosts,
-  servers: config.servers,
-  loginRateLimit: config.loginRateLimit,
-  trustProxy: config.trustProxy,
+  logger,
   remoteAddress: (c) => {
     try {
       return getConnInfo(c).remote.address
@@ -53,7 +44,6 @@ const app = createApp({
       return undefined
     }
   },
-  logger,
 })
 
 // hono/bun serveStatic resolves paths relative to the process cwd (it prefixes "./"), so keep this relative.

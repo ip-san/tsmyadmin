@@ -3,6 +3,7 @@ import type { Cell, ExportQuery, Namespace } from '@tsmyadmin/shared'
 import { CSV_NULL, EXPORT_BATCH_SIZE, isBinaryCell } from '@tsmyadmin/shared'
 
 export const DUMP_COMPLETE_MARKER = '-- tsmyadmin dump complete'
+const ITER_OPTS = { batchSize: EXPORT_BATCH_SIZE }
 
 export interface ExportFile {
   /** Chunks are produced lazily so a large table never has to fit in memory at once. */
@@ -20,7 +21,7 @@ function csvField(cell: Cell): string {
 async function* csvBody(adapter: DatabaseAdapter, ns: Namespace, table: string, bom: boolean): AsyncIterable<string> {
   if (bom) yield '﻿'
   let header = false
-  for await (const b of adapter.iterateRows(ns, table, { batchSize: EXPORT_BATCH_SIZE })) {
+  for await (const b of adapter.iterateRows(ns, table, ITER_OPTS)) {
     if (!header) {
       yield `${b.columns.map((c) => csvField(c.name)).join(',')}\r\n`
       header = true
@@ -34,12 +35,14 @@ async function* jsonBody(adapter: DatabaseAdapter, ns: Namespace, tables: string
   for (const [t, table] of tables.entries()) {
     yield `${t > 0 ? ',\n' : ''}  ${JSON.stringify(table)}: [`
     let first = true
-    for await (const b of adapter.iterateRows(ns, table, { batchSize: EXPORT_BATCH_SIZE })) {
-      for (const row of b.rows) {
-        const obj = Object.fromEntries(b.columns.map((c, i) => [c.name, row[i] ?? null]))
-        yield `${first ? '\n' : ',\n'}    ${JSON.stringify(obj)}`
-        first = false
-      }
+    // One chunk per batch (like CSV) rather than per row: far fewer stream pulls for large tables.
+    for await (const b of adapter.iterateRows(ns, table, ITER_OPTS)) {
+      if (b.rows.length === 0) continue
+      const lines = b.rows.map(
+        (row) => `    ${JSON.stringify(Object.fromEntries(b.columns.map((c, i) => [c.name, row[i] ?? null])))}`
+      )
+      yield `${first ? '\n' : ',\n'}${lines.join(',\n')}`
+      first = false
     }
     yield first ? ']' : '\n  ]'
   }
@@ -68,7 +71,7 @@ async function* sqlBody(
       for (const stmt of await adapter.showCreateTable(ns, table, schema)) yield `${stmt};\n\n`
     }
     if (q.data === '1') {
-      for await (const b of adapter.iterateRows(ns, table, { batchSize: EXPORT_BATCH_SIZE, schema })) {
+      for await (const b of adapter.iterateRows(ns, table, { ...ITER_OPTS, schema })) {
         const stmt = adapter.exporter.insert(
           ns,
           table,
