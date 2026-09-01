@@ -51,14 +51,26 @@ export type AdapterErrorCode = Extract<
   | 'PERMISSION_DENIED'
 >
 
+export interface AdapterErrorExtra {
+  /** Driver / server error code (MySQL ER_*, PostgreSQL SQLSTATE). */
+  nativeCode?: string
+  /** 1-based character offset in the statement (PostgreSQL). */
+  position?: number
+}
+
 export class AdapterError extends Error {
   readonly code: AdapterErrorCode
+  /** Human-readable server message without the code prefix. */
   readonly detail: string | undefined
-  constructor(code: AdapterErrorCode, message: string, detail?: string) {
+  readonly nativeCode: string | undefined
+  readonly position: number | undefined
+  constructor(code: AdapterErrorCode, message: string, detail?: string, extra: AdapterErrorExtra = {}) {
     super(message)
     this.name = 'AdapterError'
     this.code = code
     this.detail = detail
+    this.nativeCode = extra.nativeCode
+    this.position = extra.position
   }
 }
 

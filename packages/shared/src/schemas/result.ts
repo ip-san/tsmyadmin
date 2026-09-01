@@ -19,6 +19,15 @@ export type ResultSet = z.infer<typeof ResultSetSchema>
 export const StatementResultSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('rows'), sql: z.string(), result: ResultSetSchema, durationMs: z.number() }),
   z.object({ kind: z.literal('affected'), sql: z.string(), affectedRows: z.number(), durationMs: z.number() }),
-  z.object({ kind: z.literal('error'), sql: z.string(), message: z.string(), code: z.string().optional() }),
+  z.object({
+    kind: z.literal('error'),
+    sql: z.string(),
+    message: z.string(),
+    code: z.string().optional(),
+    /** Driver / server error code (MySQL ER_*, PostgreSQL SQLSTATE). */
+    nativeCode: z.string().optional(),
+    /** 1-based character offset of the error inside `sql` (PostgreSQL reports it; MySQL does not). */
+    position: z.number().int().min(1).optional(),
+  }),
 ])
 export type StatementResult = z.infer<typeof StatementResultSchema>

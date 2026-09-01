@@ -201,6 +201,8 @@ export const ja = {
     affected: (n: number, ms: number) => `${n.toLocaleString('ja-JP')} 行に影響（${ms} ms）`,
     truncated: (max: number) => `結果は先頭 ${max.toLocaleString('ja-JP')} 行に切り詰められています`,
     errorAt: '失敗した文',
+    errorPosition: (line: number, column: number) => `${line} 行目 ${column} 文字目`,
+    nativeCode: 'DB エラーコード',
     empty: '実行する SQL がありません',
     history: '履歴',
     noHistory: '履歴はありません',

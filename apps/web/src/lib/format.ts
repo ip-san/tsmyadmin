@@ -46,7 +46,8 @@ export function errorMessage(err: unknown): string {
         : 'message' in err && typeof err.message === 'string'
           ? err.message
           : ''
-    return detail ? `${base}: ${detail}` : base
+    const native = 'nativeCode' in err && typeof err.nativeCode === 'string' ? ` [${err.nativeCode}]` : ''
+    return detail ? `${base}: ${detail}${native}` : `${base}${native}`
   }
   return err instanceof Error ? err.message : String(err)
 }

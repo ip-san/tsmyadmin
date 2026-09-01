@@ -20,14 +20,19 @@ const STATUS_BY_CODE: Record<ApiErrorCode, ContentfulStatusCode> = {
   INTERNAL: 500,
 }
 
-export function apiError(code: ApiErrorCode, message: string, detail?: string): ApiError {
-  return detail === undefined ? { code, message } : { code, message, detail }
+export function apiError(code: ApiErrorCode, message: string, detail?: string, nativeCode?: string): ApiError {
+  return {
+    code,
+    message,
+    ...(detail === undefined ? {} : { detail }),
+    ...(nativeCode === undefined ? {} : { nativeCode }),
+  }
 }
 
 /** Normalises anything thrown by a route into the error envelope plus the HTTP status it deserves. */
 function toApiError(err: unknown): { body: ApiError; status: ContentfulStatusCode } {
   if (err instanceof AdapterError) {
-    const body = apiError(err.code, err.message, err.detail)
+    const body = apiError(err.code, err.message, err.detail, err.nativeCode)
     return { body, status: STATUS_BY_CODE[body.code] }
   }
   if (err instanceof HTTPException) {

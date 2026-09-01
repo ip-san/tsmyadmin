@@ -35,6 +35,10 @@ for (const t of TARGETS) {
       const failed = page.getByRole('region', { name: '文 2' })
       await expect(failed).toContainText('エラー')
       await expect(failed.getByRole('alert')).toContainText(/table_that_is_missing/i)
+      await expect(failed.getByTitle('DB エラーコード')).toHaveText(
+        t.dialect === 'mysql' ? 'ER_NO_SUCH_TABLE' : '42P01'
+      )
+      if (t.dialect === 'postgres') await expect(failed.getByRole('alert')).toContainText('1 行目 15 文字目')
       await expect(page.getByRole('region', { name: '文 3' })).toHaveCount(0)
       await page.getByText('履歴 (1)').click()
       await expect(page.getByTitle('失敗')).toBeVisible()

@@ -259,7 +259,7 @@ export class PostgresAdapter extends BaseAdapter {
 
   toAdapterError(err: unknown): AdapterError {
     if (err instanceof AdapterError) return err
-    const e = err as { code?: unknown; message?: unknown; detail?: unknown; hint?: unknown }
+    const e = err as { code?: unknown; message?: unknown; detail?: unknown; hint?: unknown; position?: unknown }
     const code = typeof e.code === 'string' ? e.code : 'UNKNOWN'
     const message = typeof e.message === 'string' ? e.message : String(err)
     let kind: AdapterErrorCode = 'QUERY_FAILED'
@@ -270,6 +270,10 @@ export class PostgresAdapter extends BaseAdapter {
     else if (NOT_FOUND_CODES.has(code)) kind = 'NOT_FOUND'
     const extra = [e.detail, e.hint].filter((x): x is string => typeof x === 'string' && x.length > 0)
     const detail = extra.length > 0 ? `${message} (${extra.join('; ')})` : message
-    return new AdapterError(kind, `${code}: ${message}`, detail)
+    const position = Number(e.position)
+    return new AdapterError(kind, `${code}: ${message}`, detail, {
+      ...(code === 'UNKNOWN' ? {} : { nativeCode: code }),
+      ...(Number.isInteger(position) && position > 0 ? { position } : {}),
+    })
   }
 }

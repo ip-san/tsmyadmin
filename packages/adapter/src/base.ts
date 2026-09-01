@@ -462,7 +462,14 @@ export abstract class BaseAdapter implements DatabaseAdapter {
               }
             } catch (err) {
               const e = err instanceof AdapterError ? err : this.toAdapterError(err)
-              await emit({ kind: 'error', sql: st.sql, message: e.detail ?? e.message, code: e.code })
+              await emit({
+                kind: 'error',
+                sql: st.sql,
+                message: e.detail ?? e.message,
+                code: e.code,
+                ...(e.nativeCode ? { nativeCode: e.nativeCode } : {}),
+                ...(e.position ? { position: e.position } : {}),
+              })
               if (opts.stopOnError) break
             }
           }

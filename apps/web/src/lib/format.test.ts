@@ -33,5 +33,8 @@ describe('errorMessage', () => {
     )
     expect(errorMessage({ code: 'KEY_MISMATCH', message: 'm' })).toContain('一意に特定')
     expect(errorMessage(new Error('boom'))).toBe('boom')
+    expect(errorMessage({ code: 'PERMISSION_DENIED', message: 'x', detail: 'denied', nativeCode: '42501' })).toBe(
+      'この操作に必要な権限が DB ユーザーにありません: denied [42501]'
+    )
   })
 })

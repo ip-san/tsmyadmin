@@ -81,5 +81,7 @@ export const ApiErrorSchema = z.object({
   code: ApiErrorCodeSchema,
   message: z.string(),
   detail: z.string().optional(),
+  /** Driver / server error code (MySQL ER_*, PostgreSQL SQLSTATE) when the error came from the database. */
+  nativeCode: z.string().optional(),
 })
 export type ApiError = z.infer<typeof ApiErrorSchema>

@@ -266,6 +266,6 @@ export class MysqlAdapter extends BaseAdapter {
       kind = 'CONNECTION_FAILED'
     else if (PERMISSION_CODES.has(code)) kind = 'PERMISSION_DENIED'
     else if (NOT_FOUND_CODES.has(code)) kind = 'NOT_FOUND'
-    return new AdapterError(kind, `${code}: ${detail}`, detail)
+    return new AdapterError(kind, `${code}: ${detail}`, detail, code === 'UNKNOWN' ? {} : { nativeCode: code })
   }
 }
