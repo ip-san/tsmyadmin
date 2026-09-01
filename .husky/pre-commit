@@ -1,0 +1,9 @@
+bunx lint-staged
+bunx vitest run --changed --reporter=dot
+
+# Keep CLAUDE.md stats in sync (auto-fix and stage)
+if ! node scripts/validate-docs.mjs >/dev/null 2>&1; then
+  node scripts/validate-docs.mjs --fix
+  git add CLAUDE.md
+  node scripts/validate-docs.mjs
+fi

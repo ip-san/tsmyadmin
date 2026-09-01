@@ -1,0 +1,58 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignoreUnresolved": [
+    "./src/test/setup.ts"
+  ],
+  "workspaces": {
+    ".": {
+      "entry": [
+        "scripts/*.mjs",
+        "e2e/**/*.ts"
+      ],
+      "project": [
+        "scripts/**/*.mjs",
+        "e2e/**/*.ts"
+      ],
+      "ignoreBinaries": [
+        "wait"
+      ],
+      "ignoreDependencies": [
+        "type-coverage"
+      ]
+    },
+    "packages/shared": {
+      "project": [
+        "src/**/*.ts"
+      ]
+    },
+    "packages/adapter": {
+      "entry": [
+        "src/**/*.test.ts"
+      ],
+      "project": [
+        "src/**/*.ts"
+      ]
+    },
+    "apps/api": {
+      "entry": [
+        "src/**/*.test.ts"
+      ],
+      "project": [
+        "src/**/*.ts"
+      ]
+    },
+    "apps/web": {
+      "entry": [
+        "src/routes/**/*.tsx",
+        "src/**/*.test.{ts,tsx}"
+      ],
+      "project": [
+        "src/**/*.{ts,tsx}"
+      ],
+      "ignoreDependencies": [
+        "tailwindcss",
+        "jsdom"
+      ]
+    }
+  }
+}

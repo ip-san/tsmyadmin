@@ -1,0 +1,18 @@
+{
+  "name": "@tsmyadmin/adapter",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./src/testing/index.ts"
+  },
+  "dependencies": {
+    "@tsmyadmin/shared": "workspace:*",
+    "mysql2": "^3.24.2",
+    "pg": "^8.23.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.15.5"
+  }
+}

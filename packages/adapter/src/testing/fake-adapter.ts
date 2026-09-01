@@ -1,0 +1,228 @@
+import type {
+  BrowseOptions,
+  BrowseResult,
+  Cell,
+  Dialect,
+  Namespace,
+  RowKey,
+  RowValues,
+  StatementResult,
+  TableInfo,
+  TableSchema,
+} from '@tsmyadmin/shared'
+import { mysqlDdl } from '../mysql/ddl.ts'
+import { pgDdl } from '../postgres/ddl.ts'
+import { AdapterError, type DatabaseAdapter, type ExecuteOptions } from '../types.ts'
+
+export interface FakeTable {
+  schema: TableSchema
+  rows: RowValues[]
+}
+
+export interface FakeDatabase {
+  schemas?: string[]
+  tables: Record<string, FakeTable>
+}
+
+export interface FakeAdapterOptions {
+  dialect?: Dialect
+  databases?: Record<string, FakeDatabase>
+  /** Hook invoked by executeSql; defaults to echoing a single-row result. */
+  onSql?: (ns: Namespace, sql: string, opts: ExecuteOptions) => StatementResult[]
+  /** When set, every method rejects with this error (simulates a dead connection). */
+  failWith?: AdapterError
+}
+
+export function fakeColumn(name: string, dataType = 'int', nullable = false): TableSchema['columns'][number] {
+  return { name, dataType, nullable, default: null, extra: '', comment: null, collation: null }
+}
+
+export function fakeTable(
+  name: string,
+  columns: string[],
+  rows: RowValues[],
+  primaryKey: string[] = ['id']
+): FakeTable {
+  return {
+    schema: {
+      name,
+      kind: 'table',
+      comment: null,
+      engine: null,
+      columns: columns.map((c) => fakeColumn(c, c === 'id' ? 'int' : 'varchar')),
+      primaryKey,
+      indexes:
+        primaryKey.length > 0
+          ? [{ name: 'PRIMARY', unique: true, primary: true, columns: primaryKey, type: null }]
+          : [],
+      foreignKeys: [],
+    },
+    rows,
+  }
+}
+
+function compare(a: Cell, b: Cell): number {
+  if (a === b) return 0
+  if (a === null) return -1
+  if (b === null) return 1
+  if (typeof a === 'number' && typeof b === 'number') return a - b
+  return String(JSON.stringify(a)).localeCompare(String(JSON.stringify(b)))
+}
+
+/**
+ * In-memory DatabaseAdapter for API route tests. Deterministic, no I/O.
+ * Records every call in `calls` so tests can assert on what the API asked for.
+ */
+export class FakeAdapter implements DatabaseAdapter {
+  readonly dialect: Dialect
+  readonly ddl
+  readonly calls: { method: string; args: unknown[] }[] = []
+  closed = false
+  private readonly databases: Record<string, FakeDatabase>
+  private readonly onSql: FakeAdapterOptions['onSql']
+  private readonly failWith: AdapterError | undefined
+
+  constructor(options: FakeAdapterOptions = {}) {
+    this.dialect = options.dialect ?? 'mysql'
+    this.ddl = this.dialect === 'mysql' ? mysqlDdl : pgDdl
+    this.databases = options.databases ?? {}
+    this.onSql = options.onSql
+    this.failWith = options.failWith
+  }
+
+  private record(method: string, ...args: unknown[]): void {
+    this.calls.push({ method, args })
+    if (this.failWith) throw this.failWith
+  }
+
+  private table(ns: Namespace, table: string): FakeTable {
+    const db = this.databases[ns.database]
+    if (!db) throw new AdapterError('NOT_FOUND', `Unknown database: ${ns.database}`)
+    const t = db.tables[table]
+    if (!t) throw new AdapterError('NOT_FOUND', `Table not found: ${table}`)
+    return t
+  }
+
+  async ping(): Promise<void> {
+    this.record('ping')
+  }
+
+  async close(): Promise<void> {
+    this.record('close')
+    this.closed = true
+  }
+
+  async listDatabases(): Promise<{ name: string }[]> {
+    this.record('listDatabases')
+    return Object.keys(this.databases)
+      .sort()
+      .map((name) => ({ name }))
+  }
+
+  async listSchemas(database: string): Promise<string[]> {
+    this.record('listSchemas', database)
+    return this.dialect === 'mysql' ? [] : (this.databases[database]?.schemas ?? ['public'])
+  }
+
+  async listTables(ns: Namespace): Promise<TableInfo[]> {
+    this.record('listTables', ns)
+    const db = this.databases[ns.database]
+    if (!db) throw new AdapterError('NOT_FOUND', `Unknown database: ${ns.database}`)
+    return Object.values(db.tables).map((t) => ({
+      name: t.schema.name,
+      kind: t.schema.kind,
+      rowEstimate: t.rows.length,
+      engine: t.schema.engine,
+      comment: t.schema.comment,
+    }))
+  }
+
+  async describeTable(ns: Namespace, table: string): Promise<TableSchema> {
+    this.record('describeTable', ns, table)
+    return structuredClone(this.table(ns, table).schema)
+  }
+
+  async browseRows(ns: Namespace, table: string, opts: BrowseOptions): Promise<BrowseResult> {
+    this.record('browseRows', ns, table, opts)
+    const t = this.table(ns, table)
+    let rows = [...t.rows]
+    for (const f of opts.filters) {
+      rows = rows.filter((r) => {
+        const v = r[f.column] ?? null
+        switch (f.op) {
+          case 'eq':
+            return compare(v, f.value ?? null) === 0
+          case 'neq':
+            return compare(v, f.value ?? null) !== 0
+          case 'is_null':
+            return v === null
+          case 'is_not_null':
+            return v !== null
+          case 'like':
+            return typeof v === 'string' && new RegExp(`^${String(f.value).replaceAll('%', '.*')}$`).test(v)
+          default:
+            return true
+        }
+      })
+    }
+    for (const s of [...opts.sort].reverse()) {
+      rows.sort((a, b) => compare(a[s.column] ?? null, b[s.column] ?? null) * (s.direction === 'desc' ? -1 : 1))
+    }
+    const page = rows.slice(opts.offset, opts.offset + opts.limit)
+    const columns = t.schema.columns.map((c) => ({ name: c.name, dataType: c.dataType }))
+    return {
+      columns,
+      rows: page.map((r) => columns.map((c) => r[c.name] ?? null)),
+      truncated: false,
+      total: rows.length,
+      keyKind: t.schema.primaryKey.length > 0 ? 'pk' : 'none',
+      keyColumns: t.schema.primaryKey,
+    }
+  }
+
+  async insertRow(ns: Namespace, table: string, values: RowValues): Promise<{ affectedRows: number }> {
+    this.record('insertRow', ns, table, values)
+    this.table(ns, table).rows.push({ ...values })
+    return { affectedRows: 1 }
+  }
+
+  private matchKey(row: RowValues, key: RowKey): boolean {
+    if (key.kind === 'ctid') return false
+    return Object.entries(key.values).every(([k, v]) => compare(row[k] ?? null, v) === 0)
+  }
+
+  async updateRow(ns: Namespace, table: string, key: RowKey, values: RowValues): Promise<{ affectedRows: number }> {
+    this.record('updateRow', ns, table, key, values)
+    const t = this.table(ns, table)
+    const matches = t.rows.filter((r) => this.matchKey(r, key))
+    if (matches.length !== 1) throw new AdapterError('KEY_MISMATCH', `matched ${matches.length} rows`)
+    Object.assign(matches[0] as RowValues, values)
+    return { affectedRows: 1 }
+  }
+
+  async deleteRows(ns: Namespace, table: string, keys: RowKey[]): Promise<{ affectedRows: number }> {
+    this.record('deleteRows', ns, table, keys)
+    const t = this.table(ns, table)
+    let affected = 0
+    for (const key of keys) {
+      const idx = t.rows.findIndex((r) => this.matchKey(r, key))
+      if (idx === -1) throw new AdapterError('KEY_MISMATCH', 'matched 0 rows')
+      t.rows.splice(idx, 1)
+      affected++
+    }
+    return { affectedRows: affected }
+  }
+
+  async executeSql(ns: Namespace, sql: string, opts: ExecuteOptions): Promise<StatementResult[]> {
+    this.record('executeSql', ns, sql, opts)
+    if (this.onSql) return this.onSql(ns, sql, opts)
+    return [
+      {
+        kind: 'rows',
+        sql,
+        durationMs: 1,
+        result: { columns: [{ name: 'echo', dataType: 'varchar' }], rows: [[sql]], truncated: false },
+      },
+    ]
+  }
+}

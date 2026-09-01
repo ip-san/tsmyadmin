@@ -1,0 +1,133 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        task: [typecheck, lint, test, quality]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - name: typecheck
+        if: matrix.task == 'typecheck'
+        run: bun run typecheck && bun run type-coverage
+      - name: lint
+        if: matrix.task == 'lint'
+        run: bun run lint
+      - name: test
+        if: matrix.task == 'test'
+        run: bun run test
+      - name: quality
+        if: matrix.task == 'quality'
+        run: bun run knip && bun run circular && bun run cpd && bun run check:arch && bun run check:sql-safety && bun run docs:validate
+
+  integration:
+    runs-on: ubuntu-latest
+    needs: check
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: tsmyadmin_test
+          MYSQL_USER: tsmyadmin
+          MYSQL_PASSWORD: tsmyadmin
+        ports: ["13306:3306"]
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: tsmyadmin
+          POSTGRES_PASSWORD: tsmyadmin
+          POSTGRES_DB: tsmyadmin_test
+        ports: ["15433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U tsmyadmin -d tsmyadmin_test"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - name: Load fixtures
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq mysql-client postgresql-client >/dev/null
+          mysql -h 127.0.0.1 -P 13306 -uroot -proot < docker/fixtures/mysql/01-schema.sql
+          PGPASSWORD=tsmyadmin psql -h 127.0.0.1 -p 15433 -U tsmyadmin -d tsmyadmin_test -v ON_ERROR_STOP=1 -f docker/fixtures/postgres/01-schema.sql
+      - run: bun run test:integration
+
+  e2e:
+    runs-on: ubuntu-latest
+    needs: check
+    if: ${{ hashFiles('e2e/**/*.spec.ts') != '' }}
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: tsmyadmin_test
+          MYSQL_USER: tsmyadmin
+          MYSQL_PASSWORD: tsmyadmin
+        ports: ["13306:3306"]
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: tsmyadmin
+          POSTGRES_PASSWORD: tsmyadmin
+          POSTGRES_DB: tsmyadmin_test
+        ports: ["15433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U tsmyadmin -d tsmyadmin_test"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - name: Load fixtures
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq mysql-client postgresql-client >/dev/null
+          mysql -h 127.0.0.1 -P 13306 -uroot -proot < docker/fixtures/mysql/01-schema.sql
+          PGPASSWORD=tsmyadmin psql -h 127.0.0.1 -p 15433 -U tsmyadmin -d tsmyadmin_test -v ON_ERROR_STOP=1 -f docker/fixtures/postgres/01-schema.sql
+      - run: bunx playwright install --with-deps chromium
+      - run: bun run build
+      - run: bun run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report
+
+  build:
+    runs-on: ubuntu-latest
+    needs: check
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun run build
+      - run: bun run size
+      - run: docker build -t tsmyadmin:ci .

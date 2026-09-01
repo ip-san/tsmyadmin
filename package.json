@@ -1,0 +1,65 @@
+{
+  "name": "tsmyadmin",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Modern TypeScript phpMyAdmin clone (MySQL + PostgreSQL) — Hono API + React SPA",
+  "license": "MIT",
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "bun run --filter '*' dev",
+    "db:up": "docker compose up -d --wait",
+    "db:down": "docker compose down",
+    "db:reset": "docker compose down -v && docker compose up -d --wait",
+    "typecheck": "node scripts/typecheck.mjs",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:integration": "INTEGRATION=1 vitest run --project adapter-integration --project api-integration",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "type-coverage": "node scripts/type-coverage.mjs",
+    "knip": "knip",
+    "circular": "madge --circular --extensions ts,tsx apps packages",
+    "cpd": "jscpd apps packages --min-lines 5 --min-tokens 50 --threshold 2 --ignore '**/node_modules/**,**/dist/**,**/*.test.*'",
+    "check:arch": "node scripts/check-architecture.mjs",
+    "check:sql-safety": "node scripts/check-sql-safety.mjs",
+    "docs:validate": "node scripts/validate-docs.mjs",
+    "check": "node scripts/check.mjs",
+    "check:all": "bun run check && bun run knip && bun run circular && bun run cpd && bun run check:arch && bun run check:sql-safety && bun run docs:validate && bun run test:integration",
+    "build": "bun run --filter './apps/web' build",
+    "size": "size-limit",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,mjs,js}": "biome check --write --no-errors-on-unmatched"
+  },
+  "size-limit": [
+    {
+      "path": "apps/web/dist/assets/index-*.js",
+      "name": "Initial JS",
+      "limit": "300 kB"
+    }
+  ],
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.11",
+    "@playwright/test": "^1.62.1",
+    "@size-limit/preset-app": "^12.1.0",
+    "@types/node": "^25.9.2",
+    "@vitest/coverage-v8": "^4.1.11",
+    "husky": "^9.1.7",
+    "jscpd": "^4.2.4",
+    "knip": "^6.34.0",
+    "lint-staged": "^17.0.7",
+    "madge": "^8.0.0",
+    "size-limit": "^12.1.0",
+    "type-coverage": "^2.29.7",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.11"
+  }
+}

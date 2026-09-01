@@ -1,0 +1,94 @@
+import { describe, expect, it } from 'vitest'
+import { splitStatements } from './split.ts'
+
+describe('splitStatements', () => {
+  it('splits on semicolons and trims', () => {
+    expect(splitStatements('SELECT 1; SELECT 2 ;\n\nSELECT 3', 'mysql')).toEqual([
+      { sql: 'SELECT 1', line: 1 },
+      { sql: 'SELECT 2', line: 1 },
+      { sql: 'SELECT 3', line: 3 },
+    ])
+  })
+
+  it('returns [] for empty or whitespace input', () => {
+    expect(splitStatements('', 'mysql')).toEqual([])
+    expect(splitStatements('  \n ; ; ', 'postgres')).toEqual([])
+  })
+
+  it('ignores semicolons inside single and double quoted strings', () => {
+    const sql = `SELECT 'a;b', "c;d"; SELECT 2`
+    expect(splitStatements(sql, 'mysql').map((s) => s.sql)).toEqual([`SELECT 'a;b', "c;d"`, 'SELECT 2'])
+  })
+
+  it('handles doubled quotes and MySQL backslash escapes', () => {
+    expect(splitStatements(`SELECT 'it''s; here'; SELECT 1`, 'postgres').map((s) => s.sql)).toEqual([
+      `SELECT 'it''s; here'`,
+      'SELECT 1',
+    ])
+    expect(splitStatements(`SELECT 'a\\'; b'; SELECT 1`, 'mysql').map((s) => s.sql)).toEqual([
+      `SELECT 'a\\'; b'`,
+      'SELECT 1',
+    ])
+  })
+
+  it('treats backslash literally in postgres strings', () => {
+    expect(splitStatements(`SELECT 'a\\'; SELECT 1`, 'postgres').map((s) => s.sql)).toEqual([
+      `SELECT 'a\\'`,
+      'SELECT 1',
+    ])
+  })
+
+  it('ignores semicolons inside MySQL backtick identifiers', () => {
+    expect(splitStatements('SELECT `a;b` FROM t; SELECT 1', 'mysql').map((s) => s.sql)).toEqual([
+      'SELECT `a;b` FROM t',
+      'SELECT 1',
+    ])
+  })
+
+  it('ignores semicolons in -- / # / block comments but keeps comment text', () => {
+    const sql = `-- c1; still comment\nSELECT 1; # c2; x\n/* multi;\nline */ SELECT 2`
+    expect(splitStatements(sql, 'mysql')).toEqual([
+      { sql: '-- c1; still comment\nSELECT 1', line: 1 },
+      { sql: '# c2; x\n/* multi;\nline */ SELECT 2', line: 2 },
+    ])
+  })
+
+  it('drops chunks that are only comments or whitespace', () => {
+    expect(splitStatements(`SELECT 1; -- done\n/* nothing */ ;   `, 'postgres')).toEqual([{ sql: 'SELECT 1', line: 1 }])
+    expect(splitStatements(`-- only a comment`, 'mysql')).toEqual([])
+  })
+
+  it('does not treat # as a comment in postgres', () => {
+    expect(splitStatements(`SELECT '#'; SELECT 1 # not comment`, 'postgres').map((s) => s.sql)).toEqual([
+      `SELECT '#'`,
+      'SELECT 1 # not comment',
+    ])
+  })
+
+  it('handles postgres dollar quoting with and without tags', () => {
+    const sql = `CREATE FUNCTION f() RETURNS int AS $$ BEGIN RETURN 1; END; $$ LANGUAGE plpgsql; SELECT $tag$a;b$tag$; SELECT 3`
+    expect(splitStatements(sql, 'postgres').map((s) => s.sql)).toEqual([
+      'CREATE FUNCTION f() RETURNS int AS $$ BEGIN RETURN 1; END; $$ LANGUAGE plpgsql',
+      'SELECT $tag$a;b$tag$',
+      'SELECT 3',
+    ])
+  })
+
+  it('does not apply dollar quoting for mysql', () => {
+    expect(splitStatements('SELECT $$; SELECT 1', 'mysql').map((s) => s.sql)).toEqual(['SELECT $$', 'SELECT 1'])
+  })
+
+  it('tolerates unterminated strings and comments', () => {
+    expect(splitStatements(`SELECT 'abc`, 'mysql').map((s) => s.sql)).toEqual([`SELECT 'abc`])
+    expect(splitStatements(`SELECT 1 /* never closed`, 'mysql').map((s) => s.sql)).toEqual(['SELECT 1 /* never closed'])
+  })
+
+  it('reports correct line numbers across multi-line statements', () => {
+    const sql = `SELECT\n1;\n\n\nUPDATE t\nSET a = 'x;\ny';\nDELETE FROM t`
+    expect(splitStatements(sql, 'postgres')).toEqual([
+      { sql: 'SELECT\n1', line: 1 },
+      { sql: "UPDATE t\nSET a = 'x;\ny'", line: 5 },
+      { sql: 'DELETE FROM t', line: 8 },
+    ])
+  })
+})

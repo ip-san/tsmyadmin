@@ -1,0 +1,38 @@
+# Test / dev databases. Fixtures in docker/fixtures/* are applied on first start.
+# Host ports avoid the defaults (3306/5432) because other stacks occupy them locally.
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: tsmyadmin_test
+      MYSQL_USER: tsmyadmin
+      MYSQL_PASSWORD: tsmyadmin
+    ports:
+      - "13306:3306"
+    volumes:
+      - ./docker/fixtures/mysql:/docker-entrypoint-initdb.d:ro
+    command: --default-time-zone=+00:00
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-proot"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: tsmyadmin
+      POSTGRES_PASSWORD: tsmyadmin
+      POSTGRES_DB: tsmyadmin_test
+      TZ: UTC
+      PGTZ: UTC
+    ports:
+      - "15433:5432"
+    volumes:
+      - ./docker/fixtures/postgres:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tsmyadmin -d tsmyadmin_test"]
+      interval: 3s
+      timeout: 3s
+      retries: 20

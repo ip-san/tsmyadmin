@@ -1,0 +1,61 @@
+{
+  "permissions": {
+    "allow": ["Bash(gh pr:*)", "Bash(bun run:*)", "Bash(bunx vitest:*)", "Bash(bunx biome:*)", "Bash(docker compose:*)"],
+    "deny": [
+      "Bash(rm -rf:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(git clean -f:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git checkout -- .:*)",
+      "Bash(git restore .:*)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "{ conflict=$(git status --porcelain 2>/dev/null | grep -c '^UU\\|^AA\\|^DD'); dirty=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' '); ci=$(gh run list --limit 1 --json status,conclusion,name 2>/dev/null | jq -r '.[0] | \"\\(.conclusion // .status) \\(.name)\"' 2>/dev/null); up=$(docker compose ps --status running --format '{{.Service}}' 2>/dev/null | tr '\\n' ',' | sed 's/,$//'); tserr=$(node scripts/typecheck.mjs 2>&1 | grep -c 'error TS'); msgs=''; [ \"$conflict\" -gt 0 ] && msgs=\"⚠️ マージ競合${conflict}件 \"; [ \"$tserr\" -gt 0 ] && msgs=\"${msgs}⚠️ 型エラー${tserr}件 \"; echo \"$ci\" | grep -q 'failure' && msgs=\"${msgs}⚠️ CI FAILURE: $ci \"; [ \"$dirty\" -gt 0 ] && msgs=\"${msgs}📝 未コミット${dirty}ファイル \"; if [ -n \"$up\" ]; then msgs=\"${msgs}🐳 DB up: $up\"; else msgs=\"${msgs}🐳 DB down → bun run db:up\"; fi; echo \"$msgs\"; }",
+            "timeout": 30,
+            "statusMessage": "セッション初期チェック中..."
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": "bash scripts/pre-tool-check.sh", "timeout": 3, "statusMessage": "コマンド安全チェック..." }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "FILE=$(jq -r '.tool_input.file_path // .tool_response.filePath' | sed \"s|$PWD/||\"); case \"$FILE\" in packages/adapter/src/*) { bunx tsc --noEmit -p packages/adapter 2>&1 | tail -5; bunx vitest run --project adapter --reporter=dot 2>&1 | tail -4; case \"$FILE\" in *'/mysql/'*) echo '🔁 方言パリティ: postgres/ 側の対応ファイルと conformance のケースも更新したか確認' ;; *'/postgres/'*) echo '🔁 方言パリティ: mysql/ 側の対応ファイルと conformance のケースも更新したか確認' ;; esac; } ;; packages/shared/src/*) { node scripts/typecheck.mjs shared api web 2>&1 | tail -6; echo '📦 DTO 変更: apps/api のルートと apps/web の利用側を同時に更新したか確認'; } ;; apps/api/src/*) { bunx tsc --noEmit -p apps/api 2>&1 | tail -5; bunx vitest run --project api --reporter=dot 2>&1 | tail -4; } ;; apps/web/src/*) { bunx tsc --noEmit -p apps/web 2>&1 | tail -5; bunx vitest run --project web --reporter=dot related \"$FILE\" 2>&1 | tail -4; } ;; docker/fixtures/*) { echo '🧪 fixtures 変更: conformance の typesRow1 と spec-consistency を更新し、bun run db:reset && bun run test:integration を実行'; } ;; scripts/*.mjs) node --check \"$FILE\" 2>&1 | tail -3 ;; CLAUDE.md|docs/*|*.md) node scripts/validate-docs.mjs 2>&1 | tail -3 ;; *) true ;; esac",
+            "timeout": 120,
+            "statusMessage": "品質チェック実行中..."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "{ dirty=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' '); tserr=$(node scripts/typecheck.mjs 2>&1 | grep -c 'error TS'); lint=$(bunx biome check . 2>&1 | grep -c '×'); msgs=''; [ \"$dirty\" -gt 0 ] && msgs=\"📝 未コミット${dirty}ファイル\"; [ \"$tserr\" -gt 0 ] && msgs=\"${msgs} ⚠️ 型エラー${tserr}件\"; [ \"$lint\" -gt 0 ] && msgs=\"${msgs} ⚠️ lint${lint}件\"; [ -n \"$msgs\" ] && echo \"$msgs\" || echo 'Clean'; }",
+            "timeout": 30,
+            "statusMessage": "セッション終了チェック..."
+          }
+        ]
+      }
+    ]
+  }
+}
