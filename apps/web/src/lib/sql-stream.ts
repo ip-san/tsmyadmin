@@ -1,5 +1,5 @@
 import { type SqlRequest, type SqlStreamEvent, SqlStreamEventSchema } from '@tsmyadmin/shared'
-import { ApiError, api, isApiError } from './api.ts'
+import { ApiError, api } from './api.ts'
 
 export type SqlStreamBody = Omit<SqlRequest, 'maxRows' | 'timeoutMs' | 'stopOnError'> & Partial<SqlRequest>
 
@@ -50,5 +50,3 @@ export async function* streamSql(
   }
   if (!done) yield { type: 'fatal', message: 'connection closed before the run finished' }
 }
-
-export { isApiError }
