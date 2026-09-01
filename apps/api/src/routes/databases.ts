@@ -15,9 +15,8 @@ import {
 } from '@tsmyadmin/shared'
 import { Hono } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
-import { stream } from 'hono/streaming'
 import { apiError } from '../lib/errors.ts'
-import { buildExport, contentDisposition } from '../lib/export.ts'
+import { buildExport, contentDisposition, toReadableStream } from '../lib/export.ts'
 import { ImportValidationError, importCsv, importSql } from '../lib/import.ts'
 import { validate } from '../lib/validate.ts'
 import { type AppEnv, requireSession, type SessionConfig } from '../session/middleware.ts'
@@ -105,12 +104,16 @@ export function databaseRoutes(cfg: SessionConfig) {
       }
       const baseName = requested.length === 1 ? `${namespace.database}_${requested[0]}` : namespace.database
       const file = buildExport(adapter, namespace, tables, q, baseName)
-      c.header('content-type', file.contentType)
-      c.header('content-disposition', contentDisposition(file.filename))
-      // Streamed so a large table is never held in memory; batches come from adapter.iterateRows.
-      return stream(c, async (s) => {
-        for await (const chunk of file.body) await s.write(chunk)
-      })
+      // Streamed so a large table is never held in memory. A failure mid-stream errors the response body
+      // (the browser reports a failed download) instead of ending it normally, which would make a
+      // truncated file look complete.
+      return c.body(
+        toReadableStream(file.body, (err) =>
+          console.error('[api] export aborted', err instanceof Error ? err.message : err)
+        ),
+        200,
+        { 'content-type': file.contentType, 'content-disposition': contentDisposition(file.filename) }
+      )
     })
     .post(
       '/databases/:db/import',

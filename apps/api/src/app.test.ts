@@ -243,7 +243,7 @@ describe('audit log', () => {
     const audits = lines.filter((l) => l.event === 'audit')
     expect(audits.map((a) => a.action)).toEqual(['deleteRows', 'executeSql'])
     expect(audits[0]).toMatchObject({ dbUser: 'root', dbHost: 'db:3306', table: 'users', rows: 1, ok: true })
-    expect(typeof audits[0]?.requestId).toBe('string')
+    for (const a of audits) expect(String(a.requestId)).toMatch(/[0-9a-f-]{36}/)
     expect(JSON.stringify(lines)).not.toContain('hunter2')
     expect(audits[1]?.sql).toContain('****')
   })
@@ -471,6 +471,23 @@ describe('export', () => {
     const body = await res.text()
     expect(body).toContain('-- Table: users')
     expect(body).toContain('INSERT INTO `shop`.`users`')
+  })
+
+  it('aborts the transfer when the adapter fails mid-stream', async () => {
+    const adapter = fixtureAdapter()
+    const original = adapter.iterateRows.bind(adapter)
+    adapter.iterateRows = async function* (ns, table, opts) {
+      for await (const b of original(ns, table, opts)) {
+        yield b
+        throw new Error('connection lost')
+      }
+    }
+    const h = harness(adapter)
+    stores.push(h.store)
+    await h.login()
+    const res = await h.req('/api/databases/shop/export')
+    expect(res.status).toBe(200)
+    await expect(res.text()).rejects.toThrow()
   })
 
   it('exports one table as CSV and rejects multi-table CSV', async () => {

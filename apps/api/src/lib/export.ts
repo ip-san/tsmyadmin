@@ -2,6 +2,8 @@ import type { DatabaseAdapter } from '@tsmyadmin/adapter'
 import type { Cell, ExportQuery, Namespace } from '@tsmyadmin/shared'
 import { CSV_NULL, EXPORT_BATCH_SIZE, isBinaryCell } from '@tsmyadmin/shared'
 
+export const DUMP_COMPLETE_MARKER = '-- tsmyadmin dump complete'
+
 export interface ExportFile {
   /** Chunks are produced lazily so a large table never has to fit in memory at once. */
   body: AsyncIterable<string>
@@ -77,6 +79,33 @@ async function* sqlBody(
       }
     }
   }
+  // Terminal marker: a dump that lacks this line was cut short (the transfer is also aborted on errors).
+  yield `${DUMP_COMPLETE_MARKER} (${tables.length} table${tables.length === 1 ? '' : 's'})\n`
+}
+
+/** Response body for a chunk stream. A failing chunk errors the stream (the client sees a failed transfer). */
+export function toReadableStream(
+  body: AsyncIterable<string>,
+  onError?: (err: unknown) => void
+): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder()
+  const iterator = body[Symbol.asyncIterator]()
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      let next: IteratorResult<string>
+      try {
+        next = await iterator.next()
+      } catch (err) {
+        onError?.(err)
+        throw err
+      }
+      if (next.done) controller.close()
+      else controller.enqueue(encoder.encode(next.value))
+    },
+    async cancel() {
+      await iterator.return?.()
+    },
+  })
 }
 
 /**

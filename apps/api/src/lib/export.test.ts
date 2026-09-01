@@ -1,7 +1,7 @@
 import { FakeAdapter, fakeTable } from '@tsmyadmin/adapter/testing'
 import { ExportQuerySchema } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
-import { buildExport, collect, contentDisposition } from './export.ts'
+import { buildExport, collect, contentDisposition, DUMP_COMPLETE_MARKER } from './export.ts'
 
 const adapter = () =>
   new FakeAdapter({
@@ -37,6 +37,7 @@ describe('buildExport', () => {
     )
     expect(body).toContain('-- Table: empty')
     expect(body).not.toContain('INSERT INTO `shop`.`empty`')
+    expect(body.trimEnd().endsWith(`${DUMP_COMPLETE_MARKER} (2 tables)`)).toBe(true)
   })
 
   it('sql: structure-only and data-only respect the flags', async () => {
@@ -80,5 +81,28 @@ describe('contentDisposition', () => {
     expect(contentDisposition('売上_users.sql')).toBe(
       `attachment; filename="___users.sql"; filename*=UTF-8''${encodeURIComponent('売上_users.sql')}`
     )
+  })
+})
+
+describe('buildExport failure mid-stream', () => {
+  it('propagates the error and never emits the completion marker', async () => {
+    const a = adapter()
+    let batches = 0
+    const original = a.iterateRows.bind(a)
+    a.iterateRows = async function* (ns, table, opts) {
+      for await (const b of original(ns, table, opts)) {
+        if (++batches === 2) throw new Error('connection lost')
+        yield b
+      }
+    }
+    const f = buildExport(a, ns, ['users', 'empty'], q({ format: 'sql' }))
+    let partial = ''
+    await expect(
+      (async () => {
+        for await (const chunk of f.body) partial += chunk
+      })()
+    ).rejects.toThrow('connection lost')
+    expect(partial).toContain('-- Table: users')
+    expect(partial).not.toContain(DUMP_COMPLETE_MARKER)
   })
 })
