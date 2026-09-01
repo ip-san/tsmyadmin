@@ -535,6 +535,65 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
       })
     })
 
+    describe('serverInfo', () => {
+      it('reports version, uptime and the connected user', async () => {
+        const info = await db.serverInfo()
+        expect(info.dialect).toBe(dialect)
+        expect(info.version).toMatch(/^\d+\./)
+        expect(info.uptimeSec === null || info.uptimeSec >= 0).toBe(true)
+        expect(info.currentUser).toContain('tsmyadmin')
+      })
+    })
+
+    describe('listVariables', () => {
+      it('includes max_connections', async () => {
+        const vars = await db.listVariables()
+        const mc = vars.find((v) => v.name === 'max_connections')
+        expect(mc).toBeDefined()
+        expect(Number(mc?.value)).toBeGreaterThan(0)
+      })
+    })
+
+    describe('listStatus', () => {
+      it('returns numeric counters', async () => {
+        const status = await db.listStatus()
+        expect(status.length).toBeGreaterThan(5)
+        expect(status.every((s) => typeof s.name === 'string' && typeof s.value === 'string')).toBe(true)
+      })
+    })
+
+    describe('listProcesses', () => {
+      it('lists at least this connection', async () => {
+        const procs = await db.listProcesses()
+        expect(procs.length).toBeGreaterThan(0)
+        expect(procs.every((p) => /^\d+$/.test(p.id))).toBe(true)
+        expect(procs.some((p) => p.user?.includes('tsmyadmin'))).toBe(true)
+      })
+    })
+
+    describe('killProcess', () => {
+      it('terminates another connection running a slow query', async () => {
+        const victim = ctx.create()
+        const marker = `slow_${scratch}`
+        const slow = victim.executeSql(ns, `${ctx.slowSql} /* ${marker} */`, { ...EXEC, timeoutMs: 60_000 })
+        let target: string | undefined
+        for (let i = 0; i < 40 && !target; i++) {
+          await new Promise((r) => setTimeout(r, 100))
+          target = (await db.listProcesses()).find((p) => p.query?.includes(marker))?.id
+        }
+        expect(target).toBeDefined()
+        await db.killProcess(target as string)
+        const results = await slow
+        expect(results[0]?.kind).toBe('error')
+        await victim.close()
+      })
+
+      it('rejects non-numeric ids and unknown backends', async () => {
+        await expect(db.killProcess('1; DROP TABLE users')).rejects.toMatchObject({ name: 'AdapterError' })
+        await expect(db.killProcess('999999999')).rejects.toMatchObject({ name: 'AdapterError' })
+      })
+    })
+
     describe('listUsers', () => {
       it('includes the connected account with attributes', async () => {
         const users = await db.listUsers()

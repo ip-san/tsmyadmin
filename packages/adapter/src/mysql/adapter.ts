@@ -1,4 +1,13 @@
-import type { Namespace, TableInfo, TableSchema, UserInfo, UserRef } from '@tsmyadmin/shared'
+import type {
+  KeyValue,
+  Namespace,
+  ProcessInfo,
+  ServerInfo,
+  TableInfo,
+  TableSchema,
+  UserInfo,
+  UserRef,
+} from '@tsmyadmin/shared'
 import mysql, { type FieldPacket, type Pool, type PoolConnection, type ResultSetHeader } from 'mysql2/promise'
 import { BaseAdapter, type Conn, firstResult, type RawResult } from '../base.ts'
 import { quoteIdent, quoteTable } from '../sql/quote.ts'
@@ -6,6 +15,7 @@ import { AdapterError, type AdapterErrorCode, type ConnectionConfig } from '../t
 import { mysqlDdl } from './ddl.ts'
 import { mysqlExporter } from './export.ts'
 import { mysqlDescribeTable, mysqlListTables } from './introspect.ts'
+import { mysqlKillProcess, mysqlListProcesses, mysqlListStatus, mysqlListVariables, mysqlServerInfo } from './server.ts'
 import { mysqlListUsers, mysqlShowGrants, mysqlUsers } from './users.ts'
 import { mysqlColumnMeta, mysqlToCell } from './values.ts'
 
@@ -20,6 +30,8 @@ const CONNECTION_CODES = new Set([
   'ER_HOST_NOT_PRIVILEGED',
 ])
 const NOT_FOUND_CODES = new Set(['ER_NO_SUCH_TABLE', 'ER_BAD_DB_ERROR', 'ER_BAD_FIELD_ERROR'])
+/** Killed connections surface as query interruption or a fatal protocol error. */
+const KILLED_CODES = new Set(['ER_QUERY_INTERRUPTED', 'ER_CONNECTION_KILLED', 'PROTOCOL_CONNECTION_LOST'])
 
 type QueryOutput = [unknown, FieldPacket[] | FieldPacket[][] | undefined]
 
@@ -92,6 +104,9 @@ export class MysqlAdapter extends BaseAdapter {
     return this.pool
   }
 
+  /** Connections whose socket died (e.g. KILL); destroyed instead of being returned to the pool. */
+  private readonly broken = new WeakSet<PoolConnection>()
+
   private async run(conn: PoolConnection, text: string, params?: unknown[]): Promise<RawResult | RawResult[]> {
     try {
       const [rows, fields] = (await (params
@@ -99,7 +114,9 @@ export class MysqlAdapter extends BaseAdapter {
         : conn.query({ sql: text, rowsAsArray: true }))) as QueryOutput
       return normalise(rows, fields)
     } catch (err) {
-      throw this.toAdapterError(err)
+      const mapped = this.toAdapterError(err)
+      if (mapped.code === 'CONNECTION_FAILED') this.broken.add(conn)
+      throw mapped
     }
   }
 
@@ -110,13 +127,14 @@ export class MysqlAdapter extends BaseAdapter {
     } catch (err) {
       throw this.toAdapterError(err)
     }
+    const release = () => (this.broken.has(conn) ? conn.destroy() : conn.release())
     try {
       await this.run(conn, `USE ${quoteIdent('mysql', ns.database)}`)
     } catch (err) {
-      conn.release()
+      release()
       throw err
     }
-    return { query: (text, params) => this.run(conn, text, params), release: () => conn.release() }
+    return { query: (text, params) => this.run(conn, text, params), release }
   }
 
   protected async setStatementTimeout(conn: Conn, ms: number): Promise<void> {
@@ -178,6 +196,26 @@ export class MysqlAdapter extends BaseAdapter {
     return { database: 'information_schema' }
   }
 
+  serverInfo(): Promise<ServerInfo> {
+    return this.withConn(this.serverNs(), (conn) => mysqlServerInfo(conn))
+  }
+
+  listVariables(): Promise<KeyValue[]> {
+    return this.withConn(this.serverNs(), (conn) => mysqlListVariables(conn))
+  }
+
+  listStatus(): Promise<KeyValue[]> {
+    return this.withConn(this.serverNs(), (conn) => mysqlListStatus(conn))
+  }
+
+  listProcesses(): Promise<ProcessInfo[]> {
+    return this.withConn(this.serverNs(), (conn) => mysqlListProcesses(conn))
+  }
+
+  killProcess(id: string): Promise<void> {
+    return this.withConn(this.serverNs(), (conn) => mysqlKillProcess(conn, id))
+  }
+
   listUsers(): Promise<UserInfo[]> {
     return this.withConn(this.serverNs(), (conn) => mysqlListUsers(conn))
   }
@@ -203,7 +241,8 @@ export class MysqlAdapter extends BaseAdapter {
       typeof e.sqlMessage === 'string' ? e.sqlMessage : typeof e.message === 'string' ? e.message : String(err)
     let kind: AdapterErrorCode = 'QUERY_FAILED'
     if (AUTH_CODES.has(code)) kind = 'AUTH_FAILED'
-    else if (CONNECTION_CODES.has(code)) kind = 'CONNECTION_FAILED'
+    else if (CONNECTION_CODES.has(code) || KILLED_CODES.has(code) || (e as { fatal?: boolean }).fatal === true)
+      kind = 'CONNECTION_FAILED'
     else if (NOT_FOUND_CODES.has(code)) kind = 'NOT_FOUND'
     return new AdapterError(kind, `${code}: ${detail}`, detail)
   }

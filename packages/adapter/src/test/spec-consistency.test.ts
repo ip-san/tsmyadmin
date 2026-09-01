@@ -29,7 +29,7 @@ describe('Spec consistency: adapter', () => {
   })
 
   it('mysql and postgres implement the same module set', () => {
-    const expected = ['adapter.ts', 'ddl.ts', 'introspect.ts', 'values.ts', 'export.ts', 'users.ts']
+    const expected = ['adapter.ts', 'ddl.ts', 'introspect.ts', 'values.ts', 'export.ts', 'users.ts', 'server.ts']
     for (const dialect of ['mysql', 'postgres']) {
       for (const file of expected) {
         expect(() => readFileSync(join(import.meta.dirname, '..', dialect, file))).not.toThrow()

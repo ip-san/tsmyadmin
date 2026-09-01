@@ -9,6 +9,9 @@ test.describe('visual regression', () => {
     await page.emulateMedia({ reducedMotion: 'reduce' })
   })
 
+  // The sidebar lists every table, so leftovers from aborted integration runs would break the baseline; mask it.
+  const options = (page: Parameters<typeof login>[0]) => ({ fullPage: true, mask: [page.locator('aside')] })
+
   test('login', async ({ page }) => {
     await page.goto('/login')
     await page.getByLabel('ホスト').waitFor()
@@ -19,13 +22,13 @@ test.describe('visual regression', () => {
     await login(page, t)
     await page.goto(tableUrl(t, 'users'))
     await page.getByText('全 5 件').waitFor()
-    await expect(page).toHaveScreenshot('browse.png', { fullPage: true })
+    await expect(page).toHaveScreenshot('browse.png', options(page))
   })
 
   test('structure', async ({ page }) => {
     await login(page, t)
     await page.goto(tableUrl(t, 'posts', '/structure'))
     await page.getByRole('table', { name: '外部キー' }).waitFor()
-    await expect(page).toHaveScreenshot('structure.png', { fullPage: true })
+    await expect(page).toHaveScreenshot('structure.png', options(page))
   })
 })

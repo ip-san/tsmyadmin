@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { csrf } from 'hono/csrf'
 import { errorResponse } from './lib/errors.ts'
 import { databaseRoutes } from './routes/databases.ts'
+import { serverRoutes } from './routes/server.ts'
 import { type AdapterFactory, sessionRoutes } from './routes/session.ts'
 import { userRoutes } from './routes/users.ts'
 import type { SessionStore } from './session/store.ts'
@@ -23,6 +24,7 @@ export function createApp(deps: AppDeps) {
     .route('/api', sessionRoutes(cfg, deps.adapterFactory))
     .route('/api', databaseRoutes(cfg))
     .route('/api', userRoutes(cfg))
+    .route('/api', serverRoutes(cfg))
 }
 
 export type AppType = ReturnType<typeof createApp>

@@ -65,12 +65,9 @@ export const ja = {
     import: 'インポート',
     users: 'ユーザー',
     privileges: '権限',
-  },
-  server: {
-    title: 'サーバー',
-    databasesTitle: 'データベース一覧',
-    databaseName: 'データベース名',
-    open: '開く',
+    status: 'ステータス',
+    variables: '変数',
+    processes: 'プロセス',
   },
   database: {
     title: (db: string) => `データベース: ${db}`,
@@ -312,6 +309,42 @@ export const ja = {
     previewHint: '以下の SQL を実行します（パスワードは **** で表示）。',
     done: '実行しました',
     cannotLoad: 'ユーザー一覧を取得できません（権限が必要です）',
+  },
+  server: {
+    title: 'サーバー',
+    databasesTitle: 'データベース一覧',
+    databaseName: 'データベース名',
+    open: '開く',
+    infoTitle: 'サーバー情報',
+    version: 'バージョン',
+    uptime: '稼働時間',
+    currentUser: '接続ユーザー',
+    statusTitle: 'ステータス変数',
+    variablesTitle: 'サーバー変数',
+    processesTitle: 'プロセス一覧',
+    filter: '名前で絞り込む',
+    name: '名前',
+    value: '値',
+    description: '説明',
+    noMatch: '一致する項目がありません',
+    pid: 'ID',
+    user: 'ユーザー',
+    host: 'ホスト',
+    database: 'DB',
+    state: '状態',
+    time: '経過（秒）',
+    query: 'クエリ',
+    kill: '強制終了',
+    killConfirm: (id: string) => `プロセス ${id} を強制終了します。よろしいですか？`,
+    killed: (id: string) => `プロセス ${id} を強制終了しました`,
+    autoRefresh: '自動更新（5 秒）',
+    refresh: '更新',
+    uptimeFormat: (sec: number) => {
+      const d = Math.floor(sec / 86400)
+      const h = Math.floor((sec % 86400) / 3600)
+      const m = Math.floor((sec % 3600) / 60)
+      return `${d > 0 ? `${d} 日 ` : ''}${h} 時間 ${m} 分`
+    },
   },
   errors: {
     UNAUTHENTICATED: '接続が切れています。再度接続してください',

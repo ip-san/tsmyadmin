@@ -5,10 +5,13 @@ import type {
   ColumnMeta,
   Dialect,
   Filter,
+  KeyValue,
   Namespace,
+  ProcessInfo,
   RowKey,
   RowKeyKind,
   RowValues,
+  ServerInfo,
   StatementResult,
   TableInfo,
   TableSchema,
@@ -98,6 +101,11 @@ export abstract class BaseAdapter implements DatabaseAdapter {
   abstract listTables(ns: Namespace): Promise<TableInfo[]>
   abstract describeTable(ns: Namespace, table: string): Promise<TableSchema>
   abstract showCreateTable(ns: Namespace, table: string): Promise<string[]>
+  abstract serverInfo(): Promise<ServerInfo>
+  abstract listVariables(): Promise<KeyValue[]>
+  abstract listStatus(): Promise<KeyValue[]>
+  abstract listProcesses(): Promise<ProcessInfo[]>
+  abstract killProcess(id: string): Promise<void>
   abstract listUsers(): Promise<UserInfo[]>
   abstract showGrants(user: UserRef): Promise<string[]>
 

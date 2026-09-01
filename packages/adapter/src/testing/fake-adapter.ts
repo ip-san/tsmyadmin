@@ -3,9 +3,12 @@ import type {
   BrowseResult,
   Cell,
   Dialect,
+  KeyValue,
   Namespace,
+  ProcessInfo,
   RowKey,
   RowValues,
+  ServerInfo,
   StatementResult,
   TableInfo,
   TableSchema,
@@ -38,6 +41,7 @@ export interface FakeAdapterOptions {
   /** When set, every method rejects with this error (simulates a dead connection). */
   failWith?: AdapterError
   users?: UserInfo[]
+  processes?: ProcessInfo[]
 }
 
 export function fakeColumn(name: string, dataType = 'int', nullable = false): TableSchema['columns'][number] {
@@ -89,6 +93,7 @@ export class FakeAdapter implements DatabaseAdapter {
   closed = false
   private readonly databases: Record<string, FakeDatabase>
   private readonly userList: UserInfo[]
+  private processList: ProcessInfo[]
   private readonly onSql: FakeAdapterOptions['onSql']
   private readonly failWith: AdapterError | undefined
 
@@ -98,6 +103,7 @@ export class FakeAdapter implements DatabaseAdapter {
     this.exporter = this.dialect === 'mysql' ? mysqlExporter : pgExporter
     this.users = this.dialect === 'mysql' ? mysqlUsers : pgUsers
     this.userList = options.users ?? []
+    this.processList = options.processes ?? []
     this.databases = options.databases ?? {}
     this.onSql = options.onSql
     this.failWith = options.failWith
@@ -231,6 +237,42 @@ export class FakeAdapter implements DatabaseAdapter {
       affected++
     }
     return { affectedRows: affected }
+  }
+
+  async serverInfo(): Promise<ServerInfo> {
+    this.record('serverInfo')
+    return {
+      dialect: this.dialect,
+      version: '0.0.0-fake',
+      uptimeSec: 42,
+      currentUser: 'fake@localhost',
+      extra: { hostname: 'fake' },
+    }
+  }
+
+  async listVariables(): Promise<KeyValue[]> {
+    this.record('listVariables')
+    return [
+      { name: 'max_connections', value: '151', description: null },
+      { name: 'version', value: '0.0.0-fake', description: 'Server version' },
+    ]
+  }
+
+  async listStatus(): Promise<KeyValue[]> {
+    this.record('listStatus')
+    return [{ name: 'Threads_connected', value: '1', description: null }]
+  }
+
+  async listProcesses(): Promise<ProcessInfo[]> {
+    this.record('listProcesses')
+    return structuredClone(this.processList)
+  }
+
+  async killProcess(id: string): Promise<void> {
+    this.record('killProcess', id)
+    const before = this.processList.length
+    this.processList = this.processList.filter((p) => p.id !== id)
+    if (this.processList.length === before) throw new AdapterError('NOT_FOUND', `No such process: ${id}`)
   }
 
   async listUsers(): Promise<UserInfo[]> {

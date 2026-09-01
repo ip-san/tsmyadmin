@@ -6,9 +6,12 @@ import type {
   ColumnMeta,
   DdlOp,
   Dialect,
+  KeyValue,
   Namespace,
+  ProcessInfo,
   RowKey,
   RowValues,
+  ServerInfo,
   StatementResult,
   TableInfo,
   TableSchema,
@@ -95,6 +98,14 @@ export interface DatabaseAdapter {
   /** Reads every row in stable order, `batchSize` rows at a time (for exports). */
   iterateRows(ns: Namespace, table: string, opts: { batchSize: number }): AsyncIterable<RowBatch>
   /** Login accounts (MySQL mysql.user, PostgreSQL pg_roles). Requires read privileges on the catalog. */
+  serverInfo(): Promise<ServerInfo>
+  /** Configuration variables (SHOW GLOBAL VARIABLES / pg_settings). */
+  listVariables(): Promise<KeyValue[]>
+  /** Runtime counters (SHOW GLOBAL STATUS / pg_stat_*). */
+  listStatus(): Promise<KeyValue[]>
+  listProcesses(): Promise<ProcessInfo[]>
+  /** Terminates a connection (KILL / pg_terminate_backend). `id` must be numeric. */
+  killProcess(id: string): Promise<void>
   listUsers(): Promise<UserInfo[]>
   /** Effective grants as SQL statements (MySQL SHOW GRANTS; PostgreSQL reconstructed from the catalog). */
   showGrants(user: UserRef): Promise<string[]>
@@ -123,4 +134,9 @@ export const ADAPTER_METHOD_NAMES = [
   'iterateRows',
   'listUsers',
   'showGrants',
+  'serverInfo',
+  'listVariables',
+  'listStatus',
+  'listProcesses',
+  'killProcess',
 ] as const satisfies readonly (keyof DatabaseAdapter)[]

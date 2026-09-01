@@ -3,8 +3,11 @@ import type {
   BrowseOptions,
   BrowseResult,
   DdlOp,
+  KeyValue,
+  ProcessInfo,
   RowKey,
   RowValues,
+  ServerInfo,
   SessionInfo,
   SqlRequest,
   StatementResult,
@@ -90,6 +93,25 @@ export const grantsQuery = (user: UserRef) =>
     queryFn: () => unwrap<{ statements: string[] }>(api.users.grants.$get({ query: user })),
   })
 
+export const serverInfoQuery = queryOptions({
+  queryKey: ['server', 'info'],
+  queryFn: () => unwrap<ServerInfo>(api.server.info.$get()),
+})
+export const variablesQuery = queryOptions({
+  queryKey: ['server', 'variables'],
+  queryFn: () => unwrap<KeyValue[]>(api.server.variables.$get()),
+})
+export const statusQuery = queryOptions({
+  queryKey: ['server', 'status'],
+  queryFn: () => unwrap<KeyValue[]>(api.server.status.$get()),
+  staleTime: 0,
+})
+export const processesQuery = queryOptions({
+  queryKey: ['server', 'processes'],
+  queryFn: () => unwrap<ProcessInfo[]>(api.server.processes.$get()),
+  staleTime: 0,
+})
+
 export const mutations = {
   login: (body: Parameters<typeof api.session.$post>[0]['json']) =>
     unwrap<SessionInfo>(api.session.$post({ json: body })),
@@ -120,6 +142,7 @@ export const mutations = {
     ),
   executeSql: (db: string, body: Omit<SqlRequest, 'maxRows' | 'timeoutMs' | 'stopOnError'> & Partial<SqlRequest>) =>
     unwrap<StatementResult[]>(api.databases[':db'].sql.$post({ param: { db }, json: body })),
+  killProcess: (id: string) => unwrap<{ ok: boolean }>(api.server.processes[':id'].kill.$post({ param: { id } })),
   previewDdl: (db: string, schema: string | undefined, op: DdlOp) =>
     unwrap<{ sql: string[] }>(
       api.databases[':db'].ddl.preview.$post({ param: { db }, json: { ...schemaQuery(schema), op } })

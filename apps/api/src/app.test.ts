@@ -4,6 +4,9 @@ import {
   ApiErrorSchema,
   BrowseResultSchema,
   DdlPreviewResponseSchema,
+  KeyValueSchema,
+  ProcessInfoSchema,
+  ServerInfoSchema,
   SessionInfoSchema,
   StatementResultSchema,
   TableInfoSchema,
@@ -456,6 +459,50 @@ describe('users', () => {
     ).toBe(400)
     expect((await h.req('/api/users')).status).toBe(200)
     expect((await h.app.request('/api/users')).status).toBe(401)
+  })
+})
+
+describe('server', () => {
+  const withProcesses = () =>
+    fixtureAdapter({
+      processes: [
+        { id: '7', user: 'root', host: 'localhost', database: 'shop', state: 'Query', timeSec: 3, query: 'SELECT 1' },
+        { id: '8', user: 'app', host: '10.0.0.1', database: null, state: 'Sleep', timeSec: 120, query: null },
+      ],
+    })
+
+  it('exposes info, variables, status and processes', async () => {
+    const h = harness(withProcesses())
+    stores.push(h.store)
+    await h.login()
+    expect(ServerInfoSchema.parse(await (await h.req('/api/server/info')).json()).version).toBe('0.0.0-fake')
+    expect(
+      z
+        .array(KeyValueSchema)
+        .parse(await (await h.req('/api/server/variables')).json())
+        .some((v) => v.name === 'max_connections')
+    ).toBe(true)
+    expect(z.array(KeyValueSchema).parse(await (await h.req('/api/server/status')).json())).toHaveLength(1)
+    expect(z.array(ProcessInfoSchema).parse(await (await h.req('/api/server/processes')).json())).toHaveLength(2)
+  })
+
+  it('kills a process by numeric id only', async () => {
+    const h = harness(withProcesses())
+    stores.push(h.store)
+    await h.login()
+    expect((await h.req('/api/server/processes/8/kill', { method: 'POST' })).status).toBe(200)
+    expect(
+      z
+        .array(ProcessInfoSchema)
+        .parse(await (await h.req('/api/server/processes')).json())
+        .map((p) => p.id)
+    ).toEqual(['7'])
+    expect((await h.req('/api/server/processes/8/kill', { method: 'POST' })).status).toBe(404)
+    expect((await h.req('/api/server/processes/abc/kill', { method: 'POST' })).status).toBe(400)
+    expect(
+      (await h.app.request('/api/server/processes/7/kill', { method: 'POST', headers: { origin: 'http://localhost' } }))
+        .status
+    ).toBe(401)
   })
 })
 

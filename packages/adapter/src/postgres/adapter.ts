@@ -1,4 +1,14 @@
-import type { ColumnMeta, Namespace, TableInfo, TableSchema, UserInfo, UserRef } from '@tsmyadmin/shared'
+import type {
+  ColumnMeta,
+  KeyValue,
+  Namespace,
+  ProcessInfo,
+  ServerInfo,
+  TableInfo,
+  TableSchema,
+  UserInfo,
+  UserRef,
+} from '@tsmyadmin/shared'
 import pg, { type FieldDef, type PoolClient, type QueryResult } from 'pg'
 import { BaseAdapter, type Conn, firstResult, type RawResult } from '../base.ts'
 import { quoteIdent, quoteTable } from '../sql/quote.ts'
@@ -6,10 +16,13 @@ import { AdapterError, type AdapterErrorCode, type ConnectionConfig } from '../t
 import { pgCreateStatements, pgDdl } from './ddl.ts'
 import { pgExporter } from './export.ts'
 import { pgDescribeTable, pgListSchemas, pgListTables } from './introspect.ts'
+import { pgKillProcess, pgListProcesses, pgListStatus, pgListVariables, pgServerInfo } from './server.ts'
 import { pgListUsers, pgShowGrants, pgUsers } from './users.ts'
 import { PG_TYPE_NAMES, pgToCell, pgTypes } from './values.ts'
 
 const AUTH_CODES = new Set(['28P01', '28000'])
+/** Socket-level failures reported without a SQLSTATE (e.g. after pg_terminate_backend). */
+const CONNECTION_MESSAGES = /terminat|closed|ECONNRESET/i
 const NOT_FOUND_CODES = new Set(['3D000', '3F000', '42P01', '42703'])
 const CONNECTION_CODES = new Set([
   'ECONNREFUSED',
@@ -80,6 +93,10 @@ export class PostgresAdapter extends BaseAdapter {
     }
   }
 
+  /** Clients whose socket died (e.g. pg_terminate_backend); they must be discarded, not returned to the pool. */
+  private readonly broken = new WeakSet<PoolClient>()
+  private readonly guarded = new WeakSet<PoolClient>()
+
   private async run(client: PoolClient, text: string, params?: unknown[]): Promise<RawResult | RawResult[]> {
     let res: ArrayResult | ArrayResult[]
     try {
@@ -87,7 +104,9 @@ export class PostgresAdapter extends BaseAdapter {
         ? await client.query<unknown[]>({ text, values: params, rowMode: 'array' })
         : ((await client.query<unknown[]>({ text, rowMode: 'array' })) as ArrayResult | ArrayResult[])
     } catch (err) {
-      throw this.toAdapterError(err)
+      const mapped = this.toAdapterError(err)
+      if (mapped.code === 'CONNECTION_FAILED') this.broken.add(client)
+      throw mapped
     }
     if (Array.isArray(res)) {
       const out: RawResult[] = []
@@ -104,13 +123,19 @@ export class PostgresAdapter extends BaseAdapter {
     } catch (err) {
       throw this.toAdapterError(err)
     }
+    if (!this.guarded.has(client)) {
+      // A terminated backend emits 'error' asynchronously; without a listener Node treats it as unhandled.
+      client.on('error', () => this.broken.add(client))
+      this.guarded.add(client)
+    }
+    const release = () => client.release(this.broken.has(client) ? new Error('connection terminated') : undefined)
     try {
       await this.run(client, `SET search_path TO ${quoteIdent('postgres', ns.schema ?? 'public')}`)
     } catch (err) {
-      client.release()
+      release()
       throw err
     }
-    return { query: (text, params) => this.run(client, text, params), release: () => client.release() }
+    return { query: (text, params) => this.run(client, text, params), release }
   }
 
   protected async setStatementTimeout(conn: Conn, ms: number): Promise<void> {
@@ -166,6 +191,30 @@ export class PostgresAdapter extends BaseAdapter {
     return this.withConn(ns, (conn) => pgDescribeTable(conn, ns, table))
   }
 
+  private serverNs(): Namespace {
+    return { database: this.defaultDatabase() }
+  }
+
+  serverInfo(): Promise<ServerInfo> {
+    return this.withConn(this.serverNs(), (conn) => pgServerInfo(conn))
+  }
+
+  listVariables(): Promise<KeyValue[]> {
+    return this.withConn(this.serverNs(), (conn) => pgListVariables(conn))
+  }
+
+  listStatus(): Promise<KeyValue[]> {
+    return this.withConn(this.serverNs(), (conn) => pgListStatus(conn))
+  }
+
+  listProcesses(): Promise<ProcessInfo[]> {
+    return this.withConn(this.serverNs(), (conn) => pgListProcesses(conn))
+  }
+
+  killProcess(id: string): Promise<void> {
+    return this.withConn(this.serverNs(), (conn) => pgKillProcess(conn, id))
+  }
+
   listUsers(): Promise<UserInfo[]> {
     return this.withConn({ database: this.defaultDatabase() }, (conn) => pgListUsers(conn))
   }
@@ -199,7 +248,8 @@ export class PostgresAdapter extends BaseAdapter {
     const message = typeof e.message === 'string' ? e.message : String(err)
     let kind: AdapterErrorCode = 'QUERY_FAILED'
     if (AUTH_CODES.has(code)) kind = 'AUTH_FAILED'
-    else if (CONNECTION_CODES.has(code)) kind = 'CONNECTION_FAILED'
+    else if (CONNECTION_CODES.has(code) || (code === 'UNKNOWN' && CONNECTION_MESSAGES.test(message)))
+      kind = 'CONNECTION_FAILED'
     else if (NOT_FOUND_CODES.has(code)) kind = 'NOT_FOUND'
     const extra = [e.detail, e.hint].filter((x): x is string => typeof x === 'string' && x.length > 0)
     const detail = extra.length > 0 ? `${message} (${extra.join('; ')})` : message

@@ -12,7 +12,10 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as AppProcessesRouteImport } from './routes/_app/processes'
+import { Route as AppStatusRouteImport } from './routes/_app/status'
 import { Route as AppUsersRouteImport } from './routes/_app/users'
+import { Route as AppVariablesRouteImport } from './routes/_app/variables'
 import { Route as AppDbDbRouteImport } from './routes/_app/db.$db'
 import { Route as AppDbDbIndexRouteImport } from './routes/_app/db.$db/index'
 import { Route as AppDbDbExportRouteImport } from './routes/_app/db.$db/export'
@@ -43,9 +46,24 @@ const AppIndexRoute = AppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRoute,
 } as any)
+const AppProcessesRoute = AppProcessesRouteImport.update({
+  id: '/processes',
+  path: '/processes',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppStatusRoute = AppStatusRouteImport.update({
+  id: '/status',
+  path: '/status',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppUsersRoute = AppUsersRouteImport.update({
   id: '/users',
   path: '/users',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppVariablesRoute = AppVariablesRouteImport.update({
+  id: '/variables',
+  path: '/variables',
   getParentRoute: () => AppRoute,
 } as any)
 const AppDbDbRoute = AppDbDbRouteImport.update({
@@ -129,7 +147,10 @@ const AppDbDbTableTableStructureRoute =
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/login': typeof LoginRoute
+  '/processes': typeof AppProcessesRoute
+  '/status': typeof AppStatusRoute
   '/users': typeof AppUsersRoute
+  '/variables': typeof AppVariablesRoute
   '/db/$db': typeof AppDbDbRouteWithChildren
   '/db/$db/export': typeof AppDbDbExportRoute
   '/db/$db/import': typeof AppDbDbImportRoute
@@ -148,7 +169,10 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
+  '/processes': typeof AppProcessesRoute
+  '/status': typeof AppStatusRoute
   '/users': typeof AppUsersRoute
+  '/variables': typeof AppVariablesRoute
   '/': typeof AppIndexRoute
   '/db/$db/export': typeof AppDbDbExportRoute
   '/db/$db/import': typeof AppDbDbImportRoute
@@ -168,7 +192,10 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
+  '/_app/processes': typeof AppProcessesRoute
+  '/_app/status': typeof AppStatusRoute
   '/_app/users': typeof AppUsersRoute
+  '/_app/variables': typeof AppVariablesRoute
   '/_app/': typeof AppIndexRoute
   '/_app/db/$db': typeof AppDbDbRouteWithChildren
   '/_app/db/$db/export': typeof AppDbDbExportRoute
@@ -191,7 +218,10 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/login'
+    | '/processes'
+    | '/status'
     | '/users'
+    | '/variables'
     | '/db/$db'
     | '/db/$db/export'
     | '/db/$db/import'
@@ -210,7 +240,10 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
+    | '/processes'
+    | '/status'
     | '/users'
+    | '/variables'
     | '/'
     | '/db/$db/export'
     | '/db/$db/import'
@@ -229,7 +262,10 @@ export interface FileRouteTypes {
     | '__root__'
     | '/_app'
     | '/login'
+    | '/_app/processes'
+    | '/_app/status'
     | '/_app/users'
+    | '/_app/variables'
     | '/_app/'
     | '/_app/db/$db'
     | '/_app/db/$db/export'
@@ -276,11 +312,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/processes': {
+      id: '/_app/processes'
+      path: '/processes'
+      fullPath: '/processes'
+      preLoaderRoute: typeof AppProcessesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/status': {
+      id: '/_app/status'
+      path: '/status'
+      fullPath: '/status'
+      preLoaderRoute: typeof AppStatusRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/users': {
       id: '/_app/users'
       path: '/users'
       fullPath: '/users'
       preLoaderRoute: typeof AppUsersRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/variables': {
+      id: '/_app/variables'
+      path: '/variables'
+      fullPath: '/variables'
+      preLoaderRoute: typeof AppVariablesRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/db/$db': {
@@ -438,13 +495,19 @@ const AppDbDbRouteWithChildren =
   AppDbDbRoute._addFileChildren(AppDbDbRouteChildren)
 
 interface AppRouteChildren {
+  AppProcessesRoute: typeof AppProcessesRoute
+  AppStatusRoute: typeof AppStatusRoute
   AppUsersRoute: typeof AppUsersRoute
+  AppVariablesRoute: typeof AppVariablesRoute
   AppIndexRoute: typeof AppIndexRoute
   AppDbDbRoute: typeof AppDbDbRouteWithChildren
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppProcessesRoute: AppProcessesRoute,
+  AppStatusRoute: AppStatusRoute,
   AppUsersRoute: AppUsersRoute,
+  AppVariablesRoute: AppVariablesRoute,
   AppIndexRoute: AppIndexRoute,
   AppDbDbRoute: AppDbDbRouteWithChildren,
 }

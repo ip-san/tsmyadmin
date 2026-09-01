@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { PageTitle } from '@/components/layout/PageTitle.tsx'
-import { TabNav } from '@/components/layout/TabNav.tsx'
+import { ServerTabs } from '@/components/layout/ServerTabs.tsx'
 import { ErrorBox, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
@@ -13,14 +12,7 @@ function ServerPage() {
   const databases = useQuery(databasesQuery)
   return (
     <>
-      <PageTitle>{locale.server.title}</PageTitle>
-      <TabNav
-        label={locale.nav.server}
-        items={[
-          { label: locale.tabs.databases, to: '/', exact: true },
-          { label: locale.tabs.users, to: '/users' },
-        ]}
-      />
+      <ServerTabs />
       <h2 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-200">{locale.server.databasesTitle}</h2>
       {databases.isPending ? (
         <Spinner />
