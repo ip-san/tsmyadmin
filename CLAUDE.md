@@ -19,7 +19,8 @@ bun run db:up             # テスト DB 起動（初回は fixtures 投入）
 bun run db:reset          # ボリューム削除して再作成
 bun run dev               # api + web 同時起動
 bun run check             # 型 + lint + ユニット/API/Web テスト + type-coverage（日常ゲート）
-bun run check:all         # check + knip + circular + cpd + arch + sql-safety + docs + 統合テスト
+bun run check:static      # check + knip + circular + cpd + arch + sql-safety + docs（pre-push で実行、DB 不要）
+bun run check:all         # check:static + 両 DB の統合テスト
 bun run test              # DB 不要のテスト
 bun run test:integration  # 両 DB の adapter conformance（compose 必須）
 bun run test:e2e          # Playwright

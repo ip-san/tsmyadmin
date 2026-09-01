@@ -21,7 +21,8 @@ bun run dev        # API http://localhost:3100 + Web http://localhost:5175
 ## 品質ゲート
 
 ```bash
-bun run check            # typecheck + lint + ユニット/API/Web テスト + type-coverage（pre-push でも実行）
+bun run check            # typecheck + lint + ユニット/API/Web テスト + type-coverage
+bun run check:static     # check + knip / 循環依存 / クローン / アーキテクチャ / SQL 安全性 / docs（pre-push で実行）
 bun run check:all        # + knip / 循環依存 / クローン検出 / アーキテクチャ検査 / SQL 安全性検査 / docs 同期 / 両 DB の統合テスト
 bun run test:e2e         # Playwright（機能 × 両方言 / axe a11y / VRT light+dark）。事前に db:up
 bun run lighthouse       # Lighthouse CI（ログイン画面の性能 / a11y / ベストプラクティス、警告のみ。要 Chrome）

@@ -31,11 +31,12 @@
     "check:sql-safety": "node scripts/check-sql-safety.mjs",
     "docs:validate": "node scripts/validate-docs.mjs",
     "check": "node scripts/check.mjs",
-    "check:all": "bun run check && bun run knip && bun run circular && bun run cpd && bun run check:arch && bun run check:sql-safety && bun run docs:validate && bun run test:integration",
+    "check:all": "bun run check:static && bun run test:integration",
     "build": "bun run --filter './apps/web' build",
     "size": "size-limit",
     "prepare": "husky",
-    "lighthouse": "lhci autorun --config=lighthouserc.cjs"
+    "lighthouse": "lhci autorun --config=lighthouserc.cjs",
+    "check:static": "bun run check && bun run knip && bun run circular && bun run cpd && bun run check:arch && bun run check:sql-safety && bun run docs:validate"
   },
   "lint-staged": {
     "*.{ts,tsx,mjs,js}": "biome check --write --no-errors-on-unmatched"
