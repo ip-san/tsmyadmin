@@ -18,7 +18,8 @@ COPY --from=build /app/apps/api ./apps/api
 COPY --from=build /app/apps/web/dist ./apps/web/dist
 COPY --from=build /app/apps/web/package.json ./apps/web/package.json
 COPY --from=build /app/packages ./packages
-RUN bun install --frozen-lockfile --production
+# --ignore-scripts: the root "prepare" script installs husky, a dev-only tool that is absent in production.
+RUN bun install --frozen-lockfile --production --ignore-scripts
 EXPOSE 3100
 USER bun
 CMD ["bun", "apps/api/src/index.ts"]
