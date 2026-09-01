@@ -13,6 +13,14 @@ export default defineConfig({
     projects: [
       {
         test: {
+          name: 'shared',
+          root: 'packages/shared',
+          environment: 'node',
+          include: ['src/**/*.test.ts'],
+        },
+      },
+      {
+        test: {
           name: 'adapter',
           root: 'packages/adapter',
           environment: 'node',

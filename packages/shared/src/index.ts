@@ -1,5 +1,6 @@
 export * from './schemas/api.ts'
 export * from './schemas/browse.ts'
+export * from './schemas/browse-query.ts'
 export * from './schemas/cell.ts'
 export * from './schemas/ddl.ts'
 export * from './schemas/dialect.ts'

@@ -8,7 +8,11 @@
     "start": "bun src/index.ts"
   },
   "dependencies": {
-    "hono": "^4.13.5"
+    "@hono/zod-validator": "^0.9.1",
+    "@tsmyadmin/adapter": "workspace:*",
+    "@tsmyadmin/shared": "workspace:*",
+    "hono": "^4.13.5",
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@types/bun": "^1.3.0"
