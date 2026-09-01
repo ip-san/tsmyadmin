@@ -1,4 +1,4 @@
-import type { MiddlewareHandler } from 'hono'
+import type { Context, MiddlewareHandler } from 'hono'
 
 export type LogFormat = 'json' | 'pretty'
 type LogLevel = 'info' | 'warn' | 'error'
@@ -7,6 +7,9 @@ type LogFields = Record<string, unknown>
 export interface Logger {
   log(level: LogLevel, event: string, fields?: LogFields): void
 }
+
+/** Resolves the socket's remote address (runtime-specific; Bun: getConnInfo). */
+export type RemoteAddress = (c: Context) => string | undefined
 
 /**
  * Structured logger: one JSON object per line in production (for log shippers), a readable line in development.
@@ -32,7 +35,7 @@ export function createLogger(
 }
 
 /** Access log with request id and latency; the id is also returned as X-Request-Id for correlation. */
-export function requestLogger(logger: Logger, trustProxy: boolean): MiddlewareHandler {
+export function requestLogger(logger: Logger, ip: (c: Context) => string): MiddlewareHandler {
   return async (c, next) => {
     const started = performance.now()
     const requestId = c.get('requestId') as string | undefined
@@ -43,17 +46,19 @@ export function requestLogger(logger: Logger, trustProxy: boolean): MiddlewareHa
       path: c.req.path,
       status: c.res.status,
       ms: Math.round(performance.now() - started),
-      ip: clientIp(c.req.raw.headers, trustProxy),
+      ip: ip(c),
     })
   }
 }
 
-/** Client IP for rate limiting / logs. Only honours X-Forwarded-For when a reverse proxy is declared trusted. */
-export function clientIp(headers: Headers, trustProxy: boolean): string {
+/**
+ * Client IP for rate limiting / logs. The socket address is the source of truth; X-Forwarded-For is honoured
+ * only when a reverse proxy is declared trusted. Other headers (X-Real-IP …) are never trusted: any client can set them.
+ */
+export function clientIp(headers: Headers, trustProxy: boolean, remote: string | undefined): string {
   if (trustProxy) {
-    const xff = headers.get('x-forwarded-for')
-    const first = xff?.split(',')[0]?.trim()
+    const first = headers.get('x-forwarded-for')?.split(',')[0]?.trim()
     if (first) return first
   }
-  return headers.get('x-real-ip') ?? 'unknown'
+  return remote ?? 'unknown'
 }

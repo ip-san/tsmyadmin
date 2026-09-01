@@ -4,7 +4,7 @@ import { csrf } from 'hono/csrf'
 import { requestId } from 'hono/request-id'
 import { secureHeaders } from 'hono/secure-headers'
 import { errorResponse } from './lib/errors.ts'
-import { createLogger, type Logger, requestLogger } from './lib/logging.ts'
+import { clientIp, createLogger, type Logger, type RemoteAddress, requestLogger } from './lib/logging.ts'
 import { RateLimiter } from './lib/rate-limit.ts'
 import { requestContext } from './lib/request-context.ts'
 import { databaseRoutes } from './routes/databases.ts'
@@ -26,6 +26,8 @@ export interface AppDeps {
   servers?: readonly ServerPreset[]
   loginRateLimit?: { max: number; windowMs: number }
   trustProxy?: boolean
+  /** Socket remote address resolver (Bun: getConnInfo). Without it every direct client counts as "unknown". */
+  remoteAddress?: RemoteAddress
   logger?: Logger
   /** Injectable clock for the rate limiter (tests). */
   now?: () => number
@@ -58,21 +60,23 @@ export function createApp(deps: AppDeps) {
   }
   const limit = deps.loginRateLimit ?? { max: 10, windowMs: 60_000 }
   const loginLimiter = new RateLimiter(limit.max, limit.windowMs, deps.now)
+  const trustProxy = deps.trustProxy ?? false
+  const ip = (c: Parameters<RemoteAddress>[0]) => clientIp(c.req.raw.headers, trustProxy, deps.remoteAddress?.(c))
   const sessionDeps = {
     adapterFactory: deps.adapterFactory,
     allowedHosts: deps.allowedHosts ?? ['127.0.0.1', 'localhost'],
     loginLimiter,
-    trustProxy: deps.trustProxy ?? false,
+    ip,
     logger,
   }
   return (
     new Hono<AppEnv>()
       .use('*', requestId())
       .use('*', requestContext())
-      .use('*', requestLogger(logger, sessionDeps.trustProxy))
+      .use('*', requestLogger(logger, ip))
       .use('*', secureHeaders({ contentSecurityPolicy: CONTENT_SECURITY_POLICY, referrerPolicy: 'same-origin' }))
       .use('/api/*', csrf())
-      .onError((err, c) => errorResponse(c, err))
+      .onError((err, c) => errorResponse(c, err, logger))
       // Liveness: the process answers. Readiness: the session store is usable.
       .get('/healthz', (c) => c.json({ ok: true }))
       .get('/readyz', async (c) => {
@@ -87,7 +91,7 @@ export function createApp(deps: AppDeps) {
       .get('/api/health', (c) => c.json({ ok: true }))
       .get('/api/servers', (c) => c.json(deps.servers ?? []))
       .route('/api', sessionRoutes(cfg, sessionDeps))
-      .route('/api', databaseRoutes(cfg))
+      .route('/api', databaseRoutes(cfg, logger))
       .route('/api', userRoutes(cfg))
       .route('/api', serverRoutes(cfg))
   )

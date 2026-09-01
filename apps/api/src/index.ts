@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { createAdapter } from '@tsmyadmin/adapter'
-import { serveStatic } from 'hono/bun'
+import { getConnInfo, serveStatic } from 'hono/bun'
 import { createApp } from './app.ts'
 import { ConfigError, loadConfig } from './config.ts'
 import { withAudit } from './lib/audit.ts'
@@ -46,6 +46,13 @@ const app = createApp({
   servers: config.servers,
   loginRateLimit: config.loginRateLimit,
   trustProxy: config.trustProxy,
+  remoteAddress: (c) => {
+    try {
+      return getConnInfo(c).remote.address
+    } catch {
+      return undefined
+    }
+  },
   logger,
 })
 

@@ -3,6 +3,7 @@ import type { ApiError, ApiErrorCode } from '@tsmyadmin/shared'
 import type { Context } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
+import type { Logger } from './logging.ts'
 
 const STATUS_BY_CODE: Record<ApiErrorCode, ContentfulStatusCode> = {
   UNAUTHENTICATED: 401,
@@ -22,10 +23,14 @@ export function apiError(code: ApiErrorCode, message: string, detail?: string): 
   return detail === undefined ? { code, message } : { code, message, detail }
 }
 
-/** Normalises anything thrown by a route into { code, message, detail }. */
-function toApiError(err: unknown): ApiError {
-  if (err instanceof AdapterError) return apiError(err.code, err.message, err.detail)
+/** Normalises anything thrown by a route into the error envelope plus the HTTP status it deserves. */
+function toApiError(err: unknown): { body: ApiError; status: ContentfulStatusCode } {
+  if (err instanceof AdapterError) {
+    const body = apiError(err.code, err.message, err.detail)
+    return { body, status: STATUS_BY_CODE[body.code] }
+  }
   if (err instanceof HTTPException) {
+    // Framework 4xx (CSRF 403, body limit 413, …) keep their own status under the VALIDATION envelope.
     const code: ApiErrorCode =
       err.status === 401
         ? 'UNAUTHENTICATED'
@@ -34,15 +39,22 @@ function toApiError(err: unknown): ApiError {
           : err.status >= 400 && err.status < 500
             ? 'VALIDATION'
             : 'INTERNAL'
-    return apiError(code, err.message || `HTTP ${err.status}`)
+    const status = code === 'INTERNAL' ? STATUS_BY_CODE.INTERNAL : (err.status as ContentfulStatusCode)
+    return { body: apiError(code, err.message || `HTTP ${err.status}`), status }
   }
-  return apiError('INTERNAL', 'Internal error', err instanceof Error ? err.message : String(err))
+  return {
+    body: apiError('INTERNAL', 'Internal error', err instanceof Error ? err.message : String(err)),
+    status: STATUS_BY_CODE.INTERNAL,
+  }
 }
 
-export function errorResponse(c: Context, err: unknown): Response {
-  const body = toApiError(err)
-  if (body.code === 'INTERNAL') console.error('[api] unhandled error', err)
-  // Framework 4xx (CSRF 403, body limit 413, …) keep their own status under the VALIDATION envelope.
-  const status = err instanceof HTTPException && body.code === 'VALIDATION' ? err.status : STATUS_BY_CODE[body.code]
+/** Writes the error envelope. Unexpected errors go to the structured log (stack included), never to the client. */
+export function errorResponse(c: Context, err: unknown, logger?: Logger): Response {
+  const { body, status } = toApiError(err)
+  if (body.code === 'INTERNAL') {
+    const detail = err instanceof Error ? (err.stack ?? err.message) : String(err)
+    if (logger) logger.log('error', 'unhandled', { requestId: c.get('requestId'), path: c.req.path, error: detail })
+    else console.error('[api] unhandled error', err)
+  }
   return c.json(body, status)
 }

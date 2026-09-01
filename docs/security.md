@@ -17,7 +17,7 @@
 
 ## ブルートフォース対策
 
-`POST /api/session` はクライアント IP + ユーザー名ごとに `LOGIN_RATE_LIMIT` 回 / `LOGIN_RATE_WINDOW_SECONDS` 秒に制限され、超過は `429 RATE_LIMITED`（`Retry-After` 付き）になります。成功時にカウンタはリセットされます。
+`POST /api/session` はクライアント IP（ソケットのアドレス。`TRUST_PROXY=1` のときだけ `X-Forwarded-For` の先頭を採用し、`X-Real-IP` 等のヘッダは信用しない）+ ユーザー名ごとに `LOGIN_RATE_LIMIT` 回 / `LOGIN_RATE_WINDOW_SECONDS` 秒に制限され、超過は `429 RATE_LIMITED`（`Retry-After` 付き）になります。成功時にカウンタはリセットされます。
 
 ## CSRF / XSS
 

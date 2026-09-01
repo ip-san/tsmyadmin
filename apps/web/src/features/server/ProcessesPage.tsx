@@ -14,6 +14,10 @@ export function ProcessesPage() {
   const [notice, setNotice] = useState<string | null>(null)
   const queryClient = useQueryClient()
   const procs = useQuery({ ...processesQuery, refetchInterval: auto ? 5000 : false })
+  const refresh = async () => {
+    setNotice(null)
+    await procs.refetch()
+  }
   const kill = useMutation({
     mutationFn: (id: string) => mutations.killProcess(id),
     onSuccess: async (_r, id) => {
@@ -26,7 +30,7 @@ export function ProcessesPage() {
     <section className="space-y-2">
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{locale.server.processesTitle}</h2>
-        <Button size="sm" onClick={() => procs.refetch()}>
+        <Button size="sm" onClick={() => void refresh()}>
           {locale.server.refresh}
         </Button>
         <label className="flex items-center gap-1 text-xs text-zinc-600 dark:text-zinc-300">
@@ -93,7 +97,15 @@ export function ProcessesPage() {
             <Button onClick={() => setVictim(null)} disabled={kill.isPending}>
               {locale.common.cancel}
             </Button>
-            <Button variant="danger" onClick={() => victim && kill.mutate(victim.id)} disabled={kill.isPending}>
+            <Button
+              variant="danger"
+              onClick={() => {
+                if (!victim) return
+                setNotice(null)
+                kill.mutate(victim.id)
+              }}
+              disabled={kill.isPending}
+            >
               {locale.server.kill}
             </Button>
           </>

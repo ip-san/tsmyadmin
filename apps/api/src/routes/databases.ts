@@ -18,6 +18,7 @@ import { bodyLimit } from 'hono/body-limit'
 import { apiError } from '../lib/errors.ts'
 import { buildExport, contentDisposition, toReadableStream } from '../lib/export.ts'
 import { ImportValidationError, importCsv, importSql } from '../lib/import.ts'
+import type { Logger } from '../lib/logging.ts'
 import { validate } from '../lib/validate.ts'
 import { type AppEnv, requireSession, type SessionConfig } from '../session/middleware.ts'
 
@@ -25,7 +26,7 @@ function ns(database: string, schema?: string): Namespace {
   return schema ? { database, schema } : { database }
 }
 
-export function databaseRoutes(cfg: SessionConfig) {
+export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
   return new Hono<AppEnv>()
     .use('/databases/*', requireSession(cfg))
     .use('/databases', requireSession(cfg))
@@ -109,7 +110,11 @@ export function databaseRoutes(cfg: SessionConfig) {
       // truncated file look complete.
       return c.body(
         toReadableStream(file.body, (err) =>
-          console.error('[api] export aborted', err instanceof Error ? err.message : err)
+          logger?.log('error', 'export.aborted', {
+            requestId: c.get('requestId'),
+            database: namespace.database,
+            error: err instanceof Error ? err.message : String(err),
+          })
         ),
         200,
         { 'content-type': file.contentType, 'content-disposition': contentDisposition(file.filename) }

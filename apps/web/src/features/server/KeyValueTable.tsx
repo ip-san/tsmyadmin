@@ -1,5 +1,5 @@
 import type { KeyValue } from '@tsmyadmin/shared'
-import { useState } from 'react'
+import { useDeferredValue, useState } from 'react'
 import { Notice } from '@/components/ui/Feedback.tsx'
 import { Input } from '@/components/ui/Field.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
@@ -13,7 +13,9 @@ export function filterKeyValues(items: KeyValue[], filter: string): KeyValue[] {
 
 export function KeyValueTable({ items, label }: { items: KeyValue[]; label: string }) {
   const [filter, setFilter] = useState('')
-  const shown = filterKeyValues(items, filter)
+  // Large lists (pg_settings ≈ 350 rows, SHOW VARIABLES ≈ 600) filter on a deferred value so typing stays responsive.
+  const deferred = useDeferredValue(filter)
+  const shown = filterKeyValues(items, deferred)
   const hasDescription = items.some((i) => i.description)
   return (
     <div className="space-y-2">

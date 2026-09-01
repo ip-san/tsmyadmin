@@ -51,7 +51,12 @@ export function LoginForm({ onLogin, presets = [] }: LoginFormProps) {
     <form onSubmit={submit} className="space-y-3" aria-busy={login.isPending}>
       {presets.length > 0 ? (
         <Field id="preset" label={locale.login.preset} {...(fixed ? { hint: locale.login.presetHint } : {})}>
-          <Select id="preset" value={preset} onChange={(e) => choosePreset(e.target.value)}>
+          <Select
+            id="preset"
+            value={preset}
+            onChange={(e) => choosePreset(e.target.value)}
+            {...(fixed ? { 'aria-describedby': 'preset-hint' } : {})}
+          >
             {presets.map((p) => (
               <option key={p.name} value={p.name}>
                 {p.name} — {p.dialect === 'mysql' ? locale.login.mysql : locale.login.postgres} {p.host}:{p.port}

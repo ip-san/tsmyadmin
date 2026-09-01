@@ -18,10 +18,11 @@ describe('createLogger', () => {
 })
 
 describe('clientIp', () => {
-  it('uses X-Forwarded-For only when the proxy is trusted', () => {
-    const h = new Headers({ 'x-forwarded-for': '203.0.113.5, 10.0.0.1', 'x-real-ip': '10.0.0.1' })
-    expect(clientIp(h, true)).toBe('203.0.113.5')
-    expect(clientIp(h, false)).toBe('10.0.0.1')
-    expect(clientIp(new Headers(), false)).toBe('unknown')
+  it('uses the socket address unless a trusted proxy supplies X-Forwarded-For', () => {
+    const spoofed = new Headers({ 'x-forwarded-for': '203.0.113.5, 10.0.0.1', 'x-real-ip': '198.51.100.9' })
+    expect(clientIp(spoofed, true, '10.0.0.1')).toBe('203.0.113.5')
+    expect(clientIp(spoofed, false, '10.0.0.1')).toBe('10.0.0.1')
+    expect(clientIp(new Headers({ 'x-real-ip': '198.51.100.9' }), false, '192.0.2.7')).toBe('192.0.2.7')
+    expect(clientIp(new Headers(), true, undefined)).toBe('unknown')
   })
 })

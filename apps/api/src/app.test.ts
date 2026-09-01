@@ -48,6 +48,7 @@ interface HarnessOptions {
   loginRateLimit?: { max: number; windowMs: number }
   now?: () => number
   trustProxy?: boolean
+  remoteAddress?: (c: { req: { header: (name: string) => string | undefined } }) => string | undefined
 }
 
 function harness(adapter: FakeAdapter = fixtureAdapter(), options: HarnessOptions = {}) {
@@ -61,6 +62,7 @@ function harness(adapter: FakeAdapter = fixtureAdapter(), options: HarnessOption
     ...(options.loginRateLimit ? { loginRateLimit: options.loginRateLimit } : {}),
     ...(options.now ? { now: options.now } : {}),
     ...(options.trustProxy !== undefined ? { trustProxy: options.trustProxy } : {}),
+    ...(options.remoteAddress ? { remoteAddress: options.remoteAddress } : {}),
   })
   let cookie = ''
   const req = (path: string, init: RequestInit = {}) =>
@@ -174,6 +176,26 @@ describe('hardening', () => {
     expect((await h.login({ ...LOGIN, user: 'other' })).status).toBe(401)
     t = 1000
     expect((await h.login()).status).toBe(401)
+  })
+
+  it('keys the limiter by the socket address and ignores spoofable headers when no proxy is trusted', async () => {
+    // The test harness has no socket; simulate the remote address with a header the real resolver never reads.
+    const h = harness(fixtureAdapter({ failWith: new AdapterError('AUTH_FAILED', 'denied') }), {
+      loginRateLimit: { max: 1, windowMs: 60_000 },
+      remoteAddress: (c) => c.req.header('x-test-remote'),
+    })
+    stores.push(h.store)
+    expect((await h.login(LOGIN, { 'x-test-remote': '192.0.2.1' })).status).toBe(401)
+    expect((await h.login(LOGIN, { 'x-test-remote': '192.0.2.2' })).status).toBe(401)
+    expect(
+      (
+        await h.login(LOGIN, {
+          'x-test-remote': '192.0.2.1',
+          'x-real-ip': '198.51.100.9',
+          'x-forwarded-for': '203.0.113.5',
+        })
+      ).status
+    ).toBe(429)
   })
 
   it('keys the limiter by X-Forwarded-For only when the proxy is trusted', async () => {

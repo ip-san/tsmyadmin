@@ -1,11 +1,11 @@
 import type { DatabaseAdapter } from '@tsmyadmin/adapter'
 import { type ConnectRequest, ConnectRequestSchema } from '@tsmyadmin/shared'
-import { Hono } from 'hono'
+import { type Context, Hono } from 'hono'
 import { deleteCookie, getSignedCookie, setSignedCookie } from 'hono/cookie'
 import { isHostAllowed } from '../lib/allowlist.ts'
 import { withAudit } from '../lib/audit.ts'
 import { apiError, errorResponse } from '../lib/errors.ts'
-import { clientIp, type Logger } from '../lib/logging.ts'
+import type { Logger } from '../lib/logging.ts'
 import type { RateLimiter } from '../lib/rate-limit.ts'
 import { validate } from '../lib/validate.ts'
 import { type AppEnv, requireSession, SESSION_COOKIE, type SessionConfig } from '../session/middleware.ts'
@@ -17,7 +17,8 @@ export interface SessionRouteDeps {
   adapterFactory: AdapterFactory
   allowedHosts: readonly string[]
   loginLimiter: RateLimiter
-  trustProxy: boolean
+  /** Client IP resolver shared with the access log. */
+  ip: (c: Context) => string
   logger: Logger
 }
 
@@ -25,7 +26,7 @@ export function sessionRoutes(cfg: SessionConfig, deps: SessionRouteDeps) {
   return new Hono<AppEnv>()
     .post('/session', validate('json', ConnectRequestSchema), async (c) => {
       const body = c.req.valid('json')
-      const ip = clientIp(c.req.raw.headers, deps.trustProxy)
+      const ip = deps.ip(c)
       const audit = {
         requestId: c.get('requestId'),
         ip,
@@ -55,7 +56,7 @@ export function sessionRoutes(cfg: SessionConfig, deps: SessionRouteDeps) {
       } catch (err) {
         await adapter.close().catch(() => undefined)
         deps.logger.log('warn', 'login.failed', audit)
-        return errorResponse(c, err)
+        return errorResponse(c, err, deps.logger)
       }
       deps.loginLimiter.reset(`${ip}|${body.user}`)
       const { password: _password, ...who } = body
