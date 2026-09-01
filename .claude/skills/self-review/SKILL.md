@@ -114,15 +114,15 @@ git diff --name-only HEAD | grep '^packages/shared/src/'
 
 **判定:** 1件以上あれば、対応する `apps/api/src/routes/**` のバリデータと `apps/web` 側の呼び出し（`hc<AppType>` 経由）が同じ diff に含まれているか確認する。web が生の `fetch()` で新エンドポイントを叩いていたら NG。
 
-### 7. ハードコード日本語（forward-looking）
+### 7. ハードコード日本語
 
 ```bash
 grep -rn '[ぁ-んァ-ヶ一-龠]' apps/web/src --include='*.tsx' 2>/dev/null | grep -v 'locales/ja' | grep -v '\.test\.'
 ```
 
-**判定:** `apps/web/src/config/locales/ja.ts` を経由しない直書き日本語。locale ファイルが未整備の段階では検出0件が正常。locale ファイルが存在する状態で検出された場合のみ NG。
+**判定:** `apps/web/src/config/locales/ja.ts` を経由しない直書き日本語。検出されたら NG（`ja.ts` に追加して `locale.*` で参照する）。
 
-### 8. Tailwind ダークモード漏れ（forward-looking）
+### 8. Tailwind ダークモード漏れ
 
 ```bash
 grep -rn 'bg-\(red\|blue\|gray\|slate\|stone\)-[0-9]\{3\}\|text-\(red\|blue\|gray\|slate\|stone\)-[0-9]\{3\}' apps/web/src --include='*.tsx' 2>/dev/null | grep -v 'dark:'

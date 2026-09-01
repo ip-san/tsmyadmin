@@ -121,31 +121,41 @@ describe('NewComponent', () => {
 })
 ```
 
-日本語文字列は原則 `apps/web/src/config/locales/ja.ts`（未整備なら新設）の `locale.*` 経由にし、テストもその値を参照する。Tailwind の色クラスをテストで直接文字列比較する場合は `dark:` variant も含めて確認する。
+日本語文字列は必ず `apps/web/src/config/locales/ja.ts` の `locale.*` 経由にし、テストもその値を参照する。Tailwind の色クラスをテストで直接文字列比較する場合は `dark:` variant も含めて確認する。
 
 実行:
 ```bash
 bun test apps/web/src/
 ```
 
-### 4. E2E テスト（Playwright、forward-looking）
+### 4. E2E テスト（Playwright）
 
-**現状:** `e2e/` は空、`playwright.config.ts` は未作成。E2E を初めて追加する場合は設定ファイルの作成から必要になる。
+`e2e/` に `flow` / `rows` / `sql` / `structure`（機能、両方言）、`a11y`（axe）、`visual`（VRT light/dark）がある。共通ヘルパー `e2e/helpers.ts` の `TARGETS`（MySQL/PostgreSQL の接続先）、`login(page, t)`、`tableUrl(t, table, sub)` を使い、**両方言をループ**で回す。
 
 ```typescript
-// e2e/browse-table.spec.ts
+// e2e/rows.spec.ts の形
 import { expect, test } from '@playwright/test'
+import { login, TARGETS, tableUrl } from './helpers.ts'
 
-test('セッション確立後にテーブル一覧が表示される', async ({ page }) => {
-  await page.goto('/')
-  await page.getByLabel('Host').fill('localhost')
-  await page.getByLabel('User').fill('root')
-  await page.getByRole('button', { name: 'Connect' }).click()
-  await expect(page.getByRole('link', { name: 'users' })).toBeVisible()
-})
+for (const t of TARGETS) {
+  test.describe(`rows (${t.dialect})`, () => {
+    test.beforeEach(async ({ page }) => {
+      await login(page, t)
+    })
+
+    test('inserts a row through the form', async ({ page }) => {
+      await page.goto(tableUrl(t, 'users', '/insert'))
+      await expect(page.getByRole('button', { name: '挿入する' })).toBeVisible()
+    })
+  })
+}
 ```
 
-実行（`playwright.config.ts` 作成後）:
+- データを変更するテストは `page.request.post('/api/databases/<db>/sql', …)` で使い捨てテーブルを作って使う（`rows.spec.ts` の `withScratchTable` 参照）。fixtures のテーブルは変更しない
+- 新しい spec は `playwright.config.ts` の `chromium` プロジェクトの `testMatch` に追加する
+- VRT の差分が意図的な場合のみ `bunx playwright test --project=visual-light --project=visual-dark --update-snapshots`
+
+実行（事前に `bun run db:up`）:
 ```bash
 bun run test:e2e
 ```
