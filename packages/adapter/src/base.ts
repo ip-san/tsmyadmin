@@ -114,6 +114,10 @@ export abstract class BaseAdapter implements DatabaseAdapter {
   protected abstract acquire(ns: Namespace): Promise<Conn>
   /** Applies / clears a per-session statement timeout. 0 clears. */
   protected abstract setStatementTimeout(conn: Conn, ms: number): Promise<void>
+  /** Backend/connection id of `conn` as seen by the server (CONNECTION_ID() / pg_backend_pid()). */
+  protected abstract backendId(conn: Conn): Promise<string>
+  /** Interrupts the statement running on backend `id` from a fresh connection (KILL QUERY / pg_cancel_backend). */
+  protected abstract cancelBackend(ns: Namespace, id: string): Promise<void>
   /** NULL-safe equality operator used for all-columns keys. */
   protected abstract nullSafeEq(): string
   /** Row-identity fallback when a table has no PK / NOT NULL unique key. */
@@ -389,36 +393,44 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     }
   }
 
+  /** Running executeSql calls by queryId → backend id + namespace, for cancelQuery. */
+  private readonly running = new Map<string, { ns: Namespace; backend: string }>()
+
   async executeSql(ns: Namespace, script: string, opts: ExecuteOptions): Promise<StatementResult[]> {
     const statements = splitStatements(script, this.dialect)
     const results: StatementResult[] = []
     await this.withConn(
       ns,
       async (conn) => {
-        for (const st of statements) {
-          const started = performance.now()
-          try {
-            const raw = await conn.query(st.sql)
-            const durationMs = Math.round(performance.now() - started)
-            const list = Array.isArray(raw) ? raw : [raw]
-            for (const r of list) {
-              if (r.hasRows) {
-                const truncated = r.rows.length > opts.maxRows
-                results.push({
-                  kind: 'rows',
-                  sql: st.sql,
-                  durationMs,
-                  result: { columns: r.columns, rows: truncated ? r.rows.slice(0, opts.maxRows) : r.rows, truncated },
-                })
-              } else {
-                results.push({ kind: 'affected', sql: st.sql, durationMs, affectedRows: r.affectedRows })
+        if (opts.queryId) this.running.set(opts.queryId, { ns, backend: await this.backendId(conn) })
+        try {
+          for (const st of statements) {
+            const started = performance.now()
+            try {
+              const raw = await conn.query(st.sql)
+              const durationMs = Math.round(performance.now() - started)
+              const list = Array.isArray(raw) ? raw : [raw]
+              for (const r of list) {
+                if (r.hasRows) {
+                  const truncated = r.rows.length > opts.maxRows
+                  results.push({
+                    kind: 'rows',
+                    sql: st.sql,
+                    durationMs,
+                    result: { columns: r.columns, rows: truncated ? r.rows.slice(0, opts.maxRows) : r.rows, truncated },
+                  })
+                } else {
+                  results.push({ kind: 'affected', sql: st.sql, durationMs, affectedRows: r.affectedRows })
+                }
               }
+            } catch (err) {
+              const e = err instanceof AdapterError ? err : this.toAdapterError(err)
+              results.push({ kind: 'error', sql: st.sql, message: e.detail ?? e.message, code: e.code })
+              if (opts.stopOnError) break
             }
-          } catch (err) {
-            const e = err instanceof AdapterError ? err : this.toAdapterError(err)
-            results.push({ kind: 'error', sql: st.sql, message: e.detail ?? e.message, code: e.code })
-            if (opts.stopOnError) break
           }
+        } finally {
+          if (opts.queryId) this.running.delete(opts.queryId)
         }
         // Each execution is autocommitted: a transaction the script left open (or aborted) must not
         // leak into the next borrower of this pooled connection.
@@ -427,6 +439,13 @@ export abstract class BaseAdapter implements DatabaseAdapter {
       opts.timeoutMs
     )
     return results
+  }
+
+  async cancelQuery(queryId: string): Promise<boolean> {
+    const entry = this.running.get(queryId)
+    if (!entry) return false
+    await this.cancelBackend(entry.ns, entry.backend)
+    return true
   }
 
   /** Maps a driver error to AdapterError. */

@@ -141,6 +141,17 @@ export class MysqlAdapter extends BaseAdapter {
     await conn.query(`SET SESSION max_execution_time = ${Math.max(0, Math.floor(ms))}`)
   }
 
+  protected async backendId(conn: Conn): Promise<string> {
+    const r = firstResult(await conn.query('SELECT CONNECTION_ID()'))
+    return String(r.rows[0]?.[0] ?? '')
+  }
+
+  /** KILL QUERY interrupts the statement but keeps the connection usable (unlike KILL). */
+  protected async cancelBackend(ns: Namespace, id: string): Promise<void> {
+    if (!/^\d+$/.test(id)) throw new AdapterError('QUERY_FAILED', 'backend id must be numeric')
+    await this.withConn(ns, (conn) => conn.query(`KILL QUERY ${id}`))
+  }
+
   protected nullSafeEq(): string {
     return '<=>'
   }

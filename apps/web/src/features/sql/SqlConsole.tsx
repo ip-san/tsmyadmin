@@ -1,8 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import type { Dialect, StatementResult } from '@tsmyadmin/shared'
 import { SQL_MAX_ROWS_DEFAULT } from '@tsmyadmin/shared'
-import { Play } from 'lucide-react'
-import { useState } from 'react'
+import { Play, Square } from 'lucide-react'
+import { useRef, useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox } from '@/components/ui/Feedback.tsx'
 import { Select } from '@/components/ui/Field.tsx'
@@ -82,8 +82,22 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion }:
   const [history, setHistory] = useState<HistoryEntry[]>(() => loadHistory(dialect))
   const [results, setResults] = useState<StatementResult[] | null>(null)
   const queryClient = useQueryClient()
+  const queryId = useRef<string | null>(null)
+  const cancel = useMutation({ mutationFn: (id: string) => mutations.cancelSql(db, id) })
   const run = useMutation({
-    mutationFn: () => mutations.executeSql(db, { sql: text, ...(schema ? { schema } : {}), maxRows, stopOnError }),
+    mutationFn: () => {
+      queryId.current = crypto.randomUUID()
+      return mutations.executeSql(db, {
+        sql: text,
+        ...(schema ? { schema } : {}),
+        maxRows,
+        stopOnError,
+        queryId: queryId.current,
+      })
+    },
+    onSettled: () => {
+      queryId.current = null
+    },
     onSuccess: async (res) => {
       setResults(res)
       setHistory(pushHistory(dialect, { sql: text, at: Date.now(), ok: res.every((r) => r.kind !== 'error') }))
@@ -110,6 +124,17 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion }:
           <Play className="size-4" aria-hidden />
           {run.isPending ? locale.sql.running : locale.sql.run}
         </Button>
+        {run.isPending ? (
+          <Button
+            variant="danger"
+            onClick={() => queryId.current && cancel.mutate(queryId.current)}
+            disabled={cancel.isPending}
+            aria-label={locale.sql.cancel}
+          >
+            <Square className="size-4" aria-hidden />
+            {cancel.isPending ? locale.sql.cancelling : locale.sql.cancel}
+          </Button>
+        ) : null}
         <span className="text-xs text-zinc-500 dark:text-zinc-400">{locale.sql.runHint}</span>
         <label
           htmlFor="sql-max-rows"

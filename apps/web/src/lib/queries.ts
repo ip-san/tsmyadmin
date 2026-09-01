@@ -142,6 +142,8 @@ export const mutations = {
     ),
   executeSql: (db: string, body: Omit<SqlRequest, 'maxRows' | 'timeoutMs' | 'stopOnError'> & Partial<SqlRequest>) =>
     unwrap<StatementResult[]>(api.databases[':db'].sql.$post({ param: { db }, json: body })),
+  cancelSql: (db: string, queryId: string) =>
+    unwrap<{ cancelled: boolean }>(api.databases[':db'].sql.cancel.$post({ param: { db }, json: { queryId } })),
   killProcess: (id: string) => unwrap<{ ok: boolean }>(api.server.processes[':id'].kill.$post({ param: { id } })),
   previewDdl: (db: string, schema: string | undefined, op: DdlOp) =>
     unwrap<{ sql: string[] }>(

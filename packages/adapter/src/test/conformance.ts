@@ -472,6 +472,28 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
       })
     })
 
+    describe('cancelQuery', () => {
+      it('interrupts a running script from another connection and keeps the pool usable', async () => {
+        const queryId = crypto.randomUUID()
+        const run = db.executeSql(ns, ctx.slowSql, { ...EXEC, timeoutMs: 60_000, queryId })
+        let cancelled = false
+        for (let i = 0; i < 50 && !cancelled; i++) {
+          await new Promise((r) => setTimeout(r, 100))
+          cancelled = await db.cancelQuery(queryId)
+        }
+        expect(cancelled).toBe(true)
+        const results = await run
+        expect(results[0]?.kind).toBe('error')
+        expect(await db.cancelQuery(queryId)).toBe(false)
+        const ok = await exec('SELECT 1 AS x')
+        expect(ok[0]).toMatchObject({ kind: 'rows' })
+      })
+
+      it('returns false for unknown ids', async () => {
+        expect(await db.cancelQuery(crypto.randomUUID())).toBe(false)
+      })
+    })
+
     describe('showCreateTable', () => {
       it('returns DDL that names the table, and a view definition for views', async () => {
         const users = await db.showCreateTable(ns, 'users')

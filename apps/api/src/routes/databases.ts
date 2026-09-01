@@ -9,6 +9,7 @@ import {
   type Namespace,
   parseBrowseQuery,
   SchemaQuerySchema,
+  SqlCancelRequestSchema,
   SqlRequestSchema,
   UpdateRowRequestSchema,
 } from '@tsmyadmin/shared'
@@ -139,8 +140,13 @@ export function databaseRoutes(cfg: SessionConfig) {
         maxRows: body.maxRows,
         timeoutMs: body.timeoutMs,
         stopOnError: body.stopOnError,
+        ...(body.queryId ? { queryId: body.queryId } : {}),
       })
       return c.json(results)
+    })
+    .post('/databases/:db/sql/cancel', validate('json', SqlCancelRequestSchema), async (c) => {
+      const cancelled = await c.get('session').adapter.cancelQuery(c.req.valid('json').queryId)
+      return c.json({ cancelled })
     })
     .post('/databases/:db/ddl/preview', validate('json', DdlPreviewRequestSchema), (c) => {
       const body = c.req.valid('json')

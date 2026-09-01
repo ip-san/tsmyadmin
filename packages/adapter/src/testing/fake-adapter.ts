@@ -288,6 +288,11 @@ export class FakeAdapter implements DatabaseAdapter {
     return [`GRANT USAGE ON *.* TO '${user.name}'@'${user.host ?? '%'}'`]
   }
 
+  async cancelQuery(queryId: string): Promise<boolean> {
+    this.record('cancelQuery', queryId)
+    return queryId.startsWith('running-')
+  }
+
   async showCreateTable(ns: Namespace, table: string, _schema?: TableSchema): Promise<string[]> {
     this.record('showCreateTable', ns, table)
     const t = this.table(ns, table)

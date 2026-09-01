@@ -142,6 +142,17 @@ export class PostgresAdapter extends BaseAdapter {
     await conn.query(`SET statement_timeout = ${Math.max(0, Math.floor(ms))}`)
   }
 
+  protected async backendId(conn: Conn): Promise<string> {
+    const r = firstResult(await conn.query('SELECT pg_backend_pid()'))
+    return String(r.rows[0]?.[0] ?? '')
+  }
+
+  /** pg_cancel_backend interrupts the statement but keeps the session (pg_terminate_backend would drop it). */
+  protected async cancelBackend(ns: Namespace, id: string): Promise<void> {
+    if (!/^\d+$/.test(id)) throw new AdapterError('QUERY_FAILED', 'backend id must be numeric')
+    await this.withConn(ns, (conn) => conn.query('SELECT pg_cancel_backend($1::int)', [Number(id)]))
+  }
+
   protected nullSafeEq(): string {
     return 'IS NOT DISTINCT FROM'
   }

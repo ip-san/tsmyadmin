@@ -34,6 +34,8 @@ export interface ExecuteOptions {
   maxRows: number
   timeoutMs: number
   stopOnError: boolean
+  /** When set, the run is registered under this id so cancelQuery(id) can interrupt it from another connection. */
+  queryId?: string
 }
 
 export type AdapterErrorCode = Extract<
@@ -99,6 +101,8 @@ export interface DatabaseAdapter {
   updateRow(ns: Namespace, table: string, key: RowKey, values: RowValues): Promise<{ affectedRows: number }>
   deleteRows(ns: Namespace, table: string, keys: RowKey[]): Promise<{ affectedRows: number }>
   executeSql(ns: Namespace, sql: string, opts: ExecuteOptions): Promise<StatementResult[]>
+  /** Interrupts a running executeSql registered with `queryId`. Resolves false when nothing is running under that id. */
+  cancelQuery(queryId: string): Promise<boolean>
   /**
    * DDL statements that recreate the table (MySQL: SHOW CREATE TABLE; PostgreSQL: reconstructed from the catalog).
    * Pass an already-fetched `schema` to avoid a second catalog round trip.
@@ -144,6 +148,7 @@ export const ADAPTER_METHOD_NAMES = [
   'updateRow',
   'deleteRows',
   'executeSql',
+  'cancelQuery',
   'showCreateTable',
   'iterateRows',
   'listUsers',

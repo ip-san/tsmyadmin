@@ -31,11 +31,16 @@ export const SQL_TIMEOUT_DEFAULT_MS = 30_000
 export const SqlRequestSchema = z.object({
   sql: z.string().min(1),
   schema: z.string().min(1).optional(),
+  /** Client-generated id so the run can be cancelled with POST /sql/cancel while it is executing. */
+  queryId: z.string().uuid().optional(),
   maxRows: z.number().int().min(1).max(SQL_MAX_ROWS_LIMIT).default(SQL_MAX_ROWS_DEFAULT),
   timeoutMs: z.number().int().min(1000).max(300_000).default(SQL_TIMEOUT_DEFAULT_MS),
   stopOnError: z.boolean().default(true),
 })
 export type SqlRequest = z.infer<typeof SqlRequestSchema>
+
+export const SqlCancelRequestSchema = z.object({ queryId: z.string().uuid() })
+export const SqlCancelResponseSchema = z.object({ cancelled: z.boolean() })
 
 export const DdlPreviewRequestSchema = z.object({ schema: z.string().min(1).optional(), op: DdlOpSchema })
 export const DdlPreviewResponseSchema = z.object({ sql: z.array(z.string()) })

@@ -40,6 +40,20 @@ for (const t of TARGETS) {
       await expect(page.getByTitle('失敗')).toBeVisible()
     })
 
+    test('a running statement can be cancelled', async ({ page }) => {
+      await page.goto(t.schema ? `/db/${t.database}/sql?schema=${t.schema}` : `/db/${t.database}/sql`)
+      const slow =
+        t.dialect === 'postgres'
+          ? 'SELECT pg_sleep(20)'
+          : `SELECT COUNT(*) FROM ${Array.from({ length: 12 }, (_, i) => `users u${i}`).join(', ')} WHERE ${Array.from({ length: 12 }, (_, i) => `u${i}.id`).join(' + ')} > 0`
+      await typeSql(page, slow)
+      await page.getByRole('button', { name: '実行', exact: true }).click()
+      await page.getByRole('button', { name: 'キャンセル' }).click()
+      const first = page.getByRole('region', { name: '文 1' })
+      await expect(first).toContainText('エラー', { timeout: 15_000 })
+      await expect(page.getByRole('button', { name: '実行', exact: true })).toBeEnabled()
+    })
+
     test('table SQL tab is prefilled and DML refreshes the browse view', async ({ page }) => {
       await page.goto(tableUrl(t, 'users', '/sql'))
       await expect(page.getByRole('textbox', { name: 'SQL エディタ' })).toContainText('SELECT * FROM')

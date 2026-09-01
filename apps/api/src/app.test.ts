@@ -383,6 +383,21 @@ describe('sql & ddl', () => {
     ])
   })
 
+  it('passes queryId through and cancels by id', async () => {
+    const h = harness()
+    stores.push(h.store)
+    await h.login()
+    const queryId = crypto.randomUUID()
+    await h.req('/api/databases/shop/sql', { method: 'POST', body: JSON.stringify({ sql: 'SELECT 1', queryId }) })
+    expect(h.adapter.calls.at(-1)?.args[2]).toMatchObject({ queryId })
+    const miss = await h.req('/api/databases/shop/sql/cancel', { method: 'POST', body: JSON.stringify({ queryId }) })
+    expect(await miss.json()).toEqual({ cancelled: false })
+    expect(
+      (await h.req('/api/databases/shop/sql/cancel', { method: 'POST', body: JSON.stringify({ queryId: 'nope' }) }))
+        .status
+    ).toBe(400)
+  })
+
   it('caps maxRows and rejects empty scripts', async () => {
     const h = harness()
     stores.push(h.store)

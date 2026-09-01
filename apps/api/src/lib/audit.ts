@@ -13,6 +13,7 @@ export const AUDITED_METHODS = [
   'updateRow',
   'deleteRows',
   'executeSql',
+  'cancelQuery',
   'killProcess',
 ] as const satisfies readonly Method[]
 /** Read-only methods, listed explicitly so the spec-consistency test notices new adapter methods. */
@@ -74,6 +75,8 @@ export function summarise(method: AuditedMethod, args: unknown[]): Record<string
         sqlLength: sql.length,
       }
     }
+    case 'cancelQuery':
+      return { queryId: args[0] }
     case 'killProcess':
       return { processId: args[0] }
   }
