@@ -32,7 +32,8 @@
 | 本番でログインしても直後に未ログイン扱い | `NODE_ENV=production` は `Secure` Cookie。HTTPS で終端し `X-Forwarded-Proto` を渡す |
 | ログインが 403 `FORBIDDEN` | 接続先が `TSMYADMIN_ALLOWED_HOSTS` にない |
 | ログインが 429 | レート制限。`Retry-After` 秒後に再試行。誤検知なら `TRUST_PROXY` の設定を確認（プロキシ配下で `0` だと全員が同じ IP になる） |
-| 再起動後に全員ログアウト | 仕様（セッションはプロセス内）。`docs/deployment.md` のアップグレード節 |
+| 再起動後に全員ログアウト | `SESSION_STORE=memory`、またはボリューム未設定 / `SESSION_SECRET` 変更。`docs/deployment.md` のアップグレード節 |
+| `/readyz` が 503 | SQLite ファイルの権限 / ディスクフル。`readyz.failed` の `error` を確認。`/app/data` は `bun` ユーザーが書ける必要がある |
 | SQL コンソールでタイムアウト | 既定 30 秒。エディタの「最大行数」と合わせて調整。長時間の一括処理はインポート（最大 10 分）を使う |
 | インポートが 413 | 64 MB 上限。分割するか、リバースプロキシの `client_max_body_size` も確認 |
 | プロセス一覧で「強制終了」しても消えない | DB 側の権限不足（MySQL は `PROCESS`/`SUPER`、PostgreSQL は `pg_signal_backend` 相当が必要） |
@@ -45,4 +46,4 @@
 
 ## バックアップ
 
-tsmyadmin 自体に永続データはありません。バックアップ対象は接続先 DB のみです。エクスポート機能は運用バックアップの代替ではありません（一貫スナップショットではありません）。
+tsmyadmin の永続データはセッションストア（`data/sessions.sqlite`）だけで、失っても再ログインで済むためバックアップ不要です。バックアップ対象は接続先 DB のみです。エクスポート機能は運用バックアップの代替ではありません（一貫スナップショットではありません）。

@@ -20,6 +20,10 @@ COPY --from=build /app/apps/web/package.json ./apps/web/package.json
 COPY --from=build /app/packages ./packages
 # --ignore-scripts: the root "prepare" script installs husky, a dev-only tool that is absent in production.
 RUN bun install --frozen-lockfile --production --ignore-scripts
+# Session store (SESSION_STORE=sqlite, the production default) lives here; mount a volume to keep logins across restarts.
+RUN mkdir -p /app/data && chown bun:bun /app/data
+VOLUME ["/app/data"]
 EXPOSE 3100
 USER bun
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD ["bun", "-e", "fetch('http://127.0.0.1:3100/readyz').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
 CMD ["bun", "apps/api/src/index.ts"]

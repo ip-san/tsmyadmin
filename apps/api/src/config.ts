@@ -34,6 +34,9 @@ const EnvSchema = z.object({
   TRUST_PROXY: z.enum(['0', '1']).default('0'),
   /** `json` (one object per line, for log shippers) or `pretty` (development). */
   LOG_FORMAT: z.enum(['json', 'pretty']).optional(),
+  /** `sqlite` keeps sessions across restarts (credentials encrypted with a key derived from SESSION_SECRET); `memory` does not. */
+  SESSION_STORE: z.enum(['memory', 'sqlite']).optional(),
+  SESSION_DB_PATH: z.string().default('data/sessions.sqlite'),
   /** Directory of the built SPA served by the API (relative to the working directory). */
   WEB_DIST: z.string().optional(),
 })
@@ -47,6 +50,8 @@ export type AppConfig = {
   loginRateLimit: { max: number; windowMs: number }
   trustProxy: boolean
   logFormat: 'json' | 'pretty'
+  sessionStore: 'memory' | 'sqlite'
+  sessionDbPath: string
   webDist: string | undefined
 }
 
@@ -79,6 +84,8 @@ export function loadConfig(env: Record<string, string | undefined>): AppConfig {
     loginRateLimit: { max: e.LOGIN_RATE_LIMIT, windowMs: e.LOGIN_RATE_WINDOW_SECONDS * 1000 },
     trustProxy: e.TRUST_PROXY === '1',
     logFormat: e.LOG_FORMAT ?? (isProd ? 'json' : 'pretty'),
+    sessionStore: e.SESSION_STORE ?? (isProd ? 'sqlite' : 'memory'),
+    sessionDbPath: e.SESSION_DB_PATH,
     webDist: e.WEB_DIST,
   }
 }

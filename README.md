@@ -36,7 +36,7 @@ bun run test:e2e         # Playwright（機能 × 両方言 / axe a11y / VRT lig
 
 ## 未実装（次の候補）
 
-クエリのキャンセル UI（`killProcess` で基盤は済み）、結果のストリーミング、複数接続の保存、Redis などプロセス外セッション、Lighthouse CI、MySQL 側の DELIMITER 対応。
+クエリのキャンセル UI（`killProcess` で基盤は済み）、結果のストリーミング、複数接続の保存、複数レプリカで共有できるセッションストア（Redis 等）、Lighthouse CI、MySQL 側の DELIMITER 対応。
 
 ## 本番ビルド
 

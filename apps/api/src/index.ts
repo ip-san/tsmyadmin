@@ -4,8 +4,10 @@ import { createAdapter } from '@tsmyadmin/adapter'
 import { serveStatic } from 'hono/bun'
 import { createApp } from './app.ts'
 import { ConfigError, loadConfig } from './config.ts'
+import { withAudit } from './lib/audit.ts'
 import { createLogger } from './lib/logging.ts'
-import { MemorySessionStore } from './session/store.ts'
+import { SqliteSessionStore } from './session/sqlite-store.ts'
+import { MemorySessionStore, type SessionStore } from './session/store.ts'
 
 export type { AppType } from './app.ts'
 
@@ -20,7 +22,20 @@ const logger = createLogger(config.logFormat)
 if (!process.env.SESSION_SECRET)
   logger.log('warn', 'config.dev_secret', { hint: 'SESSION_SECRET not set; using a development secret' })
 
-const store = new MemorySessionStore({ ttlMs: config.sessionTtlMs })
+const store: SessionStore =
+  config.sessionStore === 'sqlite'
+    ? new SqliteSessionStore({
+        path: config.sessionDbPath,
+        secret: config.sessionSecret,
+        ttlMs: config.sessionTtlMs,
+        // Sessions resumed after a restart get the same audited adapter as freshly created ones.
+        rebuild: (cfg) => {
+          const { password: _password, ...who } = cfg
+          return withAudit(createAdapter(cfg), who, logger)
+        },
+      })
+    : new MemorySessionStore({ ttlMs: config.sessionTtlMs })
+
 const app = createApp({
   adapterFactory: createAdapter,
   store,
@@ -54,6 +69,7 @@ logger.log('info', 'startup', {
   port: config.port,
   env: config.isProd ? 'production' : 'development',
   allowedHosts: config.allowedHosts,
+  sessionStore: config.sessionStore,
   sessionTtlMinutes: config.sessionTtlMs / 60_000,
 })
 

@@ -1,6 +1,6 @@
 # デプロイガイド
 
-tsmyadmin は **1 プロセス（Bun）で API と SPA を配信する単一コンテナ** として動きます。データベースは接続先として外部にあり、tsmyadmin 自身は永続データを持ちません（セッションはプロセス内メモリ。プロセス外ストアは `docs/operations.md` 参照）。
+tsmyadmin は **1 プロセス（Bun）で API と SPA を配信する単一コンテナ** として動きます。データベースは接続先として外部にあり、tsmyadmin が持つ永続データはセッションストア（`/app/data/sessions.sqlite`、暗号化済み）だけです。
 
 ## 環境変数（唯一の一覧）
 
@@ -10,6 +10,8 @@ tsmyadmin は **1 プロセス（Bun）で API と SPA を配信する単一コ�
 | `API_PORT` | `3100` | 待ち受けポート |
 | `SESSION_SECRET` | （開発用固定値） | セッション Cookie の署名鍵。**本番では 32 文字以上必須**。`openssl rand -hex 32` |
 | `SESSION_TTL_MINUTES` | `30` | 操作ごとに延長されるセッション寿命 |
+| `SESSION_STORE` | 本番 `sqlite` / 開発 `memory` | `sqlite` は再起動・ローリング更新後もセッションを維持（資格情報は `SESSION_SECRET` から導出した鍵で AES-256-GCM 暗号化して保存）。`memory` はプロセス内のみ |
+| `SESSION_DB_PATH` | `data/sessions.sqlite` | `sqlite` 時のファイル。Docker では `/app/data` をボリュームにする |
 | `TSMYADMIN_ALLOWED_HOSTS` | `127.0.0.1,localhost` | ログイン画面から接続を許可する DB ホスト。カンマ区切りで、完全一致 / `*.suffix` / `*`（無制限）。**SSRF・踏み台防止の要** |
 | `LOGIN_RATE_LIMIT` | `10` | `LOGIN_RATE_WINDOW_SECONDS` 内に許可するログイン試行回数（クライアント IP + ユーザー名ごと） |
 | `LOGIN_RATE_WINDOW_SECONDS` | `60` | 上記のウィンドウ |
@@ -29,10 +31,12 @@ docker run -d --name tsmyadmin \
   -e SESSION_SECRET="$(openssl rand -hex 32)" \
   -e TSMYADMIN_ALLOWED_HOSTS="db.internal,*.rds.amazonaws.com" \
   -e TRUST_PROXY=1 \
+  -v tsmyadmin-data:/app/data \
   tsmyadmin
 ```
 
-- イメージは非 root ユーザー `bun` で動作し、本番依存のみを含みます
+- イメージは非 root ユーザー `bun` で動作し、本番依存のみを含みます。`HEALTHCHECK` は `/readyz` を見ます
+- `/app/data` にセッションストアが置かれます。ボリュームを付けないと再起動で全員ログアウトになります（機能は損なわれません）
 - `/healthz`（生存）と `/readyz`（セッションストアの疎通）を公開します。オーケストレータのプローブに使ってください
 
 ### docker compose の例
@@ -49,11 +53,15 @@ services:
       TRUST_PROXY: "1"
     ports:
       - "127.0.0.1:3100:3100"
+    volumes:
+      - tsmyadmin-data:/app/data
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:3100/readyz || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
+volumes:
+  tsmyadmin-data:
 ```
 
 ## リバースプロキシと TLS
@@ -100,4 +108,6 @@ server {
 
 ## アップグレード
 
-イメージを差し替えて再起動するだけです。セッションはプロセス内メモリなので、再起動時に利用者は再ログインになります。スキーマや設定ファイルのマイグレーションはありません。
+イメージを差し替えて再起動するだけです。`SESSION_STORE=sqlite`（本番既定）でボリュームを維持していれば利用者のセッションは継続します。`SESSION_SECRET` を変えると保存済みセッションは復号できず破棄されます（全員再ログイン）。スキーマや設定ファイルのマイグレーションはありません。
+
+複数レプリカで動かす場合は同じ SQLite ファイルを共有できないため、ロードバランサでスティッキーセッションにするか、レプリカごとに別ボリュームを持たせてください。

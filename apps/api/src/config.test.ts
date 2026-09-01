@@ -12,6 +12,8 @@ describe('loadConfig', () => {
       loginRateLimit: { max: 10, windowMs: 60_000 },
       trustProxy: false,
       logFormat: 'pretty',
+      sessionStore: 'memory',
+      sessionDbPath: 'data/sessions.sqlite',
     })
     expect(c.sessionSecret.length).toBeGreaterThan(0)
   })
@@ -22,6 +24,10 @@ describe('loadConfig', () => {
     const c = loadConfig({ NODE_ENV: 'production', SESSION_SECRET: 'x'.repeat(32) })
     expect(c.isProd).toBe(true)
     expect(c.logFormat).toBe('json')
+    expect(c.sessionStore).toBe('sqlite')
+    expect(
+      loadConfig({ NODE_ENV: 'production', SESSION_SECRET: 'x'.repeat(32), SESSION_STORE: 'memory' }).sessionStore
+    ).toBe('memory')
   })
 
   it('parses and validates numbers and lists', () => {

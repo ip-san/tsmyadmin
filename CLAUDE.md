@@ -9,7 +9,7 @@ MySQL / PostgreSQL 両対応の、モダン TypeScript 製 phpMyAdmin クロー�
 - **画面構成**: phpMyAdmin と同じ 3 階層（サーバー: DB 一覧/ステータス/変数/プロセス/ユーザー、DB: 構造/SQL/エクスポート/インポート/権限、テーブル: 表示/構造/SQL/検索/挿入/エクスポート/インポート/操作）
 - **型の流れ**: `packages/shared` の Zod → API (`@hono/zod-validator`) → web (`hc<AppType>`)
 - **テスト DB**: `docker compose`（MySQL `13306` / PostgreSQL `15433`、fixtures 自動投入）
-- **本番運用**: 設定は `apps/api/src/config.ts` で起動時検証（環境変数の一覧は `docs/deployment.md` が唯一の正）。接続先 allowlist・ログイン レート制限・CSP・リクエスト ID 付き構造化ログ・`/healthz` `/readyz`
+- **本番運用**: 設定は `apps/api/src/config.ts` で起動時検証（環境変数の一覧は `docs/deployment.md` が唯一の正）。接続先 allowlist・ログイン レート制限・CSP・リクエスト ID 付き構造化ログ・監査ログ（`withAudit`）・`/healthz` `/readyz`・暗号化 SQLite セッションストア（`SESSION_STORE=sqlite`）
 - **品質**: Vitest / Playwright / Biome / knip / madge / jscpd / type-coverage / size-limit + 自前検査（`check:arch`, `check:sql-safety`, `docs:validate`）
 
 ## 開発コマンド
@@ -27,7 +27,7 @@ bun run test:e2e          # Playwright
 
 ## 現在の規模（`scripts/validate-docs.mjs` が同期）
 
-- ユニット/API/Web テスト定義: <!-- stat:unit-tests -->151<!-- /stat --> 件
+- ユニット/API/Web テスト定義: <!-- stat:unit-tests -->158<!-- /stat --> 件
 - Adapter conformance: <!-- stat:conformance -->50<!-- /stat --> 件 × 2 方言
 - E2E: <!-- stat:e2e -->30<!-- /stat --> 件
 - API ルート: <!-- stat:routes -->24<!-- /stat -->
