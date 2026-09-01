@@ -16,6 +16,7 @@ function BrowsePage() {
       tableRef={{ db, schema: search.schema, table }}
       options={browseOptionsFromSearch(search)}
       page={search.page}
+      cols={search.cols}
       onChange={(patch) => navigate({ search: (prev) => ({ ...prev, ...patch }) })}
     />
   )

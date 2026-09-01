@@ -87,6 +87,18 @@ for (const t of TARGETS) {
       await expect(grid.getByText(/バイナリ 4 bytes/).first()).toBeVisible()
     })
 
+    test('column picker hides columns and keeps the choice in the URL', async ({ page }) => {
+      await page.goto(tableUrl(t, 'users'))
+      await page.getByRole('button', { name: '列 5/5' }).click()
+      await page.getByRole('group', { name: '列' }).getByLabel('email').uncheck()
+      await expect(page).toHaveURL(/cols=/)
+      await expect(page.getByRole('button', { name: '列 4/5' })).toBeVisible()
+      await expect(page.getByRole('columnheader').filter({ hasText: 'email' })).toHaveCount(0)
+      await expect(page.getByRole('cell', { name: 'Alice', exact: true })).toBeVisible()
+      await page.reload()
+      await expect(page.getByRole('button', { name: '列 4/5' })).toBeVisible()
+    })
+
     test('foreign-key cells link to the referenced row', async ({ page }) => {
       await page.goto(tableUrl(t, 'posts'))
       const link = page.getByRole('link', { name: 'users.id を参照' }).first()

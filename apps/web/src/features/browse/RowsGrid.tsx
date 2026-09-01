@@ -1,10 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
-import type { BrowseOptions, BrowseResult, Cell, ForeignKeyDef, RowKey, RowValues } from '@tsmyadmin/shared'
+import type { BrowseOptions, BrowseResult, Cell, RowKey, RowValues } from '@tsmyadmin/shared'
 import { isBinaryCell } from '@tsmyadmin/shared'
-import { ArrowDown, ArrowUp, ExternalLink, Pencil } from 'lucide-react'
+import { ArrowDown, ArrowUp, Pencil } from 'lucide-react'
 import { useState } from 'react'
-import { CellValue } from '@/components/cells/CellValue.tsx'
 import { RowForm } from '@/components/rows/RowForm.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { Dialog } from '@/components/ui/Dialog.tsx'
@@ -13,9 +11,13 @@ import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
 import { cn } from '@/lib/cn.ts'
 import { mutations, rowsQuery, structureQuery, type TableRef } from '@/lib/queries.ts'
+import { encodeColumns, visibleColumnNames } from './browse-search.ts'
 import { CellEditor } from './CellEditor.tsx'
+import { ColumnPicker } from './ColumnPicker.tsx'
+import { DeleteRowsDialog } from './DeleteRowsDialog.tsx'
 import { FilterChips } from './FilterChips.tsx'
-import { fkTarget, linkableForeignKeys } from './fk-links.ts'
+import { FkCell } from './FkCell.tsx'
+import { linkableForeignKeys } from './fk-links.ts'
 import { Pagination } from './Pagination.tsx'
 import { rowKeyFor, rowToValues } from './row-key.ts'
 
@@ -23,7 +25,15 @@ export interface RowsGridProps {
   tableRef: TableRef
   options: BrowseOptions
   page: number
-  onChange: (patch: { page?: number; limit?: number; sort?: string | undefined; filters?: string | undefined }) => void
+  onChange: (patch: {
+    page?: number
+    limit?: number
+    sort?: string | undefined
+    filters?: string | undefined
+    cols?: string | undefined
+  }) => void
+  /** Comma-separated visible columns from the URL (undefined = all). */
+  cols?: string | undefined
 }
 
 function nextSort(current: BrowseOptions['sort'], column: string): string | undefined {
@@ -38,7 +48,7 @@ export function visibleColumns(result: BrowseResult): BrowseResult['columns'] {
   return result.keyKind === 'ctid' ? result.columns.slice(0, -1) : result.columns
 }
 
-export function RowsGrid({ tableRef, options, page, onChange }: RowsGridProps) {
+export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridProps) {
   const rows = useQuery(rowsQuery(tableRef, options))
   const queryClient = useQueryClient()
   const [selected, setSelected] = useState<ReadonlySet<number>>(new Set())
@@ -79,7 +89,11 @@ export function RowsGrid({ tableRef, options, page, onChange }: RowsGridProps) {
   if (rows.isPending) return <Spinner />
   if (rows.isError) return <ErrorBox error={rows.error} />
   const data = rows.data
-  const columns = visibleColumns(data)
+  const allColumns = visibleColumns(data)
+  const allNames = allColumns.map((c) => c.name)
+  const picked = visibleColumnNames(cols, allNames)
+  const columns = picked ? allColumns.filter((c) => picked.includes(c.name)) : allColumns
+  const columnIndex = new Map(allColumns.map((c, i) => [c.name, i]))
   const sort = options.sort[0]
   const editable = data.keyKind !== 'none'
   const keys = data.rows.map((row) => rowKeyFor(data, row))
@@ -110,6 +124,11 @@ export function RowsGrid({ tableRef, options, page, onChange }: RowsGridProps) {
       />
       <FilterChips options={options} onClear={() => onChange({ filters: undefined, page: 1 })} />
       <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400">
+        <ColumnPicker
+          columns={allNames}
+          visible={picked}
+          onChange={(next) => onChange({ cols: encodeColumns(next, allNames) })}
+        />
         <span>{locale.browse.keyHint[data.keyKind]}</span>
         {editable ? (
           <>
@@ -209,7 +228,8 @@ export function RowsGrid({ tableRef, options, page, onChange }: RowsGridProps) {
                       </button>
                     </Td>
                   ) : null}
-                  {columns.map((c, j) => {
+                  {columns.map((c) => {
+                    const j = columnIndex.get(c.name) ?? -1
                     const cell = row[j] ?? null
                     const isInline = inline?.row === i && inline.col === j
                     const canInline = key !== null && !isBinaryCell(cell)
@@ -270,46 +290,14 @@ export function RowsGrid({ tableRef, options, page, onChange }: RowsGridProps) {
         ) : null}
       </Dialog>
 
-      <Dialog
+      <DeleteRowsDialog
         open={confirmDelete}
-        title={locale.browse.deleteSelected}
-        onClose={() => setConfirmDelete(false)}
-        footer={
-          <>
-            <Button onClick={() => setConfirmDelete(false)} disabled={remove.isPending}>
-              {locale.common.cancel}
-            </Button>
-            <Button variant="danger" onClick={() => remove.mutate(selectedKeys)} disabled={remove.isPending}>
-              {locale.common.delete}
-            </Button>
-          </>
-        }
-      >
-        <p>{locale.browse.deleteConfirm(selectedKeys.length)}</p>
-        {remove.isError ? <ErrorBox error={remove.error} className="mt-2" /> : null}
-      </Dialog>
+        count={selectedKeys.length}
+        pending={remove.isPending}
+        error={remove.error}
+        onCancel={() => setConfirmDelete(false)}
+        onConfirm={() => remove.mutate(selectedKeys)}
+      />
     </div>
-  )
-}
-
-/** A cell value, followed by a link to the referenced row when the column is a single-column foreign key. */
-function FkCell({ cell, fk, db }: { cell: Cell; fk: ForeignKeyDef | undefined; db: string }) {
-  const target = fk ? fkTarget(fk, cell, db) : null
-  if (!fk || !target) return <CellValue cell={cell} />
-  const refColumn = fk.refColumns[0] ?? ''
-  return (
-    <span className="inline-flex items-center gap-1">
-      <CellValue cell={cell} />
-      <Link
-        to="/db/$db/table/$table"
-        params={{ db: target.db, table: target.table }}
-        search={{ ...(target.schema ? { schema: target.schema } : {}), filters: target.filters, page: 1 }}
-        className="text-blue-600 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-100"
-        aria-label={locale.browse.fkLink(target.table, refColumn)}
-        title={locale.browse.fkLink(target.table, refColumn)}
-      >
-        <ExternalLink className="size-3" aria-hidden />
-      </Link>
-    </span>
   )
 }

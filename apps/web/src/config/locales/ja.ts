@@ -136,6 +136,10 @@ export const ja = {
     setNull: 'NULL にする',
     editHint: 'Enter で保存、Esc でキャンセル',
     fkLink: (table: string, column: string) => `${table}.${column} を参照`,
+    columns: '列',
+    columnsShown: (shown: number, total: number) => `列 ${shown}/${total}`,
+    columnsAll: 'すべて表示',
+    columnsNone: 'すべて非表示',
     saved: '保存しました',
     keyHint: {
       pk: '主キーで行を特定します',
