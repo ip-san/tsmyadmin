@@ -27,7 +27,7 @@ bun run test:e2e          # Playwright
 
 ## 現在の規模（`scripts/validate-docs.mjs` が同期）
 
-- ユニット/API/Web テスト定義: <!-- stat:unit-tests -->144<!-- /stat --> 件
+- ユニット/API/Web テスト定義: <!-- stat:unit-tests -->151<!-- /stat --> 件
 - Adapter conformance: <!-- stat:conformance -->50<!-- /stat --> 件 × 2 方言
 - E2E: <!-- stat:e2e -->30<!-- /stat --> 件
 - API ルート: <!-- stat:routes -->24<!-- /stat -->

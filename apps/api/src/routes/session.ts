@@ -3,6 +3,7 @@ import { type ConnectRequest, ConnectRequestSchema } from '@tsmyadmin/shared'
 import { Hono } from 'hono'
 import { deleteCookie, getSignedCookie, setSignedCookie } from 'hono/cookie'
 import { isHostAllowed } from '../lib/allowlist.ts'
+import { withAudit } from '../lib/audit.ts'
 import { apiError, errorResponse } from '../lib/errors.ts'
 import { clientIp, type Logger } from '../lib/logging.ts'
 import type { RateLimiter } from '../lib/rate-limit.ts'
@@ -57,7 +58,8 @@ export function sessionRoutes(cfg: SessionConfig, deps: SessionRouteDeps) {
         return errorResponse(c, err)
       }
       deps.loginLimiter.reset(`${ip}|${body.user}`)
-      const session = await cfg.store.create(body, adapter)
+      const { password: _password, ...who } = body
+      const session = await cfg.store.create(body, withAudit(adapter, who, deps.logger))
       deps.logger.log('info', 'login.ok', { ...audit, sessionId: session.id })
       await setSignedCookie(c, SESSION_COOKIE, session.id, cfg.secret, {
         httpOnly: true,

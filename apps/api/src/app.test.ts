@@ -15,6 +15,7 @@ import {
 import { afterEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { createApp } from './app.ts'
+import { createLogger } from './lib/logging.ts'
 import { MemorySessionStore } from './session/store.ts'
 
 const SECRET = 'test-secret'
@@ -202,6 +203,49 @@ describe('hardening', () => {
     }
     const app = createApp({ adapterFactory: () => fixtureAdapter(), store: broken, secret: SECRET, secure: false })
     expect((await app.request('/readyz')).status).toBe(503)
+  })
+})
+
+describe('audit log', () => {
+  it('records mutating calls with the session identity and never the password being set', async () => {
+    const lines: Record<string, unknown>[] = []
+    const logger = createLogger('json', (l) => lines.push(JSON.parse(l)))
+    const adapter = fixtureAdapter({
+      onSql: (_ns, sql) => [{ kind: 'affected', sql, affectedRows: 0, durationMs: 1 }],
+      users: [],
+    })
+    const store = new MemorySessionStore({ sweepIntervalMs: 0 })
+    stores.push(store)
+    const app = createApp({
+      adapterFactory: () => adapter,
+      store,
+      secret: SECRET,
+      secure: false,
+      allowedHosts: ['db'],
+      logger,
+    })
+    const login = await app.request('/api/session', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(LOGIN),
+    })
+    const cookie = login.headers.get('set-cookie')?.split(';')[0] ?? ''
+    await app.request('/api/databases/shop/tables/users/rows', {
+      method: 'DELETE',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({ keys: [{ kind: 'pk', values: { id: 1 } }] }),
+    })
+    await app.request('/api/users/execute', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({ op: { op: 'setPassword', user: { name: 'x', host: '%' }, password: 'hunter2' } }),
+    })
+    const audits = lines.filter((l) => l.event === 'audit')
+    expect(audits.map((a) => a.action)).toEqual(['deleteRows', 'executeSql'])
+    expect(audits[0]).toMatchObject({ dbUser: 'root', dbHost: 'db:3306', table: 'users', rows: 1, ok: true })
+    expect(typeof audits[0]?.requestId).toBe('string')
+    expect(JSON.stringify(lines)).not.toContain('hunter2')
+    expect(audits[1]?.sql).toContain('****')
   })
 })
 

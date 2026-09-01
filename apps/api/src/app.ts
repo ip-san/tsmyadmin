@@ -5,6 +5,7 @@ import { secureHeaders } from 'hono/secure-headers'
 import { errorResponse } from './lib/errors.ts'
 import { createLogger, type Logger, requestLogger } from './lib/logging.ts'
 import { RateLimiter } from './lib/rate-limit.ts'
+import { requestContext } from './lib/request-context.ts'
 import { databaseRoutes } from './routes/databases.ts'
 import { serverRoutes } from './routes/server.ts'
 import { type AdapterFactory, sessionRoutes } from './routes/session.ts'
@@ -64,6 +65,7 @@ export function createApp(deps: AppDeps) {
   return (
     new Hono<AppEnv>()
       .use('*', requestId())
+      .use('*', requestContext())
       .use('*', requestLogger(logger, sessionDeps.trustProxy))
       .use('*', secureHeaders({ contentSecurityPolicy: CONTENT_SECURITY_POLICY, referrerPolicy: 'same-origin' }))
       .use('/api/*', csrf())

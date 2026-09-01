@@ -1,5 +1,6 @@
 import { PASSWORD_MASK, type StatementResult, type UserOp, UserOpRequestSchema, UserRefSchema } from '@tsmyadmin/shared'
 import { Hono } from 'hono'
+import { redactInLogs } from '../lib/request-context.ts'
 import { validate } from '../lib/validate.ts'
 import { type AppEnv, requireSession, type SessionConfig } from '../session/middleware.ts'
 
@@ -25,6 +26,7 @@ export function userRoutes(cfg: SessionConfig) {
       const { op } = c.req.valid('json')
       const adapter = c.get('session').adapter
       const statements = adapter.users.build(op)
+      if ('password' in op) redactInLogs(op.password)
       // One connection for the whole operation; executeSql splits the script and stops at the first error.
       const results = await adapter.executeSql(
         adapter.users.namespace(op, adapter.serverNamespace),
