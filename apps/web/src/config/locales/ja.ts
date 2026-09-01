@@ -52,6 +52,8 @@ export const ja = {
     logout: '切断',
     filterTables: 'テーブルを絞り込む',
     noTables: 'テーブルがありません',
+    matchCount: (shown: number, total: number) =>
+      `${total.toLocaleString('ja-JP')} 件中 ${shown.toLocaleString('ja-JP')} 件`,
     connectedAs: (user: string, host: string) => `${user}@${host}`,
     tree: 'データベースツリー',
     refresh: '再読み込み',

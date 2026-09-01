@@ -1,45 +1,13 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import type { Dialect } from '@tsmyadmin/shared'
-import { ChevronDown, ChevronRight, Database, Eye, Table2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, Database } from 'lucide-react'
 import { useState } from 'react'
 import { ErrorBox, Spinner } from '@/components/ui/Feedback.tsx'
 import { Input } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
-import { databasesQuery, schemasQuery, tablesQuery } from '@/lib/queries.ts'
-
-function TableLinks({ db, schema, filter }: { db: string; schema?: string; filter: string }) {
-  const tables = useQuery(tablesQuery(db, schema))
-  if (tables.isPending) return <Spinner />
-  if (tables.isError) return <ErrorBox error={tables.error} />
-  const shown = tables.data.filter((t) => t.name.toLowerCase().includes(filter.toLowerCase()))
-  if (shown.length === 0)
-    return <p className="px-2 py-1 text-xs text-zinc-500 dark:text-zinc-400">{locale.nav.noTables}</p>
-  const search = schema ? { schema } : {}
-  return (
-    <ul className="ml-3 border-l border-zinc-200 pl-2 dark:border-zinc-700">
-      {shown.map((t) => (
-        <li key={t.name}>
-          <Link
-            to="/db/$db/table/$table"
-            params={{ db, table: t.name }}
-            search={search}
-            className="flex items-center gap-1 truncate rounded px-1 py-0.5 text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
-            activeProps={{ className: 'bg-blue-50 text-blue-800 dark:bg-blue-950 dark:text-blue-200' }}
-            title={t.name}
-          >
-            {t.kind === 'view' ? (
-              <Eye className="size-3.5 shrink-0" aria-hidden />
-            ) : (
-              <Table2 className="size-3.5 shrink-0" aria-hidden />
-            )}
-            <span className="truncate">{t.name}</span>
-          </Link>
-        </li>
-      ))}
-    </ul>
-  )
-}
+import { databasesQuery, schemasQuery } from '@/lib/queries.ts'
+import { TableList } from './TableList.tsx'
 
 function SchemaNodes({ db, filter }: { db: string; filter: string }) {
   const schemas = useQuery(schemasQuery(db))
@@ -63,7 +31,7 @@ function SchemaNodes({ db, filter }: { db: string; filter: string }) {
             )}
             <span className="truncate">{s}</span>
           </button>
-          {open[s] ? <TableLinks db={db} schema={s} filter={filter} /> : null}
+          {open[s] ? <TableList db={db} schema={s} filter={filter} /> : null}
         </li>
       ))}
     </ul>
@@ -131,7 +99,7 @@ export function DbTree({ dialect, activeDb }: { dialect: Dialect; activeDb?: str
                 dialect === 'postgres' ? (
                   <SchemaNodes db={d.name} filter={filter} />
                 ) : (
-                  <TableLinks db={d.name} filter={filter} />
+                  <TableList db={d.name} filter={filter} />
                 )
               ) : null}
             </li>
