@@ -113,6 +113,17 @@ for (const t of TARGETS) {
       await expect(page.getByRole('row').filter({ hasText: dbName })).toHaveCount(0)
     })
 
+    test('creates a schema on PostgreSQL from the database page', async ({ page }) => {
+      test.skip(t.dialect !== 'postgres', 'schemas are a PostgreSQL concept')
+      const schemaName = `e2e_schema_${Date.now().toString(36)}`
+      await page.goto(`/db/${t.database}?schema=${t.schema}`)
+      await page.getByLabel('スキーマ名').fill(schemaName)
+      await page.getByRole('button', { name: 'スキーマを作成' }).click()
+      await confirmPreview(page, /CREATE SCHEMA/)
+      await expect(page.getByRole('button', { name: schemaName })).toBeVisible()
+      await page.request.post(`/api/databases/${t.database}/sql`, { data: { sql: `DROP SCHEMA ${schemaName}` } })
+    })
+
     test('shows the server error inside the preview dialog and keeps it open', async ({ page }) => {
       await page.goto(tableUrl(t, 'users', '/structure'))
       await page.getByRole('button', { name: 'カラムを追加' }).click()

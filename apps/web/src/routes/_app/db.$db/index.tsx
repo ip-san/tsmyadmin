@@ -1,4 +1,5 @@
 import { createFileRoute, useRouteContext } from '@tanstack/react-router'
+import { CreateDatabaseForm } from '@/features/database/CreateDatabaseForm.tsx'
 import { CreateTableForm } from '@/features/database/CreateTableForm.tsx'
 import { TablesList } from '@/features/database/TablesList.tsx'
 
@@ -12,6 +13,7 @@ function DatabaseStructurePage() {
     <div className="space-y-8">
       <TablesList db={db} schema={schema} />
       <CreateTableForm db={db} schema={schema} dialect={session.dialect} />
+      {session.dialect === 'postgres' ? <CreateDatabaseForm database={db} kind="schema" /> : null}
     </div>
   )
 }

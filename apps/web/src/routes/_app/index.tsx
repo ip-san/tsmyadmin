@@ -57,7 +57,7 @@ function ServerPage() {
         </Table>
       )}
       <div className="mt-6">
-        <CreateDatabaseForm serverDatabase={session.serverDatabase} />
+        <CreateDatabaseForm database={session.serverDatabase} kind="database" />
       </div>
     </>
   )

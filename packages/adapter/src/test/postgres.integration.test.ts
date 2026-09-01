@@ -16,6 +16,7 @@ describeAdapterConformance({
   dialect: 'postgres',
   create: () => createAdapter(config),
   createBad: () => createAdapter({ ...config, password: `${config.password}-wrong` }),
+  createAs: (user, password) => createAdapter({ ...config, user, password }),
   ns: { database: config.database ?? 'tsmyadmin_test', schema: 'public' },
   otherDatabase: 'tsmyadmin_other',
   schemas: ['public', 'app'],

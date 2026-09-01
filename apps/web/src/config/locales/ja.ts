@@ -328,8 +328,11 @@ export const ja = {
       revokeAll: '権限を取り消し',
     },
     previewHint: '以下の SQL を実行します（パスワードは **** で表示）。',
+    dropHint:
+      'PostgreSQL では権限を持ったままのロールは削除できません。先に各データベースの「権限」タブで取り消してください。',
     done: '実行しました',
-    cannotLoad: 'ユーザー一覧を取得できません（権限が必要です）',
+    cannotLoad:
+      'ユーザー一覧を取得できません。MySQL では mysql.user の SELECT 権限（または CREATE USER 権限）が必要です',
   },
   server: {
     title: 'サーバー',
@@ -377,6 +380,7 @@ export const ja = {
     KEY_MISMATCH: '対象行を一意に特定できませんでした（変更は取り消されました）',
     UNSUPPORTED: 'この操作はサポートされていません',
     FORBIDDEN: '許可されていない操作です',
+    PERMISSION_DENIED: 'この操作に必要な権限が DB ユーザーにありません',
     RATE_LIMITED: '試行回数が多すぎます。しばらく待ってから再度お試しください',
     INTERNAL: '内部エラーが発生しました',
     NETWORK: 'ネットワークエラー',

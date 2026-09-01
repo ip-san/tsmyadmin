@@ -6,7 +6,7 @@ import { quoteIdent } from '../sql/quote.ts'
 import type { UserSqlBuilder, UserStatement } from '../types.ts'
 
 /** 'user'@'host' account literal. */
-function mysqlAccount(user: UserRef): string {
+export function mysqlAccount(user: UserRef): string {
   return `${mysqlLiteral(user.name)}@${mysqlLiteral(user.host ?? '%')}`
 }
 

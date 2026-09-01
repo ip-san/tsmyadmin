@@ -19,7 +19,7 @@ import { mysqlKillProcess, mysqlListProcesses, mysqlListStatus, mysqlListVariabl
 import { mysqlListUsers, mysqlShowGrants, mysqlUsers } from './users.ts'
 import { mysqlColumnMeta, mysqlToCell } from './values.ts'
 
-const AUTH_CODES = new Set(['ER_ACCESS_DENIED_ERROR', 'ER_DBACCESS_DENIED_ERROR', 'ER_ACCESS_DENIED_NO_PASSWORD_ERROR'])
+const AUTH_CODES = new Set(['ER_ACCESS_DENIED_ERROR', 'ER_ACCESS_DENIED_NO_PASSWORD_ERROR'])
 const CONNECTION_CODES = new Set([
   'ECONNREFUSED',
   'ECONNRESET',
@@ -29,7 +29,16 @@ const CONNECTION_CODES = new Set([
   'PROTOCOL_CONNECTION_LOST',
   'ER_HOST_NOT_PRIVILEGED',
 ])
-const NOT_FOUND_CODES = new Set(['ER_NO_SUCH_TABLE', 'ER_BAD_DB_ERROR', 'ER_BAD_FIELD_ERROR'])
+const NOT_FOUND_CODES = new Set(['ER_NO_SUCH_TABLE', 'ER_BAD_DB_ERROR', 'ER_BAD_FIELD_ERROR', 'ER_NO_SUCH_THREAD'])
+/** The account is authenticated but lacks a privilege for this statement/object. */
+const PERMISSION_CODES = new Set([
+  'ER_TABLEACCESS_DENIED_ERROR',
+  'ER_COLUMNACCESS_DENIED_ERROR',
+  'ER_SPECIFIC_ACCESS_DENIED_ERROR',
+  'ER_PROCACCESS_DENIED_ERROR',
+  'ER_DBACCESS_DENIED_ERROR',
+  'ER_KILL_DENIED_ERROR',
+])
 /** Killed connections surface as query interruption or a fatal protocol error. */
 const KILLED_CODES = new Set(['ER_QUERY_INTERRUPTED', 'ER_CONNECTION_KILLED', 'PROTOCOL_CONNECTION_LOST'])
 
@@ -255,6 +264,7 @@ export class MysqlAdapter extends BaseAdapter {
     if (AUTH_CODES.has(code)) kind = 'AUTH_FAILED'
     else if (CONNECTION_CODES.has(code) || KILLED_CODES.has(code) || (e as { fatal?: boolean }).fatal === true)
       kind = 'CONNECTION_FAILED'
+    else if (PERMISSION_CODES.has(code)) kind = 'PERMISSION_DENIED'
     else if (NOT_FOUND_CODES.has(code)) kind = 'NOT_FOUND'
     return new AdapterError(kind, `${code}: ${detail}`, detail)
   }

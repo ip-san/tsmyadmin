@@ -24,6 +24,8 @@ const AUTH_CODES = new Set(['28P01', '28000'])
 /** Socket-level failures reported without a SQLSTATE (e.g. after pg_terminate_backend). */
 const CONNECTION_MESSAGES = /terminat|closed|ECONNRESET/i
 const NOT_FOUND_CODES = new Set(['3D000', '3F000', '42P01', '42703'])
+/** insufficient_privilege */
+const PERMISSION_CODES = new Set(['42501'])
 const CONNECTION_CODES = new Set([
   'ECONNREFUSED',
   'ECONNRESET',
@@ -264,6 +266,7 @@ export class PostgresAdapter extends BaseAdapter {
     if (AUTH_CODES.has(code)) kind = 'AUTH_FAILED'
     else if (CONNECTION_CODES.has(code) || (code === 'UNKNOWN' && CONNECTION_MESSAGES.test(message)))
       kind = 'CONNECTION_FAILED'
+    else if (PERMISSION_CODES.has(code)) kind = 'PERMISSION_DENIED'
     else if (NOT_FOUND_CODES.has(code)) kind = 'NOT_FOUND'
     const extra = [e.detail, e.hint].filter((x): x is string => typeof x === 'string' && x.length > 0)
     const detail = extra.length > 0 ? `${message} (${extra.join('; ')})` : message

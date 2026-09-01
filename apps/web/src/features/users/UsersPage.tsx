@@ -49,6 +49,7 @@ export function UsersPage({ dialect }: { dialect: Dialect }) {
           {locale.users.create}
         </Button>
       </div>
+      {dialect === 'postgres' ? <Notice>{locale.users.dropHint}</Notice> : null}
       <Table>
         <thead>
           <tr>

@@ -5,23 +5,41 @@ import { Field, Input } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
 import { useDdlFlow } from '@/lib/ddl.ts'
 
-/** Server page: create a database (runs in the session's server namespace). */
-export function CreateDatabaseForm({ serverDatabase }: { serverDatabase: string }) {
+export interface CreateNamespaceFormProps {
+  /** Namespace the statement runs in (server namespace for databases; the database itself for schemas). */
+  database: string
+  /** 'database' (server page) or 'schema' (PostgreSQL database page). */
+  kind: 'database' | 'schema'
+}
+
+/** Create a database (server page) or a PostgreSQL schema (database page) through the SQL preview flow. */
+export function CreateDatabaseForm({ database, kind }: CreateNamespaceFormProps) {
   const [name, setName] = useState('')
-  const flow = useDdlFlow(serverDatabase, undefined, () => setName(''))
+  const flow = useDdlFlow(database, undefined, () => setName(''))
+  const title = kind === 'schema' ? locale.ddl.titles.createSchema : locale.ddl.titles.createDatabase
+  const label = kind === 'schema' ? locale.ddl.schemaName : locale.ddl.databaseName
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    if (name.trim()) flow.preview({ op: 'createDatabase', name: name.trim() })
+    if (name.trim())
+      flow.preview(
+        kind === 'schema' ? { op: 'createSchema', name: name.trim() } : { op: 'createDatabase', name: name.trim() }
+      )
   }
   return (
-    <form onSubmit={submit} className="flex max-w-md items-end gap-2" aria-label={locale.ddl.titles.createDatabase}>
+    <form onSubmit={submit} className="flex max-w-md items-end gap-2" aria-label={title}>
       <div className="flex-1">
-        <Field id="new-db-name" label={locale.ddl.databaseName}>
-          <Input id="new-db-name" value={name} onChange={(e) => setName(e.target.value)} required autoComplete="off" />
+        <Field id={`new-${kind}-name`} label={label}>
+          <Input
+            id={`new-${kind}-name`}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            autoComplete="off"
+          />
         </Field>
       </div>
       <Button type="submit" variant="primary" disabled={!name.trim()}>
-        {locale.ddl.titles.createDatabase}
+        {title}
       </Button>
       <DdlPreviewDialog flow={flow} />
     </form>

@@ -1,5 +1,7 @@
 import type { Cell, ColumnSpec, DdlOp, Dialect, Namespace, RowKey, StatementResult } from '@tsmyadmin/shared'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { mysqlAccount } from '../mysql/users.ts'
+import { quoteIdent } from '../sql/quote.ts'
 import type { DatabaseAdapter, ExecuteOptions } from '../types.ts'
 
 export interface ConformanceContext {
@@ -7,6 +9,8 @@ export interface ConformanceContext {
   create: () => DatabaseAdapter
   /** Same server, wrong password. */
   createBad: () => DatabaseAdapter
+  /** Same server, different account. */
+  createAs: (user: string, password: string) => DatabaseAdapter
   ns: Namespace
   otherDatabase: string
   /** Expected schemas in ns.database (PostgreSQL) or [] (MySQL). */
@@ -756,6 +760,54 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
           await runDdl({ op: 'createSchema', name: schemaName })
           expect(await db.listSchemas(ns.database)).toContain(schemaName)
           await execOk(`DROP SCHEMA ${schemaName}`)
+        }
+      })
+    })
+
+    describe('permission errors', () => {
+      it('maps insufficient privileges to PERMISSION_DENIED for a read-only account', async () => {
+        const name = `ro_${scratch}`
+        const user = dialect === 'mysql' ? { name, host: '%' } : { name }
+        const runOp = async (op: Parameters<typeof db.users.build>[0]) => {
+          const target = db.users.namespace(op, db.serverNamespace)
+          const r = await db.executeSql(
+            target,
+            db.users
+              .build(op)
+              .map((s) => s.sql)
+              .join(';\n'),
+            EXEC
+          )
+          for (const x of r) if (x.kind === 'error') throw new Error(`${x.message}\n${x.sql}`)
+        }
+        await runOp({
+          op: 'createUser',
+          user,
+          password: 'ro-pw',
+          attributes: { superuser: false, createdb: false, createrole: false },
+        })
+        const q = (n: string) => quoteIdent(dialect, n)
+        if (dialect === 'mysql') await execOk(`GRANT SELECT ON ${q(ns.database)}.* TO ${mysqlAccount(user)}`)
+        else
+          await execOk(
+            `GRANT CONNECT ON DATABASE ${q(ns.database)} TO ${q(name)}; GRANT USAGE ON SCHEMA public TO ${q(name)}; GRANT SELECT ON ALL TABLES IN SCHEMA public TO ${q(name)}`
+          )
+        const ro = ctx.createAs(name, 'ro-pw')
+        try {
+          expect((await ro.browseRows(ns, 'users', { offset: 0, limit: 1, sort: [], filters: [] })).rows).toHaveLength(
+            1
+          )
+          await expect(ro.updateRow(ns, 'users', { kind: 'pk', values: { id: 1 } }, { age: 1 })).rejects.toMatchObject({
+            code: 'PERMISSION_DENIED',
+          })
+          const results = await ro.executeSql(ns, 'DELETE FROM users WHERE id = 1', EXEC)
+          expect(results[0]).toMatchObject({ kind: 'error', code: 'PERMISSION_DENIED' })
+        } finally {
+          await ro.close()
+          // PostgreSQL refuses to drop a role that still owns privileges; revoke first (as the UI advises).
+          if (dialect === 'postgres')
+            await runOp({ op: 'revokeAll', user, database: ns.database, ...(ns.schema ? { schema: ns.schema } : {}) })
+          await runOp({ op: 'dropUser', user })
         }
       })
     })

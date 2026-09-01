@@ -15,6 +15,7 @@ const STATUS_BY_CODE: Record<ApiErrorCode, ContentfulStatusCode> = {
   KEY_MISMATCH: 409,
   UNSUPPORTED: 400,
   FORBIDDEN: 403,
+  PERMISSION_DENIED: 403,
   RATE_LIMITED: 429,
   INTERNAL: 500,
 }

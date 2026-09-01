@@ -40,7 +40,13 @@ export interface ExecuteOptions {
 
 export type AdapterErrorCode = Extract<
   ApiErrorCode,
-  'CONNECTION_FAILED' | 'AUTH_FAILED' | 'NOT_FOUND' | 'QUERY_FAILED' | 'KEY_MISMATCH' | 'UNSUPPORTED'
+  | 'CONNECTION_FAILED'
+  | 'AUTH_FAILED'
+  | 'NOT_FOUND'
+  | 'QUERY_FAILED'
+  | 'KEY_MISMATCH'
+  | 'UNSUPPORTED'
+  | 'PERMISSION_DENIED'
 >
 
 export class AdapterError extends Error {

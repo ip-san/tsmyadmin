@@ -59,6 +59,7 @@ export const ApiErrorCodeSchema = z.enum([
   'KEY_MISMATCH',
   'UNSUPPORTED',
   'FORBIDDEN',
+  'PERMISSION_DENIED',
   'RATE_LIMITED',
   'INTERNAL',
 ])
