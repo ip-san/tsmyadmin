@@ -25,6 +25,17 @@ function commentSql(t: string, c: ColumnSpec): string[] {
 
 export const pgDdl: DdlBuilder = {
   build(ns: Namespace, op: DdlOp): string[] {
+    // Database-level ops have no table; handle them before touching op.table.
+    switch (op.op) {
+      case 'createDatabase':
+        return [`CREATE DATABASE ${id(op.name)}`]
+      case 'createSchema':
+        return [`CREATE SCHEMA ${id(op.name)}`]
+      case 'dropDatabase':
+        return [`DROP DATABASE ${id(op.name)}`]
+      default:
+        break
+    }
     const t = quoteTable('postgres', ns, op.table)
     const schema = id(ns.schema ?? 'public')
     switch (op.op) {
@@ -58,6 +69,9 @@ export const pgDdl: DdlBuilder = {
         return [`DROP TABLE ${t}`]
       case 'truncateTable':
         return [`TRUNCATE TABLE ${t}`]
+      case 'renameTable':
+        // Renaming keeps the table in its schema; the new name must not be qualified.
+        return [`ALTER TABLE ${t} RENAME TO ${id(op.newName)}`]
     }
   },
 }

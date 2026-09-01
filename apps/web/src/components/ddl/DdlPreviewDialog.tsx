@@ -3,7 +3,7 @@ import { locale } from '@/config/locale.ts'
 import type { DdlFlow } from '@/lib/ddl.ts'
 import { PreviewDialog } from './PreviewDialog.tsx'
 
-const DESTRUCTIVE = new Set<DdlOp['op']>(['dropTable', 'truncateTable', 'dropColumn', 'dropIndex'])
+const DESTRUCTIVE = new Set<DdlOp['op']>(['dropTable', 'truncateTable', 'dropColumn', 'dropIndex', 'dropDatabase'])
 
 export function DdlPreviewDialog({ flow }: { flow: DdlFlow }) {
   return (

@@ -1,6 +1,6 @@
 /** API against the real compose databases (bun run test:integration). */
 import { createAdapter } from '@tsmyadmin/adapter'
-import { BrowseResultSchema, SessionInfoSchema, StatementResultSchema, TableSchemaSchema } from '@tsmyadmin/shared'
+import { BrowseResultSchema, SessionStateSchema, StatementResultSchema, TableSchemaSchema } from '@tsmyadmin/shared'
 import { afterAll, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { createApp } from './app.ts'
@@ -40,7 +40,7 @@ describe.each(targets)('API integration ($dialect)', ({ dialect, url }) => {
     const res = await req('/api/session', { method: 'POST', body: JSON.stringify(login) })
     expect(res.status).toBe(201)
     cookie = res.headers.get('set-cookie')?.split(';')[0] ?? ''
-    expect(SessionInfoSchema.parse(await res.json()).dialect).toBe(dialect)
+    expect(SessionStateSchema.parse(await res.json()).dialect).toBe(dialect)
   })
 
   it('rejects wrong passwords', async () => {

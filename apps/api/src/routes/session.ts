@@ -7,7 +7,7 @@ import type { Logger } from '../lib/logging.ts'
 import type { RateLimiter } from '../lib/rate-limit.ts'
 import { validate } from '../lib/validate.ts'
 import { type AppEnv, requireSession, SESSION_COOKIE, type SessionConfig } from '../session/middleware.ts'
-import { sessionInfo } from '../session/store.ts'
+import { type Session, sessionInfo } from '../session/store.ts'
 
 export interface SessionRouteDeps {
   allowedHosts: readonly string[]
@@ -15,6 +15,11 @@ export interface SessionRouteDeps {
   /** Client IP resolver shared with the access log. */
   ip: (c: Context) => string
   logger: Logger
+}
+
+/** Session response: identity plus the namespace usable for server-level SQL/DDL (SessionState). */
+function sessionState(session: Session) {
+  return { ...sessionInfo(session), serverDatabase: session.adapter.serverNamespace.database }
 }
 
 export function sessionRoutes(cfg: SessionConfig, deps: SessionRouteDeps) {
@@ -63,9 +68,9 @@ export function sessionRoutes(cfg: SessionConfig, deps: SessionRouteDeps) {
         path: '/',
         maxAge: Math.floor(cfg.ttlMs / 1000),
       })
-      return c.json(sessionInfo(session), 201)
+      return c.json(sessionState(session), 201)
     })
-    .get('/session', requireSession(cfg), (c) => c.json(sessionInfo(c.get('session'))))
+    .get('/session', requireSession(cfg), (c) => c.json(sessionState(c.get('session'))))
     .delete('/session', async (c) => {
       const id = await getSignedCookie(c, cfg.secret, SESSION_COOKIE)
       if (id) {

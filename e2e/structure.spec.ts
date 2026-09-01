@@ -83,6 +83,36 @@ for (const t of TARGETS) {
       await expect(page.getByRole('table').first().getByRole('link', { name: table, exact: true })).toHaveCount(0)
     })
 
+    test('renames a table and creates/drops a database through previews', async ({ page }) => {
+      const table = `e2e_rn_${Date.now().toString(36)}`
+      const dbName = `e2e_db_${Date.now().toString(36)}`
+      const sql = (s: string) =>
+        page.request.post(`/api/databases/${t.database}/sql`, {
+          data: { sql: s, ...(t.schema ? { schema: t.schema } : {}) },
+        })
+      await sql(`CREATE TABLE ${table} (id INT PRIMARY KEY)`)
+
+      await page.goto(tableUrl(t, table, '/operations'))
+      await page.getByLabel('新しいテーブル名').fill(`${table}_x`)
+      await page.getByRole('button', { name: 'テーブル名を変更' }).click()
+      await confirmPreview(page, /RENAME TABLE|RENAME TO/)
+      await expect(page).toHaveURL(new RegExp(`/table/${table}_x`))
+      await expect(page.getByRole('heading', { name: new RegExp(`${table}_x`) })).toBeVisible()
+      await sql(`DROP TABLE ${table}_x`)
+
+      await page.goto('/')
+      await page.getByLabel('データベース名').fill(dbName)
+      await page.getByRole('button', { name: 'データベースを作成' }).click()
+      await confirmPreview(page, /CREATE DATABASE/)
+      const row = page.getByRole('row').filter({ hasText: dbName })
+      await expect(row).toBeVisible()
+      await row.getByRole('button', { name: `${dbName}: データベースを削除` }).click()
+      await page.getByLabel(`確認のためデータベース名「${dbName}」を入力してください`).fill(dbName)
+      await page.getByRole('dialog').getByRole('button', { name: '次へ（SQL を確認）' }).click()
+      await confirmPreview(page, /DROP DATABASE/)
+      await expect(page.getByRole('row').filter({ hasText: dbName })).toHaveCount(0)
+    })
+
     test('shows the server error inside the preview dialog and keeps it open', async ({ page }) => {
       await page.goto(tableUrl(t, 'users', '/structure'))
       await page.getByRole('button', { name: 'カラムを追加' }).click()

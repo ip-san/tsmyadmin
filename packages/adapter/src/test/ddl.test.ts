@@ -44,6 +44,10 @@ const SAMPLE_OPS: Record<DdlOp['op'], DdlOp> = {
   dropIndex: { op: 'dropIndex', table: 't', name: 'idx_t_a_b' },
   dropTable: { op: 'dropTable', table: 't' },
   truncateTable: { op: 'truncateTable', table: 't' },
+  renameTable: { op: 'renameTable', table: 't', newName: 'we"ird`new' },
+  createDatabase: { op: 'createDatabase', name: 'new"db`x' },
+  dropDatabase: { op: 'dropDatabase', name: 'new"db`x' },
+  createSchema: { op: 'createSchema', name: 'new"schema' },
 }
 
 describe('DDL builders', () => {

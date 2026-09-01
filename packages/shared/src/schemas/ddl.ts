@@ -41,6 +41,11 @@ export const DdlOpSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('dropIndex'), table, name: z.string().min(1) }),
   z.object({ op: z.literal('dropTable'), table }),
   z.object({ op: z.literal('truncateTable'), table }),
+  z.object({ op: z.literal('renameTable'), table, newName: z.string().min(1) }),
+  /** MySQL: database == schema, so createSchema also creates a database there. */
+  z.object({ op: z.literal('createDatabase'), name: z.string().min(1) }),
+  z.object({ op: z.literal('dropDatabase'), name: z.string().min(1) }),
+  z.object({ op: z.literal('createSchema'), name: z.string().min(1) }),
 ])
 export type DdlOp = z.infer<typeof DdlOpSchema>
 export type DdlOpInput = z.input<typeof DdlOpSchema>

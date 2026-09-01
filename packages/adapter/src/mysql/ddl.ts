@@ -15,6 +15,18 @@ function columnDef(c: ColumnSpec): string {
 
 export const mysqlDdl: DdlBuilder = {
   build(ns: Namespace, op: DdlOp): string[] {
+    // Database-level ops have no table; handle them before touching op.table.
+    switch (op.op) {
+      case 'createDatabase':
+      case 'createSchema':
+        // MySQL: database and schema are the same object.
+        return [`CREATE DATABASE ${id(op.name)}`]
+
+      case 'dropDatabase':
+        return [`DROP DATABASE ${id(op.name)}`]
+      default:
+        break
+    }
     const t = quoteTable('mysql', ns, op.table)
     switch (op.op) {
       case 'createTable': {
@@ -40,6 +52,8 @@ export const mysqlDdl: DdlBuilder = {
         return [`DROP TABLE ${t}`]
       case 'truncateTable':
         return [`TRUNCATE TABLE ${t}`]
+      case 'renameTable':
+        return [`RENAME TABLE ${t} TO ${quoteTable('mysql', ns, op.newName)}`]
     }
   },
 }

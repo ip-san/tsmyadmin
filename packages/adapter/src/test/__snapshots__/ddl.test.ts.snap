@@ -12,6 +12,18 @@ exports[`DDL builders > mysql: addIndex 1`] = `
 ]
 `;
 
+exports[`DDL builders > mysql: createDatabase 1`] = `
+[
+  "CREATE DATABASE \`new"db\`\`x\`",
+]
+`;
+
+exports[`DDL builders > mysql: createSchema 1`] = `
+[
+  "CREATE DATABASE \`new"schema\`",
+]
+`;
+
 exports[`DDL builders > mysql: createTable 1`] = `
 [
   "CREATE TABLE \`db\`.\`we"ird\`\`tbl\` (
@@ -26,6 +38,12 @@ exports[`DDL builders > mysql: createTable 1`] = `
 exports[`DDL builders > mysql: dropColumn 1`] = `
 [
   "ALTER TABLE \`db\`.\`t\` DROP COLUMN \`n\`",
+]
+`;
+
+exports[`DDL builders > mysql: dropDatabase 1`] = `
+[
+  "DROP DATABASE \`new"db\`\`x\`",
 ]
 `;
 
@@ -47,6 +65,12 @@ exports[`DDL builders > mysql: modifyColumn 1`] = `
 ]
 `;
 
+exports[`DDL builders > mysql: renameTable 1`] = `
+[
+  "RENAME TABLE \`db\`.\`t\` TO \`db\`.\`we"ird\`\`new\`",
+]
+`;
+
 exports[`DDL builders > mysql: truncateTable 1`] = `
 [
   "TRUNCATE TABLE \`db\`.\`t\`",
@@ -65,6 +89,18 @@ exports[`DDL builders > postgres: addIndex 1`] = `
 ]
 `;
 
+exports[`DDL builders > postgres: createDatabase 1`] = `
+[
+  "CREATE DATABASE "new""db\`x"",
+]
+`;
+
+exports[`DDL builders > postgres: createSchema 1`] = `
+[
+  "CREATE SCHEMA "new""schema"",
+]
+`;
+
 exports[`DDL builders > postgres: createTable 1`] = `
 [
   "CREATE TABLE "app"."we""ird\`tbl" (
@@ -80,6 +116,12 @@ exports[`DDL builders > postgres: createTable 1`] = `
 exports[`DDL builders > postgres: dropColumn 1`] = `
 [
   "ALTER TABLE "app"."t" DROP COLUMN "n"",
+]
+`;
+
+exports[`DDL builders > postgres: dropDatabase 1`] = `
+[
+  "DROP DATABASE "new""db\`x"",
 ]
 `;
 
@@ -102,6 +144,12 @@ exports[`DDL builders > postgres: modifyColumn 1`] = `
   "ALTER TABLE "app"."t" ALTER COLUMN "n2" SET NOT NULL",
   "ALTER TABLE "app"."t" ALTER COLUMN "n2" DROP DEFAULT",
   "COMMENT ON COLUMN "app"."t"."n2" IS 'renamed'",
+]
+`;
+
+exports[`DDL builders > postgres: renameTable 1`] = `
+[
+  "ALTER TABLE "app"."t" RENAME TO "we""ird\`new"",
 ]
 `;
 

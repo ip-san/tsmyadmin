@@ -9,7 +9,7 @@ import type {
   RowValues,
   ServerInfo,
   ServerPreset,
-  SessionInfo,
+  SessionState,
   SqlRequest,
   StatementResult,
   TableInfo,
@@ -30,9 +30,9 @@ const schemaQuery = (schema?: string) => (schema ? { schema } : {})
 
 export const sessionQuery = queryOptions({
   queryKey: ['session'],
-  queryFn: async (): Promise<SessionInfo | null> => {
+  queryFn: async (): Promise<SessionState | null> => {
     try {
-      return await unwrap<SessionInfo>(api.session.$get())
+      return await unwrap<SessionState>(api.session.$get())
     } catch (err) {
       if (isApiError(err, 'UNAUTHENTICATED')) return null
       throw err
@@ -121,7 +121,7 @@ export const processesQuery = queryOptions({
 
 export const mutations = {
   login: (body: Parameters<typeof api.session.$post>[0]['json']) =>
-    unwrap<SessionInfo>(api.session.$post({ json: body })),
+    unwrap<SessionState>(api.session.$post({ json: body })),
   logout: () => unwrap<{ ok: boolean }>(api.session.$delete()),
   insertRow: (ref: TableRef, values: RowValues) =>
     unwrap<{ affectedRows: number }>(

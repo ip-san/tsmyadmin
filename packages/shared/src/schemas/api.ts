@@ -17,6 +17,10 @@ export type ConnectRequest = z.infer<typeof ConnectRequestSchema>
 export const SessionInfoSchema = ConnectRequestSchema.omit({ password: true })
 export type SessionInfo = z.infer<typeof SessionInfoSchema>
 
+/** What GET/POST /session return: the identity plus the namespace usable for server-level SQL/DDL. */
+export const SessionStateSchema = SessionInfoSchema.extend({ serverDatabase: z.string().min(1) })
+export type SessionState = z.infer<typeof SessionStateSchema>
+
 export const SchemaQuerySchema = z.object({ schema: z.string().min(1).optional() })
 
 export const InsertRowRequestSchema = z.object({ values: RowValuesSchema })

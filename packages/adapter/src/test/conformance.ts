@@ -735,8 +735,28 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         await runDdl({ op: 'truncateTable', table: scratchDdl })
         expect((await browseAll(scratchDdl)).total).toBe(0)
 
+        const renamed = `${scratchDdl}_rn`
+        await runDdl({ op: 'renameTable', table: scratchDdl, newName: renamed })
+        expect((await db.describeTable(ns, renamed)).columns.map((c) => c.name)).toEqual(['id', 'name'])
+        await expect(db.describeTable(ns, scratchDdl)).rejects.toMatchObject({ code: 'NOT_FOUND' })
+        await runDdl({ op: 'renameTable', table: renamed, newName: scratchDdl })
+
         await runDdl({ op: 'dropTable', table: scratchDdl })
         await expect(db.describeTable(ns, scratchDdl)).rejects.toMatchObject({ code: 'NOT_FOUND' })
+      })
+
+      it('creates and drops a database, and a schema on PostgreSQL', async () => {
+        const name = `${scratch}_tmpdb`
+        await runDdl({ op: 'createDatabase', name })
+        expect((await db.listDatabases()).map((d) => d.name)).toContain(name)
+        await runDdl({ op: 'dropDatabase', name })
+        expect((await db.listDatabases()).map((d) => d.name)).not.toContain(name)
+        if (dialect === 'postgres') {
+          const schemaName = `${scratch}_tmpschema`
+          await runDdl({ op: 'createSchema', name: schemaName })
+          expect(await db.listSchemas(ns.database)).toContain(schemaName)
+          await execOk(`DROP SCHEMA ${schemaName}`)
+        }
       })
     })
 

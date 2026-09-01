@@ -1,15 +1,18 @@
 import { useQuery } from '@tanstack/react-query'
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, useRouteContext } from '@tanstack/react-router'
 import { ServerTabs } from '@/components/layout/ServerTabs.tsx'
 import { ErrorBox, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
+import { CreateDatabaseForm } from '@/features/database/CreateDatabaseForm.tsx'
+import { DropDatabaseButton } from '@/features/database/DropDatabaseButton.tsx'
 import { databasesQuery } from '@/lib/queries.ts'
 
 export const Route = createFileRoute('/_app/')({ component: ServerPage })
 
 function ServerPage() {
   const databases = useQuery(databasesQuery)
+  const { session } = useRouteContext({ from: '/_app' })
   return (
     <>
       <ServerTabs />
@@ -38,7 +41,7 @@ function ServerPage() {
                     {d.name}
                   </Link>
                 </Td>
-                <Td>
+                <Td className="space-x-2 whitespace-nowrap">
                   <Link
                     to="/db/$db"
                     params={{ db: d.name }}
@@ -46,12 +49,16 @@ function ServerPage() {
                   >
                     {locale.server.open}
                   </Link>
+                  <DropDatabaseButton name={d.name} serverDatabase={session.serverDatabase} />
                 </Td>
               </Tr>
             ))}
           </tbody>
         </Table>
       )}
+      <div className="mt-6">
+        <CreateDatabaseForm serverDatabase={session.serverDatabase} />
+      </div>
     </>
   )
 }

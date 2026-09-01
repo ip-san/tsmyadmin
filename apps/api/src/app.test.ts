@@ -7,7 +7,7 @@ import {
   KeyValueSchema,
   ProcessInfoSchema,
   ServerInfoSchema,
-  SessionInfoSchema,
+  SessionStateSchema,
   StatementResultSchema,
   TableInfoSchema,
   TableSchemaSchema,
@@ -101,8 +101,14 @@ describe('session', () => {
     stores.push(h.store)
     const res = await h.login()
     expect(res.status).toBe(201)
-    const body = SessionInfoSchema.parse(await res.json())
-    expect(body).toEqual({ dialect: 'mysql', host: 'db', port: 3306, user: 'root' })
+    const body = SessionStateSchema.parse(await res.json())
+    expect(body).toEqual({
+      dialect: 'mysql',
+      host: 'db',
+      port: 3306,
+      user: 'root',
+      serverDatabase: 'information_schema',
+    })
     const setCookie = res.headers.get('set-cookie') ?? ''
     expect(setCookie).toMatch(/tsmyadmin_session=/)
     expect(setCookie).toMatch(/HttpOnly/)
@@ -110,7 +116,7 @@ describe('session', () => {
     expect(h.adapter.calls[0]?.method).toBe('ping')
     const me = await h.req('/api/session')
     expect(me.status).toBe(200)
-    expect(SessionInfoSchema.parse(await me.json()).user).toBe('root')
+    expect(SessionStateSchema.parse(await me.json()).user).toBe('root')
   })
 
   it('rejects bad credentials with AUTH_FAILED and closes the adapter', async () => {
