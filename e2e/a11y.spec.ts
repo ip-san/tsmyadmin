@@ -11,9 +11,11 @@ async function scan(page: Parameters<typeof login>[0]) {
 }
 
 test.describe('accessibility (axe-core)', () => {
-  test('login form', async ({ page }) => {
+  test('login form (with presets and manual entry)', async ({ page }) => {
     await page.goto('/login')
     await page.getByLabel('ホスト').waitFor()
+    await scan(page)
+    await page.getByLabel('接続先').selectOption('')
     await scan(page)
   })
 

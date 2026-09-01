@@ -10,12 +10,13 @@ test.describe('visual regression', () => {
   })
 
   // The sidebar lists every table, so leftovers from aborted integration runs would break the baseline; mask it.
-  const options = (page: Parameters<typeof login>[0]) => ({ fullPage: true, mask: [page.locator('aside')] })
+  // Viewport-sized shots: full-page height (and thus the masked sidebar) varies with content.
+  const options = (page: Parameters<typeof login>[0]) => ({ fullPage: false, mask: [page.locator('aside')] })
 
   test('login', async ({ page }) => {
     await page.goto('/login')
     await page.getByLabel('ホスト').waitFor()
-    await expect(page).toHaveScreenshot('login.png', { fullPage: true })
+    await expect(page).toHaveScreenshot('login.png', { fullPage: false })
   })
 
   test('browse', async ({ page }) => {

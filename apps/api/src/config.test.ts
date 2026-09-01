@@ -12,6 +12,7 @@ describe('loadConfig', () => {
       loginRateLimit: { max: 10, windowMs: 60_000 },
       trustProxy: false,
       logFormat: 'pretty',
+      servers: [],
       sessionStore: 'memory',
       sessionDbPath: 'data/sessions.sqlite',
     })
@@ -49,5 +50,32 @@ describe('loadConfig', () => {
     expect(() => loadConfig({ API_PORT: 'eighty' })).toThrow(/API_PORT/)
     expect(() => loadConfig({ TSMYADMIN_ALLOWED_HOSTS: ' , ' })).toThrow(/ALLOWED_HOSTS/)
     expect(() => loadConfig({ LOG_FORMAT: 'xml' })).toThrow(/LOG_FORMAT/)
+  })
+})
+
+describe('TSMYADMIN_SERVERS', () => {
+  it('parses presets and allows their hosts automatically', () => {
+    const c = loadConfig({
+      TSMYADMIN_SERVERS: JSON.stringify([
+        { name: 'prod', dialect: 'postgres', host: 'db.internal', port: 5432, database: 'app' },
+        { name: 'legacy', dialect: 'mysql', host: 'legacy.internal', port: 3306 },
+      ]),
+    })
+    expect(c.servers).toHaveLength(2)
+    expect(c.allowedHosts).toEqual(['127.0.0.1', 'localhost', 'db.internal', 'legacy.internal'])
+  })
+
+  it('rejects malformed JSON, invalid presets and duplicate names', () => {
+    expect(() => loadConfig({ TSMYADMIN_SERVERS: '{oops' })).toThrow(/JSON array/)
+    expect(() => loadConfig({ TSMYADMIN_SERVERS: '[{"name":"x","dialect":"oracle","host":"h","port":1}]' })).toThrow(
+      /dialect/
+    )
+    expect(() =>
+      loadConfig({
+        TSMYADMIN_SERVERS:
+          '[{"name":"a","dialect":"mysql","host":"h","port":1},{"name":"a","dialect":"mysql","host":"h","port":2}]',
+      })
+    ).toThrow(/duplicate/)
+    expect(loadConfig({ TSMYADMIN_SERVERS: '  ' }).servers).toEqual([])
   })
 })

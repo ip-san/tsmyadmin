@@ -43,6 +43,7 @@ const app = createApp({
   secure: config.isProd,
   sessionTtlMs: config.sessionTtlMs,
   allowedHosts: config.allowedHosts,
+  servers: config.servers,
   loginRateLimit: config.loginRateLimit,
   trustProxy: config.trustProxy,
   logger,

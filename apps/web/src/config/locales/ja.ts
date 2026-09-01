@@ -28,6 +28,9 @@ export const ja = {
   },
   login: {
     title: 'サーバーに接続',
+    preset: '接続先',
+    presetManual: '手動で入力',
+    presetHint: '運用側が用意した接続先です。ユーザー名とパスワードを入力してください',
     dialect: 'サーバー種別',
     mysql: 'MySQL / MariaDB',
     postgres: 'PostgreSQL',

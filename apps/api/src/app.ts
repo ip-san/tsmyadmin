@@ -1,3 +1,4 @@
+import type { ServerPreset } from '@tsmyadmin/shared'
 import { Hono } from 'hono'
 import { csrf } from 'hono/csrf'
 import { requestId } from 'hono/request-id'
@@ -21,6 +22,8 @@ export interface AppDeps {
   secure: boolean
   sessionTtlMs?: number
   allowedHosts?: readonly string[]
+  /** Connection presets offered on the login screen (public; no credentials). */
+  servers?: readonly ServerPreset[]
   loginRateLimit?: { max: number; windowMs: number }
   trustProxy?: boolean
   logger?: Logger
@@ -82,6 +85,7 @@ export function createApp(deps: AppDeps) {
         }
       })
       .get('/api/health', (c) => c.json({ ok: true }))
+      .get('/api/servers', (c) => c.json(deps.servers ?? []))
       .route('/api', sessionRoutes(cfg, sessionDeps))
       .route('/api', databaseRoutes(cfg))
       .route('/api', userRoutes(cfg))

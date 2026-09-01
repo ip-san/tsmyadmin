@@ -83,7 +83,18 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion }:
   const [results, setResults] = useState<StatementResult[] | null>(null)
   const queryClient = useQueryClient()
   const queryId = useRef<string | null>(null)
-  const cancel = useMutation({ mutationFn: (id: string) => mutations.cancelSql(db, id) })
+  // The server registers the query id only once the statement is running, so retry briefly if the first
+  // cancel request arrives before that.
+  const cancel = useMutation({
+    mutationFn: async (id: string) => {
+      for (let attempt = 0; attempt < 20 && queryId.current === id; attempt++) {
+        const r = await mutations.cancelSql(db, id)
+        if (r.cancelled) return r
+        await new Promise((resolve) => setTimeout(resolve, 250))
+      }
+      return { cancelled: false }
+    },
+  })
   const run = useMutation({
     mutationFn: () => {
       queryId.current = crypto.randomUUID()

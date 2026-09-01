@@ -36,6 +36,8 @@ export const TARGETS: Target[] = [
 /** Logs in through the UI form. */
 export async function login(page: Page, t: Target): Promise<void> {
   await page.goto('/login')
+  // The E2E server defines presets; switch to manual entry so the helper controls every field.
+  await page.getByLabel('接続先').selectOption('')
   await page.getByLabel('サーバー種別').selectOption(t.dialect)
   await page.getByLabel('ホスト').fill(t.host)
   await page.getByLabel('ポート').fill(String(t.port))

@@ -2,10 +2,25 @@ import { expect, test } from '@playwright/test'
 import { login, TARGETS, tableUrl } from './helpers.ts'
 
 test.describe('login', () => {
+  test('logs in through an operator-defined preset with only user and password', async ({ page }) => {
+    const t = TARGETS[1]
+    if (!t) throw new Error('no targets')
+    await page.goto('/login')
+    await page.getByLabel('接続先').selectOption('e2e-postgres')
+    await expect(page.getByLabel('ホスト')).toHaveValue(t.host)
+    await expect(page.getByLabel('ホスト')).toHaveAttribute('readonly', '')
+    await page.getByLabel('ユーザー名').fill(t.user)
+    await page.getByLabel('パスワード').fill(t.password)
+    await page.getByRole('button', { name: '接続' }).click()
+    await expect(page.getByRole('heading', { name: 'サーバー' })).toBeVisible()
+    await expect(page.getByText('PostgreSQL')).toBeVisible()
+  })
+
   test('shows an error for wrong credentials and stays on the form', async ({ page }) => {
     const t = TARGETS[0]
     if (!t) throw new Error('no targets')
     await page.goto('/login')
+    await page.getByLabel('接続先').selectOption('')
     await page.getByLabel('サーバー種別').selectOption(t.dialect)
     await page.getByLabel('ホスト').fill(t.host)
     await page.getByLabel('ポート').fill(String(t.port))

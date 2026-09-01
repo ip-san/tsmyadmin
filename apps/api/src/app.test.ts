@@ -249,6 +249,27 @@ describe('audit log', () => {
   })
 })
 
+describe('server presets', () => {
+  it('exposes configured presets without authentication and never credentials', async () => {
+    const store = new MemorySessionStore({ sweepIntervalMs: 0 })
+    stores.push(store)
+    const app = createApp({
+      adapterFactory: () => fixtureAdapter(),
+      store,
+      secret: SECRET,
+      secure: false,
+      servers: [{ name: 'prod', dialect: 'postgres', host: 'db.internal', port: 5432, database: 'app' }],
+    })
+    const res = await app.request('/api/servers')
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual([
+      { name: 'prod', dialect: 'postgres', host: 'db.internal', port: 5432, database: 'app' },
+    ])
+    const none = createApp({ adapterFactory: () => fixtureAdapter(), store, secret: SECRET, secure: false })
+    expect(await (await none.request('/api/servers')).json()).toEqual([])
+  })
+})
+
 describe('databases & tables', () => {
   it('lists databases, schemas and tables (contract-checked)', async () => {
     const h = harness()

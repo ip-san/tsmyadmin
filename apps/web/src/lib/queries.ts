@@ -8,6 +8,7 @@ import type {
   RowKey,
   RowValues,
   ServerInfo,
+  ServerPreset,
   SessionInfo,
   SqlRequest,
   StatementResult,
@@ -38,6 +39,12 @@ export const sessionQuery = queryOptions({
     }
   },
   staleTime: 60_000,
+})
+
+export const serversQuery = queryOptions({
+  queryKey: ['servers'],
+  queryFn: () => unwrap<ServerPreset[]>(api.servers.$get()),
+  staleTime: Number.POSITIVE_INFINITY,
 })
 
 export const databasesQuery = queryOptions({

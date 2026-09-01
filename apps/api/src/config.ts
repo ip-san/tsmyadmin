@@ -1,3 +1,4 @@
+import { type ServerPreset, ServerPresetsSchema } from '@tsmyadmin/shared'
 import { z } from 'zod'
 
 const csv = (s: string) =>
@@ -27,6 +28,12 @@ const EnvSchema = z.object({
    * wildcards, or `*` to allow anything. This is the main SSRF/pivot control — keep it tight in production.
    */
   TSMYADMIN_ALLOWED_HOSTS: z.string().default('127.0.0.1,localhost'),
+  /**
+   * JSON array of connection presets shown on the login screen, e.g.
+   * [{"name":"prod","dialect":"postgres","host":"db.internal","port":5432,"database":"app"}].
+   * Preset hosts are allowed automatically. Never put passwords here.
+   */
+  TSMYADMIN_SERVERS: z.string().optional(),
   /** Login attempts allowed per client IP + user within the window. */
   LOGIN_RATE_LIMIT: z.coerce.number().int().min(1).default(10),
   LOGIN_RATE_WINDOW_SECONDS: z.coerce.number().int().min(1).default(60),
@@ -47,6 +54,7 @@ export type AppConfig = {
   sessionSecret: string
   sessionTtlMs: number
   allowedHosts: string[]
+  servers: ServerPreset[]
   loginRateLimit: { max: number; windowMs: number }
   trustProxy: boolean
   logFormat: 'json' | 'pretty'
@@ -73,7 +81,8 @@ export function loadConfig(env: Record<string, string | undefined>): AppConfig {
   if (isProd && e.SESSION_SECRET.length < 32) {
     throw new ConfigError('SESSION_SECRET must be set to at least 32 characters in production')
   }
-  const allowedHosts = csv(e.TSMYADMIN_ALLOWED_HOSTS)
+  const servers = parseServers(e.TSMYADMIN_SERVERS)
+  const allowedHosts = [...new Set([...csv(e.TSMYADMIN_ALLOWED_HOSTS), ...servers.map((s) => s.host)])]
   if (allowedHosts.length === 0) throw new ConfigError('TSMYADMIN_ALLOWED_HOSTS must list at least one host (or "*")')
   return {
     isProd,
@@ -81,6 +90,7 @@ export function loadConfig(env: Record<string, string | undefined>): AppConfig {
     sessionSecret: e.SESSION_SECRET || 'dev-secret-do-not-use-in-production',
     sessionTtlMs: e.SESSION_TTL_MINUTES * 60_000,
     allowedHosts,
+    servers,
     loginRateLimit: { max: e.LOGIN_RATE_LIMIT, windowMs: e.LOGIN_RATE_WINDOW_SECONDS * 1000 },
     trustProxy: e.TRUST_PROXY === '1',
     logFormat: e.LOG_FORMAT ?? (isProd ? 'json' : 'pretty'),
@@ -88,4 +98,26 @@ export function loadConfig(env: Record<string, string | undefined>): AppConfig {
     sessionDbPath: e.SESSION_DB_PATH,
     webDist: e.WEB_DIST,
   }
+}
+
+function parseServers(raw: string | undefined): ServerPreset[] {
+  if (!raw || raw.trim() === '') return []
+  let json: unknown
+  try {
+    json = JSON.parse(raw)
+  } catch {
+    throw new ConfigError('TSMYADMIN_SERVERS must be a JSON array')
+  }
+  const parsed = ServerPresetsSchema.safeParse(json)
+  if (!parsed.success) {
+    throw new ConfigError(
+      `TSMYADMIN_SERVERS: ${parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`
+    )
+  }
+  const names = new Set<string>()
+  for (const s of parsed.data) {
+    if (names.has(s.name)) throw new ConfigError(`TSMYADMIN_SERVERS: duplicate preset name "${s.name}"`)
+    names.add(s.name)
+  }
+  return parsed.data
 }
