@@ -22,7 +22,7 @@ export default defineConfig({
     trace: 'on-first-retry',
   },
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] }, testMatch: /(flow|rows|sql|structure)\.spec/ },
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] }, testMatch: /(flow|rows|sql|structure|export)\.spec/ },
     { name: 'a11y', use: { ...devices['Desktop Chrome'] }, testMatch: /a11y\.spec/ },
     { name: 'visual-light', use: { ...devices['Desktop Chrome'], colorScheme: 'light' }, testMatch: /visual\.spec/ },
     { name: 'visual-dark', use: { ...devices['Desktop Chrome'], colorScheme: 'dark' }, testMatch: /visual\.spec/ },

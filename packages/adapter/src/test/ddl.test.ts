@@ -1,8 +1,9 @@
 import type { ColumnSpec, DdlOp } from '@tsmyadmin/shared'
 import { DDL_OP_NAMES } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
-import { mysqlDdl, mysqlLiteral } from '../mysql/ddl.ts'
-import { pgDdl, pgLiteral } from '../postgres/ddl.ts'
+import { mysqlDdl } from '../mysql/ddl.ts'
+import { pgDdl } from '../postgres/ddl.ts'
+import { mysqlLiteral, pgLiteral } from '../sql/literal.ts'
 
 const col = (name: string, dataType: string, extra: Partial<ColumnSpec> = {}): ColumnSpec => ({
   name,

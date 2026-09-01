@@ -1,0 +1,13 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`SqlExporter.insert > renders one multi-row INSERT per batch with quoted identifiers and escaped literals 1`] = `
+"INSERT INTO \`db\`.\`we\`\`ird\` (\`id\`, \`s\`, \`n\`, \`b\`, \`f\`) VALUES
+(1, 'it''s', NULL, X'0102', 1),
+(2, 'plain', 3.5, NULL, 0);"
+`;
+
+exports[`SqlExporter.insert > renders one multi-row INSERT per batch with quoted identifiers and escaped literals 2`] = `
+"INSERT INTO "app"."we""ird" ("id", "s", "n", "b", "f") VALUES
+(1, 'it''s', NULL, '\\x0102'::bytea, TRUE),
+(2, 'plain', 3.5, NULL, FALSE);"
+`;

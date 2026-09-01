@@ -25,6 +25,7 @@ function DatabaseLayout() {
         items={[
           { label: locale.tabs.structure, to: '/db/$db', params: { db }, search, exact: true },
           { label: locale.tabs.sql, to: '/db/$db/sql', params: { db }, search },
+          { label: locale.tabs.export, to: '/db/$db/export', params: { db }, search },
         ]}
       />
       <Outlet />

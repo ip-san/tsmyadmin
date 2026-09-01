@@ -3,6 +3,7 @@ import type {
   BrowseOptions,
   BrowseResult,
   Cell,
+  ColumnMeta,
   DdlOp,
   Dialect,
   Namespace,
@@ -50,6 +51,19 @@ export interface DdlBuilder {
   build(ns: Namespace, op: DdlOp): string[]
 }
 
+export interface RowBatch {
+  columns: ColumnMeta[]
+  rows: Cell[][]
+}
+
+/** Renders dialect-specific SQL for dumps (INSERT statements with properly escaped literals). */
+export interface SqlExporter {
+  /** One multi-row INSERT for `rows` (empty string when rows is empty). Includes the trailing semicolon. */
+  insert(ns: Namespace, table: string, columns: string[], rows: Cell[][]): string
+  /** SQL literal for a wire cell. */
+  literal(cell: Cell): string
+}
+
 export interface DatabaseAdapter {
   readonly dialect: Dialect
   ping(): Promise<void>
@@ -64,7 +78,12 @@ export interface DatabaseAdapter {
   updateRow(ns: Namespace, table: string, key: RowKey, values: RowValues): Promise<{ affectedRows: number }>
   deleteRows(ns: Namespace, table: string, keys: RowKey[]): Promise<{ affectedRows: number }>
   executeSql(ns: Namespace, sql: string, opts: ExecuteOptions): Promise<StatementResult[]>
+  /** DDL statements that recreate the table (MySQL: SHOW CREATE TABLE; PostgreSQL: reconstructed from the catalog). */
+  showCreateTable(ns: Namespace, table: string): Promise<string[]>
+  /** Reads every row in stable order, `batchSize` rows at a time (for exports). */
+  iterateRows(ns: Namespace, table: string, opts: { batchSize: number }): AsyncIterable<RowBatch>
   readonly ddl: DdlBuilder
+  readonly exporter: SqlExporter
 }
 
 export type { Cell }
@@ -82,4 +101,6 @@ export const ADAPTER_METHOD_NAMES = [
   'updateRow',
   'deleteRows',
   'executeSql',
+  'showCreateTable',
+  'iterateRows',
 ] as const satisfies readonly (keyof DatabaseAdapter)[]

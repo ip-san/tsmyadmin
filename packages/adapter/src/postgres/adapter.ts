@@ -1,9 +1,10 @@
 import type { ColumnMeta, Namespace, TableInfo, TableSchema } from '@tsmyadmin/shared'
 import pg, { type FieldDef, type PoolClient, type QueryResult } from 'pg'
-import { BaseAdapter, type Conn, type RawResult } from '../base.ts'
-import { quoteIdent } from '../sql/quote.ts'
+import { BaseAdapter, type Conn, firstResult, type RawResult } from '../base.ts'
+import { quoteIdent, quoteTable } from '../sql/quote.ts'
 import { AdapterError, type AdapterErrorCode, type ConnectionConfig } from '../types.ts'
-import { pgDdl } from './ddl.ts'
+import { pgCreateStatements, pgDdl } from './ddl.ts'
+import { pgExporter } from './export.ts'
 import { pgDescribeTable, pgListSchemas, pgListTables } from './introspect.ts'
 import { PG_TYPE_NAMES, pgToCell, pgTypes } from './values.ts'
 
@@ -24,6 +25,7 @@ type ArrayResult = QueryResult<unknown[]>
 export class PostgresAdapter extends BaseAdapter {
   readonly dialect = 'postgres' as const
   readonly ddl = pgDdl
+  readonly exporter = pgExporter
   private readonly pools = new Map<string, pg.Pool>()
   private readonly typeNames = new Map<number, string>(Object.entries(PG_TYPE_NAMES).map(([k, v]) => [Number(k), v]))
 
@@ -160,6 +162,24 @@ export class PostgresAdapter extends BaseAdapter {
 
   describeTable(ns: Namespace, table: string): Promise<TableSchema> {
     return this.withConn(ns, (conn) => pgDescribeTable(conn, ns, table))
+  }
+
+  /**
+   * PostgreSQL has no SHOW CREATE TABLE; the DDL is reconstructed from the catalog
+   * (columns, defaults, identity, PK, indexes, foreign keys, comments). Not covered:
+   * collations, storage parameters, partitioning, check constraints, ownership/grants.
+   */
+  showCreateTable(ns: Namespace, table: string): Promise<string[]> {
+    return this.withConn(ns, async (conn) => {
+      const schema = await pgDescribeTable(conn, ns, table)
+      if (schema.kind === 'view') {
+        const r = firstResult(
+          await conn.query('SELECT pg_get_viewdef($1::regclass, true)', [quoteTable('postgres', ns, table)])
+        )
+        return [`CREATE VIEW ${quoteTable('postgres', ns, table)} AS\n${String(r.rows[0]?.[0] ?? '')}`]
+      }
+      return pgCreateStatements(ns, schema)
+    })
   }
 
   toAdapterError(err: unknown): AdapterError {

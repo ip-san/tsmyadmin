@@ -65,6 +65,7 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
       )
       await execOk(`CREATE TABLE ${scratch} (id INT PRIMARY KEY, name VARCHAR(50) NULL, n INT NULL)`)
       await execOk(`CREATE TABLE ${scratchNoPk} (a INT NULL, b VARCHAR(50) NULL)`)
+      await execOk(`CREATE TABLE ${scratch}_empty (id INT PRIMARY KEY)`)
       await execOk(`INSERT INTO ${scratchNoPk} (a, b) VALUES (1, 'one'), (1, 'one'), (2, 'two'), (NULL, NULL)`)
     })
 
@@ -416,6 +417,69 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         await exec('SELECT * FROM nope_nope')
         const ok = await exec('SELECT 1 AS x')
         expect(ok[0]).toMatchObject({ kind: 'rows' })
+      })
+    })
+
+    describe('showCreateTable', () => {
+      it('returns DDL that names the table, and a view definition for views', async () => {
+        const users = await db.showCreateTable(ns, 'users')
+        expect(users.length).toBeGreaterThan(0)
+        expect(users[0]).toMatch(/CREATE TABLE/i)
+        expect(users.join('\n')).toContain('users')
+        const view = await db.showCreateTable(ns, 'active_users')
+        expect(view.join('\n')).toMatch(/CREATE( OR REPLACE)?[^;]*VIEW/i)
+      })
+
+      it('rejects unknown tables', async () => {
+        await expect(db.showCreateTable(ns, 'nope_nope')).rejects.toMatchObject({ code: 'NOT_FOUND' })
+      })
+    })
+
+    describe('iterateRows', () => {
+      it('streams every row in primary-key order across batches', async () => {
+        const batches: number[][] = []
+        for await (const b of db.iterateRows(ns, 'users', { batchSize: 2 }))
+          batches.push(b.rows.map((r) => Number(r[0])))
+        expect(batches).toEqual([[1, 2], [3, 4], [5]])
+      })
+
+      it('handles tables without a key and empty tables', async () => {
+        let total = 0
+        for await (const b of db.iterateRows(ns, 'no_pk', { batchSize: 3 })) total += b.rows.length
+        expect(total).toBe(4)
+        const empty: unknown[] = []
+        for await (const b of db.iterateRows(ns, `${scratch}_empty`, { batchSize: 10 })) empty.push(b)
+        expect(empty).toEqual([])
+      })
+    })
+
+    describe('export', () => {
+      it('dump (showCreateTable + iterateRows + exporter.insert) recreates the table with identical rows', async () => {
+        const src = `${scratch}_dump`
+        await execOk(`CREATE TABLE ${src} (id INT PRIMARY KEY, s VARCHAR(50) NULL, n INT NULL, d DATE NULL)`)
+        await execOk(
+          `INSERT INTO ${src} (id, s, n, d) VALUES (1, 'it''s "quoted" \\ back', 10, '2024-01-02'), (2, NULL, NULL, NULL), (3, '', 0, '1970-01-01')`
+        )
+        const before = await browseAll(src)
+        const create = await db.showCreateTable(ns, src)
+        const inserts: string[] = []
+        for await (const b of db.iterateRows(ns, src, { batchSize: 2 })) {
+          inserts.push(
+            db.exporter.insert(
+              ns,
+              src,
+              b.columns.map((c) => c.name),
+              b.rows
+            )
+          )
+        }
+        expect(inserts).toHaveLength(2)
+        await execOk(`DROP TABLE ${src}`)
+        await execOk([...create.map((c) => `${c};`), ...inserts].join('\n'))
+        const after = await browseAll(src)
+        expect(after.rows).toEqual(before.rows)
+        expect(after.columns.map((c) => c.name)).toEqual(before.columns.map((c) => c.name))
+        await execOk(`DROP TABLE ${src}`)
       })
     })
 

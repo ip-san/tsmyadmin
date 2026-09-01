@@ -14,9 +14,11 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppDbDbRouteImport } from './routes/_app/db.$db'
 import { Route as AppDbDbIndexRouteImport } from './routes/_app/db.$db/index'
+import { Route as AppDbDbExportRouteImport } from './routes/_app/db.$db/export'
 import { Route as AppDbDbSqlRouteImport } from './routes/_app/db.$db/sql'
 import { Route as AppDbDbTableTableRouteImport } from './routes/_app/db.$db/table.$table'
 import { Route as AppDbDbTableTableIndexRouteImport } from './routes/_app/db.$db/table.$table/index'
+import { Route as AppDbDbTableTableExportRouteImport } from './routes/_app/db.$db/table.$table/export'
 import { Route as AppDbDbTableTableInsertRouteImport } from './routes/_app/db.$db/table.$table/insert'
 import { Route as AppDbDbTableTableOperationsRouteImport } from './routes/_app/db.$db/table.$table/operations'
 import { Route as AppDbDbTableTableSearchRouteImport } from './routes/_app/db.$db/table.$table/search'
@@ -47,6 +49,11 @@ const AppDbDbIndexRoute = AppDbDbIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppDbDbRoute,
 } as any)
+const AppDbDbExportRoute = AppDbDbExportRouteImport.update({
+  id: '/export',
+  path: '/export',
+  getParentRoute: () => AppDbDbRoute,
+} as any)
 const AppDbDbSqlRoute = AppDbDbSqlRouteImport.update({
   id: '/sql',
   path: '/sql',
@@ -60,6 +67,11 @@ const AppDbDbTableTableRoute = AppDbDbTableTableRouteImport.update({
 const AppDbDbTableTableIndexRoute = AppDbDbTableTableIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AppDbDbTableTableRoute,
+} as any)
+const AppDbDbTableTableExportRoute = AppDbDbTableTableExportRouteImport.update({
+  id: '/export',
+  path: '/export',
   getParentRoute: () => AppDbDbTableTableRoute,
 } as any)
 const AppDbDbTableTableInsertRoute = AppDbDbTableTableInsertRouteImport.update({
@@ -94,9 +106,11 @@ export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/login': typeof LoginRoute
   '/db/$db': typeof AppDbDbRouteWithChildren
+  '/db/$db/export': typeof AppDbDbExportRoute
   '/db/$db/sql': typeof AppDbDbSqlRoute
   '/db/$db/': typeof AppDbDbIndexRoute
   '/db/$db/table/$table': typeof AppDbDbTableTableRouteWithChildren
+  '/db/$db/table/$table/export': typeof AppDbDbTableTableExportRoute
   '/db/$db/table/$table/insert': typeof AppDbDbTableTableInsertRoute
   '/db/$db/table/$table/operations': typeof AppDbDbTableTableOperationsRoute
   '/db/$db/table/$table/search': typeof AppDbDbTableTableSearchRoute
@@ -107,8 +121,10 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/': typeof AppIndexRoute
+  '/db/$db/export': typeof AppDbDbExportRoute
   '/db/$db/sql': typeof AppDbDbSqlRoute
   '/db/$db': typeof AppDbDbIndexRoute
+  '/db/$db/table/$table/export': typeof AppDbDbTableTableExportRoute
   '/db/$db/table/$table/insert': typeof AppDbDbTableTableInsertRoute
   '/db/$db/table/$table/operations': typeof AppDbDbTableTableOperationsRoute
   '/db/$db/table/$table/search': typeof AppDbDbTableTableSearchRoute
@@ -122,9 +138,11 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/_app/': typeof AppIndexRoute
   '/_app/db/$db': typeof AppDbDbRouteWithChildren
+  '/_app/db/$db/export': typeof AppDbDbExportRoute
   '/_app/db/$db/sql': typeof AppDbDbSqlRoute
   '/_app/db/$db/': typeof AppDbDbIndexRoute
   '/_app/db/$db/table/$table': typeof AppDbDbTableTableRouteWithChildren
+  '/_app/db/$db/table/$table/export': typeof AppDbDbTableTableExportRoute
   '/_app/db/$db/table/$table/insert': typeof AppDbDbTableTableInsertRoute
   '/_app/db/$db/table/$table/operations': typeof AppDbDbTableTableOperationsRoute
   '/_app/db/$db/table/$table/search': typeof AppDbDbTableTableSearchRoute
@@ -138,9 +156,11 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/db/$db'
+    | '/db/$db/export'
     | '/db/$db/sql'
     | '/db/$db/'
     | '/db/$db/table/$table'
+    | '/db/$db/table/$table/export'
     | '/db/$db/table/$table/insert'
     | '/db/$db/table/$table/operations'
     | '/db/$db/table/$table/search'
@@ -151,8 +171,10 @@ export interface FileRouteTypes {
   to:
     | '/login'
     | '/'
+    | '/db/$db/export'
     | '/db/$db/sql'
     | '/db/$db'
+    | '/db/$db/table/$table/export'
     | '/db/$db/table/$table/insert'
     | '/db/$db/table/$table/operations'
     | '/db/$db/table/$table/search'
@@ -165,9 +187,11 @@ export interface FileRouteTypes {
     | '/login'
     | '/_app/'
     | '/_app/db/$db'
+    | '/_app/db/$db/export'
     | '/_app/db/$db/sql'
     | '/_app/db/$db/'
     | '/_app/db/$db/table/$table'
+    | '/_app/db/$db/table/$table/export'
     | '/_app/db/$db/table/$table/insert'
     | '/_app/db/$db/table/$table/operations'
     | '/_app/db/$db/table/$table/search'
@@ -218,6 +242,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppDbDbIndexRouteImport
       parentRoute: typeof AppDbDbRoute
     }
+    '/_app/db/$db/export': {
+      id: '/_app/db/$db/export'
+      path: '/export'
+      fullPath: '/db/$db/export'
+      preLoaderRoute: typeof AppDbDbExportRouteImport
+      parentRoute: typeof AppDbDbRoute
+    }
     '/_app/db/$db/sql': {
       id: '/_app/db/$db/sql'
       path: '/sql'
@@ -237,6 +268,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/db/$db/table/$table/'
       preLoaderRoute: typeof AppDbDbTableTableIndexRouteImport
+      parentRoute: typeof AppDbDbTableTableRoute
+    }
+    '/_app/db/$db/table/$table/export': {
+      id: '/_app/db/$db/table/$table/export'
+      path: '/export'
+      fullPath: '/db/$db/table/$table/export'
+      preLoaderRoute: typeof AppDbDbTableTableExportRouteImport
       parentRoute: typeof AppDbDbTableTableRoute
     }
     '/_app/db/$db/table/$table/insert': {
@@ -278,6 +316,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AppDbDbTableTableRouteChildren {
+  AppDbDbTableTableExportRoute: typeof AppDbDbTableTableExportRoute
   AppDbDbTableTableInsertRoute: typeof AppDbDbTableTableInsertRoute
   AppDbDbTableTableOperationsRoute: typeof AppDbDbTableTableOperationsRoute
   AppDbDbTableTableSearchRoute: typeof AppDbDbTableTableSearchRoute
@@ -287,6 +326,7 @@ interface AppDbDbTableTableRouteChildren {
 }
 
 const AppDbDbTableTableRouteChildren: AppDbDbTableTableRouteChildren = {
+  AppDbDbTableTableExportRoute: AppDbDbTableTableExportRoute,
   AppDbDbTableTableInsertRoute: AppDbDbTableTableInsertRoute,
   AppDbDbTableTableOperationsRoute: AppDbDbTableTableOperationsRoute,
   AppDbDbTableTableSearchRoute: AppDbDbTableTableSearchRoute,
@@ -299,12 +339,14 @@ const AppDbDbTableTableRouteWithChildren =
   AppDbDbTableTableRoute._addFileChildren(AppDbDbTableTableRouteChildren)
 
 interface AppDbDbRouteChildren {
+  AppDbDbExportRoute: typeof AppDbDbExportRoute
   AppDbDbSqlRoute: typeof AppDbDbSqlRoute
   AppDbDbIndexRoute: typeof AppDbDbIndexRoute
   AppDbDbTableTableRoute: typeof AppDbDbTableTableRouteWithChildren
 }
 
 const AppDbDbRouteChildren: AppDbDbRouteChildren = {
+  AppDbDbExportRoute: AppDbDbExportRoute,
   AppDbDbSqlRoute: AppDbDbSqlRoute,
   AppDbDbIndexRoute: AppDbDbIndexRoute,
   AppDbDbTableTableRoute: AppDbDbTableTableRouteWithChildren,

@@ -11,8 +11,10 @@ import type {
   TableSchema,
 } from '@tsmyadmin/shared'
 import { mysqlDdl } from '../mysql/ddl.ts'
+import { mysqlExporter } from '../mysql/export.ts'
 import { pgDdl } from '../postgres/ddl.ts'
-import { AdapterError, type DatabaseAdapter, type ExecuteOptions } from '../types.ts'
+import { pgExporter } from '../postgres/export.ts'
+import { AdapterError, type DatabaseAdapter, type ExecuteOptions, type RowBatch } from '../types.ts'
 
 export interface FakeTable {
   schema: TableSchema
@@ -76,6 +78,7 @@ function compare(a: Cell, b: Cell): number {
 export class FakeAdapter implements DatabaseAdapter {
   readonly dialect: Dialect
   readonly ddl
+  readonly exporter
   readonly calls: { method: string; args: unknown[] }[] = []
   closed = false
   private readonly databases: Record<string, FakeDatabase>
@@ -85,6 +88,7 @@ export class FakeAdapter implements DatabaseAdapter {
   constructor(options: FakeAdapterOptions = {}) {
     this.dialect = options.dialect ?? 'mysql'
     this.ddl = this.dialect === 'mysql' ? mysqlDdl : pgDdl
+    this.exporter = this.dialect === 'mysql' ? mysqlExporter : pgExporter
     this.databases = options.databases ?? {}
     this.onSql = options.onSql
     this.failWith = options.failWith
@@ -211,6 +215,21 @@ export class FakeAdapter implements DatabaseAdapter {
       affected++
     }
     return { affectedRows: affected }
+  }
+
+  async showCreateTable(ns: Namespace, table: string): Promise<string[]> {
+    this.record('showCreateTable', ns, table)
+    const t = this.table(ns, table)
+    return [`-- fake CREATE TABLE ${t.schema.name} (${t.schema.columns.map((c) => c.name).join(', ')})`]
+  }
+
+  async *iterateRows(ns: Namespace, table: string, opts: { batchSize: number }): AsyncIterable<RowBatch> {
+    this.record('iterateRows', ns, table, opts)
+    const t = this.table(ns, table)
+    const columns = t.schema.columns.map((c) => ({ name: c.name, dataType: c.dataType }))
+    for (let i = 0; i < t.rows.length; i += opts.batchSize) {
+      yield { columns, rows: t.rows.slice(i, i + opts.batchSize).map((r) => columns.map((c) => r[c.name] ?? null)) }
+    }
   }
 
   async executeSql(ns: Namespace, sql: string, opts: ExecuteOptions): Promise<StatementResult[]> {

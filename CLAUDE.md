@@ -25,10 +25,10 @@ bun run test:e2e          # Playwright
 
 ## 現在の規模（`scripts/validate-docs.mjs` が同期）
 
-- ユニット/API/Web テスト定義: <!-- stat:unit-tests -->87<!-- /stat --> 件
-- Adapter conformance: <!-- stat:conformance -->32<!-- /stat --> 件 × 2 方言
-- E2E: <!-- stat:e2e -->21<!-- /stat --> 件
-- API ルート: <!-- stat:routes -->13<!-- /stat -->
+- ユニット/API/Web テスト定義: <!-- stat:unit-tests -->103<!-- /stat --> 件
+- Adapter conformance: <!-- stat:conformance -->37<!-- /stat --> 件 × 2 方言
+- E2E: <!-- stat:e2e -->24<!-- /stat --> 件
+- API ルート: <!-- stat:routes -->14<!-- /stat -->
 
 ## 詳細ルール（path-scoped）
 
@@ -45,7 +45,7 @@ IMPORTANT: コンテキスト圧縮後も以下を必ず守ること。
 - **YOU MUST** `mysql2` / `pg` の import は `packages/adapter/src/**` の中だけ（`bun run check:arch` が fail する）
 - **YOU MUST** `DatabaseAdapter` にメソッドを追加したら `ADAPTER_METHOD_NAMES` と `test/conformance.ts` の `describe('<method>')` を同時に追加し、**MySQL と PostgreSQL 両方**で通す
 - **YOU MUST** `DdlOp` を追加したら `test/ddl.test.ts` の `SAMPLE_OPS` に両方言のスナップショットを追加する
-- **YOU MUST** API の入出力は先に `packages/shared` の Zod スキーマを定義し、web は `hc<AppType>` 経由でのみ呼ぶ
+- **YOU MUST** API の入出力は先に `packages/shared` の Zod スキーマを定義し、web は `hc<AppType>` 経由でのみ呼ぶ（例外: ダウンロード等ブラウザのナビゲーションで開く GET は URL ビルダー経由の `<a href>` 可）
 - **YOU MUST** DDL は `/ddl/preview` → ユーザー確認 → `/sql` 実行。プレビューなしで実行する UI を作らない
 - **YOU MUST** web の日本語文字列は `apps/web/src/config/locales/ja.ts` に定義し `locale.*` で参照する。Tailwind の色指定には `dark:` 対応を付ける
 - **YOU MUST** 統合テストは `*.integration.test.ts` 命名（DB 不要の `bun run test` / pre-commit から除外される）

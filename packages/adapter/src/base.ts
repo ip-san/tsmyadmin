@@ -16,7 +16,14 @@ import type {
 import { isBinaryCell } from '@tsmyadmin/shared'
 import { Params, quoteIdent, quoteTable } from './sql/quote.ts'
 import { splitStatements } from './sql/split.ts'
-import { AdapterError, type DatabaseAdapter, type DdlBuilder, type ExecuteOptions } from './types.ts'
+import {
+  AdapterError,
+  type DatabaseAdapter,
+  type DdlBuilder,
+  type ExecuteOptions,
+  type RowBatch,
+  type SqlExporter,
+} from './types.ts'
 
 /** Normalised driver result: rows already converted to wire Cells. */
 export interface RawResult {
@@ -78,6 +85,7 @@ export function firstResult(r: RawResult | RawResult[]): RawResult {
 export abstract class BaseAdapter implements DatabaseAdapter {
   abstract readonly dialect: Dialect
   abstract readonly ddl: DdlBuilder
+  abstract readonly exporter: SqlExporter
 
   abstract ping(): Promise<void>
   abstract close(): Promise<void>
@@ -85,6 +93,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
   abstract listSchemas(database: string): Promise<string[]>
   abstract listTables(ns: Namespace): Promise<TableInfo[]>
   abstract describeTable(ns: Namespace, table: string): Promise<TableSchema>
+  abstract showCreateTable(ns: Namespace, table: string): Promise<string[]>
 
   /** Checks a connection out of the pool for `ns` (MySQL: `USE db` applied; PG: pool of that database). */
   protected abstract acquire(ns: Namespace): Promise<Conn>
@@ -278,6 +287,44 @@ export abstract class BaseAdapter implements DatabaseAdapter {
         if (d !== 'postgres') throw new AdapterError('UNSUPPORTED', 'ctid keys are only supported on PostgreSQL')
         return ` WHERE ctid = ${params.add(key.value)}::tid`
       }
+    }
+  }
+
+  /**
+   * Stable-order full scan. PK (or NOT NULL unique key) → keyset-free OFFSET paging ordered by the key;
+   * PostgreSQL without a key → ordered by ctid; MySQL without a key → a single unordered batch
+   * (OFFSET paging without a total order would repeat/skip rows).
+   */
+  async *iterateRows(ns: Namespace, table: string, opts: { batchSize: number }): AsyncIterable<RowBatch> {
+    const schema = await this.describeTable(ns, table)
+    const key = this.resolveRowKey(schema)
+    const d = this.dialect
+    const selectList = schema.columns.map((c) => quoteIdent(d, c.name)).join(', ')
+    const tableSql = quoteTable(d, ns, table)
+    const orderBy =
+      key.keyKind === 'pk'
+        ? ` ORDER BY ${key.keyColumns.map((c) => quoteIdent(d, c)).join(', ')}`
+        : key.keyKind === 'ctid'
+          ? ' ORDER BY ctid'
+          : ''
+    const single = orderBy === ''
+    const batchSize = Math.max(1, Math.floor(opts.batchSize))
+    const conn = await this.acquire(ns)
+    try {
+      await this.setStatementTimeout(conn, 0)
+      let offset = 0
+      for (;;) {
+        const params = new Params(d)
+        const limit = single ? '' : ` LIMIT ${params.add(batchSize)} OFFSET ${params.add(offset)}`
+        const r = firstResult(
+          await conn.query(`SELECT ${selectList} FROM ${tableSql}${orderBy}${limit}`, params.values)
+        )
+        if (r.rows.length > 0) yield { columns: r.columns, rows: r.rows }
+        if (single || r.rows.length < batchSize) return
+        offset += batchSize
+      }
+    } finally {
+      conn.release()
     }
   }
 

@@ -16,8 +16,15 @@ describe('Spec consistency: adapter', () => {
     }
   })
 
-  it('the conformance suite also covers the DDL builder', () => {
+  it('the conformance suite also covers the DDL builder and the SQL exporter', () => {
     expect(conformanceSource).toContain("describe('ddl'")
+    expect(conformanceSource).toContain("describe('export'")
+  })
+
+  it('mysql and postgres implement the same module set including export', () => {
+    for (const dialect of ['mysql', 'postgres']) {
+      expect(() => readFileSync(join(import.meta.dirname, '..', dialect, 'export.ts'))).not.toThrow()
+    }
   })
 
   it('mysql and postgres implement the same module set', () => {

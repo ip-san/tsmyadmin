@@ -2,6 +2,7 @@ import {
   BrowseQuerySchema,
   DdlPreviewRequestSchema,
   DeleteRowsRequestSchema,
+  ExportQuerySchema,
   InsertRowRequestSchema,
   type Namespace,
   parseBrowseQuery,
@@ -11,6 +12,7 @@ import {
 } from '@tsmyadmin/shared'
 import { Hono } from 'hono'
 import { apiError } from '../lib/errors.ts'
+import { buildExport, contentDisposition } from '../lib/export.ts'
 import { validate } from '../lib/validate.ts'
 import { type AppEnv, requireSession, type SessionConfig } from '../session/middleware.ts'
 
@@ -80,6 +82,27 @@ export function databaseRoutes(cfg: SessionConfig) {
         return c.json(r)
       }
     )
+    .get('/databases/:db/export', validate('query', ExportQuerySchema), async (c) => {
+      const q = c.req.valid('query')
+      const adapter = c.get('session').adapter
+      const namespace = ns(c.req.param('db'), q.schema)
+      const requested = (q.tables ?? '')
+        .split(',')
+        .map((t) => t.trim())
+        .filter((t) => t.length > 0)
+      const tables =
+        requested.length > 0
+          ? requested
+          : (await adapter.listTables(namespace)).filter((t) => t.kind === 'table').map((t) => t.name)
+      if (q.format === 'csv' && tables.length !== 1)
+        return c.json(apiError('VALIDATION', 'CSV export needs exactly one table'), 400)
+      const baseName = requested.length === 1 ? `${namespace.database}_${requested[0]}` : namespace.database
+      const file = await buildExport(adapter, namespace, tables, q, baseName)
+      return c.body(file.body, 200, {
+        'content-type': file.contentType,
+        'content-disposition': contentDisposition(file.filename),
+      })
+    })
     .post('/databases/:db/sql', validate('json', SqlRequestSchema), async (c) => {
       const body = c.req.valid('json')
       const results = await c.get('session').adapter.executeSql(ns(c.req.param('db'), body.schema), body.sql, {

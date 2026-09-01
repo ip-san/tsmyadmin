@@ -1,9 +1,10 @@
 import type { Namespace, TableInfo, TableSchema } from '@tsmyadmin/shared'
 import mysql, { type FieldPacket, type Pool, type PoolConnection, type ResultSetHeader } from 'mysql2/promise'
-import { BaseAdapter, type Conn, type RawResult } from '../base.ts'
-import { quoteIdent } from '../sql/quote.ts'
+import { BaseAdapter, type Conn, firstResult, type RawResult } from '../base.ts'
+import { quoteIdent, quoteTable } from '../sql/quote.ts'
 import { AdapterError, type AdapterErrorCode, type ConnectionConfig } from '../types.ts'
 import { mysqlDdl } from './ddl.ts'
+import { mysqlExporter } from './export.ts'
 import { mysqlDescribeTable, mysqlListTables } from './introspect.ts'
 import { mysqlColumnMeta, mysqlToCell } from './values.ts'
 
@@ -60,6 +61,7 @@ function normalise(rowsOut: unknown, fields: FieldPacket[] | FieldPacket[][] | u
 export class MysqlAdapter extends BaseAdapter {
   readonly dialect = 'mysql' as const
   readonly ddl = mysqlDdl
+  readonly exporter = mysqlExporter
   private pool: Pool | null = null
 
   constructor(private readonly config: ConnectionConfig) {
@@ -167,6 +169,15 @@ export class MysqlAdapter extends BaseAdapter {
 
   describeTable(ns: Namespace, table: string): Promise<TableSchema> {
     return this.withConn(ns, (conn) => mysqlDescribeTable(conn, ns, table))
+  }
+
+  showCreateTable(ns: Namespace, table: string): Promise<string[]> {
+    return this.withConn(ns, async (conn) => {
+      const r = firstResult(await conn.query(`SHOW CREATE TABLE ${quoteTable('mysql', ns, table)}`))
+      const row = r.rows[0]
+      if (!row) throw new AdapterError('NOT_FOUND', `Table not found: ${ns.database}.${table}`)
+      return [String(row[1] ?? '')]
+    })
   }
 
   toAdapterError(err: unknown): AdapterError {

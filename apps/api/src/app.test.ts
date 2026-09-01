@@ -301,6 +301,32 @@ describe('sql & ddl', () => {
   })
 })
 
+describe('export', () => {
+  it('downloads a SQL dump of the whole database with a content-disposition', async () => {
+    const h = harness()
+    stores.push(h.store)
+    await h.login()
+    const res = await h.req('/api/databases/shop/export')
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toContain('application/sql')
+    expect(res.headers.get('content-disposition')).toContain('filename="shop.sql"')
+    const body = await res.text()
+    expect(body).toContain('-- Table: users')
+    expect(body).toContain('INSERT INTO `shop`.`users`')
+  })
+
+  it('exports one table as CSV and rejects multi-table CSV', async () => {
+    const h = harness()
+    stores.push(h.store)
+    await h.login()
+    const csv = await h.req('/api/databases/shop/export?format=csv&tables=users')
+    expect(csv.status).toBe(200)
+    expect(await csv.text()).toContain('id,name')
+    expect((await h.req('/api/databases/shop/export?format=csv&tables=users,users2')).status).toBe(400)
+    expect((await h.req('/api/databases/shop/export?format=xml')).status).toBe(400)
+  })
+})
+
 describe('errors', () => {
   it('normalises unexpected errors as 500 INTERNAL without leaking stack traces', async () => {
     const adapter = fixtureAdapter()

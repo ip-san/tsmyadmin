@@ -1,13 +1,9 @@
 import type { ColumnSpec, DdlOp, Namespace } from '@tsmyadmin/shared'
+import { mysqlLiteral } from '../sql/literal.ts'
 import { quoteIdent, quoteTable } from '../sql/quote.ts'
 import type { DdlBuilder } from '../types.ts'
 
 const id = (s: string) => quoteIdent('mysql', s)
-
-/** MySQL string literal (backslash escapes are active unless NO_BACKSLASH_ESCAPES). */
-export function mysqlLiteral(value: string): string {
-  return `'${value.replaceAll('\\', '\\\\').replaceAll("'", "''")}'`
-}
 
 function columnDef(c: ColumnSpec): string {
   const parts = [id(c.name), c.dataType, c.nullable ? 'NULL' : 'NOT NULL']
