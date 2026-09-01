@@ -36,6 +36,8 @@ export interface ExecuteOptions {
   stopOnError: boolean
   /** When set, the run is registered under this id so cancelQuery(id) can interrupt it from another connection. */
   queryId?: string
+  /** Called as each statement finishes (before the next starts); lets callers stream results per statement. */
+  onResult?: (result: StatementResult, index: number) => void | Promise<void>
 }
 
 export type AdapterErrorCode = Extract<

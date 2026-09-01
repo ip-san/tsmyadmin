@@ -8,6 +8,7 @@ import {
   ProcessInfoSchema,
   ServerInfoSchema,
   SessionStateSchema,
+  SqlStreamEventSchema,
   StatementResultSchema,
   TableInfoSchema,
   TableSchemaSchema,
@@ -434,6 +435,54 @@ describe('sql & ddl', () => {
       'SELECT 1',
       { maxRows: 1000, timeoutMs: 30_000, stopOnError: true },
     ])
+  })
+
+  it('streams NDJSON: one result line per statement then done', async () => {
+    const adapter = fixtureAdapter({
+      onSql: (_ns, sql) =>
+        sql
+          .split(';')
+          .map((s, i) =>
+            i === 1
+              ? { kind: 'error' as const, sql: s, message: 'boom', code: 'QUERY_FAILED' as const }
+              : { kind: 'affected' as const, sql: s, affectedRows: i, durationMs: 1 }
+          ),
+    })
+    const h = harness(adapter)
+    stores.push(h.store)
+    await h.login()
+    const res = await h.req('/api/databases/shop/sql/stream', {
+      method: 'POST',
+      body: JSON.stringify({ sql: 'A;B;C', stopOnError: false }),
+    })
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toContain('application/x-ndjson')
+    const lines = (await res.text())
+      .trim()
+      .split('\n')
+      .map((l) => SqlStreamEventSchema.parse(JSON.parse(l)))
+    expect(lines.map((l) => l.type)).toEqual(['result', 'result', 'result', 'done'])
+    expect(lines[1]).toMatchObject({ type: 'result', index: 1, result: { kind: 'error', message: 'boom' } })
+    expect(lines[3]).toEqual({ type: 'done', statements: 3 })
+  })
+
+  it('streams a fatal line when the adapter throws', async () => {
+    const adapter = fixtureAdapter()
+    const h = harness(adapter)
+    stores.push(h.store)
+    await h.login()
+    adapter.executeSql = async () => {
+      throw new AdapterError('CONNECTION_FAILED', 'gone')
+    }
+    const res = await h.req('/api/databases/shop/sql/stream', {
+      method: 'POST',
+      body: JSON.stringify({ sql: 'SELECT 1' }),
+    })
+    const lines = (await res.text())
+      .trim()
+      .split('\n')
+      .map((l) => SqlStreamEventSchema.parse(JSON.parse(l)))
+    expect(lines).toEqual([{ type: 'fatal', message: 'gone' }])
   })
 
   it('passes queryId through and cancels by id', async () => {

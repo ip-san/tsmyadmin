@@ -425,6 +425,10 @@ export abstract class BaseAdapter implements DatabaseAdapter {
   async executeSql(ns: Namespace, script: string, opts: ExecuteOptions): Promise<StatementResult[]> {
     const statements = splitStatements(script, this.dialect)
     const results: StatementResult[] = []
+    const emit = async (r: StatementResult) => {
+      results.push(r)
+      await opts.onResult?.(r, results.length - 1)
+    }
     let resolveBackend: (id: string) => void = () => undefined
     if (opts.queryId) {
       const backend = new Promise<string>((resolve) => {
@@ -446,19 +450,19 @@ export abstract class BaseAdapter implements DatabaseAdapter {
               for (const r of list) {
                 if (r.hasRows) {
                   const truncated = r.rows.length > opts.maxRows
-                  results.push({
+                  await emit({
                     kind: 'rows',
                     sql: st.sql,
                     durationMs,
                     result: { columns: r.columns, rows: truncated ? r.rows.slice(0, opts.maxRows) : r.rows, truncated },
                   })
                 } else {
-                  results.push({ kind: 'affected', sql: st.sql, durationMs, affectedRows: r.affectedRows })
+                  await emit({ kind: 'affected', sql: st.sql, durationMs, affectedRows: r.affectedRows })
                 }
               }
             } catch (err) {
               const e = err instanceof AdapterError ? err : this.toAdapterError(err)
-              results.push({ kind: 'error', sql: st.sql, message: e.detail ?? e.message, code: e.code })
+              await emit({ kind: 'error', sql: st.sql, message: e.detail ?? e.message, code: e.code })
               if (opts.stopOnError) break
             }
           }

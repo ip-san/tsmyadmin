@@ -8,6 +8,7 @@ import { ErrorBox } from '@/components/ui/Feedback.tsx'
 import { Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
 import { mutations } from '@/lib/queries.ts'
+import { streamSql } from '@/lib/sql-stream.ts'
 import { clearHistory, type HistoryEntry, loadHistory, pushHistory } from './history.ts'
 import { ResultsView } from './ResultsView.tsx'
 import { SqlEditor } from './SqlEditor.tsx'
@@ -85,21 +86,32 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion }:
   const queryId = useRef<string | null>(null)
   const cancel = useMutation({ mutationFn: (id: string) => mutations.cancelSql(db, id) })
   const run = useMutation({
-    mutationFn: () => {
+    // Statement results are appended to the view as the server streams them (NDJSON), so long scripts
+    // show progress instead of one big response at the end.
+    mutationFn: async () => {
       queryId.current = crypto.randomUUID()
-      return mutations.executeSql(db, {
+      const collected: StatementResult[] = []
+      setResults([])
+      for await (const event of streamSql(db, {
         sql: text,
         ...(schema ? { schema } : {}),
         maxRows,
         stopOnError,
         queryId: queryId.current,
-      })
+      })) {
+        if (event.type === 'result') {
+          collected[event.index] = event.result
+          setResults([...collected])
+        } else if (event.type === 'fatal') {
+          throw new Error(event.message)
+        }
+      }
+      return collected
     },
     onSettled: () => {
       queryId.current = null
     },
     onSuccess: async (res) => {
-      setResults(res)
       setHistory(pushHistory(dialect, { sql: text, at: Date.now(), ok: res.every((r) => r.kind !== 'error') }))
       if (res.some((r) => r.kind !== 'rows')) {
         await queryClient.invalidateQueries({ predicate: (q) => q.queryKey[0] !== 'session' })

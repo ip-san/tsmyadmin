@@ -317,14 +317,17 @@ export class FakeAdapter implements DatabaseAdapter {
 
   async executeSql(ns: Namespace, sql: string, opts: ExecuteOptions): Promise<StatementResult[]> {
     this.record('executeSql', ns, sql, opts)
-    if (this.onSql) return this.onSql(ns, sql, opts)
-    return [
-      {
-        kind: 'rows',
-        sql,
-        durationMs: 1,
-        result: { columns: [{ name: 'echo', dataType: 'varchar' }], rows: [[sql]], truncated: false },
-      },
-    ]
+    const results: StatementResult[] = this.onSql
+      ? this.onSql(ns, sql, opts)
+      : [
+          {
+            kind: 'rows',
+            sql,
+            durationMs: 1,
+            result: { columns: [{ name: 'echo', dataType: 'varchar' }], rows: [[sql]], truncated: false },
+          },
+        ]
+    for (const [i, r] of results.entries()) await opts.onResult?.(r, i)
+    return results
   }
 }

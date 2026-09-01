@@ -418,6 +418,19 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         expect(results.every((r) => r.kind !== 'error' && r.durationMs >= 0)).toBe(true)
       })
 
+      it('streams each statement result through onResult in order, before the next statement runs', async () => {
+        const seen: string[] = []
+        const results = await db.executeSql(ns, 'SELECT 1 AS a; SELECT 2 AS b; SELECT * FROM nope_nope; SELECT 4', {
+          ...EXEC,
+          stopOnError: false,
+          onResult: (r, i) => {
+            seen.push(`${i}:${r.kind}`)
+          },
+        })
+        expect(seen).toEqual(['0:rows', '1:rows', '2:error', '3:rows'])
+        expect(results).toHaveLength(4)
+      })
+
       it('reports affected rows for DML', async () => {
         const results = await exec(`UPDATE ${scratch} SET n = 1 WHERE id = 1; SELECT n FROM ${scratch} WHERE id = 1`)
         expect(results[0]).toMatchObject({ kind: 'affected', affectedRows: 1 })

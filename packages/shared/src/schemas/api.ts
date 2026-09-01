@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { RowValuesSchema } from './cell.ts'
 import { DdlOpSchema } from './ddl.ts'
 import { DialectSchema } from './dialect.ts'
+import { StatementResultSchema } from './result.ts'
 import { RowKeySchema } from './row-key.ts'
 
 export const ConnectRequestSchema = z.object({
@@ -42,6 +43,17 @@ export const SqlRequestSchema = z.object({
   stopOnError: z.boolean().default(true),
 })
 export type SqlRequest = z.infer<typeof SqlRequestSchema>
+
+/**
+ * One line of the NDJSON stream from POST /sql/stream: a statement result as it completes, then a final
+ * `done` line (absent when the connection dropped — clients treat a missing `done` as an aborted run).
+ */
+export const SqlStreamEventSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('result'), index: z.number().int().min(0), result: StatementResultSchema }),
+  z.object({ type: z.literal('done'), statements: z.number().int().min(0) }),
+  z.object({ type: z.literal('fatal'), message: z.string() }),
+])
+export type SqlStreamEvent = z.infer<typeof SqlStreamEventSchema>
 
 export const SqlCancelRequestSchema = z.object({ queryId: z.string().uuid() })
 export const SqlCancelResponseSchema = z.object({ cancelled: z.boolean() })

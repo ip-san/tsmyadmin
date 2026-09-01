@@ -40,6 +40,19 @@ for (const t of TARGETS) {
       await expect(page.getByTitle('失敗')).toBeVisible()
     })
 
+    test('shows earlier results while a later statement is still running', async ({ page }) => {
+      await page.goto(t.schema ? `/db/${t.database}/sql?schema=${t.schema}` : `/db/${t.database}/sql`)
+      await typeSql(page, `SELECT 'first' AS step; ${slowSql(t.dialect)}`)
+      await page.getByRole('button', { name: '実行', exact: true }).click()
+      // First statement's result arrives before the slow one finishes: the run is still cancellable.
+      await expect(
+        page.getByRole('region', { name: '文 1' }).getByRole('cell', { name: 'first', exact: true })
+      ).toBeVisible()
+      await expect(page.getByRole('button', { name: 'キャンセル' })).toBeVisible()
+      await page.getByRole('button', { name: 'キャンセル' }).click()
+      await expect(page.getByRole('region', { name: '文 2' })).toContainText('エラー', { timeout: 15_000 })
+    })
+
     test('a running statement can be cancelled', async ({ page }) => {
       await page.goto(t.schema ? `/db/${t.database}/sql?schema=${t.schema}` : `/db/${t.database}/sql`)
       const slow = slowSql(t.dialect)
