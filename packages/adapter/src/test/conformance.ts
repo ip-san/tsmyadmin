@@ -290,6 +290,44 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
       })
     })
 
+    describe('insertRows', () => {
+      it('bulk-inserts in chunks inside one transaction', async () => {
+        const rows = Array.from({ length: 1203 }, (_, i) => [1000 + i, `bulk ${i}`, i % 3 === 0 ? null : i])
+        const r = await db.insertRows(ns, scratch, ['id', 'name', 'n'], rows)
+        expect(r.affectedRows).toBe(1203)
+        const after = await db.browseRows(ns, scratch, {
+          offset: 0,
+          limit: 5,
+          sort: [{ column: 'id', direction: 'desc' }],
+          filters: [{ column: 'id', op: 'gte', value: 1000 }],
+        })
+        expect(after.total).toBe(1203)
+        expect(after.rows[0]?.[1]).toBe('bulk 1202')
+        await execOk(`DELETE FROM ${scratch} WHERE id >= 1000`)
+      })
+
+      it('rolls everything back when one row fails', async () => {
+        const before = (await browseAll(scratch)).total
+        await expect(
+          db.insertRows(
+            ns,
+            scratch,
+            ['id', 'name'],
+            [
+              [5000, 'ok'],
+              [1, 'duplicate pk'],
+            ]
+          )
+        ).rejects.toMatchObject({ code: 'QUERY_FAILED' })
+        expect((await browseAll(scratch)).total).toBe(before)
+      })
+
+      it('returns 0 for no rows and rejects an empty column list', async () => {
+        expect(await db.insertRows(ns, scratch, ['id'], [])).toEqual({ affectedRows: 0 })
+        await expect(db.insertRows(ns, scratch, [], [[1]])).rejects.toMatchObject({ code: 'QUERY_FAILED' })
+      })
+    })
+
     describe('updateRow', () => {
       it('updates exactly one row by primary key', async () => {
         const r = await db.updateRow(ns, scratch, { kind: 'pk', values: { id: 2 } }, { name: 'second', n: 43 })
@@ -411,6 +449,20 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
 
       it('ignores comment-only scripts', async () => {
         expect(await exec('-- nothing here\n/* or here */')).toEqual([])
+      })
+
+      it('rolls back a transaction the script left open', async () => {
+        const begin = dialect === 'mysql' ? 'START TRANSACTION' : 'BEGIN'
+        await exec(`${begin}; INSERT INTO ${scratch} (id, name) VALUES (7777, 'uncommitted'); SELECT * FROM nope_nope`)
+        const rows = await db.browseRows(ns, scratch, {
+          offset: 0,
+          limit: 1,
+          sort: [],
+          filters: [{ column: 'id', op: 'eq', value: 7777 }],
+        })
+        expect(rows.total).toBe(0)
+        const ok = await exec('SELECT 1 AS x')
+        expect(ok[0]).toMatchObject({ kind: 'rows' })
       })
 
       it('keeps working after an error (no poisoned connection)', async () => {

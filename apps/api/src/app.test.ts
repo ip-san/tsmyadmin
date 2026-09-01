@@ -327,6 +327,77 @@ describe('export', () => {
   })
 })
 
+describe('import', () => {
+  const upload = (
+    h: ReturnType<typeof harness>,
+    fields: Record<string, string>,
+    file: { name: string; body: string }
+  ) => {
+    const fd = new FormData()
+    for (const [k, v] of Object.entries(fields)) fd.set(k, v)
+    fd.set('file', new File([file.body], file.name, { type: 'text/plain' }))
+    // Browsers send Origin on same-origin form posts; hono/csrf requires it for multipart bodies.
+    return h.app.request('/api/databases/shop/import', {
+      method: 'POST',
+      body: fd,
+      headers: { cookie: h.cookie(), origin: 'http://localhost' },
+    })
+  }
+
+  it('imports a SQL file and reports per-statement results', async () => {
+    const h = harness()
+    stores.push(h.store)
+    await h.login()
+    const res = await upload(h, { format: 'sql' }, { name: 'dump.sql', body: 'INSERT INTO users VALUES (9); SELECT 1' })
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({ format: 'sql', statements: 1, succeeded: 1, failed: 0 })
+  })
+
+  it('imports a CSV into a table and rejects bad headers with 400', async () => {
+    const h = harness()
+    stores.push(h.store)
+    await h.login()
+    const res = await upload(h, { format: 'csv', table: 'users' }, { name: 'u.csv', body: 'id,name\n7,Zed\n' })
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({ format: 'csv', inserted: 1, columns: ['id', 'name'] })
+    const rows = BrowseResultSchema.parse(await (await h.req('/api/databases/shop/tables/users/rows')).json())
+    expect(rows.rows.some((r) => r[1] === 'Zed')).toBe(true)
+    const bad = await upload(h, { format: 'csv', table: 'users' }, { name: 'u.csv', body: 'nope\n1\n' })
+    expect(bad.status).toBe(400)
+    expect(ApiErrorSchema.parse(await bad.json()).code).toBe('VALIDATION')
+  })
+
+  it('rejects cross-site form posts (CSRF) with 403', async () => {
+    const h = harness()
+    stores.push(h.store)
+    await h.login()
+    const fd = new FormData()
+    fd.set('format', 'sql')
+    fd.set('file', new File(['SELECT 1'], 'x.sql'))
+    const res = await h.app.request('/api/databases/shop/import', {
+      method: 'POST',
+      body: fd,
+      headers: { cookie: h.cookie(), origin: 'https://evil.example' },
+    })
+    expect(res.status).toBe(403)
+  })
+
+  it('requires a file and a valid format', async () => {
+    const h = harness()
+    stores.push(h.store)
+    await h.login()
+    const fd = new FormData()
+    fd.set('format', 'sql')
+    const noFile = await h.app.request('/api/databases/shop/import', {
+      method: 'POST',
+      body: fd,
+      headers: { cookie: h.cookie(), origin: 'http://localhost' },
+    })
+    expect(noFile.status).toBe(400)
+    expect((await upload(h, { format: 'xml' }, { name: 'x', body: 'x' })).status).toBe(400)
+  })
+})
+
 describe('errors', () => {
   it('normalises unexpected errors as 500 INTERNAL without leaking stack traces', async () => {
     const adapter = fixtureAdapter()

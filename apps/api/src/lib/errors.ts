@@ -24,8 +24,15 @@ export function apiError(code: ApiErrorCode, message: string, detail?: string): 
 function toApiError(err: unknown): ApiError {
   if (err instanceof AdapterError) return apiError(err.code, err.message, err.detail)
   if (err instanceof HTTPException) {
-    const code: ApiErrorCode = err.status === 401 ? 'UNAUTHENTICATED' : err.status === 404 ? 'NOT_FOUND' : 'INTERNAL'
-    return apiError(code, err.message)
+    const code: ApiErrorCode =
+      err.status === 401
+        ? 'UNAUTHENTICATED'
+        : err.status === 404
+          ? 'NOT_FOUND'
+          : err.status >= 400 && err.status < 500
+            ? 'VALIDATION'
+            : 'INTERNAL'
+    return apiError(code, err.message || `HTTP ${err.status}`)
   }
   return apiError('INTERNAL', 'Internal error', err instanceof Error ? err.message : String(err))
 }
@@ -33,5 +40,7 @@ function toApiError(err: unknown): ApiError {
 export function errorResponse(c: Context, err: unknown): Response {
   const body = toApiError(err)
   if (body.code === 'INTERNAL') console.error('[api] unhandled error', err)
-  return c.json(body, STATUS_BY_CODE[body.code])
+  // Framework 4xx (CSRF 403, body limit 413, …) keep their own status under the VALIDATION envelope.
+  const status = err instanceof HTTPException && body.code === 'VALIDATION' ? err.status : STATUS_BY_CODE[body.code]
+  return c.json(body, status)
 }

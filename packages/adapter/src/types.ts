@@ -75,6 +75,8 @@ export interface DatabaseAdapter {
   describeTable(ns: Namespace, table: string): Promise<TableSchema>
   browseRows(ns: Namespace, table: string, opts: BrowseOptions): Promise<BrowseResult>
   insertRow(ns: Namespace, table: string, values: RowValues): Promise<{ affectedRows: number }>
+  /** Bulk insert (imports): parameterised multi-row INSERTs inside one transaction; all-or-nothing. */
+  insertRows(ns: Namespace, table: string, columns: string[], rows: Cell[][]): Promise<{ affectedRows: number }>
   updateRow(ns: Namespace, table: string, key: RowKey, values: RowValues): Promise<{ affectedRows: number }>
   deleteRows(ns: Namespace, table: string, keys: RowKey[]): Promise<{ affectedRows: number }>
   executeSql(ns: Namespace, sql: string, opts: ExecuteOptions): Promise<StatementResult[]>
@@ -98,6 +100,7 @@ export const ADAPTER_METHOD_NAMES = [
   'describeTable',
   'browseRows',
   'insertRow',
+  'insertRows',
   'updateRow',
   'deleteRows',
   'executeSql',

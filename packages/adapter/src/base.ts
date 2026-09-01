@@ -224,6 +224,32 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     })
   }
 
+  /** Rows per INSERT statement, bounded so PostgreSQL's 65535-parameter limit is never hit. */
+  static chunkSize(columnCount: number): number {
+    return Math.max(1, Math.min(500, Math.floor(30_000 / Math.max(1, columnCount))))
+  }
+
+  async insertRows(ns: Namespace, table: string, columns: string[], rows: Cell[][]): Promise<{ affectedRows: number }> {
+    if (columns.length === 0) throw new AdapterError('QUERY_FAILED', 'insertRows requires at least one column')
+    if (rows.length === 0) return { affectedRows: 0 }
+    const d = this.dialect
+    const head = `INSERT INTO ${quoteTable(d, ns, table)} (${columns.map((c) => quoteIdent(d, c)).join(', ')}) VALUES `
+    const chunk = BaseAdapter.chunkSize(columns.length)
+    return this.withTransaction(ns, async (conn) => {
+      let affected = 0
+      for (let i = 0; i < rows.length; i += chunk) {
+        const params = new Params(d)
+        const values = rows
+          .slice(i, i + chunk)
+          .map((row) => `(${columns.map((_, j) => params.add(toDbValue(row[j] ?? null))).join(', ')})`)
+          .join(', ')
+        const r = firstResult(await conn.query(head + values, params.values))
+        affected += r.affectedRows
+      }
+      return { affectedRows: affected }
+    })
+  }
+
   async updateRow(ns: Namespace, table: string, key: RowKey, values: RowValues): Promise<{ affectedRows: number }> {
     const d = this.dialect
     const names = Object.keys(values)
@@ -359,6 +385,9 @@ export abstract class BaseAdapter implements DatabaseAdapter {
             if (opts.stopOnError) break
           }
         }
+        // Each execution is autocommitted: a transaction the script left open (or aborted) must not
+        // leak into the next borrower of this pooled connection.
+        await conn.query('ROLLBACK').catch(() => undefined)
       },
       opts.timeoutMs
     )

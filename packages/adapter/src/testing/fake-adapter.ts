@@ -190,6 +190,13 @@ export class FakeAdapter implements DatabaseAdapter {
     return { affectedRows: 1 }
   }
 
+  async insertRows(ns: Namespace, table: string, columns: string[], rows: Cell[][]): Promise<{ affectedRows: number }> {
+    this.record('insertRows', ns, table, columns, rows)
+    const t = this.table(ns, table)
+    for (const r of rows) t.rows.push(Object.fromEntries(columns.map((c, i) => [c, r[i] ?? null])))
+    return { affectedRows: rows.length }
+  }
+
   private matchKey(row: RowValues, key: RowKey): boolean {
     if (key.kind === 'ctid') return false
     return Object.entries(key.values).every(([k, v]) => compare(row[k] ?? null, v) === 0)

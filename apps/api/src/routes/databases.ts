@@ -3,6 +3,8 @@ import {
   DdlPreviewRequestSchema,
   DeleteRowsRequestSchema,
   ExportQuerySchema,
+  IMPORT_MAX_BYTES,
+  ImportFormSchema,
   InsertRowRequestSchema,
   type Namespace,
   parseBrowseQuery,
@@ -11,8 +13,10 @@ import {
   UpdateRowRequestSchema,
 } from '@tsmyadmin/shared'
 import { Hono } from 'hono'
+import { bodyLimit } from 'hono/body-limit'
 import { apiError } from '../lib/errors.ts'
 import { buildExport, contentDisposition } from '../lib/export.ts'
+import { ImportValidationError, importCsv, importSql } from '../lib/import.ts'
 import { validate } from '../lib/validate.ts'
 import { type AppEnv, requireSession, type SessionConfig } from '../session/middleware.ts'
 
@@ -103,6 +107,32 @@ export function databaseRoutes(cfg: SessionConfig) {
         'content-disposition': contentDisposition(file.filename),
       })
     })
+    .post(
+      '/databases/:db/import',
+      bodyLimit({ maxSize: IMPORT_MAX_BYTES + 1024 * 1024 }),
+      validate('form', ImportFormSchema),
+      async (c) => {
+        const form = c.req.valid('form')
+        const body = await c.req.parseBody()
+        const file = body.file
+        if (!(file instanceof File)) return c.json(apiError('VALIDATION', 'A file is required'), 400)
+        if (file.size > IMPORT_MAX_BYTES)
+          return c.json(apiError('VALIDATION', `File exceeds ${IMPORT_MAX_BYTES} bytes`), 400)
+        const text = await file.text()
+        const adapter = c.get('session').adapter
+        const namespace = ns(c.req.param('db'), form.schema)
+        try {
+          const result =
+            form.format === 'sql'
+              ? await importSql(adapter, namespace, text, form.stopOnError === '1')
+              : await importCsv(adapter, namespace, form, text)
+          return c.json(result)
+        } catch (err) {
+          if (err instanceof ImportValidationError) return c.json(apiError('VALIDATION', err.message), 400)
+          throw err
+        }
+      }
+    )
     .post('/databases/:db/sql', validate('json', SqlRequestSchema), async (c) => {
       const body = c.req.valid('json')
       const results = await c.get('session').adapter.executeSql(ns(c.req.param('db'), body.schema), body.sql, {
