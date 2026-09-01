@@ -21,28 +21,26 @@ interface RowProps {
   db: string
   schema?: string | undefined
   table: TableInfo
-  style?: React.CSSProperties
 }
 
-function TableRow({ db, schema, table, style }: RowProps) {
+/** The link itself; the caller supplies the <li> (static or absolutely positioned when virtualized). */
+function TableLink({ db, schema, table }: RowProps) {
   return (
-    <li style={style} className="absolute left-0 top-0 w-full">
-      <Link
-        to="/db/$db/table/$table"
-        params={{ db, table: table.name }}
-        search={schema ? { schema } : {}}
-        className="flex h-full items-center gap-1 truncate rounded px-1 text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
-        activeProps={{ className: 'bg-blue-50 text-blue-800 dark:bg-blue-950 dark:text-blue-200' }}
-        title={table.name}
-      >
-        {table.kind === 'view' ? (
-          <Eye className="size-3.5 shrink-0" aria-hidden />
-        ) : (
-          <Table2 className="size-3.5 shrink-0" aria-hidden />
-        )}
-        <span className="truncate">{table.name}</span>
-      </Link>
-    </li>
+    <Link
+      to="/db/$db/table/$table"
+      params={{ db, table: table.name }}
+      search={schema ? { schema } : {}}
+      className="flex h-full items-center gap-1 truncate rounded px-1 text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+      activeProps={{ className: 'bg-blue-50 text-blue-800 dark:bg-blue-950 dark:text-blue-200' }}
+      title={table.name}
+    >
+      {table.kind === 'view' ? (
+        <Eye className="size-3.5 shrink-0" aria-hidden />
+      ) : (
+        <Table2 className="size-3.5 shrink-0" aria-hidden />
+      )}
+      <span className="truncate">{table.name}</span>
+    </Link>
   )
 }
 
@@ -88,7 +86,7 @@ export function TableList({ db, schema, filter }: { db: string; schema?: string 
         <ul className="ml-3 border-l border-zinc-200 pl-2 dark:border-zinc-700">
           {shown.map((t) => (
             <li key={t.name} style={{ height: ROW_HEIGHT }}>
-              <TableRow db={db} schema={schema} table={t} style={{ position: 'static' }} />
+              <TableLink db={db} schema={schema} table={t} />
             </li>
           ))}
         </ul>
@@ -108,13 +106,13 @@ export function TableList({ db, schema, filter }: { db: string; schema?: string 
           const t = shown[item.index]
           if (!t) return null
           return (
-            <TableRow
+            <li
               key={t.name}
-              db={db}
-              schema={schema}
-              table={t}
+              className="absolute left-0 top-0 w-full"
               style={{ height: item.size, transform: `translateY(${item.start - virtualizer.options.scrollMargin}px)` }}
-            />
+            >
+              <TableLink db={db} schema={schema} table={t} />
+            </li>
           )
         })}
       </ul>

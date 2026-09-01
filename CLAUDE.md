@@ -54,4 +54,5 @@ IMPORTANT: コンテキスト圧縮後も以下を必ず守ること。
 - **YOU MUST** ログにパスワード・行の値・SQL 全文を出さない（イベント名 + 識別子 + 要約のみ）
 - **YOU MUST** フィクスチャ（`docker/fixtures/**`）を変えたら `bun run db:reset`。既存の checkout でも MySQL の `WITH GRANT OPTION` 追加以降はリセットが必要
 - **YOU MUST** web の日本語文字列は `apps/web/src/config/locales/ja.ts` に定義し `locale.*` で参照する。Tailwind の色指定には `dark:` 対応を付ける
+- **YOU MUST** E2E は本番ビルドを API が配信する。`bun run test:e2e` は毎回ビルドするが、ポート 3199 に古いサーバーが残っていると再利用される（`reuseExistingServer`）ので、web を変更したら `bun run build` してから実行するか、残っているサーバーを止める
 - **YOU MUST** 統合テストは `*.integration.test.ts` 命名（DB 不要の `bun run test` / pre-commit から除外される）
