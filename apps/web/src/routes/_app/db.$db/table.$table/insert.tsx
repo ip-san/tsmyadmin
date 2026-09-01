@@ -1,7 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { Notice } from '@/components/ui/Feedback.tsx'
-import { locale } from '@/config/locale.ts'
+import { InsertPage } from '@/features/rows/InsertPage.tsx'
 
-export const Route = createFileRoute('/_app/db/$db/table/$table/insert')({
-  component: () => <Notice>{locale.common.comingSoon}</Notice>,
-})
+export const Route = createFileRoute('/_app/db/$db/table/$table/insert')({ component: Insert })
+
+function Insert() {
+  const { db, table } = Route.useParams()
+  const { schema } = Route.useSearch()
+  return <InsertPage tableRef={{ db, schema, table }} />
+}

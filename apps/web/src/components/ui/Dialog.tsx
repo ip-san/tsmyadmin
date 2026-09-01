@@ -1,0 +1,49 @@
+import { type ReactNode, useEffect, useRef } from 'react'
+import { locale } from '@/config/locale.ts'
+import { Button } from './Button.tsx'
+
+export interface DialogProps {
+  open: boolean
+  title: string
+  onClose: () => void
+  children: ReactNode
+  footer?: ReactNode
+}
+
+/** Accessible modal built on the native <dialog> element (focus trap + Esc handled by the browser). */
+export function Dialog({ open, title, onClose, children, footer }: DialogProps) {
+  const ref = useRef<HTMLDialogElement>(null)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    if (open && !el.open) el.showModal()
+    else if (!open && el.open) el.close()
+  }, [open])
+  return (
+    <dialog
+      ref={ref}
+      onClose={onClose}
+      aria-labelledby="dialog-title"
+      className="w-full max-w-2xl rounded-lg border border-zinc-200 bg-white p-0 text-zinc-900 shadow-xl backdrop:bg-black/40 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+    >
+      {open ? (
+        <div className="flex max-h-[80vh] flex-col">
+          <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-700">
+            <h2 id="dialog-title" className="text-base font-semibold">
+              {title}
+            </h2>
+            <Button variant="ghost" size="sm" onClick={onClose} aria-label={locale.common.close}>
+              ×
+            </Button>
+          </div>
+          <div className="overflow-auto px-4 py-3">{children}</div>
+          {footer ? (
+            <div className="flex justify-end gap-2 border-t border-zinc-200 px-4 py-3 dark:border-zinc-700">
+              {footer}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </dialog>
+  )
+}

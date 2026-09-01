@@ -44,9 +44,10 @@ export function Pagination({ page, limit, total, shown, onChange }: PaginationPr
         >
           »
         </Button>
-        <label className="ml-2 flex items-center gap-1 text-xs text-zinc-600 dark:text-zinc-300">
+        <label htmlFor="browse-limit" className="ml-2 flex items-center gap-1 text-xs text-zinc-600 dark:text-zinc-300">
           {locale.browse.perPage}
           <Select
+            id="browse-limit"
             value={limit}
             onChange={(e) => onChange({ limit: Number(e.target.value), page: 1 })}
             className="w-auto py-1"
