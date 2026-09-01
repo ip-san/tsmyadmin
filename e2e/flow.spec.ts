@@ -87,6 +87,16 @@ for (const t of TARGETS) {
       await expect(grid.getByText(/バイナリ 4 bytes/).first()).toBeVisible()
     })
 
+    test('foreign-key cells link to the referenced row', async ({ page }) => {
+      await page.goto(tableUrl(t, 'posts'))
+      const link = page.getByRole('link', { name: 'users.id を参照' }).first()
+      await expect(link).toBeVisible()
+      await link.click()
+      await expect(page).toHaveURL(/\/table\/users/)
+      await expect(page.getByText('全 1 件')).toBeVisible()
+      await expect(page.getByRole('cell', { name: 'Alice', exact: true })).toBeVisible()
+    })
+
     test('shows table structure with keys, indexes and foreign keys', async ({ page }) => {
       await page.goto(tableUrl(t, 'posts', '/structure'))
       const columns = page.getByRole('table', { name: 'カラム' })

@@ -135,6 +135,7 @@ export const ja = {
     editCell: 'セルを編集',
     setNull: 'NULL にする',
     editHint: 'Enter で保存、Esc でキャンセル',
+    fkLink: (table: string, column: string) => `${table}.${column} を参照`,
     saved: '保存しました',
     keyHint: {
       pk: '主キーで行を特定します',

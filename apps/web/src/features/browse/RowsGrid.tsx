@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { BrowseOptions, BrowseResult, Cell, RowKey, RowValues } from '@tsmyadmin/shared'
+import { Link } from '@tanstack/react-router'
+import type { BrowseOptions, BrowseResult, Cell, ForeignKeyDef, RowKey, RowValues } from '@tsmyadmin/shared'
 import { isBinaryCell } from '@tsmyadmin/shared'
-import { ArrowDown, ArrowUp, Pencil } from 'lucide-react'
+import { ArrowDown, ArrowUp, ExternalLink, Pencil } from 'lucide-react'
 import { useState } from 'react'
 import { CellValue } from '@/components/cells/CellValue.tsx'
 import { RowForm } from '@/components/rows/RowForm.tsx'
@@ -14,6 +15,7 @@ import { cn } from '@/lib/cn.ts'
 import { mutations, rowsQuery, structureQuery, type TableRef } from '@/lib/queries.ts'
 import { CellEditor } from './CellEditor.tsx'
 import { FilterChips } from './FilterChips.tsx'
+import { fkTarget, linkableForeignKeys } from './fk-links.ts'
 import { Pagination } from './Pagination.tsx'
 import { rowKeyFor, rowToValues } from './row-key.ts'
 
@@ -81,6 +83,7 @@ export function RowsGrid({ tableRef, options, page, onChange }: RowsGridProps) {
   const sort = options.sort[0]
   const editable = data.keyKind !== 'none'
   const keys = data.rows.map((row) => rowKeyFor(data, row))
+  const fks = linkableForeignKeys(data)
   const selectableIdx = keys.flatMap((k, i) => (k ? [i] : []))
   const allSelected = selectableIdx.length > 0 && selectableIdx.every((i) => selected.has(i))
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(selectableIdx))
@@ -229,7 +232,7 @@ export function RowsGrid({ tableRef, options, page, onChange }: RowsGridProps) {
                             {update.isError ? <ErrorBox error={update.error} className="mt-1" /> : null}
                           </>
                         ) : (
-                          <CellValue cell={cell} />
+                          <FkCell cell={cell} fk={fks.get(c.name)} db={tableRef.db} />
                         )}
                       </Td>
                     )
@@ -286,5 +289,27 @@ export function RowsGrid({ tableRef, options, page, onChange }: RowsGridProps) {
         {remove.isError ? <ErrorBox error={remove.error} className="mt-2" /> : null}
       </Dialog>
     </div>
+  )
+}
+
+/** A cell value, followed by a link to the referenced row when the column is a single-column foreign key. */
+function FkCell({ cell, fk, db }: { cell: Cell; fk: ForeignKeyDef | undefined; db: string }) {
+  const target = fk ? fkTarget(fk, cell, db) : null
+  if (!fk || !target) return <CellValue cell={cell} />
+  const refColumn = fk.refColumns[0] ?? ''
+  return (
+    <span className="inline-flex items-center gap-1">
+      <CellValue cell={cell} />
+      <Link
+        to="/db/$db/table/$table"
+        params={{ db: target.db, table: target.table }}
+        search={{ ...(target.schema ? { schema: target.schema } : {}), filters: target.filters, page: 1 }}
+        className="text-blue-600 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-100"
+        aria-label={locale.browse.fkLink(target.table, refColumn)}
+        title={locale.browse.fkLink(target.table, refColumn)}
+      >
+        <ExternalLink className="size-3" aria-hidden />
+      </Link>
+    </span>
   )
 }

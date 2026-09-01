@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { CellSchema } from './cell.ts'
 import { ResultSetSchema } from './result.ts'
+import { ForeignKeyDefSchema } from './structure.ts'
 
 export const SortDirectionSchema = z.enum(['asc', 'desc'])
 export const SortSpecSchema = z.object({ column: z.string().min(1), direction: SortDirectionSchema })
@@ -53,5 +54,7 @@ export const BrowseResultSchema = ResultSetSchema.extend({
   keyKind: RowKeyKindSchema,
   /** For 'pk': key column names. For 'ctid': ['ctid'] (a hidden trailing column in rows). */
   keyColumns: z.array(z.string()),
+  /** Outgoing foreign keys, so cells can link to the referenced row (single-column keys only are linkable). */
+  foreignKeys: z.array(ForeignKeyDefSchema),
 })
 export type BrowseResult = z.infer<typeof BrowseResultSchema>

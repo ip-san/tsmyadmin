@@ -192,6 +192,13 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         expect(r.columns.every((c) => typeof c.dataType === 'string' && c.dataType.length > 0)).toBe(true)
       })
 
+      it('exposes outgoing foreign keys for linking', async () => {
+        const r = await browseAll('posts')
+        expect(r.foreignKeys).toHaveLength(1)
+        expect(r.foreignKeys[0]).toMatchObject({ columns: ['user_id'], refTable: 'users', refColumns: ['id'] })
+        expect((await browseAll('users')).foreignKeys).toEqual([])
+      })
+
       it('sorts, paginates and keeps total independent of the page', async () => {
         const desc = await db.browseRows(ns, 'users', {
           offset: 0,

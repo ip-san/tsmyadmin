@@ -11,6 +11,7 @@ const base: BrowseResult = {
   truncated: false,
   total: 1,
   approximate: false,
+  foreignKeys: [],
   keyKind: 'ctid',
   keyColumns: ['ctid'],
 }
