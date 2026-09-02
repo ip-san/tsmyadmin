@@ -12,9 +12,16 @@ RUN bun run build
 
 FROM oven/bun:1.4-slim AS runtime
 ARG VERSION=0.1.0
+ARG GIT_SHA=unknown
+ARG BUILD_DATE=unknown
+# Set explicitly: otherwise source / revision / created are inherited from the oven/bun base image.
 LABEL org.opencontainers.image.title="tsmyadmin" \
       org.opencontainers.image.description="MySQL / PostgreSQL web administration (phpMyAdmin-style)" \
       org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.source="https://github.com/ip-san/tsmyadmin" \
+      org.opencontainers.image.url="https://github.com/ip-san/tsmyadmin" \
+      org.opencontainers.image.revision="${GIT_SHA}" \
+      org.opencontainers.image.created="${BUILD_DATE}" \
       org.opencontainers.image.licenses="MIT"
 WORKDIR /app
 ENV NODE_ENV=production API_PORT=3100

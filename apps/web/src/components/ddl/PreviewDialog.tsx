@@ -12,6 +12,8 @@ export interface PreviewDialogProps<Op> {
   destructive: (op: Op) => boolean
   /** Name the user must retype before an irreversible, data-destroying op may run (null = plain confirmation). */
   confirmName?: (op: Op) => string | null
+  /** Extra sentence for ops that destroy stored data (dropping an index or an account loses none). */
+  lossWarning?: (op: Op) => string | null
   hint: string
   /** Message shown (and announced) after the last op succeeded. */
   successMessage: (op: Op) => string
@@ -23,6 +25,7 @@ export function PreviewDialog<Op>({
   title,
   destructive,
   confirmName,
+  lossWarning,
   hint,
   successMessage,
 }: PreviewDialogProps<Op>) {
@@ -33,6 +36,7 @@ export function PreviewDialog<Op>({
     if (flow.executed) noticeRef.current?.focus()
   }, [flow.executed])
   const required = op === null ? null : (confirmName?.(op) ?? null)
+  const warning = op === null ? '' : `${locale.ddl.irreversible}${lossWarning?.(op) ? ` ${lossWarning(op) ?? ''}` : ''}`
   const [typed, setTyped] = useState('')
   // Reset the confirmation text whenever a different op is previewed (state-from-props reset pattern).
   const [prevOp, setPrevOp] = useState(op)
@@ -82,12 +86,12 @@ export function PreviewDialog<Op>({
         {/* Every destructive op says so; the ones that lose whole objects additionally require the name. */}
         {op !== null && destructive(op) && required === null ? (
           <p role="alert" className="mt-3 text-sm font-medium text-red-800 dark:text-red-200">
-            {locale.ddl.irreversible}
+            {warning}
           </p>
         ) : null}
         {required !== null ? (
           <div className="mt-3 space-y-1 rounded border border-red-300 bg-red-50 p-3 dark:border-red-700 dark:bg-red-950">
-            <p className="text-sm font-medium text-red-800 dark:text-red-200">{locale.ddl.irreversible}</p>
+            <p className="text-sm font-medium text-red-800 dark:text-red-200">{warning}</p>
             <label htmlFor="confirm-name" className="block text-xs text-red-800 dark:text-red-200">
               {locale.ddl.typeToConfirm(required)}
             </label>

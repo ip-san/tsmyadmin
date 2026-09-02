@@ -99,6 +99,13 @@ export const pgDdl: DdlBuilder = {
               ? `INSERT INTO ${target} (${cols}) OVERRIDING SYSTEM VALUE SELECT ${cols} FROM ${t}`
               : `INSERT INTO ${target} OVERRIDING SYSTEM VALUE SELECT * FROM ${t}`
           )
+          // LIKE ... INCLUDING IDENTITY gives the copy fresh sequences starting at 1: advance them past the
+          // copied ids, exactly as the SQL dump does, or the first insert into the copy collides.
+          for (const c of op.identityColumns ?? []) {
+            out.push(
+              `SELECT setval(pg_get_serial_sequence(${pgLiteral(target)}, ${pgLiteral(c)}), COALESCE(MAX(${id(c)}), 1), MAX(${id(c)}) IS NOT NULL) FROM ${target}`
+            )
+          }
         }
         return out
       }

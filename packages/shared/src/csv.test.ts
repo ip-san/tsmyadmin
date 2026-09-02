@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { csvField, parseCsv, toCsv } from './csv.ts'
+import { csvField, parseCsv, parseCsvDocument, toCsv } from './csv.ts'
 
 describe('parseCsv', () => {
   it('parses simple rows with CRLF and LF and strips a BOM', () => {
@@ -29,6 +29,12 @@ describe('parseCsv', () => {
     expect(parseCsv('')).toEqual([])
     expect(parseCsv('\n')).toEqual([])
   })
+
+  it('reports which fields were quoted so a quoted NULL marker can be told from NULL', () => {
+    const doc = parseCsvDocument('a,"\\N",\\N\n""\n')
+    expect(doc.rows).toEqual([['a', '\\N', '\\N'], ['']])
+    expect(doc.quoted).toEqual([[false, true, false], [true]])
+  })
 })
 
 describe('csvField / toCsv', () => {
@@ -38,6 +44,7 @@ describe('csvField / toCsv', () => {
     expect(csvField('say "hi"')).toBe('"say ""hi"""')
     expect(csvField('line\nbreak')).toBe('"line\nbreak"')
     expect(csvField(null)).toBe('\\N')
+    expect(csvField('\\N')).toBe('"\\N"')
     expect(csvField({ $bin: 'AAEC' })).toBe('AAEC')
     expect(csvField(42)).toBe('42')
   })

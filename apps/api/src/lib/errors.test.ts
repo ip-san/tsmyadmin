@@ -15,8 +15,10 @@ const EXPECTED_STATUS = {
   KEY_MISMATCH: 409,
   UNSUPPORTED: 400,
   FORBIDDEN: 403,
+  HOST_NOT_ALLOWED: 403,
   PERMISSION_DENIED: 403,
   RATE_LIMITED: 429,
+  PAYLOAD_TOO_LARGE: 413,
   INTERNAL: 500,
 } as const
 
@@ -46,14 +48,17 @@ describe('toApiError', () => {
 
   it('keeps framework 4xx statuses under the VALIDATION envelope and maps 401/404 to their own codes', () => {
     expect(toApiError(new HTTPException(413, { message: 'too large' }))).toEqual({
-      body: { code: 'VALIDATION', message: 'Request body too large' },
+      body: { code: 'PAYLOAD_TOO_LARGE', message: 'Request body too large' },
       status: 413,
     })
     expect(toApiError(new HTTPException(401)).body.code).toBe('UNAUTHENTICATED')
     expect(toApiError(new HTTPException(403)).body.code).toBe('FORBIDDEN')
     expect(toApiError(new HTTPException(404)).body.code).toBe('NOT_FOUND')
     expect(toApiError(new HTTPException(429)).body.code).toBe('RATE_LIMITED')
-    expect(toApiError(new HTTPException(413)).body).toEqual({ code: 'VALIDATION', message: 'Request body too large' })
+    expect(toApiError(new HTTPException(413)).body).toEqual({
+      code: 'PAYLOAD_TOO_LARGE',
+      message: 'Request body too large',
+    })
     expect(toApiError(new HTTPException(502))).toMatchObject({ body: { code: 'INTERNAL' }, status: 500 })
   })
 

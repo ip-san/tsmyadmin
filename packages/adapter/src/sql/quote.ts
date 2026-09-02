@@ -1,11 +1,12 @@
 import type { Dialect, Namespace } from '@tsmyadmin/shared'
+import { AdapterError } from '../types.ts'
 
 /**
  * Identifier quoting. Every user-supplied identifier (database, schema, table, column, index)
  * MUST pass through here before being embedded in SQL text.
  */
 export function quoteIdent(dialect: Dialect, name: string): string {
-  if (name.includes('\0')) throw new Error('Identifier contains NUL byte')
+  if (name.includes('\0')) throw new AdapterError('VALIDATION', 'Identifier contains a NUL byte')
   return dialect === 'mysql' ? `\`${name.replaceAll('`', '``')}\`` : `"${name.replaceAll('"', '""')}"`
 }
 

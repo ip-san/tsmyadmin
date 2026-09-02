@@ -2,11 +2,14 @@ import type { Cell } from './schemas/cell.ts'
 import { isBinaryCell } from './schemas/cell.ts'
 import { CSV_NULL } from './schemas/export.ts'
 
-/** One CSV field: NULL as `\\N`, binary as base64, quoting only when the text needs it. */
+/**
+ * One CSV field: NULL as an unquoted `\\N`, binary as base64, quoting only when the text needs it. A text value
+ * that happens to equal the NULL marker is quoted so the import can tell the two apart (as COPY / LOAD DATA do).
+ */
 export function csvField(cell: Cell): string {
   if (cell === null) return CSV_NULL
   const text = isBinaryCell(cell) ? cell.$bin : typeof cell === 'string' ? cell : String(cell)
-  return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text
+  return /[",\r\n]/.test(text) || text === CSV_NULL ? `"${text.replaceAll('"', '""')}"` : text
 }
 
 /** Header + rows as CRLF-terminated CSV (the format the table export and the SQL console download share). */
@@ -20,23 +23,40 @@ export interface CsvParseOptions {
   delimiter?: string
 }
 
+export interface CsvDocument {
+  rows: string[][]
+  /** Per field, whether it was written in quotes (a quoted `\\N` is the text, an unquoted one is NULL). */
+  quoted: boolean[][]
+}
+
 export function parseCsv(text: string, options: CsvParseOptions = {}): string[][] {
+  return parseCsvDocument(text, options).rows
+}
+
+export function parseCsvDocument(text: string, options: CsvParseOptions = {}): CsvDocument {
   const delimiter = options.delimiter ?? ','
-  const input = text.startsWith('﻿') ? text.slice(1) : text
+  const input = text.startsWith('\ufeff') ? text.slice(1) : text
   const rows: string[][] = []
+  const quotedRows: boolean[][] = []
   let row: string[] = []
+  let quotedRow: boolean[] = []
   let field = ''
   let quoted = false
+  let wasQuoted = false
   let i = 0
   const n = input.length
   const endField = () => {
     row.push(field)
+    quotedRow.push(wasQuoted)
     field = ''
+    wasQuoted = false
   }
   const endRow = () => {
     endField()
     rows.push(row)
+    quotedRows.push(quotedRow)
     row = []
+    quotedRow = []
   }
   while (i < n) {
     const ch = input[i] as string
@@ -57,6 +77,7 @@ export function parseCsv(text: string, options: CsvParseOptions = {}): string[][
     }
     if (ch === '"' && field.length === 0) {
       quoted = true
+      wasQuoted = true
       i++
       continue
     }
@@ -78,7 +99,12 @@ export function parseCsv(text: string, options: CsvParseOptions = {}): string[][
     field += ch
     i++
   }
-  if (field.length > 0 || row.length > 0) endRow()
+  if (field.length > 0 || wasQuoted || row.length > 0) endRow()
   // A trailing newline produces no extra row; a fully empty document produces none either.
-  return rows.filter((r, idx) => !(idx === rows.length - 1 && r.length === 1 && r[0] === ''))
+  const last = rows.length - 1
+  if (last >= 0 && rows[last]?.length === 1 && rows[last]?.[0] === '' && !quotedRows[last]?.[0]) {
+    rows.pop()
+    quotedRows.pop()
+  }
+  return { rows, quoted: quotedRows }
 }

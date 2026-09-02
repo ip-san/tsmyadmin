@@ -43,7 +43,7 @@ for (const t of TARGETS) {
       await fkDialog.getByLabel('ON DELETE').selectOption('SET NULL')
       await fkDialog.getByRole('button', { name: '次へ（SQL を確認）' }).click()
       await confirmPreview(page, /ADD CONSTRAINT[\s\S]*FOREIGN KEY[\s\S]*ON DELETE SET NULL/)
-      await expect(page.getByText(/外部キーを追加: 実行しました/)).toBeVisible()
+      await expect(page.getByText(/「外部キーを追加」を実行しました/)).toBeVisible()
       const fks = page.getByRole('table', { name: '外部キー' })
       const fkName = `fk_${table}_n`
       await expect(fks.getByRole('row').filter({ hasText: fkName })).toContainText('users (id)')
@@ -86,14 +86,14 @@ for (const t of TARGETS) {
       await page.getByRole('button', { name: '挿入する' }).click()
       await expect(page.getByText('1 行を挿入しました')).toBeVisible()
       await page.goto(tableUrl(t, table))
-      await expect(page.getByText('全 1 件')).toBeVisible()
+      await expect(page.getByText('全 1 行')).toBeVisible()
       await page.goto(tableUrl(t, table, '/operations'))
-      await page.getByRole('button', { name: 'テーブルを空にする' }).click()
+      await page.getByRole('button', { name: 'テーブルを空にする…' }).click()
       await confirmPreview(page, /TRUNCATE TABLE/, table)
       await page.goto(tableUrl(t, table))
-      await expect(page.getByText('全 0 件')).toBeVisible()
+      await expect(page.getByText('全 0 行')).toBeVisible()
       await page.goto(tableUrl(t, table, '/operations'))
-      await page.getByRole('button', { name: 'テーブルを削除' }).click()
+      await page.getByRole('button', { name: 'テーブルを削除…' }).click()
       await confirmPreview(page, /DROP TABLE/, table)
       await expect(page).toHaveURL(new RegExp(`/db/${t.database}(\\?|$)`))
       await expect(page.getByRole('table').first().getByRole('link', { name: table, exact: true })).toHaveCount(0)
@@ -110,7 +110,10 @@ for (const t of TARGETS) {
 
       await page.goto(tableUrl(t, table, '/operations'))
       await page.getByLabel('新しいテーブル名').fill(`${table}_x`)
-      await page.getByRole('button', { name: 'テーブル名を変更' }).click()
+      await page
+        .getByRole('form', { name: 'テーブル名を変更' })
+        .getByRole('button', { name: '次へ（SQL を確認）' })
+        .click()
       await confirmPreview(page, /RENAME TABLE|RENAME TO/)
       await expect(page).toHaveURL(new RegExp(`/table/${table}_x`))
       await expect(page.getByRole('heading', { name: new RegExp(`${table}_x`) })).toBeVisible()
@@ -131,10 +134,13 @@ for (const t of TARGETS) {
       const copy = `e2e_users_copy_${Date.now().toString(36)}`
       await page.goto(tableUrl(t, 'users', '/operations'))
       await page.getByLabel('コピー先のテーブル名').fill(copy)
-      await page.getByRole('button', { name: 'テーブルをコピー' }).click()
+      await page
+        .getByRole('form', { name: 'テーブルをコピー' })
+        .getByRole('button', { name: '次へ（SQL を確認）' })
+        .click()
       await confirmPreview(page, /CREATE TABLE[\s\S]*LIKE/)
       await expect(page).toHaveURL(new RegExp(`/table/${copy}`))
-      await expect(page.getByText('全 5 件')).toBeVisible()
+      await expect(page.getByText('全 5 行')).toBeVisible()
       await page.request.post(`/api/databases/${t.database}/sql`, {
         data: { sql: `DROP TABLE ${copy}`, ...(t.schema ? { schema: t.schema } : {}) },
       })

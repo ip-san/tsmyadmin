@@ -15,7 +15,7 @@ describe('describeCell', () => {
 describe('cellToText / cellToEditable', () => {
   it('renders NULL and binary placeholders in Japanese', () => {
     expect(cellToText(null)).toBe('NULL')
-    expect(cellToText({ $bin: 'qg==' })).toContain('1 bytes')
+    expect(cellToText({ $bin: 'qg==' })).toContain('1 バイト')
     expect(cellToText('x')).toBe('x')
   })
 
@@ -34,7 +34,7 @@ describe('errorMessage', () => {
     expect(errorMessage({ code: 'KEY_MISMATCH', message: 'm' })).toContain('一意に特定')
     expect(errorMessage(new Error('boom'))).toBe('boom')
     expect(errorMessage({ code: 'PERMISSION_DENIED', message: 'x', detail: 'denied', nativeCode: '42501' })).toBe(
-      'この操作に必要な権限が DB ユーザーにありません: denied [42501]'
+      'この操作に必要な権限がデータベースユーザーにありません: denied [42501]'
     )
   })
 })

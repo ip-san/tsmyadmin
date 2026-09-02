@@ -16,7 +16,7 @@ describe('LoginForm', () => {
     wrap(<LoginForm onLogin={onLogin} />)
     await userEvent.type(screen.getByLabelText('ユーザー名'), 'root')
     await userEvent.type(screen.getByLabelText('パスワード'), 'pw')
-    await userEvent.click(screen.getByRole('button', { name: '接続' }))
+    await userEvent.click(screen.getByRole('button', { name: '接続する' }))
     expect(onLogin).toHaveBeenCalledWith({
       dialect: 'mysql',
       host: '127.0.0.1',
@@ -54,7 +54,7 @@ describe('LoginForm', () => {
     await userEvent.selectOptions(screen.getByLabelText('接続先'), 'legacy')
     expect(screen.getByLabelText('ポート')).toHaveValue(3306)
     await userEvent.type(screen.getByLabelText('ユーザー名'), 'root')
-    await userEvent.click(screen.getByRole('button', { name: '接続' }))
+    await userEvent.click(screen.getByRole('button', { name: '接続する' }))
     await waitFor(() =>
       expect(onLogin).toHaveBeenCalledWith({
         dialect: 'mysql',
@@ -74,7 +74,7 @@ describe('LoginForm', () => {
       .mockRejectedValue({ code: 'AUTH_FAILED', message: 'denied', detail: 'Access denied for root' })
     wrap(<LoginForm onLogin={onLogin} />)
     await userEvent.type(screen.getByLabelText('ユーザー名'), 'root')
-    await userEvent.click(screen.getByRole('button', { name: '接続' }))
+    await userEvent.click(screen.getByRole('button', { name: '接続する' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('認証に失敗しました: Access denied for root')
   })
 })

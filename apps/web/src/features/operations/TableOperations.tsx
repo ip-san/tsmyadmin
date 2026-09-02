@@ -29,7 +29,7 @@ export function TableOperations({ tableRef, kind }: { tableRef: TableRef; kind: 
           <section className="flex-1 rounded border border-zinc-200 p-3 dark:border-zinc-700">
             <p className="mb-2 text-sm text-zinc-600 dark:text-zinc-300">{locale.ddl.truncateHint}</p>
             <Button variant="danger" onClick={() => flow.preview({ op: 'truncateTable', table: tableRef.table })}>
-              {locale.ddl.titles.truncateTable}
+              {locale.ddl.truncateButton}
             </Button>
           </section>
         )}
@@ -38,7 +38,7 @@ export function TableOperations({ tableRef, kind }: { tableRef: TableRef; kind: 
             {view ? locale.ddl.dropViewHint : locale.ddl.dropHint}
           </p>
           <Button variant="danger" onClick={() => flow.preview({ op: 'dropTable', table: tableRef.table, kind })}>
-            {view ? locale.ddl.dropView : locale.ddl.titles.dropTable}
+            {view ? locale.ddl.dropViewButton : locale.ddl.dropButton}
           </Button>
         </section>
       </div>

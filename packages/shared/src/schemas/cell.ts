@@ -19,3 +19,13 @@ export type RowValues = z.infer<typeof RowValuesSchema>
 export function isBinaryCell(cell: Cell): cell is BinaryCell {
   return typeof cell === 'object' && cell !== null && '$bin' in cell
 }
+
+/**
+ * Whether a column of this declared type carries `{ $bin }` cells on the wire (so a CSV import must decode its
+ * base64 text). MySQL BIT is binary; PostgreSQL bit / varbit arrive as '0101' text and stay text.
+ */
+export function isBinaryDataType(dataType: string, dialect: 'mysql' | 'postgres'): boolean {
+  return dialect === 'mysql'
+    ? /^(?:(?:tiny|medium|long)?blob|(?:var)?binary\b|bit\b)/i.test(dataType)
+    : /^bytea$/i.test(dataType)
+}

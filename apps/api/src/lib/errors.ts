@@ -15,6 +15,8 @@ const STATUS_BY_CODE: Record<ApiErrorCode, ContentfulStatusCode> = {
   KEY_MISMATCH: 409,
   UNSUPPORTED: 400,
   FORBIDDEN: 403,
+  HOST_NOT_ALLOWED: 403,
+  PAYLOAD_TOO_LARGE: 413,
   PERMISSION_DENIED: 403,
   RATE_LIMITED: 429,
   INTERNAL: 500,
@@ -49,11 +51,13 @@ export function toApiError(err: unknown): { body: ApiError; status: ContentfulSt
           ? 'FORBIDDEN'
           : err.status === 404
             ? 'NOT_FOUND'
-            : err.status === 429
-              ? 'RATE_LIMITED'
-              : err.status >= 400 && err.status < 500
-                ? 'VALIDATION'
-                : 'INTERNAL'
+            : err.status === 413
+              ? 'PAYLOAD_TOO_LARGE'
+              : err.status === 429
+                ? 'RATE_LIMITED'
+                : err.status >= 400 && err.status < 500
+                  ? 'VALIDATION'
+                  : 'INTERNAL'
     const status = code === 'INTERNAL' ? STATUS_BY_CODE.INTERNAL : (err.status as ContentfulStatusCode)
     const message = err.status === 413 ? 'Request body too large' : err.message || `HTTP ${err.status}`
     return { body: apiError(code, message), status }

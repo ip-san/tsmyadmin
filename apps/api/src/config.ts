@@ -73,18 +73,22 @@ export type AppConfig = {
   sessionMaxPerIdentity: number
 }
 
+/** Every startup-validation failure reads `Invalid environment: ...` (docs/deployment.md, docs/operations.md). */
 export class ConfigError extends Error {
   constructor(message: string) {
-    super(message)
+    super(`Invalid environment: ${message}`)
     this.name = 'ConfigError'
   }
 }
 
 export function loadConfig(env: Record<string, string | undefined>): AppConfig {
   // `.env.example` ships optional variables as `NAME=`; an empty value means "unset", not the empty string.
-  const parsed = EnvSchema.safeParse(Object.fromEntries(Object.entries(env).filter(([, v]) => v !== '')))
+  // TSMYADMIN_ALLOWED_HOSTS is the one exception: empty means "no default hosts, presets only" (docs/deployment.md).
+  const parsed = EnvSchema.safeParse(
+    Object.fromEntries(Object.entries(env).filter(([k, v]) => v !== '' || k === 'TSMYADMIN_ALLOWED_HOSTS'))
+  )
   if (!parsed.success) {
-    throw new ConfigError(`Invalid environment: ${formatIssues(parsed.error)}`)
+    throw new ConfigError(formatIssues(parsed.error))
   }
   const e = parsed.data
   const isProd = e.NODE_ENV === 'production'

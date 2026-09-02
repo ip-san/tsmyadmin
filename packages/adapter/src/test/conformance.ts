@@ -80,6 +80,7 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
     `${scratch}_fk`,
     `${scratch}_typedkey`,
     `${scratch}_enumkey`,
+    `${scratch}_nokey`,
     `${scratch}_ser`,
     `${scratch}_bin`,
     `${scratch}_part`,
@@ -957,6 +958,19 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         if (dialect === 'postgres') await execOk(`DROP TYPE ${t}_e`)
       })
 
+      it('exports every row of a key-less table exactly once across many batches', async () => {
+        const t = `${scratch}_nokey`
+        await execOk(`CREATE TABLE ${t} (a INT NOT NULL, b VARCHAR(10) NULL)`)
+        const values = Array.from({ length: 1200 }, (_, i) => `(${i}, 'v${i}')`)
+        await execOk(`INSERT INTO ${t} (a, b) VALUES ${values.join(', ')}`)
+        const seen: number[] = []
+        for await (const batch of db.iterateRows(ns, t, { batchSize: 7 }))
+          for (const r of batch.rows) seen.push(Number(r[0]))
+        expect(seen).toHaveLength(1200)
+        expect(new Set(seen).size).toBe(1200)
+        await execOk(`DROP TABLE ${t}`)
+      })
+
       it('iterates a view (no key: single batch on MySQL, ctid-less on PostgreSQL)', async () => {
         const batches: RowBatch[] = []
         for await (const b of db.iterateRows(ns, 'active_users', { batchSize: 2 })) batches.push(b)
@@ -1444,6 +1458,27 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         await runDdl({ op: 'copyTable', table: scratch, newName: copy, withData: false })
         expect((await browseAll(copy)).total).toBe(0)
         await execOk(`DROP TABLE ${copy}`)
+        // A copy of an auto-increment / identity table keeps inserting after the copied ids.
+        const src2 = `${scratch}_seq`
+        const idCol =
+          dialect === 'mysql' ? 'id INT AUTO_INCREMENT PRIMARY KEY' : 'id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY'
+        await execOk(`CREATE TABLE ${src2} (${idCol}, v INT NOT NULL)`)
+        await execOk(`INSERT INTO ${src2} (v) VALUES (1), (2), (3)`)
+        const identity = (await db.describeTable(ns, src2)).columns
+          .filter((c) => c.extra.startsWith('identity'))
+          .map((c) => c.name)
+        await runDdl({
+          op: 'copyTable',
+          table: src2,
+          newName: copy,
+          withData: true,
+          columns: ['id', 'v'],
+          identityColumns: identity,
+        })
+        expect(await db.insertRow(ns, copy, { v: 4 })).toEqual({ affectedRows: 1 })
+        expect((await browseAll(copy)).rows.map((r) => r[0])).toEqual([1, 2, 3, 4])
+        await execOk(`DROP TABLE ${copy}`)
+        await execOk(`DROP TABLE ${src2}`)
       })
 
       it('creates and drops a database, and a schema on PostgreSQL', async () => {

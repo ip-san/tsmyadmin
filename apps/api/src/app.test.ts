@@ -39,6 +39,7 @@ function fixtureAdapter(overrides: ConstructorParameters<typeof FakeAdapter>[0] 
               { id: 3, name: 'Carol' },
             ]
           ),
+          posts: fakeTable('posts', ['id', 'title'], [{ id: 1, title: 'hello' }]),
         },
       },
       other: { tables: {} },
@@ -172,12 +173,12 @@ describe('session', () => {
 })
 
 describe('hardening', () => {
-  it('refuses hosts outside the allowlist with 403 FORBIDDEN before touching the adapter', async () => {
+  it('refuses hosts outside the allowlist with 403 HOST_NOT_ALLOWED before touching the adapter', async () => {
     const h = harness(fixtureAdapter(), { allowedHosts: ['db.internal', '*.rds.amazonaws.com'] })
     stores.push(h.store)
     const res = await h.login({ ...LOGIN, host: 'evil.example' })
     expect(res.status).toBe(403)
-    expect(ApiErrorSchema.parse(await res.json()).code).toBe('FORBIDDEN')
+    expect(ApiErrorSchema.parse(await res.json()).code).toBe('HOST_NOT_ALLOWED')
     expect(h.adapter.calls).toHaveLength(0)
     expect((await h.login({ ...LOGIN, host: 'prod.rds.amazonaws.com' })).status).toBe(201)
   })
@@ -348,7 +349,7 @@ describe('hardening', () => {
     expect((await h.login({ ...LOGIN, host: '::1', port: 5433 })).status).toBe(403)
   })
 
-  it('maps framework 403 / 413 to FORBIDDEN / VALIDATION envelopes', async () => {
+  it('maps a framework 403 to a FORBIDDEN envelope', async () => {
     const h = harness()
     stores.push(h.store)
     await h.login()
@@ -454,7 +455,7 @@ describe('databases & tables', () => {
     expect(await (await h.req('/api/databases')).json()).toEqual([{ name: 'other' }, { name: 'shop' }])
     expect(await (await h.req('/api/databases/shop/schemas')).json()).toEqual([])
     const tables = z.array(TableInfoSchema).parse(await (await h.req('/api/databases/shop/tables')).json())
-    expect(tables.map((t) => t.name)).toEqual(['users'])
+    expect(tables.map((t) => t.name)).toEqual(['users', 'posts'])
     const structure = TableSchemaSchema.parse(await (await h.req('/api/databases/shop/tables/users/structure')).json())
     expect(structure.primaryKey).toEqual(['id'])
   })
@@ -831,7 +832,9 @@ describe('export', () => {
     const csv = await h.req('/api/databases/shop/export?format=csv&tables=users')
     expect(csv.status).toBe(200)
     expect(await csv.text()).toContain('id,name')
-    expect((await h.req('/api/databases/shop/export?format=csv&tables=users,users2')).status).toBe(400)
+    expect((await h.req('/api/databases/shop/export?format=csv&tables=users,posts')).status).toBe(400)
+    // Unknown tables are refused before the download starts (a JSON 404, not an aborted stream).
+    expect((await h.req('/api/databases/shop/export?format=sql&tables=users,users2')).status).toBe(404)
     expect((await h.req('/api/databases/shop/export?format=xml')).status).toBe(400)
   })
 })
@@ -853,20 +856,23 @@ describe('import', () => {
     })
   }
 
-  it('rejects files over IMPORT_MAX_BYTES with 400 and bodies over the route limit with 413', async () => {
+  it('rejects files over IMPORT_MAX_BYTES and bodies over the route limit with 413 PAYLOAD_TOO_LARGE', async () => {
     const h = harness()
     stores.push(h.store)
     await h.login()
     const tooBig = await upload(h, { format: 'sql' }, { name: 'big.sql', body: 'x'.repeat(IMPORT_MAX_BYTES + 1) })
-    expect(tooBig.status).toBe(400)
-    expect(ApiErrorSchema.parse(await tooBig.json()).code).toBe('VALIDATION')
+    expect(tooBig.status).toBe(413)
+    expect(ApiErrorSchema.parse(await tooBig.json()).code).toBe('PAYLOAD_TOO_LARGE')
     const overLimit = await upload(
       h,
       { format: 'sql' },
       { name: 'huge.sql', body: 'x'.repeat(IMPORT_MAX_BYTES + 2 * 1024 * 1024) }
     )
     expect(overLimit.status).toBe(413)
-    expect(ApiErrorSchema.parse(await overLimit.json()).message).toBe('Request body too large')
+    expect(ApiErrorSchema.parse(await overLimit.json())).toMatchObject({
+      code: 'PAYLOAD_TOO_LARGE',
+      message: 'Request body too large',
+    })
   })
 
   it('decodes percent-encoded database and table names', async () => {

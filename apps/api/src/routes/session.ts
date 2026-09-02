@@ -64,7 +64,10 @@ export function sessionRoutes(cfg: SessionConfig, deps: SessionRouteDeps) {
       if (!isHostAllowed(body.host, body.port, deps.allowedHosts)) {
         deps.logger.log('warn', 'login.host_not_allowed', audit)
         return c.json(
-          apiError('FORBIDDEN', `Connections to "${body.host}:${body.port}" are not allowed (TSMYADMIN_ALLOWED_HOSTS)`),
+          apiError(
+            'HOST_NOT_ALLOWED',
+            `Connections to "${body.host}:${body.port}" are not allowed (TSMYADMIN_ALLOWED_HOSTS)`
+          ),
           403
         )
       }

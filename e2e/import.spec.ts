@@ -28,7 +28,7 @@ for (const t of TARGETS) {
       await expect(page.getByText(`${table} に 2 行を挿入しました`)).toBeVisible()
 
       await page.goto(tableUrl(t, table))
-      await expect(page.getByText('全 3 件')).toBeVisible()
+      await expect(page.getByText('全 3 行')).toBeVisible()
       await expect(page.getByRole('cell', { name: 'from, csv', exact: true })).toBeVisible()
 
       await page.request.post(`/api/databases/${t.database}/sql`, {

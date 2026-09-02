@@ -69,6 +69,8 @@ export class SqliteSessionStore implements SessionStore {
     byIdentity: StatementSync
   }
   private readonly maxPerIdentity: number
+  /** True when the file held sessions sealed under a different secret; they were deleted on open. */
+  readonly secretRotated: boolean
 
   constructor(options: SqliteSessionStoreOptions) {
     if (options.path !== ':memory:') mkdirSync(dirname(options.path), { recursive: true })
@@ -103,6 +105,18 @@ export class SqliteSessionStore implements SessionStore {
     }
     this.maxPerIdentity = options.maxPerIdentity ?? DEFAULT_MAX_SESSIONS_PER_IDENTITY
     this.key = deriveSessionKey(options.secret)
+    // Rows sealed under a previous SESSION_SECRET are unreadable and would otherwise linger (still decryptable
+    // with the old secret) until the TTL sweep: a fingerprint of the key detects the rotation and purges them.
+    this.db.exec('CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)')
+    const fingerprint = createHmac('sha256', this.key).update('tsmyadmin-session-key').digest('hex')
+    const stored = this.db.prepare("SELECT value FROM meta WHERE key = 'key_fingerprint'").get() as
+      | { value: string }
+      | undefined
+    this.secretRotated = stored !== undefined && stored.value !== fingerprint
+    if (this.secretRotated) this.db.exec('DELETE FROM sessions')
+    if (stored?.value !== fingerprint) {
+      this.db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('key_fingerprint', ?)").run(fingerprint)
+    }
     this.ttlMs = options.ttlMs ?? SESSION_TTL_MS
     this.now = options.now ?? Date.now
     this.touchIntervalMs = options.touchIntervalMs ?? 60_000

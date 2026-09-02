@@ -16,7 +16,7 @@ describe('quoteIdent', () => {
   })
 
   it('rejects NUL bytes', () => {
-    expect(() => quoteIdent('mysql', 'a\0b')).toThrow()
+    expect(() => quoteIdent('mysql', 'a\0b')).toThrow(expect.objectContaining({ code: 'VALIDATION' }))
   })
 })
 

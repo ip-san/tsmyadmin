@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BrowseQuerySchema, buildBrowseQuery, parseBrowseQuery } from './browse-query.ts'
+import { BrowseQuerySchema, buildBrowseQuery, encodeSort, parseBrowseQuery } from './browse-query.ts'
 
 describe('browse query', () => {
   it('parses defaults', () => {
@@ -28,6 +28,30 @@ describe('browse query', () => {
     })
   })
 
+  it('escapes separators inside column names and keeps plain names readable', () => {
+    expect(
+      encodeSort([
+        { column: 'a,b:c', direction: 'desc' },
+        { column: 'name', direction: 'asc' },
+      ])
+    ).toBe('a%2Cb%3Ac:desc,name:asc')
+    const q = BrowseQuerySchema.parse({ sort: 'a%2Cb%3Ac:desc,name:asc' })
+    expect(parseBrowseQuery(q)).toMatchObject({
+      ok: true,
+      options: {
+        sort: [
+          { column: 'a,b:c', direction: 'desc' },
+          { column: 'name', direction: 'asc' },
+        ],
+      },
+    })
+    // A literal % that is not an escape sequence is taken as written.
+    expect(parseBrowseQuery(BrowseQuerySchema.parse({ sort: '100%:asc' }))).toMatchObject({
+      ok: true,
+      options: { sort: [{ column: '100%', direction: 'asc' }] },
+    })
+  })
+
   it('rejects bad sort direction, bad JSON and unknown ops', () => {
     expect(parseBrowseQuery(BrowseQuerySchema.parse({ sort: 'name:sideways' })).ok).toBe(false)
     expect(parseBrowseQuery(BrowseQuerySchema.parse({ filters: '{oops' })).ok).toBe(false)
@@ -42,7 +66,7 @@ describe('browse query', () => {
     const options = {
       offset: 5,
       limit: 50,
-      sort: [{ column: 'a:b', direction: 'desc' as const }],
+      sort: [{ column: 'a:b,c%', direction: 'desc' as const }],
       filters: [{ column: 'x', op: 'is_null' as const }],
     }
     const q = BrowseQuerySchema.parse(buildBrowseQuery(options, 'app'))

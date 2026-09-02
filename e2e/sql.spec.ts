@@ -30,12 +30,12 @@ for (const t of TARGETS) {
     test('attributes errors to the failing statement and records history', async ({ page }) => {
       await page.goto(t.schema ? `/db/${t.database}/sql?schema=${t.schema}` : `/db/${t.database}/sql`)
       await typeSql(page, 'SELECT 1 AS ok; SELECT * FROM table_that_is_missing; SELECT 3')
-      await page.getByRole('button', { name: '実行' }).click()
+      await page.getByRole('button', { name: '実行する' }).click()
       await expect(page.getByRole('region', { name: '文 1' })).toContainText('1 行')
       const failed = page.getByRole('region', { name: '文 2' })
       await expect(failed).toContainText('エラー')
       await expect(failed.getByRole('alert')).toContainText(/table_that_is_missing/i)
-      await expect(failed.getByTitle('DB エラーコード')).toHaveText(
+      await expect(failed.getByTitle('サーバーのエラーコード')).toHaveText(
         t.dialect === 'mysql' ? 'ER_NO_SUCH_TABLE' : '42P01'
       )
       if (t.dialect === 'postgres') await expect(failed.getByRole('alert')).toContainText('1 行目 15 文字目')
@@ -47,7 +47,7 @@ for (const t of TARGETS) {
     test('shows earlier results while a later statement is still running', async ({ page }) => {
       await page.goto(t.schema ? `/db/${t.database}/sql?schema=${t.schema}` : `/db/${t.database}/sql`)
       await typeSql(page, `SELECT 'first' AS step; ${slowSql(t.dialect)}`)
-      await page.getByRole('button', { name: '実行', exact: true }).click()
+      await page.getByRole('button', { name: '実行する', exact: true }).click()
       // First statement's result arrives before the slow one finishes: the run is still cancellable.
       await expect(
         page.getByRole('region', { name: '文 1' }).getByRole('cell', { name: 'first', exact: true })
@@ -61,11 +61,11 @@ for (const t of TARGETS) {
       await page.goto(t.schema ? `/db/${t.database}/sql?schema=${t.schema}` : `/db/${t.database}/sql`)
       const slow = slowSql(t.dialect)
       await typeSql(page, slow)
-      await page.getByRole('button', { name: '実行', exact: true }).click()
+      await page.getByRole('button', { name: '実行する', exact: true }).click()
       await page.getByRole('button', { name: 'キャンセル' }).click()
       const first = page.getByRole('region', { name: '文 1' })
       await expect(first).toContainText('エラー', { timeout: 15_000 })
-      await expect(page.getByRole('button', { name: '実行', exact: true })).toBeEnabled()
+      await expect(page.getByRole('button', { name: '実行する', exact: true })).toBeEnabled()
     })
 
     test('EXPLAIN, saved queries and result download', async ({ page }) => {
@@ -78,7 +78,7 @@ for (const t of TARGETS) {
       // Bookmark, reload the page and load it back into the editor.
       await page.getByText('保存済みクエリ (0)').click()
       await page.getByLabel('クエリ名').fill('two names')
-      await page.getByRole('button', { name: '保存', exact: true }).click()
+      await page.getByRole('button', { name: '保存する', exact: true }).click()
       await expect(page.getByText('保存済みクエリ (1)')).toBeVisible()
       await page.reload()
       await page.getByText('保存済みクエリ (1)').click()
@@ -87,7 +87,7 @@ for (const t of TARGETS) {
         .filter({ hasText: 'two names' })
         .getByRole('button', { name: '読み込む' })
         .click()
-      await page.getByRole('button', { name: '実行', exact: true }).click()
+      await page.getByRole('button', { name: '実行する', exact: true }).click()
       const result = page.getByRole('region', { name: '文 1' })
       await expect(result.getByRole('cell', { name: 'Alice', exact: true })).toBeVisible()
       const download = page.waitForEvent('download')
@@ -108,7 +108,7 @@ for (const t of TARGETS) {
     test('table SQL tab is prefilled and DML refreshes the browse view', async ({ page }) => {
       await page.goto(tableUrl(t, 'users', '/sql'))
       await expect(page.getByRole('textbox', { name: 'SQL エディタ' })).toContainText('SELECT * FROM')
-      await page.getByRole('button', { name: '実行' }).click()
+      await page.getByRole('button', { name: '実行する' }).click()
       await expect(page.getByRole('region', { name: '文 1' })).toContainText('5 行')
       await expect(
         page.getByRole('region', { name: '文 1' }).getByRole('cell', { name: 'Eve', exact: true })

@@ -53,6 +53,7 @@ export type AdapterErrorCode = Extract<
   | 'KEY_MISMATCH'
   | 'UNSUPPORTED'
   | 'PERMISSION_DENIED'
+  | 'VALIDATION'
 >
 
 export interface AdapterErrorExtra {

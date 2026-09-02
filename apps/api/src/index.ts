@@ -31,15 +31,32 @@ if (config.isProd && anyPort.length > 0)
 
 // Every adapter a session ever sees goes through this factory, so auditing cannot be bypassed.
 const adapterFactory = auditedAdapterFactory(createAdapter, logger)
+function openSqliteStore(): SqliteSessionStore {
+  try {
+    const sqlite = new SqliteSessionStore({
+      path: config.sessionDbPath,
+      secret: config.sessionSecret,
+      ttlMs: config.sessionTtlMs,
+      maxPerIdentity: config.sessionMaxPerIdentity,
+      adapterFactory,
+    })
+    if (sqlite.secretRotated) logger.log('warn', 'session_store.reset', { reason: 'secret_changed' })
+    return sqlite
+  } catch (err) {
+    // An unwritable SESSION_DB_PATH is the most common first-run failure in containers (bind mount owned by
+    // root): report it as a structured log line instead of a raw stack trace and exit like a config error.
+    logger.log('error', 'session_store.open_failed', {
+      path: config.sessionDbPath,
+      error: err instanceof Error ? err.message : String(err),
+      hint: 'SESSION_DB_PATH must be writable by the process user (uid 1000 in the container image)',
+    })
+    process.exit(1)
+  }
+}
+
 const store: SessionStore =
   config.sessionStore === 'sqlite'
-    ? new SqliteSessionStore({
-        path: config.sessionDbPath,
-        secret: config.sessionSecret,
-        ttlMs: config.sessionTtlMs,
-        maxPerIdentity: config.sessionMaxPerIdentity,
-        adapterFactory,
-      })
+    ? openSqliteStore()
     : new MemorySessionStore({
         ttlMs: config.sessionTtlMs,
         maxPerIdentity: config.sessionMaxPerIdentity,

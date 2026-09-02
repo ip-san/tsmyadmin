@@ -1,6 +1,6 @@
 import type { DatabaseAdapter } from '@tsmyadmin/adapter'
 import type { Cell, ImportForm, ImportResult, Namespace } from '@tsmyadmin/shared'
-import { parseCsv } from '@tsmyadmin/shared'
+import { isBinaryDataType, parseCsvDocument } from '@tsmyadmin/shared'
 
 const MAX_ERRORS = 20
 const SQL_IMPORT_TIMEOUT_MS = 10 * 60 * 1000
@@ -34,6 +34,8 @@ export async function importSql(
   }
 }
 
+const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/
+
 export async function importCsv(
   adapter: DatabaseAdapter,
   ns: Namespace,
@@ -43,30 +45,42 @@ export async function importCsv(
   const table = form.table
   if (!table) throw new ImportValidationError('CSV import requires a target table')
   const started = performance.now()
-  const parsed = parseCsv(text, { delimiter: form.delimiter })
+  const doc = parseCsvDocument(text, { delimiter: form.delimiter })
+  // Blank lines (a common artefact of hand-edited files) carry no row; they are skipped like LOAD DATA does.
+  const lines = doc.rows.map((r, i) => ({ fields: r, quoted: doc.quoted[i] ?? [], line: i + 1 }))
+  const parsed = lines.filter((l) => !(l.fields.length === 1 && l.fields[0] === '' && !l.quoted[0]))
   if (parsed.length === 0) throw new ImportValidationError('The CSV file is empty')
   const schema = await adapter.describeTable(ns, table)
-  const known = new Set(schema.columns.map((c) => c.name))
+  const known = new Map(schema.columns.map((c) => [c.name, c]))
   let columns: string[]
-  let data: string[][]
+  let data: typeof parsed
   if (form.header === '1') {
-    columns = (parsed[0] ?? []).map((c) => c.trim())
+    columns = (parsed[0]?.fields ?? []).map((c) => c.trim())
     data = parsed.slice(1)
     const unknown = columns.filter((c) => !known.has(c))
     if (unknown.length > 0) throw new ImportValidationError(`Unknown column(s) in header: ${unknown.join(', ')}`)
   } else {
     // reduce, not spread: a 64 MB CSV can exceed the argument limit of Math.max(...)
-    const width = parsed.reduce((m, r) => Math.max(m, r.length), 0)
+    const width = parsed.reduce((m, r) => Math.max(m, r.fields.length), 0)
     columns = schema.columns.slice(0, width).map((c) => c.name)
     data = parsed
   }
   if (columns.length === 0) throw new ImportValidationError('No columns to import')
-  const rows: Cell[][] = data.map((r, i) => {
-    if (r.length > columns.length)
-      throw new ImportValidationError(`Row ${i + 1} has ${r.length} fields but ${columns.length} columns`)
-    return columns.map((_, j) => {
-      const v = r[j]
-      return v === undefined || v === form.nullMarker ? null : v
+  // Binary columns are exported as base64 (see csvField) and must come back as binary cells, not as that text.
+  const binary = columns.map((c) => {
+    const col = known.get(c)
+    return col !== undefined && isBinaryDataType(col.dataType, adapter.dialect)
+  })
+  const rows: Cell[][] = data.map((r) => {
+    if (r.fields.length > columns.length)
+      throw new ImportValidationError(`Line ${r.line} has ${r.fields.length} fields but ${columns.length} columns`)
+    return columns.map((name, j) => {
+      const v = r.fields[j]
+      // Only an unquoted marker means NULL: a quoted one is the literal text (COPY / LOAD DATA semantics).
+      if (v === undefined || (v === form.nullMarker && !r.quoted[j])) return null
+      if (!binary[j]) return v
+      if (!BASE64.test(v)) throw new ImportValidationError(`Line ${r.line}: column ${name} expects base64 binary data`)
+      return { $bin: v }
     })
   })
   const result = await adapter.insertRows(ns, table, columns, rows)

@@ -22,7 +22,7 @@ test.describe('visual regression', () => {
   test('browse', async ({ page }) => {
     await login(page, t)
     await page.goto(tableUrl(t, 'users'))
-    await page.getByText('全 5 件').waitFor()
+    await page.getByText('全 5 行').waitFor()
     await expect(page).toHaveScreenshot('browse.png', options(page))
   })
 

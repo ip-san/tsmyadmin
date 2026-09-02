@@ -36,14 +36,25 @@ export function cellToEditable(cell: Cell): string {
   return typeof cell === 'string' ? cell : String(cell)
 }
 
+/** Codes whose Japanese text says everything; the server's English message would only repeat it. */
+const SELF_EXPLANATORY = new Set<string>([
+  'INTERNAL',
+  'UNAUTHENTICATED',
+  'RATE_LIMITED',
+  'NETWORK',
+  'HOST_NOT_ALLOWED',
+  'PAYLOAD_TOO_LARGE',
+])
+
 export function errorMessage(err: unknown): string {
   if (err && typeof err === 'object' && 'code' in err && typeof err.code === 'string') {
     const code = err.code as keyof typeof locale.errors
     const base = locale.errors[code] ?? locale.errors.INTERNAL
+    // A DB-native message (QUERY_FAILED, …) is kept verbatim: DBAs want it. Generic codes drop the English echo.
     const detail =
       'detail' in err && typeof err.detail === 'string'
         ? err.detail
-        : 'message' in err && typeof err.message === 'string'
+        : !SELF_EXPLANATORY.has(code) && 'message' in err && typeof err.message === 'string'
           ? err.message
           : ''
     const native = 'nativeCode' in err && typeof err.nativeCode === 'string' ? ` [${err.nativeCode}]` : ''

@@ -130,13 +130,17 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
           .map((t) => t.trim())
           .filter((t) => t.length > 0)
         // Everything by default, tables before views so a CREATE VIEW in the dump follows its base tables.
-        const all = requested.length > 0 ? null : await adapter.listTables(namespace)
+        // Requested names are checked up front: once the streamed body has started, a failure can only abort
+        // the download, never turn into a JSON error the client can show.
+        const all = await adapter.listTables(namespace)
+        const missing = requested.filter((name) => !all.some((t) => t.name === name))
+        if (missing.length > 0) {
+          return c.json(apiError('NOT_FOUND', `Unknown table(s): ${missing.join(', ')}`), 404)
+        }
         const tables =
           requested.length > 0
             ? requested
-            : [...(all ?? []).filter((t) => t.kind === 'table'), ...(all ?? []).filter((t) => t.kind !== 'table')].map(
-                (t) => t.name
-              )
+            : [...all.filter((t) => t.kind === 'table'), ...all.filter((t) => t.kind !== 'table')].map((t) => t.name)
         if (q.format === 'csv' && tables.length !== 1) {
           return c.json(apiError('VALIDATION', 'CSV export needs exactly one table'), 400)
         }
@@ -167,7 +171,7 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
           const file = body.file
           if (!(file instanceof File)) return c.json(apiError('VALIDATION', 'A file is required'), 400)
           if (file.size > IMPORT_MAX_BYTES)
-            return c.json(apiError('VALIDATION', `File exceeds ${IMPORT_MAX_BYTES} bytes`), 400)
+            return c.json(apiError('PAYLOAD_TOO_LARGE', `File exceeds ${IMPORT_MAX_BYTES} bytes`), 413)
           const text = await file.text()
           const adapter = c.get('session').adapter
           const namespace = ns(c.req.param('db'), form.schema)
@@ -279,7 +283,11 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
         // would fail after the empty copy was already created, since DDL autocommits).
         if (op.op === 'copyTable' && op.withData && op.columns === undefined) {
           const schema = await adapter.describeTable(target, op.table)
-          op = { ...op, columns: schema.columns.filter((col) => !isGeneratedColumn(col.extra)).map((col) => col.name) }
+          op = {
+            ...op,
+            columns: schema.columns.filter((col) => !isGeneratedColumn(col.extra)).map((col) => col.name),
+            identityColumns: schema.columns.filter((col) => col.extra.startsWith('identity')).map((col) => col.name),
+          }
         }
         return c.json({ sql: adapter.ddl.build(target, op) })
       })

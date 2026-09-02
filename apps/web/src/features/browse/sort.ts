@@ -1,9 +1,9 @@
-import type { BrowseOptions } from '@tsmyadmin/shared'
+import { type BrowseOptions, encodeSort } from '@tsmyadmin/shared'
 
 type Sort = BrowseOptions['sort']
 
 function encode(sort: Sort): string | undefined {
-  return sort.length === 0 ? undefined : sort.map((s) => `${s.column}:${s.direction}`).join(',')
+  return sort.length === 0 ? undefined : encodeSort(sort)
 }
 
 /**

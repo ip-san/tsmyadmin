@@ -27,7 +27,22 @@ function confirmName(op: DdlOp): string | null {
 }
 
 function opTitle(op: DdlOp): string {
-  return op.op === 'dropTable' && op.kind !== 'table' ? locale.ddl.dropView : locale.ddl.titles[op.op]
+  return op.op === 'dropTable' && op.kind !== 'table' ? locale.ddl.dropViewTitle : locale.ddl.titles[op.op]
+}
+
+/** Which destructive ops lose stored data (a dropped view, index, key or event loses only its definition). */
+function lossWarning(op: DdlOp): string | null {
+  switch (op.op) {
+    case 'dropTable':
+      return op.kind === 'table' ? locale.ddl.dataLoss : null
+    case 'truncateTable':
+    case 'dropColumn':
+      return locale.ddl.dataLoss
+    case 'dropDatabase':
+      return locale.ddl.databaseLoss
+    default:
+      return null
+  }
 }
 
 export function DdlPreviewDialog({ flow }: { flow: DdlFlow }) {
@@ -37,8 +52,9 @@ export function DdlPreviewDialog({ flow }: { flow: DdlFlow }) {
       title={opTitle}
       destructive={(op) => DESTRUCTIVE.has(op.op)}
       confirmName={confirmName}
+      lossWarning={lossWarning}
       hint={locale.ddl.previewHint}
-      successMessage={(op) => `${opTitle(op)}: ${locale.ddl.executed}`}
+      successMessage={(op) => locale.ddl.executed(opTitle(op))}
     />
   )
 }

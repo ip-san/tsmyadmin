@@ -117,14 +117,23 @@ describe('SqliteSessionStore', () => {
     await second.closeAll()
   })
 
-  it('drops sessions sealed with a different secret instead of failing', async () => {
+  it('purges every row sealed with a different secret when the store opens', async () => {
     const path = tmpFile()
     const a = new SqliteSessionStore({ path, secret: 'one', adapterFactory: factory(), sweepIntervalMs: 0 })
     const s = await a.create(config)
+    await a.create(config)
+    expect(a.secretRotated).toBe(false)
     await a.closeAll()
+    // Same secret: rows survive the restart untouched.
+    const same = new SqliteSessionStore({ path, secret: 'one', adapterFactory: factory(), sweepIntervalMs: 0 })
+    expect(same.secretRotated).toBe(false)
+    expect(same.size).toBe(2)
+    await same.closeAll()
+    // Rotated secret: the rows are deleted up front (not left until a lookup or the TTL sweep).
     const b = new SqliteSessionStore({ path, secret: 'two', adapterFactory: factory(), sweepIntervalMs: 0 })
-    expect(await b.get(s.id)).toBeUndefined()
+    expect(b.secretRotated).toBe(true)
     expect(b.size).toBe(0)
+    expect(await b.get(s.id)).toBeUndefined()
     await b.closeAll()
   })
 

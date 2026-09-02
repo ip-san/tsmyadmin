@@ -527,11 +527,13 @@ export abstract class BaseAdapter implements DatabaseAdapter {
       key.keyKind === 'pk' ? key.keyColumns.map((c) => schema.columns.findIndex((col) => col.name === c)) : []
     if (keyIndexes.includes(-1)) throw new AdapterError('QUERY_FAILED', 'Key column missing from table schema')
     const keyTypes = keyIndexes.map((i) => schema.columns[i]?.dataType ?? '')
+    // The fallback key is selected as `ctid::text AS "ctid"`; an unqualified ORDER BY ctid would bind to that
+    // text output column (sorting '(0,10)' before '(0,2)') and disagree with the tid comparison in WHERE.
     const keyExprs =
       key.keyKind === 'pk'
         ? key.keyColumns.map((c, i) => this.keyColumnExpr(quoteIdent(d, c), keyTypes[i] ?? ''))
         : byCtid
-          ? ['ctid']
+          ? [`${tableSql}.ctid`]
           : []
     const selectList = byCtid && fallback ? [...columns, fallback] : columns
     const orderBy = keyExprs.length > 0 ? ` ORDER BY ${keyExprs.join(', ')}` : ''
@@ -547,7 +549,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
         const params = new Params(d)
         let where = ''
         if (last) {
-          if (byCtid) where = ` WHERE ctid > ${params.add(last[last.length - 1])}::tid`
+          if (byCtid) where = ` WHERE ${tableSql}.ctid > ${params.add(last[last.length - 1])}::tid`
           else {
             const lastRow = last
             const lastKey = keyIndexes.map((i, k) =>

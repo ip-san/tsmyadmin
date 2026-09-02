@@ -6,7 +6,7 @@ export const BrowseQuerySchema = z.object({
   schema: z.string().min(1).optional(),
   offset: z.coerce.number().int().min(0).default(0),
   limit: z.coerce.number().int().min(1).max(BROWSE_MAX_LIMIT).default(100),
-  /** "col:asc,col2:desc" */
+  /** "col:asc,col2:desc" — column names are percent-encoded so `,` / `:` / `%` in a name survive (see encodeSort) */
   sort: z.string().optional(),
   /** JSON-encoded Filter[] */
   filters: z.string().optional(),
@@ -26,8 +26,8 @@ export function parseBrowseQuery(q: BrowseQuery): ParsedBrowseQuery {
     .map((s) => {
       const idx = s.lastIndexOf(':')
       return idx === -1
-        ? { column: s, direction: 'asc' }
-        : { column: s.slice(0, idx), direction: s.slice(idx + 1).toLowerCase() }
+        ? { column: decodeColumn(s), direction: 'asc' }
+        : { column: decodeColumn(s.slice(0, idx)), direction: s.slice(idx + 1).toLowerCase() }
     })
   const sort = SortListSchema.safeParse(sortRaw)
   if (!sort.success) return { ok: false, message: `Invalid sort: ${sort.error.issues[0]?.message ?? 'malformed'}` }
@@ -49,7 +49,21 @@ export function parseBrowseQuery(q: BrowseQuery): ParsedBrowseQuery {
 export function buildBrowseQuery(options: BrowseOptions, schema?: string): Record<string, string> {
   const out: Record<string, string> = { offset: String(options.offset), limit: String(options.limit) }
   if (schema) out.schema = schema
-  if (options.sort.length > 0) out.sort = options.sort.map((s) => `${s.column}:${s.direction}`).join(',')
+  if (options.sort.length > 0) out.sort = encodeSort(options.sort)
   if (options.filters.length > 0) out.filters = JSON.stringify(options.filters)
   return out
+}
+
+/** Query-string form of a sort list: readable `name:asc`, with the separators escaped inside column names. */
+export function encodeSort(sort: BrowseOptions['sort']): string {
+  return sort.map((s) => `${encodeURIComponent(s.column)}:${s.direction}`).join(',')
+}
+
+/** Inverse of encodeSort's column escaping; a name that is not valid percent-encoding is taken literally. */
+function decodeColumn(text: string): string {
+  try {
+    return decodeURIComponent(text)
+  } catch {
+    return text
+  }
 }

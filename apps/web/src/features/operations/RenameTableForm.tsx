@@ -39,7 +39,7 @@ export function RenameTableForm({ tableRef }: { tableRef: TableRef }) {
           </Field>
         </div>
         <Button type="submit" variant="primary" disabled={!changed}>
-          {locale.ddl.titles.renameTable}
+          {locale.ddl.submit}
         </Button>
       </form>
       <DdlPreviewDialog flow={flow} />

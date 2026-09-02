@@ -83,6 +83,6 @@ describe('RowForm (edit)', () => {
 
   it('keeps binary values read-only', () => {
     render(<RowForm columns={[col('blob')]} mode="edit" initial={{ blob: { $bin: 'AA==' } }} onSubmit={vi.fn()} />)
-    expect(screen.getByText('バイナリ値はここでは編集できません')).toBeInTheDocument()
+    expect(screen.getByText(/バイナリ値はここでは編集できません/)).toBeInTheDocument()
   })
 })

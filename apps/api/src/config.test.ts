@@ -54,6 +54,17 @@ describe('loadConfig', () => {
   })
 })
 
+describe('empty values', () => {
+  it('treats an empty TSMYADMIN_ALLOWED_HOSTS as "presets only" instead of the default hosts', () => {
+    const config = loadConfig({
+      TSMYADMIN_ALLOWED_HOSTS: '',
+      TSMYADMIN_SERVERS: '[{"name":"p","dialect":"postgres","host":"db.internal","port":5432}]',
+    })
+    expect(config.allowedHosts).toEqual(['db.internal:5432'])
+    expect(() => loadConfig({ TSMYADMIN_ALLOWED_HOSTS: '' })).toThrow(/^Invalid environment: TSMYADMIN_ALLOWED_HOSTS/)
+  })
+})
+
 describe('.env.example', () => {
   it('loads as-is: every empty value counts as unset and the defaults apply', () => {
     const text = readFileSync(new URL('../../../.env.example', import.meta.url), 'utf8')
@@ -87,6 +98,10 @@ describe('TSMYADMIN_SERVERS', () => {
 
   it('rejects malformed JSON, invalid presets and duplicate names', () => {
     expect(() => loadConfig({ TSMYADMIN_SERVERS: '{oops' })).toThrow(/JSON array/)
+    // Unknown keys (a password, a typo) are rejected rather than silently dropped.
+    expect(() =>
+      loadConfig({ TSMYADMIN_SERVERS: '[{"name":"x","dialect":"mysql","host":"h","port":1,"password":"p"}]' })
+    ).toThrow(/password/)
     expect(() => loadConfig({ TSMYADMIN_SERVERS: '[{"name":"x","dialect":"oracle","host":"h","port":1}]' })).toThrow(
       /dialect/
     )

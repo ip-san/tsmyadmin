@@ -40,7 +40,7 @@ describe('importCsv', () => {
 
   it('rejects unknown header columns, too-wide rows, empty files and a missing table', async () => {
     await expect(importCsv(adapter(), ns, form({}), 'id,nope\n1,2\n')).rejects.toThrow(/Unknown column/)
-    await expect(importCsv(adapter(), ns, form({}), 'id\n1,2\n')).rejects.toThrow(/Row 1 has 2 fields/)
+    await expect(importCsv(adapter(), ns, form({}), 'id\n1,2\n')).rejects.toThrow(/Line 2 has 2 fields/)
     await expect(importCsv(adapter(), ns, form({}), '')).rejects.toThrow(/empty/)
     await expect(
       importCsv(adapter(), ns, ImportFormSchema.parse({ file: new File([''], 'x.csv'), format: 'csv' }), 'id\n1\n')

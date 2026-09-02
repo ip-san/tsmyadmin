@@ -43,12 +43,16 @@ export function createLogger(
   }
 }
 
+/** Liveness / readiness probes fire every few seconds; a successful probe is not worth an access-log line. */
+const PROBE_PATHS = new Set(['/healthz', '/readyz'])
+
 /** Access log with request id and latency; the id is also returned as X-Request-Id for correlation. */
 export function requestLogger(logger: Logger, ip: (c: Context) => string): MiddlewareHandler {
   return async (c, next) => {
     const started = performance.now()
     const requestId = c.get('requestId') as string | undefined
     await next()
+    if (PROBE_PATHS.has(c.req.path) && c.res.status < 400) return
     logger.log(c.res.status >= 500 ? 'error' : 'info', 'http', {
       requestId,
       method: c.req.method,

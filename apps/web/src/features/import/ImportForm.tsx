@@ -60,13 +60,15 @@ export function ImportForm({ db, schema, table }: ImportFormProps) {
     const detected = f ? detectFormat(f.name) : null
     if (detected) setFormat(detected)
   }
+  // Checked here so the user gets the limit in their own language before a 64 MB upload is attempted.
+  const tooLarge = file !== null && file.size > IMPORT_MAX_BYTES
+  const blocked = !file || tooLarge || (format === 'csv' && !target)
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    if (!file || (format === 'csv' && !target)) return
+    if (!file || blocked) return
     setResult(null)
     run.mutate(file)
   }
-  const blocked = !file || (format === 'csv' && !target)
 
   return (
     <form onSubmit={submit} className="space-y-4" aria-busy={run.isPending}>
@@ -139,6 +141,11 @@ export function ImportForm({ db, schema, table }: ImportFormProps) {
         </label>
       )}
       {format === 'csv' && !target && !table ? <Notice>{locale.import.csvNeedsTable}</Notice> : null}
+      {tooLarge ? (
+        <p role="alert" className="text-sm text-red-800 dark:text-red-200">
+          {locale.import.fileTooLarge(IMPORT_MAX_BYTES / 1024 / 1024)}
+        </p>
+      ) : null}
       <Button type="submit" variant="primary" disabled={blocked || run.isPending}>
         <Upload className="size-4" aria-hidden />
         {run.isPending ? locale.import.running : locale.import.submit}

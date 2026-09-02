@@ -41,7 +41,7 @@ export function CopyTableForm({ tableRef }: { tableRef: TableRef }) {
             </Field>
           </div>
           <Button type="submit" variant="primary" disabled={!valid}>
-            {locale.ddl.titles.copyTable}
+            {locale.ddl.submit}
           </Button>
         </div>
         <label className="flex items-center gap-1 text-sm">

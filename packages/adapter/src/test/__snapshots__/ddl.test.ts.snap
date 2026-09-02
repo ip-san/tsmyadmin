@@ -136,6 +136,7 @@ exports[`DDL builders > postgres: copyTable 1`] = `
 [
   "CREATE TABLE "app"."t_copy" (LIKE "app"."t" INCLUDING ALL)",
   "INSERT INTO "app"."t_copy" ("id", "na\`me") OVERRIDING SYSTEM VALUE SELECT "id", "na\`me" FROM "app"."t"",
+  "SELECT setval(pg_get_serial_sequence('"app"."t_copy"', 'id'), COALESCE(MAX("id"), 1), MAX("id") IS NOT NULL) FROM "app"."t_copy"",
 ]
 `;
 

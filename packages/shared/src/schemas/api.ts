@@ -62,8 +62,12 @@ export const ApiErrorCodeSchema = z.enum([
   'KEY_MISMATCH',
   'UNSUPPORTED',
   'FORBIDDEN',
+  /** The login target is outside TSMYADMIN_ALLOWED_HOSTS (403). */
+  'HOST_NOT_ALLOWED',
   'PERMISSION_DENIED',
   'RATE_LIMITED',
+  /** Request body / uploaded file over the limit (413). */
+  'PAYLOAD_TOO_LARGE',
   'INTERNAL',
 ])
 export type ApiErrorCode = z.infer<typeof ApiErrorCodeSchema>

@@ -71,6 +71,8 @@ export const DdlOpSchema = z.discriminatedUnion('op', [
     withData: z.boolean().default(true),
     /** Columns to copy when withData (everything except generated columns); omitted = SELECT *. */
     columns: z.array(z.string().min(1)).optional(),
+    /** Identity columns of the copy whose sequence must be advanced past the copied values (PostgreSQL). */
+    identityColumns: z.array(z.string().min(1)).optional(),
   }),
   /** MySQL event scheduler (PostgreSQL: UNSUPPORTED). */
   z.object({ op: z.literal('enableEvent'), name: z.string().min(1) }),

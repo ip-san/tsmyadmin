@@ -19,10 +19,10 @@ tsmyadmin は **1 プロセス（Bun）で API と SPA を配信する単一コ�
 | `LOGIN_RATE_WINDOW_SECONDS` | `60` | 上記のウィンドウ（秒、1 以上。`LOGIN_RATE_LIMIT` も 1 以上） |
 | `TRUST_PROXY` | `0` | `1` でリバースプロキシの `X-Forwarded-For` をクライアント IP として信頼する（プロキシ配下では必須、直接公開時は `0` のまま） |
 | `LOG_FORMAT` | 本番 `json` / 開発 `pretty` | 1 行 1 JSON（ログ収集向け）か人が読む形式か |
-| `WEB_DIST` | `apps/web/dist` | 配信する SPA ビルドのディレクトリ（作業ディレクトリからの相対） |
+| `WEB_DIST` | `apps/web/dist` | 配信する SPA ビルドのディレクトリ。省略時は API ソースの位置から解決されるため作業ディレクトリに依存しない。指定する場合は絶対パスか作業ディレクトリからの相対 |
 | `SHUTDOWN_TIMEOUT_SECONDS` | `30`（0–600） | `SIGTERM` 受信後、実行中のリクエスト（長い SQL・エクスポート・インポート）の完了を待つ上限。超過すると強制終了 |
 
-起動時に検証され、範囲外・不正な値があれば理由を表示して終了します（`Invalid environment: ...`）。
+起動時に検証され、範囲外・不正な値があれば理由を表示して終了コード 1 で終了します（メッセージは必ず `Invalid environment: ...` で始まります）。空文字（`NAME=`）は未設定として扱われ既定値が使われます。例外は `TSMYADMIN_ALLOWED_HOSTS=` で、これは「既定のローカルホストも許可しない（プリセットの接続先だけ）」の意味です。`TSMYADMIN_SERVERS` のプリセットに未知のキー（`password` など）があると起動時に拒否されます。
 
 開発 / テスト専用の変数（本番では無視）: `WEB_PORT`（Vite 開発サーバー、既定 5175）、`TEST_MYSQL_URL` / `TEST_PG_URL`（統合テストと E2E が接続する compose の DB）。
 
@@ -30,7 +30,12 @@ tsmyadmin は **1 プロセス（Bun）で API と SPA を配信する単一コ�
 
 ```bash
 docker build -t tsmyadmin .
-docker build --build-arg VERSION="$(node -p "require('./package.json').version")" -t tsmyadmin .
+# OCI ラベル（version / revision / created）を埋める場合
+docker build \
+  --build-arg VERSION="$(node -p "require('./package.json').version")" \
+  --build-arg GIT_SHA="$(git rev-parse HEAD)" \
+  --build-arg BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  -t tsmyadmin .
 docker run -d --name tsmyadmin \
   -p 127.0.0.1:3100:3100 \
   --stop-timeout 35 \
@@ -60,6 +65,7 @@ services:
     environment:
       NODE_ENV: production
       SESSION_SECRET: ${SESSION_SECRET:?set in .env}
+      # `db` は同じ compose ネットワーク上の DB サービス名の例。外部 DB なら host:port、Docker Desktop のホスト上なら host.docker.internal:5432
       TSMYADMIN_ALLOWED_HOSTS: db:5432
       TRUST_PROXY: "1"
     ports:
@@ -86,7 +92,8 @@ nginx の例:
 
 ```nginx
 server {
-  listen 443 ssl http2;
+  listen 443 ssl;
+  http2 on;
   server_name admin.example.com;
   # ssl_certificate ...;
 
@@ -125,11 +132,12 @@ server {
 `SIGTERM` / `SIGINT` を受けると新規接続の受付を止め、実行中のリクエストが終わるのを `SHUTDOWN_TIMEOUT_SECONDS`（既定 30 秒）まで待ってから各セッションの DB 接続プールを閉じて終了します。2 回目のシグナルか上限超過で即時終了します。
 
 - Kubernetes では `terminationGracePeriodSeconds` を `SHUTDOWN_TIMEOUT_SECONDS + 5` 以上にしてください
-- `/readyz` はリスナーが閉じるまで 200 を返します。ローリング更新ではロードバランサから外してから `SIGTERM` を送る（`preStop` で数秒待つ）と、停止中のインスタンスに新規リクエストが振られません
+- `SIGTERM` を受けた瞬間にリスナーが閉じるため、以後の `/readyz` は接続拒否になります（503 は返しません）。実行中のリクエストだけが完了まで処理されます。ローリング更新ではロードバランサから外してから `SIGTERM` を送る（`preStop` で数秒待つ）と、停止中のインスタンスに新規リクエストが振られません
+- 終了コード: `shutdown.done` で 0、`shutdown.timeout` / `shutdown.forced` / 起動時の設定エラー / セッションストアを開けない場合は 1（`restart:` ポリシーの判断に使えます）
 
 ## アップグレード
 
-イメージを差し替えて再起動するだけです。`SESSION_STORE=sqlite`（本番既定）でボリュームを維持していれば利用者のセッションは継続します。`SESSION_SECRET` を変えると保存済みセッションは復号できず破棄されます（全員再ログイン）。スキーマや設定ファイルのマイグレーションはありません。
+イメージを差し替えて再起動するだけです。`SESSION_STORE=sqlite`（本番既定）でボリュームを維持していれば利用者のセッションは継続します。`SESSION_SECRET` を変えると、次回起動時に保存済みセッションはすべて削除されます（ログ `session_store.reset`、全員再ログイン）。スキーマや設定ファイルのマイグレーションはありません。
 
 複数レプリカで動かす場合は同じ SQLite ファイルを共有できないため、ロードバランサをスティッキーセッションにし、**かつ**レプリカごとに別ボリュームを持たせてください（片方だけでは、別レプリカに振られた瞬間にログアウトになります）。
 

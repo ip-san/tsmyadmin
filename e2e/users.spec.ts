@@ -11,7 +11,7 @@ for (const t of TARGETS) {
       const name = `e2e_user_${Date.now().toString(36)}`
       await page.goto('/users')
       await expect(page.getByRole('cell', { name: 'tsmyadmin', exact: true })).toBeVisible()
-      await page.getByRole('button', { name: 'ユーザーを追加' }).click()
+      await page.getByRole('button', { name: 'ユーザーを作成' }).click()
       await page.getByLabel('ユーザー名').fill(name)
       await page.getByLabel('パスワード', { exact: true }).fill('pw-123')
       await page.getByLabel('パスワード（確認）').fill('pw-123')
@@ -29,9 +29,9 @@ for (const t of TARGETS) {
       const privRow = page.getByRole('row').filter({ hasText: name })
       // A fresh PostgreSQL role already has PUBLIC's USAGE on the public schema.
       await expect(privRow.getByText(t.dialect === 'mysql' ? 'なし' : '一部', { exact: true })).toBeVisible()
-      await page.getByRole('button', { name: `${key}: この DB の全権限を付与` }).click()
+      await page.getByRole('button', { name: `${key}: このデータベースの全権限を付与` }).click()
       await confirmPreview(page, /GRANT/)
-      await expect(page.getByText(/全権限を付与: 実行しました/)).toBeVisible()
+      await expect(page.getByText(/「全権限を付与」を実行しました/)).toBeVisible()
       // Current-privilege column reflects the grant (MySQL: ALL on the database; PostgreSQL: schema grants).
       await expect(privRow.getByText('すべて', { exact: true })).toBeVisible()
 
@@ -42,14 +42,14 @@ for (const t of TARGETS) {
         t.dialect === 'mysql' ? t.database.replaceAll('_', '\\_') : (t.schema ?? 'public')
       )
 
-      await page.getByRole('button', { name: `${key}: パスワード変更` }).click()
+      await page.getByRole('button', { name: `${key}: パスワードを変更` }).click()
       await page.getByLabel('パスワード', { exact: true }).fill('new-pw')
       await page.getByLabel('パスワード（確認）').fill('new-pw')
       await page.getByRole('dialog').getByRole('button', { name: '次へ（SQL を確認）' }).click()
       await confirmPreview(page, /ALTER (USER|ROLE)/)
 
       await page.goto(t.schema ? `/db/${t.database}/privileges?schema=${t.schema}` : `/db/${t.database}/privileges`)
-      await page.getByRole('button', { name: `${key}: この DB の権限を取り消す` }).click()
+      await page.getByRole('button', { name: `${key}: このデータベースの全権限を取り消す` }).click()
       await confirmPreview(page, /REVOKE/)
 
       await page.goto('/users')

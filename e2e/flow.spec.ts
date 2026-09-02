@@ -74,7 +74,7 @@ for (const t of TARGETS) {
       await expect(table.getByRole('row').filter({ hasText: 'active_users' })).toContainText('ビュー')
 
       await page.goto(tableUrl(t, 'users'))
-      await expect(page.getByText('全 5 件')).toBeVisible()
+      await expect(page.getByText('全 5 行')).toBeVisible()
       await expect(page.getByRole('table').getByRole('row')).toHaveCount(6)
       await expect(page.getByRole('cell', { name: 'Alice', exact: true })).toBeVisible()
 
@@ -100,12 +100,12 @@ for (const t of TARGETS) {
       await expect(grid.getByRole('cell', { name: '9223372036854775807' })).toBeVisible()
       await expect(grid.getByRole('cell', { name: '12345678901234.567891' })).toBeVisible()
       await expect(grid.getByText('NULL').first()).toBeVisible()
-      await expect(grid.getByText(/バイナリ 4 bytes/).first()).toBeVisible()
+      await expect(grid.getByText(/バイナリ 4 バイト/).first()).toBeVisible()
     })
 
     test('keyboard shortcuts: help dialog, sidebar search focus, page navigation', async ({ page }) => {
       await page.goto(`${tableUrl(t, 'users')}${t.schema ? '&' : '?'}limit=2&sort=id:asc`)
-      await expect(page.getByText('全 5 件')).toBeVisible()
+      await expect(page.getByText('全 5 行')).toBeVisible()
       await page.keyboard.press('Shift+?')
       await expect(page.getByRole('dialog', { name: 'キーボードショートカット' })).toBeVisible()
       await page.keyboard.press('Escape')
@@ -131,14 +131,14 @@ for (const t of TARGETS) {
 
     test('column picker hides columns and keeps the choice in the URL', async ({ page }) => {
       await page.goto(tableUrl(t, 'users'))
-      await page.getByRole('button', { name: '列 5/5' }).click()
-      await page.getByRole('group', { name: '列' }).getByLabel('email').uncheck()
+      await page.getByRole('button', { name: 'カラム 5/5' }).click()
+      await page.getByRole('group', { name: 'カラム' }).getByLabel('email').uncheck()
       await expect(page).toHaveURL(/cols=/)
-      await expect(page.getByRole('button', { name: '列 4/5' })).toBeVisible()
+      await expect(page.getByRole('button', { name: 'カラム 4/5' })).toBeVisible()
       await expect(page.getByRole('columnheader').filter({ hasText: 'email' })).toHaveCount(0)
       await expect(page.getByRole('cell', { name: 'Alice', exact: true })).toBeVisible()
       await page.reload()
-      await expect(page.getByRole('button', { name: '列 4/5' })).toBeVisible()
+      await expect(page.getByRole('button', { name: 'カラム 4/5' })).toBeVisible()
     })
 
     test('reverse references: structure lists them and rows link to referencing rows', async ({ page }) => {
@@ -147,18 +147,18 @@ for (const t of TARGETS) {
         'fk_posts_user'
       )
       await page.goto(`${tableUrl(t, 'users')}${t.schema ? '&' : '?'}sort=id:asc`)
-      await page.getByRole('link', { name: 'posts.user_id からの参照行を表示' }).first().click()
+      await page.getByRole('link', { name: 'posts.user_id でこの行を参照している行を表示' }).first().click()
       await expect(page).toHaveURL(/\/table\/posts/)
-      await expect(page.getByText('全 2 件')).toBeVisible()
+      await expect(page.getByText('全 2 行')).toBeVisible()
     })
 
     test('foreign-key cells link to the referenced row', async ({ page }) => {
       await page.goto(tableUrl(t, 'posts'))
-      const link = page.getByRole('link', { name: 'users.id を参照' }).first()
+      const link = page.getByRole('link', { name: '参照先 users.id を開く' }).first()
       await expect(link).toBeVisible()
       await link.click()
       await expect(page).toHaveURL(/\/table\/users/)
-      await expect(page.getByText('全 1 件')).toBeVisible()
+      await expect(page.getByText('全 1 行')).toBeVisible()
       await expect(page.getByRole('cell', { name: 'Alice', exact: true })).toBeVisible()
     })
 
