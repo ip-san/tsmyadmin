@@ -1,5 +1,6 @@
 import { type Cell, isBinaryCell } from '@tsmyadmin/shared'
 import { locale } from '@/config/locale.ts'
+import { ApiError } from './api.ts'
 
 export type CellDisplay =
   | { kind: 'null' }
@@ -47,15 +48,19 @@ const SELF_EXPLANATORY = new Set<string>([
 ])
 
 export function errorMessage(err: unknown): string {
+  // fetch() itself failed: the server is unreachable, not broken.
+  if (err instanceof ApiError && err.status === 0) return locale.errors.NETWORK
   if (err && typeof err === 'object' && 'code' in err && typeof err.code === 'string') {
     const code = err.code as keyof typeof locale.errors
     const base = locale.errors[code] ?? locale.errors.INTERNAL
-    // A DB-native message (QUERY_FAILED, …) is kept verbatim: DBAs want it. Generic codes drop the English echo.
+    const message = 'message' in err && typeof err.message === 'string' ? err.message : ''
+    // A DB-native message (QUERY_FAILED, …) is kept verbatim: DBAs want it. Generic codes drop the English echo,
+    // except the bare status of a non-JSON upstream reply (`HTTP 502` from a proxy), which is the only clue.
     const detail =
       'detail' in err && typeof err.detail === 'string'
         ? err.detail
-        : !SELF_EXPLANATORY.has(code) && 'message' in err && typeof err.message === 'string'
-          ? err.message
+        : !SELF_EXPLANATORY.has(code) || /^HTTP \d{3}$/.test(message)
+          ? message
           : ''
     const native = 'nativeCode' in err && typeof err.nativeCode === 'string' ? ` [${err.nativeCode}]` : ''
     return detail ? `${base}: ${detail}${native}` : `${base}${native}`

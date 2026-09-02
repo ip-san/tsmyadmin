@@ -287,6 +287,7 @@ export const ja = {
     irreversible: 'この操作は取り消せません。',
     /** Appended to `irreversible` for the ops that destroy stored data (not for dropping an index / key / account). */
     dataLoss: 'テーブルのデータは失われます。',
+    columnLoss: 'このカラムのデータは失われます。',
     databaseLoss: 'データベース内のすべてのテーブルとデータが失われます。',
     typeToConfirm: (name: string) => `続行するには「${name}」と入力してください`,
     generating: 'SQL を生成中…',

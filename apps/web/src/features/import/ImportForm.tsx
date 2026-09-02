@@ -62,7 +62,8 @@ export function ImportForm({ db, schema, table }: ImportFormProps) {
   }
   // Checked here so the user gets the limit in their own language before a 64 MB upload is attempted.
   const tooLarge = file !== null && file.size > IMPORT_MAX_BYTES
-  const blocked = !file || tooLarge || (format === 'csv' && !target)
+  const badDelimiter = format === 'csv' && (delimiter.length !== 1 || '"\r\n'.includes(delimiter))
+  const blocked = !file || tooLarge || (format === 'csv' && !target) || badDelimiter
   const submit = (e: FormEvent) => {
     e.preventDefault()
     if (!file || blocked) return
@@ -170,9 +171,10 @@ function ImportSummary({ result }: { result: ImportResult }) {
         <section className="rounded border border-red-300 bg-red-50 p-3 text-sm dark:border-red-700 dark:bg-red-950">
           <h3 className="mb-1 font-semibold text-red-800 dark:text-red-200">{locale.import.errors}</h3>
           <ul className="space-y-1">
-            {result.errors.map((e) => (
-              <li key={`${e.sql}-${e.message}`} className="text-red-800 dark:text-red-200">
-                <span role="alert">{e.message}</span>
+            {/* The enclosing <output> already announces; per-item alerts would fire twenty times at once. */}
+            {result.errors.map((e, i) => (
+              <li key={`${i}-${e.sql}`} className="text-red-800 dark:text-red-200">
+                <span>{e.message}</span>
                 <pre className="mt-0.5 overflow-x-auto font-mono text-xs text-zinc-600 dark:text-zinc-300">{e.sql}</pre>
               </li>
             ))}

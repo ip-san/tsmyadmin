@@ -14,7 +14,9 @@ describe('exportUrl', () => {
         data: true,
         bom: false,
       })
-    ).toBe('/api/databases/my%20db/export?schema=app&tables=a%2Cb%2Cc&format=csv&structure=0&dropTable=1&data=1&bom=0')
+    ).toBe(
+      '/api/databases/my%20db/export?schema=app&tables=a%2Cb%252Cc&format=csv&structure=0&dropTable=1&data=1&bom=0'
+    )
   })
 
   it('omits tables when exporting everything', () => {

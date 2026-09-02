@@ -58,7 +58,12 @@ export async function importCsv(
     columns = (parsed[0]?.fields ?? []).map((c) => c.trim())
     data = parsed.slice(1)
     const unknown = columns.filter((c) => !known.has(c))
-    if (unknown.length > 0) throw new ImportValidationError(`Unknown column(s) in header: ${unknown.join(', ')}`)
+    if (unknown.length > 0) {
+      // Bounded: a wrong file (a .sql renamed .csv, a binary) would otherwise echo its whole first line back.
+      const shown = unknown.slice(0, 5).map((c) => (c === '' ? '(empty)' : c.length > 64 ? `${c.slice(0, 64)}…` : c))
+      const more = unknown.length > shown.length ? ` (+${unknown.length - shown.length})` : ''
+      throw new ImportValidationError(`Unknown column(s) in header: ${shown.join(', ')}${more}`)
+    }
   } else {
     // reduce, not spread: a 64 MB CSV can exceed the argument limit of Math.max(...)
     const width = parsed.reduce((m, r) => Math.max(m, r.fields.length), 0)

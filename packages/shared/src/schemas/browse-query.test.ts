@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { BrowseQuerySchema, buildBrowseQuery, encodeSort, parseBrowseQuery } from './browse-query.ts'
+import { decodeTableList, encodeTableList } from './export.ts'
 
 describe('browse query', () => {
   it('parses defaults', () => {
@@ -72,5 +73,14 @@ describe('browse query', () => {
     const q = BrowseQuerySchema.parse(buildBrowseQuery(options, 'app'))
     expect(q.schema).toBe('app')
     expect(parseBrowseQuery(q)).toEqual({ ok: true, options })
+  })
+})
+
+describe('encodeTableList / decodeTableList', () => {
+  it('round-trips names with commas and spaces, deduplicates, and tolerates unescaped input', () => {
+    expect(encodeTableList(['a', 'b,c', ' d', 'a'])).toBe('a,b%2Cc,%20d')
+    expect(decodeTableList('a,b%2Cc,%20d')).toEqual(['a', 'b,c', ' d'])
+    expect(decodeTableList('users,users,,100%')).toEqual(['users', '100%'])
+    expect(decodeTableList(undefined)).toEqual([])
   })
 })

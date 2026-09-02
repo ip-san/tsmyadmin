@@ -3,6 +3,7 @@ import {
   BrowseQuerySchema,
   DdlPreviewRequestSchema,
   DeleteRowsRequestSchema,
+  decodeTableList,
   ExportQuerySchema,
   IMPORT_MAX_BYTES,
   ImportFormSchema,
@@ -125,13 +126,10 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
         const q = c.req.valid('query')
         const adapter = c.get('session').adapter
         const namespace = ns(c.req.param('db'), q.schema)
-        const requested = (q.tables ?? '')
-          .split(',')
-          .map((t) => t.trim())
-          .filter((t) => t.length > 0)
+        const requested = decodeTableList(q.tables)
         // Everything by default, tables before views so a CREATE VIEW in the dump follows its base tables.
         // Requested names are checked up front: once the streamed body has started, a failure can only abort
-        // the download, never turn into a JSON error the client can show.
+        // the download (the browser reports "failed"); a JSON 404 at least never produces a partial file.
         const all = await adapter.listTables(namespace)
         const missing = requested.filter((name) => !all.some((t) => t.name === name))
         if (missing.length > 0) {

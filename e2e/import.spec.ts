@@ -17,7 +17,7 @@ for (const t of TARGETS) {
       await page.getByLabel('エラーで停止').uncheck()
       await page.getByRole('button', { name: 'インポートする' }).click()
       await expect(page.getByText('2 文成功、1 文失敗')).toBeVisible()
-      await expect(page.getByRole('alert')).toContainText(/nope_table_for_error/i)
+      await expect(page.getByText(/nope_table_for_error/i).first()).toBeVisible()
 
       await page.goto(tableUrl(t, table, '/import'))
       const csv = 'id,name\n2,"from, csv"\n3,\\N\n'

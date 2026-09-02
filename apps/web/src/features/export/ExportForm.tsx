@@ -27,7 +27,9 @@ export function ExportForm({ db, schema, table }: ExportFormProps) {
   // Views are included: SQL dumps carry their CREATE VIEW, CSV/JSON export their rows.
   const available: TableInfo[] = table ? [] : (tables.data ?? [])
   const toggle = (name: string) => setSelected((s) => (s.includes(name) ? s.filter((x) => x !== name) : [...s, name]))
-  const effective = table ? [table] : selected.length > 0 ? selected : available.map((t) => t.name)
+  // A table dropped elsewhere since it was ticked must not end up in the URL (the download would just fail).
+  const chosen = table ? selected : selected.filter((n) => available.some((t) => t.name === n))
+  const effective = table ? [table] : chosen.length > 0 ? chosen : available.map((t) => t.name)
   // CSV is one table at a time; views are left out of the count (a DB with one table and a view still exports).
   const csvTables = table ? [table] : effective.filter((n) => available.find((t) => t.name === n)?.kind === 'table')
   const tableCount = csvTables.length
@@ -36,7 +38,7 @@ export function ExportForm({ db, schema, table }: ExportFormProps) {
   const url = exportUrl({
     db,
     schema,
-    tables: table ? [table] : format === 'csv' ? csvTables : selected,
+    tables: table ? [table] : format === 'csv' ? csvTables : chosen,
     format,
     structure,
     dropTable,

@@ -4,12 +4,13 @@ import { CSV_NULL } from './schemas/export.ts'
 
 /**
  * One CSV field: NULL as an unquoted `\\N`, binary as base64, quoting only when the text needs it. A text value
- * that happens to equal the NULL marker is quoted so the import can tell the two apart (as COPY / LOAD DATA do).
+ * that equals the NULL marker is quoted so the import can tell the two apart (as COPY / LOAD DATA do), and so
+ * is the empty string: in a one-column table it would otherwise be a blank line, which the import skips.
  */
 export function csvField(cell: Cell): string {
   if (cell === null) return CSV_NULL
   const text = isBinaryCell(cell) ? cell.$bin : typeof cell === 'string' ? cell : String(cell)
-  return /[",\r\n]/.test(text) || text === CSV_NULL ? `"${text.replaceAll('"', '""')}"` : text
+  return /[",\r\n]/.test(text) || text === CSV_NULL || text === '' ? `"${text.replaceAll('"', '""')}"` : text
 }
 
 /** Header + rows as CRLF-terminated CSV (the format the table export and the SQL console download share). */

@@ -36,8 +36,9 @@ function lossWarning(op: DdlOp): string | null {
     case 'dropTable':
       return op.kind === 'table' ? locale.ddl.dataLoss : null
     case 'truncateTable':
-    case 'dropColumn':
       return locale.ddl.dataLoss
+    case 'dropColumn':
+      return locale.ddl.columnLoss
     case 'dropDatabase':
       return locale.ddl.databaseLoss
     default:

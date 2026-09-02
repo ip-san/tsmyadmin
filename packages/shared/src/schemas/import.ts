@@ -17,7 +17,12 @@ export const ImportFormSchema = z.object({
   header: FlagSchema.default('1'),
   /** csv: field value that means NULL */
   nullMarker: z.string().default('\\N'),
-  delimiter: z.string().min(1).max(1).default(','),
+  /** One character that is not the quote or a line break (those are structural to the parser). */
+  delimiter: z
+    .string()
+    .length(1)
+    .refine((d) => !'"\r\n'.includes(d), 'delimiter cannot be a quote or a line break')
+    .default(','),
   /** sql: stop at the first failing statement */
   stopOnError: FlagSchema.default('1'),
 })

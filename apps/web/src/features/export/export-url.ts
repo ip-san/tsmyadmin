@@ -1,4 +1,4 @@
-import type { ExportFormat } from '@tsmyadmin/shared'
+import { type ExportFormat, encodeTableList } from '@tsmyadmin/shared'
 
 export interface ExportOptions {
   db: string
@@ -15,7 +15,7 @@ export interface ExportOptions {
 export function exportUrl(o: ExportOptions): string {
   const params = new URLSearchParams()
   if (o.schema) params.set('schema', o.schema)
-  if (o.tables.length > 0) params.set('tables', o.tables.join(','))
+  if (o.tables.length > 0) params.set('tables', encodeTableList(o.tables))
   params.set('format', o.format)
   params.set('structure', o.structure ? '1' : '0')
   params.set('dropTable', o.dropTable ? '1' : '0')

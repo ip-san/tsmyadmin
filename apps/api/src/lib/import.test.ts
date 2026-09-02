@@ -28,6 +28,36 @@ describe('importCsv', () => {
     })
   })
 
+  it('keeps a quoted NULL marker and a quoted empty field, skips blank lines, decodes binary columns', async () => {
+    const blobs = fakeTable('blobs', ['name', 'data'], [], ['name'])
+    const data = blobs.schema.columns.find((c) => c.name === 'data')
+    if (data) data.dataType = 'blob'
+    const a = new FakeAdapter({ databases: { shop: { tables: { blobs } } } })
+    const r = await importCsv(a, ns, form({ table: 'blobs' }), 'name\n"\\N"\n""\n\n\\N\nx\n')
+    expect(r).toMatchObject({ inserted: 4 })
+    expect(a.calls.at(-1)).toMatchObject({
+      method: 'insertRows',
+      args: [ns, 'blobs', ['name'], [['\\N'], [''], [null], ['x']]],
+    })
+    const b = await importCsv(a, ns, form({ table: 'blobs' }), 'name,data\nx,AQI=\ny,\\N\n')
+    expect(b).toMatchObject({ inserted: 2 })
+    expect(a.calls.at(-1)).toMatchObject({
+      args: [
+        ns,
+        'blobs',
+        ['name', 'data'],
+        [
+          ['x', { $bin: 'AQI=' }],
+          ['y', null],
+        ],
+      ],
+    })
+    await expect(importCsv(a, ns, form({ table: 'blobs' }), 'name,data\nx,not base64!\n')).rejects.toThrow(/base64/)
+    // A wrong file is reported without echoing its whole first line.
+    const long = `${'a'.repeat(500)}\n`
+    await expect(importCsv(adapter(), ns, form({}), long)).rejects.toThrow(/^Unknown column\(s\) in header: a{64}…$/)
+  })
+
   it('uses positional table columns without a header and pads short rows with NULL', async () => {
     const a = adapter()
     const r = await importCsv(a, ns, form({ header: '0', delimiter: ';' }), '1;A\n2\n')

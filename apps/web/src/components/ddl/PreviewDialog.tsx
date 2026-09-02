@@ -85,9 +85,7 @@ export function PreviewDialog<Op>({
         )}
         {/* Every destructive op says so; the ones that lose whole objects additionally require the name. */}
         {op !== null && destructive(op) && required === null ? (
-          <p role="alert" className="mt-3 text-sm font-medium text-red-800 dark:text-red-200">
-            {warning}
-          </p>
+          <p className="mt-3 text-sm font-medium text-red-800 dark:text-red-200">{warning}</p>
         ) : null}
         {required !== null ? (
           <div className="mt-3 space-y-1 rounded border border-red-300 bg-red-50 p-3 dark:border-red-700 dark:bg-red-950">

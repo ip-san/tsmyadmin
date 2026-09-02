@@ -21,5 +21,25 @@ export type ExportQuery = z.infer<typeof ExportQuerySchema>
 export type ExportQueryInput = z.input<typeof ExportQuerySchema>
 
 /** NULL marker used in CSV exports (phpMyAdmin default). */
+/** Query-string form of a table list: names percent-encoded so `,` (and leading spaces) survive; deduplicated. */
+export function encodeTableList(tables: string[]): string {
+  return [...new Set(tables)].map((t) => encodeURIComponent(t)).join(',')
+}
+
+export function decodeTableList(text: string | undefined): string[] {
+  const out: string[] = []
+  for (const part of (text ?? '').split(',')) {
+    if (part.length === 0) continue
+    let name = part
+    try {
+      name = decodeURIComponent(part)
+    } catch {
+      // not an escape sequence: the name is taken as written
+    }
+    if (!out.includes(name)) out.push(name)
+  }
+  return out
+}
+
 export const CSV_NULL = '\\N'
 export const EXPORT_BATCH_SIZE = 500

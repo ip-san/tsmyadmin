@@ -45,6 +45,7 @@ describe('csvField / toCsv', () => {
     expect(csvField('line\nbreak')).toBe('"line\nbreak"')
     expect(csvField(null)).toBe('\\N')
     expect(csvField('\\N')).toBe('"\\N"')
+    expect(csvField('')).toBe('""')
     expect(csvField({ $bin: 'AAEC' })).toBe('AAEC')
     expect(csvField(42)).toBe('42')
   })

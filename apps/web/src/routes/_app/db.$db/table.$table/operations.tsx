@@ -20,8 +20,9 @@ function Operations() {
   const view = isViewKind(structure.data.kind)
   return (
     <div className="space-y-4">
-      <RenameTableForm tableRef={tableRef} />
-      {view ? null : <CopyTableForm tableRef={tableRef} />}
+      {/* Keyed by table: the route match is reused across tables, and the forms seed their state from the name. */}
+      <RenameTableForm key={table} tableRef={tableRef} />
+      {view ? null : <CopyTableForm key={table} tableRef={tableRef} />}
       <TableOperations tableRef={tableRef} kind={structure.data.kind} />
     </div>
   )
