@@ -3,11 +3,13 @@ import tailwindcss from '@tailwindcss/vite'
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
+import pkg from './package.json' with { type: 'json' }
 
 const apiPort = process.env.API_PORT ?? '3100'
 
 export default defineConfig({
   plugins: [tanstackRouter({ target: 'react', autoCodeSplitting: true }), react(), tailwindcss()],
+  define: { __APP_VERSION__: JSON.stringify(pkg.version) },
   resolve: { alias: { '@': path.resolve(import.meta.dirname, './src') } },
   server: {
     host: '127.0.0.1',

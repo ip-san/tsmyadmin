@@ -40,6 +40,7 @@ export default defineConfig({
       },
       {
         resolve: { alias: { '@': path.resolve(import.meta.dirname, 'apps/web/src') } },
+        define: { __APP_VERSION__: '"test"' },
         test: {
           name: 'web',
           root: 'apps/web',

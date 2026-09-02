@@ -43,7 +43,7 @@ export function CellEditor({ column, initial, pending, onSave, onCancel }: CellE
           <input type="checkbox" checked={isNull} onChange={(e) => setIsNull(e.target.checked)} onKeyDown={onKeyDown} />
           {locale.browse.setNull}
         </label>
-        <span className="text-zinc-400 dark:text-zinc-500">{locale.browse.editHint}</span>
+        <span className="text-zinc-500 dark:text-zinc-400">{locale.browse.editHint}</span>
         <Button size="sm" variant="primary" onClick={save} disabled={pending}>
           {locale.common.save}
         </Button>

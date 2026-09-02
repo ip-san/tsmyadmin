@@ -3,6 +3,7 @@ import { PageTitle } from '@/components/layout/PageTitle.tsx'
 import { TabNav } from '@/components/layout/TabNav.tsx'
 import { Badge } from '@/components/ui/Feedback.tsx'
 import { locale } from '@/config/locale.ts'
+import { useDocumentTitle } from '@/lib/document-title.ts'
 
 export const Route = createFileRoute('/_app/db/$db')({ component: DatabaseLayout })
 
@@ -10,6 +11,7 @@ function DatabaseLayout() {
   const { db } = Route.useParams()
   const { schema } = Route.useSearch()
   const search = schema ? { schema } : {}
+  useDocumentTitle(schema ? `${db}.${schema}` : db)
   return (
     <>
       <PageTitle>

@@ -13,7 +13,7 @@
 
 | `event` | 内容 |
 |---|---|
-| `startup` / `shutdown` | 起動設定（ポート、許可ホスト、TTL）/ 終了シグナル |
+| `startup` / `shutdown.begin` / `shutdown.done` / `shutdown.timeout` / `shutdown.forced` | 起動設定（ポート、許可ホスト、TTL）/ グレースフルシャットダウンの開始・完了・上限超過・2 回目のシグナルによる強制終了 |
 | `http` | アクセスログ: `requestId`, `method`, `path`, `status`, `ms`, `ip` |
 | `login.ok` / `login.failed` / `login.host_not_allowed` / `login.rate_limited` / `logout` | 認証イベント（ホスト・ユーザー名は含む、パスワードは含まない） |
 | `audit` | **監査ログ**: データ・構造・アカウント・サーバー状態を変える呼び出し（`insertRow(s)` / `updateRow` / `deleteRows` / `executeSql` / `killProcess`）。`requestId`, `dbUser`, `dbHost`, `database`, `table`, 行数・キー種別・カラム名、`executeSql` は SQL 先頭 500 文字と文数 / エラー数、`ok`, `ms`。**値は記録しない**。アカウント操作のパスワードは `****` に置換 |

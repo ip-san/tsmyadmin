@@ -2,6 +2,7 @@ import { createFileRoute, Outlet } from '@tanstack/react-router'
 import { PageTitle } from '@/components/layout/PageTitle.tsx'
 import { TabNav } from '@/components/layout/TabNav.tsx'
 import { locale } from '@/config/locale.ts'
+import { useDocumentTitle } from '@/lib/document-title.ts'
 
 export const Route = createFileRoute('/_app/db/$db/table/$table')({ component: TableLayout })
 
@@ -10,6 +11,7 @@ function TableLayout() {
   const { schema } = Route.useSearch()
   const params = { db, table }
   const search = schema ? { schema } : {}
+  useDocumentTitle(table, schema ? `${db}.${schema}` : db)
   return (
     <>
       <PageTitle>

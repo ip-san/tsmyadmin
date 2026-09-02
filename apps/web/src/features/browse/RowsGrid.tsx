@@ -188,7 +188,7 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
                         <ArrowDown className="size-3" aria-hidden />
                       ) : null}
                     </button>
-                    <span className="ml-1 font-normal text-zinc-400 dark:text-zinc-500">{c.dataType}</span>
+                    <span className="ml-1 font-normal text-zinc-500 dark:text-zinc-400">{c.dataType}</span>
                   </Th>
                 )
               })}

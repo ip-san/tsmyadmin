@@ -11,6 +11,11 @@ COPY . .
 RUN bun run build
 
 FROM oven/bun:1.4-slim AS runtime
+ARG VERSION=0.1.0
+LABEL org.opencontainers.image.title="tsmyadmin" \
+      org.opencontainers.image.description="MySQL / PostgreSQL web administration (phpMyAdmin-style)" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.licenses="MIT"
 WORKDIR /app
 ENV NODE_ENV=production API_PORT=3100
 COPY --from=build /app/package.json /app/bun.lock ./

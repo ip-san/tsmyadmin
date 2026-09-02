@@ -104,7 +104,7 @@ function Statement({ index, result, maxRows }: { index: number; result: Statemen
             <tr>
               {columns.map((c, i) => (
                 <Th key={`${c.name}-${i}`}>
-                  {c.name} <span className="font-normal text-zinc-400 dark:text-zinc-500">{c.dataType}</span>
+                  {c.name} <span className="font-normal text-zinc-500 dark:text-zinc-400">{c.dataType}</span>
                 </Th>
               ))}
             </tr>
