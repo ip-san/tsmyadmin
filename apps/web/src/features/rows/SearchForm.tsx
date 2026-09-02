@@ -76,8 +76,8 @@ export function SearchForm({
             return (
               <Tr key={c.name}>
                 <Td className="whitespace-nowrap font-medium">{c.name}</Td>
-                <Td className="whitespace-nowrap font-mono text-xs text-zinc-500 dark:text-zinc-400">{c.dataType}</Td>
-                <Td>
+                <Td className="font-mono text-xs text-zinc-500 dark:text-zinc-400">{c.dataType}</Td>
+                <Td className="w-px whitespace-nowrap">
                   <Select
                     aria-label={`${c.name}: ${locale.search.operator}`}
                     value={cond.op}
@@ -92,7 +92,7 @@ export function SearchForm({
                     ))}
                   </Select>
                 </Td>
-                <Td>
+                <Td className="min-w-40">
                   <Input
                     aria-label={`${c.name}: ${locale.rows.value}`}
                     value={cond.value}

@@ -104,6 +104,7 @@ export function CreateTableForm({
             <Tr key={i}>
               <Td>
                 <Input
+                  className="min-w-28"
                   aria-label={`${locale.ddl.columnName} ${i + 1}`}
                   value={r.name}
                   onChange={(e) => update(i, { name: e.target.value })}
@@ -115,7 +116,7 @@ export function CreateTableForm({
                   list="create-type-suggestions"
                   value={r.dataType}
                   onChange={(e) => update(i, { dataType: e.target.value })}
-                  className="font-mono"
+                  className="min-w-28 font-mono"
                 />
               </Td>
               <Td className="text-center">
@@ -161,7 +162,7 @@ export function CreateTableForm({
                     value={r.defaultValue}
                     disabled={r.defaultKind === 'none'}
                     onChange={(e) => update(i, { defaultValue: e.target.value })}
-                    className="font-mono"
+                    className="min-w-24 font-mono"
                   />
                 </div>
               </Td>
