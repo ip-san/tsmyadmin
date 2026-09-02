@@ -1,5 +1,5 @@
-import { expect, type Page, test } from '@playwright/test'
-import { login, TARGETS, type Target, tableUrl } from './helpers.ts'
+import { expect, type Page } from '@playwright/test'
+import { login, TARGETS, type Target, tableUrl, test } from './helpers.ts'
 
 /** Creates a throw-away table through the API (the browser session's cookie is reused). */
 async function withScratchTable(page: Page, t: Target, fn: (table: string) => Promise<void>) {
@@ -57,10 +57,10 @@ for (const t of TARGETS) {
 
     test('remembers the page size across tables', async ({ page }) => {
       await page.goto(tableUrl(t, 'users'))
-      await page.getByLabel('表示件数').selectOption('25')
+      await page.getByLabel('表示行数').selectOption('25')
       await expect(page).toHaveURL(/limit=25/)
       await page.goto(tableUrl(t, 'posts'))
-      await expect(page.getByLabel('表示件数')).toHaveValue('25')
+      await expect(page.getByLabel('表示行数')).toHaveValue('25')
     })
 
     test('edits a row through the dialog and a cell inline', async ({ page }) => {
@@ -98,7 +98,7 @@ for (const t of TARGETS) {
         await page.getByLabel('2 行目を選択').check()
         await page.getByRole('button', { name: '選択行を削除' }).click()
         await expect(page.getByRole('dialog')).toContainText('1 行を削除します')
-        await page.getByRole('dialog').getByRole('button', { name: '削除' }).click()
+        await page.getByRole('dialog').getByRole('button', { name: '削除する' }).click()
         await expect(page.getByText('1 行を削除しました')).toBeVisible()
         await expect(page.getByText('全 1 行')).toBeVisible()
         await expect(page.getByRole('cell', { name: 'two', exact: true })).toHaveCount(0)

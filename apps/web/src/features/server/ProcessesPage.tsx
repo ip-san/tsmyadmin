@@ -105,7 +105,7 @@ export function ProcessesPage() {
               }}
               disabled={kill.isPending}
             >
-              {locale.server.kill}
+              {locale.server.killExecute}
             </Button>
           </>
         }

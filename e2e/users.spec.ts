@@ -1,5 +1,5 @@
-import { expect, test } from '@playwright/test'
-import { confirmPreview, login, TARGETS } from './helpers.ts'
+import { expect } from '@playwright/test'
+import { confirmPreview, login, TARGETS, test } from './helpers.ts'
 
 for (const t of TARGETS) {
   test.describe(`users (${t.dialect})`, () => {

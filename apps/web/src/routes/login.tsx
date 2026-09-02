@@ -27,7 +27,9 @@ function LoginPage() {
     <main className="flex min-h-dvh items-center justify-center bg-zinc-100 p-4 dark:bg-zinc-950">
       <div className="w-full max-w-md rounded-lg border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
         <h1 className="mb-1 text-xl font-bold text-zinc-900 dark:text-zinc-50">{locale.app.name}</h1>
-        <p className="mb-4 text-sm text-zinc-500 dark:text-zinc-400">{locale.login.title}</p>
+        <p className="mb-4 text-sm text-zinc-500 dark:text-zinc-400">
+          {locale.app.tagline} — {locale.login.title}
+        </p>
         {search.expired ? <Notice className="mb-4">{locale.login.sessionExpired}</Notice> : null}
         {servers.isPending ? (
           <Spinner />

@@ -1,6 +1,7 @@
 import type { UserOp } from '@tsmyadmin/shared'
 import { USER_OP_NAMES } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
+import { MysqlAdapter } from '../mysql/adapter.ts'
 import { mysqlUsers } from '../mysql/users.ts'
 import { pgUsers } from '../postgres/users.ts'
 
@@ -64,6 +65,21 @@ describe('user SQL builders', () => {
     expect(pgUsers.namespace(SAMPLE_OPS.dropUser, { database: 'postgres' })).toEqual({ database: 'postgres' })
     expect(mysqlUsers.namespace(SAMPLE_OPS.grantAll, { database: 'information_schema' })).toEqual({
       database: 'information_schema',
+    })
+  })
+})
+
+describe('MysqlAdapter.toAdapterError', () => {
+  it('names MariaDB-only errno values the driver has no symbol for', () => {
+    const a = new MysqlAdapter({ dialect: 'mysql', host: 'h', port: 1, user: 'u', password: 'p' })
+    expect(a.toAdapterError({ errno: 1969, sqlMessage: 'Query execution was interrupted' })).toMatchObject({
+      code: 'QUERY_FAILED',
+      nativeCode: 'ER_STATEMENT_TIMEOUT',
+    })
+    expect(a.toAdapterError({ errno: 4242, message: 'x' })).toMatchObject({ nativeCode: 'ER_4242' })
+    expect(a.toAdapterError({ code: 'ER_NO_SUCH_TABLE', sqlMessage: 'missing' })).toMatchObject({
+      code: 'NOT_FOUND',
+      nativeCode: 'ER_NO_SUCH_TABLE',
     })
   })
 })

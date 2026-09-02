@@ -20,7 +20,7 @@ describe('Pagination', () => {
     expect(onChange).toHaveBeenCalledWith({ page: 3 })
     await userEvent.click(screen.getByRole('button', { name: '最後のページ' }))
     expect(onChange).toHaveBeenCalledWith({ page: 3 })
-    await userEvent.selectOptions(screen.getByLabelText('表示件数'), '100')
+    await userEvent.selectOptions(screen.getByLabelText('表示行数'), '100')
     expect(onChange).toHaveBeenCalledWith({ limit: 100, page: 1 })
   })
 

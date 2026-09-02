@@ -1,5 +1,5 @@
-import { expect, type Page, test } from '@playwright/test'
-import { login, slowSql, TARGETS, tableUrl } from './helpers.ts'
+import { expect, type Page } from '@playwright/test'
+import { login, slowSql, TARGETS, tableUrl, test } from './helpers.ts'
 
 async function typeSql(page: Page, sql: string) {
   const editor = page.getByRole('textbox', { name: 'SQL エディタ' })

@@ -56,6 +56,12 @@ describe('importCsv', () => {
     // A wrong file is reported without echoing its whole first line.
     const long = `${'a'.repeat(500)}\n`
     await expect(importCsv(adapter(), ns, form({}), long)).rejects.toThrow(/^Unknown column\(s\) in header: a{64}…$/)
+    await expect(importCsv(adapter(), ns, form({}), 'q,r,s,t,u,,w\n')).rejects.toThrow(
+      /^Unknown column\(s\) in header: q, r, s, t, u \(\+2\)$/
+    )
+    await expect(importCsv(adapter(), ns, form({}), 'id,\n1,2\n')).rejects.toThrow(/\(empty\)/)
+    // The delimiter must be one character that is not structural to the parser.
+    for (const delimiter of ['"', '\n', '\r', 'ab', '']) expect(() => form({ delimiter })).toThrow()
   })
 
   it('uses positional table columns without a header and pads short rows with NULL', async () => {

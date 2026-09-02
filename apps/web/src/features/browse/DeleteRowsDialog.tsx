@@ -24,7 +24,7 @@ export function DeleteRowsDialog({ open, count, pending, error, onCancel, onConf
             {locale.common.cancel}
           </Button>
           <Button variant="danger" onClick={onConfirm} disabled={pending}>
-            {locale.common.delete}
+            {locale.browse.deleteExecute}
           </Button>
         </>
       }

@@ -1,5 +1,5 @@
-import { expect, test } from '@playwright/test'
-import { login, TARGETS, tableUrl } from './helpers.ts'
+import { expect } from '@playwright/test'
+import { login, TARGETS, tableUrl, test } from './helpers.ts'
 
 test.describe('login', () => {
   test('logs in through an operator-defined preset with only user and password', async ({ page }) => {
@@ -89,7 +89,7 @@ for (const t of TARGETS) {
       await expect(page).toHaveURL(/sort=name(%3A|:)desc(%2C|,)age(%3A|:)asc/)
       await expect(page.getByRole('button', { name: /age.*並べ替え順 2/ })).toBeVisible()
 
-      await page.getByLabel('表示件数').selectOption('25')
+      await page.getByLabel('表示行数').selectOption('25')
       await expect(page).toHaveURL(/limit=25/)
       await expect(page.getByRole('button', { name: '次へ' })).toBeDisabled()
     })

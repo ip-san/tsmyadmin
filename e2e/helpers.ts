@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test'
+import { test as base, expect, type Page } from '@playwright/test'
 
 export interface Target {
   dialect: 'mysql' | 'postgres'
@@ -23,6 +23,21 @@ function fromUrl(dialect: Target['dialect'], url: string, schema?: string): Targ
     ...(schema ? { schema } : {}),
   }
 }
+
+/**
+ * `test` with an automatic logout: contexts are just closed otherwise, and each UI login leaves a server session
+ * (with its connection pool) alive until the TTL sweep — dozens per local run with parallel workers.
+ */
+// biome-ignore lint/suspicious/noConfusingVoidType: Playwright's documented type for an auto fixture without a value
+export const test = base.extend<{ autoLogout: void }>({
+  autoLogout: [
+    async ({ page }, use) => {
+      await use()
+      await page.request.delete('/api/session').catch(() => undefined)
+    },
+    { auto: true },
+  ],
+})
 
 export const TARGETS: Target[] = [
   fromUrl('mysql', process.env.TEST_MYSQL_URL ?? 'mysql://tsmyadmin:tsmyadmin@127.0.0.1:13306/tsmyadmin_test'),

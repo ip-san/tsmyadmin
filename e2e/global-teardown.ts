@@ -22,16 +22,23 @@ export default async function globalTeardown(): Promise<void> {
         },
       })
       if (!login.ok()) continue
-      const sql = async (statement: string) =>
-        api.post(`/api/databases/${t.database}/sql`, {
+      const sql = async (statement: string) => {
+        const res = await api.post(`/api/databases/${t.database}/sql`, {
           data: { sql: statement, ...(t.schema ? { schema: t.schema } : {}), stopOnError: false },
         })
+        // Non-fatal, but a leftover object must not disappear silently.
+        const events = res.ok() ? ((await res.json()) as { kind: string; sql?: string; message?: string }[]) : []
+        for (const e of events) if (e.kind === 'error') console.warn(`teardown (${t.dialect}): ${e.sql}: ${e.message}`)
+        return res
+      }
       const listSql =
         t.dialect === 'mysql'
           ? `SELECT table_name FROM information_schema.tables WHERE table_schema = '${t.database}' AND table_name LIKE 'e2e\\_%'`
           : `SELECT tablename FROM pg_tables WHERE schemaname = '${t.schema ?? 'public'}' AND tablename LIKE 'e2e\\_%'`
       const names = async (query: string): Promise<string[]> => {
-        const res = await sql(query)
+        const res = await api.post(`/api/databases/${t.database}/sql`, {
+          data: { sql: query, ...(t.schema ? { schema: t.schema } : {}) },
+        })
         const body = (await res.json()) as { kind: string; result?: { rows: unknown[][] } }[]
         return (body[0]?.result?.rows ?? []).map((r) => String(r[0]))
       }

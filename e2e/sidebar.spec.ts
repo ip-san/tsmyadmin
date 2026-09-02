@@ -1,5 +1,5 @@
-import { type APIRequestContext, expect, request, test } from '@playwright/test'
-import { login, TARGETS } from './helpers.ts'
+import { type APIRequestContext, expect, request } from '@playwright/test'
+import { login, TARGETS, test } from './helpers.ts'
 
 const TABLES = 1500
 
@@ -26,6 +26,8 @@ test.describe('sidebar at scale', () => {
   }
 
   test.beforeAll(async ({ baseURL }) => {
+    // 1,500 CREATE TABLE statements: the default 30 s hook timeout is too tight on a slow CI runner.
+    test.setTimeout(120_000)
     const api = await authenticated(baseURL)
     const body = Array.from(
       { length: TABLES },
@@ -35,6 +37,9 @@ test.describe('sidebar at scale', () => {
       data: { sql: `CREATE SCHEMA ${schema};\n${body}`, timeoutMs: 120_000 },
     })
     expect(created.ok()).toBe(true)
+    // 200 only means the script ran; every statement must have succeeded.
+    const events = (await created.json()) as { kind: string; message?: string }[]
+    expect(events.filter((e) => e.kind === 'error').map((e) => e.message)).toEqual([])
     await api.dispose()
   })
 

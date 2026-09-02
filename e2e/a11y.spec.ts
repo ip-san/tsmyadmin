@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test } from '@playwright/test'
-import { login, TARGETS, tableUrl } from './helpers.ts'
+import { expect } from '@playwright/test'
+import { login, TARGETS, tableUrl, test } from './helpers.ts'
 
 async function scan(page: Parameters<typeof login>[0]) {
   const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()

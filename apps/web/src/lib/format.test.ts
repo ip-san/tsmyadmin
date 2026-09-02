@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { locale } from '@/config/locale.ts'
+import { ApiError } from './api.ts'
 import { cellToEditable, cellToText, describeCell, errorMessage } from './format.ts'
 
 describe('describeCell', () => {
@@ -27,6 +29,17 @@ describe('cellToText / cellToEditable', () => {
 })
 
 describe('errorMessage', () => {
+  it('reports an unreachable server as a network problem and keeps a bare upstream status', () => {
+    expect(errorMessage(new ApiError(0, { code: 'INTERNAL', message: 'Failed to fetch' }))).toBe(locale.errors.NETWORK)
+    expect(errorMessage(new ApiError(502, { code: 'INTERNAL', message: 'HTTP 502' }))).toBe(
+      `${locale.errors.INTERNAL}: HTTP 502`
+    )
+    // Self-explanatory codes drop the English echo.
+    expect(errorMessage(new ApiError(429, { code: 'RATE_LIMITED', message: 'Too many login attempts' }))).toBe(
+      locale.errors.RATE_LIMITED
+    )
+  })
+
   it('maps API error codes to localized text with detail', () => {
     expect(errorMessage({ code: 'AUTH_FAILED', message: 'x', detail: 'Access denied' })).toBe(
       '認証に失敗しました: Access denied'

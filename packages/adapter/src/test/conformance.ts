@@ -76,6 +76,7 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
     `${scratch}_camel`,
     `${scratch}_pu`,
     `${scratch}_seq`,
+    `${scratch}_seq2`,
     `${scratch}_like`,
     `${scratch}_fk`,
     `${scratch}_typedkey`,
@@ -104,6 +105,7 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
 
     afterAll(async () => {
       await exec(SCRATCH_TABLES.map((t) => `DROP TABLE IF EXISTS ${t}`).join('; '), { stopOnError: false })
+      if (dialect === 'postgres') await exec(`DROP TYPE IF EXISTS ${scratch}_enumkey_e`, { stopOnError: false })
       // The users test creates this account; a failure half-way must not leave it behind.
       await exec(dialect === 'mysql' ? `DROP USER IF EXISTS 'u_${scratch}'@'%'` : `DROP ROLE IF EXISTS u_${scratch}`, {
         stopOnError: false,
@@ -1400,6 +1402,8 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         // schema/table inside the current database.
         if (dialect === 'mysql') expect(grants.join('\n')).toContain(`\`${ns.database.replaceAll('_', '\\_')}\`.*`)
         else expect(grants.join('\n')).toContain(ns.schema ?? 'public')
+        // MariaDB prints the password hash inside SHOW GRANTS; it never reaches the privileges screen.
+        expect(grants.join('\n')).not.toMatch(/IDENTIFIED (?:BY|VIA)/i)
         if (dialect === 'postgres') {
           // Table grants are read from pg_class.relacl, so every table the role can SELECT is listed.
           expect(grants.join('\n')).toMatch(
@@ -1561,7 +1565,7 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         expect((await browseAll(copy)).total).toBe(0)
         await execOk(`DROP TABLE ${copy}`)
         // A copy of an auto-increment / identity table keeps inserting after the copied ids.
-        const src2 = `${scratch}_seq`
+        const src2 = `${scratch}_seq2`
         const idCol =
           dialect === 'mysql' ? 'id INT AUTO_INCREMENT PRIMARY KEY' : 'id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY'
         await execOk(`CREATE TABLE ${src2} (${idCol}, v INT NOT NULL)`)

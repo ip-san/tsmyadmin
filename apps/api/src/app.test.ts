@@ -767,6 +767,29 @@ describe('sql & ddl', () => {
     )
   })
 
+  it('fills copyTable columns, identity and serial columns for the preview (PostgreSQL)', async () => {
+    const src = fakeTable('src', ['id', 'n', 'ab', 's'], [])
+    for (const c of src.schema.columns) {
+      if (c.name === 'id') c.extra = 'identity always'
+      if (c.name === 'ab') c.extra = 'STORED GENERATED'
+      if (c.name === 's') c.extra = 'serial'
+    }
+    const h = harness(new FakeAdapter({ dialect: 'postgres', databases: { shop: { tables: { src } } } }))
+    stores.push(h.store)
+    await h.login()
+    const res = await h.req('/api/databases/shop/ddl/preview', {
+      method: 'POST',
+      body: JSON.stringify({ op: { op: 'copyTable', table: 'src', newName: 'dst', withData: true } }),
+    })
+    expect(res.status).toBe(200)
+    const sql = DdlPreviewResponseSchema.parse(await res.json()).sql.join('\n')
+    expect(sql).toContain('INSERT INTO "public"."dst" ("id", "n", "s") OVERRIDING SYSTEM VALUE SELECT "id", "n", "s"')
+    expect(sql).not.toMatch(/INSERT[^\n]*"ab"/)
+    expect(sql).toContain('CREATE SEQUENCE "public"."dst_s_seq" OWNED BY "public"."dst"."s"')
+    expect(sql).toContain(`pg_get_serial_sequence('"public"."dst"', 'id')`)
+    expect(sql).toContain(`pg_get_serial_sequence('"public"."dst"', 's')`)
+  })
+
   it('previews DDL without executing it', async () => {
     const h = harness()
     stores.push(h.store)
