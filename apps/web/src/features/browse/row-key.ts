@@ -47,3 +47,10 @@ export function rowToValues(result: BrowseResult, row: Cell[]): Record<string, C
   })
   return out
 }
+
+/** A row's values as text, without one column: identifies the row across an edit of that column. */
+export function othersOf(result: BrowseResult, row: Cell[], column: string): string {
+  const values = rowToValues(result, row)
+  delete values[column]
+  return JSON.stringify(values)
+}

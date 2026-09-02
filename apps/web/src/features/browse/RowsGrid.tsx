@@ -14,7 +14,7 @@ import { FilterChips } from './FilterChips.tsx'
 import { linkableForeignKeys, linkableReverseKeys } from './fk-links.ts'
 import { Pagination } from './Pagination.tsx'
 import { CopyRowDialog, EditRowDialog } from './RowDialogs.tsx'
-import { rowKeys, rowToValues } from './row-key.ts'
+import { othersOf, rowKeys, rowToValues } from './row-key.ts'
 import { SortHeader } from './SortHeader.tsx'
 
 export interface RowsGridProps {
@@ -35,13 +35,6 @@ export interface RowsGridProps {
 /** Data columns exclude the hidden key column (PG ctid) appended by the adapter. */
 export function visibleColumns(result: BrowseResult): BrowseResult['columns'] {
   return result.keyKind === 'ctid' ? result.columns.slice(0, -1) : result.columns
-}
-
-/** A row's values as text, without one column: identifies the row across an edit of that column. */
-function othersOf(result: BrowseResult, row: Cell[], column: string): string {
-  const values = rowToValues(result, row)
-  delete values[column]
-  return JSON.stringify(values)
 }
 
 export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridProps) {
