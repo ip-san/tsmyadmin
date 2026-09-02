@@ -12,7 +12,10 @@
 - 構造タブ: NOT NULL で既定値のない列の既定値を「NULL」でなく「なし」と表示
 - 行のインライン編集で NULL のチェックを外すとフォーカスが入力欄へ移る、編集ダイアログや削除の成功後に古いインライン編集のエラーが残らない、削除後は通知にフォーカス、ログイン画面の初回表示でユーザー名にフォーカス、狭い幅で「いいえ」が折り返さない
 - SQL ダンプ: ルーチン本文の `$` を含む識別子で区切りが壊れないよう `DELIMITER ;;` を使用、ビューの並びをテーブル名の部分一致でなく単語単位で解決、MySQL のトリガーに `DEFINER` を保持（除去オプションに従う）、PostgreSQL のビューの `WITH CHECK OPTION` / `security_barrier` / `security_invoker` / コメントと、ビューを参照する SQL 標準本文（`BEGIN ATOMIC`）の関数はビューの後に出力、存在しなくなったルーチンはコメントで飛ばす
-- MySQL: MariaDB の PACKAGE をルーチン一覧から除外、インポート中の `SET sql_mode` による `NO_BACKSLASH_ESCAPES` の切り替えを分割器が追従（mysqldump の `/*!50003 … */` 形式、`@saved` 変数からの復元、複数代入、`REPLACE()` / `CONCAT()` を含む）
+- MySQL: インポート中の `SET sql_mode` による `NO_BACKSLASH_ESCAPES` の切り替えを分割器が追従（mysqldump の `/*!50003 … */` 形式、`@saved` 変数からの復元、複数代入、`REPLACE()` / `CONCAT()` を含む）
+- SQL ダンプ（PostgreSQL）: テーブルの行型を使う関数（`RETURNS SETOF t`、`t` 型の引数）をそのテーブルの後に出力（ルーチンをテーブルの前に移した変更で復元できなくなっていた）
+- MySQL 8: 接続ごとに `information_schema_stats_expiry = 0` を設定し、AUTO_INCREMENT・行数・サイズが最大 24 時間古い値で表示されないようにした（テーブルオプションで設定した AUTO_INCREMENT が反映されないように見えていた）
+- WebKit でマウス操作から開いたダイアログを閉じた後のフォーカス復帰（ボタンがクリック時にフォーカスを取る）、絞り込み中のインライン編集で行が結果から外れたときのフォーカスを再取得後に判定、横スクロールする SQL 表示をキーボードで到達可能に、テーブルオプションの再シードは構造の再取得を待ってから
 - SQL ダンプ（MySQL / MariaDB）: トリガーとイベントの本文を `SHOW CREATE TRIGGER` / `SHOW CREATE EVENT` の原文から出力（information_schema はエスケープを処理済みの本文を返すため、`\'` や `\\` を含む本文が復元できない・変わっていた。権限がない場合は従来の本文にフォールバック）
 - SQL ダンプ（PostgreSQL）: 「DROP TABLE IF EXISTS」オプションでは依存順の逆に並べた DROP をダンプ先頭にまとめて出力し `CASCADE` を使わない（ダンプに含まれない依存オブジェクトを黙って消していた。pg_dump --clean と同じ挙動）、外部キーの `MATCH FULL` / `SET DEFAULT (列)` / `NOT VALID`、`UNLOGGED`、ストレージパラメータ、`INHERITS`、`PARTITION BY` とパーティション、トリガーの `ENABLE ALWAYS` / `REPLICA`
 - SQL ダンプ（MariaDB）: ビューの並び順の判定で、別名や列名がビュー名と同じ場合に誤った依存を検出していた（FROM / JOIN の位置だけを参照とみなす）

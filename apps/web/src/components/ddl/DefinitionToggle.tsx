@@ -12,7 +12,10 @@ function Definition({ definition }: { definition: string | null }) {
   if (definition === null)
     return <span className="text-xs text-zinc-500 dark:text-zinc-400">{locale.routines.noDefinition}</span>
   return (
-    <pre className="mt-2 max-h-96 overflow-auto rounded border border-zinc-200 bg-zinc-50 p-2 font-mono text-xs dark:border-zinc-700 dark:bg-zinc-950">
+    <pre
+      tabIndex={0}
+      className="mt-2 max-h-96 overflow-auto rounded border border-zinc-200 bg-zinc-50 p-2 font-mono text-xs dark:border-zinc-700 dark:bg-zinc-950"
+    >
       {definition}
     </pre>
   )

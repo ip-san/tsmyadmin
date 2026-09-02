@@ -64,17 +64,37 @@ function isSqlStandardBody(statement: string): boolean {
 
 interface Routines {
   /** Emitted before the tables (every MySQL routine; PostgreSQL string bodies, which DEFAULTs and indexes may call). */
-  stringBody: ProgramStatement[]
-  /** PostgreSQL SQL-standard bodies, by routine name: ordered with the views they read or are read by. */
-  sqlBody: Map<string, ProgramStatement[]>
+  early: ProgramStatement[]
+  /**
+   * PostgreSQL routines that need a relation first — SQL-standard bodies, and signatures built on a table's row
+   * type — by name: ordered after the tables, with the views they read or are read by.
+   */
+  late: Map<string, ProgramStatement[]>
   skipped: string[]
 }
 
-/** Routines of the namespace, read once (one definition per name and kind: PostgreSQL overloads share one). */
-async function collectRoutines(adapter: DatabaseAdapter, ns: Namespace, stripDefiner: boolean): Promise<Routines> {
+/** Whether a PostgreSQL routine's signature (the CREATE and RETURNS lines) names one of the relations. */
+function signatureUses(statement: string, relations: string[]): boolean {
+  const header = statement.split('\n').slice(0, 2).join('\n')
+  return relations.some((r) =>
+    new RegExp(`(?<![\\w])${r.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w])`).test(header)
+  )
+}
+
+/**
+ * Routines of the namespace, read once (one definition per name and kind: PostgreSQL overloads share one).
+ * `relationBound` maps a routine name to the tables / views the catalog ties it to: an overload whose
+ * signature uses one of them (a row type) is created after that relation.
+ */
+async function collectRoutines(
+  adapter: DatabaseAdapter,
+  ns: Namespace,
+  stripDefiner: boolean,
+  relationBound: Map<string, string[]>
+): Promise<Routines> {
   const x = adapter.exporter
   const seen = new Set<string>()
-  const out: Routines = { stringBody: [], sqlBody: new Map(), skipped: [] }
+  const out: Routines = { early: [], late: new Map(), skipped: [] }
   for (const r of await adapter.listRoutines(ns)) {
     if (seen.has(`${r.kind}:${r.name}`)) continue
     seen.add(`${r.kind}:${r.name}`)
@@ -91,7 +111,7 @@ async function collectRoutines(adapter: DatabaseAdapter, ns: Namespace, stripDef
       continue
     }
     if (adapter.dialect !== 'postgres') {
-      out.stringBody.push({ ...x.routine(ns, r.kind, r.name, def, stripDefiner), sqlMode: r.sqlMode })
+      out.early.push({ ...x.routine(ns, r.kind, r.name, def, stripDefiner), sqlMode: r.sqlMode })
       continue
     }
     // Overloads arrive as one statement each; the body style is decided per overload. A COMMENT ON that follows
@@ -103,11 +123,11 @@ async function collectRoutines(adapter: DatabaseAdapter, ns: Namespace, stripDef
         continue
       }
       last = x.routine(ns, r.kind, r.name, sql, stripDefiner)
-      if (isSqlStandardBody(sql)) {
-        const group = out.sqlBody.get(r.name) ?? []
+      if (isSqlStandardBody(sql) || signatureUses(sql, relationBound.get(r.name) ?? [])) {
+        const group = out.late.get(r.name) ?? []
         group.push(last)
-        out.sqlBody.set(r.name, group)
-      } else out.stringBody.push(last)
+        out.late.set(r.name, group)
+      } else out.early.push(last)
     }
   }
   return out
@@ -115,12 +135,12 @@ async function collectRoutines(adapter: DatabaseAdapter, ns: Namespace, stripDef
 
 function routinesBody(adapter: DatabaseAdapter, routines: Routines): string {
   const parts: string[] = []
-  if (routines.stringBody.length > 0 || routines.skipped.length > 0) parts.push(section('Routines'))
+  if (routines.early.length > 0 || routines.skipped.length > 0) parts.push(section('Routines'))
   // A routine the account may not read is named rather than silently missing from the backup.
   for (const name of routines.skipped)
     parts.push(`-- skipped (definition not readable, or dropped meanwhile): ${commentText(name)}\n`)
   if (routines.skipped.length > 0) parts.push('\n')
-  if (routines.stringBody.length > 0) parts.push(adapter.exporter.programBlock(routines.stringBody))
+  if (routines.early.length > 0) parts.push(adapter.exporter.programBlock(routines.early))
   return parts.join('')
 }
 
@@ -178,9 +198,10 @@ function orderObjects(objects: LateObject[], catalog: ObjectDependency[] | null)
     )
     return o.statements.some((s) => re.test(s))
   }
+  const catalogByKey = new Map((catalog ?? []).map((d) => [key(d), d]))
   const dependencies = (o: LateObject): LateObject[] => {
     if (catalog) {
-      const deps = catalog.find((d) => d.kind === o.kind && d.name === o.name)?.dependsOn ?? []
+      const deps = catalogByKey.get(key(o))?.dependsOn ?? []
       return deps.map((d) => byKey.get(key(d))).filter((d): d is LateObject => d !== undefined && d !== o)
     }
     return objects.filter((dep) => dep !== o && dep.kind === 'view' && mentions(o, dep.name))
@@ -236,7 +257,16 @@ async function* sqlBody(
   // Routines go before the tables: a DEFAULT, a CHECK or a functional index may call one (PostgreSQL parses
   // string bodies only when called, see check_function_bodies in the preamble).
   const programs = structure && q.routines === '1'
-  const routines = programs && everything ? await collectRoutines(adapter, ns, q.stripDefiner === '1') : null
+  // PostgreSQL: the catalog says which routines are tied to a table or view (row-type signatures, SQL-standard
+  // bodies) and must follow it; MySQL has no such catalog and needs none (routines cannot appear in DDL).
+  const catalog = pg && (programs || schemas.size > 1) ? await adapter.listDependencies(ns) : null
+  const relationBound = new Map(
+    (catalog ?? [])
+      .filter((d) => d.kind === 'routine')
+      .map((d) => [d.name, d.dependsOn.filter((x) => x.kind !== 'routine').map((x) => x.name)])
+  )
+  const routines =
+    programs && everything ? await collectRoutines(adapter, ns, q.stripDefiner === '1', relationBound) : null
   // Views and SQL-standard routines are emitted after every table, in dependency order (decided up front so a
   // PostgreSQL dump can also drop them first, dependents before their dependencies).
   const late: LateObject[] = []
@@ -253,7 +283,7 @@ async function* sqlBody(
       text: `${section(`View: ${commentText(table)}`)}${all.map((stmt) => `${stmt};\n\n`).join('')}`,
     })
   }
-  for (const [name, statements] of routines?.sqlBody ?? []) {
+  for (const [name, statements] of routines?.late ?? []) {
     late.push({
       kind: 'routine',
       name,
@@ -261,7 +291,7 @@ async function* sqlBody(
       text: `${section(`Routine: ${commentText(name)}`)}${adapter.exporter.programBlock(statements)}`,
     })
   }
-  const ordered = orderObjects(late, late.length > 1 ? await adapter.listDependencies(ns) : null)
+  const ordered = orderObjects(late, catalog ?? (late.length > 1 ? await adapter.listDependencies(ns) : null))
   if (drops && pg) {
     const targets: DropTarget[] = [...ordered].reverse().map((o) => {
       if (o.kind === 'routine') return { kind: 'routine', name: o.name, statements: o.statements }

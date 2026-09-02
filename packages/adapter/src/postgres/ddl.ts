@@ -189,7 +189,7 @@ const IDENTITY_MAX = new Set(['32767', '2147483647', '9223372036854775807'])
 export async function pgTableCatalog(conn: Conn, regclass: string): Promise<PgTableCatalog> {
   const con = firstResult(
     await conn.query(
-      `SELECT con.conname, pg_get_constraintdef(con.oid, true), ic.relname
+      `SELECT con.conname, pg_get_constraintdef(con.oid, false), ic.relname
        FROM pg_constraint con LEFT JOIN pg_class ic ON ic.oid = con.conindid AND con.contype IN ('u', 'x')
        WHERE con.conrelid = $1::regclass AND con.contype IN ('c', 'u', 'x', 'f') AND con.conislocal
        ORDER BY con.contype, con.conname`,
@@ -263,7 +263,8 @@ export async function pgTableCatalog(conn: Conn, regclass: string): Promise<PgTa
     await conn.query(
       `SELECT a.attname, s.seqstart, s.seqincrement, s.seqmin, s.seqmax, s.seqcache, s.seqcycle
        FROM pg_attribute a
-       JOIN pg_depend d ON d.refobjid = a.attrelid AND d.refobjsubid = a.attnum AND d.deptype = 'i' AND d.classid = 'pg_class'::regclass
+       JOIN pg_depend d ON d.refclassid = 'pg_class'::regclass AND d.refobjid = a.attrelid AND d.refobjsubid = a.attnum
+                         AND d.deptype = 'i' AND d.classid = 'pg_class'::regclass
        JOIN pg_sequence s ON s.seqrelid = d.objid
        WHERE a.attrelid = $1::regclass AND a.attidentity <> ''`,
       [regclass]

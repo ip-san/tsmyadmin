@@ -149,6 +149,13 @@ describe.each(targets)('API integration ($dialect)', ({ dialect, url }) => {
           ]
         : [
             'DROP TABLE IF EXISTS prog_t CASCADE',
+            'DROP TABLE IF EXISTS prog_part',
+            'DROP TABLE IF EXISTS prog_d CASCADE',
+            'DROP VIEW IF EXISTS prog_v3',
+            'DROP FUNCTION IF EXISTS prog_one()',
+            'DROP FUNCTION IF EXISTS prog_count()',
+            'DROP FUNCTION IF EXISTS prog_label(bigint)',
+            'DROP FUNCTION IF EXISTS prog_rows()',
             'CREATE TABLE prog_t (id INT PRIMARY KEY, title VARCHAR(50) NULL)',
             "CREATE OR REPLACE FUNCTION prog_label(uid INT) RETURNS TEXT LANGUAGE sql STABLE AS $$ SELECT '#' || uid $$",
             "CREATE OR REPLACE FUNCTION prog_default_title() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN NEW.title := COALESCE(NEW.title, 'untitled'); RETURN NEW; END $$",
@@ -165,6 +172,8 @@ describe.each(targets)('API integration ($dialect)', ({ dialect, url }) => {
             'CREATE FUNCTION prog_count() RETURNS bigint LANGUAGE sql BEGIN ATOMIC SELECT count(*) FROM prog_v2; END',
             // A third overload with a SQL-standard body: classified on its own, not with its string-body siblings.
             'CREATE FUNCTION prog_label(uid BIGINT) RETURNS TEXT LANGUAGE sql RETURN (SELECT max(label) FROM prog_v)',
+            // A string-body function whose signature uses the table's row type: created after the table.
+            'CREATE FUNCTION prog_rows() RETURNS SETOF prog_t LANGUAGE sql AS $$ SELECT * FROM prog_t $$',
             // A view reading a SQL-standard-body function: that function must precede this view.
             'CREATE FUNCTION prog_one() RETURNS INT LANGUAGE sql BEGIN ATOMIC SELECT 1; END',
             'CREATE VIEW prog_v3 AS SELECT prog_one() AS one',
@@ -209,6 +218,7 @@ describe.each(targets)('API integration ($dialect)', ({ dialect, url }) => {
         expect(dump.indexOf('-- View: prog_v\n')).toBeLessThan(dump.indexOf('-- Routine: prog_count'))
         expect(dump.indexOf('-- Routine: prog_one')).toBeLessThan(dump.indexOf('-- View: prog_v3'))
         expect(dump.indexOf('-- Routines')).toBeLessThan(dump.indexOf('-- Table: prog_d'))
+        expect(dump.indexOf('-- Table: prog_t\n')).toBeLessThan(dump.indexOf('-- Routine: prog_rows'))
         expect(dump).toContain(`COMMENT ON FUNCTION "public"."prog_one"() IS 'always one'`)
         expect(dump).toContain('DISABLE TRIGGER "prog_off"')
       } else expect(dump).toContain("SELECT 'DEFINER=root@localhost' AS s")
@@ -216,7 +226,7 @@ describe.each(targets)('API integration ($dialect)', ({ dialect, url }) => {
       await other(
         dialect === 'mysql'
           ? 'DROP VIEW prog_v; DROP TRIGGER prog_before_insert; DROP FUNCTION prog_label; DROP PROCEDURE prog_p; DROP EVENT prog_event'
-          : 'DROP TABLE prog_part; DROP TABLE prog_d; DROP VIEW prog_v3; DROP FUNCTION prog_one(); DROP FUNCTION prog_label(bigint); DROP FUNCTION prog_count(); DROP VIEW prog_v2; DROP VIEW prog_v; DROP TRIGGER prog_before_insert ON prog_t; DROP FUNCTION prog_label(int); DROP FUNCTION prog_label(text)'
+          : 'DROP FUNCTION prog_rows(); DROP TABLE prog_part; DROP TABLE prog_d; DROP VIEW prog_v3; DROP FUNCTION prog_one(); DROP FUNCTION prog_label(bigint); DROP FUNCTION prog_count(); DROP VIEW prog_v2; DROP VIEW prog_v; DROP TRIGGER prog_before_insert ON prog_t; DROP FUNCTION prog_label(int); DROP FUNCTION prog_label(text)'
       )
       const restored = z.array(StatementResultSchema).parse(await (await other(dump)).json())
       expect(
@@ -238,7 +248,7 @@ describe.each(targets)('API integration ($dialect)', ({ dialect, url }) => {
         expect(create.sql.join('\n')).toContain('WITH CASCADED CHECK OPTION')
         expect(tables.find((t) => t.name === 'prog_v3')?.kind).toBe('view')
         const d = (await (await req('/api/databases/tsmyadmin_other/tables/prog_d/create')).json()) as { sql: string[] }
-        expect(d.sql.join('\n')).toMatch(/CHECK \(\(?id > 0\)?\)/)
+        expect(d.sql.join('\n')).toMatch(/CHECK \(+id > 0\)+/)
         const trg = (await (await req('/api/databases/tsmyadmin_other/triggers')).json()) as {
           name: string
           enabled: boolean
@@ -272,7 +282,7 @@ describe.each(targets)('API integration ($dialect)', ({ dialect, url }) => {
       await other(
         dialect === 'mysql'
           ? 'DROP VIEW IF EXISTS prog_v; DROP EVENT IF EXISTS prog_event; DROP TRIGGER IF EXISTS prog_before_insert; DROP FUNCTION IF EXISTS prog_label; DROP PROCEDURE IF EXISTS prog_p; DROP TABLE IF EXISTS prog_t'
-          : 'DROP TABLE IF EXISTS prog_part; DROP TABLE IF EXISTS prog_d; DROP VIEW IF EXISTS prog_v3; DROP FUNCTION IF EXISTS prog_one(); DROP FUNCTION IF EXISTS prog_label(bigint); DROP FUNCTION IF EXISTS prog_count(); DROP VIEW IF EXISTS prog_v2; DROP VIEW IF EXISTS prog_v; DROP TABLE IF EXISTS prog_t CASCADE; DROP FUNCTION IF EXISTS prog_label(int); DROP FUNCTION IF EXISTS prog_label(text); DROP FUNCTION IF EXISTS prog_default_title'
+          : 'DROP FUNCTION IF EXISTS prog_rows(); DROP TABLE IF EXISTS prog_part; DROP TABLE IF EXISTS prog_d; DROP VIEW IF EXISTS prog_v3; DROP FUNCTION IF EXISTS prog_one(); DROP FUNCTION IF EXISTS prog_label(bigint); DROP FUNCTION IF EXISTS prog_count(); DROP VIEW IF EXISTS prog_v2; DROP VIEW IF EXISTS prog_v; DROP TABLE IF EXISTS prog_t CASCADE; DROP FUNCTION IF EXISTS prog_label(int); DROP FUNCTION IF EXISTS prog_label(text); DROP FUNCTION IF EXISTS prog_default_title'
       )
     }
   })

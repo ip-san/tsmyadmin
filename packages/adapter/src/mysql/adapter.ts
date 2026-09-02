@@ -86,6 +86,9 @@ const WRAPPER_ONLY_ERRORS: ReadonlySet<string> = new Set([
   'ER_PARSE_ERROR',
 ])
 /** MariaDB-only errno values the driver has no symbolic name for; anything else unnamed becomes `ER_<errno>`. */
+/** `SEQUENCE=1` among the table options (the line after the column list), not inside a quoted comment. */
+const SEQUENCE_OPTION = /^\)(?:[^'\n]|'(?:[^']|'')*')*\bSEQUENCE=1\b/m
+
 const MARIADB_ERRNO_NAMES: Record<number, string> = {
   1969: 'ER_STATEMENT_TIMEOUT',
   4084: 'ER_SEQUENCE_RUN_OUT',
@@ -236,6 +239,15 @@ export class MysqlAdapter extends BaseAdapter {
       try {
         await this.run(conn, `USE ${quoteIdent('mysql', ns.database)}`)
         await this.run(conn, SESSION_SQL_MODE)
+        // MySQL 8 serves information_schema statistics (AUTO_INCREMENT, TABLE_ROWS, sizes) from a 24-hour cache
+        // by default; the structure pages must show what the server has now. MariaDB / 5.7 lack the variable.
+        if (!this.mariadb) {
+          try {
+            await this.run(conn, 'SET SESSION information_schema_stats_expiry = 0')
+          } catch (err) {
+            if (!(err instanceof AdapterError && err.nativeCode === 'ER_UNKNOWN_SYSTEM_VARIABLE')) throw err
+          }
+        }
         this.currentDatabase.set(core, ns.database)
       } catch (err) {
         this.currentDatabase.delete(core)
@@ -486,7 +498,7 @@ export class MysqlAdapter extends BaseAdapter {
       const create = String(row[1] ?? '')
       // MariaDB answers SHOW CREATE TABLE for a sequence with `CREATE TABLE … SEQUENCE=1`: no catalog round trip
       // is needed to tell the two apart when the caller did not pass the schema.
-      const kind = known?.kind ?? (/\bSEQUENCE=1\b/.test(create) ? 'sequence' : 'table')
+      const kind = known?.kind ?? (SEQUENCE_OPTION.test(create) ? 'sequence' : 'table')
       if (kind === 'sequence') {
         // MariaDB SEQUENCE: the definition plus the value it would hand out next, so a restore continues.
         const r = firstResult(await conn.query(`SHOW CREATE SEQUENCE ${t}`))

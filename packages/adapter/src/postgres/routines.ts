@@ -1,6 +1,6 @@
 import type { Namespace, ObjectDependency, RoutineInfo, RoutineKind, TriggerInfo } from '@tsmyadmin/shared'
 import { type Conn, firstResult } from '../base.ts'
-import { str, strOrNull } from '../sql/format.ts'
+import { groupDependencies, str, strOrNull } from '../sql/format.ts'
 import { pgLiteral } from '../sql/literal.ts'
 import { quoteIdent } from '../sql/quote.ts'
 import { AdapterError } from '../types.ts'
@@ -102,8 +102,9 @@ export async function pgListTriggers(conn: Conn, ns: Namespace, table?: string):
 }
 
 /**
- * View → relation / routine edges come from the view's rewrite rule; routine → relation / routine edges exist only
- * for SQL-standard bodies (string bodies are not parsed at CREATE time and record nothing).
+ * View → relation / routine edges come from the view's rewrite rule; routine → relation / routine edges exist for
+ * SQL-standard bodies (string bodies are not parsed at CREATE time) and for signatures that use a table's row
+ * type (`RETURNS SETOF t`, a `t` parameter), which pg_depend records against the type.
  */
 export async function pgListDependencies(conn: Conn, ns: Namespace): Promise<ObjectDependency[]> {
   const schema = ns.schema ?? 'public'
@@ -124,29 +125,31 @@ export async function pgListDependencies(conn: Conn, ns: Namespace): Promise<Obj
        JOIN objs src ON src.classid = d.classid AND src.oid = d.objid AND src.kind = 'routine'
        WHERE d.deptype = 'n'
        UNION
+       SELECT DISTINCT src.kind, src.name, ref.kind, ref.name
+       FROM pg_depend d
+       JOIN pg_type ty ON d.refclassid = 'pg_type'::regclass AND ty.oid = d.refobjid AND ty.typrelid <> 0
+       JOIN objs ref ON ref.classid = 'pg_class'::regclass AND ref.oid = ty.typrelid
+       JOIN objs src ON src.classid = d.classid AND src.oid = d.objid AND src.kind = 'routine'
+       WHERE d.deptype = 'n'
+       UNION
        SELECT DISTINCT v.kind, v.name, ref.kind, ref.name
        FROM pg_rewrite rw
        JOIN objs v ON v.classid = 'pg_class'::regclass AND v.oid = rw.ev_class AND v.kind = 'view'
        JOIN pg_depend d ON d.classid = 'pg_rewrite'::regclass AND d.objid = rw.oid
-       JOIN objs ref ON ref.classid = d.refclassid AND ref.oid = d.refobjid
+       JOIN objs ref ON ref.classid = d.refclassid AND ref.oid = d.refobjid AND ref.oid <> v.oid
        ORDER BY 1, 2, 3, 4`,
       [schema]
     )
   )
-  const byKey = new Map<string, ObjectDependency>()
-  for (const row of r.rows) {
-    const kind = str(row[0]) === 'view' ? 'view' : 'routine'
-    const name = str(row[1])
-    const refKind = str(row[2])
-    const refName = str(row[3])
-    if (kind === refKind && name === refName) continue
-    const key = `${kind}:${name}`
-    const entry = byKey.get(key) ?? { kind, name, dependsOn: [] }
-    if (!byKey.has(key)) byKey.set(key, entry)
-    entry.dependsOn.push({
-      kind: refKind === 'view' ? 'view' : refKind === 'routine' ? 'routine' : 'table',
-      name: refName,
+  return groupDependencies(
+    r.rows.map((row) => {
+      const refKind = str(row[2])
+      return {
+        kind: str(row[0]) === 'view' ? 'view' : 'routine',
+        name: str(row[1]),
+        refKind: refKind === 'view' ? 'view' : refKind === 'routine' ? 'routine' : 'table',
+        refName: str(row[3]),
+      }
     })
-  }
-  return [...byKey.values()]
+  )
 }

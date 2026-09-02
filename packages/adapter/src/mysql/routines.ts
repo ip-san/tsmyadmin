@@ -1,6 +1,6 @@
 import type { EventInfo, Namespace, ObjectDependency, RoutineInfo, RoutineKind, TriggerInfo } from '@tsmyadmin/shared'
 import { type Conn, firstResult } from '../base.ts'
-import { str, strOrNull } from '../sql/format.ts'
+import { groupDependencies, str, strOrNull } from '../sql/format.ts'
 import { quoteIdent } from '../sql/quote.ts'
 import { AdapterError } from '../types.ts'
 
@@ -188,16 +188,18 @@ export async function mysqlListDependencies(conn: Conn, ns: Namespace): Promise<
     if (err instanceof AdapterError && err.nativeCode === 'ER_UNKNOWN_TABLE') return null
     throw err
   }
-  const byView = new Map<string, ObjectDependency>()
-  const entry = (view: string) => {
-    const e = byView.get(view) ?? { kind: 'view' as const, name: view, dependsOn: [] }
-    byView.set(view, e)
-    return e
-  }
-  for (const row of tables.rows) {
-    const kind = String(row[2] ?? '').includes('VIEW') ? 'view' : 'table'
-    entry(str(row[0])).dependsOn.push({ kind, name: str(row[1]) })
-  }
-  for (const row of routines.rows) entry(str(row[0])).dependsOn.push({ kind: 'routine', name: str(row[1]) })
-  return [...byView.values()]
+  return groupDependencies([
+    ...tables.rows.map((row) => ({
+      kind: 'view' as const,
+      name: str(row[0]),
+      refKind: String(row[2] ?? '').includes('VIEW') ? ('view' as const) : ('table' as const),
+      refName: str(row[1]),
+    })),
+    ...routines.rows.map((row) => ({
+      kind: 'view' as const,
+      name: str(row[0]),
+      refKind: 'routine' as const,
+      refName: str(row[1]),
+    })),
+  ])
 }

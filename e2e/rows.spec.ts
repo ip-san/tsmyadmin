@@ -128,7 +128,9 @@ for (const t of TARGETS) {
 
     test('views are read-only', async ({ page }) => {
       await page.goto(tableUrl(t, 'active_users'))
-      await expect(page.getByText(/ビュー、または行を一意に特定できるキーがないため編集できません/)).toBeVisible()
+      await expect(
+        page.getByText(/ビュー・シーケンス、または行を一意に特定できるキーがないため編集できません/)
+      ).toBeVisible()
       await expect(page.getByRole('button', { name: '選択行を削除' })).toHaveCount(0)
     })
   })

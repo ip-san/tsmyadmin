@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { BrowseOptions, BrowseResult, Cell, RowKey, RowValues } from '@tsmyadmin/shared'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Th } from '@/components/ui/Table.tsx'
@@ -47,6 +47,7 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const noticeRef = useRef<HTMLOutputElement>(null)
+  const settleFocus = useRef(false)
   const gridRef = useRef<HTMLTableElement>(null)
   // Reset transient UI state when the table, page, sort or filters change (state-from-props reset pattern):
   // the route component is reused across tables, so a selection or an open editor must not carry over.
@@ -82,6 +83,11 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
     []
   )
   const data = rows.data
+  useEffect(() => {
+    if (!settleFocus.current || rows.isFetching) return
+    settleFocus.current = false
+    if (!gridRef.current?.contains(document.activeElement)) noticeRef.current?.focus({ preventScroll: true })
+  }, [data, rows.isFetching])
   // Derived per page, not per render: keys/indexes are reused by every checkbox toggle and inline edit.
   const derived = useMemo(() => {
     if (!data) return null
@@ -101,9 +107,10 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
     onSuccess: async () => {
       setNotice(locale.rows.updated)
       closeInline()
+      // The edited row may leave a filtered result set, taking the focused cell with it: checked once the
+      // refetched rows are committed (see the effect on `data`), not when the fetch resolves.
+      settleFocus.current = true
       await invalidate()
-      // The edited row may have left a filtered result set, taking the focused cell with it.
-      if (!gridRef.current?.contains(document.activeElement)) noticeRef.current?.focus({ preventScroll: true })
     },
   })
   const openInline = useCallback(

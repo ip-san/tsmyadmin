@@ -57,6 +57,7 @@ export function EventsPage({ db, schema, dialect }: { db: string; schema?: strin
                   <Td className="space-x-1 whitespace-nowrap">
                     <Button
                       size="sm"
+                      aria-haspopup="dialog"
                       onClick={() => flow.preview({ op: enabled ? 'disableEvent' : 'enableEvent', name: e.name })}
                       aria-label={`${e.name}: ${enabled ? locale.events.disable : locale.events.enable}`}
                     >
@@ -65,6 +66,7 @@ export function EventsPage({ db, schema, dialect }: { db: string; schema?: strin
                     <Button
                       size="sm"
                       variant="danger"
+                      aria-haspopup="dialog"
                       onClick={() => flow.preview({ op: 'dropEvent', name: e.name })}
                       aria-label={`${e.name}: ${locale.events.drop}`}
                     >

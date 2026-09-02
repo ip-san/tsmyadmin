@@ -85,6 +85,7 @@ export function PreviewDialog<Op>({
         ) : (
           <pre
             aria-label="SQL"
+            tabIndex={0}
             className="overflow-x-auto rounded border border-zinc-200 bg-zinc-50 p-3 font-mono text-xs text-zinc-800 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
           >
             {flow.sql.map((s) => `${s};`).join('\n')}
@@ -121,7 +122,9 @@ export function PreviewDialog<Op>({
             className="mt-2 rounded border border-red-300 bg-red-50 p-2 text-sm text-red-800 outline-none dark:border-red-700 dark:bg-red-950 dark:text-red-200"
           >
             <strong>{locale.ddl.failedStatement}:</strong> {flow.failed.message}
-            <pre className="mt-1 overflow-x-auto font-mono text-xs">{flow.failed.sql}</pre>
+            <pre tabIndex={0} className="mt-1 overflow-x-auto font-mono text-xs">
+              {flow.failed.sql}
+            </pre>
           </div>
         ) : null}
       </Dialog>

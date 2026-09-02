@@ -78,13 +78,16 @@ const Statement = memo(function Statement({
           ) : null}
         </p>
         {where ? (
-          <pre className="mt-1 overflow-x-auto font-mono text-xs text-red-900 dark:text-red-100">
+          <pre tabIndex={0} className="mt-1 overflow-x-auto font-mono text-xs text-red-900 dark:text-red-100">
             {where.text}
             {'\n'}
             {`${' '.repeat(Math.max(0, where.column - 1))}^`}
           </pre>
         ) : null}
-        <pre className="mt-2 overflow-x-auto rounded bg-white/60 p-2 font-mono text-xs text-zinc-700 dark:bg-black/30 dark:text-zinc-200">
+        <pre
+          tabIndex={0}
+          className="mt-2 overflow-x-auto rounded bg-white/60 p-2 font-mono text-xs text-zinc-700 dark:bg-black/30 dark:text-zinc-200"
+        >
           {result.sql}
         </pre>
       </section>
@@ -95,7 +98,9 @@ const Statement = memo(function Statement({
       <section aria-label={heading} className="space-y-1">
         <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{heading}</h3>
         <Notice>{locale.sql.affected(result.affectedRows, result.durationMs)}</Notice>
-        <pre className="overflow-x-auto font-mono text-xs text-zinc-500 dark:text-zinc-400">{result.sql}</pre>
+        <pre tabIndex={0} className="overflow-x-auto font-mono text-xs text-zinc-500 dark:text-zinc-400">
+          {result.sql}
+        </pre>
       </section>
     )
   }
@@ -110,7 +115,9 @@ const Statement = memo(function Statement({
         {rows.length > 0 ? <DownloadButtons result={result.result} label={heading} index={index} /> : null}
       </h3>
       {truncated ? <Notice>{locale.sql.truncated(maxRows)}</Notice> : null}
-      <pre className="overflow-x-auto font-mono text-xs text-zinc-500 dark:text-zinc-400">{result.sql}</pre>
+      <pre tabIndex={0} className="overflow-x-auto font-mono text-xs text-zinc-500 dark:text-zinc-400">
+        {result.sql}
+      </pre>
       {rows.length === 0 ? <Notice>{locale.browse.noRows}</Notice> : <RowsTable columns={columns} rows={rows} />}
     </section>
   )

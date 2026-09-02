@@ -100,6 +100,7 @@ export function UsersPage({ dialect }: { dialect: Dialect }) {
                   <Button
                     size="sm"
                     variant="danger"
+                    aria-haspopup="dialog"
                     onClick={() => flow.preview({ op: 'dropUser', user: r })}
                     aria-label={`${key}: ${locale.users.drop}`}
                   >

@@ -11,6 +11,7 @@ export function DropDatabaseButton({ name, flow }: { name: string; flow: DdlFlow
     <Button
       size="sm"
       variant="danger"
+      aria-haspopup="dialog"
       onClick={() => flow.preview({ op: 'dropDatabase', name })}
       aria-label={`${name}: ${locale.ddl.titles.dropDatabase}`}
     >

@@ -21,13 +21,23 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   ref?: Ref<HTMLButtonElement>
 }
 
-export function Button({ variant = 'secondary', size = 'md', className, type = 'button', ...rest }: ButtonProps) {
-  // WebKit does not focus a clicked button; a dialog opener must hold focus so the dialog can hand it back.
-  const opensDialog = rest['aria-haspopup'] === 'dialog'
+export function Button({
+  variant = 'secondary',
+  size = 'md',
+  className,
+  type = 'button',
+  onClick,
+  ...rest
+}: ButtonProps) {
   return (
     <button
       type={type}
-      onMouseDown={opensDialog ? (e) => e.currentTarget.focus() : undefined}
+      // WebKit does not focus a clicked button (and undoes a focus set on mousedown), so a dialog opener would
+      // have nothing to hand focus back to: every button takes focus on click, as Chromium does natively.
+      onClick={(e) => {
+        if (document.activeElement !== e.currentTarget) e.currentTarget.focus()
+        onClick?.(e)
+      }}
       className={cn(
         'inline-flex items-center gap-1 rounded font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-60',
         VARIANTS[variant],
