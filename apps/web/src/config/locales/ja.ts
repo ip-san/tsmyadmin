@@ -291,6 +291,7 @@ export const ja = {
       dropEvent: 'イベントを削除',
     },
     previewHint: '以下の SQL を実行します。内容を確認してください。',
+    nothingToChange: '変更はありません（実行する SQL がありません）。',
     irreversible: 'この操作は取り消せません。',
     /** Appended to `irreversible` for the ops that destroy stored data (not for dropping an index / key / account). */
     dataLoss: 'テーブルのデータは失われます。',

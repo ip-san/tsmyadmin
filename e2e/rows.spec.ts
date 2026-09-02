@@ -87,6 +87,15 @@ for (const t of TARGETS) {
         await kbEditor.fill('tres')
         await kbEditor.press('Enter')
         await expect(page.getByRole('cell', { name: 'tres', exact: true })).toBeVisible()
+        // Mouse path: the save button and the NULL checkbox must not be defeated by the editor's blur-cancel.
+        await page.getByRole('cell', { name: 'tres', exact: true }).dblclick()
+        await page.getByLabel('name: セルを編集').fill('quattro')
+        await page.getByRole('button', { name: '保存する' }).click()
+        await expect(page.getByRole('cell', { name: 'quattro', exact: true })).toBeVisible()
+        await page.getByRole('cell', { name: 'quattro', exact: true }).dblclick()
+        await page.getByLabel('NULL にする').check()
+        await page.getByRole('button', { name: '保存する' }).click()
+        await expect(page.getByRole('cell', { name: 'quattro', exact: true })).toHaveCount(0)
         // Exactly one h1 per page (the table heading is an h2 inside the database page).
         expect(await page.locator('h1').count()).toBe(1)
       })

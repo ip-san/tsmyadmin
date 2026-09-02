@@ -32,7 +32,7 @@ export function TableOptionsForm({
   const invalid =
     (engineChanged && !IDENT.test(engine.trim())) ||
     (collationChanged && !IDENT.test(collation.trim())) ||
-    (autoIncrementChanged && !/^\d+$/.test(autoIncrement.trim()))
+    (autoIncrementChanged && !/^\d{1,20}$/.test(autoIncrement.trim()))
   const changed = commentChanged || engineChanged || collationChanged || autoIncrementChanged
   const submit = (e: FormEvent) => {
     e.preventDefault()
@@ -43,13 +43,13 @@ export function TableOptionsForm({
       ...(commentChanged ? { comment: comment === '' ? null : comment } : {}),
       ...(engineChanged ? { engine: engine.trim() } : {}),
       ...(collationChanged ? { collation: collation.trim() } : {}),
-      ...(autoIncrementChanged ? { autoIncrement: Number(autoIncrement.trim()) } : {}),
+      ...(autoIncrementChanged ? { autoIncrement: autoIncrement.trim() } : {}),
     })
   }
   return (
     <section className="rounded border border-zinc-200 p-3 dark:border-zinc-700">
       <form onSubmit={submit} className="space-y-2" aria-label={locale.ddl.titles.setTableOptions}>
-        <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{locale.ddl.titles.setTableOptions}</h3>
+        <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{locale.ddl.titles.setTableOptions}</h2>
         <div className="grid max-w-2xl gap-2 sm:grid-cols-2">
           <Field id="table-comment" label={locale.database.comment}>
             <Input id="table-comment" value={comment} onChange={(e) => setComment(e.target.value)} />

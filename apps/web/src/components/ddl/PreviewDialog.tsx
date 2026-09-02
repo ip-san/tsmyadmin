@@ -35,6 +35,11 @@ export function PreviewDialog<Op>({
   useEffect(() => {
     if (flow.executed) noticeRef.current?.focus()
   }, [flow.executed])
+  // The confirm button is disabled while running, so a failure would leave focus on <body>: read the failure.
+  const failureRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (flow.failed || flow.error) failureRef.current?.focus()
+  }, [flow.failed, flow.error])
   const required = op === null ? null : (confirmName?.(op) ?? null)
   const warning = op === null ? '' : `${locale.ddl.irreversible}${lossWarning?.(op) ? ` ${lossWarning(op) ?? ''}` : ''}`
   const [typed, setTyped] = useState('')
@@ -75,6 +80,8 @@ export function PreviewDialog<Op>({
         <p className="mb-2 text-sm text-zinc-600 dark:text-zinc-300">{hint}</p>
         {flow.previewing ? (
           <Spinner label={locale.ddl.generating} />
+        ) : flow.sql.length === 0 && !flow.error ? (
+          <Notice>{locale.ddl.nothingToChange}</Notice>
         ) : (
           <pre
             aria-label="SQL"
@@ -103,11 +110,15 @@ export function PreviewDialog<Op>({
             />
           </div>
         ) : null}
-        {flow.error ? <ErrorBox error={flow.error} className="mt-2" /> : null}
+        <div ref={failureRef} tabIndex={-1} className="outline-none">
+          {flow.error ? <ErrorBox error={flow.error} className="mt-2" /> : null}
+        </div>
         {flow.failed && flow.failed.kind === 'error' ? (
           <div
+            ref={flow.error ? undefined : failureRef}
+            tabIndex={-1}
             role="alert"
-            className="mt-2 rounded border border-red-300 bg-red-50 p-2 text-sm text-red-800 dark:border-red-700 dark:bg-red-950 dark:text-red-200"
+            className="mt-2 rounded border border-red-300 bg-red-50 p-2 text-sm text-red-800 outline-none dark:border-red-700 dark:bg-red-950 dark:text-red-200"
           >
             <strong>{locale.ddl.failedStatement}:</strong> {flow.failed.message}
             <pre className="mt-1 overflow-x-auto font-mono text-xs">{flow.failed.sql}</pre>

@@ -45,7 +45,8 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
   const { session } = useRouteContext({ from: '/_app' })
   const scope = `${dialect}.${session.host}.${session.port}`
   // Unsent editor text survives tab switches and a session-expiry round trip (per console, this browser tab).
-  const key = `sql.draft.${scope}.${db}.${schema ?? ''}.${draftId}`
+  // The server console is one editor whose target database can change: its draft is not keyed by database.
+  const key = draftId === 'server' ? `sql.draft.${scope}.server` : `sql.draft.${scope}.${db}.${schema ?? ''}.${draftId}`
   const [text, setTextState] = useState(() => readPreference(key, z.string(), initialSql, sessionStore()))
   // Draft writes are debounced: a multi-MB pasted script would otherwise be serialised on every keystroke.
   const pending = useRef<ReturnType<typeof setTimeout> | null>(null)

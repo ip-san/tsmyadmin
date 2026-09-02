@@ -28,7 +28,7 @@ const darkTheme = EditorView.theme(
       backgroundColor: '#3f3f46',
     },
     '.cm-activeLine': { backgroundColor: '#27272a' },
-    '.cm-gutters': { backgroundColor: '#18181b', color: '#71717a', borderRight: '1px solid #3f3f46' },
+    '.cm-gutters': { backgroundColor: '#18181b', color: '#a1a1aa', borderRight: '1px solid #3f3f46' },
     '.cm-activeLineGutter': { backgroundColor: '#27272a' },
     '.cm-tooltip': { backgroundColor: '#27272a', color: '#f4f4f5', border: '1px solid #3f3f46' },
     '.cm-tooltip-autocomplete ul li[aria-selected]': { backgroundColor: '#3f3f46', color: '#f4f4f5' },

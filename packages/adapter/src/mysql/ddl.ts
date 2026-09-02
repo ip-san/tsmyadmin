@@ -75,7 +75,7 @@ export const mysqlDdl: DdlBuilder = {
         if (op.comment !== undefined) parts.push(`COMMENT = ${mysqlLiteral(op.comment ?? '')}`)
         if (op.engine !== undefined) parts.push(`ENGINE = ${op.engine}`)
         if (op.collation !== undefined) parts.push(`COLLATE = ${op.collation}`)
-        if (op.autoIncrement !== undefined) parts.push(`AUTO_INCREMENT = ${Math.floor(op.autoIncrement)}`)
+        if (op.autoIncrement !== undefined) parts.push(`AUTO_INCREMENT = ${op.autoIncrement}`)
         if (parts.length === 0) throw new AdapterError('VALIDATION', 'No table option to change')
         return [`ALTER TABLE ${t} ${parts.join(', ')}`]
       }

@@ -149,10 +149,10 @@ describe('DDL builders', () => {
       comment: 'c',
       engine: 'InnoDB',
       collation: 'utf8mb4_bin',
-      autoIncrement: 100,
+      autoIncrement: '18446744073709551614',
     }
     expect(mysqlDdl.build({ database: 'db' }, opts)).toEqual([
-      "ALTER TABLE `db`.`t` COMMENT = 'c', ENGINE = InnoDB, COLLATE = utf8mb4_bin, AUTO_INCREMENT = 100",
+      "ALTER TABLE `db`.`t` COMMENT = 'c', ENGINE = InnoDB, COLLATE = utf8mb4_bin, AUTO_INCREMENT = 18446744073709551614",
     ])
     expect(() => pgDdl.build({ database: 'db' }, opts)).toThrow(/no engine/)
     expect(pgDdl.build({ database: 'db' }, { op: 'setTableOptions', table: 't', comment: null })).toEqual([

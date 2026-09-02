@@ -25,7 +25,12 @@ export function Dialog({ open, title, onClose, children, footer, busy = false }:
   return (
     <dialog
       ref={ref}
-      onClose={onClose}
+      onClose={() => {
+        // A close that slipped past onCancel (a second Escape through the close watcher) must not discard
+        // an in-flight operation's result: reopen and keep waiting.
+        if (busy) ref.current?.showModal()
+        else onClose()
+      }}
       onCancel={(e) => {
         if (busy) e.preventDefault()
       }}

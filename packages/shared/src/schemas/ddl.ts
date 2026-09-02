@@ -96,7 +96,11 @@ export const DdlOpSchema = z.discriminatedUnion('op', [
       .string()
       .regex(/^[A-Za-z0-9_]+$/)
       .optional(),
-    autoIncrement: z.number().int().min(0).optional(),
+    /** Digits only (a BIGINT UNSIGNED counter can exceed 2^53, so not a JS number). */
+    autoIncrement: z
+      .string()
+      .regex(/^\d{1,20}$/)
+      .optional(),
   }),
   /** Maintenance statements: MySQL ANALYZE / OPTIMIZE / CHECK TABLE, PostgreSQL ANALYZE / VACUUM (FULL). */
   z.object({ op: z.literal('maintainTable'), table, action: z.enum(['analyze', 'optimize', 'check', 'vacuum']) }),

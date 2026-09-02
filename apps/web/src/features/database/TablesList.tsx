@@ -29,35 +29,6 @@ export function TablesList({ db, schema }: { db: string; schema?: string | undef
   const allChecked = plain.length > 0 && chosen.length === plain.length
   return (
     <div className="space-y-3">
-      {chosen.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-2 rounded border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800">
-          <span>{locale.ddl.bulkSelected(chosen.length)}</span>
-          <Link
-            to="/db/$db/export"
-            params={{ db }}
-            search={{ ...search, tables: encodeTableList(chosen) }}
-            className={`text-xs ${link}`}
-          >
-            {locale.ddl.bulkExport}
-          </Link>
-          <Button
-            size="sm"
-            variant="danger"
-            aria-haspopup="dialog"
-            onClick={() => flow.preview({ op: 'truncateTables', tables: chosen })}
-          >
-            {locale.ddl.bulkTruncate}
-          </Button>
-          <Button
-            size="sm"
-            variant="danger"
-            aria-haspopup="dialog"
-            onClick={() => flow.preview({ op: 'dropTables', tables: chosen })}
-          >
-            {locale.ddl.bulkDrop}
-          </Button>
-        </div>
-      ) : null}
       <DdlPreviewDialog flow={flow} />
       <Table>
         <thead>
@@ -145,6 +116,36 @@ export function TablesList({ db, schema }: { db: string; schema?: string | undef
           ))}
         </tbody>
       </Table>
+      {/* Below the table, next to the last checkbox in tab order (phpMyAdmin's "With selected" position). */}
+      {chosen.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-2 rounded border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800">
+          <span aria-live="polite">{locale.ddl.bulkSelected(chosen.length)}</span>
+          <Link
+            to="/db/$db/export"
+            params={{ db }}
+            search={{ ...search, tables: encodeTableList(chosen) }}
+            className={`text-xs ${link}`}
+          >
+            {locale.ddl.bulkExport}
+          </Link>
+          <Button
+            size="sm"
+            variant="danger"
+            aria-haspopup="dialog"
+            onClick={() => flow.preview({ op: 'truncateTables', tables: chosen })}
+          >
+            {locale.ddl.bulkTruncate}
+          </Button>
+          <Button
+            size="sm"
+            variant="danger"
+            aria-haspopup="dialog"
+            onClick={() => flow.preview({ op: 'dropTables', tables: chosen })}
+          >
+            {locale.ddl.bulkDrop}
+          </Button>
+        </div>
+      ) : null}
     </div>
   )
 }

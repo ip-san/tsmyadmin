@@ -60,7 +60,7 @@ export function ExportForm({ db, schema, table, initialTables }: ExportFormProps
           <legend className="mb-1 text-xs font-medium text-zinc-600 dark:text-zinc-300">
             {locale.export.tables}{' '}
             <span className="font-normal text-zinc-500 dark:text-zinc-400">
-              ({selected.length === 0 ? locale.export.allTables : selected.length})
+              ({chosen.length === 0 ? locale.export.allTables : chosen.length})
             </span>
           </legend>
           <div className="flex flex-wrap gap-3 text-sm">

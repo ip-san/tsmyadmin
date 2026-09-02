@@ -9,7 +9,13 @@ import { databasesQuery } from '@/lib/queries.ts'
 
 export const Route = createFileRoute('/_app/sql')({
   component: Page,
-  validateSearch: z.object({ db: z.string().min(1).optional() }),
+  validateSearch: z.object({
+    db: z
+      .string()
+      .optional()
+      .transform((v) => (v ? v : undefined))
+      .catch(undefined),
+  }),
 })
 
 /**
@@ -37,7 +43,7 @@ function Page() {
           ))}
         </Select>
       </label>
-      <SqlConsole key={`server/${db}`} db={db} dialect={session.dialect} completion={EMPTY} draftId="server" />
+      <SqlConsole key="server" db={db} dialect={session.dialect} completion={EMPTY} draftId="server" />
     </>
   )
 }
