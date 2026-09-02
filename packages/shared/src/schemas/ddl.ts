@@ -21,6 +21,10 @@ export type ColumnSpecInput = z.input<typeof ColumnSpecSchema>
 
 const table = z.string().min(1)
 
+/** Referential actions accepted by both dialects. */
+export const FkActionSchema = z.enum(['CASCADE', 'SET NULL', 'RESTRICT', 'NO ACTION', 'SET DEFAULT'])
+export type FkAction = z.infer<typeof FkActionSchema>
+
 export const DdlOpSchema = z.discriminatedUnion('op', [
   z.object({
     op: z.literal('createTable'),
@@ -39,6 +43,17 @@ export const DdlOpSchema = z.discriminatedUnion('op', [
     unique: z.boolean().default(false),
   }),
   z.object({ op: z.literal('dropIndex'), table, name: z.string().min(1) }),
+  z.object({
+    op: z.literal('addForeignKey'),
+    table,
+    name: z.string().min(1),
+    columns: z.array(z.string().min(1)).min(1),
+    refTable: z.string().min(1),
+    refColumns: z.array(z.string().min(1)).min(1),
+    onUpdate: FkActionSchema.optional(),
+    onDelete: FkActionSchema.optional(),
+  }),
+  z.object({ op: z.literal('dropForeignKey'), table, name: z.string().min(1) }),
   z.object({ op: z.literal('dropTable'), table }),
   z.object({ op: z.literal('truncateTable'), table }),
   z.object({ op: z.literal('renameTable'), table, newName: z.string().min(1) }),

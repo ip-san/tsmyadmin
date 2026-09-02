@@ -75,6 +75,7 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
     `${scratch}_pu`,
     `${scratch}_seq`,
     `${scratch}_like`,
+    `${scratch}_fk`,
   ]
   const browseAll = async (table: string) => db.browseRows(ns, table, { offset: 0, limit: 100, sort: [], filters: [] })
 
@@ -1119,6 +1120,36 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
     })
 
     describe('ddl', () => {
+      it('adds and drops a foreign key that describeTable reports', async () => {
+        const t = `${scratch}_fk`
+        await execOk(`CREATE TABLE ${t} (id INT PRIMARY KEY, user_id INT NULL)`)
+        try {
+          await runDdl({
+            op: 'addForeignKey',
+            table: t,
+            name: `${t}_user`,
+            columns: ['user_id'],
+            refTable: 'users',
+            refColumns: ['id'],
+            onUpdate: 'CASCADE',
+            onDelete: 'SET NULL',
+          })
+          const fk = (await db.describeTable(ns, t)).foreignKeys.find((f) => f.name === `${t}_user`)
+          expect(fk).toMatchObject({
+            columns: ['user_id'],
+            refTable: 'users',
+            refColumns: ['id'],
+            onUpdate: 'CASCADE',
+            onDelete: 'SET NULL',
+          })
+          expect((await db.describeTable(ns, 'users')).referencedBy.some((r) => r.fromTable === t)).toBe(true)
+          await runDdl({ op: 'dropForeignKey', table: t, name: `${t}_user` })
+          expect((await db.describeTable(ns, t)).foreignKeys).toEqual([])
+        } finally {
+          await exec(`DROP TABLE IF EXISTS ${t}`, { stopOnError: false })
+        }
+      })
+
       it('generated DDL executes and is reflected by describeTable', async () => {
         await runDdl({
           op: 'createTable',

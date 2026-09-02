@@ -8,6 +8,7 @@ const DESTRUCTIVE = new Set<DdlOp['op']>([
   'truncateTable',
   'dropColumn',
   'dropIndex',
+  'dropForeignKey',
   'dropDatabase',
   'dropEvent',
 ])

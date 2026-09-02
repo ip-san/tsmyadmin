@@ -1,9 +1,10 @@
 import type { TableSchema } from '@tsmyadmin/shared'
+import { Button } from '@/components/ui/Button.tsx'
 import { Notice } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
 
-export function ForeignKeysTable({ schema }: { schema: TableSchema }) {
+export function ForeignKeysTable({ schema, onDrop }: { schema: TableSchema; onDrop?: (name: string) => void }) {
   if (schema.foreignKeys.length === 0) return <Notice>{locale.table.noForeignKeys}</Notice>
   return (
     <Table aria-label={locale.table.foreignKeys}>
@@ -14,6 +15,7 @@ export function ForeignKeysTable({ schema }: { schema: TableSchema }) {
           <Th>{locale.table.references}</Th>
           <Th>{locale.table.onUpdate}</Th>
           <Th>{locale.table.onDelete}</Th>
+          {onDrop ? <Th>{locale.ddl.actions}</Th> : null}
         </tr>
       </thead>
       <tbody>
@@ -27,6 +29,18 @@ export function ForeignKeysTable({ schema }: { schema: TableSchema }) {
             </Td>
             <Td className="text-xs">{fk.onUpdate ?? ''}</Td>
             <Td className="text-xs">{fk.onDelete ?? ''}</Td>
+            {onDrop ? (
+              <Td>
+                <Button
+                  size="sm"
+                  variant="danger"
+                  onClick={() => onDrop(fk.name)}
+                  aria-label={`${fk.name}: ${locale.ddl.titles.dropForeignKey}`}
+                >
+                  {locale.ddl.drop}
+                </Button>
+              </Td>
+            ) : null}
           </Tr>
         ))}
       </tbody>

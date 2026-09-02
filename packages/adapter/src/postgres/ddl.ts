@@ -69,6 +69,15 @@ export const pgDdl: DdlBuilder = {
         return [`CREATE ${op.unique ? 'UNIQUE ' : ''}INDEX ${id(op.name)} ON ${t} (${op.columns.map(id).join(', ')})`]
       case 'dropIndex':
         return [`DROP INDEX ${schema}.${id(op.name)}`]
+      case 'addForeignKey': {
+        const ref = quoteTable('postgres', ns, op.refTable)
+        const actions = [op.onUpdate ? ` ON UPDATE ${op.onUpdate}` : '', op.onDelete ? ` ON DELETE ${op.onDelete}` : '']
+        return [
+          `ALTER TABLE ${t} ADD CONSTRAINT ${id(op.name)} FOREIGN KEY (${op.columns.map(id).join(', ')}) REFERENCES ${ref} (${op.refColumns.map(id).join(', ')})${actions.join('')}`,
+        ]
+      }
+      case 'dropForeignKey':
+        return [`ALTER TABLE ${t} DROP CONSTRAINT ${id(op.name)}`]
       case 'dropTable':
         return [`DROP TABLE ${t}`]
       case 'truncateTable':

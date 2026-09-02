@@ -12,6 +12,7 @@ import { fromColumnDef, toColumnSpec } from '@/lib/column-spec.ts'
 import { useDdlFlow } from '@/lib/ddl.ts'
 import { createStatementQuery, structureQuery, type TableRef } from '@/lib/queries.ts'
 import { ColumnForm } from './ColumnForm.tsx'
+import { ForeignKeyForm } from './ForeignKeyForm.tsx'
 import { IndexForm } from './IndexForm.tsx'
 import { ForeignKeysTable, ReferencedByTable } from './RelationsTables.tsx'
 
@@ -150,6 +151,7 @@ export function StructureView({ tableRef, dialect }: { tableRef: TableRef; diale
   const flow = useDdlFlow(tableRef.db, tableRef.schema)
   const [columnDialog, setColumnDialog] = useState<ColumnDialog>(null)
   const [indexDialog, setIndexDialog] = useState(false)
+  const [fkDialog, setFkDialog] = useState(false)
   if (structure.isPending) return <Spinner />
   if (structure.isError) return <ErrorBox error={structure.error} onRetry={() => void structure.refetch()} />
   const s = structure.data
@@ -192,8 +194,18 @@ export function StructureView({ tableRef, dialect }: { tableRef: TableRef; diale
         />
       </section>
       <section>
-        <SectionTitle>{locale.table.foreignKeys}</SectionTitle>
-        <ForeignKeysTable schema={s} />
+        <SectionTitle>
+          {locale.table.foreignKeys}
+          {editable ? (
+            <Button size="sm" onClick={() => setFkDialog(true)}>
+              {locale.ddl.titles.addForeignKey}
+            </Button>
+          ) : null}
+        </SectionTitle>
+        <ForeignKeysTable
+          schema={s}
+          {...(editable ? { onDrop: (name: string) => flow.preview({ op: 'dropForeignKey', table, name }) } : {})}
+        />
       </section>
       <section>
         <SectionTitle>{locale.table.referencedBy}</SectionTitle>
@@ -235,6 +247,19 @@ export function StructureView({ tableRef, dialect }: { tableRef: TableRef; diale
             onSubmit={(v) => {
               setIndexDialog(false)
               flow.preview({ op: 'addIndex', table, ...v })
+            }}
+          />
+        ) : null}
+      </Dialog>
+      <Dialog open={fkDialog} title={locale.ddl.titles.addForeignKey} onClose={() => setFkDialog(false)}>
+        {fkDialog ? (
+          <ForeignKeyForm
+            tableRef={tableRef}
+            columns={s.columns.map((c) => c.name)}
+            onCancel={() => setFkDialog(false)}
+            onSubmit={(v) => {
+              setFkDialog(false)
+              flow.preview({ op: 'addForeignKey', table, ...v })
             }}
           />
         ) : null}

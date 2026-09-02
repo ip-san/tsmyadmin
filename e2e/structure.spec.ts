@@ -34,6 +34,23 @@ for (const t of TARGETS) {
       const columns = page.getByRole('table', { name: 'カラム' })
       await expect(columns.getByRole('row').filter({ hasText: /^3n/ })).toBeVisible()
 
+      // foreign key: n → users.id (INT ↔ INT; the column is nullable, so SET NULL is valid), then drop it
+      await page.getByRole('button', { name: '外部キーを追加' }).click()
+      const fkDialog = page.getByRole('dialog')
+      await fkDialog.getByRole('group', { name: 'このテーブルのカラム' }).getByLabel('n', { exact: true }).check()
+      await fkDialog.getByLabel('参照先テーブル').selectOption('users')
+      await fkDialog.getByRole('group', { name: '参照先カラム' }).getByLabel('id', { exact: true }).check()
+      await fkDialog.getByLabel('ON DELETE').selectOption('SET NULL')
+      await fkDialog.getByRole('button', { name: '次へ（SQL を確認）' }).click()
+      await confirmPreview(page, /ADD CONSTRAINT[\s\S]*FOREIGN KEY[\s\S]*ON DELETE SET NULL/)
+      await expect(page.getByText(/外部キーを追加: 実行しました/)).toBeVisible()
+      const fks = page.getByRole('table', { name: '外部キー' })
+      const fkName = `fk_${table}_n`
+      await expect(fks.getByRole('row').filter({ hasText: fkName })).toContainText('users (id)')
+      await page.getByRole('button', { name: `${fkName}: 外部キーを削除` }).click()
+      await confirmPreview(page, /DROP (FOREIGN KEY|CONSTRAINT)/)
+      await expect(fks.getByRole('row').filter({ hasText: fkName })).toHaveCount(0)
+
       // modify column: rename n → n2, BIGINT NOT NULL
       await page.getByRole('button', { name: 'n: 変更' }).click()
       await page.getByLabel('カラム名').fill('n2')
