@@ -3,10 +3,12 @@ import type { Dialect, StatementResult } from '@tsmyadmin/shared'
 import { SQL_MAX_ROWS_DEFAULT } from '@tsmyadmin/shared'
 import { Play, Square } from 'lucide-react'
 import { useRef, useState } from 'react'
+import { z } from 'zod'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice } from '@/components/ui/Feedback.tsx'
 import { Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
+import { readPreference, writePreference } from '@/lib/preferences.ts'
 import { mutations } from '@/lib/queries.ts'
 import { streamSql } from '@/lib/sql-stream.ts'
 import { clearHistory, type HistoryEntry, loadHistory, pushHistory } from './history.ts'
@@ -18,6 +20,14 @@ import { isSingleStatement, stripTrailingSemicolons } from './statement.ts'
 
 const MAX_ROWS_OPTIONS = [100, 1000, 10_000]
 
+function sessionStore() {
+  try {
+    return typeof sessionStorage === 'undefined' ? null : sessionStorage
+  } catch {
+    return null
+  }
+}
+
 export interface SqlConsoleProps {
   db: string
   schema?: string | undefined
@@ -26,8 +36,17 @@ export interface SqlConsoleProps {
   completion: Record<string, string[]>
 }
 
+/** Unsent editor text survives tab switches and a session-expiry round trip (per console, this browser tab). */
+const draftKey = (dialect: Dialect, db: string, schema: string | undefined, initialSql: string) =>
+  `sql.draft.${dialect}.${db}.${schema ?? ''}.${initialSql === '' ? 'db' : 'table'}`
+
 export function SqlConsole({ db, schema, dialect, initialSql = '', completion }: SqlConsoleProps) {
-  const [text, setText] = useState(initialSql)
+  const key = draftKey(dialect, db, schema, initialSql)
+  const [text, setTextState] = useState(() => readPreference(key, z.string(), initialSql, sessionStore()))
+  const setText = (next: string) => {
+    setTextState(next)
+    writePreference(key, next, sessionStore())
+  }
   const [maxRows, setMaxRows] = useState(SQL_MAX_ROWS_DEFAULT)
   const [stopOnError, setStopOnError] = useState(true)
   const [history, setHistory] = useState<HistoryEntry[]>(() => loadHistory(dialect))

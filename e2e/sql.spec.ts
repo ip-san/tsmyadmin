@@ -99,6 +99,10 @@ for (const t of TARGETS) {
       // Multi-statement scripts cannot be EXPLAINed.
       await typeSql(page, 'SELECT 1; SELECT 2')
       await expect(page.getByRole('button', { name: 'EXPLAIN' })).toBeDisabled()
+      // The unsent draft survives leaving and returning to the console.
+      await page.goto(t.schema ? `/db/${t.database}?schema=${t.schema}` : `/db/${t.database}`)
+      await page.goto(t.schema ? `/db/${t.database}/sql?schema=${t.schema}` : `/db/${t.database}/sql`)
+      await expect(page.getByRole('textbox', { name: 'SQL エディタ' })).toContainText('SELECT 1; SELECT 2')
     })
 
     test('table SQL tab is prefilled and DML refreshes the browse view', async ({ page }) => {
