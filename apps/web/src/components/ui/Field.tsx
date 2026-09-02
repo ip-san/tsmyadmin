@@ -11,7 +11,7 @@ import {
 import { cn } from '@/lib/cn.ts'
 
 const control =
-  'w-full rounded border border-zinc-500 bg-white px-2 py-1.5 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-zinc-500 dark:bg-zinc-900 dark:text-zinc-100 disabled:opacity-60'
+  'w-full rounded border border-zinc-500 bg-white px-2 py-1.5 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-zinc-500 dark:bg-zinc-900 dark:text-zinc-100 disabled:bg-zinc-100 disabled:text-zinc-500 dark:disabled:bg-zinc-800 dark:disabled:text-zinc-400'
 
 export function Input({
   className,
@@ -27,7 +27,7 @@ export function Textarea({ className, ...rest }: TextareaHTMLAttributes<HTMLText
 
 export function Select({ className, ...rest }: SelectHTMLAttributes<HTMLSelectElement>) {
   // Tailwind emits `w-auto` before `w-full`, so a caller's width class must replace the control's, not join it.
-  const base = className && /\bw-/.test(className) ? control.replace('w-full ', '') : control
+  const base = className && /(?:^|\s)w-/.test(className) ? control.replace('w-full ', '') : control
   return <select className={cn(base, className)} {...rest} />
 }
 

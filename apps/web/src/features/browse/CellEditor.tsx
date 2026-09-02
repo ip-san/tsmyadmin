@@ -75,7 +75,20 @@ export function CellEditor({ column, initial, dataType, pending, error, onSave, 
           field before it lands; keeping focus where it is lets the click go through on every engine. */}
       <div className="flex items-center gap-2 whitespace-nowrap text-xs" onMouseDown={(e) => e.preventDefault()}>
         <label className="flex items-center gap-1">
-          <input type="checkbox" checked={isNull} onChange={(e) => setIsNull(e.target.checked)} onKeyDown={onKeyDown} />
+          <input
+            type="checkbox"
+            checked={isNull}
+            onChange={(e) => {
+              setIsNull(e.target.checked)
+              // The field is enabled again on the next render: put the caret there so typing lands in it.
+              if (!e.target.checked) {
+                queueMicrotask(() =>
+                  wrapper.current?.querySelector<HTMLElement>('input:not([type="checkbox"]), textarea')?.focus()
+                )
+              }
+            }}
+            onKeyDown={onKeyDown}
+          />
           {locale.browse.setNull}
         </label>
         <span className="text-zinc-500 dark:text-zinc-400">

@@ -24,7 +24,23 @@ export function TableOptionsForm({
   const [engine, setEngine] = useState(schema.engine ?? '')
   const [collation, setCollation] = useState(schema.collation ?? '')
   const [autoIncrement, setAutoIncrement] = useState(schema.autoIncrement ?? '')
-  const flow = useDdlFlow(tableRef.db, tableRef.schema)
+  const reseed = (from: TableSchema) => {
+    setComment(from.comment ?? '')
+    setEngine(from.engine ?? '')
+    setCollation(from.collation ?? '')
+    setAutoIncrement(from.autoIncrement ?? '')
+  }
+  // Re-seed from the refetched schema in place (state-from-props reset): remounting would discard the success
+  // notice and its focus.
+  const seed = [schema.comment, schema.engine, schema.collation, schema.autoIncrement].join('\0')
+  const [prevSeed, setPrevSeed] = useState(seed)
+  if (prevSeed !== seed) {
+    setPrevSeed(seed)
+    reseed(schema)
+  }
+  // After a run the fields go back to what the server reports, so a value it ignored (AUTO_INCREMENT below the
+  // current one) does not linger as a pending change; the refetch re-seeds whatever did change.
+  const flow = useDdlFlow(tableRef.db, tableRef.schema, () => reseed(schema))
   const commentChanged = comment !== (schema.comment ?? '')
   const engineChanged = mysql && engine.trim() !== '' && engine.trim() !== (schema.engine ?? '')
   const collationChanged = mysql && collation.trim() !== '' && collation.trim() !== (schema.collation ?? '')

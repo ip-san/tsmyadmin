@@ -32,6 +32,22 @@ describe('RowForm (insert)', () => {
     expect(onSubmit).toHaveBeenCalledWith({ name: 'Zed', note: null })
   })
 
+  it('typing into a NULL / default field takes over from the checkbox', async () => {
+    const onSubmit = vi.fn()
+    render(<RowForm columns={columns} mode="insert" onSubmit={onSubmit} />)
+    // The field is not disabled: typing unticks NULL (note) and 既定値を使う (id) like phpMyAdmin does.
+    await userEvent.type(screen.getByLabelText('note'), 'typed')
+    expect(screen.getByLabelText('note: NULL')).not.toBeChecked()
+    await userEvent.type(screen.getByLabelText('id'), '42')
+    expect(screen.getByLabelText('id: 既定値を使う')).not.toBeChecked()
+    await userEvent.type(screen.getByLabelText('name'), 'A')
+    await userEvent.click(screen.getByRole('button', { name: '挿入する' }))
+    expect(onSubmit).toHaveBeenCalledWith({ id: '42', name: 'A', note: 'typed' })
+    // Ticking NULL again blanks the field without losing the mode.
+    await userEvent.click(screen.getByLabelText('note: NULL'))
+    expect(screen.getByLabelText('note')).toHaveValue('')
+  })
+
   it('unchecking NULL enables the input and submits its text', async () => {
     const onSubmit = vi.fn()
     render(<RowForm columns={columns} mode="insert" onSubmit={onSubmit} />)

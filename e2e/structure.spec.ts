@@ -98,6 +98,11 @@ for (const t of TARGETS) {
         .getByRole('button', { name: '次へ（SQL を確認）' })
         .click()
       await confirmPreview(page, /COMMENT/)
+      // The form stays mounted after the schema refetch: the success notice is shown and holds focus.
+      const optionsDone = page.locator('output', { hasText: '「テーブルオプション」を実行しました' })
+      await expect(optionsDone).toBeVisible()
+      await expect(optionsDone).toBeFocused()
+      await expect(page.getByLabel('コメント')).toHaveValue('from e2e')
       await page.getByRole('button', { name: t.dialect === 'mysql' ? 'ANALYZE TABLE' : 'ANALYZE', exact: true }).click()
       await confirmPreview(page, /ANALYZE/)
       await page.getByRole('button', { name: 'テーブルを空にする…' }).click()

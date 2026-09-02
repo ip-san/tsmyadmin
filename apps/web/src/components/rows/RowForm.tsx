@@ -95,7 +95,9 @@ export function RowForm({ columns, mode, initial, pending, error, onSubmit, onCa
           {columns.map((c) => {
             const f = fieldFor(c)
             const binary = isBinaryCell(initial?.[c.name] ?? null)
-            const disabled = f.useDefault || f.isNull
+            // NULL / default fields stay editable: typing unticks the box (phpMyAdmin behaviour), so the user is
+            // not left clicking a control that ignores input.
+            const takeOver = (text: string) => update(c.name, c, { text, isNull: false, useDefault: false })
             const id = `field-${c.name}`
             return (
               <Tr key={c.name}>
@@ -128,19 +130,17 @@ export function RowForm({ columns, mode, initial, pending, error, onSubmit, onCa
                   ) : MULTILINE.test(c.dataType) ? (
                     <Textarea
                       id={id}
-                      value={f.text}
-                      disabled={disabled}
+                      value={f.isNull || f.useDefault ? '' : f.text}
                       rows={Math.min(12, Math.max(2, f.text.split('\n').length))}
-                      onChange={(e) => update(c.name, c, { text: e.target.value })}
+                      onChange={(e) => takeOver(e.target.value)}
                       placeholder={f.useDefault && c.default !== null ? c.default : undefined}
                       className="font-mono text-xs"
                     />
                   ) : (
                     <Input
                       id={id}
-                      value={f.text}
-                      disabled={disabled}
-                      onChange={(e) => update(c.name, c, { text: e.target.value })}
+                      value={f.isNull || f.useDefault ? '' : f.text}
+                      onChange={(e) => takeOver(e.target.value)}
                       placeholder={f.useDefault && c.default !== null ? c.default : undefined}
                       className="font-mono text-xs"
                     />

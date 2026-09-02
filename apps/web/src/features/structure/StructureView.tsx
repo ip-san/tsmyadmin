@@ -54,12 +54,14 @@ function ColumnsTable({
             </Td>
             <Td className="font-mono text-xs">{c.dataType}</Td>
             <Td className="text-xs">{c.collation ?? ''}</Td>
-            <Td>{c.nullable ? locale.common.yes : locale.common.no}</Td>
+            <Td className="whitespace-nowrap">{c.nullable ? locale.common.yes : locale.common.no}</Td>
             <Td className="font-mono text-xs">
-              {c.default === null ? (
+              {c.default !== null ? (
+                c.default
+              ) : c.nullable ? (
                 <span className="italic text-zinc-500 dark:text-zinc-400">{locale.common.null}</span>
               ) : (
-                c.default
+                <span className="text-zinc-500 dark:text-zinc-400">{locale.table.noDefault}</span>
               )}
             </Td>
             <Td className="text-xs">{c.extra}</Td>

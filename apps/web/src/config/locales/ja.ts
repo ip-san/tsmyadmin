@@ -143,6 +143,7 @@ export const ja = {
     collation: '照合順序',
     unique: 'ユニーク',
     primary: '主キー',
+    noDefault: 'なし',
     indexType: '種類',
     references: '参照先',
     onUpdate: 'ON UPDATE',

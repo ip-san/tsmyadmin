@@ -138,7 +138,14 @@ export function LoginForm({ onLogin, presets = [] }: LoginFormProps) {
         </Field>
       </div>
       <Field id="user" label={locale.login.user}>
-        <Input id="user" value={user} onChange={(e) => setUser(e.target.value)} required autoComplete="username" />
+        <Input
+          id="user"
+          value={user}
+          onChange={(e) => setUser(e.target.value)}
+          required
+          autoComplete="username"
+          autoFocus={!last?.user}
+        />
       </Field>
       <Field id="password" label={locale.login.password}>
         <Input

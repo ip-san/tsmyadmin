@@ -46,6 +46,7 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
   const [inline, setInline] = useState<{ row: number; col: number } | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
+  const noticeRef = useRef<HTMLOutputElement>(null)
   const gridRef = useRef<HTMLTableElement>(null)
   // Reset transient UI state when the table, page, sort or filters change (state-from-props reset pattern):
   // the route component is reused across tables, so a selection or an open editor must not carry over.
@@ -117,6 +118,7 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
     [update.mutate]
   )
   const dialogDone = async (message: string) => {
+    update.reset()
     setNotice(message)
     setEditingRow(null)
     setCopyingRow(null)
@@ -125,10 +127,13 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
   const remove = useMutation({
     mutationFn: (keys: RowKey[]) => mutations.deleteRows(tableRef, keys),
     onSuccess: async (r) => {
+      update.reset()
       setNotice(locale.rows.deleted(r.affectedRows))
       setSelected(new Set())
       setConfirmDelete(false)
       await invalidate()
+      // The deleted rows' checkboxes and the (now disabled) delete button cannot take focus back.
+      noticeRef.current?.focus()
     },
   })
 
@@ -170,7 +175,7 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
         onDelete={() => setConfirmDelete(true)}
       />
       {/* The live region stays mounted so screen readers announce a message that appears later. */}
-      <output aria-live="polite" className={notice ? 'block' : 'sr-only'}>
+      <output ref={noticeRef} tabIndex={-1} aria-live="polite" className={notice ? 'block' : 'sr-only'}>
         {notice ? <Notice>{notice}</Notice> : null}
       </output>
       {update.isError && inline === null ? <ErrorBox error={update.error} /> : null}
