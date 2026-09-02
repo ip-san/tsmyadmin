@@ -5,7 +5,7 @@ import { locale } from '@/config/locale.ts'
 import { cellToEditable } from '@/lib/format.ts'
 import { Button } from '../ui/Button.tsx'
 import { ErrorBox } from '../ui/Feedback.tsx'
-import { Input } from '../ui/Field.tsx'
+import { Input, Textarea } from '../ui/Field.tsx'
 import { Table, Td, Th, Tr } from '../ui/Table.tsx'
 
 interface FieldState {
@@ -22,15 +22,25 @@ export interface RowFormProps {
   initial?: Record<string, Cell>
   pending?: boolean
   error?: unknown
-  /** `another` is true when the user chose "insert and add another" (insert mode only). */
-  onSubmit: (values: RowValues, meta: { another: boolean }) => void
+  onSubmit: (values: RowValues) => void
   onCancel?: () => void
-  /** Show the "insert and add another" button (insert mode). */
-  allowAnother?: boolean
 }
 
 function isGenerated(c: ColumnDef): boolean {
   return c.extra.includes('auto_increment') || c.extra.includes('identity') || c.extra === 'serial'
+}
+
+function initialField(c: ColumnDef, mode: RowFormProps['mode'], initial?: Record<string, Cell>): FieldState {
+  const cell = initial?.[c.name] ?? null
+  const hasDefault = c.default !== null || isGenerated(c)
+  // Duplicating a row: keep every value except generated keys, which must get a fresh value.
+  if (mode === 'insert' && initial !== undefined)
+    return { text: cellToEditable(cell), isNull: cell === null, useDefault: isGenerated(c) }
+  return {
+    text: cellToEditable(cell),
+    isNull: mode === 'edit' ? cell === null : c.nullable && !hasDefault,
+    useDefault: mode === 'insert' && hasDefault,
+  }
 }
 
 function initialState(
@@ -39,44 +49,34 @@ function initialState(
   initial?: Record<string, Cell>
 ): Record<string, FieldState> {
   const out: Record<string, FieldState> = {}
-  const prefilled = mode === 'insert' && initial !== undefined
-  for (const c of columns) {
-    const cell = initial?.[c.name] ?? null
-    const hasDefault = c.default !== null || isGenerated(c)
-    if (prefilled) {
-      // Duplicating a row: keep every value except generated keys, which must get a fresh value.
-      out[c.name] = { text: cellToEditable(cell), isNull: cell === null, useDefault: isGenerated(c) }
-      continue
-    }
-    out[c.name] = {
-      text: cellToEditable(cell),
-      isNull: mode === 'edit' ? cell === null : c.nullable && !hasDefault,
-      useDefault: mode === 'insert' && hasDefault,
-    }
-  }
+  for (const c of columns) out[c.name] = initialField(c, mode, initial)
   return out
 }
 
+/** Types whose values are usually multi-line (TEXT, JSON, XML, CLOB…): edited in a textarea. */
+const MULTILINE = /text|json|xml|clob|character varying\(\d{4,}\)|varchar\(\d{4,}\)/i
+
 /** Shared insert / edit form. In edit mode only changed columns are submitted. */
-export function RowForm({ columns, mode, initial, pending, error, onSubmit, onCancel, allowAnother }: RowFormProps) {
+export function RowForm({ columns, mode, initial, pending, error, onSubmit, onCancel }: RowFormProps) {
   const [fields, setFields] = useState(() => initialState(columns, mode, initial))
-  const update = (name: string, patch: Partial<FieldState>) =>
-    setFields((f) => ({ ...f, [name]: { ...(f[name] as FieldState), ...patch } }))
+  // The structure query may refetch with a new column while the form is mounted: fall back to a fresh field.
+  const fieldFor = (c: ColumnDef): FieldState => fields[c.name] ?? initialField(c, mode, initial)
+  const update = (name: string, column: ColumnDef, patch: Partial<FieldState>) =>
+    setFields((f) => ({ ...f, [name]: { ...(f[name] ?? initialField(column, mode, initial)), ...patch } }))
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    const another = (e.nativeEvent as SubmitEvent).submitter?.getAttribute('value') === 'another'
     const values: RowValues = {}
     for (const c of columns) {
-      const f = fields[c.name]
-      if (!f || f.useDefault) continue
+      const f = fieldFor(c)
+      if (f.useDefault) continue
       const original = initial?.[c.name] ?? null
       if (isBinaryCell(original) && !f.isNull) continue
       const next: Cell = f.isNull ? null : f.text
       if (mode === 'edit' && !changed(original, next)) continue
       values[c.name] = next
     }
-    onSubmit(values, { another })
+    onSubmit(values)
   }
 
   return (
@@ -93,7 +93,7 @@ export function RowForm({ columns, mode, initial, pending, error, onSubmit, onCa
         </thead>
         <tbody>
           {columns.map((c) => {
-            const f = fields[c.name] as FieldState
+            const f = fieldFor(c)
             const binary = isBinaryCell(initial?.[c.name] ?? null)
             const disabled = f.useDefault || f.isNull
             const id = `field-${c.name}`
@@ -109,7 +109,7 @@ export function RowForm({ columns, mode, initial, pending, error, onSubmit, onCa
                     aria-label={`${c.name}: ${locale.rows.setNull}`}
                     checked={f.isNull}
                     disabled={!c.nullable && mode === 'edit'}
-                    onChange={(e) => update(c.name, { isNull: e.target.checked, useDefault: false })}
+                    onChange={(e) => update(c.name, c, { isNull: e.target.checked, useDefault: false })}
                   />
                 </Td>
                 {mode === 'insert' ? (
@@ -118,19 +118,30 @@ export function RowForm({ columns, mode, initial, pending, error, onSubmit, onCa
                       type="checkbox"
                       aria-label={`${c.name}: ${locale.rows.useDefault}`}
                       checked={f.useDefault}
-                      onChange={(e) => update(c.name, { useDefault: e.target.checked, isNull: false })}
+                      onChange={(e) => update(c.name, c, { useDefault: e.target.checked, isNull: false })}
                     />
                   </Td>
                 ) : null}
                 <Td>
                   {binary && !f.isNull ? (
                     <span className="text-xs text-zinc-500 dark:text-zinc-400">{locale.rows.binaryReadOnly}</span>
+                  ) : MULTILINE.test(c.dataType) ? (
+                    <Textarea
+                      id={id}
+                      value={f.text}
+                      disabled={disabled}
+                      rows={Math.min(12, Math.max(2, f.text.split('\n').length))}
+                      onChange={(e) => update(c.name, c, { text: e.target.value })}
+                      placeholder={f.useDefault && c.default !== null ? c.default : undefined}
+                      className="font-mono text-xs"
+                    />
                   ) : (
                     <Input
                       id={id}
                       value={f.text}
                       disabled={disabled}
-                      onChange={(e) => update(c.name, { text: e.target.value })}
+                      onChange={(e) => update(c.name, c, { text: e.target.value })}
+                      placeholder={f.useDefault && c.default !== null ? c.default : undefined}
                       className="font-mono text-xs"
                     />
                   )}
@@ -147,12 +158,7 @@ export function RowForm({ columns, mode, initial, pending, error, onSubmit, onCa
             {locale.common.cancel}
           </Button>
         ) : null}
-        {mode === 'insert' && allowAnother ? (
-          <Button type="submit" value="another" disabled={pending}>
-            {locale.rows.insertAnother}
-          </Button>
-        ) : null}
-        <Button type="submit" value="default" variant="primary" disabled={pending}>
+        <Button type="submit" variant="primary" disabled={pending}>
           {mode === 'insert' ? locale.rows.insert : locale.rows.save}
         </Button>
       </div>

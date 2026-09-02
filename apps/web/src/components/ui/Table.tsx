@@ -1,10 +1,10 @@
-import type { HTMLAttributes, TdHTMLAttributes, ThHTMLAttributes } from 'react'
+import type { HTMLAttributes, Ref, TdHTMLAttributes, ThHTMLAttributes } from 'react'
 import { cn } from '@/lib/cn.ts'
 
-export function Table({ className, ...rest }: HTMLAttributes<HTMLTableElement>) {
+export function Table({ className, ref, ...rest }: HTMLAttributes<HTMLTableElement> & { ref?: Ref<HTMLTableElement> }) {
   return (
     <div className="w-full overflow-x-auto rounded border border-zinc-200 dark:border-zinc-700">
-      <table className={cn('w-full border-collapse text-sm', className)} {...rest} />
+      <table ref={ref} className={cn('w-full border-collapse text-sm', className)} {...rest} />
     </div>
   )
 }

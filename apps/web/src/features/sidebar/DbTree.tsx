@@ -42,6 +42,12 @@ function SchemaNodes({ db, filter }: { db: string; filter: string }) {
 export function DbTree({ dialect, activeDb }: { dialect: Dialect; activeDb?: string | undefined }) {
   const databases = useQuery(databasesQuery)
   const [open, setOpen] = useState<Record<string, boolean>>(activeDb ? { [activeDb]: true } : {})
+  // Navigating to another database (server list, FK link) expands it (state-from-props reset pattern).
+  const [prevActive, setPrevActive] = useState(activeDb)
+  if (prevActive !== activeDb) {
+    setPrevActive(activeDb)
+    if (activeDb) setOpen((o) => ({ ...o, [activeDb]: true }))
+  }
   const [filter, setFilter] = useState('')
   const searchRef = useRef<HTMLInputElement>(null)
   useShortcuts([{ keys: 'mod+k', global: true, handler: () => searchRef.current?.focus() }])
@@ -76,9 +82,9 @@ export function DbTree({ dialect, activeDb }: { dialect: Dialect; activeDb?: str
               <div className="flex items-center">
                 <button
                   type="button"
-                  className="rounded p-0.5 text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                  className="inline-flex min-h-6 min-w-6 items-center justify-center rounded text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
                   aria-expanded={expanded}
-                  aria-label={d.name}
+                  aria-label={locale.nav.expand(d.name)}
                   onClick={() => setOpen((o) => ({ ...o, [d.name]: !expanded }))}
                 >
                   {expanded ? (

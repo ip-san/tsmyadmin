@@ -1,8 +1,17 @@
-import type { InputHTMLAttributes, ReactNode, Ref, SelectHTMLAttributes } from 'react'
+import {
+  Children,
+  cloneElement,
+  type InputHTMLAttributes,
+  isValidElement,
+  type ReactNode,
+  type Ref,
+  type SelectHTMLAttributes,
+  type TextareaHTMLAttributes,
+} from 'react'
 import { cn } from '@/lib/cn.ts'
 
 const control =
-  'w-full rounded border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 disabled:opacity-60'
+  'w-full rounded border border-zinc-500 bg-white px-2 py-1.5 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-zinc-500 dark:bg-zinc-900 dark:text-zinc-100 disabled:opacity-60'
 
 export function Input({
   className,
@@ -10,6 +19,10 @@ export function Input({
   ...rest
 }: InputHTMLAttributes<HTMLInputElement> & { ref?: Ref<HTMLInputElement> }) {
   return <input ref={ref} className={cn(control, className)} {...rest} />
+}
+
+export function Textarea({ className, ...rest }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  return <textarea className={cn(control, className)} {...rest} />
 }
 
 export function Select({ className, ...rest }: SelectHTMLAttributes<HTMLSelectElement>) {
@@ -38,12 +51,18 @@ export function Field({
   children: ReactNode
   hint?: string
 }) {
+  // The hint is associated with the (single) control automatically so screen readers read it with the field.
+  const hintId = hint ? `${id}-hint` : undefined
+  const control =
+    hintId && Children.count(children) === 1 && isValidElement<{ 'aria-describedby'?: string }>(children)
+      ? cloneElement(children, { 'aria-describedby': children.props['aria-describedby'] ?? hintId })
+      : children
   return (
     <div>
       <Label htmlFor={id}>{label}</Label>
-      {children}
+      {control}
       {hint ? (
-        <p id={`${id}-hint`} className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+        <p id={hintId} className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
           {hint}
         </p>
       ) : null}

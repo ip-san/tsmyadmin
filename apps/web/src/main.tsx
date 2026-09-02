@@ -1,4 +1,4 @@
-import { QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createRouter, RouterProvider } from '@tanstack/react-router'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
@@ -8,17 +8,22 @@ import { isApiError } from './lib/api.ts'
 import { applyTheme } from './lib/theme.ts'
 import { routeTree } from './routeTree.gen.ts'
 
+/**
+ * Any 401 (UNAUTHENTICATED, or AUTH_FAILED once the database rejected a resumed session's credentials) sends the
+ * user to the login page with a link back to where they were. Several queries can fail in the same tick; only the
+ * first one navigates, so the redirect target is the real page and not a nested /login URL.
+ */
+function onUnauthorized(error: unknown): void {
+  if (!isApiError(error) || error.status !== 401) return
+  if (router.state.location.pathname === '/login' || queryClient.getQueryData(['session']) === null) return
+  queryClient.setQueryData(['session'], null)
+  void router.navigate({ to: '/login', search: { redirect: router.state.location.href, expired: true } })
+}
+
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false, staleTime: 10_000 } },
-  queryCache: new QueryCache({
-    onError: (error) => {
-      if (isApiError(error, 'UNAUTHENTICATED')) {
-        queryClient.setQueryData(['session'], null)
-        // Remember where the user was so the login page can send them back after re-authenticating.
-        void router.navigate({ to: '/login', search: { redirect: router.state.location.href, expired: true } })
-      }
-    },
-  }),
+  queryCache: new QueryCache({ onError: onUnauthorized }),
+  mutationCache: new MutationCache({ onError: onUnauthorized }),
 })
 
 const router = createRouter({

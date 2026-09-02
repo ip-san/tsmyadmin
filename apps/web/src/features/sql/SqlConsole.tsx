@@ -4,7 +4,7 @@ import { SQL_MAX_ROWS_DEFAULT } from '@tsmyadmin/shared'
 import { Play, Square } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
-import { ErrorBox } from '@/components/ui/Feedback.tsx'
+import { ErrorBox, Notice } from '@/components/ui/Feedback.tsx'
 import { Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
 import { mutations } from '@/lib/queries.ts'
@@ -43,19 +43,34 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion }:
       queryId.current = crypto.randomUUID()
       const collected: StatementResult[] = []
       setResults([])
-      for await (const event of streamSql(db, {
-        sql,
-        ...(schema ? { schema } : {}),
-        maxRows,
-        stopOnError,
-        queryId: queryId.current,
-      })) {
-        if (event.type === 'result') {
-          collected[event.index] = event.result
+      // Results are flushed to React at most once per animation frame: a pasted dump can be thousands of
+      // statements, and one render per statement would be quadratic in the results view.
+      let flush: number | null = null
+      const scheduleFlush = () => {
+        if (flush !== null) return
+        flush = requestAnimationFrame(() => {
+          flush = null
           setResults([...collected])
-        } else if (event.type === 'fatal') {
-          throw new Error(event.message)
+        })
+      }
+      try {
+        for await (const event of streamSql(db, {
+          sql,
+          ...(schema ? { schema } : {}),
+          maxRows,
+          stopOnError,
+          queryId: queryId.current,
+        })) {
+          if (event.type === 'result') {
+            collected[event.index] = event.result
+            scheduleFlush()
+          } else if (event.type === 'fatal') {
+            throw new Error(event.message)
+          }
         }
+      } finally {
+        if (flush !== null) cancelAnimationFrame(flush)
+        setResults([...collected])
       }
       return collected
     },
@@ -71,6 +86,7 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion }:
   })
   const execute = () => {
     if (text.trim().length === 0 || run.isPending) return
+    cancel.reset()
     run.mutate(text)
   }
   const explain = () => {
@@ -96,7 +112,6 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion }:
             variant="danger"
             onClick={() => queryId.current && cancel.mutate(queryId.current)}
             disabled={cancel.isPending}
-            aria-label={locale.sql.cancel}
           >
             <Square className="size-4" aria-hidden />
             {cancel.isPending ? locale.sql.cancelling : locale.sql.cancel}
@@ -131,6 +146,11 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion }:
       </div>
       {run.isError ? <ErrorBox error={run.error} /> : null}
       {/* Screen readers hear the outcome; results themselves stream into the DOM below without announcements. */}
+      {cancel.isSuccess && cancel.data.cancelled && !run.isPending ? (
+        <Notice>
+          <output aria-live="polite">{locale.sql.cancelled}</output>
+        </Notice>
+      ) : null}
       <output aria-live="polite" className="sr-only">
         {run.isPending
           ? locale.sql.running

@@ -35,10 +35,12 @@ export function PasswordFields({
           value={state.confirm}
           onChange={(e) => state.setConfirm(e.target.value)}
           autoComplete="new-password"
+          aria-invalid={state.mismatch || undefined}
+          aria-describedby={state.mismatch ? `${idPrefix}-mismatch` : undefined}
         />
       </Field>
       {state.mismatch ? (
-        <div className="col-span-2">
+        <div className="col-span-2" id={`${idPrefix}-mismatch`} role="alert">
           <Notice>{locale.users.passwordMismatch}</Notice>
         </div>
       ) : null}

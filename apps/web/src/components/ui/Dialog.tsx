@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useRef } from 'react'
+import { type ReactNode, useEffect, useId, useRef } from 'react'
 import { locale } from '@/config/locale.ts'
 import { Button } from './Button.tsx'
 
@@ -8,11 +8,14 @@ export interface DialogProps {
   onClose: () => void
   children: ReactNode
   footer?: ReactNode
+  /** While true, Escape does not close the dialog (an operation is in flight and its result must stay visible). */
+  busy?: boolean
 }
 
 /** Accessible modal built on the native <dialog> element (focus trap + Esc handled by the browser). */
-export function Dialog({ open, title, onClose, children, footer }: DialogProps) {
+export function Dialog({ open, title, onClose, children, footer, busy = false }: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null)
+  const titleId = useId()
   useEffect(() => {
     const el = ref.current
     if (!el) return
@@ -23,16 +26,19 @@ export function Dialog({ open, title, onClose, children, footer }: DialogProps) 
     <dialog
       ref={ref}
       onClose={onClose}
-      aria-labelledby="dialog-title"
+      onCancel={(e) => {
+        if (busy) e.preventDefault()
+      }}
+      aria-labelledby={titleId}
       className="w-full max-w-2xl rounded-lg border border-zinc-200 bg-white p-0 text-zinc-900 shadow-xl backdrop:bg-black/40 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
     >
       {open ? (
         <div className="flex max-h-[80vh] flex-col">
           <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-700">
-            <h2 id="dialog-title" className="text-base font-semibold">
+            <h2 id={titleId} className="text-base font-semibold">
               {title}
             </h2>
-            <Button variant="ghost" size="sm" onClick={onClose} aria-label={locale.common.close}>
+            <Button variant="ghost" size="sm" onClick={onClose} aria-label={locale.common.close} disabled={busy}>
               ×
             </Button>
           </div>

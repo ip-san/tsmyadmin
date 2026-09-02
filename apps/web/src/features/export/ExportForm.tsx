@@ -107,7 +107,7 @@ export function ExportForm({ db, schema, table }: ExportFormProps) {
         <a
           href={url}
           download
-          className="inline-flex items-center gap-1 rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400"
+          className="inline-flex items-center gap-1 rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700"
         >
           <Download className="size-4" aria-hidden />
           {locale.export.download}

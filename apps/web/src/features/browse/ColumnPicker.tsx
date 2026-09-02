@@ -42,7 +42,7 @@ export function ColumnPicker({ columns, visible, onChange }: ColumnPickerProps) 
   }
   return (
     <div ref={ref} className="relative">
-      <Button ref={triggerRef} size="sm" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-haspopup="true">
+      <Button ref={triggerRef} size="sm" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
         <Columns3 className="size-3.5" aria-hidden />
         {locale.browse.columnsShown(shown.size, columns.length)}
       </Button>

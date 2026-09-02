@@ -57,7 +57,7 @@ for (const t of TARGETS) {
       await page.getByRole('region', { name: '文 1' }).waitFor()
       await scan(page)
       await page.goto(tableUrl(t, 'users', '/insert'))
-      await page.getByRole('button', { name: '挿入して続ける' }).waitFor()
+      await page.getByRole('button', { name: '挿入する' }).waitFor()
       await scan(page)
       await page.goto(t.schema ? `/db/${t.database}/events?schema=${t.schema}` : `/db/${t.database}/events`)
       await page

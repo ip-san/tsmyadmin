@@ -1,8 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { BrowseOptions, BrowseResult, Cell, RowKey, RowValues } from '@tsmyadmin/shared'
 import { isBinaryCell } from '@tsmyadmin/shared'
-import { ArrowDown, ArrowUp, Copy, Pencil } from 'lucide-react'
-import { useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
@@ -16,9 +15,10 @@ import { FilterChips } from './FilterChips.tsx'
 import { FkCell } from './FkCell.tsx'
 import { linkableForeignKeys, linkableReverseKeys } from './fk-links.ts'
 import { Pagination } from './Pagination.tsx'
+import { RowActions } from './RowActions.tsx'
 import { CopyRowDialog, EditRowDialog } from './RowDialogs.tsx'
-import { rowKeyFor, rowToValues } from './row-key.ts'
-import { nextSort } from './sort.ts'
+import { rowKeys, rowToValues } from './row-key.ts'
+import { SortHeader } from './SortHeader.tsx'
 
 export interface RowsGridProps {
   tableRef: TableRef
@@ -49,21 +49,46 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
   const [inline, setInline] = useState<{ row: number; col: number } | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
-  // Reset transient UI state when the page/sort/filters change (state-from-props reset pattern).
-  const optionsKey = JSON.stringify(options)
+  const gridRef = useRef<HTMLTableElement>(null)
+  // Reset transient UI state when the table, page, sort or filters change (state-from-props reset pattern):
+  // the route component is reused across tables, so a selection or an open editor must not carry over.
+  const optionsKey = JSON.stringify([tableRef.db, tableRef.schema ?? '', tableRef.table, options])
   const [prevOptionsKey, setPrevOptionsKey] = useState(optionsKey)
   if (prevOptionsKey !== optionsKey) {
     setPrevOptionsKey(optionsKey)
     setSelected(new Set())
     setInline(null)
+    setEditingRow(null)
+    setCopyingRow(null)
+    setConfirmDelete(false)
+    setNotice(null)
   }
+  /** Closes the inline editor and returns focus to its cell (keyboard users would otherwise land on <body>). */
+  const closeInline = (cell: { row: number; col: number } | null = inline) => {
+    setInline(null)
+    if (!cell) return
+    queueMicrotask(() => gridRef.current?.querySelector<HTMLElement>(`[data-cell="${cell.row},${cell.col}"]`)?.focus())
+  }
+  const data = rows.data
+  // Derived per page, not per render: keys/indexes are reused by every checkbox toggle and inline edit.
+  const derived = useMemo(() => {
+    if (!data) return null
+    const allColumns = visibleColumns(data)
+    return {
+      allColumns,
+      columnIndex: new Map(allColumns.map((c, i) => [c.name, i])),
+      keys: rowKeys(data),
+      fks: linkableForeignKeys(data),
+      reverse: linkableReverseKeys(data),
+    }
+  }, [data])
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: rowsKey(tableRef) })
   const update = useMutation({
     mutationFn: ({ key, values }: { key: RowKey; values: RowValues }) => mutations.updateRow(tableRef, key, values),
     onSuccess: async () => {
       setNotice(locale.rows.updated)
-      setInline(null)
+      closeInline()
       await invalidate()
     },
   })
@@ -85,17 +110,12 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
 
   if (rows.isPending) return <Spinner />
   if (rows.isError) return <ErrorBox error={rows.error} onRetry={() => void rows.refetch()} />
-  const data = rows.data
-  const allColumns = visibleColumns(data)
+  if (!data || !derived) return <Spinner />
+  const { allColumns, columnIndex, keys, fks, reverse } = derived
   const allNames = allColumns.map((c) => c.name)
   const picked = visibleColumnNames(cols, allNames)
   const columns = picked ? allColumns.filter((c) => picked.includes(c.name)) : allColumns
-  const columnIndex = new Map(allColumns.map((c, i) => [c.name, i]))
-  const sortIndex = new Map(options.sort.map((s, i) => [s.column, { ...s, i }]))
   const editable = data.keyKind !== 'none'
-  const keys = data.rows.map((row) => rowKeyFor(data, row))
-  const fks = linkableForeignKeys(data)
-  const reverse = linkableReverseKeys(data)
   const selectableIdx = keys.flatMap((k, i) => (k ? [i] : []))
   const allSelected = selectableIdx.length > 0 && selectableIdx.every((i) => selected.has(i))
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(selectableIdx))
@@ -132,16 +152,15 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
         canDelete={selectedKeys.length > 0}
         onDelete={() => setConfirmDelete(true)}
       />
-      {notice ? (
-        <Notice>
-          <output aria-live="polite">{notice}</output>
-        </Notice>
-      ) : null}
+      {/* The live region stays mounted so screen readers announce a message that appears later. */}
+      <output aria-live="polite" className={notice ? 'block' : 'sr-only'}>
+        {notice ? <Notice>{notice}</Notice> : null}
+      </output>
       {update.isError && inline === null ? <ErrorBox error={update.error} /> : null}
       {data.rows.length === 0 ? (
         <Notice>{locale.browse.noRows}</Notice>
       ) : (
-        <Table aria-label={tableRef.table}>
+        <Table aria-label={tableRef.table} ref={gridRef}>
           <thead>
             <tr>
               {editable ? (
@@ -155,80 +174,30 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
                   />
                 </Th>
               ) : null}
-              {columns.map((c) => {
-                const entry = sortIndex.get(c.name)
-                const active = entry !== undefined
-                const dir = entry?.direction
-                return (
-                  <Th key={c.name} aria-sort={dir === 'asc' ? 'ascending' : dir === 'desc' ? 'descending' : 'none'}>
-                    <button
-                      type="button"
-                      className={cn(
-                        'inline-flex items-center gap-1 hover:underline',
-                        active && 'text-blue-700 dark:text-blue-300'
-                      )}
-                      onClick={(e) => onChange({ sort: nextSort(options.sort, c.name, e.shiftKey), page: 1 })}
-                      title={`${
-                        dir === 'asc'
-                          ? locale.browse.sortDesc
-                          : dir === 'desc'
-                            ? locale.browse.clearSort
-                            : locale.browse.sortAsc
-                      }${locale.browse.multiSortHint}`}
-                    >
-                      {c.name}
-                      {dir === 'asc' ? (
-                        <ArrowUp className="size-3" aria-hidden />
-                      ) : dir === 'desc' ? (
-                        <ArrowDown className="size-3" aria-hidden />
-                      ) : null}
-                      {entry && options.sort.length > 1 ? (
-                        <span className="text-[10px] tabular-nums" aria-label={locale.browse.sortOrder(entry.i + 1)}>
-                          {entry.i + 1}
-                        </span>
-                      ) : null}
-                    </button>
-                    <span className="ml-1 font-normal text-zinc-500 dark:text-zinc-400">{c.dataType}</span>
-                  </Th>
-                )
-              })}
+              {columns.map((c) => (
+                <SortHeader
+                  key={c.name}
+                  column={c}
+                  sort={options.sort}
+                  onSort={(sort) => onChange({ sort, page: 1 })}
+                />
+              ))}
             </tr>
           </thead>
           <tbody>
             {data.rows.map((row, i) => {
               const key = keys[i] ?? null
               return (
-                <Tr
-                  key={key ? JSON.stringify(key) : i}
-                  className={cn(selected.has(i) && 'bg-blue-50 dark:bg-blue-950/40')}
-                >
+                <Tr key={i} className={cn(selected.has(i) && 'bg-blue-50 dark:bg-blue-950/40')}>
                   {editable ? (
-                    <Td className="whitespace-nowrap">
-                      <input
-                        type="checkbox"
-                        aria-label={locale.rows.selectRow(i + 1)}
-                        checked={selected.has(i)}
-                        disabled={!key}
-                        onChange={() => toggle(i)}
-                      />
-                      <button
-                        type="button"
-                        className="-my-0.5 ml-1 inline-flex min-h-6 min-w-6 items-center justify-center rounded align-middle text-zinc-500 hover:bg-zinc-100 disabled:opacity-40 dark:text-zinc-400 dark:hover:bg-zinc-800"
-                        aria-label={locale.rows.editRow(i + 1)}
-                        disabled={!key}
-                        onClick={() => setEditingRow(i)}
-                      >
-                        <Pencil className="size-3.5" aria-hidden />
-                      </button>
-                      <button
-                        type="button"
-                        className="-my-0.5 ml-1 inline-flex min-h-6 min-w-6 items-center justify-center rounded align-middle text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
-                        aria-label={locale.rows.copyRow(i + 1)}
-                        onClick={() => setCopyingRow(i)}
-                      >
-                        <Copy className="size-3.5" aria-hidden />
-                      </button>
-                    </Td>
+                    <RowActions
+                      index={i}
+                      addressable={key !== null}
+                      selected={selected.has(i)}
+                      onToggle={() => toggle(i)}
+                      onEdit={() => setEditingRow(i)}
+                      onCopy={() => setCopyingRow(i)}
+                    />
                   ) : null}
                   {columns.map((c) => {
                     const j = columnIndex.get(c.name) ?? -1
@@ -244,10 +213,13 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
                         )}
                         onDoubleClick={canInline ? () => setInline({ row: i, col: j }) : undefined}
                         // Keyboard path to the same inline editor: focus the cell, press Enter or F2.
+                        // Links inside the cell (foreign keys) keep their own Enter.
                         tabIndex={canInline && !isInline ? 0 : undefined}
+                        data-cell={`${i},${j}`}
                         onKeyDown={
                           canInline && !isInline
                             ? (e) => {
+                                if (e.target !== e.currentTarget) return
                                 if (e.key === 'Enter' || e.key === 'F2') {
                                   e.preventDefault()
                                   setInline({ row: i, col: j })
@@ -264,7 +236,7 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
                               initial={cell}
                               pending={update.isPending}
                               onSave={(value: Cell) => update.mutate({ key, values: { [c.name]: value } })}
-                              onCancel={() => setInline(null)}
+                              onCancel={() => closeInline()}
                             />
                             {update.isError ? <ErrorBox error={update.error} className="mt-1" /> : null}
                           </>

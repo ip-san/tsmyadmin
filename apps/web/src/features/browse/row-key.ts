@@ -6,12 +6,17 @@ function columnIndex(result: BrowseResult): Map<string, number> {
   return new Map(result.columns.map((c, i) => [c.name, i]))
 }
 
+/** Keys for every row of a page (the column index is built once, not per row). */
+export function rowKeys(result: BrowseResult): (RowKey | null)[] {
+  const idx = columnIndex(result)
+  return result.rows.map((row) => rowKeyFor(result, row, idx))
+}
+
 /**
  * Builds the key that addresses `row` for UPDATE/DELETE, or null when the row cannot be addressed safely
  * (views, or all-columns keys containing binary values whose base64 may be truncated).
  */
-export function rowKeyFor(result: BrowseResult, row: Cell[]): RowKey | null {
-  const idx = columnIndex(result)
+export function rowKeyFor(result: BrowseResult, row: Cell[], idx = columnIndex(result)): RowKey | null {
   const pick = (names: string[]) => {
     const values: Record<string, Cell> = {}
     for (const n of names) values[n] = row[idx.get(n) ?? -1] ?? null

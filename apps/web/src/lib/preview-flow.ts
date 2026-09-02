@@ -11,6 +11,8 @@ export interface PreviewFlow<Op> {
   error: unknown
   /** First failing statement of the last execution, if any. */
   failed: StatementResult | null
+  /** The op that ran successfully most recently (cleared when the next preview opens) — for success feedback. */
+  executed: Op | null
   preview: (op: Op) => void
   confirm: () => void
   cancel: () => void
@@ -33,7 +35,9 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
   const [op, setOp] = useState<Op | null>(null)
   const [sql, setSql] = useState<string[]>([])
   const [failed, setFailed] = useState<StatementResult | null>(null)
-  const previewM = useMutation({ mutationFn: config.preview, onSuccess: (r) => setSql(r.sql) })
+  const [executed, setExecuted] = useState<Op | null>(null)
+  // Result applied per call (below), so a superseded preview response cannot overwrite the newer op's SQL.
+  const previewM = useMutation({ mutationFn: config.preview })
   const runM = useMutation({
     mutationFn: (o: Op) => config.execute(o, sql),
     onSuccess: async (results, o) => {
@@ -46,6 +50,7 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
       await queryClient.invalidateQueries({ predicate: (q) => invalidate(q.queryKey) })
       setOp(null)
       setSql([])
+      setExecuted(o)
       await config.onSuccess?.(o)
     },
   })
@@ -56,13 +61,15 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
     running: runM.isPending,
     error: previewM.error ?? runM.error,
     failed,
+    executed,
     preview: (o) => {
       setOp(o)
       setSql([])
       setFailed(null)
+      setExecuted(null)
       previewM.reset()
       runM.reset()
-      previewM.mutate(o)
+      previewM.mutate(o, { onSuccess: (r) => setSql(r.sql) })
     },
     confirm: () => {
       if (op !== null && sql.length > 0 && !runM.isPending) runM.mutate(op)

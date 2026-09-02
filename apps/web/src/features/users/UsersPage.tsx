@@ -123,7 +123,11 @@ export function UsersPage({ dialect }: { dialect: Dialect }) {
           />
         ) : null}
       </Dialog>
-      <Dialog open={passwordFor !== null} title={locale.users.changePassword} onClose={() => setPasswordFor(null)}>
+      <Dialog
+        open={passwordFor !== null}
+        title={passwordFor ? `${locale.users.changePassword}: ${userLabel(passwordFor)}` : ''}
+        onClose={() => setPasswordFor(null)}
+      >
         {passwordFor ? (
           <PasswordForm
             onCancel={() => setPasswordFor(null)}

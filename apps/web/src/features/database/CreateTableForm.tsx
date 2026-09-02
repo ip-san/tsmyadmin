@@ -48,15 +48,17 @@ export function CreateTableForm({
   })
   const update = (i: number, patch: Partial<Row>) =>
     setRows((r) => r.map((row, j) => (j === i ? { ...row, ...patch } : row)))
-  const valid = name.trim() !== '' && rows.length > 0 && rows.every((r) => validateColumn(r) === null)
+  // A row with no name and no type is an untouched blank line, not an error.
+  const filled = rows.filter((r) => r.name.trim() !== '' || r.dataType.trim() !== '')
+  const valid = name.trim() !== '' && filled.length > 0 && filled.every((r) => validateColumn(r) === null)
   const submit = (e: FormEvent) => {
     e.preventDefault()
     if (!valid) return
     flow.preview({
       op: 'createTable',
       table: name.trim(),
-      columns: rows.map(toColumnSpec),
-      primaryKey: rows.filter((r) => r.primary).map((r) => r.name.trim()),
+      columns: filled.map(toColumnSpec),
+      primaryKey: filled.filter((r) => r.primary).map((r) => r.name.trim()),
     })
   }
   return (

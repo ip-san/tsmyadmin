@@ -22,7 +22,8 @@ export function FkCell({
     .map((r) => ({ ref: r, target: reverseTarget(r, cell, db) }))
     .filter((x) => x.target !== null)
   if (!target && reverseLinks.length === 0) return <CellValue cell={cell} />
-  const linkClass = 'text-blue-600 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-100'
+  const linkClass =
+    '-my-1 inline-flex min-h-6 min-w-6 items-center justify-center rounded align-middle text-blue-600 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-100'
   return (
     <span className="inline-flex items-center gap-1">
       <CellValue cell={cell} />

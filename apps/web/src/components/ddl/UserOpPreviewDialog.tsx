@@ -13,6 +13,7 @@ export function UserOpPreviewDialog({ flow }: { flow: UserOpFlow }) {
       destructive={(op) => DESTRUCTIVE.has(op.op)}
       confirmName={(op) => (op.op === 'dropUser' ? op.user.name : null)}
       hint={locale.users.previewHint}
+      successMessage={(op) => `${locale.users.ops[op.op]}: ${locale.ddl.executed}`}
     />
   )
 }

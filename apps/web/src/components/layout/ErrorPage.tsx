@@ -6,7 +6,7 @@ import { errorMessage } from '@/lib/format.ts'
 
 function Frame({ title, body, children }: { title: string; body: string; children?: ReactNode }) {
   return (
-    <main className="mx-auto flex max-w-lg flex-col gap-3 p-8" aria-labelledby="error-title">
+    <section className="mx-auto flex max-w-lg flex-col gap-3 p-8" aria-labelledby="error-title">
       <h1 id="error-title" className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
         {title}
       </h1>
@@ -20,7 +20,7 @@ function Frame({ title, body, children }: { title: string; body: string; childre
           {locale.common.backHome}
         </Link>
       </div>
-    </main>
+    </section>
   )
 }
 

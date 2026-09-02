@@ -13,6 +13,7 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppProcessesRouteImport } from './routes/_app/processes'
+import { Route as AppSqlRouteImport } from './routes/_app/sql'
 import { Route as AppStatusRouteImport } from './routes/_app/status'
 import { Route as AppUsersRouteImport } from './routes/_app/users'
 import { Route as AppVariablesRouteImport } from './routes/_app/variables'
@@ -53,6 +54,11 @@ const AppIndexRoute = AppIndexRouteImport.update({
 const AppProcessesRoute = AppProcessesRouteImport.update({
   id: '/processes',
   path: '/processes',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSqlRoute = AppSqlRouteImport.update({
+  id: '/sql',
+  path: '/sql',
   getParentRoute: () => AppRoute,
 } as any)
 const AppStatusRoute = AppStatusRouteImport.update({
@@ -173,6 +179,7 @@ export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/login': typeof LoginRoute
   '/processes': typeof AppProcessesRoute
+  '/sql': typeof AppSqlRoute
   '/status': typeof AppStatusRoute
   '/users': typeof AppUsersRoute
   '/variables': typeof AppVariablesRoute
@@ -199,6 +206,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/processes': typeof AppProcessesRoute
+  '/sql': typeof AppSqlRoute
   '/status': typeof AppStatusRoute
   '/users': typeof AppUsersRoute
   '/variables': typeof AppVariablesRoute
@@ -226,6 +234,7 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
   '/_app/processes': typeof AppProcessesRoute
+  '/_app/sql': typeof AppSqlRoute
   '/_app/status': typeof AppStatusRoute
   '/_app/users': typeof AppUsersRoute
   '/_app/variables': typeof AppVariablesRoute
@@ -256,6 +265,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/processes'
+    | '/sql'
     | '/status'
     | '/users'
     | '/variables'
@@ -282,6 +292,7 @@ export interface FileRouteTypes {
   to:
     | '/login'
     | '/processes'
+    | '/sql'
     | '/status'
     | '/users'
     | '/variables'
@@ -308,6 +319,7 @@ export interface FileRouteTypes {
     | '/_app'
     | '/login'
     | '/_app/processes'
+    | '/_app/sql'
     | '/_app/status'
     | '/_app/users'
     | '/_app/variables'
@@ -366,6 +378,13 @@ declare module '@tanstack/react-router' {
       path: '/processes'
       fullPath: '/processes'
       preLoaderRoute: typeof AppProcessesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/sql': {
+      id: '/_app/sql'
+      path: '/sql'
+      fullPath: '/sql'
+      preLoaderRoute: typeof AppSqlRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/status': {
@@ -581,6 +600,7 @@ const AppDbDbRouteWithChildren =
 
 interface AppRouteChildren {
   AppProcessesRoute: typeof AppProcessesRoute
+  AppSqlRoute: typeof AppSqlRoute
   AppStatusRoute: typeof AppStatusRoute
   AppUsersRoute: typeof AppUsersRoute
   AppVariablesRoute: typeof AppVariablesRoute
@@ -590,6 +610,7 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppProcessesRoute: AppProcessesRoute,
+  AppSqlRoute: AppSqlRoute,
   AppStatusRoute: AppStatusRoute,
   AppUsersRoute: AppUsersRoute,
   AppVariablesRoute: AppVariablesRoute,

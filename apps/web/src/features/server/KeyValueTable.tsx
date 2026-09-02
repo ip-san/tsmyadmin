@@ -27,6 +27,9 @@ export function KeyValueTable({ items, label }: { items: KeyValue[]; label: stri
         aria-label={locale.server.filter}
         className="max-w-sm"
       />
+      <output aria-live="polite" className="sr-only">
+        {filter.trim() !== '' ? locale.nav.matchCount(shown.length, items.length) : ''}
+      </output>
       {shown.length === 0 ? (
         <Notice>{locale.server.noMatch}</Notice>
       ) : (

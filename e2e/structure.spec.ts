@@ -63,6 +63,8 @@ for (const t of TARGETS) {
       await page.getByLabel('name: NULL').uncheck()
       await page.getByLabel('name', { exact: true }).fill('x')
       await page.getByRole('button', { name: '挿入する' }).click()
+      await expect(page.getByText('1 行を挿入しました')).toBeVisible()
+      await page.goto(tableUrl(t, table))
       await expect(page.getByText('全 1 件')).toBeVisible()
       await page.goto(tableUrl(t, table, '/operations'))
       await page.getByRole('button', { name: 'テーブルを空にする' }).click()

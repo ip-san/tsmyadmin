@@ -45,7 +45,7 @@ function ColumnsTable({
       <tbody>
         {schema.columns.map((c, i) => (
           <Tr key={c.name}>
-            <Td className="text-zinc-400">{i + 1}</Td>
+            <Td>{i + 1}</Td>
             <Td className="font-medium">
               {c.name} {pk.has(c.name) ? <Badge tone="info">{locale.table.primary}</Badge> : null}
             </Td>
@@ -53,7 +53,11 @@ function ColumnsTable({
             <Td className="text-xs">{c.collation ?? ''}</Td>
             <Td>{c.nullable ? locale.common.yes : locale.common.no}</Td>
             <Td className="font-mono text-xs">
-              {c.default === null ? <span className="italic text-zinc-400">{locale.common.null}</span> : c.default}
+              {c.default === null ? (
+                <span className="italic text-zinc-500 dark:text-zinc-400">{locale.common.null}</span>
+              ) : (
+                c.default
+              )}
             </Td>
             <Td className="text-xs">{c.extra}</Td>
             <Td className="text-xs">{c.comment ?? ''}</Td>

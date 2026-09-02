@@ -72,12 +72,14 @@ export function TableList({ db, schema, filter }: { db: string; schema?: string 
   if (tables.isPending) return <Spinner />
   if (tables.isError) return <ErrorBox error={tables.error} onRetry={() => void tables.refetch()} />
   const total = tables.data.length
-  const count =
-    deferred.trim() !== '' ? (
-      <p className="px-2 py-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-        {locale.nav.matchCount(shown.length, total)}
-      </p>
-    ) : null
+  const count = (
+    <output
+      aria-live="polite"
+      className={deferred.trim() !== '' ? 'block px-2 py-0.5 text-xs text-zinc-500 dark:text-zinc-400' : 'sr-only'}
+    >
+      {deferred.trim() !== '' ? locale.nav.matchCount(shown.length, total) : ''}
+    </output>
+  )
   if (shown.length === 0) {
     return (
       <>

@@ -16,6 +16,17 @@ function isEditable(target: EventTarget | null): boolean {
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable
 }
 
+/**
+ * Non-global shortcuts must not fire while a modal is open (a keydown inside <dialog> bubbles to document) or
+ * when the key has its own meaning on the focused element (arrows on a link/button/scroll container).
+ */
+function isCaptured(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false
+  if (target.closest('dialog[open]')) return true
+  const tag = target.tagName
+  return tag === 'A' || tag === 'BUTTON' || target.closest('[data-scroll-root]') !== null
+}
+
 /** Compares a KeyboardEvent against a 'mod+shift+k' style description. */
 export function matches(event: KeyboardEvent, keys: string): boolean {
   const parts = keys.toLowerCase().split('+')
@@ -41,7 +52,7 @@ export function useShortcuts(shortcuts: Shortcut[]): void {
   })
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      const editing = isEditable(event.target)
+      const editing = isEditable(event.target) || isCaptured(event.target)
       for (const s of latest.current) {
         if (editing && !s.global) continue
         if (matches(event, s.keys)) {

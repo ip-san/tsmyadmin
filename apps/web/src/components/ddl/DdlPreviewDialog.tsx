@@ -33,6 +33,7 @@ export function DdlPreviewDialog({ flow }: { flow: DdlFlow }) {
       destructive={(op) => DESTRUCTIVE.has(op.op)}
       confirmName={confirmName}
       hint={locale.ddl.previewHint}
+      successMessage={(op) => `${locale.ddl.titles[op.op]}: ${locale.ddl.executed}`}
     />
   )
 }

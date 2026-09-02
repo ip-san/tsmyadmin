@@ -25,29 +25,24 @@ for (const t of TARGETS) {
       await login(page, t)
     })
 
-    test('inserts a row through the form', async ({ page }) => {
+    test('inserts rows through the form (stays on the page, confirms, links back); duplicating a row prefills it', async ({
+      page,
+    }) => {
       await withScratchTable(page, t, async (table) => {
         await page.goto(tableUrl(t, table, '/insert'))
         await page.getByLabel('id', { exact: true }).fill('3')
         await page.getByLabel('name: NULL').uncheck()
         await page.getByLabel('name', { exact: true }).fill('three')
         await page.getByRole('button', { name: '挿入する' }).click()
+        await expect(page.getByText('1 行を挿入しました')).toBeVisible()
+        await expect(page).toHaveURL(/\/insert/)
+        // The form is blank again and focus moved to its first field for the next row.
+        await expect(page.getByLabel('id', { exact: true })).toHaveValue('')
+        await expect(page.getByLabel('id', { exact: true })).toBeFocused()
+        await page.getByRole('link', { name: '一覧へ戻る' }).click()
         await expect(page).toHaveURL(new RegExp(`/table/${table}(\\?|$)`))
         await expect(page.getByRole('cell', { name: 'three', exact: true })).toBeVisible()
         await expect(page.getByText('全 3 件')).toBeVisible()
-      })
-    })
-
-    test('"insert and add another" keeps the form open; duplicating a row prefills it', async ({ page }) => {
-      await withScratchTable(page, t, async (table) => {
-        await page.goto(tableUrl(t, table, '/insert'))
-        await page.getByLabel('id', { exact: true }).fill('3')
-        await page.getByLabel('name: NULL').uncheck()
-        await page.getByLabel('name', { exact: true }).fill('three')
-        await page.getByRole('button', { name: '挿入して続ける' }).click()
-        await expect(page.getByText('1 行を挿入しました')).toBeVisible()
-        await expect(page).toHaveURL(/\/insert/)
-        await expect(page.getByLabel('id', { exact: true })).toHaveValue('')
         await page.goto(`${tableUrl(t, table)}${t.schema ? '&' : '?'}sort=id:asc`)
         await expect(page.getByText('全 3 件')).toBeVisible()
         await page.getByLabel('3 行目を複製').click()
@@ -124,7 +119,7 @@ for (const t of TARGETS) {
 
     test('views are read-only', async ({ page }) => {
       await page.goto(tableUrl(t, 'active_users'))
-      await expect(page.getByText('編集不可')).toBeVisible()
+      await expect(page.getByText('ビューまたはキーのない行のため編集できません')).toBeVisible()
       await expect(page.getByRole('button', { name: '選択行を削除' })).toHaveCount(0)
     })
   })

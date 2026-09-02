@@ -1,4 +1,4 @@
-import { createFileRoute, Outlet } from '@tanstack/react-router'
+import { createFileRoute, Outlet, useMatches } from '@tanstack/react-router'
 import { PageTitle } from '@/components/layout/PageTitle.tsx'
 import { TabNav } from '@/components/layout/TabNav.tsx'
 import { locale } from '@/config/locale.ts'
@@ -11,10 +11,12 @@ function TableLayout() {
   const { schema } = Route.useSearch()
   const params = { db, table }
   const search = schema ? { schema } : {}
-  useDocumentTitle(table, schema ? `${db}.${schema}` : db)
+  const leaf = useMatches().at(-1)?.routeId ?? ''
+  const tab = TAB_LABELS[leaf.slice(leaf.lastIndexOf('/') + 1)] ?? locale.tabs.browse
+  useDocumentTitle(`${table} – ${tab}`, schema ? `${db}.${schema}` : db)
   return (
     <>
-      <PageTitle level={2}>
+      <PageTitle>
         <span className="text-zinc-500 dark:text-zinc-400">
           {db}
           {schema ? `.${schema}` : ''}.
@@ -38,4 +40,16 @@ function TableLayout() {
       <Outlet />
     </>
   )
+}
+
+/** Last path segment of each table sub-route → tab label (for the document title). */
+const TAB_LABELS: Record<string, string> = {
+  structure: locale.tabs.structure,
+  sql: locale.tabs.sql,
+  search: locale.tabs.search,
+  insert: locale.tabs.insert,
+  export: locale.tabs.export,
+  import: locale.tabs.import,
+  triggers: locale.tabs.triggers,
+  operations: locale.tabs.operations,
 }

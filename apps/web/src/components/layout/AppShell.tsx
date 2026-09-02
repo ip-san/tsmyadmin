@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import type { SessionInfo } from '@tsmyadmin/shared'
-import { LogOut, Moon, PanelLeftClose, PanelLeftOpen, Sun } from 'lucide-react'
+import { CircleHelp, LogOut, Moon, PanelLeftClose, PanelLeftOpen, Sun } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
 import { z } from 'zod'
 import { locale } from '@/config/locale.ts'
@@ -11,6 +11,8 @@ import { Button } from '../ui/Button.tsx'
 import { ShortcutHelp } from './ShortcutHelp.tsx'
 
 const SIDEBAR_PREF = 'sidebar.collapsed'
+/** User guide (served from the repository; deployments may replace it with their own manual). */
+const HELP_URL = 'https://github.com/ip-san/tsmyadmin/blob/main/docs/user-guide.md'
 
 export function AppShell({
   session,
@@ -64,6 +66,15 @@ export function AppShell({
           </span>
         </div>
         <div className="flex shrink-0 items-center gap-1">
+          <a
+            href={HELP_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+          >
+            <CircleHelp className="size-4" aria-hidden />
+            {locale.nav.help}
+          </a>
           <ShortcutHelp />
           <Button
             variant="ghost"
@@ -81,11 +92,12 @@ export function AppShell({
         </div>
       </header>
       {/* Sidebar and main pane scroll independently; the aside is the scroll root for the virtualized table lists. */}
-      <div className="flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1">
+        {/* Narrow viewports (reflow at 320px): the tree overlays the content instead of squeezing it. */}
         <aside
           data-scroll-root
           hidden={collapsed}
-          className="w-64 shrink-0 overflow-y-auto border-r border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900"
+          className="absolute inset-y-0 left-0 z-20 mt-[49px] w-64 shrink-0 overflow-y-auto border-r border-zinc-200 bg-white shadow-lg md:static md:mt-0 md:shadow-none dark:border-zinc-700 dark:bg-zinc-900"
           aria-label={locale.nav.tree}
         >
           {sidebar}
