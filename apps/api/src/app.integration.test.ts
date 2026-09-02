@@ -124,34 +124,71 @@ describe.each(targets)('API integration ($dialect)', ({ dialect, url }) => {
   })
 
   it('dumps routines, triggers and events that restore over the existing ones', async () => {
-    const routinesRes = await req('/api/databases/tsmyadmin_test/routines')
-    expect(routinesRes.status).toBe(200)
-    const before = (await routinesRes.json()) as { name: string }[]
-    expect(Array.isArray(before)).toBe(true)
-    expect(before.length).toBeGreaterThan(0)
-    const dump = await (await req('/api/databases/tsmyadmin_test/export?format=sql&routines=1&stripDefiner=1')).text()
-    expect(dump).toContain('-- Routines')
-    expect(dump).toContain('-- Triggers')
-    if (dialect === 'mysql') {
-      expect(dump).toContain('-- Events')
-      expect(dump).toContain('DELIMITER $$')
-      expect(dump).not.toMatch(/DEFINER\s*=/)
+    // Runs in tsmyadmin_other: a whole-database dump of tsmyadmin_test would race the adapter conformance
+    // suite, whose scratch tables appear and vanish there while this test runs.
+    const other = (text: string) =>
+      req('/api/databases/tsmyadmin_other/sql', { method: 'POST', body: JSON.stringify({ sql: text }) })
+    const setup =
+      dialect === 'mysql'
+        ? [
+            'DROP TABLE IF EXISTS prog_t',
+            'CREATE TABLE prog_t (id INT PRIMARY KEY, title VARCHAR(50) NULL)',
+            'DROP FUNCTION IF EXISTS prog_label',
+            "CREATE FUNCTION prog_label(uid INT) RETURNS VARCHAR(20) DETERMINISTIC RETURN CONCAT('#', uid)",
+            'DROP TRIGGER IF EXISTS prog_before_insert',
+            "CREATE TRIGGER prog_before_insert BEFORE INSERT ON prog_t FOR EACH ROW SET NEW.title = COALESCE(NEW.title, 'untitled')",
+            'DROP EVENT IF EXISTS prog_event',
+            'CREATE EVENT prog_event ON SCHEDULE EVERY 1 DAY DISABLE DO DELETE FROM prog_t WHERE id < 0',
+          ]
+        : [
+            'DROP TABLE IF EXISTS prog_t CASCADE',
+            'CREATE TABLE prog_t (id INT PRIMARY KEY, title VARCHAR(50) NULL)',
+            "CREATE OR REPLACE FUNCTION prog_label(uid INT) RETURNS TEXT LANGUAGE sql STABLE AS $$ SELECT '#' || uid $$",
+            "CREATE OR REPLACE FUNCTION prog_default_title() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN NEW.title := COALESCE(NEW.title, 'untitled'); RETURN NEW; END $$",
+            'CREATE TRIGGER prog_before_insert BEFORE INSERT ON prog_t FOR EACH ROW EXECUTE FUNCTION prog_default_title()',
+          ]
+    for (const statement of setup) {
+      const r = z.array(StatementResultSchema).parse(await (await other(statement)).json())
+      expect(r.filter((x) => x.kind === 'error').map((x) => (x.kind === 'error' ? x.message : ''))).toEqual([])
     }
-    // Only the program section is replayed: the adapter conformance suite runs against the same fixtures in
-    // parallel and must not see the tables dropped and recreated underneath it.
-    const programs = dump.slice(0, dump.indexOf('-- ------')) + dump.slice(dump.indexOf('-- Routines'))
-    const restored = z
-      .array(StatementResultSchema)
-      .parse(
-        await (
-          await req('/api/databases/tsmyadmin_test/sql', { method: 'POST', body: JSON.stringify({ sql: programs }) })
-        ).json()
+    try {
+      const dump = await (
+        await req('/api/databases/tsmyadmin_other/export?format=sql&routines=1&stripDefiner=1')
+      ).text()
+      expect(dump).toContain('-- Routines')
+      expect(dump).toContain('-- Triggers')
+      expect(dump).toContain('prog_label')
+      expect(dump).toContain('prog_before_insert')
+      if (dialect === 'mysql') {
+        expect(dump).toContain('-- Events')
+        expect(dump).toContain('prog_event')
+        expect(dump).toContain('DELIMITER $$')
+        expect(dump).not.toMatch(/DEFINER\s*=/)
+      }
+      // Drop the programs, then replay the dump: everything must come back and the trigger must still fire.
+      await other(
+        dialect === 'mysql'
+          ? 'DROP TRIGGER prog_before_insert; DROP FUNCTION prog_label; DROP EVENT prog_event'
+          : 'DROP TRIGGER prog_before_insert ON prog_t; DROP FUNCTION prog_label'
       )
-    expect(restored.filter((r) => r.kind === 'error').map((r) => (r.kind === 'error' ? r.message : ''))).toEqual([])
-    const after = (await (await req('/api/databases/tsmyadmin_test/routines')).json()) as { name: string }[]
-    expect(after.map((r) => r.name).sort()).toEqual(before.map((r) => r.name).sort())
-    const triggers = (await (await req('/api/databases/tsmyadmin_test/triggers')).json()) as { name: string }[]
-    expect(triggers.length).toBeGreaterThan(0)
+      const restored = z.array(StatementResultSchema).parse(await (await other(dump)).json())
+      expect(restored.filter((r) => r.kind === 'error').map((r) => (r.kind === 'error' ? r.message : ''))).toEqual([])
+      const routines = (await (await req('/api/databases/tsmyadmin_other/routines')).json()) as { name: string }[]
+      expect(routines.map((r) => r.name)).toContain('prog_label')
+      const triggers = (await (await req('/api/databases/tsmyadmin_other/triggers')).json()) as { name: string }[]
+      expect(triggers.map((t) => t.name)).toContain('prog_before_insert')
+      await other('INSERT INTO prog_t (id) VALUES (1)')
+      const rows = BrowseResultSchema.parse(
+        await (await req('/api/databases/tsmyadmin_other/tables/prog_t/rows')).json()
+      )
+      expect(rows.rows).toEqual([[1, 'untitled']])
+    } finally {
+      await other(
+        dialect === 'mysql'
+          ? 'DROP EVENT IF EXISTS prog_event; DROP TRIGGER IF EXISTS prog_before_insert; DROP FUNCTION IF EXISTS prog_label; DROP TABLE IF EXISTS prog_t'
+          : 'DROP TABLE IF EXISTS prog_t CASCADE; DROP FUNCTION IF EXISTS prog_label; DROP FUNCTION IF EXISTS prog_default_title'
+      )
+    }
   })
 
   it('restores a MySQL dump into another database without touching the source', async () => {
