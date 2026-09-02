@@ -69,7 +69,12 @@ interface RunningEntry {
   ns: Namespace
   backend: Promise<string>
   cancelled: boolean
+  /** True while a statement is on the wire; a cancel that lands on an idle connection is a no-op and is retried. */
+  inFlight: boolean
 }
+
+const CANCEL_RETRY_MS = 50
+const CANCEL_RETRIES = 40
 
 const READ_START = /^\s*(?:\(|(?:SELECT|WITH|VALUES|TABLE)\b)/i
 const NOT_WRAPPABLE =
@@ -604,6 +609,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
         resolveBackend = resolve
       }),
       cancelled: false,
+      inFlight: false,
     }
     if (opts.queryId) this.running.set(opts.queryId, entry)
     try {
@@ -618,7 +624,13 @@ export abstract class BaseAdapter implements DatabaseAdapter {
               if (entry.cancelled) break
               const started = performance.now()
               try {
-                const list = await this.runStatement(conn, st.sql, opts.maxRows, () => entry.cancelled)
+                entry.inFlight = true
+                let list: RawResult[]
+                try {
+                  list = await this.runStatement(conn, st.sql, opts.maxRows, () => entry.cancelled)
+                } finally {
+                  entry.inFlight = false
+                }
                 const durationMs = Math.round(performance.now() - started)
                 for (const r of list) {
                   if (r.hasRows) {
@@ -715,6 +727,15 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     // The run may have finished while waiting: its connection is back in the pool, possibly serving someone else.
     if (this.running.get(queryId) !== entry) return false
     await this.cancelBackend(entry.ns, backend)
+    // The backend id is published before the first statement is sent, so a cancel issued right after "run"
+    // can reach the server while the connection is still idle — a no-op on every dialect. Re-send it while a
+    // statement is in flight; `inFlight` (not the registry alone) guards against interrupting the connection's
+    // next borrower once the run has released it.
+    for (let attempt = 0; attempt < CANCEL_RETRIES; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, CANCEL_RETRY_MS))
+      if (this.running.get(queryId) !== entry || !entry.inFlight) break
+      await this.cancelBackend(entry.ns, backend)
+    }
     return true
   }
 

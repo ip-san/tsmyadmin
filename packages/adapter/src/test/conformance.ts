@@ -877,6 +877,20 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         expect(ok[0]).toMatchObject({ kind: 'rows' })
       })
 
+      it('cancels reliably even when the cancel reaches the server before the statement does', async () => {
+        // The backend id is known before the statement is sent; a cancel landing on the idle connection is a
+        // no-op on every server, so cancelQuery must keep re-sending it while the statement is in flight.
+        for (let i = 0; i < 8; i++) {
+          const queryId = crypto.randomUUID()
+          const started = Date.now()
+          const run = db.executeSql(ns, ctx.slowSql, { ...EXEC, timeoutMs: 60_000, queryId })
+          expect(await db.cancelQuery(queryId)).toBe(true)
+          const results = await run
+          expect(results[0]?.kind).toBe('error')
+          expect(Date.now() - started).toBeLessThan(10_000)
+        }
+      })
+
       it('returns false for unknown ids and for ids whose script already completed', async () => {
         expect(await db.cancelQuery(crypto.randomUUID())).toBe(false)
         const queryId = crypto.randomUUID()
