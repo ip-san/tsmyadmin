@@ -1,9 +1,16 @@
 import type { HTMLAttributes, Ref, TdHTMLAttributes, ThHTMLAttributes } from 'react'
 import { cn } from '@/lib/cn.ts'
 
-export function Table({ className, ref, ...rest }: HTMLAttributes<HTMLTableElement> & { ref?: Ref<HTMLTableElement> }) {
+export function Table({
+  className,
+  ref,
+  scrollLabel,
+  ...rest
+}: HTMLAttributes<HTMLTableElement> & { ref?: Ref<HTMLTableElement>; scrollLabel?: string }) {
+  // A table without focusable cells (read-only results) needs its scroller in the tab order to scroll by keyboard.
+  const scroller = scrollLabel ? { tabIndex: 0, role: 'group', 'aria-label': scrollLabel } : {}
   return (
-    <div className="w-full overflow-x-auto rounded border border-zinc-200 dark:border-zinc-700">
+    <div className="w-full overflow-x-auto rounded border border-zinc-200 dark:border-zinc-700" {...scroller}>
       <table ref={ref} className={cn('w-full border-collapse text-sm', className)} {...rest} />
     </div>
   )

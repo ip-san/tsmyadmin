@@ -74,6 +74,7 @@ function ColumnsTable({
                 <Button
                   size="sm"
                   variant="danger"
+                  aria-haspopup="dialog"
                   onClick={() => onDrop(c.name)}
                   aria-label={`${c.name}: ${locale.ddl.drop}`}
                 >
@@ -127,6 +128,7 @@ function IndexesTable({
                   <Button
                     size="sm"
                     variant="danger"
+                    aria-haspopup="dialog"
                     onClick={() => onDrop(i.name)}
                     aria-label={`${i.name}: ${locale.ddl.drop}`}
                   >

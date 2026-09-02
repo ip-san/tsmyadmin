@@ -66,6 +66,7 @@ export function PrivilegesPage({ db, schema, dialect }: { db: string; schema?: s
                   <Button
                     size="sm"
                     disabled={level === 'all'}
+                    aria-haspopup="dialog"
                     onClick={() => flow.preview({ op: 'grantAll', user: r, ...target })}
                     aria-label={`${key}: ${locale.users.grantAll}`}
                   >
@@ -75,6 +76,7 @@ export function PrivilegesPage({ db, schema, dialect }: { db: string; schema?: s
                     size="sm"
                     variant="danger"
                     disabled={level === 'none'}
+                    aria-haspopup="dialog"
                     onClick={() => flow.preview({ op: 'revokeAll', user: r, ...target })}
                     aria-label={`${key}: ${locale.users.revokeAll}`}
                   >

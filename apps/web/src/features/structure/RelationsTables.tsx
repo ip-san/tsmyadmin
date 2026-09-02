@@ -34,6 +34,7 @@ export function ForeignKeysTable({ schema, onDrop }: { schema: TableSchema; onDr
                 <Button
                   size="sm"
                   variant="danger"
+                  aria-haspopup="dialog"
                   onClick={() => onDrop(fk.name)}
                   aria-label={`${fk.name}: ${locale.ddl.titles.dropForeignKey}`}
                 >

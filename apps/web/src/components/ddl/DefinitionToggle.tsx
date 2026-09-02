@@ -14,7 +14,8 @@ function Definition({ definition }: { definition: string | null }) {
   return (
     <pre
       tabIndex={0}
-      className="mt-2 max-h-96 overflow-auto rounded border border-zinc-200 bg-zinc-50 p-2 font-mono text-xs dark:border-zinc-700 dark:bg-zinc-950"
+      // Wrapped: inside a table cell a non-wrapping <pre> widens the column to its longest line.
+      className="mt-2 max-h-96 overflow-auto whitespace-pre-wrap break-words rounded border border-zinc-200 bg-zinc-50 p-2 font-mono text-xs dark:border-zinc-700 dark:bg-zinc-950"
     >
       {definition}
     </pre>

@@ -118,7 +118,11 @@ const Statement = memo(function Statement({
       <pre tabIndex={0} className="overflow-x-auto font-mono text-xs text-zinc-500 dark:text-zinc-400">
         {result.sql}
       </pre>
-      {rows.length === 0 ? <Notice>{locale.browse.noRows}</Notice> : <RowsTable columns={columns} rows={rows} />}
+      {rows.length === 0 ? (
+        <Notice>{locale.browse.noRows}</Notice>
+      ) : (
+        <RowsTable columns={columns} rows={rows} label={heading} />
+      )}
     </section>
   )
 })
@@ -127,7 +131,15 @@ const ROW_HEIGHT = 29
 /** Above this many rows the body is virtualised inside a fixed-height scroller (10k rows × N columns otherwise). */
 const VIRTUALIZE_FROM = 200
 
-function RowsTable({ columns, rows }: { columns: ResultSet['columns']; rows: ResultSet['rows'] }) {
+function RowsTable({
+  columns,
+  rows,
+  label,
+}: {
+  columns: ResultSet['columns']
+  rows: ResultSet['rows']
+  label: string
+}) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const virtual = rows.length >= VIRTUALIZE_FROM
   const virtualizer = useVirtualizer({
@@ -158,7 +170,7 @@ function RowsTable({ columns, rows }: { columns: ResultSet['columns']; rows: Res
   )
   if (!virtual) {
     return (
-      <Table>
+      <Table scrollLabel={label}>
         {header}
         <tbody>{rows.map((row, r) => renderRow(row, r))}</tbody>
       </Table>

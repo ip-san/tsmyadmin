@@ -35,7 +35,8 @@ export function Button({
       // WebKit does not focus a clicked button (and undoes a focus set on mousedown), so a dialog opener would
       // have nothing to hand focus back to: every button takes focus on click, as Chromium does natively.
       onClick={(e) => {
-        if (document.activeElement !== e.currentTarget) e.currentTarget.focus()
+        // Pointer clicks only (detail > 0): Enter in a field submits through a synthetic click and the field keeps focus.
+        if (e.detail > 0 && document.activeElement !== e.currentTarget) e.currentTarget.focus()
         onClick?.(e)
       }}
       className={cn(

@@ -1,9 +1,10 @@
 import { Copy, Pencil } from 'lucide-react'
+import { Button } from '@/components/ui/Button.tsx'
 import { Td } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
 
 const ICON_BUTTON =
-  '-my-0.5 ml-1 inline-flex min-h-6 min-w-6 items-center justify-center rounded align-middle text-zinc-500 hover:bg-zinc-100 disabled:opacity-40 dark:text-zinc-400 dark:hover:bg-zinc-800'
+  '-my-0.5 ml-1 min-h-6 min-w-6 justify-center p-0 align-middle text-zinc-500 disabled:opacity-40 dark:text-zinc-400'
 
 /** Leading cell of a browse row: select checkbox, edit and duplicate buttons (24px targets). */
 export function RowActions({
@@ -33,18 +34,27 @@ export function RowActions({
           onChange={onToggle}
         />
       </label>
-      <button
-        type="button"
+      <Button
+        variant="ghost"
+        size="sm"
         className={ICON_BUTTON}
         aria-label={locale.rows.editRow(index + 1)}
+        aria-haspopup="dialog"
         disabled={!addressable}
         onClick={onEdit}
       >
         <Pencil className="size-3.5" aria-hidden />
-      </button>
-      <button type="button" className={ICON_BUTTON} aria-label={locale.rows.copyRow(index + 1)} onClick={onCopy}>
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        className={ICON_BUTTON}
+        aria-label={locale.rows.copyRow(index + 1)}
+        aria-haspopup="dialog"
+        onClick={onCopy}
+      >
         <Copy className="size-3.5" aria-hidden />
-      </button>
+      </Button>
     </Td>
   )
 }
