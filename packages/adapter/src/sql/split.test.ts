@@ -53,6 +53,16 @@ describe('splitStatements', () => {
     ])
   })
 
+  it('keeps MySQL /*! version comments */ as statements but drops them on PostgreSQL', () => {
+    const dump = '/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE */;\n/*!40014 SET FOREIGN_KEY_CHECKS=0 */;\nSELECT 1;'
+    expect(splitStatements(dump, 'mysql').map((s) => s.sql)).toEqual([
+      '/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE */',
+      '/*!40014 SET FOREIGN_KEY_CHECKS=0 */',
+      'SELECT 1',
+    ])
+    expect(splitStatements(dump, 'postgres').map((s) => s.sql)).toEqual(['SELECT 1'])
+  })
+
   it('drops chunks that are only comments or whitespace', () => {
     expect(splitStatements(`SELECT 1; -- done\n/* nothing */ ;   `, 'postgres')).toEqual([{ sql: 'SELECT 1', line: 1 }])
     expect(splitStatements(`-- only a comment`, 'mysql')).toEqual([])

@@ -13,6 +13,7 @@ import type {
   UserInfo,
   UserRef,
 } from '@tsmyadmin/shared'
+import { isViewKind } from '@tsmyadmin/shared'
 import pg, { type FieldDef, type PoolClient, type QueryResult } from 'pg'
 import { BaseAdapter, type Conn, firstResult, type RawResult } from '../base.ts'
 import { quoteIdent, quoteTable } from '../sql/quote.ts'
@@ -90,11 +91,11 @@ export class PostgresAdapter extends BaseAdapter {
   private async columnMetas(client: PoolClient, fields: FieldDef[]): Promise<ColumnMeta[]> {
     const unknown = [...new Set(fields.map((f) => f.dataTypeID).filter((oid) => !this.typeNames.has(oid)))]
     if (unknown.length > 0) {
-      const res = await client.query<{ oid: number; typname: string }>(
-        'SELECT oid::int4 AS oid, typname FROM pg_type WHERE oid = ANY($1::oid[])',
-        [unknown]
+      // Through run() so a failure is an AdapterError and a dead client is marked broken like any other query.
+      const res = firstResult(
+        await this.run(client, 'SELECT oid::int4 AS oid, typname FROM pg_type WHERE oid = ANY($1::oid[])', [unknown])
       )
-      for (const row of res.rows) this.typeNames.set(Number(row.oid), row.typname)
+      for (const row of res.rows) this.typeNames.set(Number(row[0]), String(row[1]))
     }
     return fields.map((f) => ({ name: f.name, dataType: this.typeNames.get(f.dataTypeID) ?? `oid:${f.dataTypeID}` }))
   }
@@ -151,7 +152,16 @@ export class PostgresAdapter extends BaseAdapter {
       release()
       throw err
     }
-    return { query: (text, params) => this.run(client, text, params), release, id: client }
+    // DISCARD ALL = RESET ALL + SET SESSION AUTHORIZATION DEFAULT + DEALLOCATE/CLOSE/UNLISTEN + temp tables.
+    // It cannot run inside a transaction; executeSql issues ROLLBACK first. run() marks a dead client broken.
+    const reset = async () => {
+      try {
+        await this.run(client, 'DISCARD ALL')
+      } catch {
+        this.broken.add(client)
+      }
+    }
+    return { query: (text, params) => this.run(client, text, params), release, id: client, reset }
   }
 
   protected async setStatementTimeout(conn: Conn, ms: number): Promise<void> {
@@ -278,11 +288,12 @@ export class PostgresAdapter extends BaseAdapter {
   showCreateTable(ns: Namespace, table: string, known?: TableSchema): Promise<string[]> {
     return this.withConn(ns, async (conn) => {
       const schema = known ?? (await pgDescribeTable(conn, ns, table))
-      if (schema.kind === 'view') {
+      if (isViewKind(schema.kind)) {
         const r = firstResult(
           await conn.query('SELECT pg_get_viewdef($1::regclass, true)', [quoteTable('postgres', ns, table)])
         )
-        return [`CREATE VIEW ${quoteTable('postgres', ns, table)} AS\n${String(r.rows[0]?.[0] ?? '')}`]
+        const keyword = schema.kind === 'materialized_view' ? 'CREATE MATERIALIZED VIEW' : 'CREATE VIEW'
+        return [`${keyword} ${quoteTable('postgres', ns, table)} AS\n${String(r.rows[0]?.[0] ?? '')}`]
       }
       return pgCreateStatements(ns, schema)
     })

@@ -30,4 +30,8 @@ paths:
 
 ## 行の同一性
 
-PK → NOT NULL 一意キー → PG は `ctid`、MySQL は全カラム一致 + `LIMIT 1`。UPDATE/DELETE はトランザクション内で `affectedRows === 1` を検証し、違えばロールバックして `KEY_MISMATCH`。
+PK → NOT NULL 一意キー → PG は `ctid`、MySQL は全カラム一致 + `LIMIT 1`。UPDATE/DELETE はトランザクション内で `affectedRows === 1` を検証し、違えばロールバックして `KEY_MISMATCH`。既知の限界: `ctid` は物理位置なので、対象行が他セッションで更新・削除され VACUUM 後にスロットが再利用されると、古い `ctid` が別の行に一致しうる（`affectedRows === 1` では検出できない）。設計上受け入れており、UI は主キーのないテーブルの編集前に再読み込みを促す。
+
+## 接続の返却
+
+`executeSql` はユーザー SQL の後に `ROLLBACK` → `Conn.reset()`（MySQL: `COM_RESET_CONNECTION`、PostgreSQL: `DISCARD ALL`）を必ず行う。セッション変数・ロール・ユーザー変数・一時テーブルがプールの次の借り手に漏れてはならない（conformance の「does not leak session state」が検証）。

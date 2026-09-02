@@ -34,7 +34,13 @@ const CONNECTION_CODES = new Set([
   'PROTOCOL_CONNECTION_LOST',
   'ER_HOST_NOT_PRIVILEGED',
 ])
-const NOT_FOUND_CODES = new Set(['ER_NO_SUCH_TABLE', 'ER_BAD_DB_ERROR', 'ER_BAD_FIELD_ERROR', 'ER_NO_SUCH_THREAD'])
+const NOT_FOUND_CODES = new Set([
+  'ER_NO_SUCH_TABLE',
+  'ER_BAD_DB_ERROR',
+  'ER_BAD_FIELD_ERROR',
+  'ER_NO_SUCH_THREAD',
+  'ER_SP_DOES_NOT_EXIST',
+])
 /** The account is authenticated but lacks a privilege for this statement/object. */
 const PERMISSION_CODES = new Set([
   'ER_TABLEACCESS_DENIED_ERROR',
@@ -44,8 +50,11 @@ const PERMISSION_CODES = new Set([
   'ER_DBACCESS_DENIED_ERROR',
   'ER_KILL_DENIED_ERROR',
 ])
-/** Killed connections surface as query interruption or a fatal protocol error. */
-const KILLED_CODES = new Set(['ER_QUERY_INTERRUPTED', 'ER_CONNECTION_KILLED', 'PROTOCOL_CONNECTION_LOST'])
+/**
+ * Killed connections surface as a fatal protocol error. ER_QUERY_INTERRUPTED (KILL QUERY / max_execution_time)
+ * is deliberately *not* here: it ends the statement but leaves the connection usable, so it stays QUERY_FAILED.
+ */
+const KILLED_CODES = new Set(['ER_CONNECTION_KILLED', 'PROTOCOL_CONNECTION_LOST'])
 
 type QueryOutput = [unknown, FieldPacket[] | FieldPacket[][] | undefined]
 
@@ -108,6 +117,7 @@ export class MysqlAdapter extends BaseAdapter {
       connectTimeout: 10_000,
       idleTimeout: 60_000,
       multipleStatements: false,
+      // BIGINT: number while it fits Number.MAX_SAFE_INTEGER, string beyond (same rule as the PostgreSQL int8 parser).
       supportBigNumbers: true,
       bigNumberStrings: false,
       decimalNumbers: false,
@@ -148,7 +158,16 @@ export class MysqlAdapter extends BaseAdapter {
       release()
       throw err
     }
-    return { query: (text, params) => this.run(conn, text, params), release, id: conn }
+    // COM_RESET_CONNECTION (MySQL 5.7.3+ / MariaDB 10.2+) clears session variables, user variables, temp tables
+    // and prepared statements without re-authenticating. A server that cannot reset gets the connection dropped.
+    const reset = async () => {
+      try {
+        await conn.reset()
+      } catch {
+        this.broken.add(conn)
+      }
+    }
+    return { query: (text, params) => this.run(conn, text, params), release, id: conn, reset }
   }
 
   protected async setStatementTimeout(conn: Conn, ms: number): Promise<void> {

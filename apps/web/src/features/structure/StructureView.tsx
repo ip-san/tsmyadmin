@@ -106,7 +106,10 @@ function IndexesTable({
             <Td className="font-medium">
               {i.name} {i.primary ? <Badge tone="info">{locale.table.primary}</Badge> : null}
             </Td>
-            <Td className="font-mono text-xs">{i.columns.join(', ')}</Td>
+            <Td className="font-mono text-xs">
+              {i.columns.join(', ')}
+              {i.predicate ? <span className="text-zinc-500 dark:text-zinc-400"> WHERE {i.predicate}</span> : null}
+            </Td>
             <Td>{i.unique ? locale.common.yes : locale.common.no}</Td>
             <Td className="text-xs">{i.type ?? ''}</Td>
             {editable ? (

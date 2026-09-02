@@ -72,6 +72,7 @@ export async function mysqlDescribeTable(conn: Conn, ns: Namespace, table: strin
       name,
       unique: num(row[1]) === 0,
       primary: name === 'PRIMARY',
+      predicate: null,
       columns: [],
       type: strOrNull(row[4]),
     }

@@ -55,6 +55,8 @@ async function* sqlBody(
     `-- Database: ${ns.database}${ns.schema ? ` / schema ${ns.schema}` : ''}`,
     `-- Generated: ${new Date().toISOString()}`,
     '',
+    ...adapter.exporter.preamble(),
+    '',
     '',
   ].join('\n')
   for (const table of tables) {
@@ -76,6 +78,8 @@ async function* sqlBody(
       }
     }
   }
+  const postamble = adapter.exporter.postamble()
+  if (postamble.length > 0) yield `${postamble.join('\n')}\n\n`
   // Terminal marker: a dump that lacks this line was cut short (the transfer is also aborted on errors).
   yield `${DUMP_COMPLETE_MARKER} (${tables.length} table${tables.length === 1 ? '' : 's'})\n`
 }

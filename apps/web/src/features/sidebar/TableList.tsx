@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import type { TableInfo } from '@tsmyadmin/shared'
+import { isViewKind, type TableInfo } from '@tsmyadmin/shared'
 import { Eye, Table2 } from 'lucide-react'
 import { useDeferredValue, useLayoutEffect, useRef, useState } from 'react'
 import { ErrorBox, Spinner } from '@/components/ui/Feedback.tsx'
@@ -34,7 +34,7 @@ function TableLink({ db, schema, table }: RowProps) {
       activeProps={{ className: 'bg-blue-50 text-blue-800 dark:bg-blue-950 dark:text-blue-200' }}
       title={table.name}
     >
-      {table.kind === 'view' ? (
+      {isViewKind(table.kind) ? (
         <Eye className="size-3.5 shrink-0" aria-hidden />
       ) : (
         <Table2 className="size-3.5 shrink-0" aria-hidden />

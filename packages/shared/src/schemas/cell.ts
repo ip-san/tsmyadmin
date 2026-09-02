@@ -2,8 +2,9 @@ import { z } from 'zod'
 
 /**
  * Wire format for a single value.
- * - number: only when losslessly representable in JS (INT, FLOAT, DOUBLE)
- * - string: everything else (BIGINT, DECIMAL, dates, JSON text, ENUM, arrays...)
+ * - number: only when losslessly representable in JS (INT, FLOAT, DOUBLE, and BIGINT within Number.MAX_SAFE_INTEGER —
+ *   both dialects apply the same safe-integer rule, so `COUNT(*)` is a number and 2^63-1 is a string)
+ * - string: everything else (BIGINT beyond the safe range, DECIMAL, dates, JSON text, ENUM, arrays...)
  * - { $bin }: binary as base64 (BLOB, bytea, BIT)
  */
 export const BinaryCellSchema = z.strictObject({ $bin: z.string() })

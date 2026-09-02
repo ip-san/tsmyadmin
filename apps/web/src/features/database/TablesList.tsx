@@ -37,7 +37,7 @@ export function TablesList({ db, schema }: { db: string; schema?: string | undef
                 {t.name}
               </Link>
             </Td>
-            <Td>{t.kind === 'view' ? locale.database.kindView : locale.database.kindTable}</Td>
+            <Td>{locale.database.kinds[t.kind]}</Td>
             <Td className="text-right tabular-nums">
               {t.rowEstimate === null ? '–' : t.rowEstimate.toLocaleString('ja-JP')}
             </Td>

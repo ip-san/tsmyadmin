@@ -52,7 +52,7 @@ export async function pgListTables(conn: Conn, ns: Namespace): Promise<TableInfo
     const est = Number(row[2])
     return {
       name: str(row[0]),
-      kind: kind === 'v' || kind === 'm' ? 'view' : 'table',
+      kind: kind === 'v' ? 'view' : kind === 'm' ? 'materialized_view' : 'table',
       rowEstimate: Number.isFinite(est) && est >= 0 ? Math.round(est) : null,
       engine: null,
       comment: strOrNull(row[3]),
@@ -108,7 +108,8 @@ export async function pgDescribeTable(conn: Conn, ns: Namespace, table: string):
     await conn.query(
       `SELECT ic.relname, i.indisunique, i.indisprimary, am.amname,
               (SELECT string_agg(pg_get_indexdef(i.indexrelid, k.n, true), $2 ORDER BY k.n)
-               FROM generate_series(1, i.indnkeyatts) AS k(n))
+               FROM generate_series(1, i.indnkeyatts) AS k(n)),
+              pg_get_expr(i.indpred, i.indrelid, true)
        FROM pg_index i
        JOIN pg_class ic ON ic.oid = i.indexrelid
        JOIN pg_am am ON am.oid = ic.relam
@@ -123,6 +124,7 @@ export async function pgDescribeTable(conn: Conn, ns: Namespace, table: string):
     primary: bool(row[2]),
     columns: list(row[4]),
     type: strOrNull(row[3]),
+    predicate: strOrNull(row[5]),
   }))
   const primaryKey = indexes.find((i) => i.primary)?.columns ?? []
 
@@ -179,7 +181,7 @@ export async function pgDescribeTable(conn: Conn, ns: Namespace, table: string):
   const tuples = Number(infoRow[2])
   return {
     name: table,
-    kind: relkind === 'v' || relkind === 'm' ? 'view' : 'table',
+    kind: relkind === 'v' ? 'view' : relkind === 'm' ? 'materialized_view' : 'table',
     comment: strOrNull(infoRow[1]),
     engine: null,
     rowEstimate: Number.isFinite(tuples) && tuples >= 0 ? Math.round(tuples) : null,

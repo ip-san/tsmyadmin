@@ -22,7 +22,7 @@ import type {
   UserInfo,
   UserRef,
 } from '@tsmyadmin/shared'
-import { EXACT_COUNT_MAX_ROWS, isBinaryCell } from '@tsmyadmin/shared'
+import { EXACT_COUNT_MAX_ROWS, isBinaryCell, isViewKind } from '@tsmyadmin/shared'
 import { Params, quoteIdent, quoteTable } from './sql/quote.ts'
 import { splitStatements } from './sql/split.ts'
 import {
@@ -50,6 +50,11 @@ export interface Conn {
   release(): void
   /** Identity of the underlying pooled driver connection (stable across checkouts); used to cache session state. */
   readonly id: object
+  /**
+   * Restores the server-side session to its defaults (variables, roles, user variables, temp tables) so state
+   * set by user SQL cannot leak to the next borrower. Implementations that cannot reset must discard the connection.
+   */
+  reset(): Promise<void>
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000
@@ -197,7 +202,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
 
   /** Resolves how rows of `schema` can be addressed. */
   resolveRowKey(schema: TableSchema): { keyKind: RowKeyKind; keyColumns: string[] } {
-    if (schema.kind === 'view') return { keyKind: 'none', keyColumns: [] }
+    if (isViewKind(schema.kind)) return { keyKind: 'none', keyColumns: [] }
     if (schema.primaryKey.length > 0) return { keyKind: 'pk', keyColumns: schema.primaryKey }
     const notNull = new Set(schema.columns.filter((c) => !c.nullable).map((c) => c.name))
     const unique = schema.indexes.find((i) => i.unique && i.columns.every((c) => notNull.has(c)))
@@ -515,8 +520,10 @@ export abstract class BaseAdapter implements DatabaseAdapter {
             }
           }
           // Each execution is autocommitted: a transaction the script left open (or aborted) must not
-          // leak into the next borrower of this pooled connection.
+          // leak into the next borrower of this pooled connection — nor may any session state the script set
+          // (autocommit, sql_mode, SET ROLE, user variables, ...), hence the full session reset afterwards.
           await conn.query('ROLLBACK').catch(() => undefined)
+          await conn.reset()
         },
         opts.timeoutMs
       )

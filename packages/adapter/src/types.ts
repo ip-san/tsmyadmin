@@ -103,6 +103,12 @@ export interface RowBatch {
 
 /** Renders dialect-specific SQL for dumps (INSERT statements with properly escaped literals). */
 export interface SqlExporter {
+  /**
+   * Statements emitted once at the top / bottom of a SQL dump so it restores the way it was written
+   * (MySQL: save + neutralise sql_mode so backslash escapes stay valid, disable FK checks during load).
+   */
+  preamble(): string[]
+  postamble(): string[]
   /** One multi-row INSERT for `rows` (empty string when rows is empty). Includes the trailing semicolon. */
   insert(ns: Namespace, table: string, columns: string[], rows: Cell[][]): string
   /** SQL literal for a wire cell. */

@@ -2,33 +2,47 @@ import type { EventInfo, Namespace, RoutineInfo, RoutineKind, TriggerInfo } from
 import { type Conn, firstResult } from '../base.ts'
 import { str, strOrNull } from '../sql/format.ts'
 import { quoteIdent } from '../sql/quote.ts'
+import { AdapterError } from '../types.ts'
 
-/** Routine list (metadata only: one information_schema query regardless of routine count). */
+/** Routine list: two catalog queries regardless of routine count (parameters are grouped here, not by GROUP_CONCAT,
+ * whose output is silently truncated at group_concat_max_len). */
 export async function mysqlListRoutines(conn: Conn, ns: Namespace): Promise<RoutineInfo[]> {
-  const r = firstResult(
+  const routines = firstResult(
     await conn.query(
-      `SELECT ROUTINE_NAME, ROUTINE_TYPE, EXTERNAL_LANGUAGE, DTD_IDENTIFIER, ROUTINE_COMMENT,
-              (SELECT GROUP_CONCAT(CONCAT(COALESCE(p.PARAMETER_MODE, ''), ' ', p.PARAMETER_NAME, ' ', p.DTD_IDENTIFIER) ORDER BY p.ORDINAL_POSITION SEPARATOR ', ')
-                 FROM information_schema.PARAMETERS p
-                WHERE p.SPECIFIC_SCHEMA = r.ROUTINE_SCHEMA AND p.SPECIFIC_NAME = r.SPECIFIC_NAME AND p.ORDINAL_POSITION > 0)
-       FROM information_schema.ROUTINES r WHERE ROUTINE_SCHEMA = ? ORDER BY ROUTINE_NAME`,
+      `SELECT ROUTINE_NAME, ROUTINE_TYPE, EXTERNAL_LANGUAGE, DTD_IDENTIFIER, ROUTINE_COMMENT, SPECIFIC_NAME
+       FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA = ? ORDER BY ROUTINE_NAME`,
       [ns.database]
     )
   )
-  return r.rows.map((row) => {
+  const params = firstResult(
+    await conn.query(
+      `SELECT SPECIFIC_NAME, PARAMETER_MODE, PARAMETER_NAME, DTD_IDENTIFIER
+       FROM information_schema.PARAMETERS
+       WHERE SPECIFIC_SCHEMA = ? AND ORDINAL_POSITION > 0 ORDER BY SPECIFIC_NAME, ORDINAL_POSITION`,
+      [ns.database]
+    )
+  )
+  const bySpecific = new Map<string, string[]>()
+  for (const row of params.rows) {
+    const key = str(row[0])
+    const list = bySpecific.get(key) ?? []
+    list.push(`${strOrNull(row[1]) ?? ''} ${str(row[2])} ${str(row[3])}`.trim())
+    bySpecific.set(key, list)
+  }
+  return routines.rows.map((row) => {
     const kind = str(row[1]).toUpperCase() === 'FUNCTION' ? 'function' : 'procedure'
     return {
       name: str(row[0]),
       kind,
       language: strOrNull(row[2]) ?? 'SQL',
       returns: kind === 'function' ? strOrNull(row[3]) : null,
-      parameters: str(row[5]).trim(),
+      parameters: (bySpecific.get(str(row[5])) ?? []).join(', '),
       comment: strOrNull(row[4]) || null,
     }
   })
 }
 
-/** SHOW CREATE PROCEDURE|FUNCTION; null when the account lacks the privilege or the routine is gone. */
+/** SHOW CREATE PROCEDURE|FUNCTION; null when the routine is gone or the account may not read it — other errors propagate. */
 export async function mysqlRoutineDefinition(
   conn: Conn,
   ns: Namespace,
@@ -43,8 +57,9 @@ export async function mysqlRoutineDefinition(
     )
     // Columns: Procedure|Function, sql_mode, Create Procedure|Create Function, ...
     return strOrNull(show.rows[0]?.[2])
-  } catch {
-    return null
+  } catch (err) {
+    if (err instanceof AdapterError && (err.code === 'NOT_FOUND' || err.code === 'PERMISSION_DENIED')) return null
+    throw err
   }
 }
 

@@ -69,7 +69,7 @@ export function fakeTable(
       primaryKey,
       indexes:
         primaryKey.length > 0
-          ? [{ name: 'PRIMARY', unique: true, primary: true, columns: primaryKey, type: null }]
+          ? [{ name: 'PRIMARY', unique: true, primary: true, columns: primaryKey, type: null, predicate: null }]
           : [],
       foreignKeys: [],
       referencedBy: [],

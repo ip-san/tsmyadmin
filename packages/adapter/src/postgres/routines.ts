@@ -56,11 +56,14 @@ export async function pgListTriggers(conn: Conn, ns: Namespace, table?: string):
       : await conn.query(`${TRIGGER_SELECT}${TRIGGER_ORDER}`, [schema])
   )
   return r.rows.map((row) => {
-    // tgtype bits: 1 row, 2 before, 4 insert, 8 delete, 16 update, 64 instead
+    // tgtype bits: 1 row, 2 before, 4 insert, 8 delete, 16 update, 32 truncate, 64 instead
     const type = Number(row[2])
-    const events = [type & 4 ? 'INSERT' : null, type & 8 ? 'DELETE' : null, type & 16 ? 'UPDATE' : null].filter(
-      (x): x is string => !!x
-    )
+    const events = [
+      type & 4 ? 'INSERT' : null,
+      type & 8 ? 'DELETE' : null,
+      type & 16 ? 'UPDATE' : null,
+      type & 32 ? 'TRUNCATE' : null,
+    ].filter((x): x is string => !!x)
     return {
       name: str(row[0]),
       table: str(row[1]),

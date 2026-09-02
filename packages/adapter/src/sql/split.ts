@@ -69,6 +69,9 @@ export function splitStatements(input: string, dialect: Dialect): Statement[] {
       continue
     }
     if (ch === '/' && input[i + 1] === '*') {
+      // MySQL executes "/*!40014 ... */" version comments (mysqldump's whole preamble is written that way), so
+      // such a chunk is real code and must not be dropped as comment-only.
+      if (dialect === 'mysql' && input[i + 2] === '!') hasCode = true
       const end = input.indexOf('*/', i + 2)
       skipTo(end === -1 ? n : end + 2)
       continue

@@ -63,11 +63,16 @@ export async function pgShowGrants(conn: Conn, user: UserRef): Promise<string[]>
     )
   )
   for (const row of schemas.rows) out.push(`GRANT USAGE ON SCHEMA ${id(String(row[0]))} TO ${id(user.name)}`)
+  // Read the ACLs directly: information_schema.role_table_grants only shows rows where the *connecting* role is
+  // the grantor, the grantee or a member of it, so grants made by another owner would be silently missing.
   const tables = firstResult(
     await conn.query(
-      `SELECT table_schema, table_name, string_agg(privilege_type, ', ' ORDER BY privilege_type)
-       FROM information_schema.role_table_grants WHERE grantee = $1
-       GROUP BY table_schema, table_name ORDER BY table_schema, table_name`,
+      `SELECT n.nspname, c.relname, string_agg(a.privilege_type, ', ' ORDER BY a.privilege_type)
+       FROM pg_class c
+       JOIN pg_namespace n ON n.oid = c.relnamespace
+       CROSS JOIN LATERAL aclexplode(c.relacl) a
+       WHERE c.relkind IN ('r', 'p', 'v', 'm', 'f') AND a.grantee = (SELECT oid FROM pg_roles WHERE rolname = $1)
+       GROUP BY n.nspname, c.relname ORDER BY n.nspname, c.relname`,
       [user.name]
     )
   )

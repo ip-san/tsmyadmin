@@ -59,7 +59,17 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
     for (const sql of db.ddl.build(ns, op)) await execOk(sql)
   }
   // Every scratch table this suite creates; dropped before and after the run so nothing leaks into the shared DB.
-  const SCRATCH_TABLES = [scratch, scratchNoPk, scratchDdl, `${scratch}_empty`, `${scratch}_dump`, `${scratch}_keyset`]
+  const SCRATCH_TABLES = [
+    scratch,
+    scratchNoPk,
+    scratchDdl,
+    `${scratch}_empty`,
+    `${scratch}_dump`,
+    `${scratch}_keyset`,
+    `${scratch}_gen`,
+    `${scratch}_uns`,
+    `${scratch}_partial`,
+  ]
   const browseAll = async (table: string) => db.browseRows(ns, table, { offset: 0, limit: 100, sort: [], filters: [] })
 
   describe(`adapter conformance (${dialect})`, () => {
@@ -333,6 +343,10 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         }
         const row2 = byName(r.columns, r.rows[1] ?? [])
         for (const column of Object.keys(ctx.typesRow1)) expect(row2[column], `types_all.${column} NULL`).toBeNull()
+        // BIGINT within the safe range is a number on both dialects (row 3 holds -1); beyond it a string (row 1).
+        const row3 = byName(r.columns, r.rows[2] ?? [])
+        expect(row3.big_col).toBe(-1)
+        expect(row3.dec_col).toBe('0.000001')
       })
 
       it('reports the row-identity strategy per table', async () => {
@@ -510,6 +524,44 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         expect(results.every((r) => r.kind !== 'error' && r.durationMs >= 0)).toBe(true)
       })
 
+      it('does not leak session state set by a script into the next borrower of the connection', async () => {
+        // Pools hand out the most recently released connection first, so the follow-up call sees the same
+        // physical connection the script mutated.
+        if (dialect === 'mysql') {
+          await execOk("SET SESSION autocommit = 0; SET SESSION sql_mode = 'ANSI_QUOTES'; SET @leak = 1")
+          const after = await execOk('SELECT @@autocommit, @@sql_mode, @leak')
+          const row = after[0]?.kind === 'rows' ? after[0].result.rows[0] : undefined
+          expect(row?.[0]).toBe(1)
+          expect(String(row?.[1])).not.toContain('ANSI_QUOTES')
+          expect(row?.[2]).toBeNull()
+        } else {
+          await execOk("SET lock_timeout = '5s'; SET application_name = 'leak'")
+          const after = await execOk('SHOW lock_timeout; SHOW application_name')
+          expect(after[0]?.kind === 'rows' ? after[0].result.rows[0]?.[0] : null).toBe('0')
+          expect(after[1]?.kind === 'rows' ? after[1].result.rows[0]?.[0] : null).not.toBe('leak')
+        }
+      })
+
+      it('keeps MySQL version comments (/*! ... */) as executable statements', async () => {
+        if (dialect !== 'mysql') return
+        const results = await execOk('/*!40014 SET @tsmy_vc = 7 */; SELECT @tsmy_vc')
+        expect(results).toHaveLength(2)
+        expect(results[1]?.kind === 'rows' ? results[1].result.rows[0]?.[0] : null).toBe(7)
+      })
+
+      it('reports UNSIGNED on DECIMAL result columns (MySQL)', async () => {
+        if (dialect !== 'mysql') return
+        const t = `${scratch}_uns`
+        await execOk(`CREATE TABLE ${t} (d DECIMAL(10,2) UNSIGNED NULL, f FLOAT UNSIGNED NULL, i INT UNSIGNED NULL)`)
+        const r = await execOk(`SELECT d, f, i FROM ${t}`)
+        expect(r[0]?.kind === 'rows' ? r[0].result.columns.map((c) => c.dataType) : []).toEqual([
+          'decimal unsigned',
+          'float unsigned',
+          'int unsigned',
+        ])
+        await execOk(`DROP TABLE ${t}`)
+      })
+
       it('streams each statement result through onResult in order, before the next statement runs', async () => {
         const seen: string[] = []
         const results = await db.executeSql(ns, 'SELECT 1 AS a; SELECT 2 AS b; SELECT * FROM nope_nope; SELECT 4', {
@@ -591,6 +643,8 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         expect(await db.cancelQuery(queryId)).toBe(true)
         const results = await run
         expect(results[0]?.kind).toBe('error')
+        // KILL QUERY / pg_cancel_backend end the statement, not the connection: it must stay in the pool.
+        if (results[0]?.kind === 'error') expect(results[0].code).not.toBe('CONNECTION_FAILED')
         expect(await db.cancelQuery(queryId)).toBe(false)
         const ok = await exec('SELECT 1 AS x')
         expect(ok[0]).toMatchObject({ kind: 'rows' })
@@ -618,6 +672,29 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
 
       it('rejects unknown tables', async () => {
         await expect(db.showCreateTable(ns, 'nope_nope')).rejects.toMatchObject({ code: 'NOT_FOUND' })
+      })
+
+      it('keeps partial-index predicates and materialized views (PostgreSQL)', async () => {
+        if (dialect !== 'postgres') return
+        const t = `${scratch}_partial`
+        const mv = `${t}_mv`
+        await execOk(
+          `CREATE TABLE ${t} (id INT PRIMARY KEY, email TEXT, deleted_at TIMESTAMP NULL);
+           CREATE UNIQUE INDEX ${t}_email_live ON ${t} (email) WHERE deleted_at IS NULL;
+           CREATE MATERIALIZED VIEW ${mv} AS SELECT id FROM ${t}`
+        )
+        try {
+          const idx = (await db.describeTable(ns, t)).indexes.find((i) => i.name === `${t}_email_live`)
+          expect(idx).toMatchObject({ unique: true, predicate: 'deleted_at IS NULL' })
+          expect((await db.showCreateTable(ns, t)).join('\n')).toMatch(/UNIQUE INDEX .* WHERE \(?deleted_at IS NULL\)?/)
+          const info = (await db.listTables(ns)).find((x) => x.name === mv)
+          expect(info?.kind).toBe('materialized_view')
+          expect((await db.describeTable(ns, mv)).kind).toBe('materialized_view')
+          expect((await db.showCreateTable(ns, mv))[0]).toMatch(/^CREATE MATERIALIZED VIEW/)
+          expect((await browseAll(mv)).keyKind).toBe('none')
+        } finally {
+          await exec(`DROP MATERIALIZED VIEW IF EXISTS ${mv}`, { stopOnError: false })
+        }
       })
     })
 
@@ -696,6 +773,46 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         expect(after.rows).toEqual(before.rows)
         expect(after.columns.map((c) => c.name)).toEqual(before.columns.map((c) => c.name))
         await execOk(`DROP TABLE ${src}`)
+      })
+    })
+
+    describe('showCreateTable (generated columns)', () => {
+      it('round-trips a STORED generated column through the reconstructed DDL', async () => {
+        const t = `${scratch}_gen`
+        // CONCAT() is only STABLE on PostgreSQL (generation expressions must be IMMUTABLE); || is OR on MySQL.
+        const expr = dialect === 'mysql' ? 'CONCAT(a, b)' : 'a || b'
+        await execOk(
+          `CREATE TABLE ${t} (id INT PRIMARY KEY, a VARCHAR(20) NOT NULL, b VARCHAR(20) NOT NULL, ab VARCHAR(41) GENERATED ALWAYS AS (${expr}) STORED)`
+        )
+        const create = await db.showCreateTable(ns, t)
+        expect(create.join('\n')).toMatch(/GENERATED ALWAYS AS \(.*\) STORED/i)
+        await execOk(`DROP TABLE ${t}`)
+        await execOk(create.map((c) => `${c};`).join('\n'))
+        await execOk(`INSERT INTO ${t} (id, a, b) VALUES (1, 'x', 'y')`)
+        const rows = await browseAll(t)
+        expect(rows.rows[0]?.[3]).toBe('xy')
+        const ab = (await db.describeTable(ns, t)).columns.find((c) => c.name === 'ab')
+        expect(ab?.extra.toLowerCase()).toContain('generated')
+        await execOk(`DROP TABLE ${t}`)
+      })
+    })
+
+    describe('listTriggers (statement-level)', () => {
+      it('decodes TRUNCATE triggers on PostgreSQL', async () => {
+        if (dialect !== 'postgres') return
+        const fn = `${scratch}_trg_fn`
+        await execOk(
+          `CREATE FUNCTION ${fn}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NULL; END $$;
+           CREATE TRIGGER ${scratch}_trunc BEFORE TRUNCATE ON ${scratch} FOR EACH STATEMENT EXECUTE FUNCTION ${fn}()`
+        )
+        try {
+          const trg = (await db.listTriggers(ns, scratch)).find((t) => t.name === `${scratch}_trunc`)
+          expect(trg).toMatchObject({ timing: 'BEFORE', events: 'TRUNCATE', orientation: 'STATEMENT' })
+        } finally {
+          await exec(`DROP TRIGGER IF EXISTS ${scratch}_trunc ON ${scratch}; DROP FUNCTION IF EXISTS ${fn}()`, {
+            stopOnError: false,
+          })
+        }
       })
     })
 
@@ -807,6 +924,12 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         const grants = await db.showGrants(user)
         // MySQL grants are per database; PostgreSQL grants are per schema/table inside the current database.
         expect(grants.join('\n')).toContain(dialect === 'mysql' ? ns.database : (ns.schema ?? 'public'))
+        if (dialect === 'postgres') {
+          // Table grants are read from pg_class.relacl, so every table the role can SELECT is listed.
+          expect(grants.join('\n')).toMatch(
+            new RegExp(`GRANT [A-Z, ]*SELECT[A-Z, ]* ON "${ns.schema ?? 'public'}"\\."users" TO`)
+          )
+        }
         await runOp({ op: 'setPassword', user, password: 'changed' })
         await runOp({ op: 'revokeAll', user, database: ns.database, ...(ns.schema ? { schema: ns.schema } : {}) })
         await runOp({ op: 'dropUser', user })

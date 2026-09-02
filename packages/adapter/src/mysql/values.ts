@@ -59,12 +59,13 @@ function mysqlTypeName(field: FieldPacket): string {
       return binary ? 'binary' : 'char'
     default: {
       const name = TYPE_NAMES[type] ?? `type${type}`
-      return flags & UNSIGNED_FLAG && ['tinyint', 'smallint', 'int', 'mediumint', 'bigint'].includes(name)
-        ? `${name} unsigned`
-        : name
+      return flags & UNSIGNED_FLAG && UNSIGNED_TYPES.has(name) ? `${name} unsigned` : name
     }
   }
 }
+
+/** Types that carry an UNSIGNED qualifier in MySQL's own type syntax. */
+const UNSIGNED_TYPES = new Set(['tinyint', 'smallint', 'int', 'mediumint', 'bigint', 'decimal', 'float', 'double'])
 
 export function mysqlColumnMeta(field: FieldPacket): ColumnMeta {
   return { name: field.name, dataType: mysqlTypeName(field) }

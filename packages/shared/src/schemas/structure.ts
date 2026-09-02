@@ -1,8 +1,10 @@
 import { z } from 'zod'
 import { NamespaceSchema } from './namespace.ts'
 
-export const TableKindSchema = z.enum(['table', 'view'])
+export const TableKindSchema = z.enum(['table', 'view', 'materialized_view'])
 export type TableKind = z.infer<typeof TableKindSchema>
+/** Views and materialized views: no row identity, read-only in the UI. */
+export const isViewKind = (kind: TableKind): boolean => kind !== 'table'
 
 export const TableInfoSchema = z.object({
   name: z.string(),
@@ -33,6 +35,8 @@ export const IndexDefSchema = z.object({
   primary: z.boolean(),
   columns: z.array(z.string()),
   type: z.string().nullable(),
+  /** Partial-index WHERE clause (PostgreSQL); null for full indexes and on MySQL. */
+  predicate: z.string().nullable(),
 })
 export type IndexDef = z.infer<typeof IndexDefSchema>
 

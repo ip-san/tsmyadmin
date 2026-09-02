@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
+import { isViewKind } from '@tsmyadmin/shared'
 import { useState } from 'react'
 import { RowForm } from '@/components/rows/RowForm.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
@@ -28,7 +29,7 @@ export function InsertPage({ tableRef }: { tableRef: TableRef }) {
   })
   if (structure.isPending) return <Spinner />
   if (structure.isError) return <ErrorBox error={structure.error} onRetry={() => void structure.refetch()} />
-  if (structure.data.kind === 'view') return <Notice>{locale.browse.readOnly}</Notice>
+  if (isViewKind(structure.data.kind)) return <Notice>{locale.browse.readOnly}</Notice>
   return (
     <div className="space-y-3">
       <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{locale.rows.insertTitle}</h2>
