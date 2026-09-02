@@ -166,6 +166,7 @@ export const ja = {
     editCell: 'セルを編集（ダブルクリック / Enter）',
     setNull: 'NULL にする',
     editHint: 'Enter で保存、Esc でキャンセル',
+    editHintMultiline: 'Ctrl/⌘ + Enter で保存、Esc でキャンセル',
     fkLink: (table: string, column: string) => `参照先 ${table}.${column} を開く`,
     reverseLink: (table: string, column: string) => `${table}.${column} でこの行を参照している行を表示`,
     columns: 'カラム',
@@ -380,6 +381,7 @@ export const ja = {
       `${table} に ${n.toLocaleString('ja-JP')} 行を挿入しました（${ms.toLocaleString('ja-JP')} ms）`,
     errors: 'エラー',
     csvNeedsTable: 'CSV の取り込み先テーブルを選択してください',
+    viewRows: '取り込んだ行を表示',
     fileTooLarge: (mb: number) => `ファイルが大きすぎます（最大 ${mb} MB）`,
   },
   users: {

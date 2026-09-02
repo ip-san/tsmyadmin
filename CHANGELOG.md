@@ -25,6 +25,13 @@
 - 設定: `TSMYADMIN_ALLOWED_HOSTS=`（空）の「プリセットのみ」の意味を維持、起動時エラーは常に `Invalid environment:` で始まる、プリセットの未知キー（`password` など）を拒否
 - SQLite セッションストア: 開けない場合は `session_store.open_failed` を記録して終了、`SESSION_SECRET` 変更時に保存済みセッションを起動時に削除（`session_store.reset`）
 - ログ: 成功した `/healthz` `/readyz` をアクセスログに出さない
+- ダイアログが画面左上に固定表示されていた（Tailwind の preflight が `<dialog>` の中央寄せを打ち消していた）
+- ダークモードの SQL エディターでキーワードがほぼ見えなかった → テーマに追従するハイライトを追加
+- PostgreSQL: ANALYZE 前のテーブルの行数を「–」でなく統計ビューから表示、エンジン列を非表示、権限表示からカタログスキーマの GRANT を除外、拡張機能の関数をルーチン一覧から除外
+- ビューでは「挿入」「インポート」タブを出さない、存在しないデータベースではエラーだけを表示
+- インライン編集: 別の場所をクリックすると閉じる、TEXT/JSON はテキストエリアで複数行編集（Ctrl/⌘+Enter で保存）
+- SQL の履歴と保存済みクエリをサーバー（方言・ホスト・ポート）ごとに分け、結果の上に配置
+- 数値が桁の途中で折り返されていた、ステータス変数の複数行の値（PEM など）を折りたたみ表示、テーブル作成後はその構造タブへ、CSV 取り込み後に「取り込んだ行を表示」リンク、ログインの接続先ラベルを短く、PostgreSQL 専用のヒントは MySQL では非表示
 - MariaDB: SQL コンソールで `ORDER BY` 付きの SELECT が並び順を失っていた（派生テーブルのマージ）→ MySQL / MariaDB は `sql_select_limit` で行数を制限する方式に変更
 - MySQL: BIGINT を含む複合キーで 2^53 超の値があるとエクスポートで行が欠落（行コンストラクタ内で DOUBLE 比較）→ 整数型を SIGNED / UNSIGNED にキャスト。バイナリ照合の ENUM/SET キーで大小文字違いのラベルが同一視され欠落 → `COLLATE utf8mb4_bin`
 - MySQL: 先頭コメントの後の `DELIMITER` が認識されなかった（mysqldump のルーチン出力）

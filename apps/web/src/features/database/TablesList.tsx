@@ -13,6 +13,8 @@ export function TablesList({ db, schema }: { db: string; schema?: string | undef
   if (tables.data.length === 0) return <Notice>{locale.database.noTables}</Notice>
   const search = schema ? { schema } : {}
   const link = 'text-blue-700 hover:underline dark:text-blue-300'
+  // PostgreSQL has no storage engine: the column would be a row of dashes.
+  const hasEngine = tables.data.some((t) => t.engine !== null)
   return (
     <Table>
       <thead>
@@ -20,7 +22,7 @@ export function TablesList({ db, schema }: { db: string; schema?: string | undef
           <Th>{locale.database.table}</Th>
           <Th>{locale.database.kind}</Th>
           <Th className="text-right">{locale.database.rowEstimate}</Th>
-          <Th>{locale.database.engine}</Th>
+          {hasEngine ? <Th>{locale.database.engine}</Th> : null}
           <Th>{locale.database.comment}</Th>
           <Th>{locale.database.actions}</Th>
         </tr>
@@ -42,7 +44,7 @@ export function TablesList({ db, schema }: { db: string; schema?: string | undef
             <Td className="text-right tabular-nums">
               {t.rowEstimate === null ? '–' : t.rowEstimate.toLocaleString('ja-JP')}
             </Td>
-            <Td>{t.engine ?? '–'}</Td>
+            {hasEngine ? <Td>{t.engine ?? '–'}</Td> : null}
             <Td className="max-w-xs">
               <CellValue cell={t.comment ?? ''} />
             </Td>

@@ -30,7 +30,8 @@ export function Dialog({ open, title, onClose, children, footer, busy = false }:
         if (busy) e.preventDefault()
       }}
       aria-labelledby={titleId}
-      className="w-full max-w-2xl rounded-lg border border-zinc-200 bg-white p-0 text-zinc-900 shadow-xl backdrop:bg-black/40 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+      // m-auto restores the centring that Tailwind's preflight (margin: 0 on every element) takes away from <dialog>.
+      className="m-auto w-full max-w-2xl rounded-lg border border-zinc-200 bg-white p-0 text-zinc-900 shadow-xl backdrop:bg-black/40 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
     >
       {open ? (
         <div className="flex max-h-[80vh] flex-col">

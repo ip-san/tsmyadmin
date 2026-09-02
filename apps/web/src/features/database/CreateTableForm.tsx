@@ -1,3 +1,4 @@
+import { useNavigate } from '@tanstack/react-router'
 import type { Dialect } from '@tsmyadmin/shared'
 import { type FormEvent, useState } from 'react'
 import { DdlPreviewDialog } from '@/components/ddl/DdlPreviewDialog.tsx'
@@ -42,9 +43,18 @@ export function CreateTableForm({
     },
     newRow(),
   ])
-  const flow = useDdlFlow(db, schema, () => {
+  const navigate = useNavigate()
+  const flow = useDdlFlow(db, schema, async (op) => {
     setName('')
     setRows([newRow()])
+    // Land on the new table's structure, where the next steps (indexes, keys, rows) are.
+    if (op.op === 'createTable') {
+      await navigate({
+        to: '/db/$db/table/$table/structure',
+        params: { db, table: op.table },
+        search: schema ? { schema } : {},
+      })
+    }
   })
   const update = (i: number, patch: Partial<Row>) =>
     setRows((r) => r.map((row, j) => (j === i ? { ...row, ...patch } : row)))

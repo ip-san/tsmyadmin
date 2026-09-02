@@ -105,6 +105,7 @@ export const BrowseRow = memo(function BrowseRow({
                 <CellEditor
                   column={c.name}
                   initial={cell}
+                  dataType={c.dataType}
                   pending={updatePending}
                   onSave={(value: Cell) => onInlineSave(key, c.name, value)}
                   onCancel={onInlineCancel}

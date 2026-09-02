@@ -10,6 +10,7 @@ export async function pgListRoutines(conn: Conn, ns: Namespace): Promise<Routine
               obj_description(p.oid, 'pg_proc')
        FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace JOIN pg_language l ON l.oid = p.prolang
        WHERE n.nspname = $1 AND p.prokind IN ('f', 'p')
+         AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.classid = 'pg_proc'::regclass AND d.objid = p.oid AND d.deptype = 'e')
        ORDER BY p.proname`,
       [ns.schema ?? 'public']
     )

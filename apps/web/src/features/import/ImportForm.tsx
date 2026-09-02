@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import type { ImportFormat, ImportResult } from '@tsmyadmin/shared'
 import { IMPORT_MAX_BYTES, ImportFormatSchema } from '@tsmyadmin/shared'
 import { Upload } from 'lucide-react'
@@ -153,16 +154,28 @@ export function ImportForm({ db, schema, table }: ImportFormProps) {
       </Button>
       {run.isError ? <ErrorBox error={run.error} /> : null}
       <output aria-live="polite" className={result ? 'block' : 'sr-only'}>
-        {result ? <ImportSummary result={result} /> : null}
+        {result ? <ImportSummary result={result} db={db} schema={schema} /> : null}
       </output>
     </form>
   )
 }
 
 /** Result banner; the live region is rendered by the parent so it exists before the message arrives. */
-function ImportSummary({ result }: { result: ImportResult }) {
+function ImportSummary({ result, db, schema }: { result: ImportResult; db: string; schema?: string | undefined }) {
   if (result.format === 'csv') {
-    return <Notice>{locale.import.csvResult(result.inserted, result.table, result.durationMs)}</Notice>
+    return (
+      <Notice>
+        {locale.import.csvResult(result.inserted, result.table, result.durationMs)}{' '}
+        <Link
+          to="/db/$db/table/$table"
+          params={{ db, table: result.table }}
+          search={schema ? { schema } : {}}
+          className="text-blue-700 underline dark:text-blue-300"
+        >
+          {locale.import.viewRows}
+        </Link>
+      </Notice>
+    )
   }
   return (
     <div className="space-y-2">

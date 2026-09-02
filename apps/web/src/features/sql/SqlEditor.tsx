@@ -1,10 +1,43 @@
 import { MySQL, PostgreSQL, sql } from '@codemirror/lang-sql'
-import { Compartment, EditorState, Prec } from '@codemirror/state'
+import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
+import { Compartment, EditorState, type Extension, Prec } from '@codemirror/state'
 import { EditorView, keymap } from '@codemirror/view'
+import { tags } from '@lezer/highlight'
 import type { Dialect } from '@tsmyadmin/shared'
 import { basicSetup } from 'codemirror'
 import { useEffect, useRef } from 'react'
 import { locale } from '@/config/locale.ts'
+import { useTheme } from '@/lib/theme.ts'
+
+/** Dark palette (zinc surfaces, the same accent hues as the light default) — basicSetup only ships the light one. */
+const darkHighlight = HighlightStyle.define([
+  { tag: [tags.keyword, tags.operatorKeyword, tags.modifier], color: '#c084fc' },
+  { tag: [tags.string, tags.special(tags.string)], color: '#86efac' },
+  { tag: [tags.number, tags.bool, tags.null], color: '#fdba74' },
+  { tag: tags.comment, color: '#a1a1aa', fontStyle: 'italic' },
+  { tag: [tags.typeName, tags.standard(tags.name)], color: '#7dd3fc' },
+  { tag: tags.operator, color: '#e4e4e7' },
+  { tag: tags.punctuation, color: '#d4d4d8' },
+])
+const darkTheme = EditorView.theme(
+  {
+    '&': { color: '#f4f4f5', backgroundColor: '#18181b' },
+    '.cm-content': { caretColor: '#f4f4f5' },
+    '.cm-cursor, .cm-dropCursor': { borderLeftColor: '#f4f4f5' },
+    '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, ::selection': {
+      backgroundColor: '#3f3f46',
+    },
+    '.cm-activeLine': { backgroundColor: '#27272a' },
+    '.cm-gutters': { backgroundColor: '#18181b', color: '#71717a', borderRight: '1px solid #3f3f46' },
+    '.cm-activeLineGutter': { backgroundColor: '#27272a' },
+    '.cm-tooltip': { backgroundColor: '#27272a', color: '#f4f4f5', border: '1px solid #3f3f46' },
+    '.cm-tooltip-autocomplete ul li[aria-selected]': { backgroundColor: '#3f3f46', color: '#f4f4f5' },
+    '.cm-matchingBracket': { backgroundColor: '#3f3f46', outline: '1px solid #71717a' },
+  },
+  { dark: true }
+)
+const themeExtension = (theme: 'light' | 'dark'): Extension =>
+  theme === 'dark' ? [darkTheme, syntaxHighlighting(darkHighlight)] : []
 
 export interface SqlEditorProps {
   value: string
@@ -20,6 +53,8 @@ export function SqlEditor({ value, onChange, onRun, dialect, schema }: SqlEditor
   const host = useRef<HTMLDivElement>(null)
   const view = useRef<EditorView | null>(null)
   const langCompartment = useRef(new Compartment())
+  const themeCompartment = useRef(new Compartment())
+  const [theme] = useTheme()
   const latest = useRef({ onChange, onRun })
   latest.current = { onChange, onRun }
 
@@ -32,6 +67,7 @@ export function SqlEditor({ value, onChange, onRun, dialect, schema }: SqlEditor
       extensions: [
         basicSetup,
         langCompartment.current.of(sql({ dialect: dialect === 'mysql' ? MySQL : PostgreSQL, schema })),
+        themeCompartment.current.of(themeExtension(theme)),
         // Highest precedence: basicSetup binds Mod-Enter to insertBlankLine.
         Prec.highest(
           keymap.of([
@@ -70,6 +106,10 @@ export function SqlEditor({ value, onChange, onRun, dialect, schema }: SqlEditor
       effects: langCompartment.current.reconfigure(sql({ dialect: dialect === 'mysql' ? MySQL : PostgreSQL, schema })),
     })
   }, [dialect, schema])
+
+  useEffect(() => {
+    view.current?.dispatch({ effects: themeCompartment.current.reconfigure(themeExtension(theme)) })
+  }, [theme])
 
   return (
     <div

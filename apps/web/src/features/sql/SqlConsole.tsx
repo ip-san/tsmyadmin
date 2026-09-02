@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useRouteContext } from '@tanstack/react-router'
 import type { Dialect, StatementResult } from '@tsmyadmin/shared'
 import { SQL_MAX_ROWS_DEFAULT } from '@tsmyadmin/shared'
 import { Play, Square } from 'lucide-react'
@@ -40,8 +41,11 @@ export interface SqlConsoleProps {
 }
 
 export function SqlConsole({ db, schema, dialect, initialSql = '', completion, draftId }: SqlConsoleProps) {
+  // History and bookmarks belong to a server: two MySQL hosts opened from the same browser keep separate lists.
+  const { session } = useRouteContext({ from: '/_app' })
+  const scope = `${dialect}.${session.host}.${session.port}`
   // Unsent editor text survives tab switches and a session-expiry round trip (per console, this browser tab).
-  const key = `sql.draft.${dialect}.${db}.${schema ?? ''}.${draftId}`
+  const key = `sql.draft.${scope}.${db}.${schema ?? ''}.${draftId}`
   const [text, setTextState] = useState(() => readPreference(key, z.string(), initialSql, sessionStore()))
   // Draft writes are debounced: a multi-MB pasted script would otherwise be serialised on every keystroke.
   const pending = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -71,8 +75,8 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
   }, [key])
   const [maxRows, setMaxRows] = useState(SQL_MAX_ROWS_DEFAULT)
   const [stopOnError, setStopOnError] = useState(true)
-  const [history, setHistory] = useState<HistoryEntry[]>(() => loadHistory(dialect))
-  const [saved, setSaved] = useState<SavedQuery[]>(() => loadSaved(dialect))
+  const [history, setHistory] = useState<HistoryEntry[]>(() => loadHistory(scope))
+  const [saved, setSaved] = useState<SavedQuery[]>(() => loadSaved(scope))
   const [results, setResults] = useState<StatementResult[] | null>(null)
   const queryClient = useQueryClient()
   const queryId = useRef<string | null>(null)
@@ -134,7 +138,7 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
       queryId.current = null
     },
     onSuccess: async (res, sql) => {
-      setHistory(pushHistory(dialect, { sql, at: Date.now(), ok: res.every((r) => r.kind !== 'error') }))
+      setHistory(pushHistory(scope, { sql, at: Date.now(), ok: res.every((r) => r.kind !== 'error') }))
       if (res.some((r) => r.kind !== 'rows')) {
         await queryClient.invalidateQueries({ predicate: (q) => q.queryKey[0] !== 'session' })
       }
@@ -215,22 +219,23 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
           ''
         )}
       </output>
-      {results ? <ResultsView results={results} maxRows={maxRows} /> : null}
+      {/* Bookmarks and history (each collapsible) sit above the results: a 1,000-row result must not bury them. */}
       <SavedQueriesPanel
         entries={saved}
         currentSql={text}
-        onSave={(name) => setSaved(saveQuery(dialect, { name, sql: text, at: Date.now() }))}
+        onSave={(name) => setSaved(saveQuery(scope, { name, sql: text, at: Date.now() }))}
         onLoad={setText}
-        onDelete={(name) => setSaved(deleteSaved(dialect, name))}
+        onDelete={(name) => setSaved(deleteSaved(scope, name))}
       />
       <HistoryPanel
         entries={history}
         onLoad={setText}
         onClear={() => {
-          clearHistory(dialect)
+          clearHistory(scope)
           setHistory([])
         }}
       />
+      {results ? <ResultsView results={results} maxRows={maxRows} /> : null}
     </div>
   )
 }

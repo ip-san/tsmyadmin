@@ -59,7 +59,8 @@ export function LoginForm({ onLogin, presets = [] }: LoginFormProps) {
           >
             {presets.map((p) => (
               <option key={p.name} value={p.name}>
-                {p.name} — {p.dialect === 'mysql' ? locale.login.mysql : locale.login.postgres} {p.host}:{p.port}
+                {/* The dialect is visible in the field below; keeping the label short avoids truncated options. */}
+                {p.name} — {p.host}:{p.port}
                 {p.database ? ` / ${p.database}` : ''}
               </option>
             ))}
@@ -116,12 +117,16 @@ export function LoginForm({ onLogin, presets = [] }: LoginFormProps) {
           autoComplete="current-password"
         />
       </Field>
-      <Field id="database" label={locale.login.database} hint={locale.login.databaseHint}>
+      <Field
+        id="database"
+        label={locale.login.database}
+        {...(dialect === 'postgres' ? { hint: locale.login.databaseHint } : {})}
+      >
         <Input
           id="database"
           value={database}
           onChange={(e) => setDatabase(e.target.value)}
-          aria-describedby="database-hint"
+          {...(dialect === 'postgres' ? { 'aria-describedby': 'database-hint' } : {})}
           readOnly={fixed}
         />
       </Field>

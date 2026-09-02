@@ -40,8 +40,11 @@ export async function pgListSchemas(conn: Conn): Promise<string[]> {
 export async function pgListTables(conn: Conn, ns: Namespace): Promise<TableInfo[]> {
   const r = firstResult(
     await conn.query(
-      `SELECT c.relname, c.relkind, c.reltuples, obj_description(c.oid, 'pg_class')
+      `SELECT c.relname, c.relkind,
+              CASE WHEN c.reltuples < 0 THEN s.n_live_tup ELSE c.reltuples END,
+              obj_description(c.oid, 'pg_class')
        FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+       LEFT JOIN pg_stat_user_tables s ON s.relid = c.oid
        WHERE n.nspname = $1 AND c.relkind IN ('r', 'p', 'v', 'm', 'f') AND NOT c.relispartition
        ORDER BY c.relname`,
       [ns.schema ?? 'public']

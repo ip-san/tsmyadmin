@@ -1,5 +1,6 @@
 import type { KeyValue } from '@tsmyadmin/shared'
 import { useDeferredValue, useState } from 'react'
+import { CellValue } from '@/components/cells/CellValue.tsx'
 import { Notice } from '@/components/ui/Feedback.tsx'
 import { Input } from '@/components/ui/Field.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
@@ -45,7 +46,9 @@ export function KeyValueTable({ items, label }: { items: KeyValue[]; label: stri
             {shown.map((i) => (
               <Tr key={i.name}>
                 <Td className="font-mono text-xs">{i.name}</Td>
-                <Td className="max-w-md break-all font-mono text-xs">{i.value}</Td>
+                <Td className="max-w-md font-mono text-xs">
+                  <CellValue cell={i.value} />
+                </Td>
                 {hasDescription ? (
                   <Td className="text-xs text-zinc-500 dark:text-zinc-400">{i.description ?? ''}</Td>
                 ) : null}

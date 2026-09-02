@@ -18,6 +18,9 @@ for (const t of TARGETS) {
       await page.getByLabel('型 2').fill('VARCHAR(50)')
       await page.getByRole('button', { name: '次へ（SQL を確認）' }).click()
       await confirmPreview(page, /CREATE TABLE/)
+      // A new table opens on its structure tab; the database list shows it too.
+      await expect(page).toHaveURL(new RegExp(`/table/${table}/structure`))
+      await page.goto(dbUrl)
       await expect(page.getByRole('table').first().getByRole('link', { name: table, exact: true })).toBeVisible()
 
       // add column

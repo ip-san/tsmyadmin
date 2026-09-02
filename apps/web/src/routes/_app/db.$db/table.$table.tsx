@@ -1,8 +1,11 @@
+import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Outlet, useMatches } from '@tanstack/react-router'
+import { isViewKind } from '@tsmyadmin/shared'
 import { PageTitle } from '@/components/layout/PageTitle.tsx'
 import { TabNav } from '@/components/layout/TabNav.tsx'
 import { locale } from '@/config/locale.ts'
 import { useDocumentTitle } from '@/lib/document-title.ts'
+import { structureQuery } from '@/lib/queries.ts'
 
 export const Route = createFileRoute('/_app/db/$db/table/$table')({ component: TableLayout })
 
@@ -14,6 +17,9 @@ function TableLayout() {
   const leaf = useMatches().at(-1)?.routeId ?? ''
   const tab = TAB_LABELS[leaf.slice(leaf.lastIndexOf('/') + 1)] ?? locale.tabs.browse
   useDocumentTitle(`${table} – ${tab}`, schema ? `${db}.${schema}` : db)
+  // Views cannot take rows: the insert / import tabs would only lead to a "read-only" notice.
+  const structure = useQuery(structureQuery({ db, schema, table }))
+  const view = structure.data !== undefined && isViewKind(structure.data.kind)
   return (
     <>
       <PageTitle>
@@ -30,9 +36,9 @@ function TableLayout() {
           { label: locale.tabs.structure, to: '/db/$db/table/$table/structure', params, search },
           { label: locale.tabs.sql, to: '/db/$db/table/$table/sql', params, search },
           { label: locale.tabs.search, to: '/db/$db/table/$table/search', params, search },
-          { label: locale.tabs.insert, to: '/db/$db/table/$table/insert', params, search },
+          { label: locale.tabs.insert, to: '/db/$db/table/$table/insert', params, search, hidden: view },
           { label: locale.tabs.export, to: '/db/$db/table/$table/export', params, search },
-          { label: locale.tabs.import, to: '/db/$db/table/$table/import', params, search },
+          { label: locale.tabs.import, to: '/db/$db/table/$table/import', params, search, hidden: view },
           { label: locale.tabs.triggers, to: '/db/$db/table/$table/triggers', params, search },
           { label: locale.tabs.operations, to: '/db/$db/table/$table/operations', params, search },
         ]}

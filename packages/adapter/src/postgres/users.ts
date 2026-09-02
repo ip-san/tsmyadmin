@@ -72,6 +72,7 @@ export async function pgShowGrants(conn: Conn, user: UserRef): Promise<string[]>
        JOIN pg_namespace n ON n.oid = c.relnamespace
        CROSS JOIN LATERAL aclexplode(c.relacl) a
        WHERE c.relkind IN ('r', 'p', 'v', 'm', 'f') AND a.grantee = (SELECT oid FROM pg_roles WHERE rolname = $1)
+         AND n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast') AND n.nspname NOT LIKE 'pg\\_%'
        GROUP BY n.nspname, c.relname ORDER BY n.nspname, c.relname`,
       [user.name]
     )

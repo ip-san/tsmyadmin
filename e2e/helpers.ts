@@ -31,9 +31,10 @@ function fromUrl(dialect: Target['dialect'], url: string, schema?: string): Targ
 // biome-ignore lint/suspicious/noConfusingVoidType: Playwright's documented type for an auto fixture without a value
 export const test = base.extend<{ autoLogout: void }>({
   autoLogout: [
-    async ({ page }, use) => {
+    async ({ page, baseURL }, use) => {
       await use()
-      await page.request.delete('/api/session').catch(() => undefined)
+      // Same-origin Origin header: the API's CSRF check refuses non-GET requests without one.
+      await page.request.delete('/api/session', { headers: { origin: baseURL ?? '' } }).catch(() => undefined)
     },
     { auto: true },
   ],
