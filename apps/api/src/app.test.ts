@@ -683,7 +683,7 @@ describe('sql & ddl', () => {
     expect(adapter.calls.at(-1)).toEqual({ method: 'cancelQuery', args: [queryId] })
     release()
     await new Promise((r) => setTimeout(r, 0))
-    // The late second result must not be enqueued on a cancelled stream (would throw otherwise).
+    // Exactly one cancel per abort; a late result after cancel is dropped by the route's `closed` guard.
     expect(adapter.calls.filter((c) => c.method === 'cancelQuery')).toHaveLength(1)
   })
 

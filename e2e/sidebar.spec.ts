@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { type APIRequestContext, expect, request, test } from '@playwright/test'
 import { login, TARGETS } from './helpers.ts'
 
 const TABLES = 1500
@@ -8,9 +8,12 @@ test.describe('sidebar at scale', () => {
   const t = TARGETS[1]
   if (!t) throw new Error('no postgres target')
   const schema = `many_${Date.now().toString(36)}`
+  // One authenticated API context for setup AND teardown: hook fixtures get a fresh (logged-out) context each.
+  let api: APIRequestContext
 
-  test.beforeAll(async ({ request }) => {
-    const res = await request.post('/api/session', {
+  test.beforeAll(async ({ baseURL }) => {
+    api = await request.newContext(baseURL ? { baseURL } : {})
+    const res = await api.post('/api/session', {
       data: {
         dialect: t.dialect,
         host: t.host,
@@ -25,14 +28,18 @@ test.describe('sidebar at scale', () => {
       { length: TABLES },
       (_, i) => `CREATE TABLE ${schema}.t_${String(i + 1).padStart(4, '0')} (id int)`
     ).join(';\n')
-    const created = await request.post(`/api/databases/${t.database}/sql`, {
+    const created = await api.post(`/api/databases/${t.database}/sql`, {
       data: { sql: `CREATE SCHEMA ${schema};\n${body}`, timeoutMs: 120_000 },
     })
     expect(created.ok()).toBe(true)
   })
 
-  test.afterAll(async ({ request }) => {
-    await request.post(`/api/databases/${t.database}/sql`, { data: { sql: `DROP SCHEMA ${schema} CASCADE` } })
+  test.afterAll(async () => {
+    const dropped = await api.post(`/api/databases/${t.database}/sql`, {
+      data: { sql: `DROP SCHEMA ${schema} CASCADE` },
+    })
+    expect(dropped.ok()).toBe(true)
+    await api.dispose()
   })
 
   test(`renders only the visible rows of ${TABLES} tables and filters with a count`, async ({ page }) => {

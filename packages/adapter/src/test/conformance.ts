@@ -254,9 +254,12 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
           comment: 'remove posts older than a year',
         })
         expect(ev?.definition).toContain('DELETE FROM posts')
-        await runDdl({ op: 'enableEvent', name: 'purge_old_posts' })
-        expect((await db.listEvents(ns)).find((e) => e.name === 'purge_old_posts')?.status).toBe('ENABLED')
-        await runDdl({ op: 'disableEvent', name: 'purge_old_posts' })
+        try {
+          await runDdl({ op: 'enableEvent', name: 'purge_old_posts' })
+          expect((await db.listEvents(ns)).find((e) => e.name === 'purge_old_posts')?.status).toBe('ENABLED')
+        } finally {
+          await runDdl({ op: 'disableEvent', name: 'purge_old_posts' })
+        }
         expect((await db.listEvents(ns)).find((e) => e.name === 'purge_old_posts')?.status).toBe('DISABLED')
       })
     })

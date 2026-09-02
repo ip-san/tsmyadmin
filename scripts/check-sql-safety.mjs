@@ -85,7 +85,10 @@ function templateLiterals(source) {
       j++
     }
     const text = source.slice(start + 1, j)
-    out.push({ text, line: source.slice(0, start).split('\n').length })
+    // Is this literal the first argument of a query call (`conn.query(`…`)`, `.query(`…`, [params])`)?
+    const before = source.slice(Math.max(0, start - 40), start)
+    const queryArg = /\.(query|exec)\(\s*$/.test(before)
+    out.push({ text, line: source.slice(0, start).split('\n').length, queryArg })
     i = j + 1
   }
   return out
@@ -113,6 +116,22 @@ for (const file of files) {
   // 1. Interpolated SQL
   for (const tl of templateLiterals(source)) {
     if (!tl.text.includes('${')) continue
+    // 1a. In SQL text, an interpolation glued to a quote is a literal built from a value — never acceptable
+    // (the quoting helpers in sql/quote.ts and sql/literal.ts are the ones that produce such literals).
+    const sqlish = tl.queryArg || SQL_KEYWORD.test(staticText(tl.text))
+    if (sqlish && !/^packages\/adapter\/src\/sql\/(quote|literal)\.ts$/.test(rel) && /['"]\$\{|\}['"]/.test(tl.text)) {
+      errors.push(`${rel}:${tl.line}: interpolation adjacent to a quote (value inlined into SQL)`)
+      continue
+    }
+    // 1b. Outside the builders, a template handed to .query() may only compose UPPER_CASE SQL constants
+    // (e.g. `${TRIGGER_SELECT} WHERE …`); the keyword test below would miss a prefix-constant statement.
+    if (!allowed && tl.queryArg) {
+      const parts = tl.text.match(/\$\{[^}]*\}/g) ?? []
+      if (parts.some((p) => !/^\$\{[A-Z][A-Z0-9_]*\}$/.test(p))) {
+        errors.push(`${rel}:${tl.line}: query text interpolates a non-constant outside the adapter builders`)
+        continue
+      }
+    }
     // Only the literal SQL text counts; identifiers inside ${} (e.g. locale.ddl.drop) must not trigger.
     if (!SQL_KEYWORD.test(staticText(tl.text))) continue
     if (allowed) {

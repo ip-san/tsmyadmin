@@ -17,6 +17,28 @@ test.describe('accessibility (axe-core)', () => {
   })
 })
 
+test.describe('accessibility (axe-core, dark theme)', () => {
+  test('login, browse and structure in dark mode', async ({ page }) => {
+    const t = TARGETS[0]
+    if (!t) throw new Error('no target')
+    await page.addInitScript(() => localStorage.setItem('tsmyadmin.theme', 'dark'))
+    await page.goto('/login')
+    await page.getByLabel('ホスト').waitFor()
+    await scan(page)
+    await login(page, t)
+    await page.goto(tableUrl(t, 'users'))
+    await page.getByText('全 5 件').waitFor()
+    await scan(page)
+    await page.goto(tableUrl(t, 'users', '/structure'))
+    await page.getByRole('table', { name: 'カラム' }).waitFor()
+    await scan(page)
+    await page.goto(tableUrl(t, 'users', '/operations'))
+    await page.getByRole('button', { name: 'テーブルを削除' }).click()
+    await page.getByRole('dialog').getByLabel('SQL').waitFor()
+    await scan(page)
+  })
+})
+
 // Both dialects: a few screens branch on the dialect (schema badge, event scheduler notice, ctid-less grids).
 for (const t of TARGETS) {
   test.describe(`accessibility (axe-core, ${t.dialect})`, () => {

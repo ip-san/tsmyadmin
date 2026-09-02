@@ -21,11 +21,14 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     trace: 'on-first-retry',
   },
+  // Drops scratch objects left behind by aborted runs (e2e_% tables, many_% schemas) so the shared DBs stay clean.
+  globalTeardown: './e2e/global-teardown.ts',
   projects: [
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
-      testMatch: /(flow|rows|sql|structure|export|import|users|server|sidebar)\.spec/,
+      // Every functional spec runs here; a11y/visual have their own projects (a new spec cannot be silently skipped).
+      testIgnore: /(a11y|visual)\.spec/,
     },
     { name: 'a11y', use: { ...devices['Desktop Chrome'] }, testMatch: /a11y\.spec/ },
     { name: 'visual-light', use: { ...devices['Desktop Chrome'], colorScheme: 'light' }, testMatch: /visual\.spec/ },

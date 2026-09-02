@@ -149,12 +149,19 @@ for (const t of TARGETS) {
       const row = table.getByRole('row').filter({ hasText: 'purge_old_posts' })
       await expect(row).toContainText('DISABLED')
       await expect(row).toContainText('EVERY 1 DAY')
-      await page.getByRole('button', { name: 'purge_old_posts: 有効化' }).click()
-      await confirmPreview(page, /ALTER EVENT[\s\S]*ENABLE/)
-      await expect(row).toContainText('ENABLED')
-      await page.getByRole('button', { name: 'purge_old_posts: 無効化' }).click()
-      await confirmPreview(page, /ALTER EVENT[\s\S]*DISABLE/)
-      await expect(row).toContainText('DISABLED')
+      try {
+        await page.getByRole('button', { name: 'purge_old_posts: 有効化' }).click()
+        await confirmPreview(page, /ALTER EVENT[\s\S]*ENABLE/)
+        await expect(row).toContainText('ENABLED')
+        await page.getByRole('button', { name: 'purge_old_posts: 無効化' }).click()
+        await confirmPreview(page, /ALTER EVENT[\s\S]*DISABLE/)
+        await expect(row).toContainText('DISABLED')
+      } finally {
+        // A failure between the two toggles must not leave the fixture ENABLED for the next run.
+        await page.request.post(`/api/databases/${t.database}/sql`, {
+          data: { sql: 'ALTER EVENT purge_old_posts DISABLE' },
+        })
+      }
     })
 
     test('creates a schema on PostgreSQL from the database page', async ({ page }) => {

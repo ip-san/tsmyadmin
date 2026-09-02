@@ -16,9 +16,10 @@ for (const t of TARGETS) {
       await page.goto('/variables')
       await page.getByLabel('名前で絞り込む').fill('max_connections')
       const vars = page.getByRole('table', { name: 'サーバー変数' })
-      // MySQL also has mysqlx_max_connections; PostgreSQL has just one match.
-      expect(await vars.getByRole('row').count()).toBeGreaterThanOrEqual(2)
+      // MySQL also has mysqlx_max_connections; PostgreSQL has just one match — and nothing else is listed.
       await expect(vars).toContainText('max_connections')
+      await expect(vars).not.toContainText(t.dialect === 'mysql' ? 'version_comment' : 'work_mem')
+      await expect(vars.getByRole('row')).toHaveCount(t.dialect === 'mysql' ? 3 : 2)
 
       await page.goto('/processes')
       const procs = page.getByRole('table', { name: 'プロセス一覧' })
