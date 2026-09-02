@@ -79,7 +79,9 @@ export const pgDdl: DdlBuilder = {
       case 'dropForeignKey':
         return [`ALTER TABLE ${t} DROP CONSTRAINT ${id(op.name)}`]
       case 'dropTable':
-        return [`DROP TABLE ${t}`]
+        return [
+          `DROP ${op.kind === 'materialized_view' ? 'MATERIALIZED VIEW' : op.kind === 'view' ? 'VIEW' : 'TABLE'} ${t}`,
+        ]
       case 'truncateTable':
         return [`TRUNCATE TABLE ${t}`]
       case 'renameTable':

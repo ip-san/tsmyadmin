@@ -8,11 +8,9 @@ test.describe('sidebar at scale', () => {
   const t = TARGETS[1]
   if (!t) throw new Error('no postgres target')
   const schema = `many_${Date.now().toString(36)}`
-  // One authenticated API context for setup AND teardown: hook fixtures get a fresh (logged-out) context each.
-  let api: APIRequestContext
-
-  test.beforeAll(async ({ baseURL }) => {
-    api = await request.newContext(baseURL ? { baseURL } : {})
+  // Hook fixtures get a fresh (logged-out) request context, so setup and teardown each log in through the API.
+  const authenticated = async (baseURL: string | undefined): Promise<APIRequestContext> => {
+    const api = await request.newContext(baseURL ? { baseURL } : {})
     const res = await api.post('/api/session', {
       data: {
         dialect: t.dialect,
@@ -24,6 +22,11 @@ test.describe('sidebar at scale', () => {
       },
     })
     expect(res.ok()).toBe(true)
+    return api
+  }
+
+  test.beforeAll(async ({ baseURL }) => {
+    const api = await authenticated(baseURL)
     const body = Array.from(
       { length: TABLES },
       (_, i) => `CREATE TABLE ${schema}.t_${String(i + 1).padStart(4, '0')} (id int)`
@@ -32,9 +35,12 @@ test.describe('sidebar at scale', () => {
       data: { sql: `CREATE SCHEMA ${schema};\n${body}`, timeoutMs: 120_000 },
     })
     expect(created.ok()).toBe(true)
+    await api.dispose()
   })
 
-  test.afterAll(async () => {
+  test.afterAll(async ({ baseURL }) => {
+    // A fresh login: the setup session may have been evicted or expired by the time the suite ends.
+    const api = await authenticated(baseURL)
     const dropped = await api.post(`/api/databases/${t.database}/sql`, {
       data: { sql: `DROP SCHEMA ${schema} CASCADE` },
     })
@@ -45,7 +51,7 @@ test.describe('sidebar at scale', () => {
   test(`renders only the visible rows of ${TABLES} tables and filters with a count`, async ({ page }) => {
     await login(page, t)
     await page.goto(`/db/${t.database}?schema=${schema}`)
-    await page.getByRole('button', { name: schema, exact: true }).click()
+    await page.getByRole('button', { name: `${schema} を展開` }).click()
     const aside = page.locator('aside')
     await expect(aside.getByRole('link', { name: 't_0001' })).toBeVisible()
     const rendered = await aside.locator('a[href*="/table/"]').count()

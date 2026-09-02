@@ -87,6 +87,15 @@ describe('splitStatements', () => {
     expect(splitStatements(`-- only a comment`, 'mysql')).toEqual([])
   })
 
+  it('requires whitespace after -- on MySQL (2--2 is arithmetic) but not on PostgreSQL', () => {
+    expect(splitStatements('SELECT 2--2; SELECT 3', 'mysql').map((s) => s.sql)).toEqual(['SELECT 2--2', 'SELECT 3'])
+    expect(splitStatements('SELECT 2--2; SELECT 3', 'postgres').map((s) => s.sql)).toEqual(['SELECT 2--2; SELECT 3'])
+    expect(splitStatements('SELECT 1 -- ok; x\n; SELECT 2', 'mysql').map((s) => s.sql)).toEqual([
+      'SELECT 1 -- ok; x',
+      'SELECT 2',
+    ])
+  })
+
   it('does not treat # as a comment in postgres', () => {
     expect(splitStatements(`SELECT '#'; SELECT 1 # not comment`, 'postgres').map((s) => s.sql)).toEqual([
       `SELECT '#'`,

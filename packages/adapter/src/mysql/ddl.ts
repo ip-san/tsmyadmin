@@ -60,7 +60,7 @@ export const mysqlDdl: DdlBuilder = {
       case 'dropForeignKey':
         return [`ALTER TABLE ${t} DROP FOREIGN KEY ${id(op.name)}`]
       case 'dropTable':
-        return [`DROP TABLE ${t}`]
+        return [`DROP ${op.kind === 'table' ? 'TABLE' : 'VIEW'} ${t}`]
       case 'truncateTable':
         return [`TRUNCATE TABLE ${t}`]
       case 'renameTable':

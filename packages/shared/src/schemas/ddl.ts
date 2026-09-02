@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { TableKindSchema } from './structure.ts'
 
 export const ColumnDefaultSchema = z
   .discriminatedUnion('kind', [
@@ -54,7 +55,8 @@ export const DdlOpSchema = z.discriminatedUnion('op', [
     onDelete: FkActionSchema.optional(),
   }),
   z.object({ op: z.literal('dropForeignKey'), table, name: z.string().min(1) }),
-  z.object({ op: z.literal('dropTable'), table }),
+  /** `kind` selects DROP TABLE / DROP VIEW / DROP MATERIALIZED VIEW (the Operations tab serves views as well). */
+  z.object({ op: z.literal('dropTable'), table, kind: TableKindSchema.default('table') }),
   z.object({ op: z.literal('truncateTable'), table }),
   z.object({ op: z.literal('renameTable'), table, newName: z.string().min(1) }),
   /** MySQL: database == schema, so createSchema also creates a database there. */

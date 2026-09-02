@@ -53,7 +53,7 @@ const SAMPLE_OPS: Record<DdlOp['op'], DdlOp> = {
     onDelete: 'SET NULL',
   },
   dropForeignKey: { op: 'dropForeignKey', table: 't', name: 'fk_t_user' },
-  dropTable: { op: 'dropTable', table: 't' },
+  dropTable: { op: 'dropTable', table: 't', kind: 'table' },
   truncateTable: { op: 'truncateTable', table: 't' },
   renameTable: { op: 'renameTable', table: 't', newName: 'we"ird`new' },
   createDatabase: { op: 'createDatabase', name: 'new"db`x' },
@@ -85,6 +85,14 @@ describe('DDL builders', () => {
     const op: DdlOp = { op: 'modifyColumn', table: 't', name: 'n', column: col('n', 'INT') }
     expect(mysqlDdl.build({ database: 'db' }, op)[0]).toContain('MODIFY COLUMN')
     expect(pgDdl.build({ database: 'db' }, op).some((s) => s.includes('RENAME'))).toBe(false)
+  })
+
+  it('dropTable drops a view / materialized view by its kind', () => {
+    const view: DdlOp = { op: 'dropTable', table: 'v', kind: 'view' }
+    const mat: DdlOp = { op: 'dropTable', table: 'm', kind: 'materialized_view' }
+    expect(mysqlDdl.build({ database: 'db' }, view)).toEqual(['DROP VIEW `db`.`v`'])
+    expect(pgDdl.build({ database: 'db', schema: 'app' }, view)).toEqual(['DROP VIEW "app"."v"'])
+    expect(pgDdl.build({ database: 'db', schema: 'app' }, mat)).toEqual(['DROP MATERIALIZED VIEW "app"."m"'])
   })
 
   it('escapes string literals per dialect', () => {

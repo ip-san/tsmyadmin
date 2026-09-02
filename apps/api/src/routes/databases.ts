@@ -1,3 +1,4 @@
+import { isGeneratedColumn } from '@tsmyadmin/adapter'
 import {
   BrowseQuerySchema,
   DdlPreviewRequestSchema,
@@ -269,10 +270,18 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
         const cancelled = await c.get('session').adapter.cancelQuery(c.req.valid('json').queryId)
         return c.json({ cancelled })
       })
-      .post('/databases/:db/ddl/preview', validate('json', DdlPreviewRequestSchema), (c) => {
+      .post('/databases/:db/ddl/preview', validate('json', DdlPreviewRequestSchema), async (c) => {
         const body = c.req.valid('json')
-        const sql = c.get('session').adapter.ddl.build(ns(c.req.param('db'), body.schema), body.op)
-        return c.json({ sql })
+        const adapter = c.get('session').adapter
+        const target = ns(c.req.param('db'), body.schema)
+        let op = body.op
+        // A data copy lists the insertable columns: generated columns cannot be written (INSERT ... SELECT *
+        // would fail after the empty copy was already created, since DDL autocommits).
+        if (op.op === 'copyTable' && op.withData && op.columns === undefined) {
+          const schema = await adapter.describeTable(target, op.table)
+          op = { ...op, columns: schema.columns.filter((col) => !isGeneratedColumn(col.extra)).map((col) => col.name) }
+        }
+        return c.json({ sql: adapter.ddl.build(target, op) })
       })
   )
 }

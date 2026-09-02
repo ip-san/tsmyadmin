@@ -33,6 +33,20 @@ export async function mysqlListTables(conn: Conn, ns: Namespace): Promise<TableI
   }))
 }
 
+const INDEX_COLUMNS = 'SELECT INDEX_NAME, NON_UNIQUE, SEQ_IN_INDEX, COLUMN_NAME, INDEX_TYPE'
+const INDEX_FROM =
+  'FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY INDEX_NAME, SEQ_IN_INDEX'
+
+/** STATISTICS.EXPRESSION (functional indexes) exists on MySQL 8.0.13+ only; MariaDB gets the column as NULL. */
+async function queryIndexes(conn: Conn, ns: Namespace, table: string) {
+  try {
+    return await conn.query(`${INDEX_COLUMNS}, EXPRESSION ${INDEX_FROM}`, [ns.database, table])
+  } catch (err) {
+    if (!(err instanceof AdapterError) || err.nativeCode !== 'ER_BAD_FIELD_ERROR') throw err
+    return conn.query(`${INDEX_COLUMNS}, NULL AS EXPRESSION ${INDEX_FROM}`, [ns.database, table])
+  }
+}
+
 export async function mysqlDescribeTable(conn: Conn, ns: Namespace, table: string): Promise<TableSchema> {
   const info = firstResult(
     await conn.query(
@@ -59,12 +73,7 @@ export async function mysqlDescribeTable(conn: Conn, ns: Namespace, table: strin
     collation: strOrNull(row[6]),
   }))
 
-  const idx = firstResult(
-    await conn.query(
-      'SELECT INDEX_NAME, NON_UNIQUE, SEQ_IN_INDEX, COLUMN_NAME, INDEX_TYPE, EXPRESSION FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY INDEX_NAME, SEQ_IN_INDEX',
-      [ns.database, table]
-    )
-  )
+  const idx = firstResult(await queryIndexes(conn, ns, table))
   const indexMap = new Map<string, IndexDef>()
   for (const row of idx.rows) {
     const name = str(row[0])

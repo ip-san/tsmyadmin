@@ -2,6 +2,7 @@ import type { Cell, ColumnSpec, DdlOp, Dialect, Namespace, RowKey, StatementResu
 import { isBinaryCell } from '@tsmyadmin/shared'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { mysqlAccount } from '../mysql/users.ts'
+import { isGeneratedColumn } from '../sql/export.ts'
 import { quoteIdent } from '../sql/quote.ts'
 import type { DatabaseAdapter, ExecuteOptions, RowBatch } from '../types.ts'
 
@@ -77,6 +78,8 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
     `${scratch}_seq`,
     `${scratch}_like`,
     `${scratch}_fk`,
+    `${scratch}_typedkey`,
+    `${scratch}_enumkey`,
     `${scratch}_ser`,
     `${scratch}_bin`,
     `${scratch}_part`,
@@ -531,6 +534,36 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         expect(after.rows.filter((x) => x[1] === 'tres')).toHaveLength(0)
       })
 
+      it('matches keys typed FLOAT / DECIMAL / JSON as the column, not as a text or double literal', async () => {
+        const t = `${scratch}_typedkey`
+        const json = dialect === 'mysql' ? 'JSON' : 'JSONB'
+        await execOk(`CREATE TABLE ${t} (f FLOAT NOT NULL, d DECIMAL(20, 4) NOT NULL, j ${json} NOT NULL, v INT NULL)`)
+        await execOk(
+          `INSERT INTO ${t} (f, d, j, v) VALUES (0.1, 1234567890123456.7891, '{"a": 1, "b": [true, null]}', 1)`
+        )
+        // No primary key: PostgreSQL addresses the row by ctid, MySQL by every column (each one typed).
+        const before = await browseAll(t)
+        const row = before.rows[0]
+        if (!row) throw new Error('row missing')
+        const key: RowKey =
+          dialect === 'postgres'
+            ? { kind: 'ctid', value: String(row.at(-1)) }
+            : { kind: 'all-columns', values: { f: row[0] ?? null, d: row[1] ?? null, j: row[2] ?? null, v: 1 } }
+        expect(await db.updateRow(ns, t, key, { v: 2 })).toEqual({ affectedRows: 1 })
+        // The same values as a composite "primary key" (FLOAT 0.1 ≠ DOUBLE 0.1 unless cast).
+        await execOk(`ALTER TABLE ${t} ADD PRIMARY KEY (f, d)`)
+        const pk: RowKey = { kind: 'pk', values: { f: row[0] ?? null, d: row[1] ?? null } }
+        expect(await db.updateRow(ns, t, pk, { v: 3 })).toEqual({ affectedRows: 1 })
+        expect((await browseAll(t)).rows[0]?.[3]).toBe(3)
+        // Keyset paging over a FLOAT key must not re-read the last row of each batch.
+        await execOk(`INSERT INTO ${t} (f, d, j, v) VALUES (0.2, 1, '{}', 4), (0.3, 1, '{}', 5)`)
+        const seen: number[] = []
+        for await (const b of db.iterateRows(ns, t, { batchSize: 1 })) for (const r of b.rows) seen.push(Number(r[3]))
+        expect(seen).toEqual([3, 4, 5])
+        expect(await db.deleteRows(ns, t, [pk])).toEqual({ affectedRows: 1 })
+        await execOk(`DROP TABLE ${t}`)
+      })
+
       it.skipIf(dialect !== 'mysql')('matches NULL values in all-columns keys (MySQL)', async () => {
         const r = await db.updateRow(
           ns,
@@ -595,6 +628,39 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
           expect(after[1]?.kind === 'rows' ? after[1].result.rows[0]?.[0] : null).not.toBe('leak')
         }
       })
+
+      it.skipIf(dialect !== 'mysql')(
+        'keeps placeholder values safe under a global NO_BACKSLASH_ESCAPES (MySQL)',
+        async () => {
+          // The driver escapes values with backslashes; a server running that mode would read them differently.
+          // The adapter strips the flag from every session it sets up (including after a connection reset, which
+          // reloads the global value), so a quote in a filter value still matches — and only matches.
+          const original = await execOk('SELECT @@GLOBAL.sql_mode')
+          const globalMode = String(original[0]?.kind === 'rows' ? original[0].result.rows[0]?.[0] : '')
+          await execOk("SET GLOBAL sql_mode = CONCAT(@@GLOBAL.sql_mode, ',NO_BACKSLASH_ESCAPES')")
+          try {
+            await execOk('SELECT 1') // the finally-reset re-reads the global mode into this pooled session
+            await execOk(`INSERT INTO ${scratch} (id, name) VALUES (77, 'o''brien')`)
+            const hit = await db.browseRows(ns, scratch, {
+              offset: 0,
+              limit: 10,
+              sort: [],
+              filters: [{ column: 'name', op: 'eq', value: "o'brien" }],
+            })
+            expect(hit.rows.map((r) => r[0])).toEqual([77])
+            const miss = await db.browseRows(ns, scratch, {
+              offset: 0,
+              limit: 10,
+              sort: [],
+              filters: [{ column: 'name', op: 'eq', value: "o\\'brien" }],
+            })
+            expect(miss.rows).toEqual([])
+            expect(await db.deleteRows(ns, scratch, [{ kind: 'pk', values: { id: 77 } }])).toEqual({ affectedRows: 1 })
+          } finally {
+            await execOk(`SET GLOBAL sql_mode = '${globalMode}'`)
+          }
+        }
+      )
 
       it.skipIf(dialect !== 'mysql')('keeps MySQL version comments (/*! ... */) as executable statements', async () => {
         const results = await execOk('/*!40014 SET @tsmy_vc = 7 */; SELECT @tsmy_vc')
@@ -669,15 +735,16 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
       })
 
       it('caps a plain SELECT at maxRows + 1 rows server-side and marks it truncated', async () => {
-        // 5^8 = 390,625 rows on MySQL (cross join of the 5-row fixture); a series on PostgreSQL. A leading
-        // comment (how pasted scripts usually start) must not defeat the cap.
+        // Every row sleeps 50 ms: 1,000 rows take 50 s unless the server stops at the wrapper's LIMIT
+        // (a client-side slice would time out). A leading comment (how pasted scripts usually start) must
+        // not defeat the cap.
         const big = `-- leading comment\n${
           dialect === 'mysql'
-            ? `SELECT u1.id FROM ${Array.from({ length: 8 }, (_, i) => `users u${i + 1}`).join(', ')}`
-            : 'SELECT i FROM generate_series(1, 200000) AS g(i)'
+            ? `SELECT u1.id, SLEEP(0.05) FROM ${Array.from({ length: 5 }, (_, i) => `users u${i + 1}`).join(', ')}`
+            : 'SELECT i, pg_sleep(0.05) FROM generate_series(1, 1000) AS g(i)'
         }`
         const started = Date.now()
-        const results = await exec(big, { maxRows: 5 })
+        const results = await exec(big, { maxRows: 5, timeoutMs: 5000 })
         expect(Date.now() - started).toBeLessThan(2000)
         expect(results[0]).toMatchObject({ kind: 'rows', result: { truncated: true } })
         if (results[0]?.kind === 'rows') expect(results[0].result.rows).toHaveLength(5)
@@ -688,10 +755,24 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         const lock = await exec('SELECT id FROM users WHERE id = 1 FOR UPDATE')
         expect(lock[0]?.kind).toBe('rows')
         // A syntax error position refers to the statement as typed, not to the wrapper.
+        // A syntax error refers to the statement as typed: the position (PostgreSQL) stays inside it and the
+        // message (MySQL re-runs the bare statement) never mentions the wrapper.
         const bad = await exec('SELECT id FROM users WHERE ORDER', { stopOnError: false })
         expect(bad[0]?.kind).toBe('error')
-        if (bad[0]?.kind === 'error' && bad[0].position !== undefined) {
-          expect(bad[0].position).toBeLessThanOrEqual('SELECT id FROM users WHERE ORDER'.length)
+        if (bad[0]?.kind === 'error') {
+          expect(bad[0].message).not.toContain('_tsmyadmin')
+          if (dialect === 'postgres') expect(bad[0].position).toBeDefined()
+          if (bad[0].position !== undefined) {
+            expect(bad[0].position).toBeLessThanOrEqual('SELECT id FROM users WHERE ORDER'.length)
+          }
+        }
+        // MySQL modifiers valid only at the top level make the wrapper fall back to the bare statement.
+        if (dialect === 'mysql') {
+          const calc = await exec('SELECT SQL_CALC_FOUND_ROWS id FROM users LIMIT 1; SELECT FOUND_ROWS() AS n', {
+            maxRows: 5,
+          })
+          expect(calc.map((r) => r.kind)).toEqual(['rows', 'rows'])
+          if (calc[1]?.kind === 'rows') expect(Number(calc[1].result.rows[0]?.[0])).toBeGreaterThan(1)
         }
         // Joins with duplicate column names still return rows (MySQL cannot wrap those; PostgreSQL can).
         const dupJoin = await exec('SELECT * FROM users u JOIN posts p ON p.user_id = u.id', { maxRows: 2 })
@@ -862,6 +943,20 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         await execOk(`DROP TABLE ${t}`)
       })
 
+      it('pages an ENUM key in a total order that agrees with the keyset comparison', async () => {
+        const t = `${scratch}_enumkey`
+        if (dialect === 'postgres') await execOk(`CREATE TYPE ${t}_e AS ENUM ('zeta', 'alpha', 'mid')`)
+        const type = dialect === 'mysql' ? "ENUM('zeta', 'alpha', 'mid')" : `${t}_e`
+        await execOk(`CREATE TABLE ${t} (e ${type} NOT NULL PRIMARY KEY, n INT NOT NULL)`)
+        await execOk(`INSERT INTO ${t} (e, n) VALUES ('zeta', 1), ('alpha', 2), ('mid', 3)`)
+        const seen: string[] = []
+        for await (const b of db.iterateRows(ns, t, { batchSize: 1 })) for (const r of b.rows) seen.push(String(r[0]))
+        expect([...seen].sort()).toEqual(['alpha', 'mid', 'zeta'])
+        expect(seen).toHaveLength(3)
+        await execOk(`DROP TABLE ${t}`)
+        if (dialect === 'postgres') await execOk(`DROP TYPE ${t}_e`)
+      })
+
       it('iterates a view (no key: single batch on MySQL, ctid-less on PostgreSQL)', async () => {
         const batches: RowBatch[] = []
         for await (const b of db.iterateRows(ns, 'active_users', { batchSize: 2 })) batches.push(b)
@@ -967,13 +1062,17 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         const idCol =
           dialect === 'mysql' ? 'id INT AUTO_INCREMENT PRIMARY KEY' : 'id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY'
         const expr = dialect === 'mysql' ? 'CONCAT(a, b)' : 'a || b'
+        // `at` has an expression default (MySQL reports it as EXTRA = DEFAULT_GENERATED): a regular column whose
+        // stored values must survive the dump, unlike the generated `ab`.
         await execOk(
-          `CREATE TABLE ${t} (${idCol}, a VARCHAR(10) NOT NULL, b VARCHAR(10) NOT NULL, ab VARCHAR(21) GENERATED ALWAYS AS (${expr}) STORED)`
+          `CREATE TABLE ${t} (${idCol}, a VARCHAR(10) NOT NULL, b VARCHAR(10) NOT NULL, ab VARCHAR(21) GENERATED ALWAYS AS (${expr}) STORED, at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)`
         )
-        await execOk(`INSERT INTO ${t} (a, b) VALUES ('x', 'y'), ('p', 'q')`)
+        await execOk(
+          `INSERT INTO ${t} (a, b, at) VALUES ('x', 'y', '2001-02-03 04:05:06'), ('p', 'q', '2002-03-04 05:06:07')`
+        )
         const schema = await db.describeTable(ns, t)
-        const generated = new Set(schema.columns.filter((c) => /generated/i.test(c.extra)).map((c) => c.name))
-        expect(generated.has('ab')).toBe(true)
+        const generated = new Set(schema.columns.filter((c) => isGeneratedColumn(c.extra)).map((c) => c.name))
+        expect([...generated]).toEqual(['ab'])
         const dump = [
           `${db.exporter.dropIfExists(ns, schema)};`,
           ...(await db.showCreateTable(ns, t, schema)).map((c) => `${c};`),
@@ -999,6 +1098,10 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
           [1, 'xy'],
           [2, 'pq'],
           [3, 'mn'],
+        ])
+        expect(rows.rows.slice(0, 2).map((r) => String(r[4]).slice(0, 19))).toEqual([
+          '2001-02-03 04:05:06',
+          '2002-03-04 05:06:07',
         ])
         await execOk(`DROP TABLE ${t}`)
       })
@@ -1325,7 +1428,7 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         await expect(db.describeTable(ns, scratchDdl)).rejects.toMatchObject({ code: 'NOT_FOUND' })
         await runDdl({ op: 'renameTable', table: renamed, newName: scratchDdl })
 
-        await runDdl({ op: 'dropTable', table: scratchDdl })
+        await runDdl({ op: 'dropTable', table: scratchDdl, kind: 'table' })
         await expect(db.describeTable(ns, scratchDdl)).rejects.toMatchObject({ code: 'NOT_FOUND' })
       })
 

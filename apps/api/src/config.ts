@@ -81,7 +81,8 @@ export class ConfigError extends Error {
 }
 
 export function loadConfig(env: Record<string, string | undefined>): AppConfig {
-  const parsed = EnvSchema.safeParse(env)
+  // `.env.example` ships optional variables as `NAME=`; an empty value means "unset", not the empty string.
+  const parsed = EnvSchema.safeParse(Object.fromEntries(Object.entries(env).filter(([, v]) => v !== '')))
   if (!parsed.success) {
     throw new ConfigError(`Invalid environment: ${formatIssues(parsed.error)}`)
   }

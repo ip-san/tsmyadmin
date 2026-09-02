@@ -4,9 +4,13 @@ import type { SqlExporter } from '../types.ts'
 import { cellLiteral, pgLiteral } from './literal.ts'
 import { quoteIdent, quoteTable } from './quote.ts'
 
-/** Columns whose values the server computes and that therefore cannot be part of an INSERT (both dialects). */
+/**
+ * Columns whose values the server computes and that therefore cannot be part of an INSERT: MySQL
+ * `VIRTUAL GENERATED` / `STORED GENERATED`, PostgreSQL `generated stored`. MySQL's `DEFAULT_GENERATED`
+ * (an expression default such as CURRENT_TIMESTAMP) is an ordinary column whose values must be dumped.
+ */
 export function isGeneratedColumn(extra: string): boolean {
-  return /generated/i.test(extra)
+  return /^(?:(?:VIRTUAL|STORED) )?GENERATED\b/i.test(extra)
 }
 
 /** Dump statements: every identifier is quoted and every value goes through cellLiteral. Dialect-agnostic. */

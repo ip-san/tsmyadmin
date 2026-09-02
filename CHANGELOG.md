@@ -4,6 +4,20 @@
 
 ## [Unreleased]
 
+### 修正
+
+- SQL ダンプで `DEFAULT CURRENT_TIMESTAMP` など式デフォルトを持つ MySQL 列（`EXTRA = DEFAULT_GENERATED`）が生成列と誤判定され INSERT から欠落していた
+- MySQL: サーバーの `sql_mode` に `NO_BACKSLASH_ESCAPES` が含まれていても、値のプレースホルダが正しく解釈されるようセッションで無効化
+- MySQL: JSON / FLOAT / DECIMAL 列を行キーとする更新・削除・エクスポートが一致しない／同じ行を繰り返す問題（型に合わせて `CAST`）、ENUM/SET キーのキーセットページング
+- MySQL: `SQL_CALC_FOUND_ROWS` などトップレベル専用の修飾子、構文エラー時のメッセージが読み取り専用ラッパーの影響を受けていた
+- MySQL: `2--2` のような減算を行コメントとして扱っていた（`-- ` の後に空白が必要）
+- MySQL: GEOMETRY 列をバイナリとして往復（`{x, y}` への変換で SRID が失われていた）
+- MySQL: 接続ごとのキャッシュがプールの再借用で効いていなかった（`USE` と timeout 設定が毎回送られていた）、リセット後の照合順序が握手時と異なっていた
+- MariaDB: `max_execution_time` が無いサーバーでは `max_statement_time` へ、`STATISTICS.EXPRESSION` が無い場合は式なしへフォールバック
+- 操作タブ: ビューに対して `TRUNCATE` / コピーを出さず、`DROP VIEW`（PostgreSQL は `DROP MATERIALIZED VIEW`）を生成。テーブルコピーの列一覧をサーバー側で決定（生成列を除外）
+- `.env.example` をそのまま `.env` にコピーすると空の値が enum 検証で拒否されていた
+- E2E: 並列ワーカーでの `SESSION_MAX_PER_IDENTITY` 超過によるセッション失効、後始末でユーザー・DB・スキーマも削除
+
 ## [0.1.0] - 2026-09-02
 
 初回リリース。phpMyAdmin と同じ 3 階層（サーバー / データベース / テーブル）の画面構成。検証済み: MySQL 8.4 / PostgreSQL 17（想定: MySQL 8.0+ / MariaDB 10.6+ / PostgreSQL 13+）。

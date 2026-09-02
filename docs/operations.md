@@ -47,7 +47,7 @@ docker logs tsmyadmin 2>&1 | jq -c 'select(.event=="audit") | {time, dbUser, act
 | 症状 | 原因と対処 |
 |---|---|
 | 起動直後に `Invalid environment` で終了 | 環境変数の型 / 必須違反。メッセージの変数名を修正 |
-| 本番でログインしても直後に未ログイン扱い | `NODE_ENV=production` は `Secure` Cookie。HTTPS で終端し `ブラウザが https:// でアクセスしていることを確認してください（本番の Cookie は `Secure` 属性付きで、平文 HTTP では保存されません）
+| 本番でログインしても直後に未ログイン扱い | `NODE_ENV=production` は Cookie に `Secure` を付けるため、平文 HTTP では保存されません。HTTPS で終端し、ブラウザが `https://` でアクセスしていることを確認してください |
 | ログインが 403 `FORBIDDEN` | 接続先が `TSMYADMIN_ALLOWED_HOSTS` にない |
 | ログインが 429 | レート制限。`Retry-After` 秒後に再試行。誤検知なら `TRUST_PROXY` の設定を確認（プロキシ配下で `0` だと全員が同じ IP になる） |
 | 再起動後に全員ログアウト | `SESSION_STORE=memory`、またはボリューム未設定 / `SESSION_SECRET` 変更。`docs/deployment.md` のアップグレード節 |

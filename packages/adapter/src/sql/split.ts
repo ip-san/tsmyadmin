@@ -58,7 +58,8 @@ export function splitStatements(input: string, dialect: Dialect): Statement[] {
         continue
       }
     }
-    if (ch === '-' && input[i + 1] === '-') {
+    // MySQL only opens a `--` comment when whitespace (or the end of input) follows: `2--2` is `2 - (-2)`.
+    if (ch === '-' && input[i + 1] === '-' && (dialect !== 'mysql' || /\s/.test(input[i + 2] ?? '\n'))) {
       const end = input.indexOf('\n', i)
       skipTo(end === -1 ? n : end)
       continue

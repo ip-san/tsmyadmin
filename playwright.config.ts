@@ -35,10 +35,13 @@ export default defineConfig({
     { name: 'visual-dark', use: { ...devices['Desktop Chrome'], colorScheme: 'dark' }, testMatch: /visual\.spec/ },
   ],
   webServer: {
-    command: `bun run build && API_PORT=${port} SESSION_SECRET=e2e-secret TSMYADMIN_SERVERS='${JSON.stringify([
-      { name: 'e2e-mysql', dialect: 'mysql', host: '127.0.0.1', port: 13306, database: 'tsmyadmin_test' },
-      { name: 'e2e-postgres', dialect: 'postgres', host: '127.0.0.1', port: 15433, database: 'tsmyadmin_test' },
-    ])}' bun apps/api/src/index.ts`,
+    // Every spec logs in as the same account from parallel workers; the per-identity cap must not evict them.
+    command: `bun run build && API_PORT=${port} SESSION_SECRET=e2e-secret SESSION_MAX_PER_IDENTITY=1000 TSMYADMIN_SERVERS='${JSON.stringify(
+      [
+        { name: 'e2e-mysql', dialect: 'mysql', host: '127.0.0.1', port: 13306, database: 'tsmyadmin_test' },
+        { name: 'e2e-postgres', dialect: 'postgres', host: '127.0.0.1', port: 15433, database: 'tsmyadmin_test' },
+      ]
+    )}' bun apps/api/src/index.ts`,
     port,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

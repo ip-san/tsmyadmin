@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { loadConfig } from './config.ts'
 
@@ -50,6 +51,24 @@ describe('loadConfig', () => {
     expect(() => loadConfig({ API_PORT: 'eighty' })).toThrow(/API_PORT/)
     expect(() => loadConfig({ TSMYADMIN_ALLOWED_HOSTS: ' , ' })).toThrow(/ALLOWED_HOSTS/)
     expect(() => loadConfig({ LOG_FORMAT: 'xml' })).toThrow(/LOG_FORMAT/)
+  })
+})
+
+describe('.env.example', () => {
+  it('loads as-is: every empty value counts as unset and the defaults apply', () => {
+    const text = readFileSync(new URL('../../../.env.example', import.meta.url), 'utf8')
+    const env: Record<string, string> = {}
+    for (const line of text.split('\n')) {
+      const m = /^([A-Z0-9_]+)=(.*)$/.exec(line)
+      if (m) env[m[1] ?? ''] = m[2] ?? ''
+    }
+    expect(Object.keys(env).length).toBeGreaterThan(10)
+    const config = loadConfig(env)
+    expect(config.isProd).toBe(false)
+    expect(config.sessionStore).toBe('memory')
+    expect(config.logFormat).toBe('pretty')
+    expect(config.webDist).toBeUndefined()
+    expect(config.servers).toEqual([])
   })
 })
 

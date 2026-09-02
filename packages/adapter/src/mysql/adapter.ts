@@ -55,8 +55,25 @@ const PERMISSION_CODES = new Set([
  * is deliberately *not* here: it ends the statement but leaves the connection usable, so it stays QUERY_FAILED.
  */
 const KILLED_CODES = new Set(['ER_CONNECTION_KILLED', 'PROTOCOL_CONNECTION_LOST'])
+/** Derived-table wrapping fails where the bare statement would not (see BaseAdapter.runStatement). */
+const WRAPPER_ONLY_ERRORS: ReadonlySet<string> = new Set([
+  'ER_DUP_FIELDNAME',
+  'ER_CANT_USE_OPTION_HERE',
+  'ER_PARSE_ERROR',
+])
 
 type QueryOutput = [unknown, FieldPacket[] | FieldPacket[][] | undefined]
+
+/** Collation negotiated at handshake; SET NAMES after a connection reset must restore the same one. */
+const SESSION_COLLATION = 'utf8mb4_unicode_ci'
+/**
+ * Placeholder values are escaped client-side by the driver with backslashes (mysql2 does not prepare `query()`);
+ * a server running with NO_BACKSLASH_ESCAPES would read `\'` as a backslash plus a string terminator, turning any
+ * quote in a filter value or row key into a syntax error or a WHERE-clause injection. The flag is removed from
+ * the *session* mode (everything else is kept), so DDL literals built by `mysqlLiteral` are safe as well.
+ */
+const SESSION_SQL_MODE =
+  "SET SESSION sql_mode = TRIM(BOTH ',' FROM REPLACE(CONCAT(',', @@SESSION.sql_mode, ','), ',NO_BACKSLASH_ESCAPES,', ','))"
 
 function isHeader(v: unknown): v is ResultSetHeader {
   return typeof v === 'object' && v !== null && 'affectedRows' in v
@@ -128,14 +145,22 @@ export class MysqlAdapter extends BaseAdapter {
       dateStrings: true,
       jsonStrings: true,
       rowsAsArray: true,
+      charset: SESSION_COLLATION,
+      // GEOMETRY arrives as the raw SRID+WKB bytes (a binary cell that round-trips through a dump) instead of
+      // the driver's lossy {x, y} objects.
+      typeCast: (field, next) => (field.type === 'GEOMETRY' ? field.buffer() : next()),
     })
     return this.pool
   }
 
+  // Caches are keyed on the driver's core connection: the promise wrapper is a new object on every checkout,
+  // the core connection is the pooled socket and therefore stable across checkouts.
   /** Connections whose socket died (e.g. KILL); destroyed instead of being returned to the pool. */
-  private readonly broken = new WeakSet<PoolConnection>()
-  /** Database each pooled connection currently has selected (skips redundant USE). */
-  private readonly currentDatabase = new WeakMap<PoolConnection, string>()
+  private readonly broken = new WeakSet<object>()
+  /** Database each pooled connection currently has selected (skips redundant USE + sql_mode setup). */
+  private readonly currentDatabase = new WeakMap<object, string>()
+  /** MariaDB has no max_execution_time; after the first ER_UNKNOWN_SYSTEM_VARIABLE the fallback variable is used. */
+  private timeoutVariable: 'max_execution_time' | 'max_statement_time' = 'max_execution_time'
 
   private async run(
     conn: PoolConnection,
@@ -150,7 +175,7 @@ export class MysqlAdapter extends BaseAdapter {
       return normalise(rows, fields, options?.binaryLimit)
     } catch (err) {
       const mapped = this.toAdapterError(err)
-      if (mapped.code === 'CONNECTION_FAILED') this.broken.add(conn)
+      if (mapped.code === 'CONNECTION_FAILED') this.broken.add(conn.connection)
       throw mapped
     }
   }
@@ -162,37 +187,73 @@ export class MysqlAdapter extends BaseAdapter {
     } catch (err) {
       throw this.toAdapterError(err)
     }
-    const release = () => (this.broken.has(conn) ? conn.destroy() : conn.release())
-    // `USE db` only when the pooled connection is not already on that database (one round trip per request saved).
-    if (this.currentDatabase.get(conn) !== ns.database) {
+    const core = conn.connection
+    const release = () => (this.broken.has(core) ? conn.destroy() : conn.release())
+    // `USE db` (plus the session sql_mode) only when the pooled connection is not already set up for that
+    // database — a cache hit costs no round trip at all.
+    if (this.currentDatabase.get(core) !== ns.database) {
       try {
         await this.run(conn, `USE ${quoteIdent('mysql', ns.database)}`)
-        this.currentDatabase.set(conn, ns.database)
+        await this.run(conn, SESSION_SQL_MODE)
+        this.currentDatabase.set(core, ns.database)
       } catch (err) {
-        this.currentDatabase.delete(conn)
+        this.currentDatabase.delete(core)
         release()
         throw err
       }
     }
-    const forget = () => this.currentDatabase.delete(conn)
+    const forget = () => this.currentDatabase.delete(core)
     // COM_RESET_CONNECTION (MySQL 5.7.3+ / MariaDB 10.2+) clears session variables, user variables, temp tables
     // and prepared statements without re-authenticating. It also reverts the session character set to the server
-    // global, which may differ from the utf8mb4 negotiated at handshake, so SET NAMES is re-issued. A server that
-    // cannot reset gets the connection dropped.
+    // global, which may differ from the utf8mb4 negotiated at handshake, so SET NAMES is re-issued with the
+    // handshake collation. A server that cannot reset gets the connection dropped.
     const reset = async () => {
       forget()
       try {
         await conn.reset()
-        await this.run(conn, 'SET NAMES utf8mb4')
+        await this.run(conn, `SET NAMES utf8mb4 COLLATE ${SESSION_COLLATION}`)
       } catch {
-        this.broken.add(conn)
+        this.broken.add(core)
       }
     }
-    return { query: (text, params, options) => this.run(conn, text, params, options), release, id: conn, reset, forget }
+    return { query: (text, params, options) => this.run(conn, text, params, options), release, id: core, reset, forget }
+  }
+
+  protected override wrapperOnlyErrors(): ReadonlySet<string> {
+    return WRAPPER_ONLY_ERRORS
+  }
+
+  protected override readonly castsKeyParams = true
+
+  /** Placeholders are sent as string / double literals; these column types need the value coerced server-side. */
+  protected override keyParam(placeholder: string, type: string): string {
+    const t = type.toLowerCase()
+    if (t.startsWith('json')) return `CAST(${placeholder} AS JSON)`
+    // A FLOAT column holding 0.1 is not equal to the DOUBLE literal 0.1 (8.0.17+ / MariaDB 10.4.5+ syntax).
+    if (t.startsWith('float')) return `CAST(${placeholder} AS FLOAT)`
+    const decimal = /^decimal\((\d+),\s*(\d+)\)/.exec(t)
+    if (decimal) return `CAST(${placeholder} AS DECIMAL(${Number(decimal[1])},${Number(decimal[2])}))`
+    return placeholder
+  }
+
+  /** ENUM/SET order by member index but compare with a string literal by label: page over the label instead. */
+  protected override keyColumnExpr(quoted: string, type: string): string {
+    return /^(?:enum|set)\(/i.test(type) ? `CAST(${quoted} AS CHAR)` : quoted
   }
 
   protected async setStatementTimeout(conn: Conn, ms: number): Promise<void> {
-    await conn.query(`SET SESSION max_execution_time = ${Math.max(0, Math.floor(ms))}`)
+    const millis = Math.max(0, Math.floor(ms))
+    if (this.timeoutVariable === 'max_execution_time') {
+      try {
+        await conn.query(`SET SESSION max_execution_time = ${millis}`)
+        return
+      } catch (err) {
+        if (!(err instanceof AdapterError) || err.nativeCode !== 'ER_UNKNOWN_SYSTEM_VARIABLE') throw err
+        this.timeoutVariable = 'max_statement_time'
+      }
+    }
+    // MariaDB: seconds with a fractional part, applies to every statement (MySQL's bounds SELECT only).
+    await conn.query(`SET SESSION max_statement_time = ${millis / 1000}`)
   }
 
   protected async backendId(conn: Conn): Promise<string> {

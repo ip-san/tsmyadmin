@@ -28,7 +28,7 @@
     "circular": "madge --circular --extensions ts,tsx apps packages",
     "cpd": "jscpd apps packages --min-lines 5 --min-tokens 50 --threshold 2 --ignore '**/node_modules/**,**/dist/**,**/*.test.*'",
     "check:arch": "node scripts/check-architecture.mjs",
-    "check:sql-safety": "node scripts/check-sql-safety.mjs",
+    "check:sql-safety": "node scripts/check-sql-safety.mjs --self-test && node scripts/check-sql-safety.mjs",
     "docs:validate": "node scripts/validate-docs.mjs",
     "check": "node scripts/check.mjs",
     "check:all": "bun run check:static && bun run test:integration",

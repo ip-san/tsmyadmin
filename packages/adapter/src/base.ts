@@ -78,6 +78,7 @@ const NOT_WRAPPABLE =
 const LEADING_COMMENTS = /^(?:\s+|--[^\n]*(?:\n|$)|#[^\n]*(?:\n|$)|\/\*[\s\S]*?\*\/)+/
 
 const WRAP_PREFIX = 'SELECT * FROM (\n'
+const EMPTY_CODES: ReadonlySet<string> = new Set()
 
 /**
  * Subquery form of a plain read with a row cap, or null when the statement must run as written. The body is
@@ -202,10 +203,34 @@ export abstract class BaseAdapter implements DatabaseAdapter {
   protected abstract cancelBackend(ns: Namespace, id: string): Promise<void>
   /** NULL-safe equality operator used for all-columns keys. */
   protected abstract nullSafeEq(): string
+  /** Native error codes that mean "the read-only wrapper broke this statement", after which it is re-run unwrapped. */
+  protected wrapperOnlyErrors(): ReadonlySet<string> {
+    return EMPTY_CODES
+  }
   /** Row-identity fallback when a table has no PK / NOT NULL unique key. */
   protected abstract fallbackKeyKind(): Extract<RowKeyKind, 'ctid' | 'all-columns'>
   /** Extra SELECT-list expression that exposes the fallback key (PG: ctid), or null. */
   protected abstract fallbackKeySelect(): string | null
+  /**
+   * Wraps a key-value placeholder so it compares as the column's own type (`dataType` as reported by describeTable).
+   * Dialects whose placeholders reach the server as untyped literals override this (MySQL JSON / FLOAT / DECIMAL).
+   */
+  protected keyParam(placeholder: string, _type: string): string {
+    return placeholder
+  }
+  /** Expression a key column is ordered and compared by in keyset paging (MySQL ENUM/SET: label, not index). */
+  protected keyColumnExpr(quoted: string, _type: string): string {
+    return quoted
+  }
+  /** Whether keyParam needs the column types (saves the describeTable round trips on dialects that never cast). */
+  protected readonly castsKeyParams: boolean = false
+
+  /** Column name → declared type, for keyParam; empty when the dialect never casts. */
+  private async keyColumnTypes(ns: Namespace, table: string): Promise<Map<string, string>> {
+    if (!this.castsKeyParams) return new Map()
+    const schema = await this.describeTable(ns, table)
+    return new Map(schema.columns.map((c) => [c.name, c.dataType]))
+  }
 
   /**
    * Statement timeout currently applied to each pooled driver connection. The timeout is left in place on
@@ -416,7 +441,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     if (names.length === 0) return { affectedRows: 0 }
     const params = new Params(d)
     const set = names.map((n) => `${quoteIdent(d, n)} = ${params.add(toDbValue(values[n] ?? null))}`).join(', ')
-    const where = this.buildKeyWhere(key, params)
+    const where = this.buildKeyWhere(key, params, await this.keyColumnTypes(ns, table))
     const limit = key.kind === 'all-columns' && d === 'mysql' ? ' LIMIT 1' : ''
     const sql = `UPDATE ${quoteTable(d, ns, table)} SET ${set}${where}${limit}`
     return this.withTransaction(ns, async (conn) => {
@@ -433,11 +458,12 @@ export abstract class BaseAdapter implements DatabaseAdapter {
 
   async deleteRows(ns: Namespace, table: string, keys: RowKey[]): Promise<{ affectedRows: number }> {
     const d = this.dialect
+    const types = await this.keyColumnTypes(ns, table)
     return this.withTransaction(ns, async (conn) => {
       let affected = 0
       for (const key of keys) {
         const params = new Params(d)
-        const where = this.buildKeyWhere(key, params)
+        const where = this.buildKeyWhere(key, params, types)
         const limit = key.kind === 'all-columns' && d === 'mysql' ? ' LIMIT 1' : ''
         const r = firstResult(
           await conn.query(`DELETE FROM ${quoteTable(d, ns, table)}${where}${limit}`, params.values)
@@ -454,20 +480,22 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     })
   }
 
-  private buildKeyWhere(key: RowKey, params: Params): string {
+  private buildKeyWhere(key: RowKey, params: Params, types: Map<string, string>): string {
     const d = this.dialect
+    const value = (name: string, cell: Cell | undefined) =>
+      this.keyParam(params.add(toDbValue(cell ?? null)), types.get(name) ?? '')
     switch (key.kind) {
       case 'pk': {
         const names = Object.keys(key.values)
         if (names.length === 0) throw new AdapterError('KEY_MISMATCH', 'Primary key values are empty')
-        return ` WHERE ${names.map((n) => `${quoteIdent(d, n)} = ${params.add(toDbValue(key.values[n] ?? null))}`).join(' AND ')}`
+        return ` WHERE ${names.map((n) => `${quoteIdent(d, n)} = ${value(n, key.values[n])}`).join(' AND ')}`
       }
       case 'all-columns': {
         if (d !== 'mysql') throw new AdapterError('UNSUPPORTED', 'all-columns keys are only supported on MySQL')
         const names = Object.keys(key.values)
         if (names.length === 0) throw new AdapterError('KEY_MISMATCH', 'Key values are empty')
         const eq = this.nullSafeEq()
-        return ` WHERE ${names.map((n) => `${quoteIdent(d, n)} ${eq} ${params.add(toDbValue(key.values[n] ?? null))}`).join(' AND ')}`
+        return ` WHERE ${names.map((n) => `${quoteIdent(d, n)} ${eq} ${value(n, key.values[n])}`).join(' AND ')}`
       }
       case 'ctid': {
         if (d !== 'postgres') throw new AdapterError('UNSUPPORTED', 'ctid keys are only supported on PostgreSQL')
@@ -494,11 +522,17 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     const tableSql = quoteTable(d, ns, table)
     const fallback = this.fallbackKeySelect()
     const byCtid = key.keyKind === 'ctid' && fallback !== null
-    const keyExprs = key.keyKind === 'pk' ? key.keyColumns.map((c) => quoteIdent(d, c)) : byCtid ? ['ctid'] : []
     // Position of each key column in the selected row (ctid is appended as an extra trailing column).
     const keyIndexes =
       key.keyKind === 'pk' ? key.keyColumns.map((c) => schema.columns.findIndex((col) => col.name === c)) : []
     if (keyIndexes.includes(-1)) throw new AdapterError('QUERY_FAILED', 'Key column missing from table schema')
+    const keyTypes = keyIndexes.map((i) => schema.columns[i]?.dataType ?? '')
+    const keyExprs =
+      key.keyKind === 'pk'
+        ? key.keyColumns.map((c, i) => this.keyColumnExpr(quoteIdent(d, c), keyTypes[i] ?? ''))
+        : byCtid
+          ? ['ctid']
+          : []
     const selectList = byCtid && fallback ? [...columns, fallback] : columns
     const orderBy = keyExprs.length > 0 ? ` ORDER BY ${keyExprs.join(', ')}` : ''
     const single = orderBy === ''
@@ -516,7 +550,9 @@ export abstract class BaseAdapter implements DatabaseAdapter {
           if (byCtid) where = ` WHERE ctid > ${params.add(last[last.length - 1])}::tid`
           else {
             const lastRow = last
-            const lastKey = keyIndexes.map((i) => params.add(toDbValue(lastRow[i] ?? null)))
+            const lastKey = keyIndexes.map((i, k) =>
+              this.keyParam(params.add(toDbValue(lastRow[i] ?? null)), keyTypes[k] ?? '')
+            )
             where = ` WHERE (${keyExprs.join(', ')}) > (${lastKey.join(', ')})`
           }
         }
@@ -636,9 +672,11 @@ export abstract class BaseAdapter implements DatabaseAdapter {
    * Runs one user statement. A plain read (SELECT / WITH / VALUES / TABLE without INTO or row locks) is wrapped
    * as `SELECT * FROM (...) AS _tsmyadmin LIMIT maxRows + 1` so a `SELECT * FROM huge_table` never materialises
    * the whole table in this process; the extra row is how the caller detects truncation. Error positions are
-   * shifted back by the wrapper prefix. MySQL rejects derived tables with duplicate column names
-   * (`SELECT * FROM a JOIN b` sharing `id`), the one case where the statement is re-run as written — never after
-   * an interruption, which would restart the very statement that was just cancelled.
+   * shifted back by the wrapper prefix. Statements the wrapper itself breaks are re-run as written: MySQL
+   * rejects derived tables with duplicate column names (`SELECT * FROM a JOIN b` sharing `id`) and with
+   * top-level-only modifiers (`SQL_CALC_FOUND_ROWS`, `HIGH_PRIORITY`); a parse error is re-run so the user
+   * sees the server's message for the text they typed, not for the wrapper. Never after an interruption,
+   * which would restart the very statement that was just cancelled.
    */
   private async runStatement(conn: Conn, sql: string, maxRows: number, cancelled: () => boolean): Promise<RawResult[]> {
     const asList = (raw: RawResult | RawResult[]) => (Array.isArray(raw) ? raw : [raw])
@@ -648,7 +686,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
       return asList(await conn.query(wrapped))
     } catch (err) {
       const e = err instanceof AdapterError ? err : this.toAdapterError(err)
-      if (this.dialect === 'mysql' && e.nativeCode === 'ER_DUP_FIELDNAME' && !cancelled()) {
+      if (e.nativeCode !== undefined && this.wrapperOnlyErrors().has(e.nativeCode) && !cancelled()) {
         return asList(await conn.query(sql))
       }
       if (e.position !== undefined && e.position > WRAP_PREFIX.length) {
@@ -672,6 +710,8 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     if (!/^\d+$/.test(backend)) return false
     // Also stop the script loop: with stopOnError=false the run would otherwise continue with the next statement.
     entry.cancelled = true
+    // The run may have finished while waiting: its connection is back in the pool, possibly serving someone else.
+    if (this.running.get(queryId) !== entry) return false
     await this.cancelBackend(entry.ns, backend)
     return true
   }

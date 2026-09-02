@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { mysqlExporter } from '../mysql/export.ts'
 import { pgExporter } from '../postgres/export.ts'
+import { isGeneratedColumn } from '../sql/export.ts'
 
 const ns = { database: 'db', schema: 'app' }
 const rows = [
@@ -26,5 +27,21 @@ describe('SqlExporter.insert', () => {
       expect(sql.split('DROP TABLE')).toHaveLength(2)
       expect(sql).toMatch(/\('''\); DROP TABLE users; --'\);$/)
     }
+  })
+})
+
+describe('isGeneratedColumn', () => {
+  it('matches only server-computed columns, not expression defaults', () => {
+    for (const extra of ['VIRTUAL GENERATED', 'STORED GENERATED', 'STORED GENERATED INVISIBLE', 'generated stored'])
+      expect(isGeneratedColumn(extra)).toBe(true)
+    for (const extra of [
+      '',
+      'auto_increment',
+      'DEFAULT_GENERATED',
+      'DEFAULT_GENERATED on update CURRENT_TIMESTAMP',
+      'identity always',
+      'serial',
+    ])
+      expect(isGeneratedColumn(extra)).toBe(false)
   })
 })

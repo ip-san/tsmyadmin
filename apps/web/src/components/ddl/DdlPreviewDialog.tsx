@@ -26,15 +26,19 @@ function confirmName(op: DdlOp): string | null {
   }
 }
 
+function opTitle(op: DdlOp): string {
+  return op.op === 'dropTable' && op.kind !== 'table' ? locale.ddl.dropView : locale.ddl.titles[op.op]
+}
+
 export function DdlPreviewDialog({ flow }: { flow: DdlFlow }) {
   return (
     <PreviewDialog
       flow={flow}
-      title={(op) => locale.ddl.titles[op.op]}
+      title={opTitle}
       destructive={(op) => DESTRUCTIVE.has(op.op)}
       confirmName={confirmName}
       hint={locale.ddl.previewHint}
-      successMessage={(op) => `${locale.ddl.titles[op.op]}: ${locale.ddl.executed}`}
+      successMessage={(op) => `${opTitle(op)}: ${locale.ddl.executed}`}
     />
   )
 }

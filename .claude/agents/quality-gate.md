@@ -34,11 +34,11 @@ bun run check:all
 
 ### 3. バンドルサイズ（size）
 
-**前提:** size-limit は `apps/web/dist/assets/index-*.js` を見るため、ビルドが必須。
+**前提:** `scripts/check-bundle-size.mjs` は `apps/web/dist/index.html` が読み込む JS（エントリ + `modulepreload` 全部）の brotli 合計を見るため、ビルドが必須。
 ```bash
 bun run build && bun run size
 ```
-`Initial JS` の閾値（300 kB）超過時は警告。
+閾値は 150 kB（brotli）。超過時は fail。
 
 ### 4. E2E テスト（test:e2e）
 

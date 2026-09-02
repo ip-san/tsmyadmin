@@ -36,4 +36,6 @@ PK → NOT NULL 一意キー → PG は `ctid`、MySQL は全カラム一致 + `
 
 `executeSql` はユーザー SQL の後に `finally` で `ROLLBACK` → `Conn.reset()`（MySQL: `COM_RESET_CONNECTION` + `SET NAMES utf8mb4`、PostgreSQL: `DISCARD ALL`）を必ず行う。セッション変数・ロール・ユーザー変数・一時テーブルがプールの次の借り手に漏れてはならない（conformance の「does not leak session state」が検証）。
 
-`base.ts` は接続ごとに statement timeout をキャッシュし（`appliedTimeout`、`Conn.id` = ドライバのプール接続オブジェクトがキー）、方言は現在の DB / `search_path` をキャッシュする（`Conn.forget()` で破棄）。方言実装の契約: `id` はチェックアウト間で安定していること、`reset()` は失敗時に接続を破棄対象にすること、ユーザー SQL の前に `forgetSessionState` が呼ばれることを前提にキャッシュを持つこと。
+`base.ts` は接続ごとに statement timeout をキャッシュし（`appliedTimeout`、`Conn.id` がキー）、方言は現在の DB / `search_path` をキャッシュする（`Conn.forget()` で破棄）。方言実装の契約: `id` はチェックアウト間で安定していること（mysql2 の promise ラッパーは毎回新しいオブジェクトなので、MySQL は `conn.connection`（コア接続）をキーにする）、`reset()` は失敗時に接続を破棄対象にすること、ユーザー SQL の前に `forgetSessionState` が呼ばれることを前提にキャッシュを持つこと。
+
+MySQL は接続セットアップ（`USE` と同時）でセッションの `sql_mode` から `NO_BACKSLASH_ESCAPES` を外す。mysql2 の `query()` は値をクライアント側でバックスラッシュエスケープするため、このモードのサーバーではプレースホルダが壊れる（conformance の「keeps placeholder values safe under a global NO_BACKSLASH_ESCAPES」）。`reset()` 後はグローバル値に戻るので、`forget()` により次の借用で再適用される。
