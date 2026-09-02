@@ -252,7 +252,7 @@ export class PostgresAdapter extends BaseAdapter {
   }
 
   /** pg_cancel_backend interrupts the statement but keeps the session (pg_terminate_backend would drop it). */
-  protected async cancelBackend(_ns: Namespace, id: string): Promise<void> {
+  protected async cancelBackend(_ns: Namespace, id: string, stillRunning: () => boolean): Promise<void> {
     // A throwaway connection: the pools may be saturated by the very scripts being cancelled, and
     // pg_cancel_backend works from any database.
     const client = new pg.Client({
@@ -265,7 +265,8 @@ export class PostgresAdapter extends BaseAdapter {
     })
     try {
       await client.connect()
-      await client.query('SELECT pg_cancel_backend($1::int)', [Number(id)])
+      // Checked with the connection in hand: the run may have ended (and its backend been re-borrowed) meanwhile.
+      if (stillRunning()) await client.query('SELECT pg_cancel_backend($1::int)', [Number(id)])
     } catch (err) {
       throw this.toAdapterError(err)
     } finally {

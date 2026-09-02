@@ -112,7 +112,8 @@ export class SqliteSessionStore implements SessionStore {
     const stored = this.db.prepare("SELECT value FROM meta WHERE key = 'key_fingerprint'").get() as
       | { value: string }
       | undefined
-    this.secretRotated = stored !== undefined && stored.value !== fingerprint
+    // A file from before the meta table (0.1.0) has no fingerprint: probe one row instead.
+    this.secretRotated = stored === undefined ? !this.canDecryptAny() : stored.value !== fingerprint
     if (this.secretRotated) this.db.exec('DELETE FROM sessions')
     if (stored?.value !== fingerprint) {
       this.db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('key_fingerprint', ?)").run(fingerprint)
@@ -122,6 +123,18 @@ export class SqliteSessionStore implements SessionStore {
     this.touchIntervalMs = options.touchIntervalMs ?? 60_000
     this.factory = options.adapterFactory
     this.timer = startSweep(options.sweepIntervalMs ?? 60_000, () => void this.sweep())
+  }
+
+  /** True when the sessions table is empty or its first row opens with the current key. */
+  private canDecryptAny(): boolean {
+    const row = this.db.prepare('SELECT payload FROM sessions LIMIT 1').get() as { payload: Uint8Array } | undefined
+    if (!row) return true
+    try {
+      open(this.key, row.payload)
+      return true
+    } catch {
+      return false
+    }
   }
 
   get size(): number {

@@ -137,6 +137,23 @@ describe('SqliteSessionStore', () => {
     await b.closeAll()
   })
 
+  it('purges a pre-fingerprint (0.1.0) file whose rows no longer decrypt', async () => {
+    const path = tmpFile()
+    const a = new SqliteSessionStore({ path, secret: 'one', adapterFactory: factory(), sweepIntervalMs: 0 })
+    await a.create(config)
+    await a.closeAll()
+    new DatabaseSync(path).exec('DROP TABLE meta')
+    const same = new SqliteSessionStore({ path, secret: 'one', adapterFactory: factory(), sweepIntervalMs: 0 })
+    expect(same.secretRotated).toBe(false)
+    expect(same.size).toBe(1)
+    await same.closeAll()
+    new DatabaseSync(path).exec('DROP TABLE meta')
+    const rotated = new SqliteSessionStore({ path, secret: 'two', adapterFactory: factory(), sweepIntervalMs: 0 })
+    expect(rotated.secretRotated).toBe(true)
+    expect(rotated.size).toBe(0)
+    await rotated.closeAll()
+  })
+
   it('applies a sliding TTL, throttles touch writes and sweeps stale rows', async () => {
     let t = 1000
     const made: FakeAdapter[] = []

@@ -12,7 +12,13 @@ import type {
   UserInfo,
   UserRef,
 } from '@tsmyadmin/shared'
-import mysql, { type FieldPacket, type Pool, type PoolConnection, type ResultSetHeader } from 'mysql2/promise'
+import mysql, {
+  type Connection,
+  type FieldPacket,
+  type Pool,
+  type PoolConnection,
+  type ResultSetHeader,
+} from 'mysql2/promise'
 import { BaseAdapter, type Conn, driverValueToCell, firstResult, type QueryOptions, type RawResult } from '../base.ts'
 import { quoteIdent, quoteTable } from '../sql/quote.ts'
 import { AdapterError, type AdapterErrorCode, type ConnectionConfig } from '../types.ts'
@@ -274,8 +280,31 @@ export class MysqlAdapter extends BaseAdapter {
   }
 
   /** KILL QUERY interrupts the statement but keeps the connection usable (unlike KILL). */
-  protected async cancelBackend(ns: Namespace, id: string): Promise<void> {
-    await this.withConn(ns, (conn) => conn.query(`KILL QUERY ${id}`))
+  /**
+   * KILL QUERY from a dedicated connection: the session's pool may be fully occupied by the very statements
+   * being cancelled, and a cancel that waits for a pooled connection cancels nothing until one frees up.
+   */
+  protected async cancelBackend(_ns: Namespace, id: string, stillRunning: () => boolean): Promise<void> {
+    let conn: Connection
+    try {
+      conn = await mysql.createConnection({
+        host: this.config.host,
+        port: this.config.port,
+        user: this.config.user,
+        password: this.config.password,
+        connectTimeout: 10_000,
+      })
+    } catch (err) {
+      throw this.toAdapterError(err)
+    }
+    try {
+      // Checked with the connection in hand: the run may have ended (and its backend been re-borrowed) meanwhile.
+      if (stillRunning()) await conn.query(`KILL QUERY ${id}`)
+    } catch (err) {
+      throw this.toAdapterError(err)
+    } finally {
+      await conn.end().catch(() => undefined)
+    }
   }
 
   protected nullSafeEq(): string {

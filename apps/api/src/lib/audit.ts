@@ -1,4 +1,4 @@
-import { ADAPTER_METHOD_NAMES, type DatabaseAdapter } from '@tsmyadmin/adapter'
+import { ADAPTER_METHOD_NAMES, AdapterError, type DatabaseAdapter } from '@tsmyadmin/adapter'
 import type { ConnectRequest, Namespace, RowKey, SessionInfo } from '@tsmyadmin/shared'
 import { PASSWORD_MASK } from '@tsmyadmin/shared'
 import { type AdapterFactory, sessionIdentity } from '../session/store.ts'
@@ -101,7 +101,7 @@ const literal = (n: number) =>
  * PASSWORD 'x', and MySQL 8 `REPLACE '<current password>'` (REPLACE INTO / REPLACE( never precede a bare literal).
  */
 const SQL_SECRET = new RegExp(
-  String.raw`\b(IDENTIFIED(?:\s+WITH\s+\S+)?\s+(?:BY|AS)|PASSWORD|REPLACE)(\s*[=(]?\s*)${literal(3)}`,
+  String.raw`\b(IDENTIFIED(?:\s+WITH\s+\S+)?\s+(?:BY|AS)|IDENTIFIED\s+VIA\s+\S+\s+USING|PASSWORD|REPLACE)(\s*[=(]?\s*)${literal(3)}`,
   'gi'
 )
 /** MySQL `SET PASSWORD [FOR user] = 'x'`. */
@@ -155,10 +155,13 @@ export function withAudit(adapter: DatabaseAdapter, who: SessionInfo, logger: Lo
           logger.log('info', 'audit', { ...fields, ...outcome, ok: true, ms: Math.round(performance.now() - started) })
           return result
         } catch (err) {
+          // Only the error class is logged: server messages quote the offending value ("Duplicate entry 'x'").
+          const e = err instanceof AdapterError ? err : null
           logger.log('warn', 'audit', {
             ...fields,
             ok: false,
-            error: err instanceof Error ? err.message : String(err),
+            error: e?.code ?? (err instanceof Error ? err.name : 'Error'),
+            ...(e?.nativeCode ? { nativeCode: e.nativeCode } : {}),
             ms: Math.round(performance.now() - started),
           })
           throw err

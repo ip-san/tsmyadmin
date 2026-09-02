@@ -16,7 +16,7 @@
 | `startup` / `shutdown.begin` / `shutdown.done` / `shutdown.timeout` / `shutdown.forced` | 起動設定（ポート、許可ホスト、TTL）/ グレースフルシャットダウンの開始・完了・上限超過・2 回目のシグナルによる強制終了 |
 | `http` | アクセスログ: `requestId`, `method`, `path`, `status`, `ms`, `ip`。成功した `/healthz` `/readyz`（プローブ）は記録しない |
 | `login.ok` / `login.failed` / `login.host_not_allowed` / `login.rate_limited` / `logout` | 認証イベント（ホスト・ユーザー名・セッション ID のハッシュ先頭 16 桁は含む、パスワードと生のセッション ID は含まない） |
-| `audit` | **監査ログ**: データ・構造・アカウント・サーバー状態を変える呼び出し（`insertRow(s)` / `updateRow` / `deleteRows` / `executeSql` / `cancelQuery` / `killProcess`）。`requestId`, `dialect`, `dbUser`, `dbHost`, `database`, `schema`, `table`, 行数・キー種別・カラム名、`executeSql` は SQL 先頭 500 文字と文数 / エラー数、`ok`, `ms`。**値は記録しない**。パスワード（アカウント操作、SQL コンソールの `IDENTIFIED BY` / `PASSWORD` 文）は `****` に置換 |
+| `audit` | **監査ログ**: データ・構造・アカウント・サーバー状態を変える呼び出し（`insertRow(s)` / `updateRow` / `deleteRows` / `executeSql` / `cancelQuery` / `killProcess`）。`requestId`, `dialect`, `dbUser`, `dbHost`, `database`, `schema`, `table`, 行数・キー種別・カラム名、`executeSql` は SQL 先頭 500 文字と文数 / エラー数、`ok`, `ms`。失敗時は `error`（エラーコード）と `nativeCode` だけで、サーバーのメッセージは記録しない。**行の値は記録しない**（SQL コンソール / インポートの文は先頭 500 文字を記録するため値を含み得る）。パスワード（アカウント操作、SQL コンソールの `IDENTIFIED BY` / `PASSWORD` 文）は `****` に置換 |
 | `readyz.failed` | セッションストア異常 |
 | `session_store.open_failed` / `session_store.reset` | SQLite セッションストアを開けず終了（`path`, `error`, `hint`）/ `SESSION_SECRET` 変更を検出して保存済みセッションを削除 |
 | `config.dev_secret` / `config.allowlist_without_port` / `web.dist_missing` | 設定の警告（開発用シークレット / ポート未指定の許可ホスト / SPA ビルド不在） |

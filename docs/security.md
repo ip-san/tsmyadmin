@@ -49,7 +49,7 @@
 
 ## 監査
 
-構造化ログ（`LOG_FORMAT=json`）に `login.ok` / `login.failed` / `login.host_not_allowed` / `login.rate_limited` / `logout` とリクエスト ID 付きのアクセスログが出ます。変更系の呼び出しはアダプター境界の監査ログ（`event: audit`）に、誰が・どの DB に・何を（値は含まない）・成功したかが記録されます。詳細は `docs/operations.md`。
+構造化ログ（`LOG_FORMAT=json`）に `login.ok` / `login.failed` / `login.host_not_allowed` / `login.rate_limited` / `logout` とリクエスト ID 付きのアクセスログが出ます。変更系の呼び出しはアダプター境界の監査ログ（`event: audit`）に、誰が・どの DB に・何を（行の値は含まない。SQL コンソールの文は先頭 500 文字を記録するため値を含み得る）・成功したかが記録されます。詳細は `docs/operations.md`。
 
 ## サプライチェーン
 

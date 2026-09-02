@@ -116,8 +116,32 @@ describe('withAudit', () => {
     await expect(adapter.deleteRows(ns, 'users', [{ kind: 'pk', values: { id: 99 } }])).rejects.toBeInstanceOf(
       AdapterError
     )
-    expect(lines[0]).toMatchObject({ action: 'deleteRows', rows: 1, key: 'pk(id)', ok: false })
-    expect(String(lines[0]?.error)).toContain('matched 0 rows')
+    expect(lines[0]).toMatchObject({ action: 'deleteRows', rows: 1, key: 'pk(id)', ok: false, error: 'KEY_MISMATCH' })
+    // The server's message would quote the offending value; only the error class reaches the log.
+    expect(JSON.stringify(lines[0])).not.toContain('matched 0 rows')
+  })
+
+  it('logs a failed insert by error code, never by the message that quotes the value', async () => {
+    const lines: Record<string, unknown>[] = []
+    const logger = createLogger('json', (l) => lines.push(JSON.parse(l)))
+    const inner = {
+      ...new FakeAdapter({ databases: { shop: { tables: {} } } }),
+      insertRow: () =>
+        Promise.reject(
+          new AdapterError('QUERY_FAILED', "ER_DUP_ENTRY: Duplicate entry 'alice@example.com'", undefined, {
+            nativeCode: 'ER_DUP_ENTRY',
+          })
+        ),
+    } as unknown as FakeAdapter
+    const adapter = withAudit(inner, who, logger)
+    await expect(adapter.insertRow(ns, 'users', { email: 'alice@example.com' })).rejects.toBeInstanceOf(AdapterError)
+    expect(lines[0]).toMatchObject({
+      action: 'insertRow',
+      ok: false,
+      error: 'QUERY_FAILED',
+      nativeCode: 'ER_DUP_ENTRY',
+    })
+    expect(JSON.stringify(lines[0])).not.toContain('alice')
   })
 
   it('summarises every audited method without values', () => {

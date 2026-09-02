@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { AdapterError } from '@tsmyadmin/adapter'
 import { ConnectRequestSchema } from '@tsmyadmin/shared'
 import { type Context, Hono } from 'hono'
 import { deleteCookie, getSignedCookie, setSignedCookie } from 'hono/cookie'
@@ -79,6 +80,11 @@ export function sessionRoutes(cfg: SessionConfig, deps: SessionRouteDeps) {
       } catch (err) {
         deps.ipLimiter.hit(ip)
         deps.logger.log('warn', 'login.failed', audit)
+        // The server's own wording ("Access denied for user 'u'@'<api host address>'") would hand an
+        // unauthenticated caller the API's egress address; the code says everything the user needs.
+        if (err instanceof AdapterError && err.code === 'AUTH_FAILED') {
+          return c.json(apiError('AUTH_FAILED', 'Authentication failed'), 401)
+        }
         return errorResponse(c, err, deps.logger)
       }
       deps.loginLimiter.reset(rateKey)

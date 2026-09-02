@@ -214,8 +214,12 @@ export abstract class BaseAdapter implements DatabaseAdapter {
   protected abstract setStatementTimeout(conn: Conn, ms: number): Promise<void>
   /** Backend/connection id of `conn` as seen by the server (CONNECTION_ID() / pg_backend_pid()). */
   protected abstract backendId(conn: Conn): Promise<string>
-  /** Interrupts the statement running on backend `id` from a fresh connection (KILL QUERY / pg_cancel_backend). */
-  protected abstract cancelBackend(ns: Namespace, id: string): Promise<void>
+  /**
+   * Interrupts the statement running on backend `id` from a dedicated connection (KILL QUERY / pg_cancel_backend).
+   * `stillRunning` must be consulted right before the signal is sent: the target statement may have finished
+   * while the connection was being opened, and its backend may already serve another request.
+   */
+  protected abstract cancelBackend(ns: Namespace, id: string, stillRunning: () => boolean): Promise<void>
   /** NULL-safe equality operator used for all-columns keys. */
   protected abstract nullSafeEq(): string
   /** Native error codes that mean "the read-only wrapper broke this statement", after which it is re-run unwrapped. */
@@ -740,8 +744,9 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     // Also stop the script loop: with stopOnError=false the run would otherwise continue with the next statement.
     entry.cancelled = true
     // The run may have finished while waiting: its connection is back in the pool, possibly serving someone else.
-    if (this.running.get(queryId) !== entry) return false
-    await this.cancelBackend(entry.ns, backend)
+    const stillRunning = () => this.running.get(queryId) === entry
+    if (!stillRunning()) return false
+    await this.cancelBackend(entry.ns, backend, stillRunning)
     // The backend id is published before the first statement is sent, so a cancel issued right after "run"
     // can reach the server while the connection is still idle — a no-op on every dialect. Re-send it while a
     // statement is in flight; `inFlight` (not the registry alone) guards against interrupting the connection's
@@ -750,7 +755,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
       await new Promise((resolve) => setTimeout(resolve, CANCEL_RETRY_MS))
       if (this.running.get(queryId) !== entry || !entry.inFlight) break
       // The first signal was delivered; a retry that cannot get a connection must not fail the request.
-      await this.cancelBackend(entry.ns, backend).catch(() => undefined)
+      await this.cancelBackend(entry.ns, backend, () => stillRunning() && entry.inFlight).catch(() => undefined)
     }
     return true
   }
