@@ -16,12 +16,12 @@ export function rememberLimit(limit: number): void {
 
 export const BrowseSearchSchema = z.object({
   schema: z.string().optional(),
-  page: z.number().int().min(1).default(1),
-  limit: LimitSchema.optional(),
-  sort: z.string().optional(),
-  filters: z.string().optional(),
+  page: z.number().int().min(1).default(1).catch(1),
+  limit: LimitSchema.optional().catch(undefined),
+  sort: z.string().optional().catch(undefined),
+  filters: z.string().optional().catch(undefined),
   /** Comma-separated visible columns; omitted = all. */
-  cols: z.string().optional(),
+  cols: z.string().optional().catch(undefined),
 })
 export type BrowseSearch = z.infer<typeof BrowseSearchSchema>
 

@@ -5,6 +5,9 @@ import { describeCell } from '@/lib/format.ts'
 
 const MAX_PREVIEW = 200
 const NUMERIC = /^-?\d{1,40}(?:\.\d{1,40})?(?:[eE][+-]?\d{1,4})?$/
+/** Dates, times and timestamps as the servers print them (with optional fraction / zone). */
+const TEMPORAL =
+  /^-?\d{1,4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:[+-]\d{2}(?::?\d{2})?|Z)?)?$|^-?\d{1,3}:\d{2}(?::\d{2}(?:\.\d+)?)?$/
 
 export function CellValue({ cell }: { cell: Cell }) {
   const [expanded, setExpanded] = useState(false)
@@ -15,7 +18,7 @@ export function CellValue({ cell }: { cell: Cell }) {
   if (d.empty) return <span className="italic text-zinc-500 dark:text-zinc-400">{locale.common.empty}</span>
   // A number split across lines reads as two numbers: keep it on one line. BIGINT / DECIMAL travel as strings
   // (for precision) and are exactly the long values that would wrap.
-  if (typeof cell === 'number' || NUMERIC.test(d.text)) {
+  if (typeof cell === 'number' || NUMERIC.test(d.text) || TEMPORAL.test(d.text)) {
     return <span className="whitespace-nowrap tabular-nums">{d.text}</span>
   }
   const long = d.text.length > MAX_PREVIEW || d.text.split('\n').length > 3

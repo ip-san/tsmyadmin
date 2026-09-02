@@ -25,6 +25,10 @@ export function CellEditor({ column, initial, dataType, pending, error, onSave, 
   const [text, setText] = useState(() => cellToEditable(initial))
   const [isNull, setIsNull] = useState(initial === null)
   const wrapper = useRef<HTMLDivElement>(null)
+  // A NULL cell opens with the text field disabled, so autoFocus has nothing to land on: focus the checkbox.
+  useEffect(() => {
+    if (initial === null) wrapper.current?.querySelector<HTMLElement>('input[type="checkbox"]')?.focus()
+  }, [initial])
   useEffect(() => {
     // A failed save disables nothing permanently, but the button that had focus was disabled while pending
     // and focus fell to <body>: bring it back into the editor.

@@ -45,7 +45,8 @@ export function ExportForm({ db, schema, table, initialTables }: ExportFormProps
   const url = exportUrl({
     db,
     schema,
-    tables: table ? [table] : format === 'csv' ? csvTables : chosen,
+    // Every table ticked = the whole database (routines and events included), so no table list is sent.
+    tables: table ? [table] : format === 'csv' ? csvTables : chosen.length === available.length ? [] : chosen,
     format,
     structure,
     dropTable,
@@ -121,7 +122,9 @@ export function ExportForm({ db, schema, table, initialTables }: ExportFormProps
               disabled={!structure}
               onChange={(e) => setRoutines(e.target.checked)}
             />
-            {locale.export.routines}
+            {table || (chosen.length > 0 && chosen.length < available.length)
+              ? locale.export.triggersOnly
+              : locale.export.routines}
           </label>
           {dialect === 'mysql' ? (
             <label className="flex items-center gap-1">

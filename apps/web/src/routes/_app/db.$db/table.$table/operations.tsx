@@ -27,7 +27,8 @@ function Operations() {
       <RenameTableForm key={table} tableRef={tableRef} view={view} />
       {view ? null : (
         <TableOptionsForm
-          key={`${table}-options`}
+          // Re-seeded from the refetched schema: the server may normalise what was submitted (AUTO_INCREMENT).
+          key={`${table}:${structure.data.comment ?? ''}:${structure.data.collation ?? ''}:${structure.data.autoIncrement ?? ''}:${structure.data.engine ?? ''}`}
           tableRef={tableRef}
           dialect={session.dialect}
           schema={structure.data}

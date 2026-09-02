@@ -29,7 +29,7 @@ export interface LoginFormProps {
 }
 
 export function LoginForm({ onLogin, presets = [] }: LoginFormProps) {
-  const last = readPreference(LAST_LOGIN_KEY, LastLoginSchema.nullable(), null)
+  const [last] = useState(() => readPreference(LAST_LOGIN_KEY, LastLoginSchema.nullable(), null))
   // The remembered preset must still exist; otherwise fall back to the operator's first one.
   const rememberedPreset = last && presets.some((p) => p.name === last.preset) ? last.preset : null
   const first = rememberedPreset ? presets.find((p) => p.name === rememberedPreset) : presets[0]
@@ -40,7 +40,9 @@ export function LoginForm({ onLogin, presets = [] }: LoginFormProps) {
   const [port, setPort] = useState(String(manualLast?.port ?? first?.port ?? DEFAULT_PORTS.mysql))
   const [user, setUser] = useState(last?.user ?? '')
   const [password, setPassword] = useState('')
-  const [database, setDatabase] = useState(manualLast?.database ?? first?.database ?? last?.database ?? '')
+  const [database, setDatabase] = useState(
+    manualLast?.database ?? (first ? (first.database ?? '') : (last?.database ?? ''))
+  )
   const login = useMutation({
     mutationFn: async (body: ConnectRequest) => {
       const result = await onLogin(body)
@@ -142,6 +144,7 @@ export function LoginForm({ onLogin, presets = [] }: LoginFormProps) {
         <Input
           id="password"
           type="password"
+          autoFocus={Boolean(last?.user)}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           autoComplete="current-password"

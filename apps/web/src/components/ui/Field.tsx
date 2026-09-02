@@ -26,7 +26,9 @@ export function Textarea({ className, ...rest }: TextareaHTMLAttributes<HTMLText
 }
 
 export function Select({ className, ...rest }: SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select className={cn(control, className)} {...rest} />
+  // Tailwind emits `w-auto` before `w-full`, so a caller's width class must replace the control's, not join it.
+  const base = className && /\bw-/.test(className) ? control.replace('w-full ', '') : control
+  return <select className={cn(base, className)} {...rest} />
 }
 
 function Label({ children, htmlFor, className }: { children: ReactNode; htmlFor: string; className?: string }) {

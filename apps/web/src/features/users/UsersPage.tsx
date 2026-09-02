@@ -20,7 +20,7 @@ function GrantsPanel({ user }: { user: UserRef }) {
   return (
     <pre
       aria-label={`${userLabel(user)}: ${locale.users.grants}`}
-      className="max-w-3xl whitespace-pre-wrap break-all rounded border border-zinc-200 bg-zinc-50 p-3 font-mono text-xs dark:border-zinc-700 dark:bg-zinc-950"
+      className="max-w-3xl whitespace-pre-wrap [overflow-wrap:anywhere] rounded border border-zinc-200 bg-zinc-50 p-3 font-mono text-xs dark:border-zinc-700 dark:bg-zinc-950"
     >
       {grants.data.statements.map((s) => `${s};`).join('\n')}
     </pre>

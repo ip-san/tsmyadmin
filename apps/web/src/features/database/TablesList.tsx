@@ -29,6 +29,10 @@ export function TablesList({ db, schema }: { db: string; schema?: string | undef
   const allChecked = plain.length > 0 && chosen.length === plain.length
   return (
     <div className="space-y-3">
+      {/* Always mounted: a live region that appears together with its text announces nothing. */}
+      <output aria-live="polite" className="sr-only">
+        {chosen.length > 0 ? locale.ddl.bulkSelected(chosen.length) : ''}
+      </output>
       <DdlPreviewDialog flow={flow} bulkConfirmName={db} />
       <Table>
         <thead>
@@ -38,6 +42,9 @@ export function TablesList({ db, schema }: { db: string; schema?: string | undef
                 type="checkbox"
                 aria-label={locale.browse.selectAll}
                 checked={allChecked}
+                ref={(el) => {
+                  if (el) el.indeterminate = chosen.length > 0 && !allChecked
+                }}
                 disabled={plain.length === 0}
                 onChange={() => setSelected(allChecked ? [] : plain)}
               />
@@ -123,7 +130,7 @@ export function TablesList({ db, schema }: { db: string; schema?: string | undef
       {/* Below the table, next to the last checkbox in tab order (phpMyAdmin's "With selected" position). */}
       {chosen.length > 0 ? (
         <div className="flex flex-wrap items-center gap-2 rounded border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800">
-          <span aria-live="polite">{locale.ddl.bulkSelected(chosen.length)}</span>
+          <span>{locale.ddl.bulkSelected(chosen.length)}</span>
           <Link
             to="/db/$db/export"
             params={{ db }}

@@ -16,11 +16,19 @@ export interface DialogProps {
 export function Dialog({ open, title, onClose, children, footer, busy = false }: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null)
   const titleId = useId()
+  // The element that opened the dialog gets focus back on close: Chromium does this natively, WebKit does not.
+  const opener = useRef<HTMLElement | null>(null)
   useEffect(() => {
     const el = ref.current
     if (!el) return
-    if (open && !el.open) el.showModal()
-    else if (!open && el.open) el.close()
+    if (open && !el.open) {
+      opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+      el.showModal()
+    } else if (!open && el.open) {
+      el.close()
+      opener.current?.focus()
+      opener.current = null
+    }
   }, [open])
   return (
     <dialog

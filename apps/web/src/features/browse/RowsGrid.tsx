@@ -80,8 +80,6 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
       }),
     []
   )
-  const openInline = useCallback((row: number, col: number) => setInline({ row, col }), [])
-  const cancelInline = useCallback(() => closeInline(), [closeInline])
   const data = rows.data
   // Derived per page, not per render: keys/indexes are reused by every checkbox toggle and inline edit.
   const derived = useMemo(() => {
@@ -105,6 +103,15 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
       await invalidate()
     },
   })
+  const openInline = useCallback(
+    (row: number, col: number) => {
+      // A failure from another cell must not show under the editor that opens now.
+      update.reset()
+      setInline({ row, col })
+    },
+    [update.reset]
+  )
+  const cancelInline = useCallback(() => closeInline(), [closeInline])
   const saveInline = useCallback(
     (key: RowKey, column: string, value: Cell) => update.mutate({ key, values: { [column]: value } }),
     [update.mutate]

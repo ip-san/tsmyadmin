@@ -33,9 +33,13 @@ function Page() {
   return (
     <>
       <ServerTabs tab={locale.tabs.sql} />
-      <label className="mb-3 flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-200">
+      <label className="mb-3 inline-flex items-center gap-2 whitespace-nowrap text-sm text-zinc-700 dark:text-zinc-200">
         {locale.nav.currentDatabase}
-        <Select value={db} onChange={(e) => void navigate({ search: { db: e.target.value } })} className="w-auto py-1">
+        <Select
+          value={db}
+          onChange={(e) => void navigate({ search: { db: e.target.value } })}
+          className="w-auto max-w-xs py-1"
+        >
           {options.map((name) => (
             <option key={name} value={name}>
               {name}

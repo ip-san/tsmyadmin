@@ -125,7 +125,7 @@ for (const t of TARGETS) {
       await page.goto(dbUrl)
       await page.getByLabel(`${a} を選択`).check()
       await page.getByLabel(`${b} を選択`).check()
-      await expect(page.getByText('2 件のテーブルを選択中')).toBeVisible()
+      await expect(page.getByText('2 件のテーブルを選択中').first()).toBeVisible()
       await page.getByRole('button', { name: '選択したテーブルを空にする…' }).click()
       await confirmPreview(page, /TRUNCATE TABLE/, t.database)
       await page.goto(tableUrl(t, a))

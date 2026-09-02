@@ -38,7 +38,8 @@ export const ja = {
       const units = ['KB', 'MB', 'GB', 'TB']
       let v = n / 1024
       let i = 0
-      while (v >= 1024 && i < units.length - 1) {
+      // 1023.6 KB rounds to 1,024 KB: roll over to the next unit before it would print as 1024.
+      while (v >= 1023.5 && i < units.length - 1) {
         v /= 1024
         i++
       }
@@ -401,6 +402,7 @@ export const ja = {
     data: 'データ（INSERT）',
     bom: 'UTF-8 BOM を付ける（Excel 向け）',
     routines: 'ルーチン・トリガー・イベントも含める',
+    triggersOnly: '対象テーブルのトリガーも含める（ルーチンとイベントはデータベース全体のエクスポートに含まれます）',
     stripDefiner:
       'DEFINER 句を除く（別のユーザーで復元する場合。定義者権限のオブジェクトは復元するユーザーの権限で動きます）',
     download: 'ダウンロードする',
