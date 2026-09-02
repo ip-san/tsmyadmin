@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
+import { CopyTableForm } from '@/features/operations/CopyTableForm.tsx'
 import { RenameTableForm } from '@/features/operations/RenameTableForm.tsx'
 import { TableOperations } from '@/features/operations/TableOperations.tsx'
 
@@ -10,6 +11,7 @@ function Operations() {
   return (
     <div className="space-y-4">
       <RenameTableForm tableRef={{ db, schema, table }} />
+      <CopyTableForm tableRef={{ db, schema, table }} />
       <TableOperations tableRef={{ db, schema, table }} />
     </div>
   )

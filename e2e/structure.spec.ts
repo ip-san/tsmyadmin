@@ -113,6 +113,19 @@ for (const t of TARGETS) {
       await expect(page.getByRole('row').filter({ hasText: dbName })).toHaveCount(0)
     })
 
+    test('copies a table with its data through the preview', async ({ page }) => {
+      const copy = `e2e_users_copy_${Date.now().toString(36)}`
+      await page.goto(tableUrl(t, 'users', '/operations'))
+      await page.getByLabel('コピー先のテーブル名').fill(copy)
+      await page.getByRole('button', { name: 'テーブルをコピー' }).click()
+      await confirmPreview(page, /CREATE TABLE[\s\S]*LIKE/)
+      await expect(page).toHaveURL(new RegExp(`/table/${copy}`))
+      await expect(page.getByText('全 5 件')).toBeVisible()
+      await page.request.post(`/api/databases/${t.database}/sql`, {
+        data: { sql: `DROP TABLE ${copy}`, ...(t.schema ? { schema: t.schema } : {}) },
+      })
+    })
+
     test('lists routines and triggers with collapsible definitions', async ({ page }) => {
       await page.goto(t.schema ? `/db/${t.database}/routines?schema=${t.schema}` : `/db/${t.database}/routines`)
       const routines = page.getByRole('table', { name: 'ストアドプロシージャ / 関数' })

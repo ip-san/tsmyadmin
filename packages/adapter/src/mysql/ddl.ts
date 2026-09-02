@@ -54,6 +54,13 @@ export const mysqlDdl: DdlBuilder = {
         return [`TRUNCATE TABLE ${t}`]
       case 'renameTable':
         return [`RENAME TABLE ${t} TO ${quoteTable('mysql', ns, op.newName)}`]
+      case 'copyTable': {
+        const target = quoteTable('mysql', ns, op.newName)
+        // LIKE keeps indexes, keys and AUTO_INCREMENT; foreign keys are not copied (as in phpMyAdmin).
+        const out = [`CREATE TABLE ${target} LIKE ${t}`]
+        if (op.withData) out.push(`INSERT INTO ${target} SELECT * FROM ${t}`)
+        return out
+      }
     }
   },
 }

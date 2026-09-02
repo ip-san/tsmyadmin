@@ -12,6 +12,13 @@ exports[`DDL builders > mysql: addIndex 1`] = `
 ]
 `;
 
+exports[`DDL builders > mysql: copyTable 1`] = `
+[
+  "CREATE TABLE \`db\`.\`t_copy\` LIKE \`db\`.\`t\`",
+  "INSERT INTO \`db\`.\`t_copy\` SELECT * FROM \`db\`.\`t\`",
+]
+`;
+
 exports[`DDL builders > mysql: createDatabase 1`] = `
 [
   "CREATE DATABASE \`new"db\`\`x\`",
@@ -86,6 +93,13 @@ exports[`DDL builders > postgres: addColumn 1`] = `
 exports[`DDL builders > postgres: addIndex 1`] = `
 [
   "CREATE UNIQUE INDEX "idx_t_a_b" ON "app"."t" ("a", "b")",
+]
+`;
+
+exports[`DDL builders > postgres: copyTable 1`] = `
+[
+  "CREATE TABLE "app"."t_copy" (LIKE "app"."t" INCLUDING ALL)",
+  "INSERT INTO "app"."t_copy" SELECT * FROM "app"."t"",
 ]
 `;
 

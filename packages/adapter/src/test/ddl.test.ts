@@ -48,6 +48,7 @@ const SAMPLE_OPS: Record<DdlOp['op'], DdlOp> = {
   createDatabase: { op: 'createDatabase', name: 'new"db`x' },
   dropDatabase: { op: 'dropDatabase', name: 'new"db`x' },
   createSchema: { op: 'createSchema', name: 'new"schema' },
+  copyTable: { op: 'copyTable', table: 't', newName: 't_copy', withData: true },
 }
 
 describe('DDL builders', () => {

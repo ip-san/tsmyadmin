@@ -793,6 +793,20 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         await expect(db.describeTable(ns, scratchDdl)).rejects.toMatchObject({ code: 'NOT_FOUND' })
       })
 
+      it('copies a table with and without data', async () => {
+        const copy = `${scratch}_copy`
+        await runDdl({ op: 'copyTable', table: scratch, newName: copy, withData: true })
+        const src = await browseAll(scratch)
+        const dst = await browseAll(copy)
+        expect(dst.columns.map((c) => c.name)).toEqual(src.columns.map((c) => c.name))
+        expect(dst.total).toBe(src.total)
+        expect((await db.describeTable(ns, copy)).primaryKey).toEqual(['id'])
+        await execOk(`DROP TABLE ${copy}`)
+        await runDdl({ op: 'copyTable', table: scratch, newName: copy, withData: false })
+        expect((await browseAll(copy)).total).toBe(0)
+        await execOk(`DROP TABLE ${copy}`)
+      })
+
       it('creates and drops a database, and a schema on PostgreSQL', async () => {
         const name = `${scratch}_tmpdb`
         await runDdl({ op: 'createDatabase', name })

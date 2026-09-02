@@ -72,6 +72,13 @@ export const pgDdl: DdlBuilder = {
       case 'renameTable':
         // Renaming keeps the table in its schema; the new name must not be qualified.
         return [`ALTER TABLE ${t} RENAME TO ${id(op.newName)}`]
+      case 'copyTable': {
+        const target = quoteTable('postgres', ns, op.newName)
+        // INCLUDING ALL keeps defaults, constraints (incl. PK), indexes and comments; foreign keys are not copied.
+        const out = [`CREATE TABLE ${target} (LIKE ${t} INCLUDING ALL)`]
+        if (op.withData) out.push(`INSERT INTO ${target} SELECT * FROM ${t}`)
+        return out
+      }
     }
   },
 }
