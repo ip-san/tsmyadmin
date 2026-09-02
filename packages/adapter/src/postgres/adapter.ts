@@ -408,8 +408,9 @@ export class PostgresAdapter extends BaseAdapter {
 
   /**
    * PostgreSQL has no SHOW CREATE TABLE; the DDL is reconstructed from the catalog (columns, defaults,
-   * collations, identity options, PK, indexes, CHECK / UNIQUE / EXCLUDE constraints, foreign keys with their
-   * deferral, comments). Not covered: storage parameters, partitioning, ownership/grants, policies.
+   * collations, identity options, PK, indexes, constraints as the server prints them, UNLOGGED, storage
+   * parameters, INHERITS, PARTITION BY with the partitions, comments). Not covered: ownership/grants, policies,
+   * tablespaces.
    */
   showCreateTable(ns: Namespace, table: string, known?: TableSchema): Promise<string[]> {
     return this.withConn(ns, async (conn) => {

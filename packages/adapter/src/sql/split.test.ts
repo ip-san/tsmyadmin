@@ -142,6 +142,14 @@ describe('splitStatements', () => {
       "SELECT 'C:\\'",
       'SELECT 1',
     ])
+    // DEFAULT and unquoted mode lists; a mixed GLOBAL / SESSION list applies the session pair only.
+    expect(sql(`SET sql_mode = 'NO_BACKSLASH_ESCAPES'; SET sql_mode = DEFAULT; SELECT 'a\\'b'; SELECT 1;`).length).toBe(
+      4
+    )
+    expect(sql(`SET sql_mode = NO_BACKSLASH_ESCAPES; SELECT 'C:\\'; SELECT 1;`).length).toBe(3)
+    expect(
+      sql(`SET @@global.sql_mode = 'NO_BACKSLASH_ESCAPES', @@session.sql_mode = ''; SELECT 'a\\'b'; SELECT 1;`).length
+    ).toBe(3)
     // GLOBAL does not touch the session; other expressions leave the flag alone.
     expect(sql(`SET GLOBAL sql_mode = 'NO_BACKSLASH_ESCAPES'; SELECT 'a\\'b'; SELECT 1;`).length).toBe(3)
     expect(

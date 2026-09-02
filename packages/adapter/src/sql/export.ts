@@ -1,6 +1,6 @@
 import type { Cell, Dialect, EventInfo, Namespace, RoutineKind, TableSchema, TriggerInfo } from '@tsmyadmin/shared'
 import { isViewKind } from '@tsmyadmin/shared'
-import type { ProgramStatement, SqlExporter } from '../types.ts'
+import type { DropTarget, ProgramStatement, SqlExporter } from '../types.ts'
 import { cellLiteral, pgLiteral } from './literal.ts'
 import { quoteIdent, quoteTable } from './quote.ts'
 
@@ -62,6 +62,41 @@ function quoteAccount(account: string): string {
 }
 
 /** Dump statements: every identifier is quoted and every value goes through cellLiteral. Dialect-agnostic. */
+/** `name(identity arguments)` for DROP FUNCTION / PROCEDURE, read from a pg_get_functiondef statement. */
+function pgRoutineSignature(statement: string): string | null {
+  const m = /^CREATE\s+(?:OR\s+REPLACE\s+)?(?:FUNCTION|PROCEDURE)\s+([^\s(]+)\(/i.exec(statement)
+  if (!m) return null
+  // Argument list up to the matching parenthesis, split at top-level commas; DEFAULT expressions are not part
+  // of a signature.
+  const args: string[] = []
+  let depth = 1
+  let quote: string | null = null
+  let current = ''
+  let closed = false
+  for (const ch of statement.slice(m[0].length)) {
+    if (quote) {
+      current += ch
+      if (ch === quote) quote = null
+      continue
+    }
+    if (ch === "'" || ch === '"') quote = ch
+    else if (ch === '(' || ch === '[') depth++
+    else if (ch === ')' || ch === ']') depth--
+    if (depth === 0) {
+      closed = true
+      break
+    }
+    if (ch === ',' && depth === 1) {
+      args.push(current)
+      current = ''
+    } else current += ch
+  }
+  if (!closed) return null
+  if (current.trim().length > 0) args.push(current)
+  const identity = args.map((a) => a.replace(/\s+DEFAULT\s[\s\S]*$/i, '').trim()).filter((a) => a.length > 0)
+  return `${m[1]}(${identity.join(', ')})`
+}
+
 export function createExporter(dialect: Dialect): SqlExporter {
   const id = (name: string) => quoteIdent(dialect, name)
   const withoutDefiner = (sql: string, strip: boolean) =>
@@ -79,23 +114,32 @@ export function createExporter(dialect: Dialect): SqlExporter {
     },
     trigger(ns, t: TriggerInfo, stripDefiner): ProgramStatement {
       if (dialect === 'mysql') {
-        // information_schema carries the body only; the header comes from the trigger's metadata (the definer
-        // `user@host` is re-quoted here).
+        const definition = t.definition ?? ''
+        // The original statement (SHOW CREATE TRIGGER) restores as written; a body from information_schema
+        // (escapes already processed) gets the header rebuilt from the trigger's metadata.
         const definer = stripDefiner || !t.definer ? '' : ` DEFINER=${quoteAccount(t.definer)}`
-        return {
-          sql: `DROP TRIGGER IF EXISTS ${id(t.name)}${DELIM}\nCREATE${definer} TRIGGER ${id(t.name)} ${t.timing} ${t.events} ON ${id(t.table)} FOR EACH ${t.orientation}\n${t.definition ?? ''}`,
-          sqlMode: t.sqlMode,
-        }
+        const create = /^CREATE\s/i.test(definition)
+          ? withoutDefiner(definition, stripDefiner)
+          : `CREATE${definer} TRIGGER ${id(t.name)} ${t.timing} ${t.events} ON ${id(t.table)} FOR EACH ${t.orientation}\n${definition}`
+        return { sql: `DROP TRIGGER IF EXISTS ${id(t.name)}${DELIM}\n${create}`, sqlMode: t.sqlMode }
       }
-      // A trigger switched off with ALTER TABLE … DISABLE TRIGGER comes back switched off.
-      const disabled = t.enabled
-        ? ''
-        : `;\nALTER TABLE ${quoteTable(dialect, ns, t.table)} DISABLE TRIGGER ${id(t.name)}`
+      // A trigger switched off (or set to fire always / on replicas) comes back the same way.
+      const mode = { origin: '', always: 'ENABLE ALWAYS', replica: 'ENABLE REPLICA', disabled: 'DISABLE' }[t.fireMode]
+      const fire = mode ? `;\nALTER TABLE ${quoteTable(dialect, ns, t.table)} ${mode} TRIGGER ${id(t.name)}` : ''
       return {
-        sql: `DROP TRIGGER IF EXISTS ${id(t.name)} ON ${quoteTable(dialect, ns, t.table)};\n${t.definition ?? ''}${disabled}`,
+        sql: `DROP TRIGGER IF EXISTS ${id(t.name)} ON ${quoteTable(dialect, ns, t.table)};\n${t.definition ?? ''}${fire}`,
       }
     },
     event(_ns, e: EventInfo, stripDefiner): ProgramStatement {
+      const definition = e.definition ?? ''
+      // SHOW CREATE EVENT text restores as written; a DO body from information_schema gets its header rebuilt.
+      if (/^CREATE\s/i.test(definition)) {
+        return {
+          sql: `DROP EVENT IF EXISTS ${id(e.name)}${DELIM}\n${withoutDefiner(definition, stripDefiner)}`,
+          sqlMode: e.sqlMode,
+          timeZone: e.timeZone,
+        }
+      }
       const definer = stripDefiner || !e.definer ? '' : ` DEFINER=${quoteAccount(e.definer)}`
       const schedule = e.schedule.startsWith('AT ') ? `AT ${lit(e.schedule.slice(3))}` : e.schedule
       const starts = e.starts ? ` STARTS ${lit(e.starts)}` : ''
@@ -139,6 +183,25 @@ export function createExporter(dialect: Dialect): SqlExporter {
     postamble: () =>
       dialect === 'mysql' ? ['SET FOREIGN_KEY_CHECKS = @OLD_FOREIGN_KEY_CHECKS;', 'SET SQL_MODE = @OLD_SQL_MODE;'] : [],
     literal: (cell: Cell) => cellLiteral(dialect, cell),
+    dropAll(ns: Namespace, objects: DropTarget[]): string[] {
+      const out: string[] = []
+      const tables: string[] = []
+      for (const o of objects) {
+        if (o.kind === 'table') tables.push(dumpTable(dialect, ns, o.name))
+        else if (o.kind === 'routine') {
+          for (const s of o.statements) {
+            const signature = pgRoutineSignature(s)
+            const object = /^CREATE\s+(?:OR\s+REPLACE\s+)?PROCEDURE/i.test(s) ? 'PROCEDURE' : 'FUNCTION'
+            if (signature) out.push(`DROP ${object} IF EXISTS ${signature}`)
+          }
+        } else {
+          const kind = o.kind === 'materialized_view' ? 'MATERIALIZED VIEW' : 'VIEW'
+          out.push(`DROP ${kind} IF EXISTS ${dumpTable(dialect, ns, o.name)}`)
+        }
+      }
+      if (tables.length > 0) out.push(`DROP TABLE IF EXISTS ${tables.join(', ')}`)
+      return out
+    },
     dropIfExists(ns: Namespace, schema: TableSchema): string {
       const kind =
         schema.kind === 'materialized_view'

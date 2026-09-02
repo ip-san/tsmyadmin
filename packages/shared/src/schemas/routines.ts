@@ -34,6 +34,10 @@ export const TriggerInfoSchema = z.object({
   events: z.string(),
   /** ROW / STATEMENT */
   orientation: z.string(),
+  /**
+   * The complete CREATE TRIGGER statement as the server prints it (MySQL: SHOW CREATE TRIGGER, DEFINER included;
+   * PostgreSQL: pg_get_triggerdef). MySQL falls back to the body alone when SHOW CREATE is not permitted.
+   */
   definition: z.string().nullable(),
   /** sql_mode the trigger was created under (MySQL). */
   sqlMode: z.string().nullable().default(null),
@@ -41,6 +45,8 @@ export const TriggerInfoSchema = z.object({
   definer: z.string().nullable().default(null),
   /** false for a PostgreSQL trigger disabled with ALTER TABLE … DISABLE TRIGGER (the dump restores that state). */
   enabled: z.boolean().default(true),
+  /** PostgreSQL firing mode (`tgenabled`): origin (default), always, replica, or disabled. */
+  fireMode: z.enum(['origin', 'always', 'replica', 'disabled']).default('origin'),
 })
 export type TriggerInfo = z.infer<typeof TriggerInfoSchema>
 

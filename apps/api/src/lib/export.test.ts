@@ -144,6 +144,19 @@ describe('buildExport ordering of views and routines', () => {
     expect(body.match(/-- View: /g)).toHaveLength(4)
   })
 
+  it('reads a DROP signature from pg_get_functiondef headers (defaults stripped, nested types kept)', async () => {
+    const a = new FakeAdapter({
+      dialect: 'postgres',
+      databases: { shop: { tables: { t: fakeTable('t', ['id'], []), v: fakeView('v', 'CREATE VIEW v AS SELECT 1') } } },
+      routines: {
+        h: "CREATE OR REPLACE FUNCTION public.h(a numeric(10,2), b text DEFAULT 'x, y'::text, VARIADIC c integer[])\n RETURNS integer\n LANGUAGE sql\nRETURN (SELECT count(*) FROM v)",
+      },
+      dependencies: [{ kind: 'routine', name: 'h', dependsOn: [{ kind: 'view', name: 'v' }] }],
+    })
+    const body = await collect(buildExport(a, ns, ['t', 'v'], q({ format: 'sql', data: '0', routines: '1' })).body)
+    expect(body).toContain('DROP FUNCTION IF EXISTS public.h(a numeric(10,2), b text, VARIADIC c integer[]);')
+  })
+
   it('PostgreSQL: SQL-standard routines are ordered with the views; a name-level cycle puts the view first', async () => {
     const a = new FakeAdapter({
       dialect: 'postgres',
@@ -178,7 +191,12 @@ describe('buildExport ordering of views and routines', () => {
     const body = await collect(buildExport(a, ns, ['t', 'v', 'w'], q({ format: 'sql', data: '0', routines: '1' })).body)
     // String bodies precede the tables; g precedes w; v precedes f's SQL-standard overload.
     expect(isAscending(order(body, '-- Routines', 'f(x int)', '-- Table: t', '-- Routine: g', '-- View: w'))).toBe(true)
-    expect(isAscending(order(body, '-- View: v', '-- Routine: f', 'f(x text)'))).toBe(true)
+    expect(isAscending(order(body, '-- View: v', '-- Routine: f', 'CREATE OR REPLACE FUNCTION f(x text)'))).toBe(true)
+    // The drop section comes first: dependents before dependencies, routines with their identity signature.
+    expect(body).toContain(
+      'DROP FUNCTION IF EXISTS f(x text);\nDROP VIEW IF EXISTS "public"."w";\nDROP FUNCTION IF EXISTS g();\nDROP VIEW IF EXISTS "public"."v";\nDROP TABLE IF EXISTS "public"."t";'
+    )
+    expect(body.indexOf('-- Drop')).toBeLessThan(body.indexOf('-- Routines'))
   })
 })
 

@@ -13,6 +13,9 @@
 - 行のインライン編集で NULL のチェックを外すとフォーカスが入力欄へ移る、編集ダイアログや削除の成功後に古いインライン編集のエラーが残らない、削除後は通知にフォーカス、ログイン画面の初回表示でユーザー名にフォーカス、狭い幅で「いいえ」が折り返さない
 - SQL ダンプ: ルーチン本文の `$` を含む識別子で区切りが壊れないよう `DELIMITER ;;` を使用、ビューの並びをテーブル名の部分一致でなく単語単位で解決、MySQL のトリガーに `DEFINER` を保持（除去オプションに従う）、PostgreSQL のビューの `WITH CHECK OPTION` / `security_barrier` / `security_invoker` / コメントと、ビューを参照する SQL 標準本文（`BEGIN ATOMIC`）の関数はビューの後に出力、存在しなくなったルーチンはコメントで飛ばす
 - MySQL: MariaDB の PACKAGE をルーチン一覧から除外、インポート中の `SET sql_mode` による `NO_BACKSLASH_ESCAPES` の切り替えを分割器が追従（mysqldump の `/*!50003 … */` 形式、`@saved` 変数からの復元、複数代入、`REPLACE()` / `CONCAT()` を含む）
+- SQL ダンプ（MySQL / MariaDB）: トリガーとイベントの本文を `SHOW CREATE TRIGGER` / `SHOW CREATE EVENT` の原文から出力（information_schema はエスケープを処理済みの本文を返すため、`\'` や `\\` を含む本文が復元できない・変わっていた。権限がない場合は従来の本文にフォールバック）
+- SQL ダンプ（PostgreSQL）: 「DROP TABLE IF EXISTS」オプションでは依存順の逆に並べた DROP をダンプ先頭にまとめて出力し `CASCADE` を使わない（ダンプに含まれない依存オブジェクトを黙って消していた。pg_dump --clean と同じ挙動）、外部キーの `MATCH FULL` / `SET DEFAULT (列)` / `NOT VALID`、`UNLOGGED`、ストレージパラメータ、`INHERITS`、`PARTITION BY` とパーティション、トリガーの `ENABLE ALWAYS` / `REPLICA`
+- SQL ダンプ（MariaDB）: ビューの並び順の判定で、別名や列名がビュー名と同じ場合に誤った依存を検出していた（FROM / JOIN の位置だけを参照とみなす）
 - SQL ダンプ（PostgreSQL）: CHECK / UNIQUE / EXCLUDE 制約、`DEFERRABLE` な外部キー、列の `COLLATE`、identity 列のシーケンスオプション（START / INCREMENT / CACHE …）、マテリアライズドビューのインデックス、`DISABLE TRIGGER` の状態、関数のコメントが失われていた。既定値・関数インデックスがルーチンを呼ぶテーブルを復元できるようルーチンをテーブルの前に出力
 - SQL ダンプ: ビューと SQL 標準本文のルーチンの順序をサーバーのカタログ（PostgreSQL `pg_depend`、MySQL 8 `VIEW_TABLE_USAGE` / `VIEW_ROUTINE_USAGE`）で決定（列の別名がビュー名と同じ場合に順序を誤っていた。MariaDB は従来どおり定義文の参照で判定）、ビューが読む SQL 標準本文の関数をビューの前に出力
 - MariaDB: PACKAGE / PACKAGE BODY をルーチン一覧に表示しダンプに含める（除外して黙って落としていた）、シーケンスの操作タブとダイアログの表題を「ビュー」でなく「シーケンス」に、MariaDB 固有のエラー番号（4000 番台）を MySQL 8 の名前で表示しない

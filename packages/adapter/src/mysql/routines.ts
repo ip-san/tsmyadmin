@@ -74,6 +74,25 @@ export async function mysqlRoutineDefinition(
   }
 }
 
+/** SHOW CREATE TRIGGER | EVENT: the statement as written; null when the account lacks the privilege. */
+async function showCreateProgram(
+  conn: Conn,
+  ns: Namespace,
+  kind: 'TRIGGER' | 'EVENT',
+  name: string
+): Promise<string | null> {
+  try {
+    const show = firstResult(
+      await conn.query(`SHOW CREATE ${kind} ${quoteIdent('mysql', ns.database)}.${quoteIdent('mysql', name)}`)
+    )
+    // Columns: Trigger, sql_mode, SQL Original Statement, … / Event, sql_mode, time_zone, Create Event, …
+    return strOrNull(show.rows[0]?.[kind === 'TRIGGER' ? 2 : 3])
+  } catch (err) {
+    if (err instanceof AdapterError && err.code === 'PERMISSION_DENIED') return null
+    throw err
+  }
+}
+
 const TRIGGER_SELECT = `SELECT TRIGGER_NAME, EVENT_OBJECT_TABLE, ACTION_TIMING, EVENT_MANIPULATION, ACTION_ORIENTATION, ACTION_STATEMENT, SQL_MODE, DEFINER
   FROM information_schema.TRIGGERS`
 // Creation order reproduces the execution order (FOLLOWS / PRECEDES) when a dump is restored.
@@ -88,16 +107,24 @@ export async function mysqlListTriggers(conn: Conn, ns: Namespace, table?: strin
         ])
       : await conn.query(`${TRIGGER_SELECT} WHERE TRIGGER_SCHEMA = ?${TRIGGER_ORDER}`, [ns.database])
   )
+  const originals = new Map<string, string>()
+  for (const row of r.rows) {
+    // information_schema hands out the body with escapes processed ('a\'b' → a'b), which does not restore; the
+    // original statement (as mysqldump uses) comes from SHOW CREATE TRIGGER. Without the privilege the body stays.
+    const original = await showCreateProgram(conn, ns, 'TRIGGER', str(row[0]))
+    if (original !== null) originals.set(str(row[0]), original)
+  }
   return r.rows.map((row) => ({
     name: str(row[0]),
     table: str(row[1]),
     timing: str(row[2]),
     events: str(row[3]),
     orientation: str(row[4]),
-    definition: strOrNull(row[5]),
+    definition: originals.get(str(row[0])) ?? strOrNull(row[5]),
     sqlMode: strOrNull(row[6]) ?? '',
     definer: strOrNull(row[7]),
     enabled: true,
+    fireMode: 'origin' as const,
   }))
 }
 
@@ -110,10 +137,12 @@ export async function mysqlListEvents(conn: Conn, ns: Namespace): Promise<EventI
       [ns.database]
     )
   )
-  return r.rows.map((row) => {
+  const events: EventInfo[] = []
+  for (const row of r.rows) {
     const type = str(row[2])
     const schedule = type === 'ONE TIME' ? `AT ${str(row[3])}` : `EVERY ${str(row[4])} ${str(row[5])}`
-    return {
+    const original = await showCreateProgram(conn, ns, 'EVENT', str(row[0]))
+    events.push({
       name: str(row[0]),
       status: str(row[1]),
       type,
@@ -123,12 +152,13 @@ export async function mysqlListEvents(conn: Conn, ns: Namespace): Promise<EventI
       lastExecuted: strOrNull(row[8]),
       onCompletion: strOrNull(row[9]),
       comment: strOrNull(row[10]) || null,
-      definition: strOrNull(row[11]),
+      definition: original ?? strOrNull(row[11]),
       sqlMode: strOrNull(row[12]) ?? '',
       timeZone: strOrNull(row[13]),
       definer: strOrNull(row[14]),
-    }
-  })
+    })
+  }
+  return events
 }
 
 /**

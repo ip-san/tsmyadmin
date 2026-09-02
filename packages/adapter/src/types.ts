@@ -106,6 +106,10 @@ export interface RowBatch {
 
 /** Renders dialect-specific SQL for dumps (INSERT statements with properly escaped literals). */
 /** One program object for the dump with the session settings it must be created under. */
+export type DropTarget =
+  | { kind: 'table' | 'view' | 'materialized_view'; name: string }
+  | { kind: 'routine'; name: string; statements: string[] }
+
 export interface ProgramStatement {
   sql: string
   sqlMode?: string | null
@@ -121,6 +125,14 @@ export interface SqlExporter {
   postamble(): string[]
   /** `DROP TABLE|VIEW IF EXISTS` statement (no trailing semicolon) for a dump that restores over existing objects. */
   dropIfExists(ns: Namespace, schema: TableSchema): string
+  /**
+   * DROP … IF EXISTS for everything a dump recreates, in the order given (dependents first), without CASCADE:
+   * an object outside the dump that depends on one inside it stops the restore instead of vanishing silently
+   * (pg_dump --clean behaves the same). Tables are dropped in one statement so foreign keys among them do not
+   * matter; a routine's overloads are identified from their CREATE statements. PostgreSQL only (MySQL restores
+   * with FOREIGN_KEY_CHECKS off and drops each object in place).
+   */
+  dropAll(ns: Namespace, objects: DropTarget[]): string[]
   /**
    * One multi-row INSERT for `rows` (empty string when rows is empty). Includes the trailing semicolon.
    * `overriding` (PostgreSQL) adds OVERRIDING SYSTEM VALUE so GENERATED ALWAYS AS IDENTITY values are kept.

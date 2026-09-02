@@ -1,4 +1,4 @@
-import type { DatabaseAdapter, ProgramStatement } from '@tsmyadmin/adapter'
+import type { DatabaseAdapter, DropTarget, ProgramStatement } from '@tsmyadmin/adapter'
 import { AdapterError, commentText, isGeneratedColumn, splitStatements } from '@tsmyadmin/adapter'
 import type { ExportQuery, Namespace, ObjectDependency, TableSchema } from '@tsmyadmin/shared'
 import { csvField, EXPORT_BATCH_SIZE } from '@tsmyadmin/shared'
@@ -168,8 +168,16 @@ async function* triggersAndEventsBody(
 function orderObjects(objects: LateObject[], catalog: ObjectDependency[] | null): LateObject[] {
   const key = (o: { kind: string; name: string }) => `${o.kind}:${o.name}`
   const byKey = new Map(objects.map((o) => [key(o), o]))
-  const mentions = (o: LateObject, other: string) =>
-    o.statements.some((s) => new RegExp(`(?<![\\w$])${other.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w$])`).test(s))
+  // A relation reference follows FROM / JOIN / `,` / `(` (optionally database-qualified); an alias or a column
+  // named like a view sits elsewhere. Backticks are optional so unnormalised definitions still match.
+  const mentions = (o: LateObject, other: string) => {
+    const name = other.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const re = new RegExp(
+      `(?:\\bfrom|\\bjoin|,|\\()\\s*(?:\`[^\`]*\`\\.)?(?:\`${name}\`|${name}(?![\\w$]))(?!\\s*\\.)`,
+      'i'
+    )
+    return o.statements.some((s) => re.test(s))
+  }
   const dependencies = (o: LateObject): LateObject[] => {
     if (catalog) {
       const deps = catalog.find((d) => d.kind === o.kind && d.name === o.name)?.dependsOn ?? []
@@ -220,44 +228,64 @@ async function* sqlBody(
     '',
   ].join('\n')
   const deferred: string[] = []
-  // Views are emitted after every table and the routines they may call, in dependency order.
-  const late: LateObject[] = []
-  // A MariaDB sequence is created before the tables whose defaults call nextval() on it.
+  const pg = adapter.dialect === 'postgres'
+  const structure = q.structure === '1'
+  const drops = structure && q.dropTable === '1'
   const schemas = new Map<string, TableSchema>()
   for (const table of tables) schemas.set(table, await adapter.describeTable(ns, table))
-  for (const [table, schema] of schemas) {
-    if (schema.kind !== 'sequence' || q.structure !== '1') continue
-    yield section(`Sequence: ${commentText(table)}`)
-    if (q.dropTable === '1') yield `${adapter.exporter.dropIfExists(ns, schema)};\n`
-    for (const stmt of await adapter.showCreateTable(ns, table, schema)) yield `${stmt};\n\n`
-  }
   // Routines go before the tables: a DEFAULT, a CHECK or a functional index may call one (PostgreSQL parses
   // string bodies only when called, see check_function_bodies in the preamble).
-  const programs = q.structure === '1' && q.routines === '1'
+  const programs = structure && q.routines === '1'
   const routines = programs && everything ? await collectRoutines(adapter, ns, q.stripDefiner === '1') : null
+  // Views and SQL-standard routines are emitted after every table, in dependency order (decided up front so a
+  // PostgreSQL dump can also drop them first, dependents before their dependencies).
+  const late: LateObject[] = []
+  for (const [table, schema] of schemas) {
+    if (schema.kind === 'table' || schema.kind === 'sequence' || !structure) continue
+    const statements = (await adapter.showCreateTable(ns, table, schema)).map((stmt) =>
+      q.stripDefiner === '1' ? adapter.exporter.withoutDefiner(stmt) : stmt
+    )
+    const all = drops && !pg ? [adapter.exporter.dropIfExists(ns, schema), ...statements] : statements
+    late.push({
+      kind: 'view',
+      name: table,
+      statements,
+      text: `${section(`View: ${commentText(table)}`)}${all.map((stmt) => `${stmt};\n\n`).join('')}`,
+    })
+  }
+  for (const [name, statements] of routines?.sqlBody ?? []) {
+    late.push({
+      kind: 'routine',
+      name,
+      statements: statements.map((s) => s.sql),
+      text: `${section(`Routine: ${commentText(name)}`)}${adapter.exporter.programBlock(statements)}`,
+    })
+  }
+  const ordered = orderObjects(late, late.length > 1 ? await adapter.listDependencies(ns) : null)
+  if (drops && pg) {
+    const targets: DropTarget[] = [...ordered].reverse().map((o) => {
+      if (o.kind === 'routine') return { kind: 'routine', name: o.name, statements: o.statements }
+      return { kind: schemas.get(o.name)?.kind === 'materialized_view' ? 'materialized_view' : 'view', name: o.name }
+    })
+    for (const s of schemas.values()) if (s.kind === 'table') targets.push({ kind: 'table', name: s.name })
+    const statements = adapter.exporter.dropAll(ns, targets)
+    if (statements.length > 0) yield `${section('Drop')}${statements.map((stmt) => `${stmt};\n`).join('')}\n`
+  }
+  // A MariaDB sequence is created before the tables whose defaults call nextval() on it.
+  for (const [table, schema] of schemas) {
+    if (schema.kind !== 'sequence' || !structure) continue
+    yield section(`Sequence: ${commentText(table)}`)
+    if (drops) yield `${adapter.exporter.dropIfExists(ns, schema)};\n`
+    for (const stmt of await adapter.showCreateTable(ns, table, schema)) yield `${stmt};\n\n`
+  }
   if (routines) yield routinesBody(adapter, routines)
   for (const table of tables) {
     // One catalog round trip per table, shared by the DDL reconstruction and the row scan.
     const schema = schemas.get(table) as TableSchema
-    if (schema.kind === 'sequence') continue
-    if (schema.kind !== 'table') {
-      if (q.structure === '1') {
-        const statements = (await adapter.showCreateTable(ns, table, schema)).map((stmt) =>
-          q.stripDefiner === '1' ? adapter.exporter.withoutDefiner(stmt) : stmt
-        )
-        const all = q.dropTable === '1' ? [adapter.exporter.dropIfExists(ns, schema), ...statements] : statements
-        late.push({
-          kind: 'view',
-          name: table,
-          statements,
-          text: `${section(`View: ${commentText(table)}`)}${all.map((stmt) => `${stmt};\n\n`).join('')}`,
-        })
-      }
-      continue
-    }
+    if (schema.kind !== 'table') continue
     yield section(`Table: ${commentText(table)}`)
-    if (q.structure === '1') {
-      if (q.dropTable === '1') yield `${adapter.exporter.dropIfExists(ns, schema)};\n`
+    if (structure) {
+      if (drops && !pg) yield `${adapter.exporter.dropIfExists(ns, schema)};\n`
       for (const stmt of await adapter.showCreateTable(ns, table, schema)) {
         // PostgreSQL has no FOREIGN_KEY_CHECKS: constraints are emitted after every table exists and is loaded.
         if (adapter.dialect === 'postgres' && FK_STATEMENT.test(stmt)) deferred.push(stmt)
@@ -287,16 +315,7 @@ async function* sqlBody(
     yield section('Foreign keys')
     for (const stmt of deferred) yield `${stmt};\n\n`
   }
-  for (const [name, statements] of routines?.sqlBody ?? []) {
-    late.push({
-      kind: 'routine',
-      name,
-      statements: statements.map((s) => s.sql),
-      text: `${section(`Routine: ${commentText(name)}`)}${adapter.exporter.programBlock(statements)}`,
-    })
-  }
-  const catalog = late.length > 1 ? await adapter.listDependencies(ns) : null
-  for (const o of orderObjects(late, catalog)) yield o.text
+  for (const o of ordered) yield o.text
   if (programs) yield* triggersAndEventsBody(adapter, ns, everything ? null : tables, q.stripDefiner === '1')
   const postamble = adapter.exporter.postamble()
   if (postamble.length > 0) yield `${postamble.join('\n')}\n\n`

@@ -14,6 +14,10 @@ export const EventInfoSchema = z.object({
   lastExecuted: z.string().nullable(),
   onCompletion: z.string().nullable(),
   comment: z.string().nullable(),
+  /**
+   * The complete CREATE EVENT statement as SHOW CREATE EVENT prints it (DEFINER included); the DO body alone when
+   * SHOW CREATE is not permitted. information_schema has the body with its escapes already processed.
+   */
   definition: z.string().nullable(),
   /** sql_mode and time zone the event was created under: both must be restored with it. */
   sqlMode: z.string().nullable().default(null),

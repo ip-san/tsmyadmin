@@ -87,6 +87,10 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
     `${scratch}_sqt`,
     `${scratch}_sq`,
     `${scratch}_cons_child`,
+    `${scratch}_part`,
+    `${scratch}_fkopts`,
+    `${scratch}_inh_kid`,
+    `${scratch}_parent`,
     `${scratch}_cons`,
     `${scratch}_dep_t`,
     `${scratch}_bulk_a`,
@@ -1064,11 +1068,54 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
             // The constraint creates its index: no separate CREATE UNIQUE INDEX for it.
             expect(parent).not.toContain(`CREATE UNIQUE INDEX "${t}_code_key"`)
             const child = (await db.showCreateTable(ns, c)).join('\n')
-            expect(child).toMatch(/FOREIGN KEY \("parent"\) REFERENCES [^\n]* DEFERRABLE INITIALLY DEFERRED$/m)
+            // pg_get_constraintdef text: unquoted plain names, MATCH / actions / DEFERRABLE / NOT VALID kept.
+            expect(child).toMatch(/FOREIGN KEY \(parent\) REFERENCES [^\n]* DEFERRABLE INITIALLY DEFERRED$/m)
             const view = (await db.showCreateTable(ns, mv)).join('\n')
             expect(view).toContain(`CREATE UNIQUE INDEX ${mv}_idx ON`)
           } finally {
             await execOk(`DROP MATERIALIZED VIEW ${mv}; DROP TABLE ${c}; DROP TABLE ${t}`)
+          }
+        }
+      )
+
+      it.skipIf(dialect !== 'postgres')(
+        'keeps FK options, UNLOGGED / storage parameters, inheritance and partitions (PostgreSQL)',
+        async () => {
+          const p = `${scratch}_parent`
+          const ch = `${scratch}_inh_kid`
+          const fk = `${scratch}_fkopts`
+          const part = `${scratch}_part`
+          await execOk(
+            `CREATE UNLOGGED TABLE ${p} (a INT, b INT, PRIMARY KEY (a, b), CHECK (a > 0)) WITH (fillfactor = 70);
+             CREATE TABLE ${ch} (extra TEXT) INHERITS (${p});
+             CREATE UNLOGGED TABLE ${fk} (id INT PRIMARY KEY, a INT DEFAULT 1, b INT DEFAULT 1);
+             ALTER TABLE ${fk} ADD CONSTRAINT ${fk}_ab FOREIGN KEY (a, b) REFERENCES ${p} (a, b) MATCH FULL ON DELETE SET DEFAULT (b) ON UPDATE SET NULL NOT VALID;
+             CREATE TABLE ${part} (id INT, d DATE) PARTITION BY RANGE (d);
+             CREATE TABLE ${part}_2024 PARTITION OF ${part} FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+             CREATE TABLE ${part}_rest PARTITION OF ${part} DEFAULT`
+          )
+          try {
+            const parent = (await db.showCreateTable(ns, p)).join('\n')
+            expect(parent).toContain(`CREATE UNLOGGED TABLE "public"."${p}"`)
+            expect(parent).toContain('WITH (fillfactor=70)')
+            const child = (await db.showCreateTable(ns, ch)).join('\n')
+            expect(child).toContain(`INHERITS (public.${p})`)
+            // The inherited CHECK belongs to the parent: not repeated on the child.
+            expect(child).not.toContain('CHECK')
+            const opts = (await db.showCreateTable(ns, fk)).join('\n')
+            expect(opts).toContain('MATCH FULL ON UPDATE SET NULL ON DELETE SET DEFAULT (b) NOT VALID')
+            const partitioned = await db.showCreateTable(ns, part)
+            expect(partitioned[0]).toContain('PARTITION BY RANGE (d)')
+            expect(partitioned).toContainEqual(
+              `CREATE TABLE "public"."${part}_2024" PARTITION OF "public"."${part}" FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')`
+            )
+            expect(partitioned).toContainEqual(
+              `CREATE TABLE "public"."${part}_rest" PARTITION OF "public"."${part}" DEFAULT`
+            )
+            // Partitions are not tables of their own in the listing (their rows come through the parent).
+            expect((await db.listTables(ns)).map((x) => x.name)).not.toContain(`${part}_2024`)
+          } finally {
+            await execOk(`DROP TABLE ${part}; DROP TABLE ${fk}; DROP TABLE ${ch}; DROP TABLE ${p}`)
           }
         }
       )

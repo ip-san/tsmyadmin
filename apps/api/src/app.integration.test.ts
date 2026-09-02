@@ -137,9 +137,10 @@ describe.each(targets)('API integration ($dialect)', ({ dialect, url }) => {
             'DROP FUNCTION IF EXISTS prog_label',
             "CREATE FUNCTION prog_label(uid INT) RETURNS VARCHAR(20) DETERMINISTIC RETURN CONCAT('#', uid)",
             'DROP TRIGGER IF EXISTS prog_before_insert',
-            "CREATE TRIGGER prog_before_insert BEFORE INSERT ON prog_t FOR EACH ROW SET NEW.title = COALESCE(NEW.title, 'untitled')",
+            // Escapes in the bodies: information_schema hands them back processed, SHOW CREATE as written.
+            "CREATE TRIGGER prog_before_insert BEFORE INSERT ON prog_t FOR EACH ROW SET NEW.title = COALESCE(NEW.title, 'un\\'titled\\\\')",
             'DROP EVENT IF EXISTS prog_event',
-            'CREATE EVENT prog_event ON SCHEDULE EVERY 1 DAY DISABLE DO DELETE FROM prog_t WHERE id < 0',
+            "CREATE EVENT prog_event ON SCHEDULE EVERY 1 DAY DISABLE DO DELETE FROM prog_t WHERE title = 'x\\'y'",
             // A body that mentions DEFINER inside a string must survive DEFINER stripping untouched.
             'DROP PROCEDURE IF EXISTS prog_p',
             "DELIMITER $$\nCREATE PROCEDURE prog_p() BEGIN SELECT 'DEFINER=root@localhost' AS s; END$$\nDELIMITER ;",
@@ -174,6 +175,13 @@ describe.each(targets)('API integration ($dialect)', ({ dialect, url }) => {
             'CREATE TRIGGER prog_off BEFORE INSERT ON prog_d FOR EACH ROW EXECUTE FUNCTION prog_default_title()',
             'ALTER TABLE prog_d DISABLE TRIGGER prog_off',
             "COMMENT ON FUNCTION prog_one() IS 'always one'",
+            // A partitioned table: partitions are recreated with the parent and rows come back through it.
+            'CREATE TABLE prog_part (id INT, d DATE) PARTITION BY RANGE (d)',
+            "CREATE TABLE prog_part_2024 PARTITION OF prog_part FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')",
+            'CREATE TABLE prog_part_rest PARTITION OF prog_part DEFAULT',
+            "INSERT INTO prog_part VALUES (1, '2024-06-01'), (2, '2030-01-01')",
+            'CREATE TRIGGER prog_always BEFORE INSERT ON prog_d FOR EACH ROW EXECUTE FUNCTION prog_default_title()',
+            'ALTER TABLE prog_d ENABLE ALWAYS TRIGGER prog_always',
           ]
     for (const statement of setup) {
       const r = z.array(StatementResultSchema).parse(await (await other(statement)).json())
@@ -208,7 +216,7 @@ describe.each(targets)('API integration ($dialect)', ({ dialect, url }) => {
       await other(
         dialect === 'mysql'
           ? 'DROP VIEW prog_v; DROP TRIGGER prog_before_insert; DROP FUNCTION prog_label; DROP PROCEDURE prog_p; DROP EVENT prog_event'
-          : 'DROP TABLE prog_d; DROP VIEW prog_v3; DROP FUNCTION prog_one(); DROP FUNCTION prog_label(bigint); DROP FUNCTION prog_count(); DROP VIEW prog_v2; DROP VIEW prog_v; DROP TRIGGER prog_before_insert ON prog_t; DROP FUNCTION prog_label(int); DROP FUNCTION prog_label(text)'
+          : 'DROP TABLE prog_part; DROP TABLE prog_d; DROP VIEW prog_v3; DROP FUNCTION prog_one(); DROP FUNCTION prog_label(bigint); DROP FUNCTION prog_count(); DROP VIEW prog_v2; DROP VIEW prog_v; DROP TRIGGER prog_before_insert ON prog_t; DROP FUNCTION prog_label(int); DROP FUNCTION prog_label(text)'
       )
       const restored = z.array(StatementResultSchema).parse(await (await other(dump)).json())
       expect(
@@ -231,17 +239,27 @@ describe.each(targets)('API integration ($dialect)', ({ dialect, url }) => {
         expect(tables.find((t) => t.name === 'prog_v3')?.kind).toBe('view')
         const d = (await (await req('/api/databases/tsmyadmin_other/tables/prog_d/create')).json()) as { sql: string[] }
         expect(d.sql.join('\n')).toMatch(/CHECK \(\(?id > 0\)?\)/)
-        expect(
-          (await (await req('/api/databases/tsmyadmin_other/triggers')).json()) as { name: string; enabled: boolean }[]
-        ).toContainEqual(expect.objectContaining({ name: 'prog_off', enabled: false }))
+        const trg = (await (await req('/api/databases/tsmyadmin_other/triggers')).json()) as {
+          name: string
+          enabled: boolean
+          fireMode: string
+        }[]
+        expect(trg).toContainEqual(expect.objectContaining({ name: 'prog_off', enabled: false }))
+        expect(trg).toContainEqual(expect.objectContaining({ name: 'prog_always', fireMode: 'always' }))
+        const partRows = BrowseResultSchema.parse(
+          await (await req('/api/databases/tsmyadmin_other/tables/prog_part/rows')).json()
+        )
+        expect(partRows.rows.map((r) => r[0])).toEqual([1, 2])
+        expect(tables.map((t) => t.name)).not.toContain('prog_part_2024')
       }
       const triggers = (await (await req('/api/databases/tsmyadmin_other/triggers')).json()) as { name: string }[]
       expect(triggers.map((t) => t.name)).toContain('prog_before_insert')
       if (dialect === 'mysql') {
         // With DEFINER kept, the trigger and event headers name the account and restore over themselves.
         const kept = await (await req('/api/databases/tsmyadmin_other/export?format=sql&routines=1')).text()
-        expect(kept).toMatch(/^CREATE DEFINER=`\w+`@`[^`]+` TRIGGER `prog_before_insert`/m)
-        expect(kept).toMatch(/^CREATE DEFINER=`\w+`@`[^`]+` EVENT `prog_event`/m)
+        // SHOW CREATE prints the statement as written (MariaDB keeps the unquoted name).
+        expect(kept).toMatch(/^CREATE DEFINER=`\w+`@`[^`]+` TRIGGER `?prog_before_insert`?/m)
+        expect(kept).toMatch(/^CREATE DEFINER=`\w+`@`[^`]+` EVENT `?prog_event`?/m)
         const again = z.array(StatementResultSchema).parse(await (await other(kept)).json())
         expect(again.filter((r) => r.kind === 'error').map((r) => (r.kind === 'error' ? r.message : ''))).toEqual([])
       }
@@ -249,12 +267,12 @@ describe.each(targets)('API integration ($dialect)', ({ dialect, url }) => {
       const rows = BrowseResultSchema.parse(
         await (await req('/api/databases/tsmyadmin_other/tables/prog_t/rows')).json()
       )
-      expect(rows.rows).toEqual([[1, 'untitled']])
+      expect(rows.rows).toEqual([[1, dialect === 'mysql' ? "un'titled\\" : 'untitled']])
     } finally {
       await other(
         dialect === 'mysql'
           ? 'DROP VIEW IF EXISTS prog_v; DROP EVENT IF EXISTS prog_event; DROP TRIGGER IF EXISTS prog_before_insert; DROP FUNCTION IF EXISTS prog_label; DROP PROCEDURE IF EXISTS prog_p; DROP TABLE IF EXISTS prog_t'
-          : 'DROP TABLE IF EXISTS prog_d; DROP VIEW IF EXISTS prog_v3; DROP FUNCTION IF EXISTS prog_one(); DROP FUNCTION IF EXISTS prog_label(bigint); DROP FUNCTION IF EXISTS prog_count(); DROP VIEW IF EXISTS prog_v2; DROP VIEW IF EXISTS prog_v; DROP TABLE IF EXISTS prog_t CASCADE; DROP FUNCTION IF EXISTS prog_label(int); DROP FUNCTION IF EXISTS prog_label(text); DROP FUNCTION IF EXISTS prog_default_title'
+          : 'DROP TABLE IF EXISTS prog_part; DROP TABLE IF EXISTS prog_d; DROP VIEW IF EXISTS prog_v3; DROP FUNCTION IF EXISTS prog_one(); DROP FUNCTION IF EXISTS prog_label(bigint); DROP FUNCTION IF EXISTS prog_count(); DROP VIEW IF EXISTS prog_v2; DROP VIEW IF EXISTS prog_v; DROP TABLE IF EXISTS prog_t CASCADE; DROP FUNCTION IF EXISTS prog_label(int); DROP FUNCTION IF EXISTS prog_label(text); DROP FUNCTION IF EXISTS prog_default_title'
       )
     }
   })

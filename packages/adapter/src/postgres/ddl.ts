@@ -163,14 +163,24 @@ export const pgDdl: DdlBuilder = {
 /** Index entries are real column names (from pg_attribute, unquoted) or expressions (from pg_get_indexdef). */
 const indexCol = (columns: Set<string>) => (c: string) => (columns.has(c) ? id(c) : c)
 
-/** What TableSchema does not carry but a faithful CREATE needs; read by `pgTableCatalog` in one extra round trip. */
+/** What TableSchema does not carry but a faithful CREATE needs; read by `pgTableCatalog` in a few extra round trips. */
 export interface PgTableCatalog {
-  /** CHECK / UNIQUE / EXCLUDE constraints as `pg_get_constraintdef` prints them, with the index each one owns. */
+  /**
+   * The table's own (not inherited) CHECK / UNIQUE / EXCLUDE / FOREIGN KEY constraints as `pg_get_constraintdef`
+   * prints them (MATCH, actions, DEFERRABLE, NOT VALID included), with the index each one owns.
+   */
   constraints: { name: string; definition: string; index: string | null }[]
-  /** `DEFERRABLE [INITIALLY DEFERRED]` suffix per foreign key name. */
-  fkTiming: Map<string, string>
   /** Identity sequence options per column, already rendered (`START WITH 1000 CACHE 10`). */
   identityOptions: Map<string, string>
+  /** Parents of an inheritance child (`INHERITS (…)`). */
+  inherits: string[]
+  /** `PARTITION BY …` of a partitioned table. */
+  partitionKey: string | null
+  /** Partitions (all levels, parents first): created as `PARTITION OF` right after the table. */
+  partitions: { name: string; parent: string; bound: string; partitionKey: string | null }[]
+  unlogged: boolean
+  /** Storage parameters (`fillfactor=70`, `autovacuum_enabled=false`). */
+  storage: string[]
 }
 
 /** Type bounds an ascending identity sequence takes by default: MAXVALUE is only printed when it differs. */
@@ -179,21 +189,75 @@ const IDENTITY_MAX = new Set(['32767', '2147483647', '9223372036854775807'])
 export async function pgTableCatalog(conn: Conn, regclass: string): Promise<PgTableCatalog> {
   const con = firstResult(
     await conn.query(
-      `SELECT con.conname, con.contype, pg_get_constraintdef(con.oid, true), ic.relname, con.condeferrable, con.condeferred
+      `SELECT con.conname, pg_get_constraintdef(con.oid, true), ic.relname
        FROM pg_constraint con LEFT JOIN pg_class ic ON ic.oid = con.conindid AND con.contype IN ('u', 'x')
-       WHERE con.conrelid = $1::regclass AND con.contype IN ('c', 'u', 'x', 'f') ORDER BY con.conname`,
+       WHERE con.conrelid = $1::regclass AND con.contype IN ('c', 'u', 'x', 'f') AND con.conislocal
+       ORDER BY con.contype, con.conname`,
       [regclass]
     )
   )
-  const out: PgTableCatalog = { constraints: [], fkTiming: new Map(), identityOptions: new Map() }
+  const out: PgTableCatalog = {
+    constraints: [],
+    identityOptions: new Map(),
+    inherits: [],
+    partitionKey: null,
+    partitions: [],
+    unlogged: false,
+    storage: [],
+  }
   for (const row of con.rows) {
-    const name = String(row[0] ?? '')
-    if (String(row[1]) === 'f') {
-      if (row[4] === true) out.fkTiming.set(name, row[5] === true ? ' DEFERRABLE INITIALLY DEFERRED' : ' DEFERRABLE')
-      continue
-    }
-    const index = row[3]
-    out.constraints.push({ name, definition: String(row[2] ?? ''), index: typeof index === 'string' ? index : null })
+    const index = row[2]
+    out.constraints.push({
+      name: String(row[0] ?? ''),
+      definition: String(row[1] ?? ''),
+      index: typeof index === 'string' ? index : null,
+    })
+  }
+  const rel = firstResult(
+    await conn.query(
+      `SELECT c.relpersistence, c.reloptions, pg_get_partkeydef(c.oid),
+              (SELECT string_agg(quote_ident(pn.nspname) || '.' || quote_ident(p.relname), ', ' ORDER BY i.inhseqno)
+                 FROM pg_inherits i JOIN pg_class p ON p.oid = i.inhparent JOIN pg_namespace pn ON pn.oid = p.relnamespace
+                 WHERE i.inhrelid = c.oid AND NOT c.relispartition)
+       FROM pg_class c WHERE c.oid = $1::regclass`,
+      [regclass]
+    )
+  )
+  const relRow = rel.rows[0]
+  out.unlogged = String(relRow?.[0]) === 'u'
+  out.storage = String(relRow?.[1] ?? '')
+    .replace(/^\{|\}$/g, '')
+    .split(',')
+    .map((o) => o.trim())
+    .filter((o) => o.length > 0)
+  const partKey = relRow?.[2]
+  out.partitionKey = typeof partKey === 'string' && partKey.length > 0 ? partKey : null
+  const parents = relRow?.[3]
+  if (typeof parents === 'string' && parents.length > 0) out.inherits = [parents]
+  if (out.partitionKey) {
+    // Every partition below this table, parents before their sub-partitions.
+    const parts = firstResult(
+      await conn.query(
+        `WITH RECURSIVE tree AS (
+           SELECT i.inhrelid, i.inhparent, 1 AS depth FROM pg_inherits i WHERE i.inhparent = $1::regclass
+           UNION ALL
+           SELECT i.inhrelid, i.inhparent, t.depth + 1 FROM pg_inherits i JOIN tree t ON i.inhparent = t.inhrelid
+         )
+         SELECT c.relname, p.relname, pg_get_expr(c.relpartbound, c.oid), pg_get_partkeydef(c.oid)
+         FROM tree JOIN pg_class c ON c.oid = tree.inhrelid JOIN pg_class p ON p.oid = tree.inhparent
+         WHERE c.relispartition ORDER BY tree.depth, c.relname`,
+        [regclass]
+      )
+    )
+    out.partitions = parts.rows.map((row) => {
+      const key = row[3]
+      return {
+        name: String(row[0] ?? ''),
+        parent: String(row[1] ?? ''),
+        bound: String(row[2] ?? ''),
+        partitionKey: typeof key === 'string' && key.length > 0 ? key : null,
+      }
+    })
   }
   const seq = firstResult(
     await conn.query(
@@ -244,7 +308,19 @@ export function pgCreateStatements(ns: Namespace, schema: TableSchema, catalog?:
     return parts.join(' ')
   })
   if (schema.primaryKey.length > 0) defs.push(`PRIMARY KEY (${schema.primaryKey.map(id).join(', ')})`)
-  const out = [`CREATE TABLE ${t} (\n  ${defs.join(',\n  ')}\n)`]
+  const inherits = catalog && catalog.inherits.length > 0 ? ` INHERITS (${catalog.inherits.join(', ')})` : ''
+  const partitionBy = catalog?.partitionKey ? ` PARTITION BY ${catalog.partitionKey}` : ''
+  const storage = catalog && catalog.storage.length > 0 ? ` WITH (${catalog.storage.join(', ')})` : ''
+  const out = [
+    `CREATE ${catalog?.unlogged ? 'UNLOGGED ' : ''}TABLE ${t} (\n  ${defs.join(',\n  ')}\n)${inherits}${partitionBy}${storage}`,
+  ]
+  // Partitions carry no columns of their own; sub-partitions come after their parent.
+  for (const p of catalog?.partitions ?? []) {
+    // relpartbound prints as `FOR VALUES …` or `DEFAULT`.
+    out.push(
+      `CREATE TABLE ${quoteTable('postgres', ns, p.name)} PARTITION OF ${quoteTable('postgres', ns, p.parent)} ${p.bound}${p.partitionKey ? ` PARTITION BY ${p.partitionKey}` : ''}`
+    )
+  }
   const names = new Set(schema.columns.map((c) => c.name))
   // An index owned by a UNIQUE / EXCLUDE constraint is created by the constraint, not on its own.
   const owned = new Set(catalog?.constraints.map((c) => c.index).filter((i): i is string => i !== null))
@@ -260,17 +336,21 @@ export function pgCreateStatements(ns: Namespace, schema: TableSchema, catalog?:
       `CREATE ${i.unique ? 'UNIQUE ' : ''}INDEX ${id(i.name)} ON ${t} (${i.columns.map(indexCol(names)).join(', ')})${where}`
     )
   }
-  for (const fk of schema.foreignKeys) {
-    const ref = quoteTable('postgres', fk.refNamespace, fk.refTable)
-    const actions = [
-      fk.onUpdate ? ` ON UPDATE ${fk.onUpdate}` : '',
-      fk.onDelete ? ` ON DELETE ${fk.onDelete}` : '',
-    ].join('')
-    out.push(
-      `ALTER TABLE ${t} ADD CONSTRAINT ${id(fk.name)} FOREIGN KEY (${fk.columns.map(id).join(', ')}) REFERENCES ${ref} (${fk.refColumns.map(id).join(', ')})${actions}${catalog?.fkTiming.get(fk.name) ?? ''}`
-    )
+  if (catalog) {
+    // The server's own text keeps MATCH, action column lists, DEFERRABLE and NOT VALID.
+    for (const c of catalog.constraints) out.push(`ALTER TABLE ${t} ADD CONSTRAINT ${id(c.name)} ${c.definition}`)
+  } else {
+    for (const fk of schema.foreignKeys) {
+      const ref = quoteTable('postgres', fk.refNamespace, fk.refTable)
+      const actions = [
+        fk.onUpdate ? ` ON UPDATE ${fk.onUpdate}` : '',
+        fk.onDelete ? ` ON DELETE ${fk.onDelete}` : '',
+      ].join('')
+      out.push(
+        `ALTER TABLE ${t} ADD CONSTRAINT ${id(fk.name)} FOREIGN KEY (${fk.columns.map(id).join(', ')}) REFERENCES ${ref} (${fk.refColumns.map(id).join(', ')})${actions}`
+      )
+    }
   }
-  for (const c of catalog?.constraints ?? []) out.push(`ALTER TABLE ${t} ADD CONSTRAINT ${id(c.name)} ${c.definition}`)
   if (schema.comment !== null) out.push(`COMMENT ON TABLE ${t} IS ${pgLiteral(schema.comment)}`)
   for (const c of schema.columns)
     if (c.comment !== null) out.push(`COMMENT ON COLUMN ${t}.${id(c.name)} IS ${pgLiteral(c.comment)}`)

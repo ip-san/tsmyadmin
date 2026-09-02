@@ -59,6 +59,7 @@ const CONNECTION_CODES = new Set([
 ])
 const NOT_FOUND_CODES = new Set([
   'ER_NO_SUCH_TABLE',
+  'ER_UNKNOWN_SEQUENCES',
   'ER_BAD_DB_ERROR',
   'ER_BAD_FIELD_ERROR',
   'ER_NO_SUCH_THREAD',
@@ -88,6 +89,7 @@ const WRAPPER_ONLY_ERRORS: ReadonlySet<string> = new Set([
 const MARIADB_ERRNO_NAMES: Record<number, string> = {
   1969: 'ER_STATEMENT_TIMEOUT',
   4084: 'ER_SEQUENCE_RUN_OUT',
+  4091: 'ER_UNKNOWN_SEQUENCES',
 }
 
 type QueryOutput = [unknown, FieldPacket[] | FieldPacket[][] | undefined]

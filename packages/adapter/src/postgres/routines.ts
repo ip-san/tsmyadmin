@@ -62,6 +62,8 @@ export async function pgRoutineDefinition(
   return defs.join(';\n\n')
 }
 
+const FIRE_MODES: Record<string, TriggerInfo['fireMode']> = { O: 'origin', A: 'always', R: 'replica', D: 'disabled' }
+
 const TRIGGER_SELECT = `SELECT t.tgname, c.relname, t.tgtype, pg_get_triggerdef(t.oid, true), t.tgenabled
   FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid JOIN pg_namespace n ON n.oid = c.relnamespace
   WHERE NOT t.tgisinternal AND n.nspname = $1`
@@ -92,8 +94,9 @@ export async function pgListTriggers(conn: Conn, ns: Namespace, table?: string):
       definition: strOrNull(row[3]),
       sqlMode: null,
       definer: null,
-      // 'D' = disabled; 'O' / 'A' / 'R' fire (always / replica: the session mode decides, the trigger exists).
+      // 'D' = disabled; 'O' fires on the origin, 'A' always, 'R' on replicas only.
       enabled: str(row[4]) !== 'D',
+      fireMode: FIRE_MODES[str(row[4])] ?? 'origin',
     }
   })
 }

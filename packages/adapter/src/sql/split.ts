@@ -21,7 +21,7 @@ const LEADING_COMMENTS = /^(?:\s*(?:--[^\n]*|#[^\n]*|\/\*(?!!)[\s\S]*?\*\/))*\s*
 const VERSION_COMMENT = /^\/\*!\d*\s*([\s\S]*?)\s*\*\/$/
 /** One `name = value` pair of a SET list (the value runs to the next comma outside quotes / parentheses). */
 const SET_ASSIGNMENT =
-  /(?:^|,)\s*(?:(?:SESSION|LOCAL)\s+|@@(?:session\.)?)?(sql_mode|@[A-Za-z0-9_$.]+)\s*=\s*((?:'[^']*'|"[^"]*"|\([^)]*\)|[^,'"()])*)/gi
+  /(?:^|,)\s*(?:(?:SESSION|LOCAL)\s+|@@(?:session\.|global\.|persist\.|persist_only\.)?)?(sql_mode|@[A-Za-z0-9_$.]+)\s*=\s*((?:'[^']*'|"[^"]*"|\([^)]*\)|[^,'"()])*)/gi
 const SQL_MODE_REF = /^@@(?:session\.)?sql_mode$/i
 
 /**
@@ -34,9 +34,11 @@ const SQL_MODE_REF = /^@@(?:session\.)?sql_mode$/i
 function trackSqlMode(statement: string, current: boolean, saved: Map<string, boolean>): boolean {
   let sql = statement.replace(LEADING_COMMENTS, '')
   sql = VERSION_COMMENT.exec(sql)?.[1] ?? sql
-  if (!/^SET\s/i.test(sql) || /^SET\s+GLOBAL\s/i.test(sql) || /^SET\s+@@global\./i.test(sql)) return current
+  if (!/^SET\s/i.test(sql) || /^SET\s+(?:GLOBAL|PERSIST|PERSIST_ONLY)\s/i.test(sql)) return current
   let next = current
   for (const m of sql.slice(3).matchAll(SET_ASSIGNMENT)) {
+    // `SET @@global.sql_mode = …, @@session.sql_mode = …`: only the session pair matters.
+    if (/@@(?:global|persist|persist_only)\./i.test(m[0] ?? '')) continue
     const name = (m[1] ?? '').toLowerCase()
     const value = (m[2] ?? '').trim()
     if (name.startsWith('@')) {
@@ -46,6 +48,9 @@ function trackSqlMode(statement: string, current: boolean, saved: Map<string, bo
     }
     const literal = /^(['"])([\s\S]*)\1$/.exec(value)
     if (literal) next = /NO_BACKSLASH_ESCAPES/i.test(literal[2] ?? '')
+    // The server default never has the flag; a single unquoted mode name is read like a literal.
+    else if (/^DEFAULT$/i.test(value)) next = false
+    else if (/^[A-Z_]+$/i.test(value)) next = /^NO_BACKSLASH_ESCAPES$/i.test(value)
     // An unknown variable was saved before the script started: restoring it means back to the usual mode.
     else if (value.startsWith('@') && !value.startsWith('@@')) next = saved.get(value.toLowerCase()) ?? false
     else if (/^REPLACE\s*\(\s*@@(?:session\.)?sql_mode\s*,\s*['"]NO_BACKSLASH_ESCAPES['"]/i.test(value)) next = false
