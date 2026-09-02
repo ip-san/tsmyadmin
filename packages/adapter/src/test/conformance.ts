@@ -1101,7 +1101,10 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
              ALTER TABLE ${fk} ADD CONSTRAINT ${fk}_ab FOREIGN KEY (a, b) REFERENCES ${p} (a, b) MATCH FULL ON DELETE SET DEFAULT ON UPDATE SET NULL NOT VALID;
              CREATE TABLE ${part} (id INT, d DATE) PARTITION BY RANGE (d);
              CREATE TABLE ${part}_2024 PARTITION OF ${part} FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
-             CREATE TABLE ${part}_rest PARTITION OF ${part} DEFAULT`
+             CREATE TABLE ${part}_rest PARTITION OF ${part} DEFAULT;
+             CREATE INDEX ${part}_d_idx ON ${part} (d);
+             CREATE INDEX ${part}_2024_id_idx ON ${part}_2024 (id);
+             ALTER TABLE ${part}_2024 ADD CONSTRAINT ${part}_2024_chk CHECK (id > 0)`
           )
           try {
             const parent = (await db.showCreateTable(ns, p)).join('\n')
@@ -1122,6 +1125,19 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
             expect(partitioned).toContainEqual(
               `CREATE TABLE "public"."${part}_rest" PARTITION OF "public"."${part}" DEFAULT`
             )
+            // The parent's index is created without ONLY (so it reaches the partitions); a partition keeps its own
+            // index and constraint, but not the ones it inherits from the parent.
+            expect(partitioned.join('\n')).toMatch(
+              new RegExp(`^CREATE INDEX ${part}_d_idx ON (?:public\\.)?${part} USING btree \\(d\\)$`, 'm')
+            )
+            expect(partitioned.join('\n')).not.toContain('ON ONLY')
+            expect(partitioned).toContainEqual(
+              `CREATE INDEX ${part}_2024_id_idx ON public.${part}_2024 USING btree (id)`
+            )
+            expect(partitioned).toContainEqual(
+              `ALTER TABLE "public"."${part}_2024" ADD CONSTRAINT "${part}_2024_chk" CHECK ((id > 0))`
+            )
+            expect(partitioned.join('\n')).not.toContain(`${part}_2024_d_idx`)
             // Partitions are not tables of their own in the listing (their rows come through the parent).
             expect((await db.listTables(ns)).map((x) => x.name)).not.toContain(`${part}_2024`)
           } finally {

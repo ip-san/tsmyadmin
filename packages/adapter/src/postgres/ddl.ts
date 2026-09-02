@@ -7,6 +7,9 @@ import { quoteIdent, quoteTable } from '../sql/quote.ts'
 import { AdapterError, type DdlBuilder } from '../types.ts'
 
 const id = (s: string) => quoteIdent('postgres', s)
+/** Separators for string_agg results (never part of a name or a statement): between entries, and inside one. */
+const SEP = String.fromCharCode(31)
+const FIELD_SEP = String.fromCharCode(30)
 
 function defaultSql(c: ColumnSpec): string | null {
   if (!c.default) return null
@@ -176,12 +179,27 @@ export interface PgTableCatalog {
   inherits: string | null
   /** `PARTITION BY …` of a partitioned table. */
   partitionKey: string | null
-  /** Partitions (all levels, parents first): created as `PARTITION OF` right after the table. */
-  partitions: { name: string; parent: string; bound: string; partitionKey: string | null }[]
+  /**
+   * Partitions (all levels, parents first): created as `PARTITION OF` right after the table, each with the
+   * indexes and constraints of its own (inherited ones are created by the parent's).
+   */
+  partitions: {
+    schema: string
+    name: string
+    parentSchema: string
+    parent: string
+    bound: string
+    partitionKey: string | null
+    indexes: string[]
+    constraints: { name: string; definition: string }[]
+  }[]
   unlogged: boolean
   /** Storage parameters as a rendered list (`fillfactor='70', toast.autovacuum_enabled='false'`). */
   storage: string | null
 }
+
+/** `CREATE INDEX … ON ONLY t` → `ON t`: the index must reach the partitions on restore. */
+const withoutOnly = (definition: string) => definition.replace(/^(CREATE (?:UNIQUE )?INDEX \S+ ON) ONLY /, '$1 ')
 
 /** Type bounds an ascending identity sequence takes by default: MAXVALUE is only printed when it differs. */
 const IDENTITY_MAX = new Set(['32767', '2147483647', '9223372036854775807'])
@@ -246,19 +264,36 @@ export async function pgTableCatalog(conn: Conn, regclass: string): Promise<PgTa
            UNION ALL
            SELECT i.inhrelid, i.inhparent, t.depth + 1 FROM pg_inherits i JOIN tree t ON i.inhparent = t.inhrelid
          )
-         SELECT c.relname, p.relname, pg_get_expr(c.relpartbound, c.oid), pg_get_partkeydef(c.oid)
+         SELECT c.relname, p.relname, pg_get_expr(c.relpartbound, c.oid), pg_get_partkeydef(c.oid),
+                cn.nspname, pn.nspname,
+                (SELECT string_agg(pg_get_indexdef(i.indexrelid), $2 ORDER BY ic.relname)
+                   FROM pg_index i JOIN pg_class ic ON ic.oid = i.indexrelid
+                   WHERE i.indrelid = c.oid AND i.indisvalid
+                     AND NOT EXISTS (SELECT 1 FROM pg_inherits ih WHERE ih.inhrelid = i.indexrelid)
+                     AND NOT EXISTS (SELECT 1 FROM pg_constraint k WHERE k.conindid = i.indexrelid AND k.conrelid = c.oid)),
+                (SELECT string_agg(k.conname || $3 || pg_get_constraintdef(k.oid, false), $2 ORDER BY k.conname)
+                   FROM pg_constraint k WHERE k.conrelid = c.oid AND k.conislocal AND k.contype IN ('c', 'u', 'x', 'f'))
          FROM tree JOIN pg_class c ON c.oid = tree.inhrelid JOIN pg_class p ON p.oid = tree.inhparent
+         JOIN pg_namespace cn ON cn.oid = c.relnamespace JOIN pg_namespace pn ON pn.oid = p.relnamespace
          WHERE c.relispartition ORDER BY tree.depth, c.relname`,
-        [regclass]
+        [regclass, SEP, FIELD_SEP]
       )
     )
     out.partitions = parts.rows.map((row) => {
       const key = row[3]
+      const split = (v: unknown) => (typeof v === 'string' && v.length > 0 ? v.split(SEP) : [])
       return {
         name: String(row[0] ?? ''),
         parent: String(row[1] ?? ''),
         bound: String(row[2] ?? ''),
         partitionKey: typeof key === 'string' && key.length > 0 ? key : null,
+        schema: String(row[4] ?? ''),
+        parentSchema: String(row[5] ?? ''),
+        indexes: split(row[6]),
+        constraints: split(row[7]).map((c) => {
+          const at = c.indexOf(FIELD_SEP)
+          return { name: c.slice(0, at), definition: c.slice(at + 1) }
+        }),
       }
     })
   }
@@ -318,12 +353,17 @@ export function pgCreateStatements(ns: Namespace, schema: TableSchema, catalog?:
   const out = [
     `CREATE ${catalog?.unlogged ? 'UNLOGGED ' : ''}TABLE ${t} (\n  ${defs.join(',\n  ')}\n)${inherits}${partitionBy}${storage}`,
   ]
-  // Partitions carry no columns of their own; sub-partitions come after their parent.
+  // Partitions carry no columns of their own; sub-partitions come after their parent. Each keeps its own indexes
+  // and constraints (inherited ones come with the parent's).
   for (const p of catalog?.partitions ?? []) {
+    const part = quoteTable('postgres', { database: ns.database, schema: p.schema }, p.name)
+    const parent = quoteTable('postgres', { database: ns.database, schema: p.parentSchema }, p.parent)
     // relpartbound prints as `FOR VALUES …` or `DEFAULT`.
     out.push(
-      `CREATE TABLE ${quoteTable('postgres', ns, p.name)} PARTITION OF ${quoteTable('postgres', ns, p.parent)} ${p.bound}${p.partitionKey ? ` PARTITION BY ${p.partitionKey}` : ''}`
+      `CREATE TABLE ${part} PARTITION OF ${parent} ${p.bound}${p.partitionKey ? ` PARTITION BY ${p.partitionKey}` : ''}`
     )
+    for (const i of p.indexes) out.push(withoutOnly(i))
+    for (const c of p.constraints) out.push(`ALTER TABLE ${part} ADD CONSTRAINT ${id(c.name)} ${c.definition}`)
   }
   const names = new Set(schema.columns.map((c) => c.name))
   // An index owned by a UNIQUE / EXCLUDE constraint is created by the constraint, not on its own.
@@ -332,7 +372,9 @@ export function pgCreateStatements(ns: Namespace, schema: TableSchema, catalog?:
     if (i.primary || owned.has(i.name)) continue
     // The server's own statement keeps access method, direction, opclass and INCLUDE; reconstruct only without it.
     if (i.definition) {
-      out.push(i.definition)
+      // pg_get_indexdef prints `ON ONLY` for a partitioned table's index, which would create an invalid parent
+      // index without the partitions'; the partitions exist by now, so the plain form cascades.
+      out.push(catalog?.partitionKey ? withoutOnly(i.definition) : i.definition)
       continue
     }
     const where = i.predicate ? ` WHERE ${i.predicate}` : ''

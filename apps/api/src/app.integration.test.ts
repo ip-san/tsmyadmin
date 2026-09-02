@@ -189,6 +189,7 @@ describe.each(targets)('API integration ($dialect)', ({ dialect, url }) => {
             "CREATE TABLE prog_part_2024 PARTITION OF prog_part FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')",
             'CREATE TABLE prog_part_rest PARTITION OF prog_part DEFAULT',
             "INSERT INTO prog_part VALUES (1, '2024-06-01'), (2, '2030-01-01')",
+            'CREATE INDEX prog_part_d_idx ON prog_part (d)',
             'CREATE TRIGGER prog_always BEFORE INSERT ON prog_d FOR EACH ROW EXECUTE FUNCTION prog_default_title()',
             'ALTER TABLE prog_d ENABLE ALWAYS TRIGGER prog_always',
           ]
@@ -259,6 +260,17 @@ describe.each(targets)('API integration ($dialect)', ({ dialect, url }) => {
           await (await req('/api/databases/tsmyadmin_other/tables/prog_part/rows')).json()
         )
         expect(partRows.rows.map((r) => r[0])).toEqual([1, 2])
+        // The parent's index came back valid and reached the partitions.
+        const idx = z
+          .array(StatementResultSchema)
+          .parse(
+            await (
+              await other(
+                "SELECT count(*) FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid WHERE c.relname LIKE 'prog_part%_d_idx' AND i.indisvalid"
+              )
+            ).json()
+          )
+        expect(idx[0]?.kind === 'rows' ? Number(idx[0].result.rows[0]?.[0]) : -1).toBe(3)
         expect(tables.map((t) => t.name)).not.toContain('prog_part_2024')
       }
       const triggers = (await (await req('/api/databases/tsmyadmin_other/triggers')).json()) as { name: string }[]

@@ -148,7 +148,7 @@ function routinesBody(adapter: DatabaseAdapter, routines: Routines): string {
  * Where a relation reference starts in a view definition: after FROM / JOIN (optionally database-qualified) or
  * after `,` / `(`; a qualified name after `,` or `(` is a column reference, not a relation.
  */
-const RELATION_REF = /(?:\b(?:from|join)\s+(?:`[^`]*`\.)?|[,(]\s*)/
+const RELATION_REF = /(?:\b(?:from|join|straight_join)\s+(?:`[^`]*`\.)?|[,(]\s*)/
 
 /** A view, or a PostgreSQL SQL-standard-body routine, emitted after the tables in dependency order. */
 interface LateObject {
@@ -167,13 +167,14 @@ async function* triggersAndEventsBody(
   stripDefiner: boolean
 ): AsyncIterable<string> {
   const x = adapter.exporter
-  const triggers = (await adapter.listTriggers(ns))
-    .filter((t) => t.definition !== null && (tables === null || tables.includes(t.table)))
-    .map((t) => x.trigger(ns, t, stripDefiner))
-  if (triggers.length > 0) {
-    yield section('Triggers')
-    yield x.programBlock(triggers)
-  }
+  const listed = (await adapter.listTriggers(ns)).filter((t) => tables === null || tables.includes(t.table))
+  const triggers = listed.filter((t) => t.definition !== null).map((t) => x.trigger(ns, t, stripDefiner))
+  // A trigger the account may not read (MariaDB lists it without a body) is named rather than silently missing.
+  const unreadable = listed.filter((t) => t.definition === null)
+  if (triggers.length > 0 || unreadable.length > 0) yield section('Triggers')
+  for (const t of unreadable) yield `-- skipped (definition not readable): trigger ${commentText(t.name)}\n`
+  if (unreadable.length > 0) yield '\n'
+  if (triggers.length > 0) yield x.programBlock(triggers)
   if (tables === null && adapter.dialect === 'mysql') {
     const events = (await adapter.listEvents(ns))
       .filter((e) => e.definition !== null)
@@ -313,7 +314,9 @@ async function* sqlBody(
     })
     for (const s of schemas.values()) if (s.kind === 'table') targets.push({ kind: 'table', name: s.name })
     const statements = adapter.exporter.dropAll(ns, targets)
-    if (statements.length > 0) yield `${section('Drop')}${statements.map((stmt) => `${stmt};\n`).join('')}\n`
+    // One transaction: a DROP refused because of an object outside the dump leaves nothing half-dropped.
+    if (statements.length > 0)
+      yield `${section('Drop')}BEGIN;\n${statements.map((stmt) => `${stmt};\n`).join('')}COMMIT;\n\n`
   }
   // A MariaDB sequence is created before the tables whose defaults call nextval() on it.
   for (const [table, schema] of schemas) {
