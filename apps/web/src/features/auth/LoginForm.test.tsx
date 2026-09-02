@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { LoginForm } from './LoginForm.tsx'
 
 function wrap(ui: ReactNode) {
@@ -11,6 +11,40 @@ function wrap(ui: ReactNode) {
 }
 
 describe('LoginForm', () => {
+  // jsdom under vitest exposes no localStorage on the global object here: give the form an in-memory one.
+  beforeEach(() => {
+    const data = new Map<string, string>()
+    const memory = {
+      getItem: (k: string) => data.get(k) ?? null,
+      setItem: (k: string, v: string) => void data.set(k, v),
+      removeItem: (k: string) => void data.delete(k),
+      clear: () => data.clear(),
+    }
+    Object.defineProperty(globalThis, 'localStorage', { value: memory, configurable: true, writable: true })
+  })
+
+  it('prefills the last successful connection (never the password) after a session expires', async () => {
+    const onLogin = vi.fn().mockResolvedValue({})
+    const first = wrap(<LoginForm onLogin={onLogin} />)
+    await userEvent.selectOptions(screen.getByLabelText('サーバー種別'), 'postgres')
+    await userEvent.clear(screen.getByLabelText('ホスト'))
+    await userEvent.type(screen.getByLabelText('ホスト'), 'db.internal')
+    await userEvent.type(screen.getByLabelText('ユーザー名'), 'alice')
+    await userEvent.type(screen.getByLabelText('パスワード'), 'pw')
+    await userEvent.type(screen.getByLabelText('データベース'), 'app')
+    await userEvent.click(screen.getByRole('button', { name: '接続する' }))
+    await waitFor(() => expect(onLogin).toHaveBeenCalled())
+    first.unmount()
+    wrap(<LoginForm onLogin={vi.fn()} />)
+    expect(screen.getByLabelText('サーバー種別')).toHaveValue('postgres')
+    expect(screen.getByLabelText('ホスト')).toHaveValue('db.internal')
+    expect(screen.getByLabelText('ポート')).toHaveValue(5432)
+    expect(screen.getByLabelText('ユーザー名')).toHaveValue('alice')
+    expect(screen.getByLabelText('データベース')).toHaveValue('app')
+    expect(screen.getByLabelText('パスワード')).toHaveValue('')
+    expect(localStorage.getItem('tsmyadmin.pref.login.last') ?? '').not.toContain('pw')
+  })
+
   it('submits the connection request with a numeric port and omits an empty database', async () => {
     const onLogin = vi.fn().mockResolvedValue({})
     wrap(<LoginForm onLogin={onLogin} />)

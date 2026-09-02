@@ -9,6 +9,8 @@ export interface ExportOptions {
   dropTable: boolean
   data: boolean
   bom: boolean
+  routines: boolean
+  stripDefiner: boolean
 }
 
 /** URL of the download endpoint (a navigation, so cookies apply and the browser saves the file). */
@@ -21,5 +23,7 @@ export function exportUrl(o: ExportOptions): string {
   params.set('dropTable', o.dropTable ? '1' : '0')
   params.set('data', o.data ? '1' : '0')
   params.set('bom', o.bom ? '1' : '0')
+  params.set('routines', o.routines ? '1' : '0')
+  params.set('stripDefiner', o.stripDefiner ? '1' : '0')
   return `/api/databases/${encodeURIComponent(o.db)}/export?${params.toString()}`
 }

@@ -1,3 +1,4 @@
+import { useNavigate } from '@tanstack/react-router'
 import { type FormEvent, useState } from 'react'
 import { DdlPreviewDialog } from '@/components/ddl/DdlPreviewDialog.tsx'
 import { Button } from '@/components/ui/Button.tsx'
@@ -15,7 +16,12 @@ export interface CreateNamespaceFormProps {
 /** Create a database (server page) or a PostgreSQL schema (database page) through the SQL preview flow. */
 export function CreateDatabaseForm({ database, kind }: CreateNamespaceFormProps) {
   const [name, setName] = useState('')
-  const flow = useDdlFlow(database, undefined, () => setName(''))
+  const navigate = useNavigate()
+  const flow = useDdlFlow(database, undefined, async (op) => {
+    setName('')
+    // A new database opens directly (a new schema stays on its database page, where it now appears).
+    if (op.op === 'createDatabase') await navigate({ to: '/db/$db', params: { db: op.name }, search: {} })
+  })
   const title = kind === 'schema' ? locale.ddl.titles.createSchema : locale.ddl.titles.createDatabase
   const label = kind === 'schema' ? locale.ddl.schemaName : locale.ddl.databaseName
   const submit = (e: FormEvent) => {

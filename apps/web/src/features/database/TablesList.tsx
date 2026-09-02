@@ -45,6 +45,7 @@ export function TablesList({ db, schema }: { db: string; schema?: string | undef
             <Th>{locale.database.table}</Th>
             <Th>{locale.database.kind}</Th>
             <Th className="text-right">{locale.database.rowEstimate}</Th>
+            <Th className="text-right">{locale.database.size}</Th>
             {hasEngine ? <Th>{locale.database.engine}</Th> : null}
             <Th>{locale.database.comment}</Th>
             <Th>{locale.database.actions}</Th>
@@ -76,6 +77,9 @@ export function TablesList({ db, schema }: { db: string; schema?: string | undef
               <Td className="whitespace-nowrap">{locale.database.kinds[t.kind]}</Td>
               <Td className="text-right tabular-nums">
                 {t.rowEstimate === null ? '–' : t.rowEstimate.toLocaleString('ja-JP')}
+              </Td>
+              <Td className="whitespace-nowrap text-right tabular-nums">
+                {t.sizeBytes === null ? '–' : locale.common.bytes(t.sizeBytes)}
               </Td>
               {hasEngine ? <Td>{t.engine ?? '–'}</Td> : null}
               <Td className="max-w-xs">

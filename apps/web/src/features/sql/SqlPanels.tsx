@@ -44,7 +44,10 @@ export function HistoryPanel({
               >
                 {e.ok ? '✓' : '✗'}
               </span>
-              <span className="text-zinc-500 dark:text-zinc-400">{new Date(e.at).toLocaleTimeString('ja-JP')}</span>
+              <span className="text-zinc-500 dark:text-zinc-400">
+                {new Date(e.at).toLocaleTimeString('ja-JP')}
+                {e.db ? ` · ${locale.sql.historyDb(e.db)}` : ''}
+              </span>
               <code className="min-w-0 flex-1 truncate font-mono" title={e.sql}>
                 {e.sql}
               </code>

@@ -33,6 +33,17 @@ export const ja = {
     null: 'NULL',
     empty: '（空）',
     binary: (bytes: number) => `[バイナリ ${bytes.toLocaleString('ja-JP')} バイト]`,
+    bytes: (n: number) => {
+      if (n < 1024) return `${n.toLocaleString('ja-JP')} B`
+      const units = ['KB', 'MB', 'GB', 'TB']
+      let v = n / 1024
+      let i = 0
+      while (v >= 1024 && i < units.length - 1) {
+        v /= 1024
+        i++
+      }
+      return `${v.toLocaleString('ja-JP', { maximumFractionDigits: v < 10 ? 1 : 0 })} ${units[i]}`
+    },
     unknown: '不明',
     theme: 'テーマ切替',
     skipToContent: 'メインコンテンツへ移動',
@@ -110,6 +121,8 @@ export const ja = {
     kind: '種類',
     kinds: { table: 'テーブル', view: 'ビュー', materialized_view: 'マテリアライズドビュー' },
     rowEstimate: '行数（概算）',
+    size: 'サイズ',
+    tableCount: 'テーブル数',
     engine: 'エンジン',
     comment: 'コメント',
     actions: '操作',
@@ -259,6 +272,7 @@ export const ja = {
     save: '保存する',
     deleteSaved: (name: string) => `${name} を削除`,
     history: '履歴',
+    historyDb: (db: string) => `対象: ${db}`,
     noHistory: '履歴はありません',
     clearHistory: '履歴をクリア',
     load: '読み込む',
@@ -385,6 +399,8 @@ export const ja = {
     dropTable: 'DROP TABLE IF EXISTS を付ける',
     data: 'データ（INSERT）',
     bom: 'UTF-8 BOM を付ける（Excel 向け）',
+    routines: 'ルーチン・トリガー・イベントも含める',
+    stripDefiner: 'DEFINER 句を除く（別のユーザーで復元する場合）',
     download: 'ダウンロードする',
     csvSingle: 'CSV は 1 テーブルずつエクスポートします。',
     nothing: 'エクスポートする対象がありません',

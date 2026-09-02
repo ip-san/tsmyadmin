@@ -42,7 +42,8 @@ export async function pgListTables(conn: Conn, ns: Namespace): Promise<TableInfo
     await conn.query(
       `SELECT c.relname, c.relkind,
               CASE WHEN c.reltuples < 0 THEN s.n_live_tup ELSE c.reltuples END,
-              obj_description(c.oid, 'pg_class')
+              obj_description(c.oid, 'pg_class'),
+              CASE WHEN c.relkind IN ('r', 'p', 'm') THEN pg_total_relation_size(c.oid) END
        FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
        LEFT JOIN pg_stat_user_tables s ON s.relid = c.oid
        WHERE n.nspname = $1 AND c.relkind IN ('r', 'p', 'v', 'm', 'f') AND NOT c.relispartition
@@ -60,6 +61,7 @@ export async function pgListTables(conn: Conn, ns: Namespace): Promise<TableInfo
       rowEstimate: kind !== 'v' && Number.isFinite(est) && est >= 0 ? Math.round(est) : null,
       engine: null,
       comment: strOrNull(row[3]),
+      sizeBytes: row[4] === null || row[4] === undefined ? null : Number(row[4]),
     }
   })
 }
@@ -196,6 +198,8 @@ export async function pgDescribeTable(conn: Conn, ns: Namespace, table: string):
     rowEstimate: Number.isFinite(tuples) && tuples >= 0 ? Math.round(tuples) : null,
     partitioned: relkind === 'p',
     hasChildren: bool(infoRow[3]),
+    collation: null,
+    autoIncrement: null,
     columns,
     primaryKey,
     indexes,

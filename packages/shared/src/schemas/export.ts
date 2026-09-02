@@ -16,6 +16,10 @@ export const ExportQuerySchema = z.object({
   data: FlagSchema.default('1'),
   /** UTF-8 BOM for CSV (Excel). */
   bom: FlagSchema.default('1'),
+  /** SQL: include stored routines, triggers and events (triggers of the requested tables when tables are named). */
+  routines: FlagSchema.default('1'),
+  /** SQL (MySQL): drop `DEFINER=...` clauses so the dump restores under another account. */
+  stripDefiner: FlagSchema.default('0'),
 })
 export type ExportQuery = z.infer<typeof ExportQuerySchema>
 export type ExportQueryInput = z.input<typeof ExportQuerySchema>

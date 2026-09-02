@@ -4,6 +4,7 @@ import type {
   BrowseResult,
   Cell,
   ColumnMeta,
+  DatabaseInfo,
   DdlOp,
   Dialect,
   EventInfo,
@@ -121,13 +122,25 @@ export interface SqlExporter {
   afterData(ns: Namespace, schema: TableSchema): string[]
   /** SQL literal for a wire cell. */
   literal(cell: Cell): string
+  /**
+   * DROP + CREATE for a routine / trigger / event (no trailing terminator). `definition` is the server's own
+   * CREATE text for routines, the trigger body (MySQL) or full CREATE TRIGGER (PostgreSQL); `stripDefiner`
+   * removes MySQL `DEFINER=` clauses so the dump restores under another account.
+   */
+  routine(ns: Namespace, kind: RoutineKind, name: string, definition: string, stripDefiner: boolean): string
+  trigger(ns: Namespace, trigger: TriggerInfo, stripDefiner: boolean): string
+  event(ns: Namespace, event: EventInfo, stripDefiner: boolean): string
+  /** Wraps program statements for the dump: a DELIMITER block on MySQL (bodies contain `;`), `;` on PostgreSQL. */
+  programBlock(statements: string[]): string
+  /** `DEFINER=` clauses removed from a CREATE VIEW / routine text (MySQL); identity elsewhere. */
+  withoutDefiner(sql: string): string
 }
 
 export interface DatabaseAdapter {
   readonly dialect: Dialect
   ping(): Promise<void>
   close(): Promise<void>
-  listDatabases(): Promise<{ name: string }[]>
+  listDatabases(): Promise<DatabaseInfo[]>
   /** PostgreSQL schemas inside `database`; MySQL returns []. */
   listSchemas(database: string): Promise<string[]>
   listTables(ns: Namespace): Promise<TableInfo[]>

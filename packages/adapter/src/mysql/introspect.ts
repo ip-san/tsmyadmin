@@ -20,7 +20,7 @@ const num = (v: unknown): number | null => {
 export async function mysqlListTables(conn: Conn, ns: Namespace): Promise<TableInfo[]> {
   const r = firstResult(
     await conn.query(
-      'SELECT TABLE_NAME, TABLE_TYPE, TABLE_ROWS, ENGINE, TABLE_COMMENT FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? ORDER BY TABLE_NAME',
+      'SELECT TABLE_NAME, TABLE_TYPE, TABLE_ROWS, ENGINE, TABLE_COMMENT, DATA_LENGTH + INDEX_LENGTH FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? ORDER BY TABLE_NAME',
       [ns.database]
     )
   )
@@ -30,6 +30,7 @@ export async function mysqlListTables(conn: Conn, ns: Namespace): Promise<TableI
     rowEstimate: num(row[2]),
     engine: strOrNull(row[3]),
     comment: strOrNull(row[4]) || null,
+    sizeBytes: str(row[1]).includes('VIEW') ? null : num(row[5]),
   }))
 }
 
@@ -56,7 +57,7 @@ async function queryIndexes(conn: Conn, ns: Namespace, table: string) {
 export async function mysqlDescribeTable(conn: Conn, ns: Namespace, table: string): Promise<TableSchema> {
   const info = firstResult(
     await conn.query(
-      'SELECT TABLE_TYPE, ENGINE, TABLE_COMMENT, TABLE_ROWS FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?',
+      'SELECT TABLE_TYPE, ENGINE, TABLE_COMMENT, TABLE_ROWS, TABLE_COLLATION, AUTO_INCREMENT FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?',
       [ns.database, table]
     )
   )
@@ -157,6 +158,8 @@ export async function mysqlDescribeTable(conn: Conn, ns: Namespace, table: strin
     rowEstimate: num(infoRow[3]),
     partitioned: false,
     hasChildren: false,
+    collation: strOrNull(infoRow[4]),
+    autoIncrement: infoRow[5] === null || infoRow[5] === undefined ? null : String(infoRow[5]),
     columns,
     primaryKey,
     indexes,

@@ -2,6 +2,7 @@ import { queryOptions } from '@tanstack/react-query'
 import type {
   BrowseOptions,
   BrowseResult,
+  DatabaseInfo,
   DdlOp,
   DdlPreviewResponse,
   EventInfo,
@@ -56,7 +57,7 @@ export const serversQuery = queryOptions({
 
 export const databasesQuery = queryOptions({
   queryKey: ['databases'],
-  queryFn: () => unwrap<{ name: string }[]>(api.databases.$get()),
+  queryFn: () => unwrap<DatabaseInfo[]>(api.databases.$get()),
 })
 
 export const schemasQuery = (db: string) =>

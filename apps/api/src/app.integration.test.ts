@@ -123,6 +123,37 @@ describe.each(targets)('API integration ($dialect)', ({ dialect, url }) => {
     }
   })
 
+  it('dumps routines, triggers and events that restore over the existing ones', async () => {
+    const routinesRes = await req('/api/databases/tsmyadmin_test/routines')
+    expect(routinesRes.status).toBe(200)
+    const before = (await routinesRes.json()) as { name: string }[]
+    expect(Array.isArray(before)).toBe(true)
+    expect(before.length).toBeGreaterThan(0)
+    const dump = await (await req('/api/databases/tsmyadmin_test/export?format=sql&routines=1&stripDefiner=1')).text()
+    expect(dump).toContain('-- Routines')
+    expect(dump).toContain('-- Triggers')
+    if (dialect === 'mysql') {
+      expect(dump).toContain('-- Events')
+      expect(dump).toContain('DELIMITER $$')
+      expect(dump).not.toMatch(/DEFINER\s*=/)
+    }
+    // Only the program section is replayed: the adapter conformance suite runs against the same fixtures in
+    // parallel and must not see the tables dropped and recreated underneath it.
+    const programs = dump.slice(0, dump.indexOf('-- ------')) + dump.slice(dump.indexOf('-- Routines'))
+    const restored = z
+      .array(StatementResultSchema)
+      .parse(
+        await (
+          await req('/api/databases/tsmyadmin_test/sql', { method: 'POST', body: JSON.stringify({ sql: programs }) })
+        ).json()
+      )
+    expect(restored.filter((r) => r.kind === 'error').map((r) => (r.kind === 'error' ? r.message : ''))).toEqual([])
+    const after = (await (await req('/api/databases/tsmyadmin_test/routines')).json()) as { name: string }[]
+    expect(after.map((r) => r.name).sort()).toEqual(before.map((r) => r.name).sort())
+    const triggers = (await (await req('/api/databases/tsmyadmin_test/triggers')).json()) as { name: string }[]
+    expect(triggers.length).toBeGreaterThan(0)
+  })
+
   it('restores a MySQL dump into another database without touching the source', async () => {
     if (dialect !== 'mysql') return
     const t = 'dump_move_mysql'

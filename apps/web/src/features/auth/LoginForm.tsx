@@ -1,13 +1,26 @@
 import { useMutation } from '@tanstack/react-query'
 import type { ConnectRequest, Dialect, ServerPreset } from '@tsmyadmin/shared'
 import { type FormEvent, useState } from 'react'
+import { z } from 'zod'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox } from '@/components/ui/Feedback.tsx'
 import { Field, Input, Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
+import { readPreference, writePreference } from '@/lib/preferences.ts'
 
 const DEFAULT_PORTS: Record<Dialect, number> = { mysql: 3306, postgres: 5432 }
 const MANUAL = ''
+
+/** Last successful connection (no password): a session that expired should not cost the whole form again. */
+const LastLoginSchema = z.object({
+  preset: z.string(),
+  dialect: z.enum(['mysql', 'postgres']),
+  host: z.string(),
+  port: z.number(),
+  user: z.string(),
+  database: z.string(),
+})
+const LAST_LOGIN_KEY = 'login.last'
 
 export interface LoginFormProps {
   onLogin: (body: ConnectRequest) => Promise<unknown>
@@ -16,15 +29,32 @@ export interface LoginFormProps {
 }
 
 export function LoginForm({ onLogin, presets = [] }: LoginFormProps) {
-  const first = presets[0]
-  const [preset, setPreset] = useState<string>(first ? first.name : MANUAL)
-  const [dialect, setDialect] = useState<Dialect>(first?.dialect ?? 'mysql')
-  const [host, setHost] = useState(first?.host ?? '127.0.0.1')
-  const [port, setPort] = useState(String(first?.port ?? DEFAULT_PORTS.mysql))
-  const [user, setUser] = useState('')
+  const last = readPreference(LAST_LOGIN_KEY, LastLoginSchema.nullable(), null)
+  // The remembered preset must still exist; otherwise fall back to the operator's first one.
+  const rememberedPreset = last && presets.some((p) => p.name === last.preset) ? last.preset : null
+  const first = rememberedPreset ? presets.find((p) => p.name === rememberedPreset) : presets[0]
+  const manualLast = last && last.preset === MANUAL ? last : null
+  const [preset, setPreset] = useState<string>(manualLast ? MANUAL : first ? first.name : MANUAL)
+  const [dialect, setDialect] = useState<Dialect>(manualLast?.dialect ?? first?.dialect ?? 'mysql')
+  const [host, setHost] = useState(manualLast?.host ?? first?.host ?? '127.0.0.1')
+  const [port, setPort] = useState(String(manualLast?.port ?? first?.port ?? DEFAULT_PORTS.mysql))
+  const [user, setUser] = useState(last?.user ?? '')
   const [password, setPassword] = useState('')
-  const [database, setDatabase] = useState(first?.database ?? '')
-  const login = useMutation({ mutationFn: (body: ConnectRequest) => onLogin(body) })
+  const [database, setDatabase] = useState(manualLast?.database ?? first?.database ?? last?.database ?? '')
+  const login = useMutation({
+    mutationFn: async (body: ConnectRequest) => {
+      const result = await onLogin(body)
+      writePreference(LAST_LOGIN_KEY, {
+        preset,
+        dialect: body.dialect,
+        host: body.host,
+        port: body.port,
+        user: body.user,
+        database: body.database ?? '',
+      })
+      return result
+    },
+  })
   const fixed = preset !== MANUAL
 
   const choosePreset = (name: string) => {

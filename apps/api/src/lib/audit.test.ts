@@ -47,7 +47,7 @@ describe('withAudit', () => {
 
   it('does not log read-only calls and keeps their behaviour', async () => {
     const { lines, adapter, inner } = setup()
-    expect(await adapter.listDatabases()).toEqual([{ name: 'shop' }])
+    expect(await adapter.listDatabases()).toMatchObject([{ name: 'shop' }])
     expect((await adapter.browseRows(ns, 'users', { offset: 0, limit: 10, sort: [], filters: [] })).total).toBe(1)
     expect(lines).toHaveLength(0)
     expect(inner.calls.map((c) => c.method)).toEqual(['listDatabases', 'browseRows'])

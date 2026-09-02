@@ -34,7 +34,9 @@ export const pgDdl: DdlBuilder = {
       case 'createSchema':
         return [`CREATE SCHEMA ${id(op.name)}`]
       case 'dropDatabase':
-        return [`DROP DATABASE ${id(op.name)}`]
+        // FORCE (PostgreSQL 13+): other sessions — including this tool's own idle pooled connections to the
+        // database just browsed — would otherwise make the DROP wait and fail with "being accessed by other users".
+        return [`DROP DATABASE ${id(op.name)} WITH (FORCE)`]
       case 'enableEvent':
       case 'disableEvent':
       case 'dropEvent':

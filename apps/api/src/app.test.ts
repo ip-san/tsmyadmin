@@ -472,7 +472,8 @@ describe('databases & tables', () => {
     const h = harness()
     stores.push(h.store)
     await h.login()
-    expect(await (await h.req('/api/databases')).json()).toEqual([{ name: 'other' }, { name: 'shop' }])
+    const dbs = (await (await h.req('/api/databases')).json()) as { name: string }[]
+    expect(dbs.map((d) => d.name)).toEqual(['other', 'shop'])
     expect(await (await h.req('/api/databases/shop/schemas')).json()).toEqual([])
     const tables = z.array(TableInfoSchema).parse(await (await h.req('/api/databases/shop/tables')).json())
     expect(tables.map((t) => t.name)).toEqual(['users', 'posts'])

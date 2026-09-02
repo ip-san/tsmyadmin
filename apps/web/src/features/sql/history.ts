@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { type PreferenceStore, readPreference, removePreference, writePreference } from '@/lib/preferences.ts'
 
-const HistoryEntrySchema = z.object({ sql: z.string(), at: z.number(), ok: z.boolean() })
+const HistoryEntrySchema = z.object({ sql: z.string(), at: z.number(), ok: z.boolean(), db: z.string().optional() })
 export type HistoryEntry = z.infer<typeof HistoryEntrySchema>
 const ListSchema = z.array(HistoryEntrySchema)
 

@@ -1,4 +1,5 @@
 import type {
+  DatabaseInfo,
   EventInfo,
   KeyValue,
   Namespace,
@@ -364,13 +365,25 @@ export class MysqlAdapter extends BaseAdapter {
     if (pool) await pool.end()
   }
 
-  async listDatabases(): Promise<{ name: string }[]> {
+  async listDatabases(): Promise<DatabaseInfo[]> {
     try {
       const [rows] = (await this.getPool().query({ sql: 'SHOW DATABASES', rowsAsArray: true })) as [
         unknown[][],
         unknown,
       ]
-      return rows.map((r) => ({ name: String(r[0]) })).sort((a, b) => a.name.localeCompare(b.name))
+      // One aggregate over the catalog for every database (sizes are the storage engine's estimates).
+      const [stats] = (await this.getPool().query({
+        sql: 'SELECT TABLE_SCHEMA, SUM(COALESCE(DATA_LENGTH, 0) + COALESCE(INDEX_LENGTH, 0)), COUNT(*) FROM information_schema.TABLES GROUP BY TABLE_SCHEMA',
+        rowsAsArray: true,
+      })) as [unknown[][], unknown]
+      const byName = new Map(stats.map((r) => [String(r[0]), { size: Number(r[1]), count: Number(r[2]) }]))
+      return rows
+        .map((r) => {
+          const name = String(r[0])
+          const s = byName.get(name)
+          return { name, sizeBytes: s ? s.size : 0, tableCount: s ? s.count : 0 }
+        })
+        .sort((a, b) => a.name.localeCompare(b.name))
     } catch (err) {
       throw this.toAdapterError(err)
     }

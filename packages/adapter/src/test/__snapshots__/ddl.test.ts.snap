@@ -200,7 +200,7 @@ exports[`DDL builders > postgres: dropColumn 1`] = `
 
 exports[`DDL builders > postgres: dropDatabase 1`] = `
 [
-  "DROP DATABASE "new""db\`x"",
+  "DROP DATABASE "new""db\`x" WITH (FORCE)",
 ]
 `;
 

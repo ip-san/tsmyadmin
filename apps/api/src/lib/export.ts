@@ -45,11 +45,53 @@ async function* jsonBody(adapter: DatabaseAdapter, ns: Namespace, tables: string
   yield '\n}\n'
 }
 
+/**
+ * Stored routines, triggers and events. With `tables` given (a table-level export) only the triggers of those
+ * tables are included; a whole-database dump carries everything. Statement text comes from the adapter's
+ * exporter (the server's own CREATE definitions).
+ */
+async function* programBody(
+  adapter: DatabaseAdapter,
+  ns: Namespace,
+  tables: string[] | null,
+  stripDefiner: boolean
+): AsyncIterable<string> {
+  const x = adapter.exporter
+  if (tables === null) {
+    const defs: string[] = []
+    for (const r of await adapter.listRoutines(ns)) {
+      const def = await adapter.routineDefinition(ns, r.name, r.kind)
+      if (def !== null) defs.push(x.routine(ns, r.kind, r.name, def, stripDefiner))
+    }
+    if (defs.length > 0) {
+      yield `-- ----------------------------------------\n-- Routines\n-- ----------------------------------------\n\n`
+      yield x.programBlock(defs)
+    }
+  }
+  const triggers = (await adapter.listTriggers(ns))
+    .filter((t) => t.definition !== null && (tables === null || tables.includes(t.table)))
+    .map((t) => x.trigger(ns, t, stripDefiner))
+  if (triggers.length > 0) {
+    yield `-- ----------------------------------------\n-- Triggers\n-- ----------------------------------------\n\n`
+    yield x.programBlock(triggers)
+  }
+  if (tables === null && adapter.dialect === 'mysql') {
+    const events = (await adapter.listEvents(ns))
+      .filter((e) => e.definition !== null)
+      .map((e) => x.event(ns, e, stripDefiner))
+    if (events.length > 0) {
+      yield `-- ----------------------------------------\n-- Events\n-- ----------------------------------------\n\n`
+      yield x.programBlock(events)
+    }
+  }
+}
+
 async function* sqlBody(
   adapter: DatabaseAdapter,
   ns: Namespace,
   tables: string[],
-  q: ExportQuery
+  q: ExportQuery,
+  everything: boolean
 ): AsyncIterable<string> {
   yield [
     '-- tsmyadmin SQL dump',
@@ -71,7 +113,7 @@ async function* sqlBody(
       for (const stmt of await adapter.showCreateTable(ns, table, schema)) {
         // PostgreSQL has no FOREIGN_KEY_CHECKS: constraints are emitted after every table exists and is loaded.
         if (adapter.dialect === 'postgres' && FK_STATEMENT.test(stmt)) deferred.push(stmt)
-        else yield `${stmt};\n\n`
+        else yield `${q.stripDefiner === '1' ? adapter.exporter.withoutDefiner(stmt) : stmt};\n\n`
       }
     }
     if (q.data === '1' && schema.kind === 'table') {
@@ -96,6 +138,9 @@ async function* sqlBody(
   if (deferred.length > 0) {
     yield `-- ----------------------------------------\n-- Foreign keys\n-- ----------------------------------------\n\n`
     for (const stmt of deferred) yield `${stmt};\n\n`
+  }
+  if (q.structure === '1' && q.routines === '1') {
+    yield* programBody(adapter, ns, everything ? null : tables, q.stripDefiner === '1')
   }
   const postamble = adapter.exporter.postamble()
   if (postamble.length > 0) yield `${postamble.join('\n')}\n\n`
@@ -137,7 +182,9 @@ export function buildExport(
   ns: Namespace,
   tables: string[],
   q: ExportQuery,
-  baseName: string = ns.database
+  baseName: string = ns.database,
+  /** True for a whole-namespace dump (routines and events included); false when tables were named. */
+  everything = true
 ): ExportFile {
   if (q.format === 'csv') {
     const table = tables[0]
@@ -156,7 +203,7 @@ export function buildExport(
     }
   }
   return {
-    body: sqlBody(adapter, ns, tables, q),
+    body: sqlBody(adapter, ns, tables, q, everything),
     contentType: 'application/sql; charset=utf-8',
     filename: `${baseName}.sql`,
   }

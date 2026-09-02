@@ -1,4 +1,4 @@
-import type { Cell, Dialect, Namespace, TableSchema } from '@tsmyadmin/shared'
+import type { Cell, Dialect, EventInfo, Namespace, RoutineKind, TableSchema, TriggerInfo } from '@tsmyadmin/shared'
 import { isViewKind } from '@tsmyadmin/shared'
 import type { SqlExporter } from '../types.ts'
 import { cellLiteral, pgLiteral } from './literal.ts'
@@ -32,9 +32,46 @@ function dumpTable(dialect: Dialect, ns: Namespace, table: string): string {
   return dialect === 'mysql' ? quoteIdent(dialect, table) : quoteTable(dialect, ns, table)
 }
 
+/** `DEFINER=user@host` inside MySQL CREATE statements (routines, triggers, events, views). */
+const DEFINER = /\bDEFINER\s*=\s*(?:`(?:[^`]|``)*`|'(?:[^']|'')*'|[^\s@]+)@(?:`(?:[^`]|``)*`|'(?:[^']|'')*'|\S+)\s*/gi
+
 /** Dump statements: every identifier is quoted and every value goes through cellLiteral. Dialect-agnostic. */
 export function createExporter(dialect: Dialect): SqlExporter {
+  const id = (name: string) => quoteIdent(dialect, name)
+  const withoutDefiner = (sql: string, strip: boolean) =>
+    strip && dialect === 'mysql' ? sql.replace(DEFINER, '') : sql
   return {
+    withoutDefiner: (sql) => withoutDefiner(sql, true),
+    routine(_ns, kind: RoutineKind, name, definition, stripDefiner) {
+      // PostgreSQL's pg_get_functiondef is a CREATE OR REPLACE (a DROP would fail while a trigger depends on
+      // the function); MySQL has no OR REPLACE for routines, so it drops first. The dump is database-relative.
+      if (dialect === 'postgres') return definition
+      const object = kind === 'procedure' ? 'PROCEDURE' : 'FUNCTION'
+      return `DROP ${object} IF EXISTS ${id(name)}$$\n${withoutDefiner(definition, stripDefiner)}`
+    },
+    trigger(ns, t: TriggerInfo, stripDefiner) {
+      if (dialect === 'mysql') {
+        // information_schema carries the body only; the header comes from the trigger's metadata.
+        return `DROP TRIGGER IF EXISTS ${id(t.name)}$$\nCREATE TRIGGER ${id(t.name)} ${t.timing} ${t.events} ON ${id(t.table)} FOR EACH ${t.orientation}\n${withoutDefiner(t.definition ?? '', stripDefiner)}`
+      }
+      return `DROP TRIGGER IF EXISTS ${id(t.name)} ON ${quoteTable(dialect, ns, t.table)};\n${t.definition ?? ''}`
+    },
+    event(_ns, e: EventInfo, stripDefiner) {
+      const lit = (text: string) => cellLiteral(dialect, text)
+      const schedule = e.schedule.startsWith('AT ') ? `AT ${lit(e.schedule.slice(3))}` : e.schedule
+      const starts = e.starts ? ` STARTS ${lit(e.starts)}` : ''
+      const ends = e.ends ? ` ENDS ${lit(e.ends)}` : ''
+      const completion = e.onCompletion ? ` ON COMPLETION ${e.onCompletion}` : ''
+      const status = e.status === 'ENABLED' ? 'ENABLE' : 'DISABLE'
+      const comment = e.comment ? ` COMMENT ${lit(e.comment)}` : ''
+      return `DROP EVENT IF EXISTS ${id(e.name)}$$\nCREATE EVENT ${id(e.name)} ON SCHEDULE ${schedule}${starts}${ends}${completion} ${status}${comment}\nDO ${withoutDefiner(e.definition ?? '', stripDefiner)}`
+    },
+    programBlock(statements) {
+      if (statements.length === 0) return ''
+      return dialect === 'mysql'
+        ? `DELIMITER $$\n${statements.map((s) => `${s}$$\n\n`).join('')}DELIMITER ;\n\n`
+        : statements.map((s) => `${s};\n\n`).join('')
+    },
     preamble: (ns: Namespace) =>
       dialect === 'postgres'
         ? // Index / view definitions are printed relative to the schema, so restore into it explicitly.

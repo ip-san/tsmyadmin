@@ -163,6 +163,9 @@ for (const t of TARGETS) {
       await page.getByLabel('データベース名').fill(dbName)
       await page.getByRole('button', { name: 'データベースを作成' }).click()
       await confirmPreview(page, /CREATE DATABASE/)
+      // A new database opens directly; the server list then offers to drop it.
+      await expect(page).toHaveURL(new RegExp(`/db/${dbName}`))
+      await page.goto('/')
       const row = page.getByRole('row').filter({ hasText: dbName })
       await expect(row).toBeVisible()
       await row.getByRole('button', { name: `${dbName}: データベースを削除` }).click()

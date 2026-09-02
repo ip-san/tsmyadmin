@@ -2,6 +2,7 @@ import type {
   BrowseOptions,
   BrowseResult,
   Cell,
+  DatabaseInfo,
   Dialect,
   EventInfo,
   KeyValue,
@@ -67,6 +68,8 @@ export function fakeTable(
       rowEstimate: rows.length,
       partitioned: false,
       hasChildren: false,
+      collation: null,
+      autoIncrement: null,
       columns: columns.map((c) => fakeColumn(c, c === 'id' ? 'int' : 'varchar')),
       primaryKey,
       indexes:
@@ -150,11 +153,11 @@ export class FakeAdapter implements DatabaseAdapter {
     this.closed = true
   }
 
-  async listDatabases(): Promise<{ name: string }[]> {
+  async listDatabases(): Promise<DatabaseInfo[]> {
     this.record('listDatabases')
     return Object.keys(this.databases)
       .sort()
-      .map((name) => ({ name }))
+      .map((name) => ({ name, sizeBytes: 0, tableCount: Object.keys(this.databases[name]?.tables ?? {}).length }))
   }
 
   async listSchemas(database: string): Promise<string[]> {
@@ -172,6 +175,7 @@ export class FakeAdapter implements DatabaseAdapter {
       rowEstimate: t.rows.length,
       engine: t.schema.engine,
       comment: t.schema.comment,
+      sizeBytes: null,
     }))
   }
 

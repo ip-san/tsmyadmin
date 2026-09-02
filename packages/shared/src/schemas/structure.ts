@@ -6,12 +6,24 @@ export type TableKind = z.infer<typeof TableKindSchema>
 /** Views and materialized views: no row identity, read-only in the UI. */
 export const isViewKind = (kind: TableKind): boolean => kind !== 'table'
 
+/** Server-level database list entry; sizes are catalog figures (null when the account cannot see them). */
+export const DatabaseInfoSchema = z.object({
+  name: z.string(),
+  /** Data + index bytes (MySQL information_schema.TABLES, PostgreSQL pg_database_size). */
+  sizeBytes: z.number().nullable(),
+  /** Tables and views (MySQL only; PostgreSQL counts need a connection per database). */
+  tableCount: z.number().nullable(),
+})
+export type DatabaseInfo = z.infer<typeof DatabaseInfoSchema>
+
 export const TableInfoSchema = z.object({
   name: z.string(),
   kind: TableKindSchema,
   rowEstimate: z.number().nullable(),
   engine: z.string().nullable(),
   comment: z.string().nullable(),
+  /** Data + index bytes (DATA_LENGTH + INDEX_LENGTH / pg_total_relation_size); null for views. */
+  sizeBytes: z.number().nullable(),
 })
 export type TableInfo = z.infer<typeof TableInfoSchema>
 
@@ -75,6 +87,10 @@ export const TableSchemaSchema = z.object({
   partitioned: z.boolean(),
   /** Inheritance parent (PostgreSQL): reads through it include child rows, so ctid cannot identify a row. */
   hasChildren: z.boolean(),
+  /** Table collation (MySQL); null on PostgreSQL. */
+  collation: z.string().nullable(),
+  /** Next AUTO_INCREMENT value as digits (MySQL); null when none. */
+  autoIncrement: z.string().nullable(),
   columns: z.array(ColumnDefSchema),
   primaryKey: z.array(z.string()),
   indexes: z.array(IndexDefSchema),

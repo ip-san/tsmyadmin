@@ -3,6 +3,7 @@ import type {
   BrowseResult,
   Cell,
   ColumnMeta,
+  DatabaseInfo,
   Dialect,
   EventInfo,
   Filter,
@@ -205,7 +206,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
 
   abstract ping(): Promise<void>
   abstract close(): Promise<void>
-  abstract listDatabases(): Promise<{ name: string }[]>
+  abstract listDatabases(): Promise<DatabaseInfo[]>
   abstract listSchemas(database: string): Promise<string[]>
   abstract listTables(ns: Namespace): Promise<TableInfo[]>
   abstract describeTable(ns: Namespace, table: string): Promise<TableSchema>

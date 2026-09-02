@@ -22,13 +22,14 @@ export function TableOptionsForm({
   const mysql = dialect === 'mysql'
   const [comment, setComment] = useState(schema.comment ?? '')
   const [engine, setEngine] = useState(schema.engine ?? '')
-  const [collation, setCollation] = useState('')
-  const [autoIncrement, setAutoIncrement] = useState('')
+  const [collation, setCollation] = useState(schema.collation ?? '')
+  const [autoIncrement, setAutoIncrement] = useState(schema.autoIncrement ?? '')
   const flow = useDdlFlow(tableRef.db, tableRef.schema)
   const commentChanged = comment !== (schema.comment ?? '')
   const engineChanged = mysql && engine.trim() !== '' && engine.trim() !== (schema.engine ?? '')
-  const collationChanged = mysql && collation.trim() !== ''
-  const autoIncrementChanged = mysql && autoIncrement.trim() !== ''
+  const collationChanged = mysql && collation.trim() !== '' && collation.trim() !== (schema.collation ?? '')
+  const autoIncrementChanged =
+    mysql && autoIncrement.trim() !== '' && autoIncrement.trim() !== (schema.autoIncrement ?? '')
   const invalid =
     (engineChanged && !IDENT.test(engine.trim())) ||
     (collationChanged && !IDENT.test(collation.trim())) ||

@@ -1,5 +1,6 @@
 import type {
   ColumnMeta,
+  DatabaseInfo,
   EventInfo,
   KeyValue,
   Namespace,
@@ -316,12 +317,18 @@ export class PostgresAdapter extends BaseAdapter {
     await Promise.all(pools.map((p) => p.end()))
   }
 
-  async listDatabases(): Promise<{ name: string }[]> {
+  async listDatabases(): Promise<DatabaseInfo[]> {
     try {
-      const res = await this.poolFor(this.defaultDatabase()).query<{ datname: string }>(
-        'SELECT datname FROM pg_database WHERE datistemplate = false ORDER BY datname'
+      // pg_database_size needs CONNECT on the database; others are reported without a size.
+      const res = await this.poolFor(this.defaultDatabase()).query<{ datname: string; size: string | null }>(
+        `SELECT datname, CASE WHEN has_database_privilege(datname, 'CONNECT') THEN pg_database_size(datname) END AS size
+         FROM pg_database WHERE datistemplate = false ORDER BY datname`
       )
-      return res.rows.map((r) => ({ name: r.datname }))
+      return res.rows.map((r) => ({
+        name: r.datname,
+        sizeBytes: r.size === null ? null : Number(r.size),
+        tableCount: null,
+      }))
     } catch (err) {
       throw this.toAdapterError(err)
     }

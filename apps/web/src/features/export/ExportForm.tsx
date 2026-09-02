@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { useRouteContext } from '@tanstack/react-router'
 import type { ExportFormat, TableInfo } from '@tsmyadmin/shared'
 import { ExportFormatSchema } from '@tsmyadmin/shared'
 import { Download } from 'lucide-react'
@@ -19,6 +20,8 @@ export interface ExportFormProps {
 }
 
 export function ExportForm({ db, schema, table, initialTables }: ExportFormProps) {
+  const { session } = useRouteContext({ from: '/_app' })
+  const dialect = session.dialect
   const tables = useQuery({ ...tablesQuery(db, schema), enabled: table === undefined })
   const [selected, setSelected] = useState<string[]>(table ? [table] : (initialTables ?? []))
   const [format, setFormat] = useState<ExportFormat>('sql')
@@ -26,6 +29,8 @@ export function ExportForm({ db, schema, table, initialTables }: ExportFormProps
   const [dropTable, setDropTable] = useState(true)
   const [data, setData] = useState(true)
   const [bom, setBom] = useState(true)
+  const [routines, setRoutines] = useState(true)
+  const [stripDefiner, setStripDefiner] = useState(false)
   // Views are included: SQL dumps carry their CREATE VIEW, CSV/JSON export their rows.
   const available: TableInfo[] = table ? [] : (tables.data ?? [])
   const toggle = (name: string) => setSelected((s) => (s.includes(name) ? s.filter((x) => x !== name) : [...s, name]))
@@ -46,6 +51,8 @@ export function ExportForm({ db, schema, table, initialTables }: ExportFormProps
     dropTable,
     data,
     bom,
+    routines,
+    stripDefiner,
   })
 
   return (
@@ -103,6 +110,30 @@ export function ExportForm({ db, schema, table, initialTables }: ExportFormProps
             <input type="checkbox" checked={data} onChange={(e) => setData(e.target.checked)} />
             {locale.export.data}
           </label>
+        </div>
+      ) : null}
+      {format === 'sql' ? (
+        <div className="flex flex-wrap gap-4 text-sm">
+          <label className="flex items-center gap-1">
+            <input
+              type="checkbox"
+              checked={routines}
+              disabled={!structure}
+              onChange={(e) => setRoutines(e.target.checked)}
+            />
+            {locale.export.routines}
+          </label>
+          {dialect === 'mysql' ? (
+            <label className="flex items-center gap-1">
+              <input
+                type="checkbox"
+                checked={stripDefiner}
+                disabled={!structure}
+                onChange={(e) => setStripDefiner(e.target.checked)}
+              />
+              {locale.export.stripDefiner}
+            </label>
+          ) : null}
         </div>
       ) : null}
       {format === 'csv' ? (

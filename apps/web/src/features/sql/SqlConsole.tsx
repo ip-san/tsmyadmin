@@ -139,7 +139,7 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
       queryId.current = null
     },
     onSuccess: async (res, sql) => {
-      setHistory(pushHistory(scope, { sql, at: Date.now(), ok: res.every((r) => r.kind !== 'error') }))
+      setHistory(pushHistory(scope, { sql, at: Date.now(), ok: res.every((r) => r.kind !== 'error'), db }))
       if (res.some((r) => r.kind !== 'rows')) {
         await queryClient.invalidateQueries({ predicate: (q) => q.queryKey[0] !== 'session' })
       }

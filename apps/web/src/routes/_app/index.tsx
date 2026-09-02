@@ -31,6 +31,8 @@ function ServerPage() {
           <thead>
             <tr>
               <Th>{locale.server.databaseName}</Th>
+              <Th className="text-right">{locale.database.size}</Th>
+              {session.dialect === 'mysql' ? <Th className="text-right">{locale.database.tableCount}</Th> : null}
               <Th>{locale.database.actions}</Th>
             </tr>
           </thead>
@@ -46,6 +48,12 @@ function ServerPage() {
                     {d.name}
                   </Link>
                 </Td>
+                <Td className="whitespace-nowrap text-right tabular-nums">
+                  {d.sizeBytes === null ? '–' : locale.common.bytes(d.sizeBytes)}
+                </Td>
+                {session.dialect === 'mysql' ? (
+                  <Td className="text-right tabular-nums">{d.tableCount === null ? '–' : d.tableCount}</Td>
+                ) : null}
                 <Td className="space-x-2 whitespace-nowrap">
                   <Link
                     to="/db/$db"
