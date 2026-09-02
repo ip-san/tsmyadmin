@@ -8,6 +8,9 @@ import { apiError, errorResponse } from '../lib/errors.ts'
 import type { Logger } from '../lib/logging.ts'
 import type { RateLimiter } from '../lib/rate-limit.ts'
 import { validate } from '../lib/validate.ts'
+
+const HOST_ACL_CODES = new Set(['ER_HOST_NOT_PRIVILEGED', 'ER_HOST_IS_BLOCKED'])
+
 import {
   type AppEnv,
   requireSession,
@@ -84,6 +87,10 @@ export function sessionRoutes(cfg: SessionConfig, deps: SessionRouteDeps) {
         // unauthenticated caller the API's egress address; the code says everything the user needs.
         if (err instanceof AdapterError && err.code === 'AUTH_FAILED') {
           return c.json(apiError('AUTH_FAILED', 'Authentication failed'), 401)
+        }
+        // MySQL host ACL errors ("Host '<api address>' is not allowed / blocked") name the API's own address.
+        if (err instanceof AdapterError && HOST_ACL_CODES.has(err.nativeCode ?? '')) {
+          return c.json(apiError('CONNECTION_FAILED', 'The server refused connections from this host'), 502)
         }
         return errorResponse(c, err, deps.logger)
       }

@@ -15,7 +15,15 @@ import type {
 } from '@tsmyadmin/shared'
 import { isViewKind } from '@tsmyadmin/shared'
 import pg, { type FieldDef, type PoolClient, type QueryResult } from 'pg'
-import { BaseAdapter, type Conn, driverValueToCell, firstResult, type QueryOptions, type RawResult } from '../base.ts'
+import {
+  BaseAdapter,
+  type Canceller,
+  type Conn,
+  driverValueToCell,
+  firstResult,
+  type QueryOptions,
+  type RawResult,
+} from '../base.ts'
 import { quoteIdent, quoteTable } from '../sql/quote.ts'
 import { AdapterError, type AdapterErrorCode, type ConnectionConfig, type RowBatch } from '../types.ts'
 import { pgCreateStatements, pgDdl } from './ddl.ts'
@@ -252,8 +260,8 @@ export class PostgresAdapter extends BaseAdapter {
   }
 
   /** pg_cancel_backend interrupts the statement but keeps the session (pg_terminate_backend would drop it). */
-  protected async cancelBackend(_ns: Namespace, id: string, stillRunning: () => boolean): Promise<void> {
-    // A throwaway connection: the pools may be saturated by the very scripts being cancelled, and
+  protected async openCanceller(_ns: Namespace): Promise<Canceller> {
+    // A dedicated connection: the pools may be saturated by the very scripts being cancelled, and
     // pg_cancel_backend works from any database.
     const client = new pg.Client({
       host: this.config.host,
@@ -265,12 +273,19 @@ export class PostgresAdapter extends BaseAdapter {
     })
     try {
       await client.connect()
-      // Checked with the connection in hand: the run may have ended (and its backend been re-borrowed) meanwhile.
-      if (stillRunning()) await client.query('SELECT pg_cancel_backend($1::int)', [Number(id)])
     } catch (err) {
-      throw this.toAdapterError(err)
-    } finally {
       await client.end().catch(() => undefined)
+      throw this.toAdapterError(err)
+    }
+    return {
+      cancel: async (id) => {
+        try {
+          await client.query('SELECT pg_cancel_backend($1::int)', [Number(id)])
+        } catch (err) {
+          throw this.toAdapterError(err)
+        }
+      },
+      close: () => client.end().catch(() => undefined),
     }
   }
 

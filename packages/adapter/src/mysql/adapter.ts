@@ -19,7 +19,15 @@ import mysql, {
   type PoolConnection,
   type ResultSetHeader,
 } from 'mysql2/promise'
-import { BaseAdapter, type Conn, driverValueToCell, firstResult, type QueryOptions, type RawResult } from '../base.ts'
+import {
+  BaseAdapter,
+  type Canceller,
+  type Conn,
+  driverValueToCell,
+  firstResult,
+  type QueryOptions,
+  type RawResult,
+} from '../base.ts'
 import { quoteIdent, quoteTable } from '../sql/quote.ts'
 import { AdapterError, type AdapterErrorCode, type ConnectionConfig } from '../types.ts'
 import { mysqlDdl } from './ddl.ts'
@@ -39,6 +47,7 @@ const CONNECTION_CODES = new Set([
   'EHOSTUNREACH',
   'PROTOCOL_CONNECTION_LOST',
   'ER_HOST_NOT_PRIVILEGED',
+  'ER_HOST_IS_BLOCKED',
 ])
 const NOT_FOUND_CODES = new Set([
   'ER_NO_SUCH_TABLE',
@@ -61,6 +70,12 @@ const PERMISSION_CODES = new Set([
  * is deliberately *not* here: it ends the statement but leaves the connection usable, so it stays QUERY_FAILED.
  */
 const KILLED_CODES = new Set(['ER_CONNECTION_KILLED', 'PROTOCOL_CONNECTION_LOST'])
+/** Derived-table wrapping (only used for statements with their own LIMIT) fails where the bare statement would not. */
+const WRAPPER_ONLY_ERRORS: ReadonlySet<string> = new Set([
+  'ER_DUP_FIELDNAME',
+  'ER_CANT_USE_OPTION_HERE',
+  'ER_PARSE_ERROR',
+])
 /** MariaDB-only errno values the driver has no symbolic name for; anything else unnamed becomes `ER_<errno>`. */
 const MARIADB_ERRNO_NAMES: Record<number, string> = {
   1969: 'ER_STATEMENT_TIMEOUT',
@@ -240,6 +255,10 @@ export class MysqlAdapter extends BaseAdapter {
     return true
   }
 
+  protected override wrapperOnlyErrors(): ReadonlySet<string> {
+    return WRAPPER_ONLY_ERRORS
+  }
+
   protected override readonly castsKeyParams = true
 
   /** Placeholders are sent as string / double literals; these column types need the value coerced server-side. */
@@ -291,11 +310,7 @@ export class MysqlAdapter extends BaseAdapter {
   }
 
   /** KILL QUERY interrupts the statement but keeps the connection usable (unlike KILL). */
-  /**
-   * KILL QUERY from a dedicated connection: the session's pool may be fully occupied by the very statements
-   * being cancelled, and a cancel that waits for a pooled connection cancels nothing until one frees up.
-   */
-  protected async cancelBackend(_ns: Namespace, id: string, stillRunning: () => boolean): Promise<void> {
+  protected async openCanceller(_ns: Namespace): Promise<Canceller> {
     let conn: Connection
     try {
       conn = await mysql.createConnection({
@@ -308,13 +323,15 @@ export class MysqlAdapter extends BaseAdapter {
     } catch (err) {
       throw this.toAdapterError(err)
     }
-    try {
-      // Checked with the connection in hand: the run may have ended (and its backend been re-borrowed) meanwhile.
-      if (stillRunning()) await conn.query(`KILL QUERY ${id}`)
-    } catch (err) {
-      throw this.toAdapterError(err)
-    } finally {
-      await conn.end().catch(() => undefined)
+    return {
+      cancel: async (id) => {
+        try {
+          await conn.query(`KILL QUERY ${id}`)
+        } catch (err) {
+          throw this.toAdapterError(err)
+        }
+      },
+      close: () => conn.end().catch(() => undefined),
     }
   }
 

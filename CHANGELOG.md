@@ -25,6 +25,9 @@
 - 設定: `TSMYADMIN_ALLOWED_HOSTS=`（空）の「プリセットのみ」の意味を維持、起動時エラーは常に `Invalid environment:` で始まる、プリセットの未知キー（`password` など）を拒否
 - SQLite セッションストア: 開けない場合は `session_store.open_failed` を記録して終了、`SESSION_SECRET` 変更時に保存済みセッションを起動時に削除（`session_store.reset`）
 - ログ: 成功した `/healthz` `/readyz` をアクセスログに出さない
+- MySQL: 上限を超える `LIMIT` を書いた文が `sql_select_limit` を上書きし、結果全体を API に送っていた → その文は派生テーブルで包む。スクリプト内の `SET SESSION sql_select_limit` の後は上限を再適用
+- キャンセル: 同じ実行への同時キャンセルは 1 本の専用接続を共有し、再送でも接続を開き直さない（連打で DB の `max_connections` を使い切れていた）
+- ログイン失敗時に MySQL のホスト ACL メッセージ（API 側のアドレスを含む）を返さない
 - ダイアログが画面左上に固定表示されていた（Tailwind の preflight が `<dialog>` の中央寄せを打ち消していた）
 - ダークモードの SQL エディターでキーワードがほぼ見えなかった → テーマに追従するハイライトを追加
 - PostgreSQL: ANALYZE 前のテーブルの行数を「–」でなく統計ビューから表示、エンジン列を非表示、権限表示からカタログスキーマの GRANT を除外、拡張機能の関数をルーチン一覧から除外

@@ -787,6 +787,27 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         // ORDER BY of a plain read is kept under the cap (MariaDB drops it inside a merged derived table).
         const ordered = await exec('SELECT id FROM users ORDER BY id DESC', { maxRows: 3 })
         expect(ordered[0]).toMatchObject({ kind: 'rows', result: { rows: [[5], [4], [3]], truncated: true } })
+        // A LIMIT above the cap does not lift it (MySQL's own LIMIT would override sql_select_limit), nor does a
+        // script that resets the session cap itself; the order of an explicit LIMIT query survives the wrap.
+        // MySQL materialises a derived table that has a LIMIT, so the guard there is about the process memory
+        // (the server keeps the 390,625-row temp table, the API receives maxRows + 1), not about time.
+        const bigLimit = await exec(
+          dialect === 'mysql'
+            ? `SELECT u1.id FROM ${Array.from({ length: 8 }, (_, i) => `users u${i + 1}`).join(', ')} LIMIT 1000000`
+            : 'SELECT i, pg_sleep(0.05) FROM generate_series(1, 1000) AS g(i) LIMIT 1000',
+          { maxRows: 5, timeoutMs: 5000 }
+        )
+        expect(bigLimit[0]).toMatchObject({ kind: 'rows', result: { truncated: true } })
+        if (bigLimit[0]?.kind === 'rows') expect(bigLimit[0].result.rows).toHaveLength(5)
+        const orderedLimit = await exec('SELECT id FROM users ORDER BY id DESC LIMIT 100', { maxRows: 3 })
+        expect(orderedLimit[0]).toMatchObject({ kind: 'rows', result: { rows: [[5], [4], [3]], truncated: true } })
+        if (dialect === 'mysql') {
+          const reset = await exec(
+            'SET SESSION sql_select_limit = DEFAULT; SELECT u1.id, SLEEP(0.05) FROM users u1, users u2, users u3, users u4, users u5',
+            { maxRows: 5, timeoutMs: 5000 }
+          )
+          expect(reset[1]).toMatchObject({ kind: 'rows', result: { truncated: true } })
+        }
         // A literal that merely mentions DML is still a read: the cap applies (unwrapped, 3,125 sleeping rows
         // would take minutes).
         const literal =
@@ -895,6 +916,18 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         expect(await db.cancelQuery(queryId)).toBe(false)
         const ok = await exec('SELECT 1 AS x')
         expect(ok[0]).toMatchObject({ kind: 'rows' })
+      })
+
+      it('shares one cancel between concurrent requests for the same run', async () => {
+        const before = (await db.listProcesses()).length
+        const queryId = crypto.randomUUID()
+        const run = db.executeSql(ns, ctx.slowSql, { ...EXEC, timeoutMs: 60_000, queryId })
+        // A burst of cancel clicks must not become a burst of dedicated connections against the server.
+        const results = await Promise.all(Array.from({ length: 25 }, () => db.cancelQuery(queryId)))
+        expect(results.every((r) => r)).toBe(true)
+        expect((await run)[0]?.kind).toBe('error')
+        // The cancel connection is closed again: the server sees no lingering sessions from the burst.
+        expect((await db.listProcesses()).length).toBeLessThanOrEqual(before + 2)
       })
 
       it('cancels reliably even when the cancel reaches the server before the statement does', async () => {

@@ -134,6 +134,26 @@ describe('session', () => {
     expect(h.store.size).toBe(0)
   })
 
+  it('never echoes a MySQL host-ACL message (it names the API host) to the login caller', async () => {
+    const adapter = fixtureAdapter({
+      failWith: new AdapterError(
+        'CONNECTION_FAILED',
+        "ER_HOST_NOT_PRIVILEGED: Host '10.0.0.7' is not allowed",
+        undefined,
+        {
+          nativeCode: 'ER_HOST_NOT_PRIVILEGED',
+        }
+      ),
+    })
+    const h = harness(adapter)
+    stores.push(h.store)
+    const res = await h.login()
+    expect(res.status).toBe(502)
+    const body = await res.text()
+    expect(body).not.toContain("Host '")
+    expect(ApiErrorSchema.parse(JSON.parse(body)).code).toBe('CONNECTION_FAILED')
+  })
+
   it('maps unreachable hosts to 502 CONNECTION_FAILED', async () => {
     const h = harness(fixtureAdapter({ failWith: new AdapterError('CONNECTION_FAILED', 'ECONNREFUSED') }))
     stores.push(h.store)

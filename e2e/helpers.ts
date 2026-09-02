@@ -33,7 +33,7 @@ export const test = base.extend<{ autoLogout: void }>({
   autoLogout: [
     async ({ page, baseURL }, use) => {
       await use()
-      // Same-origin Origin header: the API's CSRF check refuses non-GET requests without one.
+      // Same-origin Origin header, as a browser would send: the request context sends none by itself.
       await page.request.delete('/api/session', { headers: { origin: baseURL ?? '' } }).catch(() => undefined)
     },
     { auto: true },
