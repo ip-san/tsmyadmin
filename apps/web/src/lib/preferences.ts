@@ -37,3 +37,11 @@ export function writePreference<T>(key: string, value: T, store: PreferenceStore
     // ignore
   }
 }
+
+export function removePreference(key: string, store: PreferenceStore | null | undefined = storage()): void {
+  try {
+    store?.removeItem(PREFIX + key)
+  } catch {
+    // ignore
+  }
+}

@@ -10,7 +10,7 @@ MySQL / PostgreSQL 両対応の、モダン TypeScript 製 phpMyAdmin クロー�
 - **型の流れ**: `packages/shared` の Zod → API (`@hono/zod-validator`) → web (`hc<AppType>`)
 - **テスト DB**: `docker compose`（MySQL `13306` / PostgreSQL `15433`、fixtures 自動投入）
 - **本番運用**: 設定は `apps/api/src/config.ts` で起動時検証（環境変数の一覧は `docs/deployment.md` が唯一の正）。接続先 allowlist・ログイン レート制限・CSP・リクエスト ID 付き構造化ログ・監査ログ（`withAudit`）・`/healthz` `/readyz`・暗号化 SQLite セッションストア（`SESSION_STORE=sqlite`）
-- **品質**: Vitest / Playwright / Biome / knip / madge / jscpd / type-coverage / size-limit + 自前検査（`check:arch`, `check:sql-safety`, `docs:validate`）
+- **品質**: Vitest / Playwright / Biome / knip / madge / jscpd / type-coverage + 自前検査（`check:arch`, `check:sql-safety`, `docs:validate`, `size` = 初期 JS の brotli 合計 150 kB 予算）
 
 ## 開発コマンド
 
@@ -29,8 +29,8 @@ bun run lighthouse        # Lighthouse CI（警告のみ、要 Chrome）
 
 ## 現在の規模（`scripts/validate-docs.mjs` が同期）
 
-- ユニット/API/Web テスト定義: <!-- stat:unit-tests -->243<!-- /stat --> 件
-- Adapter conformance: <!-- stat:conformance -->70<!-- /stat --> 件 × 2 方言
+- ユニット/API/Web テスト定義: <!-- stat:unit-tests -->244<!-- /stat --> 件
+- Adapter conformance: <!-- stat:conformance -->71<!-- /stat --> 件 × 2 方言
 - E2E: <!-- stat:e2e -->48<!-- /stat --> 件
 - API ルート: <!-- stat:routes -->30<!-- /stat -->
 

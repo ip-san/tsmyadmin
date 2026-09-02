@@ -74,6 +74,7 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
     `${scratch}_camel`,
     `${scratch}_pu`,
     `${scratch}_seq`,
+    `${scratch}_like`,
   ]
   const browseAll = async (table: string) => db.browseRows(ns, table, { offset: 0, limit: 100, sort: [], filters: [] })
 
@@ -332,6 +333,29 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
           filters: [{ column: 'name', op: 'eq', value: "' OR 1=1 --" }],
         })
         expect(injection.rows).toHaveLength(0)
+      })
+
+      it('matches contains / starts_with literally (LIKE metacharacters escaped)', async () => {
+        const t = `${scratch}_like`
+        await execOk(`CREATE TABLE ${t} (id INT PRIMARY KEY, s VARCHAR(30) NULL)`)
+        await execOk(
+          `INSERT INTO ${t} (id, s) VALUES (1, '100%'), (2, 'a_b'), (3, 'axb'), (4, 'bang!here'), (5, 'xx100%yy')`
+        )
+        const find = async (op: 'contains' | 'starts_with', value: string) =>
+          (
+            await db.browseRows(ns, t, {
+              offset: 0,
+              limit: 10,
+              sort: [{ column: 'id', direction: 'asc' }],
+              filters: [{ column: 's', op, value }],
+            })
+          ).rows.map((r) => r[0])
+        expect(await find('contains', '100%')).toEqual([1, 5])
+        expect(await find('starts_with', '100%')).toEqual([1])
+        expect(await find('contains', 'a_b')).toEqual([2])
+        expect(await find('contains', '!')).toEqual([4])
+        expect(await find('starts_with', 'a')).toEqual([2, 3])
+        await execOk(`DROP TABLE ${t}`)
       })
 
       it('rejects unknown sort/filter columns', async () => {

@@ -102,8 +102,18 @@ const FILTER_SQL: Record<Filter['op'], string> = {
   gte: '>=',
   like: 'LIKE',
   not_like: 'NOT LIKE',
+  contains: 'LIKE',
+  starts_with: 'LIKE',
   is_null: 'IS NULL',
   is_not_null: 'IS NOT NULL',
+}
+
+/**
+ * Escapes LIKE metacharacters so a user string matches literally. `!` is the escape character (declared with
+ * ESCAPE '!'): unlike a backslash it needs no dialect-specific string escaping of its own.
+ */
+export function escapeLike(text: string): string {
+  return text.replaceAll('!', '!!').replaceAll('%', '!%').replaceAll('_', '!_')
 }
 
 /** Exact COUNT(*) unless the catalog says the table is large (callers pass null when the browse is filtered). */
@@ -308,6 +318,12 @@ export abstract class BaseAdapter implements DatabaseAdapter {
       if (f.op === 'is_null' || f.op === 'is_not_null') return `${col} ${op}`
       if (f.value === undefined)
         throw new AdapterError('QUERY_FAILED', `Filter "${f.op}" on ${f.column} requires a value`)
+      if (f.op === 'contains' || f.op === 'starts_with') {
+        // The user's text is matched literally: LIKE metacharacters are escaped, wildcards added here.
+        const text = escapeLike(String(f.value ?? ''))
+        const pattern = f.op === 'contains' ? `%${text}%` : `${text}%`
+        return `${col} LIKE ${params.add(pattern)} ESCAPE '!'`
+      }
       return `${col} ${op} ${params.add(toDbValue(f.value))}`
     })
     return ` WHERE ${parts.join(' AND ')}`

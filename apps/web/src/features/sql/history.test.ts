@@ -30,9 +30,12 @@ describe('sql history', () => {
 
   it('ignores corrupt storage and can be cleared', () => {
     const s = memoryStorage()
-    s.setItem('tsmyadmin.sqlHistory.mysql', '{not json')
+    s.setItem('tsmyadmin.pref.sql.history.mysql', '{not json')
     expect(loadHistory('mysql', s)).toEqual([])
-    s.setItem('tsmyadmin.sqlHistory.mysql', JSON.stringify([{ sql: 'ok', at: 1, ok: true }, { bad: true }]))
+    // A list with a malformed entry is discarded as a whole (schema-validated like every preference).
+    s.setItem('tsmyadmin.pref.sql.history.mysql', JSON.stringify([{ sql: 'ok', at: 1, ok: true }, { bad: true }]))
+    expect(loadHistory('mysql', s)).toEqual([])
+    s.setItem('tsmyadmin.pref.sql.history.mysql', JSON.stringify([{ sql: 'ok', at: 1, ok: true }]))
     expect(loadHistory('mysql', s)).toEqual([{ sql: 'ok', at: 1, ok: true }])
     clearHistory('mysql', s)
     expect(loadHistory('mysql', s)).toEqual([])

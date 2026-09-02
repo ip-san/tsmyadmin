@@ -121,7 +121,7 @@ ls e2e/*.spec.ts 2>/dev/null && bun run test:e2e
 |---------|------|------|
 | 1. self-review | 完了/スキップ | Critical N件, Warning N件 修正 |
 | 2. check:all | ✅ PASS / ❌ NG | typecheck/lint/test/knip/circular/cpd/arch/sql-safety/docs/integration の内訳 |
-| 3. size | ✅ PASS / ⚠️ 超過 | Initial JS: XXX kB（閾値 300 kB） |
+| 3. size | ✅ PASS / ⚠️ 超過 | Initial JS: XXX kB（閾値 150 kB、scripts/check-bundle-size.mjs） |
 | 4. e2e | ✅ PASS / ❌ NG / スキップ(未整備) | 失敗テスト一覧 |
 
 ### 実行モード

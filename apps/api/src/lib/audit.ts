@@ -73,11 +73,14 @@ export function summarise(method: AuditedMethod, args: unknown[]): Record<string
         key: (args[2] as RowKey[])?.[0] ? keySummary((args[2] as RowKey[])[0] as RowKey) : undefined,
       }
     case 'executeSql': {
-      const sql = redactSqlSecrets(String(args[1] ?? ''))
+      const full = String(args[1] ?? '')
+      // Only the logged prefix is scanned (a 64 MB import would otherwise block the event loop on regexes);
+      // a secret straddling the cut is truncated together with everything after it.
+      const sql = redactSqlSecrets(full.slice(0, SQL_SUMMARY_MAX * 16))
       return {
         ...base,
         sql: sql.length > SQL_SUMMARY_MAX ? `${sql.slice(0, SQL_SUMMARY_MAX)}…` : sql,
-        sqlLength: sql.length,
+        sqlLength: full.length,
       }
     }
     case 'cancelQuery':

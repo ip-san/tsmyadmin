@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { wrapReadOnly } from '../base.ts'
+import { escapeLike, wrapReadOnly } from '../base.ts'
 
 describe('wrapReadOnly', () => {
   it('wraps plain reads with a LIMIT and keeps the body verbatim', () => {
@@ -21,5 +21,12 @@ describe('wrapReadOnly', () => {
       'UPDATE t SET a = 1',
     ])
       expect(wrapReadOnly(sql, 10), sql).toBeNull()
+  })
+})
+
+describe('escapeLike', () => {
+  it('escapes %, _ and the escape character itself', () => {
+    expect(escapeLike('100%_!x')).toBe('100!%!_!!x')
+    expect(escapeLike('plain')).toBe('plain')
   })
 })

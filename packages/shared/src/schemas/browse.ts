@@ -14,6 +14,9 @@ export const FilterOpSchema = z.enum([
   'lte',
   'gt',
   'gte',
+  /** Substring / prefix match: the server adds the wildcards and escapes % and _ in the value. */
+  'contains',
+  'starts_with',
   'like',
   'not_like',
   'is_null',
