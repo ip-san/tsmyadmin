@@ -92,6 +92,37 @@ describe('program objects', () => {
     expect(mysqlExporter.trigger(ns, qualified, true).sql).toContain(
       `CREATE TRIGGER tr BEFORE INSERT ON t FOR EACH ROW INSERT INTO ${ns.database}.log VALUES (1)`
     )
+    // A body-only fallback is never rewritten, even when it mentions FOR EACH ROW in a string.
+    const fallback = {
+      ...trigger,
+      definition: `INSERT INTO ${ns.database}.log VALUES ('FOR EACH ROW ${ns.database}.x')`,
+    }
+    expect(mysqlExporter.trigger(ns, fallback, true).sql).toContain(
+      `FOR EACH ROW\nINSERT INTO ${ns.database}.log VALUES ('FOR EACH ROW ${ns.database}.x')`
+    )
+    // Events: only the name is unqualified; a COMMENT naming the database stays as it is.
+    const event = mysqlExporter.event(
+      ns,
+      {
+        name: 'ev',
+        status: 'ENABLED',
+        type: 'RECURRING',
+        schedule: 'EVERY 1 DAY',
+        starts: null,
+        ends: null,
+        lastExecuted: null,
+        onCompletion: null,
+        comment: null,
+        definition: `CREATE DEFINER=\`a\`@\`%\` EVENT \`${ns.database}\`.\`ev\` ON SCHEDULE EVERY 1 DAY COMMENT 'see ${ns.database}.log' DO INSERT INTO ${ns.database}.log VALUES (1)`,
+        sqlMode: '',
+        timeZone: null,
+        definer: 'a@%',
+      },
+      true
+    )
+    expect(event.sql).toContain(
+      `CREATE EVENT \`ev\` ON SCHEDULE EVERY 1 DAY COMMENT 'see ${ns.database}.log' DO INSERT INTO ${ns.database}.log VALUES (1)`
+    )
     expect(block).toContain("SELECT 'DEFINER=root@localhost' AS s")
     // PostgreSQL: overloads are already complete statements; nothing is wrapped.
     expect(

@@ -1117,7 +1117,8 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
              CREATE INDEX ${part}_d_idx ON ${part} (d);
              CREATE INDEX "${part} spaced" ON ${part} (d);
              CREATE INDEX ${part}_2024_id_idx ON ${part}_2024 (id);
-             ALTER TABLE ${part}_2024 ADD CONSTRAINT ${part}_2024_chk CHECK (id > 0)`
+             ALTER TABLE ${part}_2024 ADD CONSTRAINT ${part}_2024_chk CHECK (id > 0);
+             ALTER TABLE ${part}_2024 ADD PRIMARY KEY (id, d)`
           )
           try {
             const parent = (await db.showCreateTable(ns, p)).join('\n')
@@ -1160,6 +1161,9 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
               `ALTER TABLE "public"."${part}_2024" ADD CONSTRAINT "${part}_2024_chk" CHECK ((id > 0))`
             )
             expect(partitioned.join('\n')).not.toContain(`${part}_2024_d_idx`)
+            expect(partitioned).toContainEqual(
+              `ALTER TABLE "public"."${part}_2024" ADD CONSTRAINT "${part}_2024_pkey" PRIMARY KEY (id, d)`
+            )
             // Partitions are not tables of their own in the listing (their rows come through the parent).
             expect((await db.listTables(ns)).map((x) => x.name)).not.toContain(`${part}_2024`)
           } finally {

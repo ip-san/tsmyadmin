@@ -291,7 +291,7 @@ export async function pgTableCatalog(conn: Conn, regclass: string): Promise<PgTa
                      AND NOT EXISTS (SELECT 1 FROM pg_inherits ih WHERE ih.inhrelid = i.indexrelid)
                      AND NOT EXISTS (SELECT 1 FROM pg_constraint k WHERE k.conindid = i.indexrelid AND k.conrelid = c.oid)),
                 (SELECT string_agg(k.conname || $3 || pg_get_constraintdef(k.oid, false), $2 ORDER BY k.conname)
-                   FROM pg_constraint k WHERE k.conrelid = c.oid AND k.conislocal AND k.contype IN ('c', 'u', 'x', 'f'))
+                   FROM pg_constraint k WHERE k.conrelid = c.oid AND k.conislocal AND k.contype IN ('p', 'c', 'u', 'x', 'f'))
          FROM tree JOIN pg_class c ON c.oid = tree.inhrelid JOIN pg_class p ON p.oid = tree.inhparent
          JOIN pg_namespace cn ON cn.oid = c.relnamespace JOIN pg_namespace pn ON pn.oid = p.relnamespace
          WHERE c.relispartition ORDER BY tree.depth, c.relname`,
@@ -383,7 +383,8 @@ export function pgCreateStatements(ns: Namespace, schema: TableSchema, catalog?:
     `CREATE ${catalog?.unlogged ? 'UNLOGGED ' : ''}TABLE ${t} (\n  ${defs.join(',\n  ')}\n)${inherits}${partitionBy}${storage}`,
   ]
   for (const c of inherited) {
-    if (c.default !== null && !c.extra)
+    // A serial parent's nextval() default is inherited as a plain default (identity is not inherited).
+    if (c.default !== null && (!c.extra || c.extra === 'serial'))
       out.push(`ALTER TABLE ONLY ${t} ALTER COLUMN ${id(c.name)} SET DEFAULT ${c.default}`)
     if (!c.nullable) out.push(`ALTER TABLE ONLY ${t} ALTER COLUMN ${id(c.name)} SET NOT NULL`)
   }

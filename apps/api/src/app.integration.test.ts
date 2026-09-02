@@ -150,6 +150,8 @@ describe.each(targets)('API integration ($dialect)', ({ dialect, url }) => {
         : [
             'DROP TABLE IF EXISTS prog_t CASCADE',
             'DROP TABLE IF EXISTS prog_part',
+            'DROP TABLE IF EXISTS prog_sc',
+            'DROP TABLE IF EXISTS prog_sp',
             'DROP TABLE IF EXISTS prog_d CASCADE',
             'DROP VIEW IF EXISTS prog_v3',
             'DROP FUNCTION IF EXISTS prog_one()',
@@ -192,6 +194,11 @@ describe.each(targets)('API integration ($dialect)', ({ dialect, url }) => {
             'CREATE INDEX prog_part_d_idx ON prog_part (d)',
             'CREATE TRIGGER prog_always BEFORE INSERT ON prog_d FOR EACH ROW EXECUTE FUNCTION prog_default_title()',
             'ALTER TABLE prog_d ENABLE ALWAYS TRIGGER prog_always',
+            // A serial parent with an inheritance child: the child keeps the inherited nextval() default and the
+            // shared sequence is advanced past the child's ids.
+            'CREATE TABLE prog_sp (id SERIAL PRIMARY KEY, a INT)',
+            'CREATE TABLE prog_sc (x TEXT) INHERITS (prog_sp)',
+            "INSERT INTO prog_sc (a, x) VALUES (1, 'c'), (2, 'd')",
           ]
     for (const statement of setup) {
       const r = z.array(StatementResultSchema).parse(await (await other(statement)).json())
@@ -227,7 +234,7 @@ describe.each(targets)('API integration ($dialect)', ({ dialect, url }) => {
       await other(
         dialect === 'mysql'
           ? 'DROP VIEW prog_v; DROP TRIGGER prog_before_insert; DROP FUNCTION prog_label; DROP PROCEDURE prog_p; DROP EVENT prog_event'
-          : 'DROP FUNCTION prog_rows(); DROP TABLE prog_part; DROP TABLE prog_d; DROP VIEW prog_v3; DROP FUNCTION prog_one(); DROP FUNCTION prog_label(bigint); DROP FUNCTION prog_count(); DROP VIEW prog_v2; DROP VIEW prog_v; DROP TRIGGER prog_before_insert ON prog_t; DROP FUNCTION prog_label(int); DROP FUNCTION prog_label(text)'
+          : 'DROP TABLE prog_sc; DROP TABLE prog_sp; DROP FUNCTION prog_rows(); DROP TABLE prog_part; DROP TABLE prog_d; DROP VIEW prog_v3; DROP FUNCTION prog_one(); DROP FUNCTION prog_label(bigint); DROP FUNCTION prog_count(); DROP VIEW prog_v2; DROP VIEW prog_v; DROP TRIGGER prog_before_insert ON prog_t; DROP FUNCTION prog_label(int); DROP FUNCTION prog_label(text)'
       )
       const restored = z.array(StatementResultSchema).parse(await (await other(dump)).json())
       expect(
@@ -271,6 +278,10 @@ describe.each(targets)('API integration ($dialect)', ({ dialect, url }) => {
             ).json()
           )
         expect(idx[0]?.kind === 'rows' ? Number(idx[0].result.rows[0]?.[0]) : -1).toBe(3)
+        const next = z
+          .array(StatementResultSchema)
+          .parse(await (await other("INSERT INTO prog_sc (a, x) VALUES (3, 'after') RETURNING id")).json())
+        expect(next[0]?.kind === 'rows' ? Number(next[0].result.rows[0]?.[0]) : -1).toBe(3)
         expect(tables.map((t) => t.name)).not.toContain('prog_part_2024')
       }
       const triggers = (await (await req('/api/databases/tsmyadmin_other/triggers')).json()) as { name: string }[]
@@ -293,7 +304,7 @@ describe.each(targets)('API integration ($dialect)', ({ dialect, url }) => {
       await other(
         dialect === 'mysql'
           ? 'DROP VIEW IF EXISTS prog_v; DROP EVENT IF EXISTS prog_event; DROP TRIGGER IF EXISTS prog_before_insert; DROP FUNCTION IF EXISTS prog_label; DROP PROCEDURE IF EXISTS prog_p; DROP TABLE IF EXISTS prog_t'
-          : 'DROP FUNCTION IF EXISTS prog_rows(); DROP TABLE IF EXISTS prog_part; DROP TABLE IF EXISTS prog_d; DROP VIEW IF EXISTS prog_v3; DROP FUNCTION IF EXISTS prog_one(); DROP FUNCTION IF EXISTS prog_label(bigint); DROP FUNCTION IF EXISTS prog_count(); DROP VIEW IF EXISTS prog_v2; DROP VIEW IF EXISTS prog_v; DROP TABLE IF EXISTS prog_t CASCADE; DROP FUNCTION IF EXISTS prog_label(int); DROP FUNCTION IF EXISTS prog_label(text); DROP FUNCTION IF EXISTS prog_default_title'
+          : 'DROP TABLE IF EXISTS prog_sc; DROP TABLE IF EXISTS prog_sp; DROP FUNCTION IF EXISTS prog_rows(); DROP TABLE IF EXISTS prog_part; DROP TABLE IF EXISTS prog_d; DROP VIEW IF EXISTS prog_v3; DROP FUNCTION IF EXISTS prog_one(); DROP FUNCTION IF EXISTS prog_label(bigint); DROP FUNCTION IF EXISTS prog_count(); DROP VIEW IF EXISTS prog_v2; DROP VIEW IF EXISTS prog_v; DROP TABLE IF EXISTS prog_t CASCADE; DROP FUNCTION IF EXISTS prog_label(int); DROP FUNCTION IF EXISTS prog_label(text); DROP FUNCTION IF EXISTS prog_default_title'
       )
     }
   })

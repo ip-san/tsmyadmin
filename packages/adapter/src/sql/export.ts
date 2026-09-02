@@ -26,9 +26,19 @@ export function isGeneratedColumn(extra: string): boolean {
  * an empty table or when there is no sequence, and the value is clamped to the sequence minimum (a `MINVALUE
  * 1000` sequence must not be set to 1, nor to a negative id).
  */
-export function pgAdvanceSequence(quotedTable: string, column: string): string {
+export function pgAdvanceSequence(quotedTable: string, column: string, sequence?: string): string {
   const col = quoteIdent('postgres', column)
-  return `SELECT setval(s.seqrelid, GREATEST(m.max_id, s.seqmin), m.max_id >= s.seqmin) FROM (SELECT MAX(${col})::bigint AS max_id FROM ${quotedTable}) m JOIN pg_sequence s ON s.seqrelid = pg_get_serial_sequence(${pgLiteral(quotedTable)}, ${pgLiteral(column)})::regclass WHERE m.max_id IS NOT NULL`
+  // An inheritance child owns no sequence: the one its inherited nextval() default names is advanced instead.
+  const seq = sequence
+    ? `${pgLiteral(sequence)}::regclass`
+    : `pg_get_serial_sequence(${pgLiteral(quotedTable)}, ${pgLiteral(column)})::regclass`
+  return `SELECT setval(s.seqrelid, GREATEST(m.max_id, s.seqmin), m.max_id >= s.seqmin) FROM (SELECT MAX(${col})::bigint AS max_id FROM ${quotedTable}) m JOIN pg_sequence s ON s.seqrelid = ${seq} WHERE m.max_id IS NOT NULL`
+}
+
+/** The sequence a `nextval('…'::regclass)` default names, as written. */
+function sequenceOfDefault(def: string | null): string | undefined {
+  const m = def === null ? null : /^nextval\('((?:[^']|'')*)'::regclass\)$/.exec(def)
+  return m ? (m[1] ?? '').replace(/''/g, "'") : undefined
 }
 
 /**
@@ -59,13 +69,19 @@ const DELIM = ';;'
  * database-relative, so `db.` / `\`db\`.` are removed from the header (up to the body) when they name the dumped
  * database. The body is left alone.
  */
-function unqualifyHeader(statement: string, database: string, bodyStart: RegExp): string {
-  const at = statement.search(bodyStart)
-  if (at < 0) return statement
+function unqualifyHeader(statement: string, database: string, bodyStart: RegExp, afterMatch = false): string {
+  const m = bodyStart.exec(statement)
+  if (!m) return statement
   const escaped = database.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const quoted = quoteIdent('mysql', database).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const header = statement.slice(0, at).replace(new RegExp(`(?<![\\w$\`])(?:${quoted}|${escaped})\\.`, 'g'), '')
-  return header + statement.slice(at)
+  const qualifier = new RegExp(`(?<![\\w$\`])(?:${quoted}|${escaped})\\.`, 'g')
+  if (afterMatch) {
+    // Only the token right after the match (the object name) may carry the qualifier.
+    const at = m.index + m[0].length
+    const rest = statement.slice(at).replace(new RegExp(`^(?:${quoted}|${escaped})\\.`), '')
+    return statement.slice(0, at) + rest
+  }
+  return statement.slice(0, m.index).replace(qualifier, '') + statement.slice(m.index)
 }
 
 function quoteAccount(account: string): string {
@@ -129,12 +145,15 @@ export function createExporter(dialect: Dialect): SqlExporter {
     },
     trigger(ns, t: TriggerInfo, stripDefiner): ProgramStatement {
       if (dialect === 'mysql') {
-        const definition = unqualifyHeader(t.definition ?? '', ns.database, /\bFOR\s+EACH\s+(?:ROW|STATEMENT)\b/i)
+        const definition = t.definition ?? ''
         // The original statement (SHOW CREATE TRIGGER) restores as written; a body from information_schema
         // (escapes already processed) gets the header rebuilt from the trigger's metadata.
         const definer = stripDefiner || !t.definer ? '' : ` DEFINER=${quoteAccount(t.definer)}`
         const create = /^CREATE\s/i.test(definition)
-          ? withoutDefiner(definition, stripDefiner)
+          ? withoutDefiner(
+              unqualifyHeader(definition, ns.database, /\bFOR\s+EACH\s+(?:ROW|STATEMENT)\b/i),
+              stripDefiner
+            )
           : `CREATE${definer} TRIGGER ${id(t.name)} ${t.timing} ${t.events} ON ${id(t.table)} FOR EACH ${t.orientation}\n${definition}`
         return { sql: `DROP TRIGGER IF EXISTS ${id(t.name)}${DELIM}\n${create}`, sqlMode: t.sqlMode }
       }
@@ -146,8 +165,9 @@ export function createExporter(dialect: Dialect): SqlExporter {
       }
     },
     event(ns, e: EventInfo, stripDefiner): ProgramStatement {
-      const definition = unqualifyHeader(e.definition ?? '', ns.database, /\bDO\b/i)
-      // SHOW CREATE EVENT text restores as written; a DO body from information_schema gets its header rebuilt.
+      // SHOW CREATE EVENT text restores as written (a COMMENT precedes DO, so only the name is unqualified);
+      // a DO body from information_schema gets its header rebuilt.
+      const definition = unqualifyHeader(e.definition ?? '', ns.database, /\bEVENT\s+(?:IF\s+NOT\s+EXISTS\s+)?/i, true)
       if (/^CREATE\s/i.test(definition)) {
         return {
           sql: `DROP EVENT IF EXISTS ${id(e.name)}${DELIM}\n${withoutDefiner(definition, stripDefiner)}`,
@@ -241,7 +261,10 @@ export function createExporter(dialect: Dialect): SqlExporter {
       const t = quoteTable(dialect, ns, schema.name)
       return schema.columns
         .filter((c) => c.extra.startsWith('identity') || c.extra === 'serial')
-        .map((c) => `${pgAdvanceSequence(t, c.name)};`)
+        .map(
+          (c) =>
+            `${pgAdvanceSequence(t, c.name, schema.inherits.length > 0 && c.extra === 'serial' ? sequenceOfDefault(c.default) : undefined)};`
+        )
     },
   }
 }
