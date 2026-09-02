@@ -251,10 +251,9 @@ describe.each(targets)('API integration ($dialect)', ({ dialect, url }) => {
         expect(d.sql.join('\n')).toMatch(/CHECK \(+id > 0\)+/)
         const trg = (await (await req('/api/databases/tsmyadmin_other/triggers')).json()) as {
           name: string
-          enabled: boolean
           fireMode: string
         }[]
-        expect(trg).toContainEqual(expect.objectContaining({ name: 'prog_off', enabled: false }))
+        expect(trg).toContainEqual(expect.objectContaining({ name: 'prog_off', fireMode: 'disabled' }))
         expect(trg).toContainEqual(expect.objectContaining({ name: 'prog_always', fireMode: 'always' }))
         const partRows = BrowseResultSchema.parse(
           await (await req('/api/databases/tsmyadmin_other/tables/prog_part/rows')).json()

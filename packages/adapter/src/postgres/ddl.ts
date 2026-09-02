@@ -172,15 +172,15 @@ export interface PgTableCatalog {
   constraints: { name: string; definition: string; index: string | null }[]
   /** Identity sequence options per column, already rendered (`START WITH 1000 CACHE 10`). */
   identityOptions: Map<string, string>
-  /** Parents of an inheritance child (`INHERITS (…)`). */
-  inherits: string[]
+  /** Parents of an inheritance child, rendered for `INHERITS (…)` (schema-qualified, in order). */
+  inherits: string | null
   /** `PARTITION BY …` of a partitioned table. */
   partitionKey: string | null
   /** Partitions (all levels, parents first): created as `PARTITION OF` right after the table. */
   partitions: { name: string; parent: string; bound: string; partitionKey: string | null }[]
   unlogged: boolean
-  /** Storage parameters (`fillfactor=70`, `autovacuum_enabled=false`). */
-  storage: string[]
+  /** Storage parameters as a rendered list (`fillfactor='70', toast.autovacuum_enabled='false'`). */
+  storage: string | null
 }
 
 /** Type bounds an ascending identity sequence takes by default: MAXVALUE is only printed when it differs. */
@@ -199,11 +199,11 @@ export async function pgTableCatalog(conn: Conn, regclass: string): Promise<PgTa
   const out: PgTableCatalog = {
     constraints: [],
     identityOptions: new Map(),
-    inherits: [],
+    inherits: null,
     partitionKey: null,
     partitions: [],
     unlogged: false,
-    storage: [],
+    storage: null,
   }
   for (const row of con.rows) {
     const index = row[2]
@@ -215,7 +215,13 @@ export async function pgTableCatalog(conn: Conn, regclass: string): Promise<PgTa
   }
   const rel = firstResult(
     await conn.query(
-      `SELECT c.relpersistence, c.reloptions, pg_get_partkeydef(c.oid),
+      `SELECT c.relpersistence,
+              (SELECT string_agg(o.name || '=' || quote_literal(o.value), ', ') FROM (
+                 SELECT quote_ident(option_name) AS name, option_value AS value FROM pg_options_to_table(c.reloptions)
+                 UNION ALL
+                 SELECT 'toast.' || quote_ident(option_name), option_value
+                 FROM pg_class t, pg_options_to_table(t.reloptions) WHERE t.oid = c.reltoastrelid) AS o),
+              pg_get_partkeydef(c.oid),
               (SELECT string_agg(quote_ident(pn.nspname) || '.' || quote_ident(p.relname), ', ' ORDER BY i.inhseqno)
                  FROM pg_inherits i JOIN pg_class p ON p.oid = i.inhparent JOIN pg_namespace pn ON pn.oid = p.relnamespace
                  WHERE i.inhrelid = c.oid AND NOT c.relispartition)
@@ -225,15 +231,12 @@ export async function pgTableCatalog(conn: Conn, regclass: string): Promise<PgTa
   )
   const relRow = rel.rows[0]
   out.unlogged = String(relRow?.[0]) === 'u'
-  out.storage = String(relRow?.[1] ?? '')
-    .replace(/^\{|\}$/g, '')
-    .split(',')
-    .map((o) => o.trim())
-    .filter((o) => o.length > 0)
+  const storage = relRow?.[1]
+  out.storage = typeof storage === 'string' && storage.length > 0 ? storage : null
   const partKey = relRow?.[2]
   out.partitionKey = typeof partKey === 'string' && partKey.length > 0 ? partKey : null
   const parents = relRow?.[3]
-  if (typeof parents === 'string' && parents.length > 0) out.inherits = [parents]
+  out.inherits = typeof parents === 'string' && parents.length > 0 ? parents : null
   if (out.partitionKey) {
     // Every partition below this table, parents before their sub-partitions.
     const parts = firstResult(
@@ -309,9 +312,9 @@ export function pgCreateStatements(ns: Namespace, schema: TableSchema, catalog?:
     return parts.join(' ')
   })
   if (schema.primaryKey.length > 0) defs.push(`PRIMARY KEY (${schema.primaryKey.map(id).join(', ')})`)
-  const inherits = catalog && catalog.inherits.length > 0 ? ` INHERITS (${catalog.inherits.join(', ')})` : ''
+  const inherits = catalog?.inherits ? ` INHERITS (${catalog.inherits})` : ''
   const partitionBy = catalog?.partitionKey ? ` PARTITION BY ${catalog.partitionKey}` : ''
-  const storage = catalog && catalog.storage.length > 0 ? ` WITH (${catalog.storage.join(', ')})` : ''
+  const storage = catalog?.storage ? ` WITH (${catalog.storage})` : ''
   const out = [
     `CREATE ${catalog?.unlogged ? 'UNLOGGED ' : ''}TABLE ${t} (\n  ${defs.join(',\n  ')}\n)${inherits}${partitionBy}${storage}`,
   ]

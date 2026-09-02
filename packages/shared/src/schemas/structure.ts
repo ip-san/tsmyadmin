@@ -88,6 +88,8 @@ export const TableSchemaSchema = z.object({
   partitioned: z.boolean(),
   /** Inheritance parent (PostgreSQL): reads through it include child rows, so ctid cannot identify a row. */
   hasChildren: z.boolean(),
+  /** Inheritance parents in the same schema (PostgreSQL `INHERITS`): a dump creates them first. */
+  inherits: z.array(z.string()).default([]),
   /** Table collation (MySQL); null on PostgreSQL. */
   collation: z.string().nullable(),
   /** Next AUTO_INCREMENT value as digits (MySQL); null when none. */

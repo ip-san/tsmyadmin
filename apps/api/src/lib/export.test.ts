@@ -144,6 +144,36 @@ describe('buildExport ordering of views and routines', () => {
     expect(body.match(/-- View: /g)).toHaveLength(4)
   })
 
+  it('creates an inheritance parent before a child that sorts first', async () => {
+    const child = fakeTable('a_child', ['id'], [])
+    child.schema.inherits = ['b_parent']
+    const a = new FakeAdapter({
+      dialect: 'postgres',
+      databases: { shop: { tables: { a_child: child, b_parent: fakeTable('b_parent', ['id'], []) } } },
+    })
+    const body = await collect(buildExport(a, ns, ['a_child', 'b_parent'], q({ format: 'sql', data: '0' })).body)
+    expect(isAscending(order(body, '-- Table: b_parent', '-- Table: a_child'))).toBe(true)
+  })
+
+  it('mention fallback: a qualified column named like a view is not a reference (MariaDB normalised text)', async () => {
+    const a = new FakeAdapter({
+      databases: {
+        shop: {
+          tables: {
+            orders_t: fakeTable('orders_t', ['id'], []),
+            orders: fakeView('orders', 'select `o`.`id` AS `id`,`o`.`zz_summary` AS `zz_summary` from `orders_t` `o`'),
+            zz_summary: fakeView('zz_summary', 'select `orders`.`id` AS `id` from `orders`'),
+          },
+        },
+      },
+      dependencies: null,
+    })
+    const body = await collect(
+      buildExport(a, ns, ['orders_t', 'orders', 'zz_summary'], q({ format: 'sql', data: '0' })).body
+    )
+    expect(isAscending(order(body, '-- View: orders\n', '-- View: zz_summary\n'))).toBe(true)
+  })
+
   it('reads a DROP signature from pg_get_functiondef headers (defaults stripped, nested types kept)', async () => {
     const a = new FakeAdapter({
       dialect: 'postgres',

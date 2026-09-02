@@ -144,6 +144,12 @@ function routinesBody(adapter: DatabaseAdapter, routines: Routines): string {
   return parts.join('')
 }
 
+/**
+ * Where a relation reference starts in a view definition: after FROM / JOIN (optionally database-qualified) or
+ * after `,` / `(`; a qualified name after `,` or `(` is a column reference, not a relation.
+ */
+const RELATION_REF = /(?:\b(?:from|join)\s+(?:`[^`]*`\.)?|[,(]\s*)/
+
 /** A view, or a PostgreSQL SQL-standard-body routine, emitted after the tables in dependency order. */
 interface LateObject {
   kind: 'view' | 'routine'
@@ -192,10 +198,7 @@ function orderObjects(objects: LateObject[], catalog: ObjectDependency[] | null)
   // named like a view sits elsewhere. Backticks are optional so unnormalised definitions still match.
   const mentions = (o: LateObject, other: string) => {
     const name = other.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const re = new RegExp(
-      `(?:\\bfrom|\\bjoin|,|\\()\\s*(?:\`[^\`]*\`\\.)?(?:\`${name}\`|${name}(?![\\w$]))(?!\\s*\\.)`,
-      'i'
-    )
+    const re = new RegExp(`${RELATION_REF.source}(?:\`${name}\`|${name}(?![\\w$]))(?!\\s*\\.)`, 'i')
     return o.statements.some((s) => re.test(s))
   }
   const catalogByKey = new Map((catalog ?? []).map((d) => [key(d), d]))
@@ -254,6 +257,17 @@ async function* sqlBody(
   const drops = structure && q.dropTable === '1'
   const schemas = new Map<string, TableSchema>()
   for (const table of tables) schemas.set(table, await adapter.describeTable(ns, table))
+  // An inheritance child is created after its parents (multi-level: depth-first over the parents in the dump).
+  const tableOrder: string[] = []
+  const placed = new Set<string>()
+  const place = (table: string, stack: Set<string>) => {
+    if (placed.has(table) || stack.has(table)) return
+    stack.add(table)
+    for (const parent of schemas.get(table)?.inherits ?? []) if (schemas.has(parent)) place(parent, stack)
+    placed.add(table)
+    tableOrder.push(table)
+  }
+  for (const table of tables) place(table, new Set())
   // Routines go before the tables: a DEFAULT, a CHECK or a functional index may call one (PostgreSQL parses
   // string bodies only when called, see check_function_bodies in the preamble).
   const programs = structure && q.routines === '1'
@@ -309,7 +323,7 @@ async function* sqlBody(
     for (const stmt of await adapter.showCreateTable(ns, table, schema)) yield `${stmt};\n\n`
   }
   if (routines) yield routinesBody(adapter, routines)
-  for (const table of tables) {
+  for (const table of tableOrder) {
     // One catalog round trip per table, shared by the DDL reconstruction and the row scan.
     const schema = schemas.get(table) as TableSchema
     if (schema.kind !== 'table') continue

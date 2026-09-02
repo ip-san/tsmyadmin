@@ -75,6 +75,7 @@ export function fakeTable(
       rowEstimate: rows.length,
       partitioned: false,
       hasChildren: false,
+      inherits: [],
       collation: null,
       autoIncrement: null,
       columns: columns.map((c) => fakeColumn(c, c === 'id' ? 'int' : 'varchar')),

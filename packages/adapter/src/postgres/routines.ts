@@ -95,7 +95,6 @@ export async function pgListTriggers(conn: Conn, ns: Namespace, table?: string):
       sqlMode: null,
       definer: null,
       // 'D' = disabled; 'O' fires on the origin, 'A' always, 'R' on replicas only.
-      enabled: str(row[4]) !== 'D',
       fireMode: FIRE_MODES[str(row[4])] ?? 'origin',
     }
   })
@@ -104,7 +103,7 @@ export async function pgListTriggers(conn: Conn, ns: Namespace, table?: string):
 /**
  * View → relation / routine edges come from the view's rewrite rule; routine → relation / routine edges exist for
  * SQL-standard bodies (string bodies are not parsed at CREATE time) and for signatures that use a table's row
- * type (`RETURNS SETOF t`, a `t` parameter), which pg_depend records against the type.
+ * type (`RETURNS SETOF t`, a `t` / `t[]` parameter, a domain over `t`), which pg_depend records against the type.
  */
 export async function pgListDependencies(conn: Conn, ns: Namespace): Promise<ObjectDependency[]> {
   const schema = ns.schema ?? 'public'
@@ -127,8 +126,11 @@ export async function pgListDependencies(conn: Conn, ns: Namespace): Promise<Obj
        UNION
        SELECT DISTINCT src.kind, src.name, ref.kind, ref.name
        FROM pg_depend d
-       JOIN pg_type ty ON d.refclassid = 'pg_type'::regclass AND ty.oid = d.refobjid AND ty.typrelid <> 0
-       JOIN objs ref ON ref.classid = 'pg_class'::regclass AND ref.oid = ty.typrelid
+       JOIN pg_type ty ON d.refclassid = 'pg_type'::regclass AND ty.oid = d.refobjid
+       LEFT JOIN pg_type el ON el.oid = ty.typelem
+       LEFT JOIN pg_type base ON base.oid = ty.typbasetype
+       JOIN objs ref ON ref.classid = 'pg_class'::regclass
+                    AND ref.oid = COALESCE(NULLIF(ty.typrelid, 0), NULLIF(el.typrelid, 0), NULLIF(base.typrelid, 0))
        JOIN objs src ON src.classid = d.classid AND src.oid = d.objid AND src.kind = 'routine'
        WHERE d.deptype = 'n'
        UNION

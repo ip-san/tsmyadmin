@@ -71,10 +71,12 @@ export async function pgDescribeTable(conn: Conn, ns: Namespace, table: string):
   const info = firstResult(
     await conn.query(
       `SELECT c.relkind, obj_description(c.oid, 'pg_class'), c.reltuples,
-              c.relkind <> 'p' AND EXISTS (SELECT 1 FROM pg_inherits i WHERE i.inhparent = c.oid)
+              c.relkind <> 'p' AND EXISTS (SELECT 1 FROM pg_inherits i WHERE i.inhparent = c.oid),
+              (SELECT string_agg(p.relname, $3 ORDER BY i.inhseqno) FROM pg_inherits i JOIN pg_class p ON p.oid = i.inhparent
+                 WHERE i.inhrelid = c.oid AND p.relnamespace = c.relnamespace AND NOT c.relispartition)
        FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
        WHERE n.nspname = $1 AND c.relname = $2`,
-      [ns.schema ?? 'public', table]
+      [ns.schema ?? 'public', table, SEP]
     )
   )
   const infoRow = info.rows[0]
@@ -198,6 +200,7 @@ export async function pgDescribeTable(conn: Conn, ns: Namespace, table: string):
     rowEstimate: Number.isFinite(tuples) && tuples >= 0 ? Math.round(tuples) : null,
     partitioned: relkind === 'p',
     hasChildren: bool(infoRow[3]),
+    inherits: list(infoRow[4]),
     collation: null,
     autoIncrement: null,
     columns,

@@ -64,7 +64,8 @@ function quoteAccount(account: string): string {
 /** Dump statements: every identifier is quoted and every value goes through cellLiteral. Dialect-agnostic. */
 /** `name(identity arguments)` for DROP FUNCTION / PROCEDURE, read from a pg_get_functiondef statement. */
 function pgRoutineSignature(statement: string): string | null {
-  const m = /^CREATE\s+(?:OR\s+REPLACE\s+)?(?:FUNCTION|PROCEDURE)\s+([^\s(]+)\(/i.exec(statement)
+  // The name may be quoted (and then contain spaces or parentheses) and schema-qualified.
+  const m = /^CREATE\s+(?:OR\s+REPLACE\s+)?(?:FUNCTION|PROCEDURE)\s+((?:"(?:[^"]|"")*"|[^\s("])+)\(/i.exec(statement)
   if (!m) return null
   // Argument list up to the matching parenthesis, split at top-level commas; DEFAULT expressions are not part
   // of a signature.
@@ -211,8 +212,8 @@ export function createExporter(dialect: Dialect): SqlExporter {
             : isViewKind(schema.kind)
               ? 'VIEW'
               : 'TABLE'
-      // CASCADE (PostgreSQL) so a table referenced by a foreign key can be replaced; MySQL disables FK checks instead.
-      return `DROP ${kind} IF EXISTS ${dumpTable(dialect, ns, schema.name)}${dialect === 'postgres' ? ' CASCADE' : ''}`
+      // MySQL restores with FOREIGN_KEY_CHECKS off; PostgreSQL dumps drop everything up front through dropAll.
+      return `DROP ${kind} IF EXISTS ${dumpTable(dialect, ns, schema.name)}`
     },
     insert(ns: Namespace, table: string, columns: string[], rows: Cell[][], options = {}): string {
       if (rows.length === 0) return ''

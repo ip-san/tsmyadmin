@@ -80,7 +80,6 @@ describe('program objects', () => {
       definition: 'SET NEW.n = 1',
       sqlMode: '',
       definer: 'app@localhost',
-      enabled: true,
       fireMode: 'origin' as const,
     }
     expect(mysqlExporter.trigger(ns, trigger, false).sql).toContain('CREATE DEFINER=`app`@`localhost` TRIGGER `tr`')

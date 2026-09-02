@@ -43,9 +43,7 @@ export const TriggerInfoSchema = z.object({
   sqlMode: z.string().nullable().default(null),
   /** `user@host` that owns the trigger (MySQL); kept in dumps unless DEFINER clauses are stripped. */
   definer: z.string().nullable().default(null),
-  /** false for a PostgreSQL trigger disabled with ALTER TABLE … DISABLE TRIGGER (the dump restores that state). */
-  enabled: z.boolean().default(true),
-  /** PostgreSQL firing mode (`tgenabled`): origin (default), always, replica, or disabled. */
+  /** PostgreSQL firing mode (`tgenabled`): origin (default), always, replica, or disabled (the dump restores it). */
   fireMode: z.enum(['origin', 'always', 'replica', 'disabled']).default('origin'),
 })
 export type TriggerInfo = z.infer<typeof TriggerInfoSchema>

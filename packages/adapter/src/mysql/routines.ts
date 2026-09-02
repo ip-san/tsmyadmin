@@ -88,7 +88,8 @@ async function showCreateProgram(
     // Columns: Trigger, sql_mode, SQL Original Statement, … / Event, sql_mode, time_zone, Create Event, …
     return strOrNull(show.rows[0]?.[kind === 'TRIGGER' ? 2 : 3])
   } catch (err) {
-    if (err instanceof AdapterError && err.code === 'PERMISSION_DENIED') return null
+    // No privilege, or dropped between the listing and this call: the information_schema body stands in.
+    if (err instanceof AdapterError && (err.code === 'PERMISSION_DENIED' || err.code === 'NOT_FOUND')) return null
     throw err
   }
 }
@@ -123,7 +124,6 @@ export async function mysqlListTriggers(conn: Conn, ns: Namespace, table?: strin
     definition: originals.get(str(row[0])) ?? strOrNull(row[5]),
     sqlMode: strOrNull(row[6]) ?? '',
     definer: strOrNull(row[7]),
-    enabled: true,
     fireMode: 'origin' as const,
   }))
 }

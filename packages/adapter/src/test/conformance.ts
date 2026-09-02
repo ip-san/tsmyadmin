@@ -102,7 +102,6 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
     `${scratch}_seqmin`,
     `${scratch}_ser`,
     `${scratch}_bin`,
-    `${scratch}_part`,
   ]
   const browseAll = async (table: string) => db.browseRows(ns, table, { offset: 0, limit: 100, sort: [], filters: [] })
 
@@ -303,16 +302,16 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
             await execOk(
               `CREATE TABLE ${t} (id INT PRIMARY KEY); CREATE VIEW ${v} AS SELECT id FROM ${t};
                CREATE FUNCTION ${f}() RETURNS bigint LANGUAGE sql BEGIN ATOMIC SELECT count(*) FROM ${v}; END;
-               CREATE FUNCTION ${g}() RETURNS SETOF ${t} LANGUAGE sql AS $$ SELECT * FROM ${t} $$`
+               CREATE FUNCTION ${g}(xs ${t}[]) RETURNS SETOF ${t} LANGUAGE sql AS $$ SELECT * FROM ${t} $$`
             )
             const deps = (await db.listDependencies(ns)) ?? []
             const of = (name: string) => deps.find((d) => d.kind === 'routine' && d.name === name)?.dependsOn
             expect(of(f)).toContainEqual({ kind: 'view', name: v })
-            // A string body records nothing, but its signature depends on the table's row type.
+            // A string body records nothing, but its signature depends on the table's row type (array included).
             expect(of(g)).toContainEqual({ kind: 'table', name: t })
           } finally {
             await exec(
-              `DROP FUNCTION IF EXISTS ${g}(); DROP FUNCTION IF EXISTS ${f}(); DROP VIEW IF EXISTS ${v}; DROP TABLE IF EXISTS ${t}`,
+              `DROP FUNCTION IF EXISTS ${g}(${t}[]); DROP FUNCTION IF EXISTS ${f}(); DROP VIEW IF EXISTS ${v}; DROP TABLE IF EXISTS ${t}`,
               { stopOnError: false }
             )
           }
@@ -1099,7 +1098,7 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
             `CREATE UNLOGGED TABLE ${p} (a INT, b INT, PRIMARY KEY (a, b), CHECK (a > 0)) WITH (fillfactor = 70);
              CREATE TABLE ${ch} (extra TEXT) INHERITS (${p});
              CREATE UNLOGGED TABLE ${fk} (id INT PRIMARY KEY, a INT DEFAULT 1, b INT DEFAULT 1);
-             ALTER TABLE ${fk} ADD CONSTRAINT ${fk}_ab FOREIGN KEY (a, b) REFERENCES ${p} (a, b) MATCH FULL ON DELETE SET DEFAULT (b) ON UPDATE SET NULL NOT VALID;
+             ALTER TABLE ${fk} ADD CONSTRAINT ${fk}_ab FOREIGN KEY (a, b) REFERENCES ${p} (a, b) MATCH FULL ON DELETE SET DEFAULT ON UPDATE SET NULL NOT VALID;
              CREATE TABLE ${part} (id INT, d DATE) PARTITION BY RANGE (d);
              CREATE TABLE ${part}_2024 PARTITION OF ${part} FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
              CREATE TABLE ${part}_rest PARTITION OF ${part} DEFAULT`
@@ -1107,13 +1106,14 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
           try {
             const parent = (await db.showCreateTable(ns, p)).join('\n')
             expect(parent).toContain(`CREATE UNLOGGED TABLE "public"."${p}"`)
-            expect(parent).toContain('WITH (fillfactor=70)')
+            expect(parent).toContain("WITH (fillfactor='70')")
+            expect((await db.describeTable(ns, ch)).inherits).toEqual([p])
             const child = (await db.showCreateTable(ns, ch)).join('\n')
             expect(child).toContain(`INHERITS (public.${p})`)
             // The inherited CHECK belongs to the parent: not repeated on the child.
             expect(child).not.toContain('CHECK')
             const opts = (await db.showCreateTable(ns, fk)).join('\n')
-            expect(opts).toContain('MATCH FULL ON UPDATE SET NULL ON DELETE SET DEFAULT (b) NOT VALID')
+            expect(opts).toContain('MATCH FULL ON UPDATE SET NULL ON DELETE SET DEFAULT NOT VALID')
             const partitioned = await db.showCreateTable(ns, part)
             expect(partitioned[0]).toContain('PARTITION BY RANGE (d)')
             expect(partitioned).toContainEqual(

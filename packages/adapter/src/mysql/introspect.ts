@@ -163,6 +163,7 @@ export async function mysqlDescribeTable(conn: Conn, ns: Namespace, table: strin
     rowEstimate: num(infoRow[3]),
     partitioned: false,
     hasChildren: false,
+    inherits: [],
     collation: strOrNull(infoRow[4]),
     autoIncrement: infoRow[5] === null || infoRow[5] === undefined ? null : String(infoRow[5]),
     columns,

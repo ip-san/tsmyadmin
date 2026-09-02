@@ -46,7 +46,7 @@ export function TableOptionsForm({
   const flow = useDdlFlow(tableRef.db, tableRef.schema, async () => {
     const query = structureQuery(tableRef)
     await queryClient.invalidateQueries({ queryKey: query.queryKey })
-    reseed(queryClient.getQueryData<TableSchema>(query.queryKey) ?? schema)
+    reseed(queryClient.getQueryData(query.queryKey) ?? schema)
   })
   const commentChanged = comment !== (schema.comment ?? '')
   const engineChanged = mysql && engine.trim() !== '' && engine.trim() !== (schema.engine ?? '')
