@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { ConnectRequestSchema } from '@tsmyadmin/shared'
 import { type Context, Hono } from 'hono'
 import { deleteCookie, getSignedCookie, setSignedCookie } from 'hono/cookie'
@@ -24,6 +25,11 @@ export interface SessionRouteDeps {
   /** Client IP resolver shared with the access log. */
   ip: (c: Context) => string
   logger: Logger
+}
+
+/** Log-safe session reference: a truncated hash, so logs plus the signing secret cannot forge a cookie. */
+function sessionTag(id: string): string {
+  return createHash('sha256').update(id).digest('hex').slice(0, 16)
 }
 
 /** Session response: identity plus the namespace usable for server-level SQL/DDL (SessionState). */
@@ -76,7 +82,7 @@ export function sessionRoutes(cfg: SessionConfig, deps: SessionRouteDeps) {
         return errorResponse(c, err, deps.logger)
       }
       deps.loginLimiter.reset(rateKey)
-      deps.logger.log('info', 'login.ok', { ...audit, sessionId: session.id })
+      deps.logger.log('info', 'login.ok', { ...audit, sessionId: sessionTag(session.id) })
       await setSignedCookie(c, SESSION_COOKIE, session.id, cfg.secret, sessionCookieOptions(cfg))
       return c.json(sessionState(session), 201)
     })
@@ -85,7 +91,7 @@ export function sessionRoutes(cfg: SessionConfig, deps: SessionRouteDeps) {
       const id = await getSignedCookie(c, cfg.secret, SESSION_COOKIE)
       if (id) {
         await cfg.store.delete(id)
-        deps.logger.log('info', 'logout', { requestId: c.get('requestId'), sessionId: id })
+        deps.logger.log('info', 'logout', { requestId: c.get('requestId'), sessionId: sessionTag(id) })
       }
       deleteCookie(c, SESSION_COOKIE, { path: '/' })
       return c.json({ ok: true })

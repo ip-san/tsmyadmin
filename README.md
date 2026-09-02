@@ -4,7 +4,7 @@ MySQL / PostgreSQL 両対応の、モダン TypeScript 製 phpMyAdmin クロー�
 
 - **Bun workspaces モノレポ**: `apps/api`（Hono）/ `apps/web`（Vite + React 19 + TanStack Router/Query）/ `packages/shared`（Zod DTO）/ `packages/adapter`（`mysql2` / `pg` 上の薄い DB 抽象層。ORM 不使用）
 - **phpMyAdmin と同じ画面構成**: サーバー（データベース / ステータス / 変数 / プロセス / ユーザー）→ データベース（構造 / SQL / エクスポート / インポート / 権限 / ルーチン / トリガー / イベント）→ テーブル（表示 / 構造 / SQL / 検索 / 挿入 / エクスポート / インポート / トリガー / 操作）
-- **機能**: 接続（運用側が定義する接続先プリセット、Cookie セッション）、DB・スキーマ・テーブルのツリー、行のブラウズ（ソート・ページング・絞り込み・表示列の選択、外部キーから参照先 / 参照元へのリンク）、行の挿入（続けて挿入・複製）・編集（ダイアログ / インライン）・削除、SQL コンソール（CodeMirror、複数文、MySQL `DELIMITER` 対応、文ごとの結果を完了順にストリーミング表示、EXPLAIN、履歴・保存済みクエリ、結果の CSV / JSON ダウンロード、実行中のキャンセル）、DDL（テーブル作成・名前変更・コピー、カラム / インデックスの追加・変更・削除、TRUNCATE / DROP、データベースの作成・削除、スキーマ作成。元に戻せない操作は名前の再入力で確認）、エクスポート（SQL / CSV / JSON）、インポート（SQL スクリプト、CSV）、ユーザーアカウント（一覧・権限表示・作成・パスワード変更・削除、DB 単位の GRANT / REVOKE ALL）、ストアドプロシージャ / 関数 / トリガーの一覧と定義表示、MySQL イベントスケジューラ（一覧・有効化 / 無効化・削除）、サーバーステータス・変数・プロセス一覧（KILL）、キーボードショートカット（`?` で一覧）
+- **機能**: 接続（運用側が定義する接続先プリセット、Cookie セッション）、DB・スキーマ・テーブルのツリー、行のブラウズ（ソート・ページング・絞り込み・表示列の選択、外部キーから参照先 / 参照元へのリンク）、行の挿入（続けて挿入・複製）・編集（ダイアログ / インライン）・削除、SQL コンソール（CodeMirror、複数文、MySQL `DELIMITER` 対応、文ごとの結果を完了順にストリーミング表示、EXPLAIN、履歴・保存済みクエリ、結果の CSV / JSON ダウンロード、実行中のキャンセル）、DDL（テーブル作成・名前変更・コピー、カラムの追加・変更・削除、インデックスの追加・削除、TRUNCATE / DROP、データベースの作成・削除、スキーマ作成。元に戻せない操作は名前の再入力で確認）、エクスポート（SQL / CSV / JSON）、インポート（SQL スクリプト、CSV）、ユーザーアカウント（一覧・権限表示・作成・パスワード変更・削除、DB 単位の GRANT / REVOKE ALL）、ストアドプロシージャ / 関数 / トリガーの一覧と定義表示、MySQL イベントスケジューラ（一覧・有効化 / 無効化・削除）、サーバーステータス・変数・プロセス一覧（KILL）、キーボードショートカット（`?` で一覧）
 - **安全側の設計**: DDL・アカウント操作はすべて生成 SQL をプレビューして確認後に実行（パスワードはマスク表示）。SQL コンソールの各実行は自動コミットで、開きっぱなしのトランザクションは接続をプールへ戻す前にロールバック
 - **ロスレスな値**: BIGINT / DECIMAL / 日時 / JSON はサーバーの文字列のまま、バイナリは base64、NULL と空文字を区別
 
@@ -44,10 +44,13 @@ bun run lighthouse       # Lighthouse CI（ログイン画面の性能 / a11y / 
 
 ```bash
 docker build -t tsmyadmin .
-docker run -p 3100:3100 -e SESSION_SECRET=$(openssl rand -hex 32) tsmyadmin
+docker run -p 3100:3100 \
+  -e SESSION_SECRET=$(openssl rand -hex 32) \
+  -e TSMYADMIN_ALLOWED_HOSTS=db.example.internal:5432 \
+  tsmyadmin
 ```
 
-単一コンテナで API が SPA を配信します。本番では HTTPS 終端のリバースプロキシ配下に置き、`TSMYADMIN_ALLOWED_HOSTS` で接続先を絞ってください（詳細は `docs/deployment.md`）。
+単一コンテナで API が SPA を配信します。`TSMYADMIN_ALLOWED_HOSTS` には接続を許可する DB の `host:port` を**必ず**指定してください（既定はコンテナ自身のループバックだけなので、指定しないとどこにも接続できません）。本番では HTTPS 終端のリバースプロキシ配下に置いてください（詳細は `docs/deployment.md`）。
 
 ## 本番運用
 
@@ -60,14 +63,14 @@ docker run -p 3100:3100 -e SESSION_SECRET=$(openssl rand -hex 32) tsmyadmin
 
 - [CLAUDE.md](CLAUDE.md) — 開発コマンド、構成、守るべき不変条件（Compact Instructions）
 - [CHANGELOG.md](CHANGELOG.md) — リリースノート
+- `.claude/rules/` — パス別の詳細ルール（adapter / api-routes / fixtures / skill-scoping）
+- `.claude/agents/`, `.claude/skills/` — quality-gate / code-reviewer / test-developer エージェント、`/self-review` / `/quality-loop` スキル
 
 ## 動作要件
 
-- サーバー: Bun 1.4 以上（Docker イメージは同梱）。接続先は MySQL 8.0 以降 / MariaDB 10.6 以降 / PostgreSQL 13 以降
+- サーバー: Bun 1.4 以上（Docker イメージは同梱）。接続先: 検証済みは MySQL 8.4 / PostgreSQL 17（CI と統合テスト）。想定範囲は MySQL 8.0 以降 / MariaDB 10.6 以降 / PostgreSQL 13 以降
 - ブラウザ: 最新の Chrome / Edge / Firefox / Safari（ES2022、`<dialog>`、`dvh` 単位が必要）
 
 ## ライセンス
 
 MIT（[LICENSE](LICENSE)）
-- `.claude/rules/` — パス別の詳細ルール（adapter / api-routes / fixtures / skill-scoping）
-- `.claude/agents/`, `.claude/skills/` — quality-gate / code-reviewer / test-developer エージェント、`/self-review` / `/quality-loop` スキル

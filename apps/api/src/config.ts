@@ -41,7 +41,7 @@ const EnvSchema = z.object({
   /** Login attempts allowed per client IP + user within the window. */
   LOGIN_RATE_LIMIT: z.coerce.number().int().min(1).default(10),
   LOGIN_RATE_WINDOW_SECONDS: z.coerce.number().int().min(1).default(60),
-  /** Trust X-Forwarded-For / X-Forwarded-Proto from a reverse proxy in front of the API. */
+  /** Trust the last X-Forwarded-For element from a reverse proxy in front of the API. */
   TRUST_PROXY: z.enum(['0', '1']).default('0'),
   /** `json` (one object per line, for log shippers) or `pretty` (development). */
   LOG_FORMAT: z.enum(['json', 'pretty']).optional(),

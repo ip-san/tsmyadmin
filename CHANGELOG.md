@@ -1,12 +1,12 @@
 # Changelog
 
-このプロジェクトは [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) の形式と [セマンティック バージョニング](https://semver.org/lang/ja/) に従います。バージョンはルートと各ワークスペースの `package.json` で管理し、ログイン画面の下部と Docker イメージのラベルに表示されます。
+このプロジェクトは [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) の形式と [セマンティック バージョニング](https://semver.org/lang/ja/) に従います。バージョンはルートと各ワークスペースの `package.json` で管理し、ログイン画面の下部に表示されます。Docker イメージのラベル（`org.opencontainers.image.version`）は `docker build --build-arg VERSION=…` で渡します（`docs/deployment.md`）。
 
 ## [Unreleased]
 
 ## [0.1.0] - 2026-09-02
 
-初回リリース。phpMyAdmin と同じ 3 階層（サーバー / データベース / テーブル）の画面構成で、MySQL 8 / MariaDB と PostgreSQL 17 に対応。
+初回リリース。phpMyAdmin と同じ 3 階層（サーバー / データベース / テーブル）の画面構成。検証済み: MySQL 8.4 / PostgreSQL 17（想定: MySQL 8.0+ / MariaDB 10.6+ / PostgreSQL 13+）。
 
 ### 追加
 
@@ -14,7 +14,7 @@
 - 閲覧: DB・スキーマ・テーブルのツリー（数千テーブルでも仮想化スクロール）、行のブラウズ（ソート・ページング・絞り込み・表示列の選択・外部キーの参照先 / 参照元リンク・概算件数）
 - 編集: 行の挿入（続けて挿入・複製）、ダイアログ / インライン編集、一括削除。主キーがないテーブルも安全に 1 行だけ更新（PostgreSQL は `ctid`、MySQL は全カラム一致 + 影響行数検証）
 - SQL コンソール: CodeMirror、複数文（MySQL `DELIMITER`、PostgreSQL ドル引用）、文ごとの結果ストリーミング、キャンセル、EXPLAIN、履歴、保存済みクエリ、結果の CSV / JSON ダウンロード
-- 構造: テーブル / カラム / インデックスの作成・変更・削除、名前変更・コピー、TRUNCATE / DROP（名前を再入力して確認）、データベース / スキーマの作成・削除
+- 構造: テーブルの作成、カラムの追加・変更・削除、インデックスの追加・削除、名前変更・コピー、TRUNCATE / DROP（名前を再入力して確認）、データベース / スキーマの作成・削除
 - エクスポート（SQL / CSV / JSON、ストリーミング）/ インポート（SQL スクリプト、CSV）
 - ルーチン・トリガー・イベントスケジューラ（MySQL）の一覧と定義表示
 - ユーザーアカウントの一覧・権限表示・作成・パスワード変更・削除、DB 単位の GRANT / REVOKE

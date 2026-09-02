@@ -15,8 +15,8 @@
 |---|---|
 | `startup` / `shutdown.begin` / `shutdown.done` / `shutdown.timeout` / `shutdown.forced` | 起動設定（ポート、許可ホスト、TTL）/ グレースフルシャットダウンの開始・完了・上限超過・2 回目のシグナルによる強制終了 |
 | `http` | アクセスログ: `requestId`, `method`, `path`, `status`, `ms`, `ip` |
-| `login.ok` / `login.failed` / `login.host_not_allowed` / `login.rate_limited` / `logout` | 認証イベント（ホスト・ユーザー名は含む、パスワードは含まない） |
-| `audit` | **監査ログ**: データ・構造・アカウント・サーバー状態を変える呼び出し（`insertRow(s)` / `updateRow` / `deleteRows` / `executeSql` / `killProcess`）。`requestId`, `dbUser`, `dbHost`, `database`, `table`, 行数・キー種別・カラム名、`executeSql` は SQL 先頭 500 文字と文数 / エラー数、`ok`, `ms`。**値は記録しない**。アカウント操作のパスワードは `****` に置換 |
+| `login.ok` / `login.failed` / `login.host_not_allowed` / `login.rate_limited` / `logout` | 認証イベント（ホスト・ユーザー名・セッション ID のハッシュ先頭 16 桁は含む、パスワードと生のセッション ID は含まない） |
+| `audit` | **監査ログ**: データ・構造・アカウント・サーバー状態を変える呼び出し（`insertRow(s)` / `updateRow` / `deleteRows` / `executeSql` / `cancelQuery` / `killProcess`）。`requestId`, `dialect`, `dbUser`, `dbHost`, `database`, `schema`, `table`, 行数・キー種別・カラム名、`executeSql` は SQL 先頭 500 文字と文数 / エラー数、`ok`, `ms`。**値は記録しない**。パスワード（アカウント操作、SQL コンソールの `IDENTIFIED BY` / `PASSWORD` 文）は `****` に置換 |
 | `readyz.failed` | セッションストア異常 |
 | `config.dev_secret` / `config.allowlist_without_port` / `web.dist_missing` | 設定の警告（開発用シークレット / ポート未指定の許可ホスト / SPA ビルド不在） |
 
@@ -47,13 +47,13 @@ docker logs tsmyadmin 2>&1 | jq -c 'select(.event=="audit") | {time, dbUser, act
 | 症状 | 原因と対処 |
 |---|---|
 | 起動直後に `Invalid environment` で終了 | 環境変数の型 / 必須違反。メッセージの変数名を修正 |
-| 本番でログインしても直後に未ログイン扱い | `NODE_ENV=production` は `Secure` Cookie。HTTPS で終端し `X-Forwarded-Proto` を渡す |
+| 本番でログインしても直後に未ログイン扱い | `NODE_ENV=production` は `Secure` Cookie。HTTPS で終端し `ブラウザが https:// でアクセスしていることを確認してください（本番の Cookie は `Secure` 属性付きで、平文 HTTP では保存されません）
 | ログインが 403 `FORBIDDEN` | 接続先が `TSMYADMIN_ALLOWED_HOSTS` にない |
 | ログインが 429 | レート制限。`Retry-After` 秒後に再試行。誤検知なら `TRUST_PROXY` の設定を確認（プロキシ配下で `0` だと全員が同じ IP になる） |
 | 再起動後に全員ログアウト | `SESSION_STORE=memory`、またはボリューム未設定 / `SESSION_SECRET` 変更。`docs/deployment.md` のアップグレード節 |
 | `/readyz` が 503 | SQLite ファイルの権限 / ディスクフル。`readyz.failed` の `error` を確認。`/app/data` は `bun` ユーザーが書ける必要がある |
 | SQL コンソールでタイムアウト | 既定 30 秒。実行中は「キャンセル」で中断できる（`KILL QUERY` / `pg_cancel_backend`、監査ログ `cancelQuery`）。長時間の一括処理はインポート（最大 10 分）を使う |
-| インポートが 413 | 64 MB 上限。分割するか、リバースプロキシの `client_max_body_size` も確認 |
+| インポートが 400（ファイルが 64 MB 超）/ 413（本文が 65 MB 超） | 分割するか、リバースプロキシの `client_max_body_size` も確認 |
 | プロセス一覧で「強制終了」しても消えない | DB 側の権限不足（MySQL は `PROCESS`/`SUPER`、PostgreSQL は `pg_signal_backend` 相当が必要） |
 
 ## エクスポートの完全性
@@ -77,7 +77,7 @@ docker logs tsmyadmin 2>&1 | jq -c 'select(.event=="audit") | {time, dbUser, act
 
 ## 権限の少ないユーザー
 
-読み取り専用アカウント（`SELECT` のみ）でも閲覧・構造・SQL（SELECT）・エクスポートは動作します。変更操作は DB 側で拒否され、画面には `PERMISSION_DENIED`（403）として「必要な権限がありません」と表示されます。MySQL の「ユーザー」タブは `mysql.user` を読める権限（`SELECT ON mysql.*` または `CREATE USER`）が必要で、無い場合はその旨を表示します。PostgreSQL の「ユーザー」タブは `pg_roles` を参照するため誰でも閲覧できます。
+読み取り専用アカウント（`SELECT` のみ）でも閲覧・構造・SQL（SELECT）・エクスポートは動作します。変更操作は DB 側で拒否され、画面には `PERMISSION_DENIED`（403）として「この操作に必要な権限が DB ユーザーにありません」と表示されます。MySQL の「ユーザー」タブは `mysql.user` を読める権限（`SELECT ON mysql.*` または `CREATE USER`）が必要で、無い場合はその旨を表示します。PostgreSQL の「ユーザー」タブは `pg_roles` を参照するため誰でも閲覧できます。
 
 ## 監視の目安
 

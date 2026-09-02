@@ -17,7 +17,7 @@ paths:
 ## SQL 組み立て
 
 - 識別子は `quoteIdent` / `quoteTable`、値は `Params.add()` のプレースホルダ。文字列補間で値を埋め込まない
-- SQL テンプレート補間が許されるのは `base.ts`, `sql/*`, `*/ddl.ts`, `*/adapter.ts` のみ（`check:sql-safety`）
+- SQL テンプレート補間が許されるのは `base.ts`, `sql/*`, `*/{ddl,adapter,export,users,server}.ts`, `mysql/routines.ts`（許可リストは `scripts/check-sql-safety.mjs` が正）。それ以外で `.query()` に渡すテンプレートは UPPER_CASE の SQL 定数の合成だけが許され、値をクォートに隣接させる補間はどこでも禁止
 - イントロスペクションは information_schema / pg_catalog を **静的 SQL + パラメータ** で問い合わせる
 
 ## 値のワイヤー規則
@@ -34,4 +34,6 @@ PK → NOT NULL 一意キー → PG は `ctid`、MySQL は全カラム一致 + `
 
 ## 接続の返却
 
-`executeSql` はユーザー SQL の後に `ROLLBACK` → `Conn.reset()`（MySQL: `COM_RESET_CONNECTION`、PostgreSQL: `DISCARD ALL`）を必ず行う。セッション変数・ロール・ユーザー変数・一時テーブルがプールの次の借り手に漏れてはならない（conformance の「does not leak session state」が検証）。
+`executeSql` はユーザー SQL の後に `finally` で `ROLLBACK` → `Conn.reset()`（MySQL: `COM_RESET_CONNECTION` + `SET NAMES utf8mb4`、PostgreSQL: `DISCARD ALL`）を必ず行う。セッション変数・ロール・ユーザー変数・一時テーブルがプールの次の借り手に漏れてはならない（conformance の「does not leak session state」が検証）。
+
+`base.ts` は接続ごとに statement timeout をキャッシュし（`appliedTimeout`、`Conn.id` = ドライバのプール接続オブジェクトがキー）、方言は現在の DB / `search_path` をキャッシュする（`Conn.forget()` で破棄）。方言実装の契約: `id` はチェックアウト間で安定していること、`reset()` は失敗時に接続を破棄対象にすること、ユーザー SQL の前に `forgetSessionState` が呼ばれることを前提にキャッシュを持つこと。

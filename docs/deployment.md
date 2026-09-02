@@ -7,40 +7,48 @@ tsmyadmin は **1 プロセス（Bun）で API と SPA を配信する単一コ�
 | 変数 | 既定値 | 説明 |
 |---|---|---|
 | `NODE_ENV` | `development` | `production` で Cookie に `Secure`、ログ JSON、`SESSION_SECRET` 必須 |
-| `API_PORT` | `3100` | 待ち受けポート |
+| `API_PORT` | `3100` | 待ち受けポート（1–65535。Docker イメージの `HEALTHCHECK` は 3100 固定） |
 | `SESSION_SECRET` | （開発用固定値） | セッション Cookie の署名鍵。**本番では 32 文字以上必須**。`openssl rand -hex 32` |
-| `SESSION_TTL_MINUTES` | `30` | 操作ごとに延長されるセッション寿命 |
-| `SESSION_MAX_PER_IDENTITY` | `10` | 同じ DB アカウント（種別 / ホスト / ポート / ユーザー名）で同時に保持するセッション数。超えると最も古いものを閉じる（ログインの繰り返しで DB の `max_connections` を使い切らせない） |
+| `SESSION_TTL_MINUTES` | `30` | 操作ごとに延長されるセッション寿命（1–1440） |
+| `SESSION_MAX_PER_IDENTITY` | `10`（1–1000） | 同じ DB アカウント（種別 / ホスト / ポート / ユーザー名）で同時に保持するセッション数。超えると最も古いものを閉じる（ログインの繰り返しで DB の `max_connections` を使い切らせない） |
 | `SESSION_STORE` | 本番 `sqlite` / 開発 `memory` | `sqlite` は再起動・ローリング更新後もセッションを維持（資格情報は `SESSION_SECRET` から導出した鍵で AES-256-GCM 暗号化して保存）。`memory` はプロセス内のみ |
 | `SESSION_DB_PATH` | `data/sessions.sqlite` | `sqlite` 時のファイル。Docker では `/app/data` をボリュームにする |
 | `TSMYADMIN_ALLOWED_HOSTS` | `127.0.0.1,localhost` | ログイン画面から接続を許可する DB ホスト。カンマ区切りで、完全一致 / `*.suffix` / `*`（無制限）、それぞれ `:port` 付き可（`db.internal:5432`、`[::1]:3306`）。ポート省略は全ポート許可 — **本番ではポートまで指定する**（`docs/security.md`）。**SSRF・踏み台防止の要** |
 | `TSMYADMIN_SERVERS` | （なし） | ログイン画面に出す接続先プリセットの JSON 配列。例: `[{"name":"prod","dialect":"postgres","host":"db.internal","port":5432,"database":"app"}]`。利用者はユーザー名とパスワードだけを入力。プリセットのホストは自動的に allowlist に加わる。**パスワードは書かない** |
 | `LOGIN_RATE_LIMIT` | `10` | `LOGIN_RATE_WINDOW_SECONDS` 内に許可するログイン試行回数（クライアント IP + ユーザー名ごと。IP 単位では 3 倍まで） |
-| `LOGIN_RATE_WINDOW_SECONDS` | `60` | 上記のウィンドウ |
+| `LOGIN_RATE_WINDOW_SECONDS` | `60` | 上記のウィンドウ（秒、1 以上。`LOGIN_RATE_LIMIT` も 1 以上） |
 | `TRUST_PROXY` | `0` | `1` でリバースプロキシの `X-Forwarded-For` をクライアント IP として信頼する（プロキシ配下では必須、直接公開時は `0` のまま） |
 | `LOG_FORMAT` | 本番 `json` / 開発 `pretty` | 1 行 1 JSON（ログ収集向け）か人が読む形式か |
 | `WEB_DIST` | `apps/web/dist` | 配信する SPA ビルドのディレクトリ（作業ディレクトリからの相対） |
-| `SHUTDOWN_TIMEOUT_SECONDS` | `30` | `SIGTERM` 受信後、実行中のリクエスト（長い SQL・エクスポート・インポート）の完了を待つ上限。超過すると強制終了 |
+| `SHUTDOWN_TIMEOUT_SECONDS` | `30`（0–600） | `SIGTERM` 受信後、実行中のリクエスト（長い SQL・エクスポート・インポート）の完了を待つ上限。超過すると強制終了 |
 
-起動時に検証され、不正な値があれば理由を表示して終了します（`Invalid environment: ...`）。
+起動時に検証され、範囲外・不正な値があれば理由を表示して終了します（`Invalid environment: ...`）。
+
+開発 / テスト専用の変数（本番では無視）: `WEB_PORT`（Vite 開発サーバー、既定 5175）、`TEST_MYSQL_URL` / `TEST_PG_URL`（統合テストと E2E が接続する compose の DB）。
 
 ## Docker
 
 ```bash
 docker build -t tsmyadmin .
+docker build --build-arg VERSION="$(node -p "require('./package.json').version")" -t tsmyadmin .
 docker run -d --name tsmyadmin \
   -p 127.0.0.1:3100:3100 \
+  --stop-timeout 35 \
   -e NODE_ENV=production \
   -e SESSION_SECRET="$(openssl rand -hex 32)" \
+  -e TSMYADMIN_ALLOWED_HOSTS= \
   -e TSMYADMIN_SERVERS='[{"name":"prod","dialect":"postgres","host":"db.internal","port":5432,"database":"app"}]' \
   -e TRUST_PROXY=1 \
   -v tsmyadmin-data:/app/data \
   tsmyadmin
 ```
 
-- イメージは非 root ユーザー `bun` で動作し、本番依存のみを含みます。`HEALTHCHECK` は `/readyz` を見ます
-- `/app/data` にセッションストアが置かれます。ボリュームを付けないと再起動で全員ログアウトになります（機能は損なわれません）
+- `TSMYADMIN_ALLOWED_HOSTS=`（空文字）を明示すると既定の `127.0.0.1,localhost`（コンテナ自身のループバック。本番では不要で、ポート未指定の警告も出る）が外れ、プリセットの `host:port` だけが許可されます。プリセットを使わない場合は `host:port` を列挙してください
+- イメージは非 root ユーザー `bun`（uid/gid 1000）で動作し、本番依存のみを含みます。`HEALTHCHECK` は `/readyz` を見ます（ポート 3100 固定。コンテナ内のポートは変えず、ホスト側の `-p` で対応してください）
+- `/app/data` にセッションストアが置かれます。ボリュームを付けないと再起動で全員ログアウトになります（機能は損なわれません）。バインドマウントの場合は `chown 1000:1000 <dir>` が必要です
 - `/healthz`（生存）と `/readyz`（セッションストアの疎通）を公開します。オーケストレータのプローブに使ってください
+- `--stop-timeout`（compose では `stop_grace_period`）は Docker 既定の 10 秒では `SHUTDOWN_TIMEOUT_SECONDS`（30 秒）より短く、実行中のエクスポート / インポートが SIGKILL で切られます。`SHUTDOWN_TIMEOUT_SECONDS + 5` 秒以上にしてください
+- 目安のリソース: 1 vCPU / メモリ 512 MB。アイドル時は約 90 MB、64 MB のインポートや主キーのない MySQL テーブルの大きなエクスポートではピークが数百 MB になります。`--memory` を 256 MB 未満にしないでください
 
 ### docker compose の例
 
@@ -52,10 +60,11 @@ services:
     environment:
       NODE_ENV: production
       SESSION_SECRET: ${SESSION_SECRET:?set in .env}
-      TSMYADMIN_ALLOWED_HOSTS: db
+      TSMYADMIN_ALLOWED_HOSTS: db:5432
       TRUST_PROXY: "1"
     ports:
       - "127.0.0.1:3100:3100"
+    stop_grace_period: 35s
     volumes:
       - tsmyadmin-data:/app/data
     logging:
@@ -63,14 +72,11 @@ services:
       options:
         max-size: "50m"
         max-file: "10"
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:3100/readyz || exit 1"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
 volumes:
   tsmyadmin-data:
 ```
+
+イメージに `HEALTHCHECK`（`/readyz`）が組み込まれているため、compose 側で上書きする必要はありません。上書きする場合、実行イメージ（`oven/bun:1.4-slim`）には `curl` / `wget` がないので `["CMD", "bun", "-e", "fetch('http://127.0.0.1:3100/readyz').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]` を使ってください。
 
 ## リバースプロキシと TLS
 
@@ -125,4 +131,6 @@ server {
 
 イメージを差し替えて再起動するだけです。`SESSION_STORE=sqlite`（本番既定）でボリュームを維持していれば利用者のセッションは継続します。`SESSION_SECRET` を変えると保存済みセッションは復号できず破棄されます（全員再ログイン）。スキーマや設定ファイルのマイグレーションはありません。
 
-複数レプリカで動かす場合は同じ SQLite ファイルを共有できないため、ロードバランサでスティッキーセッションにするか、レプリカごとに別ボリュームを持たせてください。
+複数レプリカで動かす場合は同じ SQLite ファイルを共有できないため、ロードバランサをスティッキーセッションにし、**かつ**レプリカごとに別ボリュームを持たせてください（片方だけでは、別レプリカに振られた瞬間にログアウトになります）。
+
+ロールバックも同じ手順（イメージを戻して再起動）です。セッション表は `CREATE TABLE IF NOT EXISTS` と列の追加だけで管理しており、旧バージョンが読めない行は破棄されます（該当利用者は再ログイン）。
