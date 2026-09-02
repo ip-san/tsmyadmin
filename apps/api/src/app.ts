@@ -2,7 +2,6 @@ import { Hono } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
 import { csrf } from 'hono/csrf'
 import { createMiddleware } from 'hono/factory'
-import { requestId } from 'hono/request-id'
 import { secureHeaders } from 'hono/secure-headers'
 import type { AppConfig } from './config.ts'
 import { errorResponse, notFoundResponse } from './lib/errors.ts'
@@ -83,7 +82,13 @@ export function createApp(config: AppConfig, services: AppServices) {
   const sessionDeps = { allowedHosts, loginLimiter, ipLimiter, ip, logger }
   return (
     new Hono<AppEnv>()
-      .use('*', requestId())
+      // Always server-generated: a client-supplied X-Request-Id could reuse another request's id in the audit log.
+      .use('*', async (c, next) => {
+        const id = crypto.randomUUID()
+        c.set('requestId', id)
+        c.header('X-Request-Id', id)
+        await next()
+      })
       .use('*', requestContext())
       .use('*', requestLogger(logger, ip))
       .use('*', secureHeaders({ contentSecurityPolicy: CONTENT_SECURITY_POLICY, referrerPolicy: 'same-origin' }))

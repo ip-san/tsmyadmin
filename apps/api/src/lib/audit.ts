@@ -87,11 +87,19 @@ export function summarise(method: AuditedMethod, args: unknown[]): Record<string
   }
 }
 
+/**
+ * A SQL string literal: plain / doubled-quote / backslash-escaped, PostgreSQL `E'…'`, or dollar-quoted `$tag$…$tag$`.
+ * `n` is the index the dollar tag capture group will have inside the enclosing pattern.
+ */
+const literal = (n: number) =>
+  `(?:E?'(?:[^'\\\\]|\\\\.|'')*'|"(?:[^"\\\\]|\\\\.|"")*"|\\$([A-Za-z_]*)\\$[\\s\\S]*?\\$\\${n}\\$)`
 /** Password literals in account statements typed directly into the SQL console (IDENTIFIED BY / PASSWORD 'x'). */
-const SQL_SECRET = /\b(IDENTIFIED(?:\s+WITH\s+\S+)?\s+BY|PASSWORD)(\s*[=(]?\s*)('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")/gi
-
+const SQL_SECRET = new RegExp(
+  String.raw`\b(IDENTIFIED(?:\s+WITH\s+\S+)?\s+BY|PASSWORD)(\s*[=(]?\s*)${literal(3)}`,
+  'gi'
+)
 /** MySQL `SET PASSWORD [FOR user] = 'x'`. */
-const SET_PASSWORD = /(\bSET\s+PASSWORD\b[^=;]*=\s*)('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")/gi
+const SET_PASSWORD = new RegExp(String.raw`(\bSET\s+PASSWORD\b[^=;]*=\s*)${literal(2)}`, 'gi')
 
 function redactSqlSecrets(sql: string): string {
   return sql

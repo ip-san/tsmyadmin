@@ -26,6 +26,31 @@ describe('MemorySessionStore', () => {
     expect(store.size).toBe(0)
   })
 
+  it('caps live sessions per database account, evicting the least recently used', async () => {
+    let t = 0
+    const made: FakeAdapter[] = []
+    const store = new MemorySessionStore({
+      adapterFactory: () => {
+        const a = new FakeAdapter()
+        made.push(a)
+        return a
+      },
+      maxPerIdentity: 2,
+      sweepIntervalMs: 0,
+      now: () => t++,
+    })
+    const a = await store.create(config)
+    const b = await store.create(config)
+    const other = await store.create({ ...config, user: 'someone-else' })
+    const c = await store.create({ ...config, host: 'H' }) // same identity (host is case-insensitive)
+    expect(await store.get(a.id)).toBeUndefined()
+    expect(made[0]?.closed).toBe(true)
+    expect((await store.get(b.id))?.id).toBe(b.id)
+    expect((await store.get(c.id))?.id).toBe(c.id)
+    expect((await store.get(other.id))?.id).toBe(other.id)
+    expect(store.size).toBe(3)
+  })
+
   it('expires sessions after the sliding TTL', async () => {
     let t = 1000
     const store = new MemorySessionStore({

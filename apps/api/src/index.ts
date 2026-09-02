@@ -37,9 +37,14 @@ const store: SessionStore =
         path: config.sessionDbPath,
         secret: config.sessionSecret,
         ttlMs: config.sessionTtlMs,
+        maxPerIdentity: config.sessionMaxPerIdentity,
         adapterFactory,
       })
-    : new MemorySessionStore({ ttlMs: config.sessionTtlMs, adapterFactory })
+    : new MemorySessionStore({
+        ttlMs: config.sessionTtlMs,
+        maxPerIdentity: config.sessionMaxPerIdentity,
+        adapterFactory,
+      })
 
 const app = createApp(config, {
   store,

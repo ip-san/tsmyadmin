@@ -47,11 +47,12 @@ export function sessionRoutes(cfg: SessionConfig, deps: SessionRouteDeps) {
       }
 
       // The IP limiter counts failures only (a shared office NAT must not be locked out by successful logins).
+      // It is checked first so a blocked client cannot grow the ip|user map with fresh user names.
       const perIp = deps.ipLimiter.peek(ip)
-      const limit = deps.loginLimiter.hit(rateKey)
+      const limit = perIp.allowed ? deps.loginLimiter.hit(rateKey) : { allowed: false, retryAfterSec: 0 }
       if (!perIp.allowed || !limit.allowed) {
         deps.logger.log('warn', 'login.rate_limited', audit)
-        c.header('Retry-After', String(Math.max(limit.retryAfterSec, perIp.allowed ? 0 : perIp.retryAfterSec)))
+        c.header('Retry-After', String(Math.max(limit.retryAfterSec, perIp.retryAfterSec)))
         return c.json(apiError('RATE_LIMITED', 'Too many login attempts; try again later'), 429)
       }
       if (!isHostAllowed(body.host, body.port, deps.allowedHosts)) {
@@ -62,6 +63,9 @@ export function sessionRoutes(cfg: SessionConfig, deps: SessionRouteDeps) {
         )
       }
 
+      // A browser that logs in again without logging out must not keep its previous session (and pools) alive.
+      const previous = await getSignedCookie(c, cfg.secret, SESSION_COOKIE)
+      if (previous) await cfg.store.delete(previous)
       let session: Awaited<ReturnType<typeof cfg.store.create>>
       try {
         // The store builds the (audited) adapter, pings it and persists the session in one step.

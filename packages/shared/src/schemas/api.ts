@@ -6,13 +6,14 @@ import { StatementResultSchema } from './result.ts'
 import { RoutineKindSchema } from './routines.ts'
 import { RowKeySchema } from './row-key.ts'
 
+/** Bounded so an unauthenticated request cannot park large strings in the rate limiter / session store. */
 export const ConnectRequestSchema = z.object({
   dialect: DialectSchema,
-  host: z.string().min(1),
+  host: z.string().min(1).max(253),
   port: z.number().int().min(1).max(65535),
-  user: z.string().min(1),
-  password: z.string(),
-  database: z.string().min(1).optional(),
+  user: z.string().min(1).max(128),
+  password: z.string().max(1024),
+  database: z.string().min(1).max(128).optional(),
 })
 export type ConnectRequest = z.infer<typeof ConnectRequestSchema>
 

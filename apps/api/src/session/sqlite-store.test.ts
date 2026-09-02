@@ -1,6 +1,6 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { FakeAdapter } from '@tsmyadmin/adapter/testing'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -25,6 +25,46 @@ const factory =
   }
 
 describe('SqliteSessionStore', () => {
+  it('caps live sessions per database account across the persisted rows', async () => {
+    const made: FakeAdapter[] = []
+    let t = 0
+    const path = tmpFile()
+    const store = new SqliteSessionStore({
+      path,
+      secret: 's',
+      adapterFactory: factory(made),
+      maxPerIdentity: 2,
+      sweepIntervalMs: 0,
+      now: () => t++,
+    })
+    const a = await store.create(config)
+    await store.create(config)
+    await store.create(config)
+    expect(await store.get(a.id)).toBeUndefined()
+    expect(made[0]?.closed).toBe(true)
+    expect(store.size).toBe(2)
+    // Identity is stored as an HMAC, never the user/host in clear.
+    const raw = new DatabaseSync(path)
+    const rows = raw.prepare('SELECT identity FROM sessions').all() as { identity: string }[]
+    expect(rows.every((r) => /^[0-9a-f]{64}$/.test(r.identity))).toBe(true)
+    raw.close()
+    await store.closeAll()
+  })
+
+  it('adds the identity column to a pre-0.2 sessions table', async () => {
+    const path = tmpFile()
+    mkdirSync(dirname(path), { recursive: true })
+    const legacy = new DatabaseSync(path)
+    legacy.exec(
+      'CREATE TABLE sessions (id TEXT PRIMARY KEY, payload BLOB NOT NULL, created_at INTEGER NOT NULL, last_used_at INTEGER NOT NULL)'
+    )
+    legacy.close()
+    const store = new SqliteSessionStore({ path, secret: 's', adapterFactory: factory(), sweepIntervalMs: 0 })
+    const s = await store.create(config)
+    expect((await store.get(s.id))?.id).toBe(s.id)
+    await store.closeAll()
+  })
+
   it('creates, fetches, deletes and closes adapters like the memory store', async () => {
     const made: FakeAdapter[] = []
     const store = new SqliteSessionStore({

@@ -9,7 +9,7 @@ services:
       MYSQL_USER: tsmyadmin
       MYSQL_PASSWORD: tsmyadmin
     ports:
-      - "13306:3306"
+      - "127.0.0.1:13306:3306"
     volumes:
       - ./docker/fixtures/mysql:/docker-entrypoint-initdb.d:ro
     command: --default-time-zone=+00:00
@@ -28,7 +28,7 @@ services:
       TZ: UTC
       PGTZ: UTC
     ports:
-      - "15433:5432"
+      - "127.0.0.1:15433:5432"
     volumes:
       - ./docker/fixtures/postgres:/docker-entrypoint-initdb.d:ro
     healthcheck:

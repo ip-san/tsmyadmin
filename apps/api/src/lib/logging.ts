@@ -15,6 +15,14 @@ export type RemoteAddress = (c: Context) => string | undefined
  * Structured logger: one JSON object per line in production (for log shippers), a readable line in development.
  * Never pass credentials or row values as fields.
  */
+function hasControlChars(s: string): boolean {
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i)
+    if (c < 0x20 || c === 0x7f) return true
+  }
+  return false
+}
+
 export function createLogger(
   format: LogFormat,
   sink: (line: string) => void = (l) => process.stdout.write(`${l}\n`)
@@ -26,8 +34,9 @@ export function createLogger(
         sink(JSON.stringify({ time, level, event, ...fields }))
         return
       }
+      // Strings carrying control characters (paths, user names) are quoted so a request cannot forge log lines.
       const rest = Object.entries(fields)
-        .map(([k, v]) => `${k}=${typeof v === 'string' ? v : JSON.stringify(v)}`)
+        .map(([k, v]) => `${k}=${typeof v === 'string' && !hasControlChars(v) ? v : JSON.stringify(v)}`)
         .join(' ')
       sink(`${time} ${level.toUpperCase().padEnd(5)} ${event}${rest ? ` ${rest}` : ''}`)
     },
@@ -53,12 +62,14 @@ export function requestLogger(logger: Logger, ip: (c: Context) => string): Middl
 
 /**
  * Client IP for rate limiting / logs. The socket address is the source of truth; X-Forwarded-For is honoured
- * only when a reverse proxy is declared trusted. Other headers (X-Real-IP …) are never trusted: any client can set them.
+ * only when a reverse proxy is declared trusted, and then only its LAST element: proxies append the address they
+ * saw, so the last entry is the one written by the trusted hop while earlier entries are whatever the client
+ * sent. Other headers (X-Real-IP …) are never trusted: any client can set them.
  */
 export function clientIp(headers: Headers, trustProxy: boolean, remote: string | undefined): string {
   if (trustProxy) {
-    const first = headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-    if (first) return first
+    const last = headers.get('x-forwarded-for')?.split(',').at(-1)?.trim()
+    if (last) return last
   }
   return remote ?? 'unknown'
 }

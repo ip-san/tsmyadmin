@@ -26,7 +26,12 @@ export function userRoutes(cfg: SessionConfig) {
       const { op } = c.req.valid('json')
       const adapter = c.get('session').adapter
       const statements = adapter.users.build(op)
-      if ('password' in op) redactInLogs(op.password)
+      if ('password' in op) {
+        // The audit line carries the SQL text, where the password appears literal-encoded (quotes doubled, backslashes
+        // escaped), so register both the raw value and its encoded form.
+        redactInLogs(op.password)
+        redactInLogs(adapter.exporter.literal(op.password).slice(1, -1))
+      }
       // One connection for the whole operation; executeSql splits the script and stops at the first error.
       const results = await adapter.executeSql(
         adapter.users.namespace(op, adapter.serverNamespace),

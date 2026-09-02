@@ -294,6 +294,25 @@ describe('hardening', () => {
     expect((await trusted.login(LOGIN, { 'x-forwarded-for': '203.0.113.1' })).status).toBe(401)
     expect((await trusted.login(LOGIN, { 'x-forwarded-for': '203.0.113.2' })).status).toBe(401)
     expect((await trusted.login(LOGIN, { 'x-forwarded-for': '203.0.113.1' })).status).toBe(429)
+    // A client-forged first element does not open a new window: only the proxy-appended last element counts.
+    expect((await trusted.login(LOGIN, { 'x-forwarded-for': '10.9.9.9, 203.0.113.1' })).status).toBe(429)
+  })
+
+  it('closes the previous session of a browser that logs in again', async () => {
+    const h = harness()
+    stores.push(h.store)
+    await h.login()
+    expect(h.store.size).toBe(1)
+    const again = await h.login()
+    expect(again.status).toBe(201)
+    expect(h.store.size).toBe(1)
+  })
+
+  it('ignores a client-supplied X-Request-Id', async () => {
+    const h = harness()
+    stores.push(h.store)
+    const res = await h.req('/healthz', { headers: { 'x-request-id': 'forged-id' } })
+    expect(res.headers.get('x-request-id')).toMatch(/^[0-9a-f-]{36}$/)
   })
 
   it('sets security headers, a request id and answers health probes', async () => {

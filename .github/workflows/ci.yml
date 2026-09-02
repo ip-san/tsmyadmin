@@ -1,5 +1,8 @@
 name: CI
 
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main]
@@ -20,7 +23,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: 1.4.0
       - run: bun install --frozen-lockfile
       - name: typecheck
         if: matrix.task == 'typecheck'
@@ -64,7 +67,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: 1.4.0
       - run: bun install --frozen-lockfile
       - name: Load fixtures
         run: |
@@ -102,7 +105,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: 1.4.0
       - run: bun install --frozen-lockfile
       - name: Load fixtures
         run: |
@@ -128,7 +131,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: 1.4.0
       - run: bun install --frozen-lockfile
       - run: bun run build
       - run: bun run lighthouse
@@ -145,7 +148,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: 1.4.0
       - run: bun install --frozen-lockfile
       - run: bun run build
       - run: bun run size

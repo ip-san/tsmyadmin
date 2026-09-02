@@ -1,3 +1,4 @@
+import { createHmac } from 'node:crypto'
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { DatabaseSync, type StatementSync } from 'node:sqlite'
@@ -7,6 +8,8 @@ import { deriveSessionKey, open, seal } from './crypto.ts'
 import {
   type AdapterFactory,
   connectAdapter,
+  DEFAULT_MAX_SESSIONS_PER_IDENTITY,
+  identityKey,
   SESSION_TTL_MS,
   type Session,
   type SessionStore,
@@ -24,6 +27,7 @@ export interface SqliteSessionStoreOptions {
   now?: () => number
   /** Minimum interval between last_used_at writes for the same session (limits write amplification). */
   touchIntervalMs?: number
+  maxPerIdentity?: number
 }
 
 interface Row {
@@ -62,7 +66,9 @@ export class SqliteSessionStore implements SessionStore {
     remove: StatementSync
     stale: StatementSync
     count: StatementSync
+    byIdentity: StatementSync
   }
+  private readonly maxPerIdentity: number
 
   constructor(options: SqliteSessionStoreOptions) {
     if (options.path !== ':memory:') mkdirSync(dirname(options.path), { recursive: true })
@@ -77,14 +83,25 @@ export class SqliteSessionStore implements SessionStore {
       );
       CREATE INDEX IF NOT EXISTS sessions_last_used ON sessions (last_used_at);
     `)
+    // Added after 0.1.0: an HMAC of the account identity (never the plain user/host) for the per-account cap.
+    const columns = this.db.prepare('PRAGMA table_info(sessions)').all() as { name: string }[]
+    if (!columns.some((c) => c.name === 'identity')) {
+      this.db.exec(
+        'ALTER TABLE sessions ADD COLUMN identity TEXT; CREATE INDEX IF NOT EXISTS sessions_identity ON sessions (identity)'
+      )
+    }
     this.stmt = {
-      insert: this.db.prepare('INSERT INTO sessions (id, payload, created_at, last_used_at) VALUES (?, ?, ?, ?)'),
+      insert: this.db.prepare(
+        'INSERT INTO sessions (id, payload, created_at, last_used_at, identity) VALUES (?, ?, ?, ?, ?)'
+      ),
       select: this.db.prepare('SELECT id, payload, created_at, last_used_at FROM sessions WHERE id = ?'),
       touch: this.db.prepare('UPDATE sessions SET last_used_at = ? WHERE id = ?'),
       remove: this.db.prepare('DELETE FROM sessions WHERE id = ?'),
       stale: this.db.prepare('SELECT id FROM sessions WHERE last_used_at < ?'),
       count: this.db.prepare('SELECT COUNT(*) AS n FROM sessions'),
+      byIdentity: this.db.prepare('SELECT id FROM sessions WHERE identity = ? ORDER BY last_used_at ASC'),
     }
+    this.maxPerIdentity = options.maxPerIdentity ?? DEFAULT_MAX_SESSIONS_PER_IDENTITY
     this.key = deriveSessionKey(options.secret)
     this.ttlMs = options.ttlMs ?? SESSION_TTL_MS
     this.now = options.now ?? Date.now
@@ -99,9 +116,12 @@ export class SqliteSessionStore implements SessionStore {
 
   async create(config: ConnectRequest): Promise<Session> {
     const adapter = await connectAdapter(this.factory, config)
+    const identity = createHmac('sha256', this.key).update(identityKey(config)).digest('hex')
+    const same = this.stmt.byIdentity.all(identity) as { id: string }[]
+    for (const victim of same.slice(0, Math.max(0, same.length - this.maxPerIdentity + 1))) await this.delete(victim.id)
     const id = crypto.randomUUID()
     const now = this.now()
-    this.stmt.insert.run(id, seal(this.key, JSON.stringify(config)), now, now)
+    this.stmt.insert.run(id, seal(this.key, JSON.stringify(config)), now, now, identity)
     this.live.set(id, { config, adapter, createdAt: now, lastTouch: now })
     return { id, config, adapter, createdAt: now, lastUsedAt: now }
   }

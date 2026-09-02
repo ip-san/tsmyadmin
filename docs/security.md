@@ -21,9 +21,13 @@
 
 ## ブルートフォース対策
 
-`POST /api/session` はクライアント IP（ソケットのアドレス。`TRUST_PROXY=1` のときだけ `X-Forwarded-For` の先頭を採用し、`X-Real-IP` 等のヘッダは信用しない）+ ユーザー名ごとに `LOGIN_RATE_LIMIT` 回 / `LOGIN_RATE_WINDOW_SECONDS` 秒に制限され、超過は `429 RATE_LIMITED`（`Retry-After` 付き）になります。成功時にカウンタはリセットされます。加えてユーザー名を変えながらの試行を防ぐため、IP 単位でも **失敗** `LOGIN_RATE_LIMIT × 3` 回 / 同じウィンドウで制限します（成功したログインは数えないので、共有 NAT 配下の正常な利用者を締め出しません）。
+`POST /api/session` はクライアント IP（ソケットのアドレス。`TRUST_PROXY=1` のときだけ `X-Forwarded-For` の**末尾**（信頼するプロキシが追記した要素。先頭はクライアントが自由に書けます）を採用し、`X-Real-IP` 等のヘッダは信用しない）+ ユーザー名ごとに `LOGIN_RATE_LIMIT` 回 / `LOGIN_RATE_WINDOW_SECONDS` 秒に制限され、超過は `429 RATE_LIMITED`（`Retry-After` 付き）になります。成功時にカウンタはリセットされます。加えてユーザー名を変えながらの試行を防ぐため、IP 単位でも **失敗** `LOGIN_RATE_LIMIT × 3` 回 / 同じウィンドウで制限します（成功したログインは数えないので、共有 NAT 配下の正常な利用者を締め出しません）。
 
 セッション Cookie の `Max-Age` は認証済みリクエストのたびに再発行され、サーバー側のスライド式 TTL と同期します。
+
+## 接続数の上限（DB 側の `max_connections` 保護）
+
+ログインごとにセッション（= 接続プール）が作られるため、同じ DB アカウントで保持するセッションは `SESSION_MAX_PER_IDENTITY`（既定 10）までとし、超えた分は最も古いセッションから閉じます。ログアウトせずに再ログインしたブラウザの以前のセッションも閉じます。DB 側の同時接続上限は「アカウント数 × `SESSION_MAX_PER_IDENTITY` × 4」を超えないことが目安です。
 
 ## CSRF / XSS
 

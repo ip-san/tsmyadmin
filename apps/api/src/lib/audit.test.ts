@@ -70,6 +70,23 @@ describe('withAudit', () => {
     expect(lines[1]?.sql).toContain('****')
   })
 
+  it('redacts passwords containing quotes, E-strings and dollar quoting', async () => {
+    const { lines, adapter } = setup()
+    const script = [
+      "CREATE USER 'u'@'%' IDENTIFIED BY 'ab''cd-secret'",
+      "CREATE ROLE r PASSWORD E'x\\'y-secret'",
+      'ALTER ROLE r PASSWORD $$dollar-secret$$',
+      'ALTER ROLE r PASSWORD $q$tagged-secret$q$',
+      'SET PASSWORD = "dq""secret"',
+    ].join(';\n')
+    await adapter.executeSql(ns, script, { maxRows: 1, timeoutMs: 1000, stopOnError: true })
+    const logged = String(lines[0]?.sql)
+    for (const secret of ['cd-secret', 'y-secret', 'dollar-secret', 'tagged-secret', 'dq', 'secret"']) {
+      expect(logged).not.toContain(secret)
+    }
+    expect(logged.match(/\*\*\*\*/g)).toHaveLength(5)
+  })
+
   it('redacts password literals typed directly into SQL (no request context needed)', async () => {
     const { lines, adapter } = setup()
     const script = [
