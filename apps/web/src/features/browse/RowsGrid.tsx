@@ -37,6 +37,13 @@ export function visibleColumns(result: BrowseResult): BrowseResult['columns'] {
   return result.keyKind === 'ctid' ? result.columns.slice(0, -1) : result.columns
 }
 
+/** A row's values as text, without one column: identifies the row across an edit of that column. */
+function othersOf(result: BrowseResult, row: Cell[], column: string): string {
+  const values = rowToValues(result, row)
+  delete values[column]
+  return JSON.stringify(values)
+}
+
 export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridProps) {
   const rows = useQuery(rowsQuery(tableRef, options))
   const queryClient = useQueryClient()
@@ -47,8 +54,8 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const noticeRef = useRef<HTMLOutputElement>(null)
-  /** Row key of an inline-saved row, until the refetched rows are committed and its fate is known. */
-  const settleFocus = useRef<{ index: number; key: string } | null>(null)
+  /** An inline-saved row (its other columns' values), until the refetched rows are committed and its fate is known. */
+  const settleFocus = useRef<{ index: number; column: string; others: string } | null>(null)
   const gridRef = useRef<HTMLTableElement>(null)
   // Reset transient UI state when the table, page, sort or filters change (state-from-props reset pattern):
   // the route component is reused across tables, so a selection or an open editor must not carry over.
@@ -89,8 +96,10 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
     if (!saved || rows.isFetching) return
     settleFocus.current = null
     // Rows are keyed by index: the cell may still exist but now belong to another row (the edited one left a
-    // filtered result set), so the row at that index is compared by key.
-    const stillThere = data !== undefined && JSON.stringify(rowKeys(data)[saved.index] ?? null) === saved.key
+    // filtered result set), so the row at that index is compared on every column but the edited one (a row key
+    // would change with the edit on all-columns / ctid tables, or when a key column was edited).
+    const row = data?.rows[saved.index]
+    const stillThere = data !== undefined && row !== undefined && othersOf(data, row, saved.column) === saved.others
     if (!stillThere || !gridRef.current?.contains(document.activeElement)) {
       noticeRef.current?.focus({ preventScroll: true })
     }
@@ -116,7 +125,10 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
       // The edited row may leave a filtered result set, taking the focused cell with it: checked once the
       // refetched rows are committed (see the effect on `data`), not when the fetch resolves.
       const cell = inlineRef.current
-      settleFocus.current = cell ? { index: cell.row, key: JSON.stringify(derived?.keys[cell.row] ?? null) } : null
+      const before = cell && data ? data.rows[cell.row] : undefined
+      const column = cell ? (derived?.allColumns[cell.col]?.name ?? '') : ''
+      settleFocus.current =
+        cell && data && before ? { index: cell.row, column, others: othersOf(data, before, column) } : null
       closeInline()
       await invalidate()
     },

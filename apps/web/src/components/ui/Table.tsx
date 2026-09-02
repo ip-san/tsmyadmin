@@ -5,12 +5,25 @@ export function Table({
   className,
   ref,
   scrollLabel,
+  scrollRef,
+  scrollClassName,
   ...rest
-}: HTMLAttributes<HTMLTableElement> & { ref?: Ref<HTMLTableElement>; scrollLabel?: string }) {
+}: HTMLAttributes<HTMLTableElement> & {
+  ref?: Ref<HTMLTableElement>
+  scrollLabel?: string
+  /** The scrolling wrapper (a virtualiser's scroll element). */
+  scrollRef?: Ref<HTMLDivElement>
+  /** Extra classes on the wrapper (a vertical limit for virtualised results). */
+  scrollClassName?: string
+}) {
   // A table without focusable cells (read-only results) needs its scroller in the tab order to scroll by keyboard.
   const scroller = scrollLabel ? { tabIndex: 0, role: 'group', 'aria-label': scrollLabel } : {}
   return (
-    <div className="w-full overflow-x-auto rounded border border-zinc-200 dark:border-zinc-700" {...scroller}>
+    <div
+      ref={scrollRef}
+      className={cn('w-full overflow-x-auto rounded border border-zinc-200 dark:border-zinc-700', scrollClassName)}
+      {...scroller}
+    >
       <table ref={ref} className={cn('w-full border-collapse text-sm', className)} {...rest} />
     </div>
   )

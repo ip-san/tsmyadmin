@@ -1,8 +1,8 @@
 import type { ButtonHTMLAttributes, Ref } from 'react'
 import { cn } from '@/lib/cn.ts'
 
-type Variant = 'primary' | 'secondary' | 'danger' | 'ghost'
-type Size = 'sm' | 'md'
+type Variant = 'primary' | 'secondary' | 'danger' | 'ghost' | 'icon'
+type Size = 'sm' | 'md' | 'icon'
 
 const VARIANTS: Record<Variant, string> = {
   primary:
@@ -12,8 +12,14 @@ const VARIANTS: Record<Variant, string> = {
   danger:
     'bg-red-600 text-white hover:bg-red-700 dark:bg-red-600 dark:hover:bg-red-700 disabled:bg-red-300 dark:disabled:bg-red-900',
   ghost: 'bg-transparent text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800',
+  /** Icon-only control inside a table row: quieter colour, lighter when disabled. */
+  icon: 'bg-transparent text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800',
 }
-const SIZES: Record<Size, string> = { sm: 'px-2 py-1 text-xs', md: 'px-3 py-1.5 text-sm' }
+const SIZES: Record<Size, string> = {
+  sm: 'px-2 py-1 text-xs',
+  md: 'px-3 py-1.5 text-sm',
+  icon: 'min-h-6 min-w-6 justify-center p-0',
+}
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant
@@ -40,7 +46,8 @@ export function Button({
         onClick?.(e)
       }}
       className={cn(
-        'inline-flex items-center gap-1 rounded font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-60',
+        'inline-flex items-center gap-1 rounded font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:cursor-not-allowed',
+        variant === 'icon' ? 'disabled:opacity-40' : 'disabled:opacity-60',
         VARIANTS[variant],
         SIZES[size],
         className

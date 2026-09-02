@@ -3,8 +3,7 @@ import { Button } from '@/components/ui/Button.tsx'
 import { Td } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
 
-const ICON_BUTTON =
-  '-my-0.5 ml-1 min-h-6 min-w-6 justify-center p-0 align-middle text-zinc-500 disabled:opacity-40 dark:text-zinc-400'
+const ICON_BUTTON = '-my-0.5 ml-1 align-middle'
 
 /** Leading cell of a browse row: select checkbox, edit and duplicate buttons (24px targets). */
 export function RowActions({
@@ -35,8 +34,8 @@ export function RowActions({
         />
       </label>
       <Button
-        variant="ghost"
-        size="sm"
+        variant="icon"
+        size="icon"
         className={ICON_BUTTON}
         aria-label={locale.rows.editRow(index + 1)}
         aria-haspopup="dialog"
@@ -46,8 +45,8 @@ export function RowActions({
         <Pencil className="size-3.5" aria-hidden />
       </Button>
       <Button
-        variant="ghost"
-        size="sm"
+        variant="icon"
+        size="icon"
         className={ICON_BUTTON}
         aria-label={locale.rows.copyRow(index + 1)}
         aria-haspopup="dialog"

@@ -180,27 +180,25 @@ function RowsTable({
   const padTop = items[0]?.start ?? 0
   const padBottom = virtualizer.getTotalSize() - (items.at(-1)?.end ?? 0)
   return (
-    <div ref={scrollRef} className="max-h-[70vh] overflow-auto">
-      <Table>
-        {header}
-        <tbody>
-          {padTop > 0 ? (
-            <tr aria-hidden style={{ height: padTop }}>
-              <td colSpan={columns.length} />
-            </tr>
-          ) : null}
-          {items.map((item) => {
-            const row = rows[item.index]
-            return row ? renderRow(row, item.index) : null
-          })}
-          {padBottom > 0 ? (
-            <tr aria-hidden style={{ height: padBottom }}>
-              <td colSpan={columns.length} />
-            </tr>
-          ) : null}
-        </tbody>
-      </Table>
-    </div>
+    <Table scrollLabel={label} scrollRef={scrollRef} scrollClassName="max-h-[70vh] overflow-auto">
+      {header}
+      <tbody>
+        {padTop > 0 ? (
+          <tr aria-hidden style={{ height: padTop }}>
+            <td colSpan={columns.length} />
+          </tr>
+        ) : null}
+        {items.map((item) => {
+          const row = rows[item.index]
+          return row ? renderRow(row, item.index) : null
+        })}
+        {padBottom > 0 ? (
+          <tr aria-hidden style={{ height: padBottom }}>
+            <td colSpan={columns.length} />
+          </tr>
+        ) : null}
+      </tbody>
+    </Table>
   )
 }
 
