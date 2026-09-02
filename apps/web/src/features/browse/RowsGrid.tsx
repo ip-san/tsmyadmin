@@ -55,7 +55,7 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
   const [notice, setNotice] = useState<string | null>(null)
   const noticeRef = useRef<HTMLOutputElement>(null)
   /** An inline-saved row (its other columns' values), until the refetched rows are committed and its fate is known. */
-  const settleFocus = useRef<{ index: number; column: string; others: string } | null>(null)
+  const settleFocus = useRef<{ index: number; col: number; column: string; others: string } | null>(null)
   const gridRef = useRef<HTMLTableElement>(null)
   // Reset transient UI state when the table, page, sort or filters change (state-from-props reset pattern):
   // the route component is reused across tables, so a selection or an open editor must not carry over.
@@ -100,9 +100,16 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
     // would change with the edit on all-columns / ctid tables, or when a key column was edited).
     const row = data?.rows[saved.index]
     const stillThere = data !== undefined && row !== undefined && othersOf(data, row, saved.column) === saved.others
-    if (!stillThere || !gridRef.current?.contains(document.activeElement)) {
-      noticeRef.current?.focus({ preventScroll: true })
-    }
+    if (stillThere && gridRef.current?.contains(document.activeElement)) return
+    // The row may have re-sorted (a key column edited, a new ctid): follow it when exactly one row matches.
+    const matches = data
+      ? data.rows.flatMap((r, i) => (othersOf(data, r, saved.column) === saved.others ? [i] : []))
+      : []
+    const moved = matches.length === 1 ? matches[0] : undefined
+    const cell =
+      moved === undefined ? null : gridRef.current?.querySelector<HTMLElement>(`[data-cell="${moved},${saved.col}"]`)
+    if (cell) cell.focus({ preventScroll: true })
+    else noticeRef.current?.focus({ preventScroll: true })
   }, [data, rows.isFetching])
   // Derived per page, not per render: keys/indexes are reused by every checkbox toggle and inline edit.
   const derived = useMemo(() => {
@@ -128,7 +135,9 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
       const before = cell && data ? data.rows[cell.row] : undefined
       const column = cell ? (derived?.allColumns[cell.col]?.name ?? '') : ''
       settleFocus.current =
-        cell && data && before ? { index: cell.row, column, others: othersOf(data, before, column) } : null
+        cell && data && before
+          ? { index: cell.row, col: cell.col, column, others: othersOf(data, before, column) }
+          : null
       closeInline()
       await invalidate()
     },

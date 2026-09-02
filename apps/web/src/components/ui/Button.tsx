@@ -13,7 +13,7 @@ const VARIANTS: Record<Variant, string> = {
     'bg-red-600 text-white hover:bg-red-700 dark:bg-red-600 dark:hover:bg-red-700 disabled:bg-red-300 dark:disabled:bg-red-900',
   ghost: 'bg-transparent text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800',
   /** Icon-only control inside a table row: quieter colour, lighter when disabled. */
-  icon: 'bg-transparent text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800',
+  icon: 'bg-transparent text-zinc-500 enabled:hover:bg-zinc-100 dark:text-zinc-400 dark:enabled:hover:bg-zinc-800',
 }
 const SIZES: Record<Size, string> = {
   sm: 'px-2 py-1 text-xs',

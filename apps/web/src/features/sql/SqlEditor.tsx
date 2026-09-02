@@ -83,7 +83,9 @@ export function SqlEditor({ value, onChange, onRun, dialect, schema }: SqlEditor
         EditorView.updateListener.of((u) => {
           if (u.docChanged) latest.current.onChange(u.state.doc.toString())
         }),
-        EditorView.contentAttributes.of({ 'aria-label': locale.sql.editor }),
+        // tabindex on the content: axe does not count contenteditable as focusable, so a horizontally scrolling
+        // editor would be reported as an unreachable scroll region.
+        EditorView.contentAttributes.of({ 'aria-label': locale.sql.editor, tabindex: '0' }),
       ],
     })
     const v = new EditorView({ state, parent: el })
