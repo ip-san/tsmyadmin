@@ -5,6 +5,14 @@ import { cellLiteral, pgLiteral } from './literal.ts'
 import { quoteIdent, quoteTable } from './quote.ts'
 
 /**
+ * Text for a `--` comment line of a dump. Identifiers may contain line breaks on both servers; left as is, a
+ * table named `t\nDROP TABLE x` would turn the comment into a statement the restore executes.
+ */
+export function commentText(text: string): string {
+  return text.replace(/[\r\n]+/g, ' ')
+}
+
+/**
  * Columns whose values the server computes and that therefore cannot be part of an INSERT: MySQL
  * `VIRTUAL GENERATED` / `STORED GENERATED`, PostgreSQL `generated stored`. MySQL's `DEFAULT_GENERATED`
  * (an expression default such as CURRENT_TIMESTAMP) is an ordinary column whose values must be dumped.
@@ -37,7 +45,7 @@ function dumpTable(dialect: Dialect, ns: Namespace, table: string): string {
  * header so the same text inside a body's string literal (`SELECT 'DEFINER=root@localhost'`) is left alone.
  */
 const DEFINER =
-  /^(CREATE\s+(?:ALGORITHM\s*=\s*\w+\s+)?)DEFINER\s*=\s*(?:`(?:[^`]|``)*`|'(?:[^']|'')*'|[^\s@]+)@(?:`(?:[^`]|``)*`|'(?:[^']|'')*'|\S+)\s*/i
+  /^(CREATE\s+(?:ALGORITHM\s*=\s*\w+\s+)?)DEFINER\s*=\s*(?:`(?:[^`]|``)*`|'(?:[^']|'')*')@(?:`(?:[^`]|``)*`|'(?:[^']|'')*')\s+/i
 
 /** Dump statements: every identifier is quoted and every value goes through cellLiteral. Dialect-agnostic. */
 export function createExporter(dialect: Dialect): SqlExporter {
@@ -97,7 +105,7 @@ export function createExporter(dialect: Dialect): SqlExporter {
           // bodies are not validated at creation (pg_dump does the same) so their order does not matter.
           [`SET search_path TO ${quoteIdent(dialect, ns.schema ?? 'public')};`, 'SET check_function_bodies = false;']
         : [
-            `-- Database: ${ns.database} (statements are unqualified: import into the database of your choice)`,
+            `-- Database: ${commentText(ns.database)} (statements are unqualified: import into the database of your choice)`,
             // Literals are written with backslash escapes, which NO_BACKSLASH_ESCAPES would break on import.
             "SET @OLD_SQL_MODE = @@SQL_MODE, SQL_MODE = 'NO_AUTO_VALUE_ON_ZERO';",
             'SET @OLD_FOREIGN_KEY_CHECKS = @@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS = 0;',

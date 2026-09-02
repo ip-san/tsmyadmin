@@ -800,7 +800,11 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     entry.cancelled = true
     // Concurrent cancel requests for one run share a single cancel (and its one dedicated connection): a
     // burst of clicks must not open a burst of connections against the server.
-    entry.cancelling ??= this.sendCancel(queryId, entry, backend)
+    entry.cancelling ??= this.sendCancel(queryId, entry, backend).catch((err: unknown) => {
+      // A cancel that could not even open its connection must not poison every later click for this run.
+      entry.cancelling = null
+      throw err
+    })
     return entry.cancelling
   }
 

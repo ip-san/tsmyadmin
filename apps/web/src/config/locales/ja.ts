@@ -310,7 +310,8 @@ export const ja = {
     /** Appended to `irreversible` for the ops that destroy stored data (not for dropping an index / key / account). */
     dataLoss: 'テーブルのデータは失われます。',
     columnLoss: 'このカラムのデータは失われます。',
-    databaseLoss: 'データベース内のすべてのテーブルとデータが失われます。',
+    databaseLoss:
+      'データベース内のすべてのテーブルとデータが失われます。PostgreSQL では接続中の他のセッションも切断されます。',
     typeToConfirm: (name: string) => `続行するには「${name}」と入力してください`,
     generating: 'SQL を生成中…',
     execute: '実行する',
@@ -400,7 +401,8 @@ export const ja = {
     data: 'データ（INSERT）',
     bom: 'UTF-8 BOM を付ける（Excel 向け）',
     routines: 'ルーチン・トリガー・イベントも含める',
-    stripDefiner: 'DEFINER 句を除く（別のユーザーで復元する場合）',
+    stripDefiner:
+      'DEFINER 句を除く（別のユーザーで復元する場合。定義者権限のオブジェクトは復元するユーザーの権限で動きます）',
     download: 'ダウンロードする',
     csvSingle: 'CSV は 1 テーブルずつエクスポートします。',
     nothing: 'エクスポートする対象がありません',

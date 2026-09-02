@@ -26,6 +26,21 @@ const ns = { database: 'shop' }
 const q = (over: Record<string, string>) => ExportQuerySchema.parse(over)
 
 describe('buildExport', () => {
+  it('never lets an object name break out of a comment line', async () => {
+    const evil = 'x\nDROP TABLE users; -- y'
+    const a = new FakeAdapter({ databases: { shop: { tables: { [evil]: fakeTable(evil, ['id'], [{ id: 1 }]) } } } })
+    const f = buildExport(a, ns, [evil], q({ format: 'sql', data: '0' }))
+    let body = ''
+    for await (const c of f.body) body += c
+    // The comment stays one line (the next line is the section rule); the DROP names the table inside its
+    // quoted identifier, where a line break is just part of the name.
+    const lines = body.split('\n')
+    const at = lines.indexOf('-- Table: x DROP TABLE users; -- y')
+    expect(at).toBeGreaterThan(0)
+    expect(lines[at + 1]).toMatch(/^-- -+$/)
+    expect(body).toContain('DROP TABLE IF EXISTS `x\nDROP TABLE users; -- y`;')
+  })
+
   it('sql: structure + batched inserts with a header', async () => {
     const f = buildExport(adapter(), ns, ['users', 'empty'], q({ format: 'sql' }))
     const body = await collect(f.body)

@@ -1,5 +1,5 @@
 import type { DatabaseAdapter, ProgramStatement } from '@tsmyadmin/adapter'
-import { isGeneratedColumn } from '@tsmyadmin/adapter'
+import { commentText, isGeneratedColumn } from '@tsmyadmin/adapter'
 import type { ExportQuery, Namespace } from '@tsmyadmin/shared'
 import { csvField, EXPORT_BATCH_SIZE } from '@tsmyadmin/shared'
 
@@ -68,7 +68,7 @@ async function* routinesBody(adapter: DatabaseAdapter, ns: Namespace, stripDefin
   }
   if (defs.length > 0 || skipped.length > 0) yield section('Routines')
   // A routine the account may not read is named rather than silently missing from the backup.
-  for (const name of skipped) yield `-- skipped (no privilege to read the definition): ${name}\n`
+  for (const name of skipped) yield `-- skipped (no privilege to read the definition): ${commentText(name)}\n`
   if (skipped.length > 0) yield '\n'
   if (defs.length > 0) yield x.programBlock(defs)
 }
@@ -128,7 +128,7 @@ async function* sqlBody(
   yield [
     '-- tsmyadmin SQL dump',
     `-- Dialect: ${adapter.dialect}`,
-    `-- Database: ${ns.database}${ns.schema ? ` / schema ${ns.schema}` : ''}`,
+    `-- Database: ${commentText(ns.database)}${ns.schema ? ` / schema ${commentText(ns.schema)}` : ''}`,
     `-- Generated: ${new Date().toISOString()}`,
     '',
     ...adapter.exporter.preamble(ns),
@@ -153,7 +153,7 @@ async function* sqlBody(
       }
       continue
     }
-    yield section(`Table: ${table}`)
+    yield section(`Table: ${commentText(table)}`)
     if (q.structure === '1') {
       if (q.dropTable === '1') yield `${adapter.exporter.dropIfExists(ns, schema)};\n`
       for (const stmt of await adapter.showCreateTable(ns, table, schema)) {
@@ -188,7 +188,7 @@ async function* sqlBody(
   const programs = q.structure === '1' && q.routines === '1'
   if (programs && everything) yield* routinesBody(adapter, ns, q.stripDefiner === '1')
   for (const v of orderViews(views)) {
-    yield section(`View: ${v.name}`)
+    yield section(`View: ${commentText(v.name)}`)
     for (const stmt of v.statements) yield `${stmt};\n\n`
   }
   if (programs) yield* triggersAndEventsBody(adapter, ns, everything ? null : tables)

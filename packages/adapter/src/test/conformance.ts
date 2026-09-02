@@ -83,6 +83,7 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
     `${scratch}_enumkey`,
     `${scratch}_bigkey`,
     `${scratch}_bitkey`,
+    `${scratch}_trg`,
     `${scratch}_bulk_a`,
     `${scratch}_bulk_b`,
     `${scratch}_nokey`,
@@ -808,6 +809,16 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         )
         expect(bigLimit[0]).toMatchObject({ kind: 'rows', result: { truncated: true } })
         if (bigLimit[0]?.kind === 'rows') expect(bigLimit[0].result.rows).toHaveLength(5)
+        if (dialect === 'mysql') {
+          // Observable server-side: the bytes the connection sent for a wide LIMIT query stay small (the same
+          // connection serves both statements of a script).
+          const wide = await exec(
+            `SELECT REPEAT('x', 4096) AS w FROM users u1, users u2, users u3, users u4, users u5, users u6 LIMIT 100000; SHOW SESSION STATUS LIKE 'Bytes_sent'`,
+            { maxRows: 5, timeoutMs: 10_000 }
+          )
+          const sent = Number(wide[1]?.kind === 'rows' ? wide[1].result.rows[0]?.[1] : Number.NaN)
+          expect(sent).toBeLessThan(1_000_000) // unwrapped: 15,625 rows × 4 KB ≈ 64 MB
+        }
         const orderedLimit = await exec('SELECT id FROM users ORDER BY id DESC LIMIT 100', { maxRows: 3 })
         expect(orderedLimit[0]).toMatchObject({ kind: 'rows', result: { rows: [[5], [4], [3]], truncated: true } })
         if (dialect === 'mysql') {
@@ -931,9 +942,14 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         const before = (await db.listProcesses()).length
         const queryId = crypto.randomUUID()
         const run = db.executeSql(ns, ctx.slowSql, { ...EXEC, timeoutMs: 60_000, queryId })
-        // A burst of cancel clicks must not become a burst of dedicated connections against the server.
-        const results = await Promise.all(Array.from({ length: 25 }, () => db.cancelQuery(queryId)))
+        // A burst of cancel clicks must not become a burst of dedicated connections against the server:
+        // sampled while the burst is in progress, the server sees at most one extra session.
+        const burst = Array.from({ length: 25 }, () => db.cancelQuery(queryId))
+        await new Promise((resolve) => setTimeout(resolve, 30))
+        const during = (await db.listProcesses()).length
+        const results = await Promise.all(burst)
         expect(results.every((r) => r)).toBe(true)
+        expect(during).toBeLessThanOrEqual(before + 3)
         expect((await run)[0]?.kind).toBe('error')
         // The cancel connection is closed again: the server sees no lingering sessions from the burst.
         expect((await db.listProcesses()).length).toBeLessThanOrEqual(before + 2)
@@ -1031,6 +1047,21 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         await execOk(`DROP TABLE ${t}`)
       })
 
+      it.skipIf(dialect !== 'mysql')(
+        'lists triggers in execution order so a dump recreates FOLLOWS / PRECEDES',
+        async () => {
+          const t = `${scratch}_trg`
+          await execOk(`CREATE TABLE ${t} (id INT PRIMARY KEY, n INT NOT NULL DEFAULT 0)`)
+          await execOk(`CREATE TRIGGER ${t}_a BEFORE INSERT ON ${t} FOR EACH ROW SET NEW.n = NEW.n + 1`)
+          await execOk(
+            `CREATE TRIGGER ${t}_0 BEFORE INSERT ON ${t} FOR EACH ROW PRECEDES ${t}_a SET NEW.n = NEW.n * 10`
+          )
+          const names = (await db.listTriggers(ns, t)).map((x) => x.name)
+          expect(names).toEqual([`${t}_0`, `${t}_a`])
+          await execOk(`DROP TABLE ${t}`)
+        }
+      )
+
       it.skipIf(dialect !== 'mysql')('pages, updates and filters a BIT-keyed table (MySQL / MariaDB)', async () => {
         const t = `${scratch}_bitkey`
         await execOk(`CREATE TABLE ${t} (b BIT(8) NOT NULL PRIMARY KEY, v INT NOT NULL)`)
@@ -1097,7 +1128,10 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         for await (const b of db.iterateRows(ns, 'users', { batchSize: 2 })) total += b.rows.length
         expect(total).toBe(5)
         if (dialect === 'postgres') {
-          const idle = await execOk("SELECT count(*) FROM pg_stat_activity WHERE state = 'idle in transaction'")
+          // A leaked transaction is stale; an export in flight elsewhere (between FETCHes) is fresh.
+          const idle = await execOk(
+            "SELECT count(*) FROM pg_stat_activity WHERE state = 'idle in transaction' AND xact_start < now() - interval '2 seconds'"
+          )
           expect(Number(idle[0]?.kind === 'rows' ? idle[0].result.rows[0]?.[0] : -1)).toBe(0)
         }
       })

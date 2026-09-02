@@ -6,7 +6,7 @@ import { pgDdl } from './postgres/ddl.ts'
 import type { ConnectionConfig, DatabaseAdapter, DdlBuilder } from './types.ts'
 
 export { MAX_BINARY_BYTES } from './base.ts'
-export { isGeneratedColumn } from './sql/export.ts'
+export { commentText, isGeneratedColumn } from './sql/export.ts'
 export { quoteIdent, quoteTable } from './sql/quote.ts'
 export { type Statement, splitStatements } from './sql/split.ts'
 export * from './types.ts'
