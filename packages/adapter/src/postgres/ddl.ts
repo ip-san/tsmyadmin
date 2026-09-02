@@ -79,6 +79,8 @@ export const pgDdl: DdlBuilder = {
         }
         if (c.comment !== null && (prev === undefined || prev.comment !== c.comment)) {
           out.push(`COMMENT ON COLUMN ${t}.${col} IS ${pgLiteral(c.comment)}`)
+        } else if (c.comment === null && prev?.comment != null) {
+          out.push(`COMMENT ON COLUMN ${t}.${col} IS NULL`)
         }
         return out
       }

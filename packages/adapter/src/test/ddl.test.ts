@@ -130,6 +130,18 @@ describe('DDL builders', () => {
     ])
   })
 
+  it('modifyColumn clears a column comment on PostgreSQL when the previous one is dropped', () => {
+    const previous = col('n', 'INT', { comment: 'old' })
+    const op: DdlOp = {
+      op: 'modifyColumn',
+      table: 't',
+      name: 'n',
+      column: col('n', 'INT', { comment: null }),
+      previous,
+    }
+    expect(pgDdl.build({ database: 'db', schema: 'app' }, op)).toEqual(['COMMENT ON COLUMN "app"."t"."n" IS NULL'])
+  })
+
   it('table options and maintenance follow each dialect', () => {
     const opts: DdlOp = {
       op: 'setTableOptions',

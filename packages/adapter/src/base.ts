@@ -94,10 +94,14 @@ const LEADING_COMMENTS = /^(?:\s+|--[^\n]*(?:\n|$)|#[^\n]*(?:\n|$)|\/\*[\s\S]*?\
 
 /** String literals, quoted identifiers, dollar-quoted bodies and comments, replaced by a space (`'delete'` is data, not DML). */
 const LITERALS_AND_COMMENTS =
-  /'(?:[^'\\]|\\.|'')*'|"(?:[^"]|"")*"|`(?:[^`]|``)*`|(\$[A-Za-z_]*\$)[\s\S]*?\1|--[^\n]*|#[^\n]*|\/\*[\s\S]*?\*\//g
+  /\bE'(?:[^'\\]|\\.|'')*'|'(?:[^'\\]|\\.|'')*'|"(?:[^"]|"")*"|`(?:[^`]|``)*`|(\$[A-Za-z_][A-Za-z0-9_]*\$|\$\$)[\s\S]*?\1|--[^\n]*|#[^\n]*|\/\*[\s\S]*?\*\//g
 
-function stripLiterals(code: string): string {
-  return code.replace(LITERALS_AND_COMMENTS, ' ')
+const LITERALS_AND_COMMENTS_STANDARD =
+  /\bE'(?:[^'\\]|\\.|'')*'|'(?:[^']|'')*'|"(?:[^"]|"")*"|(\$[A-Za-z_][A-Za-z0-9_]*\$|\$\$)[\s\S]*?\1|--[^\n]*|\/\*[\s\S]*?\*\//g
+
+/** Backslashes escape quotes in MySQL strings; in PostgreSQL only inside E'...' (standard_conforming_strings). */
+function stripLiterals(code: string, dialect: Dialect): string {
+  return code.replace(dialect === 'mysql' ? LITERALS_AND_COMMENTS : LITERALS_AND_COMMENTS_STANDARD, ' ')
 }
 
 const WRAP_PREFIX = 'SELECT * FROM (\n'
@@ -111,10 +115,10 @@ const TOUCHES_CAP = /sql_select_limit/i
  * placed on its own line so a trailing `--` comment cannot swallow the closing parenthesis; data-modifying
  * statements (also inside a WITH) are never wrapped.
  */
-export function wrapReadOnly(sql: string, limit: number): string | null {
+export function wrapReadOnly(sql: string, limit: number, dialect: Dialect = 'postgres'): string | null {
   const body = sql.trim().replace(/;+\s*$/, '')
   const code = body.replace(LEADING_COMMENTS, '')
-  if (!READ_START.test(code) || NOT_WRAPPABLE.test(stripLiterals(code))) return null
+  if (!READ_START.test(code) || NOT_WRAPPABLE.test(stripLiterals(code, dialect))) return null
   return `${WRAP_PREFIX}${body}\n) AS _tsmyadmin LIMIT ${Math.max(1, Math.floor(limit))}`
 }
 
@@ -359,7 +363,8 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     const d = this.dialect
     const key = this.resolveRowKey(schema)
     const params = new Params(d)
-    const where = this.buildWhere(opts.filters, params)
+    const types = new Map(schema.columns.map((c) => [c.name, c.dataType]))
+    const where = this.buildWhere(opts.filters, params, types)
     const tableSql = quoteTable(d, ns, table)
     const selectList = schema.columns.map((c) => quoteIdent(d, c.name))
     const fallback = this.fallbackKeySelect()
@@ -372,7 +377,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     const dataSql = `SELECT ${selectList.join(', ')} FROM ${tableSql}${where}${order}${limit}`
 
     const countParams = new Params(d)
-    const countWhere = this.buildWhere(opts.filters, countParams)
+    const countWhere = this.buildWhere(opts.filters, countParams, types)
     const countSql = `SELECT COUNT(*) FROM ${tableSql}${countWhere}`
 
     return this.withConn(ns, async (conn) => {
@@ -410,7 +415,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     })
   }
 
-  private buildWhere(filters: Filter[], params: Params): string {
+  private buildWhere(filters: Filter[], params: Params, types: Map<string, string>): string {
     if (filters.length === 0) return ''
     const parts = filters.map((f) => {
       const col = quoteIdent(this.dialect, f.column)
@@ -427,7 +432,8 @@ export abstract class BaseAdapter implements DatabaseAdapter {
         return `${likeCol} LIKE ${params.add(pattern)} ESCAPE '!'`
       }
       if (f.op === 'like' || f.op === 'not_like') return `${likeCol} ${op} ${params.add(toDbValue(f.value))}`
-      return `${col} ${op} ${params.add(toDbValue(f.value))}`
+      // Comparisons use the column's own type (FLOAT 0.1 is not the DOUBLE literal 0.1; BIT is not a hex string).
+      return `${col} ${op} ${this.keyParam(params.add(toDbValue(f.value)), types.get(f.column) ?? '')}`
     })
     return ` WHERE ${parts.join(' AND ')}`
   }
@@ -665,7 +671,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
               try {
                 entry.inFlight = true
                 let list: RawResult[]
-                const code = stripLiterals(st.sql)
+                const code = stripLiterals(st.sql, this.dialect)
                 try {
                   list = await this.runStatement(
                     conn,
@@ -748,7 +754,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     cancelled: () => boolean
   ): Promise<RawResult[]> {
     const asList = (raw: RawResult | RawResult[]) => (Array.isArray(raw) ? raw : [raw])
-    const wrapped = wrapMaxRows === null ? null : wrapReadOnly(sql, wrapMaxRows + 1)
+    const wrapped = wrapMaxRows === null ? null : wrapReadOnly(sql, wrapMaxRows + 1, this.dialect)
     if (!wrapped) return asList(await conn.query(sql))
     try {
       return asList(await conn.query(wrapped))

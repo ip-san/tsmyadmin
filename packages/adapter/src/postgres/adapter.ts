@@ -223,29 +223,30 @@ export class PostgresAdapter extends BaseAdapter {
       key.keyKind === 'pk' ? ` ORDER BY ${key.keyColumns.map((c) => quoteIdent('postgres', c)).join(', ')}` : ''
     const batchSize = Math.max(1, Math.floor(opts.batchSize))
     const { conn, done } = await this.borrow(ns, 0)
+    // A consumer that stops early (a cancelled download) resumes the generator with return(): only this finally
+    // runs, so the transaction must be closed here or the pooled connection would go back "idle in transaction"
+    // with the cursor open and a lock on the table.
+    let committed = false
     try {
       await conn.query('BEGIN')
-      try {
-        await conn.query(`DECLARE tsmyadmin_export NO SCROLL CURSOR FOR SELECT ${columns} FROM ${source}${orderBy}`)
-        let first = true
-        for (;;) {
-          const r = firstResult(
-            await conn.query(`FETCH ${batchSize} FROM tsmyadmin_export`, undefined, {
-              binaryLimit: Number.POSITIVE_INFINITY,
-            })
-          )
-          // An empty table still yields one batch so callers learn the column list.
-          if (r.rows.length > 0 || first) yield { columns: r.columns, rows: r.rows }
-          first = false
-          if (r.rows.length < batchSize) break
-        }
-        await conn.query('CLOSE tsmyadmin_export')
-        await conn.query('COMMIT')
-      } catch (err) {
-        await conn.query('ROLLBACK').catch(() => undefined)
-        throw err
+      await conn.query(`DECLARE tsmyadmin_export NO SCROLL CURSOR FOR SELECT ${columns} FROM ${source}${orderBy}`)
+      let first = true
+      for (;;) {
+        const r = firstResult(
+          await conn.query(`FETCH ${batchSize} FROM tsmyadmin_export`, undefined, {
+            binaryLimit: Number.POSITIVE_INFINITY,
+          })
+        )
+        // An empty table still yields one batch so callers learn the column list.
+        if (r.rows.length > 0 || first) yield { columns: r.columns, rows: r.rows }
+        first = false
+        if (r.rows.length < batchSize) break
       }
+      await conn.query('CLOSE tsmyadmin_export')
+      await conn.query('COMMIT')
+      committed = true
     } finally {
+      if (!committed) await conn.query('ROLLBACK').catch(() => undefined)
       await done()
     }
   }

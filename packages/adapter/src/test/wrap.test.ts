@@ -22,6 +22,10 @@ describe('wrapReadOnly', () => {
     expect(wrapReadOnly('SELECT $$merge into$$ /* delete */', 5)).not.toBeNull()
     expect(wrapReadOnly("SELECT 'it''s an update' FROM t", 5)).not.toBeNull()
     expect(wrapReadOnly("SELECT 1 FROM t FOR UPDATE -- 'x'", 5)).toBeNull()
+    // PostgreSQL strings do not escape with backslashes: a literal ending in one must not swallow the rest.
+    expect(wrapReadOnly("WITH d AS (SELECT 'a\\'), e AS (DELETE FROM t RETURNING id) SELECT 'x'", 5)).toBeNull()
+    expect(wrapReadOnly("SELECT 'it\\'s a delete' FROM t", 5, 'mysql')).not.toBeNull()
+    expect(wrapReadOnly('SELECT $a1$delete$a1$', 5)).not.toBeNull()
   })
 
   it('never wraps data-modifying CTEs', () => {

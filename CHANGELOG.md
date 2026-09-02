@@ -25,6 +25,9 @@
 - 設定: `TSMYADMIN_ALLOWED_HOSTS=`（空）の「プリセットのみ」の意味を維持、起動時エラーは常に `Invalid environment:` で始まる、プリセットの未知キー（`password` など）を拒否
 - SQLite セッションストア: 開けない場合は `session_store.open_failed` を記録して終了、`SESSION_SECRET` 変更時に保存済みセッションを起動時に削除（`session_store.reset`）
 - ログ: 成功した `/healthz` `/readyz` をアクセスログに出さない
+- MariaDB: BIT 型の主キーでエクスポートが同じ行を繰り返し（無限ループ）、更新・削除が失敗していた（16 進リテラルが 0 に変換される）→ 数値にキャストして比較
+- PostgreSQL: ダウンロードを途中で止めるとカーソルとトランザクションが開いたまま接続がプールに戻っていた（テーブルのロック、次のエクスポートが `cursor already exists`）→ 必ずロールバック
+- 表示タブの絞り込み（=, < など）も列の型で比較（FLOAT 列に表示値を入れても 0 件だった）、PostgreSQL でカラムのコメントを消せなかった、文字列リテラルの解析（PostgreSQL の末尾バックスラッシュ、`$a1$` タグ）
 - MySQL: 上限を超える `LIMIT` を書いた文が `sql_select_limit` を上書きし、結果全体を API に送っていた → その文は派生テーブルで包む。スクリプト内の `SET SESSION sql_select_limit` の後は上限を再適用
 - キャンセル: 同じ実行への同時キャンセルは 1 本の専用接続を共有し、再送でも接続を開き直さない（連打で DB の `max_connections` を使い切れていた）
 - ログイン失敗時に MySQL のホスト ACL メッセージ（API 側のアドレスを含む）を返さない

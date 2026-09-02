@@ -274,6 +274,9 @@ export class MysqlAdapter extends BaseAdapter {
     if (/^(?:big|medium|small|tiny)?int\b/.test(t)) {
       return t.includes('unsigned') ? `CAST(${placeholder} AS UNSIGNED)` : `CAST(${placeholder} AS SIGNED)`
     }
+    // A BIT value travels as a binary literal (X'80'). MySQL reads that as a number in numeric context; MariaDB
+    // reads it as a binary string and converts it to 0, so it is turned into a number explicitly.
+    if (t.startsWith('bit')) return `CAST(CONV(HEX(${placeholder}), 16, 10) AS UNSIGNED)`
     const decimal = /^decimal\((\d+),\s*(\d+)\)/.exec(t)
     if (decimal) return `CAST(${placeholder} AS DECIMAL(${Number(decimal[1])},${Number(decimal[2])}))`
     return placeholder

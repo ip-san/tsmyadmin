@@ -82,6 +82,7 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
     `${scratch}_typedkey`,
     `${scratch}_enumkey`,
     `${scratch}_bigkey`,
+    `${scratch}_bitkey`,
     `${scratch}_bulk_a`,
     `${scratch}_bulk_b`,
     `${scratch}_nokey`,
@@ -558,6 +559,14 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         await execOk(
           `INSERT INTO ${t} (f, d, j, v) VALUES (0.1, 1234567890123456.7891, '{"a": 1, "b": [true, null]}', 1)`
         )
+        // Browse filters compare as the column type as well: the value the grid shows must match its own row.
+        const filtered = await db.browseRows(ns, t, {
+          offset: 0,
+          limit: 10,
+          sort: [],
+          filters: [{ column: 'f', op: 'eq', value: 0.1 }],
+        })
+        expect(filtered.rows).toHaveLength(1)
         // No primary key: PostgreSQL addresses the row by ctid, MySQL by every column (each one typed).
         const before = await browseAll(t)
         const row = before.rows[0]
@@ -1022,6 +1031,29 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         await execOk(`DROP TABLE ${t}`)
       })
 
+      it.skipIf(dialect !== 'mysql')('pages, updates and filters a BIT-keyed table (MySQL / MariaDB)', async () => {
+        const t = `${scratch}_bitkey`
+        await execOk(`CREATE TABLE ${t} (b BIT(8) NOT NULL PRIMARY KEY, v INT NOT NULL)`)
+        await execOk(
+          `INSERT INTO ${t} (b, v) VALUES (b'00000000', 0), (b'00000001', 1), (b'00100111', 39), (b'10000000', 128)`
+        )
+        const seen: number[] = []
+        for await (const batch of db.iterateRows(ns, t, { batchSize: 1 }))
+          for (const r of batch.rows) seen.push(Number(r[1]))
+        expect(seen).toEqual([0, 1, 39, 128])
+        const rows = await browseAll(t)
+        const key = rows.rows.find((r) => r[1] === 128)?.[0] ?? null
+        expect(await db.updateRow(ns, t, { kind: 'pk', values: { b: key } }, { v: 129 })).toEqual({ affectedRows: 1 })
+        const hit = await db.browseRows(ns, t, {
+          offset: 0,
+          limit: 10,
+          sort: [],
+          filters: [{ column: 'b', op: 'eq', value: key }],
+        })
+        expect(hit.rows.map((r) => r[1])).toEqual([129])
+        await execOk(`DROP TABLE ${t}`)
+      })
+
       it('pages a composite key with BIGINT values beyond 2^53 exactly', async () => {
         const t = `${scratch}_bigkey`
         await execOk(`CREATE TABLE ${t} (id BIGINT NOT NULL, n INT NOT NULL, PRIMARY KEY (id, n))`)
@@ -1054,6 +1086,20 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         expect(seen).toHaveLength(4)
         await execOk(`DROP TABLE ${t}`)
         if (dialect === 'postgres') await execOk(`DROP TYPE ${t}_e`)
+      })
+
+      it('leaves the connection clean when the consumer stops early', async () => {
+        const it = db.iterateRows(ns, 'users', { batchSize: 2 })[Symbol.asyncIterator]()
+        expect((await it.next()).done).toBe(false)
+        await it.return?.(undefined)
+        // The same pooled connection must serve a full export afterwards (no open cursor / transaction).
+        let total = 0
+        for await (const b of db.iterateRows(ns, 'users', { batchSize: 2 })) total += b.rows.length
+        expect(total).toBe(5)
+        if (dialect === 'postgres') {
+          const idle = await execOk("SELECT count(*) FROM pg_stat_activity WHERE state = 'idle in transaction'")
+          expect(Number(idle[0]?.kind === 'rows' ? idle[0].result.rows[0]?.[0] : -1)).toBe(0)
+        }
       })
 
       it('exports every row of a key-less table exactly once across many batches', async () => {
