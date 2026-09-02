@@ -848,7 +848,7 @@ describe('export', () => {
     expect(res.headers.get('content-disposition')).toContain('filename="shop.sql"')
     const body = await res.text()
     expect(body).toContain('-- Table: users')
-    expect(body).toContain('INSERT INTO `shop`.`users`')
+    expect(body).toContain('INSERT INTO `users`')
   })
 
   it('aborts the transfer when the adapter fails mid-stream', async () => {

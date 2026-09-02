@@ -23,6 +23,15 @@ export function pgAdvanceSequence(quotedTable: string, column: string): string {
   return `SELECT setval(s.seqrelid, GREATEST(m.max_id, s.seqmin), m.max_id >= s.seqmin) FROM (SELECT MAX(${col})::bigint AS max_id FROM ${quotedTable}) m JOIN pg_sequence s ON s.seqrelid = pg_get_serial_sequence(${pgLiteral(quotedTable)}, ${pgLiteral(column)})::regclass WHERE m.max_id IS NOT NULL`
 }
 
+/**
+ * Table reference inside a dump. MySQL dumps name tables without the database (as mysqldump does): SHOW CREATE
+ * TABLE is unqualified anyway, and the target database is chosen at import time — a dump of `prod` must restore
+ * into `staging` without touching `prod`. PostgreSQL dumps are schema-qualified (search_path is set as well).
+ */
+function dumpTable(dialect: Dialect, ns: Namespace, table: string): string {
+  return dialect === 'mysql' ? quoteIdent(dialect, table) : quoteTable(dialect, ns, table)
+}
+
 /** Dump statements: every identifier is quoted and every value goes through cellLiteral. Dialect-agnostic. */
 export function createExporter(dialect: Dialect): SqlExporter {
   return {
@@ -31,6 +40,7 @@ export function createExporter(dialect: Dialect): SqlExporter {
         ? // Index / view definitions are printed relative to the schema, so restore into it explicitly.
           [`SET search_path TO ${quoteIdent(dialect, ns.schema ?? 'public')};`]
         : [
+            `-- Database: ${ns.database} (statements are unqualified: import into the database of your choice)`,
             // Literals are written with backslash escapes, which NO_BACKSLASH_ESCAPES would break on import.
             "SET @OLD_SQL_MODE = @@SQL_MODE, SQL_MODE = 'NO_AUTO_VALUE_ON_ZERO';",
             'SET @OLD_FOREIGN_KEY_CHECKS = @@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS = 0;',
@@ -42,14 +52,14 @@ export function createExporter(dialect: Dialect): SqlExporter {
       const kind =
         schema.kind === 'materialized_view' ? 'MATERIALIZED VIEW' : isViewKind(schema.kind) ? 'VIEW' : 'TABLE'
       // CASCADE (PostgreSQL) so a table referenced by a foreign key can be replaced; MySQL disables FK checks instead.
-      return `DROP ${kind} IF EXISTS ${quoteTable(dialect, ns, schema.name)}${dialect === 'postgres' ? ' CASCADE' : ''}`
+      return `DROP ${kind} IF EXISTS ${dumpTable(dialect, ns, schema.name)}${dialect === 'postgres' ? ' CASCADE' : ''}`
     },
     insert(ns: Namespace, table: string, columns: string[], rows: Cell[][], options = {}): string {
       if (rows.length === 0) return ''
       const cols = columns.map((c) => quoteIdent(dialect, c)).join(', ')
       const values = rows.map((r) => `(${columns.map((_, i) => cellLiteral(dialect, r[i] ?? null)).join(', ')})`)
       const overriding = dialect === 'postgres' && options.overriding ? ' OVERRIDING SYSTEM VALUE' : ''
-      return `INSERT INTO ${quoteTable(dialect, ns, table)} (${cols})${overriding} VALUES\n${values.join(',\n')};`
+      return `INSERT INTO ${dumpTable(dialect, ns, table)} (${cols})${overriding} VALUES\n${values.join(',\n')};`
     },
     afterData(ns: Namespace, schema: TableSchema): string[] {
       if (dialect !== 'postgres') return [] // AUTO_INCREMENT follows explicit values on MySQL

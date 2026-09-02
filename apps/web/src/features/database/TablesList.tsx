@@ -29,7 +29,7 @@ export function TablesList({ db, schema }: { db: string; schema?: string | undef
   const allChecked = plain.length > 0 && chosen.length === plain.length
   return (
     <div className="space-y-3">
-      <DdlPreviewDialog flow={flow} />
+      <DdlPreviewDialog flow={flow} bulkConfirmName={db} />
       <Table>
         <thead>
           <tr>
@@ -73,7 +73,7 @@ export function TablesList({ db, schema }: { db: string; schema?: string | undef
                   {t.name}
                 </Link>
               </Td>
-              <Td>{locale.database.kinds[t.kind]}</Td>
+              <Td className="whitespace-nowrap">{locale.database.kinds[t.kind]}</Td>
               <Td className="text-right tabular-nums">
                 {t.rowEstimate === null ? '–' : t.rowEstimate.toLocaleString('ja-JP')}
               </Td>
@@ -82,7 +82,7 @@ export function TablesList({ db, schema }: { db: string; schema?: string | undef
                 <CellValue cell={t.comment ?? ''} />
               </Td>
               <Td>
-                <span className="flex gap-2 text-xs">
+                <span className="flex gap-2 whitespace-nowrap text-xs">
                   <Link to="/db/$db/table/$table" params={{ db, table: t.name }} search={search} className={link}>
                     {locale.tabs.browse}
                   </Link>

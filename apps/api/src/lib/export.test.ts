@@ -33,10 +33,10 @@ describe('buildExport', () => {
     expect(body).toContain('-- tsmyadmin SQL dump')
     expect(body).toContain('-- fake CREATE TABLE users (id, name);')
     expect(body).toContain(
-      "INSERT INTO `shop`.`users` (`id`, `name`) VALUES\n(1, 'A,\"quoted\"'),\n(2, NULL),\n(3, 'line\nbreak');"
+      "INSERT INTO `users` (`id`, `name`) VALUES\n(1, 'A,\"quoted\"'),\n(2, NULL),\n(3, 'line\nbreak');"
     )
     expect(body).toContain('-- Table: empty')
-    expect(body).not.toContain('INSERT INTO `shop`.`empty`')
+    expect(body).not.toContain('INSERT INTO `empty`')
     expect(body.trimEnd().endsWith(`${DUMP_COMPLETE_MARKER} (2 tables)`)).toBe(true)
   })
 

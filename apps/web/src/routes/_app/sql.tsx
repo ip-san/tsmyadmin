@@ -27,7 +27,7 @@ function Page() {
   const { db: chosen } = Route.useSearch()
   const navigate = Route.useNavigate()
   const databases = useQuery(databasesQuery)
-  const db = chosen ?? session.serverDatabase
+  const db = chosen ?? session.database ?? session.serverDatabase
   const options = databases.data?.map((d) => d.name) ?? []
   if (!options.includes(db)) options.unshift(db)
   return (

@@ -347,6 +347,8 @@ export const ja = {
     dropViewButton: 'ビューを削除…',
     typeSuggestions: '型の候補',
     newTableName: '新しいテーブル名',
+    newViewName: '新しいビュー名',
+    renameTitle: '名前の変更',
     copyTargetName: 'コピー先のテーブル名',
     copyWithData: 'データもコピーする',
     copyHint: 'インデックス・主キーはコピーされます。外部キーはコピーされません。',
@@ -446,6 +448,7 @@ export const ja = {
     previewHint: '以下の SQL を実行します（パスワードは **** で表示）。',
     dropHint:
       'PostgreSQL では権限を持ったままのロールは削除できません。先に各データベースの「権限」タブで取り消してください。',
+    selfWarning: '現在接続中のユーザーです。実行すると切断される、または操作できなくなる可能性があります。',
     cannotLoad:
       'ユーザー一覧を取得できません。MySQL では mysql.user の SELECT 権限（または CREATE USER 権限）が必要です。',
   },

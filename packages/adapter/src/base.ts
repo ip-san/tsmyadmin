@@ -369,10 +369,20 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     const selectList = schema.columns.map((c) => quoteIdent(d, c.name))
     const fallback = this.fallbackKeySelect()
     if (key.keyKind === 'ctid' && fallback) selectList.push(fallback)
+    // Without a user sort the rows still come in a stable order (LIMIT / OFFSET paging over heap order can
+    // skip or repeat rows): the primary key, or ctid on PostgreSQL.
+    const defaultOrder =
+      key.keyKind === 'pk'
+        ? key.keyColumns.map((c) => quoteIdent(d, c)).join(', ')
+        : key.keyKind === 'ctid'
+          ? `${tableSql}.ctid`
+          : ''
     const order =
       opts.sort.length > 0
         ? ` ORDER BY ${opts.sort.map((s) => `${quoteIdent(d, s.column)} ${s.direction === 'desc' ? 'DESC' : 'ASC'}`).join(', ')}`
-        : ''
+        : defaultOrder
+          ? ` ORDER BY ${defaultOrder}`
+          : ''
     const limit = ` LIMIT ${params.add(opts.limit)} OFFSET ${params.add(opts.offset)}`
     const dataSql = `SELECT ${selectList.join(', ')} FROM ${tableSql}${where}${order}${limit}`
 

@@ -123,6 +123,36 @@ describe.each(targets)('API integration ($dialect)', ({ dialect, url }) => {
     }
   })
 
+  it('restores a MySQL dump into another database without touching the source', async () => {
+    if (dialect !== 'mysql') return
+    const t = 'dump_move_mysql'
+    const src = async (text: string) =>
+      req('/api/databases/tsmyadmin_test/sql', { method: 'POST', body: JSON.stringify({ sql: text }) })
+    const dst = async (text: string) =>
+      req('/api/databases/tsmyadmin_other/sql', { method: 'POST', body: JSON.stringify({ sql: text }) })
+    await src(`DROP TABLE IF EXISTS ${t}`)
+    await dst(`DROP TABLE IF EXISTS ${t}`)
+    await src(`CREATE TABLE ${t} (id INT PRIMARY KEY, v VARCHAR(10)); INSERT INTO ${t} VALUES (1, 'prod')`)
+    try {
+      const dump = await (await req(`/api/databases/tsmyadmin_test/export?tables=${t}&format=sql`)).text()
+      // Unqualified statements: the dump names no database, so it restores wherever it is imported.
+      expect(dump).not.toContain('`tsmyadmin_test`.')
+      const restored = z.array(StatementResultSchema).parse(await (await dst(dump)).json())
+      expect(restored.filter((r) => r.kind === 'error')).toEqual([])
+      const moved = BrowseResultSchema.parse(
+        await (await req(`/api/databases/tsmyadmin_other/tables/${t}/rows`)).json()
+      )
+      expect(moved.rows).toEqual([[1, 'prod']])
+      const source = BrowseResultSchema.parse(
+        await (await req(`/api/databases/tsmyadmin_test/tables/${t}/rows`)).json()
+      )
+      expect(source.rows).toEqual([[1, 'prod']])
+    } finally {
+      await src(`DROP TABLE IF EXISTS ${t}`)
+      await dst(`DROP TABLE IF EXISTS ${t}`)
+    }
+  })
+
   it('logs out', async () => {
     expect((await req('/api/session', { method: 'DELETE' })).status).toBe(200)
   })

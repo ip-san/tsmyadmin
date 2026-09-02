@@ -16,17 +16,17 @@ const DESTRUCTIVE = new Set<DdlOp['op']>([
 ])
 
 /** Ops that destroy data with no undo: the user retypes the object name before they can run. */
-function confirmName(op: DdlOp): string | null {
+function confirmName(op: DdlOp, bulkName: string | null): string | null {
   switch (op.op) {
     case 'dropTable':
     case 'truncateTable':
       return op.table
     case 'dropDatabase':
       return op.name
-    // Bulk ops: retyping every name is impractical, the count of tables is what the user must acknowledge.
+    // Bulk ops: one table is confirmed by its name; several by the database they live in (set by the caller).
     case 'dropTables':
     case 'truncateTables':
-      return String(op.tables.length)
+      return op.tables.length === 1 ? (op.tables[0] ?? null) : bulkName
     default:
       return null
   }
@@ -55,13 +55,13 @@ function lossWarning(op: DdlOp): string | null {
   }
 }
 
-export function DdlPreviewDialog({ flow }: { flow: DdlFlow }) {
+export function DdlPreviewDialog({ flow, bulkConfirmName = null }: { flow: DdlFlow; bulkConfirmName?: string | null }) {
   return (
     <PreviewDialog
       flow={flow}
       title={opTitle}
       destructive={(op) => DESTRUCTIVE.has(op.op)}
-      confirmName={confirmName}
+      confirmName={(op) => confirmName(op, bulkConfirmName)}
       lossWarning={lossWarning}
       hint={locale.ddl.previewHint}
       successMessage={(op) => locale.ddl.executed(opTitle(op))}

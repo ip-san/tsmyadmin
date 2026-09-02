@@ -4,6 +4,7 @@ import { locale } from '@/config/locale.ts'
 import { describeCell } from '@/lib/format.ts'
 
 const MAX_PREVIEW = 200
+const NUMERIC = /^-?\d{1,40}(?:\.\d{1,40})?(?:[eE][+-]?\d{1,4})?$/
 
 export function CellValue({ cell }: { cell: Cell }) {
   const [expanded, setExpanded] = useState(false)
@@ -12,8 +13,11 @@ export function CellValue({ cell }: { cell: Cell }) {
   if (d.kind === 'binary')
     return <span className="text-xs text-zinc-500 dark:text-zinc-400">{locale.common.binary(d.bytes)}</span>
   if (d.empty) return <span className="italic text-zinc-500 dark:text-zinc-400">{locale.common.empty}</span>
-  // A number split across lines reads as two numbers: keep it on one line (values are short anyway).
-  if (typeof cell === 'number') return <span className="whitespace-nowrap tabular-nums">{d.text}</span>
+  // A number split across lines reads as two numbers: keep it on one line. BIGINT / DECIMAL travel as strings
+  // (for precision) and are exactly the long values that would wrap.
+  if (typeof cell === 'number' || NUMERIC.test(d.text)) {
+    return <span className="whitespace-nowrap tabular-nums">{d.text}</span>
+  }
   const long = d.text.length > MAX_PREVIEW || d.text.split('\n').length > 3
   if (!long) return <span className="whitespace-pre-wrap break-all">{d.text}</span>
   return (

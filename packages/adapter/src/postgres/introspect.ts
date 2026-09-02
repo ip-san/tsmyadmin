@@ -56,7 +56,8 @@ export async function pgListTables(conn: Conn, ns: Namespace): Promise<TableInfo
     return {
       name: str(row[0]),
       kind: kind === 'v' ? 'view' : kind === 'm' ? 'materialized_view' : 'table',
-      rowEstimate: Number.isFinite(est) && est >= 0 ? Math.round(est) : null,
+      // A plain view has no rows of its own (reltuples is 0, not an estimate).
+      rowEstimate: kind !== 'v' && Number.isFinite(est) && est >= 0 ? Math.round(est) : null,
       engine: null,
       comment: strOrNull(row[3]),
     }

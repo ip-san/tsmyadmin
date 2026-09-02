@@ -40,6 +40,7 @@ export function cellToEditable(cell: Cell): string {
 /** Codes whose Japanese text says everything; the server's English message would only repeat it. */
 const SELF_EXPLANATORY = new Set<string>([
   'INTERNAL',
+  'AUTH_FAILED',
   'UNAUTHENTICATED',
   'RATE_LIMITED',
   'NETWORK',

@@ -21,7 +21,8 @@ export function Pagination({ page, limit, total, approximate = false, shown, onC
   return (
     <nav aria-label={locale.tabs.browse} className="flex flex-wrap items-center gap-2 text-sm">
       <span className="text-zinc-600 dark:text-zinc-300">
-        {locale.browse.total(total, approximate)} · {locale.browse.range(from, to)}
+        {locale.browse.total(total, approximate)}
+        {to > 0 ? ` · ${locale.browse.range(from, to)}` : ''}
       </span>
       <div className="ml-auto flex items-center gap-1">
         <Button size="sm" onClick={() => onChange({ page: 1 })} disabled={page <= 1} aria-label={locale.browse.first}>

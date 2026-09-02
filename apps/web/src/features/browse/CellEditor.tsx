@@ -43,9 +43,11 @@ export function CellEditor({ column, initial, dataType, pending, error, onSave, 
       onCancel()
     }
   }
-  // Focus moving outside the editor (a click elsewhere in the grid) ends the edit instead of leaving a stale box.
+  // Focus moving outside the editor (a click elsewhere in the grid) ends an untouched edit instead of leaving a
+  // stale box; typed input is never discarded silently — a dirty editor stays open until saved or cancelled.
+  const dirty = text !== cellToEditable(initial) || isNull !== (initial === null)
   const onBlur = (e: FocusEvent<HTMLElement>) => {
-    if (pending) return
+    if (pending || dirty) return
     const next = e.relatedTarget
     if (next instanceof Node && e.currentTarget.contains(next)) return
     onCancel()
@@ -67,7 +69,7 @@ export function CellEditor({ column, initial, dataType, pending, error, onSave, 
       )}
       {/* WebKit does not focus buttons / checkboxes on mousedown, so a click here would blur (and cancel) the
           field before it lands; keeping focus where it is lets the click go through on every engine. */}
-      <div className="flex items-center gap-2 text-xs" onMouseDown={(e) => e.preventDefault()}>
+      <div className="flex items-center gap-2 whitespace-nowrap text-xs" onMouseDown={(e) => e.preventDefault()}>
         <label className="flex items-center gap-1">
           <input type="checkbox" checked={isNull} onChange={(e) => setIsNull(e.target.checked)} onKeyDown={onKeyDown} />
           {locale.browse.setNull}
