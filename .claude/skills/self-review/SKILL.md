@@ -133,7 +133,7 @@ grep -rn 'bg-\(red\|blue\|gray\|slate\|stone\)-[0-9]\{3\}\|text-\(red\|blue\|gra
 ### 9. テスト内のハードコード数値
 
 ```bash
-grep -rn 'toBe([0-9]\{3,\})' apps packages --include='*.test.*' 2>/dev/null | grep -v node_modules | grep -v 'status).toBe('
+grep -rn -B1 'toBe([0-9]\{3,\})' apps packages --include='*.test.*' 2>/dev/null | grep -v node_modules | grep -v 'status' | grep 'toBe('
 ```
 
 **判定:** ルート数・カラム数など変動しうる値がハードコードされていたら、`scripts/validate-docs.mjs` の統計マーカーのように動的取得へ寄せるべきか検討する。
@@ -157,7 +157,7 @@ git diff --name-only HEAD | grep -E '\.test\.tsx?$' | grep -v '\.integration\.te
 ### 12. 型安全性
 
 ```bash
-grep -rn ': any\|as any' apps packages --include='*.ts' --include='*.tsx' 2>/dev/null | grep -v node_modules | grep -v '\.test\.'
+grep -rn ': any\|as any' apps packages --include='*.ts' --include='*.tsx' 2>/dev/null | grep -v node_modules | grep -v '\.test\.' | grep -v '\.gen\.ts' | grep -v '^[^:]*:[0-9]*:\s*\(//\|\*\)'
 ```
 
 ### 13. 循環依存
