@@ -48,7 +48,14 @@ export function splitStatements(input: string, dialect: Dialect): Statement[] {
       startLine = line
       continue
     }
-    if (i === start && dialect === 'mysql' && (ch === 'D' || ch === 'd')) {
+    // DELIMITER is a client command: it must start a line and no code of the current statement may precede it
+    // (leading comments are fine — mysqldump routine dumps begin with them).
+    if (
+      !hasCode &&
+      dialect === 'mysql' &&
+      (ch === 'D' || ch === 'd') &&
+      /(?:^|\n)[ \t]*$/.test(input.slice(start, i))
+    ) {
       const m = DELIMITER_LINE.exec(input.slice(i))
       if (m) {
         delimiter = m[1] as string

@@ -96,6 +96,15 @@ describe('splitStatements', () => {
     ])
   })
 
+  it('recognises DELIMITER after leading comments and blank lines, but not inside code', () => {
+    expect(
+      splitStatements('-- header\n/* c */\nDELIMITER $$\nSELECT 1$$\nDELIMITER ;\nSELECT 2;', 'mysql').map((s) => s.sql)
+    ).toEqual(['SELECT 1', 'SELECT 2'])
+    expect(
+      splitStatements('SELECT delimiter FROM t; SELECT 1\nDELIMITER $$\nSELECT 2$$', 'mysql').map((s) => s.sql)
+    ).toEqual(['SELECT delimiter FROM t', 'SELECT 1\nDELIMITER $$\nSELECT 2$$'])
+  })
+
   it('does not treat # as a comment in postgres', () => {
     expect(splitStatements(`SELECT '#'; SELECT 1 # not comment`, 'postgres').map((s) => s.sql)).toEqual([
       `SELECT '#'`,

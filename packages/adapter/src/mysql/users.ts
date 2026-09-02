@@ -21,14 +21,20 @@ const USERS_MARIADB =
 /** Password hashes MariaDB prints inside SHOW GRANTS (MySQL 8 never does); not for the privileges screen. */
 const GRANT_SECRET = / IDENTIFIED (?:BY PASSWORD '[^']*'|VIA \S+ USING '[^']*')/g
 
+/** Connections whose mysql.user has no account_locked column (MariaDB): the MySQL form is not retried on them. */
+const MARIADB_USER_TABLE = new WeakSet<object>()
+
 export async function mysqlListUsers(conn: Conn): Promise<UserInfo[]> {
-  let r: ReturnType<typeof firstResult>
-  try {
-    r = firstResult(await conn.query(USERS_MYSQL))
-  } catch (err) {
-    if (!(err instanceof AdapterError) || err.nativeCode !== 'ER_BAD_FIELD_ERROR') throw err
-    r = firstResult(await conn.query(USERS_MARIADB))
+  let r: ReturnType<typeof firstResult> | undefined
+  if (!MARIADB_USER_TABLE.has(conn.id)) {
+    try {
+      r = firstResult(await conn.query(USERS_MYSQL))
+    } catch (err) {
+      if (!(err instanceof AdapterError) || err.nativeCode !== 'ER_BAD_FIELD_ERROR') throw err
+      MARIADB_USER_TABLE.add(conn.id)
+    }
   }
+  if (r === undefined) r = firstResult(await conn.query(USERS_MARIADB))
   return r.rows.map((row) => {
     const attributes: string[] = []
     if (String(row[2]) === 'Y') attributes.push('LOCKED')

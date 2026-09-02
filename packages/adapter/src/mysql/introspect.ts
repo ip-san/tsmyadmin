@@ -37,14 +37,20 @@ const INDEX_COLUMNS = 'SELECT INDEX_NAME, NON_UNIQUE, SEQ_IN_INDEX, COLUMN_NAME,
 const INDEX_FROM =
   'FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY INDEX_NAME, SEQ_IN_INDEX'
 
+/** Connections whose server has no STATISTICS.EXPRESSION (MariaDB): the MySQL form is not retried on them. */
+const NO_EXPRESSION_COLUMN = new WeakSet<object>()
+
 /** STATISTICS.EXPRESSION (functional indexes) exists on MySQL 8.0.13+ only; MariaDB gets the column as NULL. */
 async function queryIndexes(conn: Conn, ns: Namespace, table: string) {
-  try {
-    return await conn.query(`${INDEX_COLUMNS}, EXPRESSION ${INDEX_FROM}`, [ns.database, table])
-  } catch (err) {
-    if (!(err instanceof AdapterError) || err.nativeCode !== 'ER_BAD_FIELD_ERROR') throw err
-    return conn.query(`${INDEX_COLUMNS}, NULL AS EXPRESSION ${INDEX_FROM}`, [ns.database, table])
+  if (!NO_EXPRESSION_COLUMN.has(conn.id)) {
+    try {
+      return await conn.query(`${INDEX_COLUMNS}, EXPRESSION ${INDEX_FROM}`, [ns.database, table])
+    } catch (err) {
+      if (!(err instanceof AdapterError) || err.nativeCode !== 'ER_BAD_FIELD_ERROR') throw err
+      NO_EXPRESSION_COLUMN.add(conn.id)
+    }
   }
+  return conn.query(`${INDEX_COLUMNS}, NULL AS EXPRESSION ${INDEX_FROM}`, [ns.database, table])
 }
 
 export async function mysqlDescribeTable(conn: Conn, ns: Namespace, table: string): Promise<TableSchema> {

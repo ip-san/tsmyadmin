@@ -65,12 +65,6 @@ const KILLED_CODES = new Set(['ER_CONNECTION_KILLED', 'PROTOCOL_CONNECTION_LOST'
 const MARIADB_ERRNO_NAMES: Record<number, string> = {
   1969: 'ER_STATEMENT_TIMEOUT',
 }
-/** Derived-table wrapping fails where the bare statement would not (see BaseAdapter.runStatement). */
-const WRAPPER_ONLY_ERRORS: ReadonlySet<string> = new Set([
-  'ER_DUP_FIELDNAME',
-  'ER_CANT_USE_OPTION_HERE',
-  'ER_PARSE_ERROR',
-])
 
 type QueryOutput = [unknown, FieldPacket[] | FieldPacket[][] | undefined]
 
@@ -236,8 +230,14 @@ export class MysqlAdapter extends BaseAdapter {
     }
   }
 
-  protected override wrapperOnlyErrors(): ReadonlySet<string> {
-    return WRAPPER_ONLY_ERRORS
+  /**
+   * sql_select_limit caps only top-level result sets (not INSERT ... SELECT, subqueries or CALL), honours a
+   * smaller user LIMIT and keeps ORDER BY — exactly the row cap the console needs, without a derived table.
+   * COM_RESET_CONNECTION after the script restores the server default.
+   */
+  protected override async capResultRows(conn: Conn, maxRows: number): Promise<boolean> {
+    await conn.query(`SET SESSION sql_select_limit = ${Math.max(1, Math.floor(maxRows)) + 1}`)
+    return true
   }
 
   protected override readonly castsKeyParams = true
@@ -248,14 +248,25 @@ export class MysqlAdapter extends BaseAdapter {
     if (t.startsWith('json')) return `CAST(${placeholder} AS JSON)`
     // A FLOAT column holding 0.1 is not equal to the DOUBLE literal 0.1 (8.0.17+ / MariaDB 10.4.5+ syntax).
     if (t.startsWith('float')) return `CAST(${placeholder} AS FLOAT)`
+    // Integers beyond 2^53 travel as strings; inside a row constructor MySQL compares them as DOUBLE (the
+    // scalar `col = 'str'` path converts exactly, the `(a, b) > (?, ?)` path does not), so keyset paging
+    // over a composite BIGINT key would skip rows. An UNSIGNED column needs the unsigned cast (2^64-2 as
+    // SIGNED is -2).
+    if (/^(?:big|medium|small|tiny)?int\b/.test(t)) {
+      return t.includes('unsigned') ? `CAST(${placeholder} AS UNSIGNED)` : `CAST(${placeholder} AS SIGNED)`
+    }
     const decimal = /^decimal\((\d+),\s*(\d+)\)/.exec(t)
     if (decimal) return `CAST(${placeholder} AS DECIMAL(${Number(decimal[1])},${Number(decimal[2])}))`
     return placeholder
   }
 
-  /** ENUM/SET order by member index but compare with a string literal by label: page over the label instead. */
+  /**
+   * ENUM/SET order by member index but compare with a string literal by label: page over the label instead,
+   * in the binary collation — CAST AS CHAR would take collation_connection (case-insensitive), making labels
+   * that differ only by case or accent tie in ORDER BY and be skipped by the `>` comparison.
+   */
   protected override keyColumnExpr(quoted: string, type: string): string {
-    return /^(?:enum|set)\(/i.test(type) ? `CAST(${quoted} AS CHAR)` : quoted
+    return /^(?:enum|set)\(/i.test(type) ? `CAST(${quoted} AS CHAR) COLLATE utf8mb4_bin` : quoted
   }
 
   protected async setStatementTimeout(conn: Conn, ms: number): Promise<void> {

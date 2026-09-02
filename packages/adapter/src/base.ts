@@ -93,7 +93,6 @@ function stripLiterals(code: string): string {
 }
 
 const WRAP_PREFIX = 'SELECT * FROM (\n'
-const EMPTY_CODES: ReadonlySet<string> = new Set()
 
 /**
  * Subquery form of a plain read with a row cap, or null when the statement must run as written. The body is
@@ -222,9 +221,14 @@ export abstract class BaseAdapter implements DatabaseAdapter {
   protected abstract cancelBackend(ns: Namespace, id: string, stillRunning: () => boolean): Promise<void>
   /** NULL-safe equality operator used for all-columns keys. */
   protected abstract nullSafeEq(): string
-  /** Native error codes that mean "the read-only wrapper broke this statement", after which it is re-run unwrapped. */
-  protected wrapperOnlyErrors(): ReadonlySet<string> {
-    return EMPTY_CODES
+  /**
+   * Called once per executeSql before the first statement. A dialect that can cap result sets session-wide
+   * (MySQL / MariaDB `sql_select_limit`) does it here and returns false so reads are not wrapped in a derived
+   * table — MariaDB drops the inner ORDER BY of a merged derived table, MySQL rejects duplicate column names
+   * and top-level-only modifiers inside one. The session reset after the script clears the setting again.
+   */
+  protected async capResultRows(_conn: Conn, _maxRows: number): Promise<boolean> {
+    return false
   }
   /** Row-identity fallback when a table has no PK / NOT NULL unique key. */
   protected abstract fallbackKeyKind(): Extract<RowKeyKind, 'ctid' | 'all-columns'>
@@ -631,9 +635,11 @@ export abstract class BaseAdapter implements DatabaseAdapter {
         ns,
         async (conn) => {
           try {
-            if (opts.queryId) resolveBackend(await this.backendId(conn))
             // User SQL may SET the session timeout / namespace itself; never trust the cached values afterwards.
             this.forgetSessionState(conn)
+            const wrapReads = !(await this.capResultRows(conn, opts.maxRows))
+            // Published only now: a cancel must interrupt the user's first statement, not the session setup.
+            if (opts.queryId) resolveBackend(await this.backendId(conn))
             for (const st of statements) {
               if (entry.cancelled) break
               const started = performance.now()
@@ -641,7 +647,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
                 entry.inFlight = true
                 let list: RawResult[]
                 try {
-                  list = await this.runStatement(conn, st.sql, opts.maxRows, () => entry.cancelled)
+                  list = await this.runStatement(conn, st.sql, wrapReads ? opts.maxRows : null)
                 } finally {
                   entry.inFlight = false
                 }
@@ -702,26 +708,20 @@ export abstract class BaseAdapter implements DatabaseAdapter {
   }
 
   /**
-   * Runs one user statement. A plain read (SELECT / WITH / VALUES / TABLE without INTO or row locks) is wrapped
-   * as `SELECT * FROM (...) AS _tsmyadmin LIMIT maxRows + 1` so a `SELECT * FROM huge_table` never materialises
+   * Runs one user statement. Unless the dialect caps result sets session-wide (capResultRows), a plain read
+   * (SELECT / WITH / VALUES / TABLE without INTO or row locks) is wrapped as
+   * `SELECT * FROM (...) AS _tsmyadmin LIMIT maxRows + 1` so a `SELECT * FROM huge_table` never materialises
    * the whole table in this process; the extra row is how the caller detects truncation. Error positions are
-   * shifted back by the wrapper prefix. Statements the wrapper itself breaks are re-run as written: MySQL
-   * rejects derived tables with duplicate column names (`SELECT * FROM a JOIN b` sharing `id`) and with
-   * top-level-only modifiers (`SQL_CALC_FOUND_ROWS`, `HIGH_PRIORITY`); a parse error is re-run so the user
-   * sees the server's message for the text they typed, not for the wrapper. Never after an interruption,
-   * which would restart the very statement that was just cancelled.
+   * shifted back by the wrapper prefix.
    */
-  private async runStatement(conn: Conn, sql: string, maxRows: number, cancelled: () => boolean): Promise<RawResult[]> {
+  private async runStatement(conn: Conn, sql: string, wrapMaxRows: number | null): Promise<RawResult[]> {
     const asList = (raw: RawResult | RawResult[]) => (Array.isArray(raw) ? raw : [raw])
-    const wrapped = wrapReadOnly(sql, maxRows + 1)
+    const wrapped = wrapMaxRows === null ? null : wrapReadOnly(sql, wrapMaxRows + 1)
     if (!wrapped) return asList(await conn.query(sql))
     try {
       return asList(await conn.query(wrapped))
     } catch (err) {
       const e = err instanceof AdapterError ? err : this.toAdapterError(err)
-      if (e.nativeCode !== undefined && this.wrapperOnlyErrors().has(e.nativeCode) && !cancelled()) {
-        return asList(await conn.query(sql))
-      }
       if (e.position !== undefined && e.position > WRAP_PREFIX.length) {
         throw new AdapterError(e.code, e.message, e.detail, {
           ...(e.nativeCode ? { nativeCode: e.nativeCode } : {}),
@@ -746,7 +746,12 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     // The run may have finished while waiting: its connection is back in the pool, possibly serving someone else.
     const stillRunning = () => this.running.get(queryId) === entry
     if (!stillRunning()) return false
-    await this.cancelBackend(entry.ns, backend, stillRunning)
+    try {
+      await this.cancelBackend(entry.ns, backend, stillRunning)
+    } catch (err) {
+      // The script loop is already stopped; a KILL that finds no such thread means the target just finished.
+      if (stillRunning()) throw err
+    }
     // The backend id is published before the first statement is sent, so a cancel issued right after "run"
     // can reach the server while the connection is still idle — a no-op on every dialect. Re-send it while a
     // statement is in flight; `inFlight` (not the registry alone) guards against interrupting the connection's

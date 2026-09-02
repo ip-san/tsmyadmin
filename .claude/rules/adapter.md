@@ -32,6 +32,10 @@ paths:
 
 PK → NOT NULL 一意キー → PG は `ctid`、MySQL は全カラム一致 + `LIMIT 1`。UPDATE/DELETE はトランザクション内で `affectedRows === 1` を検証し、違えばロールバックして `KEY_MISMATCH`。既知の限界: `ctid` は物理位置なので、対象行が他セッションで更新・削除され VACUUM 後にスロットが再利用されると、古い `ctid` が別の行に一致しうる（`affectedRows === 1` では検出できない）。設計上受け入れており、UI は主キーのないテーブルの編集前に再読み込みを促す。
 
+## SQL コンソールの行数上限
+
+PostgreSQL は読み取り文を `SELECT * FROM (...) AS _tsmyadmin LIMIT maxRows+1` に包む（`wrapReadOnly`。リテラル・コメント内の DML キーワードは無視）。MySQL / MariaDB は包まず、スクリプト開始時に `SET SESSION sql_select_limit = maxRows+1` を発行する（`capResultRows`）— 派生テーブルは MariaDB で内側の ORDER BY を落とし、MySQL では重複カラム名やトップレベル専用の修飾子を拒否するため。`sql_select_limit` はトップレベルの結果セットだけを制限し、リセットで既定に戻る。
+
 ## エクスポートの走査（`iterateRows`）
 
 MySQL はキーセットページング（PK / NOT NULL ユニークキーで `WHERE (k) > (last) ORDER BY k LIMIT n`、キーがなければ 1 バッチ）。PostgreSQL はサーバーサイドカーソル（`DECLARE ... NO SCROLL CURSOR FOR SELECT ... FROM ONLY t`、`FETCH n`）で、キーの有無に関わらず O(N)・メモリはバッチ 1 つ分。`ONLY` により継承の親テーブルは自分の行だけを出す（pg_dump と同じ）。パーティション親（`relkind = 'p'`）は `ONLY` だと空になるので付けない。行の同一性（ブラウズ）は `hasChildren` の親で `ctid` を使わない。

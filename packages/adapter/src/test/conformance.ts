@@ -81,6 +81,7 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
     `${scratch}_fk`,
     `${scratch}_typedkey`,
     `${scratch}_enumkey`,
+    `${scratch}_bigkey`,
     `${scratch}_nokey`,
     `${scratch}_inh_child`,
     `${scratch}_inh`,
@@ -781,6 +782,9 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
             expect(bad[0].position).toBeLessThanOrEqual('SELECT id FROM users WHERE ORDER'.length)
           }
         }
+        // ORDER BY of a plain read is kept under the cap (MariaDB drops it inside a merged derived table).
+        const ordered = await exec('SELECT id FROM users ORDER BY id DESC', { maxRows: 3 })
+        expect(ordered[0]).toMatchObject({ kind: 'rows', result: { rows: [[5], [4], [3]], truncated: true } })
         // A literal that merely mentions DML is still a read: the cap applies (unwrapped, 3,125 sleeping rows
         // would take minutes).
         const literal =
@@ -983,16 +987,36 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         await execOk(`DROP TABLE ${t}`)
       })
 
+      it('pages a composite key with BIGINT values beyond 2^53 exactly', async () => {
+        const t = `${scratch}_bigkey`
+        await execOk(`CREATE TABLE ${t} (id BIGINT NOT NULL, n INT NOT NULL, PRIMARY KEY (id, n))`)
+        await execOk(
+          `INSERT INTO ${t} (id, n) VALUES (9223372036854775806, 1), (9223372036854775807, 1), (9223372036854775806, 2), (9007199254740993, 1), (9007199254740992, 1)`
+        )
+        const seen: string[] = []
+        for await (const b of db.iterateRows(ns, t, { batchSize: 1 }))
+          for (const r of b.rows) seen.push(`${r[0]}/${r[1]}`)
+        expect(seen).toEqual([
+          '9007199254740992/1',
+          '9007199254740993/1',
+          '9223372036854775806/1',
+          '9223372036854775806/2',
+          '9223372036854775807/1',
+        ])
+        await execOk(`DROP TABLE ${t}`)
+      })
+
       it('pages an ENUM key in a total order that agrees with the keyset comparison', async () => {
+        // Labels that differ only by case: a case-insensitive comparison would make them tie and skip one.
         const t = `${scratch}_enumkey`
-        if (dialect === 'postgres') await execOk(`CREATE TYPE ${t}_e AS ENUM ('zeta', 'alpha', 'mid')`)
-        const type = dialect === 'mysql' ? "ENUM('zeta', 'alpha', 'mid')" : `${t}_e`
+        if (dialect === 'postgres') await execOk(`CREATE TYPE ${t}_e AS ENUM ('zeta', 'alpha', 'Alpha', 'mid')`)
+        const type = dialect === 'mysql' ? "ENUM('zeta', 'alpha', 'Alpha', 'mid') COLLATE utf8mb4_bin" : `${t}_e`
         await execOk(`CREATE TABLE ${t} (e ${type} NOT NULL PRIMARY KEY, n INT NOT NULL)`)
-        await execOk(`INSERT INTO ${t} (e, n) VALUES ('zeta', 1), ('alpha', 2), ('mid', 3)`)
+        await execOk(`INSERT INTO ${t} (e, n) VALUES ('zeta', 1), ('alpha', 2), ('Alpha', 4), ('mid', 3)`)
         const seen: string[] = []
         for await (const b of db.iterateRows(ns, t, { batchSize: 1 })) for (const r of b.rows) seen.push(String(r[0]))
-        expect([...seen].sort()).toEqual(['alpha', 'mid', 'zeta'])
-        expect(seen).toHaveLength(3)
+        expect([...seen].sort()).toEqual(['Alpha', 'alpha', 'mid', 'zeta'])
+        expect(seen).toHaveLength(4)
         await execOk(`DROP TABLE ${t}`)
         if (dialect === 'postgres') await execOk(`DROP TYPE ${t}_e`)
       })

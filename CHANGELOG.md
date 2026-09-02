@@ -25,6 +25,9 @@
 - 設定: `TSMYADMIN_ALLOWED_HOSTS=`（空）の「プリセットのみ」の意味を維持、起動時エラーは常に `Invalid environment:` で始まる、プリセットの未知キー（`password` など）を拒否
 - SQLite セッションストア: 開けない場合は `session_store.open_failed` を記録して終了、`SESSION_SECRET` 変更時に保存済みセッションを起動時に削除（`session_store.reset`）
 - ログ: 成功した `/healthz` `/readyz` をアクセスログに出さない
+- MariaDB: SQL コンソールで `ORDER BY` 付きの SELECT が並び順を失っていた（派生テーブルのマージ）→ MySQL / MariaDB は `sql_select_limit` で行数を制限する方式に変更
+- MySQL: BIGINT を含む複合キーで 2^53 超の値があるとエクスポートで行が欠落（行コンストラクタ内で DOUBLE 比較）→ 整数型を SIGNED / UNSIGNED にキャスト。バイナリ照合の ENUM/SET キーで大小文字違いのラベルが同一視され欠落 → `COLLATE utf8mb4_bin`
+- MySQL: 先頭コメントの後の `DELIMITER` が認識されなかった（mysqldump のルーチン出力）
 - 監査ログ: 失敗時にサーバーのエラーメッセージ（値を引用する `Duplicate entry 'x'` など）を記録していた → エラーコードだけを記録。MariaDB の `IDENTIFIED VIA … USING '…'` もマスク
 - キャンセルを専用接続から送る（セッションのプールが埋まっていると「キャンセル」が効かなかった）、送信直前に対象がまだ実行中か再確認
 - ログイン失敗の応答からサーバーのメッセージ（API 側のアドレスを含む）を除去、0.1.0 のセッションファイルも `SESSION_SECRET` 変更時に削除
