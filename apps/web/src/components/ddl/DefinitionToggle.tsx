@@ -3,9 +3,9 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Spinner } from '@/components/ui/Feedback.tsx'
 import { locale } from '@/config/locale.ts'
-import type { routineDefinitionQuery } from '@/lib/queries.ts'
+import type { createStatementQuery, routineDefinitionQuery } from '@/lib/queries.ts'
 
-type DefinitionQuery = ReturnType<typeof routineDefinitionQuery>
+type DefinitionQuery = ReturnType<typeof routineDefinitionQuery> | ReturnType<typeof createStatementQuery>
 type Source = { definition: string | null } | { query: DefinitionQuery }
 
 function Definition({ definition }: { definition: string | null }) {

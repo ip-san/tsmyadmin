@@ -26,8 +26,14 @@ for (const t of TARGETS) {
       await expect(page.getByLabel(`${key}: 権限`, { exact: true })).toBeVisible()
 
       await page.goto(t.schema ? `/db/${t.database}/privileges?schema=${t.schema}` : `/db/${t.database}/privileges`)
+      const privRow = page.getByRole('row').filter({ hasText: name })
+      // A fresh PostgreSQL role already has PUBLIC's USAGE on the public schema.
+      await expect(privRow.getByText(t.dialect === 'mysql' ? 'なし' : '一部', { exact: true })).toBeVisible()
       await page.getByRole('button', { name: `${key}: この DB の全権限を付与` }).click()
       await confirmPreview(page, /GRANT/)
+      await expect(page.getByText(/全権限を付与: 実行しました/)).toBeVisible()
+      // Current-privilege column reflects the grant (MySQL: ALL on the database; PostgreSQL: schema grants).
+      await expect(privRow.getByText('すべて', { exact: true })).toBeVisible()
 
       await page.goto('/users')
       await page.getByRole('button', { name: `${key}: 権限を表示` }).click()

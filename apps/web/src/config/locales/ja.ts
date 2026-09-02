@@ -118,6 +118,7 @@ export const ja = {
     columns: 'カラム',
     indexes: 'インデックス',
     foreignKeys: '外部キー',
+    createStatement: 'CREATE 文',
     name: '名前',
     type: '型',
     nullable: 'NULL',
@@ -382,6 +383,8 @@ export const ja = {
     grantAll: 'この DB の全権限を付与',
     revokeAll: 'この DB の権限を取り消す',
     privilegesTitle: (db: string) => `${db} の権限`,
+    currentPrivileges: '現在の権限',
+    levels: { all: 'すべて', some: '一部', none: 'なし' },
     privilegesHint:
       'ユーザーごとに、このデータベース（PostgreSQL は現在のスキーマ）へのすべての権限を付与・取り消しできます。',
     ops: {

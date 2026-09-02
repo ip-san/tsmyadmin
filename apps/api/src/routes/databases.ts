@@ -65,6 +65,13 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
           await c.get('session').adapter.describeTable(ns(c.req.param('db'), q.schema), c.req.param('table'))
         )
       })
+      .get('/databases/:db/tables/:table/create', validate('query', SchemaQuerySchema), async (c) => {
+        const q = c.req.valid('query')
+        const sql = await c
+          .get('session')
+          .adapter.showCreateTable(ns(c.req.param('db'), q.schema), c.req.param('table'))
+        return c.json({ sql })
+      })
       .get('/databases/:db/tables/:table/rows', validate('query', BrowseQuerySchema), async (c) => {
         const q = c.req.valid('query')
         const parsed = parseBrowseQuery(q)

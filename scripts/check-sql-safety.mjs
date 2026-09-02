@@ -24,6 +24,8 @@ const SQL_BUILDER_ALLOWLIST = [
   /^packages\/adapter\/src\/mysql\/routines\.ts$/,
   // Editor prefill text shown to the user; executed only when they press Run (identifiers quoted).
   /^apps\/web\/src\/features\/sql\/prefill\.ts$/,
+  // Regular expressions that *parse* GRANT statements returned by the server; nothing here is executed.
+  /^apps\/web\/src\/features\/users\/privilege-level\.ts$/,
 ]
 const SQL_KEYWORD =
   /\b(SELECT|INSERT|UPDATE|DELETE|ALTER|CREATE|DROP|TRUNCATE|GRANT|REVOKE|KILL|SHOW|SET SESSION|SET search_path|USE)\b/i

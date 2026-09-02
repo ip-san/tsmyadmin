@@ -111,6 +111,22 @@ export const eventsQuery = (db: string, schema?: string) =>
       unwrap<EventInfo[]>(api.databases[':db'].events.$get({ param: { db: enc(db) }, query: schemaQuery(schema) })),
   })
 
+/** CREATE TABLE / VIEW statements as the server prints (MySQL) or reconstructs (PostgreSQL) them. */
+export const createStatementQuery = (ref: TableRef) =>
+  queryOptions({
+    queryKey: ['create-statement', ref.db, ref.schema ?? '', ref.table],
+    queryFn: async (): Promise<RoutineDefinition> => {
+      const r = await unwrap<DdlPreviewResponse>(
+        api.databases[':db'].tables[':table'].create.$get({
+          param: { db: enc(ref.db), table: enc(ref.table) },
+          query: schemaQuery(ref.schema),
+        })
+      )
+      return { definition: r.sql.map((x) => `${x};`).join('\n\n') }
+    },
+    staleTime: 60_000,
+  })
+
 export const structureQuery = (ref: TableRef) =>
   queryOptions({
     queryKey: ['structure', ref.db, ref.schema ?? '', ref.table],

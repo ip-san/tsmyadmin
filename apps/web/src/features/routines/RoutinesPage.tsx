@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
+import { DefinitionToggle } from '@/components/ddl/DefinitionToggle.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
 import { routineDefinitionQuery, routinesQuery } from '@/lib/queries.ts'
-import { DefinitionToggle } from './DefinitionToggle.tsx'
 
 export function RoutinesPage({ db, schema }: { db: string; schema?: string | undefined }) {
   const routines = useQuery(routinesQuery(db, schema))

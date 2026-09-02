@@ -491,6 +491,16 @@ describe('databases & tables', () => {
     expect(ApiErrorSchema.parse(await res.json())).toMatchObject({ code: 'NOT_FOUND' })
   })
 
+  it('returns the CREATE statements of a table', async () => {
+    const h = harness()
+    stores.push(h.store)
+    await h.login()
+    const res = await h.req('/api/databases/shop/tables/users/create')
+    expect(res.status).toBe(200)
+    expect(DdlPreviewResponseSchema.parse(await res.json()).sql[0]).toMatch(/CREATE TABLE/)
+    expect(h.adapter.calls.at(-1)).toEqual({ method: 'showCreateTable', args: [{ database: 'shop' }, 'users'] })
+  })
+
   it('returns 404 NOT_FOUND from the adapter', async () => {
     const h = harness()
     stores.push(h.store)

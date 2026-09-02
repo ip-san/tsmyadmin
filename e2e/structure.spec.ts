@@ -27,6 +27,10 @@ for (const t of TARGETS) {
       await page.getByLabel('型', { exact: true }).fill('INT')
       await page.getByRole('dialog').getByRole('button', { name: '次へ（SQL を確認）' }).click()
       await confirmPreview(page, /ADD COLUMN/)
+      // CREATE statement section loads on demand.
+      await page.getByRole('button', { name: `${table}: 定義を表示` }).click()
+      await expect(page.locator('pre').filter({ hasText: /CREATE TABLE/ })).toBeVisible()
+      await page.getByRole('button', { name: `${table}: 定義を隠す` }).click()
       const columns = page.getByRole('table', { name: 'カラム' })
       await expect(columns.getByRole('row').filter({ hasText: /^3n/ })).toBeVisible()
 

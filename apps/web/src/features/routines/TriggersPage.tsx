@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
+import { DefinitionToggle } from '@/components/ddl/DefinitionToggle.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
 import { triggersQuery } from '@/lib/queries.ts'
-import { DefinitionToggle } from './DefinitionToggle.tsx'
 
 export function TriggersPage({ db, schema, table }: { db: string; schema?: string | undefined; table?: string }) {
   const triggers = useQuery(triggersQuery(db, schema, table))

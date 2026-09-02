@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import type { Dialect, TableSchema } from '@tsmyadmin/shared'
 import { useState } from 'react'
 import { DdlPreviewDialog } from '@/components/ddl/DdlPreviewDialog.tsx'
+import { DefinitionToggle } from '@/components/ddl/DefinitionToggle.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { Dialog } from '@/components/ui/Dialog.tsx'
 import { Badge, ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
@@ -9,9 +10,10 @@ import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
 import { fromColumnDef, toColumnSpec } from '@/lib/column-spec.ts'
 import { useDdlFlow } from '@/lib/ddl.ts'
-import { structureQuery, type TableRef } from '@/lib/queries.ts'
+import { createStatementQuery, structureQuery, type TableRef } from '@/lib/queries.ts'
 import { ColumnForm } from './ColumnForm.tsx'
 import { IndexForm } from './IndexForm.tsx'
+import { ForeignKeysTable, ReferencedByTable } from './RelationsTables.tsx'
 
 type ColumnDialog = { mode: 'add' } | { mode: 'modify'; name: string } | null
 
@@ -137,64 +139,6 @@ function IndexesTable({
   )
 }
 
-function ForeignKeysTable({ schema }: { schema: TableSchema }) {
-  if (schema.foreignKeys.length === 0) return <Notice>{locale.table.noForeignKeys}</Notice>
-  return (
-    <Table aria-label={locale.table.foreignKeys}>
-      <thead>
-        <tr>
-          <Th>{locale.table.name}</Th>
-          <Th>{locale.table.columns}</Th>
-          <Th>{locale.table.references}</Th>
-          <Th>{locale.table.onUpdate}</Th>
-          <Th>{locale.table.onDelete}</Th>
-        </tr>
-      </thead>
-      <tbody>
-        {schema.foreignKeys.map((fk) => (
-          <Tr key={fk.name}>
-            <Td className="font-medium">{fk.name}</Td>
-            <Td className="font-mono text-xs">{fk.columns.join(', ')}</Td>
-            <Td className="font-mono text-xs">
-              {fk.refNamespace.schema ? `${fk.refNamespace.schema}.` : ''}
-              {fk.refTable} ({fk.refColumns.join(', ')})
-            </Td>
-            <Td className="text-xs">{fk.onUpdate ?? ''}</Td>
-            <Td className="text-xs">{fk.onDelete ?? ''}</Td>
-          </Tr>
-        ))}
-      </tbody>
-    </Table>
-  )
-}
-
-function ReferencedByTable({ schema }: { schema: TableSchema }) {
-  if (schema.referencedBy.length === 0) return <Notice>{locale.table.noReferencedBy}</Notice>
-  return (
-    <Table aria-label={locale.table.referencedBy}>
-      <thead>
-        <tr>
-          <Th>{locale.table.name}</Th>
-          <Th>{locale.table.fromTable}</Th>
-          <Th>{locale.table.columns}</Th>
-        </tr>
-      </thead>
-      <tbody>
-        {schema.referencedBy.map((r) => (
-          <Tr key={`${r.fromTable}:${r.name}`}>
-            <Td className="font-medium">{r.name}</Td>
-            <Td className="font-mono text-xs">
-              {r.fromNamespace.schema ? `${r.fromNamespace.schema}.` : ''}
-              {r.fromTable} ({r.fromColumns.join(', ')})
-            </Td>
-            <Td className="font-mono text-xs">{r.columns.join(', ')}</Td>
-          </Tr>
-        ))}
-      </tbody>
-    </Table>
-  )
-}
-
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
     <h2 className="mb-2 flex items-center gap-3 text-sm font-semibold text-zinc-700 dark:text-zinc-200">{children}</h2>
@@ -254,6 +198,10 @@ export function StructureView({ tableRef, dialect }: { tableRef: TableRef; diale
       <section>
         <SectionTitle>{locale.table.referencedBy}</SectionTitle>
         <ReferencedByTable schema={s} />
+      </section>
+      <section>
+        <SectionTitle>{locale.table.createStatement}</SectionTitle>
+        <DefinitionToggle query={createStatementQuery(tableRef)} label={table} />
       </section>
 
       <Dialog
