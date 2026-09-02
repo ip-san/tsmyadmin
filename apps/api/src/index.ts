@@ -4,6 +4,7 @@ import { createAdapter } from '@tsmyadmin/adapter'
 import { getConnInfo, serveStatic } from 'hono/bun'
 import { createApp } from './app.ts'
 import { ConfigError, loadConfig } from './config.ts'
+import { entriesWithoutPort } from './lib/allowlist.ts'
 import { auditedAdapterFactory } from './lib/audit.ts'
 import { createLogger } from './lib/logging.ts'
 import { SqliteSessionStore } from './session/sqlite-store.ts'
@@ -21,6 +22,12 @@ try {
 const logger = createLogger(config.logFormat)
 if (!process.env.SESSION_SECRET)
   logger.log('warn', 'config.dev_secret', { hint: 'SESSION_SECRET not set; using a development secret' })
+const anyPort = entriesWithoutPort(config.allowedHosts)
+if (config.isProd && anyPort.length > 0)
+  logger.log('warn', 'config.allowlist_without_port', {
+    entries: anyPort,
+    hint: 'TSMYADMIN_ALLOWED_HOSTS entries without :port allow every port on that host (see docs/security.md)',
+  })
 
 // Every adapter a session ever sees goes through this factory, so auditing cannot be bypassed.
 const adapterFactory = auditedAdapterFactory(createAdapter, logger)

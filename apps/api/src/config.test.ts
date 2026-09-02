@@ -62,7 +62,8 @@ describe('TSMYADMIN_SERVERS', () => {
       ]),
     })
     expect(c.servers).toHaveLength(2)
-    expect(c.allowedHosts).toEqual(['127.0.0.1', 'localhost', 'db.internal', 'legacy.internal'])
+    // Presets allow exactly their own host:port.
+    expect(c.allowedHosts).toEqual(['127.0.0.1', 'localhost', 'db.internal:5432', 'legacy.internal:3306'])
   })
 
   it('rejects malformed JSON, invalid presets and duplicate names', () => {

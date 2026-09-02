@@ -86,7 +86,8 @@ export function loadConfig(env: Record<string, string | undefined>): AppConfig {
     throw new ConfigError('SESSION_SECRET must be set to at least 32 characters in production')
   }
   const servers = parseServers(e.TSMYADMIN_SERVERS)
-  const allowedHosts = [...new Set([...csv(e.TSMYADMIN_ALLOWED_HOSTS), ...servers.map((s) => s.host)])]
+  // Presets allow exactly their own host:port (not every port on that host).
+  const allowedHosts = [...new Set([...csv(e.TSMYADMIN_ALLOWED_HOSTS), ...servers.map((s) => `${s.host}:${s.port}`)])]
   if (allowedHosts.length === 0) throw new ConfigError('TSMYADMIN_ALLOWED_HOSTS must list at least one host (or "*")')
   return {
     isProd,

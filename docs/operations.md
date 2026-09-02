@@ -18,7 +18,7 @@
 | `login.ok` / `login.failed` / `login.host_not_allowed` / `login.rate_limited` / `logout` | 認証イベント（ホスト・ユーザー名は含む、パスワードは含まない） |
 | `audit` | **監査ログ**: データ・構造・アカウント・サーバー状態を変える呼び出し（`insertRow(s)` / `updateRow` / `deleteRows` / `executeSql` / `killProcess`）。`requestId`, `dbUser`, `dbHost`, `database`, `table`, 行数・キー種別・カラム名、`executeSql` は SQL 先頭 500 文字と文数 / エラー数、`ok`, `ms`。**値は記録しない**。アカウント操作のパスワードは `****` に置換 |
 | `readyz.failed` | セッションストア異常 |
-| `config.dev_secret` / `web.dist_missing` | 設定の警告 |
+| `config.dev_secret` / `config.allowlist_without_port` / `web.dist_missing` | 設定の警告（開発用シークレット / ポート未指定の許可ホスト / SPA ビルド不在） |
 
 `audit` は DDL（`/sql` 経由）やインポート（`executeSql` / `insertRows`）も含みます。SQL コンソールで実行した文の全文が必要な場合は、ログの `sql` は 500 文字で切り詰められている点に注意してください（値を含み得るため意図的に短くしています）。
 

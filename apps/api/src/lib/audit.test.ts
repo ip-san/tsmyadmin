@@ -70,6 +70,24 @@ describe('withAudit', () => {
     expect(lines[1]?.sql).toContain('****')
   })
 
+  it('redacts password literals typed directly into SQL (no request context needed)', async () => {
+    const { lines, adapter } = setup()
+    const script = [
+      "CREATE USER 'app'@'%' IDENTIFIED BY 'Sup3r!'",
+      "ALTER USER 'app'@'%' IDENTIFIED WITH caching_sha2_password BY \"Qu0te\"",
+      "CREATE ROLE r LOGIN PASSWORD 'pgpass'",
+      "SET PASSWORD FOR 'x'@'%' = 'legacy'",
+      "SELECT PASSWORD('fn')",
+      "SELECT * FROM t WHERE note = 'password is fine here'",
+    ].join(';\n')
+    await adapter.executeSql(ns, script, { maxRows: 1, timeoutMs: 1000, stopOnError: true })
+    const logged = String(lines[0]?.sql)
+    for (const secret of ['Sup3r!', 'Qu0te', 'pgpass', 'legacy', "'fn'"]) expect(logged).not.toContain(secret)
+    expect(logged).toContain("IDENTIFIED BY '****'")
+    expect(logged).toContain("PASSWORD '****'")
+    expect(logged).toContain("note = 'password is fine here'")
+  })
+
   it('logs failures with ok=false and rethrows', async () => {
     const { lines, adapter } = setup()
     await expect(adapter.deleteRows(ns, 'users', [{ kind: 'pk', values: { id: 99 } }])).rejects.toBeInstanceOf(

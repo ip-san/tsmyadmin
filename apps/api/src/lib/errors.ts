@@ -53,10 +53,8 @@ export function toApiError(err: unknown): { body: ApiError; status: ContentfulSt
     const status = code === 'INTERNAL' ? STATUS_BY_CODE.INTERNAL : (err.status as ContentfulStatusCode)
     return { body: apiError(code, err.message || `HTTP ${err.status}`), status }
   }
-  return {
-    body: apiError('INTERNAL', 'Internal error', err instanceof Error ? err.message : String(err)),
-    status: STATUS_BY_CODE.INTERNAL,
-  }
+  // No detail for the client: the message (and stack) go to the structured log in errorResponse only.
+  return { body: apiError('INTERNAL', 'Internal error'), status: STATUS_BY_CODE.INTERNAL }
 }
 
 /** JSON 404 envelope for unknown API routes (the SPA fallback handles non-API paths). */

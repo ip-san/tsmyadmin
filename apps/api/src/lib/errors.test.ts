@@ -54,11 +54,11 @@ describe('toApiError', () => {
     expect(toApiError(new HTTPException(502))).toMatchObject({ body: { code: 'INTERNAL' }, status: 500 })
   })
 
-  it('hides unexpected errors behind INTERNAL but keeps the message as detail for the log', () => {
-    expect(toApiError(new TypeError('boom'))).toEqual({
-      body: { code: 'INTERNAL', message: 'Internal error', detail: 'boom' },
+  it('hides unexpected errors behind INTERNAL without leaking the message to the client', () => {
+    expect(toApiError(new TypeError('/srv/app/secret.ts: boom'))).toEqual({
+      body: { code: 'INTERNAL', message: 'Internal error' },
       status: 500,
     })
-    expect(toApiError('string').body.detail).toBe('string')
+    expect(toApiError('string').body.detail).toBeUndefined()
   })
 })

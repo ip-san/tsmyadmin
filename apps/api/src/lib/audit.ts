@@ -73,7 +73,7 @@ export function summarise(method: AuditedMethod, args: unknown[]): Record<string
         key: (args[2] as RowKey[])?.[0] ? keySummary((args[2] as RowKey[])[0] as RowKey) : undefined,
       }
     case 'executeSql': {
-      const sql = String(args[1] ?? '')
+      const sql = redactSqlSecrets(String(args[1] ?? ''))
       return {
         ...base,
         sql: sql.length > SQL_SUMMARY_MAX ? `${sql.slice(0, SQL_SUMMARY_MAX)}…` : sql,
@@ -85,6 +85,18 @@ export function summarise(method: AuditedMethod, args: unknown[]): Record<string
     case 'killProcess':
       return { processId: args[0] }
   }
+}
+
+/** Password literals in account statements typed directly into the SQL console (IDENTIFIED BY / PASSWORD 'x'). */
+const SQL_SECRET = /\b(IDENTIFIED(?:\s+WITH\s+\S+)?\s+BY|PASSWORD)(\s*[=(]?\s*)('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")/gi
+
+/** MySQL `SET PASSWORD [FOR user] = 'x'`. */
+const SET_PASSWORD = /(\bSET\s+PASSWORD\b[^=;]*=\s*)('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")/gi
+
+function redactSqlSecrets(sql: string): string {
+  return sql
+    .replace(SQL_SECRET, (_m, kw: string, sep: string) => `${kw}${sep}'${PASSWORD_MASK}'`)
+    .replace(SET_PASSWORD, (_m, head: string) => `${head}'${PASSWORD_MASK}'`)
 }
 
 function scrub(fields: Record<string, unknown>, secrets: string[]): Record<string, unknown> {

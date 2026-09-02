@@ -31,6 +31,14 @@ export class RateLimiter {
     return { allowed, remaining: Math.max(0, this.max - w.count), retryAfterSec: Math.ceil((w.resetAt - t) / 1000) }
   }
 
+  /** Reports the state of a key without recording an attempt. */
+  peek(key: string): { allowed: boolean; retryAfterSec: number } {
+    const t = this.now()
+    const w = this.windows.get(key)
+    if (!w || w.resetAt <= t) return { allowed: true, retryAfterSec: 0 }
+    return { allowed: w.count < this.max, retryAfterSec: Math.ceil((w.resetAt - t) / 1000) }
+  }
+
   /** Forgets a key (e.g. after a successful login). */
   reset(key: string): void {
     this.windows.delete(key)

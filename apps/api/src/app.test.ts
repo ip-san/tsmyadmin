@@ -15,7 +15,7 @@ import {
 } from '@tsmyadmin/shared'
 import { afterEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { createApp } from './app.ts'
+import { createApp, IP_LIMIT_FACTOR } from './app.ts'
 import { type AppConfig, loadConfig } from './config.ts'
 import { auditedAdapterFactory } from './lib/audit.ts'
 import { createLogger, type Logger } from './lib/logging.ts'
@@ -195,6 +195,74 @@ describe('hardening', () => {
     expect((await h.login({ ...LOGIN, user: 'other' })).status).toBe(401)
     t = 1000
     expect((await h.login()).status).toBe(401)
+  })
+
+  it('rate-limits per IP across rotating user names', async () => {
+    const h = harness(fixtureAdapter({ failWith: new AdapterError('AUTH_FAILED', 'denied') }), {
+      loginRateLimit: { max: 1, windowMs: 60_000 },
+    })
+    stores.push(h.store)
+    // max 1 per ip|user, IP_LIMIT_FACTOR× per IP: the (factor+1)-th user name from the same IP is refused.
+    for (let i = 0; i < IP_LIMIT_FACTOR; i++) expect((await h.login({ ...LOGIN, user: `u${i}` })).status).toBe(401)
+    const blocked = await h.login({ ...LOGIN, user: 'fresh-name' })
+    expect(blocked.status).toBe(429)
+    expect(blocked.headers.get('retry-after')).toBe('60')
+  })
+
+  it('does not count successful logins against the per-IP window (shared NAT)', async () => {
+    const h = harness(fixtureAdapter(), { loginRateLimit: { max: 1, windowMs: 60_000 } })
+    stores.push(h.store)
+    for (let i = 0; i < IP_LIMIT_FACTOR * 2; i++) expect((await h.login({ ...LOGIN, user: `ok${i}` })).status).toBe(201)
+  })
+
+  it('restricts allowlisted hosts to the listed port and lets presets allow only their own port', async () => {
+    const h = harness(fixtureAdapter(), {
+      allowedHosts: ['db:3306', '127.0.0.1'],
+      servers: [{ name: 'p', dialect: 'mysql', host: 'preset.internal', port: 3307, database: 'x' }],
+    })
+    stores.push(h.store)
+    expect((await h.login({ ...LOGIN, host: 'db', port: 3306 })).status).toBe(201)
+    expect((await h.login({ ...LOGIN, host: 'db', port: 22 })).status).toBe(403)
+    expect((await h.login({ ...LOGIN, host: '127.0.0.1', port: 9999 })).status).toBe(201)
+    expect((await h.login({ ...LOGIN, host: 'preset.internal', port: 3307 })).status).toBe(201)
+    expect((await h.login({ ...LOGIN, host: 'preset.internal', port: 3306 })).status).toBe(403)
+  })
+
+  it('caps request bodies per route family (tight on the unauthenticated login)', async () => {
+    const h = harness()
+    stores.push(h.store)
+    const big = (n: number) => JSON.stringify({ ...LOGIN, password: 'x'.repeat(n) })
+    expect((await h.req('/api/session', { method: 'POST', body: big(70 * 1024) })).status).toBe(413)
+    await h.login()
+    const sql = (n: number) => JSON.stringify({ sql: `SELECT '${'y'.repeat(n)}'` })
+    expect((await h.req('/api/databases/shop/sql', { method: 'POST', body: sql(2 * 1024 * 1024) })).status).toBe(200)
+    expect((await h.req('/api/databases/shop/sql', { method: 'POST', body: sql(17 * 1024 * 1024) })).status).toBe(413)
+    const rows = JSON.stringify({ values: { name: 'z'.repeat(2 * 1024 * 1024) } })
+    expect((await h.req('/api/databases/shop/tables/users/rows', { method: 'POST', body: rows })).status).toBe(413)
+  })
+
+  it('re-issues the session cookie on every authenticated request so its expiry slides with the store', async () => {
+    const h = harness()
+    stores.push(h.store)
+    await h.login()
+    const res = await h.req('/api/session')
+    expect(res.status).toBe(200)
+    expect(res.headers.get('set-cookie')).toMatch(/tsmyadmin_session=.*Max-Age=\d+/)
+    expect(res.headers.get('set-cookie')).toMatch(/HttpOnly/)
+  })
+
+  it('never returns internal error details to the client', async () => {
+    const adapter = fixtureAdapter()
+    adapter.listDatabases = async () => {
+      throw new TypeError('/srv/app/internal.ts exploded')
+    }
+    const h = harness(adapter)
+    stores.push(h.store)
+    await h.login()
+    const res = await h.req('/api/databases')
+    expect(res.status).toBe(500)
+    const body = ApiErrorSchema.parse(await res.json())
+    expect(body).toEqual({ code: 'INTERNAL', message: 'Internal error' })
   })
 
   it('keys the limiter by the socket address and ignores spoofable headers when no proxy is trusted', async () => {
