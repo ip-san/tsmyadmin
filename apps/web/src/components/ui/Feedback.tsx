@@ -23,7 +23,8 @@ export function ErrorBox({ error, className, onRetry }: { error: unknown; classN
       )}
     >
       <span className="min-w-0 flex-1 break-words">
-        <strong className="mr-1">{locale.common.error}:</strong>
+        {/* The red box already reads as an error; the prefix is kept for screen readers only. */}
+        <span className="sr-only">{locale.common.error}: </span>
         {errorMessage(error)}
       </span>
       {onRetry ? (

@@ -51,6 +51,11 @@
 
 構造化ログ（`LOG_FORMAT=json`）に `login.ok` / `login.failed` / `login.host_not_allowed` / `login.rate_limited` / `logout` とリクエスト ID 付きのアクセスログが出ます。変更系の呼び出しはアダプター境界の監査ログ（`event: audit`）に、誰が・どの DB に・何を（値は含まない）・成功したかが記録されます。詳細は `docs/operations.md`。
 
+## サプライチェーン
+
+- GitHub Actions はコミット SHA でピン留めし（`.github/workflows/ci.yml`、タグはコメントで併記）、Dependabot（`.github/dependabot.yml`）が月次で更新 PR を出します
+- 依存は `bun.lock` で固定し、本番イメージは `bun install --production --ignore-scripts` で postinstall スクリプトを実行しません
+
 ## 既知の制限
 
 - セッションストアは SQLite ファイルのため、複数レプリカで共有できません（スティッキーセッションが必要）
