@@ -18,6 +18,7 @@ import { linkableForeignKeys, linkableReverseKeys } from './fk-links.ts'
 import { Pagination } from './Pagination.tsx'
 import { CopyRowDialog, EditRowDialog } from './RowDialogs.tsx'
 import { rowKeyFor, rowToValues } from './row-key.ts'
+import { nextSort } from './sort.ts'
 
 export interface RowsGridProps {
   tableRef: TableRef
@@ -32,13 +33,6 @@ export interface RowsGridProps {
   }) => void
   /** Comma-separated visible columns from the URL (undefined = all). */
   cols?: string | undefined
-}
-
-function nextSort(current: BrowseOptions['sort'], column: string): string | undefined {
-  const cur = current[0]
-  if (!cur || cur.column !== column) return `${column}:asc`
-  if (cur.direction === 'asc') return `${column}:desc`
-  return undefined
 }
 
 /** Data columns exclude the hidden key column (PG ctid) appended by the adapter. */
@@ -97,7 +91,7 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
   const picked = visibleColumnNames(cols, allNames)
   const columns = picked ? allColumns.filter((c) => picked.includes(c.name)) : allColumns
   const columnIndex = new Map(allColumns.map((c, i) => [c.name, i]))
-  const sort = options.sort[0]
+  const sortIndex = new Map(options.sort.map((s, i) => [s.column, { ...s, i }]))
   const editable = data.keyKind !== 'none'
   const keys = data.rows.map((row) => rowKeyFor(data, row))
   const fks = linkableForeignKeys(data)
@@ -162,8 +156,9 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
                 </Th>
               ) : null}
               {columns.map((c) => {
-                const active = sort?.column === c.name
-                const dir = active ? sort?.direction : undefined
+                const entry = sortIndex.get(c.name)
+                const active = entry !== undefined
+                const dir = entry?.direction
                 return (
                   <Th key={c.name} aria-sort={dir === 'asc' ? 'ascending' : dir === 'desc' ? 'descending' : 'none'}>
                     <button
@@ -172,20 +167,25 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
                         'inline-flex items-center gap-1 hover:underline',
                         active && 'text-blue-700 dark:text-blue-300'
                       )}
-                      onClick={() => onChange({ sort: nextSort(options.sort, c.name), page: 1 })}
-                      title={
+                      onClick={(e) => onChange({ sort: nextSort(options.sort, c.name, e.shiftKey), page: 1 })}
+                      title={`${
                         dir === 'asc'
                           ? locale.browse.sortDesc
                           : dir === 'desc'
                             ? locale.browse.clearSort
                             : locale.browse.sortAsc
-                      }
+                      }${locale.browse.multiSortHint}`}
                     >
                       {c.name}
                       {dir === 'asc' ? (
                         <ArrowUp className="size-3" aria-hidden />
                       ) : dir === 'desc' ? (
                         <ArrowDown className="size-3" aria-hidden />
+                      ) : null}
+                      {entry && options.sort.length > 1 ? (
+                        <span className="text-[10px] tabular-nums" aria-label={locale.browse.sortOrder(entry.i + 1)}>
+                          {entry.i + 1}
+                        </span>
                       ) : null}
                     </button>
                     <span className="ml-1 font-normal text-zinc-500 dark:text-zinc-400">{c.dataType}</span>

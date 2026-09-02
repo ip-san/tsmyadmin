@@ -74,6 +74,15 @@ export class PostgresAdapter extends BaseAdapter {
       types: pgTypes,
     })
     pool.on('error', () => undefined)
+    // One pool per browsed database: drop it once its last idle client timed out so a session that walked
+    // through many databases does not keep a pool object (and its 'remove' timers) per database forever.
+    pool.on('remove', () => {
+      if (database === this.defaultDatabase() || this.pools.get(database) !== pool) return
+      if (pool.totalCount === 0 && pool.waitingCount === 0) {
+        this.pools.delete(database)
+        pool.end().catch(() => undefined)
+      }
+    })
     this.pools.set(database, pool)
     return pool
   }

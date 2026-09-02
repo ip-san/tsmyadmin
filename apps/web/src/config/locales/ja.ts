@@ -152,6 +152,8 @@ export const ja = {
     sortAsc: '昇順で並べ替え',
     sortDesc: '降順で並べ替え',
     clearSort: '並べ替え解除',
+    multiSortHint: '（Shift + クリックで複数列）',
+    sortOrder: (n: number) => `並べ替え順 ${n}`,
     noRows: '行がありません',
     readOnly: 'このテーブル（ビュー）は編集できません',
     selectRow: '行を選択',
