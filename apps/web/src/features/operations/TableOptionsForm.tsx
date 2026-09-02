@@ -1,5 +1,5 @@
 import type { Dialect, TableSchema } from '@tsmyadmin/shared'
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, useRef, useState } from 'react'
 import { DdlPreviewDialog } from '@/components/ddl/DdlPreviewDialog.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { Field, Input } from '@/components/ui/Field.tsx'
@@ -39,8 +39,11 @@ export function TableOptionsForm({
     reseed(schema)
   }
   // After a run the fields go back to what the server reports, so a value it ignored (AUTO_INCREMENT below the
-  // current one) does not linger as a pending change; the refetch re-seeds whatever did change.
-  const flow = useDdlFlow(tableRef.db, tableRef.schema, () => reseed(schema))
+  // current one) does not linger as a pending change. The refetch may land before or after this callback: it
+  // reads the latest schema through a ref, and a later refetch re-seeds through `prevSeed` anyway.
+  const latest = useRef(schema)
+  latest.current = schema
+  const flow = useDdlFlow(tableRef.db, tableRef.schema, () => reseed(latest.current))
   const commentChanged = comment !== (schema.comment ?? '')
   const engineChanged = mysql && engine.trim() !== '' && engine.trim() !== (schema.engine ?? '')
   const collationChanged = mysql && collation.trim() !== '' && collation.trim() !== (schema.collation ?? '')

@@ -31,7 +31,7 @@ export function RoutinesPage({ db, schema }: { db: string; schema?: string | und
             {routines.data.map((r) => (
               <Tr key={`${r.kind}:${r.name}:${r.parameters}`}>
                 <Td className="font-medium">{r.name}</Td>
-                <Td>{r.kind === 'procedure' ? locale.routines.procedure : locale.routines.function}</Td>
+                <Td>{locale.routines.kinds[r.kind]}</Td>
                 <Td className="font-mono text-xs">{r.parameters}</Td>
                 <Td className="font-mono text-xs">{r.returns ?? ''}</Td>
                 <Td className="text-xs">{r.language ?? ''}</Td>

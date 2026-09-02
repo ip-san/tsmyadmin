@@ -29,6 +29,7 @@ export const PASSTHROUGH_METHODS = [
   'routineDefinition',
   'listTriggers',
   'listEvents',
+  'listDependencies',
   'browseRows',
   'showCreateTable',
   'iterateRows',

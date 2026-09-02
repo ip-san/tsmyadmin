@@ -9,6 +9,7 @@ import type {
   Filter,
   KeyValue,
   Namespace,
+  ObjectDependency,
   ProcessInfo,
   RoutineInfo,
   RoutineKind,
@@ -214,6 +215,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
   abstract routineDefinition(ns: Namespace, name: string, kind: RoutineKind): Promise<string | null>
   abstract listTriggers(ns: Namespace, table?: string): Promise<TriggerInfo[]>
   abstract listEvents(ns: Namespace): Promise<EventInfo[]>
+  abstract listDependencies(ns: Namespace): Promise<ObjectDependency[] | null>
   abstract readonly serverNamespace: Namespace
   abstract showCreateTable(ns: Namespace, table: string, schema?: TableSchema): Promise<string[]>
   abstract serverInfo(): Promise<ServerInfo>

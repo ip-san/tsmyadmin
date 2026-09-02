@@ -1,6 +1,6 @@
 import type { DatabaseAdapter, ProgramStatement } from '@tsmyadmin/adapter'
 import { AdapterError, commentText, isGeneratedColumn, splitStatements } from '@tsmyadmin/adapter'
-import type { ExportQuery, Namespace, TableSchema } from '@tsmyadmin/shared'
+import type { ExportQuery, Namespace, ObjectDependency, TableSchema } from '@tsmyadmin/shared'
 import { csvField, EXPORT_BATCH_SIZE } from '@tsmyadmin/shared'
 
 export const DUMP_COMPLETE_MARKER = '-- tsmyadmin dump complete'
@@ -63,10 +63,10 @@ function isSqlStandardBody(statement: string): boolean {
 }
 
 interface Routines {
-  /** Emitted before the views (every MySQL routine; PostgreSQL string bodies). */
+  /** Emitted before the tables (every MySQL routine; PostgreSQL string bodies, which DEFAULTs and indexes may call). */
   stringBody: ProgramStatement[]
-  /** PostgreSQL SQL-standard bodies: emitted after the views they may read. */
-  sqlBody: ProgramStatement[]
+  /** PostgreSQL SQL-standard bodies, by routine name: ordered with the views they read or are read by. */
+  sqlBody: Map<string, ProgramStatement[]>
   skipped: string[]
 }
 
@@ -74,7 +74,7 @@ interface Routines {
 async function collectRoutines(adapter: DatabaseAdapter, ns: Namespace, stripDefiner: boolean): Promise<Routines> {
   const x = adapter.exporter
   const seen = new Set<string>()
-  const out: Routines = { stringBody: [], sqlBody: [], skipped: [] }
+  const out: Routines = { stringBody: [], sqlBody: new Map(), skipped: [] }
   for (const r of await adapter.listRoutines(ns)) {
     if (seen.has(`${r.kind}:${r.name}`)) continue
     seen.add(`${r.kind}:${r.name}`)
@@ -94,27 +94,43 @@ async function collectRoutines(adapter: DatabaseAdapter, ns: Namespace, stripDef
       out.stringBody.push({ ...x.routine(ns, r.kind, r.name, def, stripDefiner), sqlMode: r.sqlMode })
       continue
     }
-    // Overloads arrive as one statement each; the body style is decided per overload.
+    // Overloads arrive as one statement each; the body style is decided per overload. A COMMENT ON that follows
+    // an overload stays with it.
+    let last: ProgramStatement | null = null
     for (const { sql } of splitStatements(def, 'postgres')) {
-      ;(isSqlStandardBody(sql) ? out.sqlBody : out.stringBody).push(x.routine(ns, r.kind, r.name, sql, stripDefiner))
+      if (/^COMMENT\s+ON\s/i.test(sql) && last) {
+        last.sql += `;\n${sql}`
+        continue
+      }
+      last = x.routine(ns, r.kind, r.name, sql, stripDefiner)
+      if (isSqlStandardBody(sql)) {
+        const group = out.sqlBody.get(r.name) ?? []
+        group.push(last)
+        out.sqlBody.set(r.name, group)
+      } else out.stringBody.push(last)
     }
   }
   return out
 }
 
-async function* routinesBody(
-  adapter: DatabaseAdapter,
-  routines: Routines,
-  phase: 'stringBody' | 'sqlBody'
-): AsyncIterable<string> {
-  const defs = routines[phase]
-  const skipped = phase === 'stringBody' ? routines.skipped : []
-  if (defs.length > 0 || skipped.length > 0)
-    yield section(phase === 'sqlBody' ? 'Routines (SQL-standard bodies)' : 'Routines')
+function routinesBody(adapter: DatabaseAdapter, routines: Routines): string {
+  const parts: string[] = []
+  if (routines.stringBody.length > 0 || routines.skipped.length > 0) parts.push(section('Routines'))
   // A routine the account may not read is named rather than silently missing from the backup.
-  for (const name of skipped) yield `-- skipped (definition not readable, or dropped meanwhile): ${commentText(name)}\n`
-  if (skipped.length > 0) yield '\n'
-  if (defs.length > 0) yield adapter.exporter.programBlock(defs)
+  for (const name of routines.skipped)
+    parts.push(`-- skipped (definition not readable, or dropped meanwhile): ${commentText(name)}\n`)
+  if (routines.skipped.length > 0) parts.push('\n')
+  if (routines.stringBody.length > 0) parts.push(adapter.exporter.programBlock(routines.stringBody))
+  return parts.join('')
+}
+
+/** A view, or a PostgreSQL SQL-standard-body routine, emitted after the tables in dependency order. */
+interface LateObject {
+  kind: 'view' | 'routine'
+  name: string
+  text: string
+  /** Its definition text, for the mention fallback. */
+  statements: string[]
 }
 
 /** Triggers (of the given tables, or all) and, for a whole-database dump, events. */
@@ -144,24 +160,45 @@ async function* triggersAndEventsBody(
 }
 
 /**
- * Views ordered so that a view comes after the views it mentions (text dependency: a view definition that
- * names another view of the dump). Catalogs differ per server (MariaDB has no VIEW_TABLE_USAGE), and the
- * definition text is already in hand, so the mention test is the portable choice; unrelated views keep their
- * name order.
+ * Views and SQL-standard routines ordered so that each comes after what it depends on. The server catalog
+ * decides where it exists (PostgreSQL pg_depend, MySQL 8 VIEW_*_USAGE); MariaDB keeps no such catalog, so there
+ * a view follows the views its definition mentions (routines with parsed bodies do not exist on MariaDB).
+ * Unrelated objects keep their name order; a cycle (impossible in a consistent catalog) is cut where found.
  */
-function orderViews(views: { name: string; statements: string[] }[]): { name: string; statements: string[] }[] {
-  const mentions = (v: { statements: string[] }, other: string) =>
-    v.statements.some((s) => new RegExp(`(?<![\\w$])${other.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w$])`).test(s))
-  const out: { name: string; statements: string[] }[] = []
-  const done = new Set<string>()
-  const visit = (v: { name: string; statements: string[] }, stack: Set<string>) => {
-    if (done.has(v.name) || stack.has(v.name)) return
-    stack.add(v.name)
-    for (const dep of views) if (dep.name !== v.name && mentions(v, dep.name)) visit(dep, stack)
-    done.add(v.name)
-    out.push(v)
+function orderObjects(objects: LateObject[], catalog: ObjectDependency[] | null): LateObject[] {
+  const key = (o: { kind: string; name: string }) => `${o.kind}:${o.name}`
+  const byKey = new Map(objects.map((o) => [key(o), o]))
+  const mentions = (o: LateObject, other: string) =>
+    o.statements.some((s) => new RegExp(`(?<![\\w$])${other.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w$])`).test(s))
+  const dependencies = (o: LateObject): LateObject[] => {
+    if (catalog) {
+      const deps = catalog.find((d) => d.kind === o.kind && d.name === o.name)?.dependsOn ?? []
+      return deps.map((d) => byKey.get(key(d))).filter((d): d is LateObject => d !== undefined && d !== o)
+    }
+    return objects.filter((dep) => dep !== o && dep.kind === 'view' && mentions(o, dep.name))
   }
-  for (const v of views) visit(v, new Set())
+  const out: LateObject[] = []
+  const done = new Set<LateObject>()
+  const emit = (o: LateObject) => {
+    done.add(o)
+    out.push(o)
+  }
+  // Returns false when `o` sits in a cycle with something still being visited. Routine entries are per name, so
+  // a view that calls one overload (a string body, emitted long ago) and a SQL-standard overload that reads the
+  // view look circular: the view goes first and the routine is picked up again from the outer loop.
+  const visit = (o: LateObject, stack: Set<LateObject>): boolean => {
+    if (done.has(o)) return true
+    if (stack.has(o)) return false
+    stack.add(o)
+    let blocked = false
+    for (const dep of dependencies(o)) if (!visit(dep, stack)) blocked = true
+    stack.delete(o)
+    if (blocked && o.kind === 'routine') return false
+    emit(o)
+    return true
+  }
+  for (const o of objects) visit(o, new Set())
+  for (const o of objects) if (!done.has(o)) emit(o)
   return out
 }
 
@@ -183,8 +220,8 @@ async function* sqlBody(
     '',
   ].join('\n')
   const deferred: string[] = []
-  // Views are emitted after the routines they may call (and after every table), in dependency order.
-  const views: { name: string; statements: string[] }[] = []
+  // Views are emitted after every table and the routines they may call, in dependency order.
+  const late: LateObject[] = []
   // A MariaDB sequence is created before the tables whose defaults call nextval() on it.
   const schemas = new Map<string, TableSchema>()
   for (const table of tables) schemas.set(table, await adapter.describeTable(ns, table))
@@ -194,6 +231,11 @@ async function* sqlBody(
     if (q.dropTable === '1') yield `${adapter.exporter.dropIfExists(ns, schema)};\n`
     for (const stmt of await adapter.showCreateTable(ns, table, schema)) yield `${stmt};\n\n`
   }
+  // Routines go before the tables: a DEFAULT, a CHECK or a functional index may call one (PostgreSQL parses
+  // string bodies only when called, see check_function_bodies in the preamble).
+  const programs = q.structure === '1' && q.routines === '1'
+  const routines = programs && everything ? await collectRoutines(adapter, ns, q.stripDefiner === '1') : null
+  if (routines) yield routinesBody(adapter, routines)
   for (const table of tables) {
     // One catalog round trip per table, shared by the DDL reconstruction and the row scan.
     const schema = schemas.get(table) as TableSchema
@@ -203,9 +245,12 @@ async function* sqlBody(
         const statements = (await adapter.showCreateTable(ns, table, schema)).map((stmt) =>
           q.stripDefiner === '1' ? adapter.exporter.withoutDefiner(stmt) : stmt
         )
-        views.push({
+        const all = q.dropTable === '1' ? [adapter.exporter.dropIfExists(ns, schema), ...statements] : statements
+        late.push({
+          kind: 'view',
           name: table,
-          statements: q.dropTable === '1' ? [adapter.exporter.dropIfExists(ns, schema), ...statements] : statements,
+          statements,
+          text: `${section(`View: ${commentText(table)}`)}${all.map((stmt) => `${stmt};\n\n`).join('')}`,
         })
       }
       continue
@@ -242,14 +287,16 @@ async function* sqlBody(
     yield section('Foreign keys')
     for (const stmt of deferred) yield `${stmt};\n\n`
   }
-  const programs = q.structure === '1' && q.routines === '1'
-  const routines = programs && everything ? await collectRoutines(adapter, ns, q.stripDefiner === '1') : null
-  if (routines) yield* routinesBody(adapter, routines, 'stringBody')
-  for (const v of orderViews(views)) {
-    yield section(`View: ${commentText(v.name)}`)
-    for (const stmt of v.statements) yield `${stmt};\n\n`
+  for (const [name, statements] of routines?.sqlBody ?? []) {
+    late.push({
+      kind: 'routine',
+      name,
+      statements: statements.map((s) => s.sql),
+      text: `${section(`Routine: ${commentText(name)}`)}${adapter.exporter.programBlock(statements)}`,
+    })
   }
-  if (routines) yield* routinesBody(adapter, routines, 'sqlBody')
+  const catalog = late.length > 1 ? await adapter.listDependencies(ns) : null
+  for (const o of orderObjects(late, catalog)) yield o.text
   if (programs) yield* triggersAndEventsBody(adapter, ns, everything ? null : tables, q.stripDefiner === '1')
   const postamble = adapter.exporter.postamble()
   if (postamble.length > 0) yield `${postamble.join('\n')}\n\n`

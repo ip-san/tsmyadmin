@@ -10,6 +10,8 @@ import type { TableRef } from '@/lib/queries.ts'
 export function TableOperations({ tableRef, kind }: { tableRef: TableRef; kind: TableKind }) {
   const navigate = useNavigate()
   const view = isViewKind(kind)
+  // A MariaDB sequence is a view-like object for the UI (no rows to truncate) but is named as what it is.
+  const sequence = kind === 'sequence'
   const flow = useDdlFlow(tableRef.db, tableRef.schema, async (op) => {
     if (op.op === 'dropTable') {
       await navigate({
@@ -22,7 +24,11 @@ export function TableOperations({ tableRef, kind }: { tableRef: TableRef; kind: 
   return (
     <div className="space-y-4">
       <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">
-        {view ? locale.ddl.viewOperationsTitle : locale.ddl.operationsTitle}
+        {sequence
+          ? locale.ddl.sequenceOperationsTitle
+          : view
+            ? locale.ddl.viewOperationsTitle
+            : locale.ddl.operationsTitle}
       </h2>
       <div className="flex flex-col gap-3 sm:flex-row">
         {view ? null : (
@@ -39,14 +45,14 @@ export function TableOperations({ tableRef, kind }: { tableRef: TableRef; kind: 
         )}
         <section className="flex-1 rounded border border-red-200 p-3 dark:border-red-800">
           <p className="mb-2 text-sm text-zinc-600 dark:text-zinc-300">
-            {view ? locale.ddl.dropViewHint : locale.ddl.dropHint}
+            {sequence ? locale.ddl.dropSequenceHint : view ? locale.ddl.dropViewHint : locale.ddl.dropHint}
           </p>
           <Button
             variant="danger"
             aria-haspopup="dialog"
             onClick={() => flow.preview({ op: 'dropTable', table: tableRef.table, kind })}
           >
-            {view ? locale.ddl.dropViewButton : locale.ddl.dropButton}
+            {sequence ? locale.ddl.dropSequenceButton : view ? locale.ddl.dropViewButton : locale.ddl.dropButton}
           </Button>
         </section>
       </div>

@@ -10,6 +10,7 @@ import type {
   EventInfo,
   KeyValue,
   Namespace,
+  ObjectDependency,
   ProcessInfo,
   RoutineInfo,
   RoutineKind,
@@ -164,6 +165,11 @@ export interface DatabaseAdapter {
   listTriggers(ns: Namespace, table?: string): Promise<TriggerInfo[]>
   /** Scheduled events (MySQL). PostgreSQL returns []. */
   listEvents(ns: Namespace): Promise<EventInfo[]>
+  /**
+   * Which views / routines of the namespace depend on which objects, from the catalog (PostgreSQL pg_depend,
+   * MySQL 8 VIEW_TABLE_USAGE / VIEW_ROUTINE_USAGE); null when the server keeps no such catalog (MariaDB).
+   */
+  listDependencies(ns: Namespace): Promise<ObjectDependency[] | null>
   browseRows(ns: Namespace, table: string, opts: BrowseOptions): Promise<BrowseResult>
   insertRow(ns: Namespace, table: string, values: RowValues): Promise<{ affectedRows: number }>
   /** Bulk insert (imports): parameterised multi-row INSERTs inside one transaction; all-or-nothing. */
@@ -228,6 +234,7 @@ export const ADAPTER_METHOD_NAMES = [
   'routineDefinition',
   'listTriggers',
   'listEvents',
+  'listDependencies',
   'browseRows',
   'insertRow',
   'insertRows',

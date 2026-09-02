@@ -1,4 +1,4 @@
-import type { EventInfo, Namespace, RoutineInfo, RoutineKind, TriggerInfo } from '@tsmyadmin/shared'
+import type { EventInfo, Namespace, ObjectDependency, RoutineInfo, RoutineKind, TriggerInfo } from '@tsmyadmin/shared'
 import { type Conn, firstResult } from '../base.ts'
 import { str, strOrNull } from '../sql/format.ts'
 import { quoteIdent } from '../sql/quote.ts'
@@ -10,8 +10,9 @@ export async function mysqlListRoutines(conn: Conn, ns: Namespace): Promise<Rout
   const routines = firstResult(
     await conn.query(
       `SELECT ROUTINE_NAME, ROUTINE_TYPE, EXTERNAL_LANGUAGE, DTD_IDENTIFIER, ROUTINE_COMMENT, SPECIFIC_NAME, SQL_MODE
-       FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA = ? AND ROUTINE_TYPE IN ('PROCEDURE', 'FUNCTION')
-       ORDER BY ROUTINE_NAME`,
+       FROM information_schema.ROUTINES
+       WHERE ROUTINE_SCHEMA = ? AND ROUTINE_TYPE IN ('PROCEDURE', 'FUNCTION', 'PACKAGE', 'PACKAGE BODY')
+       ORDER BY ROUTINE_NAME, ROUTINE_TYPE`,
       [ns.database]
     )
   )
@@ -31,7 +32,8 @@ export async function mysqlListRoutines(conn: Conn, ns: Namespace): Promise<Rout
     bySpecific.set(key, list)
   }
   return routines.rows.map((row) => {
-    const kind = str(row[1]).toUpperCase() === 'FUNCTION' ? 'function' : 'procedure'
+    // MariaDB (Oracle mode) packages are listed with their specification before their body (name, then type).
+    const kind = ROUTINE_KINDS[str(row[1]).toUpperCase()] ?? 'procedure'
     return {
       name: str(row[0]),
       kind,
@@ -44,7 +46,14 @@ export async function mysqlListRoutines(conn: Conn, ns: Namespace): Promise<Rout
   })
 }
 
-/** SHOW CREATE PROCEDURE|FUNCTION; null when the account may not read it; NOT_FOUND when the routine is gone. */
+const ROUTINE_KINDS: Record<string, RoutineKind> = {
+  PROCEDURE: 'procedure',
+  FUNCTION: 'function',
+  PACKAGE: 'package',
+  'PACKAGE BODY': 'package body',
+}
+
+/** SHOW CREATE PROCEDURE|FUNCTION|PACKAGE|PACKAGE BODY; null when the account may not read it; NOT_FOUND when gone. */
 export async function mysqlRoutineDefinition(
   conn: Conn,
   ns: Namespace,
@@ -54,7 +63,7 @@ export async function mysqlRoutineDefinition(
   try {
     const show = firstResult(
       await conn.query(
-        `SHOW CREATE ${kind === 'function' ? 'FUNCTION' : 'PROCEDURE'} ${quoteIdent('mysql', ns.database)}.${quoteIdent('mysql', name)}`
+        `SHOW CREATE ${kind.toUpperCase()} ${quoteIdent('mysql', ns.database)}.${quoteIdent('mysql', name)}`
       )
     )
     // Columns: Procedure|Function, sql_mode, Create Procedure|Create Function, ...
@@ -88,6 +97,7 @@ export async function mysqlListTriggers(conn: Conn, ns: Namespace, table?: strin
     definition: strOrNull(row[5]),
     sqlMode: strOrNull(row[6]) ?? '',
     definer: strOrNull(row[7]),
+    enabled: true,
   }))
 }
 
@@ -119,4 +129,45 @@ export async function mysqlListEvents(conn: Conn, ns: Namespace): Promise<EventI
       definer: strOrNull(row[14]),
     }
   })
+}
+
+/**
+ * MySQL 8 records what each view reads in VIEW_TABLE_USAGE / VIEW_ROUTINE_USAGE; MariaDB has neither table, so
+ * it reports null and the caller falls back to reading the definitions.
+ */
+export async function mysqlListDependencies(conn: Conn, ns: Namespace): Promise<ObjectDependency[] | null> {
+  let tables: ReturnType<typeof firstResult>
+  let routines: ReturnType<typeof firstResult>
+  try {
+    tables = firstResult(
+      await conn.query(
+        `SELECT u.VIEW_NAME, u.TABLE_NAME, t.TABLE_TYPE FROM information_schema.VIEW_TABLE_USAGE u
+         LEFT JOIN information_schema.TABLES t ON t.TABLE_SCHEMA = u.TABLE_SCHEMA AND t.TABLE_NAME = u.TABLE_NAME
+         WHERE u.VIEW_SCHEMA = ? AND u.TABLE_SCHEMA = ? ORDER BY u.VIEW_NAME, u.TABLE_NAME`,
+        [ns.database, ns.database]
+      )
+    )
+    routines = firstResult(
+      await conn.query(
+        `SELECT TABLE_NAME, SPECIFIC_NAME FROM information_schema.VIEW_ROUTINE_USAGE
+         WHERE TABLE_SCHEMA = ? AND SPECIFIC_SCHEMA = ? ORDER BY TABLE_NAME, SPECIFIC_NAME`,
+        [ns.database, ns.database]
+      )
+    )
+  } catch (err) {
+    if (err instanceof AdapterError && err.nativeCode === 'ER_UNKNOWN_TABLE') return null
+    throw err
+  }
+  const byView = new Map<string, ObjectDependency>()
+  const entry = (view: string) => {
+    const e = byView.get(view) ?? { kind: 'view' as const, name: view, dependsOn: [] }
+    byView.set(view, e)
+    return e
+  }
+  for (const row of tables.rows) {
+    const kind = String(row[2] ?? '').includes('VIEW') ? 'view' : 'table'
+    entry(str(row[0])).dependsOn.push({ kind, name: str(row[1]) })
+  }
+  for (const row of routines.rows) entry(str(row[0])).dependsOn.push({ kind: 'routine', name: str(row[1]) })
+  return [...byView.values()]
 }

@@ -91,6 +91,97 @@ describe('buildExport', () => {
   })
 })
 
+/** A fake view: the definition text is what the mention fallback reads. */
+const fakeView = (name: string, definition: string) => ({
+  ...fakeTable(name, ['id'], []),
+  schema: { ...fakeTable(name, ['id'], []).schema, kind: 'view' as const },
+  definition,
+})
+
+describe('buildExport ordering of views and routines', () => {
+  const order = (body: string, ...markers: string[]) => markers.map((m) => body.indexOf(m))
+  const isAscending = (xs: number[]) => xs.every((x, i) => x >= 0 && (i === 0 || x > (xs[i - 1] ?? 0)))
+
+  it('follows the catalog when the server has one (an alias equal to a view name is not a dependency)', async () => {
+    const a = new FakeAdapter({
+      databases: {
+        shop: {
+          tables: {
+            t: fakeTable('t', ['id'], []),
+            // va sorts first and its alias is called vb; vb really reads va.
+            va: fakeView('va', 'CREATE VIEW va AS SELECT id AS vb FROM t'),
+            vb: fakeView('vb', 'CREATE VIEW vb AS SELECT vb FROM va'),
+          },
+        },
+      },
+      dependencies: [
+        { kind: 'view', name: 'va', dependsOn: [{ kind: 'table', name: 't' }] },
+        { kind: 'view', name: 'vb', dependsOn: [{ kind: 'view', name: 'va' }] },
+      ],
+    })
+    const body = await collect(buildExport(a, ns, ['t', 'va', 'vb'], q({ format: 'sql', data: '0' })).body)
+    expect(isAscending(order(body, '-- View: va', '-- View: vb'))).toBe(true)
+  })
+
+  it('falls back to definition mentions without a catalog, and never emits a view twice', async () => {
+    const a = new FakeAdapter({
+      databases: {
+        shop: {
+          tables: {
+            t: fakeTable('t', ['id'], []),
+            a: fakeView('a', 'CREATE VIEW a AS SELECT id FROM c'),
+            b: fakeView('b', 'CREATE VIEW b AS SELECT id FROM t'),
+            c: fakeView('c', 'CREATE VIEW c AS SELECT id FROM b'),
+            // `bc` contains `b` and `c` only as substrings: no dependency.
+            bc: fakeView('bc', 'CREATE VIEW bc AS SELECT id FROM t'),
+          },
+        },
+      },
+      dependencies: null,
+    })
+    const body = await collect(buildExport(a, ns, ['t', 'a', 'b', 'bc', 'c'], q({ format: 'sql', data: '0' })).body)
+    expect(isAscending(order(body, '-- View: b\n', '-- View: c\n', '-- View: a\n'))).toBe(true)
+    expect(body.match(/-- View: /g)).toHaveLength(4)
+  })
+
+  it('PostgreSQL: SQL-standard routines are ordered with the views; a name-level cycle puts the view first', async () => {
+    const a = new FakeAdapter({
+      dialect: 'postgres',
+      databases: {
+        shop: {
+          tables: {
+            t: fakeTable('t', ['id'], []),
+            v: fakeView('v', 'CREATE VIEW v AS SELECT f(id) FROM t'),
+            w: fakeView('w', 'CREATE VIEW w AS SELECT g() AS one'),
+          },
+        },
+      },
+      routines: {
+        // f: a string-body overload (used by v) and a SQL-standard overload reading v.
+        f: 'CREATE OR REPLACE FUNCTION f(x int) RETURNS int LANGUAGE sql AS $$ SELECT x $$;\n\nCREATE OR REPLACE FUNCTION f(x text) RETURNS bigint LANGUAGE sql RETURN (SELECT count(*) FROM v)',
+        // g: a SQL-standard body read by w.
+        g: 'CREATE OR REPLACE FUNCTION g() RETURNS int LANGUAGE sql BEGIN ATOMIC SELECT 1; END',
+      },
+      dependencies: [
+        {
+          kind: 'view',
+          name: 'v',
+          dependsOn: [
+            { kind: 'table', name: 't' },
+            { kind: 'routine', name: 'f' },
+          ],
+        },
+        { kind: 'view', name: 'w', dependsOn: [{ kind: 'routine', name: 'g' }] },
+        { kind: 'routine', name: 'f', dependsOn: [{ kind: 'view', name: 'v' }] },
+      ],
+    })
+    const body = await collect(buildExport(a, ns, ['t', 'v', 'w'], q({ format: 'sql', data: '0', routines: '1' })).body)
+    // String bodies precede the tables; g precedes w; v precedes f's SQL-standard overload.
+    expect(isAscending(order(body, '-- Routines', 'f(x int)', '-- Table: t', '-- Routine: g', '-- View: w'))).toBe(true)
+    expect(isAscending(order(body, '-- View: v', '-- Routine: f', 'f(x text)'))).toBe(true)
+  })
+})
+
 describe('contentDisposition', () => {
   it('provides an ASCII fallback and a UTF-8 encoded name', () => {
     expect(contentDisposition('売上_users.sql')).toBe(

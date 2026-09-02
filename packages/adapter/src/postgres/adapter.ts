@@ -4,6 +4,7 @@ import type {
   EventInfo,
   KeyValue,
   Namespace,
+  ObjectDependency,
   ProcessInfo,
   RoutineInfo,
   RoutineKind,
@@ -28,10 +29,10 @@ import {
 import { pgLiteral } from '../sql/literal.ts'
 import { quoteIdent, quoteTable } from '../sql/quote.ts'
 import { AdapterError, type AdapterErrorCode, type ConnectionConfig, type RowBatch } from '../types.ts'
-import { pgCreateStatements, pgDdl } from './ddl.ts'
+import { pgCreateStatements, pgDdl, pgTableCatalog } from './ddl.ts'
 import { pgExporter } from './export.ts'
 import { pgDescribeTable, pgListSchemas, pgListTables } from './introspect.ts'
-import { pgListRoutines, pgListTriggers, pgRoutineDefinition } from './routines.ts'
+import { pgListDependencies, pgListRoutines, pgListTriggers, pgRoutineDefinition } from './routines.ts'
 import { pgKillProcess, pgListProcesses, pgListStatus, pgListVariables, pgServerInfo } from './server.ts'
 import { pgListUsers, pgShowGrants, pgUsers } from './users.ts'
 import { PG_TYPE_NAMES, pgTypes } from './values.ts'
@@ -360,6 +361,10 @@ export class PostgresAdapter extends BaseAdapter {
     return Promise.resolve([])
   }
 
+  listDependencies(ns: Namespace): Promise<ObjectDependency[] | null> {
+    return this.withConn(ns, (conn) => pgListDependencies(conn, ns))
+  }
+
   describeTable(ns: Namespace, table: string): Promise<TableSchema> {
     return this.withConn(ns, (conn) => pgDescribeTable(conn, ns, table))
   }
@@ -402,9 +407,9 @@ export class PostgresAdapter extends BaseAdapter {
   }
 
   /**
-   * PostgreSQL has no SHOW CREATE TABLE; the DDL is reconstructed from the catalog
-   * (columns, defaults, identity, PK, indexes, foreign keys, comments). Not covered:
-   * collations, storage parameters, partitioning, check constraints, ownership/grants.
+   * PostgreSQL has no SHOW CREATE TABLE; the DDL is reconstructed from the catalog (columns, defaults,
+   * collations, identity options, PK, indexes, CHECK / UNIQUE / EXCLUDE constraints, foreign keys with their
+   * deferral, comments). Not covered: storage parameters, partitioning, ownership/grants, policies.
    */
   showCreateTable(ns: Namespace, table: string, known?: TableSchema): Promise<string[]> {
     return this.withConn(ns, async (conn) => {
@@ -438,9 +443,19 @@ export class PostgresAdapter extends BaseAdapter {
             `COMMENT ON ${schema.kind === 'materialized_view' ? 'MATERIALIZED VIEW' : 'VIEW'} ${t} IS ${pgLiteral(comment)}`
           )
         }
+        // A materialized view's indexes (REFRESH … CONCURRENTLY needs its unique index back).
+        if (schema.kind === 'materialized_view') {
+          const idx = firstResult(
+            await conn.query(
+              'SELECT indexdef FROM pg_indexes WHERE schemaname = $1 AND tablename = $2 ORDER BY indexname',
+              [ns.schema ?? 'public', table]
+            )
+          )
+          for (const r of idx.rows) out.push(String(r[0] ?? ''))
+        }
         return out
       }
-      return pgCreateStatements(ns, schema)
+      return pgCreateStatements(ns, schema, await pgTableCatalog(conn, quoteTable('postgres', ns, table)))
     })
   }
 

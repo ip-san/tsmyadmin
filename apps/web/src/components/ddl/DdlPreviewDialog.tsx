@@ -33,6 +33,7 @@ function confirmName(op: DdlOp, bulkName: string | null): string | null {
 }
 
 function opTitle(op: DdlOp): string {
+  if (op.op === 'dropTable' && op.kind === 'sequence') return locale.ddl.dropSequenceTitle
   return op.op === 'dropTable' && op.kind !== 'table' ? locale.ddl.dropViewTitle : locale.ddl.titles[op.op]
 }
 

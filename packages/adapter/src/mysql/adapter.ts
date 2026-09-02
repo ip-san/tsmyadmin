@@ -3,6 +3,7 @@ import type {
   EventInfo,
   KeyValue,
   Namespace,
+  ObjectDependency,
   ProcessInfo,
   RoutineInfo,
   RoutineKind,
@@ -34,7 +35,13 @@ import { AdapterError, type AdapterErrorCode, type ConnectionConfig } from '../t
 import { mysqlDdl } from './ddl.ts'
 import { mysqlExporter } from './export.ts'
 import { mysqlDescribeTable, mysqlListTables } from './introspect.ts'
-import { mysqlListEvents, mysqlListRoutines, mysqlListTriggers, mysqlRoutineDefinition } from './routines.ts'
+import {
+  mysqlListDependencies,
+  mysqlListEvents,
+  mysqlListRoutines,
+  mysqlListTriggers,
+  mysqlRoutineDefinition,
+} from './routines.ts'
 import { mysqlKillProcess, mysqlListProcesses, mysqlListStatus, mysqlListVariables, mysqlServerInfo } from './server.ts'
 import { mysqlListUsers, mysqlShowGrants, mysqlUsers } from './users.ts'
 import { mysqlColumnMeta } from './values.ts'
@@ -80,6 +87,7 @@ const WRAPPER_ONLY_ERRORS: ReadonlySet<string> = new Set([
 /** MariaDB-only errno values the driver has no symbolic name for; anything else unnamed becomes `ER_<errno>`. */
 const MARIADB_ERRNO_NAMES: Record<number, string> = {
   1969: 'ER_STATEMENT_TIMEOUT',
+  4084: 'ER_SEQUENCE_RUN_OUT',
 }
 
 type QueryOutput = [unknown, FieldPacket[] | FieldPacket[][] | undefined]
@@ -181,6 +189,8 @@ export class MysqlAdapter extends BaseAdapter {
   private readonly currentDatabase = new WeakMap<object, string>()
   /** MariaDB has no max_execution_time; after the first ER_UNKNOWN_SYSTEM_VARIABLE the fallback variable is used. */
   private timeoutVariable: 'max_execution_time' | 'max_statement_time' = 'max_execution_time'
+  /** Read from the first connection: MariaDB numbers its own errors from 4000 up, where MySQL 8 has other names. */
+  private mariadb: boolean | null = null
 
   private async run(
     conn: PoolConnection,
@@ -209,6 +219,15 @@ export class MysqlAdapter extends BaseAdapter {
     }
     const core = conn.connection
     const release = () => (this.broken.has(core) ? conn.destroy() : conn.release())
+    if (this.mariadb === null) {
+      try {
+        const v = await this.run(conn, 'SELECT VERSION()')
+        this.mariadb = /mariadb/i.test(String((Array.isArray(v) ? v[0] : v)?.rows[0]?.[0] ?? ''))
+      } catch (err) {
+        release()
+        throw err
+      }
+    }
     // `USE db` (plus the session sql_mode) only when the pooled connection is not already set up for that
     // database — a cache hit costs no round trip at all.
     if (this.currentDatabase.get(core) !== ns.database) {
@@ -413,6 +432,10 @@ export class MysqlAdapter extends BaseAdapter {
     return this.withConn(ns, (conn) => mysqlListEvents(conn, ns))
   }
 
+  listDependencies(ns: Namespace): Promise<ObjectDependency[] | null> {
+    return this.withConn(ns, (conn) => mysqlListDependencies(conn, ns))
+  }
+
   describeTable(ns: Namespace, table: string): Promise<TableSchema> {
     return this.withConn(ns, (conn) => mysqlDescribeTable(conn, ns, table))
   }
@@ -485,8 +508,11 @@ export class MysqlAdapter extends BaseAdapter {
   toAdapterError(err: unknown): AdapterError {
     if (err instanceof AdapterError) return err
     const e = err as { code?: unknown; sqlMessage?: unknown; message?: unknown; errno?: unknown }
+    // mysql2 names errno values after MySQL 8; a MariaDB-only number (1969, 4000+) needs its own name.
+    const mariadbNumber =
+      this.mariadb === true && typeof e.errno === 'number' && (e.errno >= 4000 || e.errno in MARIADB_ERRNO_NAMES)
     const code =
-      typeof e.code === 'string'
+      typeof e.code === 'string' && !mariadbNumber
         ? e.code
         : typeof e.errno === 'number'
           ? (MARIADB_ERRNO_NAMES[e.errno] ?? `ER_${e.errno}`)

@@ -2,7 +2,8 @@ import { z } from 'zod'
 
 export const RoutineInfoSchema = z.object({
   name: z.string(),
-  kind: z.enum(['procedure', 'function']),
+  /** 'package' / 'package body' are MariaDB (Oracle-mode) packages: listed and dumped, never created here. */
+  kind: z.enum(['procedure', 'function', 'package', 'package body']),
   language: z.string().nullable(),
   /** Return type for functions, null for procedures. */
   returns: z.string().nullable(),
@@ -38,5 +39,18 @@ export const TriggerInfoSchema = z.object({
   sqlMode: z.string().nullable().default(null),
   /** `user@host` that owns the trigger (MySQL); kept in dumps unless DEFINER clauses are stripped. */
   definer: z.string().nullable().default(null),
+  /** false for a PostgreSQL trigger disabled with ALTER TABLE … DISABLE TRIGGER (the dump restores that state). */
+  enabled: z.boolean().default(true),
 })
 export type TriggerInfo = z.infer<typeof TriggerInfoSchema>
+
+/**
+ * Catalog dependency of a view or a routine on other objects of the namespace, by name (routine overloads share
+ * one entry). Used to order a dump; servers without such a catalog (MariaDB) report null instead.
+ */
+export const ObjectDependencySchema = z.object({
+  kind: z.enum(['view', 'routine']),
+  name: z.string(),
+  dependsOn: z.array(z.object({ kind: z.enum(['table', 'view', 'routine']), name: z.string() })),
+})
+export type ObjectDependency = z.infer<typeof ObjectDependencySchema>

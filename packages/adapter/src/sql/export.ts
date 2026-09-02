@@ -73,7 +73,8 @@ export function createExporter(dialect: Dialect): SqlExporter {
       // PostgreSQL's pg_get_functiondef is a CREATE OR REPLACE (a DROP would fail while a trigger depends on
       // the function); MySQL has no OR REPLACE for routines, so it drops first. The dump is database-relative.
       if (dialect === 'postgres') return { sql: definition }
-      const object = kind === 'procedure' ? 'PROCEDURE' : 'FUNCTION'
+      // A MariaDB package body is dropped with its package; DROP PACKAGE BODY IF EXISTS is still harmless.
+      const object = kind.toUpperCase()
       return { sql: `DROP ${object} IF EXISTS ${id(name)}${DELIM}\n${withoutDefiner(definition, stripDefiner)}` }
     },
     trigger(ns, t: TriggerInfo, stripDefiner): ProgramStatement {
@@ -86,8 +87,12 @@ export function createExporter(dialect: Dialect): SqlExporter {
           sqlMode: t.sqlMode,
         }
       }
+      // A trigger switched off with ALTER TABLE … DISABLE TRIGGER comes back switched off.
+      const disabled = t.enabled
+        ? ''
+        : `;\nALTER TABLE ${quoteTable(dialect, ns, t.table)} DISABLE TRIGGER ${id(t.name)}`
       return {
-        sql: `DROP TRIGGER IF EXISTS ${id(t.name)} ON ${quoteTable(dialect, ns, t.table)};\n${t.definition ?? ''}`,
+        sql: `DROP TRIGGER IF EXISTS ${id(t.name)} ON ${quoteTable(dialect, ns, t.table)};\n${t.definition ?? ''}${disabled}`,
       }
     },
     event(_ns, e: EventInfo, stripDefiner): ProgramStatement {

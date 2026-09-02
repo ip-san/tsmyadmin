@@ -7,6 +7,7 @@ import type {
   EventInfo,
   KeyValue,
   Namespace,
+  ObjectDependency,
   ProcessInfo,
   RoutineInfo,
   RoutineKind,
@@ -31,6 +32,8 @@ import { AdapterError, type DatabaseAdapter, type ExecuteOptions, type RowBatch 
 export interface FakeTable {
   schema: TableSchema
   rows: RowValues[]
+  /** What showCreateTable returns instead of the generic fake statement (views in export tests). */
+  definition?: string
 }
 
 export interface FakeDatabase {
@@ -47,6 +50,10 @@ export interface FakeAdapterOptions {
   failWith?: AdapterError
   users?: UserInfo[]
   processes?: ProcessInfo[]
+  /** What listDependencies reports (null = no catalog, like MariaDB). */
+  dependencies?: ObjectDependency[] | null
+  /** Routine definitions by name (listRoutines lists them; kind is 'function'). */
+  routines?: Record<string, string>
 }
 
 export function fakeColumn(name: string, dataType = 'int', nullable = false): TableSchema['columns'][number] {
@@ -117,6 +124,8 @@ export class FakeAdapter implements DatabaseAdapter {
   private readonly userList: UserInfo[]
   private processList: ProcessInfo[]
   private readonly onSql: FakeAdapterOptions['onSql']
+  private readonly dependencies: ObjectDependency[] | null
+  private readonly routines: Record<string, string>
   private readonly failWith: AdapterError | undefined
 
   constructor(options: FakeAdapterOptions = {}) {
@@ -128,6 +137,8 @@ export class FakeAdapter implements DatabaseAdapter {
     this.processList = options.processes ?? []
     this.databases = options.databases ?? {}
     this.onSql = options.onSql
+    this.dependencies = options.dependencies ?? null
+    this.routines = options.routines ?? {}
     this.failWith = options.failWith
   }
 
@@ -181,12 +192,20 @@ export class FakeAdapter implements DatabaseAdapter {
 
   async listRoutines(ns: Namespace): Promise<RoutineInfo[]> {
     this.record('listRoutines', ns)
-    return []
+    return Object.keys(this.routines).map((name) => ({
+      name,
+      kind: 'function' as const,
+      language: 'sql',
+      returns: 'int',
+      parameters: '',
+      comment: null,
+      sqlMode: null,
+    }))
   }
 
   async routineDefinition(ns: Namespace, name: string, kind: RoutineKind): Promise<string | null> {
     this.record('routineDefinition', ns, name, kind)
-    return `CREATE ${kind.toUpperCase()} ${name}() BEGIN END`
+    return this.routines[name] ?? `CREATE ${kind.toUpperCase()} ${name}() BEGIN END`
   }
 
   async listTriggers(ns: Namespace, table?: string): Promise<TriggerInfo[]> {
@@ -197,6 +216,11 @@ export class FakeAdapter implements DatabaseAdapter {
   async listEvents(ns: Namespace): Promise<EventInfo[]> {
     this.record('listEvents', ns)
     return []
+  }
+
+  async listDependencies(ns: Namespace): Promise<ObjectDependency[] | null> {
+    this.record('listDependencies', ns)
+    return this.dependencies
   }
 
   async describeTable(ns: Namespace, table: string): Promise<TableSchema> {
@@ -341,6 +365,7 @@ export class FakeAdapter implements DatabaseAdapter {
   async showCreateTable(ns: Namespace, table: string, _schema?: TableSchema): Promise<string[]> {
     this.record('showCreateTable', ns, table)
     const t = this.table(ns, table)
+    if (t.definition) return [t.definition]
     return [`-- fake CREATE TABLE ${t.schema.name} (${t.schema.columns.map((c) => c.name).join(', ')})`]
   }
 
