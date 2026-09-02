@@ -17,6 +17,11 @@ const num = (v: unknown): number | null => {
   return Number.isFinite(n) ? n : null
 }
 
+/** information_schema TABLE_TYPE → kind ('SEQUENCE' is MariaDB's sequence object). */
+function mysqlKind(tableType: string): TableInfo['kind'] {
+  return tableType.includes('VIEW') ? 'view' : tableType === 'SEQUENCE' ? 'sequence' : 'table'
+}
+
 export async function mysqlListTables(conn: Conn, ns: Namespace): Promise<TableInfo[]> {
   const r = firstResult(
     await conn.query(
@@ -26,7 +31,7 @@ export async function mysqlListTables(conn: Conn, ns: Namespace): Promise<TableI
   )
   return r.rows.map((row) => ({
     name: str(row[0]),
-    kind: str(row[1]).includes('VIEW') ? 'view' : 'table',
+    kind: mysqlKind(str(row[1])),
     rowEstimate: num(row[2]),
     engine: strOrNull(row[3]),
     comment: strOrNull(row[4]) || null,
@@ -152,7 +157,7 @@ export async function mysqlDescribeTable(conn: Conn, ns: Namespace, table: strin
 
   return {
     name: table,
-    kind: str(infoRow[0]).includes('VIEW') ? 'view' : 'table',
+    kind: mysqlKind(str(infoRow[0])),
     comment: strOrNull(infoRow[2]) || null,
     engine: strOrNull(infoRow[1]),
     rowEstimate: num(infoRow[3]),

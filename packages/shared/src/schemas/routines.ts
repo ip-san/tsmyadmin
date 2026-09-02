@@ -36,5 +36,7 @@ export const TriggerInfoSchema = z.object({
   definition: z.string().nullable(),
   /** sql_mode the trigger was created under (MySQL). */
   sqlMode: z.string().nullable().default(null),
+  /** `user@host` that owns the trigger (MySQL); kept in dumps unless DEFINER clauses are stripped. */
+  definer: z.string().nullable().default(null),
 })
 export type TriggerInfo = z.infer<typeof TriggerInfoSchema>

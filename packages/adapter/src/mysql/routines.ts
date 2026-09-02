@@ -10,7 +10,8 @@ export async function mysqlListRoutines(conn: Conn, ns: Namespace): Promise<Rout
   const routines = firstResult(
     await conn.query(
       `SELECT ROUTINE_NAME, ROUTINE_TYPE, EXTERNAL_LANGUAGE, DTD_IDENTIFIER, ROUTINE_COMMENT, SPECIFIC_NAME, SQL_MODE
-       FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA = ? ORDER BY ROUTINE_NAME`,
+       FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA = ? AND ROUTINE_TYPE IN ('PROCEDURE', 'FUNCTION')
+       ORDER BY ROUTINE_NAME`,
       [ns.database]
     )
   )
@@ -64,7 +65,7 @@ export async function mysqlRoutineDefinition(
   }
 }
 
-const TRIGGER_SELECT = `SELECT TRIGGER_NAME, EVENT_OBJECT_TABLE, ACTION_TIMING, EVENT_MANIPULATION, ACTION_ORIENTATION, ACTION_STATEMENT, SQL_MODE
+const TRIGGER_SELECT = `SELECT TRIGGER_NAME, EVENT_OBJECT_TABLE, ACTION_TIMING, EVENT_MANIPULATION, ACTION_ORIENTATION, ACTION_STATEMENT, SQL_MODE, DEFINER
   FROM information_schema.TRIGGERS`
 // Creation order reproduces the execution order (FOLLOWS / PRECEDES) when a dump is restored.
 const TRIGGER_ORDER = ' ORDER BY EVENT_OBJECT_TABLE, ACTION_TIMING, EVENT_MANIPULATION, ACTION_ORDER, TRIGGER_NAME'
@@ -86,6 +87,7 @@ export async function mysqlListTriggers(conn: Conn, ns: Namespace, table?: strin
     orientation: str(row[4]),
     definition: strOrNull(row[5]),
     sqlMode: strOrNull(row[6]) ?? '',
+    definer: strOrNull(row[7]),
   }))
 }
 

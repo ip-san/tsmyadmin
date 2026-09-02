@@ -452,12 +452,29 @@ export class MysqlAdapter extends BaseAdapter {
     return this.withConn(this.serverNs(), (conn) => mysqlShowGrants(conn, user))
   }
 
-  showCreateTable(ns: Namespace, table: string): Promise<string[]> {
+  showCreateTable(ns: Namespace, table: string, known?: TableSchema): Promise<string[]> {
     return this.withConn(ns, async (conn) => {
-      const r = firstResult(await conn.query(`SHOW CREATE TABLE ${quoteTable('mysql', ns, table)}`))
+      const kind = known?.kind ?? (await mysqlDescribeTable(conn, ns, table)).kind
+      const t = quoteTable('mysql', ns, table)
+      if (kind === 'sequence') {
+        // MariaDB SEQUENCE: the definition plus the value it would hand out next, so a restore continues.
+        const r = firstResult(await conn.query(`SHOW CREATE SEQUENCE ${t}`))
+        const next = firstResult(await conn.query(`SELECT next_not_cached_value FROM ${t}`))
+        const create = String(r.rows[0]?.[1] ?? '')
+        const value = next.rows[0]?.[0]
+        return value === null || value === undefined
+          ? [create]
+          : [
+              create,
+              `ALTER SEQUENCE ${quoteIdent('mysql', table)} RESTART WITH ${String(value).replace(/[^\d-]/g, '')}`,
+            ]
+      }
+      const r = firstResult(await conn.query(`SHOW CREATE TABLE ${t}`))
       const row = r.rows[0]
       if (!row) throw new AdapterError('NOT_FOUND', `Table not found: ${ns.database}.${table}`)
-      return [String(row[1] ?? '')]
+      // MariaDB prints sequence defaults database-qualified (`nextval(\`db\`.\`seq\`)`); a dump is database-relative.
+      const qualified = `nextval(${quoteIdent('mysql', ns.database)}.`
+      return [String(row[1] ?? '').replaceAll(qualified, 'nextval(')]
     })
   }
 

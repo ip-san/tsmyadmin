@@ -135,7 +135,7 @@ export interface SqlExporter {
    * removes MySQL `DEFINER=` clauses so the dump restores under another account.
    */
   routine(ns: Namespace, kind: RoutineKind, name: string, definition: string, stripDefiner: boolean): ProgramStatement
-  trigger(ns: Namespace, trigger: TriggerInfo): ProgramStatement
+  trigger(ns: Namespace, trigger: TriggerInfo, stripDefiner: boolean): ProgramStatement
   event(ns: Namespace, event: EventInfo): ProgramStatement
   /**
    * Wraps program statements for the dump: a DELIMITER block on MySQL (bodies contain `;`) with each program's

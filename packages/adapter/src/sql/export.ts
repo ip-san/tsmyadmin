@@ -45,7 +45,21 @@ function dumpTable(dialect: Dialect, ns: Namespace, table: string): string {
  * header so the same text inside a body's string literal (`SELECT 'DEFINER=root@localhost'`) is left alone.
  */
 const DEFINER =
-  /^(CREATE\s+(?:ALGORITHM\s*=\s*\w+\s+)?)DEFINER\s*=\s*(?:`(?:[^`]|``)*`|'(?:[^']|'')*')@(?:`(?:[^`]|``)*`|'(?:[^']|'')*')\s+/i
+  /^(CREATE\s+(?:ALGORITHM\s*=\s*\w+\s+)?)DEFINER\s*=\s*(?:`(?:[^`]|``)*`|'(?:[^']|'')*'|"(?:[^"]|"")*")@(?:`(?:[^`]|``)*`|'(?:[^']|'')*'|"(?:[^"]|"")*")\s+/i
+
+/**
+ * Statement delimiter inside program blocks. `;;` (mysqldump's choice) rather than `$$`: a body may contain `$$`
+ * inside an unquoted identifier (`a$$b`), which no string-aware splitter can tell from the delimiter.
+ */
+const DELIM = ';;'
+
+/** `user@host` as information_schema prints it → `\`user\`@\`host\``. */
+function quoteAccount(account: string): string {
+  const at = account.lastIndexOf('@')
+  const user = at === -1 ? account : account.slice(0, at)
+  const host = at === -1 ? '%' : account.slice(at + 1)
+  return `${quoteIdent('mysql', user)}@${quoteIdent('mysql', host)}`
+}
 
 /** Dump statements: every identifier is quoted and every value goes through cellLiteral. Dialect-agnostic. */
 export function createExporter(dialect: Dialect): SqlExporter {
@@ -60,13 +74,15 @@ export function createExporter(dialect: Dialect): SqlExporter {
       // the function); MySQL has no OR REPLACE for routines, so it drops first. The dump is database-relative.
       if (dialect === 'postgres') return { sql: definition }
       const object = kind === 'procedure' ? 'PROCEDURE' : 'FUNCTION'
-      return { sql: `DROP ${object} IF EXISTS ${id(name)}$$\n${withoutDefiner(definition, stripDefiner)}` }
+      return { sql: `DROP ${object} IF EXISTS ${id(name)}${DELIM}\n${withoutDefiner(definition, stripDefiner)}` }
     },
-    trigger(ns, t: TriggerInfo): ProgramStatement {
+    trigger(ns, t: TriggerInfo, stripDefiner): ProgramStatement {
       if (dialect === 'mysql') {
-        // information_schema carries the body only; the header comes from the trigger's metadata.
+        // information_schema carries the body only; the header comes from the trigger's metadata (the definer
+        // `user@host` is re-quoted here).
+        const definer = stripDefiner || !t.definer ? '' : ` DEFINER=${quoteAccount(t.definer)}`
         return {
-          sql: `DROP TRIGGER IF EXISTS ${id(t.name)}$$\nCREATE TRIGGER ${id(t.name)} ${t.timing} ${t.events} ON ${id(t.table)} FOR EACH ${t.orientation}\n${t.definition ?? ''}`,
+          sql: `DROP TRIGGER IF EXISTS ${id(t.name)}${DELIM}\nCREATE${definer} TRIGGER ${id(t.name)} ${t.timing} ${t.events} ON ${id(t.table)} FOR EACH ${t.orientation}\n${t.definition ?? ''}`,
           sqlMode: t.sqlMode,
         }
       }
@@ -82,7 +98,7 @@ export function createExporter(dialect: Dialect): SqlExporter {
       const status = e.status === 'ENABLED' ? 'ENABLE' : 'DISABLE'
       const comment = e.comment ? ` COMMENT ${lit(e.comment)}` : ''
       return {
-        sql: `DROP EVENT IF EXISTS ${id(e.name)}$$\nCREATE EVENT ${id(e.name)} ON SCHEDULE ${schedule}${starts}${ends}${completion} ${status}${comment}\nDO ${e.definition ?? ''}`,
+        sql: `DROP EVENT IF EXISTS ${id(e.name)}${DELIM}\nCREATE EVENT ${id(e.name)} ON SCHEDULE ${schedule}${starts}${ends}${completion} ${status}${comment}\nDO ${e.definition ?? ''}`,
         sqlMode: e.sqlMode,
         timeZone: e.timeZone,
       }
@@ -93,11 +109,11 @@ export function createExporter(dialect: Dialect): SqlExporter {
       // MySQL stores the creating session's sql_mode (and an event's time zone) into the program: set them
       // around each CREATE as mysqldump does, then restore the dump's own settings.
       const parts = statements.map((s) => {
-        const mode = s.sqlMode === undefined || s.sqlMode === null ? '' : `SET sql_mode = ${lit(s.sqlMode)}$$\n`
-        const zone = s.timeZone ? `SET time_zone = ${lit(s.timeZone)}$$\n` : ''
-        return `${mode}${zone}${s.sql}$$\n\n`
+        const mode = s.sqlMode === undefined || s.sqlMode === null ? '' : `SET sql_mode = ${lit(s.sqlMode)}${DELIM}\n`
+        const zone = s.timeZone ? `SET time_zone = ${lit(s.timeZone)}${DELIM}\n` : ''
+        return `${mode}${zone}${s.sql}${DELIM}\n\n`
       })
-      return `SET @tsmyadmin_sql_mode = @@sql_mode;\nSET @tsmyadmin_time_zone = @@time_zone;\nDELIMITER $$\n${parts.join('')}DELIMITER ;\nSET sql_mode = @tsmyadmin_sql_mode;\nSET time_zone = @tsmyadmin_time_zone;\n\n`
+      return `SET @tsmyadmin_sql_mode = @@sql_mode;\nSET @tsmyadmin_time_zone = @@time_zone;\nDELIMITER ${DELIM}\n${parts.join('')}DELIMITER ;\nSET sql_mode = @tsmyadmin_sql_mode;\nSET time_zone = @tsmyadmin_time_zone;\n\n`
     },
     preamble: (ns: Namespace) =>
       dialect === 'postgres'
@@ -115,7 +131,13 @@ export function createExporter(dialect: Dialect): SqlExporter {
     literal: (cell: Cell) => cellLiteral(dialect, cell),
     dropIfExists(ns: Namespace, schema: TableSchema): string {
       const kind =
-        schema.kind === 'materialized_view' ? 'MATERIALIZED VIEW' : isViewKind(schema.kind) ? 'VIEW' : 'TABLE'
+        schema.kind === 'materialized_view'
+          ? 'MATERIALIZED VIEW'
+          : schema.kind === 'sequence'
+            ? 'SEQUENCE'
+            : isViewKind(schema.kind)
+              ? 'VIEW'
+              : 'TABLE'
       // CASCADE (PostgreSQL) so a table referenced by a foreign key can be replaced; MySQL disables FK checks instead.
       return `DROP ${kind} IF EXISTS ${dumpTable(dialect, ns, schema.name)}${dialect === 'postgres' ? ' CASCADE' : ''}`
     },

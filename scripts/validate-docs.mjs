@@ -26,7 +26,8 @@ function walk(dir, out = []) {
 }
 
 const count = (file, re) => (readFileSync(file, 'utf8').match(re) ?? []).length
-const IT = /^\s*(?:it|test)(?:\.each\([^)]*\))?\(/gm
+// `it(`, `it.each(...)(`, `it.skipIf(...)(` / `it.runIf(...)(` — the dialect-gated conformance cases count too.
+const IT = /^\s*(?:it|test)(?:\.(?:each|skipIf|runIf)\([^)]*\))?\(/gm
 
 const all = [...walk(join(ROOT, 'apps')), ...walk(join(ROOT, 'packages')), ...walk(join(ROOT, 'e2e'))]
 const unitTests = all

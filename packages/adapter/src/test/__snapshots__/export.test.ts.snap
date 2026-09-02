@@ -15,17 +15,17 @@ exports[`SqlExporter.insert > renders one multi-row INSERT per batch with quoted
 exports[`program objects > strips only the header DEFINER, wraps MySQL programs in their sql_mode and keeps bodies verbatim 1`] = `
 "SET @tsmyadmin_sql_mode = @@sql_mode;
 SET @tsmyadmin_time_zone = @@time_zone;
-DELIMITER $$
-SET sql_mode = 'STRICT_TRANS_TABLES'$$
-DROP PROCEDURE IF EXISTS \`p\`$$
+DELIMITER ;;
+SET sql_mode = 'STRICT_TRANS_TABLES';;
+DROP PROCEDURE IF EXISTS \`p\`;;
 CREATE PROCEDURE \`p\`()
-BEGIN SELECT 'DEFINER=root@localhost' AS s; END$$
+BEGIN SELECT 'DEFINER=root@localhost' AS s; END;;
 
-SET sql_mode = ''$$
-SET time_zone = '+09:00'$$
-DROP EVENT IF EXISTS \`ev\`$$
+SET sql_mode = '';;
+SET time_zone = '+09:00';;
+DROP EVENT IF EXISTS \`ev\`;;
 CREATE EVENT \`ev\` ON SCHEDULE AT '2030-01-01 00:00:00' ON COMPLETION PRESERVE ENABLE COMMENT 'it''s'
-DO DELETE FROM t$$
+DO DELETE FROM t;;
 
 DELIMITER ;
 SET sql_mode = @tsmyadmin_sql_mode;

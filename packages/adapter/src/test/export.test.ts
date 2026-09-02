@@ -57,9 +57,26 @@ describe('program objects', () => {
       }),
     ])
     expect(block).toMatchSnapshot()
-    expect(block).toContain("SET sql_mode = 'STRICT_TRANS_TABLES'$$")
-    expect(block).toContain("SET time_zone = '+09:00'$$")
-    expect(block).toContain('DROP PROCEDURE IF EXISTS `p`$$')
+    expect(block).toContain("SET sql_mode = 'STRICT_TRANS_TABLES';;")
+    expect(block).toContain("SET time_zone = '+09:00';;")
+    expect(block).toContain('DROP PROCEDURE IF EXISTS `p`;;')
+    // ANSI_QUOTES routines print a double-quoted definer.
+    expect(mysqlExporter.withoutDefiner('CREATE DEFINER="a"@"%" FUNCTION "f"() RETURNS int RETURN 1')).toBe(
+      'CREATE FUNCTION "f"() RETURNS int RETURN 1'
+    )
+    // A trigger keeps its definer unless clauses are stripped.
+    const trigger = {
+      name: 'tr',
+      table: 't',
+      timing: 'BEFORE',
+      events: 'INSERT',
+      orientation: 'ROW',
+      definition: 'SET NEW.n = 1',
+      sqlMode: '',
+      definer: 'app@localhost',
+    }
+    expect(mysqlExporter.trigger(ns, trigger, false).sql).toContain('CREATE DEFINER=`app`@`localhost` TRIGGER `tr`')
+    expect(mysqlExporter.trigger(ns, trigger, true).sql).toContain('CREATE TRIGGER `tr`')
     expect(block).toContain("SELECT 'DEFINER=root@localhost' AS s")
     // PostgreSQL: overloads are already complete statements; nothing is wrapped.
     expect(

@@ -84,6 +84,8 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
     `${scratch}_bigkey`,
     `${scratch}_bitkey`,
     `${scratch}_trg`,
+    `${scratch}_sqt`,
+    `${scratch}_sq`,
     `${scratch}_bulk_a`,
     `${scratch}_bulk_b`,
     `${scratch}_nokey`,
@@ -1046,6 +1048,28 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         expect(seen).toEqual(['1x', '1y', '1z', '2x', '2y', '2z', '3x', '3y', '3z'])
         await execOk(`DROP TABLE ${t}`)
       })
+
+      it.skipIf(dialect !== 'mysql')(
+        'dumps a MariaDB sequence as a sequence and keeps table defaults database-relative',
+        async () => {
+          if (!(await isMariaDb())) return
+          const seq = `${scratch}_sq`
+          const t = `${scratch}_sqt`
+          await execOk(
+            `CREATE SEQUENCE ${seq} START WITH 100; CREATE TABLE ${t} (id INT NOT NULL DEFAULT NEXTVAL(${seq}) PRIMARY KEY)`
+          )
+          await execOk(`INSERT INTO ${t} () VALUES ()`)
+          const listed = await db.listTables(ns)
+          expect(listed.find((x) => x.name === seq)?.kind).toBe('sequence')
+          const create = await db.showCreateTable(ns, seq)
+          expect(create[0]).toMatch(/^CREATE SEQUENCE/)
+          // next_not_cached_value: past the value handed out (the cache size decides by how far).
+          expect(Number(/RESTART WITH (\d+)$/.exec(create[1] ?? '')?.[1])).toBeGreaterThanOrEqual(101)
+          // The table default names the sequence without the database, so the dump restores anywhere.
+          expect((await db.showCreateTable(ns, t)).join('\n')).not.toContain(`nextval(\`${ns.database}\``)
+          await execOk(`DROP TABLE ${t}; DROP SEQUENCE ${seq}`)
+        }
+      )
 
       it.skipIf(dialect !== 'mysql')(
         'lists triggers in execution order so a dump recreates FOLLOWS / PRECEDES',

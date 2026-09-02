@@ -29,10 +29,17 @@ export function splitStatements(input: string, dialect: Dialect): Statement[] {
   // CASE ... END inside such a body must not close it.
   let atomicDepth = 0
   let caseDepth = 0
+  // MySQL: a `SET sql_mode = '…NO_BACKSLASH_ESCAPES…'` statement changes how later string literals are read
+  // (a dump wraps programs created under that mode in exactly such statements).
+  let noBackslash = false
 
   const flush = (end: number) => {
     const sql = input.slice(start, end).trim()
-    if (hasCode && sql.length > 0) out.push({ sql, line: startLine })
+    if (hasCode && sql.length > 0) {
+      out.push({ sql, line: startLine })
+      const mode = /^SET\s+(?:SESSION\s+)?sql_mode\s*=\s*(.*)$/is.exec(sql)
+      if (dialect === 'mysql' && mode) noBackslash = /NO_BACKSLASH_ESCAPES/i.test(mode[1] ?? '')
+    }
     hasCode = false
   }
   const countLines = (from: number, to: number) => {
@@ -103,7 +110,7 @@ export function splitStatements(input: string, dialect: Dialect): Statement[] {
       hasCode = true
       // PostgreSQL E'...' strings use backslash escapes like MySQL literals do.
       const escapeString =
-        (dialect === 'mysql' && ch !== '`') ||
+        (dialect === 'mysql' && ch !== '`' && !noBackslash) ||
         (dialect === 'postgres' && ch === "'" && /[eE]/.test(input[i - 1] ?? '') && !/[\w$]/.test(input[i - 2] ?? ''))
       let j = i + 1
       while (j < n) {

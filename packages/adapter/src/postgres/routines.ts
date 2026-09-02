@@ -77,6 +77,7 @@ export async function pgListTriggers(conn: Conn, ns: Namespace, table?: string):
       orientation: type & 1 ? 'ROW' : 'STATEMENT',
       definition: strOrNull(row[3]),
       sqlMode: null,
+      definer: null,
     }
   })
 }

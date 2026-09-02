@@ -6,6 +6,8 @@
 
 ### 修正
 
+- SQL ダンプ: ルーチン本文の `$` を含む識別子で区切りが壊れないよう `DELIMITER ;;` を使用、ビューの並びをテーブル名の部分一致でなく単語単位で解決、MySQL のトリガーに `DEFINER` を保持（除去オプションに従う）、PostgreSQL のビューの `WITH CHECK OPTION` / `security_barrier` / `security_invoker` / コメントと、ビューを参照する SQL 標準本文（`BEGIN ATOMIC`）の関数はビューの後に出力、存在しなくなったルーチンはコメントで飛ばす
+- MySQL: MariaDB の PACKAGE をルーチン一覧から除外、インポート中の `SET sql_mode` による `NO_BACKSLASH_ESCAPES` の切り替えを分割器が追従
 - SQL ダンプで `DEFAULT CURRENT_TIMESTAMP` など式デフォルトを持つ MySQL 列（`EXTRA = DEFAULT_GENERATED`）が生成列と誤判定され INSERT から欠落していた
 - MySQL: サーバーの `sql_mode` に `NO_BACKSLASH_ESCAPES` が含まれていても、値のプレースホルダが正しく解釈されるようセッションで無効化
 - MySQL: JSON / FLOAT / DECIMAL 列を行キーとする更新・削除・エクスポートが一致しない／同じ行を繰り返す問題（型に合わせて `CAST`）、ENUM/SET キーのキーセットページング
@@ -63,6 +65,7 @@
 
 ### 追加
 
+- MariaDB の SEQUENCE をテーブル一覧に「シーケンス」として表示し、ダンプでは `CREATE SEQUENCE` と現在値からの `RESTART` を出力（テーブル既定値の `nextval()` はデータベース名を含めない）
 - 操作タブに「テーブルオプション」（コメント。MySQL はエンジン・照合順序・次の AUTO_INCREMENT 値）と「メンテナンス」（ANALYZE / OPTIMIZE / CHECK TABLE、PostgreSQL は ANALYZE / VACUUM / VACUUM FULL）
 - データベース構造ページで複数テーブルを選択して一括で空にする・削除する・エクスポート対象にする
 - サーバーの SQL タブで対象データベースを選択できる（MySQL では既定が information_schema だった）

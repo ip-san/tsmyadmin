@@ -1,6 +1,6 @@
 import type { DatabaseAdapter, ProgramStatement } from '@tsmyadmin/adapter'
-import { commentText, isGeneratedColumn } from '@tsmyadmin/adapter'
-import type { ExportQuery, Namespace } from '@tsmyadmin/shared'
+import { AdapterError, commentText, isGeneratedColumn } from '@tsmyadmin/adapter'
+import type { ExportQuery, Namespace, TableSchema } from '@tsmyadmin/shared'
 import { csvField, EXPORT_BATCH_SIZE } from '@tsmyadmin/shared'
 
 export const DUMP_COMPLETE_MARKER = '-- tsmyadmin dump complete'
@@ -54,7 +54,21 @@ const section = (title: string) =>
   `-- ----------------------------------------\n-- ${title}\n-- ----------------------------------------\n\n`
 
 /** Routines of the namespace (one entry per name and kind: PostgreSQL overloads share a definition). */
-async function* routinesBody(adapter: DatabaseAdapter, ns: Namespace, stripDefiner: boolean): AsyncIterable<string> {
+/**
+ * PostgreSQL SQL-standard function bodies (`BEGIN ATOMIC` / bare `RETURN`) are parsed at CREATE time, so a body
+ * that reads a view can only be created after the view; string bodies (`AS $$…$$`) are not validated
+ * (check_function_bodies = false) and go first, where views can call them.
+ */
+function isSqlStandardBody(definition: string): boolean {
+  return !/\sAS\s+\$/.test(definition) && /\b(?:BEGIN\s+ATOMIC|RETURN)\b/i.test(definition)
+}
+
+async function* routinesBody(
+  adapter: DatabaseAdapter,
+  ns: Namespace,
+  stripDefiner: boolean,
+  phase: 'stringBody' | 'sqlBody' = 'stringBody'
+): AsyncIterable<string> {
   const x = adapter.exporter
   const seen = new Set<string>()
   const defs: ProgramStatement[] = []
@@ -62,14 +76,31 @@ async function* routinesBody(adapter: DatabaseAdapter, ns: Namespace, stripDefin
   for (const r of await adapter.listRoutines(ns)) {
     if (seen.has(`${r.kind}:${r.name}`)) continue
     seen.add(`${r.kind}:${r.name}`)
-    const def = await adapter.routineDefinition(ns, r.name, r.kind)
+    let def: string | null
+    try {
+      def = await adapter.routineDefinition(ns, r.name, r.kind)
+    } catch (err) {
+      // Dropped between the listing and the SHOW CREATE: named in the dump rather than aborting the download.
+      if (err instanceof AdapterError && err.code === 'NOT_FOUND') def = null
+      else throw err
+    }
     if (def === null) skipped.push(`${r.kind} ${r.name}`)
-    else defs.push({ ...x.routine(ns, r.kind, r.name, def, stripDefiner), sqlMode: r.sqlMode })
+    else if (
+      phase === 'sqlBody'
+        ? adapter.dialect === 'postgres' && isSqlStandardBody(def)
+        : !(adapter.dialect === 'postgres' && isSqlStandardBody(def))
+    ) {
+      defs.push({ ...x.routine(ns, r.kind, r.name, def, stripDefiner), sqlMode: r.sqlMode })
+    }
   }
-  if (defs.length > 0 || skipped.length > 0) yield section('Routines')
+  if (defs.length > 0 || (phase === 'stringBody' && skipped.length > 0))
+    yield section(phase === 'sqlBody' ? 'Routines (SQL-standard bodies)' : 'Routines')
   // A routine the account may not read is named rather than silently missing from the backup.
-  for (const name of skipped) yield `-- skipped (no privilege to read the definition): ${commentText(name)}\n`
-  if (skipped.length > 0) yield '\n'
+  if (phase === 'stringBody') {
+    for (const name of skipped)
+      yield `-- skipped (definition not readable, or dropped meanwhile): ${commentText(name)}\n`
+    if (skipped.length > 0) yield '\n'
+  }
   if (defs.length > 0) yield x.programBlock(defs)
 }
 
@@ -77,12 +108,13 @@ async function* routinesBody(adapter: DatabaseAdapter, ns: Namespace, stripDefin
 async function* triggersAndEventsBody(
   adapter: DatabaseAdapter,
   ns: Namespace,
-  tables: string[] | null
+  tables: string[] | null,
+  stripDefiner: boolean
 ): AsyncIterable<string> {
   const x = adapter.exporter
   const triggers = (await adapter.listTriggers(ns))
     .filter((t) => t.definition !== null && (tables === null || tables.includes(t.table)))
-    .map((t) => x.trigger(ns, t))
+    .map((t) => x.trigger(ns, t, stripDefiner))
   if (triggers.length > 0) {
     yield section('Triggers')
     yield x.programBlock(triggers)
@@ -104,7 +136,7 @@ async function* triggersAndEventsBody(
  */
 function orderViews(views: { name: string; statements: string[] }[]): { name: string; statements: string[] }[] {
   const mentions = (v: { statements: string[] }, other: string) =>
-    v.statements.some((s) => new RegExp(`[\`"\\s.(]${other.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[\`"\\s,)]`).test(s))
+    v.statements.some((s) => new RegExp(`(?<![\\w$])${other.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w$])`).test(s))
   const out: { name: string; statements: string[] }[] = []
   const done = new Set<string>()
   const visit = (v: { name: string; statements: string[] }, stack: Set<string>) => {
@@ -138,9 +170,19 @@ async function* sqlBody(
   const deferred: string[] = []
   // Views are emitted after the routines they may call (and after every table), in dependency order.
   const views: { name: string; statements: string[] }[] = []
+  // A MariaDB sequence is created before the tables whose defaults call nextval() on it.
+  const schemas = new Map<string, TableSchema>()
+  for (const table of tables) schemas.set(table, await adapter.describeTable(ns, table))
+  for (const [table, schema] of schemas) {
+    if (schema.kind !== 'sequence' || q.structure !== '1') continue
+    yield section(`Sequence: ${commentText(table)}`)
+    if (q.dropTable === '1') yield `${adapter.exporter.dropIfExists(ns, schema)};\n`
+    for (const stmt of await adapter.showCreateTable(ns, table, schema)) yield `${stmt};\n\n`
+  }
   for (const table of tables) {
     // One catalog round trip per table, shared by the DDL reconstruction and the row scan.
-    const schema = await adapter.describeTable(ns, table)
+    const schema = schemas.get(table) as TableSchema
+    if (schema.kind === 'sequence') continue
     if (schema.kind !== 'table') {
       if (q.structure === '1') {
         const statements = (await adapter.showCreateTable(ns, table, schema)).map((stmt) =>
@@ -191,7 +233,9 @@ async function* sqlBody(
     yield section(`View: ${commentText(v.name)}`)
     for (const stmt of v.statements) yield `${stmt};\n\n`
   }
-  if (programs) yield* triggersAndEventsBody(adapter, ns, everything ? null : tables)
+  if (programs && everything && adapter.dialect === 'postgres')
+    yield* routinesBody(adapter, ns, q.stripDefiner === '1', 'sqlBody')
+  if (programs) yield* triggersAndEventsBody(adapter, ns, everything ? null : tables, q.stripDefiner === '1')
   const postamble = adapter.exporter.postamble()
   if (postamble.length > 0) yield `${postamble.join('\n')}\n\n`
   // Terminal marker: a dump that lacks this line was cut short (the transfer is also aborted on errors).

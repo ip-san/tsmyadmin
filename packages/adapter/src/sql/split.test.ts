@@ -96,6 +96,16 @@ describe('splitStatements', () => {
     ])
   })
 
+  it('reads MySQL strings without backslash escapes after SET sql_mode NO_BACKSLASH_ESCAPES', () => {
+    const script = `SET sql_mode = 'NO_BACKSLASH_ESCAPES';\nSELECT 'C:\\';\nSET sql_mode = @saved;\nSELECT 'a\\'b';`
+    expect(splitStatements(script, 'mysql').map((s) => s.sql)).toEqual([
+      "SET sql_mode = 'NO_BACKSLASH_ESCAPES'",
+      "SELECT 'C:\\'",
+      'SET sql_mode = @saved',
+      "SELECT 'a\\'b'",
+    ])
+  })
+
   it('recognises DELIMITER after leading comments and blank lines, but not inside code', () => {
     expect(
       splitStatements('-- header\n/* c */\nDELIMITER $$\nSELECT 1$$\nDELIMITER ;\nSELECT 2;', 'mysql').map((s) => s.sql)

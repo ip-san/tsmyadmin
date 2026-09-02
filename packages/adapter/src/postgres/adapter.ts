@@ -25,6 +25,7 @@ import {
   type QueryOptions,
   type RawResult,
 } from '../base.ts'
+import { pgLiteral } from '../sql/literal.ts'
 import { quoteIdent, quoteTable } from '../sql/quote.ts'
 import { AdapterError, type AdapterErrorCode, type ConnectionConfig, type RowBatch } from '../types.ts'
 import { pgCreateStatements, pgDdl } from './ddl.ts'
@@ -409,11 +410,35 @@ export class PostgresAdapter extends BaseAdapter {
     return this.withConn(ns, async (conn) => {
       const schema = known ?? (await pgDescribeTable(conn, ns, table))
       if (isViewKind(schema.kind)) {
+        const t = quoteTable('postgres', ns, table)
         const r = firstResult(
-          await conn.query('SELECT pg_get_viewdef($1::regclass, true)', [quoteTable('postgres', ns, table)])
+          await conn.query(
+            "SELECT pg_get_viewdef(c.oid, true), c.reloptions, obj_description(c.oid, 'pg_class') FROM pg_class c WHERE c.oid = $1::regclass",
+            [t]
+          )
         )
+        const row = r.rows[0]
         const keyword = schema.kind === 'materialized_view' ? 'CREATE MATERIALIZED VIEW' : 'CREATE VIEW'
-        return [`${keyword} ${quoteTable('postgres', ns, table)} AS\n${String(r.rows[0]?.[0] ?? '')}`]
+        // reloptions carry check_option / security_barrier / security_invoker (text[] arrives as its literal).
+        const options = String(row?.[1] ?? '')
+          .replace(/^\{|\}$/g, '')
+          .split(',')
+          .map((o) => o.trim())
+          .filter((o) => o.length > 0)
+        const checkOption = options.find((o) => o.startsWith('check_option='))?.slice('check_option='.length)
+        const withOptions = options.filter((o) => /^(security_barrier|security_invoker)=/.test(o))
+        const withClause = withOptions.length > 0 ? ` WITH (${withOptions.join(', ')})` : ''
+        const check = checkOption ? `\nWITH ${checkOption.toUpperCase()} CHECK OPTION` : ''
+        // pg_get_viewdef ends with `;`, which must not sit between the body and the CHECK OPTION clause.
+        const body = String(row?.[0] ?? '').replace(/;\s*$/, '')
+        const out = [`${keyword} ${t}${withClause} AS\n${body}${check}`]
+        const comment = row?.[2]
+        if (typeof comment === 'string' && comment.length > 0) {
+          out.push(
+            `COMMENT ON ${schema.kind === 'materialized_view' ? 'MATERIALIZED VIEW' : 'VIEW'} ${t} IS ${pgLiteral(comment)}`
+          )
+        }
+        return out
       }
       return pgCreateStatements(ns, schema)
     })

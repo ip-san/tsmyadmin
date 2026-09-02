@@ -153,8 +153,14 @@ describe.each(targets)('API integration ($dialect)', ({ dialect, url }) => {
             'CREATE TRIGGER prog_before_insert BEFORE INSERT ON prog_t FOR EACH ROW EXECUTE FUNCTION prog_default_title()',
             // An overload: both definitions must be dumped as separate statements, once.
             "CREATE OR REPLACE FUNCTION prog_label(uid TEXT) RETURNS TEXT LANGUAGE sql STABLE AS $$ SELECT '#' || uid $$",
+            'DROP VIEW IF EXISTS prog_v2',
             'DROP VIEW IF EXISTS prog_v',
-            'CREATE VIEW prog_v AS SELECT prog_label(id) AS label FROM prog_t',
+            'CREATE VIEW prog_v AS SELECT prog_label(id) AS label, id FROM prog_t',
+            // prog_v2 sorts after prog_v by name but its definition ends with the dependency name: ordering is
+            // by mention, not by luck; WITH CHECK OPTION must survive the round trip.
+            'CREATE VIEW prog_v2 AS SELECT id FROM prog_v WITH CHECK OPTION',
+            // A SQL-standard body reads a view: it can only be created after the views.
+            'CREATE FUNCTION prog_count() RETURNS bigint LANGUAGE sql BEGIN ATOMIC SELECT count(*) FROM prog_v2; END',
           ]
     for (const statement of setup) {
       const r = z.array(StatementResultSchema).parse(await (await other(statement)).json())
@@ -171,7 +177,7 @@ describe.each(targets)('API integration ($dialect)', ({ dialect, url }) => {
       if (dialect === 'mysql') {
         expect(dump).toContain('-- Events')
         expect(dump).toContain('prog_event')
-        expect(dump).toContain('DELIMITER $$')
+        expect(dump).toContain('DELIMITER ;;')
         // Header DEFINER clauses are gone; the string inside prog_p's body is not a header and stays.
         expect(dump).not.toMatch(/^CREATE\s+(?:ALGORITHM\S*\s+)?DEFINER\s*=/m)
       }
@@ -183,7 +189,7 @@ describe.each(targets)('API integration ($dialect)', ({ dialect, url }) => {
       await other(
         dialect === 'mysql'
           ? 'DROP VIEW prog_v; DROP TRIGGER prog_before_insert; DROP FUNCTION prog_label; DROP PROCEDURE prog_p; DROP EVENT prog_event'
-          : 'DROP VIEW prog_v; DROP TRIGGER prog_before_insert ON prog_t; DROP FUNCTION prog_label(int); DROP FUNCTION prog_label(text)'
+          : 'DROP FUNCTION prog_count(); DROP VIEW prog_v2; DROP VIEW prog_v; DROP TRIGGER prog_before_insert ON prog_t; DROP FUNCTION prog_label(int); DROP FUNCTION prog_label(text)'
       )
       const restored = z.array(StatementResultSchema).parse(await (await other(dump)).json())
       expect(restored.filter((r) => r.kind === 'error').map((r) => (r.kind === 'error' ? r.message : ''))).toEqual([])
@@ -194,6 +200,14 @@ describe.each(targets)('API integration ($dialect)', ({ dialect, url }) => {
         kind: string
       }[]
       expect(tables.find((t) => t.name === 'prog_v')?.kind).toBe('view')
+      if (dialect === 'postgres') {
+        expect(tables.find((t) => t.name === 'prog_v2')?.kind).toBe('view')
+        expect(routines.map((r) => r.name)).toContain('prog_count')
+        const create = (await (await req('/api/databases/tsmyadmin_other/tables/prog_v2/create')).json()) as {
+          sql: string[]
+        }
+        expect(create.sql.join('\n')).toContain('WITH CASCADED CHECK OPTION')
+      }
       const triggers = (await (await req('/api/databases/tsmyadmin_other/triggers')).json()) as { name: string }[]
       expect(triggers.map((t) => t.name)).toContain('prog_before_insert')
       await other('INSERT INTO prog_t (id) VALUES (1)')
@@ -205,7 +219,7 @@ describe.each(targets)('API integration ($dialect)', ({ dialect, url }) => {
       await other(
         dialect === 'mysql'
           ? 'DROP VIEW IF EXISTS prog_v; DROP EVENT IF EXISTS prog_event; DROP TRIGGER IF EXISTS prog_before_insert; DROP FUNCTION IF EXISTS prog_label; DROP PROCEDURE IF EXISTS prog_p; DROP TABLE IF EXISTS prog_t'
-          : 'DROP VIEW IF EXISTS prog_v; DROP TABLE IF EXISTS prog_t CASCADE; DROP FUNCTION IF EXISTS prog_label(int); DROP FUNCTION IF EXISTS prog_label(text); DROP FUNCTION IF EXISTS prog_default_title'
+          : 'DROP FUNCTION IF EXISTS prog_count(); DROP VIEW IF EXISTS prog_v2; DROP VIEW IF EXISTS prog_v; DROP TABLE IF EXISTS prog_t CASCADE; DROP FUNCTION IF EXISTS prog_label(int); DROP FUNCTION IF EXISTS prog_label(text); DROP FUNCTION IF EXISTS prog_default_title'
       )
     }
   })

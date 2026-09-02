@@ -120,7 +120,7 @@ export const ja = {
     schema: 'スキーマ',
     table: 'テーブル',
     kind: '種類',
-    kinds: { table: 'テーブル', view: 'ビュー', materialized_view: 'マテリアライズドビュー' },
+    kinds: { table: 'テーブル', view: 'ビュー', materialized_view: 'マテリアライズドビュー', sequence: 'シーケンス' },
     rowEstimate: '行数（概算）',
     size: 'サイズ',
     tableCount: 'テーブル数',
