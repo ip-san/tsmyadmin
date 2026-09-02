@@ -43,10 +43,32 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
   // Unsent editor text survives tab switches and a session-expiry round trip (per console, this browser tab).
   const key = `sql.draft.${dialect}.${db}.${schema ?? ''}.${draftId}`
   const [text, setTextState] = useState(() => readPreference(key, z.string(), initialSql, sessionStore()))
+  // Draft writes are debounced: a multi-MB pasted script would otherwise be serialised on every keystroke.
+  const pending = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const latestText = useRef(text)
   const setText = (next: string) => {
     setTextState(next)
-    writePreference(key, next, sessionStore())
+    latestText.current = next
+    if (pending.current !== null) clearTimeout(pending.current)
+    pending.current = setTimeout(() => {
+      pending.current = null
+      writePreference(key, latestText.current, sessionStore())
+    }, 300)
   }
+  useEffect(() => {
+    // Flush a pending draft when the console unmounts or the document is left / reloaded.
+    const flushDraft = () => {
+      if (pending.current === null) return
+      clearTimeout(pending.current)
+      pending.current = null
+      writePreference(key, latestText.current, sessionStore())
+    }
+    window.addEventListener('pagehide', flushDraft)
+    return () => {
+      window.removeEventListener('pagehide', flushDraft)
+      flushDraft()
+    }
+  }, [key])
   const [maxRows, setMaxRows] = useState(SQL_MAX_ROWS_DEFAULT)
   const [stopOnError, setStopOnError] = useState(true)
   const [history, setHistory] = useState<HistoryEntry[]>(() => loadHistory(dialect))
@@ -118,6 +140,7 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
       }
     },
   })
+  const cancelled = cancel.isSuccess && cancel.data.cancelled && !run.isPending
   const execute = () => {
     if (text.trim().length === 0 || run.isPending) return
     cancel.reset()
@@ -180,17 +203,17 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
       </div>
       {run.isError ? <ErrorBox error={run.error} /> : null}
       {/* Screen readers hear the outcome; results themselves stream into the DOM below without announcements. */}
-      {cancel.isSuccess && cancel.data.cancelled && !run.isPending ? (
-        <Notice>
-          <output aria-live="polite">{locale.sql.cancelled}</output>
-        </Notice>
-      ) : null}
-      <output aria-live="polite" className="sr-only">
-        {run.isPending
-          ? locale.sql.running
-          : run.isSuccess && results
-            ? locale.sql.completed(results.length, results.filter((r) => r.kind === 'error').length)
-            : ''}
+      {/* One always-mounted live region: running → completed / cancelled (visible as a notice when cancelled). */}
+      <output aria-live="polite" className={cancelled ? 'block' : 'sr-only'}>
+        {cancelled ? (
+          <Notice>{locale.sql.cancelled}</Notice>
+        ) : run.isPending ? (
+          locale.sql.running
+        ) : run.isSuccess && results ? (
+          locale.sql.completed(results.length, results.filter((r) => r.kind === 'error').length)
+        ) : (
+          ''
+        )}
       </output>
       {results ? <ResultsView results={results} maxRows={maxRows} /> : null}
       <SavedQueriesPanel

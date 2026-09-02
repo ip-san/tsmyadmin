@@ -7,7 +7,16 @@ import { locale } from '@/config/locale.ts'
 export function usePasswordConfirm() {
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
-  return { password, confirm, setPassword, setConfirm, mismatch: password !== confirm }
+  return {
+    password,
+    confirm,
+    setPassword,
+    setConfirm,
+    /** Shown only once the confirmation has content (no alert while the user is still on the first field). */
+    mismatch: confirm !== '' && password !== confirm,
+    /** Both fields filled and equal — an empty password is never submitted silently. */
+    complete: password !== '' && password === confirm,
+  }
 }
 
 export function PasswordFields({

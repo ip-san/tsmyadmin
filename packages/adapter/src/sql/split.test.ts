@@ -53,6 +53,13 @@ describe('splitStatements', () => {
     ])
   })
 
+  it('nests block comments on PostgreSQL only', () => {
+    expect(splitStatements('/* a /* b */ ; */ SELECT 7', 'postgres').map((s) => s.sql)).toEqual([
+      '/* a /* b */ ; */ SELECT 7',
+    ])
+    expect(splitStatements('/* a /* b */ SELECT 8', 'mysql').map((s) => s.sql)).toEqual(['/* a /* b */ SELECT 8'])
+  })
+
   it('treats backslashes as escapes inside PostgreSQL E-strings only', () => {
     expect(splitStatements("SELECT E'a\\';' AS x; SELECT 2", 'postgres').map((s) => s.sql)).toEqual([
       "SELECT E'a\\';' AS x",

@@ -17,6 +17,7 @@ export function EventsPage({ db, schema, dialect }: { db: string; schema?: strin
   if (events.isError) return <ErrorBox error={events.error} onRetry={() => void events.refetch()} />
   return (
     <section className="space-y-2">
+      <DdlPreviewDialog flow={flow} />
       <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{locale.events.title}</h2>
       <p className="text-xs text-zinc-500 dark:text-zinc-400">{locale.events.schedulerHint}</p>
       {events.data.length === 0 ? (
@@ -76,7 +77,6 @@ export function EventsPage({ db, schema, dialect }: { db: string; schema?: strin
           </tbody>
         </Table>
       )}
-      <DdlPreviewDialog flow={flow} />
     </section>
   )
 }

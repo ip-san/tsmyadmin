@@ -202,39 +202,61 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
         const queryId = body.queryId ?? crypto.randomUUID()
         const encoder = new TextEncoder()
         let closed = false
+        // Backpressure: a slow consumer must not make this process buffer every result set. Statement results
+        // wait until the stream has room again (pull() resolves the gate).
+        let gate: (() => void) | null = null
+        let started = false
+        // The script runs from the first pull(), not start(): the stream calls pull() again only after start()
+        // settles, so awaiting the whole run there would deadlock the backpressure gate.
+        const run = async (controller: ReadableStreamDefaultController<Uint8Array>) => {
+          const send = async (event: SqlStreamEvent) => {
+            if (closed) return
+            while (!closed && controller.desiredSize !== null && controller.desiredSize <= 0) {
+              await new Promise<void>((resolve) => {
+                gate = resolve
+              })
+            }
+            if (!closed) controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`))
+          }
+          try {
+            const results = await adapter.executeSql(namespace, body.sql, {
+              maxRows: body.maxRows,
+              timeoutMs: body.timeoutMs,
+              stopOnError: body.stopOnError,
+              queryId,
+              onResult: (result, index) => send({ type: 'result', index, result }),
+            })
+            await send({ type: 'done', statements: results.length })
+          } catch (err) {
+            const { body } = toApiError(err)
+            await send({
+              type: 'fatal',
+              message: body.message,
+              code: body.code,
+              ...(body.nativeCode ? { nativeCode: body.nativeCode } : {}),
+            })
+          } finally {
+            if (!closed) {
+              closed = true
+              controller.close()
+            }
+          }
+        }
         const stream = new ReadableStream<Uint8Array>({
-          async start(controller) {
-            const send = (event: SqlStreamEvent) => {
-              if (closed) return
-              controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`))
+          pull(controller) {
+            if (!started) {
+              started = true
+              void run(controller)
+              return
             }
-            try {
-              const results = await adapter.executeSql(namespace, body.sql, {
-                maxRows: body.maxRows,
-                timeoutMs: body.timeoutMs,
-                stopOnError: body.stopOnError,
-                queryId,
-                onResult: (result, index) => send({ type: 'result', index, result }),
-              })
-              send({ type: 'done', statements: results.length })
-            } catch (err) {
-              const { body } = toApiError(err)
-              send({
-                type: 'fatal',
-                message: body.message,
-                code: body.code,
-                ...(body.nativeCode ? { nativeCode: body.nativeCode } : {}),
-              })
-            } finally {
-              if (!closed) {
-                closed = true
-                controller.close()
-              }
-            }
+            gate?.()
+            gate = null
           },
           async cancel() {
             // Consumer went away (tab closed, request aborted): stop the statement and drop further events.
             closed = true
+            gate?.()
+            gate = null
             await adapter.cancelQuery(queryId)
           },
         })

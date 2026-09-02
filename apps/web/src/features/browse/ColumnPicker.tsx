@@ -67,7 +67,13 @@ export function ColumnPicker({ columns, visible, onChange }: ColumnPickerProps) 
           </div>
           {columns.map((c, i) => (
             <label key={c} className="flex items-center gap-2 px-1 py-0.5 text-sm">
-              <input type="checkbox" checked={shown.has(c)} onChange={() => toggle(c)} autoFocus={i === 0} />
+              <input
+                type="checkbox"
+                checked={shown.has(c)}
+                disabled={shown.has(c) && shown.size === 1}
+                onChange={() => toggle(c)}
+                autoFocus={i === 0}
+              />
               <span className="truncate">{c}</span>
             </label>
           ))}

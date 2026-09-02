@@ -45,8 +45,14 @@ export interface RawResult {
 }
 
 /** A connection checked out of a pool and bound to a namespace. */
+/** Per-query options handed to the driver layer. */
+export interface QueryOptions {
+  /** Bytes kept of each binary value (default MAX_BINARY_BYTES for display; Infinity for exports). */
+  binaryLimit?: number
+}
+
 export interface Conn {
-  query(text: string, params?: unknown[]): Promise<RawResult | RawResult[]>
+  query(text: string, params?: unknown[], options?: QueryOptions): Promise<RawResult | RawResult[]>
   release(): void
   /** Identity of the underlying pooled driver connection (stable across checkouts); used to cache session state. */
   readonly id: object
@@ -65,16 +71,24 @@ interface RunningEntry {
   cancelled: boolean
 }
 
-const READ_START = /^\s*(?:SELECT|WITH|VALUES|TABLE)\b/i
-const NOT_WRAPPABLE = /\b(?:INTO|FOR\s+(?:UPDATE|SHARE|NO\s+KEY\s+UPDATE|KEY\s+SHARE)|LOCK\s+IN\s+SHARE\s+MODE)\b/i
+const READ_START = /^\s*(?:\(|(?:SELECT|WITH|VALUES|TABLE)\b)/i
+const NOT_WRAPPABLE =
+  /\b(?:INTO|FOR\s+(?:UPDATE|SHARE|NO\s+KEY\s+UPDATE|KEY\s+SHARE)|LOCK\s+IN\s+SHARE\s+MODE|INSERT|UPDATE|DELETE|MERGE)\b/i
+/** Leading whitespace and comments (kept in Statement.sql so the user sees what ran, ignored for the wrap test). */
+const LEADING_COMMENTS = /^(?:\s+|--[^\n]*(?:\n|$)|#[^\n]*(?:\n|$)|\/\*[\s\S]*?\*\/)+/
 
-const WRAP_PREFIX = 'SELECT * FROM ('
+const WRAP_PREFIX = 'SELECT * FROM (\n'
 
-/** Subquery form of a plain read with a row cap, or null when the statement must run as written. */
+/**
+ * Subquery form of a plain read with a row cap, or null when the statement must run as written. The body is
+ * placed on its own line so a trailing `--` comment cannot swallow the closing parenthesis; data-modifying
+ * statements (also inside a WITH) are never wrapped.
+ */
 export function wrapReadOnly(sql: string, limit: number): string | null {
   const body = sql.trim().replace(/;+\s*$/, '')
-  if (!READ_START.test(body) || NOT_WRAPPABLE.test(body)) return null
-  return `${WRAP_PREFIX}${body}) AS _tsmyadmin LIMIT ${Math.max(1, Math.floor(limit))}`
+  const code = body.replace(LEADING_COMMENTS, '')
+  if (!READ_START.test(code) || NOT_WRAPPABLE.test(code)) return null
+  return `${WRAP_PREFIX}${body}\n) AS _tsmyadmin LIMIT ${Math.max(1, Math.floor(limit))}`
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000
@@ -86,11 +100,29 @@ function toDbValue(cell: Cell): unknown {
   return cell
 }
 
-/** Truncates binaries for the wire. Returns [cell, truncated]. */
-export function bufferToCell(buf: Uint8Array): [Cell, boolean] {
-  const truncated = buf.byteLength > MAX_BINARY_BYTES
-  const slice = truncated ? buf.subarray(0, MAX_BINARY_BYTES) : buf
-  return [{ $bin: Buffer.from(slice).toString('base64') }, truncated]
+/** Binary cell for the wire, cut at `limit` bytes (display) or kept whole (`Infinity`, exports). */
+function bufferToCell(buf: Uint8Array, limit = MAX_BINARY_BYTES): Cell {
+  const slice = buf.byteLength > limit ? buf.subarray(0, limit) : buf
+  return { $bin: Buffer.from(slice).toString('base64') }
+}
+
+/**
+ * Converts a driver value into a wire Cell (both drivers are configured to return BIGINT/DECIMAL/dates as
+ * strings already; binaries arrive as Buffers, JSON as text or objects).
+ */
+export function driverValueToCell(value: unknown, binaryLimit = MAX_BINARY_BYTES): Cell {
+  if (value === null || value === undefined) return null
+  if (Buffer.isBuffer(value) || value instanceof Uint8Array) return bufferToCell(value, binaryLimit)
+  switch (typeof value) {
+    case 'string':
+    case 'number':
+    case 'boolean':
+      return value
+    case 'bigint':
+      return value.toString()
+    default:
+      return JSON.stringify(value)
+  }
 }
 
 const FILTER_SQL: Record<Filter['op'], string> = {
@@ -245,6 +277,8 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     )
     if (unique) return { keyKind: 'pk', keyColumns: unique.columns }
     const kind = this.fallbackKeyKind()
+    // ctid is unique per physical relation only: a partitioned / inherited parent repeats it across children.
+    if (kind === 'ctid' && schema.partitioned) return { keyKind: 'none', keyColumns: [] }
     return { keyKind: kind, keyColumns: kind === 'ctid' ? ['ctid'] : schema.columns.map((c) => c.name) }
   }
 
@@ -318,12 +352,15 @@ export abstract class BaseAdapter implements DatabaseAdapter {
       if (f.op === 'is_null' || f.op === 'is_not_null') return `${col} ${op}`
       if (f.value === undefined)
         throw new AdapterError('QUERY_FAILED', `Filter "${f.op}" on ${f.column} requires a value`)
+      // PostgreSQL has no implicit cast for LIKE on numbers / dates / json; match against the text form.
+      const likeCol = this.dialect === 'postgres' ? `${col}::text` : col
       if (f.op === 'contains' || f.op === 'starts_with') {
         // The user's text is matched literally: LIKE metacharacters are escaped, wildcards added here.
         const text = escapeLike(String(f.value ?? ''))
         const pattern = f.op === 'contains' ? `%${text}%` : `${text}%`
-        return `${col} LIKE ${params.add(pattern)} ESCAPE '!'`
+        return `${likeCol} LIKE ${params.add(pattern)} ESCAPE '!'`
       }
+      if (f.op === 'like' || f.op === 'not_like') return `${likeCol} ${op} ${params.add(toDbValue(f.value))}`
       return `${col} ${op} ${params.add(toDbValue(f.value))}`
     })
     return ` WHERE ${parts.join(' AND ')}`
@@ -484,8 +521,15 @@ export abstract class BaseAdapter implements DatabaseAdapter {
           }
         }
         const limit = single ? '' : ` LIMIT ${params.add(batchSize)}`
+        // Exports must carry whole binaries; the display cap only applies to browsing.
         const r = firstResult(
-          await conn.query(`SELECT ${selectList.join(', ')} FROM ${tableSql}${where}${orderBy}${limit}`, params.values)
+          await conn.query(
+            `SELECT ${selectList.join(', ')} FROM ${tableSql}${where}${orderBy}${limit}`,
+            params.values,
+            {
+              binaryLimit: Number.POSITIVE_INFINITY,
+            }
+          )
         )
         const rows = byCtid ? r.rows.map((row) => row.slice(0, -1)) : r.rows
         const cols = byCtid ? r.columns.slice(0, -1) : r.columns
@@ -510,7 +554,9 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     const statements = splitStatements(script, this.dialect)
     const results: StatementResult[] = []
     const emit = async (r: StatementResult) => {
-      results.push(r)
+      // When results are streamed to a consumer, keep only a row-less copy here (counts stay correct) so a long
+      // script does not retain every result set until it ends.
+      results.push(opts.onResult && r.kind === 'rows' ? { ...r, result: { ...r.result, rows: [] } } : r)
       await opts.onResult?.(r, results.length - 1)
     }
     let resolveBackend: (id: string) => void = () => undefined

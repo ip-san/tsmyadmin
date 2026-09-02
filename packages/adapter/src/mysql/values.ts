@@ -1,6 +1,5 @@
-import type { Cell, ColumnMeta } from '@tsmyadmin/shared'
+import type { ColumnMeta } from '@tsmyadmin/shared'
 import type { FieldPacket } from 'mysql2/promise'
-import { bufferToCell } from '../base.ts'
 
 const BINARY_CHARSET = 63
 const ENUM_FLAG = 256
@@ -69,23 +68,4 @@ const UNSIGNED_TYPES = new Set(['tinyint', 'smallint', 'int', 'mediumint', 'bigi
 
 export function mysqlColumnMeta(field: FieldPacket): ColumnMeta {
   return { name: field.name, dataType: mysqlTypeName(field) }
-}
-
-/**
- * Converts a driver value into a wire Cell. Driver options already return BIGINT/DECIMAL/dates
- * as strings; binaries arrive as Buffers and JSON as text (jsonStrings) or objects (fallback).
- */
-export function mysqlToCell(value: unknown): Cell {
-  if (value === null || value === undefined) return null
-  if (Buffer.isBuffer(value) || value instanceof Uint8Array) return bufferToCell(value)[0]
-  switch (typeof value) {
-    case 'string':
-    case 'number':
-    case 'boolean':
-      return value
-    case 'bigint':
-      return value.toString()
-    default:
-      return JSON.stringify(value)
-  }
 }

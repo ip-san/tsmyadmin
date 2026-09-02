@@ -24,11 +24,11 @@ export const UserOpSchema = z.discriminatedUnion('op', [
   z.object({
     op: z.literal('createUser'),
     user: UserRefSchema,
-    password: z.string(),
+    password: z.string().min(1),
     attributes: UserAttributesSchema.default({ superuser: false, createdb: false, createrole: false }),
   }),
   z.object({ op: z.literal('dropUser'), user: UserRefSchema }),
-  z.object({ op: z.literal('setPassword'), user: UserRefSchema, password: z.string() }),
+  z.object({ op: z.literal('setPassword'), user: UserRefSchema, password: z.string().min(1) }),
   z.object({
     op: z.literal('grantAll'),
     user: UserRefSchema,

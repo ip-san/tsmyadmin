@@ -19,19 +19,33 @@ function SchemaNodes({ db, filter }: { db: string; filter: string }) {
     <ul className="ml-3 border-l border-zinc-200 pl-2 dark:border-zinc-700">
       {schemas.data.map((s) => (
         <li key={s}>
-          <button
-            type="button"
-            className="flex w-full items-center gap-1 rounded px-1 py-0.5 text-left text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
-            aria-expanded={open[s] ?? false}
-            onClick={() => setOpen((o) => ({ ...o, [s]: !o[s] }))}
-          >
-            {open[s] ? (
-              <ChevronDown className="size-3.5" aria-hidden />
-            ) : (
-              <ChevronRight className="size-3.5" aria-hidden />
-            )}
-            <span className="truncate">{s}</span>
-          </button>
+          <div className="flex items-center">
+            <button
+              type="button"
+              className="inline-flex min-h-6 min-w-6 items-center justify-center rounded text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+              aria-expanded={open[s] ?? false}
+              aria-label={locale.nav.expand(s)}
+              onClick={() => setOpen((o) => ({ ...o, [s]: !o[s] }))}
+            >
+              {open[s] ? (
+                <ChevronDown className="size-3.5" aria-hidden />
+              ) : (
+                <ChevronRight className="size-3.5" aria-hidden />
+              )}
+            </button>
+            {/* The schema itself is a destination: its structure / SQL / export tabs live under ?schema=. */}
+            <Link
+              to="/db/$db"
+              params={{ db }}
+              search={{ schema: s }}
+              className="flex min-w-0 flex-1 items-center truncate rounded px-1 py-0.5 text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              activeProps={{ className: 'text-blue-800 dark:text-blue-200' }}
+              activeOptions={{ exact: true, includeSearch: true }}
+              onClick={() => setOpen((o) => ({ ...o, [s]: true }))}
+            >
+              <span className="truncate">{s}</span>
+            </Link>
+          </div>
           {open[s] ? <TableList db={db} schema={s} filter={filter} /> : null}
         </li>
       ))}

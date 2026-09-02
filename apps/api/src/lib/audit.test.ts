@@ -96,10 +96,16 @@ describe('withAudit', () => {
       "SET PASSWORD FOR 'x'@'%' = 'legacy'",
       "SELECT PASSWORD('fn')",
       "SELECT * FROM t WHERE note = 'password is fine here'",
+      "ALTER USER 'a'@'%' IDENTIFIED BY 'newpw1' REPLACE 'currentpw'",
+      "SET PASSWORD = 'newpw2' REPLACE 'currentpw2'",
+      "CREATE USER 'h'@'%' IDENTIFIED WITH mysql_native_password AS '*HASHVALUE'",
+      "REPLACE INTO t (a) VALUES ('kept')",
     ].join(';\n')
     await adapter.executeSql(ns, script, { maxRows: 1, timeoutMs: 1000, stopOnError: true })
     const logged = String(lines[0]?.sql)
-    for (const secret of ['Sup3r!', 'Qu0te', 'pgpass', 'legacy', "'fn'"]) expect(logged).not.toContain(secret)
+    for (const secret of ['Sup3r!', 'Qu0te', 'pgpass', 'legacy', "'fn'", 'currentpw', 'newpw', '*HASHVALUE'])
+      expect(logged).not.toContain(secret)
+    expect(logged).toContain("REPLACE INTO t (a) VALUES ('kept')")
     expect(logged).toContain("IDENTIFIED BY '****'")
     expect(logged).toContain("PASSWORD '****'")
     expect(logged).toContain("note = 'password is fine here'")

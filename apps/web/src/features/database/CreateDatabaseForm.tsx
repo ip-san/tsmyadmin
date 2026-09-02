@@ -26,22 +26,24 @@ export function CreateDatabaseForm({ database, kind }: CreateNamespaceFormProps)
       )
   }
   return (
-    <form onSubmit={submit} className="flex max-w-md items-end gap-2" aria-label={title}>
-      <div className="flex-1">
-        <Field id={`new-${kind}-name`} label={label}>
-          <Input
-            id={`new-${kind}-name`}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-            autoComplete="off"
-          />
-        </Field>
-      </div>
-      <Button type="submit" variant="primary" disabled={!name.trim()}>
-        {title}
-      </Button>
+    <div className="max-w-md space-y-2">
       <DdlPreviewDialog flow={flow} />
-    </form>
+      <form onSubmit={submit} className="flex items-end gap-2" aria-label={title}>
+        <div className="flex-1">
+          <Field id={`new-${kind}-name`} label={label}>
+            <Input
+              id={`new-${kind}-name`}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              autoComplete="off"
+            />
+          </Field>
+        </div>
+        <Button type="submit" variant="primary" disabled={!name.trim()}>
+          {title}
+        </Button>
+      </form>
+    </div>
   )
 }

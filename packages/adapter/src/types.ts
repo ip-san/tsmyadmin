@@ -107,7 +107,7 @@ export interface SqlExporter {
    * Statements emitted once at the top / bottom of a SQL dump so it restores the way it was written
    * (MySQL: save + neutralise sql_mode so backslash escapes stay valid, disable FK checks during load).
    */
-  preamble(): string[]
+  preamble(ns: Namespace): string[]
   postamble(): string[]
   /** `DROP TABLE|VIEW IF EXISTS` statement (no trailing semicolon) for a dump that restores over existing objects. */
   dropIfExists(ns: Namespace, schema: TableSchema): string

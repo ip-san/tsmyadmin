@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { locale } from '@/config/locale.ts'
 import type { PreviewFlow } from '@/lib/preview-flow.ts'
 import { Button } from '../ui/Button.tsx'
@@ -27,6 +27,11 @@ export function PreviewDialog<Op>({
   successMessage,
 }: PreviewDialogProps<Op>) {
   const op = flow.op
+  // The success notice receives focus so keyboard users are not dropped on <body> when the trigger disappears.
+  const noticeRef = useRef<HTMLOutputElement>(null)
+  useEffect(() => {
+    if (flow.executed) noticeRef.current?.focus()
+  }, [flow.executed])
   const required = op === null ? null : (confirmName?.(op) ?? null)
   const [typed, setTyped] = useState('')
   // Reset the confirmation text whenever a different op is previewed (state-from-props reset pattern).
@@ -40,7 +45,7 @@ export function PreviewDialog<Op>({
   return (
     <>
       {/* Always mounted so the announcement is picked up; visible as a notice once an op has run. */}
-      <output aria-live="polite" className={flow.executed ? 'block' : 'sr-only'}>
+      <output ref={noticeRef} tabIndex={-1} aria-live="polite" className={flow.executed ? 'block' : 'sr-only'}>
         {flow.executed ? <Notice>{successMessage(flow.executed)}</Notice> : null}
       </output>
       <Dialog
@@ -74,6 +79,12 @@ export function PreviewDialog<Op>({
             {flow.sql.map((s) => `${s};`).join('\n')}
           </pre>
         )}
+        {/* Every destructive op says so; the ones that lose whole objects additionally require the name. */}
+        {op !== null && destructive(op) && required === null ? (
+          <p role="alert" className="mt-3 text-sm font-medium text-red-800 dark:text-red-200">
+            {locale.ddl.irreversible}
+          </p>
+        ) : null}
         {required !== null ? (
           <div className="mt-3 space-y-1 rounded border border-red-300 bg-red-50 p-3 dark:border-red-700 dark:bg-red-950">
             <p className="text-sm font-medium text-red-800 dark:text-red-200">{locale.ddl.irreversible}</p>

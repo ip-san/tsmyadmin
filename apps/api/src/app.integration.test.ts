@@ -92,6 +92,37 @@ describe.each(targets)('API integration ($dialect)', ({ dialect, url }) => {
     expect(z.object({ sql: z.array(z.string()) }).parse(preview).sql[0]).toMatch(/DROP TABLE/)
   })
 
+  it('produces a SQL dump that restores over the existing objects (foreign keys after all tables)', async () => {
+    const parent = `dump_parent_${dialect}`
+    const child = `dump_child_${dialect}`
+    const sql = async (text: string) =>
+      req('/api/databases/tsmyadmin_test/sql', { method: 'POST', body: JSON.stringify({ sql: text }) })
+    await sql(`DROP TABLE IF EXISTS ${child}; DROP TABLE IF EXISTS ${parent}`)
+    await sql(
+      `CREATE TABLE ${parent} (id INT PRIMARY KEY);
+       CREATE TABLE ${child} (id INT PRIMARY KEY, parent_id INT NULL, CONSTRAINT ${child}_fk FOREIGN KEY (parent_id) REFERENCES ${parent} (id));
+       INSERT INTO ${parent} (id) VALUES (1); INSERT INTO ${child} (id, parent_id) VALUES (1, 1)`
+    )
+    try {
+      // child sorts before parent: the dump must still restore (DROP ... CASCADE / FK checks off, FKs last).
+      const dump = await (await req(`/api/databases/tsmyadmin_test/export?tables=${child},${parent}&format=sql`)).text()
+      expect(dump).toContain('dump complete')
+      const restored = z.array(StatementResultSchema).parse(await (await sql(dump)).json())
+      const errors = restored.filter((r) => r.kind === 'error')
+      expect(errors).toEqual([])
+      const rows = BrowseResultSchema.parse(
+        await (await req(`/api/databases/tsmyadmin_test/tables/${child}/rows`)).json()
+      )
+      expect(rows.rows).toEqual([[1, 1]])
+      const structure = TableSchemaSchema.parse(
+        await (await req(`/api/databases/tsmyadmin_test/tables/${child}/structure`)).json()
+      )
+      expect(structure.foreignKeys.map((f) => f.refTable)).toEqual([parent])
+    } finally {
+      await sql(`DROP TABLE IF EXISTS ${child}; DROP TABLE IF EXISTS ${parent}`)
+    }
+  })
+
   it('logs out', async () => {
     expect((await req('/api/session', { method: 'DELETE' })).status).toBe(200)
   })

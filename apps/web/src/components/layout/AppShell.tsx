@@ -1,4 +1,4 @@
-import { Link } from '@tanstack/react-router'
+import { Link, useRouterState } from '@tanstack/react-router'
 import type { SessionInfo } from '@tsmyadmin/shared'
 import { CircleHelp, LogOut, Moon, PanelLeftClose, PanelLeftOpen, Sun } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
@@ -26,10 +26,18 @@ export function AppShell({
   onLogout: () => void
 }) {
   const [theme, toggleTheme] = useTheme()
-  const [collapsed, setCollapsed] = useState(() => readPreference(SIDEBAR_PREF, z.boolean(), false))
+  // Narrow viewports start with the tree hidden (it overlays the content there); the preference applies from md up.
+  const narrow = () => typeof matchMedia === 'function' && matchMedia('(max-width: 767px)').matches
+  const [collapsed, setCollapsed] = useState(() => (narrow() ? true : readPreference(SIDEBAR_PREF, z.boolean(), false)))
+  const location = useRouterState({ select: (s) => s.location.href })
+  const [prevLocation, setPrevLocation] = useState(location)
+  if (prevLocation !== location) {
+    setPrevLocation(location)
+    if (narrow() && !collapsed) setCollapsed(true)
+  }
   const toggleSidebar = () =>
     setCollapsed((c) => {
-      writePreference(SIDEBAR_PREF, !c)
+      if (!narrow()) writePreference(SIDEBAR_PREF, !c)
       return !c
     })
   useShortcuts([{ keys: 'mod+b', global: true, handler: toggleSidebar }])
@@ -74,6 +82,7 @@ export function AppShell({
           >
             <CircleHelp className="size-4" aria-hidden />
             {locale.nav.help}
+            <span className="sr-only">{locale.nav.opensNewTab}</span>
           </a>
           <ShortcutHelp />
           <Button
@@ -94,6 +103,14 @@ export function AppShell({
       {/* Sidebar and main pane scroll independently; the aside is the scroll root for the virtualized table lists. */}
       <div className="relative flex min-h-0 flex-1">
         {/* Narrow viewports (reflow at 320px): the tree overlays the content instead of squeezing it. */}
+        {!collapsed ? (
+          <button
+            type="button"
+            className="fixed inset-0 z-10 bg-black/30 md:hidden"
+            aria-label={locale.nav.hideSidebar}
+            onClick={() => setCollapsed(true)}
+          />
+        ) : null}
         <aside
           data-scroll-root
           hidden={collapsed}

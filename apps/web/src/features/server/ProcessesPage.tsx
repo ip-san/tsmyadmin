@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ProcessInfo } from '@tsmyadmin/shared'
 import { useState } from 'react'
+import { CellValue } from '@/components/cells/CellValue.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { Dialog } from '@/components/ui/Dialog.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
@@ -38,11 +39,9 @@ export function ProcessesPage() {
           {locale.server.autoRefresh}
         </label>
       </div>
-      {notice ? (
-        <Notice>
-          <output aria-live="polite">{notice}</output>
-        </Notice>
-      ) : null}
+      <output aria-live="polite" className={notice ? 'block' : 'sr-only'}>
+        {notice ? <Notice>{notice}</Notice> : null}
+      </output>
       {procs.isPending ? (
         <Spinner />
       ) : procs.isError ? (
@@ -70,8 +69,8 @@ export function ProcessesPage() {
                 <Td>{p.database ?? ''}</Td>
                 <Td className="text-xs">{p.state ?? ''}</Td>
                 <Td className="text-right tabular-nums">{p.timeSec ?? ''}</Td>
-                <Td className="max-w-md truncate font-mono text-xs" title={p.query ?? ''}>
-                  {p.query ?? ''}
+                <Td className="max-w-md font-mono text-xs">
+                  <CellValue cell={p.query ?? ''} />
                 </Td>
                 <Td>
                   <Button

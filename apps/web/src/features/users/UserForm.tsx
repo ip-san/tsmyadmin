@@ -22,7 +22,7 @@ export function UserForm({
   const [createrole, setCreaterole] = useState(false)
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    if (!name.trim() || pw.mismatch) return
+    if (!name.trim() || !pw.complete) return
     onSubmit({
       op: 'createUser',
       user: dialect === 'mysql' ? { name: name.trim(), host: host.trim() || '%' } : { name: name.trim() },
@@ -59,7 +59,7 @@ export function UserForm({
       </div>
       <div className="flex justify-end gap-2">
         <Button onClick={onCancel}>{locale.common.cancel}</Button>
-        <Button type="submit" variant="primary" disabled={!name.trim() || pw.mismatch}>
+        <Button type="submit" variant="primary" disabled={!name.trim() || !pw.complete}>
           {locale.ddl.submit}
         </Button>
       </div>

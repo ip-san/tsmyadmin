@@ -1,5 +1,5 @@
 import { useQueries, useQuery } from '@tanstack/react-query'
-import type { Dialect } from '@tsmyadmin/shared'
+import type { Dialect, UserGrants } from '@tsmyadmin/shared'
 import { UserOpPreviewDialog } from '@/components/ddl/UserOpPreviewDialog.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { Badge, ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
@@ -14,13 +14,21 @@ export function PrivilegesPage({ db, schema, dialect }: { db: string; schema?: s
   const flow = useUserOpFlow()
   const logins = (users.data ?? []).filter((u) => u.canLogin)
   // Current grants per account so the page shows who already has access (one request per account, cached).
-  const grants = useQueries({ queries: logins.map((u) => grantsQuery(userRef(u), { database: db, schema })) })
+  // One request per account; the level is derived inside `select` so it is memoised per query, not per render.
+  const grants = useQueries({
+    queries: logins.map((u) => ({
+      ...grantsQuery(userRef(u), { database: db, schema }),
+      select: (g: UserGrants) => privilegeLevel(dialect, db, schema, g.statements),
+    })),
+  })
   if (users.isPending) return <Spinner />
   if (users.isError) return <ErrorBox error={users.error} onRetry={() => void users.refetch()} />
   const target = schema ? { database: db, schema } : { database: db }
   return (
     <div className="space-y-3">
-      <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{locale.users.privilegesTitle(db)}</h2>
+      <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">
+        {locale.users.privilegesTitle(db, schema)}
+      </h2>
       <Notice>{locale.users.privilegesHint}</Notice>
       <Table>
         <thead>
@@ -36,7 +44,7 @@ export function PrivilegesPage({ db, schema, dialect }: { db: string; schema?: s
             const r = userRef(u)
             const key = userLabel(r)
             const g = grants[i]
-            const level = g?.data ? privilegeLevel(dialect, db, schema, g.data.statements) : null
+            const level = g?.data ?? null
             return (
               <Tr key={key}>
                 <Td className="font-medium">{u.name}</Td>
@@ -46,7 +54,7 @@ export function PrivilegesPage({ db, schema, dialect }: { db: string; schema?: s
                     g?.isError ? (
                       <span className="text-xs text-zinc-500 dark:text-zinc-400">{locale.common.unknown}</span>
                     ) : (
-                      <Spinner />
+                      <span className="text-xs text-zinc-500 dark:text-zinc-400">…</span>
                     )
                   ) : (
                     <Badge tone={level === 'all' ? 'info' : level === 'some' ? 'warn' : 'neutral'}>

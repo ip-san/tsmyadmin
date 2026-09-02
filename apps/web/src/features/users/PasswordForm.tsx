@@ -7,7 +7,7 @@ export function PasswordForm({ onSubmit, onCancel }: { onSubmit: (password: stri
   const pw = usePasswordConfirm()
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    if (!pw.mismatch) onSubmit(pw.password)
+    if (pw.complete) onSubmit(pw.password)
   }
   return (
     <form onSubmit={submit} className="space-y-3">
@@ -16,7 +16,7 @@ export function PasswordForm({ onSubmit, onCancel }: { onSubmit: (password: stri
       </div>
       <div className="flex justify-end gap-2">
         <Button onClick={onCancel}>{locale.common.cancel}</Button>
-        <Button type="submit" variant="primary" disabled={pw.mismatch}>
+        <Button type="submit" variant="primary" disabled={!pw.complete}>
           {locale.ddl.submit}
         </Button>
       </div>

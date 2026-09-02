@@ -96,9 +96,12 @@ export function summarise(method: AuditedMethod, args: unknown[]): Record<string
  */
 const literal = (n: number) =>
   `(?:E?'(?:[^'\\\\]|\\\\.|'')*'|"(?:[^"\\\\]|\\\\.|"")*"|\\$([A-Za-z_]*)\\$[\\s\\S]*?\\$\\${n}\\$)`
-/** Password literals in account statements typed directly into the SQL console (IDENTIFIED BY / PASSWORD 'x'). */
+/**
+ * Password literals in account statements typed directly into the SQL console: IDENTIFIED BY / AS (plugin hash),
+ * PASSWORD 'x', and MySQL 8 `REPLACE '<current password>'` (REPLACE INTO / REPLACE( never precede a bare literal).
+ */
 const SQL_SECRET = new RegExp(
-  String.raw`\b(IDENTIFIED(?:\s+WITH\s+\S+)?\s+BY|PASSWORD)(\s*[=(]?\s*)${literal(3)}`,
+  String.raw`\b(IDENTIFIED(?:\s+WITH\s+\S+)?\s+(?:BY|AS)|PASSWORD|REPLACE)(\s*[=(]?\s*)${literal(3)}`,
   'gi'
 )
 /** MySQL `SET PASSWORD [FOR user] = 'x'`. */

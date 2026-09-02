@@ -4,6 +4,7 @@ import type { ExportQuery, Namespace } from '@tsmyadmin/shared'
 import { csvField, EXPORT_BATCH_SIZE } from '@tsmyadmin/shared'
 
 export const DUMP_COMPLETE_MARKER = '-- tsmyadmin dump complete'
+const FK_STATEMENT = /^ALTER TABLE .* ADD CONSTRAINT .* FOREIGN KEY/i
 const ITER_OPTS = { batchSize: EXPORT_BATCH_SIZE }
 
 export interface ExportFile {
@@ -56,17 +57,22 @@ async function* sqlBody(
     `-- Database: ${ns.database}${ns.schema ? ` / schema ${ns.schema}` : ''}`,
     `-- Generated: ${new Date().toISOString()}`,
     '',
-    ...adapter.exporter.preamble(),
+    ...adapter.exporter.preamble(ns),
     '',
     '',
   ].join('\n')
+  const deferred: string[] = []
   for (const table of tables) {
     yield `-- ----------------------------------------\n-- Table: ${table}\n-- ----------------------------------------\n\n`
     // One catalog round trip per table, shared by the DDL reconstruction and the row scan.
     const schema = await adapter.describeTable(ns, table)
     if (q.structure === '1') {
       if (q.dropTable === '1') yield `${adapter.exporter.dropIfExists(ns, schema)};\n`
-      for (const stmt of await adapter.showCreateTable(ns, table, schema)) yield `${stmt};\n\n`
+      for (const stmt of await adapter.showCreateTable(ns, table, schema)) {
+        // PostgreSQL has no FOREIGN_KEY_CHECKS: constraints are emitted after every table exists and is loaded.
+        if (adapter.dialect === 'postgres' && FK_STATEMENT.test(stmt)) deferred.push(stmt)
+        else yield `${stmt};\n\n`
+      }
     }
     if (q.data === '1' && schema.kind === 'table') {
       // Generated columns are computed by the server and rejected in INSERT; identity ALWAYS columns need
@@ -86,6 +92,10 @@ async function* sqlBody(
       }
       for (const stmt of adapter.exporter.afterData(ns, schema)) yield `${stmt}\n\n`
     }
+  }
+  if (deferred.length > 0) {
+    yield `-- ----------------------------------------\n-- Foreign keys\n-- ----------------------------------------\n\n`
+    for (const stmt of deferred) yield `${stmt};\n\n`
   }
   const postamble = adapter.exporter.postamble()
   if (postamble.length > 0) yield `${postamble.join('\n')}\n\n`

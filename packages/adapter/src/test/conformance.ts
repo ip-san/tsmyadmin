@@ -1,4 +1,5 @@
 import type { Cell, ColumnSpec, DdlOp, Dialect, Namespace, RowKey, StatementResult } from '@tsmyadmin/shared'
+import { isBinaryCell } from '@tsmyadmin/shared'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { mysqlAccount } from '../mysql/users.ts'
 import { quoteIdent } from '../sql/quote.ts'
@@ -76,6 +77,9 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
     `${scratch}_seq`,
     `${scratch}_like`,
     `${scratch}_fk`,
+    `${scratch}_ser`,
+    `${scratch}_bin`,
+    `${scratch}_part`,
   ]
   const browseAll = async (table: string) => db.browseRows(ns, table, { offset: 0, limit: 100, sort: [], filters: [] })
 
@@ -334,6 +338,23 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
           filters: [{ column: 'name', op: 'eq', value: "' OR 1=1 --" }],
         })
         expect(injection.rows).toHaveLength(0)
+      })
+
+      it('applies text filters to non-text columns (numbers, dates) too', async () => {
+        const r = await db.browseRows(ns, 'users', {
+          offset: 0,
+          limit: 10,
+          sort: [],
+          filters: [{ column: 'id', op: 'starts_with', value: '1' }],
+        })
+        expect(r.rows.map((x) => x[0])).toEqual([1])
+        const d = await db.browseRows(ns, 'users', {
+          offset: 0,
+          limit: 10,
+          sort: [],
+          filters: [{ column: 'created_at', op: 'contains', value: '2024-01-02' }],
+        })
+        expect(d.rows).toHaveLength(1)
       })
 
       it('matches contains / starts_with literally (LIKE metacharacters escaped)', async () => {
@@ -648,11 +669,13 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
       })
 
       it('caps a plain SELECT at maxRows + 1 rows server-side and marks it truncated', async () => {
-        // 5^8 = 390,625 rows on MySQL (cross join of the 5-row fixture); a series on PostgreSQL.
-        const big =
+        // 5^8 = 390,625 rows on MySQL (cross join of the 5-row fixture); a series on PostgreSQL. A leading
+        // comment (how pasted scripts usually start) must not defeat the cap.
+        const big = `-- leading comment\n${
           dialect === 'mysql'
             ? `SELECT u1.id FROM ${Array.from({ length: 8 }, (_, i) => `users u${i + 1}`).join(', ')}`
             : 'SELECT i FROM generate_series(1, 200000) AS g(i)'
+        }`
         const started = Date.now()
         const results = await exec(big, { maxRows: 5 })
         expect(Date.now() - started).toBeLessThan(2000)
@@ -673,6 +696,17 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         // Joins with duplicate column names still return rows (MySQL cannot wrap those; PostgreSQL can).
         const dupJoin = await exec('SELECT * FROM users u JOIN posts p ON p.user_id = u.id', { maxRows: 2 })
         expect(dupJoin[0]).toMatchObject({ kind: 'rows', result: { truncated: true } })
+      })
+
+      it('runs reads with trailing comments and data-modifying CTEs unchanged', async () => {
+        const tail = await execOk('SELECT id FROM users WHERE id = 1 -- all users')
+        expect(tail[0]?.kind === 'rows' ? tail[0].result.rows : null).toEqual([[1]])
+        const cte = await execOk(
+          dialect === 'mysql'
+            ? 'WITH c AS (SELECT 1 AS one) UPDATE users, c SET name = name WHERE id = -1'
+            : 'WITH d AS (UPDATE users SET name = name WHERE id = -1 RETURNING id) SELECT count(*) FROM d'
+        )
+        expect(cte[0]?.kind).not.toBe('error')
       })
 
       it('stops the remaining statements of a cancelled script even with stopOnError=false', async () => {
@@ -884,6 +918,45 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         let n = 0
         for await (const b of db.iterateRows(ns, t, { batchSize: 2 })) n += b.rows.length
         expect(n).toBe(4)
+        await execOk(`DROP TABLE ${t}`)
+      })
+    })
+
+    describe.skipIf(dialect !== 'postgres')('partitioned tables', () => {
+      it('is read-only without a key and exports every row exactly once', async () => {
+        const t = `${scratch}_part`
+        await execOk(
+          `CREATE TABLE ${t} (id INT NOT NULL, region TEXT NOT NULL) PARTITION BY LIST (region);
+           CREATE TABLE ${t}_a PARTITION OF ${t} FOR VALUES IN ('a');
+           CREATE TABLE ${t}_b PARTITION OF ${t} FOR VALUES IN ('b');
+           INSERT INTO ${t} SELECT i, CASE WHEN i % 2 = 0 THEN 'a' ELSE 'b' END FROM generate_series(1, 10) i`
+        )
+        try {
+          expect((await db.describeTable(ns, t)).partitioned).toBe(true)
+          expect((await browseAll(t)).keyKind).toBe('none')
+          let n = 0
+          for await (const b of db.iterateRows(ns, t, { batchSize: 3 })) n += b.rows.length
+          expect(n).toBe(10)
+          // Partitions are implementation detail: not listed (and therefore not dumped twice).
+          expect((await db.listTables(ns)).map((x) => x.name)).not.toContain(`${t}_a`)
+        } finally {
+          await exec(`DROP TABLE IF EXISTS ${t}`, { stopOnError: false })
+        }
+      })
+    })
+
+    describe('binary values', () => {
+      it('caps binaries when browsing but exports them whole', async () => {
+        const t = `${scratch}_bin`
+        const binType = dialect === 'mysql' ? 'LONGBLOB' : 'BYTEA'
+        const big = dialect === 'mysql' ? "REPEAT('x', 70000)" : "decode(repeat('78', 70000), 'hex')"
+        const bytes = (cell: Cell): number => (isBinaryCell(cell) ? Buffer.from(cell.$bin, 'base64').length : -1)
+        await execOk(`CREATE TABLE ${t} (id INT PRIMARY KEY, b ${binType} NULL)`)
+        await execOk(`INSERT INTO ${t} (id, b) VALUES (1, ${big})`)
+        expect(bytes((await browseAll(t)).rows[0]?.[1] ?? null)).toBe(64 * 1024)
+        let exported: Cell = null
+        for await (const b of db.iterateRows(ns, t, { batchSize: 10 })) exported = b.rows[0]?.[1] ?? null
+        expect(bytes(exported)).toBe(70000)
         await execOk(`DROP TABLE ${t}`)
       })
     })
@@ -1126,6 +1199,34 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
     })
 
     describe('ddl', () => {
+      it.skipIf(dialect !== 'postgres')('modifyColumn keeps a serial / identity generator', async () => {
+        const t = `${scratch}_ser`
+        await execOk(`CREATE TABLE ${t} (sid SERIAL PRIMARY KEY, iid INT GENERATED ALWAYS AS IDENTITY, x INT NULL)`)
+        try {
+          await runDdl({
+            op: 'modifyColumn',
+            table: t,
+            name: 'sid',
+            column: col('sid', 'INT', { nullable: false, autoIncrement: true, comment: 'renumbered' }),
+          })
+          await runDdl({
+            op: 'modifyColumn',
+            table: t,
+            name: 'iid',
+            column: col('iid', 'INT', { nullable: false, autoIncrement: true }),
+          })
+          await execOk(`INSERT INTO ${t} (x) VALUES (1), (2)`)
+          const rows = await browseAll(t)
+          expect(rows.rows.map((r) => [r[0], r[1]])).toEqual([
+            [1, 1],
+            [2, 2],
+          ])
+          expect((await db.describeTable(ns, t)).columns[0]?.comment).toBe('renumbered')
+        } finally {
+          await exec(`DROP TABLE IF EXISTS ${t}`, { stopOnError: false })
+        }
+      })
+
       it('adds and drops a foreign key that describeTable reports', async () => {
         const t = `${scratch}_fk`
         await execOk(`CREATE TABLE ${t} (id INT PRIMARY KEY, user_id INT NULL)`)

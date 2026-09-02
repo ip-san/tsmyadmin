@@ -12,21 +12,23 @@ export function isGeneratedColumn(extra: string): boolean {
 /** Dump statements: every identifier is quoted and every value goes through cellLiteral. Dialect-agnostic. */
 export function createExporter(dialect: Dialect): SqlExporter {
   return {
-    preamble: () =>
-      dialect === 'mysql'
-        ? [
+    preamble: (ns: Namespace) =>
+      dialect === 'postgres'
+        ? // Index / view definitions are printed relative to the schema, so restore into it explicitly.
+          [`SET search_path TO ${quoteIdent(dialect, ns.schema ?? 'public')};`]
+        : [
             // Literals are written with backslash escapes, which NO_BACKSLASH_ESCAPES would break on import.
             "SET @OLD_SQL_MODE = @@SQL_MODE, SQL_MODE = 'NO_AUTO_VALUE_ON_ZERO';",
             'SET @OLD_FOREIGN_KEY_CHECKS = @@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS = 0;',
-          ]
-        : [],
+          ],
     postamble: () =>
       dialect === 'mysql' ? ['SET FOREIGN_KEY_CHECKS = @OLD_FOREIGN_KEY_CHECKS;', 'SET SQL_MODE = @OLD_SQL_MODE;'] : [],
     literal: (cell: Cell) => cellLiteral(dialect, cell),
     dropIfExists(ns: Namespace, schema: TableSchema): string {
       const kind =
         schema.kind === 'materialized_view' ? 'MATERIALIZED VIEW' : isViewKind(schema.kind) ? 'VIEW' : 'TABLE'
-      return `DROP ${kind} IF EXISTS ${quoteTable(dialect, ns, schema.name)}`
+      // CASCADE (PostgreSQL) so a table referenced by a foreign key can be replaced; MySQL disables FK checks instead.
+      return `DROP ${kind} IF EXISTS ${quoteTable(dialect, ns, schema.name)}${dialect === 'postgres' ? ' CASCADE' : ''}`
     },
     insert(ns: Namespace, table: string, columns: string[], rows: Cell[][], options = {}): string {
       if (rows.length === 0) return ''

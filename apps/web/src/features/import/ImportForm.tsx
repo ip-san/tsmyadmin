@@ -144,26 +144,21 @@ export function ImportForm({ db, schema, table }: ImportFormProps) {
         {run.isPending ? locale.import.running : locale.import.submit}
       </Button>
       {run.isError ? <ErrorBox error={run.error} /> : null}
-      {result ? <ImportSummary result={result} /> : null}
+      <output aria-live="polite" className={result ? 'block' : 'sr-only'}>
+        {result ? <ImportSummary result={result} /> : null}
+      </output>
     </form>
   )
 }
 
+/** Result banner; the live region is rendered by the parent so it exists before the message arrives. */
 function ImportSummary({ result }: { result: ImportResult }) {
   if (result.format === 'csv') {
-    return (
-      <Notice>
-        <output aria-live="polite">{locale.import.csvResult(result.inserted, result.table, result.durationMs)}</output>
-      </Notice>
-    )
+    return <Notice>{locale.import.csvResult(result.inserted, result.table, result.durationMs)}</Notice>
   }
   return (
     <div className="space-y-2">
-      <Notice>
-        <output aria-live="polite">
-          {locale.import.sqlResult(result.succeeded, result.failed, result.durationMs)}
-        </output>
-      </Notice>
+      <Notice>{locale.import.sqlResult(result.succeeded, result.failed, result.durationMs)}</Notice>
       {result.errors.length > 0 ? (
         <section className="rounded border border-red-300 bg-red-50 p-3 text-sm dark:border-red-700 dark:bg-red-950">
           <h3 className="mb-1 font-semibold text-red-800 dark:text-red-200">{locale.import.errors}</h3>

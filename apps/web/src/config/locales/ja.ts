@@ -71,6 +71,7 @@ export const ja = {
     logout: '切断',
     breadcrumb: '現在の場所',
     help: 'ヘルプ',
+    opensNewTab: '（新しいタブで開く）',
     expand: (name: string) => `${name} を展開 / 折りたたむ`,
     showSidebar: 'サイドバーを表示',
     hideSidebar: 'サイドバーを隠す',
@@ -171,7 +172,7 @@ export const ja = {
     columns: '列',
     columnsShown: (shown: number, total: number) => `列 ${shown}/${total}`,
     columnsAll: 'すべて表示',
-    columnsNone: 'すべて非表示',
+    columnsNone: '先頭の列だけ表示',
     saved: '保存しました',
     keyHint: {
       pk: '主キーで行を特定します',
@@ -393,7 +394,7 @@ export const ja = {
     drop: '削除',
     grantAll: 'この DB の全権限を付与',
     revokeAll: 'この DB の権限を取り消す',
-    privilegesTitle: (db: string) => `${db} の権限`,
+    privilegesTitle: (db: string, schema?: string) => `${db}${schema ? `.${schema}` : ''} の権限`,
     currentPrivileges: '現在の権限',
     levels: { all: 'すべて', some: '一部', none: 'なし' },
     privilegesHint:

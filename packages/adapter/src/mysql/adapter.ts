@@ -13,7 +13,7 @@ import type {
   UserRef,
 } from '@tsmyadmin/shared'
 import mysql, { type FieldPacket, type Pool, type PoolConnection, type ResultSetHeader } from 'mysql2/promise'
-import { BaseAdapter, type Conn, firstResult, type RawResult } from '../base.ts'
+import { BaseAdapter, type Conn, driverValueToCell, firstResult, type QueryOptions, type RawResult } from '../base.ts'
 import { quoteIdent, quoteTable } from '../sql/quote.ts'
 import { AdapterError, type AdapterErrorCode, type ConnectionConfig } from '../types.ts'
 import { mysqlDdl } from './ddl.ts'
@@ -22,7 +22,7 @@ import { mysqlDescribeTable, mysqlListTables } from './introspect.ts'
 import { mysqlListEvents, mysqlListRoutines, mysqlListTriggers, mysqlRoutineDefinition } from './routines.ts'
 import { mysqlKillProcess, mysqlListProcesses, mysqlListStatus, mysqlListVariables, mysqlServerInfo } from './server.ts'
 import { mysqlListUsers, mysqlShowGrants, mysqlUsers } from './users.ts'
-import { mysqlColumnMeta, mysqlToCell } from './values.ts'
+import { mysqlColumnMeta } from './values.ts'
 
 const AUTH_CODES = new Set(['ER_ACCESS_DENIED_ERROR', 'ER_ACCESS_DENIED_NO_PASSWORD_ERROR'])
 const CONNECTION_CODES = new Set([
@@ -62,7 +62,11 @@ function isHeader(v: unknown): v is ResultSetHeader {
   return typeof v === 'object' && v !== null && 'affectedRows' in v
 }
 
-function normalise(rowsOut: unknown, fields: FieldPacket[] | FieldPacket[][] | undefined): RawResult | RawResult[] {
+function normalise(
+  rowsOut: unknown,
+  fields: FieldPacket[] | FieldPacket[][] | undefined,
+  binaryLimit?: number
+): RawResult | RawResult[] {
   if (isHeader(rowsOut)) return { columns: [], rows: [], affectedRows: rowsOut.affectedRows, hasRows: false }
   const rows = rowsOut as unknown[]
   const multi = Array.isArray(fields) && Array.isArray(fields[0])
@@ -78,7 +82,7 @@ function normalise(rowsOut: unknown, fields: FieldPacket[] | FieldPacket[][] | u
       }
       out.push({
         columns: partFields.map(mysqlColumnMeta),
-        rows: (part as unknown[][]).map((r) => r.map(mysqlToCell)),
+        rows: (part as unknown[][]).map((r) => r.map((v) => driverValueToCell(v, binaryLimit))),
         affectedRows: 0,
         hasRows: true,
       })
@@ -88,7 +92,7 @@ function normalise(rowsOut: unknown, fields: FieldPacket[] | FieldPacket[][] | u
   const single = (fields ?? []) as FieldPacket[]
   return {
     columns: single.map(mysqlColumnMeta),
-    rows: (rows as unknown[][]).map((r) => r.map(mysqlToCell)),
+    rows: (rows as unknown[][]).map((r) => r.map((v) => driverValueToCell(v, binaryLimit))),
     affectedRows: 0,
     hasRows: true,
   }
@@ -133,12 +137,17 @@ export class MysqlAdapter extends BaseAdapter {
   /** Database each pooled connection currently has selected (skips redundant USE). */
   private readonly currentDatabase = new WeakMap<PoolConnection, string>()
 
-  private async run(conn: PoolConnection, text: string, params?: unknown[]): Promise<RawResult | RawResult[]> {
+  private async run(
+    conn: PoolConnection,
+    text: string,
+    params?: unknown[],
+    options?: QueryOptions
+  ): Promise<RawResult | RawResult[]> {
     try {
       const [rows, fields] = (await (params
         ? conn.query({ sql: text, values: params, rowsAsArray: true })
         : conn.query({ sql: text, rowsAsArray: true }))) as QueryOutput
-      return normalise(rows, fields)
+      return normalise(rows, fields, options?.binaryLimit)
     } catch (err) {
       const mapped = this.toAdapterError(err)
       if (mapped.code === 'CONNECTION_FAILED') this.broken.add(conn)
@@ -179,7 +188,7 @@ export class MysqlAdapter extends BaseAdapter {
         this.broken.add(conn)
       }
     }
-    return { query: (text, params) => this.run(conn, text, params), release, id: conn, reset, forget }
+    return { query: (text, params, options) => this.run(conn, text, params, options), release, id: conn, reset, forget }
   }
 
   protected async setStatementTimeout(conn: Conn, ms: number): Promise<void> {

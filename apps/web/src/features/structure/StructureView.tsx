@@ -140,9 +140,13 @@ function IndexesTable({
   )
 }
 
-function SectionTitle({ children }: { children: React.ReactNode }) {
+/** Section heading with optional action buttons as siblings (buttons must not be heading content). */
+function SectionTitle({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
   return (
-    <h2 className="mb-2 flex items-center gap-3 text-sm font-semibold text-zinc-700 dark:text-zinc-200">{children}</h2>
+    <div className="mb-2 flex items-center gap-3">
+      <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{children}</h2>
+      {action}
+    </div>
   )
 }
 
@@ -161,15 +165,19 @@ export function StructureView({ tableRef, dialect }: { tableRef: TableRef; diale
 
   return (
     <div className="space-y-6">
+      <DdlPreviewDialog flow={flow} />
       <section>
-        <SectionTitle>
+        <SectionTitle
+          action={
+            editable ? (
+              <Button size="sm" onClick={() => setColumnDialog({ mode: 'add' })}>
+                {locale.ddl.titles.addColumn}
+              </Button>
+            ) : null
+          }
+        >
           {locale.table.columns}
           {s.comment ? <span className="font-normal text-zinc-500 dark:text-zinc-400">— {s.comment}</span> : null}
-          {editable ? (
-            <Button size="sm" onClick={() => setColumnDialog({ mode: 'add' })}>
-              {locale.ddl.titles.addColumn}
-            </Button>
-          ) : null}
         </SectionTitle>
         <ColumnsTable
           schema={s}
@@ -179,13 +187,16 @@ export function StructureView({ tableRef, dialect }: { tableRef: TableRef; diale
         />
       </section>
       <section>
-        <SectionTitle>
+        <SectionTitle
+          action={
+            editable ? (
+              <Button size="sm" onClick={() => setIndexDialog(true)}>
+                {locale.ddl.titles.addIndex}
+              </Button>
+            ) : null
+          }
+        >
           {locale.table.indexes}
-          {editable ? (
-            <Button size="sm" onClick={() => setIndexDialog(true)}>
-              {locale.ddl.titles.addIndex}
-            </Button>
-          ) : null}
         </SectionTitle>
         <IndexesTable
           schema={s}
@@ -194,13 +205,16 @@ export function StructureView({ tableRef, dialect }: { tableRef: TableRef; diale
         />
       </section>
       <section>
-        <SectionTitle>
+        <SectionTitle
+          action={
+            editable ? (
+              <Button size="sm" onClick={() => setFkDialog(true)}>
+                {locale.ddl.titles.addForeignKey}
+              </Button>
+            ) : null
+          }
+        >
           {locale.table.foreignKeys}
-          {editable ? (
-            <Button size="sm" onClick={() => setFkDialog(true)}>
-              {locale.ddl.titles.addForeignKey}
-            </Button>
-          ) : null}
         </SectionTitle>
         <ForeignKeysTable
           schema={s}
@@ -264,7 +278,6 @@ export function StructureView({ tableRef, dialect }: { tableRef: TableRef; diale
           />
         ) : null}
       </Dialog>
-      <DdlPreviewDialog flow={flow} />
     </div>
   )
 }

@@ -1,4 +1,5 @@
 import type { ColumnSpec, DdlOp, Namespace, TableSchema } from '@tsmyadmin/shared'
+import { addForeignKeySql, createIndexSql } from '../sql/ddl-common.ts'
 import { pgLiteral } from '../sql/literal.ts'
 import { quoteIdent, quoteTable } from '../sql/quote.ts'
 import { AdapterError, type DdlBuilder } from '../types.ts'
@@ -58,24 +59,23 @@ export const pgDdl: DdlBuilder = {
         const col = id(c.name)
         out.push(`ALTER TABLE ${t} ALTER COLUMN ${col} TYPE ${c.dataType}`)
         out.push(`ALTER TABLE ${t} ALTER COLUMN ${col} ${c.nullable ? 'DROP NOT NULL' : 'SET NOT NULL'}`)
-        const def = defaultSql(c)
-        out.push(`ALTER TABLE ${t} ALTER COLUMN ${col} ${def ? `SET DEFAULT ${def}` : 'DROP DEFAULT'}`)
+        // A serial / identity column keeps its generator: touching DEFAULT would drop nextval() or fail on an
+        // identity column. Turning a plain column into an identity one is left to hand-written SQL.
+        if (!c.autoIncrement) {
+          const def = defaultSql(c)
+          out.push(`ALTER TABLE ${t} ALTER COLUMN ${col} ${def ? `SET DEFAULT ${def}` : 'DROP DEFAULT'}`)
+        }
         if (c.comment !== null) out.push(`COMMENT ON COLUMN ${t}.${col} IS ${pgLiteral(c.comment)}`)
         return out
       }
       case 'dropColumn':
         return [`ALTER TABLE ${t} DROP COLUMN ${id(op.name)}`]
       case 'addIndex':
-        return [`CREATE ${op.unique ? 'UNIQUE ' : ''}INDEX ${id(op.name)} ON ${t} (${op.columns.map(id).join(', ')})`]
+        return [createIndexSql('postgres', ns, op)]
       case 'dropIndex':
         return [`DROP INDEX ${schema}.${id(op.name)}`]
-      case 'addForeignKey': {
-        const ref = quoteTable('postgres', ns, op.refTable)
-        const actions = [op.onUpdate ? ` ON UPDATE ${op.onUpdate}` : '', op.onDelete ? ` ON DELETE ${op.onDelete}` : '']
-        return [
-          `ALTER TABLE ${t} ADD CONSTRAINT ${id(op.name)} FOREIGN KEY (${op.columns.map(id).join(', ')}) REFERENCES ${ref} (${op.refColumns.map(id).join(', ')})${actions.join('')}`,
-        ]
-      }
+      case 'addForeignKey':
+        return [addForeignKeySql('postgres', ns, op)]
       case 'dropForeignKey':
         return [`ALTER TABLE ${t} DROP CONSTRAINT ${id(op.name)}`]
       case 'dropTable':

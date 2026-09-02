@@ -701,6 +701,33 @@ describe('sql & ddl', () => {
     expect(adapter.calls.filter((c) => c.method === 'cancelQuery')).toHaveLength(1)
   })
 
+  it('applies backpressure: the next statement result waits until the consumer reads', async () => {
+    const adapter = fixtureAdapter()
+    const h = harness(adapter)
+    stores.push(h.store)
+    await h.login()
+    const emitted: number[] = []
+    adapter.executeSql = async (_ns, _sql, opts) => {
+      const r = { kind: 'affected' as const, sql: 'x', affectedRows: 1, durationMs: 1 }
+      for (let i = 0; i < 3; i++) {
+        await opts.onResult?.(r, i)
+        emitted.push(i)
+      }
+      return [r, r, r]
+    }
+    const res = await h.req('/api/databases/shop/sql/stream', { method: 'POST', body: JSON.stringify({ sql: 'x' }) })
+    const reader = res.body?.getReader()
+    if (!reader) throw new Error('no body')
+    await reader.read()
+    await new Promise((r) => setTimeout(r, 20))
+    // At most the first result (queued) plus one in flight: the rest is gated on our reads.
+    expect(emitted.length).toBeLessThanOrEqual(2)
+    while (!(await reader.read()).done) {
+      // drain
+    }
+    expect(emitted).toEqual([0, 1, 2])
+  })
+
   it('assigns a queryId to streamed scripts so an abort can always cancel them', async () => {
     const h = harness()
     stores.push(h.store)

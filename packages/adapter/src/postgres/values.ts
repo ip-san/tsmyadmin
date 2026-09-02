@@ -1,6 +1,4 @@
-import type { Cell } from '@tsmyadmin/shared'
 import pg from 'pg'
-import { bufferToCell } from '../base.ts'
 
 const BYTEA = 17
 const BOOL = 16
@@ -78,19 +76,4 @@ export const PG_TYPE_NAMES: Record<number, string> = {
   1231: 'numeric[]',
   2951: 'uuid[]',
   3807: 'jsonb[]',
-}
-
-export function pgToCell(value: unknown): Cell {
-  if (value === null || value === undefined) return null
-  if (Buffer.isBuffer(value) || value instanceof Uint8Array) return bufferToCell(value)[0]
-  switch (typeof value) {
-    case 'string':
-    case 'number':
-    case 'boolean':
-      return value
-    case 'bigint':
-      return value.toString()
-    default:
-      return JSON.stringify(value)
-  }
 }

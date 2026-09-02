@@ -15,7 +15,7 @@ import type {
 } from '@tsmyadmin/shared'
 import { isViewKind } from '@tsmyadmin/shared'
 import pg, { type FieldDef, type PoolClient, type QueryResult } from 'pg'
-import { BaseAdapter, type Conn, firstResult, type RawResult } from '../base.ts'
+import { BaseAdapter, type Conn, driverValueToCell, firstResult, type QueryOptions, type RawResult } from '../base.ts'
 import { quoteIdent, quoteTable } from '../sql/quote.ts'
 import { AdapterError, type AdapterErrorCode, type ConnectionConfig } from '../types.ts'
 import { pgCreateStatements, pgDdl } from './ddl.ts'
@@ -24,7 +24,7 @@ import { pgDescribeTable, pgListSchemas, pgListTables } from './introspect.ts'
 import { pgListRoutines, pgListTriggers, pgRoutineDefinition } from './routines.ts'
 import { pgKillProcess, pgListProcesses, pgListStatus, pgListVariables, pgServerInfo } from './server.ts'
 import { pgListUsers, pgShowGrants, pgUsers } from './users.ts'
-import { PG_TYPE_NAMES, pgToCell, pgTypes } from './values.ts'
+import { PG_TYPE_NAMES, pgTypes } from './values.ts'
 
 const AUTH_CODES = new Set(['28P01', '28000'])
 /** Socket-level failures reported without a SQLSTATE (e.g. after pg_terminate_backend). */
@@ -105,11 +105,11 @@ export class PostgresAdapter extends BaseAdapter {
     return fields.map((f) => ({ name: f.name, dataType: this.typeNames.get(f.dataTypeID) ?? `oid:${f.dataTypeID}` }))
   }
 
-  private async toRaw(client: PoolClient, res: ArrayResult): Promise<RawResult> {
+  private async toRaw(client: PoolClient, res: ArrayResult, binaryLimit?: number): Promise<RawResult> {
     const hasRows = res.fields.length > 0
     return {
       columns: hasRows ? await this.columnMetas(client, res.fields) : [],
-      rows: hasRows ? res.rows.map((r) => r.map(pgToCell)) : [],
+      rows: hasRows ? res.rows.map((r) => r.map((v) => driverValueToCell(v, binaryLimit))) : [],
       affectedRows: res.rowCount ?? 0,
       hasRows,
     }
@@ -119,7 +119,12 @@ export class PostgresAdapter extends BaseAdapter {
   private readonly broken = new WeakSet<PoolClient>()
   private readonly guarded = new WeakSet<PoolClient>()
 
-  private async run(client: PoolClient, text: string, params?: unknown[]): Promise<RawResult | RawResult[]> {
+  private async run(
+    client: PoolClient,
+    text: string,
+    params?: unknown[],
+    options?: QueryOptions
+  ): Promise<RawResult | RawResult[]> {
     let res: ArrayResult | ArrayResult[]
     try {
       res = params
@@ -132,10 +137,10 @@ export class PostgresAdapter extends BaseAdapter {
     }
     if (Array.isArray(res)) {
       const out: RawResult[] = []
-      for (const r of res) out.push(await this.toRaw(client, r))
+      for (const r of res) out.push(await this.toRaw(client, r, options?.binaryLimit))
       return out
     }
-    return this.toRaw(client, res)
+    return this.toRaw(client, res, options?.binaryLimit)
   }
 
   protected async acquire(ns: Namespace): Promise<Conn> {
@@ -180,7 +185,13 @@ export class PostgresAdapter extends BaseAdapter {
         this.broken.add(client)
       }
     }
-    return { query: (text, params) => this.run(client, text, params), release, id: client, reset, forget }
+    return {
+      query: (text, params, options) => this.run(client, text, params, options),
+      release,
+      id: client,
+      reset,
+      forget,
+    }
   }
 
   protected async setStatementTimeout(conn: Conn, ms: number): Promise<void> {
@@ -194,11 +205,24 @@ export class PostgresAdapter extends BaseAdapter {
 
   /** pg_cancel_backend interrupts the statement but keeps the session (pg_terminate_backend would drop it). */
   protected async cancelBackend(_ns: Namespace, id: string): Promise<void> {
-    // pg_cancel_backend works across databases; use the login database's pool so a saturated per-database pool
-    // (all four clients busy with the very scripts being cancelled) cannot block the cancel itself.
-    await this.withConn({ database: this.defaultDatabase() }, (conn) =>
-      conn.query('SELECT pg_cancel_backend($1::int)', [Number(id)])
-    )
+    // A throwaway connection: the pools may be saturated by the very scripts being cancelled, and
+    // pg_cancel_backend works from any database.
+    const client = new pg.Client({
+      host: this.config.host,
+      port: this.config.port,
+      user: this.config.user,
+      password: this.config.password,
+      database: this.defaultDatabase(),
+      connectionTimeoutMillis: 10_000,
+    })
+    try {
+      await client.connect()
+      await client.query('SELECT pg_cancel_backend($1::int)', [Number(id)])
+    } catch (err) {
+      throw this.toAdapterError(err)
+    } finally {
+      await client.end().catch(() => undefined)
+    }
   }
 
   protected nullSafeEq(): string {

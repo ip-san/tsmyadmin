@@ -140,6 +140,7 @@ export async function mysqlDescribeTable(conn: Conn, ns: Namespace, table: strin
     comment: strOrNull(infoRow[2]) || null,
     engine: strOrNull(infoRow[1]),
     rowEstimate: num(infoRow[3]),
+    partitioned: false,
     columns,
     primaryKey,
     indexes,

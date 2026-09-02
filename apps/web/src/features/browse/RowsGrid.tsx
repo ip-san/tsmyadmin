@@ -1,22 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { BrowseOptions, BrowseResult, Cell, RowKey, RowValues } from '@tsmyadmin/shared'
-import { isBinaryCell } from '@tsmyadmin/shared'
-import { useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
-import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
+import { Table, Th } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
-import { cn } from '@/lib/cn.ts'
 import { mutations, rowsKey, rowsQuery, type TableRef } from '@/lib/queries.ts'
+import { BrowseRow } from './BrowseRow.tsx'
 import { BrowseToolbar } from './BrowseToolbar.tsx'
 import { encodeColumns, visibleColumnNames } from './browse-search.ts'
-import { CellEditor } from './CellEditor.tsx'
 import { DeleteRowsDialog } from './DeleteRowsDialog.tsx'
 import { FilterChips } from './FilterChips.tsx'
-import { FkCell } from './FkCell.tsx'
 import { linkableForeignKeys, linkableReverseKeys } from './fk-links.ts'
 import { Pagination } from './Pagination.tsx'
-import { RowActions } from './RowActions.tsx'
 import { CopyRowDialog, EditRowDialog } from './RowDialogs.tsx'
 import { rowKeys, rowToValues } from './row-key.ts'
 import { SortHeader } from './SortHeader.tsx'
@@ -65,12 +61,27 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
     setNotice(null)
   }
   /** Closes the inline editor and returns focus to its cell (keyboard users would otherwise land on <body>). */
-  const closeInline = (cell: { row: number; col: number } | null = inline) => {
+  const inlineRef = useRef(inline)
+  inlineRef.current = inline
+  const closeInline = useCallback(() => {
+    const cell = inlineRef.current
     // flushSync: from a mutation callback the state update would commit in a later task, after the focus call.
     flushSync(() => setInline(null))
     if (!cell) return
     gridRef.current?.querySelector<HTMLElement>(`[data-cell="${cell.row},${cell.col}"]`)?.focus()
-  }
+  }, [])
+  const toggle = useCallback(
+    (i: number) =>
+      setSelected((s) => {
+        const next = new Set(s)
+        if (next.has(i)) next.delete(i)
+        else next.add(i)
+        return next
+      }),
+    []
+  )
+  const openInline = useCallback((row: number, col: number) => setInline({ row, col }), [])
+  const cancelInline = useCallback(() => closeInline(), [closeInline])
   const data = rows.data
   // Derived per page, not per render: keys/indexes are reused by every checkbox toggle and inline edit.
   const derived = useMemo(() => {
@@ -94,6 +105,10 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
       await invalidate()
     },
   })
+  const saveInline = useCallback(
+    (key: RowKey, column: string, value: Cell) => update.mutate({ key, values: { [column]: value } }),
+    [update.mutate]
+  )
   const dialogDone = async (message: string) => {
     setNotice(message)
     setEditingRow(null)
@@ -121,13 +136,6 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
   const selectableIdx = keys.flatMap((k, i) => (k ? [i] : []))
   const allSelected = selectableIdx.length > 0 && selectableIdx.every((i) => selected.has(i))
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(selectableIdx))
-  const toggle = (i: number) =>
-    setSelected((s) => {
-      const next = new Set(s)
-      if (next.has(i)) next.delete(i)
-      else next.add(i)
-      return next
-    })
   const selectedKeys = [...selected].map((i) => keys[i]).filter((k): k is RowKey => k !== null && k !== undefined)
   const editingKey = editingRow === null ? null : (keys[editingRow] ?? null)
   const editingValues = editingRow === null ? null : rowToValues(data, data.rows[editingRow] ?? [])
@@ -188,75 +196,30 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
           </thead>
           {/* Keyed per page/table so per-cell state (expanded values) never carries over to another row. */}
           <tbody key={optionsKey}>
-            {data.rows.map((row, i) => {
-              const key = keys[i] ?? null
-              return (
-                <Tr key={i} className={cn(selected.has(i) && 'bg-blue-50 dark:bg-blue-950/40')}>
-                  {editable ? (
-                    <RowActions
-                      index={i}
-                      addressable={key !== null}
-                      selected={selected.has(i)}
-                      onToggle={() => toggle(i)}
-                      onEdit={() => setEditingRow(i)}
-                      onCopy={() => setCopyingRow(i)}
-                    />
-                  ) : null}
-                  {columns.map((c) => {
-                    const j = columnIndex.get(c.name) ?? -1
-                    const cell = row[j] ?? null
-                    const isInline = inline?.row === i && inline.col === j
-                    const canInline = key !== null && !isBinaryCell(cell)
-                    return (
-                      <Td
-                        key={c.name}
-                        className={cn(
-                          'max-w-md font-mono text-xs',
-                          canInline && 'focus-visible:outline-2 focus-visible:outline-blue-500'
-                        )}
-                        onDoubleClick={canInline ? () => setInline({ row: i, col: j }) : undefined}
-                        // Keyboard path to the same inline editor: focus the cell, press Enter or F2.
-                        // Links inside the cell (foreign keys) keep their own Enter.
-                        tabIndex={canInline && !isInline ? 0 : undefined}
-                        data-cell={`${i},${j}`}
-                        onKeyDown={
-                          canInline && !isInline
-                            ? (e) => {
-                                if (e.target !== e.currentTarget) return
-                                if (e.key === 'Enter' || e.key === 'F2') {
-                                  e.preventDefault()
-                                  setInline({ row: i, col: j })
-                                }
-                              }
-                            : undefined
-                        }
-                        title={canInline ? locale.browse.editCell : undefined}
-                      >
-                        {isInline && key ? (
-                          <>
-                            <CellEditor
-                              column={c.name}
-                              initial={cell}
-                              pending={update.isPending}
-                              onSave={(value: Cell) => update.mutate({ key, values: { [c.name]: value } })}
-                              onCancel={() => closeInline()}
-                            />
-                            {update.isError ? <ErrorBox error={update.error} className="mt-1" /> : null}
-                          </>
-                        ) : (
-                          <FkCell
-                            cell={cell}
-                            fk={fks.get(c.name)}
-                            reverse={reverse.get(c.name) ?? []}
-                            db={tableRef.db}
-                          />
-                        )}
-                      </Td>
-                    )
-                  })}
-                </Tr>
-              )
-            })}
+            {data.rows.map((row, i) => (
+              <BrowseRow
+                key={i}
+                index={i}
+                row={row}
+                rowKey={keys[i] ?? null}
+                columns={columns}
+                columnIndex={columnIndex}
+                fks={fks}
+                reverse={reverse}
+                db={tableRef.db}
+                editable={editable}
+                selected={selected.has(i)}
+                inlineCol={inline?.row === i ? inline.col : -1}
+                updatePending={update.isPending}
+                updateError={inline?.row === i && update.isError ? update.error : null}
+                onToggle={toggle}
+                onEdit={setEditingRow}
+                onCopy={setCopyingRow}
+                onInline={openInline}
+                onInlineSave={saveInline}
+                onInlineCancel={cancelInline}
+              />
+            ))}
           </tbody>
         </Table>
       )}

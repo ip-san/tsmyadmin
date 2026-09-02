@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
+import { CellValue } from '@/components/cells/CellValue.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
@@ -42,8 +43,8 @@ export function TablesList({ db, schema }: { db: string; schema?: string | undef
               {t.rowEstimate === null ? '–' : t.rowEstimate.toLocaleString('ja-JP')}
             </Td>
             <Td>{t.engine ?? '–'}</Td>
-            <Td className="max-w-xs truncate" title={t.comment ?? ''}>
-              {t.comment ?? ''}
+            <Td className="max-w-xs">
+              <CellValue cell={t.comment ?? ''} />
             </Td>
             <Td>
               <span className="flex gap-2 text-xs">

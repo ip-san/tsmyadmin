@@ -1,4 +1,5 @@
 import type { ColumnSpec, DdlOp, Namespace } from '@tsmyadmin/shared'
+import { addForeignKeySql, createIndexSql } from '../sql/ddl-common.ts'
 import { mysqlLiteral } from '../sql/literal.ts'
 import { quoteIdent, quoteTable } from '../sql/quote.ts'
 import type { DdlBuilder } from '../types.ts'
@@ -51,16 +52,11 @@ export const mysqlDdl: DdlBuilder = {
       case 'dropColumn':
         return [`ALTER TABLE ${t} DROP COLUMN ${id(op.name)}`]
       case 'addIndex':
-        return [`CREATE ${op.unique ? 'UNIQUE ' : ''}INDEX ${id(op.name)} ON ${t} (${op.columns.map(id).join(', ')})`]
+        return [createIndexSql('mysql', ns, op)]
       case 'dropIndex':
         return [`DROP INDEX ${id(op.name)} ON ${t}`]
-      case 'addForeignKey': {
-        const ref = quoteTable('mysql', ns, op.refTable)
-        const actions = [op.onUpdate ? ` ON UPDATE ${op.onUpdate}` : '', op.onDelete ? ` ON DELETE ${op.onDelete}` : '']
-        return [
-          `ALTER TABLE ${t} ADD CONSTRAINT ${id(op.name)} FOREIGN KEY (${op.columns.map(id).join(', ')}) REFERENCES ${ref} (${op.refColumns.map(id).join(', ')})${actions.join('')}`,
-        ]
-      }
+      case 'addForeignKey':
+        return [addForeignKeySql('mysql', ns, op)]
       case 'dropForeignKey':
         return [`ALTER TABLE ${t} DROP FOREIGN KEY ${id(op.name)}`]
       case 'dropTable':

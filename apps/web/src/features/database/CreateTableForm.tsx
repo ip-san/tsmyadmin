@@ -84,7 +84,9 @@ export function CreateTableForm({
             <Th>{locale.ddl.autoIncrement}</Th>
             <Th>{locale.ddl.primaryKey}</Th>
             <Th>{locale.ddl.default}</Th>
-            <Th />
+            <Th>
+              <span className="sr-only">{locale.ddl.actions}</span>
+            </Th>
           </tr>
         </thead>
         <tbody>
@@ -156,7 +158,16 @@ export function CreateTableForm({
               <Td>
                 <Button
                   size="sm"
-                  onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))}
+                  onClick={(e) => {
+                    // The button unmounts with its row: keep focus in the form (previous row's name field).
+                    const form = e.currentTarget.closest('form')
+                    setRows((rs) => rs.filter((_, j) => j !== i))
+                    queueMicrotask(() =>
+                      form
+                        ?.querySelectorAll<HTMLInputElement>(`input[aria-label^="${locale.ddl.columnName}"]`)
+                        [Math.max(0, i - 1)]?.focus()
+                    )
+                  }}
                   disabled={rows.length <= 1}
                   aria-label={`${locale.ddl.removeColumnRow} ${i + 1}`}
                 >

@@ -87,7 +87,7 @@ for (const t of TARGETS) {
       // Shift-click adds a secondary sort column (order badges 1 / 2).
       await page.getByRole('button', { name: /^age/ }).click({ modifiers: ['Shift'] })
       await expect(page).toHaveURL(/sort=name(%3A|:)desc(%2C|,)age(%3A|:)asc/)
-      await expect(page.getByLabel('並べ替え順 2')).toHaveText('2')
+      await expect(page.getByRole('button', { name: /age.*並べ替え順 2/ })).toBeVisible()
 
       await page.getByLabel('表示件数').selectOption('25')
       await expect(page).toHaveURL(/limit=25/)

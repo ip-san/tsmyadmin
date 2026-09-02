@@ -24,13 +24,15 @@ export function RowActions({
 }) {
   return (
     <Td className="whitespace-nowrap">
-      <input
-        type="checkbox"
-        aria-label={locale.rows.selectRow(index + 1)}
-        checked={selected}
-        disabled={!addressable}
-        onChange={onToggle}
-      />
+      <label className="inline-flex min-h-6 min-w-6 items-center justify-center align-middle">
+        <input
+          type="checkbox"
+          aria-label={locale.rows.selectRow(index + 1)}
+          checked={selected}
+          disabled={!addressable}
+          onChange={onToggle}
+        />
+      </label>
       <button
         type="button"
         className={ICON_BUTTON}

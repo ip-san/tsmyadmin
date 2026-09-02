@@ -33,8 +33,9 @@ export function SortHeader({ column, sort, onSort }: SortHeaderProps) {
           <ArrowDown className="size-3" aria-hidden />
         ) : null}
         {entry && sort.length > 1 ? (
-          <span className="text-[10px] tabular-nums" aria-label={locale.browse.sortOrder(index + 1)}>
-            {index + 1}
+          <span className="text-[10px] tabular-nums">
+            <span aria-hidden>{index + 1}</span>
+            <span className="sr-only">{locale.browse.sortOrder(index + 1)}</span>
           </span>
         ) : null}
       </button>

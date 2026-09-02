@@ -55,7 +55,8 @@ export async function importCsv(
     const unknown = columns.filter((c) => !known.has(c))
     if (unknown.length > 0) throw new ImportValidationError(`Unknown column(s) in header: ${unknown.join(', ')}`)
   } else {
-    const width = Math.max(...parsed.map((r) => r.length))
+    // reduce, not spread: a 64 MB CSV can exceed the argument limit of Math.max(...)
+    const width = parsed.reduce((m, r) => Math.max(m, r.length), 0)
     columns = schema.columns.slice(0, width).map((c) => c.name)
     data = parsed
   }
