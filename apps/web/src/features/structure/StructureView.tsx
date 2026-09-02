@@ -161,6 +161,33 @@ function ForeignKeysTable({ schema }: { schema: TableSchema }) {
   )
 }
 
+function ReferencedByTable({ schema }: { schema: TableSchema }) {
+  if (schema.referencedBy.length === 0) return <Notice>{locale.table.noReferencedBy}</Notice>
+  return (
+    <Table aria-label={locale.table.referencedBy}>
+      <thead>
+        <tr>
+          <Th>{locale.table.name}</Th>
+          <Th>{locale.table.fromTable}</Th>
+          <Th>{locale.table.columns}</Th>
+        </tr>
+      </thead>
+      <tbody>
+        {schema.referencedBy.map((r) => (
+          <Tr key={`${r.fromTable}:${r.name}`}>
+            <Td className="font-medium">{r.name}</Td>
+            <Td className="font-mono text-xs">
+              {r.fromNamespace.schema ? `${r.fromNamespace.schema}.` : ''}
+              {r.fromTable} ({r.fromColumns.join(', ')})
+            </Td>
+            <Td className="font-mono text-xs">{r.columns.join(', ')}</Td>
+          </Tr>
+        ))}
+      </tbody>
+    </Table>
+  )
+}
+
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
     <h2 className="mb-2 flex items-center gap-3 text-sm font-semibold text-zinc-700 dark:text-zinc-200">{children}</h2>
@@ -216,6 +243,10 @@ export function StructureView({ tableRef, dialect }: { tableRef: TableRef; diale
       <section>
         <SectionTitle>{locale.table.foreignKeys}</SectionTitle>
         <ForeignKeysTable schema={s} />
+      </section>
+      <section>
+        <SectionTitle>{locale.table.referencedBy}</SectionTitle>
+        <ReferencedByTable schema={s} />
       </section>
 
       <Dialog

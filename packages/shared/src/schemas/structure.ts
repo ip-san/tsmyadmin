@@ -47,6 +47,17 @@ export const ForeignKeyDefSchema = z.object({
 })
 export type ForeignKeyDef = z.infer<typeof ForeignKeyDefSchema>
 
+export const ReferencingKeyDefSchema = z.object({
+  name: z.string(),
+  /** Table holding the foreign key. */
+  fromNamespace: NamespaceSchema,
+  fromTable: z.string(),
+  fromColumns: z.array(z.string()),
+  /** Columns of this table that are referenced. */
+  columns: z.array(z.string()),
+})
+export type ReferencingKeyDef = z.infer<typeof ReferencingKeyDefSchema>
+
 export const TableSchemaSchema = z.object({
   name: z.string(),
   kind: TableKindSchema,
@@ -58,5 +69,7 @@ export const TableSchemaSchema = z.object({
   primaryKey: z.array(z.string()),
   indexes: z.array(IndexDefSchema),
   foreignKeys: z.array(ForeignKeyDefSchema),
+  /** Foreign keys in other tables that point at this table (reverse references). */
+  referencedBy: z.array(ReferencingKeyDefSchema),
 })
 export type TableSchema = z.infer<typeof TableSchemaSchema>

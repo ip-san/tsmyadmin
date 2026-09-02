@@ -70,6 +70,7 @@ export function fakeTable(
           ? [{ name: 'PRIMARY', unique: true, primary: true, columns: primaryKey, type: null }]
           : [],
       foreignKeys: [],
+      referencedBy: [],
     },
     rows,
   }
@@ -212,6 +213,7 @@ export class FakeAdapter implements DatabaseAdapter {
       keyKind: t.schema.primaryKey.length > 0 ? 'pk' : 'none',
       keyColumns: t.schema.primaryKey,
       foreignKeys: t.schema.foreignKeys,
+      referencedBy: t.schema.referencedBy,
     }
   }
 

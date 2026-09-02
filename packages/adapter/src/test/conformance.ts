@@ -150,6 +150,19 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         expect(users.indexes.find((i) => i.primary)?.columns).toEqual(['id'])
       })
 
+      it('lists reverse references (tables pointing at this one)', async () => {
+        const users = await db.describeTable(ns, 'users')
+        expect(users.referencedBy).toHaveLength(1)
+        expect(users.referencedBy[0]).toMatchObject({
+          name: 'fk_posts_user',
+          fromTable: 'posts',
+          fromColumns: ['user_id'],
+          columns: ['id'],
+        })
+        expect((await db.describeTable(ns, 'posts')).referencedBy).toEqual([])
+        expect((await browseAll('users')).referencedBy).toHaveLength(1)
+      })
+
       it('describes foreign keys with referential actions', async () => {
         const posts = await db.describeTable(ns, 'posts')
         expect(posts.foreignKeys).toHaveLength(1)

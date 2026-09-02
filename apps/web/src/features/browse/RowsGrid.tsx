@@ -16,7 +16,7 @@ import { CellEditor } from './CellEditor.tsx'
 import { DeleteRowsDialog } from './DeleteRowsDialog.tsx'
 import { FilterChips } from './FilterChips.tsx'
 import { FkCell } from './FkCell.tsx'
-import { linkableForeignKeys } from './fk-links.ts'
+import { linkableForeignKeys, linkableReverseKeys } from './fk-links.ts'
 import { Pagination } from './Pagination.tsx'
 import { rowKeyFor, rowToValues } from './row-key.ts'
 
@@ -97,6 +97,7 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
   const editable = data.keyKind !== 'none'
   const keys = data.rows.map((row) => rowKeyFor(data, row))
   const fks = linkableForeignKeys(data)
+  const reverse = linkableReverseKeys(data)
   const selectableIdx = keys.flatMap((k, i) => (k ? [i] : []))
   const allSelected = selectableIdx.length > 0 && selectableIdx.every((i) => selected.has(i))
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(selectableIdx))
@@ -240,7 +241,12 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
                             {update.isError ? <ErrorBox error={update.error} className="mt-1" /> : null}
                           </>
                         ) : (
-                          <FkCell cell={cell} fk={fks.get(c.name)} db={tableRef.db} />
+                          <FkCell
+                            cell={cell}
+                            fk={fks.get(c.name)}
+                            reverse={reverse.get(c.name) ?? []}
+                            db={tableRef.db}
+                          />
                         )}
                       </Td>
                     )

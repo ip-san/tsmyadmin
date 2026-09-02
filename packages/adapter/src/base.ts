@@ -234,6 +234,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
           keyKind: key.keyKind,
           keyColumns: key.keyColumns,
           foreignKeys: schema.foreignKeys,
+          referencedBy: schema.referencedBy,
         }
       }
       const count = firstResult(await conn.query(countSql, countParams.values))
@@ -248,6 +249,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
         keyKind: key.keyKind,
         keyColumns: key.keyColumns,
         foreignKeys: schema.foreignKeys,
+        referencedBy: schema.referencedBy,
       }
     })
   }

@@ -12,6 +12,7 @@ const base = (over: Partial<BrowseResult>): BrowseResult => ({
   total: 0,
   approximate: false,
   foreignKeys: [],
+  referencedBy: [],
   keyKind: 'pk',
   keyColumns: ['a'],
   ...over,

@@ -119,6 +119,9 @@ export const ja = {
     onDelete: 'ON DELETE',
     noIndexes: 'インデックスはありません',
     noForeignKeys: '外部キーはありません',
+    referencedBy: '参照元（このテーブルを参照する外部キー）',
+    noReferencedBy: 'このテーブルを参照する外部キーはありません',
+    fromTable: '参照元テーブル',
   },
   browse: {
     total: (n: number | null, approximate = false) =>
@@ -148,6 +151,7 @@ export const ja = {
     setNull: 'NULL にする',
     editHint: 'Enter で保存、Esc でキャンセル',
     fkLink: (table: string, column: string) => `${table}.${column} を参照`,
+    reverseLink: (table: string, column: string) => `${table}.${column} からの参照行を表示`,
     columns: '列',
     columnsShown: (shown: number, total: number) => `列 ${shown}/${total}`,
     columnsAll: 'すべて表示',

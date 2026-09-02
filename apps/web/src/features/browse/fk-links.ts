@@ -1,4 +1,4 @@
-import type { BrowseResult, Cell, ForeignKeyDef } from '@tsmyadmin/shared'
+import type { BrowseResult, Cell, ForeignKeyDef, ReferencingKeyDef } from '@tsmyadmin/shared'
 import { isBinaryCell } from '@tsmyadmin/shared'
 
 export interface FkTarget {
@@ -29,5 +29,29 @@ export function fkTarget(fk: ForeignKeyDef, value: Cell, currentDb: string): FkT
     schema: fk.refNamespace.schema,
     table: fk.refTable,
     filters: JSON.stringify([{ column: refColumn, op: 'eq', value }]),
+  }
+}
+
+/** Single-column reverse references, keyed by the column of this table that is referenced. */
+export function linkableReverseKeys(result: BrowseResult): Map<string, ReferencingKeyDef[]> {
+  const out = new Map<string, ReferencingKeyDef[]>()
+  for (const ref of result.referencedBy) {
+    const col = ref.columns[0]
+    if (ref.columns.length !== 1 || ref.fromColumns.length !== 1 || !col) continue
+    out.set(col, [...(out.get(col) ?? []), ref])
+  }
+  return out
+}
+
+/** Rows in `ref.fromTable` whose foreign-key column equals `value`. */
+export function reverseTarget(ref: ReferencingKeyDef, value: Cell, currentDb: string): FkTarget | null {
+  if (value === null || isBinaryCell(value)) return null
+  const fromColumn = ref.fromColumns[0]
+  if (!fromColumn) return null
+  return {
+    db: ref.fromNamespace.database || currentDb,
+    schema: ref.fromNamespace.schema,
+    table: ref.fromTable,
+    filters: JSON.stringify([{ column: fromColumn, op: 'eq', value }]),
   }
 }

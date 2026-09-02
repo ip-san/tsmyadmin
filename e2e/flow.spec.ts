@@ -117,6 +117,17 @@ for (const t of TARGETS) {
       await expect(page.getByRole('button', { name: '列 4/5' })).toBeVisible()
     })
 
+    test('reverse references: structure lists them and rows link to referencing rows', async ({ page }) => {
+      await page.goto(tableUrl(t, 'users', '/structure'))
+      await expect(page.getByRole('table', { name: '参照元（このテーブルを参照する外部キー）' })).toContainText(
+        'fk_posts_user'
+      )
+      await page.goto(`${tableUrl(t, 'users')}${t.schema ? '&' : '?'}sort=id:asc`)
+      await page.getByRole('link', { name: 'posts.user_id からの参照行を表示' }).first().click()
+      await expect(page).toHaveURL(/\/table\/posts/)
+      await expect(page.getByText('全 2 件')).toBeVisible()
+    })
+
     test('foreign-key cells link to the referenced row', async ({ page }) => {
       await page.goto(tableUrl(t, 'posts'))
       const link = page.getByRole('link', { name: 'users.id を参照' }).first()

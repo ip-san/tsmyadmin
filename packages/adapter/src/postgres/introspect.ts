@@ -1,4 +1,12 @@
-import type { ColumnDef, ForeignKeyDef, IndexDef, Namespace, TableInfo, TableSchema } from '@tsmyadmin/shared'
+import type {
+  ColumnDef,
+  ForeignKeyDef,
+  IndexDef,
+  Namespace,
+  ReferencingKeyDef,
+  TableInfo,
+  TableSchema,
+} from '@tsmyadmin/shared'
 import { type Conn, firstResult } from '../base.ts'
 import { str, strOrNull } from '../sql/format.ts'
 import { quoteTable } from '../sql/quote.ts'
@@ -143,6 +151,29 @@ export async function pgDescribeTable(conn: Conn, ns: Namespace, table: string):
     onDelete: FK_ACTIONS[str(row[4])] ?? null,
   }))
 
+  const refs = firstResult(
+    await conn.query(
+      `SELECT con.conname, nf.nspname, cf.relname,
+              (SELECT string_agg(a.attname, $2 ORDER BY x.ord) FROM unnest(con.conkey) WITH ORDINALITY AS x(attnum, ord)
+                 JOIN pg_attribute a ON a.attrelid = con.conrelid AND a.attnum = x.attnum),
+              (SELECT string_agg(a.attname, $2 ORDER BY x.ord) FROM unnest(con.confkey) WITH ORDINALITY AS x(attnum, ord)
+                 JOIN pg_attribute a ON a.attrelid = con.confrelid AND a.attnum = x.attnum)
+       FROM pg_constraint con
+       JOIN pg_class cf ON cf.oid = con.conrelid
+       JOIN pg_namespace nf ON nf.oid = cf.relnamespace
+       WHERE con.confrelid = $1::regclass AND con.contype = 'f'
+       ORDER BY nf.nspname, cf.relname, con.conname`,
+      [regclass, SEP]
+    )
+  )
+  const referencedBy: ReferencingKeyDef[] = refs.rows.map((row) => ({
+    name: str(row[0]),
+    fromNamespace: { database: ns.database, schema: str(row[1]) },
+    fromTable: str(row[2]),
+    fromColumns: list(row[3]),
+    columns: list(row[4]),
+  }))
+
   const relkind = str(infoRow[0])
   // reltuples is -1 until the table has been analysed/vacuumed.
   const tuples = Number(infoRow[2])
@@ -156,5 +187,6 @@ export async function pgDescribeTable(conn: Conn, ns: Namespace, table: string):
     primaryKey,
     indexes,
     foreignKeys,
+    referencedBy,
   }
 }

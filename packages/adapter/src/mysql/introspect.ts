@@ -1,4 +1,12 @@
-import type { ColumnDef, ForeignKeyDef, IndexDef, Namespace, TableInfo, TableSchema } from '@tsmyadmin/shared'
+import type {
+  ColumnDef,
+  ForeignKeyDef,
+  IndexDef,
+  Namespace,
+  ReferencingKeyDef,
+  TableInfo,
+  TableSchema,
+} from '@tsmyadmin/shared'
 import { type Conn, firstResult } from '../base.ts'
 import { str, strOrNull } from '../sql/format.ts'
 import { AdapterError } from '../types.ts'
@@ -100,6 +108,30 @@ export async function mysqlDescribeTable(conn: Conn, ns: Namespace, table: strin
     fkMap.set(name, entry)
   }
 
+  const refs = firstResult(
+    await conn.query(
+      `SELECT CONSTRAINT_NAME, TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, REFERENCED_COLUMN_NAME
+       FROM information_schema.KEY_COLUMN_USAGE
+       WHERE REFERENCED_TABLE_SCHEMA = ? AND REFERENCED_TABLE_NAME = ?
+       ORDER BY TABLE_SCHEMA, TABLE_NAME, CONSTRAINT_NAME, ORDINAL_POSITION`,
+      [ns.database, table]
+    )
+  )
+  const refMap = new Map<string, ReferencingKeyDef>()
+  for (const row of refs.rows) {
+    const key = `${str(row[1])}.${str(row[2])}.${str(row[0])}`
+    const entry = refMap.get(key) ?? {
+      name: str(row[0]),
+      fromNamespace: { database: str(row[1]) },
+      fromTable: str(row[2]),
+      fromColumns: [],
+      columns: [],
+    }
+    entry.fromColumns.push(str(row[3]))
+    entry.columns.push(str(row[4]))
+    refMap.set(key, entry)
+  }
+
   return {
     name: table,
     kind: str(infoRow[0]).includes('VIEW') ? 'view' : 'table',
@@ -110,5 +142,6 @@ export async function mysqlDescribeTable(conn: Conn, ns: Namespace, table: strin
     primaryKey,
     indexes,
     foreignKeys: [...fkMap.values()],
+    referencedBy: [...refMap.values()],
   }
 }
