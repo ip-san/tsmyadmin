@@ -1,4 +1,4 @@
-import type { DatabaseAdapter } from '@tsmyadmin/adapter'
+import type { DatabaseAdapter, ProgramStatement } from '@tsmyadmin/adapter'
 import { isGeneratedColumn } from '@tsmyadmin/adapter'
 import type { ExportQuery, Namespace } from '@tsmyadmin/shared'
 import { csvField, EXPORT_BATCH_SIZE } from '@tsmyadmin/shared'
@@ -50,40 +50,72 @@ async function* jsonBody(adapter: DatabaseAdapter, ns: Namespace, tables: string
  * tables are included; a whole-database dump carries everything. Statement text comes from the adapter's
  * exporter (the server's own CREATE definitions).
  */
-async function* programBody(
+const section = (title: string) =>
+  `-- ----------------------------------------\n-- ${title}\n-- ----------------------------------------\n\n`
+
+/** Routines of the namespace (one entry per name and kind: PostgreSQL overloads share a definition). */
+async function* routinesBody(adapter: DatabaseAdapter, ns: Namespace, stripDefiner: boolean): AsyncIterable<string> {
+  const x = adapter.exporter
+  const seen = new Set<string>()
+  const defs: ProgramStatement[] = []
+  const skipped: string[] = []
+  for (const r of await adapter.listRoutines(ns)) {
+    if (seen.has(`${r.kind}:${r.name}`)) continue
+    seen.add(`${r.kind}:${r.name}`)
+    const def = await adapter.routineDefinition(ns, r.name, r.kind)
+    if (def === null) skipped.push(`${r.kind} ${r.name}`)
+    else defs.push({ ...x.routine(ns, r.kind, r.name, def, stripDefiner), sqlMode: r.sqlMode })
+  }
+  if (defs.length > 0 || skipped.length > 0) yield section('Routines')
+  // A routine the account may not read is named rather than silently missing from the backup.
+  for (const name of skipped) yield `-- skipped (no privilege to read the definition): ${name}\n`
+  if (skipped.length > 0) yield '\n'
+  if (defs.length > 0) yield x.programBlock(defs)
+}
+
+/** Triggers (of the given tables, or all) and, for a whole-database dump, events. */
+async function* triggersAndEventsBody(
   adapter: DatabaseAdapter,
   ns: Namespace,
-  tables: string[] | null,
-  stripDefiner: boolean
+  tables: string[] | null
 ): AsyncIterable<string> {
   const x = adapter.exporter
-  if (tables === null) {
-    const defs: string[] = []
-    for (const r of await adapter.listRoutines(ns)) {
-      const def = await adapter.routineDefinition(ns, r.name, r.kind)
-      if (def !== null) defs.push(x.routine(ns, r.kind, r.name, def, stripDefiner))
-    }
-    if (defs.length > 0) {
-      yield `-- ----------------------------------------\n-- Routines\n-- ----------------------------------------\n\n`
-      yield x.programBlock(defs)
-    }
-  }
   const triggers = (await adapter.listTriggers(ns))
     .filter((t) => t.definition !== null && (tables === null || tables.includes(t.table)))
-    .map((t) => x.trigger(ns, t, stripDefiner))
+    .map((t) => x.trigger(ns, t))
   if (triggers.length > 0) {
-    yield `-- ----------------------------------------\n-- Triggers\n-- ----------------------------------------\n\n`
+    yield section('Triggers')
     yield x.programBlock(triggers)
   }
   if (tables === null && adapter.dialect === 'mysql') {
-    const events = (await adapter.listEvents(ns))
-      .filter((e) => e.definition !== null)
-      .map((e) => x.event(ns, e, stripDefiner))
+    const events = (await adapter.listEvents(ns)).filter((e) => e.definition !== null).map((e) => x.event(ns, e))
     if (events.length > 0) {
-      yield `-- ----------------------------------------\n-- Events\n-- ----------------------------------------\n\n`
+      yield section('Events')
       yield x.programBlock(events)
     }
   }
+}
+
+/**
+ * Views ordered so that a view comes after the views it mentions (text dependency: a view definition that
+ * names another view of the dump). Catalogs differ per server (MariaDB has no VIEW_TABLE_USAGE), and the
+ * definition text is already in hand, so the mention test is the portable choice; unrelated views keep their
+ * name order.
+ */
+function orderViews(views: { name: string; statements: string[] }[]): { name: string; statements: string[] }[] {
+  const mentions = (v: { statements: string[] }, other: string) =>
+    v.statements.some((s) => new RegExp(`[\`"\\s.(]${other.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[\`"\\s,)]`).test(s))
+  const out: { name: string; statements: string[] }[] = []
+  const done = new Set<string>()
+  const visit = (v: { name: string; statements: string[] }, stack: Set<string>) => {
+    if (done.has(v.name) || stack.has(v.name)) return
+    stack.add(v.name)
+    for (const dep of views) if (dep.name !== v.name && mentions(v, dep.name)) visit(dep, stack)
+    done.add(v.name)
+    out.push(v)
+  }
+  for (const v of views) visit(v, new Set())
+  return out
 }
 
 async function* sqlBody(
@@ -104,16 +136,30 @@ async function* sqlBody(
     '',
   ].join('\n')
   const deferred: string[] = []
+  // Views are emitted after the routines they may call (and after every table), in dependency order.
+  const views: { name: string; statements: string[] }[] = []
   for (const table of tables) {
-    yield `-- ----------------------------------------\n-- Table: ${table}\n-- ----------------------------------------\n\n`
     // One catalog round trip per table, shared by the DDL reconstruction and the row scan.
     const schema = await adapter.describeTable(ns, table)
+    if (schema.kind !== 'table') {
+      if (q.structure === '1') {
+        const statements = (await adapter.showCreateTable(ns, table, schema)).map((stmt) =>
+          q.stripDefiner === '1' ? adapter.exporter.withoutDefiner(stmt) : stmt
+        )
+        views.push({
+          name: table,
+          statements: q.dropTable === '1' ? [adapter.exporter.dropIfExists(ns, schema), ...statements] : statements,
+        })
+      }
+      continue
+    }
+    yield section(`Table: ${table}`)
     if (q.structure === '1') {
       if (q.dropTable === '1') yield `${adapter.exporter.dropIfExists(ns, schema)};\n`
       for (const stmt of await adapter.showCreateTable(ns, table, schema)) {
         // PostgreSQL has no FOREIGN_KEY_CHECKS: constraints are emitted after every table exists and is loaded.
         if (adapter.dialect === 'postgres' && FK_STATEMENT.test(stmt)) deferred.push(stmt)
-        else yield `${q.stripDefiner === '1' ? adapter.exporter.withoutDefiner(stmt) : stmt};\n\n`
+        else yield `${stmt};\n\n`
       }
     }
     if (q.data === '1' && schema.kind === 'table') {
@@ -136,12 +182,16 @@ async function* sqlBody(
     }
   }
   if (deferred.length > 0) {
-    yield `-- ----------------------------------------\n-- Foreign keys\n-- ----------------------------------------\n\n`
+    yield section('Foreign keys')
     for (const stmt of deferred) yield `${stmt};\n\n`
   }
-  if (q.structure === '1' && q.routines === '1') {
-    yield* programBody(adapter, ns, everything ? null : tables, q.stripDefiner === '1')
+  const programs = q.structure === '1' && q.routines === '1'
+  if (programs && everything) yield* routinesBody(adapter, ns, q.stripDefiner === '1')
+  for (const v of orderViews(views)) {
+    yield section(`View: ${v.name}`)
+    for (const stmt of v.statements) yield `${stmt};\n\n`
   }
+  if (programs) yield* triggersAndEventsBody(adapter, ns, everything ? null : tables)
   const postamble = adapter.exporter.postamble()
   if (postamble.length > 0) yield `${postamble.join('\n')}\n\n`
   // Terminal marker: a dump that lacks this line was cut short (the transfer is also aborted on errors).

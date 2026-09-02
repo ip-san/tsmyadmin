@@ -9,6 +9,8 @@ export const RoutineInfoSchema = z.object({
   /** Parameter list as the dialect prints it, e.g. "IN uid int" / "uid integer". */
   parameters: z.string(),
   comment: z.string().nullable(),
+  /** sql_mode the routine was created under (MySQL; restored programs must run with the same one). */
+  sqlMode: z.string().nullable().default(null),
 })
 export type RoutineInfo = z.infer<typeof RoutineInfoSchema>
 
@@ -32,5 +34,7 @@ export const TriggerInfoSchema = z.object({
   /** ROW / STATEMENT */
   orientation: z.string(),
   definition: z.string().nullable(),
+  /** sql_mode the trigger was created under (MySQL). */
+  sqlMode: z.string().nullable().default(null),
 })
 export type TriggerInfo = z.infer<typeof TriggerInfoSchema>

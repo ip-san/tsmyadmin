@@ -9,7 +9,7 @@ import { AdapterError } from '../types.ts'
 export async function mysqlListRoutines(conn: Conn, ns: Namespace): Promise<RoutineInfo[]> {
   const routines = firstResult(
     await conn.query(
-      `SELECT ROUTINE_NAME, ROUTINE_TYPE, EXTERNAL_LANGUAGE, DTD_IDENTIFIER, ROUTINE_COMMENT, SPECIFIC_NAME
+      `SELECT ROUTINE_NAME, ROUTINE_TYPE, EXTERNAL_LANGUAGE, DTD_IDENTIFIER, ROUTINE_COMMENT, SPECIFIC_NAME, SQL_MODE
        FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA = ? ORDER BY ROUTINE_NAME`,
       [ns.database]
     )
@@ -38,6 +38,7 @@ export async function mysqlListRoutines(conn: Conn, ns: Namespace): Promise<Rout
       returns: kind === 'function' ? strOrNull(row[3]) : null,
       parameters: (bySpecific.get(str(row[5])) ?? []).join(', '),
       comment: strOrNull(row[4]) || null,
+      sqlMode: strOrNull(row[6]) ?? '',
     }
   })
 }
@@ -63,9 +64,10 @@ export async function mysqlRoutineDefinition(
   }
 }
 
-const TRIGGER_SELECT = `SELECT TRIGGER_NAME, EVENT_OBJECT_TABLE, ACTION_TIMING, EVENT_MANIPULATION, ACTION_ORIENTATION, ACTION_STATEMENT
+const TRIGGER_SELECT = `SELECT TRIGGER_NAME, EVENT_OBJECT_TABLE, ACTION_TIMING, EVENT_MANIPULATION, ACTION_ORIENTATION, ACTION_STATEMENT, SQL_MODE
   FROM information_schema.TRIGGERS`
-const TRIGGER_ORDER = ' ORDER BY EVENT_OBJECT_TABLE, TRIGGER_NAME'
+// Creation order reproduces the execution order (FOLLOWS / PRECEDES) when a dump is restored.
+const TRIGGER_ORDER = ' ORDER BY EVENT_OBJECT_TABLE, ACTION_TIMING, EVENT_MANIPULATION, ACTION_ORDER, TRIGGER_NAME'
 
 export async function mysqlListTriggers(conn: Conn, ns: Namespace, table?: string): Promise<TriggerInfo[]> {
   const r = firstResult(
@@ -83,6 +85,7 @@ export async function mysqlListTriggers(conn: Conn, ns: Namespace, table?: strin
     events: str(row[3]),
     orientation: str(row[4]),
     definition: strOrNull(row[5]),
+    sqlMode: strOrNull(row[6]) ?? '',
   }))
 }
 
@@ -90,7 +93,7 @@ export async function mysqlListEvents(conn: Conn, ns: Namespace): Promise<EventI
   const r = firstResult(
     await conn.query(
       `SELECT EVENT_NAME, STATUS, EVENT_TYPE, EXECUTE_AT, INTERVAL_VALUE, INTERVAL_FIELD, STARTS, ENDS, LAST_EXECUTED,
-              ON_COMPLETION, EVENT_COMMENT, EVENT_DEFINITION
+              ON_COMPLETION, EVENT_COMMENT, EVENT_DEFINITION, SQL_MODE, TIME_ZONE
        FROM information_schema.EVENTS WHERE EVENT_SCHEMA = ? ORDER BY EVENT_NAME`,
       [ns.database]
     )
@@ -109,6 +112,8 @@ export async function mysqlListEvents(conn: Conn, ns: Namespace): Promise<EventI
       onCompletion: strOrNull(row[9]),
       comment: strOrNull(row[10]) || null,
       definition: strOrNull(row[11]),
+      sqlMode: strOrNull(row[12]) ?? '',
+      timeZone: strOrNull(row[13]),
     }
   })
 }

@@ -22,6 +22,7 @@ export async function pgListRoutines(conn: Conn, ns: Namespace): Promise<Routine
     returns: str(row[1]) === 'p' ? null : strOrNull(row[3]),
     parameters: str(row[4]),
     comment: strOrNull(row[5]),
+    sqlMode: null,
   }))
 }
 
@@ -43,7 +44,8 @@ export async function pgRoutineDefinition(
   )
   const defs = r.rows.map((row) => strOrNull(row[0])).filter((d): d is string => d !== null)
   if (defs.length === 0) throw new AdapterError('NOT_FOUND', `Routine not found: ${name}`)
-  return defs.join('\n\n')
+  // Every overload is a complete CREATE OR REPLACE statement; they are joined as statements.
+  return defs.join(';\n\n')
 }
 
 const TRIGGER_SELECT = `SELECT t.tgname, c.relname, t.tgtype, pg_get_triggerdef(t.oid, true)
@@ -74,6 +76,7 @@ export async function pgListTriggers(conn: Conn, ns: Namespace, table?: string):
       events: events.join(','),
       orientation: type & 1 ? 'ROW' : 'STATEMENT',
       definition: strOrNull(row[3]),
+      sqlMode: null,
     }
   })
 }

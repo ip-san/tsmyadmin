@@ -25,6 +25,10 @@ export function splitStatements(input: string, dialect: Dialect): Statement[] {
   let startLine = 1
   let hasCode = false
   let delimiter = ';'
+  // PostgreSQL SQL-standard function bodies: `BEGIN ATOMIC ... END` holds statements separated by `;`.
+  // CASE ... END inside such a body must not close it.
+  let atomicDepth = 0
+  let caseDepth = 0
 
   const flush = (end: number) => {
     const sql = input.slice(start, end).trim()
@@ -130,7 +134,20 @@ export function splitStatements(input: string, dialect: Dialect): Statement[] {
         continue
       }
     }
-    if (delimiter.length === 1 ? ch === delimiter : input.startsWith(delimiter, i)) {
+    if (dialect === 'postgres' && /[A-Za-z_]/.test(ch) && !/[\w$]/.test(input[i - 1] ?? '')) {
+      const word = /^[A-Za-z_][\w$]*/.exec(input.slice(i))?.[0] ?? ''
+      const upper = word.toUpperCase()
+      if (upper === 'BEGIN' && /^\s+ATOMIC\b/i.test(input.slice(i + word.length))) atomicDepth++
+      else if (atomicDepth > 0 && upper === 'CASE') caseDepth++
+      else if (atomicDepth > 0 && upper === 'END') {
+        if (caseDepth > 0) caseDepth--
+        else atomicDepth--
+      }
+      hasCode = true
+      skipTo(i + word.length)
+      continue
+    }
+    if (atomicDepth === 0 && (delimiter.length === 1 ? ch === delimiter : input.startsWith(delimiter, i))) {
       flush(i)
       i += delimiter.length
       start = i

@@ -371,11 +371,12 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     const fallback = this.fallbackKeySelect()
     if (key.keyKind === 'ctid' && fallback) selectList.push(fallback)
     // Without a user sort the rows still come in a stable order (LIMIT / OFFSET paging over heap order can
-    // skip or repeat rows): the primary key, or ctid on PostgreSQL.
+    // skip or repeat rows): the primary key (an index scan), or ctid on PostgreSQL — which is a full scan plus
+    // a sort per page, so only while the table is small enough to be counted exactly anyway.
     const defaultOrder =
       key.keyKind === 'pk'
         ? key.keyColumns.map((c) => quoteIdent(d, c)).join(', ')
-        : key.keyKind === 'ctid'
+        : key.keyKind === 'ctid' && countMode(schema.rowEstimate) === 'exact'
           ? `${tableSql}.ctid`
           : ''
     const order =

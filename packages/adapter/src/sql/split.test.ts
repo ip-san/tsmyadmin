@@ -105,6 +105,16 @@ describe('splitStatements', () => {
     ).toEqual(['SELECT delimiter FROM t', 'SELECT 1\nDELIMITER $$\nSELECT 2$$'])
   })
 
+  it('keeps a PostgreSQL BEGIN ATOMIC function body (with an inner CASE ... END) in one statement', () => {
+    const fn = `CREATE FUNCTION f(a int) RETURNS int LANGUAGE sql BEGIN ATOMIC
+  SELECT CASE WHEN a > 0 THEN a ELSE 0 END;
+  SELECT a + 1;
+END`
+    expect(splitStatements(`${fn}; SELECT 1`, 'postgres').map((s) => s.sql)).toEqual([fn, 'SELECT 1'])
+    // A plain BEGIN (transaction) is still split as usual.
+    expect(splitStatements('BEGIN; SELECT 1; END', 'postgres').map((s) => s.sql)).toEqual(['BEGIN', 'SELECT 1', 'END'])
+  })
+
   it('does not treat # as a comment in postgres', () => {
     expect(splitStatements(`SELECT '#'; SELECT 1 # not comment`, 'postgres').map((s) => s.sql)).toEqual([
       `SELECT '#'`,

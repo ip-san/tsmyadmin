@@ -19,3 +19,4 @@ export function createAdapter(config: ConnectionConfig): DatabaseAdapter {
 export function ddlBuilderFor(dialect: Dialect): DdlBuilder {
   return dialect === 'mysql' ? mysqlDdl : pgDdl
 }
+export type { ProgramStatement } from './types.ts'

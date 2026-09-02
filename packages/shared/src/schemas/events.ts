@@ -15,5 +15,8 @@ export const EventInfoSchema = z.object({
   onCompletion: z.string().nullable(),
   comment: z.string().nullable(),
   definition: z.string().nullable(),
+  /** sql_mode and time zone the event was created under: both must be restored with it. */
+  sqlMode: z.string().nullable().default(null),
+  timeZone: z.string().nullable().default(null),
 })
 export type EventInfo = z.infer<typeof EventInfoSchema>

@@ -30,6 +30,47 @@ describe('SqlExporter.insert', () => {
   })
 })
 
+describe('program objects', () => {
+  it('strips only the header DEFINER, wraps MySQL programs in their sql_mode and keeps bodies verbatim', () => {
+    const body = "CREATE DEFINER=`root`@`localhost` PROCEDURE `p`()\nBEGIN SELECT 'DEFINER=root@localhost' AS s; END"
+    expect(mysqlExporter.withoutDefiner(body)).toBe(
+      "CREATE PROCEDURE `p`()\nBEGIN SELECT 'DEFINER=root@localhost' AS s; END"
+    )
+    expect(
+      mysqlExporter.withoutDefiner('CREATE ALGORITHM=UNDEFINED DEFINER=`a`@`%` SQL SECURITY DEFINER VIEW v AS SELECT 1')
+    ).toBe('CREATE ALGORITHM=UNDEFINED SQL SECURITY DEFINER VIEW v AS SELECT 1')
+    const block = mysqlExporter.programBlock([
+      { ...mysqlExporter.routine(ns, 'procedure', 'p', body, true), sqlMode: 'STRICT_TRANS_TABLES' },
+      mysqlExporter.event(ns, {
+        name: 'ev',
+        status: 'ENABLED',
+        type: 'ONE TIME',
+        schedule: 'AT 2030-01-01 00:00:00',
+        starts: null,
+        ends: null,
+        lastExecuted: null,
+        onCompletion: 'PRESERVE',
+        comment: "it's",
+        definition: 'DELETE FROM t',
+        sqlMode: '',
+        timeZone: '+09:00',
+      }),
+    ])
+    expect(block).toMatchSnapshot()
+    expect(block).toContain("SET sql_mode = 'STRICT_TRANS_TABLES'$$")
+    expect(block).toContain("SET time_zone = '+09:00'$$")
+    expect(block).toContain('DROP PROCEDURE IF EXISTS `p`$$')
+    expect(block).toContain("SELECT 'DEFINER=root@localhost' AS s")
+    // PostgreSQL: overloads are already complete statements; nothing is wrapped.
+    expect(
+      pgExporter.programBlock([pgExporter.routine(ns, 'function', 'f', 'CREATE OR REPLACE FUNCTION f() ...', true)])
+    ).toBe('CREATE OR REPLACE FUNCTION f() ...;\n\n')
+    expect(pgExporter.withoutDefiner('CREATE DEFINER=x@y VIEW v AS SELECT 1')).toBe(
+      'CREATE DEFINER=x@y VIEW v AS SELECT 1'
+    )
+  })
+})
+
 describe('isGeneratedColumn', () => {
   it('matches only server-computed columns, not expression defaults', () => {
     for (const extra of ['VIRTUAL GENERATED', 'STORED GENERATED', 'STORED GENERATED INVISIBLE', 'generated stored'])

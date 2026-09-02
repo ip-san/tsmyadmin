@@ -1,6 +1,6 @@
 import type { Cell, Dialect, EventInfo, Namespace, RoutineKind, TableSchema, TriggerInfo } from '@tsmyadmin/shared'
 import { isViewKind } from '@tsmyadmin/shared'
-import type { SqlExporter } from '../types.ts'
+import type { ProgramStatement, SqlExporter } from '../types.ts'
 import { cellLiteral, pgLiteral } from './literal.ts'
 import { quoteIdent, quoteTable } from './quote.ts'
 
@@ -32,50 +32,70 @@ function dumpTable(dialect: Dialect, ns: Namespace, table: string): string {
   return dialect === 'mysql' ? quoteIdent(dialect, table) : quoteTable(dialect, ns, table)
 }
 
-/** `DEFINER=user@host` inside MySQL CREATE statements (routines, triggers, events, views). */
-const DEFINER = /\bDEFINER\s*=\s*(?:`(?:[^`]|``)*`|'(?:[^']|'')*'|[^\s@]+)@(?:`(?:[^`]|``)*`|'(?:[^']|'')*'|\S+)\s*/gi
+/**
+ * The `DEFINER=user@host` clause in the header of a MySQL CREATE statement (view, routine). Anchored to the
+ * header so the same text inside a body's string literal (`SELECT 'DEFINER=root@localhost'`) is left alone.
+ */
+const DEFINER =
+  /^(CREATE\s+(?:ALGORITHM\s*=\s*\w+\s+)?)DEFINER\s*=\s*(?:`(?:[^`]|``)*`|'(?:[^']|'')*'|[^\s@]+)@(?:`(?:[^`]|``)*`|'(?:[^']|'')*'|\S+)\s*/i
 
 /** Dump statements: every identifier is quoted and every value goes through cellLiteral. Dialect-agnostic. */
 export function createExporter(dialect: Dialect): SqlExporter {
   const id = (name: string) => quoteIdent(dialect, name)
   const withoutDefiner = (sql: string, strip: boolean) =>
-    strip && dialect === 'mysql' ? sql.replace(DEFINER, '') : sql
+    strip && dialect === 'mysql' ? sql.replace(DEFINER, '$1') : sql
+  const lit = (text: string) => cellLiteral(dialect, text)
   return {
     withoutDefiner: (sql) => withoutDefiner(sql, true),
-    routine(_ns, kind: RoutineKind, name, definition, stripDefiner) {
+    routine(_ns, kind: RoutineKind, name, definition, stripDefiner): ProgramStatement {
       // PostgreSQL's pg_get_functiondef is a CREATE OR REPLACE (a DROP would fail while a trigger depends on
       // the function); MySQL has no OR REPLACE for routines, so it drops first. The dump is database-relative.
-      if (dialect === 'postgres') return definition
+      if (dialect === 'postgres') return { sql: definition }
       const object = kind === 'procedure' ? 'PROCEDURE' : 'FUNCTION'
-      return `DROP ${object} IF EXISTS ${id(name)}$$\n${withoutDefiner(definition, stripDefiner)}`
+      return { sql: `DROP ${object} IF EXISTS ${id(name)}$$\n${withoutDefiner(definition, stripDefiner)}` }
     },
-    trigger(ns, t: TriggerInfo, stripDefiner) {
+    trigger(ns, t: TriggerInfo): ProgramStatement {
       if (dialect === 'mysql') {
         // information_schema carries the body only; the header comes from the trigger's metadata.
-        return `DROP TRIGGER IF EXISTS ${id(t.name)}$$\nCREATE TRIGGER ${id(t.name)} ${t.timing} ${t.events} ON ${id(t.table)} FOR EACH ${t.orientation}\n${withoutDefiner(t.definition ?? '', stripDefiner)}`
+        return {
+          sql: `DROP TRIGGER IF EXISTS ${id(t.name)}$$\nCREATE TRIGGER ${id(t.name)} ${t.timing} ${t.events} ON ${id(t.table)} FOR EACH ${t.orientation}\n${t.definition ?? ''}`,
+          sqlMode: t.sqlMode,
+        }
       }
-      return `DROP TRIGGER IF EXISTS ${id(t.name)} ON ${quoteTable(dialect, ns, t.table)};\n${t.definition ?? ''}`
+      return {
+        sql: `DROP TRIGGER IF EXISTS ${id(t.name)} ON ${quoteTable(dialect, ns, t.table)};\n${t.definition ?? ''}`,
+      }
     },
-    event(_ns, e: EventInfo, stripDefiner) {
-      const lit = (text: string) => cellLiteral(dialect, text)
+    event(_ns, e: EventInfo): ProgramStatement {
       const schedule = e.schedule.startsWith('AT ') ? `AT ${lit(e.schedule.slice(3))}` : e.schedule
       const starts = e.starts ? ` STARTS ${lit(e.starts)}` : ''
       const ends = e.ends ? ` ENDS ${lit(e.ends)}` : ''
       const completion = e.onCompletion ? ` ON COMPLETION ${e.onCompletion}` : ''
       const status = e.status === 'ENABLED' ? 'ENABLE' : 'DISABLE'
       const comment = e.comment ? ` COMMENT ${lit(e.comment)}` : ''
-      return `DROP EVENT IF EXISTS ${id(e.name)}$$\nCREATE EVENT ${id(e.name)} ON SCHEDULE ${schedule}${starts}${ends}${completion} ${status}${comment}\nDO ${withoutDefiner(e.definition ?? '', stripDefiner)}`
+      return {
+        sql: `DROP EVENT IF EXISTS ${id(e.name)}$$\nCREATE EVENT ${id(e.name)} ON SCHEDULE ${schedule}${starts}${ends}${completion} ${status}${comment}\nDO ${e.definition ?? ''}`,
+        sqlMode: e.sqlMode,
+        timeZone: e.timeZone,
+      }
     },
     programBlock(statements) {
       if (statements.length === 0) return ''
-      return dialect === 'mysql'
-        ? `DELIMITER $$\n${statements.map((s) => `${s}$$\n\n`).join('')}DELIMITER ;\n\n`
-        : statements.map((s) => `${s};\n\n`).join('')
+      if (dialect !== 'mysql') return statements.map((s) => `${s.sql};\n\n`).join('')
+      // MySQL stores the creating session's sql_mode (and an event's time zone) into the program: set them
+      // around each CREATE as mysqldump does, then restore the dump's own settings.
+      const parts = statements.map((s) => {
+        const mode = s.sqlMode === undefined || s.sqlMode === null ? '' : `SET sql_mode = ${lit(s.sqlMode)}$$\n`
+        const zone = s.timeZone ? `SET time_zone = ${lit(s.timeZone)}$$\n` : ''
+        return `${mode}${zone}${s.sql}$$\n\n`
+      })
+      return `SET @tsmyadmin_sql_mode = @@sql_mode;\nSET @tsmyadmin_time_zone = @@time_zone;\nDELIMITER $$\n${parts.join('')}DELIMITER ;\nSET sql_mode = @tsmyadmin_sql_mode;\nSET time_zone = @tsmyadmin_time_zone;\n\n`
     },
     preamble: (ns: Namespace) =>
       dialect === 'postgres'
-        ? // Index / view definitions are printed relative to the schema, so restore into it explicitly.
-          [`SET search_path TO ${quoteIdent(dialect, ns.schema ?? 'public')};`]
+        ? // Index / view definitions are printed relative to the schema, so restore into it explicitly. Function
+          // bodies are not validated at creation (pg_dump does the same) so their order does not matter.
+          [`SET search_path TO ${quoteIdent(dialect, ns.schema ?? 'public')};`, 'SET check_function_bodies = false;']
         : [
             `-- Database: ${ns.database} (statements are unqualified: import into the database of your choice)`,
             // Literals are written with backslash escapes, which NO_BACKSLASH_ESCAPES would break on import.

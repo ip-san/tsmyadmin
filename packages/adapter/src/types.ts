@@ -104,6 +104,13 @@ export interface RowBatch {
 }
 
 /** Renders dialect-specific SQL for dumps (INSERT statements with properly escaped literals). */
+/** One program object for the dump with the session settings it must be created under. */
+export interface ProgramStatement {
+  sql: string
+  sqlMode?: string | null
+  timeZone?: string | null
+}
+
 export interface SqlExporter {
   /**
    * Statements emitted once at the top / bottom of a SQL dump so it restores the way it was written
@@ -127,12 +134,16 @@ export interface SqlExporter {
    * CREATE text for routines, the trigger body (MySQL) or full CREATE TRIGGER (PostgreSQL); `stripDefiner`
    * removes MySQL `DEFINER=` clauses so the dump restores under another account.
    */
-  routine(ns: Namespace, kind: RoutineKind, name: string, definition: string, stripDefiner: boolean): string
-  trigger(ns: Namespace, trigger: TriggerInfo, stripDefiner: boolean): string
-  event(ns: Namespace, event: EventInfo, stripDefiner: boolean): string
-  /** Wraps program statements for the dump: a DELIMITER block on MySQL (bodies contain `;`), `;` on PostgreSQL. */
-  programBlock(statements: string[]): string
-  /** `DEFINER=` clauses removed from a CREATE VIEW / routine text (MySQL); identity elsewhere. */
+  routine(ns: Namespace, kind: RoutineKind, name: string, definition: string, stripDefiner: boolean): ProgramStatement
+  trigger(ns: Namespace, trigger: TriggerInfo): ProgramStatement
+  event(ns: Namespace, event: EventInfo): ProgramStatement
+  /**
+   * Wraps program statements for the dump: a DELIMITER block on MySQL (bodies contain `;`) with each program's
+   * sql_mode / time zone set around it (MySQL stores the creating session's mode into the program), `;` on
+   * PostgreSQL.
+   */
+  programBlock(statements: ProgramStatement[]): string
+  /** The header `DEFINER=` clause removed from a CREATE VIEW / routine statement (MySQL); identity elsewhere. */
   withoutDefiner(sql: string): string
 }
 

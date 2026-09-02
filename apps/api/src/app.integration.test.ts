@@ -139,6 +139,11 @@ describe.each(targets)('API integration ($dialect)', ({ dialect, url }) => {
             "CREATE TRIGGER prog_before_insert BEFORE INSERT ON prog_t FOR EACH ROW SET NEW.title = COALESCE(NEW.title, 'untitled')",
             'DROP EVENT IF EXISTS prog_event',
             'CREATE EVENT prog_event ON SCHEDULE EVERY 1 DAY DISABLE DO DELETE FROM prog_t WHERE id < 0',
+            // A body that mentions DEFINER inside a string must survive DEFINER stripping untouched.
+            'DROP PROCEDURE IF EXISTS prog_p',
+            "DELIMITER $$\nCREATE PROCEDURE prog_p() BEGIN SELECT 'DEFINER=root@localhost' AS s; END$$\nDELIMITER ;",
+            'DROP VIEW IF EXISTS prog_v',
+            'CREATE VIEW prog_v AS SELECT prog_label(id) AS label FROM prog_t',
           ]
         : [
             'DROP TABLE IF EXISTS prog_t CASCADE',
@@ -146,6 +151,10 @@ describe.each(targets)('API integration ($dialect)', ({ dialect, url }) => {
             "CREATE OR REPLACE FUNCTION prog_label(uid INT) RETURNS TEXT LANGUAGE sql STABLE AS $$ SELECT '#' || uid $$",
             "CREATE OR REPLACE FUNCTION prog_default_title() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN NEW.title := COALESCE(NEW.title, 'untitled'); RETURN NEW; END $$",
             'CREATE TRIGGER prog_before_insert BEFORE INSERT ON prog_t FOR EACH ROW EXECUTE FUNCTION prog_default_title()',
+            // An overload: both definitions must be dumped as separate statements, once.
+            "CREATE OR REPLACE FUNCTION prog_label(uid TEXT) RETURNS TEXT LANGUAGE sql STABLE AS $$ SELECT '#' || uid $$",
+            'DROP VIEW IF EXISTS prog_v',
+            'CREATE VIEW prog_v AS SELECT prog_label(id) AS label FROM prog_t',
           ]
     for (const statement of setup) {
       const r = z.array(StatementResultSchema).parse(await (await other(statement)).json())
@@ -163,18 +172,28 @@ describe.each(targets)('API integration ($dialect)', ({ dialect, url }) => {
         expect(dump).toContain('-- Events')
         expect(dump).toContain('prog_event')
         expect(dump).toContain('DELIMITER $$')
-        expect(dump).not.toMatch(/DEFINER\s*=/)
+        // Header DEFINER clauses are gone; the string inside prog_p's body is not a header and stays.
+        expect(dump).not.toMatch(/^CREATE\s+(?:ALGORITHM\S*\s+)?DEFINER\s*=/m)
       }
-      // Drop the programs, then replay the dump: everything must come back and the trigger must still fire.
+      // The view depends on the function: it must be dumped after the routines section.
+      expect(dump.indexOf('-- Routines')).toBeLessThan(dump.indexOf('-- View: prog_v'))
+      if (dialect === 'postgres') expect(dump.match(/CREATE OR REPLACE FUNCTION [^\n]*prog_label/g)).toHaveLength(2)
+      else expect(dump).toContain("SELECT 'DEFINER=root@localhost' AS s")
+      // Drop the programs and the view, then replay the dump: everything must come back and the trigger fire.
       await other(
         dialect === 'mysql'
-          ? 'DROP TRIGGER prog_before_insert; DROP FUNCTION prog_label; DROP EVENT prog_event'
-          : 'DROP TRIGGER prog_before_insert ON prog_t; DROP FUNCTION prog_label'
+          ? 'DROP VIEW prog_v; DROP TRIGGER prog_before_insert; DROP FUNCTION prog_label; DROP PROCEDURE prog_p; DROP EVENT prog_event'
+          : 'DROP VIEW prog_v; DROP TRIGGER prog_before_insert ON prog_t; DROP FUNCTION prog_label(int); DROP FUNCTION prog_label(text)'
       )
       const restored = z.array(StatementResultSchema).parse(await (await other(dump)).json())
       expect(restored.filter((r) => r.kind === 'error').map((r) => (r.kind === 'error' ? r.message : ''))).toEqual([])
       const routines = (await (await req('/api/databases/tsmyadmin_other/routines')).json()) as { name: string }[]
-      expect(routines.map((r) => r.name)).toContain('prog_label')
+      expect(routines.filter((r) => r.name === 'prog_label')).toHaveLength(dialect === 'postgres' ? 2 : 1)
+      const tables = (await (await req('/api/databases/tsmyadmin_other/tables')).json()) as {
+        name: string
+        kind: string
+      }[]
+      expect(tables.find((t) => t.name === 'prog_v')?.kind).toBe('view')
       const triggers = (await (await req('/api/databases/tsmyadmin_other/triggers')).json()) as { name: string }[]
       expect(triggers.map((t) => t.name)).toContain('prog_before_insert')
       await other('INSERT INTO prog_t (id) VALUES (1)')
@@ -185,8 +204,8 @@ describe.each(targets)('API integration ($dialect)', ({ dialect, url }) => {
     } finally {
       await other(
         dialect === 'mysql'
-          ? 'DROP EVENT IF EXISTS prog_event; DROP TRIGGER IF EXISTS prog_before_insert; DROP FUNCTION IF EXISTS prog_label; DROP TABLE IF EXISTS prog_t'
-          : 'DROP TABLE IF EXISTS prog_t CASCADE; DROP FUNCTION IF EXISTS prog_label; DROP FUNCTION IF EXISTS prog_default_title'
+          ? 'DROP VIEW IF EXISTS prog_v; DROP EVENT IF EXISTS prog_event; DROP TRIGGER IF EXISTS prog_before_insert; DROP FUNCTION IF EXISTS prog_label; DROP PROCEDURE IF EXISTS prog_p; DROP TABLE IF EXISTS prog_t'
+          : 'DROP VIEW IF EXISTS prog_v; DROP TABLE IF EXISTS prog_t CASCADE; DROP FUNCTION IF EXISTS prog_label(int); DROP FUNCTION IF EXISTS prog_label(text); DROP FUNCTION IF EXISTS prog_default_title'
       )
     }
   })
