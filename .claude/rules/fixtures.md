@@ -10,4 +10,5 @@ paths:
 - 型や行を足したら: `packages/adapter/src/test/{mysql,postgres}.integration.test.ts` の `typesRow1` と、必要なら `conformance.ts` の検証を更新する
 - フィクスチャは初回起動時にだけ投入される。変更後は `bun run db:reset`（ボリューム削除 + 再作成）
 - ルーチン / トリガー（`count_users`, `user_label`, `posts_before_insert`）も両方言で同名。conformance の `listRoutines` / `listTriggers` が参照する
+- MySQL のみ `purge_old_posts` イベント（DISABLED）。conformance の `listEvents` が参照
 - ホストポートは MySQL `13306`、PostgreSQL `15433`（既定ポートは他のスタックが使用中）

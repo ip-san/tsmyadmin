@@ -3,6 +3,7 @@ import type {
   BrowseResult,
   Cell,
   Dialect,
+  EventInfo,
   KeyValue,
   Namespace,
   ProcessInfo,
@@ -168,6 +169,11 @@ export class FakeAdapter implements DatabaseAdapter {
 
   async listTriggers(ns: Namespace, table?: string): Promise<TriggerInfo[]> {
     this.record('listTriggers', ns, table)
+    return []
+  }
+
+  async listEvents(ns: Namespace): Promise<EventInfo[]> {
+    this.record('listEvents', ns)
     return []
   }
 

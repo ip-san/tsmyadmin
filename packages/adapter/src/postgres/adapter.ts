@@ -1,5 +1,6 @@
 import type {
   ColumnMeta,
+  EventInfo,
   KeyValue,
   Namespace,
   ProcessInfo,
@@ -208,6 +209,11 @@ export class PostgresAdapter extends BaseAdapter {
 
   listTriggers(ns: Namespace, table?: string): Promise<TriggerInfo[]> {
     return this.withConn(ns, (conn) => pgListTriggers(conn, ns, table))
+  }
+
+  listEvents(_ns: Namespace): Promise<EventInfo[]> {
+    // PostgreSQL has no built-in event scheduler.
+    return Promise.resolve([])
   }
 
   describeTable(ns: Namespace, table: string): Promise<TableSchema> {

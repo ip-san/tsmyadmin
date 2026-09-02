@@ -24,6 +24,12 @@ export const mysqlDdl: DdlBuilder = {
 
       case 'dropDatabase':
         return [`DROP DATABASE ${id(op.name)}`]
+      case 'enableEvent':
+        return [`ALTER EVENT ${quoteTable('mysql', ns, op.name)} ENABLE`]
+      case 'disableEvent':
+        return [`ALTER EVENT ${quoteTable('mysql', ns, op.name)} DISABLE`]
+      case 'dropEvent':
+        return [`DROP EVENT ${quoteTable('mysql', ns, op.name)}`]
       default:
         break
     }

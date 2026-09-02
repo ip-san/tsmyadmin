@@ -3,6 +3,7 @@ import type {
   BrowseOptions,
   BrowseResult,
   DdlOp,
+  EventInfo,
   KeyValue,
   ProcessInfo,
   RoutineInfo,
@@ -83,6 +84,12 @@ export const triggersQuery = (db: string, schema?: string, table?: string) =>
           query: { ...schemaQuery(schema), ...(table ? { table } : {}) },
         })
       ),
+  })
+
+export const eventsQuery = (db: string, schema?: string) =>
+  queryOptions({
+    queryKey: ['events', db, schema ?? ''],
+    queryFn: () => unwrap<EventInfo[]>(api.databases[':db'].events.$get({ param: { db }, query: schemaQuery(schema) })),
   })
 
 export const structureQuery = (ref: TableRef) =>

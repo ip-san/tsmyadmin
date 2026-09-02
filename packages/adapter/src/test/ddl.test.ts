@@ -49,6 +49,9 @@ const SAMPLE_OPS: Record<DdlOp['op'], DdlOp> = {
   dropDatabase: { op: 'dropDatabase', name: 'new"db`x' },
   createSchema: { op: 'createSchema', name: 'new"schema' },
   copyTable: { op: 'copyTable', table: 't', newName: 't_copy', withData: true },
+  enableEvent: { op: 'enableEvent', name: 'ev`x' },
+  disableEvent: { op: 'disableEvent', name: 'ev`x' },
+  dropEvent: { op: 'dropEvent', name: 'ev`x' },
 }
 
 describe('DDL builders', () => {
@@ -61,7 +64,9 @@ describe('DDL builders', () => {
       expect(mysqlDdl.build({ database: 'db' }, SAMPLE_OPS[name])).toMatchSnapshot()
     })
     it(`postgres: ${name}`, () => {
-      expect(pgDdl.build({ database: 'db', schema: 'app' }, SAMPLE_OPS[name])).toMatchSnapshot()
+      const build = () => pgDdl.build({ database: 'db', schema: 'app' }, SAMPLE_OPS[name])
+      if (name.endsWith('Event')) expect(build).toThrow(/no event scheduler/)
+      else expect(build()).toMatchSnapshot()
     })
   }
 
@@ -79,6 +84,7 @@ describe('DDL builders', () => {
   it('never emits an unquoted identifier from user input', () => {
     for (const name of DDL_OP_NAMES) {
       for (const dialect of [mysqlDdl, pgDdl]) {
+        if (dialect === pgDdl && name.endsWith('Event')) continue
         for (const sql of dialect.build({ database: 'db' }, SAMPLE_OPS[name])) {
           expect(sql).not.toMatch(/\bwe"ird`tbl\b/)
         }

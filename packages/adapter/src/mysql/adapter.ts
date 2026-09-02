@@ -1,4 +1,5 @@
 import type {
+  EventInfo,
   KeyValue,
   Namespace,
   ProcessInfo,
@@ -17,7 +18,7 @@ import { AdapterError, type AdapterErrorCode, type ConnectionConfig } from '../t
 import { mysqlDdl } from './ddl.ts'
 import { mysqlExporter } from './export.ts'
 import { mysqlDescribeTable, mysqlListTables } from './introspect.ts'
-import { mysqlListRoutines, mysqlListTriggers } from './routines.ts'
+import { mysqlListEvents, mysqlListRoutines, mysqlListTriggers } from './routines.ts'
 import { mysqlKillProcess, mysqlListProcesses, mysqlListStatus, mysqlListVariables, mysqlServerInfo } from './server.ts'
 import { mysqlListUsers, mysqlShowGrants, mysqlUsers } from './users.ts'
 import { mysqlColumnMeta, mysqlToCell } from './values.ts'
@@ -215,6 +216,10 @@ export class MysqlAdapter extends BaseAdapter {
 
   listTriggers(ns: Namespace, table?: string): Promise<TriggerInfo[]> {
     return this.withConn(ns, (conn) => mysqlListTriggers(conn, ns, table))
+  }
+
+  listEvents(ns: Namespace): Promise<EventInfo[]> {
+    return this.withConn(ns, (conn) => mysqlListEvents(conn, ns))
   }
 
   describeTable(ns: Namespace, table: string): Promise<TableSchema> {

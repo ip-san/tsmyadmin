@@ -4,6 +4,7 @@ import type {
   Cell,
   ColumnMeta,
   Dialect,
+  EventInfo,
   Filter,
   KeyValue,
   Namespace,
@@ -109,6 +110,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
   abstract describeTable(ns: Namespace, table: string): Promise<TableSchema>
   abstract listRoutines(ns: Namespace): Promise<RoutineInfo[]>
   abstract listTriggers(ns: Namespace, table?: string): Promise<TriggerInfo[]>
+  abstract listEvents(ns: Namespace): Promise<EventInfo[]>
   abstract readonly serverNamespace: Namespace
   abstract showCreateTable(ns: Namespace, table: string, schema?: TableSchema): Promise<string[]>
   abstract serverInfo(): Promise<ServerInfo>

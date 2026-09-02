@@ -216,6 +216,28 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
       })
     })
 
+    describe('listEvents', () => {
+      it('lists scheduled events on MySQL and returns [] on PostgreSQL', async () => {
+        const events = await db.listEvents(ns)
+        if (dialect === 'postgres') {
+          expect(events).toEqual([])
+          return
+        }
+        const ev = events.find((e) => e.name === 'purge_old_posts')
+        expect(ev).toMatchObject({
+          status: 'DISABLED',
+          type: 'RECURRING',
+          schedule: 'EVERY 1 DAY',
+          comment: 'remove posts older than a year',
+        })
+        expect(ev?.definition).toContain('DELETE FROM posts')
+        await runDdl({ op: 'enableEvent', name: 'purge_old_posts' })
+        expect((await db.listEvents(ns)).find((e) => e.name === 'purge_old_posts')?.status).toBe('ENABLED')
+        await runDdl({ op: 'disableEvent', name: 'purge_old_posts' })
+        expect((await db.listEvents(ns)).find((e) => e.name === 'purge_old_posts')?.status).toBe('DISABLED')
+      })
+    })
+
     describe('browseRows', () => {
       it('returns rows as arrays with column metadata and total', async () => {
         const r = await browseAll('users')

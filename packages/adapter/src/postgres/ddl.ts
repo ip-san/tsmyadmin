@@ -1,7 +1,7 @@
 import type { ColumnSpec, DdlOp, Namespace, TableSchema } from '@tsmyadmin/shared'
 import { pgLiteral } from '../sql/literal.ts'
 import { quoteIdent, quoteTable } from '../sql/quote.ts'
-import type { DdlBuilder } from '../types.ts'
+import { AdapterError, type DdlBuilder } from '../types.ts'
 
 const id = (s: string) => quoteIdent('postgres', s)
 
@@ -33,6 +33,10 @@ export const pgDdl: DdlBuilder = {
         return [`CREATE SCHEMA ${id(op.name)}`]
       case 'dropDatabase':
         return [`DROP DATABASE ${id(op.name)}`]
+      case 'enableEvent':
+      case 'disableEvent':
+      case 'dropEvent':
+        throw new AdapterError('UNSUPPORTED', 'PostgreSQL has no event scheduler')
       default:
         break
     }

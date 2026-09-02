@@ -47,6 +47,10 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
         const q = c.req.valid('query')
         return c.json(await c.get('session').adapter.listTriggers(ns(c.req.param('db'), q.schema), q.table))
       })
+      .get('/databases/:db/events', validate('query', SchemaQuerySchema), async (c) => {
+        const q = c.req.valid('query')
+        return c.json(await c.get('session').adapter.listEvents(ns(c.req.param('db'), q.schema)))
+      })
       .get('/databases/:db/tables/:table/structure', validate('query', SchemaQuerySchema), async (c) => {
         const q = c.req.valid('query')
         return c.json(

@@ -324,6 +324,8 @@ describe('databases & tables', () => {
     expect(h.adapter.calls.at(-1)).toEqual({ method: 'listRoutines', args: [{ database: 'shop', schema: 'app' }] })
     expect(await (await h.req('/api/databases/shop/triggers?table=users')).json()).toEqual([])
     expect(h.adapter.calls.at(-1)).toEqual({ method: 'listTriggers', args: [{ database: 'shop' }, 'users'] })
+    expect(await (await h.req('/api/databases/shop/events')).json()).toEqual([])
+    expect(h.adapter.calls.at(-1)).toEqual({ method: 'listEvents', args: [{ database: 'shop' }] })
   })
 
   it('passes ?schema through as the namespace', async () => {

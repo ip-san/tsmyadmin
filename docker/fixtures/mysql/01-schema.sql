@@ -103,3 +103,10 @@ BEGIN
   IF NEW.title = '' THEN SET NEW.title = '(untitled)'; END IF;
 END$$
 DELIMITER ;
+
+-- Event scheduler fixture (listing only; the scheduler itself may be OFF in the test container)
+CREATE EVENT purge_old_posts
+  ON SCHEDULE EVERY 1 DAY STARTS '2030-01-01 00:00:00'
+  ON COMPLETION PRESERVE DISABLE
+  COMMENT 'remove posts older than a year'
+  DO DELETE FROM posts WHERE published_at < NOW() - INTERVAL 1 YEAR;

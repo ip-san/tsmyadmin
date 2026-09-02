@@ -48,6 +48,10 @@ export const DdlOpSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('createSchema'), name: z.string().min(1) }),
   /** Copies structure (indexes, keys) and optionally rows into a new table in the same namespace. */
   z.object({ op: z.literal('copyTable'), table, newName: z.string().min(1), withData: z.boolean().default(true) }),
+  /** MySQL event scheduler (PostgreSQL: UNSUPPORTED). */
+  z.object({ op: z.literal('enableEvent'), name: z.string().min(1) }),
+  z.object({ op: z.literal('disableEvent'), name: z.string().min(1) }),
+  z.object({ op: z.literal('dropEvent'), name: z.string().min(1) }),
 ])
 export type DdlOp = z.infer<typeof DdlOpSchema>
 export type DdlOpInput = z.input<typeof DdlOpSchema>

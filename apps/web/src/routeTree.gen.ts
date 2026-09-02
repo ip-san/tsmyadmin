@@ -18,6 +18,7 @@ import { Route as AppUsersRouteImport } from './routes/_app/users'
 import { Route as AppVariablesRouteImport } from './routes/_app/variables'
 import { Route as AppDbDbRouteImport } from './routes/_app/db.$db'
 import { Route as AppDbDbIndexRouteImport } from './routes/_app/db.$db/index'
+import { Route as AppDbDbEventsRouteImport } from './routes/_app/db.$db/events'
 import { Route as AppDbDbExportRouteImport } from './routes/_app/db.$db/export'
 import { Route as AppDbDbImportRouteImport } from './routes/_app/db.$db/import'
 import { Route as AppDbDbPrivilegesRouteImport } from './routes/_app/db.$db/privileges'
@@ -77,6 +78,11 @@ const AppDbDbRoute = AppDbDbRouteImport.update({
 const AppDbDbIndexRoute = AppDbDbIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AppDbDbRoute,
+} as any)
+const AppDbDbEventsRoute = AppDbDbEventsRouteImport.update({
+  id: '/events',
+  path: '/events',
   getParentRoute: () => AppDbDbRoute,
 } as any)
 const AppDbDbExportRoute = AppDbDbExportRouteImport.update({
@@ -171,6 +177,7 @@ export interface FileRoutesByFullPath {
   '/users': typeof AppUsersRoute
   '/variables': typeof AppVariablesRoute
   '/db/$db': typeof AppDbDbRouteWithChildren
+  '/db/$db/events': typeof AppDbDbEventsRoute
   '/db/$db/export': typeof AppDbDbExportRoute
   '/db/$db/import': typeof AppDbDbImportRoute
   '/db/$db/privileges': typeof AppDbDbPrivilegesRoute
@@ -196,6 +203,7 @@ export interface FileRoutesByTo {
   '/users': typeof AppUsersRoute
   '/variables': typeof AppVariablesRoute
   '/': typeof AppIndexRoute
+  '/db/$db/events': typeof AppDbDbEventsRoute
   '/db/$db/export': typeof AppDbDbExportRoute
   '/db/$db/import': typeof AppDbDbImportRoute
   '/db/$db/privileges': typeof AppDbDbPrivilegesRoute
@@ -223,6 +231,7 @@ export interface FileRoutesById {
   '/_app/variables': typeof AppVariablesRoute
   '/_app/': typeof AppIndexRoute
   '/_app/db/$db': typeof AppDbDbRouteWithChildren
+  '/_app/db/$db/events': typeof AppDbDbEventsRoute
   '/_app/db/$db/export': typeof AppDbDbExportRoute
   '/_app/db/$db/import': typeof AppDbDbImportRoute
   '/_app/db/$db/privileges': typeof AppDbDbPrivilegesRoute
@@ -251,6 +260,7 @@ export interface FileRouteTypes {
     | '/users'
     | '/variables'
     | '/db/$db'
+    | '/db/$db/events'
     | '/db/$db/export'
     | '/db/$db/import'
     | '/db/$db/privileges'
@@ -276,6 +286,7 @@ export interface FileRouteTypes {
     | '/users'
     | '/variables'
     | '/'
+    | '/db/$db/events'
     | '/db/$db/export'
     | '/db/$db/import'
     | '/db/$db/privileges'
@@ -302,6 +313,7 @@ export interface FileRouteTypes {
     | '/_app/variables'
     | '/_app/'
     | '/_app/db/$db'
+    | '/_app/db/$db/events'
     | '/_app/db/$db/export'
     | '/_app/db/$db/import'
     | '/_app/db/$db/privileges'
@@ -389,6 +401,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/db/$db/'
       preLoaderRoute: typeof AppDbDbIndexRouteImport
+      parentRoute: typeof AppDbDbRoute
+    }
+    '/_app/db/$db/events': {
+      id: '/_app/db/$db/events'
+      path: '/events'
+      fullPath: '/db/$db/events'
+      preLoaderRoute: typeof AppDbDbEventsRouteImport
       parentRoute: typeof AppDbDbRoute
     }
     '/_app/db/$db/export': {
@@ -534,6 +553,7 @@ const AppDbDbTableTableRouteWithChildren =
   AppDbDbTableTableRoute._addFileChildren(AppDbDbTableTableRouteChildren)
 
 interface AppDbDbRouteChildren {
+  AppDbDbEventsRoute: typeof AppDbDbEventsRoute
   AppDbDbExportRoute: typeof AppDbDbExportRoute
   AppDbDbImportRoute: typeof AppDbDbImportRoute
   AppDbDbPrivilegesRoute: typeof AppDbDbPrivilegesRoute
@@ -545,6 +565,7 @@ interface AppDbDbRouteChildren {
 }
 
 const AppDbDbRouteChildren: AppDbDbRouteChildren = {
+  AppDbDbEventsRoute: AppDbDbEventsRoute,
   AppDbDbExportRoute: AppDbDbExportRoute,
   AppDbDbImportRoute: AppDbDbImportRoute,
   AppDbDbPrivilegesRoute: AppDbDbPrivilegesRoute,

@@ -1,4 +1,4 @@
-import type { Namespace, RoutineInfo, TriggerInfo } from '@tsmyadmin/shared'
+import type { EventInfo, Namespace, RoutineInfo, TriggerInfo } from '@tsmyadmin/shared'
 import { type Conn, firstResult } from '../base.ts'
 import { str, strOrNull } from '../sql/format.ts'
 import { quoteIdent } from '../sql/quote.ts'
@@ -65,4 +65,31 @@ export async function mysqlListTriggers(conn: Conn, ns: Namespace, table?: strin
     orientation: str(row[4]),
     definition: strOrNull(row[5]),
   }))
+}
+
+export async function mysqlListEvents(conn: Conn, ns: Namespace): Promise<EventInfo[]> {
+  const r = firstResult(
+    await conn.query(
+      `SELECT EVENT_NAME, STATUS, EVENT_TYPE, EXECUTE_AT, INTERVAL_VALUE, INTERVAL_FIELD, STARTS, ENDS, LAST_EXECUTED,
+              ON_COMPLETION, EVENT_COMMENT, EVENT_DEFINITION
+       FROM information_schema.EVENTS WHERE EVENT_SCHEMA = ? ORDER BY EVENT_NAME`,
+      [ns.database]
+    )
+  )
+  return r.rows.map((row) => {
+    const type = str(row[2])
+    const schedule = type === 'ONE TIME' ? `AT ${str(row[3])}` : `EVERY ${str(row[4])} ${str(row[5])}`
+    return {
+      name: str(row[0]),
+      status: str(row[1]),
+      type,
+      schedule,
+      starts: strOrNull(row[6]),
+      ends: strOrNull(row[7]),
+      lastExecuted: strOrNull(row[8]),
+      onCompletion: strOrNull(row[9]),
+      comment: strOrNull(row[10]) || null,
+      definition: strOrNull(row[11]),
+    }
+  })
 }

@@ -144,6 +144,26 @@ for (const t of TARGETS) {
       await expect(page.getByText('トリガーはありません')).toBeVisible()
     })
 
+    test('event scheduler: lists events on MySQL, toggles status through previews; unsupported on PostgreSQL', async ({
+      page,
+    }) => {
+      await page.goto(t.schema ? `/db/${t.database}/events?schema=${t.schema}` : `/db/${t.database}/events`)
+      if (t.dialect === 'postgres') {
+        await expect(page.getByText(/組み込みのイベントスケジューラがありません/)).toBeVisible()
+        return
+      }
+      const table = page.getByRole('table', { name: 'イベントスケジューラ' })
+      const row = table.getByRole('row').filter({ hasText: 'purge_old_posts' })
+      await expect(row).toContainText('DISABLED')
+      await expect(row).toContainText('EVERY 1 DAY')
+      await page.getByRole('button', { name: 'purge_old_posts: 有効化' }).click()
+      await confirmPreview(page, /ALTER EVENT[\s\S]*ENABLE/)
+      await expect(row).toContainText('ENABLED')
+      await page.getByRole('button', { name: 'purge_old_posts: 無効化' }).click()
+      await confirmPreview(page, /ALTER EVENT[\s\S]*DISABLE/)
+      await expect(row).toContainText('DISABLED')
+    })
+
     test('creates a schema on PostgreSQL from the database page', async ({ page }) => {
       test.skip(t.dialect !== 'postgres', 'schemas are a PostgreSQL concept')
       const schemaName = `e2e_schema_${Date.now().toString(36)}`

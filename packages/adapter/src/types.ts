@@ -6,6 +6,7 @@ import type {
   ColumnMeta,
   DdlOp,
   Dialect,
+  EventInfo,
   KeyValue,
   Namespace,
   ProcessInfo,
@@ -120,6 +121,8 @@ export interface DatabaseAdapter {
   listRoutines(ns: Namespace): Promise<RoutineInfo[]>
   /** Triggers in the namespace, optionally only for one table. */
   listTriggers(ns: Namespace, table?: string): Promise<TriggerInfo[]>
+  /** Scheduled events (MySQL). PostgreSQL returns []. */
+  listEvents(ns: Namespace): Promise<EventInfo[]>
   browseRows(ns: Namespace, table: string, opts: BrowseOptions): Promise<BrowseResult>
   insertRow(ns: Namespace, table: string, values: RowValues): Promise<{ affectedRows: number }>
   /** Bulk insert (imports): parameterised multi-row INSERTs inside one transaction; all-or-nothing. */
@@ -170,6 +173,7 @@ export const ADAPTER_METHOD_NAMES = [
   'describeTable',
   'listRoutines',
   'listTriggers',
+  'listEvents',
   'browseRows',
   'insertRow',
   'insertRows',

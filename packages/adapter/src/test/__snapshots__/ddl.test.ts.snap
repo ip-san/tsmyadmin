@@ -42,6 +42,12 @@ exports[`DDL builders > mysql: createTable 1`] = `
 ]
 `;
 
+exports[`DDL builders > mysql: disableEvent 1`] = `
+[
+  "ALTER EVENT \`db\`.\`ev\`\`x\` DISABLE",
+]
+`;
+
 exports[`DDL builders > mysql: dropColumn 1`] = `
 [
   "ALTER TABLE \`db\`.\`t\` DROP COLUMN \`n\`",
@@ -54,6 +60,12 @@ exports[`DDL builders > mysql: dropDatabase 1`] = `
 ]
 `;
 
+exports[`DDL builders > mysql: dropEvent 1`] = `
+[
+  "DROP EVENT \`db\`.\`ev\`\`x\`",
+]
+`;
+
 exports[`DDL builders > mysql: dropIndex 1`] = `
 [
   "DROP INDEX \`idx_t_a_b\` ON \`db\`.\`t\`",
@@ -63,6 +75,12 @@ exports[`DDL builders > mysql: dropIndex 1`] = `
 exports[`DDL builders > mysql: dropTable 1`] = `
 [
   "DROP TABLE \`db\`.\`t\`",
+]
+`;
+
+exports[`DDL builders > mysql: enableEvent 1`] = `
+[
+  "ALTER EVENT \`db\`.\`ev\`\`x\` ENABLE",
 ]
 `;
 
