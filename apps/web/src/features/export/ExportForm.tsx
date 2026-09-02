@@ -14,11 +14,13 @@ export interface ExportFormProps {
   schema?: string | undefined
   /** When set, the form exports just this table (table-level tab). */
   table?: string
+  /** Tables ticked in advance (bulk action on the structure page). */
+  initialTables?: string[]
 }
 
-export function ExportForm({ db, schema, table }: ExportFormProps) {
+export function ExportForm({ db, schema, table, initialTables }: ExportFormProps) {
   const tables = useQuery({ ...tablesQuery(db, schema), enabled: table === undefined })
-  const [selected, setSelected] = useState<string[]>(table ? [table] : [])
+  const [selected, setSelected] = useState<string[]>(table ? [table] : (initialTables ?? []))
   const [format, setFormat] = useState<ExportFormat>('sql')
   const [structure, setStructure] = useState(true)
   const [dropTable, setDropTable] = useState(true)

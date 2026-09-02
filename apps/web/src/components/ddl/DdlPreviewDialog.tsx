@@ -11,6 +11,8 @@ const DESTRUCTIVE = new Set<DdlOp['op']>([
   'dropForeignKey',
   'dropDatabase',
   'dropEvent',
+  'dropTables',
+  'truncateTables',
 ])
 
 /** Ops that destroy data with no undo: the user retypes the object name before they can run. */
@@ -21,6 +23,10 @@ function confirmName(op: DdlOp): string | null {
       return op.table
     case 'dropDatabase':
       return op.name
+    // Bulk ops: retyping every name is impractical, the count of tables is what the user must acknowledge.
+    case 'dropTables':
+    case 'truncateTables':
+      return String(op.tables.length)
     default:
       return null
   }
@@ -41,6 +47,9 @@ function lossWarning(op: DdlOp): string | null {
       return locale.ddl.columnLoss
     case 'dropDatabase':
       return locale.ddl.databaseLoss
+    case 'dropTables':
+    case 'truncateTables':
+      return locale.ddl.bulkLoss(op.tables.length)
     default:
       return null
   }

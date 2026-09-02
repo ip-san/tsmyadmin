@@ -91,6 +91,15 @@ for (const t of TARGETS) {
       await page.goto(tableUrl(t, table))
       await expect(page.getByText('全 1 行')).toBeVisible()
       await page.goto(tableUrl(t, table, '/operations'))
+      // table comment + maintenance through the same preview flow
+      await page.getByLabel('コメント').fill('from e2e')
+      await page
+        .getByRole('form', { name: 'テーブルオプション' })
+        .getByRole('button', { name: '次へ（SQL を確認）' })
+        .click()
+      await confirmPreview(page, /COMMENT/)
+      await page.getByRole('button', { name: t.dialect === 'mysql' ? 'ANALYZE TABLE' : 'ANALYZE', exact: true }).click()
+      await confirmPreview(page, /ANALYZE/)
       await page.getByRole('button', { name: 'テーブルを空にする…' }).click()
       await confirmPreview(page, /TRUNCATE TABLE/, table)
       await page.goto(tableUrl(t, table))
@@ -100,6 +109,34 @@ for (const t of TARGETS) {
       await confirmPreview(page, /DROP TABLE/, table)
       await expect(page).toHaveURL(new RegExp(`/db/${t.database}(\\?|$)`))
       await expect(page.getByRole('table').first().getByRole('link', { name: table, exact: true })).toHaveCount(0)
+    })
+
+    test('bulk-truncates and bulk-drops selected tables from the database structure page', async ({ page }) => {
+      const stamp = Date.now().toString(36)
+      const a = `e2e_bulk_a_${stamp}`
+      const b = `e2e_bulk_b_${stamp}`
+      await page.request.post(`/api/databases/${t.database}/sql`, {
+        data: {
+          sql: `CREATE TABLE ${a} (id INT PRIMARY KEY); CREATE TABLE ${b} (id INT PRIMARY KEY); INSERT INTO ${a} (id) VALUES (1)`,
+          ...(t.schema ? { schema: t.schema } : {}),
+        },
+      })
+      const dbUrl = t.schema ? `/db/${t.database}?schema=${t.schema}` : `/db/${t.database}`
+      await page.goto(dbUrl)
+      await page.getByLabel(`${a} を選択`).check()
+      await page.getByLabel(`${b} を選択`).check()
+      await expect(page.getByText('2 件のテーブルを選択中')).toBeVisible()
+      await page.getByRole('button', { name: '選択したテーブルを空にする…' }).click()
+      await confirmPreview(page, /TRUNCATE TABLE/, '2')
+      await page.goto(tableUrl(t, a))
+      await expect(page.getByText('全 0 行')).toBeVisible()
+      await page.goto(dbUrl)
+      await page.getByLabel(`${a} を選択`).check()
+      await page.getByLabel(`${b} を選択`).check()
+      await page.getByRole('button', { name: '選択したテーブルを削除…' }).click()
+      await confirmPreview(page, /DROP TABLE/, '2')
+      await expect(page.getByRole('link', { name: a, exact: true })).toHaveCount(0)
+      await expect(page.getByRole('link', { name: b, exact: true })).toHaveCount(0)
     })
 
     test('renames a table and creates/drops a database through previews', async ({ page }) => {

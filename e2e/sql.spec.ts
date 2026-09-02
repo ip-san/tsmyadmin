@@ -27,6 +27,17 @@ for (const t of TARGETS) {
       await expect(page.getByText('履歴 (1)')).toBeVisible()
     })
 
+    test('server-level console resolves unqualified names in the selected database', async ({ page }) => {
+      await page.goto('/sql')
+      await page.getByLabel('対象データベース').selectOption(t.database)
+      await expect(page).toHaveURL(new RegExp(`db=${t.database}`))
+      await typeSql(page, 'SELECT COUNT(*) AS n FROM users')
+      await page.getByRole('button', { name: '実行する', exact: true }).click()
+      await expect(
+        page.getByRole('region', { name: '文 1' }).getByRole('cell', { name: '5', exact: true })
+      ).toBeVisible()
+    })
+
     test('attributes errors to the failing statement and records history', async ({ page }) => {
       await page.goto(t.schema ? `/db/${t.database}/sql?schema=${t.schema}` : `/db/${t.database}/sql`)
       await typeSql(page, 'SELECT 1 AS ok; SELECT * FROM table_that_is_missing; SELECT 3')

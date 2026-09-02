@@ -47,6 +47,13 @@
 - MariaDB: ユーザー一覧（`mysql.user.account_locked` がない）を `global_priv` から取得、`SHOW GRANTS` のパスワードハッシュを除去、errno 1969 などに名前を補完。CI に MariaDB 11 の conformance ジョブを追加
 - API: 許可外ホストへのログインは `HOST_NOT_ALLOWED`、上限超過は `PAYLOAD_TOO_LARGE`（インポートのファイル超過も 413）
 
+### 追加
+
+- 操作タブに「テーブルオプション」（コメント。MySQL はエンジン・照合順序・次の AUTO_INCREMENT 値）と「メンテナンス」（ANALYZE / OPTIMIZE / CHECK TABLE、PostgreSQL は ANALYZE / VACUUM / VACUUM FULL）
+- データベース構造ページで複数テーブルを選択して一括で空にする・削除する・エクスポート対象にする
+- サーバーの SQL タブで対象データベースを選択できる（MySQL では既定が information_schema だった）
+- PostgreSQL のカラム変更プレビューは変更された句だけを出す（型・NOT NULL・既定値・コメントの差分）
+
 ### 変更
 
 - 日本語 UI の用語統一（カラム / 行・件 / データベース / ユーザーを作成 / システム変数 など）、送信ボタンは「〜する」、取り消せない操作の警告はデータが失われる操作だけに「データは失われます」を付ける、英語メッセージの二重表示を廃止

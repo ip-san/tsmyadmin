@@ -39,6 +39,10 @@ export const pgDdl: DdlBuilder = {
       case 'disableEvent':
       case 'dropEvent':
         throw new AdapterError('UNSUPPORTED', 'PostgreSQL has no event scheduler')
+      case 'dropTables':
+        return [`DROP TABLE ${op.tables.map((x) => quoteTable('postgres', ns, x)).join(', ')}`]
+      case 'truncateTables':
+        return [`TRUNCATE TABLE ${op.tables.map((x) => quoteTable('postgres', ns, x)).join(', ')}`]
       default:
         break
     }
@@ -55,18 +59,27 @@ export const pgDdl: DdlBuilder = {
         return [`ALTER TABLE ${t} ADD COLUMN ${columnDef(op.column)}`, ...commentSql(t, op.column)]
       case 'modifyColumn': {
         const c = op.column
+        const prev = op.previous
         const out: string[] = []
         if (op.name !== c.name) out.push(`ALTER TABLE ${t} RENAME COLUMN ${id(op.name)} TO ${id(c.name)}`)
         const col = id(c.name)
-        out.push(`ALTER TABLE ${t} ALTER COLUMN ${col} TYPE ${c.dataType}`)
-        out.push(`ALTER TABLE ${t} ALTER COLUMN ${col} ${c.nullable ? 'DROP NOT NULL' : 'SET NOT NULL'}`)
+        // With the current definition known, only what changed is emitted: an ALTER TYPE rewrites the table
+        // and a DROP DEFAULT the user never asked for is exactly what a reviewing DBA refuses to run.
+        if (prev === undefined || prev.dataType !== c.dataType) {
+          out.push(`ALTER TABLE ${t} ALTER COLUMN ${col} TYPE ${c.dataType}`)
+        }
+        if (prev === undefined || prev.nullable !== c.nullable) {
+          out.push(`ALTER TABLE ${t} ALTER COLUMN ${col} ${c.nullable ? 'DROP NOT NULL' : 'SET NOT NULL'}`)
+        }
         // A serial / identity column keeps its generator: touching DEFAULT would drop nextval() or fail on an
         // identity column. Turning a plain column into an identity one is left to hand-written SQL.
-        if (!c.autoIncrement) {
+        if (!c.autoIncrement && (prev === undefined || defaultSql(prev) !== defaultSql(c))) {
           const def = defaultSql(c)
           out.push(`ALTER TABLE ${t} ALTER COLUMN ${col} ${def ? `SET DEFAULT ${def}` : 'DROP DEFAULT'}`)
         }
-        if (c.comment !== null) out.push(`COMMENT ON COLUMN ${t}.${col} IS ${pgLiteral(c.comment)}`)
+        if (c.comment !== null && (prev === undefined || prev.comment !== c.comment)) {
+          out.push(`COMMENT ON COLUMN ${t}.${col} IS ${pgLiteral(c.comment)}`)
+        }
         return out
       }
       case 'dropColumn':
@@ -88,6 +101,24 @@ export const pgDdl: DdlBuilder = {
       case 'renameTable':
         // Renaming keeps the table in its schema; the new name must not be qualified.
         return [`ALTER TABLE ${t} RENAME TO ${id(op.newName)}`]
+      case 'setTableOptions':
+        if (op.engine !== undefined || op.collation !== undefined || op.autoIncrement !== undefined) {
+          throw new AdapterError('UNSUPPORTED', 'PostgreSQL tables have no engine, collation or AUTO_INCREMENT option')
+        }
+        if (op.comment === undefined) throw new AdapterError('VALIDATION', 'No table option to change')
+        return [`COMMENT ON TABLE ${t} IS ${op.comment === null ? 'NULL' : pgLiteral(op.comment)}`]
+      case 'maintainTable':
+        switch (op.action) {
+          case 'analyze':
+            return [`ANALYZE ${t}`]
+          case 'vacuum':
+            return [`VACUUM (ANALYZE) ${t}`]
+          case 'optimize':
+            return [`VACUUM (FULL, ANALYZE) ${t}`]
+          case 'check':
+            throw new AdapterError('UNSUPPORTED', 'PostgreSQL has no CHECK TABLE')
+        }
+        break
       case 'copyTable': {
         const target = quoteTable('postgres', ns, op.newName)
         // INCLUDING ALL keeps defaults, constraints (incl. PK), indexes and comments; foreign keys are not copied.

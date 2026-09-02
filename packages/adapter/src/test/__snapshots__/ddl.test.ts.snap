@@ -90,9 +90,21 @@ exports[`DDL builders > mysql: dropTable 1`] = `
 ]
 `;
 
+exports[`DDL builders > mysql: dropTables 1`] = `
+[
+  "DROP TABLE \`db\`.\`t\`, \`db\`.\`we"ird\`\`tbl\`",
+]
+`;
+
 exports[`DDL builders > mysql: enableEvent 1`] = `
 [
   "ALTER EVENT \`db\`.\`ev\`\`x\` ENABLE",
+]
+`;
+
+exports[`DDL builders > mysql: maintainTable 1`] = `
+[
+  "ANALYZE TABLE \`db\`.\`t\`",
 ]
 `;
 
@@ -108,9 +120,22 @@ exports[`DDL builders > mysql: renameTable 1`] = `
 ]
 `;
 
+exports[`DDL builders > mysql: setTableOptions 1`] = `
+[
+  "ALTER TABLE \`db\`.\`t\` COMMENT = 'it''s'",
+]
+`;
+
 exports[`DDL builders > mysql: truncateTable 1`] = `
 [
   "TRUNCATE TABLE \`db\`.\`t\`",
+]
+`;
+
+exports[`DDL builders > mysql: truncateTables 1`] = `
+[
+  "TRUNCATE TABLE \`db\`.\`t\`",
+  "TRUNCATE TABLE \`db\`.\`we"ird\`\`tbl\`",
 ]
 `;
 
@@ -197,6 +222,18 @@ exports[`DDL builders > postgres: dropTable 1`] = `
 ]
 `;
 
+exports[`DDL builders > postgres: dropTables 1`] = `
+[
+  "DROP TABLE "app"."t", "app"."we""ird\`tbl"",
+]
+`;
+
+exports[`DDL builders > postgres: maintainTable 1`] = `
+[
+  "ANALYZE "app"."t"",
+]
+`;
+
 exports[`DDL builders > postgres: modifyColumn 1`] = `
 [
   "ALTER TABLE "app"."t" RENAME COLUMN "n" TO "n2"",
@@ -213,8 +250,20 @@ exports[`DDL builders > postgres: renameTable 1`] = `
 ]
 `;
 
+exports[`DDL builders > postgres: setTableOptions 1`] = `
+[
+  "COMMENT ON TABLE "app"."t" IS 'it''s'",
+]
+`;
+
 exports[`DDL builders > postgres: truncateTable 1`] = `
 [
   "TRUNCATE TABLE "app"."t"",
+]
+`;
+
+exports[`DDL builders > postgres: truncateTables 1`] = `
+[
+  "TRUNCATE TABLE "app"."t", "app"."we""ird\`tbl"",
 ]
 `;

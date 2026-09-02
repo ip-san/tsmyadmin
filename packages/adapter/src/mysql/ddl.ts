@@ -2,7 +2,7 @@ import type { ColumnSpec, DdlOp, Namespace } from '@tsmyadmin/shared'
 import { addForeignKeySql, createIndexSql } from '../sql/ddl-common.ts'
 import { mysqlLiteral } from '../sql/literal.ts'
 import { quoteIdent, quoteTable } from '../sql/quote.ts'
-import type { DdlBuilder } from '../types.ts'
+import { AdapterError, type DdlBuilder } from '../types.ts'
 
 const id = (s: string) => quoteIdent('mysql', s)
 
@@ -31,6 +31,10 @@ export const mysqlDdl: DdlBuilder = {
         return [`ALTER EVENT ${quoteTable('mysql', ns, op.name)} DISABLE`]
       case 'dropEvent':
         return [`DROP EVENT ${quoteTable('mysql', ns, op.name)}`]
+      case 'dropTables':
+        return [`DROP TABLE ${op.tables.map((x) => quoteTable('mysql', ns, x)).join(', ')}`]
+      case 'truncateTables':
+        return op.tables.map((x) => `TRUNCATE TABLE ${quoteTable('mysql', ns, x)}`)
       default:
         break
     }
@@ -65,6 +69,28 @@ export const mysqlDdl: DdlBuilder = {
         return [`TRUNCATE TABLE ${t}`]
       case 'renameTable':
         return [`RENAME TABLE ${t} TO ${quoteTable('mysql', ns, op.newName)}`]
+      case 'setTableOptions': {
+        // engine / collation are schema-validated identifiers (`[A-Za-z0-9_]+`), so they are safe unquoted.
+        const parts: string[] = []
+        if (op.comment !== undefined) parts.push(`COMMENT = ${mysqlLiteral(op.comment ?? '')}`)
+        if (op.engine !== undefined) parts.push(`ENGINE = ${op.engine}`)
+        if (op.collation !== undefined) parts.push(`COLLATE = ${op.collation}`)
+        if (op.autoIncrement !== undefined) parts.push(`AUTO_INCREMENT = ${Math.floor(op.autoIncrement)}`)
+        if (parts.length === 0) throw new AdapterError('VALIDATION', 'No table option to change')
+        return [`ALTER TABLE ${t} ${parts.join(', ')}`]
+      }
+      case 'maintainTable':
+        switch (op.action) {
+          case 'analyze':
+            return [`ANALYZE TABLE ${t}`]
+          case 'optimize':
+            return [`OPTIMIZE TABLE ${t}`]
+          case 'check':
+            return [`CHECK TABLE ${t}`]
+          case 'vacuum':
+            throw new AdapterError('UNSUPPORTED', 'MySQL has no VACUUM; use OPTIMIZE TABLE')
+        }
+        break
       case 'copyTable': {
         const target = quoteTable('mysql', ns, op.newName)
         // LIKE keeps indexes, keys and AUTO_INCREMENT; foreign keys are not copied (as in phpMyAdmin).

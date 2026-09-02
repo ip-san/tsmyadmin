@@ -34,7 +34,14 @@ export const DdlOpSchema = z.discriminatedUnion('op', [
     primaryKey: z.array(z.string().min(1)).default([]),
   }),
   z.object({ op: z.literal('addColumn'), table, column: ColumnSpecSchema, after: z.string().min(1).optional() }),
-  z.object({ op: z.literal('modifyColumn'), table, name: z.string().min(1), column: ColumnSpecSchema }),
+  z.object({
+    op: z.literal('modifyColumn'),
+    table,
+    name: z.string().min(1),
+    column: ColumnSpecSchema,
+    /** Current definition; when present PostgreSQL emits only the clauses that actually change. */
+    previous: ColumnSpecSchema.optional(),
+  }),
   z.object({ op: z.literal('dropColumn'), table, name: z.string().min(1) }),
   z.object({
     op: z.literal('addIndex'),
@@ -76,6 +83,26 @@ export const DdlOpSchema = z.discriminatedUnion('op', [
     /** serial columns: the copy gets its own sequence instead of sharing the source's (PostgreSQL). */
     serialColumns: z.array(z.string().min(1)).optional(),
   }),
+  /** Table-level options; engine / collation / autoIncrement are MySQL-only (PostgreSQL: UNSUPPORTED). */
+  z.object({
+    op: z.literal('setTableOptions'),
+    table,
+    comment: z.string().nullable().optional(),
+    engine: z
+      .string()
+      .regex(/^[A-Za-z0-9_]+$/)
+      .optional(),
+    collation: z
+      .string()
+      .regex(/^[A-Za-z0-9_]+$/)
+      .optional(),
+    autoIncrement: z.number().int().min(0).optional(),
+  }),
+  /** Maintenance statements: MySQL ANALYZE / OPTIMIZE / CHECK TABLE, PostgreSQL ANALYZE / VACUUM (FULL). */
+  z.object({ op: z.literal('maintainTable'), table, action: z.enum(['analyze', 'optimize', 'check', 'vacuum']) }),
+  /** Bulk actions from the database structure page. */
+  z.object({ op: z.literal('dropTables'), tables: z.array(table).min(1) }),
+  z.object({ op: z.literal('truncateTables'), tables: z.array(table).min(1) }),
   /** MySQL event scheduler (PostgreSQL: UNSUPPORTED). */
   z.object({ op: z.literal('enableEvent'), name: z.string().min(1) }),
   z.object({ op: z.literal('disableEvent'), name: z.string().min(1) }),

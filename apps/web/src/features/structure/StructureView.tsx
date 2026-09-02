@@ -246,7 +246,14 @@ export function StructureView({ tableRef, dialect }: { tableRef: TableRef; diale
               const column = toColumnSpec(values)
               setColumnDialog(null)
               if (columnDialog.mode === 'modify')
-                flow.preview({ op: 'modifyColumn', table, name: columnDialog.name, column })
+                flow.preview({
+                  op: 'modifyColumn',
+                  table,
+                  name: columnDialog.name,
+                  column,
+                  // The current definition lets PostgreSQL emit only the clauses that change.
+                  ...(editing ? { previous: toColumnSpec(fromColumnDef(editing, dialect)) } : {}),
+                })
               else flow.preview({ op: 'addColumn', table, column, ...(after ? { after } : {}) })
             }}
           />

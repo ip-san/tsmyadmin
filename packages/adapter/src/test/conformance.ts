@@ -82,6 +82,8 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
     `${scratch}_typedkey`,
     `${scratch}_enumkey`,
     `${scratch}_bigkey`,
+    `${scratch}_bulk_a`,
+    `${scratch}_bulk_b`,
     `${scratch}_nokey`,
     `${scratch}_inh_child`,
     `${scratch}_inh`,
@@ -1574,6 +1576,24 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
 
         await runDdl({ op: 'dropTable', table: scratchDdl, kind: 'table' })
         await expect(db.describeTable(ns, scratchDdl)).rejects.toMatchObject({ code: 'NOT_FOUND' })
+      })
+
+      it('sets a table comment, runs maintenance and bulk-drops / truncates tables', async () => {
+        const a = `${scratch}_bulk_a`
+        const b = `${scratch}_bulk_b`
+        await execOk(`CREATE TABLE ${a} (id INT PRIMARY KEY); CREATE TABLE ${b} (id INT PRIMARY KEY)`)
+        await execOk(`INSERT INTO ${a} (id) VALUES (1); INSERT INTO ${b} (id) VALUES (1)`)
+        await runDdl({ op: 'setTableOptions', table: a, comment: "bulk 'a'" })
+        expect((await db.describeTable(ns, a)).comment).toBe("bulk 'a'")
+        await runDdl({ op: 'maintainTable', table: a, action: 'analyze' })
+        if (dialect === 'mysql') await runDdl({ op: 'maintainTable', table: a, action: 'check' })
+        else await runDdl({ op: 'maintainTable', table: a, action: 'vacuum' })
+        await runDdl({ op: 'truncateTables', tables: [a, b] })
+        expect((await browseAll(a)).total).toBe(0)
+        expect((await browseAll(b)).total).toBe(0)
+        await runDdl({ op: 'dropTables', tables: [a, b] })
+        await expect(db.describeTable(ns, a)).rejects.toMatchObject({ code: 'NOT_FOUND' })
+        await expect(db.describeTable(ns, b)).rejects.toMatchObject({ code: 'NOT_FOUND' })
       })
 
       it('copies a table with and without data', async () => {

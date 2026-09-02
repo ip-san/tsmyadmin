@@ -40,6 +40,10 @@ const SAMPLE_OPS: Record<DdlOp['op'], DdlOp> = {
     column: col('n2', 'BIGINT', { nullable: false, comment: 'renamed' }),
   },
   dropColumn: { op: 'dropColumn', table: 't', name: 'n' },
+  setTableOptions: { op: 'setTableOptions', table: 't', comment: "it's" },
+  maintainTable: { op: 'maintainTable', table: 't', action: 'analyze' },
+  dropTables: { op: 'dropTables', tables: ['t', 'we"ird`tbl'] },
+  truncateTables: { op: 'truncateTables', tables: ['t', 'we"ird`tbl'] },
   addIndex: { op: 'addIndex', table: 't', name: 'idx_t_a_b', columns: ['a', 'b'], unique: true },
   dropIndex: { op: 'dropIndex', table: 't', name: 'idx_t_a_b' },
   addForeignKey: {
@@ -101,6 +105,59 @@ describe('DDL builders', () => {
     expect(mysqlDdl.build({ database: 'db' }, view)).toEqual(['DROP VIEW `db`.`v`'])
     expect(pgDdl.build({ database: 'db', schema: 'app' }, view)).toEqual(['DROP VIEW "app"."v"'])
     expect(pgDdl.build({ database: 'db', schema: 'app' }, mat)).toEqual(['DROP MATERIALIZED VIEW "app"."m"'])
+  })
+
+  it('modifyColumn with the previous definition emits only the changed clauses on PostgreSQL', () => {
+    const previous = col('n', 'INT', { nullable: true, comment: 'old' })
+    const same: DdlOp = {
+      op: 'modifyColumn',
+      table: 't',
+      name: 'n',
+      column: col('n', 'INT', { nullable: true, comment: 'new' }),
+      previous,
+    }
+    expect(pgDdl.build({ database: 'db', schema: 'app' }, same)).toEqual([`COMMENT ON COLUMN "app"."t"."n" IS 'new'`])
+    const typed: DdlOp = {
+      op: 'modifyColumn',
+      table: 't',
+      name: 'n',
+      column: col('n', 'BIGINT', { nullable: false, comment: 'old' }),
+      previous,
+    }
+    expect(pgDdl.build({ database: 'db', schema: 'app' }, typed)).toEqual([
+      'ALTER TABLE "app"."t" ALTER COLUMN "n" TYPE BIGINT',
+      'ALTER TABLE "app"."t" ALTER COLUMN "n" SET NOT NULL',
+    ])
+  })
+
+  it('table options and maintenance follow each dialect', () => {
+    const opts: DdlOp = {
+      op: 'setTableOptions',
+      table: 't',
+      comment: 'c',
+      engine: 'InnoDB',
+      collation: 'utf8mb4_bin',
+      autoIncrement: 100,
+    }
+    expect(mysqlDdl.build({ database: 'db' }, opts)).toEqual([
+      "ALTER TABLE `db`.`t` COMMENT = 'c', ENGINE = InnoDB, COLLATE = utf8mb4_bin, AUTO_INCREMENT = 100",
+    ])
+    expect(() => pgDdl.build({ database: 'db' }, opts)).toThrow(/no engine/)
+    expect(pgDdl.build({ database: 'db' }, { op: 'setTableOptions', table: 't', comment: null })).toEqual([
+      'COMMENT ON TABLE "public"."t" IS NULL',
+    ])
+    expect(mysqlDdl.build({ database: 'db' }, { op: 'maintainTable', table: 't', action: 'optimize' })).toEqual([
+      'OPTIMIZE TABLE `db`.`t`',
+    ])
+    expect(() => mysqlDdl.build({ database: 'db' }, { op: 'maintainTable', table: 't', action: 'vacuum' })).toThrow(
+      /VACUUM/
+    )
+    expect(pgDdl.build({ database: 'db' }, { op: 'maintainTable', table: 't', action: 'vacuum' })).toEqual([
+      'VACUUM (ANALYZE) "public"."t"',
+    ])
+    expect(() => pgDdl.build({ database: 'db' }, { op: 'maintainTable', table: 't', action: 'check' })).toThrow(
+      /CHECK TABLE/
+    )
   })
 
   it('escapes string literals per dialect', () => {
