@@ -279,13 +279,17 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
         let op = body.op
         // A data copy lists the insertable columns: generated columns cannot be written (INSERT ... SELECT *
         // would fail after the empty copy was already created, since DDL autocommits).
-        if (op.op === 'copyTable' && op.withData && op.columns === undefined) {
+        if (op.op === 'copyTable' && op.columns === undefined && adapter.dialect === 'postgres') {
           const schema = await adapter.describeTable(target, op.table)
           op = {
             ...op,
             columns: schema.columns.filter((col) => !isGeneratedColumn(col.extra)).map((col) => col.name),
             identityColumns: schema.columns.filter((col) => col.extra.startsWith('identity')).map((col) => col.name),
+            serialColumns: schema.columns.filter((col) => col.extra === 'serial').map((col) => col.name),
           }
+        } else if (op.op === 'copyTable' && op.withData && op.columns === undefined) {
+          const schema = await adapter.describeTable(target, op.table)
+          op = { ...op, columns: schema.columns.filter((col) => !isGeneratedColumn(col.extra)).map((col) => col.name) }
         }
         return c.json({ sql: adapter.ddl.build(target, op) })
       })

@@ -136,7 +136,10 @@ exports[`DDL builders > postgres: copyTable 1`] = `
 [
   "CREATE TABLE "app"."t_copy" (LIKE "app"."t" INCLUDING ALL)",
   "INSERT INTO "app"."t_copy" ("id", "na\`me") OVERRIDING SYSTEM VALUE SELECT "id", "na\`me" FROM "app"."t"",
-  "SELECT setval(pg_get_serial_sequence('"app"."t_copy"', 'id'), COALESCE(MAX("id"), 1), MAX("id") IS NOT NULL) FROM "app"."t_copy"",
+  "CREATE SEQUENCE "app"."t_copy_na\`me_seq" OWNED BY "app"."t_copy"."na\`me"",
+  "ALTER TABLE "app"."t_copy" ALTER COLUMN "na\`me" SET DEFAULT nextval('"app"."t_copy_na\`me_seq"'::regclass)",
+  "SELECT setval(s.seqrelid, GREATEST(m.max_id, s.seqmin), m.max_id >= s.seqmin) FROM (SELECT MAX("id")::bigint AS max_id FROM "app"."t_copy") m JOIN pg_sequence s ON s.seqrelid = pg_get_serial_sequence('"app"."t_copy"', 'id')::regclass WHERE m.max_id IS NOT NULL",
+  "SELECT setval(s.seqrelid, GREATEST(m.max_id, s.seqmin), m.max_id >= s.seqmin) FROM (SELECT MAX("na\`me")::bigint AS max_id FROM "app"."t_copy") m JOIN pg_sequence s ON s.seqrelid = pg_get_serial_sequence('"app"."t_copy"', 'na\`me')::regclass WHERE m.max_id IS NOT NULL",
 ]
 `;
 

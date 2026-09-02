@@ -220,7 +220,14 @@ export class MysqlAdapter extends BaseAdapter {
         this.broken.add(core)
       }
     }
-    return { query: (text, params, options) => this.run(conn, text, params, options), release, id: core, reset, forget }
+    return {
+      query: (text, params, options) => this.run(conn, text, params, options),
+      release,
+      id: core,
+      reset,
+      forget,
+      discard: () => this.broken.add(core),
+    }
   }
 
   protected override wrapperOnlyErrors(): ReadonlySet<string> {

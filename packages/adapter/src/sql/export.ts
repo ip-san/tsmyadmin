@@ -13,6 +13,16 @@ export function isGeneratedColumn(extra: string): boolean {
   return /^(?:(?:VIRTUAL|STORED) )?GENERATED\b/i.test(extra)
 }
 
+/**
+ * Moves the sequence behind an identity / serial column past the values now in the table. Nothing happens for
+ * an empty table or when there is no sequence, and the value is clamped to the sequence minimum (a `MINVALUE
+ * 1000` sequence must not be set to 1, nor to a negative id).
+ */
+export function pgAdvanceSequence(quotedTable: string, column: string): string {
+  const col = quoteIdent('postgres', column)
+  return `SELECT setval(s.seqrelid, GREATEST(m.max_id, s.seqmin), m.max_id >= s.seqmin) FROM (SELECT MAX(${col})::bigint AS max_id FROM ${quotedTable}) m JOIN pg_sequence s ON s.seqrelid = pg_get_serial_sequence(${pgLiteral(quotedTable)}, ${pgLiteral(column)})::regclass WHERE m.max_id IS NOT NULL`
+}
+
 /** Dump statements: every identifier is quoted and every value goes through cellLiteral. Dialect-agnostic. */
 export function createExporter(dialect: Dialect): SqlExporter {
   return {
@@ -46,10 +56,7 @@ export function createExporter(dialect: Dialect): SqlExporter {
       const t = quoteTable(dialect, ns, schema.name)
       return schema.columns
         .filter((c) => c.extra.startsWith('identity') || c.extra === 'serial')
-        .map(
-          (c) =>
-            `SELECT setval(pg_get_serial_sequence(${pgLiteral(t)}, ${pgLiteral(c.name)}), COALESCE(MAX(${quoteIdent(dialect, c.name)}), 1), MAX(${quoteIdent(dialect, c.name)}) IS NOT NULL) FROM ${t};`
-        )
+        .map((c) => `${pgAdvanceSequence(t, c.name)};`)
     },
   }
 }

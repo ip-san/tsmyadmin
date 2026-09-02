@@ -71,8 +71,10 @@ export const TableSchemaSchema = z.object({
   engine: z.string().nullable(),
   /** Catalog row-count estimate (TABLE_ROWS / reltuples); null for views or before the table was analysed. */
   rowEstimate: z.number().nullable(),
-  /** Partitioned / inherited parent (PostgreSQL): rows live in child relations, so ctid cannot identify them. */
+  /** Partitioned table (PostgreSQL relkind 'p'): rows live only in the partitions. */
   partitioned: z.boolean(),
+  /** Inheritance parent (PostgreSQL): reads through it include child rows, so ctid cannot identify a row. */
+  hasChildren: z.boolean(),
   columns: z.array(ColumnDefSchema),
   primaryKey: z.array(z.string()),
   indexes: z.array(IndexDefSchema),

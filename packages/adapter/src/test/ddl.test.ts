@@ -66,6 +66,7 @@ const SAMPLE_OPS: Record<DdlOp['op'], DdlOp> = {
     withData: true,
     columns: ['id', 'na`me'],
     identityColumns: ['id'],
+    serialColumns: ['na`me'],
   },
   enableEvent: { op: 'enableEvent', name: 'ev`x' },
   disableEvent: { op: 'disableEvent', name: 'ev`x' },

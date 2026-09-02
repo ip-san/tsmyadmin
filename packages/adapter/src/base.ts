@@ -63,6 +63,8 @@ export interface Conn {
   reset(): Promise<void>
   /** Drops any per-connection cache the dialect keeps (current database / search_path) so the next acquire re-applies it. */
   forget(): void
+  /** Marks the connection as not reusable: release() closes it instead of returning it to the pool. */
+  discard(): void
 }
 
 interface RunningEntry {
@@ -82,6 +84,14 @@ const NOT_WRAPPABLE =
 /** Leading whitespace and comments (kept in Statement.sql so the user sees what ran, ignored for the wrap test). */
 const LEADING_COMMENTS = /^(?:\s+|--[^\n]*(?:\n|$)|#[^\n]*(?:\n|$)|\/\*[\s\S]*?\*\/)+/
 
+/** String literals, quoted identifiers, dollar-quoted bodies and comments, replaced by a space (`'delete'` is data, not DML). */
+const LITERALS_AND_COMMENTS =
+  /'(?:[^'\\]|\\.|'')*'|"(?:[^"]|"")*"|`(?:[^`]|``)*`|(\$[A-Za-z_]*\$)[\s\S]*?\1|--[^\n]*|#[^\n]*|\/\*[\s\S]*?\*\//g
+
+function stripLiterals(code: string): string {
+  return code.replace(LITERALS_AND_COMMENTS, ' ')
+}
+
 const WRAP_PREFIX = 'SELECT * FROM (\n'
 const EMPTY_CODES: ReadonlySet<string> = new Set()
 
@@ -93,7 +103,7 @@ const EMPTY_CODES: ReadonlySet<string> = new Set()
 export function wrapReadOnly(sql: string, limit: number): string | null {
   const body = sql.trim().replace(/;+\s*$/, '')
   const code = body.replace(LEADING_COMMENTS, '')
-  if (!READ_START.test(code) || NOT_WRAPPABLE.test(code)) return null
+  if (!READ_START.test(code) || NOT_WRAPPABLE.test(stripLiterals(code))) return null
   return `${WRAP_PREFIX}${body}\n) AS _tsmyadmin LIMIT ${Math.max(1, Math.floor(limit))}`
 }
 
@@ -245,7 +255,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
   private readonly appliedTimeout = new WeakMap<object, number>()
 
   /** Checks out a connection with the statement timeout applied; `done()` mirrors withConn's cleanup. */
-  private async borrow(ns: Namespace, timeoutMs: number): Promise<{ conn: Conn; done: () => Promise<void> }> {
+  protected async borrow(ns: Namespace, timeoutMs: number): Promise<{ conn: Conn; done: () => Promise<void> }> {
     const conn = await this.acquire(ns)
     if (this.appliedTimeout.get(conn.id) !== timeoutMs) {
       try {
@@ -307,8 +317,8 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     )
     if (unique) return { keyKind: 'pk', keyColumns: unique.columns }
     const kind = this.fallbackKeyKind()
-    // ctid is unique per physical relation only: a partitioned / inherited parent repeats it across children.
-    if (kind === 'ctid' && schema.partitioned) return { keyKind: 'none', keyColumns: [] }
+    // ctid is unique per physical relation only: a partitioned / inheritance parent repeats it across children.
+    if (kind === 'ctid' && (schema.partitioned || schema.hasChildren)) return { keyKind: 'none', keyColumns: [] }
     return { keyKind: kind, keyColumns: kind === 'ctid' ? ['ctid'] : schema.columns.map((c) => c.name) }
   }
 
@@ -667,8 +677,13 @@ export abstract class BaseAdapter implements DatabaseAdapter {
             // into the next borrower of this pooled connection — nor may any session state the script set
             // (autocommit, sql_mode, SET ROLE, user variables, ...), hence the full session reset afterwards.
             // In a finally so an onResult/backendId failure cannot return a dirty connection to the pool.
-            await conn.query('ROLLBACK').catch(() => undefined)
-            await conn.reset()
+            // After a cancel the connection is closed rather than reused: a KILL QUERY / pg_cancel_backend
+            // signal still in transit would otherwise interrupt whatever the next borrower runs on it.
+            if (entry.cancelled) conn.discard()
+            else {
+              await conn.query('ROLLBACK').catch(() => undefined)
+              await conn.reset()
+            }
           }
         },
         opts.timeoutMs
@@ -734,7 +749,8 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     for (let attempt = 0; attempt < CANCEL_RETRIES; attempt++) {
       await new Promise((resolve) => setTimeout(resolve, CANCEL_RETRY_MS))
       if (this.running.get(queryId) !== entry || !entry.inFlight) break
-      await this.cancelBackend(entry.ns, backend)
+      // The first signal was delivered; a retry that cannot get a connection must not fail the request.
+      await this.cancelBackend(entry.ns, backend).catch(() => undefined)
     }
     return true
   }

@@ -1,5 +1,6 @@
 import type { ColumnSpec, DdlOp, Namespace, TableSchema } from '@tsmyadmin/shared'
 import { addForeignKeySql, createIndexSql } from '../sql/ddl-common.ts'
+import { pgAdvanceSequence } from '../sql/export.ts'
 import { pgLiteral } from '../sql/literal.ts'
 import { quoteIdent, quoteTable } from '../sql/quote.ts'
 import { AdapterError, type DdlBuilder } from '../types.ts'
@@ -99,12 +100,22 @@ export const pgDdl: DdlBuilder = {
               ? `INSERT INTO ${target} (${cols}) OVERRIDING SYSTEM VALUE SELECT ${cols} FROM ${t}`
               : `INSERT INTO ${target} OVERRIDING SYSTEM VALUE SELECT * FROM ${t}`
           )
-          // LIKE ... INCLUDING IDENTITY gives the copy fresh sequences starting at 1: advance them past the
+        }
+        // LIKE copies a serial column's DEFAULT nextval('<source>_seq'): the copy would draw ids from the
+        // source's sequence and pin it (DROP TABLE source then fails). Give the copy its own sequence, as
+        // MySQL's CREATE TABLE ... LIKE gives it its own AUTO_INCREMENT.
+        for (const c of op.serialColumns ?? []) {
+          const seq = quoteTable('postgres', ns, `${op.newName}_${c}_seq`)
+          out.push(
+            `CREATE SEQUENCE ${seq} OWNED BY ${target}.${id(c)}`,
+            `ALTER TABLE ${target} ALTER COLUMN ${id(c)} SET DEFAULT nextval(${pgLiteral(seq)}::regclass)`
+          )
+        }
+        if (op.withData) {
+          // INCLUDING IDENTITY gives the copy fresh sequences starting at their minimum: advance them past the
           // copied ids, exactly as the SQL dump does, or the first insert into the copy collides.
-          for (const c of op.identityColumns ?? []) {
-            out.push(
-              `SELECT setval(pg_get_serial_sequence(${pgLiteral(target)}, ${pgLiteral(c)}), COALESCE(MAX(${id(c)}), 1), MAX(${id(c)}) IS NOT NULL) FROM ${target}`
-            )
+          for (const c of [...(op.identityColumns ?? []), ...(op.serialColumns ?? [])]) {
+            out.push(pgAdvanceSequence(target, c))
           }
         }
         return out

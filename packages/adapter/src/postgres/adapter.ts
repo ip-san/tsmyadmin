@@ -17,7 +17,7 @@ import { isViewKind } from '@tsmyadmin/shared'
 import pg, { type FieldDef, type PoolClient, type QueryResult } from 'pg'
 import { BaseAdapter, type Conn, driverValueToCell, firstResult, type QueryOptions, type RawResult } from '../base.ts'
 import { quoteIdent, quoteTable } from '../sql/quote.ts'
-import { AdapterError, type AdapterErrorCode, type ConnectionConfig } from '../types.ts'
+import { AdapterError, type AdapterErrorCode, type ConnectionConfig, type RowBatch } from '../types.ts'
 import { pgCreateStatements, pgDdl } from './ddl.ts'
 import { pgExporter } from './export.ts'
 import { pgDescribeTable, pgListSchemas, pgListTables } from './introspect.ts'
@@ -191,6 +191,54 @@ export class PostgresAdapter extends BaseAdapter {
       id: client,
       reset,
       forget,
+      discard: () => this.broken.add(client),
+    }
+  }
+
+  /**
+   * Server-side cursor instead of keyset paging: O(N) for every relation (a ctid keyset rescans the heap per
+   * batch, and key-less relations would otherwise be read in one unbounded SELECT), memory bounded to one
+   * batch, and `ONLY` so an inheritance parent yields its own rows exactly once — pg_dump semantics. Rows are
+   * ordered by the primary key when there is one (an index scan; cursors favour fast-start plans).
+   */
+  override async *iterateRows(
+    ns: Namespace,
+    table: string,
+    opts: { batchSize: number; schema?: TableSchema }
+  ): AsyncIterable<RowBatch> {
+    const schema = opts.schema ?? (await this.describeTable(ns, table))
+    const columns = schema.columns.map((c) => quoteIdent('postgres', c.name)).join(', ')
+    // A partitioned parent holds no rows itself; every other relation kind accepts ONLY (views included).
+    const source = `${schema.partitioned ? '' : 'ONLY '}${quoteTable('postgres', ns, table)}`
+    const key = this.resolveRowKey(schema)
+    const orderBy =
+      key.keyKind === 'pk' ? ` ORDER BY ${key.keyColumns.map((c) => quoteIdent('postgres', c)).join(', ')}` : ''
+    const batchSize = Math.max(1, Math.floor(opts.batchSize))
+    const { conn, done } = await this.borrow(ns, 0)
+    try {
+      await conn.query('BEGIN')
+      try {
+        await conn.query(`DECLARE tsmyadmin_export NO SCROLL CURSOR FOR SELECT ${columns} FROM ${source}${orderBy}`)
+        let first = true
+        for (;;) {
+          const r = firstResult(
+            await conn.query(`FETCH ${batchSize} FROM tsmyadmin_export`, undefined, {
+              binaryLimit: Number.POSITIVE_INFINITY,
+            })
+          )
+          // An empty table still yields one batch so callers learn the column list.
+          if (r.rows.length > 0 || first) yield { columns: r.columns, rows: r.rows }
+          first = false
+          if (r.rows.length < batchSize) break
+        }
+        await conn.query('CLOSE tsmyadmin_export')
+        await conn.query('COMMIT')
+      } catch (err) {
+        await conn.query('ROLLBACK').catch(() => undefined)
+        throw err
+      }
+    } finally {
+      await done()
     }
   }
 

@@ -16,6 +16,14 @@ describe('wrapReadOnly', () => {
     expect(wrapReadOnly('# mysql comment\nSELECT 2', 3)).not.toBeNull()
   })
 
+  it('ignores DML keywords inside string literals, quoted identifiers and comments', () => {
+    expect(wrapReadOnly("SELECT * FROM t WHERE b <> 'delete'", 5)).not.toBeNull()
+    expect(wrapReadOnly('SELECT "update" FROM t -- insert later\n', 5)).not.toBeNull()
+    expect(wrapReadOnly('SELECT $$merge into$$ /* delete */', 5)).not.toBeNull()
+    expect(wrapReadOnly("SELECT 'it''s an update' FROM t", 5)).not.toBeNull()
+    expect(wrapReadOnly("SELECT 1 FROM t FOR UPDATE -- 'x'", 5)).toBeNull()
+  })
+
   it('never wraps data-modifying CTEs', () => {
     expect(wrapReadOnly('WITH d AS (DELETE FROM t RETURNING *) SELECT * FROM d', 3)).toBeNull()
     expect(wrapReadOnly('WITH c AS (SELECT 1) UPDATE t SET a = 1', 3)).toBeNull()

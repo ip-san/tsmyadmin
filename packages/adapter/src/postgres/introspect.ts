@@ -64,7 +64,8 @@ export async function pgDescribeTable(conn: Conn, ns: Namespace, table: string):
   const regclass = quoteTable('postgres', ns, table)
   const info = firstResult(
     await conn.query(
-      `SELECT c.relkind, obj_description(c.oid, 'pg_class'), c.reltuples, c.relkind = 'p' OR c.relhassubclass
+      `SELECT c.relkind, obj_description(c.oid, 'pg_class'), c.reltuples,
+              c.relkind <> 'p' AND EXISTS (SELECT 1 FROM pg_inherits i WHERE i.inhparent = c.oid)
        FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
        WHERE n.nspname = $1 AND c.relname = $2`,
       [ns.schema ?? 'public', table]
@@ -189,7 +190,8 @@ export async function pgDescribeTable(conn: Conn, ns: Namespace, table: string):
     comment: strOrNull(infoRow[1]),
     engine: null,
     rowEstimate: Number.isFinite(tuples) && tuples >= 0 ? Math.round(tuples) : null,
-    partitioned: bool(infoRow[3]),
+    partitioned: relkind === 'p',
+    hasChildren: bool(infoRow[3]),
     columns,
     primaryKey,
     indexes,
