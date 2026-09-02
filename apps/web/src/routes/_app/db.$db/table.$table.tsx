@@ -14,7 +14,7 @@ function TableLayout() {
   useDocumentTitle(table, schema ? `${db}.${schema}` : db)
   return (
     <>
-      <PageTitle>
+      <PageTitle level={2}>
         <span className="text-zinc-500 dark:text-zinc-400">
           {db}
           {schema ? `.${schema}` : ''}.

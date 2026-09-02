@@ -84,6 +84,16 @@ for (const t of TARGETS) {
         await editor.fill('dos')
         await editor.press('Enter')
         await expect(page.getByRole('cell', { name: 'dos', exact: true })).toBeVisible()
+
+        // Keyboard path: focus the cell and press Enter (no mouse).
+        await page.getByRole('cell', { name: 'dos', exact: true }).focus()
+        await page.keyboard.press('Enter')
+        const kbEditor = page.getByLabel('name: セルを編集')
+        await kbEditor.fill('tres')
+        await kbEditor.press('Enter')
+        await expect(page.getByRole('cell', { name: 'tres', exact: true })).toBeVisible()
+        // Exactly one h1 per page (the table heading is an h2 inside the database page).
+        expect(await page.locator('h1').count()).toBe(1)
       })
     })
 

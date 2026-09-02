@@ -39,6 +39,8 @@ export function HistoryPanel({
               <span
                 className={e.ok ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}
                 title={e.ok ? locale.sql.ok : locale.sql.failed}
+                aria-label={e.ok ? locale.sql.ok : locale.sql.failed}
+                role="img"
               >
                 {e.ok ? '✓' : '✗'}
               </span>

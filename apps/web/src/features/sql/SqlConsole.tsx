@@ -130,6 +130,14 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion }:
         </label>
       </div>
       {run.isError ? <ErrorBox error={run.error} /> : null}
+      {/* Screen readers hear the outcome; results themselves stream into the DOM below without announcements. */}
+      <output aria-live="polite" className="sr-only">
+        {run.isPending
+          ? locale.sql.running
+          : run.isSuccess && results
+            ? locale.sql.completed(results.length, results.filter((r) => r.kind === 'error').length)
+            : ''}
+      </output>
       {results ? <ResultsView results={results} maxRows={maxRows} /> : null}
       <SavedQueriesPanel
         entries={saved}

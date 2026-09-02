@@ -213,7 +213,7 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
                       />
                       <button
                         type="button"
-                        className="ml-1 rounded p-0.5 text-zinc-500 hover:bg-zinc-100 disabled:opacity-40 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                        className="-my-0.5 ml-1 inline-flex min-h-6 min-w-6 items-center justify-center rounded align-middle text-zinc-500 hover:bg-zinc-100 disabled:opacity-40 dark:text-zinc-400 dark:hover:bg-zinc-800"
                         aria-label={locale.rows.editRow(i + 1)}
                         disabled={!key}
                         onClick={() => setEditingRow(i)}
@@ -222,7 +222,7 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
                       </button>
                       <button
                         type="button"
-                        className="ml-1 rounded p-0.5 text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                        className="-my-0.5 ml-1 inline-flex min-h-6 min-w-6 items-center justify-center rounded align-middle text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
                         aria-label={locale.rows.copyRow(i + 1)}
                         onClick={() => setCopyingRow(i)}
                       >
@@ -238,8 +238,23 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
                     return (
                       <Td
                         key={c.name}
-                        className="max-w-md font-mono text-xs"
+                        className={cn(
+                          'max-w-md font-mono text-xs',
+                          canInline && 'focus-visible:outline-2 focus-visible:outline-blue-500'
+                        )}
                         onDoubleClick={canInline ? () => setInline({ row: i, col: j }) : undefined}
+                        // Keyboard path to the same inline editor: focus the cell, press Enter or F2.
+                        tabIndex={canInline && !isInline ? 0 : undefined}
+                        onKeyDown={
+                          canInline && !isInline
+                            ? (e) => {
+                                if (e.key === 'Enter' || e.key === 'F2') {
+                                  e.preventDefault()
+                                  setInline({ row: i, col: j })
+                                }
+                              }
+                            : undefined
+                        }
                         title={canInline ? locale.browse.editCell : undefined}
                       >
                         {isInline && key ? (

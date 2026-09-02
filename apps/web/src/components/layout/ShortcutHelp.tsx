@@ -10,6 +10,7 @@ const ROWS: { keys: string; label: string }[] = [
   { keys: 'mod+b', label: locale.shortcuts.toggleSidebar },
   { keys: 'arrowleft', label: locale.shortcuts.prevPage },
   { keys: 'arrowright', label: locale.shortcuts.nextPage },
+  { keys: 'enter', label: locale.shortcuts.editCell },
   { keys: 'mod+enter', label: locale.shortcuts.runSql },
   { keys: 'shift+?', label: locale.shortcuts.help },
 ]
