@@ -1,6 +1,10 @@
 @import "tailwindcss";
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Native controls (checkbox, select, scrollbars) follow the app theme, not only the OS preference. */
+html { color-scheme: light; }
+html.dark { color-scheme: dark; }
+
 /* CodeMirror (SQL editor) */
 .cm-editor { font-size: 13px; }
 .cm-editor.cm-focused { outline: 2px solid #3b82f6; outline-offset: -1px; }
