@@ -169,7 +169,7 @@ async function* triggersAndEventsBody(
   const x = adapter.exporter
   const listed = (await adapter.listTriggers(ns)).filter((t) => tables === null || tables.includes(t.table))
   const triggers = listed.filter((t) => t.definition !== null).map((t) => x.trigger(ns, t, stripDefiner))
-  // A trigger the account may not read (MariaDB lists it without a body) is named rather than silently missing.
+  // A trigger listed without a readable body is named rather than silently missing.
   const unreadable = listed.filter((t) => t.definition === null)
   if (triggers.length > 0 || unreadable.length > 0) yield section('Triggers')
   for (const t of unreadable) yield `-- skipped (definition not readable): trigger ${commentText(t.name)}\n`
@@ -285,11 +285,21 @@ async function* sqlBody(
   // Views and SQL-standard routines are emitted after every table, in dependency order (decided up front so a
   // PostgreSQL dump can also drop them first, dependents before their dependencies).
   const late: LateObject[] = []
+  const unreadableViews: string[] = []
   for (const [table, schema] of schemas) {
     if (schema.kind === 'table' || schema.kind === 'sequence' || !structure) continue
-    const statements = (await adapter.showCreateTable(ns, table, schema)).map((stmt) =>
-      q.stripDefiner === '1' ? adapter.exporter.withoutDefiner(stmt) : stmt
-    )
+    let created: string[]
+    try {
+      created = await adapter.showCreateTable(ns, table, schema)
+    } catch (err) {
+      // SHOW VIEW privilege missing: named in the dump (like routines) instead of failing the download.
+      if (err instanceof AdapterError && err.code === 'PERMISSION_DENIED') {
+        unreadableViews.push(table)
+        continue
+      }
+      throw err
+    }
+    const statements = created.map((stmt) => (q.stripDefiner === '1' ? adapter.exporter.withoutDefiner(stmt) : stmt))
     const all = drops && !pg ? [adapter.exporter.dropIfExists(ns, schema), ...statements] : statements
     late.push({
       kind: 'view',
@@ -363,6 +373,11 @@ async function* sqlBody(
     for (const stmt of deferred) yield `${stmt};\n\n`
   }
   for (const o of ordered) yield o.text
+  if (unreadableViews.length > 0) {
+    yield section('Views')
+    for (const v of unreadableViews) yield `-- skipped (definition not readable): view ${commentText(v)}\n`
+    yield '\n'
+  }
   if (programs) yield* triggersAndEventsBody(adapter, ns, everything ? null : tables, q.stripDefiner === '1')
   const postamble = adapter.exporter.postamble()
   if (postamble.length > 0) yield `${postamble.join('\n')}\n\n`

@@ -54,6 +54,20 @@ const DEFINER =
 const DELIM = ';;'
 
 /** `user@host` as information_schema prints it → `\`user\`@\`host\``. */
+/**
+ * MariaDB's SHOW CREATE TRIGGER / EVENT returns the statement as typed, database qualifiers included; a dump is
+ * database-relative, so `db.` / `\`db\`.` are removed from the header (up to the body) when they name the dumped
+ * database. The body is left alone.
+ */
+function unqualifyHeader(statement: string, database: string, bodyStart: RegExp): string {
+  const at = statement.search(bodyStart)
+  if (at < 0) return statement
+  const escaped = database.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const quoted = quoteIdent('mysql', database).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const header = statement.slice(0, at).replace(new RegExp(`(?<![\\w$\`])(?:${quoted}|${escaped})\\.`, 'g'), '')
+  return header + statement.slice(at)
+}
+
 function quoteAccount(account: string): string {
   const at = account.lastIndexOf('@')
   const user = at === -1 ? account : account.slice(0, at)
@@ -115,7 +129,7 @@ export function createExporter(dialect: Dialect): SqlExporter {
     },
     trigger(ns, t: TriggerInfo, stripDefiner): ProgramStatement {
       if (dialect === 'mysql') {
-        const definition = t.definition ?? ''
+        const definition = unqualifyHeader(t.definition ?? '', ns.database, /\bFOR\s+EACH\s+(?:ROW|STATEMENT)\b/i)
         // The original statement (SHOW CREATE TRIGGER) restores as written; a body from information_schema
         // (escapes already processed) gets the header rebuilt from the trigger's metadata.
         const definer = stripDefiner || !t.definer ? '' : ` DEFINER=${quoteAccount(t.definer)}`
@@ -131,8 +145,8 @@ export function createExporter(dialect: Dialect): SqlExporter {
         sql: `DROP TRIGGER IF EXISTS ${id(t.name)} ON ${quoteTable(dialect, ns, t.table)};\n${t.definition ?? ''}${fire}`,
       }
     },
-    event(_ns, e: EventInfo, stripDefiner): ProgramStatement {
-      const definition = e.definition ?? ''
+    event(ns, e: EventInfo, stripDefiner): ProgramStatement {
+      const definition = unqualifyHeader(e.definition ?? '', ns.database, /\bDO\b/i)
       // SHOW CREATE EVENT text restores as written; a DO body from information_schema gets its header rebuilt.
       if (/^CREATE\s/i.test(definition)) {
         return {

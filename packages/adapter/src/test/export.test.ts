@@ -84,6 +84,14 @@ describe('program objects', () => {
     }
     expect(mysqlExporter.trigger(ns, trigger, false).sql).toContain('CREATE DEFINER=`app`@`localhost` TRIGGER `tr`')
     expect(mysqlExporter.trigger(ns, trigger, true).sql).toContain('CREATE TRIGGER `tr`')
+    // MariaDB returns the statement as typed: database qualifiers leave the header, the body is untouched.
+    const qualified = {
+      ...trigger,
+      definition: `CREATE DEFINER=\`a\`@\`%\` TRIGGER \`${ns.database}\`.tr BEFORE INSERT ON ${ns.database}.t FOR EACH ROW INSERT INTO ${ns.database}.log VALUES (1)`,
+    }
+    expect(mysqlExporter.trigger(ns, qualified, true).sql).toContain(
+      `CREATE TRIGGER tr BEFORE INSERT ON t FOR EACH ROW INSERT INTO ${ns.database}.log VALUES (1)`
+    )
     expect(block).toContain("SELECT 'DEFINER=root@localhost' AS s")
     // PostgreSQL: overloads are already complete statements; nothing is wrapped.
     expect(

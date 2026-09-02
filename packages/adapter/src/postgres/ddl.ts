@@ -192,14 +192,27 @@ export interface PgTableCatalog {
     partitionKey: string | null
     indexes: string[]
     constraints: { name: string; definition: string }[]
+    unlogged: boolean
+    storage: string | null
+    comment: string | null
   }[]
+  /** Columns declared on this table itself (an inheritance child repeats none of the inherited ones). */
+  localColumns: Set<string> | null
   unlogged: boolean
   /** Storage parameters as a rendered list (`fillfactor='70', toast.autovacuum_enabled='false'`). */
   storage: string | null
 }
 
 /** `CREATE INDEX … ON ONLY t` → `ON t`: the index must reach the partitions on restore. */
-const withoutOnly = (definition: string) => definition.replace(/^(CREATE (?:UNIQUE )?INDEX \S+ ON) ONLY /, '$1 ')
+const withoutOnly = (definition: string) =>
+  definition.replace(/^(CREATE (?:UNIQUE )?INDEX (?:"(?:[^"]|"")*"|\S+) ON) ONLY /, '$1 ')
+
+/** Storage parameters of pg_class row `c` (its TOAST table's included), rendered for `WITH (…)`. */
+const STORAGE_SQL = `(SELECT string_agg(o.name || '=' || quote_literal(o.value), ', ') FROM (
+   SELECT quote_ident(option_name) AS name, option_value AS value FROM pg_options_to_table(c.reloptions)
+   UNION ALL
+   SELECT 'toast.' || quote_ident(option_name), option_value
+   FROM pg_class t, pg_options_to_table(t.reloptions) WHERE t.oid = c.reltoastrelid) AS o)`
 
 /** Type bounds an ascending identity sequence takes by default: MAXVALUE is only printed when it differs. */
 const IDENTITY_MAX = new Set(['32767', '2147483647', '9223372036854775807'])
@@ -222,6 +235,7 @@ export async function pgTableCatalog(conn: Conn, regclass: string): Promise<PgTa
     partitions: [],
     unlogged: false,
     storage: null,
+    localColumns: null,
   }
   for (const row of con.rows) {
     const index = row[2]
@@ -233,13 +247,7 @@ export async function pgTableCatalog(conn: Conn, regclass: string): Promise<PgTa
   }
   const rel = firstResult(
     await conn.query(
-      `SELECT c.relpersistence,
-              (SELECT string_agg(o.name || '=' || quote_literal(o.value), ', ') FROM (
-                 SELECT quote_ident(option_name) AS name, option_value AS value FROM pg_options_to_table(c.reloptions)
-                 UNION ALL
-                 SELECT 'toast.' || quote_ident(option_name), option_value
-                 FROM pg_class t, pg_options_to_table(t.reloptions) WHERE t.oid = c.reltoastrelid) AS o),
-              pg_get_partkeydef(c.oid),
+      `SELECT c.relpersistence, ${STORAGE_SQL}, pg_get_partkeydef(c.oid),
               (SELECT string_agg(quote_ident(pn.nspname) || '.' || quote_ident(p.relname), ', ' ORDER BY i.inhseqno)
                  FROM pg_inherits i JOIN pg_class p ON p.oid = i.inhparent JOIN pg_namespace pn ON pn.oid = p.relnamespace
                  WHERE i.inhrelid = c.oid AND NOT c.relispartition)
@@ -255,6 +263,16 @@ export async function pgTableCatalog(conn: Conn, regclass: string): Promise<PgTa
   out.partitionKey = typeof partKey === 'string' && partKey.length > 0 ? partKey : null
   const parents = relRow?.[3]
   out.inherits = typeof parents === 'string' && parents.length > 0 ? parents : null
+  if (out.inherits) {
+    // Inherited columns come with INHERITS; only the child's own declarations belong in its column list.
+    const local = firstResult(
+      await conn.query(
+        'SELECT a.attname FROM pg_attribute a WHERE a.attrelid = $1::regclass AND a.attnum > 0 AND NOT a.attisdropped AND a.attislocal',
+        [regclass]
+      )
+    )
+    out.localColumns = new Set(local.rows.map((row) => String(row[0] ?? '')))
+  }
   if (out.partitionKey) {
     // Every partition below this table, parents before their sub-partitions.
     const parts = firstResult(
@@ -266,6 +284,7 @@ export async function pgTableCatalog(conn: Conn, regclass: string): Promise<PgTa
          )
          SELECT c.relname, p.relname, pg_get_expr(c.relpartbound, c.oid), pg_get_partkeydef(c.oid),
                 cn.nspname, pn.nspname,
+                c.relpersistence, ${STORAGE_SQL}, obj_description(c.oid, 'pg_class'),
                 (SELECT string_agg(pg_get_indexdef(i.indexrelid), $2 ORDER BY ic.relname)
                    FROM pg_index i JOIN pg_class ic ON ic.oid = i.indexrelid
                    WHERE i.indrelid = c.oid AND i.indisvalid
@@ -282,6 +301,7 @@ export async function pgTableCatalog(conn: Conn, regclass: string): Promise<PgTa
     out.partitions = parts.rows.map((row) => {
       const key = row[3]
       const split = (v: unknown) => (typeof v === 'string' && v.length > 0 ? v.split(SEP) : [])
+      const text = (v: unknown) => (typeof v === 'string' && v.length > 0 ? v : null)
       return {
         name: String(row[0] ?? ''),
         parent: String(row[1] ?? ''),
@@ -289,8 +309,11 @@ export async function pgTableCatalog(conn: Conn, regclass: string): Promise<PgTa
         partitionKey: typeof key === 'string' && key.length > 0 ? key : null,
         schema: String(row[4] ?? ''),
         parentSchema: String(row[5] ?? ''),
-        indexes: split(row[6]),
-        constraints: split(row[7]).map((c) => {
+        unlogged: String(row[6]) === 'u',
+        storage: text(row[7]),
+        comment: text(row[8]),
+        indexes: split(row[9]),
+        constraints: split(row[10]).map((c) => {
           const at = c.indexOf(FIELD_SEP)
           return { name: c.slice(0, at), definition: c.slice(at + 1) }
         }),
@@ -329,23 +352,29 @@ export async function pgTableCatalog(conn: Conn, regclass: string): Promise<PgTa
  */
 export function pgCreateStatements(ns: Namespace, schema: TableSchema, catalog?: PgTableCatalog): string[] {
   const t = quoteTable('postgres', ns, schema.name)
-  const defs = schema.columns.map((c) => {
-    const identity = c.extra.startsWith('identity') || c.extra === 'serial'
-    const generated = c.extra === 'generated stored'
-    const parts = [id(c.name), c.dataType]
-    // A non-default collation is part of the type (ordering and index semantics change without it).
-    if (c.collation !== null) parts.push(`COLLATE ${id(c.collation)}`)
-    if (identity) {
-      const options = catalog?.identityOptions.get(c.name)
-      parts.push(c.extra === 'identity always' ? 'GENERATED ALWAYS AS IDENTITY' : 'GENERATED BY DEFAULT AS IDENTITY')
-      if (options) parts.push(`(${options})`)
-    }
-    // describeTable stores the generation expression in `default`; it is not a DEFAULT (it may reference siblings).
-    if (generated && c.default !== null) parts.push(`GENERATED ALWAYS AS (${c.default}) STORED`)
-    if (!c.nullable) parts.push('NOT NULL')
-    if (c.default !== null && !identity && !generated) parts.push(`DEFAULT ${c.default}`)
-    return parts.join(' ')
-  })
+  // An inheritance child declares only its own columns; inherited ones with a default / NOT NULL of their own are
+  // adjusted afterwards (repeating them would make them local, and a later DROP COLUMN on the parent would skip them).
+  const local = catalog?.localColumns
+  const inherited = local ? schema.columns.filter((c) => !local.has(c.name)) : []
+  const defs = schema.columns
+    .filter((c) => !local || local.has(c.name))
+    .map((c) => {
+      const identity = c.extra.startsWith('identity') || c.extra === 'serial'
+      const generated = c.extra === 'generated stored'
+      const parts = [id(c.name), c.dataType]
+      // A non-default collation is part of the type (ordering and index semantics change without it).
+      if (c.collation !== null) parts.push(`COLLATE ${id(c.collation)}`)
+      if (identity) {
+        const options = catalog?.identityOptions.get(c.name)
+        parts.push(c.extra === 'identity always' ? 'GENERATED ALWAYS AS IDENTITY' : 'GENERATED BY DEFAULT AS IDENTITY')
+        if (options) parts.push(`(${options})`)
+      }
+      // describeTable stores the generation expression in `default`; it is not a DEFAULT (it may reference siblings).
+      if (generated && c.default !== null) parts.push(`GENERATED ALWAYS AS (${c.default}) STORED`)
+      if (!c.nullable) parts.push('NOT NULL')
+      if (c.default !== null && !identity && !generated) parts.push(`DEFAULT ${c.default}`)
+      return parts.join(' ')
+    })
   if (schema.primaryKey.length > 0) defs.push(`PRIMARY KEY (${schema.primaryKey.map(id).join(', ')})`)
   const inherits = catalog?.inherits ? ` INHERITS (${catalog.inherits})` : ''
   const partitionBy = catalog?.partitionKey ? ` PARTITION BY ${catalog.partitionKey}` : ''
@@ -353,17 +382,23 @@ export function pgCreateStatements(ns: Namespace, schema: TableSchema, catalog?:
   const out = [
     `CREATE ${catalog?.unlogged ? 'UNLOGGED ' : ''}TABLE ${t} (\n  ${defs.join(',\n  ')}\n)${inherits}${partitionBy}${storage}`,
   ]
+  for (const c of inherited) {
+    if (c.default !== null && !c.extra)
+      out.push(`ALTER TABLE ONLY ${t} ALTER COLUMN ${id(c.name)} SET DEFAULT ${c.default}`)
+    if (!c.nullable) out.push(`ALTER TABLE ONLY ${t} ALTER COLUMN ${id(c.name)} SET NOT NULL`)
+  }
   // Partitions carry no columns of their own; sub-partitions come after their parent. Each keeps its own indexes
   // and constraints (inherited ones come with the parent's).
   for (const p of catalog?.partitions ?? []) {
     const part = quoteTable('postgres', { database: ns.database, schema: p.schema }, p.name)
     const parent = quoteTable('postgres', { database: ns.database, schema: p.parentSchema }, p.parent)
-    // relpartbound prints as `FOR VALUES …` or `DEFAULT`.
+    // relpartbound prints as `FOR VALUES …` or `DEFAULT`. Storage parameters live on the leaves only.
     out.push(
-      `CREATE TABLE ${part} PARTITION OF ${parent} ${p.bound}${p.partitionKey ? ` PARTITION BY ${p.partitionKey}` : ''}`
+      `CREATE ${p.unlogged ? 'UNLOGGED ' : ''}TABLE ${part} PARTITION OF ${parent} ${p.bound}${p.partitionKey ? ` PARTITION BY ${p.partitionKey}` : ''}${p.storage ? ` WITH (${p.storage})` : ''}`
     )
     for (const i of p.indexes) out.push(withoutOnly(i))
     for (const c of p.constraints) out.push(`ALTER TABLE ${part} ADD CONSTRAINT ${id(c.name)} ${c.definition}`)
+    if (p.comment !== null) out.push(`COMMENT ON TABLE ${part} IS ${pgLiteral(p.comment)}`)
   }
   const names = new Set(schema.columns.map((c) => c.name))
   // An index owned by a UNIQUE / EXCLUDE constraint is created by the constraint, not on its own.

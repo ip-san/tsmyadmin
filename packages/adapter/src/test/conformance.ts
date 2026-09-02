@@ -1,4 +1,13 @@
-import type { Cell, ColumnSpec, DdlOp, Dialect, Namespace, RowKey, StatementResult } from '@tsmyadmin/shared'
+import type {
+  Cell,
+  ColumnSpec,
+  DdlOp,
+  Dialect,
+  Namespace,
+  RowKey,
+  StatementResult,
+  TriggerInfo,
+} from '@tsmyadmin/shared'
 import { isBinaryCell } from '@tsmyadmin/shared'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { mysqlAccount } from '../mysql/users.ts'
@@ -85,6 +94,7 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
     `${scratch}_bitkey`,
     `${scratch}_trg`,
     `${scratch}_sqt`,
+    `${scratch}_qtrg`,
     `${scratch}_sq`,
     `${scratch}_cons_child`,
     `${scratch}_part`,
@@ -1096,13 +1106,16 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
           const part = `${scratch}_part`
           await execOk(
             `CREATE UNLOGGED TABLE ${p} (a INT, b INT, PRIMARY KEY (a, b), CHECK (a > 0)) WITH (fillfactor = 70);
-             CREATE TABLE ${ch} (extra TEXT) INHERITS (${p});
+             CREATE TABLE ${ch} (extra TEXT, b INT NOT NULL DEFAULT 5) INHERITS (${p});
+             ALTER TABLE ${ch} ALTER COLUMN a SET DEFAULT 9;
              CREATE UNLOGGED TABLE ${fk} (id INT PRIMARY KEY, a INT DEFAULT 1, b INT DEFAULT 1);
              ALTER TABLE ${fk} ADD CONSTRAINT ${fk}_ab FOREIGN KEY (a, b) REFERENCES ${p} (a, b) MATCH FULL ON DELETE SET DEFAULT ON UPDATE SET NULL NOT VALID;
              CREATE TABLE ${part} (id INT, d DATE) PARTITION BY RANGE (d);
              CREATE TABLE ${part}_2024 PARTITION OF ${part} FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
-             CREATE TABLE ${part}_rest PARTITION OF ${part} DEFAULT;
+             CREATE UNLOGGED TABLE ${part}_rest PARTITION OF ${part} DEFAULT WITH (fillfactor = 60);
+             COMMENT ON TABLE ${part}_rest IS 'the rest';
              CREATE INDEX ${part}_d_idx ON ${part} (d);
+             CREATE INDEX "${part} spaced" ON ${part} (d);
              CREATE INDEX ${part}_2024_id_idx ON ${part}_2024 (id);
              ALTER TABLE ${part}_2024 ADD CONSTRAINT ${part}_2024_chk CHECK (id > 0)`
           )
@@ -1113,8 +1126,12 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
             expect((await db.describeTable(ns, ch)).inherits).toEqual([p])
             const child = (await db.showCreateTable(ns, ch)).join('\n')
             expect(child).toContain(`INHERITS (public.${p})`)
-            // The inherited CHECK belongs to the parent: not repeated on the child.
+            // The inherited CHECK belongs to the parent: not repeated on the child. Only columns the child declares
+            // itself are listed (`b` is redeclared, `a` is not); an inherited column's own default is set afterwards.
             expect(child).not.toContain('CHECK')
+            expect(child).not.toMatch(/^\s+"a" integer/m)
+            expect(child).toMatch(/^\s+"b" integer NOT NULL DEFAULT 5/m)
+            expect(child).toContain(`ALTER TABLE ONLY "public"."${ch}" ALTER COLUMN "a" SET DEFAULT 9`)
             const opts = (await db.showCreateTable(ns, fk)).join('\n')
             expect(opts).toContain('MATCH FULL ON UPDATE SET NULL ON DELETE SET DEFAULT NOT VALID')
             const partitioned = await db.showCreateTable(ns, part)
@@ -1122,8 +1139,13 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
             expect(partitioned).toContainEqual(
               `CREATE TABLE "public"."${part}_2024" PARTITION OF "public"."${part}" FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')`
             )
+            // Leaf attributes: UNLOGGED, storage parameters and the comment live on the partition.
             expect(partitioned).toContainEqual(
-              `CREATE TABLE "public"."${part}_rest" PARTITION OF "public"."${part}" DEFAULT`
+              `CREATE UNLOGGED TABLE "public"."${part}_rest" PARTITION OF "public"."${part}" DEFAULT WITH (fillfactor='60')`
+            )
+            expect(partitioned).toContainEqual(`COMMENT ON TABLE "public"."${part}_rest" IS 'the rest'`)
+            expect(partitioned.join('\n')).toMatch(
+              new RegExp(`^CREATE INDEX "${part} spaced" ON (?:public\\.)?${part} USING btree \\(d\\)$`, 'm')
             )
             // The parent's index is created without ONLY (so it reaches the partitions); a partition keeps its own
             // index and constraint, but not the ones it inherits from the parent.
@@ -1222,6 +1244,26 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         expect(seen).toEqual(['1x', '1y', '1z', '2x', '2y', '2z', '3x', '3y', '3z'])
         await execOk(`DROP TABLE ${t}`)
       })
+
+      it.skipIf(dialect !== 'mysql')(
+        'keeps a trigger written with database-qualified names database-relative',
+        async () => {
+          const t = `${scratch}_qtrg`
+          const dbq = quoteIdent('mysql', ns.database)
+          await execOk(`CREATE TABLE ${t} (id INT PRIMARY KEY, v VARCHAR(10))`)
+          await execOk(`CREATE TRIGGER ${dbq}.${t}_bi BEFORE INSERT ON ${dbq}.${t} FOR EACH ROW SET NEW.v = 'x'`)
+          try {
+            const trigger = (await db.listTriggers(ns, t)).find((x) => x.name === `${t}_bi`)
+            expect(trigger).toBeDefined()
+            const sql = db.exporter.trigger(ns, trigger as TriggerInfo, true).sql
+            // MariaDB keeps the statement as typed (MySQL normalises it): the dump must not name the database.
+            expect(sql).not.toContain(`${ns.database}.`)
+            expect(sql).toMatch(/TRIGGER `?\w+_qtrg_bi`? BEFORE INSERT ON `?\w+_qtrg`? FOR EACH ROW/)
+          } finally {
+            await execOk(`DROP TABLE ${t}`)
+          }
+        }
+      )
 
       it.skipIf(dialect !== 'mysql')(
         'dumps a MariaDB sequence as a sequence and keeps table defaults database-relative',
