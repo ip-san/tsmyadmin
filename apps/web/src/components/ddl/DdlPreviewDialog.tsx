@@ -41,7 +41,7 @@ function opTitle(op: DdlOp): string {
 function lossWarning(op: DdlOp): string | null {
   switch (op.op) {
     case 'dropTable':
-      return op.kind === 'table' ? locale.ddl.dataLoss : null
+      return op.kind === 'table' ? locale.ddl.dataLoss : op.kind === 'sequence' ? locale.ddl.sequenceLoss : null
     case 'truncateTable':
       return locale.ddl.dataLoss
     case 'dropColumn':

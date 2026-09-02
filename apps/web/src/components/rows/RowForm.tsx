@@ -100,7 +100,7 @@ export function RowForm({ columns, mode, initial, pending, error, onSubmit, onCa
             const takeOver = (text: string) => update(c.name, c, { text, isNull: false, useDefault: false })
             const id = `field-${c.name}`
             return (
-              <Tr key={c.name}>
+              <Tr key={c.name} data-generated={isGenerated(c) ? '' : undefined}>
                 <Td className="whitespace-nowrap font-medium">
                   <label htmlFor={id}>{c.name}</label>
                 </Td>
@@ -110,7 +110,7 @@ export function RowForm({ columns, mode, initial, pending, error, onSubmit, onCa
                     type="checkbox"
                     aria-label={`${c.name}: ${locale.rows.setNull}`}
                     checked={f.isNull}
-                    disabled={!c.nullable && mode === 'edit'}
+                    disabled={!c.nullable}
                     onChange={(e) => update(c.name, c, { isNull: e.target.checked, useDefault: false })}
                   />
                 </Td>

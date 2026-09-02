@@ -106,7 +106,8 @@ export function SearchForm({
           })}
         </tbody>
       </Table>
-      <div className="flex justify-end gap-2">
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <p className="mr-auto text-xs text-zinc-500 dark:text-zinc-400">{locale.search.likeHint}</p>
         <Button onClick={() => setConditions({})}>{locale.search.clear}</Button>
         <Button type="submit" variant="primary">
           {locale.search.apply}

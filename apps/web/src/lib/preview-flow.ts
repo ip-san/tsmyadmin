@@ -47,11 +47,13 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
         return
       }
       const invalidate = config.invalidate ?? ((key) => key[0] !== 'session')
-      await queryClient.invalidateQueries({ predicate: (q) => invalidate(q.queryKey) })
       setOp(null)
       setSql([])
       setExecuted(o)
+      // The caller's follow-up first (a rename navigates away before the old table's structure is refetched
+      // and shows a 404 for a frame); a callback that needs fresh data reads it after the invalidation resolves.
       await config.onSuccess?.(o)
+      await queryClient.invalidateQueries({ predicate: (q) => invalidate(q.queryKey) })
     },
   })
   return {

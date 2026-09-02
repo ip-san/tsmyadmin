@@ -102,6 +102,8 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
       setNotice(locale.rows.updated)
       closeInline()
       await invalidate()
+      // The edited row may have left a filtered result set, taking the focused cell with it.
+      if (!gridRef.current?.contains(document.activeElement)) noticeRef.current?.focus({ preventScroll: true })
     },
   })
   const openInline = useCallback(
@@ -132,8 +134,9 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
       setSelected(new Set())
       setConfirmDelete(false)
       await invalidate()
-      // The deleted rows' checkboxes and the (now disabled) delete button cannot take focus back.
-      noticeRef.current?.focus()
+      // The deleted rows' checkboxes and the (now disabled) delete button cannot take focus back; the notice is
+      // announced anyway, so the pane keeps its scroll position.
+      noticeRef.current?.focus({ preventScroll: true })
     },
   })
 

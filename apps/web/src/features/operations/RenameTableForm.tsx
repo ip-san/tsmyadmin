@@ -7,7 +7,15 @@ import { locale } from '@/config/locale.ts'
 import { useDdlFlow } from '@/lib/ddl.ts'
 import type { TableRef } from '@/lib/queries.ts'
 
-export function RenameTableForm({ tableRef, view = false }: { tableRef: TableRef; view?: boolean }) {
+export function RenameTableForm({
+  tableRef,
+  view = false,
+  sequence = false,
+}: {
+  tableRef: TableRef
+  view?: boolean
+  sequence?: boolean
+}) {
   const [newName, setNewName] = useState(tableRef.table)
   const navigate = useNavigate()
   const flow = useDdlFlow(tableRef.db, tableRef.schema, async (op) => {
@@ -30,7 +38,7 @@ export function RenameTableForm({ tableRef, view = false }: { tableRef: TableRef
         <div className="flex-1">
           <Field
             id="rename-table"
-            label={view ? locale.ddl.newViewName : locale.ddl.newTableName}
+            label={sequence ? locale.ddl.newSequenceName : view ? locale.ddl.newViewName : locale.ddl.newTableName}
             hint={locale.ddl.renameHint}
           >
             <Input

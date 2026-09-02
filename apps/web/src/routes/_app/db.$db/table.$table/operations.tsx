@@ -24,7 +24,7 @@ function Operations() {
   return (
     <div className="space-y-4">
       {/* Keyed by table: the route match is reused across tables, and the forms seed their state from the name. */}
-      <RenameTableForm key={table} tableRef={tableRef} view={view} />
+      <RenameTableForm key={table} tableRef={tableRef} view={view} sequence={structure.data.kind === 'sequence'} />
       {view ? null : (
         <TableOptionsForm
           key={`${table}-options`}

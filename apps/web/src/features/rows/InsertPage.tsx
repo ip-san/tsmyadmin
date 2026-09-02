@@ -25,13 +25,19 @@ export function InsertPage({ tableRef }: { tableRef: TableRef }) {
   // After a remount the focused submit button is gone; keyboard users continue from the first field.
   useEffect(() => {
     if (inserted > 0)
+      // Not the generated key: typing there would replace the generated value.
       formRef.current
-        ?.querySelector<HTMLElement>('input:not([type="checkbox"]):not([disabled]), textarea:not([disabled])')
+        ?.querySelector<HTMLElement>(
+          'tr:not([data-generated]) input:not([type="checkbox"]):not([disabled]), tr:not([data-generated]) textarea:not([disabled])'
+        )
         ?.focus()
   }, [inserted])
   if (structure.isPending) return <Spinner />
   if (structure.isError) return <ErrorBox error={structure.error} onRetry={() => void structure.refetch()} />
-  if (isViewKind(structure.data.kind)) return <Notice>{locale.browse.readOnly}</Notice>
+  if (isViewKind(structure.data.kind))
+    return (
+      <Notice>{structure.data.kind === 'sequence' ? locale.browse.readOnlySequence : locale.browse.readOnly}</Notice>
+    )
   return (
     <div className="space-y-3">
       <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{locale.rows.insertTitle}</h2>

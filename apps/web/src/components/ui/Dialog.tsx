@@ -18,6 +18,9 @@ export function Dialog({ open, title, onClose, children, footer, busy = false }:
   const titleId = useId()
   // The element that opened the dialog gets focus back on close: Chromium does this natively, WebKit does not.
   const opener = useRef<HTMLElement | null>(null)
+  // What the close event sees: a close the effect itself requested must not be mistaken for a user's Escape.
+  const openRef = useRef(open)
+  openRef.current = open
   useEffect(() => {
     const el = ref.current
     if (!el) return
@@ -34,6 +37,7 @@ export function Dialog({ open, title, onClose, children, footer, busy = false }:
     <dialog
       ref={ref}
       onClose={() => {
+        if (!openRef.current) return
         // A close that slipped past onCancel (a second Escape through the close watcher) must not discard
         // an in-flight operation's result: reopen and keep waiting.
         if (busy) ref.current?.showModal()
