@@ -106,6 +106,49 @@ describe('splitStatements', () => {
     ])
   })
 
+  it('follows sql_mode through mysqldump version comments, saved variables, lists and REPLACE / CONCAT', () => {
+    const sql = (script: string) => splitStatements(script, 'mysql').map((s) => s.sql)
+    // mysqldump: the switch sits in a `/*!50003 … */ ;` comment, after `--` lines, and is restored from @saved.
+    expect(
+      sql(
+        `/*!50003 SET @saved_sql_mode = @@sql_mode */ ;\n-- body\n/*!50003 SET sql_mode = 'NO_BACKSLASH_ESCAPES' */ ;\nSELECT 'C:\\';\n/*!50003 SET sql_mode = @saved_sql_mode */ ;\nSELECT 'a\\'b';`
+      )
+    ).toEqual([
+      '/*!50003 SET @saved_sql_mode = @@sql_mode */',
+      "-- body\n/*!50003 SET sql_mode = 'NO_BACKSLASH_ESCAPES' */",
+      "SELECT 'C:\\'",
+      '/*!50003 SET sql_mode = @saved_sql_mode */',
+      "SELECT 'a\\'b'",
+    ])
+    // A variable saved while the mode was on restores it.
+    expect(
+      sql(
+        `SET sql_mode = 'NO_BACKSLASH_ESCAPES'; SET @m = @@session.sql_mode; SET @@sql_mode = ''; SELECT 'a\\'b'; SET SESSION sql_mode = @m; SELECT 'C:\\';`
+      ).length
+    ).toBe(6)
+    // Second position in a list, and REPLACE turning the mode off despite naming it.
+    expect(
+      sql(
+        `SET time_zone = '+00:00', sql_mode = 'ANSI,NO_BACKSLASH_ESCAPES'; SELECT 'C:\\'; SET sql_mode = REPLACE(@@sql_mode, 'NO_BACKSLASH_ESCAPES', ''); SELECT 'a\\'b';`
+      )
+    ).toEqual([
+      "SET time_zone = '+00:00', sql_mode = 'ANSI,NO_BACKSLASH_ESCAPES'",
+      "SELECT 'C:\\'",
+      "SET sql_mode = REPLACE(@@sql_mode, 'NO_BACKSLASH_ESCAPES', '')",
+      "SELECT 'a\\'b'",
+    ])
+    expect(sql(`SET sql_mode = CONCAT(@@sql_mode, ',NO_BACKSLASH_ESCAPES'); SELECT 'C:\\'; SELECT 1;`)).toEqual([
+      "SET sql_mode = CONCAT(@@sql_mode, ',NO_BACKSLASH_ESCAPES')",
+      "SELECT 'C:\\'",
+      'SELECT 1',
+    ])
+    // GLOBAL does not touch the session; other expressions leave the flag alone.
+    expect(sql(`SET GLOBAL sql_mode = 'NO_BACKSLASH_ESCAPES'; SELECT 'a\\'b'; SELECT 1;`).length).toBe(3)
+    expect(
+      sql(`SET sql_mode = 'NO_BACKSLASH_ESCAPES'; SET sql_mode = some_fn(); SELECT 'C:\\'; SELECT 1;`).length
+    ).toBe(4)
+  })
+
   it('recognises DELIMITER after leading comments and blank lines, but not inside code', () => {
     expect(
       splitStatements('-- header\n/* c */\nDELIMITER $$\nSELECT 1$$\nDELIMITER ;\nSELECT 2;', 'mysql').map((s) => s.sql)

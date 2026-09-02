@@ -454,8 +454,14 @@ export class MysqlAdapter extends BaseAdapter {
 
   showCreateTable(ns: Namespace, table: string, known?: TableSchema): Promise<string[]> {
     return this.withConn(ns, async (conn) => {
-      const kind = known?.kind ?? (await mysqlDescribeTable(conn, ns, table)).kind
       const t = quoteTable('mysql', ns, table)
+      const r = firstResult(await conn.query(`SHOW CREATE TABLE ${t}`))
+      const row = r.rows[0]
+      if (!row) throw new AdapterError('NOT_FOUND', `Table not found: ${ns.database}.${table}`)
+      const create = String(row[1] ?? '')
+      // MariaDB answers SHOW CREATE TABLE for a sequence with `CREATE TABLE … SEQUENCE=1`: no catalog round trip
+      // is needed to tell the two apart when the caller did not pass the schema.
+      const kind = known?.kind ?? (/\bSEQUENCE=1\b/.test(create) ? 'sequence' : 'table')
       if (kind === 'sequence') {
         // MariaDB SEQUENCE: the definition plus the value it would hand out next, so a restore continues.
         const r = firstResult(await conn.query(`SHOW CREATE SEQUENCE ${t}`))
@@ -469,12 +475,10 @@ export class MysqlAdapter extends BaseAdapter {
               `ALTER SEQUENCE ${quoteIdent('mysql', table)} RESTART WITH ${String(value).replace(/[^\d-]/g, '')}`,
             ]
       }
-      const r = firstResult(await conn.query(`SHOW CREATE TABLE ${t}`))
-      const row = r.rows[0]
-      if (!row) throw new AdapterError('NOT_FOUND', `Table not found: ${ns.database}.${table}`)
-      // MariaDB prints sequence defaults database-qualified (`nextval(\`db\`.\`seq\`)`); a dump is database-relative.
-      const qualified = `nextval(${quoteIdent('mysql', ns.database)}.`
-      return [String(row[1] ?? '').replaceAll(qualified, 'nextval(')]
+      // MariaDB prints sequence defaults database-qualified (`DEFAULT nextval(\`db\`.\`seq\`)`); a dump is
+      // database-relative. Only the DEFAULT position is rewritten: a comment may quote the same text.
+      const qualified = `DEFAULT nextval(${quoteIdent('mysql', ns.database)}.`
+      return [create.replaceAll(qualified, 'DEFAULT nextval(')]
     })
   }
 

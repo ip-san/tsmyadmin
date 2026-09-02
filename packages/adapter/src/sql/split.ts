@@ -16,6 +16,44 @@ const DELIMITER_LINE = /^[ \t]*DELIMITER[ \t]+(\S+)[ \t]*(?:\r?\n|$)/i
  * `DELIMITER xx` command (a line on its own; `DELIMITER ;` restores the default) so stored routines can be pasted as-is.
  * Chunks that contain only comments/whitespace are dropped.
  */
+/** Leading `--` / `#` / plain block comments, then the wrapper of a `/*!50003 … *\/` version comment. */
+const LEADING_COMMENTS = /^(?:\s*(?:--[^\n]*|#[^\n]*|\/\*(?!!)[\s\S]*?\*\/))*\s*/
+const VERSION_COMMENT = /^\/\*!\d*\s*([\s\S]*?)\s*\*\/$/
+/** One `name = value` pair of a SET list (the value runs to the next comma outside quotes / parentheses). */
+const SET_ASSIGNMENT =
+  /(?:^|,)\s*(?:(?:SESSION|LOCAL)\s+|@@(?:session\.)?)?(sql_mode|@[A-Za-z0-9_$.]+)\s*=\s*((?:'[^']*'|"[^"]*"|\([^)]*\)|[^,'"()])*)/gi
+const SQL_MODE_REF = /^@@(?:session\.)?sql_mode$/i
+
+/**
+ * Follows what a MySQL `SET` statement does to NO_BACKSLASH_ESCAPES: a literal value decides directly, a user
+ * variable restores what it was saved from (`SET @saved = @@sql_mode`; the default mode when the script never saved
+ * it), REPLACE / CONCAT of the token are read as removing / adding it, and any other expression leaves the flag
+ * as it is rather than guessing. The mysql CLI
+ * does not parse this at all (it reads the server status after each statement); this is the closest static form.
+ */
+function trackSqlMode(statement: string, current: boolean, saved: Map<string, boolean>): boolean {
+  let sql = statement.replace(LEADING_COMMENTS, '')
+  sql = VERSION_COMMENT.exec(sql)?.[1] ?? sql
+  if (!/^SET\s/i.test(sql) || /^SET\s+GLOBAL\s/i.test(sql) || /^SET\s+@@global\./i.test(sql)) return current
+  let next = current
+  for (const m of sql.slice(3).matchAll(SET_ASSIGNMENT)) {
+    const name = (m[1] ?? '').toLowerCase()
+    const value = (m[2] ?? '').trim()
+    if (name.startsWith('@')) {
+      // `SET @saved = @@sql_mode` remembers the mode in force now.
+      if (SQL_MODE_REF.test(value)) saved.set(name, next)
+      continue
+    }
+    const literal = /^(['"])([\s\S]*)\1$/.exec(value)
+    if (literal) next = /NO_BACKSLASH_ESCAPES/i.test(literal[2] ?? '')
+    // An unknown variable was saved before the script started: restoring it means back to the usual mode.
+    else if (value.startsWith('@') && !value.startsWith('@@')) next = saved.get(value.toLowerCase()) ?? false
+    else if (/^REPLACE\s*\(\s*@@(?:session\.)?sql_mode\s*,\s*['"]NO_BACKSLASH_ESCAPES['"]/i.test(value)) next = false
+    else if (/^CONCAT(?:_WS)?\s*\([^)]*NO_BACKSLASH_ESCAPES/i.test(value)) next = true
+  }
+  return next
+}
+
 export function splitStatements(input: string, dialect: Dialect): Statement[] {
   const out: Statement[] = []
   const n = input.length
@@ -32,13 +70,14 @@ export function splitStatements(input: string, dialect: Dialect): Statement[] {
   // MySQL: a `SET sql_mode = '…NO_BACKSLASH_ESCAPES…'` statement changes how later string literals are read
   // (a dump wraps programs created under that mode in exactly such statements).
   let noBackslash = false
+  // `SET @saved = @@sql_mode` … `SET sql_mode = @saved`: the value a user variable holds, when known.
+  const savedModes = new Map<string, boolean>()
 
   const flush = (end: number) => {
     const sql = input.slice(start, end).trim()
     if (hasCode && sql.length > 0) {
       out.push({ sql, line: startLine })
-      const mode = /^SET\s+(?:SESSION\s+)?sql_mode\s*=\s*(.*)$/is.exec(sql)
-      if (dialect === 'mysql' && mode) noBackslash = /NO_BACKSLASH_ESCAPES/i.test(mode[1] ?? '')
+      if (dialect === 'mysql') noBackslash = trackSqlMode(sql, noBackslash, savedModes)
     }
     hasCode = false
   }

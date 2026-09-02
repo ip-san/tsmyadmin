@@ -18,5 +18,7 @@ export const EventInfoSchema = z.object({
   /** sql_mode and time zone the event was created under: both must be restored with it. */
   sqlMode: z.string().nullable().default(null),
   timeZone: z.string().nullable().default(null),
+  /** `user@host` that owns the event; kept in dumps unless DEFINER clauses are stripped. */
+  definer: z.string().nullable().default(null),
 })
 export type EventInfo = z.infer<typeof EventInfoSchema>

@@ -136,7 +136,7 @@ export interface SqlExporter {
    */
   routine(ns: Namespace, kind: RoutineKind, name: string, definition: string, stripDefiner: boolean): ProgramStatement
   trigger(ns: Namespace, trigger: TriggerInfo, stripDefiner: boolean): ProgramStatement
-  event(ns: Namespace, event: EventInfo): ProgramStatement
+  event(ns: Namespace, event: EventInfo, stripDefiner: boolean): ProgramStatement
   /**
    * Wraps program statements for the dump: a DELIMITER block on MySQL (bodies contain `;`) with each program's
    * sql_mode / time zone set around it (MySQL stores the creating session's mode into the program), `;` on

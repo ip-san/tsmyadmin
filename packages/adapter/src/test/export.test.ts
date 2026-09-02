@@ -41,22 +41,28 @@ describe('program objects', () => {
     ).toBe('CREATE ALGORITHM=UNDEFINED SQL SECURITY DEFINER VIEW v AS SELECT 1')
     const block = mysqlExporter.programBlock([
       { ...mysqlExporter.routine(ns, 'procedure', 'p', body, true), sqlMode: 'STRICT_TRANS_TABLES' },
-      mysqlExporter.event(ns, {
-        name: 'ev',
-        status: 'ENABLED',
-        type: 'ONE TIME',
-        schedule: 'AT 2030-01-01 00:00:00',
-        starts: null,
-        ends: null,
-        lastExecuted: null,
-        onCompletion: 'PRESERVE',
-        comment: "it's",
-        definition: 'DELETE FROM t',
-        sqlMode: '',
-        timeZone: '+09:00',
-      }),
+      mysqlExporter.event(
+        ns,
+        {
+          name: 'ev',
+          definer: 'app@localhost',
+          status: 'ENABLED',
+          type: 'ONE TIME',
+          schedule: 'AT 2030-01-01 00:00:00',
+          starts: null,
+          ends: null,
+          lastExecuted: null,
+          onCompletion: 'PRESERVE',
+          comment: "it's",
+          definition: 'DELETE FROM t',
+          sqlMode: '',
+          timeZone: '+09:00',
+        },
+        false
+      ),
     ])
     expect(block).toMatchSnapshot()
+    expect(block).toContain('CREATE DEFINER=`app`@`localhost` EVENT `ev`')
     expect(block).toContain("SET sql_mode = 'STRICT_TRANS_TABLES';;")
     expect(block).toContain("SET time_zone = '+09:00';;")
     expect(block).toContain('DROP PROCEDURE IF EXISTS `p`;;')

@@ -95,7 +95,7 @@ export async function mysqlListEvents(conn: Conn, ns: Namespace): Promise<EventI
   const r = firstResult(
     await conn.query(
       `SELECT EVENT_NAME, STATUS, EVENT_TYPE, EXECUTE_AT, INTERVAL_VALUE, INTERVAL_FIELD, STARTS, ENDS, LAST_EXECUTED,
-              ON_COMPLETION, EVENT_COMMENT, EVENT_DEFINITION, SQL_MODE, TIME_ZONE
+              ON_COMPLETION, EVENT_COMMENT, EVENT_DEFINITION, SQL_MODE, TIME_ZONE, DEFINER
        FROM information_schema.EVENTS WHERE EVENT_SCHEMA = ? ORDER BY EVENT_NAME`,
       [ns.database]
     )
@@ -116,6 +116,7 @@ export async function mysqlListEvents(conn: Conn, ns: Namespace): Promise<EventI
       definition: strOrNull(row[11]),
       sqlMode: strOrNull(row[12]) ?? '',
       timeZone: strOrNull(row[13]),
+      definer: strOrNull(row[14]),
     }
   })
 }

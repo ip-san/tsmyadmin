@@ -1,5 +1,5 @@
 import type { DatabaseAdapter, ProgramStatement } from '@tsmyadmin/adapter'
-import { AdapterError, commentText, isGeneratedColumn } from '@tsmyadmin/adapter'
+import { AdapterError, commentText, isGeneratedColumn, splitStatements } from '@tsmyadmin/adapter'
 import type { ExportQuery, Namespace, TableSchema } from '@tsmyadmin/shared'
 import { csvField, EXPORT_BATCH_SIZE } from '@tsmyadmin/shared'
 
@@ -53,26 +53,28 @@ async function* jsonBody(adapter: DatabaseAdapter, ns: Namespace, tables: string
 const section = (title: string) =>
   `-- ----------------------------------------\n-- ${title}\n-- ----------------------------------------\n\n`
 
-/** Routines of the namespace (one entry per name and kind: PostgreSQL overloads share a definition). */
 /**
  * PostgreSQL SQL-standard function bodies (`BEGIN ATOMIC` / bare `RETURN`) are parsed at CREATE time, so a body
  * that reads a view can only be created after the view; string bodies (`AS $$…$$`) are not validated
  * (check_function_bodies = false) and go first, where views can call them.
  */
-function isSqlStandardBody(definition: string): boolean {
-  return !/\sAS\s+\$/.test(definition) && /\b(?:BEGIN\s+ATOMIC|RETURN)\b/i.test(definition)
+function isSqlStandardBody(statement: string): boolean {
+  return !/\sAS\s+\$/i.test(statement) && /\b(?:BEGIN\s+ATOMIC|RETURN)\b/i.test(statement)
 }
 
-async function* routinesBody(
-  adapter: DatabaseAdapter,
-  ns: Namespace,
-  stripDefiner: boolean,
-  phase: 'stringBody' | 'sqlBody' = 'stringBody'
-): AsyncIterable<string> {
+interface Routines {
+  /** Emitted before the views (every MySQL routine; PostgreSQL string bodies). */
+  stringBody: ProgramStatement[]
+  /** PostgreSQL SQL-standard bodies: emitted after the views they may read. */
+  sqlBody: ProgramStatement[]
+  skipped: string[]
+}
+
+/** Routines of the namespace, read once (one definition per name and kind: PostgreSQL overloads share one). */
+async function collectRoutines(adapter: DatabaseAdapter, ns: Namespace, stripDefiner: boolean): Promise<Routines> {
   const x = adapter.exporter
   const seen = new Set<string>()
-  const defs: ProgramStatement[] = []
-  const skipped: string[] = []
+  const out: Routines = { stringBody: [], sqlBody: [], skipped: [] }
   for (const r of await adapter.listRoutines(ns)) {
     if (seen.has(`${r.kind}:${r.name}`)) continue
     seen.add(`${r.kind}:${r.name}`)
@@ -84,24 +86,35 @@ async function* routinesBody(
       if (err instanceof AdapterError && err.code === 'NOT_FOUND') def = null
       else throw err
     }
-    if (def === null) skipped.push(`${r.kind} ${r.name}`)
-    else if (
-      phase === 'sqlBody'
-        ? adapter.dialect === 'postgres' && isSqlStandardBody(def)
-        : !(adapter.dialect === 'postgres' && isSqlStandardBody(def))
-    ) {
-      defs.push({ ...x.routine(ns, r.kind, r.name, def, stripDefiner), sqlMode: r.sqlMode })
+    if (def === null) {
+      out.skipped.push(`${r.kind} ${r.name}`)
+      continue
+    }
+    if (adapter.dialect !== 'postgres') {
+      out.stringBody.push({ ...x.routine(ns, r.kind, r.name, def, stripDefiner), sqlMode: r.sqlMode })
+      continue
+    }
+    // Overloads arrive as one statement each; the body style is decided per overload.
+    for (const { sql } of splitStatements(def, 'postgres')) {
+      ;(isSqlStandardBody(sql) ? out.sqlBody : out.stringBody).push(x.routine(ns, r.kind, r.name, sql, stripDefiner))
     }
   }
-  if (defs.length > 0 || (phase === 'stringBody' && skipped.length > 0))
+  return out
+}
+
+async function* routinesBody(
+  adapter: DatabaseAdapter,
+  routines: Routines,
+  phase: 'stringBody' | 'sqlBody'
+): AsyncIterable<string> {
+  const defs = routines[phase]
+  const skipped = phase === 'stringBody' ? routines.skipped : []
+  if (defs.length > 0 || skipped.length > 0)
     yield section(phase === 'sqlBody' ? 'Routines (SQL-standard bodies)' : 'Routines')
   // A routine the account may not read is named rather than silently missing from the backup.
-  if (phase === 'stringBody') {
-    for (const name of skipped)
-      yield `-- skipped (definition not readable, or dropped meanwhile): ${commentText(name)}\n`
-    if (skipped.length > 0) yield '\n'
-  }
-  if (defs.length > 0) yield x.programBlock(defs)
+  for (const name of skipped) yield `-- skipped (definition not readable, or dropped meanwhile): ${commentText(name)}\n`
+  if (skipped.length > 0) yield '\n'
+  if (defs.length > 0) yield adapter.exporter.programBlock(defs)
 }
 
 /** Triggers (of the given tables, or all) and, for a whole-database dump, events. */
@@ -120,7 +133,9 @@ async function* triggersAndEventsBody(
     yield x.programBlock(triggers)
   }
   if (tables === null && adapter.dialect === 'mysql') {
-    const events = (await adapter.listEvents(ns)).filter((e) => e.definition !== null).map((e) => x.event(ns, e))
+    const events = (await adapter.listEvents(ns))
+      .filter((e) => e.definition !== null)
+      .map((e) => x.event(ns, e, stripDefiner))
     if (events.length > 0) {
       yield section('Events')
       yield x.programBlock(events)
@@ -228,13 +243,13 @@ async function* sqlBody(
     for (const stmt of deferred) yield `${stmt};\n\n`
   }
   const programs = q.structure === '1' && q.routines === '1'
-  if (programs && everything) yield* routinesBody(adapter, ns, q.stripDefiner === '1')
+  const routines = programs && everything ? await collectRoutines(adapter, ns, q.stripDefiner === '1') : null
+  if (routines) yield* routinesBody(adapter, routines, 'stringBody')
   for (const v of orderViews(views)) {
     yield section(`View: ${commentText(v.name)}`)
     for (const stmt of v.statements) yield `${stmt};\n\n`
   }
-  if (programs && everything && adapter.dialect === 'postgres')
-    yield* routinesBody(adapter, ns, q.stripDefiner === '1', 'sqlBody')
+  if (routines) yield* routinesBody(adapter, routines, 'sqlBody')
   if (programs) yield* triggersAndEventsBody(adapter, ns, everything ? null : tables, q.stripDefiner === '1')
   const postamble = adapter.exporter.postamble()
   if (postamble.length > 0) yield `${postamble.join('\n')}\n\n`

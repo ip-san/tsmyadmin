@@ -90,7 +90,8 @@ export function createExporter(dialect: Dialect): SqlExporter {
         sql: `DROP TRIGGER IF EXISTS ${id(t.name)} ON ${quoteTable(dialect, ns, t.table)};\n${t.definition ?? ''}`,
       }
     },
-    event(_ns, e: EventInfo): ProgramStatement {
+    event(_ns, e: EventInfo, stripDefiner): ProgramStatement {
+      const definer = stripDefiner || !e.definer ? '' : ` DEFINER=${quoteAccount(e.definer)}`
       const schedule = e.schedule.startsWith('AT ') ? `AT ${lit(e.schedule.slice(3))}` : e.schedule
       const starts = e.starts ? ` STARTS ${lit(e.starts)}` : ''
       const ends = e.ends ? ` ENDS ${lit(e.ends)}` : ''
@@ -98,7 +99,7 @@ export function createExporter(dialect: Dialect): SqlExporter {
       const status = e.status === 'ENABLED' ? 'ENABLE' : 'DISABLE'
       const comment = e.comment ? ` COMMENT ${lit(e.comment)}` : ''
       return {
-        sql: `DROP EVENT IF EXISTS ${id(e.name)}${DELIM}\nCREATE EVENT ${id(e.name)} ON SCHEDULE ${schedule}${starts}${ends}${completion} ${status}${comment}\nDO ${e.definition ?? ''}`,
+        sql: `DROP EVENT IF EXISTS ${id(e.name)}${DELIM}\nCREATE${definer} EVENT ${id(e.name)} ON SCHEDULE ${schedule}${starts}${ends}${completion} ${status}${comment}\nDO ${e.definition ?? ''}`,
         sqlMode: e.sqlMode,
         timeZone: e.timeZone,
       }
@@ -119,7 +120,11 @@ export function createExporter(dialect: Dialect): SqlExporter {
       dialect === 'postgres'
         ? // Index / view definitions are printed relative to the schema, so restore into it explicitly. Function
           // bodies are not validated at creation (pg_dump does the same) so their order does not matter.
-          [`SET search_path TO ${quoteIdent(dialect, ns.schema ?? 'public')};`, 'SET check_function_bodies = false;']
+          [
+            `SET search_path TO ${quoteIdent(dialect, ns.schema ?? 'public')};`,
+            'SET check_function_bodies = false;',
+            'SET standard_conforming_strings = on;',
+          ]
         : [
             `-- Database: ${commentText(ns.database)} (statements are unqualified: import into the database of your choice)`,
             // Literals are written with backslash escapes, which NO_BACKSLASH_ESCAPES would break on import.
