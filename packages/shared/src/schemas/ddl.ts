@@ -26,9 +26,9 @@ export const DdlOpSchema = z.discriminatedUnion('op', [
     op: z.literal('createTable'),
     table,
     columns: z.array(ColumnSpecSchema).min(1),
-    primaryKey: z.array(z.string()).default([]),
+    primaryKey: z.array(z.string().min(1)).default([]),
   }),
-  z.object({ op: z.literal('addColumn'), table, column: ColumnSpecSchema, after: z.string().optional() }),
+  z.object({ op: z.literal('addColumn'), table, column: ColumnSpecSchema, after: z.string().min(1).optional() }),
   z.object({ op: z.literal('modifyColumn'), table, name: z.string().min(1), column: ColumnSpecSchema }),
   z.object({ op: z.literal('dropColumn'), table, name: z.string().min(1) }),
   z.object({
@@ -47,7 +47,14 @@ export const DdlOpSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('dropDatabase'), name: z.string().min(1) }),
   z.object({ op: z.literal('createSchema'), name: z.string().min(1) }),
   /** Copies structure (indexes, keys) and optionally rows into a new table in the same namespace. */
-  z.object({ op: z.literal('copyTable'), table, newName: z.string().min(1), withData: z.boolean().default(true) }),
+  z.object({
+    op: z.literal('copyTable'),
+    table,
+    newName: z.string().min(1),
+    withData: z.boolean().default(true),
+    /** Columns to copy when withData (everything except generated columns); omitted = SELECT *. */
+    columns: z.array(z.string().min(1)).optional(),
+  }),
   /** MySQL event scheduler (PostgreSQL: UNSUPPORTED). */
   z.object({ op: z.literal('enableEvent'), name: z.string().min(1) }),
   z.object({ op: z.literal('disableEvent'), name: z.string().min(1) }),

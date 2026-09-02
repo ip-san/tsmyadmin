@@ -1,4 +1,5 @@
 import type { DatabaseAdapter } from '@tsmyadmin/adapter'
+import { isGeneratedColumn } from '@tsmyadmin/adapter'
 import type { ExportQuery, Namespace } from '@tsmyadmin/shared'
 import { csvField, EXPORT_BATCH_SIZE } from '@tsmyadmin/shared'
 
@@ -64,18 +65,26 @@ async function* sqlBody(
     // One catalog round trip per table, shared by the DDL reconstruction and the row scan.
     const schema = await adapter.describeTable(ns, table)
     if (q.structure === '1') {
+      if (q.dropTable === '1') yield `${adapter.exporter.dropIfExists(ns, schema)};\n`
       for (const stmt of await adapter.showCreateTable(ns, table, schema)) yield `${stmt};\n\n`
     }
-    if (q.data === '1') {
+    if (q.data === '1' && schema.kind === 'table') {
+      // Generated columns are computed by the server and rejected in INSERT; identity ALWAYS columns need
+      // OVERRIDING SYSTEM VALUE; sequences are advanced afterwards so the next insert does not collide.
+      const generated = new Set(schema.columns.filter((c) => isGeneratedColumn(c.extra)).map((c) => c.name))
+      const overriding = schema.columns.some((c) => c.extra === 'identity always')
       for await (const b of adapter.iterateRows(ns, table, { ...ITER_OPTS, schema })) {
+        const keep = b.columns.map((c, i) => (generated.has(c.name) ? -1 : i)).filter((i) => i >= 0)
         const stmt = adapter.exporter.insert(
           ns,
           table,
-          b.columns.map((c) => c.name),
-          b.rows
+          keep.map((i) => b.columns[i]?.name ?? ''),
+          b.rows.map((row) => keep.map((i) => row[i] ?? null)),
+          { overriding }
         )
         if (stmt) yield `${stmt}\n\n`
       }
+      for (const stmt of adapter.exporter.afterData(ns, schema)) yield `${stmt}\n\n`
     }
   }
   const postamble = adapter.exporter.postamble()
@@ -152,6 +161,12 @@ export async function collect(body: AsyncIterable<string>): Promise<string> {
 
 /** RFC 6266 / 5987 Content-Disposition with an ASCII fallback for non-Latin names. */
 export function contentDisposition(filename: string): string {
-  const ascii = filename.replaceAll(/[^\x20-\x7E]/g, '_').replaceAll('"', '')
-  return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`
+  // Quoted-string fallback: printable ASCII only, no quote or backslash (both would end/escape the string).
+  const ascii = filename.replaceAll(/[^\x20-\x7E]/g, '_').replaceAll(/["\\]/g, '')
+  // RFC 8187 attr-char excludes `!'()*`, which encodeURIComponent leaves bare.
+  const encoded = encodeURIComponent(filename).replaceAll(
+    /[!'()*]/g,
+    (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`
+  )
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${encoded}`
 }

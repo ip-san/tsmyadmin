@@ -130,6 +130,8 @@ export class MysqlAdapter extends BaseAdapter {
 
   /** Connections whose socket died (e.g. KILL); destroyed instead of being returned to the pool. */
   private readonly broken = new WeakSet<PoolConnection>()
+  /** Database each pooled connection currently has selected (skips redundant USE). */
+  private readonly currentDatabase = new WeakMap<PoolConnection, string>()
 
   private async run(conn: PoolConnection, text: string, params?: unknown[]): Promise<RawResult | RawResult[]> {
     try {
@@ -152,22 +154,32 @@ export class MysqlAdapter extends BaseAdapter {
       throw this.toAdapterError(err)
     }
     const release = () => (this.broken.has(conn) ? conn.destroy() : conn.release())
-    try {
-      await this.run(conn, `USE ${quoteIdent('mysql', ns.database)}`)
-    } catch (err) {
-      release()
-      throw err
+    // `USE db` only when the pooled connection is not already on that database (one round trip per request saved).
+    if (this.currentDatabase.get(conn) !== ns.database) {
+      try {
+        await this.run(conn, `USE ${quoteIdent('mysql', ns.database)}`)
+        this.currentDatabase.set(conn, ns.database)
+      } catch (err) {
+        this.currentDatabase.delete(conn)
+        release()
+        throw err
+      }
     }
+    const forget = () => this.currentDatabase.delete(conn)
     // COM_RESET_CONNECTION (MySQL 5.7.3+ / MariaDB 10.2+) clears session variables, user variables, temp tables
-    // and prepared statements without re-authenticating. A server that cannot reset gets the connection dropped.
+    // and prepared statements without re-authenticating. It also reverts the session character set to the server
+    // global, which may differ from the utf8mb4 negotiated at handshake, so SET NAMES is re-issued. A server that
+    // cannot reset gets the connection dropped.
     const reset = async () => {
+      forget()
       try {
         await conn.reset()
+        await this.run(conn, 'SET NAMES utf8mb4')
       } catch {
         this.broken.add(conn)
       }
     }
-    return { query: (text, params) => this.run(conn, text, params), release, id: conn, reset }
+    return { query: (text, params) => this.run(conn, text, params), release, id: conn, reset, forget }
   }
 
   protected async setStatementTimeout(conn: Conn, ms: number): Promise<void> {

@@ -18,7 +18,7 @@ import {
 } from '@tsmyadmin/shared'
 import { Hono } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
-import { apiError } from '../lib/errors.ts'
+import { apiError, toApiError } from '../lib/errors.ts'
 import { buildExport, contentDisposition, toReadableStream } from '../lib/export.ts'
 import { ImportValidationError, importCsv, importSql } from '../lib/import.ts'
 import type { Logger } from '../lib/logging.ts'
@@ -207,7 +207,13 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
               })
               send({ type: 'done', statements: results.length })
             } catch (err) {
-              send({ type: 'fatal', message: err instanceof Error ? err.message : String(err) })
+              const { body } = toApiError(err)
+              send({
+                type: 'fatal',
+                message: body.message,
+                code: body.code,
+                ...(body.nativeCode ? { nativeCode: body.nativeCode } : {}),
+              })
             } finally {
               if (!closed) {
                 closed = true

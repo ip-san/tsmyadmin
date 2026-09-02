@@ -80,16 +80,23 @@ export const pgDdl: DdlBuilder = {
         const target = quoteTable('postgres', ns, op.newName)
         // INCLUDING ALL keeps defaults, constraints (incl. PK), indexes and comments; foreign keys are not copied.
         const out = [`CREATE TABLE ${target} (LIKE ${t} INCLUDING ALL)`]
-        if (op.withData) out.push(`INSERT INTO ${target} SELECT * FROM ${t}`)
+        if (op.withData) {
+          // OVERRIDING SYSTEM VALUE keeps GENERATED ALWAYS AS IDENTITY values; generated columns are left out by the caller.
+          const cols = op.columns?.map(id).join(', ')
+          out.push(
+            cols
+              ? `INSERT INTO ${target} (${cols}) OVERRIDING SYSTEM VALUE SELECT ${cols} FROM ${t}`
+              : `INSERT INTO ${target} OVERRIDING SYSTEM VALUE SELECT * FROM ${t}`
+          )
+        }
         return out
       }
     }
   },
 }
 
-const PLAIN_IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/
-/** Index/constraint column entries may be expressions (from pg_get_indexdef); quote only plain names. */
-const indexCol = (c: string) => (PLAIN_IDENT.test(c) ? id(c) : c)
+/** Index entries are real column names (from pg_attribute, unquoted) or expressions (from pg_get_indexdef). */
+const indexCol = (columns: Set<string>) => (c: string) => (columns.has(c) ? id(c) : c)
 
 /** Reconstructs CREATE TABLE + indexes + foreign keys + comments from catalog metadata (see PostgresAdapter.showCreateTable). */
 export function pgCreateStatements(ns: Namespace, schema: TableSchema): string[] {
@@ -108,11 +115,17 @@ export function pgCreateStatements(ns: Namespace, schema: TableSchema): string[]
   })
   if (schema.primaryKey.length > 0) defs.push(`PRIMARY KEY (${schema.primaryKey.map(id).join(', ')})`)
   const out = [`CREATE TABLE ${t} (\n  ${defs.join(',\n  ')}\n)`]
+  const names = new Set(schema.columns.map((c) => c.name))
   for (const i of schema.indexes) {
     if (i.primary) continue
+    // The server's own statement keeps access method, direction, opclass and INCLUDE; reconstruct only without it.
+    if (i.definition) {
+      out.push(i.definition)
+      continue
+    }
     const where = i.predicate ? ` WHERE ${i.predicate}` : ''
     out.push(
-      `CREATE ${i.unique ? 'UNIQUE ' : ''}INDEX ${id(i.name)} ON ${t} (${i.columns.map(indexCol).join(', ')})${where}`
+      `CREATE ${i.unique ? 'UNIQUE ' : ''}INDEX ${id(i.name)} ON ${t} (${i.columns.map(indexCol(names)).join(', ')})${where}`
     )
   }
   for (const fk of schema.foreignKeys) {

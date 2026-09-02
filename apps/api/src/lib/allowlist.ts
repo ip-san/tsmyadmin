@@ -21,6 +21,22 @@ export function isHostAllowed(host: string, port: number, allowlist: readonly st
   })
 }
 
+/** Allowlist entry for a preset: exactly its host:port (IPv6 literals bracketed so the port parses). */
+export function presetEntry(preset: { host: string; port: number }): string {
+  return preset.host.includes(':') ? `[${preset.host}]:${preset.port}` : `${preset.host}:${preset.port}`
+}
+
+/** Entries whose `:port` suffix is not a valid port (a typo that would otherwise become an unmatchable host name). */
+export function invalidEntries(allowlist: readonly string[]): string[] {
+  return allowlist.filter((raw) => {
+    const s = raw.trim()
+    const m = /^(\[[^\]]+\]|[^:]+):(\d+)$/.exec(s)
+    if (!m?.[2]) return false
+    const port = Number(m[2])
+    return port < 1 || port > 65535
+  })
+}
+
 /** Entries that allow any port (worth a warning in production). */
 export function entriesWithoutPort(allowlist: readonly string[]): string[] {
   return allowlist.filter((e) => parseEntry(e).port === null)

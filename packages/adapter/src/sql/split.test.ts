@@ -53,6 +53,18 @@ describe('splitStatements', () => {
     ])
   })
 
+  it('treats backslashes as escapes inside PostgreSQL E-strings only', () => {
+    expect(splitStatements("SELECT E'a\\';' AS x; SELECT 2", 'postgres').map((s) => s.sql)).toEqual([
+      "SELECT E'a\\';' AS x",
+      'SELECT 2',
+    ])
+    // A plain literal keeps standard_conforming_strings semantics: the backslash is not an escape.
+    expect(splitStatements("SELECT 'a\\'; SELECT 2", 'postgres').map((s) => s.sql)).toEqual([
+      "SELECT 'a\\'",
+      'SELECT 2',
+    ])
+  })
+
   it('keeps MySQL /*! version comments */ as statements but drops them on PostgreSQL', () => {
     const dump = '/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE */;\n/*!40014 SET FOREIGN_KEY_CHECKS=0 */;\nSELECT 1;'
     expect(splitStatements(dump, 'mysql').map((s) => s.sql)).toEqual([

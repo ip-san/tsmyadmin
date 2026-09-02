@@ -18,10 +18,17 @@ function parseInt8(value: string): number | string {
  * Type parser set: keeps values lossless on the wire. int8/numeric/dates/json/arrays/enums/uuid
  * all arrive as text; bytea as Buffer; small ints, floats and booleans as JS primitives.
  */
+function parseNumberOrText(value: string): number | string {
+  const n = Number(value)
+  return Number.isFinite(n) ? n : value
+}
+
 export const pgTypes: pg.CustomTypesConfig = {
   getTypeParser(oid: number, format?: 'text' | 'binary') {
     if (format === 'binary') return pg.types.getTypeParser(oid, format)
-    if (oid === BYTEA || oid === BOOL || NUMBER_OIDS.has(oid)) return pg.types.getTypeParser(oid, 'text')
+    if (oid === BYTEA || oid === BOOL) return pg.types.getTypeParser(oid, 'text')
+    // float4/float8: JSON has no NaN/Infinity, so those stay as the server's text ('NaN', 'Infinity', '-Infinity').
+    if (NUMBER_OIDS.has(oid)) return parseNumberOrText
     if (oid === INT8) return parseInt8
     return (value: string) => value
   },

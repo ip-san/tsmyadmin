@@ -107,13 +107,16 @@ export async function pgDescribeTable(conn: Conn, ns: Namespace, table: string):
   const idx = firstResult(
     await conn.query(
       `SELECT ic.relname, i.indisunique, i.indisprimary, am.amname,
-              (SELECT string_agg(pg_get_indexdef(i.indexrelid, k.n, true), $2 ORDER BY k.n)
-               FROM generate_series(1, i.indnkeyatts) AS k(n)),
-              pg_get_expr(i.indpred, i.indrelid, true)
+              (SELECT string_agg(CASE WHEN k.attnum = 0 THEN pg_get_indexdef(i.indexrelid, k.ord::int, true) ELSE a.attname END, $2 ORDER BY k.ord)
+               FROM unnest(i.indkey) WITH ORDINALITY AS k(attnum, ord)
+               LEFT JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = k.attnum
+               WHERE k.ord <= i.indnkeyatts),
+              pg_get_expr(i.indpred, i.indrelid, true),
+              pg_get_indexdef(i.indexrelid, 0, true)
        FROM pg_index i
        JOIN pg_class ic ON ic.oid = i.indexrelid
        JOIN pg_am am ON am.oid = ic.relam
-       WHERE i.indrelid = $1::regclass
+       WHERE i.indrelid = $1::regclass AND i.indisvalid
        ORDER BY i.indisprimary DESC, ic.relname`,
       [regclass, SEP]
     )
@@ -125,6 +128,7 @@ export async function pgDescribeTable(conn: Conn, ns: Namespace, table: string):
     columns: list(row[4]),
     type: strOrNull(row[3]),
     predicate: strOrNull(row[5]),
+    definition: strOrNull(row[6]),
   }))
   const primaryKey = indexes.find((i) => i.primary)?.columns ?? []
 

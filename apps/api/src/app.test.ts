@@ -4,6 +4,7 @@ import {
   ApiErrorSchema,
   BrowseResultSchema,
   DdlPreviewResponseSchema,
+  IMPORT_MAX_BYTES,
   KeyValueSchema,
   ProcessInfoSchema,
   ServerInfoSchema,
@@ -48,6 +49,7 @@ function fixtureAdapter(overrides: ConstructorParameters<typeof FakeAdapter>[0] 
 
 interface HarnessOptions {
   allowedHosts?: string[]
+  isProd?: boolean
   loginRateLimit?: { max: number; windowMs: number }
   now?: () => number
   trustProxy?: boolean
@@ -69,6 +71,7 @@ function harness(adapter: FakeAdapter = fixtureAdapter(), options: HarnessOption
       ...(options.loginRateLimit ? { loginRateLimit: options.loginRateLimit } : {}),
       ...(options.trustProxy !== undefined ? { trustProxy: options.trustProxy } : {}),
       ...(options.servers ? { servers: options.servers } : {}),
+      ...(options.isProd !== undefined ? { isProd: options.isProd } : {}),
     }),
     {
       store,
@@ -306,6 +309,55 @@ describe('hardening', () => {
     const again = await h.login()
     expect(again.status).toBe(201)
     expect(h.store.size).toBe(1)
+  })
+
+  it('marks the session cookie Secure in production and slides Max-Age to the TTL', async () => {
+    const h = harness(fixtureAdapter(), { isProd: true })
+    stores.push(h.store)
+    const login = await h.login()
+    expect(login.headers.get('set-cookie')).toMatch(/; Secure/)
+    expect(login.headers.get('set-cookie')).toMatch(/Max-Age=1800/)
+    const res = await h.req('/api/session')
+    expect(res.headers.get('set-cookie')).toMatch(/Max-Age=1800/)
+    expect(res.headers.get('set-cookie')).toMatch(/; Secure/)
+  })
+
+  it('refuses unauthenticated non-GET bodies before buffering them', async () => {
+    const h = harness()
+    stores.push(h.store)
+    const res = await h.app.request('/api/databases/shop/sql', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ sql: 'SELECT 1' }),
+    })
+    expect(res.status).toBe(401)
+    expect(ApiErrorSchema.parse(await res.json()).code).toBe('UNAUTHENTICATED')
+  })
+
+  it('allows an IPv6 preset on exactly its port', async () => {
+    const h = harness(fixtureAdapter(), {
+      allowedHosts: ['db'],
+      servers: [{ name: 'v6', dialect: 'postgres', host: '::1', port: 5432, database: 'x' }],
+    })
+    stores.push(h.store)
+    expect((await h.login({ ...LOGIN, host: '::1', port: 5432 })).status).toBe(201)
+    expect((await h.login({ ...LOGIN, host: '::1', port: 5433 })).status).toBe(403)
+  })
+
+  it('maps framework 403 / 413 to FORBIDDEN / VALIDATION envelopes', async () => {
+    const h = harness()
+    stores.push(h.store)
+    await h.login()
+    // Multipart POST without an Origin header is refused by hono/csrf with 403.
+    const fd = new FormData()
+    fd.set('format', 'sql')
+    const csrf = await h.app.request('/api/databases/shop/import', {
+      method: 'POST',
+      body: fd,
+      headers: { cookie: h.cookie() },
+    })
+    expect(csrf.status).toBe(403)
+    expect(ApiErrorSchema.parse(await csrf.json()).code).toBe('FORBIDDEN')
   })
 
   it('ignores a client-supplied X-Request-Id', async () => {
@@ -597,7 +649,7 @@ describe('sql & ddl', () => {
       .trim()
       .split('\n')
       .map((l) => SqlStreamEventSchema.parse(JSON.parse(l)))
-    expect(lines).toEqual([{ type: 'fatal', message: 'gone' }])
+    expect(lines).toEqual([{ type: 'fatal', message: 'gone', code: 'CONNECTION_FAILED' }])
   })
 
   it('cancels the running script when the stream consumer aborts', async () => {
@@ -759,6 +811,36 @@ describe('import', () => {
       headers: { cookie: h.cookie(), origin: 'http://localhost' },
     })
   }
+
+  it('rejects files over IMPORT_MAX_BYTES with 400 and bodies over the route limit with 413', async () => {
+    const h = harness()
+    stores.push(h.store)
+    await h.login()
+    const tooBig = await upload(h, { format: 'sql' }, { name: 'big.sql', body: 'x'.repeat(IMPORT_MAX_BYTES + 1) })
+    expect(tooBig.status).toBe(400)
+    expect(ApiErrorSchema.parse(await tooBig.json()).code).toBe('VALIDATION')
+    const overLimit = await upload(
+      h,
+      { format: 'sql' },
+      { name: 'huge.sql', body: 'x'.repeat(IMPORT_MAX_BYTES + 2 * 1024 * 1024) }
+    )
+    expect(overLimit.status).toBe(413)
+    expect(ApiErrorSchema.parse(await overLimit.json()).message).toBe('Request body too large')
+  })
+
+  it('decodes percent-encoded database and table names', async () => {
+    const adapter = new FakeAdapter({
+      databases: { 'we ird/db': { tables: { 'a?b': fakeTable('a?b', ['id'], [{ id: 1 }]) } } },
+    })
+    const h = harness(adapter)
+    stores.push(h.store)
+    await h.login()
+    const res = await h.req(
+      `/api/databases/${encodeURIComponent('we ird/db')}/tables/${encodeURIComponent('a?b')}/rows`
+    )
+    expect(res.status).toBe(200)
+    expect(BrowseResultSchema.parse(await res.json()).rows).toEqual([[1]])
+  })
 
   it('imports a SQL file and reports per-statement results', async () => {
     const h = harness()

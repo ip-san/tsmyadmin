@@ -52,20 +52,6 @@ export type SqlRequest = z.infer<typeof SqlRequestSchema>
  * One line of the NDJSON stream from POST /sql/stream: a statement result as it completes, then a final
  * `done` line (absent when the connection dropped — clients treat a missing `done` as an aborted run).
  */
-export const SqlStreamEventSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('result'), index: z.number().int().min(0), result: StatementResultSchema }),
-  z.object({ type: z.literal('done'), statements: z.number().int().min(0) }),
-  z.object({ type: z.literal('fatal'), message: z.string() }),
-])
-export type SqlStreamEvent = z.infer<typeof SqlStreamEventSchema>
-
-export const SqlCancelRequestSchema = z.object({ queryId: z.string().uuid() })
-export const SqlCancelResponseSchema = z.object({ cancelled: z.boolean() })
-
-export const DdlPreviewRequestSchema = z.object({ schema: z.string().min(1).optional(), op: DdlOpSchema })
-export const DdlPreviewResponseSchema = z.object({ sql: z.array(z.string()) })
-export type DdlPreviewResponse = z.infer<typeof DdlPreviewResponseSchema>
-
 export const ApiErrorCodeSchema = z.enum([
   'UNAUTHENTICATED',
   'VALIDATION',
@@ -81,6 +67,25 @@ export const ApiErrorCodeSchema = z.enum([
   'INTERNAL',
 ])
 export type ApiErrorCode = z.infer<typeof ApiErrorCodeSchema>
+
+export const SqlStreamEventSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('result'), index: z.number().int().min(0), result: StatementResultSchema }),
+  z.object({ type: z.literal('done'), statements: z.number().int().min(0) }),
+  z.object({
+    type: z.literal('fatal'),
+    message: z.string(),
+    code: ApiErrorCodeSchema.optional(),
+    nativeCode: z.string().optional(),
+  }),
+])
+export type SqlStreamEvent = z.infer<typeof SqlStreamEventSchema>
+
+export const SqlCancelRequestSchema = z.object({ queryId: z.string().uuid() })
+export const SqlCancelResponseSchema = z.object({ cancelled: z.boolean() })
+
+export const DdlPreviewRequestSchema = z.object({ schema: z.string().min(1).optional(), op: DdlOpSchema })
+export const DdlPreviewResponseSchema = z.object({ sql: z.array(z.string()) })
+export type DdlPreviewResponse = z.infer<typeof DdlPreviewResponseSchema>
 
 export const ApiErrorSchema = z.object({
   code: ApiErrorCodeSchema,

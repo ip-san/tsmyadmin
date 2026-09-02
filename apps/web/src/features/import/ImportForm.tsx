@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Field, Input, Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
-import { api, unwrap } from '@/lib/api.ts'
+import { api, enc, unwrap } from '@/lib/api.ts'
 import { tablesQuery } from '@/lib/queries.ts'
 
 export interface ImportFormProps {
@@ -38,7 +38,7 @@ export function ImportForm({ db, schema, table }: ImportFormProps) {
     mutationFn: (f: File) =>
       unwrap<ImportResult>(
         api.databases[':db'].import.$post({
-          param: { db },
+          param: { db: enc(db) },
           form: {
             file: f,
             format,

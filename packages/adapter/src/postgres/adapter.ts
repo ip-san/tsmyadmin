@@ -50,6 +50,8 @@ export class PostgresAdapter extends BaseAdapter {
   readonly exporter = pgExporter
   readonly users = pgUsers
   private readonly pools = new Map<string, pg.Pool>()
+  /** search_path each pooled client currently has (skips redundant SET). */
+  private readonly currentSchema = new WeakMap<PoolClient, string>()
   private readonly typeNames = new Map<number, string>(Object.entries(PG_TYPE_NAMES).map(([k, v]) => [Number(k), v]))
 
   constructor(private readonly config: ConnectionConfig) {
@@ -92,8 +94,11 @@ export class PostgresAdapter extends BaseAdapter {
     const unknown = [...new Set(fields.map((f) => f.dataTypeID).filter((oid) => !this.typeNames.has(oid)))]
     if (unknown.length > 0) {
       // Through run() so a failure is an AdapterError and a dead client is marked broken like any other query.
+      // NB: run() → toRaw() → columnMetas() recurses; it terminates because this SELECT's own column types
+      // (text = 25, name = 19) are in the static PG_TYPE_NAMES table — keep them there. oid::text avoids the
+      // int4 wraparound of OIDs ≥ 2^31.
       const res = firstResult(
-        await this.run(client, 'SELECT oid::int4 AS oid, typname FROM pg_type WHERE oid = ANY($1::oid[])', [unknown])
+        await this.run(client, 'SELECT oid::text AS oid, typname FROM pg_type WHERE oid = ANY($1::oid[])', [unknown])
       )
       for (const row of res.rows) this.typeNames.set(Number(row[0]), String(row[1]))
     }
@@ -135,9 +140,15 @@ export class PostgresAdapter extends BaseAdapter {
 
   protected async acquire(ns: Namespace): Promise<Conn> {
     let client: PoolClient
+    const pool = this.poolFor(ns.database)
     try {
-      client = await this.poolFor(ns.database).connect()
+      client = await pool.connect()
     } catch (err) {
+      // pg-pool emits no 'remove' for a failed connect, so an unreachable database would keep its pool forever.
+      if (ns.database !== this.defaultDatabase() && pool.totalCount === 0 && pool.waitingCount === 0) {
+        this.pools.delete(ns.database)
+        pool.end().catch(() => undefined)
+      }
       throw this.toAdapterError(err)
     }
     if (!this.guarded.has(client)) {
@@ -146,22 +157,30 @@ export class PostgresAdapter extends BaseAdapter {
       this.guarded.add(client)
     }
     const release = () => client.release(this.broken.has(client) ? new Error('connection terminated') : undefined)
-    try {
-      await this.run(client, `SET search_path TO ${quoteIdent('postgres', ns.schema ?? 'public')}`)
-    } catch (err) {
-      release()
-      throw err
+    const schema = ns.schema ?? 'public'
+    // SET search_path only when the pooled client is not already on that schema (one round trip per request saved).
+    if (this.currentSchema.get(client) !== schema) {
+      try {
+        await this.run(client, `SET search_path TO ${quoteIdent('postgres', schema)}`)
+        this.currentSchema.set(client, schema)
+      } catch (err) {
+        this.currentSchema.delete(client)
+        release()
+        throw err
+      }
     }
+    const forget = () => this.currentSchema.delete(client)
     // DISCARD ALL = RESET ALL + SET SESSION AUTHORIZATION DEFAULT + DEALLOCATE/CLOSE/UNLISTEN + temp tables.
     // It cannot run inside a transaction; executeSql issues ROLLBACK first. run() marks a dead client broken.
     const reset = async () => {
+      forget()
       try {
         await this.run(client, 'DISCARD ALL')
       } catch {
         this.broken.add(client)
       }
     }
-    return { query: (text, params) => this.run(client, text, params), release, id: client, reset }
+    return { query: (text, params) => this.run(client, text, params), release, id: client, reset, forget }
   }
 
   protected async setStatementTimeout(conn: Conn, ms: number): Promise<void> {
@@ -174,8 +193,12 @@ export class PostgresAdapter extends BaseAdapter {
   }
 
   /** pg_cancel_backend interrupts the statement but keeps the session (pg_terminate_backend would drop it). */
-  protected async cancelBackend(ns: Namespace, id: string): Promise<void> {
-    await this.withConn(ns, (conn) => conn.query('SELECT pg_cancel_backend($1::int)', [Number(id)]))
+  protected async cancelBackend(_ns: Namespace, id: string): Promise<void> {
+    // pg_cancel_backend works across databases; use the login database's pool so a saturated per-database pool
+    // (all four clients busy with the very scripts being cancelled) cannot block the cancel itself.
+    await this.withConn({ database: this.defaultDatabase() }, (conn) =>
+      conn.query('SELECT pg_cancel_backend($1::int)', [Number(id)])
+    )
   }
 
   protected nullSafeEq(): string {

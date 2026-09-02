@@ -1,5 +1,5 @@
 import { ApiErrorSchema, type SqlRequest, type SqlStreamEvent, SqlStreamEventSchema } from '@tsmyadmin/shared'
-import { ApiError, api } from './api.ts'
+import { ApiError, api, enc } from './api.ts'
 
 export type SqlStreamBody = Omit<SqlRequest, 'maxRows' | 'timeoutMs' | 'stopOnError'> & Partial<SqlRequest>
 
@@ -13,7 +13,7 @@ export async function* streamSql(
   signal?: AbortSignal
 ): AsyncGenerator<SqlStreamEvent> {
   const res = await api.databases[':db'].sql.stream.$post(
-    { param: { db }, json: body },
+    { param: { db: enc(db) }, json: body },
     { init: signal ? { signal } : {} }
   )
   if (!res.ok || !res.body) {
@@ -34,7 +34,7 @@ export async function* streamSql(
         buffer = buffer.slice(nl + 1)
         if (line) {
           const event = SqlStreamEventSchema.parse(JSON.parse(line))
-          if (event.type === 'done') done = true
+          if (event.type !== 'result') done = true
           yield event
         }
         nl = buffer.indexOf('\n')

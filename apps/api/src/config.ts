@@ -1,5 +1,6 @@
 import { type ServerPreset, ServerPresetsSchema } from '@tsmyadmin/shared'
 import { z } from 'zod'
+import { invalidEntries, presetEntry } from './lib/allowlist.ts'
 
 const formatIssues = (e: z.ZodError) => e.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')
 
@@ -27,7 +28,8 @@ const EnvSchema = z.object({
     .default(30),
   /**
    * Database hosts the login form may connect to. Comma-separated; entries are exact hosts, `*.suffix`
-   * wildcards, or `*` to allow anything. This is the main SSRF/pivot control — keep it tight in production.
+   * wildcards, or `*` to allow anything, each optionally with `:port` (`[::1]:5432` for IPv6). An entry
+   * without a port allows every port on that host. This is the main SSRF/pivot control — see docs/security.md.
    */
   TSMYADMIN_ALLOWED_HOSTS: z.string().default('127.0.0.1,localhost'),
   /**
@@ -90,8 +92,10 @@ export function loadConfig(env: Record<string, string | undefined>): AppConfig {
   }
   const servers = parseServers(e.TSMYADMIN_SERVERS)
   // Presets allow exactly their own host:port (not every port on that host).
-  const allowedHosts = [...new Set([...csv(e.TSMYADMIN_ALLOWED_HOSTS), ...servers.map((s) => `${s.host}:${s.port}`)])]
+  const allowedHosts = [...new Set([...csv(e.TSMYADMIN_ALLOWED_HOSTS), ...servers.map(presetEntry)])]
   if (allowedHosts.length === 0) throw new ConfigError('TSMYADMIN_ALLOWED_HOSTS must list at least one host (or "*")')
+  const invalid = invalidEntries(allowedHosts)
+  if (invalid.length > 0) throw new ConfigError(`TSMYADMIN_ALLOWED_HOSTS: invalid port in ${invalid.join(', ')}`)
   return {
     isProd,
     port: e.API_PORT,

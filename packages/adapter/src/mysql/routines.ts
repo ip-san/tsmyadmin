@@ -42,7 +42,7 @@ export async function mysqlListRoutines(conn: Conn, ns: Namespace): Promise<Rout
   })
 }
 
-/** SHOW CREATE PROCEDURE|FUNCTION; null when the routine is gone or the account may not read it — other errors propagate. */
+/** SHOW CREATE PROCEDURE|FUNCTION; null when the account may not read it; NOT_FOUND when the routine is gone. */
 export async function mysqlRoutineDefinition(
   conn: Conn,
   ns: Namespace,
@@ -58,7 +58,7 @@ export async function mysqlRoutineDefinition(
     // Columns: Procedure|Function, sql_mode, Create Procedure|Create Function, ...
     return strOrNull(show.rows[0]?.[2])
   } catch (err) {
-    if (err instanceof AdapterError && (err.code === 'NOT_FOUND' || err.code === 'PERMISSION_DENIED')) return null
+    if (err instanceof AdapterError && err.code === 'PERMISSION_DENIED') return null
     throw err
   }
 }

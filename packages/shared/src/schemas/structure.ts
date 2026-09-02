@@ -37,6 +37,8 @@ export const IndexDefSchema = z.object({
   type: z.string().nullable(),
   /** Partial-index WHERE clause (PostgreSQL); null for full indexes and on MySQL. */
   predicate: z.string().nullable(),
+  /** Complete CREATE INDEX statement as the server prints it (PostgreSQL: access method, direction, opclass, INCLUDE); null on MySQL. */
+  definition: z.string().nullable(),
 })
 export type IndexDef = z.infer<typeof IndexDefSchema>
 

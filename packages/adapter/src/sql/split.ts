@@ -78,10 +78,14 @@ export function splitStatements(input: string, dialect: Dialect): Statement[] {
     }
     if (ch === "'" || ch === '"' || (ch === '`' && dialect === 'mysql')) {
       hasCode = true
+      // PostgreSQL E'...' strings use backslash escapes like MySQL literals do.
+      const escapeString =
+        (dialect === 'mysql' && ch !== '`') ||
+        (dialect === 'postgres' && ch === "'" && /[eE]/.test(input[i - 1] ?? '') && !/[\w$]/.test(input[i - 2] ?? ''))
       let j = i + 1
       while (j < n) {
         const c = input[j]
-        if (c === '\\' && dialect === 'mysql' && ch !== '`') {
+        if (c === '\\' && escapeString) {
           j += 2
           continue
         }

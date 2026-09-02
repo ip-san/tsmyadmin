@@ -11,6 +11,8 @@ export const ExportQuerySchema = z.object({
   tables: z.string().optional(),
   format: ExportFormatSchema.default('sql'),
   structure: FlagSchema.default('1'),
+  /** Emit DROP TABLE/VIEW IF EXISTS before each CREATE so the dump restores over an existing schema. */
+  dropTable: FlagSchema.default('1'),
   data: FlagSchema.default('1'),
   /** UTF-8 BOM for CSV (Excel). */
   bom: FlagSchema.default('1'),

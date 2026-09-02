@@ -25,7 +25,7 @@ import type {
   UserRef,
 } from '@tsmyadmin/shared'
 import { buildBrowseQuery } from '@tsmyadmin/shared'
-import { api, isApiError, unwrap } from './api.ts'
+import { api, enc, isApiError, unwrap } from './api.ts'
 
 export interface TableRef {
   db: string
@@ -62,13 +62,14 @@ export const databasesQuery = queryOptions({
 export const schemasQuery = (db: string) =>
   queryOptions({
     queryKey: ['schemas', db],
-    queryFn: () => unwrap<string[]>(api.databases[':db'].schemas.$get({ param: { db } })),
+    queryFn: () => unwrap<string[]>(api.databases[':db'].schemas.$get({ param: { db: enc(db) } })),
   })
 
 export const tablesQuery = (db: string, schema?: string) =>
   queryOptions({
     queryKey: ['tables', db, schema ?? ''],
-    queryFn: () => unwrap<TableInfo[]>(api.databases[':db'].tables.$get({ param: { db }, query: schemaQuery(schema) })),
+    queryFn: () =>
+      unwrap<TableInfo[]>(api.databases[':db'].tables.$get({ param: { db: enc(db) }, query: schemaQuery(schema) })),
   })
 
 export const routineDefinitionQuery = (db: string, name: string, kind: RoutineKind, schema?: string) =>
@@ -77,7 +78,7 @@ export const routineDefinitionQuery = (db: string, name: string, kind: RoutineKi
     queryFn: () =>
       unwrap<RoutineDefinition>(
         api.databases[':db'].routines[':name'].definition.$get({
-          param: { db, name },
+          param: { db: enc(db), name: enc(name) },
           query: { ...schemaQuery(schema), kind },
         })
       ),
@@ -88,7 +89,7 @@ export const routinesQuery = (db: string, schema?: string) =>
   queryOptions({
     queryKey: ['routines', db, schema ?? ''],
     queryFn: () =>
-      unwrap<RoutineInfo[]>(api.databases[':db'].routines.$get({ param: { db }, query: schemaQuery(schema) })),
+      unwrap<RoutineInfo[]>(api.databases[':db'].routines.$get({ param: { db: enc(db) }, query: schemaQuery(schema) })),
   })
 
 export const triggersQuery = (db: string, schema?: string, table?: string) =>
@@ -97,7 +98,7 @@ export const triggersQuery = (db: string, schema?: string, table?: string) =>
     queryFn: () =>
       unwrap<TriggerInfo[]>(
         api.databases[':db'].triggers.$get({
-          param: { db },
+          param: { db: enc(db) },
           query: { ...schemaQuery(schema), ...(table ? { table } : {}) },
         })
       ),
@@ -106,7 +107,8 @@ export const triggersQuery = (db: string, schema?: string, table?: string) =>
 export const eventsQuery = (db: string, schema?: string) =>
   queryOptions({
     queryKey: ['events', db, schema ?? ''],
-    queryFn: () => unwrap<EventInfo[]>(api.databases[':db'].events.$get({ param: { db }, query: schemaQuery(schema) })),
+    queryFn: () =>
+      unwrap<EventInfo[]>(api.databases[':db'].events.$get({ param: { db: enc(db) }, query: schemaQuery(schema) })),
   })
 
 export const structureQuery = (ref: TableRef) =>
@@ -115,7 +117,7 @@ export const structureQuery = (ref: TableRef) =>
     queryFn: () =>
       unwrap<TableSchema>(
         api.databases[':db'].tables[':table'].structure.$get({
-          param: { db: ref.db, table: ref.table },
+          param: { db: enc(ref.db), table: enc(ref.table) },
           query: schemaQuery(ref.schema),
         })
       ),
@@ -130,7 +132,7 @@ export const rowsQuery = (ref: TableRef, options: BrowseOptions) =>
     queryFn: () =>
       unwrap<BrowseResult>(
         api.databases[':db'].tables[':table'].rows.$get({
-          param: { db: ref.db, table: ref.table },
+          param: { db: enc(ref.db), table: enc(ref.table) },
           query: buildBrowseQuery(options, ref.schema),
         })
       ),
@@ -174,7 +176,7 @@ export const mutations = {
   insertRow: (ref: TableRef, values: RowValues) =>
     unwrap<{ affectedRows: number }>(
       api.databases[':db'].tables[':table'].rows.$post({
-        param: { db: ref.db, table: ref.table },
+        param: { db: enc(ref.db), table: enc(ref.table) },
         query: schemaQuery(ref.schema),
         json: { values },
       })
@@ -182,7 +184,7 @@ export const mutations = {
   updateRow: (ref: TableRef, key: RowKey, values: RowValues) =>
     unwrap<{ affectedRows: number }>(
       api.databases[':db'].tables[':table'].rows.$patch({
-        param: { db: ref.db, table: ref.table },
+        param: { db: enc(ref.db), table: enc(ref.table) },
         query: schemaQuery(ref.schema),
         json: { key, values },
       })
@@ -190,18 +192,21 @@ export const mutations = {
   deleteRows: (ref: TableRef, keys: RowKey[]) =>
     unwrap<{ affectedRows: number }>(
       api.databases[':db'].tables[':table'].rows.$delete({
-        param: { db: ref.db, table: ref.table },
+        param: { db: enc(ref.db), table: enc(ref.table) },
         query: schemaQuery(ref.schema),
         json: { keys },
       })
     ),
   executeSql: (db: string, body: Omit<SqlRequest, 'maxRows' | 'timeoutMs' | 'stopOnError'> & Partial<SqlRequest>) =>
-    unwrap<StatementResult[]>(api.databases[':db'].sql.$post({ param: { db }, json: body })),
+    unwrap<StatementResult[]>(api.databases[':db'].sql.$post({ param: { db: enc(db) }, json: body })),
   cancelSql: (db: string, queryId: string) =>
-    unwrap<{ cancelled: boolean }>(api.databases[':db'].sql.cancel.$post({ param: { db }, json: { queryId } })),
-  killProcess: (id: string) => unwrap<{ ok: boolean }>(api.server.processes[':id'].kill.$post({ param: { id } })),
+    unwrap<{ cancelled: boolean }>(
+      api.databases[':db'].sql.cancel.$post({ param: { db: enc(db) }, json: { queryId } })
+    ),
+  killProcess: (id: string) =>
+    unwrap<{ ok: boolean }>(api.server.processes[':id'].kill.$post({ param: { id: enc(id) } })),
   previewDdl: (db: string, schema: string | undefined, op: DdlOp) =>
     unwrap<DdlPreviewResponse>(
-      api.databases[':db'].ddl.preview.$post({ param: { db }, json: { ...schemaQuery(schema), op } })
+      api.databases[':db'].ddl.preview.$post({ param: { db: enc(db) }, json: { ...schemaQuery(schema), op } })
     ),
 }

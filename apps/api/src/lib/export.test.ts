@@ -82,6 +82,12 @@ describe('contentDisposition', () => {
       `attachment; filename="___users.sql"; filename*=UTF-8''${encodeURIComponent('売上_users.sql')}`
     )
   })
+
+  it('encodes RFC 8187 reserved characters and strips quote/backslash from the ASCII fallback', () => {
+    expect(contentDisposition(`it's "a" (x)*!\\.sql`)).toBe(
+      `attachment; filename="it's a (x)*!.sql"; filename*=UTF-8''it%27s%20%22a%22%20%28x%29%2A%21%5C.sql`
+    )
+  })
 })
 
 describe('buildExport failure mid-stream', () => {

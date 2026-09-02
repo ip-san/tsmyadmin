@@ -1,6 +1,7 @@
 import type { Namespace, RoutineInfo, RoutineKind, TriggerInfo } from '@tsmyadmin/shared'
 import { type Conn, firstResult } from '../base.ts'
 import { str, strOrNull } from '../sql/format.ts'
+import { AdapterError } from '../types.ts'
 
 export async function pgListRoutines(conn: Conn, ns: Namespace): Promise<RoutineInfo[]> {
   const r = firstResult(
@@ -23,7 +24,7 @@ export async function pgListRoutines(conn: Conn, ns: Namespace): Promise<Routine
   }))
 }
 
-/** pg_get_functiondef of every overload with that name and kind, joined; null when none is visible. */
+/** pg_get_functiondef of every overload with that name and kind, joined; NOT_FOUND when there is none. */
 export async function pgRoutineDefinition(
   conn: Conn,
   ns: Namespace,
@@ -40,7 +41,8 @@ export async function pgRoutineDefinition(
     )
   )
   const defs = r.rows.map((row) => strOrNull(row[0])).filter((d): d is string => d !== null)
-  return defs.length > 0 ? defs.join('\n\n') : null
+  if (defs.length === 0) throw new AdapterError('NOT_FOUND', `Routine not found: ${name}`)
+  return defs.join('\n\n')
 }
 
 const TRIGGER_SELECT = `SELECT t.tgname, c.relname, t.tgtype, pg_get_triggerdef(t.oid, true)

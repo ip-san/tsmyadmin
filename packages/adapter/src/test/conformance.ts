@@ -69,6 +69,11 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
     `${scratch}_gen`,
     `${scratch}_uns`,
     `${scratch}_partial`,
+    `${scratch}_copy`,
+    `${scratchDdl}_rn`,
+    `${scratch}_camel`,
+    `${scratch}_pu`,
+    `${scratch}_seq`,
   ]
   const browseAll = async (table: string) => db.browseRows(ns, table, { offset: 0, limit: 100, sort: [], filters: [] })
 
@@ -210,14 +215,16 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
     })
 
     describe('routineDefinition', () => {
-      it('returns the CREATE statement per routine and null for unknown names', async () => {
+      it('returns the CREATE statement per routine and NOT_FOUND for unknown names', async () => {
         const fn = await db.routineDefinition(ns, 'user_label', 'function')
         expect(fn?.toUpperCase()).toContain('CREATE')
         expect(fn).toContain('user_label')
         expect((await db.routineDefinition(ns, 'count_users', 'procedure'))?.toUpperCase()).toContain('CREATE')
-        expect(await db.routineDefinition(ns, 'does_not_exist', 'function')).toBeNull()
+        await expect(db.routineDefinition(ns, 'does_not_exist', 'function')).rejects.toMatchObject({
+          code: 'NOT_FOUND',
+        })
         // Wrong kind for an existing name is not a match either.
-        expect(await db.routineDefinition(ns, 'user_label', 'procedure')).toBeNull()
+        await expect(db.routineDefinition(ns, 'user_label', 'procedure')).rejects.toMatchObject({ code: 'NOT_FOUND' })
       })
     })
 
@@ -456,8 +463,7 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         expect(after.rows.filter((x) => x[1] === 'one')).toHaveLength(1)
       })
 
-      it('rejects a stale ctid after the row moved (PostgreSQL)', async () => {
-        if (dialect !== 'postgres') return
+      it.skipIf(dialect !== 'postgres')('rejects a stale ctid after the row moved (PostgreSQL)', async () => {
         const before = await browseAll(scratchNoPk)
         const target = before.rows.find((r) => r[0] === 2 && r[1] === 'two')
         const stale = String(target?.at(-1))
@@ -476,8 +482,7 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         expect(after.rows.filter((x) => x[1] === 'tres')).toHaveLength(0)
       })
 
-      it('matches NULL values in all-columns keys (MySQL)', async () => {
-        if (dialect !== 'mysql') return
+      it.skipIf(dialect !== 'mysql')('matches NULL values in all-columns keys (MySQL)', async () => {
         const r = await db.updateRow(
           ns,
           scratchNoPk,
@@ -542,15 +547,13 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         }
       })
 
-      it('keeps MySQL version comments (/*! ... */) as executable statements', async () => {
-        if (dialect !== 'mysql') return
+      it.skipIf(dialect !== 'mysql')('keeps MySQL version comments (/*! ... */) as executable statements', async () => {
         const results = await execOk('/*!40014 SET @tsmy_vc = 7 */; SELECT @tsmy_vc')
         expect(results).toHaveLength(2)
         expect(results[1]?.kind === 'rows' ? results[1].result.rows[0]?.[0] : null).toBe(7)
       })
 
-      it('reports UNSIGNED on DECIMAL result columns (MySQL)', async () => {
-        if (dialect !== 'mysql') return
+      it.skipIf(dialect !== 'mysql')('reports UNSIGNED on DECIMAL result columns (MySQL)', async () => {
         const t = `${scratch}_uns`
         await execOk(`CREATE TABLE ${t} (d DECIMAL(10,2) UNSIGNED NULL, f FLOAT UNSIGNED NULL, i INT UNSIGNED NULL)`)
         const r = await execOk(`SELECT d, f, i FROM ${t}`)
@@ -606,8 +609,77 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
       })
 
       it('applies the statement timeout', async () => {
+        const started = Date.now()
         const results = await exec(ctx.slowSql, { timeoutMs: 500 })
+        // The per-call timeout must win over the cached default (the slow statement takes seconds otherwise).
+        expect(Date.now() - started).toBeLessThan(2500)
+        expect(results[0]).toMatchObject({
+          kind: 'error',
+          nativeCode: dialect === 'mysql' ? 'ER_QUERY_TIMEOUT' : '57014',
+        })
+      })
+
+      it('caps a plain SELECT at maxRows + 1 rows server-side and marks it truncated', async () => {
+        // 5^8 = 390,625 rows on MySQL (cross join of the 5-row fixture); a series on PostgreSQL.
+        const big =
+          dialect === 'mysql'
+            ? `SELECT u1.id FROM ${Array.from({ length: 8 }, (_, i) => `users u${i + 1}`).join(', ')}`
+            : 'SELECT i FROM generate_series(1, 200000) AS g(i)'
+        const started = Date.now()
+        const results = await exec(big, { maxRows: 5 })
+        expect(Date.now() - started).toBeLessThan(2000)
+        expect(results[0]).toMatchObject({ kind: 'rows', result: { truncated: true } })
+        if (results[0]?.kind === 'rows') expect(results[0].result.rows).toHaveLength(5)
+        // Statements that cannot be wrapped run as written (duplicate names on MySQL, FOR UPDATE, INTO).
+        const dup = await exec('SELECT 1 AS a, 2 AS a', { maxRows: 5 })
+        if (dup[0]?.kind === 'rows') expect(dup[0].result.rows).toEqual([[1, 2]])
+        expect(dup[0]?.kind).toBe('rows')
+        const lock = await exec('SELECT id FROM users WHERE id = 1 FOR UPDATE')
+        expect(lock[0]?.kind).toBe('rows')
+        // A syntax error position refers to the statement as typed, not to the wrapper.
+        const bad = await exec('SELECT id FROM users WHERE ORDER', { stopOnError: false })
+        expect(bad[0]?.kind).toBe('error')
+        if (bad[0]?.kind === 'error' && bad[0].position !== undefined) {
+          expect(bad[0].position).toBeLessThanOrEqual('SELECT id FROM users WHERE ORDER'.length)
+        }
+        // Joins with duplicate column names still return rows (MySQL cannot wrap those; PostgreSQL can).
+        const dupJoin = await exec('SELECT * FROM users u JOIN posts p ON p.user_id = u.id', { maxRows: 2 })
+        expect(dupJoin[0]).toMatchObject({ kind: 'rows', result: { truncated: true } })
+      })
+
+      it('stops the remaining statements of a cancelled script even with stopOnError=false', async () => {
+        const queryId = crypto.randomUUID()
+        const run = db.executeSql(ns, `${ctx.slowSql}; SELECT 42 AS after`, {
+          ...EXEC,
+          stopOnError: false,
+          timeoutMs: 60_000,
+          queryId,
+        })
+        expect(await db.cancelQuery(queryId)).toBe(true)
+        const results = await run
+        expect(results).toHaveLength(1)
         expect(results[0]?.kind).toBe('error')
+      })
+
+      it('re-applies the namespace after a script changed it', async () => {
+        await execOk(
+          dialect === 'mysql' ? 'USE information_schema; SELECT 1' : 'SET search_path TO pg_catalog; SELECT 1'
+        )
+        expect((await browseAll('users')).rows.length).toBeGreaterThan(0)
+      })
+
+      it.skipIf(dialect !== 'mysql')('keeps the utf8mb4 session charset across the connection reset', async () => {
+        const before = await execOk('SELECT @@character_set_client, @@character_set_results')
+        await execOk('SELECT 1')
+        const after = await execOk('SELECT @@character_set_client, @@character_set_results')
+        const row = (r: StatementResult[]) => (r[0]?.kind === 'rows' ? r[0].result.rows[0] : undefined)
+        expect(row(after)).toEqual(row(before))
+        expect(row(after)?.[0]).toBe('utf8mb4')
+      })
+
+      it.skipIf(dialect !== 'postgres')('keeps NaN / Infinity floats as text instead of NULL', async () => {
+        const r = await execOk("SELECT 'NaN'::float8, 'Infinity'::float4, 1.5::float8")
+        expect(r[0]?.kind === 'rows' ? r[0].result.rows[0] : null).toEqual(['NaN', 'Infinity', 1.5])
       })
 
       it('ignores comment-only scripts', async () => {
@@ -674,28 +746,32 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         await expect(db.showCreateTable(ns, 'nope_nope')).rejects.toMatchObject({ code: 'NOT_FOUND' })
       })
 
-      it('keeps partial-index predicates and materialized views (PostgreSQL)', async () => {
-        if (dialect !== 'postgres') return
-        const t = `${scratch}_partial`
-        const mv = `${t}_mv`
-        await execOk(
-          `CREATE TABLE ${t} (id INT PRIMARY KEY, email TEXT, deleted_at TIMESTAMP NULL);
+      it.skipIf(dialect !== 'postgres')(
+        'keeps partial-index predicates and materialized views (PostgreSQL)',
+        async () => {
+          const t = `${scratch}_partial`
+          const mv = `${t}_mv`
+          await execOk(
+            `CREATE TABLE ${t} (id INT PRIMARY KEY, email TEXT, deleted_at TIMESTAMP NULL);
            CREATE UNIQUE INDEX ${t}_email_live ON ${t} (email) WHERE deleted_at IS NULL;
            CREATE MATERIALIZED VIEW ${mv} AS SELECT id FROM ${t}`
-        )
-        try {
-          const idx = (await db.describeTable(ns, t)).indexes.find((i) => i.name === `${t}_email_live`)
-          expect(idx).toMatchObject({ unique: true, predicate: 'deleted_at IS NULL' })
-          expect((await db.showCreateTable(ns, t)).join('\n')).toMatch(/UNIQUE INDEX .* WHERE \(?deleted_at IS NULL\)?/)
-          const info = (await db.listTables(ns)).find((x) => x.name === mv)
-          expect(info?.kind).toBe('materialized_view')
-          expect((await db.describeTable(ns, mv)).kind).toBe('materialized_view')
-          expect((await db.showCreateTable(ns, mv))[0]).toMatch(/^CREATE MATERIALIZED VIEW/)
-          expect((await browseAll(mv)).keyKind).toBe('none')
-        } finally {
-          await exec(`DROP MATERIALIZED VIEW IF EXISTS ${mv}`, { stopOnError: false })
+          )
+          try {
+            const idx = (await db.describeTable(ns, t)).indexes.find((i) => i.name === `${t}_email_live`)
+            expect(idx).toMatchObject({ unique: true, predicate: 'deleted_at IS NULL' })
+            expect((await db.showCreateTable(ns, t)).join('\n')).toMatch(
+              /UNIQUE INDEX .* WHERE \(?deleted_at IS NULL\)?/
+            )
+            const info = (await db.listTables(ns)).find((x) => x.name === mv)
+            expect(info?.kind).toBe('materialized_view')
+            expect((await db.describeTable(ns, mv)).kind).toBe('materialized_view')
+            expect((await db.showCreateTable(ns, mv))[0]).toMatch(/^CREATE MATERIALIZED VIEW/)
+            expect((await browseAll(mv)).keyKind).toBe('none')
+          } finally {
+            await exec(`DROP MATERIALIZED VIEW IF EXISTS ${mv}`, { stopOnError: false })
+          }
         }
-      })
+      )
     })
 
     describe('iterateRows', () => {
@@ -746,7 +822,86 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
       })
     })
 
+    describe('row identity edge cases', () => {
+      it('handles a mixed-case / quoted primary key column in browse, update, iterate and DDL', async () => {
+        const t = `${scratch}_camel`
+        const q = (c: string) => quoteIdent(dialect, c)
+        await execOk(`CREATE TABLE ${t} (${q('userId')} INT PRIMARY KEY, ${q('Name')} VARCHAR(20) NULL)`)
+        await execOk(`INSERT INTO ${t} (${q('userId')}, ${q('Name')}) VALUES (1, 'a'), (2, 'b')`)
+        const schema = await db.describeTable(ns, t)
+        expect(schema.primaryKey).toEqual(['userId'])
+        const browsed = await browseAll(t)
+        expect(browsed.keyColumns).toEqual(['userId'])
+        expect(await db.updateRow(ns, t, { kind: 'pk', values: { userId: 2 } }, { Name: 'B' })).toEqual({
+          affectedRows: 1,
+        })
+        const seen: unknown[] = []
+        for await (const b of db.iterateRows(ns, t, { batchSize: 1 })) seen.push(...b.rows.map((r) => r[0]))
+        expect(seen).toEqual([1, 2])
+        const create = await db.showCreateTable(ns, t)
+        await execOk(`DROP TABLE ${t}`)
+        await execOk(create.map((c) => `${c};`).join('\n'))
+        expect((await db.describeTable(ns, t)).primaryKey).toEqual(['userId'])
+        await execOk(`DROP TABLE ${t}`)
+      })
+
+      it.skipIf(dialect !== 'postgres')('does not treat a partial unique index as a row key', async () => {
+        const t = `${scratch}_pu`
+        await execOk(
+          `CREATE TABLE ${t} (email TEXT NOT NULL, deleted BOOLEAN NOT NULL);
+           CREATE UNIQUE INDEX ${t}_live ON ${t} (email) WHERE NOT deleted;
+           INSERT INTO ${t} VALUES ('x', true), ('x', true), ('x', false), ('y', false)`
+        )
+        expect((await browseAll(t)).keyKind).toBe('ctid')
+        let n = 0
+        for await (const b of db.iterateRows(ns, t, { batchSize: 2 })) n += b.rows.length
+        expect(n).toBe(4)
+        await execOk(`DROP TABLE ${t}`)
+      })
+    })
+
     describe('export', () => {
+      it('dump of identity / auto-increment + generated columns restores over the existing table and keeps inserting', async () => {
+        const t = `${scratch}_seq`
+        const idCol =
+          dialect === 'mysql' ? 'id INT AUTO_INCREMENT PRIMARY KEY' : 'id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY'
+        const expr = dialect === 'mysql' ? 'CONCAT(a, b)' : 'a || b'
+        await execOk(
+          `CREATE TABLE ${t} (${idCol}, a VARCHAR(10) NOT NULL, b VARCHAR(10) NOT NULL, ab VARCHAR(21) GENERATED ALWAYS AS (${expr}) STORED)`
+        )
+        await execOk(`INSERT INTO ${t} (a, b) VALUES ('x', 'y'), ('p', 'q')`)
+        const schema = await db.describeTable(ns, t)
+        const generated = new Set(schema.columns.filter((c) => /generated/i.test(c.extra)).map((c) => c.name))
+        expect(generated.has('ab')).toBe(true)
+        const dump = [
+          `${db.exporter.dropIfExists(ns, schema)};`,
+          ...(await db.showCreateTable(ns, t, schema)).map((c) => `${c};`),
+        ]
+        for await (const b of db.iterateRows(ns, t, { batchSize: 10, schema })) {
+          const keep = b.columns.map((c, i) => (generated.has(c.name) ? -1 : i)).filter((i) => i >= 0)
+          dump.push(
+            db.exporter.insert(
+              ns,
+              t,
+              keep.map((i) => b.columns[i]?.name ?? ''),
+              b.rows.map((r) => keep.map((i) => r[i] ?? null)),
+              { overriding: schema.columns.some((c) => c.extra === 'identity always') }
+            )
+          )
+        }
+        dump.push(...db.exporter.afterData(ns, schema))
+        await execOk(dump.join('\n'))
+        // Sequence advanced past the restored ids: the next insert gets id 3, not a duplicate 1.
+        await execOk(`INSERT INTO ${t} (a, b) VALUES ('m', 'n')`)
+        const rows = await browseAll(t)
+        expect(rows.rows.map((r) => [r[0], r[3]])).toEqual([
+          [1, 'xy'],
+          [2, 'pq'],
+          [3, 'mn'],
+        ])
+        await execOk(`DROP TABLE ${t}`)
+      })
+
       it('dump (showCreateTable + iterateRows + exporter.insert) recreates the table with identical rows', async () => {
         const src = `${scratch}_dump`
         await execOk(`CREATE TABLE ${src} (id INT PRIMARY KEY, s VARCHAR(50) NULL, n INT NULL, d DATE NULL)`)
@@ -798,8 +953,7 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
     })
 
     describe('listTriggers (statement-level)', () => {
-      it('decodes TRUNCATE triggers on PostgreSQL', async () => {
-        if (dialect !== 'postgres') return
+      it.skipIf(dialect !== 'postgres')('decodes TRUNCATE triggers on PostgreSQL', async () => {
         const fn = `${scratch}_trg_fn`
         await execOk(
           `CREATE FUNCTION ${fn}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NULL; END $$;

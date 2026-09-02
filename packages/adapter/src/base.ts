@@ -55,6 +55,26 @@ export interface Conn {
    * set by user SQL cannot leak to the next borrower. Implementations that cannot reset must discard the connection.
    */
   reset(): Promise<void>
+  /** Drops any per-connection cache the dialect keeps (current database / search_path) so the next acquire re-applies it. */
+  forget(): void
+}
+
+interface RunningEntry {
+  ns: Namespace
+  backend: Promise<string>
+  cancelled: boolean
+}
+
+const READ_START = /^\s*(?:SELECT|WITH|VALUES|TABLE)\b/i
+const NOT_WRAPPABLE = /\b(?:INTO|FOR\s+(?:UPDATE|SHARE|NO\s+KEY\s+UPDATE|KEY\s+SHARE)|LOCK\s+IN\s+SHARE\s+MODE)\b/i
+
+const WRAP_PREFIX = 'SELECT * FROM ('
+
+/** Subquery form of a plain read with a row cap, or null when the statement must run as written. */
+export function wrapReadOnly(sql: string, limit: number): string | null {
+  const body = sql.trim().replace(/;+\s*$/, '')
+  if (!READ_START.test(body) || NOT_WRAPPABLE.test(body)) return null
+  return `${WRAP_PREFIX}${body}) AS _tsmyadmin LIMIT ${Math.max(1, Math.floor(limit))}`
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000
@@ -168,9 +188,13 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     return { conn, done: () => Promise.resolve(conn.release()) }
   }
 
-  /** Forgets the cached timeout of `conn` (after user-controlled SQL that may have issued its own SET). */
+  /**
+   * Forgets the cached session state of `conn` (after user-controlled SQL that may have issued its own SET /
+   * USE / search_path change): the timeout cache here and the dialect's namespace cache via `conn.forget()`.
+   */
   protected forgetSessionState(conn: Conn): void {
     this.appliedTimeout.delete(conn.id)
+    conn.forget()
   }
 
   protected async withConn<T>(
@@ -205,7 +229,10 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     if (isViewKind(schema.kind)) return { keyKind: 'none', keyColumns: [] }
     if (schema.primaryKey.length > 0) return { keyKind: 'pk', keyColumns: schema.primaryKey }
     const notNull = new Set(schema.columns.filter((c) => !c.nullable).map((c) => c.name))
-    const unique = schema.indexes.find((i) => i.unique && i.columns.every((c) => notNull.has(c)))
+    // A partial unique index does not identify every row (duplicates are allowed outside its predicate).
+    const unique = schema.indexes.find(
+      (i) => i.unique && i.predicate === null && i.columns.every((c) => notNull.has(c))
+    )
     if (unique) return { keyKind: 'pk', keyColumns: unique.columns }
     const kind = this.fallbackKeyKind()
     return { keyKind: kind, keyColumns: kind === 'ctid' ? ['ctid'] : schema.columns.map((c) => c.name) }
@@ -461,10 +488,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
    * Running executeSql calls by queryId. The entry is registered synchronously when executeSql starts so a
    * cancel that arrives while the connection is still being acquired waits for the backend id instead of missing.
    */
-  private readonly running = new Map<
-    string,
-    { ns: Namespace; backend: Promise<string>; resolve: (id: string) => void }
-  >()
+  private readonly running = new Map<string, RunningEntry>()
 
   async executeSql(ns: Namespace, script: string, opts: ExecuteOptions): Promise<StatementResult[]> {
     const statements = splitStatements(script, this.dialect)
@@ -474,56 +498,66 @@ export abstract class BaseAdapter implements DatabaseAdapter {
       await opts.onResult?.(r, results.length - 1)
     }
     let resolveBackend: (id: string) => void = () => undefined
-    if (opts.queryId) {
-      const backend = new Promise<string>((resolve) => {
+    const entry: RunningEntry = {
+      ns,
+      backend: new Promise<string>((resolve) => {
         resolveBackend = resolve
-      })
-      this.running.set(opts.queryId, { ns, backend, resolve: resolveBackend })
+      }),
+      cancelled: false,
     }
+    if (opts.queryId) this.running.set(opts.queryId, entry)
     try {
       await this.withConn(
         ns,
         async (conn) => {
-          if (opts.queryId) resolveBackend(await this.backendId(conn))
-          // User SQL may SET the session timeout itself; never trust the cached value afterwards.
-          this.forgetSessionState(conn)
-          for (const st of statements) {
-            const started = performance.now()
-            try {
-              const raw = await conn.query(st.sql)
-              const durationMs = Math.round(performance.now() - started)
-              const list = Array.isArray(raw) ? raw : [raw]
-              for (const r of list) {
-                if (r.hasRows) {
-                  const truncated = r.rows.length > opts.maxRows
-                  await emit({
-                    kind: 'rows',
-                    sql: st.sql,
-                    durationMs,
-                    result: { columns: r.columns, rows: truncated ? r.rows.slice(0, opts.maxRows) : r.rows, truncated },
-                  })
-                } else {
-                  await emit({ kind: 'affected', sql: st.sql, durationMs, affectedRows: r.affectedRows })
+          try {
+            if (opts.queryId) resolveBackend(await this.backendId(conn))
+            // User SQL may SET the session timeout / namespace itself; never trust the cached values afterwards.
+            this.forgetSessionState(conn)
+            for (const st of statements) {
+              if (entry.cancelled) break
+              const started = performance.now()
+              try {
+                const list = await this.runStatement(conn, st.sql, opts.maxRows, () => entry.cancelled)
+                const durationMs = Math.round(performance.now() - started)
+                for (const r of list) {
+                  if (r.hasRows) {
+                    const truncated = r.rows.length > opts.maxRows
+                    await emit({
+                      kind: 'rows',
+                      sql: st.sql,
+                      durationMs,
+                      result: {
+                        columns: r.columns,
+                        rows: truncated ? r.rows.slice(0, opts.maxRows) : r.rows,
+                        truncated,
+                      },
+                    })
+                  } else {
+                    await emit({ kind: 'affected', sql: st.sql, durationMs, affectedRows: r.affectedRows })
+                  }
                 }
+              } catch (err) {
+                const e = err instanceof AdapterError ? err : this.toAdapterError(err)
+                await emit({
+                  kind: 'error',
+                  sql: st.sql,
+                  message: e.detail ?? e.message,
+                  code: e.code,
+                  ...(e.nativeCode ? { nativeCode: e.nativeCode } : {}),
+                  ...(e.position ? { position: e.position } : {}),
+                })
+                if (opts.stopOnError) break
               }
-            } catch (err) {
-              const e = err instanceof AdapterError ? err : this.toAdapterError(err)
-              await emit({
-                kind: 'error',
-                sql: st.sql,
-                message: e.detail ?? e.message,
-                code: e.code,
-                ...(e.nativeCode ? { nativeCode: e.nativeCode } : {}),
-                ...(e.position ? { position: e.position } : {}),
-              })
-              if (opts.stopOnError) break
             }
+          } finally {
+            // Each execution is autocommitted: a transaction the script left open (or aborted) must not leak
+            // into the next borrower of this pooled connection — nor may any session state the script set
+            // (autocommit, sql_mode, SET ROLE, user variables, ...), hence the full session reset afterwards.
+            // In a finally so an onResult/backendId failure cannot return a dirty connection to the pool.
+            await conn.query('ROLLBACK').catch(() => undefined)
+            await conn.reset()
           }
-          // Each execution is autocommitted: a transaction the script left open (or aborted) must not
-          // leak into the next borrower of this pooled connection — nor may any session state the script set
-          // (autocommit, sql_mode, SET ROLE, user variables, ...), hence the full session reset afterwards.
-          await conn.query('ROLLBACK').catch(() => undefined)
-          await conn.reset()
         },
         opts.timeoutMs
       )
@@ -536,6 +570,35 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     return results
   }
 
+  /**
+   * Runs one user statement. A plain read (SELECT / WITH / VALUES / TABLE without INTO or row locks) is wrapped
+   * as `SELECT * FROM (...) AS _tsmyadmin LIMIT maxRows + 1` so a `SELECT * FROM huge_table` never materialises
+   * the whole table in this process; the extra row is how the caller detects truncation. Error positions are
+   * shifted back by the wrapper prefix. MySQL rejects derived tables with duplicate column names
+   * (`SELECT * FROM a JOIN b` sharing `id`), the one case where the statement is re-run as written — never after
+   * an interruption, which would restart the very statement that was just cancelled.
+   */
+  private async runStatement(conn: Conn, sql: string, maxRows: number, cancelled: () => boolean): Promise<RawResult[]> {
+    const asList = (raw: RawResult | RawResult[]) => (Array.isArray(raw) ? raw : [raw])
+    const wrapped = wrapReadOnly(sql, maxRows + 1)
+    if (!wrapped) return asList(await conn.query(sql))
+    try {
+      return asList(await conn.query(wrapped))
+    } catch (err) {
+      const e = err instanceof AdapterError ? err : this.toAdapterError(err)
+      if (this.dialect === 'mysql' && e.nativeCode === 'ER_DUP_FIELDNAME' && !cancelled()) {
+        return asList(await conn.query(sql))
+      }
+      if (e.position !== undefined && e.position > WRAP_PREFIX.length) {
+        throw new AdapterError(e.code, e.message, e.detail, {
+          ...(e.nativeCode ? { nativeCode: e.nativeCode } : {}),
+          position: e.position - WRAP_PREFIX.length,
+        })
+      }
+      throw e
+    }
+  }
+
   /** Cancels a registered run. Waits up to `waitMs` for the run to reach the server (pool acquisition). */
   async cancelQuery(queryId: string, waitMs = 10_000): Promise<boolean> {
     const entry = this.running.get(queryId)
@@ -545,6 +608,8 @@ export abstract class BaseAdapter implements DatabaseAdapter {
       new Promise<string>((resolve) => setTimeout(() => resolve(''), waitMs)),
     ])
     if (!/^\d+$/.test(backend)) return false
+    // Also stop the script loop: with stopOnError=false the run would otherwise continue with the next statement.
+    entry.cancelled = true
     await this.cancelBackend(entry.ns, backend)
     return true
   }

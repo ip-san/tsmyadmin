@@ -64,7 +64,15 @@ export const mysqlDdl: DdlBuilder = {
         const target = quoteTable('mysql', ns, op.newName)
         // LIKE keeps indexes, keys and AUTO_INCREMENT; foreign keys are not copied (as in phpMyAdmin).
         const out = [`CREATE TABLE ${target} LIKE ${t}`]
-        if (op.withData) out.push(`INSERT INTO ${target} SELECT * FROM ${t}`)
+        if (op.withData) {
+          // Generated columns cannot be inserted, so the caller lists the copyable columns.
+          const cols = op.columns?.map((c) => quoteIdent('mysql', c)).join(', ')
+          out.push(
+            cols
+              ? `INSERT INTO ${target} (${cols}) SELECT ${cols} FROM ${t}`
+              : `INSERT INTO ${target} SELECT * FROM ${t}`
+          )
+        }
         return out
       }
     }

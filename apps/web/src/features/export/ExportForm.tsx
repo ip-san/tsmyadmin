@@ -21,14 +21,16 @@ export function ExportForm({ db, schema, table }: ExportFormProps) {
   const [selected, setSelected] = useState<string[]>(table ? [table] : [])
   const [format, setFormat] = useState<ExportFormat>('sql')
   const [structure, setStructure] = useState(true)
+  const [dropTable, setDropTable] = useState(true)
   const [data, setData] = useState(true)
   const [bom, setBom] = useState(true)
-  const available: TableInfo[] = table ? [] : (tables.data ?? []).filter((t) => t.kind === 'table')
+  // Views are included: SQL dumps carry their CREATE VIEW, CSV/JSON export their rows.
+  const available: TableInfo[] = table ? [] : (tables.data ?? [])
   const toggle = (name: string) => setSelected((s) => (s.includes(name) ? s.filter((x) => x !== name) : [...s, name]))
   const effective = table ? [table] : selected.length > 0 ? selected : available.map((t) => t.name)
   const csvBlocked = format === 'csv' && effective.length !== 1
   const nothing = effective.length === 0
-  const url = exportUrl({ db, schema, tables: table ? [table] : selected, format, structure, data, bom })
+  const url = exportUrl({ db, schema, tables: table ? [table] : selected, format, structure, dropTable, data, bom })
 
   return (
     <div className="space-y-4">
@@ -71,6 +73,15 @@ export function ExportForm({ db, schema, table }: ExportFormProps) {
           <label className="flex items-center gap-1">
             <input type="checkbox" checked={structure} onChange={(e) => setStructure(e.target.checked)} />
             {locale.export.structure}
+          </label>
+          <label className="ml-4 flex items-center gap-1 text-sm">
+            <input
+              type="checkbox"
+              checked={dropTable}
+              disabled={!structure}
+              onChange={(e) => setDropTable(e.target.checked)}
+            />
+            {locale.export.dropTable}
           </label>
           <label className="flex items-center gap-1">
             <input type="checkbox" checked={data} onChange={(e) => setData(e.target.checked)} />

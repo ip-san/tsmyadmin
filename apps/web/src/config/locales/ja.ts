@@ -336,6 +336,7 @@ export const ja = {
     format: '形式',
     formats: { sql: 'SQL', csv: 'CSV', json: 'JSON' },
     structure: '構造（CREATE TABLE）',
+    dropTable: 'DROP TABLE IF EXISTS を付ける',
     data: 'データ（INSERT）',
     bom: 'UTF-8 BOM を付ける（Excel 向け）',
     download: 'ダウンロード',

@@ -8,16 +8,24 @@ export class ApiError extends Error {
   readonly code: ApiErrorCode
   readonly status: number
   readonly detail: string | undefined
+  readonly nativeCode: string | undefined
   constructor(status: number, body: ApiErrorBody) {
     super(body.message)
     this.name = 'ApiError'
     this.status = status
     this.code = body.code
     this.detail = body.detail
+    this.nativeCode = body.nativeCode
   }
 }
 
 /** Unwraps a Hono RPC response: typed JSON on success, ApiError otherwise. */
+/**
+ * hc splices path params in verbatim, so names with `/`, `?`, `#` or `%` (legal in both dialects) must be
+ * percent-encoded here; Hono decodes `c.req.param()` on the way in.
+ */
+export const enc = (value: string) => encodeURIComponent(value)
+
 export async function unwrap<T>(
   pending: Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>
 ): Promise<T> {

@@ -109,8 +109,15 @@ export interface SqlExporter {
    */
   preamble(): string[]
   postamble(): string[]
-  /** One multi-row INSERT for `rows` (empty string when rows is empty). Includes the trailing semicolon. */
-  insert(ns: Namespace, table: string, columns: string[], rows: Cell[][]): string
+  /** `DROP TABLE|VIEW IF EXISTS` statement (no trailing semicolon) for a dump that restores over existing objects. */
+  dropIfExists(ns: Namespace, schema: TableSchema): string
+  /**
+   * One multi-row INSERT for `rows` (empty string when rows is empty). Includes the trailing semicolon.
+   * `overriding` (PostgreSQL) adds OVERRIDING SYSTEM VALUE so GENERATED ALWAYS AS IDENTITY values are kept.
+   */
+  insert(ns: Namespace, table: string, columns: string[], rows: Cell[][], options?: { overriding?: boolean }): string
+  /** Statements to run after a table's data (PostgreSQL: advance identity/serial sequences past the loaded ids). */
+  afterData(ns: Namespace, schema: TableSchema): string[]
   /** SQL literal for a wire cell. */
   literal(cell: Cell): string
 }
@@ -126,7 +133,7 @@ export interface DatabaseAdapter {
   describeTable(ns: Namespace, table: string): Promise<TableSchema>
   /** Stored procedures and functions in the namespace (metadata only; see routineDefinition). */
   listRoutines(ns: Namespace): Promise<RoutineInfo[]>
-  /** CREATE statement of one routine, or null when the account may not read it. */
+  /** CREATE statement of one routine; null when the account may not read it, NOT_FOUND when it does not exist. */
   routineDefinition(ns: Namespace, name: string, kind: RoutineKind): Promise<string | null>
   /** Triggers in the namespace, optionally only for one table. */
   listTriggers(ns: Namespace, table?: string): Promise<TriggerInfo[]>

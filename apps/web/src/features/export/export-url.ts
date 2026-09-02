@@ -6,6 +6,7 @@ export interface ExportOptions {
   tables: string[]
   format: ExportFormat
   structure: boolean
+  dropTable: boolean
   data: boolean
   bom: boolean
 }
@@ -17,6 +18,7 @@ export function exportUrl(o: ExportOptions): string {
   if (o.tables.length > 0) params.set('tables', o.tables.join(','))
   params.set('format', o.format)
   params.set('structure', o.structure ? '1' : '0')
+  params.set('dropTable', o.dropTable ? '1' : '0')
   params.set('data', o.data ? '1' : '0')
   params.set('bom', o.bom ? '1' : '0')
   return `/api/databases/${encodeURIComponent(o.db)}/export?${params.toString()}`

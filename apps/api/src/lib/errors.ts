@@ -41,17 +41,22 @@ export function toApiError(err: unknown): { body: ApiError; status: ContentfulSt
     return { body, status: STATUS_BY_CODE[body.code] }
   }
   if (err instanceof HTTPException) {
-    // Framework 4xx (CSRF 403, body limit 413, …) keep their own status under the VALIDATION envelope.
+    // Framework 4xx (CSRF 403, body limit 413, …) keep their own status; the code follows the status where one exists.
     const code: ApiErrorCode =
       err.status === 401
         ? 'UNAUTHENTICATED'
-        : err.status === 404
-          ? 'NOT_FOUND'
-          : err.status >= 400 && err.status < 500
-            ? 'VALIDATION'
-            : 'INTERNAL'
+        : err.status === 403
+          ? 'FORBIDDEN'
+          : err.status === 404
+            ? 'NOT_FOUND'
+            : err.status === 429
+              ? 'RATE_LIMITED'
+              : err.status >= 400 && err.status < 500
+                ? 'VALIDATION'
+                : 'INTERNAL'
     const status = code === 'INTERNAL' ? STATUS_BY_CODE.INTERNAL : (err.status as ContentfulStatusCode)
-    return { body: apiError(code, err.message || `HTTP ${err.status}`), status }
+    const message = err.status === 413 ? 'Request body too large' : err.message || `HTTP ${err.status}`
+    return { body: apiError(code, message), status }
   }
   // No detail for the client: the message (and stack) go to the structured log in errorResponse only.
   return { body: apiError('INTERNAL', 'Internal error'), status: STATUS_BY_CODE.INTERNAL }

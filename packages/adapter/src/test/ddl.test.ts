@@ -48,7 +48,7 @@ const SAMPLE_OPS: Record<DdlOp['op'], DdlOp> = {
   createDatabase: { op: 'createDatabase', name: 'new"db`x' },
   dropDatabase: { op: 'dropDatabase', name: 'new"db`x' },
   createSchema: { op: 'createSchema', name: 'new"schema' },
-  copyTable: { op: 'copyTable', table: 't', newName: 't_copy', withData: true },
+  copyTable: { op: 'copyTable', table: 't', newName: 't_copy', withData: true, columns: ['id', 'na`me'] },
   enableEvent: { op: 'enableEvent', name: 'ev`x' },
   disableEvent: { op: 'disableEvent', name: 'ev`x' },
   dropEvent: { op: 'dropEvent', name: 'ev`x' },

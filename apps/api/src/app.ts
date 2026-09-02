@@ -1,10 +1,12 @@
 import { Hono } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
+import { getSignedCookie } from 'hono/cookie'
 import { csrf } from 'hono/csrf'
 import { createMiddleware } from 'hono/factory'
 import { secureHeaders } from 'hono/secure-headers'
 import type { AppConfig } from './config.ts'
-import { errorResponse, notFoundResponse } from './lib/errors.ts'
+import { presetEntry } from './lib/allowlist.ts'
+import { apiError, errorResponse, notFoundResponse } from './lib/errors.ts'
 import { clientIp, createLogger, type Logger, type RemoteAddress, requestLogger } from './lib/logging.ts'
 import { RateLimiter } from './lib/rate-limit.ts'
 import { requestContext } from './lib/request-context.ts'
@@ -12,7 +14,7 @@ import { databaseRoutes } from './routes/databases.ts'
 import { serverRoutes } from './routes/server.ts'
 import { sessionRoutes } from './routes/session.ts'
 import { userRoutes } from './routes/users.ts'
-import type { AppEnv } from './session/middleware.ts'
+import { type AppEnv, SESSION_COOKIE } from './session/middleware.ts'
 import type { SessionStore } from './session/store.ts'
 
 /** Runtime services injected next to the validated configuration (all defaults live in loadConfig). */
@@ -49,14 +51,19 @@ const MB = 1024 * KB
  * Request-body ceilings per route family. The import route sets its own (IMPORT_MAX_BYTES) and is skipped here;
  * SQL scripts may be pasted dumps; everything else is small JSON. Unauthenticated /api/session is the tightest.
  */
-function apiBodyLimit() {
+function apiBodyLimit(secret: string) {
   const session = bodyLimit({ maxSize: 64 * KB })
   const sql = bodyLimit({ maxSize: 16 * MB })
   const json = bodyLimit({ maxSize: 1 * MB })
-  return createMiddleware<AppEnv>((c, next) => {
+  return createMiddleware<AppEnv>(async (c, next) => {
     const path = c.req.path
-    if (path.endsWith('/import')) return next()
     if (path === '/api/session') return session(c, next)
+    // Chunked bodies are buffered up to the limit before the route's requireSession runs; refuse unauthenticated
+    // uploads here so an anonymous client cannot make the process buffer megabytes per request.
+    if (c.req.method !== 'GET' && c.req.method !== 'HEAD' && !(await getSignedCookie(c, secret, SESSION_COOKIE))) {
+      return c.json(apiError('UNAUTHENTICATED', 'Not connected'), 401)
+    }
+    if (path.endsWith('/import')) return next()
     if (/\/sql(\/stream)?$/.test(path)) return sql(c, next)
     return json(c, next)
   })
@@ -78,7 +85,7 @@ export function createApp(config: AppConfig, services: AppServices) {
   const ip = (c: Parameters<RemoteAddress>[0]) =>
     clientIp(c.req.raw.headers, config.trustProxy, services.remoteAddress?.(c))
   // Presets are always reachable on exactly their own host:port, however the config object was assembled.
-  const allowedHosts = [...new Set([...config.allowedHosts, ...config.servers.map((s) => `${s.host}:${s.port}`)])]
+  const allowedHosts = [...new Set([...config.allowedHosts, ...config.servers.map(presetEntry)])]
   const sessionDeps = { allowedHosts, loginLimiter, ipLimiter, ip, logger }
   return (
     new Hono<AppEnv>()
@@ -93,7 +100,7 @@ export function createApp(config: AppConfig, services: AppServices) {
       .use('*', requestLogger(logger, ip))
       .use('*', secureHeaders({ contentSecurityPolicy: CONTENT_SECURITY_POLICY, referrerPolicy: 'same-origin' }))
       .use('/api/*', csrf())
-      .use('/api/*', apiBodyLimit())
+      .use('/api/*', apiBodyLimit(config.sessionSecret))
       .onError((err, c) => errorResponse(c, err, logger))
       // Liveness: the process answers. Readiness: the session store is usable.
       .get('/healthz', (c) => c.json({ ok: true }))

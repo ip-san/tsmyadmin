@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { entriesWithoutPort, isHostAllowed, parseEntry } from './allowlist.ts'
+import { entriesWithoutPort, invalidEntries, isHostAllowed, parseEntry, presetEntry } from './allowlist.ts'
 
 describe('isHostAllowed', () => {
   it('matches exact hosts case-insensitively (any port when the entry has none)', () => {
@@ -30,6 +30,23 @@ describe('isHostAllowed', () => {
     expect(isHostAllowed('anything', 1, ['*'])).toBe(true)
     expect(isHostAllowed('', 1, ['*'])).toBe(false)
     expect(isHostAllowed('127.0.0.1', 3306, [])).toBe(false)
+  })
+})
+
+describe('presetEntry / invalidEntries', () => {
+  it('brackets IPv6 preset hosts so their port is honoured', () => {
+    expect(presetEntry({ host: '::1', port: 5432 })).toBe('[::1]:5432')
+    expect(presetEntry({ host: 'db', port: 3306 })).toBe('db:3306')
+    expect(isHostAllowed('::1', 5432, [presetEntry({ host: '::1', port: 5432 })])).toBe(true)
+    expect(isHostAllowed('::1', 5433, [presetEntry({ host: '::1', port: 5432 })])).toBe(false)
+  })
+
+  it('flags entries whose port suffix is out of range', () => {
+    expect(invalidEntries(['db:99999', 'db:0', 'db:3306', 'db', '[::1]:70000'])).toEqual([
+      'db:99999',
+      'db:0',
+      '[::1]:70000',
+    ])
   })
 })
 
