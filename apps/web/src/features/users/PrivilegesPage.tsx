@@ -12,7 +12,7 @@ export function PrivilegesPage({ db, schema, dialect }: { db: string; schema?: s
   const users = useQuery(usersQuery)
   const flow = useUserOpFlow()
   if (users.isPending) return <Spinner />
-  if (users.isError) return <ErrorBox error={users.error} />
+  if (users.isError) return <ErrorBox error={users.error} onRetry={() => void users.refetch()} />
   const target = schema ? { database: db, schema } : { database: db }
   return (
     <div className="space-y-3">

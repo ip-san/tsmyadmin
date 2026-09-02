@@ -15,7 +15,7 @@ export function StatusPage() {
         {info.isPending ? (
           <Spinner />
         ) : info.isError ? (
-          <ErrorBox error={info.error} />
+          <ErrorBox error={info.error} onRetry={() => void info.refetch()} />
         ) : (
           <dl className="grid max-w-2xl grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-sm">
             <dt className="text-zinc-500 dark:text-zinc-400">{locale.server.version}</dt>
@@ -40,7 +40,7 @@ export function StatusPage() {
         {status.isPending ? (
           <Spinner />
         ) : status.isError ? (
-          <ErrorBox error={status.error} />
+          <ErrorBox error={status.error} onRetry={() => void status.refetch()} />
         ) : (
           <KeyValueTable items={status.data} label={locale.server.statusTitle} />
         )}

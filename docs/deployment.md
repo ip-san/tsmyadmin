@@ -19,6 +19,7 @@ tsmyadmin は **1 プロセス（Bun）で API と SPA を配信する単一コ�
 | `TRUST_PROXY` | `0` | `1` でリバースプロキシの `X-Forwarded-For` をクライアント IP として信頼する（プロキシ配下では必須、直接公開時は `0` のまま） |
 | `LOG_FORMAT` | 本番 `json` / 開発 `pretty` | 1 行 1 JSON（ログ収集向け）か人が読む形式か |
 | `WEB_DIST` | `apps/web/dist` | 配信する SPA ビルドのディレクトリ（作業ディレクトリからの相対） |
+| `SHUTDOWN_TIMEOUT_SECONDS` | `30` | `SIGTERM` 受信後、実行中のリクエスト（長い SQL・エクスポート・インポート）の完了を待つ上限。超過すると強制終了 |
 
 起動時に検証され、不正な値があれば理由を表示して終了します（`Invalid environment: ...`）。
 
@@ -110,7 +111,14 @@ server {
 | インポートファイル | 64 MB | `IMPORT_MAX_BYTES` |
 | エクスポート | ストリーミング（500 行ずつ読み出して逐次送信）。例外: 主キーも一意キーもない MySQL テーブルは安定した順序が取れないため 1 回で全件読み出す（巨大な無 PK テーブルはメモリを消費） | `apps/api/src/lib/export.ts`, `iterateRows` |
 | バイナリ値の表示 | 先頭 64 KB | `MAX_BINARY_BYTES` |
-| DB 接続プール | セッションごとに最大 4 接続、30 分無操作で破棄 | adapter |
+| DB 接続プール | ログインセッションごとに最大 4 接続（PostgreSQL は接続先データベースごとに 1 プール）。60 秒アイドルで接続を閉じ、セッション失効（`SESSION_TTL_MINUTES`）でプールごと破棄。DB 側の同時接続上限は「想定同時ログイン数 × 4」を目安に確保する | adapter (`idleTimeout`) |
+
+## 停止と再起動（グレースフルシャットダウン）
+
+`SIGTERM` / `SIGINT` を受けると新規接続の受付を止め、実行中のリクエストが終わるのを `SHUTDOWN_TIMEOUT_SECONDS`（既定 30 秒）まで待ってから各セッションの DB 接続プールを閉じて終了します。2 回目のシグナルか上限超過で即時終了します。
+
+- Kubernetes では `terminationGracePeriodSeconds` を `SHUTDOWN_TIMEOUT_SECONDS + 5` 以上にしてください
+- `/readyz` はリスナーが閉じるまで 200 を返します。ローリング更新ではロードバランサから外してから `SIGTERM` を送る（`preStop` で数秒待つ）と、停止中のインスタンスに新規リクエストが振られません
 
 ## アップグレード
 

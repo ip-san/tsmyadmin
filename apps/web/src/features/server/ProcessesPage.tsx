@@ -46,7 +46,7 @@ export function ProcessesPage() {
       {procs.isPending ? (
         <Spinner />
       ) : procs.isError ? (
-        <ErrorBox error={procs.error} />
+        <ErrorBox error={procs.error} onRetry={() => void procs.refetch()} />
       ) : (
         <Table aria-label={locale.server.processesTitle}>
           <thead>

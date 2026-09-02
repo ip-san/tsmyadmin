@@ -1,9 +1,41 @@
-import type { StatementResult } from '@tsmyadmin/shared'
+import type { ResultSet, StatementResult } from '@tsmyadmin/shared'
+import { toCsv } from '@tsmyadmin/shared'
+import { Download } from 'lucide-react'
 import { CellValue } from '@/components/cells/CellValue.tsx'
+import { Button } from '@/components/ui/Button.tsx'
 import { Notice } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
+import { downloadText, safeFilename } from '@/lib/download.ts'
 import { locateInSql } from '@/lib/sql-position.ts'
+
+/** Client-side export of one result set (what is on screen, up to maxRows). */
+function DownloadButtons({ result, label }: { result: ResultSet; label: string }) {
+  const names = result.columns.map((c) => c.name)
+  const csv = () => downloadText(safeFilename(label, 'csv'), toCsv(names, result.rows), 'text/csv;charset=utf-8')
+  const json = () =>
+    downloadText(
+      safeFilename(label, 'json'),
+      JSON.stringify(
+        result.rows.map((row) => Object.fromEntries(names.map((n, i) => [n, row[i] ?? null]))),
+        null,
+        2
+      ),
+      'application/json'
+    )
+  return (
+    <span className="ml-2 inline-flex gap-1" aria-label={locale.sql.downloadResult(Number(label.split(' ')[1]) || 0)}>
+      <Button size="sm" onClick={csv}>
+        <Download className="size-3" aria-hidden />
+        {locale.sql.downloadCsv}
+      </Button>
+      <Button size="sm" onClick={json}>
+        <Download className="size-3" aria-hidden />
+        {locale.sql.downloadJson}
+      </Button>
+    </span>
+  )
+}
 
 function Statement({ index, result, maxRows }: { index: number; result: StatementResult; maxRows: number }) {
   const heading = `${locale.sql.statement(index + 1)}`
@@ -60,6 +92,7 @@ function Statement({ index, result, maxRows }: { index: number; result: Statemen
         <span className="font-normal text-zinc-500 dark:text-zinc-400">
           {locale.sql.rowsResult(rows.length, result.durationMs)}
         </span>
+        {rows.length > 0 ? <DownloadButtons result={result.result} label={heading} /> : null}
       </h3>
       {truncated ? <Notice>{locale.sql.truncated(maxRows)}</Notice> : null}
       <pre className="overflow-x-auto font-mono text-xs text-zinc-500 dark:text-zinc-400">{result.sql}</pre>

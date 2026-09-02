@@ -1,3 +1,20 @@
+import type { Cell } from './schemas/cell.ts'
+import { isBinaryCell } from './schemas/cell.ts'
+import { CSV_NULL } from './schemas/export.ts'
+
+/** One CSV field: NULL as `\\N`, binary as base64, quoting only when the text needs it. */
+export function csvField(cell: Cell): string {
+  if (cell === null) return CSV_NULL
+  const text = isBinaryCell(cell) ? cell.$bin : typeof cell === 'string' ? cell : String(cell)
+  return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text
+}
+
+/** Header + rows as CRLF-terminated CSV (the format the table export and the SQL console download share). */
+export function toCsv(columns: string[], rows: Cell[][]): string {
+  const lines = [columns.map(csvField).join(','), ...rows.map((row) => row.map(csvField).join(','))]
+  return `${lines.join('\r\n')}\r\n`
+}
+
 /** RFC 4180 CSV parsing (quotes, escaped quotes, CR/LF/CRLF, optional BOM). */
 export interface CsvParseOptions {
   delimiter?: string

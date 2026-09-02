@@ -322,6 +322,14 @@ describe('databases & tables', () => {
     await h.login()
     expect(await (await h.req('/api/databases/shop/routines?schema=app')).json()).toEqual([])
     expect(h.adapter.calls.at(-1)).toEqual({ method: 'listRoutines', args: [{ database: 'shop', schema: 'app' }] })
+    expect(await (await h.req('/api/databases/shop/routines/user_label/definition?kind=function')).json()).toEqual({
+      definition: 'CREATE FUNCTION user_label() BEGIN END',
+    })
+    expect(h.adapter.calls.at(-1)).toEqual({
+      method: 'routineDefinition',
+      args: [{ database: 'shop' }, 'user_label', 'function'],
+    })
+    expect((await h.req('/api/databases/shop/routines/user_label/definition?kind=view')).status).toBe(400)
     expect(await (await h.req('/api/databases/shop/triggers?table=users')).json()).toEqual([])
     expect(h.adapter.calls.at(-1)).toEqual({ method: 'listTriggers', args: [{ database: 'shop' }, 'users'] })
     expect(await (await h.req('/api/databases/shop/events')).json()).toEqual([])
@@ -334,6 +342,14 @@ describe('databases & tables', () => {
     await h.login()
     await h.req('/api/databases/shop/tables?schema=app')
     expect(h.adapter.calls.at(-1)).toEqual({ method: 'listTables', args: [{ database: 'shop', schema: 'app' }] })
+  })
+
+  it('answers unknown /api paths with the JSON NOT_FOUND envelope', async () => {
+    const h = harness()
+    stores.push(h.store)
+    const res = await h.req('/api/no/such/route')
+    expect(res.status).toBe(404)
+    expect(ApiErrorSchema.parse(await res.json())).toMatchObject({ code: 'NOT_FOUND' })
   })
 
   it('returns 404 NOT_FOUND from the adapter', async () => {
@@ -495,6 +511,51 @@ describe('sql & ddl', () => {
       .split('\n')
       .map((l) => SqlStreamEventSchema.parse(JSON.parse(l)))
     expect(lines).toEqual([{ type: 'fatal', message: 'gone' }])
+  })
+
+  it('cancels the running script when the stream consumer aborts', async () => {
+    const adapter = fixtureAdapter()
+    const h = harness(adapter)
+    stores.push(h.store)
+    await h.login()
+    let release: () => void = () => undefined
+    const gate = new Promise<void>((r) => {
+      release = r
+    })
+    adapter.executeSql = async (ns, sql, opts) => {
+      adapter.calls.push({ method: 'executeSql', args: [ns, sql, opts] })
+      const first = { kind: 'affected' as const, sql: 'A', affectedRows: 1, durationMs: 1 }
+      await opts.onResult?.(first, 0)
+      await gate // simulates a long second statement
+      const second = { kind: 'affected' as const, sql: 'B', affectedRows: 1, durationMs: 1 }
+      await opts.onResult?.(second, 1)
+      return [first, second]
+    }
+    const queryId = crypto.randomUUID()
+    const res = await h.req('/api/databases/shop/sql/stream', {
+      method: 'POST',
+      body: JSON.stringify({ sql: 'A;B', queryId }),
+    })
+    const reader = res.body?.getReader()
+    if (!reader) throw new Error('no body')
+    const { value } = await reader.read()
+    expect(new TextDecoder().decode(value)).toContain('"index":0')
+    await reader.cancel()
+    expect(adapter.calls.at(-1)).toEqual({ method: 'cancelQuery', args: [queryId] })
+    release()
+    await new Promise((r) => setTimeout(r, 0))
+    // The late second result must not be enqueued on a cancelled stream (would throw otherwise).
+    expect(adapter.calls.filter((c) => c.method === 'cancelQuery')).toHaveLength(1)
+  })
+
+  it('assigns a queryId to streamed scripts so an abort can always cancel them', async () => {
+    const h = harness()
+    stores.push(h.store)
+    await h.login()
+    const res = await h.req('/api/databases/shop/sql/stream', { method: 'POST', body: JSON.stringify({ sql: 'X' }) })
+    await res.text()
+    const opts = h.adapter.calls.find((c) => c.method === 'executeSql')?.args[2] as { queryId?: string }
+    expect(opts.queryId).toMatch(/^[0-9a-f-]{36}$/)
   })
 
   it('passes queryId through and cancels by id', async () => {

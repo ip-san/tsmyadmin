@@ -38,6 +38,36 @@ for (const t of TARGETS) {
       })
     })
 
+    test('"insert and add another" keeps the form open; duplicating a row prefills it', async ({ page }) => {
+      await withScratchTable(page, t, async (table) => {
+        await page.goto(tableUrl(t, table, '/insert'))
+        await page.getByLabel('id', { exact: true }).fill('3')
+        await page.getByLabel('name: NULL').uncheck()
+        await page.getByLabel('name', { exact: true }).fill('three')
+        await page.getByRole('button', { name: '挿入して続ける' }).click()
+        await expect(page.getByText('1 行を挿入しました')).toBeVisible()
+        await expect(page).toHaveURL(/\/insert/)
+        await expect(page.getByLabel('id', { exact: true })).toHaveValue('')
+        await page.goto(`${tableUrl(t, table)}${t.schema ? '&' : '?'}sort=id:asc`)
+        await expect(page.getByText('全 3 件')).toBeVisible()
+        await page.getByLabel('3 行目を複製').click()
+        const dialog = page.getByRole('dialog')
+        await expect(dialog.getByLabel('name', { exact: true })).toHaveValue('three')
+        await dialog.getByLabel('id', { exact: true }).fill('4')
+        await dialog.getByRole('button', { name: '挿入する' }).click()
+        await expect(page.getByText('全 4 件')).toBeVisible()
+        await expect(page.getByRole('cell', { name: 'three', exact: true })).toHaveCount(2)
+      })
+    })
+
+    test('remembers the page size across tables', async ({ page }) => {
+      await page.goto(tableUrl(t, 'users'))
+      await page.getByLabel('表示件数').selectOption('25')
+      await expect(page).toHaveURL(/limit=25/)
+      await page.goto(tableUrl(t, 'posts'))
+      await expect(page.getByLabel('表示件数')).toHaveValue('25')
+    })
+
     test('edits a row through the dialog and a cell inline', async ({ page }) => {
       await withScratchTable(page, t, async (table) => {
         await page.goto(`${tableUrl(t, table)}${t.schema ? '&' : '?'}sort=id:asc`)

@@ -48,4 +48,5 @@ export const USER_OP_NAMES = UserOpSchema.options.map((o) => o.shape.op.value)
 
 export const UserOpRequestSchema = z.object({ op: UserOpSchema })
 export const UserGrantsSchema = z.object({ statements: z.array(z.string()) })
+export type UserGrants = z.infer<typeof UserGrantsSchema>
 export const PASSWORD_MASK = '****'

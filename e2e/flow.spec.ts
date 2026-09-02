@@ -42,9 +42,21 @@ test.describe('login', () => {
     expect(errors.filter((e) => /Content Security Policy/i.test(e))).toEqual([])
   })
 
-  test('redirects unauthenticated visitors to /login', async ({ page }) => {
-    await page.goto('/db/tsmyadmin_test')
-    await expect(page).toHaveURL(/\/login$/)
+  test('redirects unauthenticated visitors to /login and returns them to the deep link after login', async ({
+    page,
+  }) => {
+    const t = TARGETS[0]
+    if (!t) throw new Error('no target')
+    await page.goto('/db/tsmyadmin_test/table/users?limit=25')
+    await expect(page).toHaveURL(/\/login\?redirect=/)
+    await login(page, t, { fromCurrentPage: true })
+    await expect(page).toHaveURL(/\/db\/tsmyadmin_test\/table\/users\?limit=25/)
+    await expect(page.getByRole('table', { name: 'users' })).toBeVisible()
+  })
+
+  test('ignores off-site redirect targets', async ({ page }) => {
+    await page.goto('/login?redirect=https%3A%2F%2Fevil.example%2F')
+    await expect(page.getByLabel('ホスト')).toBeVisible()
   })
 })
 
@@ -103,6 +115,14 @@ for (const t of TARGETS) {
       await expect(page.getByRole('cell', { name: 'Carol', exact: true })).toBeVisible()
       await page.keyboard.press('ArrowLeft')
       await expect(page).toHaveURL(/page=1/)
+      // Sidebar toggle (button and mod+B) persists across reloads.
+      await page.getByRole('button', { name: 'サイドバーを隠す' }).click()
+      await expect(page.getByRole('complementary')).toBeHidden()
+      await page.reload()
+      await expect(page.getByRole('complementary')).toBeHidden()
+      await page.locator('main').click()
+      await page.keyboard.press('ControlOrMeta+B')
+      await expect(page.getByRole('complementary')).toBeVisible()
     })
 
     test('column picker hides columns and keeps the choice in the URL', async ({ page }) => {

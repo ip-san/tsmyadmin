@@ -5,6 +5,7 @@ import type {
   Namespace,
   ProcessInfo,
   RoutineInfo,
+  RoutineKind,
   ServerInfo,
   TableInfo,
   TableSchema,
@@ -19,7 +20,7 @@ import { AdapterError, type AdapterErrorCode, type ConnectionConfig } from '../t
 import { pgCreateStatements, pgDdl } from './ddl.ts'
 import { pgExporter } from './export.ts'
 import { pgDescribeTable, pgListSchemas, pgListTables } from './introspect.ts'
-import { pgListRoutines, pgListTriggers } from './routines.ts'
+import { pgListRoutines, pgListTriggers, pgRoutineDefinition } from './routines.ts'
 import { pgKillProcess, pgListProcesses, pgListStatus, pgListVariables, pgServerInfo } from './server.ts'
 import { pgListUsers, pgShowGrants, pgUsers } from './users.ts'
 import { PG_TYPE_NAMES, pgToCell, pgTypes } from './values.ts'
@@ -141,7 +142,7 @@ export class PostgresAdapter extends BaseAdapter {
       release()
       throw err
     }
-    return { query: (text, params) => this.run(client, text, params), release }
+    return { query: (text, params) => this.run(client, text, params), release, id: client }
   }
 
   protected async setStatementTimeout(conn: Conn, ms: number): Promise<void> {
@@ -205,6 +206,10 @@ export class PostgresAdapter extends BaseAdapter {
 
   listRoutines(ns: Namespace): Promise<RoutineInfo[]> {
     return this.withConn(ns, (conn) => pgListRoutines(conn, ns))
+  }
+
+  routineDefinition(ns: Namespace, name: string, kind: RoutineKind): Promise<string | null> {
+    return this.withConn(ns, (conn) => pgRoutineDefinition(conn, ns, name, kind))
   }
 
   listTriggers(ns: Namespace, table?: string): Promise<TriggerInfo[]> {

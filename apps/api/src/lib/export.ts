@@ -1,6 +1,6 @@
 import type { DatabaseAdapter } from '@tsmyadmin/adapter'
-import type { Cell, ExportQuery, Namespace } from '@tsmyadmin/shared'
-import { CSV_NULL, EXPORT_BATCH_SIZE, isBinaryCell } from '@tsmyadmin/shared'
+import type { ExportQuery, Namespace } from '@tsmyadmin/shared'
+import { csvField, EXPORT_BATCH_SIZE } from '@tsmyadmin/shared'
 
 export const DUMP_COMPLETE_MARKER = '-- tsmyadmin dump complete'
 const ITER_OPTS = { batchSize: EXPORT_BATCH_SIZE }
@@ -10,12 +10,6 @@ export interface ExportFile {
   body: AsyncIterable<string>
   contentType: string
   filename: string
-}
-
-function csvField(cell: Cell): string {
-  if (cell === null) return CSV_NULL
-  const text = isBinaryCell(cell) ? cell.$bin : typeof cell === 'string' ? cell : String(cell)
-  return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text
 }
 
 async function* csvBody(adapter: DatabaseAdapter, ns: Namespace, table: string, bom: boolean): AsyncIterable<string> {

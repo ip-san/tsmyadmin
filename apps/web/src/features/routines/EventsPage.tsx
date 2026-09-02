@@ -14,7 +14,7 @@ export function EventsPage({ db, schema, dialect }: { db: string; schema?: strin
   const flow = useDdlFlow(db, schema)
   if (dialect !== 'mysql') return <Notice>{locale.events.unsupported}</Notice>
   if (events.isPending) return <Spinner />
-  if (events.isError) return <ErrorBox error={events.error} />
+  if (events.isError) return <ErrorBox error={events.error} onRetry={() => void events.refetch()} />
   return (
     <section className="space-y-2">
       <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{locale.events.title}</h2>

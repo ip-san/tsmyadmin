@@ -3,6 +3,7 @@ import { RowValuesSchema } from './cell.ts'
 import { DdlOpSchema } from './ddl.ts'
 import { DialectSchema } from './dialect.ts'
 import { StatementResultSchema } from './result.ts'
+import { RoutineKindSchema } from './routines.ts'
 import { RowKeySchema } from './row-key.ts'
 
 export const ConnectRequestSchema = z.object({
@@ -24,6 +25,7 @@ export type SessionState = z.infer<typeof SessionStateSchema>
 
 export const SchemaQuerySchema = z.object({ schema: z.string().min(1).optional() })
 export const TriggerQuerySchema = SchemaQuerySchema.extend({ table: z.string().min(1).optional() })
+export const RoutineDefinitionQuerySchema = SchemaQuerySchema.extend({ kind: RoutineKindSchema })
 
 export const InsertRowRequestSchema = z.object({ values: RowValuesSchema })
 export const UpdateRowRequestSchema = z.object({ key: RowKeySchema, values: RowValuesSchema })
@@ -61,6 +63,7 @@ export const SqlCancelResponseSchema = z.object({ cancelled: z.boolean() })
 
 export const DdlPreviewRequestSchema = z.object({ schema: z.string().min(1).optional(), op: DdlOpSchema })
 export const DdlPreviewResponseSchema = z.object({ sql: z.array(z.string()) })
+export type DdlPreviewResponse = z.infer<typeof DdlPreviewResponseSchema>
 
 export const ApiErrorCodeSchema = z.enum([
   'UNAUTHENTICATED',

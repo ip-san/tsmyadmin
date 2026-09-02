@@ -11,6 +11,7 @@ import type {
   Namespace,
   ProcessInfo,
   RoutineInfo,
+  RoutineKind,
   RowKey,
   RowValues,
   ServerInfo,
@@ -117,8 +118,10 @@ export interface DatabaseAdapter {
   listSchemas(database: string): Promise<string[]>
   listTables(ns: Namespace): Promise<TableInfo[]>
   describeTable(ns: Namespace, table: string): Promise<TableSchema>
-  /** Stored procedures and functions in the namespace (definitions when readable). */
+  /** Stored procedures and functions in the namespace (metadata only; see routineDefinition). */
   listRoutines(ns: Namespace): Promise<RoutineInfo[]>
+  /** CREATE statement of one routine, or null when the account may not read it. */
+  routineDefinition(ns: Namespace, name: string, kind: RoutineKind): Promise<string | null>
   /** Triggers in the namespace, optionally only for one table. */
   listTriggers(ns: Namespace, table?: string): Promise<TriggerInfo[]>
   /** Scheduled events (MySQL). PostgreSQL returns []. */
@@ -163,7 +166,15 @@ export interface DatabaseAdapter {
 
 export type { Cell }
 
-/** Names of every DatabaseAdapter method. Used by spec-consistency tests to detect untested methods. */
+type AdapterMethodName = {
+  [K in keyof DatabaseAdapter]: DatabaseAdapter[K] extends (...args: never[]) => unknown ? K : never
+}[keyof DatabaseAdapter]
+
+/**
+ * Names of every DatabaseAdapter method. Used by spec-consistency tests to detect untested methods and by the
+ * audit wrapper to classify calls. The `Record<AdapterMethodName, true>` check makes a method added to the
+ * interface but missing here a compile error (a bare `satisfies` on the array would only reject unknown names).
+ */
 export const ADAPTER_METHOD_NAMES = [
   'ping',
   'close',
@@ -172,6 +183,7 @@ export const ADAPTER_METHOD_NAMES = [
   'listTables',
   'describeTable',
   'listRoutines',
+  'routineDefinition',
   'listTriggers',
   'listEvents',
   'browseRows',
@@ -190,4 +202,9 @@ export const ADAPTER_METHOD_NAMES = [
   'listStatus',
   'listProcesses',
   'killProcess',
-] as const satisfies readonly (keyof DatabaseAdapter)[]
+] as const satisfies readonly AdapterMethodName[]
+
+const _exhaustive: Record<AdapterMethodName, true> = Object.fromEntries(
+  ADAPTER_METHOD_NAMES.map((n) => [n, true])
+) as Record<(typeof ADAPTER_METHOD_NAMES)[number], true>
+void _exhaustive

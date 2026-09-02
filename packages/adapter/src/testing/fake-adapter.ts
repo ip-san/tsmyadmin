@@ -8,6 +8,7 @@ import type {
   Namespace,
   ProcessInfo,
   RoutineInfo,
+  RoutineKind,
   RowKey,
   RowValues,
   ServerInfo,
@@ -165,6 +166,11 @@ export class FakeAdapter implements DatabaseAdapter {
   async listRoutines(ns: Namespace): Promise<RoutineInfo[]> {
     this.record('listRoutines', ns)
     return []
+  }
+
+  async routineDefinition(ns: Namespace, name: string, kind: RoutineKind): Promise<string | null> {
+    this.record('routineDefinition', ns, name, kind)
+    return `CREATE ${kind.toUpperCase()} ${name}() BEGIN END`
   }
 
   async listTriggers(ns: Namespace, table?: string): Promise<TriggerInfo[]> {

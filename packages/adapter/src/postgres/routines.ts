@@ -1,4 +1,4 @@
-import type { Namespace, RoutineInfo, TriggerInfo } from '@tsmyadmin/shared'
+import type { Namespace, RoutineInfo, RoutineKind, TriggerInfo } from '@tsmyadmin/shared'
 import { type Conn, firstResult } from '../base.ts'
 import { str, strOrNull } from '../sql/format.ts'
 
@@ -6,7 +6,7 @@ export async function pgListRoutines(conn: Conn, ns: Namespace): Promise<Routine
   const r = firstResult(
     await conn.query(
       `SELECT p.proname, p.prokind, l.lanname, pg_get_function_result(p.oid), pg_get_function_arguments(p.oid),
-              pg_get_functiondef(p.oid), obj_description(p.oid, 'pg_proc')
+              obj_description(p.oid, 'pg_proc')
        FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace JOIN pg_language l ON l.oid = p.prolang
        WHERE n.nspname = $1 AND p.prokind IN ('f', 'p')
        ORDER BY p.proname`,
@@ -19,9 +19,28 @@ export async function pgListRoutines(conn: Conn, ns: Namespace): Promise<Routine
     language: strOrNull(row[2]),
     returns: str(row[1]) === 'p' ? null : strOrNull(row[3]),
     parameters: str(row[4]),
-    definition: strOrNull(row[5]),
-    comment: strOrNull(row[6]),
+    comment: strOrNull(row[5]),
   }))
+}
+
+/** pg_get_functiondef of every overload with that name and kind, joined; null when none is visible. */
+export async function pgRoutineDefinition(
+  conn: Conn,
+  ns: Namespace,
+  name: string,
+  kind: RoutineKind
+): Promise<string | null> {
+  const r = firstResult(
+    await conn.query(
+      `SELECT pg_get_functiondef(p.oid)
+       FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+       WHERE n.nspname = $1 AND p.proname = $2 AND p.prokind = $3
+       ORDER BY p.oid`,
+      [ns.schema ?? 'public', name, kind === 'procedure' ? 'p' : 'f']
+    )
+  )
+  const defs = r.rows.map((row) => strOrNull(row[0])).filter((d): d is string => d !== null)
+  return defs.length > 0 ? defs.join('\n\n') : null
 }
 
 const TRIGGER_SELECT = `SELECT t.tgname, c.relname, t.tgtype, pg_get_triggerdef(t.oid, true)

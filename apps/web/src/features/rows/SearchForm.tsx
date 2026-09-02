@@ -49,7 +49,7 @@ export function SearchForm({
   const structure = useQuery(structureQuery(tableRef))
   const [conditions, setConditions] = useState<Record<string, Condition>>(() => filtersToConditions(initial))
   if (structure.isPending) return <Spinner />
-  if (structure.isError) return <ErrorBox error={structure.error} />
+  if (structure.isError) return <ErrorBox error={structure.error} onRetry={() => void structure.refetch()} />
   const columns = structure.data.columns
   const update = (name: string, patch: Partial<Condition>) =>
     setConditions((c) => ({ ...c, [name]: { op: '', value: '', ...c[name], ...patch } }))

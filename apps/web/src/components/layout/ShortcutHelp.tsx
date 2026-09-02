@@ -7,6 +7,7 @@ import { Dialog } from '../ui/Dialog.tsx'
 
 const ROWS: { keys: string; label: string }[] = [
   { keys: 'mod+k', label: locale.shortcuts.search },
+  { keys: 'mod+b', label: locale.shortcuts.toggleSidebar },
   { keys: 'arrowleft', label: locale.shortcuts.prevPage },
   { keys: 'arrowright', label: locale.shortcuts.nextPage },
   { keys: 'mod+enter', label: locale.shortcuts.runSql },

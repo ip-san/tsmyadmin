@@ -11,6 +11,7 @@ export function UserOpPreviewDialog({ flow }: { flow: UserOpFlow }) {
       flow={flow}
       title={(op) => locale.users.ops[op.op]}
       destructive={(op) => DESTRUCTIVE.has(op.op)}
+      confirmName={(op) => (op.op === 'dropUser' ? op.user.name : null)}
       hint={locale.users.previewHint}
     />
   )

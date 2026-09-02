@@ -3,6 +3,7 @@ import { createRouter, RouterProvider } from '@tanstack/react-router'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
+import { ErrorPage, NotFoundPage } from './components/layout/ErrorPage.tsx'
 import { isApiError } from './lib/api.ts'
 import { applyTheme } from './lib/theme.ts'
 import { routeTree } from './routeTree.gen.ts'
@@ -13,13 +14,21 @@ const queryClient = new QueryClient({
     onError: (error) => {
       if (isApiError(error, 'UNAUTHENTICATED')) {
         queryClient.setQueryData(['session'], null)
-        void router.navigate({ to: '/login' })
+        // Remember where the user was so the login page can send them back after re-authenticating.
+        void router.navigate({ to: '/login', search: { redirect: router.state.location.href, expired: true } })
       }
     },
   }),
 })
 
-const router = createRouter({ routeTree, context: { queryClient }, defaultPreload: 'intent', scrollRestoration: true })
+const router = createRouter({
+  routeTree,
+  context: { queryClient },
+  defaultPreload: 'intent',
+  scrollRestoration: true,
+  defaultErrorComponent: ({ error, reset }) => <ErrorPage error={error} reset={reset} />,
+  defaultNotFoundComponent: NotFoundPage,
+})
 
 declare module '@tanstack/react-router' {
   interface Register {

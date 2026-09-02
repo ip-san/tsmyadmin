@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 
 export interface Shortcut {
   /** e.g. 'mod+k', 'shift+/', 'arrowleft' — `mod` is ⌘ on macOS and Ctrl elsewhere. */
@@ -30,12 +30,19 @@ export function matches(event: KeyboardEvent, keys: string): boolean {
   return event.key.toLowerCase() === key
 }
 
-/** Registers document-level shortcuts for the lifetime of the component. */
+/**
+ * Registers document-level shortcuts for the lifetime of the component. The listener is attached once; the
+ * latest `shortcuts` array is read through a ref, so callers may pass inline literals without re-registering.
+ */
 export function useShortcuts(shortcuts: Shortcut[]): void {
+  const latest = useRef(shortcuts)
+  useLayoutEffect(() => {
+    latest.current = shortcuts
+  })
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const editing = isEditable(event.target)
-      for (const s of shortcuts) {
+      for (const s of latest.current) {
         if (editing && !s.global) continue
         if (matches(event, s.keys)) {
           event.preventDefault()
@@ -46,7 +53,7 @@ export function useShortcuts(shortcuts: Shortcut[]): void {
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [shortcuts])
+  }, [])
 }
 
 /** Human-readable label for the help dialog. */

@@ -200,7 +200,7 @@ export function StructureView({ tableRef, dialect }: { tableRef: TableRef; diale
   const [columnDialog, setColumnDialog] = useState<ColumnDialog>(null)
   const [indexDialog, setIndexDialog] = useState(false)
   if (structure.isPending) return <Spinner />
-  if (structure.isError) return <ErrorBox error={structure.error} />
+  if (structure.isError) return <ErrorBox error={structure.error} onRetry={() => void structure.refetch()} />
   const s = structure.data
   const editable = s.kind === 'table'
   const table = tableRef.table

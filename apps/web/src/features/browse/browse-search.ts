@@ -1,10 +1,23 @@
 import { BROWSE_MAX_LIMIT, type BrowseOptions, BrowseQuerySchema, parseBrowseQuery } from '@tsmyadmin/shared'
 import { z } from 'zod'
+import { readPreference, writePreference } from '@/lib/preferences.ts'
+
+const DEFAULT_LIMIT = 50
+const LimitSchema = z.number().int().min(1).max(BROWSE_MAX_LIMIT)
+const LIMIT_PREF = 'browse.limit'
+
+/** Page size remembered per browser; an explicit `?limit=` in the URL always wins (shareable links). */
+export function preferredLimit(): number {
+  return readPreference(LIMIT_PREF, LimitSchema, DEFAULT_LIMIT)
+}
+export function rememberLimit(limit: number): void {
+  writePreference(LIMIT_PREF, limit)
+}
 
 export const BrowseSearchSchema = z.object({
   schema: z.string().optional(),
   page: z.number().int().min(1).default(1),
-  limit: z.number().int().min(1).max(BROWSE_MAX_LIMIT).default(50),
+  limit: LimitSchema.optional(),
   sort: z.string().optional(),
   filters: z.string().optional(),
   /** Comma-separated visible columns; omitted = all. */
@@ -13,12 +26,12 @@ export const BrowseSearchSchema = z.object({
 export type BrowseSearch = z.infer<typeof BrowseSearchSchema>
 
 /** Converts the browse route's search params into BrowseOptions (invalid sort/filters fall back to none). */
-export function browseOptionsFromSearch(s: BrowseSearch): BrowseOptions {
+export function browseOptionsFromSearch(s: BrowseSearch, limit = s.limit ?? preferredLimit()): BrowseOptions {
   const parsed = parseBrowseQuery(
-    BrowseQuerySchema.parse({ offset: (s.page - 1) * s.limit, limit: s.limit, sort: s.sort, filters: s.filters })
+    BrowseQuerySchema.parse({ offset: (s.page - 1) * limit, limit, sort: s.sort, filters: s.filters })
   )
   if (parsed.ok) return parsed.options
-  return { offset: (s.page - 1) * s.limit, limit: s.limit, sort: [], filters: [] }
+  return { offset: (s.page - 1) * limit, limit, sort: [], filters: [] }
 }
 
 /** Column names to show, or null when every column is visible. Unknown names are dropped. */

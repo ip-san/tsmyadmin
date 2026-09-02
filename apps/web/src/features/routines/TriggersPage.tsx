@@ -8,7 +8,7 @@ import { DefinitionToggle } from './DefinitionToggle.tsx'
 export function TriggersPage({ db, schema, table }: { db: string; schema?: string | undefined; table?: string }) {
   const triggers = useQuery(triggersQuery(db, schema, table))
   if (triggers.isPending) return <Spinner />
-  if (triggers.isError) return <ErrorBox error={triggers.error} />
+  if (triggers.isError) return <ErrorBox error={triggers.error} onRetry={() => void triggers.refetch()} />
   return (
     <section className="space-y-2">
       <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{locale.triggers.title}</h2>

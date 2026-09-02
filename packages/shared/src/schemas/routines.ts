@@ -8,11 +8,19 @@ export const RoutineInfoSchema = z.object({
   returns: z.string().nullable(),
   /** Parameter list as the dialect prints it, e.g. "IN uid int" / "uid integer". */
   parameters: z.string(),
-  /** Full definition (CREATE statement or body) when the account may read it, else null. */
-  definition: z.string().nullable(),
   comment: z.string().nullable(),
 })
 export type RoutineInfo = z.infer<typeof RoutineInfoSchema>
+
+export const RoutineKindSchema = RoutineInfoSchema.shape.kind
+export type RoutineKind = z.infer<typeof RoutineKindSchema>
+
+/** Definition of one routine, fetched on demand (MySQL SHOW CREATE is one round trip per routine). */
+export const RoutineDefinitionSchema = z.object({
+  /** CREATE statement (all overloads joined on PostgreSQL); null when the account may not read it. */
+  definition: z.string().nullable(),
+})
+export type RoutineDefinition = z.infer<typeof RoutineDefinitionSchema>
 
 export const TriggerInfoSchema = z.object({
   name: z.string(),

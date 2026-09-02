@@ -1,20 +1,33 @@
+import { useState } from 'react'
 import { locale } from '@/config/locale.ts'
 import type { PreviewFlow } from '@/lib/preview-flow.ts'
 import { Button } from '../ui/Button.tsx'
 import { Dialog } from '../ui/Dialog.tsx'
 import { ErrorBox, Spinner } from '../ui/Feedback.tsx'
+import { Input } from '../ui/Field.tsx'
 
 export interface PreviewDialogProps<Op> {
   flow: PreviewFlow<Op>
   title: (op: Op) => string
   destructive: (op: Op) => boolean
+  /** Name the user must retype before an irreversible, data-destroying op may run (null = plain confirmation). */
+  confirmName?: (op: Op) => string | null
   hint: string
 }
 
 /** Shows generated SQL for a pending operation and executes it only on explicit confirmation. */
-export function PreviewDialog<Op>({ flow, title, destructive, hint }: PreviewDialogProps<Op>) {
+export function PreviewDialog<Op>({ flow, title, destructive, confirmName, hint }: PreviewDialogProps<Op>) {
   const op = flow.op
-  const ready = flow.sql.length > 0 && !flow.previewing
+  const required = op === null ? null : (confirmName?.(op) ?? null)
+  const [typed, setTyped] = useState('')
+  // Reset the confirmation text whenever a different op is previewed (state-from-props reset pattern).
+  const [prevOp, setPrevOp] = useState(op)
+  if (prevOp !== op) {
+    setPrevOp(op)
+    setTyped('')
+  }
+  const confirmed = required === null || typed === required
+  const ready = flow.sql.length > 0 && !flow.previewing && confirmed
   return (
     <Dialog
       open={op !== null}
@@ -46,6 +59,22 @@ export function PreviewDialog<Op>({ flow, title, destructive, hint }: PreviewDia
           {flow.sql.map((s) => `${s};`).join('\n')}
         </pre>
       )}
+      {required !== null ? (
+        <div className="mt-3 space-y-1 rounded border border-red-300 bg-red-50 p-3 dark:border-red-700 dark:bg-red-950">
+          <p className="text-sm font-medium text-red-800 dark:text-red-200">{locale.ddl.irreversible}</p>
+          <label htmlFor="confirm-name" className="block text-xs text-red-800 dark:text-red-200">
+            {locale.ddl.typeToConfirm(required)}
+          </label>
+          <Input
+            id="confirm-name"
+            value={typed}
+            onChange={(e) => setTyped(e.target.value)}
+            autoComplete="off"
+            spellCheck={false}
+            className="font-mono text-xs"
+          />
+        </div>
+      ) : null}
       {flow.error ? <ErrorBox error={flow.error} className="mt-2" /> : null}
       {flow.failed && flow.failed.kind === 'error' ? (
         <div

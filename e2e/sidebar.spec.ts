@@ -39,12 +39,22 @@ test.describe('sidebar at scale', () => {
     await login(page, t)
     await page.goto(`/db/${t.database}?schema=${schema}`)
     await page.getByRole('button', { name: schema, exact: true }).click()
-    await expect(page.getByRole('link', { name: 't_0001' })).toBeVisible()
-    const rendered = await page.locator('aside a[href*="/table/"]').count()
+    const aside = page.locator('aside')
+    await expect(aside.getByRole('link', { name: 't_0001' })).toBeVisible()
+    const rendered = await aside.locator('a[href*="/table/"]').count()
     expect(rendered).toBeLessThan(120)
+    // The aside is the scroll container: scrolling to the bottom must materialise the last rows.
+    await aside.evaluate((el) => {
+      el.scrollTop = el.scrollHeight
+    })
+    await expect(aside.getByRole('link', { name: 't_1500' })).toBeVisible()
+    expect(await aside.locator('a[href*="/table/"]').count()).toBeLessThan(120)
+    await aside.evaluate((el) => {
+      el.scrollTop = 0
+    })
     await page.getByLabel('テーブルを絞り込む').fill('t_14')
     await expect(page.getByText('1,500 件中 100 件')).toBeVisible()
-    await expect(page.getByRole('link', { name: 't_1400' })).toBeVisible()
+    await expect(aside.getByRole('link', { name: 't_1400' })).toBeVisible()
     await page.getByLabel('テーブルを絞り込む').fill('t_1499')
     await expect(page.getByText('1,500 件中 1 件')).toBeVisible()
   })

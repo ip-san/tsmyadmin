@@ -3,10 +3,13 @@ import type {
   BrowseOptions,
   BrowseResult,
   DdlOp,
+  DdlPreviewResponse,
   EventInfo,
   KeyValue,
   ProcessInfo,
+  RoutineDefinition,
   RoutineInfo,
+  RoutineKind,
   RowKey,
   RowValues,
   ServerInfo,
@@ -17,6 +20,7 @@ import type {
   TableInfo,
   TableSchema,
   TriggerInfo,
+  UserGrants,
   UserInfo,
   UserRef,
 } from '@tsmyadmin/shared'
@@ -67,6 +71,19 @@ export const tablesQuery = (db: string, schema?: string) =>
     queryFn: () => unwrap<TableInfo[]>(api.databases[':db'].tables.$get({ param: { db }, query: schemaQuery(schema) })),
   })
 
+export const routineDefinitionQuery = (db: string, name: string, kind: RoutineKind, schema?: string) =>
+  queryOptions({
+    queryKey: ['routine-definition', db, schema ?? '', kind, name],
+    queryFn: () =>
+      unwrap<RoutineDefinition>(
+        api.databases[':db'].routines[':name'].definition.$get({
+          param: { db, name },
+          query: { ...schemaQuery(schema), kind },
+        })
+      ),
+    staleTime: 60_000,
+  })
+
 export const routinesQuery = (db: string, schema?: string) =>
   queryOptions({
     queryKey: ['routines', db, schema ?? ''],
@@ -104,9 +121,12 @@ export const structureQuery = (ref: TableRef) =>
       ),
   })
 
+/** Key prefix shared by every rows page of one table (invalidate this after a mutation, not the whole database). */
+export const rowsKey = (ref: TableRef) => ['rows', ref.db, ref.schema ?? '', ref.table] as const
+
 export const rowsQuery = (ref: TableRef, options: BrowseOptions) =>
   queryOptions({
-    queryKey: ['rows', ref.db, ref.schema ?? '', ref.table, options],
+    queryKey: [...rowsKey(ref), options],
     queryFn: () =>
       unwrap<BrowseResult>(
         api.databases[':db'].tables[':table'].rows.$get({
@@ -125,7 +145,7 @@ export const usersQuery = queryOptions({
 export const grantsQuery = (user: UserRef) =>
   queryOptions({
     queryKey: ['users', 'grants', user.name, user.host ?? ''],
-    queryFn: () => unwrap<{ statements: string[] }>(api.users.grants.$get({ query: user })),
+    queryFn: () => unwrap<UserGrants>(api.users.grants.$get({ query: user })),
   })
 
 export const serverInfoQuery = queryOptions({
@@ -181,7 +201,7 @@ export const mutations = {
     unwrap<{ cancelled: boolean }>(api.databases[':db'].sql.cancel.$post({ param: { db }, json: { queryId } })),
   killProcess: (id: string) => unwrap<{ ok: boolean }>(api.server.processes[':id'].kill.$post({ param: { id } })),
   previewDdl: (db: string, schema: string | undefined, op: DdlOp) =>
-    unwrap<{ sql: string[] }>(
+    unwrap<DdlPreviewResponse>(
       api.databases[':db'].ddl.preview.$post({ param: { db }, json: { ...schemaQuery(schema), op } })
     ),
 }

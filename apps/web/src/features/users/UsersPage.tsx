@@ -15,7 +15,7 @@ import { UserForm } from './UserForm.tsx'
 function GrantsPanel({ user }: { user: UserRef }) {
   const grants = useQuery(grantsQuery(user))
   if (grants.isPending) return <Spinner />
-  if (grants.isError) return <ErrorBox error={grants.error} />
+  if (grants.isError) return <ErrorBox error={grants.error} onRetry={() => void grants.refetch()} />
   if (grants.data.statements.length === 0) return <Notice>{locale.users.noGrants}</Notice>
   return (
     <pre
@@ -38,7 +38,7 @@ export function UsersPage({ dialect }: { dialect: Dialect }) {
     return (
       <div className="space-y-2">
         <Notice>{locale.users.cannotLoad}</Notice>
-        <ErrorBox error={users.error} />
+        <ErrorBox error={users.error} onRetry={() => void users.refetch()} />
       </div>
     )
   return (

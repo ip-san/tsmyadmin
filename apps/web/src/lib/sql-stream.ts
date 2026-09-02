@@ -1,4 +1,4 @@
-import { type SqlRequest, type SqlStreamEvent, SqlStreamEventSchema } from '@tsmyadmin/shared'
+import { ApiErrorSchema, type SqlRequest, type SqlStreamEvent, SqlStreamEventSchema } from '@tsmyadmin/shared'
 import { ApiError, api } from './api.ts'
 
 export type SqlStreamBody = Omit<SqlRequest, 'maxRows' | 'timeoutMs' | 'stopOnError'> & Partial<SqlRequest>
@@ -17,13 +17,8 @@ export async function* streamSql(
     { init: signal ? { signal } : {} }
   )
   if (!res.ok || !res.body) {
-    const parsed = await res.json().catch(() => null)
-    throw new ApiError(
-      res.status,
-      parsed && typeof parsed === 'object' && 'code' in parsed
-        ? (parsed as ApiError)
-        : { code: 'INTERNAL', message: `HTTP ${res.status}` }
-    )
+    const parsed = ApiErrorSchema.safeParse(await res.json().catch(() => null))
+    throw new ApiError(res.status, parsed.success ? parsed.data : { code: 'INTERNAL', message: `HTTP ${res.status}` })
   }
   const reader = res.body.pipeThrough(new TextDecoderStream()).getReader()
   let buffer = ''

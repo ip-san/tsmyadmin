@@ -20,7 +20,7 @@ function ServerPage() {
       {databases.isPending ? (
         <Spinner />
       ) : databases.isError ? (
-        <ErrorBox error={databases.error} />
+        <ErrorBox error={databases.error} onRetry={() => void databases.refetch()} />
       ) : (
         <Table>
           <thead>

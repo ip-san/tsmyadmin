@@ -68,6 +68,39 @@ for (const t of TARGETS) {
       await expect(page.getByRole('button', { name: '実行', exact: true })).toBeEnabled()
     })
 
+    test('EXPLAIN, saved queries and result download', async ({ page }) => {
+      await page.goto(t.schema ? `/db/${t.database}/sql?schema=${t.schema}` : `/db/${t.database}/sql`)
+      await typeSql(page, 'SELECT name FROM users ORDER BY id LIMIT 2')
+      await page.getByRole('button', { name: 'EXPLAIN' }).click()
+      const plan = page.getByRole('region', { name: '文 1' })
+      await expect(plan).toContainText(/EXPLAIN SELECT/)
+      await expect(plan.getByRole('table')).toBeVisible()
+      // Bookmark, reload the page and load it back into the editor.
+      await page.getByText('保存済みクエリ (0)').click()
+      await page.getByLabel('クエリ名').fill('two names')
+      await page.getByRole('button', { name: '保存', exact: true }).click()
+      await expect(page.getByText('保存済みクエリ (1)')).toBeVisible()
+      await page.reload()
+      await page.getByText('保存済みクエリ (1)').click()
+      await page
+        .getByRole('listitem')
+        .filter({ hasText: 'two names' })
+        .getByRole('button', { name: '読み込む' })
+        .click()
+      await page.getByRole('button', { name: '実行', exact: true }).click()
+      const result = page.getByRole('region', { name: '文 1' })
+      await expect(result.getByRole('cell', { name: 'Alice', exact: true })).toBeVisible()
+      const download = page.waitForEvent('download')
+      await result.getByRole('button', { name: 'CSV' }).click()
+      const file = await download
+      expect(file.suggestedFilename()).toMatch(/\.csv$/)
+      const text = await (await import('node:fs/promises')).readFile(await file.path(), 'utf8')
+      expect(text).toBe('name\r\nAlice\r\nBob\r\n')
+      // Multi-statement scripts cannot be EXPLAINed.
+      await typeSql(page, 'SELECT 1; SELECT 2')
+      await expect(page.getByRole('button', { name: 'EXPLAIN' })).toBeDisabled()
+    })
+
     test('table SQL tab is prefilled and DML refreshes the browse view', async ({ page }) => {
       await page.goto(tableUrl(t, 'users', '/sql'))
       await expect(page.getByRole('textbox', { name: 'SQL エディタ' })).toContainText('SELECT * FROM')

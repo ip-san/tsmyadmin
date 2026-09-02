@@ -33,9 +33,9 @@ export const TARGETS: Target[] = [
   ),
 ]
 
-/** Logs in through the UI form. */
-export async function login(page: Page, t: Target): Promise<void> {
-  await page.goto('/login')
+/** Logs in through the UI form (from `/login`, or from the current page when already on a login URL). */
+export async function login(page: Page, t: Target, { fromCurrentPage = false } = {}): Promise<void> {
+  if (!fromCurrentPage) await page.goto('/login')
   // The E2E server defines presets; switch to manual entry so the helper controls every field.
   await page.getByLabel('接続先').selectOption('')
   await page.getByLabel('サーバー種別').selectOption(t.dialect)
@@ -45,7 +45,7 @@ export async function login(page: Page, t: Target): Promise<void> {
   await page.getByLabel('パスワード').fill(t.password)
   await page.getByLabel('データベース').fill(t.database)
   await page.getByRole('button', { name: '接続' }).click()
-  await expect(page.getByRole('heading', { name: 'サーバー' })).toBeVisible()
+  if (!fromCurrentPage) await expect(page.getByRole('heading', { name: 'サーバー' })).toBeVisible()
 }
 
 export function tableUrl(t: Target, table: string, sub = ''): string {
@@ -61,4 +61,20 @@ export function slowSql(dialect: Target['dialect']): string {
   const tables = Array.from({ length: 12 }, (_, i) => `users u${i}`).join(', ')
   const cond = Array.from({ length: 12 }, (_, i) => `u${i}.id`).join(' + ')
   return `SELECT COUNT(*) FROM ${tables} WHERE ${cond} > 0`
+}
+
+/**
+ * Confirms the SQL preview dialog. Irreversible ops (DROP/TRUNCATE TABLE, DROP DATABASE, DROP USER) additionally
+ * require retyping the object name; pass it as `confirmName`.
+ */
+export async function confirmPreview(page: Page, expectSql: RegExp, confirmName?: string): Promise<void> {
+  const dialog = page.getByRole('dialog')
+  await expect(dialog.getByLabel('SQL')).toContainText(expectSql)
+  if (confirmName !== undefined) {
+    const run = dialog.getByRole('button', { name: '実行する' })
+    await expect(run).toBeDisabled()
+    await dialog.getByLabel(`続行するには「${confirmName}」と入力してください`).fill(confirmName)
+  }
+  await dialog.getByRole('button', { name: '実行する' }).click()
+  await expect(dialog).toBeHidden()
 }

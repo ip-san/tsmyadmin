@@ -3,7 +3,7 @@ import { csrf } from 'hono/csrf'
 import { requestId } from 'hono/request-id'
 import { secureHeaders } from 'hono/secure-headers'
 import type { AppConfig } from './config.ts'
-import { errorResponse } from './lib/errors.ts'
+import { errorResponse, notFoundResponse } from './lib/errors.ts'
 import { clientIp, createLogger, type Logger, type RemoteAddress, requestLogger } from './lib/logging.ts'
 import { RateLimiter } from './lib/rate-limit.ts'
 import { requestContext } from './lib/request-context.ts'
@@ -74,6 +74,8 @@ export function createApp(config: AppConfig, services: AppServices) {
       .route('/api', databaseRoutes(cfg, logger))
       .route('/api', userRoutes(cfg))
       .route('/api', serverRoutes(cfg))
+      // Unknown /api paths get the JSON envelope (registered last, before index.ts adds the SPA fallback for `*`).
+      .all('/api/*', (c) => notFoundResponse(c))
   )
 }
 

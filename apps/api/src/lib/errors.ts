@@ -20,6 +20,11 @@ const STATUS_BY_CODE: Record<ApiErrorCode, ContentfulStatusCode> = {
   INTERNAL: 500,
 }
 
+/** HTTP status carried by each error code. */
+export function statusForCode(code: ApiErrorCode): ContentfulStatusCode {
+  return STATUS_BY_CODE[code]
+}
+
 export function apiError(code: ApiErrorCode, message: string, detail?: string, nativeCode?: string): ApiError {
   return {
     code,
@@ -30,7 +35,7 @@ export function apiError(code: ApiErrorCode, message: string, detail?: string, n
 }
 
 /** Normalises anything thrown by a route into the error envelope plus the HTTP status it deserves. */
-function toApiError(err: unknown): { body: ApiError; status: ContentfulStatusCode } {
+export function toApiError(err: unknown): { body: ApiError; status: ContentfulStatusCode } {
   if (err instanceof AdapterError) {
     const body = apiError(err.code, err.message, err.detail, err.nativeCode)
     return { body, status: STATUS_BY_CODE[body.code] }
@@ -52,6 +57,11 @@ function toApiError(err: unknown): { body: ApiError; status: ContentfulStatusCod
     body: apiError('INTERNAL', 'Internal error', err instanceof Error ? err.message : String(err)),
     status: STATUS_BY_CODE.INTERNAL,
   }
+}
+
+/** JSON 404 envelope for unknown API routes (the SPA fallback handles non-API paths). */
+export function notFoundResponse(c: Context): Response {
+  return c.json(apiError('NOT_FOUND', `No route for ${c.req.method} ${c.req.path}`), STATUS_BY_CODE.NOT_FOUND)
 }
 
 /** Writes the error envelope. Unexpected errors go to the structured log (stack included), never to the client. */

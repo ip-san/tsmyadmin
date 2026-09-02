@@ -2,13 +2,13 @@ import { useQuery } from '@tanstack/react-query'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
-import { routinesQuery } from '@/lib/queries.ts'
+import { routineDefinitionQuery, routinesQuery } from '@/lib/queries.ts'
 import { DefinitionToggle } from './DefinitionToggle.tsx'
 
 export function RoutinesPage({ db, schema }: { db: string; schema?: string | undefined }) {
   const routines = useQuery(routinesQuery(db, schema))
   if (routines.isPending) return <Spinner />
-  if (routines.isError) return <ErrorBox error={routines.error} />
+  if (routines.isError) return <ErrorBox error={routines.error} onRetry={() => void routines.refetch()} />
   return (
     <section className="space-y-2">
       <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{locale.routines.title}</h2>
@@ -37,7 +37,7 @@ export function RoutinesPage({ db, schema }: { db: string; schema?: string | und
                 <Td className="text-xs">{r.language ?? ''}</Td>
                 <Td className="text-xs">{r.comment ?? ''}</Td>
                 <Td>
-                  <DefinitionToggle definition={r.definition} label={r.name} />
+                  <DefinitionToggle query={routineDefinitionQuery(db, r.name, r.kind, schema)} label={r.name} />
                 </Td>
               </Tr>
             ))}

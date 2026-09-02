@@ -36,7 +36,7 @@ export function ExportForm({ db, schema, table }: ExportFormProps) {
       {table ? null : tables.isPending ? (
         <Spinner />
       ) : tables.isError ? (
-        <ErrorBox error={tables.error} />
+        <ErrorBox error={tables.error} onRetry={() => void tables.refetch()} />
       ) : (
         <fieldset>
           <legend className="mb-1 text-xs font-medium text-zinc-600 dark:text-zinc-300">

@@ -12,7 +12,7 @@ export function VariablesPage() {
       {vars.isPending ? (
         <Spinner />
       ) : vars.isError ? (
-        <ErrorBox error={vars.error} />
+        <ErrorBox error={vars.error} onRetry={() => void vars.refetch()} />
       ) : (
         <KeyValueTable items={vars.data} label={locale.server.variablesTitle} />
       )}

@@ -55,9 +55,29 @@ if (existsSync(webDist)) {
   logger.log('warn', 'web.dist_missing', { webDist })
 }
 
+const server = Bun.serve({ port: config.port, fetch: app.fetch })
+
+/**
+ * Graceful shutdown: stop accepting connections, let in-flight requests (long SQL, exports, imports) finish
+ * within SHUTDOWN_TIMEOUT_SECONDS, then close every session's database pools. A second signal or the deadline
+ * forces exit. `/readyz` keeps answering 200 until the listener closes, so drain the load balancer first.
+ */
+let stopping = false
 const shutdown = async (signal: string) => {
-  logger.log('info', 'shutdown', { signal })
+  if (stopping) {
+    logger.log('warn', 'shutdown.forced', { signal })
+    process.exit(1)
+  }
+  stopping = true
+  logger.log('info', 'shutdown.begin', { signal, timeoutMs: config.shutdownTimeoutMs })
+  const deadline = setTimeout(() => {
+    logger.log('warn', 'shutdown.timeout', { pendingRequests: server.pendingRequests })
+    process.exit(1)
+  }, config.shutdownTimeoutMs)
+  await server.stop() // resolves once active requests have completed
   await store.closeAll()
+  clearTimeout(deadline)
+  logger.log('info', 'shutdown.done', {})
   process.exit(0)
 }
 process.on('SIGINT', () => void shutdown('SIGINT'))
@@ -70,8 +90,3 @@ logger.log('info', 'startup', {
   sessionStore: config.sessionStore,
   sessionTtlMinutes: config.sessionTtlMs / 60_000,
 })
-
-export default {
-  port: config.port,
-  fetch: app.fetch,
-}

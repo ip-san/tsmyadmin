@@ -6,3 +6,8 @@ test-results
 playwright-report
 .git
 .claude
+.env
+.env.*
+!.env.example
+data
+*.sqlite

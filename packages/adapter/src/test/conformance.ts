@@ -2,7 +2,7 @@ import type { Cell, ColumnSpec, DdlOp, Dialect, Namespace, RowKey, StatementResu
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { mysqlAccount } from '../mysql/users.ts'
 import { quoteIdent } from '../sql/quote.ts'
-import type { DatabaseAdapter, ExecuteOptions } from '../types.ts'
+import type { DatabaseAdapter, ExecuteOptions, RowBatch } from '../types.ts'
 
 export interface ConformanceContext {
   dialect: Dialect
@@ -58,15 +58,15 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
   const runDdl = async (op: DdlOp) => {
     for (const sql of db.ddl.build(ns, op)) await execOk(sql)
   }
+  // Every scratch table this suite creates; dropped before and after the run so nothing leaks into the shared DB.
+  const SCRATCH_TABLES = [scratch, scratchNoPk, scratchDdl, `${scratch}_empty`, `${scratch}_dump`, `${scratch}_keyset`]
   const browseAll = async (table: string) => db.browseRows(ns, table, { offset: 0, limit: 100, sort: [], filters: [] })
 
   describe(`adapter conformance (${dialect})`, () => {
     beforeAll(async () => {
       db = ctx.create()
       await db.ping()
-      await execOk(
-        `DROP TABLE IF EXISTS ${scratch}; DROP TABLE IF EXISTS ${scratchNoPk}; DROP TABLE IF EXISTS ${scratchDdl}`
-      )
+      await execOk(SCRATCH_TABLES.map((t) => `DROP TABLE IF EXISTS ${t}`).join('; '))
       await execOk(`CREATE TABLE ${scratch} (id INT PRIMARY KEY, name VARCHAR(50) NULL, n INT NULL)`)
       await execOk(`CREATE TABLE ${scratchNoPk} (a INT NULL, b VARCHAR(50) NULL)`)
       await execOk(`CREATE TABLE ${scratch}_empty (id INT PRIMARY KEY)`)
@@ -74,12 +74,7 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
     })
 
     afterAll(async () => {
-      await exec(
-        `DROP TABLE IF EXISTS ${scratch}; DROP TABLE IF EXISTS ${scratchNoPk}; DROP TABLE IF EXISTS ${scratchDdl}`,
-        {
-          stopOnError: false,
-        }
-      )
+      await exec(SCRATCH_TABLES.map((t) => `DROP TABLE IF EXISTS ${t}`).join('; '), { stopOnError: false })
       await db.close()
     })
 
@@ -193,7 +188,7 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
     })
 
     describe('listRoutines', () => {
-      it('lists the fixture procedure and function with definitions', async () => {
+      it('lists the fixture procedure and function', async () => {
         const routines = await db.listRoutines(ns)
         const proc = routines.find((r) => r.name === 'count_users')
         const fn = routines.find((r) => r.name === 'user_label')
@@ -201,7 +196,18 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         expect(fn?.kind).toBe('function')
         expect(fn?.returns?.toLowerCase()).toMatch(/varchar|text/)
         expect(fn?.parameters.toLowerCase()).toContain('uid')
-        expect(fn?.definition?.toUpperCase()).toContain('CREATE')
+      })
+    })
+
+    describe('routineDefinition', () => {
+      it('returns the CREATE statement per routine and null for unknown names', async () => {
+        const fn = await db.routineDefinition(ns, 'user_label', 'function')
+        expect(fn?.toUpperCase()).toContain('CREATE')
+        expect(fn).toContain('user_label')
+        expect((await db.routineDefinition(ns, 'count_users', 'procedure'))?.toUpperCase()).toContain('CREATE')
+        expect(await db.routineDefinition(ns, 'does_not_exist', 'function')).toBeNull()
+        // Wrong kind for an existing name is not a match either.
+        expect(await db.routineDefinition(ns, 'user_label', 'procedure')).toBeNull()
       })
     })
 
@@ -436,6 +442,26 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         expect(after.rows.filter((x) => x[1] === 'one')).toHaveLength(1)
       })
 
+      it('rejects a stale ctid after the row moved (PostgreSQL)', async () => {
+        if (dialect !== 'postgres') return
+        const before = await browseAll(scratchNoPk)
+        const target = before.rows.find((r) => r[0] === 2 && r[1] === 'two')
+        const stale = String(target?.at(-1))
+        expect(await db.updateRow(ns, scratchNoPk, { kind: 'ctid', value: stale }, { b: 'dos' })).toEqual({
+          affectedRows: 1,
+        })
+        // The UPDATE wrote a new tuple version, so the captured ctid no longer addresses a live row.
+        await expect(
+          db.updateRow(ns, scratchNoPk, { kind: 'ctid', value: stale }, { b: 'tres' })
+        ).rejects.toMatchObject({ code: 'KEY_MISMATCH' })
+        await expect(db.deleteRows(ns, scratchNoPk, [{ kind: 'ctid', value: stale }])).rejects.toMatchObject({
+          code: 'KEY_MISMATCH',
+        })
+        const after = await browseAll(scratchNoPk)
+        expect(after.rows.filter((x) => x[1] === 'dos')).toHaveLength(1)
+        expect(after.rows.filter((x) => x[1] === 'tres')).toHaveLength(0)
+      })
+
       it('matches NULL values in all-columns keys (MySQL)', async () => {
         if (dialect !== 'mysql') return
         const r = await db.updateRow(
@@ -570,8 +596,13 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         expect(ok[0]).toMatchObject({ kind: 'rows' })
       })
 
-      it('returns false for unknown ids', async () => {
+      it('returns false for unknown ids and for ids whose script already completed', async () => {
         expect(await db.cancelQuery(crypto.randomUUID())).toBe(false)
+        const queryId = crypto.randomUUID()
+        const results = await db.executeSql(ns, 'SELECT 1 AS x', { ...EXEC, queryId })
+        expect(results[0]).toMatchObject({ kind: 'rows' })
+        // The registration is removed on the success path too, so a late cancel is a no-op.
+        expect(await db.cancelQuery(queryId)).toBe(false)
       })
     })
 
@@ -596,6 +627,34 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         for await (const b of db.iterateRows(ns, 'users', { batchSize: 2 }))
           batches.push(b.rows.map((r) => Number(r[0])))
         expect(batches).toEqual([[1, 2], [3, 4], [5]])
+      })
+
+      it('pages a composite key with keyset comparisons and never repeats or skips rows', async () => {
+        const t = `${scratch}_keyset`
+        await execOk(`CREATE TABLE ${t} (a INT NOT NULL, b VARCHAR(10) NOT NULL, v INT NULL, PRIMARY KEY (a, b))`)
+        const values: string[] = []
+        for (let a = 1; a <= 3; a++) for (const b of ['x', 'y', 'z']) values.push(`(${a}, '${b}', ${a * 10})`)
+        await execOk(`INSERT INTO ${t} (a, b, v) VALUES ${values.join(', ')}`)
+        const seen: string[] = []
+        let batches = 0
+        for await (const batch of db.iterateRows(ns, t, { batchSize: 4 })) {
+          batches++
+          for (const r of batch.rows) seen.push(`${r[0]}${r[1]}`)
+          expect(batch.columns.map((c) => c.name)).toEqual(['a', 'b', 'v'])
+        }
+        expect(batches).toBe(3)
+        expect(seen).toEqual(['1x', '1y', '1z', '2x', '2y', '2z', '3x', '3y', '3z'])
+        await execOk(`DROP TABLE ${t}`)
+      })
+
+      it('iterates a view (no key: single batch on MySQL, ctid-less on PostgreSQL)', async () => {
+        const batches: RowBatch[] = []
+        for await (const b of db.iterateRows(ns, 'active_users', { batchSize: 2 })) batches.push(b)
+        const rows = batches.flatMap((b) => b.rows)
+        expect(rows.length).toBeGreaterThan(0)
+        expect(batches[0]?.columns.some((c) => c.name === 'name')).toBe(true)
+        const insert = db.exporter.insert(ns, 'active_users', batches[0]?.columns.map((c) => c.name) ?? [], rows)
+        expect(insert).toMatch(/^INSERT INTO/)
       })
 
       it('handles tables without a key and empty tables', async () => {

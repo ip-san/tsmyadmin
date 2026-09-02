@@ -10,6 +10,7 @@ import type {
   Namespace,
   ProcessInfo,
   RoutineInfo,
+  RoutineKind,
   RowKey,
   RowKeyKind,
   RowValues,
@@ -47,6 +48,8 @@ export interface RawResult {
 export interface Conn {
   query(text: string, params?: unknown[]): Promise<RawResult | RawResult[]>
   release(): void
+  /** Identity of the underlying pooled driver connection (stable across checkouts); used to cache session state. */
+  readonly id: object
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000
@@ -109,6 +112,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
   abstract listTables(ns: Namespace): Promise<TableInfo[]>
   abstract describeTable(ns: Namespace, table: string): Promise<TableSchema>
   abstract listRoutines(ns: Namespace): Promise<RoutineInfo[]>
+  abstract routineDefinition(ns: Namespace, name: string, kind: RoutineKind): Promise<string | null>
   abstract listTriggers(ns: Namespace, table?: string): Promise<TriggerInfo[]>
   abstract listEvents(ns: Namespace): Promise<EventInfo[]>
   abstract readonly serverNamespace: Namespace
@@ -136,24 +140,32 @@ export abstract class BaseAdapter implements DatabaseAdapter {
   /** Extra SELECT-list expression that exposes the fallback key (PG: ctid), or null. */
   protected abstract fallbackKeySelect(): string | null
 
+  /**
+   * Statement timeout currently applied to each pooled driver connection. The timeout is left in place on
+   * release and only re-sent when the next borrower needs a different value, so the common path (every call
+   * using the default timeout) costs no extra round trips. Entries are dropped when user SQL may have changed it.
+   */
+  private readonly appliedTimeout = new WeakMap<object, number>()
+
   /** Checks out a connection with the statement timeout applied; `done()` mirrors withConn's cleanup. */
   private async borrow(ns: Namespace, timeoutMs: number): Promise<{ conn: Conn; done: () => Promise<void> }> {
     const conn = await this.acquire(ns)
-    try {
-      await this.setStatementTimeout(conn, timeoutMs)
-    } catch (err) {
-      conn.release()
-      throw err
-    }
-    const done = async () => {
+    if (this.appliedTimeout.get(conn.id) !== timeoutMs) {
       try {
-        await this.setStatementTimeout(conn, 0)
-      } catch {
-        // connection may already be broken; releasing is all we can do
+        await this.setStatementTimeout(conn, timeoutMs)
+        this.appliedTimeout.set(conn.id, timeoutMs)
+      } catch (err) {
+        this.appliedTimeout.delete(conn.id)
+        conn.release()
+        throw err
       }
-      conn.release()
     }
-    return { conn, done }
+    return { conn, done: () => Promise.resolve(conn.release()) }
+  }
+
+  /** Forgets the cached timeout of `conn` (after user-controlled SQL that may have issued its own SET). */
+  protected forgetSessionState(conn: Conn): void {
+    this.appliedTimeout.delete(conn.id)
   }
 
   protected async withConn<T>(
@@ -380,9 +392,10 @@ export abstract class BaseAdapter implements DatabaseAdapter {
   }
 
   /**
-   * Stable-order full scan. PK (or NOT NULL unique key) → keyset-free OFFSET paging ordered by the key;
-   * PostgreSQL without a key → ordered by ctid; MySQL without a key → a single unordered batch
-   * (OFFSET paging without a total order would repeat/skip rows).
+   * Stable-order full scan with keyset pagination: PK (or NOT NULL unique key) → `WHERE (k1, k2) > (last)`
+   * ordered by the key; PostgreSQL without a key → `WHERE ctid > last` ordered by ctid; MySQL without a key →
+   * a single unordered batch (no total order exists to page over). Keyset paging keeps each batch O(batch)
+   * instead of OFFSET's O(offset + batch) rescans on large tables.
    */
   async *iterateRows(
     ns: Namespace,
@@ -392,31 +405,47 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     const schema = opts.schema ?? (await this.describeTable(ns, table))
     const key = this.resolveRowKey(schema)
     const d = this.dialect
-    const selectList = schema.columns.map((c) => quoteIdent(d, c.name)).join(', ')
+    const columns = schema.columns.map((c) => quoteIdent(d, c.name))
     const tableSql = quoteTable(d, ns, table)
-    const orderBy =
-      key.keyKind === 'pk'
-        ? ` ORDER BY ${key.keyColumns.map((c) => quoteIdent(d, c)).join(', ')}`
-        : key.keyKind === 'ctid'
-          ? ' ORDER BY ctid'
-          : ''
+    const fallback = this.fallbackKeySelect()
+    const byCtid = key.keyKind === 'ctid' && fallback !== null
+    const keyExprs = key.keyKind === 'pk' ? key.keyColumns.map((c) => quoteIdent(d, c)) : byCtid ? ['ctid'] : []
+    // Position of each key column in the selected row (ctid is appended as an extra trailing column).
+    const keyIndexes =
+      key.keyKind === 'pk' ? key.keyColumns.map((c) => schema.columns.findIndex((col) => col.name === c)) : []
+    if (keyIndexes.includes(-1)) throw new AdapterError('QUERY_FAILED', 'Key column missing from table schema')
+    const selectList = byCtid && fallback ? [...columns, fallback] : columns
+    const orderBy = keyExprs.length > 0 ? ` ORDER BY ${keyExprs.join(', ')}` : ''
     const single = orderBy === ''
     const batchSize = Math.max(1, Math.floor(opts.batchSize))
     // Generators cannot run inside withConn's callback, so the borrow/done pair is shared instead
     // (no statement timeout: full scans may legitimately be long).
     const { conn, done } = await this.borrow(ns, 0)
     try {
-      let offset = 0
+      let last: Cell[] | null = null
+      let first = true
       for (;;) {
         const params = new Params(d)
-        const limit = single ? '' : ` LIMIT ${params.add(batchSize)} OFFSET ${params.add(offset)}`
+        let where = ''
+        if (last) {
+          if (byCtid) where = ` WHERE ctid > ${params.add(last[last.length - 1])}::tid`
+          else {
+            const lastRow = last
+            const lastKey = keyIndexes.map((i) => params.add(toDbValue(lastRow[i] ?? null)))
+            where = ` WHERE (${keyExprs.join(', ')}) > (${lastKey.join(', ')})`
+          }
+        }
+        const limit = single ? '' : ` LIMIT ${params.add(batchSize)}`
         const r = firstResult(
-          await conn.query(`SELECT ${selectList} FROM ${tableSql}${orderBy}${limit}`, params.values)
+          await conn.query(`SELECT ${selectList.join(', ')} FROM ${tableSql}${where}${orderBy}${limit}`, params.values)
         )
+        const rows = byCtid ? r.rows.map((row) => row.slice(0, -1)) : r.rows
+        const cols = byCtid ? r.columns.slice(0, -1) : r.columns
         // An empty table still yields one batch so callers learn the column list.
-        if (r.rows.length > 0 || offset === 0) yield { columns: r.columns, rows: r.rows }
+        if (rows.length > 0 || first) yield { columns: cols, rows }
+        first = false
         if (single || r.rows.length < batchSize) return
-        offset += batchSize
+        last = r.rows[r.rows.length - 1] ?? null
       }
     } finally {
       await done()
@@ -451,6 +480,8 @@ export abstract class BaseAdapter implements DatabaseAdapter {
         ns,
         async (conn) => {
           if (opts.queryId) resolveBackend(await this.backendId(conn))
+          // User SQL may SET the session timeout itself; never trust the cached value afterwards.
+          this.forgetSessionState(conn)
           for (const st of statements) {
             const started = performance.now()
             try {

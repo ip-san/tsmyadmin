@@ -12,6 +12,9 @@ import { streamSql } from '@/lib/sql-stream.ts'
 import { clearHistory, type HistoryEntry, loadHistory, pushHistory } from './history.ts'
 import { ResultsView } from './ResultsView.tsx'
 import { SqlEditor } from './SqlEditor.tsx'
+import { HistoryPanel, SavedQueriesPanel } from './SqlPanels.tsx'
+import { deleteSaved, loadSaved, type SavedQuery, saveQuery } from './saved-queries.ts'
+import { isSingleStatement, stripTrailingSemicolons } from './statement.ts'
 
 const MAX_ROWS_OPTIONS = [100, 1000, 10_000]
 
@@ -23,64 +26,12 @@ export interface SqlConsoleProps {
   completion: Record<string, string[]>
 }
 
-function HistoryPanel({
-  entries,
-  onLoad,
-  onClear,
-}: {
-  entries: HistoryEntry[]
-  onLoad: (sql: string) => void
-  onClear: () => void
-}) {
-  return (
-    <details className="rounded border border-zinc-200 dark:border-zinc-700">
-      <summary className="cursor-pointer px-3 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-200">
-        {locale.sql.history} ({entries.length})
-      </summary>
-      <div className="max-h-64 overflow-auto border-t border-zinc-200 dark:border-zinc-700">
-        {entries.length === 0 ? (
-          <p className="px-3 py-2 text-xs text-zinc-500 dark:text-zinc-400">{locale.sql.noHistory}</p>
-        ) : (
-          <ul>
-            {entries.map((e) => (
-              <li
-                key={`${e.at}-${e.sql}`}
-                className="flex items-start gap-2 border-b border-zinc-100 px-3 py-1.5 text-xs dark:border-zinc-800"
-              >
-                <span
-                  className={e.ok ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}
-                  title={e.ok ? locale.sql.ok : locale.sql.failed}
-                >
-                  {e.ok ? '✓' : '✗'}
-                </span>
-                <span className="text-zinc-400 dark:text-zinc-500">{new Date(e.at).toLocaleTimeString('ja-JP')}</span>
-                <code className="min-w-0 flex-1 truncate font-mono" title={e.sql}>
-                  {e.sql}
-                </code>
-                <Button size="sm" onClick={() => onLoad(e.sql)}>
-                  {locale.sql.load}
-                </Button>
-              </li>
-            ))}
-          </ul>
-        )}
-        {entries.length > 0 ? (
-          <div className="px-3 py-2">
-            <Button size="sm" onClick={onClear}>
-              {locale.sql.clearHistory}
-            </Button>
-          </div>
-        ) : null}
-      </div>
-    </details>
-  )
-}
-
 export function SqlConsole({ db, schema, dialect, initialSql = '', completion }: SqlConsoleProps) {
   const [text, setText] = useState(initialSql)
   const [maxRows, setMaxRows] = useState(SQL_MAX_ROWS_DEFAULT)
   const [stopOnError, setStopOnError] = useState(true)
   const [history, setHistory] = useState<HistoryEntry[]>(() => loadHistory(dialect))
+  const [saved, setSaved] = useState<SavedQuery[]>(() => loadSaved(dialect))
   const [results, setResults] = useState<StatementResult[] | null>(null)
   const queryClient = useQueryClient()
   const queryId = useRef<string | null>(null)
@@ -88,12 +39,12 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion }:
   const run = useMutation({
     // Statement results are appended to the view as the server streams them (NDJSON), so long scripts
     // show progress instead of one big response at the end.
-    mutationFn: async () => {
+    mutationFn: async (sql: string) => {
       queryId.current = crypto.randomUUID()
       const collected: StatementResult[] = []
       setResults([])
       for await (const event of streamSql(db, {
-        sql: text,
+        sql,
         ...(schema ? { schema } : {}),
         maxRows,
         stopOnError,
@@ -111,8 +62,8 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion }:
     onSettled: () => {
       queryId.current = null
     },
-    onSuccess: async (res) => {
-      setHistory(pushHistory(dialect, { sql: text, at: Date.now(), ok: res.every((r) => r.kind !== 'error') }))
+    onSuccess: async (res, sql) => {
+      setHistory(pushHistory(dialect, { sql, at: Date.now(), ok: res.every((r) => r.kind !== 'error') }))
       if (res.some((r) => r.kind !== 'rows')) {
         await queryClient.invalidateQueries({ predicate: (q) => q.queryKey[0] !== 'session' })
       }
@@ -120,7 +71,11 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion }:
   })
   const execute = () => {
     if (text.trim().length === 0 || run.isPending) return
-    run.mutate()
+    run.mutate(text)
+  }
+  const explain = () => {
+    if (!isSingleStatement(text) || run.isPending) return
+    run.mutate(`EXPLAIN ${stripTrailingSemicolons(text)}`)
   }
 
   return (
@@ -147,6 +102,9 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion }:
             {cancel.isPending ? locale.sql.cancelling : locale.sql.cancel}
           </Button>
         ) : null}
+        <Button onClick={explain} disabled={run.isPending || !isSingleStatement(text)} title={locale.sql.explainHint}>
+          {locale.sql.explain}
+        </Button>
         <span className="text-xs text-zinc-500 dark:text-zinc-400">{locale.sql.runHint}</span>
         <label
           htmlFor="sql-max-rows"
@@ -173,6 +131,13 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion }:
       </div>
       {run.isError ? <ErrorBox error={run.error} /> : null}
       {results ? <ResultsView results={results} maxRows={maxRows} /> : null}
+      <SavedQueriesPanel
+        entries={saved}
+        currentSql={text}
+        onSave={(name) => setSaved(saveQuery(dialect, { name, sql: text, at: Date.now() }))}
+        onLoad={setText}
+        onDelete={(name) => setSaved(deleteSaved(dialect, name))}
+      />
       <HistoryPanel
         entries={history}
         onLoad={setText}

@@ -8,6 +8,7 @@ import {
   InsertRowRequestSchema,
   type Namespace,
   parseBrowseQuery,
+  RoutineDefinitionQuerySchema,
   SchemaQuerySchema,
   SqlCancelRequestSchema,
   SqlRequestSchema,
@@ -42,6 +43,13 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
       .get('/databases/:db/routines', validate('query', SchemaQuerySchema), async (c) => {
         const q = c.req.valid('query')
         return c.json(await c.get('session').adapter.listRoutines(ns(c.req.param('db'), q.schema)))
+      })
+      .get('/databases/:db/routines/:name/definition', validate('query', RoutineDefinitionQuerySchema), async (c) => {
+        const q = c.req.valid('query')
+        const definition = await c
+          .get('session')
+          .adapter.routineDefinition(ns(c.req.param('db'), q.schema), c.req.param('name'), q.kind)
+        return c.json({ definition })
       })
       .get('/databases/:db/triggers', validate('query', TriggerQuerySchema), async (c) => {
         const q = c.req.valid('query')
@@ -178,24 +186,39 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
         const body = c.req.valid('json')
         const adapter = c.get('session').adapter
         const namespace = ns(c.req.param('db'), body.schema)
+        // Always register the run so a client that disconnects mid-script gets its statement interrupted
+        // instead of running to completion on an abandoned connection.
+        const queryId = body.queryId ?? crypto.randomUUID()
         const encoder = new TextEncoder()
+        let closed = false
         const stream = new ReadableStream<Uint8Array>({
           async start(controller) {
-            const send = (event: SqlStreamEvent) => controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`))
+            const send = (event: SqlStreamEvent) => {
+              if (closed) return
+              controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`))
+            }
             try {
               const results = await adapter.executeSql(namespace, body.sql, {
                 maxRows: body.maxRows,
                 timeoutMs: body.timeoutMs,
                 stopOnError: body.stopOnError,
-                ...(body.queryId ? { queryId: body.queryId } : {}),
+                queryId,
                 onResult: (result, index) => send({ type: 'result', index, result }),
               })
               send({ type: 'done', statements: results.length })
             } catch (err) {
               send({ type: 'fatal', message: err instanceof Error ? err.message : String(err) })
             } finally {
-              controller.close()
+              if (!closed) {
+                closed = true
+                controller.close()
+              }
             }
+          },
+          async cancel() {
+            // Consumer went away (tab closed, request aborted): stop the statement and drop further events.
+            closed = true
+            await adapter.cancelQuery(queryId)
           },
         })
         return c.body(stream, 200, {

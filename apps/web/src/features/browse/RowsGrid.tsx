@@ -1,15 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { BrowseOptions, BrowseResult, Cell, RowKey, RowValues } from '@tsmyadmin/shared'
 import { isBinaryCell } from '@tsmyadmin/shared'
-import { ArrowDown, ArrowUp, Pencil } from 'lucide-react'
+import { ArrowDown, ArrowUp, Copy, Pencil } from 'lucide-react'
 import { useState } from 'react'
-import { RowForm } from '@/components/rows/RowForm.tsx'
-import { Dialog } from '@/components/ui/Dialog.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
 import { cn } from '@/lib/cn.ts'
-import { mutations, rowsQuery, structureQuery, type TableRef } from '@/lib/queries.ts'
+import { mutations, rowsKey, rowsQuery, type TableRef } from '@/lib/queries.ts'
 import { BrowseToolbar } from './BrowseToolbar.tsx'
 import { encodeColumns, visibleColumnNames } from './browse-search.ts'
 import { CellEditor } from './CellEditor.tsx'
@@ -18,6 +16,7 @@ import { FilterChips } from './FilterChips.tsx'
 import { FkCell } from './FkCell.tsx'
 import { linkableForeignKeys, linkableReverseKeys } from './fk-links.ts'
 import { Pagination } from './Pagination.tsx'
+import { CopyRowDialog, EditRowDialog } from './RowDialogs.tsx'
 import { rowKeyFor, rowToValues } from './row-key.ts'
 
 export interface RowsGridProps {
@@ -52,6 +51,7 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
   const queryClient = useQueryClient()
   const [selected, setSelected] = useState<ReadonlySet<number>>(new Set())
   const [editingRow, setEditingRow] = useState<number | null>(null)
+  const [copyingRow, setCopyingRow] = useState<number | null>(null)
   const [inline, setInline] = useState<{ row: number; col: number } | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
@@ -64,17 +64,21 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
     setInline(null)
   }
 
-  const structure = useQuery({ ...structureQuery(tableRef), enabled: editingRow !== null })
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['rows', tableRef.db] })
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: rowsKey(tableRef) })
   const update = useMutation({
     mutationFn: ({ key, values }: { key: RowKey; values: RowValues }) => mutations.updateRow(tableRef, key, values),
     onSuccess: async () => {
       setNotice(locale.rows.updated)
-      setEditingRow(null)
       setInline(null)
       await invalidate()
     },
   })
+  const dialogDone = async (message: string) => {
+    setNotice(message)
+    setEditingRow(null)
+    setCopyingRow(null)
+    await invalidate()
+  }
   const remove = useMutation({
     mutationFn: (keys: RowKey[]) => mutations.deleteRows(tableRef, keys),
     onSuccess: async (r) => {
@@ -86,7 +90,7 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
   })
 
   if (rows.isPending) return <Spinner />
-  if (rows.isError) return <ErrorBox error={rows.error} />
+  if (rows.isError) return <ErrorBox error={rows.error} onRetry={() => void rows.refetch()} />
   const data = rows.data
   const allColumns = visibleColumns(data)
   const allNames = allColumns.map((c) => c.name)
@@ -111,6 +115,7 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
   const selectedKeys = [...selected].map((i) => keys[i]).filter((k): k is RowKey => k !== null && k !== undefined)
   const editingKey = editingRow === null ? null : (keys[editingRow] ?? null)
   const editingValues = editingRow === null ? null : rowToValues(data, data.rows[editingRow] ?? [])
+  const copyingValues = copyingRow === null ? null : rowToValues(data, data.rows[copyingRow] ?? [])
 
   return (
     <div className="space-y-2" aria-busy={rows.isFetching}>
@@ -138,7 +143,7 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
           <output aria-live="polite">{notice}</output>
         </Notice>
       ) : null}
-      {update.isError && inline === null && editingRow === null ? <ErrorBox error={update.error} /> : null}
+      {update.isError && inline === null ? <ErrorBox error={update.error} /> : null}
       {data.rows.length === 0 ? (
         <Notice>{locale.browse.noRows}</Notice>
       ) : (
@@ -215,6 +220,14 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
                       >
                         <Pencil className="size-3.5" aria-hidden />
                       </button>
+                      <button
+                        type="button"
+                        className="ml-1 rounded p-0.5 text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                        aria-label={locale.rows.copyRow(i + 1)}
+                        onClick={() => setCopyingRow(i)}
+                      >
+                        <Copy className="size-3.5" aria-hidden />
+                      </button>
                     </Td>
                   ) : null}
                   {columns.map((c) => {
@@ -258,31 +271,19 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
         </Table>
       )}
 
-      <Dialog open={editingRow !== null} title={locale.rows.editTitle} onClose={() => setEditingRow(null)}>
-        {structure.isPending ? (
-          <Spinner />
-        ) : structure.isError ? (
-          <ErrorBox error={structure.error} />
-        ) : editingKey && editingValues ? (
-          <RowForm
-            key={editingRow}
-            columns={structure.data.columns}
-            mode="edit"
-            initial={editingValues}
-            pending={update.isPending}
-            error={update.error}
-            onCancel={() => setEditingRow(null)}
-            onSubmit={(values) => {
-              if (Object.keys(values).length === 0) {
-                setNotice(locale.rows.nothingChanged)
-                setEditingRow(null)
-                return
-              }
-              update.mutate({ key: editingKey, values })
-            }}
-          />
-        ) : null}
-      </Dialog>
+      <EditRowDialog
+        tableRef={tableRef}
+        values={editingValues}
+        rowKey={editingKey}
+        onClose={() => setEditingRow(null)}
+        onDone={dialogDone}
+      />
+      <CopyRowDialog
+        tableRef={tableRef}
+        values={copyingValues}
+        onClose={() => setCopyingRow(null)}
+        onDone={dialogDone}
+      />
 
       <DeleteRowsDialog
         open={confirmDelete}

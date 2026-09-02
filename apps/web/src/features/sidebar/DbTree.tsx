@@ -14,7 +14,7 @@ function SchemaNodes({ db, filter }: { db: string; filter: string }) {
   const schemas = useQuery(schemasQuery(db))
   const [open, setOpen] = useState<Record<string, boolean>>({ public: true })
   if (schemas.isPending) return <Spinner />
-  if (schemas.isError) return <ErrorBox error={schemas.error} />
+  if (schemas.isError) return <ErrorBox error={schemas.error} onRetry={() => void schemas.refetch()} />
   return (
     <ul className="ml-3 border-l border-zinc-200 pl-2 dark:border-zinc-700">
       {schemas.data.map((s) => (
@@ -54,7 +54,7 @@ export function DbTree({ dialect, activeDb }: { dialect: Dialect; activeDb?: str
   if (databases.isError)
     return (
       <div className="p-3">
-        <ErrorBox error={databases.error} />
+        <ErrorBox error={databases.error} onRetry={() => void databases.refetch()} />
       </div>
     )
   return (

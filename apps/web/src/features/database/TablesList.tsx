@@ -8,7 +8,7 @@ import { tablesQuery } from '@/lib/queries.ts'
 export function TablesList({ db, schema }: { db: string; schema?: string | undefined }) {
   const tables = useQuery(tablesQuery(db, schema))
   if (tables.isPending) return <Spinner />
-  if (tables.isError) return <ErrorBox error={tables.error} />
+  if (tables.isError) return <ErrorBox error={tables.error} onRetry={() => void tables.refetch()} />
   if (tables.data.length === 0) return <Notice>{locale.database.noTables}</Notice>
   const search = schema ? { schema } : {}
   const link = 'text-blue-700 hover:underline dark:text-blue-300'

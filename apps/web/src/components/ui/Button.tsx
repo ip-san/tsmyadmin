@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes } from 'react'
+import type { ButtonHTMLAttributes, Ref } from 'react'
 import { cn } from '@/lib/cn.ts'
 
 type Variant = 'primary' | 'secondary' | 'danger' | 'ghost'
@@ -18,6 +18,7 @@ const SIZES: Record<Size, string> = { sm: 'px-2 py-1 text-xs', md: 'px-3 py-1.5 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant
   size?: Size
+  ref?: Ref<HTMLButtonElement>
 }
 
 export function Button({ variant = 'secondary', size = 'md', className, type = 'button', ...rest }: ButtonProps) {

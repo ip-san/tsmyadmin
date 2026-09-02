@@ -7,9 +7,10 @@ import { mutations, sessionQuery } from '@/lib/queries.ts'
 
 export const Route = createFileRoute('/_app')({
   validateSearch: z.object({ schema: z.string().optional() }),
-  beforeLoad: async ({ context }) => {
+  beforeLoad: async ({ context, location }) => {
     const session = await context.queryClient.ensureQueryData(sessionQuery)
-    if (!session) throw redirect({ to: '/login' })
+    // Deep links survive the login round trip; the top page needs no redirect param.
+    if (!session) throw redirect({ to: '/login', search: location.href === '/' ? {} : { redirect: location.href } })
     return { session }
   },
   component: AppLayout,

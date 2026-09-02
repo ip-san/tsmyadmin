@@ -1,12 +1,5 @@
-import { expect, type Page, test } from '@playwright/test'
-import { login, TARGETS, tableUrl } from './helpers.ts'
-
-async function confirmPreview(page: Page, expectSql: RegExp) {
-  const dialog = page.getByRole('dialog')
-  await expect(dialog.getByLabel('SQL')).toContainText(expectSql)
-  await dialog.getByRole('button', { name: '実行する' }).click()
-  await expect(dialog).toBeHidden()
-}
+import { expect, test } from '@playwright/test'
+import { confirmPreview, login, TARGETS, tableUrl } from './helpers.ts'
 
 for (const t of TARGETS) {
   test.describe(`structure / ddl (${t.dialect})`, () => {
@@ -73,12 +66,12 @@ for (const t of TARGETS) {
       await expect(page.getByText('全 1 件')).toBeVisible()
       await page.goto(tableUrl(t, table, '/operations'))
       await page.getByRole('button', { name: 'テーブルを空にする' }).click()
-      await confirmPreview(page, /TRUNCATE TABLE/)
+      await confirmPreview(page, /TRUNCATE TABLE/, table)
       await page.goto(tableUrl(t, table))
       await expect(page.getByText('全 0 件')).toBeVisible()
       await page.goto(tableUrl(t, table, '/operations'))
       await page.getByRole('button', { name: 'テーブルを削除' }).click()
-      await confirmPreview(page, /DROP TABLE/)
+      await confirmPreview(page, /DROP TABLE/, table)
       await expect(page).toHaveURL(new RegExp(`/db/${t.database}(\\?|$)`))
       await expect(page.getByRole('table').first().getByRole('link', { name: table, exact: true })).toHaveCount(0)
     })
@@ -107,9 +100,7 @@ for (const t of TARGETS) {
       const row = page.getByRole('row').filter({ hasText: dbName })
       await expect(row).toBeVisible()
       await row.getByRole('button', { name: `${dbName}: データベースを削除` }).click()
-      await page.getByLabel(`確認のためデータベース名「${dbName}」を入力してください`).fill(dbName)
-      await page.getByRole('dialog').getByRole('button', { name: '次へ（SQL を確認）' }).click()
-      await confirmPreview(page, /DROP DATABASE/)
+      await confirmPreview(page, /DROP DATABASE/, dbName)
       await expect(page.getByRole('row').filter({ hasText: dbName })).toHaveCount(0)
     })
 

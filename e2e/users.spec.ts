@@ -1,12 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { login, TARGETS } from './helpers.ts'
-
-async function confirmPreview(page: import('@playwright/test').Page, expectSql: RegExp) {
-  const dialog = page.getByRole('dialog')
-  await expect(dialog.getByLabel('SQL')).toContainText(expectSql)
-  await dialog.getByRole('button', { name: '実行する' }).click()
-  await expect(dialog).toBeHidden()
-}
+import { confirmPreview, login, TARGETS } from './helpers.ts'
 
 for (const t of TARGETS) {
   test.describe(`users (${t.dialect})`, () => {
@@ -55,7 +48,7 @@ for (const t of TARGETS) {
 
       await page.goto('/users')
       await page.getByRole('button', { name: `${key}: 削除` }).click()
-      await confirmPreview(page, /DROP (USER|ROLE)/)
+      await confirmPreview(page, /DROP (USER|ROLE)/, name)
       await expect(page.getByRole('cell', { name, exact: true })).toHaveCount(0)
     })
   })

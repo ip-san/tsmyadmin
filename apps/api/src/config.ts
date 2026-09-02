@@ -48,6 +48,8 @@ const EnvSchema = z.object({
   SESSION_DB_PATH: z.string().default('data/sessions.sqlite'),
   /** Directory of the built SPA served by the API (relative to the working directory). */
   WEB_DIST: z.string().optional(),
+  /** On SIGTERM/SIGINT: stop accepting requests, wait up to this long for in-flight ones, then exit. */
+  SHUTDOWN_TIMEOUT_SECONDS: z.coerce.number().int().min(0).max(600).default(30),
 })
 
 export type AppConfig = {
@@ -63,6 +65,7 @@ export type AppConfig = {
   sessionStore: 'memory' | 'sqlite'
   sessionDbPath: string
   webDist: string | undefined
+  shutdownTimeoutMs: number
 }
 
 export class ConfigError extends Error {
@@ -98,6 +101,7 @@ export function loadConfig(env: Record<string, string | undefined>): AppConfig {
     sessionStore: e.SESSION_STORE ?? (isProd ? 'sqlite' : 'memory'),
     sessionDbPath: e.SESSION_DB_PATH,
     webDist: e.WEB_DIST,
+    shutdownTimeoutMs: e.SHUTDOWN_TIMEOUT_SECONDS * 1000,
   }
 }
 

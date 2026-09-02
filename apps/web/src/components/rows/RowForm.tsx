@@ -18,11 +18,19 @@ interface FieldState {
 export interface RowFormProps {
   columns: ColumnDef[]
   mode: 'insert' | 'edit'
+  /** Edit: the current row. Insert: values to prefill (duplicate row); generated columns still use their default. */
   initial?: Record<string, Cell>
   pending?: boolean
   error?: unknown
-  onSubmit: (values: RowValues) => void
+  /** `another` is true when the user chose "insert and add another" (insert mode only). */
+  onSubmit: (values: RowValues, meta: { another: boolean }) => void
   onCancel?: () => void
+  /** Show the "insert and add another" button (insert mode). */
+  allowAnother?: boolean
+}
+
+function isGenerated(c: ColumnDef): boolean {
+  return c.extra.includes('auto_increment') || c.extra.includes('identity') || c.extra === 'serial'
 }
 
 function initialState(
@@ -31,10 +39,15 @@ function initialState(
   initial?: Record<string, Cell>
 ): Record<string, FieldState> {
   const out: Record<string, FieldState> = {}
+  const prefilled = mode === 'insert' && initial !== undefined
   for (const c of columns) {
     const cell = initial?.[c.name] ?? null
-    const hasDefault =
-      c.default !== null || c.extra.includes('auto_increment') || c.extra.includes('identity') || c.extra === 'serial'
+    const hasDefault = c.default !== null || isGenerated(c)
+    if (prefilled) {
+      // Duplicating a row: keep every value except generated keys, which must get a fresh value.
+      out[c.name] = { text: cellToEditable(cell), isNull: cell === null, useDefault: isGenerated(c) }
+      continue
+    }
     out[c.name] = {
       text: cellToEditable(cell),
       isNull: mode === 'edit' ? cell === null : c.nullable && !hasDefault,
@@ -45,13 +58,14 @@ function initialState(
 }
 
 /** Shared insert / edit form. In edit mode only changed columns are submitted. */
-export function RowForm({ columns, mode, initial, pending, error, onSubmit, onCancel }: RowFormProps) {
+export function RowForm({ columns, mode, initial, pending, error, onSubmit, onCancel, allowAnother }: RowFormProps) {
   const [fields, setFields] = useState(() => initialState(columns, mode, initial))
   const update = (name: string, patch: Partial<FieldState>) =>
     setFields((f) => ({ ...f, [name]: { ...(f[name] as FieldState), ...patch } }))
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
+    const another = (e.nativeEvent as SubmitEvent).submitter?.getAttribute('value') === 'another'
     const values: RowValues = {}
     for (const c of columns) {
       const f = fields[c.name]
@@ -62,7 +76,7 @@ export function RowForm({ columns, mode, initial, pending, error, onSubmit, onCa
       if (mode === 'edit' && !changed(original, next)) continue
       values[c.name] = next
     }
-    onSubmit(values)
+    onSubmit(values, { another })
   }
 
   return (
@@ -133,7 +147,12 @@ export function RowForm({ columns, mode, initial, pending, error, onSubmit, onCa
             {locale.common.cancel}
           </Button>
         ) : null}
-        <Button type="submit" variant="primary" disabled={pending}>
+        {mode === 'insert' && allowAnother ? (
+          <Button type="submit" value="another" disabled={pending}>
+            {locale.rows.insertAnother}
+          </Button>
+        ) : null}
+        <Button type="submit" value="default" variant="primary" disabled={pending}>
           {mode === 'insert' ? locale.rows.insert : locale.rows.save}
         </Button>
       </div>
