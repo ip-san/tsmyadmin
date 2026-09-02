@@ -25,6 +25,7 @@
 - 設定: `TSMYADMIN_ALLOWED_HOSTS=`（空）の「プリセットのみ」の意味を維持、起動時エラーは常に `Invalid environment:` で始まる、プリセットの未知キー（`password` など）を拒否
 - SQLite セッションストア: 開けない場合は `session_store.open_failed` を記録して終了、`SESSION_SECRET` 変更時に保存済みセッションを起動時に削除（`session_store.reset`）
 - ログ: 成功した `/healthz` `/readyz` をアクセスログに出さない
+- MariaDB: ユーザー一覧（`mysql.user.account_locked` がない）を `global_priv` から取得、`SHOW GRANTS` のパスワードハッシュを除去、errno 1969 などに名前を補完。CI に MariaDB 11 の conformance ジョブを追加
 - API: 許可外ホストへのログインは `HOST_NOT_ALLOWED`、上限超過は `PAYLOAD_TOO_LARGE`（インポートのファイル超過も 413）
 
 ### 変更

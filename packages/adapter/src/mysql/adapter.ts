@@ -55,6 +55,10 @@ const PERMISSION_CODES = new Set([
  * is deliberately *not* here: it ends the statement but leaves the connection usable, so it stays QUERY_FAILED.
  */
 const KILLED_CODES = new Set(['ER_CONNECTION_KILLED', 'PROTOCOL_CONNECTION_LOST'])
+/** MariaDB-only errno values the driver has no symbolic name for; anything else unnamed becomes `ER_<errno>`. */
+const MARIADB_ERRNO_NAMES: Record<number, string> = {
+  1969: 'ER_STATEMENT_TIMEOUT',
+}
 /** Derived-table wrapping fails where the bare statement would not (see BaseAdapter.runStatement). */
 const WRAPPER_ONLY_ERRORS: ReadonlySet<string> = new Set([
   'ER_DUP_FIELDNAME',
@@ -252,7 +256,8 @@ export class MysqlAdapter extends BaseAdapter {
         this.timeoutVariable = 'max_statement_time'
       }
     }
-    // MariaDB: seconds with a fractional part, applies to every statement (MySQL's bounds SELECT only).
+    // MariaDB: seconds with a fractional part. Unlike MySQL's SELECT-only max_execution_time it bounds every
+    // statement — the same semantics as PostgreSQL's statement_timeout, so writes are limited there as well.
     await conn.query(`SET SESSION max_statement_time = ${millis / 1000}`)
   }
 
@@ -379,7 +384,12 @@ export class MysqlAdapter extends BaseAdapter {
   toAdapterError(err: unknown): AdapterError {
     if (err instanceof AdapterError) return err
     const e = err as { code?: unknown; sqlMessage?: unknown; message?: unknown; errno?: unknown }
-    const code = typeof e.code === 'string' ? e.code : 'UNKNOWN'
+    const code =
+      typeof e.code === 'string'
+        ? e.code
+        : typeof e.errno === 'number'
+          ? (MARIADB_ERRNO_NAMES[e.errno] ?? `ER_${e.errno}`)
+          : 'UNKNOWN'
     const detail =
       typeof e.sqlMessage === 'string' ? e.sqlMessage : typeof e.message === 'string' ? e.message : String(err)
     let kind: AdapterErrorCode = 'QUERY_FAILED'

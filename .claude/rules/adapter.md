@@ -38,4 +38,8 @@ PK → NOT NULL 一意キー → PG は `ctid`、MySQL は全カラム一致 + `
 
 `base.ts` は接続ごとに statement timeout をキャッシュし（`appliedTimeout`、`Conn.id` がキー）、方言は現在の DB / `search_path` をキャッシュする（`Conn.forget()` で破棄）。方言実装の契約: `id` はチェックアウト間で安定していること（mysql2 の promise ラッパーは毎回新しいオブジェクトなので、MySQL は `conn.connection`（コア接続）をキーにする）、`reset()` は失敗時に接続を破棄対象にすること、ユーザー SQL の前に `forgetSessionState` が呼ばれることを前提にキャッシュを持つこと。
 
+## MariaDB
+
+MySQL アダプターは MariaDB 10.6 以降でも動く（CI の `integration-mariadb` ジョブが mysql:8.4 と別に MariaDB 11 で conformance を回す）。差分はすべて「まず MySQL の形を試し、特定のエラーで MariaDB の形に切り替えて記憶する」方式で吸収する: `max_execution_time` → `max_statement_time`（`ER_UNKNOWN_SYSTEM_VARIABLE`）、`STATISTICS.EXPRESSION` → `NULL`（`ER_BAD_FIELD_ERROR`）、`mysql.user.account_locked` → `global_priv` の JSON（`ER_BAD_FIELD_ERROR`）。MariaDB 固有の errno（1969 など）は mysql2 に名前がないので `toAdapterError` が `ER_STATEMENT_TIMEOUT` / `ER_<errno>` を補う。`max_statement_time` は SELECT 以外も制限する（PostgreSQL の `statement_timeout` と同じ意味）。`SHOW GRANTS` に含まれるパスワードハッシュは取り除いて返す。
+
 MySQL は接続セットアップ（`USE` と同時）でセッションの `sql_mode` から `NO_BACKSLASH_ESCAPES` を外す。mysql2 の `query()` は値をクライアント側でバックスラッシュエスケープするため、このモードのサーバーではプレースホルダが壊れる（conformance の「keeps placeholder values safe under a global NO_BACKSLASH_ESCAPES」）。`reset()` 後はグローバル値に戻るので、`forget()` により次の借用で再適用される。

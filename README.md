@@ -71,7 +71,7 @@ docker run -d --name tsmyadmin \
 
 ## 動作要件
 
-- サーバー: Bun 1.4 以上（Docker イメージは同梱）。接続先: 検証済みは MySQL 8.4 / PostgreSQL 17（CI と統合テスト）。想定範囲は MySQL 8.0 以降 / MariaDB 10.6 以降 / PostgreSQL 13 以降
+- サーバー: Bun 1.4 以上（Docker イメージは同梱）。接続先: 検証済みは MySQL 8.4 / PostgreSQL 17（CI と統合テスト）。想定範囲は MySQL 8.0 以降 / MariaDB 10.6 以降（CI は MySQL 8.4 と MariaDB 11 で検証） / PostgreSQL 13 以降
 - ブラウザ: 最新の Chrome / Edge / Firefox / Safari（ES2022、`<dialog>`、`dvh` 単位が必要）
 
 ## ライセンス

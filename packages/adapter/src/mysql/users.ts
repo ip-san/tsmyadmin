@@ -3,17 +3,32 @@ import { PASSWORD_MASK } from '@tsmyadmin/shared'
 import { type Conn, firstResult } from '../base.ts'
 import { mysqlLiteral } from '../sql/literal.ts'
 import { quoteIdent } from '../sql/quote.ts'
-import type { UserSqlBuilder, UserStatement } from '../types.ts'
+import { AdapterError, type UserSqlBuilder, type UserStatement } from '../types.ts'
 
 /** 'user'@'host' account literal. */
 export function mysqlAccount(user: UserRef): string {
   return `${mysqlLiteral(user.name)}@${mysqlLiteral(user.host ?? '%')}`
 }
 
+const USERS_MYSQL = 'SELECT User, Host, account_locked, password_expired FROM mysql.user ORDER BY User, Host'
+/**
+ * MariaDB 10.4+: mysql.user is a view over mysql.global_priv without account_locked (the lock lives in the
+ * Priv JSON); roles appear there too (is_role = 'Y', empty Host) and are not login accounts.
+ */
+const USERS_MARIADB =
+  "SELECT u.User, u.Host, IF(JSON_VALUE(g.Priv, '$.account_locked') = 1, 'Y', 'N') AS account_locked, u.password_expired FROM mysql.user u JOIN mysql.global_priv g ON g.User = u.User AND g.Host = u.Host WHERE u.is_role <> 'Y' ORDER BY u.User, u.Host"
+
+/** Password hashes MariaDB prints inside SHOW GRANTS (MySQL 8 never does); not for the privileges screen. */
+const GRANT_SECRET = / IDENTIFIED (?:BY PASSWORD '[^']*'|VIA \S+ USING '[^']*')/g
+
 export async function mysqlListUsers(conn: Conn): Promise<UserInfo[]> {
-  const r = firstResult(
-    await conn.query('SELECT User, Host, account_locked, password_expired FROM mysql.user ORDER BY User, Host')
-  )
+  let r: ReturnType<typeof firstResult>
+  try {
+    r = firstResult(await conn.query(USERS_MYSQL))
+  } catch (err) {
+    if (!(err instanceof AdapterError) || err.nativeCode !== 'ER_BAD_FIELD_ERROR') throw err
+    r = firstResult(await conn.query(USERS_MARIADB))
+  }
   return r.rows.map((row) => {
     const attributes: string[] = []
     if (String(row[2]) === 'Y') attributes.push('LOCKED')
@@ -24,7 +39,7 @@ export async function mysqlListUsers(conn: Conn): Promise<UserInfo[]> {
 
 export async function mysqlShowGrants(conn: Conn, user: UserRef): Promise<string[]> {
   const r = firstResult(await conn.query(`SHOW GRANTS FOR ${mysqlAccount(user)}`))
-  return r.rows.map((row) => String(row[0] ?? ''))
+  return r.rows.map((row) => String(row[0] ?? '').replace(GRANT_SECRET, ''))
 }
 
 const plain = (sql: string): UserStatement => ({ sql, display: sql })

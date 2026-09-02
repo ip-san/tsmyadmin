@@ -76,6 +76,34 @@ jobs:
           PGPASSWORD=tsmyadmin psql -h 127.0.0.1 -p 15433 -U tsmyadmin -d tsmyadmin_test -v ON_ERROR_STOP=1 -f docker/fixtures/postgres/01-schema.sql
       - run: bun run test:integration
 
+  # The MySQL adapter must also pass its conformance suite against MariaDB (mysql.user layout, max_statement_time…).
+  integration-mariadb:
+    runs-on: ubuntu-latest
+    needs: check
+    services:
+      mariadb:
+        image: mariadb:11
+        env:
+          MARIADB_ROOT_PASSWORD: root
+          MARIADB_DATABASE: tsmyadmin_test
+          MARIADB_USER: tsmyadmin
+          MARIADB_PASSWORD: tsmyadmin
+        ports: ["13306:3306"]
+        options: >-
+          --health-cmd "healthcheck.sh --connect --innodb_initialized"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.0
+      - run: bun install --frozen-lockfile
+      - name: Load fixtures
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq mariadb-client >/dev/null
+          mariadb -h 127.0.0.1 -P 13306 -uroot -proot < docker/fixtures/mysql/01-schema.sql
+      - run: INTEGRATION=1 bunx vitest run --project adapter-integration packages/adapter/src/test/mysql.integration.test.ts
+
   e2e:
     runs-on: ubuntu-latest
     needs: check

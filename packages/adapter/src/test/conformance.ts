@@ -100,8 +100,15 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
 
     afterAll(async () => {
       await exec(SCRATCH_TABLES.map((t) => `DROP TABLE IF EXISTS ${t}`).join('; '), { stopOnError: false })
+      // The users test creates this account; a failure half-way must not leave it behind.
+      await exec(dialect === 'mysql' ? `DROP USER IF EXISTS 'u_${scratch}'@'%'` : `DROP ROLE IF EXISTS u_${scratch}`, {
+        stopOnError: false,
+      })
       await db.close()
     })
+
+    /** MariaDB answers the MySQL adapter; a few server behaviours differ (see the MariaDB notes in adapter.md). */
+    const isMariaDb = async () => dialect === 'mysql' && /mariadb/i.test((await db.serverInfo()).version)
 
     describe('ping', () => {
       it('resolves for valid credentials', async () => {
@@ -731,7 +738,8 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         expect(Date.now() - started).toBeLessThan(2500)
         expect(results[0]).toMatchObject({
           kind: 'error',
-          nativeCode: dialect === 'mysql' ? 'ER_QUERY_TIMEOUT' : '57014',
+          nativeCode:
+            dialect === 'mysql' ? ((await isMariaDb()) ? 'ER_STATEMENT_TIMEOUT' : 'ER_QUERY_TIMEOUT') : '57014',
         })
       })
 
@@ -783,10 +791,13 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
       it('runs reads with trailing comments and data-modifying CTEs unchanged', async () => {
         const tail = await execOk('SELECT id FROM users WHERE id = 1 -- all users')
         expect(tail[0]?.kind === 'rows' ? tail[0].result.rows : null).toEqual([[1]])
+        // MariaDB has no WITH ... UPDATE form; a CTE inside the assignment exercises the same "not wrapped" path.
         const cte = await execOk(
-          dialect === 'mysql'
-            ? 'WITH c AS (SELECT 1 AS one) UPDATE users, c SET name = name WHERE id = -1'
-            : 'WITH d AS (UPDATE users SET name = name WHERE id = -1 RETURNING id) SELECT count(*) FROM d'
+          dialect === 'postgres'
+            ? 'WITH d AS (UPDATE users SET name = name WHERE id = -1 RETURNING id) SELECT count(*) FROM d'
+            : (await isMariaDb())
+              ? "UPDATE users SET name = (WITH c AS (SELECT 'x' AS n) SELECT n FROM c) WHERE id = -1"
+              : 'WITH c AS (SELECT 1 AS one) UPDATE users, c SET name = name WHERE id = -1'
         )
         expect(cte[0]?.kind).not.toBe('error')
       })
