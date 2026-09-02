@@ -26,6 +26,7 @@ function TableSqlPage() {
       dialect={session.dialect}
       initialSql={selectAllPrefill(session.dialect, table, schema)}
       completion={completion}
+      draftId={`table:${table}`}
     />
   )
 }

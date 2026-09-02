@@ -69,9 +69,6 @@ export function sessionRoutes(cfg: SessionConfig, deps: SessionRouteDeps) {
         )
       }
 
-      // A browser that logs in again without logging out must not keep its previous session (and pools) alive.
-      const previous = await getSignedCookie(c, cfg.secret, SESSION_COOKIE)
-      if (previous) await cfg.store.delete(previous)
       let session: Awaited<ReturnType<typeof cfg.store.create>>
       try {
         // The store builds the (audited) adapter, pings it and persists the session in one step.
@@ -82,6 +79,10 @@ export function sessionRoutes(cfg: SessionConfig, deps: SessionRouteDeps) {
         return errorResponse(c, err, deps.logger)
       }
       deps.loginLimiter.reset(rateKey)
+      // A browser that logs in again without logging out must not keep its previous session (and pools) alive —
+      // dropped only now, so a failed re-login leaves the existing session untouched.
+      const previous = await getSignedCookie(c, cfg.secret, SESSION_COOKIE)
+      if (previous && previous !== session.id) await cfg.store.delete(previous)
       deps.logger.log('info', 'login.ok', { ...audit, sessionId: sessionTag(session.id) })
       await setSignedCookie(c, SESSION_COOKIE, session.id, cfg.secret, sessionCookieOptions(cfg))
       return c.json(sessionState(session), 201)

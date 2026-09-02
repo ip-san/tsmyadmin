@@ -299,8 +299,9 @@ export class PostgresAdapter extends BaseAdapter {
     return this.withConn(this.serverNs(), (conn) => pgListUsers(conn))
   }
 
-  showGrants(user: UserRef): Promise<string[]> {
-    return this.withConn(this.serverNs(), (conn) => pgShowGrants(conn, user))
+  showGrants(user: UserRef, ns?: Namespace): Promise<string[]> {
+    // Role attributes are cluster-wide, but schema/table ACLs live in the database being inspected.
+    return this.withConn(ns ? { database: ns.database } : this.serverNs(), (conn) => pgShowGrants(conn, user))
   }
 
   /**

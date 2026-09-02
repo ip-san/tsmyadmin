@@ -293,7 +293,7 @@ export class MysqlAdapter extends BaseAdapter {
     return this.withConn(this.serverNs(), (conn) => mysqlListUsers(conn))
   }
 
-  showGrants(user: UserRef): Promise<string[]> {
+  showGrants(user: UserRef, _ns?: Namespace): Promise<string[]> {
     return this.withConn(this.serverNs(), (conn) => mysqlShowGrants(conn, user))
   }
 

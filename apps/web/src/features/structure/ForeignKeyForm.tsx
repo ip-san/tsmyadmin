@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { type FkAction, FkActionSchema } from '@tsmyadmin/shared'
 import { type FormEvent, useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
-import { Notice, Spinner } from '@/components/ui/Feedback.tsx'
+import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Field, Input, Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
 import { structureQuery, type TableRef, tablesQuery } from '@/lib/queries.ts'
@@ -65,6 +65,8 @@ export function ForeignKeyForm({ tableRef, columns, onSubmit, onCancel }: Foreig
   return (
     <form onSubmit={submit} className="space-y-3">
       <Notice>{locale.ddl.fkHint}</Notice>
+      {tables.isError ? <ErrorBox error={tables.error} onRetry={() => void tables.refetch()} /> : null}
+      {ref.isError ? <ErrorBox error={ref.error} onRetry={() => void ref.refetch()} /> : null}
       <Field id="fk-name" label={locale.ddl.fkName}>
         <Input
           id="fk-name"

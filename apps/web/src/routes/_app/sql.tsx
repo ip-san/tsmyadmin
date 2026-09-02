@@ -11,7 +11,13 @@ function Page() {
   return (
     <>
       <ServerTabs tab={locale.tabs.sql} />
-      <SqlConsole key="server" db={session.serverDatabase} dialect={session.dialect} completion={EMPTY} />
+      <SqlConsole
+        key="server"
+        db={session.serverDatabase}
+        dialect={session.dialect}
+        completion={EMPTY}
+        draftId="server"
+      />
     </>
   )
 }

@@ -14,7 +14,7 @@ export function PrivilegesPage({ db, schema, dialect }: { db: string; schema?: s
   const flow = useUserOpFlow()
   const logins = (users.data ?? []).filter((u) => u.canLogin)
   // Current grants per account so the page shows who already has access (one request per account, cached).
-  const grants = useQueries({ queries: logins.map((u) => grantsQuery(userRef(u))) })
+  const grants = useQueries({ queries: logins.map((u) => grantsQuery(userRef(u), { database: db, schema })) })
   if (users.isPending) return <Spinner />
   if (users.isError) return <ErrorBox error={users.error} onRetry={() => void users.refetch()} />
   const target = schema ? { database: db, schema } : { database: db }

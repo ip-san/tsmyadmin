@@ -10,6 +10,8 @@ describe('privilegeLevel', () => {
       privilegeLevel('mysql', 'shop', undefined, ['GRANT USAGE ON *.* TO `x`@`%`', 'GRANT ALL ON `other`.* TO `x`@`%`'])
     ).toBe('none')
     expect(privilegeLevel('mysql', 'a.b', undefined, ['GRANT SELECT ON `a.b`.* TO `x`@`%`'])).toBe('some')
+    expect(privilegeLevel('mysql', 'my_db', undefined, ['GRANT ALL PRIVILEGES ON `my\\_db`.* TO `x`@`%`'])).toBe('all')
+    expect(privilegeLevel('mysql', 'my_db', undefined, ['GRANT SELECT ON `my_db`.`t` TO `x`@`%`'])).toBe('some')
   })
 
   it('reads PostgreSQL grants for one database / schema', () => {

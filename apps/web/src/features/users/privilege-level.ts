@@ -17,7 +17,8 @@ export function privilegeLevel(
 ): PrivilegeLevel {
   const text = statements.join('\n')
   if (dialect === 'mysql') {
-    const target = `\`${esc(db)}\``
+    // SHOW GRANTS prints database patterns as stored: `_` / `%` may appear backslash-escaped (my\_db).
+    const target = `\`${esc(db).replace(/[_%]/g, (c) => `\\\\?${c}`)}\``
     if (new RegExp(`GRANT ALL PRIVILEGES ON (\\*\\.\\*|${target}\\.\\*) TO`, 'i').test(text)) return 'all'
     return new RegExp(`GRANT [^\\n]* ON ${target}\\.`, 'i').test(text) ? 'some' : 'none'
   }

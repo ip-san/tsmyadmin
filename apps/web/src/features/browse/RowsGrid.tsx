@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { BrowseOptions, BrowseResult, Cell, RowKey, RowValues } from '@tsmyadmin/shared'
 import { isBinaryCell } from '@tsmyadmin/shared'
 import { useMemo, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
@@ -65,9 +66,10 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
   }
   /** Closes the inline editor and returns focus to its cell (keyboard users would otherwise land on <body>). */
   const closeInline = (cell: { row: number; col: number } | null = inline) => {
-    setInline(null)
+    // flushSync: from a mutation callback the state update would commit in a later task, after the focus call.
+    flushSync(() => setInline(null))
     if (!cell) return
-    queueMicrotask(() => gridRef.current?.querySelector<HTMLElement>(`[data-cell="${cell.row},${cell.col}"]`)?.focus())
+    gridRef.current?.querySelector<HTMLElement>(`[data-cell="${cell.row},${cell.col}"]`)?.focus()
   }
   const data = rows.data
   // Derived per page, not per render: keys/indexes are reused by every checkbox toggle and inline edit.
@@ -184,7 +186,8 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
               ))}
             </tr>
           </thead>
-          <tbody>
+          {/* Keyed per page/table so per-cell state (expanded values) never carries over to another row. */}
+          <tbody key={optionsKey}>
             {data.rows.map((row, i) => {
               const key = keys[i] ?? null
               return (

@@ -39,7 +39,7 @@ for (const t of TARGETS) {
       await page.getByRole('button', { name: `${key}: 権限を表示` }).click()
       // MySQL grants are per database; PostgreSQL grants are per schema.
       await expect(page.getByLabel(`${key}: 権限`, { exact: true })).toContainText(
-        t.dialect === 'mysql' ? t.database : (t.schema ?? 'public')
+        t.dialect === 'mysql' ? t.database.replaceAll('_', '\\_') : (t.schema ?? 'public')
       )
 
       await page.getByRole('button', { name: `${key}: パスワード変更` }).click()

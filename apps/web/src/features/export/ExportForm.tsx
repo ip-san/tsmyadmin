@@ -28,9 +28,21 @@ export function ExportForm({ db, schema, table }: ExportFormProps) {
   const available: TableInfo[] = table ? [] : (tables.data ?? [])
   const toggle = (name: string) => setSelected((s) => (s.includes(name) ? s.filter((x) => x !== name) : [...s, name]))
   const effective = table ? [table] : selected.length > 0 ? selected : available.map((t) => t.name)
-  const csvBlocked = format === 'csv' && effective.length !== 1
+  // CSV is one table at a time; views are left out of the count (a DB with one table and a view still exports).
+  const csvTables = table ? [table] : effective.filter((n) => available.find((t) => t.name === n)?.kind === 'table')
+  const tableCount = csvTables.length
+  const csvBlocked = format === 'csv' && tableCount !== 1
   const nothing = effective.length === 0
-  const url = exportUrl({ db, schema, tables: table ? [table] : selected, format, structure, dropTable, data, bom })
+  const url = exportUrl({
+    db,
+    schema,
+    tables: table ? [table] : format === 'csv' ? csvTables : selected,
+    format,
+    structure,
+    dropTable,
+    data,
+    bom,
+  })
 
   return (
     <div className="space-y-4">

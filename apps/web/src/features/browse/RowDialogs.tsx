@@ -1,5 +1,6 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
 import type { Cell, RowKey, RowValues } from '@tsmyadmin/shared'
+import { useState } from 'react'
 import { RowForm } from '@/components/rows/RowForm.tsx'
 import { Dialog } from '@/components/ui/Dialog.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
@@ -22,6 +23,12 @@ export function EditRowDialog({ tableRef, values, rowKey, onClose, onDone }: Com
     mutationFn: ({ key, next }: { key: RowKey; next: RowValues }) => mutations.updateRow(tableRef, key, next),
     onSuccess: () => onDone(locale.rows.updated),
   })
+  // A previous row's failure must not greet the next row (the dialog component stays mounted).
+  const [prevValues, setPrevValues] = useState(values)
+  if (prevValues !== values) {
+    setPrevValues(values)
+    update.reset()
+  }
   return (
     <Dialog open={open} title={locale.rows.editTitle} onClose={onClose}>
       {structure.isPending ? (
@@ -54,6 +61,11 @@ export function CopyRowDialog({ tableRef, values, onClose, onDone }: CommonProps
     mutationFn: (next: RowValues) => mutations.insertRow(tableRef, next),
     onSuccess: (r) => onDone(locale.rows.inserted(r.affectedRows)),
   })
+  const [prevValues, setPrevValues] = useState(values)
+  if (prevValues !== values) {
+    setPrevValues(values)
+    insert.reset()
+  }
   return (
     <Dialog open={open} title={locale.rows.copyTitle} onClose={onClose}>
       {structure.isPending ? (

@@ -320,8 +320,8 @@ export class FakeAdapter implements DatabaseAdapter {
     return structuredClone(this.userList)
   }
 
-  async showGrants(user: UserRef): Promise<string[]> {
-    this.record('showGrants', user)
+  async showGrants(user: UserRef, ns?: Namespace): Promise<string[]> {
+    this.record('showGrants', user, ns)
     if (!this.userList.some((u) => u.name === user.name))
       throw new AdapterError('NOT_FOUND', `Unknown user: ${user.name}`)
     return [`GRANT USAGE ON *.* TO '${user.name}'@'${user.host ?? '%'}'`]

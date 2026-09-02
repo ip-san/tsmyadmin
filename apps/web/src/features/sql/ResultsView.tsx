@@ -141,7 +141,7 @@ function RowsTable({ columns, rows }: { columns: ResultSet['columns']; rows: Res
     </thead>
   )
   const renderRow = (row: Cell[], r: number, style?: CSSProperties) => (
-    <Tr key={r} style={style}>
+    <Tr key={r} style={style} data-index={r} {...(virtual ? { ref: virtualizer.measureElement } : {})}>
       {columns.map((c, i) => (
         <Td key={`${c.name}-${i}`} className="max-w-md font-mono text-xs">
           <CellValue cell={row[i] ?? null} />
@@ -172,7 +172,7 @@ function RowsTable({ columns, rows }: { columns: ResultSet['columns']; rows: Res
           ) : null}
           {items.map((item) => {
             const row = rows[item.index]
-            return row ? renderRow(row, item.index, { height: ROW_HEIGHT }) : null
+            return row ? renderRow(row, item.index) : null
           })}
           {padBottom > 0 ? (
             <tr aria-hidden style={{ height: padBottom }}>

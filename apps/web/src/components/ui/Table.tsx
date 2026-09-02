@@ -34,6 +34,10 @@ export function Td({ className, ...rest }: TdHTMLAttributes<HTMLTableCellElement
   )
 }
 
-export function Tr({ className, ...rest }: HTMLAttributes<HTMLTableRowElement>) {
-  return <tr className={cn('hover:bg-blue-50/60 dark:hover:bg-zinc-800/60', className)} {...rest} />
+export function Tr({
+  className,
+  ref,
+  ...rest
+}: HTMLAttributes<HTMLTableRowElement> & { ref?: Ref<HTMLTableRowElement> }) {
+  return <tr ref={ref} className={cn('hover:bg-blue-50/60 dark:hover:bg-zinc-800/60', className)} {...rest} />
 }

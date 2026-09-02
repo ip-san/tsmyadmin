@@ -23,6 +23,7 @@ function DatabaseSqlPage() {
       schema={schema}
       dialect={session.dialect}
       completion={completion}
+      draftId="db"
     />
   )
 }

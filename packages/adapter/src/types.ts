@@ -170,8 +170,12 @@ export interface DatabaseAdapter {
   /** Terminates a connection (KILL / pg_terminate_backend). `id` must be numeric. */
   killProcess(id: string): Promise<void>
   listUsers(): Promise<UserInfo[]>
-  /** Effective grants as SQL statements (MySQL SHOW GRANTS; PostgreSQL reconstructed from the catalog). */
-  showGrants(user: UserRef): Promise<string[]>
+  /**
+   * Effective grants as SQL statements (MySQL SHOW GRANTS; PostgreSQL reconstructed from the catalog).
+   * PostgreSQL privileges are per database: `ns` selects which database's schema/table ACLs are listed
+   * (default: the login database). MySQL grants are global and ignore `ns`.
+   */
+  showGrants(user: UserRef, ns?: Namespace): Promise<string[]>
   readonly ddl: DdlBuilder
   readonly exporter: SqlExporter
   readonly users: UserSqlBuilder

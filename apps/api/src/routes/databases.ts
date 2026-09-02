@@ -128,10 +128,14 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
           .split(',')
           .map((t) => t.trim())
           .filter((t) => t.length > 0)
+        // Everything by default, tables before views so a CREATE VIEW in the dump follows its base tables.
+        const all = requested.length > 0 ? null : await adapter.listTables(namespace)
         const tables =
           requested.length > 0
             ? requested
-            : (await adapter.listTables(namespace)).filter((t) => t.kind === 'table').map((t) => t.name)
+            : [...(all ?? []).filter((t) => t.kind === 'table'), ...(all ?? []).filter((t) => t.kind !== 'table')].map(
+                (t) => t.name
+              )
         if (q.format === 'csv' && tables.length !== 1) {
           return c.json(apiError('VALIDATION', 'CSV export needs exactly one table'), 400)
         }

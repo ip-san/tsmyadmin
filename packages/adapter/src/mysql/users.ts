@@ -34,6 +34,9 @@ const secret = (template: (password: string) => string, password: string): UserS
   display: template(mysqlLiteral(PASSWORD_MASK)),
 })
 
+const grantPattern = (database: string) =>
+  database.replaceAll('\\', '\\\\').replaceAll('_', '\\_').replaceAll('%', '\\%')
+
 export const mysqlUsers: UserSqlBuilder = {
   namespace(_op: UserOp, serverNamespace: Namespace): Namespace {
     return serverNamespace
@@ -52,10 +55,11 @@ export const mysqlUsers: UserSqlBuilder = {
         return [plain(`DROP USER ${account}`)]
       case 'setPassword':
         return [secret((pw) => `ALTER USER ${account} IDENTIFIED BY ${pw}`, op.password)]
+      // The database part of a GRANT is a LIKE pattern: escape _ and % so `my_db` does not also cover `myXdb`.
       case 'grantAll':
-        return [plain(`GRANT ALL PRIVILEGES ON ${quoteIdent('mysql', op.database)}.* TO ${account}`)]
+        return [plain(`GRANT ALL PRIVILEGES ON ${quoteIdent('mysql', grantPattern(op.database))}.* TO ${account}`)]
       case 'revokeAll':
-        return [plain(`REVOKE ALL PRIVILEGES ON ${quoteIdent('mysql', op.database)}.* FROM ${account}`)]
+        return [plain(`REVOKE ALL PRIVILEGES ON ${quoteIdent('mysql', grantPattern(op.database))}.* FROM ${account}`)]
     }
   },
 }

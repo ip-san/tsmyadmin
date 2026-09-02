@@ -1104,13 +1104,19 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         expect((await db.listUsers()).some((u) => u.name === name)).toBe(true)
         await runOp({ op: 'grantAll', user, database: ns.database, ...(ns.schema ? { schema: ns.schema } : {}) })
         const grants = await db.showGrants(user)
-        // MySQL grants are per database; PostgreSQL grants are per schema/table inside the current database.
-        expect(grants.join('\n')).toContain(dialect === 'mysql' ? ns.database : (ns.schema ?? 'public'))
+        // MySQL grants are per database (printed as a LIKE pattern, `_` escaped); PostgreSQL grants are per
+        // schema/table inside the current database.
+        if (dialect === 'mysql') expect(grants.join('\n')).toContain(`\`${ns.database.replaceAll('_', '\\_')}\`.*`)
+        else expect(grants.join('\n')).toContain(ns.schema ?? 'public')
         if (dialect === 'postgres') {
           // Table grants are read from pg_class.relacl, so every table the role can SELECT is listed.
           expect(grants.join('\n')).toMatch(
             new RegExp(`GRANT [A-Z, ]*SELECT[A-Z, ]* ON "${ns.schema ?? 'public'}"\\."users" TO`)
           )
+          // ACLs are per database: inspecting another database does not show this one's table grants.
+          const elsewhere = await db.showGrants(user, { database: 'postgres' })
+          expect(elsewhere.join('\n')).not.toContain('"users"')
+          expect((await db.showGrants(user, ns)).join('\n')).toContain('"users"')
         }
         await runOp({ op: 'setPassword', user, password: 'changed' })
         await runOp({ op: 'revokeAll', user, database: ns.database, ...(ns.schema ? { schema: ns.schema } : {}) })

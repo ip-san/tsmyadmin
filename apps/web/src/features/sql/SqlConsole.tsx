@@ -2,12 +2,13 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import type { Dialect, StatementResult } from '@tsmyadmin/shared'
 import { SQL_MAX_ROWS_DEFAULT } from '@tsmyadmin/shared'
 import { Play, Square } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { z } from 'zod'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice } from '@/components/ui/Feedback.tsx'
 import { Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
+import { ApiError } from '@/lib/api.ts'
 import { readPreference, writePreference } from '@/lib/preferences.ts'
 import { mutations } from '@/lib/queries.ts'
 import { streamSql } from '@/lib/sql-stream.ts'
@@ -34,14 +35,13 @@ export interface SqlConsoleProps {
   dialect: Dialect
   initialSql?: string
   completion: Record<string, string[]>
+  /** Distinguishes consoles that share a database: 'server' | 'db' | `table:<name>`. */
+  draftId: string
 }
 
-/** Unsent editor text survives tab switches and a session-expiry round trip (per console, this browser tab). */
-const draftKey = (dialect: Dialect, db: string, schema: string | undefined, initialSql: string) =>
-  `sql.draft.${dialect}.${db}.${schema ?? ''}.${initialSql === '' ? 'db' : 'table'}`
-
-export function SqlConsole({ db, schema, dialect, initialSql = '', completion }: SqlConsoleProps) {
-  const key = draftKey(dialect, db, schema, initialSql)
+export function SqlConsole({ db, schema, dialect, initialSql = '', completion, draftId }: SqlConsoleProps) {
+  // Unsent editor text survives tab switches and a session-expiry round trip (per console, this browser tab).
+  const key = `sql.draft.${dialect}.${db}.${schema ?? ''}.${draftId}`
   const [text, setTextState] = useState(() => readPreference(key, z.string(), initialSql, sessionStore()))
   const setText = (next: string) => {
     setTextState(next)
@@ -54,6 +54,12 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion }:
   const [results, setResults] = useState<StatementResult[] | null>(null)
   const queryClient = useQueryClient()
   const queryId = useRef<string | null>(null)
+  // Leaving the page aborts the stream, which makes the server cancel the running statement.
+  const abort = useRef(new AbortController())
+  useEffect(() => {
+    const controller = abort.current
+    return () => controller.abort()
+  }, [])
   const cancel = useMutation({ mutationFn: (id: string) => mutations.cancelSql(db, id) })
   const run = useMutation({
     // Statement results are appended to the view as the server streams them (NDJSON), so long scripts
@@ -73,18 +79,27 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion }:
         })
       }
       try {
-        for await (const event of streamSql(db, {
-          sql,
-          ...(schema ? { schema } : {}),
-          maxRows,
-          stopOnError,
-          queryId: queryId.current,
-        })) {
+        for await (const event of streamSql(
+          db,
+          {
+            sql,
+            ...(schema ? { schema } : {}),
+            maxRows,
+            stopOnError,
+            queryId: queryId.current,
+          },
+          abort.current.signal
+        )) {
           if (event.type === 'result') {
             collected[event.index] = event.result
             scheduleFlush()
           } else if (event.type === 'fatal') {
-            throw new Error(event.message)
+            // Carries the API error code so an AUTH/UNAUTHENTICATED fatal redirects like any other 401.
+            throw new ApiError(event.code === 'UNAUTHENTICATED' || event.code === 'AUTH_FAILED' ? 401 : 500, {
+              code: event.code ?? 'INTERNAL',
+              message: event.message,
+              ...(event.nativeCode ? { nativeCode: event.nativeCode } : {}),
+            })
           }
         }
       } finally {

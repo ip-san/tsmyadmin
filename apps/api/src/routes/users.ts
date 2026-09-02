@@ -1,4 +1,10 @@
-import { PASSWORD_MASK, type StatementResult, type UserOp, UserOpRequestSchema, UserRefSchema } from '@tsmyadmin/shared'
+import {
+  PASSWORD_MASK,
+  type StatementResult,
+  UserGrantsQuerySchema,
+  type UserOp,
+  UserOpRequestSchema,
+} from '@tsmyadmin/shared'
 import { Hono } from 'hono'
 import { redactInLogs } from '../lib/request-context.ts'
 import { validate } from '../lib/validate.ts'
@@ -9,8 +15,10 @@ export function userRoutes(cfg: SessionConfig) {
     .use('/users', requireSession(cfg))
     .use('/users/*', requireSession(cfg))
     .get('/users', async (c) => c.json(await c.get('session').adapter.listUsers()))
-    .get('/users/grants', validate('query', UserRefSchema), async (c) => {
-      const statements = await c.get('session').adapter.showGrants(c.req.valid('query'))
+    .get('/users/grants', validate('query', UserGrantsQuerySchema), async (c) => {
+      const { database, schema, ...user } = c.req.valid('query')
+      const ns = database ? { database, ...(schema ? { schema } : {}) } : undefined
+      const statements = await c.get('session').adapter.showGrants(user, ns)
       return c.json({ statements })
     })
     .post('/users/preview', validate('json', UserOpRequestSchema), (c) => {

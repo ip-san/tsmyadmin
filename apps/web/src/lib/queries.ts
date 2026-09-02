@@ -160,10 +160,16 @@ export const usersQuery = queryOptions({
   queryFn: () => unwrap<UserInfo[]>(api.users.$get()),
 })
 
-export const grantsQuery = (user: UserRef) =>
+/** `ns` selects the database whose ACLs are listed (PostgreSQL privileges are per database). */
+export const grantsQuery = (user: UserRef, ns?: { database: string; schema?: string | undefined }) =>
   queryOptions({
-    queryKey: ['users', 'grants', user.name, user.host ?? ''],
-    queryFn: () => unwrap<UserGrants>(api.users.grants.$get({ query: user })),
+    queryKey: ['users', 'grants', user.name, user.host ?? '', ns?.database ?? '', ns?.schema ?? ''],
+    queryFn: () =>
+      unwrap<UserGrants>(
+        api.users.grants.$get({
+          query: { ...user, ...(ns ? { database: ns.database, ...(ns.schema ? { schema: ns.schema } : {}) } : {}) },
+        })
+      ),
   })
 
 export const serverInfoQuery = queryOptions({

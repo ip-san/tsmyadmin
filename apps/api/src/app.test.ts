@@ -309,6 +309,10 @@ describe('hardening', () => {
     const again = await h.login()
     expect(again.status).toBe(201)
     expect(h.store.size).toBe(1)
+    // A failed re-login keeps the current session.
+    const cookie = h.cookie()
+    expect((await h.login({ ...LOGIN, host: 'evil.example' })).status).toBe(403)
+    expect((await h.req('/api/session', { headers: { cookie } })).status).toBe(200)
   })
 
   it('marks the session cookie Secure in production and slides Max-Age to the TTL', async () => {
@@ -926,6 +930,11 @@ describe('users', () => {
     const grants = await (await h.req('/api/users/grants?name=app&host=%25')).json()
     expect(grants).toEqual({ statements: ["GRANT USAGE ON *.* TO 'app'@'%'"] })
     expect((await h.req('/api/users/grants?name=ghost')).status).toBe(404)
+    await h.req('/api/users/grants?name=root&database=shop&schema=app')
+    expect(h.adapter.calls.at(-1)).toEqual({
+      method: 'showGrants',
+      args: [{ name: 'root' }, { database: 'shop', schema: 'app' }],
+    })
   })
 
   it('previews masked SQL and executes the real statements without echoing the password', async () => {

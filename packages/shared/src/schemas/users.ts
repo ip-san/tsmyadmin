@@ -47,6 +47,13 @@ export type UserOpInput = z.input<typeof UserOpSchema>
 export const USER_OP_NAMES = UserOpSchema.options.map((o) => o.shape.op.value)
 
 export const UserOpRequestSchema = z.object({ op: UserOpSchema })
+/** Query of GET /users/grants: the account plus, optionally, the database (and schema) whose ACLs to list. */
+export const UserGrantsQuerySchema = UserRefSchema.extend({
+  database: z.string().min(1).optional(),
+  schema: z.string().min(1).optional(),
+})
+export type UserGrantsQuery = z.infer<typeof UserGrantsQuerySchema>
+
 export const UserGrantsSchema = z.object({ statements: z.array(z.string()) })
 export type UserGrants = z.infer<typeof UserGrantsSchema>
 export const PASSWORD_MASK = '****'
