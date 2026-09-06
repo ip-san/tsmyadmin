@@ -104,6 +104,8 @@ interface RunningEntry {
   ns: Namespace
   backend: Promise<string>
   cancelled: boolean
+  /** True once the flag actually stopped the script (a statement was interrupted or the loop broke before one). */
+  interrupted: boolean
   /** True while a statement is on the wire; a cancel that lands on an idle connection is a no-op and is retried. */
   inFlight: boolean
   /** The cancel in progress, shared by concurrent cancel requests for the same run. */
@@ -742,6 +744,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
         resolveBackend = resolve
       }),
       cancelled: false,
+      interrupted: false,
       inFlight: false,
       cancelling: null,
     }
@@ -757,7 +760,10 @@ export abstract class BaseAdapter implements DatabaseAdapter {
             // Published only now: a cancel must interrupt the user's first statement, not the session setup.
             if (opts.queryId) resolveBackend(await this.backendId(conn))
             for (const st of statements) {
-              if (entry.cancelled) break
+              if (entry.cancelled) {
+                entry.interrupted = true
+                break
+              }
               const started = performance.now()
               try {
                 entry.inFlight = true
@@ -827,6 +833,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
                   ...(e.nativeCode ? { nativeCode: e.nativeCode } : {}),
                   ...(e.position ? { position: e.position } : {}),
                 })
+                if (entry.cancelled) entry.interrupted = true
                 if (opts.stopOnError) break
               }
             }
@@ -915,12 +922,13 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     // The run may have finished while waiting: its connection is back in the pool, possibly serving someone else.
     // The flag set above already stops the script at the next statement boundary, so a run that was still
     // registered a moment ago was cancelled even when no signal needs sending.
+    // A run that ended meanwhile was cancelled only if the flag stopped it (not when its last statement finished).
     const stillRunning = () => this.running.get(queryId) === entry
-    if (!stillRunning()) return true
+    if (!stillRunning()) return entry.interrupted
     const canceller = await this.openCanceller(entry.ns)
     try {
       // Checked with the connection in hand: the target may have ended while it was being opened.
-      if (!stillRunning()) return true
+      if (!stillRunning()) return entry.interrupted
       try {
         await canceller.cancel(backend)
       } catch (err) {
@@ -937,7 +945,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
         // The first signal was delivered; a failing retry must not fail the request.
         await canceller.cancel(backend).catch(() => undefined)
       }
-      return true
+      return stillRunning() || entry.interrupted
     } finally {
       await canceller.close()
     }

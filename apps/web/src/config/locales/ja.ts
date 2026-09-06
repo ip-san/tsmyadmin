@@ -462,6 +462,7 @@ export const ja = {
     running: 'インポート中…',
     cancel: '中止',
     cancelling: '中止しています…',
+    resultRegion: 'インポートの結果',
     cancelled:
       '中止しました。それまでに実行された文の結果は次のとおりです（トランザクション内の文は取り消されています）。',
     progress: (done: number, total: number) =>

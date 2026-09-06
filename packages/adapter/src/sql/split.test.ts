@@ -77,6 +77,16 @@ describe('splitStatements', () => {
     ])
   })
 
+  it('reports the delimiter in force at the end of the input', () => {
+    const state: { delimiter?: string } = {}
+    splitStatements('SELECT 1', 'mysql', state)
+    expect(state.delimiter).toBe(';')
+    splitStatements('DELIMITER $$\nCREATE PROCEDURE p() BEGIN END$$', 'mysql', state)
+    expect(state.delimiter).toBe('$$')
+    splitStatements('DELIMITER $$\nCREATE PROCEDURE p() BEGIN END$$\nDELIMITER ;\nSELECT 1', 'mysql', state)
+    expect(state.delimiter).toBe(';')
+  })
+
   it('reads a CRLF COPY block without a phantom first row', () => {
     const sql = 'COPY public.t (a) FROM stdin;\r\n1\r\n2\r\n\\.\r\nSELECT 1;\r\n'
     expect(splitStatements(sql, 'postgres').map((s) => s.sql)).toEqual([

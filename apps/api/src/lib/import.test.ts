@@ -1,3 +1,4 @@
+import { splitStatements } from '@tsmyadmin/adapter'
 import { FakeAdapter, fakeTable } from '@tsmyadmin/adapter/testing'
 import { ImportFormSchema } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
@@ -116,6 +117,34 @@ const opts = (over: Partial<ImportSqlOptions>): ImportSqlOptions => ({
 })
 
 describe('importSql', () => {
+  it('terminates the last statement with the delimiter in force (real splitter)', async () => {
+    const seen: string[] = []
+    const a = new FakeAdapter({
+      dialect: 'mysql',
+      onSql: (_ns, sql) =>
+        splitStatements(sql, 'mysql').map((st) => {
+          seen.push(st.sql)
+          return { kind: 'affected' as const, sql: st.sql, affectedRows: 1, durationMs: 1 }
+        }),
+    })
+    const files = [
+      'INSERT INTO t VALUES (1)',
+      'DELIMITER $$\nCREATE PROCEDURE p() BEGIN SELECT 1; END$$',
+      'DELIMITER $$\nCREATE PROCEDURE p() BEGIN SELECT 1; END$$\nDELIMITER ;\nINSERT INTO t VALUES (2)',
+      'DELIMITER //\nCALL p()',
+    ]
+    for (const file of files) {
+      seen.length = 0
+      const r = await importSql(a, { database: 'shop' }, file, opts({ singleTransaction: true, stopOnError: false }))
+      if (r.format !== 'sql') throw new Error('sql result expected')
+      // The user's statements, then the wrapper COMMIT — nothing merged, nothing phantom.
+      expect(seen.length).toBe(r.total + 2)
+      expect(seen.some((sql) => /DELIMITER\s*$/i.test(sql) || sql.trim() === ';')).toBe(false)
+      expect(seen[seen.length - 1]).toBe('COMMIT')
+      expect(r.failed).toBe(0)
+    }
+  })
+
   it('summarises statement results and caps the error list', async () => {
     const a = new FakeAdapter({
       onSql: (_ns, sql) =>

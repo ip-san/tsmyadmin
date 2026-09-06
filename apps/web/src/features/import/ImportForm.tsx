@@ -84,6 +84,8 @@ export function ImportForm({ db, schema, table }: ImportFormProps) {
     onSettled: () => {
       abort.current = null
       setProgress(null)
+      // A cancel that failed is moot once the run has ended by itself.
+      if (cancel.isError) cancel.reset()
       summary.current?.focus()
     },
   })
@@ -255,10 +257,11 @@ export function ImportForm({ db, schema, table }: ImportFormProps) {
       <output
         ref={summary}
         tabIndex={-1}
+        aria-label={locale.import.resultRegion}
         aria-live="polite"
         className={cn('outline-none', result || cancelled || run.isError ? 'block' : 'sr-only')}
       >
-        {run.isError ? <ErrorBox error={run.error} /> : null}
+        {run.isError ? <ErrorBox error={run.error} live={false} /> : null}
         {cancelled ? <Notice>{locale.import.cancelled}</Notice> : null}
         {result ? <ImportSummary result={result} db={db} schema={schema} /> : null}
       </output>

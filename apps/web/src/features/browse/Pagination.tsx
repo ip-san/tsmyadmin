@@ -16,7 +16,7 @@ export interface PaginationProps {
 
 export function Pagination({ page, limit, total, count = 'exact', shown, onChange }: PaginationProps) {
   const from = shown === 0 ? 0 : (page - 1) * limit + 1
-  const to = (page - 1) * limit + shown
+  const to = shown === 0 ? 0 : (page - 1) * limit + shown
   // A floor says nothing about where the rows end: page forward while pages come back full. A catalog estimate
   // may undercount, so a full page keeps 次へ open past its computed last page too.
   const lastPage = total === null || count === 'lower_bound' ? null : Math.max(1, Math.ceil(total / limit))

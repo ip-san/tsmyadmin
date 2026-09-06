@@ -327,7 +327,12 @@ export async function pgTableCatalog(conn: Conn, regclass: string): Promise<PgTa
        JOIN pg_depend d ON d.refclassid = 'pg_class'::regclass AND d.refobjid = a.attrelid AND d.refobjsubid = a.attnum
                          AND d.deptype IN ('i', 'a') AND d.classid = 'pg_class'::regclass
        JOIN pg_sequence s ON s.seqrelid = d.objid
-       WHERE a.attrelid = $1::regclass AND (a.attidentity <> '' OR a.atthasdef)`,
+       WHERE a.attrelid = $1::regclass
+         AND (a.attidentity <> '' OR EXISTS (
+               SELECT 1 FROM pg_attrdef ad
+               JOIN pg_depend dd ON dd.classid = 'pg_attrdef'::regclass AND dd.objid = ad.oid
+                                 AND dd.refclassid = 'pg_class'::regclass AND dd.refobjid = s.seqrelid
+               WHERE ad.adrelid = a.attrelid AND ad.adnum = a.attnum))`,
       [regclass]
     )
   )

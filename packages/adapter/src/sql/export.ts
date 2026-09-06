@@ -35,8 +35,9 @@ export function pgAdvanceSequence(quotedTable: string, column: string, sequence?
     : `pg_get_serial_sequence(${pgLiteral(quotedTable)}, ${pgLiteral(column)})::regclass`
   // A descending sequence (INCREMENT BY -1) moves the other way: past the smallest value, never raised.
   const last = 'pg_sequence_last_value(s.seqrelid)'
-  const up = `GREATEST(m.max_id, s.seqmin, COALESCE(${last}, s.seqmin))`
-  const down = `LEAST(m.min_id, s.seqmax, COALESCE(${last}, s.seqmax))`
+  // Clamped to the bounds: a row outside them must not abort the restore (nextval then fails as on the source).
+  const up = `LEAST(GREATEST(m.max_id, s.seqmin, COALESCE(${last}, s.seqmin)), s.seqmax)`
+  const down = `GREATEST(LEAST(m.min_id, s.seqmax, COALESCE(${last}, s.seqmax)), s.seqmin)`
   return `SELECT setval(s.seqrelid, CASE WHEN s.seqincrement > 0 THEN ${up} ELSE ${down} END, CASE WHEN s.seqincrement > 0 THEN m.max_id >= s.seqmin ELSE m.min_id <= s.seqmax END OR ${last} IS NOT NULL) FROM (SELECT MAX(${col})::bigint AS max_id, MIN(${col})::bigint AS min_id FROM ${quotedTable}) m JOIN pg_sequence s ON s.seqrelid = ${seq} WHERE m.max_id IS NOT NULL`
 }
 
@@ -267,13 +268,13 @@ export function createExporter(dialect: Dialect): SqlExporter {
     afterData(ns: Namespace, schema: TableSchema): string[] {
       if (dialect !== 'postgres') return [] // AUTO_INCREMENT follows explicit values on MySQL
       const t = quoteTable(dialect, ns, schema.name)
-      // Identity / serial columns own their sequence; any other nextval() default (an inherited serial, a
-      // standalone sequence) names the sequence to advance.
+      // Identity columns own their sequence; a serial or any other nextval() default names the sequence to advance
+      // (a column may own several sequences, so the one its default calls is the one that moves).
       return schema.columns
-        .filter((c) => c.extra.startsWith('identity') || c.extra === 'serial' || sequenceOfDefault(c.default))
+        .filter((c) => c.extra.startsWith('identity') || sequenceOfDefault(c.default))
         .map(
           (c) =>
-            `${pgAdvanceSequence(t, c.name, c.extra.startsWith('identity') || c.extra === 'serial' ? undefined : sequenceOfDefault(c.default))};`
+            `${pgAdvanceSequence(t, c.name, c.extra.startsWith('identity') ? undefined : sequenceOfDefault(c.default))};`
         )
     },
   }

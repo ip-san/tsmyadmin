@@ -56,7 +56,11 @@ const CLOSES_TRANSACTION = /^(?:COMMIT\b|ROLLBACK\b|END\b)/i
  * `SET autocommit = 1`); temporary tables are the documented exception.
  */
 const IMPLICIT_COMMIT =
-  /^(?:(?:CREATE|DROP)\s+(?!TEMPORARY\b)|ALTER|TRUNCATE|RENAME|GRANT|REVOKE|LOCK\s+TABLES|UNLOCK\s+TABLES|SET\s+PASSWORD|SET\s+autocommit\s*=\s*1|FLUSH|ANALYZE|OPTIMIZE|REPAIR|CHECK\s+TABLE|LOAD\s+DATA)\b/i
+  /^(?:(?:CREATE|DROP)\s+(?!TEMPORARY\b)|ALTER|TRUNCATE|RENAME|GRANT|REVOKE|LOCK\s+TABLES|UNLOCK\s+TABLES|SET\s+PASSWORD|FLUSH|ANALYZE|OPTIMIZE|REPAIR|CHECK\s+TABLE|LOAD\s+DATA)\b/i
+/** `SET autocommit = 1` commits only when autocommit was off; the pooled connection starts with it on. */
+const AUTOCOMMIT = /^SET\s+(?:SESSION\s+|LOCAL\s+|@@(?:session\.|local\.)?)?autocommit\s*=\s*(0|1|OFF|ON|FALSE|TRUE)\b/i
+/** The server's own "interrupted by a cancel" errors: MySQL KILL QUERY, PostgreSQL pg_cancel_backend. */
+const CANCEL_CODES = new Set(['ER_QUERY_INTERRUPTED', '57014'])
 const code = (sql: string) => {
   const plain = sql.replace(LEADING_COMMENTS, '')
   return VERSION_COMMENT.exec(plain)?.[1] ?? plain
@@ -89,7 +93,8 @@ export async function importSql(
       }
     )
   }
-  const total = splitStatements(text, adapter.dialect).length
+  const splitState: { delimiter?: string } = {}
+  const total = splitStatements(text, adapter.dialect, splitState).length
   if (total === 0) throw new ImportValidationError('NO_STATEMENTS', 'No SQL statements were found in the file')
   // Wrapping statements are the adapter builders' business (see SqlExporter); a plain pre/postamble is enough here.
   const prefix = [
@@ -101,10 +106,11 @@ export async function importSql(
     ...(options.singleTransaction ? [adapter.dialect === 'mysql' ? 'START TRANSACTION' : 'BEGIN'] : []),
   ]
   const suffix = options.singleTransaction ? ['COMMIT'] : []
-  // A file whose last statement has no `;` must not merge it with the COMMIT: the terminator is appended (the
-  // splitter drops the empty chunk it leaves otherwise). A MySQL file may end under its own DELIMITER, where a
-  // bare `;` would be a statement of its own, so the default delimiter is restored first.
-  const terminator = adapter.dialect === 'mysql' ? '\nDELIMITER ;\n;' : '\n;'
+  // A file whose last statement has no terminator must not merge it with the COMMIT: the delimiter in force at
+  // the end is appended (the splitter drops the empty chunk it leaves otherwise). A MySQL file that ends under its
+  // own DELIMITER gets the default restored afterwards, so the wrapper's COMMIT is read as usual.
+  const delimiter = adapter.dialect === 'mysql' ? (splitState.delimiter ?? ';') : ';'
+  const terminator = delimiter === ';' ? '\n;' : `\n${delimiter}\nDELIMITER ;`
   const script = [...prefix.map((s) => `${s};`), `${text}${terminator}`, ...suffix.map((s) => `\n${s};`)].join('\n')
   const results = await adapter.executeSql(ns, script, {
     maxRows: 1,
@@ -145,6 +151,7 @@ export async function importSql(
         ]
       : []
   )
+  const ownErrors = errors.length
   const commit = suffix.length > 0 ? results[results.length - 1] : undefined
   // A COMMIT refused by the server (a deferred constraint failing at commit) is the run's error: listed as such.
   if (commit?.kind === 'error' && results.length === prefix.length + own.length + 1)
@@ -157,27 +164,40 @@ export async function importSql(
   const warnings: ImportWarning[] = []
   const ran = own.filter((r) => r.kind !== 'error').map((r) => code(r.sql))
   if (ran.some((sql) => CHANGES_DATABASE.test(sql))) warnings.push('CHANGED_DATABASE')
-  // Fewer statements than the file holds without an error stopping the run: the run was cancelled (a cancel that
-  // interrupts a statement also leaves that statement's error in the list).
+  // Fewer statements than the file holds without an error stopping the run, or a run whose last statement was
+  // interrupted by the server: the run was cancelled (the interrupted statement stays in the error list).
   const last = own[own.length - 1]
-  if (own.length < total && (last?.kind !== 'error' || !(options.stopOnError || options.singleTransaction)))
+  const interrupted = last?.kind === 'error' && CANCEL_CODES.has(last.nativeCode ?? '')
+  if (
+    own.length < total &&
+    (interrupted || last?.kind !== 'error' || !(options.stopOnError || options.singleTransaction))
+  )
     warnings.push('CANCELLED')
   if (options.singleTransaction && (errors.length > 0 || commit?.kind !== 'affected')) {
     // The single transaction only holds until the script commits by itself: a COMMIT of its own, or on MySQL any
     // DDL or a new START TRANSACTION (mysqldump is full of DDL). What ran before that point stays. On PostgreSQL
     // a nested BEGIN is only a warning and commits nothing.
-    const committed = ran.some(
-      (sql) =>
+    let committed = false
+    let autocommitOff = false
+    for (const sql of ran) {
+      const auto = AUTOCOMMIT.exec(sql)
+      if (auto) {
+        const on = /^(?:1|ON|TRUE)$/i.test(auto[1] ?? '')
+        if (on && autocommitOff) committed = true
+        autocommitOff = !on
+      } else if (
         CLOSES_TRANSACTION.test(sql) ||
         (adapter.dialect === 'mysql' && (OPENS_TRANSACTION.test(sql) || IMPLICIT_COMMIT.test(sql)))
-    )
+      )
+        committed = true
+    }
     warnings.push(committed ? 'PARTIALLY_ROLLED_BACK' : 'ALL_ROLLED_BACK')
   } else if (openTransaction(ran)) warnings.push('ROLLED_BACK')
   return {
     format: 'sql',
     total,
     statements: own.length,
-    succeeded: own.length - errors.length,
+    succeeded: own.length - ownErrors,
     failed: errors.length,
     errors: errors.slice(0, MAX_ERRORS),
     warnings,

@@ -62,7 +62,12 @@ function trackSqlMode(statement: string, current: boolean, saved: Map<string, bo
   return next
 }
 
-export function splitStatements(input: string, dialect: Dialect): Statement[] {
+export function splitStatements(
+  input: string,
+  dialect: Dialect,
+  /** Receives the statement delimiter in force when the input ends (`;` unless a DELIMITER line changed it). */
+  state?: { delimiter?: string }
+): Statement[] {
   const out: Statement[] = []
   const n = input.length
   let i = 0
@@ -245,5 +250,6 @@ export function splitStatements(input: string, dialect: Dialect): Statement[] {
     i++
   }
   flush(n)
+  if (state) state.delimiter = delimiter
   return out
 }

@@ -165,6 +165,21 @@ describe('withAudit', () => {
     expect(logged).toMatch(/IDENTIFIED BY '\*+' WI/)
   })
 
+  it('reads comments and literals the way each server does', () => {
+    const pg = (sql: string) => String(summarise('executeSql', [ns, sql], 'postgres').sql)
+    const my = (sql: string) => String(summarise('executeSql', [ns, sql], 'mysql').sql)
+    // Dollar tags may hold digits and non-ASCII letters; `#` is an operator on PostgreSQL, `--` needs no space.
+    expect(pg('CREATE USER u PASSWORD $a1$se;cret$a1$')).not.toContain('cret')
+    expect(pg("SELECT 5 # 3; CREATE USER u PASSWORD\n'hash-secret'")).not.toContain('hash-secret')
+    expect(pg("SELECT 5 # 3; CREATE USER u PASSWORD\n'hash-secret'")).toContain('CREATE USER u PASSWORD')
+    expect(pg("SELECT 'a\\'; SELECT 'b'; CREATE USER u PASSWORD /* x */ 'se;cret'")).not.toContain('cret')
+    // MySQL: `1--1` is arithmetic; a versioned comment is a statement the server runs.
+    expect(my("SELECT 1--1; CREATE USER u IDENTIFIED BY\n'dash-secret'")).not.toContain('dash-secret')
+    expect(my("SELECT 1--1; CREATE USER u IDENTIFIED BY\n'dash-secret'")).toContain('SELECT 1--1')
+    expect(my("SELECT 1; /*!80000 CREATE USER v IDENTIFIED BY 'ver-secret' */")).toContain('CREATE USER v')
+    expect(my("SELECT 1; /*!80000 CREATE USER v IDENTIFIED BY 'ver-secret' */")).not.toContain('ver-secret')
+  })
+
   it('logs an import as a labelled size, never its text', async () => {
     const { lines, adapter } = setup()
     await adapter.executeSql(ns, "INSERT INTO t VALUES (1, 'row value')", {

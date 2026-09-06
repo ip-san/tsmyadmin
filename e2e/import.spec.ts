@@ -42,7 +42,10 @@ for (const t of TARGETS) {
         .getByLabel('ファイル')
         .setInputFiles({ name: 'bad.csv', mimeType: 'text/csv', buffer: Buffer.from('nope\n1\n') })
       await page.getByRole('button', { name: 'インポートする' }).click()
-      await expect(page.getByRole('alert')).toContainText('nope')
+      // The error is announced by the result live region (and receives focus), not as a separate alert.
+      const result = page.getByRole('status', { name: 'インポートの結果' })
+      await expect(result).toContainText('nope')
+      await expect(result).toBeFocused()
     })
   })
 }

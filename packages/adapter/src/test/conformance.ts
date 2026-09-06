@@ -1422,6 +1422,13 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
             expect((await db.showCreateTable(ns, t, schema)).join('\n')).toContain(
               `DEFAULT nextval('${seq}'::regclass)`
             )
+            // A serial column that owns a second sequence keeps the options of the one its default calls.
+            await execOk(
+              `ALTER SEQUENCE ${serial}_id_seq INCREMENT BY 3; CREATE SEQUENCE ${seq}_2 INCREMENT BY 10 OWNED BY ${serial}.id`
+            )
+            expect((await db.showCreateTable(ns, serial)).join('\n')).toContain('AS IDENTITY (INCREMENT BY 3)')
+            const advance = db.exporter.afterData(ns, await db.describeTable(ns, serial))
+            expect(advance.join('\n')).toContain(`'${serial}_id_seq'::regclass`)
           } finally {
             await execOk(`DROP TABLE ${t}; DROP TABLE ${serial}; DROP SEQUENCE IF EXISTS ${seq}`)
           }

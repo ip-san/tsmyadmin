@@ -1,6 +1,6 @@
-import { ADAPTER_METHOD_NAMES, AdapterError, type DatabaseAdapter } from '@tsmyadmin/adapter'
+import { ADAPTER_METHOD_NAMES, AdapterError, type DatabaseAdapter, splitStatements } from '@tsmyadmin/adapter'
 import type { ConnectRequest, Namespace, RowKey, SessionInfo } from '@tsmyadmin/shared'
-import { PASSWORD_MASK } from '@tsmyadmin/shared'
+import { type Dialect, PASSWORD_MASK } from '@tsmyadmin/shared'
 import { type AdapterFactory, sessionIdentity } from '../session/store.ts'
 import type { Logger } from './logging.ts'
 import { currentRequest } from './request-context.ts'
@@ -51,7 +51,11 @@ function keySummary(key: RowKey): string {
 }
 
 /** Compact, value-free description of a call: which table, how many rows, which key kind, statement text (truncated). */
-export function summarise(method: AuditedMethod, args: unknown[]): Record<string, unknown> {
+export function summarise(
+  method: AuditedMethod,
+  args: unknown[],
+  dialect: Dialect = 'postgres'
+): Record<string, unknown> {
   const ns = args[0] as Namespace | undefined
   const base = ns ? { database: ns.database, ...(ns.schema ? { schema: ns.schema } : {}) } : {}
   switch (method) {
@@ -81,7 +85,7 @@ export function summarise(method: AuditedMethod, args: unknown[]): Record<string
       if (label) return { ...base, sql: `<${label}>`, sqlLength: full.length }
       // Only the logged prefix is scanned (a 64 MB import would otherwise block the event loop on regexes);
       // a secret straddling the cut is truncated together with everything after it.
-      const sql = redactSqlSecrets(full.slice(0, SQL_SUMMARY_MAX * 16))
+      const sql = redactSqlSecrets(full.slice(0, SQL_SUMMARY_MAX * 16), dialect)
       return {
         ...base,
         sql: sql.length > SQL_SUMMARY_MAX ? `${sql.slice(0, SQL_SUMMARY_MAX)}…` : sql,
@@ -100,7 +104,9 @@ export function summarise(method: AuditedMethod, args: unknown[]): Record<string
  * `n` is the index the dollar tag capture group will have inside the enclosing pattern.
  */
 const literal = (n: number) =>
-  `(?:(?:[EeNnXxBb]|[Uu]&|_[A-Za-z0-9]+)?'(?:[^'\\\\]|\\\\.|'')*'|"(?:[^"\\\\]|\\\\.|"")*"|\\$([A-Za-z_]*)\\$[\\s\\S]*?\\$\\${n}\\$)`
+  `(?:(?:[EeNnXxBb]|[Uu]&|_[A-Za-z0-9]+)?'(?:[^'\\\\]|\\\\.|'')*'|"(?:[^"\\\\]|\\\\.|"")*"|\\$((?:[A-Za-z_\\u0080-\\uffff][\\w\\u0080-\\uffff]*)?)\\$[\\s\\S]*?\\$\\${n}\\$)`
+/** A dollar-quote tag as PostgreSQL reads it: an identifier (letters, digits after the first, non-ASCII) or empty. */
+const DOLLAR_TAG = /^\$(?:[A-Za-z_\u0080-\uffff][\w\u0080-\uffff]*)?\$/
 /**
  * Password literals in account statements typed directly into the SQL console: IDENTIFIED BY / AS (plugin hash),
  * PASSWORD 'x', and MySQL 8 `REPLACE '<current password>'` (REPLACE INTO / REPLACE( never precede a bare literal).
@@ -130,58 +136,58 @@ const QUOTED_SPAN = /['"$][\s\S]*['"$]/
  * `PASSWORD` and its literal, would otherwise defeat the patterns below). The summary is for reading, not for
  * replay, so losing comments is fine.
  */
-/** End index (exclusive) of the string literal / quoted identifier / dollar-quoted block starting at `i`, or -1. */
-function literalEnd(sql: string, i: number): number {
+/**
+ * End index (exclusive) of the string literal / quoted identifier / dollar-quoted block starting at `i`, or -1.
+ * Read as the server reads it: a backslash escapes only on MySQL and in a PostgreSQL `E'…'` string.
+ */
+function literalEnd(sql: string, i: number, dialect: Dialect): number {
   const ch = sql[i] as string
   if (ch === "'" || ch === '"' || ch === '`') {
+    const escaped =
+      ch !== '`' &&
+      (dialect === 'mysql' ||
+        (ch === "'" && /[Ee]$/.test(sql.slice(Math.max(0, i - 1), i)) && !/\w/.test(sql[i - 2] ?? '')))
     let j = i + 1
     while (j < sql.length) {
-      if (sql[j] === '\\' && ch !== '`') j += 2
+      if (sql[j] === '\\' && escaped) j += 2
       else if (sql[j] === ch && sql[j + 1] === ch) j += 2
       else if (sql[j] === ch) break
       else j++
     }
     return j + 1
   }
-  if (ch === '$' && /^\$[A-Za-z_]*\$/.test(sql.slice(i))) {
-    const tag = /^\$[A-Za-z_]*\$/.exec(sql.slice(i))?.[0] ?? '$$'
+  if (dialect === 'postgres' && ch === '$') {
+    const tag = DOLLAR_TAG.exec(sql.slice(i))?.[0]
+    if (!tag) return -1
     const end = sql.indexOf(tag, i + tag.length)
     return end < 0 ? sql.length : end + tag.length
   }
   return -1
 }
 
-/** Splits at top-level `;` only: a `;` inside a literal (a password, a dollar-quoted body) never starts a part. */
-function topLevelParts(sql: string): string[] {
-  const parts: string[] = []
-  let start = 0
-  let i = 0
-  while (i < sql.length) {
-    const end = literalEnd(sql, i)
-    if (end >= 0) i = end
-    else if (sql[i] === ';') {
-      parts.push(sql.slice(start, i), ';')
-      start = ++i
-    } else i++
-  }
-  parts.push(sql.slice(start))
-  return parts
-}
-
-function withoutComments(sql: string): string {
+/**
+ * Drops SQL comments the way the server does (`#` and `-- ` are MySQL's; PostgreSQL's `--` needs no space and `#`
+ * is an operator) while copying literals verbatim. A MySQL versioned comment keeps its body: the server runs it.
+ */
+function withoutComments(sql: string, dialect: Dialect): string {
   let out = ''
   let i = 0
   while (i < sql.length) {
     const ch = sql[i] as string
-    const end = literalEnd(sql, i)
+    const end = literalEnd(sql, i, dialect)
     if (end >= 0) {
       out += sql.slice(i, end)
       i = end
     } else if (ch === '/' && sql[i + 1] === '*') {
       const end = sql.indexOf('*/', i + 2)
-      i = end < 0 ? sql.length : end + 2
-      out += ' '
-    } else if ((ch === '-' && sql[i + 1] === '-') || ch === '#') {
+      const stop = end < 0 ? sql.length : end + 2
+      const versioned = dialect === 'mysql' ? /^\/\*!\d*\s*([\s\S]*?)\s*(?:\*\/)?$/.exec(sql.slice(i, stop)) : null
+      out += versioned ? ` ${versioned[1] ?? ''} ` : ' '
+      i = stop
+    } else if (
+      (ch === '-' && sql[i + 1] === '-' && (dialect !== 'mysql' || /\s/.test(sql[i + 2] ?? '\n'))) ||
+      (ch === '#' && dialect === 'mysql')
+    ) {
       const end = sql.indexOf('\n', i)
       i = end < 0 ? sql.length : end
     } else {
@@ -192,14 +198,15 @@ function withoutComments(sql: string): string {
   return out
 }
 
-function redactSqlSecrets(sql: string): string {
-  const plain = withoutComments(sql)
+function redactSqlSecrets(sql: string, dialect: Dialect): string {
+  const plain = withoutComments(sql, dialect)
     .replace(SQL_SECRET, (_m, kw: string, sep: string) => `${kw}${sep}'${PASSWORD_MASK}'`)
     .replace(SET_PASSWORD, (_m, head: string) => `${head}'${PASSWORD_MASK}'`)
     .replace(CONNECTION_PASSWORD, (_m, head: string) => `${head}${PASSWORD_MASK}`)
-  // Statement by statement: after the credential keyword no literal survives — not even an unterminated one
-  // (a typo that still reaches the audit log).
-  return topLevelParts(plain)
+  // Statement by statement (the adapter's own splitter, so a `;` inside any literal the server would accept never
+  // starts a new part): after the credential keyword no literal survives — not even an unterminated one.
+  return splitStatements(plain, dialect)
+    .map((st) => st.sql)
     .map((part) => {
       const m = CREDENTIAL_PART.exec(part)
       if (!m) return part
@@ -211,7 +218,7 @@ function redactSqlSecrets(sql: string): string {
           : tail.replace(ANY_LITERAL, (lit) => (lit.includes(PASSWORD_MASK) ? lit : `'${PASSWORD_MASK}'`))
       return `${m[1]}${masked}`
     })
-    .join('')
+    .join(';\n')
 }
 
 function scrub(fields: Record<string, unknown>, secrets: string[]): Record<string, unknown> {
@@ -245,7 +252,7 @@ export function withAudit(adapter: DatabaseAdapter, who: SessionInfo, logger: Lo
           dialect: who.dialect,
           dbHost: `${who.host}:${who.port}`,
           dbUser: who.user,
-          ...scrub(summarise(method, args), ctx?.redact ?? []),
+          ...scrub(summarise(method, args, who.dialect), ctx?.redact ?? []),
         }
         try {
           const result = await (value as (...a: unknown[]) => Promise<unknown>).apply(target, args)

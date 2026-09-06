@@ -1,4 +1,4 @@
-import { type ReactNode, useId } from 'react'
+import type { ReactNode } from 'react'
 import { locale } from '@/config/locale.ts'
 import { cn } from '@/lib/cn.ts'
 import { errorMessage } from '@/lib/format.ts'
@@ -12,11 +12,24 @@ export function Spinner({ label = locale.common.loading }: { label?: string }) {
   )
 }
 
-/** Error banner. Pass `onRetry` for query failures so the user can refetch without reloading the page. */
-export function ErrorBox({ error, className, onRetry }: { error: unknown; className?: string; onRetry?: () => void }) {
+/**
+ * Error banner. Pass `onRetry` for query failures so the user can refetch without reloading the page; `live={false}`
+ * when it sits inside a live region that already announces it.
+ */
+export function ErrorBox({
+  error,
+  className,
+  onRetry,
+  live = true,
+}: {
+  error: unknown
+  className?: string
+  onRetry?: () => void
+  live?: boolean
+}) {
   return (
     <div
-      role="alert"
+      role={live ? 'alert' : undefined}
       className={cn(
         'flex flex-wrap items-center gap-2 rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-700 dark:bg-red-950 dark:text-red-200',
         className
@@ -68,20 +81,14 @@ export function Badge({
     info: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100',
     warn: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100',
   }
-  // The hint is hover-only as a title; assistive tech gets it as a description, so the badge's name stays short.
-  const hintId = useId()
+  // The hint is hover-only as a title; screen readers get it as hidden text right after the badge (a description
+  // on plain inline text is not announced), which keeps the badge's own text exact.
   return (
-    <span
-      className={cn('inline-block rounded px-1.5 py-0.5 text-xs font-medium', tones[tone])}
-      title={title}
-      aria-describedby={title ? hintId : undefined}
-    >
-      {children}
-      {title ? (
-        <span id={hintId} hidden>
-          {title}
-        </span>
-      ) : null}
-    </span>
+    <>
+      <span className={cn('inline-block rounded px-1.5 py-0.5 text-xs font-medium', tones[tone])} title={title}>
+        {children}
+      </span>
+      {title ? <span className="sr-only">（{title}）</span> : null}
+    </>
   )
 }
