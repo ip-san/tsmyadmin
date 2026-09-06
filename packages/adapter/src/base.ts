@@ -913,10 +913,13 @@ export abstract class BaseAdapter implements DatabaseAdapter {
   async cancelQuery(queryId: string, waitMs = 10_000): Promise<boolean> {
     const entry = this.running.get(queryId)
     if (!entry) return false
+    let waitTimer: ReturnType<typeof setTimeout> | undefined
     const backend = await Promise.race([
       entry.backend,
-      new Promise<string>((resolve) => setTimeout(() => resolve(''), waitMs)),
-    ])
+      new Promise<string>((resolve) => {
+        waitTimer = setTimeout(() => resolve(''), waitMs)
+      }),
+    ]).finally(() => clearTimeout(waitTimer))
     if (!/^\d+$/.test(backend)) return false
     // Also stop the script loop: with stopOnError=false the run would otherwise continue with the next statement.
     entry.cancelled = true
