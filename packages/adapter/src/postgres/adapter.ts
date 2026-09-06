@@ -229,7 +229,7 @@ export class PostgresAdapter extends BaseAdapter {
       await new Promise<void>((resolve, reject) => {
         stream.on('error', reject)
         stream.on('finish', () => resolve())
-        stream.end(`${data}\n`)
+        stream.end(data)
       })
       return stream.rowCount ?? 0
     } catch (err) {
@@ -443,6 +443,7 @@ export class PostgresAdapter extends BaseAdapter {
   showCreateTable(ns: Namespace, table: string, known?: TableSchema): Promise<string[]> {
     return this.withConn(ns, async (conn) => {
       const schema = known ?? (await pgDescribeTable(conn, ns, table))
+      if (schema.kind === 'sequence') return this.createSequence(conn, ns, table)
       if (isViewKind(schema.kind)) {
         const t = quoteTable('postgres', ns, table)
         const r = firstResult(
@@ -486,6 +487,44 @@ export class PostgresAdapter extends BaseAdapter {
       }
       return pgCreateStatements(ns, schema, await pgTableCatalog(conn, quoteTable('postgres', ns, table)))
     })
+  }
+
+  /**
+   * A standalone sequence: its definition, then (when a column owns it) the OWNED BY link — which needs the table,
+   * so a dump defers it — and its current position as pg_dump's SEQUENCE SET writes it.
+   */
+  private async createSequence(conn: Conn, ns: Namespace, name: string): Promise<string[]> {
+    const t = quoteTable('postgres', ns, name)
+    const r = firstResult(
+      await conn.query(
+        `SELECT format_type(s.seqtypid, NULL), s.seqstart, s.seqincrement, s.seqmin, s.seqmax, s.seqcache, s.seqcycle,
+                own.relname, own.attname,
+                (SELECT last_value FROM ${t}), (SELECT is_called FROM ${t})
+         FROM pg_sequence s
+         LEFT JOIN LATERAL (SELECT o.relname, a.attname FROM pg_depend d
+                              JOIN pg_class o ON o.oid = d.refobjid
+                              JOIN pg_attribute a ON a.attrelid = o.oid AND a.attnum = d.refobjsubid
+                            WHERE d.objid = s.seqrelid AND d.classid = 'pg_class'::regclass
+                              AND d.refclassid = 'pg_class'::regclass AND d.deptype = 'a' LIMIT 1) own ON true
+         WHERE s.seqrelid = $1::regclass`,
+        [t]
+      )
+    )
+    const row = r.rows[0]
+    if (!row) throw new AdapterError('NOT_FOUND', `Sequence not found: ${name}`)
+    const [type, start, inc, min, max, cache] = [row[0], row[1], row[2], row[3], row[4], row[5]].map((v) =>
+      String(v ?? '')
+    )
+    const out = [
+      `CREATE SEQUENCE ${t} AS ${type} INCREMENT BY ${inc} MINVALUE ${min} MAXVALUE ${max} START WITH ${start} CACHE ${cache}${row[6] === true ? ' CYCLE' : ''}`,
+    ]
+    if (typeof row[7] === 'string' && typeof row[8] === 'string') {
+      out.push(`ALTER SEQUENCE ${t} OWNED BY ${quoteTable('postgres', ns, row[7])}.${quoteIdent('postgres', row[8])}`)
+    }
+    out.push(
+      `SELECT pg_catalog.setval(${pgLiteral(t)}, ${String(row[9] ?? '1')}, ${row[10] === true ? 'true' : 'false'})`
+    )
+    return out
   }
 
   toAdapterError(err: unknown): AdapterError {

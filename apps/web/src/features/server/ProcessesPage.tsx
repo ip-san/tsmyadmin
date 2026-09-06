@@ -66,9 +66,12 @@ export function ProcessesPage() {
                 <Td className="whitespace-nowrap font-mono text-xs">
                   {p.id}
                   {p.self ? (
-                    <Badge tone="neutral" title={locale.server.selfConnectionHint}>
-                      {locale.server.selfConnection}
-                    </Badge>
+                    <>
+                      {' '}
+                      <Badge tone="neutral" title={locale.server.selfConnectionHint}>
+                        {locale.server.selfConnection}
+                      </Badge>
+                    </>
                   ) : null}
                 </Td>
                 <Td>{p.user ?? ''}</Td>
@@ -77,7 +80,11 @@ export function ProcessesPage() {
                 <Td className="text-xs">{p.state ?? ''}</Td>
                 <Td className="text-right tabular-nums">{p.timeSec ?? ''}</Td>
                 <Td className="max-w-md font-mono text-xs">
-                  {p.query === null ? <span className="text-zinc-400">–</span> : <CellValue cell={p.query} />}
+                  {p.query === null ? (
+                    <span className="text-zinc-400 dark:text-zinc-500">–</span>
+                  ) : (
+                    <CellValue cell={p.query} />
+                  )}
                 </Td>
                 <Td className="whitespace-nowrap">
                   <Button
@@ -118,8 +125,13 @@ export function ProcessesPage() {
         }
       >
         <p>{victim ? locale.server.killConfirm(victim.id) : ''}</p>
+        {victim?.self ? (
+          <p className="mt-2 rounded bg-amber-50 px-2 py-1 text-xs text-amber-900 dark:bg-amber-950 dark:text-amber-200">
+            {locale.server.killSelfWarning}
+          </p>
+        ) : null}
         {victim ? (
-          <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+          <dl className="mt-2 grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
             <dt className="text-zinc-500 dark:text-zinc-400">{locale.server.user}</dt>
             <dd>{[victim.user, victim.host].filter(Boolean).join('@') || '–'}</dd>
             <dt className="text-zinc-500 dark:text-zinc-400">{locale.server.database}</dt>

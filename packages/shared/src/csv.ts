@@ -9,13 +9,9 @@ import { CSV_NULL } from './schemas/export.ts'
  */
 export function csvField(cell: Cell): string {
   if (cell === null) return CSV_NULL
-  const text = isBinaryCell(cell)
-    ? cell.$bin
-    : isTruncatedCell(cell)
-      ? cell.$text
-      : typeof cell === 'string'
-        ? cell
-        : String(cell)
+  // A cut value must never land in a file that looks complete; callers check with isTruncatedCell first.
+  if (isTruncatedCell(cell)) throw new Error('truncated text cannot be written to CSV')
+  const text = isBinaryCell(cell) ? cell.$bin : typeof cell === 'string' ? cell : String(cell)
   return /[",\r\n]/.test(text) || text === CSV_NULL || text === '' ? `"${text.replaceAll('"', '""')}"` : text
 }
 

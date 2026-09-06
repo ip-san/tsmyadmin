@@ -43,10 +43,16 @@ const DIALECT_HEADERS: { pattern: RegExp; dialect: 'mysql' | 'postgres' }[] = [
   { pattern: /^-- (?:MySQL|MariaDB) dump\b/m, dialect: 'mysql' },
   { pattern: /^-- PostgreSQL database dump\b/m, dialect: 'postgres' },
 ]
+/** Comments a dump writes above a statement (the splitter keeps them in `sql`). */
+const LEADING_COMMENTS = /^(?:\s*(?:--[^\n]*|#[^\n]*|\/\*(?!!)[\s\S]*?\*\/))*\s*/
 /** Statements that move the run to another database (or remove one): the result is flagged. */
 const CHANGES_DATABASE = /^(?:USE\s|\\connect\b|\\c\s|CREATE\s+DATABASE\b|DROP\s+DATABASE\b)/i
 const OPENS_TRANSACTION = /^(?:BEGIN\b|START\s+TRANSACTION\b)/i
 const CLOSES_TRANSACTION = /^(?:COMMIT\b|ROLLBACK\b|END\b)/i
+/** MySQL statements that commit the open transaction implicitly (DDL, account statements, LOCK TABLES). */
+const IMPLICIT_COMMIT =
+  /^(?:CREATE|DROP|ALTER|TRUNCATE|RENAME|GRANT|REVOKE|LOCK\s+TABLES|UNLOCK\s+TABLES|SET\s+PASSWORD|FLUSH|ANALYZE|OPTIMIZE|REPAIR|CHECK\s+TABLE|LOAD\s+DATA)\b/i
+const code = (sql: string) => sql.replace(LEADING_COMMENTS, '')
 
 export interface ImportSqlOptions {
   stopOnError: boolean
@@ -87,14 +93,24 @@ export async function importSql(
     ...(options.singleTransaction ? [adapter.dialect === 'mysql' ? 'START TRANSACTION' : 'BEGIN'] : []),
   ]
   const suffix = options.singleTransaction ? ['COMMIT'] : []
-  const script = [...prefix.map((s) => `${s};`), text, ...suffix.map((s) => `\n${s};`)].join('\n')
+  // A file whose last statement has no `;` must not merge it with the COMMIT (the splitter drops the empty chunk).
+  const script = [...prefix.map((s) => `${s};`), `${text}\n;`, ...suffix.map((s) => `\n${s};`)].join('\n')
   const results = await adapter.executeSql(ns, script, {
     maxRows: 1,
     timeoutMs: SQL_IMPORT_TIMEOUT_MS,
     // Single-transaction mode stops at the first error by definition (the rest could not commit anyway).
     stopOnError: options.stopOnError || options.singleTransaction,
     queryId: options.queryId,
-    onResult: async (_r, index) => {
+    onResult: async (r, index) => {
+      // An option the server refused (session_replication_role needs superuser) must stop the run before the
+      // user's first statement: throwing here ends executeSql, which resets the connection.
+      if (index < prefix.length && r.kind === 'error') {
+        const option = options.ignoreForeignKeys && index === 0 ? 'ignoreForeignKeys' : 'singleTransaction'
+        throw new ImportValidationError('OPTION_FAILED', `Import option could not be applied: ${r.message}`, {
+          option,
+          message: r.message,
+        })
+      }
       const done = Math.max(0, index + 1 - prefix.length)
       if (done % PROGRESS_EVERY === 0 || done === total) await options.onProgress?.(Math.min(done, total), total)
     },
@@ -118,10 +134,20 @@ export async function importSql(
       : []
   )
   const warnings: ImportWarning[] = []
-  if (own.some((r) => r.kind !== 'error' && CHANGES_DATABASE.test(r.sql))) warnings.push('CHANGED_DATABASE')
+  const ran = own.filter((r) => r.kind !== 'error').map((r) => code(r.sql))
+  if (ran.some((sql) => CHANGES_DATABASE.test(sql))) warnings.push('CHANGED_DATABASE')
   const commit = suffix.length > 0 ? results[results.length - 1] : undefined
-  if (options.singleTransaction && (errors.length > 0 || commit?.kind !== 'affected')) warnings.push('ALL_ROLLED_BACK')
-  else if (openTransaction(own.filter((r) => r.kind !== 'error').map((r) => r.sql))) warnings.push('ROLLED_BACK')
+  if (options.singleTransaction && (errors.length > 0 || commit?.kind !== 'affected')) {
+    // The single transaction only holds until the script commits by itself: a COMMIT of its own, or on MySQL any
+    // DDL (mysqldump is full of them). What ran before that point stays.
+    const committed = ran.some(
+      (sql) =>
+        CLOSES_TRANSACTION.test(sql) ||
+        OPENS_TRANSACTION.test(sql) ||
+        (adapter.dialect === 'mysql' && IMPLICIT_COMMIT.test(sql))
+    )
+    warnings.push(committed ? 'PARTIALLY_ROLLED_BACK' : 'ALL_ROLLED_BACK')
+  } else if (openTransaction(ran)) warnings.push('ROLLED_BACK')
   return {
     format: 'sql',
     total,
@@ -163,6 +189,8 @@ export async function importCsv(
     const hits = schema.columns.filter((c) => c.name.toLowerCase() === name.toLowerCase())
     return hits.length === 1 ? hits[0]?.name : undefined
   }
+  const ambiguous = (name: string): boolean =>
+    !known.has(name) && schema.columns.filter((c) => c.name.toLowerCase() === name.toLowerCase()).length > 1
   const records = parseCsvRecords(text, { delimiter: form.delimiter })
   // Blank lines (a common artefact of hand-edited files) carry no row; they are skipped like LOAD DATA does.
   const isBlank = (r: { fields: string[]; quoted: boolean[] }) =>
@@ -176,6 +204,24 @@ export async function importCsv(
   if (form.header === '1') {
     const names = first.value.fields.map((c) => c.trim())
     const resolved = names.map((n) => resolve(n))
+    const vague = names.filter((n) => ambiguous(n))
+    if (vague.length > 0) {
+      throw new ImportValidationError(
+        'CSV_AMBIGUOUS_COLUMNS',
+        `Header column(s) match several table columns (case differs): ${vague.join(', ')}`,
+        { columns: vague.slice(0, 5).join(', ') }
+      )
+    }
+    const duplicates = resolved.filter((c, i) => c !== undefined && resolved.indexOf(c) !== i)
+    if (duplicates.length > 0) {
+      throw new ImportValidationError(
+        'CSV_DUPLICATE_COLUMNS',
+        `Header names a column twice: ${duplicates.join(', ')}`,
+        {
+          columns: [...new Set(duplicates)].slice(0, 5).join(', '),
+        }
+      )
+    }
     const unknown = names.filter((_, i) => resolved[i] === undefined)
     if (unknown.length > 0) {
       // Bounded: a wrong file (a .sql renamed .csv, a binary) would otherwise echo its whole first line back.

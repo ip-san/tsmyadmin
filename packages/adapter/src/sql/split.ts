@@ -3,7 +3,7 @@ import type { Dialect } from '@tsmyadmin/shared'
 export interface Statement {
   /** Statement text (leading comments are kept so the user sees what ran). */
   sql: string
-  /** 1-based line where the statement text starts in the original script. */
+  /** 1-based line of the statement's first code token in the original script (its leading comments sit above). */
   line: number
 }
 
@@ -86,9 +86,11 @@ export function splitStatements(input: string, dialect: Dialect): Statement[] {
   const flush = (end: number) => {
     const sql = input.slice(start, end).trim()
     if (hasCode && sql.length > 0) {
-      out.push({ sql, line: startLine })
+      // pg_dump / mysqldump put a comment block above every statement: errors point at the code below it.
+      const lead = LEADING_COMMENTS.exec(sql)?.[0] ?? ''
+      out.push({ sql, line: startLine + lead.split('\n').length - 1 })
       if (dialect === 'mysql') noBackslash = trackSqlMode(sql, noBackslash, savedModes)
-      if (dialect === 'postgres' && COPY_FROM_STDIN.test(sql)) copyData = true
+      if (dialect === 'postgres' && COPY_FROM_STDIN.test(sql.slice(lead.length))) copyData = true
     }
     hasCode = false
   }
@@ -109,7 +111,8 @@ export function splitStatements(input: string, dialect: Dialect): Statement[] {
       const m = /(?:^|\n)\\\.[ \t]*(?:\r?\n|$)/.exec(input.slice(from))
       const stop = m ? from + m.index + m[0].length : n
       const last = out[out.length - 1]
-      if (last) last.sql = `${last.sql}\n${input.slice(from, stop).replace(/\r?\n$/, '')}`
+      // The terminator line itself is kept (`\.`), minus its line ending, so the executor can find the block's end.
+      if (last) last.sql = `${last.sql}\n${input.slice(from, stop).replace(/[ \t]*\r?\n$/, '')}`
       skipTo(stop)
       start = i
       startLine = line

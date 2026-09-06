@@ -77,6 +77,14 @@ export function ExportForm({ db, schema, table, initialTables }: ExportFormProps
               ({chosen.length === 0 ? locale.export.allTables : chosen.length})
             </span>
           </legend>
+          <div className="mb-1 flex gap-2">
+            <Button size="sm" onClick={() => setSelected(available.map((t) => t.name))}>
+              {locale.export.selectAll}
+            </Button>
+            <Button size="sm" onClick={() => setSelected([])} disabled={selected.length === 0}>
+              {locale.export.selectNone}
+            </Button>
+          </div>
           <div className="flex flex-wrap gap-3 text-sm">
             {available.map((t) => (
               <label key={t.name} className="flex items-center gap-1">

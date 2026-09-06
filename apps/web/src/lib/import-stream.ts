@@ -12,6 +12,8 @@ export interface ImportRequest {
   stopOnError?: '0' | '1'
   ignoreForeignKeys?: '0' | '1'
   singleTransaction?: '0' | '1'
+  /** Lets the caller stop the run through `mutations.cancelSql` and still read the result. */
+  queryId?: string
 }
 
 /**
@@ -26,7 +28,8 @@ export async function runImport(
   signal?: AbortSignal
 ): Promise<ImportResult> {
   // Optional fields are dropped when undefined (a multipart form has no "absent" value otherwise).
-  const { schema, table, header, nullMarker, delimiter, stopOnError, ignoreForeignKeys, singleTransaction } = form
+  const { schema, table, header, nullMarker, delimiter, stopOnError, ignoreForeignKeys, singleTransaction, queryId } =
+    form
   let res: Response
   try {
     res = await api.databases[':db'].import.$post(
@@ -43,6 +46,7 @@ export async function runImport(
           ...(stopOnError ? { stopOnError } : {}),
           ...(ignoreForeignKeys ? { ignoreForeignKeys } : {}),
           ...(singleTransaction ? { singleTransaction } : {}),
+          ...(queryId ? { queryId } : {}),
         },
       },
       { init: signal ? { signal } : {} }

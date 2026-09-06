@@ -121,6 +121,8 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
     `${scratch}_nokey`,
     `${scratch}_big`,
     `${scratch}_seed`,
+    `${scratch}_pseqt`,
+    `${scratch}_serialt`,
     `${scratch}_inh_child`,
     `${scratch}_inh`,
     `${scratch}_seqmin_copy`,
@@ -1342,6 +1344,44 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
             expect(sql).toMatch(/TRIGGER `?\w+_qtrg_bi`? BEFORE INSERT ON `?\w+_qtrg`? FOR EACH ROW/)
           } finally {
             await execOk(`DROP TABLE ${t}`)
+          }
+        }
+      )
+
+      it.skipIf(dialect !== 'postgres')(
+        'lists a standalone sequence (not the one behind a serial) and dumps it with its owner and position',
+        async () => {
+          const seq = `${scratch}_pseq`
+          const t = `${scratch}_pseqt`
+          const serial = `${scratch}_serialt`
+          await execOk(
+            `CREATE SEQUENCE ${seq} START 100 INCREMENT 5;
+             CREATE TABLE ${t} (id bigint DEFAULT nextval('${seq}') PRIMARY KEY, v text);
+             ALTER SEQUENCE ${seq} OWNED BY ${t}.id;
+             CREATE TABLE ${serial} (id serial PRIMARY KEY);
+             INSERT INTO ${t} (v) VALUES ('a'), ('b')`
+          )
+          try {
+            const listed = await db.listTables(ns)
+            expect(listed.find((x) => x.name === seq)?.kind).toBe('sequence')
+            // A serial's own sequence belongs to its column and is not an object of the listing.
+            expect(listed.some((x) => x.name === `${serial}_id_seq`)).toBe(false)
+            const schema = await db.describeTable(ns, t)
+            expect(schema.columns[0]).toMatchObject({ name: 'id', extra: '', default: `nextval('${seq}'::regclass)` })
+            expect((await db.describeTable(ns, serial)).columns[0]?.extra).toBe('serial')
+            expect((await db.describeTable(ns, seq)).kind).toBe('sequence')
+            const created = await db.showCreateTable(ns, seq)
+            expect(created[0]).toBe(
+              `CREATE SEQUENCE "public"."${seq}" AS bigint INCREMENT BY 5 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 100 CACHE 1`
+            )
+            expect(created[1]).toBe(`ALTER SEQUENCE "public"."${seq}" OWNED BY "public"."${t}"."id"`)
+            expect(created[2]).toBe(`SELECT pg_catalog.setval('"public"."${seq}"', 105, true)`)
+            // The table keeps its default as written, so the dump restores against the recreated sequence.
+            expect((await db.showCreateTable(ns, t, schema)).join('\n')).toContain(
+              `DEFAULT nextval('${seq}'::regclass)`
+            )
+          } finally {
+            await execOk(`DROP TABLE ${t}; DROP TABLE ${serial}; DROP SEQUENCE IF EXISTS ${seq}`)
           }
         }
       )

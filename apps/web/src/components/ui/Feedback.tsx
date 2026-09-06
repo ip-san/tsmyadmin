@@ -68,9 +68,11 @@ export function Badge({
     info: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100',
     warn: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100',
   }
+  // The hint is hover-only as a title; keyboard and screen-reader users get it as hidden text after the label.
   return (
     <span className={cn('inline-block rounded px-1.5 py-0.5 text-xs font-medium', tones[tone])} title={title}>
       {children}
+      {title ? <span className="sr-only">（{title}）</span> : null}
     </span>
   )
 }

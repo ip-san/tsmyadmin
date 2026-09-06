@@ -32,9 +32,12 @@ function isGenerated(c: ColumnDef): boolean {
 function initialField(c: ColumnDef, mode: RowFormProps['mode'], initial?: Record<string, Cell>): FieldState {
   const cell = initial?.[c.name] ?? null
   const hasDefault = c.default !== null || isGenerated(c)
-  // Duplicating a row: keep every value except generated keys, which must get a fresh value.
-  if (mode === 'insert' && initial !== undefined)
+  // Duplicating a row: keep every value except generated keys, which must get a fresh value. A value the page
+  // does not hold whole (binary, cut text) cannot be copied: the column falls back to its default or NULL.
+  if (mode === 'insert' && initial !== undefined) {
+    if (isOpaqueCell(cell)) return { text: '', isNull: c.nullable && !hasDefault, useDefault: hasDefault }
     return { text: cellToEditable(cell), isNull: cell === null, useDefault: isGenerated(c) }
+  }
   return {
     text: cellToEditable(cell),
     isNull: mode === 'edit' ? cell === null : c.nullable && !hasDefault,
@@ -93,7 +96,9 @@ export function RowForm({ columns, mode, initial, pending, error, onSubmit, onCa
         <tbody>
           {columns.map((c) => {
             const f = fieldFor(c)
-            const binary = isOpaqueCell(initial?.[c.name] ?? null)
+            const opaque = isOpaqueCell(initial?.[c.name] ?? null)
+            // Editing keeps an opaque value untouched; duplicating leaves the column open for a new value.
+            const binary = mode === 'edit' && opaque
             // NULL / default fields stay editable: typing unticks the box (phpMyAdmin behaviour), so the user is
             // not left clicking a control that ignores input.
             const takeOver = (text: string) => update(c.name, c, { text, isNull: false, useDefault: false })
@@ -101,7 +106,7 @@ export function RowForm({ columns, mode, initial, pending, error, onSubmit, onCa
             return (
               <Tr key={c.name} data-generated={isGenerated(c) ? '' : undefined}>
                 <Td className="whitespace-nowrap font-medium">
-                  <label htmlFor={id}>{c.name}</label>
+                  {binary && !f.isNull ? c.name : <label htmlFor={id}>{c.name}</label>}
                 </Td>
                 <Td className="whitespace-nowrap font-mono text-xs text-zinc-500 dark:text-zinc-400">{c.dataType}</Td>
                 <Td>
@@ -144,6 +149,11 @@ export function RowForm({ columns, mode, initial, pending, error, onSubmit, onCa
                       className="font-mono text-xs"
                     />
                   )}
+                  {opaque && mode === 'insert' ? (
+                    <span className="block text-xs text-zinc-500 dark:text-zinc-400">
+                      {locale.rows.opaqueNotCopied}
+                    </span>
+                  ) : null}
                 </Td>
               </Tr>
             )

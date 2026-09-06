@@ -6,9 +6,9 @@ tsmyadmin は **1 プロセス（Bun）で API と SPA を配信する単一コ�
 
 | 変数 | 既定値 | 説明 |
 |---|---|---|
-| `NODE_ENV` | `development` | `production` で Cookie に `Secure`、ログ JSON、`SESSION_SECRET` 必須 |
-| `API_PORT` | `3100` | 待ち受けポート（1–65535。Docker イメージの `HEALTHCHECK` は 3100 固定）。未指定なら `PORT`（PaaS が注入する変数）を代わりに使う |
-| `COOKIE_SECURE` | 本番 `1` / 開発 `0` | セッション Cookie の `Secure`。`1` のとき平文 HTTP でのログインは `INSECURE_TRANSPORT`（400）で拒否する（ブラウザが Cookie を捨てるため）。TLS を終端しない社内ネットワークでだけ `0` にする |
+| `NODE_ENV` | `development` | `production` で Cookie に `Secure`（`COOKIE_SECURE` で上書き可）、ログ JSON、`SESSION_SECRET` 必須 |
+| `API_PORT` | `3100` | 待ち受けポート（1–65535）。未指定なら `PORT`（PaaS が注入する変数）を代わりに使う。Docker イメージの `EXPOSE` は 3100 だが `HEALTHCHECK` は実際のポートに従う |
+| `COOKIE_SECURE` | 本番 `1` / 開発 `0` | セッション Cookie の `Secure`。`1` のとき平文 HTTP でのログインは `INSECURE_TRANSPORT`（400）で拒否する（ブラウザが Cookie を捨てるため）。TLS を終端しない社内ネットワークでだけ `0` にする。`localhost` / `127.0.0.1` / `::1` からの平文アクセスは常に許可（ブラウザが Secure Cookie を受け入れる） |
 | `SESSION_SECRET` | （開発用固定値） | セッション Cookie の署名鍵。**本番では 32 文字以上必須**。`openssl rand -hex 32` |
 | `SESSION_TTL_MINUTES` | `30` | 操作ごとに延長されるセッション寿命（1–1440） |
 | `SESSION_MAX_PER_IDENTITY` | `10`（1–1000） | 同じ DB アカウント（種別 / ホスト / ポート / ユーザー名）で同時に保持するセッション数。超えると最も古いものを閉じる（ログインの繰り返しで DB の `max_connections` を使い切らせない） |
@@ -54,7 +54,7 @@ docker run -d --name tsmyadmin \
 - `/app/data` にセッションストアが置かれます。ボリュームを付けないと再起動で全員ログアウトになります（機能は損なわれません）。バインドマウントの場合は `chown 1000:1000 <dir>` が必要です
 - `/healthz`（生存）と `/readyz`（セッションストアの疎通）を公開します。オーケストレータのプローブに使ってください
 - `--stop-timeout`（compose では `stop_grace_period`）は Docker 既定の 10 秒では `SHUTDOWN_TIMEOUT_SECONDS`（30 秒）より短く、実行中のエクスポート / インポートが SIGKILL で切られます。`SHUTDOWN_TIMEOUT_SECONDS + 5` 秒以上にしてください
-- 目安のリソース: 1 vCPU / メモリ 512 MB。アイドル時は約 90 MB、64 MB のインポートや主キーのない MySQL テーブルの大きなエクスポートではピークが数百 MB になります。`--memory` を 256 MB 未満にしないでください
+- 目安のリソース: 1 vCPU / メモリ 512 MB。アイドル時は約 90 MB、64 MB のインポート（ファイル全体をメモリに置く）ではピークが数百 MB になります。エクスポートは 500 行ずつストリーミングし、テーブルの大きさに依存しません。`--memory` を 256 MB 未満にしないでください
 
 ### docker compose の例
 
@@ -116,7 +116,8 @@ server {
     proxy_set_header Host $host;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_read_timeout 600s;   # 長い SQL / インポート
+    proxy_read_timeout 600s;   # API 側の無通信上限（255 秒）以上に。エクスポートは空行のハートビートを送らない
+    proxy_buffering off;       # NDJSON の進捗・空行をそのまま流す（バッファすると進捗が止まって見える）
   }
 }
 ```
@@ -125,7 +126,13 @@ server {
 
 ## 直接起動（systemd）
 
-Docker を使わない場合は Bun 1.4 以上を入れ、`bun install --frozen-lockfile --production --ignore-scripts` の後に `bun run build`（SPA を `apps/web/dist` に生成。ビルドには開発依存が必要なので、ビルドだけは `--production` なしの環境で行い成果物を配布してもよい）。起動は `bun apps/api/src/index.ts`。`SESSION_DB_PATH` は作業ディレクトリからの相対なので `WorkingDirectory` を固定してください。
+Docker を使わない場合は Bun 1.4 以上を入れ、次の順で準備します。
+
+1. `bun install --frozen-lockfile`（ビルドには開発依存が必要）
+2. `bun run build`（SPA を `apps/web/dist` に生成）
+3. 任意: `bun install --frozen-lockfile --production --ignore-scripts --filter '!@tsmyadmin/web'` で実行時依存だけに絞る（Docker イメージと同じ構成。ビルド済みの `apps/web/dist` はそのまま残る）
+
+起動は `bun apps/api/src/index.ts`。`SESSION_DB_PATH` は作業ディレクトリからの相対なので `WorkingDirectory` を固定し、`data/` を `User=` のユーザーが書き込めるようにしてください。`EnvironmentFile` には少なくとも `NODE_ENV=production`・`SESSION_SECRET`・`TSMYADMIN_ALLOWED_HOSTS` を置きます。
 
 ```ini
 [Unit]
@@ -152,14 +159,15 @@ WantedBy=multi-user.target
 | ブラウズ 1 ページ | 最大 1,000 行。絞り込みなしで概算 100,000 行を超えるテーブルは `COUNT(*)` を避けてカタログの概算件数を表示（「約 N 件（概算）」）。絞り込みありの件数は 100,000 行で打ち切り（「100,000 行以上」、最終ページへのジャンプは不可） | `BROWSE_MAX_LIMIT`, `EXACT_COUNT_MAX_ROWS` |
 | SQL コンソール結果 | 既定 1,000 / 最大 10,000 行、既定タイムアウト 30 秒 | `SQL_MAX_ROWS_*`, `SQL_TIMEOUT_DEFAULT_MS` |
 | インポートファイル | 64 MB | `IMPORT_MAX_BYTES` |
-| エクスポート | ストリーミング（500 行ずつ読み出して逐次送信）。例外: 主キーも一意キーもない MySQL テーブルは安定した順序が取れないため 1 回で全件読み出す（巨大な無 PK テーブルはメモリを消費） | `apps/api/src/lib/export.ts`, `iterateRows` |
+| エクスポート | ストリーミング（500 行ずつ読み出して逐次送信。主キーも一意キーもない MySQL テーブルも 1 本の SELECT を行ストリームで読む） | `apps/api/src/lib/export.ts`, `iterateRows` |
+| 長いレスポンスの維持 | SQL 実行・インポートは処理中 15 秒ごとに空行（NDJSON のハートビート）を送る。HTTP 接続のアイドル上限は 255 秒（Bun の上限）で、エクスポートはハートビートを送らないため最初の行を返すまで 255 秒以上かかるクエリ（巨大テーブルの並べ替え）は切断される。リバースプロキシ / ロードバランサのアイドルタイムアウト（nginx `proxy_read_timeout`、ALB idle timeout = 既定 60 秒など）は 255 秒以上、かつプロキシのレスポンスバッファリングは無効（nginx `proxy_buffering off`）にする | `idleTimeout`, `HEARTBEAT_MS` |
 | バイナリ値の表示 | 先頭 64 KB | `MAX_BINARY_BYTES` |
 | 長いテキストの表示 | 先頭 65,536 文字（「先頭のみ表示」と全体の文字数を併記。超えるセルは画面から編集できず、SQL で更新する。エクスポートは全文） | `MAX_TEXT_CHARS` |
 | DB 接続プール | ログインセッションごとに最大 4 接続（PostgreSQL は接続先データベースごとに 1 プール）。60 秒アイドルで接続を閉じ、セッション失効（`SESSION_TTL_MINUTES`）でプールごと破棄。DB 側の同時接続上限（`max_connections`）は「想定同時ログイン数 × 4 + 監視・管理用の余裕 5 程度」を目安に確保する | adapter (`idleTimeout`) |
 
 ## 停止と再起動（グレースフルシャットダウン）
 
-`SIGTERM` / `SIGINT` を受けると新規接続の受付を止め、実行中のリクエストが終わるのを `SHUTDOWN_TIMEOUT_SECONDS`（既定 30 秒）まで待ってから各セッションの DB 接続プールを閉じて終了します。2 回目のシグナルか上限超過で即時終了します。
+`SIGTERM` / `SIGINT` を受けると新規接続の受付を止め、実行中のリクエストが終わるのを `SHUTDOWN_TIMEOUT_SECONDS`（既定 30 秒）まで待ってから各セッションの DB 接続プールを閉じて終了します。2 回目のシグナルか上限超過で即時終了します（1 秒以内に重ねて届いたシグナルは同じ停止要求とみなして無視します。`docker stop` が SIGTERM を二重に送ることがあるため）。
 
 - Kubernetes では `terminationGracePeriodSeconds` を `SHUTDOWN_TIMEOUT_SECONDS + 5` 以上にしてください
 - `SIGTERM` を受けた瞬間にリスナーが閉じるため、以後の `/readyz` は接続拒否になります（503 は返しません）。実行中のリクエストだけが完了まで処理されます。ローリング更新ではロードバランサから外してから `SIGTERM` を送る（`preStop` で数秒待つ）と、停止中のインスタンスに新規リクエストが振られません

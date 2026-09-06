@@ -47,9 +47,33 @@ describe('splitStatements', () => {
 
   it('ignores semicolons in -- / # / block comments but keeps comment text', () => {
     const sql = `-- c1; still comment\nSELECT 1; # c2; x\n/* multi;\nline */ SELECT 2`
+    // `line` is where the code starts: a dump's comment block above each statement is not what failed.
     expect(splitStatements(sql, 'mysql')).toEqual([
-      { sql: '-- c1; still comment\nSELECT 1', line: 1 },
-      { sql: '# c2; x\n/* multi;\nline */ SELECT 2', line: 2 },
+      { sql: '-- c1; still comment\nSELECT 1', line: 2 },
+      { sql: '# c2; x\n/* multi;\nline */ SELECT 2', line: 4 },
+    ])
+  })
+
+  it('keeps a COPY block whole even under a dump comment block, including an empty one', () => {
+    const sql = [
+      '--',
+      '-- Data for Name: t; Type: TABLE DATA',
+      '--',
+      '',
+      'COPY public.t (a, b) FROM stdin;',
+      "1\tit's; not a terminator",
+      '\\.',
+      'COPY public.e (a) FROM stdin;',
+      '\\.',
+      'SELECT 1;',
+    ].join('\n')
+    expect(splitStatements(sql, 'postgres')).toEqual([
+      {
+        sql: "--\n-- Data for Name: t; Type: TABLE DATA\n--\n\nCOPY public.t (a, b) FROM stdin\n1\tit's; not a terminator\n\\.",
+        line: 5,
+      },
+      { sql: 'COPY public.e (a) FROM stdin\n\\.', line: 8 },
+      { sql: 'SELECT 1', line: 10 },
     ])
   })
 

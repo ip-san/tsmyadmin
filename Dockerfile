@@ -24,7 +24,7 @@ LABEL org.opencontainers.image.title="tsmyadmin" \
       org.opencontainers.image.created="${BUILD_DATE}" \
       org.opencontainers.image.licenses="MIT"
 WORKDIR /app
-ENV NODE_ENV=production API_PORT=3100
+ENV NODE_ENV=production
 COPY --from=build /app/package.json /app/bun.lock ./
 COPY --from=build /app/apps/api ./apps/api
 COPY --from=build /app/apps/web/dist ./apps/web/dist
@@ -41,5 +41,6 @@ RUN mkdir -p /app/data && chown bun:bun /app/data
 VOLUME ["/app/data"]
 EXPOSE 3100
 USER bun
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD ["bun", "-e", "fetch('http://127.0.0.1:3100/readyz').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+# The probe follows API_PORT / PORT the same way config.ts does (3100 when neither is set).
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD ["bun", "-e", "fetch(`http://127.0.0.1:${process.env.API_PORT || process.env.PORT || 3100}/readyz`).then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
 CMD ["bun", "apps/api/src/index.ts"]

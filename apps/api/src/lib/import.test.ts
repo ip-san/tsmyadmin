@@ -121,6 +121,9 @@ describe('importSql', () => {
       onSql: (_ns, sql) =>
         sql
           .split(';')
+          .map((s) => s.trim())
+          // The real splitter drops the empty chunk the import appends before COMMIT.
+          .filter((s) => s.length > 0)
           .map((s, i) =>
             i % 2
               ? { kind: 'error' as const, sql: s, message: 'boom', code: 'QUERY_FAILED' }

@@ -24,7 +24,10 @@ export function RowActions({
 }) {
   return (
     <Td className="whitespace-nowrap">
-      <label className="inline-flex min-h-6 min-w-6 items-center justify-center align-middle">
+      <label
+        className="inline-flex min-h-6 min-w-6 items-center justify-center align-middle"
+        title={addressable ? undefined : locale.rows.notAddressable}
+      >
         <input
           type="checkbox"
           aria-label={locale.rows.selectRow(index + 1)}
@@ -40,6 +43,7 @@ export function RowActions({
         aria-label={locale.rows.editRow(index + 1)}
         aria-haspopup="dialog"
         disabled={!addressable}
+        title={addressable ? undefined : locale.rows.notAddressable}
         onClick={onEdit}
       >
         <Pencil className="size-3.5" aria-hidden />

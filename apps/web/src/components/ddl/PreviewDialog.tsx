@@ -58,8 +58,9 @@ export function PreviewDialog<Op>({
         {flow.executed ? (
           <Notice>
             {successMessage(flow.executed)}
-            {flow.notices.map((n) => (
-              <span key={n} className="block text-xs text-amber-900 dark:text-amber-200">
+            {flow.notices.map((n, i) => (
+              // Identical NOTICE lines are common (one per statement): the position is the identity.
+              <span key={`${i}-${n}`} className="block text-xs text-amber-900 dark:text-amber-200">
                 {locale.ddl.serverNotice}: {n}
               </span>
             ))}

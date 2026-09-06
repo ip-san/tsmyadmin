@@ -52,7 +52,12 @@ describe('buildExport', () => {
     )
     expect(body).toContain('-- Table: empty')
     expect(body).not.toContain('INSERT INTO `empty`')
-    expect(body.trimEnd().endsWith(`${DUMP_COMPLETE_MARKER} (2 tables)`)).toBe(true)
+    expect(body.trimEnd().endsWith(`${DUMP_COMPLETE_MARKER} (2 objects)`)).toBe(true)
+  })
+
+  it('aborts when a requested table is gone before the dump starts', async () => {
+    const f = buildExport(adapter(), ns, ['users', 'ghost'], q({ format: 'sql' }))
+    await expect(collect(f.body)).rejects.toMatchObject({ code: 'NOT_FOUND' })
   })
 
   it('sql: structure-only and data-only respect the flags', async () => {
@@ -153,6 +158,30 @@ describe('buildExport ordering of views and routines', () => {
     })
     const body = await collect(buildExport(a, ns, ['a_child', 'b_parent'], q({ format: 'sql', data: '0' })).body)
     expect(isAscending(order(body, '-- Table: b_parent', '-- Table: a_child'))).toBe(true)
+  })
+
+  it('PostgreSQL: creates materialized views empty and refreshes them after the data', async () => {
+    const view = fakeView('mv', 'CREATE MATERIALIZED VIEW mv AS SELECT id FROM t')
+    const mv = { ...view, schema: { ...view.schema, kind: 'materialized_view' as const } }
+    const a = new FakeAdapter({
+      dialect: 'postgres',
+      databases: { shop: { tables: { t: fakeTable('t', ['id'], [{ id: 1 }]), mv } } },
+      dependencies: [{ kind: 'view', name: 'mv', dependsOn: [{ kind: 'table', name: 't' }] }],
+    })
+    const body = await collect(buildExport(a, ns, ['t', 'mv'], q({ format: 'sql' })).body)
+    expect(body).toContain('CREATE MATERIALIZED VIEW mv AS SELECT id FROM t\nWITH NO DATA;')
+    expect(
+      isAscending(
+        order(
+          body,
+          'INSERT INTO "public"."t"',
+          'CREATE MATERIALIZED VIEW mv',
+          'REFRESH MATERIALIZED VIEW "public"."mv";'
+        )
+      )
+    ).toBe(true)
+    const structureOnly = await collect(buildExport(a, ns, ['t', 'mv'], q({ format: 'sql', data: '0' })).body)
+    expect(structureOnly).not.toContain('REFRESH MATERIALIZED VIEW')
   })
 
   it('mention fallback: a qualified column named like a view is not a reference (MariaDB normalised text)', async () => {

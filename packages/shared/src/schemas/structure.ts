@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { NamespaceSchema } from './namespace.ts'
 
-/** 'sequence' is a MariaDB SEQUENCE object (listed with the tables; read-only, dumped as CREATE SEQUENCE). */
+/** 'sequence' is a MariaDB SEQUENCE or a standalone PostgreSQL sequence (listed with the tables; read-only, dumped as CREATE SEQUENCE). */
 export const TableKindSchema = z.enum(['table', 'view', 'materialized_view', 'sequence'])
 export type TableKind = z.infer<typeof TableKindSchema>
 /** Views and materialized views: no row identity, read-only in the UI. */

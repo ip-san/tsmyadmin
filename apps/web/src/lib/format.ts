@@ -27,6 +27,7 @@ export function describeCell(cell: Cell): CellDisplay {
   return { kind: 'text', text, empty: text.length === 0 }
 }
 
+/** What the cell is rendered as (a cut text carries its note); not a value to write anywhere. */
 export function cellToText(cell: Cell): string {
   const d = describeCell(cell)
   switch (d.kind) {

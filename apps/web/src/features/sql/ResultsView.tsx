@@ -1,6 +1,6 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { Cell, ResultSet, StatementResult } from '@tsmyadmin/shared'
-import { toCsv } from '@tsmyadmin/shared'
+import { isTruncatedCell, toCsv } from '@tsmyadmin/shared'
 import { Download } from 'lucide-react'
 import { type CSSProperties, memo, useRef } from 'react'
 import { CellValue } from '@/components/cells/CellValue.tsx'
@@ -14,6 +14,9 @@ import { locateInSql } from '@/lib/sql-position.ts'
 /** Client-side export of one result set (what is on screen, up to maxRows). */
 function DownloadButtons({ result, label, index }: { result: ResultSet; label: string; index: number }) {
   const names = result.columns.map((c) => c.name)
+  // A file built from the screen would carry the cut values as if they were whole; the export tab reads uncapped.
+  const cut = result.rows.some((row) => row.some((cell) => isTruncatedCell(cell)))
+  if (cut) return <span className="ml-2 text-xs text-zinc-500 dark:text-zinc-400">{locale.sql.downloadTruncated}</span>
   const csv = () => downloadText(safeFilename(label, 'csv'), toCsv(names, result.rows), 'text/csv;charset=utf-8')
   const json = () =>
     downloadText(
@@ -99,8 +102,8 @@ const Statement = memo(function Statement({
         <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{heading}</h3>
         <Notice>
           {locale.sql.affected(result.affectedRows, result.durationMs)}
-          {(result.notices ?? []).map((n) => (
-            <span key={n} className="block text-xs text-amber-900 dark:text-amber-200">
+          {(result.notices ?? []).map((n, i) => (
+            <span key={`${i}-${n}`} className="block text-xs text-amber-900 dark:text-amber-200">
               {n}
             </span>
           ))}

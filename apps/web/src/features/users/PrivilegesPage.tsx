@@ -66,9 +66,12 @@ export function PrivilegesPage({ db, schema, dialect }: { db: string; schema?: s
                         {locale.users.levels[level]}
                       </Badge>
                       {global ? (
-                        <Badge tone="neutral" title={locale.users.globalGrantHint}>
-                          {locale.users.globalGrant}
-                        </Badge>
+                        <>
+                          {' '}
+                          <Badge tone="neutral" title={locale.users.globalGrantHint}>
+                            {locale.users.globalGrant}
+                          </Badge>
+                        </>
                       ) : null}
                     </>
                   )}

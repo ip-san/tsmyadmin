@@ -17,7 +17,9 @@ export function CellValue({ cell }: { cell: Cell }) {
     return <span className="text-xs text-zinc-500 dark:text-zinc-400">{locale.common.binary(d.bytes)}</span>
   const note =
     d.kind === 'truncated' ? (
-      <span className="text-xs text-zinc-500 dark:text-zinc-400">{locale.common.truncatedText(d.length)}</span>
+      <span className="whitespace-nowrap text-xs text-zinc-500 dark:text-zinc-400">
+        {locale.common.truncatedText(d.length)}
+      </span>
     ) : null
   if (d.kind === 'text' && d.empty)
     return <span className="italic text-zinc-500 dark:text-zinc-400">{locale.common.empty}</span>
@@ -35,11 +37,15 @@ export function CellValue({ cell }: { cell: Cell }) {
       {note ? ' ' : null}
       <button
         type="button"
-        className="text-xs text-blue-700 hover:underline dark:text-blue-300"
+        className="whitespace-nowrap text-xs text-blue-700 hover:underline dark:text-blue-300"
         onClick={() => setExpanded((e) => !e)}
         aria-expanded={expanded}
       >
-        {expanded ? locale.common.showLess : locale.common.showMore(d.text.length)}
+        {expanded
+          ? locale.common.showLess
+          : d.kind === 'truncated'
+            ? locale.common.showHead(d.text.length)
+            : locale.common.showMore(d.text.length)}
       </button>
     </span>
   )

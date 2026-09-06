@@ -117,7 +117,7 @@ export interface RowBatch {
 /** Renders dialect-specific SQL for dumps (INSERT statements with properly escaped literals). */
 /** One program object for the dump with the session settings it must be created under. */
 export type DropTarget =
-  | { kind: 'table' | 'view' | 'materialized_view'; name: string }
+  | { kind: 'table' | 'view' | 'materialized_view' | 'sequence'; name: string }
   | { kind: 'routine'; name: string; statements: string[] }
 
 export interface ProgramStatement {

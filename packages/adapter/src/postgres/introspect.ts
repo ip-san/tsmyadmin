@@ -37,6 +37,19 @@ export async function pgListSchemas(conn: Conn): Promise<string[]> {
   return r.rows.map((row) => str(row[0]))
 }
 
+/**
+ * The sequence behind an identity column (internal dependency) or a `serial` column (auto dependency on the
+ * column, named `<table>_<column>_seq` as CREATE TABLE names it). Such sequences belong to their column: the
+ * column is dumped as IDENTITY / serial and the sequence is not an object of its own. Any other sequence — made
+ * with CREATE SEQUENCE, even when later OWNED BY a column — is listed with the tables and dumped as itself.
+ */
+const SERIAL_SEQUENCE_DEPENDENCY = `
+  SELECT 1 FROM pg_depend d
+  JOIN pg_class t ON t.oid = d.refobjid
+  JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = d.refobjsubid
+  WHERE d.objid = c.oid AND d.classid = 'pg_class'::regclass AND d.refclassid = 'pg_class'::regclass
+    AND (d.deptype = 'i' OR (d.deptype = 'a' AND c.relname = t.relname || '_' || a.attname || '_seq'))`
+
 export async function pgListTables(conn: Conn, ns: Namespace): Promise<TableInfo[]> {
   const r = firstResult(
     await conn.query(
@@ -48,7 +61,9 @@ export async function pgListTables(conn: Conn, ns: Namespace): Promise<TableInfo
                  WHERE i.inhrelid = c.oid AND p.relnamespace = c.relnamespace)
        FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
        LEFT JOIN pg_stat_user_tables s ON s.relid = c.oid
-       WHERE n.nspname = $1 AND c.relkind IN ('r', 'p', 'v', 'm', 'f') AND NOT c.relispartition
+       WHERE n.nspname = $1 AND NOT c.relispartition
+         AND (c.relkind IN ('r', 'p', 'v', 'm', 'f')
+              OR (c.relkind = 'S' AND NOT EXISTS (${SERIAL_SEQUENCE_DEPENDENCY})))
        ORDER BY c.relname`,
       [ns.schema ?? 'public', SEP]
     )
@@ -58,7 +73,7 @@ export async function pgListTables(conn: Conn, ns: Namespace): Promise<TableInfo
     const est = Number(row[2])
     return {
       name: str(row[0]),
-      kind: kind === 'v' ? 'view' : kind === 'm' ? 'materialized_view' : 'table',
+      kind: kind === 'v' ? 'view' : kind === 'm' ? 'materialized_view' : kind === 'S' ? 'sequence' : 'table',
       // A plain view has no rows of its own (reltuples is 0, not an estimate).
       rowEstimate: kind !== 'v' && Number.isFinite(est) && est >= 0 ? Math.round(est) : null,
       engine: null,
@@ -88,7 +103,11 @@ export async function pgDescribeTable(conn: Conn, ns: Namespace, table: string):
   const cols = firstResult(
     await conn.query(
       `SELECT a.attname, format_type(a.atttypid, a.atttypmod), a.attnotnull, pg_get_expr(d.adbin, d.adrelid),
-              a.attidentity, a.attgenerated, col_description(a.attrelid, a.attnum), co.collname
+              a.attidentity, a.attgenerated, col_description(a.attrelid, a.attnum), co.collname,
+              EXISTS (SELECT 1 FROM pg_depend sd JOIN pg_class c ON c.oid = sd.objid
+                      WHERE sd.refclassid = 'pg_class'::regclass AND sd.refobjid = a.attrelid AND sd.refobjsubid = a.attnum
+                        AND sd.classid = 'pg_class'::regclass AND sd.deptype = 'a' AND c.relkind = 'S'
+                        AND c.relname = (SELECT relname FROM pg_class WHERE oid = a.attrelid) || '_' || a.attname || '_seq')
        FROM pg_attribute a
        LEFT JOIN pg_attrdef d ON d.adrelid = a.attrelid AND d.adnum = a.attnum
        LEFT JOIN pg_collation co ON co.oid = a.attcollation AND a.attcollation <> 0 AND co.collname <> 'default'
@@ -104,7 +123,9 @@ export async function pgDescribeTable(conn: Conn, ns: Namespace, table: string):
     if (identity === 'a') extra = 'identity always'
     else if (identity === 'd') extra = 'identity by default'
     else if (generated === 's') extra = 'generated stored'
-    else if (str(row[3]).startsWith('nextval(')) extra = 'serial'
+    // serial: the column's own conventionally named sequence. A nextval() of any other sequence stays a plain
+    // default (the sequence is dumped as an object of its own, so the default restores as written).
+    else if (str(row[3]).startsWith('nextval(') && bool(row[8])) extra = 'serial'
     return {
       name: str(row[0]),
       dataType: str(row[1]),
@@ -197,7 +218,7 @@ export async function pgDescribeTable(conn: Conn, ns: Namespace, table: string):
   const tuples = Number(infoRow[2])
   return {
     name: table,
-    kind: relkind === 'v' ? 'view' : relkind === 'm' ? 'materialized_view' : 'table',
+    kind: relkind === 'v' ? 'view' : relkind === 'm' ? 'materialized_view' : relkind === 'S' ? 'sequence' : 'table',
     comment: strOrNull(infoRow[1]),
     engine: null,
     rowEstimate: Number.isFinite(tuples) && tuples >= 0 ? Math.round(tuples) : null,

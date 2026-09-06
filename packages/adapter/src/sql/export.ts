@@ -22,9 +22,10 @@ export function isGeneratedColumn(extra: string): boolean {
 }
 
 /**
- * Moves the sequence behind an identity / serial column past the values now in the table. Nothing happens for
- * an empty table or when there is no sequence, and the value is clamped to the sequence minimum (a `MINVALUE
- * 1000` sequence must not be set to 1, nor to a negative id).
+ * Moves the sequence behind an identity / serial / nextval() column past the values now in the table. Nothing
+ * happens for an empty table or when there is no sequence; the value is clamped to the sequence minimum (a
+ * `MINVALUE 1000` sequence must not be set to 1, nor to a negative id) and never lowered (a sequence shared by
+ * two tables, or restored to its own position already, keeps the higher value).
  */
 export function pgAdvanceSequence(quotedTable: string, column: string, sequence?: string): string {
   const col = quoteIdent('postgres', column)
@@ -32,7 +33,7 @@ export function pgAdvanceSequence(quotedTable: string, column: string, sequence?
   const seq = sequence
     ? `${pgLiteral(sequence)}::regclass`
     : `pg_get_serial_sequence(${pgLiteral(quotedTable)}, ${pgLiteral(column)})::regclass`
-  return `SELECT setval(s.seqrelid, GREATEST(m.max_id, s.seqmin), m.max_id >= s.seqmin) FROM (SELECT MAX(${col})::bigint AS max_id FROM ${quotedTable}) m JOIN pg_sequence s ON s.seqrelid = ${seq} WHERE m.max_id IS NOT NULL`
+  return `SELECT setval(s.seqrelid, GREATEST(m.max_id, s.seqmin, COALESCE(pg_sequence_last_value(s.seqrelid), s.seqmin)), m.max_id >= s.seqmin OR pg_sequence_last_value(s.seqrelid) IS NOT NULL) FROM (SELECT MAX(${col})::bigint AS max_id FROM ${quotedTable}) m JOIN pg_sequence s ON s.seqrelid = ${seq} WHERE m.max_id IS NOT NULL`
 }
 
 /** The sequence a `nextval('…'::regclass)` default names, as written. */
@@ -229,12 +230,15 @@ export function createExporter(dialect: Dialect): SqlExporter {
             const object = /^CREATE\s+(?:OR\s+REPLACE\s+)?PROCEDURE/i.test(s) ? 'PROCEDURE' : 'FUNCTION'
             if (signature) out.push(`DROP ${object} IF EXISTS ${signature}`)
           }
-        } else {
+        } else if (o.kind !== 'sequence') {
           const kind = o.kind === 'materialized_view' ? 'MATERIALIZED VIEW' : 'VIEW'
           out.push(`DROP ${kind} IF EXISTS ${dumpTable(dialect, ns, o.name)}`)
         }
       }
       if (tables.length > 0) out.push(`DROP TABLE IF EXISTS ${tables.join(', ')}`)
+      // After the tables whose defaults call them (a column-owned sequence is already gone with its table).
+      for (const o of objects)
+        if (o.kind === 'sequence') out.push(`DROP SEQUENCE IF EXISTS ${dumpTable(dialect, ns, o.name)}`)
       return out
     },
     dropIfExists(ns: Namespace, schema: Pick<TableSchema, 'name' | 'kind'>): string {
@@ -259,11 +263,13 @@ export function createExporter(dialect: Dialect): SqlExporter {
     afterData(ns: Namespace, schema: TableSchema): string[] {
       if (dialect !== 'postgres') return [] // AUTO_INCREMENT follows explicit values on MySQL
       const t = quoteTable(dialect, ns, schema.name)
+      // Identity / serial columns own their sequence; any other nextval() default (an inherited serial, a
+      // standalone sequence) names the sequence to advance.
       return schema.columns
-        .filter((c) => c.extra.startsWith('identity') || c.extra === 'serial')
+        .filter((c) => c.extra.startsWith('identity') || c.extra === 'serial' || sequenceOfDefault(c.default))
         .map(
           (c) =>
-            `${pgAdvanceSequence(t, c.name, schema.inherits.length > 0 && c.extra === 'serial' ? sequenceOfDefault(c.default) : undefined)};`
+            `${pgAdvanceSequence(t, c.name, c.extra.startsWith('identity') || c.extra === 'serial' ? undefined : sequenceOfDefault(c.default))};`
         )
     },
   }

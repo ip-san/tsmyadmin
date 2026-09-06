@@ -30,6 +30,11 @@ export const ImportFormSchema = z.object({
   ignoreForeignKeys: FlagSchema.default('0'),
   /** sql: run the whole script in one transaction and roll everything back on the first error */
   singleTransaction: FlagSchema.default('0'),
+  /**
+   * Client-generated id so the run can be stopped with POST /sql/cancel while the stream stays open: the
+   * client then still receives the result (what ran, what was rolled back). Aborting the upload also cancels.
+   */
+  queryId: z.string().uuid().optional(),
 })
 export type ImportForm = z.infer<typeof ImportFormSchema>
 
@@ -51,6 +56,8 @@ export const ImportWarningSchema = z.enum([
   'ROLLED_BACK',
   /** The whole run was rolled back (single-transaction mode after an error). */
   'ALL_ROLLED_BACK',
+  /** Single-transaction mode after an error, but the script had committed on its own (COMMIT, MySQL DDL) before it. */
+  'PARTIALLY_ROLLED_BACK',
 ])
 export type ImportWarning = z.infer<typeof ImportWarningSchema>
 
@@ -99,6 +106,10 @@ export const ImportReasonSchema = z.enum([
   'CSV_NO_TABLE',
   'CSV_EMPTY',
   'CSV_UNKNOWN_COLUMNS',
+  /** A header name matches several table columns differing only in case (params: columns). */
+  'CSV_AMBIGUOUS_COLUMNS',
+  /** A header names the same column twice (params: columns). */
+  'CSV_DUPLICATE_COLUMNS',
   'CSV_NO_COLUMNS',
   'CSV_FIELD_COUNT',
   'CSV_BINARY',
@@ -107,5 +118,7 @@ export const ImportReasonSchema = z.enum([
   'CSV_ROWS_FAILED',
   /** DDL / account previews: an identifier longer than the server allows (params: name, max). */
   'IDENTIFIER_TOO_LONG',
+  /** An import option's SET statement was refused by the server (params: option, message). */
+  'OPTION_FAILED',
 ])
 export type ImportReason = z.infer<typeof ImportReasonSchema>

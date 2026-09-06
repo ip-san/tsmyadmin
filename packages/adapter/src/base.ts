@@ -88,8 +88,11 @@ export interface Conn {
 
 /** psql meta-command line (`\connect`, `\copy`, `\.`) that reached the server-side splitter. */
 const META_COMMAND = /^\\/
-/** A COPY block as the splitter assembles it: the statement line, then the data, then `\.`. */
-const COPY_BLOCK = /^(COPY\b[\s\S]*?\bFROM\s+STDIN\b[^\n]*?)\s*;?[ \t]*\n([\s\S]*?)\n\\\.$/i
+/**
+ * A COPY block as the splitter assembles it: the statement line, then the data lines (each with its newline, so
+ * an empty table and one empty-string row stay distinct), then `\.`.
+ */
+const COPY_BLOCK = /^(COPY\b[\s\S]*?\bFROM\s+STDIN\b[^\n]*?)[ \t]*;?[ \t]*\r?\n([\s\S]*?)\\\.$/i
 
 interface RunningEntry {
   ns: Namespace
@@ -751,7 +754,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
                 entry.inFlight = true
                 let list: RawResult[]
                 const code = stripLiterals(st.sql, this.dialect)
-                const copy = this.dialect === 'postgres' ? COPY_BLOCK.exec(st.sql) : null
+                const copy = this.dialect === 'postgres' ? COPY_BLOCK.exec(st.sql.replace(LEADING_COMMENTS, '')) : null
                 try {
                   if (META_COMMAND.test(st.sql)) {
                     throw new AdapterError(

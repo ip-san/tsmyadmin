@@ -371,21 +371,46 @@ describe.each(targets)('API integration ($dialect)', ({ dialect, url }) => {
     if (dialect !== 'postgres') return
     const other = (text: string) =>
       req('/api/databases/tsmyadmin_other/sql', { method: 'POST', body: JSON.stringify({ sql: text }) })
-    await other('DROP TABLE IF EXISTS imp_copy')
+    await other('DROP TABLE IF EXISTS imp_copy; DROP TABLE IF EXISTS imp_empty; DROP TABLE IF EXISTS imp_blank')
     try {
-      // What pg_dump ≥ 17.6 writes: the psql fence, then a COPY block with tab-separated, backslash-escaped data.
+      // What pg_dump ≥ 17.6 writes: the psql fence, a comment block above every statement, COPY blocks with
+      // tab-separated, backslash-escaped data — including an empty table and a table holding one empty string.
       const dump = [
         '--',
         '-- PostgreSQL database dump',
         '--',
         '\\restrict abc123',
         'SET statement_timeout = 0;',
+        '',
+        '--',
+        '-- Name: imp_copy; Type: TABLE; Schema: public; Owner: tsmyadmin',
+        '--',
+        '',
         'CREATE TABLE public.imp_copy (id integer NOT NULL, note text, PRIMARY KEY (id));',
+        'CREATE TABLE public.imp_empty (id integer);',
+        'CREATE TABLE public.imp_blank (note text);',
+        '',
+        '--',
+        '-- Data for Name: imp_copy; Type: TABLE DATA; Schema: public; Owner: tsmyadmin',
+        '--',
+        '',
         'COPY public.imp_copy (id, note) FROM stdin;',
         "1\tit's\\ta",
         '2\t\\N',
         '3\tline\\nbreak',
         '\\.',
+        '',
+        'COPY public.imp_empty (id) FROM stdin;',
+        '\\.',
+        '',
+        'COPY public.imp_blank (note) FROM stdin;',
+        '',
+        '\\.',
+        '',
+        '--',
+        '-- Name: imp_copy_seq; Type: SEQUENCE SET',
+        '--',
+        '',
         "SELECT pg_catalog.setval('public.imp_copy_seq', 3, true);",
         '\\unrestrict abc123',
         '',
@@ -394,19 +419,22 @@ describe.each(targets)('API integration ($dialect)', ({ dialect, url }) => {
       expect(r.status).toBe(200)
       expect(r.last?.type).toBe('result')
       if (r.last?.type !== 'result' || r.last.result.format !== 'sql') throw new Error('no result')
-      // The setval fails (no such sequence): everything else, COPY included, went through.
-      expect(r.last.result).toMatchObject({ total: 4, statements: 4, succeeded: 3, failed: 1 })
-      expect(r.last.result.errors[0]).toMatchObject({ line: 12, index: 3 })
-      const rows = BrowseResultSchema.parse(
-        await (await req('/api/databases/tsmyadmin_other/tables/imp_copy/rows')).json()
-      )
-      expect(rows.rows).toEqual([
+      // The setval fails (no such sequence): everything else, COPY included, went through. Its line is the
+      // statement's own, not the comment block above it.
+      expect(r.last.result).toMatchObject({ total: 8, statements: 8, succeeded: 7, failed: 1 })
+      expect(r.last.result.errors[0]).toMatchObject({ line: 36, index: 7 })
+      const rowsOf = async (table: string) =>
+        BrowseResultSchema.parse(await (await req(`/api/databases/tsmyadmin_other/tables/${table}/rows`)).json()).rows
+      expect(await rowsOf('imp_copy')).toEqual([
         [1, "it's\ta"],
         [2, null],
         [3, 'line\nbreak'],
       ])
+      expect(await rowsOf('imp_empty')).toEqual([])
+      // One empty-string row (a key-less table also carries its ctid).
+      expect((await rowsOf('imp_blank')).map((r) => r[0])).toEqual([''])
     } finally {
-      await other('DROP TABLE IF EXISTS imp_copy')
+      await other('DROP TABLE IF EXISTS imp_copy; DROP TABLE IF EXISTS imp_empty; DROP TABLE IF EXISTS imp_blank')
     }
   })
 

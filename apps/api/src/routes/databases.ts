@@ -154,7 +154,7 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
           return c.json(apiError('VALIDATION', 'CSV export needs exactly one table'), 400)
         }
         const baseName = requested.length === 1 ? `${namespace.database}_${requested[0]}` : namespace.database
-        const file = buildExport(adapter, namespace, tables, q, baseName, requested.length === 0)
+        const file = buildExport(adapter, namespace, tables, q, baseName, requested.length === 0, all)
         // Streamed so a large table is never held in memory. A failure mid-stream errors the response body
         // (the browser reports a failed download) instead of ending it normally, which would make a
         // truncated file look complete.
@@ -192,7 +192,7 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
           const namespace = ns(c.req.param('db'), form.schema)
           // The run streams NDJSON (progress, then the result): a long import shows where it is, and a client that
           // goes away cancels the statement instead of leaving it to run to the end on an abandoned connection.
-          const queryId = crypto.randomUUID()
+          const queryId = form.queryId ?? crypto.randomUUID()
           const encoder = new TextEncoder()
           let closed = false
           const stream = new ReadableStream<Uint8Array>({

@@ -1,9 +1,12 @@
 import type { DatabaseAdapter, DropTarget, ProgramStatement } from '@tsmyadmin/adapter'
-import { AdapterError, commentText, isGeneratedColumn, splitStatements } from '@tsmyadmin/adapter'
+import { AdapterError, commentText, isGeneratedColumn, quoteTable, splitStatements } from '@tsmyadmin/adapter'
 import type { ExportQuery, Namespace, ObjectDependency, TableInfo } from '@tsmyadmin/shared'
 import { csvField, EXPORT_BATCH_SIZE } from '@tsmyadmin/shared'
 
 export const DUMP_COMPLETE_MARKER = '-- tsmyadmin dump complete'
+/** The parts of a PostgreSQL sequence's definition that are not structure (see showCreateTable). */
+const SEQUENCE_OWNER = /^ALTER SEQUENCE .* OWNED BY /
+const SEQUENCE_VALUE = /^SELECT pg_catalog\.setval\(/
 const FK_STATEMENT = /^ALTER TABLE .* ADD CONSTRAINT .* FOREIGN KEY/i
 const ITER_OPTS = { batchSize: EXPORT_BATCH_SIZE }
 
@@ -240,7 +243,8 @@ async function* sqlBody(
   ns: Namespace,
   tables: string[],
   q: ExportQuery,
-  everything: boolean
+  everything: boolean,
+  listing?: TableInfo[]
 ): AsyncIterable<string> {
   yield [
     '-- tsmyadmin SQL dump',
@@ -253,13 +257,18 @@ async function* sqlBody(
     '',
   ].join('\n')
   const deferred: string[] = []
+  // `ALTER SEQUENCE … OWNED BY table.column`: needs the table, so it follows the tables like the foreign keys.
+  const ownership: string[] = []
   const pg = adapter.dialect === 'postgres'
   const structure = q.structure === '1'
   const drops = structure && q.dropTable === '1'
   // One listing gives every kind and inheritance parent; each table is described right before it is written, so
   // a database with thousands of tables starts streaming at once instead of after a full catalog pass.
-  const listed = new Map((await adapter.listTables(ns)).map((t) => [t.name, t]))
+  const listed = new Map((listing ?? (await adapter.listTables(ns))).map((t) => [t.name, t]))
   const infos = new Map(tables.flatMap((t) => (listed.has(t) ? [[t, listed.get(t) as TableInfo] as const] : [])))
+  // A table dropped since the request was checked must abort the transfer, not vanish from a "complete" dump.
+  const gone = tables.filter((t) => !infos.has(t))
+  if (gone.length > 0) throw new AdapterError('NOT_FOUND', `Table not found: ${gone.join(', ')}`)
   // An inheritance child is created after its parents (multi-level: depth-first over the parents in the dump).
   const tableOrder: string[] = []
   const placed = new Set<string>()
@@ -302,6 +311,9 @@ async function* sqlBody(
       throw err
     }
     const statements = created.map((stmt) => (q.stripDefiner === '1' ? adapter.exporter.withoutDefiner(stmt) : stmt))
+    // Like pg_dump: a materialized view is created empty and refreshed once its sources hold their rows (below),
+    // so a structure-only dump followed by a data-only one does not leave it stale.
+    if (info.kind === 'materialized_view' && pg && statements[0]) statements[0] = `${statements[0]}\nWITH NO DATA`
     const all = drops && !pg ? [adapter.exporter.dropIfExists(ns, info), ...statements] : statements
     late.push({
       kind: 'view',
@@ -325,23 +337,31 @@ async function* sqlBody(
       return { kind: infos.get(o.name)?.kind === 'materialized_view' ? 'materialized_view' : 'view', name: o.name }
     })
     for (const t of infos.values()) if (t.kind === 'table') targets.push({ kind: 'table', name: t.name })
+    // Sequences last: a table default depends on its sequence (an owned one already went with its table).
+    for (const t of infos.values()) if (t.kind === 'sequence') targets.push({ kind: 'sequence', name: t.name })
     const statements = adapter.exporter.dropAll(ns, targets)
     // One transaction: a DROP refused because of an object outside the dump leaves nothing half-dropped.
     if (statements.length > 0)
       yield `${section('Drop')}BEGIN;\n${statements.map((stmt) => `${stmt};\n`).join('')}COMMIT;\n\n`
   }
-  // A MariaDB sequence is created before the tables whose defaults call nextval() on it.
+  // A sequence is created before the tables whose defaults call nextval() on it. PostgreSQL adds the OWNED BY link
+  // (after the table exists, with the foreign keys) and the current position (data, like pg_dump's SEQUENCE SET).
   for (const [table, info] of infos) {
-    if (info.kind !== 'sequence' || !structure) continue
-    const schema = await adapter.describeTable(ns, table)
-    yield section(`Sequence: ${commentText(table)}`)
-    if (drops) yield `${adapter.exporter.dropIfExists(ns, schema)};\n`
-    for (const stmt of await adapter.showCreateTable(ns, table, schema)) yield `${stmt};\n\n`
+    if (info.kind !== 'sequence') continue
+    const statements = await adapter.showCreateTable(ns, table)
+    const definition = statements.filter((s) => !SEQUENCE_OWNER.test(s) && !SEQUENCE_VALUE.test(s))
+    if (structure) {
+      yield section(`Sequence: ${commentText(table)}`)
+      if (drops && !pg) yield `${adapter.exporter.dropIfExists(ns, info)};\n`
+      for (const stmt of definition) yield `${stmt};\n\n`
+      ownership.push(...statements.filter((s) => SEQUENCE_OWNER.test(s)))
+    }
+    if (q.data === '1') for (const stmt of statements.filter((s) => SEQUENCE_VALUE.test(s))) yield `${stmt};\n\n`
   }
   if (routines) yield routinesBody(adapter, routines)
   for (const table of tableOrder) {
     if (infos.get(table)?.kind !== 'table') continue
-    // One catalog round trip per table, shared by the DDL reconstruction and the row scan.
+    // Described only now (columns, keys, constraints), shared by the DDL reconstruction and the row scan.
     const schema = await adapter.describeTable(ns, table)
     yield section(`Table: ${commentText(table)}`)
     if (structure) {
@@ -375,7 +395,17 @@ async function* sqlBody(
     yield section('Foreign keys')
     for (const stmt of deferred) yield `${stmt};\n\n`
   }
+  if (ownership.length > 0) {
+    yield section('Sequence ownership')
+    for (const stmt of ownership) yield `${stmt};\n\n`
+  }
   for (const o of ordered) yield o.text
+  const refresh = q.data === '1' ? ordered.filter((o) => infos.get(o.name)?.kind === 'materialized_view') : []
+  if (refresh.length > 0) {
+    yield section('Materialized view data')
+    for (const o of refresh) yield `REFRESH MATERIALIZED VIEW ${quoteTable(adapter.dialect, ns, o.name)};\n`
+    yield '\n'
+  }
   if (unreadableViews.length > 0) {
     yield section('Views')
     for (const v of unreadableViews) yield `-- skipped (definition not readable): view ${commentText(v)}\n`
@@ -385,7 +415,7 @@ async function* sqlBody(
   const postamble = adapter.exporter.postamble()
   if (postamble.length > 0) yield `${postamble.join('\n')}\n\n`
   // Terminal marker: a dump that lacks this line was cut short (the transfer is also aborted on errors).
-  yield `${DUMP_COMPLETE_MARKER} (${tables.length} table${tables.length === 1 ? '' : 's'})\n`
+  yield `${DUMP_COMPLETE_MARKER} (${infos.size} object${infos.size === 1 ? '' : 's'})\n`
 }
 
 /** Response body for a chunk stream. A failing chunk errors the stream (the client sees a failed transfer). */
@@ -424,7 +454,9 @@ export function buildExport(
   q: ExportQuery,
   baseName: string = ns.database,
   /** True for a whole-namespace dump (routines and events included); false when tables were named. */
-  everything = true
+  everything = true,
+  /** The namespace's listing when the caller already has it (saves the catalog pass a second time). */
+  listing?: TableInfo[]
 ): ExportFile {
   if (q.format === 'csv') {
     const table = tables[0]
@@ -443,7 +475,7 @@ export function buildExport(
     }
   }
   return {
-    body: sqlBody(adapter, ns, tables, q, everything),
+    body: sqlBody(adapter, ns, tables, q, everything, listing),
     contentType: 'application/sql; charset=utf-8',
     filename: `${baseName}.sql`,
   }

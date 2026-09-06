@@ -17,9 +17,13 @@ export interface PaginationProps {
 export function Pagination({ page, limit, total, count = 'exact', shown, onChange }: PaginationProps) {
   const from = shown === 0 ? 0 : (page - 1) * limit + 1
   const to = (page - 1) * limit + shown
-  // A floor says nothing about where the rows end: page forward while pages come back full.
+  // A floor says nothing about where the rows end: page forward while pages come back full. A catalog estimate
+  // may undercount, so a full page keeps 次へ open past its computed last page too.
   const lastPage = total === null || count === 'lower_bound' ? null : Math.max(1, Math.ceil(total / limit))
-  const hasNext = lastPage === null ? shown === limit : page < lastPage
+  const hasNext =
+    lastPage === null || count === 'estimate'
+      ? shown === limit || (lastPage !== null && page < lastPage)
+      : page < lastPage
   return (
     <nav aria-label={locale.tabs.browse} className="flex flex-wrap items-center gap-2 text-sm">
       <span className="text-zinc-600 dark:text-zinc-300">
@@ -34,8 +38,7 @@ export function Pagination({ page, limit, total, count = 'exact', shown, onChang
           {locale.browse.prev}
         </Button>
         <span className="px-2 tabular-nums" aria-current="page">
-          {page}
-          {lastPage === null ? '' : ` / ${lastPage}`}
+          {locale.browse.pageLabel(page, lastPage)}
         </span>
         <Button size="sm" onClick={() => onChange({ page: page + 1 })} disabled={!hasNext}>
           {locale.browse.next}

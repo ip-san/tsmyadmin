@@ -10,7 +10,7 @@ describe('Pagination', () => {
     expect(screen.getByText(/1–50 行目/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '前へ' })).toBeDisabled()
     expect(screen.getByRole('button', { name: '次へ' })).toBeEnabled()
-    expect(screen.getByText('1 / 3')).toBeInTheDocument()
+    expect(screen.getByText('ページ 1 / 3')).toBeInTheDocument()
   })
 
   it('emits page and limit changes (limit resets to page 1)', async () => {

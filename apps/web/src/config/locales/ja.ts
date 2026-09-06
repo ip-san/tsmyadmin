@@ -52,6 +52,7 @@ export const ja = {
     reload: '再読み込み',
     showMore: (n: number) => `全文を表示（${n.toLocaleString('ja-JP')} 文字）`,
     showLess: '折りたたむ',
+    showHead: (n: number) => `先頭 ${n.toLocaleString('ja-JP')} 文字を表示`,
     backHome: 'トップへ戻る',
   },
   errorPage: {
@@ -64,7 +65,8 @@ export const ja = {
     title: 'サーバーに接続',
     preset: '接続先',
     presetManual: '手動で入力',
-    presetHint: '管理者が用意した接続先です。ユーザー名とパスワードを入力してください。',
+    presetHint:
+      '管理者が用意した接続先です。ユーザー名とパスワードを入力してください（MySQL ではデータベース名を変えることもできます）。',
     dialect: 'サーバー種別',
     mysql: 'MySQL / MariaDB',
     postgres: 'PostgreSQL',
@@ -166,6 +168,10 @@ export const ja = {
             : `全 ${n.toLocaleString('ja-JP')} 行`,
     range: (from: number, to: number) => `${from.toLocaleString('ja-JP')}–${to.toLocaleString('ja-JP')} 行目`,
     perPage: '表示行数',
+    pageLabel: (page: number, last: number | null) =>
+      last === null
+        ? `ページ ${page.toLocaleString('ja-JP')}`
+        : `ページ ${page.toLocaleString('ja-JP')} / ${last.toLocaleString('ja-JP')}`,
     prev: '前へ',
     next: '次へ',
     first: '最初のページ',
@@ -209,6 +215,9 @@ export const ja = {
     useDefault: '既定値を使う',
     setNull: 'NULL',
     binaryReadOnly: 'バイナリ値や表示上限を超える長いテキストはここでは編集できません（SQL で更新してください）。',
+    opaqueNotCopied: 'バイナリ値や表示上限を超える長いテキストは複製されません。',
+    notAddressable:
+      'バイナリ値や表示上限を超える長いテキストを含むため、この行を一意に特定できません（SQL で操作してください）',
     insert: '挿入する',
     save: '保存する',
     inserted: (n: number) => `${n.toLocaleString('ja-JP')} 行を挿入しました`,
@@ -272,6 +281,8 @@ export const ja = {
     downloadCsv: 'CSV',
     downloadJson: 'JSON',
     downloadResult: (n: number) => `文 ${n} の結果をダウンロード`,
+    downloadTruncated:
+      '表示上限を超える長いテキストを含むためダウンロードできません（エクスポートタブをご利用ください）',
     saved: '保存済みクエリ',
     noSaved: '保存済みクエリはありません',
     saveQuery: 'このクエリを保存',
@@ -425,7 +436,9 @@ export const ja = {
     csvSingle: 'CSV は 1 テーブルずつエクスポートします。',
     nothing: 'エクスポートする対象がありません',
     selectionTooLong:
-      '選択したテーブルが多すぎて URL に収まりません。すべてのテーブルを選ぶか、選択を減らしてください。',
+      '選択したテーブルが多すぎて URL に収まりません。選択をすべて解除するとデータベース全体をエクスポートできます。',
+    selectAll: 'すべて選択',
+    selectNone: '選択を解除',
     snapshotNote: '書き込み中のテーブルでは一貫したスナップショットにならないことがあります。',
   },
   import: {
@@ -444,6 +457,9 @@ export const ja = {
     submit: 'インポートする',
     running: 'インポート中…',
     cancel: '中止',
+    cancelling: '中止しています…',
+    cancelled:
+      '中止しました。それまでに実行された文の結果は次のとおりです（トランザクション内の文は取り消されています）。',
     progress: (done: number, total: number) =>
       `${done.toLocaleString('ja-JP')} / ${total.toLocaleString('ja-JP')} 文を実行しました`,
     sqlResult: (ok: number, failed: number, ms: number) =>
@@ -458,12 +474,14 @@ export const ja = {
       ROLLED_BACK:
         'スクリプトが開いたままのトランザクションを取り消しました（成功として数えた文の一部は反映されていません）',
       ALL_ROLLED_BACK: 'エラーのため、ファイル全体を取り消しました（何も反映されていません）',
+      PARTIALLY_ROLLED_BACK:
+        'エラーのため、最後のコミット以降の文を取り消しました。スクリプト自身の COMMIT や（MySQL では）CREATE / DROP / ALTER などが途中でコミットしているため、それ以前の文は反映されています',
     },
     errorAt: (line: number, index: number) =>
       `${line.toLocaleString('ja-JP')} 行目（文 #${(index + 1).toLocaleString('ja-JP')}）`,
     notes: {
-      sql: 'UTF-8 のテキストのみ。mysqldump は --hex-blob 付きで出力してください。pg_dump は通常形式（COPY）と --inserts のどちらも取り込めます。CSV は全行を 1 つのトランザクションで取り込み、途中でエラーになるとファイル全体を取り消します。実行中に画面を閉じると中止されます',
-      csv: '空欄は空文字列、「NULL を表す値」に一致する引用符なしの値だけが NULL になります。ヘッダーのカラム名は大文字小文字を区別せずに照合します',
+      sql: 'UTF-8 のテキストのみ。mysqldump は --hex-blob 付きで出力してください。pg_dump は通常形式（COPY）と --inserts のどちらも取り込めます。MySQL では CREATE / DROP / ALTER などが暗黙にコミットするため、「1 つのトランザクションで実行する」でもそれ以前の文は取り消されません。実行中に画面を閉じると中止されます',
+      csv: 'UTF-8 のテキストのみ。全行を 1 つのトランザクションで取り込み、途中でエラーになるとファイル全体を取り消します（実行中の中止はできません）。空欄は空文字列、「NULL を表す値」に一致する引用符なしの値だけが NULL になります。ヘッダーのカラム名は大文字小文字を区別せずに照合します',
     },
     errors: 'エラー',
     csvNeedsTable: 'CSV の取り込み先テーブルを選択してください',
@@ -539,6 +557,8 @@ export const ja = {
     kill: '強制終了',
     killExecute: '強制終了する',
     killConfirm: (id: string) => `プロセス ${id} を強制終了します。よろしいですか？`,
+    killSelfWarning:
+      'これは tsmyadmin 自身の接続です。終了すると進行中の操作が失敗することがあります（接続は自動的に張り直されます）。',
     selfConnection: 'このツール',
     selfConnectionHint: 'tsmyadmin 自身の接続（自分のセッションを含む）',
     killed: (id: string) => `プロセス ${id} を強制終了しました`,
@@ -605,6 +625,10 @@ export const ja = {
     CSV_EMPTY: () => 'CSV ファイルが空です',
     CSV_UNKNOWN_COLUMNS: (p: Record<string, string | number>) =>
       `ヘッダーにテーブルにないカラムがあります: ${p.columns ?? ''}`,
+    CSV_AMBIGUOUS_COLUMNS: (p: Record<string, string | number>) =>
+      `ヘッダーのカラム名が大文字小文字だけ異なる複数のカラムに一致します（テーブルどおりの表記にしてください）: ${p.columns ?? ''}`,
+    CSV_DUPLICATE_COLUMNS: (p: Record<string, string | number>) =>
+      `ヘッダーに同じカラムが 2 回あります: ${p.columns ?? ''}`,
     CSV_NO_COLUMNS: () => '取り込むカラムがありません',
     CSV_FIELD_COUNT: (p: Record<string, string | number>) =>
       `${p.line ?? '?'} 行目のフィールド数（${p.fields ?? '?'}）がカラム数（${p.columns ?? '?'}）を超えています`,
@@ -614,6 +638,8 @@ export const ja = {
       `${p.line ?? '?'} 行目で開いた引用符が閉じていません（以降の行が 1 つのフィールドになるため取り込みを中止しました）`,
     CSV_ROW_FAILED: (p: Record<string, string | number>) =>
       `${p.line ?? '?'} 行目の取り込みに失敗しました（ファイル全体を取り消しました）: ${p.message ?? ''}`,
+    OPTION_FAILED: (p: Record<string, string | number>) =>
+      `オプション「${p.option === 'ignoreForeignKeys' ? '外部キー制約のチェックを無効にする' : '1 つのトランザクションで実行する'}」を適用できませんでした（PostgreSQL では外部キー検査の無効化にスーパーユーザー権限が必要です）: ${p.message ?? ''}`,
     IDENTIFIER_TOO_LONG: (p: Record<string, string | number>) =>
       `名前「${p.name ?? ''}」が長すぎます（最大 ${p.max ?? '?'} ${p.max === 63 ? 'バイト' : '文字'}）`,
     CSV_ROWS_FAILED: (p: Record<string, string | number>) =>
