@@ -97,6 +97,22 @@ describe('RowForm (edit)', () => {
     expect(screen.getByLabelText('body').tagName).toBe('TEXTAREA')
   })
 
+  it('duplicating a row sends what was typed into a column whose value could not be copied', async () => {
+    const onSubmit = vi.fn()
+    render(
+      <RowForm
+        columns={[col('name'), col('body', { dataType: 'text', nullable: false })]}
+        mode="insert"
+        initial={{ name: 'a', body: { $text: 'head', length: 70000 } }}
+        onSubmit={onSubmit}
+      />
+    )
+    expect(screen.getByText(/複製されません/)).toBeInTheDocument()
+    await userEvent.type(screen.getByLabelText('body'), 'typed')
+    await userEvent.click(screen.getByRole('button', { name: '挿入する' }))
+    expect(onSubmit).toHaveBeenCalledWith({ name: 'a', body: 'typed' })
+  })
+
   it('keeps binary and truncated values read-only', () => {
     render(
       <RowForm

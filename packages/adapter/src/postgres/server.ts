@@ -59,7 +59,7 @@ export async function pgListProcesses(conn: Conn): Promise<ProcessInfo[]> {
   const r = firstResult(
     await conn.query(
       `SELECT pid, usename, client_addr::text, datname, state, wait_event_type,
-              CASE WHEN state = 'active' THEN EXTRACT(EPOCH FROM (now() - query_start))::bigint END, query,
+              CASE WHEN state = 'active' THEN EXTRACT(EPOCH FROM (now() - query_start))::bigint END, left(query, 65536),
               application_name = 'tsmyadmin'
        FROM pg_stat_activity WHERE backend_type = 'client backend' ORDER BY pid`
     )

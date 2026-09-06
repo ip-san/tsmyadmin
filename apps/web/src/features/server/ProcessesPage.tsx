@@ -137,7 +137,7 @@ export function ProcessesPage() {
             <dt className="text-zinc-500 dark:text-zinc-400">{locale.server.database}</dt>
             <dd>{victim.database ?? '–'}</dd>
             <dt className="text-zinc-500 dark:text-zinc-400">{locale.server.query}</dt>
-            <dd className="truncate font-mono">{victim.query?.split('\n')[0]?.slice(0, 200) ?? '–'}</dd>
+            <dd className="truncate font-mono">{victim.query?.replace(/\s+/g, ' ').trim().slice(0, 200) || '–'}</dd>
           </dl>
         ) : null}
         {kill.isError ? <ErrorBox error={kill.error} className="mt-2" /> : null}

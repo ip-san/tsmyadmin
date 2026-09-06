@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Field, Input, Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
+import { cn } from '@/lib/cn.ts'
 import { runImport } from '@/lib/import-stream.ts'
 import { mutations, tablesQuery } from '@/lib/queries.ts'
 
@@ -42,6 +43,8 @@ export function ImportForm({ db, schema, table }: ImportFormProps) {
   const abort = useRef<AbortController | null>(null)
   const queryId = useRef<string | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
+  // The submit / cancel buttons disable or unmount while focused: focus lands on the summary once the run ends.
+  const summary = useRef<HTMLOutputElement>(null)
   useEffect(() => () => abort.current?.abort(), [])
   const cancel = useMutation({ mutationFn: (id: string) => mutations.cancelSql(db, id) })
 
@@ -50,7 +53,6 @@ export function ImportForm({ db, schema, table }: ImportFormProps) {
       const controller = new AbortController()
       abort.current = controller
       queryId.current = crypto.randomUUID()
-      cancel.reset()
       setProgress(null)
       return runImport(
         db,
@@ -71,6 +73,7 @@ export function ImportForm({ db, schema, table }: ImportFormProps) {
         controller.signal
       )
     },
+    onMutate: () => cancel.reset(),
     onSuccess: async (r) => {
       setResult(r)
       // The file is consumed: a second click must not import it again (the summary stays on screen).
@@ -81,6 +84,7 @@ export function ImportForm({ db, schema, table }: ImportFormProps) {
     onSettled: () => {
       abort.current = null
       setProgress(null)
+      summary.current?.focus()
     },
   })
 
@@ -93,6 +97,7 @@ export function ImportForm({ db, schema, table }: ImportFormProps) {
     // A fresh file must not sit under the previous run's summary.
     setResult(null)
     run.reset()
+    cancel.reset()
     const detected = f ? detectFormat(f.name) : null
     if (detected) setFormat(detected)
   }
@@ -246,8 +251,14 @@ export function ImportForm({ db, schema, table }: ImportFormProps) {
           </span>
         ) : null}
       </div>
-      {run.isError ? <ErrorBox error={run.error} /> : null}
-      <output aria-live="polite" className={result || cancelled ? 'block' : 'sr-only'}>
+      {cancel.isError ? <ErrorBox error={cancel.error} /> : null}
+      <output
+        ref={summary}
+        tabIndex={-1}
+        aria-live="polite"
+        className={cn('outline-none', result || cancelled || run.isError ? 'block' : 'sr-only')}
+      >
+        {run.isError ? <ErrorBox error={run.error} /> : null}
         {cancelled ? <Notice>{locale.import.cancelled}</Notice> : null}
         {result ? <ImportSummary result={result} db={db} schema={schema} /> : null}
       </output>

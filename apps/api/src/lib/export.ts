@@ -266,9 +266,15 @@ async function* sqlBody(
   // a database with thousands of tables starts streaming at once instead of after a full catalog pass.
   const listed = new Map((listing ?? (await adapter.listTables(ns))).map((t) => [t.name, t]))
   const infos = new Map(tables.flatMap((t) => (listed.has(t) ? [[t, listed.get(t) as TableInfo] as const] : [])))
-  // A table dropped since the request was checked must abort the transfer, not vanish from a "complete" dump.
+  // A table missing from the listing (dropped between two catalog reads) must abort the transfer, not vanish from
+  // a "complete" dump.
   const gone = tables.filter((t) => !infos.has(t))
   if (gone.length > 0) throw new AdapterError('NOT_FOUND', `Table not found: ${gone.join(', ')}`)
+  // A sequence OWNED BY a column of a dumped table belongs to that table (pg_dump -t includes it too): the column's
+  // default names it, and dropping the table drops it, so a subset dump that left it out could not restore.
+  for (const t of listed.values())
+    if (t.kind === 'sequence' && t.ownedBy && infos.get(t.ownedBy.table)?.kind === 'table' && !infos.has(t.name))
+      infos.set(t.name, t)
   // An inheritance child is created after its parents (multi-level: depth-first over the parents in the dump).
   const tableOrder: string[] = []
   const placed = new Set<string>()
@@ -298,7 +304,12 @@ async function* sqlBody(
   const late: LateObject[] = []
   const unreadableViews: string[] = []
   for (const [table, info] of infos) {
-    if (info.kind === 'table' || info.kind === 'sequence' || !structure) continue
+    if (info.kind === 'table' || info.kind === 'sequence') continue
+    // A data-only dump still refreshes its materialized views, in dependency order: listed without text.
+    if (!structure) {
+      if (info.kind === 'materialized_view') late.push({ kind: 'view', name: table, statements: [], text: '' })
+      continue
+    }
     let created: string[]
     try {
       created = await adapter.showCreateTable(ns, table)
@@ -345,7 +356,9 @@ async function* sqlBody(
       yield `${section('Drop')}BEGIN;\n${statements.map((stmt) => `${stmt};\n`).join('')}COMMIT;\n\n`
   }
   // A sequence is created before the tables whose defaults call nextval() on it. PostgreSQL adds the OWNED BY link
-  // (after the table exists, with the foreign keys) and the current position (data, like pg_dump's SEQUENCE SET).
+  // (after the table exists, with the foreign keys) and the current position — after the table data, like
+  // pg_dump's SEQUENCE SET, so the source's exact position wins over the per-table advance.
+  const positions: string[] = []
   for (const [table, info] of infos) {
     if (info.kind !== 'sequence') continue
     const statements = await adapter.showCreateTable(ns, table)
@@ -356,7 +369,7 @@ async function* sqlBody(
       for (const stmt of definition) yield `${stmt};\n\n`
       ownership.push(...statements.filter((s) => SEQUENCE_OWNER.test(s)))
     }
-    if (q.data === '1') for (const stmt of statements.filter((s) => SEQUENCE_VALUE.test(s))) yield `${stmt};\n\n`
+    if (q.data === '1') positions.push(...statements.filter((s) => SEQUENCE_VALUE.test(s)))
   }
   if (routines) yield routinesBody(adapter, routines)
   for (const table of tableOrder) {
@@ -394,6 +407,10 @@ async function* sqlBody(
   if (deferred.length > 0) {
     yield section('Foreign keys')
     for (const stmt of deferred) yield `${stmt};\n\n`
+  }
+  if (positions.length > 0) {
+    yield section('Sequence values')
+    for (const stmt of positions) yield `${stmt};\n\n`
   }
   if (ownership.length > 0) {
     yield section('Sequence ownership')

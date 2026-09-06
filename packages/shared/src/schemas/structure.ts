@@ -27,6 +27,8 @@ export const TableInfoSchema = z.object({
   sizeBytes: z.number().nullable(),
   /** Inheritance parents in the same schema (PostgreSQL); [] elsewhere. Lets a dump order tables without describing each. */
   inherits: z.array(z.string()).default([]),
+  /** For a PostgreSQL sequence OWNED BY a column: that column (the sequence goes wherever the table goes). */
+  ownedBy: z.object({ table: z.string(), column: z.string() }).optional(),
 })
 export type TableInfo = z.infer<typeof TableInfoSchema>
 

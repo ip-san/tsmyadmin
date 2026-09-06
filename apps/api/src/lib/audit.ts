@@ -58,7 +58,8 @@ export function summarise(method: AuditedMethod, args: unknown[]): Record<string
     case 'insertRow':
       return { ...base, table: args[1], rows: 1, columns: Object.keys((args[2] as Record<string, unknown>) ?? {}) }
     case 'insertRows':
-      return { ...base, table: args[1], rows: (args[3] as unknown[])?.length ?? 0, columns: args[2] }
+      // The rows may be a generator (CSV import): only an array has a count up front; the outcome carries it.
+      return { ...base, table: args[1], ...(Array.isArray(args[3]) ? { rows: args[3].length } : {}), columns: args[2] }
     case 'updateRow':
       return {
         ...base,
@@ -105,7 +106,7 @@ const literal = (n: number) =>
  * PASSWORD 'x', and MySQL 8 `REPLACE '<current password>'` (REPLACE INTO / REPLACE( never precede a bare literal).
  */
 const SQL_SECRET = new RegExp(
-  String.raw`\b(IDENTIFIED(?:\s+WITH\s+\S+)?\s+(?:BY|AS)|IDENTIFIED\s+VIA\s+\S+\s+USING|(?:\w+_)?PASSWORD|REPLACE)(\s*[=(]?\s*)(?:${literal(3)}|0x[0-9A-Fa-f]+)`,
+  String.raw`\b(IDENTIFIED(?:\s+WITH\s+\S+)?\s+(?:BY|AS)|IDENTIFIED\s+VIA\s+\S+\s+USING|(?:\w+_)?PASSWORD|REPLACE)(\s*(?:[=(]\s*)?)(?:${literal(3)}|0x[0-9A-Fa-f]+)`,
   'gi'
 )
 /** `password=secret` inside a connection string (CREATE SUBSCRIPTION … CONNECTION, dblink, postgres_fdw options). */
@@ -129,27 +130,53 @@ const QUOTED_SPAN = /['"$][\s\S]*['"$]/
  * `PASSWORD` and its literal, would otherwise defeat the patterns below). The summary is for reading, not for
  * replay, so losing comments is fine.
  */
+/** End index (exclusive) of the string literal / quoted identifier / dollar-quoted block starting at `i`, or -1. */
+function literalEnd(sql: string, i: number): number {
+  const ch = sql[i] as string
+  if (ch === "'" || ch === '"' || ch === '`') {
+    let j = i + 1
+    while (j < sql.length) {
+      if (sql[j] === '\\' && ch !== '`') j += 2
+      else if (sql[j] === ch && sql[j + 1] === ch) j += 2
+      else if (sql[j] === ch) break
+      else j++
+    }
+    return j + 1
+  }
+  if (ch === '$' && /^\$[A-Za-z_]*\$/.test(sql.slice(i))) {
+    const tag = /^\$[A-Za-z_]*\$/.exec(sql.slice(i))?.[0] ?? '$$'
+    const end = sql.indexOf(tag, i + tag.length)
+    return end < 0 ? sql.length : end + tag.length
+  }
+  return -1
+}
+
+/** Splits at top-level `;` only: a `;` inside a literal (a password, a dollar-quoted body) never starts a part. */
+function topLevelParts(sql: string): string[] {
+  const parts: string[] = []
+  let start = 0
+  let i = 0
+  while (i < sql.length) {
+    const end = literalEnd(sql, i)
+    if (end >= 0) i = end
+    else if (sql[i] === ';') {
+      parts.push(sql.slice(start, i), ';')
+      start = ++i
+    } else i++
+  }
+  parts.push(sql.slice(start))
+  return parts
+}
+
 function withoutComments(sql: string): string {
   let out = ''
   let i = 0
   while (i < sql.length) {
     const ch = sql[i] as string
-    if (ch === "'" || ch === '"' || ch === '`') {
-      let j = i + 1
-      while (j < sql.length) {
-        if (sql[j] === '\\' && ch !== '`') j += 2
-        else if (sql[j] === ch && sql[j + 1] === ch) j += 2
-        else if (sql[j] === ch) break
-        else j++
-      }
-      out += sql.slice(i, j + 1)
-      i = j + 1
-    } else if (ch === '$' && /^\$[A-Za-z_]*\$/.test(sql.slice(i))) {
-      const tag = /^\$[A-Za-z_]*\$/.exec(sql.slice(i))?.[0] ?? '$$'
-      const end = sql.indexOf(tag, i + tag.length)
-      const stop = end < 0 ? sql.length : end + tag.length
-      out += sql.slice(i, stop)
-      i = stop
+    const end = literalEnd(sql, i)
+    if (end >= 0) {
+      out += sql.slice(i, end)
+      i = end
     } else if (ch === '/' && sql[i + 1] === '*') {
       const end = sql.indexOf('*/', i + 2)
       i = end < 0 ? sql.length : end + 2
@@ -170,16 +197,18 @@ function redactSqlSecrets(sql: string): string {
     .replace(SQL_SECRET, (_m, kw: string, sep: string) => `${kw}${sep}'${PASSWORD_MASK}'`)
     .replace(SET_PASSWORD, (_m, head: string) => `${head}'${PASSWORD_MASK}'`)
     .replace(CONNECTION_PASSWORD, (_m, head: string) => `${head}${PASSWORD_MASK}`)
-  // Statement by statement: after the credential keyword no literal survives.
-  return plain
-    .split(/(;)/)
+  // Statement by statement: after the credential keyword no literal survives — not even an unterminated one
+  // (a typo that still reaches the audit log).
+  return topLevelParts(plain)
     .map((part) => {
       const m = CREDENTIAL_PART.exec(part)
       if (!m) return part
       const tail = m[2] ?? ''
       const masked = QUOTED_SPAN.test(tail)
         ? tail.replace(QUOTED_SPAN, `'${PASSWORD_MASK}'`)
-        : tail.replace(ANY_LITERAL, (lit) => (lit.includes(PASSWORD_MASK) ? lit : `'${PASSWORD_MASK}'`))
+        : /['"$]/.test(tail)
+          ? tail.replace(/['"$][\s\S]*$/, `'${PASSWORD_MASK}'`)
+          : tail.replace(ANY_LITERAL, (lit) => (lit.includes(PASSWORD_MASK) ? lit : `'${PASSWORD_MASK}'`))
       return `${m[1]}${masked}`
     })
     .join('')
@@ -223,7 +252,9 @@ export function withAudit(adapter: DatabaseAdapter, who: SessionInfo, logger: Lo
           const outcome =
             method === 'executeSql' && Array.isArray(result)
               ? { statements: result.length, errors: result.filter((r) => r?.kind === 'error').length }
-              : {}
+              : method === 'insertRows' && result && typeof result === 'object' && 'affectedRows' in result
+                ? { rows: (result as { affectedRows: number }).affectedRows }
+                : {}
           logger.log('info', 'audit', { ...fields, ...outcome, ok: true, ms: Math.round(performance.now() - started) })
           return result
         } catch (err) {

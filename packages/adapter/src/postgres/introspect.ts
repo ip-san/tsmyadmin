@@ -58,9 +58,16 @@ export async function pgListTables(conn: Conn, ns: Namespace): Promise<TableInfo
               obj_description(c.oid, 'pg_class'),
               CASE WHEN c.relkind IN ('r', 'p', 'm') THEN pg_total_relation_size(c.oid) END,
               (SELECT string_agg(p.relname, $2 ORDER BY i.inhseqno) FROM pg_inherits i JOIN pg_class p ON p.oid = i.inhparent
-                 WHERE i.inhrelid = c.oid AND p.relnamespace = c.relnamespace)
+                 WHERE i.inhrelid = c.oid AND p.relnamespace = c.relnamespace),
+              own.relname, own.attname
        FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
        LEFT JOIN pg_stat_user_tables s ON s.relid = c.oid
+       LEFT JOIN LATERAL (SELECT o.relname, a.attname FROM pg_depend d
+                            JOIN pg_class o ON o.oid = d.refobjid
+                            JOIN pg_attribute a ON a.attrelid = o.oid AND a.attnum = d.refobjsubid
+                          WHERE c.relkind = 'S' AND d.objid = c.oid AND d.classid = 'pg_class'::regclass
+                            AND d.refclassid = 'pg_class'::regclass AND d.deptype = 'a' AND o.relnamespace = c.relnamespace
+                          LIMIT 1) own ON true
        WHERE n.nspname = $1 AND NOT c.relispartition
          AND (c.relkind IN ('r', 'p', 'v', 'm', 'f')
               OR (c.relkind = 'S' AND NOT EXISTS (${SERIAL_SEQUENCE_DEPENDENCY})))
@@ -80,6 +87,9 @@ export async function pgListTables(conn: Conn, ns: Namespace): Promise<TableInfo
       comment: strOrNull(row[3]),
       sizeBytes: row[4] === null || row[4] === undefined ? null : Number(row[4]),
       inherits: list(row[5]),
+      ...(typeof row[6] === 'string' && typeof row[7] === 'string'
+        ? { ownedBy: { table: row[6], column: row[7] } }
+        : {}),
     }
   })
 }

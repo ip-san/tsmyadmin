@@ -182,6 +182,12 @@ describe('buildExport ordering of views and routines', () => {
     ).toBe(true)
     const structureOnly = await collect(buildExport(a, ns, ['t', 'mv'], q({ format: 'sql', data: '0' })).body)
     expect(structureOnly).not.toContain('REFRESH MATERIALIZED VIEW')
+    // A data-only dump restores the rows and then refreshes: the view is not recreated, only refilled.
+    const dataOnly = await collect(buildExport(a, ns, ['t', 'mv'], q({ format: 'sql', structure: '0' })).body)
+    expect(dataOnly).not.toContain('CREATE MATERIALIZED VIEW')
+    expect(isAscending(order(dataOnly, 'INSERT INTO "public"."t"', 'REFRESH MATERIALIZED VIEW "public"."mv";'))).toBe(
+      true
+    )
   })
 
   it('mention fallback: a qualified column named like a view is not a reference (MariaDB normalised text)', async () => {

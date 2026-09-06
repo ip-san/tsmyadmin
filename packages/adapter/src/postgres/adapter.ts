@@ -499,7 +499,7 @@ export class PostgresAdapter extends BaseAdapter {
       await conn.query(
         `SELECT format_type(s.seqtypid, NULL), s.seqstart, s.seqincrement, s.seqmin, s.seqmax, s.seqcache, s.seqcycle,
                 own.relname, own.attname,
-                (SELECT last_value FROM ${t}), (SELECT is_called FROM ${t})
+                (SELECT last_value FROM ${t}), (SELECT is_called FROM ${t}), obj_description(s.seqrelid, 'pg_class')
          FROM pg_sequence s
          LEFT JOIN LATERAL (SELECT o.relname, a.attname FROM pg_depend d
                               JOIN pg_class o ON o.oid = d.refobjid
@@ -521,6 +521,7 @@ export class PostgresAdapter extends BaseAdapter {
     if (typeof row[7] === 'string' && typeof row[8] === 'string') {
       out.push(`ALTER SEQUENCE ${t} OWNED BY ${quoteTable('postgres', ns, row[7])}.${quoteIdent('postgres', row[8])}`)
     }
+    if (typeof row[11] === 'string' && row[11].length > 0) out.push(`COMMENT ON SEQUENCE ${t} IS ${pgLiteral(row[11])}`)
     out.push(
       `SELECT pg_catalog.setval(${pgLiteral(t)}, ${String(row[9] ?? '1')}, ${row[10] === true ? 'true' : 'false'})`
     )

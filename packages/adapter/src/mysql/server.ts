@@ -28,7 +28,7 @@ export async function mysqlListStatus(conn: Conn): Promise<KeyValue[]> {
   return pairs(firstResult(await conn.query('SHOW GLOBAL STATUS')).rows)
 }
 
-const PROCESSLIST = 'SELECT p.ID, p.USER, p.HOST, p.DB, p.COMMAND, p.TIME, p.STATE, p.INFO'
+const PROCESSLIST = 'SELECT p.ID, p.USER, p.HOST, p.DB, p.COMMAND, p.TIME, p.STATE, LEFT(p.INFO, 65536)'
 /** The tool's own connections announce themselves through a connection attribute (needs performance_schema). */
 const PROCESSLIST_WITH_SELF = `${PROCESSLIST}, a.ATTR_VALUE = 'tsmyadmin'
   FROM information_schema.PROCESSLIST p

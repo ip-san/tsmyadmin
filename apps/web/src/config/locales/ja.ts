@@ -168,10 +168,12 @@ export const ja = {
             : `全 ${n.toLocaleString('ja-JP')} 行`,
     range: (from: number, to: number) => `${from.toLocaleString('ja-JP')}–${to.toLocaleString('ja-JP')} 行目`,
     perPage: '表示行数',
-    pageLabel: (page: number, last: number | null) =>
+    pageLabel: (page: number, last: number | null, count: 'exact' | 'estimate' | 'lower_bound' = 'exact') =>
       last === null
         ? `ページ ${page.toLocaleString('ja-JP')}`
-        : `ページ ${page.toLocaleString('ja-JP')} / ${last.toLocaleString('ja-JP')}`,
+        : count === 'estimate'
+          ? `ページ ${page.toLocaleString('ja-JP')} / 約 ${last.toLocaleString('ja-JP')}`
+          : `ページ ${page.toLocaleString('ja-JP')} / ${last.toLocaleString('ja-JP')}`,
     prev: '前へ',
     next: '次へ',
     first: '最初のページ',
@@ -396,6 +398,8 @@ export const ja = {
     copyHint: 'インデックス・主キーはコピーされます。外部キーはコピーされません。',
     renameHint:
       'ビュー・外部キー・権限は参照先を自動では追従しない場合があります。PostgreSQL ではインデックスやシーケンスの名前は変わりません。',
+    renameSequenceHint:
+      'このシーケンスを既定値（nextval）で使う列は新しい名前を自動で参照します。権限は引き継がれます。',
     databaseName: 'データベース名',
     schemaName: 'スキーマ名',
     engineHint: 'InnoDB など（空欄は変更なし）。',
@@ -474,6 +478,7 @@ export const ja = {
       ROLLED_BACK:
         'スクリプトが開いたままのトランザクションを取り消しました（成功として数えた文の一部は反映されていません）',
       ALL_ROLLED_BACK: 'エラーのため、ファイル全体を取り消しました（何も反映されていません）',
+      CANCELLED: '中止したため、以降の文は実行されていません',
       PARTIALLY_ROLLED_BACK:
         'エラーのため、最後のコミット以降の文を取り消しました。スクリプト自身の COMMIT や（MySQL では）CREATE / DROP / ALTER などが途中でコミットしているため、それ以前の文は反映されています',
     },

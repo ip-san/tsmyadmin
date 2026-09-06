@@ -77,6 +77,14 @@ describe('splitStatements', () => {
     ])
   })
 
+  it('reads a CRLF COPY block without a phantom first row', () => {
+    const sql = 'COPY public.t (a) FROM stdin;\r\n1\r\n2\r\n\\.\r\nSELECT 1;\r\n'
+    expect(splitStatements(sql, 'postgres').map((s) => s.sql)).toEqual([
+      'COPY public.t (a) FROM stdin\n1\r\n2\r\n\\.',
+      'SELECT 1',
+    ])
+  })
+
   it('nests block comments on PostgreSQL only', () => {
     expect(splitStatements('/* a /* b */ ; */ SELECT 7', 'postgres').map((s) => s.sql)).toEqual([
       '/* a /* b */ ; */ SELECT 7',

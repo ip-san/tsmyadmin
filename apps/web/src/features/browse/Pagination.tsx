@@ -38,7 +38,7 @@ export function Pagination({ page, limit, total, count = 'exact', shown, onChang
           {locale.browse.prev}
         </Button>
         <span className="px-2 tabular-nums" aria-current="page">
-          {locale.browse.pageLabel(page, lastPage)}
+          {locale.browse.pageLabel(page, lastPage, count)}
         </span>
         <Button size="sm" onClick={() => onChange({ page: page + 1 })} disabled={!hasNext}>
           {locale.browse.next}

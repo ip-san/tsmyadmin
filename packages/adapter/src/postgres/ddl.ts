@@ -102,7 +102,7 @@ export const pgDdl: DdlBuilder = {
         return [`ALTER TABLE ${t} DROP CONSTRAINT ${id(op.name)}`]
       case 'dropTable':
         return [
-          `DROP ${op.kind === 'materialized_view' ? 'MATERIALIZED VIEW' : op.kind === 'view' ? 'VIEW' : 'TABLE'} ${t}`,
+          `DROP ${op.kind === 'materialized_view' ? 'MATERIALIZED VIEW' : op.kind === 'view' ? 'VIEW' : op.kind === 'sequence' ? 'SEQUENCE' : 'TABLE'} ${t}`,
         ]
       case 'truncateTable':
         return [`TRUNCATE TABLE ${t}`]
@@ -325,9 +325,9 @@ export async function pgTableCatalog(conn: Conn, regclass: string): Promise<PgTa
       `SELECT a.attname, s.seqstart, s.seqincrement, s.seqmin, s.seqmax, s.seqcache, s.seqcycle
        FROM pg_attribute a
        JOIN pg_depend d ON d.refclassid = 'pg_class'::regclass AND d.refobjid = a.attrelid AND d.refobjsubid = a.attnum
-                         AND d.deptype = 'i' AND d.classid = 'pg_class'::regclass
+                         AND d.deptype IN ('i', 'a') AND d.classid = 'pg_class'::regclass
        JOIN pg_sequence s ON s.seqrelid = d.objid
-       WHERE a.attrelid = $1::regclass AND a.attidentity <> ''`,
+       WHERE a.attrelid = $1::regclass AND (a.attidentity <> '' OR a.atthasdef)`,
       [regclass]
     )
   )

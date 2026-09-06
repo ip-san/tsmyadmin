@@ -913,12 +913,14 @@ export abstract class BaseAdapter implements DatabaseAdapter {
 
   private async sendCancel(queryId: string, entry: RunningEntry, backend: string): Promise<boolean> {
     // The run may have finished while waiting: its connection is back in the pool, possibly serving someone else.
+    // The flag set above already stops the script at the next statement boundary, so a run that was still
+    // registered a moment ago was cancelled even when no signal needs sending.
     const stillRunning = () => this.running.get(queryId) === entry
-    if (!stillRunning()) return false
+    if (!stillRunning()) return true
     const canceller = await this.openCanceller(entry.ns)
     try {
       // Checked with the connection in hand: the target may have ended while it was being opened.
-      if (!stillRunning()) return false
+      if (!stillRunning()) return true
       try {
         await canceller.cancel(backend)
       } catch (err) {

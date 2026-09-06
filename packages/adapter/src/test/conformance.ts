@@ -1338,11 +1338,19 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
               const me = (await db.listProcesses()).find((p) => (p.query ?? '').includes(slow))
               expect(me).toBeDefined()
               if (me) await db.killProcess(me.id)
+              // Batches already buffered on the client may still come through; the kill surfaces right after.
+              const drain = async (): Promise<string> => {
+                for (let i = 0; i < 50; i++) {
+                  const next = await scan.next().then(
+                    (r) => (r.done ? 'ended' : 'batch'),
+                    (err: unknown) => (err instanceof AdapterError ? err.code : 'other')
+                  )
+                  if (next !== 'batch') return next
+                }
+                return 'still-flowing'
+              }
               const outcome = await Promise.race([
-                scan.next().then(
-                  () => 'ended',
-                  (err: unknown) => (err instanceof AdapterError ? err.code : 'other')
-                ),
+                drain(),
                 new Promise<string>((resolve) => setTimeout(() => resolve('timeout'), 8000)),
               ])
               expect(['CONNECTION_FAILED', 'QUERY_FAILED']).toContain(outcome)

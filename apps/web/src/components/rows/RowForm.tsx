@@ -73,7 +73,8 @@ export function RowForm({ columns, mode, initial, pending, error, onSubmit, onCa
       const f = fieldFor(c)
       if (f.useDefault) continue
       const original = initial?.[c.name] ?? null
-      if (isOpaqueCell(original) && !f.isNull) continue
+      // Editing keeps an opaque value untouched (the field is read-only); duplicating sends whatever was typed.
+      if (mode === 'edit' && isOpaqueCell(original) && !f.isNull) continue
       const next: Cell = f.isNull ? null : f.text
       if (mode === 'edit' && !changed(original, next)) continue
       values[c.name] = next

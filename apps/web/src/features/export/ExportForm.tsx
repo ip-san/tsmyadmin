@@ -81,9 +81,13 @@ export function ExportForm({ db, schema, table, initialTables }: ExportFormProps
             <Button size="sm" onClick={() => setSelected(available.map((t) => t.name))}>
               {locale.export.selectAll}
             </Button>
-            <Button size="sm" onClick={() => setSelected([])} disabled={selected.length === 0}>
+            {/* Never disabled: a control that disables itself under the keyboard drops the focus to the page. */}
+            <Button size="sm" onClick={() => setSelected([])}>
               {locale.export.selectNone}
             </Button>
+            {tooLong ? (
+              <span className="text-xs text-amber-900 dark:text-amber-200">{locale.export.selectionTooLong}</span>
+            ) : null}
           </div>
           <div className="flex flex-wrap gap-3 text-sm">
             {available.map((t) => (

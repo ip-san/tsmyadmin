@@ -33,7 +33,11 @@ export function pgAdvanceSequence(quotedTable: string, column: string, sequence?
   const seq = sequence
     ? `${pgLiteral(sequence)}::regclass`
     : `pg_get_serial_sequence(${pgLiteral(quotedTable)}, ${pgLiteral(column)})::regclass`
-  return `SELECT setval(s.seqrelid, GREATEST(m.max_id, s.seqmin, COALESCE(pg_sequence_last_value(s.seqrelid), s.seqmin)), m.max_id >= s.seqmin OR pg_sequence_last_value(s.seqrelid) IS NOT NULL) FROM (SELECT MAX(${col})::bigint AS max_id FROM ${quotedTable}) m JOIN pg_sequence s ON s.seqrelid = ${seq} WHERE m.max_id IS NOT NULL`
+  // A descending sequence (INCREMENT BY -1) moves the other way: past the smallest value, never raised.
+  const last = 'pg_sequence_last_value(s.seqrelid)'
+  const up = `GREATEST(m.max_id, s.seqmin, COALESCE(${last}, s.seqmin))`
+  const down = `LEAST(m.min_id, s.seqmax, COALESCE(${last}, s.seqmax))`
+  return `SELECT setval(s.seqrelid, CASE WHEN s.seqincrement > 0 THEN ${up} ELSE ${down} END, CASE WHEN s.seqincrement > 0 THEN m.max_id >= s.seqmin ELSE m.min_id <= s.seqmax END OR ${last} IS NOT NULL) FROM (SELECT MAX(${col})::bigint AS max_id, MIN(${col})::bigint AS min_id FROM ${quotedTable}) m JOIN pg_sequence s ON s.seqrelid = ${seq} WHERE m.max_id IS NOT NULL`
 }
 
 /** The sequence a `nextval('…'::regclass)` default names, as written. */

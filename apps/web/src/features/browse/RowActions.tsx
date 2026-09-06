@@ -1,4 +1,5 @@
 import { Copy, Pencil } from 'lucide-react'
+import { useId } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { Td } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
@@ -22,6 +23,7 @@ export function RowActions({
   onEdit: () => void
   onCopy: () => void
 }) {
+  const reasonId = useId()
   return (
     <Td className="whitespace-nowrap">
       <label
@@ -31,11 +33,17 @@ export function RowActions({
         <input
           type="checkbox"
           aria-label={locale.rows.selectRow(index + 1)}
+          aria-describedby={addressable ? undefined : reasonId}
           checked={selected}
           disabled={!addressable}
           onChange={onToggle}
         />
       </label>
+      {addressable ? null : (
+        <span id={reasonId} hidden>
+          {locale.rows.notAddressable}
+        </span>
+      )}
       <Button
         variant="icon"
         size="icon"
@@ -44,6 +52,7 @@ export function RowActions({
         aria-haspopup="dialog"
         disabled={!addressable}
         title={addressable ? undefined : locale.rows.notAddressable}
+        aria-describedby={addressable ? undefined : reasonId}
         onClick={onEdit}
       >
         <Pencil className="size-3.5" aria-hidden />

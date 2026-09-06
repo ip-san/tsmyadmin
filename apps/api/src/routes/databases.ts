@@ -1,4 +1,4 @@
-import { isGeneratedColumn } from '@tsmyadmin/adapter'
+import { type DatabaseAdapter, isGeneratedColumn } from '@tsmyadmin/adapter'
 import {
   type ApiError,
   BrowseQuerySchema,
@@ -32,6 +32,22 @@ import { type AppEnv, requireSession, type SessionConfig } from '../session/midd
 
 function ns(database: string, schema?: string): Namespace {
   return schema ? { database, schema } : { database }
+}
+
+/** Columns of `table` fed by a sequence of their own (serial, or a sequence OWNED BY the column). */
+async function ownedSequenceColumns(
+  adapter: DatabaseAdapter,
+  target: Namespace,
+  table: string,
+  columns: string[]
+): Promise<string[]> {
+  if (adapter.dialect !== 'postgres') return []
+  const schema = await adapter.describeTable(target, table)
+  const own = new Set(schema.columns.filter((col) => col.extra === 'serial').map((col) => col.name))
+  for (const t of await adapter.listTables(target))
+    if (t.kind === 'sequence' && t.ownedBy?.table === table && columns.includes(t.ownedBy.column))
+      own.add(t.ownedBy.column)
+  return [...own]
 }
 
 /** Blank line sent on an NDJSON stream while a statement runs (well inside every idle timeout in the path). */
@@ -348,8 +364,16 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
             identityColumns:
               op.identityColumns ??
               schema.columns.filter((col) => col.extra.startsWith('identity')).map((col) => col.name),
+            // A renamed serial sequence (or CREATE SEQUENCE … OWNED BY) is not `serial` by name but pins the copy to
+            // the source's sequence all the same: the owned sequences of the source name those columns.
             serialColumns:
-              op.serialColumns ?? schema.columns.filter((col) => col.extra === 'serial').map((col) => col.name),
+              op.serialColumns ??
+              (await ownedSequenceColumns(
+                adapter,
+                target,
+                op.table,
+                schema.columns.map((col) => col.name)
+              )),
           }
         } else if (op.op === 'copyTable' && op.withData && op.columns === undefined) {
           const schema = await adapter.describeTable(target, op.table)

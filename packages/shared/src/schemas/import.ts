@@ -58,6 +58,8 @@ export const ImportWarningSchema = z.enum([
   'ALL_ROLLED_BACK',
   /** Single-transaction mode after an error, but the script had committed on its own (COMMIT, MySQL DDL) before it. */
   'PARTIALLY_ROLLED_BACK',
+  /** The run was stopped by a cancel request; the statements after the stop did not run. */
+  'CANCELLED',
 ])
 export type ImportWarning = z.infer<typeof ImportWarningSchema>
 

@@ -39,7 +39,7 @@ export function RenameTableForm({
           <Field
             id="rename-table"
             label={sequence ? locale.ddl.newSequenceName : view ? locale.ddl.newViewName : locale.ddl.newTableName}
-            hint={locale.ddl.renameHint}
+            hint={sequence ? locale.ddl.renameSequenceHint : locale.ddl.renameHint}
           >
             <Input
               id="rename-table"

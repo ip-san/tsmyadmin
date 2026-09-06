@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { type ReactNode, useId } from 'react'
 import { locale } from '@/config/locale.ts'
 import { cn } from '@/lib/cn.ts'
 import { errorMessage } from '@/lib/format.ts'
@@ -68,11 +68,20 @@ export function Badge({
     info: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100',
     warn: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100',
   }
-  // The hint is hover-only as a title; keyboard and screen-reader users get it as hidden text after the label.
+  // The hint is hover-only as a title; assistive tech gets it as a description, so the badge's name stays short.
+  const hintId = useId()
   return (
-    <span className={cn('inline-block rounded px-1.5 py-0.5 text-xs font-medium', tones[tone])} title={title}>
+    <span
+      className={cn('inline-block rounded px-1.5 py-0.5 text-xs font-medium', tones[tone])}
+      title={title}
+      aria-describedby={title ? hintId : undefined}
+    >
       {children}
-      {title ? <span className="sr-only">（{title}）</span> : null}
+      {title ? (
+        <span id={hintId} hidden>
+          {title}
+        </span>
+      ) : null}
     </span>
   )
 }

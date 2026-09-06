@@ -107,7 +107,8 @@ export function splitStatements(input: string, dialect: Dialect): Statement[] {
     if (copyData) {
       // The block ends at a line holding only `\.`; the data (tabs, backslashes, quotes) is not SQL.
       copyData = false
-      const from = input[i] === '\n' ? i + 1 : i
+      // The data starts on the next line (CRLF files included: a leading `\r` would be a phantom empty row).
+      const from = input.startsWith('\r\n', i) ? i + 2 : input[i] === '\n' ? i + 1 : i
       const m = /(?:^|\n)\\\.[ \t]*(?:\r?\n|$)/.exec(input.slice(from))
       const stop = m ? from + m.index + m[0].length : n
       const last = out[out.length - 1]

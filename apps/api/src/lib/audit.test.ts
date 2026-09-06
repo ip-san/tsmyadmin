@@ -141,10 +141,16 @@ describe('withAudit', () => {
       "SELECT dblink_connect('host=x password=link-secret')",
       "ALTER USER 'u'@'%' IDENTIFIED WITH caching_sha2_password AS 0x2441303024ABCDEF",
       "GRANT ALL ON *.* TO 'g'@'%' IDENTIFIED BY 'grant-secret' WITH GRANT OPTION",
+      "PREPARE s2 FROM 'CREATE USER u2 IDENTIFIED BY ''semi;colon-secret'''",
+      "SET @s = CONCAT('CREATE USER u3 IDENTIFIED BY ''', 'var;secret', '''')",
+      "CREATE USER u4 IDENTIFIED BY 'open-secret",
     ].join(';\n')
     await adapter.executeSql(ns, script, { maxRows: 1, timeoutMs: 1000, stopOnError: true })
     const logged = String(lines[0]?.sql)
     for (const secret of [
+      'semi;colon-secret',
+      'var;secret',
+      'open-secret',
       'nested-secret',
       'do-secret',
       'fmt-secret',

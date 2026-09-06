@@ -99,12 +99,15 @@ describe('DDL builders', () => {
     expect(pgDdl.build({ database: 'db' }, op).some((s) => s.includes('RENAME'))).toBe(false)
   })
 
-  it('dropTable drops a view / materialized view by its kind', () => {
+  it('dropTable drops a view / materialized view / sequence by its kind', () => {
     const view: DdlOp = { op: 'dropTable', table: 'v', kind: 'view' }
     const mat: DdlOp = { op: 'dropTable', table: 'm', kind: 'materialized_view' }
+    const seq: DdlOp = { op: 'dropTable', table: 's', kind: 'sequence' }
     expect(mysqlDdl.build({ database: 'db' }, view)).toEqual(['DROP VIEW `db`.`v`'])
+    expect(mysqlDdl.build({ database: 'db' }, seq)).toEqual(['DROP SEQUENCE `db`.`s`'])
     expect(pgDdl.build({ database: 'db', schema: 'app' }, view)).toEqual(['DROP VIEW "app"."v"'])
     expect(pgDdl.build({ database: 'db', schema: 'app' }, mat)).toEqual(['DROP MATERIALIZED VIEW "app"."m"'])
+    expect(pgDdl.build({ database: 'db', schema: 'app' }, seq)).toEqual(['DROP SEQUENCE "app"."s"'])
   })
 
   it('modifyColumn with the previous definition emits only the changed clauses on PostgreSQL', () => {

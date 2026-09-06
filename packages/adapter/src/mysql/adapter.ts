@@ -83,7 +83,7 @@ const PERMISSION_CODES = new Set([
  * Killed connections surface as a fatal protocol error. ER_QUERY_INTERRUPTED (KILL QUERY / max_execution_time)
  * is deliberately *not* here: it ends the statement but leaves the connection usable, so it stays QUERY_FAILED.
  */
-const KILLED_CODES = new Set(['ER_CONNECTION_KILLED', 'PROTOCOL_CONNECTION_LOST'])
+const KILLED_CODES = new Set(['ER_CONNECTION_KILLED', 'PROTOCOL_CONNECTION_LOST', 'ER_SERVER_SHUTDOWN'])
 /** Derived-table wrapping (only used for statements with their own LIMIT) fails where the bare statement would not. */
 const WRAPPER_ONLY_ERRORS: ReadonlySet<string> = new Set([
   'ER_DUP_FIELDNAME',
@@ -302,20 +302,27 @@ export class MysqlAdapter extends BaseAdapter {
     // The promise wrapper's typings call the inner connection a promise Connection; at runtime it is the core
     // callback one, which is the only API with a row stream.
     const core = conn.connection as unknown as CoreConnection
-    const query = core.query({ sql: text, values: params, rowsAsArray: true })
-    let columns: ColumnMeta[] = []
-    query.on('fields', (fields: FieldPacket[]) => {
-      columns = fields.map(mysqlColumnMeta)
-    })
-    const stream = query.stream({ highWaterMark: batchSize })
     // mysql2 only reports a lost connection to commands with a callback; a callback would make it buffer every
     // row, so the connection's own 'error' (KILL, server gone, net_write_timeout on a stalled client) is forwarded
-    // to the stream instead — otherwise the iteration would wait forever.
-    const onFatal = (err: Error) => stream.destroy(err)
+    // to the stream instead — otherwise the iteration would wait forever. Listening before the query is queued
+    // covers a connection the server closed a moment ago (mysql2 emits that synchronously).
+    let stream: ReturnType<ReturnType<CoreConnection['query']>['stream']> | null = null
+    let pending: Error | null = null
+    const onFatal = (err: Error) => {
+      if (stream) stream.destroy(err)
+      else pending = err
+    }
     core.on('error', onFatal)
+    let columns: ColumnMeta[] = []
     let rows: Cell[][] = []
     let finished = false
     try {
+      const query = core.query({ sql: text, values: params, rowsAsArray: true })
+      query.on('fields', (fields: FieldPacket[]) => {
+        columns = fields.map(mysqlColumnMeta)
+      })
+      stream = query.stream({ highWaterMark: batchSize })
+      if (pending) stream.destroy(pending)
       for await (const row of stream) {
         rows.push((row as unknown[]).map((v) => driverValueToCell(v, options)))
         if (rows.length >= batchSize) {
@@ -334,7 +341,7 @@ export class MysqlAdapter extends BaseAdapter {
       if (!finished) {
         // Abandoned mid-scan: drop the socket outright, or the rest of the result set keeps arriving and being
         // parsed until the server notices the half-closed connection.
-        stream.destroy()
+        stream?.destroy()
         this.broken.add(conn.connection)
         ;(core as unknown as { stream?: { destroy(): void } }).stream?.destroy()
       }

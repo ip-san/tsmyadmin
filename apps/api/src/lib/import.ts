@@ -45,14 +45,22 @@ const DIALECT_HEADERS: { pattern: RegExp; dialect: 'mysql' | 'postgres' }[] = [
 ]
 /** Comments a dump writes above a statement (the splitter keeps them in `sql`). */
 const LEADING_COMMENTS = /^(?:\s*(?:--[^\n]*|#[^\n]*|\/\*(?!!)[\s\S]*?\*\/))*\s*/
+/** A mysqldump `/*!40000 ALTER TABLE … *\/` versioned comment: the statement inside runs on MySQL. */
+const VERSION_COMMENT = /^\/\*!\d*\s*([\s\S]*?)\s*\*\/$/
 /** Statements that move the run to another database (or remove one): the result is flagged. */
 const CHANGES_DATABASE = /^(?:USE\s|\\connect\b|\\c\s|CREATE\s+DATABASE\b|DROP\s+DATABASE\b)/i
 const OPENS_TRANSACTION = /^(?:BEGIN\b|START\s+TRANSACTION\b)/i
 const CLOSES_TRANSACTION = /^(?:COMMIT\b|ROLLBACK\b|END\b)/i
-/** MySQL statements that commit the open transaction implicitly (DDL, account statements, LOCK TABLES). */
+/**
+ * MySQL statements that commit the open transaction implicitly (DDL, account statements, LOCK TABLES,
+ * `SET autocommit = 1`); temporary tables are the documented exception.
+ */
 const IMPLICIT_COMMIT =
-  /^(?:CREATE|DROP|ALTER|TRUNCATE|RENAME|GRANT|REVOKE|LOCK\s+TABLES|UNLOCK\s+TABLES|SET\s+PASSWORD|FLUSH|ANALYZE|OPTIMIZE|REPAIR|CHECK\s+TABLE|LOAD\s+DATA)\b/i
-const code = (sql: string) => sql.replace(LEADING_COMMENTS, '')
+  /^(?:(?:CREATE|DROP)\s+(?!TEMPORARY\b)|ALTER|TRUNCATE|RENAME|GRANT|REVOKE|LOCK\s+TABLES|UNLOCK\s+TABLES|SET\s+PASSWORD|SET\s+autocommit\s*=\s*1|FLUSH|ANALYZE|OPTIMIZE|REPAIR|CHECK\s+TABLE|LOAD\s+DATA)\b/i
+const code = (sql: string) => {
+  const plain = sql.replace(LEADING_COMMENTS, '')
+  return VERSION_COMMENT.exec(plain)?.[1] ?? plain
+}
 
 export interface ImportSqlOptions {
   stopOnError: boolean
@@ -93,8 +101,11 @@ export async function importSql(
     ...(options.singleTransaction ? [adapter.dialect === 'mysql' ? 'START TRANSACTION' : 'BEGIN'] : []),
   ]
   const suffix = options.singleTransaction ? ['COMMIT'] : []
-  // A file whose last statement has no `;` must not merge it with the COMMIT (the splitter drops the empty chunk).
-  const script = [...prefix.map((s) => `${s};`), `${text}\n;`, ...suffix.map((s) => `\n${s};`)].join('\n')
+  // A file whose last statement has no `;` must not merge it with the COMMIT: the terminator is appended (the
+  // splitter drops the empty chunk it leaves otherwise). A MySQL file may end under its own DELIMITER, where a
+  // bare `;` would be a statement of its own, so the default delimiter is restored first.
+  const terminator = adapter.dialect === 'mysql' ? '\nDELIMITER ;\n;' : '\n;'
+  const script = [...prefix.map((s) => `${s};`), `${text}${terminator}`, ...suffix.map((s) => `\n${s};`)].join('\n')
   const results = await adapter.executeSql(ns, script, {
     maxRows: 1,
     timeoutMs: SQL_IMPORT_TIMEOUT_MS,
@@ -134,18 +145,31 @@ export async function importSql(
         ]
       : []
   )
+  const commit = suffix.length > 0 ? results[results.length - 1] : undefined
+  // A COMMIT refused by the server (a deferred constraint failing at commit) is the run's error: listed as such.
+  if (commit?.kind === 'error' && results.length === prefix.length + own.length + 1)
+    errors.push({
+      sql: 'COMMIT',
+      message: commit.message,
+      index: own.length,
+      ...(commit.code ? { code: commit.code } : {}),
+    })
   const warnings: ImportWarning[] = []
   const ran = own.filter((r) => r.kind !== 'error').map((r) => code(r.sql))
   if (ran.some((sql) => CHANGES_DATABASE.test(sql))) warnings.push('CHANGED_DATABASE')
-  const commit = suffix.length > 0 ? results[results.length - 1] : undefined
+  // Fewer statements than the file holds without an error stopping the run: the run was cancelled (a cancel that
+  // interrupts a statement also leaves that statement's error in the list).
+  const last = own[own.length - 1]
+  if (own.length < total && (last?.kind !== 'error' || !(options.stopOnError || options.singleTransaction)))
+    warnings.push('CANCELLED')
   if (options.singleTransaction && (errors.length > 0 || commit?.kind !== 'affected')) {
     // The single transaction only holds until the script commits by itself: a COMMIT of its own, or on MySQL any
-    // DDL (mysqldump is full of them). What ran before that point stays.
+    // DDL or a new START TRANSACTION (mysqldump is full of DDL). What ran before that point stays. On PostgreSQL
+    // a nested BEGIN is only a warning and commits nothing.
     const committed = ran.some(
       (sql) =>
         CLOSES_TRANSACTION.test(sql) ||
-        OPENS_TRANSACTION.test(sql) ||
-        (adapter.dialect === 'mysql' && IMPLICIT_COMMIT.test(sql))
+        (adapter.dialect === 'mysql' && (OPENS_TRANSACTION.test(sql) || IMPLICIT_COMMIT.test(sql)))
     )
     warnings.push(committed ? 'PARTIALLY_ROLLED_BACK' : 'ALL_ROLLED_BACK')
   } else if (openTransaction(ran)) warnings.push('ROLLED_BACK')

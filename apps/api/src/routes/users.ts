@@ -36,6 +36,9 @@ export function userRoutes(cfg: SessionConfig) {
     .post('/users/execute', validate('json', UserOpRequestSchema), async (c) => {
       const { op } = c.req.valid('json')
       const adapter = c.get('session').adapter
+      // The UI previews first; a direct call must not create a role under a silently truncated name.
+      const long = tooLongIdentifier({ user: op.user.name }, adapter.dialect)
+      if (long) return c.json(identifierTooLong(long), 400)
       const statements = adapter.users.build(op)
       if ('password' in op) {
         // The audit line carries the SQL text, where the password appears literal-encoded (quotes doubled, backslashes
