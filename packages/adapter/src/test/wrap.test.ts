@@ -13,7 +13,9 @@ describe('wrapReadOnly', () => {
     const wrapped = wrapReadOnly('-- note\nSELECT 1 AS a -- trailing', 3)
     expect(wrapped).toBe('SELECT * FROM (\n-- note\nSELECT 1 AS a -- trailing\n) AS _tsmyadmin LIMIT 3')
     expect(wrapReadOnly('/* c */ (SELECT 1)', 3)).not.toBeNull()
-    expect(wrapReadOnly('# mysql comment\nSELECT 2', 3)).not.toBeNull()
+    expect(wrapReadOnly('# mysql comment\nSELECT 2', 3, 'mysql')).not.toBeNull()
+    // `#` is an operator on PostgreSQL, so the statement is not a plain read there.
+    expect(wrapReadOnly('# mysql comment\nSELECT 2', 3, 'postgres')).toBeNull()
   })
 
   it('ignores DML keywords inside string literals, quoted identifiers and comments', () => {

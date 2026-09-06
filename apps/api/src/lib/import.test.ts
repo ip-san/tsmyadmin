@@ -101,10 +101,11 @@ const perStatement = () =>
   new FakeAdapter({
     databases: { shop: { tables: { users: fakeTable('users', ['id', 'name', 'age'], []) } } },
     onSql: (_ns, sql) =>
-      splitStatements(sql, 'mysql').map((st) => ({
+      splitStatements(sql, 'mysql').map((st, statement) => ({
         kind: 'affected' as const,
         sql: st.sql,
         line: st.line,
+        statement,
         affectedRows: 1,
         durationMs: 1,
       })),
@@ -157,11 +158,12 @@ describe('importSql', () => {
                 kind: 'error' as const,
                 sql: st.sql,
                 line: st.line,
+                statement: i,
                 message: 'interrupted',
                 code: 'QUERY_FAILED' as const,
                 nativeCode: 'ER_QUERY_INTERRUPTED',
               }
-            : { kind: 'affected' as const, sql: st.sql, line: st.line, affectedRows: 1, durationMs: 1 }
+            : { kind: 'affected' as const, sql: st.sql, line: st.line, statement: i, affectedRows: 1, durationMs: 1 }
         ),
     })
     const cancelled = await importSql(killed, ns, 'SELECT 1; SELECT SLEEP(9)', opts({}))
@@ -169,9 +171,10 @@ describe('importSql', () => {
     // A CALL returning two result sets followed by a failing INSERT: the error belongs to the INSERT, not to COMMIT.
     const multi = new FakeAdapter({
       onSql: (_ns, sql) =>
-        splitStatements(sql, 'mysql').flatMap((st): StatementResult[] => {
+        splitStatements(sql, 'mysql').flatMap((st, statement): StatementResult[] => {
           if (/^CALL/i.test(st.sql))
             return [1, 2].map(() => ({
+              statement,
               kind: 'affected' as const,
               sql: st.sql,
               line: st.line,
@@ -184,11 +187,12 @@ describe('importSql', () => {
                 kind: 'error' as const,
                 sql: st.sql,
                 line: st.line,
+                statement,
                 message: "Table 'nope' doesn't exist",
                 code: 'QUERY_FAILED' as const,
               },
             ]
-          return [{ kind: 'affected' as const, sql: st.sql, line: st.line, affectedRows: 1, durationMs: 1 }]
+          return [{ kind: 'affected' as const, sql: st.sql, line: st.line, statement, affectedRows: 1, durationMs: 1 }]
         }),
     })
     const r = await importSql(multi, ns, 'CALL p();\nINSERT INTO nope VALUES (1)', opts({ singleTransaction: true }))
@@ -196,12 +200,12 @@ describe('importSql', () => {
       {
         sql: 'INSERT INTO nope VALUES (1)',
         message: "Table 'nope' doesn't exist",
-        index: 2,
+        index: 1,
         code: 'QUERY_FAILED',
         line: 2,
       },
     ])
-    expect(r).toMatchObject({ statements: 3, succeeded: 2, failed: 1, warnings: ['ALL_ROLLED_BACK'] })
+    expect(r).toMatchObject({ statements: 2, succeeded: 1, failed: 1, warnings: ['ALL_ROLLED_BACK'] })
     // A file ending inside a comment would swallow the COMMIT: refused before anything runs.
     await expect(
       importSql(perStatement(), ns, 'INSERT INTO t VALUES (1); /* end', opts({ singleTransaction: true }))

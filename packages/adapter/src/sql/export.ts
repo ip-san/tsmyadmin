@@ -39,7 +39,7 @@ export function pgAdvanceSequence(quotedTable: string, column: string, sequence?
   const last = 'pg_sequence_last_value(s.seqrelid)'
   const up = `GREATEST(m.max_id, s.seqmin, COALESCE(${last}, s.seqmin))`
   const down = `LEAST(m.min_id, s.seqmax, COALESCE(${last}, s.seqmax))`
-  const inRange = `${col} BETWEEN s.seqmin AND s.seqmax`
+  const inRange = `${col}::bigint BETWEEN s.seqmin AND s.seqmax`
   return `SELECT setval(s.seqrelid, CASE WHEN s.seqincrement > 0 THEN ${up} ELSE ${down} END, CASE WHEN s.seqincrement > 0 THEN m.max_id >= s.seqmin ELSE m.min_id <= s.seqmax END OR ${last} IS NOT NULL) FROM pg_sequence s CROSS JOIN LATERAL (SELECT MAX(${col}) FILTER (WHERE ${inRange})::bigint AS max_id, MIN(${col}) FILTER (WHERE ${inRange})::bigint AS min_id FROM ${quotedTable}) m WHERE s.seqrelid = ${seq} AND m.max_id IS NOT NULL`
 }
 

@@ -27,7 +27,7 @@ import type {
 } from '@tsmyadmin/shared'
 import { EXACT_COUNT_MAX_ROWS, isBinaryCell, isTruncatedCell, isViewKind, MAX_TEXT_CHARS } from '@tsmyadmin/shared'
 import { Params, quoteIdent, quoteTable } from './sql/quote.ts'
-import { splitStatements } from './sql/split.ts'
+import { splitStatements, stripLeadingComments } from './sql/split.ts'
 import {
   AdapterError,
   type DatabaseAdapter,
@@ -106,6 +106,8 @@ interface RunningEntry {
   cancelled: boolean
   /** True once the flag actually stopped the script (a statement was interrupted or the loop broke before one). */
   interrupted: boolean
+  /** Resolves when the run has ended, whatever the outcome. */
+  settled: Promise<void>
   /** True while a statement is on the wire; a cancel that lands on an idle connection is a no-op and is retried. */
   inFlight: boolean
   /** The cancel in progress, shared by concurrent cancel requests for the same run. */
@@ -120,12 +122,13 @@ export interface Canceller {
 
 const CANCEL_RETRY_MS = 50
 const CANCEL_RETRIES = 40
+/** How long a cancel waits for the script loop to report what the signal did before answering "stopping". */
+const CANCEL_SETTLE_MS = 10_000
 
 const READ_START = /^\s*(?:\(|(?:SELECT|WITH|VALUES|TABLE)\b)/i
 const NOT_WRAPPABLE =
   /\b(?:INTO|FOR\s+(?:UPDATE|SHARE|NO\s+KEY\s+UPDATE|KEY\s+SHARE)|LOCK\s+IN\s+SHARE\s+MODE|INSERT|UPDATE|DELETE|MERGE)\b/i
 /** Leading whitespace and comments (kept in Statement.sql so the user sees what ran, ignored for the wrap test). */
-const LEADING_COMMENTS = /^(?:\s+|--[^\n]*(?:\n|$)|#[^\n]*(?:\n|$)|\/\*[\s\S]*?\*\/)+/
 
 /** String literals, quoted identifiers, dollar-quoted bodies and comments, replaced by a space (`'delete'` is data, not DML). */
 const LITERALS_AND_COMMENTS =
@@ -152,7 +155,7 @@ const TOUCHES_CAP = /sql_select_limit/i
  */
 export function wrapReadOnly(sql: string, limit: number, dialect: Dialect = 'postgres'): string | null {
   const body = sql.trim().replace(/;+\s*$/, '')
-  const code = body.replace(LEADING_COMMENTS, '')
+  const code = stripLeadingComments(body, dialect)
   if (!READ_START.test(code) || NOT_WRAPPABLE.test(stripLiterals(code, dialect))) return null
   return `${WRAP_PREFIX}${body}\n) AS _tsmyadmin LIMIT ${Math.max(1, Math.floor(limit))}`
 }
@@ -738,6 +741,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
       await opts.onResult?.(r, results.length - 1)
     }
     let resolveBackend: (id: string) => void = () => undefined
+    let resolveSettled: () => void = () => undefined
     const entry: RunningEntry = {
       ns,
       backend: new Promise<string>((resolve) => {
@@ -747,6 +751,9 @@ export abstract class BaseAdapter implements DatabaseAdapter {
       interrupted: false,
       inFlight: false,
       cancelling: null,
+      settled: new Promise<void>((resolve) => {
+        resolveSettled = resolve
+      }),
     }
     if (opts.queryId) this.running.set(opts.queryId, entry)
     try {
@@ -759,7 +766,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
             let capped = await this.capResultRows(conn, opts.maxRows)
             // Published only now: a cancel must interrupt the user's first statement, not the session setup.
             if (opts.queryId) resolveBackend(await this.backendId(conn))
-            for (const st of statements) {
+            for (const [statement, st] of statements.entries()) {
               if (entry.cancelled) {
                 entry.interrupted = true
                 break
@@ -769,7 +776,8 @@ export abstract class BaseAdapter implements DatabaseAdapter {
                 entry.inFlight = true
                 let list: RawResult[]
                 const code = stripLiterals(st.sql, this.dialect)
-                const copy = this.dialect === 'postgres' ? COPY_BLOCK.exec(st.sql.replace(LEADING_COMMENTS, '')) : null
+                const copy =
+                  this.dialect === 'postgres' ? COPY_BLOCK.exec(stripLeadingComments(st.sql, 'postgres')) : null
                 try {
                   if (META_COMMAND.test(st.sql)) {
                     throw new AdapterError(
@@ -803,6 +811,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
                       kind: 'rows',
                       sql: st.sql,
                       line: st.line,
+                      statement,
                       durationMs,
                       ...(r.notices && r.notices.length > 0 ? { notices: r.notices } : {}),
                       result: {
@@ -816,6 +825,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
                       kind: 'affected',
                       sql: st.sql,
                       line: st.line,
+                      statement,
                       durationMs,
                       affectedRows: r.affectedRows,
                       ...(r.notices && r.notices.length > 0 ? { notices: r.notices } : {}),
@@ -828,6 +838,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
                   kind: 'error',
                   sql: st.sql,
                   line: st.line,
+                  statement,
                   message: e.detail ?? e.message,
                   code: e.code,
                   ...(e.nativeCode ? { nativeCode: e.nativeCode } : {}),
@@ -858,6 +869,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
         this.running.delete(opts.queryId)
         resolveBackend('') // release any waiting cancelQuery
       }
+      resolveSettled()
     }
     return results
   }
@@ -945,11 +957,14 @@ export abstract class BaseAdapter implements DatabaseAdapter {
         // The first signal was delivered; a failing retry must not fail the request.
         await canceller.cancel(backend).catch(() => undefined)
       }
-      // The signal is out; the answer is what it did. A statement that resists (MySQL SLEEP returns normally when
-      // killed) still stops the script at the next boundary, so the flag settles within the same bounded window.
-      for (let attempt = 0; attempt < CANCEL_RETRIES && stillRunning() && !entry.interrupted; attempt++)
-        await new Promise((resolve) => setTimeout(resolve, CANCEL_RETRY_MS))
-      return entry.interrupted
+      // The signal is out; the answer is what it did, known once the script loop reaches its next boundary
+      // (a statement that resists — MySQL SLEEP returns normally when killed — still stops the script there).
+      // A run that is still going after the wait is stopping: the flag holds until the loop looks at it.
+      const settled = await Promise.race([
+        entry.settled.then(() => true),
+        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), CANCEL_SETTLE_MS)),
+      ])
+      return settled ? entry.interrupted : true
     } finally {
       await canceller.close()
     }

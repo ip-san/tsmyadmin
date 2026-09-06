@@ -19,9 +19,42 @@ const DELIMITER_LINE = /^[ \t]*DELIMITER[ \t]+(\S+)[ \t]*(?:\r?\n|$)/i
 /** `COPY table (cols) FROM stdin` — the data that follows is part of the statement (see splitStatements). */
 const COPY_FROM_STDIN = /^COPY\b[\s\S]*?\bFROM\s+STDIN\b/i
 
-/** Leading `--` / `#` / plain block comments, then the wrapper of a `/*!50003 … *\/` version comment. */
-const LEADING_COMMENTS = /^(?:\s*(?:--[^\n]*|#[^\n]*|\/\*(?!!)[\s\S]*?\*\/))*\s*/
 const VERSION_COMMENT = /^\/\*!\d*\s*([\s\S]*?)\s*\*\/$/
+
+/**
+ * The statement text without the comments a dump writes above it, read as the server reads them: `#` and `-- `
+ * (space required) on MySQL, `--` and nested block comments on PostgreSQL. A MySQL `/*!…*\/` versioned comment is
+ * code and stays.
+ */
+export function stripLeadingComments(sql: string, dialect: Dialect): string {
+  let i = 0
+  for (;;) {
+    while (i < sql.length && /\s/.test(sql[i] as string)) i++
+    if (sql.startsWith('--', i) && (dialect !== 'mysql' || /\s/.test(sql[i + 2] ?? '\n'))) {
+      const end = sql.indexOf('\n', i)
+      i = end < 0 ? sql.length : end + 1
+    } else if (sql[i] === '#' && dialect === 'mysql') {
+      const end = sql.indexOf('\n', i)
+      i = end < 0 ? sql.length : end + 1
+    } else if (sql.startsWith('/*', i) && !sql.startsWith('/*!', i)) {
+      let depth = 0
+      let k = i
+      for (; k < sql.length; k++) {
+        if (sql.startsWith('/*', k)) {
+          depth++
+          k++
+        } else if (sql.startsWith('*/', k)) {
+          depth--
+          k++
+          if (depth === 0 || dialect === 'mysql') break
+        }
+      }
+      // An unterminated comment swallows the rest: nothing left to run.
+      if (k >= sql.length) return ''
+      i = k + 1
+    } else return sql.slice(i)
+  }
+}
 /** One `name = value` pair of a SET list (the value runs to the next comma outside quotes / parentheses). */
 const SET_ASSIGNMENT =
   /(?:^|,)\s*(?:(?:SESSION|LOCAL)\s+|@@(?:session\.|global\.|persist\.|persist_only\.)?)?(sql_mode|@[A-Za-z0-9_$.]+)\s*=\s*((?:'[^']*'|"[^"]*"|\([^)]*\)|[^,'"()])*)/gi
@@ -35,7 +68,7 @@ const SQL_MODE_REF = /^@@(?:session\.)?sql_mode$/i
  * does not parse this at all (it reads the server status after each statement); this is the closest static form.
  */
 function trackSqlMode(statement: string, current: boolean, saved: Map<string, boolean>): boolean {
-  let sql = statement.replace(LEADING_COMMENTS, '')
+  let sql = stripLeadingComments(statement, 'mysql')
   sql = VERSION_COMMENT.exec(sql)?.[1] ?? sql
   if (!/^SET\s/i.test(sql) || /^SET\s+(?:GLOBAL|PERSIST|PERSIST_ONLY)\s/i.test(sql)) return current
   let next = current
@@ -92,10 +125,11 @@ export function splitStatements(
     const sql = input.slice(start, end).trim()
     if (hasCode && sql.length > 0) {
       // pg_dump / mysqldump put a comment block above every statement: errors point at the code below it.
-      const lead = LEADING_COMMENTS.exec(sql)?.[0] ?? ''
+      const body = stripLeadingComments(sql, dialect)
+      const lead = sql.slice(0, sql.length - body.length)
       out.push({ sql, line: startLine + lead.split('\n').length - 1 })
       if (dialect === 'mysql') noBackslash = trackSqlMode(sql, noBackslash, savedModes)
-      if (dialect === 'postgres' && COPY_FROM_STDIN.test(sql.slice(lead.length))) copyData = true
+      if (dialect === 'postgres' && COPY_FROM_STDIN.test(body)) copyData = true
     }
     hasCode = false
   }
