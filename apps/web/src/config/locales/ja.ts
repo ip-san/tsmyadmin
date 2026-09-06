@@ -574,6 +574,7 @@ export const ja = {
     UNSUPPORTED: 'この操作はサポートされていません',
     FORBIDDEN: '許可されていない操作です',
     HOST_NOT_ALLOWED: 'この接続先は管理者により許可されていません',
+    INSECURE_TRANSPORT: 'HTTPS で接続してください（HTTP ではログイン状態を保持できません）',
     PERMISSION_DENIED: 'この操作に必要な権限がデータベースユーザーにありません',
     RATE_LIMITED: '試行回数が多すぎます。しばらく待ってから再度お試しください',
     PAYLOAD_TOO_LARGE: '送信データが大きすぎます',

@@ -1,7 +1,15 @@
-# Keeps the SHA-pinned actions in ci.yml current (the pin comments carry the tag Dependabot updates).
+# Keeps the SHA-pinned actions in ci.yml current (the pin comments carry the tag Dependabot updates) and opens
+# monthly PRs for the workspace dependencies in bun.lock.
 version: 2
 updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
+  - package-ecosystem: bun
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      dependencies:
+        patterns: ['*']

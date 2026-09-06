@@ -7,7 +7,8 @@ tsmyadmin は **1 プロセス（Bun）で API と SPA を配信する単一コ�
 | 変数 | 既定値 | 説明 |
 |---|---|---|
 | `NODE_ENV` | `development` | `production` で Cookie に `Secure`、ログ JSON、`SESSION_SECRET` 必須 |
-| `API_PORT` | `3100` | 待ち受けポート（1–65535。Docker イメージの `HEALTHCHECK` は 3100 固定） |
+| `API_PORT` | `3100` | 待ち受けポート（1–65535。Docker イメージの `HEALTHCHECK` は 3100 固定）。未指定なら `PORT`（PaaS が注入する変数）を代わりに使う |
+| `COOKIE_SECURE` | 本番 `1` / 開発 `0` | セッション Cookie の `Secure`。`1` のとき平文 HTTP でのログインは `INSECURE_TRANSPORT`（400）で拒否する（ブラウザが Cookie を捨てるため）。TLS を終端しない社内ネットワークでだけ `0` にする |
 | `SESSION_SECRET` | （開発用固定値） | セッション Cookie の署名鍵。**本番では 32 文字以上必須**。`openssl rand -hex 32` |
 | `SESSION_TTL_MINUTES` | `30` | 操作ごとに延長されるセッション寿命（1–1440） |
 | `SESSION_MAX_PER_IDENTITY` | `10`（1–1000） | 同じ DB アカウント（種別 / ホスト / ポート / ユーザー名）で同時に保持するセッション数。超えると最も古いものを閉じる（ログインの繰り返しで DB の `max_connections` を使い切らせない） |
@@ -86,7 +87,11 @@ volumes:
 
 ## リバースプロキシと TLS
 
-tsmyadmin 自身は TLS を終端しません。**必ず HTTPS を終端するリバースプロキシの背後に置いてください**（`NODE_ENV=production` では Cookie に `Secure` が付くため、平文 HTTP ではログインできません）。
+tsmyadmin 自身は TLS を終端しません。**必ず HTTPS を終端するリバースプロキシの背後に置いてください**（`NODE_ENV=production` では Cookie に `Secure` が付き、平文 HTTP でのログインは `HTTPS で接続してください` と拒否されます。ログには `login.insecure_transport` が出ます。TLS を終端しない社内ネットワークでは `COOKIE_SECURE=0`）。プロキシは `X-Forwarded-Proto` を付け、`TRUST_PROXY=1` にしてください（それがないと HTTPS 経由でも平文と判定されます）。
+
+ルート直下（`https://admin.example.com/`）でのみ動作します。サブパス（`https://example.com/tsmyadmin/`）配下には置けません（アセットと API のパスが `/` 基準のため）。
+
+`Strict-Transport-Security: max-age=15552000; includeSubDomains` を常に返します（`hono/secure-headers` の既定）。apex ドメインで同居する他サービスが HTTP のままの場合は注意してください。
 
 nginx の例:
 
@@ -102,6 +107,8 @@ server {
   deny all;
 
   client_max_body_size 70m;   # インポート上限 64MB + マルチパート余裕
+  # tsmyadmin は SPA を gzip で返します（API は非圧縮 = NDJSON ストリームを文ごとに届けるため）。
+  # nginx 側で圧縮する場合は API を除外してください: gzip on; gzip_types text/javascript application/javascript text/css;
 
   location / {
     proxy_pass http://127.0.0.1:3100;
@@ -115,6 +122,28 @@ server {
 ```
 
 `TRUST_PROXY=1` を設定すると、レート制限とアクセスログが `X-Forwarded-For` の**末尾**のアドレス（直前のプロキシが追記した値）をクライアント IP として使います。`$proxy_add_x_forwarded_for` のように追記するプロキシでも、クライアントが先頭に偽の値を書いても影響しません。プロキシが多段の場合は、tsmyadmin の直前のプロキシが自分の見たアドレスを末尾に追記する設定にしてください（末尾は常に「直前のホップが見たアドレス」= 多段では手前のプロキシの IP になるため、その場合は手前のプロキシで正規化してください）。プロキシを介さず直接公開する場合は `0` のままにしてください（ヘッダ偽装でレート制限を回避されます）。
+
+## 直接起動（systemd）
+
+Docker を使わない場合は Bun 1.4 以上を入れ、`bun install --frozen-lockfile --production --ignore-scripts` の後に `bun run build`（SPA を `apps/web/dist` に生成。ビルドには開発依存が必要なので、ビルドだけは `--production` なしの環境で行い成果物を配布してもよい）。起動は `bun apps/api/src/index.ts`。`SESSION_DB_PATH` は作業ディレクトリからの相対なので `WorkingDirectory` を固定してください。
+
+```ini
+[Unit]
+Description=tsmyadmin
+After=network.target
+
+[Service]
+User=tsmyadmin
+WorkingDirectory=/opt/tsmyadmin
+EnvironmentFile=/etc/tsmyadmin.env
+ExecStart=/usr/local/bin/bun apps/api/src/index.ts
+KillSignal=SIGTERM
+TimeoutStopSec=40
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+```
 
 ## サイズと制限
 
@@ -136,6 +165,8 @@ server {
 - 終了コード: `shutdown.done` で 0、`shutdown.timeout` / `shutdown.forced` / 起動時の設定エラー / セッションストアを開けない場合は 1（`restart:` ポリシーの判断に使えます）
 
 ## アップグレード
+
+配布済みのコンテナイメージはありません。イメージは上記のとおりソースからビルドし、リリースは Git のタグ（`v0.1.0` など）と `CHANGELOG.md` で管理します。`main` は次のリリースに向けた変更を含みます（`[Unreleased]` 節）。
 
 イメージを差し替えて再起動するだけです。`SESSION_STORE=sqlite`（本番既定）でボリュームを維持していれば利用者のセッションは継続します。`SESSION_SECRET` を変えると、次回起動時に保存済みセッションはすべて削除されます（ログ `session_store.reset`、全員再ログイン。0.1.0 で作られたファイルも、行が復号できなければ同様に削除されます）。スキーマや設定ファイルのマイグレーションはありません。
 

@@ -1,4 +1,4 @@
-import { Hono } from 'hono'
+import { type Context, Hono } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
 import { getSignedCookie } from 'hono/cookie'
 import { csrf } from 'hono/csrf'
@@ -74,7 +74,12 @@ export const IP_LIMIT_FACTOR = 3
 
 export function createApp(config: AppConfig, services: AppServices) {
   const logger = services.logger ?? createLogger('pretty', () => undefined)
-  const cfg = { store: services.store, secret: config.sessionSecret, secure: config.isProd, ttlMs: config.sessionTtlMs }
+  const cfg = {
+    store: services.store,
+    secret: config.sessionSecret,
+    secure: config.cookieSecure,
+    ttlMs: config.sessionTtlMs,
+  }
   const loginLimiter = new RateLimiter(config.loginRateLimit.max, config.loginRateLimit.windowMs, services.now)
   // Rotating the user name must not grant a fresh window: a second limiter keyed on the IP alone, IP_LIMIT_FACTOR×.
   const ipLimiter = new RateLimiter(
@@ -86,7 +91,13 @@ export function createApp(config: AppConfig, services: AppServices) {
     clientIp(c.req.raw.headers, config.trustProxy, services.remoteAddress?.(c))
   // Presets are always reachable on exactly their own host:port, however the config object was assembled.
   const allowedHosts = [...new Set([...config.allowedHosts, ...config.servers.map(presetEntry)])]
-  const sessionDeps = { allowedHosts, loginLimiter, ipLimiter, ip, logger }
+  const secureTransport = (c: Context) => {
+    const url = new URL(c.req.url)
+    if (url.protocol === 'https:') return true
+    if (config.trustProxy && c.req.header('x-forwarded-proto')?.split(',')[0]?.trim() === 'https') return true
+    return url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '[::1]'
+  }
+  const sessionDeps = { allowedHosts, loginLimiter, ipLimiter, ip, secureTransport, logger }
   return (
     new Hono<AppEnv>()
       // Always server-generated: a client-supplied X-Request-Id could reuse another request's id in the audit log.

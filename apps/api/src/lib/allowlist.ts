@@ -26,12 +26,17 @@ export function presetEntry(preset: { host: string; port: number }): string {
   return preset.host.includes(':') ? `[${preset.host}]:${preset.port}` : `${preset.host}:${preset.port}`
 }
 
-/** Entries whose `:port` suffix is not a valid port (a typo that would otherwise become an unmatchable host name). */
+/**
+ * Entries that can never match a login target: a non-numeric or out-of-range port (`db:abc`, `db:5432:x`), or an
+ * unbracketed IPv6 literal (`::1:5432`) — typos that would otherwise become unmatchable host names.
+ */
 export function invalidEntries(allowlist: readonly string[]): string[] {
   return allowlist.filter((raw) => {
     const s = raw.trim()
-    const m = /^(\[[^\]]+\]|[^:]+):(\d+)$/.exec(s)
-    if (!m?.[2]) return false
+    if (!s.includes(':')) return false
+    const m = /^(\[[^\]]+\]|[^:[\]]+)(?::(\d+))?$/.exec(s)
+    if (!m) return true
+    if (m[2] === undefined) return false
     const port = Number(m[2])
     return port < 1 || port > 65535
   })

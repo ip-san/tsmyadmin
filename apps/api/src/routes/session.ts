@@ -28,6 +28,11 @@ export interface SessionRouteDeps {
   ipLimiter: RateLimiter
   /** Client IP resolver shared with the access log. */
   ip: (c: Context) => string
+  /**
+   * Whether the request reached us over TLS (directly, or via a proxy's X-Forwarded-Proto when trusted), or from
+   * loopback. A `Secure` cookie issued over plain HTTP is dropped by the browser: the login is refused instead.
+   */
+  secureTransport: (c: Context) => boolean
   logger: Logger
 }
 
@@ -64,6 +69,13 @@ export function sessionRoutes(cfg: SessionConfig, deps: SessionRouteDeps) {
         deps.logger.log('warn', 'login.rate_limited', audit)
         c.header('Retry-After', String(Math.max(limit.retryAfterSec, perIp.retryAfterSec)))
         return c.json(apiError('RATE_LIMITED', 'Too many login attempts; try again later'), 429)
+      }
+      if (cfg.secure && !deps.secureTransport(c)) {
+        deps.logger.log('warn', 'login.insecure_transport', audit)
+        return c.json(
+          apiError('INSECURE_TRANSPORT', 'The session cookie is Secure: log in over HTTPS (or set COOKIE_SECURE=0)'),
+          400
+        )
       }
       if (!isHostAllowed(body.host, body.port, deps.allowedHosts)) {
         deps.logger.log('warn', 'login.host_not_allowed', audit)

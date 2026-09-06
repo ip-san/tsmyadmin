@@ -59,7 +59,7 @@ SQL エクスポートの「`DEFINER` 句を除く」は、復元したビュー
 
 ## サプライチェーン
 
-- GitHub Actions はコミット SHA でピン留めし（`.github/workflows/ci.yml`、タグはコメントで併記）、Dependabot（`.github/dependabot.yml`）が月次で更新 PR を出します
+- GitHub Actions はコミット SHA でピン留めし（`.github/workflows/ci.yml`、タグはコメントで併記）、Dependabot（`.github/dependabot.yml`）が Actions と `bun.lock` の依存について月次で更新 PR を出します
 - 依存は `bun.lock` で固定し、本番イメージは `bun install --production --ignore-scripts` で postinstall スクリプトを実行しません
 
 ## 既知の制限

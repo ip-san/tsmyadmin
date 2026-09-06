@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { createAdapter } from '@tsmyadmin/adapter'
 import { getConnInfo, serveStatic } from 'hono/bun'
+import { compress } from 'hono/compress'
 import { createApp } from './app.ts'
 import { ConfigError, loadConfig } from './config.ts'
 import { entriesWithoutPort } from './lib/allowlist.ts'
@@ -78,7 +79,20 @@ const app = createApp(config, {
 // hono/bun serveStatic resolves paths relative to the process cwd (it prefixes "./"), so keep this relative.
 const webDist = config.webDist ?? path.relative(process.cwd(), path.resolve(import.meta.dir, '../../web/dist'))
 if (existsSync(webDist)) {
+  // gzip for the SPA (the brotli budget in CI never reached a browser); API responses stay uncompressed so the
+  // NDJSON statement stream is delivered per statement, not per compression window.
+  const gzip = compress({ encoding: 'gzip' })
+  app.use('*', (c, next) => (c.req.path.startsWith('/api/') ? next() : gzip(c, next)))
+  // Hashed assets never change: a year of caching; everything else the SPA serves (index.html, theme-init.js) is
+  // revalidated on every load so a deploy is picked up.
+  app.use('*', async (c, next) => {
+    await next()
+    if (!c.res.ok || c.req.path.startsWith('/api/')) return
+    c.header('Cache-Control', c.req.path.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache')
+  })
   app.use('*', serveStatic({ root: webDist }))
+  // A missing asset is an error (a stale index.html after a deploy), not a page to fall back to.
+  app.get('/assets/*', (c) => c.text('Not found', 404))
   app.get('*', serveStatic({ path: path.join(webDist, 'index.html') }))
 } else {
   logger.log('warn', 'web.dist_missing', { webDist })
@@ -92,12 +106,17 @@ const server = Bun.serve({ port: config.port, fetch: app.fetch })
  * forces exit. `/readyz` keeps answering 200 until the listener closes, so drain the load balancer first.
  */
 let stopping = false
+let stoppedAt = 0
 const shutdown = async (signal: string) => {
   if (stopping) {
+    // Supervisors that signal the whole process group deliver the same signal twice within milliseconds; only a
+    // deliberate second signal (a second Ctrl+C) forces the exit.
+    if (Date.now() - stoppedAt < 1000) return
     logger.log('warn', 'shutdown.forced', { signal })
     process.exit(1)
   }
   stopping = true
+  stoppedAt = Date.now()
   logger.log('info', 'shutdown.begin', { signal, timeoutMs: config.shutdownTimeoutMs })
   const deadline = setTimeout(() => {
     logger.log('warn', 'shutdown.timeout', { pendingRequests: server.pendingRequests })

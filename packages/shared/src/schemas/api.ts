@@ -64,6 +64,8 @@ export const ApiErrorCodeSchema = z.enum([
   'FORBIDDEN',
   /** The login target is outside TSMYADMIN_ALLOWED_HOSTS (403). */
   'HOST_NOT_ALLOWED',
+  /** Login over plain HTTP while the session cookie is `Secure` — the browser would drop it (400). */
+  'INSECURE_TRANSPORT',
   'PERMISSION_DENIED',
   'RATE_LIMITED',
   /** Request body / uploaded file over the limit (413). */

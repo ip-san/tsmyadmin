@@ -72,7 +72,7 @@ function harness(adapter: FakeAdapter = fixtureAdapter(), options: HarnessOption
       ...(options.loginRateLimit ? { loginRateLimit: options.loginRateLimit } : {}),
       ...(options.trustProxy !== undefined ? { trustProxy: options.trustProxy } : {}),
       ...(options.servers ? { servers: options.servers } : {}),
-      ...(options.isProd !== undefined ? { isProd: options.isProd } : {}),
+      ...(options.isProd !== undefined ? { isProd: options.isProd, cookieSecure: options.isProd } : {}),
     }),
     {
       store,
@@ -334,6 +334,25 @@ describe('hardening', () => {
     const cookie = h.cookie()
     expect((await h.login({ ...LOGIN, host: 'evil.example' })).status).toBe(403)
     expect((await h.req('/api/session', { headers: { cookie } })).status).toBe(200)
+  })
+
+  it('refuses a production login over plain HTTP from a non-loopback host, accepts TLS via a trusted proxy', async () => {
+    const h = harness(fixtureAdapter(), { isProd: true, trustProxy: true })
+    stores.push(h.store)
+    const post = (url: string, headers: Record<string, string> = {}) =>
+      h.app.request(url, {
+        method: 'POST',
+        body: JSON.stringify(LOGIN),
+        headers: { 'content-type': 'application/json', ...headers },
+      })
+    // app.request() defaults to http://localhost: loopback is fine; a real host over http is not.
+    const plain = await post('http://admin.example.com/api/session')
+    expect(plain.status).toBe(400)
+    expect(((await plain.json()) as { code: string }).code).toBe('INSECURE_TRANSPORT')
+    const proxied = await post('http://admin.example.com/api/session', { 'x-forwarded-proto': 'https' })
+    expect(proxied.status).toBe(201)
+    const https = await post('https://admin.example.com/api/session')
+    expect(https.status).toBe(201)
   })
 
   it('marks the session cookie Secure in production and slides Max-Age to the TTL', async () => {

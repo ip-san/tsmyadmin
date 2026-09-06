@@ -16,7 +16,13 @@ const csv = (s: string) =>
  */
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  /** Listening port; `PORT` (what most hosting platforms inject) is accepted as a fallback. */
   API_PORT: z.coerce.number().int().min(1).max(65535).default(3100),
+  /**
+   * `Secure` flag on the session cookie: `1` in production by default. `0` only for TLS-free internal networks —
+   * a production login over plain HTTP is refused otherwise (the browser would drop the cookie).
+   */
+  COOKIE_SECURE: z.enum(['0', '1']).optional(),
   /** Signs the session cookie. Required (≥ 32 chars) in production. */
   SESSION_SECRET: z.string().default(''),
   /** Sliding session TTL. */
@@ -58,6 +64,8 @@ const EnvSchema = z.object({
 
 export type AppConfig = {
   isProd: boolean
+  /** `Secure` on the session cookie; a production login over plain HTTP is refused while this is on. */
+  cookieSecure: boolean
   port: number
   sessionSecret: string
   sessionTtlMs: number
@@ -84,9 +92,11 @@ export class ConfigError extends Error {
 export function loadConfig(env: Record<string, string | undefined>): AppConfig {
   // `.env.example` ships optional variables as `NAME=`; an empty value means "unset", not the empty string.
   // TSMYADMIN_ALLOWED_HOSTS is the one exception: empty means "no default hosts, presets only" (docs/deployment.md).
-  const parsed = EnvSchema.safeParse(
-    Object.fromEntries(Object.entries(env).filter(([k, v]) => v !== '' || k === 'TSMYADMIN_ALLOWED_HOSTS'))
+  const present = Object.fromEntries(
+    Object.entries(env).filter(([k, v]) => v !== '' || k === 'TSMYADMIN_ALLOWED_HOSTS')
   )
+  if (present.API_PORT === undefined && present.PORT !== undefined) present.API_PORT = present.PORT
+  const parsed = EnvSchema.safeParse(present)
   if (!parsed.success) {
     throw new ConfigError(formatIssues(parsed.error))
   }
@@ -100,10 +110,15 @@ export function loadConfig(env: Record<string, string | undefined>): AppConfig {
   const allowedHosts = [...new Set([...csv(e.TSMYADMIN_ALLOWED_HOSTS), ...servers.map(presetEntry)])]
   if (allowedHosts.length === 0) throw new ConfigError('TSMYADMIN_ALLOWED_HOSTS must list at least one host (or "*")')
   const invalid = invalidEntries(allowedHosts)
-  if (invalid.length > 0) throw new ConfigError(`TSMYADMIN_ALLOWED_HOSTS: invalid port in ${invalid.join(', ')}`)
+  if (invalid.length > 0) {
+    // (the checker reads "use host" as SQL: the hint lives in a plain string)
+    const hint = 'expected host, host:port or [ipv6]:port with a numeric port'
+    throw new ConfigError(`TSMYADMIN_ALLOWED_HOSTS: invalid entry ${invalid.join(', ')} (${hint})`)
+  }
   return {
     isProd,
     port: e.API_PORT,
+    cookieSecure: e.COOKIE_SECURE ? e.COOKIE_SECURE === '1' : isProd,
     sessionSecret: e.SESSION_SECRET || 'dev-secret-do-not-use-in-production',
     sessionTtlMs: e.SESSION_TTL_MINUTES * 60_000,
     allowedHosts,

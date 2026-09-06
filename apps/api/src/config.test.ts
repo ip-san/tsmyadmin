@@ -12,6 +12,7 @@ describe('loadConfig', () => {
       allowedHosts: ['127.0.0.1', 'localhost'],
       loginRateLimit: { max: 10, windowMs: 60_000 },
       trustProxy: false,
+      cookieSecure: false,
       logFormat: 'pretty',
       servers: [],
       sessionStore: 'memory',
@@ -47,7 +48,18 @@ describe('loadConfig', () => {
       allowedHosts: ['db.internal', '*.rds.amazonaws.com'],
       loginRateLimit: { max: 3, windowMs: 10_000 },
       trustProxy: true,
+      cookieSecure: false,
     })
+    // PORT (platform-injected) is the fallback for API_PORT; COOKIE_SECURE overrides the NODE_ENV default.
+    expect(loadConfig({ PORT: '9000' }).port).toBe(9000)
+    expect(loadConfig({ PORT: '9000', API_PORT: '9100' }).port).toBe(9100)
+    expect(loadConfig({ COOKIE_SECURE: '1' }).cookieSecure).toBe(true)
+    expect(
+      loadConfig({ NODE_ENV: 'production', SESSION_SECRET: 'x'.repeat(32), COOKIE_SECURE: '0' }).cookieSecure
+    ).toBe(false)
+    expect(() => loadConfig({ TSMYADMIN_ALLOWED_HOSTS: 'db:abc' })).toThrow(/invalid entry db:abc/)
+    expect(() => loadConfig({ TSMYADMIN_ALLOWED_HOSTS: '::1:5432' })).toThrow(/invalid entry/)
+    expect(loadConfig({ TSMYADMIN_ALLOWED_HOSTS: '[::1]:5432,db' }).allowedHosts).toEqual(['[::1]:5432', 'db'])
     expect(() => loadConfig({ API_PORT: 'eighty' })).toThrow(/API_PORT/)
     expect(() => loadConfig({ TSMYADMIN_ALLOWED_HOSTS: ' , ' })).toThrow(/ALLOWED_HOSTS/)
     expect(() => loadConfig({ LOG_FORMAT: 'xml' })).toThrow(/LOG_FORMAT/)

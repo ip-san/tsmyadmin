@@ -31,7 +31,11 @@ COPY --from=build /app/apps/web/dist ./apps/web/dist
 COPY --from=build /app/apps/web/package.json ./apps/web/package.json
 COPY --from=build /app/packages ./packages
 # --ignore-scripts: the root "prepare" script installs husky, a dev-only tool that is absent in production.
-RUN bun install --frozen-lockfile --production --ignore-scripts
+# --filter: the web workspace is already built, so React, CodeMirror and the other browser-only packages
+# (~65 MB) stay out of the runtime image; tests and build caches are not shipped either.
+RUN bun install --frozen-lockfile --production --ignore-scripts --filter '!@tsmyadmin/web' \
+ && find /app/apps /app/packages -name '*.test.ts' -delete \
+ && find /app/apps /app/packages -name '*.tsbuildinfo' -delete
 # Session store (SESSION_STORE=sqlite, the production default) lives here; mount a volume to keep logins across restarts.
 RUN mkdir -p /app/data && chown bun:bun /app/data
 VOLUME ["/app/data"]
