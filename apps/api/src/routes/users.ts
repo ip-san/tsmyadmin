@@ -57,18 +57,23 @@ export function userRoutes(cfg: SessionConfig) {
         timeoutMs: 30_000,
         stopOnError: true,
       })
-      // The wrapper statements are not the user's: only their own show, in the masked display form.
+      // The wrapper statements are not the user's: only their own show, in the masked display form — except a
+      // COMMIT that failed, which is the error the user must see (its SQL is shown as the wrapper's).
       const results = transactional ? all.slice(1, 1 + statements.length) : all
+      const commit = transactional ? all[1 + statements.length] : undefined
       const rolledBack = transactional && all.some((r) => r.kind === 'error')
+      const shown = [...results, ...(commit?.kind === 'error' ? [commit] : [])]
+      const encoded = 'password' in op && op.password !== '' ? adapter.exporter.literal(op.password).slice(1, -1) : ''
       return c.json(
-        results.map((r, i) =>
+        shown.map((r, i) =>
           redactPassword(
             {
               ...r,
-              sql: statements[i]?.display ?? '',
+              sql: statements[i]?.display ?? r.sql,
               ...(rolledBack && r.kind !== 'error' ? { notices: [...(r.notices ?? []), 'ROLLED_BACK'] } : {}),
             },
-            op
+            op,
+            encoded
           )
         )
       )
@@ -79,8 +84,11 @@ export function userRoutes(cfg: SessionConfig) {
  * Never echo passwords back. The SQL shown is the masked `display` form, and error messages are scrubbed too:
  * MySQL syntax errors quote the failing fragment (`... near 'IDENTIFIED BY 'x''`).
  */
-function redactPassword(result: StatementResult, op: UserOp): StatementResult {
+function redactPassword(result: StatementResult, op: UserOp, encoded: string): StatementResult {
   const password = 'password' in op ? op.password : ''
   if (password === '' || result.kind !== 'error') return result
-  return { ...result, message: result.message.split(password).join(PASSWORD_MASK) }
+  // Both the raw value and its literal-encoded form (quotes doubled, backslashes escaped), like the audit log.
+  let message = result.message.split(password).join(PASSWORD_MASK)
+  if (encoded && encoded !== password) message = message.split(encoded).join(PASSWORD_MASK)
+  return { ...result, message }
 }

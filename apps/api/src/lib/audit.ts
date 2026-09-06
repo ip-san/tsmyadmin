@@ -75,6 +75,9 @@ export function summarise(method: AuditedMethod, args: unknown[]): Record<string
       }
     case 'executeSql': {
       const full = String(args[1] ?? '')
+      // A bulk load (an uploaded file) is data, not a statement the operator typed: only its size is logged.
+      const label = (args[2] as { auditLabel?: string } | undefined)?.auditLabel
+      if (label) return { ...base, sql: `<${label}>`, sqlLength: full.length }
       // Only the logged prefix is scanned (a 64 MB import would otherwise block the event loop on regexes);
       // a secret straddling the cut is truncated together with everything after it.
       const sql = redactSqlSecrets(full.slice(0, SQL_SUMMARY_MAX * 16))
@@ -102,19 +105,24 @@ const literal = (n: number) =>
  * PASSWORD 'x', and MySQL 8 `REPLACE '<current password>'` (REPLACE INTO / REPLACE( never precede a bare literal).
  */
 const SQL_SECRET = new RegExp(
-  String.raw`\b(IDENTIFIED(?:\s+WITH\s+\S+)?\s+(?:BY|AS)|IDENTIFIED\s+VIA\s+\S+\s+USING|PASSWORD|REPLACE)(\s*[=(]?\s*)${literal(3)}`,
+  String.raw`\b(IDENTIFIED(?:\s+WITH\s+\S+)?\s+(?:BY|AS)|IDENTIFIED\s+VIA\s+\S+\s+USING|(?:\w+_)?PASSWORD|REPLACE)(\s*[=(]?\s*)(?:${literal(3)}|0x[0-9A-Fa-f]+)`,
   'gi'
 )
+/** `password=secret` inside a connection string (CREATE SUBSCRIPTION … CONNECTION, dblink, postgres_fdw options). */
+const CONNECTION_PASSWORD = /(\bpassword\s*=\s*)[^\s'";]+/gi
 /** MySQL `SET PASSWORD [FOR user] = 'x'`. */
 const SET_PASSWORD = new RegExp(String.raw`(\bSET\s+PASSWORD\b[^=;]*=\s*)${literal(2)}`, 'gi')
 
 /** Any string literal, for the coarse sweep over account statements. */
 const ANY_LITERAL = new RegExp(literal(1), 'g')
 /**
- * An account statement's credential part: from the first IDENTIFIED / PASSWORD keyword on, whatever literal
- * survives the targeted patterns (syntax they do not know) is masked as well. The account name before it stays.
+ * A statement's credential part: from the first IDENTIFIED / PASSWORD keyword on — wherever it sits, including
+ * inside a string handed to PREPARE / EXECUTE / format() — everything between the first and the last quote is one
+ * mask, so nested quoting (`''secret''`) cannot leave a fragment outside a literal. The account name before it
+ * stays, and so does the tail after the last quote (`WITH GRANT OPTION`).
  */
-const CREDENTIAL_PART = /^(\s*(?:CREATE|ALTER|GRANT|SET)\b[\s\S]*?\b(?:IDENTIFIED|PASSWORD)\b)([\s\S]*)$/i
+const CREDENTIAL_PART = /^([\s\S]*?\b(?:\w+_)?(?:IDENTIFIED|PASSWORD)\b)([\s\S]*)$/i
+const QUOTED_SPAN = /['"$][\s\S]*['"$]/
 
 /**
  * Drops SQL comments while copying string literals verbatim (a comment between `IDENTIFIED` and `BY`, or between
@@ -161,15 +169,17 @@ function redactSqlSecrets(sql: string): string {
   const plain = withoutComments(sql)
     .replace(SQL_SECRET, (_m, kw: string, sep: string) => `${kw}${sep}'${PASSWORD_MASK}'`)
     .replace(SET_PASSWORD, (_m, head: string) => `${head}'${PASSWORD_MASK}'`)
+    .replace(CONNECTION_PASSWORD, (_m, head: string) => `${head}${PASSWORD_MASK}`)
   // Statement by statement: after the credential keyword no literal survives.
   return plain
     .split(/(;)/)
     .map((part) => {
       const m = CREDENTIAL_PART.exec(part)
       if (!m) return part
-      const masked = (m[2] ?? '').replace(ANY_LITERAL, (lit) =>
-        lit.includes(PASSWORD_MASK) ? lit : `'${PASSWORD_MASK}'`
-      )
+      const tail = m[2] ?? ''
+      const masked = QUOTED_SPAN.test(tail)
+        ? tail.replace(QUOTED_SPAN, `'${PASSWORD_MASK}'`)
+        : tail.replace(ANY_LITERAL, (lit) => (lit.includes(PASSWORD_MASK) ? lit : `'${PASSWORD_MASK}'`))
       return `${m[1]}${masked}`
     })
     .join('')

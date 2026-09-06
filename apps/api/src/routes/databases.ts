@@ -34,9 +34,14 @@ function ns(database: string, schema?: string): Namespace {
   return schema ? { database, schema } : { database }
 }
 
-/** A user-fixable import problem as the API error body (the client localises `reason` with `params`). */
 /** Blank line sent on an NDJSON stream while a statement runs (well inside every idle timeout in the path). */
 const HEARTBEAT_MS = 15_000
+/** NDJSON responses: progress lines must reach the browser as they are written, not when a proxy buffer fills. */
+const NDJSON_HEADERS = {
+  'content-type': 'application/x-ndjson; charset=utf-8',
+  'cache-control': 'no-store',
+  'x-accel-buffering': 'no',
+}
 
 function validationError(err: ImportValidationError): ApiError {
   return { ...apiError('VALIDATION', err.message), reason: err.reason, params: err.params }
@@ -233,10 +238,7 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
               await adapter.cancelQuery(queryId)
             },
           })
-          return c.body(stream, 200, {
-            'content-type': 'application/x-ndjson; charset=utf-8',
-            'cache-control': 'no-store',
-          })
+          return c.body(stream, 200, NDJSON_HEADERS)
         }
       )
       .post('/databases/:db/sql', validate('json', SqlRequestSchema), async (c) => {
@@ -322,10 +324,7 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
             await adapter.cancelQuery(queryId)
           },
         })
-        return c.body(stream, 200, {
-          'content-type': 'application/x-ndjson; charset=utf-8',
-          'cache-control': 'no-store',
-        })
+        return c.body(stream, 200, NDJSON_HEADERS)
       })
       .post('/databases/:db/sql/cancel', validate('json', SqlCancelRequestSchema), async (c) => {
         const cancelled = await c.get('session').adapter.cancelQuery(c.req.valid('json').queryId)

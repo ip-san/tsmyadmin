@@ -17,7 +17,7 @@ export type BinaryCell = z.infer<typeof BinaryCellSchema>
 export const TruncatedTextCellSchema = z.strictObject({ $text: z.string(), length: z.number().int().min(0) })
 export type TruncatedTextCell = z.infer<typeof TruncatedTextCellSchema>
 
-/** Characters kept of a text value when browsing / running SQL (exports carry the whole value). */
+/** UTF-16 units kept of a text value when browsing / running SQL (exports and catalog reads carry the whole value). */
 export const MAX_TEXT_CHARS = 64 * 1024
 
 /** A value the client may send (row values, filters, keys). */

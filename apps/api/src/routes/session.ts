@@ -63,19 +63,20 @@ export function sessionRoutes(cfg: SessionConfig, deps: SessionRouteDeps) {
 
       // The IP limiter counts failures only (a shared office NAT must not be locked out by successful logins).
       // It is checked first so a blocked client cannot grow the ip|user map with fresh user names.
-      const perIp = deps.ipLimiter.peek(ip)
-      const limit = perIp.allowed ? deps.loginLimiter.hit(rateKey) : { allowed: false, retryAfterSec: 0 }
-      if (!perIp.allowed || !limit.allowed) {
-        deps.logger.log('warn', 'login.rate_limited', audit)
-        c.header('Retry-After', String(Math.max(limit.retryAfterSec, perIp.retryAfterSec)))
-        return c.json(apiError('RATE_LIMITED', 'Too many login attempts; try again later'), 429)
-      }
+      // A deployment refusing plain HTTP must not also lock its users out: checked before any attempt is counted.
       if (cfg.secure && !deps.secureTransport(c)) {
         deps.logger.log('warn', 'login.insecure_transport', audit)
         return c.json(
           apiError('INSECURE_TRANSPORT', 'The session cookie is Secure: log in over HTTPS (or set COOKIE_SECURE=0)'),
           400
         )
+      }
+      const perIp = deps.ipLimiter.peek(ip)
+      const limit = perIp.allowed ? deps.loginLimiter.hit(rateKey) : { allowed: false, retryAfterSec: 0 }
+      if (!perIp.allowed || !limit.allowed) {
+        deps.logger.log('warn', 'login.rate_limited', audit)
+        c.header('Retry-After', String(Math.max(limit.retryAfterSec, perIp.retryAfterSec)))
+        return c.json(apiError('RATE_LIMITED', 'Too many login attempts; try again later'), 429)
       }
       if (!isHostAllowed(body.host, body.port, deps.allowedHosts)) {
         deps.logger.log('warn', 'login.host_not_allowed', audit)

@@ -23,6 +23,10 @@ try {
 const logger = createLogger(config.logFormat)
 if (!process.env.SESSION_SECRET)
   logger.log('warn', 'config.dev_secret', { hint: 'SESSION_SECRET not set; using a development secret' })
+if (config.isProd && !config.cookieSecure)
+  logger.log('warn', 'config.cookie_insecure', {
+    hint: 'COOKIE_SECURE=0: the session cookie travels over plain HTTP; only for networks that never see TLS',
+  })
 const anyPort = entriesWithoutPort(config.allowedHosts)
 if (config.isProd && anyPort.length > 0)
   logger.log('warn', 'config.allowlist_without_port', {

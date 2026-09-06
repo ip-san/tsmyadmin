@@ -130,6 +130,47 @@ describe('withAudit', () => {
     expect(logged).toContain("note = 'a -- not a comment'")
   })
 
+  it('redacts credentials nested in strings, replication / connection passwords and hex hashes', async () => {
+    const { lines, adapter } = setup()
+    const script = [
+      "PREPARE s FROM 'CREATE USER u IDENTIFIED BY ''nested-secret'''",
+      "DO $$ BEGIN EXECUTE 'ALTER ROLE r PASSWORD ''do-secret'''; END $$",
+      "DO $$ BEGIN EXECUTE format('ALTER ROLE r PASSWORD %L', 'fmt-secret'); END $$",
+      "CHANGE REPLICATION SOURCE TO SOURCE_HOST = 'h', SOURCE_PASSWORD = 'repl-secret'",
+      "CREATE SUBSCRIPTION s CONNECTION 'host=x password=conn-secret dbname=d' PUBLICATION p",
+      "SELECT dblink_connect('host=x password=link-secret')",
+      "ALTER USER 'u'@'%' IDENTIFIED WITH caching_sha2_password AS 0x2441303024ABCDEF",
+      "GRANT ALL ON *.* TO 'g'@'%' IDENTIFIED BY 'grant-secret' WITH GRANT OPTION",
+    ].join(';\n')
+    await adapter.executeSql(ns, script, { maxRows: 1, timeoutMs: 1000, stopOnError: true })
+    const logged = String(lines[0]?.sql)
+    for (const secret of [
+      'nested-secret',
+      'do-secret',
+      'fmt-secret',
+      'repl-secret',
+      'conn-secret',
+      'link-secret',
+      '2441303024ABCDEF',
+      'grant-secret',
+    ])
+      expect(logged).not.toContain(secret)
+    // The tail after the last quote survives (the summary is cut at SQL_SUMMARY_MAX).
+    expect(logged).toMatch(/IDENTIFIED BY '\*+' WI/)
+  })
+
+  it('logs an import as a labelled size, never its text', async () => {
+    const { lines, adapter } = setup()
+    await adapter.executeSql(ns, "INSERT INTO t VALUES (1, 'row value')", {
+      maxRows: 1,
+      timeoutMs: 1000,
+      stopOnError: true,
+      auditLabel: 'import',
+    })
+    expect(lines[0]).toMatchObject({ sql: '<import>', sqlLength: 37 })
+    expect(JSON.stringify(lines[0])).not.toContain('row value')
+  })
+
   it('logs failures with ok=false and rethrows', async () => {
     const { lines, adapter } = setup()
     await expect(adapter.deleteRows(ns, 'users', [{ kind: 'pk', values: { id: 99 } }])).rejects.toBeInstanceOf(

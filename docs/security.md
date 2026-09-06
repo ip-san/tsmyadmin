@@ -9,7 +9,7 @@
 
 - 資格情報はサーバー側にだけ保持され、ブラウザには **署名付きセッション ID の Cookie**（`HttpOnly`, `SameSite=Strict`, 本番では `Secure`）しか渡りません。本番既定の `SESSION_STORE=sqlite` では、資格情報は `SESSION_SECRET` から HKDF で導出した鍵による AES-256-GCM で暗号化して保存します（ファイルだけ持ち出されても復号できません。`SESSION_SECRET` は環境変数として厳重に管理してください）
 - セッションは無操作 `SESSION_TTL_MINUTES` で失効し、ログアウト / 失効時に DB 接続プールを閉じます
-- パスワードは API のレスポンス（`GET /api/session`）、ログ、アカウント操作のプレビュー / 実行結果、DB エラーメッセージのいずれにも含めません（マスク `****`）。SQL コンソールに直接入力した `IDENTIFIED BY '…'` / `PASSWORD '…'` / `SET PASSWORD … = '…'` も監査ログに書く前にマスクします（コメントを除去してから照合し、`CREATE / ALTER / GRANT / SET` 文では認証キーワード以降に残るすべての文字列リテラルもマスクします。要約は再実行用ではないためコメントは失われます）
+- パスワードは API のレスポンス（`GET /api/session`）、ログ、アカウント操作のプレビュー / 実行結果、DB エラーメッセージのいずれにも含めません（マスク `****`）。SQL コンソールに直接入力した `IDENTIFIED BY '…'` / `PASSWORD '…'` / `SET PASSWORD … = '…'` も監査ログに書く前にマスクします（コメントを除去してから照合し、`IDENTIFIED` / `PASSWORD` を含む文では認証キーワード以降の最初の引用符から最後の引用符までを 1 つのマスクにします — `PREPARE` / `EXECUTE` / `format()` に文字列として渡した文や `''` の入れ子でも断片が残りません。`SOURCE_PASSWORD` などの `*_PASSWORD`、接続文字列中の `password=…`、`AS 0x…` のハッシュも対象です。要約は再実行用ではないためコメントは失われます）
 - 想定外の内部エラーはクライアントに `INTERNAL` とだけ返し、メッセージやスタックはサーバーログにのみ残します
 - リクエスト本文の上限: `/api/session` 64 KB、SQL 実行 16 MB、インポート `IMPORT_MAX_BYTES`（64 MB）、その他の JSON 1 MB。超過は `413 PAYLOAD_TOO_LARGE`（インポートはファイルが 64 MB を超えた場合も、マルチパート本文が 65 MB を超えた場合も同じ）
 
@@ -55,7 +55,7 @@ SQL エクスポートの「`DEFINER` 句を除く」は、復元したビュー
 
 ## 監査
 
-構造化ログ（`LOG_FORMAT=json`）に `login.ok` / `login.failed` / `login.host_not_allowed` / `login.rate_limited` / `logout` とリクエスト ID 付きのアクセスログが出ます。変更系の呼び出しはアダプター境界の監査ログ（`event: audit`）に、誰が・どの DB に・何を（行の値は含まない。SQL コンソールの文は先頭 500 文字を記録するため値を含み得る）・成功したかが記録されます。詳細は `docs/operations.md`。
+構造化ログ（`LOG_FORMAT=json`）に `login.ok` / `login.failed` / `login.host_not_allowed` / `login.rate_limited` / `logout` とリクエスト ID 付きのアクセスログが出ます。変更系の呼び出しはアダプター境界の監査ログ（`event: audit`）に、誰が・どの DB に・何を（行の値は含まない。SQL コンソールの文は先頭 500 文字を記録するため値を含み得る。インポートは `<import>` とファイルの文字数だけを記録する）・成功したかが記録されます。詳細は `docs/operations.md`。
 
 ## サプライチェーン
 

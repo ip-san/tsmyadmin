@@ -7,6 +7,8 @@ function identifierLimit(dialect: Dialect): { max: number; unit: 'chars' | 'byte
 }
 
 const NAME_KEYS = new Set(['name', 'newName', 'table', 'database', 'schema', 'refTable', 'user'])
+/** MySQL account names are shorter than other identifiers (the host part may be 255). */
+const MYSQL_USER_MAX = 32
 const encoder = new TextEncoder()
 
 /**
@@ -18,8 +20,11 @@ export function tooLongIdentifier(op: unknown, dialect: Dialect): { name: string
   const { max, unit } = identifierLimit(dialect)
   const length = (s: string) => (unit === 'bytes' ? encoder.encode(s).length : [...s].length)
   const visit = (value: unknown, key: string | null): { name: string; max: number } | null => {
-    if (typeof value === 'string')
-      return key !== null && NAME_KEYS.has(key) && length(value) > max ? { name: value, max } : null
+    if (typeof value === 'string') {
+      if (key === null || !NAME_KEYS.has(key)) return null
+      const limit = key === 'user' && dialect === 'mysql' ? MYSQL_USER_MAX : max
+      return length(value) > limit ? { name: value, max: limit } : null
+    }
     if (Array.isArray(value)) {
       for (const v of value) {
         const hit = visit(v, key === 'columns' || key === 'refColumns' ? 'name' : null)

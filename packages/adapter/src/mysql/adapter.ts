@@ -308,6 +308,11 @@ export class MysqlAdapter extends BaseAdapter {
       columns = fields.map(mysqlColumnMeta)
     })
     const stream = query.stream({ highWaterMark: batchSize })
+    // mysql2 only reports a lost connection to commands with a callback; a callback would make it buffer every
+    // row, so the connection's own 'error' (KILL, server gone, net_write_timeout on a stalled client) is forwarded
+    // to the stream instead — otherwise the iteration would wait forever.
+    const onFatal = (err: Error) => stream.destroy(err)
+    core.on('error', onFatal)
     let rows: Cell[][] = []
     let finished = false
     try {
@@ -321,11 +326,17 @@ export class MysqlAdapter extends BaseAdapter {
       finished = true
     } catch (err) {
       finished = true
-      throw this.toAdapterError(err)
+      const mapped = this.toAdapterError(err)
+      if (mapped.code === 'CONNECTION_FAILED') this.broken.add(conn.connection)
+      throw mapped
     } finally {
+      core.off('error', onFatal)
       if (!finished) {
+        // Abandoned mid-scan: drop the socket outright, or the rest of the result set keeps arriving and being
+        // parsed until the server notices the half-closed connection.
         stream.destroy()
         this.broken.add(conn.connection)
+        ;(core as unknown as { stream?: { destroy(): void } }).stream?.destroy()
       }
     }
     // The last (possibly empty) batch also tells an empty table's caller the column list.

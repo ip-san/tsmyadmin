@@ -19,7 +19,7 @@
 | `audit` | **監査ログ**: データ・構造・アカウント・サーバー状態を変える呼び出し（`insertRow(s)` / `updateRow` / `deleteRows` / `executeSql` / `cancelQuery` / `killProcess`）。`requestId`, `dialect`, `dbUser`, `dbHost`, `database`, `schema`, `table`, 行数・キー種別・カラム名、`executeSql` は SQL 先頭 500 文字と文数 / エラー数、`ok`, `ms`。失敗時は `error`（エラーコード）と `nativeCode` だけで、サーバーのメッセージは記録しない。**行の値は記録しない**（SQL コンソール / インポートの文は先頭 500 文字を記録するため値を含み得る）。パスワード（アカウント操作、SQL コンソールの `IDENTIFIED BY` / `PASSWORD` 文）は `****` に置換 |
 | `readyz.failed` | セッションストア異常 |
 | `session_store.open_failed` / `session_store.reset` | SQLite セッションストアを開けず終了（`path`, `error`, `hint`）/ `SESSION_SECRET` 変更を検出して保存済みセッションを削除 |
-| `config.dev_secret` / `config.allowlist_without_port` / `web.dist_missing` | 設定の警告（開発用シークレット / ポート未指定の許可ホスト / SPA ビルド不在） |
+| `config.dev_secret` / `config.allowlist_without_port` / `config.cookie_insecure` / `web.dist_missing` | 設定の警告（開発用シークレット / ポート未指定の許可ホスト / 本番で `COOKIE_SECURE=0` / SPA ビルド不在） |
 
 `audit` は DDL（`/sql` 経由）やインポート（`executeSql` / `insertRows`）も含みます。SQL コンソールで実行した文の全文が必要な場合は、ログの `sql` は 500 文字で切り詰められている点に注意してください（値を含み得るため意図的に短くしています）。
 

@@ -92,9 +92,17 @@ export function createApp(config: AppConfig, services: AppServices) {
   // Presets are always reachable on exactly their own host:port, however the config object was assembled.
   const allowedHosts = [...new Set([...config.allowedHosts, ...config.servers.map(presetEntry)])]
   const secureTransport = (c: Context) => {
-    const url = new URL(c.req.url)
+    let url: URL
+    try {
+      url = new URL(c.req.url)
+    } catch {
+      return false // a malformed Host header is not a reason for a 500
+    }
     if (url.protocol === 'https:') return true
+    // X-Forwarded-Proto: the first value is the client-facing hop (unlike X-Forwarded-For, where the last is trusted).
     if (config.trustProxy && c.req.header('x-forwarded-proto')?.split(',')[0]?.trim() === 'https') return true
+    // Browsers accept a Secure cookie from http://localhost (Chrome, Firefox; not Safari) — judged by the Host the
+    // browser used, which is what the cookie rule looks at.
     return url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '[::1]'
   }
   const sessionDeps = { allowedHosts, loginLimiter, ipLimiter, ip, secureTransport, logger }

@@ -8,7 +8,7 @@ tsmyadmin は **1 プロセス（Bun）で API と SPA を配信する単一コ�
 |---|---|---|
 | `NODE_ENV` | `development` | `production` で Cookie に `Secure`（`COOKIE_SECURE` で上書き可）、ログ JSON、`SESSION_SECRET` 必須 |
 | `API_PORT` | `3100` | 待ち受けポート（1–65535）。未指定なら `PORT`（PaaS が注入する変数）を代わりに使う。Docker イメージの `EXPOSE` は 3100 だが `HEALTHCHECK` は実際のポートに従う |
-| `COOKIE_SECURE` | 本番 `1` / 開発 `0` | セッション Cookie の `Secure`。`1` のとき平文 HTTP でのログインは `INSECURE_TRANSPORT`（400）で拒否する（ブラウザが Cookie を捨てるため）。TLS を終端しない社内ネットワークでだけ `0` にする。`localhost` / `127.0.0.1` / `::1` からの平文アクセスは常に許可（ブラウザが Secure Cookie を受け入れる） |
+| `COOKIE_SECURE` | 本番 `1` / 開発 `0` | セッション Cookie の `Secure`。`1` のとき平文 HTTP でのログインは `INSECURE_TRANSPORT`（400）で拒否する（ブラウザが Cookie を捨てるため）。TLS を終端しない社内ネットワークでだけ `0` にする。`localhost` / `127.0.0.1` / `::1` への平文アクセスは常に許可（Chrome / Firefox は localhost の Secure Cookie を受け入れる。Safari は受け入れないため、Safari で試す場合も HTTPS か `COOKIE_SECURE=0` が必要） |
 | `SESSION_SECRET` | （開発用固定値） | セッション Cookie の署名鍵。**本番では 32 文字以上必須**。`openssl rand -hex 32` |
 | `SESSION_TTL_MINUTES` | `30` | 操作ごとに延長されるセッション寿命（1–1440） |
 | `SESSION_MAX_PER_IDENTITY` | `10`（1–1000） | 同じ DB アカウント（種別 / ホスト / ポート / ユーザー名）で同時に保持するセッション数。超えると最も古いものを閉じる（ログインの繰り返しで DB の `max_connections` を使い切らせない） |

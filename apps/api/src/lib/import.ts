@@ -101,6 +101,7 @@ export async function importSql(
     // Single-transaction mode stops at the first error by definition (the rest could not commit anyway).
     stopOnError: options.stopOnError || options.singleTransaction,
     queryId: options.queryId,
+    auditLabel: 'import',
     onResult: async (r, index) => {
       // An option the server refused (session_replication_role needs superuser) must stop the run before the
       // user's first statement: throwing here ends executeSql, which resets the connection.

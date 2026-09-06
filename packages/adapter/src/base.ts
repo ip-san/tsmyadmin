@@ -55,12 +55,18 @@ export interface RawResult {
 export interface QueryOptions {
   /** Bytes kept of each binary value (default MAX_BINARY_BYTES for display; Infinity for exports). */
   binaryLimit?: number
-  /** Characters kept of each text value (default MAX_TEXT_CHARS for display; Infinity for exports). */
+  /**
+   * Characters kept of each text value. Unlimited by default: catalog reads (a view definition, a routine body,
+   * SHOW CREATE TABLE) must arrive whole. Only the rows shown to the user (browse pages, console results) pass
+   * DISPLAY.
+   */
   textLimit?: number
 }
 
 /** Export reads: whole values, whatever their size. */
 export const UNCAPPED: QueryOptions = { binaryLimit: Number.POSITIVE_INFINITY, textLimit: Number.POSITIVE_INFINITY }
+/** Rows rendered on a page: a multi-megabyte TEXT / JSON cell travels as its head plus its length. */
+const DISPLAY: QueryOptions = { textLimit: MAX_TEXT_CHARS }
 
 export interface Conn {
   query(text: string, params?: unknown[], options?: QueryOptions): Promise<RawResult | RawResult[]>
@@ -175,9 +181,12 @@ export function driverValueToCell(value: unknown, options: QueryOptions = {}): C
   if (Buffer.isBuffer(value) || value instanceof Uint8Array) return bufferToCell(value, options.binaryLimit)
   switch (typeof value) {
     case 'string': {
-      // A multi-megabyte TEXT / JSON column would otherwise travel whole for every row of a page.
-      const limit = options.textLimit ?? MAX_TEXT_CHARS
-      return value.length > limit ? { $text: value.slice(0, limit), length: value.length } : value
+      const limit = options.textLimit ?? Number.POSITIVE_INFINITY
+      if (value.length <= limit) return value
+      // Cut between code points: a high surrogate at the edge would leave a lone half of a character.
+      const cut = value.charCodeAt(limit - 1)
+      const end = cut >= 0xd800 && cut <= 0xdbff ? limit - 1 : limit
+      return { $text: value.slice(0, end), length: value.length }
     }
     case 'number':
     case 'boolean':
@@ -428,7 +437,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     const countSql = `SELECT COUNT(*) FROM (SELECT 1 FROM ${tableSql}${countWhere} LIMIT ${countParams.add(EXACT_COUNT_MAX_ROWS + 1)}) AS tsmyadmin_count`
 
     return this.withConn(ns, async (conn) => {
-      const data = firstResult(await conn.query(dataSql, params.values))
+      const data = firstResult(await conn.query(dataSql, params.values, DISPLAY))
       // Large unfiltered tables: COUNT(*) is a full scan on InnoDB / PostgreSQL, so use the catalog estimate
       // that describeTable already fetched (no extra round trip).
       const estimate = opts.filters.length === 0 ? schema.rowEstimate : null
@@ -861,15 +870,15 @@ export abstract class BaseAdapter implements DatabaseAdapter {
   ): Promise<RawResult[]> {
     const asList = (raw: RawResult | RawResult[]) => (Array.isArray(raw) ? raw : [raw])
     const wrapped = wrapMaxRows === null ? null : wrapReadOnly(sql, wrapMaxRows + 1, this.dialect)
-    if (!wrapped) return asList(await conn.query(sql))
+    if (!wrapped) return asList(await conn.query(sql, undefined, DISPLAY))
     try {
-      return asList(await conn.query(wrapped))
+      return asList(await conn.query(wrapped, undefined, DISPLAY))
     } catch (err) {
       const e = err instanceof AdapterError ? err : this.toAdapterError(err)
       // Statements the wrapper itself breaks (MySQL: duplicate column names, top-level-only modifiers) are
       // re-run as written — never after an interruption, which would restart the cancelled statement.
       if (e.nativeCode !== undefined && this.wrapperOnlyErrors().has(e.nativeCode) && !cancelled()) {
-        return asList(await conn.query(sql))
+        return asList(await conn.query(sql, undefined, DISPLAY))
       }
       if (e.position !== undefined && e.position > WRAP_PREFIX.length) {
         throw new AdapterError(e.code, e.message, e.detail, {

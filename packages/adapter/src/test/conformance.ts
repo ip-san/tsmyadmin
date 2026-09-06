@@ -20,7 +20,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { mysqlAccount } from '../mysql/users.ts'
 import { isGeneratedColumn } from '../sql/export.ts'
 import { quoteIdent } from '../sql/quote.ts'
-import type { DatabaseAdapter, ExecuteOptions, RowBatch } from '../types.ts'
+import { AdapterError, type DatabaseAdapter, type ExecuteOptions, type RowBatch } from '../types.ts'
 
 /** A browsed value handed back as a key / filter value (fails loudly if the server cut it). */
 function input(cell: Cell | undefined): InputCell {
@@ -119,6 +119,7 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
     `${scratch}_bulk_a`,
     `${scratch}_bulk_b`,
     `${scratch}_nokey`,
+    `${scratch}_slowt`,
     `${scratch}_big`,
     `${scratch}_seed`,
     `${scratch}_pseqt`,
@@ -130,7 +131,6 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
     `${scratch}_ser`,
     `${scratch}_bin`,
     `${scratch}_txt`,
-    `${scratch}_nokey`,
   ]
   const browseAll = async (table: string) => db.browseRows(ns, table, { offset: 0, limit: 100, sort: [], filters: [] })
 
@@ -1320,6 +1320,40 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
           break
         }
         expect((await browseAll(t)).rows).toHaveLength(11)
+        // A connection that dies mid-scan ends the iteration with an error instead of hanging it (MySQL streams
+        // the scan; PostgreSQL pages with a cursor).
+        if (dialect === 'mysql') {
+          const slow = `${scratch}_slowv`
+          const big = `${scratch}_slowt`
+          // 1,331 rows at 10 ms each from a plain scan; the 8 KB padding overflows the server's 16 KB net buffer so
+          // rows reach the client while the query is still running (small rows would be flushed only at the end).
+          await execOk(`CREATE TABLE ${big} (v INT NULL)`)
+          await execOk(`INSERT INTO ${big} (v) SELECT a.v FROM ${t} a, ${t} b, ${t} c`)
+          await execOk(`CREATE VIEW ${slow} AS SELECT v, REPEAT('x', 8000) AS pad, SLEEP(0.01) AS z FROM ${big}`)
+          try {
+            const scan = db.iterateRows(ns, slow, { batchSize: 2 })[Symbol.asyncIterator]()
+            try {
+              await scan.next()
+              // Found by its text: MariaDB has no connection attributes, so `self` is not set there.
+              const me = (await db.listProcesses()).find((p) => (p.query ?? '').includes(slow))
+              expect(me).toBeDefined()
+              if (me) await db.killProcess(me.id)
+              const outcome = await Promise.race([
+                scan.next().then(
+                  () => 'ended',
+                  (err: unknown) => (err instanceof AdapterError ? err.code : 'other')
+                ),
+                new Promise<string>((resolve) => setTimeout(() => resolve('timeout'), 8000)),
+              ])
+              expect(['CONNECTION_FAILED', 'QUERY_FAILED']).toContain(outcome)
+              expect((await browseAll(t)).rows).toHaveLength(11)
+            } finally {
+              await Promise.race([scan.return?.(undefined), new Promise((r) => setTimeout(r, 2000))])
+            }
+          } finally {
+            await execOk(`DROP VIEW ${slow}; DROP TABLE ${big}`)
+          }
+        }
         // An empty table still reports its columns.
         await execOk(`DELETE FROM ${t}`)
         const empty: RowBatch[] = []
@@ -1631,6 +1665,28 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         for await (const b of db.iterateRows(ns, t, { batchSize: 10 })) exported = b.rows[0]?.[1] ?? null
         expect(typeof exported === 'string' ? exported.length : -1).toBe(MAX_TEXT_CHARS + 5)
         await execOk(`DROP TABLE ${t}`)
+      })
+
+      it('reads catalog text (a view definition, a routine body) whole however long it is', async () => {
+        const v = `${scratch}_bigview`
+        const fn = `${scratch}_bigfn`
+        const literal = 'y'.repeat(MAX_TEXT_CHARS + 100)
+        await execOk(`CREATE VIEW ${v} AS SELECT '${literal}' AS s`)
+        await execOk(
+          dialect === 'mysql'
+            ? `CREATE FUNCTION ${fn}() RETURNS TEXT DETERMINISTIC RETURN '${literal}'`
+            : `CREATE FUNCTION ${fn}() RETURNS text LANGUAGE sql AS $$ SELECT '${literal}' $$`
+        )
+        try {
+          expect((await db.showCreateTable(ns, v)).join('\n')).toContain(literal)
+          expect(await db.routineDefinition(ns, fn, 'function')).toContain(literal)
+          // The same text through the console is capped: display and catalog are different reads.
+          const [shown] = await execOk(`SELECT s FROM ${v}`)
+          expect(shown?.kind === 'rows' && isTruncatedCell(shown.result.rows[0]?.[0] ?? null)).toBe(true)
+        } finally {
+          await execOk(`DROP VIEW ${v}`)
+          await execOk(dialect === 'mysql' ? `DROP FUNCTION ${fn}` : `DROP FUNCTION ${fn}()`)
+        }
       })
     })
 

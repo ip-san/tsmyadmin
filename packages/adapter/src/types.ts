@@ -45,6 +45,8 @@ export interface ExecuteOptions {
   queryId?: string
   /** Called as each statement finishes (before the next starts); lets callers stream results per statement. */
   onResult?: (result: StatementResult, index: number) => void | Promise<void>
+  /** Logged in place of the script text (`<import>`): an uploaded file carries row values, which never reach a log. */
+  auditLabel?: string
 }
 
 export type AdapterErrorCode = Extract<
