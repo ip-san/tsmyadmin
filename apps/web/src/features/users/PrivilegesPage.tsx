@@ -7,7 +7,7 @@ import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
 import { grantsQuery, usersQuery } from '@/lib/queries.ts'
 import { userLabel, userRef, useUserOpFlow } from '@/lib/user-ops.ts'
-import { privilegeLevel } from './privilege-level.ts'
+import { globalPrivilegeLevel, privilegeLevel } from './privilege-level.ts'
 
 export function PrivilegesPage({ db, schema, dialect }: { db: string; schema?: string | undefined; dialect: Dialect }) {
   const users = useQuery(usersQuery)
@@ -18,7 +18,10 @@ export function PrivilegesPage({ db, schema, dialect }: { db: string; schema?: s
   const grants = useQueries({
     queries: logins.map((u) => ({
       ...grantsQuery(userRef(u), { database: db, schema }),
-      select: (g: UserGrants) => privilegeLevel(dialect, db, schema, g.statements),
+      select: (g: UserGrants) => ({
+        level: privilegeLevel(dialect, db, schema, g.statements),
+        global: dialect === 'mysql' ? globalPrivilegeLevel(g.statements) : null,
+      }),
     })),
   })
   if (users.isPending) return <Spinner />
@@ -44,7 +47,8 @@ export function PrivilegesPage({ db, schema, dialect }: { db: string; schema?: s
             const r = userRef(u)
             const key = userLabel(r)
             const g = grants[i]
-            const level = g?.data ?? null
+            const level = g?.data?.level ?? null
+            const global = g?.data?.global ?? null
             return (
               <Tr key={key}>
                 <Td className="font-medium">{u.name}</Td>
@@ -57,9 +61,16 @@ export function PrivilegesPage({ db, schema, dialect }: { db: string; schema?: s
                       <span className="text-xs text-zinc-500 dark:text-zinc-400">…</span>
                     )
                   ) : (
-                    <Badge tone={level === 'all' ? 'info' : level === 'some' ? 'warn' : 'neutral'}>
-                      {locale.users.levels[level]}
-                    </Badge>
+                    <>
+                      <Badge tone={level === 'all' ? 'info' : level === 'some' ? 'warn' : 'neutral'}>
+                        {locale.users.levels[level]}
+                      </Badge>
+                      {global ? (
+                        <Badge tone="neutral" title={locale.users.globalGrantHint}>
+                          {locale.users.globalGrant}
+                        </Badge>
+                      ) : null}
+                    </>
                   )}
                 </Td>
                 <Td className="whitespace-nowrap space-x-1">

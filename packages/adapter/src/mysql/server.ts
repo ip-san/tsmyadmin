@@ -28,12 +28,23 @@ export async function mysqlListStatus(conn: Conn): Promise<KeyValue[]> {
   return pairs(firstResult(await conn.query('SHOW GLOBAL STATUS')).rows)
 }
 
+const PROCESSLIST = 'SELECT p.ID, p.USER, p.HOST, p.DB, p.COMMAND, p.TIME, p.STATE, p.INFO'
+/** The tool's own connections announce themselves through a connection attribute (needs performance_schema). */
+const PROCESSLIST_WITH_SELF = `${PROCESSLIST}, a.ATTR_VALUE = 'tsmyadmin'
+  FROM information_schema.PROCESSLIST p
+  LEFT JOIN performance_schema.session_connect_attrs a ON a.PROCESSLIST_ID = p.ID AND a.ATTR_NAME = 'program_name'
+  ORDER BY p.ID`
+const PROCESSLIST_PLAIN = `${PROCESSLIST}, NULL FROM information_schema.PROCESSLIST p ORDER BY p.ID`
+
 export async function mysqlListProcesses(conn: Conn): Promise<ProcessInfo[]> {
-  const r = firstResult(
-    await conn.query(
-      'SELECT ID, USER, HOST, DB, COMMAND, TIME, STATE, INFO FROM information_schema.PROCESSLIST ORDER BY ID'
-    )
-  )
+  let r: ReturnType<typeof firstResult>
+  try {
+    r = firstResult(await conn.query(PROCESSLIST_WITH_SELF))
+  } catch (err) {
+    // No SELECT on performance_schema: the list without the self mark.
+    if (!(err instanceof AdapterError && err.code === 'PERMISSION_DENIED')) throw err
+    r = firstResult(await conn.query(PROCESSLIST_PLAIN))
+  }
   return r.rows.map((row) => ({
     id: str(row[0]),
     user: strOrNull(row[1]),
@@ -42,10 +53,20 @@ export async function mysqlListProcesses(conn: Conn): Promise<ProcessInfo[]> {
     state: joinParts(row[4], row[6]),
     timeSec: row[5] === null || row[5] === undefined ? null : Number(row[5]),
     query: strOrNull(row[7]),
+    self: row[8] === 1 || row[8] === true,
   }))
 }
 
 export async function mysqlKillProcess(conn: Conn, id: string): Promise<void> {
   if (!/^\d+$/.test(id)) throw new AdapterError('QUERY_FAILED', 'process id must be numeric')
-  await conn.query(`KILL ${id}`)
+  try {
+    await conn.query(`KILL ${id}`)
+  } catch (err) {
+    // KILL of the connection this statement runs on drops it (the server reports the loss): success.
+    if (err instanceof AdapterError && err.code === 'CONNECTION_FAILED') {
+      conn.discard()
+      return
+    }
+    throw err
+  }
 }

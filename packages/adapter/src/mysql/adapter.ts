@@ -170,6 +170,8 @@ export class MysqlAdapter extends BaseAdapter {
       password: this.config.password,
       ...(this.config.database ? { database: this.config.database } : {}),
       connectionLimit: 4,
+      // performance_schema.session_connect_attrs: the process list marks the tool's own connections.
+      connectAttributes: { program_name: 'tsmyadmin' },
       connectTimeout: 10_000,
       idleTimeout: 60_000,
       multipleStatements: false,

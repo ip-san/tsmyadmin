@@ -18,10 +18,26 @@ export type ResultSet = z.infer<typeof ResultSetSchema>
 
 /** 1-based line of the script where the statement starts (imports and long scripts). */
 const line = z.number().int().min(1).optional()
+/** Server-side NOTICE / WARNING messages raised by the statement (PostgreSQL); a "success" may hide one. */
+const notices = z.array(z.string()).optional()
 
 export const StatementResultSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('rows'), sql: z.string(), result: ResultSetSchema, durationMs: z.number(), line }),
-  z.object({ kind: z.literal('affected'), sql: z.string(), affectedRows: z.number(), durationMs: z.number(), line }),
+  z.object({
+    kind: z.literal('rows'),
+    sql: z.string(),
+    result: ResultSetSchema,
+    durationMs: z.number(),
+    line,
+    notices,
+  }),
+  z.object({
+    kind: z.literal('affected'),
+    sql: z.string(),
+    affectedRows: z.number(),
+    durationMs: z.number(),
+    line,
+    notices,
+  }),
   z.object({
     kind: z.literal('error'),
     sql: z.string(),

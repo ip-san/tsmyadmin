@@ -314,13 +314,15 @@ export const ja = {
     /** Appended to `irreversible` for the ops that destroy stored data (not for dropping an index / key / account). */
     dataLoss: 'テーブルのデータは失われます。',
     columnLoss: 'このカラムのデータは失われます。',
-    databaseLoss:
-      'データベース内のすべてのテーブルとデータが失われます。PostgreSQL では接続中の他のセッションも切断されます。',
+    databaseLoss: 'データベース内のすべてのテーブルとデータが失われます。',
+    databaseLossForce: 'このデータベースに接続中の他のユーザーのセッションも強制的に切断されます。',
     typeToConfirm: (name: string) => `続行するには「${name}」と入力してください`,
     generating: 'SQL を生成中…',
     execute: '実行する',
     executed: (title: string) => `「${title}」を実行しました`,
     failedStatement: '失敗した文',
+    rolledBack: '先行して成功した文も取り消しました（何も反映されていません）',
+    serverNotice: 'サーバーからの通知',
     columnName: 'カラム名',
     dataType: '型',
     nullable: 'NULL を許可',
@@ -487,6 +489,8 @@ export const ja = {
     privilegesTitle: (db: string, schema?: string) => `${db}${schema ? `.${schema}` : ''} の権限`,
     currentPrivileges: '現在の権限',
     levels: { all: 'すべて', some: '一部', none: 'なし' },
+    globalGrant: 'グローバル',
+    globalGrantHint: 'サーバー全体（*.*）に対する権限です。このデータベースでの取り消しでは外れません',
     privilegesHint:
       'ユーザーごとに、このデータベース（PostgreSQL は現在のスキーマ）へのすべての権限を付与・取り消しできます。',
     ops: {
@@ -530,6 +534,8 @@ export const ja = {
     kill: '強制終了',
     killExecute: '強制終了する',
     killConfirm: (id: string) => `プロセス ${id} を強制終了します。よろしいですか？`,
+    selfConnection: 'このツール',
+    selfConnectionHint: 'tsmyadmin 自身の接続（自分のセッションを含む）',
     killed: (id: string) => `プロセス ${id} を強制終了しました`,
     autoRefresh: '自動更新（5 秒）',
     refresh: '更新',
@@ -603,6 +609,8 @@ export const ja = {
       `${p.line ?? '?'} 行目で開いた引用符が閉じていません（以降の行が 1 つのフィールドになるため取り込みを中止しました）`,
     CSV_ROW_FAILED: (p: Record<string, string | number>) =>
       `${p.line ?? '?'} 行目の取り込みに失敗しました（ファイル全体を取り消しました）: ${p.message ?? ''}`,
+    IDENTIFIER_TOO_LONG: (p: Record<string, string | number>) =>
+      `名前「${p.name ?? ''}」が長すぎます（最大 ${p.max ?? '?'} ${p.max === 63 ? 'バイト' : '文字'}）`,
     CSV_ROWS_FAILED: (p: Record<string, string | number>) =>
       `${p.from ?? '?'}〜${p.to ?? '?'} 行目のいずれかの取り込みに失敗しました（ファイル全体を取り消しました）: ${p.message ?? ''}`,
   },

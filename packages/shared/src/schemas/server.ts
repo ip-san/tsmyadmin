@@ -24,6 +24,8 @@ export const ProcessInfoSchema = z.object({
   state: z.string().nullable(),
   timeSec: z.number().nullable(),
   query: z.string().nullable(),
+  /** One of this tool's own connections (its pools announce themselves as `tsmyadmin`). */
+  self: z.boolean().default(false),
 })
 export type ProcessInfo = z.infer<typeof ProcessInfoSchema>
 

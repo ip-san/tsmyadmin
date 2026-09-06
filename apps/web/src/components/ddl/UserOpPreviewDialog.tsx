@@ -1,6 +1,8 @@
+import { useQuery } from '@tanstack/react-query'
 import { useRouteContext } from '@tanstack/react-router'
 import type { UserOp } from '@tsmyadmin/shared'
 import { locale } from '@/config/locale.ts'
+import { serverInfoQuery } from '@/lib/queries.ts'
 import type { UserOpFlow } from '@/lib/user-ops.ts'
 import { PreviewDialog } from './PreviewDialog.tsx'
 
@@ -9,7 +11,14 @@ const WITH_PASSWORD = new Set<UserOp['op']>(['createUser', 'setPassword'])
 
 export function UserOpPreviewDialog({ flow }: { flow: UserOpFlow }) {
   const { session } = useRouteContext({ from: '/_app' })
-  const self = (op: UserOp) => op.user.name === session.user
+  // MySQL accounts are name@host: `root@localhost` is not the `root@%` we are logged in as. CURRENT_USER() (the
+  // matched account) comes from the server info; until it is known the name alone decides.
+  const info = useQuery(serverInfoQuery)
+  const current = info.data?.currentUser ?? ''
+  const at = current.lastIndexOf('@')
+  const currentHost = session.dialect === 'mysql' && at > 0 ? current.slice(at + 1).replace(/^'|'$/g, '') : null
+  const self = (op: UserOp) =>
+    op.user.name === session.user && (currentHost === null || !op.user.host || op.user.host === currentHost)
   return (
     <PreviewDialog
       flow={flow}

@@ -45,6 +45,8 @@ export interface RawResult {
   affectedRows: number
   /** True when the statement produced a result set (even an empty one). */
   hasRows: boolean
+  /** NOTICE / WARNING lines the server raised while running it (PostgreSQL). */
+  notices?: string[]
 }
 
 /** A connection checked out of a pool and bound to a namespace. */
@@ -757,6 +759,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
                       sql: st.sql,
                       line: st.line,
                       durationMs,
+                      ...(r.notices && r.notices.length > 0 ? { notices: r.notices } : {}),
                       result: {
                         columns: r.columns,
                         rows: truncated ? r.rows.slice(0, opts.maxRows) : r.rows,
@@ -770,6 +773,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
                       line: st.line,
                       durationMs,
                       affectedRows: r.affectedRows,
+                      ...(r.notices && r.notices.length > 0 ? { notices: r.notices } : {}),
                     })
                   }
                 }

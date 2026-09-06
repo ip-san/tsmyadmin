@@ -105,5 +105,7 @@ export const ImportReasonSchema = z.enum([
   'CSV_UNTERMINATED_QUOTE',
   'CSV_ROW_FAILED',
   'CSV_ROWS_FAILED',
+  /** DDL / account previews: an identifier longer than the server allows (params: name, max). */
+  'IDENTIFIER_TOO_LONG',
 ])
 export type ImportReason = z.infer<typeof ImportReasonSchema>

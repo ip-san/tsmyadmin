@@ -53,11 +53,24 @@ export function Notice({ children, className }: { children: ReactNode; className
   )
 }
 
-export function Badge({ children, tone = 'neutral' }: { children: ReactNode; tone?: 'neutral' | 'info' | 'warn' }) {
+export function Badge({
+  children,
+  tone = 'neutral',
+  title,
+}: {
+  children: ReactNode
+  tone?: 'neutral' | 'info' | 'warn'
+  /** Longer explanation shown on hover / to assistive tech. */
+  title?: string
+}) {
   const tones = {
     neutral: 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200',
     info: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100',
     warn: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100',
   }
-  return <span className={cn('inline-block rounded px-1.5 py-0.5 text-xs font-medium', tones[tone])}>{children}</span>
+  return (
+    <span className={cn('inline-block rounded px-1.5 py-0.5 text-xs font-medium', tones[tone])} title={title}>
+      {children}
+    </span>
+  )
 }

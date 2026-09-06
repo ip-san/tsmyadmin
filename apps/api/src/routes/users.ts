@@ -6,6 +6,7 @@ import {
   UserOpRequestSchema,
 } from '@tsmyadmin/shared'
 import { Hono } from 'hono'
+import { identifierTooLong, tooLongIdentifier } from '../lib/identifiers.ts'
 import { redactInLogs } from '../lib/request-context.ts'
 import { validate } from '../lib/validate.ts'
 import { type AppEnv, requireSession, type SessionConfig } from '../session/middleware.ts'
@@ -23,6 +24,8 @@ export function userRoutes(cfg: SessionConfig) {
     })
     .post('/users/preview', validate('json', UserOpRequestSchema), (c) => {
       const { op } = c.req.valid('json')
+      const long = tooLongIdentifier({ user: op.user.name }, c.get('session').adapter.dialect)
+      if (long) return c.json(identifierTooLong(long), 400)
       return c.json({
         sql: c
           .get('session')
@@ -41,12 +44,34 @@ export function userRoutes(cfg: SessionConfig) {
         redactInLogs(adapter.exporter.literal(op.password).slice(1, -1))
       }
       // One connection for the whole operation; executeSql splits the script and stops at the first error.
-      const results = await adapter.executeSql(
-        adapter.users.namespace(op, adapter.serverNamespace),
-        statements.map((s) => s.sql).join(';\n'),
-        { maxRows: 1, timeoutMs: 30_000, stopOnError: true }
+      // PostgreSQL role / grant statements are transactional: all of them or none (a failing third GRANT must not
+      // leave the first two in place). MySQL account statements commit implicitly, so they run as they are.
+      const transactional = adapter.dialect === 'postgres' && statements.length > 1
+      const script = [
+        ...(transactional ? ['BEGIN'] : []),
+        ...statements.map((s) => s.sql),
+        ...(transactional ? ['COMMIT'] : []),
+      ].join(';\n')
+      const all = await adapter.executeSql(adapter.users.namespace(op, adapter.serverNamespace), script, {
+        maxRows: 1,
+        timeoutMs: 30_000,
+        stopOnError: true,
+      })
+      // The wrapper statements are not the user's: only their own show, in the masked display form.
+      const results = transactional ? all.slice(1, 1 + statements.length) : all
+      const rolledBack = transactional && all.some((r) => r.kind === 'error')
+      return c.json(
+        results.map((r, i) =>
+          redactPassword(
+            {
+              ...r,
+              sql: statements[i]?.display ?? '',
+              ...(rolledBack && r.kind !== 'error' ? { notices: [...(r.notices ?? []), 'ROLLED_BACK'] } : {}),
+            },
+            op
+          )
+        )
       )
-      return c.json(results.map((r, i) => redactPassword({ ...r, sql: statements[i]?.display ?? '' }, op)))
     })
 }
 

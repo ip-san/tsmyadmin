@@ -1126,8 +1126,26 @@ describe('server', () => {
   const withProcesses = () =>
     fixtureAdapter({
       processes: [
-        { id: '7', user: 'root', host: 'localhost', database: 'shop', state: 'Query', timeSec: 3, query: 'SELECT 1' },
-        { id: '8', user: 'app', host: '10.0.0.1', database: null, state: 'Sleep', timeSec: 120, query: null },
+        {
+          id: '7',
+          user: 'root',
+          host: 'localhost',
+          database: 'shop',
+          state: 'Query',
+          timeSec: 3,
+          query: 'SELECT 1',
+          self: false,
+        },
+        {
+          id: '8',
+          user: 'app',
+          host: '10.0.0.1',
+          database: null,
+          state: 'Sleep',
+          timeSec: 120,
+          query: null,
+          self: true,
+        },
       ],
     })
 

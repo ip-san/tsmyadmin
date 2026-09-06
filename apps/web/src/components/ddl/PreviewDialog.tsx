@@ -55,7 +55,16 @@ export function PreviewDialog<Op>({
     <>
       {/* Always mounted so the announcement is picked up; visible as a notice once an op has run. */}
       <output ref={noticeRef} tabIndex={-1} aria-live="polite" className={flow.executed ? 'block' : 'sr-only'}>
-        {flow.executed ? <Notice>{successMessage(flow.executed)}</Notice> : null}
+        {flow.executed ? (
+          <Notice>
+            {successMessage(flow.executed)}
+            {flow.notices.map((n) => (
+              <span key={n} className="block text-xs text-amber-900 dark:text-amber-200">
+                {locale.ddl.serverNotice}: {n}
+              </span>
+            ))}
+          </Notice>
+        ) : null}
       </output>
       <Dialog
         open={op !== null}
@@ -125,6 +134,7 @@ export function PreviewDialog<Op>({
             <pre tabIndex={0} className="mt-1 overflow-x-auto font-mono text-xs">
               {flow.failed.sql}
             </pre>
+            {flow.rolledBack ? <p className="mt-1 text-xs">{locale.ddl.rolledBack}</p> : null}
           </div>
         ) : null}
       </Dialog>

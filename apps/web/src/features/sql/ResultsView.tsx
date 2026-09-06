@@ -97,7 +97,14 @@ const Statement = memo(function Statement({
     return (
       <section aria-label={heading} className="space-y-1">
         <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{heading}</h3>
-        <Notice>{locale.sql.affected(result.affectedRows, result.durationMs)}</Notice>
+        <Notice>
+          {locale.sql.affected(result.affectedRows, result.durationMs)}
+          {(result.notices ?? []).map((n) => (
+            <span key={n} className="block text-xs text-amber-900 dark:text-amber-200">
+              {n}
+            </span>
+          ))}
+        </Notice>
         <pre tabIndex={0} className="overflow-x-auto font-mono text-xs text-zinc-500 dark:text-zinc-400">
           {result.sql}
         </pre>

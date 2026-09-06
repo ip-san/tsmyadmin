@@ -1,4 +1,5 @@
-import type { DdlOp } from '@tsmyadmin/shared'
+import { useRouteContext } from '@tanstack/react-router'
+import type { DdlOp, Dialect } from '@tsmyadmin/shared'
 import { locale } from '@/config/locale.ts'
 import type { DdlFlow } from '@/lib/ddl.ts'
 import { PreviewDialog } from './PreviewDialog.tsx'
@@ -38,7 +39,7 @@ function opTitle(op: DdlOp): string {
 }
 
 /** Which destructive ops lose stored data (a dropped view, index, key or event loses only its definition). */
-function lossWarning(op: DdlOp): string | null {
+function lossWarning(op: DdlOp, dialect: Dialect): string | null {
   switch (op.op) {
     case 'dropTable':
       return op.kind === 'table' ? locale.ddl.dataLoss : op.kind === 'sequence' ? locale.ddl.sequenceLoss : null
@@ -47,7 +48,9 @@ function lossWarning(op: DdlOp): string | null {
     case 'dropColumn':
       return locale.ddl.columnLoss
     case 'dropDatabase':
-      return locale.ddl.databaseLoss
+      return dialect === 'postgres'
+        ? `${locale.ddl.databaseLoss} ${locale.ddl.databaseLossForce}`
+        : locale.ddl.databaseLoss
     case 'dropTables':
     case 'truncateTables':
       return locale.ddl.bulkLoss(op.tables.length)
@@ -57,13 +60,14 @@ function lossWarning(op: DdlOp): string | null {
 }
 
 export function DdlPreviewDialog({ flow, bulkConfirmName = null }: { flow: DdlFlow; bulkConfirmName?: string | null }) {
+  const { session } = useRouteContext({ from: '/_app' })
   return (
     <PreviewDialog
       flow={flow}
       title={opTitle}
       destructive={(op) => DESTRUCTIVE.has(op.op)}
       confirmName={(op) => confirmName(op, bulkConfirmName)}
-      lossWarning={lossWarning}
+      lossWarning={(op) => lossWarning(op, session.dialect)}
       hint={locale.ddl.previewHint}
       successMessage={(op) => locale.ddl.executed(opTitle(op))}
     />

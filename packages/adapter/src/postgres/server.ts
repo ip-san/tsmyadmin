@@ -59,7 +59,8 @@ export async function pgListProcesses(conn: Conn): Promise<ProcessInfo[]> {
   const r = firstResult(
     await conn.query(
       `SELECT pid, usename, client_addr::text, datname, state, wait_event_type,
-              EXTRACT(EPOCH FROM (now() - query_start))::bigint, query
+              CASE WHEN state = 'active' THEN EXTRACT(EPOCH FROM (now() - query_start))::bigint END, query,
+              application_name = 'tsmyadmin'
        FROM pg_stat_activity WHERE backend_type = 'client backend' ORDER BY pid`
     )
   )
@@ -68,14 +69,23 @@ export async function pgListProcesses(conn: Conn): Promise<ProcessInfo[]> {
     user: strOrNull(row[1]),
     host: strOrNull(row[2]),
     database: strOrNull(row[3]),
-    state: joinParts(row[4], row[5]),
+    // The wait event only says something while the backend is active; an idle one is just idle.
+    state: str(row[4]) === 'active' ? joinParts(row[4], row[5]) : strOrNull(row[4]),
     timeSec: row[6] === null || row[6] === undefined ? null : Number(row[6]),
     query: strOrNull(row[7]),
+    self: row[8] === true,
   }))
 }
 
 export async function pgKillProcess(conn: Conn, id: string): Promise<void> {
   if (!/^\d+$/.test(id)) throw new AdapterError('QUERY_FAILED', 'process id must be numeric')
+  // Terminating the very backend this query runs on kills the connection mid-call: that is success, not failure.
+  const own = firstResult(await conn.query('SELECT pg_backend_pid()'))
+  if (String(own.rows[0]?.[0]) === id) {
+    await conn.query('SELECT pg_terminate_backend($1::int)', [Number(id)]).catch(() => undefined)
+    conn.discard()
+    return
+  }
   const r = firstResult(await conn.query('SELECT pg_terminate_backend($1::int)', [Number(id)]))
   if (r.rows[0]?.[0] !== true) throw new AdapterError('NOT_FOUND', `No such backend: ${id}`)
 }

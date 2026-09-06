@@ -24,6 +24,7 @@ import { Hono } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
 import { apiError, toApiError } from '../lib/errors.ts'
 import { buildExport, contentDisposition, toReadableStream } from '../lib/export.ts'
+import { identifierTooLong, tooLongIdentifier } from '../lib/identifiers.ts'
 import { decodeUpload, ImportValidationError, importCsv, importSql } from '../lib/import.ts'
 import type { Logger } from '../lib/logging.ts'
 import { validate } from '../lib/validate.ts'
@@ -323,6 +324,9 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
         const adapter = c.get('session').adapter
         const target = ns(c.req.param('db'), body.schema)
         let op = body.op
+        // Caught here rather than by the server: PostgreSQL would silently truncate the name to 63 bytes.
+        const long = tooLongIdentifier(op, adapter.dialect)
+        if (long) return c.json(identifierTooLong(long), 400)
         // A data copy lists the insertable columns: generated columns cannot be written (INSERT ... SELECT *
         // would fail after the empty copy was already created, since DDL autocommits).
         if (op.op === 'copyTable' && adapter.dialect === 'postgres') {

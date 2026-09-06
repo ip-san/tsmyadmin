@@ -29,6 +29,13 @@ export async function mysqlListTables(conn: Conn, ns: Namespace): Promise<TableI
       [ns.database]
     )
   )
+  if (r.rows.length === 0) {
+    // A pooled connection still "on" a database that was dropped meanwhile lists nothing: tell the two apart.
+    const exists = firstResult(
+      await conn.query('SELECT 1 FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = ?', [ns.database])
+    )
+    if (exists.rows.length === 0) throw new AdapterError('NOT_FOUND', `Database not found: ${ns.database}`)
+  }
   return r.rows.map((row) => ({
     name: str(row[0]),
     kind: mysqlKind(str(row[1])),

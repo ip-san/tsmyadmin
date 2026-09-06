@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { CellValue } from '@/components/cells/CellValue.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { Dialog } from '@/components/ui/Dialog.tsx'
-import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
+import { Badge, ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
 import { mutations, processesQuery } from '@/lib/queries.ts'
@@ -63,16 +63,23 @@ export function ProcessesPage() {
           <tbody>
             {procs.data.map((p) => (
               <Tr key={p.id}>
-                <Td className="font-mono text-xs">{p.id}</Td>
+                <Td className="whitespace-nowrap font-mono text-xs">
+                  {p.id}
+                  {p.self ? (
+                    <Badge tone="neutral" title={locale.server.selfConnectionHint}>
+                      {locale.server.selfConnection}
+                    </Badge>
+                  ) : null}
+                </Td>
                 <Td>{p.user ?? ''}</Td>
                 <Td className="font-mono text-xs">{p.host ?? ''}</Td>
                 <Td>{p.database ?? ''}</Td>
                 <Td className="text-xs">{p.state ?? ''}</Td>
                 <Td className="text-right tabular-nums">{p.timeSec ?? ''}</Td>
                 <Td className="max-w-md font-mono text-xs">
-                  <CellValue cell={p.query ?? ''} />
+                  {p.query === null ? <span className="text-zinc-400">–</span> : <CellValue cell={p.query} />}
                 </Td>
-                <Td>
+                <Td className="whitespace-nowrap">
                   <Button
                     size="sm"
                     variant="danger"
@@ -111,6 +118,16 @@ export function ProcessesPage() {
         }
       >
         <p>{victim ? locale.server.killConfirm(victim.id) : ''}</p>
+        {victim ? (
+          <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+            <dt className="text-zinc-500 dark:text-zinc-400">{locale.server.user}</dt>
+            <dd>{[victim.user, victim.host].filter(Boolean).join('@') || '–'}</dd>
+            <dt className="text-zinc-500 dark:text-zinc-400">{locale.server.database}</dt>
+            <dd>{victim.database ?? '–'}</dd>
+            <dt className="text-zinc-500 dark:text-zinc-400">{locale.server.query}</dt>
+            <dd className="truncate font-mono">{victim.query?.split('\n')[0]?.slice(0, 200) ?? '–'}</dd>
+          </dl>
+        ) : null}
         {kill.isError ? <ErrorBox error={kill.error} className="mt-2" /> : null}
       </Dialog>
     </section>

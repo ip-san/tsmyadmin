@@ -13,6 +13,10 @@ export interface PreviewFlow<Op> {
   failed: StatementResult | null
   /** The op that ran successfully most recently (cleared when the next preview opens) — for success feedback. */
   executed: Op | null
+  /** NOTICE / WARNING lines the server raised during the last run (a "success" that granted nothing, say). */
+  notices: string[]
+  /** The failed run was rolled back as a whole (PostgreSQL account operations run in one transaction). */
+  rolledBack: boolean
   preview: (op: Op) => void
   confirm: () => void
   cancel: () => void
@@ -36,12 +40,17 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
   const [sql, setSql] = useState<string[]>([])
   const [failed, setFailed] = useState<StatementResult | null>(null)
   const [executed, setExecuted] = useState<Op | null>(null)
+  const [notices, setNotices] = useState<string[]>([])
+  const [rolledBack, setRolledBack] = useState(false)
   // Result applied per call (below), so a superseded preview response cannot overwrite the newer op's SQL.
   const previewM = useMutation({ mutationFn: config.preview })
   const runM = useMutation({
     mutationFn: (o: Op) => config.execute(o, sql),
     onSuccess: async (results, o) => {
       const err = results.find((r) => r.kind === 'error')
+      const raised = results.flatMap((r) => (r.kind === 'error' ? [] : (r.notices ?? [])))
+      setRolledBack(raised.includes('ROLLED_BACK'))
+      setNotices(raised.filter((n) => n !== 'ROLLED_BACK'))
       if (err) {
         setFailed(err)
         return
@@ -64,11 +73,15 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
     error: previewM.error ?? runM.error,
     failed,
     executed,
+    notices,
+    rolledBack,
     preview: (o) => {
       setOp(o)
       setSql([])
       setFailed(null)
       setExecuted(null)
+      setNotices([])
+      setRolledBack(false)
       previewM.reset()
       runM.reset()
       previewM.mutate(o, { onSuccess: (r) => setSql(r.sql) })

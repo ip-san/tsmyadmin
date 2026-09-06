@@ -167,7 +167,8 @@ export function LoginForm({ onLogin, presets = [] }: LoginFormProps) {
           value={database}
           onChange={(e) => setDatabase(e.target.value)}
           {...(dialect === 'postgres' ? { 'aria-describedby': 'database-hint' } : {})}
-          readOnly={fixed}
+          // A MySQL account without access to the preset's database can still log in without one.
+          readOnly={fixed && dialect === 'postgres'}
         />
       </Field>
       {login.isError ? <ErrorBox error={login.error} /> : null}

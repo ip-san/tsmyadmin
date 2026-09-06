@@ -83,6 +83,8 @@ export class PostgresAdapter extends BaseAdapter {
       user: this.config.user,
       password: this.config.password,
       database,
+      // Visible in pg_stat_activity: the process list marks the tool's own connections.
+      application_name: 'tsmyadmin',
       max: 4,
       idleTimeoutMillis: 60_000,
       connectionTimeoutMillis: 10_000,
@@ -138,6 +140,14 @@ export class PostgresAdapter extends BaseAdapter {
     options?: QueryOptions
   ): Promise<RawResult | RawResult[]> {
     let res: ArrayResult | ArrayResult[]
+    // A GRANT by a non-owner "succeeds" with WARNING: no privileges were granted — the caller must see that.
+    const notices: string[] = []
+    const onNotice = (n: { severity?: string | undefined; message?: string | undefined }) => {
+      if (n.message && n.severity !== 'DEBUG' && n.severity !== 'LOG') {
+        notices.push(`${n.severity ?? 'NOTICE'}: ${n.message}`)
+      }
+    }
+    client.on('notice', onNotice)
     try {
       res = params
         ? await client.query<unknown[]>({ text, values: params, rowMode: 'array' })
@@ -146,13 +156,16 @@ export class PostgresAdapter extends BaseAdapter {
       const mapped = this.toAdapterError(err)
       if (mapped.code === 'CONNECTION_FAILED') this.broken.add(client)
       throw mapped
+    } finally {
+      client.off('notice', onNotice)
     }
     if (Array.isArray(res)) {
       const out: RawResult[] = []
       for (const r of res) out.push(await this.toRaw(client, r, options?.binaryLimit))
       return out
     }
-    return this.toRaw(client, res, options?.binaryLimit)
+    const raw = await this.toRaw(client, res, options?.binaryLimit)
+    return notices.length > 0 ? { ...raw, notices } : raw
   }
 
   protected async acquire(ns: Namespace): Promise<Conn> {
