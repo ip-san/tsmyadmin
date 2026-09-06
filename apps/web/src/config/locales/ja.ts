@@ -33,6 +33,7 @@ export const ja = {
     null: 'NULL',
     empty: '（空）',
     binary: (bytes: number) => `[バイナリ ${bytes.toLocaleString('ja-JP')} バイト]`,
+    truncatedText: (length: number) => `[先頭のみ表示 / 全 ${length.toLocaleString('ja-JP')} 文字]`,
     bytes: (n: number) => {
       if (n < 1024) return `${n.toLocaleString('ja-JP')} B`
       const units = ['KB', 'MB', 'GB', 'TB']
@@ -155,12 +156,14 @@ export const ja = {
     fromTable: '参照元テーブル',
   },
   browse: {
-    total: (n: number | null, approximate = false) =>
+    total: (n: number | null, count: 'exact' | 'estimate' | 'lower_bound' = 'exact') =>
       n === null
         ? '行数不明'
-        : approximate
+        : count === 'estimate'
           ? `約 ${n.toLocaleString('ja-JP')} 行（概算）`
-          : `全 ${n.toLocaleString('ja-JP')} 行`,
+          : count === 'lower_bound'
+            ? `${n.toLocaleString('ja-JP')} 行以上`
+            : `全 ${n.toLocaleString('ja-JP')} 行`,
     range: (from: number, to: number) => `${from.toLocaleString('ja-JP')}–${to.toLocaleString('ja-JP')} 行目`,
     perPage: '表示行数',
     prev: '前へ',
@@ -205,7 +208,7 @@ export const ja = {
     value: '値',
     useDefault: '既定値を使う',
     setNull: 'NULL',
-    binaryReadOnly: 'バイナリ値はここでは編集できません（SQL で更新してください）。',
+    binaryReadOnly: 'バイナリ値や表示上限を超える長いテキストはここでは編集できません（SQL で更新してください）。',
     insert: '挿入する',
     save: '保存する',
     inserted: (n: number) => `${n.toLocaleString('ja-JP')} 行を挿入しました`,
@@ -421,6 +424,8 @@ export const ja = {
     download: 'ダウンロードする',
     csvSingle: 'CSV は 1 テーブルずつエクスポートします。',
     nothing: 'エクスポートする対象がありません',
+    selectionTooLong:
+      '選択したテーブルが多すぎて URL に収まりません。すべてのテーブルを選ぶか、選択を減らしてください。',
     snapshotNote: '書き込み中のテーブルでは一貫したスナップショットにならないことがあります。',
   },
   import: {

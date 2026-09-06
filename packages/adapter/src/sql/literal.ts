@@ -1,5 +1,5 @@
 import type { Cell, Dialect } from '@tsmyadmin/shared'
-import { isBinaryCell } from '@tsmyadmin/shared'
+import { isBinaryCell, isTruncatedCell } from '@tsmyadmin/shared'
 
 /** MySQL string literal (backslash escapes are active unless NO_BACKSLASH_ESCAPES). */
 export function mysqlLiteral(value: string): string {
@@ -19,6 +19,8 @@ function hex(base64: string): string {
 export function cellLiteral(dialect: Dialect, cell: Cell): string {
   if (cell === null) return 'NULL'
   if (isBinaryCell(cell)) return dialect === 'mysql' ? `X'${hex(cell.$bin)}'` : `'\\x${hex(cell.$bin)}'::bytea`
+  // Dumps read with no cap, so a truncated cell here is a programming error, not a value to write cut.
+  if (isTruncatedCell(cell)) throw new Error('truncated text cannot be written to a dump')
   switch (typeof cell) {
     case 'number':
       return Number.isFinite(cell) ? String(cell) : 'NULL'

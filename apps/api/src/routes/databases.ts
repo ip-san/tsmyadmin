@@ -35,6 +35,9 @@ function ns(database: string, schema?: string): Namespace {
 }
 
 /** A user-fixable import problem as the API error body (the client localises `reason` with `params`). */
+/** Blank line sent on an NDJSON stream while a statement runs (well inside every idle timeout in the path). */
+const HEARTBEAT_MS = 15_000
+
 function validationError(err: ImportValidationError): ApiError {
   return { ...apiError('VALIDATION', err.message), reason: err.reason, params: err.params }
 }
@@ -197,6 +200,9 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
               const send = (event: ImportEvent) => {
                 if (!closed) controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`))
               }
+              const heartbeat = setInterval(() => {
+                if (!closed) controller.enqueue(encoder.encode('\n'))
+              }, HEARTBEAT_MS)
               try {
                 const result =
                   form.format === 'sql'
@@ -215,6 +221,7 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
                   error: err instanceof ImportValidationError ? validationError(err) : toApiError(err).body,
                 })
               } finally {
+                clearInterval(heartbeat)
                 if (!closed) {
                   closed = true
                   controller.close()
@@ -268,6 +275,10 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
             }
             if (!closed) controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`))
           }
+          // A statement longer than the connection's idle timeout would drop the stream: keep it warm.
+          const heartbeat = setInterval(() => {
+            if (!closed) controller.enqueue(encoder.encode('\n'))
+          }, HEARTBEAT_MS)
           try {
             const results = await adapter.executeSql(namespace, body.sql, {
               maxRows: body.maxRows,
@@ -286,6 +297,7 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
               ...(body.nativeCode ? { nativeCode: body.nativeCode } : {}),
             })
           } finally {
+            clearInterval(heartbeat)
             if (!closed) {
               closed = true
               controller.close()

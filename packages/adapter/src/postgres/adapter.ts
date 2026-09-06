@@ -26,6 +26,7 @@ import {
   firstResult,
   type QueryOptions,
   type RawResult,
+  UNCAPPED,
 } from '../base.ts'
 import { pgLiteral } from '../sql/literal.ts'
 import { quoteIdent, quoteTable } from '../sql/quote.ts'
@@ -119,11 +120,11 @@ export class PostgresAdapter extends BaseAdapter {
     return fields.map((f) => ({ name: f.name, dataType: this.typeNames.get(f.dataTypeID) ?? `oid:${f.dataTypeID}` }))
   }
 
-  private async toRaw(client: PoolClient, res: ArrayResult, binaryLimit?: number): Promise<RawResult> {
+  private async toRaw(client: PoolClient, res: ArrayResult, options?: QueryOptions): Promise<RawResult> {
     const hasRows = res.fields.length > 0
     return {
       columns: hasRows ? await this.columnMetas(client, res.fields) : [],
-      rows: hasRows ? res.rows.map((r) => r.map((v) => driverValueToCell(v, binaryLimit))) : [],
+      rows: hasRows ? res.rows.map((r) => r.map((v) => driverValueToCell(v, options))) : [],
       affectedRows: res.rowCount ?? 0,
       hasRows,
     }
@@ -161,10 +162,10 @@ export class PostgresAdapter extends BaseAdapter {
     }
     if (Array.isArray(res)) {
       const out: RawResult[] = []
-      for (const r of res) out.push(await this.toRaw(client, r, options?.binaryLimit))
+      for (const r of res) out.push(await this.toRaw(client, r, options))
       return out
     }
-    const raw = await this.toRaw(client, res, options?.binaryLimit)
+    const raw = await this.toRaw(client, res, options)
     return notices.length > 0 ? { ...raw, notices } : raw
   }
 
@@ -265,11 +266,7 @@ export class PostgresAdapter extends BaseAdapter {
       await conn.query(`DECLARE tsmyadmin_export NO SCROLL CURSOR FOR SELECT ${columns} FROM ${source}${orderBy}`)
       let first = true
       for (;;) {
-        const r = firstResult(
-          await conn.query(`FETCH ${batchSize} FROM tsmyadmin_export`, undefined, {
-            binaryLimit: Number.POSITIVE_INFINITY,
-          })
-        )
+        const r = firstResult(await conn.query(`FETCH ${batchSize} FROM tsmyadmin_export`, undefined, UNCAPPED))
         // An empty table still yields one batch so callers learn the column list.
         if (r.rows.length > 0 || first) yield { columns: r.columns, rows: r.rows }
         first = false

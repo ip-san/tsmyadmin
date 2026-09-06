@@ -98,7 +98,10 @@ if (existsSync(webDist)) {
   logger.log('warn', 'web.dist_missing', { webDist })
 }
 
-const server = Bun.serve({ port: config.port, fetch: app.fetch })
+// Bun closes a request idle for 10 s by default (no bytes either way): a slow GET or a stream waiting on a long
+// statement would die before the app's own timeouts. 255 s is Bun's maximum; the NDJSON streams also send a
+// heartbeat while a statement runs, so a statement may take longer than that.
+const server = Bun.serve({ port: config.port, fetch: app.fetch, idleTimeout: 255 })
 
 /**
  * Graceful shutdown: stop accepting connections, let in-flight requests (long SQL, exports, imports) finish

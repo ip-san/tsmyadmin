@@ -8,6 +8,10 @@ import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { locale } from '@/config/locale.ts'
 import { tablesQuery } from '@/lib/queries.ts'
+
+/** Under the 8 KB request-line limit common to proxies and Bun's header buffer. */
+const MAX_EXPORT_URL_LENGTH = 6000
+
 import { exportUrl } from './export-url.ts'
 
 export interface ExportFormProps {
@@ -55,6 +59,8 @@ export function ExportForm({ db, schema, table, initialTables }: ExportFormProps
     routines,
     stripDefiner,
   })
+  // The table list travels in the query string; hundreds of ticked tables would exceed what servers accept.
+  const tooLong = url.length > MAX_EXPORT_URL_LENGTH
 
   return (
     <div className="space-y-4">
@@ -147,8 +153,9 @@ export function ExportForm({ db, schema, table, initialTables }: ExportFormProps
       ) : null}
       {csvBlocked ? <Notice>{locale.export.csvSingle}</Notice> : null}
       {nothing ? <Notice>{locale.export.nothing}</Notice> : null}
+      {tooLong ? <Notice>{locale.export.selectionTooLong}</Notice> : null}
       <p className="text-xs text-zinc-500 dark:text-zinc-400">{locale.export.snapshotNote}</p>
-      {csvBlocked || nothing ? (
+      {csvBlocked || nothing || tooLong ? (
         <Button variant="primary" disabled>
           <Download className="size-4" aria-hidden />
           {locale.export.download}

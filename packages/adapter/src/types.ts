@@ -8,6 +8,7 @@ import type {
   DdlOp,
   Dialect,
   EventInfo,
+  InputCell,
   KeyValue,
   Namespace,
   ObjectDependency,
@@ -133,7 +134,7 @@ export interface SqlExporter {
   preamble(ns: Namespace): string[]
   postamble(): string[]
   /** `DROP TABLE|VIEW IF EXISTS` statement (no trailing semicolon) for a dump that restores over existing objects. */
-  dropIfExists(ns: Namespace, schema: TableSchema): string
+  dropIfExists(ns: Namespace, object: Pick<TableSchema, 'name' | 'kind'>): string
   /**
    * DROP … IF EXISTS for everything a dump recreates, in the order given (dependents first), without CASCADE:
    * an object outside the dump that depends on one inside it stops the restore instead of vanishing silently
@@ -202,7 +203,7 @@ export interface DatabaseAdapter {
     ns: Namespace,
     table: string,
     columns: string[],
-    rows: Iterable<Cell[]>,
+    rows: Iterable<InputCell[]>,
     options?: InsertRowsOptions
   ): Promise<{ affectedRows: number }>
   updateRow(ns: Namespace, table: string, key: RowKey, values: RowValues): Promise<{ affectedRows: number }>

@@ -25,6 +25,8 @@ export const TableInfoSchema = z.object({
   comment: z.string().nullable(),
   /** Data + index bytes (DATA_LENGTH + INDEX_LENGTH / pg_total_relation_size); null for views. */
   sizeBytes: z.number().nullable(),
+  /** Inheritance parents in the same schema (PostgreSQL); [] elsewhere. Lets a dump order tables without describing each. */
+  inherits: z.array(z.string()).default([]),
 })
 export type TableInfo = z.infer<typeof TableInfoSchema>
 

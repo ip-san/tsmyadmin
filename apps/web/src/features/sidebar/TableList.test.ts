@@ -5,6 +5,7 @@ import { filterTables } from './TableList.tsx'
 const t = (name: string): TableInfo => ({
   name,
   kind: 'table',
+  inherits: [],
   rowEstimate: null,
   engine: null,
   comment: null,

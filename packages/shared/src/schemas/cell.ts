@@ -10,14 +10,38 @@ import { z } from 'zod'
 export const BinaryCellSchema = z.strictObject({ $bin: z.string() })
 export type BinaryCell = z.infer<typeof BinaryCellSchema>
 
-export const CellSchema = z.union([z.null(), z.string(), z.number(), z.boolean(), BinaryCellSchema])
+/**
+ * Text cut to the display limit (`$text` holds the first MAX_TEXT_CHARS characters, `length` the full count).
+ * Only ever produced by the server for display: never accepted as a value to write.
+ */
+export const TruncatedTextCellSchema = z.strictObject({ $text: z.string(), length: z.number().int().min(0) })
+export type TruncatedTextCell = z.infer<typeof TruncatedTextCellSchema>
+
+/** Characters kept of a text value when browsing / running SQL (exports carry the whole value). */
+export const MAX_TEXT_CHARS = 64 * 1024
+
+/** A value the client may send (row values, filters, keys). */
+export const InputCellSchema = z.union([z.null(), z.string(), z.number(), z.boolean(), BinaryCellSchema])
+export type InputCell = z.infer<typeof InputCellSchema>
+
+/** A value the server may return: any input cell, or a truncated text. */
+export const CellSchema = z.union([InputCellSchema, TruncatedTextCellSchema])
 export type Cell = z.infer<typeof CellSchema>
 
-export const RowValuesSchema = z.record(z.string(), CellSchema)
+export const RowValuesSchema = z.record(z.string(), InputCellSchema)
 export type RowValues = z.infer<typeof RowValuesSchema>
 
 export function isBinaryCell(cell: Cell): cell is BinaryCell {
   return typeof cell === 'object' && cell !== null && '$bin' in cell
+}
+
+export function isTruncatedCell(cell: Cell): cell is TruncatedTextCell {
+  return typeof cell === 'object' && cell !== null && '$text' in cell
+}
+
+/** Whether a cell can be sent back as a value (a truncated text would write a cut value). */
+export function isInputCell(cell: Cell): cell is InputCell {
+  return !isTruncatedCell(cell)
 }
 
 /**

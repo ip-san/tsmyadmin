@@ -43,6 +43,7 @@ export async function mysqlListTables(conn: Conn, ns: Namespace): Promise<TableI
     engine: strOrNull(row[3]),
     comment: strOrNull(row[4]) || null,
     sizeBytes: str(row[1]).includes('VIEW') ? null : num(row[5]),
+    inherits: [],
   }))
 }
 

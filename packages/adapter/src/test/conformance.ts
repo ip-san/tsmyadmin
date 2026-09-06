@@ -8,12 +8,25 @@ import type {
   StatementResult,
   TriggerInfo,
 } from '@tsmyadmin/shared'
-import { isBinaryCell } from '@tsmyadmin/shared'
+import {
+  EXACT_COUNT_MAX_ROWS,
+  type InputCell,
+  isBinaryCell,
+  isInputCell,
+  isTruncatedCell,
+  MAX_TEXT_CHARS,
+} from '@tsmyadmin/shared'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { mysqlAccount } from '../mysql/users.ts'
 import { isGeneratedColumn } from '../sql/export.ts'
 import { quoteIdent } from '../sql/quote.ts'
 import type { DatabaseAdapter, ExecuteOptions, RowBatch } from '../types.ts'
+
+/** A browsed value handed back as a key / filter value (fails loudly if the server cut it). */
+function input(cell: Cell | undefined): InputCell {
+  if (cell === undefined || !isInputCell(cell)) throw new Error('not a writable cell')
+  return cell
+}
 
 export interface ConformanceContext {
   dialect: Dialect
@@ -106,12 +119,16 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
     `${scratch}_bulk_a`,
     `${scratch}_bulk_b`,
     `${scratch}_nokey`,
+    `${scratch}_big`,
+    `${scratch}_seed`,
     `${scratch}_inh_child`,
     `${scratch}_inh`,
     `${scratch}_seqmin_copy`,
     `${scratch}_seqmin`,
     `${scratch}_ser`,
     `${scratch}_bin`,
+    `${scratch}_txt`,
+    `${scratch}_nokey`,
   ]
   const browseAll = async (table: string) => db.browseRows(ns, table, { offset: 0, limit: 100, sort: [], filters: [] })
 
@@ -371,11 +388,43 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         expect(r.columns.map((c) => c.name)).toEqual(['id', 'name', 'email', 'age', 'created_at'])
         expect(r.rows).toHaveLength(5)
         expect(r.total).toBe(5)
-        expect(r.approximate).toBe(false)
+        expect(r.count).toBe('exact')
         expect(r.truncated).toBe(false)
         expect(r.keyKind).toBe('pk')
         expect(r.keyColumns).toEqual(['id'])
         expect(r.columns.every((c) => typeof c.dataType === 'string' && c.dataType.length > 0)).toBe(true)
+      })
+
+      it('stops a filtered count at the threshold and reports it as a floor', async () => {
+        const t = `${scratch}_big`
+        const seed = `${scratch}_seed`
+        await execOk(`CREATE TABLE ${seed} (n INT NOT NULL)`)
+        await execOk(`INSERT INTO ${seed} (n) VALUES ${Array.from({ length: 47 }, (_, i) => `(${i + 1})`).join(', ')}`)
+        // 47³ = 103,823 rows: just past EXACT_COUNT_MAX_ROWS.
+        await execOk(`CREATE TABLE ${t} (v INT NOT NULL)`)
+        await execOk(`INSERT INTO ${t} (v) SELECT a.n FROM ${seed} a, ${seed} b, ${seed} c`)
+        try {
+          const many = await db.browseRows(ns, t, {
+            offset: 0,
+            limit: 5,
+            sort: [],
+            filters: [{ column: 'v', op: 'gte', value: 1 }],
+          })
+          expect(many.rows).toHaveLength(5)
+          expect({ total: many.total, count: many.count }).toEqual({
+            total: EXACT_COUNT_MAX_ROWS,
+            count: 'lower_bound',
+          })
+          const few = await db.browseRows(ns, t, {
+            offset: 0,
+            limit: 5,
+            sort: [],
+            filters: [{ column: 'v', op: 'eq', value: 1 }],
+          })
+          expect({ total: few.total, count: few.count }).toEqual({ total: 47 * 47, count: 'exact' })
+        } finally {
+          await execOk(`DROP TABLE ${t}; DROP TABLE ${seed}`)
+        }
       })
 
       it('exposes outgoing foreign keys for linking', async () => {
@@ -648,11 +697,11 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         const key: RowKey =
           dialect === 'postgres'
             ? { kind: 'ctid', value: String(row.at(-1)) }
-            : { kind: 'all-columns', values: { f: row[0] ?? null, d: row[1] ?? null, j: row[2] ?? null, v: 1 } }
+            : { kind: 'all-columns', values: { f: input(row[0]), d: input(row[1]), j: input(row[2]), v: 1 } }
         expect(await db.updateRow(ns, t, key, { v: 2 })).toEqual({ affectedRows: 1 })
         // The same values as a composite "primary key" (FLOAT 0.1 ≠ DOUBLE 0.1 unless cast).
         await execOk(`ALTER TABLE ${t} ADD PRIMARY KEY (f, d)`)
-        const pk: RowKey = { kind: 'pk', values: { f: row[0] ?? null, d: row[1] ?? null } }
+        const pk: RowKey = { kind: 'pk', values: { f: input(row[0]), d: input(row[1]) } }
         expect(await db.updateRow(ns, t, pk, { v: 3 })).toEqual({ affectedRows: 1 })
         expect((await browseAll(t)).rows[0]?.[3]).toBe(3)
         // Keyset paging over a FLOAT key must not re-read the last row of each batch.
@@ -1249,6 +1298,34 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         await execOk(`DROP TABLE ${t}`)
       })
 
+      it('scans a key-less table in batches and survives a consumer that stops early', async () => {
+        const t = `${scratch}_nokey`
+        await execOk(`CREATE TABLE ${t} (v INT NULL, s VARCHAR(10) NULL)`)
+        const values = Array.from({ length: 11 }, (_, i) => `(${i}, 'r${i}')`)
+        await execOk(`INSERT INTO ${t} (v, s) VALUES ${values.join(', ')}`)
+        const sizes: number[] = []
+        const seen = new Set<number>()
+        for await (const batch of db.iterateRows(ns, t, { batchSize: 4 })) {
+          expect(batch.columns.map((c) => c.name)).toEqual(['v', 's'])
+          sizes.push(batch.rows.length)
+          for (const r of batch.rows) seen.add(Number(r[0]))
+        }
+        expect(seen.size).toBe(11)
+        expect(sizes.reduce((a, b) => a + b, 0)).toBe(11)
+        // A caller that gives up mid-scan (a client closing an export) must not poison the pool.
+        for await (const batch of db.iterateRows(ns, t, { batchSize: 4 })) {
+          expect(batch.rows.length).toBeGreaterThan(0)
+          break
+        }
+        expect((await browseAll(t)).rows).toHaveLength(11)
+        // An empty table still reports its columns.
+        await execOk(`DELETE FROM ${t}`)
+        const empty: RowBatch[] = []
+        for await (const batch of db.iterateRows(ns, t, { batchSize: 4 })) empty.push(batch)
+        expect(empty.map((b) => [b.columns.length, b.rows.length])).toEqual([[2, 0]])
+        await execOk(`DROP TABLE ${t}`)
+      })
+
       it.skipIf(dialect !== 'mysql')(
         'keeps a trigger written with database-qualified names database-relative',
         async () => {
@@ -1317,7 +1394,7 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
           for (const r of batch.rows) seen.push(Number(r[1]))
         expect(seen).toEqual([0, 1, 39, 128])
         const rows = await browseAll(t)
-        const key = rows.rows.find((r) => r[1] === 128)?.[0] ?? null
+        const key = input(rows.rows.find((r) => r[1] === 128)?.[0])
         expect(await db.updateRow(ns, t, { kind: 'pk', values: { b: key } }, { v: 129 })).toEqual({ affectedRows: 1 })
         const hit = await db.browseRows(ns, t, {
           offset: 0,
@@ -1488,6 +1565,31 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         let exported: Cell = null
         for await (const b of db.iterateRows(ns, t, { batchSize: 10 })) exported = b.rows[0]?.[1] ?? null
         expect(bytes(exported)).toBe(70000)
+        await execOk(`DROP TABLE ${t}`)
+      })
+
+      it('caps long text when browsing (with its full length) but exports it whole', async () => {
+        const t = `${scratch}_txt`
+        const long = `REPEAT('y', ${MAX_TEXT_CHARS + 5})`
+        await execOk(`CREATE TABLE ${t} (id INT PRIMARY KEY, s ${dialect === 'mysql' ? 'MEDIUMTEXT' : 'TEXT'} NULL)`)
+        await execOk(`INSERT INTO ${t} (id, s) VALUES (1, ${long}), (2, 'short')`)
+        const browsed = (await browseAll(t)).rows.map((r) => r[1] ?? null)
+        expect(browsed[1]).toBe('short')
+        const cut = browsed[0] ?? null
+        expect(isTruncatedCell(cut)).toBe(true)
+        expect(isTruncatedCell(cut) ? { chars: cut.$text.length, length: cut.length } : null).toEqual({
+          chars: MAX_TEXT_CHARS,
+          length: MAX_TEXT_CHARS + 5,
+        })
+        // The SQL console applies the same cap; a cut value can never be written back through a row key.
+        const [viaSql] = await execOk(`SELECT s FROM ${t} WHERE id = 1`)
+        expect(viaSql?.kind === 'rows' && isTruncatedCell(viaSql.result.rows[0]?.[0] ?? null)).toBe(true)
+        await expect(
+          db.updateRow(ns, t, { kind: 'pk', values: { id: 1 } }, { s: cut as unknown as InputCell })
+        ).rejects.toMatchObject({ code: 'VALIDATION' })
+        let exported: Cell = null
+        for await (const b of db.iterateRows(ns, t, { batchSize: 10 })) exported = b.rows[0]?.[1] ?? null
+        expect(typeof exported === 'string' ? exported.length : -1).toBe(MAX_TEXT_CHARS + 5)
         await execOk(`DROP TABLE ${t}`)
       })
     })

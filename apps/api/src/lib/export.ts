@@ -1,6 +1,6 @@
 import type { DatabaseAdapter, DropTarget, ProgramStatement } from '@tsmyadmin/adapter'
 import { AdapterError, commentText, isGeneratedColumn, splitStatements } from '@tsmyadmin/adapter'
-import type { ExportQuery, Namespace, ObjectDependency, TableSchema } from '@tsmyadmin/shared'
+import type { ExportQuery, Namespace, ObjectDependency, TableInfo } from '@tsmyadmin/shared'
 import { csvField, EXPORT_BATCH_SIZE } from '@tsmyadmin/shared'
 
 export const DUMP_COMPLETE_MARKER = '-- tsmyadmin dump complete'
@@ -256,15 +256,17 @@ async function* sqlBody(
   const pg = adapter.dialect === 'postgres'
   const structure = q.structure === '1'
   const drops = structure && q.dropTable === '1'
-  const schemas = new Map<string, TableSchema>()
-  for (const table of tables) schemas.set(table, await adapter.describeTable(ns, table))
+  // One listing gives every kind and inheritance parent; each table is described right before it is written, so
+  // a database with thousands of tables starts streaming at once instead of after a full catalog pass.
+  const listed = new Map((await adapter.listTables(ns)).map((t) => [t.name, t]))
+  const infos = new Map(tables.flatMap((t) => (listed.has(t) ? [[t, listed.get(t) as TableInfo] as const] : [])))
   // An inheritance child is created after its parents (multi-level: depth-first over the parents in the dump).
   const tableOrder: string[] = []
   const placed = new Set<string>()
   const place = (table: string, stack: Set<string>) => {
     if (placed.has(table) || stack.has(table)) return
     stack.add(table)
-    for (const parent of schemas.get(table)?.inherits ?? []) if (schemas.has(parent)) place(parent, stack)
+    for (const parent of infos.get(table)?.inherits ?? []) if (infos.has(parent)) place(parent, stack)
     placed.add(table)
     tableOrder.push(table)
   }
@@ -274,7 +276,7 @@ async function* sqlBody(
   const programs = structure && q.routines === '1'
   // PostgreSQL: the catalog says which routines are tied to a table or view (row-type signatures, SQL-standard
   // bodies) and must follow it; MySQL has no such catalog and needs none (routines cannot appear in DDL).
-  const catalog = pg && (programs || schemas.size > 1) ? await adapter.listDependencies(ns) : null
+  const catalog = pg && (programs || infos.size > 1) ? await adapter.listDependencies(ns) : null
   const relationBound = new Map(
     (catalog ?? [])
       .filter((d) => d.kind === 'routine')
@@ -286,11 +288,11 @@ async function* sqlBody(
   // PostgreSQL dump can also drop them first, dependents before their dependencies).
   const late: LateObject[] = []
   const unreadableViews: string[] = []
-  for (const [table, schema] of schemas) {
-    if (schema.kind === 'table' || schema.kind === 'sequence' || !structure) continue
+  for (const [table, info] of infos) {
+    if (info.kind === 'table' || info.kind === 'sequence' || !structure) continue
     let created: string[]
     try {
-      created = await adapter.showCreateTable(ns, table, schema)
+      created = await adapter.showCreateTable(ns, table)
     } catch (err) {
       // SHOW VIEW privilege missing: named in the dump (like routines) instead of failing the download.
       if (err instanceof AdapterError && err.code === 'PERMISSION_DENIED') {
@@ -300,7 +302,7 @@ async function* sqlBody(
       throw err
     }
     const statements = created.map((stmt) => (q.stripDefiner === '1' ? adapter.exporter.withoutDefiner(stmt) : stmt))
-    const all = drops && !pg ? [adapter.exporter.dropIfExists(ns, schema), ...statements] : statements
+    const all = drops && !pg ? [adapter.exporter.dropIfExists(ns, info), ...statements] : statements
     late.push({
       kind: 'view',
       name: table,
@@ -320,26 +322,27 @@ async function* sqlBody(
   if (drops && pg) {
     const targets: DropTarget[] = [...ordered].reverse().map((o) => {
       if (o.kind === 'routine') return { kind: 'routine', name: o.name, statements: o.statements }
-      return { kind: schemas.get(o.name)?.kind === 'materialized_view' ? 'materialized_view' : 'view', name: o.name }
+      return { kind: infos.get(o.name)?.kind === 'materialized_view' ? 'materialized_view' : 'view', name: o.name }
     })
-    for (const s of schemas.values()) if (s.kind === 'table') targets.push({ kind: 'table', name: s.name })
+    for (const t of infos.values()) if (t.kind === 'table') targets.push({ kind: 'table', name: t.name })
     const statements = adapter.exporter.dropAll(ns, targets)
     // One transaction: a DROP refused because of an object outside the dump leaves nothing half-dropped.
     if (statements.length > 0)
       yield `${section('Drop')}BEGIN;\n${statements.map((stmt) => `${stmt};\n`).join('')}COMMIT;\n\n`
   }
   // A MariaDB sequence is created before the tables whose defaults call nextval() on it.
-  for (const [table, schema] of schemas) {
-    if (schema.kind !== 'sequence' || !structure) continue
+  for (const [table, info] of infos) {
+    if (info.kind !== 'sequence' || !structure) continue
+    const schema = await adapter.describeTable(ns, table)
     yield section(`Sequence: ${commentText(table)}`)
     if (drops) yield `${adapter.exporter.dropIfExists(ns, schema)};\n`
     for (const stmt of await adapter.showCreateTable(ns, table, schema)) yield `${stmt};\n\n`
   }
   if (routines) yield routinesBody(adapter, routines)
   for (const table of tableOrder) {
+    if (infos.get(table)?.kind !== 'table') continue
     // One catalog round trip per table, shared by the DDL reconstruction and the row scan.
-    const schema = schemas.get(table) as TableSchema
-    if (schema.kind !== 'table') continue
+    const schema = await adapter.describeTable(ns, table)
     yield section(`Table: ${commentText(table)}`)
     if (structure) {
       if (drops && !pg) yield `${adapter.exporter.dropIfExists(ns, schema)};\n`

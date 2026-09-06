@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { CellSchema } from './cell.ts'
+import { InputCellSchema } from './cell.ts'
 import { ResultSetSchema } from './result.ts'
 import { ForeignKeyDefSchema, ReferencingKeyDefSchema } from './structure.ts'
 
@@ -27,7 +27,7 @@ export type FilterOp = z.infer<typeof FilterOpSchema>
 export const FilterSchema = z.object({
   column: z.string().min(1),
   op: FilterOpSchema,
-  value: CellSchema.optional(),
+  value: InputCellSchema.optional(),
 })
 export type Filter = z.infer<typeof FilterSchema>
 
@@ -49,11 +49,17 @@ export type RowKeyKind = z.infer<typeof RowKeyKindSchema>
 /** Tables whose catalog estimate exceeds this are not COUNT(*)ed on unfiltered browses (phpMyAdmin behaves the same). */
 export const EXACT_COUNT_MAX_ROWS = 100_000
 
+/**
+ * What `total` means: an exact COUNT(*); the catalog's estimate (large unfiltered table); or a floor — the
+ * count stopped at EXACT_COUNT_MAX_ROWS matching rows so a filter over a huge table cannot scan it whole.
+ */
+export const CountKindSchema = z.enum(['exact', 'estimate', 'lower_bound'])
+export type CountKind = z.infer<typeof CountKindSchema>
+
 export const BrowseResultSchema = ResultSetSchema.extend({
-  /** Row count with the same filters, null when unavailable. Approximate when `approximate` is true. */
+  /** Row count with the same filters, null when unavailable; `count` says how exact it is. */
   total: z.number().nullable(),
-  /** True when `total` is the catalog's estimate (large unfiltered table) instead of an exact COUNT(*). */
-  approximate: z.boolean(),
+  count: CountKindSchema,
   keyKind: RowKeyKindSchema,
   /** For 'pk': key column names. For 'ctid': ['ctid'] (a hidden trailing column in rows). */
   keyColumns: z.array(z.string()),

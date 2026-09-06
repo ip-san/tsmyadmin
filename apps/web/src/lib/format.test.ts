@@ -11,6 +11,7 @@ describe('describeCell', () => {
     expect(describeCell('')).toEqual({ kind: 'text', text: '', empty: true })
     expect(describeCell(42)).toEqual({ kind: 'text', text: '42', empty: false })
     expect(describeCell(true)).toEqual({ kind: 'text', text: 'true', empty: false })
+    expect(describeCell({ $text: 'abc', length: 70000 })).toEqual({ kind: 'truncated', text: 'abc', length: 70000 })
   })
 })
 
@@ -19,11 +20,13 @@ describe('cellToText / cellToEditable', () => {
     expect(cellToText(null)).toBe('NULL')
     expect(cellToText({ $bin: 'qg==' })).toContain('1 バイト')
     expect(cellToText('x')).toBe('x')
+    expect(cellToText({ $text: 'abc', length: 70000 })).toBe('abc[先頭のみ表示 / 全 70,000 文字]')
   })
 
-  it('never puts NULL/binary into an editor as text', () => {
+  it('never puts NULL/binary/truncated text into an editor as text', () => {
     expect(cellToEditable(null)).toBe('')
     expect(cellToEditable({ $bin: 'qg==' })).toBe('')
+    expect(cellToEditable({ $text: 'abc', length: 70000 })).toBe('')
     expect(cellToEditable(3.5)).toBe('3.5')
   })
 })

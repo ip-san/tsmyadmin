@@ -1,3 +1,4 @@
+import type { CountKind } from '@tsmyadmin/shared'
 import { Button } from '@/components/ui/Button.tsx'
 import { Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
@@ -8,20 +9,21 @@ export interface PaginationProps {
   page: number
   limit: number
   total: number | null
-  approximate?: boolean
+  count?: CountKind
   shown: number
   onChange: (patch: { page?: number; limit?: number }) => void
 }
 
-export function Pagination({ page, limit, total, approximate = false, shown, onChange }: PaginationProps) {
+export function Pagination({ page, limit, total, count = 'exact', shown, onChange }: PaginationProps) {
   const from = shown === 0 ? 0 : (page - 1) * limit + 1
   const to = (page - 1) * limit + shown
-  const lastPage = total === null ? null : Math.max(1, Math.ceil(total / limit))
+  // A floor says nothing about where the rows end: page forward while pages come back full.
+  const lastPage = total === null || count === 'lower_bound' ? null : Math.max(1, Math.ceil(total / limit))
   const hasNext = lastPage === null ? shown === limit : page < lastPage
   return (
     <nav aria-label={locale.tabs.browse} className="flex flex-wrap items-center gap-2 text-sm">
       <span className="text-zinc-600 dark:text-zinc-300">
-        {locale.browse.total(total, approximate)}
+        {locale.browse.total(total, count)}
         {to > 0 ? ` · ${locale.browse.range(from, to)}` : ''}
       </span>
       <div className="ml-auto flex items-center gap-1">

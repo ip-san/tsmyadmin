@@ -10,7 +10,7 @@ const base = (over: Partial<BrowseResult>): BrowseResult => ({
   rows: [],
   truncated: false,
   total: 0,
-  approximate: false,
+  count: 'exact',
   foreignKeys: [],
   referencedBy: [],
   keyKind: 'pk',

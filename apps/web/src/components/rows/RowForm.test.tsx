@@ -97,8 +97,16 @@ describe('RowForm (edit)', () => {
     expect(screen.getByLabelText('body').tagName).toBe('TEXTAREA')
   })
 
-  it('keeps binary values read-only', () => {
-    render(<RowForm columns={[col('blob')]} mode="edit" initial={{ blob: { $bin: 'AA==' } }} onSubmit={vi.fn()} />)
-    expect(screen.getByText(/バイナリ値はここでは編集できません/)).toBeInTheDocument()
+  it('keeps binary and truncated values read-only', () => {
+    render(
+      <RowForm
+        columns={[col('blob'), col('body')]}
+        mode="edit"
+        initial={{ blob: { $bin: 'AA==' }, body: { $text: 'head', length: 70000 } }}
+        onSubmit={vi.fn()}
+      />
+    )
+    expect(screen.getAllByText(/ここでは編集できません/)).toHaveLength(2)
+    expect(screen.queryByDisplayValue('head')).toBeNull()
   })
 })

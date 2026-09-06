@@ -43,12 +43,14 @@ export async function pgListTables(conn: Conn, ns: Namespace): Promise<TableInfo
       `SELECT c.relname, c.relkind,
               CASE WHEN c.reltuples < 0 THEN s.n_live_tup ELSE c.reltuples END,
               obj_description(c.oid, 'pg_class'),
-              CASE WHEN c.relkind IN ('r', 'p', 'm') THEN pg_total_relation_size(c.oid) END
+              CASE WHEN c.relkind IN ('r', 'p', 'm') THEN pg_total_relation_size(c.oid) END,
+              (SELECT string_agg(p.relname, $2 ORDER BY i.inhseqno) FROM pg_inherits i JOIN pg_class p ON p.oid = i.inhparent
+                 WHERE i.inhrelid = c.oid AND p.relnamespace = c.relnamespace)
        FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
        LEFT JOIN pg_stat_user_tables s ON s.relid = c.oid
        WHERE n.nspname = $1 AND c.relkind IN ('r', 'p', 'v', 'm', 'f') AND NOT c.relispartition
        ORDER BY c.relname`,
-      [ns.schema ?? 'public']
+      [ns.schema ?? 'public', SEP]
     )
   )
   return r.rows.map((row) => {
@@ -62,6 +64,7 @@ export async function pgListTables(conn: Conn, ns: Namespace): Promise<TableInfo
       engine: null,
       comment: strOrNull(row[3]),
       sizeBytes: row[4] === null || row[4] === undefined ? null : Number(row[4]),
+      inherits: list(row[5]),
     }
   })
 }

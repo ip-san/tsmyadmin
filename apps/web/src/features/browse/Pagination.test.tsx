@@ -32,9 +32,16 @@ describe('Pagination', () => {
   })
 })
 
-describe('Pagination (approximate totals)', () => {
+describe('Pagination (inexact totals)', () => {
   it('labels catalog estimates as approximate', () => {
-    render(<Pagination page={1} limit={50} total={1234567} approximate shown={50} onChange={vi.fn()} />)
+    render(<Pagination page={1} limit={50} total={1234567} count="estimate" shown={50} onChange={vi.fn()} />)
     expect(screen.getByText(/約 1,234,567 行（概算）/)).toBeInTheDocument()
+  })
+
+  it('shows a bounded count as a floor and keeps paging open-ended', () => {
+    render(<Pagination page={3} limit={50} total={100000} count="lower_bound" shown={50} onChange={vi.fn()} />)
+    expect(screen.getByText(/100,000 行以上/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '次へ' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: '最後のページ' })).toBeDisabled()
   })
 })

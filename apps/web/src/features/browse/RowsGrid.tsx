@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { BrowseOptions, BrowseResult, Cell, RowKey, RowValues } from '@tsmyadmin/shared'
+import type { BrowseOptions, BrowseResult, InputCell, RowKey, RowValues } from '@tsmyadmin/shared'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
@@ -145,7 +145,7 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
   )
   const cancelInline = useCallback(() => closeInline(), [closeInline])
   const saveInline = useCallback(
-    (key: RowKey, column: string, value: Cell) => update.mutate({ key, values: { [column]: value } }),
+    (key: RowKey, column: string, value: InputCell) => update.mutate({ key, values: { [column]: value } }),
     [update.mutate]
   )
   const dialogDone = async (message: string) => {
@@ -191,7 +191,7 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
         page={page}
         limit={options.limit}
         total={data.total}
-        approximate={data.approximate}
+        count={data.count}
         shown={data.rows.length}
         onChange={onChange}
       />

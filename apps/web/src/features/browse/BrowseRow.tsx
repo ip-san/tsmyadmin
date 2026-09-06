@@ -1,10 +1,10 @@
-import type { BrowseResult, Cell, RowKey } from '@tsmyadmin/shared'
-import { isBinaryCell } from '@tsmyadmin/shared'
+import type { BrowseResult, Cell, InputCell, RowKey } from '@tsmyadmin/shared'
 import { memo } from 'react'
 import { ErrorBox } from '@/components/ui/Feedback.tsx'
 import { Td, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
 import { cn } from '@/lib/cn.ts'
+import { isOpaqueCell } from '@/lib/format.ts'
 import { CellEditor } from './CellEditor.tsx'
 import { FkCell } from './FkCell.tsx'
 import type { linkableForeignKeys, linkableReverseKeys } from './fk-links.ts'
@@ -29,7 +29,7 @@ export interface BrowseRowProps {
   onEdit: (index: number) => void
   onCopy: (index: number) => void
   onInline: (index: number, col: number) => void
-  onInlineSave: (key: RowKey, column: string, value: Cell) => void
+  onInlineSave: (key: RowKey, column: string, value: InputCell) => void
   onInlineCancel: () => void
 }
 
@@ -74,7 +74,7 @@ export const BrowseRow = memo(function BrowseRow({
         const j = columnIndex.get(c.name) ?? -1
         const cell = row[j] ?? null
         const isInline = inlineCol === j
-        const canInline = key !== null && !isBinaryCell(cell)
+        const canInline = key !== null && !isOpaqueCell(cell)
         return (
           <Td
             key={c.name}
@@ -108,7 +108,7 @@ export const BrowseRow = memo(function BrowseRow({
                   dataType={c.dataType}
                   pending={updatePending}
                   error={updateError}
-                  onSave={(value: Cell) => onInlineSave(key, c.name, value)}
+                  onSave={(value: InputCell) => onInlineSave(key, c.name, value)}
                   onCancel={onInlineCancel}
                 />
                 {updateError ? <ErrorBox error={updateError} className="mt-1" /> : null}

@@ -1,5 +1,5 @@
 import type { Cell } from './schemas/cell.ts'
-import { isBinaryCell } from './schemas/cell.ts'
+import { isBinaryCell, isTruncatedCell } from './schemas/cell.ts'
 import { CSV_NULL } from './schemas/export.ts'
 
 /**
@@ -9,7 +9,13 @@ import { CSV_NULL } from './schemas/export.ts'
  */
 export function csvField(cell: Cell): string {
   if (cell === null) return CSV_NULL
-  const text = isBinaryCell(cell) ? cell.$bin : typeof cell === 'string' ? cell : String(cell)
+  const text = isBinaryCell(cell)
+    ? cell.$bin
+    : isTruncatedCell(cell)
+      ? cell.$text
+      : typeof cell === 'string'
+        ? cell
+        : String(cell)
   return /[",\r\n]/.test(text) || text === CSV_NULL || text === '' ? `"${text.replaceAll('"', '""')}"` : text
 }
 

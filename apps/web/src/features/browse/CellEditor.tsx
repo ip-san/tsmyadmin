@@ -1,4 +1,4 @@
-import type { Cell } from '@tsmyadmin/shared'
+import type { Cell, InputCell } from '@tsmyadmin/shared'
 import { type FocusEvent, type KeyboardEvent, useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { Input, Textarea } from '@/components/ui/Field.tsx'
@@ -13,7 +13,7 @@ export interface CellEditorProps {
   pending?: boolean
   /** Last save failure: focus returns to the field so the error is not read into the void. */
   error?: unknown
-  onSave: (value: Cell) => void
+  onSave: (value: InputCell) => void
   onCancel: () => void
 }
 

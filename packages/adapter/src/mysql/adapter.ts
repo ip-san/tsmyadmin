@@ -1,4 +1,6 @@
 import type {
+  Cell,
+  ColumnMeta,
   DatabaseInfo,
   EventInfo,
   KeyValue,
@@ -14,6 +16,7 @@ import type {
   UserInfo,
   UserRef,
 } from '@tsmyadmin/shared'
+import type { Connection as CoreConnection } from 'mysql2'
 import mysql, {
   type Connection,
   type FieldPacket,
@@ -117,7 +120,7 @@ function isHeader(v: unknown): v is ResultSetHeader {
 function normalise(
   rowsOut: unknown,
   fields: FieldPacket[] | FieldPacket[][] | undefined,
-  binaryLimit?: number
+  options?: QueryOptions
 ): RawResult | RawResult[] {
   if (isHeader(rowsOut)) return { columns: [], rows: [], affectedRows: rowsOut.affectedRows, hasRows: false }
   const rows = rowsOut as unknown[]
@@ -134,7 +137,7 @@ function normalise(
       }
       out.push({
         columns: partFields.map(mysqlColumnMeta),
-        rows: (part as unknown[][]).map((r) => r.map((v) => driverValueToCell(v, binaryLimit))),
+        rows: (part as unknown[][]).map((r) => r.map((v) => driverValueToCell(v, options))),
         affectedRows: 0,
         hasRows: true,
       })
@@ -144,7 +147,7 @@ function normalise(
   const single = (fields ?? []) as FieldPacket[]
   return {
     columns: single.map(mysqlColumnMeta),
-    rows: (rows as unknown[][]).map((r) => r.map((v) => driverValueToCell(v, binaryLimit))),
+    rows: (rows as unknown[][]).map((r) => r.map((v) => driverValueToCell(v, options))),
     affectedRows: 0,
     hasRows: true,
   }
@@ -211,7 +214,7 @@ export class MysqlAdapter extends BaseAdapter {
       const [rows, fields] = (await (params
         ? conn.query({ sql: text, values: params, rowsAsArray: true })
         : conn.query({ sql: text, rowsAsArray: true }))) as QueryOutput
-      return normalise(rows, fields, options?.binaryLimit)
+      return normalise(rows, fields, options)
     } catch (err) {
       const mapped = this.toAdapterError(err)
       if (mapped.code === 'CONNECTION_FAILED') this.broken.add(conn.connection)
@@ -280,7 +283,53 @@ export class MysqlAdapter extends BaseAdapter {
       reset,
       forget,
       discard: () => this.broken.add(core),
+      stream: (text, params, batchSize, options) => this.streamRows(conn, text, params, batchSize, options),
     }
+  }
+
+  /**
+   * Row-at-a-time read of one SELECT through mysql2's stream API (rows are converted as they arrive; the stream
+   * pauses the socket when the consumer is slower). A consumer that stops early leaves the query half-read on
+   * the wire, so the connection is discarded rather than returned to the pool.
+   */
+  private async *streamRows(
+    conn: PoolConnection,
+    text: string,
+    params: unknown[],
+    batchSize: number,
+    options?: QueryOptions
+  ): AsyncIterable<RawResult> {
+    // The promise wrapper's typings call the inner connection a promise Connection; at runtime it is the core
+    // callback one, which is the only API with a row stream.
+    const core = conn.connection as unknown as CoreConnection
+    const query = core.query({ sql: text, values: params, rowsAsArray: true })
+    let columns: ColumnMeta[] = []
+    query.on('fields', (fields: FieldPacket[]) => {
+      columns = fields.map(mysqlColumnMeta)
+    })
+    const stream = query.stream({ highWaterMark: batchSize })
+    let rows: Cell[][] = []
+    let finished = false
+    try {
+      for await (const row of stream) {
+        rows.push((row as unknown[]).map((v) => driverValueToCell(v, options)))
+        if (rows.length >= batchSize) {
+          yield { columns, rows, affectedRows: 0, hasRows: true }
+          rows = []
+        }
+      }
+      finished = true
+    } catch (err) {
+      finished = true
+      throw this.toAdapterError(err)
+    } finally {
+      if (!finished) {
+        stream.destroy()
+        this.broken.add(conn.connection)
+      }
+    }
+    // The last (possibly empty) batch also tells an empty table's caller the column list.
+    yield { columns, rows, affectedRows: 0, hasRows: true }
   }
 
   /**

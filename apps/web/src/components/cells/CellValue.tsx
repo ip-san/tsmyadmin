@@ -15,17 +15,24 @@ export function CellValue({ cell }: { cell: Cell }) {
   if (d.kind === 'null') return <span className="italic text-zinc-500 dark:text-zinc-400">{locale.common.null}</span>
   if (d.kind === 'binary')
     return <span className="text-xs text-zinc-500 dark:text-zinc-400">{locale.common.binary(d.bytes)}</span>
-  if (d.empty) return <span className="italic text-zinc-500 dark:text-zinc-400">{locale.common.empty}</span>
+  const note =
+    d.kind === 'truncated' ? (
+      <span className="text-xs text-zinc-500 dark:text-zinc-400">{locale.common.truncatedText(d.length)}</span>
+    ) : null
+  if (d.kind === 'text' && d.empty)
+    return <span className="italic text-zinc-500 dark:text-zinc-400">{locale.common.empty}</span>
   // A number split across lines reads as two numbers: keep it on one line. BIGINT / DECIMAL travel as strings
   // (for precision) and are exactly the long values that would wrap.
   if (typeof cell === 'number' || NUMERIC.test(d.text) || TEMPORAL.test(d.text)) {
     return <span className="whitespace-nowrap tabular-nums">{d.text}</span>
   }
-  const long = d.text.length > MAX_PREVIEW || d.text.split('\n').length > 3
+  // A server-truncated text is always long enough to fold; its note stays visible in both states.
+  const long = note !== null || d.text.length > MAX_PREVIEW || d.text.split('\n').length > 3
   if (!long) return <span className="whitespace-pre-wrap break-all">{d.text}</span>
   return (
     <span className="whitespace-pre-wrap break-all">
-      {expanded ? d.text : `${d.text.split('\n').slice(0, 3).join('\n').slice(0, MAX_PREVIEW)}…`}{' '}
+      {expanded ? d.text : `${d.text.split('\n').slice(0, 3).join('\n').slice(0, MAX_PREVIEW)}…`} {note}
+      {note ? ' ' : null}
       <button
         type="button"
         className="text-xs text-blue-700 hover:underline dark:text-blue-300"

@@ -1,5 +1,5 @@
-import type { BrowseResult, Cell, RowKey } from '@tsmyadmin/shared'
-import { isBinaryCell } from '@tsmyadmin/shared'
+import type { BrowseResult, Cell, InputCell, RowKey } from '@tsmyadmin/shared'
+import { isBinaryCell, isInputCell } from '@tsmyadmin/shared'
 
 /** Index of each column name in the result's row arrays. */
 function columnIndex(result: BrowseResult): Map<string, number> {
@@ -14,24 +14,32 @@ export function rowKeys(result: BrowseResult): (RowKey | null)[] {
 
 /**
  * Builds the key that addresses `row` for UPDATE/DELETE, or null when the row cannot be addressed safely
- * (views, or all-columns keys containing binary values whose base64 may be truncated).
+ * (views, keys containing a text cut to the display limit, or all-columns keys containing binary values whose
+ * base64 may be truncated).
  */
 export function rowKeyFor(result: BrowseResult, row: Cell[], idx = columnIndex(result)): RowKey | null {
-  const pick = (names: string[]) => {
-    const values: Record<string, Cell> = {}
-    for (const n of names) values[n] = row[idx.get(n) ?? -1] ?? null
+  const pick = (names: string[]): Record<string, InputCell> | null => {
+    const values: Record<string, InputCell> = {}
+    for (const n of names) {
+      const cell = row[idx.get(n) ?? -1] ?? null
+      if (!isInputCell(cell)) return null
+      values[n] = cell
+    }
     return values
   }
   switch (result.keyKind) {
-    case 'pk':
-      return { kind: 'pk', values: pick(result.keyColumns) }
+    case 'pk': {
+      const values = pick(result.keyColumns)
+      return values ? { kind: 'pk', values } : null
+    }
     case 'ctid': {
       const value = row[result.columns.length - 1]
       return typeof value === 'string' ? { kind: 'ctid', value } : null
     }
     case 'all-columns': {
       if (row.some((c) => isBinaryCell(c))) return null
-      return { kind: 'all-columns', values: pick(result.columns.map((c) => c.name)) }
+      const values = pick(result.columns.map((c) => c.name))
+      return values ? { kind: 'all-columns', values } : null
     }
     case 'none':
       return null

@@ -1,6 +1,6 @@
 import type { DatabaseAdapter } from '@tsmyadmin/adapter'
 import { AdapterError, isGeneratedColumn, splitStatements } from '@tsmyadmin/adapter'
-import type { Cell, ImportForm, ImportReason, ImportResult, ImportWarning, Namespace } from '@tsmyadmin/shared'
+import type { ImportForm, ImportReason, ImportResult, ImportWarning, InputCell, Namespace } from '@tsmyadmin/shared'
 import { CsvParseError, isBinaryDataType, parseCsvRecords } from '@tsmyadmin/shared'
 
 const MAX_ERRORS = 20
@@ -211,7 +211,7 @@ export async function importCsv(
   })
   const overriding = target.some((c) => known.get(c)?.extra === 'identity always')
   const lines: number[] = []
-  function* rows(): Generator<Cell[]> {
+  function* rows(): Generator<InputCell[]> {
     let rec = headerConsumed ? records.next() : first
     while (!rec.done) {
       const r = rec.value
@@ -224,7 +224,7 @@ export async function importCsv(
           { line: r.line, fields: r.fields.length, columns: columns.length }
         )
       }
-      const cells: Cell[] = []
+      const cells: InputCell[] = []
       columns.forEach((name, j) => {
         if (!keep[j]) return
         const v = r.fields[j]

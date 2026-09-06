@@ -1,11 +1,18 @@
-import { type Cell, isBinaryCell } from '@tsmyadmin/shared'
+import { type Cell, isBinaryCell, isTruncatedCell } from '@tsmyadmin/shared'
 import { locale } from '@/config/locale.ts'
 import { ApiError } from './api.ts'
 
 export type CellDisplay =
   | { kind: 'null' }
   | { kind: 'binary'; bytes: number }
+  /** Text the server cut to its display limit: `text` is the head, `length` the full character count. */
+  | { kind: 'truncated'; text: string; length: number }
   | { kind: 'text'; text: string; empty: boolean }
+
+/** Cells the page holds no complete text for (binary, or text cut to the display limit): shown, never edited. */
+export function isOpaqueCell(cell: Cell): boolean {
+  return isBinaryCell(cell) || isTruncatedCell(cell)
+}
 
 /** How a wire Cell should be rendered. */
 export function describeCell(cell: Cell): CellDisplay {
@@ -15,6 +22,7 @@ export function describeCell(cell: Cell): CellDisplay {
       kind: 'binary',
       bytes: Math.floor((cell.$bin.length * 3) / 4) - (cell.$bin.endsWith('==') ? 2 : cell.$bin.endsWith('=') ? 1 : 0),
     }
+  if (isTruncatedCell(cell)) return { kind: 'truncated', text: cell.$text, length: cell.length }
   const text = typeof cell === 'string' ? cell : String(cell)
   return { kind: 'text', text, empty: text.length === 0 }
 }
@@ -26,6 +34,8 @@ export function cellToText(cell: Cell): string {
       return locale.common.null
     case 'binary':
       return locale.common.binary(d.bytes)
+    case 'truncated':
+      return `${d.text}${locale.common.truncatedText(d.length)}`
     case 'text':
       return d.text
   }
@@ -33,7 +43,7 @@ export function cellToText(cell: Cell): string {
 
 /** Value to put in an <input> when editing (NULL handled separately). */
 export function cellToEditable(cell: Cell): string {
-  if (cell === null || isBinaryCell(cell)) return ''
+  if (cell === null || isOpaqueCell(cell)) return ''
   return typeof cell === 'string' ? cell : String(cell)
 }
 

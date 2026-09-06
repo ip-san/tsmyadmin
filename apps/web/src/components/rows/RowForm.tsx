@@ -1,8 +1,7 @@
 import type { Cell, ColumnDef, RowValues } from '@tsmyadmin/shared'
-import { isBinaryCell } from '@tsmyadmin/shared'
 import { type FormEvent, useState } from 'react'
 import { locale } from '@/config/locale.ts'
-import { cellToEditable } from '@/lib/format.ts'
+import { cellToEditable, isOpaqueCell } from '@/lib/format.ts'
 import { Button } from '../ui/Button.tsx'
 import { ErrorBox } from '../ui/Feedback.tsx'
 import { Input, Textarea } from '../ui/Field.tsx'
@@ -71,7 +70,7 @@ export function RowForm({ columns, mode, initial, pending, error, onSubmit, onCa
       const f = fieldFor(c)
       if (f.useDefault) continue
       const original = initial?.[c.name] ?? null
-      if (isBinaryCell(original) && !f.isNull) continue
+      if (isOpaqueCell(original) && !f.isNull) continue
       const next: Cell = f.isNull ? null : f.text
       if (mode === 'edit' && !changed(original, next)) continue
       values[c.name] = next
@@ -94,7 +93,7 @@ export function RowForm({ columns, mode, initial, pending, error, onSubmit, onCa
         <tbody>
           {columns.map((c) => {
             const f = fieldFor(c)
-            const binary = isBinaryCell(initial?.[c.name] ?? null)
+            const binary = isOpaqueCell(initial?.[c.name] ?? null)
             // NULL / default fields stay editable: typing unticks the box (phpMyAdmin behaviour), so the user is
             // not left clicking a control that ignores input.
             const takeOver = (text: string) => update(c.name, c, { text, isNull: false, useDefault: false })
@@ -168,6 +167,6 @@ export function RowForm({ columns, mode, initial, pending, error, onSubmit, onCa
 
 function changed(original: Cell, next: Cell): boolean {
   if (original === null || next === null) return original !== next
-  if (isBinaryCell(original)) return true
+  if (isOpaqueCell(original)) return true
   return String(original) !== String(next)
 }

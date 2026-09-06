@@ -5,6 +5,7 @@ import type {
   DatabaseInfo,
   Dialect,
   EventInfo,
+  InputCell,
   KeyValue,
   Namespace,
   ObjectDependency,
@@ -190,6 +191,7 @@ export class FakeAdapter implements DatabaseAdapter {
     return Object.values(db.tables).map((t) => ({
       name: t.schema.name,
       kind: t.schema.kind,
+      inherits: t.schema.inherits,
       rowEstimate: t.rows.length,
       engine: t.schema.engine,
       comment: t.schema.comment,
@@ -268,7 +270,7 @@ export class FakeAdapter implements DatabaseAdapter {
       rows: page.map((r) => columns.map((c) => r[c.name] ?? null)),
       truncated: false,
       total: rows.length,
-      approximate: false,
+      count: 'exact',
       keyKind: t.schema.primaryKey.length > 0 ? 'pk' : 'none',
       keyColumns: t.schema.primaryKey,
       foreignKeys: t.schema.foreignKeys,
@@ -286,7 +288,7 @@ export class FakeAdapter implements DatabaseAdapter {
     ns: Namespace,
     table: string,
     columns: string[],
-    rows: Iterable<Cell[]>,
+    rows: Iterable<InputCell[]>,
     options: InsertRowsOptions = {}
   ): Promise<{ affectedRows: number }> {
     const all = [...rows]

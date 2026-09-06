@@ -7,6 +7,7 @@ import type {
   Dialect,
   EventInfo,
   Filter,
+  InputCell,
   KeyValue,
   Namespace,
   ObjectDependency,
@@ -24,7 +25,7 @@ import type {
   UserInfo,
   UserRef,
 } from '@tsmyadmin/shared'
-import { EXACT_COUNT_MAX_ROWS, isBinaryCell, isViewKind } from '@tsmyadmin/shared'
+import { EXACT_COUNT_MAX_ROWS, isBinaryCell, isTruncatedCell, isViewKind, MAX_TEXT_CHARS } from '@tsmyadmin/shared'
 import { Params, quoteIdent, quoteTable } from './sql/quote.ts'
 import { splitStatements } from './sql/split.ts'
 import {
@@ -54,7 +55,12 @@ export interface RawResult {
 export interface QueryOptions {
   /** Bytes kept of each binary value (default MAX_BINARY_BYTES for display; Infinity for exports). */
   binaryLimit?: number
+  /** Characters kept of each text value (default MAX_TEXT_CHARS for display; Infinity for exports). */
+  textLimit?: number
 }
+
+/** Export reads: whole values, whatever their size. */
+export const UNCAPPED: QueryOptions = { binaryLimit: Number.POSITIVE_INFINITY, textLimit: Number.POSITIVE_INFINITY }
 
 export interface Conn {
   query(text: string, params?: unknown[], options?: QueryOptions): Promise<RawResult | RawResult[]>
@@ -72,6 +78,12 @@ export interface Conn {
   discard(): void
   /** PostgreSQL `COPY … FROM stdin` with the block's data (pg_dump's default format); absent on other dialects. */
   copyFrom?(sql: string, data: string): Promise<number>
+  /**
+   * Runs one SELECT and hands its rows over in batches as the driver reads them, so a full scan never holds the
+   * whole result set (MySQL; PostgreSQL pages with a cursor instead). Every batch carries the column list; the
+   * last one may be empty. Abandoning the iteration early discards the connection.
+   */
+  stream?(sql: string, params: unknown[], batchSize: number, options?: QueryOptions): AsyncIterable<RawResult>
 }
 
 /** psql meta-command line (`\connect`, `\copy`, `\.`) that reached the server-side splitter. */
@@ -140,6 +152,8 @@ export const MAX_BINARY_BYTES = 64 * 1024
 /** Converts a wire Cell into a driver parameter. */
 function toDbValue(cell: Cell): unknown {
   if (isBinaryCell(cell)) return Buffer.from(cell.$bin, 'base64')
+  // The schemas already reject it at the API; this guards adapter-internal callers (row keys built from a page).
+  if (isTruncatedCell(cell)) throw new AdapterError('VALIDATION', 'a truncated text value cannot be written back')
   return cell
 }
 
@@ -153,11 +167,15 @@ function bufferToCell(buf: Uint8Array, limit = MAX_BINARY_BYTES): Cell {
  * Converts a driver value into a wire Cell (both drivers are configured to return BIGINT/DECIMAL/dates as
  * strings already; binaries arrive as Buffers, JSON as text or objects).
  */
-export function driverValueToCell(value: unknown, binaryLimit = MAX_BINARY_BYTES): Cell {
+export function driverValueToCell(value: unknown, options: QueryOptions = {}): Cell {
   if (value === null || value === undefined) return null
-  if (Buffer.isBuffer(value) || value instanceof Uint8Array) return bufferToCell(value, binaryLimit)
+  if (Buffer.isBuffer(value) || value instanceof Uint8Array) return bufferToCell(value, options.binaryLimit)
   switch (typeof value) {
-    case 'string':
+    case 'string': {
+      // A multi-megabyte TEXT / JSON column would otherwise travel whole for every row of a page.
+      const limit = options.textLimit ?? MAX_TEXT_CHARS
+      return value.length > limit ? { $text: value.slice(0, limit), length: value.length } : value
+    }
     case 'number':
     case 'boolean':
       return value
@@ -400,9 +418,11 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     const limit = ` LIMIT ${params.add(opts.limit)} OFFSET ${params.add(opts.offset)}`
     const dataSql = `SELECT ${selectList.join(', ')} FROM ${tableSql}${where}${order}${limit}`
 
+    // The count stops at the threshold: a filter matching millions of rows costs one bounded scan, and the page
+    // then says "100,000+" instead of the exact figure.
     const countParams = new Params(d)
     const countWhere = this.buildWhere(opts.filters, countParams, types)
-    const countSql = `SELECT COUNT(*) FROM ${tableSql}${countWhere}`
+    const countSql = `SELECT COUNT(*) FROM (SELECT 1 FROM ${tableSql}${countWhere} LIMIT ${countParams.add(EXACT_COUNT_MAX_ROWS + 1)}) AS tsmyadmin_count`
 
     return this.withConn(ns, async (conn) => {
       const data = firstResult(await conn.query(dataSql, params.values))
@@ -415,7 +435,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
           rows: data.rows,
           truncated: false,
           total: estimate,
-          approximate: true,
+          count: 'estimate',
           keyKind: key.keyKind,
           keyColumns: key.keyColumns,
           foreignKeys: schema.foreignKeys,
@@ -424,13 +444,16 @@ export abstract class BaseAdapter implements DatabaseAdapter {
       }
       const count = firstResult(await conn.query(countSql, countParams.values))
       const totalCell = count.rows[0]?.[0]
-      const total = typeof totalCell === 'number' ? totalCell : typeof totalCell === 'string' ? Number(totalCell) : null
+      const counted =
+        typeof totalCell === 'number' ? totalCell : typeof totalCell === 'string' ? Number(totalCell) : null
+      const total = counted !== null && Number.isFinite(counted) ? counted : null
+      const bounded = total !== null && total > EXACT_COUNT_MAX_ROWS
       return {
         columns: data.columns,
         rows: data.rows,
         truncated: false,
-        total: total !== null && Number.isFinite(total) ? total : null,
-        approximate: false,
+        total: bounded ? EXACT_COUNT_MAX_ROWS : total,
+        count: bounded ? 'lower_bound' : 'exact',
         keyKind: key.keyKind,
         keyColumns: key.keyColumns,
         foreignKeys: schema.foreignKeys,
@@ -489,7 +512,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     ns: Namespace,
     table: string,
     columns: string[],
-    rows: Iterable<Cell[]>,
+    rows: Iterable<InputCell[]>,
     options: InsertRowsOptions = {}
   ): Promise<{ affectedRows: number }> {
     if (columns.length === 0) throw new AdapterError('QUERY_FAILED', 'insertRows requires at least one column')
@@ -606,8 +629,8 @@ export abstract class BaseAdapter implements DatabaseAdapter {
   /**
    * Stable-order full scan with keyset pagination: PK (or NOT NULL unique key) → `WHERE (k1, k2) > (last)`
    * ordered by the key; PostgreSQL without a key → `WHERE ctid > last` ordered by ctid; MySQL without a key →
-   * a single unordered batch (no total order exists to page over). Keyset paging keeps each batch O(batch)
-   * instead of OFFSET's O(offset + batch) rescans on large tables.
+   * one unordered SELECT streamed from the driver in batches (no total order exists to page over). Keyset
+   * paging keeps each batch O(batch) instead of OFFSET's O(offset + batch) rescans on large tables.
    */
   async *iterateRows(
     ns: Namespace,
@@ -642,6 +665,12 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     // (no statement timeout: full scans may legitimately be long).
     const { conn, done } = await this.borrow(ns, 0)
     try {
+      if (single && conn.stream) {
+        // Streamed rows arrive one at a time, so a key-less table of any size costs one batch of memory.
+        const sql = `SELECT ${selectList.join(', ')} FROM ${tableSql}`
+        for await (const r of conn.stream(sql, [], batchSize, UNCAPPED)) yield { columns: r.columns, rows: r.rows }
+        return
+      }
       let last: Cell[] | null = null
       let first = true
       for (;;) {
@@ -663,9 +692,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
           await conn.query(
             `SELECT ${selectList.join(', ')} FROM ${tableSql}${where}${orderBy}${limit}`,
             params.values,
-            {
-              binaryLimit: Number.POSITIVE_INFINITY,
-            }
+            UNCAPPED
           )
         )
         const rows = byCtid ? r.rows.map((row) => row.slice(0, -1)) : r.rows

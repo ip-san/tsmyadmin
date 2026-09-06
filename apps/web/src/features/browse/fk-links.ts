@@ -1,5 +1,5 @@
 import type { BrowseResult, Cell, ForeignKeyDef, ReferencingKeyDef } from '@tsmyadmin/shared'
-import { isBinaryCell } from '@tsmyadmin/shared'
+import { isOpaqueCell } from '@/lib/format.ts'
 
 export interface FkTarget {
   db: string
@@ -19,9 +19,9 @@ export function linkableForeignKeys(result: BrowseResult): Map<string, ForeignKe
   return out
 }
 
-/** Where a foreign-key cell should link to, or null for NULL / binary values. */
+/** Where a foreign-key cell should link to, or null for NULL / binary / truncated values. */
 export function fkTarget(fk: ForeignKeyDef, value: Cell, currentDb: string): FkTarget | null {
-  if (value === null || isBinaryCell(value)) return null
+  if (value === null || isOpaqueCell(value)) return null
   const refColumn = fk.refColumns[0]
   if (!refColumn) return null
   return {
@@ -45,7 +45,7 @@ export function linkableReverseKeys(result: BrowseResult): Map<string, Referenci
 
 /** Rows in `ref.fromTable` whose foreign-key column equals `value`. */
 export function reverseTarget(ref: ReferencingKeyDef, value: Cell, currentDb: string): FkTarget | null {
-  if (value === null || isBinaryCell(value)) return null
+  if (value === null || isOpaqueCell(value)) return null
   const fromColumn = ref.fromColumns[0]
   if (!fromColumn) return null
   return {

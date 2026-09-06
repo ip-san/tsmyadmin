@@ -237,7 +237,7 @@ export function createExporter(dialect: Dialect): SqlExporter {
       if (tables.length > 0) out.push(`DROP TABLE IF EXISTS ${tables.join(', ')}`)
       return out
     },
-    dropIfExists(ns: Namespace, schema: TableSchema): string {
+    dropIfExists(ns: Namespace, schema: Pick<TableSchema, 'name' | 'kind'>): string {
       const kind =
         schema.kind === 'materialized_view'
           ? 'MATERIALIZED VIEW'
