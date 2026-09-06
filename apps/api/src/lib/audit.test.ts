@@ -111,6 +111,25 @@ describe('withAudit', () => {
     expect(logged).toContain("note = 'password is fine here'")
   })
 
+  it('redacts credentials hidden behind comments, Unicode / charset literals and unknown syntax', async () => {
+    const { lines, adapter } = setup()
+    const script = [
+      "CREATE USER 'u'@'%' IDENTIFIED /*c*/ BY 'cmt-secret'",
+      "ALTER ROLE r WITH PASSWORD U&'uni-secret'",
+      "ALTER ROLE r PASSWORD --x\n'line-secret'",
+      "ALTER USER 'u'@'%' IDENTIFIED WITH caching_sha2_password BY _utf8mb4'intro-secret'",
+      "CREATE ROLE r2 LOGIN ENCRYPTED PASSWORD 'md5abc-secret' VALID UNTIL '2030-01-01'",
+      "SELECT * FROM t WHERE note = 'a -- not a comment'",
+    ].join(';\n')
+    await adapter.executeSql(ns, script, { maxRows: 1, timeoutMs: 1000, stopOnError: true })
+    const logged = String(lines[0]?.sql)
+    for (const secret of ['cmt-secret', 'uni-secret', 'line-secret', 'intro-secret', 'md5abc-secret'])
+      expect(logged).not.toContain(secret)
+    // Comments are dropped from the summary, but a `--` inside a string is data and stays.
+    expect(logged).not.toContain('/*c*/')
+    expect(logged).toContain("note = 'a -- not a comment'")
+  })
+
   it('logs failures with ok=false and rethrows', async () => {
     const { lines, adapter } = setup()
     await expect(adapter.deleteRows(ns, 'users', [{ kind: 'pk', values: { id: 99 } }])).rejects.toBeInstanceOf(

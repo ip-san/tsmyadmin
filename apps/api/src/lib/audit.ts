@@ -96,7 +96,7 @@ export function summarise(method: AuditedMethod, args: unknown[]): Record<string
  * `n` is the index the dollar tag capture group will have inside the enclosing pattern.
  */
 const literal = (n: number) =>
-  `(?:E?'(?:[^'\\\\]|\\\\.|'')*'|"(?:[^"\\\\]|\\\\.|"")*"|\\$([A-Za-z_]*)\\$[\\s\\S]*?\\$\\${n}\\$)`
+  `(?:(?:[EeNnXxBb]|[Uu]&|_[A-Za-z0-9]+)?'(?:[^'\\\\]|\\\\.|'')*'|"(?:[^"\\\\]|\\\\.|"")*"|\\$([A-Za-z_]*)\\$[\\s\\S]*?\\$\\${n}\\$)`
 /**
  * Password literals in account statements typed directly into the SQL console: IDENTIFIED BY / AS (plugin hash),
  * PASSWORD 'x', and MySQL 8 `REPLACE '<current password>'` (REPLACE INTO / REPLACE( never precede a bare literal).
@@ -108,10 +108,71 @@ const SQL_SECRET = new RegExp(
 /** MySQL `SET PASSWORD [FOR user] = 'x'`. */
 const SET_PASSWORD = new RegExp(String.raw`(\bSET\s+PASSWORD\b[^=;]*=\s*)${literal(2)}`, 'gi')
 
+/** Any string literal, for the coarse sweep over account statements. */
+const ANY_LITERAL = new RegExp(literal(1), 'g')
+/**
+ * An account statement's credential part: from the first IDENTIFIED / PASSWORD keyword on, whatever literal
+ * survives the targeted patterns (syntax they do not know) is masked as well. The account name before it stays.
+ */
+const CREDENTIAL_PART = /^(\s*(?:CREATE|ALTER|GRANT|SET)\b[\s\S]*?\b(?:IDENTIFIED|PASSWORD)\b)([\s\S]*)$/i
+
+/**
+ * Drops SQL comments while copying string literals verbatim (a comment between `IDENTIFIED` and `BY`, or between
+ * `PASSWORD` and its literal, would otherwise defeat the patterns below). The summary is for reading, not for
+ * replay, so losing comments is fine.
+ */
+function withoutComments(sql: string): string {
+  let out = ''
+  let i = 0
+  while (i < sql.length) {
+    const ch = sql[i] as string
+    if (ch === "'" || ch === '"' || ch === '`') {
+      let j = i + 1
+      while (j < sql.length) {
+        if (sql[j] === '\\' && ch !== '`') j += 2
+        else if (sql[j] === ch && sql[j + 1] === ch) j += 2
+        else if (sql[j] === ch) break
+        else j++
+      }
+      out += sql.slice(i, j + 1)
+      i = j + 1
+    } else if (ch === '$' && /^\$[A-Za-z_]*\$/.test(sql.slice(i))) {
+      const tag = /^\$[A-Za-z_]*\$/.exec(sql.slice(i))?.[0] ?? '$$'
+      const end = sql.indexOf(tag, i + tag.length)
+      const stop = end < 0 ? sql.length : end + tag.length
+      out += sql.slice(i, stop)
+      i = stop
+    } else if (ch === '/' && sql[i + 1] === '*') {
+      const end = sql.indexOf('*/', i + 2)
+      i = end < 0 ? sql.length : end + 2
+      out += ' '
+    } else if ((ch === '-' && sql[i + 1] === '-') || ch === '#') {
+      const end = sql.indexOf('\n', i)
+      i = end < 0 ? sql.length : end
+    } else {
+      out += ch
+      i++
+    }
+  }
+  return out
+}
+
 function redactSqlSecrets(sql: string): string {
-  return sql
+  const plain = withoutComments(sql)
     .replace(SQL_SECRET, (_m, kw: string, sep: string) => `${kw}${sep}'${PASSWORD_MASK}'`)
     .replace(SET_PASSWORD, (_m, head: string) => `${head}'${PASSWORD_MASK}'`)
+  // Statement by statement: after the credential keyword no literal survives.
+  return plain
+    .split(/(;)/)
+    .map((part) => {
+      const m = CREDENTIAL_PART.exec(part)
+      if (!m) return part
+      const masked = (m[2] ?? '').replace(ANY_LITERAL, (lit) =>
+        lit.includes(PASSWORD_MASK) ? lit : `'${PASSWORD_MASK}'`
+      )
+      return `${m[1]}${masked}`
+    })
+    .join('')
 }
 
 function scrub(fields: Record<string, unknown>, secrets: string[]): Record<string, unknown> {
