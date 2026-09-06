@@ -1429,8 +1429,21 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
             expect((await db.showCreateTable(ns, serial)).join('\n')).toContain('AS IDENTITY (INCREMENT BY 3)')
             const advance = db.exporter.afterData(ns, await db.describeTable(ns, serial))
             expect(advance.join('\n')).toContain(`'${serial}_id_seq'::regclass`)
+            // An identity column owning an extra sequence keeps its own options; a serial column whose default was
+            // repointed elsewhere is a plain default again, and the sequence it no longer uses is listed.
+            await execOk(
+              `CREATE TABLE ${t}_ident (id int GENERATED ALWAYS AS IDENTITY (INCREMENT BY 5) PRIMARY KEY);
+               CREATE SEQUENCE ${seq}_3 INCREMENT BY 10 MINVALUE 7 OWNED BY ${t}_ident.id;
+               ALTER TABLE ${serial} ALTER COLUMN id SET DEFAULT nextval('${seq}')`
+            )
+            expect((await db.showCreateTable(ns, `${t}_ident`)).join('\n')).toContain('AS IDENTITY (INCREMENT BY 5)')
+            const repointed = await db.describeTable(ns, serial)
+            expect(repointed.columns[0]).toMatchObject({ extra: '', default: `nextval('${seq}'::regclass)` })
+            expect((await db.listTables(ns)).some((x) => x.name === `${serial}_id_seq`)).toBe(true)
           } finally {
-            await execOk(`DROP TABLE ${t}; DROP TABLE ${serial}; DROP SEQUENCE IF EXISTS ${seq}`)
+            await execOk(
+              `DROP TABLE IF EXISTS ${t}_ident; DROP TABLE ${serial}; DROP TABLE ${t}; DROP SEQUENCE IF EXISTS ${seq}`
+            )
           }
         }
       )

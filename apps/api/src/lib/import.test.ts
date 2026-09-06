@@ -1,6 +1,6 @@
 import { splitStatements } from '@tsmyadmin/adapter'
 import { FakeAdapter, fakeTable } from '@tsmyadmin/adapter/testing'
-import { ImportFormSchema } from '@tsmyadmin/shared'
+import { ImportFormSchema, type StatementResult } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
 import { decodeUpload, type ImportSqlOptions, importCsv, importSql } from './import.ts'
 
@@ -101,11 +101,13 @@ const perStatement = () =>
   new FakeAdapter({
     databases: { shop: { tables: { users: fakeTable('users', ['id', 'name', 'age'], []) } } },
     onSql: (_ns, sql) =>
-      sql
-        .split(';')
-        .map((s) => s.trim())
-        .filter((s) => s.length > 0)
-        .map((s) => ({ kind: 'affected' as const, sql: s, affectedRows: 1, durationMs: 1 })),
+      splitStatements(sql, 'mysql').map((st) => ({
+        kind: 'affected' as const,
+        sql: st.sql,
+        line: st.line,
+        affectedRows: 1,
+        durationMs: 1,
+      })),
   })
 
 const opts = (over: Partial<ImportSqlOptions>): ImportSqlOptions => ({
@@ -143,6 +145,71 @@ describe('importSql', () => {
       expect(seen[seen.length - 1]).toBe('COMMIT')
       expect(r.failed).toBe(0)
     }
+  })
+
+  it('reports a cancelled run, tells the wrapper COMMIT apart from a multi-result statement, refuses an open comment', async () => {
+    // The last statement interrupted by the server: cancelled, whatever the counts say.
+    const killed = new FakeAdapter({
+      onSql: (_ns, sql) =>
+        splitStatements(sql, 'mysql').map((st, i, all) =>
+          i === all.length - 1
+            ? {
+                kind: 'error' as const,
+                sql: st.sql,
+                line: st.line,
+                message: 'interrupted',
+                code: 'QUERY_FAILED' as const,
+                nativeCode: 'ER_QUERY_INTERRUPTED',
+              }
+            : { kind: 'affected' as const, sql: st.sql, line: st.line, affectedRows: 1, durationMs: 1 }
+        ),
+    })
+    const cancelled = await importSql(killed, ns, 'SELECT 1; SELECT SLEEP(9)', opts({}))
+    expect(cancelled).toMatchObject({ format: 'sql', total: 2, statements: 2, failed: 1, warnings: ['CANCELLED'] })
+    // A CALL returning two result sets followed by a failing INSERT: the error belongs to the INSERT, not to COMMIT.
+    const multi = new FakeAdapter({
+      onSql: (_ns, sql) =>
+        splitStatements(sql, 'mysql').flatMap((st): StatementResult[] => {
+          if (/^CALL/i.test(st.sql))
+            return [1, 2].map(() => ({
+              kind: 'affected' as const,
+              sql: st.sql,
+              line: st.line,
+              affectedRows: 0,
+              durationMs: 1,
+            }))
+          if (/^INSERT/i.test(st.sql))
+            return [
+              {
+                kind: 'error' as const,
+                sql: st.sql,
+                line: st.line,
+                message: "Table 'nope' doesn't exist",
+                code: 'QUERY_FAILED' as const,
+              },
+            ]
+          return [{ kind: 'affected' as const, sql: st.sql, line: st.line, affectedRows: 1, durationMs: 1 }]
+        }),
+    })
+    const r = await importSql(multi, ns, 'CALL p();\nINSERT INTO nope VALUES (1)', opts({ singleTransaction: true }))
+    expect(r.format === 'sql' && r.errors).toEqual([
+      {
+        sql: 'INSERT INTO nope VALUES (1)',
+        message: "Table 'nope' doesn't exist",
+        index: 2,
+        code: 'QUERY_FAILED',
+        line: 2,
+      },
+    ])
+    expect(r).toMatchObject({ statements: 3, succeeded: 2, failed: 1, warnings: ['ALL_ROLLED_BACK'] })
+    // A file ending inside a comment would swallow the COMMIT: refused before anything runs.
+    await expect(
+      importSql(perStatement(), ns, 'INSERT INTO t VALUES (1); /* end', opts({ singleTransaction: true }))
+    ).rejects.toMatchObject({
+      reason: 'UNTERMINATED_END',
+    })
+    const plain = await importSql(perStatement(), ns, 'INSERT INTO t VALUES (1); /* end', opts({}))
+    expect(plain).toMatchObject({ total: 1, statements: 1, failed: 0 })
   })
 
   it('summarises statement results and caps the error list', async () => {

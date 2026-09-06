@@ -122,5 +122,7 @@ export const ImportReasonSchema = z.enum([
   'IDENTIFIER_TOO_LONG',
   /** An import option's SET statement was refused by the server (params: option, message). */
   'OPTION_FAILED',
+  /** Single-transaction mode: the file ends inside an unterminated comment or literal, which would swallow the COMMIT. */
+  'UNTERMINATED_END',
 ])
 export type ImportReason = z.infer<typeof ImportReasonSchema>

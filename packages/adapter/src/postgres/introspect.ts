@@ -48,7 +48,10 @@ const SERIAL_SEQUENCE_DEPENDENCY = `
   JOIN pg_class t ON t.oid = d.refobjid
   JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = d.refobjsubid
   WHERE d.objid = c.oid AND d.classid = 'pg_class'::regclass AND d.refclassid = 'pg_class'::regclass
-    AND (d.deptype = 'i' OR (d.deptype = 'a' AND c.relname = t.relname || '_' || a.attname || '_seq'))`
+    AND (d.deptype = 'i' OR (d.deptype = 'a' AND c.relname = t.relname || '_' || a.attname || '_seq'
+         AND EXISTS (SELECT 1 FROM pg_attrdef ad JOIN pg_depend dd ON dd.classid = 'pg_attrdef'::regclass AND dd.objid = ad.oid
+                                 AND dd.refclassid = 'pg_class'::regclass AND dd.refobjid = c.oid
+                          WHERE ad.adrelid = t.oid AND ad.adnum = a.attnum)))`
 
 export async function pgListTables(conn: Conn, ns: Namespace): Promise<TableInfo[]> {
   const r = firstResult(
@@ -117,7 +120,10 @@ export async function pgDescribeTable(conn: Conn, ns: Namespace, table: string):
               EXISTS (SELECT 1 FROM pg_depend sd JOIN pg_class c ON c.oid = sd.objid
                       WHERE sd.refclassid = 'pg_class'::regclass AND sd.refobjid = a.attrelid AND sd.refobjsubid = a.attnum
                         AND sd.classid = 'pg_class'::regclass AND sd.deptype = 'a' AND c.relkind = 'S'
-                        AND c.relname = (SELECT relname FROM pg_class WHERE oid = a.attrelid) || '_' || a.attname || '_seq')
+                        AND c.relname = (SELECT relname FROM pg_class WHERE oid = a.attrelid) || '_' || a.attname || '_seq'
+                        AND EXISTS (SELECT 1 FROM pg_attrdef ad JOIN pg_depend dd ON dd.classid = 'pg_attrdef'::regclass AND dd.objid = ad.oid
+                                 AND dd.refclassid = 'pg_class'::regclass AND dd.refobjid = c.oid
+                          WHERE ad.adrelid = a.attrelid AND ad.adnum = a.attnum))
        FROM pg_attribute a
        LEFT JOIN pg_attrdef d ON d.adrelid = a.attrelid AND d.adnum = a.attnum
        LEFT JOIN pg_collation co ON co.oid = a.attcollation AND a.attcollation <> 0 AND co.collname <> 'default'
@@ -133,8 +139,9 @@ export async function pgDescribeTable(conn: Conn, ns: Namespace, table: string):
     if (identity === 'a') extra = 'identity always'
     else if (identity === 'd') extra = 'identity by default'
     else if (generated === 's') extra = 'generated stored'
-    // serial: the column's own conventionally named sequence. A nextval() of any other sequence stays a plain
-    // default (the sequence is dumped as an object of its own, so the default restores as written).
+    // serial: the column's own conventionally named sequence, and the one its default calls. A nextval() of any
+    // other sequence stays a plain default (that sequence is dumped as an object of its own, so the default
+    // restores as written), and an owned sequence the default does not use is listed like any other.
     else if (str(row[3]).startsWith('nextval(') && bool(row[8])) extra = 'serial'
     return {
       name: str(row[0]),

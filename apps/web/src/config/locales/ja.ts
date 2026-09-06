@@ -646,6 +646,8 @@ export const ja = {
       `${p.line ?? '?'} 行目の取り込みに失敗しました（ファイル全体を取り消しました）: ${p.message ?? ''}`,
     OPTION_FAILED: (p: Record<string, string | number>) =>
       `オプション「${p.option === 'ignoreForeignKeys' ? '外部キー制約のチェックを無効にする' : '1 つのトランザクションで実行する'}」を適用できませんでした（PostgreSQL では外部キー検査の無効化にスーパーユーザー権限が必要です）: ${p.message ?? ''}`,
+    UNTERMINATED_END: () =>
+      'ファイルの末尾がコメントまたは文字列の途中で終わっています（1 つのトランザクションで実行するとコミットできないため中止しました）。末尾を閉じるか、このオプションを外してください',
     IDENTIFIER_TOO_LONG: (p: Record<string, string | number>) =>
       `名前「${p.name ?? ''}」が長すぎます（最大 ${p.max ?? '?'} ${p.max === 63 ? 'バイト' : '文字'}）`,
     CSV_ROWS_FAILED: (p: Record<string, string | number>) =>

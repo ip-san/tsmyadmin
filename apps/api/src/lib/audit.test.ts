@@ -178,6 +178,9 @@ describe('withAudit', () => {
     expect(my("SELECT 1--1; CREATE USER u IDENTIFIED BY\n'dash-secret'")).toContain('SELECT 1--1')
     expect(my("SELECT 1; /*!80000 CREATE USER v IDENTIFIED BY 'ver-secret' */")).toContain('CREATE USER v')
     expect(my("SELECT 1; /*!80000 CREATE USER v IDENTIFIED BY 'ver-secret' */")).not.toContain('ver-secret')
+    // PostgreSQL nests block comments: a statement after `/* /* */ */` is still a statement.
+    expect(pg('/* /* */ -- */ CREATE TABLE hidden (id int); SELECT 1')).toContain('CREATE TABLE hidden')
+    expect(pg("/* /* */ ' */ CREATE USER u PASSWORD 'nest-secret'")).not.toContain('nest-secret')
   })
 
   it('logs an import as a labelled size, never its text', async () => {

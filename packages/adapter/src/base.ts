@@ -945,7 +945,11 @@ export abstract class BaseAdapter implements DatabaseAdapter {
         // The first signal was delivered; a failing retry must not fail the request.
         await canceller.cancel(backend).catch(() => undefined)
       }
-      return stillRunning() || entry.interrupted
+      // The signal is out; the answer is what it did. A statement that resists (MySQL SLEEP returns normally when
+      // killed) still stops the script at the next boundary, so the flag settles within the same bounded window.
+      for (let attempt = 0; attempt < CANCEL_RETRIES && stillRunning() && !entry.interrupted; attempt++)
+        await new Promise((resolve) => setTimeout(resolve, CANCEL_RETRY_MS))
+      return entry.interrupted
     } finally {
       await canceller.close()
     }

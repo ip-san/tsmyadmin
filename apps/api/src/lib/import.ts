@@ -1,6 +1,14 @@
 import type { DatabaseAdapter } from '@tsmyadmin/adapter'
 import { AdapterError, isGeneratedColumn, splitStatements } from '@tsmyadmin/adapter'
-import type { ImportForm, ImportReason, ImportResult, ImportWarning, InputCell, Namespace } from '@tsmyadmin/shared'
+import type {
+  ImportForm,
+  ImportReason,
+  ImportResult,
+  ImportWarning,
+  InputCell,
+  Namespace,
+  StatementResult,
+} from '@tsmyadmin/shared'
 import { CsvParseError, isBinaryDataType, parseCsvRecords } from '@tsmyadmin/shared'
 
 const MAX_ERRORS = 20
@@ -57,8 +65,12 @@ const CLOSES_TRANSACTION = /^(?:COMMIT\b|ROLLBACK\b|END\b)/i
  */
 const IMPLICIT_COMMIT =
   /^(?:(?:CREATE|DROP)\s+(?!TEMPORARY\b)|ALTER|TRUNCATE|RENAME|GRANT|REVOKE|LOCK\s+TABLES|UNLOCK\s+TABLES|SET\s+PASSWORD|FLUSH|ANALYZE|OPTIMIZE|REPAIR|CHECK\s+TABLE|LOAD\s+DATA)\b/i
-/** `SET autocommit = 1` commits only when autocommit was off; the pooled connection starts with it on. */
-const AUTOCOMMIT = /^SET\s+(?:SESSION\s+|LOCAL\s+|@@(?:session\.|local\.)?)?autocommit\s*=\s*(0|1|OFF|ON|FALSE|TRUE)\b/i
+/**
+ * `autocommit = …` anywhere in a SET list (`SET sql_mode = '', autocommit = 0`, `SET @OLD = @@autocommit, AUTOCOMMIT
+ * = 0`): turning it on commits only when it was off; the pooled connection starts with it on. A value that is not
+ * a literal (`@OLD_AUTOCOMMIT`) is unknown, and unknown is treated as a commit — the safe direction.
+ */
+const AUTOCOMMIT_SET = /(?:^SET\b|,)\s*(?:SESSION\s+|LOCAL\s+|@@(?:session\.|local\.)?)?autocommit\s*=\s*([^,;\s]+)/gi
 /** The server's own "interrupted by a cancel" errors: MySQL KILL QUERY, PostgreSQL pg_cancel_backend. */
 const CANCEL_CODES = new Set(['ER_QUERY_INTERRUPTED', '57014'])
 const code = (sql: string) => {
@@ -112,6 +124,14 @@ export async function importSql(
   const delimiter = adapter.dialect === 'mysql' ? (splitState.delimiter ?? ';') : ';'
   const terminator = delimiter === ';' ? '\n;' : `\n${delimiter}\nDELIMITER ;`
   const script = [...prefix.map((s) => `${s};`), `${text}${terminator}`, ...suffix.map((s) => `\n${s};`)].join('\n')
+  // The wrapper's COMMIT is the script's last line. A file that ends inside an unterminated comment or literal
+  // would swallow it (and the terminator): the whole run would silently roll back at the end, so it is refused.
+  const commitLine = suffix.length > 0 ? script.split('\n').length : -1
+  if (suffix.length > 0 && splitStatements(script, adapter.dialect).length < prefix.length + total + suffix.length)
+    throw new ImportValidationError(
+      'UNTERMINATED_END',
+      'The file ends inside an unterminated comment or string literal: nothing could be committed'
+    )
   const results = await adapter.executeSql(ns, script, {
     maxRows: 1,
     timeoutMs: SQL_IMPORT_TIMEOUT_MS,
@@ -133,11 +153,16 @@ export async function importSql(
       if (done % PROGRESS_EVERY === 0 || done === total) await options.onProgress?.(Math.min(done, total), total)
     },
   })
-  // The wrapper statements are not the user's: they leave the counts and error list.
-  const own = results.slice(
-    prefix.length,
-    results.length - (suffix.length > 0 && results.length > prefix.length + total ? suffix.length : 0)
-  )
+  // The wrapper statements are not the user's: they leave the counts and error list. They are told apart by their
+  // line (a CALL may return several results, so counting results would misplace the COMMIT); results without a
+  // line (test doubles) fall back to their position.
+  const isPrefix = (r: StatementResult, i: number) =>
+    r.line !== undefined ? r.line <= prefix.length : i < prefix.length
+  const isCommit = (r: StatementResult, i: number) =>
+    suffix.length > 0 &&
+    (r.line !== undefined ? r.line === commitLine : i === results.length - 1 && results.length > prefix.length + total)
+  const own = results.filter((r, i) => !isPrefix(r, i) && !isCommit(r, i))
+  const commit = results.find(isCommit)
   const errors = own.flatMap((r, i) =>
     r.kind === 'error'
       ? [
@@ -152,9 +177,8 @@ export async function importSql(
       : []
   )
   const ownErrors = errors.length
-  const commit = suffix.length > 0 ? results[results.length - 1] : undefined
   // A COMMIT refused by the server (a deferred constraint failing at commit) is the run's error: listed as such.
-  if (commit?.kind === 'error' && results.length === prefix.length + own.length + 1)
+  if (commit?.kind === 'error')
     errors.push({
       sql: 'COMMIT',
       message: commit.message,
@@ -169,8 +193,8 @@ export async function importSql(
   const last = own[own.length - 1]
   const interrupted = last?.kind === 'error' && CANCEL_CODES.has(last.nativeCode ?? '')
   if (
-    own.length < total &&
-    (interrupted || last?.kind !== 'error' || !(options.stopOnError || options.singleTransaction))
+    interrupted ||
+    (own.length < total && (last?.kind !== 'error' || !(options.stopOnError || options.singleTransaction)))
   )
     warnings.push('CANCELLED')
   if (options.singleTransaction && (errors.length > 0 || commit?.kind !== 'affected')) {
@@ -180,11 +204,14 @@ export async function importSql(
     let committed = false
     let autocommitOff = false
     for (const sql of ran) {
-      const auto = AUTOCOMMIT.exec(sql)
-      if (auto) {
-        const on = /^(?:1|ON|TRUE)$/i.test(auto[1] ?? '')
-        if (on && autocommitOff) committed = true
-        autocommitOff = !on
+      const settings = /^SET\b/i.test(sql) ? [...sql.matchAll(AUTOCOMMIT_SET)].map((m) => m[1] ?? '') : []
+      if (settings.length > 0) {
+        for (const value of settings) {
+          const off = /^(?:0|OFF|FALSE)$/i.test(value)
+          const on = /^(?:1|ON|TRUE)$/i.test(value)
+          if (!off && (autocommitOff || !on)) committed = true
+          autocommitOff = off
+        }
       } else if (
         CLOSES_TRANSACTION.test(sql) ||
         (adapter.dialect === 'mysql' && (OPENS_TRANSACTION.test(sql) || IMPLICIT_COMMIT.test(sql)))

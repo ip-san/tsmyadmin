@@ -179,8 +179,27 @@ function withoutComments(sql: string, dialect: Dialect): string {
       out += sql.slice(i, end)
       i = end
     } else if (ch === '/' && sql[i + 1] === '*') {
-      const end = sql.indexOf('*/', i + 2)
-      const stop = end < 0 ? sql.length : end + 2
+      // PostgreSQL nests block comments; MySQL ends at the first `*\/`.
+      let stop = sql.length
+      if (dialect === 'postgres') {
+        let depth = 0
+        for (let k = i; k < sql.length; k++) {
+          if (sql.startsWith('/*', k)) {
+            depth++
+            k++
+          } else if (sql.startsWith('*/', k)) {
+            depth--
+            k++
+            if (depth === 0) {
+              stop = k + 1
+              break
+            }
+          }
+        }
+      } else {
+        const end = sql.indexOf('*/', i + 2)
+        stop = end < 0 ? sql.length : end + 2
+      }
       const versioned = dialect === 'mysql' ? /^\/\*!\d*\s*([\s\S]*?)\s*(?:\*\/)?$/.exec(sql.slice(i, stop)) : null
       out += versioned ? ` ${versioned[1] ?? ''} ` : ' '
       i = stop
