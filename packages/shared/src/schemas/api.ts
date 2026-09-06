@@ -99,5 +99,8 @@ export const ApiErrorSchema = z.object({
   detail: z.string().optional(),
   /** Driver / server error code (MySQL ER_*, PostgreSQL SQLSTATE) when the error came from the database. */
   nativeCode: z.string().optional(),
+  /** Machine-readable reason of a VALIDATION error (the client localises it), with its parameters. */
+  reason: z.string().optional(),
+  params: z.record(z.string(), z.union([z.string(), z.number()])).optional(),
 })
 export type ApiError = z.infer<typeof ApiErrorSchema>

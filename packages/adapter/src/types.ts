@@ -63,6 +63,12 @@ export interface AdapterErrorExtra {
   nativeCode?: string
   /** 1-based character offset in the statement (PostgreSQL). */
   position?: number
+  rows?: readonly [number, number]
+}
+
+export interface InsertRowsOptions {
+  /** PostgreSQL: values for a GENERATED ALWAYS AS IDENTITY column are given (OVERRIDING SYSTEM VALUE). */
+  overriding?: boolean
 }
 
 export class AdapterError extends Error {
@@ -71,6 +77,8 @@ export class AdapterError extends Error {
   readonly detail: string | undefined
   readonly nativeCode: string | undefined
   readonly position: number | undefined
+  /** 0-based inclusive range of the input rows a bulk insert failed on (a single row when the server names it). */
+  readonly rows: readonly [number, number] | undefined
   constructor(code: AdapterErrorCode, message: string, detail?: string, extra: AdapterErrorExtra = {}) {
     super(message)
     this.name = 'AdapterError'
@@ -78,6 +86,7 @@ export class AdapterError extends Error {
     this.detail = detail
     this.nativeCode = extra.nativeCode
     this.position = extra.position
+    this.rows = extra.rows
   }
 }
 
@@ -185,7 +194,17 @@ export interface DatabaseAdapter {
   browseRows(ns: Namespace, table: string, opts: BrowseOptions): Promise<BrowseResult>
   insertRow(ns: Namespace, table: string, values: RowValues): Promise<{ affectedRows: number }>
   /** Bulk insert (imports): parameterised multi-row INSERTs inside one transaction; all-or-nothing. */
-  insertRows(ns: Namespace, table: string, columns: string[], rows: Cell[][]): Promise<{ affectedRows: number }>
+  /**
+   * Bulk insert in one transaction (all or nothing); `rows` may be lazy so a large file is never held twice.
+   * A failure names the 0-based row(s) of `rows` it came from (`AdapterError.rows`).
+   */
+  insertRows(
+    ns: Namespace,
+    table: string,
+    columns: string[],
+    rows: Iterable<Cell[]>,
+    options?: InsertRowsOptions
+  ): Promise<{ affectedRows: number }>
   updateRow(ns: Namespace, table: string, key: RowKey, values: RowValues): Promise<{ affectedRows: number }>
   deleteRows(ns: Namespace, table: string, keys: RowKey[]): Promise<{ affectedRows: number }>
   executeSql(ns: Namespace, sql: string, opts: ExecuteOptions): Promise<StatementResult[]>

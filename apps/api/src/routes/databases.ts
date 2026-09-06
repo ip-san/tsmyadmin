@@ -1,11 +1,13 @@
 import { isGeneratedColumn } from '@tsmyadmin/adapter'
 import {
+  type ApiError,
   BrowseQuerySchema,
   DdlPreviewRequestSchema,
   DeleteRowsRequestSchema,
   decodeTableList,
   ExportQuerySchema,
   IMPORT_MAX_BYTES,
+  type ImportEvent,
   ImportFormSchema,
   InsertRowRequestSchema,
   type Namespace,
@@ -22,13 +24,18 @@ import { Hono } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
 import { apiError, toApiError } from '../lib/errors.ts'
 import { buildExport, contentDisposition, toReadableStream } from '../lib/export.ts'
-import { ImportValidationError, importCsv, importSql } from '../lib/import.ts'
+import { decodeUpload, ImportValidationError, importCsv, importSql } from '../lib/import.ts'
 import type { Logger } from '../lib/logging.ts'
 import { validate } from '../lib/validate.ts'
 import { type AppEnv, requireSession, type SessionConfig } from '../session/middleware.ts'
 
 function ns(database: string, schema?: string): Namespace {
   return schema ? { database, schema } : { database }
+}
+
+/** A user-fixable import problem as the API error body (the client localises `reason` with `params`). */
+function validationError(err: ImportValidationError): ApiError {
+  return { ...apiError('VALIDATION', err.message), reason: err.reason, params: err.params }
 }
 
 export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
@@ -170,19 +177,58 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
           if (!(file instanceof File)) return c.json(apiError('VALIDATION', 'A file is required'), 400)
           if (file.size > IMPORT_MAX_BYTES)
             return c.json(apiError('PAYLOAD_TOO_LARGE', `File exceeds ${IMPORT_MAX_BYTES} bytes`), 413)
-          const text = await file.text()
-          const adapter = c.get('session').adapter
-          const namespace = ns(c.req.param('db'), form.schema)
+          let text: string
           try {
-            const result =
-              form.format === 'sql'
-                ? await importSql(adapter, namespace, text, form.stopOnError === '1')
-                : await importCsv(adapter, namespace, form, text)
-            return c.json(result)
+            text = decodeUpload(new Uint8Array(await file.arrayBuffer()))
           } catch (err) {
-            if (err instanceof ImportValidationError) return c.json(apiError('VALIDATION', err.message), 400)
+            if (err instanceof ImportValidationError) return c.json(validationError(err), 400)
             throw err
           }
+          const adapter = c.get('session').adapter
+          const namespace = ns(c.req.param('db'), form.schema)
+          // The run streams NDJSON (progress, then the result): a long import shows where it is, and a client that
+          // goes away cancels the statement instead of leaving it to run to the end on an abandoned connection.
+          const queryId = crypto.randomUUID()
+          const encoder = new TextEncoder()
+          let closed = false
+          const stream = new ReadableStream<Uint8Array>({
+            async start(controller) {
+              const send = (event: ImportEvent) => {
+                if (!closed) controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`))
+              }
+              try {
+                const result =
+                  form.format === 'sql'
+                    ? await importSql(adapter, namespace, text, {
+                        stopOnError: form.stopOnError === '1',
+                        ignoreForeignKeys: form.ignoreForeignKeys === '1',
+                        singleTransaction: form.singleTransaction === '1',
+                        queryId,
+                        onProgress: (done, total) => send({ type: 'progress', done, total }),
+                      })
+                    : await importCsv(adapter, namespace, form, text)
+                send({ type: 'result', result })
+              } catch (err) {
+                send({
+                  type: 'fatal',
+                  error: err instanceof ImportValidationError ? validationError(err) : toApiError(err).body,
+                })
+              } finally {
+                if (!closed) {
+                  closed = true
+                  controller.close()
+                }
+              }
+            },
+            async cancel() {
+              closed = true
+              await adapter.cancelQuery(queryId)
+            },
+          })
+          return c.body(stream, 200, {
+            'content-type': 'application/x-ndjson; charset=utf-8',
+            'cache-control': 'no-store',
+          })
         }
       )
       .post('/databases/:db/sql', validate('json', SqlRequestSchema), async (c) => {

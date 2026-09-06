@@ -32,6 +32,7 @@ import {
   type DatabaseAdapter,
   type DdlBuilder,
   type ExecuteOptions,
+  type InsertRowsOptions,
   type RowBatch,
   type SqlExporter,
   type UserSqlBuilder,
@@ -67,7 +68,14 @@ export interface Conn {
   forget(): void
   /** Marks the connection as not reusable: release() closes it instead of returning it to the pool. */
   discard(): void
+  /** PostgreSQL `COPY … FROM stdin` with the block's data (pg_dump's default format); absent on other dialects. */
+  copyFrom?(sql: string, data: string): Promise<number>
 }
+
+/** psql meta-command line (`\connect`, `\copy`, `\.`) that reached the server-side splitter. */
+const META_COMMAND = /^\\/
+/** A COPY block as the splitter assembles it: the statement line, then the data, then `\.`. */
+const COPY_BLOCK = /^(COPY\b[\s\S]*?\bFROM\s+STDIN\b[^\n]*?)\s*;?[ \t]*\n([\s\S]*?)\n\\\.$/i
 
 interface RunningEntry {
   ns: Namespace
@@ -475,22 +483,50 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     return Math.max(1, Math.min(500, Math.floor(30_000 / Math.max(1, columnCount))))
   }
 
-  async insertRows(ns: Namespace, table: string, columns: string[], rows: Cell[][]): Promise<{ affectedRows: number }> {
+  async insertRows(
+    ns: Namespace,
+    table: string,
+    columns: string[],
+    rows: Iterable<Cell[]>,
+    options: InsertRowsOptions = {}
+  ): Promise<{ affectedRows: number }> {
     if (columns.length === 0) throw new AdapterError('QUERY_FAILED', 'insertRows requires at least one column')
-    if (rows.length === 0) return { affectedRows: 0 }
     const d = this.dialect
-    const head = `INSERT INTO ${quoteTable(d, ns, table)} (${columns.map((c) => quoteIdent(d, c)).join(', ')}) VALUES `
+    // A PostgreSQL identity column declared ALWAYS refuses explicit values without OVERRIDING SYSTEM VALUE.
+    const overriding = d === 'postgres' && options.overriding ? ' OVERRIDING SYSTEM VALUE' : ''
+    const head = `INSERT INTO ${quoteTable(d, ns, table)} (${columns.map((c) => quoteIdent(d, c)).join(', ')})${overriding} VALUES `
     const chunk = BaseAdapter.chunkSize(columns.length)
+    const it = rows[Symbol.iterator]()
+    let first = it.next()
+    if (first.done) return { affectedRows: 0 }
+    // One transaction for the whole batch (all or nothing); rows are consumed as they come, a chunk at a time.
     return this.withTransaction(ns, async (conn) => {
       let affected = 0
-      for (let i = 0; i < rows.length; i += chunk) {
+      let offset = 0
+      while (!first.done) {
+        const batch: Cell[][] = []
+        while (!first.done && batch.length < chunk) {
+          batch.push(first.value)
+          first = it.next()
+        }
         const params = new Params(d)
-        const values = rows
-          .slice(i, i + chunk)
+        const values = batch
           .map((row) => `(${columns.map((_, j) => params.add(toDbValue(row[j] ?? null))).join(', ')})`)
           .join(', ')
-        const r = firstResult(await conn.query(head + values, params.values))
-        affected += r.affectedRows
+        try {
+          const r = firstResult(await conn.query(head + values, params.values))
+          affected += r.affectedRows
+        } catch (err) {
+          const e = err instanceof AdapterError ? err : this.toAdapterError(err)
+          // MySQL names the failing row of the statement; PostgreSQL does not — the batch is the best it gets.
+          const at = /\bat row (\d+)/i.exec(e.detail ?? e.message)
+          throw new AdapterError(e.code, e.message, e.detail, {
+            ...(e.nativeCode ? { nativeCode: e.nativeCode } : {}),
+            ...(e.position ? { position: e.position } : {}),
+            rows: at ? [offset + Number(at[1]) - 1, offset + Number(at[1]) - 1] : [offset, offset + batch.length - 1],
+          })
+        }
+        offset += batch.length
       }
       return { affectedRows: affected }
     })
@@ -686,13 +722,27 @@ export abstract class BaseAdapter implements DatabaseAdapter {
                 entry.inFlight = true
                 let list: RawResult[]
                 const code = stripLiterals(st.sql, this.dialect)
+                const copy = this.dialect === 'postgres' ? COPY_BLOCK.exec(st.sql) : null
                 try {
-                  list = await this.runStatement(
-                    conn,
-                    st.sql,
-                    capped && !HAS_LIMIT.test(code) ? null : opts.maxRows,
-                    () => entry.cancelled
-                  )
+                  if (META_COMMAND.test(st.sql)) {
+                    throw new AdapterError(
+                      'UNSUPPORTED',
+                      `psql meta-command is not supported: ${st.sql.split(/\s/)[0]}`,
+                      `psql meta-command is not supported: ${st.sql.split(/\s/)[0]}`
+                    )
+                  }
+                  if (copy) {
+                    if (!conn.copyFrom) throw new AdapterError('UNSUPPORTED', 'COPY FROM stdin is not supported')
+                    const affectedRows = await conn.copyFrom(copy[1] ?? '', copy[2] ?? '')
+                    list = [{ hasRows: false, affectedRows, columns: [], rows: [] }]
+                  } else {
+                    list = await this.runStatement(
+                      conn,
+                      st.sql,
+                      capped && !HAS_LIMIT.test(code) ? null : opts.maxRows,
+                      () => entry.cancelled
+                    )
+                  }
                 } finally {
                   entry.inFlight = false
                 }
@@ -705,6 +755,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
                     await emit({
                       kind: 'rows',
                       sql: st.sql,
+                      line: st.line,
                       durationMs,
                       result: {
                         columns: r.columns,
@@ -713,7 +764,13 @@ export abstract class BaseAdapter implements DatabaseAdapter {
                       },
                     })
                   } else {
-                    await emit({ kind: 'affected', sql: st.sql, durationMs, affectedRows: r.affectedRows })
+                    await emit({
+                      kind: 'affected',
+                      sql: st.sql,
+                      line: st.line,
+                      durationMs,
+                      affectedRows: r.affectedRows,
+                    })
                   }
                 }
               } catch (err) {
@@ -721,6 +778,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
                 await emit({
                   kind: 'error',
                   sql: st.sql,
+                  line: st.line,
                   message: e.detail ?? e.message,
                   code: e.code,
                   ...(e.nativeCode ? { nativeCode: e.nativeCode } : {}),

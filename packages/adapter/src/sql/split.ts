@@ -16,6 +16,9 @@ const DELIMITER_LINE = /^[ \t]*DELIMITER[ \t]+(\S+)[ \t]*(?:\r?\n|$)/i
  * `DELIMITER xx` command (a line on its own; `DELIMITER ;` restores the default) so stored routines can be pasted as-is.
  * Chunks that contain only comments/whitespace are dropped.
  */
+/** `COPY table (cols) FROM stdin` — the data that follows is part of the statement (see splitStatements). */
+const COPY_FROM_STDIN = /^COPY\b[\s\S]*?\bFROM\s+STDIN\b/i
+
 /** Leading `--` / `#` / plain block comments, then the wrapper of a `/*!50003 … *\/` version comment. */
 const LEADING_COMMENTS = /^(?:\s*(?:--[^\n]*|#[^\n]*|\/\*(?!!)[\s\S]*?\*\/))*\s*/
 const VERSION_COMMENT = /^\/\*!\d*\s*([\s\S]*?)\s*\*\/$/
@@ -78,11 +81,14 @@ export function splitStatements(input: string, dialect: Dialect): Statement[] {
   // `SET @saved = @@sql_mode` … `SET sql_mode = @saved`: the value a user variable holds, when known.
   const savedModes = new Map<string, boolean>()
 
+  /** After a `COPY … FROM stdin;` the data lines up to the `\.` terminator belong to that statement. */
+  let copyData = false
   const flush = (end: number) => {
     const sql = input.slice(start, end).trim()
     if (hasCode && sql.length > 0) {
       out.push({ sql, line: startLine })
       if (dialect === 'mysql') noBackslash = trackSqlMode(sql, noBackslash, savedModes)
+      if (dialect === 'postgres' && COPY_FROM_STDIN.test(sql)) copyData = true
     }
     hasCode = false
   }
@@ -96,6 +102,31 @@ export function splitStatements(input: string, dialect: Dialect): Statement[] {
 
   while (i < n) {
     const ch = input[i] as string
+    if (copyData) {
+      // The block ends at a line holding only `\.`; the data (tabs, backslashes, quotes) is not SQL.
+      copyData = false
+      const from = input[i] === '\n' ? i + 1 : i
+      const m = /(?:^|\n)\\\.[ \t]*(?:\r?\n|$)/.exec(input.slice(from))
+      const stop = m ? from + m.index + m[0].length : n
+      const last = out[out.length - 1]
+      if (last) last.sql = `${last.sql}\n${input.slice(from, stop).replace(/\r?\n$/, '')}`
+      skipTo(stop)
+      start = i
+      startLine = line
+      continue
+    }
+    // psql meta-commands (`\restrict`, `\connect`, `\.`) are a line each, only between statements.
+    if (dialect === 'postgres' && ch === '\\' && !hasCode && /(?:^|\n)[ \t]*$/.test(input.slice(start, i))) {
+      const end = input.indexOf('\n', i)
+      const stop = end < 0 ? n : end
+      const command = input.slice(i, stop).trim()
+      // pg_dump ≥ 17.6 brackets the file in \restrict / \unrestrict, which only psql understands: no-ops here.
+      if (!/^\\(?:un)?restrict\b/.test(command)) out.push({ sql: command, line })
+      skipTo(stop)
+      start = i
+      startLine = line
+      continue
+    }
     if (i === start && /\s/.test(ch)) {
       if (ch === '\n') line++
       i++

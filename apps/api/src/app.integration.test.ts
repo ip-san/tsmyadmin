@@ -1,6 +1,13 @@
 /** API against the real compose databases (bun run test:integration). */
 import { createAdapter } from '@tsmyadmin/adapter'
-import { BrowseResultSchema, SessionStateSchema, StatementResultSchema, TableSchemaSchema } from '@tsmyadmin/shared'
+import {
+  ApiErrorSchema,
+  BrowseResultSchema,
+  ImportEventSchema,
+  SessionStateSchema,
+  StatementResultSchema,
+  TableSchemaSchema,
+} from '@tsmyadmin/shared'
 import { afterAll, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { createApp } from './app.ts'
@@ -336,6 +343,106 @@ describe.each(targets)('API integration ($dialect)', ({ dialect, url }) => {
     } finally {
       await src(`DROP TABLE IF EXISTS ${t}`)
       await dst(`DROP TABLE IF EXISTS ${t}`)
+    }
+  })
+
+  const upload = async (db: string, fields: Record<string, string>, body: string | Uint8Array) => {
+    const fd = new FormData()
+    for (const [k, v] of Object.entries(fields)) fd.set(k, v)
+    fd.set('file', new File([body], 'f.sql'))
+    const res = await app.request(`/api/databases/${db}/import`, {
+      method: 'POST',
+      body: fd,
+      headers: { cookie, origin: 'http://localhost' },
+    })
+    const text = await res.text()
+    // Pre-run refusals (size, encoding, validation of the form) are plain JSON, not an event stream.
+    const events = res.ok
+      ? text
+          .trim()
+          .split('\n')
+          .filter((l) => l.length > 0)
+          .map((l) => ImportEventSchema.parse(JSON.parse(l)))
+      : [{ type: 'fatal' as const, error: ApiErrorSchema.parse(JSON.parse(text)) }]
+    return { status: res.status, events, last: events.at(-1) }
+  }
+
+  it('imports a pg_dump plain-format file: \\restrict header and COPY … FROM stdin data', async () => {
+    if (dialect !== 'postgres') return
+    const other = (text: string) =>
+      req('/api/databases/tsmyadmin_other/sql', { method: 'POST', body: JSON.stringify({ sql: text }) })
+    await other('DROP TABLE IF EXISTS imp_copy')
+    try {
+      // What pg_dump ≥ 17.6 writes: the psql fence, then a COPY block with tab-separated, backslash-escaped data.
+      const dump = [
+        '--',
+        '-- PostgreSQL database dump',
+        '--',
+        '\\restrict abc123',
+        'SET statement_timeout = 0;',
+        'CREATE TABLE public.imp_copy (id integer NOT NULL, note text, PRIMARY KEY (id));',
+        'COPY public.imp_copy (id, note) FROM stdin;',
+        "1\tit's\\ta",
+        '2\t\\N',
+        '3\tline\\nbreak',
+        '\\.',
+        "SELECT pg_catalog.setval('public.imp_copy_seq', 3, true);",
+        '\\unrestrict abc123',
+        '',
+      ].join('\n')
+      const r = await upload('tsmyadmin_other', { format: 'sql', stopOnError: '0' }, dump)
+      expect(r.status).toBe(200)
+      expect(r.last?.type).toBe('result')
+      if (r.last?.type !== 'result' || r.last.result.format !== 'sql') throw new Error('no result')
+      // The setval fails (no such sequence): everything else, COPY included, went through.
+      expect(r.last.result).toMatchObject({ total: 4, statements: 4, succeeded: 3, failed: 1 })
+      expect(r.last.result.errors[0]).toMatchObject({ line: 12, index: 3 })
+      const rows = BrowseResultSchema.parse(
+        await (await req('/api/databases/tsmyadmin_other/tables/imp_copy/rows')).json()
+      )
+      expect(rows.rows).toEqual([
+        [1, "it's\ta"],
+        [2, null],
+        [3, 'line\nbreak'],
+      ])
+    } finally {
+      await other('DROP TABLE IF EXISTS imp_copy')
+    }
+  })
+
+  it('imports a CSV with identity / generated columns and names the failing line', async () => {
+    const other = (text: string) =>
+      req('/api/databases/tsmyadmin_other/sql', { method: 'POST', body: JSON.stringify({ sql: text }) })
+    const create =
+      dialect === 'mysql'
+        ? 'CREATE TABLE imp_csv (id INT AUTO_INCREMENT PRIMARY KEY, n INT NOT NULL, dbl INT AS (n * 2) STORED)'
+        : 'CREATE TABLE imp_csv (id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY, n INT NOT NULL, dbl INT GENERATED ALWAYS AS (n * 2) STORED)'
+    await other('DROP TABLE IF EXISTS imp_csv')
+    await other(create)
+    try {
+      // A CSV export lists every column: the generated one is skipped, explicit ids are accepted.
+      const ok = await upload('tsmyadmin_other', { format: 'csv', table: 'imp_csv' }, 'id,n,dbl\n5,1,2\n6,2,4\n')
+      expect(ok.last).toMatchObject({ type: 'result', result: { format: 'csv', inserted: 2, skippedColumns: ['dbl'] } })
+      const rows = BrowseResultSchema.parse(
+        await (await req('/api/databases/tsmyadmin_other/tables/imp_csv/rows')).json()
+      )
+      expect(rows.rows).toEqual([
+        [5, 1, 2],
+        [6, 2, 4],
+      ])
+      // A bad value on line 4: nothing of the file is kept and the message names the line (or its batch).
+      const bad = await upload('tsmyadmin_other', { format: 'csv', table: 'imp_csv' }, 'n\n7\n8\nx\n')
+      expect(bad.last?.type).toBe('fatal')
+      if (bad.last?.type !== 'fatal') throw new Error('expected fatal')
+      expect(bad.last.error.code).toBe('VALIDATION')
+      expect(['CSV_ROW_FAILED', 'CSV_ROWS_FAILED']).toContain(bad.last.error.reason)
+      if (bad.last.error.reason === 'CSV_ROW_FAILED') expect(bad.last.error.params).toMatchObject({ line: 4 })
+      const after = BrowseResultSchema.parse(
+        await (await req('/api/databases/tsmyadmin_other/tables/imp_csv/rows')).json()
+      )
+      expect(after.rows).toHaveLength(2)
+    } finally {
+      await other('DROP TABLE IF EXISTS imp_csv')
     }
   })
 

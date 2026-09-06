@@ -17,6 +17,7 @@ import type {
 } from '@tsmyadmin/shared'
 import { isViewKind } from '@tsmyadmin/shared'
 import pg, { type FieldDef, type PoolClient, type QueryResult } from 'pg'
+import { from as copyFrom } from 'pg-copy-streams'
 import {
   BaseAdapter,
   type Canceller,
@@ -203,6 +204,22 @@ export class PostgresAdapter extends BaseAdapter {
       reset,
       forget,
       discard: () => this.broken.add(client),
+      copyFrom: (sql, data) => this.copyFrom(client, sql, data),
+    }
+  }
+
+  /** Streams a COPY block's data (already in memory) to the server; resolves to the number of rows copied. */
+  private async copyFrom(client: PoolClient, sql: string, data: string): Promise<number> {
+    try {
+      const stream = client.query(copyFrom(sql))
+      await new Promise<void>((resolve, reject) => {
+        stream.on('error', reject)
+        stream.on('finish', () => resolve())
+        stream.end(`${data}\n`)
+      })
+      return stream.rowCount ?? 0
+    } catch (err) {
+      throw this.toAdapterError(err)
     }
   }
 

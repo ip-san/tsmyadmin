@@ -27,7 +27,13 @@ import { mysqlUsers } from '../mysql/users.ts'
 import { pgDdl } from '../postgres/ddl.ts'
 import { pgExporter } from '../postgres/export.ts'
 import { pgUsers } from '../postgres/users.ts'
-import { AdapterError, type DatabaseAdapter, type ExecuteOptions, type RowBatch } from '../types.ts'
+import {
+  AdapterError,
+  type DatabaseAdapter,
+  type ExecuteOptions,
+  type InsertRowsOptions,
+  type RowBatch,
+} from '../types.ts'
 
 export interface FakeTable {
   schema: TableSchema
@@ -276,11 +282,18 @@ export class FakeAdapter implements DatabaseAdapter {
     return { affectedRows: 1 }
   }
 
-  async insertRows(ns: Namespace, table: string, columns: string[], rows: Cell[][]): Promise<{ affectedRows: number }> {
-    this.record('insertRows', ns, table, columns, rows)
+  async insertRows(
+    ns: Namespace,
+    table: string,
+    columns: string[],
+    rows: Iterable<Cell[]>,
+    options: InsertRowsOptions = {}
+  ): Promise<{ affectedRows: number }> {
+    const all = [...rows]
+    this.record('insertRows', ns, table, columns, all, options)
     const t = this.table(ns, table)
-    for (const r of rows) t.rows.push(Object.fromEntries(columns.map((c, i) => [c, r[i] ?? null])))
-    return { affectedRows: rows.length }
+    for (const r of all) t.rows.push(Object.fromEntries(columns.map((c, i) => [c, r[i] ?? null])))
+    return { affectedRows: all.length }
   }
 
   private matchKey(row: RowValues, key: RowKey): boolean {

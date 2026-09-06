@@ -5,6 +5,7 @@ import {
   BrowseResultSchema,
   DdlPreviewResponseSchema,
   IMPORT_MAX_BYTES,
+  ImportEventSchema,
   KeyValueSchema,
   ProcessInfoSchema,
   ServerInfoSchema,
@@ -958,7 +959,25 @@ describe('import', () => {
     await h.login()
     const res = await upload(h, { format: 'sql' }, { name: 'dump.sql', body: 'INSERT INTO users VALUES (9); SELECT 1' })
     expect(res.status).toBe(200)
-    expect(await res.json()).toMatchObject({ format: 'sql', statements: 1, succeeded: 1, failed: 0 })
+    expect(res.headers.get('content-type')).toContain('application/x-ndjson')
+    // The run streams progress and then the result (NDJSON); a validation problem mid-run is a `fatal` event.
+    const events = (await res.text())
+      .trim()
+      .split('\n')
+      .map((line) => ImportEventSchema.parse(JSON.parse(line)))
+    expect(events.at(-1)).toMatchObject({ type: 'result', result: { format: 'sql', succeeded: 1, failed: 0 } })
+    const latin1 = await upload(h, { format: 'sql' }, { name: 'l1.sql', body: 'x' })
+    expect(latin1.status).toBe(200)
+    const bytes = new FormData()
+    bytes.set('format', 'sql')
+    bytes.set('file', new File([new Uint8Array([0x53, 0x45, 0x4c, 0xe9])], 'l1.sql'))
+    const bad = await h.app.request('/api/databases/shop/import', {
+      method: 'POST',
+      body: bytes,
+      headers: { cookie: h.cookie(), origin: 'http://localhost' },
+    })
+    expect(bad.status).toBe(400)
+    expect(ApiErrorSchema.parse(await bad.json())).toMatchObject({ code: 'VALIDATION', reason: 'INVALID_ENCODING' })
   })
 
   it('imports a CSV into a table and rejects bad headers with 400', async () => {
@@ -967,12 +986,19 @@ describe('import', () => {
     await h.login()
     const res = await upload(h, { format: 'csv', table: 'users' }, { name: 'u.csv', body: 'id,name\n7,Zed\n' })
     expect(res.status).toBe(200)
-    expect(await res.json()).toMatchObject({ format: 'csv', inserted: 1, columns: ['id', 'name'] })
+    const last = (text: string) => ImportEventSchema.parse(JSON.parse(text.trim().split('\n').at(-1) ?? ''))
+    expect(last(await res.text())).toMatchObject({
+      type: 'result',
+      result: { format: 'csv', inserted: 1, columns: ['id', 'name'] },
+    })
     const rows = BrowseResultSchema.parse(await (await h.req('/api/databases/shop/tables/users/rows')).json())
     expect(rows.rows.some((r) => r[1] === 'Zed')).toBe(true)
     const bad = await upload(h, { format: 'csv', table: 'users' }, { name: 'u.csv', body: 'nope\n1\n' })
-    expect(bad.status).toBe(400)
-    expect(ApiErrorSchema.parse(await bad.json()).code).toBe('VALIDATION')
+    expect(bad.status).toBe(200)
+    expect(last(await bad.text())).toMatchObject({
+      type: 'fatal',
+      error: { code: 'VALIDATION', reason: 'CSV_UNKNOWN_COLUMNS' },
+    })
   })
 
   it('rejects cross-site form posts (CSRF) with 403', async () => {

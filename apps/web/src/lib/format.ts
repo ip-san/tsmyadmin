@@ -52,6 +52,12 @@ export function errorMessage(err: unknown): string {
   // fetch() itself failed: the server is unreachable, not broken.
   if (err instanceof ApiError && err.status === 0) return locale.errors.NETWORK
   if (err && typeof err === 'object' && 'code' in err && typeof err.code === 'string') {
+    // A reason the server named is rendered in the user's language, with its parameters.
+    if ('reason' in err && typeof err.reason === 'string' && err.reason in locale.reasons) {
+      const render = locale.reasons[err.reason as keyof typeof locale.reasons]
+      const params = 'params' in err && err.params && typeof err.params === 'object' ? err.params : {}
+      return render(params as Record<string, string | number>)
+    }
     const code = err.code as keyof typeof locale.errors
     const base = locale.errors[code] ?? locale.errors.INTERNAL
     const message = 'message' in err && typeof err.message === 'string' ? err.message : ''

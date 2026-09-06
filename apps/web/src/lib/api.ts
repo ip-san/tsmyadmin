@@ -9,6 +9,9 @@ export class ApiError extends Error {
   readonly status: number
   readonly detail: string | undefined
   readonly nativeCode: string | undefined
+  /** Localisable reason of a VALIDATION error, with its parameters (see locale.reasons). */
+  readonly reason: string | undefined
+  readonly params: Record<string, string | number> | undefined
   constructor(status: number, body: ApiErrorBody) {
     super(body.message)
     this.name = 'ApiError'
@@ -16,6 +19,8 @@ export class ApiError extends Error {
     this.code = body.code
     this.detail = body.detail
     this.nativeCode = body.nativeCode
+    this.reason = body.reason
+    this.params = body.params
   }
 }
 

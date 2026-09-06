@@ -34,16 +34,46 @@ export function parseCsv(text: string, options: CsvParseOptions = {}): string[][
   return parseCsvDocument(text, options).rows
 }
 
+/** One parsed record: its fields, which of them were quoted, and the 1-based line it starts on. */
+export interface CsvRecord {
+  fields: string[]
+  quoted: boolean[]
+  line: number
+}
+
+/** A quote opened on `line` was never closed: the rest of the file would silently become one field. */
+export class CsvParseError extends Error {
+  readonly line: number
+  constructor(line: number) {
+    super(`Unterminated quoted field starting on line ${line}`)
+    this.name = 'CsvParseError'
+    this.line = line
+  }
+}
+
 export function parseCsvDocument(text: string, options: CsvParseOptions = {}): CsvDocument {
+  const rows: string[][] = []
+  const quoted: boolean[][] = []
+  for (const r of parseCsvRecords(text, options)) {
+    rows.push(r.fields)
+    quoted.push(r.quoted)
+  }
+  return { rows, quoted }
+}
+
+/** Records one at a time, so a large file is held once (as text) rather than twice (text plus every row). */
+export function* parseCsvRecords(text: string, options: CsvParseOptions = {}): Generator<CsvRecord> {
   const delimiter = options.delimiter ?? ','
   const input = text.startsWith('\ufeff') ? text.slice(1) : text
-  const rows: string[][] = []
-  const quotedRows: boolean[][] = []
   let row: string[] = []
   let quotedRow: boolean[] = []
   let field = ''
   let quoted = false
   let wasQuoted = false
+  let quoteLine = 0
+  let line = 1
+  let rowLine = 1
+  let pending: CsvRecord | null = null
   let i = 0
   const n = input.length
   const endField = () => {
@@ -54,12 +84,17 @@ export function parseCsvDocument(text: string, options: CsvParseOptions = {}): C
   }
   const endRow = () => {
     endField()
-    rows.push(row)
-    quotedRows.push(quotedRow)
+    pending = { fields: row, quoted: quotedRow, line: rowLine }
     row = []
     quotedRow = []
+    rowLine = line
   }
   while (i < n) {
+    if (pending) {
+      const r: CsvRecord = pending
+      pending = null
+      yield r
+    }
     const ch = input[i] as string
     if (quoted) {
       if (ch === '"') {
@@ -72,6 +107,7 @@ export function parseCsvDocument(text: string, options: CsvParseOptions = {}): C
         i++
         continue
       }
+      if (ch === '\n') line++
       field += ch
       i++
       continue
@@ -79,6 +115,7 @@ export function parseCsvDocument(text: string, options: CsvParseOptions = {}): C
     if (ch === '"' && field.length === 0) {
       quoted = true
       wasQuoted = true
+      quoteLine = line
       i++
       continue
     }
@@ -88,24 +125,25 @@ export function parseCsvDocument(text: string, options: CsvParseOptions = {}): C
       continue
     }
     if (ch === '\r') {
-      endRow()
+      line++
       i += input[i + 1] === '\n' ? 2 : 1
+      endRow()
       continue
     }
     if (ch === '\n') {
-      endRow()
+      line++
       i++
+      endRow()
       continue
     }
     field += ch
     i++
   }
+  if (quoted) throw new CsvParseError(quoteLine)
   if (field.length > 0 || wasQuoted || row.length > 0) endRow()
-  // A trailing newline produces no extra row; a fully empty document produces none either.
-  const last = rows.length - 1
-  if (last >= 0 && rows[last]?.length === 1 && rows[last]?.[0] === '' && !quotedRows[last]?.[0]) {
-    rows.pop()
-    quotedRows.pop()
+  if (pending) {
+    // A trailing newline produces no extra row; a fully empty document produces none either.
+    const r: CsvRecord = pending
+    if (!(r.fields.length === 1 && r.fields[0] === '' && !r.quoted[0])) yield r
   }
-  return { rows, quoted: quotedRows }
 }

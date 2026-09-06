@@ -3,12 +3,12 @@ import { Link } from '@tanstack/react-router'
 import type { ImportFormat, ImportResult } from '@tsmyadmin/shared'
 import { IMPORT_MAX_BYTES, ImportFormatSchema } from '@tsmyadmin/shared'
 import { Upload } from 'lucide-react'
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Field, Input, Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
-import { api, enc, unwrap } from '@/lib/api.ts'
+import { runImport } from '@/lib/import-stream.ts'
 import { tablesQuery } from '@/lib/queries.ts'
 
 export interface ImportFormProps {
@@ -33,31 +33,52 @@ export function ImportForm({ db, schema, table }: ImportFormProps) {
   const [nullMarker, setNullMarker] = useState('\\N')
   const [delimiter, setDelimiter] = useState(',')
   const [stopOnError, setStopOnError] = useState(true)
+  const [ignoreForeignKeys, setIgnoreForeignKeys] = useState(false)
+  const [singleTransaction, setSingleTransaction] = useState(false)
   const [result, setResult] = useState<ImportResult | null>(null)
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
+  // The upload is cancelled when the user asks or leaves the page: the server stops the running statement.
+  const abort = useRef<AbortController | null>(null)
+  useEffect(() => () => abort.current?.abort(), [])
 
   const run = useMutation({
-    mutationFn: (f: File) =>
-      unwrap<ImportResult>(
-        api.databases[':db'].import.$post({
-          param: { db: enc(db) },
-          form: {
-            file: f,
-            format,
-            ...(schema ? { schema } : {}),
-            ...(format === 'csv'
-              ? { table: target, header: header ? '1' : '0', nullMarker, delimiter }
-              : { stopOnError: stopOnError ? '1' : '0' }),
-          },
-        })
-      ),
+    mutationFn: (f: File) => {
+      const controller = new AbortController()
+      abort.current = controller
+      setProgress(null)
+      return runImport(
+        db,
+        {
+          file: f,
+          format,
+          schema,
+          ...(format === 'csv'
+            ? { table: target, header: header ? ('1' as const) : ('0' as const), nullMarker, delimiter }
+            : {
+                stopOnError: stopOnError ? ('1' as const) : ('0' as const),
+                ignoreForeignKeys: ignoreForeignKeys ? ('1' as const) : ('0' as const),
+                singleTransaction: singleTransaction ? ('1' as const) : ('0' as const),
+              }),
+        },
+        (done, total) => setProgress({ done, total }),
+        controller.signal
+      )
+    },
     onSuccess: async (r) => {
       setResult(r)
       await queryClient.invalidateQueries({ predicate: (q) => q.queryKey[0] !== 'session' })
+    },
+    onSettled: () => {
+      abort.current = null
+      setProgress(null)
     },
   })
 
   const onFile = (f: File | null) => {
     setFile(f)
+    // A fresh file must not sit under the previous run's summary.
+    setResult(null)
+    run.reset()
     const detected = f ? detectFormat(f.name) : null
     if (detected) setFormat(detected)
   }
@@ -137,21 +158,61 @@ export function ImportForm({ db, schema, table }: ImportFormProps) {
           </label>
         </div>
       ) : (
-        <label className="flex items-center gap-1 text-sm">
-          <input type="checkbox" checked={stopOnError} onChange={(e) => setStopOnError(e.target.checked)} />
-          {locale.import.stopOnError}
-        </label>
+        <div className="space-y-1 text-sm">
+          <label className="flex items-center gap-1">
+            <input
+              type="checkbox"
+              checked={stopOnError || singleTransaction}
+              disabled={singleTransaction}
+              onChange={(e) => setStopOnError(e.target.checked)}
+            />
+            {locale.import.stopOnError}
+          </label>
+          <label className="flex items-center gap-1">
+            <input
+              type="checkbox"
+              checked={ignoreForeignKeys}
+              onChange={(e) => setIgnoreForeignKeys(e.target.checked)}
+            />
+            {locale.import.ignoreForeignKeys}
+          </label>
+          <label className="flex items-center gap-1">
+            <input
+              type="checkbox"
+              checked={singleTransaction}
+              onChange={(e) => setSingleTransaction(e.target.checked)}
+            />
+            {locale.import.singleTransaction}
+          </label>
+        </div>
       )}
+      <p className="text-xs text-zinc-500 dark:text-zinc-400">{locale.import.notes[format]}</p>
       {format === 'csv' && !target && !table ? <Notice>{locale.import.csvNeedsTable}</Notice> : null}
       {tooLarge ? (
         <p role="alert" className="text-sm text-red-800 dark:text-red-200">
           {locale.import.fileTooLarge(IMPORT_MAX_BYTES / 1024 / 1024)}
         </p>
       ) : null}
-      <Button type="submit" variant="primary" disabled={blocked || run.isPending}>
-        <Upload className="size-4" aria-hidden />
-        {run.isPending ? locale.import.running : locale.import.submit}
-      </Button>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button type="submit" variant="primary" disabled={blocked || run.isPending}>
+          <Upload className="size-4" aria-hidden />
+          {run.isPending ? locale.import.running : locale.import.submit}
+        </Button>
+        {run.isPending ? <Button onClick={() => abort.current?.abort()}>{locale.import.cancel}</Button> : null}
+        {run.isPending && progress ? (
+          <progress
+            className="h-2 w-48"
+            value={progress.done}
+            max={Math.max(progress.total, 1)}
+            aria-label={locale.import.progress(progress.done, progress.total)}
+          />
+        ) : null}
+        {run.isPending && progress ? (
+          <span className="text-xs text-zinc-600 dark:text-zinc-300">
+            {locale.import.progress(progress.done, progress.total)}
+          </span>
+        ) : null}
+      </div>
       {run.isError ? <ErrorBox error={run.error} /> : null}
       <output aria-live="polite" className={result ? 'block' : 'sr-only'}>
         {result ? <ImportSummary result={result} db={db} schema={schema} /> : null}
@@ -174,12 +235,24 @@ function ImportSummary({ result, db, schema }: { result: ImportResult; db: strin
         >
           {locale.import.viewRows}
         </Link>
+        {result.skippedColumns.length > 0 ? (
+          <span className="block text-xs">{locale.import.skippedColumns(result.skippedColumns.join(', '))}</span>
+        ) : null}
       </Notice>
     )
   }
+  const skipped = result.total - result.statements
   return (
     <div className="space-y-2">
-      <Notice>{locale.import.sqlResult(result.succeeded, result.failed, result.durationMs)}</Notice>
+      <Notice>
+        {locale.import.sqlResult(result.succeeded, result.failed, result.durationMs)}
+        {skipped > 0 ? <span className="block text-xs">{locale.import.skipped(skipped)}</span> : null}
+        {result.warnings.map((w) => (
+          <span key={w} className="block text-xs text-amber-900 dark:text-amber-200">
+            {locale.import.warnings[w]}
+          </span>
+        ))}
+      </Notice>
       {result.errors.length > 0 ? (
         <section className="rounded border border-red-300 bg-red-50 p-3 text-sm dark:border-red-700 dark:bg-red-950">
           <h3 className="mb-1 font-semibold text-red-800 dark:text-red-200">{locale.import.errors}</h3>
@@ -187,8 +260,13 @@ function ImportSummary({ result, db, schema }: { result: ImportResult; db: strin
             {/* The enclosing <output> already announces; per-item alerts would fire twenty times at once. */}
             {result.errors.map((e, i) => (
               <li key={`${i}-${e.sql}`} className="text-red-800 dark:text-red-200">
-                <span>{e.message}</span>
-                <pre className="mt-0.5 overflow-x-auto font-mono text-xs text-zinc-600 dark:text-zinc-300">{e.sql}</pre>
+                <span>
+                  {e.line !== undefined && e.index !== undefined ? `${locale.import.errorAt(e.line, e.index)}: ` : ''}
+                  {e.message}
+                </span>
+                <pre tabIndex={0} className="mt-0.5 overflow-x-auto font-mono text-xs text-zinc-600 dark:text-zinc-300">
+                  {e.sql}
+                </pre>
               </li>
             ))}
           </ul>

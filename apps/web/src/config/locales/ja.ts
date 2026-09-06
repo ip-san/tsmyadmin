@@ -432,12 +432,32 @@ export const ja = {
     nullMarker: 'NULL を表す値',
     delimiter: '区切り文字',
     stopOnError: 'エラーで停止',
+    ignoreForeignKeys: '外部キー制約のチェックを無効にする（テーブルの順序を気にせず取り込む）',
+    singleTransaction: '1 つのトランザクションで実行する（エラー時はすべて取り消す。単行 INSERT が多い場合に高速）',
     submit: 'インポートする',
     running: 'インポート中…',
+    cancel: '中止',
+    progress: (done: number, total: number) =>
+      `${done.toLocaleString('ja-JP')} / ${total.toLocaleString('ja-JP')} 文を実行しました`,
     sqlResult: (ok: number, failed: number, ms: number) =>
       `${ok.toLocaleString('ja-JP')} 文成功、${failed.toLocaleString('ja-JP')} 文失敗（${ms.toLocaleString('ja-JP')} ms）`,
+    skipped: (n: number) => `${n.toLocaleString('ja-JP')} 文は実行されませんでした`,
     csvResult: (n: number, table: string, ms: number) =>
       `${table} に ${n.toLocaleString('ja-JP')} 行を挿入しました（${ms.toLocaleString('ja-JP')} ms）`,
+    skippedColumns: (cols: string) => `サーバーが計算する列は取り込みから除外しました: ${cols}`,
+    warnings: {
+      CHANGED_DATABASE:
+        'スクリプトがデータベースを切り替え・作成・削除しました。取り込み先以外のデータベースに書き込まれた可能性があります',
+      ROLLED_BACK:
+        'スクリプトが開いたままのトランザクションを取り消しました（成功として数えた文の一部は反映されていません）',
+      ALL_ROLLED_BACK: 'エラーのため、ファイル全体を取り消しました（何も反映されていません）',
+    },
+    errorAt: (line: number, index: number) =>
+      `${line.toLocaleString('ja-JP')} 行目（文 #${(index + 1).toLocaleString('ja-JP')}）`,
+    notes: {
+      sql: 'UTF-8 のテキストのみ。mysqldump は --hex-blob 付きで出力してください。pg_dump は通常形式（COPY）と --inserts のどちらも取り込めます。CSV は全行を 1 つのトランザクションで取り込み、途中でエラーになるとファイル全体を取り消します。実行中に画面を閉じると中止されます',
+      csv: '空欄は空文字列、「NULL を表す値」に一致する引用符なしの値だけが NULL になります。ヘッダーのカラム名は大文字小文字を区別せずに照合します',
+    },
     errors: 'エラー',
     csvNeedsTable: 'CSV の取り込み先テーブルを選択してください',
     viewRows: '取り込んだ行を表示',
@@ -563,6 +583,29 @@ export const ja = {
     none: 'トリガーはありません',
   },
   /** Prefixes: a server-side detail (DB message, validation issue) may follow after 「: 」, so no trailing 。. */
+  /** Server-named reasons of a VALIDATION error, rendered with their parameters. */
+  reasons: {
+    INVALID_ENCODING: (p: Record<string, string | number>) =>
+      `ファイルに UTF-8 として不正なバイトが含まれています（${p.line ?? '?'} 行目付近）。mysqldump は --hex-blob を付けて出力し、テキストは UTF-8 で保存してください`,
+    WRONG_DIALECT: (p: Record<string, string | number>) =>
+      `この SQL は ${p.dialect === 'postgres' ? 'PostgreSQL' : 'MySQL'} 用のダンプです（接続先の種別と一致しません）`,
+    NO_STATEMENTS: () => '実行する文が見つかりませんでした',
+    CSV_NO_TABLE: () => 'CSV の取り込み先テーブルを選択してください',
+    CSV_EMPTY: () => 'CSV ファイルが空です',
+    CSV_UNKNOWN_COLUMNS: (p: Record<string, string | number>) =>
+      `ヘッダーにテーブルにないカラムがあります: ${p.columns ?? ''}`,
+    CSV_NO_COLUMNS: () => '取り込むカラムがありません',
+    CSV_FIELD_COUNT: (p: Record<string, string | number>) =>
+      `${p.line ?? '?'} 行目のフィールド数（${p.fields ?? '?'}）がカラム数（${p.columns ?? '?'}）を超えています`,
+    CSV_BINARY: (p: Record<string, string | number>) =>
+      `${p.line ?? '?'} 行目: カラム ${p.column ?? ''} はバイナリのため base64 で指定してください`,
+    CSV_UNTERMINATED_QUOTE: (p: Record<string, string | number>) =>
+      `${p.line ?? '?'} 行目で開いた引用符が閉じていません（以降の行が 1 つのフィールドになるため取り込みを中止しました）`,
+    CSV_ROW_FAILED: (p: Record<string, string | number>) =>
+      `${p.line ?? '?'} 行目の取り込みに失敗しました（ファイル全体を取り消しました）: ${p.message ?? ''}`,
+    CSV_ROWS_FAILED: (p: Record<string, string | number>) =>
+      `${p.from ?? '?'}〜${p.to ?? '?'} 行目のいずれかの取り込みに失敗しました（ファイル全体を取り消しました）: ${p.message ?? ''}`,
+  },
   errors: {
     UNAUTHENTICATED: '接続が切れています。もう一度接続してください',
     VALIDATION: '入力内容に誤りがあります',
