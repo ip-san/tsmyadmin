@@ -77,6 +77,15 @@ describe('splitStatements', () => {
     ])
   })
 
+  it('tracks sql_mode set with := as well', () => {
+    const sql = "SET sql_mode := 'NO_BACKSLASH_ESCAPES';\nSELECT 'a\\';\nSELECT 2"
+    expect(splitStatements(sql, 'mysql').map((s) => s.sql)).toEqual([
+      "SET sql_mode := 'NO_BACKSLASH_ESCAPES'",
+      "SELECT 'a\\'",
+      'SELECT 2',
+    ])
+  })
+
   it('reports the delimiter in force at the end of the input', () => {
     const state: { delimiter?: string } = {}
     splitStatements('SELECT 1', 'mysql', state)

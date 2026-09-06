@@ -960,10 +960,13 @@ export abstract class BaseAdapter implements DatabaseAdapter {
       // The signal is out; the answer is what it did, known once the script loop reaches its next boundary
       // (a statement that resists — MySQL SLEEP returns normally when killed — still stops the script there).
       // A run that is still going after the wait is stopping: the flag holds until the loop looks at it.
+      let timer: ReturnType<typeof setTimeout> | undefined
       const settled = await Promise.race([
         entry.settled.then(() => true),
-        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), CANCEL_SETTLE_MS)),
-      ])
+        new Promise<boolean>((resolve) => {
+          timer = setTimeout(() => resolve(false), CANCEL_SETTLE_MS)
+        }),
+      ]).finally(() => clearTimeout(timer))
       return settled ? entry.interrupted : true
     } finally {
       await canceller.close()

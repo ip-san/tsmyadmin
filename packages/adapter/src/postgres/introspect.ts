@@ -52,7 +52,7 @@ const SERIAL_SEQUENCE_DEPENDENCY = `
          AND EXISTS (SELECT 1 FROM pg_attrdef ad JOIN pg_depend dd ON dd.classid = 'pg_attrdef'::regclass AND dd.objid = ad.oid
                                  AND dd.refclassid = 'pg_class'::regclass AND dd.refobjid = c.oid
                           WHERE ad.adrelid = t.oid AND ad.adnum = a.attnum
-                            AND pg_get_expr(ad.adbin, ad.adrelid) ~ '^nextval\\(''[^'']*''::regclass\\)$')))`
+                            AND pg_get_expr(ad.adbin, ad.adrelid) ~ '^nextval\\(''(?:[^'']|'''')*''::regclass\\)$')))`
 
 export async function pgListTables(conn: Conn, ns: Namespace): Promise<TableInfo[]> {
   const r = firstResult(

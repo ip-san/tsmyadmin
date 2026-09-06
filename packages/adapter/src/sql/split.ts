@@ -36,7 +36,7 @@ export function stripLeadingComments(sql: string, dialect: Dialect): string {
     } else if (sql[i] === '#' && dialect === 'mysql') {
       const end = sql.indexOf('\n', i)
       i = end < 0 ? sql.length : end + 1
-    } else if (sql.startsWith('/*', i) && !sql.startsWith('/*!', i)) {
+    } else if (sql.startsWith('/*', i) && (dialect !== 'mysql' || !sql.startsWith('/*!', i))) {
       let depth = 0
       let k = i
       for (; k < sql.length; k++) {
@@ -57,7 +57,7 @@ export function stripLeadingComments(sql: string, dialect: Dialect): string {
 }
 /** One `name = value` pair of a SET list (the value runs to the next comma outside quotes / parentheses). */
 const SET_ASSIGNMENT =
-  /(?:^|,)\s*(?:(?:SESSION|LOCAL)\s+|@@(?:session\.|global\.|persist\.|persist_only\.)?)?(sql_mode|@[A-Za-z0-9_$.]+)\s*=\s*((?:'[^']*'|"[^"]*"|\([^)]*\)|[^,'"()])*)/gi
+  /(?:^|,)\s*(?:(?:SESSION|LOCAL)\s+|@@(?:session\.|global\.|persist\.|persist_only\.)?)?(sql_mode|@[A-Za-z0-9_$.]+)\s*:?=\s*((?:'[^']*'|"[^"]*"|\([^)]*\)|[^,'"()])*)/gi
 const SQL_MODE_REF = /^@@(?:session\.)?sql_mode$/i
 
 /**

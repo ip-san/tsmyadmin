@@ -69,7 +69,7 @@ const IMPLICIT_COMMIT =
  * a literal (`@OLD_AUTOCOMMIT`) is unknown, and unknown is treated as a commit — the safe direction.
  */
 const AUTOCOMMIT_SET =
-  /(?:^SET\b|,)\s*(?:SESSION\s+|LOCAL\s+|@@(?:session\.|local\.)?)?autocommit\s*=\s*((?:'[^']*'|"[^"]*"|\([^)]*\)|[^,'"()])*)/gi
+  /(?:^SET\b|,)\s*(?:SESSION\s+|LOCAL\s+|@@(?:session\.|local\.)?)?autocommit\s*:?=\s*((?:'[^']*'|"[^"]*"|\([^)]*\)|[^,'"()])*)/gi
 /** String literals blanked so a `, autocommit = 1` inside one is not read as an assignment. */
 const STRING_LITERAL = /'(?:[^'\\]|\\.|'')*'|"(?:[^"\\]|\\.|"")*"/g
 /** The server's own "interrupted by a cancel" errors: MySQL KILL QUERY, PostgreSQL pg_cancel_backend. */
@@ -157,20 +157,24 @@ export async function importSql(
   // Every result carries its statement's index (the several result sets of a CALL share one), which tells the
   // wrapper statements apart and keeps the counts in statements. Results without it (test doubles) are taken
   // one per statement, in order.
-  const indexOf = (r: StatementResult, i: number): number => r.statement ?? i
   const commitIndex = suffix.length > 0 ? prefix.length + total : -1
-  const own = results.filter((r, i) => indexOf(r, i) >= prefix.length && indexOf(r, i) !== commitIndex)
-  const commit = results.find((r, i) => indexOf(r, i) === commitIndex)
-  const ownIndex = (r: StatementResult) => indexOf(r, results.indexOf(r)) - prefix.length
-  const ranStatements = new Set(own.map((r) => ownIndex(r)))
-  const failedStatements = new Set(own.filter((r) => r.kind === 'error').map((r) => ownIndex(r)))
-  const errors = own.flatMap((r) =>
+  // One pass: a dump of hundreds of thousands of single-row INSERTs must not cost a quadratic post-processing.
+  const own: { r: StatementResult; index: number }[] = []
+  let commit: StatementResult | undefined
+  for (const [i, r] of results.entries()) {
+    const index = r.statement ?? i
+    if (index === commitIndex) commit = r
+    else if (index >= prefix.length) own.push({ r, index: index - prefix.length })
+  }
+  const ranStatements = new Set(own.map((o) => o.index))
+  const failedStatements = new Set(own.filter((o) => o.r.kind === 'error').map((o) => o.index))
+  const errors = own.flatMap(({ r, index }) =>
     r.kind === 'error'
       ? [
           {
             sql: r.sql.slice(0, 500),
             message: r.message,
-            index: ownIndex(r),
+            index,
             ...(r.code ? { code: r.code } : {}),
             ...(r.line ? { line: r.line - prefix.length } : {}),
           },
@@ -186,11 +190,11 @@ export async function importSql(
       ...(commit.code ? { code: commit.code } : {}),
     })
   const warnings: ImportWarning[] = []
-  const ran = own.filter((r) => r.kind !== 'error').map((r) => code(r.sql, adapter.dialect))
+  const ran = own.filter((o) => o.r.kind !== 'error').map((o) => code(o.r.sql, adapter.dialect))
   if (ran.some((sql) => CHANGES_DATABASE.test(sql))) warnings.push('CHANGED_DATABASE')
   // Fewer statements than the file holds without an error stopping the run, or a run whose last statement was
   // interrupted by the server: the run was cancelled (the interrupted statement stays in the error list).
-  const last = own[own.length - 1]
+  const last = own[own.length - 1]?.r
   const interrupted = last?.kind === 'error' && CANCEL_CODES.has(last.nativeCode ?? '')
   if (
     interrupted ||
