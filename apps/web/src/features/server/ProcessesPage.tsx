@@ -81,7 +81,9 @@ export function ProcessesPage() {
                 <Td className="text-right tabular-nums">{p.timeSec ?? ''}</Td>
                 <Td className="max-w-md font-mono text-xs">
                   {p.query === null ? (
-                    <span className="text-zinc-400 dark:text-zinc-500">–</span>
+                    <span className="text-zinc-500 dark:text-zinc-400" aria-hidden>
+                      –
+                    </span>
                   ) : (
                     <CellValue cell={p.query} />
                   )}

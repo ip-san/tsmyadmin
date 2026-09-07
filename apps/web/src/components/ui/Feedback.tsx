@@ -53,9 +53,21 @@ export function ErrorBox({
   )
 }
 
-export function Notice({ children, className }: { children: ReactNode; className?: string }) {
+export function Notice({
+  children,
+  className,
+  id,
+  role,
+}: {
+  children: ReactNode
+  className?: string
+  id?: string
+  role?: 'status'
+}) {
   return (
     <div
+      id={id}
+      role={role}
       className={cn(
         'rounded border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-100',
         className
@@ -88,7 +100,7 @@ export function Badge({
       <span className={cn('inline-block rounded px-1.5 py-0.5 text-xs font-medium', tones[tone])} title={title}>
         {children}
       </span>
-      {title ? <span className="sr-only">（{title}）</span> : null}
+      {title ? <span className="sr-only">{locale.common.parenthesised(title)}</span> : null}
     </>
   )
 }

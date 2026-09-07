@@ -20,7 +20,7 @@ describe('cellToText / cellToEditable', () => {
     expect(cellToText(null)).toBe('NULL')
     expect(cellToText({ $bin: 'qg==' })).toContain('1 バイト')
     expect(cellToText('x')).toBe('x')
-    expect(cellToText({ $text: 'abc', length: 70000 })).toBe('abc[先頭のみ表示 / 全 70,000 文字]')
+    expect(cellToText({ $text: 'abc', length: 70000 })).toBe('abc（全 70,000 文字のうち先頭のみ表示）')
   })
 
   it('never puts NULL/binary/truncated text into an editor as text', () => {

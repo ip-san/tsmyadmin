@@ -26,6 +26,7 @@ import type {
   UserOp,
   UserRef,
 } from '@tsmyadmin/shared'
+import type { Statement } from './sql/split.ts'
 
 export interface ConnectionConfig {
   dialect: Dialect
@@ -47,6 +48,8 @@ export interface ExecuteOptions {
   onResult?: (result: StatementResult, index: number) => void | Promise<void>
   /** Logged in place of the script text (`<import>`): an uploaded file carries row values, which never reach a log. */
   auditLabel?: string
+  /** The script already split (a caller that had to split it anyway); `script` is then only the audited text. */
+  statements?: Statement[]
 }
 
 export type AdapterErrorCode = Extract<

@@ -1,5 +1,4 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
 import type { ImportFormat, ImportResult } from '@tsmyadmin/shared'
 import { IMPORT_MAX_BYTES, ImportFormatSchema } from '@tsmyadmin/shared'
 import { Upload } from 'lucide-react'
@@ -11,6 +10,8 @@ import { locale } from '@/config/locale.ts'
 import { cn } from '@/lib/cn.ts'
 import { runImport } from '@/lib/import-stream.ts'
 import { mutations, tablesQuery } from '@/lib/queries.ts'
+import { newQueryId } from '@/lib/uuid.ts'
+import { ImportSummary } from './ImportSummary.tsx'
 
 export interface ImportFormProps {
   db: string
@@ -44,23 +45,25 @@ export function ImportForm({ db, schema, table }: ImportFormProps) {
   const queryId = useRef<string | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
   // The submit / cancel buttons disable or unmount while focused: focus lands on the summary once the run ends.
-  const summary = useRef<HTMLOutputElement>(null)
+  const summary = useRef<HTMLElement>(null)
   useEffect(() => () => abort.current?.abort(), [])
   const cancel = useMutation({ mutationFn: (id: string) => mutations.cancelSql(db, id) })
 
   const run = useMutation({
-    mutationFn: (f: File) => {
-      const controller = new AbortController()
-      abort.current = controller
-      queryId.current = crypto.randomUUID()
+    onMutate: () => {
+      abort.current = new AbortController()
+      queryId.current = newQueryId()
       setProgress(null)
+      cancel.reset()
+    },
+    mutationFn: (f: File) => {
       return runImport(
         db,
         {
           file: f,
           format,
           schema,
-          queryId: queryId.current,
+          ...(queryId.current ? { queryId: queryId.current } : {}),
           ...(format === 'csv'
             ? { table: target, header: header ? ('1' as const) : ('0' as const), nullMarker, delimiter }
             : {
@@ -70,10 +73,9 @@ export function ImportForm({ db, schema, table }: ImportFormProps) {
               }),
         },
         (done, total) => setProgress({ done, total }),
-        controller.signal
+        abort.current?.signal
       )
     },
-    onMutate: () => cancel.reset(),
     onSuccess: async (r) => {
       setResult(r)
       // The file is consumed: a second click must not import it again (the summary stays on screen).
@@ -84,15 +86,17 @@ export function ImportForm({ db, schema, table }: ImportFormProps) {
     onSettled: () => {
       abort.current = null
       setProgress(null)
-      // A cancel that failed is moot once the run has ended by itself.
-      if (cancel.isError) cancel.reset()
-      summary.current?.focus()
     },
   })
 
   // A cancel that found nothing running (the file was still being decoded) leaves the button usable.
   const cancelSent = cancel.isPending || (cancel.isSuccess && cancel.data.cancelled)
   const cancelled = cancel.isSuccess && cancel.data.cancelled && !run.isPending
+  // Focus lands on the result once it is on screen (the submit / cancel buttons may have gone or changed).
+  const outcome = result !== null || run.isError || cancelled
+  useEffect(() => {
+    if (outcome) summary.current?.focus()
+  }, [outcome])
 
   const onFile = (f: File | null) => {
     setFile(f)
@@ -109,6 +113,7 @@ export function ImportForm({ db, schema, table }: ImportFormProps) {
   const blocked = !file || tooLarge || (format === 'csv' && !target) || badDelimiter
   const submit = (e: FormEvent) => {
     e.preventDefault()
+    if (run.isPending) return
     if (!file || blocked) return
     setResult(null)
     run.mutate(file)
@@ -229,13 +234,17 @@ export function ImportForm({ db, schema, table }: ImportFormProps) {
         </p>
       ) : null}
       <div className="flex flex-wrap items-center gap-2">
-        <Button type="submit" variant="primary" disabled={blocked || run.isPending}>
+        {/* Kept focusable while busy: a control that disables itself under the keyboard drops focus to the page. */}
+        <Button type="submit" variant="primary" disabled={blocked} aria-disabled={blocked || run.isPending}>
           <Upload className="size-4" aria-hidden />
           {run.isPending ? locale.import.running : locale.import.submit}
         </Button>
         {/* CSV runs as one INSERT transaction the server cannot interrupt by id: no cancel for it. */}
         {run.isPending && format === 'sql' ? (
-          <Button onClick={() => queryId.current && cancel.mutate(queryId.current)} disabled={cancelSent}>
+          <Button
+            onClick={() => !cancelSent && queryId.current && cancel.mutate(queryId.current)}
+            aria-disabled={cancelSent}
+          >
             {cancelSent ? locale.import.cancelling : locale.import.cancel}
           </Button>
         ) : null}
@@ -253,73 +262,20 @@ export function ImportForm({ db, schema, table }: ImportFormProps) {
           </span>
         ) : null}
       </div>
-      {cancel.isError ? <ErrorBox error={cancel.error} /> : null}
-      <output
+      {run.isPending && cancel.isError ? <ErrorBox error={cancel.error} /> : null}
+      {/* One channel only: the region takes focus once its content is rendered (a live region on top would read
+          the same text again). The server's own CANCELLED warning speaks for a cancelled run that returned a
+          result; the client-side notice covers a cancel whose run ended without one. */}
+      <section
         ref={summary}
         tabIndex={-1}
         aria-label={locale.import.resultRegion}
-        aria-live="polite"
-        className={cn('outline-none', result || cancelled || run.isError ? 'block' : 'sr-only')}
+        className={cn('outline-none', result || cancelled || run.isError ? 'block' : 'hidden')}
       >
         {run.isError ? <ErrorBox error={run.error} live={false} /> : null}
-        {cancelled ? <Notice>{locale.import.cancelled}</Notice> : null}
+        {cancelled && !result ? <Notice>{locale.import.cancelled}</Notice> : null}
         {result ? <ImportSummary result={result} db={db} schema={schema} /> : null}
-      </output>
+      </section>
     </form>
-  )
-}
-
-/** Result banner; the live region is rendered by the parent so it exists before the message arrives. */
-function ImportSummary({ result, db, schema }: { result: ImportResult; db: string; schema?: string | undefined }) {
-  if (result.format === 'csv') {
-    return (
-      <Notice>
-        {locale.import.csvResult(result.inserted, result.table, result.durationMs)}{' '}
-        <Link
-          to="/db/$db/table/$table"
-          params={{ db, table: result.table }}
-          search={schema ? { schema } : {}}
-          className="text-blue-700 underline dark:text-blue-300"
-        >
-          {locale.import.viewRows}
-        </Link>
-        {result.skippedColumns.length > 0 ? (
-          <span className="block text-xs">{locale.import.skippedColumns(result.skippedColumns.join(', '))}</span>
-        ) : null}
-      </Notice>
-    )
-  }
-  const skipped = result.total - result.statements
-  return (
-    <div className="space-y-2">
-      <Notice>
-        {locale.import.sqlResult(result.succeeded, result.failed, result.durationMs)}
-        {skipped > 0 ? <span className="block text-xs">{locale.import.skipped(skipped)}</span> : null}
-        {result.warnings.map((w) => (
-          <span key={w} className="block text-xs text-amber-900 dark:text-amber-200">
-            {locale.import.warnings[w]}
-          </span>
-        ))}
-      </Notice>
-      {result.errors.length > 0 ? (
-        <section className="rounded border border-red-300 bg-red-50 p-3 text-sm dark:border-red-700 dark:bg-red-950">
-          <h3 className="mb-1 font-semibold text-red-800 dark:text-red-200">{locale.import.errors}</h3>
-          <ul className="space-y-1">
-            {/* The enclosing <output> already announces; per-item alerts would fire twenty times at once. */}
-            {result.errors.map((e, i) => (
-              <li key={`${i}-${e.sql}`} className="text-red-800 dark:text-red-200">
-                <span>
-                  {e.line !== undefined && e.index !== undefined ? `${locale.import.errorAt(e.line, e.index)}: ` : ''}
-                  {e.message}
-                </span>
-                <pre tabIndex={0} className="mt-0.5 overflow-x-auto font-mono text-xs text-zinc-600 dark:text-zinc-300">
-                  {e.sql}
-                </pre>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-    </div>
   )
 }

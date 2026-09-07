@@ -13,6 +13,7 @@ import { ApiError } from '@/lib/api.ts'
 import { readPreference, writePreference } from '@/lib/preferences.ts'
 import { mutations } from '@/lib/queries.ts'
 import { streamSql } from '@/lib/sql-stream.ts'
+import { newQueryId } from '@/lib/uuid.ts'
 import { clearHistory, type HistoryEntry, loadHistory, pushHistory } from './history.ts'
 import { ResultsView } from './ResultsView.tsx'
 import { SqlEditor } from './SqlEditor.tsx'
@@ -92,7 +93,7 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
     // Statement results are appended to the view as the server streams them (NDJSON), so long scripts
     // show progress instead of one big response at the end.
     mutationFn: async (sql: string) => {
-      queryId.current = crypto.randomUUID()
+      queryId.current = newQueryId()
       const collected: StatementResult[] = []
       setResults([])
       // Results are flushed to React at most once per animation frame: a pasted dump can be thousands of

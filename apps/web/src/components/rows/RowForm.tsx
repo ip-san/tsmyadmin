@@ -1,4 +1,4 @@
-import type { Cell, ColumnDef, RowValues } from '@tsmyadmin/shared'
+import type { Cell, ColumnDef, InputCell, RowValues } from '@tsmyadmin/shared'
 import { type FormEvent, useState } from 'react'
 import { locale } from '@/config/locale.ts'
 import { cellToEditable, isOpaqueCell } from '@/lib/format.ts'
@@ -75,7 +75,7 @@ export function RowForm({ columns, mode, initial, pending, error, onSubmit, onCa
       const original = initial?.[c.name] ?? null
       // Editing keeps an opaque value untouched (the field is read-only); duplicating sends whatever was typed.
       if (mode === 'edit' && isOpaqueCell(original) && !f.isNull) continue
-      const next: Cell = f.isNull ? null : f.text
+      const next: InputCell = f.isNull ? null : f.text
       if (mode === 'edit' && !changed(original, next)) continue
       values[c.name] = next
     }
@@ -135,6 +135,7 @@ export function RowForm({ columns, mode, initial, pending, error, onSubmit, onCa
                   ) : MULTILINE.test(c.dataType) ? (
                     <Textarea
                       id={id}
+                      aria-describedby={opaque && mode === 'insert' ? `${id}-note` : undefined}
                       value={f.isNull || f.useDefault ? '' : f.text}
                       rows={Math.min(12, Math.max(2, f.text.split('\n').length))}
                       onChange={(e) => takeOver(e.target.value)}
@@ -144,6 +145,7 @@ export function RowForm({ columns, mode, initial, pending, error, onSubmit, onCa
                   ) : (
                     <Input
                       id={id}
+                      aria-describedby={opaque && mode === 'insert' ? `${id}-note` : undefined}
                       value={f.isNull || f.useDefault ? '' : f.text}
                       onChange={(e) => takeOver(e.target.value)}
                       placeholder={f.useDefault && c.default !== null ? c.default : undefined}
@@ -151,7 +153,7 @@ export function RowForm({ columns, mode, initial, pending, error, onSubmit, onCa
                     />
                   )}
                   {opaque && mode === 'insert' ? (
-                    <span className="block text-xs text-zinc-500 dark:text-zinc-400">
+                    <span id={`${id}-note`} className="block text-xs text-zinc-500 dark:text-zinc-400">
                       {locale.rows.opaqueNotCopied}
                     </span>
                   ) : null}

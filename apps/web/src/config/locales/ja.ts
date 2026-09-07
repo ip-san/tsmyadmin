@@ -1,3 +1,5 @@
+import type { CountKind, ImportReason, ImportWarning } from '@tsmyadmin/shared'
+
 /**
  * All user-facing Japanese strings. Components must reference `locale.*`, never literal Japanese.
  *
@@ -33,7 +35,7 @@ export const ja = {
     null: 'NULL',
     empty: '（空）',
     binary: (bytes: number) => `[バイナリ ${bytes.toLocaleString('ja-JP')} バイト]`,
-    truncatedText: (length: number) => `[先頭のみ表示 / 全 ${length.toLocaleString('ja-JP')} 文字]`,
+    truncatedText: (length: number) => `（全 ${length.toLocaleString('ja-JP')} 文字のうち先頭のみ表示）`,
     bytes: (n: number) => {
       if (n < 1024) return `${n.toLocaleString('ja-JP')} B`
       const units = ['KB', 'MB', 'GB', 'TB']
@@ -52,6 +54,7 @@ export const ja = {
     reload: '再読み込み',
     showMore: (n: number) => `全文を表示（${n.toLocaleString('ja-JP')} 文字）`,
     showLess: '折りたたむ',
+    parenthesised: (s: string) => `（${s}）`,
     showHead: (n: number) => `先頭 ${n.toLocaleString('ja-JP')} 文字を表示`,
     backHome: 'トップへ戻る',
   },
@@ -158,7 +161,7 @@ export const ja = {
     fromTable: '参照元テーブル',
   },
   browse: {
-    total: (n: number | null, count: 'exact' | 'estimate' | 'lower_bound' = 'exact') =>
+    total: (n: number | null, count: CountKind = 'exact') =>
       n === null
         ? '行数不明'
         : count === 'estimate'
@@ -168,7 +171,7 @@ export const ja = {
             : `全 ${n.toLocaleString('ja-JP')} 行`,
     range: (from: number, to: number) => `${from.toLocaleString('ja-JP')}–${to.toLocaleString('ja-JP')} 行目`,
     perPage: '表示行数',
-    pageLabel: (page: number, last: number | null, count: 'exact' | 'estimate' | 'lower_bound' = 'exact') =>
+    pageLabel: (page: number, last: number | null, count: CountKind = 'exact') =>
       last === null
         ? `ページ ${page.toLocaleString('ja-JP')}`
         : count === 'estimate'
@@ -482,7 +485,7 @@ export const ja = {
       CANCELLED: '中止したため、以降の文は実行されていません',
       PARTIALLY_ROLLED_BACK:
         'エラーのため、最後のコミット以降の文を取り消しました。スクリプト自身の COMMIT や（MySQL では）CREATE / DROP / ALTER などが途中でコミットしているため、それ以前の文は反映されています',
-    },
+    } satisfies Record<ImportWarning, string>,
     errorAt: (line: number, index: number) =>
       `${line.toLocaleString('ja-JP')} 行目（文 #${(index + 1).toLocaleString('ja-JP')}）`,
     notes: {
@@ -652,7 +655,7 @@ export const ja = {
       `名前「${p.name ?? ''}」が長すぎます（最大 ${p.max ?? '?'} ${p.max === 63 ? 'バイト' : '文字'}）`,
     CSV_ROWS_FAILED: (p: Record<string, string | number>) =>
       `${p.from ?? '?'}〜${p.to ?? '?'} 行目のいずれかの取り込みに失敗しました（ファイル全体を取り消しました）: ${p.message ?? ''}`,
-  },
+  } satisfies Record<ImportReason, (p: Record<string, string | number>) => string>,
   errors: {
     UNAUTHENTICATED: '接続が切れています。もう一度接続してください',
     VALIDATION: '入力内容に誤りがあります',

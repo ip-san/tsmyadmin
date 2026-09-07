@@ -43,7 +43,7 @@ for (const t of TARGETS) {
         .setInputFiles({ name: 'bad.csv', mimeType: 'text/csv', buffer: Buffer.from('nope\n1\n') })
       await page.getByRole('button', { name: 'インポートする' }).click()
       // The error is announced by the result live region (and receives focus), not as a separate alert.
-      const result = page.getByRole('status', { name: 'インポートの結果' })
+      const result = page.getByRole('region', { name: 'インポートの結果' })
       await expect(result).toContainText('nope')
       await expect(result).toBeFocused()
     })

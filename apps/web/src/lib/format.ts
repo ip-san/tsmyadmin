@@ -64,7 +64,7 @@ export function errorMessage(err: unknown): string {
   if (err instanceof ApiError && err.status === 0) return locale.errors.NETWORK
   if (err && typeof err === 'object' && 'code' in err && typeof err.code === 'string') {
     // A reason the server named is rendered in the user's language, with its parameters.
-    if ('reason' in err && typeof err.reason === 'string' && err.reason in locale.reasons) {
+    if ('reason' in err && typeof err.reason === 'string' && Object.hasOwn(locale.reasons, err.reason)) {
       const render = locale.reasons[err.reason as keyof typeof locale.reasons]
       const params = 'params' in err && err.params && typeof err.params === 'object' ? err.params : {}
       return render(params as Record<string, string | number>)

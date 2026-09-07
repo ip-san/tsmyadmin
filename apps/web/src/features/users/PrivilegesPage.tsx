@@ -1,5 +1,6 @@
 import { useQueries, useQuery } from '@tanstack/react-query'
 import type { Dialect, UserGrants } from '@tsmyadmin/shared'
+import { useCallback } from 'react'
 import { UserOpPreviewDialog } from '@/components/ddl/UserOpPreviewDialog.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { Badge, ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
@@ -15,14 +16,16 @@ export function PrivilegesPage({ db, schema, dialect }: { db: string; schema?: s
   const logins = (users.data ?? []).filter((u) => u.canLogin)
   // Current grants per account so the page shows who already has access (one request per account, cached).
   // One request per account; the level is derived inside `select` so it is memoised per query, not per render.
+  // A stable `select` keeps its result memoised across renders (a new function each render would re-run it).
+  const selectLevels = useCallback(
+    (g: UserGrants) => ({
+      level: privilegeLevel(dialect, db, schema, g.statements),
+      global: dialect === 'mysql' ? globalPrivilegeLevel(g.statements) : null,
+    }),
+    [dialect, db, schema]
+  )
   const grants = useQueries({
-    queries: logins.map((u) => ({
-      ...grantsQuery(userRef(u), { database: db, schema }),
-      select: (g: UserGrants) => ({
-        level: privilegeLevel(dialect, db, schema, g.statements),
-        global: dialect === 'mysql' ? globalPrivilegeLevel(g.statements) : null,
-      }),
-    })),
+    queries: logins.map((u) => ({ ...grantsQuery(userRef(u), { database: db, schema }), select: selectLevels })),
   })
   if (users.isPending) return <Spinner />
   if (users.isError) return <ErrorBox error={users.error} onRetry={() => void users.refetch()} />

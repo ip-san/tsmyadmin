@@ -1,6 +1,14 @@
 import type { DatabaseAdapter } from '@tsmyadmin/adapter'
-import { AdapterError, isGeneratedColumn, splitStatements, stripLeadingComments } from '@tsmyadmin/adapter'
+import {
+  AdapterError,
+  isGeneratedColumn,
+  type Statement,
+  setAssignments,
+  splitStatements,
+  stripLeadingComments,
+} from '@tsmyadmin/adapter'
 import type {
+  ImportError,
   ImportForm,
   ImportReason,
   ImportResult,
@@ -63,15 +71,6 @@ const CLOSES_TRANSACTION = /^(?:COMMIT\b|ROLLBACK\b|END\b)/i
  */
 const IMPLICIT_COMMIT =
   /^(?:(?:CREATE|DROP)\s+(?!TEMPORARY\b)|ALTER|TRUNCATE|RENAME|GRANT|REVOKE|LOCK\s+TABLES|UNLOCK\s+TABLES|SET\s+PASSWORD|FLUSH|ANALYZE|OPTIMIZE|REPAIR|CHECK\s+TABLE|LOAD\s+DATA)\b/i
-/**
- * `autocommit = …` anywhere in a SET list (`SET sql_mode = '', autocommit = 0`, `SET @OLD = @@autocommit, AUTOCOMMIT
- * = 0`): turning it on commits only when it was off; the pooled connection starts with it on. A value that is not
- * a literal (`@OLD_AUTOCOMMIT`) is unknown, and unknown is treated as a commit — the safe direction.
- */
-const AUTOCOMMIT_SET =
-  /(?:^SET\b|,)\s*(?:SESSION\s+|LOCAL\s+|@@(?:session\.|local\.)?)?autocommit\s*:?=\s*((?:'[^']*'|"[^"]*"|\([^)]*\)|[^,'"()])*)/gi
-/** String literals blanked so a `, autocommit = 1` inside one is not read as an assignment. */
-const STRING_LITERAL = /'(?:[^'\\]|\\.|'')*'|"(?:[^"\\]|\\.|"")*"/g
 /** The server's own "interrupted by a cancel" errors: MySQL KILL QUERY, PostgreSQL pg_cancel_backend. */
 const CANCEL_CODES = new Set(['ER_QUERY_INTERRUPTED', '57014'])
 const code = (sql: string, dialect: 'mysql' | 'postgres') => {
@@ -106,8 +105,9 @@ export async function importSql(
       }
     )
   }
-  const splitState: { delimiter?: string } = {}
-  const total = splitStatements(text, adapter.dialect, splitState).length
+  const splitState: { delimiter?: string; unterminated?: boolean } = {}
+  const own = splitStatements(text, adapter.dialect, splitState)
+  const total = own.length
   if (total === 0) throw new ImportValidationError('NO_STATEMENTS', 'No SQL statements were found in the file')
   // Wrapping statements are the adapter builders' business (see SqlExporter); a plain pre/postamble is enough here.
   const prefix = [
@@ -127,12 +127,21 @@ export async function importSql(
   const script = [...prefix.map((s) => `${s};`), `${text}${terminator}`, ...suffix.map((s) => `\n${s};`)].join('\n')
   // A file that ends inside an unterminated comment or literal would swallow the terminator and the wrapper's
   // COMMIT: the whole run would silently roll back at the end, so it is refused.
-  if (suffix.length > 0 && splitStatements(script, adapter.dialect).length < prefix.length + total + suffix.length)
+  if (suffix.length > 0 && splitState.unterminated)
     throw new ImportValidationError(
       'UNTERMINATED_END',
       'The file ends inside an unterminated comment or string literal: nothing could be committed'
     )
+  // The file was split once above; the wrapper statements are added around it (their lines match `script`) so the
+  // adapter does not tokenise a 64 MB upload a second time.
+  const commitLine = script.split('\n').length
+  const statements: Statement[] = [
+    ...prefix.map((sql, k) => ({ sql, line: k + 1 })),
+    ...own.map((st) => ({ sql: st.sql, line: st.line + prefix.length })),
+    ...suffix.map((sql) => ({ sql, line: commitLine })),
+  ]
   const results = await adapter.executeSql(ns, script, {
+    statements,
     maxRows: 1,
     timeoutMs: SQL_IMPORT_TIMEOUT_MS,
     // Single-transaction mode stops at the first error by definition (the rest could not commit anyway).
@@ -158,29 +167,35 @@ export async function importSql(
   // wrapper statements apart and keeps the counts in statements. Results without it (test doubles) are taken
   // one per statement, in order.
   const commitIndex = suffix.length > 0 ? prefix.length + total : -1
-  // One pass: a dump of hundreds of thousands of single-row INSERTs must not cost a quadratic post-processing.
-  const own: { r: StatementResult; index: number }[] = []
+  // One pass: a dump of hundreds of thousands of single-row INSERTs must not cost a quadratic post-processing,
+  // nor an error entry per failed statement when only the first MAX_ERRORS are shown.
+  const ownResults: { r: StatementResult; index: number }[] = []
+  const ranStatements = new Set<number>()
+  const failedStatements = new Set<number>()
+  const errors: ImportError[] = []
   let commit: StatementResult | undefined
   for (const [i, r] of results.entries()) {
     const index = r.statement ?? i
-    if (index === commitIndex) commit = r
-    else if (index >= prefix.length) own.push({ r, index: index - prefix.length })
+    if (index === commitIndex) {
+      commit = r
+      continue
+    }
+    if (index < prefix.length) continue
+    const ownIndex = index - prefix.length
+    ownResults.push({ r, index: ownIndex })
+    ranStatements.add(ownIndex)
+    if (r.kind === 'error') {
+      failedStatements.add(ownIndex)
+      if (errors.length < MAX_ERRORS)
+        errors.push({
+          sql: r.sql.slice(0, 500),
+          message: r.message,
+          index: ownIndex,
+          ...(r.code ? { code: r.code } : {}),
+          ...(r.line ? { line: r.line - prefix.length } : {}),
+        })
+    }
   }
-  const ranStatements = new Set(own.map((o) => o.index))
-  const failedStatements = new Set(own.filter((o) => o.r.kind === 'error').map((o) => o.index))
-  const errors = own.flatMap(({ r, index }) =>
-    r.kind === 'error'
-      ? [
-          {
-            sql: r.sql.slice(0, 500),
-            message: r.message,
-            index,
-            ...(r.code ? { code: r.code } : {}),
-            ...(r.line ? { line: r.line - prefix.length } : {}),
-          },
-        ]
-      : []
-  )
   // A COMMIT refused by the server (a deferred constraint failing at commit) is the run's error: listed as such.
   if (commit?.kind === 'error')
     errors.push({
@@ -190,11 +205,11 @@ export async function importSql(
       ...(commit.code ? { code: commit.code } : {}),
     })
   const warnings: ImportWarning[] = []
-  const ran = own.filter((o) => o.r.kind !== 'error').map((o) => code(o.r.sql, adapter.dialect))
+  const ran = ownResults.filter((o) => o.r.kind !== 'error').map((o) => code(o.r.sql, adapter.dialect))
   if (ran.some((sql) => CHANGES_DATABASE.test(sql))) warnings.push('CHANGED_DATABASE')
   // Fewer statements than the file holds without an error stopping the run, or a run whose last statement was
   // interrupted by the server: the run was cancelled (the interrupted statement stays in the error list).
-  const last = own[own.length - 1]?.r
+  const last = ownResults[ownResults.length - 1]?.r
   const interrupted = last?.kind === 'error' && CANCEL_CODES.has(last.nativeCode ?? '')
   if (
     interrupted ||
@@ -208,9 +223,9 @@ export async function importSql(
     let committed = false
     let autocommitOff = false
     for (const sql of ran) {
-      const settings = /^SET\b/i.test(sql)
-        ? [...sql.replace(STRING_LITERAL, "''").matchAll(AUTOCOMMIT_SET)].map((m) => (m[1] ?? '').trim())
-        : []
+      const settings = setAssignments(sql)
+        .filter((a) => a.name === 'autocommit')
+        .map((a) => a.value)
       if (settings.length > 0) {
         for (const value of settings) {
           const off = /^(?:0|OFF|FALSE)$/i.test(value)
@@ -231,8 +246,8 @@ export async function importSql(
     total,
     statements: ranStatements.size,
     succeeded: ranStatements.size - failedStatements.size,
-    failed: errors.length,
-    errors: errors.slice(0, MAX_ERRORS),
+    failed: failedStatements.size + (commit?.kind === 'error' ? 1 : 0),
+    errors,
     warnings,
     durationMs: Math.round(performance.now() - started),
   }

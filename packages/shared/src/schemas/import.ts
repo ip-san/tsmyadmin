@@ -48,6 +48,8 @@ export const ImportErrorSchema = z.object({
   index: z.number().int().min(0).optional(),
 })
 
+export type ImportError = z.infer<typeof ImportErrorSchema>
+
 /** Things worth telling the user after a run that reported no error of its own. */
 export const ImportWarningSchema = z.enum([
   /** The script switched databases (USE / \connect) or created / dropped one: rows may have gone elsewhere. */

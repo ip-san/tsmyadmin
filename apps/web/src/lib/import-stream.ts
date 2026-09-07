@@ -1,5 +1,6 @@
-import { ApiErrorSchema, type ImportEvent, ImportEventSchema, type ImportResult } from '@tsmyadmin/shared'
+import { type ImportEvent, ImportEventSchema, type ImportResult } from '@tsmyadmin/shared'
 import { ApiError, api, enc } from './api.ts'
+import { ndjsonEvents, streamError } from './ndjson.ts'
 
 export interface ImportRequest {
   file: File
@@ -54,34 +55,14 @@ export async function runImport(
   } catch (err) {
     throw new ApiError(0, { code: 'INTERNAL', message: err instanceof Error ? err.message : 'network error' })
   }
-  if (!res.ok || !res.body) {
-    const parsed = ApiErrorSchema.safeParse(await res.json().catch(() => null))
-    throw new ApiError(res.status, parsed.success ? parsed.data : { code: 'INTERNAL', message: `HTTP ${res.status}` })
-  }
-  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader()
-  let buffer = ''
+  if (!res.ok || !res.body) throw await streamError(res)
   let last: ImportEvent | null = null
-  try {
-    for (;;) {
-      const chunk = await reader.read()
-      if (chunk.done) break
-      buffer += chunk.value
-      let nl = buffer.indexOf('\n')
-      while (nl !== -1) {
-        const line = buffer.slice(0, nl).trim()
-        buffer = buffer.slice(nl + 1)
-        if (line) {
-          const event = ImportEventSchema.parse(JSON.parse(line))
-          if (event.type === 'progress') onProgress(event.done, event.total)
-          else last = event
-        }
-        nl = buffer.indexOf('\n')
-      }
-    }
-  } finally {
-    reader.releaseLock()
+  for await (const event of ndjsonEvents(res.body, ImportEventSchema)) {
+    if (event.type === 'progress') onProgress(event.done, event.total)
+    else last = event
   }
   if (last?.type === 'result') return last.result
-  if (last?.type === 'fatal') throw new ApiError(400, last.error)
+  // A fatal event is the server's error body: a user-fixable problem is a 400, anything else a server failure.
+  if (last?.type === 'fatal') throw new ApiError(last.error.code === 'VALIDATION' ? 400 : 500, last.error)
   throw new ApiError(0, { code: 'INTERNAL', message: 'connection closed before the import finished' })
 }

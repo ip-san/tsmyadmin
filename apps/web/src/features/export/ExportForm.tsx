@@ -3,16 +3,16 @@ import { useRouteContext } from '@tanstack/react-router'
 import type { ExportFormat, TableInfo } from '@tsmyadmin/shared'
 import { ExportFormatSchema } from '@tsmyadmin/shared'
 import { Download } from 'lucide-react'
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { locale } from '@/config/locale.ts'
 import { tablesQuery } from '@/lib/queries.ts'
 
+import { exportUrl } from './export-url.ts'
+
 /** Under the 8 KB request-line limit common to proxies and Bun's header buffer. */
 const MAX_EXPORT_URL_LENGTH = 6000
-
-import { exportUrl } from './export-url.ts'
 
 export interface ExportFormProps {
   db: string
@@ -61,6 +61,14 @@ export function ExportForm({ db, schema, table, initialTables }: ExportFormProps
   })
   // The table list travels in the query string; hundreds of ticked tables would exceed what servers accept.
   const tooLong = url.length > MAX_EXPORT_URL_LENGTH
+  const blockedReason = csvBlocked
+    ? locale.export.csvSingle
+    : nothing
+      ? locale.export.nothing
+      : tooLong
+        ? locale.export.selectionTooLong
+        : null
+  const reasonId = useId()
 
   return (
     <div className="space-y-4">
@@ -160,12 +168,15 @@ export function ExportForm({ db, schema, table, initialTables }: ExportFormProps
           {locale.export.bom}
         </label>
       ) : null}
-      {csvBlocked ? <Notice>{locale.export.csvSingle}</Notice> : null}
-      {nothing ? <Notice>{locale.export.nothing}</Notice> : null}
-      {tooLong ? <Notice>{locale.export.selectionTooLong}</Notice> : null}
+      {/* The reason a download is refused stays attached to the (focusable) control, and is announced as it appears. */}
+      {blockedReason ? (
+        <Notice id={reasonId} role="status">
+          {blockedReason}
+        </Notice>
+      ) : null}
       <p className="text-xs text-zinc-500 dark:text-zinc-400">{locale.export.snapshotNote}</p>
-      {csvBlocked || nothing || tooLong ? (
-        <Button variant="primary" disabled>
+      {blockedReason ? (
+        <Button variant="primary" aria-disabled aria-describedby={reasonId}>
           <Download className="size-4" aria-hidden />
           {locale.export.download}
         </Button>

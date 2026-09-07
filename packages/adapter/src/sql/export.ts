@@ -27,8 +27,15 @@ export function isGeneratedColumn(extra: string): boolean {
  * `MINVALUE 1000` sequence must not be set to 1, nor to a negative id) and never lowered (a sequence shared by
  * two tables, or restored to its own position already, keeps the higher value).
  */
-export function pgAdvanceSequence(quotedTable: string, column: string, sequence?: string): string {
+export function pgAdvanceSequence(
+  quotedTable: string,
+  column: string,
+  sequence?: string,
+  /** The column's declared type: an exotic one (oid) is compared through a cast, which costs the index. */
+  dataType = 'integer'
+): string {
   const col = quoteIdent('postgres', column)
+  const probe = NUMERIC_TYPE.test(dataType) ? col : `${col}::bigint`
   // An inheritance child owns no sequence: the one its inherited nextval() default names is advanced instead.
   const seq = sequence
     ? `${pgLiteral(sequence)}::regclass`
@@ -39,9 +46,16 @@ export function pgAdvanceSequence(quotedTable: string, column: string, sequence?
   const last = 'pg_sequence_last_value(s.seqrelid)'
   const up = `GREATEST(m.max_id, s.seqmin, COALESCE(${last}, s.seqmin))`
   const down = `LEAST(m.min_id, s.seqmax, COALESCE(${last}, s.seqmax))`
-  const inRange = `${col}::bigint BETWEEN s.seqmin AND s.seqmax`
-  return `SELECT setval(s.seqrelid, CASE WHEN s.seqincrement > 0 THEN ${up} ELSE ${down} END, CASE WHEN s.seqincrement > 0 THEN m.max_id >= s.seqmin ELSE m.min_id <= s.seqmax END OR ${last} IS NOT NULL) FROM pg_sequence s CROSS JOIN LATERAL (SELECT MAX(${col}) FILTER (WHERE ${inRange})::bigint AS max_id, MIN(${col}) FILTER (WHERE ${inRange})::bigint AS min_id FROM ${quotedTable}) m WHERE s.seqrelid = ${seq} AND m.max_id IS NOT NULL`
+  // Range-bounded MIN / MAX as plain scalar subqueries: the planner turns each into an index probe (an aggregate
+  // FILTER or a cast on the column would force a full scan of a large table at every restore).
+  const inRange = `${probe} BETWEEN s.seqmin AND s.seqmax`
+  const extremes = `SELECT (SELECT MAX(${probe})::bigint FROM ${quotedTable} WHERE ${inRange}) AS max_id, (SELECT MIN(${probe})::bigint FROM ${quotedTable} WHERE ${inRange}) AS min_id`
+  return `SELECT setval(s.seqrelid, CASE WHEN s.seqincrement > 0 THEN ${up} ELSE ${down} END, CASE WHEN s.seqincrement > 0 THEN m.max_id >= s.seqmin ELSE m.min_id <= s.seqmax END OR ${last} IS NOT NULL) FROM pg_sequence s CROSS JOIN LATERAL (${extremes}) m WHERE s.seqrelid = ${seq} AND m.max_id IS NOT NULL`
 }
+
+/** Column types the sequence bounds (bigint) compare with directly; anything else goes through a cast. */
+const NUMERIC_TYPE =
+  /^(?:smallint|integer|bigint|int[248]?|numeric|decimal|real|double precision|(?:small|big)?serial)\b/i
 
 /** The sequence a `nextval('…'::regclass)` default names, as written. */
 function sequenceOfDefault(def: string | null): string | undefined {
@@ -276,7 +290,7 @@ export function createExporter(dialect: Dialect): SqlExporter {
         .filter((c) => c.extra.startsWith('identity') || sequenceOfDefault(c.default))
         .map(
           (c) =>
-            `${pgAdvanceSequence(t, c.name, c.extra.startsWith('identity') ? undefined : sequenceOfDefault(c.default))};`
+            `${pgAdvanceSequence(t, c.name, c.extra.startsWith('identity') ? undefined : sequenceOfDefault(c.default), c.dataType)};`
         )
     },
   }

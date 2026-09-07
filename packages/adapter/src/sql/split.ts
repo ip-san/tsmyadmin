@@ -57,8 +57,25 @@ export function stripLeadingComments(sql: string, dialect: Dialect): string {
 }
 /** One `name = value` pair of a SET list (the value runs to the next comma outside quotes / parentheses). */
 const SET_ASSIGNMENT =
-  /(?:^|,)\s*(?:(?:SESSION|LOCAL)\s+|@@(?:session\.|global\.|persist\.|persist_only\.)?)?(sql_mode|@[A-Za-z0-9_$.]+)\s*:?=\s*((?:'[^']*'|"[^"]*"|\([^)]*\)|[^,'"()])*)/gi
+  /(?:^|,)\s*(?:(?:SESSION|LOCAL)\s+|@@(?:session\.|global\.|persist\.|persist_only\.)?)?(sql_mode|autocommit|@[A-Za-z0-9_$.]+)\s*:?=\s*((?:'[^']*'|"[^"]*"|\([^)]*\)|[^,'"()])*)/gi
 const SQL_MODE_REF = /^@@(?:session\.)?sql_mode$/i
+
+/**
+ * The session-level `name = value` pairs of a MySQL SET statement (sql_mode, autocommit, user variables) —
+ * `SET @@global.x = …, @@session.x = …` keeps only the session pair — with names lower-cased and values trimmed.
+ * [] for any other statement. Comments above the statement and a `/*!…*\/` wrapper are ignored.
+ */
+export function setAssignments(statement: string): { name: string; value: string }[] {
+  let sql = stripLeadingComments(statement, 'mysql')
+  sql = VERSION_COMMENT.exec(sql)?.[1] ?? sql
+  if (!/^SET\s/i.test(sql) || /^SET\s+(?:GLOBAL|PERSIST|PERSIST_ONLY)\s/i.test(sql)) return []
+  const out: { name: string; value: string }[] = []
+  for (const m of sql.slice(3).matchAll(SET_ASSIGNMENT)) {
+    if (/@@(?:global|persist|persist_only)\./i.test(m[0] ?? '')) continue
+    out.push({ name: (m[1] ?? '').toLowerCase(), value: (m[2] ?? '').trim() })
+  }
+  return out
+}
 
 /**
  * Follows what a MySQL `SET` statement does to NO_BACKSLASH_ESCAPES: a literal value decides directly, a user
@@ -68,20 +85,14 @@ const SQL_MODE_REF = /^@@(?:session\.)?sql_mode$/i
  * does not parse this at all (it reads the server status after each statement); this is the closest static form.
  */
 function trackSqlMode(statement: string, current: boolean, saved: Map<string, boolean>): boolean {
-  let sql = stripLeadingComments(statement, 'mysql')
-  sql = VERSION_COMMENT.exec(sql)?.[1] ?? sql
-  if (!/^SET\s/i.test(sql) || /^SET\s+(?:GLOBAL|PERSIST|PERSIST_ONLY)\s/i.test(sql)) return current
   let next = current
-  for (const m of sql.slice(3).matchAll(SET_ASSIGNMENT)) {
-    // `SET @@global.sql_mode = …, @@session.sql_mode = …`: only the session pair matters.
-    if (/@@(?:global|persist|persist_only)\./i.test(m[0] ?? '')) continue
-    const name = (m[1] ?? '').toLowerCase()
-    const value = (m[2] ?? '').trim()
+  for (const { name, value } of setAssignments(statement)) {
     if (name.startsWith('@')) {
       // `SET @saved = @@sql_mode` remembers the mode in force now.
       if (SQL_MODE_REF.test(value)) saved.set(name, next)
       continue
     }
+    if (name !== 'sql_mode') continue
     const literal = /^(['"])([\s\S]*)\1$/.exec(value)
     if (literal) next = /NO_BACKSLASH_ESCAPES/i.test(literal[2] ?? '')
     // The server default never has the flag; a single unquoted mode name is read like a literal.
@@ -98,9 +109,13 @@ function trackSqlMode(statement: string, current: boolean, saved: Map<string, bo
 export function splitStatements(
   input: string,
   dialect: Dialect,
-  /** Receives the statement delimiter in force when the input ends (`;` unless a DELIMITER line changed it). */
-  state?: { delimiter?: string }
+  /**
+   * Receives the statement delimiter in force when the input ends (`;` unless a DELIMITER line changed it) and
+   * whether the input ended inside a literal, comment or COPY block (whatever follows would be swallowed).
+   */
+  state?: { delimiter?: string; unterminated?: boolean }
 ): Statement[] {
+  let unterminated = false
   const out: Statement[] = []
   const n = input.length
   let i = 0
@@ -150,6 +165,7 @@ export function splitStatements(
       const from = input.startsWith('\r\n', i) ? i + 2 : input[i] === '\n' ? i + 1 : i
       const m = /(?:^|\n)\\\.[ \t]*(?:\r?\n|$)/.exec(input.slice(from))
       const stop = m ? from + m.index + m[0].length : n
+      if (!m) unterminated = true
       const last = out[out.length - 1]
       // The terminator line itself is kept (`\.`), minus its line ending, so the executor can find the block's end.
       if (last) last.sql = `${last.sql}\n${input.slice(from, stop).replace(/[ \t]*\r?\n$/, '')}`
@@ -221,6 +237,7 @@ export function splitStatements(
           j += 2
         } else j++
       }
+      if (depth !== 0) unterminated = true
       skipTo(depth === 0 ? j : n)
       continue
     }
@@ -246,6 +263,7 @@ export function splitStatements(
         }
         j++
       }
+      if (j >= n) unterminated = true
       skipTo(Math.min(j + 1, n))
       continue
     }
@@ -255,6 +273,7 @@ export function splitStatements(
         hasCode = true
         const tag = m[0]
         const end = input.indexOf(tag, i + tag.length)
+        if (end === -1) unterminated = true
         skipTo(end === -1 ? n : end + tag.length)
         continue
       }
@@ -284,6 +303,9 @@ export function splitStatements(
     i++
   }
   flush(n)
-  if (state) state.delimiter = delimiter
+  if (state) {
+    state.delimiter = delimiter
+    state.unterminated = unterminated
+  }
   return out
 }

@@ -732,7 +732,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
   private readonly running = new Map<string, RunningEntry>()
 
   async executeSql(ns: Namespace, script: string, opts: ExecuteOptions): Promise<StatementResult[]> {
-    const statements = splitStatements(script, this.dialect)
+    const statements = opts.statements ?? splitStatements(script, this.dialect)
     const results: StatementResult[] = []
     const emit = async (r: StatementResult) => {
       // When results are streamed to a consumer, keep only a row-less copy here (counts stay correct) so a long
