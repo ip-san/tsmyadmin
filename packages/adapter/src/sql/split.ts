@@ -22,39 +22,110 @@ const COPY_FROM_STDIN = /^COPY\b[\s\S]*?\bFROM\s+STDIN\b/i
 const VERSION_COMMENT = /^\/\*!\d*\s*([\s\S]*?)\s*\*\/$/
 
 /**
- * The statement text without the comments a dump writes above it, read as the server reads them: `#` and `-- `
- * (space required) on MySQL, `--` and nested block comments on PostgreSQL. A MySQL `/*!…*\/` versioned comment is
- * code and stays.
+ * The statement text without the comments a dump writes above it (a MySQL `/*!…*\/` version comment is code and
+ * stays). An unterminated comment swallows the rest: nothing is left to run.
  */
 export function stripLeadingComments(sql: string, dialect: Dialect): string {
   let i = 0
   for (;;) {
     while (i < sql.length && /\s/.test(sql[i] as string)) i++
-    if (sql.startsWith('--', i) && (dialect !== 'mysql' || /\s/.test(sql[i + 2] ?? '\n'))) {
-      const end = sql.indexOf('\n', i)
-      i = end < 0 ? sql.length : end + 1
-    } else if (sql[i] === '#' && dialect === 'mysql') {
-      const end = sql.indexOf('\n', i)
-      i = end < 0 ? sql.length : end + 1
-    } else if (sql.startsWith('/*', i) && (dialect !== 'mysql' || !sql.startsWith('/*!', i))) {
-      let depth = 0
-      let k = i
-      for (; k < sql.length; k++) {
-        if (sql.startsWith('/*', k)) {
-          depth++
-          k++
-        } else if (sql.startsWith('*/', k)) {
-          depth--
-          k++
-          if (depth === 0 || dialect === 'mysql') break
-        }
-      }
-      // An unterminated comment swallows the rest: nothing left to run.
-      if (k >= sql.length) return ''
-      i = k + 1
-    } else return sql.slice(i)
+    const token = scanToken(sql, i, dialect)
+    if (!token || token.kind === 'literal' || token.kind === 'version-comment') return sql.slice(i)
+    if (token.kind === 'comment' && !token.closed) return ''
+    i = token.end + (token.kind === 'line-comment' ? 1 : 0)
   }
 }
+/** One lexical span the splitter skips over: what it is, where it ends (exclusive), and whether it was closed. */
+interface SqlToken {
+  kind: 'literal' | 'comment' | 'line-comment' | 'version-comment'
+  end: number
+  closed: boolean
+}
+
+/** A dollar-quote tag as PostgreSQL reads it: an identifier (letters, digits after the first, non-ASCII) or empty. */
+const DOLLAR_TAG = /^\$(?:[A-Za-z_\u0080-\uffff][\w\u0080-\uffff]*)?\$/
+
+/**
+ * The literal or comment starting at `i`, read as the server reads it, or null when `i` is plain code:
+ * - literals: '…' (doubled quotes; backslash escapes on MySQL unless NO_BACKSLASH_ESCAPES, and in a PostgreSQL
+ *   `E'…'`), "…", MySQL `…`, PostgreSQL `$tag$…$tag$`
+ * - comments: `/* *\/` (nested on PostgreSQL, first `*\/` on MySQL; a MySQL `/*!…*\/` is a version comment the
+ *   server executes), `--` (MySQL needs whitespace after it: `2--2` is arithmetic), `#` (MySQL only)
+ * Every consumer of SQL text — the splitter, comment stripping, the audit log's redaction — shares these rules.
+ */
+function scanToken(input: string, i: number, dialect: Dialect, noBackslash = false): SqlToken | null {
+  const n = input.length
+  const ch = input[i]
+  if (ch === "'" || ch === '"' || (ch === '`' && dialect === 'mysql')) {
+    const escapeString =
+      (dialect === 'mysql' && ch !== '`' && !noBackslash) ||
+      (dialect === 'postgres' && ch === "'" && /[eE]/.test(input[i - 1] ?? '') && !/[\w$]/.test(input[i - 2] ?? ''))
+    let j = i + 1
+    while (j < n) {
+      const c = input[j]
+      if (c === '\\' && escapeString) j += 2
+      else if (c === ch && input[j + 1] === ch) j += 2
+      else if (c === ch) return { kind: 'literal', end: j + 1, closed: true }
+      else j++
+    }
+    return { kind: 'literal', end: n, closed: false }
+  }
+  if (ch === '$' && dialect === 'postgres') {
+    const tag = DOLLAR_TAG.exec(input.slice(i))?.[0]
+    if (!tag) return null
+    const end = input.indexOf(tag, i + tag.length)
+    return end === -1
+      ? { kind: 'literal', end: n, closed: false }
+      : { kind: 'literal', end: end + tag.length, closed: true }
+  }
+  if (ch === '/' && input[i + 1] === '*') {
+    const kind = dialect === 'mysql' && input[i + 2] === '!' ? 'version-comment' : 'comment'
+    let depth = 1
+    let j = i + 2
+    while (j < n && depth > 0) {
+      if (dialect === 'postgres' && input[j] === '/' && input[j + 1] === '*') {
+        depth++
+        j += 2
+      } else if (input[j] === '*' && input[j + 1] === '/') {
+        depth--
+        j += 2
+      } else j++
+    }
+    return { kind, end: depth === 0 ? j : n, closed: depth === 0 }
+  }
+  if (
+    (ch === '-' && input[i + 1] === '-' && (dialect !== 'mysql' || /\s/.test(input[i + 2] ?? '\n'))) ||
+    (ch === '#' && dialect === 'mysql')
+  ) {
+    const end = input.indexOf('\n', i)
+    return { kind: 'line-comment', end: end === -1 ? n : end, closed: true }
+  }
+  return null
+}
+
+/**
+ * The text without its comments (literals copied verbatim); a MySQL version comment keeps its body, since the
+ * server runs it. For reading, not for replay.
+ */
+export function stripComments(sql: string, dialect: Dialect): string {
+  let out = ''
+  let i = 0
+  while (i < sql.length) {
+    const token = scanToken(sql, i, dialect)
+    if (!token) {
+      out += sql[i]
+      i++
+      continue
+    }
+    if (token.kind === 'literal') out += sql.slice(i, token.end)
+    else if (token.kind === 'version-comment')
+      out += ` ${VERSION_COMMENT.exec(sql.slice(i, token.end))?.[1] ?? sql.slice(i + 2, token.end).replace(/\*\/$/, '')} `
+    else if (token.kind === 'comment') out += ' '
+    i = token.end
+  }
+  return out
+}
+
 /** One `name = value` pair of a SET list (the value runs to the next comma outside quotes / parentheses). */
 const SET_ASSIGNMENT =
   /(?:^|,)\s*(?:(?:SESSION|LOCAL)\s+|@@(?:session\.|global\.|persist\.|persist_only\.)?)?(sql_mode|autocommit|@[A-Za-z0-9_$.]+)\s*:?=\s*((?:'[^']*'|"[^"]*"|\([^)]*\)|[^,'"()])*)/gi
@@ -191,6 +262,32 @@ export function splitStatements(
       i++
       start = i
       startLine = line
+      continue
+    }
+    // DELIMITER is a client command: it must start a line and no code of the current statement may precede it
+    // (leading comments are fine — mysqldump routine dumps begin with them).
+    if (
+      !hasCode &&
+      dialect === 'mysql' &&
+      (ch === 'D' || ch === 'd') &&
+      /(?:^|\n)[ \t]*$/.test(input.slice(start, i))
+    ) {
+      const m = DELIMITER_LINE.exec(input.slice(i))
+      if (m) {
+        delimiter = m[1] as string
+        skipTo(i + m[0].length)
+        start = i
+        startLine = line
+        continue
+      }
+    }
+    const token = scanToken(input, i, dialect, noBackslash)
+    if (token) {
+      // MySQL executes "/*!40014 ... */" version comments (mysqldump's whole preamble is written that way), so
+      // such a chunk is real code and must not be dropped as comment-only; so is any literal.
+      if (token.kind === 'literal' || token.kind === 'version-comment') hasCode = true
+      if (!token.closed) unterminated = true
+      skipTo(token.end)
       continue
     }
     // DELIMITER is a client command: it must start a line and no code of the current statement may precede it

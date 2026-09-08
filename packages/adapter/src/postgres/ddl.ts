@@ -3,6 +3,7 @@ import { type Conn, firstResult } from '../base.ts'
 import { addForeignKeySql, createIndexSql } from '../sql/ddl-common.ts'
 import { pgAdvanceSequence } from '../sql/export.ts'
 import { pgLiteral } from '../sql/literal.ts'
+import { OPTIONS_SEQUENCE_OF_COLUMN } from '../sql/pg-sequence.ts'
 import { quoteIdent, quoteTable } from '../sql/quote.ts'
 import { AdapterError, type DdlBuilder } from '../types.ts'
 
@@ -327,13 +328,7 @@ export async function pgTableCatalog(conn: Conn, regclass: string): Promise<PgTa
        JOIN pg_depend d ON d.refclassid = 'pg_class'::regclass AND d.refobjid = a.attrelid AND d.refobjsubid = a.attnum
                          AND d.deptype IN ('i', 'a') AND d.classid = 'pg_class'::regclass
        JOIN pg_sequence s ON s.seqrelid = d.objid
-       WHERE a.attrelid = $1::regclass
-         AND ((a.attidentity <> '' AND d.deptype = 'i')
-              OR (a.attidentity = '' AND d.deptype = 'a' AND EXISTS (
-                    SELECT 1 FROM pg_attrdef ad
-                    JOIN pg_depend dd ON dd.classid = 'pg_attrdef'::regclass AND dd.objid = ad.oid
-                                      AND dd.refclassid = 'pg_class'::regclass AND dd.refobjid = s.seqrelid
-                    WHERE ad.adrelid = a.attrelid AND ad.adnum = a.attnum)))`,
+       WHERE a.attrelid = $1::regclass AND ${OPTIONS_SEQUENCE_OF_COLUMN}`,
       [regclass]
     )
   )

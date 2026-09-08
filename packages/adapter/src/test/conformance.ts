@@ -753,6 +753,8 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
       it('runs multiple statements and returns one result per statement', async () => {
         const results = await exec('SELECT 1 AS one; SELECT 2 AS two')
         expect(results).toHaveLength(2)
+        // Every result names its statement: the wrapper / progress logic of an import counts statements.
+        expect(results.map((r) => r.statement)).toEqual([0, 1])
         expect(results[0]).toMatchObject({ kind: 'rows', sql: 'SELECT 1 AS one' })
         if (results[0]?.kind === 'rows') {
           expect(results[0].result.columns.map((c) => c.name)).toEqual(['one'])
@@ -1048,6 +1050,44 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
     })
 
     describe('cancelQuery', () => {
+      it.skipIf(dialect !== 'mysql')('gives every result set of a CALL the statement index of the CALL', async () => {
+        const p = `${scratch}_multi`
+        await execOk(`DROP PROCEDURE IF EXISTS ${p}`)
+        await execOk(`DELIMITER $$\nCREATE PROCEDURE ${p}() BEGIN SELECT 1 AS a; SELECT 2 AS b; END$$`)
+        try {
+          const results = await exec(`SELECT 0 AS z; CALL ${p}(); SELECT 3 AS c`)
+          // CALL: two result sets plus the final OK packet, all statement #1.
+          expect(results.map((r) => r.statement)).toEqual([0, 1, 1, 1, 2])
+        } finally {
+          await execOk(`DROP PROCEDURE ${p}`)
+        }
+      })
+
+      it('answers what the cancel did once the script loop reaches its next boundary', async () => {
+        // The loop is idle inside onResult for a while (a slow consumer): the cancel waits for it, then reports
+        // that the script was stopped there — it must neither answer early nor hang.
+        const queryId = crypto.randomUUID()
+        let release: () => void = () => undefined
+        const gate = new Promise<void>((resolve) => {
+          release = resolve
+        })
+        const run = db.executeSql(ns, 'SELECT 1 AS a; SELECT 2 AS b', {
+          ...EXEC,
+          queryId,
+          onResult: async (_r, index) => {
+            if (index === 0) await gate
+          },
+        })
+        await new Promise((resolve) => setTimeout(resolve, 50))
+        const cancelling = db.cancelQuery(queryId)
+        await new Promise((resolve) => setTimeout(resolve, 300))
+        release()
+        expect(await cancelling).toBe(true)
+        // Stopped between the statements: only the first ran.
+        expect((await run).map((r) => r.kind)).toEqual(['rows'])
+        expect((await exec('SELECT 1 AS x'))[0]).toMatchObject({ kind: 'rows' })
+      })
+
       it('interrupts a running script from another connection and keeps the pool usable', async () => {
         const queryId = crypto.randomUUID()
         const run = db.executeSql(ns, ctx.slowSql, { ...EXEC, timeoutMs: 60_000, queryId })

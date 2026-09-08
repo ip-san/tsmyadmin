@@ -1,4 +1,10 @@
-import { ADAPTER_METHOD_NAMES, AdapterError, type DatabaseAdapter, splitStatements } from '@tsmyadmin/adapter'
+import {
+  ADAPTER_METHOD_NAMES,
+  AdapterError,
+  type DatabaseAdapter,
+  splitStatements,
+  stripComments,
+} from '@tsmyadmin/adapter'
 import type { ConnectRequest, Namespace, RowKey, SessionInfo } from '@tsmyadmin/shared'
 import { type Dialect, PASSWORD_MASK } from '@tsmyadmin/shared'
 import { type AdapterFactory, sessionIdentity } from '../session/store.ts'
@@ -105,8 +111,6 @@ export function summarise(
  */
 const literal = (n: number) =>
   `(?:(?:[EeNnXxBb]|[Uu]&|_[A-Za-z0-9]+)?'(?:[^'\\\\]|\\\\.|'')*'|"(?:[^"\\\\]|\\\\.|"")*"|\\$((?:[A-Za-z_\\u0080-\\uffff][\\w\\u0080-\\uffff]*)?)\\$[\\s\\S]*?\\$\\${n}\\$)`
-/** A dollar-quote tag as PostgreSQL reads it: an identifier (letters, digits after the first, non-ASCII) or empty. */
-const DOLLAR_TAG = /^\$(?:[A-Za-z_\u0080-\uffff][\w\u0080-\uffff]*)?\$/
 /**
  * Password literals in account statements typed directly into the SQL console: IDENTIFIED BY / AS (plugin hash),
  * PASSWORD 'x', and MySQL 8 `REPLACE '<current password>'` (REPLACE INTO / REPLACE( never precede a bare literal).
@@ -131,94 +135,8 @@ const ANY_LITERAL = new RegExp(literal(1), 'g')
 const CREDENTIAL_PART = /^([\s\S]*?\b(?:\w+_)?(?:IDENTIFIED|PASSWORD)\b)([\s\S]*)$/i
 const QUOTED_SPAN = /['"$][\s\S]*['"$]/
 
-/**
- * Drops SQL comments while copying string literals verbatim (a comment between `IDENTIFIED` and `BY`, or between
- * `PASSWORD` and its literal, would otherwise defeat the patterns below). The summary is for reading, not for
- * replay, so losing comments is fine.
- */
-/**
- * End index (exclusive) of the string literal / quoted identifier / dollar-quoted block starting at `i`, or -1.
- * Read as the server reads it: a backslash escapes only on MySQL and in a PostgreSQL `E'…'` string.
- */
-function literalEnd(sql: string, i: number, dialect: Dialect): number {
-  const ch = sql[i] as string
-  if (ch === "'" || ch === '"' || ch === '`') {
-    const escaped =
-      ch !== '`' &&
-      (dialect === 'mysql' ||
-        (ch === "'" && /[Ee]$/.test(sql.slice(Math.max(0, i - 1), i)) && !/\w/.test(sql[i - 2] ?? '')))
-    let j = i + 1
-    while (j < sql.length) {
-      if (sql[j] === '\\' && escaped) j += 2
-      else if (sql[j] === ch && sql[j + 1] === ch) j += 2
-      else if (sql[j] === ch) break
-      else j++
-    }
-    return j + 1
-  }
-  if (dialect === 'postgres' && ch === '$') {
-    const tag = DOLLAR_TAG.exec(sql.slice(i))?.[0]
-    if (!tag) return -1
-    const end = sql.indexOf(tag, i + tag.length)
-    return end < 0 ? sql.length : end + tag.length
-  }
-  return -1
-}
-
-/**
- * Drops SQL comments the way the server does (`#` and `-- ` are MySQL's; PostgreSQL's `--` needs no space and `#`
- * is an operator) while copying literals verbatim. A MySQL versioned comment keeps its body: the server runs it.
- */
-function withoutComments(sql: string, dialect: Dialect): string {
-  let out = ''
-  let i = 0
-  while (i < sql.length) {
-    const ch = sql[i] as string
-    const end = literalEnd(sql, i, dialect)
-    if (end >= 0) {
-      out += sql.slice(i, end)
-      i = end
-    } else if (ch === '/' && sql[i + 1] === '*') {
-      // PostgreSQL nests block comments; MySQL ends at the first `*\/`.
-      let stop = sql.length
-      if (dialect === 'postgres') {
-        let depth = 0
-        for (let k = i; k < sql.length; k++) {
-          if (sql.startsWith('/*', k)) {
-            depth++
-            k++
-          } else if (sql.startsWith('*/', k)) {
-            depth--
-            k++
-            if (depth === 0) {
-              stop = k + 1
-              break
-            }
-          }
-        }
-      } else {
-        const end = sql.indexOf('*/', i + 2)
-        stop = end < 0 ? sql.length : end + 2
-      }
-      const versioned = dialect === 'mysql' ? /^\/\*!\d*\s*([\s\S]*?)\s*(?:\*\/)?$/.exec(sql.slice(i, stop)) : null
-      out += versioned ? ` ${versioned[1] ?? ''} ` : ' '
-      i = stop
-    } else if (
-      (ch === '-' && sql[i + 1] === '-' && (dialect !== 'mysql' || /\s/.test(sql[i + 2] ?? '\n'))) ||
-      (ch === '#' && dialect === 'mysql')
-    ) {
-      const end = sql.indexOf('\n', i)
-      i = end < 0 ? sql.length : end
-    } else {
-      out += ch
-      i++
-    }
-  }
-  return out
-}
-
 function redactSqlSecrets(sql: string, dialect: Dialect): string {
-  const plain = withoutComments(sql, dialect)
+  const plain = stripComments(sql, dialect)
     .replace(SQL_SECRET, (_m, kw: string, sep: string) => `${kw}${sep}'${PASSWORD_MASK}'`)
     .replace(SET_PASSWORD, (_m, head: string) => `${head}'${PASSWORD_MASK}'`)
     .replace(CONNECTION_PASSWORD, (_m, head: string) => `${head}${PASSWORD_MASK}`)

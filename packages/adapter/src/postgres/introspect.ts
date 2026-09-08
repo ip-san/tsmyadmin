@@ -9,6 +9,7 @@ import type {
 } from '@tsmyadmin/shared'
 import { type Conn, firstResult } from '../base.ts'
 import { str, strOrNull } from '../sql/format.ts'
+import { COLUMN_HAS_SERIAL_SEQUENCE, SEQUENCE_BEHIND_COLUMN } from '../sql/pg-sequence.ts'
 import { quoteTable } from '../sql/quote.ts'
 import { AdapterError } from '../types.ts'
 
@@ -43,16 +44,7 @@ export async function pgListSchemas(conn: Conn): Promise<string[]> {
  * column is dumped as IDENTITY / serial and the sequence is not an object of its own. Any other sequence — made
  * with CREATE SEQUENCE, even when later OWNED BY a column — is listed with the tables and dumped as itself.
  */
-const SERIAL_SEQUENCE_DEPENDENCY = `
-  SELECT 1 FROM pg_depend d
-  JOIN pg_class t ON t.oid = d.refobjid
-  JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = d.refobjsubid
-  WHERE d.objid = c.oid AND d.classid = 'pg_class'::regclass AND d.refclassid = 'pg_class'::regclass
-    AND (d.deptype = 'i' OR (d.deptype = 'a' AND c.relname = t.relname || '_' || a.attname || '_seq'
-         AND EXISTS (SELECT 1 FROM pg_attrdef ad JOIN pg_depend dd ON dd.classid = 'pg_attrdef'::regclass AND dd.objid = ad.oid
-                                 AND dd.refclassid = 'pg_class'::regclass AND dd.refobjid = c.oid
-                          WHERE ad.adrelid = t.oid AND ad.adnum = a.attnum
-                            AND pg_get_expr(ad.adbin, ad.adrelid) ~ '^nextval\\(''(?:[^'']|'''')*''::regclass\\)$')))`
+const SERIAL_SEQUENCE_DEPENDENCY = SEQUENCE_BEHIND_COLUMN
 
 export async function pgListTables(conn: Conn, ns: Namespace): Promise<TableInfo[]> {
   const r = firstResult(
@@ -118,13 +110,7 @@ export async function pgDescribeTable(conn: Conn, ns: Namespace, table: string):
     await conn.query(
       `SELECT a.attname, format_type(a.atttypid, a.atttypmod), a.attnotnull, pg_get_expr(d.adbin, d.adrelid),
               a.attidentity, a.attgenerated, col_description(a.attrelid, a.attnum), co.collname,
-              EXISTS (SELECT 1 FROM pg_depend sd JOIN pg_class c ON c.oid = sd.objid
-                      WHERE sd.refclassid = 'pg_class'::regclass AND sd.refobjid = a.attrelid AND sd.refobjsubid = a.attnum
-                        AND sd.classid = 'pg_class'::regclass AND sd.deptype = 'a' AND c.relkind = 'S'
-                        AND c.relname = (SELECT relname FROM pg_class WHERE oid = a.attrelid) || '_' || a.attname || '_seq'
-                        AND EXISTS (SELECT 1 FROM pg_attrdef ad JOIN pg_depend dd ON dd.classid = 'pg_attrdef'::regclass AND dd.objid = ad.oid
-                                 AND dd.refclassid = 'pg_class'::regclass AND dd.refobjid = c.oid
-                          WHERE ad.adrelid = a.attrelid AND ad.adnum = a.attnum))
+              ${COLUMN_HAS_SERIAL_SEQUENCE}
        FROM pg_attribute a
        LEFT JOIN pg_attrdef d ON d.adrelid = a.attrelid AND d.adnum = a.attnum
        LEFT JOIN pg_collation co ON co.oid = a.attcollation AND a.attcollation <> 0 AND co.collname <> 'default'

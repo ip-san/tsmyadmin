@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { splitStatements } from './split.ts'
+import { setAssignments, splitStatements, stripComments, stripLeadingComments } from './split.ts'
 
 describe('splitStatements', () => {
   it('splits on semicolons and trims', () => {
@@ -75,6 +75,40 @@ describe('splitStatements', () => {
       { sql: 'COPY public.e (a) FROM stdin\n\\.', line: 8 },
       { sql: 'SELECT 1', line: 10 },
     ])
+  })
+
+  it('strips leading comments the way each server reads them', () => {
+    expect(stripLeadingComments('  -- a\n# b\n/* c */ SELECT 1', 'mysql')).toBe('SELECT 1')
+    // `#` is an operator on PostgreSQL; `--x` without a space is arithmetic on MySQL; comments nest on PostgreSQL.
+    expect(stripLeadingComments('# b\nSELECT 1', 'postgres')).toBe('# b\nSELECT 1')
+    expect(stripLeadingComments('--x\nSELECT 1', 'mysql')).toBe('--x\nSELECT 1')
+    expect(stripLeadingComments('/* a /* b */ c */ SELECT 1', 'postgres')).toBe('SELECT 1')
+    expect(stripLeadingComments('/* a /* b */ c */ SELECT 1', 'mysql')).toBe('c */ SELECT 1')
+    // A versioned comment is code on MySQL; an unterminated comment swallows everything.
+    expect(stripLeadingComments('/*!40101 SET x = 1 */', 'mysql')).toBe('/*!40101 SET x = 1 */')
+    expect(stripLeadingComments('/*!40101 SET x = 1 */', 'postgres')).toBe('')
+    expect(stripLeadingComments('/* open', 'postgres')).toBe('')
+  })
+
+  it('strips comments throughout while keeping literals and versioned bodies', () => {
+    expect(stripComments("SELECT 'a -- not a comment' -- c\nFROM t /* x */", 'mysql')).toBe(
+      "SELECT 'a -- not a comment' \nFROM t  "
+    )
+    expect(stripComments('SELECT 1; /*!80000 CREATE USER v */', 'mysql')).toBe('SELECT 1;  CREATE USER v ')
+    expect(stripComments('SELECT $a1$ /* not a comment */ $a1$ /* c */', 'postgres')).toBe(
+      'SELECT $a1$ /* not a comment */ $a1$  '
+    )
+  })
+
+  it('reads the session assignments of a SET list', () => {
+    expect(setAssignments("SET sql_mode = 'A', @x := 1, @@session.autocommit = 0, @@global.autocommit = 1")).toEqual([
+      { name: 'sql_mode', value: "'A'" },
+      { name: '@x', value: '1' },
+      { name: 'autocommit', value: '0' },
+    ])
+    expect(setAssignments("SET @v = 'a, autocommit = 1'")).toEqual([{ name: '@v', value: "'a, autocommit = 1'" }])
+    expect(setAssignments('SET GLOBAL autocommit = 0')).toEqual([])
+    expect(setAssignments('SELECT 1')).toEqual([])
   })
 
   it('tracks sql_mode set with := as well', () => {
