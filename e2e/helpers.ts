@@ -32,6 +32,18 @@ function fromUrl(dialect: Target['dialect'], url: string, schema?: string): Targ
 export const test = base.extend<{ autoLogout: void }>({
   autoLogout: [
     async ({ page, baseURL }, use) => {
+      // The app navigates by itself after a preview or a login redirect. A goto that starts while such a
+      // client-side navigation is in flight is aborted (WebKit reports it as an error, Chromium swallows it):
+      // the test's destination is what matters, so it is retried once.
+      const goto = page.goto.bind(page)
+      page.goto = async (url, options) => {
+        try {
+          return await goto(url, options)
+        } catch (err) {
+          if (!String(err).includes('interrupted by another navigation')) throw err
+          return await goto(url, options)
+        }
+      }
       await use()
       // Same-origin Origin header, as a browser would send: the request context sends none by itself.
       await page.request.delete('/api/session', { headers: { origin: baseURL ?? '' } }).catch(() => undefined)

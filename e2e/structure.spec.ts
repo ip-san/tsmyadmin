@@ -18,8 +18,11 @@ for (const t of TARGETS) {
       await page.getByLabel('型 2').fill('VARCHAR(50)')
       await page.getByRole('button', { name: '次へ（SQL を確認）' }).click()
       await confirmPreview(page, /CREATE TABLE/)
-      // A new table opens on its structure tab; the database list shows it too.
+      // A new table opens on its structure tab; the database list shows it too. The destination must be rendered
+      // before the test navigates away: the flow still invalidates its queries, and WebKit aborts a goto that
+      // starts while the app is navigating.
       await expect(page).toHaveURL(new RegExp(`/table/${table}/structure`))
+      await expect(page.getByRole('heading', { name: new RegExp(table) })).toBeVisible()
       await page.goto(dbUrl)
       await expect(page.getByRole('table').first().getByRole('link', { name: table, exact: true })).toBeVisible()
 
@@ -170,6 +173,7 @@ for (const t of TARGETS) {
       await confirmPreview(page, /CREATE DATABASE/)
       // A new database opens directly; the server list then offers to drop it.
       await expect(page).toHaveURL(new RegExp(`/db/${dbName}`))
+      await expect(page.getByRole('heading', { name: new RegExp(dbName) })).toBeVisible()
       await page.goto('/')
       const row = page.getByRole('row').filter({ hasText: dbName })
       await expect(row).toBeVisible()

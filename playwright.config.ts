@@ -30,6 +30,13 @@ export default defineConfig({
       // Every functional spec runs here; a11y/visual have their own projects (a new spec cannot be silently skipped).
       testIgnore: /(a11y|visual)\.spec/,
     },
+    {
+      // Safari's engine differs where it matters for this app (focus restoration after a dialog, Secure cookies
+      // on localhost, date input rendering): the functional specs run there too.
+      name: 'webkit',
+      use: { ...devices['Desktop Safari'] },
+      testIgnore: /(a11y|visual)\.spec/,
+    },
     { name: 'a11y', use: { ...devices['Desktop Chrome'] }, testMatch: /a11y\.spec/ },
     { name: 'visual-light', use: { ...devices['Desktop Chrome'], colorScheme: 'light' }, testMatch: /visual\.spec/ },
     { name: 'visual-dark', use: { ...devices['Desktop Chrome'], colorScheme: 'dark' }, testMatch: /visual\.spec/ },
