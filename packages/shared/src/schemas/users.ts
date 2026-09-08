@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { StatementResultSchema } from './result.ts'
 
 /** A login account: MySQL user@host or a PostgreSQL role. */
 export const UserInfoSchema = z.object({
@@ -47,6 +48,17 @@ export type UserOpInput = z.input<typeof UserOpSchema>
 export const USER_OP_NAMES = UserOpSchema.options.map((o) => o.shape.op.value)
 
 export const UserOpRequestSchema = z.object({ op: UserOpSchema })
+
+/**
+ * Response of POST /users/execute: one result per statement of the operation (a failing wrapper COMMIT is
+ * appended as its own result), and whether the whole operation was rolled back — PostgreSQL runs a multi-statement
+ * account operation in one transaction, so a later failure undoes the statements that had succeeded.
+ */
+export const UserOpResponseSchema = z.object({
+  results: z.array(StatementResultSchema),
+  rolledBack: z.boolean(),
+})
+export type UserOpResponse = z.infer<typeof UserOpResponseSchema>
 /** Query of GET /users/grants: the account plus, optionally, the database (and schema) whose ACLs to list. */
 export const UserGrantsQuerySchema = UserRefSchema.extend({
   database: z.string().min(1).optional(),

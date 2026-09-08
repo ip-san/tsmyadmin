@@ -67,19 +67,10 @@ export function userRoutes(cfg: SessionConfig) {
       const rolledBack = transactional && all.some((r) => r.kind === 'error')
       const shown = [...results, ...(commit?.kind === 'error' ? [commit] : [])]
       const encoded = 'password' in op && op.password !== '' ? adapter.exporter.literal(op.password).slice(1, -1) : ''
-      return c.json(
-        shown.map((r, i) =>
-          redactPassword(
-            {
-              ...r,
-              sql: statements[i]?.display ?? r.sql,
-              ...(rolledBack && r.kind !== 'error' ? { notices: [...(r.notices ?? []), 'ROLLED_BACK'] } : {}),
-            },
-            op,
-            encoded
-          )
-        )
-      )
+      return c.json({
+        results: shown.map((r, i) => redactPassword({ ...r, sql: statements[i]?.display ?? r.sql }, op, encoded)),
+        rolledBack,
+      })
     })
 }
 

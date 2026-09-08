@@ -15,13 +15,15 @@ export function useDdlFlow(
 ): DdlFlow {
   return usePreviewFlow<DdlOp>({
     preview: (op) => mutations.previewDdl(db, schema, op),
-    execute: (_op, sql) =>
-      mutations.executeSql(db, {
+    // DDL runs through the SQL route, which is not transactional: a failure leaves what already ran in place.
+    execute: async (_op, sql) => ({
+      results: await mutations.executeSql(db, {
         sql: sql.join(';\n'),
         ...(schema ? { schema } : {}),
         stopOnError: true,
         timeoutMs: DDL_TIMEOUT_MS,
       }),
+    }),
     ...(onSuccess ? { onSuccess } : {}),
   })
 }

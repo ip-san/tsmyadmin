@@ -24,7 +24,8 @@ export interface PreviewFlow<Op> {
 
 export interface PreviewFlowConfig<Op> {
   preview: (op: Op) => Promise<{ sql: string[] }>
-  execute: (op: Op, sql: string[]) => Promise<StatementResult[]>
+  /** Runs the previewed SQL; `rolledBack` says a failure undid the statements that had already succeeded. */
+  execute: (op: Op, sql: string[]) => Promise<{ results: StatementResult[]; rolledBack?: boolean }>
   /** Query keys to invalidate after success (default: everything but the session). */
   invalidate?: (key: readonly unknown[]) => boolean
   onSuccess?: (op: Op) => void | Promise<void>
@@ -46,11 +47,10 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
   const previewM = useMutation({ mutationFn: config.preview })
   const runM = useMutation({
     mutationFn: (o: Op) => config.execute(o, sql),
-    onSuccess: async (results, o) => {
+    onSuccess: async ({ results, rolledBack: undone }, o) => {
       const err = results.find((r) => r.kind === 'error')
-      const raised = results.flatMap((r) => (r.kind === 'error' ? [] : (r.notices ?? [])))
-      setRolledBack(raised.includes('ROLLED_BACK'))
-      setNotices(raised.filter((n) => n !== 'ROLLED_BACK'))
+      setRolledBack(undone === true)
+      setNotices(results.flatMap((r) => (r.kind === 'error' ? [] : (r.notices ?? []))))
       if (err) {
         setFailed(err)
         return

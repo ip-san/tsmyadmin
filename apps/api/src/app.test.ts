@@ -1078,6 +1078,9 @@ describe('users', () => {
     expect(res.status).toBe(200)
     const body = await res.text()
     expect(body).not.toContain('hunter2')
+    // The response says outright whether a failure undid the statements that had succeeded (PostgreSQL wraps
+    // a multi-statement account operation in one transaction); MySQL commits each statement as it runs.
+    expect(JSON.parse(body)).toMatchObject({ rolledBack: false, results: [{ kind: 'affected' }] })
     const executed = h.adapter.calls.filter((c) => c.method === 'executeSql')
     expect(executed).toHaveLength(1)
     expect(executed[0]?.args[1]).toBe(

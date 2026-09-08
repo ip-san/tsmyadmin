@@ -474,6 +474,20 @@ describe.each(targets)('API integration ($dialect)', ({ dialect, url }) => {
     }
   })
 
+  it('reports whether a failed account operation was rolled back', async () => {
+    // Granting to an account that does not exist fails on both servers. PostgreSQL runs a multi-statement
+    // operation in one transaction, so the response reports the rollback; MySQL commits each statement as it runs.
+    const user = dialect === 'mysql' ? { name: 'r_optx_missing', host: '%' } : { name: 'r_optx_missing' }
+    const res = await req('/api/users/execute', {
+      method: 'POST',
+      body: JSON.stringify({ op: { op: 'grantAll', user, database: 'tsmyadmin_test' } }),
+    })
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { results: { kind: string }[]; rolledBack: boolean }
+    expect(body.results.some((r) => r.kind === 'error')).toBe(true)
+    expect(body.rolledBack).toBe(dialect === 'postgres')
+  })
+
   it('logs out', async () => {
     expect((await req('/api/session', { method: 'DELETE' })).status).toBe(200)
   })
