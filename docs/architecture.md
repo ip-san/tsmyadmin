@@ -131,7 +131,7 @@ flowchart LR
   conv --> bin["{ $bin } base64<br/>BLOB / bytea / BIT"]
   conv --> trunc["{ $text, length }<br/>表示上限超えのテキスト"]
   nul & num & str & bin & trunc --> ui["画面 / SQL 結果"]
-  conv -. "UNCAPPED（上限なし）" .-> dump["エクスポート・カタログ読み取り"]
+  conv -. "UNCAPPED（テキスト・バイナリとも上限なし）" .-> dump["エクスポート"]
 ```
 
 `{ $text }` は**表示専用**で、書き戻せません（`InputCell` 型が受け付けず、`toDbValue` も拒否します）。**なぜ書き戻せなくしているか** — 切り詰めた値を編集できる型にすると、利用者が気付かないまま末尾を失った値で UPDATE してしまうためです。テキストの上限を付けるのは表示経路（行の閲覧と SQL 実行）だけで、そこだけが `DISPLAY` を渡します。カタログ読み取り（ビュー定義、ルーチン本体、`SHOW CREATE`）は既定で無制限、エクスポートは `UNCAPPED`（テキストもバイナリも無制限）です。

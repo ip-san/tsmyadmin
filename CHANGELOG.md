@@ -59,7 +59,7 @@
 - ドキュメントを実装に合わせて修正: DDL の実行はプレビューした SQL をそのまま `/sql` に送る（サーバーで再生成するのはアカウント操作だけ）、`executeSql` は 1 回だけ呼ばれる、件数の打ち切りは絞り込みの有無に関わらず効く、`HEALTHCHECK` は `API_PORT` に従う、MariaDB の検証済みバージョンは 10.11 / 11
 - ドキュメントに不足していた説明を追加: ORM を使わない理由、表示上限の値を書き戻せない理由、件数を打ち切る理由、字句解析と文の分割の仕様表、行キーが `none` になる条件、エラーコード早見表、`max_connections` の見積もり式、ブラウザ側に残るデータ（SQL 履歴・保存済みクエリ）、API にレスポンス項目を足す手順の実例
 - 対応データベースに MySQL 9・Percona Server 8.4・PostgreSQL 18 を追加（いずれも統合テスト全通過）。互換エンジン（TiDB 7.5・CockroachDB 24.3）は実測結果を明記（限定動作 / 非対応）
-- 対応データベースを明記し、CI で最古と最新の組み合わせ（MySQL 8.0 + PostgreSQL 14 / MySQL 8.4 + PostgreSQL 17、MariaDB 10.11 と 11）を毎回検証するようにしました
+- 対応データベースを明記し、CI で MySQL 8.0 + PostgreSQL 14 / MySQL 8.4 + PostgreSQL 17、MariaDB 10.11 と 11 を毎回検証するようにしました（MySQL 9 / PostgreSQL 18 / Percona は手動検証）
 - MariaDB 10.11 でユーザー一覧・権限表示・アカウント操作が照合順序の不一致（`Illegal mix of collations`）で失敗していたのを修正
 - docs: 接続先 DB を再起動・停止したときの挙動（即座に 502、同じセッションのまま自動復帰、`/healthz` `/readyz` は接続先 DB の状態を示さない）を運用ドキュメントに追記
 - E2E を WebKit（Safari エンジン）でも実行するようにしました（CI 含む）。Safari のフォーカス復帰・Cookie・入力欄の差分を継続的に検出します
