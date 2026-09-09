@@ -34,6 +34,10 @@ bun run lighthouse        # Lighthouse CI（警告のみ、要 Chrome）
 - E2E: <!-- stat:e2e -->51<!-- /stat --> 件
 - API ルート: <!-- stat:routes -->31<!-- /stat -->
 
+## 設計ドキュメント
+
+- [docs/architecture.md](docs/architecture.md) — 設計の全体像（Mermaid 図）。パッケージ依存の向き、アダプター層の契約、セッションと接続プール、行の閲覧 / SQL 実行 / DDL の流れ、エクスポート・インポート、品質ゲート、逆引き表
+
 ## 詳細ルール（path-scoped）
 
 - [.claude/rules/adapter.md](.claude/rules/adapter.md) — `packages/adapter/**`

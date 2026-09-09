@@ -2,7 +2,7 @@
 
 MySQL / PostgreSQL 両対応の、モダン TypeScript 製 phpMyAdmin クローン。
 
-UI は日本語 / English（ブラウザの言語設定に追従、画面右上で切替）。対応: **MySQL 8.0 / 8.4**、**MariaDB 10.11 (LTS) / 11**、**PostgreSQL 14〜17**（CI で最古と最新を毎回検証。詳細と注意点は [docs/deployment.md](docs/deployment.md#対応データベース)）。
+UI は日本語 / English（ブラウザの言語設定に追従、画面右上で切替）。対応: **MySQL 8.0〜9**、**MariaDB 10.11 (LTS) / 11**、**Percona Server 8.4**、**PostgreSQL 14〜18**（CI で最古と最新を毎回検証。互換エンジン（TiDB / CockroachDB）の実測結果を含む詳細は [docs/deployment.md](docs/deployment.md#対応データベース)）。
 
 - **Bun workspaces モノレポ**: `apps/api`（Hono）/ `apps/web`（Vite + React 19 + TanStack Router/Query）/ `packages/shared`（Zod DTO）/ `packages/adapter`（`mysql2` / `pg` 上の薄い DB 抽象層。ORM 不使用）
 - **phpMyAdmin と同じ画面構成**: サーバー（データベース / ステータス / 変数 / プロセス / ユーザー）→ データベース（構造 / SQL / エクスポート / インポート / 権限 / ルーチン / トリガー / イベント）→ テーブル（表示 / 構造 / SQL / 検索 / 挿入 / エクスポート / インポート / トリガー / 操作）
@@ -66,6 +66,7 @@ docker run -d --name tsmyadmin \
 
 ## ドキュメント
 
+- [docs/architecture.md](docs/architecture.md) — 設計の全体像（Mermaid 図つき）: パッケージ依存、アダプター層、セッションと接続プール、主要リクエストの流れ、エクスポート / インポート、品質ゲート
 - [CLAUDE.md](CLAUDE.md) — 開発コマンド、構成、守るべき不変条件（Compact Instructions）
 - [CHANGELOG.md](CHANGELOG.md) — リリースノート
 - `.claude/rules/` — パス別の詳細ルール（adapter / api-routes / fixtures / skill-scoping）
@@ -73,7 +74,7 @@ docker run -d --name tsmyadmin \
 
 ## 動作要件
 
-- サーバー: Bun 1.4 以上（Docker イメージは同梱）。接続先: 検証済みは MySQL 8.4 / PostgreSQL 17（CI と統合テスト）。想定範囲は MySQL 8.0 以降 / MariaDB 10.6 以降（CI は MySQL 8.4 と MariaDB 11 で検証） / PostgreSQL 13 以降
+- サーバー: Bun 1.4 以上（Docker イメージは同梱）。接続先の対応バージョンと検証状況は [docs/deployment.md](docs/deployment.md#対応データベース) を参照
 - ブラウザ: 最新の Chrome / Edge / Firefox / Safari（ES2022、`<dialog>`、`dvh` 単位が必要）
 
 ## ライセンス

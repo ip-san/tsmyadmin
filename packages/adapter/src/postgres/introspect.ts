@@ -50,7 +50,7 @@ export async function pgListTables(conn: Conn, ns: Namespace): Promise<TableInfo
   const r = firstResult(
     await conn.query(
       `SELECT c.relname, c.relkind,
-              CASE WHEN c.reltuples < 0 THEN s.n_live_tup ELSE c.reltuples END,
+              CASE WHEN c.reltuples < 0 THEN s.n_live_tup::float8 ELSE c.reltuples::float8 END,
               obj_description(c.oid, 'pg_class'),
               CASE WHEN c.relkind IN ('r', 'p', 'm') THEN pg_total_relation_size(c.oid) END,
               (SELECT string_agg(p.relname, $2 ORDER BY i.inhseqno) FROM pg_inherits i JOIN pg_class p ON p.oid = i.inhparent
