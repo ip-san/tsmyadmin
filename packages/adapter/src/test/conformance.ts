@@ -1282,7 +1282,8 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
           expect(await db.routineDefinition(ns, p, 'package')).toMatch(/^CREATE .*PACKAGE/)
           expect(await db.routineDefinition(ns, p, 'package body')).toMatch(/^CREATE .*PACKAGE BODY/)
         } finally {
-          await execOk(`DROP PACKAGE ${p}`)
+          // Each run resets the session, and MariaDB 10.11 parses DROP PACKAGE only in Oracle mode.
+          await execOk(`SET SESSION sql_mode = ORACLE;\nDROP PACKAGE ${p}`)
         }
       })
 

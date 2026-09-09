@@ -2,6 +2,8 @@
 
 MySQL / PostgreSQL 両対応の、モダン TypeScript 製 phpMyAdmin クローン。
 
+対応: **MySQL 8.0 / 8.4**、**MariaDB 10.11 (LTS) / 11**、**PostgreSQL 14〜17**（CI で最古と最新を毎回検証。詳細と注意点は [docs/deployment.md](docs/deployment.md#対応データベース)）。
+
 - **Bun workspaces モノレポ**: `apps/api`（Hono）/ `apps/web`（Vite + React 19 + TanStack Router/Query）/ `packages/shared`（Zod DTO）/ `packages/adapter`（`mysql2` / `pg` 上の薄い DB 抽象層。ORM 不使用）
 - **phpMyAdmin と同じ画面構成**: サーバー（データベース / ステータス / 変数 / プロセス / ユーザー）→ データベース（構造 / SQL / エクスポート / インポート / 権限 / ルーチン / トリガー / イベント）→ テーブル（表示 / 構造 / SQL / 検索 / 挿入 / エクスポート / インポート / トリガー / 操作）
 - **機能**: 接続（管理者が定義する接続先プリセット、Cookie セッション）、DB・スキーマ・テーブルのツリー、行のブラウズ（ソート・ページング・絞り込み・表示列の選択、外部キーから参照先 / 参照元へのリンク）、行の挿入（続けて挿入・複製）・編集（ダイアログ / インライン）・削除、SQL コンソール（CodeMirror、複数文、MySQL `DELIMITER` 対応、文ごとの結果を完了順にストリーミング表示、EXPLAIN、履歴・保存済みクエリ、結果の CSV / JSON ダウンロード、実行中のキャンセル）、DDL（テーブル作成・名前変更・コピー、カラムの追加・変更・削除、インデックス / 外部キーの追加・削除、TRUNCATE / DROP、データベースの作成・削除、スキーマ作成。元に戻せない操作は名前の再入力で確認）、エクスポート（SQL / CSV / JSON）、インポート（SQL スクリプト、CSV）、ユーザーアカウント（一覧・権限表示・作成・パスワード変更・削除、DB 単位の GRANT / REVOKE ALL）、ストアドプロシージャ / 関数 / トリガーの一覧と定義表示、MySQL イベントスケジューラ（一覧・有効化 / 無効化・削除）、サーバーステータス・変数・プロセス一覧（KILL）、キーボードショートカット（`?` で一覧）

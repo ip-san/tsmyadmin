@@ -13,10 +13,12 @@ export function mysqlAccount(user: UserRef): string {
 const USERS_MYSQL = 'SELECT User, Host, account_locked, password_expired FROM mysql.user ORDER BY User, Host'
 /**
  * MariaDB 10.4+: mysql.user is a view over mysql.global_priv without account_locked (the lock lives in the
- * Priv JSON); roles appear there too (is_role = 'Y', empty Host) and are not login accounts.
+ * Priv JSON); roles appear there too (is_role = 'Y', empty Host) and are not login accounts. The literal is
+ * binary: the view's columns carry the server's collation, which need not be the session's (MariaDB 10.11
+ * refuses to compare utf8mb4_general_ci with the connection's utf8mb4_unicode_ci).
  */
 const USERS_MARIADB =
-  "SELECT u.User, u.Host, IF(JSON_VALUE(g.Priv, '$.account_locked') = 1, 'Y', 'N') AS account_locked, u.password_expired FROM mysql.user u JOIN mysql.global_priv g ON g.User = u.User AND g.Host = u.Host WHERE u.is_role <> 'Y' ORDER BY u.User, u.Host"
+  "SELECT u.User, u.Host, IF(JSON_VALUE(g.Priv, '$.account_locked') = 1, 'Y', 'N') AS account_locked, u.password_expired FROM mysql.user u JOIN mysql.global_priv g ON g.User = u.User AND g.Host = u.Host WHERE u.is_role <> _binary'Y' ORDER BY u.User, u.Host"
 
 /** Password hashes MariaDB prints inside SHOW GRANTS (MySQL 8 never does); not for the privileges screen. */
 const GRANT_SECRET = / IDENTIFIED (?:BY PASSWORD '[^']*'|VIA \S+ USING '[^']*')/g

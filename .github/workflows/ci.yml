@@ -38,12 +38,22 @@ jobs:
         if: matrix.task == 'quality'
         run: bun run knip && bun run circular && bun run cpd && bun run check:arch && bun run check:sql-safety && bun run docs:validate
 
+  # The oldest and the newest supported servers (docs/deployment.md holds the matrix); the versions between them
+  # share the same catalog surface, so the two ends are what a change has to keep working.
   integration:
     runs-on: ubuntu-latest
     needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - mysql: 'mysql:8.0'
+            postgres: 'postgres:14'
+          - mysql: 'mysql:8.4'
+            postgres: 'postgres:17'
     services:
       mysql:
-        image: mysql:8.4
+        image: ${{ matrix.mysql }}
         env:
           MYSQL_ROOT_PASSWORD: root
           MYSQL_DATABASE: tsmyadmin_test
@@ -54,7 +64,7 @@ jobs:
           --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -proot"
           --health-interval 5s --health-timeout 5s --health-retries 20
       postgres:
-        image: postgres:17
+        image: ${{ matrix.postgres }}
         env:
           POSTGRES_USER: tsmyadmin
           POSTGRES_PASSWORD: tsmyadmin
@@ -76,13 +86,18 @@ jobs:
           PGPASSWORD=tsmyadmin psql -h 127.0.0.1 -p 15433 -U tsmyadmin -d tsmyadmin_test -v ON_ERROR_STOP=1 -f docker/fixtures/postgres/01-schema.sql
       - run: bun run test:integration
 
-  # The MySQL adapter must also pass its conformance suite against MariaDB (mysql.user layout, max_statement_time…).
+  # The MySQL adapter must also pass its conformance suite against MariaDB (mysql.user layout and its collation,
+  # max_statement_time, sequences, packages…), on the LTS release as well as the current one.
   integration-mariadb:
     runs-on: ubuntu-latest
     needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        mariadb: ['mariadb:10.11', 'mariadb:11']
     services:
       mariadb:
-        image: mariadb:11
+        image: ${{ matrix.mariadb }}
         env:
           MARIADB_ROOT_PASSWORD: root
           MARIADB_DATABASE: tsmyadmin_test
