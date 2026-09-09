@@ -1,7 +1,8 @@
 import type { CountKind, ImportReason, ImportWarning } from '@tsmyadmin/shared'
 
 /**
- * All user-facing Japanese strings. Components must reference `locale.*`, never literal Japanese.
+ * All user-facing Japanese strings, and the shape every other locale must have (`Locale`). Components must
+ * reference `locale.*`, never a literal in either language.
  *
  * Conventions: primary submit / confirm buttons use the verb form（〜する）, secondary actions and labels use
  * 体言止め; full sentences (hints, notices) end with 。, labels and error prefixes do not; table columns are
@@ -50,6 +51,7 @@ export const ja = {
     },
     unknown: '不明',
     theme: 'テーマ切替',
+    language: '表示言語',
     skipToContent: 'メインコンテンツへ移動',
     reload: '再読み込み',
     showMore: (n: number) => `全文を表示（${n.toLocaleString('ja-JP')} 文字）`,
@@ -675,3 +677,14 @@ export const ja = {
     NETWORK: 'サーバーと通信できません。ネットワーク接続を確認してください',
   },
 } as const
+
+/**
+ * The set of strings a locale must provide: the Japanese one with its literal types widened, so another language
+ * has to match every key and every function signature, but of course not the Japanese text itself.
+ */
+type Widen<T> = T extends string
+  ? string
+  : T extends (...args: infer A) => infer R
+    ? (...args: A) => R
+    : { [K in keyof T]: Widen<T[K]> }
+export type Locale = Widen<typeof ja>

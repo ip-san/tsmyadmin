@@ -29,9 +29,9 @@ bun run lighthouse        # Lighthouse CI（警告のみ、要 Chrome）
 
 ## 現在の規模（`scripts/validate-docs.mjs` が同期）
 
-- ユニット/API/Web テスト定義: <!-- stat:unit-tests -->309<!-- /stat --> 件
+- ユニット/API/Web テスト定義: <!-- stat:unit-tests -->312<!-- /stat --> 件
 - Adapter conformance: <!-- stat:conformance -->113<!-- /stat --> 件 × 2 方言
-- E2E: <!-- stat:e2e -->50<!-- /stat --> 件
+- E2E: <!-- stat:e2e -->51<!-- /stat --> 件
 - API ルート: <!-- stat:routes -->31<!-- /stat -->
 
 ## 詳細ルール（path-scoped）
@@ -54,6 +54,6 @@ IMPORTANT: コンテキスト圧縮後も以下を必ず守ること。
 - **YOU MUST** 環境変数を追加したら `apps/api/src/config.ts`・`.env.example`・`docs/deployment.md` の 3 か所を同時に更新する（表は deployment.md だけに置き、他は参照する）
 - **YOU MUST** ログにパスワード・行の値・SQL 全文を出さない（イベント名 + 識別子 + 要約のみ）
 - **YOU MUST** フィクスチャ（`docker/fixtures/**`）を変えたら `bun run db:reset`。既存の checkout でも MySQL の `WITH GRANT OPTION` 追加以降はリセットが必要
-- **YOU MUST** web の日本語文字列は `apps/web/src/config/locales/ja.ts` に定義し `locale.*` で参照する。Tailwind の色指定には `dark:` 対応を付ける
+- **YOU MUST** web の UI 文字列は `apps/web/src/config/locales/{ja,en}.ts` の両方に定義し（`en.ts` は `satisfies Locale` で型が揃う）、`locale.*` で参照する。Tailwind の色指定には `dark:` 対応を付ける
 - **YOU MUST** E2E は本番ビルドを API が配信する。Playwright のプロジェクトは `chromium`（機能）/ `webkit`（機能・Safari 差分）/ `a11y` / `visual-light` / `visual-dark`。`bun run test:e2e` は毎回ビルドするが、ポート 3199 に古いサーバーが残っていると再利用される（`reuseExistingServer`）ので、web を変更したら `bun run build` してから実行するか、残っているサーバーを止める
 - **YOU MUST** 統合テストは `*.integration.test.ts` 命名（DB 不要の `bun run test` / pre-commit から除外される）

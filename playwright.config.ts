@@ -18,6 +18,8 @@ export default defineConfig({
   reporter: (process.env.CI ? [['github'], ['html', { open: 'never' }]] : [['list']]) satisfies ReporterDescription[],
   use: {
     baseURL: `http://127.0.0.1:${port}`,
+    // The specs assert the Japanese UI; the browsers would otherwise ask for English (the app follows the browser).
+    locale: 'ja-JP',
     screenshot: 'only-on-failure',
     trace: 'on-first-retry',
   },

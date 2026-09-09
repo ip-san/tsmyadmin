@@ -3,11 +3,12 @@ import type { SessionInfo } from '@tsmyadmin/shared'
 import { CircleHelp, LogOut, Moon, PanelLeftClose, PanelLeftOpen, Sun } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
 import { z } from 'zod'
-import { locale } from '@/config/locale.ts'
+import { LOCALE_NAMES, LOCALES, locale, localeCode, setLocale } from '@/config/locale.ts'
 import { readPreference, writePreference } from '@/lib/preferences.ts'
 import { useShortcuts } from '@/lib/shortcuts.ts'
 import { useTheme } from '@/lib/theme.ts'
 import { Button } from '../ui/Button.tsx'
+import { Select } from '../ui/Field.tsx'
 import { ShortcutHelp } from './ShortcutHelp.tsx'
 
 const SIDEBAR_PREF = 'sidebar.collapsed'
@@ -85,6 +86,20 @@ export function AppShell({
             <span className="sr-only">{locale.nav.opensNewTab}</span>
           </a>
           <ShortcutHelp />
+          {/* Switching reloads the page: every string is read once at load, so a live swap would leave half the
+              screen in the other language. */}
+          <Select
+            aria-label={locale.common.language}
+            value={localeCode}
+            onChange={(e) => setLocale(e.target.value as keyof typeof LOCALES)}
+            className="w-auto py-1 text-xs"
+          >
+            {Object.keys(LOCALES).map((code) => (
+              <option key={code} value={code}>
+                {LOCALE_NAMES[code as keyof typeof LOCALES]}
+              </option>
+            ))}
+          </Select>
           <Button
             variant="ghost"
             size="sm"

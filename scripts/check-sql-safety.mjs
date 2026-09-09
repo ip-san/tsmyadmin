@@ -26,6 +26,8 @@ const SQL_BUILDER_ALLOWLIST = [
   // Regular expressions that *parse* GRANT statements returned by the server; nothing here is executed.
   /^apps\/web\/src\/features\/users\/privilege-level\.ts$/,
 ]
+/** UI text, never SQL: English labels legitimately read "Show all", "Delete 3 rows", "Create a table". */
+const NOT_SQL = [/^apps\/web\/src\/config\/locales\/[a-z-]+\.ts$/]
 const SQL_KEYWORD =
   /\b(SELECT|INSERT|UPDATE|DELETE|ALTER|CREATE|DROP|TRUNCATE|GRANT|REVOKE|KILL|SHOW|SET SESSION|SET search_path|USE|WHERE|JOIN|ORDER BY|GROUP BY|VALUES)\b/i
 const DRIVERS = ['mysql2', 'pg']
@@ -117,6 +119,8 @@ function checkFile(rel, source) {
   }
 
   if (isTest) return errors
+  // UI text is not SQL, whatever keywords its English strings contain.
+  if (NOT_SQL.some((re) => re.test(rel))) return errors
   const allowed = SQL_BUILDER_ALLOWLIST.some((re) => re.test(rel))
 
   // 1. Interpolated SQL

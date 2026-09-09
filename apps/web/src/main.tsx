@@ -4,6 +4,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import { ErrorPage, NotFoundPage } from './components/layout/ErrorPage.tsx'
+import { localeCode } from './config/locale.ts'
 import { isApiError } from './lib/api.ts'
 import { applyTheme } from './lib/theme.ts'
 import { routeTree } from './routeTree.gen.ts'
@@ -41,6 +42,7 @@ declare module '@tanstack/react-router' {
   }
 }
 
+document.documentElement.lang = localeCode
 applyTheme()
 
 const root = document.getElementById('root')

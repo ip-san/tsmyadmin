@@ -16,6 +16,38 @@ test.describe('login', () => {
     await expect(page.getByText('PostgreSQL')).toBeVisible()
   })
 
+  test('renders in English for an English browser and remembers a chosen language', async ({ browser }) => {
+    const t = TARGETS[0]
+    if (!t) throw new Error('no targets')
+    // A browser that asks for English gets English, without any setting.
+    const context = await browser.newContext({ locale: 'en-US' })
+    const page = await context.newPage()
+    try {
+      await page.goto('/login')
+      await expect(page.getByText('MySQL / PostgreSQL admin — Connect to a server')).toBeVisible()
+      await expect(page.locator('html')).toHaveAttribute('lang', 'en')
+      await page.getByLabel('Server', { exact: true }).selectOption('')
+      await page.getByLabel('Server type').selectOption(t.dialect)
+      await page.getByLabel('Host').fill(t.host)
+      await page.getByLabel('Port').fill(String(t.port))
+      await page.getByLabel('User name').fill(t.user)
+      await page.getByLabel('Password').fill(t.password)
+      await page.getByLabel('Database').fill(t.database)
+      await page.getByRole('button', { name: 'Connect' }).click()
+      await expect(page.getByRole('heading', { name: 'Server' })).toBeVisible()
+      await expect(page.getByRole('link', { name: 'Databases' }).first()).toBeVisible()
+      // The switcher wins over the browser and survives a reload.
+      await page.getByLabel('Language').selectOption('ja')
+      await expect(page.getByRole('heading', { name: 'サーバー' })).toBeVisible()
+      await expect(page.locator('html')).toHaveAttribute('lang', 'ja')
+      await page.reload()
+      await expect(page.getByRole('heading', { name: 'サーバー' })).toBeVisible()
+      await page.request.delete('/api/session', { headers: { origin: page.url().replace(/\/[^/]*$/, '') } })
+    } finally {
+      await context.close()
+    }
+  })
+
   test('shows an error for wrong credentials and stays on the form', async ({ page }) => {
     const t = TARGETS[0]
     if (!t) throw new Error('no targets')
