@@ -1,12 +1,5 @@
 import type { DatabaseAdapter } from '@tsmyadmin/adapter'
-import {
-  AdapterError,
-  isGeneratedColumn,
-  type Statement,
-  setAssignments,
-  splitStatements,
-  stripLeadingComments,
-} from '@tsmyadmin/adapter'
+import { AdapterError, type Statement, setAssignments, splitStatements, stripLeadingComments } from '@tsmyadmin/adapter'
 import type {
   ImportError,
   ImportForm,
@@ -17,7 +10,7 @@ import type {
   Namespace,
   StatementResult,
 } from '@tsmyadmin/shared'
-import { CsvParseError, isBinaryDataType, parseCsvRecords } from '@tsmyadmin/shared'
+import { CsvParseError, isBinaryDataType, isGeneratedColumn, parseCsvRecords } from '@tsmyadmin/shared'
 
 const MAX_ERRORS = 20
 const SQL_IMPORT_TIMEOUT_MS = 10 * 60 * 1000

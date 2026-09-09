@@ -1,4 +1,5 @@
 import type { ColumnDef, ColumnSpec, Dialect } from '@tsmyadmin/shared'
+import { onUpdateExpression } from '@tsmyadmin/shared'
 
 type DefaultKind = 'none' | 'literal' | 'expression'
 
@@ -10,6 +11,12 @@ export interface ColumnFormValues {
   defaultValue: string
   autoIncrement: boolean
   comment: string
+  /**
+   * Not shown in the form, but MySQL rewrites the whole column on every change, so these travel with the values
+   * and are emitted again. Without them a comment-only edit would drop the collation or the ON UPDATE clause.
+   */
+  collation: string | null
+  onUpdate: string | null
 }
 
 export const EMPTY_COLUMN: ColumnFormValues = {
@@ -20,6 +27,8 @@ export const EMPTY_COLUMN: ColumnFormValues = {
   defaultValue: '',
   autoIncrement: false,
   comment: '',
+  collation: null,
+  onUpdate: null,
 }
 
 export const TYPE_SUGGESTIONS: Record<Dialect, string[]> = {
@@ -65,6 +74,8 @@ export function toColumnSpec(v: ColumnFormValues): ColumnSpec {
           : { kind: 'expression', sql: v.defaultValue },
     autoIncrement: v.autoIncrement,
     comment: v.comment.trim() === '' ? null : v.comment,
+    collation: v.collation,
+    onUpdate: v.onUpdate,
   }
 }
 
@@ -86,6 +97,9 @@ export function fromColumnDef(c: ColumnDef, dialect: Dialect): ColumnFormValues 
     defaultValue,
     autoIncrement: auto,
     comment: c.comment ?? '',
+    // PostgreSQL emits only the clauses that change, so it needs neither; MySQL replaces the definition.
+    collation: dialect === 'mysql' ? c.collation : null,
+    onUpdate: dialect === 'mysql' ? onUpdateExpression(c.extra) : null,
   }
 }
 

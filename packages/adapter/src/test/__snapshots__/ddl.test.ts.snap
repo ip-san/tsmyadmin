@@ -110,7 +110,7 @@ exports[`DDL builders > mysql: maintainTable 1`] = `
 
 exports[`DDL builders > mysql: modifyColumn 1`] = `
 [
-  "ALTER TABLE \`db\`.\`t\` CHANGE COLUMN \`n\` \`n2\` BIGINT NOT NULL COMMENT 'renamed'",
+  "ALTER TABLE \`db\`.\`t\` CHANGE COLUMN \`n\` \`n2\` BIGINT COLLATE utf8mb4_bin NOT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT 'renamed'",
 ]
 `;
 

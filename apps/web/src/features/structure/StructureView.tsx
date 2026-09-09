@@ -8,6 +8,7 @@ import { Dialog } from '@/components/ui/Dialog.tsx'
 import { Badge, ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
+import { ColumnsTable } from '@/features/structure/ColumnsTable.tsx'
 import { fromColumnDef, toColumnSpec } from '@/lib/column-spec.ts'
 import { useDdlFlow } from '@/lib/ddl.ts'
 import { createStatementQuery, structureQuery, type TableRef } from '@/lib/queries.ts'
@@ -17,77 +18,6 @@ import { IndexForm } from './IndexForm.tsx'
 import { ForeignKeysTable, ReferencedByTable } from './RelationsTables.tsx'
 
 type ColumnDialog = { mode: 'add' } | { mode: 'modify'; name: string } | null
-
-function ColumnsTable({
-  schema,
-  editable,
-  onEdit,
-  onDrop,
-}: {
-  schema: TableSchema
-  editable: boolean
-  onEdit: (name: string) => void
-  onDrop: (name: string) => void
-}) {
-  const pk = new Set(schema.primaryKey)
-  return (
-    <Table aria-label={locale.table.columns}>
-      <thead>
-        <tr>
-          <Th>#</Th>
-          <Th>{locale.table.name}</Th>
-          <Th>{locale.table.type}</Th>
-          <Th>{locale.table.collation}</Th>
-          <Th>{locale.table.nullable}</Th>
-          <Th>{locale.table.default}</Th>
-          <Th>{locale.table.extra}</Th>
-          <Th>{locale.table.comment}</Th>
-          {editable ? <Th>{locale.ddl.actions}</Th> : null}
-        </tr>
-      </thead>
-      <tbody>
-        {schema.columns.map((c, i) => (
-          <Tr key={c.name}>
-            <Td>{i + 1}</Td>
-            <Td className="font-medium">
-              {c.name} {pk.has(c.name) ? <Badge tone="info">{locale.table.primary}</Badge> : null}
-            </Td>
-            <Td className="font-mono text-xs">{c.dataType}</Td>
-            <Td className="text-xs">{c.collation ?? ''}</Td>
-            <Td className="whitespace-nowrap">{c.nullable ? locale.common.yes : locale.common.no}</Td>
-            <Td className="font-mono text-xs">
-              {c.default !== null ? (
-                c.default
-              ) : c.nullable ? (
-                <span className="italic text-zinc-500 dark:text-zinc-400">{locale.common.null}</span>
-              ) : (
-                <span className="text-zinc-500 dark:text-zinc-400">{locale.table.noDefault}</span>
-              )}
-            </Td>
-            <Td className="text-xs">{c.extra}</Td>
-            <Td className="text-xs">{c.comment ?? ''}</Td>
-            {editable ? (
-              <Td className="whitespace-nowrap">
-                <Button size="sm" onClick={() => onEdit(c.name)} aria-label={`${c.name}: ${locale.ddl.edit}`}>
-                  {locale.ddl.edit}
-                </Button>{' '}
-                <Button
-                  size="sm"
-                  variant="danger"
-                  aria-haspopup="dialog"
-                  onClick={() => onDrop(c.name)}
-                  aria-label={`${c.name}: ${locale.ddl.drop}`}
-                >
-                  {locale.ddl.drop}
-                </Button>
-              </Td>
-            ) : null}
-          </Tr>
-        ))}
-      </tbody>
-    </Table>
-  )
-}
 
 function IndexesTable({
   schema,

@@ -7,8 +7,13 @@ import { AdapterError, type DdlBuilder } from '../types.ts'
 const id = (s: string) => quoteIdent('mysql', s)
 
 function columnDef(c: ColumnSpec): string {
-  const parts = [id(c.name), c.dataType, c.nullable ? 'NULL' : 'NOT NULL']
+  // MODIFY COLUMN replaces the whole definition, so anything omitted here is dropped from the column. The
+  // collation and ON UPDATE clauses are schema-validated patterns, hence safe to render unquoted.
+  const parts = [id(c.name), c.dataType]
+  if (c.collation) parts.push(`COLLATE ${c.collation}`)
+  parts.push(c.nullable ? 'NULL' : 'NOT NULL')
   if (c.default) parts.push(`DEFAULT ${c.default.kind === 'literal' ? mysqlLiteral(c.default.value) : c.default.sql}`)
+  if (c.onUpdate) parts.push(`ON UPDATE ${c.onUpdate}`)
   if (c.autoIncrement) parts.push('AUTO_INCREMENT')
   if (c.comment !== null) parts.push(`COMMENT ${mysqlLiteral(c.comment)}`)
   return parts.join(' ')

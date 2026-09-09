@@ -58,6 +58,14 @@ export function parseEntry(raw: string): { host: string; port: number | null } {
   return { host: normalise(s), port: null }
 }
 
+/**
+ * The form of a host the allowlist compares. The session connects to this, not to what was typed: otherwise the
+ * check and the connection would run on different strings (` 127.0.0.1` and `127.0.0.1.` pass as `127.0.0.1`).
+ */
+export function normaliseHost(s: string): string {
+  return normalise(s)
+}
+
 function normalise(s: string): string {
   return s
     .trim()

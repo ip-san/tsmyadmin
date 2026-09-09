@@ -22,6 +22,8 @@ describe('toColumnSpec', () => {
       default: null,
       autoIncrement: false,
       comment: null,
+      collation: null,
+      onUpdate: null,
     })
     expect(
       toColumnSpec({ ...EMPTY_COLUMN, name: 'n', dataType: 'x', defaultKind: 'literal', defaultValue: "it's" }).default
@@ -57,6 +59,17 @@ describe('fromColumnDef', () => {
       defaultKind: 'none',
     })
     expect(fromColumnDef(def({ extra: 'auto_increment' }), 'mysql').autoIncrement).toBe(true)
+  })
+
+  it('carries the attributes MySQL would drop from a rewritten column', () => {
+    const c = def({ extra: 'on update CURRENT_TIMESTAMP(3)', collation: 'latin1_bin' })
+    expect(fromColumnDef(c, 'mysql')).toMatchObject({ collation: 'latin1_bin', onUpdate: 'CURRENT_TIMESTAMP(3)' })
+    expect(toColumnSpec(fromColumnDef(c, 'mysql'))).toMatchObject({
+      collation: 'latin1_bin',
+      onUpdate: 'CURRENT_TIMESTAMP(3)',
+    })
+    // PostgreSQL emits only the clauses that change, so it must not repeat a collation it never asked for.
+    expect(fromColumnDef(c, 'postgres')).toMatchObject({ collation: null, onUpdate: null })
   })
 })
 

@@ -1,5 +1,6 @@
 import type { Cell, ColumnDef, InputCell, RowValues } from '@tsmyadmin/shared'
-import { type FormEvent, useState } from 'react'
+import { isGeneratedColumn } from '@tsmyadmin/shared'
+import { type FormEvent, useEffect, useRef, useState } from 'react'
 import { locale } from '@/config/locale.ts'
 import { cellToEditable, isOpaqueCell } from '@/lib/format.ts'
 import { Button } from '../ui/Button.tsx'
@@ -25,8 +26,14 @@ export interface RowFormProps {
   onCancel?: () => void
 }
 
+/** The server supplies the value: a key column with a sequence, or a column computed from the others. */
 function isGenerated(c: ColumnDef): boolean {
-  return c.extra.includes('auto_increment') || c.extra.includes('identity') || c.extra === 'serial'
+  return c.extra.includes('auto_increment') || c.extra.includes('identity') || c.extra === 'serial' || computed(c)
+}
+
+/** Stronger than `isGenerated`: the server refuses a value for these at all, so they never enter the payload. */
+function computed(c: ColumnDef): boolean {
+  return isGeneratedColumn(c.extra)
 }
 
 function initialField(c: ColumnDef, mode: RowFormProps['mode'], initial?: Record<string, Cell>): FieldState {
@@ -66,12 +73,21 @@ export function RowForm({ columns, mode, initial, pending, error, onSubmit, onCa
   const update = (name: string, column: ColumnDef, patch: Partial<FieldState>) =>
     setFields((f) => ({ ...f, [name]: { ...(f[name] ?? initialField(column, mode, initial)), ...patch } }))
 
+  // `pending` comes from a mutation and only flips on the next render, so a double click would submit twice.
+  const submitted = useRef(false)
+  useEffect(() => {
+    if (!pending) submitted.current = false
+  }, [pending])
+
   const submit = (e: FormEvent) => {
     e.preventDefault()
+    if (submitted.current || pending) return
+    submitted.current = true
     const values: RowValues = {}
     for (const c of columns) {
       const f = fieldFor(c)
-      if (f.useDefault) continue
+      // A generated column rejects any value, including NULL (MySQL ER_NON_DEFAULT_VALUE_FOR_GENERATED_COLUMN).
+      if (computed(c) || f.useDefault) continue
       const original = initial?.[c.name] ?? null
       // Editing keeps an opaque value untouched (the field is read-only); duplicating sends whatever was typed.
       if (mode === 'edit' && isOpaqueCell(original) && !f.isNull) continue
@@ -115,7 +131,7 @@ export function RowForm({ columns, mode, initial, pending, error, onSubmit, onCa
                     type="checkbox"
                     aria-label={`${c.name}: ${locale.rows.setNull}`}
                     checked={f.isNull}
-                    disabled={!c.nullable}
+                    disabled={!c.nullable || computed(c)}
                     onChange={(e) => update(c.name, c, { isNull: e.target.checked, useDefault: false })}
                   />
                 </Td>
@@ -124,13 +140,16 @@ export function RowForm({ columns, mode, initial, pending, error, onSubmit, onCa
                     <input
                       type="checkbox"
                       aria-label={`${c.name}: ${locale.rows.useDefault}`}
-                      checked={f.useDefault}
+                      checked={f.useDefault || computed(c)}
+                      disabled={computed(c)}
                       onChange={(e) => update(c.name, c, { useDefault: e.target.checked, isNull: false })}
                     />
                   </Td>
                 ) : null}
                 <Td>
-                  {binary && !f.isNull ? (
+                  {computed(c) ? (
+                    <span className="text-xs text-zinc-500 dark:text-zinc-400">{locale.rows.generatedReadOnly}</span>
+                  ) : binary && !f.isNull ? (
                     <span className="text-xs text-zinc-500 dark:text-zinc-400">{locale.rows.binaryReadOnly}</span>
                   ) : MULTILINE.test(c.dataType) ? (
                     <Textarea

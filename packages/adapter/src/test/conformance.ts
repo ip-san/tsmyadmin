@@ -12,13 +12,13 @@ import {
   EXACT_COUNT_MAX_ROWS,
   type InputCell,
   isBinaryCell,
+  isGeneratedColumn,
   isInputCell,
   isTruncatedCell,
   MAX_TEXT_CHARS,
 } from '@tsmyadmin/shared'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { mysqlAccount } from '../mysql/users.ts'
-import { isGeneratedColumn } from '../sql/export.ts'
 import { quoteIdent } from '../sql/quote.ts'
 import { AdapterError, type DatabaseAdapter, type ExecuteOptions, type RowBatch } from '../types.ts'
 
@@ -56,7 +56,17 @@ function byName(columns: { name: string }[], row: Cell[]): Record<string, Cell> 
 }
 
 function col(name: string, dataType: string, extra: Partial<ColumnSpec> = {}): ColumnSpec {
-  return { name, dataType, nullable: true, default: null, autoIncrement: false, comment: null, ...extra }
+  return {
+    name,
+    dataType,
+    nullable: true,
+    default: null,
+    autoIncrement: false,
+    comment: null,
+    collation: null,
+    onUpdate: null,
+    ...extra,
+  }
 }
 
 /**
@@ -2095,6 +2105,43 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
             [2, 2],
           ])
           expect((await db.describeTable(ns, t)).columns[0]?.comment).toBe('renumbered')
+        } finally {
+          await exec(`DROP TABLE IF EXISTS ${t}`, { stopOnError: false })
+        }
+      })
+
+      it.skipIf(dialect !== 'mysql')('modifyColumn keeps the clauses the column form does not model', async () => {
+        // MySQL rewrites the whole column, so a comment-only edit used to drop ON UPDATE and the collation.
+        const t = `${scratch}_keep`
+        await execOk(
+          `CREATE TABLE ${t} (id INT PRIMARY KEY, ` +
+            'updated_at TIMESTAMP NULL ON UPDATE CURRENT_TIMESTAMP, ' +
+            'code VARCHAR(20) CHARACTER SET latin1 COLLATE latin1_bin NULL)'
+        )
+        try {
+          const before = await db.describeTable(ns, t)
+          const spec = (name: string, over: Partial<ColumnSpec>) => {
+            const c = before.columns.find((x) => x.name === name)
+            if (!c) throw new Error(`missing column ${name}`)
+            return col(name, c.dataType, {
+              nullable: c.nullable,
+              collation: c.collation,
+              onUpdate: /\bon update (CURRENT_TIMESTAMP(?:\(\d\))?)/i.exec(c.extra)?.[1]?.toUpperCase() ?? null,
+              ...over,
+            })
+          }
+          await runDdl({
+            op: 'modifyColumn',
+            table: t,
+            name: 'updated_at',
+            column: spec('updated_at', { comment: 'c' }),
+          })
+          await runDdl({ op: 'modifyColumn', table: t, name: 'code', column: spec('code', { comment: 'c' }) })
+          const after = await db.describeTable(ns, t)
+          const byName = (n: string) => after.columns.find((c) => c.name === n)
+          expect(byName('updated_at')?.extra.toLowerCase()).toContain('on update current_timestamp')
+          expect(byName('code')?.collation).toBe('latin1_bin')
+          expect(byName('code')?.comment).toBe('c')
         } finally {
           await exec(`DROP TABLE IF EXISTS ${t}`, { stopOnError: false })
         }

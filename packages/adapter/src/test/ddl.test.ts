@@ -12,6 +12,8 @@ const col = (name: string, dataType: string, extra: Partial<ColumnSpec> = {}): C
   default: null,
   autoIncrement: false,
   comment: null,
+  collation: null,
+  onUpdate: null,
   ...extra,
 })
 
@@ -37,7 +39,12 @@ const SAMPLE_OPS: Record<DdlOp['op'], DdlOp> = {
     op: 'modifyColumn',
     table: 't',
     name: 'n',
-    column: col('n2', 'BIGINT', { nullable: false, comment: 'renamed' }),
+    column: col('n2', 'BIGINT', {
+      nullable: false,
+      comment: 'renamed',
+      collation: 'utf8mb4_bin',
+      onUpdate: 'CURRENT_TIMESTAMP',
+    }),
   },
   dropColumn: { op: 'dropColumn', table: 't', name: 'n' },
   setTableOptions: { op: 'setTableOptions', table: 't', comment: "it's" },
@@ -97,6 +104,19 @@ describe('DDL builders', () => {
     const op: DdlOp = { op: 'modifyColumn', table: 't', name: 'n', column: col('n', 'INT') }
     expect(mysqlDdl.build({ database: 'db' }, op)[0]).toContain('MODIFY COLUMN')
     expect(pgDdl.build({ database: 'db' }, op).some((s) => s.includes('RENAME'))).toBe(false)
+  })
+
+  it('MODIFY COLUMN keeps the collation and ON UPDATE the column form does not show', () => {
+    // MySQL replaces the whole definition: anything the builder omits is dropped from the column.
+    const op: DdlOp = {
+      op: 'modifyColumn',
+      table: 't',
+      name: 'n',
+      column: col('n', 'timestamp', { collation: 'latin1_bin', onUpdate: 'CURRENT_TIMESTAMP(3)', comment: 'c' }),
+    }
+    expect(mysqlDdl.build({ database: 'db' }, op)[0]).toBe(
+      "ALTER TABLE `db`.`t` MODIFY COLUMN `n` timestamp COLLATE latin1_bin NULL ON UPDATE CURRENT_TIMESTAMP(3) COMMENT 'c'"
+    )
   })
 
   it('dropTable drops a view / materialized view / sequence by its kind', () => {

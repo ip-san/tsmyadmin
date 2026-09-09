@@ -1,7 +1,7 @@
+import { isGeneratedColumn } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
 import { mysqlExporter } from '../mysql/export.ts'
 import { pgExporter } from '../postgres/export.ts'
-import { isGeneratedColumn } from '../sql/export.ts'
 
 const ns = { database: 'db', schema: 'app' }
 const rows = [

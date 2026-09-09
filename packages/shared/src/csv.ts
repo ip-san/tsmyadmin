@@ -7,17 +7,26 @@ import { CSV_NULL } from './schemas/export.ts'
  * that equals the NULL marker is quoted so the import can tell the two apart (as COPY / LOAD DATA do), and so
  * is the empty string: in a one-column table it would otherwise be a blank line, which the import skips.
  */
-export function csvField(cell: Cell): string {
+export function csvField(cell: Cell, neutralise = false): string {
   if (cell === null) return CSV_NULL
   // A cut value must never land in a file that looks complete; callers check with isTruncatedCell first.
   if (isTruncatedCell(cell)) throw new Error('truncated text cannot be written to CSV')
-  const text = isBinaryCell(cell) ? cell.$bin : typeof cell === 'string' ? cell : String(cell)
+  const raw = isBinaryCell(cell) ? cell.$bin : typeof cell === 'string' ? cell : String(cell)
+  const text = neutralise && FORMULA_START.test(raw) ? `'${raw}` : raw
   return /[",\r\n]/.test(text) || text === CSV_NULL || text === '' ? `"${text.replaceAll('"', '""')}"` : text
 }
 
+/**
+ * Leading characters that make Excel / LibreOffice / Sheets treat a cell as a formula. Prefixing them with an
+ * apostrophe stops that, at the cost of changing the value — hence opt-in: the export → import round trip must
+ * stay lossless by default.
+ */
+const FORMULA_START = /^[=+\-@\t\r]/
+
 /** Header + rows as CRLF-terminated CSV (the format the table export and the SQL console download share). */
-export function toCsv(columns: string[], rows: Cell[][]): string {
-  const lines = [columns.map(csvField).join(','), ...rows.map((row) => row.map(csvField).join(','))]
+export function toCsv(columns: string[], rows: Cell[][], neutralise = false): string {
+  const field = (c: Cell) => csvField(c, neutralise)
+  const lines = [columns.map(field).join(','), ...rows.map((row) => row.map(field).join(','))]
   return `${lines.join('\r\n')}\r\n`
 }
 

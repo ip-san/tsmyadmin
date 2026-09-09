@@ -220,7 +220,9 @@ export const en = {
     value: 'Value',
     useDefault: 'Use the default',
     setNull: 'NULL',
-    binaryReadOnly: 'Binary values and text past the display limit cannot be edited here (use the SQL console).',
+    binaryReadOnly: 'Binary values and text past the display limit cannot be edited here (use the SQL tab).',
+    generatedReadOnly:
+      'This is a generated column: the server computes it from the other columns, so no value can be given.',
     opaqueNotCopied: 'Binary values and text past the display limit are not copied.',
     notAddressable:
       'This row holds a binary value or text past the display limit, so it cannot be addressed (use the SQL console)',
@@ -379,13 +381,15 @@ export const en = {
     dropViewTitle: 'Drop the view',
     sequenceOperationsTitle: 'Sequence operations',
     dropSequenceHint:
-      'Drops the sequence. Inserts into tables whose default calls it will start failing. This cannot be undone.',
+      'Drops the sequence. On MariaDB, inserts into tables whose default calls it will fail afterwards; on PostgreSQL the drop is refused while a column default still depends on it. This cannot be undone.',
     dropSequenceTitle: 'Drop the sequence',
     dropSequenceButton: 'Drop the sequence…',
     sequenceLoss: 'The sequence position is lost.',
     newSequenceName: 'New sequence name',
     actions: 'Actions',
     edit: 'Change',
+    generatedNotEditable:
+      'Generated columns cannot be changed here (the generation expression would be lost). Use ALTER TABLE in the SQL tab.',
     drop: 'Drop',
     submit: 'Next (review the SQL)',
     /** Danger buttons that open the preview dialog: the ellipsis says a confirmation follows. */
@@ -402,7 +406,7 @@ export const en = {
     renameHint:
       'Views, foreign keys and privileges may not follow the new name. On PostgreSQL, indexes and sequences keep their own names.',
     renameSequenceHint:
-      'Columns whose default calls this sequence follow the new name automatically, and its privileges are kept.',
+      'On PostgreSQL, column defaults that call this sequence (nextval) follow the new name and its privileges are kept. On MariaDB they do not: inserts into tables whose default calls the old name fail until the default is changed.',
     databaseName: 'Database name',
     schemaName: 'Schema name',
     engineHint: 'InnoDB, for instance (empty leaves it unchanged).',
@@ -436,6 +440,9 @@ export const en = {
     dropTable: 'Add DROP TABLE IF EXISTS',
     data: 'Data (INSERT)',
     bom: 'Add a UTF-8 BOM (for Excel)',
+    csvSafe: 'Stop spreadsheets from running values as formulas',
+    csvSafeHint:
+      'Prefixes values starting with = + - @ with an apostrophe. This changes the value, so leave it off if the file will be imported back.',
     routines: 'Include routines, triggers and events',
     triggersOnly: 'Include the triggers of these tables (routines and events come with a whole-database export)',
     stripDefiner:

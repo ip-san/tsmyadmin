@@ -106,6 +106,12 @@ interface RunningEntry {
   cancelled: boolean
   /** True once the flag actually stopped the script (a statement was interrupted or the loop broke before one). */
   interrupted: boolean
+  /**
+   * True once a cancel signal was delivered while a statement was in flight. MySQL's KILL QUERY does not
+   * always make the statement fail — `SELECT SLEEP(20)` just returns early with a row — so `interrupted`
+   * alone would report "not cancelled" for a query the server really did stop.
+   */
+  signalled: boolean
   /** Resolves when the run has ended, whatever the outcome. */
   settled: Promise<void>
   /** True while a statement is on the wire; a cancel that lands on an idle connection is a no-op and is retried. */
@@ -749,6 +755,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
       }),
       cancelled: false,
       interrupted: false,
+      signalled: false,
       inFlight: false,
       cancelling: null,
       settled: new Promise<void>((resolve) => {
@@ -944,8 +951,11 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     try {
       // Checked with the connection in hand: the target may have ended while it was being opened.
       if (!stillRunning()) return entry.interrupted
+      const wasInFlight = entry.inFlight
       try {
         await canceller.cancel(backend)
+        // Checked on both sides of the send so a statement that merely finished next to it is not counted.
+        if (wasInFlight && entry.inFlight) entry.signalled = true
       } catch (err) {
         // The script loop is already stopped; a KILL that finds no such thread means the target just finished.
         if (stillRunning()) throw err
@@ -958,7 +968,12 @@ export abstract class BaseAdapter implements DatabaseAdapter {
         await new Promise((resolve) => setTimeout(resolve, CANCEL_RETRY_MS))
         if (!stillRunning() || !entry.inFlight) break
         // The first signal was delivered; a failing retry must not fail the request.
-        await canceller.cancel(backend).catch(() => undefined)
+        await canceller.cancel(backend).then(
+          () => {
+            if (entry.inFlight) entry.signalled = true
+          },
+          () => undefined
+        )
       }
       // The signal is out; the answer is what it did, known once the script loop reaches its next boundary
       // (a statement that resists — MySQL SLEEP returns normally when killed — still stops the script there).
@@ -970,7 +985,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
           timer = setTimeout(() => resolve(false), CANCEL_SETTLE_MS)
         }),
       ]).finally(() => clearTimeout(timer))
-      return settled ? entry.interrupted : true
+      return settled ? entry.interrupted || entry.signalled : true
     } finally {
       await canceller.close()
     }

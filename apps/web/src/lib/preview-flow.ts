@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import type { StatementResult } from '@tsmyadmin/shared'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 
 export interface PreviewFlow<Op> {
   /** Operation currently being previewed (null = dialog closed). */
@@ -45,6 +45,8 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
   const [rolledBack, setRolledBack] = useState(false)
   // Result applied per call (below), so a superseded preview response cannot overwrite the newer op's SQL.
   const previewM = useMutation({ mutationFn: config.preview })
+  // `runM.isPending` only becomes true on the next render: a second click on "execute" would run the SQL twice.
+  const running = useRef(false)
   const runM = useMutation({
     mutationFn: (o: Op) => config.execute(o, sql),
     onSuccess: async ({ results, rolledBack: undone }, o) => {
@@ -76,6 +78,7 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
     notices,
     rolledBack,
     preview: (o) => {
+      running.current = false
       setOp(o)
       setSql([])
       setFailed(null)
@@ -87,7 +90,9 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
       previewM.mutate(o, { onSuccess: (r) => setSql(r.sql) })
     },
     confirm: () => {
-      if (op !== null && sql.length > 0 && !runM.isPending) runM.mutate(op)
+      if (op === null || sql.length === 0 || running.current || runM.isPending) return
+      running.current = true
+      runM.mutate(op, { onSettled: () => (running.current = false) })
     },
     cancel: () => {
       setOp(null)

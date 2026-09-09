@@ -3,7 +3,7 @@ import { AdapterError } from '@tsmyadmin/adapter'
 import { ConnectRequestSchema } from '@tsmyadmin/shared'
 import { type Context, Hono } from 'hono'
 import { deleteCookie, getSignedCookie, setSignedCookie } from 'hono/cookie'
-import { isHostAllowed } from '../lib/allowlist.ts'
+import { isHostAllowed, normaliseHost } from '../lib/allowlist.ts'
 import { apiError, errorResponse } from '../lib/errors.ts'
 import type { Logger } from '../lib/logging.ts'
 import type { RateLimiter } from '../lib/rate-limit.ts'
@@ -92,7 +92,7 @@ export function sessionRoutes(cfg: SessionConfig, deps: SessionRouteDeps) {
       let session: Awaited<ReturnType<typeof cfg.store.create>>
       try {
         // The store builds the (audited) adapter, pings it and persists the session in one step.
-        session = await cfg.store.create(body)
+        session = await cfg.store.create({ ...body, host: normaliseHost(body.host) })
       } catch (err) {
         deps.ipLimiter.hit(ip)
         deps.logger.log('warn', 'login.failed', audit)

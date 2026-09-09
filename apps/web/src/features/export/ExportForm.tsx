@@ -33,6 +33,7 @@ export function ExportForm({ db, schema, table, initialTables }: ExportFormProps
   const [dropTable, setDropTable] = useState(true)
   const [data, setData] = useState(true)
   const [bom, setBom] = useState(true)
+  const [csvSafe, setCsvSafe] = useState(false)
   const [routines, setRoutines] = useState(true)
   const [stripDefiner, setStripDefiner] = useState(false)
   // Views are included: SQL dumps carry their CREATE VIEW, CSV/JSON export their rows.
@@ -56,6 +57,7 @@ export function ExportForm({ db, schema, table, initialTables }: ExportFormProps
     dropTable,
     data,
     bom,
+    csvSafe,
     routines,
     stripDefiner,
   })
@@ -163,10 +165,17 @@ export function ExportForm({ db, schema, table, initialTables }: ExportFormProps
         </div>
       ) : null}
       {format === 'csv' ? (
-        <label className="flex items-center gap-1 text-sm">
-          <input type="checkbox" checked={bom} onChange={(e) => setBom(e.target.checked)} />
-          {locale.export.bom}
-        </label>
+        <div className="space-y-1">
+          <label className="flex items-center gap-1 text-sm">
+            <input type="checkbox" checked={bom} onChange={(e) => setBom(e.target.checked)} />
+            {locale.export.bom}
+          </label>
+          <label className="flex items-center gap-1 text-sm">
+            <input type="checkbox" checked={csvSafe} onChange={(e) => setCsvSafe(e.target.checked)} />
+            {locale.export.csvSafe}
+          </label>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">{locale.export.csvSafeHint}</p>
+        </div>
       ) : null}
       {/* The reason a download is refused stays attached to the (focusable) control, and is announced as it appears. */}
       {blockedReason ? (

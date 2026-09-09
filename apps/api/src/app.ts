@@ -119,6 +119,12 @@ export function createApp(config: AppConfig, services: AppServices) {
       .use('*', requestLogger(logger, ip))
       .use('*', secureHeaders({ contentSecurityPolicy: CONTENT_SECURITY_POLICY, referrerPolicy: 'same-origin' }))
       .use('/api/*', csrf())
+      // Row values and the login target are as sensitive as the credentials behind them: no store may keep a
+      // copy — not the browser's disk cache, not an intermediary that ignores the Cookie header.
+      .use('/api/*', async (c, next) => {
+        await next()
+        c.header('Cache-Control', 'no-store')
+      })
       .use('/api/*', apiBodyLimit(config.sessionSecret))
       .onError((err, c) => errorResponse(c, err, logger))
       // Liveness: the process answers. Readiness: the session store is usable.

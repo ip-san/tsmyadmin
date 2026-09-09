@@ -13,15 +13,6 @@ export function commentText(text: string): string {
 }
 
 /**
- * Columns whose values the server computes and that therefore cannot be part of an INSERT: MySQL
- * `VIRTUAL GENERATED` / `STORED GENERATED`, PostgreSQL `generated stored`. MySQL's `DEFAULT_GENERATED`
- * (an expression default such as CURRENT_TIMESTAMP) is an ordinary column whose values must be dumped.
- */
-export function isGeneratedColumn(extra: string): boolean {
-  return /^(?:(?:VIRTUAL|STORED) )?GENERATED\b/i.test(extra)
-}
-
-/**
  * Moves the sequence behind an identity / serial / nextval() column past the values now in the table. Nothing
  * happens for an empty table or when there is no sequence; the value is clamped to the sequence minimum (a
  * `MINVALUE 1000` sequence must not be set to 1, nor to a negative id) and never lowered (a sequence shared by

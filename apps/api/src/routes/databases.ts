@@ -1,4 +1,4 @@
-import { type DatabaseAdapter, isGeneratedColumn } from '@tsmyadmin/adapter'
+import type { DatabaseAdapter } from '@tsmyadmin/adapter'
 import {
   type ApiError,
   BrowseQuerySchema,
@@ -10,6 +10,7 @@ import {
   type ImportEvent,
   ImportFormSchema,
   InsertRowRequestSchema,
+  isGeneratedColumn,
   type Namespace,
   parseBrowseQuery,
   RoutineDefinitionQuerySchema,

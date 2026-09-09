@@ -46,6 +46,20 @@ export const ColumnDefSchema = z.object({
 })
 export type ColumnDef = z.infer<typeof ColumnDefSchema>
 
+/**
+ * Columns whose values the server computes, so they can be neither inserted nor written back: MySQL
+ * `VIRTUAL GENERATED` / `STORED GENERATED`, PostgreSQL `generated stored`. MySQL's `DEFAULT_GENERATED`
+ * (an expression default such as CURRENT_TIMESTAMP) is an ordinary column and is not matched.
+ */
+export function isGeneratedColumn(extra: string): boolean {
+  return /^(?:(?:VIRTUAL|STORED) )?GENERATED\b/i.test(extra)
+}
+
+/** MySQL prints `on update CURRENT_TIMESTAMP[(n)]` in `extra`; the clause is invisible to the column form. */
+export function onUpdateExpression(extra: string): string | null {
+  return /\bon update (CURRENT_TIMESTAMP(?:\(\d\))?)/i.exec(extra)?.[1]?.toUpperCase() ?? null
+}
+
 export const IndexDefSchema = z.object({
   name: z.string(),
   unique: z.boolean(),

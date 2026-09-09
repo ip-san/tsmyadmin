@@ -221,7 +221,8 @@ export const ja = {
     value: '値',
     useDefault: '既定値を使う',
     setNull: 'NULL',
-    binaryReadOnly: 'バイナリ値や表示上限を超える長いテキストはここでは編集できません（SQL で更新してください）。',
+    binaryReadOnly: 'バイナリ値や表示上限を超える長いテキストはここでは編集できません（SQL タブで更新してください）。',
+    generatedReadOnly: '生成カラム（サーバーが他のカラムから計算する値）のため、値を指定できません。',
     opaqueNotCopied: 'バイナリ値や表示上限を超える長いテキストは複製されません。',
     notAddressable:
       'バイナリ値や表示上限を超える長いテキストを含むため、この行を一意に特定できません（SQL で操作してください）',
@@ -381,13 +382,15 @@ export const ja = {
     dropViewTitle: 'ビューを削除',
     sequenceOperationsTitle: 'シーケンス操作',
     dropSequenceHint:
-      'シーケンスを削除します。既定値でこのシーケンスを使うテーブルは挿入に失敗するようになります。元に戻せません。',
+      'シーケンスを削除します。MariaDB では既定値でこのシーケンスを使うテーブルが挿入に失敗するようになります。PostgreSQL では列の既定値が依存している間は削除自体が拒否されます。元に戻せません。',
     dropSequenceTitle: 'シーケンスを削除',
     dropSequenceButton: 'シーケンスを削除…',
     sequenceLoss: 'シーケンスの現在値は失われます。',
     newSequenceName: '新しいシーケンス名',
     actions: '操作',
     edit: '変更',
+    generatedNotEditable:
+      '生成カラムはここでは変更できません（生成式が失われるため）。SQL タブで ALTER TABLE を実行してください。',
     drop: '削除',
     submit: '次へ（SQL を確認）',
     /** Danger buttons that open the preview dialog: the ellipsis says a confirmation follows. */
@@ -404,7 +407,7 @@ export const ja = {
     renameHint:
       'ビュー・外部キー・権限は参照先を自動では追従しない場合があります。PostgreSQL ではインデックスやシーケンスの名前は変わりません。',
     renameSequenceHint:
-      'このシーケンスを既定値（nextval）で使う列は新しい名前を自動で参照します。権限は引き継がれます。',
+      'PostgreSQL では、このシーケンスを既定値（nextval）で使う列は新しい名前を自動で参照し、権限も引き継がれます。MariaDB では追従しないため、古い名前を既定値に持つテーブルは既定値を書き換えるまで挿入に失敗します。',
     databaseName: 'データベース名',
     schemaName: 'スキーマ名',
     engineHint: 'InnoDB など（空欄は変更なし）。',
@@ -437,6 +440,9 @@ export const ja = {
     dropTable: 'DROP TABLE IF EXISTS を付ける',
     data: 'データ（INSERT）',
     bom: 'UTF-8 BOM を付ける（Excel 向け）',
+    csvSafe: '表計算ソフトで数式として実行されないようにする',
+    csvSafeHint:
+      '= + - @ で始まる値の先頭にアポストロフィを付けます。値そのものが変わるため、このファイルをインポートで戻す場合はチェックを外してください。',
     routines: 'ルーチン・トリガー・イベントも含める',
     triggersOnly: '対象テーブルのトリガーも含める（ルーチンとイベントはデータベース全体のエクスポートに含まれます）',
     stripDefiner:

@@ -19,6 +19,11 @@ export const ExportQuerySchema = z.object({
   data: FlagSchema.default('1'),
   /** UTF-8 BOM for CSV (Excel). */
   bom: FlagSchema.default('1'),
+  /**
+   * CSV: prefix values starting with `= + - @` with an apostrophe so a spreadsheet does not run them as
+   * formulas. Off by default because it changes the value, which would break the round trip back through import.
+   */
+  csvSafe: FlagSchema.default('0'),
   /** SQL: include stored routines, triggers and events (triggers of the requested tables when tables are named). */
   routines: FlagSchema.default('1'),
   /** SQL (MySQL): drop `DEFINER=...` clauses so the dump restores under another account. */

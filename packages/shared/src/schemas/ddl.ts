@@ -16,6 +16,20 @@ export const ColumnSpecSchema = z.object({
   default: ColumnDefaultSchema,
   autoIncrement: z.boolean().default(false),
   comment: z.string().nullable().default(null),
+  /**
+   * Attributes the column form does not show but a MySQL `MODIFY COLUMN` would silently drop, so they travel
+   * with the spec and are re-emitted verbatim. Both are pattern-validated because they render unquoted.
+   */
+  collation: z
+    .string()
+    .regex(/^[A-Za-z0-9_]+$/)
+    .nullable()
+    .default(null),
+  onUpdate: z
+    .string()
+    .regex(/^CURRENT_TIMESTAMP(\(\d\))?$/i)
+    .nullable()
+    .default(null),
 })
 export type ColumnSpec = z.infer<typeof ColumnSpecSchema>
 export type ColumnSpecInput = z.input<typeof ColumnSpecSchema>
