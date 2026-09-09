@@ -96,8 +96,32 @@ function unescapeDefault(sql: string): string {
   return out
 }
 
-/** Binary and bit literals the catalog prints in a form that only replays unquoted (`0xFF`, `b'101'`). */
-const BINARY_LITERAL = /^(?:0x[0-9A-Fa-f]*|[xX]'[0-9A-Fa-f]*'|[bB]'[01]*')$/
+/**
+ * The column types whose default the catalog prints in a form that only replays unquoted (`0xFF`, `b'101'`).
+ * Decided by type, never by the text: MySQL prints a `VARCHAR` default of the string `0xFF` identically.
+ */
+const BINARY_TYPE = /^(?:var)?binary\b|^bit\b/i
+
+/**
+ * MariaDB escapes five things inside a quoted default (`''`, `\\`, `\n`, `\r`, `\0`). One left-to-right pass is
+ * required: replacing them in sequence would turn a stored `a\nb` (backslash, n) into a line feed.
+ */
+function unquoteMariaDefault(quoted: string): string {
+  const body = quoted.slice(1, -1)
+  let out = ''
+  for (let i = 0; i < body.length; i++) {
+    const c = body[i] as string
+    if (c === "'" && body[i + 1] === "'") {
+      out += "'"
+      i++
+    } else if (c === '\\') {
+      const next = body[i + 1]
+      out += next === 'n' ? '\n' : next === 'r' ? '\r' : next === '0' ? '\0' : (next ?? '\\')
+      if (next !== undefined) i++
+    } else out += c
+  }
+  return out
+}
 
 /**
  * MariaDB (10.2.7+) reports `COLUMN_DEFAULT` in its own format: a literal is quoted (`'abc'`), "no default" is
@@ -105,18 +129,23 @@ const BINARY_LITERAL = /^(?:0x[0-9A-Fa-f]*|[xX]'[0-9A-Fa-f]*'|[bB]'[01]*')$/
  * the opposite — literals bare, expressions flagged `DEFAULT_GENERATED`. Both are normalised to "the text to
  * replay" plus a flag.
  */
-function normaliseDefault(raw: string | null, extra: string, mariadb: boolean): { text: string | null; expr: boolean } {
+function normaliseDefault(
+  raw: string | null,
+  extra: string,
+  columnType: string,
+  mariadb: boolean
+): { text: string | null; expr: boolean } {
   if (raw === null) return { text: null, expr: false }
   if (mariadb) {
     if (raw === 'NULL') return { text: null, expr: false }
     if (raw.startsWith("'") && raw.endsWith("'") && raw.length >= 2) {
-      return { text: raw.slice(1, -1).replaceAll("''", "'").replaceAll('\\\\', '\\'), expr: false }
+      return { text: unquoteMariaDefault(raw), expr: false }
     }
     return { text: raw, expr: true }
   }
   if (/\bDEFAULT_GENERATED\b/i.test(extra)) return { text: unescapeDefault(repairEncoding(raw)), expr: true }
   // A binary or bit default is a literal to the server but only replays in its unquoted form.
-  return { text: raw, expr: BINARY_LITERAL.test(raw) }
+  return { text: raw, expr: BINARY_TYPE.test(columnType) }
 }
 
 export async function mysqlDescribeTable(
@@ -142,7 +171,7 @@ export async function mysqlDescribeTable(
   )
   const columns: ColumnDef[] = cols.rows.map((row) => {
     const extra = str(row[4])
-    const { text, expr } = normaliseDefault(strOrNull(row[3]), extra, mariadb)
+    const { text, expr } = normaliseDefault(strOrNull(row[3]), extra, str(row[1]), mariadb)
     return {
       name: str(row[0]),
       dataType: str(row[1]),

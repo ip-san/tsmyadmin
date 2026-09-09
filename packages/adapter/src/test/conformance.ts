@@ -2169,6 +2169,61 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         }
       })
 
+      it.skipIf(dialect !== 'mysql')('describeTable reports a default that replays to the same value', async () => {
+        // The two servers print COLUMN_DEFAULT differently (MariaDB quotes and escapes literals, MySQL 8 does
+        // not) and both hide it behind the same column. Asserting the produced value catches either format.
+        const t = `${scratch}_def`
+        await execOk(
+          `CREATE TABLE ${t} (id INT PRIMARY KEY AUTO_INCREMENT, ` +
+            `plain VARCHAR(20) NOT NULL DEFAULT 'abc', ` +
+            `quoted VARCHAR(20) NOT NULL DEFAULT 'it''s', ` +
+            `newline VARCHAR(20) NOT NULL DEFAULT 'a\\nb', ` +
+            `slash VARCHAR(20) NOT NULL DEFAULT 'a\\\\nb', ` +
+            `looksHex VARCHAR(20) NOT NULL DEFAULT '0xFF', ` +
+            `bin VARBINARY(10) NOT NULL DEFAULT 0xFF, ` +
+            `none VARCHAR(20) NULL)`
+        )
+        const names = ['plain', 'quoted', 'newline', 'slash', 'looksHex', 'bin', 'none']
+        try {
+          const produced = async () => {
+            await execOk(`INSERT INTO ${t} () VALUES ()`)
+            const rows = await exec(
+              `SELECT ${names.map((n) => `HEX(\`${n}\`)`).join(', ')} FROM ${t} ORDER BY id DESC LIMIT 1`
+            )
+            const r = rows[0]
+            return r?.kind === 'rows' ? JSON.stringify(r.result.rows[0]) : 'n/a'
+          }
+          const before = await produced()
+          const schema = await db.describeTable(ns, t)
+          // A nullable column with no default is "no default", however the catalog spells it.
+          expect(schema.columns.find((c) => c.name === 'none')?.default).toBeNull()
+          for (const name of names) {
+            const c = schema.columns.find((x) => x.name === name)
+            if (!c) throw new Error(name)
+            await runDdl({
+              op: 'modifyColumn',
+              table: t,
+              name,
+              column: col(name, c.dataType, {
+                nullable: c.nullable,
+                collation: c.collation,
+                comment: 'edited',
+                ...(c.default === null
+                  ? {}
+                  : {
+                      default: c.defaultIsExpression
+                        ? { kind: 'expression', sql: c.default }
+                        : { kind: 'literal', value: c.default },
+                    }),
+              }),
+            })
+          }
+          expect(await produced()).toBe(before)
+        } finally {
+          await exec(`DROP TABLE IF EXISTS ${t}`, { stopOnError: false })
+        }
+      })
+
       it.skipIf(dialect !== 'mysql')('modifyColumn replays an expression default without changing it', async () => {
         // information_schema hands the expression back with its literals escaped and its UTF-8 bytes read as
         // latin1; replaying that text verbatim would store mojibake. What matters is the value it produces.
