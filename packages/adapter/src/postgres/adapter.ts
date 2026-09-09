@@ -224,8 +224,12 @@ export class PostgresAdapter extends BaseAdapter {
       forget,
       discard: () => this.broken.add(client),
       // 'I' idle, 'T' in a transaction, 'E' in one that failed — the failed one still holds work that the
-      // rollback below is about to discard, so it counts as open.
-      inTransaction: async () => (client as unknown as PgTxStatus).getTransactionStatus?.() !== 'I',
+      // rollback below is about to discard, so it counts as open. Tested for the open states rather than
+      // against 'I' so a driver that stops reporting it says "nothing open" instead of warning on every run.
+      inTransaction: async () => {
+        const status = (client as unknown as PgTxStatus).getTransactionStatus?.()
+        return status === 'T' || status === 'E'
+      },
       copyFrom: (sql, data) => this.copyFrom(client, sql, data),
     }
   }
