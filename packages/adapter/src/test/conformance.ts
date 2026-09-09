@@ -760,6 +760,52 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
     })
 
     describe('executeSql', () => {
+      it('asks the server whether the script left a transaction open', async () => {
+        // The answer has to come from the server: MySQL's implicit commits depend on how far a statement got
+        // (a DDL the parser rejected never committed), which reading the script cannot reproduce.
+        const t = `${scratch}_tx`
+        await execOk(`CREATE TABLE ${t} (id INT PRIMARY KEY)`)
+        const begin = dialect === 'mysql' ? 'START TRANSACTION' : 'BEGIN'
+        const open = async (sql: string, opts: Partial<ExecuteOptions> = {}) => {
+          let reported: boolean | null = null
+          await exec(sql, { ...opts, onTransactionOpen: (o) => (reported = o) })
+          return reported
+        }
+        try {
+          expect(await open(`SELECT 1;`)).toBe(false)
+          expect(await open(`${begin};\nINSERT INTO ${t} VALUES (1);`)).toBe(true)
+          expect(await open(`${begin};\nINSERT INTO ${t} VALUES (2);\nCOMMIT;`)).toBe(false)
+          expect(await open(`${begin};\nINSERT INTO ${t} VALUES (3);\nROLLBACK;`)).toBe(false)
+          // A statement the server rejected before its implicit commit leaves the transaction open.
+          expect(
+            await open(`${begin};\nINSERT INTO ${t} VALUES (4);\nCREATE TABLE ${t}_x (a INT`, { stopOnError: false })
+          ).toBe(true)
+          if (dialect === 'mysql') {
+            // MySQL excludes temporary tables from the implicit commit.
+            expect(
+              await open(`${begin};\nINSERT INTO ${t} VALUES (5);\nCREATE TEMPORARY TABLE ${t}_tmp (a INT);`)
+            ).toBe(true)
+            // An ordinary DDL does commit, so nothing is left open.
+            expect(await open(`${begin};\nINSERT INTO ${t} VALUES (6);\nCREATE TABLE ${t}_y (a INT);`)).toBe(false)
+            await execOk(`DROP TABLE IF EXISTS ${t}_y`)
+            expect(await open(`SET autocommit = 0;\nINSERT INTO ${t} VALUES (7);`)).toBe(true)
+          } else {
+            // PostgreSQL keeps a failed transaction open until it is rolled back; its work is lost either way.
+            expect(await open(`${begin};\nINSERT INTO ${t} VALUES (8);\nSELECT 1 / 0;`, { stopOnError: false })).toBe(
+              true
+            )
+          }
+          // What survived proves the reported flag matched reality: only the explicitly committed row, plus
+          // on MySQL the one an ordinary DDL implicitly committed. Everything reported as open was rolled back.
+          const rows = await exec(`SELECT id FROM ${t} ORDER BY id`)
+          const first = rows[0]
+          const ids = first?.kind === 'rows' ? first.result.rows.map((r) => Number(r[0])) : []
+          expect(ids).toEqual(dialect === 'mysql' ? [2, 6] : [2])
+        } finally {
+          await exec(`DROP TABLE IF EXISTS ${t}`, { stopOnError: false })
+        }
+      })
+
       it('runs multiple statements and returns one result per statement', async () => {
         const results = await exec('SELECT 1 AS one; SELECT 2 AS two')
         expect(results).toHaveLength(2)
@@ -2105,6 +2151,45 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
             [2, 2],
           ])
           expect((await db.describeTable(ns, t)).columns[0]?.comment).toBe('renumbered')
+        } finally {
+          await exec(`DROP TABLE IF EXISTS ${t}`, { stopOnError: false })
+        }
+      })
+
+      it.skipIf(dialect !== 'mysql')('modifyColumn replays an expression default without changing it', async () => {
+        // information_schema hands the expression back with its literals escaped and its UTF-8 bytes read as
+        // latin1; replaying that text verbatim would store mojibake. What matters is the value it produces.
+        const t = `${scratch}_expr`
+        await execOk(
+          `CREATE TABLE ${t} (id INT PRIMARY KEY AUTO_INCREMENT, ` +
+            `jp VARCHAR(20) NULL DEFAULT (concat('日本')), ` +
+            `qu VARCHAR(20) NULL DEFAULT (concat('it''s')))`
+        )
+        try {
+          const value = async () => {
+            await execOk(`INSERT INTO ${t} () VALUES ()`)
+            const rows = await exec(`SELECT jp, qu FROM ${t} ORDER BY id DESC LIMIT 1`)
+            const r = rows[0]
+            return r?.kind === 'rows' ? JSON.stringify(r.result.rows[0]) : 'n/a'
+          }
+          const before = await value()
+          const schema = await db.describeTable(ns, t)
+          for (const name of ['jp', 'qu']) {
+            const c = schema.columns.find((x) => x.name === name)
+            if (!c) throw new Error(name)
+            await runDdl({
+              op: 'modifyColumn',
+              table: t,
+              name,
+              column: col(name, c.dataType, {
+                nullable: c.nullable,
+                collation: c.collation,
+                default: { kind: 'expression', sql: c.default ?? '' },
+                comment: 'edited',
+              }),
+            })
+          }
+          expect(await value()).toBe(before)
         } finally {
           await exec(`DROP TABLE IF EXISTS ${t}`, { stopOnError: false })
         }

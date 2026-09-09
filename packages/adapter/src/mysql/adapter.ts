@@ -283,6 +283,12 @@ export class MysqlAdapter extends BaseAdapter {
       reset,
       forget,
       discard: () => this.broken.add(core),
+      inTransaction: async () => {
+        // `DO 0` is the cheapest statement that neither starts nor ends a transaction; its OK packet carries
+        // the server status, whose lowest bit is SERVER_STATUS_IN_TRANS.
+        const [res] = await conn.query('DO 0')
+        return ((res as { serverStatus?: number }).serverStatus ?? 0) % 2 === 1
+      },
       stream: (text, params, batchSize, options) => this.streamRows(conn, text, params, batchSize, options),
     }
   }

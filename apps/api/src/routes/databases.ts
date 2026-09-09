@@ -1,4 +1,4 @@
-import { type DatabaseAdapter, leavesTransactionOpen } from '@tsmyadmin/adapter'
+import type { DatabaseAdapter } from '@tsmyadmin/adapter'
 import {
   type ApiError,
   BrowseQuerySchema,
@@ -299,24 +299,22 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
             if (!closed) controller.enqueue(encoder.encode('\n'))
           }, HEARTBEAT_MS)
           try {
+            // Answered by the server itself once the script is done, just before its transaction is rolled back.
+            let openTransaction = false
             const results = await adapter.executeSql(namespace, body.sql, {
               maxRows: body.maxRows,
               timeoutMs: body.timeoutMs,
               stopOnError: body.stopOnError,
               queryId,
               onResult: (result, index) => send({ type: 'result', index, result }),
+              onTransactionOpen: (open) => {
+                openTransaction = open
+              },
             })
             await send({
               type: 'done',
               statements: results.length,
-              openTransaction: leavesTransactionOpen(
-                results.map((r) => ({
-                  sql: r.sql,
-                  failed: r.kind === 'error',
-                  nativeCode: r.kind === 'error' ? r.nativeCode : undefined,
-                })),
-                adapter.dialect
-              ),
+              openTransaction,
             })
           } catch (err) {
             const { body } = toApiError(err)

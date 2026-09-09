@@ -68,6 +68,19 @@ async function queryIndexes(conn: Conn, ns: Namespace, table: string) {
 }
 
 /**
+ * MySQL hands an expression default back with its UTF-8 bytes reinterpreted as latin1, so `concat('日本')`
+ * arrives as `concat(_utf8mb4'æ—¥æœ¬')`. Rewriting that as-is would store mojibake, so the bytes are put back —
+ * but only when the string really is a mis-decoded one: every character must fit in a byte AND those bytes must
+ * form different, valid UTF-8. A genuine latin1-range default (`café`) is not valid UTF-8 as bytes and is left
+ * alone, and so is correct output from a server that stops doing this.
+ */
+function repairEncoding(sql: string): string {
+  for (let i = 0; i < sql.length; i++) if ((sql.codePointAt(i) ?? 0) > 0xff) return sql
+  const decoded = new TextDecoder('utf-8', { fatal: false }).decode(Uint8Array.from(sql, (c) => c.charCodeAt(0)))
+  return decoded === sql || decoded.includes('\ufffd') ? sql : decoded
+}
+
+/**
  * `information_schema.COLUMNS.COLUMN_DEFAULT` escapes backslashes and quotes inside an expression default
  * (`DEFAULT ('{}')` reads back as `_utf8mb4\\'{}\\'`). One left-to-right pass restores the executable form.
  */
@@ -108,7 +121,7 @@ export async function mysqlDescribeTable(conn: Conn, ns: Namespace, table: strin
       nullable: str(row[2]) === 'YES',
       // An expression default arrives with its string literals escaped (`('{}')` reads back as
       // `_utf8mb4\\'{}\\'`), which no longer parses. Unescaping restores the form SHOW CREATE TABLE prints.
-      default: def !== null && /\bDEFAULT_GENERATED\b/i.test(extra) ? unescapeDefault(def) : def,
+      default: def !== null && /\bDEFAULT_GENERATED\b/i.test(extra) ? unescapeDefault(repairEncoding(def)) : def,
       extra,
       comment: strOrNull(row[5]) || null,
       collation: strOrNull(row[6]),

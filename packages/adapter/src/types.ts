@@ -48,6 +48,11 @@ export interface ExecuteOptions {
   onResult?: (result: StatementResult, index: number) => void | Promise<void>
   /** Logged in place of the script text (`<import>`): an uploaded file carries row values, which never reach a log. */
   auditLabel?: string
+  /**
+   * Called once when the script has finished, with the server's answer to "is a transaction still open?".
+   * Each run is autocommitted on its own pooled connection, so anything still open is about to be rolled back.
+   */
+  onTransactionOpen?: (open: boolean) => void
   /** The script already split (a caller that had to split it anyway); `script` is then only the audited text. */
   statements?: Statement[]
 }

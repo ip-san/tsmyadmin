@@ -103,28 +103,36 @@ export function fromColumnDef(c: ColumnDef, dialect: Dialect): ColumnFormValues 
   }
 }
 
-/** MySQL accepts `COLLATE` only on a character string type; on anything else it is an error or meaningless. */
-const CHARACTER_TYPE = /^(?:CHAR|VARCHAR|TINYTEXT|TEXT|MEDIUMTEXT|LONGTEXT|ENUM|SET)\b/i
-/** `ON UPDATE CURRENT_TIMESTAMP(n)` needs a TIMESTAMP / DATETIME of exactly the same fractional precision. */
-const TIMESTAMP_TYPE = /^(?:TIMESTAMP|DATETIME)\s*(?:\((\d)\))?\s*$/i
+/**
+ * MySQL accepts `COLLATE` only on a character string type; on anything else it is an error or meaningless.
+ * `NATIONAL`/`N`-prefixed types are deliberately absent: they pin their own character set.
+ */
+const CHARACTER_TYPE =
+  /^(?:CHAR|CHARACTER(?:\s+VARYING)?|VARCHAR|TINYTEXT|TEXT|MEDIUMTEXT|LONGTEXT|LONG(?:\s+VARCHAR)?|ENUM|SET)\b/i
+/** A collation the user typed themselves wins; emitting the carried one too is "Multiple COLLATE clauses". */
+const TYPED_COLLATION = /\b(?:COLLATE|CHARACTER\s+SET|CHARSET)\b/i
+/** `ON UPDATE CURRENT_TIMESTAMP(n)` needs a TIMESTAMP / DATETIME, and `n` must match the type's precision. */
+const TIMESTAMP_TYPE = /^(?:TIMESTAMP|DATETIME)\s*(?:\((\d)\))?/i
 
 /**
  * A new data type for the form. `collation` and `ON UPDATE` are carried invisibly (MySQL rewrites the whole
- * column), so each is kept only while the new type can still hold it: widening `VARCHAR(50)` to `VARCHAR(100)`
- * keeps the collation, turning it into `JSON` drops it — MySQL rejects `JSON … COLLATE utf8mb4_bin`, and an
- * `ON UPDATE CURRENT_TIMESTAMP` on a non-timestamp (or on a TIMESTAMP of a different precision) is refused too.
+ * column on every change), so each follows the new type:
+ * - the collation survives a type that can hold one (`VARCHAR(50)` → `VARCHAR(100)` keeps it; → `JSON` drops it,
+ *   because MySQL rejects `JSON … COLLATE utf8mb4_bin`), and steps aside when the user types their own;
+ * - `ON UPDATE` survives a TIMESTAMP / DATETIME, rewritten to that type's fractional precision — the clause is
+ *   refused when the two disagree, and dropping it silently would lose an `updated_at` column's whole point.
  */
 export function retypeColumn(v: ColumnFormValues, initial: ColumnFormValues, dataType: string): ColumnFormValues {
   const t = dataType.trim()
   const timestamp = TIMESTAMP_TYPE.exec(t)
-  // Both are unset when the type has no precision: `ON UPDATE CURRENT_TIMESTAMP` on a plain TIMESTAMP.
   const typeFsp = timestamp ? (timestamp[1] ?? '') : null
-  const clauseFsp = initial.onUpdate === null ? null : (/\((\d)\)/.exec(initial.onUpdate)?.[1] ?? '')
+  const keepsCollation = CHARACTER_TYPE.test(t) && !TYPED_COLLATION.test(t)
   return {
     ...v,
     dataType,
-    collation: CHARACTER_TYPE.test(t) ? initial.collation : null,
-    onUpdate: typeFsp !== null && typeFsp === clauseFsp ? initial.onUpdate : null,
+    collation: keepsCollation ? initial.collation : null,
+    onUpdate:
+      typeFsp === null || initial.onUpdate === null ? null : `CURRENT_TIMESTAMP${typeFsp === '' ? '' : `(${typeFsp})`}`,
   }
 }
 

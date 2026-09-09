@@ -76,10 +76,18 @@ describe('fromColumnDef', () => {
     const initial = fromColumnDef(def({ dataType: 'varchar(50)', collation: 'latin1_bin' }), 'mysql')
     // Widening a string column is the most common type edit: losing the collation would silently change
     // comparison and ordering (verified against MySQL 8.4).
-    for (const t of ['VARCHAR(100)', 'TEXT', 'char(10)', "ENUM('a')"]) {
+    for (const t of ['VARCHAR(100)', 'TEXT', 'char(10)', "ENUM('a')", 'CHARACTER VARYING(80)', 'LONG VARCHAR']) {
       expect(retypeColumn(initial, initial, t)).toMatchObject({ collation: 'latin1_bin' })
     }
     for (const t of ['JSON', 'INT', 'DATE', 'BLOB']) {
+      expect(retypeColumn(initial, initial, t)).toMatchObject({ collation: null })
+    }
+  })
+
+  it('steps aside when the user types a collation or charset into the type box', () => {
+    const initial = fromColumnDef(def({ dataType: 'varchar(50)', collation: 'latin1_bin' }), 'mysql')
+    // Emitting the carried one too would be "Multiple COLLATE clauses" / a charset mismatch.
+    for (const t of ['VARCHAR(100) COLLATE utf8mb4_general_ci', 'VARCHAR(100) CHARACTER SET latin1']) {
       expect(retypeColumn(initial, initial, t)).toMatchObject({ collation: null })
     }
   })
@@ -88,13 +96,15 @@ describe('fromColumnDef', () => {
     const plain = fromColumnDef(def({ dataType: 'timestamp', extra: 'on update CURRENT_TIMESTAMP' }), 'mysql')
     expect(retypeColumn(plain, plain, 'TIMESTAMP')).toMatchObject({ onUpdate: 'CURRENT_TIMESTAMP' })
     expect(retypeColumn(plain, plain, 'DATETIME')).toMatchObject({ onUpdate: 'CURRENT_TIMESTAMP' })
-    // `ON UPDATE CURRENT_TIMESTAMP` on a TIMESTAMP(3) is "Invalid ON UPDATE clause".
-    expect(retypeColumn(plain, plain, 'TIMESTAMP(3)')).toMatchObject({ onUpdate: null })
+    // The clause follows the new precision instead of being dropped: an updated_at column's whole point.
+    expect(retypeColumn(plain, plain, 'TIMESTAMP(3)')).toMatchObject({ onUpdate: 'CURRENT_TIMESTAMP(3)' })
+    // A type typed with a trailing NULL still counts as a timestamp.
+    expect(retypeColumn(plain, plain, 'TIMESTAMP(6) NULL')).toMatchObject({ onUpdate: 'CURRENT_TIMESTAMP(6)' })
     expect(retypeColumn(plain, plain, 'VARCHAR(30)')).toMatchObject({ onUpdate: null })
 
     const fsp = fromColumnDef(def({ dataType: 'datetime(3)', extra: 'on update CURRENT_TIMESTAMP(3)' }), 'mysql')
     expect(retypeColumn(fsp, fsp, 'DATETIME(3)')).toMatchObject({ onUpdate: 'CURRENT_TIMESTAMP(3)' })
-    expect(retypeColumn(fsp, fsp, 'DATETIME')).toMatchObject({ onUpdate: null })
+    expect(retypeColumn(fsp, fsp, 'DATETIME')).toMatchObject({ onUpdate: 'CURRENT_TIMESTAMP' })
   })
 })
 

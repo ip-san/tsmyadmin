@@ -57,6 +57,11 @@ const CONNECTION_CODES = new Set([
 
 type ArrayResult = QueryResult<unknown[]>
 
+/** `pg` exposes the transaction status of the last ReadyForQuery through this method. */
+interface PgTxStatus {
+  getTransactionStatus?(): string | null
+}
+
 export class PostgresAdapter extends BaseAdapter {
   readonly dialect = 'postgres' as const
   readonly ddl = pgDdl
@@ -218,6 +223,9 @@ export class PostgresAdapter extends BaseAdapter {
       reset,
       forget,
       discard: () => this.broken.add(client),
+      // 'I' idle, 'T' in a transaction, 'E' in one that failed — the failed one still holds work that the
+      // rollback below is about to discard, so it counts as open.
+      inTransaction: async () => (client as unknown as PgTxStatus).getTransactionStatus?.() !== 'I',
       copyFrom: (sql, data) => this.copyFrom(client, sql, data),
     }
   }

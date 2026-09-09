@@ -82,6 +82,12 @@ export interface Conn {
   forget(): void
   /** Marks the connection as not reusable: release() closes it instead of returning it to the pool. */
   discard(): void
+  /**
+   * Whether the server considers a transaction to still be open on this connection. Only the server knows:
+   * MySQL's implicit commits depend on the statement AND on how far it got (a DDL the parser rejected never
+   * committed), which no amount of reading the script can reproduce.
+   */
+  inTransaction?(): Promise<boolean>
   /** PostgreSQL `COPY … FROM stdin` with the block's data (pg_dump's default format); absent on other dialects. */
   copyFrom?(sql: string, data: string): Promise<number>
   /**
@@ -862,6 +868,12 @@ export abstract class BaseAdapter implements DatabaseAdapter {
             // In a finally so an onResult/backendId failure cannot return a dirty connection to the pool.
             // After a cancel the connection is closed rather than reused: a KILL QUERY / pg_cancel_backend
             // signal still in transit would otherwise interrupt whatever the next borrower runs on it.
+            // Asked before the ROLLBACK, and not after a cancel: that connection is being thrown away anyway.
+            if (opts.onTransactionOpen && !entry.cancelled) {
+              // A probe that cannot run says nothing rather than something wrong.
+              const open = await conn.inTransaction?.().catch(() => false)
+              opts.onTransactionOpen(open === true)
+            }
             if (entry.cancelled) conn.discard()
             else {
               await conn.query('ROLLBACK').catch(() => undefined)
