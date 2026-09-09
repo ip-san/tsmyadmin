@@ -16,14 +16,14 @@
 | `startup` / `shutdown.begin` / `shutdown.done` / `shutdown.timeout` / `shutdown.forced` | 起動設定（ポート、許可ホスト、TTL）/ グレースフルシャットダウンの開始・完了・上限超過・2 回目のシグナルによる強制終了（1 秒以内の重複シグナルは無視） |
 | `http` | アクセスログ: `requestId`, `method`, `path`, `status`, `ms`, `ip`。成功した `/healthz` `/readyz`（プローブ）と `/assets/*`（ハッシュ付き静的ファイル、ブラウザが 1 年キャッシュ）は記録しない。ログレベルの設定はなく、`warn` / `error` の抽出はログ収集側で行う |
 | `login.ok` / `login.failed` / `login.host_not_allowed` / `login.insecure_transport` / `login.rate_limited` / `logout` | 認証イベント（ホスト・ユーザー名・セッション ID のハッシュ先頭 16 桁は含む、パスワードと生のセッション ID は含まない） |
-| `audit` | **監査ログ**: データ・構造・アカウント・サーバー状態を変える呼び出し（`insertRow(s)` / `updateRow` / `deleteRows` / `executeSql` / `cancelQuery` / `killProcess`）。`requestId`, `dialect`, `dbUser`, `dbHost`, `database`, `schema`, `table`, 行数・キー種別・カラム名、`executeSql` は SQL 先頭 500 文字と文数 / エラー数、`ok`, `ms`。失敗時は `error`（エラーコード）と `nativeCode` だけで、サーバーのメッセージは記録しない。**行の値は記録しない**（SQL コンソール / インポートの文は先頭 500 文字を記録するため値を含み得る）。パスワード（アカウント操作、SQL コンソールの `IDENTIFIED BY` / `PASSWORD` 文）は `****` に置換 |
+| `audit` | **監査ログ**: データ・構造・アカウント・サーバー状態を変える呼び出し（`insertRow(s)` / `updateRow` / `deleteRows` / `executeSql` / `cancelQuery` / `killProcess`）。`requestId`, `dialect`, `dbUser`, `dbHost`, `database`, `schema`, `table`, 行数・キー種別・カラム名、`executeSql` は SQL 先頭 500 文字と文数 / エラー数、`ok`, `ms`。失敗時は `error`（エラーコード）と `nativeCode` だけで、サーバーのメッセージは記録しない。**行の値は記録しない**（SQL コンソールの文は先頭 500 文字を記録するため値を含み得る。インポートは `<import>` と文字数だけを記録し、ファイルの中身は一切残さない）。パスワード（アカウント操作、SQL コンソールの `IDENTIFIED BY` / `PASSWORD` 文）は `****` に置換 |
 | `readyz.failed` | セッションストア異常（`error` レベル） |
 | `unhandled` | 想定外の例外（`error` レベル）。`requestId` とスタックを含み、レスポンスは `500 INTERNAL`。`X-Request-Id` から引ける |
 | `export.aborted` | エクスポートのストリーミングが途中で失敗（`error` レベル）。ダウンロード済みのファイルは不完全 |
 | `session_store.open_failed` / `session_store.reset` | SQLite セッションストアを開けず終了（`path`, `error`, `hint`）/ `SESSION_SECRET` 変更を検出して保存済みセッションを削除 |
 | `config.dev_secret` / `config.allowlist_without_port` / `config.cookie_insecure` / `web.dist_missing` | 設定の警告（開発用シークレット / ポート未指定の許可ホスト / 本番で `COOKIE_SECURE=0` / SPA ビルド不在） |
 
-`audit` は DDL（`/sql` 経由）やインポート（`executeSql` / `insertRows`）も含みます。SQL コンソールで実行した文の全文が必要な場合は、ログの `sql` は 500 文字で切り詰められている点に注意してください（値を含み得るため意図的に短くしています）。
+`audit` は DDL（`/sql` 経由）やインポート（`executeSql` / `insertRows`）も含みます。SQL コンソールで実行した文の全文が必要な場合は、ログの `sql` は 500 文字で切り詰められている点に注意してください（値を含み得るため意図的に短くしています）。パスワードの検出は先頭 8,000 文字までを走査します（64 MB のスクリプトに正規表現をかけるとイベントループが止まるため）。
 
 ### ログの保管とローテーション
 

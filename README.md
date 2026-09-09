@@ -5,7 +5,7 @@ MySQL / PostgreSQL 両対応の、モダン TypeScript 製 phpMyAdmin クロー�
 UI は日本語 / English（ブラウザの言語設定に追従、画面右上で切替）。対応: **MySQL 8.0〜9**、**MariaDB 10.11 (LTS) / 11**、**Percona Server 8.4**、**PostgreSQL 14〜18**（CI で最古と最新を毎回検証。互換エンジン（TiDB / CockroachDB）の実測結果を含む詳細は [docs/deployment.md](docs/deployment.md#対応データベース)）。
 
 - **Bun workspaces モノレポ**: `apps/api`（Hono）/ `apps/web`（Vite + React 19 + TanStack Router/Query）/ `packages/shared`（Zod DTO）/ `packages/adapter`（`mysql2` / `pg` 上の薄い DB 抽象層。ORM 不使用）
-- **phpMyAdmin と同じ画面構成**: サーバー（データベース / ステータス / 変数 / プロセス / ユーザー）→ データベース（構造 / SQL / エクスポート / インポート / 権限 / ルーチン / トリガー / イベント）→ テーブル（表示 / 構造 / SQL / 検索 / 挿入 / エクスポート / インポート / トリガー / 操作）
+- **phpMyAdmin と同じ画面構成**: サーバー（データベース / SQL / ステータス / 変数 / プロセス / ユーザー）→ データベース（構造 / SQL / エクスポート / インポート / 権限 / ルーチン / トリガー / イベント）→ テーブル（表示 / 構造 / SQL / 検索 / 挿入 / エクスポート / インポート / トリガー / 操作）
 - **機能**
   - 接続: 管理者が定義する接続先プリセット、Cookie セッション
   - 閲覧: DB / スキーマ / テーブルのツリー、行のブラウズ（ソート・ページング・絞り込み・表示カラムの選択、外部キーから参照先 / 参照元へのリンク）
@@ -37,7 +37,7 @@ bun run dev        # API http://localhost:3100 + Web http://localhost:5175
 bun run check            # typecheck + lint + ユニット/API/Web テスト + type-coverage
 bun run check:static     # check + knip / 循環依存 / クローン / アーキテクチャ / SQL 安全性 / docs（pre-push で実行）
 bun run check:all        # check:static + 両 DB の統合テスト
-bun run test:e2e         # Playwright（機能 × 両方言 / axe a11y / VRT light+dark）。事前に db:up
+bun run test:e2e         # Playwright（Chromium / WebKit の機能 / axe a11y / VRT light+dark）。事前に db:up
 bun run lighthouse       # Lighthouse CI（ログイン画面の性能 / a11y / ベストプラクティス、警告のみ。要 Chrome）
 ```
 

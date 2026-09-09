@@ -30,7 +30,7 @@ test.describe('login', () => {
       await page.getByLabel('Server type').selectOption(t.dialect)
       await page.getByLabel('Host').fill(t.host)
       await page.getByLabel('Port').fill(String(t.port))
-      await page.getByLabel('User name').fill(t.user)
+      await page.getByLabel('Username').fill(t.user)
       await page.getByLabel('Password').fill(t.password)
       await page.getByLabel('Database').fill(t.database)
       await page.getByRole('button', { name: 'Connect' }).click()

@@ -5,7 +5,7 @@ paths:
 
 # API ルートのルール
 
-- ルートは `createApp({ adapterFactory, sessionStore })` で依存注入する。テストは `@tsmyadmin/adapter/testing` の `FakeAdapter` を注入し `app.request()` で呼ぶ（DB 不要）
+- ルートは `createApp(config, { store, logger?, remoteAddress?, now? })` で依存注入する（アダプターのファクトリはストアが持つ）。テストは `@tsmyadmin/adapter/testing` の `FakeAdapter` を注入し `app.request()` で呼ぶ（DB 不要）
 - リクエスト/レスポンスの形は **先に `packages/shared` の Zod スキーマを定義**し、`@hono/zod-validator` で検証する。web は `hc<AppType>` の型だけを見る（ファイルダウンロードのようにブラウザのナビゲーションで開くエンドポイントは例外。クエリは shared の Zod で検証し、web 側は URL ビルダー関数 + `<a href download>` を使う）
 - `mysql2` / `pg` を import しない（`check:arch` が fail）。DB 操作はすべて adapter 経由
 - エラーは `lib/errors.ts` で `{ code, message, detail }` に正規化する。コードと HTTP ステータスの対応表は `lib/errors.ts` の `STATUS_BY_CODE` が唯一の正（`AUTH_FAILED` 401、`CONNECTION_FAILED` 502、`KEY_MISMATCH` 409 など）。コードを追加するときは `packages/shared` の `ApiErrorCodeSchema` と `STATUS_BY_CODE` を同時に更新する（型が網羅性を強制する）

@@ -50,7 +50,7 @@ flowchart TD
   linkStyle 6,7 stroke:#c00,color:#c00,stroke-dasharray:4 4
 ```
 
-この向きは `scripts/check-architecture.mjs` が機械的に検査します（web からアダプターや DB ドライバーを import すると CI が落ちます）。`packages/shared` は他の内部パッケージに依存しません。
+このうち**禁止方向**は `scripts/check-architecture.mjs` が機械的に検査します（web からアダプターや DB ドライバーを import する、ルートがドライバーを直接触る、`packages/shared` が内部パッケージに依存する、と CI が落ちます）。web → api が型だけであることは規約で、検査はしていません。`packages/shared` は他の内部パッケージに依存しません。
 
 | 層 | 責務 | 触ってよい範囲 |
 |---|---|---|
@@ -99,7 +99,7 @@ classDiagram
 
 - **契約の同一性は conformance テストが保証します。** `packages/adapter/src/test/conformance.ts` は 1 つのスイートを MySQL と PostgreSQL の両方に対して実行します。`ADAPTER_METHOD_NAMES` に載ったメソッドすべてに `describe('<method>')` があることは `test/spec-consistency.test.ts` が検査するので、載せた時点で自動的に両方言のテストになります。
 - **SQL の組み立て**: 識別子は `quoteIdent` / `quoteTable`、値は `Params` のプレースホルダ。文字列補間が許されるファイルは `scripts/check-sql-safety.mjs` の許可リストが唯一の正です。
-- **字句解析は 1 か所**: `sql/split.ts` が公開するのは `splitStatements` / `stripComments` / `stripLeadingComments` の 3 つで、文の分割・先頭コメント除去・監査ログのマスクはすべてこれを通ります。リテラル・コメント・方言差（`#` は MySQL のみ、PostgreSQL はブロックコメントが入れ子、`E'…'` のエスケープ、`$tag$`）を知っているのは内部の `scanToken` だけです。詳しくは下の「字句解析と文の分割」を参照。
+- **字句解析は 1 か所**: `sql/split.ts` が公開するのは `splitStatements` / `stripComments` / `stripLeadingComments` の 3 つで、文の分割・先頭コメント除去・監査ログのマスクはすべてこれを通ります。リテラル・コメント・方言差（`#` は MySQL のみ、PostgreSQL はブロックコメントが入れ子、`E'…'` のエスケープ、`$tag$`）を知っているのは内部の `scanToken` だけです。なお読み取り文の判定（`base.ts` の `stripLiterals`）と監査ログのパスワード照合は、速度優先で別の正規表現を使っています。詳しくは下の「字句解析と文の分割」を参照。
 
 ### 字句解析と文の分割
 
@@ -134,7 +134,7 @@ flowchart LR
   conv -. "UNCAPPED（上限なし）" .-> dump["エクスポート・カタログ読み取り"]
 ```
 
-`{ $text }` は**表示専用**で、書き戻せません（`InputCell` 型が受け付けず、`toDbValue` も拒否します）。**なぜ書き戻せなくしているか** — 切り詰めた値を編集できる型にすると、利用者が気付かないまま末尾を失った値で UPDATE してしまうためです。エクスポートとカタログ読み取り（ビュー定義、`SHOW CREATE`）は上限なし（`base.ts` の `UNCAPPED`）で全文を取得します。
+`{ $text }` は**表示専用**で、書き戻せません（`InputCell` 型が受け付けず、`toDbValue` も拒否します）。**なぜ書き戻せなくしているか** — 切り詰めた値を編集できる型にすると、利用者が気付かないまま末尾を失った値で UPDATE してしまうためです。テキストの上限を付けるのは表示経路（行の閲覧と SQL 実行）だけで、そこだけが `DISPLAY` を渡します。カタログ読み取り（ビュー定義、ルーチン本体、`SHOW CREATE`）は既定で無制限、エクスポートは `UNCAPPED`（テキストもバイナリも無制限）です。
 
 行キーの決め方も `base.ts` にあります（`resolveRowKey`）。主キー → NOT NULL な一意インデックス → PostgreSQL は `ctid` / MySQL は全カラム一致、の順です。ビュー・シーケンス、およびパーティションや継承の親テーブルは `none`（編集不可）になります — `ctid` は 1 つの物理リレーションの中でしか一意ではなく、親テーブルでは子ごとに重複するためです。
 
@@ -278,7 +278,7 @@ flowchart LR
 
 ## 7. 画面側
 
-- ルーティングは TanStack Router（`apps/web/src/routes`、`routeTree.gen.ts` は生成物）。サーバー状態は TanStack Query が唯一の持ち主で、**サーバーのデータをローカル state にコピーしません**。
+- ルーティングは TanStack Router（`apps/web/src/routes`、`routeTree.gen.ts` は生成物）。サーバー状態は TanStack Query が唯一の持ち主です。フォームは初期値として一度だけクエリの値を写しますが、**`useEffect` で再同期はしません**（別の対象に切り替わったときは state-from-props パターンで作り直します）。
 - `features/*` は互いを直接 import しません（共有は `components/` と `lib/`）。
 - UI 文字列は `config/locales/{ja,en}.ts` にのみ置き、`locale.*` で参照します。`en.ts` は `satisfies Locale` で日本語版と同じ形であることが型で保証されます。
 - 表示言語は「利用者の選択 → ブラウザ言語 → 日本語」の順に決まり、切り替え時はページを再読み込みします（各モジュールが読み込み時に一度だけ `locale` を読むため）。

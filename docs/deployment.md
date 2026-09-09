@@ -31,7 +31,7 @@ tsmyadmin は **1 プロセス（Bun）で API と SPA を配信する単一コ�
 | `COOKIE_SECURE` | 本番 `1` / 開発 `0` | セッション Cookie の `Secure`。`1` のとき平文 HTTP でのログインは `INSECURE_TRANSPORT`（400）で拒否する（ブラウザが Cookie を捨てるため）。TLS を終端しない社内ネットワークでだけ `0` にする。`localhost` / `127.0.0.1` / `::1` への平文アクセスは常に許可（Chrome / Firefox は localhost の Secure Cookie を受け入れる。Safari は受け入れないため、Safari で試す場合も HTTPS か `COOKIE_SECURE=0` が必要） |
 | `SESSION_SECRET` | （開発用固定値） | セッション Cookie の署名鍵。**本番では 32 文字以上必須**。`openssl rand -hex 32` |
 | `SESSION_TTL_MINUTES` | `30` | 操作ごとに延長されるセッション寿命（1–1440） |
-| `SESSION_MAX_PER_IDENTITY` | `10`（1–1000） | 同じ DB アカウント（種別 / ホスト / ポート / ユーザー名）で同時に保持するセッション数。超えると最も古いものを閉じる（ログインの繰り返しで DB の `max_connections` を使い切らせない） |
+| `SESSION_MAX_PER_IDENTITY` | `10`（1–1000） | 同じ DB アカウント（種別 / ホスト / ポート / ユーザー名）で同時に保持するセッション数。超えると最後に使われてから最も時間が経ったものを閉じる（LRU）（ログインの繰り返しで DB の `max_connections` を使い切らせない） |
 | `SESSION_STORE` | 本番 `sqlite` / 開発 `memory` | `sqlite` は再起動・ローリング更新後もセッションを維持（資格情報は `SESSION_SECRET` から導出した鍵で AES-256-GCM 暗号化して保存）。`memory` はプロセス内のみ |
 | `SESSION_DB_PATH` | `data/sessions.sqlite` | `sqlite` 時のファイル。Docker では `/app/data` をボリュームにする |
 | `TSMYADMIN_ALLOWED_HOSTS` | `127.0.0.1,localhost` | ログイン画面から接続を許可する DB ホスト。カンマ区切りで、完全一致 / `*.suffix` / `*`（無制限）、それぞれ `:port` 付き可（`db.internal:5432`、`[::1]:3306`）。ポート省略は全ポート許可 — **本番ではポートまで指定する**（`docs/security.md`）。**SSRF・踏み台防止の要** |
