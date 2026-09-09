@@ -64,7 +64,16 @@ export interface FakeAdapterOptions {
 }
 
 export function fakeColumn(name: string, dataType = 'int', nullable = false): TableSchema['columns'][number] {
-  return { name, dataType, nullable, default: null, extra: '', comment: null, collation: null }
+  return {
+    name,
+    dataType,
+    nullable,
+    default: null,
+    defaultIsExpression: false,
+    extra: '',
+    comment: null,
+    collation: null,
+  }
 }
 
 export function fakeTable(
@@ -412,6 +421,14 @@ export class FakeAdapter implements DatabaseAdapter {
           },
         ]
     for (const [i, r] of results.entries()) await opts.onResult?.(r, i)
+    // A real server answers this from its own state; the fake counts the statements that ran, which is enough
+    // for callers that only need to see the warning appear.
+    let open = false
+    for (const r of results) {
+      if (/^\s*(?:BEGIN|START\s+TRANSACTION)\b/i.test(r.sql)) open = true
+      else if (/^\s*(?:COMMIT|ROLLBACK|END)\b/i.test(r.sql)) open = false
+    }
+    opts.onTransactionOpen?.(open)
     return results
   }
 }

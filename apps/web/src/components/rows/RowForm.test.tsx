@@ -9,6 +9,7 @@ const col = (name: string, over: Partial<ColumnDef> = {}): ColumnDef => ({
   dataType: 'varchar(50)',
   nullable: true,
   default: null,
+  defaultIsExpression: false,
   extra: '',
   comment: null,
   collation: null,

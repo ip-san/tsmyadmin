@@ -37,8 +37,14 @@ export const ColumnDefSchema = z.object({
   /** Full type as the dialect prints it, e.g. "varchar(100)", "numeric(20,6)", "int[]". */
   dataType: z.string(),
   nullable: z.boolean(),
-  /** Default expression as stored by the catalog, null when none. */
+  /** Default as stored by the catalog, null when none. Ready to replay: quoting and escaping are undone. */
   default: z.string().nullable(),
+  /**
+   * Whether `default` is an expression rather than a literal value. The dialects report this differently
+   * (MySQL 8 flags it in `extra`, MariaDB quotes literals instead, PostgreSQL always stores an expression),
+   * so the answer is normalised here rather than sniffed from the text by every consumer.
+   */
+  defaultIsExpression: z.boolean(),
   /** e.g. "auto_increment", "identity", "on update CURRENT_TIMESTAMP". */
   extra: z.string(),
   comment: z.string().nullable(),

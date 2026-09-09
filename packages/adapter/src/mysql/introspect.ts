@@ -96,7 +96,35 @@ function unescapeDefault(sql: string): string {
   return out
 }
 
-export async function mysqlDescribeTable(conn: Conn, ns: Namespace, table: string): Promise<TableSchema> {
+/** Binary and bit literals the catalog prints in a form that only replays unquoted (`0xFF`, `b'101'`). */
+const BINARY_LITERAL = /^(?:0x[0-9A-Fa-f]*|[xX]'[0-9A-Fa-f]*'|[bB]'[01]*')$/
+
+/**
+ * MariaDB (10.2.7+) reports `COLUMN_DEFAULT` in its own format: a literal is quoted (`'abc'`), "no default" is
+ * the unquoted word `NULL`, and an expression is printed bare with nothing in `EXTRA` to say so. MySQL 8 does
+ * the opposite — literals bare, expressions flagged `DEFAULT_GENERATED`. Both are normalised to "the text to
+ * replay" plus a flag.
+ */
+function normaliseDefault(raw: string | null, extra: string, mariadb: boolean): { text: string | null; expr: boolean } {
+  if (raw === null) return { text: null, expr: false }
+  if (mariadb) {
+    if (raw === 'NULL') return { text: null, expr: false }
+    if (raw.startsWith("'") && raw.endsWith("'") && raw.length >= 2) {
+      return { text: raw.slice(1, -1).replaceAll("''", "'").replaceAll('\\\\', '\\'), expr: false }
+    }
+    return { text: raw, expr: true }
+  }
+  if (/\bDEFAULT_GENERATED\b/i.test(extra)) return { text: unescapeDefault(repairEncoding(raw)), expr: true }
+  // A binary or bit default is a literal to the server but only replays in its unquoted form.
+  return { text: raw, expr: BINARY_LITERAL.test(raw) }
+}
+
+export async function mysqlDescribeTable(
+  conn: Conn,
+  ns: Namespace,
+  table: string,
+  mariadb = false
+): Promise<TableSchema> {
   const info = firstResult(
     await conn.query(
       'SELECT TABLE_TYPE, ENGINE, TABLE_COMMENT, TABLE_ROWS, TABLE_COLLATION, AUTO_INCREMENT FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?',
@@ -114,14 +142,13 @@ export async function mysqlDescribeTable(conn: Conn, ns: Namespace, table: strin
   )
   const columns: ColumnDef[] = cols.rows.map((row) => {
     const extra = str(row[4])
-    const def = strOrNull(row[3])
+    const { text, expr } = normaliseDefault(strOrNull(row[3]), extra, mariadb)
     return {
       name: str(row[0]),
       dataType: str(row[1]),
       nullable: str(row[2]) === 'YES',
-      // An expression default arrives with its string literals escaped (`('{}')` reads back as
-      // `_utf8mb4\\'{}\\'`), which no longer parses. Unescaping restores the form SHOW CREATE TABLE prints.
-      default: def !== null && /\bDEFAULT_GENERATED\b/i.test(extra) ? unescapeDefault(repairEncoding(def)) : def,
+      default: text,
+      defaultIsExpression: expr,
       extra,
       comment: strOrNull(row[5]) || null,
       collation: strOrNull(row[6]),

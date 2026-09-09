@@ -137,6 +137,7 @@ export async function pgDescribeTable(conn: Conn, ns: Namespace, table: string):
       dataType: str(row[1]),
       nullable: !bool(row[2]),
       default: strOrNull(row[3]),
+      defaultIsExpression: strOrNull(row[3]) !== null,
       extra,
       comment: strOrNull(row[6]),
       collation: strOrNull(row[7]),

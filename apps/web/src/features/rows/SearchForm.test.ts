@@ -7,6 +7,7 @@ const col = (name: string): ColumnDef => ({
   dataType: 'int',
   nullable: true,
   default: null,
+  defaultIsExpression: false,
   extra: '',
   comment: null,
   collation: null,

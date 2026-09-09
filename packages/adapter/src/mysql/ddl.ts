@@ -30,6 +30,8 @@ function columnDef(c: ColumnSpec): string {
 function defaultExpression(sql: string): string {
   const s = sql.trim()
   if (/^CURRENT_TIMESTAMP(\(\d?\))?$/i.test(s) || s.startsWith('(')) return s
+  // A binary / bit default is not an expression to the server: parentheses would be a syntax error.
+  if (/^(?:0x[0-9A-Fa-f]*|[xX]'[0-9A-Fa-f]*'|[bB]'[01]*')$/.test(s)) return s
   return `(${s})`
 }
 

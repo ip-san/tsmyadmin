@@ -7,6 +7,7 @@ const def = (over: Partial<ColumnDef>): ColumnDef => ({
   dataType: 'int',
   nullable: true,
   default: null,
+  defaultIsExpression: false,
   extra: '',
   comment: null,
   collation: null,
@@ -42,15 +43,16 @@ describe('toColumnSpec', () => {
 })
 
 describe('fromColumnDef', () => {
-  it('treats MySQL plain defaults as literals and generated ones as expressions', () => {
+  it('follows the catalog on whether a default is a literal or an expression', () => {
+    // The dialects report this differently; the adapter normalises it, so the form just reads the flag.
     expect(fromColumnDef(def({ default: 'x' }), 'mysql')).toMatchObject({ defaultKind: 'literal', defaultValue: 'x' })
-    expect(fromColumnDef(def({ default: 'CURRENT_TIMESTAMP', extra: 'DEFAULT_GENERATED' }), 'mysql')).toMatchObject({
+    expect(fromColumnDef(def({ default: 'CURRENT_TIMESTAMP', defaultIsExpression: true }), 'mysql')).toMatchObject({
       defaultKind: 'expression',
     })
   })
 
   it('keeps PostgreSQL defaults as raw expressions and detects identity/serial', () => {
-    expect(fromColumnDef(def({ default: "'x'::text" }), 'postgres')).toMatchObject({
+    expect(fromColumnDef(def({ default: "'x'::text", defaultIsExpression: true }), 'postgres')).toMatchObject({
       defaultKind: 'expression',
       defaultValue: "'x'::text",
     })
@@ -108,6 +110,7 @@ describe('fromColumnDef', () => {
       def({
         dataType: 'timestamp',
         default: 'CURRENT_TIMESTAMP',
+        defaultIsExpression: true,
         extra: 'DEFAULT_GENERATED on update CURRENT_TIMESTAMP',
       }),
       'mysql'

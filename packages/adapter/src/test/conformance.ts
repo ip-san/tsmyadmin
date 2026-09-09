@@ -803,6 +803,9 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
             expect(await open(`${begin};\nINSERT INTO ${t} VALUES (8);\nSELECT 1 / 0;`, { stopOnError: false })).toBe(
               true
             )
+            // END is COMMIT and ABORT is ROLLBACK; both are easy to miss when reading the script instead.
+            expect(await open(`${begin};\nINSERT INTO ${t} VALUES (11);\nEND;`)).toBe(false)
+            expect(await open(`${begin};\nINSERT INTO ${t} VALUES (12);\nABORT;`)).toBe(false)
           }
           // What survived proves the reported flag matched reality: only the explicitly committed row, plus
           // on MySQL the one an ordinary DDL implicitly committed. Everything reported as open was rolled back.
@@ -810,7 +813,7 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
           const first = rows[0]
           const ids = first?.kind === 'rows' ? first.result.rows.map((r) => Number(r[0])) : []
           // Row 10 survived: COMMIT AND CHAIN committed it before opening the next transaction.
-          expect(ids).toEqual(dialect === 'mysql' ? [2, 6, 10] : [2, 10])
+          expect(ids).toEqual(dialect === 'mysql' ? [2, 6, 10] : [2, 10, 11])
         } finally {
           await exec(`DROP TABLE IF EXISTS ${t}`, { stopOnError: false })
         }
@@ -2286,7 +2289,10 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         expect(s.columns.map((c) => c.name)).toEqual(['id', 'name'])
         expect(s.primaryKey).toEqual(['id'])
         expect(s.columns[1]).toMatchObject({ nullable: true, comment: 'the name' })
-        expect(s.columns[1]?.default).toContain('it')
+        // MySQL reports a literal default as a literal; PostgreSQL stores every default as an expression.
+        // Asserted exactly, because a loose check here hid MariaDB returning the value still quoted.
+        expect(s.columns[1]?.defaultIsExpression).toBe(dialect === 'postgres')
+        expect(s.columns[1]?.default).toBe(dialect === 'postgres' ? "'it''s'::character varying" : "it's")
 
         await runDdl({
           op: 'addColumn',

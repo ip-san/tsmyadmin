@@ -100,8 +100,13 @@ export async function importSql(
   }
   const script = wrapScript(text, adapter.dialect, options)
   const { prefix, total } = script
+  // Whether a transaction is still open when the script ends is the server's to answer, not a regex's.
+  let openTransaction = false
   const results = await adapter.executeSql(ns, script.text, {
     statements: script.statements,
+    onTransactionOpen: (open) => {
+      openTransaction = open
+    },
     maxRows: 1,
     timeoutMs: SQL_IMPORT_TIMEOUT_MS,
     // Single-transaction mode stops at the first error by definition (the rest could not commit anyway).
@@ -124,7 +129,7 @@ export async function importSql(
     },
   })
   const run = summariseRun(results, script)
-  const warnings = runWarnings(run, adapter.dialect, options)
+  const warnings = runWarnings(run, adapter.dialect, options, openTransaction)
   return {
     format: 'sql',
     total,
@@ -241,7 +246,12 @@ function summariseRun(results: StatementResult[], script: WrappedScript): RunSum
 }
 
 /** What the user must know beyond the counts: a database switch, a cancel, what a rollback undid. */
-function runWarnings(run: RunSummary, dialect: 'mysql' | 'postgres', options: ImportSqlOptions): ImportWarning[] {
+function runWarnings(
+  run: RunSummary,
+  dialect: 'mysql' | 'postgres',
+  options: ImportSqlOptions,
+  openTransaction: boolean
+): ImportWarning[] {
   const warnings: ImportWarning[] = []
   const ran = run.own.filter((o) => o.r.kind !== 'error').map((o) => code(o.r.sql, dialect))
   if (ran.some((sql) => CHANGES_DATABASE.test(sql))) warnings.push('CHANGED_DATABASE')
@@ -253,7 +263,7 @@ function runWarnings(run: RunSummary, dialect: 'mysql' | 'postgres', options: Im
   if (interrupted || (run.ran.size < run.total && (last?.kind !== 'error' || !stopsOnError))) warnings.push('CANCELLED')
   if (options.singleTransaction && (run.errors.length > 0 || run.commit?.kind !== 'affected'))
     warnings.push(committedMidway(ran, dialect) ? 'PARTIALLY_ROLLED_BACK' : 'ALL_ROLLED_BACK')
-  else if (openTransaction(ran)) warnings.push('ROLLED_BACK')
+  else if (openTransaction) warnings.push('ROLLED_BACK')
   return warnings
 }
 
@@ -284,16 +294,6 @@ function committedMidway(ran: string[], dialect: 'mysql' | 'postgres'): boolean 
       committed = true
   }
   return committed
-}
-
-/** Whether the script left a transaction open (executeSql rolls it back afterwards). */
-function openTransaction(statements: string[]): boolean {
-  let open = false
-  for (const sql of statements) {
-    if (OPENS_TRANSACTION.test(sql)) open = true
-    else if (CLOSES_TRANSACTION.test(sql)) open = false
-  }
-  return open
 }
 
 const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/

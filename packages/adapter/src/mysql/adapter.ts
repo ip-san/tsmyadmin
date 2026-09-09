@@ -285,9 +285,17 @@ export class MysqlAdapter extends BaseAdapter {
       discard: () => this.broken.add(core),
       inTransaction: async () => {
         // `DO 0` is the cheapest statement that neither starts nor ends a transaction; its OK packet carries
-        // the server status, whose lowest bit is SERVER_STATUS_IN_TRANS.
-        const [res] = await conn.query('DO 0')
-        return ((res as { serverStatus?: number }).serverStatus ?? 0) % 2 === 1
+        // the server status, whose lowest bit is SERVER_STATUS_IN_TRANS. A cancel still in flight can kill the
+        // probe itself, which would answer "nothing open" for a transaction that is; by then the cancel has
+        // been delivered, so one retry settles it.
+        for (let attempt = 0; ; attempt++) {
+          try {
+            const [res] = await conn.query('DO 0')
+            return ((res as { serverStatus?: number }).serverStatus ?? 0) % 2 === 1
+          } catch (err) {
+            if (attempt > 0 || (err as { code?: string }).code !== 'ER_QUERY_INTERRUPTED') throw err
+          }
+        }
       },
       stream: (text, params, batchSize, options) => this.streamRows(conn, text, params, batchSize, options),
     }
@@ -528,7 +536,7 @@ export class MysqlAdapter extends BaseAdapter {
   }
 
   describeTable(ns: Namespace, table: string): Promise<TableSchema> {
-    return this.withConn(ns, (conn) => mysqlDescribeTable(conn, ns, table))
+    return this.withConn(ns, (conn) => mysqlDescribeTable(conn, ns, table, this.mariadb === true))
   }
 
   /** information_schema is readable by every account, so it is a safe namespace for server-level queries. */

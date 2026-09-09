@@ -85,8 +85,7 @@ export function fromColumnDef(c: ColumnDef, dialect: Dialect): ColumnFormValues 
   let defaultKind: DefaultKind = 'none'
   let defaultValue = ''
   if (c.default !== null && !auto) {
-    const generated = dialect === 'mysql' && c.extra.toUpperCase().includes('DEFAULT_GENERATED')
-    defaultKind = dialect === 'mysql' && !generated ? 'literal' : 'expression'
+    defaultKind = c.defaultIsExpression ? 'expression' : 'literal'
     defaultValue = c.default
   }
   return {
@@ -122,10 +121,26 @@ const CURRENT_TIMESTAMP = /^CURRENT_TIMESTAMP(\((\d)\))?$/i
  * lexer: `apps/web` may not import it, and a type expression is a far smaller language than a SQL script.
  */
 function typeShape(dataType: string): string {
-  return dataType
-    .replace(/\/\*[\s\S]*?\*\//g, ' ')
-    .replace(/(['"`])(?:\\.|(?!\1).)*\1?/g, "''")
-    .trim()
+  let out = ''
+  for (let i = 0; i < dataType.length; i++) {
+    const c = dataType[i] as string
+    if (c === '/' && dataType[i + 1] === '*') {
+      const end = dataType.indexOf('*/', i + 2)
+      i = end === -1 ? dataType.length : end + 1
+      out += ' '
+    } else if (c === "'" || c === '"' || c === '`') {
+      let j = i + 1
+      while (j < dataType.length) {
+        if (dataType[j] === '\\') j += 2
+        else if (dataType[j] === c && dataType[j + 1] === c) j += 2
+        else if (dataType[j] === c) break
+        else j++
+      }
+      i = Math.min(j, dataType.length)
+      out += "''"
+    } else out += c
+  }
+  return out.trim()
 }
 
 /**
