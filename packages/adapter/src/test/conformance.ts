@@ -2221,7 +2221,7 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
             `newline VARCHAR(20) NOT NULL DEFAULT 'a\\nb', ` +
             `slash VARCHAR(20) NOT NULL DEFAULT 'a\\\\nb', ` +
             `looksHex VARCHAR(20) NOT NULL DEFAULT '0xFF', ` +
-            `bin VARBINARY(10) NOT NULL DEFAULT 0xFF, ` +
+            `bin VARBINARY(10) NOT NULL DEFAULT 0x6162, ` +
             `none VARCHAR(20) NULL)`
         )
         const names = ['plain', 'quoted', 'newline', 'slash', 'looksHex', 'bin', 'none']
@@ -2260,6 +2260,37 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
             })
           }
           expect(await produced()).toBe(before)
+
+          // A byte the connection charset cannot show is reported as `?` by MariaDB 10.11 — the catalog itself
+          // loses it, so only MySQL can be asked to carry one.
+          if (!(await isMariaDb())) {
+            const b = `${t}_hi`
+            await execOk(`CREATE TABLE ${b} (id INT PRIMARY KEY AUTO_INCREMENT, v VARBINARY(4) NOT NULL DEFAULT 0xFF)`)
+            try {
+              const hex = async () => {
+                await execOk(`INSERT INTO ${b} () VALUES ()`)
+                const rows = await exec(`SELECT HEX(v) FROM ${b} ORDER BY id DESC LIMIT 1`)
+                const r = rows[0]
+                return r?.kind === 'rows' ? String(r.result.rows[0]?.[0]) : 'n/a'
+              }
+              const was = await hex()
+              const c = (await db.describeTable(ns, b)).columns.find((x) => x.name === 'v')
+              expect(c?.defaultIsExpression).toBe(true)
+              await runDdl({
+                op: 'modifyColumn',
+                table: b,
+                name: 'v',
+                column: col('v', c?.dataType ?? 'varbinary(4)', {
+                  nullable: false,
+                  comment: 'edited',
+                  default: { kind: 'expression', sql: c?.default ?? '' },
+                }),
+              })
+              expect(await hex()).toBe(was)
+            } finally {
+              await exec(`DROP TABLE IF EXISTS ${b}`, { stopOnError: false })
+            }
+          }
         } finally {
           await exec(`DROP TABLE IF EXISTS ${t}`, { stopOnError: false })
         }
