@@ -1,4 +1,4 @@
-import type { DatabaseAdapter } from '@tsmyadmin/adapter'
+import { type DatabaseAdapter, leavesTransactionOpen } from '@tsmyadmin/adapter'
 import {
   type ApiError,
   BrowseQuerySchema,
@@ -306,7 +306,14 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
               queryId,
               onResult: (result, index) => send({ type: 'result', index, result }),
             })
-            await send({ type: 'done', statements: results.length })
+            await send({
+              type: 'done',
+              statements: results.length,
+              openTransaction: leavesTransactionOpen(
+                results.map((r) => r.sql),
+                adapter.dialect
+              ),
+            })
           } catch (err) {
             const { body } = toApiError(err)
             await send({

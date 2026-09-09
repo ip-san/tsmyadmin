@@ -269,6 +269,8 @@ export const ja = {
     cancel: 'キャンセル',
     cancelling: 'キャンセル中…',
     cancelled: 'キャンセルしました',
+    openTransaction:
+      '実行の終わりでトランザクションが開いたままだったため、取り消しました。1 回の実行ごとに接続が返却されるため、BEGIN と COMMIT は同じ実行に入れてください。',
     maxRows: '最大行数',
     stopOnError: 'エラーで停止',
     editor: 'SQL エディター',

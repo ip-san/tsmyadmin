@@ -269,6 +269,8 @@ export const en = {
     cancel: 'Cancel',
     cancelling: 'Cancelling…',
     cancelled: 'Cancelled',
+    openTransaction:
+      'A transaction was still open when the run finished, so it was rolled back. The connection is returned after every run: keep BEGIN and COMMIT in the same run.',
     maxRows: 'Row limit',
     stopOnError: 'Stop on error',
     editor: 'SQL editor',

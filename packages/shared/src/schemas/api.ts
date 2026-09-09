@@ -76,7 +76,12 @@ export type ApiErrorCode = z.infer<typeof ApiErrorCodeSchema>
 
 export const SqlStreamEventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('result'), index: z.number().int().min(0), result: StatementResultSchema }),
-  z.object({ type: z.literal('done'), statements: z.number().int().min(0) }),
+  z.object({
+    type: z.literal('done'),
+    statements: z.number().int().min(0),
+    /** The script left a transaction open; each run is autocommitted, so it was rolled back. */
+    openTransaction: z.boolean().default(false),
+  }),
   z.object({
     type: z.literal('fatal'),
     message: z.string(),

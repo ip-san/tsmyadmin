@@ -80,6 +80,8 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
   const [history, setHistory] = useState<HistoryEntry[]>(() => loadHistory(scope))
   const [saved, setSaved] = useState<SavedQuery[]>(() => loadSaved(scope))
   const [results, setResults] = useState<StatementResult[] | null>(null)
+  // The script left a transaction open; the server rolled it back when the run finished.
+  const [openTransaction, setOpenTransaction] = useState(false)
   const queryClient = useQueryClient()
   const queryId = useRef<string | null>(null)
   // Leaving the page aborts the stream, which makes the server cancel the running statement.
@@ -96,6 +98,7 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
       queryId.current = newQueryId()
       const collected: StatementResult[] = []
       setResults([])
+      setOpenTransaction(false)
       // Results are flushed to React at most once per animation frame: a pasted dump can be thousands of
       // statements, and one render per statement would be quadratic in the results view.
       let flush: number | null = null
@@ -121,6 +124,8 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
           if (event.type === 'result') {
             collected[event.index] = event.result
             scheduleFlush()
+          } else if (event.type === 'done') {
+            setOpenTransaction(event.openTransaction)
           } else if (event.type === 'fatal') {
             // Carries the API error code so an AUTH/UNAUTHENTICATED fatal redirects like any other 401.
             throw new ApiError(event.code === 'UNAUTHENTICATED' || event.code === 'AUTH_FAILED' ? 401 : 500, {
@@ -221,6 +226,8 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
           ''
         )}
       </output>
+      {/* Every run is autocommitted on its own connection: say so rather than losing the work silently. */}
+      {openTransaction && !run.isPending ? <Notice role="status">{locale.sql.openTransaction}</Notice> : null}
       {/* Bookmarks and history (each collapsible) sit above the results: a 1,000-row result must not bury them. */}
       <SavedQueriesPanel
         entries={saved}

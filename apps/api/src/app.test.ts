@@ -686,7 +686,7 @@ describe('sql & ddl', () => {
       .map((l) => SqlStreamEventSchema.parse(JSON.parse(l)))
     expect(lines.map((l) => l.type)).toEqual(['result', 'result', 'result', 'done'])
     expect(lines[1]).toMatchObject({ type: 'result', index: 1, result: { kind: 'error', message: 'boom' } })
-    expect(lines[3]).toEqual({ type: 'done', statements: 3 })
+    expect(lines[3]).toEqual({ type: 'done', statements: 3, openTransaction: false })
   })
 
   it('streams a fatal line when the adapter throws', async () => {
