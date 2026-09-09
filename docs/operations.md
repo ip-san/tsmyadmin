@@ -17,7 +17,9 @@
 | `http` | アクセスログ: `requestId`, `method`, `path`, `status`, `ms`, `ip`。成功した `/healthz` `/readyz`（プローブ）と `/assets/*`（ハッシュ付き静的ファイル、ブラウザが 1 年キャッシュ）は記録しない。ログレベルの設定はなく、`warn` / `error` の抽出はログ収集側で行う |
 | `login.ok` / `login.failed` / `login.host_not_allowed` / `login.insecure_transport` / `login.rate_limited` / `logout` | 認証イベント（ホスト・ユーザー名・セッション ID のハッシュ先頭 16 桁は含む、パスワードと生のセッション ID は含まない） |
 | `audit` | **監査ログ**: データ・構造・アカウント・サーバー状態を変える呼び出し（`insertRow(s)` / `updateRow` / `deleteRows` / `executeSql` / `cancelQuery` / `killProcess`）。`requestId`, `dialect`, `dbUser`, `dbHost`, `database`, `schema`, `table`, 行数・キー種別・カラム名、`executeSql` は SQL 先頭 500 文字と文数 / エラー数、`ok`, `ms`。失敗時は `error`（エラーコード）と `nativeCode` だけで、サーバーのメッセージは記録しない。**行の値は記録しない**（SQL コンソール / インポートの文は先頭 500 文字を記録するため値を含み得る）。パスワード（アカウント操作、SQL コンソールの `IDENTIFIED BY` / `PASSWORD` 文）は `****` に置換 |
-| `readyz.failed` | セッションストア異常 |
+| `readyz.failed` | セッションストア異常（`error` レベル） |
+| `unhandled` | 想定外の例外（`error` レベル）。`requestId` とスタックを含み、レスポンスは `500 INTERNAL`。`X-Request-Id` から引ける |
+| `export.aborted` | エクスポートのストリーミングが途中で失敗（`error` レベル）。ダウンロード済みのファイルは不完全 |
 | `session_store.open_failed` / `session_store.reset` | SQLite セッションストアを開けず終了（`path`, `error`, `hint`）/ `SESSION_SECRET` 変更を検出して保存済みセッションを削除 |
 | `config.dev_secret` / `config.allowlist_without_port` / `config.cookie_insecure` / `web.dist_missing` | 設定の警告（開発用シークレット / ポート未指定の許可ホスト / 本番で `COOKIE_SECURE=0` / SPA ビルド不在） |
 
@@ -58,6 +60,26 @@ docker logs tsmyadmin 2>&1 | jq -c 'select(.event=="audit") | {time, dbUser, act
 | インポートが 413 `PAYLOAD_TOO_LARGE`（ファイルが 64 MB 超 / 本文が 65 MB 超） | 分割するか、リバースプロキシの `client_max_body_size` も確認 |
 | プロセス一覧で「強制終了」しても消えない | DB 側の権限不足（MySQL は `PROCESS`/`SUPER`、PostgreSQL は `pg_signal_backend` 相当が必要） |
 
+### エラーコード早見表
+
+API が返すコードは `apps/api/src/lib/errors.ts` の `STATUS_BY_CODE` が唯一の正です。運用で問い合わせになりやすいものを挙げます。
+
+| コード | HTTP | 意味と対処 |
+|---|---|---|
+| `UNAUTHENTICATED` | 401 | セッションがない / 失効。画面は自動でログインへ戻ります |
+| `AUTH_FAILED` | 401 | DB の資格情報が誤り。接続先の egress アドレスを漏らさないため、詳細は返しません |
+| `CONNECTION_FAILED` | 502 | 接続先 DB に到達できない。下の「接続先 DB の再起動・障害」を参照 |
+| `HOST_NOT_ALLOWED` | 403 | 接続先が `TSMYADMIN_ALLOWED_HOSTS` にない |
+| `INSECURE_TRANSPORT` | 400 | 上記のとおり、`Secure` Cookie を平文 HTTP で発行しようとした |
+| `RATE_LIMITED` | 429 | ログインのレート制限。`Retry-After` 秒後に再試行 |
+| `FORBIDDEN` | 403 | CSRF 判定（`Origin` とホストの不一致）。**リバースプロキシで `Host` を書き換えていると常に出ます**（nginx 既定の `proxy_set_header Host $proxy_host` など）。ブラウザが見ているホスト名をそのまま渡してください |
+| `PAYLOAD_TOO_LARGE` | 413 | 本文 / アップロードが上限超過。上限は [deployment.md](deployment.md) の「サイズと制限」 |
+| `PERMISSION_DENIED` | 403 | DB ユーザーの権限不足。メッセージに必要な権限名が入ります |
+| `KEY_MISMATCH` | 409 | 更新しようとした行が他の誰かに変更された（1 行に一致しなかったのでロールバック）。画面を再読み込みしてやり直す |
+| `QUERY_FAILED` | 400 | SQL のエラー。`nativeCode`（MySQL の `ER_*` / PostgreSQL の SQLSTATE）が付きます。SQL コンソールの既定タイムアウト 30 秒の超過もここ |
+| `UNSUPPORTED` | 400 | その方言・サーバーで扱えない操作（psql メタコマンド、TiDB のルーチンなど） |
+| `INTERNAL` | 500 | 想定外の例外。`X-Request-Id` でログの `unhandled` を引く |
+
 ## 接続先 DB の再起動・障害
 
 接続先の DB が落ちている間、その DB を使う API は **即座に** `502 CONNECTION_FAILED` を返します（待ち続けません。画面には「データベースに接続できません」と再試行ボタン）。tsmyadmin 側のプロセスは落ちず、`/healthz` と `/readyz` は 200 のままです（これらは tsmyadmin 自身とセッションストアの健全性を示すもので、接続先 DB の状態ではありません）。
@@ -94,6 +116,7 @@ DB が復帰すると、**同じログインセッションのまま**次のリ�
 
 - `http` ログの `status >= 500` 率、`ms` の p95
 - `login.failed` / `login.rate_limited` の急増（総当たりの兆候）
+- `error` レベルの件数（`unhandled` / `export.aborted` / `readyz.failed` / `session_store.open_failed`）
 - `readyz` の失敗
 
 ## バックアップ
