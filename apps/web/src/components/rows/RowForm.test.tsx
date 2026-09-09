@@ -13,6 +13,7 @@ const col = (name: string, over: Partial<ColumnDef> = {}): ColumnDef => ({
   extra: '',
   comment: null,
   collation: null,
+  check: null,
   ...over,
 })
 

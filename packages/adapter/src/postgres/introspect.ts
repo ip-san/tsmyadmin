@@ -138,6 +138,8 @@ export async function pgDescribeTable(conn: Conn, ns: Namespace, table: string):
       nullable: !bool(row[2]),
       default: strOrNull(row[3]),
       defaultIsExpression: strOrNull(row[3]) !== null,
+      // PostgreSQL always records a CHECK as a table constraint, so a column rewrite never drops one.
+      check: null,
       extra,
       comment: strOrNull(row[6]),
       collation: strOrNull(row[7]),

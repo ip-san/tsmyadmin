@@ -19,6 +19,8 @@ function columnDef(c: ColumnSpec): string {
   if (c.onUpdate) parts.push(`ON UPDATE ${c.onUpdate}`)
   if (c.autoIncrement) parts.push('AUTO_INCREMENT')
   if (c.comment !== null) parts.push(`COMMENT ${mysqlLiteral(c.comment)}`)
+  // Carried verbatim from the catalog (the form cannot compose one) and shown in the preview before it runs.
+  if (c.check) parts.push(`CHECK (${c.check})`)
   return parts.join(' ')
 }
 

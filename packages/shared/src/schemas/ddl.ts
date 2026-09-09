@@ -30,6 +30,12 @@ export const ColumnSpecSchema = z.object({
     .regex(/^CURRENT_TIMESTAMP(\(\d\))?$/i)
     .nullable()
     .default(null),
+  /**
+   * A column-level CHECK to write again (MariaDB drops it on MODIFY COLUMN). Unlike the two above this is an
+   * arbitrary expression, so it is only ever carried from `describeTable` — the form never composes one — and
+   * the preview shows it before anything runs.
+   */
+  check: z.string().nullable().default(null),
 })
 export type ColumnSpec = z.infer<typeof ColumnSpecSchema>
 export type ColumnSpecInput = z.input<typeof ColumnSpecSchema>

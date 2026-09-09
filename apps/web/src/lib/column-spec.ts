@@ -17,6 +17,7 @@ export interface ColumnFormValues {
    */
   collation: string | null
   onUpdate: string | null
+  check: string | null
 }
 
 export const EMPTY_COLUMN: ColumnFormValues = {
@@ -29,6 +30,7 @@ export const EMPTY_COLUMN: ColumnFormValues = {
   comment: '',
   collation: null,
   onUpdate: null,
+  check: null,
 }
 
 export const TYPE_SUGGESTIONS: Record<Dialect, string[]> = {
@@ -76,6 +78,7 @@ export function toColumnSpec(v: ColumnFormValues): ColumnSpec {
     comment: v.comment.trim() === '' ? null : v.comment,
     collation: v.collation,
     onUpdate: v.onUpdate,
+    check: v.check,
   }
 }
 
@@ -99,6 +102,7 @@ export function fromColumnDef(c: ColumnDef, dialect: Dialect): ColumnFormValues 
     // PostgreSQL emits only the clauses that change, so it needs neither; MySQL replaces the definition.
     collation: dialect === 'mysql' ? c.collation : null,
     onUpdate: dialect === 'mysql' ? onUpdateExpression(c.extra) : null,
+    check: c.check,
   }
 }
 

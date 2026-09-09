@@ -169,6 +169,18 @@ export async function mysqlDescribeTable(
       [ns.database, table]
     )
   )
+  // MariaDB keeps column-level CHECKs; `MODIFY COLUMN` replaces the whole definition, so they have to travel
+  // with it. MySQL 8 promotes them to named table constraints, which a column rewrite leaves alone.
+  const checks = new Map<string, string>()
+  if (mariadb) {
+    const rows = firstResult(
+      await conn.query(
+        "SELECT CONSTRAINT_NAME, CHECK_CLAUSE FROM information_schema.CHECK_CONSTRAINTS WHERE CONSTRAINT_SCHEMA = ? AND TABLE_NAME = ? AND LEVEL = 'Column'",
+        [ns.database, table]
+      )
+    )
+    for (const row of rows.rows) checks.set(str(row[0]), str(row[1]))
+  }
   const columns: ColumnDef[] = cols.rows.map((row) => {
     const extra = str(row[4])
     const { text, expr } = normaliseDefault(strOrNull(row[3]), extra, str(row[1]), mariadb)
@@ -181,6 +193,7 @@ export async function mysqlDescribeTable(
       extra,
       comment: strOrNull(row[5]) || null,
       collation: strOrNull(row[6]),
+      check: checks.get(str(row[0])) ?? null,
     }
   })
 

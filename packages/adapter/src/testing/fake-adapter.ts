@@ -73,6 +73,7 @@ export function fakeColumn(name: string, dataType = 'int', nullable = false): Ta
     extra: '',
     comment: null,
     collation: null,
+    check: null,
   }
 }
 

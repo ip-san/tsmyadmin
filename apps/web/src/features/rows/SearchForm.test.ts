@@ -11,6 +11,7 @@ const col = (name: string): ColumnDef => ({
   extra: '',
   comment: null,
   collation: null,
+  check: null,
 })
 
 describe('search conditions', () => {

@@ -49,6 +49,13 @@ export const ColumnDefSchema = z.object({
   extra: z.string(),
   comment: z.string().nullable(),
   collation: z.string().nullable(),
+  /**
+   * A CHECK attached to the column rather than the table (MariaDB). It is part of the column: `MODIFY COLUMN`
+   * drops it unless it is written again — and a MariaDB JSON column is a `longtext` whose `json_valid` CHECK is
+   * the only thing that makes it JSON. MySQL 8 turns such constraints into named table constraints, which
+   * survive on their own, so this stays null there.
+   */
+  check: z.string().nullable(),
 })
 export type ColumnDef = z.infer<typeof ColumnDefSchema>
 

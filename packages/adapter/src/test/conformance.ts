@@ -65,6 +65,7 @@ function col(name: string, dataType: string, extra: Partial<ColumnSpec> = {}): C
     comment: null,
     collation: null,
     onUpdate: null,
+    check: null,
     ...extra,
   }
 }
@@ -225,7 +226,12 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         expect(users.columns.find((c) => c.name === 'age')?.nullable).toBe(true)
         expect(users.columns.find((c) => c.name === 'id')?.extra).not.toBe('')
         const createdAt = users.columns.find((c) => c.name === 'created_at')
-        expect(createdAt?.default).toBeTruthy()
+        // `DEFAULT CURRENT_TIMESTAMP` is an expression on both dialects; a literal here would be re-quoted on
+        // the next column edit and stop being a default at all.
+        expect(createdAt?.defaultIsExpression).toBe(true)
+        expect(createdAt?.default ?? '').toMatch(
+          dialect === 'mysql' ? /^current_timestamp(\(\))?$/i : /^(?:now\(\)|CURRENT_TIMESTAMP)$/i
+        )
         const uq = users.indexes.find((i) => i.name === 'uq_users_email')
         expect(uq).toMatchObject({ unique: true, primary: false, columns: ['email'] })
         expect(users.indexes.find((i) => i.name === 'idx_users_name')).toMatchObject({
@@ -2169,6 +2175,41 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         }
       })
 
+      it.skipIf(dialect !== 'mysql')('modifyColumn keeps a column-level CHECK (MariaDB)', async () => {
+        // MariaDB attaches CHECKs to the column and MODIFY COLUMN replaces the whole definition, so a
+        // comment-only edit used to drop them — including the `json_valid` that is all a JSON column is.
+        if (!(await isMariaDb())) return
+        const t = `${scratch}_chk`
+        await execOk(`CREATE TABLE ${t} (id INT PRIMARY KEY, c INT CHECK (c > 0), j JSON DEFAULT '{}')`)
+        try {
+          const refuses = async (sql: string) =>
+            (await exec(sql, { stopOnError: false })).some((r) => r.kind === 'error')
+          const schema = await db.describeTable(ns, t)
+          expect(schema.columns.find((c) => c.name === 'c')?.check).toBeTruthy()
+          expect(schema.columns.find((c) => c.name === 'j')?.check).toBeTruthy()
+          for (const name of ['c', 'j']) {
+            const c = schema.columns.find((x) => x.name === name)
+            if (!c) throw new Error(name)
+            await runDdl({
+              op: 'modifyColumn',
+              table: t,
+              name,
+              column: col(name, c.dataType, {
+                nullable: c.nullable,
+                collation: c.collation,
+                comment: 'edited',
+                check: c.check,
+                ...(c.default === null ? {} : { default: { kind: 'literal', value: c.default } }),
+              }),
+            })
+          }
+          expect(await refuses(`INSERT INTO ${t} (id, c) VALUES (1, -1)`)).toBe(true)
+          expect(await refuses(`INSERT INTO ${t} (id, j) VALUES (2, 'not json')`)).toBe(true)
+        } finally {
+          await exec(`DROP TABLE IF EXISTS ${t}`, { stopOnError: false })
+        }
+      })
+
       it.skipIf(dialect !== 'mysql')('describeTable reports a default that replays to the same value', async () => {
         // The two servers print COLUMN_DEFAULT differently (MariaDB quotes and escapes literals, MySQL 8 does
         // not) and both hide it behind the same column. Asserting the produced value catches either format.
@@ -2252,7 +2293,10 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
               column: col(name, c.dataType, {
                 nullable: c.nullable,
                 collation: c.collation,
-                default: { kind: 'expression', sql: c.default ?? '' },
+                // Taken from the catalog's answer, not assumed: a wrong flag has to show up here.
+                default: c.defaultIsExpression
+                  ? { kind: 'expression', sql: c.default ?? '' }
+                  : { kind: 'literal', value: c.default ?? '' },
                 comment: 'edited',
               }),
             })

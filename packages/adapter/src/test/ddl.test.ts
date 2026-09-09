@@ -14,6 +14,7 @@ const col = (name: string, dataType: string, extra: Partial<ColumnSpec> = {}): C
   comment: null,
   collation: null,
   onUpdate: null,
+  check: null,
   ...extra,
 })
 

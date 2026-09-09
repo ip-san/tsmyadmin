@@ -11,6 +11,7 @@ const def = (over: Partial<ColumnDef>): ColumnDef => ({
   extra: '',
   comment: null,
   collation: null,
+  check: null,
   ...over,
 })
 
@@ -25,6 +26,7 @@ describe('toColumnSpec', () => {
       comment: null,
       collation: null,
       onUpdate: null,
+      check: null,
     })
     expect(
       toColumnSpec({ ...EMPTY_COLUMN, name: 'n', dataType: 'x', defaultKind: 'literal', defaultValue: "it's" }).default
