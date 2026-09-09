@@ -780,6 +780,15 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
           expect(
             await open(`${begin};\nINSERT INTO ${t} VALUES (4);\nCREATE TABLE ${t}_x (a INT`, { stopOnError: false })
           ).toBe(true)
+          // The cases that motivated asking the server: MySQL rejects these before the implicit commit, so the
+          // transaction is still open — no reading of the script can know that.
+          expect(
+            await open(`${begin};\nINSERT INTO ${t} VALUES (9);\nCREATE TABLE ${t}_z (a DECIMAL(2,5));`, {
+              stopOnError: false,
+            })
+          ).toBe(true)
+          // `COMMIT AND CHAIN` closes one transaction and opens the next in the same statement.
+          expect(await open(`${begin};\nINSERT INTO ${t} VALUES (10);\nCOMMIT AND CHAIN;`)).toBe(true)
           if (dialect === 'mysql') {
             // MySQL excludes temporary tables from the implicit commit.
             expect(
@@ -800,7 +809,8 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
           const rows = await exec(`SELECT id FROM ${t} ORDER BY id`)
           const first = rows[0]
           const ids = first?.kind === 'rows' ? first.result.rows.map((r) => Number(r[0])) : []
-          expect(ids).toEqual(dialect === 'mysql' ? [2, 6] : [2])
+          // Row 10 survived: COMMIT AND CHAIN committed it before opening the next transaction.
+          expect(ids).toEqual(dialect === 'mysql' ? [2, 6, 10] : [2, 10])
         } finally {
           await exec(`DROP TABLE IF EXISTS ${t}`, { stopOnError: false })
         }

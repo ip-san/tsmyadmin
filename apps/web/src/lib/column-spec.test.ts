@@ -92,6 +92,35 @@ describe('fromColumnDef', () => {
     }
   })
 
+  it('reads the type past comments and string literals the user typed', () => {
+    const str = fromColumnDef(def({ dataType: 'varchar(50)', collation: 'latin1_bin' }), 'mysql')
+    expect(retypeColumn(str, str, '/* widen */ VARCHAR(100)')).toMatchObject({ collation: 'latin1_bin' })
+    // "collate" inside an ENUM value is data, not a clause.
+    expect(retypeColumn(str, str, "ENUM('collate','charset')")).toMatchObject({ collation: 'latin1_bin' })
+
+    const ts = fromColumnDef(def({ dataType: 'timestamp', extra: 'on update CURRENT_TIMESTAMP' }), 'mysql')
+    expect(retypeColumn(ts, ts, '/* c */ TIMESTAMP(3)')).toMatchObject({ onUpdate: 'CURRENT_TIMESTAMP(3)' })
+  })
+
+  it('moves a CURRENT_TIMESTAMP default to the new precision as well', () => {
+    // MySQL wants the default's precision to match the type too, or the whole MODIFY is rejected.
+    const c = fromColumnDef(
+      def({
+        dataType: 'timestamp',
+        default: 'CURRENT_TIMESTAMP',
+        extra: 'DEFAULT_GENERATED on update CURRENT_TIMESTAMP',
+      }),
+      'mysql'
+    )
+    expect(retypeColumn(c, c, 'TIMESTAMP(3)')).toMatchObject({
+      defaultValue: 'CURRENT_TIMESTAMP(3)',
+      onUpdate: 'CURRENT_TIMESTAMP(3)',
+    })
+    // A default that is not CURRENT_TIMESTAMP is the user's to keep.
+    const other = { ...c, defaultValue: 'uuid()' }
+    expect(retypeColumn(other, c, 'TIMESTAMP(3)')).toMatchObject({ defaultValue: 'uuid()' })
+  })
+
   it('keeps ON UPDATE only for a timestamp type of the same precision', () => {
     const plain = fromColumnDef(def({ dataType: 'timestamp', extra: 'on update CURRENT_TIMESTAMP' }), 'mysql')
     expect(retypeColumn(plain, plain, 'TIMESTAMP')).toMatchObject({ onUpdate: 'CURRENT_TIMESTAMP' })

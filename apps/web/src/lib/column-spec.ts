@@ -113,6 +113,20 @@ const CHARACTER_TYPE =
 const TYPED_COLLATION = /\b(?:COLLATE|CHARACTER\s+SET|CHARSET)\b/i
 /** `ON UPDATE CURRENT_TIMESTAMP(n)` needs a TIMESTAMP / DATETIME, and `n` must match the type's precision. */
 const TIMESTAMP_TYPE = /^(?:TIMESTAMP|DATETIME)\s*(?:\((\d)\))?/i
+/** `CURRENT_TIMESTAMP(n)` as a default carries the same precision rule as the ON UPDATE clause. */
+const CURRENT_TIMESTAMP = /^CURRENT_TIMESTAMP(\((\d)\))?$/i
+
+/**
+ * The type text with its comments and string literals blanked out, so `ENUM('collate')` is not read as a
+ * COLLATE clause and `/* widen *\/ VARCHAR(100)` still starts with VARCHAR. Deliberately not the adapter's
+ * lexer: `apps/web` may not import it, and a type expression is a far smaller language than a SQL script.
+ */
+function typeShape(dataType: string): string {
+  return dataType
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/(['"`])(?:\\.|(?!\1).)*\1?/g, "''")
+    .trim()
+}
 
 /**
  * A new data type for the form. `collation` and `ON UPDATE` are carried invisibly (MySQL rewrites the whole
@@ -123,16 +137,23 @@ const TIMESTAMP_TYPE = /^(?:TIMESTAMP|DATETIME)\s*(?:\((\d)\))?/i
  *   refused when the two disagree, and dropping it silently would lose an `updated_at` column's whole point.
  */
 export function retypeColumn(v: ColumnFormValues, initial: ColumnFormValues, dataType: string): ColumnFormValues {
-  const t = dataType.trim()
+  const t = typeShape(dataType)
   const timestamp = TIMESTAMP_TYPE.exec(t)
   const typeFsp = timestamp ? (timestamp[1] ?? '') : null
+  const stamp = typeFsp === null ? null : `CURRENT_TIMESTAMP${typeFsp === '' ? '' : `(${typeFsp})`}`
   const keepsCollation = CHARACTER_TYPE.test(t) && !TYPED_COLLATION.test(t)
+  // A `DEFAULT CURRENT_TIMESTAMP` is shown in the form, but MySQL wants its precision to match the type too,
+  // so it follows the new type rather than leaving the user with "Invalid default value".
+  const shownDefault =
+    stamp !== null && v.defaultKind === 'expression' && CURRENT_TIMESTAMP.test(v.defaultValue.trim())
+      ? { defaultValue: stamp }
+      : {}
   return {
     ...v,
+    ...shownDefault,
     dataType,
     collation: keepsCollation ? initial.collation : null,
-    onUpdate:
-      typeFsp === null || initial.onUpdate === null ? null : `CURRENT_TIMESTAMP${typeFsp === '' ? '' : `(${typeFsp})`}`,
+    onUpdate: stamp === null || initial.onUpdate === null ? null : stamp,
   }
 }
 

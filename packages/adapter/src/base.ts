@@ -868,8 +868,9 @@ export abstract class BaseAdapter implements DatabaseAdapter {
             // In a finally so an onResult/backendId failure cannot return a dirty connection to the pool.
             // After a cancel the connection is closed rather than reused: a KILL QUERY / pg_cancel_backend
             // signal still in transit would otherwise interrupt whatever the next borrower runs on it.
-            // Asked before the ROLLBACK, and not after a cancel: that connection is being thrown away anyway.
-            if (opts.onTransactionOpen && !entry.cancelled) {
+            // Asked before the ROLLBACK, including after a cancel: KILL QUERY / pg_cancel_backend end the
+            // statement, not the transaction, so an interrupted script leaves work behind just like any other.
+            if (opts.onTransactionOpen) {
               // A probe that cannot run says nothing rather than something wrong.
               const open = await conn.inTransaction?.().catch(() => false)
               opts.onTransactionOpen(open === true)
