@@ -361,7 +361,7 @@ export function pgCreateStatements(ns: Namespace, schema: TableSchema, catalog?:
     .filter((c) => !local || local.has(c.name))
     .map((c) => {
       const identity = c.extra.startsWith('identity') || c.extra === 'serial'
-      const generated = c.extra === 'generated stored'
+      const generated = c.extra.startsWith('generated ')
       const parts = [id(c.name), c.dataType]
       // A non-default collation is part of the type (ordering and index semantics change without it).
       if (c.collation !== null) parts.push(`COLLATE ${id(c.collation)}`)
@@ -371,7 +371,8 @@ export function pgCreateStatements(ns: Namespace, schema: TableSchema, catalog?:
         if (options) parts.push(`(${options})`)
       }
       // describeTable stores the generation expression in `default`; it is not a DEFAULT (it may reference siblings).
-      if (generated && c.default !== null) parts.push(`GENERATED ALWAYS AS (${c.default}) STORED`)
+      if (generated && c.default !== null)
+        parts.push(`GENERATED ALWAYS AS (${c.default}) ${c.extra === 'generated virtual' ? 'VIRTUAL' : 'STORED'}`)
       if (!c.nullable) parts.push('NOT NULL')
       if (c.default !== null && !identity && !generated) parts.push(`DEFAULT ${c.default}`)
       return parts.join(' ')

@@ -67,6 +67,22 @@ async function queryIndexes(conn: Conn, ns: Namespace, table: string) {
   return conn.query(`${INDEX_COLUMNS}, NULL AS EXPRESSION ${INDEX_FROM}`, [ns.database, table])
 }
 
+/**
+ * `information_schema.COLUMNS.COLUMN_DEFAULT` escapes backslashes and quotes inside an expression default
+ * (`DEFAULT ('{}')` reads back as `_utf8mb4\\'{}\\'`). One left-to-right pass restores the executable form.
+ */
+function unescapeDefault(sql: string): string {
+  let out = ''
+  for (let i = 0; i < sql.length; i++) {
+    const c = sql[i] as string
+    if (c === '\\' && (sql[i + 1] === '\\' || sql[i + 1] === "'")) {
+      out += sql[i + 1]
+      i++
+    } else out += c
+  }
+  return out
+}
+
 export async function mysqlDescribeTable(conn: Conn, ns: Namespace, table: string): Promise<TableSchema> {
   const info = firstResult(
     await conn.query(
@@ -83,15 +99,21 @@ export async function mysqlDescribeTable(conn: Conn, ns: Namespace, table: strin
       [ns.database, table]
     )
   )
-  const columns: ColumnDef[] = cols.rows.map((row) => ({
-    name: str(row[0]),
-    dataType: str(row[1]),
-    nullable: str(row[2]) === 'YES',
-    default: strOrNull(row[3]),
-    extra: str(row[4]),
-    comment: strOrNull(row[5]) || null,
-    collation: strOrNull(row[6]),
-  }))
+  const columns: ColumnDef[] = cols.rows.map((row) => {
+    const extra = str(row[4])
+    const def = strOrNull(row[3])
+    return {
+      name: str(row[0]),
+      dataType: str(row[1]),
+      nullable: str(row[2]) === 'YES',
+      // An expression default arrives with its string literals escaped (`('{}')` reads back as
+      // `_utf8mb4\\'{}\\'`), which no longer parses. Unescaping restores the form SHOW CREATE TABLE prints.
+      default: def !== null && /\bDEFAULT_GENERATED\b/i.test(extra) ? unescapeDefault(def) : def,
+      extra,
+      comment: strOrNull(row[5]) || null,
+      collation: strOrNull(row[6]),
+    }
+  })
 
   const idx = firstResult(await queryIndexes(conn, ns, table))
   const indexMap = new Map<string, IndexDef>()

@@ -26,11 +26,13 @@ const AND_CHAIN = /\bAND\s+CHAIN\b/i
 export function leavesTransactionOpen(statements: readonly ExecutedStatement[], dialect: Dialect): boolean {
   let open = false
   let autocommitOff = false
-  for (const { sql: raw, failed } of statements) {
+  for (const { sql: raw, failed, nativeCode } of statements) {
     const sql = stripLeadingComments(raw, dialect).trimStart()
-    // A MySQL DDL commits even when it fails (the implicit commit happens before the statement runs), but a
-    // `BEGIN` or `SET autocommit` that errored changed nothing.
-    if (dialect === 'mysql' && MYSQL_IMPLICIT_COMMIT.test(sql) && !MYSQL_TEMPORARY.test(sql)) {
+    // A MySQL DDL commits even when it fails, because the implicit commit happens before the statement runs —
+    // unless the server could not parse it, in which case nothing ran. A `BEGIN` or `SET autocommit` that
+    // errored changed nothing either, hence the `failed` check below.
+    const parsed = !(failed && nativeCode === 'ER_PARSE_ERROR')
+    if (parsed && dialect === 'mysql' && MYSQL_IMPLICIT_COMMIT.test(sql) && !MYSQL_TEMPORARY.test(sql)) {
       open = false
       continue
     }
@@ -60,4 +62,6 @@ export function leavesTransactionOpen(statements: readonly ExecutedStatement[], 
 export interface ExecutedStatement {
   sql: string
   failed?: boolean
+  /** Dialect error code (`ER_PARSE_ERROR`, a PostgreSQL SQLSTATE): tells a rejected statement from a failed one. */
+  nativeCode?: string | undefined
 }

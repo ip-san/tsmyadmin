@@ -53,6 +53,19 @@ describe('leavesTransactionOpen', () => {
     expect(mysql('START TRANSACTION', 'UPDATE t SET a = 1', 'DROP TEMPORARY TABLE tmp')).toBe(true)
   })
 
+  it('does not count a MySQL DDL the server could not parse: it never reached the implicit commit', () => {
+    const parseError = { sql: 'CREATE TABLE x (a INT', failed: true, nativeCode: 'ER_PARSE_ERROR' }
+    expect(mysql('START TRANSACTION', 'UPDATE t SET a = 1', parseError)).toBe(true)
+    // A DDL that parsed and then failed did commit.
+    expect(
+      mysql('START TRANSACTION', 'UPDATE t SET a = 1', {
+        sql: 'CREATE TABLE existing (a INT)',
+        failed: true,
+        nativeCode: 'ER_TABLE_EXISTS_ERROR',
+      })
+    ).toBe(false)
+  })
+
   it('ignores statements that failed, which changed nothing', () => {
     // `SET autocommit = off` is a syntax error on PostgreSQL: it must not produce a false warning.
     expect(pg(failed('SET autocommit = off'), 'SELECT 1')).toBe(false)

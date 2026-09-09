@@ -103,16 +103,29 @@ export function fromColumnDef(c: ColumnDef, dialect: Dialect): ColumnFormValues 
   }
 }
 
+/** MySQL accepts `COLLATE` only on a character string type; on anything else it is an error or meaningless. */
+const CHARACTER_TYPE = /^(?:CHAR|VARCHAR|TINYTEXT|TEXT|MEDIUMTEXT|LONGTEXT|ENUM|SET)\b/i
+/** `ON UPDATE CURRENT_TIMESTAMP(n)` needs a TIMESTAMP / DATETIME of exactly the same fractional precision. */
+const TIMESTAMP_TYPE = /^(?:TIMESTAMP|DATETIME)\s*(?:\((\d)\))?\s*$/i
+
 /**
- * A new data type for the form. `collation` and `onUpdate` describe the type they were read from, so changing
- * the type drops them (MySQL rejects `VARCHAR … COLLATE …` turned into JSON, and `ON UPDATE` on a non-timestamp);
- * typing the original type back restores them.
+ * A new data type for the form. `collation` and `ON UPDATE` are carried invisibly (MySQL rewrites the whole
+ * column), so each is kept only while the new type can still hold it: widening `VARCHAR(50)` to `VARCHAR(100)`
+ * keeps the collation, turning it into `JSON` drops it — MySQL rejects `JSON … COLLATE utf8mb4_bin`, and an
+ * `ON UPDATE CURRENT_TIMESTAMP` on a non-timestamp (or on a TIMESTAMP of a different precision) is refused too.
  */
 export function retypeColumn(v: ColumnFormValues, initial: ColumnFormValues, dataType: string): ColumnFormValues {
-  const same = dataType.trim().toLowerCase() === initial.dataType.trim().toLowerCase()
-  return same
-    ? { ...v, dataType, collation: initial.collation, onUpdate: initial.onUpdate }
-    : { ...v, dataType, collation: null, onUpdate: null }
+  const t = dataType.trim()
+  const timestamp = TIMESTAMP_TYPE.exec(t)
+  // Both are unset when the type has no precision: `ON UPDATE CURRENT_TIMESTAMP` on a plain TIMESTAMP.
+  const typeFsp = timestamp ? (timestamp[1] ?? '') : null
+  const clauseFsp = initial.onUpdate === null ? null : (/\((\d)\)/.exec(initial.onUpdate)?.[1] ?? '')
+  return {
+    ...v,
+    dataType,
+    collation: CHARACTER_TYPE.test(t) ? initial.collation : null,
+    onUpdate: typeFsp !== null && typeFsp === clauseFsp ? initial.onUpdate : null,
+  }
 }
 
 export function validateColumn(v: ColumnFormValues): string | null {

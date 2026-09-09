@@ -34,7 +34,7 @@ PK → NOT NULL 一意キー → PG は `ctid`、MySQL は全カラム一致 + `
 
 ## SQL コンソールの行数上限
 
-PostgreSQL は読み取り文を `SELECT * FROM (...) AS _tsmyadmin LIMIT maxRows+1` に包む（`wrapReadOnly`。リテラル・コメント内の DML キーワードは無視）。MySQL / MariaDB はスクリプト開始時に `SET SESSION sql_select_limit = maxRows+1` を発行する（`capResultRows`）。文が自分で `LIMIT` を書いている場合だけ派生テーブルに包み、ラッパー固有のエラー（`WRAPPER_ONLY_ERRORS`）が出たら包まずに再実行する— 派生テーブルは MariaDB で内側の ORDER BY を落とし、MySQL では重複カラム名やトップレベル専用の修飾子を拒否するため。`sql_select_limit` はトップレベルの結果セットだけを制限し、リセットで既定に戻る。
+PostgreSQL は読み取り文を `SELECT * FROM (...) AS _tsmyadmin LIMIT maxRows+1` に包む（`wrapReadOnly`。リテラル・コメント内の DML キーワードは無視）。MySQL / MariaDB はスクリプト開始時に `SET SESSION sql_select_limit = maxRows+1` を発行する（`capResultRows`）。文が自分で `LIMIT` を書いている場合だけ派生テーブルにも包み、ラッパー固有のエラー（`WRAPPER_ONLY_ERRORS`）が出たら包まずに再実行する。既定で包まないのは、派生テーブルが MariaDB では内側の ORDER BY を落とし、MySQL では重複カラム名やトップレベル専用の修飾子を拒否するため。`sql_select_limit` はトップレベルの結果セットだけを制限し、リセットで既定に戻る。
 
 ## エクスポートの走査（`iterateRows`）
 
@@ -42,7 +42,7 @@ MySQL はキーセットページング（PK / NOT NULL ユニークキーで `W
 
 ## 接続の返却
 
-`executeSql` はユーザー SQL の後に `finally` で `ROLLBACK` → `Conn.reset()`（キャンセルされた実行だけは例外で、`discard()` して接続を捨てる。飛んでいる KILL / cancel シグナルが次の借り手に当たらないようにするため）（MySQL: `COM_RESET_CONNECTION` + `SET NAMES utf8mb4`、PostgreSQL: `DISCARD ALL`）を必ず行う。セッション変数・ロール・ユーザー変数・一時テーブルがプールの次の借り手に漏れてはならない（conformance の「does not leak session state」が検証）。
+`executeSql` はユーザー SQL の後に `finally` で `ROLLBACK` → `Conn.reset()`（MySQL: `COM_RESET_CONNECTION` + `SET NAMES utf8mb4`、PostgreSQL: `DISCARD ALL`）を必ず行う。ただしキャンセルされた実行だけは例外で、`reset()` せず `discard()` して接続を捨てる（飛んでいる KILL / cancel シグナルが次の借り手に当たらないようにするため）。セッション変数・ロール・ユーザー変数・一時テーブルがプールの次の借り手に漏れてはならない（conformance の「does not leak session state」が検証）。
 
 `base.ts` は接続ごとに statement timeout をキャッシュし（`appliedTimeout`、`Conn.id` がキー）、方言は現在の DB / `search_path` をキャッシュする（`Conn.forget()` で破棄）。方言実装の契約: `id` はチェックアウト間で安定していること（mysql2 の promise ラッパーは毎回新しいオブジェクトなので、MySQL は `conn.connection`（コア接続）をキーにする）、`reset()` は失敗時に接続を破棄対象にすること、ユーザー SQL の前に `forgetSessionState` が呼ばれることを前提にキャッシュを持つこと。
 

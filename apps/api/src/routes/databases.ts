@@ -310,7 +310,11 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
               type: 'done',
               statements: results.length,
               openTransaction: leavesTransactionOpen(
-                results.map((r) => ({ sql: r.sql, failed: r.kind === 'error' })),
+                results.map((r) => ({
+                  sql: r.sql,
+                  failed: r.kind === 'error',
+                  nativeCode: r.kind === 'error' ? r.nativeCode : undefined,
+                })),
                 adapter.dialect
               ),
             })
