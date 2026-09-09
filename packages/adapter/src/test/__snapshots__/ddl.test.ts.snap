@@ -2,7 +2,7 @@
 
 exports[`DDL builders > mysql: addColumn 1`] = `
 [
-  "ALTER TABLE \`db\`.\`t\` ADD COLUMN \`n\` INT NULL DEFAULT 0 AFTER \`id\`",
+  "ALTER TABLE \`db\`.\`t\` ADD COLUMN \`n\` INT NULL DEFAULT (0) AFTER \`id\`",
 ]
 `;
 

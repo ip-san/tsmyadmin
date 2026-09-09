@@ -1,6 +1,6 @@
 import type { ColumnDef } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
-import { EMPTY_COLUMN, fromColumnDef, toColumnSpec, validateColumn } from '@/lib/column-spec.ts'
+import { EMPTY_COLUMN, fromColumnDef, retypeColumn, toColumnSpec, validateColumn } from '@/lib/column-spec.ts'
 
 const def = (over: Partial<ColumnDef>): ColumnDef => ({
   name: 'c',
@@ -70,6 +70,24 @@ describe('fromColumnDef', () => {
     })
     // PostgreSQL emits only the clauses that change, so it must not repeat a collation it never asked for.
     expect(fromColumnDef(c, 'postgres')).toMatchObject({ collation: null, onUpdate: null })
+  })
+
+  it('drops those attributes when the type changes, and restores them when it changes back', () => {
+    const initial = fromColumnDef(
+      def({ dataType: 'varchar(50)', extra: 'on update CURRENT_TIMESTAMP', collation: 'latin1_bin' }),
+      'mysql'
+    )
+    // `COLLATE latin1_bin` on a JSON column and `ON UPDATE` on a non-timestamp are both errors.
+    expect(retypeColumn(initial, initial, 'JSON')).toMatchObject({
+      dataType: 'JSON',
+      collation: null,
+      onUpdate: null,
+    })
+    const changed = retypeColumn(initial, initial, 'JSON')
+    expect(retypeColumn(changed, initial, ' VARCHAR(50) ')).toMatchObject({
+      collation: 'latin1_bin',
+      onUpdate: 'CURRENT_TIMESTAMP',
+    })
   })
 })
 

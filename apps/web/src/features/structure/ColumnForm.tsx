@@ -3,7 +3,13 @@ import { type FormEvent, useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { Field, Input, Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
-import { type ColumnFormValues, EMPTY_COLUMN, TYPE_SUGGESTIONS, validateColumn } from '@/lib/column-spec.ts'
+import {
+  type ColumnFormValues,
+  EMPTY_COLUMN,
+  retypeColumn,
+  TYPE_SUGGESTIONS,
+  validateColumn,
+} from '@/lib/column-spec.ts'
 
 export interface ColumnFormProps {
   dialect: Dialect
@@ -41,7 +47,7 @@ export function ColumnForm({ dialect, initial = EMPTY_COLUMN, positions, onSubmi
             id="col-type"
             list="col-type-suggestions"
             value={v.dataType}
-            onChange={(e) => set({ dataType: e.target.value })}
+            onChange={(e) => setV((cur) => retypeColumn(cur, initial, e.target.value))}
             required
             className="font-mono"
           />

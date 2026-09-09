@@ -72,7 +72,7 @@ API が返すコードは `apps/api/src/lib/errors.ts` の `STATUS_BY_CODE` が�
 | `HOST_NOT_ALLOWED` | 403 | 接続先が `TSMYADMIN_ALLOWED_HOSTS` にない |
 | `INSECURE_TRANSPORT` | 400 | 上記のとおり、`Secure` Cookie を平文 HTTP で発行しようとした |
 | `RATE_LIMITED` | 429 | ログインのレート制限。`Retry-After` 秒後に再試行 |
-| `FORBIDDEN` | 403 | CSRF 判定（`Origin` とホストの不一致）。**リバースプロキシで `Host` を書き換えていると常に出ます**（nginx 既定の `proxy_set_header Host $proxy_host` など）。ブラウザが見ているホスト名をそのまま渡してください |
+| `FORBIDDEN` | 403 | CSRF 判定（`hono/csrf`）。対象はフォーム形式の POST（= インポートのアップロード）だけで、JSON の API には効きません。`Sec-Fetch-Site: same-origin` を送る現行ブラウザはそのまま通ります。このヘッダーを落とすプロキシや古いブラウザでは `Origin` とホストを比較するため、リバースプロキシが `Host` を書き換えていると 403 になります（nginx は `proxy_set_header Host $host`） |
 | `PAYLOAD_TOO_LARGE` | 413 | 本文 / アップロードが上限超過。上限は [deployment.md](deployment.md) の「サイズと制限」 |
 | `PERMISSION_DENIED` | 403 | DB ユーザーの権限不足。メッセージに必要な権限名が入ります |
 | `KEY_MISMATCH` | 409 | 更新しようとした行が他の誰かに変更された（1 行に一致しなかったのでロールバック）。画面を再読み込みしてやり直す |

@@ -103,6 +103,18 @@ export function fromColumnDef(c: ColumnDef, dialect: Dialect): ColumnFormValues 
   }
 }
 
+/**
+ * A new data type for the form. `collation` and `onUpdate` describe the type they were read from, so changing
+ * the type drops them (MySQL rejects `VARCHAR … COLLATE …` turned into JSON, and `ON UPDATE` on a non-timestamp);
+ * typing the original type back restores them.
+ */
+export function retypeColumn(v: ColumnFormValues, initial: ColumnFormValues, dataType: string): ColumnFormValues {
+  const same = dataType.trim().toLowerCase() === initial.dataType.trim().toLowerCase()
+  return same
+    ? { ...v, dataType, collation: initial.collation, onUpdate: initial.onUpdate }
+    : { ...v, dataType, collation: null, onUpdate: null }
+}
+
 export function validateColumn(v: ColumnFormValues): string | null {
   if (v.name.trim() === '') return 'name'
   if (v.dataType.trim() === '') return 'dataType'

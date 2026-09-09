@@ -46,6 +46,10 @@
 - `/api/*` のレスポンスに `Cache-Control: no-store` を付与
 - 接続先ホストは allowlist 判定に使った正規化後の文字列で接続するようにした（判定と接続で別の文字列を使わない）
 - シーケンスの削除・改名の説明が方言によって誤っていた（PostgreSQL は依存があると削除を拒否する / MariaDB は改名に既定値が追従しない）
+- カラムの**型を変更**したときに、直前まで持っていた照合順序と `ON UPDATE` を新しい型に付け直してしまい失敗していた（`VARCHAR` → `JSON` など。前段の修正で入った退行）
+- SQL タブで `CREATE TEMPORARY TABLE` を使うとトランザクションが開いたままでも警告が出なかった（MySQL は一時テーブルでは暗黙コミットしないため）。`COMMIT AND CHAIN`、および失敗した `BEGIN` / `SET autocommit` の扱いも修正
+- MySQL で `DEFAULT (uuid())` のような式の既定値を持つカラムをフォームから変更できなかった（括弧が外れて構文エラーになっていた）
+- PostgreSQL 18 の仮想生成カラムを生成カラムとして認識するようにした
 - `splitStatements` から到達不能な重複コードを削除（`scanToken` が先に消費するため 5 分岐が死んでいた）。「字句解析は 1 か所」が実装どおりになった
 - 英語 UI の見直し: 単複の処理を追加（「Delete 1 rows?」を解消）、ラベル・ボタン・見出しから冠詞を落とす、`undo` を `roll back` に、`every privilege` を `all privileges` に、`Kind` を `Type` に、「SQL console」を「SQL tab」に、切り詰めたテキストの注記が値と地続きになっていたのを修正
 - ドキュメントを実装に合わせて修正: DDL の実行はプレビューした SQL をそのまま `/sql` に送る（サーバーで再生成するのはアカウント操作だけ）、`executeSql` は 1 回だけ呼ばれる、件数の打ち切りは絞り込みの有無に関わらず効く、`HEALTHCHECK` は `API_PORT` に従う、MariaDB の検証済みバージョンは 10.11 / 11

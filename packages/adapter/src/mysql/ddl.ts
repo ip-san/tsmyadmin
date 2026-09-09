@@ -12,11 +12,25 @@ function columnDef(c: ColumnSpec): string {
   const parts = [id(c.name), c.dataType]
   if (c.collation) parts.push(`COLLATE ${c.collation}`)
   parts.push(c.nullable ? 'NULL' : 'NOT NULL')
-  if (c.default) parts.push(`DEFAULT ${c.default.kind === 'literal' ? mysqlLiteral(c.default.value) : c.default.sql}`)
+  if (c.default)
+    parts.push(
+      `DEFAULT ${c.default.kind === 'literal' ? mysqlLiteral(c.default.value) : defaultExpression(c.default.sql)}`
+    )
   if (c.onUpdate) parts.push(`ON UPDATE ${c.onUpdate}`)
   if (c.autoIncrement) parts.push('AUTO_INCREMENT')
   if (c.comment !== null) parts.push(`COMMENT ${mysqlLiteral(c.comment)}`)
   return parts.join(' ')
+}
+
+/**
+ * MySQL accepts a bare expression default only for `CURRENT_TIMESTAMP`; everything else (`uuid()`, `(a + b)`)
+ * must be parenthesised — and that is how `information_schema` prints it back, so an already-wrapped
+ * expression is left alone.
+ */
+function defaultExpression(sql: string): string {
+  const s = sql.trim()
+  if (/^CURRENT_TIMESTAMP(\(\d?\))?$/i.test(s) || s.startsWith('(')) return s
+  return `(${s})`
 }
 
 export const mysqlDdl: DdlBuilder = {

@@ -125,7 +125,9 @@ export async function pgDescribeTable(conn: Conn, ns: Namespace, table: string):
     let extra = ''
     if (identity === 'a') extra = 'identity always'
     else if (identity === 'd') extra = 'identity by default'
+    // 's' = stored, 'v' = virtual (PostgreSQL 18). Both are computed by the server and not writable.
     else if (generated === 's') extra = 'generated stored'
+    else if (generated === 'v') extra = 'generated virtual'
     // serial: the column's own conventionally named sequence, and the one its default calls. A nextval() of any
     // other sequence stays a plain default (that sequence is dumped as an object of its own, so the default
     // restores as written), and an owned sequence the default does not use is listed like any other.

@@ -99,7 +99,7 @@ classDiagram
 
 - **契約の同一性は conformance テストが保証します。** `packages/adapter/src/test/conformance.ts` は 1 つのスイートを MySQL と PostgreSQL の両方に対して実行します。`ADAPTER_METHOD_NAMES` に載ったメソッドすべてに `describe('<method>')` があることは `test/spec-consistency.test.ts` が検査するので、載せた時点で自動的に両方言のテストになります。
 - **SQL の組み立て**: 識別子は `quoteIdent` / `quoteTable`、値は `Params` のプレースホルダ。文字列補間が許されるファイルは `scripts/check-sql-safety.mjs` の許可リストが唯一の正です。
-- **字句解析は 1 か所**: `sql/split.ts` が公開するのは `splitStatements` / `stripComments` / `stripLeadingComments` の 3 つで、文の分割・先頭コメント除去・監査ログのマスクはすべてこれを通ります。リテラル・コメント・方言差（`#` は MySQL のみ、PostgreSQL はブロックコメントが入れ子、`E'…'` のエスケープ、`$tag$`）を知っているのは内部の `scanToken` だけです。なお読み取り文の判定（`base.ts` の `stripLiterals`）と監査ログのパスワード照合は、速度優先で別の正規表現を使っています。詳しくは下の「字句解析と文の分割」を参照。
+- **字句解析は 1 か所**: `sql/split.ts` が公開するのは `splitStatements` / `stripComments` / `stripLeadingComments` / `setAssignments`（MySQL の `SET` 文から代入を取り出す。インポートの autocommit 判定が使う）の 4 つで、文の分割・先頭コメント除去・監査ログのマスクはすべてこれを通ります。リテラル・コメント・方言差（`#` は MySQL のみ、PostgreSQL はブロックコメントが入れ子、`E'…'` のエスケープ、`$tag$`）を知っているのは内部の `scanToken` だけです。なお読み取り文の判定（`base.ts` の `stripLiterals`）と監査ログのパスワード照合は、速度優先で別の正規表現を使っています。詳しくは下の「字句解析と文の分割」を参照。
 
 ### 字句解析と文の分割
 
@@ -110,9 +110,9 @@ classDiagram
 | 文字列・識別子リテラル | 方言ごとのエスケープを解釈（PostgreSQL の `E'…'`、`$tag$…$tag$`、MySQL の `\` エスケープ） |
 | コメント | `--` / `/* */`（PostgreSQL は入れ子）/ `#`（MySQL のみ）。先頭コメントは行番号を保ったまま除去できる |
 | `DELIMITER` | 行に単独で書かれたときだけ有効（mysqldump 互換）。状態は `state.delimiter` で呼び出し側に返る |
-| ルーチン本体 | `BEGIN … END`、PostgreSQL の `BEGIN ATOMIC`、`CASE` の入れ子を数えて 1 文にまとめる |
+| ルーチン本体 | PostgreSQL の `BEGIN ATOMIC … END` は内側の `CASE … END` を数えて 1 文にまとめる。それ以外の本体は区切りで保つ（MySQL は `DELIMITER`、plpgsql は `$$`）。素の `BEGIN … END` は数えない |
 | `COPY … FROM stdin` | 続くデータブロックを SQL として解釈せず、`\.` までを 1 つの塊として持つ（pg_dump の既定形式） |
-| psql メタコマンド | `\restrict` は捨て、それ以外は文として残す（実行時に `UNSUPPORTED`） |
+| psql メタコマンド | `\restrict` / `\unrestrict` は捨て、それ以外は文として残す（実行時に `UNSUPPORTED`） |
 | `SET sql_mode` | MySQL の `NO_BACKSLASH_ESCAPES` を追跡し、以降のリテラル解釈を切り替える（`@saved` 変数・`REPLACE`・`CONCAT` 経由も） |
 | 途中で終わるファイル | `state.unterminated` で「コメントや文字列の途中で終わった」ことを返す |
 

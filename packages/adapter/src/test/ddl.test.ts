@@ -106,6 +106,20 @@ describe('DDL builders', () => {
     expect(pgDdl.build({ database: 'db' }, op).some((s) => s.includes('RENAME'))).toBe(false)
   })
 
+  it('parenthesises a MySQL expression default, which the bare form only accepts for CURRENT_TIMESTAMP', () => {
+    const withDefault = (sql: string): DdlOp => ({
+      op: 'addColumn',
+      table: 't',
+      column: col('n', 'CHAR(36)', { default: { kind: 'expression', sql } }),
+    })
+    expect(mysqlDdl.build({ database: 'db' }, withDefault('uuid()'))[0]).toContain('DEFAULT (uuid())')
+    // The catalog prints a compound expression already wrapped; it must not be wrapped twice.
+    expect(mysqlDdl.build({ database: 'db' }, withDefault('(1 + 1)'))[0]).toContain('DEFAULT (1 + 1)')
+    expect(mysqlDdl.build({ database: 'db' }, withDefault('CURRENT_TIMESTAMP(3)'))[0]).toContain(
+      'DEFAULT CURRENT_TIMESTAMP(3)'
+    )
+  })
+
   it('MODIFY COLUMN keeps the collation and ON UPDATE the column form does not show', () => {
     // MySQL replaces the whole definition: anything the builder omits is dropped from the column.
     const op: DdlOp = {
