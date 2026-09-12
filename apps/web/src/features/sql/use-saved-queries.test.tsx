@@ -101,7 +101,11 @@ describe('useSavedQueries', () => {
     expect(result.current.error).toBeNull()
   })
 
+  // Two tests, because each pins a different way of getting this wrong: this one catches ordering the errors by
+  // when a write was submitted, and the next catches reading both errors at once (where a save's error sticks
+  // after a later delete succeeded). Neither catches the other's bug.
   it('reports a save that fails after a later delete has already succeeded', async () => {
+    let clock = Date.now()
     server.list = [{ id: 'id-old', name: 'old', sql: 'SELECT 2', at: 1 }]
     const { result } = renderHook(() => useSavedQueries('mysql.db.3306', true), { wrapper })
     await waitFor(() => expect(result.current.entries).toHaveLength(1))
@@ -112,9 +116,14 @@ describe('useSavedQueries', () => {
       release = resolve
     })
     server.saveFail = new Error('the deployment refused it')
+    // Both writes are submitted in the same tick, so a clock that only moves when read is what makes the
+    // submission order unambiguous: without it the two land on the same millisecond and an implementation that
+    // (wrongly) compares submission times passes about three runs in four by winning the tie. Restored before
+    // the assertions, because waitFor measures its own timeout against this clock.
+    const now = vi.spyOn(Date, 'now').mockImplementation(() => (clock += 1000))
     act(() => result.current.save('daily', 'SELECT 1'))
-
     act(() => result.current.remove('old'))
+    now.mockRestore()
     await waitFor(() => expect(result.current.entries).toEqual([]))
     expect(result.current.error).toBeNull()
 
