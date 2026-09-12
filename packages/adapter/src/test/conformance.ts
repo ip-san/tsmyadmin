@@ -2336,22 +2336,36 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
             .join(';\n')
         )
         try {
-          const attempt = async (privilege: string) => {
+          const target = db.users.namespace(
+            { op: 'grantPrivileges', user, privileges: ['SELECT'], database: ns.database },
+            db.serverNamespace
+          )
+          const attempt = async (privilege: string, columns: boolean) => {
             const r = await db.executeSql(
-              db.users.namespace(
-                { op: 'grantPrivileges', user, privileges: ['SELECT'], database: ns.database },
-                db.serverNamespace
-              ),
-              `GRANT ${privilege} (name) ON ${table} TO ${account}`,
+              target,
+              `GRANT ${privilege}${columns ? ' (name)' : ''} ON ${table} TO ${account}`,
               { ...EXEC, stopOnError: false }
             )
             return r.every((x) => x.kind !== 'error')
           }
-          for (const privilege of COLUMN_PRIVILEGES)
-            expect([privilege, await attempt(privilege)]).toEqual([privilege, true])
-          // DELETE and TRIGGER act on the whole table: naming a column is a syntax error on both servers.
+          for (const privilege of COLUMN_PRIVILEGES) {
+            expect([privilege, await attempt(privilege, true)]).toEqual([privilege, true])
+          }
+          // DELETE and TRIGGER act on the whole table, so naming a column is rejected. Each is also granted
+          // *without* columns in the same breath: the column list is then the only difference between a
+          // statement that works and one that does not, so this cannot pass because of some unrelated refusal
+          // (a missing grant option, a mistyped table) that would have failed both forms.
           for (const privilege of ['DELETE', 'TRIGGER']) {
-            expect([privilege, await attempt(privilege)]).toEqual([privilege, false])
+            expect([privilege, 'with columns', await attempt(privilege, true)]).toEqual([
+              privilege,
+              'with columns',
+              false,
+            ])
+            expect([privilege, 'whole table', await attempt(privilege, false)]).toEqual([
+              privilege,
+              'whole table',
+              true,
+            ])
           }
         } finally {
           await exec(

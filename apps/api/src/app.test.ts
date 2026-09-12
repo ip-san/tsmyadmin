@@ -1117,6 +1117,35 @@ describe('users', () => {
     expect(body).toContain('****')
   })
 
+  it('refuses a column grant the servers could not run, on preview and on execute alike', async () => {
+    const h = harness(withUsers())
+    stores.push(h.store)
+    await h.login()
+    const send = (path: string, op: unknown) =>
+      h.req(`/api/users/${path}`, { method: 'POST', body: JSON.stringify({ op }) })
+    const base = { user: { name: 'r', host: '%' }, database: 'shop', table: 'orders' }
+    // The rule lives in a refinement on the request schema, so both routes have to carry it: previewing SQL
+    // that execute would then reject is the one failure mode worth pinning down.
+    for (const path of ['preview', 'execute']) {
+      // DELETE has no column form on either server.
+      expect(
+        (await send(path, { op: 'grantPrivileges', ...base, privileges: ['DELETE'], columns: ['id'] })).status
+      ).toBe(400)
+      // Columns without a table name nothing.
+      const { table: _table, ...noTable } = base
+      expect(
+        (await send(path, { op: 'grantPrivileges', ...noTable, privileges: ['SELECT'], columns: ['id'] })).status
+      ).toBe(400)
+      // The valid form goes through.
+      expect(
+        (await send(path, { op: 'grantPrivileges', ...base, privileges: ['SELECT'], columns: ['id'] })).status
+      ).toBe(200)
+    }
+    expect(h.adapter.calls.filter((c) => c.method === 'executeSql').map((c) => c.args[1])).toEqual([
+      "GRANT SELECT (`id`) ON `shop`.`orders` TO 'r'@'%'",
+    ])
+  })
+
   it('validates user ops', async () => {
     const h = harness(withUsers())
     stores.push(h.store)
