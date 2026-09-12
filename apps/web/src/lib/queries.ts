@@ -7,6 +7,7 @@ import type {
   DdlPreviewResponse,
   EventInfo,
   KeyValue,
+  KillMode,
   ProcessInfo,
   RoutineDefinition,
   RoutineInfo,
@@ -226,8 +227,8 @@ export const mutations = {
     unwrap<{ cancelled: boolean }>(
       api.databases[':db'].sql.cancel.$post({ param: { db: enc(db) }, json: { queryId } })
     ),
-  killProcess: (id: string) =>
-    unwrap<{ ok: boolean }>(api.server.processes[':id'].kill.$post({ param: { id: enc(id) } })),
+  killProcess: (id: string, mode: KillMode) =>
+    unwrap<{ ok: boolean }>(api.server.processes[':id'].kill.$post({ param: { id: enc(id) }, query: { mode } })),
   previewDdl: (db: string, schema: string | undefined, op: DdlOp) =>
     unwrap<DdlPreviewResponse>(
       api.databases[':db'].ddl.preview.$post({ param: { db: enc(db) }, json: { ...schemaQuery(schema), op } })

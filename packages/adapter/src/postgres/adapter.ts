@@ -3,6 +3,7 @@ import type {
   DatabaseInfo,
   EventInfo,
   KeyValue,
+  KillMode,
   Namespace,
   ObjectDependency,
   ProcessInfo,
@@ -432,8 +433,8 @@ export class PostgresAdapter extends BaseAdapter {
     return this.withConn(this.serverNs(), (conn) => pgListProcesses(conn))
   }
 
-  killProcess(id: string): Promise<void> {
-    return this.withConn(this.serverNs(), (conn) => pgKillProcess(conn, id))
+  killProcess(id: string, mode: KillMode = 'connection'): Promise<void> {
+    return this.withConn(this.serverNs(), (conn) => pgKillProcess(conn, id, mode))
   }
 
   listUsers(): Promise<UserInfo[]> {

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { ProcessInfo } from '@tsmyadmin/shared'
+import type { KillMode, ProcessInfo } from '@tsmyadmin/shared'
 import { useState } from 'react'
 import { CellValue } from '@/components/cells/CellValue.tsx'
 import { Button } from '@/components/ui/Button.tsx'
@@ -20,9 +20,9 @@ export function ProcessesPage() {
     await procs.refetch()
   }
   const kill = useMutation({
-    mutationFn: (id: string) => mutations.killProcess(id),
-    onSuccess: async (_r, id) => {
-      setNotice(locale.server.killed(id))
+    mutationFn: ({ id, mode }: { id: string; mode: KillMode }) => mutations.killProcess(id, mode),
+    onSuccess: async (_r, { id, mode }) => {
+      setNotice(mode === 'query' ? locale.server.cancelled(id) : locale.server.killed(id))
       setVictim(null)
       await queryClient.invalidateQueries({ queryKey: ['server', 'processes'] })
     },
@@ -89,6 +89,20 @@ export function ProcessesPage() {
                   )}
                 </Td>
                 <Td className="whitespace-nowrap">
+                  {/* Ending the statement is the gentler action: the session, its transaction and its
+                      temporary tables survive, so it needs no confirmation. */}
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setNotice(null)
+                      kill.mutate({ id: p.id, mode: 'query' })
+                    }}
+                    disabled={kill.isPending}
+                    title={locale.server.cancelQueryHint}
+                    aria-label={`${p.id}: ${locale.server.cancelQuery}`}
+                  >
+                    {locale.server.cancelQuery}
+                  </Button>{' '}
                   <Button
                     size="sm"
                     variant="danger"
@@ -117,7 +131,7 @@ export function ProcessesPage() {
               onClick={() => {
                 if (!victim) return
                 setNotice(null)
-                kill.mutate(victim.id)
+                kill.mutate({ id: victim.id, mode: 'connection' })
               }}
               disabled={kill.isPending}
             >

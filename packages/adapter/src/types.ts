@@ -10,6 +10,7 @@ import type {
   EventInfo,
   InputCell,
   KeyValue,
+  KillMode,
   Namespace,
   ObjectDependency,
   ProcessInfo,
@@ -241,7 +242,8 @@ export interface DatabaseAdapter {
   listStatus(): Promise<KeyValue[]>
   listProcesses(): Promise<ProcessInfo[]>
   /** Terminates a connection (KILL / pg_terminate_backend). `id` must be numeric. */
-  killProcess(id: string): Promise<void>
+  /** Stops a server-side process: `query` cancels its running statement, `connection` closes it outright. */
+  killProcess(id: string, mode?: KillMode): Promise<void>
   listUsers(): Promise<UserInfo[]>
   /**
    * Effective grants as SQL statements (MySQL SHOW GRANTS; PostgreSQL reconstructed from the catalog).

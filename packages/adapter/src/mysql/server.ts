@@ -1,4 +1,4 @@
-import type { KeyValue, ProcessInfo, ServerInfo } from '@tsmyadmin/shared'
+import type { KeyValue, KillMode, ProcessInfo, ServerInfo } from '@tsmyadmin/shared'
 import { type Conn, firstResult } from '../base.ts'
 import { joinParts, str, strOrNull } from '../sql/format.ts'
 import { AdapterError } from '../types.ts'
@@ -57,10 +57,11 @@ export async function mysqlListProcesses(conn: Conn): Promise<ProcessInfo[]> {
   }))
 }
 
-export async function mysqlKillProcess(conn: Conn, id: string): Promise<void> {
+export async function mysqlKillProcess(conn: Conn, id: string, mode: KillMode = 'connection'): Promise<void> {
   if (!/^\d+$/.test(id)) throw new AdapterError('QUERY_FAILED', 'process id must be numeric')
   try {
-    await conn.query(`KILL ${id}`)
+    // `KILL QUERY` ends the statement and leaves the session; `KILL` (CONNECTION) drops the whole thing.
+    await conn.query(`KILL ${mode === 'query' ? 'QUERY ' : ''}${id}`)
   } catch (err) {
     // KILL of the connection this statement runs on drops it (the server reports the loss): success.
     if (err instanceof AdapterError && err.code === 'CONNECTION_FAILED') {

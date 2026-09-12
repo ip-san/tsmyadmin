@@ -2112,6 +2112,33 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         await victim.close()
       })
 
+      it("cancels only the statement in 'query' mode, leaving the connection usable", async () => {
+        const victim = ctx.create()
+        const marker = `cancel_${scratch}`
+        const slow = victim.executeSql(ns, `${ctx.slowSql} /* ${marker} */`, { ...EXEC, timeoutMs: 60_000 })
+        let target: string | undefined
+        for (let i = 0; i < 40 && !target; i++) {
+          await new Promise((r) => setTimeout(r, 100))
+          target = (await db.listProcesses()).find((p) => p.query?.includes(marker))?.id
+        }
+        expect(target).toBeDefined()
+        await db.killProcess(target as string, 'query')
+        await slow
+        // The connection itself is still there — that is the whole difference from a connection kill.
+        const alive = async () => (await db.listProcesses()).some((p) => p.id === target)
+        expect(await alive()).toBe(true)
+
+        // ...and killing the connection does remove it.
+        await db.killProcess(target as string, 'connection')
+        let gone = false
+        for (let i = 0; i < 40 && !gone; i++) {
+          await new Promise((r) => setTimeout(r, 100))
+          gone = !(await alive())
+        }
+        expect(gone).toBe(true)
+        await victim.close()
+      })
+
       it('rejects non-numeric ids and unknown backends', async () => {
         await expect(db.killProcess('1; DROP TABLE users')).rejects.toMatchObject({ name: 'AdapterError' })
         await expect(db.killProcess('999999999')).rejects.toMatchObject({ name: 'AdapterError' })

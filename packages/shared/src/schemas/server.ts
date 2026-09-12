@@ -30,3 +30,15 @@ export const ProcessInfoSchema = z.object({
 export type ProcessInfo = z.infer<typeof ProcessInfoSchema>
 
 export const ProcessIdSchema = z.object({ id: z.string().regex(/^\d+$/, 'process id must be numeric') })
+
+/**
+ * What to stop: just the statement the connection is running, or the connection itself. Cancelling a runaway
+ * query is the gentler of the two — the client keeps its session, transaction and temporary tables.
+ */
+export const KillModeSchema = z.enum(['query', 'connection'])
+export type KillMode = z.infer<typeof KillModeSchema>
+/**
+ * Query of POST /server/processes/:id/kill. A query parameter rather than a body on purpose: a body-less POST
+ * is what `hono/csrf` inspects, and a JSON body would quietly take this endpoint out of that check.
+ */
+export const KillQuerySchema = z.object({ mode: KillModeSchema.default('connection') })

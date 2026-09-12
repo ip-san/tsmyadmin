@@ -1,4 +1,4 @@
-import type { KeyValue, ProcessInfo, ServerInfo } from '@tsmyadmin/shared'
+import type { KeyValue, KillMode, ProcessInfo, ServerInfo } from '@tsmyadmin/shared'
 import { type Conn, firstResult } from '../base.ts'
 import { joinParts, str, strOrNull } from '../sql/format.ts'
 import { AdapterError } from '../types.ts'
@@ -77,15 +77,17 @@ export async function pgListProcesses(conn: Conn): Promise<ProcessInfo[]> {
   }))
 }
 
-export async function pgKillProcess(conn: Conn, id: string): Promise<void> {
+export async function pgKillProcess(conn: Conn, id: string, mode: KillMode = 'connection'): Promise<void> {
   if (!/^\d+$/.test(id)) throw new AdapterError('QUERY_FAILED', 'process id must be numeric')
-  // Terminating the very backend this query runs on kills the connection mid-call: that is success, not failure.
+  // pg_cancel_backend ends the running statement; pg_terminate_backend closes the connection.
+  const fn = mode === 'query' ? 'pg_cancel_backend' : 'pg_terminate_backend'
+  // Acting on the very backend this query runs on kills the connection mid-call: that is success, not failure.
   const own = firstResult(await conn.query('SELECT pg_backend_pid()'))
-  if (String(own.rows[0]?.[0]) === id) {
-    await conn.query('SELECT pg_terminate_backend($1::int)', [Number(id)]).catch(() => undefined)
+  if (String(own.rows[0]?.[0]) === id && mode === 'connection') {
+    await conn.query(`SELECT ${fn}($1::int)`, [Number(id)]).catch(() => undefined)
     conn.discard()
     return
   }
-  const r = firstResult(await conn.query('SELECT pg_terminate_backend($1::int)', [Number(id)]))
+  const r = firstResult(await conn.query(`SELECT ${fn}($1::int)`, [Number(id)]))
   if (r.rows[0]?.[0] !== true) throw new AdapterError('NOT_FOUND', `No such backend: ${id}`)
 }

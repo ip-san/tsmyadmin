@@ -241,7 +241,8 @@ describe('withAudit', () => {
       rows: 2,
       columns: ['a'],
     })
-    expect(summarise('killProcess', ['42'])).toEqual({ processId: '42' })
+    expect(summarise('killProcess', ['42'])).toEqual({ processId: '42', killMode: 'connection' })
+    expect(summarise('killProcess', ['42', 'query'])).toEqual({ processId: '42', killMode: 'query' })
     expect(summarise('deleteRows', [{ database: 'd', schema: 's' }, 't', [{ kind: 'ctid', value: '(0,1)' }]])).toEqual({
       database: 'd',
       schema: 's',

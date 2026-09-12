@@ -4,6 +4,7 @@ import type {
   DatabaseInfo,
   EventInfo,
   KeyValue,
+  KillMode,
   Namespace,
   ObjectDependency,
   ProcessInfo,
@@ -609,8 +610,8 @@ export class MysqlAdapter extends BaseAdapter {
     return this.withConn(this.serverNs(), (conn) => mysqlListProcesses(conn))
   }
 
-  killProcess(id: string): Promise<void> {
-    return this.withConn(this.serverNs(), (conn) => mysqlKillProcess(conn, id))
+  killProcess(id: string, mode: KillMode = 'connection'): Promise<void> {
+    return this.withConn(this.serverNs(), (conn) => mysqlKillProcess(conn, id, mode))
   }
 
   listUsers(): Promise<UserInfo[]> {

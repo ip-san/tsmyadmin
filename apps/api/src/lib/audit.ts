@@ -101,7 +101,8 @@ export function summarise(
     case 'cancelQuery':
       return { queryId: args[0] }
     case 'killProcess':
-      return { processId: args[0] }
+      // Which of the two a KILL was matters after the fact: one ended a statement, the other a session.
+      return { processId: args[0], killMode: (args[1] as string | undefined) ?? 'connection' }
   }
 }
 
