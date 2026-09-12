@@ -18,6 +18,7 @@ test.describe('saved queries on a persistent deployment', () => {
 
     const entry = page.getByRole('listitem').filter({ hasText: name })
     let saved = false
+    let failed = false
     try {
       await page.getByLabel('クエリ名').fill(name)
       await page.getByRole('textbox', { name: 'SQL エディタ' }).click()
@@ -34,17 +35,24 @@ test.describe('saved queries on a persistent deployment', () => {
       await page.reload()
       await panel.click()
       await expect(entry).toBeVisible()
+    } catch (error) {
+      failed = true
+      throw error
     } finally {
       // The list is shared by every run against this account, so the row goes even if an assertion failed.
       // Whether it exists is tracked, not re-read from the page: a failure that leaves the panel collapsed
-      // would make the row invisible while it is still very much on the server. Cleanup never throws — a
-      // failure here would replace the assertion error that actually explains the run.
+      // would make the row invisible while it is still very much on the server.
       if (saved) {
-        await (async () => {
+        const cleanup = (async () => {
           if (!(await entry.isVisible())) await panel.click()
           await entry.getByRole('button', { name: `${name} を削除` }).click()
           await expect(entry).toBeHidden()
-        })().catch(() => undefined)
+        })()
+        // Only swallowed when the test was already failing: throwing here would replace the assertion error
+        // that explains the run. On a passing run this is the only place the delete button is exercised, so a
+        // broken one has to fail the test rather than disappear into the cleanup.
+        if (failed) await cleanup.catch(() => undefined)
+        else await cleanup
       }
     }
   })

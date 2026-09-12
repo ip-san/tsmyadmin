@@ -8,18 +8,22 @@ import { useSavedQueries } from './use-saved-queries.ts'
 
 const server = vi.hoisted(() => ({
   list: [] as { id: string; name: string; sql: string; at: number }[],
-  fail: null as Error | null,
+  saveFail: null as Error | null,
+  deleteFail: null as Error | null,
+  /** Held until the test releases it, to make a save settle after a delete submitted later. */
+  saveHold: null as Promise<void> | null,
 }))
 vi.mock('@/lib/queries.ts', () => ({
   savedQueriesQuery: { queryKey: ['saved-queries'], queryFn: async () => server.list },
   mutations: {
     saveQuery: async (name: string, sql: string) => {
-      if (server.fail) throw server.fail
+      if (server.saveHold) await server.saveHold
+      if (server.saveFail) throw server.saveFail
       server.list = [...server.list.filter((q) => q.name !== name), { id: `id-${name}`, name, sql, at: 1 }]
       return server.list
     },
     deleteSavedQuery: async (id: string) => {
-      if (server.fail) throw server.fail
+      if (server.deleteFail) throw server.deleteFail
       server.list = server.list.filter((q) => q.id !== id)
       return server.list
     },
@@ -34,7 +38,9 @@ function wrapper({ children }: { children: ReactNode }) {
 describe('useSavedQueries', () => {
   beforeEach(() => {
     server.list = []
-    server.fail = null
+    server.saveFail = null
+    server.deleteFail = null
+    server.saveHold = null
     const data = new Map<string, string>()
     vi.stubGlobal('localStorage', {
       getItem: (k: string) => data.get(k) ?? null,
@@ -84,19 +90,43 @@ describe('useSavedQueries', () => {
     const { result } = renderHook(() => useSavedQueries('mysql.db.3306', true), { wrapper })
     await waitFor(() => expect(result.current.entries).toHaveLength(1))
 
-    server.fail = new Error('the deployment refused it')
+    server.saveFail = new Error('the deployment refused it')
     act(() => result.current.save('daily', 'SELECT 1'))
     await waitFor(() => expect(result.current.error).not.toBeNull())
 
     // A mutation keeps its error until it is fired again, so the failed save must not outlive a later success.
-    server.fail = null
+    server.saveFail = null
     act(() => result.current.remove('old'))
     await waitFor(() => expect(result.current.entries).toEqual([]))
     expect(result.current.error).toBeNull()
   })
 
+  it('reports a save that fails after a later delete has already succeeded', async () => {
+    server.list = [{ id: 'id-old', name: 'old', sql: 'SELECT 2', at: 1 }]
+    const { result } = renderHook(() => useSavedQueries('mysql.db.3306', true), { wrapper })
+    await waitFor(() => expect(result.current.entries).toHaveLength(1))
+
+    // Submitted first, settles last: which write was submitted first is the wrong thing to go by.
+    let release: () => void = () => undefined
+    server.saveHold = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    server.saveFail = new Error('the deployment refused it')
+    act(() => result.current.save('daily', 'SELECT 1'))
+
+    act(() => result.current.remove('old'))
+    await waitFor(() => expect(result.current.entries).toEqual([]))
+    expect(result.current.error).toBeNull()
+
+    await act(async () => {
+      release()
+      await Promise.resolve()
+    })
+    await waitFor(() => expect(result.current.error?.message).toBe('the deployment refused it'))
+  })
+
   it('reports a failed write instead of doing nothing on screen', async () => {
-    server.fail = new Error('the deployment refused it')
+    server.saveFail = new Error('the deployment refused it')
     const { result } = renderHook(() => useSavedQueries('mysql.db.3306', true), { wrapper })
     await waitFor(() => expect(result.current.entries).toEqual([]))
     act(() => result.current.save('daily', 'SELECT 1'))

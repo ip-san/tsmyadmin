@@ -9,19 +9,13 @@ export interface SavedQueries {
   /** True when the list is kept with the account rather than in this browser. */
   onServer: boolean
   /**
-   * The last failure of the server-side list, for the panel to show: a 5xx, a network error or UNSUPPORTED
-   * (a 401 is already handled globally by the MutationCache in main.tsx). Without it a failed save would simply
-   * do nothing on screen. Always null in browser mode, where neither the query nor the mutations ever run.
+   * The last write to have failed, and only while it is still the last to have settled: a 5xx, a network error
+   * or UNSUPPORTED (a 401 is already handled globally by the MutationCache in main.tsx). Without it a failed
+   * save would simply do nothing on screen. Always null in browser mode, where nothing here ever runs.
    */
   error: Error | null
   save: (name: string, sql: string) => void
   remove: (name: string) => void
-}
-
-/** Whichever of the two writes was submitted last (`submittedAt` is 0 for one that never ran). */
-type Write = { submittedAt: number; error: Error | null }
-function lastWrite(a: Write, b: Write): Write {
-  return b.submittedAt > a.submittedAt ? b : a
 }
 
 /**
@@ -35,19 +29,30 @@ export function useSavedQueries(scope: string, onServer: boolean): SavedQueries 
   const [local, setLocal] = useState<SavedQuery[]>(() => loadSaved(scope))
   const server = useQuery({ ...savedQueriesQuery, enabled: onServer })
   const entries = onServer ? (server.data ?? []) : local
+  // Held here rather than read off the mutations, because what matters is which write *settled* last, not
+  // which was submitted last: a slow save that fails after a quick delete has succeeded is still a failure the
+  // user has to see, and a mutation keeps its own error until it is fired again.
+  const [writeError, setWriteError] = useState<Error | null>(null)
   // The mutations return the new list, so the cache is set from the response rather than refetched.
-  const onSuccess = (list: SavedQuery[]) => queryClient.setQueryData(savedQueriesQuery.queryKey, list)
+  const onSuccess = (list: SavedQuery[]) => {
+    setWriteError(null)
+    queryClient.setQueryData(savedQueriesQuery.queryKey, list)
+  }
+  const onError = (failure: Error) => setWriteError(failure)
   const saveMutation = useMutation({
     mutationFn: ({ name, sql }: { name: string; sql: string }) => mutations.saveQuery(name, sql),
     onSuccess,
+    onError,
   })
-  const removeMutation = useMutation({ mutationFn: (id: string) => mutations.deleteSavedQuery(id), onSuccess })
+  const removeMutation = useMutation({
+    mutationFn: (id: string) => mutations.deleteSavedQuery(id),
+    onSuccess,
+    onError,
+  })
   return {
     entries,
     onServer,
-    // Only the most recent write: a mutation keeps its error until it is fired again, so a failed save
-    // would otherwise still be on screen after a delete had since succeeded.
-    error: server.error ?? lastWrite(saveMutation, removeMutation).error,
+    error: server.error ?? writeError,
     save: (name, sql) => {
       if (onServer) saveMutation.mutate({ name, sql })
       else setLocal(saveQuery(scope, { id: '', name, sql, at: Date.now() }))
