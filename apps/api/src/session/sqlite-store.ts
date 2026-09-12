@@ -4,9 +4,18 @@ import { dirname } from 'node:path'
 import { DatabaseSync, type StatementSync } from 'node:sqlite'
 import type { DatabaseAdapter } from '@tsmyadmin/adapter'
 import { type ConnectRequest, ConnectRequestSchema } from '@tsmyadmin/shared'
-import { deriveSessionKey, open, seal } from './crypto.ts'
+import { deriveSessionKey, open, openLegacy, rowAad, seal } from './crypto.ts'
 import { identityHash } from './identity.ts'
-import { SavedQueryStore } from './saved-queries.ts'
+import { SAVED_QUERIES, SavedQueryStore } from './saved-queries.ts'
+
+/** Table name in the AAD of a session payload. */
+const SESSIONS = 'sessions'
+/**
+ * Marks that every payload in the file is sealed against its own row. Absent (or anything else) means the
+ * file predates that and its rows are re-sealed on open.
+ */
+const PAYLOAD_FORMAT = '2'
+
 import {
   type AdapterFactory,
   connectAdapter,
@@ -131,21 +140,84 @@ export class SqliteSessionStore implements SessionStore {
     // (After the store, which is what creates the table; a 0.1.x file does not have it yet.) Rotating back to
     // the old secret would have made them readable again, but that is not worth an unbounded leak in the file.
     if (this.secretRotated) this.db.exec('DELETE FROM saved_queries')
+    this.bindPayloadsToRows()
     this.touchIntervalMs = options.touchIntervalMs ?? 60_000
     this.factory = options.adapterFactory
     this.timer = startSweep(options.sweepIntervalMs ?? 60_000, () => void this.sweep())
   }
 
   /** True when the sessions table is empty or its first row opens with the current key. */
-  private canDecryptAny(): boolean {
-    const row = this.db.prepare('SELECT payload FROM sessions LIMIT 1').get() as { payload: Uint8Array } | undefined
-    if (!row) return true
+  /**
+   * Re-seals payloads written before they were bound to their row (see rowAad). Done in place so an upgrade
+   * costs nobody their session or their saved queries, and in one transaction so a crash part-way cannot leave
+   * some rows bound and the file still marked unbound — the next start would then fail to read the migrated
+   * ones. A row that cannot be read at all is dropped, the same as on a secret rotation.
+   */
+  private bindPayloadsToRows(): void {
+    const stored = this.db.prepare("SELECT value FROM meta WHERE key = 'payload_format'").get() as
+      | { value: string }
+      | undefined
+    if (stored?.value === PAYLOAD_FORMAT) return
+    // Written out per table rather than interpolating a name: check:sql-safety draws no distinction between a
+    // constant and a value, and it is right not to.
+    const plan = [
+      {
+        table: SESSIONS,
+        rows: this.db.prepare('SELECT id, payload FROM sessions').all(),
+        rebind: this.db.prepare('UPDATE sessions SET payload = ? WHERE id = ?'),
+        drop: this.db.prepare('DELETE FROM sessions WHERE id = ?'),
+      },
+      {
+        table: SAVED_QUERIES,
+        rows: this.db.prepare('SELECT id, payload FROM saved_queries').all(),
+        rebind: this.db.prepare('UPDATE saved_queries SET payload = ? WHERE id = ?'),
+        drop: this.db.prepare('DELETE FROM saved_queries WHERE id = ?'),
+      },
+    ]
+    this.db.exec('BEGIN IMMEDIATE')
     try {
-      open(this.key, row.payload)
-      return true
-    } catch {
-      return false
+      for (const { table, rows, rebind, drop } of plan) {
+        for (const row of rows as { id: string; payload: Uint8Array }[]) {
+          const aad = rowAad(table, row.id)
+          try {
+            rebind.run(seal(this.key, openLegacy(this.key, row.payload), aad), row.id)
+          } catch {
+            try {
+              // Already bound — the meta row went missing, not the binding. Leave it exactly as it is.
+              open(this.key, row.payload, aad)
+            } catch {
+              drop.run(row.id)
+            }
+          }
+        }
+      }
+      this.db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('payload_format', ?)").run(PAYLOAD_FORMAT)
+      this.db.exec('COMMIT')
+    } catch (err) {
+      this.db.exec('ROLLBACK')
+      throw err
     }
+  }
+
+  private canDecryptAny(): boolean {
+    const row = this.db.prepare('SELECT id, payload FROM sessions LIMIT 1').get() as
+      | { id: string; payload: Uint8Array }
+      | undefined
+    if (!row) return true
+    // Either format counts: the question is whether the secret is still the right one, not how the row is
+    // sealed. A file that lost its meta row (as 0.1.0 files have none at all) can hold either.
+    for (const read of [
+      () => open(this.key, row.payload, rowAad(SESSIONS, row.id)),
+      () => openLegacy(this.key, row.payload),
+    ]) {
+      try {
+        read()
+        return true
+      } catch {
+        /* try the other format */
+      }
+    }
+    return false
   }
 
   get size(): number {
@@ -159,7 +231,7 @@ export class SqliteSessionStore implements SessionStore {
     for (const victim of same.slice(0, Math.max(0, same.length - this.maxPerIdentity + 1))) await this.delete(victim.id)
     const id = crypto.randomUUID()
     const now = this.now()
-    this.stmt.insert.run(id, seal(this.key, JSON.stringify(config)), now, now, identity)
+    this.stmt.insert.run(id, seal(this.key, JSON.stringify(config), rowAad(SESSIONS, id)), now, now, identity)
     this.live.set(id, { config, adapter, createdAt: now, lastTouch: now })
     return { id, config, adapter, createdAt: now, lastUsedAt: now }
   }
@@ -177,7 +249,7 @@ export class SqliteSessionStore implements SessionStore {
       // First use after a restart: decrypt + validate once, then keep the config with the rebuilt pool.
       let config: ConnectRequest
       try {
-        config = ConnectRequestSchema.parse(JSON.parse(open(this.key, row.payload)))
+        config = ConnectRequestSchema.parse(JSON.parse(open(this.key, row.payload, rowAad(SESSIONS, id))))
       } catch {
         // Undecryptable (secret rotated) or corrupt: drop it rather than fail every request.
         await this.delete(id)

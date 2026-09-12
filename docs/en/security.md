@@ -1,4 +1,4 @@
-<!-- translated-from: docs/security.md sha256:34413cec40af70e134f1bfd1eb9b2b05c674fe69af6338844b2293e519be3017 -->
+<!-- translated-from: docs/security.md sha256:dfbb3f6dff460459fa20717465fa112dda0f1e7e6cb5cbebdc7074882733383e -->
 
 # Security model
 
@@ -11,6 +11,7 @@
 
 ## Authentication and sessions
 
+- Every stored row is encrypted against that row (its `table:row id` goes into AES-GCM's additional authenticated data). Someone able to write the file but not to decrypt it therefore cannot copy another row's ciphertext over their own and have their session run with the victim's credentials; a row that will not open is discarded when it is read.
 - Credentials are held server-side only; the browser gets nothing but **a cookie with a signed session ID** (`HttpOnly`, `SameSite=Strict`, and `Secure` in production). With `SESSION_STORE=sqlite`, the production default, credentials are stored AES-256-GCM encrypted under a key derived from `SESSION_SECRET` with HKDF — the file alone cannot be decrypted, so guard `SESSION_SECRET` as the environment secret it is
 - A session expires after `SESSION_TTL_MINUTES` of inactivity; signing out or expiring closes its database connection pool
 - Passwords appear in no API response (`GET /api/session`), no log, no account-operation preview or result, and no database error message — they are masked as `****`. A password typed straight into the SQL console (`IDENTIFIED BY '…'`, `PASSWORD '…'`, `SET PASSWORD … = '…'`) is masked before the audit log is written: comments are stripped first, and in a statement containing `IDENTIFIED` or `PASSWORD` everything from the first quote after the keyword to the last quote becomes a single mask, so no fragment survives even when the statement was passed as a string to `PREPARE` / `EXECUTE` / `format()` or contains a nested `''`. `*_PASSWORD` variants such as `SOURCE_PASSWORD`, a `password=…` inside a connection string, and an `AS 0x…` hash are covered too. (The summary is not meant to be re-run, so comments are lost.)

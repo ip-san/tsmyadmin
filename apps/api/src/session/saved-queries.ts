@@ -1,8 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
 import type { ConnectRequest, SavedQuery } from '@tsmyadmin/shared'
-import { open, seal } from './crypto.ts'
+import { open, rowAad, seal } from './crypto.ts'
 import { identityHash } from './identity.ts'
+
+/** Table name in the AAD of a saved-query payload. */
+export const SAVED_QUERIES = 'saved_queries'
 
 /** Per account, matching what the browser-side list holds. */
 const SAVED_QUERY_LIMIT = 200
@@ -63,7 +66,10 @@ export class SavedQueryStore {
     for (const row of rows) {
       // A row sealed with a previous SESSION_SECRET cannot be read; it is skipped rather than failing the list.
       try {
-        const body = JSON.parse(open(this.key, row.payload)) as { name: string; sql: string }
+        const body = JSON.parse(open(this.key, row.payload, rowAad(SAVED_QUERIES, row.id))) as {
+          name: string
+          sql: string
+        }
         out.push({ id: row.id, name: body.name, sql: body.sql, at: row.updated_at })
       } catch {
         /* unreadable row */
@@ -76,10 +82,12 @@ export class SavedQueryStore {
   save(config: ConnectRequest, name: string, sql: string): SavedQuery[] {
     const identity = this.identity(config)
     const existing = this.list(config).find((q) => q.name === name)
-    const payload = seal(this.key, JSON.stringify({ name, sql }))
+    // Sealed against the row it lands in, so the id has to be decided first.
+    const id = existing?.id ?? randomUUID()
+    const payload = seal(this.key, JSON.stringify({ name, sql }), rowAad(SAVED_QUERIES, id))
     const at = this.now()
-    if (existing) this.stmt.update.run(payload, at, existing.id, identity)
-    else this.stmt.insert.run(randomUUID(), identity, payload, at)
+    if (existing) this.stmt.update.run(payload, at, id, identity)
+    else this.stmt.insert.run(id, identity, payload, at)
     // Oldest first beyond the cap, so a runaway client cannot grow the file without bound.
     for (const row of this.stmt.oldest.all(identity, identity, SAVED_QUERY_LIMIT) as { id: string }[]) {
       this.stmt.remove.run(row.id, identity)

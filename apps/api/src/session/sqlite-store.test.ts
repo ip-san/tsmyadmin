@@ -1,9 +1,11 @@
+import { createCipheriv, randomBytes } from 'node:crypto'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { FakeAdapter } from '@tsmyadmin/adapter/testing'
 import { afterEach, describe, expect, it } from 'vitest'
+import { deriveSessionKey, open, openLegacy, rowAad } from './crypto.ts'
 import { SqliteSessionStore } from './sqlite-store.ts'
 
 const config = { dialect: 'mysql' as const, host: 'h', port: 1, user: 'u', password: 'secret-pw' }
@@ -16,6 +18,14 @@ const tmpFile = () => {
   dirs.push(dir)
   return join(dir, 'nested', 'sessions.sqlite')
 }
+/** What the release before row binding wrote: iv | tag | ciphertext, with no AAD. */
+const legacySeal = (key: Buffer, plaintext: string) => {
+  const iv = randomBytes(12)
+  const cipher = createCipheriv('aes-256-gcm', key, iv)
+  const body = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()])
+  return Buffer.concat([iv, cipher.getAuthTag(), body])
+}
+
 const factory =
   (made: FakeAdapter[] = []) =>
   () => {
@@ -121,6 +131,107 @@ describe('SqliteSessionStore', () => {
       expect(store.savedQueries.save(config, 'daily', 'SELECT 1')).toHaveLength(1)
     } finally {
       await store.closeAll()
+    }
+  })
+
+  it('carries sessions and saved queries across the row-binding upgrade', async () => {
+    const path = tmpFile()
+    const secret = 's'.repeat(32)
+    let sessionId = ''
+    const before = new SqliteSessionStore({ path, secret, adapterFactory: factory() })
+    try {
+      sessionId = (await before.create(config)).id
+      before.savedQueries.save(config, 'daily', 'SELECT 1')
+    } finally {
+      await before.closeAll()
+    }
+
+    // Rewind the file to what the previous release wrote: payloads sealed without their row, and no format mark.
+    const key = deriveSessionKey(secret)
+    const raw = new DatabaseSync(path)
+    for (const table of ['sessions', 'saved_queries']) {
+      const rows = raw.prepare(`SELECT id, payload FROM ${table}`).all() as { id: string; payload: Uint8Array }[]
+      const update = raw.prepare(`UPDATE ${table} SET payload = ? WHERE id = ?`)
+      for (const row of rows) {
+        update.run(legacySeal(key, open(key, row.payload, rowAad(table, row.id))), row.id)
+      }
+    }
+    raw.prepare("DELETE FROM meta WHERE key = 'payload_format'").run()
+    raw.close()
+
+    const after = new SqliteSessionStore({ path, secret, adapterFactory: factory() })
+    try {
+      // Nobody is signed out and nobody loses a bookmark.
+      expect(after.secretRotated).toBe(false)
+      expect((await after.get(sessionId))?.config.user).toBe(config.user)
+      expect(after.savedQueries.list(config)).toMatchObject([{ name: 'daily', sql: 'SELECT 1' }])
+      // And the rows are bound now: the same payload in another row no longer opens.
+      const check = new DatabaseSync(path)
+      const row = check.prepare('SELECT id, payload FROM sessions LIMIT 1').get() as {
+        id: string
+        payload: Uint8Array
+      }
+      expect(() => open(key, row.payload, rowAad('sessions', 'another-row'))).toThrow()
+      expect(open(key, row.payload, rowAad('sessions', row.id))).toContain(config.user)
+      check.close()
+    } finally {
+      await after.closeAll()
+    }
+  })
+
+  it("refuses a session payload copied into another account's row", async () => {
+    const path = tmpFile()
+    const secret = 's'.repeat(32)
+    const store = new SqliteSessionStore({ path, secret, adapterFactory: factory() })
+    const victim = await store.create(config)
+    const attacker = await store.create({ ...config, user: 'attacker' })
+    // Someone able to write the file but not to decrypt it swaps one payload for another.
+    const raw = new DatabaseSync(path)
+    const payload = (raw.prepare('SELECT payload FROM sessions WHERE id = ?').get(victim.id) as { payload: Uint8Array })
+      .payload
+    raw.prepare('UPDATE sessions SET payload = ? WHERE id = ?').run(payload, attacker.id)
+    raw.close()
+    await store.closeAll()
+
+    // After a restart the row is read from the file: it cannot be opened for that row, so it is dropped rather
+    // than handing the attacker a session running as the victim.
+    const reopened = new SqliteSessionStore({ path, secret, adapterFactory: factory() })
+    try {
+      expect(await reopened.get(attacker.id)).toBeUndefined()
+      expect((await reopened.get(victim.id))?.config.user).toBe(config.user)
+    } finally {
+      await reopened.closeAll()
+    }
+  })
+
+  it('leaves a rolled-back image a readable file, not a broken one', async () => {
+    // What deployment.md promises about going back past this release. An older image opens payloads with no
+    // AAD, so it can read none of them; what matters is that it does not decide the secret changed and wipe
+    // the file, and that the saved-query rows survive for a roll forward.
+    const path = tmpFile()
+    const secret = 's'.repeat(32)
+    const store = new SqliteSessionStore({ path, secret, adapterFactory: factory() })
+    try {
+      await store.create(config)
+      store.savedQueries.save(config, 'daily', 'SELECT 1')
+    } finally {
+      await store.closeAll()
+    }
+
+    const key = deriveSessionKey(secret)
+    const raw = new DatabaseSync(path)
+    try {
+      // The fingerprint is what the older image checks, and it still matches: no rotation, no purge.
+      const meta = raw.prepare('SELECT key, value FROM meta').all() as { key: string; value: string }[]
+      expect(meta.map((m) => m.key).sort()).toEqual(['key_fingerprint', 'payload_format'])
+      // And it genuinely cannot read the payloads, which is why those rows go rather than being handed over.
+      for (const table of ['sessions', 'saved_queries']) {
+        const rows = raw.prepare(`SELECT payload FROM ${table}`).all() as { payload: Uint8Array }[]
+        expect(rows).toHaveLength(1)
+        expect(() => openLegacy(key, rows[0]?.payload ?? new Uint8Array())).toThrow()
+      }
+    } finally {
+      raw.close()
     }
   })
 

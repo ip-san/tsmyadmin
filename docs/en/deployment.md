@@ -1,4 +1,4 @@
-<!-- translated-from: docs/deployment.md sha256:0ca53b5ac3743a148046c5d56138cc79639ca4e78d435c6ab66a19b2ab25cc50 -->
+<!-- translated-from: docs/deployment.md sha256:088cf95693c87838b887679b7d5c96528f3e0d9e1dfcfe7407c3b186eaebd0ca -->
 
 # Deployment guide
 
@@ -218,4 +218,4 @@ Upgrading is replacing the image and restarting. With `SESSION_STORE=sqlite` (th
 
 Several replicas cannot share one SQLite file, so make the load balancer sticky **and** give each replica its own volume. One without the other signs a user out the moment they are routed to a different replica.
 
-Rolling back is the same procedure: put the old image back and restart. The session table is managed with `CREATE TABLE IF NOT EXISTS` and added columns only, and a row an older version cannot read is discarded (that user signs in again).
+Rolling back is the same procedure: put the old image back and restart. The session table is managed with `CREATE TABLE IF NOT EXISTS` and added columns only, and a row an older version cannot read is discarded (that user signs in again). Going back past the release that binds each payload to its row (`payload_format = 2`), the older image can read no row at all. The key fingerprint still matches, so the file as a whole is not recreated and nothing crashes: session rows are discarded as they are read, so users sign in again, and saved queries look like an empty list while their rows stay in the file — rolling forward shows them again. Upgrading re-seals the existing rows in place, so neither sessions nor saved queries are lost.
