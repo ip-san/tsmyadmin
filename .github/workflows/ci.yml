@@ -36,7 +36,8 @@ jobs:
         run: bun run test
       - name: quality
         if: matrix.task == 'quality'
-        run: bun run knip && bun run circular && bun run cpd && bun run check:arch && bun run check:sql-safety && bun run docs:validate
+        # check:quality is the same list check:static runs, so a new check cannot be added in one place and forgotten in the other.
+        run: bun run check:quality
 
   # The oldest and the newest server of each series that CI covers (docs/deployment.md holds the full matrix and
   # says which versions are only checked by hand); the versions between them share the same catalog surface, so

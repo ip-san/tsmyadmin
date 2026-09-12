@@ -16,14 +16,14 @@ test.describe('saved queries on a persistent deployment', () => {
     await panel.click()
     await expect(page.getByText('この接続ユーザーのアカウントに保存されます。', { exact: false })).toBeVisible()
 
-    await page.getByLabel('クエリ名').fill(name)
-    await page.getByRole('textbox', { name: 'SQL エディタ' }).click()
-    await page.keyboard.type('SELECT 1')
-    await page.getByRole('button', { name: '保存する', exact: true }).click()
     const entry = page.getByRole('listitem').filter({ hasText: name })
-    await expect(entry).toBeVisible()
-
     try {
+      await page.getByLabel('クエリ名').fill(name)
+      await page.getByRole('textbox', { name: 'SQL エディタ' }).click()
+      await page.keyboard.type('SELECT 1')
+      await page.getByRole('button', { name: '保存する', exact: true }).click()
+      await expect(entry).toBeVisible()
+
       // Nothing of it is in this browser: emptying local storage and reloading still shows it.
       await page.evaluate(() => {
         localStorage.clear()
@@ -31,14 +31,13 @@ test.describe('saved queries on a persistent deployment', () => {
       })
       await page.reload()
       await panel.click()
-      await expect(page.getByRole('listitem').filter({ hasText: name })).toBeVisible()
+      await expect(entry).toBeVisible()
     } finally {
-      await page
-        .getByRole('listitem')
-        .filter({ hasText: name })
-        .getByRole('button', { name: `${name} を削除` })
-        .click()
-      await expect(page.getByRole('listitem').filter({ hasText: name })).toBeHidden()
+      // The list is shared by every run against this account, so the row goes even if an assertion failed.
+      if (await entry.isVisible()) {
+        await entry.getByRole('button', { name: `${name} を削除` }).click()
+        await expect(entry).toBeHidden()
+      }
     }
   })
 })

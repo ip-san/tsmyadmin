@@ -276,6 +276,7 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
       <SavedQueriesPanel
         entries={saved.entries}
         savedOnServer={saved.onServer}
+        error={saved.error}
         currentSql={text}
         onSave={(name) => saved.save(name, text)}
         onLoad={setText}

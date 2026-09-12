@@ -8,6 +8,12 @@ export interface SavedQueries {
   entries: SavedQuery[]
   /** True when the list is kept with the account rather than in this browser. */
   onServer: boolean
+  /**
+   * The last failure of the server-side list, for the panel to show: a 5xx, a network error or UNSUPPORTED
+   * (a 401 is already handled globally by the MutationCache in main.tsx). Without it a failed save would simply
+   * do nothing on screen. Always null in browser mode, where neither the query nor the mutations ever run.
+   */
+  error: Error | null
   save: (name: string, sql: string) => void
   remove: (name: string) => void
 }
@@ -33,6 +39,7 @@ export function useSavedQueries(scope: string, onServer: boolean): SavedQueries 
   return {
     entries,
     onServer,
+    error: server.error ?? saveMutation.error ?? removeMutation.error,
     save: (name, sql) => {
       if (onServer) saveMutation.mutate({ name, sql })
       else setLocal(saveQuery(scope, { id: '', name, sql, at: Date.now() }))

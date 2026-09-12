@@ -1,4 +1,4 @@
-<!-- translated-from: README.md sha256:2c127edaf73a3452c0e637904104f7d91f705c08857b34e2261ddbbd2ef6e38b -->
+<!-- translated-from: README.md sha256:dc5a28274b3cf042f38ab19340a05edb82a750c26d16feaa54225a34c43d1d5f -->
 
 # tsmyadmin
 
@@ -54,7 +54,7 @@ The project's own checks:
 - `scripts/check-architecture.mjs` — layer dependencies (the web app never touches a database driver, routes go through the adapter, features do not import each other) and component length
 - `scripts/check-sql-safety.mjs` — that no SQL is built by interpolation or concatenation outside the adapter's builders, and that no identifier is quoted by hand
 - `scripts/validate-docs.mjs` — that the statistics in `CLAUDE.md` match reality (`--fix`)
-- `scripts/check-translations.mjs` — that each English document has been updated for the Japanese original it was written from (`bun run docs:sync` stamps them after translating)
+- `scripts/check-translations.mjs` — that each English document has been updated for the Japanese original it was written from (with a `--self-test`; `bun run docs:sync` stamps them after translating)
 
 `packages/adapter/src/test/conformance.ts` runs one suite against both MySQL and PostgreSQL, which is what guarantees the dialect differences are actually absorbed.
 

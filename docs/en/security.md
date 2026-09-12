@@ -1,4 +1,4 @@
-<!-- translated-from: docs/security.md sha256:5959571cc60a96dd27d5b848cd2bfdf3475f698009517c445246cada36f68f1b -->
+<!-- translated-from: docs/security.md sha256:34413cec40af70e134f1bfd1eb9b2b05c674fe69af6338844b2293e519be3017 -->
 
 # Security model
 
@@ -31,7 +31,7 @@ The session cookie's `Max-Age` is reissued on every authenticated request, keepi
 
 ## Capping connections (protecting the database's `max_connections`)
 
-Each sign-in creates a session, and so a connection pool. On top of that, cancelling a running query opens one dedicated connection (concurrent cancels of the same run share it; the pool size is the ceiling, so at most +4 per session). One database account holds at most `SESSION_MAX_PER_IDENTITY` sessions (10 by default), and beyond that the oldest are closed — including the earlier session of a browser that signed in again without signing out. The formula for sizing `max_connections` is under *Sizes and limits* in [deployment.md](deployment.md).
+Each sign-in creates a session, and so a connection pool. On top of that, cancelling a running query opens one dedicated connection (concurrent cancels of the same run share it; the pool size is the ceiling, so at most +4 per session). One database account holds at most `SESSION_MAX_PER_IDENTITY` sessions (10 by default), and beyond that the least recently used are closed — including the earlier session of a browser that signed in again without signing out. The formula for sizing `max_connections` is under *Sizes and limits* in [deployment.md](deployment.md).
 
 ## About the SQL console's row limit
 

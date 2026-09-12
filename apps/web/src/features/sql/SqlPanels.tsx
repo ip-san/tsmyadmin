@@ -1,6 +1,7 @@
 import type { SavedQuery } from '@tsmyadmin/shared'
 import { type ReactNode, useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
+import { ErrorBox } from '@/components/ui/Feedback.tsx'
 import { Input } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
 import type { HistoryEntry } from './history.ts'
@@ -74,6 +75,7 @@ export function SavedQueriesPanel({
   entries,
   currentSql,
   savedOnServer = false,
+  error = null,
   onSave,
   onLoad,
   onDelete,
@@ -81,6 +83,8 @@ export function SavedQueriesPanel({
   entries: SavedQuery[]
   /** Whether the list is kept with the account or only in this browser. */
   savedOnServer?: boolean
+  /** A failed read or write of the server-side list (nothing is shown when null). */
+  error?: Error | null
   currentSql: string
   onSave: (name: string) => void
   onLoad: (sql: string) => void
@@ -113,6 +117,11 @@ export function SavedQueriesPanel({
       <p className="px-3 pt-2 text-xs text-zinc-500 dark:text-zinc-400">
         {savedOnServer ? locale.sql.savedOnServer : locale.sql.savedInBrowser}
       </p>
+      {error ? (
+        <div className="px-3 pt-2">
+          <ErrorBox error={error} />
+        </div>
+      ) : null}
       {entries.length === 0 ? (
         <p className={EMPTY}>{locale.sql.noSaved}</p>
       ) : (

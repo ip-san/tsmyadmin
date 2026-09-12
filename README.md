@@ -52,7 +52,7 @@ bun run lighthouse       # Lighthouse CI（ログイン画面の性能 / a11y / 
 - `scripts/check-architecture.mjs` — レイヤー依存（web は DB ドライバーに触れない、ルートはアダプター経由のみ、feature 間の直接 import 禁止）とコンポーネント行数
 - `scripts/check-sql-safety.mjs` — アダプターのビルダー以外で SQL を文字列補間・連結していないか、識別子を生でクォートしていないか
 - `scripts/validate-docs.mjs` — `CLAUDE.md` の統計値と実体の同期（`--fix`）
-- `scripts/check-translations.mjs` — 英語ドキュメントが日本語の原文の更新に追随しているか（翻訳後に `bun run docs:sync` でハッシュを打ち直す）
+- `scripts/check-translations.mjs` — 英語ドキュメントが日本語の原文の更新に追随しているか（`--self-test` 付き。翻訳後に `bun run docs:sync` でハッシュを打ち直す）
 
 `packages/adapter/src/test/conformance.ts` は 1 つのテストスイートを MySQL / PostgreSQL の両方に対して実行し、方言差を吸収できているかを保証します。
 

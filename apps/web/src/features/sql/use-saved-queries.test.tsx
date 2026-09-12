@@ -6,15 +6,20 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { loadSaved } from './saved-queries.ts'
 import { useSavedQueries } from './use-saved-queries.ts'
 
-const server = vi.hoisted(() => ({ list: [] as { id: string; name: string; sql: string; at: number }[] }))
+const server = vi.hoisted(() => ({
+  list: [] as { id: string; name: string; sql: string; at: number }[],
+  fail: null as Error | null,
+}))
 vi.mock('@/lib/queries.ts', () => ({
   savedQueriesQuery: { queryKey: ['saved-queries'], queryFn: async () => server.list },
   mutations: {
     saveQuery: async (name: string, sql: string) => {
+      if (server.fail) throw server.fail
       server.list = [...server.list.filter((q) => q.name !== name), { id: `id-${name}`, name, sql, at: 1 }]
       return server.list
     },
     deleteSavedQuery: async (id: string) => {
+      if (server.fail) throw server.fail
       server.list = server.list.filter((q) => q.id !== id)
       return server.list
     },
@@ -29,6 +34,7 @@ function wrapper({ children }: { children: ReactNode }) {
 describe('useSavedQueries', () => {
   beforeEach(() => {
     server.list = []
+    server.fail = null
     const data = new Map<string, string>()
     vi.stubGlobal('localStorage', {
       getItem: (k: string) => data.get(k) ?? null,
@@ -72,5 +78,13 @@ describe('useSavedQueries', () => {
     server.list = [{ id: 'id-old', name: 'from another browser', sql: 'SELECT 2', at: 1 }]
     const { result } = renderHook(() => useSavedQueries('mysql.db.3306', true), { wrapper })
     await waitFor(() => expect(result.current.entries).toMatchObject([{ name: 'from another browser' }]))
+  })
+  it('reports a failed write instead of doing nothing on screen', async () => {
+    server.fail = new Error('the deployment refused it')
+    const { result } = renderHook(() => useSavedQueries('mysql.db.3306', true), { wrapper })
+    await waitFor(() => expect(result.current.entries).toEqual([]))
+    act(() => result.current.save('daily', 'SELECT 1'))
+    // A 401 is handled globally; anything else has to reach the panel, or the save looks like a no-op.
+    await waitFor(() => expect(result.current.error?.message).toBe('the deployment refused it'))
   })
 })
