@@ -83,6 +83,47 @@ describe('SqliteSessionStore', () => {
     await store.closeAll()
   })
 
+  it('drops saved queries when SESSION_SECRET is rotated, instead of orphaning them', async () => {
+    const path = tmpFile()
+    const first = new SqliteSessionStore({ path, secret: 's'.repeat(32), adapterFactory: factory() })
+    try {
+      first.savedQueries.save(config, 'daily', 'SELECT 1')
+    } finally {
+      await first.closeAll()
+    }
+
+    // A new secret changes the identity HMAC, so nothing could ever address the old rows again.
+    const rotated = new SqliteSessionStore({ path, secret: 'r'.repeat(32), adapterFactory: factory() })
+    try {
+      expect(rotated.secretRotated).toBe(true)
+      expect(rotated.savedQueries.list(config)).toEqual([])
+      const raw = new DatabaseSync(path)
+      expect(raw.prepare('SELECT COUNT(*) AS n FROM saved_queries').get()).toEqual({ n: 0 })
+      raw.close()
+    } finally {
+      await rotated.closeAll()
+    }
+  })
+
+  it('rotates the secret on a file written before saved queries existed', async () => {
+    // The purge runs against a table a 0.1.x file has never had, so opening one must not throw.
+    const path = tmpFile()
+    const before = new SqliteSessionStore({ path, secret: 's'.repeat(32), adapterFactory: factory() })
+    await before.closeAll()
+    const raw = new DatabaseSync(path)
+    raw.exec('DROP TABLE saved_queries')
+    raw.close()
+
+    const store = new SqliteSessionStore({ path, secret: 'r'.repeat(32), adapterFactory: factory() })
+    try {
+      expect(store.secretRotated).toBe(true)
+      expect(store.savedQueries.list(config)).toEqual([])
+      expect(store.savedQueries.save(config, 'daily', 'SELECT 1')).toHaveLength(1)
+    } finally {
+      await store.closeAll()
+    }
+  })
+
   it('keeps saved queries per account, sealed, and capped', async () => {
     const path = tmpFile()
     const store = new SqliteSessionStore({ path, secret: 's'.repeat(32), adapterFactory: factory() })

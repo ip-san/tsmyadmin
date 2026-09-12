@@ -110,8 +110,6 @@ export class SqliteSessionStore implements SessionStore {
     // Rows sealed under a previous SESSION_SECRET are unreadable and would otherwise linger (still decryptable
     // with the old secret) until the TTL sweep: a fingerprint of the key detects the rotation and purges them.
     this.db.exec('CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)')
-    // Same file and same key as the credentials: a bookmarked statement is written by hand and routinely
-    // carries row values, so it is sealed exactly like them.
     const fingerprint = createHmac('sha256', this.key).update('tsmyadmin-session-key').digest('hex')
     const stored = this.db.prepare("SELECT value FROM meta WHERE key = 'key_fingerprint'").get() as
       | { value: string }
@@ -127,6 +125,12 @@ export class SqliteSessionStore implements SessionStore {
     // Same file and same key as the credentials: a bookmarked statement is written by hand and routinely
     // carries row values, so it is sealed exactly like them.
     this.savedQueries = new SavedQueryStore(this.db, this.key, this.now)
+    // Saved queries go the same way, and must: a row is found by an HMAC of the account under this key, so after
+    // a rotation no future request can name the old rows at all. Left alone they would never be listed, never
+    // count towards the per-account cap, and never be pruned — they would simply accumulate across rotations.
+    // (After the store, which is what creates the table; a 0.1.x file does not have it yet.) Rotating back to
+    // the old secret would have made them readable again, but that is not worth an unbounded leak in the file.
+    if (this.secretRotated) this.db.exec('DELETE FROM saved_queries')
     this.touchIntervalMs = options.touchIntervalMs ?? 60_000
     this.factory = options.adapterFactory
     this.timer = startSweep(options.sweepIntervalMs ?? 60_000, () => void this.sweep())

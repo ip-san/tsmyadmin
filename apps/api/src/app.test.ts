@@ -8,6 +8,7 @@ import {
   ImportEventSchema,
   KeyValueSchema,
   ProcessInfoSchema,
+  SAVED_QUERY_MAX_SQL,
   SavedQuerySchema,
   ServerInfoSchema,
   SessionStateSchema,
@@ -1274,6 +1275,18 @@ describe('saved queries', () => {
       await h.login()
       expect((await h.save('', 'SELECT 1')).status).toBe(400)
       expect((await h.save('daily', '')).status).toBe(400)
+    } finally {
+      await h.store.closeAll()
+    }
+  })
+
+  it('caps the statement length, because this list is kept on disk', async () => {
+    const h = persistentHarness()
+    try {
+      await h.login()
+      expect((await h.save('long', 'x'.repeat(SAVED_QUERY_MAX_SQL))).status).toBe(200)
+      // Without a cap, the 200-row allowance alone would let one account write 200 MB into the session file.
+      expect((await h.save('longer', 'x'.repeat(SAVED_QUERY_MAX_SQL + 1))).status).toBe(400)
     } finally {
       await h.store.closeAll()
     }

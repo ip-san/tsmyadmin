@@ -21,11 +21,17 @@ export const SessionInfoSchema = ConnectRequestSchema.omit({ password: true })
 export type SessionInfo = z.infer<typeof SessionInfoSchema>
 
 /** What GET/POST /session return: the identity plus the namespace usable for server-level SQL/DDL. */
+/**
+ * The longest statement that can be bookmarked. Far more than anything written by hand, and unlike the 16 MB a
+ * run is allowed this is kept on disk: with the 200-per-account cap it bounds what one account can store.
+ */
+export const SAVED_QUERY_MAX_SQL = 100_000
+
 /** A bookmarked statement. `id` is assigned by the server; the browser-side list leaves it empty. */
 export const SavedQuerySchema = z.object({
   id: z.string().default(''),
   name: z.string().min(1).max(200),
-  sql: z.string().min(1),
+  sql: z.string().min(1).max(SAVED_QUERY_MAX_SQL),
   at: z.number(),
 })
 export type SavedQuery = z.infer<typeof SavedQuerySchema>
