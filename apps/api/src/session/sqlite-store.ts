@@ -88,6 +88,12 @@ export class SqliteSessionStore implements SessionStore {
     this.db = new DatabaseSync(options.path)
     this.db.exec(`
       PRAGMA journal_mode = WAL;
+      -- Waits for a lock instead of failing outright. Nothing here holds one for long (the longest is the
+      -- payload migration, one transaction at startup), and a brief wait beats a container that will not start
+      -- because another process happened to be mid-write. Not covered by a test: the setting is per connection,
+      -- so a second connection cannot observe it, and node:sqlite is synchronous — a test holding the lock
+      -- would block the thread that has to release it.
+      PRAGMA busy_timeout = 5000;
       CREATE TABLE IF NOT EXISTS sessions (
         id TEXT PRIMARY KEY,
         payload BLOB NOT NULL,
