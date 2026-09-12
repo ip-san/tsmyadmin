@@ -278,6 +278,12 @@ export const en = {
       'A transaction was still open when the run finished, so it was rolled back. The connection is returned after every run: keep BEGIN and COMMIT in the same run.',
     maxRows: 'Row limit',
     stopOnError: 'Stop on error',
+    safeMode: 'Confirm UPDATE / DELETE without WHERE',
+    safeModeHint:
+      'An UPDATE or DELETE without a WHERE changes every row. This asks before running one. It reads the text, so it may ask once too often; it never stays silent when it should ask.',
+    safeModeTitle: 'This affects every row',
+    safeModeBody: (kinds: string) =>
+      `The script contains a ${kinds} with no WHERE. Every row of the table will be changed or deleted. Run it anyway?`,
     editor: 'SQL editor',
     results: 'Results',
     statement: (n: number) => `Statement ${n}`,

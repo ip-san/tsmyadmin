@@ -79,6 +79,51 @@ for (const t of TARGETS) {
       await expect(page.getByRole('button', { name: '実行する', exact: true })).toBeEnabled()
     })
 
+    test('asks before an UPDATE with no WHERE, and can be turned off', async ({ page }) => {
+      const table = `e2e_safe_${Date.now().toString(36)}`
+      const url = t.schema ? `/db/${t.database}/sql?schema=${t.schema}` : `/db/${t.database}/sql`
+      const runButton = page.getByRole('button', { name: '実行する', exact: true })
+      const result = page.getByRole('region', { name: '文 1' })
+      await page.goto(url)
+      await typeSql(page, `CREATE TABLE ${table} (id INT PRIMARY KEY, n INT)`)
+      await runButton.click()
+      await expect(result).toBeVisible()
+      try {
+        // The confirmation appears, and cancelling it runs nothing.
+        await typeSql(page, `INSERT INTO ${table} (id, n) VALUES (1, 0)`)
+        await runButton.click()
+        await expect(result).toContainText('1')
+        await typeSql(page, `UPDATE ${table} SET n = 1`)
+        await runButton.click()
+        const dialog = page.getByRole('dialog')
+        await expect(dialog).toContainText('全行が対象になります')
+        await dialog.getByRole('button', { name: 'キャンセル' }).click()
+        await expect(dialog).toBeHidden()
+
+        // Confirming runs it.
+        await runButton.click()
+        await dialog.getByRole('button', { name: '実行する', exact: true }).click()
+        await expect(dialog).toBeHidden()
+        await expect(result).toBeVisible()
+
+        // A bounded statement never asks.
+        await typeSql(page, `UPDATE ${table} SET n = 2 WHERE id = 1`)
+        await runButton.click()
+        await expect(result).toBeVisible()
+        await expect(dialog).toBeHidden()
+
+        // Turning the check off skips the dialog.
+        await page.getByLabel('WHERE のない UPDATE / DELETE を確認').uncheck()
+        await typeSql(page, `DELETE FROM ${table}`)
+        await runButton.click()
+        await expect(result).toBeVisible()
+        await expect(dialog).toBeHidden()
+      } finally {
+        await typeSql(page, `DROP TABLE IF EXISTS ${table}`)
+        await runButton.click()
+      }
+    })
+
     test('EXPLAIN, saved queries and result download', async ({ page }) => {
       await page.goto(t.schema ? `/db/${t.database}/sql?schema=${t.schema}` : `/db/${t.database}/sql`)
       await typeSql(page, 'SELECT name FROM users ORDER BY id LIMIT 2')

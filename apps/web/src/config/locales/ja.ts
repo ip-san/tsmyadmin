@@ -273,6 +273,12 @@ export const ja = {
       '実行の終わりでトランザクションが開いたままだったため、取り消しました。1 回の実行ごとに接続が返却されるため、BEGIN と COMMIT は同じ実行に入れてください。',
     maxRows: '最大行数',
     stopOnError: 'エラーで停止',
+    safeMode: 'WHERE のない UPDATE / DELETE を確認',
+    safeModeHint:
+      'WHERE のない UPDATE / DELETE は全行が対象になります。実行前に確認ダイアログを出します（文字列やコメントの中は見ないため、確認が多めに出ることがあります）。',
+    safeModeTitle: '全行が対象になります',
+    safeModeBody: (kinds: string) =>
+      `WHERE のない ${kinds} が含まれています。このテーブルの全行が変更または削除されます。実行してよろしいですか。`,
     editor: 'SQL エディター',
     results: '実行結果',
     statement: (n: number) => `文 ${n}`,

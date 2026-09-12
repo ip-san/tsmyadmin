@@ -6,6 +6,7 @@ import { Play, Square } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { z } from 'zod'
 import { Button } from '@/components/ui/Button.tsx'
+import { Dialog } from '@/components/ui/Dialog.tsx'
 import { ErrorBox, Notice } from '@/components/ui/Feedback.tsx'
 import { Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
@@ -19,8 +20,10 @@ import { ResultsView } from './ResultsView.tsx'
 import { SqlEditor } from './SqlEditor.tsx'
 import { HistoryPanel, SavedQueriesPanel } from './SqlPanels.tsx'
 import { deleteSaved, loadSaved, type SavedQuery, saveQuery } from './saved-queries.ts'
-import { isSingleStatement, stripTrailingSemicolons } from './statement.ts'
+import { isSingleStatement, stripTrailingSemicolons, unboundedWrites } from './statement.ts'
 
+/** Asking before an UPDATE / DELETE that has no WHERE; on unless the user turns it off. */
+const SAFE_MODE_PREF = 'sql.safeMode'
 const MAX_ROWS_OPTIONS = [100, 1000, 10_000]
 
 function sessionStore() {
@@ -80,6 +83,9 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
   const [history, setHistory] = useState<HistoryEntry[]>(() => loadHistory(scope))
   const [saved, setSaved] = useState<SavedQuery[]>(() => loadSaved(scope))
   const [results, setResults] = useState<StatementResult[] | null>(null)
+  const [safeMode, setSafeMode] = useState(() => readPreference(SAFE_MODE_PREF, z.boolean(), true))
+  /** Statement kinds waiting for confirmation because they would change every row (empty = no dialog). */
+  const [confirming, setConfirming] = useState<string[]>([])
   // The script left a transaction open; the server rolled it back when the run finished.
   const [openTransaction, setOpenTransaction] = useState(false)
   const queryClient = useQueryClient()
@@ -152,10 +158,20 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
     },
   })
   const cancelled = cancel.isSuccess && cancel.data.cancelled && !run.isPending
-  const execute = () => {
-    if (text.trim().length === 0 || run.isPending) return
+  const send = () => {
     cancel.reset()
     run.mutate(text)
+  }
+  const execute = () => {
+    if (text.trim().length === 0 || run.isPending) return
+    // An UPDATE / DELETE with no WHERE changes every row. The check reads the text, so it is advisory: it can
+    // ask once too often, never too seldom, and the user can turn it off.
+    const unbounded = safeMode ? unboundedWrites(text) : []
+    if (unbounded.length > 0) {
+      setConfirming(unbounded)
+      return
+    }
+    send()
   }
   const explain = () => {
     if (!isSingleStatement(text) || run.isPending) return
@@ -211,7 +227,42 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
           <input type="checkbox" checked={stopOnError} onChange={(e) => setStopOnError(e.target.checked)} />
           {locale.sql.stopOnError}
         </label>
+        <label
+          className="flex items-center gap-1 text-xs text-zinc-600 dark:text-zinc-300"
+          title={locale.sql.safeModeHint}
+        >
+          <input
+            type="checkbox"
+            checked={safeMode}
+            onChange={(e) => {
+              setSafeMode(e.target.checked)
+              writePreference(SAFE_MODE_PREF, e.target.checked)
+            }}
+          />
+          {locale.sql.safeMode}
+        </label>
       </div>
+      <Dialog
+        open={confirming.length > 0}
+        title={locale.sql.safeModeTitle}
+        onClose={() => setConfirming([])}
+        footer={
+          <>
+            <Button onClick={() => setConfirming([])}>{locale.common.cancel}</Button>
+            <Button
+              variant="danger"
+              onClick={() => {
+                setConfirming([])
+                send()
+              }}
+            >
+              {locale.sql.run}
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-zinc-700 dark:text-zinc-200">{locale.sql.safeModeBody(confirming.join(' / '))}</p>
+      </Dialog>
       {run.isError ? <ErrorBox error={run.error} /> : null}
       {/* Screen readers hear the outcome; results themselves stream into the DOM below without announcements. */}
       {/* One always-mounted live region: running → completed / cancelled (visible as a notice when cancelled). */}
