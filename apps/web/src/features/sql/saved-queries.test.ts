@@ -13,10 +13,10 @@ function memoryStore() {
 describe('saved queries', () => {
   it('saves newest first, replaces by name and deletes', () => {
     const s = memoryStore()
-    saveQuery('mysql', { name: 'a', sql: 'SELECT 1', at: 1 }, s)
-    saveQuery('mysql', { name: 'b', sql: 'SELECT 2', at: 2 }, s)
+    saveQuery('mysql', { id: '', name: 'a', sql: 'SELECT 1', at: 1 }, s)
+    saveQuery('mysql', { id: '', name: 'b', sql: 'SELECT 2', at: 2 }, s)
     expect(loadSaved('mysql', s).map((q) => q.name)).toEqual(['b', 'a'])
-    saveQuery('mysql', { name: 'a', sql: 'SELECT 11', at: 3 }, s)
+    saveQuery('mysql', { id: '', name: 'a', sql: 'SELECT 11', at: 3 }, s)
     expect(loadSaved('mysql', s).map((q) => q.sql)).toEqual(['SELECT 11', 'SELECT 2'])
     expect(deleteSaved('mysql', 'b', s).map((q) => q.name)).toEqual(['a'])
     expect(loadSaved('postgres', s)).toEqual([])

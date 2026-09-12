@@ -38,6 +38,9 @@ function LoginPage() {
             presets={servers.data ?? []}
             onLogin={async (body) => {
               const info = await mutations.login(body)
+              // An expired session leaves the previous account's data cached (logging out clears it, timing out
+              // does not). Signing in as someone else must not show their databases — or their bookmarks.
+              queryClient.clear()
               // ensureQueryData() in route guards returns cached data as-is, so write the new session directly.
               queryClient.setQueryData(sessionQuery.queryKey, info)
               await navigate({ href: safeRedirect(search.redirect) })

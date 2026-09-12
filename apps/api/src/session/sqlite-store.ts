@@ -5,11 +5,12 @@ import { DatabaseSync, type StatementSync } from 'node:sqlite'
 import type { DatabaseAdapter } from '@tsmyadmin/adapter'
 import { type ConnectRequest, ConnectRequestSchema } from '@tsmyadmin/shared'
 import { deriveSessionKey, open, seal } from './crypto.ts'
+import { identityHash } from './identity.ts'
+import { SavedQueryStore } from './saved-queries.ts'
 import {
   type AdapterFactory,
   connectAdapter,
   DEFAULT_MAX_SESSIONS_PER_IDENTITY,
-  identityKey,
   SESSION_TTL_MS,
   type Session,
   type SessionStore,
@@ -58,6 +59,7 @@ export class SqliteSessionStore implements SessionStore {
   private readonly touchIntervalMs: number
   private readonly factory: AdapterFactory
   private readonly live = new Map<string, Live>()
+  readonly savedQueries: SavedQueryStore
   private timer: ReturnType<typeof setInterval> | null
   private readonly stmt: {
     insert: StatementSync
@@ -108,6 +110,8 @@ export class SqliteSessionStore implements SessionStore {
     // Rows sealed under a previous SESSION_SECRET are unreadable and would otherwise linger (still decryptable
     // with the old secret) until the TTL sweep: a fingerprint of the key detects the rotation and purges them.
     this.db.exec('CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)')
+    // Same file and same key as the credentials: a bookmarked statement is written by hand and routinely
+    // carries row values, so it is sealed exactly like them.
     const fingerprint = createHmac('sha256', this.key).update('tsmyadmin-session-key').digest('hex')
     const stored = this.db.prepare("SELECT value FROM meta WHERE key = 'key_fingerprint'").get() as
       | { value: string }
@@ -120,6 +124,9 @@ export class SqliteSessionStore implements SessionStore {
     }
     this.ttlMs = options.ttlMs ?? SESSION_TTL_MS
     this.now = options.now ?? Date.now
+    // Same file and same key as the credentials: a bookmarked statement is written by hand and routinely
+    // carries row values, so it is sealed exactly like them.
+    this.savedQueries = new SavedQueryStore(this.db, this.key, this.now)
     this.touchIntervalMs = options.touchIntervalMs ?? 60_000
     this.factory = options.adapterFactory
     this.timer = startSweep(options.sweepIntervalMs ?? 60_000, () => void this.sweep())
@@ -143,7 +150,7 @@ export class SqliteSessionStore implements SessionStore {
 
   async create(config: ConnectRequest): Promise<Session> {
     const adapter = await connectAdapter(this.factory, config)
-    const identity = createHmac('sha256', this.key).update(identityKey(config)).digest('hex')
+    const identity = identityHash(this.key, config)
     const same = this.stmt.byIdentity.all(identity) as { id: string }[]
     for (const victim of same.slice(0, Math.max(0, same.length - this.maxPerIdentity + 1))) await this.delete(victim.id)
     const id = crypto.randomUUID()

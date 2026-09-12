@@ -76,6 +76,12 @@ export async function login(page: Page, t: Target, { fromCurrentPage = false } =
   if (!fromCurrentPage) await expect(page.getByRole('heading', { name: 'サーバー' })).toBeVisible()
 }
 
+/**
+ * The second E2E server, running on the persistent session store (see playwright.config.ts). Saved queries are
+ * kept with the account only where such a store exists, so that spec points itself here.
+ */
+export const PERSISTENT_BASE_URL = `http://127.0.0.1:${Number(process.env.E2E_PORT ?? 3199) - 1}`
+
 export function tableUrl(t: Target, table: string, sub = ''): string {
   const base = `/db/${t.database}/table/${table}${sub}`
   return t.schema ? `${base}?schema=${t.schema}` : base

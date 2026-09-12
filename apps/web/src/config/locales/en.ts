@@ -305,6 +305,8 @@ export const en = {
     downloadTruncated: 'A result holding text past the display limit cannot be downloaded here (use the Export tab)',
     saved: 'Saved queries',
     noSaved: 'No saved queries',
+    savedOnServer: 'Saved with this connection account, so the same list appears in any browser.',
+    savedInBrowser: 'Saved in this browser only; other devices and browsers will not see this list.',
     saveQuery: 'Save query',
     savedName: 'Query name',
     save: 'Save',

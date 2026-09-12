@@ -1,9 +1,9 @@
+import type { SavedQuery } from '@tsmyadmin/shared'
 import { type ReactNode, useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { Input } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
 import type { HistoryEntry } from './history.ts'
-import type { SavedQuery } from './saved-queries.ts'
 
 function Panel({ title, count, children }: { title: string; count: number; children: ReactNode }) {
   return (
@@ -73,11 +73,14 @@ export function HistoryPanel({
 export function SavedQueriesPanel({
   entries,
   currentSql,
+  savedOnServer = false,
   onSave,
   onLoad,
   onDelete,
 }: {
   entries: SavedQuery[]
+  /** Whether the list is kept with the account or only in this browser. */
+  savedOnServer?: boolean
   currentSql: string
   onSave: (name: string) => void
   onLoad: (sql: string) => void
@@ -107,12 +110,15 @@ export function SavedQueriesPanel({
           {locale.sql.save}
         </Button>
       </form>
+      <p className="px-3 pt-2 text-xs text-zinc-500 dark:text-zinc-400">
+        {savedOnServer ? locale.sql.savedOnServer : locale.sql.savedInBrowser}
+      </p>
       {entries.length === 0 ? (
         <p className={EMPTY}>{locale.sql.noSaved}</p>
       ) : (
         <ul>
           {entries.map((q) => (
-            <li key={q.name} className={ROW}>
+            <li key={q.id || q.name} className={ROW}>
               <span className="font-medium">{q.name}</span>
               <code className="min-w-0 flex-1 truncate font-mono text-zinc-500 dark:text-zinc-400" title={q.sql}>
                 {q.sql}

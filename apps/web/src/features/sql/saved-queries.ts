@@ -1,14 +1,17 @@
+import type { SavedQuery } from '@tsmyadmin/shared'
+import { SavedQuerySchema } from '@tsmyadmin/shared'
 import { z } from 'zod'
 import { type PreferenceStore, readPreference, writePreference } from '@/lib/preferences.ts'
 
-const SavedQuerySchema = z.object({ name: z.string().min(1), sql: z.string().min(1), at: z.number() })
-export type SavedQuery = z.infer<typeof SavedQuerySchema>
 const ListSchema = z.array(SavedQuerySchema)
 const SAVED_LIMIT = 200
 /** `scope` identifies the server (dialect:host:port): two MySQL servers must not share one list. */
 const key = (scope: string) => `sql.saved.${scope}`
 
-/** Bookmarked statements (phpMyAdmin "bookmarks"), per dialect, in this browser. */
+/**
+ * Bookmarked statements (phpMyAdmin "bookmarks"), per server, in this browser. Used only where the deployment
+ * has no persistent session store to keep them in; otherwise they live with the account (see `savedQueries`).
+ */
 export function loadSaved(scope: string, store?: PreferenceStore): SavedQuery[] {
   return readPreference(key(scope), ListSchema, [], store)
 }

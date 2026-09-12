@@ -20,8 +20,8 @@ import { clearHistory, type HistoryEntry, loadHistory, pushHistory } from './his
 import { ResultsView } from './ResultsView.tsx'
 import { SqlEditor } from './SqlEditor.tsx'
 import { HistoryPanel, SavedQueriesPanel } from './SqlPanels.tsx'
-import { deleteSaved, loadSaved, type SavedQuery, saveQuery } from './saved-queries.ts'
 import { isSingleStatement, stripTrailingSemicolons, unboundedWrites } from './statement.ts'
+import { useSavedQueries } from './use-saved-queries.ts'
 
 /** Asking before an UPDATE / DELETE that has no WHERE; on unless the user turns it off. */
 const SAFE_MODE_PREF = 'sql.safeMode'
@@ -74,7 +74,7 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
   const [maxRows, setMaxRows] = useState(SQL_MAX_ROWS_DEFAULT)
   const [stopOnError, setStopOnError] = useState(true)
   const [history, setHistory] = useState<HistoryEntry[]>(() => loadHistory(scope))
-  const [saved, setSaved] = useState<SavedQuery[]>(() => loadSaved(scope))
+  const saved = useSavedQueries(scope, session.savedQueries === 'server')
   const [results, setResults] = useState<StatementResult[] | null>(null)
   const [safeMode, setSafeMode] = useState(() => readPreference(SAFE_MODE_PREF, z.boolean(), true))
   /** Statement kinds waiting for confirmation because they would change every row (empty = no dialog). */
@@ -274,11 +274,12 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
       {openTransaction && !run.isPending ? <Notice role="status">{locale.sql.openTransaction}</Notice> : null}
       {/* Bookmarks and history (each collapsible) sit above the results: a 1,000-row result must not bury them. */}
       <SavedQueriesPanel
-        entries={saved}
+        entries={saved.entries}
+        savedOnServer={saved.onServer}
         currentSql={text}
-        onSave={(name) => setSaved(saveQuery(scope, { name, sql: text, at: Date.now() }))}
+        onSave={(name) => saved.save(name, text)}
         onLoad={setText}
-        onDelete={(name) => setSaved(deleteSaved(scope, name))}
+        onDelete={saved.remove}
       />
       <HistoryPanel
         entries={history}

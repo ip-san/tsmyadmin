@@ -133,6 +133,9 @@ for (const t of TARGETS) {
       await expect(plan.getByRole('table')).toBeVisible()
       // Bookmark, reload the page and load it back into the editor.
       await page.getByText('保存済みクエリ (0)').click()
+      // This server runs the in-memory session store, so the list stays in the browser (saved-queries.spec
+      // covers the persistent deployment, where it follows the account instead).
+      await expect(page.getByText('このブラウザーにのみ保存されます。', { exact: false })).toBeVisible()
       await page.getByLabel('クエリ名').fill('two names')
       await page.getByRole('button', { name: '保存する', exact: true }).click()
       await expect(page.getByText('保存済みクエリ (1)')).toBeVisible()

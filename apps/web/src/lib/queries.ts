@@ -14,6 +14,7 @@ import type {
   RoutineKind,
   RowKey,
   RowValues,
+  SavedQuery,
   ServerInfo,
   ServerPreset,
   SessionState,
@@ -54,6 +55,12 @@ export const serversQuery = queryOptions({
   queryKey: ['servers'],
   queryFn: () => unwrap<ServerPreset[]>(api.servers.$get()),
   staleTime: Number.POSITIVE_INFINITY,
+})
+
+/** Bookmarks stored with the account; only fetched where the session says the server keeps them. */
+export const savedQueriesQuery = queryOptions({
+  queryKey: ['saved-queries'],
+  queryFn: () => unwrap<SavedQuery[]>(api['saved-queries'].$get()),
 })
 
 export const databasesQuery = queryOptions({
@@ -227,6 +234,8 @@ export const mutations = {
     unwrap<{ cancelled: boolean }>(
       api.databases[':db'].sql.cancel.$post({ param: { db: enc(db) }, json: { queryId } })
     ),
+  saveQuery: (name: string, sql: string) => unwrap<SavedQuery[]>(api['saved-queries'].$post({ json: { name, sql } })),
+  deleteSavedQuery: (id: string) => unwrap<SavedQuery[]>(api['saved-queries'][':id'].$delete({ param: { id } })),
   killProcess: (id: string, mode: KillMode) =>
     unwrap<{ ok: boolean }>(api.server.processes[':id'].kill.$post({ param: { id: enc(id) }, query: { mode } })),
   previewDdl: (db: string, schema: string | undefined, op: DdlOp) =>

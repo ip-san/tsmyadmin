@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { AdapterError } from '@tsmyadmin/adapter'
-import { ConnectRequestSchema } from '@tsmyadmin/shared'
+import { ConnectRequestSchema, SavedQueryIdSchema, SaveQueryRequestSchema } from '@tsmyadmin/shared'
 import { type Context, Hono } from 'hono'
 import { deleteCookie, getSignedCookie, setSignedCookie } from 'hono/cookie'
 import { isHostAllowed, normaliseHost } from '../lib/allowlist.ts'
@@ -42,88 +42,107 @@ function sessionTag(id: string): string {
 }
 
 /** Session response: identity plus the namespace usable for server-level SQL/DDL (SessionState). */
-function sessionState(session: Session) {
-  return { ...sessionInfo(session), serverDatabase: session.adapter.serverNamespace.database }
+function sessionState(session: Session, savedQueries: 'server' | 'browser') {
+  return { ...sessionInfo(session), serverDatabase: session.adapter.serverNamespace.database, savedQueries }
 }
 
 export function sessionRoutes(cfg: SessionConfig, deps: SessionRouteDeps) {
-  return new Hono<AppEnv>()
-    .post('/session', validate('json', ConnectRequestSchema), async (c) => {
-      const body = c.req.valid('json')
-      const ip = deps.ip(c)
-      const rateKey = `${ip}|${body.user}`
-      const audit = {
-        requestId: c.get('requestId'),
-        ip,
-        dialect: body.dialect,
-        host: body.host,
-        port: body.port,
-        user: body.user,
-      }
-
-      // The IP limiter counts failures only (a shared office NAT must not be locked out by successful logins).
-      // It is checked first so a blocked client cannot grow the ip|user map with fresh user names.
-      // A deployment refusing plain HTTP must not also lock its users out: checked before any attempt is counted.
-      if (cfg.secure && !deps.secureTransport(c)) {
-        deps.logger.log('warn', 'login.insecure_transport', audit)
-        return c.json(
-          apiError('INSECURE_TRANSPORT', 'The session cookie is Secure: log in over HTTPS (or set COOKIE_SECURE=0)'),
-          400
-        )
-      }
-      const perIp = deps.ipLimiter.peek(ip)
-      const limit = perIp.allowed ? deps.loginLimiter.hit(rateKey) : { allowed: false, retryAfterSec: 0 }
-      if (!perIp.allowed || !limit.allowed) {
-        deps.logger.log('warn', 'login.rate_limited', audit)
-        c.header('Retry-After', String(Math.max(limit.retryAfterSec, perIp.retryAfterSec)))
-        return c.json(apiError('RATE_LIMITED', 'Too many login attempts; try again later'), 429)
-      }
-      if (!isHostAllowed(body.host, body.port, deps.allowedHosts)) {
-        deps.logger.log('warn', 'login.host_not_allowed', audit)
-        return c.json(
-          apiError(
-            'HOST_NOT_ALLOWED',
-            `Connections to "${body.host}:${body.port}" are not allowed (TSMYADMIN_ALLOWED_HOSTS)`
-          ),
-          403
-        )
-      }
-
-      let session: Awaited<ReturnType<typeof cfg.store.create>>
-      try {
-        // The store builds the (audited) adapter, pings it and persists the session in one step.
-        session = await cfg.store.create({ ...body, host: normaliseHost(body.host) })
-      } catch (err) {
-        deps.ipLimiter.hit(ip)
-        deps.logger.log('warn', 'login.failed', audit)
-        // The server's own wording ("Access denied for user 'u'@'<api host address>'") would hand an
-        // unauthenticated caller the API's egress address; the code says everything the user needs.
-        if (err instanceof AdapterError && err.code === 'AUTH_FAILED') {
-          return c.json(apiError('AUTH_FAILED', 'Authentication failed'), 401)
+  // Constant for the life of the process: it depends on which store was configured, not on the session.
+  const savedQueriesMode = cfg.store.savedQueries ? 'server' : 'browser'
+  return (
+    new Hono<AppEnv>()
+      .post('/session', validate('json', ConnectRequestSchema), async (c) => {
+        const body = c.req.valid('json')
+        const ip = deps.ip(c)
+        const rateKey = `${ip}|${body.user}`
+        const audit = {
+          requestId: c.get('requestId'),
+          ip,
+          dialect: body.dialect,
+          host: body.host,
+          port: body.port,
+          user: body.user,
         }
-        // MySQL host ACL errors ("Host '<api address>' is not allowed / blocked") name the API's own address.
-        if (err instanceof AdapterError && HOST_ACL_CODES.has(err.nativeCode ?? '')) {
-          return c.json(apiError('CONNECTION_FAILED', 'The server refused connections from this host'), 502)
+
+        // The IP limiter counts failures only (a shared office NAT must not be locked out by successful logins).
+        // It is checked first so a blocked client cannot grow the ip|user map with fresh user names.
+        // A deployment refusing plain HTTP must not also lock its users out: checked before any attempt is counted.
+        if (cfg.secure && !deps.secureTransport(c)) {
+          deps.logger.log('warn', 'login.insecure_transport', audit)
+          return c.json(
+            apiError('INSECURE_TRANSPORT', 'The session cookie is Secure: log in over HTTPS (or set COOKIE_SECURE=0)'),
+            400
+          )
         }
-        return errorResponse(c, err, deps.logger)
-      }
-      deps.loginLimiter.reset(rateKey)
-      // A browser that logs in again without logging out must not keep its previous session (and pools) alive —
-      // dropped only now, so a failed re-login leaves the existing session untouched.
-      const previous = await getSignedCookie(c, cfg.secret, SESSION_COOKIE)
-      if (previous && previous !== session.id) await cfg.store.delete(previous)
-      deps.logger.log('info', 'login.ok', { ...audit, sessionId: sessionTag(session.id) })
-      await setSignedCookie(c, SESSION_COOKIE, session.id, cfg.secret, sessionCookieOptions(cfg))
-      return c.json(sessionState(session), 201)
-    })
-    .get('/session', requireSession(cfg), (c) => c.json(sessionState(c.get('session'))))
-    .delete('/session', async (c) => {
-      const id = await getSignedCookie(c, cfg.secret, SESSION_COOKIE)
-      if (id) {
-        await cfg.store.delete(id)
-        deps.logger.log('info', 'logout', { requestId: c.get('requestId'), sessionId: sessionTag(id) })
-      }
-      deleteCookie(c, SESSION_COOKIE, { path: '/' })
-      return c.json({ ok: true })
-    })
+        const perIp = deps.ipLimiter.peek(ip)
+        const limit = perIp.allowed ? deps.loginLimiter.hit(rateKey) : { allowed: false, retryAfterSec: 0 }
+        if (!perIp.allowed || !limit.allowed) {
+          deps.logger.log('warn', 'login.rate_limited', audit)
+          c.header('Retry-After', String(Math.max(limit.retryAfterSec, perIp.retryAfterSec)))
+          return c.json(apiError('RATE_LIMITED', 'Too many login attempts; try again later'), 429)
+        }
+        if (!isHostAllowed(body.host, body.port, deps.allowedHosts)) {
+          deps.logger.log('warn', 'login.host_not_allowed', audit)
+          return c.json(
+            apiError(
+              'HOST_NOT_ALLOWED',
+              `Connections to "${body.host}:${body.port}" are not allowed (TSMYADMIN_ALLOWED_HOSTS)`
+            ),
+            403
+          )
+        }
+
+        let session: Awaited<ReturnType<typeof cfg.store.create>>
+        try {
+          // The store builds the (audited) adapter, pings it and persists the session in one step.
+          session = await cfg.store.create({ ...body, host: normaliseHost(body.host) })
+        } catch (err) {
+          deps.ipLimiter.hit(ip)
+          deps.logger.log('warn', 'login.failed', audit)
+          // The server's own wording ("Access denied for user 'u'@'<api host address>'") would hand an
+          // unauthenticated caller the API's egress address; the code says everything the user needs.
+          if (err instanceof AdapterError && err.code === 'AUTH_FAILED') {
+            return c.json(apiError('AUTH_FAILED', 'Authentication failed'), 401)
+          }
+          // MySQL host ACL errors ("Host '<api address>' is not allowed / blocked") name the API's own address.
+          if (err instanceof AdapterError && HOST_ACL_CODES.has(err.nativeCode ?? '')) {
+            return c.json(apiError('CONNECTION_FAILED', 'The server refused connections from this host'), 502)
+          }
+          return errorResponse(c, err, deps.logger)
+        }
+        deps.loginLimiter.reset(rateKey)
+        // A browser that logs in again without logging out must not keep its previous session (and pools) alive —
+        // dropped only now, so a failed re-login leaves the existing session untouched.
+        const previous = await getSignedCookie(c, cfg.secret, SESSION_COOKIE)
+        if (previous && previous !== session.id) await cfg.store.delete(previous)
+        deps.logger.log('info', 'login.ok', { ...audit, sessionId: sessionTag(session.id) })
+        await setSignedCookie(c, SESSION_COOKIE, session.id, cfg.secret, sessionCookieOptions(cfg))
+        return c.json(sessionState(session, savedQueriesMode), 201)
+      })
+      .get('/session', requireSession(cfg), (c) => c.json(sessionState(c.get('session'), savedQueriesMode)))
+      // Bookmarks live with the session store, so they exist only where that store is persistent.
+      .get('/saved-queries', requireSession(cfg), (c) =>
+        c.json(cfg.store.savedQueries?.list(c.get('session').config) ?? [])
+      )
+      .post('/saved-queries', requireSession(cfg), validate('json', SaveQueryRequestSchema), (c) => {
+        const store = cfg.store.savedQueries
+        if (!store) return c.json(apiError('UNSUPPORTED', 'Saved queries need a persistent session store'), 400)
+        const { name, sql } = c.req.valid('json')
+        return c.json(store.save(c.get('session').config, name, sql))
+      })
+      .delete('/saved-queries/:id', requireSession(cfg), validate('param', SavedQueryIdSchema), (c) => {
+        const store = cfg.store.savedQueries
+        if (!store) return c.json(apiError('UNSUPPORTED', 'Saved queries need a persistent session store'), 400)
+        return c.json(store.remove(c.get('session').config, c.req.valid('param').id))
+      })
+      .delete('/session', async (c) => {
+        const id = await getSignedCookie(c, cfg.secret, SESSION_COOKIE)
+        if (id) {
+          await cfg.store.delete(id)
+          deps.logger.log('info', 'logout', { requestId: c.get('requestId'), sessionId: sessionTag(id) })
+        }
+        deleteCookie(c, SESSION_COOKIE, { path: '/' })
+        return c.json({ ok: true })
+      })
+  )
 }

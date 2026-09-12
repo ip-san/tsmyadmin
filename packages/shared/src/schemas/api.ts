@@ -21,7 +21,25 @@ export const SessionInfoSchema = ConnectRequestSchema.omit({ password: true })
 export type SessionInfo = z.infer<typeof SessionInfoSchema>
 
 /** What GET/POST /session return: the identity plus the namespace usable for server-level SQL/DDL. */
-export const SessionStateSchema = SessionInfoSchema.extend({ serverDatabase: z.string().min(1) })
+/** A bookmarked statement. `id` is assigned by the server; the browser-side list leaves it empty. */
+export const SavedQuerySchema = z.object({
+  id: z.string().default(''),
+  name: z.string().min(1).max(200),
+  sql: z.string().min(1),
+  at: z.number(),
+})
+export type SavedQuery = z.infer<typeof SavedQuerySchema>
+export const SaveQueryRequestSchema = SavedQuerySchema.pick({ name: true, sql: true })
+export const SavedQueryIdSchema = z.object({ id: z.string().min(1) })
+
+export const SessionStateSchema = SessionInfoSchema.extend({
+  serverDatabase: z.string().min(1),
+  /**
+   * Where bookmarked statements live. 'server' when the deployment has a persistent session store, so they
+   * follow the account; 'browser' when it does not, and they stay in this browser as before.
+   */
+  savedQueries: z.enum(['server', 'browser']).default('browser'),
+})
 export type SessionState = z.infer<typeof SessionStateSchema>
 
 export const SchemaQuerySchema = z.object({ schema: z.string().min(1).optional() })

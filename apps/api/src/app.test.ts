@@ -8,6 +8,7 @@ import {
   ImportEventSchema,
   KeyValueSchema,
   ProcessInfoSchema,
+  SavedQuerySchema,
   ServerInfoSchema,
   SessionStateSchema,
   SqlStreamEventSchema,
@@ -21,6 +22,7 @@ import { createApp, IP_LIMIT_FACTOR } from './app.ts'
 import { type AppConfig, loadConfig } from './config.ts'
 import { auditedAdapterFactory } from './lib/audit.ts'
 import { createLogger, type Logger } from './lib/logging.ts'
+import { SqliteSessionStore } from './session/sqlite-store.ts'
 import { MemorySessionStore } from './session/store.ts'
 
 const SECRET = 'test-secret'
@@ -109,6 +111,7 @@ describe('session', () => {
     expect(res.status).toBe(201)
     const body = SessionStateSchema.parse(await res.json())
     expect(body).toEqual({
+      savedQueries: 'browser',
       dialect: 'mysql',
       host: 'db',
       port: 3306,
@@ -1201,5 +1204,92 @@ describe('errors', () => {
     const err = ApiErrorSchema.parse(await res.json())
     expect(err.code).toBe('INTERNAL')
     expect(err.message).toBe('Internal error')
+  })
+})
+
+describe('saved queries', () => {
+  /** Same harness, but on the persistent store — the only one that can keep bookmarks. */
+  function persistentHarness() {
+    const store = new SqliteSessionStore({
+      path: ':memory:',
+      secret: 's'.repeat(32),
+      adapterFactory: () => fixtureAdapter(),
+      sweepIntervalMs: 0,
+    })
+    const app = createApp(testConfig(), { store })
+    let cookie = ''
+    const req = (path: string, init: RequestInit = {}) =>
+      app.request(path, {
+        ...init,
+        headers: { 'content-type': 'application/json', ...(cookie ? { cookie } : {}), ...(init.headers ?? {}) },
+      })
+    const login = async (body: Record<string, unknown> = LOGIN) => {
+      const res = await req('/api/session', { method: 'POST', body: JSON.stringify(body) })
+      cookie = res.headers.get('set-cookie')?.split(';')[0] ?? ''
+      return res
+    }
+    const save = (name: string, sql: string) =>
+      req('/api/saved-queries', { method: 'POST', body: JSON.stringify({ name, sql }) })
+    return { store, req, login, save }
+  }
+
+  it('tells the client the list lives on the server and round-trips it', async () => {
+    const h = persistentHarness()
+    try {
+      const state = SessionStateSchema.parse(await (await h.login()).json())
+      expect(state.savedQueries).toBe('server')
+
+      const saved = z.array(SavedQuerySchema).parse(await (await h.save('daily', 'SELECT 1')).json())
+      expect(saved).toMatchObject([{ name: 'daily', sql: 'SELECT 1' }])
+      expect(await (await h.req('/api/saved-queries')).json()).toEqual(saved)
+
+      const left = await (await h.req(`/api/saved-queries/${saved[0]?.id}`, { method: 'DELETE' })).json()
+      expect(left).toEqual([])
+    } finally {
+      await h.store.closeAll()
+    }
+  })
+
+  it('keeps one account out of another account’s list', async () => {
+    const h = persistentHarness()
+    try {
+      await h.login()
+      const mine = z.array(SavedQuerySchema).parse(await (await h.save('mine', 'SELECT 1')).json())
+      // A second login as a different user gets a session of its own, and sees none of it.
+      await h.login({ ...LOGIN, user: 'reader' })
+      expect(await (await h.req('/api/saved-queries')).json()).toEqual([])
+      // Nor can it delete a row it cannot see.
+      expect(await (await h.req(`/api/saved-queries/${mine[0]?.id}`, { method: 'DELETE' })).json()).toEqual([])
+      await h.login()
+      expect(await (await h.req('/api/saved-queries')).json()).toHaveLength(1)
+    } finally {
+      await h.store.closeAll()
+    }
+  })
+
+  it('needs a session, and rejects an empty name or statement', async () => {
+    const h = persistentHarness()
+    try {
+      expect((await h.save('daily', 'SELECT 1')).status).toBe(401)
+      await h.login()
+      expect((await h.save('', 'SELECT 1')).status).toBe(400)
+      expect((await h.save('daily', '')).status).toBe(400)
+    } finally {
+      await h.store.closeAll()
+    }
+  })
+
+  it('reports the browser mode, and refuses to save, without a persistent store', async () => {
+    const h = harness()
+    stores.push(h.store)
+    const state = SessionStateSchema.parse(await (await h.login()).json())
+    expect(state.savedQueries).toBe('browser')
+    expect(await (await h.req('/api/saved-queries')).json()).toEqual([])
+    const res = await h.req('/api/saved-queries', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'daily', sql: 'SELECT 1' }),
+    })
+    expect(res.status).toBe(400)
+    expect(ApiErrorSchema.parse(await res.json()).code).toBe('UNSUPPORTED')
   })
 })

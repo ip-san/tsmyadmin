@@ -83,6 +83,41 @@ describe('SqliteSessionStore', () => {
     await store.closeAll()
   })
 
+  it('keeps saved queries per account, sealed, and capped', async () => {
+    const path = tmpFile()
+    const store = new SqliteSessionStore({ path, secret: 's'.repeat(32), adapterFactory: factory() })
+    const other = { ...config, user: 'someone-else' }
+    try {
+      const saved = store.savedQueries.save(config, 'recent users', "SELECT * FROM users WHERE note = 'x'")
+      expect(saved).toMatchObject([{ name: 'recent users' }])
+      expect(saved[0]?.id).toBeTruthy()
+      // Saving the same name replaces it rather than adding a second row.
+      expect(store.savedQueries.save(config, 'recent users', 'SELECT 2')).toHaveLength(1)
+      expect(store.savedQueries.list(config)[0]?.sql).toBe('SELECT 2')
+
+      // Another account sees nothing of it, and cannot delete it by id.
+      expect(store.savedQueries.list(other)).toEqual([])
+      store.savedQueries.remove(other, saved[0]?.id ?? '')
+      expect(store.savedQueries.list(config)).toHaveLength(1)
+
+      // Neither the statement nor the account name is readable in the file.
+      const raw = new DatabaseSync(path)
+      const rows = raw.prepare('SELECT identity, payload FROM saved_queries').all() as {
+        identity: string
+        payload: Uint8Array
+      }[]
+      const bytes = Buffer.concat(rows.map((r) => Buffer.from(r.payload))).toString('latin1')
+      expect(bytes).not.toContain('SELECT')
+      expect(rows.map((r) => r.identity).join()).not.toContain(config.user)
+      raw.close()
+
+      store.savedQueries.remove(config, saved[0]?.id ?? '')
+      expect(store.savedQueries.list(config)).toEqual([])
+    } finally {
+      await store.closeAll()
+    }
+  })
+
   it('stores credentials encrypted at rest', async () => {
     const path = tmpFile()
     const store = new SqliteSessionStore({ path, secret: 's', adapterFactory: factory(), sweepIntervalMs: 0 })

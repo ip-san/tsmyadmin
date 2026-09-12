@@ -1,5 +1,7 @@
 import type { DatabaseAdapter } from '@tsmyadmin/adapter'
 import type { ConnectRequest, SessionInfo } from '@tsmyadmin/shared'
+import { identityKey } from './identity.ts'
+import type { SavedQueryStore } from './saved-queries.ts'
 
 export interface Session {
   readonly id: string
@@ -27,6 +29,11 @@ export interface SessionStore {
   ping(): Promise<void>
   /** Closes every adapter (shutdown / tests). */
   closeAll(): Promise<void>
+  /**
+   * Bookmarked statements, when the deployment has somewhere to keep them. Absent for the in-memory store,
+   * where they would vanish on restart — the browser keeps its own list in that case.
+   */
+  readonly savedQueries?: SavedQueryStore
 }
 
 /** Everything about a connection except the password (what logs, audit lines and the client may see). */
@@ -42,14 +49,6 @@ export function sessionInfo(session: Session): SessionInfo {
 export const SESSION_TTL_MS = 30 * 60 * 1000
 /** Live sessions allowed per database identity (dialect|host|port|user); the oldest is evicted beyond this. */
 export const DEFAULT_MAX_SESSIONS_PER_IDENTITY = 10
-
-/**
- * Groups sessions that hold pools against the same account. Bounding this keeps one account holder from
- * exhausting the database's max_connections by logging in repeatedly (each session pings and pools connections).
- */
-export function identityKey(config: ConnectRequest): string {
-  return `${config.dialect}|${config.host.toLowerCase()}|${config.port}|${config.user}`
-}
 
 /** Interval timer that never keeps the process alive; null when disabled. */
 export function startSweep(intervalMs: number, fn: () => void): ReturnType<typeof setInterval> | null {
