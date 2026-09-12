@@ -616,6 +616,9 @@ export const en = {
     none: 'No routines',
     show: 'Show definition',
     hide: 'Hide definition',
+    edit: 'Edit in SQL tab',
+    editHint:
+      'Loads a script that replaces the definition into the SQL tab. A body is code in the server’s own dialect, so there is no form for it — review the script before running it.',
     noDefinition: 'You do not have permission to view this definition',
   },
   events: {

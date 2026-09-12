@@ -216,6 +216,56 @@ for (const t of TARGETS) {
       await expect(page.getByText('トリガーはありません')).toBeVisible()
     })
 
+    test('loads an editable routine definition into the SQL tab and the script runs', async ({ page }) => {
+      // The scaffold has to be runnable as-is: that is the whole contract of "edit in the SQL tab".
+      // It works on a routine this test creates, never a fixture — a half-run script would leave the
+      // fixture dropped and break every later run.
+      const fn = `e2e_fn_${Date.now().toString(36)}`
+      const sqlUrl = t.schema ? `/db/${t.database}/sql?schema=${t.schema}` : `/db/${t.database}/sql`
+      const run = page.getByRole('button', { name: '実行する', exact: true })
+      const type = async (sql: string) => {
+        const editor = page.getByRole('textbox', { name: 'SQL エディタ' })
+        await editor.click()
+        await page.keyboard.press('ControlOrMeta+A')
+        await page.keyboard.press('Backspace')
+        await page.keyboard.type(sql)
+      }
+      await page.goto(sqlUrl)
+      await type(
+        t.dialect === 'mysql'
+          ? `CREATE FUNCTION ${fn}(n INT) RETURNS INT DETERMINISTIC RETURN n + 1`
+          : `CREATE FUNCTION ${fn}(n INT) RETURNS INT LANGUAGE sql IMMUTABLE AS $$ SELECT n + 1 $$`
+      )
+      await run.click()
+      await expect(page.getByRole('region', { name: '文 1' })).toBeVisible()
+      try {
+        await page.goto(t.schema ? `/db/${t.database}/routines?schema=${t.schema}` : `/db/${t.database}/routines`)
+        const row = page.getByRole('row').filter({ hasText: fn })
+        await expect(row.first()).toBeVisible()
+        await row
+          .first()
+          .getByRole('button', { name: /: 定義を表示$/ })
+          .click()
+        await row.first().getByRole('button', { name: 'SQL タブで編集' }).click()
+
+        await expect(page).toHaveURL(/\/sql/)
+        await expect(page.getByRole('textbox', { name: 'SQL エディタ' })).toContainText(fn)
+        await run.click()
+        // Every statement of the generated script succeeds.
+        await expect(page.getByRole('region', { name: '文 1' })).toBeVisible()
+        await expect(page.getByText('失敗しました')).toBeHidden()
+
+        // The routine still works after being replaced by its own definition.
+        await type(`SELECT ${fn}(41) AS v`)
+        await run.click()
+        await expect(page.getByRole('cell', { name: '42', exact: true })).toBeVisible()
+      } finally {
+        await page.goto(sqlUrl)
+        await type(`DROP FUNCTION IF EXISTS ${fn}`)
+        await run.click()
+      }
+    })
+
     test('event scheduler: lists events on MySQL, toggles status through previews; unsupported on PostgreSQL', async ({
       page,
     }) => {

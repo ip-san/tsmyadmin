@@ -23,6 +23,8 @@ const SQL_BUILDER_ALLOWLIST = [
   /^packages\/adapter\/src\/mysql\/routines\.ts$/,
   // Editor prefill text shown to the user; executed only when they press Run (identifiers quoted).
   /^apps\/web\/src\/features\/sql\/prefill\.ts$/,
+  // Script that replaces an object's definition, shown in the editor for the user to run (identifiers quoted).
+  /^apps\/web\/src\/lib\/edit-definition\.ts$/,
   // Regular expressions that *parse* GRANT statements returned by the server; nothing here is executed.
   /^apps\/web\/src\/features\/users\/privilege-level\.ts$/,
 ]

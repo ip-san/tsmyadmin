@@ -8,32 +8,45 @@ import type { createStatementQuery, routineDefinitionQuery } from '@/lib/queries
 type DefinitionQuery = ReturnType<typeof routineDefinitionQuery> | ReturnType<typeof createStatementQuery>
 type Source = { definition: string | null } | { query: DefinitionQuery }
 
-function Definition({ definition }: { definition: string | null }) {
+function Definition({ definition, onEdit }: { definition: string | null; onEdit?: (d: string) => void }) {
   if (definition === null)
     return <span className="text-xs text-zinc-500 dark:text-zinc-400">{locale.routines.noDefinition}</span>
   return (
-    <pre
-      tabIndex={0}
-      // Wrapped: inside a table cell a non-wrapping <pre> widens the column to its longest line.
-      className="mt-2 max-h-96 overflow-auto whitespace-pre-wrap break-words rounded border border-zinc-200 bg-zinc-50 p-2 font-mono text-xs dark:border-zinc-700 dark:bg-zinc-950"
-    >
-      {definition}
-    </pre>
+    <>
+      {onEdit ? (
+        <div className="mt-2">
+          <Button size="sm" onClick={() => onEdit(definition)} title={locale.routines.editHint}>
+            {locale.routines.edit}
+          </Button>
+        </div>
+      ) : null}
+      <pre
+        tabIndex={0}
+        // Wrapped: inside a table cell a non-wrapping <pre> widens the column to its longest line.
+        className="mt-2 max-h-96 overflow-auto whitespace-pre-wrap break-words rounded border border-zinc-200 bg-zinc-50 p-2 font-mono text-xs dark:border-zinc-700 dark:bg-zinc-950"
+      >
+        {definition}
+      </pre>
+    </>
   )
 }
 
-function LazyDefinition({ query }: { query: DefinitionQuery }) {
+function LazyDefinition({ query, onEdit }: { query: DefinitionQuery; onEdit?: (d: string) => void }) {
   const q = useQuery(query)
   if (q.isPending) return <Spinner />
   if (q.isError) return <ErrorBox error={q.error} onRetry={() => void q.refetch()} />
-  return <Definition definition={q.data.definition} />
+  return <Definition definition={q.data.definition} {...(onEdit ? { onEdit } : {})} />
 }
 
 /**
  * Collapsible SQL definition. Pass `definition` when the list already carries it (triggers, events) or `query`
  * to fetch it on first expand (routines: one SHOW CREATE per routine on MySQL). null = the account may not read it.
  */
-export function DefinitionToggle({ label, ...source }: { label: string } & Source) {
+export function DefinitionToggle({
+  label,
+  onEdit,
+  ...source
+}: { label: string; onEdit?: (definition: string) => void } & Source) {
   const [open, setOpen] = useState(false)
   if ('definition' in source && source.definition === null) return <Definition definition={null} />
   return (
@@ -48,9 +61,9 @@ export function DefinitionToggle({ label, ...source }: { label: string } & Sourc
       </Button>
       {open ? (
         'definition' in source ? (
-          <Definition definition={source.definition} />
+          <Definition definition={source.definition} {...(onEdit ? { onEdit } : {})} />
         ) : (
-          <LazyDefinition query={source.query} />
+          <LazyDefinition query={source.query} {...(onEdit ? { onEdit } : {})} />
         )
       ) : null}
     </div>

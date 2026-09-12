@@ -1,11 +1,30 @@
 import { useQuery } from '@tanstack/react-query'
+import { useNavigate, useRouteContext } from '@tanstack/react-router'
 import { DefinitionToggle } from '@/components/ddl/DefinitionToggle.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
+import { setDatabaseConsoleDraft } from '@/lib/console-draft.ts'
+import { type EditDefinitionOptions, editDefinitionSql } from '@/lib/edit-definition.ts'
 import { triggersQuery } from '@/lib/queries.ts'
 
+/**
+ * Hands the database SQL tab a script that replaces this object's definition and goes there. There is no
+ * structured editor for a routine body: it is code in the server's own dialect, and the console shows exactly
+ * what will run before it runs.
+ */
+function useEditDefinition(db: string, schema: string | undefined) {
+  const navigate = useNavigate()
+  const { session } = useRouteContext({ from: '/_app' })
+  return (o: Omit<EditDefinitionOptions, 'dialect' | 'schema'>) => {
+    const scope = `${session.dialect}.${session.host}.${session.port}`
+    setDatabaseConsoleDraft(scope, db, schema, editDefinitionSql({ ...o, dialect: session.dialect, schema }))
+    void navigate({ to: '/db/$db/sql', params: { db }, search: schema ? { schema } : {} })
+  }
+}
+
 export function TriggersPage({ db, schema, table }: { db: string; schema?: string | undefined; table?: string }) {
+  const edit = useEditDefinition(db, schema)
   const triggers = useQuery(triggersQuery(db, schema, table))
   if (triggers.isPending) return <Spinner />
   if (triggers.isError) return <ErrorBox error={triggers.error} onRetry={() => void triggers.refetch()} />
@@ -35,7 +54,11 @@ export function TriggersPage({ db, schema, table }: { db: string; schema?: strin
                 <Td className="text-xs">{t.events}</Td>
                 <Td className="text-xs">{t.orientation}</Td>
                 <Td>
-                  <DefinitionToggle definition={t.definition} label={t.name} />
+                  <DefinitionToggle
+                    definition={t.definition}
+                    label={t.name}
+                    onEdit={(definition) => edit({ kind: 'trigger', name: t.name, definition, table: t.table })}
+                  />
                 </Td>
               </Tr>
             ))}

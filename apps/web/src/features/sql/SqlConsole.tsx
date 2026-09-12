@@ -11,6 +11,7 @@ import { ErrorBox, Notice } from '@/components/ui/Feedback.tsx'
 import { Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
 import { ApiError } from '@/lib/api.ts'
+import { consoleDraftKey, sessionStore } from '@/lib/console-draft.ts'
 import { readPreference, writePreference } from '@/lib/preferences.ts'
 import { mutations } from '@/lib/queries.ts'
 import { streamSql } from '@/lib/sql-stream.ts'
@@ -25,14 +26,6 @@ import { isSingleStatement, stripTrailingSemicolons, unboundedWrites } from './s
 /** Asking before an UPDATE / DELETE that has no WHERE; on unless the user turns it off. */
 const SAFE_MODE_PREF = 'sql.safeMode'
 const MAX_ROWS_OPTIONS = [100, 1000, 10_000]
-
-function sessionStore() {
-  try {
-    return typeof sessionStorage === 'undefined' ? null : sessionStorage
-  } catch {
-    return null
-  }
-}
 
 export interface SqlConsoleProps {
   db: string
@@ -50,7 +43,7 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
   const scope = `${dialect}.${session.host}.${session.port}`
   // Unsent editor text survives tab switches and a session-expiry round trip (per console, this browser tab).
   // The server console is one editor whose target database can change: its draft is not keyed by database.
-  const key = draftId === 'server' ? `sql.draft.${scope}.server` : `sql.draft.${scope}.${db}.${schema ?? ''}.${draftId}`
+  const key = consoleDraftKey(scope, db, schema, draftId)
   const [text, setTextState] = useState(() => readPreference(key, z.string(), initialSql, sessionStore()))
   // Draft writes are debounced: a multi-MB pasted script would otherwise be serialised on every keystroke.
   const pending = useRef<ReturnType<typeof setTimeout> | null>(null)
