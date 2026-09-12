@@ -537,6 +537,13 @@ export const en = {
     createrole: 'May create users (CREATEROLE / CREATE USER)',
     changePassword: 'Change password',
     drop: 'Drop',
+    choose: 'Choose privileges…',
+    choosePrivileges: (user: string) => `Privileges for ${user}`,
+    privileges: 'Privileges',
+    privilegeTarget: 'Applies to',
+    wholeDatabase: 'The whole database',
+    privilegesNote:
+      'Only privileges that mean the same thing on both servers are listed. Anything else (MySQL INDEX, PostgreSQL TRUNCATE) goes through the SQL tab.',
     grantAll: 'Grant all privileges on this database',
     revokeAll: 'Revoke all privileges on this database',
     privilegesTitle: (db: string, schema?: string) => `Privileges on ${db}${schema ? `.${schema}` : ''}`,
@@ -551,6 +558,8 @@ export const en = {
       setPassword: 'Change password',
       grantAll: 'Grant all privileges',
       revokeAll: 'Revoke all privileges',
+      grantPrivileges: 'Grant privileges',
+      revokePrivileges: 'Revoke privileges',
     },
     previewHint: 'The SQL below will be run (the password is shown as ****).',
     dropHint:

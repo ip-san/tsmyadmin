@@ -91,7 +91,7 @@ const secret = (template: (password: string) => string, password: string): UserS
 
 export const pgUsers: UserSqlBuilder = {
   namespace(op: UserOp, serverNamespace: Namespace): Namespace {
-    if (op.op === 'grantAll' || op.op === 'revokeAll')
+    if (op.op === 'grantAll' || op.op === 'revokeAll' || op.op === 'grantPrivileges' || op.op === 'revokePrivileges')
       return op.schema ? { database: op.database, schema: op.schema } : { database: op.database }
     return serverNamespace
   },
@@ -118,6 +118,34 @@ export const pgUsers: UserSqlBuilder = {
           `GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA ${schema} TO ${role}`,
           `ALTER DEFAULT PRIVILEGES IN SCHEMA ${schema} GRANT ALL PRIVILEGES ON TABLES TO ${role}`,
         ].map(plain)
+      }
+      case 'grantPrivileges': {
+        const schema = id(op.schema ?? 'public')
+        const list = op.privileges.join(', ')
+        // Without CONNECT and USAGE the role cannot reach the table at all, so a table grant implies them.
+        const out = [
+          `GRANT CONNECT ON DATABASE ${id(op.database)} TO ${role}`,
+          `GRANT USAGE ON SCHEMA ${schema} TO ${role}`,
+        ]
+        if (op.table) out.push(`GRANT ${list} ON ${schema}.${id(op.table)} TO ${role}`)
+        else {
+          out.push(`GRANT ${list} ON ALL TABLES IN SCHEMA ${schema} TO ${role}`)
+          // Tables created later would otherwise be invisible to the role.
+          out.push(`ALTER DEFAULT PRIVILEGES IN SCHEMA ${schema} GRANT ${list} ON TABLES TO ${role}`)
+        }
+        return out.map(plain)
+      }
+      case 'revokePrivileges': {
+        const schema = id(op.schema ?? 'public')
+        const list = op.privileges.join(', ')
+        // CONNECT and USAGE stay: they may be carrying other grants the caller did not ask about.
+        const out = op.table
+          ? [`REVOKE ${list} ON ${schema}.${id(op.table)} FROM ${role}`]
+          : [
+              `ALTER DEFAULT PRIVILEGES IN SCHEMA ${schema} REVOKE ${list} ON TABLES FROM ${role}`,
+              `REVOKE ${list} ON ALL TABLES IN SCHEMA ${schema} FROM ${role}`,
+            ]
+        return out.map(plain)
       }
       case 'revokeAll': {
         const schema = id(op.schema ?? 'public')

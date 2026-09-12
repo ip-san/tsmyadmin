@@ -2168,6 +2168,86 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
     })
 
     describe('users', () => {
+      it('grants exactly the privileges asked for: a read-only account can select but not write', async () => {
+        // The point of per-table grants is this account. Checked by connecting as it, not by reading the SQL.
+        const name = `ro_${scratch}`
+        const password = 'r3ad only!'
+        const user = dialect === 'mysql' ? { name, host: '%' } : { name }
+        const runOp = async (op: Parameters<typeof db.users.build>[0]) => {
+          const target = db.users.namespace(op, db.serverNamespace)
+          const r = await db.executeSql(
+            target,
+            db.users
+              .build(op)
+              .map((x) => x.sql)
+              .join(';\n'),
+            EXEC
+          )
+          for (const x of r) if (x.kind === 'error') throw new Error(`${x.message}\n${x.sql}`)
+        }
+        await runOp({
+          op: 'createUser',
+          user,
+          password,
+          attributes: { superuser: false, createdb: false, createrole: false },
+        })
+        let reader: DatabaseAdapter | undefined
+        try {
+          await runOp({
+            op: 'grantPrivileges',
+            user,
+            privileges: ['SELECT'],
+            database: ns.database,
+            ...(ns.schema ? { schema: ns.schema } : {}),
+            table: 'users',
+          })
+          reader = ctx.createAs(name, password)
+          // Refused either as a failed statement or, once the account loses the database entirely, as a
+          // connection that cannot be opened — both mean "not allowed".
+          const refused = async (sql: string) => {
+            try {
+              const r = await (reader as DatabaseAdapter).executeSql(ns, sql, { ...EXEC, stopOnError: false })
+              return r.some((x) => x.kind === 'error')
+            } catch {
+              return true
+            }
+          }
+          const rows = await reader.executeSql(ns, 'SELECT COUNT(*) FROM users', EXEC)
+          expect(rows[0]?.kind).toBe('rows')
+          // Only what was granted: writing that table, and reading a different one, are both refused.
+          expect(await refused('UPDATE users SET name = name WHERE id = -1')).toBe(true)
+          expect(await refused('SELECT COUNT(*) FROM posts')).toBe(true)
+
+          // Revoking it takes the read away again.
+          await runOp({
+            op: 'revokePrivileges',
+            user,
+            privileges: ['SELECT'],
+            database: ns.database,
+            ...(ns.schema ? { schema: ns.schema } : {}),
+            table: 'users',
+          })
+          expect(await refused('SELECT COUNT(*) FROM users')).toBe(true)
+        } finally {
+          await reader?.close()
+          // PostgreSQL refuses to drop a role that still holds privileges, so they go first.
+          await exec(
+            [
+              ...db.users.build({
+                op: 'revokeAll',
+                user,
+                database: ns.database,
+                ...(ns.schema ? { schema: ns.schema } : {}),
+              }),
+              ...db.users.build({ op: 'dropUser', user }),
+            ]
+              .map((x) => x.sql)
+              .join(';\n'),
+            { stopOnError: false }
+          )
+        }
+      })
+
       it('create → grant → password → revoke → drop through the builder', async () => {
         const name = `u_${scratch}`
         const user = dialect === 'mysql' ? { name, host: '%' } : { name }

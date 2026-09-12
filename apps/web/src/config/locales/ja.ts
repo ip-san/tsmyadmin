@@ -532,6 +532,13 @@ export const ja = {
     createrole: 'ユーザーの作成を許可（CREATEROLE / CREATE USER）',
     changePassword: 'パスワードを変更',
     drop: '削除',
+    choose: '権限を選ぶ…',
+    choosePrivileges: (user: string) => `${user} の権限`,
+    privileges: '権限',
+    privilegeTarget: '対象',
+    wholeDatabase: 'データベース全体',
+    privilegesNote:
+      '両方の DB で同じ意味を持つ権限だけを並べています。これ以外（MySQL の INDEX、PostgreSQL の TRUNCATE など）は SQL タブで付与してください。',
     grantAll: 'このデータベースの全権限を付与',
     revokeAll: 'このデータベースの全権限を取り消す',
     privilegesTitle: (db: string, schema?: string) => `${db}${schema ? `.${schema}` : ''} の権限`,
@@ -547,6 +554,8 @@ export const ja = {
       setPassword: 'パスワードを変更',
       grantAll: '全権限を付与',
       revokeAll: '全権限を取り消す',
+      grantPrivileges: '権限を付与',
+      revokePrivileges: '権限を取り消す',
     },
     previewHint: '以下の SQL を実行します（パスワードは **** で表示）。',
     dropHint:

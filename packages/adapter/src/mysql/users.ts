@@ -83,6 +83,22 @@ export const mysqlUsers: UserSqlBuilder = {
         return [plain(`GRANT ALL PRIVILEGES ON ${quoteIdent('mysql', grantPattern(op.database))}.* TO ${account}`)]
       case 'revokeAll':
         return [plain(`REVOKE ALL PRIVILEGES ON ${quoteIdent('mysql', grantPattern(op.database))}.* FROM ${account}`)]
+      case 'grantPrivileges':
+      case 'revokePrivileges': {
+        // `db.*` matches databases as a LIKE pattern, so `_` and `%` are escaped there. `db.tbl` names one
+        // table and takes plain identifiers — escaping would look for a database with a backslash in its name.
+        const target = op.table
+          ? `${quoteIdent('mysql', op.database)}.${quoteIdent('mysql', op.table)}`
+          : `${quoteIdent('mysql', grantPattern(op.database))}.*`
+        const list = op.privileges.join(', ')
+        return [
+          plain(
+            op.op === 'grantPrivileges'
+              ? `GRANT ${list} ON ${target} TO ${account}`
+              : `REVOKE ${list} ON ${target} FROM ${account}`
+          ),
+        ]
+      }
     }
   },
 }

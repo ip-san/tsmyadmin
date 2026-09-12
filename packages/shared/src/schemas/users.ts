@@ -21,7 +21,27 @@ export const UserAttributesSchema = z.object({
   createrole: z.boolean().default(false),
 })
 
+/**
+ * Privileges both dialects accept on a table and on a whole database / schema. Deliberately a closed list: the
+ * names are rendered into SQL, so nothing free-text may reach it. Dialect-only privileges (MySQL `INDEX`,
+ * PostgreSQL `TRUNCATE`) are left to the SQL tab rather than guessed at per server.
+ */
+export const PrivilegeSchema = z.enum(['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'REFERENCES', 'TRIGGER'])
+export type Privilege = z.infer<typeof PrivilegeSchema>
+export const PRIVILEGES = PrivilegeSchema.options
+
+/** `table` absent = the whole database (PostgreSQL: the schema, plus the default for tables created later). */
+const PrivilegeTarget = {
+  user: UserRefSchema,
+  privileges: z.array(PrivilegeSchema).min(1),
+  database: z.string().min(1),
+  schema: z.string().min(1).optional(),
+  table: z.string().min(1).optional(),
+}
+
 export const UserOpSchema = z.discriminatedUnion('op', [
+  z.object({ op: z.literal('grantPrivileges'), ...PrivilegeTarget }),
+  z.object({ op: z.literal('revokePrivileges'), ...PrivilegeTarget }),
   z.object({
     op: z.literal('createUser'),
     user: UserRefSchema,

@@ -17,6 +17,15 @@ const SAMPLE_OPS: Record<UserOp['op'], UserOp> = {
   setPassword: { op: 'setPassword', user, password: 'new' },
   grantAll: { op: 'grantAll', user, database: 'shop', schema: 'app' },
   revokeAll: { op: 'revokeAll', user, database: 'shop', schema: 'app' },
+  grantPrivileges: {
+    op: 'grantPrivileges',
+    user,
+    privileges: ['SELECT', 'INSERT'],
+    database: 'shop',
+    schema: 'app',
+    table: 'ord ers',
+  },
+  revokePrivileges: { op: 'revokePrivileges', user, privileges: ['SELECT'], database: 'shop', schema: 'app' },
 }
 
 describe('user SQL builders', () => {

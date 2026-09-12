@@ -35,6 +35,27 @@ for (const t of TARGETS) {
       // Current-privilege column reflects the grant (MySQL: ALL on the database; PostgreSQL: schema grants).
       await expect(privRow.getByText('すべて', { exact: true })).toBeVisible()
 
+      // Per-table privileges: SELECT on one table only.
+      await page.getByRole('button', { name: `${key}: 権限を選ぶ…` }).click()
+      const chooser = page.getByRole('dialog')
+      await chooser.getByLabel('INSERT').check()
+      await chooser.getByLabel('対象').selectOption('users')
+      await chooser.getByRole('button', { name: '権限を付与' }).click()
+      await confirmPreview(page, /GRANT SELECT, INSERT ON/)
+      await expect(page.getByText(/「権限を付与」を実行しました/)).toBeVisible()
+
+      await page.goto('/users')
+      await page.getByRole('button', { name: `${key}: 権限を表示` }).click()
+      // The grant names that one table.
+      await expect(page.getByLabel(`${key}: 権限`, { exact: true })).toContainText('users')
+
+      await page.goto(t.schema ? `/db/${t.database}/privileges?schema=${t.schema}` : `/db/${t.database}/privileges`)
+      await page.getByRole('button', { name: `${key}: 権限を選ぶ…` }).click()
+      await page.getByRole('dialog').getByLabel('INSERT').check()
+      await page.getByRole('dialog').getByLabel('対象').selectOption('users')
+      await page.getByRole('dialog').getByRole('button', { name: '権限を取り消す' }).click()
+      await confirmPreview(page, /REVOKE SELECT, INSERT ON/)
+
       await page.goto('/users')
       await page.getByRole('button', { name: `${key}: 権限を表示` }).click()
       // MySQL grants are per database; PostgreSQL grants are per schema.
