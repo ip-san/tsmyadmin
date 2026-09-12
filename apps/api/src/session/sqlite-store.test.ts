@@ -204,6 +204,33 @@ describe('SqliteSessionStore', () => {
     }
   })
 
+  it('re-runs the binding migration over already-bound rows without losing them', async () => {
+    // The format mark can go missing while the bindings are intact (a truncated meta table, a file restored
+    // from a partial copy). Re-running must not read that as "unreadable" and drop every session.
+    const path = tmpFile()
+    const secret = 's'.repeat(32)
+    let sessionId = ''
+    const first = new SqliteSessionStore({ path, secret, adapterFactory: factory() })
+    try {
+      sessionId = (await first.create(config)).id
+      first.savedQueries.save(config, 'daily', 'SELECT 1')
+    } finally {
+      await first.closeAll()
+    }
+    const raw = new DatabaseSync(path)
+    raw.prepare("DELETE FROM meta WHERE key = 'payload_format'").run()
+    raw.close()
+
+    const again = new SqliteSessionStore({ path, secret, adapterFactory: factory() })
+    try {
+      expect(again.secretRotated).toBe(false)
+      expect((await again.get(sessionId))?.config.user).toBe(config.user)
+      expect(again.savedQueries.list(config)).toMatchObject([{ name: 'daily' }])
+    } finally {
+      await again.closeAll()
+    }
+  })
+
   it('leaves a rolled-back image a readable file, not a broken one', async () => {
     // What deployment.md promises about going back past this release. An older image opens payloads with no
     // AAD, so it can read none of them; what matters is that it does not decide the secret changed and wipe

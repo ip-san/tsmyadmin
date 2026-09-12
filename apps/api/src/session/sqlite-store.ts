@@ -163,21 +163,24 @@ export class SqliteSessionStore implements SessionStore {
     const plan = [
       {
         table: SESSIONS,
-        rows: this.db.prepare('SELECT id, payload FROM sessions').all(),
+        read: this.db.prepare('SELECT id, payload FROM sessions'),
         rebind: this.db.prepare('UPDATE sessions SET payload = ? WHERE id = ?'),
         drop: this.db.prepare('DELETE FROM sessions WHERE id = ?'),
       },
       {
         table: SAVED_QUERIES,
-        rows: this.db.prepare('SELECT id, payload FROM saved_queries').all(),
+        read: this.db.prepare('SELECT id, payload FROM saved_queries'),
         rebind: this.db.prepare('UPDATE saved_queries SET payload = ? WHERE id = ?'),
         drop: this.db.prepare('DELETE FROM saved_queries WHERE id = ?'),
       },
     ]
+    // The rows are read inside the transaction, not before it: BEGIN IMMEDIATE takes the write lock first, so a
+    // second process (a rolling deploy still serving from the old image) cannot insert or change a row between
+    // the read and the re-seal and have that write silently reverted.
     this.db.exec('BEGIN IMMEDIATE')
     try {
-      for (const { table, rows, rebind, drop } of plan) {
-        for (const row of rows as { id: string; payload: Uint8Array }[]) {
+      for (const { table, read, rebind, drop } of plan) {
+        for (const row of read.all() as { id: string; payload: Uint8Array }[]) {
           const aad = rowAad(table, row.id)
           try {
             rebind.run(seal(this.key, openLegacy(this.key, row.payload), aad), row.id)
