@@ -17,12 +17,14 @@ test.describe('saved queries on a persistent deployment', () => {
     await expect(page.getByText('この接続ユーザーのアカウントに保存されます。', { exact: false })).toBeVisible()
 
     const entry = page.getByRole('listitem').filter({ hasText: name })
+    let saved = false
     try {
       await page.getByLabel('クエリ名').fill(name)
       await page.getByRole('textbox', { name: 'SQL エディタ' }).click()
       await page.keyboard.type('SELECT 1')
       await page.getByRole('button', { name: '保存する', exact: true }).click()
       await expect(entry).toBeVisible()
+      saved = true
 
       // Nothing of it is in this browser: emptying local storage and reloading still shows it.
       await page.evaluate(() => {
@@ -34,9 +36,15 @@ test.describe('saved queries on a persistent deployment', () => {
       await expect(entry).toBeVisible()
     } finally {
       // The list is shared by every run against this account, so the row goes even if an assertion failed.
-      if (await entry.isVisible()) {
-        await entry.getByRole('button', { name: `${name} を削除` }).click()
-        await expect(entry).toBeHidden()
+      // Whether it exists is tracked, not re-read from the page: a failure that leaves the panel collapsed
+      // would make the row invisible while it is still very much on the server. Cleanup never throws — a
+      // failure here would replace the assertion error that actually explains the run.
+      if (saved) {
+        await (async () => {
+          if (!(await entry.isVisible())) await panel.click()
+          await entry.getByRole('button', { name: `${name} を削除` }).click()
+          await expect(entry).toBeHidden()
+        })().catch(() => undefined)
       }
     }
   })
