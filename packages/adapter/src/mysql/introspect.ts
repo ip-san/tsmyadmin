@@ -7,6 +7,7 @@ import type {
   TableInfo,
   TableSchema,
 } from '@tsmyadmin/shared'
+
 import { type Conn, firstResult } from '../base.ts'
 import { str, strOrNull } from '../sql/format.ts'
 import { AdapterError } from '../types.ts'

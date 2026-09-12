@@ -35,7 +35,7 @@ function DownloadButtons({ result, label, index }: { result: ResultSet; label: s
       'application/json'
     )
   return (
-    <span className="ml-2 inline-flex gap-1">
+    <span className="ml-2 inline-flex items-center gap-3">
       <Button size="sm" onClick={csv} aria-label={`${locale.sql.downloadResult(index + 1)} ${locale.sql.downloadCsv}`}>
         <Download className="size-3" aria-hidden />
         {locale.sql.downloadCsv}
@@ -48,7 +48,7 @@ function DownloadButtons({ result, label, index }: { result: ResultSet; label: s
         <Download className="size-3" aria-hidden />
         {locale.sql.downloadJson}
       </Button>
-      <label className="flex items-center gap-1 text-xs text-zinc-600 dark:text-zinc-300">
+      <label className="flex items-center gap-2 py-1 text-xs text-zinc-600 dark:text-zinc-300">
         <input
           type="checkbox"
           checked={csvSafe}

@@ -131,6 +131,32 @@ describe.each(targets)('API integration ($dialect)', ({ dialect, url }) => {
     }
   })
 
+  it('leaves generated columns out of the INSERTs it writes', async () => {
+    // The server computes them; listing one in an INSERT makes the whole dump unrestorable.
+    const t = `dump_gen_${dialect}`
+    const sql = async (text: string) =>
+      req('/api/databases/tsmyadmin_test/sql', { method: 'POST', body: JSON.stringify({ sql: text }) })
+    await sql(`DROP TABLE IF EXISTS ${t}`)
+    const generated =
+      dialect === 'mysql'
+        ? `CREATE TABLE ${t} (id INT PRIMARY KEY, a INT, twice INT AS (a * 2) STORED)`
+        : `CREATE TABLE ${t} (id INT PRIMARY KEY, a INT, twice INT GENERATED ALWAYS AS (a * 2) STORED)`
+    await sql(`${generated}; INSERT INTO ${t} (id, a) VALUES (1, 21)`)
+    try {
+      const dump = await (await req(`/api/databases/tsmyadmin_test/export?tables=${t}&format=sql`)).text()
+      // The column belongs in the CREATE but never in an INSERT's column list.
+      expect(dump).toContain('twice')
+      for (const line of dump.split('\n'))
+        if (/^INSERT INTO/i.test(line.trim())) expect(line.slice(0, line.indexOf('VALUES'))).not.toContain('twice')
+      const restored = z.array(StatementResultSchema).parse(await (await sql(dump)).json())
+      expect(restored.filter((r) => r.kind === 'error')).toEqual([])
+      const rows = BrowseResultSchema.parse(await (await req(`/api/databases/tsmyadmin_test/tables/${t}/rows`)).json())
+      expect(rows.rows).toEqual([[1, 21, 42]])
+    } finally {
+      await sql(`DROP TABLE IF EXISTS ${t}`)
+    }
+  })
+
   it('dumps routines, triggers and events that restore over the existing ones', async () => {
     // Runs in tsmyadmin_other: a whole-database dump of tsmyadmin_test would race the adapter conformance
     // suite, whose scratch tables appear and vanish there while this test runs.

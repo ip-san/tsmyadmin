@@ -536,7 +536,40 @@ export class MysqlAdapter extends BaseAdapter {
   }
 
   describeTable(ns: Namespace, table: string): Promise<TableSchema> {
-    return this.withConn(ns, (conn) => mysqlDescribeTable(conn, ns, table, this.mariadb === true))
+    return this.withConn(ns, async (conn) => {
+      const schema = await mysqlDescribeTable(conn, ns, table, this.mariadb === true)
+      if (this.mariadb !== true) await this.recoverLossyDefaults(conn, ns, table, schema.columns)
+      return schema
+    })
+  }
+
+  /**
+   * `information_schema.COLUMNS.COLUMN_DEFAULT` is a utf8mb3 column, so a literal default holding a character
+   * outside the BMP (an emoji, CJK Ext-B) comes back with that character replaced by `?`; replaying it would
+   * quietly rewrite the default. MySQL prints such a default as a hex literal in `SHOW CREATE TABLE` precisely
+   * because the text form cannot carry it — which both recovers the bytes and tells a mangled value apart from
+   * a `?` the user really typed. MariaDB prints `?` there too, so its defaults are left as reported (a
+   * documented limitation), and the extra round trip only happens when a default actually contains a `?`.
+   */
+  private async recoverLossyDefaults(
+    conn: Conn,
+    ns: Namespace,
+    table: string,
+    columns: TableSchema['columns']
+  ): Promise<void> {
+    const suspect = columns.filter((c) => !c.defaultIsExpression && c.default?.includes('?'))
+    if (suspect.length === 0) return
+    const create = firstResult(await conn.query(`SHOW CREATE TABLE ${quoteTable('mysql', ns, table)}`))
+    const text = String(create.rows[0]?.[1] ?? '')
+    for (const c of suspect) {
+      const name = c.name.replaceAll('`', '``').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const line = new RegExp(`^\\s*\`${name}\` [^\n]*`, 'm').exec(text)?.[0]
+      const hex = line ? /\bDEFAULT (0x[0-9A-Fa-f]+)/.exec(line)?.[1] : undefined
+      if (hex) {
+        c.default = hex
+        c.defaultIsExpression = true
+      }
+    }
   }
 
   /** information_schema is readable by every account, so it is a safe namespace for server-level queries. */

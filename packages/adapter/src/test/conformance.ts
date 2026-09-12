@@ -2175,6 +2175,57 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         }
       })
 
+      it.skipIf(dialect !== 'mysql')('recovers a default the catalog cannot spell (MySQL)', async () => {
+        // information_schema.COLUMNS.COLUMN_DEFAULT is utf8mb3, so a 4-byte character comes back as `?`.
+        // MySQL prints such a default as hex in SHOW CREATE TABLE — which is also how a real `?` is told apart.
+        if (await isMariaDb()) return
+        const t = `${scratch}_astral`
+        await execOk(
+          `CREATE TABLE ${t} (id INT PRIMARY KEY AUTO_INCREMENT, ` +
+            `emoji VARCHAR(20) NOT NULL DEFAULT '日本語😀', ` +
+            `q VARCHAR(20) NOT NULL DEFAULT 'a?b')`
+        )
+        try {
+          const hex = async () => {
+            await execOk(`INSERT INTO ${t} () VALUES ()`)
+            const rows = await exec(`SELECT HEX(emoji), HEX(q) FROM ${t} ORDER BY id DESC LIMIT 1`)
+            const r = rows[0]
+            return r?.kind === 'rows' ? JSON.stringify(r.result.rows[0]) : 'n/a'
+          }
+          const before = await hex()
+          const schema = await db.describeTable(ns, t)
+          const emoji = schema.columns.find((c) => c.name === 'emoji')
+          // Recovered as the bytes MySQL itself would write, not as text with a `?` in it.
+          expect(emoji?.default).toMatch(/^0x[0-9A-Fa-f]+$/)
+          expect(emoji?.defaultIsExpression).toBe(true)
+          // A `?` the user really typed stays a plain literal.
+          expect(schema.columns.find((c) => c.name === 'q')).toMatchObject({
+            default: 'a?b',
+            defaultIsExpression: false,
+          })
+          for (const name of ['emoji', 'q']) {
+            const c = schema.columns.find((x) => x.name === name)
+            if (!c) throw new Error(name)
+            await runDdl({
+              op: 'modifyColumn',
+              table: t,
+              name,
+              column: col(name, c.dataType, {
+                nullable: c.nullable,
+                collation: c.collation,
+                comment: 'edited',
+                default: c.defaultIsExpression
+                  ? { kind: 'expression', sql: c.default ?? '' }
+                  : { kind: 'literal', value: c.default ?? '' },
+              }),
+            })
+          }
+          expect(await hex()).toBe(before)
+        } finally {
+          await exec(`DROP TABLE IF EXISTS ${t}`, { stopOnError: false })
+        }
+      })
+
       it.skipIf(dialect !== 'mysql')('modifyColumn keeps a column-level CHECK (MariaDB)', async () => {
         // MariaDB attaches CHECKs to the column and MODIFY COLUMN replaces the whole definition, so a
         // comment-only edit used to drop them — including the `json_valid` that is all a JSON column is.

@@ -126,6 +126,19 @@ describe('fromColumnDef', () => {
     expect(retypeColumn(other, c, 'TIMESTAMP(3)')).toMatchObject({ defaultValue: 'uuid()' })
   })
 
+  it('never invents an ON UPDATE on a column that had none', () => {
+    const plain = fromColumnDef(def({ dataType: 'varchar(20)' }), 'mysql')
+    expect(retypeColumn(plain, plain, 'TIMESTAMP')).toMatchObject({ onUpdate: null })
+    expect(retypeColumn(plain, plain, 'DATETIME(3)')).toMatchObject({ onUpdate: null })
+  })
+
+  it('carries the column CHECK and the existing comment into the form', () => {
+    // MODIFY COLUMN replaces the whole definition: whatever the form does not carry is dropped.
+    const c = def({ check: '`c` > 0', comment: 'kept' })
+    expect(fromColumnDef(c, 'mysql')).toMatchObject({ check: '`c` > 0', comment: 'kept' })
+    expect(toColumnSpec(fromColumnDef(c, 'mysql'))).toMatchObject({ check: '`c` > 0', comment: 'kept' })
+  })
+
   it('keeps ON UPDATE only for a timestamp type of the same precision', () => {
     const plain = fromColumnDef(def({ dataType: 'timestamp', extra: 'on update CURRENT_TIMESTAMP' }), 'mysql')
     expect(retypeColumn(plain, plain, 'TIMESTAMP')).toMatchObject({ onUpdate: 'CURRENT_TIMESTAMP' })
