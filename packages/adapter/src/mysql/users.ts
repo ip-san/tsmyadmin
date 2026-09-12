@@ -2,6 +2,7 @@ import type { Namespace, UserInfo, UserOp, UserRef } from '@tsmyadmin/shared'
 import { PASSWORD_MASK } from '@tsmyadmin/shared'
 import { type Conn, firstResult } from '../base.ts'
 import { mysqlLiteral } from '../sql/literal.ts'
+import { privilegeList } from '../sql/privileges.ts'
 import { quoteIdent } from '../sql/quote.ts'
 import { AdapterError, type UserSqlBuilder, type UserStatement } from '../types.ts'
 
@@ -90,7 +91,7 @@ export const mysqlUsers: UserSqlBuilder = {
         const target = op.table
           ? `${quoteIdent('mysql', op.database)}.${quoteIdent('mysql', op.table)}`
           : `${quoteIdent('mysql', grantPattern(op.database))}.*`
-        const list = op.privileges.join(', ')
+        const list = privilegeList('mysql', op.privileges, op.columns)
         return [
           plain(
             op.op === 'grantPrivileges'

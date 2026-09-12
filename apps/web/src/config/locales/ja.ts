@@ -541,6 +541,14 @@ export const ja = {
     privileges: '権限',
     privilegeTarget: '対象',
     wholeDatabase: 'データベース全体',
+    wholeTableOnly: '（テーブル単位のみ）',
+    privilegeColumns: 'カラムを絞る（省略するとテーブル全体）',
+    privilegeColumnsHint:
+      'カラムを選ぶと、そのカラムだけに権限を与えます。取り消しはカラム単位の権限にだけ効き、テーブル全体の権限は狭まりません（テーブル全体の権限は全カラムを含みます）。',
+    columnProblem: {
+      needsTable: 'カラムを指定するときは対象のテーブルも選んでください。',
+      notColumnPrivilege: 'DELETE と TRIGGER はテーブル単位のみです。カラムを指定するなら外してください。',
+    },
     privilegesNote:
       '両方の DB で同じ意味を持つ権限だけを並べています。これ以外（MySQL の INDEX、PostgreSQL の TRUNCATE など）は SQL タブで付与してください。',
     grantAll: 'このデータベースの全権限を付与',

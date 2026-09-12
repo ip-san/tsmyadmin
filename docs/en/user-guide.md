@@ -1,4 +1,4 @@
-<!-- translated-from: docs/user-guide.md sha256:fa5ade9774fd830ef2cb886c9ab2c82c895277980bd6f4139ede29f9916dee74 -->
+<!-- translated-from: docs/user-guide.md sha256:25efd0c57c60ad7f50325b6e2b2c16e207f41d355996be911bf47e4ac0c72e6a -->
 
 # User guide
 
@@ -47,7 +47,7 @@ The language menu at the top right switches between English and 日本語 (the p
 | SQL | A SQL console scoped to this database (below) |
 | Export | Downloads the whole database as SQL / CSV / JSON (tables can be selected). See *Export in detail* below |
 | Import | Loads a SQL script (mysqldump / mariadb-dump / pg_dump) or a CSV, with progress and a stop button. See *Import in detail* below |
-| Privileges | Each user's current level on this database (All / Some / None), and granting or revoking everything on it. **Choose privileges…** grants or revokes `SELECT` / `INSERT` / `UPDATE` / `DELETE` / `REFERENCES` / `TRIGGER` on either the whole database or one table. (Only privileges that mean the same thing on both servers are offered; anything else — MySQL `INDEX`, PostgreSQL `TRUNCATE` — goes through the SQL tab.) A user allowed by a server-wide privilege (`*.*`) carries a **Global** badge, which revoking on this database does not remove |
+| Privileges | Each user's current level on this database (All / Some / None), and granting or revoking everything on it. **Choose privileges…** grants or revokes `SELECT` / `INSERT` / `UPDATE` / `DELETE` / `REFERENCES` / `TRIGGER` on either the whole database or one table. (Only privileges that mean the same thing on both servers are offered; anything else — MySQL `INDEX`, PostgreSQL `TRUNCATE` — goes through the SQL tab.) Choosing a table also lets you name columns — `SELECT` / `INSERT` / `UPDATE` / `REFERENCES` only, since `DELETE` and `TRIGGER` apply to the whole table and are refused before anything runs if combined with columns. Revoking at column level removes only a column-level privilege: it does not narrow one held on the whole table, which always covers every column. A user allowed by a server-wide privilege (`*.*`) carries a **Global** badge, which revoking on this database does not remove |
 | Routines | Stored procedures and functions. **Show definition** fetches the CREATE statement |
 | Triggers | The triggers and their definitions |
 | Events | MySQL's event scheduler (enable / disable / drop). On PostgreSQL the tab says it is not supported |

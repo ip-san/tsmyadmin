@@ -545,6 +545,14 @@ export const en = {
     privileges: 'Privileges',
     privilegeTarget: 'Applies to',
     wholeDatabase: 'The whole database',
+    wholeTableOnly: '(whole table only)',
+    privilegeColumns: 'Limit to columns (all of them when none are chosen)',
+    privilegeColumnsHint:
+      'Choosing columns grants the privilege on those columns alone. Revoking removes only a column-level privilege — it does not narrow a privilege held on the whole table, which always covers every column.',
+    columnProblem: {
+      needsTable: 'Choose the table those columns belong to as well.',
+      notColumnPrivilege: 'DELETE and TRIGGER apply to the whole table: clear them to name columns.',
+    },
     privilegesNote:
       'Only privileges that mean the same thing on both servers are listed. Anything else (MySQL INDEX, PostgreSQL TRUNCATE) goes through the SQL tab.',
     grantAll: 'Grant all privileges on this database',

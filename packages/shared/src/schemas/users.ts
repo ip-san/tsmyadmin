@@ -30,13 +30,46 @@ export const PrivilegeSchema = z.enum(['SELECT', 'INSERT', 'UPDATE', 'DELETE', '
 export type Privilege = z.infer<typeof PrivilegeSchema>
 export const PRIVILEGES = PrivilegeSchema.options
 
-/** `table` absent = the whole database (PostgreSQL: the schema, plus the default for tables created later). */
+/**
+ * The privileges that can name columns. Both dialects accept exactly these four per column — DELETE and TRIGGER
+ * act on the whole table and have no column form — and the conformance suite proves it against both servers
+ * rather than trusting the documentation.
+ */
+export const ColumnPrivilegeSchema = PrivilegeSchema.extract(['SELECT', 'INSERT', 'UPDATE', 'REFERENCES'])
+export type ColumnPrivilege = z.infer<typeof ColumnPrivilegeSchema>
+export const COLUMN_PRIVILEGES = ColumnPrivilegeSchema.options
+
+/**
+ * `table` absent = the whole database (PostgreSQL: the schema, plus the default for tables created later).
+ * `columns` narrows the grant to those columns of that table; it needs a table, and only the privileges in
+ * `COLUMN_PRIVILEGES` have a column form. Both are enforced below so a bad combination cannot reach the preview.
+ */
 const PrivilegeTarget = {
   user: UserRefSchema,
   privileges: z.array(PrivilegeSchema).min(1),
   database: z.string().min(1),
   schema: z.string().min(1).optional(),
   table: z.string().min(1).optional(),
+  columns: z.array(z.string().min(1)).min(1).optional(),
+}
+
+type PrivilegeTargetValue = {
+  privileges: Privilege[]
+  table?: string | undefined
+  columns?: string[] | undefined
+}
+
+/** Reason a target is not a valid column grant, or null. Shared by the schema and the privileges form. */
+export function columnTargetError(target: PrivilegeTargetValue): 'needsTable' | 'notColumnPrivilege' | null {
+  if (!target.columns) return null
+  if (target.table === undefined) return 'needsTable'
+  const wholeTableOnly = target.privileges.filter((p) => !COLUMN_PRIVILEGES.includes(p as ColumnPrivilege))
+  return wholeTableOnly.length > 0 ? 'notColumnPrivilege' : null
+}
+
+const MESSAGES: Record<NonNullable<ReturnType<typeof columnTargetError>>, string> = {
+  needsTable: 'columns apply to one table: name the table as well',
+  notColumnPrivilege: `only ${COLUMN_PRIVILEGES.join(', ')} can name columns`,
 }
 
 export const UserOpSchema = z.discriminatedUnion('op', [
@@ -67,7 +100,11 @@ export type UserOp = z.infer<typeof UserOpSchema>
 export type UserOpInput = z.input<typeof UserOpSchema>
 export const USER_OP_NAMES = UserOpSchema.options.map((o) => o.shape.op.value)
 
-export const UserOpRequestSchema = z.object({ op: UserOpSchema })
+export const UserOpRequestSchema = z.object({ op: UserOpSchema }).superRefine(({ op }, ctx) => {
+  if (op.op !== 'grantPrivileges' && op.op !== 'revokePrivileges') return
+  const problem = columnTargetError(op)
+  if (problem) ctx.addIssue({ code: 'custom', path: ['op', 'columns'], message: MESSAGES[problem] })
+})
 
 /**
  * Response of POST /users/execute: one result per statement of the operation (a failing wrapper COMMIT is

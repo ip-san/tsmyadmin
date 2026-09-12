@@ -63,6 +63,35 @@ for (const t of TARGETS) {
         t.dialect === 'mysql' ? t.database.replaceAll('_', '\\_') : (t.schema ?? 'public')
       )
 
+      // Column-level: SELECT on one column of one table.
+      await page.goto(t.schema ? `/db/${t.database}/privileges?schema=${t.schema}` : `/db/${t.database}/privileges`)
+      await page.getByRole('button', { name: `${key}: 権限を選ぶ…` }).click()
+      const columns = page.getByRole('dialog')
+      await columns.getByLabel('対象').selectOption('users')
+      await columns.getByRole('checkbox', { name: 'name', exact: true }).check()
+      // DELETE has no column form, so the form says so and refuses to submit rather than failing at execute.
+      await columns.getByRole('checkbox', { name: /^DELETE/ }).check()
+      await expect(columns.getByText('テーブル単位のみです', { exact: false })).toBeVisible()
+      await expect(columns.getByRole('button', { name: '権限を付与' })).toBeDisabled()
+      await columns.getByRole('checkbox', { name: /^DELETE/ }).uncheck()
+
+      await columns.getByRole('button', { name: '権限を付与' }).click()
+      await confirmPreview(page, /GRANT SELECT \(.?name.?\) ON/)
+      await expect(page.getByText(/「権限を付与」を実行しました/)).toBeVisible()
+
+      await page.goto('/users')
+      await page.getByRole('button', { name: `${key}: 権限を表示` }).click()
+      // Visible on both servers: MySQL reads it from SHOW GRANTS, PostgreSQL from pg_attribute.attacl.
+      await expect(page.getByLabel(`${key}: 権限`, { exact: true })).toContainText(/SELECT \(.?name.?\)/)
+
+      await page.goto(t.schema ? `/db/${t.database}/privileges?schema=${t.schema}` : `/db/${t.database}/privileges`)
+      await page.getByRole('button', { name: `${key}: 権限を選ぶ…` }).click()
+      await page.getByRole('dialog').getByLabel('対象').selectOption('users')
+      await page.getByRole('dialog').getByRole('checkbox', { name: 'name', exact: true }).check()
+      await page.getByRole('dialog').getByRole('button', { name: '権限を取り消す' }).click()
+      await confirmPreview(page, /REVOKE SELECT \(.?name.?\) ON/)
+
+      await page.goto('/users')
       await page.getByRole('button', { name: `${key}: パスワードを変更` }).click()
       await page.getByLabel('パスワード', { exact: true }).fill('new-pw')
       await page.getByLabel('パスワード（確認）').fill('new-pw')

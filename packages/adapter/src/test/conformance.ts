@@ -9,6 +9,7 @@ import type {
   TriggerInfo,
 } from '@tsmyadmin/shared'
 import {
+  COLUMN_PRIVILEGES,
   EXACT_COUNT_MAX_ROWS,
   type InputCell,
   isBinaryCell,
@@ -2231,6 +2232,128 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         } finally {
           await reader?.close()
           // PostgreSQL refuses to drop a role that still holds privileges, so they go first.
+          await exec(
+            [
+              ...db.users.build({
+                op: 'revokeAll',
+                user,
+                database: ns.database,
+                ...(ns.schema ? { schema: ns.schema } : {}),
+              }),
+              ...db.users.build({ op: 'dropUser', user }),
+            ]
+              .map((x) => x.sql)
+              .join(';\n'),
+            { stopOnError: false }
+          )
+        }
+      })
+
+      it('grants a named column only: the account reads that column and not its neighbours', async () => {
+        const name = `col_${scratch}`
+        const password = 'c0l only!'
+        const user = dialect === 'mysql' ? { name, host: '%' } : { name }
+        const runOp = async (op: Parameters<typeof db.users.build>[0]) => {
+          const target = db.users.namespace(op, db.serverNamespace)
+          const r = await db.executeSql(
+            target,
+            db.users
+              .build(op)
+              .map((x) => x.sql)
+              .join(';\n'),
+            EXEC
+          )
+          for (const x of r) if (x.kind === 'error') throw new Error(`${x.message}\n${x.sql}`)
+        }
+        const target = { database: ns.database, ...(ns.schema ? { schema: ns.schema } : {}), table: 'users' }
+        await runOp({
+          op: 'createUser',
+          user,
+          password,
+          attributes: { superuser: false, createdb: false, createrole: false },
+        })
+        let reader: DatabaseAdapter | undefined
+        try {
+          await runOp({ op: 'grantPrivileges', user, privileges: ['SELECT'], columns: ['name'], ...target })
+          reader = ctx.createAs(name, password)
+          const refused = async (sql: string) => {
+            try {
+              const r = await (reader as DatabaseAdapter).executeSql(ns, sql, { ...EXEC, stopOnError: false })
+              return r.some((x) => x.kind === 'error')
+            } catch {
+              return true
+            }
+          }
+          // Named columns, not COUNT(*): whether a bare count is allowed under a column grant differs by server
+          // and is not what this is testing.
+          const granted = await reader.executeSql(ns, 'SELECT name FROM users', EXEC)
+          expect(granted[0]?.kind).toBe('rows')
+          expect(await refused('SELECT email FROM users')).toBe(true)
+          expect(await refused('SELECT * FROM users')).toBe(true)
+          // The grant is per column *and* per privilege: reading `name` does not allow writing it.
+          expect(await refused('UPDATE users SET name = name WHERE id = -1')).toBe(true)
+
+          // The privileges screen reads showGrants, so a column grant has to be visible there or the feature
+          // looks like it did nothing.
+          expect((await db.showGrants(user)).join('\n')).toMatch(/GRANT SELECT \(.?name.?\) ON/i)
+
+          await runOp({ op: 'revokePrivileges', user, privileges: ['SELECT'], columns: ['name'], ...target })
+          expect(await refused('SELECT name FROM users')).toBe(true)
+        } finally {
+          await reader?.close()
+          await exec(
+            [
+              ...db.users.build({
+                op: 'revokeAll',
+                user,
+                database: ns.database,
+                ...(ns.schema ? { schema: ns.schema } : {}),
+              }),
+              ...db.users.build({ op: 'dropUser', user }),
+            ]
+              .map((x) => x.sql)
+              .join(';\n'),
+            { stopOnError: false }
+          )
+        }
+      })
+
+      it('accepts columns for exactly the privileges COLUMN_PRIVILEGES lists', async () => {
+        // The closed list in `packages/shared` is a claim about both servers; this is the claim being checked.
+        const name = `colset_${scratch}`
+        const user = dialect === 'mysql' ? { name, host: '%' } : { name }
+        const account = dialect === 'mysql' ? `'${name}'@'%'` : `"${name}"`
+        const table = dialect === 'mysql' ? `\`${ns.database}\`.\`users\`` : `"${ns.schema ?? 'public'}"."users"`
+        await exec(
+          db.users
+            .build({
+              op: 'createUser',
+              user,
+              password: 'c0lset!',
+              attributes: { superuser: false, createdb: false, createrole: false },
+            })
+            .map((x) => x.sql)
+            .join(';\n')
+        )
+        try {
+          const attempt = async (privilege: string) => {
+            const r = await db.executeSql(
+              db.users.namespace(
+                { op: 'grantPrivileges', user, privileges: ['SELECT'], database: ns.database },
+                db.serverNamespace
+              ),
+              `GRANT ${privilege} (name) ON ${table} TO ${account}`,
+              { ...EXEC, stopOnError: false }
+            )
+            return r.every((x) => x.kind !== 'error')
+          }
+          for (const privilege of COLUMN_PRIVILEGES)
+            expect([privilege, await attempt(privilege)]).toEqual([privilege, true])
+          // DELETE and TRIGGER act on the whole table: naming a column is a syntax error on both servers.
+          for (const privilege of ['DELETE', 'TRIGGER']) {
+            expect([privilege, await attempt(privilege)]).toEqual([privilege, false])
+          }
+        } finally {
           await exec(
             [
               ...db.users.build({

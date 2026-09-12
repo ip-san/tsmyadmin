@@ -46,7 +46,10 @@ export function privilegeLevel(
   if (/ALTER ROLE "[^"]+" SUPERUSER/.test(text)) return 'all'
   const target = `"${esc(schema ?? 'public')}"`
   // Write privileges on the schema's tables count as "all" (what the grant-all op produces); USAGE / SELECT
-  // only (e.g. the PUBLIC usage every role has on `public`) is "some".
-  if (new RegExp(`GRANT [^\\n]*\\b(INSERT|UPDATE|DELETE)\\b[^\\n]* ON ${target}\\.`).test(text)) return 'all'
+  // only (e.g. the PUBLIC usage every role has on `public`) is "some". A column-scoped grant
+  // (`GRANT UPDATE (name) ON …`) is excluded first: it names particular columns of one table, which is the
+  // narrowest grant there is and must never read as "everything".
+  const wholeTable = statements.filter((s) => !/^GRANT\s+[^\n]*\([^)]*\)\s+ON\b/i.test(s)).join('\n')
+  if (new RegExp(`GRANT [^\\n]*\\b(INSERT|UPDATE|DELETE)\\b[^\\n]* ON ${target}\\.`).test(wholeTable)) return 'all'
   return new RegExp(`ON (SCHEMA ${target}|${target}\\.|DATABASE "${esc(db)}")`).test(text) ? 'some' : 'none'
 }

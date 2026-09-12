@@ -28,6 +28,31 @@ const SAMPLE_OPS: Record<UserOp['op'], UserOp> = {
   revokePrivileges: { op: 'revokePrivileges', user, privileges: ['SELECT'], database: 'shop', schema: 'app' },
 }
 
+/**
+ * Column grants are not separate ops, so SAMPLE_OPS completeness does not reach them: they get their own
+ * snapshots. The column name is quoting-hostile on purpose — a bare join would produce invalid SQL.
+ */
+const COLUMN_OPS = {
+  grant: {
+    op: 'grantPrivileges',
+    user,
+    privileges: ['SELECT', 'UPDATE'],
+    database: 'shop',
+    schema: 'app',
+    table: 'ord ers',
+    columns: ['na"me', 'no`te'],
+  },
+  revoke: {
+    op: 'revokePrivileges',
+    user,
+    privileges: ['SELECT'],
+    database: 'shop',
+    schema: 'app',
+    table: 'ord ers',
+    columns: ['na"me'],
+  },
+} satisfies Record<string, UserOp>
+
 describe('user SQL builders', () => {
   it('has a sample for every UserOp', () => {
     expect(Object.keys(SAMPLE_OPS).sort()).toEqual([...USER_OP_NAMES].sort())
@@ -41,6 +66,28 @@ describe('user SQL builders', () => {
       expect(pgUsers.build(SAMPLE_OPS[name]).map((s) => s.sql)).toMatchSnapshot()
     })
   }
+
+  for (const [kind, op] of Object.entries(COLUMN_OPS)) {
+    it(`mysql: ${kind} on named columns`, () => {
+      expect(mysqlUsers.build(op).map((s) => s.sql)).toMatchSnapshot()
+    })
+    it(`postgres: ${kind} on named columns`, () => {
+      expect(pgUsers.build(op).map((s) => s.sql)).toMatchSnapshot()
+    })
+  }
+
+  it('quotes column names per dialect and repeats them for each privilege', () => {
+    const mysql = mysqlUsers.build(COLUMN_OPS.grant)[0]?.sql ?? ''
+    expect(mysql).toContain('GRANT SELECT (`na"me`, `no``te`), UPDATE (`na"me`, `no``te`) ON')
+    // The columns of a table grant are plain identifiers: the LIKE escaping of `db.*` must not reach them.
+    expect(mysql).not.toContain('\\_')
+    const pg = pgUsers.build(COLUMN_OPS.grant).map((x) => x.sql)
+    expect(pg.at(-1)).toContain('GRANT SELECT ("na""me", "no`te"), UPDATE ("na""me", "no`te") ON')
+  })
+
+  it('leaves a grant without columns unchanged', () => {
+    expect(mysqlUsers.build(SAMPLE_OPS.grantPrivileges)[0]?.sql).toContain('GRANT SELECT, INSERT ON')
+  })
 
   it('masks passwords in display text and never leaks them', () => {
     for (const b of [mysqlUsers, pgUsers]) {

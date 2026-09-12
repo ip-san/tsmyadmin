@@ -32,4 +32,16 @@ describe('privilegeLevel', () => {
     expect(privilegeLevel('postgres', 'app', 'sales', ['GRANT SELECT ON "public"."orders" TO "r"'])).toBe('none')
     expect(privilegeLevel('postgres', 'app', undefined, ['ALTER ROLE "r" NOSUPERUSER LOGIN'])).toBe('none')
   })
+
+  it('treats a column grant as partial, never as everything', () => {
+    // The narrowest grant there is: one privilege, on one column, of one table.
+    const pg = ['GRANT USAGE ON SCHEMA "public" TO "r"', 'GRANT UPDATE (name) ON "public"."users" TO "r"']
+    expect(privilegeLevel('postgres', 'shop', 'public', pg)).toBe('some')
+    // The same privilege on the whole table is what grant-all produces, and still reads as all.
+    expect(privilegeLevel('postgres', 'shop', 'public', ['GRANT UPDATE ON "public"."users" TO "r"'])).toBe('all')
+    // MySQL prints the same parenthesised form; it was already partial there.
+    expect(privilegeLevel('mysql', 'shop', undefined, ['GRANT SELECT (`name`) ON `shop`.`users` TO `r`@`%`'])).toBe(
+      'some'
+    )
+  })
 })

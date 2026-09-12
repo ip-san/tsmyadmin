@@ -14,6 +14,12 @@ exports[`user SQL builders > mysql: dropUser 1`] = `
 ]
 `;
 
+exports[`user SQL builders > mysql: grant on named columns 1`] = `
+[
+  "GRANT SELECT (\`na"me\`, \`no\`\`te\`), UPDATE (\`na"me\`, \`no\`\`te\`) ON \`shop\`.\`ord ers\` TO 'o''brien'@'10.0.%'",
+]
+`;
+
 exports[`user SQL builders > mysql: grantAll 1`] = `
 [
   "GRANT ALL PRIVILEGES ON \`shop\`.* TO 'o''brien'@'10.0.%'",
@@ -23,6 +29,12 @@ exports[`user SQL builders > mysql: grantAll 1`] = `
 exports[`user SQL builders > mysql: grantPrivileges 1`] = `
 [
   "GRANT SELECT, INSERT ON \`shop\`.\`ord ers\` TO 'o''brien'@'10.0.%'",
+]
+`;
+
+exports[`user SQL builders > mysql: revoke on named columns 1`] = `
+[
+  "REVOKE SELECT (\`na"me\`) ON \`shop\`.\`ord ers\` FROM 'o''brien'@'10.0.%'",
 ]
 `;
 
@@ -56,6 +68,14 @@ exports[`user SQL builders > postgres: dropUser 1`] = `
 ]
 `;
 
+exports[`user SQL builders > postgres: grant on named columns 1`] = `
+[
+  "GRANT CONNECT ON DATABASE "shop" TO "o'brien"",
+  "GRANT USAGE ON SCHEMA "app" TO "o'brien"",
+  "GRANT SELECT ("na""me", "no\`te"), UPDATE ("na""me", "no\`te") ON "app"."ord ers" TO "o'brien"",
+]
+`;
+
 exports[`user SQL builders > postgres: grantAll 1`] = `
 [
   "GRANT CONNECT, TEMP ON DATABASE "shop" TO "o'brien"",
@@ -71,6 +91,12 @@ exports[`user SQL builders > postgres: grantPrivileges 1`] = `
   "GRANT CONNECT ON DATABASE "shop" TO "o'brien"",
   "GRANT USAGE ON SCHEMA "app" TO "o'brien"",
   "GRANT SELECT, INSERT ON "app"."ord ers" TO "o'brien"",
+]
+`;
+
+exports[`user SQL builders > postgres: revoke on named columns 1`] = `
+[
+  "REVOKE SELECT ("na""me") ON "app"."ord ers" FROM "o'brien"",
 ]
 `;
 

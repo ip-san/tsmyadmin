@@ -1,107 +1,15 @@
 import { useQueries, useQuery } from '@tanstack/react-query'
-import type { Dialect, Privilege, UserGrants, UserOp, UserRef } from '@tsmyadmin/shared'
-import { PRIVILEGES } from '@tsmyadmin/shared'
+import type { Dialect, UserGrants, UserRef } from '@tsmyadmin/shared'
 import { useCallback, useState } from 'react'
 import { UserOpPreviewDialog } from '@/components/ddl/UserOpPreviewDialog.tsx'
 import { Button } from '@/components/ui/Button.tsx'
-import { Dialog } from '@/components/ui/Dialog.tsx'
 import { Badge, ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
-import { Field, Select } from '@/components/ui/Field.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
-import { grantsQuery, tablesQuery, usersQuery } from '@/lib/queries.ts'
+import { grantsQuery, usersQuery } from '@/lib/queries.ts'
 import { userLabel, userRef, useUserOpFlow } from '@/lib/user-ops.ts'
+import { PrivilegeChooser } from './PrivilegeChooser.tsx'
 import { globalPrivilegeLevel, privilegeLevel } from './privilege-level.ts'
-
-/**
- * Picks privileges and an optional table, then goes through the same preview → execute flow as everything else.
- * The privilege names come from a closed list in `packages/shared`, so nothing typed here reaches SQL.
- */
-function PrivilegeChooser({
-  user,
-  label,
-  db,
-  schema,
-  onSubmit,
-  onClose,
-}: {
-  user: UserRef
-  label: string
-  db: string
-  schema?: string | undefined
-  onSubmit: (op: UserOp) => void
-  onClose: () => void
-}) {
-  const tables = useQuery(tablesQuery(db, schema))
-  const [chosen, setChosen] = useState<Privilege[]>(['SELECT'])
-  const [table, setTable] = useState('')
-  const target = {
-    user,
-    privileges: chosen,
-    database: db,
-    ...(schema ? { schema } : {}),
-    ...(table ? { table } : {}),
-  }
-  return (
-    <Dialog
-      open
-      title={locale.users.choosePrivileges(label)}
-      onClose={onClose}
-      footer={
-        <>
-          <Button onClick={onClose}>{locale.common.cancel}</Button>
-          <Button
-            variant="danger"
-            disabled={chosen.length === 0}
-            aria-haspopup="dialog"
-            onClick={() => onSubmit({ op: 'revokePrivileges', ...target })}
-          >
-            {locale.users.ops.revokePrivileges}
-          </Button>
-          <Button
-            variant="primary"
-            disabled={chosen.length === 0}
-            aria-haspopup="dialog"
-            onClick={() => onSubmit({ op: 'grantPrivileges', ...target })}
-          >
-            {locale.users.ops.grantPrivileges}
-          </Button>
-        </>
-      }
-    >
-      <fieldset className="space-y-1">
-        <legend className="text-sm font-medium text-zinc-700 dark:text-zinc-200">{locale.users.privileges}</legend>
-        <div className="flex flex-wrap gap-x-4 gap-y-2">
-          {PRIVILEGES.map((p) => (
-            <label key={p} className="flex items-center gap-2 py-1 text-sm">
-              <input
-                type="checkbox"
-                checked={chosen.includes(p)}
-                onChange={(e) => setChosen((c) => (e.target.checked ? [...c, p] : c.filter((x) => x !== p)))}
-              />
-              {p}
-            </label>
-          ))}
-        </div>
-      </fieldset>
-      <div className="mt-3">
-        <Field id="priv-table" label={locale.users.privilegeTarget}>
-          <Select id="priv-table" value={table} onChange={(e) => setTable(e.target.value)}>
-            <option value="">{locale.users.wholeDatabase}</option>
-            {(tables.data ?? [])
-              .filter((t) => t.kind === 'table')
-              .map((t) => (
-                <option key={t.name} value={t.name}>
-                  {t.name}
-                </option>
-              ))}
-          </Select>
-        </Field>
-      </div>
-      <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">{locale.users.privilegesNote}</p>
-    </Dialog>
-  )
-}
 
 export function PrivilegesPage({ db, schema, dialect }: { db: string; schema?: string | undefined; dialect: Dialect }) {
   const users = useQuery(usersQuery)

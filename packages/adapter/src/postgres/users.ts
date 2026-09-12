@@ -2,6 +2,7 @@ import type { Namespace, UserInfo, UserOp, UserRef } from '@tsmyadmin/shared'
 import { PASSWORD_MASK } from '@tsmyadmin/shared'
 import { type Conn, firstResult } from '../base.ts'
 import { pgLiteral } from '../sql/literal.ts'
+import { privilegeList } from '../sql/privileges.ts'
 import { quoteIdent } from '../sql/quote.ts'
 import type { UserSqlBuilder, UserStatement } from '../types.ts'
 
@@ -79,6 +80,27 @@ export async function pgShowGrants(conn: Conn, user: UserRef): Promise<string[]>
   )
   for (const row of tables.rows)
     out.push(`GRANT ${String(row[2])} ON ${id(String(row[0]))}.${id(String(row[1]))} TO ${id(user.name)}`)
+  // Column privileges live in pg_attribute.attacl, not in the table's relacl, so a column grant is invisible to
+  // the query above. Grouped per privilege so it reads back as the GRANT that produced it.
+  const columns = firstResult(
+    await conn.query(
+      `SELECT n.nspname, c.relname, acl.privilege_type, string_agg(quote_ident(a.attname), ', ' ORDER BY a.attnum)
+       FROM pg_attribute a
+       JOIN pg_class c ON c.oid = a.attrelid
+       JOIN pg_namespace n ON n.oid = c.relnamespace
+       CROSS JOIN LATERAL aclexplode(a.attacl) acl
+       WHERE a.attacl IS NOT NULL AND acl.grantee = (SELECT oid FROM pg_roles WHERE rolname = $1)
+         AND n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast') AND n.nspname NOT LIKE 'pg\\_%'
+       GROUP BY n.nspname, c.relname, acl.privilege_type
+       ORDER BY n.nspname, c.relname, acl.privilege_type`,
+      [user.name]
+    )
+  )
+  for (const row of columns.rows) {
+    out.push(
+      `GRANT ${String(row[2])} (${String(row[3])}) ON ${id(String(row[0]))}.${id(String(row[1]))} TO ${id(user.name)}`
+    )
+  }
   return out
 }
 
@@ -121,7 +143,7 @@ export const pgUsers: UserSqlBuilder = {
       }
       case 'grantPrivileges': {
         const schema = id(op.schema ?? 'public')
-        const list = op.privileges.join(', ')
+        const list = privilegeList('postgres', op.privileges, op.columns)
         // Without CONNECT and USAGE the role cannot reach the table at all, so a table grant implies them.
         const out = [
           `GRANT CONNECT ON DATABASE ${id(op.database)} TO ${role}`,
@@ -137,7 +159,7 @@ export const pgUsers: UserSqlBuilder = {
       }
       case 'revokePrivileges': {
         const schema = id(op.schema ?? 'public')
-        const list = op.privileges.join(', ')
+        const list = privilegeList('postgres', op.privileges, op.columns)
         // CONNECT and USAGE stay: they may be carrying other grants the caller did not ask about.
         const out = op.table
           ? [`REVOKE ${list} ON ${schema}.${id(op.table)} FROM ${role}`]
