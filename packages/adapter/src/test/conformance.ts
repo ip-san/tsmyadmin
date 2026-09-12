@@ -639,6 +639,48 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
     })
 
     describe('updateRow', () => {
+      it.skipIf(dialect !== 'mysql')(
+        'addresses the row the caller named, not one the collation calls equal',
+        async () => {
+          // Without a key every column is the key. Compared in the column's own collation, rows differing only by
+          // case, accent or a trailing space tie, and the LIMIT 1 that follows would edit whichever came first.
+          for (const [collation, a, b] of [
+            ['utf8mb4_0900_ai_ci', 'cafe', 'café'],
+            ['utf8mb4_general_ci', 'a', 'A'],
+            ['utf8mb4_general_ci', 'b ', 'b'],
+            ['latin1_swedish_ci', 'cafe', 'café'],
+          ] as const) {
+            const t = `${scratch}_ci`
+            await exec(`DROP TABLE IF EXISTS ${t}`, { stopOnError: false })
+            // MariaDB has no utf8mb4_0900_* collations; its default ai_ci behaves the same way.
+            const coll = collation === 'utf8mb4_0900_ai_ci' && (await isMariaDb()) ? 'utf8mb4_general_ci' : collation
+            await execOk(`CREATE TABLE ${t} (s VARCHAR(10) COLLATE ${coll}, n INT)`)
+            try {
+              // Both rows carry the same n, so only `s` tells them apart — and the collation says it does not.
+              await execOk(`INSERT INTO ${t} (s, n) VALUES ('${a}', 1), ('${b}', 1)`)
+              await db.updateRow(ns, t, { kind: 'all-columns', values: { s: b, n: 1 } }, { n: '99' })
+              // Compared by bytes: only the row the caller named may carry the new value.
+              const after = await exec(`SELECT HEX(CONVERT(s USING utf8mb4)) h, n FROM ${t} ORDER BY n`)
+              const r = after[0]
+              const pairs = r?.kind === 'rows' ? r.result.rows.map((x) => [String(x[0]), Number(x[1])]) : []
+              const hex = (v: string) => Buffer.from(v, 'utf8').toString('hex').toUpperCase()
+              expect(pairs).toEqual([
+                [hex(a), 1],
+                [hex(b), 99],
+              ])
+
+              await execOk(`UPDATE ${t} SET n = 1 WHERE n = 99`)
+              await db.deleteRows(ns, t, [{ kind: 'all-columns', values: { s: b, n: 1 } }])
+              const left = await exec(`SELECT s FROM ${t}`)
+              const l = left[0]
+              expect(l?.kind === 'rows' ? l.result.rows.map((x) => String(x[0])) : []).toEqual([a])
+            } finally {
+              await exec(`DROP TABLE IF EXISTS ${t}`, { stopOnError: false })
+            }
+          }
+        }
+      )
+
       it('updates exactly one row by primary key', async () => {
         const r = await db.updateRow(ns, scratch, { kind: 'pk', values: { id: 2 } }, { name: 'second', n: 43 })
         expect(r.affectedRows).toBe(1)

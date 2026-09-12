@@ -85,6 +85,9 @@ const PERMISSION_CODES = new Set([
  */
 const KILLED_CODES = new Set(['ER_CONNECTION_KILLED', 'PROTOCOL_CONNECTION_LOST', 'ER_SERVER_SHUTDOWN'])
 /** Derived-table wrapping (only used for statements with their own LIMIT) fails where the bare statement would not. */
+/** Character column types, whose collation would otherwise decide what counts as the same row. */
+const CHARACTER_KEY_TYPE = /^(?:char|varchar|tinytext|text|mediumtext|longtext|enum|set)\b/i
+
 const WRAPPER_ONLY_ERRORS: ReadonlySet<string> = new Set([
   'ER_DUP_FIELDNAME',
   'ER_CANT_USE_OPTION_HERE',
@@ -399,6 +402,17 @@ export class MysqlAdapter extends BaseAdapter {
     const decimal = /^decimal\((\d+),\s*(\d+)\)/.exec(t)
     if (decimal) return `CAST(${placeholder} AS DECIMAL(${Number(decimal[1])},${Number(decimal[2])}))`
     return placeholder
+  }
+
+  /**
+   * An all-columns key must match the row byte for byte. Comparing in the column's own collation makes rows
+   * that differ only by case (`a` / `A` under general_ci), accent (`cafe` / `café` under 0900_ai_ci) or a
+   * trailing space (PAD SPACE) equal, and the `LIMIT 1` that follows would then edit whichever the scan found
+   * first. Both sides are converted to utf8mb4 (lossless, and it makes a latin1 column comparable with the
+   * utf8mb4 parameter) and compared as binary, which is exact and never pads.
+   */
+  protected override keyMatchExpr(expr: string, type: string): string {
+    return CHARACTER_KEY_TYPE.test(type) ? `CAST(CONVERT(${expr} USING utf8mb4) AS BINARY)` : expr
   }
 
   /**

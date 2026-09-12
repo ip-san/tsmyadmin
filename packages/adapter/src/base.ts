@@ -323,6 +323,14 @@ export abstract class BaseAdapter implements DatabaseAdapter {
   protected keyParam(placeholder: string, _type: string): string {
     return placeholder
   }
+  /**
+   * Both sides of an all-columns key comparison, wrapped so the match is exact rather than collation-equal.
+   * The default is no wrapping (PostgreSQL addresses rows by ctid and never takes this path).
+   */
+  protected keyMatchExpr(expr: string, _type: string): string {
+    return expr
+  }
+
   /** Expression a key column is ordered and compared by in keyset paging (MySQL ENUM/SET: label, not index). */
   protected keyColumnExpr(quoted: string, _type: string): string {
     return quoted
@@ -646,7 +654,13 @@ export abstract class BaseAdapter implements DatabaseAdapter {
         const names = Object.keys(key.values)
         if (names.length === 0) throw new AdapterError('KEY_MISMATCH', 'Key values are empty')
         const eq = this.nullSafeEq()
-        return ` WHERE ${names.map((n) => `${quoteIdent(d, n)} ${eq} ${value(n, key.values[n])}`).join(' AND ')}`
+        // Every column is the key here, so the comparison has to be exact: under the column's own collation
+        // rows differing only by case, accent or trailing space are equal, and `LIMIT 1` would then pick
+        // whichever the scan reached first — silently editing a row the user did not click.
+        const match = (n: string, expr: string) => this.keyMatchExpr(expr, types.get(n) ?? '')
+        return ` WHERE ${names
+          .map((n) => `${match(n, quoteIdent(d, n))} ${eq} ${match(n, value(n, key.values[n]))}`)
+          .join(' AND ')}`
       }
       case 'ctid': {
         if (d !== 'postgres') throw new AdapterError('UNSUPPORTED', 'ctid keys are only supported on PostgreSQL')
