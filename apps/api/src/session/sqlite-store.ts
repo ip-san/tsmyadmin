@@ -146,7 +146,6 @@ export class SqliteSessionStore implements SessionStore {
     this.timer = startSweep(options.sweepIntervalMs ?? 60_000, () => void this.sweep())
   }
 
-  /** True when the sessions table is empty or its first row opens with the current key. */
   /**
    * Re-seals payloads written before they were bound to their row (see rowAad). Done in place so an upgrade
    * costs nobody their session or their saved queries, and in one transaction so a crash part-way cannot leave
@@ -202,6 +201,7 @@ export class SqliteSessionStore implements SessionStore {
     }
   }
 
+  /** True when the sessions table is empty or its first row opens with the current key. */
   private canDecryptAny(): boolean {
     const row = this.db.prepare('SELECT id, payload FROM sessions LIMIT 1').get() as
       | { id: string; payload: Uint8Array }

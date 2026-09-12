@@ -53,4 +53,11 @@ describe('session crypto', () => {
     expect(rowAad('sessions', 'a').equals(rowAad('sessions', 'b'))).toBe(false)
     expect(rowAad('sessions', 'a').equals(rowAad('saved_queries', 'a'))).toBe(false)
   })
+
+  it('renders the binding exactly as the rows on disk were sealed with', () => {
+    // Pinned literally. Changing this format does not re-run the migration (the file still says format 2), so
+    // every bound row would stop opening at once: sessions dropped, saved queries dropped.
+    expect(rowAad('sessions', 'x').toString('utf8')).toBe('tsmyadmin:sessions:x')
+    expect(rowAad('saved_queries', 'x').toString('utf8')).toBe('tsmyadmin:saved_queries:x')
+  })
 })

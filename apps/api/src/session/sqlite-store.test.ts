@@ -93,6 +93,36 @@ describe('SqliteSessionStore', () => {
     await store.closeAll()
   })
 
+  it('drops a saved-query row that will not open, instead of carrying it forever', async () => {
+    // Tampering, or a partially restored file. Such a row can never be listed, yet it would still count
+    // towards the 200-per-account cap and nothing else would prune it.
+    const path = tmpFile()
+    const secret = 's'.repeat(32)
+    const store = new SqliteSessionStore({ path, secret, adapterFactory: factory() })
+    try {
+      store.savedQueries.save(config, 'keep', 'SELECT 1')
+      store.savedQueries.save(config, 'break', 'SELECT 2')
+      const ids = store.savedQueries.list(config)
+      const doomed = ids.find((q) => q.name === 'break')?.id ?? ''
+      const other = ids.find((q) => q.name === 'keep')?.id ?? ''
+
+      const raw = new DatabaseSync(path)
+      const payload = (
+        raw.prepare('SELECT payload FROM saved_queries WHERE id = ?').get(other) as { payload: Uint8Array }
+      ).payload
+      // The other row's ciphertext: readable bytes, but not for this row.
+      raw.prepare('UPDATE saved_queries SET payload = ? WHERE id = ?').run(payload, doomed)
+      raw.close()
+
+      expect(store.savedQueries.list(config).map((q) => q.name)).toEqual(['keep'])
+      const check = new DatabaseSync(path)
+      expect(check.prepare('SELECT COUNT(*) AS n FROM saved_queries').get()).toEqual({ n: 1 })
+      check.close()
+    } finally {
+      await store.closeAll()
+    }
+  })
+
   it('drops saved queries when SESSION_SECRET is rotated, instead of orphaning them', async () => {
     const path = tmpFile()
     const first = new SqliteSessionStore({ path, secret: 's'.repeat(32), adapterFactory: factory() })

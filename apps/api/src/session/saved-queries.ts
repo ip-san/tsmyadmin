@@ -64,7 +64,6 @@ export class SavedQueryStore {
     }[]
     const out: SavedQuery[] = []
     for (const row of rows) {
-      // A row sealed with a previous SESSION_SECRET cannot be read; it is skipped rather than failing the list.
       try {
         const body = JSON.parse(open(this.key, row.payload, rowAad(SAVED_QUERIES, row.id))) as {
           name: string
@@ -72,7 +71,12 @@ export class SavedQueryStore {
         }
         out.push({ id: row.id, name: body.name, sql: body.sql, at: row.updated_at })
       } catch {
-        /* unreadable row */
+        // A row that will not open is dead weight: it can never be listed, yet it still counts towards this
+        // account's cap and nothing else would ever prune it. Dropped here, the same as an unreadable session
+        // is dropped when it is read. Decryption is deterministic, so this cannot discard a row that would
+        // have opened a moment later — and a row that stopped opening because the secret changed has already
+        // been purged at startup.
+        this.stmt.remove.run(row.id, this.identity(config))
       }
     }
     return out.sort((a, b) => b.at - a.at)
