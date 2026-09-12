@@ -2,22 +2,28 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import type { Cell, ResultSet, StatementResult } from '@tsmyadmin/shared'
 import { isTruncatedCell, toCsv } from '@tsmyadmin/shared'
 import { Download } from 'lucide-react'
-import { type CSSProperties, memo, useRef } from 'react'
+import { type CSSProperties, memo, useRef, useState } from 'react'
+import { z } from 'zod'
 import { CellValue } from '@/components/cells/CellValue.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { Notice } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
 import { downloadText, safeFilename } from '@/lib/download.ts'
+import { readPreference, writePreference } from '@/lib/preferences.ts'
 import { locateInSql } from '@/lib/sql-position.ts'
+
+const CSV_SAFE_PREF = 'sql.csvSafe'
 
 /** Client-side export of one result set (what is on screen, up to maxRows). */
 function DownloadButtons({ result, label, index }: { result: ResultSet; label: string; index: number }) {
   const names = result.columns.map((c) => c.name)
+  const [csvSafe, setCsvSafe] = useState(() => readPreference(CSV_SAFE_PREF, z.boolean(), false))
   // A file built from the screen would carry the cut values as if they were whole; the export tab reads uncapped.
   const cut = result.rows.some((row) => row.some((cell) => isTruncatedCell(cell)))
   if (cut) return <span className="ml-2 text-xs text-zinc-500 dark:text-zinc-400">{locale.sql.downloadTruncated}</span>
-  const csv = () => downloadText(safeFilename(label, 'csv'), toCsv(names, result.rows), 'text/csv;charset=utf-8')
+  const csv = () =>
+    downloadText(safeFilename(label, 'csv'), toCsv(names, result.rows, csvSafe), 'text/csv;charset=utf-8')
   const json = () =>
     downloadText(
       safeFilename(label, 'json'),
@@ -42,6 +48,17 @@ function DownloadButtons({ result, label, index }: { result: ResultSet; label: s
         <Download className="size-3" aria-hidden />
         {locale.sql.downloadJson}
       </Button>
+      <label className="flex items-center gap-1 text-xs text-zinc-600 dark:text-zinc-300">
+        <input
+          type="checkbox"
+          checked={csvSafe}
+          onChange={(e) => {
+            setCsvSafe(e.target.checked)
+            writePreference(CSV_SAFE_PREF, e.target.checked)
+          }}
+        />
+        {locale.export.csvSafe}
+      </label>
     </span>
   )
 }
