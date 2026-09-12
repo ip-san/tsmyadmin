@@ -79,6 +79,22 @@ describe('useSavedQueries', () => {
     const { result } = renderHook(() => useSavedQueries('mysql.db.3306', true), { wrapper })
     await waitFor(() => expect(result.current.entries).toMatchObject([{ name: 'from another browser' }]))
   })
+  it('stops reporting a failed save once a later write has succeeded', async () => {
+    server.list = [{ id: 'id-old', name: 'old', sql: 'SELECT 2', at: 1 }]
+    const { result } = renderHook(() => useSavedQueries('mysql.db.3306', true), { wrapper })
+    await waitFor(() => expect(result.current.entries).toHaveLength(1))
+
+    server.fail = new Error('the deployment refused it')
+    act(() => result.current.save('daily', 'SELECT 1'))
+    await waitFor(() => expect(result.current.error).not.toBeNull())
+
+    // A mutation keeps its error until it is fired again, so the failed save must not outlive a later success.
+    server.fail = null
+    act(() => result.current.remove('old'))
+    await waitFor(() => expect(result.current.entries).toEqual([]))
+    expect(result.current.error).toBeNull()
+  })
+
   it('reports a failed write instead of doing nothing on screen', async () => {
     server.fail = new Error('the deployment refused it')
     const { result } = renderHook(() => useSavedQueries('mysql.db.3306', true), { wrapper })

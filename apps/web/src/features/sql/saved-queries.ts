@@ -3,7 +3,13 @@ import { SavedQuerySchema } from '@tsmyadmin/shared'
 import { z } from 'zod'
 import { type PreferenceStore, readPreference, writePreference } from '@/lib/preferences.ts'
 
-const ListSchema = z.array(SavedQuerySchema)
+/** One unreadable entry — hand-edited storage, a shape from another version — must not discard the rest. */
+const ListSchema = z.array(z.unknown()).transform((entries) =>
+  entries.flatMap((entry) => {
+    const parsed = SavedQuerySchema.safeParse(entry)
+    return parsed.success ? [parsed.data] : []
+  })
+)
 const SAVED_LIMIT = 200
 /** `scope` identifies the server (dialect:host:port): two MySQL servers must not share one list. */
 const key = (scope: string) => `sql.saved.${scope}`

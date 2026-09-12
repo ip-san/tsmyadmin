@@ -18,6 +18,12 @@ export interface SavedQueries {
   remove: (name: string) => void
 }
 
+/** Whichever of the two writes was submitted last (`submittedAt` is 0 for one that never ran). */
+type Write = { submittedAt: number; error: Error | null }
+function lastWrite(a: Write, b: Write): Write {
+  return b.submittedAt > a.submittedAt ? b : a
+}
+
 /**
  * Bookmarked statements, from wherever this deployment keeps them: with the account when the session store is
  * persistent (so they follow the user between browsers), otherwise in this browser as they always were. Both
@@ -39,7 +45,9 @@ export function useSavedQueries(scope: string, onServer: boolean): SavedQueries 
   return {
     entries,
     onServer,
-    error: server.error ?? saveMutation.error ?? removeMutation.error,
+    // Only the most recent write: a mutation keeps its error until it is fired again, so a failed save
+    // would otherwise still be on screen after a delete had since succeeded.
+    error: server.error ?? lastWrite(saveMutation, removeMutation).error,
     save: (name, sql) => {
       if (onServer) saveMutation.mutate({ name, sql })
       else setLocal(saveQuery(scope, { id: '', name, sql, at: Date.now() }))
