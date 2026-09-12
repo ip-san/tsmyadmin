@@ -92,6 +92,8 @@ export const ja = {
     logout: '切断',
     breadcrumb: '現在の場所',
     help: 'ヘルプ',
+    /** 利用者向けマニュアル。配布先が自前のものに差し替えることを想定しています。 */
+    helpUrl: 'https://github.com/ip-san/tsmyadmin/blob/main/docs/user-guide.md',
     opensNewTab: '（新しいタブで開く）',
     expand: (name: string) => `${name} を展開 / 折りたたむ`,
     showSidebar: 'サイドバーを表示',

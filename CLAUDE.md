@@ -55,7 +55,8 @@ IMPORTANT: コンテキスト圧縮後も以下を必ず守ること。
 - **YOU MUST** `DdlOp` を追加したら `test/ddl.test.ts` の `SAMPLE_OPS` に両方言のスナップショットを追加する
 - **YOU MUST** API の入出力は先に `packages/shared` の Zod スキーマを定義し、web は `hc<AppType>` 経由でのみ呼ぶ（例外: ダウンロード等ブラウザのナビゲーションで開く GET は URL ビルダー経由の `<a href>` 可）
 - **YOU MUST** DDL は `/ddl/preview` → ユーザー確認 → `/sql` 実行、アカウント操作は `/users/preview`（パスワードはマスク）→ `/users/execute`。プレビューなしで実行する UI を作らない（`usePreviewFlow` + `PreviewDialog` を使う）
-- **YOU MUST** 環境変数を追加したら `apps/api/src/config.ts`・`.env.example`・`docs/deployment.md` の 3 か所を同時に更新する（表は deployment.md だけに置き、他は参照する）
+- **YOU MUST** 環境変数を追加したら `apps/api/src/config.ts`・`.env.example`・`docs/deployment.md` の 3 か所を同時に更新する（表は deployment.md だけに置き、他は参照する）。英訳 `docs/en/deployment.md` も直し、`bun run docs:sync` でハッシュを打ち直す
+- **YOU MUST** `docs/*.md` と `README.md`（日本語が原文）を変えたら `docs/en/` / `README.en.md` の対応箇所も訳し、`bun run docs:sync` を実行する（`bun run check:static` の `docs:i18n` が fail する）
 - **YOU MUST** ログにパスワード・行の値・SQL 全文を出さない（イベント名 + 識別子 + 要約のみ）
 - **YOU MUST** フィクスチャ（`docker/fixtures/**`）を変えたら `bun run db:reset`。既存の checkout でも MySQL の `WITH GRANT OPTION` 追加以降はリセットが必要
 - **YOU MUST** web の UI 文字列は `apps/web/src/config/locales/{ja,en}.ts` の両方に定義し（`en.ts` は `satisfies Locale` で型が揃う）、`locale.*` で参照する。Tailwind の色指定には `dark:` 対応を付ける

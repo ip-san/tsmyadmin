@@ -12,8 +12,6 @@ import { Select } from '../ui/Field.tsx'
 import { ShortcutHelp } from './ShortcutHelp.tsx'
 
 const SIDEBAR_PREF = 'sidebar.collapsed'
-/** User guide (served from the repository; deployments may replace it with their own manual). */
-const HELP_URL = 'https://github.com/ip-san/tsmyadmin/blob/main/docs/user-guide.md'
 
 export function AppShell({
   session,
@@ -76,7 +74,7 @@ export function AppShell({
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <a
-            href={HELP_URL}
+            href={locale.nav.helpUrl}
             target="_blank"
             rel="noreferrer"
             className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"

@@ -30,13 +30,15 @@
     "check:arch": "node scripts/check-architecture.mjs",
     "check:sql-safety": "node scripts/check-sql-safety.mjs --self-test && node scripts/check-sql-safety.mjs",
     "docs:validate": "node scripts/validate-docs.mjs",
+    "docs:i18n": "node scripts/check-translations.mjs",
+    "docs:sync": "node scripts/check-translations.mjs --sync",
     "check": "node scripts/check.mjs",
     "check:all": "bun run check:static && bun run test:integration",
     "build": "bun run --filter './apps/web' build",
     "size": "node scripts/check-bundle-size.mjs",
     "prepare": "husky",
     "lighthouse": "lhci autorun --config=lighthouserc.cjs",
-    "check:static": "bun run check && bun run knip && bun run circular && bun run cpd && bun run check:arch && bun run check:sql-safety && bun run docs:validate"
+    "check:static": "bun run check && bun run knip && bun run circular && bun run cpd && bun run check:arch && bun run check:sql-safety && bun run docs:validate && bun run docs:i18n"
   },
   "lint-staged": {
     "*.{ts,tsx,mjs,js}": "biome check --write --no-errors-on-unmatched"

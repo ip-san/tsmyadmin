@@ -1,5 +1,7 @@
 # ユーザーガイド
 
+*English: [docs/en/user-guide.md](en/user-guide.md)*
+
 tsmyadmin の画面と操作の説明です。画面構成は phpMyAdmin と同じ 3 階層（**サーバー → データベース → テーブル**）で、左のサイドバーからどの階層にも移動できます。
 
 ## 接続（ログイン）

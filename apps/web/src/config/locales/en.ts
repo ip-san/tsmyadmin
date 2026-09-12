@@ -96,6 +96,7 @@ export const en = {
     logout: 'Disconnect',
     breadcrumb: 'Breadcrumb',
     help: 'Help',
+    helpUrl: 'https://github.com/ip-san/tsmyadmin/blob/main/docs/en/user-guide.md',
     opensNewTab: ' (opens in a new tab)',
     expand: (name: string) => `Expand / collapse ${name}`,
     showSidebar: 'Show sidebar',

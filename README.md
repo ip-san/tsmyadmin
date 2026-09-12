@@ -1,5 +1,7 @@
 # tsmyadmin
 
+*English: [README.en.md](README.en.md)*
+
 MySQL / PostgreSQL 両対応の、モダン TypeScript 製 phpMyAdmin クローン。
 
 UI は日本語 / English（ブラウザの言語設定に追従、画面右上で切替）。対応: **MySQL 8.0〜9**、**MariaDB 10.11 (LTS) / 11**、**Percona Server 8.4**、**PostgreSQL 14〜18**（MySQL 8.0 / 8.4、MariaDB 10.11 / 11、PostgreSQL 14 / 17 は CI で毎回検証。MySQL 9・PostgreSQL 18・Percona は手動検証。互換エンジン（TiDB / CockroachDB）の実測結果を含む詳細は [docs/deployment.md](docs/deployment.md#対応データベース)）。
@@ -50,6 +52,7 @@ bun run lighthouse       # Lighthouse CI（ログイン画面の性能 / a11y / 
 - `scripts/check-architecture.mjs` — レイヤー依存（web は DB ドライバーに触れない、ルートはアダプター経由のみ、feature 間の直接 import 禁止）とコンポーネント行数
 - `scripts/check-sql-safety.mjs` — アダプターのビルダー以外で SQL を文字列補間・連結していないか、識別子を生でクォートしていないか
 - `scripts/validate-docs.mjs` — `CLAUDE.md` の統計値と実体の同期（`--fix`）
+- `scripts/check-translations.mjs` — 英語ドキュメントが日本語の原文の更新に追随しているか（翻訳後に `bun run docs:sync` でハッシュを打ち直す）
 
 `packages/adapter/src/test/conformance.ts` は 1 つのテストスイートを MySQL / PostgreSQL の両方に対して実行し、方言差を吸収できているかを保証します。
 
@@ -73,6 +76,8 @@ docker run -d --name tsmyadmin \
 単一コンテナで API が SPA を配信します。`TSMYADMIN_ALLOWED_HOSTS` には接続を許可する DB の `host:port` を**必ず**指定してください（既定はコンテナ自身のループバックだけなので、指定しないとどこにも接続できません）。本番では HTTPS 終端のリバースプロキシ配下に置いてください（詳細は `docs/deployment.md`）。
 
 ## ドキュメント
+
+英語版は [README.en.md](README.en.md) と `docs/en/` にあります（日本語が原文で、`bun run docs:i18n` が追随を検査します）。
 
 **利用者**
 

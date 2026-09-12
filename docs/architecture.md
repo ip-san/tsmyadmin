@@ -1,5 +1,7 @@
 # アーキテクチャ
 
+*English: [docs/en/architecture.md](en/architecture.md)*
+
 このコードベースを初めて触る開発者向けに、**どこに何があり、なぜそうなっているか**を説明します。運用は [deployment.md](deployment.md) / [operations.md](operations.md)、利用者向けは [user-guide.md](user-guide.md)、変更時に必ず守る規約は [CLAUDE.md](../CLAUDE.md) と `.claude/rules/` にあります。
 
 ## 1. 全体像
@@ -312,9 +314,10 @@ flowchart LR
 | アダプターにメソッドを追加 | `types.ts` → `base.ts` / `mysql/*` / `postgres/*` | `ADAPTER_METHOD_NAMES` と conformance の `describe`、両方言で通す。`testing/fake-adapter.ts` に実装し、`apps/api/src/lib/audit.ts` の `AUDITED_METHODS`（データ・構造・アカウント・サーバー状態を変えるもの）か `PASSTHROUGH_METHODS` に分類する（`audit.test.ts` が網羅性を検査） |
 | DDL 操作を追加 | `packages/shared/src/schemas/ddl.ts` → `*/ddl.ts` → web のフォーム | `test/ddl.test.ts` の `SAMPLE_OPS` に両方言のスナップショット、プレビュー経由の UI |
 | 画面の文言を変える | `config/locales/ja.ts` と `en.ts` | 両方に同じキーを足す（`locale.test.ts` が形の一致を検査）。コンポーネントへの直書きは禁止 |
+| ドキュメントを直す | `docs/*.md`（日本語が原文） | `docs/en/` の対応ファイルも翻訳し、`bun run docs:sync` でハッシュを打ち直す（`bun run docs:i18n` が追随を検査） |
 | 表示言語を追加する | `config/locale.ts` の `LOCALES` / `LOCALE_NAMES` / `LocaleCodeSchema` と `locales/<code>.ts` | `ja.ts` が型の出どころ。新しい表は `satisfies Locale` を付ける |
 | 色・見た目を変える | Tailwind のクラス | `dark:` 対応を必ず付ける |
-| 環境変数を追加 | `apps/api/src/config.ts` | `.env.example` と `docs/deployment.md` の表を同時に更新 |
+| 環境変数を追加 | `apps/api/src/config.ts` | `.env.example` と `docs/deployment.md` の表を同時に更新（英訳も。`bun run docs:i18n` が検査します） |
 | 新しい型のサポート | `docker/fixtures/*` → `*/values.ts` → conformance | `bun run db:reset`、両方言の `typesRow1` |
 
 ### 例: `GET /api/server/info` のレスポンスに項目を足す
