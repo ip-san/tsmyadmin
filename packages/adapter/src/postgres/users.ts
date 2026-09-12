@@ -81,26 +81,35 @@ export async function pgShowGrants(conn: Conn, user: UserRef): Promise<string[]>
   for (const row of tables.rows)
     out.push(`GRANT ${String(row[2])} ON ${id(String(row[0]))}.${id(String(row[1]))} TO ${id(user.name)}`)
   // Column privileges live in pg_attribute.attacl, not in the table's relacl, so a column grant is invisible to
-  // the query above. Grouped per privilege so it reads back as the GRANT that produced it.
+  // the query above. One row per column rather than a string_agg: the names are quoted here with the same
+  // helper as every other identifier in this function, instead of by the server's quote_ident (which quotes
+  // only when it has to and would mix bare and quoted names inside one statement).
   const columns = firstResult(
     await conn.query(
-      `SELECT n.nspname, c.relname, acl.privilege_type, string_agg(quote_ident(a.attname), ', ' ORDER BY a.attnum)
+      `SELECT n.nspname, c.relname, acl.privilege_type, a.attname
        FROM pg_attribute a
        JOIN pg_class c ON c.oid = a.attrelid
        JOIN pg_namespace n ON n.oid = c.relnamespace
        CROSS JOIN LATERAL aclexplode(a.attacl) acl
        WHERE a.attacl IS NOT NULL AND acl.grantee = (SELECT oid FROM pg_roles WHERE rolname = $1)
          AND n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast') AND n.nspname NOT LIKE 'pg\\_%'
-       GROUP BY n.nspname, c.relname, acl.privilege_type
-       ORDER BY n.nspname, c.relname, acl.privilege_type`,
+       ORDER BY n.nspname, c.relname, acl.privilege_type, a.attnum`,
       [user.name]
     )
   )
+  // The rows arrive grouped by table and privilege, so each run of them is one GRANT with its columns in table
+  // order. Walked in order rather than collected into a keyed map: any separator a key could use is a
+  // character an identifier is allowed to contain.
+  const grants: { table: string; privilege: string; columns: string[] }[] = []
   for (const row of columns.rows) {
-    out.push(
-      `GRANT ${String(row[2])} (${String(row[3])}) ON ${id(String(row[0]))}.${id(String(row[1]))} TO ${id(user.name)}`
-    )
+    const table = `${id(String(row[0]))}.${id(String(row[1]))}`
+    const privilege = String(row[2])
+    const column = id(String(row[3]))
+    const open = grants.at(-1)
+    if (open && open.table === table && open.privilege === privilege) open.columns.push(column)
+    else grants.push({ table, privilege, columns: [column] })
   }
+  for (const g of grants) out.push(`GRANT ${g.privilege} (${g.columns.join(', ')}) ON ${g.table} TO ${id(user.name)}`)
   return out
 }
 
