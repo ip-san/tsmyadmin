@@ -1,4 +1,4 @@
-<!-- translated-from: docs/cloudflare.md sha256:cb8d85f7f2ff88d440d148f182d909fe8489ed6fac9ddf8ef7afddd0007257c2 -->
+<!-- translated-from: docs/cloudflare.md sha256:db77ad50546e458d3cbe3f06913f20fdb8952977d488a5239ab1708c41be9cf1 -->
 
 # Deploying to Cloudflare
 
@@ -67,17 +67,25 @@ The first build and push take the longest.
 
 ### 4. Confirm it actually works
 
-**Do this on the first deploy.** Each row below is an assumption that only Cloudflare can settle, and each fails quietly.
+**Confirm all three of these on the first deploy.** Each rests on an assumption only Cloudflare can settle, and each fails quietly.
 
 | What to confirm | How | If it does not hold |
 |---|---|---|
 | TCP reaches the database and Redis | `/readyz` returns 200 and you can log in | Containers will not work. Giving the database a Cloudflare private network connection (`cloudflared`) would reach it, but that is not covered here. The dependable answer is *Only the front door* below |
 | The client's IP arrives | The `ip` field of the `event: http` log lines differs per visitor | Everyone shares one rate-limit bucket and brute-force protection stops working |
-| Stopping waits for work in flight | Redeploy with `bun run cf:deploy` during a long export, and that export still finishes | An export or import in flight is cut off (the grace period is `SHUTDOWN_TIMEOUT_SECONDS`, 30 seconds by default) |
+| Stopping waits for work in flight | Redeploy with `bun run cf:deploy` during an export, and an export that finishes within `SHUTDOWN_TIMEOUT_SECONDS` (30 seconds by default) completes | An export or import in flight is cut off immediately |
+
+> **Anything longer than the grace period is cut off by default.** Raise `SHUTDOWN_TIMEOUT_SECONDS` (up to 600) if you need exports or imports longer than 30 seconds to survive a restart.
 
 > **Verified, all of it locally**: `bun run cf:check`, `docker build --platform linux/amd64`, and booting the production image with the same environment Cloudflare gives it (`SESSION_STORE=redis` + `TRUST_PROXY=cloudflare` + the secrets) — logging in to MySQL, the session landing in Redis, and the `ip` in the logs taking the value of a `CF-Connecting-IP` header supplied by hand.
 >
 > **Not verified**: running on a Cloudflare account. All three rows above are unverified. For the second one, what is verified is only that the header is read correctly when present — **whether Cloudflare actually supplies a distinct value per visitor is a separate question**, so confirm it after deploying.
+
+### 5. Restrict who can reach it
+
+Once deployed, the app is on `*.workers.dev` and **anyone can reach it**. [security.md](security.md) states that exposing it directly to the internet is not an intended use. Do not leave it sitting there with nothing but a login screen.
+
+The straightforward answer is to put [Cloudflare Access](https://developers.cloudflare.com/cloudflare-one/policies/access/) in front of it, so people authenticate against your own identity provider before anything reaches tsmyadmin. (That combination is unverified here.)
 
 ## Constraints
 

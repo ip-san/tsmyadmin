@@ -65,17 +65,25 @@ bun run cf:deploy
 
 ### 4. 動いているか確認する
 
-**最初のデプロイでは必ずここまで確認してください。** 以下は Cloudflare 上でしか確かめられない前提で、外れると静かに壊れます。
+**最初のデプロイでは、以下の 3 つを必ず確認してください。** どれも Cloudflare 上でしか確かめられない前提で、外れると静かに壊れます。
 
 | 確認すること | 見かた | 外れていた場合 |
 |---|---|---|
 | DB / Redis へ TCP が出られる | `/readyz` が 200 で、ログインできる | Containers 案が成立しません。DB 側に Cloudflare のプライベートネットワーク接続（`cloudflared`）を用意すれば届きますが、この手順書では扱いません。確実なのは下の「別案: 前だけ Cloudflare にする」です |
 | クライアント IP が届いている | `event: http` のログの `ip` が利用者ごとに違う | 全員が同じレート制限の枠に入り、総当たり対策が効きません |
-| 停止時に猶予がある | 長いエクスポート中に `bun run cf:deploy` で再デプロイし、そのエクスポートが最後まで終わる | 実行中のエクスポート / インポートが切られます（猶予は `SHUTDOWN_TIMEOUT_SECONDS`、既定 30 秒） |
+| 停止時に猶予がある | エクスポート中に `bun run cf:deploy` で再デプロイし、`SHUTDOWN_TIMEOUT_SECONDS`（既定 30 秒）以内に終わるエクスポートが完了する | 実行中のエクスポート / インポートが即座に切られます |
+
+> **猶予より長い処理は既定では切られます。** 30 秒を超えるエクスポートやインポートを守りたいなら `SHUTDOWN_TIMEOUT_SECONDS` を上げてください（最大 600）。
 
 > **確認済み（すべてローカル）**: `bun run cf:check`、`docker build --platform linux/amd64`、および本番イメージを Cloudflare と同じ環境変数（`SESSION_STORE=redis` + `TRUST_PROXY=cloudflare` + シークレット）で起動して MySQL にログインし、セッションが Redis に入り、`CF-Connecting-IP` を自分で付けたときにログの `ip` がその値になること。
 >
 > **未確認**: Cloudflare アカウント上での実行。上の表の 3 行はすべて未確認です。2 行目について確認済みなのは「ヘッダーがあれば正しく読める」ことだけで、**Cloudflare が実際に利用者ごとの値を付けてくれるかは別の話**なので、デプロイ後に必ず確かめてください。
+
+### 5. 到達できる範囲を絞る
+
+デプロイすると `*.workers.dev` で**誰でもアクセスできる状態**になります。[security.md](security.md) は「インターネットに直接公開する用途は想定していない」としています。ログイン画面が出るだけの状態で放置しないでください。
+
+[Cloudflare Access](https://developers.cloudflare.com/cloudflare-one/policies/access/) を前に置き、社内の ID で認証してから tsmyadmin に届くようにするのが素直です（この組み合わせは未確認です）。
 
 ## 制約
 
