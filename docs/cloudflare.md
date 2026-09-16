@@ -59,7 +59,7 @@ bun run cf:deploy
 
 ### 4. 動いているか確認する
 
-**最初のデプロイでは必ずここまで確認してください。** 以下は実機で確かめていない前提で、外れると静かに壊れます。
+**最初のデプロイでは必ずここまで確認してください。** 以下は Cloudflare 上でしか確かめられない前提で、外れると静かに壊れます。
 
 | 確認すること | 見かた | 外れていた場合 |
 |---|---|---|
@@ -67,7 +67,9 @@ bun run cf:deploy
 | クライアント IP が届いている | `event: http` のログの `ip` が利用者ごとに違う | 全員が同じレート制限の枠に入り、総当たり対策が効きません |
 | 停止時に猶予がある | 長いエクスポートが最後まで終わる | 実行中のエクスポート / インポートが切られます |
 
-> ここまでの内容は Cloudflare のドキュメントから組み立てたもので、実際の Cloudflare アカウントでの動作確認はしていません。確認済みなのは `bun run cf:check`（設定・worker・イメージのビルドが通ること）と `docker build --platform linux/amd64`（amd64 でビルドできること）までです。
+> **確認済み**: `bun run cf:check`（設定・worker・イメージがビルドできる）、`docker build --platform linux/amd64`、および本番イメージを Cloudflare と同じ環境変数（`SESSION_STORE=redis` + `TRUST_PROXY=cloudflare` + シークレット）で起動して MySQL にログインし、セッションが Redis に入り、`CF-Connecting-IP` がログの `ip` に出るところまで。
+>
+> **未確認**: Cloudflare アカウント上での実行そのもの。上の表の 3 つは Cloudflare のドキュメントに基づく前提で、実機では確かめていません。
 
 ## 制約
 

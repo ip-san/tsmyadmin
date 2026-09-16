@@ -1,4 +1,4 @@
-<!-- translated-from: docs/cloudflare.md sha256:4895f46399ca11751d77c45e00a0aa542eae3e14350fbdcf53ebd8eb2ba092bd -->
+<!-- translated-from: docs/cloudflare.md sha256:12e72b1698d7586df1a16ce06c980ac901df64b0ff27bdeebb846f8c6c5abf27 -->
 
 # Deploying to Cloudflare
 
@@ -61,7 +61,7 @@ The first build and push take the longest.
 
 ### 4. Confirm it actually works
 
-**Do this on the first deploy.** Each row below is an assumption nobody has measured, and each fails quietly.
+**Do this on the first deploy.** Each row below is an assumption that only Cloudflare can settle, and each fails quietly.
 
 | What to confirm | How | If it does not hold |
 |---|---|---|
@@ -69,7 +69,9 @@ The first build and push take the longest.
 | The client's IP arrives | The `ip` field of the `event: http` log lines differs per visitor | Everyone shares one rate-limit bucket and brute-force protection stops working |
 | Stopping waits for work in flight | A long export runs to completion | An export or import in flight is cut off |
 
-> All of this was assembled from Cloudflare's documentation; none of it was tried against a real Cloudflare account. What has been verified is `bun run cf:check` (the config, the worker and the image all build) and `docker build --platform linux/amd64` (it builds for amd64).
+> **Verified**: `bun run cf:check` (the config, the worker and the image all build), `docker build --platform linux/amd64`, and booting the production image with the same environment Cloudflare gives it (`SESSION_STORE=redis` + `TRUST_PROXY=cloudflare` + the secrets) — logging in to MySQL, the session landing in Redis, and `CF-Connecting-IP` showing up as `ip` in the logs.
+>
+> **Not verified**: running on a Cloudflare account at all. The three rows above rest on Cloudflare's documentation and have not been measured on the real thing.
 
 ## Constraints
 

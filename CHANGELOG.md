@@ -8,7 +8,7 @@
 
 - `TRUST_PROXY=cloudflare`: クライアント IP を `CF-Connecting-IP` から取る。Cloudflare の Worker 経由では `X-Forwarded-For` が付かないことがあり、`1` のままだと全員が同じアドレスと見なされてログインのレート制限が 1 枠になっていた。`1` と分けているのは、このヘッダーを必ず上書きしてくれるのが Cloudflare だけで、それ以外の環境ではクライアントが自分で名乗れてしまうため
 - `bun run cf:check` / `cf:deploy`。`cf:check` は Cloudflare のアカウントなしで、設定・worker・コンテナイメージがビルドできるかを確かめる
-- Cloudflare 用の設定を同梱した（`wrangler.jsonc` と `deploy/cloudflare/worker.ts`）。転送先ポートが `Dockerfile` の `EXPOSE` とずれると `check:static` が落ちる
+- Cloudflare 用の設定を同梱した（`wrangler.jsonc` と `deploy/cloudflare/worker.ts`）。転送先ポートが `Dockerfile` の `EXPOSE` とずれると `check:static` が落ちる。`wrangler secret put` で登録した値が届くのは Worker までなので、worker 側でコンテナの環境変数に渡し直している
 - Cloudflare へのデプロイ手順（`docs/cloudflare.md` / 英訳）。Containers で同梱の Dockerfile を動かす構成、ディスクが ephemeral なため `SESSION_STORE=redis` が必須になること、Workers 単体では動かない理由、Tunnel / Access を入口だけに使う別案
 - `SESSION_STORE=redis`: セッションと保存済みクエリを複数レプリカで共有する（`REDIS_URL` が必須）。暗号化は sqlite と同一（`SESSION_SECRET` 由来の鍵、値ごとに自分のキーへ結合）。**ただしこれで「複数レプリカ対応」になるわけではない** — 実行中クエリのキャンセル・ログインのレート制限・DB 接続プールはプロセスごとに残るため、引き続きスティッキーセッションが必要（docs/deployment.md の「複数レプリカ」）
 - セッションと保存済みクエリの暗号文を、それぞれの行に結び付けた（AES-GCM の追加認証データに `テーブル名:行 ID`）。ファイルに書き込めるが復号はできない者が、他人の行の暗号文を自分の行に上書きして自分のセッションを他人の資格情報で動かすことを防ぐ。既存のファイルは起動時にその場で読み替えるので、セッションも保存済みクエリも失われない（1 トランザクションで行うため中断しても半端な状態にならない）。開かない行は読んだ時点で破棄する（一覧に出ないのに件数上限に数えられ続ける状態にしない）
