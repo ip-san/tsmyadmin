@@ -6,7 +6,7 @@ import type { DatabaseAdapter } from '@tsmyadmin/adapter'
 import { type ConnectRequest, ConnectRequestSchema } from '@tsmyadmin/shared'
 import { deriveSessionKey, open, openLegacy, rowAad, seal } from './crypto.ts'
 import { identityHash } from './identity.ts'
-import { SAVED_QUERIES, SavedQueryStore } from './saved-queries.ts'
+import { SAVED_QUERIES, SqliteSavedQueries } from './saved-queries.ts'
 
 /** Table name in the AAD of a session payload. */
 const SESSIONS = 'sessions'
@@ -70,7 +70,7 @@ export class SqliteSessionStore implements SessionStore {
   private readonly touchIntervalMs: number
   private readonly factory: AdapterFactory
   private readonly live = new Map<string, Live>()
-  readonly savedQueries: SavedQueryStore
+  readonly savedQueries: SqliteSavedQueries
   private timer: ReturnType<typeof setInterval> | null
   private readonly stmt: {
     insert: StatementSync
@@ -141,7 +141,7 @@ export class SqliteSessionStore implements SessionStore {
     this.now = options.now ?? Date.now
     // Same file and same key as the credentials: a bookmarked statement is written by hand and routinely
     // carries row values, so it is sealed exactly like them.
-    this.savedQueries = new SavedQueryStore(this.db, this.key, this.now)
+    this.savedQueries = new SqliteSavedQueries(this.db, this.key, this.now)
     // Saved queries go the same way, and must: a row is found by an HMAC of the account under this key, so after
     // a rotation no future request can name the old rows at all. Left alone they would never be listed, never
     // count towards the per-account cap, and never be pruned — they would simply accumulate across rotations.

@@ -1,7 +1,18 @@
 import type { DatabaseAdapter } from '@tsmyadmin/adapter'
-import type { ConnectRequest, SessionInfo } from '@tsmyadmin/shared'
+import type { ConnectRequest as Config, ConnectRequest, SavedQuery, SessionInfo } from '@tsmyadmin/shared'
 import { identityKey } from './identity.ts'
-import type { SavedQueryStore } from './saved-queries.ts'
+
+/**
+ * Bookmarked statements, per database account. Async like `SessionStore`: SQLite answers from the same process,
+ * Redis over a socket. Every method returns the account's whole list, which is what the routes hand back.
+ */
+export interface SavedQueries {
+  list(config: Config): Promise<SavedQuery[]>
+  /** Creates or replaces by name. */
+  save(config: Config, name: string, sql: string): Promise<SavedQuery[]>
+  /** Deletes one of the caller's own rows; an id belonging to another account matches nothing. */
+  remove(config: Config, id: string): Promise<SavedQuery[]>
+}
 
 export interface Session {
   readonly id: string
@@ -33,7 +44,7 @@ export interface SessionStore {
    * Bookmarked statements, when the deployment has somewhere to keep them. Absent for the in-memory store,
    * where they would vanish on restart — the browser keeps its own list in that case.
    */
-  readonly savedQueries?: SavedQueryStore
+  readonly savedQueries?: SavedQueries
 }
 
 /** Everything about a connection except the password (what logs, audit lines and the client may see). */

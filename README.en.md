@@ -1,4 +1,4 @@
-<!-- translated-from: README.md sha256:dc5a28274b3cf042f38ab19340a05edb82a750c26d16feaa54225a34c43d1d5f -->
+<!-- translated-from: README.md sha256:22e70aaf5611e81fefe95f9286f6c528af0d5dd7484c02fbc8f6f127071b12d6 -->
 
 # tsmyadmin
 
@@ -60,7 +60,7 @@ The project's own checks:
 
 ## Not implemented yet (what is next)
 
-A session store that several replicas can share (Redis or similar).
+Nothing outstanding. The shared session store for several replicas ships as `SESSION_STORE=redis` — see [docs/en/deployment.md](docs/en/deployment.md#several-replicas) for what is shared and what is not.
 
 ## Production build
 

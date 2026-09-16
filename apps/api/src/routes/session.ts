@@ -121,19 +121,19 @@ export function sessionRoutes(cfg: SessionConfig, deps: SessionRouteDeps) {
       })
       .get('/session', requireSession(cfg), (c) => c.json(sessionState(c.get('session'), savedQueriesMode)))
       // Bookmarks live with the session store, so they exist only where that store is persistent.
-      .get('/saved-queries', requireSession(cfg), (c) =>
-        c.json(cfg.store.savedQueries?.list(c.get('session').config) ?? [])
+      .get('/saved-queries', requireSession(cfg), async (c) =>
+        c.json((await cfg.store.savedQueries?.list(c.get('session').config)) ?? [])
       )
-      .post('/saved-queries', requireSession(cfg), validate('json', SaveQueryRequestSchema), (c) => {
+      .post('/saved-queries', requireSession(cfg), validate('json', SaveQueryRequestSchema), async (c) => {
         const store = cfg.store.savedQueries
         if (!store) return c.json(apiError('UNSUPPORTED', 'Saved queries need a persistent session store'), 400)
         const { name, sql } = c.req.valid('json')
-        return c.json(store.save(c.get('session').config, name, sql))
+        return c.json(await store.save(c.get('session').config, name, sql))
       })
-      .delete('/saved-queries/:id', requireSession(cfg), validate('param', SavedQueryIdSchema), (c) => {
+      .delete('/saved-queries/:id', requireSession(cfg), validate('param', SavedQueryIdSchema), async (c) => {
         const store = cfg.store.savedQueries
         if (!store) return c.json(apiError('UNSUPPORTED', 'Saved queries need a persistent session store'), 400)
-        return c.json(store.remove(c.get('session').config, c.req.valid('param').id))
+        return c.json(await store.remove(c.get('session').config, c.req.valid('param').id))
       })
       .delete('/session', async (c) => {
         const id = await getSignedCookie(c, cfg.secret, SESSION_COOKIE)

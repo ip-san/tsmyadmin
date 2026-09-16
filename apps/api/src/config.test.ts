@@ -125,4 +125,14 @@ describe('TSMYADMIN_SERVERS', () => {
     ).toThrow(/duplicate/)
     expect(loadConfig({ TSMYADMIN_SERVERS: '  ' }).servers).toEqual([])
   })
+
+  it('refuses SESSION_STORE=redis without a URL to connect to', () => {
+    expect(() => loadConfig({ SESSION_STORE: 'redis' })).toThrow(/REDIS_URL/)
+    expect(loadConfig({ SESSION_STORE: 'redis', REDIS_URL: 'redis://r:6379' })).toMatchObject({
+      sessionStore: 'redis',
+      redisUrl: 'redis://r:6379',
+    })
+    // An empty value counts as unset here as everywhere else, so it is refused rather than passed to the client.
+    expect(() => loadConfig({ SESSION_STORE: 'redis', REDIS_URL: '' })).toThrow(/REDIS_URL/)
+  })
 })

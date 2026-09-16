@@ -3,12 +3,13 @@ import type { DatabaseSync } from 'node:sqlite'
 import type { ConnectRequest, SavedQuery } from '@tsmyadmin/shared'
 import { open, rowAad, seal } from './crypto.ts'
 import { identityHash } from './identity.ts'
+import type { SavedQueries } from './store.ts'
 
 /** Table name in the AAD of a saved-query payload. */
 export const SAVED_QUERIES = 'saved_queries'
 
 /** Per account, matching what the browser-side list holds. */
-const SAVED_QUERY_LIMIT = 200
+export const SAVED_QUERY_LIMIT = 200
 
 /**
  * Bookmarked statements kept on the server so they follow the account rather than the browser.
@@ -18,7 +19,7 @@ const SAVED_QUERY_LIMIT = 200
  * sit in the clear next to them. Rows are addressed by id, never by name, because the name is inside the sealed
  * payload — there is nothing queryable in a row but the identity it belongs to.
  */
-export class SavedQueryStore {
+export class SqliteSavedQueries implements SavedQueries {
   private readonly stmt: {
     byIdentity: import('node:sqlite').StatementSync
     insert: import('node:sqlite').StatementSync
@@ -56,7 +57,7 @@ export class SavedQueryStore {
     return identityHash(this.key, config)
   }
 
-  list(config: ConnectRequest): SavedQuery[] {
+  async list(config: ConnectRequest): Promise<SavedQuery[]> {
     const rows = this.stmt.byIdentity.all(this.identity(config)) as {
       id: string
       payload: Uint8Array
@@ -83,9 +84,9 @@ export class SavedQueryStore {
   }
 
   /** Creates or replaces by name, the way the browser-side list behaved. Returns the new list. */
-  save(config: ConnectRequest, name: string, sql: string): SavedQuery[] {
+  async save(config: ConnectRequest, name: string, sql: string): Promise<SavedQuery[]> {
     const identity = this.identity(config)
-    const existing = this.list(config).find((q) => q.name === name)
+    const existing = (await this.list(config)).find((q) => q.name === name)
     // Sealed against the row it lands in, so the id has to be decided first.
     const id = existing?.id ?? randomUUID()
     const payload = seal(this.key, JSON.stringify({ name, sql }), rowAad(SAVED_QUERIES, id))
@@ -100,7 +101,7 @@ export class SavedQueryStore {
   }
 
   /** Deletes one of the caller's own rows; an id belonging to another account matches nothing. */
-  remove(config: ConnectRequest, id: string): SavedQuery[] {
+  async remove(config: ConnectRequest, id: string): Promise<SavedQuery[]> {
     this.stmt.remove.run(id, this.identity(config))
     return this.list(config)
   }

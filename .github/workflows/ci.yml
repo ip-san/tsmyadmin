@@ -75,6 +75,13 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U tsmyadmin -d tsmyadmin_test"
           --health-interval 5s --health-timeout 5s --health-retries 20
+      # The shared session store (SESSION_STORE=redis); its conformance leg is an api-integration test.
+      redis:
+        image: redis:7-alpine
+        ports: ["16379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2

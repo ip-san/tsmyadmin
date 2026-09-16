@@ -80,9 +80,9 @@ describe('SqliteSessionStore', () => {
     const secret = 's'.repeat(32)
     const store = new SqliteSessionStore({ path, secret, adapterFactory: factory() })
     try {
-      store.savedQueries.save(config, 'keep', 'SELECT 1')
-      store.savedQueries.save(config, 'break', 'SELECT 2')
-      const ids = store.savedQueries.list(config)
+      await store.savedQueries.save(config, 'keep', 'SELECT 1')
+      await store.savedQueries.save(config, 'break', 'SELECT 2')
+      const ids = await store.savedQueries.list(config)
       const doomed = ids.find((q) => q.name === 'break')?.id ?? ''
       const other = ids.find((q) => q.name === 'keep')?.id ?? ''
 
@@ -94,7 +94,7 @@ describe('SqliteSessionStore', () => {
       raw.prepare('UPDATE saved_queries SET payload = ? WHERE id = ?').run(payload, doomed)
       raw.close()
 
-      expect(store.savedQueries.list(config).map((q) => q.name)).toEqual(['keep'])
+      expect((await store.savedQueries.list(config)).map((q) => q.name)).toEqual(['keep'])
       const check = new DatabaseSync(path)
       expect(check.prepare('SELECT COUNT(*) AS n FROM saved_queries').get()).toEqual({ n: 1 })
       check.close()
@@ -107,7 +107,7 @@ describe('SqliteSessionStore', () => {
     const path = tmpFile()
     const first = new SqliteSessionStore({ path, secret: 's'.repeat(32), adapterFactory: factory() })
     try {
-      first.savedQueries.save(config, 'daily', 'SELECT 1')
+      await first.savedQueries.save(config, 'daily', 'SELECT 1')
     } finally {
       await first.closeAll()
     }
@@ -116,7 +116,7 @@ describe('SqliteSessionStore', () => {
     const rotated = new SqliteSessionStore({ path, secret: 'r'.repeat(32), adapterFactory: factory() })
     try {
       expect(rotated.secretRotated).toBe(true)
-      expect(rotated.savedQueries.list(config)).toEqual([])
+      expect(await rotated.savedQueries.list(config)).toEqual([])
       const raw = new DatabaseSync(path)
       expect(raw.prepare('SELECT COUNT(*) AS n FROM saved_queries').get()).toEqual({ n: 0 })
       raw.close()
@@ -137,8 +137,8 @@ describe('SqliteSessionStore', () => {
     const store = new SqliteSessionStore({ path, secret: 'r'.repeat(32), adapterFactory: factory() })
     try {
       expect(store.secretRotated).toBe(true)
-      expect(store.savedQueries.list(config)).toEqual([])
-      expect(store.savedQueries.save(config, 'daily', 'SELECT 1')).toHaveLength(1)
+      expect(await store.savedQueries.list(config)).toEqual([])
+      expect(await store.savedQueries.save(config, 'daily', 'SELECT 1')).toHaveLength(1)
     } finally {
       await store.closeAll()
     }
@@ -151,7 +151,7 @@ describe('SqliteSessionStore', () => {
     const before = new SqliteSessionStore({ path, secret, adapterFactory: factory() })
     try {
       sessionId = (await before.create(config)).id
-      before.savedQueries.save(config, 'daily', 'SELECT 1')
+      await before.savedQueries.save(config, 'daily', 'SELECT 1')
     } finally {
       await before.closeAll()
     }
@@ -174,7 +174,7 @@ describe('SqliteSessionStore', () => {
       // Nobody is signed out and nobody loses a bookmark.
       expect(after.secretRotated).toBe(false)
       expect((await after.get(sessionId))?.config.user).toBe(config.user)
-      expect(after.savedQueries.list(config)).toMatchObject([{ name: 'daily', sql: 'SELECT 1' }])
+      expect(await after.savedQueries.list(config)).toMatchObject([{ name: 'daily', sql: 'SELECT 1' }])
       // And the rows are bound now: the same payload in another row no longer opens.
       const check = new DatabaseSync(path)
       const row = check.prepare('SELECT id, payload FROM sessions LIMIT 1').get() as {
@@ -223,7 +223,7 @@ describe('SqliteSessionStore', () => {
     const first = new SqliteSessionStore({ path, secret, adapterFactory: factory() })
     try {
       sessionId = (await first.create(config)).id
-      first.savedQueries.save(config, 'daily', 'SELECT 1')
+      await first.savedQueries.save(config, 'daily', 'SELECT 1')
     } finally {
       await first.closeAll()
     }
@@ -235,7 +235,7 @@ describe('SqliteSessionStore', () => {
     try {
       expect(again.secretRotated).toBe(false)
       expect((await again.get(sessionId))?.config.user).toBe(config.user)
-      expect(again.savedQueries.list(config)).toMatchObject([{ name: 'daily' }])
+      expect(await again.savedQueries.list(config)).toMatchObject([{ name: 'daily' }])
     } finally {
       await again.closeAll()
     }
@@ -250,7 +250,7 @@ describe('SqliteSessionStore', () => {
     const store = new SqliteSessionStore({ path, secret, adapterFactory: factory() })
     try {
       await store.create(config)
-      store.savedQueries.save(config, 'daily', 'SELECT 1')
+      await store.savedQueries.save(config, 'daily', 'SELECT 1')
     } finally {
       await store.closeAll()
     }
@@ -277,17 +277,17 @@ describe('SqliteSessionStore', () => {
     const store = new SqliteSessionStore({ path, secret: 's'.repeat(32), adapterFactory: factory() })
     const other = { ...config, user: 'someone-else' }
     try {
-      const saved = store.savedQueries.save(config, 'recent users', "SELECT * FROM users WHERE note = 'x'")
+      const saved = await store.savedQueries.save(config, 'recent users', "SELECT * FROM users WHERE note = 'x'")
       expect(saved).toMatchObject([{ name: 'recent users' }])
       expect(saved[0]?.id).toBeTruthy()
       // Saving the same name replaces it rather than adding a second row.
-      expect(store.savedQueries.save(config, 'recent users', 'SELECT 2')).toHaveLength(1)
-      expect(store.savedQueries.list(config)[0]?.sql).toBe('SELECT 2')
+      expect(await store.savedQueries.save(config, 'recent users', 'SELECT 2')).toHaveLength(1)
+      expect((await store.savedQueries.list(config))[0]?.sql).toBe('SELECT 2')
 
       // Another account sees nothing of it, and cannot delete it by id.
-      expect(store.savedQueries.list(other)).toEqual([])
-      store.savedQueries.remove(other, saved[0]?.id ?? '')
-      expect(store.savedQueries.list(config)).toHaveLength(1)
+      expect(await store.savedQueries.list(other)).toEqual([])
+      await store.savedQueries.remove(other, saved[0]?.id ?? '')
+      expect(await store.savedQueries.list(config)).toHaveLength(1)
 
       // Neither the statement nor the account name is readable in the file.
       const raw = new DatabaseSync(path)
@@ -300,8 +300,8 @@ describe('SqliteSessionStore', () => {
       expect(rows.map((r) => r.identity).join()).not.toContain(config.user)
       raw.close()
 
-      store.savedQueries.remove(config, saved[0]?.id ?? '')
-      expect(store.savedQueries.list(config)).toEqual([])
+      await store.savedQueries.remove(config, saved[0]?.id ?? '')
+      expect(await store.savedQueries.list(config)).toEqual([])
     } finally {
       await store.closeAll()
     }

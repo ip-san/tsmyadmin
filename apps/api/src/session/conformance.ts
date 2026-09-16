@@ -167,14 +167,14 @@ export function describeSessionStoreConformance(
           expect(store.savedQueries).toBeUndefined()
           return
         }
-        expect(saved.save(CONFIG, 'daily', 'SELECT 1')).toMatchObject([{ name: 'daily', sql: 'SELECT 1' }])
+        expect(await saved.save(CONFIG, 'daily', 'SELECT 1')).toMatchObject([{ name: 'daily', sql: 'SELECT 1' }])
         // Replaced by name rather than added twice, and invisible to a different account.
-        expect(saved.save(CONFIG, 'daily', 'SELECT 2')).toHaveLength(1)
-        expect(saved.list({ ...CONFIG, user: 'someone-else' })).toEqual([])
-        const id = saved.list(CONFIG)[0]?.id ?? ''
-        expect(saved.remove({ ...CONFIG, user: 'someone-else' }, id)).toEqual([])
-        expect(saved.list(CONFIG)).toHaveLength(1)
-        expect(saved.remove(CONFIG, id)).toEqual([])
+        expect(await saved.save(CONFIG, 'daily', 'SELECT 2')).toHaveLength(1)
+        expect(await saved.list({ ...CONFIG, user: 'someone-else' })).toEqual([])
+        const id = (await saved.list(CONFIG))[0]?.id ?? ''
+        expect(await saved.remove({ ...CONFIG, user: 'someone-else' }, id)).toEqual([])
+        expect(await saved.list(CONFIG)).toHaveLength(1)
+        expect(await saved.remove(CONFIG, id)).toEqual([])
       } finally {
         await store.closeAll()
       }

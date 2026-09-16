@@ -8,6 +8,7 @@ import { ConfigError, loadConfig } from './config.ts'
 import { entriesWithoutPort } from './lib/allowlist.ts'
 import { auditedAdapterFactory } from './lib/audit.ts'
 import { createLogger } from './lib/logging.ts'
+import { RedisSessionStore } from './session/redis-store.ts'
 import { SqliteSessionStore } from './session/sqlite-store.ts'
 import { MemorySessionStore, type SessionStore } from './session/store.ts'
 
@@ -59,14 +60,35 @@ function openSqliteStore(): SqliteSessionStore {
   }
 }
 
+function openRedisStore(url: string): RedisSessionStore {
+  const redis = new RedisSessionStore({
+    url,
+    secret: config.sessionSecret,
+    ttlMs: config.sessionTtlMs,
+    maxPerIdentity: config.sessionMaxPerIdentity,
+    adapterFactory,
+  })
+  // The client reconnects on its own, so a Redis that is down at boot is not fatal: /readyz reports it until
+  // it comes back. Logged once so the cause is visible rather than showing up only as failed logins.
+  void redis.ping().catch((err: unknown) => {
+    logger.log('error', 'session_store.unreachable', {
+      error: err instanceof Error ? err.message : String(err),
+      hint: 'REDIS_URL must point at a reachable Redis; /readyz stays down until it is',
+    })
+  })
+  return redis
+}
+
 const store: SessionStore =
   config.sessionStore === 'sqlite'
     ? openSqliteStore()
-    : new MemorySessionStore({
-        ttlMs: config.sessionTtlMs,
-        maxPerIdentity: config.sessionMaxPerIdentity,
-        adapterFactory,
-      })
+    : config.sessionStore === 'redis'
+      ? openRedisStore(config.redisUrl ?? '')
+      : new MemorySessionStore({
+          ttlMs: config.sessionTtlMs,
+          maxPerIdentity: config.sessionMaxPerIdentity,
+          adapterFactory,
+        })
 
 const app = createApp(config, {
   store,

@@ -51,9 +51,11 @@ const EnvSchema = z.object({
   TRUST_PROXY: z.enum(['0', '1']).default('0'),
   /** `json` (one object per line, for log shippers) or `pretty` (development). */
   LOG_FORMAT: z.enum(['json', 'pretty']).optional(),
-  /** `sqlite` keeps sessions across restarts (credentials encrypted with a key derived from SESSION_SECRET); `memory` does not. */
-  SESSION_STORE: z.enum(['memory', 'sqlite']).optional(),
+  /** `sqlite` keeps sessions across restarts, `redis` shares them between replicas, `memory` does neither. */
+  SESSION_STORE: z.enum(['memory', 'sqlite', 'redis']).optional(),
   SESSION_DB_PATH: z.string().default('data/sessions.sqlite'),
+  /** Required by SESSION_STORE=redis. */
+  REDIS_URL: z.string().optional(),
   /** Directory of the built SPA served by the API (relative to the working directory). */
   WEB_DIST: z.string().optional(),
   /** Live sessions per database account (dialect/host/port/user); the least recently used is evicted beyond it. */
@@ -74,8 +76,9 @@ export type AppConfig = {
   loginRateLimit: { max: number; windowMs: number }
   trustProxy: boolean
   logFormat: 'json' | 'pretty'
-  sessionStore: 'memory' | 'sqlite'
+  sessionStore: 'memory' | 'sqlite' | 'redis'
   sessionDbPath: string
+  redisUrl: string | undefined
   webDist: string | undefined
   shutdownTimeoutMs: number
   sessionMaxPerIdentity: number
@@ -105,6 +108,10 @@ export function loadConfig(env: Record<string, string | undefined>): AppConfig {
   if (isProd && e.SESSION_SECRET.length < 32) {
     throw new ConfigError('SESSION_SECRET must be set to at least 32 characters in production')
   }
+  const sessionStore = e.SESSION_STORE ?? (isProd ? 'sqlite' : 'memory')
+  if (sessionStore === 'redis' && !e.REDIS_URL) {
+    throw new ConfigError('REDIS_URL must be set when SESSION_STORE=redis')
+  }
   const servers = parseServers(e.TSMYADMIN_SERVERS)
   // Presets allow exactly their own host:port (not every port on that host).
   const allowedHosts = [...new Set([...csv(e.TSMYADMIN_ALLOWED_HOSTS), ...servers.map(presetEntry)])]
@@ -126,8 +133,9 @@ export function loadConfig(env: Record<string, string | undefined>): AppConfig {
     loginRateLimit: { max: e.LOGIN_RATE_LIMIT, windowMs: e.LOGIN_RATE_WINDOW_SECONDS * 1000 },
     trustProxy: e.TRUST_PROXY === '1',
     logFormat: e.LOG_FORMAT ?? (isProd ? 'json' : 'pretty'),
-    sessionStore: e.SESSION_STORE ?? (isProd ? 'sqlite' : 'memory'),
+    sessionStore,
     sessionDbPath: e.SESSION_DB_PATH,
+    redisUrl: e.REDIS_URL,
     webDist: e.WEB_DIST,
     shutdownTimeoutMs: e.SHUTDOWN_TIMEOUT_SECONDS * 1000,
     sessionMaxPerIdentity: e.SESSION_MAX_PER_IDENTITY,

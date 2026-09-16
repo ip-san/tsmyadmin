@@ -58,7 +58,7 @@ bun run lighthouse       # Lighthouse CI（ログイン画面の性能 / a11y / 
 
 ## 未実装（次の候補）
 
-複数レプリカで共有できるセッションストア（Redis 等）。
+特にありません。複数レプリカ向けの共有セッションストアは `SESSION_STORE=redis` として実装済みです（共有されるものとされないものは [docs/deployment.md](docs/deployment.md#複数レプリカ) を参照）。
 
 ## 本番ビルド
 

@@ -1,4 +1,4 @@
-<!-- translated-from: docs/deployment.md sha256:088cf95693c87838b887679b7d5c96528f3e0d9e1dfcfe7407c3b186eaebd0ca -->
+<!-- translated-from: docs/deployment.md sha256:582f8d5c30f19152b1ea1a016d275abb9940353efc38fa0c877f167939c85957 -->
 
 # Deployment guide
 
@@ -36,8 +36,9 @@ tsmyadmin runs as **a single container whose one process (Bun) serves both the A
 | `SESSION_SECRET` | (a fixed development value) | The key the session cookie is signed with. **At least 32 characters, and mandatory, in production.** `openssl rand -hex 32` |
 | `SESSION_TTL_MINUTES` | `30` | How long a session lives, extended by every action (1–1440) |
 | `SESSION_MAX_PER_IDENTITY` | `10` (1–1000) | How many sessions one database account (type / host / port / username) may hold at once. Past that, the least recently used one is closed (LRU), so repeated logins cannot exhaust the database's `max_connections` |
-| `SESSION_STORE` | `sqlite` in production, `memory` in development | `sqlite` keeps sessions across restarts and rolling updates (credentials are stored AES-256-GCM encrypted, with a key derived from `SESSION_SECRET`). Saved queries live in the same file under the same key and are tied to the database account (200 per account). `memory` keeps sessions in the process only, and saved queries then stay in each browser |
+| `SESSION_STORE` | `sqlite` in production, `memory` in development | `redis` shares sessions between replicas (`REDIS_URL` is required; read *Several replicas* below before using it). `sqlite` keeps sessions across restarts and rolling updates (credentials are stored AES-256-GCM encrypted, with a key derived from `SESSION_SECRET`). Saved queries live in the same file under the same key and are tied to the database account (200 per account). `memory` keeps sessions in the process only, and saved queries then stay in each browser |
 | `SESSION_DB_PATH` | `data/sessions.sqlite` | The file used by `sqlite`. Under Docker, make `/app/data` a volume |
+| `REDIS_URL` | (none) | Required with `SESSION_STORE=redis` (`redis://host:6379`, or `rediss://` for TLS). Without it the process exits at startup. Sessions and saved queries live here, encrypted exactly as the SQLite store encrypts them (a key derived from `SESSION_SECRET`, each value bound to its own key) |
 | `TSMYADMIN_ALLOWED_HOSTS` | `127.0.0.1,localhost` | The database hosts the login screen may connect to. Comma-separated; each entry is an exact name, `*.suffix` or `*` (no restriction), optionally with `:port` (`db.internal:5432`, `[::1]:3306`). Leaving the port off allows every port — **name the port in production** (see [security.md](security.md)). **This is what stops SSRF and use as a jump host** |
 | `TSMYADMIN_SERVERS` | (none) | A JSON array of the server presets offered on the login screen. For example: `[{"name":"prod","dialect":"postgres","host":"db.internal","port":5432,"database":"app"}]`. Users then enter only a username and password. A preset's host joins the allowlist automatically. **Never put a password here** |
 | `LOGIN_RATE_LIMIT` | `10` | How many sign-in attempts are allowed within `LOGIN_RATE_WINDOW_SECONDS`, per client IP and username (per IP alone, up to three times that) |
@@ -216,6 +217,21 @@ No container image is published. Build the image from source as above; releases 
 
 Upgrading is replacing the image and restarting. With `SESSION_STORE=sqlite` (the production default) and the volume kept, users' sessions continue. Changing `SESSION_SECRET` deletes every stored session at the next start (logged as `session_store.reset`; everyone signs in again — and a file created by 0.1.0 is cleared the same way when its rows cannot be decrypted). Saved query rows likewise become undecryptable and disappear from the list (the rows remain but are never read). There are no schema or configuration file migrations.
 
-Several replicas cannot share one SQLite file, so make the load balancer sticky **and** give each replica its own volume. One without the other signs a user out the moment they are routed to a different replica.
+### Several replicas
+
+With `SESSION_STORE=sqlite` the file cannot be shared, so make the load balancer sticky **and** give each replica its own volume. One without the other signs a user out the moment they are routed to a different replica.
+
+With `SESSION_STORE=redis`, **sessions and saved queries are shared between replicas.** Whichever replica a request lands on, the user stays signed in and sees the same saved queries, and signing out on one ends the session everywhere.
+
+**This does not make the application replica-safe.** The following stay inside the process that created them, so sticky sessions are still required:
+
+| Not shared | What happens without stickiness |
+|---|---|
+| Cancelling a running query | A cancel that lands on a replica which is not running the query does nothing, silently. The same goes for stopping an import |
+| The login rate limit | Counted per process, so the effective limit is multiplied by the number of replicas |
+| Database connection pools | Each replica opens its own pool per session — multiply the `max_connections` estimate **by the number of replicas** |
+| Connections just after a logout | Deleting on one replica leaves another replica's pool open until its next use or sweep (up to 60 seconds) |
+
+So what Redis buys is that losing or adding a replica costs nobody their session or their saved queries — not that any request may go to any replica.
 
 Rolling back is the same procedure: put the old image back and restart. The session table is managed with `CREATE TABLE IF NOT EXISTS` and added columns only, and a row an older version cannot read is discarded (that user signs in again). Going back past the release that binds each payload to its row (`payload_format = 2`), the older image can read no row at all. The key fingerprint still matches, so the file as a whole is not recreated and nothing crashes: session rows are discarded as they are read, so users sign in again, and saved queries look like an empty list while their rows stay in the file — rolling forward shows them again. Upgrading re-seals the existing rows in place, so neither sessions nor saved queries are lost.
