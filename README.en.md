@@ -1,4 +1,4 @@
-<!-- translated-from: README.md sha256:589fa5b148241540a6eb17dee2fbb69f6688288273aa708062df6de877e590c7 -->
+<!-- translated-from: README.md sha256:a1f0fdd49dcb04256ed8bc58fe8c4da5a9e786a72a19e08f4d6b9dc0eedaab23 -->
 
 # tsmyadmin
 
@@ -87,6 +87,7 @@ A single container, with the API serving the SPA. You **must** list the `host:po
 **For running it**
 
 - [docs/en/deployment.md](docs/en/deployment.md) — the environment variables, Docker and compose examples, reverse proxies and TLS, supported databases, sizes and limits
+- [docs/en/cloudflare.md](docs/en/cloudflare.md) — setting up and deploying on Cloudflare Containers, why Workers cannot run it, and using Tunnel / Access as the front door only
 - [docs/en/operations.md](docs/en/operations.md) — health checks, log events, the error code table, troubleshooting, monitoring, backups
 - [docs/en/security.md](docs/en/security.md) — assumptions and trust boundary, authentication and sessions, the host allowlist, rate limiting, CSP, what stays in the browser
 

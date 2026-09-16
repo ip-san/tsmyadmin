@@ -108,6 +108,8 @@ volumes:
 
 イメージに `HEALTHCHECK`（`/readyz`）が組み込まれているため、compose 側で上書きする必要はありません。上書きする場合、実行イメージ（`oven/bun:1.4-slim`）には `curl` / `wget` がないので `["CMD", "bun", "-e", "fetch('http://127.0.0.1:3100/readyz').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]` を使ってください。
 
+Cloudflare Containers で動かす手順は [cloudflare.md](cloudflare.md) にあります（セッションストアを `redis` にする必要があります）。
+
 ## リバースプロキシと TLS
 
 tsmyadmin 自身は TLS を終端しません。**必ず HTTPS を終端するリバースプロキシの背後に置いてください**（`NODE_ENV=production` では Cookie に `Secure` が付き、平文 HTTP でのログインは `HTTPS で接続してください` と拒否されます。ログには `login.insecure_transport` が出ます。TLS を終端しない社内ネットワークでは `COOKIE_SECURE=0`）。プロキシは `X-Forwarded-Proto` を付け、`TRUST_PROXY=1` にしてください（それがないと HTTPS 経由でも平文と判定されます）。
