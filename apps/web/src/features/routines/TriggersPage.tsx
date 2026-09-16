@@ -30,7 +30,7 @@ export function TriggersPage({ db, schema, table }: { db: string; schema?: strin
   if (triggers.isError) return <ErrorBox error={triggers.error} onRetry={() => void triggers.refetch()} />
   return (
     <section className="space-y-2">
-      <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{locale.triggers.title}</h2>
+      <h2 className="text-sm font-semibold text-ink">{locale.triggers.title}</h2>
       {triggers.data.length === 0 ? (
         <Notice>{locale.triggers.none}</Notice>
       ) : (

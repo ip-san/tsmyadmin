@@ -54,7 +54,7 @@ export function ImportSummary({
                   {e.line !== undefined && e.index !== undefined ? `${locale.import.errorAt(e.line, e.index)}: ` : ''}
                   {e.message}
                 </span>
-                <pre tabIndex={0} className="mt-0.5 overflow-x-auto font-mono text-xs text-zinc-600 dark:text-zinc-300">
+                <pre tabIndex={0} className="mt-0.5 overflow-x-auto font-mono text-xs text-ink-sub">
                   {e.sql}
                 </pre>
               </li>

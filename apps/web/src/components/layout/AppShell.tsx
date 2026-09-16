@@ -9,6 +9,7 @@ import { useShortcuts } from '@/lib/shortcuts.ts'
 import { useTheme } from '@/lib/theme.ts'
 import { Button } from '../ui/Button.tsx'
 import { Select } from '../ui/Field.tsx'
+import { BrandMark } from './BrandMark.tsx'
 import { ShortcutHelp } from './ShortcutHelp.tsx'
 
 const SIDEBAR_PREF = 'sidebar.collapsed'
@@ -41,14 +42,14 @@ export function AppShell({
     })
   useShortcuts([{ keys: 'mod+b', global: true, handler: toggleSidebar }])
   return (
-    <div className="flex h-dvh flex-col bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
+    <div className="flex h-dvh flex-col bg-canvas text-ink">
       <a
         href="#main"
-        className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-white focus:px-3 focus:py-2 dark:focus:bg-zinc-800"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-surface focus:px-3 focus:py-2"
       >
         {locale.common.skipToContent}
       </a>
-      <header className="flex shrink-0 items-center justify-between border-b border-zinc-200 bg-white px-4 py-2 dark:border-zinc-700 dark:bg-zinc-900">
+      <header className="flex shrink-0 items-center justify-between border-b border-line bg-surface px-4 py-2">
         <div className="flex min-w-0 items-center gap-3">
           <Button
             variant="ghost"
@@ -64,10 +65,13 @@ export function AppShell({
               <PanelLeftClose className="size-4" aria-hidden />
             )}
           </Button>
-          <Link to="/" className="text-base font-bold text-blue-700 dark:text-blue-300">
-            {locale.app.name}
+          <Link to="/" className="flex shrink-0 items-center gap-2">
+            <BrandMark size={22} />
+            <span className="text-base font-semibold tracking-tight text-ink">{locale.app.name}</span>
           </Link>
-          <span className="truncate text-xs text-zinc-500 dark:text-zinc-400">
+          {/* The connection is the one piece of context that has to be visible on every screen: give it a
+              chip rather than letting it trail off as small grey text in a wide empty bar. */}
+          <span className="truncate rounded-control bg-surface-sub px-2 py-1 text-xs text-ink-sub">
             {session.dialect === 'mysql' ? locale.login.mysql : locale.login.postgres} ·{' '}
             {locale.nav.connectedAs(session.user, `${session.host}:${session.port}`)}
           </span>
@@ -77,7 +81,7 @@ export function AppShell({
             href={locale.nav.helpUrl}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-ink hover:bg-surface-sub"
           >
             <CircleHelp className="size-4" aria-hidden />
             {locale.nav.help}
@@ -127,7 +131,7 @@ export function AppShell({
         <aside
           data-scroll-root
           hidden={collapsed}
-          className="absolute inset-y-0 left-0 z-20 mt-[49px] w-64 shrink-0 overflow-y-auto border-r border-zinc-200 bg-white shadow-lg md:static md:mt-0 md:shadow-none dark:border-zinc-700 dark:bg-zinc-900"
+          className="absolute inset-y-0 left-0 z-20 mt-[49px] w-64 shrink-0 overflow-y-auto border-r border-line bg-surface shadow-lg md:static md:mt-0 md:shadow-none"
           aria-label={locale.nav.tree}
         >
           {sidebar}

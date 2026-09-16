@@ -7,7 +7,7 @@ export function FilterChips({ options, onClear }: { options: BrowseOptions; onCl
   if (options.filters.length === 0) return null
   return (
     <div className="flex flex-wrap items-center gap-2 text-xs">
-      <span className="font-medium text-zinc-600 dark:text-zinc-300">{locale.search.activeFilters}:</span>
+      <span className="font-medium text-ink-sub">{locale.search.activeFilters}:</span>
       {options.filters.map((f) => (
         <span
           key={`${f.column}-${f.op}`}

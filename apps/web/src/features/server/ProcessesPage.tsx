@@ -30,11 +30,11 @@ export function ProcessesPage() {
   return (
     <section className="space-y-2">
       <div className="flex flex-wrap items-center gap-3">
-        <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{locale.server.processesTitle}</h2>
+        <h2 className="text-sm font-semibold text-ink">{locale.server.processesTitle}</h2>
         <Button size="sm" onClick={() => void refresh()}>
           {locale.server.refresh}
         </Button>
-        <label className="flex items-center gap-1 text-xs text-zinc-600 dark:text-zinc-300">
+        <label className="flex items-center gap-1 text-xs text-ink-sub">
           <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} />
           {locale.server.autoRefresh}
         </label>
@@ -81,7 +81,7 @@ export function ProcessesPage() {
                 <Td className="text-right tabular-nums">{p.timeSec ?? ''}</Td>
                 <Td className="max-w-md font-mono text-xs">
                   {p.query === null ? (
-                    <span className="text-zinc-500 dark:text-zinc-400" aria-hidden>
+                    <span className="text-ink-sub" aria-hidden>
                       –
                     </span>
                   ) : (
@@ -148,11 +148,11 @@ export function ProcessesPage() {
         ) : null}
         {victim ? (
           <dl className="mt-2 grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
-            <dt className="text-zinc-500 dark:text-zinc-400">{locale.server.user}</dt>
+            <dt className="text-ink-sub">{locale.server.user}</dt>
             <dd>{[victim.user, victim.host].filter(Boolean).join('@') || '–'}</dd>
-            <dt className="text-zinc-500 dark:text-zinc-400">{locale.server.database}</dt>
+            <dt className="text-ink-sub">{locale.server.database}</dt>
             <dd>{victim.database ?? '–'}</dd>
-            <dt className="text-zinc-500 dark:text-zinc-400">{locale.server.query}</dt>
+            <dt className="text-ink-sub">{locale.server.query}</dt>
             <dd className="truncate font-mono">{victim.query?.replace(/\s+/g, ' ').trim().slice(0, 200) || '–'}</dd>
           </dl>
         ) : null}

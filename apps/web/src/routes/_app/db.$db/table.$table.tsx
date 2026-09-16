@@ -23,7 +23,7 @@ function TableLayout() {
   return (
     <>
       <PageTitle>
-        <span className="text-zinc-500 dark:text-zinc-400">
+        <span className="text-ink-sub">
           {db}
           {schema ? `.${schema}` : ''}.
         </span>

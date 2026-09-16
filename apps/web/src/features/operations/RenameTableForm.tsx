@@ -33,7 +33,7 @@ export function RenameTableForm({
     if (changed) flow.preview({ op: 'renameTable', table: tableRef.table, newName: newName.trim() })
   }
   return (
-    <section className="rounded border border-zinc-200 p-3 dark:border-zinc-700">
+    <section className="rounded border border-line p-3">
       <form onSubmit={submit} className="flex max-w-md items-end gap-2" aria-label={locale.ddl.titles.renameTable}>
         <div className="flex-1">
           <Field

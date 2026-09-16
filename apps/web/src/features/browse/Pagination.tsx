@@ -26,7 +26,7 @@ export function Pagination({ page, limit, total, count = 'exact', shown, onChang
       : page < lastPage
   return (
     <nav aria-label={locale.tabs.browse} className="flex flex-wrap items-center gap-2 text-sm">
-      <span className="text-zinc-600 dark:text-zinc-300">
+      <span className="text-ink-sub">
         {locale.browse.total(total, count)}
         {to > 0 ? ` · ${locale.browse.range(from, to)}` : ''}
       </span>
@@ -49,7 +49,7 @@ export function Pagination({ page, limit, total, count = 'exact', shown, onChang
         >
           »
         </Button>
-        <label htmlFor="browse-limit" className="ml-2 flex items-center gap-1 text-xs text-zinc-600 dark:text-zinc-300">
+        <label htmlFor="browse-limit" className="ml-2 flex items-center gap-1 text-xs text-ink-sub">
           {locale.browse.perPage}
           <Select
             id="browse-limit"

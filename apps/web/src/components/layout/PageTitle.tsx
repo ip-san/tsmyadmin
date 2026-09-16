@@ -13,7 +13,7 @@ export function PageTitle({
   const Heading = level === 1 ? 'h1' : 'h2'
   return (
     <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-      <Heading className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">{children}</Heading>
+      <Heading className="text-lg font-semibold text-ink">{children}</Heading>
       {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
     </div>
   )

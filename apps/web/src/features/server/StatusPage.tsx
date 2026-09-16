@@ -11,24 +11,24 @@ export function StatusPage() {
   return (
     <div className="space-y-6">
       <section>
-        <h2 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-200">{locale.server.infoTitle}</h2>
+        <h2 className="mb-2 text-sm font-semibold text-ink">{locale.server.infoTitle}</h2>
         {info.isPending ? (
           <Spinner />
         ) : info.isError ? (
           <ErrorBox error={info.error} onRetry={() => void info.refetch()} />
         ) : (
           <dl className="grid max-w-2xl grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-sm">
-            <dt className="text-zinc-500 dark:text-zinc-400">{locale.server.version}</dt>
+            <dt className="text-ink-sub">{locale.server.version}</dt>
             <dd className="font-mono">{info.data.version}</dd>
-            <dt className="text-zinc-500 dark:text-zinc-400">{locale.server.uptime}</dt>
+            <dt className="text-ink-sub">{locale.server.uptime}</dt>
             <dd>
               {info.data.uptimeSec === null ? locale.common.unknown : locale.server.uptimeFormat(info.data.uptimeSec)}
             </dd>
-            <dt className="text-zinc-500 dark:text-zinc-400">{locale.server.currentUser}</dt>
+            <dt className="text-ink-sub">{locale.server.currentUser}</dt>
             <dd className="font-mono">{info.data.currentUser}</dd>
             {Object.entries(info.data.extra).map(([k, v]) => (
               <Fragment key={k}>
-                <dt className="text-zinc-500 dark:text-zinc-400">{k}</dt>
+                <dt className="text-ink-sub">{k}</dt>
                 <dd className="font-mono">{v}</dd>
               </Fragment>
             ))}
@@ -36,7 +36,7 @@ export function StatusPage() {
         )}
       </section>
       <section>
-        <h2 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-200">{locale.server.statusTitle}</h2>
+        <h2 className="mb-2 text-sm font-semibold text-ink">{locale.server.statusTitle}</h2>
         {status.isPending ? (
           <Spinner />
         ) : status.isError ? (

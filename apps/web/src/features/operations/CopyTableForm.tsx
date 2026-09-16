@@ -26,7 +26,7 @@ export function CopyTableForm({ tableRef }: { tableRef: TableRef }) {
     if (valid) flow.preview({ op: 'copyTable', table: tableRef.table, newName: newName.trim(), withData })
   }
   return (
-    <section className="rounded border border-zinc-200 p-3 dark:border-zinc-700">
+    <section className="rounded border border-line p-3">
       <form onSubmit={submit} className="space-y-2" aria-label={locale.ddl.titles.copyTable}>
         <div className="flex max-w-md items-end gap-2">
           <div className="flex-1">

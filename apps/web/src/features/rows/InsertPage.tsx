@@ -40,7 +40,7 @@ export function InsertPage({ tableRef }: { tableRef: TableRef }) {
     )
   return (
     <div className="space-y-3">
-      <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{locale.rows.insertTitle}</h2>
+      <h2 className="text-sm font-semibold text-ink">{locale.rows.insertTitle}</h2>
       <output aria-live="polite" className={inserted > 0 ? 'block' : 'sr-only'}>
         {inserted > 0 ? (
           <Notice>

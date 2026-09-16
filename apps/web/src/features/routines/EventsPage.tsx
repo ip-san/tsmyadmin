@@ -18,8 +18,8 @@ export function EventsPage({ db, schema, dialect }: { db: string; schema?: strin
   return (
     <section className="space-y-2">
       <DdlPreviewDialog flow={flow} />
-      <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{locale.events.title}</h2>
-      <p className="text-xs text-zinc-500 dark:text-zinc-400">{locale.events.schedulerHint}</p>
+      <h2 className="text-sm font-semibold text-ink">{locale.events.title}</h2>
+      <p className="text-xs text-ink-sub">{locale.events.schedulerHint}</p>
       {events.data.length === 0 ? (
         <Notice>{locale.events.none}</Notice>
       ) : (

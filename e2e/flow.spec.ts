@@ -12,8 +12,9 @@ test.describe('login', () => {
     await page.getByLabel('ユーザー名').fill(t.user)
     await page.getByLabel('パスワード').fill(t.password)
     await page.getByRole('button', { name: '接続' }).click()
-    await expect(page.getByRole('heading', { name: 'サーバー' })).toBeVisible()
-    await expect(page.getByText('PostgreSQL')).toBeVisible()
+    // Exact: the login card's heading is 「サーバーに接続」, which a substring match also satisfies.
+    await expect(page.getByRole('heading', { name: 'サーバー', exact: true })).toBeVisible()
+    await expect(page.getByRole('banner').getByText('PostgreSQL')).toBeVisible()
   })
 
   test('renders in English for an English browser and remembers a chosen language', async ({ browser }) => {
@@ -24,7 +25,9 @@ test.describe('login', () => {
     const page = await context.newPage()
     try {
       await page.goto('/login')
-      await expect(page.getByText('MySQL / PostgreSQL admin — Connect to a server')).toBeVisible()
+      // The tagline sits under the brand and the form's own heading is separate, so assert them individually.
+      await expect(page.getByText('MySQL / PostgreSQL admin')).toBeVisible()
+      await expect(page.getByRole('heading', { name: 'Connect to a server' })).toBeVisible()
       await expect(page.locator('html')).toHaveAttribute('lang', 'en')
       await page.getByLabel('Server', { exact: true }).selectOption('')
       await page.getByLabel('Server type').selectOption(t.dialect)
@@ -34,14 +37,14 @@ test.describe('login', () => {
       await page.getByLabel('Password').fill(t.password)
       await page.getByLabel('Database').fill(t.database)
       await page.getByRole('button', { name: 'Connect' }).click()
-      await expect(page.getByRole('heading', { name: 'Server' })).toBeVisible()
+      await expect(page.getByRole('heading', { name: 'Server', exact: true })).toBeVisible()
       await expect(page.getByRole('link', { name: 'Databases' }).first()).toBeVisible()
       // The switcher wins over the browser and survives a reload.
       await page.getByLabel('Language').selectOption('ja')
-      await expect(page.getByRole('heading', { name: 'サーバー' })).toBeVisible()
+      await expect(page.getByRole('heading', { name: 'サーバー', exact: true })).toBeVisible()
       await expect(page.locator('html')).toHaveAttribute('lang', 'ja')
       await page.reload()
-      await expect(page.getByRole('heading', { name: 'サーバー' })).toBeVisible()
+      await expect(page.getByRole('heading', { name: 'サーバー', exact: true })).toBeVisible()
       await page.request.delete('/api/session', { headers: { origin: page.url().replace(/\/[^/]*$/, '') } })
     } finally {
       await context.close()

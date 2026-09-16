@@ -77,7 +77,7 @@ export function ForeignKeyForm({ tableRef, columns, onSubmit, onCancel }: Foreig
         />
       </Field>
       <fieldset>
-        <legend className="mb-1 text-xs font-medium text-zinc-600 dark:text-zinc-300">{locale.ddl.fkColumns}</legend>
+        <legend className="mb-1 text-xs font-medium text-ink-sub">{locale.ddl.fkColumns}</legend>
         <div className="flex flex-wrap gap-3 text-sm">
           {columns.map((c) => (
             <label key={c} className="flex items-center gap-1">
@@ -108,9 +108,7 @@ export function ForeignKeyForm({ tableRef, columns, onSubmit, onCancel }: Foreig
       </Field>
       {refTable !== '' ? (
         <fieldset>
-          <legend className="mb-1 text-xs font-medium text-zinc-600 dark:text-zinc-300">
-            {locale.ddl.fkRefColumns}
-          </legend>
+          <legend className="mb-1 text-xs font-medium text-ink-sub">{locale.ddl.fkRefColumns}</legend>
           {ref.isPending ? (
             <Spinner />
           ) : (

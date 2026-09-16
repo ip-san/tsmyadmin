@@ -16,9 +16,9 @@ const ACTIONS: Record<Dialect, Action[]> = {
 export function MaintenanceActions({ tableRef, dialect }: { tableRef: TableRef; dialect: Dialect }) {
   const flow = useDdlFlow(tableRef.db, tableRef.schema)
   return (
-    <section className="rounded border border-zinc-200 p-3 dark:border-zinc-700">
-      <h2 className="mb-1 text-sm font-semibold text-zinc-700 dark:text-zinc-200">{locale.ddl.maintenanceTitle}</h2>
-      <p className="mb-2 text-sm text-zinc-600 dark:text-zinc-300">{locale.ddl.maintenanceHint[dialect]}</p>
+    <section className="rounded border border-line p-3">
+      <h2 className="mb-1 text-sm font-semibold text-ink">{locale.ddl.maintenanceTitle}</h2>
+      <p className="mb-2 text-sm text-ink-sub">{locale.ddl.maintenanceHint[dialect]}</p>
       <div className="flex flex-wrap gap-2">
         {ACTIONS[dialect].map((action) => (
           <Button

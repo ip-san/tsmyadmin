@@ -8,7 +8,7 @@ export function VariablesPage() {
   const vars = useQuery(variablesQuery)
   return (
     <section>
-      <h2 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-200">{locale.server.variablesTitle}</h2>
+      <h2 className="mb-2 text-sm font-semibold text-ink">{locale.server.variablesTitle}</h2>
       {vars.isPending ? (
         <Spinner />
       ) : vars.isError ? (

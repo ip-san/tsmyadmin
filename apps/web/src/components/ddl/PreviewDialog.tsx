@@ -87,7 +87,7 @@ export function PreviewDialog<Op>({
           </>
         }
       >
-        <p className="mb-2 text-sm text-zinc-600 dark:text-zinc-300">{hint}</p>
+        <p className="mb-2 text-sm text-ink-sub">{hint}</p>
         {flow.previewing ? (
           <Spinner label={locale.ddl.generating} />
         ) : flow.sql.length === 0 && !flow.error ? (
@@ -96,7 +96,7 @@ export function PreviewDialog<Op>({
           <pre
             aria-label="SQL"
             tabIndex={0}
-            className="overflow-x-auto rounded border border-zinc-200 bg-zinc-50 p-3 font-mono text-xs text-zinc-800 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+            className="overflow-x-auto rounded border border-line bg-surface-sub p-3 font-mono text-xs text-ink"
           >
             {flow.sql.map((s) => `${s};`).join('\n')}
           </pre>

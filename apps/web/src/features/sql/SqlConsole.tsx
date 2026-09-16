@@ -197,11 +197,8 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
         <Button onClick={explain} disabled={run.isPending || !isSingleStatement(text)} title={locale.sql.explainHint}>
           {locale.sql.explain}
         </Button>
-        <span className="text-xs text-zinc-500 dark:text-zinc-400">{locale.sql.runHint}</span>
-        <label
-          htmlFor="sql-max-rows"
-          className="ml-auto flex items-center gap-1 text-xs text-zinc-600 dark:text-zinc-300"
-        >
+        <span className="text-xs text-ink-sub">{locale.sql.runHint}</span>
+        <label htmlFor="sql-max-rows" className="ml-auto flex items-center gap-1 text-xs text-ink-sub">
           {locale.sql.maxRows}
           <Select
             id="sql-max-rows"
@@ -216,14 +213,11 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
             ))}
           </Select>
         </label>
-        <label className="flex items-center gap-1 text-xs text-zinc-600 dark:text-zinc-300">
+        <label className="flex items-center gap-1 text-xs text-ink-sub">
           <input type="checkbox" checked={stopOnError} onChange={(e) => setStopOnError(e.target.checked)} />
           {locale.sql.stopOnError}
         </label>
-        <label
-          className="flex items-center gap-1 text-xs text-zinc-600 dark:text-zinc-300"
-          title={locale.sql.safeModeHint}
-        >
+        <label className="flex items-center gap-1 text-xs text-ink-sub" title={locale.sql.safeModeHint}>
           <input
             type="checkbox"
             checked={safeMode}
@@ -254,7 +248,7 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
           </>
         }
       >
-        <p className="text-sm text-zinc-700 dark:text-zinc-200">{locale.sql.safeModeBody(confirming.join(' / '))}</p>
+        <p className="text-sm text-ink">{locale.sql.safeModeBody(confirming.join(' / '))}</p>
       </Dialog>
       {run.isError ? <ErrorBox error={run.error} /> : null}
       {/* Screen readers hear the outcome; results themselves stream into the DOM below without announcements. */}

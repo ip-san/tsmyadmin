@@ -19,6 +19,8 @@
   --color-brand: var(--c-brand);
   --color-brand-hover: var(--c-brand-hover);
   --color-brand-sub: var(--c-brand-sub);
+  /* Text that sits on the brand colour: white in light, near-black in dark, where the brand is a light indigo. */
+  --color-brand-ink: var(--c-brand-ink);
   --color-critical: var(--c-critical);
   --color-critical-sub: var(--c-critical-sub);
 
@@ -37,10 +39,11 @@
   --c-line-strong: #c3c7cd;
   --c-ink: #1a1c1f;
   --c-ink-sub: #5b616b;
-  --c-ink-faint: #8b919b;
+  --c-ink-faint: #676e7a;
   --c-brand: #4338ca;
   --c-brand-hover: #3730a3;
   --c-brand-sub: #eef2ff;
+  --c-brand-ink: #ffffff;
   --c-critical: #b42318;
   --c-critical-sub: #fef3f2;
   color-scheme: light;
@@ -54,10 +57,11 @@ html.dark {
   --c-line-strong: #4a4e56;
   --c-ink: #f0f1f3;
   --c-ink-sub: #a3a8b2;
-  --c-ink-faint: #7c828c;
+  --c-ink-faint: #868d98;
   --c-brand: #818cf8;
   --c-brand-hover: #a5b4fc;
   --c-brand-sub: #262a45;
+  --c-brand-ink: #16171a;
   --c-critical: #f87171;
   --c-critical-sub: #2a1d1d;
   color-scheme: dark;

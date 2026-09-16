@@ -36,8 +36,22 @@ const darkTheme = EditorView.theme(
   },
   { dark: true }
 )
+/**
+ * Light palette. basicSetup ships one, but its string colour (#ee4400) is 3.8:1 even on white — below AA at
+ * this size, and worse over the active line. These are the same hues, darkened until every one clears 4.5:1
+ * against both the editor background and the highlighted current line.
+ */
+const lightHighlight = HighlightStyle.define([
+  { tag: [tags.keyword, tags.operatorKeyword, tags.modifier], color: '#6d28d9' },
+  { tag: [tags.string, tags.special(tags.string)], color: '#a3320a' },
+  { tag: [tags.number, tags.bool, tags.null], color: '#9a3412' },
+  { tag: tags.comment, color: '#5b616b', fontStyle: 'italic' },
+  { tag: [tags.typeName, tags.standard(tags.name)], color: '#0e6ba8' },
+  { tag: tags.operator, color: '#3f3f46' },
+  { tag: tags.punctuation, color: '#52525b' },
+])
 const themeExtension = (theme: 'light' | 'dark'): Extension =>
-  theme === 'dark' ? [darkTheme, syntaxHighlighting(darkHighlight)] : []
+  theme === 'dark' ? [darkTheme, syntaxHighlighting(darkHighlight)] : [syntaxHighlighting(lightHighlight)]
 
 export interface SqlEditorProps {
   value: string
@@ -113,10 +127,5 @@ export function SqlEditor({ value, onChange, onRun, dialect, schema }: SqlEditor
     view.current?.dispatch({ effects: themeCompartment.current.reconfigure(themeExtension(theme)) })
   }, [theme])
 
-  return (
-    <div
-      ref={host}
-      className="min-h-40 rounded border border-zinc-300 bg-white text-sm dark:border-zinc-600 dark:bg-zinc-900"
-    />
-  )
+  return <div ref={host} className="min-h-40 rounded border border-line-strong bg-surface text-sm" />
 }

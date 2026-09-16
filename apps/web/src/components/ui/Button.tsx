@@ -5,7 +5,7 @@ type Variant = 'primary' | 'secondary' | 'danger' | 'criticalSolid' | 'ghost' | 
 type Size = 'sm' | 'md' | 'icon'
 
 const VARIANTS: Record<Variant, string> = {
-  primary: 'bg-brand text-white hover:bg-brand-hover disabled:opacity-50',
+  primary: 'bg-brand text-brand-ink hover:bg-brand-hover disabled:opacity-50',
   secondary: 'bg-surface text-ink border border-line-strong hover:bg-surface-sub',
   /**
    * Destructive actions are a colour, not a filled block (Polaris's `tone="critical"`). A structure page lists

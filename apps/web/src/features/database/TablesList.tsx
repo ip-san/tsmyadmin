@@ -129,7 +129,7 @@ export function TablesList({ db, schema }: { db: string; schema?: string | undef
       </Table>
       {/* Below the table, next to the last checkbox in tab order (phpMyAdmin's "With selected" position). */}
       {chosen.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-2 rounded border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800">
+        <div className="flex flex-wrap items-center gap-2 rounded border border-line bg-surface-sub px-3 py-2 text-sm">
           <span>{locale.ddl.bulkSelected(chosen.length)}</span>
           <Link
             to="/db/$db/export"

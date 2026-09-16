@@ -8,17 +8,17 @@ import type { HistoryEntry } from './history.ts'
 
 function Panel({ title, count, children }: { title: string; count: number; children: ReactNode }) {
   return (
-    <details className="rounded border border-zinc-200 dark:border-zinc-700">
-      <summary className="cursor-pointer px-3 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-200">
+    <details className="rounded border border-line">
+      <summary className="cursor-pointer px-3 py-2 text-sm font-medium text-ink">
         {title} ({count})
       </summary>
-      <div className="max-h-64 overflow-auto border-t border-zinc-200 dark:border-zinc-700">{children}</div>
+      <div className="max-h-64 overflow-auto border-t border-line">{children}</div>
     </details>
   )
 }
 
-const ROW = 'flex items-start gap-2 border-b border-zinc-100 px-3 py-1.5 text-xs dark:border-zinc-800'
-const EMPTY = 'px-3 py-2 text-xs text-zinc-500 dark:text-zinc-400'
+const ROW = 'flex items-start gap-2 border-b border-line px-3 py-1.5 text-xs'
+const EMPTY = 'px-3 py-2 text-xs text-ink-sub'
 
 export function HistoryPanel({
   entries,
@@ -45,7 +45,7 @@ export function HistoryPanel({
               >
                 {e.ok ? '✓' : '✗'}
               </span>
-              <span className="text-zinc-500 dark:text-zinc-400">
+              <span className="text-ink-sub">
                 {new Date(e.at).toLocaleTimeString('ja-JP')}
                 {e.db ? ` · ${locale.sql.historyDb(e.db)}` : ''}
               </span>
@@ -95,7 +95,7 @@ export function SavedQueriesPanel({
   return (
     <Panel title={locale.sql.saved} count={entries.length}>
       <form
-        className="flex items-center gap-2 border-b border-zinc-100 px-3 py-2 dark:border-zinc-800"
+        className="flex items-center gap-2 border-b border-line px-3 py-2"
         onSubmit={(e) => {
           e.preventDefault()
           if (!canSave) return
@@ -114,7 +114,7 @@ export function SavedQueriesPanel({
           {locale.sql.save}
         </Button>
       </form>
-      <p className="px-3 pt-2 text-xs text-zinc-500 dark:text-zinc-400">
+      <p className="px-3 pt-2 text-xs text-ink-sub">
         {savedOnServer ? locale.sql.savedOnServer : locale.sql.savedInBrowser}
       </p>
       {error ? (
@@ -129,7 +129,7 @@ export function SavedQueriesPanel({
           {entries.map((q) => (
             <li key={q.id || q.name} className={ROW}>
               <span className="font-medium">{q.name}</span>
-              <code className="min-w-0 flex-1 truncate font-mono text-zinc-500 dark:text-zinc-400" title={q.sql}>
+              <code className="min-w-0 flex-1 truncate font-mono text-ink-sub" title={q.sql}>
                 {q.sql}
               </code>
               <Button size="sm" onClick={() => onLoad(q.sql)}>

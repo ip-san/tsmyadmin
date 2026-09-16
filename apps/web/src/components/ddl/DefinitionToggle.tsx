@@ -9,8 +9,7 @@ type DefinitionQuery = ReturnType<typeof routineDefinitionQuery> | ReturnType<ty
 type Source = { definition: string | null } | { query: DefinitionQuery }
 
 function Definition({ definition, onEdit }: { definition: string | null; onEdit?: (d: string) => void }) {
-  if (definition === null)
-    return <span className="text-xs text-zinc-500 dark:text-zinc-400">{locale.routines.noDefinition}</span>
+  if (definition === null) return <span className="text-xs text-ink-sub">{locale.routines.noDefinition}</span>
   return (
     <>
       {onEdit ? (
@@ -23,7 +22,7 @@ function Definition({ definition, onEdit }: { definition: string | null; onEdit?
       <pre
         tabIndex={0}
         // Wrapped: inside a table cell a non-wrapping <pre> widens the column to its longest line.
-        className="mt-2 max-h-96 overflow-auto whitespace-pre-wrap break-words rounded border border-zinc-200 bg-zinc-50 p-2 font-mono text-xs dark:border-zinc-700 dark:bg-zinc-950"
+        className="mt-2 max-h-96 overflow-auto whitespace-pre-wrap break-words rounded border border-line bg-surface-sub p-2 font-mono text-xs"
       >
         {definition}
       </pre>

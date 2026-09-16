@@ -21,7 +21,7 @@ export function Table({
   return (
     <div
       ref={scrollRef}
-      className={cn('w-full overflow-x-auto rounded border border-zinc-200 dark:border-zinc-700', scrollClassName)}
+      className={cn('w-full overflow-x-auto rounded border border-line', scrollClassName)}
       {...scroller}
     >
       <table ref={ref} className={cn('w-full border-collapse text-sm', className)} {...rest} />
@@ -34,7 +34,7 @@ export function Th({ className, ...rest }: ThHTMLAttributes<HTMLTableCellElement
     <th
       scope="col"
       className={cn(
-        'whitespace-nowrap border-b border-zinc-200 bg-zinc-100 px-2 py-1.5 text-left font-semibold text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200',
+        'whitespace-nowrap border-b border-line bg-surface-sub px-2 py-1.5 text-left font-semibold text-ink',
         className
       )}
       {...rest}
@@ -43,15 +43,7 @@ export function Th({ className, ...rest }: ThHTMLAttributes<HTMLTableCellElement
 }
 
 export function Td({ className, ...rest }: TdHTMLAttributes<HTMLTableCellElement>) {
-  return (
-    <td
-      className={cn(
-        'border-b border-zinc-100 px-2 py-1 align-top text-zinc-800 dark:border-zinc-800 dark:text-zinc-100',
-        className
-      )}
-      {...rest}
-    />
-  )
+  return <td className={cn('border-b border-line px-2 py-1 align-top text-ink', className)} {...rest} />
 }
 
 export function Tr({
@@ -59,5 +51,5 @@ export function Tr({
   ref,
   ...rest
 }: HTMLAttributes<HTMLTableRowElement> & { ref?: Ref<HTMLTableRowElement> }) {
-  return <tr ref={ref} className={cn('hover:bg-blue-50/60 dark:hover:bg-zinc-800/60', className)} {...rest} />
+  return <tr ref={ref} className={cn('hover:bg-surface-sub', className)} {...rest} />
 }

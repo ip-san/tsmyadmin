@@ -5,8 +5,8 @@ import { errorMessage } from '@/lib/format.ts'
 
 export function Spinner({ label = locale.common.loading }: { label?: string }) {
   return (
-    <output className="inline-flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400" aria-live="polite">
-      <span className="size-4 animate-spin rounded-full border-2 border-zinc-300 border-t-blue-600 dark:border-zinc-600 dark:border-t-blue-400" />
+    <output className="inline-flex items-center gap-2 text-sm text-ink-sub" aria-live="polite">
+      <span className="size-4 animate-spin rounded-full border-2 border-line-strong border-t-blue-600 dark:border-t-blue-400" />
       {label}
     </output>
   )
@@ -89,7 +89,7 @@ export function Badge({
   title?: string
 }) {
   const tones = {
-    neutral: 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200',
+    neutral: 'bg-surface-sub text-ink',
     info: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100',
     warn: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100',
   }
