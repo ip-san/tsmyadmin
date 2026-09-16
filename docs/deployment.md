@@ -108,7 +108,7 @@ volumes:
 
 イメージに `HEALTHCHECK`（`/readyz`）が組み込まれているため、compose 側で上書きする必要はありません。上書きする場合、実行イメージ（`oven/bun:1.4-slim`）には `curl` / `wget` がないので `["CMD", "bun", "-e", "fetch('http://127.0.0.1:3100/readyz').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]` を使ってください。
 
-Cloudflare Containers で動かす手順は [cloudflare.md](cloudflare.md) にあります（セッションストアを `redis` にする必要があります）。
+置き場所ごとの違い（さくらの VPS などのサーバー、AWS、Azure）は [hosting.md](hosting.md) に、Cloudflare Containers は [cloudflare.md](cloudflare.md) にあります。
 
 ## リバースプロキシと TLS
 

@@ -83,11 +83,28 @@ export type TrustProxy = 'none' | 'forwarded' | 'cloudflare'
 export function clientIp(headers: Headers, trustProxy: TrustProxy, remote: string | undefined): string {
   if (trustProxy === 'cloudflare') {
     const cf = headers.get('cf-connecting-ip')?.trim()
-    if (cf) return cf
+    if (cf) return stripPort(cf)
   }
   if (trustProxy !== 'none') {
     const last = headers.get('x-forwarded-for')?.split(',').at(-1)?.trim()
-    if (last) return last
+    if (last) return stripPort(last)
   }
-  return remote ?? 'unknown'
+  return remote ? stripPort(remote) : 'unknown'
+}
+
+/**
+ * Drops a source port some proxies append (Azure App Service writes `1.2.3.4:56789`).
+ *
+ * Keeping it would be quiet and bad: the port changes on every TCP connection, so each attempt would land in a
+ * rate-limit bucket of its own and the per-IP login limit would stop counting anything.
+ *
+ * Bare IPv6 is left alone — `2001:db8::1` is not an address with a port, and there is no way to tell one from the
+ * other except by counting colons. Only the bracketed form carries a port.
+ */
+function stripPort(value: string): string {
+  const bracketed = /^\[([^\]]+)\](?::\d+)?$/.exec(value)
+  if (bracketed?.[1]) return bracketed[1]
+  const withPort = /^([^:]+):\d+$/.exec(value)
+  if (withPort?.[1]) return withPort[1]
+  return value
 }

@@ -25,6 +25,7 @@ const PAIRS = [
   ['docs/security.md', 'docs/en/security.md'],
   ['docs/operations.md', 'docs/en/operations.md'],
   ['docs/cloudflare.md', 'docs/en/cloudflare.md'],
+  ['docs/hosting.md', 'docs/en/hosting.md'],
   ['docs/architecture.md', 'docs/en/architecture.md'],
 ]
 

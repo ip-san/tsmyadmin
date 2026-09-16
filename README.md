@@ -88,6 +88,7 @@ docker run -d --name tsmyadmin \
 **運用・導入**
 
 - [docs/deployment.md](docs/deployment.md) — 環境変数一覧、Docker / compose 例、リバースプロキシと TLS、対応データベース、サイズと制限
+- [docs/hosting.md](docs/hosting.md) — どこで動かすか（さくらの VPS などのサーバー、AWS、Azure）。置き場所ごとに違うところだけ
 - [docs/cloudflare.md](docs/cloudflare.md) — Cloudflare Containers での構築とデプロイ、Workers では動かない理由、Tunnel / Access で入口だけ置く構成
 - [docs/operations.md](docs/operations.md) — ヘルスチェック、ログイベント、エラーコード早見表、トラブルシュート、監視、バックアップ
 - [docs/security.md](docs/security.md) — 前提と信頼境界、認証・セッション、接続先 allowlist、レート制限、CSP、ブラウザ側に残るデータ

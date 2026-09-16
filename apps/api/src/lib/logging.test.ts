@@ -39,6 +39,24 @@ describe('clientIp', () => {
     expect(clientIp(new Headers(), 'forwarded', undefined)).toBe('unknown')
   })
 
+  it('drops a port some proxies append, and leaves bare IPv6 intact', () => {
+    // Azure App Service writes `1.2.3.4:56789`. The port changes per connection, so keeping it would give every
+    // attempt its own rate-limit bucket and the per-IP login limit would count nothing.
+    const xff = (v: string) => new Headers({ 'x-forwarded-for': v })
+    expect(clientIp(xff('203.0.113.5:56789'), 'forwarded', undefined)).toBe('203.0.113.5')
+    expect(clientIp(xff('203.0.113.5'), 'forwarded', undefined)).toBe('203.0.113.5')
+    // Bracketed IPv6 carries a port; bare IPv6 does not, and its colons must not be read as one.
+    expect(clientIp(xff('[2001:db8::1]:443'), 'forwarded', undefined)).toBe('2001:db8::1')
+    expect(clientIp(xff('[2001:db8::1]'), 'forwarded', undefined)).toBe('2001:db8::1')
+    expect(clientIp(xff('2001:db8::1'), 'forwarded', undefined)).toBe('2001:db8::1')
+    expect(clientIp(xff('::1'), 'forwarded', undefined)).toBe('::1')
+    // The same normalisation applies to the other two sources, not just X-Forwarded-For.
+    expect(clientIp(new Headers({ 'cf-connecting-ip': '203.0.113.7:1234' }), 'cloudflare', undefined)).toBe(
+      '203.0.113.7'
+    )
+    expect(clientIp(new Headers(), 'none', '198.51.100.4:33445')).toBe('198.51.100.4')
+  })
+
   it('reads CF-Connecting-IP only when the proxy is named as Cloudflare', () => {
     // Behind a Worker there may be no X-Forwarded-For at all: without this every visitor would share the
     // Worker's own address, and so a single rate-limit bucket.

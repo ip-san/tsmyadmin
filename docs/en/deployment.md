@@ -1,4 +1,4 @@
-<!-- translated-from: docs/deployment.md sha256:cf40cc159fdf8d842c17be39071a99174d5d8796d8782a03257aca2190baa199 -->
+<!-- translated-from: docs/deployment.md sha256:f795e67e076b6b12efb95f1a52072182f962ec5b0b2375b2c4afce10e310dad8 -->
 
 # Deployment guide
 
@@ -111,7 +111,7 @@ volumes:
 
 The image has a `HEALTHCHECK` (`/readyz`) built in, so compose does not need to override it. If you do override it, note that the runtime image (`oven/bun:1.4-slim`) has neither `curl` nor `wget`, so use `["CMD", "bun", "-e", "fetch('http://127.0.0.1:3100/readyz').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]`.
 
-Running it on Cloudflare Containers is covered by [cloudflare.md](cloudflare.md) (it requires the Redis session store).
+What differs between places to run it — an ordinary server such as Sakura VPS, AWS, Azure — is covered by [hosting.md](hosting.md); Cloudflare Containers has its own page, [cloudflare.md](cloudflare.md).
 
 ## Reverse proxies and TLS
 
