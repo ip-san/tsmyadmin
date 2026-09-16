@@ -1,4 +1,4 @@
-<!-- translated-from: docs/cloudflare.md sha256:8631edde041315b63ea278fb4ed46fbab1106911a7d91fa7a66a8c52df1d2a8e -->
+<!-- translated-from: docs/cloudflare.md sha256:7e5be09918cedee92dcc21bc72e3ff67f34dd30454aef003d4d0a956d83a2f33 -->
 
 # Deploying to Cloudflare
 
@@ -27,64 +27,30 @@ By default (`enableInternet = true`) a container can reach the internet, includi
 - For a database that is not on the public internet (inside a VPC, say), use [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) or Workers VPC
 - Redis has to be reachable too; a managed Redis over TLS (`rediss://`) is the easy answer
 
-> This reachability is what Cloudflare's documentation describes, not something measured here. Check `/readyz` and one login against your own database and port before relying on it.
+> **Assumptions nobody has measured.** Check each on your first deploy.
+>
+> 1. That a container can open TCP to the database and Redis ports — read from Cloudflare's documentation, not observed. `/readyz` returning 200 and one successful login confirms it
+> 2. That `CF-Connecting-IP` survives the hop from the Worker to the container — if it does not, everyone shares one rate-limit bucket. The `ip` field of the `event: http` log lines tells you: it should differ per visitor
+> 3. That stopping sends SIGTERM and waits — if it does not, an export or import in flight is cut off
 
 ## Steps
 
-### 1. The wrangler configuration
+### 1. Look at the configuration that ships with the repository
 
-Put `wrangler.jsonc` at the root of the repository:
+`wrangler.jsonc` (at the root) and `deploy/cloudflare/worker.ts` are ready to use — there is nothing to copy out of this page.
 
-```jsonc
-{
-  "name": "tsmyadmin",
-  "main": "worker/index.ts",
-  "compatibility_date": "2026-01-01",
-  "containers": [
-    {
-      "class_name": "TsmyadminContainer",
-      "image": "./Dockerfile",
-      // The Worker below pins a single name, so exactly one instance runs. To run more, read "Running more
-      // than one" below.
-      "max_instances": 1
-    }
-  ],
-  "durable_objects": {
-    "bindings": [{ "name": "TSMYADMIN", "class_name": "TsmyadminContainer" }]
-  },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["TsmyadminContainer"] }]
-}
+- `wrangler.jsonc` — the container class, `./Dockerfile`, `max_instances`
+- `deploy/cloudflare/worker.ts` — the port it forwards to, `sleepAfter`, and `SESSION_STORE=redis` / `TRUST_PROXY=cloudflare`
+
+That port has to match `EXPOSE` in the `Dockerfile`; `bun run check:static` fails if they drift apart (`scripts/validate-docs.mjs`).
+
+### 2. Install the tooling
+
+```bash
+bun add -d wrangler @cloudflare/containers
 ```
 
-### 2. The Worker in front
-
-`worker/index.ts`:
-
-```ts
-import { Container } from '@cloudflare/containers'
-
-export class TsmyadminContainer extends Container {
-  // Matches EXPOSE in the Dockerfile.
-  defaultPort = 3100
-  // 10 minutes by default. Shorter costs less but makes the next visitor wait for a cold start.
-  sleepAfter = '30m'
-  envVars = {
-    NODE_ENV: 'production',
-    SESSION_STORE: 'redis',
-    // Use CF-Connecting-IP. A request forwarded by a Worker may carry no X-Forwarded-For, and with '1'
-    // every visitor would then share the Worker's own address — one rate-limit bucket for everyone.
-    TRUST_PROXY: 'cloudflare',
-  }
-}
-
-export default {
-  async fetch(request: Request, env: { TSMYADMIN: DurableObjectNamespace<TsmyadminContainer> }) {
-    // One fixed name, so everyone shares the same instance. Spreading requests over several names sends a
-    // login to one instance and the next request to another, which starts the login over.
-    return env.TSMYADMIN.getByName('default').fetch(request)
-  },
-}
-```
+`deploy/cloudflare/worker.ts` is built by wrangler at deploy time. It is outside the workspaces, so `bun run check` does not typecheck it.
 
 ### 3. Secrets
 

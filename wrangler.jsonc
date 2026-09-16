@@ -1,0 +1,26 @@
+// Cloudflare Containers deployment. See docs/cloudflare.md before using this — the Redis session store is
+// required, because a container's disk does not survive it going to sleep.
+//
+// This file lives at the repository root so that `./Dockerfile` and the Docker build context are both the
+// repository, which is what the Dockerfile expects.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "tsmyadmin",
+  "main": "deploy/cloudflare/worker.ts",
+  "compatibility_date": "2026-01-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "containers": [
+    {
+      "class_name": "TsmyadminContainer",
+      "image": "./Dockerfile",
+      // The worker pins a single instance name, so exactly one runs. Read "Running more than one" in
+      // docs/cloudflare.md before raising this — sessions are shared through Redis, but cancelling a query and
+      // the login rate limit are not.
+      "max_instances": 1
+    }
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "TSMYADMIN", "class_name": "TsmyadminContainer" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["TsmyadminContainer"] }]
+}

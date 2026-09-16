@@ -1,4 +1,4 @@
-<!-- translated-from: README.md sha256:a1f0fdd49dcb04256ed8bc58fe8c4da5a9e786a72a19e08f4d6b9dc0eedaab23 -->
+<!-- translated-from: README.md sha256:6d1d2dbafe6732eff04b998926752fbfcbd4edc374fdc2138b3a9177218d2b83 -->
 
 # tsmyadmin
 
@@ -54,6 +54,7 @@ The project's own checks:
 - `scripts/check-architecture.mjs` — layer dependencies (the web app never touches a database driver, routes go through the adapter, features do not import each other) and component length
 - `scripts/check-sql-safety.mjs` — that no SQL is built by interpolation or concatenation outside the adapter's builders, and that no identifier is quoted by hand
 - `scripts/validate-docs.mjs` — that the statistics in `CLAUDE.md` match reality (`--fix`)
+- `scripts/validate-docs.mjs` — also, that the port the Cloudflare worker forwards to matches `EXPOSE` in the `Dockerfile`
 - `scripts/check-contrast.mjs` — that every combination of the design tokens meets the WCAG contrast ratios (with a `--self-test`). axe judges text only, and only the combinations a test happens to render
 - `scripts/check-translations.mjs` — that each English document has been updated for the Japanese original it was written from (with a `--self-test`; `bun run docs:sync` stamps them after translating)
 

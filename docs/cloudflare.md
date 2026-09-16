@@ -25,64 +25,30 @@ Containers は既定（`enableInternet = true`）でインターネットに出�
 - 公開されていないデータベース（VPC 内など）に繋ぐ場合は、[Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) か Workers VPC を使ってください
 - Redis も同じく到達できる必要があります。マネージドの Redis（TLS 付き、`rediss://`）が手軽です
 
-> 到達性は Cloudflare のドキュメントの記述から確認したものです。実際に使うデータベースとポートで、最初に一度 `/readyz` とログインを確かめてください。
+> **未検証の前提**（実機で確かめていません。最初のデプロイで必ず確認してください）
+>
+> 1. コンテナから DB / Redis のポートへ TCP が出られること — Cloudflare のドキュメントの記述から読み取ったものです。`/readyz` が 200 になり、ログインできれば通っています
+> 2. `CF-Connecting-IP` が Worker からコンテナまで残ること — 残らないと全員が同じレート制限の枠に入ります。`event: http` のログの `ip` が利用者ごとに違うかで分かります
+> 3. 停止時に SIGTERM と猶予があること — なければ実行中のエクスポートやインポートが切られます
 
 ## 手順
 
-### 1. wrangler の設定
+### 1. 同梱の設定を確認する
 
-リポジトリのルートに `wrangler.jsonc` を置きます。
+`wrangler.jsonc`（リポジトリのルート）と `deploy/cloudflare/worker.ts` がそのまま使えます。書き写す必要はありません。
 
-```jsonc
-{
-  "name": "tsmyadmin",
-  "main": "worker/index.ts",
-  "compatibility_date": "2026-01-01",
-  "containers": [
-    {
-      "class_name": "TsmyadminContainer",
-      "image": "./Dockerfile",
-      // 下の Worker は名前を 1 つに固定するので、実際に立つのは 1 インスタンスです。
-      // 増やす場合は「増やすには」を読んでください。
-      "max_instances": 1
-    }
-  ],
-  "durable_objects": {
-    "bindings": [{ "name": "TSMYADMIN", "class_name": "TsmyadminContainer" }]
-  },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["TsmyadminContainer"] }]
-}
+- `wrangler.jsonc` — コンテナのクラス、`./Dockerfile`、`max_instances`
+- `deploy/cloudflare/worker.ts` — 転送先ポート、`sleepAfter`、`SESSION_STORE=redis` と `TRUST_PROXY=cloudflare`
+
+転送先ポートは `Dockerfile` の `EXPOSE` と一致している必要があり、ずれると `bun run check:static` が落ちます（`scripts/validate-docs.mjs`）。
+
+### 2. 依存を入れる
+
+```bash
+bun add -d wrangler @cloudflare/containers
 ```
 
-### 2. 前に置く Worker
-
-`worker/index.ts`:
-
-```ts
-import { Container } from '@cloudflare/containers'
-
-export class TsmyadminContainer extends Container {
-  // Dockerfile の EXPOSE と揃えます。
-  defaultPort = 3100
-  // 既定は 10 分。短くするとコストは下がりますが、次のアクセスで起動を待ちます。
-  sleepAfter = '30m'
-  envVars = {
-    NODE_ENV: 'production',
-    SESSION_STORE: 'redis',
-    // CF-Connecting-IP を使う。Worker 経由では X-Forwarded-For が付かないことがあり、
-    // '1' のままだと全員が Worker の内部アドレスを共有してレート制限が 1 枠になる。
-    TRUST_PROXY: 'cloudflare',
-  }
-}
-
-export default {
-  async fetch(request: Request, env: { TSMYADMIN: DurableObjectNamespace<TsmyadminContainer> }) {
-    // 全員が同じセッションを共有するので、インスタンスは 1 つの名前に固定します。
-    // 名前を分けるとログインが別インスタンスに飛んで毎回やり直しになります。
-    return env.TSMYADMIN.getByName('default').fetch(request)
-  },
-}
-```
+`deploy/cloudflare/worker.ts` は wrangler がデプロイ時にビルドします。ワークスペースには含めていないので `bun run check` の型検査の対象外です。
 
 ### 3. 秘密情報
 

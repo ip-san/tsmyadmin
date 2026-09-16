@@ -48,6 +48,28 @@ const expected = {
   routes,
 }
 
+/**
+ * The Cloudflare worker declares the port it forwards to, and the Dockerfile declares the one the app listens
+ * on. Nothing else ties them together: change one and the deployment answers nothing, with every other check
+ * still green.
+ */
+function checkContainerPort() {
+  const exposed = /^EXPOSE\s+(\d+)/m.exec(readFileSync(join(ROOT, 'Dockerfile'), 'utf8'))?.[1]
+  const forwarded = /CONTAINER_PORT\s*=\s*(\d+)/.exec(
+    readFileSync(join(ROOT, 'deploy/cloudflare/worker.ts'), 'utf8')
+  )?.[1]
+  if (!exposed || !forwarded) return `could not read the port from Dockerfile (${exposed}) / worker.ts (${forwarded})`
+  return exposed === forwarded
+    ? null
+    : `Dockerfile EXPOSEs ${exposed} but deploy/cloudflare/worker.ts forwards to ${forwarded}`
+}
+
+const portProblem = checkContainerPort()
+if (portProblem) {
+  console.error(`✗ ${portProblem}`)
+  process.exit(1)
+}
+
 const claudeMd = join(ROOT, 'CLAUDE.md')
 let text = readFileSync(claudeMd, 'utf8')
 let drift = false
