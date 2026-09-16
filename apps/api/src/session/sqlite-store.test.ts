@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { FakeAdapter } from '@tsmyadmin/adapter/testing'
 import { afterEach, describe, expect, it } from 'vitest'
+import { describeSessionStoreConformance } from './conformance.ts'
 import { deriveSessionKey, open, openLegacy, rowAad } from './crypto.ts'
 import { SqliteSessionStore } from './sqlite-store.ts'
 
@@ -34,31 +35,28 @@ const factory =
     return a
   }
 
+// `touchIntervalMs: 0` because this store throttles last_used_at writes to limit write amplification, which is
+// a storage concern rather than part of the session contract — the throttle has its own test further down.
+describeSessionStoreConformance(
+  'sqlite',
+  (options) => new SqliteSessionStore({ ...options, path: ':memory:', secret: 's'.repeat(32), touchIntervalMs: 0 })
+)
+
 describe('SqliteSessionStore', () => {
-  it('caps live sessions per database account across the persisted rows', async () => {
-    const made: FakeAdapter[] = []
-    let t = 0
+  it('stores the account identity as an HMAC, never the user or host in clear', async () => {
     const path = tmpFile()
-    const store = new SqliteSessionStore({
-      path,
-      secret: 's',
-      adapterFactory: factory(made),
-      maxPerIdentity: 2,
-      sweepIntervalMs: 0,
-      now: () => t++,
-    })
-    const a = await store.create(config)
-    await store.create(config)
-    await store.create(config)
-    expect(await store.get(a.id)).toBeUndefined()
-    expect(made[0]?.closed).toBe(true)
-    expect(store.size).toBe(2)
-    // Identity is stored as an HMAC, never the user/host in clear.
-    const raw = new DatabaseSync(path)
-    const rows = raw.prepare('SELECT identity FROM sessions').all() as { identity: string }[]
-    expect(rows.every((r) => /^[0-9a-f]{64}$/.test(r.identity))).toBe(true)
-    raw.close()
-    await store.closeAll()
+    const store = new SqliteSessionStore({ path, secret: 's', adapterFactory: factory(), sweepIntervalMs: 0 })
+    try {
+      await store.create(config)
+      const raw = new DatabaseSync(path)
+      const rows = raw.prepare('SELECT identity FROM sessions').all() as { identity: string }[]
+      expect(rows).toHaveLength(1)
+      expect(rows.every((r) => /^[0-9a-f]{64}$/.test(r.identity))).toBe(true)
+      expect(rows.map((r) => r.identity).join()).not.toContain(config.user)
+      raw.close()
+    } finally {
+      await store.closeAll()
+    }
   })
 
   it('adds the identity column to a pre-0.2 sessions table', async () => {
@@ -72,24 +70,6 @@ describe('SqliteSessionStore', () => {
     const store = new SqliteSessionStore({ path, secret: 's', adapterFactory: factory(), sweepIntervalMs: 0 })
     const s = await store.create(config)
     expect((await store.get(s.id))?.id).toBe(s.id)
-    await store.closeAll()
-  })
-
-  it('creates, fetches, deletes and closes adapters like the memory store', async () => {
-    const made: FakeAdapter[] = []
-    const store = new SqliteSessionStore({
-      path: ':memory:',
-      secret: 's',
-      adapterFactory: factory(made),
-      sweepIntervalMs: 0,
-    })
-    const s = await store.create(config)
-    expect((await store.get(s.id))?.adapter).toBe(made[0])
-    expect((await store.get(s.id))?.config.password).toBe('secret-pw')
-    await store.delete(s.id)
-    expect(await store.get(s.id)).toBeUndefined()
-    expect(made[0]?.closed).toBe(true)
-    await store.ping()
     await store.closeAll()
   })
 

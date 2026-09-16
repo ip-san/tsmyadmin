@@ -62,6 +62,8 @@ interface Live {
  */
 export class SqliteSessionStore implements SessionStore {
   private readonly db: DatabaseSync
+  /** False once the handle is closed, so closeAll can be called again without throwing. */
+  private open = true
   private readonly key: Buffer
   private readonly ttlMs: number
   private readonly now: () => number
@@ -293,7 +295,10 @@ export class SqliteSessionStore implements SessionStore {
     if (this.timer) clearInterval(this.timer)
     this.timer = null
     for (const id of [...this.live.keys()]) await this.closeLive(id)
-    this.db.close()
+    // Shutdown can reach here twice (a repeated signal, a test's finally after an explicit close) and closing
+    // the handle again throws. The in-memory store has always tolerated it; so does this one now.
+    if (this.open) this.db.close()
+    this.open = false
   }
 
   private async closeLive(id: string): Promise<void> {
