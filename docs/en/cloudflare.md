@@ -1,4 +1,4 @@
-<!-- translated-from: docs/cloudflare.md sha256:61a6e5e26afb15bb2365547d66385112758cfb68bc15f616b48b60bb5858401c -->
+<!-- translated-from: docs/cloudflare.md sha256:64e746c133db97f2e4ed9ac801f91c35a1abcaf0574352b92ad36a2be82307ff -->
 
 # Deploying to Cloudflare
 
@@ -29,7 +29,10 @@ bun run cf:deploy    # deploy (after steps 1 and 2)
 
 ### 1. Get ready
 
-First enable the Workers Paid plan (from $5/month) in the Cloudflare dashboard. On the free plan, `bun run cf:deploy` fails.
+Two things to arrange first:
+
+1. **The Workers Paid plan** (from $5/month), enabled in the Cloudflare dashboard. On the free plan, `bun run cf:deploy` fails
+2. **A Redis**, ideally managed and over TLS. You will need its connection URL in the next step
 
 ```bash
 bunx wrangler login
@@ -54,7 +57,7 @@ Add `TSMYADMIN_SERVERS` the same way if you use server presets ([deployment.md](
 
 > A value stored with `wrangler secret put` reaches the **Worker**. The container receives only what `envVars` in `deploy/cloudflare/worker.ts` lists.
 >
-> The three above (and `TSMYADMIN_SERVERS`) are already listed there, so nothing is needed from you here. **When you add a further variable later, add it to that list too.** Miss one and the process exits at startup with `Invalid environment: …`.
+> The three above (and `TSMYADMIN_SERVERS`) are already listed there, so nothing is needed from you here. **When you add a further variable later, add it to that list too.** Missing one of the three required variables stops the deploy. **Any other variable is silently ignored when it is not in `envVars`, and its built-in default applies** — `wrangler secret put SESSION_TTL_MINUTES` on its own raises no error and sessions still expire after 30 minutes.
 
 ### 3. Check, then deploy
 
@@ -71,8 +74,8 @@ The first build and push take the longest.
 
 | What to confirm | How | If it does not hold |
 |---|---|---|
-| TCP reaches the database and Redis | `/readyz` returns 200 and you can log in | Containers will not work. Giving the database a Cloudflare private network connection (`cloudflared`) would reach it, but that is not covered here. The dependable answer is *Only the front door* below |
-| The client's IP arrives | The `ip` field of the `event: http` log lines differs per visitor | Everyone shares one rate-limit bucket and brute-force protection stops working |
+| TCP reaches the database and Redis | `/readyz` returns 200 (Redis is reachable) and you can log in (the database is reachable) | Containers will not work. Giving the database a Cloudflare private network connection (`cloudflared`) would reach it, but that is not covered here. The dependable answer is *Only the front door* below |
+| The client's IP arrives | The `ip` field of the `event: http` log lines differs per visitor | Everyone shares one rate-limit bucket and brute-force protection stops working. First check the startup log that `TRUST_PROXY=cloudflare` reached the container; if it did and the values are still identical, switch to *Only the front door* below |
 | Stopping waits for work in flight | Redeploy with `bun run cf:deploy` during an export, and an export that finishes within `SHUTDOWN_TIMEOUT_SECONDS` (30 seconds by default) completes | An export or import in flight is cut off immediately |
 
 > **Anything longer than the grace period is cut off by default.** To lengthen it, set `SHUTDOWN_TIMEOUT_SECONDS` (up to 600) **and add it to `envVars` in `deploy/cloudflare/worker.ts`** — for the same reason as step 2.
@@ -96,13 +99,15 @@ The straightforward answer is to put [Cloudflare Access](https://developers.clou
 | Connection pools | Lost every time the instance sleeps. They are rebuilt on the next request, so nobody signs in again, but the connection count at the database rises and falls |
 | The login rate limit | Counted per visitor while `TRUST_PROXY=cloudflare` is working; one bucket for everyone if it is not |
 | Long operations | `sleepAfter` is set above the 10-minute default so an export or import cannot run into it |
-| Import size | Unchanged. tsmyadmin's own 64 MB cap is reached first and never gets near the [Worker request body limit](https://developers.cloudflare.com/workers/platform/limits/) (100 MB at the lowest). A dump over 64 MB has to go straight into the database on any setup |
+| Import size | Unchanged. tsmyadmin's own 64 MB cap is reached first and never gets near the [Worker request body limit](https://developers.cloudflare.com/workers/platform/limits/) (100 MB at the lowest). The 64 MB is a fixed constant with no setting to raise it, so a larger dump has to go straight into the database on any setup |
 | Architecture | `linux/amd64` only. Building locally on Apple Silicon needs `docker build --platform linux/amd64` |
-| Cost | On top of the Workers Paid plan: per 10 ms of runtime, CPU time, and egress |
+| Memory and CPU | `instance_type` in `wrangler.jsonc`, shipped as `basic` (1 GiB / 0.25 vCPU). **Leave it out and you get `lite` (256 MiB), where a large import kills the container** |
+| Logs | `observability` is enabled in `wrangler.jsonc`. Left off, neither `wrangler tail` nor Workers Logs shows anything |
+| Cost | On top of the Workers Paid plan: per 10 ms of runtime, CPU time, and egress. A larger `instance_type` costs more |
 
 ### Running more than one instance
 
-The worker as shipped pins `getByName('default')`, so exactly one runs. To run more, pick a key that sends **the same person to the same name every time** (the session cookie, for instance). Spread requests around instead and everything listed under *Several replicas* in [deployment.md](deployment.md) starts to bite: cancelling a running query, the login rate limit, and the connection pools.
+The worker as shipped pins `getByName('default')`, so exactly one runs. To run more, pick a key that sends **the same person to the same name every time** (the session cookie, for instance), and raise `max_instances` in `wrangler.jsonc` (it ships as `1`). Changing only the name in the worker still leaves exactly one instance running. Spread requests around instead and everything listed under *Several replicas* in [deployment.md](deployment.md) starts to bite: cancelling a running query, the login rate limit, and the connection pools.
 
 Whether you need more depends on concurrent work rather than headcount. An admin tool spends most of its time waiting, so one instance is plenty for a handful of people.
 
@@ -110,7 +115,7 @@ Whether you need more depends on concurrent work rather than headcount. An admin
 
 If the database sits in a closed network, or you would rather keep a long-running process, it is simpler to **run the application where it runs today and let Cloudflare be the way in**:
 
-- [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) — reachable from outside with no public IP
+- [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) — reachable from outside with no public IP. Same product as the `cloudflared` in step 4, pointed the other way: this carries **visitor → tsmyadmin**, not tsmyadmin → database
 - [Cloudflare Access](https://developers.cloudflare.com/cloudflare-one/policies/access/) — authenticate against your own identity provider before anything reaches tsmyadmin, which is the concrete form of the "restrict who can reach it at the network level" that [security.md](security.md) asks for
 
 With this shape the disk survives, so `SESSION_STORE=sqlite` is fine.

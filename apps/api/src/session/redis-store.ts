@@ -28,6 +28,12 @@ export interface RedisSessionStoreOptions {
   maxPerIdentity?: number
   /** Namespace for every key, so one Redis can hold more than one deployment. */
   prefix?: string
+  /**
+   * Connection errors. ioredis reconnects on its own, so these are informational — but a listener must exist:
+   * with none, ioredis falls back to `console.error` with a raw stack, which breaks the one-JSON-object-per-line
+   * contract of LOG_FORMAT=json for every retry (roughly twice a second while Redis is down).
+   */
+  onError?: (error: Error) => void
 }
 
 /** Table name in the AAD of a session payload, matching the SQLite store so the binding reads the same. */
@@ -58,6 +64,9 @@ export class RedisSessionStore implements SessionStore {
 
   constructor(options: RedisSessionStoreOptions) {
     this.redis = new Redis(options.url, { maxRetriesPerRequest: 3, lazyConnect: false })
+    const onError = options.onError
+    // Always attached, even without a callback: an unhandled 'error' is what triggers ioredis's console.error.
+    this.redis.on('error', (error: Error) => onError?.(error))
     this.key = deriveSessionKey(options.secret)
     this.ttlMs = options.ttlMs ?? SESSION_TTL_MS
     this.now = options.now ?? Date.now

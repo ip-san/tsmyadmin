@@ -35,8 +35,16 @@ export class TsmyadminContainer extends Container<Env> {
     // Secrets reach the *Worker*, not the container: a container only receives what is listed here. Leave one
     // out and the process exits at startup — `SESSION_SECRET` is required in production, and `SESSION_STORE=redis`
     // makes `REDIS_URL` required too.
+    for (const name of ['SESSION_SECRET', 'REDIS_URL', 'TSMYADMIN_ALLOWED_HOSTS']) {
+      // Fail here with a readable message rather than passing `undefined` through and having the container exit
+      // with `Invalid environment: …` from inside a process whose logs may not be wired up yet.
+      if (!env[name]) throw new Error(`${name} is not set. Run: bunx wrangler secret put ${name}`)
+    }
     this.envVars = {
       NODE_ENV: 'production',
+      // Pinned so CONTAINER_PORT is what the app actually listens on, rather than matching its default by
+      // coincidence. scripts/validate-docs.mjs ties CONTAINER_PORT to the Dockerfile's EXPOSE.
+      API_PORT: String(CONTAINER_PORT),
       // Required: a container's disk is wiped whenever it sleeps, so the file-backed store would sign everyone
       // out and drop every saved query each time that happened.
       SESSION_STORE: 'redis',
@@ -53,8 +61,16 @@ export class TsmyadminContainer extends Container<Env> {
 
 export default {
   async fetch(request: Request, env: Env) {
+    const headers = new Headers(request.headers)
+    // The container library reads this off the incoming request to pick the port it proxies to, so a client must
+    // not be able to supply it.
+    headers.delete('cf-container-target-port')
+    // The library rewrites https: to http: before proxying, so inside the container the URL scheme always reads
+    // as plain. The API would then refuse every login with INSECURE_TRANSPORT unless X-Forwarded-Proto says
+    // otherwise. Set it from the scheme the edge actually used, rather than relying on the header arriving.
+    headers.set('x-forwarded-proto', new URL(request.url).protocol === 'https:' ? 'https' : 'http')
     // One fixed name, so every request reaches the same instance. Spreading requests over several names sends a
     // login to one instance and the next request to another; see "Running more than one" in docs/cloudflare.md.
-    return env.TSMYADMIN.getByName('default').fetch(request)
+    return env.TSMYADMIN.getByName('default').fetch(new Request(request, { headers }))
   },
 }

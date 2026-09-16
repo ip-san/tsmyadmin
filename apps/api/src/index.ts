@@ -60,6 +60,22 @@ function openSqliteStore(): SqliteSessionStore {
   }
 }
 
+/**
+ * Redis connection errors, at most one line a minute. ioredis retries about twice a second while Redis is down,
+ * and one structured line per retry would bury everything else; without any listener at all it would be a raw
+ * stack trace per retry instead.
+ */
+let lastRedisErrorAt = 0
+function reportRedisError(error: Error): void {
+  const now = Date.now()
+  if (now - lastRedisErrorAt < 60_000) return
+  lastRedisErrorAt = now
+  logger.log('error', 'session_store.unreachable', {
+    error: error.message,
+    hint: 'REDIS_URL must point at a reachable Redis; /readyz stays down until it is',
+  })
+}
+
 function openRedisStore(url: string): RedisSessionStore {
   const redis = new RedisSessionStore({
     url,
@@ -67,6 +83,7 @@ function openRedisStore(url: string): RedisSessionStore {
     ttlMs: config.sessionTtlMs,
     maxPerIdentity: config.sessionMaxPerIdentity,
     adapterFactory,
+    onError: (error) => reportRedisError(error),
   })
   // The client reconnects on its own, so a Redis that is down at boot is not fatal: /readyz reports it until
   // it comes back. Logged once so the cause is visible rather than showing up only as failed logins.

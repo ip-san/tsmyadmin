@@ -24,7 +24,10 @@
 
 ## ブルートフォース対策
 
-`POST /api/session` はクライアント IP（既定はソケットのアドレス。`TRUST_PROXY=1` では `X-Forwarded-For` の**末尾**（信頼するプロキシが追記した要素。先頭はクライアントが自由に書けます）を使います。`TRUST_PROXY=cloudflare` では `CF-Connecting-IP` を優先し、それが無ければ `1` と同じ動きに戻ります。`X-Real-IP` 等のヘッダーはどの設定でも信用しません）+ ユーザー名ごとに `LOGIN_RATE_LIMIT` 回 / `LOGIN_RATE_WINDOW_SECONDS` 秒に制限され、超過は `429 RATE_LIMITED`（`Retry-After` 付き）になります。成功時にカウンタはリセットされます。加えてユーザー名を変えながらの試行を防ぐため、IP 単位でも **失敗** `LOGIN_RATE_LIMIT × 3` 回 / 同じウィンドウで制限します（成功したログインは数えないので、共有 NAT 配下の正常な利用者を締め出しません）。
+`POST /api/session` はクライアント IP + ユーザー名ごとに `LOGIN_RATE_LIMIT` 回 / `LOGIN_RATE_WINDOW_SECONDS` 秒に制限され、超過は `429 RATE_LIMITED`（`Retry-After` 付き）になります。
+
+クライアント IP は既定ではソケットのアドレスです。`TRUST_PROXY=1` では `X-Forwarded-For` の**末尾**（信頼するプロキシが追記した要素。先頭はクライアントが自由に書けます）を使い、`TRUST_PROXY=cloudflare` では `CF-Connecting-IP` を優先して、それが無ければ `1` と同じ動きに戻ります。`X-Real-IP` 等のヘッダーはどの設定でも信用しません。
+成功時にカウンタはリセットされます。加えてユーザー名を変えながらの試行を防ぐため、IP 単位でも **失敗** `LOGIN_RATE_LIMIT × 3` 回 / 同じウィンドウで制限します（成功したログインは数えないので、共有 NAT 配下の正常な利用者を締め出しません）。
 
 セッション Cookie の `Max-Age` は認証済みリクエストのたびに再発行され、サーバー側のスライド式 TTL と同期します。
 

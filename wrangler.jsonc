@@ -9,10 +9,17 @@
   "main": "deploy/cloudflare/worker.ts",
   "compatibility_date": "2026-01-01",
   "compatibility_flags": ["nodejs_compat"],
+  // Without this, wrangler deploys with logs disabled and `wrangler tail` shows nothing — including the
+  // `event: http` lines docs/cloudflare.md tells you to read after the first deploy, and the audit log.
+  "observability": { "enabled": true },
   "containers": [
     {
       "class_name": "TsmyadminContainer",
       "image": "./Dockerfile",
+      // Required: omitting it gets `lite` (256 MiB / 0.0625 vCPU), and a 64 MB import — the app's own ceiling —
+      // peaks in the hundreds of MB, so the container is OOM-killed mid-import. `basic` is 1 GiB / 0.25 vCPU,
+      // which matches the "512 MB 以上" guidance in docs/deployment.md. Raise it for larger workloads.
+      "instance_type": "basic",
       // The worker pins a single instance name, so exactly one runs. Read "Running more than one" in
       // docs/cloudflare.md before raising this — sessions are shared through Redis, but cancelling a query and
       // the login rate limit are not.

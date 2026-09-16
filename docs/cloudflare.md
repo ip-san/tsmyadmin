@@ -27,7 +27,10 @@ bun run cf:deploy    # デプロイ（手順 1・2 のあと）
 
 ### 1. 準備
 
-まず Cloudflare ダッシュボードで Workers Paid プラン（$5/月〜）を有効にしてください。無料プランのままだと `bun run cf:deploy` が失敗します。
+先に 2 つ用意します。
+
+1. **Workers Paid プラン**（$5/月〜）を Cloudflare ダッシュボードで有効にする。無料プランのままだと `bun run cf:deploy` が失敗します
+2. **Redis を 1 つ用意する**（マネージドの TLS 付きが手軽です）。接続 URL は次の手順で使います
 
 ```bash
 bunx wrangler login
@@ -52,7 +55,7 @@ bunx wrangler secret put TSMYADMIN_ALLOWED_HOSTS   # db.example.com:5432
 
 > `wrangler secret put` で登録した値が届くのは **Worker** までです。コンテナに渡るのは `deploy/cloudflare/worker.ts` の `envVars` に書いた値だけです。
 >
-> 上の 3 つ（と `TSMYADMIN_SERVERS`）は既に書いてあるので、ここで何かする必要はありません。**この先べつの変数を足すときは、同じ一覧にも追記してください。** 渡し忘れると起動時に `Invalid environment: …` で終了します。
+> 上の 3 つ（と `TSMYADMIN_SERVERS`）は既に書いてあるので、ここで何かする必要はありません。**この先べつの変数を足すときは、同じ一覧にも追記してください。** 必須の変数（上の 3 つ）を渡し忘れるとデプロイ時に止まります。**それ以外の変数は、`envVars` に無いと黙って無視され、組み込みの既定値のままになります** — `wrangler secret put SESSION_TTL_MINUTES` だけしてもエラーは出ず、セッションは 30 分のままです。
 
 ### 3. 確かめてからデプロイする
 
@@ -69,8 +72,8 @@ bun run cf:deploy
 
 | 確認すること | 見かた | 外れていた場合 |
 |---|---|---|
-| DB / Redis へ TCP が出られる | `/readyz` が 200 で、ログインできる | Containers 案が成立しません。DB 側に Cloudflare のプライベートネットワーク接続（`cloudflared`）を用意すれば届きますが、この手順書では扱いません。確実なのは下の「別案: 前だけ Cloudflare にする」です |
-| クライアント IP が届いている | `event: http` のログの `ip` が利用者ごとに違う | 全員が同じレート制限の枠に入り、総当たり対策が効きません |
+| DB / Redis へ TCP が出られる | `/readyz` が 200（Redis に届いている）、かつログインできる（DB に届いている） | Containers 案が成立しません。DB 側に Cloudflare のプライベートネットワーク接続（`cloudflared`）を用意すれば届きますが、この手順書では扱いません。確実なのは下の「別案: 前だけ Cloudflare にする」です |
+| クライアント IP が届いている | `event: http` のログの `ip` が利用者ごとに違う | 全員が同じレート制限の枠に入り、総当たり対策が効きません。まず起動ログで `TRUST_PROXY=cloudflare` がコンテナまで渡っているか確認し、渡っていて値が同じままなら下の「別案: 前だけ Cloudflare にする」に切り替えてください |
 | 停止時に猶予がある | エクスポート中に `bun run cf:deploy` で再デプロイし、`SHUTDOWN_TIMEOUT_SECONDS`（既定 30 秒）以内に終わるエクスポートが完了する | 実行中のエクスポート / インポートが即座に切られます |
 
 > **猶予より長い処理は既定では切られます。** 伸ばすなら `SHUTDOWN_TIMEOUT_SECONDS`（最大 600）を設定し、**`deploy/cloudflare/worker.ts` の `envVars` にも追記してください**（手順 2 と同じ理由です）。
@@ -94,13 +97,15 @@ bun run cf:deploy
 | 接続プール | 休止のたびに失われます。次のアクセスで張り直されるので再ログインは不要ですが、DB 側の接続数は上下します |
 | ログインのレート制限 | `TRUST_PROXY=cloudflare` が効いていれば利用者ごとに数えます。効いていないと全員で 1 枠です |
 | 長い処理 | エクスポートやインポートが `sleepAfter` に達しないよう、既定の 10 分より長くしてあります |
-| インポートの大きさ | 変わりません。tsmyadmin 自身の上限 64 MB が先に効き、[Worker のリクエストボディ上限](https://developers.cloudflare.com/workers/platform/limits/)（最小でも 100 MB）には届きません。64 MB を超えるダンプは、どの構成でも DB に直接流し込んでください |
+| インポートの大きさ | 変わりません。tsmyadmin 自身の上限 64 MB が先に効き、[Worker のリクエストボディ上限](https://developers.cloudflare.com/workers/platform/limits/)（最小でも 100 MB）には届きません。64 MB は設定では変えられない固定値なので、それを超えるダンプはどの構成でも DB に直接流し込んでください |
 | アーキテクチャ | `linux/amd64` のみ。Apple Silicon で手元ビルドするときは `docker build --platform linux/amd64` |
-| 料金 | Workers Paid に加えて、稼働 10 ミリ秒単位 + CPU 時間 + 下り転送 |
+| メモリ / CPU | `wrangler.jsonc` の `instance_type`。同梱は `basic`（1 GiB / 0.25 vCPU）です。**指定しないと `lite`（256 MiB）になり、大きなインポートでコンテナが落ちます** |
+| ログ | `wrangler.jsonc` の `observability` を有効にしてあります。無効のままだと `wrangler tail` にも Workers Logs にも何も出ません |
+| 料金 | Workers Paid に加えて、稼働 10 ミリ秒単位 + CPU 時間 + 下り転送。`instance_type` を上げるとその分増えます |
 
 ### インスタンスを増やすには
 
-同梱の worker は `getByName('default')` で名前を固定しているため、立つのは 1 つだけです。増やすなら**同じ利用者が必ず同じ名前に振られる**キー（セッション Cookie の値など）を使ってください。ばらけさせると、[deployment.md](deployment.md) の「複数レプリカ」で挙げた共有されないもの — 実行中クエリのキャンセル、ログインのレート制限、接続プール — がそのまま問題になります。
+同梱の worker は `getByName('default')` で名前を固定しているため、立つのは 1 つだけです。増やすなら**同じ利用者が必ず同じ名前に振られる**キー（セッション Cookie の値など）を使い、あわせて `wrangler.jsonc` の `max_instances`（同梱の設定は `1`）を上げてください。worker の名前だけ変えても、立つのは 1 つのままです。ばらけさせると、[deployment.md](deployment.md) の「複数レプリカ」で挙げた共有されないもの — 実行中クエリのキャンセル、ログインのレート制限、接続プール — がそのまま問題になります。
 
 必要かどうかは利用者数ではなく同時実行数で決まります。管理ツールは大半の時間が待ちなので、数人で使うなら 1 つで足ります。
 
@@ -108,7 +113,7 @@ bun run cf:deploy
 
 DB が閉じたネットワークにある場合や、常駐プロセスのまま運用したい場合は、**アプリは今の場所で動かし、Cloudflare は入口だけ**にするほうが単純です。
 
-- [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) — 公開 IP なしで外から到達できるようにする
+- [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) — 公開 IP なしで外から tsmyadmin に到達できるようにする（手順 4 に出てくる `cloudflared` と同じ製品ですが向きが逆で、ここで作るのは **利用者 → tsmyadmin** の経路です）
 - [Cloudflare Access](https://developers.cloudflare.com/cloudflare-one/policies/access/) — 社内の ID で認証してから tsmyadmin に届かせる（[security.md](security.md) が求めている「到達性をネットワークで絞る」の具体形です）
 
 この場合、ディスクが保つので `SESSION_STORE=sqlite` のままで構いません。
