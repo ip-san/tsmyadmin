@@ -31,13 +31,27 @@ interface Platform {
    * something per connection — Azure App Service appends the source port — actually varies it here.
    */
   headers: (client: string, attempt: number) => Record<string, string>
+  /**
+   * Headers this platform does NOT vouch for, which a client is therefore free to set itself. Believing one hands
+   * every visitor a way to choose their own rate-limit bucket, so the tests send a different forged address on
+   * every attempt: an implementation that trusts these never reaches the limit.
+   */
+  decoy: (forged: string) => Record<string, string>
+  /** IPv4 clients unless stated. Bare IPv6 is the case an address-parsing slip collapses into one bucket. */
+  ipv6?: boolean
 }
+
+/** A trusted front end overwrites its own header, so a client-supplied one only ever appears in addition. */
+const forgedXff = (forged: string) => ({ 'x-forwarded-for': forged })
+const forgedCf = (forged: string) => ({ 'cf-connecting-ip': forged })
+const forgedBoth = (forged: string) => ({ ...forgedXff(forged), ...forgedCf(forged) })
 
 const PLATFORMS: Platform[] = [
   {
     // nginx / Caddy on an ordinary server: Sakura VPS, ConoHa, EC2, Lightsail, Azure VM.
     name: 'reverse proxy on a server',
     trustProxy: 'forwarded',
+    decoy: forgedCf,
     remote: () => '10.0.0.1',
     headers: (client) => ({ 'x-forwarded-for': client, 'x-forwarded-proto': 'https' }),
   },
@@ -45,12 +59,14 @@ const PLATFORMS: Platform[] = [
     // An ALB appends the client to any X-Forwarded-For already present, so the last element is the client.
     name: 'AWS ALB',
     trustProxy: 'forwarded',
+    decoy: forgedCf,
     remote: () => '10.0.0.2',
     headers: (client) => ({ 'x-forwarded-for': client, 'x-forwarded-proto': 'https' }),
   },
   {
     name: 'AWS App Runner',
     trustProxy: 'forwarded',
+    decoy: forgedCf,
     remote: () => '10.0.0.3',
     headers: (client) => ({ 'x-forwarded-for': client, 'x-forwarded-proto': 'https' }),
   },
@@ -58,6 +74,7 @@ const PLATFORMS: Platform[] = [
     // The distinguishing case: the source port rides along, and it changes on every connection.
     name: 'Azure App Service',
     trustProxy: 'forwarded',
+    decoy: forgedCf,
     remote: () => '10.0.0.4',
     headers: (client, attempt) => ({
       'x-forwarded-for': `${client}:${40000 + attempt}`,
@@ -67,6 +84,7 @@ const PLATFORMS: Platform[] = [
   {
     name: 'Azure Container Apps',
     trustProxy: 'forwarded',
+    decoy: forgedCf,
     remote: () => '10.0.0.5',
     headers: (client) => ({ 'x-forwarded-for': client, 'x-forwarded-proto': 'https' }),
   },
@@ -74,6 +92,10 @@ const PLATFORMS: Platform[] = [
     // The Worker sets X-Forwarded-Proto itself, because the container library rewrites https: to http:.
     name: 'Cloudflare Containers',
     trustProxy: 'cloudflare',
+    // Cloudflare overwrites CF-Connecting-IP but passes X-Forwarded-For through, so a client can write that one.
+    decoy: forgedXff,
+    // Cloudflare serves IPv6 visitors, and a naive port-strip would collapse a whole /64 into one bucket.
+    ipv6: true,
     remote: () => '10.0.0.6',
     headers: (client) => ({ 'cf-connecting-ip': client, 'x-forwarded-proto': 'https' }),
   },
@@ -81,6 +103,7 @@ const PLATFORMS: Platform[] = [
     // A client that writes its own X-Forwarded-For before the real proxy appends to it.
     name: 'reverse proxy, client forging a prefix',
     trustProxy: 'forwarded',
+    decoy: forgedCf,
     remote: () => '10.0.0.7',
     headers: (client) => ({
       'x-forwarded-for': `203.0.113.250, 198.51.100.250, ${client}`,
@@ -92,6 +115,8 @@ const PLATFORMS: Platform[] = [
     // somewhere, so this shape is only viable with COOKIE_SECURE=0 on a closed network.
     name: 'no proxy (COOKIE_SECURE=0)',
     trustProxy: 'none',
+    // Nothing is in front, so every one of these is the client's own words and none may be believed.
+    decoy: forgedBoth,
     remote: (client) => client,
     headers: () => ({}),
   },
@@ -129,18 +154,24 @@ function harness(platform: Platform) {
     return app.request('/api/session', {
       method: 'POST',
       body: JSON.stringify(body),
-      headers: { 'content-type': 'application/json', ...platform.headers(client, attempt) },
+      headers: {
+        'content-type': 'application/json',
+        // Written first so the front end's own headers overwrite them, exactly as a real one would.
+        ...platform.decoy(`198.51.100.${attempt}`),
+        ...platform.headers(client, attempt),
+      },
     })
   }
-  return { store, post, logged }
+  /** Addresses the app actually believed. Events without an `ip` field (startup, audit) are not requests. */
+  const seenIps = () => new Set(logged.map((f) => f.ip).filter((ip) => ip !== undefined))
+  return { store, post, logged, seenIps }
 }
 
 describe.each(PLATFORMS)('behind $name', (platform) => {
   it('identifies the client, so one visitor can be rate limited without affecting another', async () => {
     const h = harness(platform)
     try {
-      const alice = '203.0.113.11'
-      const bob = '203.0.113.22'
+      const [alice, bob] = platform.ipv6 ? ['2001:db8::11', '2001:db8::22'] : ['203.0.113.11', '203.0.113.22']
 
       // A login must be accepted at all: with cookieSecure on, a front end that does not present HTTPS to the
       // app would refuse every one of these with INSECURE_TRANSPORT.
@@ -158,10 +189,8 @@ describe.each(PLATFORMS)('behind $name', (platform) => {
       // is what would fail, silently, in production.
       expect((await h.post(bob, LOGIN)).status).toBe(201)
 
-      // And the address the app believes is the client's, not the front end's.
-      const ips = new Set(h.logged.map((f) => f.ip))
-      expect(ips.has(alice)).toBe(true)
-      expect(ips.has(bob)).toBe(true)
+      // Exactly these two, so a fallback to the front end's own address on some requests cannot hide here.
+      expect(h.seenIps()).toEqual(new Set([alice, bob]))
     } finally {
       await h.store.closeAll()
     }
@@ -170,7 +199,7 @@ describe.each(PLATFORMS)('behind $name', (platform) => {
   it('counts failures per address, so rotating the user name does not buy a fresh window', async () => {
     const h = harness(platform)
     try {
-      const mallory = '203.0.113.33'
+      const mallory = platform.ipv6 ? '2001:db8::33' : '203.0.113.33'
       let limited = false
       // Each attempt uses a new user name, which defeats the per-user bucket by design; the per-IP bucket is
       // what has to stop it, and it can only do that if the address is read consistently.
