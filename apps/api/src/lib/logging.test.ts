@@ -32,10 +32,25 @@ describe('clientIp', () => {
   it('uses the socket address unless a trusted proxy supplies X-Forwarded-For', () => {
     // Appending proxies put the address they saw LAST; anything before it came from the client.
     const spoofed = new Headers({ 'x-forwarded-for': '1.2.3.4, 203.0.113.5', 'x-real-ip': '198.51.100.9' })
-    expect(clientIp(spoofed, true, '10.0.0.1')).toBe('203.0.113.5')
-    expect(clientIp(new Headers({ 'x-forwarded-for': '203.0.113.5' }), true, '10.0.0.1')).toBe('203.0.113.5')
-    expect(clientIp(spoofed, false, '10.0.0.1')).toBe('10.0.0.1')
-    expect(clientIp(new Headers({ 'x-real-ip': '198.51.100.9' }), false, '192.0.2.7')).toBe('192.0.2.7')
-    expect(clientIp(new Headers(), true, undefined)).toBe('unknown')
+    expect(clientIp(spoofed, 'forwarded', '10.0.0.1')).toBe('203.0.113.5')
+    expect(clientIp(new Headers({ 'x-forwarded-for': '203.0.113.5' }), 'forwarded', '10.0.0.1')).toBe('203.0.113.5')
+    expect(clientIp(spoofed, 'none', '10.0.0.1')).toBe('10.0.0.1')
+    expect(clientIp(new Headers({ 'x-real-ip': '198.51.100.9' }), 'none', '192.0.2.7')).toBe('192.0.2.7')
+    expect(clientIp(new Headers(), 'forwarded', undefined)).toBe('unknown')
+  })
+
+  it('reads CF-Connecting-IP only when the proxy is named as Cloudflare', () => {
+    // Behind a Worker there may be no X-Forwarded-For at all: without this every visitor would share the
+    // Worker's own address, and so a single rate-limit bucket.
+    const cf = new Headers({ 'cf-connecting-ip': '203.0.113.7' })
+    expect(clientIp(cf, 'cloudflare', '10.0.0.1')).toBe('203.0.113.7')
+    // Any client can set this header, so it counts for nothing unless Cloudflare was declared.
+    expect(clientIp(cf, 'forwarded', '10.0.0.1')).toBe('10.0.0.1')
+    expect(clientIp(cf, 'none', '10.0.0.1')).toBe('10.0.0.1')
+    // Cloudflare's own header wins over a forwarded chain the client may have prefixed.
+    const both = new Headers({ 'cf-connecting-ip': '203.0.113.7', 'x-forwarded-for': '1.2.3.4' })
+    expect(clientIp(both, 'cloudflare', '10.0.0.1')).toBe('203.0.113.7')
+    // And it still falls back when Cloudflare did not set it.
+    expect(clientIp(new Headers({ 'x-forwarded-for': '198.51.100.2' }), 'cloudflare', '10.0.0.1')).toBe('198.51.100.2')
   })
 })

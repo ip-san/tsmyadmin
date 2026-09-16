@@ -1,4 +1,4 @@
-<!-- translated-from: docs/cloudflare.md sha256:5495c487861103d82321bbe7c520450d4cdd8574c2b61572c5423ba7870924a7 -->
+<!-- translated-from: docs/cloudflare.md sha256:c423db8e5ebd7d713b313c49493ffbf53b1966fac25f9edfdb70f98713bc4231 -->
 
 # Deploying to Cloudflare
 
@@ -71,7 +71,9 @@ export class TsmyadminContainer extends Container {
   envVars = {
     NODE_ENV: 'production',
     SESSION_STORE: 'redis',
-    TRUST_PROXY: '1',
+    // Use CF-Connecting-IP. A request forwarded by a Worker may carry no X-Forwarded-For, and with '1'
+    // every visitor would then share the Worker's own address — one rate-limit bucket for everyone.
+    TRUST_PROXY: 'cloudflare',
   }
 }
 
@@ -112,7 +114,7 @@ Everything under *Several replicas* in `deployment.md` applies, plus what Contai
 | Starting and sleeping | Stops after 10 minutes idle (`sleepAfter` changes it) and starts again on the next request. **The first request after that is slow** |
 | Connection pools | Lost every time the instance sleeps. They are rebuilt on the next request, so nobody has to sign in again, but the connection count at the database rises and falls |
 | Cancelling a running query | Does not cross instances. With `max_instances` above 1, the table of what is not shared in `deployment.md` applies as written |
-| The login rate limit | Counted per instance, so the effective limit is multiplied by `max_instances` |
+| The login rate limit | Counted per instance, so the effective limit is multiplied by `max_instances`. Without `TRUST_PROXY=cloudflare`, everyone also shares a single bucket |
 | Long operations | Raise `sleepAfter` above the default 10 minutes so an export or import cannot run into it |
 | Cost | On top of the Workers Paid plan: per 10 ms of runtime, CPU time, and egress |
 

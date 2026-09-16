@@ -22,7 +22,7 @@ import { z } from 'zod'
 import { createApp, IP_LIMIT_FACTOR } from './app.ts'
 import { type AppConfig, loadConfig } from './config.ts'
 import { auditedAdapterFactory } from './lib/audit.ts'
-import { createLogger, type Logger } from './lib/logging.ts'
+import { createLogger, type Logger, type TrustProxy } from './lib/logging.ts'
 import { SqliteSessionStore } from './session/sqlite-store.ts'
 import { MemorySessionStore } from './session/store.ts'
 
@@ -57,7 +57,7 @@ interface HarnessOptions {
   isProd?: boolean
   loginRateLimit?: { max: number; windowMs: number }
   now?: () => number
-  trustProxy?: boolean
+  trustProxy?: TrustProxy
   remoteAddress?: (c: { req: { header: (name: string) => string | undefined } }) => string | undefined
   servers?: AppConfig['servers']
   logger?: Logger
@@ -317,7 +317,7 @@ describe('hardening', () => {
   it('keys the limiter by X-Forwarded-For only when the proxy is trusted', async () => {
     const trusted = harness(fixtureAdapter({ failWith: new AdapterError('AUTH_FAILED', 'denied') }), {
       loginRateLimit: { max: 1, windowMs: 60_000 },
-      trustProxy: true,
+      trustProxy: 'forwarded',
     })
     stores.push(trusted.store)
     expect((await trusted.login(LOGIN, { 'x-forwarded-for': '203.0.113.1' })).status).toBe(401)
@@ -342,7 +342,7 @@ describe('hardening', () => {
   })
 
   it('refuses a production login over plain HTTP from a non-loopback host, accepts TLS via a trusted proxy', async () => {
-    const h = harness(fixtureAdapter(), { isProd: true, trustProxy: true })
+    const h = harness(fixtureAdapter(), { isProd: true, trustProxy: 'forwarded' })
     stores.push(h.store)
     const post = (url: string, headers: Record<string, string> = {}) =>
       h.app.request(url, {

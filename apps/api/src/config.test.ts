@@ -11,7 +11,7 @@ describe('loadConfig', () => {
       sessionTtlMs: 30 * 60_000,
       allowedHosts: ['127.0.0.1', 'localhost'],
       loginRateLimit: { max: 10, windowMs: 60_000 },
-      trustProxy: false,
+      trustProxy: 'none',
       cookieSecure: false,
       logFormat: 'pretty',
       servers: [],
@@ -47,7 +47,7 @@ describe('loadConfig', () => {
       sessionTtlMs: 300_000,
       allowedHosts: ['db.internal', '*.rds.amazonaws.com'],
       loginRateLimit: { max: 3, windowMs: 10_000 },
-      trustProxy: true,
+      trustProxy: 'forwarded',
       cookieSecure: false,
     })
     // PORT (platform-injected) is the fallback for API_PORT; COOKIE_SECURE overrides the NODE_ENV default.
@@ -134,5 +134,12 @@ describe('TSMYADMIN_SERVERS', () => {
     })
     // An empty value counts as unset here as everywhere else, so it is refused rather than passed to the client.
     expect(() => loadConfig({ SESSION_STORE: 'redis', REDIS_URL: '' })).toThrow(/REDIS_URL/)
+  })
+
+  it('names Cloudflare as the trusted proxy when asked', () => {
+    expect(loadConfig({ TRUST_PROXY: 'cloudflare' })).toMatchObject({ trustProxy: 'cloudflare' })
+    expect(loadConfig({ TRUST_PROXY: '1' })).toMatchObject({ trustProxy: 'forwarded' })
+    expect(loadConfig({})).toMatchObject({ trustProxy: 'none' })
+    expect(() => loadConfig({ TRUST_PROXY: 'yes' })).toThrow(/TRUST_PROXY/)
   })
 })

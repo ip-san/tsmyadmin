@@ -1,4 +1,4 @@
-<!-- translated-from: docs/deployment.md sha256:1666938bbbd8ae2511b31e54feaaaed1feeadfa7c9a359fd99c5ee9cffc51e04 -->
+<!-- translated-from: docs/deployment.md sha256:3adf5cd4dbb10d94126c21aedc2caf5844f377b1b790d9e03f8ff931a0e732fa -->
 
 # Deployment guide
 
@@ -43,7 +43,7 @@ tsmyadmin runs as **a single container whose one process (Bun) serves both the A
 | `TSMYADMIN_SERVERS` | (none) | A JSON array of the server presets offered on the login screen. For example: `[{"name":"prod","dialect":"postgres","host":"db.internal","port":5432,"database":"app"}]`. Users then enter only a username and password. A preset's host joins the allowlist automatically. **Never put a password here** |
 | `LOGIN_RATE_LIMIT` | `10` | How many sign-in attempts are allowed within `LOGIN_RATE_WINDOW_SECONDS`, per client IP and username (per IP alone, up to three times that) |
 | `LOGIN_RATE_WINDOW_SECONDS` | `60` | The window for the above, in seconds (at least 1; `LOGIN_RATE_LIMIT` likewise) |
-| `TRUST_PROXY` | `0` | `1` trusts a reverse proxy's `X-Forwarded-For` as the client IP (required behind a proxy; leave it `0` when exposed directly) |
+| `TRUST_PROXY` | `0` | `1` trusts a reverse proxy's `X-Forwarded-For` as the client IP (required behind a proxy; leave it `0` when exposed directly). `cloudflare` prefers `CF-Connecting-IP`. They are separate settings because only Cloudflare can be relied on to overwrite that header — anywhere else, trusting it lets a client name its own address |
 | `LOG_FORMAT` | `json` in production, `pretty` in development | One JSON object per line (for a log collector), or a human-readable form |
 | `WEB_DIST` | `apps/web/dist` | The directory of the SPA build to serve. When unset it is resolved from the location of the API source, so it does not depend on the working directory. If you do set it, use an absolute path or one relative to the working directory |
 | `SHUTDOWN_TIMEOUT_SECONDS` | `30` (0–600) | How long to wait, after `SIGTERM`, for requests in flight (a long SQL statement, an export, an import) to finish. Past that the process exits immediately |

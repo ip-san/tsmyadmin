@@ -1,6 +1,7 @@
 import { type ServerPreset, ServerPresetsSchema } from '@tsmyadmin/shared'
 import { z } from 'zod'
 import { invalidEntries, presetEntry } from './lib/allowlist.ts'
+import type { TrustProxy } from './lib/logging.ts'
 
 const formatIssues = (e: z.ZodError) => e.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')
 
@@ -47,8 +48,11 @@ const EnvSchema = z.object({
   /** Login attempts allowed per client IP + user within the window. */
   LOGIN_RATE_LIMIT: z.coerce.number().int().min(1).default(10),
   LOGIN_RATE_WINDOW_SECONDS: z.coerce.number().int().min(1).default(60),
-  /** Trust the last X-Forwarded-For element from a reverse proxy in front of the API. */
-  TRUST_PROXY: z.enum(['0', '1']).default('0'),
+  /**
+   * `1` trusts the last X-Forwarded-For element from a reverse proxy in front of the API; `cloudflare` also
+   * reads CF-Connecting-IP, which only Cloudflare can be relied on to overwrite.
+   */
+  TRUST_PROXY: z.enum(['0', '1', 'cloudflare']).default('0'),
   /** `json` (one object per line, for log shippers) or `pretty` (development). */
   LOG_FORMAT: z.enum(['json', 'pretty']).optional(),
   /** `sqlite` keeps sessions across restarts, `redis` shares them between replicas, `memory` does neither. */
@@ -74,7 +78,7 @@ export type AppConfig = {
   allowedHosts: string[]
   servers: ServerPreset[]
   loginRateLimit: { max: number; windowMs: number }
-  trustProxy: boolean
+  trustProxy: TrustProxy
   logFormat: 'json' | 'pretty'
   sessionStore: 'memory' | 'sqlite' | 'redis'
   sessionDbPath: string
@@ -131,7 +135,7 @@ export function loadConfig(env: Record<string, string | undefined>): AppConfig {
     allowedHosts,
     servers,
     loginRateLimit: { max: e.LOGIN_RATE_LIMIT, windowMs: e.LOGIN_RATE_WINDOW_SECONDS * 1000 },
-    trustProxy: e.TRUST_PROXY === '1',
+    trustProxy: e.TRUST_PROXY === '0' ? 'none' : e.TRUST_PROXY === 'cloudflare' ? 'cloudflare' : 'forwarded',
     logFormat: e.LOG_FORMAT ?? (isProd ? 'json' : 'pretty'),
     sessionStore,
     sessionDbPath: e.SESSION_DB_PATH,

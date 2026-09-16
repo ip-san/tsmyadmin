@@ -66,14 +66,26 @@ export function requestLogger(logger: Logger, ip: (c: Context) => string): Middl
   }
 }
 
+/** Which hop, if any, is allowed to tell us who the client is. */
+export type TrustProxy = 'none' | 'forwarded' | 'cloudflare'
+
 /**
  * Client IP for rate limiting / logs. The socket address is the source of truth; X-Forwarded-For is honoured
  * only when a reverse proxy is declared trusted, and then only its LAST element: proxies append the address they
  * saw, so the last entry is the one written by the trusted hop while earlier entries are whatever the client
- * sent. Other headers (X-Real-IP …) are never trusted: any client can set them.
+ * sent.
+ *
+ * `cloudflare` additionally reads CF-Connecting-IP, which Cloudflare overwrites on every request that passes
+ * through it. It is a separate setting rather than part of `forwarded` because that guarantee only holds behind
+ * Cloudflare: anywhere else the header is one a client can simply set, and trusting it would hand every client
+ * a way to pick its own rate-limit bucket.
  */
-export function clientIp(headers: Headers, trustProxy: boolean, remote: string | undefined): string {
-  if (trustProxy) {
+export function clientIp(headers: Headers, trustProxy: TrustProxy, remote: string | undefined): string {
+  if (trustProxy === 'cloudflare') {
+    const cf = headers.get('cf-connecting-ip')?.trim()
+    if (cf) return cf
+  }
+  if (trustProxy !== 'none') {
     const last = headers.get('x-forwarded-for')?.split(',').at(-1)?.trim()
     if (last) return last
   }

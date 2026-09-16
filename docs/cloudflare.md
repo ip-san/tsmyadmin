@@ -69,7 +69,9 @@ export class TsmyadminContainer extends Container {
   envVars = {
     NODE_ENV: 'production',
     SESSION_STORE: 'redis',
-    TRUST_PROXY: '1',
+    // CF-Connecting-IP を使う。Worker 経由では X-Forwarded-For が付かないことがあり、
+    // '1' のままだと全員が Worker の内部アドレスを共有してレート制限が 1 枠になる。
+    TRUST_PROXY: 'cloudflare',
   }
 }
 
@@ -110,7 +112,7 @@ npx wrangler deploy
 | 起動と休止 | 10 分（`sleepAfter` で変更可）アイドルで停止し、次のアクセスで起動します。**起動直後の最初のリクエストは遅くなります** |
 | 接続プール | 休止のたびに失われます。次のアクセスで張り直されるので利用者の再ログインは不要ですが、DB 側の接続数は上下します |
 | 実行中クエリのキャンセル | インスタンスをまたぐと効きません。`max_instances` を 2 以上にするなら、`deployment.md` の「共有されないもの」の表をそのまま適用してください |
-| ログインのレート制限 | インスタンスごとに数えるので、実効的な上限が `max_instances` 倍になります |
+| ログインのレート制限 | インスタンスごとに数えるので、実効的な上限が `max_instances` 倍になります。`TRUST_PROXY=cloudflare` にしていないと、さらに全員が同じ 1 枠に入ります |
 | 長い処理 | エクスポートやインポートの途中で `sleepAfter` に達しないよう、既定の 10 分より長くしてください |
 | 料金 | Workers Paid に加えて、稼働 10 ミリ秒単位 + CPU 時間 + 下り転送で課金されます |
 
