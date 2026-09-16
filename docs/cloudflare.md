@@ -4,11 +4,11 @@
 
 Cloudflare Containers で動かします。設定はリポジトリに入っているので、書き写すものはありません。
 
-最後はこの 2 つを実行します（その前に下の手順 1・2 が必要です）。
+`bun run cf:check` は Cloudflare のアカウントなしで、今すぐ実行できます（Docker が起動している必要があります）。`bun run cf:deploy` は下の手順 1・2 を済ませてからです。
 
 ```bash
-bun run cf:check     # 設定・worker・イメージがビルドできるか（アカウント不要）
-bun run cf:deploy    # デプロイ
+bun run cf:check     # 設定・worker・イメージがビルドできるか（アカウント不要、要 Docker）
+bun run cf:deploy    # デプロイ（手順 1・2 のあと）
 ```
 
 ## まず把握すること
@@ -73,7 +73,7 @@ bun run cf:deploy
 | クライアント IP が届いている | `event: http` のログの `ip` が利用者ごとに違う | 全員が同じレート制限の枠に入り、総当たり対策が効きません |
 | 停止時に猶予がある | エクスポート中に `bun run cf:deploy` で再デプロイし、`SHUTDOWN_TIMEOUT_SECONDS`（既定 30 秒）以内に終わるエクスポートが完了する | 実行中のエクスポート / インポートが即座に切られます |
 
-> **猶予より長い処理は既定では切られます。** 30 秒を超えるエクスポートやインポートを守りたいなら `SHUTDOWN_TIMEOUT_SECONDS` を上げてください（最大 600）。
+> **猶予より長い処理は既定では切られます。** 伸ばすなら `SHUTDOWN_TIMEOUT_SECONDS`（最大 600）を設定し、**`deploy/cloudflare/worker.ts` の `envVars` にも追記してください**（手順 2 と同じ理由です）。
 
 > **確認済み（すべてローカル）**: `bun run cf:check`、`docker build --platform linux/amd64`、および本番イメージを Cloudflare と同じ環境変数（`SESSION_STORE=redis` + `TRUST_PROXY=cloudflare` + シークレット）で起動して MySQL にログインし、セッションが Redis に入り、`CF-Connecting-IP` を自分で付けたときにログの `ip` がその値になること。
 >
@@ -94,7 +94,7 @@ bun run cf:deploy
 | 接続プール | 休止のたびに失われます。次のアクセスで張り直されるので再ログインは不要ですが、DB 側の接続数は上下します |
 | ログインのレート制限 | `TRUST_PROXY=cloudflare` が効いていれば利用者ごとに数えます。効いていないと全員で 1 枠です |
 | 長い処理 | エクスポートやインポートが `sleepAfter` に達しないよう、既定の 10 分より長くしてあります |
-| インポートの大きさ | ダンプは Worker を通ります。[Worker のリクエストボディ上限](https://developers.cloudflare.com/workers/platform/limits/)（プランにより 100〜200 MB）を超えると `413` です。それより大きいダンプは DB に直接流し込んでください |
+| インポートの大きさ | 変わりません。tsmyadmin 自身の上限 64 MB が先に効き、[Worker のリクエストボディ上限](https://developers.cloudflare.com/workers/platform/limits/)（最小でも 100 MB）には届きません。64 MB を超えるダンプは、どの構成でも DB に直接流し込んでください |
 | アーキテクチャ | `linux/amd64` のみ。Apple Silicon で手元ビルドするときは `docker build --platform linux/amd64` |
 | 料金 | Workers Paid に加えて、稼働 10 ミリ秒単位 + CPU 時間 + 下り転送 |
 

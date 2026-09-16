@@ -1,4 +1,4 @@
-<!-- translated-from: docs/cloudflare.md sha256:db77ad50546e458d3cbe3f06913f20fdb8952977d488a5239ab1708c41be9cf1 -->
+<!-- translated-from: docs/cloudflare.md sha256:61a6e5e26afb15bb2365547d66385112758cfb68bc15f616b48b60bb5858401c -->
 
 # Deploying to Cloudflare
 
@@ -6,11 +6,11 @@
 
 It runs on Cloudflare Containers. The configuration is in the repository, so there is nothing to copy out of this page.
 
-These two commands are the end of the process; steps 1 and 2 below come first.
+`bun run cf:check` runs right now, with no Cloudflare account — it does need Docker running. `bun run cf:deploy` comes after steps 1 and 2 below.
 
 ```bash
-bun run cf:check     # does the config, the worker and the image build? (no account needed)
-bun run cf:deploy    # deploy
+bun run cf:check     # does the config, the worker and the image build? (no account; needs Docker)
+bun run cf:deploy    # deploy (after steps 1 and 2)
 ```
 
 ## What you are signing up for
@@ -75,7 +75,7 @@ The first build and push take the longest.
 | The client's IP arrives | The `ip` field of the `event: http` log lines differs per visitor | Everyone shares one rate-limit bucket and brute-force protection stops working |
 | Stopping waits for work in flight | Redeploy with `bun run cf:deploy` during an export, and an export that finishes within `SHUTDOWN_TIMEOUT_SECONDS` (30 seconds by default) completes | An export or import in flight is cut off immediately |
 
-> **Anything longer than the grace period is cut off by default.** Raise `SHUTDOWN_TIMEOUT_SECONDS` (up to 600) if you need exports or imports longer than 30 seconds to survive a restart.
+> **Anything longer than the grace period is cut off by default.** To lengthen it, set `SHUTDOWN_TIMEOUT_SECONDS` (up to 600) **and add it to `envVars` in `deploy/cloudflare/worker.ts`** — for the same reason as step 2.
 
 > **Verified, all of it locally**: `bun run cf:check`, `docker build --platform linux/amd64`, and booting the production image with the same environment Cloudflare gives it (`SESSION_STORE=redis` + `TRUST_PROXY=cloudflare` + the secrets) — logging in to MySQL, the session landing in Redis, and the `ip` in the logs taking the value of a `CF-Connecting-IP` header supplied by hand.
 >
@@ -96,7 +96,7 @@ The straightforward answer is to put [Cloudflare Access](https://developers.clou
 | Connection pools | Lost every time the instance sleeps. They are rebuilt on the next request, so nobody signs in again, but the connection count at the database rises and falls |
 | The login rate limit | Counted per visitor while `TRUST_PROXY=cloudflare` is working; one bucket for everyone if it is not |
 | Long operations | `sleepAfter` is set above the 10-minute default so an export or import cannot run into it |
-| Import size | A dump travels through the Worker. Anything over the [Worker request body limit](https://developers.cloudflare.com/workers/platform/limits/) (100–200 MB depending on plan) comes back `413`. Load a larger dump straight into the database instead |
+| Import size | Unchanged. tsmyadmin's own 64 MB cap is reached first and never gets near the [Worker request body limit](https://developers.cloudflare.com/workers/platform/limits/) (100 MB at the lowest). A dump over 64 MB has to go straight into the database on any setup |
 | Architecture | `linux/amd64` only. Building locally on Apple Silicon needs `docker build --platform linux/amd64` |
 | Cost | On top of the Workers Paid plan: per 10 ms of runtime, CPU time, and egress |
 
