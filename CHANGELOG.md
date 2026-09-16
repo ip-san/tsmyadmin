@@ -6,6 +6,7 @@
 
 ### 追加
 
+- 前段（リバースプロキシ / 各クラウド）の形ごとの適合テスト（`platform-conformance.test.ts`）。nginx・Caddy、AWS ALB / App Runner、Azure App Service / Container Apps、Cloudflare、プロキシなし、クライアントが `X-Forwarded-For` を偽装した場合の 8 通りで、利用者を識別できること・1 人のレート制限が他人に波及しないこと・ユーザー名を変えながらの総当たりが止まることを確認します
 - 置き場所ごとのデプロイ手引き（`docs/hosting.md` / 英訳）。さくらの VPS などの普通のサーバー、AWS（ECS Fargate / App Runner / EC2）、Azure（Container Apps / App Service / VM）。ディスクが残るかでセッションストアが決まる、という 1 点から書いてあります
 - 転送されたクライアント IP に付いてくるポート番号（Azure App Service は `1.2.3.4:56789` の形で渡します）を落とすようにした。付いたままだと接続ごとに別のアドレスと見なされ、IP 単位のログインレート制限が数えられなくなっていました。IPv6 は括弧付き（`[2001:db8::1]:443`）のときだけポートとして扱います
 

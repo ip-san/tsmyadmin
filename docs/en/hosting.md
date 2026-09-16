@@ -1,4 +1,4 @@
-<!-- translated-from: docs/hosting.md sha256:af69994d0399481522e09c4a4f14b429bbfbedba1122a3d3eb168ae206fb2371 -->
+<!-- translated-from: docs/hosting.md sha256:b420345ce39c7844f1d3b798d82058f696f80966c3103fd7c0a29c2e40f05b1c -->
 
 # Where to run it (VPS / AWS / Azure)
 
@@ -120,6 +120,8 @@ This service can pass `X-Forwarded-For` with a port attached (`1.2.3.4:56789`). 
 Same as *Sakura VPS and other ordinary servers* above.
 
 ---
+
+> Every front-end shape listed here is covered by `apps/api/src/platform-conformance.test.ts`: for each one it checks that the visitor is identified, that rate-limiting one visitor does not take another down with them, and that cycling user names does not get around the per-address limit. **Adding a place to run it means adding the same row to that test.**
 
 ## Verified and not verified
 
