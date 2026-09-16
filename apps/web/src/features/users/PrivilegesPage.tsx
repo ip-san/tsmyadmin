@@ -34,9 +34,7 @@ export function PrivilegesPage({ db, schema, dialect }: { db: string; schema?: s
   const target = schema ? { database: db, schema } : { database: db }
   return (
     <div className="space-y-3">
-      <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">
-        {locale.users.privilegesTitle(db, schema)}
-      </h2>
+      <h2 className="text-sm font-semibold text-ink">{locale.users.privilegesTitle(db, schema)}</h2>
       <Notice>{locale.users.privilegesHint}</Notice>
       <Table>
         <thead>
@@ -61,9 +59,9 @@ export function PrivilegesPage({ db, schema, dialect }: { db: string; schema?: s
                 <Td>
                   {level === null ? (
                     g?.isError ? (
-                      <span className="text-xs text-zinc-500 dark:text-zinc-400">{locale.common.unknown}</span>
+                      <span className="text-xs text-ink-sub">{locale.common.unknown}</span>
                     ) : (
-                      <span className="text-xs text-zinc-500 dark:text-zinc-400">…</span>
+                      <span className="text-xs text-ink-sub">…</span>
                     )
                   ) : (
                     <>

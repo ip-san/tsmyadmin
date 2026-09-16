@@ -21,7 +21,7 @@ function ServerPage() {
     <>
       <ServerTabs tab={locale.tabs.databases} />
       <DdlPreviewDialog flow={dropFlow} />
-      <h2 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-200">{locale.server.databasesTitle}</h2>
+      <h2 className="mb-2 text-sm font-semibold text-ink">{locale.server.databasesTitle}</h2>
       {databases.isPending ? (
         <Spinner />
       ) : databases.isError ? (

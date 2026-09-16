@@ -46,9 +46,9 @@ export function ColumnsTable({
               {c.default !== null ? (
                 c.default
               ) : c.nullable ? (
-                <span className="italic text-zinc-500 dark:text-zinc-400">{locale.common.null}</span>
+                <span className="italic text-ink-sub">{locale.common.null}</span>
               ) : (
-                <span className="text-zinc-500 dark:text-zinc-400">{locale.table.noDefault}</span>
+                <span className="text-ink-sub">{locale.table.noDefault}</span>
               )}
             </Td>
             <Td className="text-xs">{c.extra}</Td>

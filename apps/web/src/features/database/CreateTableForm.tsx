@@ -73,7 +73,7 @@ export function CreateTableForm({
   }
   return (
     <form onSubmit={submit} className="space-y-3" aria-label={locale.ddl.createTableTitle}>
-      <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{locale.ddl.createTableTitle}</h2>
+      <h2 className="text-sm font-semibold text-ink">{locale.ddl.createTableTitle}</h2>
       <div className="max-w-sm">
         <Field id="new-table-name" label={locale.ddl.tableName}>
           <Input

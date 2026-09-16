@@ -33,9 +33,9 @@ export function ShortcutHelp() {
         <table className="w-full text-sm">
           <tbody>
             {ROWS.map((r) => (
-              <tr key={r.keys} className="border-b border-zinc-100 dark:border-zinc-800">
+              <tr key={r.keys} className="border-b border-line">
                 <td className="py-1 pr-4">
-                  <kbd className="rounded border border-zinc-300 bg-zinc-50 px-1.5 py-0.5 font-mono text-xs dark:border-zinc-600 dark:bg-zinc-800">
+                  <kbd className="rounded border border-line-strong bg-surface-sub px-1.5 py-0.5 font-mono text-xs">
                     {shortcutLabel(r.keys)}
                   </kbd>
                 </td>
@@ -44,7 +44,7 @@ export function ShortcutHelp() {
             ))}
           </tbody>
         </table>
-        <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">{locale.shortcuts.editHint}</p>
+        <p className="mt-2 text-xs text-ink-sub">{locale.shortcuts.editHint}</p>
       </Dialog>
     </>
   )

@@ -49,9 +49,7 @@ export function KeyValueTable({ items, label }: { items: KeyValue[]; label: stri
                 <Td className="max-w-md font-mono text-xs">
                   <CellValue cell={i.value} />
                 </Td>
-                {hasDescription ? (
-                  <Td className="text-xs text-zinc-500 dark:text-zinc-400">{i.description ?? ''}</Td>
-                ) : null}
+                {hasDescription ? <Td className="text-xs text-ink-sub">{i.description ?? ''}</Td> : null}
               </Tr>
             ))}
           </tbody>

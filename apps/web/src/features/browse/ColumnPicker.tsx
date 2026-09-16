@@ -47,7 +47,7 @@ export function ColumnPicker({ columns, visible, onChange }: ColumnPickerProps) 
         {locale.browse.columnsShown(shown.size, columns.length)}
       </Button>
       {open ? (
-        <fieldset className="absolute left-0 z-10 mt-1 max-h-72 w-56 overflow-auto rounded border border-zinc-200 bg-white p-2 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+        <fieldset className="absolute left-0 z-10 mt-1 max-h-72 w-56 overflow-auto rounded border border-line bg-surface p-2 shadow-lg">
           <legend className="sr-only">{locale.browse.columns}</legend>
           <div className="mb-1 flex gap-2 text-xs">
             <button

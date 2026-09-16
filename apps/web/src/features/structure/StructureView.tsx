@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { DdlPreviewDialog } from '@/components/ddl/DdlPreviewDialog.tsx'
 import { DefinitionToggle } from '@/components/ddl/DefinitionToggle.tsx'
 import { Button } from '@/components/ui/Button.tsx'
+import { Card } from '@/components/ui/Card.tsx'
 import { Dialog } from '@/components/ui/Dialog.tsx'
 import { Badge, ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
@@ -48,7 +49,7 @@ function IndexesTable({
             </Td>
             <Td className="font-mono text-xs">
               {i.columns.join(', ')}
-              {i.predicate ? <span className="text-zinc-500 dark:text-zinc-400"> WHERE {i.predicate}</span> : null}
+              {i.predicate ? <span className="text-ink-sub"> WHERE {i.predicate}</span> : null}
             </Td>
             <Td>{i.unique ? locale.common.yes : locale.common.no}</Td>
             <Td className="text-xs">{i.type ?? ''}</Td>
@@ -74,16 +75,6 @@ function IndexesTable({
   )
 }
 
-/** Section heading with optional action buttons as siblings (buttons must not be heading content). */
-function SectionTitle({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
-  return (
-    <div className="mb-2 flex items-center gap-3">
-      <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{children}</h2>
-      {action}
-    </div>
-  )
-}
-
 export function StructureView({ tableRef, dialect }: { tableRef: TableRef; dialect: Dialect }) {
   const structure = useQuery(structureQuery(tableRef))
   const flow = useDdlFlow(tableRef.db, tableRef.schema)
@@ -98,71 +89,70 @@ export function StructureView({ tableRef, dialect }: { tableRef: TableRef; diale
   const editing = columnDialog?.mode === 'modify' ? s.columns.find((c) => c.name === columnDialog.name) : undefined
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <DdlPreviewDialog flow={flow} />
-      <section>
-        <SectionTitle
-          action={
-            editable ? (
-              <Button size="sm" onClick={() => setColumnDialog({ mode: 'add' })}>
-                {locale.ddl.titles.addColumn}
-              </Button>
-            ) : null
-          }
-        >
-          {locale.table.columns}
-          {s.comment ? <span className="font-normal text-zinc-500 dark:text-zinc-400">— {s.comment}</span> : null}
-        </SectionTitle>
+      <Card
+        title={
+          <>
+            {locale.table.columns}
+            {s.comment ? <span className="ml-2 font-normal text-ink-sub">— {s.comment}</span> : null}
+          </>
+        }
+        actions={
+          editable ? (
+            <Button size="sm" onClick={() => setColumnDialog({ mode: 'add' })}>
+              {locale.ddl.titles.addColumn}
+            </Button>
+          ) : null
+        }
+        bleed
+      >
         <ColumnsTable
           schema={s}
           editable={editable}
           onEdit={(name) => setColumnDialog({ mode: 'modify', name })}
           onDrop={(name) => flow.preview({ op: 'dropColumn', table, name })}
         />
-      </section>
-      <section>
-        <SectionTitle
-          action={
-            editable ? (
-              <Button size="sm" onClick={() => setIndexDialog(true)}>
-                {locale.ddl.titles.addIndex}
-              </Button>
-            ) : null
-          }
-        >
-          {locale.table.indexes}
-        </SectionTitle>
+      </Card>
+      <Card
+        title={locale.table.indexes}
+        actions={
+          editable ? (
+            <Button size="sm" onClick={() => setIndexDialog(true)}>
+              {locale.ddl.titles.addIndex}
+            </Button>
+          ) : null
+        }
+        bleed
+      >
         <IndexesTable
           schema={s}
           editable={editable}
           onDrop={(name) => flow.preview({ op: 'dropIndex', table, name })}
         />
-      </section>
-      <section>
-        <SectionTitle
-          action={
-            editable ? (
-              <Button size="sm" onClick={() => setFkDialog(true)}>
-                {locale.ddl.titles.addForeignKey}
-              </Button>
-            ) : null
-          }
-        >
-          {locale.table.foreignKeys}
-        </SectionTitle>
+      </Card>
+      <Card
+        title={locale.table.foreignKeys}
+        actions={
+          editable ? (
+            <Button size="sm" onClick={() => setFkDialog(true)}>
+              {locale.ddl.titles.addForeignKey}
+            </Button>
+          ) : null
+        }
+        bleed
+      >
         <ForeignKeysTable
           schema={s}
           {...(editable ? { onDrop: (name: string) => flow.preview({ op: 'dropForeignKey', table, name }) } : {})}
         />
-      </section>
-      <section>
-        <SectionTitle>{locale.table.referencedBy}</SectionTitle>
+      </Card>
+      <Card title={locale.table.referencedBy} bleed>
         <ReferencedByTable schema={s} />
-      </section>
-      <section>
-        <SectionTitle>{locale.table.createStatement}</SectionTitle>
+      </Card>
+      <Card title={locale.table.createStatement}>
         <DefinitionToggle query={createStatementQuery(tableRef)} label={table} />
-      </section>
+      </Card>
 
       <Dialog
         open={columnDialog !== null}

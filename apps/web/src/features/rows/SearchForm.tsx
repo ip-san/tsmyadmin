@@ -59,7 +59,7 @@ export function SearchForm({
   }
   return (
     <form onSubmit={submit} className="space-y-3">
-      <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{locale.search.title}</h2>
+      <h2 className="text-sm font-semibold text-ink">{locale.search.title}</h2>
       <Table>
         <thead>
           <tr>
@@ -76,7 +76,7 @@ export function SearchForm({
             return (
               <Tr key={c.name}>
                 <Td className="whitespace-nowrap font-medium">{c.name}</Td>
-                <Td className="font-mono text-xs text-zinc-500 dark:text-zinc-400">{c.dataType}</Td>
+                <Td className="font-mono text-xs text-ink-sub">{c.dataType}</Td>
                 <Td className="w-px whitespace-nowrap">
                   <Select
                     aria-label={`${c.name}: ${locale.search.operator}`}
@@ -107,7 +107,7 @@ export function SearchForm({
         </tbody>
       </Table>
       <div className="flex flex-wrap items-center justify-end gap-2">
-        <p className="mr-auto text-xs text-zinc-500 dark:text-zinc-400">{locale.search.likeHint}</p>
+        <p className="mr-auto text-xs text-ink-sub">{locale.search.likeHint}</p>
         <Button onClick={() => setConditions({})}>{locale.search.clear}</Button>
         <Button type="submit" variant="primary">
           {locale.search.apply}

@@ -64,8 +64,16 @@ export const TARGETS: Target[] = [
 /** Logs in through the UI form (from `/login`, or from the current page when already on a login URL). */
 export async function login(page: Page, t: Target, { fromCurrentPage = false } = {}): Promise<void> {
   if (!fromCurrentPage) await page.goto('/login')
-  // The E2E server defines presets; switch to manual entry so the helper controls every field.
-  await page.getByLabel('接続先').selectOption('')
+  // Wait for the form to be on screen before touching it. Playwright will happily set a <select> the moment it
+  // exists in the DOM, which can be before React has attached its listener: the change is then lost and the
+  // next render puts the controlled value back, leaving the form half-filled and the login silently stuck.
+  await page.getByRole('button', { name: '接続' }).waitFor()
+  // …and that the preset really switched. Setting a <select> that React has only just rendered can land before
+  // the listener does: the DOM changes, the state does not, and the next render puts the old value back — the
+  // form then looks half-filled and the login silently never happens.
+  const presetSelect = page.getByLabel('接続先')
+  await presetSelect.selectOption('')
+  await expect(presetSelect).toHaveValue('')
   await page.getByLabel('サーバー種別').selectOption(t.dialect)
   await page.getByLabel('ホスト').fill(t.host)
   await page.getByLabel('ポート').fill(String(t.port))
@@ -73,7 +81,9 @@ export async function login(page: Page, t: Target, { fromCurrentPage = false } =
   await page.getByLabel('パスワード').fill(t.password)
   await page.getByLabel('データベース').fill(t.database)
   await page.getByRole('button', { name: '接続' }).click()
-  if (!fromCurrentPage) await expect(page.getByRole('heading', { name: 'サーバー' })).toBeVisible()
+  // Exact: the login card's own heading is 「サーバーに接続」, which a substring match would satisfy — the
+  // helper would then return without having logged in at all, and every later step would fail somewhere else.
+  if (!fromCurrentPage) await expect(page.getByRole('heading', { name: 'サーバー', exact: true })).toBeVisible()
 }
 
 /**

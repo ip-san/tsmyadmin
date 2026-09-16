@@ -21,7 +21,7 @@ function DownloadButtons({ result, label, index }: { result: ResultSet; label: s
   const [csvSafe, setCsvSafe] = useState(() => readPreference(CSV_SAFE_PREF, z.boolean(), false))
   // A file built from the screen would carry the cut values as if they were whole; the export tab reads uncapped.
   const cut = result.rows.some((row) => row.some((cell) => isTruncatedCell(cell)))
-  if (cut) return <span className="ml-2 text-xs text-zinc-500 dark:text-zinc-400">{locale.sql.downloadTruncated}</span>
+  if (cut) return <span className="ml-2 text-xs text-ink-sub">{locale.sql.downloadTruncated}</span>
   const csv = () =>
     downloadText(safeFilename(label, 'csv'), toCsv(names, result.rows, csvSafe), 'text/csv;charset=utf-8')
   const json = () =>
@@ -48,7 +48,7 @@ function DownloadButtons({ result, label, index }: { result: ResultSet; label: s
         <Download className="size-3" aria-hidden />
         {locale.sql.downloadJson}
       </Button>
-      <label className="flex items-center gap-2 py-1 text-xs text-zinc-600 dark:text-zinc-300">
+      <label className="flex items-center gap-2 py-1 text-xs text-ink-sub">
         <input
           type="checkbox"
           checked={csvSafe}
@@ -106,7 +106,7 @@ const Statement = memo(function Statement({
         ) : null}
         <pre
           tabIndex={0}
-          className="mt-2 overflow-x-auto rounded bg-white/60 p-2 font-mono text-xs text-zinc-700 dark:bg-black/30 dark:text-zinc-200"
+          className="mt-2 overflow-x-auto rounded bg-white/60 p-2 font-mono text-xs text-ink dark:bg-black/30"
         >
           {result.sql}
         </pre>
@@ -116,7 +116,7 @@ const Statement = memo(function Statement({
   if (result.kind === 'affected') {
     return (
       <section aria-label={heading} className="space-y-1">
-        <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{heading}</h3>
+        <h3 className="text-sm font-semibold text-ink">{heading}</h3>
         <Notice>
           {locale.sql.affected(result.affectedRows, result.durationMs)}
           {(result.notices ?? []).map((n, i) => (
@@ -125,7 +125,7 @@ const Statement = memo(function Statement({
             </span>
           ))}
         </Notice>
-        <pre tabIndex={0} className="overflow-x-auto font-mono text-xs text-zinc-500 dark:text-zinc-400">
+        <pre tabIndex={0} className="overflow-x-auto font-mono text-xs text-ink-sub">
           {result.sql}
         </pre>
       </section>
@@ -134,15 +134,13 @@ const Statement = memo(function Statement({
   const { columns, rows, truncated } = result.result
   return (
     <section aria-label={heading} className="space-y-1">
-      <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">
+      <h3 className="text-sm font-semibold text-ink">
         {heading}{' '}
-        <span className="font-normal text-zinc-500 dark:text-zinc-400">
-          {locale.sql.rowsResult(rows.length, result.durationMs)}
-        </span>
+        <span className="font-normal text-ink-sub">{locale.sql.rowsResult(rows.length, result.durationMs)}</span>
         {rows.length > 0 ? <DownloadButtons result={result.result} label={heading} index={index} /> : null}
       </h3>
       {truncated ? <Notice>{locale.sql.truncated(maxRows)}</Notice> : null}
-      <pre tabIndex={0} className="overflow-x-auto font-mono text-xs text-zinc-500 dark:text-zinc-400">
+      <pre tabIndex={0} className="overflow-x-auto font-mono text-xs text-ink-sub">
         {result.sql}
       </pre>
       {rows.length === 0 ? (
@@ -180,7 +178,7 @@ function RowsTable({
       <tr>
         {columns.map((c, i) => (
           <Th key={`${c.name}-${i}`}>
-            {c.name} <span className="font-normal text-zinc-600 dark:text-zinc-400">{c.dataType}</span>
+            {c.name} <span className="font-normal text-ink-sub">{c.dataType}</span>
           </Th>
         ))}
       </tr>

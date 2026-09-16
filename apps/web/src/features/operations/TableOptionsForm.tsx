@@ -71,9 +71,9 @@ export function TableOptionsForm({
     })
   }
   return (
-    <section className="rounded border border-zinc-200 p-3 dark:border-zinc-700">
+    <section className="rounded border border-line p-3">
       <form onSubmit={submit} className="space-y-2" aria-label={locale.ddl.titles.setTableOptions}>
-        <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{locale.ddl.titles.setTableOptions}</h2>
+        <h2 className="text-sm font-semibold text-ink">{locale.ddl.titles.setTableOptions}</h2>
         <div className="grid max-w-2xl gap-2 sm:grid-cols-2">
           <Field id="table-comment" label={locale.database.comment}>
             <Input id="table-comment" value={comment} onChange={(e) => setComment(e.target.value)} />

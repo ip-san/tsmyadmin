@@ -74,16 +74,16 @@ export function ExportForm({ db, schema, table, initialTables }: ExportFormProps
 
   return (
     <div className="space-y-4">
-      <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{locale.export.title}</h2>
+      <h2 className="text-sm font-semibold text-ink">{locale.export.title}</h2>
       {table ? null : tables.isPending ? (
         <Spinner />
       ) : tables.isError ? (
         <ErrorBox error={tables.error} onRetry={() => void tables.refetch()} />
       ) : (
         <fieldset>
-          <legend className="mb-1 text-xs font-medium text-zinc-600 dark:text-zinc-300">
+          <legend className="mb-1 text-xs font-medium text-ink-sub">
             {locale.export.tables}{' '}
-            <span className="font-normal text-zinc-500 dark:text-zinc-400">
+            <span className="font-normal text-ink-sub">
               ({chosen.length === 0 ? locale.export.allTables : chosen.length})
             </span>
           </legend>
@@ -107,7 +107,7 @@ export function ExportForm({ db, schema, table, initialTables }: ExportFormProps
         </fieldset>
       )}
       <fieldset>
-        <legend className="mb-1 text-xs font-medium text-zinc-600 dark:text-zinc-300">{locale.export.format}</legend>
+        <legend className="mb-1 text-xs font-medium text-ink-sub">{locale.export.format}</legend>
         <div className="flex gap-4 text-sm">
           {ExportFormatSchema.options.map((f) => (
             <label key={f} className="flex items-center gap-1">
@@ -174,7 +174,7 @@ export function ExportForm({ db, schema, table, initialTables }: ExportFormProps
             <input type="checkbox" checked={csvSafe} onChange={(e) => setCsvSafe(e.target.checked)} />
             {locale.export.csvSafe}
           </label>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">{locale.export.csvSafeHint}</p>
+          <p className="text-xs text-ink-sub">{locale.export.csvSafeHint}</p>
         </div>
       ) : null}
       {/* The reason a download is refused stays attached to the (focusable) control, and is announced as it appears. */}
@@ -183,7 +183,7 @@ export function ExportForm({ db, schema, table, initialTables }: ExportFormProps
           {blockedReason}
         </Notice>
       ) : null}
-      <p className="text-xs text-zinc-500 dark:text-zinc-400">{locale.export.snapshotNote}</p>
+      <p className="text-xs text-ink-sub">{locale.export.snapshotNote}</p>
       {blockedReason ? (
         <Button variant="primary" aria-disabled aria-describedby={reasonId}>
           <Download className="size-4" aria-hidden />
@@ -193,7 +193,7 @@ export function ExportForm({ db, schema, table, initialTables }: ExportFormProps
         <a
           href={url}
           download
-          className="inline-flex items-center gap-1 rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700"
+          className="inline-flex items-center gap-1 rounded-control bg-brand px-3 py-1.5 text-sm font-medium text-brand-ink hover:bg-brand-hover"
         >
           <Download className="size-4" aria-hidden />
           {locale.export.download}

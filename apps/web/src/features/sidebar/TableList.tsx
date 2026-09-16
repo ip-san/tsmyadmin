@@ -30,7 +30,7 @@ function TableLink({ db, schema, table }: RowProps) {
       to="/db/$db/table/$table"
       params={{ db, table: table.name }}
       search={schema ? { schema } : {}}
-      className="flex h-full items-center gap-1 truncate rounded px-1 text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+      className="flex h-full items-center gap-1 truncate rounded px-1 text-sm text-ink hover:bg-surface-sub"
       activeProps={{ className: 'bg-blue-50 text-blue-800 dark:bg-blue-950 dark:text-blue-200' }}
       title={table.name}
     >
@@ -77,7 +77,7 @@ export function TableList({ db, schema, filter }: { db: string; schema?: string 
   const count = (
     <output
       aria-live="polite"
-      className={deferred.trim() !== '' ? 'block px-2 py-0.5 text-xs text-zinc-500 dark:text-zinc-400' : 'sr-only'}
+      className={deferred.trim() !== '' ? 'block px-2 py-0.5 text-xs text-ink-sub' : 'sr-only'}
     >
       {deferred.trim() !== '' ? locale.nav.matchCount(shown.length, total) : ''}
     </output>
@@ -86,7 +86,7 @@ export function TableList({ db, schema, filter }: { db: string; schema?: string 
     return (
       <>
         {count}
-        <p className="px-2 py-1 text-xs text-zinc-500 dark:text-zinc-400">{locale.nav.noTables}</p>
+        <p className="px-2 py-1 text-xs text-ink-sub">{locale.nav.noTables}</p>
       </>
     )
   }
@@ -94,7 +94,7 @@ export function TableList({ db, schema, filter }: { db: string; schema?: string 
     return (
       <>
         {count}
-        <ul className="ml-3 border-l border-zinc-200 pl-2 dark:border-zinc-700">
+        <ul className="ml-3 border-l border-line pl-2">
           {shown.map((t) => (
             <li key={t.name} style={{ height: ROW_HEIGHT }}>
               <TableLink db={db} schema={schema} table={t} />
@@ -109,7 +109,7 @@ export function TableList({ db, schema, filter }: { db: string; schema?: string 
       {count}
       <ul
         ref={listRef}
-        className="relative ml-3 border-l border-zinc-200 pl-2 dark:border-zinc-700"
+        className="relative ml-3 border-l border-line pl-2"
         style={{ height: virtualizer.getTotalSize() }}
         aria-label={locale.nav.tables}
       >

@@ -30,7 +30,7 @@ export function RoutinesPage({ db, schema }: { db: string; schema?: string | und
   if (routines.isError) return <ErrorBox error={routines.error} onRetry={() => void routines.refetch()} />
   return (
     <section className="space-y-2">
-      <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{locale.routines.title}</h2>
+      <h2 className="text-sm font-semibold text-ink">{locale.routines.title}</h2>
       {routines.data.length === 0 ? (
         <Notice>{locale.routines.none}</Notice>
       ) : (

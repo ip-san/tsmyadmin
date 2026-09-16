@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
 import { z } from 'zod'
+import { BrandMark } from '@/components/layout/BrandMark.tsx'
 import { Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { locale } from '@/config/locale.ts'
 import { LoginForm } from '@/features/auth/LoginForm.tsx'
@@ -24,30 +25,37 @@ function LoginPage() {
   const servers = useQuery(serversQuery)
   useDocumentTitle(locale.login.title)
   return (
-    <main className="flex min-h-dvh items-center justify-center bg-zinc-100 p-4 dark:bg-zinc-950">
-      <div className="w-full max-w-md rounded-lg border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
-        <h1 className="mb-1 text-xl font-bold text-zinc-900 dark:text-zinc-50">{locale.app.name}</h1>
-        <p className="mb-4 text-sm text-zinc-500 dark:text-zinc-400">
-          {locale.app.tagline} — {locale.login.title}
-        </p>
-        {search.expired ? <Notice className="mb-4">{locale.login.sessionExpired}</Notice> : null}
-        {servers.isPending ? (
-          <Spinner />
-        ) : (
-          <LoginForm
-            presets={servers.data ?? []}
-            onLogin={async (body) => {
-              const info = await mutations.login(body)
-              // An expired session leaves the previous account's data cached (logging out clears it, timing out
-              // does not). Signing in as someone else must not show their databases — or their bookmarks.
-              queryClient.clear()
-              // ensureQueryData() in route guards returns cached data as-is, so write the new session directly.
-              queryClient.setQueryData(sessionQuery.queryKey, info)
-              await navigate({ href: safeRedirect(search.redirect) })
-            }}
-          />
-        )}
-        <p className="mt-4 text-center text-xs text-zinc-500 dark:text-zinc-400">
+    <main className="flex min-h-dvh items-center justify-center bg-canvas p-4">
+      <div className="w-full max-w-md">
+        {/* The product names itself before the form: this is the first screen anyone sees. */}
+        <div className="mb-5 flex items-center gap-3">
+          <BrandMark size={40} />
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight text-ink">{locale.app.name}</h1>
+            <p className="text-sm text-ink-sub">{locale.app.tagline}</p>
+          </div>
+        </div>
+        <div className="rounded-card border border-line bg-surface p-6 shadow-raised">
+          <h2 className="mb-4 text-sm font-semibold text-ink">{locale.login.title}</h2>
+          {search.expired ? <Notice className="mb-4">{locale.login.sessionExpired}</Notice> : null}
+          {servers.isPending ? (
+            <Spinner />
+          ) : (
+            <LoginForm
+              presets={servers.data ?? []}
+              onLogin={async (body) => {
+                const info = await mutations.login(body)
+                // An expired session leaves the previous account's data cached (logging out clears it, timing out
+                // does not). Signing in as someone else must not show their databases — or their bookmarks.
+                queryClient.clear()
+                // ensureQueryData() in route guards returns cached data as-is, so write the new session directly.
+                queryClient.setQueryData(sessionQuery.queryKey, info)
+                await navigate({ href: safeRedirect(search.redirect) })
+              }}
+            />
+          )}
+        </div>
+        <p className="mt-4 text-center text-xs text-ink-faint">
           {locale.app.name} v{__APP_VERSION__}
         </p>
       </div>

@@ -13,7 +13,7 @@ export interface TabItem {
 
 export function TabNav({ items, label }: { items: TabItem[]; label: string }) {
   return (
-    <nav aria-label={label} className="mb-4 border-b border-zinc-200 dark:border-zinc-700">
+    <nav aria-label={label} className="mb-4 border-b border-line">
       <ul className="-mb-px flex flex-wrap gap-1">
         {items
           .filter((i) => !i.hidden)
@@ -23,10 +23,10 @@ export function TabNav({ items, label }: { items: TabItem[]; label: string }) {
                 {...linkProps}
                 activeOptions={{ exact: exact ?? false, includeSearch: false }}
                 className={cn(
-                  'inline-block border-b-2 border-transparent px-3 py-2 text-sm text-zinc-600 hover:border-zinc-300 hover:text-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-500 dark:hover:text-white'
+                  'inline-block border-b-2 border-transparent px-3 py-2 text-sm text-ink-sub hover:border-line-strong hover:text-ink'
                 )}
                 activeProps={{
-                  className: 'border-blue-600! text-blue-700! dark:border-blue-400! dark:text-blue-300! font-medium',
+                  className: 'border-brand! text-brand! font-medium',
                 }}
               >
                 {itemLabel}

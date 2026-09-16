@@ -91,9 +91,7 @@ export function CellEditor({ column, initial, dataType, pending, error, onSave, 
           />
           {locale.browse.setNull}
         </label>
-        <span className="text-zinc-500 dark:text-zinc-400">
-          {multiline ? locale.browse.editHintMultiline : locale.browse.editHint}
-        </span>
+        <span className="text-ink-sub">{multiline ? locale.browse.editHintMultiline : locale.browse.editHint}</span>
         <Button size="sm" variant="primary" onClick={save} disabled={pending}>
           {locale.common.save}
         </Button>

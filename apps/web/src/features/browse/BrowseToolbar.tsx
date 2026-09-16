@@ -25,7 +25,7 @@ export function BrowseToolbar({
   onDelete,
 }: BrowseToolbarProps) {
   return (
-    <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400">
+    <div className="flex flex-wrap items-center gap-3 text-xs text-ink-sub">
       <ColumnPicker columns={columns} visible={visible} onChange={onColumns} />
       <span>{locale.browse.keyHint[keyKind]}</span>
       {editable ? (

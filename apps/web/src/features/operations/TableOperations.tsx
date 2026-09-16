@@ -23,7 +23,7 @@ export function TableOperations({ tableRef, kind }: { tableRef: TableRef; kind: 
   })
   return (
     <div className="space-y-4">
-      <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">
+      <h2 className="text-sm font-semibold text-ink">
         {sequence
           ? locale.ddl.sequenceOperationsTitle
           : view
@@ -32,8 +32,8 @@ export function TableOperations({ tableRef, kind }: { tableRef: TableRef; kind: 
       </h2>
       <div className="flex flex-col gap-3 sm:flex-row">
         {view ? null : (
-          <section className="flex-1 rounded border border-zinc-200 p-3 dark:border-zinc-700">
-            <p className="mb-2 text-sm text-zinc-600 dark:text-zinc-300">{locale.ddl.truncateHint}</p>
+          <section className="flex-1 rounded border border-line p-3">
+            <p className="mb-2 text-sm text-ink-sub">{locale.ddl.truncateHint}</p>
             <Button
               variant="danger"
               aria-haspopup="dialog"
@@ -44,7 +44,7 @@ export function TableOperations({ tableRef, kind }: { tableRef: TableRef; kind: 
           </section>
         )}
         <section className="flex-1 rounded border border-red-200 p-3 dark:border-red-800">
-          <p className="mb-2 text-sm text-zinc-600 dark:text-zinc-300">
+          <p className="mb-2 text-sm text-ink-sub">
             {sequence ? locale.ddl.dropSequenceHint : view ? locale.ddl.dropViewHint : locale.ddl.dropHint}
           </p>
           <Button

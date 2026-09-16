@@ -12,17 +12,13 @@ const TEMPORAL =
 export function CellValue({ cell }: { cell: Cell }) {
   const [expanded, setExpanded] = useState(false)
   const d = describeCell(cell)
-  if (d.kind === 'null') return <span className="italic text-zinc-500 dark:text-zinc-400">{locale.common.null}</span>
-  if (d.kind === 'binary')
-    return <span className="text-xs text-zinc-500 dark:text-zinc-400">{locale.common.binary(d.bytes)}</span>
+  if (d.kind === 'null') return <span className="italic text-ink-sub">{locale.common.null}</span>
+  if (d.kind === 'binary') return <span className="text-xs text-ink-sub">{locale.common.binary(d.bytes)}</span>
   const note =
     d.kind === 'truncated' ? (
-      <span className="whitespace-nowrap text-xs text-zinc-500 dark:text-zinc-400">
-        {locale.common.truncatedText(d.length)}
-      </span>
+      <span className="whitespace-nowrap text-xs text-ink-sub">{locale.common.truncatedText(d.length)}</span>
     ) : null
-  if (d.kind === 'text' && d.empty)
-    return <span className="italic text-zinc-500 dark:text-zinc-400">{locale.common.empty}</span>
+  if (d.kind === 'text' && d.empty) return <span className="italic text-ink-sub">{locale.common.empty}</span>
   // A number split across lines reads as two numbers: keep it on one line. BIGINT / DECIMAL travel as strings
   // (for precision) and are exactly the long values that would wrap.
   if (typeof cell === 'number' || NUMERIC.test(d.text) || TEMPORAL.test(d.text)) {

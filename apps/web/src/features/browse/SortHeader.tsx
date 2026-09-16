@@ -20,7 +20,7 @@ export function SortHeader({ column, sort, onSort }: SortHeaderProps) {
     <Th aria-sort={dir === 'asc' ? 'ascending' : dir === 'desc' ? 'descending' : 'none'}>
       <button
         type="button"
-        className={cn('inline-flex items-center gap-1 hover:underline', entry && 'text-blue-700 dark:text-blue-300')}
+        className={cn('inline-flex items-center gap-1 hover:underline', entry && 'text-brand')}
         onClick={(e) => onSort(nextSort(sort, column.name, e.shiftKey))}
         title={`${
           dir === 'asc' ? locale.browse.sortDesc : dir === 'desc' ? locale.browse.clearSort : locale.browse.sortAsc
@@ -39,7 +39,7 @@ export function SortHeader({ column, sort, onSort }: SortHeaderProps) {
           </span>
         ) : null}
       </button>
-      <span className="ml-1 font-normal text-zinc-600 dark:text-zinc-400">{column.dataType}</span>
+      <span className="ml-1 font-normal text-ink-sub">{column.dataType}</span>
     </Th>
   )
 }

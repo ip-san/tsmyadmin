@@ -16,13 +16,13 @@ function SchemaNodes({ db, filter }: { db: string; filter: string }) {
   if (schemas.isPending) return <Spinner />
   if (schemas.isError) return <ErrorBox error={schemas.error} onRetry={() => void schemas.refetch()} />
   return (
-    <ul className="ml-3 border-l border-zinc-200 pl-2 dark:border-zinc-700">
+    <ul className="ml-3 border-l border-line pl-2">
       {schemas.data.map((s) => (
         <li key={s}>
           <div className="flex items-center">
             <button
               type="button"
-              className="inline-flex min-h-6 min-w-6 items-center justify-center rounded text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+              className="inline-flex min-h-6 min-w-6 items-center justify-center rounded text-ink-sub hover:bg-surface-sub"
               aria-expanded={open[s] ?? false}
               aria-label={locale.nav.expand(s)}
               onClick={() => setOpen((o) => ({ ...o, [s]: !o[s] }))}
@@ -38,8 +38,8 @@ function SchemaNodes({ db, filter }: { db: string; filter: string }) {
               to="/db/$db"
               params={{ db }}
               search={{ schema: s }}
-              className="flex min-w-0 flex-1 items-center truncate rounded px-1 py-0.5 text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
-              activeProps={{ className: 'text-blue-800 dark:text-blue-200' }}
+              className="flex min-w-0 flex-1 items-center truncate rounded px-1 py-0.5 text-sm text-ink hover:bg-surface-sub"
+              activeProps={{ className: 'text-brand' }}
               activeOptions={{ exact: true, includeSearch: true }}
               onClick={() => setOpen((o) => ({ ...o, [s]: true }))}
             >
@@ -96,7 +96,7 @@ export function DbTree({ dialect, activeDb }: { dialect: Dialect; activeDb?: str
               <div className="flex items-center">
                 <button
                   type="button"
-                  className="inline-flex min-h-6 min-w-6 items-center justify-center rounded text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                  className="inline-flex min-h-6 min-w-6 items-center justify-center rounded text-ink-sub hover:bg-surface-sub"
                   aria-expanded={expanded}
                   aria-label={locale.nav.expand(d.name)}
                   onClick={() => setOpen((o) => ({ ...o, [d.name]: !expanded }))}
@@ -110,8 +110,8 @@ export function DbTree({ dialect, activeDb }: { dialect: Dialect; activeDb?: str
                 <Link
                   to="/db/$db"
                   params={{ db: d.name }}
-                  className="flex min-w-0 flex-1 items-center gap-1 truncate rounded px-1 py-0.5 text-sm font-medium text-zinc-800 hover:bg-zinc-100 dark:text-zinc-100 dark:hover:bg-zinc-800"
-                  activeProps={{ className: 'text-blue-800 dark:text-blue-200' }}
+                  className="flex min-w-0 flex-1 items-center gap-1 truncate rounded px-1 py-0.5 text-sm font-medium text-ink hover:bg-surface-sub"
+                  activeProps={{ className: 'text-brand' }}
                   activeOptions={{ exact: true, includeSearch: false }}
                   onClick={() => setOpen((o) => ({ ...o, [d.name]: true }))}
                 >

@@ -34,7 +34,7 @@ export function IndexForm({ table, columns, onSubmit, onCancel }: IndexFormProps
         />
       </Field>
       <fieldset>
-        <legend className="mb-1 text-xs font-medium text-zinc-600 dark:text-zinc-300">{locale.ddl.indexColumns}</legend>
+        <legend className="mb-1 text-xs font-medium text-ink-sub">{locale.ddl.indexColumns}</legend>
         <div className="flex flex-wrap gap-3 text-sm">
           {columns.map((c) => (
             <label key={c} className="flex items-center gap-1">

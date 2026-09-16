@@ -7,10 +7,10 @@ import { errorMessage } from '@/lib/format.ts'
 function Frame({ title, body, children }: { title: string; body: string; children?: ReactNode }) {
   return (
     <section className="mx-auto flex max-w-lg flex-col gap-3 p-8" aria-labelledby="error-title">
-      <h1 id="error-title" className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+      <h1 id="error-title" className="text-lg font-semibold text-ink">
         {title}
       </h1>
-      <p className="text-sm text-zinc-600 dark:text-zinc-300">{body}</p>
+      <p className="text-sm text-ink-sub">{body}</p>
       {children}
       <div className="flex gap-2">
         <Button variant="primary" onClick={() => window.location.reload()}>

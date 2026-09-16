@@ -77,7 +77,7 @@ export function PrivilegeChooser({
       }
     >
       <fieldset className="space-y-1">
-        <legend className="text-sm font-medium text-zinc-700 dark:text-zinc-200">{locale.users.privileges}</legend>
+        <legend className="text-sm font-medium text-ink">{locale.users.privileges}</legend>
         <div className="flex flex-wrap gap-x-4 gap-y-2">
           {PRIVILEGES.map((p) => (
             <label key={p} className="flex items-center gap-2 py-1 text-sm">
@@ -88,9 +88,7 @@ export function PrivilegeChooser({
               />
               {p}
               {/* Says which privileges can be narrowed to columns before the user picks any. */}
-              {columnCapable(p) ? null : (
-                <span className="text-xs text-zinc-500 dark:text-zinc-400">{locale.users.wholeTableOnly}</span>
-              )}
+              {columnCapable(p) ? null : <span className="text-xs text-ink-sub">{locale.users.wholeTableOnly}</span>}
             </label>
           ))}
         </div>
@@ -119,10 +117,8 @@ export function PrivilegeChooser({
       </div>
       {table === '' ? null : (
         <fieldset className="mt-3 space-y-1">
-          <legend className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
-            {locale.users.privilegeColumns}
-          </legend>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">{locale.users.privilegeColumnsHint}</p>
+          <legend className="text-sm font-medium text-ink">{locale.users.privilegeColumns}</legend>
+          <p className="text-xs text-ink-sub">{locale.users.privilegeColumnsHint}</p>
           <div className="flex flex-wrap gap-x-4 gap-y-2">
             {(structure.data?.columns ?? []).map((c) => (
               <label key={c.name} className="flex items-center gap-2 py-1 text-sm">
@@ -138,7 +134,7 @@ export function PrivilegeChooser({
         </fieldset>
       )}
       {problem ? <Notice className="mt-3">{locale.users.columnProblem[problem]}</Notice> : null}
-      <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">{locale.users.privilegesNote}</p>
+      <p className="mt-2 text-xs text-ink-sub">{locale.users.privilegesNote}</p>
     </Dialog>
   )
 }

@@ -121,7 +121,7 @@ export function ImportForm({ db, schema, table }: ImportFormProps) {
 
   return (
     <form onSubmit={submit} className="space-y-4" aria-busy={run.isPending}>
-      <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{locale.import.title}</h2>
+      <h2 className="text-sm font-semibold text-ink">{locale.import.title}</h2>
       {/* Everything is frozen while a run is in flight: changing the file would detach the running upload. */}
       <fieldset disabled={run.isPending} className="space-y-4">
         <Field
@@ -138,7 +138,7 @@ export function ImportForm({ db, schema, table }: ImportFormProps) {
           />
         </Field>
         <fieldset>
-          <legend className="mb-1 text-xs font-medium text-zinc-600 dark:text-zinc-300">{locale.import.format}</legend>
+          <legend className="mb-1 text-xs font-medium text-ink-sub">{locale.import.format}</legend>
           <div className="flex gap-4 text-sm">
             {ImportFormatSchema.options.map((f) => (
               <label key={f} className="flex items-center gap-1">
@@ -225,7 +225,7 @@ export function ImportForm({ db, schema, table }: ImportFormProps) {
             </label>
           </div>
         )}
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">{locale.import.notes[format]}</p>
+        <p className="text-xs text-ink-sub">{locale.import.notes[format]}</p>
       </fieldset>
       {format === 'csv' && !target && !table ? <Notice>{locale.import.csvNeedsTable}</Notice> : null}
       {tooLarge ? (
@@ -257,9 +257,7 @@ export function ImportForm({ db, schema, table }: ImportFormProps) {
           />
         ) : null}
         {run.isPending && progress ? (
-          <span className="text-xs text-zinc-600 dark:text-zinc-300">
-            {locale.import.progress(progress.done, progress.total)}
-          </span>
+          <span className="text-xs text-ink-sub">{locale.import.progress(progress.done, progress.total)}</span>
         ) : null}
       </div>
       {run.isPending && cancel.isError ? <ErrorBox error={cancel.error} /> : null}

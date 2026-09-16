@@ -125,7 +125,7 @@ export function RowForm({ columns, mode, initial, pending, error, onSubmit, onCa
                 <Td className="whitespace-nowrap font-medium">
                   {binary && !f.isNull ? c.name : <label htmlFor={id}>{c.name}</label>}
                 </Td>
-                <Td className="whitespace-nowrap font-mono text-xs text-zinc-500 dark:text-zinc-400">{c.dataType}</Td>
+                <Td className="whitespace-nowrap font-mono text-xs text-ink-sub">{c.dataType}</Td>
                 <Td>
                   <input
                     type="checkbox"
@@ -148,9 +148,9 @@ export function RowForm({ columns, mode, initial, pending, error, onSubmit, onCa
                 ) : null}
                 <Td>
                   {computed(c) ? (
-                    <span className="text-xs text-zinc-500 dark:text-zinc-400">{locale.rows.generatedReadOnly}</span>
+                    <span className="text-xs text-ink-sub">{locale.rows.generatedReadOnly}</span>
                   ) : binary && !f.isNull ? (
-                    <span className="text-xs text-zinc-500 dark:text-zinc-400">{locale.rows.binaryReadOnly}</span>
+                    <span className="text-xs text-ink-sub">{locale.rows.binaryReadOnly}</span>
                   ) : MULTILINE.test(c.dataType) ? (
                     <Textarea
                       id={id}
@@ -172,7 +172,7 @@ export function RowForm({ columns, mode, initial, pending, error, onSubmit, onCa
                     />
                   )}
                   {opaque && mode === 'insert' ? (
-                    <span id={`${id}-note`} className="block text-xs text-zinc-500 dark:text-zinc-400">
+                    <span id={`${id}-note`} className="block text-xs text-ink-sub">
                       {locale.rows.opaqueNotCopied}
                     </span>
                   ) : null}

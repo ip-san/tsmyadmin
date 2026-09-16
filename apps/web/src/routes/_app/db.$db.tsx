@@ -18,7 +18,7 @@ function DatabaseLayout() {
   if (tableOpen) {
     return (
       <>
-        <nav aria-label={locale.nav.breadcrumb} className="mb-2 text-sm text-zinc-600 dark:text-zinc-300">
+        <nav aria-label={locale.nav.breadcrumb} className="mb-2 text-sm text-ink-sub">
           <Link to="/" className="hover:underline">
             {locale.server.title}
           </Link>
