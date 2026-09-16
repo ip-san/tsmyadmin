@@ -31,7 +31,7 @@ function TableLink({ db, schema, table }: RowProps) {
       params={{ db, table: table.name }}
       search={schema ? { schema } : {}}
       className="flex h-full items-center gap-1 truncate rounded px-1 text-sm text-ink hover:bg-surface-sub"
-      activeProps={{ className: 'bg-blue-50 text-blue-800 dark:bg-blue-950 dark:text-blue-200' }}
+      activeProps={{ className: 'bg-brand/10 font-medium text-brand' }}
       title={table.name}
     >
       {table.kind === 'sequence' ? (

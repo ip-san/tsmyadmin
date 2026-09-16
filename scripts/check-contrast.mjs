@@ -31,11 +31,12 @@ export function contrast(a, b) {
 const SURFACES = ['canvas', 'surface', 'surface-sub', 'critical-sub']
 const TEXT = ['ink', 'ink-sub', 'ink-faint', 'brand', 'critical']
 /**
- * 1.4.11 covers the boundary that identifies a control. `line-strong` is that boundary (inputs, buttons, the
- * editor frame); `line` draws dividers and the outline of non-interactive containers, which the rule does not
- * cover, so it is deliberately quieter and not checked.
+ * 1.4.11 covers the boundary that identifies a control. Every token used as one belongs here — the first
+ * version of this check knew only about `line-strong`, and so said nothing while a destructive button carried
+ * a border at 2.0:1. `line` draws dividers and the outline of non-interactive containers, which the rule does
+ * not cover, so it is deliberately quieter and not checked.
  */
-const CONTROL_BORDER = 'line-strong'
+const CONTROL_BORDERS = ['line-strong', 'critical-border']
 const TEXT_MIN = 4.5
 const NON_TEXT_MIN = 3
 
@@ -51,7 +52,7 @@ function parseThemes(css) {
 export function check(themes) {
   const problems = []
   for (const [theme, t] of Object.entries(themes)) {
-    for (const name of [...SURFACES, ...TEXT, CONTROL_BORDER]) {
+    for (const name of [...SURFACES, ...TEXT, ...CONTROL_BORDERS]) {
       if (!t[name]) problems.push(`${theme}: token --c-${name} is not defined`)
     }
     for (const bg of SURFACES) {
@@ -60,10 +61,12 @@ export function check(themes) {
         const r = contrast(t[fg], t[bg])
         if (r < TEXT_MIN) problems.push(`${theme}: text ${fg} on ${bg} is ${r.toFixed(2)}:1 (needs ${TEXT_MIN})`)
       }
-      if (!t[bg] || !t[CONTROL_BORDER]) continue
-      const r = contrast(t[CONTROL_BORDER], t[bg])
-      if (r < NON_TEXT_MIN) {
-        problems.push(`${theme}: control border on ${bg} is ${r.toFixed(2)}:1 (needs ${NON_TEXT_MIN})`)
+      for (const border of CONTROL_BORDERS) {
+        if (!t[bg] || !t[border]) continue
+        const r = contrast(t[border], t[bg])
+        if (r < NON_TEXT_MIN) {
+          problems.push(`${theme}: control border ${border} on ${bg} is ${r.toFixed(2)}:1 (needs ${NON_TEXT_MIN})`)
+        }
       }
     }
     // The primary button: its label sits on the brand, which is light in dark mode.
@@ -82,6 +85,8 @@ const SELF_TEST = [
   { name: 'white on a light brand', ok: false, fg: '#ffffff', bg: '#818cf8', min: TEXT_MIN },
   { name: 'a faint control border', ok: false, fg: '#c3c7cd', bg: '#ffffff', min: NON_TEXT_MIN },
   { name: 'a control border that holds up', ok: true, fg: '#83898f', bg: '#ffffff', min: NON_TEXT_MIN },
+  // What `border-critical/40` composited to on a white surface — the case this check first missed.
+  { name: 'a destructive border at 40% alpha', ok: false, fg: '#e2b9b5', bg: '#ffffff', min: NON_TEXT_MIN },
 ]
 
 if (process.argv.includes('--self-test')) {
@@ -102,5 +107,5 @@ if (problems.length) {
   console.error('✗ contrast check FAILED')
   process.exit(1)
 }
-const combos = Object.keys(themes).length * (SURFACES.length * (TEXT.length + 1) + 2)
+const combos = Object.keys(themes).length * (SURFACES.length * (TEXT.length + CONTROL_BORDERS.length) + 2)
 console.log(`✓ contrast check passed (${combos} token combinations)`)

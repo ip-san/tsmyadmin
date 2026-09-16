@@ -12,7 +12,7 @@ const VARIANTS: Record<Variant, string> = {
    * one per row, and a column of solid red made the most dangerous control the loudest thing on the screen.
    * Filled red is kept for the one button inside a confirmation dialog, where it is the only action.
    */
-  danger: 'bg-surface text-critical border border-critical/40 hover:bg-critical-sub',
+  danger: 'bg-surface text-critical border border-critical-border hover:bg-critical-sub',
   criticalSolid: 'bg-critical text-white hover:opacity-90 disabled:opacity-50',
   ghost: 'bg-transparent text-ink-sub hover:bg-surface-sub hover:text-ink',
   /** Icon-only control inside a table row: quieter colour, lighter when disabled. */

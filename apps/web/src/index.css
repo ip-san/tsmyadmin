@@ -22,6 +22,11 @@
   --color-brand-ink: var(--c-brand-ink);
   --color-critical: var(--c-critical);
   --color-critical-sub: var(--c-critical-sub);
+  /* The boundary of a destructive control: a softer red than the label, but still 3:1 (WCAG 1.4.11). */
+  --color-critical-border: var(--c-critical-border);
+  /* Row hover. Tinted towards the brand so a hovered row cannot be mistaken for the header row,
+     which sits on surface-sub. */
+  --color-row-hover: var(--c-row-hover);
 
   --radius-card: 0.75rem;
   --radius-control: 0.5rem;
@@ -44,6 +49,8 @@
   --c-brand-ink: #ffffff;
   --c-critical: #b42318;
   --c-critical-sub: #fef3f2;
+  --c-critical-border: #c06058;
+  --c-row-hover: #eef0fb;
   color-scheme: light;
 }
 
@@ -61,6 +68,8 @@ html.dark {
   --c-brand-ink: #16171a;
   --c-critical: #f87171;
   --c-critical-sub: #2a1d1d;
+  --c-critical-border: #b55a55;
+  --c-row-hover: #23262f;
   color-scheme: dark;
 }
 

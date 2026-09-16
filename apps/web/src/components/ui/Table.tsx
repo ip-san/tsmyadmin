@@ -34,7 +34,7 @@ export function Th({ className, ...rest }: ThHTMLAttributes<HTMLTableCellElement
     <th
       scope="col"
       className={cn(
-        'whitespace-nowrap border-b border-line bg-surface-sub px-2 py-1.5 text-left font-semibold text-ink',
+        'whitespace-nowrap border-b border-line-strong bg-surface-sub px-2 py-1.5 text-left font-semibold text-ink',
         className
       )}
       {...rest}
@@ -51,5 +51,5 @@ export function Tr({
   ref,
   ...rest
 }: HTMLAttributes<HTMLTableRowElement> & { ref?: Ref<HTMLTableRowElement> }) {
-  return <tr ref={ref} className={cn('hover:bg-surface-sub', className)} {...rest} />
+  return <tr ref={ref} className={cn('hover:bg-row-hover', className)} {...rest} />
 }

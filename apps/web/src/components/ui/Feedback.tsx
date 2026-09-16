@@ -6,7 +6,7 @@ import { errorMessage } from '@/lib/format.ts'
 export function Spinner({ label = locale.common.loading }: { label?: string }) {
   return (
     <output className="inline-flex items-center gap-2 text-sm text-ink-sub" aria-live="polite">
-      <span className="size-4 animate-spin rounded-full border-2 border-line-strong border-t-blue-600 dark:border-t-blue-400" />
+      <span className="size-4 animate-spin rounded-full border-2 border-line-strong border-t-brand" />
       {label}
     </output>
   )
