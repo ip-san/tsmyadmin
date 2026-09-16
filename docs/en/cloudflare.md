@@ -1,10 +1,12 @@
-<!-- translated-from: docs/cloudflare.md sha256:12e72b1698d7586df1a16ce06c980ac901df64b0ff27bdeebb846f8c6c5abf27 -->
+<!-- translated-from: docs/cloudflare.md sha256:cb8d85f7f2ff88d440d148f182d909fe8489ed6fac9ddf8ef7afddd0007257c2 -->
 
 # Deploying to Cloudflare
 
 *日本語版: [docs/cloudflare.md](../cloudflare.md)*
 
-On Cloudflare Containers. The configuration is in the repository, so there is nothing to copy out of this page.
+It runs on Cloudflare Containers. The configuration is in the repository, so there is nothing to copy out of this page.
+
+These two commands are the end of the process; steps 1 and 2 below come first.
 
 ```bash
 bun run cf:check     # does the config, the worker and the image build? (no account needed)
@@ -27,8 +29,10 @@ bun run cf:deploy    # deploy
 
 ### 1. Get ready
 
+First enable the Workers Paid plan (from $5/month) in the Cloudflare dashboard. On the free plan, `bun run cf:deploy` fails.
+
 ```bash
-npx wrangler login
+bunx wrangler login
 ```
 
 `wrangler` and `@cloudflare/containers` are already dev dependencies. The configuration is these two files, and you should not normally need to change either:
@@ -41,14 +45,16 @@ npx wrangler login
 ### 2. Store the secrets
 
 ```bash
-npx wrangler secret put SESSION_SECRET            # openssl rand -hex 32
-npx wrangler secret put REDIS_URL                 # rediss://…
-npx wrangler secret put TSMYADMIN_ALLOWED_HOSTS   # db.example.com:5432
+bunx wrangler secret put SESSION_SECRET            # openssl rand -hex 32
+bunx wrangler secret put REDIS_URL                 # rediss://…
+bunx wrangler secret put TSMYADMIN_ALLOWED_HOSTS   # db.example.com:5432
 ```
 
 Add `TSMYADMIN_SERVERS` the same way if you use server presets ([deployment.md](deployment.md) lists every variable).
 
-> A value stored with `wrangler secret put` reaches the **Worker**. The container receives only what `envVars` in `deploy/cloudflare/worker.ts` lists, so adding a variable means adding it there too. Miss one and the process exits at startup with `Invalid environment: …`.
+> A value stored with `wrangler secret put` reaches the **Worker**. The container receives only what `envVars` in `deploy/cloudflare/worker.ts` lists.
+>
+> The three above (and `TSMYADMIN_SERVERS`) are already listed there, so nothing is needed from you here. **When you add a further variable later, add it to that list too.** Miss one and the process exits at startup with `Invalid environment: …`.
 
 ### 3. Check, then deploy
 
@@ -65,13 +71,13 @@ The first build and push take the longest.
 
 | What to confirm | How | If it does not hold |
 |---|---|---|
-| TCP reaches the database and Redis | `/readyz` returns 200 and you can log in | Containers will not work. Put the database behind a Tunnel, or see *Only the front door* below |
+| TCP reaches the database and Redis | `/readyz` returns 200 and you can log in | Containers will not work. Giving the database a Cloudflare private network connection (`cloudflared`) would reach it, but that is not covered here. The dependable answer is *Only the front door* below |
 | The client's IP arrives | The `ip` field of the `event: http` log lines differs per visitor | Everyone shares one rate-limit bucket and brute-force protection stops working |
-| Stopping waits for work in flight | A long export runs to completion | An export or import in flight is cut off |
+| Stopping waits for work in flight | Redeploy with `bun run cf:deploy` during a long export, and that export still finishes | An export or import in flight is cut off (the grace period is `SHUTDOWN_TIMEOUT_SECONDS`, 30 seconds by default) |
 
-> **Verified**: `bun run cf:check` (the config, the worker and the image all build), `docker build --platform linux/amd64`, and booting the production image with the same environment Cloudflare gives it (`SESSION_STORE=redis` + `TRUST_PROXY=cloudflare` + the secrets) — logging in to MySQL, the session landing in Redis, and `CF-Connecting-IP` showing up as `ip` in the logs.
+> **Verified, all of it locally**: `bun run cf:check`, `docker build --platform linux/amd64`, and booting the production image with the same environment Cloudflare gives it (`SESSION_STORE=redis` + `TRUST_PROXY=cloudflare` + the secrets) — logging in to MySQL, the session landing in Redis, and the `ip` in the logs taking the value of a `CF-Connecting-IP` header supplied by hand.
 >
-> **Not verified**: running on a Cloudflare account at all. The three rows above rest on Cloudflare's documentation and have not been measured on the real thing.
+> **Not verified**: running on a Cloudflare account. All three rows above are unverified. For the second one, what is verified is only that the header is read correctly when present — **whether Cloudflare actually supplies a distinct value per visitor is a separate question**, so confirm it after deploying.
 
 ## Constraints
 
@@ -82,6 +88,7 @@ The first build and push take the longest.
 | Connection pools | Lost every time the instance sleeps. They are rebuilt on the next request, so nobody signs in again, but the connection count at the database rises and falls |
 | The login rate limit | Counted per visitor while `TRUST_PROXY=cloudflare` is working; one bucket for everyone if it is not |
 | Long operations | `sleepAfter` is set above the 10-minute default so an export or import cannot run into it |
+| Import size | A dump travels through the Worker. Anything over the [Worker request body limit](https://developers.cloudflare.com/workers/platform/limits/) (100–200 MB depending on plan) comes back `413`. Load a larger dump straight into the database instead |
 | Architecture | `linux/amd64` only. Building locally on Apple Silicon needs `docker build --platform linux/amd64` |
 | Cost | On top of the Workers Paid plan: per 10 ms of runtime, CPU time, and egress |
 

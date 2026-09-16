@@ -1,4 +1,4 @@
-<!-- translated-from: docs/security.md sha256:dfbb3f6dff460459fa20717465fa112dda0f1e7e6cb5cbebdc7074882733383e -->
+<!-- translated-from: docs/security.md sha256:9c41094362d9394132af599d049505fbb631699ebeeec5e79caa43d18eabb6b9 -->
 
 # Security model
 
@@ -26,7 +26,7 @@ An entry is `host[:port]` (`db.internal:5432`, `[::1]:3306`, `*.rds.amazonaws.co
 
 ## Brute-force protection
 
-`POST /api/session` is limited to `LOGIN_RATE_LIMIT` attempts per `LOGIN_RATE_WINDOW_SECONDS`, counted per client IP and username. (The client IP is the socket address; only with `TRUST_PROXY=1` is the **last** element of `X-Forwarded-For` used — the one a trusted proxy appended, since the front of the list is whatever the client wrote — and headers such as `X-Real-IP` are never trusted.) Going over is `429 RATE_LIMITED`, with `Retry-After`. A successful sign-in resets the counter. To stop someone cycling through usernames, there is a second limit per IP of `LOGIN_RATE_LIMIT × 3` **failures** in the same window; successful sign-ins are not counted, so legitimate users behind a shared NAT are not locked out.
+`POST /api/session` is limited to `LOGIN_RATE_LIMIT` attempts per `LOGIN_RATE_WINDOW_SECONDS`, counted per client IP and username. (The client IP is the socket address by default. Only with `TRUST_PROXY=1` is the **last** element of `X-Forwarded-For` used — the one a trusted proxy appended, since the front of the list is whatever the client wrote. `TRUST_PROXY=cloudflare` prefers `CF-Connecting-IP`. Headers such as `X-Real-IP` are never trusted under any setting.) Going over is `429 RATE_LIMITED`, with `Retry-After`. A successful sign-in resets the counter. To stop someone cycling through usernames, there is a second limit per IP of `LOGIN_RATE_LIMIT × 3` **failures** in the same window; successful sign-ins are not counted, so legitimate users behind a shared NAT are not locked out.
 
 The session cookie's `Max-Age` is reissued on every authenticated request, keeping it in step with the sliding server-side TTL.
 

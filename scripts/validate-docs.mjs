@@ -54,10 +54,17 @@ const expected = {
  * still green.
  */
 function checkContainerPort() {
-  const exposed = /^EXPOSE\s+(\d+)/m.exec(readFileSync(join(ROOT, 'Dockerfile'), 'utf8'))?.[1]
-  const forwarded = /CONTAINER_PORT\s*=\s*(\d+)/.exec(
-    readFileSync(join(ROOT, 'deploy/cloudflare/worker.ts'), 'utf8')
-  )?.[1]
+  /** Missing file included: deleting either side must fail with the same message, not an ENOENT stack trace. */
+  const read = (path) => {
+    try {
+      return readFileSync(join(ROOT, path), 'utf8')
+    } catch {
+      return ''
+    }
+  }
+  // Last match, not first: the port that matters is the runtime stage's, and the Dockerfile is multi-stage.
+  const exposed = [...read('Dockerfile').matchAll(/^EXPOSE\s+(\d+)/gm)].at(-1)?.[1]
+  const forwarded = /CONTAINER_PORT\s*=\s*(\d+)/.exec(read('deploy/cloudflare/worker.ts'))?.[1]
   if (!exposed || !forwarded) return `could not read the port from Dockerfile (${exposed}) / worker.ts (${forwarded})`
   return exposed === forwarded
     ? null

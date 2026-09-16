@@ -1,4 +1,4 @@
-<!-- translated-from: docs/deployment.md sha256:3adf5cd4dbb10d94126c21aedc2caf5844f377b1b790d9e03f8ff931a0e732fa -->
+<!-- translated-from: docs/deployment.md sha256:cf40cc159fdf8d842c17be39071a99174d5d8796d8782a03257aca2190baa199 -->
 
 # Deployment guide
 
@@ -115,7 +115,7 @@ Running it on Cloudflare Containers is covered by [cloudflare.md](cloudflare.md)
 
 ## Reverse proxies and TLS
 
-tsmyadmin does not terminate TLS itself. **Always put it behind a reverse proxy that terminates HTTPS.** (With `NODE_ENV=production` the cookie carries `Secure`, and signing in over plain HTTP is refused with *Connect over HTTPS*; the log records `login.insecure_transport`. On an internal network without TLS, use `COOKIE_SECURE=0`.) The proxy must set `X-Forwarded-Proto`, and you must set `TRUST_PROXY=1` — without it, even HTTPS requests look like plain ones.
+tsmyadmin does not terminate TLS itself. **Always put it behind a reverse proxy that terminates HTTPS.** (With `NODE_ENV=production` the cookie carries `Secure`, and signing in over plain HTTP is refused with *Connect over HTTPS*; the log records `login.insecure_transport`. On an internal network without TLS, use `COOKIE_SECURE=0`.) The proxy must set `X-Forwarded-Proto`, and `TRUST_PROXY` must be `1` (or `cloudflare` behind Cloudflare). Left at `0`, even HTTPS requests look like plain ones.
 
 It works at the root of a host (`https://admin.example.com/`) only. It cannot be served under a sub-path (`https://example.com/tsmyadmin/`), because the asset and API paths are anchored at `/`.
 
@@ -151,6 +151,8 @@ server {
 ```
 
 With `TRUST_PROXY=1`, rate limiting and the access log take the client IP from the **last** address in `X-Forwarded-For` — the one the immediately preceding proxy appended. That holds even for a proxy that appends, as `$proxy_add_x_forwarded_for` does, and a client writing a forged value at the front changes nothing. Several proxies in a row need care: the last entry is always "the address the preceding proxy saw", so with a chain it is the IP of the proxy one hop further out. To get the real client IP through, **normalise `X-Forwarded-For` down to the client IP in the proxy directly in front of tsmyadmin**. When exposing it with no proxy at all, leave this at `0` — otherwise a forged header gets around the rate limit.
+
+Behind Cloudflare, use `cloudflare`: it prefers `CF-Connecting-IP` and falls back to the `1` behaviour when that header is absent. [cloudflare.md](cloudflare.md) covers the setup.
 
 ## Running it directly (systemd)
 

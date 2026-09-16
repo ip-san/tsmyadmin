@@ -1,10 +1,12 @@
 /**
  * The Worker that fronts the container on Cloudflare. See docs/cloudflare.md.
  *
- * Not part of any workspace: it is built by `wrangler deploy`, against Cloudflare's own types, so it is outside
- * the repository's tsconfig projects and is not typechecked by `bun run check`. `bun run cf:check` builds it.
+ * Not part of any workspace: it is outside the repository's tsconfig projects, so `bun run check` does not
+ * typecheck it. Neither does anything else — `wrangler deploy` and `bun run cf:check` bundle with esbuild, which
+ * strips types without checking them. `cf:check` therefore proves the file bundles and the bindings resolve, not
+ * that it is type-correct. Keep this file small enough to review by eye.
  */
-// @ts-nocheck - resolved by wrangler at deploy time; `bun run cf:check` is what compiles this file.
+// @ts-nocheck - Cloudflare's Worker types (DurableObjectState, DurableObjectNamespace) are not in this project.
 import { Container } from '@cloudflare/containers'
 
 /** Must match EXPOSE in the Dockerfile; `bun run check:static` fails if the two drift apart. */

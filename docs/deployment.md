@@ -112,7 +112,7 @@ Cloudflare Containers で動かす手順は [cloudflare.md](cloudflare.md) に�
 
 ## リバースプロキシと TLS
 
-tsmyadmin 自身は TLS を終端しません。**必ず HTTPS を終端するリバースプロキシの背後に置いてください**（`NODE_ENV=production` では Cookie に `Secure` が付き、平文 HTTP でのログインは `HTTPS で接続してください` と拒否されます。ログには `login.insecure_transport` が出ます。TLS を終端しない社内ネットワークでは `COOKIE_SECURE=0`）。プロキシは `X-Forwarded-Proto` を付け、`TRUST_PROXY=1` にしてください（それがないと HTTPS 経由でも平文と判定されます）。
+tsmyadmin 自身は TLS を終端しません。**必ず HTTPS を終端するリバースプロキシの背後に置いてください**（`NODE_ENV=production` では Cookie に `Secure` が付き、平文 HTTP でのログインは `HTTPS で接続してください` と拒否されます。ログには `login.insecure_transport` が出ます。TLS を終端しない社内ネットワークでは `COOKIE_SECURE=0`）。プロキシは `X-Forwarded-Proto` を付け、`TRUST_PROXY` を `1`（Cloudflare 経由なら `cloudflare`）にしてください。`0` のままだと HTTPS 経由でも平文と判定されます。
 
 ルート直下（`https://admin.example.com/`）でのみ動作します。サブパス（`https://example.com/tsmyadmin/`）配下には置けません（アセットと API のパスが `/` 基準のため）。
 
@@ -148,6 +148,8 @@ server {
 ```
 
 `TRUST_PROXY=1` を設定すると、レート制限とアクセスログが `X-Forwarded-For` の**末尾**のアドレス（直前のプロキシが追記した値）をクライアント IP として使います。`$proxy_add_x_forwarded_for` のように追記するプロキシでも、クライアントが先頭に偽の値を書いても影響しません。多段のときは注意が必要です。末尾は常に「直前のプロキシが見たアドレス」なので、多段ではその 1 つ手前のプロキシの IP になります。クライアント IP を届けたい場合は、**tsmyadmin の直前のプロキシで `X-Forwarded-For` をクライアント IP だけに正規化してから**渡してください。プロキシを介さず直接公開する場合は `0` のままにしてください（ヘッダー偽装でレート制限を回避されます）。
+
+Cloudflare の背後に置く場合は `cloudflare` にしてください。`CF-Connecting-IP` を優先し、それがなければ `1` と同じ動きに戻ります。設定と手順は [cloudflare.md](cloudflare.md) にまとめてあります。
 
 ## 直接起動（systemd）
 
