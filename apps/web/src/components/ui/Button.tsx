@@ -1,22 +1,25 @@
 import type { ButtonHTMLAttributes, Ref } from 'react'
 import { cn } from '@/lib/cn.ts'
 
-type Variant = 'primary' | 'secondary' | 'danger' | 'ghost' | 'icon'
+type Variant = 'primary' | 'secondary' | 'danger' | 'criticalSolid' | 'ghost' | 'icon'
 type Size = 'sm' | 'md' | 'icon'
 
 const VARIANTS: Record<Variant, string> = {
-  primary:
-    'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700 disabled:bg-blue-300 dark:disabled:bg-blue-900',
-  secondary:
-    'bg-white text-zinc-800 border border-zinc-300 hover:bg-zinc-50 dark:bg-zinc-800 dark:text-zinc-100 dark:border-zinc-600 dark:hover:bg-zinc-700',
-  danger:
-    'bg-red-600 text-white hover:bg-red-700 dark:bg-red-600 dark:hover:bg-red-700 disabled:bg-red-300 dark:disabled:bg-red-900',
-  ghost: 'bg-transparent text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800',
+  primary: 'bg-brand text-white hover:bg-brand-hover disabled:opacity-50',
+  secondary: 'bg-surface text-ink border border-line-strong hover:bg-surface-sub',
+  /**
+   * Destructive actions are a colour, not a filled block (Polaris's `tone="critical"`). A structure page lists
+   * one per row, and a column of solid red made the most dangerous control the loudest thing on the screen.
+   * Filled red is kept for the one button inside a confirmation dialog, where it is the only action.
+   */
+  danger: 'bg-surface text-critical border border-critical/40 hover:bg-critical-sub',
+  criticalSolid: 'bg-critical text-white hover:opacity-90 disabled:opacity-50',
+  ghost: 'bg-transparent text-ink-sub hover:bg-surface-sub hover:text-ink',
   /** Icon-only control inside a table row: quieter colour, lighter when disabled. */
-  icon: 'bg-transparent text-zinc-500 enabled:hover:bg-zinc-100 dark:text-zinc-400 dark:enabled:hover:bg-zinc-800',
+  icon: 'bg-transparent text-ink-faint enabled:hover:bg-surface-sub enabled:hover:text-ink',
 }
 const SIZES: Record<Size, string> = {
-  sm: 'px-2 py-1 text-xs',
+  sm: 'px-2.5 py-1 text-xs',
   md: 'px-3 py-1.5 text-sm',
   icon: 'min-h-6 min-w-6 justify-center p-0',
 }
@@ -46,7 +49,7 @@ export function Button({
         onClick?.(e)
       }}
       className={cn(
-        'inline-flex items-center gap-1 rounded font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:cursor-not-allowed',
+        'inline-flex items-center gap-1 rounded-control font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed',
         variant === 'icon' ? 'disabled:opacity-40' : 'disabled:opacity-60',
         VARIANTS[variant],
         SIZES[size],

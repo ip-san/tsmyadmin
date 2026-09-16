@@ -11,7 +11,7 @@ import {
 import { cn } from '@/lib/cn.ts'
 
 const control =
-  'w-full rounded border border-zinc-500 bg-white px-2 py-1.5 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-zinc-500 dark:bg-zinc-900 dark:text-zinc-100 disabled:bg-zinc-100 disabled:text-zinc-600 dark:disabled:bg-zinc-800 dark:disabled:text-zinc-400'
+  'w-full rounded-control border border-line-strong bg-surface px-2.5 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 disabled:bg-surface-sub disabled:text-ink-faint'
 
 export function Input({
   className,
@@ -28,15 +28,12 @@ export function Textarea({ className, ...rest }: TextareaHTMLAttributes<HTMLText
 export function Select({ className, ...rest }: SelectHTMLAttributes<HTMLSelectElement>) {
   // Tailwind emits `w-auto` before `w-full`, so a caller's width class must replace the control's, not join it.
   const base = className && /(?:^|\s)w-/.test(className) ? control.replace('w-full ', '') : control
-  return <select className={cn(base, className)} {...rest} />
+  return <select className={cn(base, 'select-chevron', className)} {...rest} />
 }
 
 function Label({ children, htmlFor, className }: { children: ReactNode; htmlFor: string; className?: string }) {
   return (
-    <label
-      htmlFor={htmlFor}
-      className={cn('mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-300', className)}
-    >
+    <label htmlFor={htmlFor} className={cn('mb-1 block text-xs font-medium text-ink-sub', className)}>
       {children}
     </label>
   )
@@ -64,7 +61,7 @@ export function Field({
       <Label htmlFor={id}>{label}</Label>
       {control}
       {hint ? (
-        <p id={hintId} className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+        <p id={hintId} className="mt-1 text-xs text-ink-sub">
           {hint}
         </p>
       ) : null}

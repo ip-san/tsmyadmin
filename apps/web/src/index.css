@@ -1,13 +1,85 @@
 @import "tailwindcss";
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Native controls (checkbox, select, scrollbars) follow the app theme, not only the OS preference. */
-html { color-scheme: light; }
-html.dark { color-scheme: dark; }
+/*
+ * Semantic tokens, in the spirit of Shopify Polaris: a subdued page canvas with raised surfaces on it, one
+ * brand colour, and a "critical" tone that is a colour rather than a filled button. The values flip under
+ * `.dark`, so a component writes `bg-surface` once instead of a light/dark pair — the pairing that used to be
+ * written by hand is what drifted.
+ */
+@theme inline {
+  --color-canvas: var(--c-canvas);
+  --color-surface: var(--c-surface);
+  --color-surface-sub: var(--c-surface-sub);
+  --color-line: var(--c-line);
+  --color-line-strong: var(--c-line-strong);
+  --color-ink: var(--c-ink);
+  --color-ink-sub: var(--c-ink-sub);
+  --color-ink-faint: var(--c-ink-faint);
+  --color-brand: var(--c-brand);
+  --color-brand-hover: var(--c-brand-hover);
+  --color-brand-sub: var(--c-brand-sub);
+  --color-critical: var(--c-critical);
+  --color-critical-sub: var(--c-critical-sub);
+
+  --radius-card: 0.75rem;
+  --radius-control: 0.5rem;
+
+  --shadow-card: 0 1px 2px rgb(16 17 20 / 0.06), 0 1px 3px rgb(16 17 20 / 0.08);
+  --shadow-raised: 0 4px 12px rgb(16 17 20 / 0.1), 0 1px 3px rgb(16 17 20 / 0.06);
+}
+
+:root {
+  --c-canvas: #f4f5f7;
+  --c-surface: #ffffff;
+  --c-surface-sub: #f7f8f9;
+  --c-line: #e3e5e8;
+  --c-line-strong: #c3c7cd;
+  --c-ink: #1a1c1f;
+  --c-ink-sub: #5b616b;
+  --c-ink-faint: #8b919b;
+  --c-brand: #4338ca;
+  --c-brand-hover: #3730a3;
+  --c-brand-sub: #eef2ff;
+  --c-critical: #b42318;
+  --c-critical-sub: #fef3f2;
+  color-scheme: light;
+}
+
+html.dark {
+  --c-canvas: #16171a;
+  --c-surface: #1e2024;
+  --c-surface-sub: #24262b;
+  --c-line: #32353b;
+  --c-line-strong: #4a4e56;
+  --c-ink: #f0f1f3;
+  --c-ink-sub: #a3a8b2;
+  --c-ink-faint: #7c828c;
+  --c-brand: #818cf8;
+  --c-brand-hover: #a5b4fc;
+  --c-brand-sub: #262a45;
+  --c-critical: #f87171;
+  --c-critical-sub: #2a1d1d;
+  color-scheme: dark;
+}
+
+/*
+ * The chevron for <select>. Written here rather than as an arbitrary Tailwind value: the SVG contains spaces
+ * and quotes, which a class name cannot carry — the first attempt silently produced a dozen junk classes and a
+ * select with no arrow at all.
+ */
+@utility select-chevron {
+  appearance: none;
+  padding-right: 2rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%238b919b' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.5rem center;
+  background-size: 1rem 1rem;
+}
 
 /* CodeMirror (SQL editor) */
 .cm-editor { font-size: 13px; }
-.cm-editor.cm-focused { outline: 2px solid #3b82f6; outline-offset: -1px; }
+.cm-editor.cm-focused { outline: 2px solid var(--c-brand); outline-offset: -1px; }
 .dark .cm-editor { background: #18181b; color: #e4e4e7; }
 .dark .cm-gutters { background: #27272a; color: #a1a1aa; border-color: #3f3f46; }
 .dark .cm-activeLine, .dark .cm-activeLineGutter { background: #27272a; }
