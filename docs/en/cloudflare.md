@@ -1,4 +1,4 @@
-<!-- translated-from: docs/cloudflare.md sha256:c423db8e5ebd7d713b313c49493ffbf53b1966fac25f9edfdb70f98713bc4231 -->
+<!-- translated-from: docs/cloudflare.md sha256:8631edde041315b63ea278fb4ed46fbab1106911a7d91fa7a66a8c52df1d2a8e -->
 
 # Deploying to Cloudflare
 
@@ -44,9 +44,9 @@ Put `wrangler.jsonc` at the root of the repository:
     {
       "class_name": "TsmyadminContainer",
       "image": "./Dockerfile",
-      // How many instances may run at once. Each one opens its own connection pools, so multiply your
-      // max_connections estimate by this number.
-      "max_instances": 2
+      // The Worker below pins a single name, so exactly one instance runs. To run more, read "Running more
+      // than one" below.
+      "max_instances": 1
     }
   ],
   "durable_objects": {
@@ -104,6 +104,12 @@ npx wrangler deploy
 
 The first build and push take the longest.
 
+### Running more than one
+
+The Worker above pins `getByName('default')`, so raising `max_instances` still gives you one instance. To run more, choose a key that sends the same person to the same name every time (the session cookie, for instance). Spread requests around instead and everything under *Several replicas* in `deployment.md` starts to bite: cancelling a running query, the login rate limit, and the connection pools.
+
+Whether one instance is enough depends on concurrent work rather than headcount. An admin tool spends most of its time waiting, so one is plenty for a handful of people.
+
 ## How running it here differs
 
 Everything under *Several replicas* in `deployment.md` applies, plus what Containers add of their own:
@@ -113,8 +119,8 @@ Everything under *Several replicas* in `deployment.md` applies, plus what Contai
 | Disk | Ephemeral. `SESSION_DB_PATH` means nothing here |
 | Starting and sleeping | Stops after 10 minutes idle (`sleepAfter` changes it) and starts again on the next request. **The first request after that is slow** |
 | Connection pools | Lost every time the instance sleeps. They are rebuilt on the next request, so nobody has to sign in again, but the connection count at the database rises and falls |
-| Cancelling a running query | Does not cross instances. With `max_instances` above 1, the table of what is not shared in `deployment.md` applies as written |
-| The login rate limit | Counted per instance, so the effective limit is multiplied by `max_instances`. Without `TRUST_PROXY=cloudflare`, everyone also shares a single bucket |
+| Cancelling a running query | Does not cross instances, which cannot arise while a single pinned name serves everyone |
+| The login rate limit | Without `TRUST_PROXY=cloudflare`, everyone shares a single bucket. Run more than one instance and it is then counted per instance as well |
 | Long operations | Raise `sleepAfter` above the default 10 minutes so an export or import cannot run into it |
 | Cost | On top of the Workers Paid plan: per 10 ms of runtime, CPU time, and egress |
 
