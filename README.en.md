@@ -1,4 +1,4 @@
-<!-- translated-from: README.md sha256:22e70aaf5611e81fefe95f9286f6c528af0d5dd7484c02fbc8f6f127071b12d6 -->
+<!-- translated-from: README.md sha256:589fa5b148241540a6eb17dee2fbb69f6688288273aa708062df6de877e590c7 -->
 
 # tsmyadmin
 
@@ -54,6 +54,7 @@ The project's own checks:
 - `scripts/check-architecture.mjs` — layer dependencies (the web app never touches a database driver, routes go through the adapter, features do not import each other) and component length
 - `scripts/check-sql-safety.mjs` — that no SQL is built by interpolation or concatenation outside the adapter's builders, and that no identifier is quoted by hand
 - `scripts/validate-docs.mjs` — that the statistics in `CLAUDE.md` match reality (`--fix`)
+- `scripts/check-contrast.mjs` — that every combination of the design tokens meets the WCAG contrast ratios (with a `--self-test`). axe judges text only, and only the combinations a test happens to render
 - `scripts/check-translations.mjs` — that each English document has been updated for the Japanese original it was written from (with a `--self-test`; `bun run docs:sync` stamps them after translating)
 
 `packages/adapter/src/test/conformance.ts` runs one suite against both MySQL and PostgreSQL, which is what guarantees the dialect differences are actually absorbed.
