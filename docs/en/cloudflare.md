@@ -1,4 +1,4 @@
-<!-- translated-from: docs/cloudflare.md sha256:a05643baa7b223600ad217843532ba387a1c0f5fd7c84ea127115c91ae48090d -->
+<!-- translated-from: docs/cloudflare.md sha256:4895f46399ca11751d77c45e00a0aa542eae3e14350fbdcf53ebd8eb2ba092bd -->
 
 # Deploying to Cloudflare
 
@@ -47,6 +47,8 @@ npx wrangler secret put TSMYADMIN_ALLOWED_HOSTS   # db.example.com:5432
 ```
 
 Add `TSMYADMIN_SERVERS` the same way if you use server presets ([deployment.md](deployment.md) lists every variable).
+
+> A value stored with `wrangler secret put` reaches the **Worker**. The container receives only what `envVars` in `deploy/cloudflare/worker.ts` lists, so adding a variable means adding it there too. Miss one and the process exits at startup with `Invalid environment: …`.
 
 ### 3. Check, then deploy
 

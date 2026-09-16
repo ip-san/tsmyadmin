@@ -46,6 +46,8 @@ npx wrangler secret put TSMYADMIN_ALLOWED_HOSTS   # db.example.com:5432
 
 接続先プリセットを使うなら `TSMYADMIN_SERVERS` も同様に登録します（変数の一覧は [deployment.md](deployment.md)）。
 
+> `wrangler secret put` で登録した値が届くのは **Worker** までです。コンテナに渡るのは `deploy/cloudflare/worker.ts` の `envVars` に書いたものだけなので、変数を増やすときは同じファイルへの追記も必要です。渡し忘れると起動時に `Invalid environment: …` で終了します。
+
 ### 3. 確かめてからデプロイする
 
 ```bash
