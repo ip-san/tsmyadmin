@@ -247,7 +247,9 @@ const UNSEARCHABLE_TYPE: Record<Dialect, RegExp> = {
     /^(tiny|medium|long)?blob\b|^(var)?binary\b|^bit\b|^vector\b|^(multi)?(point|linestring|polygon)\b|^geometry\b|^geometrycollection\b|^geomcollection\b/i,
   // PostGIS types may be schema-qualified: format_type adds the schema when it is not on the search path, which
   // is the usual case (PostGIS in public or its own schema, browsing another).
-  postgres: /^bytea\b|(?:^|\.)"?(?:geometry|geography|raster)\b/i,
+  // The whole name has to be the type (optionally with a typmod and array brackets), so a readable type that only
+  // starts with one of these words, or sits in a schema named after one, is still searched.
+  postgres: /^bytea(?:\[\])*$|(?:^|\.)"?(?:geometry|geography|raster)"?(?:\(.*\))?(?:\[\])*$/i,
 }
 
 /** Whether the database-wide search looks at a column of this type (see UNSEARCHABLE_TYPE). */

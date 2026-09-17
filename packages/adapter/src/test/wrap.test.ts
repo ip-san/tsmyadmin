@@ -89,6 +89,8 @@ describe('isSearchableType', () => {
       'public.geometry(Point,4326)',
       'extensions.geography',
       '"my schema"."geometry"',
+      'public.geometry(Point,4326)[]',
+      'raster[]',
     ])
       expect(isSearchableType('postgres', t), t).toBe(false)
     for (const t of [
@@ -101,6 +103,12 @@ describe('isSearchableType', () => {
       'jsonb',
       'integer[]',
       'app.geometry_dump',
+      // Readable types whose schema or name merely starts with a PostGIS word.
+      'geometry.mytext',
+      '"geometry".mytext',
+      'app."geometry-x"',
+      'app."geometry.x"',
+      'rastering',
     ])
       expect(isSearchableType('postgres', t), t).toBe(true)
   })
