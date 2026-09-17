@@ -304,10 +304,14 @@ export function joinPlan(d: Dialect, ns: Namespace, tables: string[], schemas: M
   return out
 }
 
+const BIT_MAX = 2n ** 64n - 1n
+
 /** A MySQL BIT value typed as a whole number, as the hex literal of its bytes (170 → X'AA'). */
 function bitLiteral(value: InputCell): string {
   const text = String(value).trim()
-  if (!/^\d{1,20}$/.test(text)) throw new AdapterError('VALIDATION', 'A BIT value must be a whole number')
+  // BIT holds at most 64 bits; a larger number would be clamped to the maximum by MySQL's CONV, not refused.
+  if (!/^\d{1,20}$/.test(text) || BigInt(text) > BIT_MAX)
+    throw new AdapterError('VALIDATION', 'A BIT value must be a whole number from 0 to 18446744073709551615')
   const hex = BigInt(text).toString(16)
   return `X'${hex.length % 2 === 0 ? hex : `0${hex}`}'`
 }

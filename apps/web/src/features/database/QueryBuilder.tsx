@@ -51,8 +51,9 @@ export function QueryBuilder({ db, schema }: { db: string; schema?: string | und
         }))
       : []
   )
-  const loadingColumns = structures.some((s) => s.isPending)
-  const failed = structures.find((s) => s.isError)
+  const activeStructures = structures.filter((_, i) => active.includes(chosen[i] ?? ''))
+  const loadingColumns = activeStructures.some((s) => s.isPending)
+  const failed = activeStructures.find((s) => s.isError)
   const request = toRequest(active, outputs, groups, schema)
   // The SQL shown is for the choices it was built from; after any change it is hidden rather than left looking current.
   const current = build.isSuccess && JSON.stringify(build.variables) === JSON.stringify(request)

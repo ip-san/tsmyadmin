@@ -531,6 +531,14 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
               where: [[{ table: 'types_all', column: 'bit_col', op: 'eq', value: 'x' }]],
             })
           ).rejects.toMatchObject({ code: 'VALIDATION' })
+          // One past BIT(64): MySQL would clamp it to the maximum and match that instead.
+          await expect(
+            db.buildQuery(ns, {
+              tables: ['types_all'],
+              columns: [],
+              where: [[{ table: 'types_all', column: 'bit_col', op: 'eq', value: '18446744073709551616' }]],
+            })
+          ).rejects.toMatchObject({ code: 'VALIDATION' })
         }
       })
 
