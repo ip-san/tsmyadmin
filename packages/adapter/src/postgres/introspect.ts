@@ -109,8 +109,12 @@ function foreignKeyRow(ns: Namespace, row: unknown[]): RelationDef {
 }
 
 /**
- * Every foreign key held by a table of the schema, ordered by table and constraint name. A key declared on a
- * partitioned table is listed once, on that table, not again as the copy each partition holds.
+ * Every foreign key held by a table of the schema, ordered by table and constraint name. Partitions are left out,
+ * as listTables leaves them out; a key declared on a partitioned table is listed there once.
+ *
+ * Both this and describeTable skip the constraints PostgreSQL adds for a key that *references* a partitioned
+ * table: one per partition, on the same referencing table, each with the key it copies as its parent. Listed,
+ * one key would appear once per partition.
  */
 export async function pgListForeignKeys(conn: Conn, ns: Namespace): Promise<RelationDef[]> {
   const fk = firstResult(
@@ -126,7 +130,8 @@ export async function pgListForeignKeys(conn: Conn, ns: Namespace): Promise<Rela
        JOIN pg_namespace n ON n.oid = c.relnamespace
        JOIN pg_class cr ON cr.oid = con.confrelid
        JOIN pg_namespace nr ON nr.oid = cr.relnamespace
-       WHERE n.nspname = $1 AND con.contype = 'f' AND con.conparentid = 0
+       WHERE n.nspname = $1 AND con.contype = 'f' AND NOT c.relispartition
+         AND NOT EXISTS (SELECT 1 FROM pg_constraint p WHERE p.oid = con.conparentid AND p.conrelid = con.conrelid)
        ORDER BY c.relname, con.conname`,
       [ns.schema ?? 'public', SEP]
     )
@@ -230,6 +235,7 @@ export async function pgDescribeTable(conn: Conn, ns: Namespace, table: string):
        JOIN pg_class cr ON cr.oid = con.confrelid
        JOIN pg_namespace nr ON nr.oid = cr.relnamespace
        WHERE con.conrelid = $1::regclass AND con.contype = 'f'
+         AND NOT EXISTS (SELECT 1 FROM pg_constraint p WHERE p.oid = con.conparentid AND p.conrelid = con.conrelid)
        ORDER BY con.conname`,
       [regclass, SEP]
     )

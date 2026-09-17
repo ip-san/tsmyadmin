@@ -13,41 +13,50 @@ export const relationKey = (r: RelationDef) => JSON.stringify([r.table, r.name])
 
 /**
  * Tables as boxes and foreign keys as lines. Boxes move by dragging or, once focused, with the arrow keys (Shift
- * for larger steps); `onMoved` fires once a move ends, which is when the page saves the layout.
+ * for larger steps); `commit` is true for the move that ends one, which is when the page saves the layout.
  */
 export function DesignerDiagram({
   tables,
   relations,
   positions,
   onMove,
-  onMoved,
 }: {
   tables: readonly string[]
   relations: readonly RelationDef[]
   positions: Readonly<Record<string, Point>>
-  onMove: (table: string, to: Point) => void
-  onMoved: () => void
+  onMove: (table: string, to: Point, commit: boolean) => void
 }) {
-  const drag = useRef<{ table: string; dx: number; dy: number } | null>(null)
+  /** Where in the box it was grabbed, and where it was last put. */
+  const drag = useRef<{ table: string; dx: number; dy: number; last: Point } | null>(null)
   const columns = new Map(tables.map((name) => [name, boxColumns(name, relations)]))
   const at = (table: string): Point => positions[table] ?? { x: 0, y: 0 }
   const width = Math.max(...tables.map((name) => at(name).x + BOX_WIDTH)) + PAD
   const height = Math.max(...tables.map((name) => at(name).y + boxHeight(columns.get(name)?.length ?? 0))) + PAD
   const clamp = (p: Point): Point => ({ x: Math.max(0, p.x), y: Math.max(0, p.y) })
 
+  // In diagram coordinates, measured against the SVG each time, so scrolling the diagram mid-drag does not jump the box.
+  const pointerAt = (e: PointerEvent<SVGGElement>): Point => {
+    const rect = e.currentTarget.ownerSVGElement?.getBoundingClientRect()
+    return { x: e.clientX - (rect?.left ?? 0), y: e.clientY - (rect?.top ?? 0) }
+  }
   const startDrag = (table: string) => (e: PointerEvent<SVGGElement>) => {
     const p = at(table)
-    drag.current = { table, dx: e.clientX - p.x, dy: e.clientY - p.y }
+    const pointer = pointerAt(e)
+    drag.current = { table, dx: pointer.x - p.x, dy: pointer.y - p.y, last: p }
     e.currentTarget.setPointerCapture(e.pointerId)
   }
   const moveDrag = (e: PointerEvent<SVGGElement>) => {
     const d = drag.current
-    if (d) onMove(d.table, clamp({ x: e.clientX - d.dx, y: e.clientY - d.dy }))
+    if (!d) return
+    const pointer = pointerAt(e)
+    d.last = clamp({ x: pointer.x - d.dx, y: pointer.y - d.dy })
+    onMove(d.table, d.last, false)
   }
   const endDrag = () => {
-    if (!drag.current) return
+    const d = drag.current
+    if (!d) return
     drag.current = null
-    onMoved()
+    onMove(d.table, d.last, true)
   }
   const nudge = (table: string) => (e: KeyboardEvent<SVGGElement>) => {
     const step = e.shiftKey ? BIG_STEP : STEP
@@ -61,8 +70,7 @@ export function DesignerDiagram({
     if (!d) return
     e.preventDefault()
     const p = at(table)
-    onMove(table, clamp({ x: p.x + d.x, y: p.y + d.y }))
-    onMoved()
+    onMove(table, clamp({ x: p.x + d.x, y: p.y + d.y }), true)
   }
 
   return (
@@ -98,7 +106,8 @@ export function DesignerDiagram({
               tabIndex={0}
               aria-label={t.boxLabel(name)}
               transform={`translate(${p.x} ${p.y})`}
-              className="group cursor-move outline-none"
+              // touch-none: on a touch screen the gesture moves the box instead of scrolling the diagram.
+              className="group cursor-move touch-none outline-none"
               onPointerDown={startDrag(name)}
               onPointerMove={moveDrag}
               onPointerUp={endDrag}

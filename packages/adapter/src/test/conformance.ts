@@ -480,6 +480,25 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
           await exec(`DROP TABLE IF EXISTS ${t}`, { stopOnError: false })
         }
       })
+
+      it.skipIf(dialect !== 'postgres')(
+        'lists a key to a partitioned table once, not once per partition (PostgreSQL)',
+        async () => {
+          const parent = `${scratch}_part`
+          const child = `${scratch}_ref`
+          await execOk(`DROP TABLE IF EXISTS ${child}; DROP TABLE IF EXISTS ${parent}`)
+          await execOk(
+            `CREATE TABLE ${parent} (id INT PRIMARY KEY) PARTITION BY RANGE (id); CREATE TABLE ${parent}_1 PARTITION OF ${parent} FOR VALUES FROM (0) TO (100); CREATE TABLE ${parent}_2 PARTITION OF ${parent} FOR VALUES FROM (100) TO (200); CREATE TABLE ${child} (id INT PRIMARY KEY, p INT REFERENCES ${parent} (id))`
+          )
+          try {
+            expect((await db.describeTable(ns, child)).foreignKeys.map((k) => k.refTable)).toEqual([parent])
+            const listed = (await db.listForeignKeys(ns)).filter((k) => k.table === child || k.table.startsWith(parent))
+            expect(listed.map((k) => [k.table, k.refTable])).toEqual([[child, parent]])
+          } finally {
+            await exec(`DROP TABLE IF EXISTS ${child}; DROP TABLE IF EXISTS ${parent}`, { stopOnError: false })
+          }
+        }
+      )
     })
 
     describe('buildQuery', () => {

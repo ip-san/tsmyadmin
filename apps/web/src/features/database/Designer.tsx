@@ -36,10 +36,17 @@ export function Designer({ db, schema }: { db: string; schema?: string | undefin
   const drawn = drawnRelations(keys.data, session.dialect, schema ? { database: db, schema } : { database: db }, names)
   // A table without a saved position (new, or never moved) takes its place in the automatic layout.
   const positions = { ...autoLayout(names, drawn), ...saved }
+  const move = (table: string, to: Point, commit: boolean) => {
+    const next = { ...saved, [table]: to }
+    setSaved(next)
+    if (!commit) return
+    // Positions of tables that are gone are dropped, so a table created later under that name starts fresh.
+    writePreference(storageKey, Object.fromEntries(Object.entries(next).filter(([name]) => names.includes(name))))
+  }
+  // Qualified only when the key leaves this namespace: by schema on PostgreSQL (which has no keys across
+  // databases), by database on MySQL.
   const target = (r: RelationDef) =>
-    drawn.includes(r)
-      ? r.refTable
-      : [r.refNamespace.database, r.refNamespace.schema, r.refTable].filter((part) => part !== undefined).join('.')
+    drawn.includes(r) ? r.refTable : `${r.refNamespace.schema ?? r.refNamespace.database}.${r.refTable}`
 
   return (
     <section className="space-y-3">
@@ -58,18 +65,7 @@ export function Designer({ db, schema }: { db: string; schema?: string | undefin
           {t.resetLayout}
         </Button>
       </div>
-      <DesignerDiagram
-        tables={names}
-        relations={drawn}
-        positions={positions}
-        onMove={(table, to) => setSaved((prev) => ({ ...prev, [table]: to }))}
-        onMoved={() =>
-          setSaved((prev) => {
-            writePreference(storageKey, prev)
-            return prev
-          })
-        }
-      />
+      <DesignerDiagram tables={names} relations={drawn} positions={positions} onMove={move} />
       <h3 className="text-sm font-semibold text-ink">{t.relations}</h3>
       {keys.data.length === 0 ? (
         <p className="text-sm text-ink-sub">{t.noRelations}</p>

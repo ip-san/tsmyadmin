@@ -274,7 +274,9 @@ export class FakeAdapter implements DatabaseAdapter {
     this.record('listForeignKeys', ns)
     const db = this.databases[ns.database]
     if (!db) throw new AdapterError('NOT_FOUND', `Unknown database: ${ns.database}`)
-    return Object.values(db.tables).flatMap((t) => t.schema.foreignKeys.map((fk) => ({ ...fk, table: t.schema.name })))
+    return Object.values(db.tables)
+      .flatMap((t) => t.schema.foreignKeys.map((fk) => ({ ...fk, table: t.schema.name })))
+      .sort((a, b) => a.table.localeCompare(b.table) || a.name.localeCompare(b.name))
   }
 
   async buildQuery(ns: Namespace, spec: QueryBuilderSpec): Promise<QueryBuilderResult> {
