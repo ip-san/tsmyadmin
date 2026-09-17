@@ -1,4 +1,4 @@
-<!-- translated-from: docs/deployment.md sha256:f795e67e076b6b12efb95f1a52072182f962ec5b0b2375b2c4afce10e310dad8 -->
+<!-- translated-from: docs/deployment.md sha256:066f6ad047d3f5e6cece1f035251a533e74cc238b9e112184ea6a4591d42c01e -->
 
 # Deployment guide
 
@@ -75,9 +75,9 @@ docker run -d --name tsmyadmin \
 ```
 
 - Setting `TSMYADMIN_ALLOWED_HOSTS=` (the empty string) explicitly drops the default `127.0.0.1,localhost` — the container's own loopback, which production does not need and which warns about the missing port — and allows only the `host:port` of the presets. Without presets, list the `host:port` values yourself
-- The image runs as the non-root user `bun` (uid/gid 1000) and contains production dependencies only. `HEALTHCHECK` looks at `/readyz` (it follows `API_PORT` / `PORT`, so changing the port inside the container still works)
+- The image runs as the non-root user `bun` (uid/gid 1000) and contains production dependencies only. `HEALTHCHECK` looks at `/readyz` (it follows `API_PORT` / `PORT`, so changing the port inside the container still works). That is the right check for the default file-backed store; with `SESSION_STORE=redis` the store is shared, so anything that acts on container health automatically (Swarm, autoheal) would restart every container at once when Redis blips
 - The session store lives in `/app/data`. Without a volume, a restart signs everyone out (nothing else breaks). A bind mount needs `chown 1000:1000 <dir>`
-- `/healthz` (liveness) and `/readyz` (the session store answers) are exposed for your orchestrator's probes
+- `/healthz` (liveness) and `/readyz` (the session store answers) are exposed. **Point an orchestrator's or load balancer's probe at `/healthz`.** The session store `/readyz` checks is shared by every replica under `SESSION_STORE=redis`, so probing it takes them all out of rotation together on a momentary Redis outage ([hosting.md](hosting.md))
 - `--stop-timeout` (`stop_grace_period` in compose) defaults to 10 seconds in Docker, which is shorter than `SHUTDOWN_TIMEOUT_SECONDS` (30), so an export or import in flight would be cut off by SIGKILL. Set it to at least `SHUTDOWN_TIMEOUT_SECONDS + 5`
 - Rough resources: 1 vCPU and 512 MB of memory. Idle sits around 90 MB; a 64 MB import (the whole file is held in memory) peaks in the hundreds of MB. Exports stream 500 rows at a time and do not depend on the size of the table. Do not set `--memory` below 256 MB
 

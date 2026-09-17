@@ -109,7 +109,8 @@ export class RedisSessionStore implements SessionStore {
     // key is then just the cleanup that stops an abandoned session sitting there for ever.
     await this.redis
       .multi()
-      .hset(this.sessionKey(id), 'payload', payload, 'at', now)
+      // `identity` is stored beside the payload so that a delete can find the index without help from `live`.
+      .hset(this.sessionKey(id), 'payload', payload, 'at', now, 'identity', identity)
       .pexpire(this.sessionKey(id), this.ttlMs)
       .zadd(index, now, id)
       .pexpire(index, this.ttlMs)
@@ -156,8 +157,14 @@ export class RedisSessionStore implements SessionStore {
   }
 
   async delete(id: string): Promise<void> {
+    // Read the identity from Redis rather than from `live`: this process may never have held this session's
+    // pool — another replica signed the user out, or this one restarted. Deriving it only from `live` left the
+    // sorted-set member behind, and `create` then counted that tombstone as a held session and evicted a real
+    // one to make room it did not need.
+    const stored = await this.redis.hget(this.sessionKey(id), 'identity')
     const live = this.live.get(id)
-    if (live) await this.redis.zrem(this.identityKey(identityHash(this.key, live.config)), id)
+    const identity = stored ?? (live ? identityHash(this.key, live.config) : null)
+    if (identity) await this.redis.zrem(this.identityKey(identity), id)
     await this.redis.del(this.sessionKey(id))
     await this.closeLive(id)
   }

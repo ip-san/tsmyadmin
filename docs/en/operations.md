@@ -1,4 +1,4 @@
-<!-- translated-from: docs/operations.md sha256:ee4f9e6bcc0f9f278ffbc6aef51db4052b2202c5d477f332c2d52e1c0c6ddc81 -->
+<!-- translated-from: docs/operations.md sha256:be3ec0f307c6615af2b6c2b28f4c9a40e44be61ccf1a3b03569074c5083306ea -->
 
 # Operations guide
 
@@ -9,7 +9,7 @@
 | Path | Meaning | When it fails |
 |---|---|---|
 | `GET /healthz` | The process is answering (liveness) | Restart |
-| `GET /readyz` | The session store is usable (readiness) | Take it out of rotation and look for a `readyz.failed` log line |
+| `GET /readyz` | The session store is usable (readiness) | Look for a `readyz.failed` log line. **Meant for monitoring and alerting, not for a load balancer's decision** — the session store is shared by every replica, so they would all leave rotation together and the service would go down ([hosting.md](hosting.md)) |
 
 ## Logs
 

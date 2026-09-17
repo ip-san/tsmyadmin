@@ -73,9 +73,9 @@ docker run -d --name tsmyadmin \
 ```
 
 - `TSMYADMIN_ALLOWED_HOSTS=`（空文字）を明示すると既定の `127.0.0.1,localhost`（コンテナ自身のループバック。本番では不要で、ポート未指定の警告も出る）が外れ、プリセットの `host:port` だけが許可されます。プリセットを使わない場合は `host:port` を列挙してください
-- イメージは非 root ユーザー `bun`（uid/gid 1000）で動作し、本番依存のみを含みます。`HEALTHCHECK` は `/readyz` を見ます（`API_PORT` / `PORT` に従うので、コンテナ内のポートを変えても機能します）
+- イメージは非 root ユーザー `bun`（uid/gid 1000）で動作し、本番依存のみを含みます。`HEALTHCHECK` は `/readyz` を見ます（`API_PORT` / `PORT` に従うので、コンテナ内のポートを変えても機能します）。既定のファイルベースのストアならこれが正しい判定ですが、`SESSION_STORE=redis` ではストアが共有なので、コンテナの health で自動的に動くもの（Swarm、autoheal）は Redis が一瞬落ちただけで全コンテナを同時に再起動します
 - `/app/data` にセッションストアが置かれます。ボリュームを付けないと再起動で全員ログアウトになります（機能は損なわれません）。バインドマウントの場合は `chown 1000:1000 <dir>` が必要です
-- `/healthz`（生存）と `/readyz`（セッションストアの疎通）を公開します。オーケストレータのプローブに使ってください
+- `/healthz`（生存）と `/readyz`（セッションストアの疎通）を公開します。**オーケストレータやロードバランサのプローブには `/healthz` を使ってください。** `/readyz` が見るセッションストアは全レプリカで共有なので、プローブに使うと一瞬の Redis 断で全レプリカが同時に外れます（[hosting.md](hosting.md)）
 - `--stop-timeout`（compose では `stop_grace_period`）は Docker 既定の 10 秒では `SHUTDOWN_TIMEOUT_SECONDS`（30 秒）より短く、実行中のエクスポート / インポートが SIGKILL で切られます。`SHUTDOWN_TIMEOUT_SECONDS + 5` 秒以上にしてください
 - 目安のリソース: 1 vCPU / メモリ 512 MB。アイドル時は約 90 MB、64 MB のインポート（ファイル全体をメモリに置く）ではピークが数百 MB になります。エクスポートは 500 行ずつストリーミングし、テーブルの大きさに依存しません。`--memory` を 256 MB 未満にしないでください
 

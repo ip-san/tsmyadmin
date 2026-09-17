@@ -75,13 +75,16 @@ export function sessionRoutes(cfg: SessionConfig, deps: SessionRouteDeps) {
           )
         }
         const perIp = deps.ipLimiter.peek(ip)
-        const limit = perIp.allowed ? deps.loginLimiter.hit(rateKey) : { allowed: false, retryAfterSec: 0 }
-        if (!perIp.allowed || !limit.allowed) {
+        if (!perIp.allowed) {
           deps.logger.log('warn', 'login.rate_limited', audit)
-          c.header('Retry-After', String(Math.max(limit.retryAfterSec, perIp.retryAfterSec)))
+          c.header('Retry-After', String(perIp.retryAfterSec))
           return c.json(apiError('RATE_LIMITED', 'Too many login attempts; try again later'), 429)
         }
+        // Before the per-user counter, so a mistyped host does not spend the budget for the user's real logins;
+        // counted on the IP instead, because probing the allowlist is exactly the kind of sweep that limiter is
+        // for (the 403-vs-401 difference tells a caller which hosts exist).
         if (!isHostAllowed(body.host, body.port, deps.allowedHosts)) {
+          deps.ipLimiter.hit(ip)
           deps.logger.log('warn', 'login.host_not_allowed', audit)
           return c.json(
             apiError(
@@ -90,6 +93,12 @@ export function sessionRoutes(cfg: SessionConfig, deps: SessionRouteDeps) {
             ),
             403
           )
+        }
+        const limit = deps.loginLimiter.hit(rateKey)
+        if (!limit.allowed) {
+          deps.logger.log('warn', 'login.rate_limited', audit)
+          c.header('Retry-After', String(limit.retryAfterSec))
+          return c.json(apiError('RATE_LIMITED', 'Too many login attempts; try again later'), 429)
         }
 
         let session: Awaited<ReturnType<typeof cfg.store.create>>

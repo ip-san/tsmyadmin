@@ -226,6 +226,23 @@ describe('hardening', () => {
     expect((await h.login()).status).toBe(401)
   })
 
+  it("does not spend the user's login budget on a rejected host, but does count it against the IP", async () => {
+    // A mistyped host is a configuration error, not a failed credential: burning the per-user window would lock
+    // someone out of their own real login. Probing the allowlist still has to cost something, though — the
+    // 403-vs-401 difference tells an unauthenticated caller which hosts exist — so it is counted on the IP.
+    const h = harness(fixtureAdapter(), { allowedHosts: ['db'], loginRateLimit: { max: 2, windowMs: 60_000 } })
+    stores.push(h.store)
+    const denied = { ...LOGIN, host: 'elsewhere.example.com' }
+    for (let i = 0; i < 2; i++) expect((await h.login(denied)).status).toBe(403)
+    // The user's own window is untouched, so a legitimate login still goes through.
+    expect((await h.login()).status).toBe(201)
+    // And the IP counter did move: max × IP_LIMIT_FACTOR failures in the window and the next one is refused.
+    const h2 = harness(fixtureAdapter(), { allowedHosts: ['db'], loginRateLimit: { max: 2, windowMs: 60_000 } })
+    stores.push(h2.store)
+    for (let i = 0; i < 2 * IP_LIMIT_FACTOR; i++) expect((await h2.login(denied)).status).toBe(403)
+    expect((await h2.login(denied)).status).toBe(429)
+  })
+
   it('rate-limits per IP across rotating user names', async () => {
     const h = harness(fixtureAdapter({ failWith: new AdapterError('AUTH_FAILED', 'denied') }), {
       loginRateLimit: { max: 1, windowMs: 60_000 },

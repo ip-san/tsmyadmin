@@ -13,6 +13,33 @@ describeSessionStoreConformance(
 )
 
 describe('RedisSessionStore', () => {
+  it('does not evict a live session because another replica signed one out', async () => {
+    // The whole point of this store is that a request can land on any replica, so a sign-out routinely happens
+    // somewhere that never held that session's pool. If the index keeps the member, the next login counts it as
+    // held and evicts a real session to make room it does not need — a user silently signed out elsewhere.
+    const prefix = `test-${randomUUID()}`
+    const config = { dialect: 'mysql' as const, host: 'h', port: 1, user: 'u', password: 'secret' }
+    const { FakeAdapter } = await import('@tsmyadmin/adapter/testing')
+    const opts = { url, secret: SECRET, prefix, adapterFactory: () => new FakeAdapter(), maxPerIdentity: 3 }
+    const a = new RedisSessionStore(opts)
+    const b = new RedisSessionStore(opts)
+    try {
+      const first = await a.create(config)
+      const second = await a.create(config)
+      const third = await a.create(config)
+      // The sign-out arrives at the other replica.
+      await b.delete(third.id)
+      expect(await a.get(third.id)).toBeUndefined()
+      // Two live sessions under a cap of three: this must evict nothing.
+      await a.create(config)
+      expect(await a.get(first.id)).toBeDefined()
+      expect(await a.get(second.id)).toBeDefined()
+    } finally {
+      await a.closeAll()
+      await b.closeAll()
+    }
+  })
+
   it('lets another replica pick up a session it never created', async () => {
     // The point of the whole store: one process signs the user in, a different one serves the next request.
     const prefix = `test-${randomUUID()}`

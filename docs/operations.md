@@ -7,7 +7,7 @@
 | パス | 意味 | 失敗時 |
 |---|---|---|
 | `GET /healthz` | プロセスが応答している（liveness） | 再起動 |
-| `GET /readyz` | セッションストアが利用可能（readiness） | トラフィックを外す。`readyz.failed` ログを確認 |
+| `GET /readyz` | セッションストアが利用可能（readiness） | `readyz.failed` ログを確認。**監視・通知に使う想定で、ロードバランサの判定には使わないでください** — セッションストアは全レプリカで共有なので、一斉に外れて全断になります（[hosting.md](hosting.md)） |
 
 ## ログ
 
