@@ -18,6 +18,7 @@ import type {
   StatementResult,
   TableInfo,
   TableSchema,
+  TableSearchResult,
   TriggerInfo,
   UserInfo,
   UserRef,
@@ -250,6 +251,20 @@ export class FakeAdapter implements DatabaseAdapter {
   async describeTable(ns: Namespace, table: string): Promise<TableSchema> {
     this.record('describeTable', ns, table)
     return structuredClone(this.table(ns, table).schema)
+  }
+
+  async searchTable(ns: Namespace, table: string, term: string): Promise<TableSearchResult> {
+    this.record('searchTable', ns, table, term)
+    const t = this.table(ns, table)
+    const columns = t.schema.columns.map((c) => c.name)
+    const needle = term.toLowerCase()
+    const total = t.rows.filter((r) =>
+      columns.some((c) => {
+        const v = r[c]
+        return (typeof v === 'string' || typeof v === 'number') && String(v).toLowerCase().includes(needle)
+      })
+    ).length
+    return { total, count: 'exact', columns, sql: `SELECT * FROM ${table}` }
   }
 
   async browseRows(ns: Namespace, table: string, opts: BrowseOptions): Promise<BrowseResult> {

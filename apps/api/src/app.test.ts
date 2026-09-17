@@ -10,12 +10,14 @@ import {
   ProcessInfoSchema,
   SAVED_QUERY_MAX_SQL,
   SavedQuerySchema,
+  SEARCH_TERM_MAX,
   ServerInfoSchema,
   SessionStateSchema,
   SqlStreamEventSchema,
   StatementResultSchema,
   TableInfoSchema,
   TableSchemaSchema,
+  TableSearchResultSchema,
 } from '@tsmyadmin/shared'
 import { afterEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
@@ -896,6 +898,19 @@ describe('sql & ddl', () => {
       code: 'VALIDATION',
       message: expect.stringContaining('1 views'),
     })
+  })
+
+  it('searches one table per request and validates the term', async () => {
+    const h = harness()
+    stores.push(h.store)
+    await h.login()
+    const res = await h.req('/api/databases/shop/tables/users/search?q=ali')
+    expect(res.status).toBe(200)
+    expect(TableSearchResultSchema.parse(await res.json())).toMatchObject({ total: 1, count: 'exact' })
+    expect((await h.req('/api/databases/shop/tables/users/search?q=')).status).toBe(400)
+    expect((await h.req(`/api/databases/shop/tables/users/search?q=${'x'.repeat(SEARCH_TERM_MAX + 1)}`)).status).toBe(
+      400
+    )
   })
 
   it('previews DDL without executing it', async () => {

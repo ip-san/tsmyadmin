@@ -18,6 +18,7 @@ import {
   SqlCancelRequestSchema,
   SqlRequestSchema,
   type SqlStreamEvent,
+  TableSearchQuerySchema,
   TriggerQuerySchema,
   UpdateRowRequestSchema,
 } from '@tsmyadmin/shared'
@@ -107,6 +108,15 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
           .get('session')
           .adapter.showCreateTable(ns(c.req.param('db'), q.schema), c.req.param('table'))
         return c.json({ sql })
+      })
+      // One table per request: the page runs them in turn, so a search can stop between tables and never ties up the
+      // session's small connection pool with a scan per table at once.
+      .get('/databases/:db/tables/:table/search', validate('query', TableSearchQuerySchema), async (c) => {
+        const q = c.req.valid('query')
+        const result = await c
+          .get('session')
+          .adapter.searchTable(ns(c.req.param('db'), q.schema), c.req.param('table'), q.q)
+        return c.json(result)
       })
       .get('/databases/:db/tables/:table/rows', validate('query', BrowseQuerySchema), async (c) => {
         const q = c.req.valid('query')

@@ -21,11 +21,13 @@ import type {
   StatementResult,
   TableInfo,
   TableSchema,
+  TableSearchResult,
   TriggerInfo,
   UserInfo,
   UserRef,
 } from '@tsmyadmin/shared'
 import { EXACT_COUNT_MAX_ROWS, isBinaryCell, isTruncatedCell, isViewKind, MAX_TEXT_CHARS } from '@tsmyadmin/shared'
+import { mysqlLiteral, pgLiteral } from './sql/literal.ts'
 import { Params, quoteIdent, quoteTable } from './sql/quote.ts'
 import { splitStatements, stripLeadingComments } from './sql/split.ts'
 import {
@@ -234,6 +236,10 @@ const FILTER_SQL: Record<Filter['op'], string> = {
  * Escapes LIKE metacharacters so a user string matches literally. `!` is the escape character (declared with
  * ESCAPE '!'): unlike a backslash it needs no dialect-specific string escaping of its own.
  */
+/** Column types the database-wide search skips: binary, bit strings and spatial types (matched on the type name). */
+const UNSEARCHABLE_TYPE =
+  /^(tiny|medium|long)?blob\b|^(var)?binary\b|^bit\b|^bytea\b|^(multi)?(point|linestring|polygon)\b|^geometry(collection)?\b|^geography\b/i
+
 export function escapeLike(text: string): string {
   return text.replaceAll('!', '!!').replaceAll('%', '!%').replaceAll('_', '!_')
 }
@@ -418,6 +424,33 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     // ctid is unique per physical relation only: a partitioned / inheritance parent repeats it across children.
     if (kind === 'ctid' && (schema.partitioned || schema.hasChildren)) return { keyKind: 'none', keyColumns: [] }
     return { keyKind: kind, keyColumns: kind === 'ctid' ? ['ctid'] : schema.columns.map((c) => c.name) }
+  }
+
+  async searchTable(ns: Namespace, table: string, term: string): Promise<TableSearchResult> {
+    const schema = await this.describeTable(ns, table)
+    const d = this.dialect
+    // Binary and spatial values have no meaningful text form to match (MySQL rejects LIKE on GEOMETRY outright).
+    const columns = schema.columns.filter((c) => !UNSEARCHABLE_TYPE.test(c.dataType)).map((c) => c.name)
+    if (columns.length === 0) return { total: 0, count: 'exact', columns: [], sql: '' }
+    const tableSql = quoteTable(d, ns, table)
+    // Same meaning of "contains" as the browse filter: the term is literal, wildcards added here. Case-insensitive
+    // on both servers — MySQL through the connection's collation, PostgreSQL with ILIKE — as phpMyAdmin searches.
+    const pattern = `%${escapeLike(term)}%`
+    const text = (c: string) => (d === 'mysql' ? `CAST(${quoteIdent(d, c)} AS CHAR)` : `${quoteIdent(d, c)}::text`)
+    const like = d === 'mysql' ? 'LIKE' : 'ILIKE'
+    const params = new Params(d)
+    const where = columns.map((c) => `${text(c)} ${like} ${params.add(pattern)} ESCAPE '!'`).join(' OR ')
+    // Bounded like the browse count: a term that matches most of a huge table is still one limited scan.
+    const countSql = `SELECT COUNT(*) FROM (SELECT 1 FROM ${tableSql} WHERE ${where} LIMIT ${params.add(EXACT_COUNT_MAX_ROWS + 1)}) AS tsmyadmin_search`
+    // For the SQL tab, where it is edited and run: the term is written in as a literal there.
+    const literal = d === 'mysql' ? mysqlLiteral(pattern) : pgLiteral(pattern)
+    const sql = `SELECT * FROM ${tableSql} WHERE ${columns.map((c) => `${text(c)} ${like} ${literal} ESCAPE '!'`).join(' OR ')}`
+    return this.withConn(ns, async (conn) => {
+      const cell = firstResult(await conn.query(countSql, params.values)).rows[0]?.[0]
+      const counted = typeof cell === 'number' ? cell : Number(cell ?? 0)
+      const bounded = counted > EXACT_COUNT_MAX_ROWS
+      return { total: bounded ? EXACT_COUNT_MAX_ROWS : counted, count: bounded ? 'lower_bound' : 'exact', columns, sql }
+    })
   }
 
   async browseRows(ns: Namespace, table: string, opts: BrowseOptions): Promise<BrowseResult> {

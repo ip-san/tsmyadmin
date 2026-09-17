@@ -22,6 +22,7 @@ import type {
   StatementResult,
   TableInfo,
   TableSchema,
+  TableSearchResult,
   TriggerInfo,
   UserInfo,
   UserOp,
@@ -204,6 +205,8 @@ export interface DatabaseAdapter {
    */
   listDependencies(ns: Namespace): Promise<ObjectDependency[] | null>
   browseRows(ns: Namespace, table: string, opts: BrowseOptions): Promise<BrowseResult>
+  /** Rows containing `term` in any searchable column (case-insensitive), for the database-wide search. */
+  searchTable(ns: Namespace, table: string, term: string): Promise<TableSearchResult>
   insertRow(ns: Namespace, table: string, values: RowValues): Promise<{ affectedRows: number }>
   /** Bulk insert (imports): parameterised multi-row INSERTs inside one transaction; all-or-nothing. */
   /**
@@ -280,6 +283,7 @@ export const ADAPTER_METHOD_NAMES = [
   'listEvents',
   'listDependencies',
   'browseRows',
+  'searchTable',
   'insertRow',
   'insertRows',
   'updateRow',

@@ -401,6 +401,39 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
       })
     })
 
+    describe('searchTable', () => {
+      it('counts rows containing the term in any column, ignoring case', async () => {
+        // "alice" is in both the name (Alice) and the email of the same row: one row, not two.
+        expect(await db.searchTable(ns, 'users', 'ALICE')).toMatchObject({ total: 1, count: 'exact' })
+        expect((await db.searchTable(ns, 'posts', 'alice')).total).toBe(0)
+      })
+
+      it('matches LIKE metacharacters literally', async () => {
+        // Unescaped, % and _ would match every row.
+        expect((await db.searchTable(ns, 'users', '%')).total).toBe(0)
+        expect((await db.searchTable(ns, 'users', '_')).total).toBe(0)
+      })
+
+      it('skips binary and bit columns instead of failing on them', async () => {
+        const r = await db.searchTable(ns, 'types_all', 'x')
+        expect(r.columns).not.toContain('blob_col')
+        expect(r.columns).not.toContain(dialect === 'mysql' ? 'varbinary_col' : 'blob_col')
+        if (dialect === 'mysql') expect(r.columns).not.toContain('bit_col')
+        expect(r.columns).toContain('text_col')
+        expect(r.total).toBeGreaterThanOrEqual(0)
+      })
+
+      it('gives a SELECT for the SQL tab that finds the same rows', async () => {
+        // A quote in the term (posts has "Bob's post"): the SELECT must still parse and find that row.
+        const found = await db.searchTable(ns, 'posts', "bob's")
+        expect(found.total).toBe(1)
+        const results = await exec(found.sql)
+        const rows = results[0]
+        expect(rows?.kind).toBe('rows')
+        expect(rows?.kind === 'rows' && rows.result.rows.length).toBe(found.total)
+      })
+    })
+
     describe('browseRows', () => {
       it('returns rows as arrays with column metadata and total', async () => {
         const r = await browseAll('users')

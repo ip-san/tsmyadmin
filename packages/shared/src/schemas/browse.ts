@@ -86,3 +86,28 @@ export const BrowseResultSchema = ResultSetSchema.extend({
   statement: BrowseStatementSchema,
 })
 export type BrowseResult = z.infer<typeof BrowseResultSchema>
+
+/** Longest term the database-wide search accepts. */
+export const SEARCH_TERM_MAX = 200
+
+export const TableSearchQuerySchema = z.object({
+  q: z.string().min(1).max(SEARCH_TERM_MAX),
+  schema: z.string().min(1).optional(),
+})
+export type TableSearchQuery = z.infer<typeof TableSearchQuerySchema>
+
+/**
+ * One table's share of a database-wide search: how many rows contain the term in any searchable column.
+ *
+ * `count` is `exact` or `lower_bound` — the count stops at EXACT_COUNT_MAX_ROWS, as the browse count does, so a
+ * term matching most of a huge table costs one bounded scan. `columns` lists what was searched (binary and
+ * spatial columns are not). `sql` is a SELECT for the SQL tab with the term written in as a literal, because it
+ * is meant to be edited and run; it is not a record of what the count ran, which bound the term as a parameter.
+ */
+export const TableSearchResultSchema = z.object({
+  total: z.number(),
+  count: CountKindSchema,
+  columns: z.array(z.string()),
+  sql: z.string(),
+})
+export type TableSearchResult = z.infer<typeof TableSearchResultSchema>
