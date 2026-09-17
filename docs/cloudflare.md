@@ -55,7 +55,7 @@ bunx wrangler secret put TSMYADMIN_ALLOWED_HOSTS   # db.example.com:5432
 
 > `wrangler secret put` で登録した値が届くのは **Worker** までです。コンテナに渡るのは `deploy/cloudflare/worker.ts` の `envVars` に書いた値だけです。
 >
-> 上の 3 つ（と `TSMYADMIN_SERVERS`）は既に書いてあるので、ここで何かする必要はありません。**この先べつの変数を足すときは、同じ一覧にも追記してください。** 必須の変数（上の 3 つ）を渡し忘れるとデプロイ時に止まります。**それ以外の変数は、`envVars` に無いと黙って無視され、組み込みの既定値のままになります** — `wrangler secret put SESSION_TTL_MINUTES` だけしてもエラーは出ず、セッションは 30 分のままです。
+> 上の 3 つ（と `TSMYADMIN_SERVERS`）は既に書いてあるので、ここで何かする必要はありません。**この先べつの変数を足すときは、同じ一覧にも追記してください。** 必須の変数（上の 3 つ）を渡し忘れても **`bun run cf:deploy` は成功します**。失敗するのは最初のリクエストで、`bunx wrangler tail` に「`SESSION_SECRET` is not set」のように出ます。**それ以外の変数は、`envVars` に無いと黙って無視され、組み込みの既定値のままになります** — `wrangler secret put SESSION_TTL_MINUTES` だけしてもエラーは出ず、セッションは 30 分のままです。
 
 ### 3. 確かめてからデプロイする
 

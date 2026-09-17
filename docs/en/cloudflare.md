@@ -1,4 +1,4 @@
-<!-- translated-from: docs/cloudflare.md sha256:64e746c133db97f2e4ed9ac801f91c35a1abcaf0574352b92ad36a2be82307ff -->
+<!-- translated-from: docs/cloudflare.md sha256:f67a84ca9bbc18fecf66c52666a868b286d22954e27435dac76cbb74c400607c -->
 
 # Deploying to Cloudflare
 
@@ -57,7 +57,7 @@ Add `TSMYADMIN_SERVERS` the same way if you use server presets ([deployment.md](
 
 > A value stored with `wrangler secret put` reaches the **Worker**. The container receives only what `envVars` in `deploy/cloudflare/worker.ts` lists.
 >
-> The three above (and `TSMYADMIN_SERVERS`) are already listed there, so nothing is needed from you here. **When you add a further variable later, add it to that list too.** Missing one of the three required variables stops the deploy. **Any other variable is silently ignored when it is not in `envVars`, and its built-in default applies** — `wrangler secret put SESSION_TTL_MINUTES` on its own raises no error and sessions still expire after 30 minutes.
+> The three above (and `TSMYADMIN_SERVERS`) are already listed there, so nothing is needed from you here. **When you add a further variable later, add it to that list too.** Missing one of the three required variables **still deploys successfully**. It fails on the first request instead, and `bunx wrangler tail` shows which one — `SESSION_SECRET is not set`. **Any other variable is silently ignored when it is not in `envVars`, and its built-in default applies** — `wrangler secret put SESSION_TTL_MINUTES` on its own raises no error and sessions still expire after 30 minutes.
 
 ### 3. Check, then deploy
 
