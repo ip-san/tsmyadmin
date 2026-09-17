@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { StatementResult } from '@tsmyadmin/shared'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -156,6 +156,28 @@ describe('ResultsView printing', () => {
     // Now a Ctrl+P prints every statement again, and the screen is windowed again.
     expect(firstHidden()).toBe(false)
     expect(document.querySelectorAll('section[aria-label="文 2"] tbody tr[data-index]').length).toBeLessThan(300)
+  })
+
+  it('leaves nothing behind when the results go away before the print is seen to end', async () => {
+    vi.spyOn(window, 'print').mockImplementation(() => undefined)
+    const first = render(<ResultsView results={twoResults()} maxRows={1000} />)
+    await userEvent.click(
+      within(first.container).getByRole('button', { name: new RegExp(`文 2.*${locale.sql.print}`) })
+    )
+    first.unmount()
+
+    // A later print elsewhere, in progress: a key press must not be taken as the end of the earlier one.
+    const second = render(<ResultsView results={twoResults()} maxRows={1000} />)
+    await act(async () => {
+      window.dispatchEvent(new Event('beforeprint'))
+    })
+    const rows = () => second.container.querySelectorAll('section[aria-label="文 2"] tbody tr[data-index]').length
+    expect(rows()).toBe(300)
+    await userEvent.keyboard('{Shift}')
+    expect(rows()).toBe(300)
+    await act(async () => {
+      window.dispatchEvent(new Event('afterprint'))
+    })
   })
 
   it('puts the screen back as soon as print() returns in a browser that reports the print finished', async () => {

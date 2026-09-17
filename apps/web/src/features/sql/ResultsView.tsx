@@ -211,34 +211,41 @@ export function ResultsView({ results, maxRows }: { results: StatementResult[]; 
     window.addEventListener('afterprint', clear)
     return () => window.removeEventListener('afterprint', clear)
   }, [])
+  /** Undoes a Print whose end has not been seen yet; also run when the results go away, so nothing outlives them. */
+  const pendingReset = useRef<(() => void) | null>(null)
+  useEffect(() => () => pendingReset.current?.(), [])
   // Stable across renders so the memoised statements are not all re-rendered by a new function each time.
   const onPrint = useRef((index: number) => {
+    pendingReset.current?.()
     // Committed before the dialog opens: the browser lays the page out for paper at the moment print() is called.
     flushSync(() => {
       setPrintTarget({ index, at: new Date() })
       setPrinting(true)
     })
     let finished = false
-    const reset = () => {
+    const markFinished = () => {
       finished = true
-      for (const [type, fn] of events) window.removeEventListener(type, fn, true)
-      setPrinting(false)
-      setPrintTarget(null)
     }
     // Left set, the next Ctrl+P would print this statement alone and the screen would stay unwindowed. Most
     // browsers block in print() and fire afterprint inside it; one that returns early is reset by afterprint later,
     // and one that never fires it by the user's next key press or click.
-    const events: [string, () => void][] = [
-      ['afterprint', reset],
-      ['keydown', reset],
-      ['pointerdown', reset],
-    ]
-    window.addEventListener('afterprint', () => (finished = true), { once: true })
+    const later = ['afterprint', 'keydown', 'pointerdown'] as const
+    const reset = () => {
+      for (const type of later) window.removeEventListener(type, reset, true)
+      pendingReset.current = null
+      setPrinting(false)
+      setPrintTarget(null)
+    }
+    window.addEventListener('afterprint', markFinished)
     try {
       window.print()
     } finally {
+      window.removeEventListener('afterprint', markFinished)
       if (finished) reset()
-      else for (const [type, fn] of events) window.addEventListener(type, fn, true)
+      else {
+        for (const type of later) window.addEventListener(type, reset, true)
+        pendingReset.current = reset
+      }
     }
   }).current
   if (results.length === 0) return <Notice>{locale.sql.empty}</Notice>
