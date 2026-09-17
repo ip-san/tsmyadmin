@@ -237,6 +237,7 @@ export const ja = {
     updated: '行を更新しました',
     deleted: (n: number) => `${n.toLocaleString('ja-JP')} 行を削除しました`,
     nothingChanged: '変更はありません',
+    deleteRow: (n: number) => `${n.toLocaleString('ja-JP')} 行目を削除`,
     editRow: (n: number) => `${n.toLocaleString('ja-JP')} 行目を編集`,
     selectRow: (n: number) => `${n.toLocaleString('ja-JP')} 行目を選択`,
     backToBrowse: '一覧へ戻る',

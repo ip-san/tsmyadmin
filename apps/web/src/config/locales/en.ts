@@ -241,6 +241,7 @@ export const en = {
     updated: 'Row updated',
     deleted: (n: number) => `Deleted ${plural(n, 'row', 'rows')}`,
     nothingChanged: 'Nothing changed',
+    deleteRow: (n: number) => `Delete row ${n.toLocaleString('en-US')}`,
     editRow: (n: number) => `Edit row ${n.toLocaleString('en-US')}`,
     selectRow: (n: number) => `Select row ${n.toLocaleString('en-US')}`,
     backToBrowse: 'Back to Browse',

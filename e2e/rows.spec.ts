@@ -114,6 +114,20 @@ for (const t of TARGETS) {
       })
     })
 
+    test('deletes a single row from its own delete button', async ({ page }) => {
+      await withScratchTable(page, t, async (table) => {
+        await page.goto(`${tableUrl(t, table)}${t.schema ? '&' : '?'}sort=id:asc`)
+        // A ticked row elsewhere must not be swept up: the row's own button deletes that row only.
+        await page.getByLabel('1 行目を選択').check()
+        await page.getByRole('button', { name: '2 行目を削除' }).click()
+        await expect(page.getByRole('dialog')).toContainText('1 行を削除します')
+        await page.getByRole('dialog').getByRole('button', { name: '削除する' }).click()
+        await expect(page.getByText('1 行を削除しました')).toBeVisible()
+        await expect(page.getByRole('cell', { name: 'two', exact: true })).toHaveCount(0)
+        await expect(page.getByRole('cell', { name: 'one', exact: true })).toBeVisible()
+      })
+    })
+
     test('searches with column conditions and shows active filters', async ({ page }) => {
       await page.goto(tableUrl(t, 'users', '/search'))
       await page.getByLabel('age: 条件').selectOption('gt')

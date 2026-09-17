@@ -44,7 +44,8 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
   const [editingRow, setEditingRow] = useState<number | null>(null)
   const [copyingRow, setCopyingRow] = useState<number | null>(null)
   const [inline, setInline] = useState<{ row: number; col: number } | null>(null)
-  const [confirmDelete, setConfirmDelete] = useState(false)
+  /** What the delete dialog is confirming: the ticked rows, or the one row whose own delete button was pressed. */
+  const [deleteTarget, setDeleteTarget] = useState<'selected' | number | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const noticeRef = useRef<HTMLOutputElement>(null)
   /** An inline-saved row (its other columns' values), until the refetched rows are committed and its fate is known. */
@@ -60,7 +61,7 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
     setInline(null)
     setEditingRow(null)
     setCopyingRow(null)
-    setConfirmDelete(false)
+    setDeleteTarget(null)
     setNotice(null)
   }
   /** Closes the inline editor and returns focus to its cell (keyboard users would otherwise land on <body>). */
@@ -161,7 +162,7 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
       update.reset()
       setNotice(locale.rows.deleted(r.affectedRows))
       setSelected(new Set())
-      setConfirmDelete(false)
+      setDeleteTarget(null)
       await invalidate()
       // The deleted rows' checkboxes and the (now disabled) delete button cannot take focus back; the notice is
       // announced anyway, so the pane keeps its scroll position.
@@ -181,6 +182,12 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
   const allSelected = selectableIdx.length > 0 && selectableIdx.every((i) => selected.has(i))
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(selectableIdx))
   const selectedKeys = [...selected].map((i) => keys[i]).filter((k): k is RowKey => k !== null && k !== undefined)
+  const deleteKeys =
+    deleteTarget === 'selected'
+      ? selectedKeys
+      : deleteTarget === null
+        ? []
+        : [keys[deleteTarget]].filter((k): k is RowKey => k !== null && k !== undefined)
   const editingKey = editingRow === null ? null : (keys[editingRow] ?? null)
   const editingValues = editingRow === null ? null : rowToValues(data, data.rows[editingRow] ?? [])
   const copyingValues = copyingRow === null ? null : rowToValues(data, data.rows[copyingRow] ?? [])
@@ -204,7 +211,7 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
         editable={editable}
         selectedCount={selected.size}
         canDelete={selectedKeys.length > 0}
-        onDelete={() => setConfirmDelete(true)}
+        onDelete={() => setDeleteTarget('selected')}
       />
       {/* The live region stays mounted so screen readers announce a message that appears later. */}
       <output ref={noticeRef} tabIndex={-1} aria-live="polite" className={notice ? 'block' : 'sr-only'}>
@@ -259,6 +266,7 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
                 onToggle={toggle}
                 onEdit={setEditingRow}
                 onCopy={setCopyingRow}
+                onDelete={setDeleteTarget}
                 onInline={openInline}
                 onInlineSave={saveInline}
                 onInlineCancel={cancelInline}
@@ -283,12 +291,16 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
       />
 
       <DeleteRowsDialog
-        open={confirmDelete}
-        count={selectedKeys.length}
+        open={deleteTarget !== null}
+        count={deleteKeys.length}
         pending={remove.isPending}
         error={remove.error}
-        onCancel={() => setConfirmDelete(false)}
-        onConfirm={() => remove.mutate(selectedKeys)}
+        onCancel={() => {
+          setDeleteTarget(null)
+          // Otherwise a failure from this attempt is still shown the next time the dialog opens, for other rows.
+          remove.reset()
+        }}
+        onConfirm={() => remove.mutate(deleteKeys)}
       />
     </div>
   )

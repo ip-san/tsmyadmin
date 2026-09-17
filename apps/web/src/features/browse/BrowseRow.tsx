@@ -28,6 +28,7 @@ export interface BrowseRowProps {
   onToggle: (index: number) => void
   onEdit: (index: number) => void
   onCopy: (index: number) => void
+  onDelete: (index: number) => void
   onInline: (index: number, col: number) => void
   onInlineSave: (key: RowKey, column: string, value: InputCell) => void
   onInlineCancel: () => void
@@ -54,6 +55,7 @@ export const BrowseRow = memo(function BrowseRow({
   onToggle,
   onEdit,
   onCopy,
+  onDelete,
   onInline,
   onInlineSave,
   onInlineCancel,
@@ -68,6 +70,7 @@ export const BrowseRow = memo(function BrowseRow({
           onToggle={() => onToggle(i)}
           onEdit={() => onEdit(i)}
           onCopy={() => onCopy(i)}
+          onDelete={() => onDelete(i)}
         />
       ) : null}
       {columns.map((c) => {

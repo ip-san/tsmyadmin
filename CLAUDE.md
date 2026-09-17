@@ -31,7 +31,7 @@ bun run lighthouse        # Lighthouse CI（警告のみ、要 Chrome）
 
 - ユニット/API/Web テスト定義: <!-- stat:unit-tests -->376<!-- /stat --> 件
 - Adapter conformance: <!-- stat:conformance -->124<!-- /stat --> 件 × 2 方言
-- E2E: <!-- stat:e2e -->56<!-- /stat --> 件
+- E2E: <!-- stat:e2e -->57<!-- /stat --> 件
 - API ルート: <!-- stat:routes -->34<!-- /stat -->
 
 ## 設計ドキュメント
