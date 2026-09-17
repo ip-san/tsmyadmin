@@ -99,6 +99,10 @@ export const ForeignKeyDefSchema = z.object({
 })
 export type ForeignKeyDef = z.infer<typeof ForeignKeyDefSchema>
 
+/** A foreign key with the table that holds it: every key of a database or schema at once (the designer). */
+export const RelationDefSchema = ForeignKeyDefSchema.extend({ table: z.string() })
+export type RelationDef = z.infer<typeof RelationDefSchema>
+
 export const ReferencingKeyDefSchema = z.object({
   name: z.string(),
   /** Table holding the foreign key. */

@@ -78,6 +78,11 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
         const q = c.req.valid('query')
         return c.json(await c.get('session').adapter.listTables(ns(c.req.param('db'), q.schema)))
       })
+      // Every foreign key of the database (or schema) in one catalog query, for the designer.
+      .get('/databases/:db/foreign-keys', validate('query', SchemaQuerySchema), async (c) => {
+        const q = c.req.valid('query')
+        return c.json(await c.get('session').adapter.listForeignKeys(ns(c.req.param('db'), q.schema)))
+      })
       .get('/databases/:db/routines', validate('query', SchemaQuerySchema), async (c) => {
         const q = c.req.valid('query')
         return c.json(await c.get('session').adapter.listRoutines(ns(c.req.param('db'), q.schema)))

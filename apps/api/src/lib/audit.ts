@@ -39,6 +39,7 @@ export const PASSTHROUGH_METHODS = [
   'browseRows',
   'searchTable',
   'buildQuery',
+  'listForeignKeys',
   'showCreateTable',
   'iterateRows',
   'listUsers',

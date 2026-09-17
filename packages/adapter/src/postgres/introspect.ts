@@ -4,6 +4,7 @@ import type {
   IndexDef,
   Namespace,
   ReferencingKeyDef,
+  RelationDef,
   TableInfo,
   TableSchema,
 } from '@tsmyadmin/shared'
@@ -88,6 +89,49 @@ export async function pgListTables(conn: Conn, ns: Namespace): Promise<TableInfo
         : {}),
     }
   })
+}
+
+/**
+ * One pg_constraint row as a key. Columns: name, referenced schema, referenced table, ON UPDATE code, ON DELETE
+ * code, key columns, referenced columns, holding table (NULL when the query is for one table).
+ */
+function foreignKeyRow(ns: Namespace, row: unknown[]): RelationDef {
+  return {
+    table: row[7] === null ? '' : str(row[7]),
+    name: str(row[0]),
+    columns: list(row[5]),
+    refNamespace: { database: ns.database, schema: str(row[1]) },
+    refTable: str(row[2]),
+    refColumns: list(row[6]),
+    onUpdate: FK_ACTIONS[str(row[3])] ?? null,
+    onDelete: FK_ACTIONS[str(row[4])] ?? null,
+  }
+}
+
+/**
+ * Every foreign key held by a table of the schema, ordered by table and constraint name. A key declared on a
+ * partitioned table is listed once, on that table, not again as the copy each partition holds.
+ */
+export async function pgListForeignKeys(conn: Conn, ns: Namespace): Promise<RelationDef[]> {
+  const fk = firstResult(
+    await conn.query(
+      `SELECT con.conname, nr.nspname, cr.relname, con.confupdtype, con.confdeltype,
+              (SELECT string_agg(a.attname, $2 ORDER BY x.ord) FROM unnest(con.conkey) WITH ORDINALITY AS x(attnum, ord)
+                 JOIN pg_attribute a ON a.attrelid = con.conrelid AND a.attnum = x.attnum),
+              (SELECT string_agg(a.attname, $2 ORDER BY x.ord) FROM unnest(con.confkey) WITH ORDINALITY AS x(attnum, ord)
+                 JOIN pg_attribute a ON a.attrelid = con.confrelid AND a.attnum = x.attnum),
+              c.relname
+       FROM pg_constraint con
+       JOIN pg_class c ON c.oid = con.conrelid
+       JOIN pg_namespace n ON n.oid = c.relnamespace
+       JOIN pg_class cr ON cr.oid = con.confrelid
+       JOIN pg_namespace nr ON nr.oid = cr.relnamespace
+       WHERE n.nspname = $1 AND con.contype = 'f' AND con.conparentid = 0
+       ORDER BY c.relname, con.conname`,
+      [ns.schema ?? 'public', SEP]
+    )
+  )
+  return fk.rows.map((row) => foreignKeyRow(ns, row))
 }
 
 export async function pgDescribeTable(conn: Conn, ns: Namespace, table: string): Promise<TableSchema> {
@@ -180,7 +224,8 @@ export async function pgDescribeTable(conn: Conn, ns: Namespace, table: string):
               (SELECT string_agg(a.attname, $2 ORDER BY x.ord) FROM unnest(con.conkey) WITH ORDINALITY AS x(attnum, ord)
                  JOIN pg_attribute a ON a.attrelid = con.conrelid AND a.attnum = x.attnum),
               (SELECT string_agg(a.attname, $2 ORDER BY x.ord) FROM unnest(con.confkey) WITH ORDINALITY AS x(attnum, ord)
-                 JOIN pg_attribute a ON a.attrelid = con.confrelid AND a.attnum = x.attnum)
+                 JOIN pg_attribute a ON a.attrelid = con.confrelid AND a.attnum = x.attnum),
+              NULL
        FROM pg_constraint con
        JOIN pg_class cr ON cr.oid = con.confrelid
        JOIN pg_namespace nr ON nr.oid = cr.relnamespace
@@ -189,15 +234,10 @@ export async function pgDescribeTable(conn: Conn, ns: Namespace, table: string):
       [regclass, SEP]
     )
   )
-  const foreignKeys: ForeignKeyDef[] = fk.rows.map((row) => ({
-    name: str(row[0]),
-    columns: list(row[5]),
-    refNamespace: { database: ns.database, schema: str(row[1]) },
-    refTable: str(row[2]),
-    refColumns: list(row[6]),
-    onUpdate: FK_ACTIONS[str(row[3])] ?? null,
-    onDelete: FK_ACTIONS[str(row[4])] ?? null,
-  }))
+  const foreignKeys = fk.rows.map((row): ForeignKeyDef => {
+    const { table: _, ...key } = foreignKeyRow(ns, row)
+    return key
+  })
 
   const refs = firstResult(
     await conn.query(

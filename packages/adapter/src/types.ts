@@ -16,6 +16,7 @@ import type {
   ProcessInfo,
   QueryBuilderResult,
   QueryBuilderSpec,
+  RelationDef,
   RoutineInfo,
   RoutineKind,
   RowKey,
@@ -214,6 +215,8 @@ export interface DatabaseAdapter {
    * structure; refuses tables that no foreign key connects to the rest.
    */
   buildQuery(ns: Namespace, spec: QueryBuilderSpec): Promise<QueryBuilderResult>
+  /** Every foreign key held by a table of the namespace, ordered by table and constraint name (the designer). */
+  listForeignKeys(ns: Namespace): Promise<RelationDef[]>
   insertRow(ns: Namespace, table: string, values: RowValues): Promise<{ affectedRows: number }>
   /** Bulk insert (imports): parameterised multi-row INSERTs inside one transaction; all-or-nothing. */
   /**
@@ -292,6 +295,7 @@ export const ADAPTER_METHOD_NAMES = [
   'browseRows',
   'searchTable',
   'buildQuery',
+  'listForeignKeys',
   'insertRow',
   'insertRows',
   'updateRow',

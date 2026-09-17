@@ -15,6 +15,7 @@ import type {
   QueryBuilderCondition,
   QueryBuilderResult,
   QueryBuilderSpec,
+  RelationDef,
   RoutineInfo,
   RoutineKind,
   RowKey,
@@ -349,6 +350,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
   abstract listDatabases(): Promise<DatabaseInfo[]>
   abstract listSchemas(database: string): Promise<string[]>
   abstract listTables(ns: Namespace): Promise<TableInfo[]>
+  abstract listForeignKeys(ns: Namespace): Promise<RelationDef[]>
   abstract describeTable(ns: Namespace, table: string): Promise<TableSchema>
   abstract listRoutines(ns: Namespace): Promise<RoutineInfo[]>
   abstract routineDefinition(ns: Namespace, name: string, kind: RoutineKind): Promise<string | null>

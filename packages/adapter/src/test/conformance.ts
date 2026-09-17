@@ -446,6 +446,42 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
       })
     })
 
+    describe('listForeignKeys', () => {
+      it('lists every key of the namespace, as describeTable reports them, ordered by table', async () => {
+        const t = `${scratch}_fk`
+        await execOk(`DROP TABLE IF EXISTS ${t}`)
+        // Key columns in a different order from the referenced ones: they must stay paired, not sorted.
+        await execOk(
+          `CREATE TABLE ${t} (id INT PRIMARY KEY, y INT NULL, x INT NULL, CONSTRAINT ${t}_c FOREIGN KEY (y, x) REFERENCES composite_pk (a, b))`
+        )
+        try {
+          const keys = await db.listForeignKeys(ns)
+          expect(keys).toContainEqual({
+            table: 'posts',
+            name: 'fk_posts_user',
+            columns: ['user_id'],
+            refNamespace: ns.schema ? { database: ns.database, schema: ns.schema } : { database: ns.database },
+            refTable: 'users',
+            refColumns: ['id'],
+            onUpdate: 'RESTRICT',
+            onDelete: 'CASCADE',
+          })
+          expect(keys.find((k) => k.table === t)).toMatchObject({ columns: ['y', 'x'], refColumns: ['a', 'b'] })
+          const tables = keys.map((k) => k.table)
+          expect(tables).toEqual([...tables].sort())
+          for (const table of new Set(tables)) {
+            const described = (await db.describeTable(ns, table)).foreignKeys
+            expect(
+              keys.filter((k) => k.table === table).map(({ table: _, ...key }) => key),
+              table
+            ).toEqual(described)
+          }
+        } finally {
+          await exec(`DROP TABLE IF EXISTS ${t}`, { stopOnError: false })
+        }
+      })
+    })
+
     describe('buildQuery', () => {
       const rowsOf = async (sql: string) => {
         const [r] = await exec(sql)

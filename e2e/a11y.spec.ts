@@ -61,6 +61,9 @@ for (const t of TARGETS) {
       await page.getByRole('button', { name: '条件を追加' }).click()
       await page.getByLabel('グループ 1 の条件 1の値').waitFor()
       await scan(page)
+      await page.goto(t.schema ? `/db/${t.database}/designer?schema=${t.schema}` : `/db/${t.database}/designer`)
+      await page.getByRole('table', { name: '外部キー' }).waitFor()
+      await scan(page)
     })
 
     test('server status, processes and users screens', async ({ page }) => {

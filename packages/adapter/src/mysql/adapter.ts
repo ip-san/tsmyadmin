@@ -8,6 +8,7 @@ import type {
   Namespace,
   ObjectDependency,
   ProcessInfo,
+  RelationDef,
   RoutineInfo,
   RoutineKind,
   ServerInfo,
@@ -38,7 +39,7 @@ import { quoteIdent, quoteTable } from '../sql/quote.ts'
 import { AdapterError, type AdapterErrorCode, type ConnectionConfig } from '../types.ts'
 import { mysqlDdl } from './ddl.ts'
 import { mysqlExporter } from './export.ts'
-import { mysqlDescribeTable, mysqlListTables } from './introspect.ts'
+import { mysqlDescribeTable, mysqlListForeignKeys, mysqlListTables } from './introspect.ts'
 import {
   mysqlListDependencies,
   mysqlListEvents,
@@ -558,6 +559,10 @@ export class MysqlAdapter extends BaseAdapter {
 
   listDependencies(ns: Namespace): Promise<ObjectDependency[] | null> {
     return this.withConn(ns, (conn) => mysqlListDependencies(conn, ns))
+  }
+
+  listForeignKeys(ns: Namespace): Promise<RelationDef[]> {
+    return this.withConn(ns, (conn) => mysqlListForeignKeys(conn, ns))
   }
 
   describeTable(ns: Namespace, table: string): Promise<TableSchema> {

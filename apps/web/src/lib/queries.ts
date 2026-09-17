@@ -11,6 +11,7 @@ import type {
   ProcessInfo,
   QueryBuilderRequestInput,
   QueryBuilderResult,
+  RelationDef,
   RoutineDefinition,
   RoutineInfo,
   RoutineKind,
@@ -95,6 +96,15 @@ export const routineDefinitionQuery = (db: string, name: string, kind: RoutineKi
         })
       ),
     staleTime: 60_000,
+  })
+
+export const foreignKeysQuery = (db: string, schema?: string) =>
+  queryOptions({
+    queryKey: ['foreign-keys', db, schema ?? ''],
+    queryFn: () =>
+      unwrap<RelationDef[]>(
+        api.databases[':db']['foreign-keys'].$get({ param: { db: enc(db) }, query: schemaQuery(schema) })
+      ),
   })
 
 export const routinesQuery = (db: string, schema?: string) =>

@@ -7,6 +7,7 @@ import type {
   Namespace,
   ObjectDependency,
   ProcessInfo,
+  RelationDef,
   RoutineInfo,
   RoutineKind,
   ServerInfo,
@@ -34,7 +35,7 @@ import { quoteIdent, quoteTable } from '../sql/quote.ts'
 import { AdapterError, type AdapterErrorCode, type ConnectionConfig, type RowBatch } from '../types.ts'
 import { pgCreateStatements, pgDdl, pgTableCatalog } from './ddl.ts'
 import { pgExporter } from './export.ts'
-import { pgDescribeTable, pgListSchemas, pgListTables } from './introspect.ts'
+import { pgDescribeTable, pgListForeignKeys, pgListSchemas, pgListTables } from './introspect.ts'
 import { pgListDependencies, pgListRoutines, pgListTriggers, pgRoutineDefinition } from './routines.ts'
 import { pgKillProcess, pgListProcesses, pgListStatus, pgListVariables, pgServerInfo } from './server.ts'
 import { pgListUsers, pgShowGrants, pgUsers } from './users.ts'
@@ -408,6 +409,10 @@ export class PostgresAdapter extends BaseAdapter {
 
   describeTable(ns: Namespace, table: string): Promise<TableSchema> {
     return this.withConn(ns, (conn) => pgDescribeTable(conn, ns, table))
+  }
+
+  listForeignKeys(ns: Namespace): Promise<RelationDef[]> {
+    return this.withConn(ns, (conn) => pgListForeignKeys(conn, ns))
   }
 
   get serverNamespace(): Namespace {

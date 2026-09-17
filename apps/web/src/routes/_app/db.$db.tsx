@@ -49,6 +49,7 @@ function DatabaseLayout() {
           { label: locale.tabs.sql, to: '/db/$db/sql', params: { db }, search },
           { label: locale.tabs.search, to: '/db/$db/search', params: { db }, search },
           { label: locale.tabs.query, to: '/db/$db/query', params: { db }, search },
+          { label: locale.tabs.designer, to: '/db/$db/designer', params: { db }, search },
           { label: locale.tabs.export, to: '/db/$db/export', params: { db }, search },
           { label: locale.tabs.import, to: '/db/$db/import', params: { db }, search },
           { label: locale.tabs.privileges, to: '/db/$db/privileges', params: { db }, search },

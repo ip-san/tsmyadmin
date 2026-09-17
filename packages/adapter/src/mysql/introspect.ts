@@ -4,6 +4,7 @@ import type {
   IndexDef,
   Namespace,
   ReferencingKeyDef,
+  RelationDef,
   TableInfo,
   TableSchema,
 } from '@tsmyadmin/shared'
@@ -149,6 +150,48 @@ function normaliseDefault(
   return { text: raw, expr: BINARY_TYPE.test(columnType) }
 }
 
+/**
+ * Rows of KEY_COLUMN_USAGE ⨝ REFERENTIAL_CONSTRAINTS — one per key column, in constraint then ordinal order — as
+ * keys. Columns: constraint, column, referenced schema, referenced table, referenced column, ON UPDATE, ON DELETE,
+ * table.
+ */
+function groupForeignKeys(rows: unknown[][]): RelationDef[] {
+  const keys = new Map<string, RelationDef>()
+  for (const row of rows) {
+    // Keyed by table as well as name, so two keys are never merged into one whatever a server allows for names.
+    const id = JSON.stringify([str(row[7]), str(row[0])])
+    const entry = keys.get(id) ?? {
+      table: str(row[7]),
+      name: str(row[0]),
+      columns: [],
+      refNamespace: { database: str(row[2]) },
+      refTable: str(row[3]),
+      refColumns: [],
+      onUpdate: strOrNull(row[5]),
+      onDelete: strOrNull(row[6]),
+    }
+    entry.columns.push(str(row[1]))
+    entry.refColumns.push(str(row[4]))
+    keys.set(id, entry)
+  }
+  return [...keys.values()]
+}
+
+/** Every foreign key held by a table of the database, ordered by table and constraint name. */
+export async function mysqlListForeignKeys(conn: Conn, ns: Namespace): Promise<RelationDef[]> {
+  const fk = firstResult(
+    await conn.query(
+      `SELECT k.CONSTRAINT_NAME, k.COLUMN_NAME, k.REFERENCED_TABLE_SCHEMA, k.REFERENCED_TABLE_NAME, k.REFERENCED_COLUMN_NAME, r.UPDATE_RULE, r.DELETE_RULE, k.TABLE_NAME
+       FROM information_schema.KEY_COLUMN_USAGE k
+       JOIN information_schema.REFERENTIAL_CONSTRAINTS r ON r.CONSTRAINT_SCHEMA = k.CONSTRAINT_SCHEMA AND r.CONSTRAINT_NAME = k.CONSTRAINT_NAME
+       WHERE k.TABLE_SCHEMA = ? AND k.REFERENCED_TABLE_NAME IS NOT NULL
+       ORDER BY k.TABLE_NAME, k.CONSTRAINT_NAME, k.ORDINAL_POSITION`,
+      [ns.database]
+    )
+  )
+  return groupForeignKeys(fk.rows)
+}
+
 export async function mysqlDescribeTable(
   conn: Conn,
   ns: Namespace,
@@ -219,7 +262,7 @@ export async function mysqlDescribeTable(
 
   const fk = firstResult(
     await conn.query(
-      `SELECT k.CONSTRAINT_NAME, k.COLUMN_NAME, k.REFERENCED_TABLE_SCHEMA, k.REFERENCED_TABLE_NAME, k.REFERENCED_COLUMN_NAME, r.UPDATE_RULE, r.DELETE_RULE
+      `SELECT k.CONSTRAINT_NAME, k.COLUMN_NAME, k.REFERENCED_TABLE_SCHEMA, k.REFERENCED_TABLE_NAME, k.REFERENCED_COLUMN_NAME, r.UPDATE_RULE, r.DELETE_RULE, k.TABLE_NAME
        FROM information_schema.KEY_COLUMN_USAGE k
        JOIN information_schema.REFERENTIAL_CONSTRAINTS r ON r.CONSTRAINT_SCHEMA = k.CONSTRAINT_SCHEMA AND r.CONSTRAINT_NAME = k.CONSTRAINT_NAME
        WHERE k.TABLE_SCHEMA = ? AND k.TABLE_NAME = ? AND k.REFERENCED_TABLE_NAME IS NOT NULL
@@ -227,22 +270,7 @@ export async function mysqlDescribeTable(
       [ns.database, table]
     )
   )
-  const fkMap = new Map<string, ForeignKeyDef>()
-  for (const row of fk.rows) {
-    const name = str(row[0])
-    const entry = fkMap.get(name) ?? {
-      name,
-      columns: [],
-      refNamespace: { database: str(row[2]) },
-      refTable: str(row[3]),
-      refColumns: [],
-      onUpdate: strOrNull(row[5]),
-      onDelete: strOrNull(row[6]),
-    }
-    entry.columns.push(str(row[1]))
-    entry.refColumns.push(str(row[4]))
-    fkMap.set(name, entry)
-  }
+  const foreignKeys = groupForeignKeys(fk.rows).map(({ table: _, ...key }): ForeignKeyDef => key)
 
   const refs = firstResult(
     await conn.query(
@@ -282,7 +310,7 @@ export async function mysqlDescribeTable(
     columns,
     primaryKey,
     indexes,
-    foreignKeys: [...fkMap.values()],
+    foreignKeys,
     referencedBy: [...refMap.values()],
   }
 }

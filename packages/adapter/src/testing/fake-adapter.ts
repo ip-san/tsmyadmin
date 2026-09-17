@@ -12,6 +12,7 @@ import type {
   ProcessInfo,
   QueryBuilderResult,
   QueryBuilderSpec,
+  RelationDef,
   RoutineInfo,
   RoutineKind,
   RowKey,
@@ -267,6 +268,13 @@ export class FakeAdapter implements DatabaseAdapter {
       })
     ).length
     return { total, count: 'exact', columns, sql: `SELECT * FROM ${table}` }
+  }
+
+  async listForeignKeys(ns: Namespace): Promise<RelationDef[]> {
+    this.record('listForeignKeys', ns)
+    const db = this.databases[ns.database]
+    if (!db) throw new AdapterError('NOT_FOUND', `Unknown database: ${ns.database}`)
+    return Object.values(db.tables).flatMap((t) => t.schema.foreignKeys.map((fk) => ({ ...fk, table: t.schema.name })))
   }
 
   async buildQuery(ns: Namespace, spec: QueryBuilderSpec): Promise<QueryBuilderResult> {

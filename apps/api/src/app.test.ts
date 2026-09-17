@@ -9,6 +9,7 @@ import {
   KeyValueSchema,
   ProcessInfoSchema,
   QueryBuilderResultSchema,
+  RelationDefSchema,
   SAVED_QUERY_MAX_SQL,
   SavedQuerySchema,
   SEARCH_TERM_MAX,
@@ -914,6 +915,19 @@ describe('sql & ddl', () => {
     )
     // PostgreSQL cannot hold NUL in text: refused before it reaches the server.
     expect((await h.req('/api/databases/shop/tables/users/search?q=a%00b')).status).toBe(400)
+  })
+
+  it('lists the foreign keys of a database for the designer', async () => {
+    const h = harness()
+    stores.push(h.store)
+    await h.login()
+    const res = await h.req('/api/databases/shop/foreign-keys?schema=app')
+    expect(res.status).toBe(200)
+    RelationDefSchema.array().parse(await res.json())
+    expect(h.adapter.calls.at(-1)).toMatchObject({
+      method: 'listForeignKeys',
+      args: [{ database: 'shop', schema: 'app' }],
+    })
   })
 
   it('builds a query from structured choices and validates them', async () => {
