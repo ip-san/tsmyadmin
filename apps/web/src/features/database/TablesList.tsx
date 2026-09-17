@@ -10,6 +10,7 @@ import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
 import { useDdlFlow } from '@/lib/ddl.ts'
 import { tablesQuery } from '@/lib/queries.ts'
+import { tableTotals } from './table-totals.ts'
 
 export function TablesList({ db, schema }: { db: string; schema?: string | undefined }) {
   const tables = useQuery(tablesQuery(db, schema))
@@ -27,6 +28,7 @@ export function TablesList({ db, schema }: { db: string; schema?: string | undef
   const chosen = selected.filter((n) => plain.includes(n))
   const toggle = (name: string) => setSelected((s) => (s.includes(name) ? s.filter((n) => n !== name) : [...s, name]))
   const allChecked = plain.length > 0 && chosen.length === plain.length
+  const totals = tableTotals(tables.data)
   return (
     <div className="space-y-3">
       {/* Always mounted: a live region that appears together with its text announces nothing. */}
@@ -126,6 +128,19 @@ export function TablesList({ db, schema }: { db: string; schema?: string | undef
             </Tr>
           ))}
         </tbody>
+        <tfoot>
+          <tr className="font-semibold">
+            <Td />
+            <Td colSpan={2}>{locale.database.total(totals.count)}</Td>
+            <Td className="text-right tabular-nums">
+              {totals.rows === null ? '–' : totals.rows.toLocaleString('ja-JP')}
+            </Td>
+            <Td className="whitespace-nowrap text-right tabular-nums">
+              {totals.bytes === null ? '–' : locale.common.bytes(totals.bytes)}
+            </Td>
+            <Td colSpan={hasEngine ? 4 : 3} />
+          </tr>
+        </tfoot>
       </Table>
       {/* Below the table, next to the last checkbox in tab order (phpMyAdmin's "With selected" position). */}
       {chosen.length > 0 ? (

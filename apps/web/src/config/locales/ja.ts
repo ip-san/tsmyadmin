@@ -239,6 +239,7 @@ export const ja = {
     comment: 'コメント',
     actions: '操作',
     noTables: 'このデータベースにテーブルはありません',
+    total: (count: number) => `合計（${count.toLocaleString('ja-JP')} 件）`,
   },
   table: {
     columns: 'カラム',

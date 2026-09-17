@@ -107,6 +107,11 @@ for (const t of TARGETS) {
       const table = page.getByRole('table')
       await expect(table.getByRole('link', { name: 'users', exact: true })).toBeVisible()
       await expect(table.getByRole('row').filter({ hasText: 'active_users' })).toContainText('ビュー')
+      // The footer totals every listed object (other test runs may have added scratch tables, so count them here).
+      // The page has a second table (the create-table form), so the rows are counted in the one with the footer.
+      const list = page.getByRole('table').filter({ has: page.locator('tfoot') })
+      const listed = await list.locator('tbody tr').count()
+      await expect(list.locator('tfoot')).toContainText(`合計（${listed.toLocaleString('ja-JP')} 件）`)
 
       await page.goto(tableUrl(t, 'users'))
       await expect(page.getByText('全 5 行')).toBeVisible()

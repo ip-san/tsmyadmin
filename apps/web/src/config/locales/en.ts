@@ -243,6 +243,7 @@ export const en = {
     comment: 'Comment',
     actions: 'Actions',
     noTables: 'This database has no tables',
+    total: (count: number) => `Total (${count.toLocaleString('en-US')})`,
   },
   table: {
     columns: 'Columns',
