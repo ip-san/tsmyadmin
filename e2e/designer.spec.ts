@@ -51,6 +51,9 @@ for (const t of TARGETS) {
       await expect(page.getByRole('button', { name: /^テーブル posts/ })).toHaveAttribute('transform', moved ?? '')
 
       await page.getByRole('button', { name: '配置を元に戻す' }).click()
+      // Clicking a box without dragging it saves nothing.
+      await page.getByRole('button', { name: /^テーブル users/ }).click()
+      await expect(page.getByRole('button', { name: '配置を元に戻す' })).toBeDisabled()
       await expect(page.getByRole('button', { name: /^テーブル posts/ })).toHaveAttribute('transform', start ?? '')
     })
   })

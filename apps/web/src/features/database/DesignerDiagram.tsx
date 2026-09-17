@@ -27,7 +27,7 @@ export function DesignerDiagram({
   onMove: (table: string, to: Point, commit: boolean) => void
 }) {
   /** Where in the box it was grabbed, and where it was last put. */
-  const drag = useRef<{ table: string; dx: number; dy: number; last: Point } | null>(null)
+  const drag = useRef<{ table: string; dx: number; dy: number; last: Point; moved: boolean } | null>(null)
   const columns = new Map(tables.map((name) => [name, boxColumns(name, relations)]))
   const at = (table: string): Point => positions[table] ?? { x: 0, y: 0 }
   const width = Math.max(...tables.map((name) => at(name).x + BOX_WIDTH)) + PAD
@@ -42,7 +42,7 @@ export function DesignerDiagram({
   const startDrag = (table: string) => (e: PointerEvent<SVGGElement>) => {
     const p = at(table)
     const pointer = pointerAt(e)
-    drag.current = { table, dx: pointer.x - p.x, dy: pointer.y - p.y, last: p }
+    drag.current = { table, dx: pointer.x - p.x, dy: pointer.y - p.y, last: p, moved: false }
     e.currentTarget.setPointerCapture(e.pointerId)
   }
   const moveDrag = (e: PointerEvent<SVGGElement>) => {
@@ -50,13 +50,15 @@ export function DesignerDiagram({
     if (!d) return
     const pointer = pointerAt(e)
     d.last = clamp({ x: pointer.x - d.dx, y: pointer.y - d.dy })
+    d.moved = true
     onMove(d.table, d.last, false)
   }
   const endDrag = () => {
     const d = drag.current
     if (!d) return
     drag.current = null
-    onMove(d.table, d.last, true)
+    // A click only focuses the box: saving its position would take it out of the automatic layout.
+    if (d.moved) onMove(d.table, d.last, true)
   }
   const nudge = (table: string) => (e: KeyboardEvent<SVGGElement>) => {
     const step = e.shiftKey ? BIG_STEP : STEP
