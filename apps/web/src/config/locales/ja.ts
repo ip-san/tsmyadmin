@@ -685,6 +685,21 @@ export const ja = {
     cannotLoad:
       'ユーザー一覧を取得できません。MySQL では mysql.user の SELECT 権限（または CREATE USER 権限）が必要です。',
   },
+  tablePrivileges: {
+    title: (table: string) => `${table} の権限`,
+    hintMysql:
+      'ユーザーごとに、このテーブルへの権限と、その出どころ（テーブル・カラム・データベース全体・サーバー全体）を示します。「権限を選ぶ…」で付与・取り消しできますが、取り消しはテーブルとカラム単位の権限にだけ効きます。データベース全体の権限はデータベースの「権限」タブ、サーバー全体の権限は「ユーザー」で扱ってください。',
+    hintPostgres:
+      'ユーザーごとに、このテーブルへの権限と、その出どころ（テーブル・カラム・スーパーユーザー）を示します。「権限を選ぶ…」で付与・取り消しできます。テーブルの所有者が持つ暗黙の権限と、PUBLIC やロール経由で得ている権限は表示しません。',
+    scopes: { server: 'サーバー全体', database: 'データベース', table: 'テーブル' },
+    scopeHints: {
+      server: 'サーバー全体（MySQL の *.*、PostgreSQL のスーパーユーザー）の権限です。ここでの取り消しでは外れません',
+      database: 'データベース全体への権限です。ここでの取り消しでは外れません',
+      table: 'このテーブルへの権限です',
+      columns: '列挙したカラムだけへの権限です',
+    },
+    columns: (columns: string) => `カラム: ${columns}`,
+  },
   server: {
     title: 'サーバー',
     databasesTitle: 'データベース一覧',

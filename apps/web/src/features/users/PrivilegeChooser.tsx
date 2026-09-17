@@ -21,6 +21,7 @@ export function PrivilegeChooser({
   label,
   db,
   schema,
+  initialTable = '',
   onSubmit,
   onClose,
 }: {
@@ -28,12 +29,14 @@ export function PrivilegeChooser({
   label: string
   db: string
   schema?: string | undefined
+  /** Preselected target (a table's own Privileges tab); the whole database otherwise. */
+  initialTable?: string
   onSubmit: (op: UserOp) => void
   onClose: () => void
 }) {
   const tables = useQuery(tablesQuery(db, schema))
   const [chosen, setChosen] = useState<Privilege[]>(['SELECT'])
-  const [table, setTable] = useState('')
+  const [table, setTable] = useState(initialTable)
   const [columns, setColumns] = useState<string[]>([])
   // Only fetched once a table is chosen: there are no columns to offer for a whole-database grant.
   const structure = useQuery({ ...structureQuery({ db, schema, table }), enabled: table !== '' })

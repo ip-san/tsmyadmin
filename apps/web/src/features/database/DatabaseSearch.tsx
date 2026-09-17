@@ -1,5 +1,4 @@
 import { useQuery } from '@tanstack/react-query'
-import { useNavigate, useRouteContext } from '@tanstack/react-router'
 import type { TableSearchResult } from '@tsmyadmin/shared'
 import { SEARCH_TERM_MAX } from '@tsmyadmin/shared'
 import { type FormEvent, useEffect, useRef, useState } from 'react'
@@ -8,7 +7,7 @@ import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Field, Input } from '@/components/ui/Field.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
-import { setDatabaseConsoleDraft } from '@/lib/console-draft.ts'
+import { useOpenInDatabaseConsole } from '@/lib/open-in-console.ts'
 import { searchTable, tablesQuery } from '@/lib/queries.ts'
 
 type Outcome = { table: string } & ({ result: TableSearchResult } | { error: unknown })
@@ -20,8 +19,7 @@ type Outcome = { table: string } & ({ result: TableSearchResult } | { error: unk
  */
 export function DatabaseSearch({ db, schema }: { db: string; schema?: string | undefined }) {
   const tables = useQuery(tablesQuery(db, schema))
-  const { session } = useRouteContext({ from: '/_app' })
-  const navigate = useNavigate()
+  const openInSql = useOpenInDatabaseConsole(db, schema)
   const [term, setTerm] = useState('')
   const [excluded, setExcluded] = useState<ReadonlySet<string>>(new Set())
   const [outcomes, setOutcomes] = useState<Outcome[]>([])
@@ -80,11 +78,6 @@ export function DatabaseSearch({ db, schema }: { db: string; schema?: string | u
     } finally {
       if (currentRun.current === runId) setRunning(false)
     }
-  }
-
-  const openInSql = (sql: string) => {
-    setDatabaseConsoleDraft(`${session.dialect}.${session.host}.${session.port}`, db, schema, sql)
-    void navigate({ to: '/db/$db/sql', params: { db }, search: schema ? { schema } : {} })
   }
 
   const found = outcomes.flatMap((o) => ('result' in o ? [o.result] : []))

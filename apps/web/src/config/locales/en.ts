@@ -689,6 +689,21 @@ export const en = {
     cannotLoad:
       'The user list cannot be read. On MySQL this needs SELECT on mysql.user (or the CREATE USER privilege).',
   },
+  tablePrivileges: {
+    title: (table: string) => `Privileges on ${table}`,
+    hintMysql:
+      'For each account: what it may do to this table and where that comes from (the table, some columns, the whole database, the whole server). Choose privileges… grants and revokes, but a revoke here only removes table and column grants. Manage database-wide grants on the database’s Privileges tab and server-wide ones under Users.',
+    hintPostgres:
+      'For each account: what it may do to this table and where that comes from (the table, some columns, superuser). Choose privileges… grants and revokes. The owner’s implicit privileges, and privileges held through PUBLIC or another role, are not shown.',
+    scopes: { server: 'Server', database: 'Database', table: 'Table' },
+    scopeHints: {
+      server: 'Granted on the whole server (MySQL *.*, a PostgreSQL superuser); revoking here does not remove it',
+      database: 'Granted on the whole database; revoking here does not remove it',
+      table: 'Granted on this table',
+      columns: 'Granted on the listed columns only',
+    },
+    columns: (columns: string) => `Columns: ${columns}`,
+  },
   server: {
     title: 'Server',
     databasesTitle: 'Databases',

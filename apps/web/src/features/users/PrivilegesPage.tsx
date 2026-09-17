@@ -1,21 +1,15 @@
-import { useQueries, useQuery } from '@tanstack/react-query'
-import type { Dialect, UserGrants, UserRef } from '@tsmyadmin/shared'
-import { useCallback, useState } from 'react'
-import { UserOpPreviewDialog } from '@/components/ddl/UserOpPreviewDialog.tsx'
+import type { Dialect, UserGrants } from '@tsmyadmin/shared'
+import { useCallback } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { Badge, ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
-import { grantsQuery, usersQuery } from '@/lib/queries.ts'
-import { userLabel, userRef, useUserOpFlow } from '@/lib/user-ops.ts'
-import { PrivilegeChooser } from './PrivilegeChooser.tsx'
+import { userLabel, userRef } from '@/lib/user-ops.ts'
+import { useAccountGrants, usePrivilegeDialogs } from './account-privileges.tsx'
 import { globalPrivilegeLevel, privilegeLevel } from './privilege-level.ts'
 
 export function PrivilegesPage({ db, schema, dialect }: { db: string; schema?: string | undefined; dialect: Dialect }) {
-  const users = useQuery(usersQuery)
-  const flow = useUserOpFlow()
-  const [choosing, setChoosing] = useState<{ user: UserRef; label: string } | null>(null)
-  const logins = (users.data ?? []).filter((u) => u.canLogin)
+  const { flow, choose, dialogs } = usePrivilegeDialogs(db, schema)
   // Current grants per account so the page shows who already has access (one request per account, cached).
   // One request per account; the level is derived inside `select` so it is memoised per query, not per render.
   // A stable `select` keeps its result memoised across renders (a new function each render would re-run it).
@@ -26,9 +20,7 @@ export function PrivilegesPage({ db, schema, dialect }: { db: string; schema?: s
     }),
     [dialect, db, schema]
   )
-  const grants = useQueries({
-    queries: logins.map((u) => ({ ...grantsQuery(userRef(u), { database: db, schema }), select: selectLevels })),
-  })
+  const { users, logins, grants } = useAccountGrants(db, schema, selectLevels)
   if (users.isPending) return <Spinner />
   if (users.isError) return <ErrorBox error={users.error} onRetry={() => void users.refetch()} />
   const target = schema ? { database: db, schema } : { database: db }
@@ -102,7 +94,7 @@ export function PrivilegesPage({ db, schema, dialect }: { db: string; schema?: s
                   <Button
                     size="sm"
                     aria-haspopup="dialog"
-                    onClick={() => setChoosing({ user: r, label: key })}
+                    onClick={() => choose(r, key)}
                     aria-label={`${key}: ${locale.users.choose}`}
                   >
                     {locale.users.choose}
@@ -113,20 +105,7 @@ export function PrivilegesPage({ db, schema, dialect }: { db: string; schema?: s
           })}
         </tbody>
       </Table>
-      {choosing ? (
-        <PrivilegeChooser
-          user={choosing.user}
-          label={choosing.label}
-          db={db}
-          schema={schema}
-          onClose={() => setChoosing(null)}
-          onSubmit={(op) => {
-            setChoosing(null)
-            flow.preview(op)
-          }}
-        />
-      ) : null}
-      <UserOpPreviewDialog flow={flow} />
+      {dialogs}
     </div>
   )
 }

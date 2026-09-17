@@ -40,6 +40,7 @@ function TableLayout() {
           { label: locale.tabs.export, to: '/db/$db/table/$table/export', params, search },
           { label: locale.tabs.import, to: '/db/$db/table/$table/import', params, search, hidden: view },
           { label: locale.tabs.triggers, to: '/db/$db/table/$table/triggers', params, search },
+          { label: locale.tabs.privileges, to: '/db/$db/table/$table/privileges', params, search },
           { label: locale.tabs.operations, to: '/db/$db/table/$table/operations', params, search },
         ]}
       />
@@ -57,5 +58,6 @@ const TAB_LABELS: Record<string, string> = {
   export: locale.tabs.export,
   import: locale.tabs.import,
   triggers: locale.tabs.triggers,
+  privileges: locale.tabs.privileges,
   operations: locale.tabs.operations,
 }

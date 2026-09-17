@@ -1,5 +1,4 @@
 import { useMutation, useQueries, useQuery } from '@tanstack/react-query'
-import { useNavigate, useRouteContext } from '@tanstack/react-router'
 
 import { type FormEvent, useRef, useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
@@ -7,7 +6,7 @@ import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Input, Select } from '@/components/ui/Field.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
-import { setDatabaseConsoleDraft } from '@/lib/console-draft.ts'
+import { useOpenInDatabaseConsole } from '@/lib/open-in-console.ts'
 import { mutations, structureQuery, tablesQuery } from '@/lib/queries.ts'
 import { type ColumnOption, ColumnSelect, QueryBuilderCriteria } from './QueryBuilderCriteria.tsx'
 import { type ConditionGroup, columnKey, type OutputRow, toRequest, withoutTable } from './query-builder-model.ts'
@@ -21,8 +20,7 @@ const t = locale.queryBuilder
  */
 export function QueryBuilder({ db, schema }: { db: string; schema?: string | undefined }) {
   const tables = useQuery(tablesQuery(db, schema))
-  const { session } = useRouteContext({ from: '/_app' })
-  const navigate = useNavigate()
+  const openInSql = useOpenInDatabaseConsole(db, schema)
   /** In the order they were chosen: the first is the one the rest are joined to. */
   const [chosen, setChosen] = useState<string[]>([])
   const [outputs, setOutputs] = useState<OutputRow[]>([])
@@ -64,10 +62,6 @@ export function QueryBuilder({ db, schema }: { db: string; schema?: string | und
   }
   const updateOutput = (id: number, patch: Partial<OutputRow>) =>
     setOutputs((prev) => prev.map((o) => (o.id === id ? { ...o, ...patch } : o)))
-  const openInSql = (sql: string) => {
-    setDatabaseConsoleDraft(`${session.dialect}.${session.host}.${session.port}`, db, schema, sql)
-    void navigate({ to: '/db/$db/sql', params: { db }, search: schema ? { schema } : {} })
-  }
 
   return (
     <section className="space-y-4">
