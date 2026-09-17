@@ -41,9 +41,15 @@ interface Platform {
   ipv6?: boolean
 }
 
-/** A trusted front end overwrites its own header, so a client-supplied one only ever appears in addition. */
-const forgedXff = (forged: string) => ({ 'x-forwarded-for': forged })
-const forgedCf = (forged: string) => ({ 'cf-connecting-ip': forged })
+/**
+ * A trusted front end overwrites its own header, so a client-supplied one only ever appears in addition.
+ *
+ * `x-real-ip` and `forwarded` are on every row: no platform here vouches for either, so believing one would be
+ * the same bug as believing the rest, and both are headers an implementation might plausibly reach for.
+ */
+const forgedCommon = (forged: string) => ({ 'x-real-ip': forged, forwarded: `for=${forged}` })
+const forgedXff = (forged: string) => ({ ...forgedCommon(forged), 'x-forwarded-for': forged })
+const forgedCf = (forged: string) => ({ ...forgedCommon(forged), 'cf-connecting-ip': forged })
 const forgedBoth = (forged: string) => ({ ...forgedXff(forged), ...forgedCf(forged) })
 
 const PLATFORMS: Platform[] = [
