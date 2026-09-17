@@ -10,14 +10,15 @@ import { AdapterError, type DdlBuilder } from '../types.ts'
 const id = (s: string) => quoteIdent('postgres', s)
 
 /**
- * Ends this tool's **idle** connections to a database under the current account.
+ * Ends this tool's **idle** connections to a database under the account that signed in (`session_user`, which a
+ * role's default `SET ROLE` does not change — `current_user` would then match none of them).
  *
  * Idle, because application name and account do not single out this person: two people sharing one database
  * account both show up as `tsmyadmin` / that user. A pooled connection waiting for its next query is idle; someone
  * else's running export is not, and is left alone — PostgreSQL then refuses the rename, which is the right outcome.
  */
 function releaseOwnConnections(database: string): string {
-  return `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = ${pgLiteral(database)} AND application_name = 'tsmyadmin' AND usename = current_user AND state = 'idle' AND pid <> pg_backend_pid()`
+  return `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = ${pgLiteral(database)} AND application_name = 'tsmyadmin' AND usename = session_user AND state = 'idle' AND pid <> pg_backend_pid()`
 }
 /** Separators for string_agg results (never part of a name or a statement): between entries, and inside one. */
 const SEP = String.fromCharCode(31)

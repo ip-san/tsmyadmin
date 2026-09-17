@@ -31,8 +31,15 @@ export async function prepareDatabaseOp(
   const databases = await adapter.listDatabases()
   const source = databases.find((d) => d.name === op.name)
   if (!source) throw new DatabaseOpRefused('NOT_FOUND', `Unknown database: ${op.name}`)
-  if (databases.some((d) => d.name === op.newName))
-    throw new DatabaseOpRefused('VALIDATION', `A database named "${op.newName}" already exists`)
+  const existing = databases.find((d) => d.name === op.newName)
+  if (existing)
+    throw new DatabaseOpRefused(
+      'VALIDATION',
+      // CREATE DATABASE runs first, so a rename or copy that failed part-way leaves exactly this behind.
+      existing.tableCount === 0
+        ? `A database named "${op.newName}" already exists and is empty — perhaps left by an earlier attempt that failed; remove it before trying again`
+        : `A database named "${op.newName}" already exists`
+    )
 
   if (dialect === 'postgres') {
     // Both statements run on the connection's own database, and PostgreSQL cannot rename or copy that one.
@@ -59,8 +66,11 @@ export async function prepareDatabaseOp(
       adapter.listRoutines(ns),
       adapter.listEvents(ns),
     ])
+    const count = (kinds: string[]) => objects.filter((t) => kinds.includes(t.kind)).length
     const blockers = [
-      [objects.length - baseTables.length, 'views'],
+      [count(['view', 'materialized_view']), 'views'],
+      // MariaDB sequences: listed alongside tables, but not moved by RENAME TABLE here.
+      [count(['sequence']), 'sequences'],
       [triggers.length, 'triggers'],
       [routines.length, 'routines'],
       [events.length, 'events'],

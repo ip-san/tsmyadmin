@@ -852,6 +852,52 @@ describe('sql & ddl', () => {
     expect(sql).toContain(`pg_get_serial_sequence('"public"."dst"', 's')`)
   })
 
+  it('fills a database rename from the server, whatever table list the request carries', async () => {
+    // The route, not only prepareDatabaseOp in isolation: moving that call after build() must fail here.
+    const h = harness(
+      new FakeAdapter({
+        dialect: 'mysql',
+        databases: {
+          information_schema: { tables: {} },
+          shop: { tables: { users: fakeTable('users', ['id'], []), posts: fakeTable('posts', ['id'], []) } },
+        },
+      })
+    )
+    stores.push(h.store)
+    await h.login()
+    const res = await h.req('/api/databases/information_schema/ddl/preview', {
+      method: 'POST',
+      body: JSON.stringify({ op: { op: 'renameDatabase', name: 'shop', newName: 'store', tables: ['users'] } }),
+    })
+    expect(res.status).toBe(200)
+    const sql = DdlPreviewResponseSchema.parse(await res.json()).sql.join('\n')
+    expect(sql).toContain('`shop`.`users` TO `store`.`users`')
+    expect(sql).toContain('`shop`.`posts` TO `store`.`posts`')
+    expect(h.adapter.calls.some((c) => c.method === 'executeSql')).toBe(false)
+  })
+
+  it('refuses a database rename through the route with a 400 and the reason', async () => {
+    const view = fakeTable('active', ['id'], [])
+    view.schema.kind = 'view'
+    const h = harness(
+      new FakeAdapter({
+        dialect: 'mysql',
+        databases: { information_schema: { tables: {} }, shop: { tables: { active: view } } },
+      })
+    )
+    stores.push(h.store)
+    await h.login()
+    const res = await h.req('/api/databases/information_schema/ddl/preview', {
+      method: 'POST',
+      body: JSON.stringify({ op: { op: 'renameDatabase', name: 'shop', newName: 'store' } }),
+    })
+    expect(res.status).toBe(400)
+    expect(ApiErrorSchema.parse(await res.json())).toMatchObject({
+      code: 'VALIDATION',
+      message: expect.stringContaining('1 views'),
+    })
+  })
+
   it('previews DDL without executing it', async () => {
     const h = harness()
     stores.push(h.store)

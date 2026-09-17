@@ -175,7 +175,7 @@ exports[`DDL builders > postgres: addIndex 1`] = `
 
 exports[`DDL builders > postgres: copyDatabase 1`] = `
 [
-  "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'old"db\`x' AND application_name = 'tsmyadmin' AND usename = current_user AND state = 'idle' AND pid <> pg_backend_pid()",
+  "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'old"db\`x' AND application_name = 'tsmyadmin' AND usename = session_user AND state = 'idle' AND pid <> pg_backend_pid()",
   "CREATE DATABASE "new""db\`x" TEMPLATE "old""db\`x"",
 ]
 `;
@@ -269,7 +269,7 @@ exports[`DDL builders > postgres: modifyColumn 1`] = `
 
 exports[`DDL builders > postgres: renameDatabase 1`] = `
 [
-  "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'old"db\`x' AND application_name = 'tsmyadmin' AND usename = current_user AND state = 'idle' AND pid <> pg_backend_pid()",
+  "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'old"db\`x' AND application_name = 'tsmyadmin' AND usename = session_user AND state = 'idle' AND pid <> pg_backend_pid()",
   "ALTER DATABASE "old""db\`x" RENAME TO "new""db\`x"",
 ]
 `;

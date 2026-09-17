@@ -46,7 +46,7 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
   const [copyingRow, setCopyingRow] = useState<number | null>(null)
   const [inline, setInline] = useState<{ row: number; col: number } | null>(null)
   /** What the delete dialog is confirming: the ticked rows, or the one row whose own delete button was pressed. */
-  const [deleteTarget, setDeleteTarget] = useState<'selected' | number | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<'selected' | { key: RowKey } | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const noticeRef = useRef<HTMLOutputElement>(null)
   /** An inline-saved row (its other columns' values), until the refetched rows are committed and its fate is known. */
@@ -118,6 +118,15 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
       reverse: linkableReverseKeys(data),
     }
   }, [data])
+  // The key is taken when the button is pressed, not looked up by position when the deletion is confirmed: rows
+  // refetched in a different order while the dialog is open would otherwise put another row at that position.
+  const openRowDelete = useCallback(
+    (index: number) => {
+      const key = derived?.keys[index]
+      if (key) setDeleteTarget({ key })
+    },
+    [derived]
+  )
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: rowsKey(tableRef) })
   const update = useMutation({
@@ -183,12 +192,7 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
   const allSelected = selectableIdx.length > 0 && selectableIdx.every((i) => selected.has(i))
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(selectableIdx))
   const selectedKeys = [...selected].map((i) => keys[i]).filter((k): k is RowKey => k !== null && k !== undefined)
-  const deleteKeys =
-    deleteTarget === 'selected'
-      ? selectedKeys
-      : deleteTarget === null
-        ? []
-        : [keys[deleteTarget]].filter((k): k is RowKey => k !== null && k !== undefined)
+  const deleteKeys = deleteTarget === 'selected' ? selectedKeys : deleteTarget === null ? [] : [deleteTarget.key]
   const editingKey = editingRow === null ? null : (keys[editingRow] ?? null)
   const editingValues = editingRow === null ? null : rowToValues(data, data.rows[editingRow] ?? [])
   const copyingValues = copyingRow === null ? null : rowToValues(data, data.rows[copyingRow] ?? [])
@@ -268,7 +272,7 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
                 onToggle={toggle}
                 onEdit={setEditingRow}
                 onCopy={setCopyingRow}
-                onDelete={setDeleteTarget}
+                onDelete={openRowDelete}
                 onInline={openInline}
                 onInlineSave={saveInline}
                 onInlineCancel={cancelInline}

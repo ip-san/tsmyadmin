@@ -51,6 +51,34 @@ describe.each(targets)('API integration ($dialect)', ({ dialect, url }) => {
     expect(SessionStateSchema.parse(await res.json()).dialect).toBe(dialect)
   })
 
+  it('refuses to rename a MySQL database that has a view, trigger, routine or event, on the real server', async () => {
+    if (dialect !== 'mysql') return
+    const name = `it_dbops_${Date.now().toString(36)}`
+    const run = (sql: string) =>
+      req('/api/databases/tsmyadmin_test/sql', { method: 'POST', body: JSON.stringify({ sql, stopOnError: true }) })
+    await run(`CREATE DATABASE ${name}`)
+    try {
+      await run(
+        [
+          `CREATE TABLE ${name}.t (id INT PRIMARY KEY)`,
+          `CREATE VIEW ${name}.v AS SELECT id FROM ${name}.t`,
+          `CREATE TRIGGER ${name}.trg BEFORE INSERT ON ${name}.t FOR EACH ROW SET NEW.id = NEW.id`,
+          `CREATE PROCEDURE ${name}.p() SELECT 1`,
+          `CREATE EVENT ${name}.e ON SCHEDULE EVERY 1 DAY DISABLE DO SELECT 1`,
+        ].join(';\n')
+      )
+      const res = await req('/api/databases/information_schema/ddl/preview', {
+        method: 'POST',
+        body: JSON.stringify({ op: { op: 'renameDatabase', name, newName: `${name}_x` } }),
+      })
+      expect(res.status).toBe(400)
+      const { message } = ApiErrorSchema.parse(await res.json())
+      for (const what of ['1 views', '1 triggers', '1 routines', '1 events']) expect(message).toContain(what)
+    } finally {
+      await run(`DROP DATABASE IF EXISTS ${name}`)
+    }
+  })
+
   it('rejects wrong passwords', async () => {
     const res = await app.request('/api/session', {
       method: 'POST',

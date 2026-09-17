@@ -79,6 +79,24 @@ describe('prepareDatabaseOp', () => {
     ).toMatchObject({ code: 'VALIDATION', message: expect.stringContaining('1 triggers') })
   })
 
+  it('names a MariaDB sequence as a sequence, not as a view', async () => {
+    const a = mysql()
+    const seq = fakeTable('order_seq', ['id'], [])
+    seq.schema.kind = 'sequence'
+    const shop = (a as unknown as { databases: Record<string, { tables: Record<string, unknown> }> }).databases.shop
+    if (shop) shop.tables.order_seq = seq
+    const r = await refusal(prepareDatabaseOp(a, server, { op: 'renameDatabase', name: 'shop', newName: 'store' }))
+    expect(r.message).toContain('1 sequences')
+    expect(r.message).not.toContain('views')
+  })
+
+  it('says why an existing, empty target is in the way', async () => {
+    // CREATE DATABASE runs first, so a failed attempt leaves an empty database with the new name behind.
+    expect(
+      await refusal(prepareDatabaseOp(mysql(), server, { op: 'renameDatabase', name: 'shop', newName: 'taken' }))
+    ).toMatchObject({ code: 'VALIDATION', message: expect.stringContaining('earlier attempt') })
+  })
+
   it('copies base tables with their writable columns, and does not refuse for views', async () => {
     const op = await prepareDatabaseOp(mysql({ view: true }), server, {
       op: 'copyDatabase',
