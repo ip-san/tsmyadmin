@@ -36,6 +36,26 @@ export interface RedisSessionStoreOptions {
   onError?: (error: Error) => void
 }
 
+/**
+ * Splits index members by whether their session still exists, given the replies to one `exists` per member.
+ *
+ * Only a reply that succeeded and said 0 proves a session is gone. A failed command says nothing, and treating it
+ * as gone would drop a live session's index member: it would then be neither counted against the per-account cap
+ * nor reachable for eviction, and would linger until its TTL.
+ */
+export function partitionByExistence(
+  members: string[],
+  replies: [Error | null, unknown][] | null
+): { held: string[]; stale: string[] } {
+  const held: string[] = []
+  const stale: string[] = []
+  for (const [i, id] of members.entries()) {
+    const [error, exists] = replies?.[i] ?? [null, undefined]
+    ;(error || exists !== 0 ? held : stale).push(id)
+  }
+  return { held, stale }
+}
+
 /** Table name in the AAD of a session payload, matching the SQLite store so the binding reads the same. */
 const SESSIONS = 'sessions'
 
@@ -133,9 +153,7 @@ export class RedisSessionStore implements SessionStore {
     const pipeline = this.redis.pipeline()
     for (const id of members) pipeline.exists(this.sessionKey(id))
     const results = await pipeline.exec()
-    const held: string[] = []
-    const stale: string[] = []
-    for (const [i, id] of members.entries()) (results?.[i]?.[1] === 1 ? held : stale).push(id)
+    const { held, stale } = partitionByExistence(members, results)
     if (stale.length > 0) await this.redis.zrem(index, ...stale)
     return held
   }
