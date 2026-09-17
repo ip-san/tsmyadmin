@@ -51,8 +51,13 @@ for (const t of TARGETS) {
       await expect(page.getByRole('button', { name: /^テーブル posts/ })).toHaveAttribute('transform', moved ?? '')
 
       await page.getByRole('button', { name: '配置を元に戻す' }).click()
-      // Clicking a box without dragging it saves nothing.
-      await page.getByRole('button', { name: /^テーブル users/ }).click()
+      // Clicking a box without dragging it saves nothing, even if the hand moves a pixel or two.
+      const users = await page.getByRole('button', { name: /^テーブル users/ }).boundingBox()
+      if (!users) throw new Error('users box is not rendered')
+      await page.mouse.move(users.x + 20, users.y + 10)
+      await page.mouse.down()
+      await page.mouse.move(users.x + 22, users.y + 11)
+      await page.mouse.up()
       await expect(page.getByRole('button', { name: '配置を元に戻す' })).toBeDisabled()
       await expect(page.getByRole('button', { name: /^テーブル posts/ })).toHaveAttribute('transform', start ?? '')
     })

@@ -131,14 +131,17 @@ export function TablesList({ db, schema }: { db: string; schema?: string | undef
         <tfoot>
           <tr className="font-semibold">
             <Td />
-            <Td colSpan={2}>{locale.database.total(totals.count)}</Td>
+            <th scope="row" colSpan={2} className="border-b border-line px-2 py-1 text-left text-ink">
+              {locale.database.total(totals.count)}
+            </th>
             <Td className="text-right tabular-nums">
               {totals.rows === null ? '–' : totals.rows.toLocaleString('ja-JP')}
             </Td>
             <Td className="whitespace-nowrap text-right tabular-nums">
               {totals.bytes === null ? '–' : locale.common.bytes(totals.bytes)}
             </Td>
-            <Td colSpan={hasEngine ? 4 : 3} />
+            {/* engine (MySQL only), comment, actions */}
+            <Td colSpan={hasEngine ? 3 : 2} />
           </tr>
         </tfoot>
       </Table>

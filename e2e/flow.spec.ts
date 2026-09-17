@@ -112,6 +112,12 @@ for (const t of TARGETS) {
       const list = page.getByRole('table').filter({ has: page.locator('tfoot') })
       const listed = await list.locator('tbody tr').count()
       await expect(list.locator('tfoot')).toContainText(`合計（${listed.toLocaleString('ja-JP')} 件）`)
+      // The footer spans exactly the header's columns (the engine column exists on MySQL only).
+      const span = (row: string) =>
+        list
+          .locator(row)
+          .evaluate((tr) => [...tr.children].reduce((n, c) => n + (c as HTMLTableCellElement).colSpan, 0))
+      expect(await span('tfoot tr')).toBe(await span('thead tr'))
 
       await page.goto(tableUrl(t, 'users'))
       await expect(page.getByText('全 5 行')).toBeVisible()

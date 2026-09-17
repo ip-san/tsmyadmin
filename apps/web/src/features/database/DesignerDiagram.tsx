@@ -7,6 +7,8 @@ const t = locale.designer
 const STEP = 10
 const BIG_STEP = 50
 const PAD = 40
+/** Pointer travel below this is a click with an unsteady hand, not a drag. */
+const DRAG_THRESHOLD = 4
 
 /** Distinct per key: constraint names are unique within a table, not across the database. */
 export const relationKey = (r: RelationDef) => JSON.stringify([r.table, r.name])
@@ -27,7 +29,7 @@ export function DesignerDiagram({
   onMove: (table: string, to: Point, commit: boolean) => void
 }) {
   /** Where in the box it was grabbed, and where it was last put. */
-  const drag = useRef<{ table: string; dx: number; dy: number; last: Point; moved: boolean } | null>(null)
+  const drag = useRef<{ table: string; dx: number; dy: number; start: Point; last: Point; moved: boolean } | null>(null)
   const columns = new Map(tables.map((name) => [name, boxColumns(name, relations)]))
   const at = (table: string): Point => positions[table] ?? { x: 0, y: 0 }
   const width = Math.max(...tables.map((name) => at(name).x + BOX_WIDTH)) + PAD
@@ -42,13 +44,14 @@ export function DesignerDiagram({
   const startDrag = (table: string) => (e: PointerEvent<SVGGElement>) => {
     const p = at(table)
     const pointer = pointerAt(e)
-    drag.current = { table, dx: pointer.x - p.x, dy: pointer.y - p.y, last: p, moved: false }
+    drag.current = { table, dx: pointer.x - p.x, dy: pointer.y - p.y, start: pointer, last: p, moved: false }
     e.currentTarget.setPointerCapture(e.pointerId)
   }
   const moveDrag = (e: PointerEvent<SVGGElement>) => {
     const d = drag.current
     if (!d) return
     const pointer = pointerAt(e)
+    if (!d.moved && Math.hypot(pointer.x - d.start.x, pointer.y - d.start.y) < DRAG_THRESHOLD) return
     d.last = clamp({ x: pointer.x - d.dx, y: pointer.y - d.dy })
     d.moved = true
     onMove(d.table, d.last, false)
