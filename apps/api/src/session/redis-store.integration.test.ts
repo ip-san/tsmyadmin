@@ -13,6 +13,39 @@ describeSessionStoreConformance(
 )
 
 describe('RedisSessionStore', () => {
+  it('ignores an index entry whose session is gone, instead of evicting a live one for it', async () => {
+    // A sign-out on one replica can interleave with an in-flight request on another: the request's sliding-TTL
+    // write puts the member back with nothing behind it. Counting that member would evict a live session to make
+    // room that was never needed — the user is signed out of a session nobody ended.
+    const prefix = `test-${randomUUID()}`
+    const config = { dialect: 'mysql' as const, host: 'h', port: 1, user: 'u', password: 'secret' }
+    const { FakeAdapter } = await import('@tsmyadmin/adapter/testing')
+    const store = new RedisSessionStore({
+      url,
+      secret: SECRET,
+      prefix,
+      adapterFactory: () => new FakeAdapter(),
+      maxPerIdentity: 3,
+    })
+    const { Redis } = await import('ioredis')
+    const raw = new Redis(url)
+    try {
+      const first = await store.create(config)
+      const second = await store.create(config)
+      const [index] = await raw.keys(`${prefix}:identity:*`)
+      // The leftover: a member with no session hash behind it.
+      await raw.zadd(index as string, Date.now(), randomUUID())
+      await store.create(config)
+      expect(await store.get(first.id)).toBeDefined()
+      expect(await store.get(second.id)).toBeDefined()
+      // And it is cleared rather than left to linger until the TTL sweep.
+      expect(await raw.zcard(index as string)).toBe(3)
+    } finally {
+      await raw.quit()
+      await store.closeAll()
+    }
+  })
+
   it('writes the identity field back on use, so old sessions stop needing the fallback', async () => {
     // The fallback decrypts the payload to find the identity, which is fine but happens on every delete of an
     // old session. Touching a session heals it instead, so a rolling upgrade converges as people use the app.

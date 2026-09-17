@@ -98,7 +98,7 @@ export class RedisSessionStore implements SessionStore {
     // Evict the least recently used sessions of this account beyond the cap. The index is a sorted set scored
     // by last use, and Redis may already have expired members, so it is trimmed of those first.
     await this.redis.zremrangebyscore(index, '-inf', this.now() - this.ttlMs)
-    const held = await this.redis.zrange(index, '0', '-1')
+    const held = await this.heldSessions(index)
     for (const victim of held.slice(0, Math.max(0, held.length - this.maxPerIdentity + 1))) await this.delete(victim)
 
     const id = randomUUID()
@@ -117,6 +117,27 @@ export class RedisSessionStore implements SessionStore {
       .exec()
     this.live.set(id, { config, adapter, createdAt: now })
     return { id, config, adapter, createdAt: now, lastUsedAt: now }
+  }
+
+  /**
+   * The index members that still have a session behind them, dropping any that do not.
+   *
+   * A sign-out on one replica can interleave with an in-flight request on another: the request's sliding-TTL
+   * write lands after the sign-out removed the member, putting it back with nothing behind it. Counting such a
+   * member would evict a live session to make room that was never needed, so they are cleared here — the one
+   * place that already reads the whole index.
+   */
+  private async heldSessions(index: string): Promise<string[]> {
+    const members = await this.redis.zrange(index, '0', '-1')
+    if (members.length === 0) return members
+    const pipeline = this.redis.pipeline()
+    for (const id of members) pipeline.exists(this.sessionKey(id))
+    const results = await pipeline.exec()
+    const held: string[] = []
+    const stale: string[] = []
+    for (const [i, id] of members.entries()) (results?.[i]?.[1] === 1 ? held : stale).push(id)
+    if (stale.length > 0) await this.redis.zrem(index, ...stale)
+    return held
   }
 
   async get(id: string): Promise<Session | undefined> {

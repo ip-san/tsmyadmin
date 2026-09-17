@@ -57,7 +57,7 @@ docker logs tsmyadmin 2>&1 | jq -c 'select(.event=="audit") | {time, dbUser, act
 | ログインが 429 | レート制限。`Retry-After` 秒後に再試行。誤検知なら `TRUST_PROXY` の設定を確認（プロキシ配下で `0` だと全員が同じ IP になる） |
 | 再起動後に全員ログアウト | `SESSION_STORE=memory`、またはボリューム未設定 / `SESSION_SECRET` 変更。`docs/deployment.md` のアップグレード節 |
 | 起動直後に `session_store.open_failed` で終了（コンテナが再起動ループ） | `SESSION_DB_PATH`（Docker では `/app/data`）に `bun` ユーザー（uid 1000）の書き込み権限がない。バインドマウントは `chown 1000:1000`。`unable to open database file` / `attempt to write a readonly database` が `error` に出る |
-| `/readyz` が 503 | 起動後に SQLite ファイルが読めなくなった / 破損。`readyz.failed` の `error` を確認 |
+| `/readyz` が 503 | セッションストアに届かない。`SESSION_STORE=redis` なら Redis が落ちている / `REDIS_URL` が誤り（ログ `session_store.unreachable` も出ます）、`sqlite` なら起動後にファイルが読めなくなった / 破損。`readyz.failed` の `error` を確認 |
 | SQL コンソールでタイムアウト | 既定 30 秒。実行中は「キャンセル」で中断できる（`KILL QUERY` / `pg_cancel_backend`、監査ログ `cancelQuery`）。長時間の一括処理はインポート（最大 10 分）を使う |
 | インポートが 413 `PAYLOAD_TOO_LARGE`（ファイルが 64 MB 超 / 本文が 65 MB 超） | 分割するか、リバースプロキシの `client_max_body_size` も確認 |
 | プロセス一覧で「強制終了」しても消えない | DB 側の権限不足（MySQL は `PROCESS`/`SUPER`、PostgreSQL は `pg_signal_backend` 相当が必要） |

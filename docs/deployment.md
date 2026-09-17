@@ -73,7 +73,7 @@ docker run -d --name tsmyadmin \
 ```
 
 - `TSMYADMIN_ALLOWED_HOSTS=`（空文字）を明示すると既定の `127.0.0.1,localhost`（コンテナ自身のループバック。本番では不要で、ポート未指定の警告も出る）が外れ、プリセットの `host:port` だけが許可されます。プリセットを使わない場合は `host:port` を列挙してください
-- イメージは非 root ユーザー `bun`（uid/gid 1000）で動作し、本番依存のみを含みます。`HEALTHCHECK` は `/readyz` を見ます（`API_PORT` / `PORT` に従うので、コンテナ内のポートを変えても機能します）。既定のファイルベースのストアならこれが正しい判定ですが、`SESSION_STORE=redis` ではストアが共有なので、コンテナの health で自動的に動くもの（Swarm、autoheal）は Redis が一瞬落ちただけで全コンテナを同時に再起動します
+- イメージは非 root ユーザー `bun`（uid/gid 1000）で動作し、本番依存のみを含みます。`HEALTHCHECK` は `/readyz` を見ます（`API_PORT` / `PORT` に従うので、コンテナ内のポートを変えても機能します）。既定のファイルベースのストアならこれが正しい判定です。`SESSION_STORE=redis` ではストアが共有なので、コンテナの health で自動的に動くもの（Swarm、autoheal）は、Redis が 60〜90 秒以上続けて落ちると全コンテナを同時に再起動します（`--interval=30s --retries=3`。一瞬の断では発火しません）
 - `/app/data` にセッションストアが置かれます。ボリュームを付けないと再起動で全員ログアウトになります（機能は損なわれません）。バインドマウントの場合は `chown 1000:1000 <dir>` が必要です
 - `/healthz`（生存）と `/readyz`（セッションストアの疎通）を公開します。**オーケストレータやロードバランサのプローブには `/healthz` を使ってください。** `/readyz` が見るセッションストアは全レプリカで共有なので、プローブに使うと一瞬の Redis 断で全レプリカが同時に外れます（[hosting.md](hosting.md)）
 - `--stop-timeout`（compose では `stop_grace_period`）は Docker 既定の 10 秒では `SHUTDOWN_TIMEOUT_SECONDS`（30 秒）より短く、実行中のエクスポート / インポートが SIGKILL で切られます。`SHUTDOWN_TIMEOUT_SECONDS + 5` 秒以上にしてください
@@ -106,7 +106,7 @@ volumes:
   tsmyadmin-data:
 ```
 
-イメージに `HEALTHCHECK`（`/readyz`）が組み込まれているため、compose 側で上書きする必要はありません。上書きする場合、実行イメージ（`oven/bun:1.4-slim`）には `curl` / `wget` がないので `["CMD", "bun", "-e", "fetch('http://127.0.0.1:3100/readyz').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]` を使ってください。
+イメージに `HEALTHCHECK`（`/readyz`）が組み込まれているため、compose 側で上書きする必要はありません。`SESSION_STORE=redis` で、health に応じて自動で動くもの（Swarm、autoheal）を使っている場合だけ `/healthz` に上書きしてください。実行イメージ（`oven/bun:1.4-slim`）には `curl` / `wget` がないので `["CMD", "bun", "-e", "fetch(`http://127.0.0.1:${process.env.API_PORT || process.env.PORT || 3100}/healthz`).then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]` を使ってください。
 
 置き場所ごとの違い（さくらの VPS などのサーバー、AWS、Azure）は [hosting.md](hosting.md) に、Cloudflare Containers は [cloudflare.md](cloudflare.md) にあります。
 

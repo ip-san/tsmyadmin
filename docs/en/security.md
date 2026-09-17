@@ -1,4 +1,4 @@
-<!-- translated-from: docs/security.md sha256:ab5f136c7c13a2c5a9801ec6b753942e1bd5ab1185008bb50a3fc055dd6ee337 -->
+<!-- translated-from: docs/security.md sha256:1c8db054ee796a4995261a672b3986caa73410d77a5d6258f849c3452fc1a897 -->
 
 # Security model
 
@@ -26,7 +26,7 @@ An entry is `host[:port]` (`db.internal:5432`, `[::1]:3306`, `*.rds.amazonaws.co
 
 ## Brute-force protection
 
-`POST /api/session` is limited to `LOGIN_RATE_LIMIT` attempts per `LOGIN_RATE_WINDOW_SECONDS`, counted per client IP and username. (The client IP is the socket address by default. With `TRUST_PROXY=1` the **last** element of `X-Forwarded-For` is used — the one a trusted proxy appended, since the front of the list is whatever the client wrote. `TRUST_PROXY=cloudflare` prefers `CF-Connecting-IP` and falls back to the `1` behaviour when that header is absent. Headers such as `X-Real-IP` are never trusted under any setting.) Going over is `429 RATE_LIMITED`, with `Retry-After`. A successful sign-in resets the counter. To stop someone cycling through usernames, there is a second limit per IP of `LOGIN_RATE_LIMIT × 3` **failures** in the same window; successful sign-ins are not counted, so legitimate users behind a shared NAT are not locked out.
+`POST /api/session` is limited to `LOGIN_RATE_LIMIT` attempts per `LOGIN_RATE_WINDOW_SECONDS`, counted per client IP and username. (The client IP is the socket address by default. With `TRUST_PROXY=1` the **last** element of `X-Forwarded-For` is used — the one a trusted proxy appended, since the front of the list is whatever the client wrote. `TRUST_PROXY=cloudflare` prefers `CF-Connecting-IP` and falls back to the `1` behaviour when that header is absent. Headers such as `X-Real-IP` are never trusted under any setting.) Going over is `429 RATE_LIMITED`, with `Retry-After`. A successful sign-in resets the counter. To stop someone cycling through usernames, there is a second limit per IP of `LOGIN_RATE_LIMIT × 3` **failures** in the same window; successful sign-ins are not counted, so legitimate users behind a shared NAT are not locked out. Attempts against a host that is not on the allowlist count here too, since the difference between `403` and `401` reveals which hosts exist. One consequence: a stale connection preset behind a shared NAT can push colleagues into `429` on hosts that are perfectly valid.
 
 The session cookie's `Max-Age` is reissued on every authenticated request, keeping it in step with the sliding server-side TTL.
 

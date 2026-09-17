@@ -1,4 +1,4 @@
-<!-- translated-from: docs/operations.md sha256:be3ec0f307c6615af2b6c2b28f4c9a40e44be61ccf1a3b03569074c5083306ea -->
+<!-- translated-from: docs/operations.md sha256:3f0d417ed8969d7726bd7e821e9865f84f10377250c29a6cb9445f8e020b7733 -->
 
 # Operations guide
 
@@ -59,7 +59,7 @@ Every response carries an `X-Request-Id`. When a user reports a problem, look th
 | Sign-in returns 429 | The rate limit. Retry after `Retry-After` seconds. If it is a false positive, check `TRUST_PROXY` — behind a proxy with `0`, everyone shares one IP |
 | Everyone is signed out after a restart | `SESSION_STORE=memory`, no volume, or a changed `SESSION_SECRET`. See the upgrade section of [deployment.md](deployment.md) |
 | Exits at startup with `session_store.open_failed` (the container restart-loops) | The `bun` user (uid 1000) cannot write to `SESSION_DB_PATH` (`/app/data` under Docker). A bind mount needs `chown 1000:1000`. The `error` line reads `unable to open database file` or `attempt to write a readonly database` |
-| `/readyz` returns 503 | The SQLite file became unreadable or corrupt after startup. Check the `error` in `readyz.failed` |
+| `/readyz` returns 503 | The session store cannot be reached. Under `SESSION_STORE=redis` that means Redis is down or `REDIS_URL` is wrong (a `session_store.unreachable` line accompanies it); under `sqlite`, the file became unreadable or corrupt after startup. Check the `error` in `readyz.failed` |
 | A statement times out in the SQL console | 30 seconds by default. A run can be stopped with **Cancel** (`KILL QUERY` / `pg_cancel_backend`, audited as `cancelQuery`). Use Import (up to 10 minutes) for long bulk work |
 | An import returns 413 `PAYLOAD_TOO_LARGE` (a file past 64 MB, or a body past 65 MB) | Split the file, and check the reverse proxy's `client_max_body_size` as well |
 | **Kill** in the process list does not remove the connection | The database user lacks the privilege (`PROCESS` / `SUPER` on MySQL, the equivalent of `pg_signal_backend` on PostgreSQL) |

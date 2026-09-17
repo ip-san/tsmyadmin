@@ -1,4 +1,4 @@
-<!-- translated-from: docs/deployment.md sha256:066f6ad047d3f5e6cece1f035251a533e74cc238b9e112184ea6a4591d42c01e -->
+<!-- translated-from: docs/deployment.md sha256:1fa16ab31d430a82d1398f0e9e469e257dbe2a04023ac0d2d7cf313e18026020 -->
 
 # Deployment guide
 
@@ -75,7 +75,7 @@ docker run -d --name tsmyadmin \
 ```
 
 - Setting `TSMYADMIN_ALLOWED_HOSTS=` (the empty string) explicitly drops the default `127.0.0.1,localhost` — the container's own loopback, which production does not need and which warns about the missing port — and allows only the `host:port` of the presets. Without presets, list the `host:port` values yourself
-- The image runs as the non-root user `bun` (uid/gid 1000) and contains production dependencies only. `HEALTHCHECK` looks at `/readyz` (it follows `API_PORT` / `PORT`, so changing the port inside the container still works). That is the right check for the default file-backed store; with `SESSION_STORE=redis` the store is shared, so anything that acts on container health automatically (Swarm, autoheal) would restart every container at once when Redis blips
+- The image runs as the non-root user `bun` (uid/gid 1000) and contains production dependencies only. `HEALTHCHECK` looks at `/readyz` (it follows `API_PORT` / `PORT`, so changing the port inside the container still works). That is the right check for the default file-backed store. With `SESSION_STORE=redis` the store is shared, so anything that acts on container health by itself (Swarm, autoheal) restarts every container at once — but only after Redis has been down for 60–90 seconds (`--interval=30s --retries=3`), not on a blip
 - The session store lives in `/app/data`. Without a volume, a restart signs everyone out (nothing else breaks). A bind mount needs `chown 1000:1000 <dir>`
 - `/healthz` (liveness) and `/readyz` (the session store answers) are exposed. **Point an orchestrator's or load balancer's probe at `/healthz`.** The session store `/readyz` checks is shared by every replica under `SESSION_STORE=redis`, so probing it takes them all out of rotation together on a momentary Redis outage ([hosting.md](hosting.md))
 - `--stop-timeout` (`stop_grace_period` in compose) defaults to 10 seconds in Docker, which is shorter than `SHUTDOWN_TIMEOUT_SECONDS` (30), so an export or import in flight would be cut off by SIGKILL. Set it to at least `SHUTDOWN_TIMEOUT_SECONDS + 5`
@@ -109,7 +109,7 @@ volumes:
   tsmyadmin-data:
 ```
 
-The image has a `HEALTHCHECK` (`/readyz`) built in, so compose does not need to override it. If you do override it, note that the runtime image (`oven/bun:1.4-slim`) has neither `curl` nor `wget`, so use `["CMD", "bun", "-e", "fetch('http://127.0.0.1:3100/readyz').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]`.
+The image has a `HEALTHCHECK` (`/readyz`) built in, so compose does not need to override it. Override it with `/healthz` only when you run `SESSION_STORE=redis` together with something that acts on container health by itself (Swarm, autoheal). The runtime image (`oven/bun:1.4-slim`) has neither `curl` nor `wget`, so use `["CMD", "bun", "-e", "fetch(`http://127.0.0.1:${process.env.API_PORT || process.env.PORT || 3100}/healthz`).then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]`.
 
 What differs between places to run it — an ordinary server such as Sakura VPS, AWS, Azure — is covered by [hosting.md](hosting.md); Cloudflare Containers has its own page, [cloudflare.md](cloudflare.md).
 
