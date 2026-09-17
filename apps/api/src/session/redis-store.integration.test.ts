@@ -13,10 +13,79 @@ describeSessionStoreConformance(
 )
 
 describe('RedisSessionStore', () => {
-  it('ignores an index entry whose session is gone, instead of evicting a live one for it', async () => {
-    // A sign-out on one replica can interleave with an in-flight request on another: the request's sliding-TTL
-    // write puts the member back with nothing behind it. Counting that member would evict a live session to make
-    // room that was never needed — the user is signed out of a session nobody ended.
+  it('does not bring a signed-out session back when a request for it was already in flight', async () => {
+    // Replica A is serving a request for the session: it has read the payload and is about to slide the TTL.
+    // Replica B signs the session out in between. A's write must not recreate the session's hash — an entry with
+    // `at` and `identity` but no payload, which would then be counted against the cap for a whole TTL and evict a
+    // real session at the next login.
+    const prefix = `test-${randomUUID()}`
+    const config = { dialect: 'mysql' as const, host: 'h', port: 1, user: 'u', password: 'secret' }
+    const { FakeAdapter } = await import('@tsmyadmin/adapter/testing')
+    const opts = { url, secret: SECRET, prefix, adapterFactory: () => new FakeAdapter(), maxPerIdentity: 3 }
+    const a = new RedisSessionStore(opts)
+    const b = new RedisSessionStore(opts)
+    const { Redis } = await import('ioredis')
+    const raw = new Redis(url)
+    try {
+      const first = await a.create(config)
+      const second = await a.create(config)
+      const third = await a.create(config)
+      // Interleave on the real code path: B's sign-out lands inside A's request.
+      const client = (a as unknown as { redis: { hget: (...args: unknown[]) => Promise<unknown> } }).redis
+      const original = client.hget.bind(client)
+      let interleaved = false
+      // After A reads `at` (so A still believes the session is live) and before A's sliding write.
+      client.hget = async (...args: unknown[]) => {
+        const value = await original(...args)
+        if (!interleaved && args[0] === `${prefix}:session:${third.id}` && args[1] === 'at') {
+          interleaved = true
+          await b.delete(third.id)
+        }
+        return value
+      }
+      await a.get(third.id)
+      client.hget = original
+      expect(interleaved).toBe(true)
+      expect(await raw.exists(`${prefix}:session:${third.id}`)).toBe(0)
+      // Two live sessions under a cap of three: the next login must evict neither.
+      await a.create(config)
+      expect(await a.get(first.id)).toBeDefined()
+      expect(await a.get(second.id)).toBeDefined()
+    } finally {
+      await raw.quit()
+      await a.closeAll()
+      await b.closeAll()
+    }
+  })
+
+  it('clears a payload-less leftover, index member included, when a request names it', async () => {
+    // There is no payload to decrypt, so the identity stored in the hash is the only way to find its index.
+    const prefix = `test-${randomUUID()}`
+    const config = { dialect: 'mysql' as const, host: 'h', port: 1, user: 'u', password: 'secret' }
+    const { FakeAdapter } = await import('@tsmyadmin/adapter/testing')
+    const store = new RedisSessionStore({ url, secret: SECRET, prefix, adapterFactory: () => new FakeAdapter() })
+    const { Redis } = await import('ioredis')
+    const raw = new Redis(url)
+    try {
+      await store.create(config)
+      const [index] = await raw.keys(`${prefix}:identity:*`)
+      const leftover = randomUUID()
+      const identity = String(index).slice(`${prefix}:identity:`.length)
+      await raw.hset(`${prefix}:session:${leftover}`, 'at', Date.now(), 'identity', identity)
+      await raw.zadd(index as string, Date.now(), leftover)
+      expect(await store.get(leftover)).toBeUndefined()
+      expect(await raw.exists(`${prefix}:session:${leftover}`)).toBe(0)
+      expect(await raw.zrange(index as string, '0', '-1')).not.toContain(leftover)
+    } finally {
+      await raw.quit()
+      await store.closeAll()
+    }
+  })
+
+  it('does not count a hash without a payload, as older versions left behind, against the cap', async () => {
+    // Before the sliding write was made conditional, a sign-out racing an in-flight request recreated the hash with
+    // `at` and `identity` and no payload, and put the index member back. A rolling upgrade can still meet those.
+    // Such a key exists, so counting by existence would evict a live session for it.
     const prefix = `test-${randomUUID()}`
     const config = { dialect: 'mysql' as const, host: 'h', port: 1, user: 'u', password: 'secret' }
     const { FakeAdapter } = await import('@tsmyadmin/adapter/testing')
@@ -33,8 +102,10 @@ describe('RedisSessionStore', () => {
       const first = await store.create(config)
       const second = await store.create(config)
       const [index] = await raw.keys(`${prefix}:identity:*`)
-      // The leftover: a member with no session hash behind it.
-      await raw.zadd(index as string, Date.now(), randomUUID())
+      const leftover = randomUUID()
+      const identity = String(index).slice(`${prefix}:identity:`.length)
+      await raw.hset(`${prefix}:session:${leftover}`, 'at', Date.now(), 'identity', identity)
+      await raw.zadd(index as string, Date.now(), leftover)
       await store.create(config)
       expect(await store.get(first.id)).toBeDefined()
       expect(await store.get(second.id)).toBeDefined()
@@ -86,6 +157,10 @@ describe('RedisSessionStore', () => {
       // Make it look as an older version wrote it.
       await raw.hdel(`${prefix}:session:${third.id}`, 'identity')
       await b.delete(third.id)
+      // B never held the pool and the hash has no identity: only decrypting the payload can name the index, so the
+      // member must already be gone here, before a login gets the chance to tidy the index and mask a failure.
+      const [index] = await raw.keys(`${prefix}:identity:*`)
+      expect(await raw.zrange(index as string, '0', '-1')).not.toContain(third.id)
       await a.create(config)
       expect(await a.get(first.id)).toBeDefined()
       expect(await a.get(second.id)).toBeDefined()
@@ -112,6 +187,13 @@ describe('RedisSessionStore', () => {
       const third = await a.create(config)
       // The sign-out arrives at the other replica.
       await b.delete(third.id)
+      // The member goes at sign-out, from the identity stored with the session — not later, when a login happens to
+      // read the index and tidy it (which would hide a broken lookup here).
+      const { Redis } = await import('ioredis')
+      const raw = new Redis(url)
+      const [index] = await raw.keys(`${prefix}:identity:*`)
+      expect(await raw.zrange(index as string, '0', '-1')).not.toContain(third.id)
+      await raw.quit()
       expect(await a.get(third.id)).toBeUndefined()
       // Two live sessions under a cap of three: this must evict nothing.
       await a.create(config)

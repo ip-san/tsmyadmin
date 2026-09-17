@@ -1,4 +1,4 @@
-<!-- translated-from: docs/deployment.md sha256:1fa16ab31d430a82d1398f0e9e469e257dbe2a04023ac0d2d7cf313e18026020 -->
+<!-- translated-from: docs/deployment.md sha256:c55ead2c088070e4f18ed17d4733f8b86c32fa01f543de3cb3f897a8e58bff1a -->
 
 # Deployment guide
 
@@ -109,7 +109,13 @@ volumes:
   tsmyadmin-data:
 ```
 
-The image has a `HEALTHCHECK` (`/readyz`) built in, so compose does not need to override it. Override it with `/healthz` only when you run `SESSION_STORE=redis` together with something that acts on container health by itself (Swarm, autoheal). The runtime image (`oven/bun:1.4-slim`) has neither `curl` nor `wget`, so use `["CMD", "bun", "-e", "fetch(`http://127.0.0.1:${process.env.API_PORT || process.env.PORT || 3100}/healthz`).then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]`.
+The image has a `HEALTHCHECK` (`/readyz`) built in, so compose does not need to override it. Override it with `/healthz` only when you run `SESSION_STORE=redis` together with something that acts on container health by itself (Swarm, autoheal). The runtime image (`oven/bun:1.4-slim`) has neither `curl` nor `wget`, so write it like this:
+
+```yaml
+healthcheck:
+  # $$ is compose's escape for a literal $; without it compose tries to substitute ${process.env…} itself
+  test: ["CMD", "bun", "-e", "fetch(`http://127.0.0.1:$${process.env.API_PORT || process.env.PORT || 3100}/healthz`).then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+```
 
 What differs between places to run it — an ordinary server such as Sakura VPS, AWS, Azure — is covered by [hosting.md](hosting.md); Cloudflare Containers has its own page, [cloudflare.md](cloudflare.md).
 

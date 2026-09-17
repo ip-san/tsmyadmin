@@ -37,7 +37,7 @@ export interface RedisSessionStoreOptions {
 }
 
 /**
- * Splits index members by whether their session still exists, given the replies to one `exists` per member.
+ * Splits index members by whether their session still exists, given one `HEXISTS … payload` reply per member.
  *
  * Only a reply that succeeded and said 0 proves a session is gone. A failed command says nothing, and treating it
  * as gone would drop a live session's index member: it would then be neither counted against the per-account cap
@@ -55,6 +55,19 @@ export function partitionByExistence(
   }
   return { held, stale }
 }
+
+/**
+ * Slides a session's TTL only while it still exists: KEYS[1] the session hash, KEYS[2] its account index;
+ * ARGV now, identity, ttl (ms), session id. Returns 0 when the session was deleted in the meantime.
+ */
+const SLIDE_SESSION = `
+if redis.call('HEXISTS', KEYS[1], 'payload') == 0 then return 0 end
+redis.call('HSET', KEYS[1], 'at', ARGV[1], 'identity', ARGV[2])
+redis.call('PEXPIRE', KEYS[1], ARGV[3])
+redis.call('ZADD', KEYS[2], ARGV[1], ARGV[4])
+redis.call('PEXPIRE', KEYS[2], ARGV[3])
+return 1
+`
 
 /** Table name in the AAD of a session payload, matching the SQLite store so the binding reads the same. */
 const SESSIONS = 'sessions'
@@ -142,16 +155,16 @@ export class RedisSessionStore implements SessionStore {
   /**
    * The index members that still have a session behind them, dropping any that do not.
    *
-   * A sign-out on one replica can interleave with an in-flight request on another: the request's sliding-TTL
-   * write lands after the sign-out removed the member, putting it back with nothing behind it. Counting such a
-   * member would evict a live session to make room that was never needed, so they are cleared here — the one
-   * place that already reads the whole index.
+   * "Still there" means the hash has a payload, not merely that the key exists. Before the sliding write was made
+   * conditional (see `get`), a sign-out racing an in-flight request left a hash holding only `at` and `identity`,
+   * and a rolling upgrade can still meet those. Counting one would evict a live session to make room that was
+   * never needed, so they are cleared here — the one place that already reads the whole index.
    */
   private async heldSessions(index: string): Promise<string[]> {
     const members = await this.redis.zrange(index, '0', '-1')
     if (members.length === 0) return members
     const pipeline = this.redis.pipeline()
-    for (const id of members) pipeline.exists(this.sessionKey(id))
+    for (const id of members) pipeline.hexists(this.sessionKey(id), 'payload')
     const results = await pipeline.exec()
     const { held, stale } = partitionByExistence(members, results)
     if (stale.length > 0) await this.redis.zrem(index, ...stale)
@@ -161,8 +174,9 @@ export class RedisSessionStore implements SessionStore {
   async get(id: string): Promise<Session | undefined> {
     const payload = await this.redis.hgetBuffer(this.sessionKey(id), 'payload')
     if (!payload) {
-      // Expired in Redis, or ended on another replica: drop the pool this process was still holding.
-      await this.closeLive(id)
+      // Expired in Redis, or ended on another replica: drop the pool this process was still holding, and any
+      // payload-less hash an older version left behind (delete removes its index member too).
+      await this.delete(id)
       return undefined
     }
     if (this.now() - Number((await this.redis.hget(this.sessionKey(id), 'at')) ?? 0) > this.ttlMs) {
@@ -186,15 +200,15 @@ export class RedisSessionStore implements SessionStore {
     // Sliding TTL, on the session and on the index that orders it.
     const identity = identityHash(this.key, live.config)
     const index = this.identityKey(identity)
-    await this.redis
-      .multi()
-      // `identity` is written on every use, not just at creation: a session that predates this field being
-      // stored heals the first time it is touched, which matters during a rolling upgrade.
-      .hset(this.sessionKey(id), 'at', now, 'identity', identity)
-      .pexpire(this.sessionKey(id), this.ttlMs)
-      .zadd(index, now, id)
-      .pexpire(index, this.ttlMs)
-      .exec()
+    // Conditional and atomic: another replica may have signed this session out after the reads above. A plain
+    // write would recreate the hash with `at` and `identity` but no payload — counted against the cap for a whole
+    // TTL — and put the index member back. `identity` is written on every use so a session from before that field
+    // existed heals the first time it is touched, which matters during a rolling upgrade.
+    const slid = await this.redis.eval(SLIDE_SESSION, 2, this.sessionKey(id), index, now, identity, this.ttlMs, id)
+    if (slid !== 1) {
+      await this.closeLive(id)
+      return undefined
+    }
     return { id, config: live.config, adapter: live.adapter, createdAt: live.createdAt, lastUsedAt: now }
   }
 

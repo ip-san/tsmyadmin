@@ -106,7 +106,13 @@ volumes:
   tsmyadmin-data:
 ```
 
-イメージに `HEALTHCHECK`（`/readyz`）が組み込まれているため、compose 側で上書きする必要はありません。`SESSION_STORE=redis` で、health に応じて自動で動くもの（Swarm、autoheal）を使っている場合だけ `/healthz` に上書きしてください。実行イメージ（`oven/bun:1.4-slim`）には `curl` / `wget` がないので `["CMD", "bun", "-e", "fetch(`http://127.0.0.1:${process.env.API_PORT || process.env.PORT || 3100}/healthz`).then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]` を使ってください。
+イメージに `HEALTHCHECK`（`/readyz`）が組み込まれているため、compose 側で上書きする必要はありません。`SESSION_STORE=redis` で、health に応じて自動で動くもの（Swarm、autoheal）を使っている場合だけ `/healthz` に上書きしてください。実行イメージ（`oven/bun:1.4-slim`）には `curl` / `wget` がないので、次のように書いてください。
+
+```yaml
+healthcheck:
+  # $$ は compose で $ を書くためのエスケープ。$ 1 つだと compose が ${process.env…} を自分の変数として展開しようとして起動に失敗します
+  test: ["CMD", "bun", "-e", "fetch(`http://127.0.0.1:$${process.env.API_PORT || process.env.PORT || 3100}/healthz`).then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+```
 
 置き場所ごとの違い（さくらの VPS などのサーバー、AWS、Azure）は [hosting.md](hosting.md) に、Cloudflare Containers は [cloudflare.md](cloudflare.md) にあります。
 
