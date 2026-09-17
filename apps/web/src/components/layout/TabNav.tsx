@@ -13,7 +13,7 @@ export interface TabItem {
 
 export function TabNav({ items, label }: { items: TabItem[]; label: string }) {
   return (
-    <nav aria-label={label} className="mb-4 border-b border-line">
+    <nav aria-label={label} className="mb-4 border-b border-line print:hidden">
       <ul className="-mb-px flex flex-wrap gap-1">
         {items
           .filter((i) => !i.hidden)

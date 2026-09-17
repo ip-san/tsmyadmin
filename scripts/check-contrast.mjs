@@ -37,6 +37,8 @@ const TEXT = ['ink', 'ink-sub', 'ink-faint', 'brand', 'critical']
  * not cover, so it is deliberately quieter and not checked.
  */
 const CONTROL_BORDERS = ['line-strong', 'critical-border']
+/** Series colours of the result chart: graphics that carry meaning, drawn on the surface only. */
+const CHART = ['chart-1', 'chart-2', 'chart-3', 'chart-4', 'chart-5', 'chart-6']
 const TEXT_MIN = 4.5
 const NON_TEXT_MIN = 3
 
@@ -44,7 +46,7 @@ function parseThemes(css) {
   const read = (selector) => {
     const m = new RegExp(`${selector}\\s*\\{(.*?)\\n\\}`, 's').exec(css)
     if (!m) throw new Error(`no ${selector} block in index.css`)
-    return Object.fromEntries([...m[1].matchAll(/--c-([a-z-]+):\s*(#[0-9a-fA-F]{6})/g)].map((x) => [x[1], x[2]]))
+    return Object.fromEntries([...m[1].matchAll(/--c-([a-z0-9-]+):\s*(#[0-9a-fA-F]{6})/g)].map((x) => [x[1], x[2]]))
   }
   return { light: read(':root'), dark: read('html\\.dark') }
 }
@@ -52,7 +54,7 @@ function parseThemes(css) {
 export function check(themes) {
   const problems = []
   for (const [theme, t] of Object.entries(themes)) {
-    for (const name of [...SURFACES, ...TEXT, ...CONTROL_BORDERS]) {
+    for (const name of [...SURFACES, ...TEXT, ...CONTROL_BORDERS, ...CHART]) {
       if (!t[name]) problems.push(`${theme}: token --c-${name} is not defined`)
     }
     for (const bg of SURFACES) {
@@ -68,6 +70,12 @@ export function check(themes) {
           problems.push(`${theme}: control border ${border} on ${bg} is ${r.toFixed(2)}:1 (needs ${NON_TEXT_MIN})`)
         }
       }
+    }
+    for (const series of CHART) {
+      if (!t[series] || !t.surface) continue
+      const r = contrast(t[series], t.surface)
+      if (r < NON_TEXT_MIN)
+        problems.push(`${theme}: chart ${series} on surface is ${r.toFixed(2)}:1 (needs ${NON_TEXT_MIN})`)
     }
     // The primary button: its label sits on the brand, which is light in dark mode.
     for (const bg of ['brand', 'brand-hover']) {
@@ -107,5 +115,6 @@ if (problems.length) {
   console.error('✗ contrast check FAILED')
   process.exit(1)
 }
-const combos = Object.keys(themes).length * (SURFACES.length * (TEXT.length + CONTROL_BORDERS.length) + 2)
+const combos =
+  Object.keys(themes).length * (SURFACES.length * (TEXT.length + CONTROL_BORDERS.length) + CHART.length + 2)
 console.log(`✓ contrast check passed (${combos} token combinations)`)

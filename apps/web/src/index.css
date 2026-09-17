@@ -27,6 +27,13 @@
   /* Row hover. Tinted towards the brand so a hovered row cannot be mistaken for the header row,
      which sits on surface-sub. */
   --color-row-hover: var(--c-row-hover);
+  /* Result chart series, in order. Graphics on the surface: 3:1 there (WCAG 1.4.11), checked by check:contrast. */
+  --color-chart-1: var(--c-chart-1);
+  --color-chart-2: var(--c-chart-2);
+  --color-chart-3: var(--c-chart-3);
+  --color-chart-4: var(--c-chart-4);
+  --color-chart-5: var(--c-chart-5);
+  --color-chart-6: var(--c-chart-6);
 
   --radius-card: 0.75rem;
   --radius-control: 0.5rem;
@@ -51,6 +58,12 @@
   --c-critical-sub: #fef3f2;
   --c-critical-border: #c06058;
   --c-row-hover: #eef0fb;
+  --c-chart-1: #4338ca;
+  --c-chart-2: #b45309;
+  --c-chart-3: #047857;
+  --c-chart-4: #be123c;
+  --c-chart-5: #0e7490;
+  --c-chart-6: #7c3aed;
   color-scheme: light;
 }
 
@@ -70,6 +83,12 @@ html.dark {
   --c-critical-sub: #2a1d1d;
   --c-critical-border: #b55a55;
   --c-row-hover: #23262f;
+  --c-chart-1: #818cf8;
+  --c-chart-2: #fbbf24;
+  --c-chart-3: #34d399;
+  --c-chart-4: #fb7185;
+  --c-chart-5: #22d3ee;
+  --c-chart-6: #c4b5fd;
   color-scheme: dark;
 }
 
@@ -85,6 +104,17 @@ html.dark {
   background-repeat: no-repeat;
   background-position: right 0.5rem center;
   background-size: 1rem 1rem;
+}
+
+/*
+ * Paper: nothing on the page scrolls or clips, so a wide or long result prints whole rather than as the part that
+ * was scrolled into view.
+ */
+@media print {
+  #main * {
+    max-height: none !important;
+    overflow: visible !important;
+  }
 }
 
 /* CodeMirror (SQL editor) */

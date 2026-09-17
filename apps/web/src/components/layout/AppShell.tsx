@@ -42,14 +42,14 @@ export function AppShell({
     })
   useShortcuts([{ keys: 'mod+b', global: true, handler: toggleSidebar }])
   return (
-    <div className="flex h-dvh flex-col bg-canvas text-ink">
+    <div className="flex h-dvh flex-col bg-canvas text-ink print:block print:h-auto">
       <a
         href="#main"
         className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-surface focus:px-3 focus:py-2"
       >
         {locale.common.skipToContent}
       </a>
-      <header className="flex shrink-0 items-center justify-between border-b border-line bg-surface px-4 py-2">
+      <header className="flex shrink-0 items-center justify-between border-b border-line bg-surface px-4 py-2 print:hidden">
         <div className="flex min-w-0 items-center gap-3">
           <Button
             variant="ghost"
@@ -118,12 +118,12 @@ export function AppShell({
         </div>
       </header>
       {/* Sidebar and main pane scroll independently; the aside is the scroll root for the virtualized table lists. */}
-      <div className="relative flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1 print:block">
         {/* Narrow viewports (reflow at 320px): the tree overlays the content instead of squeezing it. */}
         {!collapsed ? (
           <button
             type="button"
-            className="fixed inset-0 z-10 bg-black/30 md:hidden"
+            className="fixed inset-0 z-10 bg-black/30 md:hidden print:hidden"
             aria-label={locale.nav.hideSidebar}
             onClick={() => setCollapsed(true)}
           />
@@ -131,12 +131,12 @@ export function AppShell({
         <aside
           data-scroll-root
           hidden={collapsed}
-          className="absolute inset-y-0 left-0 z-20 mt-[49px] w-64 shrink-0 overflow-y-auto border-r border-line bg-surface shadow-lg md:static md:mt-0 md:shadow-none"
+          className="absolute inset-y-0 left-0 z-20 mt-[49px] w-64 shrink-0 overflow-y-auto border-r border-line bg-surface shadow-lg md:static md:mt-0 md:shadow-none print:hidden"
           aria-label={locale.nav.tree}
         >
           {sidebar}
         </aside>
-        <main id="main" className="min-w-0 flex-1 overflow-y-auto p-4">
+        <main id="main" className="min-w-0 flex-1 overflow-y-auto p-4 print:overflow-visible print:p-0">
           {children}
         </main>
       </div>

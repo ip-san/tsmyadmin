@@ -1,4 +1,4 @@
-<!-- translated-from: docs/user-guide.md sha256:b587974d2a78538df29cdffb013e9918d9ff4accc366900cf8c08e9c70002c3d -->
+<!-- translated-from: docs/user-guide.md sha256:b0be9852751fd30c295242eb8911de68c6945fa83e292a28a05deefd2b590742 -->
 
 # User guide
 
@@ -96,6 +96,9 @@ On PostgreSQL, **idle** tsmyadmin connections to that database under the same da
 - **EXPLAIN** shows the query plan for a single statement
 - **Confirm UPDATE / DELETE without WHERE** (on by default) asks before running a statement that would touch every row. It reads the text you typed, so it may ask once too often; it never stays silent when it should ask. Clearing the box runs without asking
 - **CSV** and **JSON** download what is on screen. CSV has an option to **stop spreadsheets from running values as formulas** (off by default; it prefixes the value with an apostrophe, so do not use it for a file you intend to import back)
+- **Copy** puts the result on the clipboard as tab-separated text (column names first, NULL as `NULL`), which a spreadsheet splits into cells when pasted. Over a connection that is neither HTTPS nor localhost some browsers refuse, and the screen says the copy failed. A result holding values cut for display cannot be copied, as it cannot be downloaded
+- **Print** prints that statement's result alone (not the editor, sidebar or tabs). A long result that the screen draws only part of is laid out in full on paper, up to its first 1,000 rows. The browser's own print (`⌘/Ctrl + P`) prints every result
+- **Chart** draws the result as bars or lines: one column for the categories (horizontal axis) and up to six numeric columns as values. A row whose value is NULL or not a number is left out of that series (a line breaks there). Up to the first 500 rows are drawn; there are no other chart types such as pie charts
 - **Saved queries** stores the editor text under a name (up to 200). Where they are kept depends on the deployment, and the panel says which: with a persistent session store (`SESSION_STORE=sqlite`, the production default) they are encrypted and tied to the connection account, so the same list appears when you sign in from another browser; with `SESSION_STORE=memory` they stay in this browser only
 - **History** keeps the last 100 (**Clear history** removes them — do that before leaving a shared machine). Unsent editor text survives moving between tabs (within this browser tab)
 

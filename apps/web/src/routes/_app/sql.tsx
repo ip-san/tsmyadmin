@@ -33,7 +33,7 @@ function Page() {
   return (
     <>
       <ServerTabs tab={locale.tabs.sql} />
-      <label className="mb-3 inline-flex items-center gap-2 whitespace-nowrap text-sm text-ink">
+      <label className="mb-3 inline-flex items-center gap-2 whitespace-nowrap text-sm text-ink print:hidden">
         {locale.nav.currentDatabase}
         <Select
           value={db}

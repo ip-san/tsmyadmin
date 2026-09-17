@@ -173,8 +173,10 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
 
   return (
     <div className="space-y-3">
-      <SqlEditor value={text} onChange={setText} onRun={execute} dialect={dialect} schema={completion} />
-      <div className="flex flex-wrap items-center gap-3 text-sm">
+      <div className="print:hidden">
+        <SqlEditor value={text} onChange={setText} onRun={execute} dialect={dialect} schema={completion} />
+      </div>
+      <div className="flex flex-wrap items-center gap-3 text-sm print:hidden">
         <Button
           variant="primary"
           onClick={execute}
@@ -267,23 +269,25 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
       {/* Every run is autocommitted on its own connection: say so rather than losing the work silently. */}
       {openTransaction && !run.isPending ? <Notice role="status">{locale.sql.openTransaction}</Notice> : null}
       {/* Bookmarks and history (each collapsible) sit above the results: a 1,000-row result must not bury them. */}
-      <SavedQueriesPanel
-        entries={saved.entries}
-        savedOnServer={saved.onServer}
-        error={saved.error}
-        currentSql={text}
-        onSave={(name) => saved.save(name, text)}
-        onLoad={setText}
-        onDelete={saved.remove}
-      />
-      <HistoryPanel
-        entries={history}
-        onLoad={setText}
-        onClear={() => {
-          clearHistory(scope)
-          setHistory([])
-        }}
-      />
+      <div className="space-y-3 print:hidden">
+        <SavedQueriesPanel
+          entries={saved.entries}
+          savedOnServer={saved.onServer}
+          error={saved.error}
+          currentSql={text}
+          onSave={(name) => saved.save(name, text)}
+          onLoad={setText}
+          onDelete={saved.remove}
+        />
+        <HistoryPanel
+          entries={history}
+          onLoad={setText}
+          onClear={() => {
+            clearHistory(scope)
+            setHistory([])
+          }}
+        />
+      </div>
       {results ? <ResultsView results={results} maxRows={maxRows} /> : null}
     </div>
   )

@@ -91,6 +91,10 @@ for (const t of TARGETS) {
       await page.getByRole('button', { name: '実行する', exact: true }).click()
       await page.getByRole('region', { name: '文 1' }).waitFor()
       await scan(page)
+      // With the chart open: its controls and legend are part of the page too.
+      await page.getByRole('button', { name: '文 1 の結果: グラフ' }).click()
+      await page.getByLabel('グラフの種類').waitFor()
+      await scan(page)
       await page.goto(tableUrl(t, 'users', '/insert'))
       await page.getByRole('button', { name: '挿入する' }).waitFor()
       await scan(page)

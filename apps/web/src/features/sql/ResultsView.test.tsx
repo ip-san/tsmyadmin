@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { StatementResult } from '@tsmyadmin/shared'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -61,5 +61,30 @@ describe('ResultsView downloads', () => {
     // A second visit keeps the choice.
     render(<ResultsView results={results} maxRows={1000} />)
     expect(screen.getByRole('checkbox', { name: locale.export.csvSafe })).toBeChecked()
+  })
+})
+
+describe('ResultsView printing', () => {
+  it('lays out every row of a long result for paper, not just the window on screen', async () => {
+    const long: StatementResult[] = [
+      {
+        kind: 'rows',
+        sql: 'SELECT n FROM s',
+        durationMs: 1,
+        result: {
+          columns: [{ name: 'n', dataType: 'int' }],
+          rows: Array.from({ length: 300 }, (_, i) => [i + 1]),
+          truncated: false,
+        },
+      },
+    ]
+    render(<ResultsView results={long} maxRows={1000} />)
+    const table = screen.getByRole('table')
+    // On screen a result this long is virtualised: only a window of rows exists (none at all without layout).
+    expect(table.querySelectorAll('tbody tr[data-index]').length).toBeLessThan(300)
+    await act(async () => {
+      window.dispatchEvent(new Event('beforeprint'))
+    })
+    expect(screen.getByRole('table').querySelectorAll('tbody tr[data-index]')).toHaveLength(300)
   })
 })
