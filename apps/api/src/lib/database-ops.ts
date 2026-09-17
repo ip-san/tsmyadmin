@@ -35,9 +35,10 @@ export async function prepareDatabaseOp(
   if (existing)
     throw new DatabaseOpRefused(
       'VALIDATION',
-      // CREATE DATABASE runs first, so a rename or copy that failed part-way leaves exactly this behind.
+      // Not "empty": the count only covers tables this account can see. A database a MySQL rename left behind is
+      // in exactly this state, and may still hold routines or events the account cannot list.
       existing.tableCount === 0
-        ? `A database named "${op.newName}" already exists and is empty — perhaps left by an earlier attempt that failed; remove it before trying again`
+        ? `A database named "${op.newName}" already exists (it has no tables visible to this account)`
         : `A database named "${op.newName}" already exists`
     )
 

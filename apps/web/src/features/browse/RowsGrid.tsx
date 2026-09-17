@@ -46,7 +46,8 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
   const [copyingRow, setCopyingRow] = useState<number | null>(null)
   const [inline, setInline] = useState<{ row: number; col: number } | null>(null)
   /** What the delete dialog is confirming: the ticked rows, or the one row whose own delete button was pressed. */
-  const [deleteTarget, setDeleteTarget] = useState<'selected' | { key: RowKey } | null>(null)
+  /** The rows the delete dialog is confirming, captured as keys when it opens (never looked up by position later). */
+  const [deleteTarget, setDeleteTarget] = useState<{ keys: RowKey[] } | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const noticeRef = useRef<HTMLOutputElement>(null)
   /** An inline-saved row (its other columns' values), until the refetched rows are committed and its fate is known. */
@@ -123,7 +124,7 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
   const openRowDelete = useCallback(
     (index: number) => {
       const key = derived?.keys[index]
-      if (key) setDeleteTarget({ key })
+      if (key) setDeleteTarget({ keys: [key] })
     },
     [derived]
   )
@@ -192,7 +193,7 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
   const allSelected = selectableIdx.length > 0 && selectableIdx.every((i) => selected.has(i))
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(selectableIdx))
   const selectedKeys = [...selected].map((i) => keys[i]).filter((k): k is RowKey => k !== null && k !== undefined)
-  const deleteKeys = deleteTarget === 'selected' ? selectedKeys : deleteTarget === null ? [] : [deleteTarget.key]
+  const deleteKeys = deleteTarget?.keys ?? []
   const editingKey = editingRow === null ? null : (keys[editingRow] ?? null)
   const editingValues = editingRow === null ? null : rowToValues(data, data.rows[editingRow] ?? [])
   const copyingValues = copyingRow === null ? null : rowToValues(data, data.rows[copyingRow] ?? [])
@@ -217,7 +218,7 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
         editable={editable}
         selectedCount={selected.size}
         canDelete={selectedKeys.length > 0}
-        onDelete={() => setDeleteTarget('selected')}
+        onDelete={() => setDeleteTarget({ keys: selectedKeys })}
       />
       {/* The live region stays mounted so screen readers announce a message that appears later. */}
       <output ref={noticeRef} tabIndex={-1} aria-live="polite" className={notice ? 'block' : 'sr-only'}>

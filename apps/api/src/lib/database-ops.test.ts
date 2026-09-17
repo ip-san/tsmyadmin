@@ -90,11 +90,11 @@ describe('prepareDatabaseOp', () => {
     expect(r.message).not.toContain('views')
   })
 
-  it('says why an existing, empty target is in the way', async () => {
-    // CREATE DATABASE runs first, so a failed attempt leaves an empty database with the new name behind.
+  it('describes an existing target with no tables without calling it empty', async () => {
+    // It may be what a MySQL rename left behind, still holding routines or events this account cannot see.
     expect(
       await refusal(prepareDatabaseOp(mysql(), server, { op: 'renameDatabase', name: 'shop', newName: 'taken' }))
-    ).toMatchObject({ code: 'VALIDATION', message: expect.stringContaining('earlier attempt') })
+    ).toMatchObject({ code: 'VALIDATION', message: expect.stringContaining('no tables visible to this account') })
   })
 
   it('copies base tables with their writable columns, and does not refuse for views', async () => {

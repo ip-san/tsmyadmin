@@ -1,4 +1,4 @@
-<!-- translated-from: docs/user-guide.md sha256:e2d5da36d976aa2f7e5b3cfba19e7b09315168a05cbe1977501a285e56fdc7b2 -->
+<!-- translated-from: docs/user-guide.md sha256:d281b34321cca3027ba75dc8e616ecfc874eafa48d54db6db42f14ad37132cc2 -->
 
 # User guide
 
@@ -59,7 +59,7 @@ Both show the SQL before anything runs. The server's own databases are excluded,
 
 | | MySQL | PostgreSQL |
 |---|---|---|
-| How a rename works | MySQL has no rename statement, so a new database is created and every table is moved in one (atomic) statement. **The old database is not dropped**, so routines or events your account cannot see, and tables created after you confirmed, are not taken with it. Check what is left, then drop it from the server page | `ALTER DATABASE … RENAME TO` |
+| How a rename works | MySQL has no rename statement, so a new database is created and every table is moved in one (atomic) statement. **The old database is not dropped**, so routines or events your account cannot see, and tables created after you confirmed, are not taken with it. Seeing no tables does not mean it is empty: before dropping it, check it with an administrator account that can see everything. And an application still using the old name that creates its tables on startup will keep writing to the old database | `ALTER DATABASE … RENAME TO` |
 | When a rename is refused | The database has any view, routine, trigger or event (they would be left behind, and views would lose the tables they read, so it stops before running) | Something is running in it |
 | What a rename does not carry over | Privileges granted on the database (GRANT) | Nothing |
 | Confirmation | Retype the current database name | Retype the current database name |
