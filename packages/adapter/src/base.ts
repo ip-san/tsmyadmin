@@ -233,13 +233,29 @@ const FILTER_SQL: Record<Filter['op'], string> = {
 }
 
 /**
+ * Column types the database-wide search skips, per dialect, matched on the type name as the catalog prints it.
+ *
+ * MySQL: binary strings, BIT and the spatial types store bytes, so their text form is raw WKB or binary and a
+ * match would be noise (CAST to CHAR accepts them; it just compares bytes). GEOMETRYCOLLECTION is printed as
+ * `geomcollection` since 8.0; VECTOR is binary too.
+ * PostgreSQL: only bytea (and arrays of it). bit, point, polygon and the like have a readable `::text` form
+ * ("1010", "(1.5,2)") that is worth searching.
+ */
+const UNSEARCHABLE_TYPE: Record<Dialect, RegExp> = {
+  mysql:
+    /^(tiny|medium|long)?blob\b|^(var)?binary\b|^bit\b|^vector\b|^(multi)?(point|linestring|polygon)\b|^geometry\b|^geometrycollection\b|^geomcollection\b/i,
+  postgres: /^bytea\b/i,
+}
+
+/** Whether the database-wide search looks at a column of this type (see UNSEARCHABLE_TYPE). */
+export function isSearchableType(dialect: Dialect, dataType: string): boolean {
+  return !UNSEARCHABLE_TYPE[dialect].test(dataType)
+}
+
+/**
  * Escapes LIKE metacharacters so a user string matches literally. `!` is the escape character (declared with
  * ESCAPE '!'): unlike a backslash it needs no dialect-specific string escaping of its own.
  */
-/** Column types the database-wide search skips: binary, bit strings and spatial types (matched on the type name). */
-const UNSEARCHABLE_TYPE =
-  /^(tiny|medium|long)?blob\b|^(var)?binary\b|^bit\b|^bytea\b|^(multi)?(point|linestring|polygon)\b|^geometry(collection)?\b|^geography\b/i
-
 export function escapeLike(text: string): string {
   return text.replaceAll('!', '!!').replaceAll('%', '!%').replaceAll('_', '!_')
 }
@@ -429,8 +445,8 @@ export abstract class BaseAdapter implements DatabaseAdapter {
   async searchTable(ns: Namespace, table: string, term: string): Promise<TableSearchResult> {
     const schema = await this.describeTable(ns, table)
     const d = this.dialect
-    // Binary and spatial values have no meaningful text form to match (MySQL rejects LIKE on GEOMETRY outright).
-    const columns = schema.columns.filter((c) => !UNSEARCHABLE_TYPE.test(c.dataType)).map((c) => c.name)
+    // Columns whose values have no readable text form are skipped (see UNSEARCHABLE_TYPE).
+    const columns = schema.columns.filter((c) => isSearchableType(d, c.dataType)).map((c) => c.name)
     if (columns.length === 0) return { total: 0, count: 'exact', columns: [], sql: '' }
     const tableSql = quoteTable(d, ns, table)
     // Same meaning of "contains" as the browse filter: the term is literal, wildcards added here. Case-insensitive

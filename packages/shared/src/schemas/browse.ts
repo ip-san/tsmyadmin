@@ -91,7 +91,12 @@ export type BrowseResult = z.infer<typeof BrowseResultSchema>
 export const SEARCH_TERM_MAX = 200
 
 export const TableSearchQuerySchema = z.object({
-  q: z.string().min(1).max(SEARCH_TERM_MAX),
+  q: z
+    .string()
+    .min(1)
+    .max(SEARCH_TERM_MAX)
+    // PostgreSQL cannot hold NUL in text at all, so every table would fail with an encoding error.
+    .refine((s) => !s.includes('\0'), 'The search term cannot contain a NUL character'),
   schema: z.string().min(1).optional(),
 })
 export type TableSearchQuery = z.infer<typeof TableSearchQuerySchema>

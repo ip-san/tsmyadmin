@@ -30,15 +30,16 @@ for (const t of TARGETS) {
       await expect(editor).toContainText('%ALICE%')
     })
 
-    test('stops between tables', async ({ page }) => {
+    test('stops between tables, and searches nothing further', async ({ page }) => {
       await page.goto(searchUrl)
-      // Hold every table's request until Stop has been pressed, so the stop lands mid-run deterministically.
+      let sent = 0
       let release: (() => void) | undefined
       const held = new Promise<void>((resolve) => {
         release = resolve
       })
       const isSearch = (url: URL) => url.pathname.endsWith('/search') && url.pathname.includes('/tables/')
       await page.route(isSearch, async (route) => {
+        sent += 1
         await held
         await route.continue()
       })
@@ -47,9 +48,42 @@ for (const t of TARGETS) {
       await page.getByRole('button', { name: '中止する' }).click()
       release?.()
       await expect(page.getByText(/中止しました/)).toBeVisible()
-      // Only the table already in flight finished; the rest were never searched.
-      await expect(page.getByText('1 / ', { exact: false })).toBeVisible()
+      // Give a loop that ignored the stop time to send more.
+      await page.waitForTimeout(1500)
+      expect(sent).toBe(1)
       await page.unroute(isSearch)
+    })
+
+    test('stops searching when the page is left', async ({ page }) => {
+      await page.goto(searchUrl)
+      let sent = 0
+      const isSearch = (url: URL) => url.pathname.endsWith('/search') && url.pathname.includes('/tables/')
+      await page.route(isSearch, async (route) => {
+        sent += 1
+        // Slow enough that the page is left while the first table is still being searched.
+        await new Promise((resolve) => setTimeout(resolve, 400))
+        await route.continue()
+      })
+      await page.getByLabel('検索する語').fill('a')
+      await page.getByRole('form', { name: 'データベース内を検索' }).getByRole('button', { name: '検索する' }).click()
+      await page.getByRole('link', { name: '構造', exact: true }).click()
+      await page.waitForTimeout(2500)
+      expect(sent).toBe(1)
+      await page.unroute(isSearch)
+    })
+
+    test('a double click on Search does not stop the search it started', async ({ page }) => {
+      await page.goto(searchUrl)
+      await page.getByLabel('検索する語').fill('alice')
+      await page
+        .getByRole('form', { name: 'データベース内を検索' })
+        .getByRole('button', { name: '検索する' })
+        .dblclick()
+      await expect(page.getByText(/テーブルを検索しました/)).toBeVisible()
+      await expect(
+        page.getByRole('form', { name: 'データベース内を検索' }).getByRole('button', { name: '検索する' })
+      ).toBeEnabled()
+      await expect(page.getByText(/中止しました/)).toHaveCount(0)
     })
   })
 }

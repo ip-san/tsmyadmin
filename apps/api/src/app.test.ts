@@ -911,6 +911,8 @@ describe('sql & ddl', () => {
     expect((await h.req(`/api/databases/shop/tables/users/search?q=${'x'.repeat(SEARCH_TERM_MAX + 1)}`)).status).toBe(
       400
     )
+    // PostgreSQL cannot hold NUL in text: refused before it reaches the server.
+    expect((await h.req('/api/databases/shop/tables/users/search?q=a%00b')).status).toBe(400)
   })
 
   it('previews DDL without executing it', async () => {

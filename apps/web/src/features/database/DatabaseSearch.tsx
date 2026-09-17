@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useNavigate, useRouteContext } from '@tanstack/react-router'
 import type { TableSearchResult } from '@tsmyadmin/shared'
 import { SEARCH_TERM_MAX } from '@tsmyadmin/shared'
-import { type FormEvent, useRef, useState } from 'react'
+import { type FormEvent, useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Field, Input } from '@/components/ui/Field.tsx'
@@ -28,7 +28,16 @@ export function DatabaseSearch({ db, schema }: { db: string; schema?: string | u
   const [planned, setPlanned] = useState(0)
   const [running, setRunning] = useState(false)
   const [stopped, setStopped] = useState(false)
-  const stop = useRef(false)
+  /** The run that may still append results; a new run, Stop, or leaving the page invalidates the previous one. */
+  const currentRun = useRef(0)
+  // Leaving the page must end the loop: otherwise every remaining table is still scanned in the background, each
+  // holding one of the session's few pooled connections, and a later visit starts a second loop alongside it.
+  useEffect(
+    () => () => {
+      currentRun.current += 1
+    },
+    []
+  )
 
   if (tables.isPending) return <Spinner />
   if (tables.isError) return <ErrorBox error={tables.error} onRetry={() => void tables.refetch()} />
@@ -40,25 +49,25 @@ export function DatabaseSearch({ db, schema }: { db: string; schema?: string | u
     e.preventDefault()
     const q = term.trim()
     if (q === '' || chosen.length === 0 || running) return
-    stop.current = false
+    currentRun.current += 1
+    const runId = currentRun.current
     setStopped(false)
     setOutcomes([])
     setPlanned(chosen.length)
     setRunning(true)
     try {
       for (const table of chosen) {
-        if (stop.current) {
-          setStopped(true)
-          break
-        }
+        if (currentRun.current !== runId) break
         const outcome: Outcome = await searchTable({ db, schema, table }, q).then(
           (result) => ({ table, result }),
           (error: unknown) => ({ table, error })
         )
+        // The table that was in flight when this run was superseded still finishes; its result is not shown.
+        if (currentRun.current !== runId) break
         setOutcomes((prev) => [...prev, outcome])
       }
     } finally {
-      setRunning(false)
+      if (currentRun.current === runId) setRunning(false)
     }
   }
 
@@ -90,15 +99,11 @@ export function DatabaseSearch({ db, schema }: { db: string; schema?: string | u
               />
             </Field>
           </div>
-          {running ? (
-            <Button type="button" onClick={() => (stop.current = true)}>
-              {locale.databaseSearch.stop}
-            </Button>
-          ) : (
-            <Button type="submit" variant="primary" disabled={term.trim() === '' || chosen.length === 0}>
-              {locale.databaseSearch.run}
-            </Button>
-          )}
+          {/* Disabled while running rather than swapped for Stop: anything appearing in this row would also resize
+              the field and move the buttons under the pointer, so a double click could land its second click on it. */}
+          <Button type="submit" variant="primary" disabled={running || term.trim() === '' || chosen.length === 0}>
+            {locale.databaseSearch.run}
+          </Button>
         </div>
         <fieldset className="space-y-1">
           <legend className="flex items-center gap-2 text-sm text-ink-sub">
@@ -140,10 +145,25 @@ export function DatabaseSearch({ db, schema }: { db: string; schema?: string | u
         </fieldset>
       </form>
 
-      <output aria-live="polite" className="block text-sm text-ink-sub">
-        {planned > 0 ? locale.databaseSearch.progress(outcomes.length, planned) : null}
-        {stopped ? ` — ${locale.databaseSearch.stopped}` : null}
-      </output>
+      <div className="flex min-h-7 items-center gap-3">
+        <output aria-live="polite" className="block text-sm text-ink-sub">
+          {planned > 0 ? locale.databaseSearch.progress(outcomes.length, planned) : null}
+          {stopped ? ` — ${locale.databaseSearch.stopped}` : null}
+        </output>
+        {running ? (
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => {
+              currentRun.current += 1
+              setRunning(false)
+              setStopped(true)
+            }}
+          >
+            {locale.databaseSearch.stop}
+          </Button>
+        ) : null}
+      </div>
 
       {outcomes.length > 0 ? (
         <>

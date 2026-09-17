@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { escapeLike, wrapReadOnly } from '../base.ts'
+import { escapeLike, isSearchableType, wrapReadOnly } from '../base.ts'
 
 describe('wrapReadOnly', () => {
   it('wraps plain reads with a LIMIT and keeps the body verbatim', () => {
@@ -55,5 +55,31 @@ describe('escapeLike', () => {
   it('escapes %, _ and the escape character itself', () => {
     expect(escapeLike('100%_!x')).toBe('100!%!_!!x')
     expect(escapeLike('plain')).toBe('plain')
+  })
+})
+
+describe('isSearchableType', () => {
+  it('skips MySQL types whose text form is raw bytes, including the names MySQL 8 prints', () => {
+    for (const t of [
+      'blob',
+      'longblob',
+      'varbinary(16)',
+      'binary(4)',
+      'bit(8)',
+      'vector(3)',
+      'geometry',
+      'point',
+      'multipolygon',
+      'geomcollection',
+    ])
+      expect(isSearchableType('mysql', t), t).toBe(false)
+    for (const t of ['varchar(100)', 'text', 'json', "enum('a','b')", 'datetime', 'decimal(10,2)', 'int'])
+      expect(isSearchableType('mysql', t), t).toBe(true)
+  })
+
+  it('on PostgreSQL skips only bytea: bit strings and geometric types read as text', () => {
+    for (const t of ['bytea', 'bytea[]']) expect(isSearchableType('postgres', t), t).toBe(false)
+    for (const t of ['bit(4)', 'bit varying(8)', 'point', 'polygon', 'box', 'text', 'jsonb', 'integer[]'])
+      expect(isSearchableType('postgres', t), t).toBe(true)
   })
 })
