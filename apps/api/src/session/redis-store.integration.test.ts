@@ -13,6 +13,56 @@ describeSessionStoreConformance(
 )
 
 describe('RedisSessionStore', () => {
+  it('writes the identity field back on use, so old sessions stop needing the fallback', async () => {
+    // The fallback decrypts the payload to find the identity, which is fine but happens on every delete of an
+    // old session. Touching a session heals it instead, so a rolling upgrade converges as people use the app.
+    const prefix = `test-${randomUUID()}`
+    const config = { dialect: 'mysql' as const, host: 'h', port: 1, user: 'u', password: 'secret' }
+    const { FakeAdapter } = await import('@tsmyadmin/adapter/testing')
+    const store = new RedisSessionStore({ url, secret: SECRET, prefix, adapterFactory: () => new FakeAdapter() })
+    const { Redis } = await import('ioredis')
+    const raw = new Redis(url)
+    try {
+      const session = await store.create(config)
+      await raw.hdel(`${prefix}:session:${session.id}`, 'identity')
+      expect(await raw.hget(`${prefix}:session:${session.id}`, 'identity')).toBeNull()
+      expect(await store.get(session.id)).toBeDefined()
+      expect(await raw.hget(`${prefix}:session:${session.id}`, 'identity')).not.toBeNull()
+    } finally {
+      await raw.quit()
+      await store.closeAll()
+    }
+  })
+
+  it('handles a session written before the identity field existed', async () => {
+    // During a rolling upgrade every session already in Redis is in exactly this state: the hash has no
+    // `identity` field, and the replica that ends up serving the sign-out never held its pool. Without a way to
+    // derive the identity, the index keeps a tombstone and the next login evicts a live session.
+    const prefix = `test-${randomUUID()}`
+    const config = { dialect: 'mysql' as const, host: 'h', port: 1, user: 'u', password: 'secret' }
+    const { FakeAdapter } = await import('@tsmyadmin/adapter/testing')
+    const opts = { url, secret: SECRET, prefix, adapterFactory: () => new FakeAdapter(), maxPerIdentity: 3 }
+    const a = new RedisSessionStore(opts)
+    const b = new RedisSessionStore(opts)
+    const { Redis } = await import('ioredis')
+    const raw = new Redis(url)
+    try {
+      const first = await a.create(config)
+      const second = await a.create(config)
+      const third = await a.create(config)
+      // Make it look as an older version wrote it.
+      await raw.hdel(`${prefix}:session:${third.id}`, 'identity')
+      await b.delete(third.id)
+      await a.create(config)
+      expect(await a.get(first.id)).toBeDefined()
+      expect(await a.get(second.id)).toBeDefined()
+    } finally {
+      await raw.quit()
+      await a.closeAll()
+      await b.closeAll()
+    }
+  })
+
   it('does not evict a live session because another replica signed one out', async () => {
     // The whole point of this store is that a request can land on any replica, so a sign-out routinely happens
     // somewhere that never held that session's pool. If the index keeps the member, the next login counts it as

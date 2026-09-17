@@ -145,13 +145,16 @@ export class RedisSessionStore implements SessionStore {
     }
     const now = this.now()
     // Sliding TTL, on the session and on the index that orders it.
-    const identity = this.identityKey(identityHash(this.key, live.config))
+    const identity = identityHash(this.key, live.config)
+    const index = this.identityKey(identity)
     await this.redis
       .multi()
-      .hset(this.sessionKey(id), 'at', now)
+      // `identity` is written on every use, not just at creation: a session that predates this field being
+      // stored heals the first time it is touched, which matters during a rolling upgrade.
+      .hset(this.sessionKey(id), 'at', now, 'identity', identity)
       .pexpire(this.sessionKey(id), this.ttlMs)
-      .zadd(identity, now, id)
-      .pexpire(identity, this.ttlMs)
+      .zadd(index, now, id)
+      .pexpire(index, this.ttlMs)
       .exec()
     return { id, config: live.config, adapter: live.adapter, createdAt: live.createdAt, lastUsedAt: now }
   }
@@ -161,12 +164,31 @@ export class RedisSessionStore implements SessionStore {
     // pool — another replica signed the user out, or this one restarted. Deriving it only from `live` left the
     // sorted-set member behind, and `create` then counted that tombstone as a held session and evicted a real
     // one to make room it did not need.
-    const stored = await this.redis.hget(this.sessionKey(id), 'identity')
     const live = this.live.get(id)
-    const identity = stored ?? (live ? identityHash(this.key, live.config) : null)
+    const identity = (await this.redis.hget(this.sessionKey(id), 'identity')) ?? (await this.deriveIdentity(id, live))
     if (identity) await this.redis.zrem(this.identityKey(identity), id)
     await this.redis.del(this.sessionKey(id))
     await this.closeLive(id)
+  }
+
+  /**
+   * The identity of a session whose hash predates the stored `identity` field — written by an older version and
+   * still alive in Redis during a rolling upgrade. The pool this process holds answers it for free; otherwise the
+   * payload is still there to be decrypted, since this runs before the key is deleted.
+   */
+  private async deriveIdentity(id: string, live: { config: ConnectRequest } | undefined): Promise<string | null> {
+    if (live) return identityHash(this.key, live.config)
+    const payload = await this.redis.hgetBuffer(this.sessionKey(id), 'payload')
+    if (!payload) return null
+    try {
+      return identityHash(
+        this.key,
+        ConnectRequestSchema.parse(JSON.parse(open(this.key, payload, rowAad(SESSIONS, id))))
+      )
+    } catch {
+      // Undecryptable: the secret was rotated, so the index entry is unreachable anyway and expires on its own.
+      return null
+    }
   }
 
   /** Closes and forgets the pool this process holds for a session, leaving Redis alone. */
