@@ -94,6 +94,8 @@ export function DatabaseSearch({ db, schema }: { db: string; schema?: string | u
                 value={term}
                 onChange={(e) => setTerm(e.target.value)}
                 maxLength={SEARCH_TERM_MAX}
+                // Locked while running, so the results on screen are always for the term shown.
+                disabled={running}
                 required
                 autoComplete="off"
               />

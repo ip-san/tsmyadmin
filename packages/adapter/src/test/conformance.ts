@@ -420,10 +420,22 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         expect(r.columns).not.toContain(dialect === 'mysql' ? 'varbinary_col' : 'blob_col')
         if (dialect === 'mysql') expect(r.columns).not.toContain('bit_col')
         expect(r.columns).toContain('text_col')
-        expect(r.total).toBeGreaterThanOrEqual(0)
+      })
+
+      it('searches the text form of numbers, dates, JSON and enums', async () => {
+        // Each term appears only in types_all's first row, and only in a column of that type.
+        for (const term of ['901234.5678', '2024-03-04', 'true, null', dialect === 'mysql' ? 'beta' : 'sad'])
+          expect((await db.searchTable(ns, 'types_all', term)).total, term).toBe(1)
       })
 
       it('gives a SELECT for the SQL tab that finds the same rows', async () => {
+        // A backslash before a quote: on MySQL the literal must escape the backslash as well, or the quote ends
+        // the string early. Nothing matches; the point is that the SELECT parses and agrees with the count.
+        const escaped = await db.searchTable(ns, 'posts', "x\\'y")
+        expect(escaped.total).toBe(0)
+        const none = (await exec(escaped.sql))[0]
+        expect(none?.kind).toBe('rows')
+        expect(none?.kind === 'rows' && none.result.rows.length).toBe(0)
         // A quote in the term (posts has "Bob's post"): the SELECT must still parse and find that row.
         const found = await db.searchTable(ns, 'posts', "bob's")
         expect(found.total).toBe(1)
