@@ -8,6 +8,7 @@ import {
   ImportEventSchema,
   KeyValueSchema,
   ProcessInfoSchema,
+  QueryBuilderResultSchema,
   SAVED_QUERY_MAX_SQL,
   SavedQuerySchema,
   SEARCH_TERM_MAX,
@@ -913,6 +914,26 @@ describe('sql & ddl', () => {
     )
     // PostgreSQL cannot hold NUL in text: refused before it reaches the server.
     expect((await h.req('/api/databases/shop/tables/users/search?q=a%00b')).status).toBe(400)
+  })
+
+  it('builds a query from structured choices and validates them', async () => {
+    const h = harness()
+    stores.push(h.store)
+    await h.login()
+    const post = (body: unknown) => h.req('/api/databases/shop/query', { method: 'POST', body: JSON.stringify(body) })
+    const res = await post({ tables: ['users'], where: [[{ table: 'users', column: 'name', op: 'eq', value: 'a' }]] })
+    expect(res.status).toBe(200)
+    expect(QueryBuilderResultSchema.parse(await res.json()).sql).toContain('users')
+    expect(h.adapter.calls.at(-1)).toMatchObject({
+      method: 'buildQuery',
+      args: [{ database: 'shop' }, { tables: ['users'], columns: [] }],
+    })
+    expect((await post({ tables: [] })).status).toBe(400)
+    // Free-text patterns are not offered: every condition is a column, an operator and a value.
+    expect(
+      (await post({ tables: ['users'], where: [[{ table: 'users', column: 'name', op: 'like', value: '%' }]] })).status
+    ).toBe(400)
+    expect((await post({ tables: ['missing'] })).status).toBe(404)
   })
 
   it('previews DDL without executing it', async () => {

@@ -38,6 +38,7 @@ export const PASSTHROUGH_METHODS = [
   'listDependencies',
   'browseRows',
   'searchTable',
+  'buildQuery',
   'showCreateTable',
   'iterateRows',
   'listUsers',

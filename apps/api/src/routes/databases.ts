@@ -13,6 +13,7 @@ import {
   isGeneratedColumn,
   type Namespace,
   parseBrowseQuery,
+  QueryBuilderRequestSchema,
   RoutineDefinitionQuerySchema,
   SchemaQuerySchema,
   SqlCancelRequestSchema,
@@ -269,6 +270,12 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
           return c.body(stream, 200, NDJSON_HEADERS)
         }
       )
+      // Builds a SELECT from structured choices and returns it for the SQL tab; nothing but structure is read.
+      .post('/databases/:db/query', validate('json', QueryBuilderRequestSchema), async (c) => {
+        const { schema, ...spec } = c.req.valid('json')
+        const result = await c.get('session').adapter.buildQuery(ns(c.req.param('db'), schema), spec)
+        return c.json(result)
+      })
       .post('/databases/:db/sql', validate('json', SqlRequestSchema), async (c) => {
         const body = c.req.valid('json')
         const results = await c.get('session').adapter.executeSql(ns(c.req.param('db'), body.schema), body.sql, {

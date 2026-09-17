@@ -10,6 +10,8 @@ import type {
   Namespace,
   ObjectDependency,
   ProcessInfo,
+  QueryBuilderResult,
+  QueryBuilderSpec,
   RoutineInfo,
   RoutineKind,
   RowKey,
@@ -265,6 +267,12 @@ export class FakeAdapter implements DatabaseAdapter {
       })
     ).length
     return { total, count: 'exact', columns, sql: `SELECT * FROM ${table}` }
+  }
+
+  async buildQuery(ns: Namespace, spec: QueryBuilderSpec): Promise<QueryBuilderResult> {
+    this.record('buildQuery', ns, spec)
+    for (const table of spec.tables) this.table(ns, table)
+    return { sql: `SELECT * FROM ${spec.tables.join(', ')}` }
   }
 
   async browseRows(ns: Namespace, table: string, opts: BrowseOptions): Promise<BrowseResult> {

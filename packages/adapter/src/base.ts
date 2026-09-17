@@ -12,6 +12,9 @@ import type {
   Namespace,
   ObjectDependency,
   ProcessInfo,
+  QueryBuilderCondition,
+  QueryBuilderResult,
+  QueryBuilderSpec,
   RoutineInfo,
   RoutineKind,
   RowKey,
@@ -261,6 +264,46 @@ export function isSearchableType(dialect: Dialect, dataType: string): boolean {
  * Escapes LIKE metacharacters so a user string matches literally. `!` is the escape character (declared with
  * ESCAPE '!'): unlike a backslash it needs no dialect-specific string escaping of its own.
  */
+/**
+ * LEFT JOINs that bring every table after the first into the query, each along a foreign key to a table already
+ * joined (either direction). Keys into another database or schema do not count. A table no key reaches is
+ * refused rather than cross-joined: a product of two tables is almost never what was meant, and the SQL tab is
+ * there for queries that need it.
+ */
+export function joinPlan(d: Dialect, ns: Namespace, tables: string[], schemas: Map<string, TableSchema>): string[] {
+  const home = (other: Namespace) =>
+    other.database === ns.database && (d === 'mysql' || (other.schema ?? 'public') === (ns.schema ?? 'public'))
+  const col = (table: string, column: string) => `${quoteIdent(d, table)}.${quoteIdent(d, column)}`
+  // Every table is described, so their own foreign keys already hold every link between them.
+  const links = tables.flatMap((from) =>
+    (schemas.get(from)?.foreignKeys ?? [])
+      .filter((fk) => home(fk.refNamespace) && fk.refTable !== from)
+      .map((fk) => ({ from, to: fk.refTable, fk }))
+  )
+  const joined = new Set(tables.slice(0, 1))
+  const out: string[] = []
+  // Repeated passes in the order given, so a table reachable only through a later one still joins, and the same
+  // request always gives the same SQL.
+  for (let progress = true; progress; ) {
+    progress = false
+    for (const table of tables) {
+      if (joined.has(table)) continue
+      const link = links.find((l) => (l.from === table && joined.has(l.to)) || (l.to === table && joined.has(l.from)))
+      if (!link) continue
+      const on = link.fk.columns
+        .map((c, i) => `${col(link.to, link.fk.refColumns[i] ?? '')} = ${col(link.from, c)}`)
+        .join(' AND ')
+      out.push(`LEFT JOIN ${quoteTable(d, ns, table)} ON ${on}`)
+      joined.add(table)
+      progress = true
+    }
+  }
+  const unreached = tables.filter((t) => !joined.has(t))
+  if (unreached.length > 0)
+    throw new AdapterError('VALIDATION', `No foreign key connects ${unreached.join(', ')} to ${tables[0]}`)
+  return out
+}
+
 export function escapeLike(text: string): string {
   return text.replaceAll('!', '!!').replaceAll('%', '!%').replaceAll('_', '!_')
 }
@@ -564,25 +607,81 @@ export abstract class BaseAdapter implements DatabaseAdapter {
 
   private buildWhere(filters: Filter[], params: Params, types: Map<string, string>): string {
     if (filters.length === 0) return ''
-    const parts = filters.map((f) => {
-      const col = quoteIdent(this.dialect, f.column)
-      const op = FILTER_SQL[f.op]
-      if (f.op === 'is_null' || f.op === 'is_not_null') return `${col} ${op}`
-      if (f.value === undefined)
-        throw new AdapterError('QUERY_FAILED', `Filter "${f.op}" on ${f.column} requires a value`)
-      // PostgreSQL has no implicit cast for LIKE on numbers / dates / json; match against the text form.
-      const likeCol = this.dialect === 'postgres' ? `${col}::text` : col
-      if (f.op === 'contains' || f.op === 'starts_with') {
-        // The user's text is matched literally: LIKE metacharacters are escaped, wildcards added here.
-        const text = escapeLike(String(f.value ?? ''))
-        const pattern = f.op === 'contains' ? `%${text}%` : `${text}%`
-        return `${likeCol} LIKE ${params.add(pattern)} ESCAPE '!'`
-      }
-      if (f.op === 'like' || f.op === 'not_like') return `${likeCol} ${op} ${params.add(toDbValue(f.value))}`
-      // Comparisons use the column's own type (FLOAT 0.1 is not the DOUBLE literal 0.1; BIT is not a hex string).
-      return `${col} ${op} ${this.keyParam(params.add(toDbValue(f.value)), types.get(f.column) ?? '')}`
-    })
+    const parts = filters.map((f) =>
+      this.conditionSql(quoteIdent(this.dialect, f.column), f, types.get(f.column) ?? '', (v) =>
+        params.add(toDbValue(v))
+      )
+    )
     return ` WHERE ${parts.join(' AND ')}`
+  }
+
+  /**
+   * One condition on one column, shared by the browse filter and the query builder. `bind` turns a value into
+   * SQL text: a placeholder for browsing, a quoted literal for a statement the user will edit in the SQL tab.
+   */
+  private conditionSql(
+    col: string,
+    f: Pick<Filter, 'column' | 'op' | 'value'>,
+    type: string,
+    bind: (value: InputCell) => string
+  ): string {
+    const op = FILTER_SQL[f.op]
+    if (f.op === 'is_null' || f.op === 'is_not_null') return `${col} ${op}`
+    if (f.value === undefined)
+      throw new AdapterError('QUERY_FAILED', `Filter "${f.op}" on ${f.column} requires a value`)
+    // PostgreSQL has no implicit cast for LIKE on numbers / dates / json; match against the text form.
+    const likeCol = this.dialect === 'postgres' ? `${col}::text` : col
+    if (f.op === 'contains' || f.op === 'starts_with') {
+      // The user's text is matched literally: LIKE metacharacters are escaped, wildcards added here.
+      const text = escapeLike(String(f.value ?? ''))
+      const pattern = f.op === 'contains' ? `%${text}%` : `${text}%`
+      return `${likeCol} LIKE ${bind(pattern)} ESCAPE '!'`
+    }
+    if (f.op === 'like' || f.op === 'not_like') return `${likeCol} ${op} ${bind(f.value)}`
+    // Comparisons use the column's own type (FLOAT 0.1 is not the DOUBLE literal 0.1; BIT is not a hex string).
+    return `${col} ${op} ${this.keyParam(bind(f.value), type)}`
+  }
+
+  async buildQuery(ns: Namespace, spec: QueryBuilderSpec): Promise<QueryBuilderResult> {
+    const d = this.dialect
+    if (new Set(spec.tables).size !== spec.tables.length)
+      throw new AdapterError('VALIDATION', 'Each table can be listed only once')
+    const schemas = new Map<string, TableSchema>()
+    // One at a time: the session's pool is small, and structure reads are quick.
+    for (const table of spec.tables) schemas.set(table, await this.describeTable(ns, table))
+    const typeOf = (ref: { table: string; column: string }): string => {
+      const column = schemas.get(ref.table)?.columns.find((c) => c.name === ref.column)
+      if (!column) throw new AdapterError('NOT_FOUND', `Unknown column: ${ref.table}.${ref.column}`)
+      return column.dataType
+    }
+    // Columns are qualified by the bare table name, which FROM leaves in scope in both dialects.
+    const ref = (r: { table: string; column: string }) => `${quoteIdent(d, r.table)}.${quoteIdent(d, r.column)}`
+    const literal = (v: InputCell) => (d === 'mysql' ? mysqlLiteral(String(v)) : pgLiteral(String(v)))
+
+    const select = spec.columns
+      .filter((c) => c.show)
+      .map((c) => {
+        typeOf(c)
+        return c.alias === '' ? ref(c) : `${ref(c)} AS ${quoteIdent(d, c.alias)}`
+      })
+    const condition = (c: QueryBuilderCondition) => this.conditionSql(ref(c), c, typeOf(c), literal)
+    const groups = spec.where.map((g) => g.map(condition).join(' AND '))
+    const order = spec.columns
+      .filter((c) => c.sort !== null)
+      .map((c) => {
+        typeOf(c)
+        return `${ref(c)} ${c.sort === 'desc' ? 'DESC' : 'ASC'}`
+      })
+
+    const lines = [
+      `SELECT ${select.length === 0 ? '*' : select.join(', ')}`,
+      `FROM ${quoteTable(d, ns, spec.tables[0] ?? '')}`,
+      ...joinPlan(d, ns, spec.tables, schemas),
+    ]
+    if (groups.length === 1) lines.push(`WHERE ${groups[0]}`)
+    else if (groups.length > 1) lines.push(`WHERE ${groups.map((g) => `(${g})`).join(' OR ')}`)
+    if (order.length > 0) lines.push(`ORDER BY ${order.join(', ')}`)
+    return { sql: lines.join('\n') }
   }
 
   async insertRow(ns: Namespace, table: string, values: RowValues): Promise<{ affectedRows: number }> {

@@ -446,6 +446,89 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
       })
     })
 
+    describe('buildQuery', () => {
+      const rowsOf = async (sql: string) => {
+        const [r] = await exec(sql)
+        if (r?.kind !== 'rows') throw new Error(`expected rows, got ${JSON.stringify(r)}`)
+        return r
+      }
+      const shown = (table: string, column: string, extra: { alias?: string; sort?: 'asc' | 'desc' } = {}) => ({
+        table,
+        column,
+        alias: extra.alias ?? '',
+        show: true,
+        sort: extra.sort ?? null,
+      })
+
+      it('joins along a foreign key from either side, with OR groups and quoted values', async () => {
+        const where = [
+          // A quote in the value (posts has "Bob's post"); matched as literal text.
+          [{ table: 'posts', column: 'title', op: 'contains' as const, value: "b's p" }],
+          [
+            { table: 'users', column: 'name', op: 'eq' as const, value: 'Alice' },
+            { table: 'posts', column: 'title', op: 'starts_with' as const, value: 'Sec' },
+          ],
+          // A backslash before a quote: MySQL's literal must escape the backslash too, or the string ends early.
+          [{ table: 'posts', column: 'title', op: 'eq' as const, value: "x\\'y" }],
+        ]
+        const columns = [
+          shown('users', 'name', { sort: 'asc' }),
+          shown('posts', 'title', { alias: 'post', sort: 'asc' }),
+        ]
+        const expected = [
+          ['Alice', 'Second'],
+          ['Bob', "Bob's post"],
+        ]
+        for (const tables of [
+          ['users', 'posts'],
+          ['posts', 'users'],
+        ]) {
+          const { sql } = await db.buildQuery(ns, { tables, columns, where })
+          const r = await rowsOf(sql)
+          expect(
+            r.result.columns.map((c) => c.name),
+            sql
+          ).toEqual(['name', 'post'])
+          expect(r.result.rows, sql).toEqual(expected)
+        }
+      })
+
+      it('compares against the column type and handles IS NULL without a value', async () => {
+        const columns = [shown('users', 'name', { sort: 'asc' })]
+        const older = await db.buildQuery(ns, {
+          tables: ['users'],
+          columns,
+          where: [[{ table: 'users', column: 'age', op: 'gt', value: '34' }]],
+        })
+        expect((await rowsOf(older.sql)).result.rows).toEqual([['Carol'], ['Eve']])
+        const unknownAge = await db.buildQuery(ns, {
+          tables: ['users'],
+          columns,
+          where: [[{ table: 'users', column: 'age', op: 'is_null' }]],
+        })
+        expect((await rowsOf(unknownAge.sql)).result.rows).toEqual([['Bob']])
+        // Keys in another order: equal only when compared as JSON, which on MySQL takes an explicit cast.
+        const json = await db.buildQuery(ns, {
+          tables: ['types_all'],
+          columns: [shown('types_all', 'id')],
+          where: [[{ table: 'types_all', column: 'json_col', op: 'eq', value: '{"b": [true, null], "a": 1}' }]],
+        })
+        expect((await rowsOf(json.sql)).result.rows).toEqual([[1]])
+      })
+
+      it('refuses tables that no foreign key connects, and unknown columns', async () => {
+        await expect(
+          db.buildQuery(ns, { tables: ['users', 'types_all'], columns: [], where: [] })
+        ).rejects.toMatchObject({ code: 'VALIDATION' })
+        await expect(
+          db.buildQuery(ns, { tables: ['users'], columns: [shown('users', 'nope')], where: [] })
+        ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+        await expect(
+          db.buildQuery(ns, { tables: ['users'], columns: [shown('posts', 'title')], where: [] })
+        ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+      })
+    })
+
     describe('browseRows', () => {
       it('returns rows as arrays with column metadata and total', async () => {
         const r = await browseAll('users')

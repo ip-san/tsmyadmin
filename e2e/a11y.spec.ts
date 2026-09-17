@@ -54,6 +54,13 @@ for (const t of TARGETS) {
       await page.goto(tableUrl(t, 'users', '/structure'))
       await page.getByRole('table', { name: 'カラム' }).waitFor()
       await scan(page)
+      // The query builder with a column row and a condition row, so every generated control is labelled.
+      await page.goto(t.schema ? `/db/${t.database}/query?schema=${t.schema}` : `/db/${t.database}/query`)
+      await page.getByRole('checkbox', { name: 'users', exact: true }).check()
+      await page.getByRole('button', { name: 'カラムを追加' }).click()
+      await page.getByRole('button', { name: '条件を追加' }).click()
+      await page.getByLabel('グループ 1 の条件 1 の 値').waitFor()
+      await scan(page)
     })
 
     test('server status, processes and users screens', async ({ page }) => {

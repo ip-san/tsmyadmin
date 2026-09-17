@@ -14,6 +14,8 @@ import type {
   Namespace,
   ObjectDependency,
   ProcessInfo,
+  QueryBuilderResult,
+  QueryBuilderSpec,
   RoutineInfo,
   RoutineKind,
   RowKey,
@@ -207,6 +209,11 @@ export interface DatabaseAdapter {
   browseRows(ns: Namespace, table: string, opts: BrowseOptions): Promise<BrowseResult>
   /** Rows containing `term` in any searchable column (case-insensitive), for the database-wide search. */
   searchTable(ns: Namespace, table: string, term: string): Promise<TableSearchResult>
+  /**
+   * A SELECT over the given tables for the SQL tab, joined along the foreign keys between them. Only reads
+   * structure; refuses tables that no foreign key connects to the rest.
+   */
+  buildQuery(ns: Namespace, spec: QueryBuilderSpec): Promise<QueryBuilderResult>
   insertRow(ns: Namespace, table: string, values: RowValues): Promise<{ affectedRows: number }>
   /** Bulk insert (imports): parameterised multi-row INSERTs inside one transaction; all-or-nothing. */
   /**
@@ -284,6 +291,7 @@ export const ADAPTER_METHOD_NAMES = [
   'listDependencies',
   'browseRows',
   'searchTable',
+  'buildQuery',
   'insertRow',
   'insertRows',
   'updateRow',

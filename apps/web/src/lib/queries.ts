@@ -9,6 +9,8 @@ import type {
   KeyValue,
   KillMode,
   ProcessInfo,
+  QueryBuilderRequestInput,
+  QueryBuilderResult,
   RoutineDefinition,
   RoutineInfo,
   RoutineKind,
@@ -252,4 +254,6 @@ export const mutations = {
     unwrap<DdlPreviewResponse>(
       api.databases[':db'].ddl.preview.$post({ param: { db: enc(db) }, json: { ...schemaQuery(schema), op } })
     ),
+  buildQuery: (db: string, body: QueryBuilderRequestInput) =>
+    unwrap<QueryBuilderResult>(api.databases[':db'].query.$post({ param: { db: enc(db) }, json: body })),
 }
