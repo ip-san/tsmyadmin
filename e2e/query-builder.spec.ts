@@ -15,23 +15,23 @@ for (const t of TARGETS) {
       await page.getByRole('checkbox', { name: 'users', exact: true }).check()
 
       await page.getByRole('button', { name: 'カラムを追加' }).click()
-      await page.getByLabel('出力 1 行目の カラム').selectOption({ label: 'users.name' })
+      await page.getByLabel('出力 1 行目のカラム').selectOption({ label: 'users.name' })
       await page.getByRole('button', { name: 'カラムを追加' }).click()
-      await page.getByLabel('出力 2 行目の カラム').selectOption({ label: 'posts.title' })
-      await page.getByLabel('出力 2 行目の 別名').fill('post')
+      await page.getByLabel('出力 2 行目のカラム').selectOption({ label: 'posts.title' })
+      await page.getByLabel('出力 2 行目の別名').fill('post')
 
       await page.getByRole('button', { name: '条件を追加' }).click()
-      await page.getByLabel('グループ 1 の条件 1 の カラム').selectOption({ label: 'posts.title' })
-      await page.getByLabel('グループ 1 の条件 1 の 演算子').selectOption({ label: 'を含む' })
+      await page.getByLabel('グループ 1 の条件 1のカラム').selectOption({ label: 'posts.title' })
+      await page.getByLabel('グループ 1 の条件 1の演算子').selectOption({ label: 'を含む' })
       // A quote in the value: written into the SQL as a literal, not pasted in as text.
-      await page.getByLabel('グループ 1 の条件 1 の 値').fill("b's p")
+      await page.getByLabel('グループ 1 の条件 1の値').fill("b's p")
 
       await page.getByRole('button', { name: 'SQL を作成' }).click()
       const generated = page.locator('pre')
       await expect(generated).toContainText('LEFT JOIN')
       await expect(generated).toContainText("b''s p")
       // Changing a choice hides the SQL, which no longer matches it.
-      await page.getByLabel('出力 2 行目の 別名').fill('title')
+      await page.getByLabel('出力 2 行目の別名').fill('title')
       await expect(generated).toHaveCount(0)
       await expect(page.getByText('選択が変わりました')).toBeVisible()
       await page.getByRole('button', { name: 'SQL を作成' }).click()
@@ -41,7 +41,27 @@ for (const t of TARGETS) {
       await page.getByRole('button', { name: '実行する', exact: true }).click()
       const result = page.getByRole('region', { name: '文 1' })
       await expect(result.getByRole('cell', { name: "Bob's post", exact: true })).toBeVisible()
-      await expect(result).toContainText('1 行')
+      await expect(result).toContainText(/(^|[^\d,])1 行/)
+    })
+
+    test('shows the join order and clears rows of a table that is unticked', async ({ page }) => {
+      await page.getByRole('checkbox', { name: 'users', exact: true }).check()
+      await page.getByRole('checkbox', { name: 'posts', exact: true }).check()
+      await expect(page.getByText('結合の順: users → posts')).toBeVisible()
+      await page.getByRole('button', { name: '条件を追加' }).click()
+      await page.getByLabel('グループ 1 の条件 1のカラム').selectOption({ label: 'posts.title' })
+      await page.getByRole('button', { name: 'カラムを追加' }).click()
+      await page.getByLabel('出力 1 行目のカラム').selectOption({ label: 'users.name' })
+
+      // Removing a row keeps keyboard focus on a control that stays.
+      await page.getByRole('button', { name: '出力 1 行目を外す' }).click()
+      await expect(page.getByRole('button', { name: 'カラムを追加' })).toBeFocused()
+
+      await page.getByRole('checkbox', { name: 'posts', exact: true }).uncheck()
+      // The condition on posts goes with it, instead of staying on screen while being left out of the SQL.
+      await expect(page.getByLabel('グループ 1 の条件 1のカラム')).toHaveCount(0)
+      await page.getByRole('checkbox', { name: 'posts', exact: true }).check()
+      await expect(page.getByText('結合の順: users → posts')).toBeVisible()
     })
 
     test('refuses tables that no foreign key connects', async ({ page }) => {

@@ -10,7 +10,7 @@ import { locale } from '@/config/locale.ts'
 import { setDatabaseConsoleDraft } from '@/lib/console-draft.ts'
 import { mutations, structureQuery, tablesQuery } from '@/lib/queries.ts'
 import { type ColumnOption, ColumnSelect, QueryBuilderCriteria } from './QueryBuilderCriteria.tsx'
-import { type ConditionGroup, columnKey, type OutputRow, toRequest } from './query-builder-model.ts'
+import { type ConditionGroup, columnKey, type OutputRow, toRequest, withoutTable } from './query-builder-model.ts'
 
 const t = locale.queryBuilder
 
@@ -28,6 +28,7 @@ export function QueryBuilder({ db, schema }: { db: string; schema?: string | und
   const [outputs, setOutputs] = useState<OutputRow[]>([])
   const [groups, setGroups] = useState<ConditionGroup[]>([])
   const lastId = useRef(0)
+  const addColumnButton = useRef<HTMLButtonElement>(null)
   const newId = () => {
     lastId.current += 1
     return lastId.current
@@ -39,22 +40,26 @@ export function QueryBuilder({ db, schema }: { db: string; schema?: string | und
   if (tables.isError) return <ErrorBox error={tables.error} onRetry={() => void tables.refetch()} />
   const names = tables.data.filter((x) => x.kind !== 'sequence').map((x) => x.name)
   if (names.length === 0) return <Notice>{t.noTables}</Notice>
+  // A table dropped since it was ticked (the list refetches) is left out rather than sent to fail on the server.
+  const active = chosen.filter((name) => names.includes(name))
 
   const options: ColumnOption[] = chosen.flatMap((table, i) =>
-    (structures[i]?.data?.columns ?? []).map((c) => ({
-      key: columnKey(table, c.name),
-      label: chosen.length > 1 ? `${table}.${c.name}` : c.name,
-    }))
+    active.includes(table)
+      ? (structures[i]?.data?.columns ?? []).map((c) => ({
+          key: columnKey(table, c.name),
+          label: active.length > 1 ? `${table}.${c.name}` : c.name,
+        }))
+      : []
   )
   const loadingColumns = structures.some((s) => s.isPending)
-  const columnsError = structures.find((s) => s.isError)?.error
-  const request = toRequest(chosen, outputs, groups, schema)
+  const failed = structures.find((s) => s.isError)
+  const request = toRequest(active, outputs, groups, schema)
   // The SQL shown is for the choices it was built from; after any change it is hidden rather than left looking current.
   const current = build.isSuccess && JSON.stringify(build.variables) === JSON.stringify(request)
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    if (chosen.length > 0) build.mutate(request)
+    if (active.length > 0) build.mutate(request)
   }
   const updateOutput = (id: number, patch: Partial<OutputRow>) =>
     setOutputs((prev) => prev.map((o) => (o.id === id ? { ...o, ...patch } : o)))
@@ -79,21 +84,34 @@ export function QueryBuilder({ db, schema }: { db: string; schema?: string | und
                 <input
                   type="checkbox"
                   checked={chosen.includes(name)}
-                  onChange={(e) =>
-                    setChosen((prev) => (e.target.checked ? [...prev, name] : prev.filter((x) => x !== name)))
-                  }
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setChosen((prev) => [...prev, name])
+                      return
+                    }
+                    setChosen((prev) => prev.filter((x) => x !== name))
+                    const rest = withoutTable(name, outputs, groups)
+                    setOutputs(rest.outputs)
+                    setGroups(rest.groups)
+                  }}
                 />
                 {name}
               </label>
             ))}
           </div>
         </fieldset>
+        {/* Which table the rest join to follows the order they were ticked, which the grid above cannot show. */}
+        {active.length > 1 ? <p className="text-xs text-ink-sub">{t.joinOrder(active.join(' → '))}</p> : null}
 
-        {chosen.length === 0 ? (
+        {active.length === 0 ? (
           <p className="text-sm text-ink-sub">{t.chooseTable}</p>
         ) : (
           <>
-            {columnsError ? <ErrorBox error={columnsError} /> : loadingColumns ? <Spinner /> : null}
+            {failed ? (
+              <ErrorBox error={failed.error} onRetry={() => void failed.refetch()} />
+            ) : loadingColumns ? (
+              <Spinner />
+            ) : null}
             <fieldset className="space-y-2">
               <legend className="text-sm text-ink-sub">{t.columns}</legend>
               {outputs.length === 0 ? (
@@ -120,13 +138,13 @@ export function QueryBuilder({ db, schema }: { db: string; schema?: string | und
                             <ColumnSelect
                               value={o.key}
                               options={options}
-                              label={`${label} ${t.column}`}
+                              label={t.fieldLabel(label, t.column)}
                               onChange={(key) => updateOutput(o.id, { key })}
                             />
                           </Td>
                           <Td>
                             <Input
-                              aria-label={`${label} ${t.alias}`}
+                              aria-label={t.fieldLabel(label, t.alias)}
                               value={o.alias}
                               maxLength={64}
                               onChange={(e) => updateOutput(o.id, { alias: e.target.value })}
@@ -137,14 +155,14 @@ export function QueryBuilder({ db, schema }: { db: string; schema?: string | und
                           <Td>
                             <input
                               type="checkbox"
-                              aria-label={`${label} ${t.show}`}
+                              aria-label={t.fieldLabel(label, t.show)}
                               checked={o.show}
                               onChange={(e) => updateOutput(o.id, { show: e.target.checked })}
                             />
                           </Td>
                           <Td>
                             <Select
-                              aria-label={`${label} ${t.sort}`}
+                              aria-label={t.fieldLabel(label, t.sort)}
                               value={o.sort}
                               onChange={(e) => updateOutput(o.id, { sort: e.target.value as OutputRow['sort'] })}
                               className="w-28"
@@ -160,7 +178,10 @@ export function QueryBuilder({ db, schema }: { db: string; schema?: string | und
                               variant="ghost"
                               size="sm"
                               aria-label={t.removeOutput(label)}
-                              onClick={() => setOutputs((prev) => prev.filter((x) => x.id !== o.id))}
+                              onClick={() => {
+                                setOutputs((prev) => prev.filter((x) => x.id !== o.id))
+                                addColumnButton.current?.focus()
+                              }}
                             >
                               {t.remove}
                             </Button>
@@ -172,6 +193,7 @@ export function QueryBuilder({ db, schema }: { db: string; schema?: string | und
                 </Table>
               )}
               <Button
+                ref={addColumnButton}
                 type="button"
                 size="sm"
                 onClick={() =>
@@ -188,12 +210,15 @@ export function QueryBuilder({ db, schema }: { db: string; schema?: string | und
           </>
         )}
 
-        <Button type="submit" variant="primary" disabled={chosen.length === 0 || build.isPending}>
+        <Button type="submit" variant="primary" disabled={active.length === 0 || build.isPending}>
           {build.isPending ? t.building : t.build}
         </Button>
       </form>
 
       {build.isError ? <ErrorBox error={build.error} /> : null}
+      <output aria-live="polite" className="sr-only">
+        {current ? t.built : null}
+      </output>
       {current ? (
         <div className="space-y-2">
           <h3 className="text-sm font-semibold text-ink">{t.result}</h3>
@@ -205,7 +230,9 @@ export function QueryBuilder({ db, schema }: { db: string; schema?: string | und
           </Button>
         </div>
       ) : build.isSuccess ? (
-        <p className="text-sm text-ink-sub">{t.stale}</p>
+        <p role="status" className="text-sm text-ink-sub">
+          {t.stale}
+        </p>
       ) : null}
     </section>
   )

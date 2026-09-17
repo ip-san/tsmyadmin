@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { columnKey, toRequest } from './query-builder-model.ts'
+import { columnKey, toRequest, withoutTable } from './query-builder-model.ts'
 
 describe('toRequest', () => {
   it('sends only complete rows of chosen tables, in the shape the server expects', () => {
@@ -39,5 +39,28 @@ describe('toRequest', () => {
     const r = toRequest(['a.b'], [{ id: 1, key, alias: '', show: false, sort: '' }], [], undefined)
     expect(r.columns).toEqual([{ table: 'a.b', column: 'c"d', alias: '', show: false, sort: null }])
     expect(r).not.toHaveProperty('schema')
+  })
+})
+
+describe('withoutTable', () => {
+  it("drops the unticked table's rows, and a group left with no conditions", () => {
+    const outputs = [
+      { id: 1, key: columnKey('users', 'name'), alias: '', show: true, sort: '' as const },
+      { id: 2, key: columnKey('posts', 'title'), alias: '', show: true, sort: '' as const },
+      { id: 3, key: '', alias: '', show: true, sort: '' as const },
+    ]
+    const groups = [
+      { id: 4, conditions: [{ id: 5, key: columnKey('posts', 'title'), op: 'eq' as const, value: 'x' }] },
+      {
+        id: 6,
+        conditions: [
+          { id: 7, key: columnKey('posts', 'id'), op: 'eq' as const, value: '1' },
+          { id: 8, key: columnKey('users', 'id'), op: 'eq' as const, value: '1' },
+        ],
+      },
+    ]
+    const rest = withoutTable('posts', outputs, groups)
+    expect(rest.outputs.map((o) => o.id)).toEqual([1, 3])
+    expect(rest.groups).toEqual([{ id: 6, conditions: [groups[1]?.conditions[1]] }])
   })
 })

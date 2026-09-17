@@ -159,7 +159,9 @@ export const en = {
     intro:
       'Choose tables, columns and conditions to build a SELECT. Several tables are joined along their foreign keys (tables no foreign key connects cannot be combined). The SQL opens in the SQL tab to edit and run. Add LIKE patterns or free-form expressions there.',
     tables: 'Tables',
-    tablesHint: 'The first table you choose is the starting point; the others are LEFT JOINed to it.',
+    tablesHint:
+      'The first table you choose is the starting point; the others are LEFT JOINed in turn along the foreign keys that reach them.',
+    joinOrder: (tables: string) => `Join order: ${tables}`,
     chooseTable: 'Choose at least one table',
     noTables: 'This database has no tables',
     columns: 'Output columns',
@@ -175,6 +177,7 @@ export const en = {
     addColumn: 'Add a column',
     outputLabel: (n: number) => `Output row ${n}`,
     removeOutput: (label: string) => `Remove ${label.toLowerCase()}`,
+    fieldLabel: (label: string, field: string) => `${label} ${field}`,
     criteria: 'Conditions',
     group: (n: number) => `Condition group ${n} (all must hold)`,
     or: 'or',
@@ -189,6 +192,7 @@ export const en = {
     build: 'Build SQL',
     building: 'Building…',
     result: 'Generated SQL',
+    built: 'SQL built',
     stale: 'Your choices have changed. Press “Build SQL” again.',
     openInSql: 'Open in the SQL tab',
   },

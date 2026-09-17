@@ -59,7 +59,7 @@ for (const t of TARGETS) {
       await page.getByRole('checkbox', { name: 'users', exact: true }).check()
       await page.getByRole('button', { name: 'カラムを追加' }).click()
       await page.getByRole('button', { name: '条件を追加' }).click()
-      await page.getByLabel('グループ 1 の条件 1 の 値').waitFor()
+      await page.getByLabel('グループ 1 の条件 1の値').waitFor()
       await scan(page)
     })
 

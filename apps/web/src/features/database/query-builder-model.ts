@@ -61,3 +61,18 @@ export function toRequest(
     .filter((g) => g.length > 0)
   return { ...(schema ? { schema } : {}), tables: [...tables], columns, where }
 }
+
+/** Rows of `table` removed when it is unticked, so none is left on screen pointing at a column no longer offered. */
+export function withoutTable(
+  table: string,
+  outputs: readonly OutputRow[],
+  groups: readonly ConditionGroup[]
+): { outputs: OutputRow[]; groups: ConditionGroup[] } {
+  const keep = (key: ColumnKey) => parseKey(key)?.table !== table
+  return {
+    outputs: outputs.filter((o) => keep(o.key)),
+    groups: groups
+      .map((g) => ({ ...g, conditions: g.conditions.filter((c) => keep(c.key)) }))
+      .filter((g) => g.conditions.length > 0),
+  }
+}

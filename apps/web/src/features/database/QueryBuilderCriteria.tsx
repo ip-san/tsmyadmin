@@ -1,4 +1,5 @@
 import { type QueryBuilderOp, QueryBuilderOpSchema } from '@tsmyadmin/shared'
+import { useRef } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { Input, Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
@@ -46,6 +47,7 @@ export function QueryBuilderCriteria({
   onChange: (groups: ConditionGroup[]) => void
   newId: () => number
 }) {
+  const addGroupButton = useRef<HTMLButtonElement>(null)
   const blank = (): ConditionRow => ({ id: newId(), key: '', op: 'eq', value: '' })
   // A group left with no conditions is removed with its last one.
   const setGroup = (gi: number, conditions: ConditionRow[]) =>
@@ -70,11 +72,11 @@ export function QueryBuilderCriteria({
                   <ColumnSelect
                     value={c.key}
                     options={options}
-                    label={`${label} ${t.column}`}
+                    label={t.fieldLabel(label, t.column)}
                     onChange={(key) => update(gi, c.id, { key })}
                   />
                   <Select
-                    aria-label={`${label} ${t.operator}`}
+                    aria-label={t.fieldLabel(label, t.operator)}
                     value={c.op}
                     onChange={(e) => update(gi, c.id, { op: e.target.value as QueryBuilderOp })}
                     className="w-36"
@@ -87,7 +89,7 @@ export function QueryBuilderCriteria({
                   </Select>
                   {NO_VALUE.has(c.op) ? null : (
                     <Input
-                      aria-label={`${label} ${t.value}`}
+                      aria-label={t.fieldLabel(label, t.value)}
                       value={c.value}
                       onChange={(e) => update(gi, c.id, { value: e.target.value })}
                       className="w-56"
@@ -99,12 +101,14 @@ export function QueryBuilderCriteria({
                     variant="ghost"
                     size="sm"
                     aria-label={t.removeCondition(label)}
-                    onClick={() =>
+                    onClick={() => {
                       setGroup(
                         gi,
                         group.conditions.filter((x) => x.id !== c.id)
                       )
-                    }
+                      // This button goes (with its group, if it held the last condition): keep focus on a control that stays.
+                      addGroupButton.current?.focus()
+                    }}
                   >
                     {t.remove}
                   </Button>
@@ -117,7 +121,12 @@ export function QueryBuilderCriteria({
           </fieldset>
         </div>
       ))}
-      <Button type="button" size="sm" onClick={() => onChange([...groups, { id: newId(), conditions: [blank()] }])}>
+      <Button
+        ref={addGroupButton}
+        type="button"
+        size="sm"
+        onClick={() => onChange([...groups, { id: newId(), conditions: [blank()] }])}
+      >
         {groups.length === 0 ? t.addFirstCondition : t.addGroup}
       </Button>
     </div>
