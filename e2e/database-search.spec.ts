@@ -46,8 +46,12 @@ for (const t of TARGETS) {
       await page.getByLabel('検索する語').fill('a')
       await page.getByRole('form', { name: 'データベース内を検索' }).getByRole('button', { name: '検索する' }).click()
       await page.getByRole('button', { name: '中止する' }).click()
-      release?.()
       await expect(page.getByText(/中止しました/)).toBeVisible()
+      // The stopped table is still being searched on the server: another search would add a second scan.
+      const search = page.getByRole('form', { name: 'データベース内を検索' }).getByRole('button', { name: '検索する' })
+      await expect(search).toBeDisabled()
+      release?.()
+      await expect(search).toBeEnabled()
       // Give a loop that ignored the stop time to send more.
       await page.waitForTimeout(1500)
       expect(sent).toBe(1)

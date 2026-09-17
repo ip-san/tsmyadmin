@@ -129,7 +129,7 @@ export const ja = {
     title: 'データベース内を検索',
     term: '検索する語',
     termHint:
-      '大文字と小文字は区別しません。% や _ もそのままの文字として探します。バイナリや空間型のカラムは対象外です。',
+      '大文字と小文字は区別しません。% や _ もそのままの文字として探します。値を文字として読めないカラム（バイナリや空間型など）は対象外です。',
     tables: '対象のテーブル',
     selectAll: 'すべて選択',
     selectNone: '選択を解除',
@@ -143,8 +143,8 @@ export const ja = {
     matches: '一致した行',
     actions: '操作',
     rows: (n: number, lowerBound: boolean) => `${n.toLocaleString('ja-JP')} 行${lowerBound ? '以上' : ''}`,
-    summary: (rows: number, tables: number, lowerBound: boolean) =>
-      `合計 ${rows.toLocaleString('ja-JP')} 行${lowerBound ? '以上' : ''}（${tables.toLocaleString('ja-JP')} テーブル）`,
+    summary: (term: string, rows: number, tables: number, lowerBound: boolean) =>
+      `「${term}」: 合計 ${rows.toLocaleString('ja-JP')} 行${lowerBound ? '以上' : ''}（${tables.toLocaleString('ja-JP')} テーブル）`,
     openInSql: 'SQL タブで開く',
     openInSqlLabel: (table: string) => `${table} の一致した行を SQL タブで開く`,
     noColumns: '検索できるカラムがありません',

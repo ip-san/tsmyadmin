@@ -28,6 +28,10 @@ export function DatabaseSearch({ db, schema }: { db: string; schema?: string | u
   const [planned, setPlanned] = useState(0)
   const [running, setRunning] = useState(false)
   const [stopped, setStopped] = useState(false)
+  /** A table's request is still on the server — also after Stop, which only stops showing its result. */
+  const [settling, setSettling] = useState(false)
+  const [searchedTerm, setSearchedTerm] = useState('')
+  const mounted = useRef(true)
   /** The run that may still append results; a new run, Stop, or leaving the page invalidates the previous one. */
   const currentRun = useRef(0)
   // Leaving the page must end the loop: otherwise every remaining table is still scanned in the background, each
@@ -35,6 +39,7 @@ export function DatabaseSearch({ db, schema }: { db: string; schema?: string | u
   useEffect(
     () => () => {
       currentRun.current += 1
+      mounted.current = false
     },
     []
   )
@@ -48,20 +53,25 @@ export function DatabaseSearch({ db, schema }: { db: string; schema?: string | u
   const run = async (e: FormEvent) => {
     e.preventDefault()
     const q = term.trim()
-    if (q === '' || chosen.length === 0 || running) return
+    if (q === '' || chosen.length === 0 || running || settling) return
     currentRun.current += 1
     const runId = currentRun.current
     setStopped(false)
     setOutcomes([])
     setPlanned(chosen.length)
+    setSearchedTerm(q)
     setRunning(true)
     try {
       for (const table of chosen) {
         if (currentRun.current !== runId) break
+        setSettling(true)
         const outcome: Outcome = await searchTable({ db, schema, table }, q).then(
           (result) => ({ table, result }),
           (error: unknown) => ({ table, error })
         )
+        // Until this returns, a new search would add a second full scan to the session's small connection pool —
+        // exactly what searching one table at a time is meant to avoid — so Search stays unavailable even after Stop.
+        if (mounted.current) setSettling(false)
         // The table that was in flight when this run was superseded still finishes; its result is not shown.
         if (currentRun.current !== runId) break
         setOutcomes((prev) => [...prev, outcome])
@@ -94,8 +104,6 @@ export function DatabaseSearch({ db, schema }: { db: string; schema?: string | u
                 value={term}
                 onChange={(e) => setTerm(e.target.value)}
                 maxLength={SEARCH_TERM_MAX}
-                // Locked while running, so the results on screen are always for the term shown.
-                disabled={running}
                 required
                 autoComplete="off"
               />
@@ -103,7 +111,11 @@ export function DatabaseSearch({ db, schema }: { db: string; schema?: string | u
           </div>
           {/* Disabled while running rather than swapped for Stop: anything appearing in this row would also resize
               the field and move the buttons under the pointer, so a double click could land its second click on it. */}
-          <Button type="submit" variant="primary" disabled={running || term.trim() === '' || chosen.length === 0}>
+          <Button
+            type="submit"
+            variant="primary"
+            disabled={running || settling || term.trim() === '' || chosen.length === 0}
+          >
             {locale.databaseSearch.run}
           </Button>
         </div>
@@ -169,7 +181,9 @@ export function DatabaseSearch({ db, schema }: { db: string; schema?: string | u
 
       {outcomes.length > 0 ? (
         <>
-          <p className="text-sm text-ink">{locale.databaseSearch.summary(totalRows, matchedTables, lowerBound)}</p>
+          <p className="text-sm text-ink">
+            {locale.databaseSearch.summary(searchedTerm, totalRows, matchedTables, lowerBound)}
+          </p>
           <Table aria-label={locale.databaseSearch.title}>
             <thead>
               <tr>

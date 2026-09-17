@@ -77,8 +77,9 @@ describe('isSearchableType', () => {
       expect(isSearchableType('mysql', t), t).toBe(true)
   })
 
-  it('on PostgreSQL skips only bytea: bit strings and geometric types read as text', () => {
-    for (const t of ['bytea', 'bytea[]']) expect(isSearchableType('postgres', t), t).toBe(false)
+  it('on PostgreSQL skips bytea and PostGIS types, but searches bit strings and built-in geometric types', () => {
+    for (const t of ['bytea', 'bytea[]', 'geometry', 'geometry(Point,4326)', 'geography', 'raster'])
+      expect(isSearchableType('postgres', t), t).toBe(false)
     for (const t of ['bit(4)', 'bit varying(8)', 'point', 'polygon', 'box', 'text', 'jsonb', 'integer[]'])
       expect(isSearchableType('postgres', t), t).toBe(true)
   })

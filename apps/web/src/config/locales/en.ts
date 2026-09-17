@@ -132,7 +132,7 @@ export const en = {
     title: 'Search the database',
     term: 'Search for',
     termHint:
-      'Not case-sensitive. % and _ are searched for as the characters themselves. Binary and spatial columns are not searched.',
+      'Not case-sensitive. % and _ are searched for as the characters themselves. Columns whose values have no readable text form (binary, spatial and the like) are not searched.',
     tables: 'Tables to search',
     selectAll: 'Select all',
     selectNone: 'Clear selection',
@@ -146,8 +146,8 @@ export const en = {
     matches: 'Matching rows',
     actions: 'Actions',
     rows: (n: number, lowerBound: boolean) => `${n.toLocaleString('en-US')}${lowerBound ? '+' : ''} rows`,
-    summary: (rows: number, tables: number, lowerBound: boolean) =>
-      `${rows.toLocaleString('en-US')}${lowerBound ? '+' : ''} rows in ${tables.toLocaleString('en-US')} tables`,
+    summary: (term: string, rows: number, tables: number, lowerBound: boolean) =>
+      `“${term}”: ${rows.toLocaleString('en-US')}${lowerBound ? '+' : ''} rows in ${tables.toLocaleString('en-US')} tables`,
     openInSql: 'Open in SQL tab',
     openInSqlLabel: (table: string) => `Open the matching rows of ${table} in the SQL tab`,
     noColumns: 'No searchable columns',

@@ -238,13 +238,14 @@ const FILTER_SQL: Record<Filter['op'], string> = {
  * MySQL: binary strings, BIT and the spatial types store bytes, so their text form is raw WKB or binary and a
  * match would be noise (CAST to CHAR accepts them; it just compares bytes). GEOMETRYCOLLECTION is printed as
  * `geomcollection` since 8.0; VECTOR is binary too.
- * PostgreSQL: only bytea (and arrays of it). bit, point, polygon and the like have a readable `::text` form
- * ("1010", "(1.5,2)") that is worth searching.
+ * PostgreSQL: bytea (and arrays of it), and PostGIS geometry / geography / raster, whose text form is hex EWKB —
+ * a short term like "01" would match every row. The built-in bit, point, polygon and the like have a readable
+ * `::text` form ("1010", "(1.5,2)") that is worth searching.
  */
 const UNSEARCHABLE_TYPE: Record<Dialect, RegExp> = {
   mysql:
     /^(tiny|medium|long)?blob\b|^(var)?binary\b|^bit\b|^vector\b|^(multi)?(point|linestring|polygon)\b|^geometry\b|^geometrycollection\b|^geomcollection\b/i,
-  postgres: /^bytea\b/i,
+  postgres: /^bytea\b|^geometry\b|^geography\b|^raster\b/i,
 }
 
 /** Whether the database-wide search looks at a column of this type (see UNSEARCHABLE_TYPE). */
