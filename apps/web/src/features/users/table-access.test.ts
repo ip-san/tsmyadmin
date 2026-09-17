@@ -4,6 +4,7 @@ import { parseGrant, tableAccess } from './table-access.ts'
 describe('parseGrant', () => {
   it('reads privileges, column lists and the object, with any character in the names', () => {
     expect(parseGrant('mysql', 'GRANT SELECT (`a`, `on, b``c`), INSERT ON `shop`.`or ders` TO `u`@`%`')).toEqual({
+      verb: 'GRANT',
       privileges: [
         { name: 'SELECT', columns: ['a', 'on, b`c'] },
         { name: 'INSERT', columns: null },
@@ -11,6 +12,7 @@ describe('parseGrant', () => {
       object: ['shop', 'or ders'],
     })
     expect(parseGrant('postgres', 'GRANT UPDATE ("x ON y", "q""") ON "public"."t" TO "r"')).toEqual({
+      verb: 'GRANT',
       privileges: [{ name: 'UPDATE', columns: ['x ON y', 'q"'] }],
       object: ['public', 't'],
     })
@@ -49,6 +51,19 @@ describe('tableAccess', () => {
       REFERENCES: [{ scope: 'table' }],
       TRIGGER: [],
     })
+  })
+
+  it('applies a MySQL partial revoke to the global grant, and lists overlapping database grants once', () => {
+    const access = tableAccess('mysql', 'secret', undefined, 't', [
+      'GRANT SELECT, INSERT ON *.* TO `u`@`%`',
+      'REVOKE SELECT ON `secret`.* FROM `u`@`%`',
+      'REVOKE INSERT ON `other`.* FROM `u`@`%`',
+      'GRANT UPDATE ON `sec%`.* TO `u`@`%`',
+      'GRANT UPDATE ON `secre_`.* TO `u`@`%`',
+    ])
+    expect(access.SELECT).toEqual([])
+    expect(access.INSERT).toEqual([{ scope: 'server' }])
+    expect(access.UPDATE).toEqual([{ scope: 'database' }])
   })
 
   it('expands ALL PRIVILEGES, and an escaped wildcard matches only itself', () => {

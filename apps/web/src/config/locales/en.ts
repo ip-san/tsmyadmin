@@ -692,7 +692,7 @@ export const en = {
   tablePrivileges: {
     title: (table: string) => `Privileges on ${table}`,
     hintMysql:
-      'For each account: what it may do to this table and where that comes from (the table, some columns, the whole database, the whole server). Choose privileges… grants and revokes, but a revoke here only removes table and column grants. Manage database-wide grants on the database’s Privileges tab and server-wide ones under Users.',
+      'For each account: what it may do to this table and where that comes from (the table, some columns, the whole database, the whole server). Choose privileges… grants and revokes, but a revoke here only removes table and column grants. Manage database-wide grants on the database’s Privileges tab and server-wide ones under Users. Privileges held through a role are not shown.',
     hintPostgres:
       'For each account: what it may do to this table and where that comes from (the table, some columns, superuser). Choose privileges… grants and revokes. The owner’s implicit privileges, and privileges held through PUBLIC or another role, are not shown.',
     scopes: { server: 'Server', database: 'Database', table: 'Table' },

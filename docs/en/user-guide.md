@@ -1,4 +1,4 @@
-<!-- translated-from: docs/user-guide.md sha256:63b07ba8061cf820ffbcb636f1546b627dbc52eee85cccb498367b1261b81dfc -->
+<!-- translated-from: docs/user-guide.md sha256:b587974d2a78538df29cdffb013e9918d9ff4accc366900cf8c08e9c70002c3d -->
 
 # User guide
 
@@ -110,7 +110,7 @@ Every run is autocommitted. A script that ends with a transaction still open is 
 | Export | Downloads this table as SQL / CSV / JSON (structure and/or data) |
 | Import | Loads a CSV into this table |
 | Triggers | The triggers of this table |
-| Privileges | For each account that can log in: SELECT / INSERT / UPDATE / DELETE / REFERENCES / TRIGGER on this table, and where each comes from (the table, some columns, the whole database, the whole server; on PostgreSQL, superuser). **Choose privileges…** opens with this table already chosen. A revoke here only removes table and column grants; database-wide and server-wide grants stay. On PostgreSQL, the owner's implicit privileges and privileges held through PUBLIC or another role are not shown |
+| Privileges | For each account that can log in: SELECT / INSERT / UPDATE / DELETE / REFERENCES / TRIGGER on this table, and where each comes from (the table, some columns, the whole database, the whole server; on PostgreSQL, superuser). **Choose privileges…** opens with this table already chosen. A revoke here only removes table and column grants; database-wide and server-wide grants stay. Privileges held through a role are not shown (nor, on PostgreSQL, the owner's implicit privileges or PUBLIC's). MySQL partial revokes (`partial_revokes`) are taken into account |
 | Operations | **Rename table**, **Table options** (comment; on MySQL also engine, collation and the next AUTO_INCREMENT value), **Copy table** (with or without its data), **Maintenance** (MySQL: ANALYZE / OPTIMIZE / CHECK TABLE; PostgreSQL: ANALYZE / VACUUM / VACUUM FULL), **Empty the table…** (TRUNCATE) and **Drop the table…** (DROP). A view offers only **Drop the view…** |
 
 ### Export in detail
