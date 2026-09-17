@@ -1,4 +1,4 @@
-<!-- translated-from: docs/hosting.md sha256:57f788c67c87f806f782feb7827c5c922139134d8a161290cbcd6ebb01050980 -->
+<!-- translated-from: docs/hosting.md sha256:372d954d5f2f97f367bf953dc2da6e0805c3c7c228de3403e94e33b1f40f96ac -->
 
 # Where to run it (VPS / AWS / Azure)
 
@@ -24,12 +24,12 @@ Leaving `sqlite` on a disk that does not survive signs everyone out and loses ev
 | TLS | tsmyadmin does not terminate TLS. Something in front always must |
 | `TRUST_PROXY` | `1` when something sits in front. With nothing in front (a closed network without TLS, and only that) leave it `0` and also set `COOKIE_SECURE=0` — in production a plain-HTTP login is refused by default |
 | Health checks | Point a load balancer at `/healthz`. **`/readyz` checks the session store** (Redis under `redis`), not the database you connect to |
-| Memory | 512 MB or more (*Size and limits* in [deployment.md](deployment.md)). Only a 64 MB import pushes the peak into the hundreds of MB |
+| Memory | 512 MB or more (*Docker* in [deployment.md](deployment.md): ~90 MB idle, and only a 64 MB import pushes the peak into the hundreds of MB). Never go below 256 MB |
 | More than one instance | Sharing sessions does not share the rest: cancelling a running query, the login rate limit and the connection pools stay per instance. Running two or more requires sticky sessions (*Several replicas* in [deployment.md](deployment.md)). If you cannot enable them, stay at one |
 | Port | 3100 by default; `API_PORT` changes it. The platform-injected `PORT` is honoured only when `API_PORT` is unset — set both and `API_PORT` wins |
 | Reachability | [security.md](security.md) states that exposing it directly to the internet is not an intended use. Put a VPN, an IP restriction or SSO in front |
 
-> `TRUST_PROXY=1` takes the **last** element of `X-Forwarded-For`. With several proxies in a chain, normalise that header down to the client IP in the proxy directly in front of tsmyadmin (see *Reverse proxy and TLS* in [deployment.md](deployment.md)).
+> `TRUST_PROXY=1` takes the **last** element of `X-Forwarded-For`. With several proxies in a chain, normalise that header down to the client IP in the proxy directly in front of tsmyadmin (see *Reverse proxies and TLS* in [deployment.md](deployment.md)).
 
 ---
 
@@ -59,7 +59,7 @@ volumes:
   session:
 ```
 
-Caddy is the shortest thing to put in front, since it handles Let's Encrypt on its own.
+Caddy is the shortest thing to put in front, since it handles Let's Encrypt on its own. The example below assumes **Caddy running on the host**: put Caddy in the same compose file and `127.0.0.1` is Caddy's own container, so the destination becomes the service name (`tsmyadmin:3100`).
 
 ```caddyfile
 tsmyadmin.example.com {
@@ -108,7 +108,7 @@ Same as *Sakura VPS and other ordinary servers* above.
 | Sessions | Azure Cache for Redis: `SESSION_STORE=redis` |
 | TLS | Terminated by ingress, so `TRUST_PROXY=1` |
 | Port | Set the ingress target port to 3100 |
-| Health checks | `/readyz` for startup and readiness, `/healthz` for liveness |
+| Health checks | `/healthz` for startup, readiness and liveness alike. Using `/readyz` for readiness pulls every replica out of ingress at once when Redis blips — the same reason as the ECS row |
 | Replicas | Minimum 1 — scaling to zero means a cold start on the next visit. Going above one means enabling session affinity on the ingress |
 | Secrets | Assign Container Apps secrets to environment variables |
 

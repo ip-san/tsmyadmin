@@ -22,7 +22,7 @@
 | TLS | tsmyadmin は TLS を終端しません。必ず前段で終端します |
 | `TRUST_PROXY` | 前段があるなら `1`。前段なしで直接公開する構成（TLS のない閉じたネットワークだけ）では `0` のままにし、あわせて `COOKIE_SECURE=0` が必要です。本番は既定で HTTPS 以外のログインを拒否します |
 | ヘルスチェック | ロードバランサには `/healthz`。**`/readyz` が見るのはセッションストア**（`redis` なら Redis）で、接続先 DB ではありません |
-| メモリ | 512 MB 以上（[deployment.md](deployment.md) の「サイズと制限」）。64 MB のインポート中だけピークが数百 MB になります |
+| メモリ | 512 MB 以上（[deployment.md](deployment.md) の「Docker」。アイドル約 90 MB、64 MB のインポート中だけピークが数百 MB）。256 MB を下回らせないでください |
 | 複数インスタンス | セッションを共有しても、実行中クエリのキャンセル・ログインのレート制限・接続プールはインスタンスごとに残ります。2 つ以上動かすならスティッキーセッションが必須です（[deployment.md](deployment.md) の「複数レプリカ」）。有効にできないなら 1 つに固定してください |
 | ポート | 既定 3100。`API_PORT` で変えられます。`API_PORT` を設定していないときだけ、プラットフォームが注入する `PORT` に従います（両方あれば `API_PORT` が優先） |
 | 到達制限 | [security.md](security.md) は「インターネットに直接公開する用途は想定していない」としています。VPN・IP 制限・SSO のいずれかを前に置いてください |
@@ -57,7 +57,7 @@ volumes:
   session:
 ```
 
-前段は Caddy が短く済みます（Let's Encrypt が自動）。
+前段は Caddy が短く済みます（Let's Encrypt が自動）。次の例は **Caddy をホスト側で動かす**前提です。Caddy も同じ compose に入れる場合、`127.0.0.1` は Caddy 自身のコンテナを指してしまうので、宛先をサービス名（`tsmyadmin:3100`）にしてください。
 
 ```caddyfile
 tsmyadmin.example.com {
@@ -106,7 +106,7 @@ ALB も VPC も要らない分、手軽です。`PORT` が注入されるので 
 | セッション | Azure Cache for Redis。`SESSION_STORE=redis` |
 | TLS | Ingress が終端。`TRUST_PROXY=1` |
 | ポート | Ingress の target port を 3100 に |
-| ヘルスチェック | Startup / Readiness に `/readyz`、Liveness に `/healthz` |
+| ヘルスチェック | Startup / Readiness / Liveness すべて `/healthz`。`/readyz` を Readiness に使うと、Redis が一瞬落ちただけで全レプリカが同時に ingress から外れます（ECS の行と同じ理由） |
 | レプリカ | 最小 1。0 まで縮めるとアクセスのたびにコールドスタートします。2 つ以上にするなら Ingress のセッションアフィニティを有効に |
 | シークレット | Container Apps のシークレットを環境変数に割り当てます |
 

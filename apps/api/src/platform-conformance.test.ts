@@ -37,7 +37,13 @@ interface Platform {
    * every attempt: an implementation that trusts these never reaches the limit.
    */
   decoy: (forged: string) => Record<string, string>
-  /** IPv4 clients unless stated. Bare IPv6 is the case an address-parsing slip collapses into one bucket. */
+  /**
+   * IPv4 clients unless stated. Bare IPv6 is the case an address-parsing slip collapses into one bucket.
+   *
+   * The two IPv6 clients deliberately share a /64, so these tests also pin the decision that buckets are per
+   * address and not per prefix. Bucketing IPv6 by /64 is a defensible choice, but it is not the one made here,
+   * and changing it should fail loudly rather than quietly.
+   */
   ipv6?: boolean
 }
 
@@ -117,6 +123,22 @@ const PLATFORMS: Platform[] = [
     }),
   },
   {
+    /**
+     * A proxy that terminates TLS but was never configured with `proxy_set_header X-Forwarded-For`.
+     *
+     * Every other row sends the header its platform sets, so they only ever ask "does the real header win?".
+     * This one asks what happens when it is missing, which is where a regression actually lands: identity must
+     * fall back to the socket, and no other header may stand in for it. `remote` is the client here because a
+     * constant would put every visitor in one bucket and the test could not tell right from wrong.
+     */
+    name: 'proxy that sets no X-Forwarded-For',
+    trustProxy: 'forwarded',
+    // Not x-forwarded-for: under 'forwarded' that one is legitimately trusted, so decoying it would fail correct code.
+    decoy: (forged: string) => ({ ...forgedCommon(forged), 'cf-connecting-ip': forged }),
+    remote: (client) => client,
+    headers: () => ({ 'x-forwarded-proto': 'https' }),
+  },
+  {
     // No proxy at all: the socket address is the only thing that can be believed. TLS has to be terminated
     // somewhere, so this shape is only viable with COOKIE_SECURE=0 on a closed network.
     name: 'no proxy (COOKIE_SECURE=0)',
@@ -157,7 +179,9 @@ function harness(platform: Platform) {
     currentClient = client
     refuse = options.refuse ?? false
     attempt += 1
-    return app.request('/api/session', {
+    // Absolute, non-loopback: app.request() would otherwise build http://localhost, which secureTransport
+    // exempts, and every row's `x-forwarded-proto` would be decoration rather than the thing under test.
+    return app.request('http://app.internal/api/session', {
       method: 'POST',
       body: JSON.stringify(body),
       headers: {
