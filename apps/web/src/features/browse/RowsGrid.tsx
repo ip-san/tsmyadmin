@@ -45,7 +45,6 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
   const [editingRow, setEditingRow] = useState<number | null>(null)
   const [copyingRow, setCopyingRow] = useState<number | null>(null)
   const [inline, setInline] = useState<{ row: number; col: number } | null>(null)
-  /** What the delete dialog is confirming: the ticked rows, or the one row whose own delete button was pressed. */
   /** The rows the delete dialog is confirming, captured as keys when it opens (never looked up by position later). */
   const [deleteTarget, setDeleteTarget] = useState<{ keys: RowKey[] } | null>(null)
   const [notice, setNotice] = useState<string | null>(null)

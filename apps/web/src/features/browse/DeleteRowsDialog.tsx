@@ -18,6 +18,8 @@ export function DeleteRowsDialog({ open, count, pending, error, onCancel, onConf
       open={open}
       title={locale.browse.deleteSelected}
       onClose={onCancel}
+      // Escape must not close it mid-delete: cancelling resets the mutation, so a failure would then show nowhere.
+      busy={pending}
       footer={
         <>
           <Button onClick={onCancel} disabled={pending}>

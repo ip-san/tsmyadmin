@@ -128,6 +128,37 @@ for (const t of TARGETS) {
       })
     })
 
+    test('keeps the delete dialog open while deleting, so a failure is still shown', async ({ page }) => {
+      await withScratchTable(page, t, async (table) => {
+        await page.goto(`${tableUrl(t, table)}${t.schema ? '&' : '?'}sort=id:asc`)
+        // Hold the delete, then fail it: Escape pressed in between must not close the dialog and lose the error.
+        let release: (() => void) | undefined
+        const held = new Promise<void>((resolve) => {
+          release = resolve
+        })
+        // Matched on the path: PostgreSQL requests carry ?schema=, which a `**/rows` glob does not match.
+        const isRows = (url: URL) => url.pathname.endsWith('/rows')
+        await page.route(isRows, async (route) => {
+          if (route.request().method() !== 'DELETE') return route.continue()
+          await held
+          await route.fulfill({
+            status: 500,
+            contentType: 'application/json',
+            body: JSON.stringify({ code: 'INTERNAL', message: 'simulated failure' }),
+          })
+        })
+        await page.getByRole('button', { name: '2 行目を削除' }).click()
+        const dialog = page.getByRole('dialog')
+        await dialog.getByRole('button', { name: '削除する' }).click()
+        await expect(dialog.getByRole('button', { name: '削除する' })).toBeDisabled()
+        await page.keyboard.press('Escape')
+        await expect(dialog).toBeVisible()
+        release?.()
+        await expect(dialog).toContainText('内部エラーが発生しました')
+        await page.unroute(isRows)
+      })
+    })
+
     test('searches with column conditions and shows active filters', async ({ page }) => {
       await page.goto(tableUrl(t, 'users', '/search'))
       await page.getByLabel('age: 条件').selectOption('gt')
