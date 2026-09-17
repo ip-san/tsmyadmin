@@ -507,13 +507,31 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
           where: [[{ table: 'users', column: 'age', op: 'is_null' }]],
         })
         expect((await rowsOf(unknownAge.sql)).result.rows).toEqual([['Bob']])
-        // Keys in another order: equal only when compared as JSON, which on MySQL takes an explicit cast.
+        // Keys in another order: equal only when compared as JSON, which on MySQL takes an explicit cast. MariaDB's
+        // JSON is LONGTEXT underneath and compares as text, so there the value is the text as stored.
+        const jsonValue = (await isMariaDb()) ? '{"a": 1, "b": [true, null]}' : '{"b": [true, null], "a": 1}'
         const json = await db.buildQuery(ns, {
           tables: ['types_all'],
           columns: [shown('types_all', 'id')],
-          where: [[{ table: 'types_all', column: 'json_col', op: 'eq', value: '{"b": [true, null], "a": 1}' }]],
+          where: [[{ table: 'types_all', column: 'json_col', op: 'eq', value: jsonValue }]],
         })
         expect((await rowsOf(json.sql)).result.rows).toEqual([[1]])
+        // BIT typed as a number: on MySQL a quoted '170' would be compared as the bytes of the text.
+        if (dialect === 'mysql') {
+          const bit = await db.buildQuery(ns, {
+            tables: ['types_all'],
+            columns: [shown('types_all', 'id')],
+            where: [[{ table: 'types_all', column: 'bit_col', op: 'eq', value: '170' }]],
+          })
+          expect((await rowsOf(bit.sql)).result.rows).toEqual([[1]])
+          await expect(
+            db.buildQuery(ns, {
+              tables: ['types_all'],
+              columns: [],
+              where: [[{ table: 'types_all', column: 'bit_col', op: 'eq', value: 'x' }]],
+            })
+          ).rejects.toMatchObject({ code: 'VALIDATION' })
+        }
       })
 
       it('refuses tables that no foreign key connects, and unknown columns', async () => {

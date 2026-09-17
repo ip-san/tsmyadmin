@@ -79,6 +79,21 @@ describe('joinPlan', () => {
     ).toHaveLength(1)
   })
 
+  it('uses the first key by constraint name when several connect the same two tables', () => {
+    const ns = { database: 'app' }
+    // describeTable lists keys by constraint name on both servers, so the choice is the same on either.
+    const joins = plan('mysql', ns, [
+      table('orders', {
+        foreignKeys: [
+          { ...fk(ns, 'users'), name: 'fk_a_created', columns: ['created_by'] },
+          { ...fk(ns, 'users'), name: 'fk_b_updated', columns: ['updated_by'] },
+        ],
+      }),
+      table('users'),
+    ])
+    expect(joins).toEqual(['LEFT JOIN `app`.`users` ON `users`.`id` = `orders`.`created_by`'])
+  })
+
   it('reaches a table through one joined after the first', () => {
     const ns = { database: 'app' }
     // comments → posts → users, listed users first: comments is only reachable once posts is in.

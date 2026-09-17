@@ -304,6 +304,14 @@ export function joinPlan(d: Dialect, ns: Namespace, tables: string[], schemas: M
   return out
 }
 
+/** A MySQL BIT value typed as a whole number, as the hex literal of its bytes (170 → X'AA'). */
+function bitLiteral(value: InputCell): string {
+  const text = String(value).trim()
+  if (!/^\d{1,20}$/.test(text)) throw new AdapterError('VALIDATION', 'A BIT value must be a whole number')
+  const hex = BigInt(text).toString(16)
+  return `X'${hex.length % 2 === 0 ? hex : `0${hex}`}'`
+}
+
 export function escapeLike(text: string): string {
   return text.replaceAll('!', '!!').replaceAll('%', '!%').replaceAll('_', '!_')
 }
@@ -664,7 +672,13 @@ export abstract class BaseAdapter implements DatabaseAdapter {
         typeOf(c)
         return c.alias === '' ? ref(c) : `${ref(c)} AS ${quoteIdent(d, c.alias)}`
       })
-    const condition = (c: QueryBuilderCondition) => this.conditionSql(ref(c), c, typeOf(c), literal)
+    const condition = (c: QueryBuilderCondition) => {
+      const type = typeOf(c)
+      // MySQL compares BIT through the bytes bound for it (see keyParam): a quoted '170' would be read as the
+      // bytes of the text "170". The number is written as those bytes instead.
+      const bitCompare = d === 'mysql' && /^bit\b/i.test(type) && c.op !== 'contains' && c.op !== 'starts_with'
+      return this.conditionSql(ref(c), c, type, bitCompare ? bitLiteral : literal)
+    }
     const groups = spec.where.map((g) => g.map(condition).join(' AND '))
     const order = spec.columns
       .filter((c) => c.sort !== null)
