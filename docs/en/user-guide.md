@@ -1,4 +1,4 @@
-<!-- translated-from: docs/user-guide.md sha256:d281b34321cca3027ba75dc8e616ecfc874eafa48d54db6db42f14ad37132cc2 -->
+<!-- translated-from: docs/user-guide.md sha256:207c58b100e86c68c94686b9c00e66b7bac000408917ff91f4b405d47d09191c -->
 
 # User guide
 
@@ -45,6 +45,7 @@ The language menu at the top right switches between English and 日本語 (the p
 |---|---|
 | Structure | Tables and views (estimated row count, engine, comment) and creating a table. Tick several and use **Export the selected tables**, **Empty the selected tables…** or **Drop the selected tables…** (confirmed by typing the table name for one, the database name for several) |
 | SQL | A SQL console scoped to this database (below) |
+| Search | Finds rows containing a term in any column of the chosen tables (not case-sensitive; `%` and `_` are searched for as themselves; binary and spatial columns are skipped). Each table shows its number of matching rows, and **Open in SQL tab** puts a SELECT for those rows into the SQL tab. Tables are searched one at a time, so **Stop** leaves the rest unsearched. Counts stop at 100,000 and read *N+ rows* |
 | Export | Downloads the whole database as SQL / CSV / JSON (tables can be selected). See *Export in detail* below |
 | Import | Loads a SQL script (mysqldump / mariadb-dump / pg_dump) or a CSV, with progress and a stop button. See *Import in detail* below |
 | Privileges | Each user's current level on this database (All / Some / None), and granting or revoking everything on it. **Choose privileges…** grants or revokes `SELECT` / `INSERT` / `UPDATE` / `DELETE` / `REFERENCES` / `TRIGGER` on either the whole database or one table. (Only privileges that mean the same thing on both servers are offered; anything else — MySQL `INDEX`, PostgreSQL `TRUNCATE` — goes through the SQL tab.) Choosing a table also lets you name columns — `SELECT` / `INSERT` / `UPDATE` / `REFERENCES` only, since `DELETE` and `TRIGGER` apply to the whole table and are refused before anything runs if combined with columns. Revoking at column level removes only a column-level privilege: it does not narrow one held on the whole table, which always covers every column. A user allowed by a server-wide privilege (`*.*`) carries a **Global** badge, which revoking on this database does not remove |

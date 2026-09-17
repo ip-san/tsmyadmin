@@ -47,6 +47,7 @@ function DatabaseLayout() {
         items={[
           { label: locale.tabs.structure, to: '/db/$db', params: { db }, search, exact: true },
           { label: locale.tabs.sql, to: '/db/$db/sql', params: { db }, search },
+          { label: locale.tabs.search, to: '/db/$db/search', params: { db }, search },
           { label: locale.tabs.export, to: '/db/$db/export', params: { db }, search },
           { label: locale.tabs.import, to: '/db/$db/import', params: { db }, search },
           { label: locale.tabs.privileges, to: '/db/$db/privileges', params: { db }, search },

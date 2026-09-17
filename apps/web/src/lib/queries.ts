@@ -22,6 +22,7 @@ import type {
   StatementResult,
   TableInfo,
   TableSchema,
+  TableSearchResult,
   TriggerInfo,
   UserGrants,
   UserInfo,
@@ -199,6 +200,15 @@ export const processesQuery = queryOptions({
   queryFn: () => unwrap<ProcessInfo[]>(api.server.processes.$get()),
   staleTime: 0,
 })
+
+/** One table of the database-wide search. The page calls these one at a time, so it can stop between tables. */
+export const searchTable = (ref: TableRef, term: string) =>
+  unwrap<TableSearchResult>(
+    api.databases[':db'].tables[':table'].search.$get({
+      param: { db: enc(ref.db), table: enc(ref.table) },
+      query: { q: term, ...schemaQuery(ref.schema) },
+    })
+  )
 
 export const mutations = {
   login: (body: Parameters<typeof api.session.$post>[0]['json']) =>

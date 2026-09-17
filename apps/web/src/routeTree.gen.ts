@@ -25,6 +25,7 @@ import { Route as AppDbDbImportRouteImport } from './routes/_app/db.$db/import'
 import { Route as AppDbDbOperationsRouteImport } from './routes/_app/db.$db/operations'
 import { Route as AppDbDbPrivilegesRouteImport } from './routes/_app/db.$db/privileges'
 import { Route as AppDbDbRoutinesRouteImport } from './routes/_app/db.$db/routines'
+import { Route as AppDbDbSearchRouteImport } from './routes/_app/db.$db/search'
 import { Route as AppDbDbSqlRouteImport } from './routes/_app/db.$db/sql'
 import { Route as AppDbDbTriggersRouteImport } from './routes/_app/db.$db/triggers'
 import { Route as AppDbDbTableTableRouteImport } from './routes/_app/db.$db/table.$table'
@@ -117,6 +118,11 @@ const AppDbDbRoutinesRoute = AppDbDbRoutinesRouteImport.update({
   path: '/routines',
   getParentRoute: () => AppDbDbRoute,
 } as any)
+const AppDbDbSearchRoute = AppDbDbSearchRouteImport.update({
+  id: '/search',
+  path: '/search',
+  getParentRoute: () => AppDbDbRoute,
+} as any)
 const AppDbDbSqlRoute = AppDbDbSqlRouteImport.update({
   id: '/sql',
   path: '/sql',
@@ -196,6 +202,7 @@ export interface FileRoutesByFullPath {
   '/db/$db/operations': typeof AppDbDbOperationsRoute
   '/db/$db/privileges': typeof AppDbDbPrivilegesRoute
   '/db/$db/routines': typeof AppDbDbRoutinesRoute
+  '/db/$db/search': typeof AppDbDbSearchRoute
   '/db/$db/sql': typeof AppDbDbSqlRoute
   '/db/$db/triggers': typeof AppDbDbTriggersRoute
   '/db/$db/': typeof AppDbDbIndexRoute
@@ -224,6 +231,7 @@ export interface FileRoutesByTo {
   '/db/$db/operations': typeof AppDbDbOperationsRoute
   '/db/$db/privileges': typeof AppDbDbPrivilegesRoute
   '/db/$db/routines': typeof AppDbDbRoutinesRoute
+  '/db/$db/search': typeof AppDbDbSearchRoute
   '/db/$db/sql': typeof AppDbDbSqlRoute
   '/db/$db/triggers': typeof AppDbDbTriggersRoute
   '/db/$db': typeof AppDbDbIndexRoute
@@ -254,6 +262,7 @@ export interface FileRoutesById {
   '/_app/db/$db/operations': typeof AppDbDbOperationsRoute
   '/_app/db/$db/privileges': typeof AppDbDbPrivilegesRoute
   '/_app/db/$db/routines': typeof AppDbDbRoutinesRoute
+  '/_app/db/$db/search': typeof AppDbDbSearchRoute
   '/_app/db/$db/sql': typeof AppDbDbSqlRoute
   '/_app/db/$db/triggers': typeof AppDbDbTriggersRoute
   '/_app/db/$db/': typeof AppDbDbIndexRoute
@@ -285,6 +294,7 @@ export interface FileRouteTypes {
     | '/db/$db/operations'
     | '/db/$db/privileges'
     | '/db/$db/routines'
+    | '/db/$db/search'
     | '/db/$db/sql'
     | '/db/$db/triggers'
     | '/db/$db/'
@@ -313,6 +323,7 @@ export interface FileRouteTypes {
     | '/db/$db/operations'
     | '/db/$db/privileges'
     | '/db/$db/routines'
+    | '/db/$db/search'
     | '/db/$db/sql'
     | '/db/$db/triggers'
     | '/db/$db'
@@ -342,6 +353,7 @@ export interface FileRouteTypes {
     | '/_app/db/$db/operations'
     | '/_app/db/$db/privileges'
     | '/_app/db/$db/routines'
+    | '/_app/db/$db/search'
     | '/_app/db/$db/sql'
     | '/_app/db/$db/triggers'
     | '/_app/db/$db/'
@@ -476,6 +488,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppDbDbRoutinesRouteImport
       parentRoute: typeof AppDbDbRoute
     }
+    '/_app/db/$db/search': {
+      id: '/_app/db/$db/search'
+      path: '/search'
+      fullPath: '/db/$db/search'
+      preLoaderRoute: typeof AppDbDbSearchRouteImport
+      parentRoute: typeof AppDbDbRoute
+    }
     '/_app/db/$db/sql': {
       id: '/_app/db/$db/sql'
       path: '/sql'
@@ -597,6 +616,7 @@ interface AppDbDbRouteChildren {
   AppDbDbOperationsRoute: typeof AppDbDbOperationsRoute
   AppDbDbPrivilegesRoute: typeof AppDbDbPrivilegesRoute
   AppDbDbRoutinesRoute: typeof AppDbDbRoutinesRoute
+  AppDbDbSearchRoute: typeof AppDbDbSearchRoute
   AppDbDbSqlRoute: typeof AppDbDbSqlRoute
   AppDbDbTriggersRoute: typeof AppDbDbTriggersRoute
   AppDbDbIndexRoute: typeof AppDbDbIndexRoute
@@ -610,6 +630,7 @@ const AppDbDbRouteChildren: AppDbDbRouteChildren = {
   AppDbDbOperationsRoute: AppDbDbOperationsRoute,
   AppDbDbPrivilegesRoute: AppDbDbPrivilegesRoute,
   AppDbDbRoutinesRoute: AppDbDbRoutinesRoute,
+  AppDbDbSearchRoute: AppDbDbSearchRoute,
   AppDbDbSqlRoute: AppDbDbSqlRoute,
   AppDbDbTriggersRoute: AppDbDbTriggersRoute,
   AppDbDbIndexRoute: AppDbDbIndexRoute,
