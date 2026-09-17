@@ -11,6 +11,8 @@ const DESTRUCTIVE = new Set<DdlOp['op']>([
   'dropIndex',
   'dropForeignKey',
   'dropDatabase',
+  // MySQL implements a rename as a copy of every table and a DROP DATABASE.
+  'renameDatabase',
   'dropEvent',
   'dropTables',
   'truncateTables',
@@ -23,6 +25,7 @@ function confirmName(op: DdlOp, bulkName: string | null): string | null {
     case 'truncateTable':
       return op.table
     case 'dropDatabase':
+    case 'renameDatabase':
       return op.name
     // Bulk ops: one table is confirmed by its name; several by the database they live in (set by the caller).
     case 'dropTables':
@@ -54,6 +57,8 @@ function lossWarning(op: DdlOp, dialect: Dialect): string | null {
     case 'dropTables':
     case 'truncateTables':
       return locale.ddl.bulkLoss(op.tables.length)
+    case 'renameDatabase':
+      return dialect === 'postgres' ? locale.databaseOps.renameWarningPostgres : locale.databaseOps.renameWarningMysql
     default:
       return null
   }

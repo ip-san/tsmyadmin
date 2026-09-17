@@ -128,6 +128,23 @@ export const en = {
     triggers: 'Triggers',
     events: 'Events',
   },
+  databaseOps: {
+    newName: 'New database name',
+    copyName: 'Name of the copy',
+    renameHintMysql:
+      'MySQL has no statement for renaming a database, so a new one is created, the tables are moved into it, and the old one is dropped. A database with views, routines, triggers or events cannot be renamed.',
+    renameHintPostgres: 'This fails while anyone else is connected to the database.',
+    copyHintMysql:
+      'Copies the tables’ structure and data. Foreign keys, views, routines, triggers, events and privileges are not copied.',
+    copyHintPostgres:
+      'Copies the whole database — tables, views, functions and data. It fails while anyone else is connected to the source.',
+    renameWarningMysql:
+      'The old database is dropped. Privileges granted on it (GRANT) do not carry over to the new name.',
+    renameWarningPostgres: 'Your own tsmyadmin connections to this database are closed.',
+    systemDatabase: 'The server’s own databases cannot be renamed or copied.',
+    connectedDatabase:
+      'The database this session is connected through cannot be renamed or copied. Sign in again with a different database.',
+  },
   database: {
     title: (db: string) => `Database: ${db}`,
     schema: 'Schema',

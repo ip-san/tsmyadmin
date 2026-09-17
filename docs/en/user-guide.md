@@ -1,4 +1,4 @@
-<!-- translated-from: docs/user-guide.md sha256:25efd0c57c60ad7f50325b6e2b2c16e207f41d355996be911bf47e4ac0c72e6a -->
+<!-- translated-from: docs/user-guide.md sha256:b20aeb5e6b308c4d4831646d0fdbae62a7e79cedc8edac85b7c8211ba388c2d9 -->
 
 # User guide
 
@@ -51,6 +51,21 @@ The language menu at the top right switches between English and 日本語 (the p
 | Routines | Stored procedures and functions. **Show definition** fetches the CREATE statement |
 | Triggers | The triggers and their definitions |
 | Events | MySQL's event scheduler (enable / disable / drop). On PostgreSQL the tab says it is not supported |
+| Operations | **Rename** and **copy** the database (see *Renaming and copying a database* below) |
+
+### Renaming and copying a database
+
+Both show the SQL before anything runs. The server's own databases are excluded, and on PostgreSQL so is the database you signed in with (the one this session is connected through).
+
+| | MySQL | PostgreSQL |
+|---|---|---|
+| How a rename works | MySQL has no rename statement, so a new database is created, every table is moved in one statement, and the old one is dropped. If the move fails, the old database is not dropped | `ALTER DATABASE … RENAME TO` |
+| When a rename is refused | The database has any view, routine, trigger or event (they would be dropped without being moved, so it stops before running) | Anyone else is connected to it |
+| What a rename does not carry over | Privileges granted on the database (GRANT) | Nothing |
+| Confirmation | Retype the current database name | Retype the current database name |
+| What a copy includes | The tables' structure and, if chosen, their data. Foreign keys, views, routines, triggers, events and privileges are not copied | The whole database — tables, views, functions and data. It fails while anyone else is connected to the source |
+
+On PostgreSQL, your own tsmyadmin connections to that database are closed first.
 
 ## Table
 
@@ -61,7 +76,8 @@ The language menu at the top right switches between English and 日本語 (the p
 - A foreign key value links to the row it references (↗); a primary key links to the rows referencing it (↵)
 - On a table over 100,000 rows with no filter, the exact count is skipped and the total reads *Approx. N rows*
 - **Editing**: the pencil at the start of a row opens a dialog; double-clicking a cell edits it in place (`Enter` saves, `Esc` cancels). The copy icon **duplicates a row** (auto-increment columns take a new value)
-- **Deleting**: tick the rows and press **Delete selected rows**; a confirmation follows
+- **Deleting**: the bin at the start of a row deletes that row alone, or tick rows and press **Delete selected rows**; a confirmation follows
+- Above the table is the SQL that fetched the page and how long it took. Filter values are not spliced into the SQL; they are listed as *Bound values*
 - A table with neither a primary key nor a unique key is addressed by `ctid` on PostgreSQL and by every column on MySQL (compared byte for byte, so rows that differ only in case or accents — which the collation would treat as equal — count as different rows). If that does not match exactly one row, the change fails and nothing is written. `ctid` is a physical position, so once another session has updated or deleted a row, an edit made from a stale screen can land on a different one — reload just before editing a table without a primary key (adding a primary key is the real fix)
 - Views and sequences are read-only. So are PostgreSQL partitioned parents and inheritance parents (`ctid` repeats across children, so a row cannot be identified — edit through the child table)
 

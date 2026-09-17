@@ -53,6 +53,7 @@ function DatabaseLayout() {
           { label: locale.tabs.routines, to: '/db/$db/routines', params: { db }, search },
           { label: locale.tabs.triggers, to: '/db/$db/triggers', params: { db }, search },
           { label: locale.tabs.events, to: '/db/$db/events', params: { db }, search },
+          { label: locale.tabs.operations, to: '/db/$db/operations', params: { db }, search },
         ]}
       />
       <Outlet />

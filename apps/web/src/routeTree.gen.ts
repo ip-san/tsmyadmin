@@ -22,6 +22,7 @@ import { Route as AppDbDbIndexRouteImport } from './routes/_app/db.$db/index'
 import { Route as AppDbDbEventsRouteImport } from './routes/_app/db.$db/events'
 import { Route as AppDbDbExportRouteImport } from './routes/_app/db.$db/export'
 import { Route as AppDbDbImportRouteImport } from './routes/_app/db.$db/import'
+import { Route as AppDbDbOperationsRouteImport } from './routes/_app/db.$db/operations'
 import { Route as AppDbDbPrivilegesRouteImport } from './routes/_app/db.$db/privileges'
 import { Route as AppDbDbRoutinesRouteImport } from './routes/_app/db.$db/routines'
 import { Route as AppDbDbSqlRouteImport } from './routes/_app/db.$db/sql'
@@ -99,6 +100,11 @@ const AppDbDbExportRoute = AppDbDbExportRouteImport.update({
 const AppDbDbImportRoute = AppDbDbImportRouteImport.update({
   id: '/import',
   path: '/import',
+  getParentRoute: () => AppDbDbRoute,
+} as any)
+const AppDbDbOperationsRoute = AppDbDbOperationsRouteImport.update({
+  id: '/operations',
+  path: '/operations',
   getParentRoute: () => AppDbDbRoute,
 } as any)
 const AppDbDbPrivilegesRoute = AppDbDbPrivilegesRouteImport.update({
@@ -187,6 +193,7 @@ export interface FileRoutesByFullPath {
   '/db/$db/events': typeof AppDbDbEventsRoute
   '/db/$db/export': typeof AppDbDbExportRoute
   '/db/$db/import': typeof AppDbDbImportRoute
+  '/db/$db/operations': typeof AppDbDbOperationsRoute
   '/db/$db/privileges': typeof AppDbDbPrivilegesRoute
   '/db/$db/routines': typeof AppDbDbRoutinesRoute
   '/db/$db/sql': typeof AppDbDbSqlRoute
@@ -214,6 +221,7 @@ export interface FileRoutesByTo {
   '/db/$db/events': typeof AppDbDbEventsRoute
   '/db/$db/export': typeof AppDbDbExportRoute
   '/db/$db/import': typeof AppDbDbImportRoute
+  '/db/$db/operations': typeof AppDbDbOperationsRoute
   '/db/$db/privileges': typeof AppDbDbPrivilegesRoute
   '/db/$db/routines': typeof AppDbDbRoutinesRoute
   '/db/$db/sql': typeof AppDbDbSqlRoute
@@ -243,6 +251,7 @@ export interface FileRoutesById {
   '/_app/db/$db/events': typeof AppDbDbEventsRoute
   '/_app/db/$db/export': typeof AppDbDbExportRoute
   '/_app/db/$db/import': typeof AppDbDbImportRoute
+  '/_app/db/$db/operations': typeof AppDbDbOperationsRoute
   '/_app/db/$db/privileges': typeof AppDbDbPrivilegesRoute
   '/_app/db/$db/routines': typeof AppDbDbRoutinesRoute
   '/_app/db/$db/sql': typeof AppDbDbSqlRoute
@@ -273,6 +282,7 @@ export interface FileRouteTypes {
     | '/db/$db/events'
     | '/db/$db/export'
     | '/db/$db/import'
+    | '/db/$db/operations'
     | '/db/$db/privileges'
     | '/db/$db/routines'
     | '/db/$db/sql'
@@ -300,6 +310,7 @@ export interface FileRouteTypes {
     | '/db/$db/events'
     | '/db/$db/export'
     | '/db/$db/import'
+    | '/db/$db/operations'
     | '/db/$db/privileges'
     | '/db/$db/routines'
     | '/db/$db/sql'
@@ -328,6 +339,7 @@ export interface FileRouteTypes {
     | '/_app/db/$db/events'
     | '/_app/db/$db/export'
     | '/_app/db/$db/import'
+    | '/_app/db/$db/operations'
     | '/_app/db/$db/privileges'
     | '/_app/db/$db/routines'
     | '/_app/db/$db/sql'
@@ -441,6 +453,13 @@ declare module '@tanstack/react-router' {
       path: '/import'
       fullPath: '/db/$db/import'
       preLoaderRoute: typeof AppDbDbImportRouteImport
+      parentRoute: typeof AppDbDbRoute
+    }
+    '/_app/db/$db/operations': {
+      id: '/_app/db/$db/operations'
+      path: '/operations'
+      fullPath: '/db/$db/operations'
+      preLoaderRoute: typeof AppDbDbOperationsRouteImport
       parentRoute: typeof AppDbDbRoute
     }
     '/_app/db/$db/privileges': {
@@ -575,6 +594,7 @@ interface AppDbDbRouteChildren {
   AppDbDbEventsRoute: typeof AppDbDbEventsRoute
   AppDbDbExportRoute: typeof AppDbDbExportRoute
   AppDbDbImportRoute: typeof AppDbDbImportRoute
+  AppDbDbOperationsRoute: typeof AppDbDbOperationsRoute
   AppDbDbPrivilegesRoute: typeof AppDbDbPrivilegesRoute
   AppDbDbRoutinesRoute: typeof AppDbDbRoutinesRoute
   AppDbDbSqlRoute: typeof AppDbDbSqlRoute
@@ -587,6 +607,7 @@ const AppDbDbRouteChildren: AppDbDbRouteChildren = {
   AppDbDbEventsRoute: AppDbDbEventsRoute,
   AppDbDbExportRoute: AppDbDbExportRoute,
   AppDbDbImportRoute: AppDbDbImportRoute,
+  AppDbDbOperationsRoute: AppDbDbOperationsRoute,
   AppDbDbPrivilegesRoute: AppDbDbPrivilegesRoute,
   AppDbDbRoutinesRoute: AppDbDbRoutinesRoute,
   AppDbDbSqlRoute: AppDbDbSqlRoute,
