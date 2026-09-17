@@ -245,7 +245,9 @@ const FILTER_SQL: Record<Filter['op'], string> = {
 const UNSEARCHABLE_TYPE: Record<Dialect, RegExp> = {
   mysql:
     /^(tiny|medium|long)?blob\b|^(var)?binary\b|^bit\b|^vector\b|^(multi)?(point|linestring|polygon)\b|^geometry\b|^geometrycollection\b|^geomcollection\b/i,
-  postgres: /^bytea\b|^geometry\b|^geography\b|^raster\b/i,
+  // PostGIS types may be schema-qualified: format_type adds the schema when it is not on the search path, which
+  // is the usual case (PostGIS in public or its own schema, browsing another).
+  postgres: /^bytea\b|(?:^|\.)"?(?:geometry|geography|raster)\b/i,
 }
 
 /** Whether the database-wide search looks at a column of this type (see UNSEARCHABLE_TYPE). */

@@ -78,9 +78,30 @@ describe('isSearchableType', () => {
   })
 
   it('on PostgreSQL skips bytea and PostGIS types, but searches bit strings and built-in geometric types', () => {
-    for (const t of ['bytea', 'bytea[]', 'geometry', 'geometry(Point,4326)', 'geography', 'raster'])
+    for (const t of [
+      'bytea',
+      'bytea[]',
+      'geometry',
+      'geometry(Point,4326)',
+      'geography',
+      'raster',
+      // Schema-qualified, as format_type prints them when PostGIS is not on the search path.
+      'public.geometry(Point,4326)',
+      'extensions.geography',
+      '"my schema"."geometry"',
+    ])
       expect(isSearchableType('postgres', t), t).toBe(false)
-    for (const t of ['bit(4)', 'bit varying(8)', 'point', 'polygon', 'box', 'text', 'jsonb', 'integer[]'])
+    for (const t of [
+      'bit(4)',
+      'bit varying(8)',
+      'point',
+      'polygon',
+      'box',
+      'text',
+      'jsonb',
+      'integer[]',
+      'app.geometry_dump',
+    ])
       expect(isSearchableType('postgres', t), t).toBe(true)
   })
 })

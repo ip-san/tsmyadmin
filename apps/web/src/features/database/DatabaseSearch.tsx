@@ -31,7 +31,7 @@ export function DatabaseSearch({ db, schema }: { db: string; schema?: string | u
   /** A table's request is still on the server — also after Stop, which only stops showing its result. */
   const [settling, setSettling] = useState(false)
   const [searchedTerm, setSearchedTerm] = useState('')
-  const mounted = useRef(true)
+  const termInput = useRef<HTMLInputElement>(null)
   /** The run that may still append results; a new run, Stop, or leaving the page invalidates the previous one. */
   const currentRun = useRef(0)
   // Leaving the page must end the loop: otherwise every remaining table is still scanned in the background, each
@@ -39,7 +39,6 @@ export function DatabaseSearch({ db, schema }: { db: string; schema?: string | u
   useEffect(
     () => () => {
       currentRun.current += 1
-      mounted.current = false
     },
     []
   )
@@ -71,7 +70,9 @@ export function DatabaseSearch({ db, schema }: { db: string; schema?: string | u
         )
         // Until this returns, a new search would add a second full scan to the session's small connection pool —
         // exactly what searching one table at a time is meant to avoid — so Search stays unavailable even after Stop.
-        if (mounted.current) setSettling(false)
+        // Not guarded by a "still mounted" flag: React ignores a state update after unmount, and such a flag is
+        // left false by StrictMode's mount → cleanup → mount in development, which would keep Search disabled for good.
+        setSettling(false)
         // The table that was in flight when this run was superseded still finishes; its result is not shown.
         if (currentRun.current !== runId) break
         setOutcomes((prev) => [...prev, outcome])
@@ -101,6 +102,7 @@ export function DatabaseSearch({ db, schema }: { db: string; schema?: string | u
             <Field id="database-search-term" label={locale.databaseSearch.term} hint={locale.databaseSearch.termHint}>
               <Input
                 id="database-search-term"
+                ref={termInput}
                 value={term}
                 onChange={(e) => setTerm(e.target.value)}
                 maxLength={SEARCH_TERM_MAX}
@@ -172,6 +174,8 @@ export function DatabaseSearch({ db, schema }: { db: string; schema?: string | u
               currentRun.current += 1
               setRunning(false)
               setStopped(true)
+              // Stop is about to disappear and Search is still disabled: keep keyboard focus somewhere useful.
+              termInput.current?.focus()
             }}
           >
             {locale.databaseSearch.stop}
