@@ -8,6 +8,11 @@ import { quoteIdent, quoteTable } from '../sql/quote.ts'
 import { AdapterError, type DdlBuilder } from '../types.ts'
 
 const id = (s: string) => quoteIdent('postgres', s)
+
+/** Ends this tool's idle connections to a database, for the current login only. */
+function releaseOwnConnections(database: string): string {
+  return `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = ${pgLiteral(database)} AND application_name = 'tsmyadmin' AND usename = current_user AND pid <> pg_backend_pid()`
+}
 /** Separators for string_agg results (never part of a name or a statement): between entries, and inside one. */
 const SEP = String.fromCharCode(31)
 const FIELD_SEP = String.fromCharCode(30)
@@ -42,6 +47,14 @@ export const pgDdl: DdlBuilder = {
         // FORCE (PostgreSQL 13+): other sessions — including this tool's own idle pooled connections to the
         // database just browsed — would otherwise make the DROP wait and fail with "being accessed by other users".
         return [`DROP DATABASE ${id(op.name)} WITH (FORCE)`]
+      // Both need the source database to have no other sessions. Only this tool's own connections for the current
+      // login are ended — its pool keeps idle connections to a database that was just browsed. Anyone else still
+      // connected makes PostgreSQL refuse, which is the right outcome rather than something to force past.
+      case 'renameDatabase':
+        return [releaseOwnConnections(op.name), `ALTER DATABASE ${id(op.name)} RENAME TO ${id(op.newName)}`]
+      case 'copyDatabase':
+        if (!op.withData) throw new AdapterError('UNSUPPORTED', 'PostgreSQL copies a database with its data')
+        return [releaseOwnConnections(op.name), `CREATE DATABASE ${id(op.newName)} TEMPLATE ${id(op.name)}`]
       case 'enableEvent':
       case 'disableEvent':
       case 'dropEvent':

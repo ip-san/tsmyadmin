@@ -339,6 +339,8 @@ export const en = {
       truncateTable: 'Empty the table',
       renameTable: 'Rename table',
       createDatabase: 'Create database',
+      renameDatabase: 'Rename database',
+      copyDatabase: 'Copy database',
       dropDatabase: 'Drop the database',
       createSchema: 'Create schema',
       copyTable: 'Copy table',

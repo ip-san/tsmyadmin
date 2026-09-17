@@ -510,11 +510,21 @@ export class MysqlAdapter extends BaseAdapter {
         rowsAsArray: true,
       })) as [unknown[][], unknown]
       const byName = new Map(stats.map((r) => [String(r[0]), { size: Number(r[1]), count: Number(r[2]) }]))
+      const [schemata] = (await this.getPool().query({
+        sql: 'SELECT SCHEMA_NAME, DEFAULT_COLLATION_NAME FROM information_schema.SCHEMATA',
+        rowsAsArray: true,
+      })) as [unknown[][], unknown]
+      const collations = new Map(schemata.map((r) => [String(r[0]), r[1] === null ? null : String(r[1])]))
       return rows
         .map((r) => {
           const name = String(r[0])
           const s = byName.get(name)
-          return { name, sizeBytes: s ? s.size : 0, tableCount: s ? s.count : 0 }
+          return {
+            name,
+            sizeBytes: s ? s.size : 0,
+            tableCount: s ? s.count : 0,
+            collation: collations.get(name) ?? null,
+          }
         })
         .sort((a, b) => a.name.localeCompare(b.name))
     } catch (err) {

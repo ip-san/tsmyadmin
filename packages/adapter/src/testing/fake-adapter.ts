@@ -186,7 +186,12 @@ export class FakeAdapter implements DatabaseAdapter {
     this.record('listDatabases')
     return Object.keys(this.databases)
       .sort()
-      .map((name) => ({ name, sizeBytes: 0, tableCount: Object.keys(this.databases[name]?.tables ?? {}).length }))
+      .map((name) => ({
+        name,
+        sizeBytes: 0,
+        tableCount: Object.keys(this.databases[name]?.tables ?? {}).length,
+        collation: null,
+      }))
   }
 
   async listSchemas(database: string): Promise<string[]> {

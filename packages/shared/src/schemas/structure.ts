@@ -14,6 +14,8 @@ export const DatabaseInfoSchema = z.object({
   sizeBytes: z.number().nullable(),
   /** Tables and views (MySQL only; PostgreSQL counts need a connection per database). */
   tableCount: z.number().nullable(),
+  /** Default collation for new tables (MySQL only: a renamed or copied database is created with it). */
+  collation: z.string().nullable(),
 })
 export type DatabaseInfo = z.infer<typeof DatabaseInfoSchema>
 

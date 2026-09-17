@@ -23,6 +23,7 @@ import {
 } from '@tsmyadmin/shared'
 import { Hono } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
+import { DatabaseOpRefused, prepareDatabaseOp } from '../lib/database-ops.ts'
 import { apiError, toApiError } from '../lib/errors.ts'
 import { buildExport, contentDisposition, toReadableStream } from '../lib/export.ts'
 import { identifierTooLong, tooLongIdentifier } from '../lib/identifiers.ts'
@@ -388,6 +389,15 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
         } else if (op.op === 'copyTable' && op.withData && op.columns === undefined) {
           const schema = await adapter.describeTable(target, op.table)
           op = { ...op, columns: schema.columns.filter((col) => !isGeneratedColumn(col.extra)).map((col) => col.name) }
+        }
+        if (op.op === 'renameDatabase' || op.op === 'copyDatabase') {
+          try {
+            op = await prepareDatabaseOp(adapter, target, op)
+          } catch (err) {
+            if (err instanceof DatabaseOpRefused)
+              return c.json(apiError(err.code, err.message), err.code === 'NOT_FOUND' ? 404 : 400)
+            throw err
+          }
         }
         return c.json({ sql: adapter.ddl.build(target, op) })
       })

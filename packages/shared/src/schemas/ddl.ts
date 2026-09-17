@@ -90,6 +90,38 @@ export const DdlOpSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('createDatabase'), name: z.string().min(1) }),
   z.object({ op: z.literal('dropDatabase'), name: z.string().min(1) }),
   z.object({ op: z.literal('createSchema'), name: z.string().min(1) }),
+  /**
+   * MySQL has no RENAME DATABASE: a new database, one atomic multi-table RENAME TABLE, then DROP DATABASE. So
+   * `tables` must name every base table, or DROP DATABASE takes the rest with it — the preview route always fills
+   * it from the server and never trusts what the client sent. PostgreSQL renames in place and ignores both fields.
+   */
+  z.object({
+    op: z.literal('renameDatabase'),
+    name: z.string().min(1),
+    newName: z.string().min(1),
+    tables: z.array(z.string().min(1)).optional(),
+    collation: z
+      .string()
+      .regex(/^[A-Za-z0-9_]+$/)
+      .optional(),
+  }),
+  /**
+   * PostgreSQL copies the whole database from it as a template (tables, views, routines, sequences, data).
+   * MySQL copies base tables only — structure, and rows when `withData` — with foreign keys, views, routines,
+   * triggers and events left behind, as phpMyAdmin does.
+   */
+  z.object({
+    op: z.literal('copyDatabase'),
+    name: z.string().min(1),
+    newName: z.string().min(1),
+    withData: z.boolean().default(true),
+    /** MySQL: each base table with its insertable columns (generated columns excluded). Filled by the preview. */
+    tables: z.array(z.object({ name: z.string().min(1), columns: z.array(z.string().min(1)) })).optional(),
+    collation: z
+      .string()
+      .regex(/^[A-Za-z0-9_]+$/)
+      .optional(),
+  }),
   /** Copies structure (indexes, keys) and optionally rows into a new table in the same namespace. */
   z.object({
     op: z.literal('copyTable'),

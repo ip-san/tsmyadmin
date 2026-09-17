@@ -18,7 +18,7 @@ import {
   isTruncatedCell,
   MAX_TEXT_CHARS,
 } from '@tsmyadmin/shared'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { mysqlAccount } from '../mysql/users.ts'
 import { quoteIdent } from '../sql/quote.ts'
 import { AdapterError, type DatabaseAdapter, type ExecuteOptions, type RowBatch } from '../types.ts'
@@ -2901,6 +2901,85 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
           expect(await db.listSchemas(ns.database)).toContain(schemaName)
           await execOk(`DROP SCHEMA ${schemaName}`)
         }
+      })
+    })
+
+    describe('renaming and copying a database', () => {
+      const src = `${scratch}_srcdb`
+      const renamed = `${scratch}_rendb`
+      const copied = `${scratch}_cpydb`
+      const inDb = async (database: string, sql: string) => {
+        for (const r of await db.executeSql({ database }, sql, EXEC))
+          if (r.kind === 'error') throw new Error(`SQL failed: ${r.message}\n${r.sql}`)
+      }
+      const dropQuietly = async (name: string) => {
+        if ((await db.listDatabases()).some((d) => d.name === name))
+          for (const sql of db.ddl.build(ns, { op: 'dropDatabase', name })) await exec(sql)
+      }
+      /** A parent/child pair with a foreign key between them, so a move that loses the key is noticed. */
+      const seed = async (database: string) => {
+        // A non-default collation on MySQL, so a rename that silently falls back to the server default is caught.
+        if (dialect === 'mysql') await execOk(`CREATE DATABASE ${quoteIdent('mysql', database)} COLLATE utf8mb4_bin`)
+        else await runDdl({ op: 'createDatabase', name: database })
+        await inDb(database, 'CREATE TABLE parent (id INT PRIMARY KEY, v VARCHAR(10))')
+        await inDb(
+          database,
+          'CREATE TABLE child (id INT PRIMARY KEY, parent_id INT NOT NULL, CONSTRAINT child_parent FOREIGN KEY (parent_id) REFERENCES parent (id))'
+        )
+        await inDb(database, "INSERT INTO parent (id, v) VALUES (1, 'a'), (2, 'b')")
+        await inDb(database, 'INSERT INTO child (id, parent_id) VALUES (10, 1), (20, 2)')
+      }
+      /** What the preview route fills in on MySQL; PostgreSQL ignores both fields. */
+      const tablesOf = async (database: string) =>
+        (await db.listTables({ database })).filter((t) => t.kind === 'table').map((t) => t.name)
+      const rowIds = async (database: string, table: string) =>
+        (await db.browseRows({ database }, table, { offset: 0, limit: 100, sort: [], filters: [] })).rows.map(
+          (r) => r[0]
+        )
+
+      afterEach(async () => {
+        for (const name of [src, renamed, copied]) await dropQuietly(name)
+      })
+
+      it('renames a database with its tables, rows and foreign keys, and removes the old name', async () => {
+        await seed(src)
+        // Opens a pooled connection to the source first: the rename must still go through (PostgreSQL refuses
+        // while any session is connected, and this tool's own idle pool is exactly such a session).
+        expect(await rowIds(src, 'parent')).toEqual([1, 2])
+        const collation = (await db.listDatabases()).find((d) => d.name === src)?.collation ?? undefined
+        await runDdl({
+          op: 'renameDatabase',
+          name: src,
+          newName: renamed,
+          tables: await tablesOf(src),
+          ...(collation ? { collation } : {}),
+        })
+        const names = (await db.listDatabases()).map((d) => d.name)
+        expect(names).toContain(renamed)
+        expect(names).not.toContain(src)
+        expect(await rowIds(renamed, 'child')).toEqual([10, 20])
+        expect((await db.describeTable({ database: renamed }, 'child')).foreignKeys.map((f) => f.name)).toEqual([
+          'child_parent',
+        ])
+        if (dialect === 'mysql') {
+          expect(collation).toBe('utf8mb4_bin')
+          expect((await db.listDatabases()).find((d) => d.name === renamed)?.collation).toBe('utf8mb4_bin')
+        }
+      })
+
+      it('copies a database with its rows, leaving the source untouched', async () => {
+        await seed(src)
+        expect(await rowIds(src, 'parent')).toEqual([1, 2])
+        const tables = await Promise.all(
+          (await tablesOf(src)).map(async (name) => ({
+            name,
+            columns: (await db.describeTable({ database: src }, name)).columns.map((c) => c.name),
+          }))
+        )
+        await runDdl({ op: 'copyDatabase', name: src, newName: copied, withData: true, tables })
+        expect(await rowIds(copied, 'parent')).toEqual([1, 2])
+        expect(await rowIds(copied, 'child')).toEqual([10, 20])
+        expect(await rowIds(src, 'child')).toEqual([10, 20])
       })
     })
 

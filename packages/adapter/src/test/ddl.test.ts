@@ -70,6 +70,25 @@ const SAMPLE_OPS: Record<DdlOp['op'], DdlOp> = {
   renameTable: { op: 'renameTable', table: 't', newName: 'we"ird`new' },
   createDatabase: { op: 'createDatabase', name: 'new"db`x' },
   dropDatabase: { op: 'dropDatabase', name: 'new"db`x' },
+  renameDatabase: {
+    op: 'renameDatabase',
+    name: 'old"db`x',
+    newName: 'new"db`x',
+    tables: ['we"ird`t', 'users'],
+    collation: 'utf8mb4_0900_ai_ci',
+  },
+  copyDatabase: {
+    op: 'copyDatabase',
+    name: 'old"db`x',
+    newName: 'new"db`x',
+    withData: true,
+    // A table whose every column is generated gets its structure and no INSERT.
+    tables: [
+      { name: 'we"ird`t', columns: ['id', 'n"m`e'] },
+      { name: 'all_generated', columns: [] },
+    ],
+    collation: 'utf8mb4_0900_ai_ci',
+  },
   createSchema: { op: 'createSchema', name: 'new"schema' },
   copyTable: {
     op: 'copyTable',

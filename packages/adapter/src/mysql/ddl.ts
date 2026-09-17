@@ -6,6 +6,11 @@ import { AdapterError, type DdlBuilder } from '../types.ts'
 
 const id = (s: string) => quoteIdent('mysql', s)
 
+/** CREATE DATABASE, keeping the source's default collation (a schema-validated identifier, so safe unquoted). */
+function createDatabaseSql(name: string, collation: string | undefined): string {
+  return collation ? `CREATE DATABASE ${id(name)} COLLATE ${collation}` : `CREATE DATABASE ${id(name)}`
+}
+
 function columnDef(c: ColumnSpec): string {
   // MODIFY COLUMN replaces the whole definition, so anything omitted here is dropped from the column. The
   // collation and ON UPDATE clauses are schema-validated patterns, hence safe to render unquoted.
@@ -48,6 +53,40 @@ export const mysqlDdl: DdlBuilder = {
 
       case 'dropDatabase':
         return [`DROP DATABASE ${id(op.name)}`]
+      case 'renameDatabase': {
+        // Without the list the DROP DATABASE below would take every table with it.
+        if (!op.tables) throw new AdapterError('VALIDATION', 'renameDatabase needs the list of tables to move')
+        const from = { database: op.name }
+        const to = { database: op.newName }
+        return [
+          createDatabaseSql(op.newName, op.collation),
+          // One statement for every table: MySQL applies a multi-table RENAME TABLE atomically, so a failure leaves
+          // nothing half-moved, and the DROP below never runs (the SQL route stops at the first error).
+          ...(op.tables.length > 0
+            ? [
+                `RENAME TABLE ${op.tables.map((t) => `${quoteTable('mysql', from, t)} TO ${quoteTable('mysql', to, t)}`).join(', ')}`,
+              ]
+            : []),
+          `DROP DATABASE ${id(op.name)}`,
+        ]
+      }
+      case 'copyDatabase': {
+        if (!op.tables) throw new AdapterError('VALIDATION', 'copyDatabase needs the list of tables to copy')
+        const from = { database: op.name }
+        const to = { database: op.newName }
+        const out = [createDatabaseSql(op.newName, op.collation)]
+        for (const t of op.tables) {
+          const source = quoteTable('mysql', from, t.name)
+          const target = quoteTable('mysql', to, t.name)
+          // LIKE keeps indexes, keys and AUTO_INCREMENT; foreign keys are not copied (as in copyTable).
+          out.push(`CREATE TABLE ${target} LIKE ${source}`)
+          if (op.withData && t.columns.length > 0) {
+            const cols = t.columns.map((c) => quoteIdent('mysql', c)).join(', ')
+            out.push(`INSERT INTO ${target} (${cols}) SELECT ${cols} FROM ${source}`)
+          }
+        }
+        return out
+      }
       case 'enableEvent':
         return [`ALTER EVENT ${quoteTable('mysql', ns, op.name)} ENABLE`]
       case 'disableEvent':

@@ -370,6 +370,7 @@ export class PostgresAdapter extends BaseAdapter {
         name: r.datname,
         sizeBytes: r.size === null ? null : Number(r.size),
         tableCount: null,
+        collation: null,
       }))
     } catch (err) {
       throw this.toAdapterError(err)

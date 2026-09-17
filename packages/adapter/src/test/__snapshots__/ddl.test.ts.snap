@@ -18,6 +18,15 @@ exports[`DDL builders > mysql: addIndex 1`] = `
 ]
 `;
 
+exports[`DDL builders > mysql: copyDatabase 1`] = `
+[
+  "CREATE DATABASE \`new"db\`\`x\` COLLATE utf8mb4_0900_ai_ci",
+  "CREATE TABLE \`new"db\`\`x\`.\`we"ird\`\`t\` LIKE \`old"db\`\`x\`.\`we"ird\`\`t\`",
+  "INSERT INTO \`new"db\`\`x\`.\`we"ird\`\`t\` (\`id\`, \`n"m\`\`e\`) SELECT \`id\`, \`n"m\`\`e\` FROM \`old"db\`\`x\`.\`we"ird\`\`t\`",
+  "CREATE TABLE \`new"db\`\`x\`.\`all_generated\` LIKE \`old"db\`\`x\`.\`all_generated\`",
+]
+`;
+
 exports[`DDL builders > mysql: copyTable 1`] = `
 [
   "CREATE TABLE \`db\`.\`t_copy\` LIKE \`db\`.\`t\`",
@@ -114,6 +123,14 @@ exports[`DDL builders > mysql: modifyColumn 1`] = `
 ]
 `;
 
+exports[`DDL builders > mysql: renameDatabase 1`] = `
+[
+  "CREATE DATABASE \`new"db\`\`x\` COLLATE utf8mb4_0900_ai_ci",
+  "RENAME TABLE \`old"db\`\`x\`.\`we"ird\`\`t\` TO \`new"db\`\`x\`.\`we"ird\`\`t\`, \`old"db\`\`x\`.\`users\` TO \`new"db\`\`x\`.\`users\`",
+  "DROP DATABASE \`old"db\`\`x\`",
+]
+`;
+
 exports[`DDL builders > mysql: renameTable 1`] = `
 [
   "RENAME TABLE \`db\`.\`t\` TO \`db\`.\`we"ird\`\`new\`",
@@ -154,6 +171,13 @@ exports[`DDL builders > postgres: addForeignKey 1`] = `
 exports[`DDL builders > postgres: addIndex 1`] = `
 [
   "CREATE UNIQUE INDEX "idx_t_a_b" ON "app"."t" ("a", "b")",
+]
+`;
+
+exports[`DDL builders > postgres: copyDatabase 1`] = `
+[
+  "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'old"db\`x' AND application_name = 'tsmyadmin' AND usename = current_user AND pid <> pg_backend_pid()",
+  "CREATE DATABASE "new""db\`x" TEMPLATE "old""db\`x"",
 ]
 `;
 
@@ -241,6 +265,13 @@ exports[`DDL builders > postgres: modifyColumn 1`] = `
   "ALTER TABLE "app"."t" ALTER COLUMN "n2" SET NOT NULL",
   "ALTER TABLE "app"."t" ALTER COLUMN "n2" DROP DEFAULT",
   "COMMENT ON COLUMN "app"."t"."n2" IS 'renamed'",
+]
+`;
+
+exports[`DDL builders > postgres: renameDatabase 1`] = `
+[
+  "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'old"db\`x' AND application_name = 'tsmyadmin' AND usename = current_user AND pid <> pg_backend_pid()",
+  "ALTER DATABASE "old""db\`x" RENAME TO "new""db\`x"",
 ]
 `;
 

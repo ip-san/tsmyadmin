@@ -336,6 +336,8 @@ export const ja = {
       truncateTable: 'テーブルを空にする',
       renameTable: 'テーブル名を変更',
       createDatabase: 'データベースを作成',
+      renameDatabase: 'データベースの名前を変更',
+      copyDatabase: 'データベースをコピー',
       dropDatabase: 'データベースを削除',
       createSchema: 'スキーマを作成',
       copyTable: 'テーブルをコピー',
