@@ -1,20 +1,23 @@
 import type { Cell } from '@tsmyadmin/shared'
-import { isBinaryCell, isTruncatedCell } from '@tsmyadmin/shared'
+import { isBinaryCell, isTruncatedCell, neutraliseFormula } from '@tsmyadmin/shared'
 
 /** One tab-separated field: quoted, CSV-style, only when a tab, line break or quote would break the grid. */
-function tsvField(cell: Cell): string {
+function tsvField(cell: Cell, neutralise: boolean): string {
   // Callers refuse cut values first, as the download does: a paste must not look complete when it is not.
   if (isTruncatedCell(cell)) throw new Error('truncated text cannot be copied')
-  const text = cell === null ? 'NULL' : isBinaryCell(cell) ? cell.$bin : String(cell)
+  const raw = cell === null ? 'NULL' : isBinaryCell(cell) ? cell.$bin : String(cell)
+  const text = neutralise ? neutraliseFormula(raw) : raw
   return /[\t\r\n"]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text
 }
 
 /**
  * A result set as tab-separated text with a header row — what a spreadsheet splits into cells when pasted. NULL
- * is written as the word NULL (an empty cell would read as an empty string), binary as base64.
+ * is written as the word NULL (an empty cell would read as an empty string), binary as base64. `neutralise` is the
+ * same opt-in as the CSV download's: values a spreadsheet would run as formulas get a leading apostrophe.
  */
-export function toTsv(columns: readonly string[], rows: readonly Cell[][]): string {
-  return [columns.map(tsvField).join('\t'), ...rows.map((row) => row.map(tsvField).join('\t'))].join('\n')
+export function toTsv(columns: readonly string[], rows: readonly Cell[][], neutralise = false): string {
+  const line = (cells: readonly Cell[]) => cells.map((c) => tsvField(c, neutralise)).join('\t')
+  return [line(columns), ...rows.map(line)].join('\n')
 }
 
 /**

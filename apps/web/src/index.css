@@ -107,11 +107,11 @@ html.dark {
 }
 
 /*
- * Paper: nothing on the page scrolls or clips, so a wide or long result prints whole rather than as the part that
- * was scrolled into view.
+ * Paper: nothing in the SQL results scrolls or clips, so a wide or long result prints whole rather than as the
+ * part that was scrolled into view.
  */
 @media print {
-  #main * {
+  .print-expand * {
     max-height: none !important;
     overflow: visible !important;
   }

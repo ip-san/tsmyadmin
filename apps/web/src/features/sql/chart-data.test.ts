@@ -11,6 +11,8 @@ describe('chart data', () => {
     expect(numericColumns(5, rows)).toEqual([1, 2])
     expect(toNumber('-0.25')).toBe(-0.25)
     expect(toNumber('12a')).toBeNull()
+    // Beyond a double: no scale can be drawn around it.
+    expect(toNumber('1e400')).toBeNull()
     expect(toNumber({ $bin: 'AA==' })).toBeNull()
   })
 

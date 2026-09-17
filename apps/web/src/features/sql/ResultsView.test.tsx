@@ -62,6 +62,15 @@ describe('ResultsView downloads', () => {
     render(<ResultsView results={results} maxRows={1000} />)
     expect(screen.getByRole('checkbox', { name: locale.export.csvSafe })).toBeChecked()
   })
+
+  it('applies the same option to a copy for a spreadsheet', async () => {
+    const writeText = vi.fn(async (_text: string) => undefined)
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
+    render(<ResultsView results={results} maxRows={1000} />)
+    await userEvent.click(screen.getByRole('checkbox', { name: locale.export.csvSafe }))
+    await userEvent.click(screen.getByRole('button', { name: new RegExp(locale.sql.copy) }))
+    expect(writeText).toHaveBeenCalledWith("note\n'=1+1")
+  })
 })
 
 describe('ResultsView printing', () => {
@@ -86,5 +95,44 @@ describe('ResultsView printing', () => {
       window.dispatchEvent(new Event('beforeprint'))
     })
     expect(screen.getByRole('table').querySelectorAll('tbody tr[data-index]')).toHaveLength(300)
+    await act(async () => {
+      window.dispatchEvent(new Event('afterprint'))
+    })
+    expect(screen.getByRole('table').querySelectorAll('tbody tr[data-index]').length).toBeLessThan(300)
+  })
+
+  it('lays the rows out while its Print button prints, and puts the screen back even without afterprint', async () => {
+    const long: StatementResult[] = [
+      {
+        kind: 'rows',
+        sql: 'SELECT 1',
+        durationMs: 1,
+        result: { columns: [{ name: 'a', dataType: 'int' }], rows: [[1]], truncated: false },
+      },
+      {
+        kind: 'rows',
+        sql: 'SELECT n FROM s',
+        durationMs: 1,
+        result: {
+          columns: [{ name: 'n', dataType: 'int' }],
+          rows: Array.from({ length: 300 }, (_, i) => [i + 1]),
+          truncated: false,
+        },
+      },
+    ]
+    let during: { rows: number; firstHidden: boolean } | null = null
+    // A browser that never fires afterprint: print() just returns.
+    vi.spyOn(window, 'print').mockImplementation(() => {
+      during = {
+        rows: document.querySelectorAll('section[aria-label="文 2"] tbody tr[data-index]').length,
+        firstHidden: document.querySelector('section[aria-label="文 1"]')?.classList.contains('print:hidden') ?? false,
+      }
+    })
+    render(<ResultsView results={long} maxRows={1000} />)
+    await userEvent.click(screen.getByRole('button', { name: new RegExp(`文 2.*${locale.sql.print}`) }))
+    expect(during).toEqual({ rows: 300, firstHidden: true })
+    // Afterwards a Ctrl+P prints every statement again, and the screen is windowed again.
+    expect(document.querySelector('section[aria-label="文 1"]')?.classList.contains('print:hidden')).toBe(false)
+    expect(document.querySelectorAll('section[aria-label="文 2"] tbody tr[data-index]').length).toBeLessThan(300)
   })
 })

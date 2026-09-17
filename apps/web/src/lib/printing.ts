@@ -1,26 +1,44 @@
-import { useEffect, useState } from 'react'
+import { useSyncExternalStore } from 'react'
 
 /**
- * Whether the page is being printed (or shown in print preview). Chrome reports it through the print media
- * query; Safari only fires beforeprint / afterprint; both are listened to. Components that render a window of a
- * long list use it to lay out every row for paper.
+ * Whether the page is being printed (or shown in print preview), for components that render a window of a long
+ * list and must lay out every row for paper.
+ *
+ * Kept outside React so the Print button can switch it on synchronously before calling `window.print()`, and off
+ * again when that returns (print() blocks until the dialog closes). A print the browser starts itself (Ctrl+P) is
+ * seen through beforeprint / afterprint (Safari) and the print media query (Chrome).
  */
+let printing = false
+const listeners = new Set<() => void>()
+
+export function setPrinting(value: boolean): void {
+  if (printing === value) return
+  printing = value
+  for (const l of listeners) l()
+}
+
+let attached = false
+function attach() {
+  if (attached || typeof window === 'undefined') return
+  attached = true
+  window.addEventListener('beforeprint', () => setPrinting(true))
+  window.addEventListener('afterprint', () => setPrinting(false))
+  // jsdom (component tests) has no matchMedia.
+  if (typeof window.matchMedia === 'function') {
+    window.matchMedia('print').addEventListener('change', (e) => setPrinting(e.matches))
+  }
+}
+
+function subscribe(listener: () => void) {
+  attach()
+  listeners.add(listener)
+  return () => listeners.delete(listener)
+}
+
 export function usePrinting(): boolean {
-  const [printing, setPrinting] = useState(false)
-  useEffect(() => {
-    const on = () => setPrinting(true)
-    const off = () => setPrinting(false)
-    window.addEventListener('beforeprint', on)
-    window.addEventListener('afterprint', off)
-    // jsdom (component tests) has no matchMedia.
-    const query = typeof window.matchMedia === 'function' ? window.matchMedia('print') : null
-    const change = (e: MediaQueryListEvent) => setPrinting(e.matches)
-    query?.addEventListener('change', change)
-    return () => {
-      window.removeEventListener('beforeprint', on)
-      window.removeEventListener('afterprint', off)
-      query?.removeEventListener('change', change)
-    }
-  }, [])
-  return printing
+  return useSyncExternalStore(
+    subscribe,
+    () => printing,
+    () => false
+  )
 }

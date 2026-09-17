@@ -9,8 +9,9 @@ const NUMBER = /^-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?$/
 /** A cell as a number, or null when it is NULL or not a number (BIGINT and DECIMAL arrive as digit strings). */
 export function toNumber(cell: Cell | undefined): number | null {
   if (typeof cell === 'number') return Number.isFinite(cell) ? cell : null
-  if (typeof cell === 'string' && NUMBER.test(cell.trim())) return Number(cell)
-  return null
+  if (typeof cell !== 'string' || !NUMBER.test(cell.trim())) return null
+  const n = Number(cell)
+  return Number.isFinite(n) ? n : null
 }
 
 /**

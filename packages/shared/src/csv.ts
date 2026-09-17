@@ -12,7 +12,7 @@ export function csvField(cell: Cell, neutralise = false): string {
   // A cut value must never land in a file that looks complete; callers check with isTruncatedCell first.
   if (isTruncatedCell(cell)) throw new Error('truncated text cannot be written to CSV')
   const raw = isBinaryCell(cell) ? cell.$bin : typeof cell === 'string' ? cell : String(cell)
-  const text = neutralise && FORMULA_START.test(raw) ? `'${raw}` : raw
+  const text = neutralise ? neutraliseFormula(raw) : raw
   return /[",\r\n]/.test(text) || text === CSV_NULL || text === '' ? `"${text.replaceAll('"', '""')}"` : text
 }
 
@@ -22,6 +22,11 @@ export function csvField(cell: Cell, neutralise = false): string {
  * stay lossless by default.
  */
 const FORMULA_START = /^[=+\-@\t\r]/
+
+/** The value with a leading apostrophe when a spreadsheet would run it as a formula; otherwise unchanged. */
+export function neutraliseFormula(text: string): string {
+  return FORMULA_START.test(text) ? `'${text}` : text
+}
 
 /** Header + rows as CRLF-terminated CSV (the format the table export and the SQL console download share). */
 export function toCsv(columns: string[], rows: Cell[][], neutralise = false): string {

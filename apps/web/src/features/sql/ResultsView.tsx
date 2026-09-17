@@ -7,7 +7,7 @@ import { Notice } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
 import { cn } from '@/lib/cn.ts'
-import { usePrinting } from '@/lib/printing.ts'
+import { setPrinting, usePrinting } from '@/lib/printing.ts'
 import { locateInSql } from '@/lib/sql-position.ts'
 import { ResultActions } from './ResultActions.tsx'
 import { ResultChart } from './ResultChart.tsx'
@@ -214,12 +214,22 @@ export function ResultsView({ results, maxRows }: { results: StatementResult[]; 
   // Stable across renders so the memoised statements are not all re-rendered by a new function each time.
   const onPrint = useRef((index: number) => {
     // Committed before the dialog opens: the browser lays the page out for paper at the moment print() is called.
-    flushSync(() => setPrintTarget({ index, at: new Date() }))
-    window.print()
+    flushSync(() => {
+      setPrintTarget({ index, at: new Date() })
+      setPrinting(true)
+    })
+    try {
+      window.print()
+    } finally {
+      // print() returns once the dialog is closed. Reset here too, not only on afterprint, which some browsers
+      // never fire: left set, the next Ctrl+P would print this statement alone and the screen would stay unwindowed.
+      setPrinting(false)
+      setPrintTarget(null)
+    }
   }).current
   if (results.length === 0) return <Notice>{locale.sql.empty}</Notice>
   return (
-    <div className="space-y-4" aria-label={locale.sql.results}>
+    <div className="print-expand space-y-4" aria-label={locale.sql.results}>
       {printTarget ? (
         <p className="hidden text-xs text-ink-sub print:block">
           {locale.sql.printedAt(printTarget.at.toLocaleString())}

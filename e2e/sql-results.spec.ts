@@ -5,6 +5,8 @@ declare global {
   interface Window {
     __copied?: string
     __printed?: number
+    /** What was about to go on paper when print() was called. */
+    __paper?: { rows: number; firstHidden: boolean }
   }
 }
 
@@ -35,6 +37,11 @@ for (const t of TARGETS) {
         })
         window.print = () => {
           window.__printed = (window.__printed ?? 0) + 1
+          window.__paper = {
+            rows: document.querySelectorAll('section[aria-label="文 2"] tbody tr').length,
+            firstHidden:
+              document.querySelector('section[aria-label="文 1"]')?.classList.contains('print:hidden') ?? false,
+          }
         }
       })
       await login(page, t)
@@ -59,13 +66,15 @@ for (const t of TARGETS) {
       await expect(second.getByText('300 行', { exact: false })).toBeVisible()
       await second.getByRole('button', { name: '文 2 の結果: 印刷' }).click()
       expect(await page.evaluate(() => window.__printed)).toBe(1)
+      // At the moment of printing: every row laid out, the other statement left off the paper.
+      expect(await page.evaluate(() => window.__paper)).toEqual({ rows: 300, firstHidden: true })
 
+      // A print the browser starts itself: the page chrome is left off, every result goes on paper.
       await page.emulateMedia({ media: 'print' })
       await expect(page.getByRole('complementary')).toBeHidden()
       await expect(page.getByRole('textbox', { name: 'SQL エディタ' })).toBeHidden()
-      await expect(page.getByRole('region', { name: '文 1' })).toBeHidden()
+      await expect(page.getByRole('region', { name: '文 1' })).toBeVisible()
       await expect(second.locator('tbody tr')).toHaveCount(300)
-      await expect(page.getByText(/^印刷日時:/)).toBeVisible()
     })
 
     test('charts numeric columns, leaving out rows without a number', async ({ page }) => {

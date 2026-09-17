@@ -1,5 +1,5 @@
 import type { ResultSet } from '@tsmyadmin/shared'
-import { useId, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import { Field, Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
 import { chartData, MAX_POINTS, niceScale, numericColumns } from './chart-data.ts'
@@ -22,7 +22,9 @@ const MAX_SERIES = FILL.length
 const HEIGHT = 280
 const LEFT = 64
 const TOP = 12
-const BOTTOM = 72
+const BOTTOM = 96
+/** Characters of a category label shown; wide (CJK) text at this length still fits under the axis when rotated. */
+const LABEL_CHARS = 10
 const MIN_STEP = 18
 
 /**
@@ -33,7 +35,8 @@ const MIN_STEP = 18
 export function ResultChart({ result }: { result: ResultSet }) {
   const id = useId()
   const names = result.columns.map((c) => c.name)
-  const numeric = numericColumns(names.length, result.rows)
+  // One scan of the rows per result, not per toggle of a control.
+  const numeric = useMemo(() => numericColumns(result.columns.length, result.rows), [result])
   // Defaults: the first non-numeric column as categories (or the first column), the first numeric one plotted.
   const firstText = names.findIndex((_, i) => !numeric.includes(i))
   const [kind, setKind] = useState<'bar' | 'line'>('bar')
@@ -45,7 +48,9 @@ export function ResultChart({ result }: { result: ResultSet }) {
   const { labels, series, clipped } = chartData(result.rows, x, plotted)
   const scale = niceScale(series.flatMap((s) => s.values.filter((v): v is number => v !== null)))
   const step = Math.max(MIN_STEP, Math.min(64, 720 / Math.max(labels.length, 1)))
-  const width = LEFT + labels.length * step + 16
+  // Room for the widest tick label (large sums print many digits).
+  const left = Math.max(LEFT, 12 + 6 * Math.max(...scale.ticks.map((tick) => tick.toLocaleString('ja-JP').length)))
+  const width = left + labels.length * step + 16
   const plotHeight = HEIGHT - TOP - BOTTOM
   const y = (v: number) => TOP + plotHeight - ((v - scale.min) / (scale.max - scale.min)) * plotHeight
   const labelEvery = Math.ceil(labels.length / 60)
@@ -108,22 +113,22 @@ export function ResultChart({ result }: { result: ResultSet }) {
           <svg width={width} height={HEIGHT} aria-hidden className="text-ink-sub">
             {scale.ticks.map((tick) => (
               <g key={tick}>
-                <line x1={LEFT} x2={width - 8} y1={y(tick)} y2={y(tick)} className="stroke-line" />
-                <text x={LEFT - 6} y={y(tick) + 4} textAnchor="end" className="fill-ink-sub text-[10px]">
+                <line x1={left} x2={width - 8} y1={y(tick)} y2={y(tick)} className="stroke-line" />
+                <text x={left - 6} y={y(tick) + 4} textAnchor="end" className="fill-ink-sub text-[10px]">
                   {tick.toLocaleString('ja-JP')}
                 </text>
               </g>
             ))}
-            <line x1={LEFT} x2={width - 8} y1={y(0)} y2={y(0)} className="stroke-line-strong" />
+            <line x1={left} x2={width - 8} y1={y(0)} y2={y(0)} className="stroke-line-strong" />
             {labels.map((label, i) =>
               i % labelEvery === 0 ? (
                 <text
                   key={i}
-                  transform={`translate(${LEFT + i * step + step / 2} ${HEIGHT - BOTTOM + 12}) rotate(-45)`}
+                  transform={`translate(${left + i * step + step / 2} ${HEIGHT - BOTTOM + 12}) rotate(-45)`}
                   textAnchor="end"
                   className="fill-ink-sub text-[10px]"
                 >
-                  {label.length > 16 ? `${label.slice(0, 15)}…` : label}
+                  {short(label)}
                 </text>
               ) : null
             )}
@@ -135,7 +140,7 @@ export function ResultChart({ result }: { result: ResultSet }) {
                       <rect
                         key={i}
                         data-series={names[s.column]}
-                        x={LEFT + i * step + step * 0.1 + si * barWidth}
+                        x={left + i * step + step * 0.1 + si * barWidth}
                         y={Math.min(y(v), y(0))}
                         width={Math.max(barWidth - 1, 1)}
                         height={Math.abs(y(0) - y(v))}
@@ -147,7 +152,7 @@ export function ResultChart({ result }: { result: ResultSet }) {
                 <path
                   key={s.column}
                   data-series={names[s.column]}
-                  d={linePath(s.values, (i) => LEFT + i * step + step / 2, y)}
+                  d={linePath(s.values, (i) => left + i * step + step / 2, y)}
                   className={`fill-none ${STROKE[si]}`}
                   strokeWidth={2}
                 />
@@ -173,4 +178,10 @@ function linePath(values: readonly (number | null)[], px: (i: number) => number,
     pen = true
   })
   return d.trim()
+}
+
+/** A category label cut to LABEL_CHARS characters (by code point, so no surrogate pair is split). */
+function short(label: string): string {
+  const chars = Array.from(label)
+  return chars.length > LABEL_CHARS ? `${chars.slice(0, LABEL_CHARS - 1).join('')}…` : label
 }

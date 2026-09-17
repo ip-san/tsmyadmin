@@ -50,7 +50,7 @@ export function ResultActions({
       'application/json'
     )
   const copy = () => {
-    copyText(toTsv(names, result.rows)).then(
+    copyText(toTsv(names, result.rows, csvSafe)).then(
       () => setCopied('done'),
       () => setCopied('failed')
     )
