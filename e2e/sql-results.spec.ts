@@ -69,6 +69,12 @@ for (const t of TARGETS) {
       // At the moment of printing: every row laid out, the other statement left off the paper.
       expect(await page.evaluate(() => window.__paper)).toEqual({ rows: 300, firstHidden: true })
 
+      // The stub never reports the print finished, as a browser whose print() returns early would not: the paper
+      // layout stays until the user is back on the page.
+      await expect(page.getByRole('region', { name: '文 1' })).toHaveClass(/print:hidden/)
+      await page.keyboard.press('Shift')
+      await expect(page.getByRole('region', { name: '文 1' })).not.toHaveClass(/print:hidden/)
+
       // A print the browser starts itself: the page chrome is left off, every result goes on paper.
       await page.emulateMedia({ media: 'print' })
       await expect(page.getByRole('complementary')).toBeHidden()

@@ -1,7 +1,7 @@
 import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { StatementResult } from '@tsmyadmin/shared'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { locale } from '@/config/locale.ts'
 import { ResultsView } from './ResultsView.tsx'
 
@@ -70,10 +70,28 @@ describe('ResultsView downloads', () => {
     await userEvent.click(screen.getByRole('checkbox', { name: locale.export.csvSafe }))
     await userEvent.click(screen.getByRole('button', { name: new RegExp(locale.sql.copy) }))
     expect(writeText).toHaveBeenCalledWith("note\n'=1+1")
+    Reflect.deleteProperty(navigator, 'clipboard')
   })
 })
 
+const firstHidden = () =>
+  document.querySelector('section[aria-label="文 1"]')?.classList.contains('print:hidden') ?? false
+
+function twoResults(): StatementResult[] {
+  const rows = (n: number) => Array.from({ length: n }, (_, i) => [i + 1])
+  return [1, 300].map((n) => ({
+    kind: 'rows',
+    sql: 'SELECT n',
+    durationMs: 1,
+    result: { columns: [{ name: 'n', dataType: 'int' }], rows: rows(n), truncated: false },
+  }))
+}
+
 describe('ResultsView printing', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
   it('lays out every row of a long result for paper, not just the window on screen', async () => {
     const long: StatementResult[] = [
       {
@@ -131,8 +149,21 @@ describe('ResultsView printing', () => {
     render(<ResultsView results={long} maxRows={1000} />)
     await userEvent.click(screen.getByRole('button', { name: new RegExp(`文 2.*${locale.sql.print}`) }))
     expect(during).toEqual({ rows: 300, firstHidden: true })
-    // Afterwards a Ctrl+P prints every statement again, and the screen is windowed again.
-    expect(document.querySelector('section[aria-label="文 1"]')?.classList.contains('print:hidden')).toBe(false)
+    // Returned without afterprint: the dialog may still be open (a browser whose print() does not block), so the
+    // paper layout stays until the user is back on the page.
+    expect(firstHidden()).toBe(true)
+    await userEvent.keyboard('{Shift}')
+    // Now a Ctrl+P prints every statement again, and the screen is windowed again.
+    expect(firstHidden()).toBe(false)
     expect(document.querySelectorAll('section[aria-label="文 2"] tbody tr[data-index]').length).toBeLessThan(300)
+  })
+
+  it('puts the screen back as soon as print() returns in a browser that reports the print finished', async () => {
+    vi.spyOn(window, 'print').mockImplementation(() => {
+      window.dispatchEvent(new Event('afterprint'))
+    })
+    const { container } = render(<ResultsView results={twoResults()} maxRows={1000} />)
+    await userEvent.click(screen.getByRole('button', { name: new RegExp(`文 2.*${locale.sql.print}`) }))
+    expect(container.querySelector('section[aria-label="文 1"]')?.classList.contains('print:hidden')).toBe(false)
   })
 })

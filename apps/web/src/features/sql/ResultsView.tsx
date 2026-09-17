@@ -218,13 +218,27 @@ export function ResultsView({ results, maxRows }: { results: StatementResult[]; 
       setPrintTarget({ index, at: new Date() })
       setPrinting(true)
     })
+    let finished = false
+    const reset = () => {
+      finished = true
+      for (const [type, fn] of events) window.removeEventListener(type, fn, true)
+      setPrinting(false)
+      setPrintTarget(null)
+    }
+    // Left set, the next Ctrl+P would print this statement alone and the screen would stay unwindowed. Most
+    // browsers block in print() and fire afterprint inside it; one that returns early is reset by afterprint later,
+    // and one that never fires it by the user's next key press or click.
+    const events: [string, () => void][] = [
+      ['afterprint', reset],
+      ['keydown', reset],
+      ['pointerdown', reset],
+    ]
+    window.addEventListener('afterprint', () => (finished = true), { once: true })
     try {
       window.print()
     } finally {
-      // print() returns once the dialog is closed. Reset here too, not only on afterprint, which some browsers
-      // never fire: left set, the next Ctrl+P would print this statement alone and the screen would stay unwindowed.
-      setPrinting(false)
-      setPrintTarget(null)
+      if (finished) reset()
+      else for (const [type, fn] of events) window.addEventListener(type, fn, true)
     }
   }).current
   if (results.length === 0) return <Notice>{locale.sql.empty}</Notice>
