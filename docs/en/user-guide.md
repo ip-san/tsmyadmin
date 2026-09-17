@@ -1,4 +1,4 @@
-<!-- translated-from: docs/user-guide.md sha256:b20aeb5e6b308c4d4831646d0fdbae62a7e79cedc8edac85b7c8211ba388c2d9 -->
+<!-- translated-from: docs/user-guide.md sha256:f5c26e3e01938ad10cbf0ee00050ff670e5989463a48338b9cd39cfc2c2bf77a -->
 
 # User guide
 
@@ -65,7 +65,7 @@ Both show the SQL before anything runs. The server's own databases are excluded,
 | Confirmation | Retype the current database name | Retype the current database name |
 | What a copy includes | The tables' structure and, if chosen, their data. Foreign keys, views, routines, triggers, events and privileges are not copied | The whole database — tables, views, functions and data. It fails while anyone else is connected to the source |
 
-On PostgreSQL, your own tsmyadmin connections to that database are closed first.
+On PostgreSQL, **idle** tsmyadmin connections to that database under the same database account are closed first. Nothing that is running is interrupted; in that case nothing changes and the operation fails. Copying needs the owner of the source database or a superuser.
 
 ## Table
 

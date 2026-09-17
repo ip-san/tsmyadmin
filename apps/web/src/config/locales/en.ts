@@ -137,10 +137,11 @@ export const en = {
     copyHintMysql:
       'Copies the tables’ structure and data. Foreign keys, views, routines, triggers, events and privileges are not copied.',
     copyHintPostgres:
-      'Copies the whole database — tables, views, functions and data. It fails while anyone else is connected to the source.',
+      'Copies the whole database — tables, views, functions and data. It fails while anything is running in the source, and needs its owner or a superuser.',
     renameWarningMysql:
       'The old database is dropped. Privileges granted on it (GRANT) do not carry over to the new name.',
-    renameWarningPostgres: 'Your own tsmyadmin connections to this database are closed.',
+    renameWarningPostgres:
+      'Idle tsmyadmin connections to this database under the same account are closed. If anything is still running there, nothing changes and the rename fails.',
     systemDatabase: 'The server’s own databases cannot be renamed or copied.',
     connectedDatabase:
       'The database this session is connected through cannot be renamed or copied. Sign in again with a different database.',

@@ -2967,6 +2967,20 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         }
       })
 
+      it('leaves a query running on the source alone, and refuses the rename instead (PostgreSQL)', async () => {
+        if (dialect !== 'postgres') return
+        await seed(src)
+        // Same account and application name as the rename itself: only the connection's state tells them apart.
+        const running = db.executeSql({ database: src }, 'SELECT pg_sleep(2)', EXEC)
+        await new Promise((resolve) => setTimeout(resolve, 300))
+        const results: StatementResult[] = []
+        for (const sql of db.ddl.build(ns, { op: 'renameDatabase', name: src, newName: renamed }))
+          results.push(...(await exec(sql, { stopOnError: true })))
+        expect(results.some((r) => r.kind === 'error')).toBe(true)
+        expect((await running).every((r) => r.kind !== 'error')).toBe(true)
+        expect((await db.listDatabases()).map((d) => d.name)).toContain(src)
+      }, 20_000)
+
       it('copies a database with its rows, leaving the source untouched', async () => {
         await seed(src)
         expect(await rowIds(src, 'parent')).toEqual([1, 2])

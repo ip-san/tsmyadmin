@@ -312,7 +312,7 @@ flowchart LR
 |---|---|---|
 | API に項目を足す | `packages/shared/src/schemas/*` → `apps/api/src/routes/*` → web | Zod を先に定義。web は `hc<AppType>` 経由 |
 | アダプターにメソッドを追加 | `types.ts` → `base.ts` / `mysql/*` / `postgres/*` | `ADAPTER_METHOD_NAMES` と conformance の `describe`、両方言で通す。`testing/fake-adapter.ts` に実装し、`apps/api/src/lib/audit.ts` の `AUDITED_METHODS`（データ・構造・アカウント・サーバー状態を変えるもの）か `PASSTHROUGH_METHODS` に分類する（`audit.test.ts` が網羅性を検査） |
-| DDL 操作を追加 | `packages/shared/src/schemas/ddl.ts` → `*/ddl.ts` → web のフォーム | `test/ddl.test.ts` の `SAMPLE_OPS` に両方言のスナップショット、プレビュー経由の UI |
+| DDL 操作を追加 | `packages/shared/src/schemas/ddl.ts` → `*/ddl.ts` → web のフォーム | `test/ddl.test.ts` の `SAMPLE_OPS` に両方言のスナップショット、プレビュー経由の UI。SQL がサーバーの状態に依存する操作（`copyTable` の列、`renameDatabase` / `copyDatabase` のテーブル一覧）は `/ddl/preview` のルートで埋める。**依頼に含まれていても上書きする**（名前変更は DROP DATABASE で終わるので、一覧の漏れはそのまま消失になる。`apps/api/src/lib/database-ops.ts`） |
 | 画面の文言を変える | `config/locales/ja.ts` と `en.ts` | 両方に同じキーを足す（`locale.test.ts` が形の一致を検査）。コンポーネントへの直書きは禁止 |
 | ドキュメントを直す | `docs/*.md`（日本語が原文） | `docs/en/` の対応ファイルも翻訳し、`bun run docs:sync` でハッシュを打ち直す（`bun run docs:i18n` が追随を検査） |
 | 表示言語を追加する | `config/locale.ts` の `LOCALES` / `LOCALE_NAMES` / `LocaleCodeSchema` と `locales/<code>.ts` | `ja.ts` が型の出どころ。新しい表は `satisfies Locale` を付ける |

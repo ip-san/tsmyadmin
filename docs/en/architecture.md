@@ -1,4 +1,4 @@
-<!-- translated-from: docs/architecture.md sha256:4952abd1122db844370c6c255b272d450a58f765bda70f887b75de9732eed5b3 -->
+<!-- translated-from: docs/architecture.md sha256:c37221f49a68ed5479f38e9af4b46af4e27fde9239786e193f9e5230434e1b39 -->
 
 # Architecture
 
@@ -314,7 +314,7 @@ The test layers, from the bottom: unit (`sql/split`, the DDL snapshots, the pure
 |---|---|---|
 | Add a field to the API | `packages/shared/src/schemas/*` → `apps/api/src/routes/*` → web | Define the Zod schema first. The web app goes through `hc<AppType>` |
 | Add a method to the adapter | `types.ts` → `base.ts` / `mysql/*` / `postgres/*` | Add it to `ADAPTER_METHOD_NAMES` and to the conformance `describe`, and make it pass on both dialects. Implement it in `testing/fake-adapter.ts`, and classify it in `apps/api/src/lib/audit.ts` as either `AUDITED_METHODS` (anything that changes data, structure, an account or server state) or `PASSTHROUGH_METHODS` (`audit.test.ts` checks that every method is in one of them) |
-| Add a DDL operation | `packages/shared/src/schemas/ddl.ts` → `*/ddl.ts` → the web form | Snapshots for both dialects in `SAMPLE_OPS` in `test/ddl.test.ts`, and a UI that goes through the preview |
+| Add a DDL operation | `packages/shared/src/schemas/ddl.ts` → `*/ddl.ts` → the web form | Snapshots for both dialects in `SAMPLE_OPS` in `test/ddl.test.ts`, and a UI that goes through the preview. When the SQL depends on the server's state (`copyTable`'s columns, the table list of `renameDatabase` / `copyDatabase`), the `/ddl/preview` route fills it in — **overwriting whatever the request carried**, since a rename ends in DROP DATABASE and a table missing from the list is lost with it (`apps/api/src/lib/database-ops.ts`) |
 | Change a UI string | `config/locales/ja.ts` and `en.ts` | Add the same key to both (`locale.test.ts` checks the shapes match). Writing it into a component is not allowed |
 | Fix the documentation | `docs/*.md` (Japanese is the original) | Translate the matching file under `docs/en/` and re-stamp with `bun run docs:sync` (`bun run docs:i18n` checks they keep up) |
 | Add an interface language | `LOCALES` / `LOCALE_NAMES` / `LocaleCodeSchema` in `config/locale.ts`, and `locales/<code>.ts` | `ja.ts` is where the type comes from. Give a new table `satisfies Locale` |
