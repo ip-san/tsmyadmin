@@ -414,6 +414,25 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         expect(r.columns.every((c) => typeof c.dataType === 'string' && c.dataType.length > 0)).toBe(true)
       })
 
+      it('reports the statement it ran, with values bound and never spliced into the text', async () => {
+        // A value that would break the SQL if it were ever interpolated rather than bound.
+        const needle = "o'hara; --"
+        const r = await db.browseRows(ns, 'users', {
+          offset: 0,
+          limit: 7,
+          sort: [{ column: 'age', direction: 'desc' }],
+          filters: [{ column: 'name', op: 'eq', value: needle }],
+        })
+        expect(r.statement.sql).toMatch(/^SELECT /)
+        expect(r.statement.sql).not.toContain(needle)
+        expect(r.statement.sql).toContain('ORDER BY')
+        // The filter value and the paging figures are all among the bound values, in placeholder order.
+        expect(r.statement.params).toEqual([needle, 7, 0])
+        const placeholders = dialect === 'mysql' ? r.statement.sql.match(/\?/g) : r.statement.sql.match(/\$\d+/g)
+        expect(placeholders?.length).toBe(r.statement.params.length)
+        expect(r.statement.durationMs).toBeGreaterThanOrEqual(0)
+      })
+
       it('stops a filtered count at the threshold and reports it as a floor', async () => {
         const t = `${scratch}_big`
         const seed = `${scratch}_seed`

@@ -11,7 +11,11 @@ test.describe('visual regression', () => {
 
   // The sidebar lists every table, so leftovers from aborted integration runs would break the baseline; mask it.
   // Viewport-sized shots: full-page height (and thus the masked sidebar) varies with content.
-  const options = (page: Parameters<typeof login>[0]) => ({ fullPage: false, mask: [page.locator('aside')] })
+  // The executed statement's timing differs on every run, so only that figure is masked, not the statement.
+  const options = (page: Parameters<typeof login>[0]) => ({
+    fullPage: false,
+    mask: [page.locator('aside'), page.getByRole('figure').locator('figcaption span').last()],
+  })
 
   test('login', async ({ page }) => {
     await page.goto('/login')

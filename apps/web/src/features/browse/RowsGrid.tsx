@@ -10,6 +10,7 @@ import { BrowseRow } from './BrowseRow.tsx'
 import { BrowseToolbar } from './BrowseToolbar.tsx'
 import { encodeColumns, visibleColumnNames } from './browse-search.ts'
 import { DeleteRowsDialog } from './DeleteRowsDialog.tsx'
+import { ExecutedStatement } from './ExecutedStatement.tsx'
 import { FilterChips } from './FilterChips.tsx'
 import { linkableForeignKeys, linkableReverseKeys } from './fk-links.ts'
 import { Pagination } from './Pagination.tsx'
@@ -194,6 +195,7 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
 
   return (
     <div className="space-y-2" aria-busy={rows.isFetching}>
+      <ExecutedStatement statement={data.statement} />
       <Pagination
         page={page}
         limit={options.limit}

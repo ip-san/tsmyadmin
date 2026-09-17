@@ -136,6 +136,11 @@ for (const t of TARGETS) {
       await expect(page.getByText('全 2 行')).toBeVisible()
       await expect(page.getByText('絞り込み中:')).toBeVisible()
       await expect(page.getByRole('cell', { name: 'Carol', exact: true })).toBeVisible()
+      // The statement behind the page is shown, with the condition as a placeholder and its value listed apart.
+      const statement = page.getByRole('figure', { name: /実行した SQL/ })
+      await expect(statement.locator('pre')).toContainText('WHERE')
+      await expect(statement.locator('pre')).not.toContainText('30')
+      await expect(statement).toContainText(/バインドした値:.*30/)
       await page.getByRole('button', { name: '条件をクリア' }).click()
       await expect(page.getByText('全 5 行')).toBeVisible()
     })

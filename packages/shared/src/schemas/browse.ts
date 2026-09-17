@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { InputCellSchema } from './cell.ts'
+import { CellSchema, InputCellSchema } from './cell.ts'
 import { ResultSetSchema } from './result.ts'
 import { ForeignKeyDefSchema, ReferencingKeyDefSchema } from './structure.ts'
 
@@ -56,6 +56,22 @@ export const EXACT_COUNT_MAX_ROWS = 100_000
 export const CountKindSchema = z.enum(['exact', 'estimate', 'lower_bound'])
 export type CountKind = z.infer<typeof CountKindSchema>
 
+/**
+ * The statement that fetched a page, exactly as it was sent: placeholders (`?` on MySQL, `$1`… on PostgreSQL)
+ * with the bound values listed beside them.
+ *
+ * Never with the values spliced into the text. That string would look runnable, and making it runnable means
+ * quoting each value for the dialect and the server's settings (MySQL's NO_BACKSLASH_ESCAPES changes what a
+ * backslash means) — a guess, shown as if it were what ran.
+ */
+export const BrowseStatementSchema = z.object({
+  sql: z.string(),
+  params: z.array(CellSchema),
+  /** The data query alone; the row count, when one is run, is not included. */
+  durationMs: z.number().nonnegative(),
+})
+export type BrowseStatement = z.infer<typeof BrowseStatementSchema>
+
 export const BrowseResultSchema = ResultSetSchema.extend({
   /** Row count with the same filters, null when unavailable; `count` says how exact it is. */
   total: z.number().nullable(),
@@ -67,5 +83,6 @@ export const BrowseResultSchema = ResultSetSchema.extend({
   foreignKeys: z.array(ForeignKeyDefSchema),
   /** Reverse references, so a row can link to the rows that point at it. */
   referencedBy: z.array(ReferencingKeyDefSchema),
+  statement: BrowseStatementSchema,
 })
 export type BrowseResult = z.infer<typeof BrowseResultSchema>

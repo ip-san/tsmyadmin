@@ -285,6 +285,8 @@ export class FakeAdapter implements DatabaseAdapter {
       keyColumns: t.schema.primaryKey,
       foreignKeys: t.schema.foreignKeys,
       referencedBy: t.schema.referencedBy,
+      // No SQL runs here; a stand-in keeps the result shaped like a real adapter's.
+      statement: { sql: `SELECT * FROM ${table}`, params: [opts.limit, opts.offset], durationMs: 0 },
     }
   }
 

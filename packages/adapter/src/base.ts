@@ -462,7 +462,14 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     const countSql = `SELECT COUNT(*) FROM (SELECT 1 FROM ${tableSql}${countWhere} LIMIT ${countParams.add(EXACT_COUNT_MAX_ROWS + 1)}) AS tsmyadmin_count`
 
     return this.withConn(ns, async (conn) => {
+      const started = performance.now()
       const data = firstResult(await conn.query(dataSql, params.values, DISPLAY))
+      const statement = {
+        sql: dataSql,
+        // Bound values go back as cells: a binary filter was turned into a Buffer for the driver.
+        params: params.values.map((v) => (v instanceof Uint8Array ? bufferToCell(v) : (v as Cell))),
+        durationMs: performance.now() - started,
+      }
       // Large unfiltered tables: COUNT(*) is a full scan on InnoDB / PostgreSQL, so use the catalog estimate
       // that describeTable already fetched (no extra round trip).
       const estimate = opts.filters.length === 0 ? schema.rowEstimate : null
@@ -477,6 +484,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
           keyColumns: key.keyColumns,
           foreignKeys: schema.foreignKeys,
           referencedBy: schema.referencedBy,
+          statement,
         }
       }
       const count = firstResult(await conn.query(countSql, countParams.values))
@@ -495,6 +503,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
         keyColumns: key.keyColumns,
         foreignKeys: schema.foreignKeys,
         referencedBy: schema.referencedBy,
+        statement,
       }
     })
   }
