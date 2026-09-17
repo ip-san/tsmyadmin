@@ -91,9 +91,10 @@ export const DdlOpSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('dropDatabase'), name: z.string().min(1) }),
   z.object({ op: z.literal('createSchema'), name: z.string().min(1) }),
   /**
-   * MySQL has no RENAME DATABASE: a new database, one atomic multi-table RENAME TABLE, then DROP DATABASE. So
-   * `tables` must name every base table, or DROP DATABASE takes the rest with it — the preview route always fills
-   * it from the server and never trusts what the client sent. PostgreSQL renames in place and ignores both fields.
+   * MySQL has no RENAME DATABASE: a new database and one atomic multi-table RENAME TABLE. The old database is
+   * left in place rather than dropped, since DROP DATABASE would also take what could not be moved or seen.
+   * `tables` is filled by the preview route from the server, never taken from the client. PostgreSQL renames in
+   * place and ignores both fields.
    */
   z.object({
     op: z.literal('renameDatabase'),

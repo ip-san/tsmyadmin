@@ -1,4 +1,4 @@
-<!-- translated-from: docs/user-guide.md sha256:f5c26e3e01938ad10cbf0ee00050ff670e5989463a48338b9cd39cfc2c2bf77a -->
+<!-- translated-from: docs/user-guide.md sha256:e2d5da36d976aa2f7e5b3cfba19e7b09315168a05cbe1977501a285e56fdc7b2 -->
 
 # User guide
 
@@ -59,8 +59,8 @@ Both show the SQL before anything runs. The server's own databases are excluded,
 
 | | MySQL | PostgreSQL |
 |---|---|---|
-| How a rename works | MySQL has no rename statement, so a new database is created, every table is moved in one statement, and the old one is dropped. If the move fails, the old database is not dropped | `ALTER DATABASE … RENAME TO` |
-| When a rename is refused | The database has any view, routine, trigger or event (they would be dropped without being moved, so it stops before running) | Anyone else is connected to it |
+| How a rename works | MySQL has no rename statement, so a new database is created and every table is moved in one (atomic) statement. **The old database is not dropped**, so routines or events your account cannot see, and tables created after you confirmed, are not taken with it. Check what is left, then drop it from the server page | `ALTER DATABASE … RENAME TO` |
+| When a rename is refused | The database has any view, routine, trigger or event (they would be left behind, and views would lose the tables they read, so it stops before running) | Something is running in it |
 | What a rename does not carry over | Privileges granted on the database (GRANT) | Nothing |
 | Confirmation | Retype the current database name | Retype the current database name |
 | What a copy includes | The tables' structure and, if chosen, their data. Foreign keys, views, routines, triggers, events and privileges are not copied | The whole database — tables, views, functions and data. It fails while anyone else is connected to the source |

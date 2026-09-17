@@ -16,8 +16,8 @@ export class DatabaseOpRefused extends Error {
 /**
  * Checks a rename or copy of a whole database and fills in what only the server can know.
  *
- * `tables` and `collation` are always replaced, never taken from the request. A MySQL rename ends in DROP
- * DATABASE, so a table left off the list — by a stale page, or a hand-written request — would be dropped with it.
+ * `tables` and `collation` are always replaced, never taken from the request, so a stale page or a hand-written
+ * request cannot move a partial set. (A MySQL rename does not drop the old database, so nothing left off is lost.)
  */
 export async function prepareDatabaseOp(
   adapter: DatabaseAdapter,
@@ -50,8 +50,10 @@ export async function prepareDatabaseOp(
   const collation = source.collation ?? undefined
 
   if (op.op === 'renameDatabase') {
-    // MySQL moves tables one RENAME TABLE at a time and then drops the old database. Anything else in it would be
-    // lost with the DROP: views and routines are not moved, and a table with a trigger cannot be moved at all.
+    // MySQL moves only tables. Views and routines would stay behind in the old database — views still pointing at
+    // tables that have moved — and a table with a trigger cannot be moved at all, so such a database is refused.
+    // This is not what keeps data safe (the old database is never dropped, and objects the account cannot see are
+    // not listed here); it keeps a rename from quietly leaving a half-working database behind.
     const [triggers, routines, events] = await Promise.all([
       adapter.listTriggers(ns),
       adapter.listRoutines(ns),
@@ -66,7 +68,7 @@ export async function prepareDatabaseOp(
     if (blockers.length > 0)
       throw new DatabaseOpRefused(
         'VALIDATION',
-        `"${op.name}" cannot be renamed while it has ${blockers.map(([n, what]) => `${n} ${what}`).join(', ')}: MySQL renames a database by moving its tables and dropping the rest`
+        `"${op.name}" cannot be renamed while it has ${blockers.map(([n, what]) => `${n} ${what}`).join(', ')}: MySQL renames a database by moving its tables, and these would be left behind`
       )
     return { ...op, tables: baseTables, ...(collation ? { collation } : { collation: undefined }) }
   }

@@ -11,7 +11,7 @@ const DESTRUCTIVE = new Set<DdlOp['op']>([
   'dropIndex',
   'dropForeignKey',
   'dropDatabase',
-  // MySQL implements a rename as a copy of every table and a DROP DATABASE.
+  // Not data loss, but every application still using the old name breaks: confirmed by retyping it.
   'renameDatabase',
   'dropEvent',
   'dropTables',

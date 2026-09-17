@@ -2956,7 +2956,9 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         })
         const names = (await db.listDatabases()).map((d) => d.name)
         expect(names).toContain(renamed)
-        expect(names).not.toContain(src)
+        if (dialect === 'postgres') expect(names).not.toContain(src)
+        // MySQL keeps the old database, emptied of its tables, for the user to inspect and drop.
+        else expect(await tablesOf(src)).toEqual([])
         expect(await rowIds(renamed, 'child')).toEqual([10, 20])
         expect((await db.describeTable({ database: renamed }, 'child')).foreignKeys.map((f) => f.name)).toEqual([
           'child_parent',
@@ -2965,6 +2967,20 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
           expect(collation).toBe('utf8mb4_bin')
           expect((await db.listDatabases()).find((d) => d.name === renamed)?.collation).toBe('utf8mb4_bin')
         }
+      })
+
+      it('never drops the old database on MySQL, so a table created after the preview is not lost', async () => {
+        if (dialect !== 'mysql') return
+        await seed(src)
+        // The statements are built from the table list as it stood at preview time …
+        const sql = db.ddl.build(ns, { op: 'renameDatabase', name: src, newName: renamed, tables: await tablesOf(src) })
+        expect(sql.some((s) => /DROP\s+DATABASE/i.test(s))).toBe(false)
+        // … and another session adds a table with a row before the user confirms.
+        await inDb(src, 'CREATE TABLE late (id INT PRIMARY KEY)')
+        await inDb(src, 'INSERT INTO late (id) VALUES (42)')
+        for (const statement of sql) await execOk(statement)
+        expect(await rowIds(renamed, 'parent')).toEqual([1, 2])
+        expect(await rowIds(src, 'late')).toEqual([42])
       })
 
       it('leaves a query running on the source alone, and refuses the rename instead (PostgreSQL)', async () => {

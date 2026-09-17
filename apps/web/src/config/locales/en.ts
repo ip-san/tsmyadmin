@@ -132,14 +132,14 @@ export const en = {
     newName: 'New database name',
     copyName: 'Name of the copy',
     renameHintMysql:
-      'MySQL has no statement for renaming a database, so a new one is created, the tables are moved into it, and the old one is dropped. A database with views, routines, triggers or events cannot be renamed.',
+      'MySQL has no statement for renaming a database, so a new one is created and the tables are moved into it. The old database is kept rather than dropped: check that it is empty, then drop it. A database with views, routines, triggers or events cannot be renamed.',
     renameHintPostgres: 'This fails while anyone else is connected to the database.',
     copyHintMysql:
       'Copies the tables’ structure and data. Foreign keys, views, routines, triggers, events and privileges are not copied.',
     copyHintPostgres:
       'Copies the whole database — tables, views, functions and data. It fails while anything is running in the source, and needs its owner or a superuser.',
     renameWarningMysql:
-      'The old database is dropped. Privileges granted on it (GRANT) do not carry over to the new name.',
+      'The old database is kept, not dropped, so nothing your account cannot see — routines, events — and no table created after this preview is taken with it. Check what is left, then drop it. Privileges granted on it (GRANT) do not carry over to the new name.',
     renameWarningPostgres:
       'Idle tsmyadmin connections to this database under the same account are closed. If anything is still running there, nothing changes and the rename fails.',
     systemDatabase: 'The server’s own databases cannot be renamed or copied.',

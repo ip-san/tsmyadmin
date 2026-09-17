@@ -127,7 +127,6 @@ exports[`DDL builders > mysql: renameDatabase 1`] = `
 [
   "CREATE DATABASE \`new"db\`\`x\` COLLATE utf8mb4_0900_ai_ci",
   "RENAME TABLE \`old"db\`\`x\`.\`we"ird\`\`t\` TO \`new"db\`\`x\`.\`we"ird\`\`t\`, \`old"db\`\`x\`.\`users\` TO \`new"db\`\`x\`.\`users\`",
-  "DROP DATABASE \`old"db\`\`x\`",
 ]
 `;
 

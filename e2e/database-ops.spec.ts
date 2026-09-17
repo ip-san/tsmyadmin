@@ -43,10 +43,21 @@ for (const t of TARGETS) {
           .getByRole('form', { name: 'データベースの名前を変更' })
           .getByRole('button', { name: '次へ（SQL を確認）' })
           .click()
-        // Renaming ends in DROP DATABASE on MySQL, so the name has to be retyped, as for a drop.
-        await confirmPreview(page, t.dialect === 'mysql' ? /RENAME TABLE[\s\S]*DROP DATABASE/ : /RENAME TO/, base)
+        // MySQL moves the tables and keeps the old database: dropping it would also take what the account cannot
+        // see, or what was created after this preview.
+        if (t.dialect === 'mysql') {
+          const statements = page.getByRole('dialog').getByLabel('SQL')
+          // Wait for the SQL first, or the negative check could pass against an empty dialog.
+          await expect(statements).toContainText('RENAME TABLE')
+          await expect(statements).not.toContainText('DROP DATABASE')
+        }
+        await confirmPreview(page, t.dialect === 'mysql' ? /RENAME TABLE/ : /RENAME TO/, base)
         await expect(page).toHaveURL(new RegExp(`/db/${renamed}$`))
         await expect(page.getByRole('heading', { name: new RegExp(renamed) })).toBeVisible()
+        await page.goto('/')
+        await expect(page.getByRole('main').getByRole('link', { name: base, exact: true })).toHaveCount(
+          t.dialect === 'mysql' ? 1 : 0
+        )
 
         await page.goto(`/db/${renamed}/operations`)
         await page.getByLabel('コピー先のデータベース名').fill(copied)

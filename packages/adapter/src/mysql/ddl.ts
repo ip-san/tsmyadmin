@@ -54,20 +54,23 @@ export const mysqlDdl: DdlBuilder = {
       case 'dropDatabase':
         return [`DROP DATABASE ${id(op.name)}`]
       case 'renameDatabase': {
-        // Without the list the DROP DATABASE below would take every table with it.
+        // MySQL has no RENAME DATABASE, so the tables move to a new one. The old database is deliberately NOT
+        // dropped: DROP DATABASE would take whatever was not moved with it, and some of that cannot be seen from
+        // here — routines and events the account has no privilege on are invisible to it yet dropped all the same,
+        // and a table created between the preview and the run is not on the list. What is left is for the user to
+        // inspect and drop through the ordinary, confirmed drop.
         if (!op.tables) throw new AdapterError('VALIDATION', 'renameDatabase needs the list of tables to move')
         const from = { database: op.name }
         const to = { database: op.newName }
         return [
           createDatabaseSql(op.newName, op.collation),
           // One statement for every table: MySQL applies a multi-table RENAME TABLE atomically, so a failure leaves
-          // nothing half-moved, and the DROP below never runs (the SQL route stops at the first error).
+          // nothing half-moved.
           ...(op.tables.length > 0
             ? [
                 `RENAME TABLE ${op.tables.map((t) => `${quoteTable('mysql', from, t)} TO ${quoteTable('mysql', to, t)}`).join(', ')}`,
               ]
             : []),
-          `DROP DATABASE ${id(op.name)}`,
         ]
       }
       case 'copyDatabase': {

@@ -1,4 +1,4 @@
-<!-- translated-from: docs/architecture.md sha256:c37221f49a68ed5479f38e9af4b46af4e27fde9239786e193f9e5230434e1b39 -->
+<!-- translated-from: docs/architecture.md sha256:68a3a9e341cbcc72806a6601441d07427b5970a2d6a2c172077c8c39830b948b -->
 
 # Architecture
 
@@ -314,7 +314,7 @@ The test layers, from the bottom: unit (`sql/split`, the DDL snapshots, the pure
 |---|---|---|
 | Add a field to the API | `packages/shared/src/schemas/*` → `apps/api/src/routes/*` → web | Define the Zod schema first. The web app goes through `hc<AppType>` |
 | Add a method to the adapter | `types.ts` → `base.ts` / `mysql/*` / `postgres/*` | Add it to `ADAPTER_METHOD_NAMES` and to the conformance `describe`, and make it pass on both dialects. Implement it in `testing/fake-adapter.ts`, and classify it in `apps/api/src/lib/audit.ts` as either `AUDITED_METHODS` (anything that changes data, structure, an account or server state) or `PASSTHROUGH_METHODS` (`audit.test.ts` checks that every method is in one of them) |
-| Add a DDL operation | `packages/shared/src/schemas/ddl.ts` → `*/ddl.ts` → the web form | Snapshots for both dialects in `SAMPLE_OPS` in `test/ddl.test.ts`, and a UI that goes through the preview. When the SQL depends on the server's state (`copyTable`'s columns, the table list of `renameDatabase` / `copyDatabase`), the `/ddl/preview` route fills it in — **overwriting whatever the request carried**, since a rename ends in DROP DATABASE and a table missing from the list is lost with it (`apps/api/src/lib/database-ops.ts`) |
+| Add a DDL operation | `packages/shared/src/schemas/ddl.ts` → `*/ddl.ts` → the web form | Snapshots for both dialects in `SAMPLE_OPS` in `test/ddl.test.ts`, and a UI that goes through the preview. When the SQL depends on the server's state (`copyTable`'s columns, the table list of `renameDatabase` / `copyDatabase`), the `/ddl/preview` route fills it in — **overwriting whatever the request carried** (`apps/api/src/lib/database-ops.ts`). Do not build a destructive statement that depends on what was visible or listed at preview time: that is why a MySQL rename does not DROP the old database (it would take routines and events the account cannot see, and tables created after the preview) |
 | Change a UI string | `config/locales/ja.ts` and `en.ts` | Add the same key to both (`locale.test.ts` checks the shapes match). Writing it into a component is not allowed |
 | Fix the documentation | `docs/*.md` (Japanese is the original) | Translate the matching file under `docs/en/` and re-stamp with `bun run docs:sync` (`bun run docs:i18n` checks they keep up) |
 | Add an interface language | `LOCALES` / `LOCALE_NAMES` / `LocaleCodeSchema` in `config/locale.ts`, and `locales/<code>.ts` | `ja.ts` is where the type comes from. Give a new table `satisfies Locale` |
