@@ -48,3 +48,7 @@
 - サーバー側 `SavedQueryStore.save()` は名前で dedupe（`existing = list().find(name)` → update/insert 分岐）するため、`entries.find(name)` が二重登録で迷子になることはない。
 - ローカルストレージのスコープキー（`dialect.host.port`、ユーザー名を含まない）は本 diff より前からの既存設計。同一ブラウザで同じホストに複数アカウントでログインした場合の越境閲覧はこの機能追加が動機になっている既知の制約であり、この diff のレビューでは対象外（言及するとしても Info 止め、あるいは省略）。
 
+
+## web: 区切り文字なしの文字列連結を React key に使うと衝突しうる（bd7b470 TableShortcuts.tsx）
+
+- `apps/web/src/features/sidebar/TableShortcuts.tsx` の `key={\`${t.db}${t.schema ?? ''}${t.table}\`}` は区切り文字なしの連結。MySQL は schema が常に空文字なので `db+table` の連結だけになり、db="ab"+table="c" と db="a"+table="bc" がどちらも "abc" というキーになり衝突する（実データとしてはありうる識別子）。同じコミットの `ServerCatalogPage.tsx`（`key={JSON.stringify(row)}`）が示す通り、この codebase では複合キーに `JSON.stringify([...])` を使う既存パターンがあるので、複合キーを見たら「区切り文字なし連結」になっていないか確認し、`JSON.stringify([t.db, t.schema ?? '', t.table])` 等を提案する。

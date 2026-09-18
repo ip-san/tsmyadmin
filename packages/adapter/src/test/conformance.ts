@@ -2899,6 +2899,19 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
             [3, 'Banana'],
             [4, null],
           ])
+          // A change of case alone: equal under a case-insensitive collation (MySQL's default), yet a change.
+          const recased = await runScript({
+            op: 'replaceInColumn',
+            table: t,
+            column: 'name',
+            find: 'Pear',
+            replace: 'PEAR',
+          })
+          const second = recased.find((r) => r.kind === 'affected')
+          expect(second?.kind === 'affected' ? second.affectedRows : -1).toBe(1)
+          expect(await exec(`SELECT name FROM ${t} WHERE id = 1`)).toMatchObject([
+            { kind: 'rows', result: { rows: [['PEAR pie']] } },
+          ])
         } finally {
           await exec(`DROP TABLE IF EXISTS ${t}`, { stopOnError: false })
         }

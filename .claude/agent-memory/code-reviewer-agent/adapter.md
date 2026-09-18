@@ -29,3 +29,10 @@
 - packages/shared/src/sql-script.test.ts にはこのケースがない（末尾コメントなしの単純な ; を含む文のみ）。test/conformance.ts の createRoutine/createTrigger/createEvent のボディもすべて末尾がコメントなしなので、mutation を入れても検出できない抜け。
 - 修正案（提案のみ、実施はしていない）: delimiter を追記する前に改行を挟む（`${s}\n${delimiter}`）。splitStatements は複数文字delimiterを行頭に限定せずどこでも認識するので、行コメントの外に出すだけで直る。
 - 次にこのファイルを触ったら、末尾が行コメントで終わる本体（-- comment の後に空白/; だけが続く、または ; の後に -- comment が続く）を必ずテストケースに足す。PostgreSQL 側の dollarQuoted()（postgres/ddl.ts）は閉じタグの前に必ず改行を挟む実装になっており、同じ問題は起きない（意図的か偶然かは不明だが、参考実装として比較に使える）。
+
+## adapter: `replaceInColumn` の MySQL 版 `WHERE REPLACE(...) <> c` は照合順序比較で「置換で変わった行」まで落とす（f9f3d6f で実機確認・Critical）
+
+- 場所: `packages/adapter/src/mysql/ddl.ts` の `replaceInColumn`（`WHERE ${replaced} <> ${c}`）。`REPLACE()` 自体はどの照合順序でもバイト完全一致（大文字小文字・アクセントを区別する）検索だが、生成した `<>` 比較はカラムの照合順序で評価される。MySQL 8 の既定照合順序 `utf8mb4_0900_ai_ci`（大文字小文字・アクセント無視）の列で `find='ABC', replace='abc'`（大文字小文字だけの置換）を実行すると、`REPLACE(v,'ABC','abc')` は正しく `'abc'` を返すのに、`'abc' <> 'ABC'` が ai_ci では偽と評価され、`WHERE` がその行を落として **0 行更新**になる（`ROW_COUNT()=0`、実機 MySQL 8.4 で確認済み）。コミットメッセージ・conformance のコメント（「MySQL の照合順序では一致でも置換で変わらない行を触らない」）は `REPLACE()` 側のバイト完全一致だけを検証しており、`<>` 側が照合順序で緩む方向の危険は未検証のまま残っていた。
+- 再現時の注意: `docker compose exec mysql mysql ...` で日本語やアクセント付き文字（café 等）を検証すると、クライアント側の文字コード既定（latin1）で文字化けし誤った結果を見ることがある。`mysql --default-character-set=utf8mb4 ...` を必ず付けること（一度 café のテストで自分がこれにハマった）。ASCII の大文字小文字違い（ABC/abc）なら文字コード起因のノイズなしに再現できる。
+- 修正案: `<>` を `CAST(... AS BINARY) <> CAST(... AS BINARY)` にする（`BINARY expr` 構文は MySQL 8.0.27+ で非推奨、`SHOW WARNINGS` で Warning 1287 が出ることを確認済み。`CAST(expr AS BINARY)` なら警告なし）。PostgreSQL 側の `IS DISTINCT FROM` は decisive collation（既定の libc 系）では `=`/`<>` がバイト比較そのものなので同じ穴はない（`citext` 型や nondeterministic ICU 照合順序を使えば理論上再現しうるが未検証・対応不要）。
+- 教訓: 「`REPLACE()`（または類似の文字列関数）の入力側は大文字小文字を区別するか」と「その結果を比較する `<>`/`=` 演算子が列の照合順序でどう評価されるか」は別の質問。片方だけテストして「照合順序は検証した」と思い込みやすい（このコミットの conformance テストのコメントが実例）。次に同種の「変更があった行だけ更新する」パターン（`<>` や `IS DISTINCT FROM` で before/after を比較する箇所）を見たら、大文字小文字・アクセントだけが変わるケースを必ず追加でテストすること。

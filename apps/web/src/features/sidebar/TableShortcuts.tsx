@@ -9,7 +9,7 @@ function ShortcutList({ title, items }: { title: string; items: TableShortcut[] 
       <summary className="cursor-pointer px-1 text-xs font-semibold text-ink-sub">{title}</summary>
       <ul className="mt-1">
         {items.map((t) => (
-          <li key={`${t.db}${t.schema ?? ''}${t.table}`}>
+          <li key={JSON.stringify([t.db, t.schema ?? '', t.table])}>
             <Link
               to="/db/$db/table/$table"
               params={{ db: t.db, table: t.table }}

@@ -117,7 +117,10 @@ export const mysqlDdl: DdlBuilder = {
       case 'replaceInColumn': {
         const c = id(op.column)
         const replaced = `REPLACE(${c}, ${mysqlLiteral(op.find)}, ${mysqlLiteral(op.replace)})`
-        return [`UPDATE ${quoteTable('mysql', ns, op.table)} SET ${c} = ${replaced} WHERE ${replaced} <> ${c}`]
+        // REPLACE matches bytes; `<>` would compare in the column's collation, where a case-only change
+        // (ABC → abc under _ai_ci) is "equal" and the row that changes would be skipped. Compared as bytes.
+        const changes = `CAST(${replaced} AS BINARY) <> CAST(${c} AS BINARY)`
+        return [`UPDATE ${quoteTable('mysql', ns, op.table)} SET ${c} = ${replaced} WHERE ${changes}`]
       }
       case 'moveTable':
         return [

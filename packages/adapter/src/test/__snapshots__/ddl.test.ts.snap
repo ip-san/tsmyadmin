@@ -170,7 +170,7 @@ exports[`DDL builders > mysql: renameTable 1`] = `
 
 exports[`DDL builders > mysql: replaceInColumn 1`] = `
 [
-  "UPDATE \`db\`.\`users\` SET \`na\`\`me"\` = REPLACE(\`na\`\`me"\`, 'it''s', '%_\\\\') WHERE REPLACE(\`na\`\`me"\`, 'it''s', '%_\\\\') <> \`na\`\`me"\`",
+  "UPDATE \`db\`.\`users\` SET \`na\`\`me"\` = REPLACE(\`na\`\`me"\`, 'it''s', '%_\\\\') WHERE CAST(REPLACE(\`na\`\`me"\`, 'it''s', '%_\\\\') AS BINARY) <> CAST(\`na\`\`me"\` AS BINARY)",
 ]
 `;
 
