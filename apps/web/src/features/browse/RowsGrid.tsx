@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { BrowseOptions, BrowseResult, InputCell, RowKey, RowValues } from '@tsmyadmin/shared'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Th } from '@/components/ui/Table.tsx'
@@ -17,6 +17,7 @@ import { Pagination } from './Pagination.tsx'
 import { CopyRowDialog, EditRowDialog } from './RowDialogs.tsx'
 import { othersOf, rowKeys, rowToValues } from './row-key.ts'
 import { SortHeader } from './SortHeader.tsx'
+import { useSettleFocus } from './settle-focus.ts'
 
 export interface RowsGridProps {
   tableRef: TableRef
@@ -49,8 +50,6 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
   const [deleteTarget, setDeleteTarget] = useState<{ keys: RowKey[] } | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const noticeRef = useRef<HTMLOutputElement>(null)
-  /** An inline-saved row (its other columns' values), until the refetched rows are committed and its fate is known. */
-  const settleFocus = useRef<{ index: number; col: number; column: string; others: string } | null>(null)
   const gridRef = useRef<HTMLTableElement>(null)
   // Reset transient UI state when the table, page, sort or filters change (state-from-props reset pattern):
   // the route component is reused across tables, so a selection or an open editor must not carry over.
@@ -86,26 +85,7 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
     []
   )
   const data = rows.data
-  useEffect(() => {
-    const saved = settleFocus.current
-    if (!saved || rows.isFetching) return
-    settleFocus.current = null
-    // Rows are keyed by index: the cell may still exist but now belong to another row (the edited one left a
-    // filtered result set), so the row at that index is compared on every column but the edited one (a row key
-    // would change with the edit on all-columns / ctid tables, or when a key column was edited).
-    const row = data?.rows[saved.index]
-    const stillThere = data !== undefined && row !== undefined && othersOf(data, row, saved.column) === saved.others
-    if (stillThere && gridRef.current?.contains(document.activeElement)) return
-    // The row may have re-sorted (a key column edited, a new ctid): follow it when exactly one row matches.
-    const matches = data
-      ? data.rows.flatMap((r, i) => (othersOf(data, r, saved.column) === saved.others ? [i] : []))
-      : []
-    const moved = matches.length === 1 ? matches[0] : undefined
-    const cell =
-      moved === undefined ? null : gridRef.current?.querySelector<HTMLElement>(`[data-cell="${moved},${saved.col}"]`)
-    if (cell) cell.focus({ preventScroll: true })
-    else noticeRef.current?.focus({ preventScroll: true })
-  }, [data, rows.isFetching])
+  const settleFocus = useSettleFocus(data, rows.isFetching, gridRef, noticeRef)
   // Derived per page, not per render: keys/indexes are reused by every checkbox toggle and inline edit.
   const derived = useMemo(() => {
     if (!data) return null
