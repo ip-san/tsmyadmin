@@ -21,6 +21,7 @@ import {
   SEARCH_TERM_MAX,
   SecondFactorSetupSchema,
   SecondFactorStatusSchema,
+  ServerCatalogSchema,
   ServerInfoSchema,
   SessionStateSchema,
   SqlStreamEventSchema,
@@ -1043,6 +1044,18 @@ describe('export', () => {
     expect((await h.req('/api/databases/shop/export?format=sql&tables=users,users2')).status).toBe(404)
     // A format that is not offered (a spreadsheet file) is refused, not guessed at.
     expect((await h.req('/api/databases/shop/export?format=xlsx')).status).toBe(400)
+  })
+})
+
+describe('server catalog', () => {
+  it('returns collations, engines and plugins, and refuses a kind that is not one of them', async () => {
+    const h = harness()
+    stores.push(h.store)
+    await h.login()
+    const res = await h.req('/api/server/catalog/engines')
+    expect(res.status).toBe(200)
+    expect(ServerCatalogSchema.parse(await res.json())).toEqual({ columns: ['name'], rows: [['fake engines']] })
+    expect((await h.req('/api/server/catalog/users')).status).toBe(400)
   })
 })
 

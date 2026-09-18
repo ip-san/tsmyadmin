@@ -80,7 +80,7 @@ classDiagram
     +iterateRows(ns, table) AsyncIterable~RowBatch~
     +showCreateTable() / listRoutines() / listTriggers()
     +listUsers() / showGrants() / canManageAccount()
-    +serverInfo() / listProcesses() / killProcess()
+    +serverInfo() / listProcesses() / killProcess() / serverCatalog()
     +ddl : DdlBuilder
     +exporter : SqlExporter
     +users : UserSqlBuilder

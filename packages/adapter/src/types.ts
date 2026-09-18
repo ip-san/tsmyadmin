@@ -21,6 +21,8 @@ import type {
   RoutineKind,
   RowKey,
   RowValues,
+  ServerCatalog,
+  ServerCatalogKind,
   ServerInfo,
   StatementResult,
   TableInfo,
@@ -251,6 +253,8 @@ export interface DatabaseAdapter {
   serverInfo(): Promise<ServerInfo>
   /** Configuration variables (SHOW GLOBAL VARIABLES / pg_settings). */
   listVariables(): Promise<KeyValue[]>
+  /** Collations, engines (PostgreSQL: access methods) or plugins (PostgreSQL: extensions), as a table to show. */
+  serverCatalog(kind: ServerCatalogKind): Promise<ServerCatalog>
   /** Runtime counters (SHOW GLOBAL STATUS / pg_stat_*). */
   listStatus(): Promise<KeyValue[]>
   listProcesses(): Promise<ProcessInfo[]>
@@ -317,6 +321,7 @@ export const ADAPTER_METHOD_NAMES = [
   'showGrants',
   'serverInfo',
   'listVariables',
+  'serverCatalog',
   'listStatus',
   'listProcesses',
   'killProcess',

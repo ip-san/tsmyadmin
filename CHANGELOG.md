@@ -12,6 +12,8 @@
 
 ### 追加
 
+- サーバーに「**文字セット・照合順序**」「**エンジン**」「**プラグイン**」タブを追加（phpMyAdmin の Charsets / Engines / Plugins）。PostgreSQL では同じ位置に照合順序・アクセスメソッド・拡張を示す。どの列でも絞り込める
+
 - テーブルの「操作」に**テーブルを移動**（同じ名前のまま行ごと。MySQL は別のデータベースへ `RENAME TABLE`、PostgreSQL は同じデータベースの別スキーマへ `ALTER TABLE … SET SCHEMA`）と、MySQL の**メンテナンスに REPAIR TABLE**（MyISAM など。InnoDB では対象外である旨が結果に出る）を追加
 
 - エクスポート形式に **XML・YAML・Markdown（表）** を追加し、CSV の**区切り文字**（カンマ・セミコロン（Excel 向け）・タブ）を選べるようにした。XML / YAML は複数テーブルをまとめて出し、NULL・バイナリ・XML に書けない制御文字を含む文字列を区別して値を失わない。Markdown は文書向けの表でバイナリは大きさだけ。テンプレートには区切り文字も保存する

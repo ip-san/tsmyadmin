@@ -12,6 +12,9 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as AppCollationsRouteImport } from './routes/_app/collations'
+import { Route as AppEnginesRouteImport } from './routes/_app/engines'
+import { Route as AppPluginsRouteImport } from './routes/_app/plugins'
 import { Route as AppProcessesRouteImport } from './routes/_app/processes'
 import { Route as AppSecurityRouteImport } from './routes/_app/security'
 import { Route as AppSqlRouteImport } from './routes/_app/sql'
@@ -55,6 +58,21 @@ const LoginRoute = LoginRouteImport.update({
 const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppCollationsRoute = AppCollationsRouteImport.update({
+  id: '/collations',
+  path: '/collations',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppEnginesRoute = AppEnginesRouteImport.update({
+  id: '/engines',
+  path: '/engines',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppPluginsRoute = AppPluginsRouteImport.update({
+  id: '/plugins',
+  path: '/plugins',
   getParentRoute: () => AppRoute,
 } as any)
 const AppProcessesRoute = AppProcessesRouteImport.update({
@@ -215,6 +233,9 @@ const AppDbDbTableTableTriggersRoute =
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/login': typeof LoginRoute
+  '/collations': typeof AppCollationsRoute
+  '/engines': typeof AppEnginesRoute
+  '/plugins': typeof AppPluginsRoute
   '/processes': typeof AppProcessesRoute
   '/security': typeof AppSecurityRoute
   '/sql': typeof AppSqlRoute
@@ -248,6 +269,9 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
+  '/collations': typeof AppCollationsRoute
+  '/engines': typeof AppEnginesRoute
+  '/plugins': typeof AppPluginsRoute
   '/processes': typeof AppProcessesRoute
   '/security': typeof AppSecurityRoute
   '/sql': typeof AppSqlRoute
@@ -282,6 +306,9 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
+  '/_app/collations': typeof AppCollationsRoute
+  '/_app/engines': typeof AppEnginesRoute
+  '/_app/plugins': typeof AppPluginsRoute
   '/_app/processes': typeof AppProcessesRoute
   '/_app/security': typeof AppSecurityRoute
   '/_app/sql': typeof AppSqlRoute
@@ -319,6 +346,9 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/login'
+    | '/collations'
+    | '/engines'
+    | '/plugins'
     | '/processes'
     | '/security'
     | '/sql'
@@ -352,6 +382,9 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
+    | '/collations'
+    | '/engines'
+    | '/plugins'
     | '/processes'
     | '/security'
     | '/sql'
@@ -385,6 +418,9 @@ export interface FileRouteTypes {
     | '__root__'
     | '/_app'
     | '/login'
+    | '/_app/collations'
+    | '/_app/engines'
+    | '/_app/plugins'
     | '/_app/processes'
     | '/_app/security'
     | '/_app/sql'
@@ -444,6 +480,27 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof AppIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/collations': {
+      id: '/_app/collations'
+      path: '/collations'
+      fullPath: '/collations'
+      preLoaderRoute: typeof AppCollationsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/engines': {
+      id: '/_app/engines'
+      path: '/engines'
+      fullPath: '/engines'
+      preLoaderRoute: typeof AppEnginesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/plugins': {
+      id: '/_app/plugins'
+      path: '/plugins'
+      fullPath: '/plugins'
+      preLoaderRoute: typeof AppPluginsRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/processes': {
@@ -724,6 +781,9 @@ const AppDbDbRouteWithChildren =
   AppDbDbRoute._addFileChildren(AppDbDbRouteChildren)
 
 interface AppRouteChildren {
+  AppCollationsRoute: typeof AppCollationsRoute
+  AppEnginesRoute: typeof AppEnginesRoute
+  AppPluginsRoute: typeof AppPluginsRoute
   AppProcessesRoute: typeof AppProcessesRoute
   AppSecurityRoute: typeof AppSecurityRoute
   AppSqlRoute: typeof AppSqlRoute
@@ -735,6 +795,9 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppCollationsRoute: AppCollationsRoute,
+  AppEnginesRoute: AppEnginesRoute,
+  AppPluginsRoute: AppPluginsRoute,
   AppProcessesRoute: AppProcessesRoute,
   AppSecurityRoute: AppSecurityRoute,
   AppSqlRoute: AppSqlRoute,

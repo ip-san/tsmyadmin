@@ -1,4 +1,12 @@
-import type { KeyValue, KillMode, ProcessInfo, ServerInfo } from '@tsmyadmin/shared'
+import type {
+  CatalogColumn,
+  KeyValue,
+  KillMode,
+  ProcessInfo,
+  ServerCatalog,
+  ServerCatalogKind,
+  ServerInfo,
+} from '@tsmyadmin/shared'
 import { type Conn, firstResult } from '../base.ts'
 import { joinParts, str, strOrNull } from '../sql/format.ts'
 import { AdapterError } from '../types.ts'
@@ -90,4 +98,32 @@ export async function pgKillProcess(conn: Conn, id: string, mode: KillMode = 'co
   }
   const r = firstResult(await conn.query(`SELECT ${fn}($1::int)`, [Number(id)]))
   if (r.rows[0]?.[0] !== true) throw new AdapterError('NOT_FOUND', `No such backend: ${id}`)
+}
+
+/** Every value as text (null stays null): the catalog is shown, not computed with. */
+const asText = (rows: unknown[][]) => rows.map((r) => r.map((v) => (v === null || v === undefined ? null : String(v))))
+
+/** PostgreSQL has no storage engines or plugins: its access methods and extensions are what fill those places. */
+const PG_CATALOG = {
+  collations: {
+    columns: ['collation', 'provider', 'encoding'],
+    sql: `SELECT collname,
+                 CASE collprovider WHEN 'c' THEN 'libc' WHEN 'i' THEN 'icu' WHEN 'b' THEN 'builtin' ELSE 'default' END,
+                 CASE WHEN collencoding < 0 THEN NULL ELSE pg_encoding_to_char(collencoding) END
+          FROM pg_collation ORDER BY collname`,
+  },
+  engines: {
+    columns: ['name', 'type'],
+    sql: `SELECT amname, CASE amtype WHEN 't' THEN 'table' WHEN 'i' THEN 'index' ELSE amtype::text END
+          FROM pg_am ORDER BY amname`,
+  },
+  plugins: {
+    columns: ['name', 'version', 'installedVersion', 'comment'],
+    sql: 'SELECT name, default_version, installed_version, comment FROM pg_available_extensions ORDER BY name',
+  },
+} satisfies Record<ServerCatalogKind, { columns: CatalogColumn[]; sql: string }>
+
+export async function pgServerCatalog(conn: Conn, kind: ServerCatalogKind): Promise<ServerCatalog> {
+  const { columns, sql } = PG_CATALOG[kind]
+  return { columns, rows: asText(firstResult(await conn.query(sql)).rows) }
 }

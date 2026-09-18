@@ -10,6 +10,8 @@ import type {
   RelationDef,
   RoutineInfo,
   RoutineKind,
+  ServerCatalog,
+  ServerCatalogKind,
   ServerInfo,
   TableInfo,
   TableSchema,
@@ -37,7 +39,14 @@ import { pgCreateStatements, pgDdl, pgTableCatalog } from './ddl.ts'
 import { pgExporter } from './export.ts'
 import { pgDescribeTable, pgListForeignKeys, pgListSchemas, pgListTables } from './introspect.ts'
 import { pgListDependencies, pgListRoutines, pgListTriggers, pgRoutineDefinition } from './routines.ts'
-import { pgKillProcess, pgListProcesses, pgListStatus, pgListVariables, pgServerInfo } from './server.ts'
+import {
+  pgKillProcess,
+  pgListProcesses,
+  pgListStatus,
+  pgListVariables,
+  pgServerCatalog,
+  pgServerInfo,
+} from './server.ts'
 import { pgCanManageAccount, pgListUsers, pgShowGrants, pgUsers } from './users.ts'
 import { PG_TYPE_NAMES, pgTypes } from './values.ts'
 
@@ -425,6 +434,10 @@ export class PostgresAdapter extends BaseAdapter {
 
   serverInfo(): Promise<ServerInfo> {
     return this.withConn(this.serverNs(), (conn) => pgServerInfo(conn))
+  }
+
+  serverCatalog(kind: ServerCatalogKind): Promise<ServerCatalog> {
+    return this.withConn(this.serverNs(), (conn) => pgServerCatalog(conn, kind))
   }
 
   listVariables(): Promise<KeyValue[]> {

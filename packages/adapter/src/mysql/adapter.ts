@@ -11,6 +11,8 @@ import type {
   RelationDef,
   RoutineInfo,
   RoutineKind,
+  ServerCatalog,
+  ServerCatalogKind,
   ServerInfo,
   TableInfo,
   TableSchema,
@@ -47,7 +49,14 @@ import {
   mysqlListTriggers,
   mysqlRoutineDefinition,
 } from './routines.ts'
-import { mysqlKillProcess, mysqlListProcesses, mysqlListStatus, mysqlListVariables, mysqlServerInfo } from './server.ts'
+import {
+  mysqlKillProcess,
+  mysqlListProcesses,
+  mysqlListStatus,
+  mysqlListVariables,
+  mysqlServerCatalog,
+  mysqlServerInfo,
+} from './server.ts'
 import { mysqlCanManageAccount, mysqlListUsers, mysqlShowGrants, mysqlUsers } from './users.ts'
 import { mysqlColumnMeta } from './values.ts'
 
@@ -611,6 +620,10 @@ export class MysqlAdapter extends BaseAdapter {
 
   serverInfo(): Promise<ServerInfo> {
     return this.withConn(this.serverNs(), (conn) => mysqlServerInfo(conn))
+  }
+
+  serverCatalog(kind: ServerCatalogKind): Promise<ServerCatalog> {
+    return this.withConn(this.serverNs(), (conn) => mysqlServerCatalog(conn, kind))
   }
 
   listVariables(): Promise<KeyValue[]> {

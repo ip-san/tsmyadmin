@@ -21,6 +21,8 @@ import type {
   RowKey,
   RowKeyKind,
   RowValues,
+  ServerCatalog,
+  ServerCatalogKind,
   ServerInfo,
   StatementResult,
   TableInfo,
@@ -361,6 +363,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
   abstract showCreateTable(ns: Namespace, table: string, schema?: TableSchema): Promise<string[]>
   abstract serverInfo(): Promise<ServerInfo>
   abstract listVariables(): Promise<KeyValue[]>
+  abstract serverCatalog(kind: ServerCatalogKind): Promise<ServerCatalog>
   abstract listStatus(): Promise<KeyValue[]>
   abstract listProcesses(): Promise<ProcessInfo[]>
   abstract killProcess(id: string): Promise<void>

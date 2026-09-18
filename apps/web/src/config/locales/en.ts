@@ -770,6 +770,48 @@ export const en = {
     },
     columns: (columns: string) => `Columns: ${columns}`,
   },
+  catalog: {
+    filter: 'Filter (any column)',
+    titles: {
+      collations: { mysql: 'Charsets and collations', postgres: 'Collations' },
+      engines: { mysql: 'Engines', postgres: 'Access methods' },
+      plugins: { mysql: 'Plugins', postgres: 'Extensions' },
+    },
+    hints: {
+      collations: {
+        mysql:
+          'The character sets and collations the server has. "Default" marks the default collation of its character set.',
+        postgres:
+          'The collations the server has (provider: libc / ICU / builtin). Those with no encoding work with any encoding.',
+      },
+      engines: {
+        mysql: 'Storage engines and whether this server supports them (DEFAULT is the default engine).',
+        postgres: 'PostgreSQL has no storage engines; its table and index access methods are shown instead.',
+      },
+      plugins: {
+        mysql: 'The plugins the server has loaded.',
+        postgres:
+          'PostgreSQL has no plugins; the extensions available, and the version installed in this database, are shown instead.',
+      },
+    },
+    columns: {
+      charset: 'Charset',
+      collation: 'Collation',
+      isDefault: 'Default',
+      provider: 'Provider',
+      encoding: 'Encoding',
+      name: 'Name',
+      support: 'Support',
+      transactions: 'Transactions',
+      comment: 'Description',
+      type: 'Type',
+      status: 'Status',
+      library: 'Library',
+      license: 'License',
+      version: 'Default version',
+      installedVersion: 'Installed version',
+    },
+  },
   secondFactor: {
     title: 'Two-factor authentication',
     intro:

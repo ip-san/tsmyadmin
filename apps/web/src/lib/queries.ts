@@ -27,6 +27,8 @@ import type {
   SecondFactorProof,
   SecondFactorSetup,
   SecondFactorStatus,
+  ServerCatalog,
+  ServerCatalogKind,
   ServerInfo,
   ServerPreset,
   SessionState,
@@ -224,6 +226,13 @@ export const variablesQuery = queryOptions({
   queryKey: ['server', 'variables'],
   queryFn: () => unwrap<KeyValue[]>(api.server.variables.$get()),
 })
+/** Collations, engines (PostgreSQL: access methods) or plugins (PostgreSQL: extensions). */
+export const serverCatalogQuery = (kind: ServerCatalogKind) =>
+  queryOptions({
+    queryKey: ['server', 'catalog', kind],
+    queryFn: () => unwrap<ServerCatalog>(api.server.catalog[':kind'].$get({ param: { kind } })),
+    staleTime: Number.POSITIVE_INFINITY,
+  })
 export const statusQuery = queryOptions({
   queryKey: ['server', 'status'],
   queryFn: () => unwrap<KeyValue[]>(api.server.status.$get()),

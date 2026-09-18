@@ -2299,6 +2299,22 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
       })
     })
 
+    describe('serverCatalog', () => {
+      it('lists collations, engines (access methods) and plugins (extensions), row by row as wide as the columns', async () => {
+        const find = async (kind: 'collations' | 'engines' | 'plugins', column: string) => {
+          const catalog = await db.serverCatalog(kind)
+          for (const row of catalog.rows) expect(row).toHaveLength(catalog.columns.length)
+          const at = catalog.columns.indexOf(column as never)
+          expect(at, `${kind} has ${column}`).toBeGreaterThanOrEqual(0)
+          return catalog.rows.map((r) => r[at])
+        }
+        // Something every server of the dialect has.
+        expect(await find('collations', 'collation')).toContain(dialect === 'mysql' ? 'utf8mb4_bin' : 'C')
+        expect(await find('engines', 'name')).toContain(dialect === 'mysql' ? 'InnoDB' : 'btree')
+        expect(await find('plugins', 'name')).toContain(dialect === 'mysql' ? 'InnoDB' : 'plpgsql')
+      })
+    })
+
     describe('listVariables', () => {
       it('includes max_connections', async () => {
         const vars = await db.listVariables()

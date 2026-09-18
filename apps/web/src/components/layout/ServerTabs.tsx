@@ -9,7 +9,9 @@ import { sessionQuery } from '@/lib/queries.ts'
 export function ServerTabs({ tab }: { tab: string }) {
   useDocumentTitle(tab, locale.server.title)
   // Already loaded by the layout's guard; the second factor needs a persistent store, so the tab follows it.
-  const secondFactor = useQuery(sessionQuery).data?.secondFactor ?? 'unsupported'
+  const session = useQuery(sessionQuery).data
+  const secondFactor = session?.secondFactor ?? 'unsupported'
+  const dialect = session?.dialect ?? 'mysql'
   return (
     <>
       <PageTitle>{locale.server.title}</PageTitle>
@@ -22,6 +24,9 @@ export function ServerTabs({ tab }: { tab: string }) {
           { label: locale.tabs.variables, to: '/variables' },
           { label: locale.tabs.processes, to: '/processes' },
           { label: locale.tabs.users, to: '/users' },
+          { label: locale.catalog.titles.collations[dialect], to: '/collations' },
+          { label: locale.catalog.titles.engines[dialect], to: '/engines' },
+          { label: locale.catalog.titles.plugins[dialect], to: '/plugins' },
           { label: locale.tabs.security, to: '/security', hidden: secondFactor === 'unsupported' },
         ]}
       />

@@ -155,6 +155,12 @@ for (const t of TARGETS) {
       await page.goto('/users')
       await page.getByRole('cell', { name: 'tsmyadmin', exact: true }).waitFor()
       await scan(page)
+      // Collations, engines (access methods) and plugins (extensions): one table each, named per server.
+      for (const path of ['/collations', '/engines', '/plugins']) {
+        await page.goto(path)
+        await page.getByRole('table').waitFor()
+        await scan(page)
+      }
       await page.goto(tableUrl(t, 'posts', '/privileges'))
       await page.getByRole('table', { name: 'posts の権限' }).getByText('サーバー全体').first().waitFor()
       await scan(page)

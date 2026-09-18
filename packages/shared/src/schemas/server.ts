@@ -42,3 +42,33 @@ export type KillMode = z.infer<typeof KillModeSchema>
  * is what `hono/csrf` inspects, and a JSON body would quietly take this endpoint out of that check.
  */
 export const KillQuerySchema = z.object({ mode: KillModeSchema.default('connection') })
+
+/** phpMyAdmin's Charsets / Engines / Plugins tabs; on PostgreSQL collations, access methods and extensions. */
+export const ServerCatalogKindSchema = z.enum(['collations', 'engines', 'plugins'])
+export type ServerCatalogKind = z.infer<typeof ServerCatalogKindSchema>
+
+/** Column ids, labelled by the client in its language (what each kind returns differs by dialect). */
+export const CatalogColumnSchema = z.enum([
+  'charset',
+  'collation',
+  'isDefault',
+  'provider',
+  'encoding',
+  'name',
+  'support',
+  'transactions',
+  'comment',
+  'type',
+  'status',
+  'library',
+  'license',
+  'version',
+  'installedVersion',
+])
+export type CatalogColumn = z.infer<typeof CatalogColumnSchema>
+
+export const ServerCatalogSchema = z.object({
+  columns: z.array(CatalogColumnSchema),
+  rows: z.array(z.array(z.string().nullable())),
+})
+export type ServerCatalog = z.infer<typeof ServerCatalogSchema>

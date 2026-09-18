@@ -1,4 +1,12 @@
-import type { KeyValue, KillMode, ProcessInfo, ServerInfo } from '@tsmyadmin/shared'
+import type {
+  CatalogColumn,
+  KeyValue,
+  KillMode,
+  ProcessInfo,
+  ServerCatalog,
+  ServerCatalogKind,
+  ServerInfo,
+} from '@tsmyadmin/shared'
 import { type Conn, firstResult } from '../base.ts'
 import { joinParts, str, strOrNull } from '../sql/format.ts'
 import { AdapterError } from '../types.ts'
@@ -70,4 +78,27 @@ export async function mysqlKillProcess(conn: Conn, id: string, mode: KillMode = 
     }
     throw err
   }
+}
+
+/** Every value as text (null stays null): the catalog is shown, not computed with. */
+const asText = (rows: unknown[][]) => rows.map((r) => r.map((v) => (v === null || v === undefined ? null : String(v))))
+
+const MYSQL_CATALOG = {
+  collations: {
+    columns: ['charset', 'collation', 'isDefault'],
+    sql: 'SELECT CHARACTER_SET_NAME, COLLATION_NAME, IS_DEFAULT FROM information_schema.COLLATIONS ORDER BY CHARACTER_SET_NAME, COLLATION_NAME',
+  },
+  engines: {
+    columns: ['name', 'support', 'transactions', 'comment'],
+    sql: 'SELECT ENGINE, SUPPORT, TRANSACTIONS, COMMENT FROM information_schema.ENGINES ORDER BY ENGINE',
+  },
+  plugins: {
+    columns: ['name', 'status', 'type', 'library', 'license'],
+    sql: 'SELECT PLUGIN_NAME, PLUGIN_STATUS, PLUGIN_TYPE, PLUGIN_LIBRARY, PLUGIN_LICENSE FROM information_schema.PLUGINS ORDER BY PLUGIN_NAME',
+  },
+} satisfies Record<ServerCatalogKind, { columns: CatalogColumn[]; sql: string }>
+
+export async function mysqlServerCatalog(conn: Conn, kind: ServerCatalogKind): Promise<ServerCatalog> {
+  const { columns, sql } = MYSQL_CATALOG[kind]
+  return { columns, rows: asText(firstResult(await conn.query(sql)).rows) }
 }

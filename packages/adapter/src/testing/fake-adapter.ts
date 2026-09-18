@@ -17,6 +17,8 @@ import type {
   RoutineKind,
   RowKey,
   RowValues,
+  ServerCatalog,
+  ServerCatalogKind,
   ServerInfo,
   StatementResult,
   TableInfo,
@@ -388,6 +390,11 @@ export class FakeAdapter implements DatabaseAdapter {
       currentUser: 'fake@localhost',
       extra: { hostname: 'fake' },
     }
+  }
+
+  async serverCatalog(kind: ServerCatalogKind): Promise<ServerCatalog> {
+    this.record('serverCatalog', kind)
+    return { columns: ['name'], rows: [[`fake ${kind}`]] }
   }
 
   async listVariables(): Promise<KeyValue[]> {

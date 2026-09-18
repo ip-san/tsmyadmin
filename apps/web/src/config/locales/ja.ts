@@ -765,6 +765,48 @@ export const ja = {
     },
     columns: (columns: string) => `カラム: ${columns}`,
   },
+  catalog: {
+    filter: '絞り込む（どの列でも）',
+    titles: {
+      collations: { mysql: '文字セット・照合順序', postgres: '照合順序' },
+      engines: { mysql: 'エンジン', postgres: 'アクセスメソッド' },
+      plugins: { mysql: 'プラグイン', postgres: '拡張' },
+    },
+    hints: {
+      collations: {
+        mysql: 'サーバーが持つ文字セットと照合順序。「既定」はその文字セットの既定の照合順序です。',
+        postgres:
+          'サーバーが持つ照合順序（提供元: libc / ICU / builtin）。符号化方式が空のものは、どの符号化方式でも使えます。',
+      },
+      engines: {
+        mysql: 'ストレージエンジンと、このサーバーでの対応状況（DEFAULT は既定のエンジン）。',
+        postgres:
+          'PostgreSQL にストレージエンジンはありません。代わりにテーブルとインデックスのアクセスメソッドを示します。',
+      },
+      plugins: {
+        mysql: 'サーバーに読み込まれているプラグイン。',
+        postgres:
+          'PostgreSQL にプラグインはありません。代わりに利用できる拡張と、このデータベースに入っている版を示します。',
+      },
+    },
+    columns: {
+      charset: '文字セット',
+      collation: '照合順序',
+      isDefault: '既定',
+      provider: '提供元',
+      encoding: '符号化方式',
+      name: '名前',
+      support: '対応',
+      transactions: 'トランザクション',
+      comment: '説明',
+      type: '種類',
+      status: '状態',
+      library: 'ライブラリ',
+      license: 'ライセンス',
+      version: '既定の版',
+      installedVersion: '導入済みの版',
+    },
+  },
   secondFactor: {
     title: '2 要素認証',
     intro:
