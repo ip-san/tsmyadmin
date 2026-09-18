@@ -42,6 +42,37 @@ export type ColumnSpecInput = z.input<typeof ColumnSpecSchema>
 
 const table = z.string().min(1)
 
+/**
+ * A type as the server spells it (`INT`, `varchar(20)`, `numeric(10,2)`), rendered as written like a column's
+ * data type — the preview shows it before anything runs.
+ */
+const SqlType = z.string().min(1).max(200)
+/** A body of server-dialect code (SELECT, routine, trigger or event body), shown in the preview before it runs. */
+const SqlBody = z.string().trim().min(1).max(1_000_000)
+/** `YYYY-MM-DD HH:MM:SS`, as the event scheduler takes a moment. */
+const Moment = z.string().regex(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)
+
+export const RoutineParamSchema = z.object({
+  /** OUT / INOUT exist for procedures only (and PostgreSQL functions); the form offers them where they apply. */
+  mode: z.enum(['IN', 'OUT', 'INOUT']).default('IN'),
+  name: z.string().min(1),
+  type: SqlType,
+})
+export type RoutineParam = z.infer<typeof RoutineParamSchema>
+
+export const EVENT_INTERVAL_UNITS = ['SECOND', 'MINUTE', 'HOUR', 'DAY', 'WEEK', 'MONTH', 'YEAR'] as const
+export const EventScheduleSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('at'), at: Moment }),
+  z.object({
+    kind: z.literal('every'),
+    interval: z.number().int().min(1).max(1_000_000),
+    unit: z.enum(EVENT_INTERVAL_UNITS),
+    starts: Moment.optional(),
+    ends: Moment.optional(),
+  }),
+])
+export type EventSchedule = z.infer<typeof EventScheduleSchema>
+
 /** Referential actions accepted by both dialects. */
 export const FkActionSchema = z.enum(['CASCADE', 'SET NULL', 'RESTRICT', 'NO ACTION', 'SET DEFAULT'])
 export type FkAction = z.infer<typeof FkActionSchema>
@@ -160,7 +191,55 @@ export const DdlOpSchema = z.discriminatedUnion('op', [
   /** Bulk actions from the database structure page. */
   z.object({ op: z.literal('dropTables'), tables: z.array(table).min(1) }),
   z.object({ op: z.literal('truncateTables'), tables: z.array(table).min(1) }),
+  /** A view over a SELECT; `orReplace` swaps the definition of one that exists. */
+  z.object({
+    op: z.literal('createView'),
+    name: z.string().min(1),
+    select: SqlBody,
+    orReplace: z.boolean().default(false),
+  }),
+  /**
+   * A stored procedure or function. The body is the dialect's own: MySQL a statement or BEGIN … END block,
+   * PostgreSQL the code of the function in `language` (plpgsql: a BEGIN … END block).
+   */
+  z.object({
+    op: z.literal('createRoutine'),
+    kind: z.enum(['procedure', 'function']),
+    name: z.string().min(1),
+    params: z.array(RoutineParamSchema).default([]),
+    /** Functions only. */
+    returns: SqlType.optional(),
+    body: SqlBody,
+    /** PostgreSQL only (MySQL routines are SQL): a language name. */
+    language: z
+      .string()
+      .regex(/^[A-Za-z][A-Za-z0-9_]*$/)
+      .default('plpgsql'),
+    /** MySQL functions under binary logging must declare it. */
+    deterministic: z.boolean().default(false),
+    comment: z.string().max(1024).optional(),
+  }),
+  /**
+   * A row-level trigger. MySQL: the body is a statement or BEGIN … END block. PostgreSQL: a PL/pgSQL block that
+   * returns the row (`BEGIN … RETURN NEW; END`), put in a trigger function named after the trigger.
+   */
+  z.object({
+    op: z.literal('createTrigger'),
+    name: z.string().min(1),
+    table,
+    timing: z.enum(['BEFORE', 'AFTER']),
+    event: z.enum(['INSERT', 'UPDATE', 'DELETE']),
+    body: SqlBody,
+  }),
   /** MySQL event scheduler (PostgreSQL: UNSUPPORTED). */
+  z.object({
+    op: z.literal('createEvent'),
+    name: z.string().min(1),
+    schedule: EventScheduleSchema,
+    body: SqlBody,
+    enabled: z.boolean().default(true),
+    comment: z.string().max(1024).optional(),
+  }),
   z.object({ op: z.literal('enableEvent'), name: z.string().min(1) }),
   z.object({ op: z.literal('disableEvent'), name: z.string().min(1) }),
   z.object({ op: z.literal('dropEvent'), name: z.string().min(1) }),

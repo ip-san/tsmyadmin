@@ -477,6 +477,10 @@ export const en = {
       enableEvent: 'Enable event',
       disableEvent: 'Disable event',
       dropEvent: 'Drop the event',
+      createView: 'Create view',
+      createRoutine: 'Create routine',
+      createTrigger: 'Create trigger',
+      createEvent: 'Create event',
     },
     previewHint: 'The SQL below will be run. Read it before you continue.',
     nothingToChange: 'Nothing to change (no SQL to run).',
@@ -836,6 +840,67 @@ export const en = {
       const h = Math.floor((sec % 86400) / 3600)
       const m = Math.floor((sec % 3600) / 60)
       return `${d > 0 ? `${d} d ` : ''}${h} h ${m} min`
+    },
+  },
+  create: {
+    review: 'Review SQL',
+    name: 'Name',
+    comment: 'Comment',
+    body: 'Body',
+    routine: {
+      title: 'Create routine',
+      kind: 'Kind',
+      params: 'Parameters',
+      addParam: 'Add parameter',
+      removeParam: (n: number) => `Remove parameter ${n}`,
+      mode: 'Direction',
+      paramName: (n: number) => `Parameter ${n} name`,
+      paramType: (n: number) => `Parameter ${n} type`,
+      paramMode: (n: number) => `Parameter ${n} direction`,
+      returns: 'Return type',
+      language: 'Language',
+      deterministic: 'Deterministic (always the same result for the same arguments)',
+      bodyHint: {
+        mysql: 'One statement, or a BEGIN … END block. Semicolons inside it are fine (no DELIMITER needed).',
+        postgres: 'The function body (for plpgsql, a BEGIN … END block).',
+      },
+    },
+    trigger: {
+      title: 'Create trigger',
+      table: 'Table',
+      timing: 'Timing',
+      event: 'Event',
+      bodyHint: {
+        mysql: 'One statement run for each row, or a BEGIN … END block. NEW / OLD refer to the row.',
+        postgres:
+          'A PL/pgSQL block that returns the row (BEGIN … RETURN NEW; END). A trigger function "name_fn" is created with it.',
+      },
+    },
+    event: {
+      title: 'Create event',
+      once: 'Once',
+      every: 'Repeating',
+      at: 'Run at',
+      interval: 'Every',
+      unit: 'Unit',
+      units: {
+        SECOND: 'seconds',
+        MINUTE: 'minutes',
+        HOUR: 'hours',
+        DAY: 'days',
+        WEEK: 'weeks',
+        MONTH: 'months',
+        YEAR: 'years',
+      },
+      starts: 'Starts (optional)',
+      ends: 'Ends (optional)',
+      enabled: 'Enabled',
+      bodyHint: 'One statement to run, or a BEGIN … END block.',
+    },
+    view: {
+      title: 'Create view',
+      select: 'SELECT statement',
+      orReplace: 'Replace a view of the same name (OR REPLACE)',
     },
   },
   routines: {

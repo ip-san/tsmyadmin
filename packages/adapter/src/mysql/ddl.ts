@@ -11,6 +11,30 @@ function createDatabaseSql(name: string, collation: string | undefined): string 
   return collation ? `CREATE DATABASE ${id(name)} COLLATE ${collation}` : `CREATE DATABASE ${id(name)}`
 }
 
+/**
+ * Code as the statement's last part: a trailing `;` would end the statement early (the body of a BEGIN … END
+ * block keeps its own).
+ */
+const bare = (code: string) => code.trim().replace(/[\s;]+$/, '')
+
+function createRoutineSql(ns: Namespace, op: Extract<DdlOp, { op: 'createRoutine' }>): string {
+  const params = op.params.map((p) => {
+    // MySQL functions take IN parameters only, and do not spell the mode out.
+    if (op.kind === 'function' && p.mode !== 'IN') {
+      throw new AdapterError('UNSUPPORTED', 'MySQL functions take IN parameters only')
+    }
+    return `${op.kind === 'procedure' ? `${p.mode} ` : ''}${id(p.name)} ${p.type}`
+  })
+  const head = `CREATE ${op.kind === 'function' ? 'FUNCTION' : 'PROCEDURE'} ${quoteTable('mysql', ns, op.name)}(${params.join(', ')})`
+  if (op.kind === 'function' && !op.returns) throw new AdapterError('UNSUPPORTED', 'A function needs a return type')
+  const traits = [
+    ...(op.kind === 'function' ? [`RETURNS ${op.returns}`] : []),
+    ...(op.comment ? [`COMMENT ${mysqlLiteral(op.comment)}`] : []),
+    op.deterministic ? 'DETERMINISTIC' : 'NOT DETERMINISTIC',
+  ]
+  return `${head} ${traits.join(' ')} ${bare(op.body)}`
+}
+
 function columnDef(c: ColumnSpec): string {
   // MODIFY COLUMN replaces the whole definition, so anything omitted here is dropped from the column. The
   // collation and ON UPDATE clauses are schema-validated patterns, hence safe to render unquoted.
@@ -89,6 +113,31 @@ export const mysqlDdl: DdlBuilder = {
           }
         }
         return out
+      }
+      case 'createView':
+        return [
+          `CREATE ${op.orReplace ? 'OR REPLACE ' : ''}VIEW ${quoteTable('mysql', ns, op.name)} AS ${bare(op.select)}`,
+        ]
+      case 'createRoutine':
+        return [createRoutineSql(ns, op)]
+      case 'createTrigger':
+        return [
+          `CREATE TRIGGER ${quoteTable('mysql', ns, op.name)} ${op.timing} ${op.event} ON ${quoteTable('mysql', ns, op.table)} FOR EACH ROW ${bare(op.body)}`,
+        ]
+      case 'createEvent': {
+        const s = op.schedule
+        const schedule =
+          s.kind === 'at'
+            ? `AT ${mysqlLiteral(s.at)}`
+            : [
+                `EVERY ${s.interval} ${s.unit}`,
+                ...(s.starts ? [`STARTS ${mysqlLiteral(s.starts)}`] : []),
+                ...(s.ends ? [`ENDS ${mysqlLiteral(s.ends)}`] : []),
+              ].join(' ')
+        const comment = op.comment ? ` COMMENT ${mysqlLiteral(op.comment)}` : ''
+        return [
+          `CREATE EVENT ${quoteTable('mysql', ns, op.name)} ON SCHEDULE ${schedule} ON COMPLETION NOT PRESERVE ${op.enabled ? 'ENABLE' : 'DISABLE'}${comment} DO ${bare(op.body)}`,
+        ]
       }
       case 'enableEvent':
         return [`ALTER EVENT ${quoteTable('mysql', ns, op.name)} ENABLE`]

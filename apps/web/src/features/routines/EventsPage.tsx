@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import type { Dialect } from '@tsmyadmin/shared'
+import { CreateSection } from '@/components/ddl/CreateSection.tsx'
 import { DdlPreviewDialog } from '@/components/ddl/DdlPreviewDialog.tsx'
 import { DefinitionToggle } from '@/components/ddl/DefinitionToggle.tsx'
 import { Button } from '@/components/ui/Button.tsx'
@@ -8,6 +9,7 @@ import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
 import { useDdlFlow } from '@/lib/ddl.ts'
 import { eventsQuery } from '@/lib/queries.ts'
+import { CreateEventForm } from './CreateEventForm.tsx'
 
 export function EventsPage({ db, schema, dialect }: { db: string; schema?: string | undefined; dialect: Dialect }) {
   const events = useQuery({ ...eventsQuery(db, schema), enabled: dialect === 'mysql' })
@@ -79,6 +81,9 @@ export function EventsPage({ db, schema, dialect }: { db: string; schema?: strin
           </tbody>
         </Table>
       )}
+      <CreateSection title={locale.create.event.title}>
+        <CreateEventForm onSubmit={flow.preview} />
+      </CreateSection>
     </section>
   )
 }

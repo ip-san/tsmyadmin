@@ -1,18 +1,25 @@
 import { useQuery } from '@tanstack/react-query'
+import type { Dialect } from '@tsmyadmin/shared'
+import { CreateSection } from '@/components/ddl/CreateSection.tsx'
+import { DdlPreviewDialog } from '@/components/ddl/DdlPreviewDialog.tsx'
 import { DefinitionToggle } from '@/components/ddl/DefinitionToggle.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
+import { useDdlFlow } from '@/lib/ddl.ts'
 import { useEditDefinition } from '@/lib/open-in-console.ts'
 import { routineDefinitionQuery, routinesQuery } from '@/lib/queries.ts'
+import { CreateRoutineForm } from './CreateRoutineForm.tsx'
 
-export function RoutinesPage({ db, schema }: { db: string; schema?: string | undefined }) {
+export function RoutinesPage({ db, schema, dialect }: { db: string; schema?: string | undefined; dialect: Dialect }) {
   const edit = useEditDefinition(db, schema)
+  const flow = useDdlFlow(db, schema)
   const routines = useQuery(routinesQuery(db, schema))
   if (routines.isPending) return <Spinner />
   if (routines.isError) return <ErrorBox error={routines.error} onRetry={() => void routines.refetch()} />
   return (
     <section className="space-y-2">
+      <DdlPreviewDialog flow={flow} />
       <h2 className="text-sm font-semibold text-ink">{locale.routines.title}</h2>
       {routines.data.length === 0 ? (
         <Notice>{locale.routines.none}</Notice>
@@ -61,6 +68,9 @@ export function RoutinesPage({ db, schema }: { db: string; schema?: string | und
           </tbody>
         </Table>
       )}
+      <CreateSection title={locale.create.routine.title}>
+        <CreateRoutineForm dialect={dialect} onSubmit={flow.preview} />
+      </CreateSection>
     </section>
   )
 }

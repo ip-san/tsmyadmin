@@ -42,6 +42,28 @@ function commentSql(t: string, c: ColumnSpec): string[] {
   return c.comment === null ? [] : [`COMMENT ON COLUMN ${t}.${id(c.name)} IS ${pgLiteral(c.comment)}`]
 }
 
+/**
+ * Code as a dollar-quoted string, under a tag the code itself does not contain — so nothing in it needs
+ * escaping, and nothing in it can end the string early.
+ */
+function dollarQuoted(code: string): string {
+  let tag = 'body'
+  for (let n = 1; code.includes(`$${tag}$`); n++) tag = `body${n}`
+  return `$${tag}$\n${code.trim()}\n$${tag}$`
+}
+
+function createRoutineSql(ns: Namespace, op: Extract<DdlOp, { op: 'createRoutine' }>): string[] {
+  const kind = op.kind === 'function' ? 'FUNCTION' : 'PROCEDURE'
+  const signature = `${quoteTable('postgres', ns, op.name)}(${op.params
+    .map((p) => `${p.mode} ${id(p.name)} ${p.type}`)
+    .join(', ')})`
+  if (op.kind === 'function' && !op.returns) throw new AdapterError('UNSUPPORTED', 'A function needs a return type')
+  const returns = op.kind === 'function' ? ` RETURNS ${op.returns}` : ''
+  // The language is schema-validated as an identifier, hence safe unquoted.
+  const create = `CREATE ${kind} ${signature}${returns} LANGUAGE ${op.language} AS ${dollarQuoted(op.body)}`
+  return op.comment ? [create, `COMMENT ON ${kind} ${signature} IS ${pgLiteral(op.comment)}`] : [create]
+}
+
 export const pgDdl: DdlBuilder = {
   build(ns: Namespace, op: DdlOp): string[] {
     // Database-level ops have no table; handle them before touching op.table.
@@ -62,6 +84,21 @@ export const pgDdl: DdlBuilder = {
       case 'copyDatabase':
         if (!op.withData) throw new AdapterError('UNSUPPORTED', 'PostgreSQL copies a database with its data')
         return [releaseOwnConnections(op.name), `CREATE DATABASE ${id(op.newName)} TEMPLATE ${id(op.name)}`]
+      case 'createView':
+        return [
+          `CREATE ${op.orReplace ? 'OR REPLACE ' : ''}VIEW ${quoteTable('postgres', ns, op.name)} AS ${op.select.trim().replace(/[\s;]+$/, '')}`,
+        ]
+      case 'createRoutine':
+        return createRoutineSql(ns, op)
+      case 'createTrigger': {
+        // PostgreSQL runs a trigger function; it is created next to the trigger and named after it.
+        const fn = quoteTable('postgres', ns, `${op.name}_fn`)
+        return [
+          `CREATE FUNCTION ${fn}() RETURNS trigger LANGUAGE plpgsql AS ${dollarQuoted(op.body)}`,
+          `CREATE TRIGGER ${id(op.name)} ${op.timing} ${op.event} ON ${quoteTable('postgres', ns, op.table)} FOR EACH ROW EXECUTE FUNCTION ${fn}()`,
+        ]
+      }
+      case 'createEvent':
       case 'enableEvent':
       case 'disableEvent':
       case 'dropEvent':

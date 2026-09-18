@@ -17,6 +17,7 @@ import {
   isInputCell,
   isTruncatedCell,
   MAX_TEXT_CHARS,
+  sqlScript,
 } from '@tsmyadmin/shared'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { mysqlAccount } from '../mysql/users.ts'
@@ -2738,6 +2739,111 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
     })
 
     describe('ddl', () => {
+      /** As the web runs a preview: all of an op's statements as one script through the SQL route. */
+      const runScript = async (op: DdlOp) => execOk(sqlScript(dialect, db.ddl.build(ns, op)))
+      const firstValue = async (sql: string) => {
+        const r = await execOk(sql)
+        const rows = r.find((x) => x.kind === 'rows')
+        return rows?.kind === 'rows' ? rows.result.rows[0]?.[0] : undefined
+      }
+
+      it('creates a view, a function and a procedure whose bodies hold statements of their own', async () => {
+        const view = `${scratch}_v`
+        const fn = `${scratch}_fn`
+        const proc = `${scratch}_proc`
+        try {
+          await runScript({
+            op: 'createView',
+            name: view,
+            select: 'SELECT id, name FROM users WHERE id <= 2;',
+            orReplace: false,
+          })
+          expect(await firstValue(`SELECT COUNT(*) FROM ${view}`)).toBe(2)
+          await runScript({
+            op: 'createRoutine',
+            kind: 'function',
+            name: fn,
+            params: [{ mode: 'IN', name: 'n', type: 'INT' }],
+            returns: 'INT',
+            body:
+              dialect === 'mysql'
+                ? 'BEGIN\n  DECLARE r INT;\n  SET r = n + 1;\n  RETURN r;\nEND;'
+                : 'BEGIN\n  RETURN n + 1;\nEND;',
+            language: 'plpgsql',
+            deterministic: true,
+            comment: "adds 'one'",
+          })
+          expect(Number(await firstValue(`SELECT ${fn}(41)`))).toBe(42)
+          await runScript({
+            op: 'createRoutine',
+            kind: 'procedure',
+            name: proc,
+            params: [{ mode: 'IN', name: 'n', type: 'INT' }],
+            body:
+              dialect === 'mysql'
+                ? 'BEGIN\n  SET @conformance_proc = n;\n  SET @conformance_proc = @conformance_proc * 2;\nEND'
+                : "BEGIN\n  PERFORM set_config('conformance.proc', (n * 2)::text, false);\nEND",
+            language: 'plpgsql',
+            deterministic: false,
+          })
+          // One run: the variable is the connection's, and each run may get another one from the pool.
+          const doubled =
+            dialect === 'mysql'
+              ? await firstValue(`CALL ${proc}(21); SELECT @conformance_proc`)
+              : await firstValue(`CALL ${proc}(21); SELECT current_setting('conformance.proc')`)
+          expect(Number(doubled)).toBe(42)
+          const listed = (await db.listRoutines(ns)).map((r) => r.name)
+          expect(listed).toEqual(expect.arrayContaining([fn, proc]))
+        } finally {
+          await exec(`DROP VIEW IF EXISTS ${view}`, { stopOnError: false })
+          await exec(`DROP FUNCTION IF EXISTS ${fn}`, { stopOnError: false })
+          await exec(`DROP PROCEDURE IF EXISTS ${proc}`, { stopOnError: false })
+        }
+      })
+
+      it('creates a row trigger that fires', async () => {
+        const t = `${scratch}_trg`
+        const trigger = `${scratch}_up`
+        await execOk(`CREATE TABLE ${t} (id INT PRIMARY KEY, name VARCHAR(20))`)
+        try {
+          await runScript({
+            op: 'createTrigger',
+            name: trigger,
+            table: t,
+            timing: 'BEFORE',
+            event: 'INSERT',
+            body:
+              dialect === 'mysql'
+                ? 'BEGIN\n  SET NEW.name = UPPER(NEW.name);\nEND;'
+                : 'BEGIN\n  NEW.name := UPPER(NEW.name);\n  RETURN NEW;\nEND;',
+          })
+          await execOk(`INSERT INTO ${t} (id, name) VALUES (1, 'abc')`)
+          expect(await firstValue(`SELECT name FROM ${t}`)).toBe('ABC')
+          expect((await db.listTriggers(ns)).map((x) => x.name)).toContain(trigger)
+        } finally {
+          await exec(`DROP TABLE IF EXISTS ${t}`, { stopOnError: false })
+          if (dialect === 'postgres') await exec(`DROP FUNCTION IF EXISTS ${trigger}_fn()`, { stopOnError: false })
+        }
+      })
+
+      it.skipIf(dialect !== 'mysql')('creates an event on a schedule (MySQL)', async () => {
+        const event = `${scratch}_ev`
+        try {
+          await runScript({
+            op: 'createEvent',
+            name: event,
+            schedule: { kind: 'every', interval: 1, unit: 'DAY', starts: '2030-01-01 00:00:00' },
+            body: 'BEGIN\n  SET @conformance_event = 1;\n  SET @conformance_event = 2;\nEND',
+            enabled: false,
+            comment: 'conformance',
+          })
+          const listed = (await db.listEvents(ns)).find((e) => e.name === event)
+          expect(listed?.status).toMatch(/DISABLED/i)
+        } finally {
+          await exec(`DROP EVENT IF EXISTS ${event}`, { stopOnError: false })
+        }
+      })
+
       it.skipIf(dialect !== 'postgres')('modifyColumn keeps a serial / identity generator', async () => {
         const t = `${scratch}_ser`
         await execOk(`CREATE TABLE ${t} (sid SERIAL PRIMARY KEY, iid INT GENERATED ALWAYS AS IDENTITY, x INT NULL)`)

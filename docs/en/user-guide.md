@@ -1,4 +1,4 @@
-<!-- translated-from: docs/user-guide.md sha256:344a34268a363ddb65f2ed7beb3d02bb233b73d04ca96e306052422a02000e78 -->
+<!-- translated-from: docs/user-guide.md sha256:22087dd63e8c43747e3dd15a560c1a8adce2041119613c0e65a1576b8edb7be7 -->
 
 # User guide
 
@@ -60,7 +60,7 @@ The language menu at the top right switches between English and 日本語 (the p
 
 | Tab | Contents |
 |---|---|
-| Structure | Tables and views (estimated row count, engine, comment; the last row gives how many there are and totals their rows and size) and creating a table. Tick several and use **Export the selected tables**, **Empty the selected tables…** or **Drop the selected tables…** (confirmed by typing the table name for one, the database name for several) |
+| Structure | Tables and views (estimated row count, engine, comment; the last row gives how many there are and totals their rows and size) creating a table, and **Create view** (a name and a SELECT statement). Tick several and use **Export the selected tables**, **Empty the selected tables…** or **Drop the selected tables…** (confirmed by typing the table name for one, the database name for several) |
 | SQL | A SQL console scoped to this database (below) |
 | Search | Finds rows containing a term in any column of the chosen tables (not case-sensitive; `%` and `_` are searched for as themselves; columns whose values have no readable text form are skipped — on MySQL binary, BIT and spatial types, on PostgreSQL bytea and the PostGIS types; PostgreSQL's bit, point and the like read as text and are searched). Each table shows its number of matching rows, and **Open in SQL tab** puts a SELECT for those rows into the SQL tab. Tables are searched one at a time, so **Stop** leaves the rest unsearched. Counts stop at 100,000 and read *N+ rows*. **What counts as a match differs by server**: MySQL compares in the connection's collation, so even `_bin` columns ignore case, accents are ignored, and in Japanese hiragana and katakana, full- and half-width letters, digits and katakana, and characters with and without dakuten (ハ and パ) all match — searches match broadly (half-width katakana with a separate dakuten mark, as in ﾊﾟ, counts as two characters, so the result depends on direction: searching for the full-width パ also finds rows containing ﾊﾟ, but searching for ﾊﾟ does not find rows that only contain パ). PostgreSQL distinguishes accents and treats full- and half-width forms as different characters; in `COLLATE "C"` columns it also distinguishes case outside ASCII |
 | Query | Choose tables, output columns (alias, shown or not, sort) and conditions to build a SELECT, then **Open in the SQL tab** to edit and run it. A condition is a column, an operator and a value; conditions within a group are ANDed and groups are ORed. Values are written into the SQL as quoted literals. *contains* and *starts with* are LIKE, so they are case-sensitive on PostgreSQL and follow the column's collation on MySQL (unlike the Search tab). Several tables are **joined along their foreign keys** (LEFT JOINs starting from the first table chosen, each along a foreign key to a table already joined; foreign keys into another database or schema are not used; when several keys connect the same two tables, the first by constraint name is used, so change the ON clause in the SQL tab to join on another), and a set of tables no foreign key connects is refused. There is no free-form criteria row or LIKE pattern as in phpMyAdmin; add those in the SQL tab |
@@ -68,9 +68,9 @@ The language menu at the top right switches between English and 日本語 (the p
 | Export | Downloads the whole database as SQL / CSV / JSON (tables can be selected). See *Export in detail* below |
 | Import | Loads a SQL script (mysqldump / mariadb-dump / pg_dump) or a CSV, with progress and a stop button. See *Import in detail* below |
 | Privileges | Each user's current level on this database (All / Some / None), and granting or revoking everything on it. **Choose privileges…** grants or revokes `SELECT` / `INSERT` / `UPDATE` / `DELETE` / `REFERENCES` / `TRIGGER` on either the whole database or one table. (Only privileges that mean the same thing on both servers are offered; anything else — MySQL `INDEX`, PostgreSQL `TRUNCATE` — goes through the SQL tab.) Choosing a table also lets you name columns — `SELECT` / `INSERT` / `UPDATE` / `REFERENCES` only, since `DELETE` and `TRIGGER` apply to the whole table and are refused before anything runs if combined with columns. Revoking at column level removes only a column-level privilege: it does not narrow one held on the whole table, which always covers every column. A user allowed by a server-wide privilege (`*.*`) carries a **Global** badge, which revoking on this database does not remove |
-| Routines | Stored procedures and functions. **Show definition** fetches the CREATE statement |
-| Triggers | The triggers and their definitions |
-| Events | MySQL's event scheduler (enable / disable / drop). On PostgreSQL the tab says it is not supported |
+| Routines | Stored procedures and functions. **Show definition** fetches the CREATE statement. **Create routine** below builds one from its kind, name, parameters, return type and body (a MySQL BEGIN … END block is written as it is, semicolons and all — no DELIMITER needed) |
+| Triggers | The triggers and their definitions. **Create trigger** builds one from its table, timing, event and body (on PostgreSQL a trigger function "name_fn" is created with it) |
+| Events | MySQL's event scheduler (enable / disable / drop, and **Create event** on a one-off or repeating schedule). On PostgreSQL the tab says it is not supported |
 | Operations | **Rename** and **copy** the database (see *Renaming and copying a database* below) |
 
 ### Renaming and copying a database
@@ -129,7 +129,7 @@ Every run is autocommitted. A script that ends with a transaction still open is 
 | Insert | Inserts one row from a form, with **Use default** and **NULL** per column (the default is shown as the placeholder). The screen stays open afterwards so you can enter the next row (**Back to Browse** returns to the list) |
 | Export | Downloads this table as SQL / CSV / JSON (structure and/or data) |
 | Import | Loads a CSV into this table |
-| Triggers | The triggers of this table |
+| Triggers | The triggers of this table. **Create trigger** there targets this table |
 | Privileges | For each account that can log in: SELECT / INSERT / UPDATE / DELETE / REFERENCES / TRIGGER on this table, and where each comes from (the table, some columns, the whole database, the whole server; on PostgreSQL, superuser). **Choose privileges…** opens with this table already chosen. A revoke here only removes table and column grants; database-wide and server-wide grants stay. Privileges held through a role are not shown (nor, on PostgreSQL, the owner's implicit privileges or PUBLIC's). MySQL partial revokes (`partial_revokes`) are taken into account |
 | Operations | **Rename table**, **Table options** (comment; on MySQL also engine, collation and the next AUTO_INCREMENT value), **Copy table** (with or without its data), **Maintenance** (MySQL: ANALYZE / OPTIMIZE / CHECK TABLE; PostgreSQL: ANALYZE / VACUUM / VACUUM FULL), **Empty the table…** (TRUNCATE) and **Drop the table…** (DROP). A view offers only **Drop the view…** |
 

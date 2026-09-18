@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, useRouteContext } from '@tanstack/react-router'
 import { TriggersPage } from '@/features/routines/TriggersPage.tsx'
 
 export const Route = createFileRoute('/_app/db/$db/triggers')({ component: Page })
@@ -6,5 +6,6 @@ export const Route = createFileRoute('/_app/db/$db/triggers')({ component: Page 
 function Page() {
   const { db } = Route.useParams()
   const { schema } = Route.useSearch()
-  return <TriggersPage db={db} schema={schema} />
+  const { session } = useRouteContext({ from: '/_app' })
+  return <TriggersPage db={db} schema={schema} dialect={session.dialect} />
 }
