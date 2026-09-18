@@ -1,8 +1,7 @@
 import type { SavedQuery } from '@tsmyadmin/shared'
-import { type ReactNode, useState } from 'react'
+import type { ReactNode } from 'react'
+import { NamedListPanel } from '@/components/panels/NamedListPanel.tsx'
 import { Button } from '@/components/ui/Button.tsx'
-import { ErrorBox } from '@/components/ui/Feedback.tsx'
-import { Input } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
 import type { HistoryEntry } from './history.ts'
 
@@ -90,63 +89,21 @@ export function SavedQueriesPanel({
   onLoad: (sql: string) => void
   onDelete: (name: string) => void
 }) {
-  const [name, setName] = useState('')
-  const canSave = name.trim().length > 0 && currentSql.trim().length > 0
   return (
-    <Panel title={locale.sql.saved} count={entries.length}>
-      <form
-        className="flex items-center gap-2 border-b border-line px-3 py-2"
-        onSubmit={(e) => {
-          e.preventDefault()
-          if (!canSave) return
-          onSave(name.trim())
-          setName('')
-        }}
-      >
-        <Input
-          aria-label={locale.sql.savedName}
-          placeholder={locale.sql.savedName}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className="max-w-xs py-1 text-xs"
-        />
-        <Button size="sm" type="submit" disabled={!canSave} title={locale.sql.saveQuery}>
-          {locale.sql.save}
-        </Button>
-      </form>
-      <p className="px-3 pt-2 text-xs text-ink-sub">
-        {savedOnServer ? locale.sql.savedOnServer : locale.sql.savedInBrowser}
-      </p>
-      {error ? (
-        <div className="px-3 pt-2">
-          <ErrorBox error={error} />
-        </div>
-      ) : null}
-      {entries.length === 0 ? (
-        <p className={EMPTY}>{locale.sql.noSaved}</p>
-      ) : (
-        <ul>
-          {entries.map((q) => (
-            <li key={q.id || q.name} className={ROW}>
-              <span className="font-medium">{q.name}</span>
-              <code className="min-w-0 flex-1 truncate font-mono text-ink-sub" title={q.sql}>
-                {q.sql}
-              </code>
-              <Button size="sm" onClick={() => onLoad(q.sql)}>
-                {locale.sql.load}
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => onDelete(q.name)}
-                aria-label={locale.sql.deleteSaved(q.name)}
-              >
-                ×
-              </Button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </Panel>
+    <NamedListPanel
+      title={locale.sql.saved}
+      nameLabel={locale.sql.savedName}
+      entries={entries.map((q) => ({ id: q.id, name: q.name, summary: q.sql }))}
+      note={savedOnServer ? locale.sql.savedOnServer : locale.sql.savedInBrowser}
+      error={error}
+      saveTitle={locale.sql.saveQuery}
+      canSave={currentSql.trim().length > 0}
+      onSave={onSave}
+      onLoad={(entry) => onLoad(entries.find((q) => q.id === entry.id && q.name === entry.name)?.sql ?? entry.summary)}
+      loadLabel={locale.sql.load}
+      deleteLabel={locale.sql.deleteSaved}
+      onDelete={(entry) => onDelete(entry.name)}
+      empty={locale.sql.noSaved}
+    />
   )
 }

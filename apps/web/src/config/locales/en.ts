@@ -576,6 +576,18 @@ export const en = {
     selectTable: (name: string) => `Select ${name}`,
   },
   export: {
+    templates: {
+      title: 'Export templates',
+      name: 'Template name',
+      saveHint: 'Saves the current choices under a name',
+      empty: 'No templates for this database',
+      deleteLabel: (name: string) => `Delete the template ${name}`,
+      wholeDatabase: 'whole database',
+      tableCount: (n: number) => `${n.toLocaleString('en-US')} tables`,
+      structureOnly: 'structure only',
+      dataOnly: 'data only',
+      missing: (tables: string) => `Tables in the template are gone: ${tables} (left out of the selection)`,
+    },
     title: 'Export',
     tables: 'Tables',
     allTables: 'all tables',

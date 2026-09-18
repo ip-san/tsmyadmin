@@ -1,15 +1,17 @@
 import { randomUUID } from 'node:crypto'
 import type { DatabaseAdapter } from '@tsmyadmin/adapter'
-import { type ConnectRequest, ConnectRequestSchema, type SavedQuery } from '@tsmyadmin/shared'
+import { type ConnectRequest, ConnectRequestSchema } from '@tsmyadmin/shared'
 import { Redis } from 'ioredis'
 import { deriveSessionKey, open, rowAad, seal } from './crypto.ts'
 import { identityHash } from './identity.ts'
-import { SAVED_QUERIES, SAVED_QUERY_LIMIT } from './saved-queries.ts'
+import { readPayload, SAVED_QUERIES, SAVED_QUERY_LIMIT } from './saved-queries.ts'
 import {
   type AdapterFactory,
   connectAdapter,
   DEFAULT_MAX_SESSIONS_PER_IDENTITY,
-  type SavedQueries,
+  type SavedItem,
+  type SavedItemKind,
+  type SavedItems,
   SESSION_TTL_MS,
   type Session,
   type SessionStore,
@@ -93,7 +95,7 @@ export class RedisSessionStore implements SessionStore {
   /** Adapters are process-local: another replica holds its own pool for the same session. */
   private readonly live = new Map<string, { config: ConnectRequest; adapter: DatabaseAdapter; createdAt: number }>()
   private timer: ReturnType<typeof setInterval> | null
-  readonly savedQueries: SavedQueries
+  readonly savedQueries: SavedItems
 
   constructor(options: RedisSessionStoreOptions) {
     this.redis = new Redis(options.url, { maxRetriesPerRequest: 3, lazyConnect: false })
@@ -282,7 +284,7 @@ export class RedisSessionStore implements SessionStore {
  * bookmark. Sealed and bound exactly as the SQLite rows are, and addressed by id for the same reason — the name
  * lives inside the payload, so there is nothing to look up by.
  */
-class RedisSavedQueries implements SavedQueries {
+class RedisSavedQueries implements SavedItems {
   constructor(
     private readonly redis: Redis,
     private readonly key: Buffer,
@@ -298,17 +300,17 @@ class RedisSavedQueries implements SavedQueries {
     return `${this.index(config)}:${id}`
   }
 
-  async list(config: ConnectRequest): Promise<SavedQuery[]> {
+  async list(config: ConnectRequest, kind: SavedItemKind): Promise<SavedItem[]> {
     const index = this.index(config)
     const ids = await this.redis.zrange(index, '0', '-1')
-    const out: SavedQuery[] = []
+    const out: SavedItem[] = []
     for (const id of ids) {
       const payload = await this.redis.getBuffer(this.entry(config, id))
       try {
         if (!payload) throw new Error('missing')
-        const body = JSON.parse(open(this.key, payload, rowAad(SAVED_QUERIES, id))) as { name: string; sql: string }
         const at = (await this.redis.zscore(index, id)) ?? '0'
-        out.push({ id, name: body.name, sql: body.sql, at: Number(at) })
+        const item = readPayload(open(this.key, payload, rowAad(SAVED_QUERIES, id)), id, Number(at))
+        if (item.kind === kind) out.push(item)
       } catch {
         // Gone, or it will not open: the same dead weight the file store drops when it reads one.
         await this.redis.multi().zrem(index, id).del(this.entry(config, id)).exec()
@@ -317,14 +319,14 @@ class RedisSavedQueries implements SavedQueries {
     return out.sort((a, b) => b.at - a.at)
   }
 
-  async save(config: ConnectRequest, name: string, sql: string): Promise<SavedQuery[]> {
+  async save(config: ConnectRequest, kind: SavedItemKind, name: string, body: string): Promise<SavedItem[]> {
     const index = this.index(config)
-    const existing = (await this.list(config)).find((q) => q.name === name)
+    const existing = (await this.list(config, kind)).find((q) => q.name === name)
     const id = existing?.id ?? randomUUID()
     const at = this.now()
     await this.redis
       .multi()
-      .set(this.entry(config, id), seal(this.key, JSON.stringify({ name, sql }), rowAad(SAVED_QUERIES, id)))
+      .set(this.entry(config, id), seal(this.key, JSON.stringify({ kind, name, body }), rowAad(SAVED_QUERIES, id)))
       .zadd(index, at, id)
       .exec()
     // Oldest first beyond the cap, so a runaway client cannot grow the store without bound.
@@ -332,12 +334,12 @@ class RedisSavedQueries implements SavedQueries {
     for (const victim of ids.slice(0, Math.max(0, ids.length - SAVED_QUERY_LIMIT))) {
       await this.redis.multi().zrem(index, victim).del(this.entry(config, victim)).exec()
     }
-    return this.list(config)
+    return this.list(config, kind)
   }
 
-  async remove(config: ConnectRequest, id: string): Promise<SavedQuery[]> {
+  async remove(config: ConnectRequest, kind: SavedItemKind, id: string): Promise<SavedItem[]> {
     // Scoped to the caller's own index, so an id belonging to another account matches nothing.
     await this.redis.multi().zrem(this.index(config), id).del(this.entry(config, id)).exec()
-    return this.list(config)
+    return this.list(config, kind)
   }
 }

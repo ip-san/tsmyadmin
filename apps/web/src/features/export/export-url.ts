@@ -1,21 +1,14 @@
-import { type ExportFormat, encodeTableList } from '@tsmyadmin/shared'
+import { type ExportOptions, encodeTableList } from '@tsmyadmin/shared'
 
-export interface ExportOptions {
+/** One export: which namespace and tables, plus the choices a template stores. */
+export interface ExportTarget extends ExportOptions {
   db: string
   schema?: string | undefined
   tables: string[]
-  format: ExportFormat
-  structure: boolean
-  dropTable: boolean
-  data: boolean
-  bom: boolean
-  csvSafe: boolean
-  routines: boolean
-  stripDefiner: boolean
 }
 
 /** URL of the download endpoint (a navigation, so cookies apply and the browser saves the file). */
-export function exportUrl(o: ExportOptions): string {
+export function exportUrl(o: ExportTarget): string {
   const params = new URLSearchParams()
   if (o.schema) params.set('schema', o.schema)
   if (o.tables.length > 0) params.set('tables', encodeTableList(o.tables))

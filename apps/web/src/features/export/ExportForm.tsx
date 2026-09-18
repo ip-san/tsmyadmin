@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useRouteContext } from '@tanstack/react-router'
-import type { ExportFormat, TableInfo } from '@tsmyadmin/shared'
+import type { ExportFormat, ExportTemplate, ExportTemplateBody, TableInfo } from '@tsmyadmin/shared'
 import { ExportFormatSchema } from '@tsmyadmin/shared'
 import { Download } from 'lucide-react'
 import { useId, useState } from 'react'
@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { locale } from '@/config/locale.ts'
 import { tablesQuery } from '@/lib/queries.ts'
-
+import { ExportTemplatesPanel } from './ExportTemplatesPanel.tsx'
+import { applyTemplate } from './export-templates.ts'
 import { exportUrl } from './export-url.ts'
 
 /** Under the 8 KB request-line limit common to proxies and Bun's header buffer. */
@@ -36,6 +37,8 @@ export function ExportForm({ db, schema, table, initialTables }: ExportFormProps
   const [csvSafe, setCsvSafe] = useState(false)
   const [routines, setRoutines] = useState(true)
   const [stripDefiner, setStripDefiner] = useState(false)
+  /** Tables a loaded template named that are no longer there. */
+  const [missing, setMissing] = useState<string[]>([])
   // Views are included: SQL dumps carry their CREATE VIEW, CSV/JSON export their rows.
   const available: TableInfo[] = table ? [] : (tables.data ?? [])
   const toggle = (name: string) => setSelected((s) => (s.includes(name) ? s.filter((x) => x !== name) : [...s, name]))
@@ -63,6 +66,30 @@ export function ExportForm({ db, schema, table, initialTables }: ExportFormProps
   })
   // The table list travels in the query string; hundreds of ticked tables would exceed what servers accept.
   const tooLong = url.length > MAX_EXPORT_URL_LENGTH
+  const options = { format, structure, dropTable, data, bom, csvSafe, routines, stripDefiner }
+  const current: ExportTemplateBody = {
+    database: db,
+    ...(schema ? { schema } : {}),
+    // What is ticked, not what that expands to: "every table" stays true as the database grows.
+    tables: chosen,
+    options,
+  }
+  const load = (template: ExportTemplate) => {
+    const applied = applyTemplate(
+      template,
+      available.map((t) => t.name)
+    )
+    setSelected(applied.tables)
+    setMissing(applied.missing)
+    setFormat(template.options.format)
+    setStructure(template.options.structure)
+    setDropTable(template.options.dropTable)
+    setData(template.options.data)
+    setBom(template.options.bom)
+    setCsvSafe(template.options.csvSafe)
+    setRoutines(template.options.routines)
+    setStripDefiner(template.options.stripDefiner)
+  }
   const blockedReason = csvBlocked
     ? locale.export.csvSingle
     : nothing
@@ -177,6 +204,10 @@ export function ExportForm({ db, schema, table, initialTables }: ExportFormProps
           <p className="text-xs text-ink-sub">{locale.export.csvSafeHint}</p>
         </div>
       ) : null}
+      {table ? null : (
+        <ExportTemplatesPanel db={db} schema={schema} current={current} canSave={!tooLong} onLoad={load} />
+      )}
+      {missing.length > 0 ? <Notice role="status">{locale.export.templates.missing(missing.join(', '))}</Notice> : null}
       {/* The reason a download is refused stays attached to the (focusable) control, and is announced as it appears. */}
       {blockedReason ? (
         <Notice id={reasonId} role="status">

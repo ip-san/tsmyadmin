@@ -30,6 +30,51 @@ export const ExportQuerySchema = z.object({
   stripDefiner: FlagSchema.default('0'),
 })
 export type ExportQuery = z.infer<typeof ExportQuerySchema>
+
+/**
+ * The same choices as ExportQuerySchema, as the form holds them: booleans rather than the `'0'`/`'1'` strings a
+ * query string carries. A saved template stores these, and the download URL is built from them.
+ */
+export const ExportOptionsSchema = z.object({
+  format: ExportFormatSchema.default('sql'),
+  structure: z.boolean().default(true),
+  dropTable: z.boolean().default(true),
+  data: z.boolean().default(true),
+  bom: z.boolean().default(true),
+  csvSafe: z.boolean().default(false),
+  routines: z.boolean().default(true),
+  stripDefiner: z.boolean().default(false),
+})
+export type ExportOptions = z.infer<typeof ExportOptionsSchema>
+
+/** As many tables as the URL can carry; a longer selection is refused by the form before it is saved. */
+export const EXPORT_TEMPLATE_MAX_TABLES = 500
+
+/**
+ * A named set of export choices. It belongs to one database (and schema on PostgreSQL) because the table names
+ * do; the export page shows only the templates of the namespace being looked at. An empty `tables` means the
+ * whole database, exactly as it does in the form.
+ */
+export const ExportTemplateBodySchema = z.object({
+  database: z.string().min(1),
+  schema: z.string().min(1).optional(),
+  tables: z.array(z.string().min(1)).max(EXPORT_TEMPLATE_MAX_TABLES).default([]),
+  options: ExportOptionsSchema,
+})
+export type ExportTemplateBody = z.infer<typeof ExportTemplateBodySchema>
+
+/** `id` is assigned by the server; a browser-side list leaves it empty. */
+export const ExportTemplateSchema = ExportTemplateBodySchema.extend({
+  id: z.string().default(''),
+  name: z.string().min(1).max(200),
+  at: z.number(),
+})
+export type ExportTemplate = z.infer<typeof ExportTemplateSchema>
+
+export const SaveExportTemplateRequestSchema = ExportTemplateBodySchema.extend({
+  name: z.string().min(1).max(200),
+})
+export type SaveExportTemplateRequest = z.infer<typeof SaveExportTemplateRequestSchema>
 export type ExportQueryInput = z.input<typeof ExportQuerySchema>
 
 /** NULL marker used in CSV exports (phpMyAdmin default). */

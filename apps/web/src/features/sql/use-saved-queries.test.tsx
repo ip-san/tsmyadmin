@@ -14,7 +14,8 @@ const server = vi.hoisted(() => ({
   saveHold: null as Promise<void> | null,
 }))
 vi.mock('@/lib/queries.ts', () => ({
-  savedQueriesQuery: { queryKey: ['saved-queries'], queryFn: async () => server.list },
+  savedQueriesQuery: { queryKey: ['saved-queries'] },
+  listSavedQueries: async () => server.list,
   mutations: {
     saveQuery: async (name: string, sql: string) => {
       if (server.saveHold) await server.saveHold

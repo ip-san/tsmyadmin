@@ -1,17 +1,31 @@
 import type { DatabaseAdapter } from '@tsmyadmin/adapter'
-import type { ConnectRequest as Config, ConnectRequest, SavedQuery, SessionInfo } from '@tsmyadmin/shared'
+import type { ConnectRequest as Config, ConnectRequest, SessionInfo } from '@tsmyadmin/shared'
 import { identityKey } from './identity.ts'
 
+/** What a stored item is: a bookmarked statement, or a saved set of export choices. */
+export type SavedItemKind = 'sql' | 'export'
+
+/** A stored item. `body` is the statement for 'sql' and JSON for 'export'; only the routes interpret it. */
+export interface SavedItem {
+  id: string
+  kind: SavedItemKind
+  name: string
+  body: string
+  at: number
+}
+
 /**
- * Bookmarked statements, per database account. Async like `SessionStore`: SQLite answers from the same process,
- * Redis over a socket. Every method returns the account's whole list, which is what the routes hand back.
+ * Named items kept per database account: bookmarked statements and export templates. Async like `SessionStore`:
+ * SQLite answers from the same process, Redis over a socket. Every method returns the account's whole list of
+ * that kind, which is what the routes hand back. The two kinds share the per-account cap and the same rows; a
+ * name is unique within its kind.
  */
-export interface SavedQueries {
-  list(config: Config): Promise<SavedQuery[]>
-  /** Creates or replaces by name. */
-  save(config: Config, name: string, sql: string): Promise<SavedQuery[]>
+export interface SavedItems {
+  list(config: Config, kind: SavedItemKind): Promise<SavedItem[]>
+  /** Creates or replaces by name, within the kind. */
+  save(config: Config, kind: SavedItemKind, name: string, body: string): Promise<SavedItem[]>
   /** Deletes one of the caller's own rows; an id belonging to another account matches nothing. */
-  remove(config: Config, id: string): Promise<SavedQuery[]>
+  remove(config: Config, kind: SavedItemKind, id: string): Promise<SavedItem[]>
 }
 
 export interface Session {
@@ -44,7 +58,8 @@ export interface SessionStore {
    * Bookmarked statements, when the deployment has somewhere to keep them. Absent for the in-memory store,
    * where they would vanish on restart — the browser keeps its own list in that case.
    */
-  readonly savedQueries?: SavedQueries
+  /** Named items (bookmarks, export templates); absent where the store cannot keep them past a restart. */
+  readonly savedQueries?: SavedItems
 }
 
 /** Everything about a connection except the password (what logs, audit lines and the client may see). */

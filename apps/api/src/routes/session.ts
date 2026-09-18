@@ -1,6 +1,13 @@
 import { createHash } from 'node:crypto'
 import { AdapterError } from '@tsmyadmin/adapter'
-import { ConnectRequestSchema, SavedQueryIdSchema, SaveQueryRequestSchema } from '@tsmyadmin/shared'
+import type { ExportTemplate, SavedQuery } from '@tsmyadmin/shared'
+import {
+  ConnectRequestSchema,
+  ExportTemplateBodySchema,
+  SavedQueryIdSchema,
+  SaveExportTemplateRequestSchema,
+  SaveQueryRequestSchema,
+} from '@tsmyadmin/shared'
 import { type Context, Hono } from 'hono'
 import { deleteCookie, getSignedCookie, setSignedCookie } from 'hono/cookie'
 import { isHostAllowed, normaliseHost } from '../lib/allowlist.ts'
@@ -18,6 +25,7 @@ import {
   type SessionConfig,
   sessionCookieOptions,
 } from '../session/middleware.ts'
+import type { SavedItem } from '../session/store.ts'
 import { type Session, sessionInfo } from '../session/store.ts'
 
 export interface SessionRouteDeps {
@@ -129,20 +137,34 @@ export function sessionRoutes(cfg: SessionConfig, deps: SessionRouteDeps) {
         return c.json(sessionState(session, savedQueriesMode), 201)
       })
       .get('/session', requireSession(cfg), (c) => c.json(sessionState(c.get('session'), savedQueriesMode)))
-      // Bookmarks live with the session store, so they exist only where that store is persistent.
+      // Bookmarks and export templates live with the session store, so they exist only where it is persistent.
       .get('/saved-queries', requireSession(cfg), async (c) =>
-        c.json((await cfg.store.savedQueries?.list(c.get('session').config)) ?? [])
+        c.json(toSavedQueries((await cfg.store.savedQueries?.list(c.get('session').config, 'sql')) ?? []))
       )
       .post('/saved-queries', requireSession(cfg), validate('json', SaveQueryRequestSchema), async (c) => {
         const store = cfg.store.savedQueries
         if (!store) return c.json(apiError('UNSUPPORTED', 'Saved queries need a persistent session store'), 400)
         const { name, sql } = c.req.valid('json')
-        return c.json(await store.save(c.get('session').config, name, sql))
+        return c.json(toSavedQueries(await store.save(c.get('session').config, 'sql', name, sql)))
       })
       .delete('/saved-queries/:id', requireSession(cfg), validate('param', SavedQueryIdSchema), async (c) => {
         const store = cfg.store.savedQueries
         if (!store) return c.json(apiError('UNSUPPORTED', 'Saved queries need a persistent session store'), 400)
-        return c.json(await store.remove(c.get('session').config, c.req.valid('param').id))
+        return c.json(toSavedQueries(await store.remove(c.get('session').config, 'sql', c.req.valid('param').id)))
+      })
+      .get('/export-templates', requireSession(cfg), async (c) =>
+        c.json(toTemplates((await cfg.store.savedQueries?.list(c.get('session').config, 'export')) ?? []))
+      )
+      .post('/export-templates', requireSession(cfg), validate('json', SaveExportTemplateRequestSchema), async (c) => {
+        const store = cfg.store.savedQueries
+        if (!store) return c.json(apiError('UNSUPPORTED', 'Export templates need a persistent session store'), 400)
+        const { name, ...body } = c.req.valid('json')
+        return c.json(toTemplates(await store.save(c.get('session').config, 'export', name, JSON.stringify(body))))
+      })
+      .delete('/export-templates/:id', requireSession(cfg), validate('param', SavedQueryIdSchema), async (c) => {
+        const store = cfg.store.savedQueries
+        if (!store) return c.json(apiError('UNSUPPORTED', 'Export templates need a persistent session store'), 400)
+        return c.json(toTemplates(await store.remove(c.get('session').config, 'export', c.req.valid('param').id)))
       })
       .delete('/session', async (c) => {
         const id = await getSignedCookie(c, cfg.secret, SESSION_COOKIE)
@@ -154,4 +176,24 @@ export function sessionRoutes(cfg: SessionConfig, deps: SessionRouteDeps) {
         return c.json({ ok: true })
       })
   )
+}
+
+const toSavedQueries = (items: SavedItem[]): SavedQuery[] =>
+  items.map((i) => ({ id: i.id, name: i.name, sql: i.body, at: i.at }))
+
+/**
+ * Stored export templates as the client sees them. A body that no longer parses (written by a newer version, or
+ * corrupted) is left out rather than failing the whole list — the same treatment a row that will not open gets.
+ */
+function toTemplates(items: SavedItem[]): ExportTemplate[] {
+  const out: ExportTemplate[] = []
+  for (const item of items) {
+    try {
+      const body = ExportTemplateBodySchema.parse(JSON.parse(item.body))
+      out.push({ ...body, id: item.id, name: item.name, at: item.at })
+    } catch {
+      // Not readable as a template: skipped.
+    }
+  }
+  return out
 }

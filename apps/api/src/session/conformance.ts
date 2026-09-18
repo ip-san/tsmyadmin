@@ -167,14 +167,26 @@ export function describeSessionStoreConformance(
           expect(store.savedQueries).toBeUndefined()
           return
         }
-        expect(await saved.save(CONFIG, 'daily', 'SELECT 1')).toMatchObject([{ name: 'daily', sql: 'SELECT 1' }])
+        expect(await saved.save(CONFIG, 'sql', 'daily', 'SELECT 1')).toMatchObject([
+          { name: 'daily', body: 'SELECT 1' },
+        ])
         // Replaced by name rather than added twice, and invisible to a different account.
-        expect(await saved.save(CONFIG, 'daily', 'SELECT 2')).toHaveLength(1)
-        expect(await saved.list({ ...CONFIG, user: 'someone-else' })).toEqual([])
-        const id = (await saved.list(CONFIG))[0]?.id ?? ''
-        expect(await saved.remove({ ...CONFIG, user: 'someone-else' }, id)).toEqual([])
-        expect(await saved.list(CONFIG)).toHaveLength(1)
-        expect(await saved.remove(CONFIG, id)).toEqual([])
+        expect(await saved.save(CONFIG, 'sql', 'daily', 'SELECT 2')).toHaveLength(1)
+        expect(await saved.list({ ...CONFIG, user: 'someone-else' }, 'sql')).toEqual([])
+        const id = (await saved.list(CONFIG, 'sql'))[0]?.id ?? ''
+        expect(await saved.remove({ ...CONFIG, user: 'someone-else' }, 'sql', id)).toEqual([])
+        expect(await saved.list(CONFIG, 'sql')).toHaveLength(1)
+        expect(await saved.remove(CONFIG, 'sql', id)).toEqual([])
+
+        // Export templates share the rows but are a separate list: the same name in both kinds is two items.
+        await saved.save(CONFIG, 'sql', 'nightly', 'SELECT 3')
+        expect(await saved.save(CONFIG, 'export', 'nightly', '{"database":"shop"}')).toMatchObject([
+          { name: 'nightly', body: '{"database":"shop"}' },
+        ])
+        expect(await saved.list(CONFIG, 'sql')).toMatchObject([{ name: 'nightly', body: 'SELECT 3' }])
+        const template = (await saved.list(CONFIG, 'export'))[0]?.id ?? ''
+        expect(await saved.remove(CONFIG, 'export', template)).toEqual([])
+        expect(await saved.list(CONFIG, 'sql')).toHaveLength(1)
       } finally {
         await store.closeAll()
       }

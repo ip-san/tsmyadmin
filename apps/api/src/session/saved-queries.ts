@@ -1,25 +1,27 @@
 import { randomUUID } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
-import type { ConnectRequest, SavedQuery } from '@tsmyadmin/shared'
+import type { ConnectRequest } from '@tsmyadmin/shared'
 import { open, rowAad, seal } from './crypto.ts'
 import { identityHash } from './identity.ts'
-import type { SavedQueries } from './store.ts'
+import type { SavedItem, SavedItemKind, SavedItems } from './store.ts'
 
-/** Table name in the AAD of a saved-query payload. */
+/** Table name in the AAD of a saved-item payload. The name is historical: export templates share the table. */
 export const SAVED_QUERIES = 'saved_queries'
 
 /** Per account, matching what the browser-side list holds. */
 export const SAVED_QUERY_LIMIT = 200
 
 /**
- * Bookmarked statements kept on the server so they follow the account rather than the browser.
+ * Named items (bookmarked statements, export templates) kept on the server so they follow the account rather
+ * than the browser.
  *
  * The text is sealed with the same key as the stored credentials: a saved query is written by hand and
  * routinely contains row values, and a `CREATE USER … IDENTIFIED BY` typed once and bookmarked would otherwise
  * sit in the clear next to them. Rows are addressed by id, never by name, because the name is inside the sealed
- * payload — there is nothing queryable in a row but the identity it belongs to.
+ * payload — there is nothing queryable in a row but the identity it belongs to, which is also why the kind lives
+ * in the payload and is filtered after opening it rather than in SQL.
  */
-export class SqliteSavedQueries implements SavedQueries {
+export class SqliteSavedQueries implements SavedItems {
   private readonly stmt: {
     byIdentity: import('node:sqlite').StatementSync
     insert: import('node:sqlite').StatementSync
@@ -57,20 +59,17 @@ export class SqliteSavedQueries implements SavedQueries {
     return identityHash(this.key, config)
   }
 
-  async list(config: ConnectRequest): Promise<SavedQuery[]> {
+  async list(config: ConnectRequest, kind: SavedItemKind): Promise<SavedItem[]> {
     const rows = this.stmt.byIdentity.all(this.identity(config)) as {
       id: string
       payload: Uint8Array
       updated_at: number
     }[]
-    const out: SavedQuery[] = []
+    const out: SavedItem[] = []
     for (const row of rows) {
       try {
-        const body = JSON.parse(open(this.key, row.payload, rowAad(SAVED_QUERIES, row.id))) as {
-          name: string
-          sql: string
-        }
-        out.push({ id: row.id, name: body.name, sql: body.sql, at: row.updated_at })
+        const item = readPayload(open(this.key, row.payload, rowAad(SAVED_QUERIES, row.id)), row.id, row.updated_at)
+        if (item.kind === kind) out.push(item)
       } catch {
         // A row that will not open is dead weight: it can never be listed, yet it still counts towards this
         // account's cap and nothing else would ever prune it. Dropped here, the same as an unreadable session
@@ -83,13 +82,13 @@ export class SqliteSavedQueries implements SavedQueries {
     return out.sort((a, b) => b.at - a.at)
   }
 
-  /** Creates or replaces by name, the way the browser-side list behaved. Returns the new list. */
-  async save(config: ConnectRequest, name: string, sql: string): Promise<SavedQuery[]> {
+  /** Creates or replaces by name within the kind, the way the browser-side list behaved. Returns the new list. */
+  async save(config: ConnectRequest, kind: SavedItemKind, name: string, body: string): Promise<SavedItem[]> {
     const identity = this.identity(config)
-    const existing = (await this.list(config)).find((q) => q.name === name)
+    const existing = (await this.list(config, kind)).find((q) => q.name === name)
     // Sealed against the row it lands in, so the id has to be decided first.
     const id = existing?.id ?? randomUUID()
-    const payload = seal(this.key, JSON.stringify({ name, sql }), rowAad(SAVED_QUERIES, id))
+    const payload = seal(this.key, JSON.stringify({ kind, name, body }), rowAad(SAVED_QUERIES, id))
     const at = this.now()
     if (existing) this.stmt.update.run(payload, at, id, identity)
     else this.stmt.insert.run(id, identity, payload, at)
@@ -97,12 +96,22 @@ export class SqliteSavedQueries implements SavedQueries {
     for (const row of this.stmt.oldest.all(identity, identity, SAVED_QUERY_LIMIT) as { id: string }[]) {
       this.stmt.remove.run(row.id, identity)
     }
-    return this.list(config)
+    return this.list(config, kind)
   }
 
   /** Deletes one of the caller's own rows; an id belonging to another account matches nothing. */
-  async remove(config: ConnectRequest, id: string): Promise<SavedQuery[]> {
+  async remove(config: ConnectRequest, kind: SavedItemKind, id: string): Promise<SavedItem[]> {
     this.stmt.remove.run(id, this.identity(config))
-    return this.list(config)
+    return this.list(config, kind)
   }
+}
+
+/**
+ * A sealed payload as an item. Rows written before export templates existed hold `{ name, sql }` and no kind:
+ * they are bookmarks, and are read as such rather than being thrown away.
+ */
+export function readPayload(json: string, id: string, at: number): SavedItem {
+  const body = JSON.parse(json) as { kind?: string; name: string; sql?: string; body?: string }
+  const kind: SavedItemKind = body.kind === 'export' ? 'export' : 'sql'
+  return { id, kind, name: body.name, body: body.body ?? body.sql ?? '', at }
 }

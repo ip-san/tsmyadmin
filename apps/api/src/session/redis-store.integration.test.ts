@@ -232,8 +232,8 @@ describe('RedisSessionStore', () => {
       expect(onB?.adapter).not.toBe(s.adapter)
 
       // Saved queries follow the account, not the replica.
-      await a.savedQueries.save(config, 'daily', 'SELECT 1')
-      expect(await b.savedQueries.list(config)).toMatchObject([{ name: 'daily', sql: 'SELECT 1' }])
+      await a.savedQueries.save(config, 'sql', 'daily', 'SELECT 1')
+      expect(await b.savedQueries.list(config, 'sql')).toMatchObject([{ name: 'daily', body: 'SELECT 1' }])
 
       // Signing out on one replica ends the session everywhere.
       await b.delete(s.id)

@@ -6,6 +6,7 @@ import type {
   DdlOp,
   DdlPreviewResponse,
   EventInfo,
+  ExportTemplate,
   KeyValue,
   KillMode,
   ProcessInfo,
@@ -18,6 +19,7 @@ import type {
   RowKey,
   RowValues,
   SavedQuery,
+  SaveExportTemplateRequest,
   ServerInfo,
   ServerPreset,
   SessionState,
@@ -62,10 +64,12 @@ export const serversQuery = queryOptions({
 })
 
 /** Bookmarks stored with the account; only fetched where the session says the server keeps them. */
-export const savedQueriesQuery = queryOptions({
-  queryKey: ['saved-queries'],
-  queryFn: () => unwrap<SavedQuery[]>(api['saved-queries'].$get()),
-})
+export const listSavedQueries = () => unwrap<SavedQuery[]>(api['saved-queries'].$get())
+export const savedQueriesQuery = queryOptions({ queryKey: ['saved-queries'], queryFn: listSavedQueries })
+
+/** Saved export choices, per account; the list is filtered to the current database in the export page. */
+export const listExportTemplates = () => unwrap<ExportTemplate[]>(api['export-templates'].$get())
+export const exportTemplatesQuery = queryOptions({ queryKey: ['export-templates'], queryFn: listExportTemplates })
 
 export const databasesQuery = queryOptions({
   queryKey: ['databases'],
@@ -264,6 +268,10 @@ export const mutations = {
     unwrap<DdlPreviewResponse>(
       api.databases[':db'].ddl.preview.$post({ param: { db: enc(db) }, json: { ...schemaQuery(schema), op } })
     ),
+  saveExportTemplate: (body: SaveExportTemplateRequest) =>
+    unwrap<ExportTemplate[]>(api['export-templates'].$post({ json: body })),
+  deleteExportTemplate: (id: string) =>
+    unwrap<ExportTemplate[]>(api['export-templates'][':id'].$delete({ param: { id } })),
   buildQuery: (db: string, body: QueryBuilderRequestInput) =>
     unwrap<QueryBuilderResult>(api.databases[':db'].query.$post({ param: { db: enc(db) }, json: body })),
 }

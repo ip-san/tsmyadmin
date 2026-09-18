@@ -7,6 +7,50 @@ test.use({ baseURL: PERSISTENT_BASE_URL })
 
 const t = TARGETS[0] as (typeof TARGETS)[number]
 
+test.describe('export templates on a persistent deployment', () => {
+  test('are kept with the account rather than in the browser', async ({ page }) => {
+    const name = `e2e tpl ${Date.now()}`
+    await login(page, t)
+    await page.goto(`/db/${t.database}/export`)
+    const panel = page.locator('summary').filter({ hasText: 'エクスポートのテンプレート' })
+    await panel.click()
+    await expect(page.getByText('この接続ユーザーのアカウントに保存されます。', { exact: false })).toBeVisible()
+
+    const entry = page.getByRole('listitem').filter({ hasText: name })
+    let saved = false
+    let failed = false
+    try {
+      await page.getByRole('checkbox', { name: 'users', exact: true }).check()
+      await page.getByLabel('テンプレート名').fill(name)
+      await page.getByRole('button', { name: '保存する', exact: true }).click()
+      await expect(entry).toBeVisible()
+      saved = true
+
+      await page.evaluate(() => {
+        localStorage.clear()
+        sessionStorage.clear()
+      })
+      await page.reload()
+      await panel.click()
+      await expect(entry).toBeVisible()
+    } catch (error) {
+      failed = true
+      throw error
+    } finally {
+      // Shared by every run against this account, so the row goes even when an assertion failed (see below).
+      if (saved) {
+        const cleanup = (async () => {
+          if (!(await entry.isVisible())) await panel.click()
+          await entry.getByRole('button', { name: `テンプレート ${name} を削除` }).click()
+          await expect(entry).toBeHidden()
+        })()
+        if (failed) await cleanup.catch(() => undefined)
+        else await cleanup
+      }
+    }
+  })
+})
+
 test.describe('saved queries on a persistent deployment', () => {
   test('are kept with the account rather than in the browser', async ({ page }) => {
     const name = `e2e ${Date.now()}`

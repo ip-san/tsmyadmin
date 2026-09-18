@@ -4,6 +4,7 @@ import {
   ApiErrorSchema,
   BrowseResultSchema,
   DdlPreviewResponseSchema,
+  ExportTemplateSchema,
   IMPORT_MAX_BYTES,
   ImportEventSchema,
   KeyValueSchema,
@@ -1436,6 +1437,48 @@ describe('saved queries', () => {
     }
   })
 
+  it('keeps export templates as their own list beside the bookmarks', async () => {
+    const h = persistentHarness()
+    try {
+      await h.login()
+      const body = {
+        name: 'nightly',
+        database: 'shop',
+        tables: ['users'],
+        options: {
+          format: 'csv',
+          structure: false,
+          data: true,
+          dropTable: true,
+          bom: true,
+          csvSafe: true,
+          routines: false,
+          stripDefiner: false,
+        },
+      }
+      const saved = z
+        .array(ExportTemplateSchema)
+        .parse(await (await h.req('/api/export-templates', { method: 'POST', body: JSON.stringify(body) })).json())
+      expect(saved).toMatchObject([{ name: 'nightly', database: 'shop', tables: ['users'] }])
+      expect(saved[0]?.options.format).toBe('csv')
+      // The same name in the other list is a different item, and neither list shows the other's.
+      await h.save('nightly', 'SELECT 1')
+      expect(await (await h.req('/api/export-templates')).json()).toHaveLength(1)
+      expect(z.array(SavedQuerySchema).parse(await (await h.req('/api/saved-queries')).json())).toMatchObject([
+        { name: 'nightly', sql: 'SELECT 1' },
+      ])
+      // A template of another database is refused before it is stored; deleting is by id, as bookmarks are.
+      expect(
+        (await h.req('/api/export-templates', { method: 'POST', body: JSON.stringify({ ...body, database: '' }) }))
+          .status
+      ).toBe(400)
+      expect(await (await h.req(`/api/export-templates/${saved[0]?.id}`, { method: 'DELETE' })).json()).toEqual([])
+      expect(await (await h.req('/api/saved-queries')).json()).toHaveLength(1)
+    } finally {
+      await h.store.closeAll()
+    }
+  })
+
   it('reports the browser mode, and refuses to save, without a persistent store', async () => {
     const h = harness()
     stores.push(h.store)
@@ -1448,5 +1491,12 @@ describe('saved queries', () => {
     })
     expect(res.status).toBe(400)
     expect(ApiErrorSchema.parse(await res.json()).code).toBe('UNSUPPORTED')
+    expect(await (await h.req('/api/export-templates')).json()).toEqual([])
+    const template = await h.req('/api/export-templates', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'nightly', database: 'shop', options: {} }),
+    })
+    expect(template.status).toBe(400)
+    expect(ApiErrorSchema.parse(await template.json()).code).toBe('UNSUPPORTED')
   })
 })

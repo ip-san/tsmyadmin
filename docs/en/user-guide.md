@@ -1,4 +1,4 @@
-<!-- translated-from: docs/user-guide.md sha256:46fa97c1096cbec7efb9307706c814171afd5c0adca6394dc35af642f8ea038a -->
+<!-- translated-from: docs/user-guide.md sha256:538de2930d4b93d93e064bdd058ca8d71b8fe0ed428e12efe58d8410a308291b -->
 
 # User guide
 
@@ -118,6 +118,7 @@ Every run is autocommitted. A script that ends with a transaction still open is 
 
 ### Export in detail
 
+- **Export templates** save the current choices (tables, format, structure / data, DROP, BOM and the rest) under a name to be loaded later. The list belongs to the database (and schema on PostgreSQL) and is not on the table-level Export tab. They are kept where saved queries are kept: with the connection account when sessions are persistent (encrypted, and visible from another browser), otherwise in this browser. The per-account cap of 200 is shared with saved queries. Tables named by a template that no longer exist are left out of the selection and listed by name when it is loaded
 - A SQL export can include routines, triggers and events. Routines are separated with `DELIMITER ;;`
 - On MySQL the `DEFINER` clause (of routines, triggers and events) can be stripped so the dump restores as another user
 - A MySQL SQL dump carries no database name, so it can be imported into a database with a different name as it is

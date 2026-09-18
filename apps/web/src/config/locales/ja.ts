@@ -571,6 +571,18 @@ export const ja = {
     selectTable: (name: string) => `${name} を選択`,
   },
   export: {
+    templates: {
+      title: 'エクスポートのテンプレート',
+      name: 'テンプレート名',
+      saveHint: '今の選択に名前を付けて保存します',
+      empty: 'このデータベースのテンプレートはありません',
+      deleteLabel: (name: string) => `テンプレート ${name} を削除`,
+      wholeDatabase: 'データベース全体',
+      tableCount: (n: number) => `${n.toLocaleString('ja-JP')} テーブル`,
+      structureOnly: '構造のみ',
+      dataOnly: 'データのみ',
+      missing: (tables: string) => `テンプレートにあったテーブルが見つかりません: ${tables}（選択から外しました）`,
+    },
     title: 'エクスポート',
     tables: '対象テーブル',
     allTables: 'すべてのテーブル',
