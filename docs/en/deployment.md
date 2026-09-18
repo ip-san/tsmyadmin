@@ -1,4 +1,4 @@
-<!-- translated-from: docs/deployment.md sha256:c55ead2c088070e4f18ed17d4733f8b86c32fa01f543de3cb3f897a8e58bff1a -->
+<!-- translated-from: docs/deployment.md sha256:0f4fcbdc0bab60e48bf557f05a5bb319de3e5edcf6a1d9ea10b70ca0f95338b2 -->
 
 # Deployment guide
 
@@ -42,6 +42,7 @@ tsmyadmin runs as **a single container whose one process (Bun) serves both the A
 | `TSMYADMIN_ALLOWED_HOSTS` | `127.0.0.1,localhost` | The database hosts the login screen may connect to. Comma-separated; each entry is an exact name, `*.suffix` or `*` (no restriction), optionally with `:port` (`db.internal:5432`, `[::1]:3306`). Leaving the port off allows every port — **name the port in production** (see [security.md](security.md)). **This is what stops SSRF and use as a jump host** |
 | `TSMYADMIN_SERVERS` | (none) | A JSON array of the server presets offered on the login screen. For example: `[{"name":"prod","dialect":"postgres","host":"db.internal","port":5432,"database":"app"}]`. Users then enter only a username and password. A preset's host joins the allowlist automatically. **Never put a password here** |
 | `LOGIN_RATE_LIMIT` | `10` | How many sign-in attempts are allowed within `LOGIN_RATE_WINDOW_SECONDS`, per client IP and username (per IP alone, up to three times that) |
+| `TSMYADMIN_REQUIRE_2FA` | `0` | `1` requires a second factor (TOTP) of every account: one that has not enrolled can log in but can do nothing until it has. It needs somewhere to keep the secrets, so `SESSION_STORE=sqlite` or `redis` is required (with `memory` the process exits at startup). At the default `0`, only accounts that enrol get the second step |
 | `LOGIN_RATE_WINDOW_SECONDS` | `60` | The window for the above, in seconds (at least 1; `LOGIN_RATE_LIMIT` likewise) |
 | `TRUST_PROXY` | `0` | `1` trusts a reverse proxy's `X-Forwarded-For` as the client IP (required behind a proxy; leave it `0` when exposed directly). `cloudflare` prefers `CF-Connecting-IP`. They are separate settings because only Cloudflare can be relied on to overwrite that header — anywhere else, trusting it lets a client name its own address |
 | `LOG_FORMAT` | `json` in production, `pretty` in development | One JSON object per line (for a log collector), or a human-readable form |

@@ -42,6 +42,14 @@ export const SaveQueryRequestSchema = SavedQuerySchema.pick({ name: true, sql: t
 })
 export const SavedQueryIdSchema = z.object({ id: z.string().min(1) })
 
+/**
+ * Where the account stands with its second factor: nothing enrolled, enrolled (so a code was given at login), or
+ * the deployment requires one and this account has not enrolled yet — which is the only state that restricts
+ * what a session may do.
+ */
+export const SecondFactorStateSchema = z.enum(['none', 'enrolled', 'enrollment_required'])
+export type SecondFactorState = z.infer<typeof SecondFactorStateSchema>
+
 export const SessionStateSchema = SessionInfoSchema.extend({
   serverDatabase: z.string().min(1),
   /**
@@ -49,6 +57,7 @@ export const SessionStateSchema = SessionInfoSchema.extend({
    * follow the account; 'browser' when it does not, and they stay in this browser as before.
    */
   savedQueries: z.enum(['server', 'browser']).default('browser'),
+  secondFactor: SecondFactorStateSchema.default('none'),
 })
 export type SessionState = z.infer<typeof SessionStateSchema>
 
@@ -95,6 +104,10 @@ export const ApiErrorCodeSchema = z.enum([
   /** Login over plain HTTP while the session cookie is `Secure` — the browser would drop it (400). */
   'INSECURE_TRANSPORT',
   'PERMISSION_DENIED',
+  /** The account has a second factor and the login carried no code (401). */
+  'SECOND_FACTOR_REQUIRED',
+  /** The code (or recovery code) was wrong, already used, or expired (401). */
+  'SECOND_FACTOR_INVALID',
   'RATE_LIMITED',
   /** Request body / uploaded file over the limit (413). */
   'PAYLOAD_TOO_LARGE',
@@ -137,3 +150,31 @@ export const ApiErrorSchema = z.object({
   params: z.record(z.string(), z.union([z.string(), z.number()])).optional(),
 })
 export type ApiError = z.infer<typeof ApiErrorSchema>
+
+/** A one-time code: six digits from an authenticator app, or a ten-character recovery code. */
+export const SecondFactorCodeSchema = z.string().min(6).max(20)
+
+/**
+ * Login. The code travels with the credentials rather than in a second request: nothing is kept server-side
+ * between the two, so a refused code leaves no session, no connection and nothing to expire.
+ */
+export const LoginRequestSchema = ConnectRequestSchema.extend({ code: SecondFactorCodeSchema.optional() })
+export type LoginRequest = z.infer<typeof LoginRequestSchema>
+
+export const SecondFactorCodeRequestSchema = z.object({ code: SecondFactorCodeSchema })
+
+/** What enrolment hands back, once: the secret to scan or type, and the recovery codes to write down. */
+export const SecondFactorSetupSchema = z.object({
+  secret: z.string().min(1),
+  /** `otpauth://` URI for a QR code or a paste into the app. */
+  uri: z.string().min(1),
+  recoveryCodes: z.array(z.string().min(1)),
+})
+export type SecondFactorSetup = z.infer<typeof SecondFactorSetupSchema>
+
+export const SecondFactorStatusSchema = z.object({
+  state: SecondFactorStateSchema,
+  /** How many recovery codes are still unused (0 when nothing is enrolled). */
+  recoveryCodesLeft: z.number().int().min(0),
+})
+export type SecondFactorStatus = z.infer<typeof SecondFactorStatusSchema>

@@ -79,6 +79,7 @@ export function createApp(config: AppConfig, services: AppServices) {
     secret: config.sessionSecret,
     secure: config.cookieSecure,
     ttlMs: config.sessionTtlMs,
+    require2fa: config.require2fa,
   }
   const loginLimiter = new RateLimiter(config.loginRateLimit.max, config.loginRateLimit.windowMs, services.now)
   // Rotating the user name must not grant a fresh window: a second limiter keyed on the IP alone, IP_LIMIT_FACTOR×.
@@ -106,7 +107,15 @@ export function createApp(config: AppConfig, services: AppServices) {
     // browser used, which is what the cookie rule looks at.
     return url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '[::1]'
   }
-  const sessionDeps = { allowedHosts, loginLimiter, ipLimiter, ip, secureTransport, logger }
+  const sessionDeps = {
+    allowedHosts,
+    loginLimiter,
+    ipLimiter,
+    ip,
+    secureTransport,
+    logger,
+    now: services.now ?? Date.now,
+  }
   return (
     new Hono<AppEnv>()
       // Always server-generated: a client-supplied X-Request-Id could reuse another request's id in the audit log.

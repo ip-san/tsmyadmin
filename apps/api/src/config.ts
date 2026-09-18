@@ -57,6 +57,11 @@ const EnvSchema = z.object({
   LOG_FORMAT: z.enum(['json', 'pretty']).optional(),
   /** `sqlite` keeps sessions across restarts, `redis` shares them between replicas, `memory` does neither. */
   SESSION_STORE: z.enum(['memory', 'sqlite', 'redis']).optional(),
+  /**
+   * `1` requires every account to have a second factor: one that has not enrolled can do nothing but enrol.
+   * Needs a session store that survives a restart, since that is where the secret lives.
+   */
+  TSMYADMIN_REQUIRE_2FA: z.enum(['0', '1']).optional(),
   SESSION_DB_PATH: z.string().default('data/sessions.sqlite'),
   /** Required by SESSION_STORE=redis. */
   REDIS_URL: z.string().optional(),
@@ -70,6 +75,8 @@ const EnvSchema = z.object({
 
 export type AppConfig = {
   isProd: boolean
+  /** Every account must have a second factor (TSMYADMIN_REQUIRE_2FA). */
+  require2fa: boolean
   /** `Secure` on the session cookie; a production login over plain HTTP is refused while this is on. */
   cookieSecure: boolean
   port: number
@@ -113,6 +120,10 @@ export function loadConfig(env: Record<string, string | undefined>): AppConfig {
     throw new ConfigError('SESSION_SECRET must be set to at least 32 characters in production')
   }
   const sessionStore = e.SESSION_STORE ?? (isProd ? 'sqlite' : 'memory')
+  const require2fa = e.TSMYADMIN_REQUIRE_2FA === '1'
+  if (require2fa && sessionStore === 'memory') {
+    throw new ConfigError('TSMYADMIN_REQUIRE_2FA needs SESSION_STORE=sqlite or redis (the secrets live there)')
+  }
   if (sessionStore === 'redis' && !e.REDIS_URL) {
     throw new ConfigError('REDIS_URL must be set when SESSION_STORE=redis')
   }
@@ -128,6 +139,7 @@ export function loadConfig(env: Record<string, string | undefined>): AppConfig {
   }
   return {
     isProd,
+    require2fa,
     port: e.API_PORT,
     cookieSecure: e.COOKIE_SECURE ? e.COOKIE_SECURE === '1' : isProd,
     sessionSecret: e.SESSION_SECRET || 'dev-secret-do-not-use-in-production',

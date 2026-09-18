@@ -15,6 +15,8 @@ import {
   SAVED_QUERY_MAX_SQL,
   SavedQuerySchema,
   SEARCH_TERM_MAX,
+  SecondFactorSetupSchema,
+  SecondFactorStatusSchema,
   ServerInfoSchema,
   SessionStateSchema,
   SqlStreamEventSchema,
@@ -29,6 +31,7 @@ import { createApp, IP_LIMIT_FACTOR } from './app.ts'
 import { type AppConfig, loadConfig } from './config.ts'
 import { auditedAdapterFactory } from './lib/audit.ts'
 import { createLogger, type Logger, type TrustProxy } from './lib/logging.ts'
+import { codeFor, stepAt } from './lib/totp.ts'
 import { SAVED_QUERY_LIMIT } from './session/saved-queries.ts'
 import { SqliteSessionStore } from './session/sqlite-store.ts'
 import { MemorySessionStore } from './session/store.ts'
@@ -120,6 +123,7 @@ describe('session', () => {
     const body = SessionStateSchema.parse(await res.json())
     expect(body).toEqual({
       savedQueries: 'browser',
+      secondFactor: 'none',
       dialect: 'mysql',
       host: 'db',
       port: 3306,
@@ -1352,6 +1356,138 @@ describe('errors', () => {
     const err = ApiErrorSchema.parse(await res.json())
     expect(err.code).toBe('INTERNAL')
     expect(err.message).toBe('Internal error')
+  })
+})
+
+describe('second factor', () => {
+  /** The same persistent-store harness, with a clock the test can hold still. */
+  function totpHarness(options: { require2fa?: boolean } = {}) {
+    let now = 1_700_000_000_000
+    const store = new SqliteSessionStore({
+      path: ':memory:',
+      secret: 's'.repeat(32),
+      adapterFactory: () => fixtureAdapter(),
+      sweepIntervalMs: 0,
+    })
+    const app = createApp({ ...testConfig(), require2fa: options.require2fa ?? false }, { store, now: () => now })
+    let cookie = ''
+    const req = (path: string, init: RequestInit = {}) =>
+      app.request(path, {
+        ...init,
+        headers: { 'content-type': 'application/json', ...(cookie ? { cookie } : {}), ...(init.headers ?? {}) },
+      })
+    const login = async (body: Record<string, unknown> = LOGIN) => {
+      const res = await req('/api/session', { method: 'POST', body: JSON.stringify(body) })
+      const set = res.headers.get('set-cookie')?.split(';')[0]
+      if (set) cookie = set
+      return res
+    }
+    return { store, req, login, at: () => now, tick: (ms: number) => (now += ms) }
+  }
+
+  /** Enrols and returns the secret plus the recovery codes shown once. */
+  async function enrol(h: ReturnType<typeof totpHarness>) {
+    const setup = SecondFactorSetupSchema.parse(
+      await (await h.req('/api/second-factor/begin', { method: 'POST' })).json()
+    )
+    const confirmed = await h.req('/api/second-factor/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ code: codeFor(setup.secret, stepAt(h.at())) }),
+    })
+    expect(confirmed.status).toBe(201)
+    return setup
+  }
+
+  it('asks for a code at the next login, and refuses one that was already used', async () => {
+    const h = totpHarness()
+    try {
+      await h.login()
+      const setup = await enrol(h)
+      expect(SecondFactorStatusSchema.parse(await (await h.req('/api/second-factor')).json())).toEqual({
+        state: 'enrolled',
+        recoveryCodesLeft: 10,
+      })
+
+      // The password alone is no longer enough, and a wrong code is a different answer from a missing one.
+      expect(ApiErrorSchema.parse(await (await h.login()).json()).code).toBe('SECOND_FACTOR_REQUIRED')
+      expect(ApiErrorSchema.parse(await (await h.login({ ...LOGIN, code: '000000' })).json()).code).toBe(
+        'SECOND_FACTOR_INVALID'
+      )
+
+      // A fresh step: the code that confirmed the enrolment is spent, as any used code is.
+      h.tick(30_000)
+      const code = codeFor(setup.secret, stepAt(h.at()))
+      expect((await h.login({ ...LOGIN, code })).status).toBe(201)
+      // The same code inside its own 30 seconds: refused, so one seen over a shoulder is of no use.
+      expect(ApiErrorSchema.parse(await (await h.login({ ...LOGIN, code })).json()).code).toBe('SECOND_FACTOR_INVALID')
+      // The next step's code works.
+      h.tick(30_000)
+      expect((await h.login({ ...LOGIN, code: codeFor(setup.secret, stepAt(h.at())) })).status).toBe(201)
+    } finally {
+      await h.store.closeAll()
+    }
+  })
+
+  it('takes a recovery code once, and lets the factor be removed with a current code', async () => {
+    const h = totpHarness()
+    try {
+      await h.login()
+      const setup = await enrol(h)
+      const recovery = setup.recoveryCodes[0] ?? ''
+      h.tick(30_000)
+
+      expect((await h.login({ ...LOGIN, code: recovery })).status).toBe(201)
+      expect(SecondFactorStatusSchema.parse(await (await h.req('/api/second-factor')).json())).toMatchObject({
+        recoveryCodesLeft: 9,
+      })
+      // Used up: the same one does not work twice.
+      expect(ApiErrorSchema.parse(await (await h.login({ ...LOGIN, code: recovery })).json()).code).toBe(
+        'SECOND_FACTOR_INVALID'
+      )
+
+      // Removing it takes a code from the app, not a recovery code.
+      h.tick(30_000)
+      const stale = await h.req('/api/second-factor', {
+        method: 'DELETE',
+        body: JSON.stringify({ code: setup.recoveryCodes[1] ?? '' }),
+      })
+      expect(stale.status).toBe(401)
+      const removed = await h.req('/api/second-factor', {
+        method: 'DELETE',
+        body: JSON.stringify({ code: codeFor(setup.secret, stepAt(h.at())) }),
+      })
+      expect(removed.status).toBe(200)
+      expect((await h.login()).status).toBe(201)
+    } finally {
+      await h.store.closeAll()
+    }
+  })
+
+  it('lets an account that must enrol do nothing else until it has', async () => {
+    const h = totpHarness({ require2fa: true })
+    try {
+      const state = SessionStateSchema.parse(await (await h.login()).json())
+      expect(state.secondFactor).toBe('enrollment_required')
+      // Everything but enrolment is refused while it has not.
+      expect((await h.req('/api/databases')).status).toBe(401)
+      const setup = await enrol(h)
+      expect((await h.req('/api/databases')).status).toBe(200)
+      // And the next login needs the code, as for anyone else.
+      h.tick(30_000)
+      expect((await h.login()).status).toBe(401)
+      expect((await h.login({ ...LOGIN, code: codeFor(setup.secret, stepAt(h.at())) })).status).toBe(201)
+    } finally {
+      await h.store.closeAll()
+    }
+  })
+
+  it('refuses enrolment where the store cannot keep it', async () => {
+    const h = harness()
+    stores.push(h.store)
+    await h.login()
+    const res = await h.req('/api/second-factor/begin', { method: 'POST' })
+    expect(res.status).toBe(400)
+    expect(ApiErrorSchema.parse(await res.json()).code).toBe('UNSUPPORTED')
   })
 })
 
