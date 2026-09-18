@@ -194,6 +194,18 @@ export function describeSessionStoreConformance(
         const other = (await saved.list(CONFIG, 'sql'))[0]?.id ?? ''
         expect(await saved.save(CONFIG, 'export', 'kept', '{"database":"shop"}', other)).toHaveLength(2)
         expect(await saved.list(CONFIG, 'sql')).toHaveLength(1)
+        await saved.save({ ...CONFIG, user: 'someone-else' }, 'export', 'theirs', '{"database":"shop"}')
+        const theirs = (await saved.list({ ...CONFIG, user: 'someone-else' }, 'export'))[0]?.id ?? ''
+        expect(await saved.save(CONFIG, 'export', 'kept', '{"database":"blog"}', theirs)).toHaveLength(2)
+        expect(await saved.list({ ...CONFIG, user: 'someone-else' }, 'export')).toHaveLength(1)
+        expect(await saved.save(CONFIG, 'export', 'kept', '{"database":"blog"}', 'gone')).toHaveLength(2)
+
+        // Replacing a row with itself keeps it: the write must not delete what it just stored.
+        const self = (await saved.list(CONFIG, 'export')).find((item) => item.name === 'kept')?.id ?? ''
+        expect(await saved.save(CONFIG, 'export', 'kept', '{"database":"shop"}', self)).toMatchObject([
+          { name: 'kept' },
+          { name: 'renamed' },
+        ])
 
         for (const item of await saved.list(CONFIG, 'export')) await saved.remove(CONFIG, 'export', item.id)
         expect(await saved.list(CONFIG, 'export')).toEqual([])

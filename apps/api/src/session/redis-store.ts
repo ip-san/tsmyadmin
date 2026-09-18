@@ -329,7 +329,8 @@ class RedisSavedQueries implements SavedItems {
     const index = this.index(config)
     const mine = await this.list(config, kind)
     const existing = mine.find((q) => q.name === name)
-    const replaced = replaces === undefined ? undefined : mine.find((q) => q.id === replaces)
+    // Never the row being written: replacing a row with itself would delete what this call just stored.
+    const replaced = replaces === undefined ? undefined : mine.find((q) => q.id === replaces && q.id !== existing?.id)
     const id = existing?.id ?? randomUUID()
     const at = this.now()
     // One transaction, so the row being replaced cannot survive a failed write of its replacement (nor be

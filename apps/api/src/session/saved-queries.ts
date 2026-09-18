@@ -96,7 +96,8 @@ export class SqliteSavedQueries implements SavedItems {
     const identity = this.identity(config)
     const mine = await this.list(config, kind)
     const existing = mine.find((q) => q.name === name)
-    const replaced = replaces === undefined ? undefined : mine.find((q) => q.id === replaces)
+    // Never the row being written: replacing a row with itself would delete what this call just stored.
+    const replaced = replaces === undefined ? undefined : mine.find((q) => q.id === replaces && q.id !== existing?.id)
     // Sealed against the row it lands in, so the id has to be decided first.
     const id = existing?.id ?? randomUUID()
     const payload = seal(this.key, JSON.stringify({ kind, name, body }), rowAad(SAVED_QUERIES, id))
