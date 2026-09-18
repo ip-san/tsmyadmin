@@ -39,6 +39,21 @@ describe('export templates', () => {
     expect(loadTemplates('s', 'shop', undefined, memory)).toHaveLength(1)
   })
 
+  it('moves a list saved under the old per-server key to its database', () => {
+    const store = new Map<string, string>()
+    const memory = {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, v),
+      removeItem: (k: string) => void store.delete(k),
+    }
+    const old = [template({ name: 'nightly', database: 'shop' }), template({ name: 'nightly', database: 'blog' })]
+    memory.setItem('tsmyadmin.pref.export.templates.s', JSON.stringify(old))
+    expect(loadTemplates('s', 'shop', undefined, memory)).toMatchObject([{ database: 'shop' }])
+    expect(loadTemplates('s', 'blog', undefined, memory)).toMatchObject([{ database: 'blog' }])
+    // Moved, not copied: the old key is gone.
+    expect(memory.getItem('tsmyadmin.pref.export.templates.s')).toBeNull()
+  })
+
   it('shows only the templates of the namespace being looked at', () => {
     const all = [
       template({ name: 'here' }),

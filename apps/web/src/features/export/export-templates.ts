@@ -1,7 +1,7 @@
 import type { ExportTemplate, ExportTemplateBody } from '@tsmyadmin/shared'
 import { ExportTemplateSchema } from '@tsmyadmin/shared'
 import { loadNamed, removeNamed, saveNamed } from '@/lib/named-storage.ts'
-import type { PreferenceStore } from '@/lib/preferences.ts'
+import { type PreferenceStore, removePreference, writePreference } from '@/lib/preferences.ts'
 
 /**
  * Per server and namespace: two servers open in one browser keep separate lists, and a name used in one database
@@ -16,7 +16,26 @@ export function loadTemplates(
   schema: string | undefined,
   store?: PreferenceStore
 ): ExportTemplate[] {
+  migrateFlatList(scope, store)
   return loadNamed(key(scope, database, schema), ExportTemplateSchema, store)
+}
+
+/**
+ * The first version of this list kept every database's templates under one key per server, which made a name
+ * used in two databases collide. Whatever is still there is moved to the per-namespace keys once, rather than
+ * left as a list nothing reads.
+ */
+function migrateFlatList(scope: string, store?: PreferenceStore): void {
+  const flat = `export.templates.${scope}`
+  const old = loadNamed(flat, ExportTemplateSchema, store)
+  if (old.length === 0) return
+  for (const entry of old) {
+    const target = key(scope, entry.database, entry.schema)
+    const existing = loadNamed(target, ExportTemplateSchema, store)
+    if (existing.some((t) => t.name === entry.name)) continue
+    writePreference(target, [entry, ...existing], store)
+  }
+  removePreference(flat, store)
 }
 
 export function saveTemplate(scope: string, entry: ExportTemplate, store?: PreferenceStore): ExportTemplate[] {

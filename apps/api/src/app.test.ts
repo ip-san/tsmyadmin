@@ -3,6 +3,7 @@ import { FakeAdapter, fakeTable } from '@tsmyadmin/adapter/testing'
 import {
   ApiErrorSchema,
   BrowseResultSchema,
+  ConnectRequestSchema,
   DdlPreviewResponseSchema,
   ExportTemplateSchema,
   IMPORT_MAX_BYTES,
@@ -1492,6 +1493,22 @@ describe('saved queries', () => {
       ).toBe(400)
       expect(await (await h.req(`/api/export-templates/${saved[0]?.id}`, { method: 'DELETE' })).json()).toEqual([])
       expect(await (await h.req('/api/saved-queries')).json()).toHaveLength(1)
+    } finally {
+      await h.store.closeAll()
+    }
+  })
+
+  it('reads a template row written before the name was kept in its payload, and leaves it alone', async () => {
+    const h = persistentHarness()
+    try {
+      await h.login()
+      // The shape 0.3.0-dev wrote: the name was the row's key, the body held only the choices.
+      const body = { database: 'shop', tables: ['users'], options: { format: 'sql' } }
+      await h.store.savedQueries.save(ConnectRequestSchema.parse(LOGIN), 'export', 'nightly', JSON.stringify(body))
+      const listed = z.array(ExportTemplateSchema).parse(await (await h.req('/api/export-templates')).json())
+      expect(listed).toMatchObject([{ name: 'nightly', database: 'shop', tables: ['users'] }])
+      // Reading it did not delete it: a row this version cannot fully interpret is not data to throw away.
+      expect(await h.store.savedQueries.list(ConnectRequestSchema.parse(LOGIN), 'export')).toHaveLength(1)
     } finally {
       await h.store.closeAll()
     }
