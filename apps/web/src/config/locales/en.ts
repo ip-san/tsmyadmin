@@ -743,6 +743,8 @@ export const en = {
     intro:
       'Adds a one-time code (TOTP) from an authenticator app to the database account this session is signed in as. Once enrolled, connecting asks for a code.',
     required: 'This deployment requires two-factor authentication. Nothing else is available until you enrol.',
+    unsupported:
+      'Two-factor authentication is not available in this deployment: the secret needs somewhere to live, so run it with a persistent session store (SESSION_STORE=sqlite or redis).',
     enrol: 'Enrol',
     scan: 'Add this key (or the URI below) to your authenticator app, then enter the six digits it shows.',
     secretLabel: 'Key to enrol',

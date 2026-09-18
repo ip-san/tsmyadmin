@@ -73,7 +73,9 @@ async function sessionState(cfg: SessionConfig, session: Session, savedQueries: 
 }
 
 async function secondFactorState(cfg: SessionConfig, session: Session): Promise<SecondFactorState> {
-  const factor = await cfg.store.secondFactor?.get(session.config)
+  // Nowhere to keep a secret: the screen says so rather than offering an enrolment that would fail.
+  if (!cfg.store.secondFactor) return 'unsupported'
+  const factor = await cfg.store.secondFactor.get(session.config)
   if (factor) return 'enrolled'
   return cfg.require2fa ? 'enrollment_required' : 'none'
 }

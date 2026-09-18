@@ -43,11 +43,11 @@ export const SaveQueryRequestSchema = SavedQuerySchema.pick({ name: true, sql: t
 export const SavedQueryIdSchema = z.object({ id: z.string().min(1) })
 
 /**
- * Where the account stands with its second factor: nothing enrolled, enrolled (so a code was given at login), or
+ * Where the account stands with its second factor: nothing enrolled, enrolled (so a code was given at login),
  * the deployment requires one and this account has not enrolled yet — which is the only state that restricts
- * what a session may do.
+ * what a session may do — or the deployment cannot keep one at all, because its session store is not persistent.
  */
-export const SecondFactorStateSchema = z.enum(['none', 'enrolled', 'enrollment_required'])
+export const SecondFactorStateSchema = z.enum(['none', 'enrolled', 'enrollment_required', 'unsupported'])
 export type SecondFactorState = z.infer<typeof SecondFactorStateSchema>
 
 export const SessionStateSchema = SessionInfoSchema.extend({

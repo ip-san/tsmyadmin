@@ -46,7 +46,9 @@ export function SecondFactorPage() {
       <p className="text-sm text-ink-sub">{t.intro}</p>
       {state === 'enrollment_required' && !setup ? <Notice role="status">{t.required}</Notice> : null}
 
-      {state === 'enrolled' ? (
+      {state === 'unsupported' ? (
+        <Notice role="status">{t.unsupported}</Notice>
+      ) : state === 'enrolled' ? (
         <div className="space-y-3">
           <p className="text-sm text-ink">{t.enrolled(status.data.recoveryCodesLeft)}</p>
           <form onSubmit={submit(disable.mutate)} className="flex flex-wrap items-end gap-2">

@@ -1,4 +1,4 @@
-<!-- translated-from: docs/user-guide.md sha256:1ada9e2223a75b6fb3bd3c85a8949a09d3603a8ca50f861ba2bdccc0fef11756 -->
+<!-- translated-from: docs/user-guide.md sha256:d94c96d9c9f7ba4f31f5586f66fe77d30d216aced2c31c57fe68105ab1c5fc99 -->
 
 # User guide
 
@@ -13,6 +13,18 @@ What each screen does and how to work with it. The layout is the same three leve
 3. Your credentials are held in a server-side session; the browser only gets a cookie with a signed session ID. (Separately, the last server, username and database are remembered in `localStorage` — never the password. On a shared machine, bear in mind that the next person sees which server you connected to.) After `SESSION_TTL_MINUTES` of inactivity (30 by default) the session ends; connecting again returns you to the page you were on
 
 Your administrator restricts which hosts can be reached with `TSMYADMIN_ALLOWED_HOSTS`. Hosts outside that list cannot be connected to.
+
+### Two-factor authentication (one-time codes)
+
+The **Security** tab at server level adds a one-time code from an authenticator app to the account this session logged in as.
+
+1. **Enrol** shows the key, an `otpauth://` URI and ten recovery codes — **once, there and then**. Put the key or the URI into the app (no QR code is drawn: copy the URI, or type the key in)
+2. Print the recovery codes or keep them in a password manager. Each works once, and they cannot be looked up later
+3. Type the code the app is showing and **Confirm**. Nothing takes effect until that succeeds, so stopping half-way cannot lock you out
+
+From the next sign-in on, a code is asked for after the password. A recovery code goes in the same field. A code that has been accepted cannot be used again even within its own 30 seconds, so wait for the next one when signing in twice in a row.
+
+To remove it, type the app's current code in the same tab and choose **Remove**. **If the device is gone and the recovery codes with it, you cannot undo this yourself** — ask the administrator to delete the stored factor (see `docs/security.md`). Where the administrator requires it of everyone (`TSMYADMIN_REQUIRE_2FA`), nothing else can be used until enrolment is finished.
 
 ## Interface language
 
@@ -38,6 +50,7 @@ The language menu at the top right switches between English and 日本語 (the p
 | Variables | System variables (filtered by name) |
 | Processes | The connections the server has open. tsmyadmin's own carry a **tsmyadmin** badge. **Cancel query** stops the running statement only and leaves the connection, its transaction and its temporary tables alone (no confirmation). **Kill** closes the connection itself (the confirmation shows the user, database and running query) |
 | Users | The accounts, their privileges (as GRANT statements), **Create user**, **Change password** and **Drop** |
+| Security | Two-factor authentication for the account this session logged in as (below). The secret needs somewhere to live, so the tab is only shown where the deployment has a persistent session store |
 
 ## Database
 

@@ -123,7 +123,8 @@ describe('session', () => {
     const body = SessionStateSchema.parse(await res.json())
     expect(body).toEqual({
       savedQueries: 'browser',
-      secondFactor: 'none',
+      // The in-memory store keeps neither bookmarks nor a second factor, and says so rather than offering both.
+      secondFactor: 'unsupported',
       dialect: 'mysql',
       host: 'db',
       port: 3306,
@@ -1525,13 +1526,19 @@ describe('second factor', () => {
     }
   })
 
-  it('refuses enrolment where the store cannot keep it', async () => {
+  it('refuses enrolment where the store cannot keep it, and says so before it is offered', async () => {
     const h = harness()
     stores.push(h.store)
     await h.login()
     const res = await h.req('/api/second-factor/begin', { method: 'POST' })
     expect(res.status).toBe(400)
     expect(ApiErrorSchema.parse(await res.json()).code).toBe('UNSUPPORTED')
+    // Reported as a state of its own, so the screen can leave the tab out instead of offering what would fail.
+    expect(SecondFactorStatusSchema.parse(await (await h.req('/api/second-factor')).json())).toEqual({
+      state: 'unsupported',
+      recoveryCodesLeft: 0,
+    })
+    expect(SessionStateSchema.parse(await (await h.req('/api/session')).json()).secondFactor).toBe('unsupported')
   })
 })
 

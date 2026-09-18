@@ -1,4 +1,4 @@
-<!-- translated-from: docs/security.md sha256:1c8db054ee796a4995261a672b3986caa73410d77a5d6258f849c3452fc1a897 -->
+<!-- translated-from: docs/security.md sha256:569cfe5d88d0ce2a55263870be5c0c196c326ded20ebb14edccc42cc28861fd6 -->
 
 # Security model
 
@@ -17,6 +17,15 @@
 - Passwords appear in no API response (`GET /api/session`), no log, no account-operation preview or result, and no database error message — they are masked as `****`. A password typed straight into the SQL console (`IDENTIFIED BY '…'`, `PASSWORD '…'`, `SET PASSWORD … = '…'`) is masked before the audit log is written: comments are stripped first, and in a statement containing `IDENTIFIED` or `PASSWORD` everything from the first quote after the keyword to the last quote becomes a single mask, so no fragment survives even when the statement was passed as a string to `PREPARE` / `EXECUTE` / `format()` or contains a nested `''`. `*_PASSWORD` variants such as `SOURCE_PASSWORD`, a `password=…` inside a connection string, and an `AS 0x…` hash are covered too. (The summary is not meant to be re-run, so comments are lost.)
 - An unexpected internal error is returned to the client as `INTERNAL` and nothing else; the message and stack stay in the server log
 - Request body limits: 64 KB for `/api/session`, 16 MB for running SQL, `IMPORT_MAX_BYTES` (64 MB) for imports, and 1 MB for other JSON. Over the limit is `413 PAYLOAD_TOO_LARGE` (for an import, both a file past 64 MB and a multipart body past 65 MB)
+
+## Two-factor authentication (TOTP)
+
+- Each database account that logs in can add a one-time code from an authenticator app (the **Security** tab). The secret and the hashes of the recovery codes are encrypted with the same key as the credentials and kept in the session store (one row per account, unrelated to the saved-item cap), so `SESSION_STORE=sqlite` or `redis` is required
+- **What it protects**: in this product the database credentials *are* the identity, so whoever knows the password can also enrol first. A second factor helps once it is enrolled — against a password that leaks later (reuse, shoulder-surfing, a dump). `TSMYADMIN_REQUIRE_2FA=1` closes that window: an account that has not enrolled can do nothing until it has
+- A code that has been accepted cannot be used again, even within its own 30 seconds (the accepted step is recorded). Each recovery code works once. Code attempts count against the same per-IP budget as failed logins
+- Removing it takes a current code from the app, and so does replacing an enrolled secret with a new one — otherwise that check could simply be walked around
+- **A lost device**: there is no admin screen. Use a recovery code, or have the operator delete the stored factor (`DELETE FROM second_factor;` on `sqlite`, `DEL <prefix>:2fa:*` on `redis`). Rotating `SESSION_SECRET` wipes every enrolment, so that a row nobody can read never locks an account out
+- The code field is `autocomplete="one-time-code"` so a password manager can fill it. Codes are never stored or logged
 
 ## Restricting where it connects (SSRF and jump-host protection)
 
@@ -57,7 +66,7 @@ On a shared machine, run **Clear history** in the SQL tab and sign out before yo
 
 ## If `SESSION_SECRET` leaks
 
-1. Set a new value (`openssl rand -hex 32`) and restart. Startup detects that the key fingerprint changed, deletes every stored session row (logged as `session_store.reset`) and invalidates the cookie signatures, so everyone signs in again. (Step 1 is needed with `SESSION_STORE=memory` too, since it is also the signing key.)
+1. Set a new value (`openssl rand -hex 32`) and restart. Startup detects that the key fingerprint changed, deletes every stored session row (logged as `session_store.reset`) and invalidates the cookie signatures, so everyone signs in again (saved queries, export templates and every second-factor enrolment go with them). (Step 1 is needed with `SESSION_STORE=memory` too, since it is also the signing key.)
 2. If `data/sessions.sqlite` (and its `-wal` / `-shm` files) may have leaked at the same time, the credentials inside it can be decrypted: change the database passwords of every `user@host` recorded in `login.ok` during the exposure
 3. The logs never contain a raw session ID (`sessionId` is the first 16 characters of a hash). Even so, treat access to the logs as you treat access to the secrets
 
