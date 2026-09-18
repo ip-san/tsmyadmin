@@ -80,7 +80,7 @@ test.describe('second factor', () => {
       await signIn(page, name, password)
       await page.goto('/security')
       await page.getByRole('button', { name: '2 要素認証を登録する' }).click()
-      const secret = (await page.getByLabel('登録する鍵').textContent()) ?? ''
+      const secret = (await page.locator('#second-factor-secret').textContent()) ?? ''
       expect(secret).toMatch(/^[A-Z2-7]{32}$/)
       const recovery = ((await page.locator('pre').textContent()) ?? '').split('\n').filter(Boolean)
       expect(recovery).toHaveLength(10)
@@ -93,13 +93,17 @@ test.describe('second factor', () => {
       await page.getByRole('button', { name: '切断' }).click()
       await signIn(page, name, password)
       await expect(page.getByLabel('ワンタイムコード')).toBeVisible()
-      await page.getByLabel('ワンタイムコード').fill('000000')
+      // Each refusal is waited for by the field being emptied: the alert from the one before is still on screen,
+      // and typing the next code before the answer arrives would have it wiped by that answer.
+      const codeField = page.getByLabel('ワンタイムコード')
+      await codeField.fill('000000')
       await page.getByRole('button', { name: '接続' }).click()
-      await expect(page.getByRole('alert')).toBeVisible()
+      await expect(codeField).toHaveValue('')
+      await expect(page.getByRole('alert')).toContainText('コードが正しくありません')
       // The code that completed the enrolment is spent: it does not work a second time inside its 30 seconds.
-      await page.getByLabel('ワンタイムコード').fill(enrolCode)
+      await codeField.fill(enrolCode)
       await page.getByRole('button', { name: '接続' }).click()
-      await expect(page.getByRole('alert')).toBeVisible()
+      await expect(codeField).toHaveValue('')
 
       // A recovery code works once, and is then gone.
       await page.getByLabel('ワンタイムコード').fill(recovery[0] ?? '')
@@ -107,6 +111,12 @@ test.describe('second factor', () => {
       await expect(page.getByRole('heading', { name: 'サーバー', exact: true })).toBeVisible()
       await page.goto('/security')
       await expect(page.getByText(/回復用コード: 9 個/)).toBeVisible()
+
+      // A refused code is not an expired session: the page stays, with the reason on it.
+      await page.getByLabel('コード').fill('000000')
+      await page.getByRole('button', { name: '2 要素認証を解除する' }).click()
+      await expect(page.getByRole('alert')).toBeVisible()
+      await expect(page.getByRole('heading', { name: '2 要素認証' })).toBeVisible()
 
       // Removing it takes a code from the app, which means waiting for one the enrolment did not already spend.
       await page.waitForTimeout(30_000 - (Date.now() % 30_000) + 1_000)

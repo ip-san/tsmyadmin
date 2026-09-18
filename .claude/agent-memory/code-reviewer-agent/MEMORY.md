@@ -28,3 +28,29 @@
 
 - `packages/adapter/src/base.ts` の `joinPlan`（links.find、Array.prototype.find は最初にマッチしたリンクを採用）は、2 テーブル間に FK が複数本ある場合（例: `orders.created_by` と `orders.updated_by` が両方 `users.id` を指す）にどちらか一方だけを無言で選ぶ。選択は `describeTable` が返す `foreignKeys` の順序（MySQL: `ORDER BY CONSTRAINT_NAME`、PostgreSQL: `ORDER BY con.conname`）に依存し、命名規則が方言間で異なれば同じ論理スキーマでも MySQL と PostgreSQL で違う FK が選ばれ得る（未検証だが命名規則の違いから見て現実的な差異）。エラーにはならず、テスト（`join-plan.test.ts`、conformance の `buildQuery`）にもこのケースがない。自己参照 FK（`fk.refTable !== from` で除外）は別途安全に弾かれている。
 - 次回このあたりを触ったら、複数 FK 間の曖昧性を「エラーにする」か「選択できるようにする」か方針が変わっていないか確認する。
+
+## web: aria-label を「値そのもの」の入れ物に使う誤り（SecondFactorPage）
+
+- `apps/web/src/features/auth/SecondFactorPage.tsx:75` の `<p aria-label={t.secretLabel}>{setup.secret}</p>` は、`<p>`（暗黙ロール `paragraph`）に `aria-label` を付けている。ARIA 1.2 では `paragraph` は Name From: prohibited で、axe-core は `aria-prohibited-attr` として検出しうる。実害は AT/ブラウザの組み合わせ依存（Chrome は label をアクセシブルネームとして露出するなど挙動が割れる）なので「読み上げられない可能性がある」という言い方に留めること（「絶対読めない」と断定しない）。
+- この codebase には既に正しいパターンがある: `apps/web/src/components/ui/Feedback.tsx` の `Badge`（`title` を hover 用に残しつつ `sr-only` の `<span>` で説明を別出しし、可視テキストを潰さない）。値そのものを見せたい要素には `aria-label` ではなく `<span className="sr-only">ラベル: </span>` + 可視テキストを使うべき。次に類似コード（秘密鍵・トークン・URI など「値がそのままコンテンツ」なテキスト）を見たら同じ観点でチェックする。
+
+## web: `locale.sql.copied` を SQL 結果コピー以外で使い回す誤り
+
+- `SecondFactorPage.tsx:97` が回復用コードのコピー成功表示に `locale.sql.copied` を再利用しているが、その文言は ja/en とも「クリップボードにコピーしました（**タブ区切り**）」/ "Copied to the clipboard (**tab-separated**)"（`ja.ts:413`, `en.ts:418`）で、SQL 結果グリッド専用の説明。回復用コードは改行区切り（`join('\n')`）でタブ区切りではなく、文脈も無関係。コピー成功文言を使い回すときは「対象データの形式に言及していないか」を必ず確認する。
+- 同じファイルはコピー失敗時のフィードバックも欠落している（`copyText(...).then(() => setCopied(true), () => setCopied(false))` で失敗時は成功前と同じ空表示になる）。対照として `apps/web/src/features/sql/ResultActions.tsx`（`copied: 'done' | 'failed' | null` の3値 + `locale.sql.copyFailed`）が正しい既存パターン。コピー機能を新規に足すレビューでは必ず ResultActions.tsx と比較する。
+
+## web: 状態遷移でフォーカスされていた要素が unmount されると focus が body に落ちる（フィードバック無音化）
+
+- `SecondFactorPage.tsx` は `begin`/`confirm`/`disable` の各ミューテーション成功時に、直前までフォーカスがあったボタン（Enrol ボタン等）を含むブランチごと unmount して別の分岐に切り替える。結果は静的な `<p>`（`t.enrolled(...)` 等）で、live region でも見出しへのフォーカス移動でもないため、フォーカスは `<body>` に落ち、成功も内容の変化もスクリーンリーダーに一切アナウンスされない（disable 成功時は「解除できました」に相当する文言自体が存在しない）。
+- `autoFocus` を新しい入力欄に付けるのは必ずしも正しい修正ではない（例: confirm 前は秘密鍵・回復用コードを先に読む必要があるので、コード入力欄に autoFocus すると読むべき内容を飛ばしてしまう）。正しい修正は「一時的な成功 Notice(role="status") を出す」+「見出し等に `tabIndex={-1}` を振ってフォーカスを移す」の組み合わせ。LoginForm.tsx の `codeNeeded` → `autoFocus` はボタンが unmount されない別パターンなので単純に真似ない。
+- レビュー時のチェックリスト: ミューテーション成功時に (1) それまでフォーカスがあった要素が unmount されるか、(2) 新しい分岐に成功を示す live region があるか、を必ず両方確認する。片方だけ見ると見逃す。
+
+## e2e: `/security`（2FA ページ）が a11y スイート未収載
+
+- `e2e/a11y.spec.ts` は login / server / database / browse / structure / SQL / insert / events / operations 等を網羅しているが `/security` への `scan()` 呼び出しが無い。2FA 機能追加時に axe ゲートへの追加を忘れた状態が確認できた（2026-09 時点）。2FA 関連の PR をレビューするときは a11y.spec.ts への追加有無を必ず確認する。
+
+## web: main.tsx の onUnauthorized は「認証切れ」以外の 401 も無差別に握り潰す
+
+- `apps/web/src/main.tsx:17-22` の `onUnauthorized` は `error.status !== 401` しか見ておらず、`ApiErrorCode` は見ていない。コメント（`main.tsx:12-16`）は `UNAUTHENTICATED` / `AUTH_FAILED` を想定しているが、`apps/api/src/lib/errors.ts` の `STATUS_BY_CODE` で 401 にマップされる**新しいコード**（例: `SECOND_FACTOR_REQUIRED` / `SECOND_FACTOR_INVALID`）は、それが `/login` 以外の**認証済み画面**から飛んだ場合にも同じ扱い（セッションを null にして `/login?expired=true` へ強制遷移）を受ける。
+- 2FA 実装（a595325〜9d336f6）で実際に発生: `/security` でのコード確認・解除ミス、および `TSMYADMIN_REQUIRE_2FA` 下で未登録アカウントが `/` 等の保護ルートに触れた場合の両方が、この無差別処理でログイン画面に飛ばされる。後者は `DbTree`（`_app.tsx` のレイアウトに常駐、`enabled` 条件なしで `databasesQuery` を叩く）が `/security` 自体でも発火するため、機能が UI 経由で到達不能になる重大度。
+- 教訓: `STATUS_BY_CODE` に 401 を返す新コードを足すとき（今後 WebAuthn 等の別要因を足す場合も含む）は、それが「未認証（グローバルにログアウトしてよい）」なのか「認証済みだが追加の手続きが要る（ログアウトしてはいけない）」なのかを `onUnauthorized` 側で分岐しているか必ず確認する。次回もこのファイルは「404 相当の分岐漏れ」が起きやすい場所として要チェック。

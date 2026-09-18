@@ -1,4 +1,4 @@
-import type { CountKind, ImportReason, ImportWarning } from '@tsmyadmin/shared'
+import type { ApiErrorCode, CountKind, ImportReason, ImportWarning } from '@tsmyadmin/shared'
 
 /**
  * All user-facing Japanese strings, and the shape every other locale must have (`Locale`). Components must
@@ -748,9 +748,14 @@ export const ja = {
     recoveryHint:
       '認証アプリを失ったときにログインするためのコードです。今だけ表示されます。安全な場所に保管してください（1 つにつき 1 回だけ使えます）。',
     copyRecovery: '回復用コードをコピー',
+    copied: 'コピーしました（1 行に 1 つ）',
+    copyFailed: 'コピーできませんでした。表示されているコードを書き写してください',
+    enrolledNotice: '2 要素認証を有効にしました。次回の接続からコードが必要です',
+    disabledNotice: '2 要素認証を解除しました',
     codeLabel: 'コード',
     confirmHint: '認証アプリに表示されている 6 桁',
     confirm: '登録を完了する',
+    restart: 'やり直す',
     enrolled: (left: number) => `登録済みです（未使用の回復用コード: ${left.toLocaleString('ja-JP')} 個）`,
     disableHint: '解除には認証アプリの 6 桁が必要です（回復用コードでは解除できません）',
     disable: '2 要素認証を解除する',
@@ -891,11 +896,13 @@ export const ja = {
     HOST_NOT_ALLOWED: 'この接続先は管理者により許可されていません',
     INSECURE_TRANSPORT: 'HTTPS で接続してください（HTTP ではログイン状態を保持できません）',
     PERMISSION_DENIED: 'この操作に必要な権限がデータベースユーザーにありません',
+    SECOND_FACTOR_REQUIRED: 'ワンタイムコードを入力してください',
+    SECOND_FACTOR_INVALID: 'コードが正しくありません（使用済み・期限切れを含みます）',
     RATE_LIMITED: '試行回数が多すぎます。しばらく待ってから再度お試しください',
     PAYLOAD_TOO_LARGE: '送信データが大きすぎます',
     INTERNAL: '内部エラーが発生しました',
     NETWORK: 'サーバーと通信できません。ネットワーク接続を確認してください',
-  },
+  } satisfies Record<ApiErrorCode | 'NETWORK', string>,
 } as const
 
 /**

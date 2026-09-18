@@ -43,6 +43,12 @@ describe('errorMessage', () => {
     )
   })
 
+  it('names a refused one-time code instead of calling it an internal error', () => {
+    expect(errorMessage(new ApiError(401, { code: 'SECOND_FACTOR_INVALID', message: 'That code is not valid' }))).toBe(
+      'コードが正しくありません（使用済み・期限切れを含みます）'
+    )
+  })
+
   it('maps API error codes to localized text with detail', () => {
     expect(errorMessage({ code: 'AUTH_FAILED', message: 'x', detail: 'Access denied' })).toBe(
       '認証に失敗しました: Access denied'

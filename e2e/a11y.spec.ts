@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect } from '@playwright/test'
-import { login, TARGETS, tableUrl, test } from './helpers.ts'
+import { login, PERSISTENT_BASE_URL, TARGETS, tableUrl, test } from './helpers.ts'
 
 async function scan(page: Parameters<typeof login>[0]) {
   const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()
@@ -35,6 +35,22 @@ test.describe('accessibility (axe-core, dark theme)', () => {
     await page.goto(tableUrl(t, 'users', '/operations'))
     await page.getByRole('button', { name: 'テーブルを削除…' }).click()
     await page.getByRole('dialog').getByLabel('SQL').waitFor()
+    await scan(page)
+  })
+})
+
+test.describe('accessibility (axe-core, two-factor)', () => {
+  // The page only offers enrolment where the session store can keep a secret.
+  test.use({ baseURL: PERSISTENT_BASE_URL })
+
+  test('security tab, before and during enrolment', async ({ page }) => {
+    const t = TARGETS[0]
+    if (!t) throw new Error('no target')
+    await login(page, t)
+    await page.goto('/security')
+    await page.getByRole('button', { name: '2 要素認証を登録する' }).click()
+    // Nothing is kept until a code confirms it, so the shared fixture account is left as it was.
+    await page.locator('#second-factor-secret').waitFor()
     await scan(page)
   })
 })

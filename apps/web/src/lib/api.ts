@@ -51,3 +51,13 @@ export async function unwrap<T>(
 export function isApiError(err: unknown, code?: ApiErrorCode): err is ApiError {
   return err instanceof ApiError && (code === undefined || err.code === code)
 }
+
+/**
+ * Whether a failure means the session is gone and the user has to sign in again. A one-time code that was
+ * refused, or asked for, also comes back as 401 — the form that asked for it shows that itself, and throwing the
+ * user out to the login page would end a session that is perfectly alive.
+ */
+export function sessionExpired(err: unknown): boolean {
+  if (!isApiError(err) || err.status !== 401) return false
+  return err.code !== 'SECOND_FACTOR_INVALID' && err.code !== 'SECOND_FACTOR_REQUIRED'
+}

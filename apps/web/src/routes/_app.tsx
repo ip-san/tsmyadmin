@@ -1,4 +1,4 @@
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Outlet, redirect, useNavigate, useParams } from '@tanstack/react-router'
 import { z } from 'zod'
 import { AppShell } from '@/components/layout/AppShell.tsx'
@@ -11,13 +11,19 @@ export const Route = createFileRoute('/_app')({
     const session = await context.queryClient.ensureQueryData(sessionQuery)
     // Deep links survive the login round trip; the top page needs no redirect param.
     if (!session) throw redirect({ to: '/login', search: location.href === '/' ? {} : { redirect: location.href } })
+    // An account that must enrol can do nothing else: every other page would only show the API refusing it.
+    if (session.secondFactor === 'enrollment_required' && location.pathname !== '/security') {
+      throw redirect({ to: '/security' })
+    }
     return { session }
   },
   component: AppLayout,
 })
 
 function AppLayout() {
-  const { session } = Route.useRouteContext()
+  const { session: atLoad } = Route.useRouteContext()
+  // The live copy: finishing the enrolment updates it, and with it whether the tree may be loaded.
+  const session = useQuery(sessionQuery).data ?? atLoad
   const params = useParams({ strict: false })
   const queryClient = useQueryClient()
   const navigate = useNavigate()
@@ -27,7 +33,15 @@ function AppLayout() {
     await navigate({ to: '/login' })
   }
   return (
-    <AppShell session={session} sidebar={<DbTree dialect={session.dialect} activeDb={params.db} />} onLogout={logout}>
+    <AppShell
+      session={session}
+      sidebar={
+        session.secondFactor === 'enrollment_required' ? null : (
+          <DbTree dialect={session.dialect} activeDb={params.db} />
+        )
+      }
+      onLogout={logout}
+    >
       <Outlet />
     </AppShell>
   )
