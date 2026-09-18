@@ -998,6 +998,26 @@ export const en = {
       orReplace: 'Replace a view of the same name (OR REPLACE)',
     },
   },
+  zoom: {
+    title: 'Zoom search',
+    hint: 'Pick two numeric columns to plot the rows matching the search. Pick a point to open its row.',
+    x: 'Horizontal axis',
+    y: 'Vertical axis',
+    plot: 'Show scatter plot',
+    summary: (points: number, skipped: number) =>
+      skipped > 0
+        ? `${points.toLocaleString('en-US')} points (${skipped.toLocaleString('en-US')} rows left out: NULL or not a number)`
+        : `${points.toLocaleString('en-US')} points`,
+    clipped: (max: number) => `Only the first ${max.toLocaleString('en-US')} rows are drawn. Narrow the search.`,
+    caption: (x: string, y: string) => `Scatter plot of ${x} and ${y}`,
+    asTable: (n: number) => `Show the points as a table (${n.toLocaleString('en-US')})`,
+    pick: 'Pick',
+    pickPoint: (x: string, xv: number, y: string, yv: number) =>
+      `Pick the row with ${x} = ${xv.toLocaleString('en-US')}, ${y} = ${yv.toLocaleString('en-US')}`,
+    picked: 'Picked row',
+    open: 'Open this row in Browse',
+    noKey: 'This table has no primary key, so the row cannot be opened.',
+  },
   replace: {
     title: 'Find and replace',
     hint: 'Replaces a text in one column, in every row that holds it (case-sensitive). The SQL is shown before it runs.',

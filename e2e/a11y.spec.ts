@@ -142,6 +142,17 @@ for (const t of TARGETS) {
       await page.goto(t.schema ? `/db/${t.database}/designer?schema=${t.schema}` : `/db/${t.database}/designer`)
       await page.getByRole('table', { name: '外部キー' }).waitFor()
       await scan(page)
+      // Zoom search with a plot, a picked row and the table of points open.
+      await page.goto(tableUrl(t, 'users', '/search'))
+      const zoom = page.getByRole('region', { name: 'ズーム検索' })
+      await zoom.getByRole('button', { name: '散布図を表示' }).click()
+      await zoom.getByText(/点を表で見る/).click()
+      await zoom
+        .getByRole('button', { name: /の行を選ぶ$/ })
+        .first()
+        .click()
+      await zoom.getByRole('link', { name: 'この行を表示タブで開く' }).waitFor()
+      await scan(page)
     })
 
     test('server status, processes and users screens', async ({ page }) => {

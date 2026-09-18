@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { BrowseSearchSchema, browseOptionsFromSearch } from '@/features/browse/browse-search.ts'
 import { ReplaceForm } from '@/features/rows/ReplaceForm.tsx'
 import { SearchForm } from '@/features/rows/SearchForm.tsx'
+import { ZoomSearch } from '@/features/rows/ZoomSearch.tsx'
 
 export const Route = createFileRoute('/_app/db/$db/table/$table/search')({
   validateSearch: z.object({ schema: z.string().optional(), filters: z.string().optional() }),
@@ -32,6 +33,7 @@ function Search() {
           })
         }
       />
+      <ZoomSearch tableRef={{ db, schema, table }} filters={initial} />
       <ReplaceForm tableRef={{ db, schema, table }} />
     </>
   )

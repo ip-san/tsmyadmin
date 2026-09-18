@@ -60,11 +60,20 @@ export function chartData(rows: readonly Cell[][], x: number, ys: readonly numbe
   }
 }
 
-/** Axis bounds and ticks at round steps (1, 2, 5 × 10ⁿ), always including zero so bars start from the axis. */
-export function niceScale(values: readonly number[], tickCount = 5) {
-  const lo = Math.min(0, ...values)
-  const hi = Math.max(0, ...values)
-  if (lo === hi) return { min: 0, max: 1, ticks: [0, 1] }
+/**
+ * Axis bounds and ticks at round steps (1, 2, 5 × 10ⁿ). Bars need zero on the axis so they start from it; a
+ * scatter plot passes `includeZero: false`, or a cluster around 1,000,000 would be drawn as one dot.
+ */
+export function niceScale(
+  values: readonly number[],
+  tickCount = 5,
+  { includeZero = true } = {}
+): { min: number; max: number; ticks: number[] } {
+  const lo = includeZero ? Math.min(0, ...values) : Math.min(...values)
+  const hi = includeZero ? Math.max(0, ...values) : Math.max(...values)
+  if (values.length === 0 && !includeZero) return { min: 0, max: 1, ticks: [0, 1] }
+  if (lo === hi)
+    return lo === 0 ? { min: 0, max: 1, ticks: [0, 1] } : niceScale([lo - 1, hi + 1], tickCount, { includeZero })
   const rough = (hi - lo) / tickCount
   const magnitude = 10 ** Math.floor(Math.log10(rough))
   const step = ([1, 2, 5, 10].find((m) => m * magnitude >= rough) ?? 10) * magnitude
@@ -74,4 +83,24 @@ export function niceScale(values: readonly number[], tickCount = 5) {
   // Integer steps from min avoid accumulating float error (0.1 + 0.2).
   for (let i = 0; min + i * step <= max + step / 1e6; i++) ticks.push(Number((min + i * step).toPrecision(12)))
   return { min, max, ticks }
+}
+
+/** One row as a point of a scatter plot: its position and where it came from in the page. */
+interface ScatterPoint {
+  row: number
+  x: number
+  y: number
+}
+
+/** Rows with a number in both columns, the first MAX_POINTS of them; the others cannot be placed. */
+export function scatterPoints(rows: readonly Cell[][], x: number, y: number) {
+  const points: ScatterPoint[] = []
+  let skipped = 0
+  rows.forEach((row, i) => {
+    const px = toNumber(row[x])
+    const py = toNumber(row[y])
+    if (px === null || py === null) skipped++
+    else if (points.length < MAX_POINTS) points.push({ row: i, x: px, y: py })
+  })
+  return { points, skipped }
 }

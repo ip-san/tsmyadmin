@@ -2,7 +2,7 @@ import type { ResultSet } from '@tsmyadmin/shared'
 import { useId, useMemo, useState } from 'react'
 import { Field, Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
-import { chartData, MAX_POINTS, niceScale, numericColumns } from './chart-data.ts'
+import { chartData, MAX_POINTS, niceScale, numericColumns } from '@/lib/chart-data.ts'
 
 const t = locale.sql.chart
 /**

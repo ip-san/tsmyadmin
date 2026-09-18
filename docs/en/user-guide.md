@@ -1,4 +1,4 @@
-<!-- translated-from: docs/user-guide.md sha256:61731c89523a1eb647a8c67ca6eaeabef4868ce025b679fd2f08e0385cc02617 -->
+<!-- translated-from: docs/user-guide.md sha256:c2fb9f8d19218fba059eddce2c0cb219d1e01750769d54490485e105f06c8d5f -->
 
 # User guide
 
@@ -127,7 +127,7 @@ Every run is autocommitted. A script that ends with a transaction still open is 
 
 | Tab | Contents |
 |---|---|
-| Search | Combines per-column conditions (=, ≠, <, >, *contains*, *starts with* (no wildcards needed), LIKE, IS NULL …). The result carries over to the Browse tab **Find and replace** below replaces a text in one text column, in every row that holds it (case-sensitive; only rows whose value actually changes are updated; the SQL is shown first, and it cannot be undone) |
+| Search | Combines per-column conditions (=, ≠, <, >, *contains*, *starts with* (no wildcards needed), LIKE, IS NULL …). The result carries over to the Browse tab. **Zoom search** below plots two numeric columns of the matching rows (the first 500) as a scatter plot; picking a point opens its row (tables with a primary key). **Find and replace** replaces a text in one text column, in every row that holds it (case-sensitive; only rows whose value actually changes are updated; the SQL is shown first, and it cannot be undone) |
 | Insert | Inserts one row from a form, with **Use default** and **NULL** per column (the default is shown as the placeholder). The screen stays open afterwards so you can enter the next row (**Back to Browse** returns to the list) |
 | Export | Downloads this table as SQL / CSV / JSON (structure and/or data) |
 | Import | Loads a CSV into this table |

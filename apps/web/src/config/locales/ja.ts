@@ -984,6 +984,26 @@ export const ja = {
       orReplace: '同名のビューがあれば置き換える（OR REPLACE）',
     },
   },
+  zoom: {
+    title: 'ズーム検索',
+    hint: '数値のカラムを 2 つ選ぶと、検索条件に合う行を散布図にします。点を選ぶとその行を開けます。',
+    x: '横軸',
+    y: '縦軸',
+    plot: '散布図を表示',
+    summary: (points: number, skipped: number) =>
+      skipped > 0
+        ? `${points.toLocaleString('ja-JP')} 点（値が NULL か数値でない ${skipped.toLocaleString('ja-JP')} 行は除外）`
+        : `${points.toLocaleString('ja-JP')} 点`,
+    clipped: (max: number) => `先頭 ${max.toLocaleString('ja-JP')} 行だけを描いています。条件で絞り込んでください。`,
+    caption: (x: string, y: string) => `${x} と ${y} の散布図`,
+    asTable: (n: number) => `点を表で見る（${n.toLocaleString('ja-JP')} 点）`,
+    pick: '選ぶ',
+    pickPoint: (x: string, xv: number, y: string, yv: number) =>
+      `${x} = ${xv.toLocaleString('ja-JP')}、${y} = ${yv.toLocaleString('ja-JP')} の行を選ぶ`,
+    picked: '選んだ行',
+    open: 'この行を表示タブで開く',
+    noKey: 'このテーブルには主キーがないため、行を開けません。',
+  },
   replace: {
     title: '検索して置換',
     hint: 'カラム内の文字列を、一致するすべての行で置き換えます（大文字と小文字は区別します）。実行前に SQL を確認できます。',
