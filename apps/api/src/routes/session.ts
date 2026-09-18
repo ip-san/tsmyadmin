@@ -28,6 +28,7 @@ import { validate } from '../lib/validate.ts'
 const HOST_ACL_CODES = new Set(['ER_HOST_NOT_PRIVILEGED', 'ER_HOST_IS_BLOCKED'])
 
 import { z } from 'zod'
+import { qrRows } from '../lib/qr.ts'
 import { hashRecoveryCode, newRecoveryCodes, newSecret, otpauthUri, verifyCode } from '../lib/totp.ts'
 import {
   type AppEnv,
@@ -290,11 +291,8 @@ export function sessionRoutes(cfg: SessionConfig, deps: SessionRouteDeps) {
         for (const [id, started] of pending) if (deps.now() - started.at > ENROLMENT_WINDOW_MS) pending.delete(id)
         pending.set(session.id, { secret, recoveryCodes, at: deps.now() })
         const info = sessionInfo(session)
-        return c.json({
-          secret,
-          uri: otpauthUri(secret, `${info.user}@${info.host}:${info.port}`),
-          recoveryCodes,
-        })
+        const uri = otpauthUri(secret, `${info.user}@${info.host}:${info.port}`)
+        return c.json({ secret, uri, recoveryCodes, qr: qrRows(uri) })
       })
       .post(
         '/second-factor/confirm',

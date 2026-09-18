@@ -20,6 +20,7 @@ vi.mock('@/lib/queries.ts', () => ({
       secret: 'A'.repeat(32),
       uri: 'otpauth://totp/tsmyadmin:root@db:3306?secret=AAAA',
       recoveryCodes: ['AAAAABBBBB'],
+      qr: ['101', '010', '101'],
     }),
     confirmSecondFactor: async () => ({ state: 'enrolled', recoveryCodesLeft: 1 }),
     disableSecondFactor: async () => ({ state: 'none', recoveryCodesLeft: 0 }),
@@ -48,6 +49,11 @@ describe('SecondFactorPage', () => {
     renderPage('none')
     await userEvent.click(await screen.findByRole('button', { name: '2 要素認証を登録する' }))
     expect(await screen.findByText('A'.repeat(32))).toBeInTheDocument()
+    // Drawn from the rows the server sent: one square per dark module, nothing inserted as markup.
+    const qr = screen.getByRole('img', { name: '認証アプリで読み取る QR コード' })
+    expect(qr.querySelector('path')?.getAttribute('d')).toBe(
+      'M0 0h1v1h-1zM2 0h1v1h-1zM1 1h1v1h-1zM0 2h1v1h-1zM2 2h1v1h-1z'
+    )
     await userEvent.click(screen.getByRole('button', { name: 'やり直す' }))
     expect(await screen.findByRole('button', { name: '2 要素認証を登録する' })).toBeInTheDocument()
     expect(screen.queryByText('A'.repeat(32))).not.toBeInTheDocument()

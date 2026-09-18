@@ -753,7 +753,8 @@ export const en = {
     unsupported:
       'Two-factor authentication is not available in this deployment: the secret needs somewhere to live, so run it with a persistent session store (SESSION_STORE=sqlite or redis).',
     enrol: 'Enrol',
-    scan: 'Add this key (or the URI below) to your authenticator app, then enter the six digits it shows.',
+    scan: 'Scan the QR code with your authenticator app, or enter the key (or the URI), then type the six digits it shows.',
+    qrLabel: 'QR code for your authenticator app',
     secretLabel: 'Key to enrol',
     recoveryTitle: 'Recovery codes',
     recoveryHint:

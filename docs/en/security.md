@@ -1,4 +1,4 @@
-<!-- translated-from: docs/security.md sha256:250bafeea95fa940c82c9d8617e31d49fa38c98ecd0bd0cddf54530ff9d88ff9 -->
+<!-- translated-from: docs/security.md sha256:4cddf2655276656849f8c5bd960520dac02e6b8f6c81e8473ab5070e36886c8f -->
 
 # Security model
 
@@ -25,6 +25,7 @@
 - A code that has been accepted cannot be used again, even within its own 30 seconds (the accepted step is recorded). Each recovery code works once. Code attempts count against the same per-IP budget as failed logins
 - Removing it takes a current code from the app, and so does replacing an enrolled secret with a new one — otherwise that check could simply be walked around
 - **A lost device**: use a recovery code, or reset it from the **Users** tab as an account that could change that account's password (MySQL: `CREATE USER`, plus `SYSTEM_USER` on MySQL 8; PostgreSQL: a superuser, or `CREATEROLE` over that role). It only reaches accounts the database already lets it take over, so nothing is weakened. An account cannot reset its own there (that goes through the security tab, with a code). Each reset is logged as `second_factor.reset`, and it reaches accounts enrolled through the same address (host name and port). As a last resort the stored factors can be deleted directly (`DELETE FROM second_factor;` on `sqlite`, `DEL <prefix>:2fa:*` on `redis` — that removes everyone's). Rotating `SESSION_SECRET` wipes every enrolment, so that a row nobody can read never locks an account out
+- The QR code shown at enrolment is made inside the server, and the page only draws its grid of modules as shapes: the secret never goes to an outside QR service
 - The code field is `autocomplete="one-time-code"` so a password manager can fill it. Codes are never stored or logged
 
 ## Restricting where it connects (SSRF and jump-host protection)

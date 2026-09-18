@@ -749,7 +749,8 @@ export const ja = {
     unsupported:
       'この配備では 2 要素認証を使えません。秘密鍵の保存先が必要なため、永続セッションストア（SESSION_STORE=sqlite / redis）で動かしてください。',
     enrol: '2 要素認証を登録する',
-    scan: '認証アプリでこの鍵（または下の URI）を登録し、表示された 6 桁を入力してください。',
+    scan: '認証アプリで QR コードを読み取るか、鍵（または URI）を入力し、表示された 6 桁を入力してください。',
+    qrLabel: '認証アプリで読み取る QR コード',
     secretLabel: '登録する鍵',
     recoveryTitle: '回復用コード',
     recoveryHint:

@@ -7,6 +7,7 @@ import { Field, Input } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
 import { copyText } from '@/lib/clipboard.ts'
 import { mutations, secondFactorQuery, sessionQuery } from '@/lib/queries.ts'
+import { QrCode } from './QrCode.tsx'
 
 const t = locale.secondFactor
 
@@ -89,6 +90,7 @@ export function SecondFactorPage() {
       ) : setup ? (
         <div className="space-y-3">
           <p className="text-sm text-ink">{t.scan}</p>
+          <QrCode rows={setup.qr} label={t.qrLabel} />
           <p className="text-sm text-ink">
             <span className="sr-only">{t.secretLabel}: </span>
             <span id="second-factor-secret" className="font-mono">

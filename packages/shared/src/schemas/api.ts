@@ -169,6 +169,8 @@ export const SecondFactorSetupSchema = z.object({
   /** `otpauth://` URI for a QR code or a paste into the app. */
   uri: z.string().min(1),
   recoveryCodes: z.array(z.string().min(1)),
+  /** The URI as a QR code: one string per row, '1' for a dark module, without the quiet zone. */
+  qr: z.array(z.string().regex(/^[01]+$/)),
 })
 export type SecondFactorSetup = z.infer<typeof SecondFactorSetupSchema>
 

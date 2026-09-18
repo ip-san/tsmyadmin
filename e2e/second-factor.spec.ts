@@ -73,10 +73,11 @@ test.describe('second factor', () => {
       await page.getByRole('button', { name: '2 要素認証を登録する' }).click()
       const secret = (await page.locator('#second-factor-secret').textContent()) ?? ''
       expect(secret).toMatch(/^[A-Z2-7]{32}$/)
+      await expect(page.getByRole('img', { name: '認証アプリで読み取る QR コード' })).toBeVisible()
       const recovery = ((await page.locator('pre').textContent()) ?? '').split('\n').filter(Boolean)
       expect(recovery).toHaveLength(10)
       const enrolCode = totp(secret)
-      await page.getByLabel('コード').fill(enrolCode)
+      await page.getByLabel('コード', { exact: true }).fill(enrolCode)
       await page.getByRole('button', { name: '登録を完了する' }).click()
       await expect(page.getByText(/登録済みです/)).toBeVisible()
 
@@ -104,14 +105,14 @@ test.describe('second factor', () => {
       await expect(page.getByText(/回復用コード: 9 個/)).toBeVisible()
 
       // A refused code is not an expired session: the page stays, with the reason on it.
-      await page.getByLabel('コード').fill('000000')
+      await page.getByLabel('コード', { exact: true }).fill('000000')
       await page.getByRole('button', { name: '2 要素認証を解除する' }).click()
       await expect(page.getByRole('alert')).toBeVisible()
       await expect(page.getByRole('heading', { name: '2 要素認証' })).toBeVisible()
 
       // Removing it takes a code from the app, which means waiting for one the enrolment did not already spend.
       await page.waitForTimeout(30_000 - (Date.now() % 30_000) + 1_000)
-      await page.getByLabel('コード').fill(totp(secret))
+      await page.getByLabel('コード', { exact: true }).fill(totp(secret))
       await page.getByRole('button', { name: '2 要素認証を解除する' }).click()
       await expect(page.getByRole('button', { name: '2 要素認証を登録する' })).toBeVisible()
 
@@ -133,7 +134,7 @@ test.describe('second factor', () => {
       await page.goto('/security')
       await page.getByRole('button', { name: '2 要素認証を登録する' }).click()
       const secret = (await page.locator('#second-factor-secret').textContent()) ?? ''
-      await page.getByLabel('コード').fill(totp(secret))
+      await page.getByLabel('コード', { exact: true }).fill(totp(secret))
       await page.getByRole('button', { name: '登録を完了する' }).click()
       await expect(page.getByText(/登録済みです/)).toBeVisible()
       await page.getByRole('button', { name: '切断' }).click()

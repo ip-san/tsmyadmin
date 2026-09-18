@@ -1,4 +1,4 @@
-<!-- translated-from: docs/user-guide.md sha256:458921a8a78934ddba3b8ec121ee2f3ae867e76ee871e7022fbde81f8d14101b -->
+<!-- translated-from: docs/user-guide.md sha256:5b77a9d533cc71495272a850b6a16977fa971806dcb9e3f146c60c4899b8be02 -->
 
 # User guide
 
@@ -18,7 +18,7 @@ Your administrator restricts which hosts can be reached with `TSMYADMIN_ALLOWED_
 
 The **Security** tab at server level adds a one-time code from an authenticator app to the account this session logged in as.
 
-1. **Enrol** shows the key, an `otpauth://` URI and ten recovery codes — **once, there and then**. Put the key or the URI into the app (no QR code is drawn: copy the URI, or type the key in)
+1. **Enrol** shows a QR code, the key, an `otpauth://` URI and ten recovery codes — **once, there and then**. Scan the QR code with the app (where it cannot scan, type the key in or paste the URI)
 2. Print the recovery codes or keep them in a password manager. Each works once, and they cannot be looked up later
 3. Type the code the app is showing and **Confirm**. Nothing takes effect until that succeeds, so stopping half-way cannot lock you out
 
