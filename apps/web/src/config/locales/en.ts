@@ -211,6 +211,7 @@ export const en = {
     diagram: 'Diagram of tables and foreign keys (the same as the Foreign keys table below)',
     boxLabel: (table: string) => `Table ${table} (arrow keys move it)`,
     resetLayout: 'Reset layout',
+    fromTable: 'Table the key belongs to',
     relations: 'Foreign keys',
     noRelations: 'This database has no foreign keys',
     noTables: 'This database has no tables',

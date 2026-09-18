@@ -9,6 +9,7 @@ import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
 import { readPreference, removePreference, writePreference } from '@/lib/preferences.ts'
 import { foreignKeysQuery, tablesQuery } from '@/lib/queries.ts'
+import { DesignerAddForeignKey } from './DesignerAddForeignKey.tsx'
 import { DesignerDiagram, relationKey } from './DesignerDiagram.tsx'
 import { autoLayout, drawnRelations, type Point } from './designer-layout.ts'
 
@@ -53,9 +54,10 @@ export function Designer({ db, schema }: { db: string; schema?: string | undefin
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="text-sm font-semibold text-ink">{t.title}</h2>
         <p className="text-xs text-ink-sub">{t.hint}</p>
+        <div className="ml-auto" />
+        <DesignerAddForeignKey db={db} schema={schema} tables={names} />
         <Button
           size="sm"
-          className="ml-auto"
           disabled={Object.keys(saved).length === 0}
           onClick={() => {
             removePreference(storageKey)

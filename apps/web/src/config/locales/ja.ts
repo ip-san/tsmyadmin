@@ -207,6 +207,7 @@ export const ja = {
     diagram: 'テーブルと外部キーの図（下の「外部キー」の表と同じ内容）',
     boxLabel: (table: string) => `テーブル ${table}（矢印キーで移動）`,
     resetLayout: '配置を元に戻す',
+    fromTable: '外部キーを付けるテーブル',
     relations: '外部キー',
     noRelations: 'このデータベースに外部キーはありません',
     noTables: 'このデータベースにテーブルはありません',
