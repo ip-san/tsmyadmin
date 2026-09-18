@@ -7,11 +7,14 @@ const aad = rowAad('sessions', 'row-1')
 describe('session crypto', () => {
   it('round-trips and never reuses an IV', () => {
     const key = deriveSessionKey('a-secret')
-    const a = seal(key, '{"password":"pw"}', aad)
-    const b = seal(key, '{"password":"pw"}', aad)
-    expect(open(key, a, aad)).toBe('{"password":"pw"}')
+    // Long enough that random ciphertext cannot hold it by chance (a 2-byte password did, now and then).
+    const password = 'correct-horse-battery-staple'
+    const plain = JSON.stringify({ password })
+    const a = seal(key, plain, aad)
+    const b = seal(key, plain, aad)
+    expect(open(key, a, aad)).toBe(plain)
     expect(a.equals(b)).toBe(false)
-    expect(a.toString('utf8')).not.toContain('pw')
+    expect(a.includes(Buffer.from(password))).toBe(false)
   })
 
   it('rejects tampering and a different secret', () => {
