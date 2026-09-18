@@ -54,3 +54,15 @@
 - `apps/web/src/main.tsx:17-22` の `onUnauthorized` は `error.status !== 401` しか見ておらず、`ApiErrorCode` は見ていない。コメント（`main.tsx:12-16`）は `UNAUTHENTICATED` / `AUTH_FAILED` を想定しているが、`apps/api/src/lib/errors.ts` の `STATUS_BY_CODE` で 401 にマップされる**新しいコード**（例: `SECOND_FACTOR_REQUIRED` / `SECOND_FACTOR_INVALID`）は、それが `/login` 以外の**認証済み画面**から飛んだ場合にも同じ扱い（セッションを null にして `/login?expired=true` へ強制遷移）を受ける。
 - 2FA 実装（a595325〜9d336f6）で実際に発生: `/security` でのコード確認・解除ミス、および `TSMYADMIN_REQUIRE_2FA` 下で未登録アカウントが `/` 等の保護ルートに触れた場合の両方が、この無差別処理でログイン画面に飛ばされる。後者は `DbTree`（`_app.tsx` のレイアウトに常駐、`enabled` 条件なしで `databasesQuery` を叩く）が `/security` 自体でも発火するため、機能が UI 経由で到達不能になる重大度。
 - 教訓: `STATUS_BY_CODE` に 401 を返す新コードを足すとき（今後 WebAuthn 等の別要因を足す場合も含む）は、それが「未認証（グローバルにログアウトしてよい）」なのか「認証済みだが追加の手続きが要る（ログアウトしてはいけない）」なのかを `onUnauthorized` 側で分岐しているか必ず確認する。次回もこのファイルは「404 相当の分岐漏れ」が起きやすい場所として要チェック。
+
+## adapter: MySQL canManageAccount の SYSTEM_USER 要件は「対象非依存」で意図的・テストで固定済み（Critical に格上げしない）
+
+- `packages/adapter/src/mysql/users.ts` の `mysqlCanManageAccount` は、対象アカウント（`name` 引数）が実際に SYSTEM_USER を持つかを見ず、常に「自分が SYSTEM_USER を持っているか」だけをサーバーが対応していれば要求する。実機検証済み（MySQL 8.4.11）: `CREATE USER` のみを持つ管理者アカウントは、SYSTEM_USER を持たない普通のアカウントの `ALTER USER ... IDENTIFIED BY` に実際には成功する（本物の MySQL の挙動）のに、アプリの `canManageAccount` は false を返す。これは fail-closed 方向（過剰に制限）であり、over-permissive ではないので Critical/Warning の「認可の穴」には当たらない。`test/conformance.ts` の `expect(await admin.canManageAccount('tsmyadmin')).toBe(mariadb)`（8.4 では false 期待）で契約として固定されている＝意図的な設計。次にこの箇所をレビューするときは「対象依存にすべき」という指摘を Critical にしない。実務上の懸念は「CREATE USER はあるが SYSTEM_USER までは持たない、という比較的よくある権限構成の運用者には、この機能が事実上使えない」という UX 上の Warning に留める。
+
+## adapter: バージョン文字列パーサが NaN で「安全側に倒れない」唯一の穴（`hasSystemUser`）
+
+- `packages/adapter/src/mysql/users.ts` の `hasSystemUser`: `version.split(/[.-]/).map(Number)` の分割要素が数値に変換できない場合（配列に要素自体は存在するので分割代入のデフォルト値 `= 0` は発動しない）、`Number(...)` は `NaN` になる。`NaN >= 16` は常に `false` になるため、`8.0.<非数値>` のようなバージョン文字列だと `hasSystemUser` が `false`（＝ SYSTEM_USER 不要）を返し、`mysqlCanManageAccount` が要求を緩める方向に倒れる。この機能の中で唯一「壊れた入力が安全側でなく危険側に倒れる」経路。実 MySQL 8.4.11 の `VERSION()` は綺麗な数値なので再現できないが、MySQL 互換プロキシ/フォーク（ProxySQL、Vitess、一部のクラウド管理型 MySQL 等）が非標準の `VERSION()` 文字列を返す場合に理論上該当しうる。次に類似のバージョン文字列パースを見たら「配列の欠落要素」と「NaN になる要素」を分けて考え、NaN 側もフェイルクローズ（未知の形式は「保護機能あり」とみなす）にすべきという指摘をする。
+
+## e2e a11y: 既存ページに乗る「条件付き新規 UI」はテストのセットアップ次第で一切スキャンされない
+
+- `e2e/a11y.spec.ts:93-95` は `/users` を fixture アカウント（tsmyadmin、常にフル権限）でログインした直後・何も 2FA 登録されていない状態でスキャンする。8b1973a で追加された `SecondFactorReset` のバッジ／ボタン／確認ダイアログは `resettable.has(u.name)`（= 誰かが 2FA 登録済みでこのアカウントが解除できる）が真のときだけ描画されるため、このテストでは常に空集合になり新規 UI 要素は一度も axe でスキャンされない。同種のパターンは過去に「/security ページ自体が a11y スイート未収載」として記録済みだが、今回は「ページはスキャンされているが、ページ内の条件付き要素だけがセットアップ不足で素通りする」という一段階違う形。ダイアログの開いた状態を別途スキャンする既存パターンは `e2e/a11y.spec.ts:36-38`（テーブル削除ダイアログ）や `:125-127`。次に「既存の a11y スキャン対象ページに機能を追加した」PR を見たら、その新規要素が実際にそのテストのシナリオで描画される状態になっているかを必ず確認する（ページ到達だけでは不十分）。

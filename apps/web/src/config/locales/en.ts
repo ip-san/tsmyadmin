@@ -669,6 +669,7 @@ export const en = {
     secondFactor: {
       badge: 'Two-factor',
       reset: 'Reset two-factor…',
+      resetTitle: 'Reset two-factor',
       resetExecute: 'Reset',
       resetConfirm: (user: string) =>
         `Removes the second factor of ${user}. This is for someone who has lost both the device and the recovery codes: they can connect with the password alone from now on, and have to enrol again themselves. On MySQL it applies to every host row of this user name.`,

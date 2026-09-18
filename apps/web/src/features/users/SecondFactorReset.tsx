@@ -34,7 +34,7 @@ export function SecondFactorResetDialog({ user, onClose }: { user: string | null
   return (
     <Dialog
       open={user !== null}
-      title={user ? `${t.reset}: ${user}` : ''}
+      title={user ? `${t.resetTitle}: ${user}` : ''}
       onClose={close}
       busy={reset.isPending}
       footer={

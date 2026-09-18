@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect } from '@playwright/test'
 import { login, PERSISTENT_BASE_URL, TARGETS, tableUrl, test } from './helpers.ts'
+import { createAccount, dropAccount, enrol, t as first, signIn } from './two-factor.ts'
 
 async function scan(page: Parameters<typeof login>[0]) {
   const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()
@@ -52,6 +53,30 @@ test.describe('accessibility (axe-core, two-factor)', () => {
     // Nothing is kept until a code confirms it, so the shared fixture account is left as it was.
     await page.locator('#second-factor-secret').waitFor()
     await scan(page)
+  })
+
+  test('users tab with an account to reset, and the reset dialog', async ({ page }) => {
+    test.setTimeout(90_000)
+    const name = `e2e_a11y2f_${Date.now().toString(36)}`
+    await createAccount(page, name, 'pw-a11y-2fa')
+    try {
+      await signIn(page, name, 'pw-a11y-2fa')
+      await enrol(page)
+      await page.getByRole('button', { name: '切断' }).click()
+      await login(page, first)
+      await page.goto('/users')
+      const reset = page.getByRole('button', {
+        name: `${first.dialect === 'mysql' ? `${name}@%` : name}: 2 要素認証を解除…`,
+      })
+      await reset.waitFor()
+      await scan(page)
+      await reset.click()
+      await page.getByRole('dialog').getByRole('button', { name: '解除する' }).waitFor()
+      await scan(page)
+      await page.getByRole('dialog').getByRole('button', { name: 'キャンセル' }).click()
+    } finally {
+      await dropAccount(page, name)
+    }
   })
 })
 

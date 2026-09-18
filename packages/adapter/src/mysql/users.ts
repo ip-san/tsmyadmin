@@ -68,11 +68,15 @@ export async function mysqlCanManageAccount(conn: Conn): Promise<boolean> {
   return held.has('CREATE USER') && (!hasSystemUser(version) || held.has('SYSTEM_USER'))
 }
 
-/** SYSTEM_USER exists from MySQL 8.0.16; MariaDB has no such privilege. */
-function hasSystemUser(version: string): boolean {
+/**
+ * SYSTEM_USER exists from MySQL 8.0.16; MariaDB has no such privilege. A version this cannot read (a proxy or a
+ * fork answering VERSION() its own way) is taken to have it: the check then asks for more, never for less.
+ */
+export function hasSystemUser(version: string): boolean {
   if (/mariadb/i.test(version)) return false
-  const [major = 0, minor = 0, patch = 0] = version.split(/[.-]/).map(Number)
-  return major > 8 || (major === 8 && (minor > 0 || patch >= 16))
+  const [major, minor, patch] = version.split(/[.-]/).map(Number)
+  if (!Number.isInteger(major) || !Number.isInteger(minor) || !Number.isInteger(patch)) return true
+  return (major as number) > 8 || (major === 8 && ((minor as number) > 0 || (patch as number) >= 16))
 }
 
 export async function mysqlShowGrants(conn: Conn, user: UserRef): Promise<string[]> {

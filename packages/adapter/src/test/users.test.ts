@@ -2,7 +2,7 @@ import type { UserOp } from '@tsmyadmin/shared'
 import { USER_OP_NAMES } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
 import { MysqlAdapter } from '../mysql/adapter.ts'
-import { mysqlUsers } from '../mysql/users.ts'
+import { hasSystemUser, mysqlUsers } from '../mysql/users.ts'
 import { pgUsers } from '../postgres/users.ts'
 
 const user = { name: "o'brien", host: '10.0.%' }
@@ -137,5 +137,18 @@ describe('MysqlAdapter.toAdapterError', () => {
       code: 'NOT_FOUND',
       nativeCode: 'ER_NO_SUCH_TABLE',
     })
+  })
+})
+
+describe('hasSystemUser', () => {
+  it('knows which servers have SYSTEM_USER, and assumes it where the version cannot be read', () => {
+    expect(hasSystemUser('8.4.11')).toBe(true)
+    expect(hasSystemUser('8.0.16')).toBe(true)
+    expect(hasSystemUser('8.0.15')).toBe(false)
+    expect(hasSystemUser('5.7.44-log')).toBe(false)
+    expect(hasSystemUser('11.4.2-MariaDB-ubu2404')).toBe(false)
+    // Asking for SYSTEM_USER only makes canManageAccount stricter, so an unreadable version must not skip it.
+    expect(hasSystemUser('8.0.x-proxy')).toBe(true)
+    expect(hasSystemUser('')).toBe(true)
   })
 })
