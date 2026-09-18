@@ -165,20 +165,12 @@ export function sessionRoutes(cfg: SessionConfig, deps: SessionRouteDeps) {
         const key = exportTemplateKey(template)
         const config = c.get('session').config
         // A row written before templates were keyed by namespace + name sits under the bare name: saving that
-        // name again would otherwise leave the two side by side, indistinguishable on screen. Dropped before the
-        // save, not after, so the account is never briefly one row over its cap — which would evict the oldest
-        // thing it has, bookmark or template, to make room for a row about to be removed anyway.
+        // name again would otherwise leave the two side by side, indistinguishable on screen.
         const listed = await store.list(config, 'export')
         const legacy = listed.find((item) => item.name === template.name && sameTemplate(item, template))
-        if (legacy) await store.remove(config, 'export', legacy.id)
-        try {
-          return c.json(toTemplates(await store.save(config, 'export', key, JSON.stringify(template))))
-        } catch (error) {
-          // The two writes are not one transaction: a save that fails after the old row is gone would leave the
-          // account with neither, so it goes back before the failure is reported.
-          if (legacy) await store.save(config, 'export', legacy.name, legacy.body)
-          throw error
-        }
+        // Replaced in the same write as the new row: neither briefly over the cap nor, if the write fails, gone.
+        const saved = await store.save(config, 'export', key, JSON.stringify(template), legacy?.id)
+        return c.json(toTemplates(saved))
       })
       .delete('/export-templates/:id', requireSession(cfg), validate('param', SavedQueryIdSchema), async (c) => {
         const store = cfg.store.savedQueries

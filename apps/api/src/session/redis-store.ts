@@ -319,16 +319,27 @@ class RedisSavedQueries implements SavedItems {
     return out.sort((a, b) => b.at - a.at)
   }
 
-  async save(config: ConnectRequest, kind: SavedItemKind, name: string, body: string): Promise<SavedItem[]> {
+  async save(
+    config: ConnectRequest,
+    kind: SavedItemKind,
+    name: string,
+    body: string,
+    replaces?: string
+  ): Promise<SavedItem[]> {
     const index = this.index(config)
-    const existing = (await this.list(config, kind)).find((q) => q.name === name)
+    const mine = await this.list(config, kind)
+    const existing = mine.find((q) => q.name === name)
+    const replaced = replaces === undefined ? undefined : mine.find((q) => q.id === replaces)
     const id = existing?.id ?? randomUUID()
     const at = this.now()
-    await this.redis
+    // One transaction, so the row being replaced cannot survive a failed write of its replacement (nor be
+    // counted beside it by the cap below).
+    const write = this.redis
       .multi()
       .set(this.entry(config, id), seal(this.key, JSON.stringify({ kind, name, body }), rowAad(SAVED_QUERIES, id)))
       .zadd(index, at, id)
-      .exec()
+    if (replaced) write.zrem(index, replaced.id).del(this.entry(config, replaced.id))
+    await write.exec()
     // Oldest first beyond the cap, so a runaway client cannot grow the store without bound.
     const ids = await this.redis.zrange(index, '0', '-1')
     for (const victim of ids.slice(0, Math.max(0, ids.length - SAVED_QUERY_LIMIT))) {

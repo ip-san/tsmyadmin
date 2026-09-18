@@ -185,7 +185,18 @@ export function describeSessionStoreConformance(
         ])
         expect(await saved.list(CONFIG, 'sql')).toMatchObject([{ name: 'nightly', body: 'SELECT 3' }])
         const template = (await saved.list(CONFIG, 'export'))[0]?.id ?? ''
-        expect(await saved.remove(CONFIG, 'export', template)).toEqual([])
+
+        // `replaces` drops that row in the same write as the new one, so a row stored under an older key does
+        // not linger beside its replacement (and the account is never counted as holding both).
+        const replaced = await saved.save(CONFIG, 'export', 'renamed', '{"database":"shop"}', template)
+        expect(replaced.map((item) => item.name)).toEqual(['renamed'])
+        // An id of another kind, of another account, or one that is simply gone, replaces nothing.
+        const other = (await saved.list(CONFIG, 'sql'))[0]?.id ?? ''
+        expect(await saved.save(CONFIG, 'export', 'kept', '{"database":"shop"}', other)).toHaveLength(2)
+        expect(await saved.list(CONFIG, 'sql')).toHaveLength(1)
+
+        for (const item of await saved.list(CONFIG, 'export')) await saved.remove(CONFIG, 'export', item.id)
+        expect(await saved.list(CONFIG, 'export')).toEqual([])
         expect(await saved.list(CONFIG, 'sql')).toHaveLength(1)
       } finally {
         await store.closeAll()

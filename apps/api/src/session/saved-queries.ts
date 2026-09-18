@@ -30,11 +30,14 @@ export class SqliteSavedQueries implements SavedItems {
     oldest: import('node:sqlite').StatementSync
   }
 
+  private readonly db: DatabaseSync
+
   constructor(
     db: DatabaseSync,
     private readonly key: Buffer,
     private readonly now: () => number = Date.now
   ) {
+    this.db = db
     db.exec(`
       CREATE TABLE IF NOT EXISTS saved_queries (
         id TEXT PRIMARY KEY,
@@ -83,18 +86,36 @@ export class SqliteSavedQueries implements SavedItems {
   }
 
   /** Creates or replaces by name within the kind, the way the browser-side list behaved. Returns the new list. */
-  async save(config: ConnectRequest, kind: SavedItemKind, name: string, body: string): Promise<SavedItem[]> {
+  async save(
+    config: ConnectRequest,
+    kind: SavedItemKind,
+    name: string,
+    body: string,
+    replaces?: string
+  ): Promise<SavedItem[]> {
     const identity = this.identity(config)
-    const existing = (await this.list(config, kind)).find((q) => q.name === name)
+    const mine = await this.list(config, kind)
+    const existing = mine.find((q) => q.name === name)
+    const replaced = replaces === undefined ? undefined : mine.find((q) => q.id === replaces)
     // Sealed against the row it lands in, so the id has to be decided first.
     const id = existing?.id ?? randomUUID()
     const payload = seal(this.key, JSON.stringify({ kind, name, body }), rowAad(SAVED_QUERIES, id))
     const at = this.now()
-    if (existing) this.stmt.update.run(payload, at, id, identity)
-    else this.stmt.insert.run(id, identity, payload, at)
-    // Oldest first beyond the cap, so a runaway client cannot grow the file without bound.
-    for (const row of this.stmt.oldest.all(identity, identity, SAVED_QUERY_LIMIT) as { id: string }[]) {
-      this.stmt.remove.run(row.id, identity)
+    // One transaction: the row being replaced goes in the same write as the new one, so a failure leaves the
+    // account exactly as it was and the cap never sees the two of them at once.
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      if (replaced) this.stmt.remove.run(replaced.id, identity)
+      if (existing) this.stmt.update.run(payload, at, id, identity)
+      else this.stmt.insert.run(id, identity, payload, at)
+      // Oldest first beyond the cap, so a runaway client cannot grow the file without bound.
+      for (const row of this.stmt.oldest.all(identity, identity, SAVED_QUERY_LIMIT) as { id: string }[]) {
+        this.stmt.remove.run(row.id, identity)
+      }
+      this.db.exec('COMMIT')
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
     }
     return this.list(config, kind)
   }

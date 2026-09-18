@@ -22,8 +22,12 @@ export interface SavedItem {
  */
 export interface SavedItems {
   list(config: Config, kind: SavedItemKind): Promise<SavedItem[]>
-  /** Creates or replaces by name, within the kind. */
-  save(config: Config, kind: SavedItemKind, name: string, body: string): Promise<SavedItem[]>
+  /**
+   * Creates or replaces by name, within the kind. `replaces` also drops that row of the caller's own, in the same
+   * write: it is how a row stored under an older key is replaced without the account being briefly one row over
+   * its cap (which would evict something else) or losing both if the write failed in between.
+   */
+  save(config: Config, kind: SavedItemKind, name: string, body: string, replaces?: string): Promise<SavedItem[]>
   /**
    * Deletes one of the caller's own rows of that kind; an id belonging to another account, or to the other kind,
    * matches nothing (a bookmark is not deleted by the route that deletes templates).
