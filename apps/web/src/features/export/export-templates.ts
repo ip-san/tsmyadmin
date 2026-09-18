@@ -3,19 +3,34 @@ import { ExportTemplateSchema } from '@tsmyadmin/shared'
 import { loadNamed, removeNamed, saveNamed } from '@/lib/named-storage.ts'
 import type { PreferenceStore } from '@/lib/preferences.ts'
 
-/** Per server, as bookmarks are: two servers open in one browser keep separate lists. */
-const key = (scope: string) => `export.templates.${scope}`
+/**
+ * Per server and namespace: two servers open in one browser keep separate lists, and a name used in one database
+ * does not replace a template of another (the list is per database, so the same name in two is two templates).
+ */
+const key = (scope: string, database: string, schema: string | undefined) =>
+  `export.templates.${scope}.${database}.${schema ?? ''}`
 
-export function loadTemplates(scope: string, store?: PreferenceStore): ExportTemplate[] {
-  return loadNamed(key(scope), ExportTemplateSchema, store)
+export function loadTemplates(
+  scope: string,
+  database: string,
+  schema: string | undefined,
+  store?: PreferenceStore
+): ExportTemplate[] {
+  return loadNamed(key(scope, database, schema), ExportTemplateSchema, store)
 }
 
 export function saveTemplate(scope: string, entry: ExportTemplate, store?: PreferenceStore): ExportTemplate[] {
-  return saveNamed(key(scope), ExportTemplateSchema, entry, store)
+  return saveNamed(key(scope, entry.database, entry.schema), ExportTemplateSchema, entry, store)
 }
 
-export function deleteTemplate(scope: string, name: string, store?: PreferenceStore): ExportTemplate[] {
-  return removeNamed(key(scope), ExportTemplateSchema, name, store)
+export function deleteTemplate(
+  scope: string,
+  database: string,
+  schema: string | undefined,
+  name: string,
+  store?: PreferenceStore
+): ExportTemplate[] {
+  return removeNamed(key(scope, database, schema), ExportTemplateSchema, name, store)
 }
 
 /** Templates saved for the database (and schema) being looked at; the table names belong to that namespace. */

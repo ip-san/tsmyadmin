@@ -99,9 +99,10 @@ export class SqliteSavedQueries implements SavedItems {
     return this.list(config, kind)
   }
 
-  /** Deletes one of the caller's own rows; an id belonging to another account matches nothing. */
+  /** Deletes one of the caller's own rows of that kind; any other id matches nothing. */
   async remove(config: ConnectRequest, kind: SavedItemKind, id: string): Promise<SavedItem[]> {
-    this.stmt.remove.run(id, this.identity(config))
+    const mine = await this.list(config, kind)
+    if (mine.some((item) => item.id === id)) this.stmt.remove.run(id, this.identity(config))
     return this.list(config, kind)
   }
 }

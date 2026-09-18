@@ -338,8 +338,12 @@ class RedisSavedQueries implements SavedItems {
   }
 
   async remove(config: ConnectRequest, kind: SavedItemKind, id: string): Promise<SavedItem[]> {
-    // Scoped to the caller's own index, so an id belonging to another account matches nothing.
-    await this.redis.multi().zrem(this.index(config), id).del(this.entry(config, id)).exec()
+    // Scoped to the caller's own index and kind, so an id of another account — or of a bookmark, when deleting a
+    // template — matches nothing.
+    const mine = await this.list(config, kind)
+    if (mine.some((item) => item.id === id)) {
+      await this.redis.multi().zrem(this.index(config), id).del(this.entry(config, id)).exec()
+    }
     return this.list(config, kind)
   }
 }

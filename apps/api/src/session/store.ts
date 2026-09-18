@@ -24,7 +24,10 @@ export interface SavedItems {
   list(config: Config, kind: SavedItemKind): Promise<SavedItem[]>
   /** Creates or replaces by name, within the kind. */
   save(config: Config, kind: SavedItemKind, name: string, body: string): Promise<SavedItem[]>
-  /** Deletes one of the caller's own rows; an id belonging to another account matches nothing. */
+  /**
+   * Deletes one of the caller's own rows of that kind; an id belonging to another account, or to the other kind,
+   * matches nothing (a bookmark is not deleted by the route that deletes templates).
+   */
   remove(config: Config, kind: SavedItemKind, id: string): Promise<SavedItem[]>
 }
 

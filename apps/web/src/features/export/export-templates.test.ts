@@ -1,6 +1,6 @@
 import type { ExportTemplate } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
-import { applyTemplate, templatesFor } from './export-templates.ts'
+import { applyTemplate, deleteTemplate, loadTemplates, saveTemplate, templatesFor } from './export-templates.ts'
 
 const template = (parts: Partial<ExportTemplate>): ExportTemplate => ({
   id: '',
@@ -22,6 +22,23 @@ const template = (parts: Partial<ExportTemplate>): ExportTemplate => ({
 })
 
 describe('export templates', () => {
+  it('keeps a name of one database apart from the same name in another', () => {
+    const store = new Map<string, string>()
+    const memory = {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, v),
+      removeItem: (k: string) => void store.delete(k),
+    }
+    saveTemplate('s', template({ name: 'nightly', database: 'shop' }), memory)
+    saveTemplate('s', template({ name: 'nightly', database: 'blog', tables: ['posts'] }), memory)
+    expect(loadTemplates('s', 'shop', undefined, memory)).toMatchObject([{ database: 'shop', tables: [] }])
+    expect(loadTemplates('s', 'blog', undefined, memory)).toMatchObject([{ tables: ['posts'] }])
+    // Deleting one leaves the other alone.
+    deleteTemplate('s', 'blog', undefined, 'nightly', memory)
+    expect(loadTemplates('s', 'blog', undefined, memory)).toEqual([])
+    expect(loadTemplates('s', 'shop', undefined, memory)).toHaveLength(1)
+  })
+
   it('shows only the templates of the namespace being looked at', () => {
     const all = [
       template({ name: 'here' }),

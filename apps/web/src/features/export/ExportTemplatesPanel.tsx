@@ -43,9 +43,9 @@ export function ExportTemplatesPanel({
     saveOnServer: (name, body) => mutations.saveExportTemplate({ name, ...body }),
     removeOnServer: (id) => mutations.deleteExportTemplate(id),
     local: {
-      load: () => loadTemplates(scope),
+      load: () => loadTemplates(scope, db, schema),
       save: (name, body) => saveTemplate(scope, { ...body, id: '', name, at: Date.now() }),
-      remove: (name) => deleteTemplate(scope, name),
+      remove: (name) => deleteTemplate(scope, db, schema, name),
     },
   })
   const entries = templatesFor(list.entries, db, schema)

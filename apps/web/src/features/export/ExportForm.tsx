@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useRouteContext } from '@tanstack/react-router'
 import type { ExportFormat, ExportTemplate, ExportTemplateBody, TableInfo } from '@tsmyadmin/shared'
-import { ExportFormatSchema } from '@tsmyadmin/shared'
+import { EXPORT_TEMPLATE_MAX_TABLES, ExportFormatSchema } from '@tsmyadmin/shared'
 import { Download } from 'lucide-react'
 import { useId, useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
@@ -41,7 +41,11 @@ export function ExportForm({ db, schema, table, initialTables }: ExportFormProps
   const [missing, setMissing] = useState<string[]>([])
   // Views are included: SQL dumps carry their CREATE VIEW, CSV/JSON export their rows.
   const available: TableInfo[] = table ? [] : (tables.data ?? [])
-  const toggle = (name: string) => setSelected((s) => (s.includes(name) ? s.filter((x) => x !== name) : [...s, name]))
+  const toggle = (name: string) => {
+    // The notice belongs to the template that was loaded; touching the selection answers it.
+    setMissing([])
+    setSelected((s) => (s.includes(name) ? s.filter((x) => x !== name) : [...s, name]))
+  }
   // A table dropped elsewhere since it was ticked must not end up in the URL (the download would just fail).
   const chosen = table ? selected : selected.filter((n) => available.some((t) => t.name === n))
   const effective = table ? [table] : chosen.length > 0 ? chosen : available.map((t) => t.name)
@@ -115,11 +119,23 @@ export function ExportForm({ db, schema, table, initialTables }: ExportFormProps
             </span>
           </legend>
           <div className="mb-1 flex gap-2">
-            <Button size="sm" onClick={() => setSelected(available.map((t) => t.name))}>
+            <Button
+              size="sm"
+              onClick={() => {
+                setMissing([])
+                setSelected(available.map((t) => t.name))
+              }}
+            >
               {locale.export.selectAll}
             </Button>
             {/* Never disabled: a control that disables itself under the keyboard drops the focus to the page. */}
-            <Button size="sm" onClick={() => setSelected([])}>
+            <Button
+              size="sm"
+              onClick={() => {
+                setMissing([])
+                setSelected([])
+              }}
+            >
               {locale.export.selectNone}
             </Button>
           </div>
@@ -205,7 +221,14 @@ export function ExportForm({ db, schema, table, initialTables }: ExportFormProps
         </div>
       ) : null}
       {table ? null : (
-        <ExportTemplatesPanel db={db} schema={schema} current={current} canSave={!tooLong} onLoad={load} />
+        <ExportTemplatesPanel
+          db={db}
+          schema={schema}
+          current={current}
+          // A selection too long for the URL, or for a template, would be stored and then refused on the way back.
+          canSave={!tooLong && chosen.length <= EXPORT_TEMPLATE_MAX_TABLES}
+          onLoad={load}
+        />
       )}
       {missing.length > 0 ? <Notice role="status">{locale.export.templates.missing(missing.join(', '))}</Notice> : null}
       {/* The reason a download is refused stays attached to the (focusable) control, and is announced as it appears. */}

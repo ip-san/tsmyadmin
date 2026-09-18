@@ -49,6 +49,8 @@ export type ExportOptions = z.infer<typeof ExportOptionsSchema>
 
 /** As many tables as the URL can carry; a longer selection is refused by the form before it is saved. */
 export const EXPORT_TEMPLATE_MAX_TABLES = 500
+/** Longest identifier a template may name: 64 bytes is the server limit, with room for multi-byte names. */
+const IDENTIFIER_MAX = 256
 
 /**
  * A named set of export choices. It belongs to one database (and schema on PostgreSQL) because the table names
@@ -56,9 +58,11 @@ export const EXPORT_TEMPLATE_MAX_TABLES = 500
  * whole database, exactly as it does in the form.
  */
 export const ExportTemplateBodySchema = z.object({
-  database: z.string().min(1),
-  schema: z.string().min(1).optional(),
-  tables: z.array(z.string().min(1)).max(EXPORT_TEMPLATE_MAX_TABLES).default([]),
+  // Bounded like the statement a bookmark carries: identifiers are far shorter than this on either server, and
+  // without a cap one template could hold as much text as the whole per-account allowance.
+  database: z.string().min(1).max(IDENTIFIER_MAX),
+  schema: z.string().min(1).max(IDENTIFIER_MAX).optional(),
+  tables: z.array(z.string().min(1).max(IDENTIFIER_MAX)).max(EXPORT_TEMPLATE_MAX_TABLES).default([]),
   options: ExportOptionsSchema,
 })
 export type ExportTemplateBody = z.infer<typeof ExportTemplateBodySchema>
@@ -75,6 +79,14 @@ export const SaveExportTemplateRequestSchema = ExportTemplateBodySchema.extend({
   name: z.string().min(1).max(200),
 })
 export type SaveExportTemplateRequest = z.infer<typeof SaveExportTemplateRequestSchema>
+
+/**
+ * How a template is addressed in the store, which replaces by name: the name alone would make one saved for
+ * another database of the same server replace it, since the store cannot read the namespace inside the payload.
+ */
+export function exportTemplateKey(template: { database: string; schema?: string | undefined; name: string }): string {
+  return JSON.stringify([template.database, template.schema ?? '', template.name])
+}
 export type ExportQueryInput = z.input<typeof ExportQuerySchema>
 
 /** NULL marker used in CSV exports (phpMyAdmin default). */

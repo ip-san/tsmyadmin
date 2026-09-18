@@ -1467,6 +1467,24 @@ describe('saved queries', () => {
       expect(z.array(SavedQuerySchema).parse(await (await h.req('/api/saved-queries')).json())).toMatchObject([
         { name: 'nightly', sql: 'SELECT 1' },
       ])
+      // The same name in another database is a second template, not a replacement of the first.
+      const both = z.array(ExportTemplateSchema).parse(
+        await (
+          await h.req('/api/export-templates', {
+            method: 'POST',
+            body: JSON.stringify({ ...body, database: 'blog' }),
+          })
+        ).json()
+      )
+      expect(both.map((x) => x.database).sort()).toEqual(['blog', 'shop'])
+      // Deleting by an id of the other kind removes nothing.
+      const bookmarks = z.array(SavedQuerySchema).parse(await (await h.req('/api/saved-queries')).json())
+      expect(
+        await (await h.req(`/api/export-templates/${bookmarks[0]?.id}`, { method: 'DELETE' })).json()
+      ).toHaveLength(2)
+      expect(await (await h.req('/api/saved-queries')).json()).toHaveLength(1)
+      await h.req(`/api/export-templates/${both.find((x) => x.database === 'blog')?.id}`, { method: 'DELETE' })
+
       // A template of another database is refused before it is stored; deleting is by id, as bookmarks are.
       expect(
         (await h.req('/api/export-templates', { method: 'POST', body: JSON.stringify({ ...body, database: '' }) }))

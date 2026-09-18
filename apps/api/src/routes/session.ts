@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto'
 import { AdapterError } from '@tsmyadmin/adapter'
-import type { ExportTemplate, SavedQuery } from '@tsmyadmin/shared'
+import type { ConnectRequest, ExportTemplate, SavedQuery } from '@tsmyadmin/shared'
 import {
   ConnectRequestSchema,
-  ExportTemplateBodySchema,
+  exportTemplateKey,
   SavedQueryIdSchema,
   SaveExportTemplateRequestSchema,
   SaveQueryRequestSchema,
@@ -25,7 +25,7 @@ import {
   type SessionConfig,
   sessionCookieOptions,
 } from '../session/middleware.ts'
-import type { SavedItem } from '../session/store.ts'
+import type { SavedItem, SavedItems } from '../session/store.ts'
 import { type Session, sessionInfo } from '../session/store.ts'
 
 export interface SessionRouteDeps {
@@ -152,19 +152,28 @@ export function sessionRoutes(cfg: SessionConfig, deps: SessionRouteDeps) {
         if (!store) return c.json(apiError('UNSUPPORTED', 'Saved queries need a persistent session store'), 400)
         return c.json(toSavedQueries(await store.remove(c.get('session').config, 'sql', c.req.valid('param').id)))
       })
-      .get('/export-templates', requireSession(cfg), async (c) =>
-        c.json(toTemplates((await cfg.store.savedQueries?.list(c.get('session').config, 'export')) ?? []))
-      )
+      .get('/export-templates', requireSession(cfg), async (c) => {
+        const store = cfg.store.savedQueries
+        const config = c.get('session').config
+        return c.json(await toTemplates((await store?.list(config, 'export')) ?? [], store, config))
+      })
       .post('/export-templates', requireSession(cfg), validate('json', SaveExportTemplateRequestSchema), async (c) => {
         const store = cfg.store.savedQueries
         if (!store) return c.json(apiError('UNSUPPORTED', 'Export templates need a persistent session store'), 400)
-        const { name, ...body } = c.req.valid('json')
-        return c.json(toTemplates(await store.save(c.get('session').config, 'export', name, JSON.stringify(body))))
+        const template = c.req.valid('json')
+        // Keyed by namespace and name: the store replaces by name, and two databases may use the same one.
+        const key = exportTemplateKey(template)
+        const config = c.get('session').config
+        return c.json(
+          await toTemplates(await store.save(config, 'export', key, JSON.stringify(template)), store, config)
+        )
       })
       .delete('/export-templates/:id', requireSession(cfg), validate('param', SavedQueryIdSchema), async (c) => {
         const store = cfg.store.savedQueries
         if (!store) return c.json(apiError('UNSUPPORTED', 'Export templates need a persistent session store'), 400)
-        return c.json(toTemplates(await store.remove(c.get('session').config, 'export', c.req.valid('param').id)))
+        const config = c.get('session').config
+        const left = await store.remove(config, 'export', c.req.valid('param').id)
+        return c.json(await toTemplates(left, store, config))
       })
       .delete('/session', async (c) => {
         const id = await getSignedCookie(c, cfg.secret, SESSION_COOKIE)
@@ -182,17 +191,24 @@ const toSavedQueries = (items: SavedItem[]): SavedQuery[] =>
   items.map((i) => ({ id: i.id, name: i.name, sql: i.body, at: i.at }))
 
 /**
- * Stored export templates as the client sees them. A body that no longer parses (written by a newer version, or
- * corrupted) is left out rather than failing the whole list — the same treatment a row that will not open gets.
+ * Stored export templates as the client sees them. A body that does not parse (corrupted, or written by a version
+ * whose shape this one does not know) is dropped from the store rather than failing the whole list: it can never
+ * be listed or deleted by id, yet it would keep counting towards the account's cap — the same reasoning the store
+ * applies to a row that will not decrypt.
  */
-function toTemplates(items: SavedItem[]): ExportTemplate[] {
+async function toTemplates(
+  items: SavedItem[],
+  store: SavedItems | undefined,
+  config: ConnectRequest
+): Promise<ExportTemplate[]> {
   const out: ExportTemplate[] = []
   for (const item of items) {
     try {
-      const body = ExportTemplateBodySchema.parse(JSON.parse(item.body))
-      out.push({ ...body, id: item.id, name: item.name, at: item.at })
+      // The name is in the payload; the row is keyed by namespace + name, which is not what to show.
+      const template = SaveExportTemplateRequestSchema.parse(JSON.parse(item.body))
+      out.push({ ...template, id: item.id, at: item.at })
     } catch {
-      // Not readable as a template: skipped.
+      await store?.remove(config, 'export', item.id)
     }
   }
   return out
