@@ -1,8 +1,13 @@
 import { z } from 'zod'
 import { FlagSchema } from './common.ts'
 
-export const ExportFormatSchema = z.enum(['sql', 'csv', 'json'])
+export const ExportFormatSchema = z.enum(['sql', 'csv', 'json', 'xml', 'yaml', 'markdown'])
 export type ExportFormat = z.infer<typeof ExportFormatSchema>
+
+/** CSV field separators: a semicolon is what Excel expects where the decimal separator is a comma. */
+export const CSV_DELIMITERS = { comma: ',', semicolon: ';', tab: '\t' } as const
+export const CsvDelimiterSchema = z.enum(['comma', 'semicolon', 'tab'])
+export type CsvDelimiter = z.infer<typeof CsvDelimiterSchema>
 
 /** Query string of GET /databases/:db/export (a navigation download, so everything is a string). */
 export const ExportQuerySchema = z.object({
@@ -24,6 +29,7 @@ export const ExportQuerySchema = z.object({
    * formulas. Off by default because it changes the value, which would break the round trip back through import.
    */
   csvSafe: FlagSchema.default('0'),
+  csvDelimiter: CsvDelimiterSchema.default('comma'),
   /** SQL: include stored routines, triggers and events (triggers of the requested tables when tables are named). */
   routines: FlagSchema.default('1'),
   /** SQL (MySQL): drop `DEFINER=...` clauses so the dump restores under another account. */
@@ -42,6 +48,7 @@ export const ExportOptionsSchema = z.object({
   data: z.boolean().default(true),
   bom: z.boolean().default(true),
   csvSafe: z.boolean().default(false),
+  csvDelimiter: CsvDelimiterSchema.default('comma'),
   routines: z.boolean().default(true),
   stripDefiner: z.boolean().default(false),
 })

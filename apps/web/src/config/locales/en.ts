@@ -600,7 +600,11 @@ export const en = {
     tables: 'Tables',
     allTables: 'all tables',
     format: 'Format',
-    formats: { sql: 'SQL', csv: 'CSV', json: 'JSON' },
+    formats: { sql: 'SQL', csv: 'CSV', json: 'JSON', xml: 'XML', yaml: 'YAML', markdown: 'Markdown (table)' },
+    csvDelimiter: 'Delimiter',
+    csvDelimiters: { comma: 'Comma (,)', semicolon: 'Semicolon (;) for Excel', tab: 'Tab' },
+    markdownHint:
+      'Markdown is a table to paste into documents. Binary values are written as their size only, so it cannot be imported back.',
     structure: 'Structure (CREATE TABLE)',
     dropTable: 'Add DROP TABLE IF EXISTS',
     data: 'Data (INSERT)',

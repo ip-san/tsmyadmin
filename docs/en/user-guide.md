@@ -1,4 +1,4 @@
-<!-- translated-from: docs/user-guide.md sha256:22087dd63e8c43747e3dd15a560c1a8adce2041119613c0e65a1576b8edb7be7 -->
+<!-- translated-from: docs/user-guide.md sha256:65f1cd2180a10a4f59a9e6cfce463bc20e8fd14735022e3823b6171a3a816b5c -->
 
 # User guide
 
@@ -135,6 +135,7 @@ Every run is autocommitted. A script that ends with a transaction still open is 
 
 ### Export in detail
 
+- Formats: SQL, CSV, JSON, XML, YAML and Markdown (table). CSV is one table at a time, with a comma, a semicolon (for Excel) or a tab between fields. XML and YAML lose nothing (NULL, binary as base64, and text holding control characters XML cannot carry, also as base64, are each told apart). Markdown is a table for documents, and writes binary values as their size only
 - **Export templates** save the current choices (tables, format, structure / data, DROP, BOM and the rest) under a name to be loaded later. The list belongs to the database (and schema on PostgreSQL) and is not on the table-level Export tab. They are kept where saved queries are kept: with the connection account when sessions are persistent (encrypted, and visible from another browser), otherwise in this browser. With the account, the cap of 200 is shared with saved queries; in the browser each list has its own 200. Tables named by a template that no longer exist are left out of the selection and listed by name when it is loaded
 - A SQL export can include routines, triggers and events. Routines are separated with `DELIMITER ;;`
 - On MySQL the `DEFINER` clause (of routines, triggers and events) can be stripped so the dump restores as another user

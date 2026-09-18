@@ -1,7 +1,8 @@
 import type { DatabaseAdapter, DropTarget, ProgramStatement } from '@tsmyadmin/adapter'
 import { AdapterError, commentText, quoteTable, splitStatements } from '@tsmyadmin/adapter'
 import type { ExportQuery, Namespace, ObjectDependency, TableInfo } from '@tsmyadmin/shared'
-import { csvField, EXPORT_BATCH_SIZE, isGeneratedColumn } from '@tsmyadmin/shared'
+import { CSV_DELIMITERS, csvField, EXPORT_BATCH_SIZE, isGeneratedColumn } from '@tsmyadmin/shared'
+import { markdownBody, xmlBody, yamlBody } from './export-formats.ts'
 
 export const DUMP_COMPLETE_MARKER = '-- tsmyadmin dump complete'
 /** The parts of a PostgreSQL sequence's definition that are not structure (see showCreateTable). */
@@ -22,17 +23,18 @@ async function* csvBody(
   ns: Namespace,
   table: string,
   bom: boolean,
-  safe: boolean
+  safe: boolean,
+  delimiter: string
 ): AsyncIterable<string> {
-  const field = (c: Parameters<typeof csvField>[0]) => csvField(c, safe)
+  const field = (c: Parameters<typeof csvField>[0]) => csvField(c, safe, delimiter)
   if (bom) yield '﻿'
   let header = false
   for await (const b of adapter.iterateRows(ns, table, ITER_OPTS)) {
     if (!header) {
-      yield `${b.columns.map((c) => field(c.name)).join(',')}\r\n`
+      yield `${b.columns.map((c) => field(c.name)).join(delimiter)}\r\n`
       header = true
     }
-    if (b.rows.length > 0) yield `${b.rows.map((row) => row.map(field).join(',')).join('\r\n')}\r\n`
+    if (b.rows.length > 0) yield `${b.rows.map((row) => row.map(field).join(delimiter)).join('\r\n')}\r\n`
   }
 }
 
@@ -520,9 +522,30 @@ export function buildExport(
     const table = tables[0]
     if (tables.length !== 1 || !table) throw new Error('CSV export needs exactly one table')
     return {
-      body: csvBody(adapter, ns, table, q.bom === '1', q.csvSafe === '1'),
+      body: csvBody(adapter, ns, table, q.bom === '1', q.csvSafe === '1', CSV_DELIMITERS[q.csvDelimiter]),
       contentType: 'text/csv; charset=utf-8',
       filename: `${baseName}.csv`,
+    }
+  }
+  if (q.format === 'xml') {
+    return {
+      body: xmlBody(adapter, ns, tables),
+      contentType: 'application/xml; charset=utf-8',
+      filename: `${baseName}.xml`,
+    }
+  }
+  if (q.format === 'yaml') {
+    return {
+      body: yamlBody(adapter, ns, tables),
+      contentType: 'application/yaml; charset=utf-8',
+      filename: `${baseName}.yaml`,
+    }
+  }
+  if (q.format === 'markdown') {
+    return {
+      body: markdownBody(adapter, ns, tables),
+      contentType: 'text/markdown; charset=utf-8',
+      filename: `${baseName}.md`,
     }
   }
   if (q.format === 'json') {

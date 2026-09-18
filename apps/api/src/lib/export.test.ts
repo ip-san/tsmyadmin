@@ -83,6 +83,112 @@ describe('buildExport', () => {
     expect(noBomBody).toBe('id\r\n')
   })
 
+  it('csv: quotes a field holding the chosen delimiter, not the others', async () => {
+    const f = buildExport(adapter(), ns, ['users'], q({ format: 'csv', bom: '0', csvDelimiter: 'semicolon' }))
+    expect(await collect(f.body)).toBe('id;name\r\n1;"A,""quoted"""\r\n2;\\N\r\n3;"line\nbreak"\r\n')
+    const tab = buildExport(adapter(), ns, ['users'], q({ format: 'csv', bom: '0', csvDelimiter: 'tab' }))
+    expect((await collect(tab.body)).split('\r\n')[0]).toBe('id\tname')
+    // A value holding only the chosen delimiter needs quotes under it, and none under a comma.
+    const semi = new FakeAdapter({ databases: { shop: { tables: { s: fakeTable('s', ['v'], [{ v: 'a;b' }]) } } } })
+    const quoted = buildExport(semi, ns, ['s'], q({ format: 'csv', bom: '0', csvDelimiter: 'semicolon' }))
+    expect(await collect(quoted.body)).toBe('v\r\n"a;b"\r\n')
+    const plain = buildExport(semi, ns, ['s'], q({ format: 'csv', bom: '0' }))
+    expect(await collect(plain.body)).toBe('v\r\na;b\r\n')
+  })
+
+  /** Values the text formats must keep apart: NULL, binary, and text XML cannot carry as it is. */
+  const oddAdapter = () =>
+    new FakeAdapter({
+      databases: {
+        shop: {
+          tables: {
+            odd: fakeTable(
+              'odd',
+              ['id', 'v'],
+              [
+                { id: 1, v: 'a|b\n<&>"' },
+                { id: 2, v: null },
+                { id: 3, v: { $bin: 'AAE=' } },
+                { id: 4, v: 'bell' },
+              ]
+            ),
+            empty: fakeTable('empty', ['id'], []),
+          },
+        },
+      },
+    })
+
+  it('xml: NULL, binary and unrepresentable text each marked, everything else escaped', async () => {
+    const f = buildExport(oddAdapter(), ns, ['odd', 'empty'], q({ format: 'xml' }))
+    expect(f.filename).toBe('shop.xml')
+    expect(await collect(f.body)).toBe(
+      [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<export database="shop">',
+        '  <table name="odd">',
+        '    <row>',
+        '      <column name="id">1</column>',
+        '      <column name="v">a|b\n&lt;&amp;&gt;&quot;</column>',
+        '    </row>',
+        '    <row>',
+        '      <column name="id">2</column>',
+        '      <column name="v" null="true"/>',
+        '    </row>',
+        '    <row>',
+        '      <column name="id">3</column>',
+        '      <column name="v" encoding="base64">AAE=</column>',
+        '    </row>',
+        '    <row>',
+        '      <column name="id">4</column>',
+        `      <column name="v" encoding="base64">${Buffer.from('bell').toString('base64')}</column>`,
+        '    </row>',
+        '  </table>',
+        '  <table name="empty">',
+        '  </table>',
+        '</export>',
+        '',
+      ].join('\n')
+    )
+  })
+
+  it('yaml: one list of mappings per table, strings double-quoted, binary tagged', async () => {
+    const f = buildExport(oddAdapter(), ns, ['odd', 'empty'], q({ format: 'yaml' }))
+    expect(f.filename).toBe('shop.yaml')
+    expect(await collect(f.body)).toBe(
+      [
+        '"odd":',
+        '  - "id": 1',
+        '    "v": "a|b\\n<&>\\""',
+        '  - "id": 2',
+        '    "v": null',
+        '  - "id": 3',
+        '    "v": !!binary AAE=',
+        '  - "id": 4',
+        '    "v": "bell\\u0007"',
+        '"empty": []',
+        '',
+      ].join('\n')
+    )
+  })
+
+  it('markdown: a table per section, cells kept on one line', async () => {
+    const f = buildExport(oddAdapter(), ns, ['odd'], q({ format: 'markdown' }))
+    expect(f.filename).toBe('shop.md')
+    expect(await collect(f.body)).toBe(
+      [
+        '## odd',
+        '',
+        '| id | v |',
+        '| --- | --- |',
+        '| 1 | a\\|b<br><&>" |',
+        '| 2 | *NULL* |',
+        '| 3 | *(binary, 2 bytes)* |',
+        '| 4 | bell |',
+        '',
+      ].join('\n')
+    )
+  })
+
   it('json: one array per table with native cells', async () => {
     const f = buildExport(adapter(), ns, ['users'], q({ format: 'json' }))
     const body = await collect(f.body)

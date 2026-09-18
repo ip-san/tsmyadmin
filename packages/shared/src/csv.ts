@@ -7,13 +7,14 @@ import { CSV_NULL } from './schemas/export.ts'
  * that equals the NULL marker is quoted so the import can tell the two apart (as COPY / LOAD DATA do), and so
  * is the empty string: in a one-column table it would otherwise be a blank line, which the import skips.
  */
-export function csvField(cell: Cell, neutralise = false): string {
+export function csvField(cell: Cell, neutralise = false, delimiter = ','): string {
   if (cell === null) return CSV_NULL
   // A cut value must never land in a file that looks complete; callers check with isTruncatedCell first.
   if (isTruncatedCell(cell)) throw new Error('truncated text cannot be written to CSV')
   const raw = isBinaryCell(cell) ? cell.$bin : typeof cell === 'string' ? cell : String(cell)
   const text = neutralise ? neutraliseFormula(raw) : raw
-  return /[",\r\n]/.test(text) || text === CSV_NULL || text === '' ? `"${text.replaceAll('"', '""')}"` : text
+  const needsQuotes = /["\r\n]/.test(text) || text.includes(delimiter) || text === CSV_NULL || text === ''
+  return needsQuotes ? `"${text.replaceAll('"', '""')}"` : text
 }
 
 /**

@@ -1,11 +1,12 @@
 import { useQuery } from '@tanstack/react-query'
 import { useRouteContext } from '@tanstack/react-router'
-import type { ExportFormat, ExportTemplate, ExportTemplateBody, TableInfo } from '@tsmyadmin/shared'
-import { EXPORT_TEMPLATE_MAX_TABLES, ExportFormatSchema } from '@tsmyadmin/shared'
+import type { CsvDelimiter, ExportFormat, ExportTemplate, ExportTemplateBody, TableInfo } from '@tsmyadmin/shared'
+import { CsvDelimiterSchema, EXPORT_TEMPLATE_MAX_TABLES, ExportFormatSchema } from '@tsmyadmin/shared'
 import { Download } from 'lucide-react'
 import { useId, useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
+import { Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
 import { tablesQuery } from '@/lib/queries.ts'
 import { ExportTemplatesPanel } from './ExportTemplatesPanel.tsx'
@@ -35,6 +36,7 @@ export function ExportForm({ db, schema, table, initialTables }: ExportFormProps
   const [data, setData] = useState(true)
   const [bom, setBom] = useState(true)
   const [csvSafe, setCsvSafe] = useState(false)
+  const [csvDelimiter, setCsvDelimiter] = useState<CsvDelimiter>('comma')
   const [routines, setRoutines] = useState(true)
   const [stripDefiner, setStripDefiner] = useState(false)
   /** Tables a loaded template named that are no longer there. */
@@ -65,12 +67,13 @@ export function ExportForm({ db, schema, table, initialTables }: ExportFormProps
     data,
     bom,
     csvSafe,
+    csvDelimiter,
     routines,
     stripDefiner,
   })
   // The table list travels in the query string; hundreds of ticked tables would exceed what servers accept.
   const tooLong = url.length > MAX_EXPORT_URL_LENGTH
-  const options = { format, structure, dropTable, data, bom, csvSafe, routines, stripDefiner }
+  const options = { format, structure, dropTable, data, bom, csvSafe, csvDelimiter, routines, stripDefiner }
   const current: ExportTemplateBody = {
     database: db,
     ...(schema ? { schema } : {}),
@@ -91,6 +94,7 @@ export function ExportForm({ db, schema, table, initialTables }: ExportFormProps
     setData(template.options.data)
     setBom(template.options.bom)
     setCsvSafe(template.options.csvSafe)
+    setCsvDelimiter(template.options.csvDelimiter)
     setRoutines(template.options.routines)
     setStripDefiner(template.options.stripDefiner)
   }
@@ -151,7 +155,7 @@ export function ExportForm({ db, schema, table, initialTables }: ExportFormProps
       )}
       <fieldset>
         <legend className="mb-1 text-xs font-medium text-ink-sub">{locale.export.format}</legend>
-        <div className="flex gap-4 text-sm">
+        <div className="flex flex-wrap gap-4 text-sm">
           {ExportFormatSchema.options.map((f) => (
             <label key={f} className="flex items-center gap-1">
               <input type="radio" name="export-format" value={f} checked={format === f} onChange={() => setFormat(f)} />
@@ -207,8 +211,23 @@ export function ExportForm({ db, schema, table, initialTables }: ExportFormProps
           ) : null}
         </div>
       ) : null}
+      {format === 'markdown' ? <p className="text-xs text-ink-sub">{locale.export.markdownHint}</p> : null}
       {format === 'csv' ? (
         <div className="space-y-1">
+          <div className="flex items-center gap-2 text-sm">
+            <label htmlFor="export-csv-delimiter">{locale.export.csvDelimiter}</label>
+            <Select
+              id="export-csv-delimiter"
+              value={csvDelimiter}
+              onChange={(e) => setCsvDelimiter(e.target.value as CsvDelimiter)}
+            >
+              {CsvDelimiterSchema.options.map((d) => (
+                <option key={d} value={d}>
+                  {locale.export.csvDelimiters[d]}
+                </option>
+              ))}
+            </Select>
+          </div>
           <label className="flex items-center gap-1 text-sm">
             <input type="checkbox" checked={bom} onChange={(e) => setBom(e.target.checked)} />
             {locale.export.bom}

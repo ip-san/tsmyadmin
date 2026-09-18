@@ -1041,7 +1041,8 @@ describe('export', () => {
     expect((await h.req('/api/databases/shop/export?format=csv&tables=users,posts')).status).toBe(400)
     // Unknown tables are refused before the download starts (a JSON 404, not an aborted stream).
     expect((await h.req('/api/databases/shop/export?format=sql&tables=users,users2')).status).toBe(404)
-    expect((await h.req('/api/databases/shop/export?format=xml')).status).toBe(400)
+    // A format that is not offered (a spreadsheet file) is refused, not guessed at.
+    expect((await h.req('/api/databases/shop/export?format=xlsx')).status).toBe(400)
   })
 })
 

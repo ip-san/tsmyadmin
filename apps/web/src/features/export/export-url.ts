@@ -18,6 +18,7 @@ export function exportUrl(o: ExportTarget): string {
   params.set('data', o.data ? '1' : '0')
   params.set('bom', o.bom ? '1' : '0')
   params.set('csvSafe', o.csvSafe ? '1' : '0')
+  params.set('csvDelimiter', o.csvDelimiter)
   params.set('routines', o.routines ? '1' : '0')
   params.set('stripDefiner', o.stripDefiner ? '1' : '0')
   return `/api/databases/${encodeURIComponent(o.db)}/export?${params.toString()}`

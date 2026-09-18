@@ -51,6 +51,17 @@ for (const t of TARGETS) {
       )
       expect(Object.keys(body).sort()).toEqual(['posts', 'users'])
       expect(body.users).toHaveLength(5)
+
+      // XML carries several tables the same way, one <table> each.
+      await page.getByLabel('XML', { exact: true }).check()
+      const xmlPromise = page.waitForEvent('download')
+      await page.getByRole('link', { name: 'ダウンロード' }).click()
+      const xml = await xmlPromise
+      expect(xml.suggestedFilename()).toBe(`${t.database}.xml`)
+      const text = await (await xml.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8'))
+      expect(text).toMatch(/^<\?xml version="1\.0" encoding="UTF-8"\?>/)
+      expect(text.match(/<table name="(users|posts)">/g)).toHaveLength(2)
+      expect(text.match(/<row>/g)?.length).toBeGreaterThanOrEqual(5)
     })
   })
 }

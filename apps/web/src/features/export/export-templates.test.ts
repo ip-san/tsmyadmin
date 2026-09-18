@@ -15,6 +15,7 @@ const template = (parts: Partial<ExportTemplate>): ExportTemplate => ({
     data: true,
     bom: true,
     csvSafe: false,
+    csvDelimiter: 'comma' as const,
     routines: true,
     stripDefiner: false,
   },
