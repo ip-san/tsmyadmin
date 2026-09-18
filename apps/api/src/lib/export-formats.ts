@@ -15,7 +15,11 @@ function text(cell: Exclude<Cell, null>): string {
   return typeof cell === 'string' ? cell : String(cell)
 }
 
-/** Whether the text holds a character XML 1.0 cannot carry at all, not even escaped (most control characters). */
+/**
+ * Whether the text holds a character XML 1.0 cannot carry at all, not even escaped (most control characters).
+ * Lone surrogates are not looked for: the drivers decode what the server stores as UTF-8, which never yields one
+ * (invalid bytes arrive as U+FFFD already), so no value read from the database can hold one.
+ */
 function xmlUnrepresentable(s: string): boolean {
   for (let i = 0; i < s.length; i++) {
     const c = s.charCodeAt(i)

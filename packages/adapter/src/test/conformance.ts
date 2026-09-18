@@ -2813,9 +2813,10 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
             timing: 'BEFORE',
             event: 'INSERT',
             body:
+              // Ending in a line comment: whatever closes the statement must not land inside it.
               dialect === 'mysql'
-                ? 'BEGIN\n  SET NEW.name = UPPER(NEW.name);\nEND;'
-                : 'BEGIN\n  NEW.name := UPPER(NEW.name);\n  RETURN NEW;\nEND;',
+                ? 'BEGIN\n  SET NEW.name = UPPER(NEW.name);\nEND; -- upper-cases the name'
+                : 'BEGIN\n  NEW.name := UPPER(NEW.name);\n  RETURN NEW;\nEND; -- upper-cases the name',
           })
           await execOk(`INSERT INTO ${t} (id, name) VALUES (1, 'abc')`)
           expect(await firstValue(`SELECT name FROM ${t}`)).toBe('ABC')
@@ -2833,7 +2834,7 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
             op: 'createEvent',
             name: event,
             schedule: { kind: 'every', interval: 1, unit: 'DAY', starts: '2030-01-01 00:00:00' },
-            body: 'BEGIN\n  SET @conformance_event = 1;\n  SET @conformance_event = 2;\nEND',
+            body: 'BEGIN\n  SET @conformance_event = 1;\n  SET @conformance_event = 2;\nEND # runs daily',
             enabled: false,
             comment: 'conformance',
           })

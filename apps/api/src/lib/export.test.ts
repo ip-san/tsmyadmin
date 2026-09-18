@@ -96,6 +96,8 @@ describe('buildExport', () => {
     expect(await collect(plain.body)).toBe('v\r\na;b\r\n')
   })
 
+  /** Written by code point: a formatter would otherwise turn the escapes into the raw characters. */
+  const BELL = String.fromCharCode(0x07)
   /** Values the text formats must keep apart: NULL, binary, and text XML cannot carry as it is. */
   const oddAdapter = () =>
     new FakeAdapter({
@@ -109,7 +111,7 @@ describe('buildExport', () => {
                 { id: 1, v: 'a|b\n<&>"' },
                 { id: 2, v: null },
                 { id: 3, v: { $bin: 'AAE=' } },
-                { id: 4, v: 'bell' },
+                { id: 4, v: `bell${BELL}` },
               ]
             ),
             empty: fakeTable('empty', ['id'], []),
@@ -140,7 +142,7 @@ describe('buildExport', () => {
         '    </row>',
         '    <row>',
         '      <column name="id">4</column>',
-        `      <column name="v" encoding="base64">${Buffer.from('bell').toString('base64')}</column>`,
+        `      <column name="v" encoding="base64">${Buffer.from(`bell${BELL}`).toString('base64')}</column>`,
         '    </row>',
         '  </table>',
         '  <table name="empty">',
@@ -183,7 +185,7 @@ describe('buildExport', () => {
         '| 1 | a\\|b<br><&>" |',
         '| 2 | *NULL* |',
         '| 3 | *(binary, 2 bytes)* |',
-        '| 4 | bell |',
+        `| 4 | bell${BELL} |`,
         '',
       ].join('\n')
     )

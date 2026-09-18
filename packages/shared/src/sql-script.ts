@@ -12,5 +12,6 @@ export function sqlScript(dialect: Dialect, statements: readonly string[]): stri
   if (dialect === 'postgres' || !statements.some((s) => s.includes(';'))) return statements.join(';\n')
   const delimiter = DELIMITERS.find((d) => !statements.some((s) => s.includes(d)))
   if (!delimiter) throw new Error('No delimiter is free of the statements')
-  return `DELIMITER ${delimiter}\n${statements.map((s) => `${s}${delimiter}`).join('\n')}\nDELIMITER ;`
+  // Each delimiter on a line of its own: a body ending in a `--` or `#` comment would otherwise swallow it.
+  return `DELIMITER ${delimiter}\n${statements.map((s) => `${s}\n${delimiter}`).join('\n')}\nDELIMITER ;`
 }
