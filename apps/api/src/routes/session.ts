@@ -171,7 +171,14 @@ export function sessionRoutes(cfg: SessionConfig, deps: SessionRouteDeps) {
         const listed = await store.list(config, 'export')
         const legacy = listed.find((item) => item.name === template.name && sameTemplate(item, template))
         if (legacy) await store.remove(config, 'export', legacy.id)
-        return c.json(toTemplates(await store.save(config, 'export', key, JSON.stringify(template))))
+        try {
+          return c.json(toTemplates(await store.save(config, 'export', key, JSON.stringify(template))))
+        } catch (error) {
+          // The two writes are not one transaction: a save that fails after the old row is gone would leave the
+          // account with neither, so it goes back before the failure is reported.
+          if (legacy) await store.save(config, 'export', legacy.name, legacy.body)
+          throw error
+        }
       })
       .delete('/export-templates/:id', requireSession(cfg), validate('param', SavedQueryIdSchema), async (c) => {
         const store = cfg.store.savedQueries

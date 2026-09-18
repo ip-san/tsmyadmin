@@ -1516,6 +1516,27 @@ describe('saved queries', () => {
       expect(listed).toMatchObject([{ name: 'nightly', database: 'shop', tables: ['users'] }])
       expect(await h.store.savedQueries.list(config, 'sql')).toHaveLength(SAVED_QUERY_LIMIT - 1)
 
+      // A save that fails puts the row it was replacing back, rather than leaving the account with neither.
+      const real = h.store.savedQueries.save.bind(h.store.savedQueries)
+      let broken = true
+      h.store.savedQueries.save = async (...args: Parameters<typeof real>) => {
+        // The write of the new row fails; putting the old one back must still work, as it would on a real store.
+        if (args[1] === 'export' && broken) {
+          broken = false
+          throw new Error('disk full')
+        }
+        return real(...args)
+      }
+      const failed = await h.req('/api/export-templates', {
+        method: 'POST',
+        body: JSON.stringify({ name: 'nightly', database: 'shop', tables: ['posts'], options: {} }),
+      })
+      expect(failed.status).toBe(500)
+      h.store.savedQueries.save = real
+      expect(z.array(ExportTemplateSchema).parse(await (await h.req('/api/export-templates')).json())).toMatchObject([
+        { name: 'nightly', tables: ['users'] },
+      ])
+
       // Saving that name again replaces it rather than leaving two rows showing the same name.
       const after = z.array(ExportTemplateSchema).parse(
         await (
