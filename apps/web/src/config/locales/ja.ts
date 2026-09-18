@@ -661,6 +661,13 @@ export const ja = {
     fileTooLarge: (mb: number) => `ファイルが大きすぎます（最大 ${mb} MB）`,
   },
   users: {
+    secondFactor: {
+      badge: '2 要素認証',
+      reset: '2 要素認証を解除…',
+      resetExecute: '解除する',
+      resetConfirm: (user: string) =>
+        `${user} の 2 要素認証を解除します。端末と回復用コードを失った利用者のための操作です。解除すると、次回からパスワードだけで接続でき、本人が改めて登録する必要があります。MySQL では、このユーザー名のすべてのホストの行に効きます。`,
+    },
     title: 'ユーザーアカウント',
     name: 'ユーザー名',
     host: 'ホスト',

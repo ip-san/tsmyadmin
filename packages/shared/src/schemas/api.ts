@@ -178,3 +178,13 @@ export const SecondFactorStatusSchema = z.object({
   recoveryCodesLeft: z.number().int().min(0),
 })
 export type SecondFactorStatus = z.infer<typeof SecondFactorStatusSchema>
+
+/**
+ * Other accounts on this server that have a second factor and whose sign-in this account could already take over
+ * (it could change their password): the ones an operator may reset for someone who lost their device. Its own
+ * is never listed — that goes through the security tab, with a code.
+ */
+export const AccountSecondFactorsSchema = z.object({ accounts: z.array(z.string()) })
+export type AccountSecondFactors = z.infer<typeof AccountSecondFactorsSchema>
+
+export const ResetSecondFactorRequestSchema = z.object({ user: z.string().min(1).max(256) })

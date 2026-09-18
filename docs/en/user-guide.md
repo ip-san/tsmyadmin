@@ -1,4 +1,4 @@
-<!-- translated-from: docs/user-guide.md sha256:d94c96d9c9f7ba4f31f5586f66fe77d30d216aced2c31c57fe68105ab1c5fc99 -->
+<!-- translated-from: docs/user-guide.md sha256:458921a8a78934ddba3b8ec121ee2f3ae867e76ee871e7022fbde81f8d14101b -->
 
 # User guide
 
@@ -24,7 +24,7 @@ The **Security** tab at server level adds a one-time code from an authenticator 
 
 From the next sign-in on, a code is asked for after the password. A recovery code goes in the same field. A code that has been accepted cannot be used again even within its own 30 seconds, so wait for the next one when signing in twice in a row.
 
-To remove it, type the app's current code in the same tab and choose **Remove**. **If the device is gone and the recovery codes with it, you cannot undo this yourself** — ask the administrator to delete the stored factor (see `docs/security.md`). Where the administrator requires it of everyone (`TSMYADMIN_REQUIRE_2FA`), nothing else can be used until enrolment is finished.
+To remove it, type the app's current code in the same tab and choose **Remove**. **If the device is gone and the recovery codes with it, you cannot undo this yourself** — ask the administrator to reset it from the **Users** tab. Where the administrator requires it of everyone (`TSMYADMIN_REQUIRE_2FA`), nothing else can be used until enrolment is finished.
 
 ## Interface language
 
@@ -49,7 +49,7 @@ The language menu at the top right switches between English and 日本語 (the p
 | Status | The server version, uptime and status variables (filtered by name) |
 | Variables | System variables (filtered by name) |
 | Processes | The connections the server has open. tsmyadmin's own carry a **tsmyadmin** badge. **Cancel query** stops the running statement only and leaves the connection, its transaction and its temporary tables alone (no confirmation). **Kill** closes the connection itself (the confirmation shows the user, database and running query) |
-| Users | The accounts, their privileges (as GRANT statements), **Create user**, **Change password** and **Drop** |
+| Users | The accounts, their privileges (as GRANT statements), **Create user**, **Change password** and **Drop**. Accounts with a second factor that you may manage also get **Reset two-factor…** (for someone who lost their device) |
 | Security | Two-factor authentication for the account this session logged in as (below). The secret needs somewhere to live, so the tab is only shown where the deployment has a persistent session store |
 
 ## Database

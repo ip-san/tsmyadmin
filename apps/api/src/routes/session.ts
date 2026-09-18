@@ -1,10 +1,17 @@
 import { createHash } from 'node:crypto'
 import { AdapterError } from '@tsmyadmin/adapter'
-import type { ExportTemplate, SavedQuery, SecondFactorState, SecondFactorStatus } from '@tsmyadmin/shared'
+import type {
+  AccountSecondFactors,
+  ExportTemplate,
+  SavedQuery,
+  SecondFactorState,
+  SecondFactorStatus,
+} from '@tsmyadmin/shared'
 import {
   ExportTemplateBodySchema,
   exportTemplateKey,
   LoginRequestSchema,
+  ResetSecondFactorRequestSchema,
   SavedQueryIdSchema,
   SaveExportTemplateRequestSchema,
   SaveQueryRequestSchema,
@@ -125,6 +132,24 @@ function codeRefused(c: Context, deps: SessionRouteDeps, event: string) {
   deps.ipLimiter.hit(deps.ip(c))
   deps.logger.log('warn', event, { requestId: c.get('requestId'), ...sessionInfo(c.get('session')) })
   return c.json(apiError('SECOND_FACTOR_INVALID', 'That code is not valid'), 401)
+}
+
+/**
+ * The accounts an operator could reset: enrolled, not this session's own, and within what the database lets this
+ * account alter. Another login name's factor is found by the same identity the login would use — the session's
+ * dialect, host and port with that user — so it only reaches accounts signed in to through the same address.
+ */
+async function resettableAccounts(cfg: SessionConfig, session: Session): Promise<AccountSecondFactors> {
+  const store = cfg.store.secondFactor
+  if (!store) return { accounts: [] }
+  const names = [...new Set((await session.adapter.listUsers()).map((u) => u.name))]
+  const accounts: string[] = []
+  for (const name of names) {
+    if (name === session.config.user) continue
+    if (!(await store.get({ ...session.config, user: name }))) continue
+    if (await session.adapter.canManageAccount(name)) accounts.push(name)
+  }
+  return { accounts }
 }
 
 /** Enrolment is the one thing an account that must enrol may do, so these routes bypass that gate. */
@@ -318,6 +343,39 @@ export function sessionRoutes(cfg: SessionConfig, deps: SessionRouteDeps) {
         deps.logger.log('info', 'second_factor.disabled', { requestId: c.get('requestId'), ...sessionInfo(session) })
         return c.json(await secondFactorStatus(cfg, session))
       })
+      .get('/second-factor/accounts', requireSession(cfg), async (c) =>
+        c.json(await resettableAccounts(cfg, c.get('session')))
+      )
+      // For someone who lost both the device and the recovery codes. No code is asked for: the authority is the
+      // database's own — an account that could change this one's password could take its sign-in over anyway.
+      .post(
+        '/second-factor/accounts/reset',
+        requireSession(cfg),
+        validate('json', ResetSecondFactorRequestSchema),
+        async (c) => {
+          const store = cfg.store.secondFactor
+          if (!store) return c.json(apiError('UNSUPPORTED', SECOND_FACTOR_NEEDS_STORE), 400)
+          const session = c.get('session')
+          const { user } = c.req.valid('json')
+          // Its own goes through the security tab, which asks for a code: a stolen session must not skip that.
+          if (user === session.config.user) {
+            return c.json(apiError('FORBIDDEN', 'Remove your own second factor from the security tab'), 403)
+          }
+          if (!(await session.adapter.canManageAccount(user))) {
+            return c.json(apiError('FORBIDDEN', 'This account cannot manage that one'), 403)
+          }
+          const target = { ...session.config, user }
+          if (!(await store.get(target)))
+            return c.json(apiError('NOT_FOUND', 'Nothing is enrolled for that account'), 404)
+          await store.clear(target)
+          deps.logger.log('warn', 'second_factor.reset', {
+            requestId: c.get('requestId'),
+            ...sessionInfo(session),
+            target: user,
+          })
+          return c.json(await resettableAccounts(cfg, session))
+        }
+      )
       // Bookmarks and export templates live with the session store, so they exist only where it is persistent.
       .get('/saved-queries', requireSession(cfg), async (c) =>
         c.json(toSavedQueries((await cfg.store.savedQueries?.list(c.get('session').config, 'sql')) ?? []))

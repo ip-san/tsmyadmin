@@ -54,6 +54,8 @@ export interface FakeDatabase {
 
 export interface FakeAdapterOptions {
   dialect?: Dialect
+  /** What canManageAccount answers (default true): false plays an account without authority over others. */
+  manageAccounts?: boolean
   databases?: Record<string, FakeDatabase>
   /** Hook invoked by executeSql; defaults to echoing a single-row result. */
   onSql?: (ns: Namespace, sql: string, opts: ExecuteOptions) => StatementResult[]
@@ -144,6 +146,7 @@ export class FakeAdapter implements DatabaseAdapter {
   closed = false
   private readonly databases: Record<string, FakeDatabase>
   private readonly userList: UserInfo[]
+  private readonly manageAccountsAllowed: boolean
   private processList: ProcessInfo[]
   private readonly onSql: FakeAdapterOptions['onSql']
   private readonly dependencies: ObjectDependency[] | null
@@ -156,6 +159,7 @@ export class FakeAdapter implements DatabaseAdapter {
     this.exporter = this.dialect === 'mysql' ? mysqlExporter : pgExporter
     this.users = this.dialect === 'mysql' ? mysqlUsers : pgUsers
     this.userList = options.users ?? []
+    this.manageAccountsAllowed = options.manageAccounts ?? true
     this.processList = options.processes ?? []
     this.databases = options.databases ?? {}
     this.onSql = options.onSql
@@ -414,6 +418,11 @@ export class FakeAdapter implements DatabaseAdapter {
   async listUsers(): Promise<UserInfo[]> {
     this.record('listUsers')
     return structuredClone(this.userList)
+  }
+
+  async canManageAccount(name: string): Promise<boolean> {
+    this.record('canManageAccount', name)
+    return this.manageAccountsAllowed
   }
 
   async showGrants(user: UserRef, ns?: Namespace): Promise<string[]> {

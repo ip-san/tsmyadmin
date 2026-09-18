@@ -65,16 +65,7 @@ test.describe('second factor', () => {
   test('enrols, is asked for at the next login, refuses a used code, and can be removed', async ({ page }) => {
     const name = `e2e_2fa_${Date.now().toString(36)}`
     const password = 'pw-2fa-123'
-    await login(page, t)
-    // A user of its own: the fixture account is shared with every other spec.
-    await page.goto('/users')
-    await page.getByRole('button', { name: 'ユーザーを作成' }).click()
-    await page.getByLabel('ユーザー名').fill(name)
-    await page.getByLabel('パスワード', { exact: true }).fill(password)
-    await page.getByLabel('パスワード（確認）').fill(password)
-    await page.getByRole('dialog').getByRole('button', { name: '次へ（SQL を確認）' }).click()
-    await confirmPreview(page, /CREATE (USER|ROLE)/)
-    await page.getByRole('button', { name: '切断' }).click()
+    await createAccount(page, name, password)
 
     try {
       await signIn(page, name, password)
@@ -129,14 +120,62 @@ test.describe('second factor', () => {
       await signIn(page, name, password)
       await expect(page.getByRole('heading', { name: 'サーバー', exact: true })).toBeVisible()
     } finally {
-      await page
-        .getByRole('button', { name: '切断' })
-        .click()
-        .catch(() => undefined)
+      await dropAccount(page, name)
+    }
+  })
+
+  test('an operator can reset the second factor of an account that lost its device', async ({ page }) => {
+    const name = `e2e_2fr_${Date.now().toString(36)}`
+    const password = 'pw-2fr-123'
+    await createAccount(page, name, password)
+    try {
+      await signIn(page, name, password)
+      await page.goto('/security')
+      await page.getByRole('button', { name: '2 要素認証を登録する' }).click()
+      const secret = (await page.locator('#second-factor-secret').textContent()) ?? ''
+      await page.getByLabel('コード').fill(totp(secret))
+      await page.getByRole('button', { name: '登録を完了する' }).click()
+      await expect(page.getByText(/登録済みです/)).toBeVisible()
+      await page.getByRole('button', { name: '切断' }).click()
+
+      // The fixture account can alter any account, so it is offered the reset for this one.
       await login(page, t)
       await page.goto('/users')
-      await page.getByRole('button', { name: `${t.dialect === 'mysql' ? `${name}@%` : name}: 削除` }).click()
-      await confirmPreview(page, /DROP (USER|ROLE)/, name)
+      const label = t.dialect === 'mysql' ? `${name}@%` : name
+      await page.getByRole('button', { name: `${label}: 2 要素認証を解除…` }).click()
+      await page.getByRole('dialog').getByRole('button', { name: '解除する' }).click()
+      await expect(page.getByRole('button', { name: `${label}: 2 要素認証を解除…` })).toHaveCount(0)
+      await page.getByRole('button', { name: '切断' }).click()
+
+      // The password alone is enough again.
+      await signIn(page, name, password)
+      await expect(page.getByRole('heading', { name: 'サーバー', exact: true })).toBeVisible()
+    } finally {
+      await dropAccount(page, name)
     }
   })
 })
+
+/** A throwaway account, created by the fixture one: signing in as it keeps the fixture account unenrolled. */
+async function createAccount(page: Page, name: string, password: string) {
+  await login(page, t)
+  await page.goto('/users')
+  await page.getByRole('button', { name: 'ユーザーを作成' }).click()
+  await page.getByLabel('ユーザー名').fill(name)
+  await page.getByLabel('パスワード', { exact: true }).fill(password)
+  await page.getByLabel('パスワード（確認）').fill(password)
+  await page.getByRole('dialog').getByRole('button', { name: '次へ（SQL を確認）' }).click()
+  await confirmPreview(page, /CREATE (USER|ROLE)/)
+  await page.getByRole('button', { name: '切断' }).click()
+}
+
+async function dropAccount(page: Page, name: string) {
+  await page
+    .getByRole('button', { name: '切断' })
+    .click()
+    .catch(() => undefined)
+  await login(page, t)
+  await page.goto('/users')
+  await page.getByRole('button', { name: `${t.dialect === 'mysql' ? `${name}@%` : name}: 削除` }).click()
+  await confirmPreview(page, /DROP (USER|ROLE)/, name)
+}

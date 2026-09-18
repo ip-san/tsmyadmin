@@ -46,6 +46,35 @@ export async function mysqlListUsers(conn: Conn): Promise<UserInfo[]> {
   })
 }
 
+/**
+ * Global CREATE USER, plus SYSTEM_USER on servers that have it (MySQL 8.0.16+): without it, an account that
+ * holds SYSTEM_USER cannot be altered, and which of the accounts behind a login name hold it is not visible to
+ * everyone. The grantee is rebuilt from CURRENT_USER() in the `'user'@'host'` form USER_PRIVILEGES uses; the
+ * host is what follows the last `@` (a host cannot contain one).
+ */
+export async function mysqlCanManageAccount(conn: Conn): Promise<boolean> {
+  const r = firstResult(
+    await conn.query(
+      `SELECT p.PRIVILEGE_TYPE, VERSION()
+       FROM (SELECT CURRENT_USER() AS u) AS me
+       LEFT JOIN information_schema.USER_PRIVILEGES p
+         ON p.GRANTEE = CONCAT('''', LEFT(me.u, CHAR_LENGTH(me.u) - CHAR_LENGTH(SUBSTRING_INDEX(me.u, '@', -1)) - 1),
+                               '''@''', SUBSTRING_INDEX(me.u, '@', -1), '''')
+        AND p.PRIVILEGE_TYPE IN ('CREATE USER', 'SYSTEM_USER')`
+    )
+  )
+  const held = new Set(r.rows.map((row) => String(row[0] ?? '')))
+  const version = String(r.rows[0]?.[1] ?? '')
+  return held.has('CREATE USER') && (!hasSystemUser(version) || held.has('SYSTEM_USER'))
+}
+
+/** SYSTEM_USER exists from MySQL 8.0.16; MariaDB has no such privilege. */
+function hasSystemUser(version: string): boolean {
+  if (/mariadb/i.test(version)) return false
+  const [major = 0, minor = 0, patch = 0] = version.split(/[.-]/).map(Number)
+  return major > 8 || (major === 8 && (minor > 0 || patch >= 16))
+}
+
 export async function mysqlShowGrants(conn: Conn, user: UserRef): Promise<string[]> {
   const r = firstResult(await conn.query(`SHOW GRANTS FOR ${mysqlAccount(user)}`))
   return r.rows.map((row) => String(row[0] ?? '').replace(GRANT_SECRET, ''))

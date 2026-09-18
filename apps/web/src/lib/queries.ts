@@ -1,5 +1,6 @@
 import { queryOptions } from '@tanstack/react-query'
 import type {
+  AccountSecondFactors,
   BrowseOptions,
   BrowseResult,
   DatabaseInfo,
@@ -73,6 +74,12 @@ export const savedQueriesQuery = queryOptions({ queryKey: ['saved-queries'], que
 export const secondFactorQuery = queryOptions({
   queryKey: ['second-factor'],
   queryFn: () => unwrap<SecondFactorStatus>(api['second-factor'].$get()),
+})
+
+/** Other accounts' second factors this one may reset (empty for an account without that authority). */
+export const accountSecondFactorsQuery = queryOptions({
+  queryKey: ['second-factor', 'accounts'],
+  queryFn: () => unwrap<AccountSecondFactors>(api['second-factor'].accounts.$get()),
 })
 
 export const listExportTemplates = () => unwrap<ExportTemplate[]>(api['export-templates'].$get())
@@ -241,6 +248,8 @@ export const mutations = {
   confirmSecondFactor: (code: string) =>
     unwrap<SecondFactorStatus>(api['second-factor'].confirm.$post({ json: { code } })),
   disableSecondFactor: (code: string) => unwrap<SecondFactorStatus>(api['second-factor'].$delete({ json: { code } })),
+  resetSecondFactor: (user: string) =>
+    unwrap<AccountSecondFactors>(api['second-factor'].accounts.reset.$post({ json: { user } })),
   insertRow: (ref: TableRef, values: RowValues) =>
     unwrap<{ affectedRows: number }>(
       api.databases[':db'].tables[':table'].rows.$post({

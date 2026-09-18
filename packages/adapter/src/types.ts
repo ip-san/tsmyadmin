@@ -264,6 +264,14 @@ export interface DatabaseAdapter {
    * (default: the login database). MySQL grants are global and ignore `ns`.
    */
   showGrants(user: UserRef, ns?: Namespace): Promise<string[]>
+  /**
+   * Whether the account this connection logged in as could change the password of the login `name` — the test
+   * for taking a decision about that account's sign-in (resetting its second factor) that the database would let
+   * it take anyway. MySQL: global CREATE USER, and SYSTEM_USER where the server has it (without it, accounts that
+   * hold it cannot be altered). PostgreSQL: superuser, or CREATEROLE over a non-superuser role (from 16 on, only
+   * one it has ADMIN OPTION on). Fails closed: anything it cannot establish is `false`.
+   */
+  canManageAccount(name: string): Promise<boolean>
   readonly ddl: DdlBuilder
   readonly exporter: SqlExporter
   readonly users: UserSqlBuilder
@@ -305,6 +313,7 @@ export const ADAPTER_METHOD_NAMES = [
   'showCreateTable',
   'iterateRows',
   'listUsers',
+  'canManageAccount',
   'showGrants',
   'serverInfo',
   'listVariables',

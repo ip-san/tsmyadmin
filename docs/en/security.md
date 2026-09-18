@@ -1,4 +1,4 @@
-<!-- translated-from: docs/security.md sha256:569cfe5d88d0ce2a55263870be5c0c196c326ded20ebb14edccc42cc28861fd6 -->
+<!-- translated-from: docs/security.md sha256:250bafeea95fa940c82c9d8617e31d49fa38c98ecd0bd0cddf54530ff9d88ff9 -->
 
 # Security model
 
@@ -24,7 +24,7 @@
 - **What it protects**: in this product the database credentials *are* the identity, so whoever knows the password can also enrol first. A second factor helps once it is enrolled — against a password that leaks later (reuse, shoulder-surfing, a dump). `TSMYADMIN_REQUIRE_2FA=1` closes that window: an account that has not enrolled can do nothing until it has
 - A code that has been accepted cannot be used again, even within its own 30 seconds (the accepted step is recorded). Each recovery code works once. Code attempts count against the same per-IP budget as failed logins
 - Removing it takes a current code from the app, and so does replacing an enrolled secret with a new one — otherwise that check could simply be walked around
-- **A lost device**: there is no admin screen. Use a recovery code, or have the operator delete the stored factor (`DELETE FROM second_factor;` on `sqlite`, `DEL <prefix>:2fa:*` on `redis`). Rotating `SESSION_SECRET` wipes every enrolment, so that a row nobody can read never locks an account out
+- **A lost device**: use a recovery code, or reset it from the **Users** tab as an account that could change that account's password (MySQL: `CREATE USER`, plus `SYSTEM_USER` on MySQL 8; PostgreSQL: a superuser, or `CREATEROLE` over that role). It only reaches accounts the database already lets it take over, so nothing is weakened. An account cannot reset its own there (that goes through the security tab, with a code). Each reset is logged as `second_factor.reset`, and it reaches accounts enrolled through the same address (host name and port). As a last resort the stored factors can be deleted directly (`DELETE FROM second_factor;` on `sqlite`, `DEL <prefix>:2fa:*` on `redis` — that removes everyone's). Rotating `SESSION_SECRET` wipes every enrolment, so that a row nobody can read never locks an account out
 - The code field is `autocomplete="one-time-code"` so a password manager can fill it. Codes are never stored or logged
 
 ## Restricting where it connects (SSRF and jump-host protection)

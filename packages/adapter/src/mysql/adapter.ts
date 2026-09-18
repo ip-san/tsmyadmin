@@ -48,7 +48,7 @@ import {
   mysqlRoutineDefinition,
 } from './routines.ts'
 import { mysqlKillProcess, mysqlListProcesses, mysqlListStatus, mysqlListVariables, mysqlServerInfo } from './server.ts'
-import { mysqlListUsers, mysqlShowGrants, mysqlUsers } from './users.ts'
+import { mysqlCanManageAccount, mysqlListUsers, mysqlShowGrants, mysqlUsers } from './users.ts'
 import { mysqlColumnMeta } from './values.ts'
 
 const AUTH_CODES = new Set(['ER_ACCESS_DENIED_ERROR', 'ER_ACCESS_DENIED_NO_PASSWORD_ERROR'])
@@ -635,6 +635,11 @@ export class MysqlAdapter extends BaseAdapter {
 
   showGrants(user: UserRef, _ns?: Namespace): Promise<string[]> {
     return this.withConn(this.serverNs(), (conn) => mysqlShowGrants(conn, user))
+  }
+
+  /** The name does not change the answer here: MySQL's CREATE USER reaches every account (SYSTEM_USER aside). */
+  canManageAccount(_name: string): Promise<boolean> {
+    return this.withConn(this.serverNs(), (conn) => mysqlCanManageAccount(conn))
   }
 
   showCreateTable(ns: Namespace, table: string, known?: TableSchema): Promise<string[]> {

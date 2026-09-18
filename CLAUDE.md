@@ -5,7 +5,7 @@ MySQL / PostgreSQL 両対応の、モダン TypeScript 製 phpMyAdmin クロー�
 ## 構成
 
 - **モノレポ (Bun workspaces)**: `apps/api`（Hono on Bun, :3100）/ `apps/web`（Vite + React 19 + TanStack, :5175）/ `packages/shared`（Zod DTO）/ `packages/adapter`（DB 抽象層）
-- **DB 抽象**: `DatabaseAdapter` を `mysql2` / `pg` の上に薄く実装。ORM 不使用（Prisma は不採用）。閲覧・CRUD・SQL 実行・DDL・エクスポート（`showCreateTable`/`iterateRows`/`exporter`）・インポート（`insertRows`）・アカウント（`listUsers`/`showGrants`/`users` ビルダー）・サーバー情報（`serverInfo`/`listVariables`/`listStatus`/`listProcesses`/`killProcess`）を両方言で同じ契約に揃える
+- **DB 抽象**: `DatabaseAdapter` を `mysql2` / `pg` の上に薄く実装。ORM 不使用（Prisma は不採用）。閲覧・CRUD・SQL 実行・DDL・エクスポート（`showCreateTable`/`iterateRows`/`exporter`）・インポート（`insertRows`）・アカウント（`listUsers`/`showGrants`/`canManageAccount`/`users` ビルダー）・サーバー情報（`serverInfo`/`listVariables`/`listStatus`/`listProcesses`/`killProcess`）を両方言で同じ契約に揃える
 - **画面構成**: phpMyAdmin と同じ 3 階層（サーバー: DB 一覧/SQL/ステータス/変数/プロセス/ユーザー、DB: 構造/SQL/エクスポート/インポート/権限/ルーチン/トリガー/イベント、テーブル: 表示/構造/SQL/検索/挿入/エクスポート/インポート/トリガー/操作）
 - **型の流れ**: `packages/shared` の Zod → API (`@hono/zod-validator`) → web (`hc<AppType>`)
 - **テスト DB**: `docker compose`（MySQL `13306` / PostgreSQL `15433`、fixtures 自動投入）
@@ -29,10 +29,10 @@ bun run lighthouse        # Lighthouse CI（警告のみ、要 Chrome）
 
 ## 現在の規模（`scripts/validate-docs.mjs` が同期）
 
-- ユニット/API/Web テスト定義: <!-- stat:unit-tests -->455<!-- /stat --> 件
-- Adapter conformance: <!-- stat:conformance -->139<!-- /stat --> 件 × 2 方言
-- E2E: <!-- stat:e2e -->77<!-- /stat --> 件
-- API ルート: <!-- stat:routes -->44<!-- /stat -->
+- ユニット/API/Web テスト定義: <!-- stat:unit-tests -->460<!-- /stat --> 件
+- Adapter conformance: <!-- stat:conformance -->141<!-- /stat --> 件 × 2 方言
+- E2E: <!-- stat:e2e -->78<!-- /stat --> 件
+- API ルート: <!-- stat:routes -->46<!-- /stat -->
 
 ## 設計ドキュメント
 

@@ -27,6 +27,24 @@ export async function pgListUsers(conn: Conn): Promise<UserInfo[]> {
   })
 }
 
+/**
+ * Superuser, or CREATEROLE over a role that is not a superuser — from PostgreSQL 16, only one this role holds
+ * ADMIN OPTION on (which its creator gets). A name with no role behind it is left to superusers.
+ */
+export async function pgCanManageAccount(conn: Conn, name: string): Promise<boolean> {
+  const r = firstResult(
+    await conn.query(
+      `SELECT me.rolsuper OR (me.rolcreaterole AND t.oid IS NOT NULL AND NOT t.rolsuper
+                AND (current_setting('server_version_num')::int < 160000
+                     OR pg_has_role(me.oid, t.oid, 'MEMBER WITH ADMIN OPTION')))
+       FROM pg_roles me LEFT JOIN pg_roles t ON t.rolname = $1
+       WHERE me.rolname = current_user`,
+      [name]
+    )
+  )
+  return r.rows[0]?.[0] === true
+}
+
 /** Role attributes, memberships and table/schema grants in the current database, as SQL. */
 export async function pgShowGrants(conn: Conn, user: UserRef): Promise<string[]> {
   const role = firstResult(

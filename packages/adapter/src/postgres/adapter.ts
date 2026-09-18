@@ -38,7 +38,7 @@ import { pgExporter } from './export.ts'
 import { pgDescribeTable, pgListForeignKeys, pgListSchemas, pgListTables } from './introspect.ts'
 import { pgListDependencies, pgListRoutines, pgListTriggers, pgRoutineDefinition } from './routines.ts'
 import { pgKillProcess, pgListProcesses, pgListStatus, pgListVariables, pgServerInfo } from './server.ts'
-import { pgListUsers, pgShowGrants, pgUsers } from './users.ts'
+import { pgCanManageAccount, pgListUsers, pgShowGrants, pgUsers } from './users.ts'
 import { PG_TYPE_NAMES, pgTypes } from './values.ts'
 
 const AUTH_CODES = new Set(['28P01', '28000'])
@@ -450,6 +450,10 @@ export class PostgresAdapter extends BaseAdapter {
   showGrants(user: UserRef, ns?: Namespace): Promise<string[]> {
     // Role attributes are cluster-wide, but schema/table ACLs live in the database being inspected.
     return this.withConn(ns ? { database: ns.database } : this.serverNs(), (conn) => pgShowGrants(conn, user))
+  }
+
+  canManageAccount(name: string): Promise<boolean> {
+    return this.withConn(this.serverNs(), (conn) => pgCanManageAccount(conn, name))
   }
 
   /**

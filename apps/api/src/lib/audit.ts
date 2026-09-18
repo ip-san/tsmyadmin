@@ -43,6 +43,7 @@ export const PASSTHROUGH_METHODS = [
   'showCreateTable',
   'iterateRows',
   'listUsers',
+  'canManageAccount',
   'showGrants',
   'serverInfo',
   'listVariables',

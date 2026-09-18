@@ -1,6 +1,7 @@
 import { AdapterError } from '@tsmyadmin/adapter'
 import { FakeAdapter, fakeTable } from '@tsmyadmin/adapter/testing'
 import {
+  AccountSecondFactorsSchema,
   ApiErrorSchema,
   BrowseResultSchema,
   ConnectRequestSchema,
@@ -1362,12 +1363,16 @@ describe('errors', () => {
 
 describe('second factor', () => {
   /** The same persistent-store harness, with a clock the test can hold still. */
-  function totpHarness(options: { require2fa?: boolean; maxPerIdentity?: number } = {}) {
+  function totpHarness(options: { require2fa?: boolean; maxPerIdentity?: number; manageAccounts?: boolean } = {}) {
     let now = 1_700_000_000_000
     const store = new SqliteSessionStore({
       path: ':memory:',
       secret: 's'.repeat(32),
-      adapterFactory: () => fixtureAdapter(),
+      adapterFactory: () =>
+        fixtureAdapter({
+          users: ['root', 'alice'].map((name) => ({ name, host: '%', canLogin: true, attributes: [] })),
+          manageAccounts: options.manageAccounts ?? true,
+        }),
       sweepIntervalMs: 0,
       ...(options.maxPerIdentity === undefined ? {} : { maxPerIdentity: options.maxPerIdentity }),
     })
@@ -1523,6 +1528,77 @@ describe('second factor', () => {
       expect(h.store.size).toBe(1)
     } finally {
       await h.store.closeAll()
+    }
+  })
+
+  const ALICE = { ...LOGIN, user: 'alice' }
+
+  it('lets an operator reset another account that lost its device, and nothing more', async () => {
+    const h = totpHarness()
+    try {
+      await h.login(ALICE)
+      await enrol(h)
+      await h.req('/api/session', { method: 'DELETE' })
+      h.tick(30_000)
+
+      await h.login()
+      const listed = AccountSecondFactorsSchema.parse(await (await h.req('/api/second-factor/accounts')).json())
+      expect(listed.accounts).toEqual(['alice'])
+      const reset = await h.req('/api/second-factor/accounts/reset', {
+        method: 'POST',
+        body: JSON.stringify({ user: 'alice' }),
+      })
+      expect(reset.status).toBe(200)
+      expect(AccountSecondFactorsSchema.parse(await reset.json()).accounts).toEqual([])
+      // Gone for good: a second reset finds nothing, and alice signs in with her password alone again.
+      expect(
+        (await h.req('/api/second-factor/accounts/reset', { method: 'POST', body: JSON.stringify({ user: 'alice' }) }))
+          .status
+      ).toBe(404)
+      await h.req('/api/session', { method: 'DELETE' })
+      expect((await h.login(ALICE)).status).toBe(201)
+    } finally {
+      await h.store.closeAll()
+    }
+  })
+
+  it('does not reset for an account the database would not let alter that one, nor its own', async () => {
+    const h = totpHarness({ manageAccounts: false })
+    try {
+      await h.login(ALICE)
+      await enrol(h)
+      await h.req('/api/session', { method: 'DELETE' })
+      h.tick(30_000)
+      await h.login()
+      // Not even listed: who has a second factor is not shown to those who could not act on it.
+      expect(AccountSecondFactorsSchema.parse(await (await h.req('/api/second-factor/accounts')).json())).toEqual({
+        accounts: [],
+      })
+      const refused = await h.req('/api/second-factor/accounts/reset', {
+        method: 'POST',
+        body: JSON.stringify({ user: 'alice' }),
+      })
+      expect(refused.status).toBe(403)
+      expect((await h.login(ALICE)).status).toBe(401)
+    } finally {
+      await h.store.closeAll()
+    }
+    // Its own, even with the authority: that removal asks for a code, and a stolen session must not skip it.
+    const own = totpHarness()
+    try {
+      await own.login()
+      await enrol(own)
+      const res = await own.req('/api/second-factor/accounts/reset', {
+        method: 'POST',
+        body: JSON.stringify({ user: 'root' }),
+      })
+      expect(res.status).toBe(403)
+      expect(AccountSecondFactorsSchema.parse(await (await own.req('/api/second-factor/accounts')).json())).toEqual({
+        accounts: [],
+      })
+      expect(SecondFactorStatusSchema.parse(await (await own.req('/api/second-factor')).json()).state).toBe('enrolled')
+    } finally {
+      await own.store.closeAll()
     }
   })
 

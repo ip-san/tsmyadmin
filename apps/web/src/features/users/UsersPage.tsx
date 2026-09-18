@@ -10,6 +10,7 @@ import { locale } from '@/config/locale.ts'
 import { grantsQuery, usersQuery } from '@/lib/queries.ts'
 import { userLabel, userRef, useUserOpFlow } from '@/lib/user-ops.ts'
 import { PasswordForm } from './PasswordForm.tsx'
+import { SecondFactorResetDialog, useResettableAccounts } from './SecondFactorReset.tsx'
 import { UserForm } from './UserForm.tsx'
 
 function GrantsPanel({ user }: { user: UserRef }) {
@@ -33,6 +34,8 @@ export function UsersPage({ dialect }: { dialect: Dialect }) {
   const [creating, setCreating] = useState(false)
   const [passwordFor, setPasswordFor] = useState<UserRef | null>(null)
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [resetFor, setResetFor] = useState<string | null>(null)
+  const resettable = useResettableAccounts()
   if (users.isPending) return <Spinner />
   if (users.isError)
     return (
@@ -70,6 +73,7 @@ export function UsersPage({ dialect }: { dialect: Dialect }) {
                 {dialect === 'mysql' ? <Td className="font-mono text-xs">{u.host}</Td> : null}
                 <Td>{u.canLogin ? locale.common.yes : locale.common.no}</Td>
                 <Td className="space-x-1">
+                  {resettable.has(u.name) ? <Badge tone="neutral">{locale.users.secondFactor.badge}</Badge> : null}
                   {u.attributes.map((a) => (
                     <Badge key={a} tone={a === 'SUPERUSER' ? 'warn' : 'neutral'}>
                       {a}
@@ -97,6 +101,16 @@ export function UsersPage({ dialect }: { dialect: Dialect }) {
                   >
                     {locale.users.changePassword}
                   </Button>
+                  {resettable.has(u.name) ? (
+                    <Button
+                      size="sm"
+                      aria-haspopup="dialog"
+                      onClick={() => setResetFor(u.name)}
+                      aria-label={`${key}: ${locale.users.secondFactor.reset}`}
+                    >
+                      {locale.users.secondFactor.reset}
+                    </Button>
+                  ) : null}
                   <Button
                     size="sm"
                     variant="danger"
@@ -140,6 +154,7 @@ export function UsersPage({ dialect }: { dialect: Dialect }) {
           />
         ) : null}
       </Dialog>
+      <SecondFactorResetDialog user={resetFor} onClose={() => setResetFor(null)} />
       <UserOpPreviewDialog flow={flow} />
     </div>
   )

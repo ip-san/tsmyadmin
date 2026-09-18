@@ -366,6 +366,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
   abstract killProcess(id: string): Promise<void>
   abstract listUsers(): Promise<UserInfo[]>
   abstract showGrants(user: UserRef, ns?: Namespace): Promise<string[]>
+  abstract canManageAccount(name: string): Promise<boolean>
 
   /** Checks a connection out of the pool for `ns` (MySQL: `USE db` applied; PG: pool of that database). */
   protected abstract acquire(ns: Namespace): Promise<Conn>

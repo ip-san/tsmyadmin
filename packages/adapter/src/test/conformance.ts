@@ -2396,6 +2396,83 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
       })
     })
 
+    describe('canManageAccount', () => {
+      const q = (n: string) => quoteIdent(dialect, n)
+      /** A login account of its own, created and dropped around each case. */
+      const account = async (name: string, extra = '') => {
+        // Reading the fixture database is only there so the connection opens; it grants no say over accounts.
+        if (dialect === 'mysql')
+          await execOk(
+            `CREATE USER ${mysqlAccount({ name, host: '%' })} IDENTIFIED BY 'cm-pw'; GRANT SELECT ON ${q(ns.database)}.* TO ${mysqlAccount({ name, host: '%' })}`
+          )
+        else
+          await execOk(
+            `CREATE ROLE ${q(name)} LOGIN PASSWORD 'cm-pw' ${extra}; GRANT CONNECT ON DATABASE ${q(ns.database)} TO ${q(name)}`
+          )
+        return ctx.createAs(name, 'cm-pw')
+      }
+      const drop = async (...names: string[]) => {
+        for (const name of names) {
+          if (dialect === 'mysql') await exec(`DROP USER IF EXISTS ${mysqlAccount({ name, host: '%' })}`)
+          else await exec(`DROP OWNED BY ${q(name)}; DROP ROLE IF EXISTS ${q(name)}`, { stopOnError: false })
+        }
+      }
+
+      it('is true for the fixture account, and false for one without the authority', async () => {
+        expect(await db.canManageAccount('tsmyadmin')).toBe(true)
+        const name = `cm_${scratch}`
+        const plain = await account(name)
+        try {
+          expect(await plain.canManageAccount('tsmyadmin')).toBe(false)
+          expect(await plain.canManageAccount(name)).toBe(false)
+        } finally {
+          await plain.close()
+          await drop(name)
+        }
+      })
+
+      it('follows what the database itself would let that account alter', async () => {
+        const name = `cm2_${scratch}`
+        const other = `cm3_${scratch}`
+        if (dialect === 'mysql') {
+          const admin = await account(name)
+          try {
+            await execOk(`GRANT CREATE USER ON *.* TO ${mysqlAccount({ name, host: '%' })}`)
+            // MySQL 8 protects SYSTEM_USER accounts from those without it; MariaDB has no such privilege.
+            const mariadb = await isMariaDb()
+            expect(await admin.canManageAccount('tsmyadmin')).toBe(mariadb)
+            if (!mariadb) {
+              await execOk(`GRANT SYSTEM_USER ON *.* TO ${mysqlAccount({ name, host: '%' })}`)
+              expect(await admin.canManageAccount('tsmyadmin')).toBe(true)
+            }
+          } finally {
+            await admin.close()
+            await drop(name)
+          }
+          return
+        }
+        const admin = await account(name, 'CREATEROLE')
+        const version = await exec('SHOW server_version_num')
+        const numeric = version[0]?.kind === 'rows' ? Number(version[0].result.rows[0]?.[0]) : 0
+        try {
+          // Never a superuser, whatever else it may alter.
+          expect(await admin.canManageAccount('tsmyadmin')).toBe(false)
+          // A role it created itself: its own to manage on every version.
+          const made = await admin.executeSql(ns, `CREATE ROLE ${q(other)} LOGIN`, EXEC)
+          expect(made[0]?.kind).toBe('affected')
+          expect(await admin.canManageAccount(other)).toBe(true)
+          // One someone else created: from 16 on, CREATEROLE alone no longer reaches it.
+          await execOk(`CREATE ROLE ${q(`${other}x`)} LOGIN`)
+          expect(await admin.canManageAccount(`${other}x`)).toBe(numeric < 160000)
+          // No role by that name: left to superusers.
+          expect(await admin.canManageAccount(`${other}_missing`)).toBe(false)
+        } finally {
+          await admin.close()
+          await drop(other, `${other}x`, name)
+        }
+      })
+    })
+
     describe('users', () => {
       it('grants exactly the privileges asked for: a read-only account can select but not write', async () => {
         // The point of per-table grants is this account. Checked by connecting as it, not by reading the SQL.

@@ -79,7 +79,7 @@ classDiagram
     +executeSql(ns, sql, opts) / cancelQuery(id)
     +iterateRows(ns, table) AsyncIterable~RowBatch~
     +showCreateTable() / listRoutines() / listTriggers()
-    +listUsers() / showGrants()
+    +listUsers() / showGrants() / canManageAccount()
     +serverInfo() / listProcesses() / killProcess()
     +ddl : DdlBuilder
     +exporter : SqlExporter
