@@ -1,3 +1,4 @@
+import { mkdir, rm, stat } from 'node:fs/promises'
 import { test as base, expect, type Page } from '@playwright/test'
 
 export interface Target {
@@ -51,6 +52,47 @@ export const test = base.extend<{ autoLogout: void }>({
     { auto: true },
   ],
 })
+
+const LOCK_DIR = 'node_modules/.cache/e2e-locks'
+
+/**
+ * A lock shared by every worker, for specs that change the same catalog row: PostgreSQL refuses two concurrent
+ * GRANTs on one database with `tuple concurrently updated`, which is the database's answer, not the app's. A lock
+ * left by a worker that died is taken over once it is older than any test could hold it.
+ */
+export async function acquireLock(name: string, staleMs = 120_000): Promise<() => Promise<void>> {
+  const path = `${LOCK_DIR}/${name}`
+  await mkdir(LOCK_DIR, { recursive: true })
+  for (;;) {
+    try {
+      await mkdir(path)
+      return () => rm(path, { recursive: true, force: true })
+    } catch (err) {
+      if ((err as { code?: string }).code !== 'EEXIST') throw err
+      const held = await stat(path).catch(() => null)
+      if (held && Date.now() - held.mtimeMs > staleMs) await rm(path, { recursive: true, force: true })
+      else await new Promise((resolve) => setTimeout(resolve, 200))
+    }
+  }
+}
+
+/**
+ * Serialises the specs that grant and revoke on the fixture database itself — on PostgreSQL only, where they
+ * collide. The time spent waiting is added to the test's budget: queueing behind another spec is not slowness.
+ */
+export function lockDatabaseGrants(dialect: Target['dialect']): void {
+  if (dialect !== 'postgres') return
+  let release: (() => Promise<void>) | undefined
+  // biome-ignore lint/correctness/noEmptyPattern: Playwright requires the fixtures argument to be destructured
+  test.beforeEach(async ({}, testInfo) => {
+    const started = Date.now()
+    release = await acquireLock('database-grants')
+    testInfo.setTimeout(testInfo.timeout + (Date.now() - started))
+  })
+  test.afterEach(async () => {
+    await release?.()
+  })
+}
 
 export const TARGETS: Target[] = [
   fromUrl('mysql', process.env.TEST_MYSQL_URL ?? 'mysql://tsmyadmin:tsmyadmin@127.0.0.1:13306/tsmyadmin_test'),

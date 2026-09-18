@@ -1,8 +1,10 @@
 import { expect } from '@playwright/test'
-import { confirmPreview, login, TARGETS, tableUrl, test } from './helpers.ts'
+import { confirmPreview, lockDatabaseGrants, login, TARGETS, tableUrl, test } from './helpers.ts'
 
 for (const t of TARGETS) {
   test.describe(`table privileges (${t.dialect})`, () => {
+    // Grants on the fixture database: two specs doing it at once collide in PostgreSQL's catalog.
+    lockDatabaseGrants(t.dialect)
     test.beforeEach(async ({ page }) => {
       await login(page, t)
     })
