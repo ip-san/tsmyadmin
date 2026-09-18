@@ -54,7 +54,7 @@ export function ReplicationPage({ dialect }: { dialect: Dialect }) {
   return (
     <div className="space-y-6">
       <p className="flex items-center gap-2 text-sm text-ink">
-        {t.role}: <Badge tone={role === 'standalone' ? 'neutral' : 'info'}>{t.roles[role]}</Badge>
+        {t.role}: <Badge tone={role === 'standalone' || role === 'unknown' ? 'neutral' : 'info'}>{t.roles[role]}</Badge>
       </p>
       <Part title={t.source[dialect]} records={source} empty={t.notReplica} />
       <Part title={t.replicas} records={replicas} empty={t.noReplicas} />
