@@ -29,6 +29,7 @@ import { createApp, IP_LIMIT_FACTOR } from './app.ts'
 import { type AppConfig, loadConfig } from './config.ts'
 import { auditedAdapterFactory } from './lib/audit.ts'
 import { createLogger, type Logger, type TrustProxy } from './lib/logging.ts'
+import { SAVED_QUERY_LIMIT } from './session/saved-queries.ts'
 import { SqliteSessionStore } from './session/sqlite-store.ts'
 import { MemorySessionStore } from './session/store.ts'
 
@@ -1502,11 +1503,19 @@ describe('saved queries', () => {
     const h = persistentHarness()
     try {
       await h.login()
-      // The shape 0.3.0-dev wrote: the name was the row's key, the body held only the choices.
+      const config = ConnectRequestSchema.parse(LOGIN)
+      // Older than the legacy row below, so an eviction would take one of these rather than the row being replaced.
+      for (let i = 0; i < SAVED_QUERY_LIMIT - 1; i++) {
+        await h.store.savedQueries.save(config, 'sql', `fill-${i}`, 'SELECT 1')
+      }
+      // The shape 0.3.0-dev wrote: the name was the row's key, the body held only the choices. The account is now
+      // exactly at its cap, so replacing this row must not make room for itself by evicting anything.
       const body = { database: 'shop', tables: ['users'], options: { format: 'sql' } }
-      await h.store.savedQueries.save(ConnectRequestSchema.parse(LOGIN), 'export', 'nightly', JSON.stringify(body))
+      await h.store.savedQueries.save(config, 'export', 'nightly', JSON.stringify(body))
       const listed = z.array(ExportTemplateSchema).parse(await (await h.req('/api/export-templates')).json())
       expect(listed).toMatchObject([{ name: 'nightly', database: 'shop', tables: ['users'] }])
+      expect(await h.store.savedQueries.list(config, 'sql')).toHaveLength(SAVED_QUERY_LIMIT - 1)
+
       // Saving that name again replaces it rather than leaving two rows showing the same name.
       const after = z.array(ExportTemplateSchema).parse(
         await (
@@ -1518,6 +1527,8 @@ describe('saved queries', () => {
       )
       expect(after).toMatchObject([{ name: 'nightly', tables: ['posts'] }])
       expect(await (await h.req('/api/export-templates')).json()).toHaveLength(1)
+      // The bookmarks that filled the account are all still there.
+      expect(await h.store.savedQueries.list(config, 'sql')).toHaveLength(SAVED_QUERY_LIMIT - 1)
       await h.req(`/api/export-templates/${after[0]?.id}`, { method: 'DELETE' })
 
       // Reading it did not delete it: a row this version cannot fully interpret is not data to throw away.

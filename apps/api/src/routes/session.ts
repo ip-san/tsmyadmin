@@ -164,11 +164,14 @@ export function sessionRoutes(cfg: SessionConfig, deps: SessionRouteDeps) {
         // Keyed by namespace and name: the store replaces by name, and two databases may use the same one.
         const key = exportTemplateKey(template)
         const config = c.get('session').config
-        const saved = await store.save(config, 'export', key, JSON.stringify(template))
         // A row written before templates were keyed by namespace + name sits under the bare name: saving that
-        // name again would otherwise leave the two side by side, indistinguishable on screen.
-        const legacy = saved.find((item) => item.name === template.name && sameTemplate(item, template))
-        return c.json(toTemplates(legacy ? await store.remove(config, 'export', legacy.id) : saved))
+        // name again would otherwise leave the two side by side, indistinguishable on screen. Dropped before the
+        // save, not after, so the account is never briefly one row over its cap — which would evict the oldest
+        // thing it has, bookmark or template, to make room for a row about to be removed anyway.
+        const listed = await store.list(config, 'export')
+        const legacy = listed.find((item) => item.name === template.name && sameTemplate(item, template))
+        if (legacy) await store.remove(config, 'export', legacy.id)
+        return c.json(toTemplates(await store.save(config, 'export', key, JSON.stringify(template))))
       })
       .delete('/export-templates/:id', requireSession(cfg), validate('param', SavedQueryIdSchema), async (c) => {
         const store = cfg.store.savedQueries
