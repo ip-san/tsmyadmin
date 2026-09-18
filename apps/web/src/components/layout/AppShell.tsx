@@ -1,6 +1,6 @@
 import { Link, useRouterState } from '@tanstack/react-router'
 import type { SessionInfo } from '@tsmyadmin/shared'
-import { CircleHelp, LogOut, Moon, PanelLeftClose, PanelLeftOpen, Sun } from 'lucide-react'
+import { CircleHelp, LogOut, Moon, PanelLeftClose, PanelLeftOpen, SquareTerminal, Sun, X } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
 import { z } from 'zod'
 import { LOCALE_NAMES, LOCALES, locale, localeCode, setLocale } from '@/config/locale.ts'
@@ -13,15 +13,19 @@ import { BrandMark } from './BrandMark.tsx'
 import { ShortcutHelp } from './ShortcutHelp.tsx'
 
 const SIDEBAR_PREF = 'sidebar.collapsed'
+const DOCK_PREF = 'console.docked'
 
 export function AppShell({
   session,
   sidebar,
+  dock,
   children,
   onLogout,
 }: {
   session: SessionInfo
   sidebar: ReactNode
+  /** The SQL console kept at the foot of the page; mounted only while it is open. */
+  dock?: ReactNode
   children: ReactNode
   onLogout: () => void
 }) {
@@ -41,6 +45,11 @@ export function AppShell({
       return !c
     })
   useShortcuts([{ keys: 'mod+b', global: true, handler: toggleSidebar }])
+  const [docked, setDocked] = useState(() => readPreference(DOCK_PREF, z.boolean(), false))
+  const setDock = (open: boolean) => {
+    setDocked(open)
+    writePreference(DOCK_PREF, open)
+  }
   return (
     <div className="flex h-dvh flex-col bg-canvas text-ink print:block print:h-auto">
       <a
@@ -87,6 +96,18 @@ export function AppShell({
             {locale.nav.help}
             <span className="sr-only">{locale.nav.opensNewTab}</span>
           </a>
+          {dock ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setDock(!docked)}
+              aria-expanded={docked}
+              aria-controls={docked ? 'sql-dock' : undefined}
+            >
+              <SquareTerminal className="size-4" aria-hidden />
+              {locale.dock.toggle}
+            </Button>
+          ) : null}
           <ShortcutHelp />
           {/* Switching reloads the page: every string is read once at load, so a live swap would leave half the
               screen in the other language. */}
@@ -136,9 +157,28 @@ export function AppShell({
         >
           {sidebar}
         </aside>
-        <main id="main" className="min-w-0 flex-1 overflow-y-auto p-4 print:overflow-visible print:p-0">
-          {children}
-        </main>
+        <div className="flex min-w-0 flex-1 flex-col print:block">
+          <main id="main" className="min-h-0 min-w-0 flex-1 overflow-y-auto p-4 print:overflow-visible print:p-0">
+            {children}
+          </main>
+          {dock && docked ? (
+            <section
+              id="sql-dock"
+              aria-labelledby="sql-dock-title"
+              className="flex h-[45vh] shrink-0 flex-col border-t-2 border-line-strong bg-surface print:hidden"
+            >
+              <div className="flex shrink-0 items-center justify-between border-b border-line px-4 py-1">
+                <h2 id="sql-dock-title" className="text-sm font-semibold text-ink">
+                  {locale.dock.title}
+                </h2>
+                <Button variant="ghost" size="sm" onClick={() => setDock(false)} aria-label={locale.dock.close}>
+                  <X className="size-4" aria-hidden />
+                </Button>
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto p-4">{dock}</div>
+            </section>
+          ) : null}
+        </div>
       </div>
     </div>
   )

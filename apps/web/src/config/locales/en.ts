@@ -998,6 +998,11 @@ export const en = {
       orReplace: 'Replace a view of the same name (OR REPLACE)',
     },
   },
+  dock: {
+    toggle: 'Console',
+    title: 'SQL console (docked)',
+    close: 'Close the console',
+  },
   zoom: {
     title: 'Zoom search',
     hint: 'Pick two numeric columns to plot the rows matching the search. Pick a point to open its row.',

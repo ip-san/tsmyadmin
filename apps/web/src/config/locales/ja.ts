@@ -984,6 +984,11 @@ export const ja = {
       orReplace: '同名のビューがあれば置き換える（OR REPLACE）',
     },
   },
+  dock: {
+    toggle: 'コンソール',
+    title: 'SQL コンソール（画面の下に常駐）',
+    close: 'コンソールを閉じる',
+  },
   zoom: {
     title: 'ズーム検索',
     hint: '数値のカラムを 2 つ選ぶと、検索条件に合う行を散布図にします。点を選ぶとその行を開けます。',

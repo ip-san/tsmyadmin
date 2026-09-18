@@ -1,4 +1,4 @@
-<!-- translated-from: docs/user-guide.md sha256:c2fb9f8d19218fba059eddce2c0cb219d1e01750769d54490485e105f06c8d5f -->
+<!-- translated-from: docs/user-guide.md sha256:818d5b496d5e152a368a82727187b2c0c4c6266adb9407fdb27e6dc056b8c787 -->
 
 # User guide
 
@@ -40,6 +40,7 @@ The language menu at the top right switches between English and 日本語 (the p
 |---|---|
 | Sidebar | The tree of databases → (on PostgreSQL, schemas →) tables. The box at the top filters table names. Below it come **Favorites** (added and removed with the star by a table's name) and **Recent tables** (the last 10), kept in this browser for each connection. The button at the left of the header, or `⌘/Ctrl + B`, shows and hides it (the setting is kept in this browser) |
 | Tabs | The features of each level (Browse / Structure / SQL / …). The state lives in the URL, so a page can be shared or bookmarked as it is |
+| Console | **Console** in the header docks a SQL console at the foot of the page. It runs against the database on screen, and keeps its text and results while you move between tabs. Whether it is open is remembered in the browser |
 | Theme | The moon / sun icon in the header switches between light and dark |
 | Shortcuts | `?` lists them. `⌘/Ctrl + K` the sidebar filter, `←` `→` paging, `⌘/Ctrl + Enter` run SQL, `Enter` edit the focused cell |
 | Errors | When something fails to load, **Retry** fetches it again. An error that takes out the whole page is cleared by reloading |
