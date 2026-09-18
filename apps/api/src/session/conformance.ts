@@ -200,12 +200,12 @@ export function describeSessionStoreConformance(
         expect(await saved.list({ ...CONFIG, user: 'someone-else' }, 'export')).toHaveLength(1)
         expect(await saved.save(CONFIG, 'export', 'kept', '{"database":"blog"}', 'gone')).toHaveLength(2)
 
-        // Replacing a row with itself keeps it: the write must not delete what it just stored.
+        // Replacing a row with itself keeps it: the write must not delete what it just stored. Compared by name
+        // rather than in order: two rows written in the same millisecond tie, and which comes first is not the
+        // point here (the store has no injected clock in this case).
         const self = (await saved.list(CONFIG, 'export')).find((item) => item.name === 'kept')?.id ?? ''
-        expect(await saved.save(CONFIG, 'export', 'kept', '{"database":"shop"}', self)).toMatchObject([
-          { name: 'kept' },
-          { name: 'renamed' },
-        ])
+        const kept = await saved.save(CONFIG, 'export', 'kept', '{"database":"shop"}', self)
+        expect(kept.map((item) => item.name).sort()).toEqual(['kept', 'renamed'])
 
         for (const item of await saved.list(CONFIG, 'export')) await saved.remove(CONFIG, 'export', item.id)
         expect(await saved.list(CONFIG, 'export')).toEqual([])
