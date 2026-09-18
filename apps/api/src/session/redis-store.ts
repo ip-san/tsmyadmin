@@ -5,6 +5,7 @@ import { Redis } from 'ioredis'
 import { deriveSessionKey, open, rowAad, seal } from './crypto.ts'
 import { identityHash } from './identity.ts'
 import { readPayload, SAVED_QUERIES, SAVED_QUERY_LIMIT } from './saved-queries.ts'
+import { SECOND_FACTOR } from './second-factor.ts'
 import {
   type AdapterFactory,
   connectAdapter,
@@ -13,6 +14,8 @@ import {
   type SavedItemKind,
   type SavedItems,
   SESSION_TTL_MS,
+  type SecondFactor,
+  type SecondFactors,
   type Session,
   type SessionStore,
   startSweep,
@@ -96,6 +99,7 @@ export class RedisSessionStore implements SessionStore {
   private readonly live = new Map<string, { config: ConnectRequest; adapter: DatabaseAdapter; createdAt: number }>()
   private timer: ReturnType<typeof setInterval> | null
   readonly savedQueries: SavedItems
+  readonly secondFactor: SecondFactors
 
   constructor(options: RedisSessionStoreOptions) {
     this.redis = new Redis(options.url, { maxRetriesPerRequest: 3, lazyConnect: false })
@@ -109,6 +113,7 @@ export class RedisSessionStore implements SessionStore {
     this.maxPerIdentity = options.maxPerIdentity ?? DEFAULT_MAX_SESSIONS_PER_IDENTITY
     this.prefix = options.prefix ?? 'tsmyadmin'
     this.savedQueries = new RedisSavedQueries(this.redis, this.key, this.prefix, this.now)
+    this.secondFactor = new RedisSecondFactors(this.redis, this.key, this.prefix)
     // Redis expires sessions itself; the sweep only closes the pools this process still holds for them.
     this.timer = startSweep(options.sweepIntervalMs ?? 60_000, () => void this.sweep())
   }
@@ -357,5 +362,43 @@ class RedisSavedQueries implements SavedItems {
       await this.redis.multi().zrem(this.index(config), id).del(this.entry(config, id)).exec()
     }
     return this.list(config, kind)
+  }
+}
+
+/**
+ * The second factor of a database account, one key per account. Kept apart from the saved items for the same
+ * reason the file store keeps it in its own table: those are capped and pruned, and this must not be.
+ */
+class RedisSecondFactors implements SecondFactors {
+  constructor(
+    private readonly redis: Redis,
+    private readonly key: Buffer,
+    private readonly prefix: string
+  ) {}
+
+  private entry(config: ConnectRequest): string {
+    return `${this.prefix}:2fa:${identityHash(this.key, config)}`
+  }
+
+  async get(config: ConnectRequest): Promise<SecondFactor | null> {
+    const payload = await this.redis.getBuffer(this.entry(config))
+    if (!payload) return null
+    try {
+      return JSON.parse(open(this.key, payload, rowAad(SECOND_FACTOR, identityHash(this.key, config))))
+    } catch {
+      // Will not open (a different secret, a hand-written value): dropped, so the account can enrol again
+      // rather than be locked out by something nothing can read.
+      await this.redis.del(this.entry(config))
+      return null
+    }
+  }
+
+  async set(config: ConnectRequest, factor: SecondFactor): Promise<void> {
+    const aad = rowAad(SECOND_FACTOR, identityHash(this.key, config))
+    await this.redis.set(this.entry(config), seal(this.key, JSON.stringify(factor), aad))
+  }
+
+  async clear(config: ConnectRequest): Promise<void> {
+    await this.redis.del(this.entry(config))
   }
 }

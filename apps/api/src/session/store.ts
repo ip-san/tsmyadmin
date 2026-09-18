@@ -35,6 +35,25 @@ export interface SavedItems {
   remove(config: Config, kind: SavedItemKind, id: string): Promise<SavedItem[]>
 }
 
+/**
+ * The second factor of one database account: the TOTP secret, the last step accepted for it (so a code cannot be
+ * used twice), and the hashes of the recovery codes that are still unused.
+ */
+export interface SecondFactor {
+  secret: string
+  lastStep: number
+  recoveryHashes: string[]
+  /** When it was enrolled or last changed. */
+  at: number
+}
+
+/** Where the second factor lives; absent on a store that cannot keep anything past a restart. */
+export interface SecondFactors {
+  get(config: Config): Promise<SecondFactor | null>
+  set(config: Config, factor: SecondFactor): Promise<void>
+  clear(config: Config): Promise<void>
+}
+
 export interface Session {
   readonly id: string
   readonly config: ConnectRequest
@@ -67,6 +86,8 @@ export interface SessionStore {
    */
   /** Named items (bookmarks, export templates); absent where the store cannot keep them past a restart. */
   readonly savedQueries?: SavedItems
+  /** Second factors per account; absent for the same reason, which is why requiring one needs a real store. */
+  readonly secondFactor?: SecondFactors
 }
 
 /** Everything about a connection except the password (what logs, audit lines and the client may see). */

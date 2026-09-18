@@ -7,6 +7,7 @@ import { type ConnectRequest, ConnectRequestSchema } from '@tsmyadmin/shared'
 import { deriveSessionKey, open, openLegacy, rowAad, seal } from './crypto.ts'
 import { identityHash } from './identity.ts'
 import { SAVED_QUERIES, SqliteSavedQueries } from './saved-queries.ts'
+import { SqliteSecondFactors } from './second-factor.ts'
 
 /** Table name in the AAD of a session payload. */
 const SESSIONS = 'sessions'
@@ -71,6 +72,7 @@ export class SqliteSessionStore implements SessionStore {
   private readonly factory: AdapterFactory
   private readonly live = new Map<string, Live>()
   readonly savedQueries: SqliteSavedQueries
+  readonly secondFactor: SqliteSecondFactors
   private timer: ReturnType<typeof setInterval> | null
   private readonly stmt: {
     insert: StatementSync
@@ -142,12 +144,16 @@ export class SqliteSessionStore implements SessionStore {
     // Same file and same key as the credentials: a bookmarked statement is written by hand and routinely
     // carries row values, so it is sealed exactly like them.
     this.savedQueries = new SqliteSavedQueries(this.db, this.key, this.now)
+    this.secondFactor = new SqliteSecondFactors(this.db, this.key)
     // Saved queries go the same way, and must: a row is found by an HMAC of the account under this key, so after
     // a rotation no future request can name the old rows at all. Left alone they would never be listed, never
     // count towards the per-account cap, and never be pruned — they would simply accumulate across rotations.
     // (After the store, which is what creates the table; a 0.1.x file does not have it yet.) Rotating back to
     // the old secret would have made them readable again, but that is not worth an unbounded leak in the file.
-    if (this.secretRotated) this.db.exec('DELETE FROM saved_queries')
+    // Second factors go with them, and for the same reason: the row is found by an HMAC of the account under
+    // this key, so after a rotation nothing can name it again. Everyone enrols once more, which is the same
+    // position a fresh deployment starts from — better than rows nothing will ever read or delete.
+    if (this.secretRotated) this.db.exec('DELETE FROM saved_queries; DELETE FROM second_factor')
     this.bindPayloadsToRows()
     this.touchIntervalMs = options.touchIntervalMs ?? 60_000
     this.factory = options.adapterFactory

@@ -108,6 +108,7 @@ describe('SqliteSessionStore', () => {
     const first = new SqliteSessionStore({ path, secret: 's'.repeat(32), adapterFactory: factory() })
     try {
       await first.savedQueries.save(config, 'sql', 'daily', 'SELECT 1')
+      await first.secondFactor.set(config, { secret: 'JBSWY3DPEHPK3PXP', lastStep: 0, recoveryHashes: [], at: 1 })
     } finally {
       await first.closeAll()
     }
@@ -117,8 +118,12 @@ describe('SqliteSessionStore', () => {
     try {
       expect(rotated.secretRotated).toBe(true)
       expect(await rotated.savedQueries.list(config, 'sql')).toEqual([])
+      // The second factor goes too: everyone enrols again, rather than the file keeping a row nothing can read
+      // while the account is asked for a code it can no longer be checked against.
+      expect(await rotated.secondFactor.get(config)).toBeNull()
       const raw = new DatabaseSync(path)
       expect(raw.prepare('SELECT COUNT(*) AS n FROM saved_queries').get()).toEqual({ n: 0 })
+      expect(raw.prepare('SELECT COUNT(*) AS n FROM second_factor').get()).toEqual({ n: 0 })
       raw.close()
     } finally {
       await rotated.closeAll()

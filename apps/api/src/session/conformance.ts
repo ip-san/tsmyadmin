@@ -158,6 +158,37 @@ export function describeSessionStoreConformance(
       }
     })
 
+    it('keeps a second factor per account, where the store has somewhere to put it', async () => {
+      const store = await create({ adapterFactory: tracked().adapterFactory, sweepIntervalMs: 0 })
+      try {
+        const factor = store.secondFactor
+        if (!factor) {
+          // The in-memory store has none, which is why requiring a second factor needs a persistent one.
+          expect(store.secondFactor).toBeUndefined()
+          return
+        }
+        expect(await factor.get(CONFIG)).toBeNull()
+        await factor.set(CONFIG, { secret: 'JBSWY3DPEHPK3PXP', lastStep: 7, recoveryHashes: ['a', 'b'], at: 1 })
+        expect(await factor.get(CONFIG)).toEqual({
+          secret: 'JBSWY3DPEHPK3PXP',
+          lastStep: 7,
+          recoveryHashes: ['a', 'b'],
+          at: 1,
+        })
+        // Another account has its own, and cannot see this one.
+        expect(await factor.get({ ...CONFIG, user: 'someone-else' })).toBeNull()
+        // Replaced in place: one row per account, whatever the account does.
+        await factor.set(CONFIG, { secret: 'JBSWY3DPEHPK3PXP', lastStep: 9, recoveryHashes: [], at: 2 })
+        expect(await factor.get(CONFIG)).toMatchObject({ lastStep: 9, recoveryHashes: [] })
+        await factor.clear({ ...CONFIG, user: 'someone-else' })
+        expect(await factor.get(CONFIG)).not.toBeNull()
+        await factor.clear(CONFIG)
+        expect(await factor.get(CONFIG)).toBeNull()
+      } finally {
+        await store.closeAll()
+      }
+    })
+
     it('keeps saved queries per account, where the store has somewhere to put them', async () => {
       const store = await create({ adapterFactory: tracked().adapterFactory, sweepIntervalMs: 0 })
       try {
