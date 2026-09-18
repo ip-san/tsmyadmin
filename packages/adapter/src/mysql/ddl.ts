@@ -114,6 +114,10 @@ export const mysqlDdl: DdlBuilder = {
         }
         return out
       }
+      case 'moveTable':
+        return [
+          `RENAME TABLE ${quoteTable('mysql', ns, op.table)} TO ${quoteTable('mysql', { database: op.to }, op.table)}`,
+        ]
       case 'createView':
         return [
           `CREATE ${op.orReplace ? 'OR REPLACE ' : ''}VIEW ${quoteTable('mysql', ns, op.name)} AS ${bare(op.select)}`,
@@ -201,6 +205,9 @@ export const mysqlDdl: DdlBuilder = {
             return [`OPTIMIZE TABLE ${t}`]
           case 'check':
             return [`CHECK TABLE ${t}`]
+          case 'repair':
+            // MyISAM / ARCHIVE / CSV only; InnoDB answers with a note saying so rather than an error.
+            return [`REPAIR TABLE ${t}`]
           case 'vacuum':
             throw new AdapterError('UNSUPPORTED', 'MySQL has no VACUUM; use OPTIMIZE TABLE')
         }

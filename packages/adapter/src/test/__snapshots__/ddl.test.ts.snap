@@ -149,6 +149,12 @@ exports[`DDL builders > mysql: modifyColumn 1`] = `
 ]
 `;
 
+exports[`DDL builders > mysql: moveTable 1`] = `
+[
+  "RENAME TABLE \`db\`.\`we"ird\`\`tbl\` TO \`arch\`\`ive"\`.\`we"ird\`\`tbl\`",
+]
+`;
+
 exports[`DDL builders > mysql: renameDatabase 1`] = `
 [
   "CREATE DATABASE \`new"db\`\`x\` COLLATE utf8mb4_0900_ai_ci",
@@ -316,6 +322,12 @@ exports[`DDL builders > postgres: modifyColumn 1`] = `
   "ALTER TABLE "app"."t" ALTER COLUMN "n2" SET NOT NULL",
   "ALTER TABLE "app"."t" ALTER COLUMN "n2" DROP DEFAULT",
   "COMMENT ON COLUMN "app"."t"."n2" IS 'renamed'",
+]
+`;
+
+exports[`DDL builders > postgres: moveTable 1`] = `
+[
+  "ALTER TABLE "app"."we""ird\`tbl" SET SCHEMA "arch\`ive"""",
 ]
 `;
 

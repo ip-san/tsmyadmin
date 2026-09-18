@@ -4,6 +4,7 @@ import { isViewKind } from '@tsmyadmin/shared'
 import { ErrorBox, Spinner } from '@/components/ui/Feedback.tsx'
 import { CopyTableForm } from '@/features/operations/CopyTableForm.tsx'
 import { MaintenanceActions } from '@/features/operations/MaintenanceActions.tsx'
+import { MoveTableForm } from '@/features/operations/MoveTableForm.tsx'
 import { RenameTableForm } from '@/features/operations/RenameTableForm.tsx'
 import { TableOperations } from '@/features/operations/TableOperations.tsx'
 import { TableOptionsForm } from '@/features/operations/TableOptionsForm.tsx'
@@ -33,6 +34,7 @@ function Operations() {
           schema={structure.data}
         />
       )}
+      {view ? null : <MoveTableForm key={`${table}-move`} tableRef={tableRef} dialect={session.dialect} />}
       {view ? null : <CopyTableForm key={table} tableRef={tableRef} />}
       {view ? null : <MaintenanceActions tableRef={tableRef} dialect={session.dialect} />}
       <TableOperations tableRef={tableRef} kind={structure.data.kind} />

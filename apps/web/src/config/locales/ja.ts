@@ -473,6 +473,7 @@ export const ja = {
       enableEvent: 'イベントを有効化',
       disableEvent: 'イベントを無効化',
       dropEvent: 'イベントを削除',
+      moveTable: 'テーブルを移動',
       createView: 'ビューを作成',
       createRoutine: 'ルーチンを作成',
       createTrigger: 'トリガーを作成',
@@ -564,13 +565,27 @@ export const ja = {
     autoIncrementHint: '現在の最大値より小さい値は無視されます。',
     unchanged: '変更なし',
     maintenanceTitle: 'メンテナンス',
+    moveTo: { mysql: '移動先のデータベース', postgres: '移動先のスキーマ' },
+    moveHint: {
+      mysql:
+        '同じ名前のまま、行ごと移します（RENAME TABLE）。トリガーのあるテーブルは MySQL が別データベースへ移せません。',
+      postgres:
+        '同じ名前のまま、このデータベース内の別スキーマへ移します。PostgreSQL は別のデータベースへは移せません。',
+    },
     maintenanceHint: {
-      mysql: 'ANALYZE は統計を更新、OPTIMIZE は領域を再編成（ロックあり）、CHECK は整合性を検査します。',
+      mysql:
+        'ANALYZE は統計を更新、OPTIMIZE は領域を再編成（ロックあり）、CHECK は整合性を検査、REPAIR は壊れたテーブルを修復します（MyISAM など。InnoDB は対象外で、その旨が結果に出ます）。',
       postgres: 'ANALYZE は統計を更新、VACUUM は不要領域を回収、VACUUM FULL はテーブルを書き直します（排他ロック）。',
     },
     maintenance: {
-      mysql: { analyze: 'ANALYZE TABLE', optimize: 'OPTIMIZE TABLE', check: 'CHECK TABLE', vacuum: 'VACUUM' },
-      postgres: { analyze: 'ANALYZE', vacuum: 'VACUUM', optimize: 'VACUUM FULL', check: 'CHECK' },
+      mysql: {
+        analyze: 'ANALYZE TABLE',
+        optimize: 'OPTIMIZE TABLE',
+        check: 'CHECK TABLE',
+        repair: 'REPAIR TABLE',
+        vacuum: 'VACUUM',
+      },
+      postgres: { analyze: 'ANALYZE', vacuum: 'VACUUM', optimize: 'VACUUM FULL', check: 'CHECK', repair: 'REPAIR' },
     },
     bulkSelected: (n: number) => `${n.toLocaleString('ja-JP')} 件のテーブルを選択中`,
     bulkTruncate: '選択したテーブルを空にする…',

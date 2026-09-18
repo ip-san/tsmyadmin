@@ -117,6 +117,11 @@ export const DdlOpSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('dropTable'), table, kind: TableKindSchema.default('table') }),
   z.object({ op: z.literal('truncateTable'), table }),
   z.object({ op: z.literal('renameTable'), table, newName: z.string().min(1) }),
+  /**
+   * Moves a table under the same name: to another database on MySQL (RENAME TABLE), to another schema of the same
+   * database on PostgreSQL (which cannot move a table between databases).
+   */
+  z.object({ op: z.literal('moveTable'), table, to: z.string().min(1) }),
   /** MySQL: database == schema, so createSchema also creates a database there. */
   z.object({ op: z.literal('createDatabase'), name: z.string().min(1) }),
   z.object({ op: z.literal('dropDatabase'), name: z.string().min(1) }),
@@ -187,7 +192,11 @@ export const DdlOpSchema = z.discriminatedUnion('op', [
       .optional(),
   }),
   /** Maintenance statements: MySQL ANALYZE / OPTIMIZE / CHECK TABLE, PostgreSQL ANALYZE / VACUUM (FULL). */
-  z.object({ op: z.literal('maintainTable'), table, action: z.enum(['analyze', 'optimize', 'check', 'vacuum']) }),
+  z.object({
+    op: z.literal('maintainTable'),
+    table,
+    action: z.enum(['analyze', 'optimize', 'check', 'repair', 'vacuum']),
+  }),
   /** Bulk actions from the database structure page. */
   z.object({ op: z.literal('dropTables'), tables: z.array(table).min(1) }),
   z.object({ op: z.literal('truncateTables'), tables: z.array(table).min(1) }),

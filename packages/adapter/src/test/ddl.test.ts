@@ -99,6 +99,7 @@ const SAMPLE_OPS: Record<DdlOp['op'], DdlOp> = {
     identityColumns: ['id'],
     serialColumns: ['na`me'],
   },
+  moveTable: { op: 'moveTable', table: 'we"ird`tbl', to: 'arch`ive"' },
   createView: { op: 'createView', name: 'v`w"x', select: 'SELECT id, name FROM users WHERE id > 1;', orReplace: true },
   createRoutine: {
     op: 'createRoutine',
@@ -254,6 +255,12 @@ describe('DDL builders', () => {
     ])
     expect(() => pgDdl.build({ database: 'db' }, { op: 'maintainTable', table: 't', action: 'check' })).toThrow(
       /CHECK TABLE/
+    )
+    expect(mysqlDdl.build({ database: 'db' }, { op: 'maintainTable', table: 't', action: 'repair' })).toEqual([
+      'REPAIR TABLE `db`.`t`',
+    ])
+    expect(() => pgDdl.build({ database: 'db' }, { op: 'maintainTable', table: 't', action: 'repair' })).toThrow(
+      /REPAIR TABLE/
     )
   })
 

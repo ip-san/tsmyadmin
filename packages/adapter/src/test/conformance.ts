@@ -21,7 +21,7 @@ import {
 } from '@tsmyadmin/shared'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { mysqlAccount } from '../mysql/users.ts'
-import { quoteIdent } from '../sql/quote.ts'
+import { quoteIdent, quoteTable } from '../sql/quote.ts'
 import { AdapterError, type DatabaseAdapter, type ExecuteOptions, type RowBatch } from '../types.ts'
 
 /** A browsed value handed back as a key / filter value (fails loudly if the server cut it). */
@@ -2801,6 +2801,28 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         }
       })
 
+      it('moves a table, rows and all, to another database (MySQL) or schema (PostgreSQL)', async () => {
+        const t = `${scratch}_mv`
+        const target = dialect === 'mysql' ? ctx.otherDatabase : `${scratch}_sch`
+        const there: Namespace = dialect === 'mysql' ? { database: target } : { database: ns.database, schema: target }
+        await execOk(`CREATE TABLE ${t} (id INT PRIMARY KEY)`)
+        await execOk(`INSERT INTO ${t} (id) VALUES (1), (2)`)
+        if (dialect === 'postgres') await execOk(`CREATE SCHEMA ${quoteIdent(dialect, target)}`)
+        try {
+          await runScript({ op: 'moveTable', table: t, to: target })
+          expect((await db.listTables(ns)).map((x) => x.name)).not.toContain(t)
+          expect((await db.listTables(there)).map((x) => x.name)).toContain(t)
+          const moved = await db.browseRows(there, t, { offset: 0, limit: 10, sort: [], filters: [] })
+          expect(moved.rows).toHaveLength(2)
+        } finally {
+          await exec(`DROP TABLE IF EXISTS ${quoteTable(dialect, there, t)}`, { stopOnError: false })
+          await exec(`DROP TABLE IF EXISTS ${t}`, { stopOnError: false })
+          if (dialect === 'postgres') {
+            await exec(`DROP SCHEMA IF EXISTS ${quoteIdent(dialect, target)}`, { stopOnError: false })
+          }
+        }
+      })
+
       it('creates a row trigger that fires', async () => {
         const t = `${scratch}_trg`
         const trigger = `${scratch}_up`
@@ -3237,8 +3259,11 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         await runDdl({ op: 'setTableOptions', table: a, comment: "bulk 'a'" })
         expect((await db.describeTable(ns, a)).comment).toBe("bulk 'a'")
         await runDdl({ op: 'maintainTable', table: a, action: 'analyze' })
-        if (dialect === 'mysql') await runDdl({ op: 'maintainTable', table: a, action: 'check' })
-        else await runDdl({ op: 'maintainTable', table: a, action: 'vacuum' })
+        if (dialect === 'mysql') {
+          await runDdl({ op: 'maintainTable', table: a, action: 'check' })
+          // InnoDB cannot be repaired: the server says so in the result, which must not read as a failure.
+          await runDdl({ op: 'maintainTable', table: a, action: 'repair' })
+        } else await runDdl({ op: 'maintainTable', table: a, action: 'vacuum' })
         await runDdl({ op: 'truncateTables', tables: [a, b] })
         expect((await browseAll(a)).total).toBe(0)
         expect((await browseAll(b)).total).toBe(0)

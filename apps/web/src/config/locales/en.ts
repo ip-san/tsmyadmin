@@ -477,6 +477,7 @@ export const en = {
       enableEvent: 'Enable event',
       disableEvent: 'Disable event',
       dropEvent: 'Drop the event',
+      moveTable: 'Move table',
       createView: 'Create view',
       createRoutine: 'Create routine',
       createTrigger: 'Create trigger',
@@ -568,14 +569,28 @@ export const en = {
     autoIncrementHint: 'A value below the current maximum is ignored.',
     unchanged: 'unchanged',
     maintenanceTitle: 'Maintenance',
+    moveTo: { mysql: 'Move to database', postgres: 'Move to schema' },
+    moveHint: {
+      mysql:
+        'Moves the table, rows and all, under the same name (RENAME TABLE). MySQL cannot move a table with triggers to another database.',
+      postgres:
+        'Moves the table under the same name to another schema of this database. PostgreSQL cannot move a table to another database.',
+    },
     maintenanceHint: {
-      mysql: 'ANALYZE refreshes statistics, OPTIMIZE rebuilds the storage (locking), CHECK verifies integrity.',
+      mysql:
+        'ANALYZE refreshes statistics, OPTIMIZE rebuilds the storage (locking), CHECK verifies integrity, REPAIR mends a damaged table (MyISAM and the like; InnoDB is not covered, and the result says so).',
       postgres:
         'ANALYZE refreshes statistics, VACUUM reclaims dead space, VACUUM FULL rewrites the table (exclusive lock).',
     },
     maintenance: {
-      mysql: { analyze: 'ANALYZE TABLE', optimize: 'OPTIMIZE TABLE', check: 'CHECK TABLE', vacuum: 'VACUUM' },
-      postgres: { analyze: 'ANALYZE', vacuum: 'VACUUM', optimize: 'VACUUM FULL', check: 'CHECK' },
+      mysql: {
+        analyze: 'ANALYZE TABLE',
+        optimize: 'OPTIMIZE TABLE',
+        check: 'CHECK TABLE',
+        repair: 'REPAIR TABLE',
+        vacuum: 'VACUUM',
+      },
+      postgres: { analyze: 'ANALYZE', vacuum: 'VACUUM', optimize: 'VACUUM FULL', check: 'CHECK', repair: 'REPAIR' },
     },
     bulkSelected: (n: number) => `${plural(n, 'table', 'tables')} selected`,
     bulkTruncate: 'Empty the selected tables…',

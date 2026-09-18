@@ -84,6 +84,8 @@ export const pgDdl: DdlBuilder = {
       case 'copyDatabase':
         if (!op.withData) throw new AdapterError('UNSUPPORTED', 'PostgreSQL copies a database with its data')
         return [releaseOwnConnections(op.name), `CREATE DATABASE ${id(op.newName)} TEMPLATE ${id(op.name)}`]
+      case 'moveTable':
+        return [`ALTER TABLE ${quoteTable('postgres', ns, op.table)} SET SCHEMA ${id(op.to)}`]
       case 'createView':
         return [
           `CREATE ${op.orReplace ? 'OR REPLACE ' : ''}VIEW ${quoteTable('postgres', ns, op.name)} AS ${op.select.trim().replace(/[\s;]+$/, '')}`,
@@ -183,6 +185,8 @@ export const pgDdl: DdlBuilder = {
             return [`VACUUM (FULL, ANALYZE) ${t}`]
           case 'check':
             throw new AdapterError('UNSUPPORTED', 'PostgreSQL has no CHECK TABLE')
+          case 'repair':
+            throw new AdapterError('UNSUPPORTED', 'PostgreSQL has no REPAIR TABLE')
         }
         break
       case 'copyTable': {
