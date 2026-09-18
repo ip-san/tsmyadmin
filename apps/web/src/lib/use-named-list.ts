@@ -32,7 +32,11 @@ export interface NamedList<TItem, TBody> {
    */
   error: Error | null
   save: (name: string, body: TBody) => void
-  remove: (name: string) => void
+  /**
+   * Takes the entry, not its name: a name is unique only within what the caller shows (export templates share a
+   * name between databases), so looking one up by name in the account's whole list could delete another's.
+   */
+  remove: (entry: { id: string; name: string }) => void
 }
 
 export function useNamedList<TItem extends { id: string; name: string }, TBody>(
@@ -70,13 +74,10 @@ export function useNamedList<TItem extends { id: string; name: string }, TBody>(
       if (options.onServer) saveMutation.mutate({ name, body })
       else setLocal(options.local.save(name, body))
     },
-    remove: (name) => {
-      if (!options.onServer) {
-        setLocal(options.local.remove(name))
-        return
-      }
-      const entry = entries.find((e) => e.name === name)
-      if (entry) removeMutation.mutate(entry.id)
+    remove: (entry) => {
+      // The browser-side lists are keyed per namespace already, so there a name is enough (and is all they hold).
+      if (options.onServer) removeMutation.mutate(entry.id)
+      else setLocal(options.local.remove(entry.name))
     },
   }
 }

@@ -31,6 +31,10 @@ vi.mock('@/lib/queries.ts', () => ({
   },
 }))
 
+/** The panel hands back the row it is deleting; these tests do the same. */
+const entryNamed = (entries: { id: string; name: string }[], name: string) =>
+  entries.find((e) => e.name === name) ?? { id: '', name }
+
 function wrapper({ children }: { children: ReactNode }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>
@@ -60,7 +64,7 @@ describe('useSavedQueries', () => {
     expect(loadSaved('mysql.db.3306')).toHaveLength(1)
     expect(server.list).toEqual([])
 
-    act(() => result.current.remove('daily'))
+    act(() => result.current.remove(entryNamed(result.current.entries, 'daily')))
     await waitFor(() => expect(result.current.entries).toEqual([]))
     expect(loadSaved('mysql.db.3306')).toEqual([])
   })
@@ -76,7 +80,7 @@ describe('useSavedQueries', () => {
     expect(server.list).toHaveLength(1)
 
     // Deleting is by name in the UI but by id on the wire, because the name is not queryable server-side.
-    act(() => result.current.remove('daily'))
+    act(() => result.current.remove(entryNamed(result.current.entries, 'daily')))
     await waitFor(() => expect(result.current.entries).toEqual([]))
     expect(server.list).toEqual([])
   })
@@ -97,7 +101,7 @@ describe('useSavedQueries', () => {
 
     // A mutation keeps its error until it is fired again, so the failed save must not outlive a later success.
     server.saveFail = null
-    act(() => result.current.remove('old'))
+    act(() => result.current.remove(entryNamed(result.current.entries, 'old')))
     await waitFor(() => expect(result.current.entries).toEqual([]))
     expect(result.current.error).toBeNull()
   })
@@ -123,7 +127,7 @@ describe('useSavedQueries', () => {
     // the assertions, because waitFor measures its own timeout against this clock.
     const now = vi.spyOn(Date, 'now').mockImplementation(() => (clock += 1000))
     act(() => result.current.save('daily', 'SELECT 1'))
-    act(() => result.current.remove('old'))
+    act(() => result.current.remove(entryNamed(result.current.entries, 'old')))
     now.mockRestore()
     await waitFor(() => expect(result.current.entries).toEqual([]))
     expect(result.current.error).toBeNull()

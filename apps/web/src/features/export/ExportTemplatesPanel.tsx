@@ -65,7 +65,7 @@ export function ExportTemplatesPanel({
       }}
       loadLabel={locale.sql.load}
       deleteLabel={t.deleteLabel}
-      onDelete={(entry) => list.remove(entry.name)}
+      onDelete={(entry) => list.remove(entry)}
       empty={t.empty}
     />
   )

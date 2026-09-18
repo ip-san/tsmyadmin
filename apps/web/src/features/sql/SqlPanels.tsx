@@ -87,7 +87,7 @@ export function SavedQueriesPanel({
   currentSql: string
   onSave: (name: string) => void
   onLoad: (sql: string) => void
-  onDelete: (name: string) => void
+  onDelete: (entry: { id: string; name: string }) => void
 }) {
   return (
     <NamedListPanel
@@ -102,7 +102,7 @@ export function SavedQueriesPanel({
       onLoad={(entry) => onLoad(entries.find((q) => q.id === entry.id && q.name === entry.name)?.sql ?? entry.summary)}
       loadLabel={locale.sql.load}
       deleteLabel={locale.sql.deleteSaved}
-      onDelete={(entry) => onDelete(entry.name)}
+      onDelete={(entry) => onDelete(entry)}
       empty={locale.sql.noSaved}
     />
   )
