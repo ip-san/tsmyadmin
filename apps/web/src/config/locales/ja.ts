@@ -781,6 +781,7 @@ export const ja = {
       primary: 'ソース（送る側）',
       replica: 'レプリカ（受ける側）',
       relay: '中継（受けて送る）',
+      unknown: '不明（読む権限がありません）',
     },
     source: {
       mysql: 'レプリカとしての状態（SHOW REPLICA STATUS）',

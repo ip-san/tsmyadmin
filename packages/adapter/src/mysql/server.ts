@@ -8,6 +8,7 @@ import type {
   ServerCatalogKind,
   ServerInfo,
 } from '@tsmyadmin/shared'
+import { replicationRole } from '@tsmyadmin/shared'
 import { type Conn, firstResult } from '../base.ts'
 import { joinParts, str, strOrNull } from '../sql/format.ts'
 import { AdapterError } from '../types.ts'
@@ -111,7 +112,7 @@ const records = (r: { columns: { name: string }[]; rows: unknown[][] }): Records
   r.rows.map((row) => r.columns.map((c, i) => ({ name: c.name, value: row[i] == null ? null : String(row[i]) })))
 
 /** Not allowed, or not there at all (binary logging off): the part is shown as unavailable, not as an error. */
-const UNAVAILABLE = new Set(['ER_SPECIFIC_ACCESS_DENIED_ERROR', 'ER_ACCESS_DENIED_ERROR', 'ER_NO_BINARY_LOGGING'])
+const UNAVAILABLE = new Set(['ER_SPECIFIC_ACCESS_DENIED_ERROR', 'ER_NO_BINARY_LOGGING'])
 
 /** A statement, falling back to its pre-8.0.22 / MariaDB spelling where the server does not know the new one. */
 async function readOrNull(conn: Conn, sql: string, legacy?: string): Promise<Records | null> {
@@ -129,10 +130,8 @@ export async function mysqlReplicationInfo(conn: Conn): Promise<ReplicationInfo>
   const source = await readOrNull(conn, 'SHOW REPLICA STATUS', 'SHOW SLAVE STATUS')
   const replicas = await readOrNull(conn, 'SHOW REPLICAS', 'SHOW SLAVE HOSTS')
   const logs = await readOrNull(conn, 'SHOW BINARY LOGS')
-  const reading = (source?.length ?? 0) > 0
-  const sending = (replicas?.length ?? 0) > 0
   return {
-    role: reading && sending ? 'relay' : reading ? 'replica' : sending ? 'primary' : 'standalone',
+    role: replicationRole(source, replicas),
     source,
     replicas,
     logs: logs?.map((r) => ({ name: r[0]?.value ?? '', size: r[1]?.value ?? null })) ?? null,

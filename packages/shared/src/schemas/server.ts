@@ -81,8 +81,11 @@ export const RecordSchema = z.array(z.object({ name: z.string(), value: z.string
  * the account may not read it (or, for the logs, when the server keeps none).
  */
 export const ReplicationInfoSchema = z.object({
-  /** This server reads from a source / sends to replicas; both at once for a relay. */
-  role: z.enum(['standalone', 'primary', 'replica', 'relay']),
+  /**
+   * This server reads from a source / sends to replicas; both at once for a relay. `unknown` when nothing shows a
+   * role and the account could not read part of it — "standalone" would be a guess.
+   */
+  role: z.enum(['standalone', 'primary', 'replica', 'relay', 'unknown']),
   /** As a replica: its state (MySQL SHOW REPLICA STATUS, PostgreSQL pg_stat_wal_receiver), one per channel. */
   source: z.array(RecordSchema).nullable(),
   /** As a source: the replicas connected to it (MySQL SHOW REPLICAS, PostgreSQL pg_stat_replication). */
@@ -91,3 +94,13 @@ export const ReplicationInfoSchema = z.object({
   logs: z.array(z.object({ name: z.string(), size: z.string().nullable() })).nullable(),
 })
 export type ReplicationInfo = z.infer<typeof ReplicationInfoSchema>
+
+/** The role the parts show: a part that could not be read (null) proves nothing either way. */
+export function replicationRole(source: unknown[] | null, replicas: unknown[] | null): ReplicationInfo['role'] {
+  const reading = (source?.length ?? 0) > 0
+  const sending = (replicas?.length ?? 0) > 0
+  if (reading && sending) return 'relay'
+  if (reading) return 'replica'
+  if (sending) return 'primary'
+  return source === null || replicas === null ? 'unknown' : 'standalone'
+}

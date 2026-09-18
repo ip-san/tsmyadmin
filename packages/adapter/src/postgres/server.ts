@@ -8,6 +8,7 @@ import type {
   ServerCatalogKind,
   ServerInfo,
 } from '@tsmyadmin/shared'
+import { replicationRole } from '@tsmyadmin/shared'
 import { type Conn, firstResult } from '../base.ts'
 import { joinParts, str, strOrNull } from '../sql/format.ts'
 import { AdapterError } from '../types.ts'
@@ -149,10 +150,8 @@ export async function pgReplicationInfo(conn: Conn): Promise<ReplicationInfo> {
   const source = await readOrNull(conn, 'SELECT * FROM pg_stat_wal_receiver')
   const replicas = await readOrNull(conn, 'SELECT * FROM pg_stat_replication ORDER BY application_name')
   const logs = await readOrNull(conn, 'SELECT name, size FROM pg_ls_waldir() ORDER BY name')
-  const reading = (source?.length ?? 0) > 0
-  const sending = (replicas?.length ?? 0) > 0
   return {
-    role: reading && sending ? 'relay' : reading ? 'replica' : sending ? 'primary' : 'standalone',
+    role: replicationRole(source, replicas),
     source,
     replicas,
     logs: logs?.map((r) => ({ name: r[0]?.value ?? '', size: r[1]?.value ?? null })) ?? null,

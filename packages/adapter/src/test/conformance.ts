@@ -2341,7 +2341,9 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         const plain = ctx.createAs(name, 'rp-pw')
         try {
           const limited = await plain.replicationInfo()
-          expect(limited.role).toBe('standalone')
+          // MySQL keeps the replication state from such an account, so its role cannot be told (PostgreSQL shows
+          // the views to anyone, with the details blanked, and the role stays known).
+          expect(limited.role).toBe(dialect === 'mysql' ? 'unknown' : 'standalone')
           expect(limited.logs).toBeNull()
         } finally {
           await plain.close()

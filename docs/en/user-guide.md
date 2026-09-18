@@ -1,4 +1,4 @@
-<!-- translated-from: docs/user-guide.md sha256:9544e5c0ac735f6a0e65f4bd82ba4e4b576e0aedc2d8120efdb7943aac7c399c -->
+<!-- translated-from: docs/user-guide.md sha256:61731c89523a1eb647a8c67ca6eaeabef4868ce025b679fd2f08e0385cc02617 -->
 
 # User guide
 
@@ -52,7 +52,7 @@ The language menu at the top right switches between English and 日本語 (the p
 | SQL | A SQL console for the server as a whole. **Database** chooses which database unqualified names resolve in |
 | Status | The server version, uptime and status variables (filtered by name) |
 | Variables | System variables (filtered by name) |
-| Replication | The role of this server (standalone / source / replica / relay), its state as a replica (MySQL: SHOW REPLICA STATUS; PostgreSQL: pg_stat_wal_receiver), the replicas connected to it, and the binary logs (on PostgreSQL, WAL segments) with their size. Parts the account may not read say so (MySQL: REPLICATION CLIENT; PostgreSQL: pg_read_all_stats / pg_monitor) |
+| Replication | The role of this server (standalone / source / replica / relay; *unknown* where the account cannot read enough to tell), its state as a replica (MySQL: SHOW REPLICA STATUS; PostgreSQL: pg_stat_wal_receiver), the replicas connected to it, and the binary logs (on PostgreSQL, WAL segments) with their size. Parts the account may not read say so (MySQL: REPLICATION CLIENT; PostgreSQL: pg_read_all_stats / pg_monitor) |
 | Charsets and collations / Engines / Plugins | The character sets and collations, storage engines and plugins the server has (filtered on any column). PostgreSQL has none of these as such, so the same places show **Collations**, **Access methods** (table and index) and **Extensions** (available, and the version installed) |
 | Processes | The connections the server has open. tsmyadmin's own carry a **tsmyadmin** badge. **Cancel query** stops the running statement only and leaves the connection, its transaction and its temporary tables alone (no confirmation). **Kill** closes the connection itself (the confirmation shows the user, database and running query) |
 | Users | The accounts, their privileges (as GRANT statements), **Create user**, **Change password** and **Drop**. Accounts with a second factor that you may manage also get **Reset two-factor…** (for someone who lost their device) |

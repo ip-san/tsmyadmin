@@ -786,6 +786,7 @@ export const en = {
       primary: 'Source (sends)',
       replica: 'Replica (receives)',
       relay: 'Relay (receives and sends)',
+      unknown: 'Unknown (not readable by this account)',
     },
     source: {
       mysql: 'State as a replica (SHOW REPLICA STATUS)',
