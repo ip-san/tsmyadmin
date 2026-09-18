@@ -1507,8 +1507,22 @@ describe('saved queries', () => {
       await h.store.savedQueries.save(ConnectRequestSchema.parse(LOGIN), 'export', 'nightly', JSON.stringify(body))
       const listed = z.array(ExportTemplateSchema).parse(await (await h.req('/api/export-templates')).json())
       expect(listed).toMatchObject([{ name: 'nightly', database: 'shop', tables: ['users'] }])
+      // Saving that name again replaces it rather than leaving two rows showing the same name.
+      const after = z.array(ExportTemplateSchema).parse(
+        await (
+          await h.req('/api/export-templates', {
+            method: 'POST',
+            body: JSON.stringify({ name: 'nightly', database: 'shop', tables: ['posts'], options: {} }),
+          })
+        ).json()
+      )
+      expect(after).toMatchObject([{ name: 'nightly', tables: ['posts'] }])
+      expect(await (await h.req('/api/export-templates')).json()).toHaveLength(1)
+      await h.req(`/api/export-templates/${after[0]?.id}`, { method: 'DELETE' })
+
       // Reading it did not delete it: a row this version cannot fully interpret is not data to throw away.
-      expect(await h.store.savedQueries.list(ConnectRequestSchema.parse(LOGIN), 'export')).toHaveLength(1)
+      // The legacy row was read as a template before it was replaced, rather than being thrown away on sight.
+      expect(listed[0]?.tables).toEqual(['users'])
     } finally {
       await h.store.closeAll()
     }

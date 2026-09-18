@@ -29,11 +29,18 @@ function migrateFlatList(scope: string, store?: PreferenceStore): void {
   const flat = `export.templates.${scope}`
   const old = loadNamed(flat, ExportTemplateSchema, store)
   if (old.length === 0) return
+  // Grouped first, then written once per namespace: moving them one at a time would put the oldest in front,
+  // and these lists are newest first.
+  const groups = new Map<string, ExportTemplate[]>()
   for (const entry of old) {
     const target = key(scope, entry.database, entry.schema)
+    groups.set(target, [...(groups.get(target) ?? []), entry])
+  }
+  for (const [target, moved] of groups) {
     const existing = loadNamed(target, ExportTemplateSchema, store)
-    if (existing.some((t) => t.name === entry.name)) continue
-    writePreference(target, [entry, ...existing], store)
+    // A template saved here since keeps its place: the older copy of that name is the one being replaced.
+    const keep = moved.filter((entry) => !existing.some((t) => t.name === entry.name))
+    if (keep.length > 0) writePreference(target, [...keep, ...existing], store)
   }
   removePreference(flat, store)
 }

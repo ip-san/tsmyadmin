@@ -163,8 +163,12 @@ export function sessionRoutes(cfg: SessionConfig, deps: SessionRouteDeps) {
         const template = c.req.valid('json')
         // Keyed by namespace and name: the store replaces by name, and two databases may use the same one.
         const key = exportTemplateKey(template)
-        const saved = await store.save(c.get('session').config, 'export', key, JSON.stringify(template))
-        return c.json(toTemplates(saved))
+        const config = c.get('session').config
+        const saved = await store.save(config, 'export', key, JSON.stringify(template))
+        // A row written before templates were keyed by namespace + name sits under the bare name: saving that
+        // name again would otherwise leave the two side by side, indistinguishable on screen.
+        const legacy = saved.find((item) => item.name === template.name && sameTemplate(item, template))
+        return c.json(toTemplates(legacy ? await store.remove(config, 'export', legacy.id) : saved))
       })
       .delete('/export-templates/:id', requireSession(cfg), validate('param', SavedQueryIdSchema), async (c) => {
         const store = cfg.store.savedQueries
@@ -208,6 +212,14 @@ function toTemplates(items: SavedItem[]): ExportTemplate[] {
     out.push({ ...parsed.data, id: item.id, name: named.success ? named.data : item.name, at: item.at })
   }
   return out
+}
+
+/** Whether a stored row is a template of the same database (and schema) as this one. */
+function sameTemplate(item: SavedItem, template: { database: string; schema?: string | undefined }): boolean {
+  const body = ExportTemplateBodySchema.safeParse(safeJson(item.body))
+  return (
+    body.success && body.data.database === template.database && (body.data.schema ?? '') === (template.schema ?? '')
+  )
 }
 
 function safeJson(text: string): unknown {

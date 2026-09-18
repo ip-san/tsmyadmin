@@ -54,6 +54,19 @@ describe('export templates', () => {
     expect(memory.getItem('tsmyadmin.pref.export.templates.s')).toBeNull()
   })
 
+  it('keeps the order of several templates of one database while moving them', () => {
+    const store = new Map<string, string>()
+    const memory = {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, v),
+      removeItem: (k: string) => void store.delete(k),
+    }
+    // As the old list held them: newest first.
+    const old = ['newest', 'middle', 'oldest'].map((name) => template({ name }))
+    memory.setItem('tsmyadmin.pref.export.templates.s', JSON.stringify(old))
+    expect(loadTemplates('s', 'shop', undefined, memory).map((t) => t.name)).toEqual(['newest', 'middle', 'oldest'])
+  })
+
   it('shows only the templates of the namespace being looked at', () => {
     const all = [
       template({ name: 'here' }),
