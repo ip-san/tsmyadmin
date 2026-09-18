@@ -48,6 +48,7 @@ export const PASSTHROUGH_METHODS = [
   'serverInfo',
   'listVariables',
   'serverCatalog',
+  'replicationInfo',
   'listStatus',
   'listProcesses',
 ] as const satisfies readonly Method[]

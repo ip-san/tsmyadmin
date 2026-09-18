@@ -156,7 +156,7 @@ for (const t of TARGETS) {
       await page.getByRole('cell', { name: 'tsmyadmin', exact: true }).waitFor()
       await scan(page)
       // Collations, engines (access methods) and plugins (extensions): one table each, named per server.
-      for (const path of ['/collations', '/engines', '/plugins']) {
+      for (const path of ['/replication', '/collations', '/engines', '/plugins']) {
         await page.goto(path)
         await page.getByRole('table').waitFor()
         await scan(page)

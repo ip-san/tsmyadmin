@@ -772,6 +772,31 @@ export const ja = {
     },
     columns: (columns: string) => `カラム: ${columns}`,
   },
+  replication: {
+    title: 'レプリケーション',
+    role: 'このサーバーの役割',
+    roles: {
+      standalone: '単独',
+      primary: 'ソース（送る側）',
+      replica: 'レプリカ（受ける側）',
+      relay: '中継（受けて送る）',
+    },
+    source: {
+      mysql: 'レプリカとしての状態（SHOW REPLICA STATUS）',
+      postgres: 'レプリカとしての状態（pg_stat_wal_receiver）',
+    },
+    replicas: '接続しているレプリカ',
+    notReplica: 'このサーバーはレプリカではありません。',
+    noReplicas: '接続しているレプリカはありません。',
+    unavailable: 'このアカウントには読む権限がありません（MySQL: REPLICATION CLIENT、PostgreSQL: pg_read_all_stats）。',
+    logs: { mysql: 'バイナリログ', postgres: 'WAL セグメント' },
+    logsUnavailable: {
+      mysql: 'バイナリログは無効か、このアカウントに読む権限がありません（REPLICATION CLIENT）。',
+      postgres: 'WAL ディレクトリを読む権限がありません（pg_monitor が必要です）。',
+    },
+    logName: '名前',
+    logSize: 'サイズ',
+  },
   catalog: {
     filter: '絞り込む（どの列でも）',
     titles: {

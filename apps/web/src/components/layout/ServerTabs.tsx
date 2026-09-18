@@ -24,6 +24,7 @@ export function ServerTabs({ tab }: { tab: string }) {
           { label: locale.tabs.variables, to: '/variables' },
           { label: locale.tabs.processes, to: '/processes' },
           { label: locale.tabs.users, to: '/users' },
+          { label: locale.replication.title, to: '/replication' },
           { label: locale.catalog.titles.collations[dialect], to: '/collations' },
           { label: locale.catalog.titles.engines[dialect], to: '/engines' },
           { label: locale.catalog.titles.plugins[dialect], to: '/plugins' },

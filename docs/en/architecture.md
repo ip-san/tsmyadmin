@@ -1,4 +1,4 @@
-<!-- translated-from: docs/architecture.md sha256:8e516dcfd407e40a4a2a5ea2f0b777c97d13f8527565cbc6ee82f6e1553f575e -->
+<!-- translated-from: docs/architecture.md sha256:fca9ff9f72a02db9073967da9054ee32ebfcce3dd77667088d7fafdecc883372 -->
 
 # Architecture
 
@@ -82,7 +82,7 @@ classDiagram
     +iterateRows(ns, table) AsyncIterable~RowBatch~
     +showCreateTable() / listRoutines() / listTriggers()
     +listUsers() / showGrants() / canManageAccount()
-    +serverInfo() / listProcesses() / killProcess() / serverCatalog()
+    +serverInfo() / listProcesses() / killProcess() / serverCatalog() / replicationInfo()
     +ddl : DdlBuilder
     +exporter : SqlExporter
     +users : UserSqlBuilder

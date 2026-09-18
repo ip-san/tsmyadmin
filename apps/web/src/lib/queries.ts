@@ -17,6 +17,7 @@ import type {
   QueryBuilderRequestInput,
   QueryBuilderResult,
   RelationDef,
+  ReplicationInfo,
   RoutineDefinition,
   RoutineInfo,
   RoutineKind,
@@ -233,6 +234,10 @@ export const serverCatalogQuery = (kind: ServerCatalogKind) =>
     queryFn: () => unwrap<ServerCatalog>(api.server.catalog[':kind'].$get({ param: { kind } })),
     staleTime: Number.POSITIVE_INFINITY,
   })
+export const replicationQuery = queryOptions({
+  queryKey: ['server', 'replication'],
+  queryFn: () => unwrap<ReplicationInfo>(api.server.replication.$get()),
+})
 export const statusQuery = queryOptions({
   queryKey: ['server', 'status'],
   queryFn: () => unwrap<KeyValue[]>(api.server.status.$get()),

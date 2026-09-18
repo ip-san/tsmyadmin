@@ -26,5 +26,17 @@ for (const t of TARGETS) {
         await expect(page.getByRole('cell', { name: entry, exact: true }).first()).toBeVisible()
       }
     })
+
+    test('shows the replication role and the binary logs / WAL segments', async ({ page }) => {
+      await login(page, t)
+      await page
+        .getByRole('navigation', { name: 'サーバー' })
+        .getByRole('link', { name: 'レプリケーション', exact: true })
+        .click()
+      await expect(page.getByText('このサーバーの役割')).toBeVisible()
+      await expect(page.getByText('単独', { exact: true })).toBeVisible()
+      const logs = page.getByRole('table', { name: t.dialect === 'mysql' ? 'バイナリログ' : 'WAL セグメント' })
+      await expect(logs.getByRole('row').nth(1)).toBeVisible()
+    })
   })
 }

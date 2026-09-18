@@ -13,6 +13,7 @@ import type {
   QueryBuilderResult,
   QueryBuilderSpec,
   RelationDef,
+  ReplicationInfo,
   RoutineInfo,
   RoutineKind,
   RowKey,
@@ -390,6 +391,11 @@ export class FakeAdapter implements DatabaseAdapter {
       currentUser: 'fake@localhost',
       extra: { hostname: 'fake' },
     }
+  }
+
+  async replicationInfo(): Promise<ReplicationInfo> {
+    this.record('replicationInfo')
+    return { role: 'standalone', source: [], replicas: [], logs: [{ name: 'binlog.000001', size: '1024' }] }
   }
 
   async serverCatalog(kind: ServerCatalogKind): Promise<ServerCatalog> {

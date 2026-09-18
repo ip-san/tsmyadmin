@@ -17,6 +17,7 @@ import type {
   QueryBuilderResult,
   QueryBuilderSpec,
   RelationDef,
+  ReplicationInfo,
   RoutineInfo,
   RoutineKind,
   RowKey,
@@ -255,6 +256,8 @@ export interface DatabaseAdapter {
   listVariables(): Promise<KeyValue[]>
   /** Collations, engines (PostgreSQL: access methods) or plugins (PostgreSQL: extensions), as a table to show. */
   serverCatalog(kind: ServerCatalogKind): Promise<ServerCatalog>
+  /** Replication role and state, and the binary logs / WAL segments; each part null where it cannot be read. */
+  replicationInfo(): Promise<ReplicationInfo>
   /** Runtime counters (SHOW GLOBAL STATUS / pg_stat_*). */
   listStatus(): Promise<KeyValue[]>
   listProcesses(): Promise<ProcessInfo[]>
@@ -322,6 +325,7 @@ export const ADAPTER_METHOD_NAMES = [
   'serverInfo',
   'listVariables',
   'serverCatalog',
+  'replicationInfo',
   'listStatus',
   'listProcesses',
   'killProcess',

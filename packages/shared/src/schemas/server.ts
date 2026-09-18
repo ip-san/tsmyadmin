@@ -72,3 +72,22 @@ export const ServerCatalogSchema = z.object({
   rows: z.array(z.array(z.string().nullable())),
 })
 export type ServerCatalog = z.infer<typeof ServerCatalogSchema>
+
+/** One result row as name → value (the replication views have many columns, and they differ by version). */
+export const RecordSchema = z.array(z.object({ name: z.string(), value: z.string().nullable() }))
+
+/**
+ * phpMyAdmin's Replication and Binary log tabs, and PostgreSQL's streaming replication. Each part is null when
+ * the account may not read it (or, for the logs, when the server keeps none).
+ */
+export const ReplicationInfoSchema = z.object({
+  /** This server reads from a source / sends to replicas; both at once for a relay. */
+  role: z.enum(['standalone', 'primary', 'replica', 'relay']),
+  /** As a replica: its state (MySQL SHOW REPLICA STATUS, PostgreSQL pg_stat_wal_receiver), one per channel. */
+  source: z.array(RecordSchema).nullable(),
+  /** As a source: the replicas connected to it (MySQL SHOW REPLICAS, PostgreSQL pg_stat_replication). */
+  replicas: z.array(RecordSchema).nullable(),
+  /** Binary logs (MySQL) or WAL segments (PostgreSQL), with their size in bytes. */
+  logs: z.array(z.object({ name: z.string(), size: z.string().nullable() })).nullable(),
+})
+export type ReplicationInfo = z.infer<typeof ReplicationInfoSchema>

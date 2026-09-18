@@ -16,6 +16,7 @@ import {
   ProcessInfoSchema,
   QueryBuilderResultSchema,
   RelationDefSchema,
+  ReplicationInfoSchema,
   SAVED_QUERY_MAX_SQL,
   SavedQuerySchema,
   SEARCH_TERM_MAX,
@@ -1056,6 +1057,18 @@ describe('server catalog', () => {
     expect(res.status).toBe(200)
     expect(ServerCatalogSchema.parse(await res.json())).toEqual({ columns: ['name'], rows: [['fake engines']] })
     expect((await h.req('/api/server/catalog/users')).status).toBe(400)
+  })
+
+  it('returns the replication role, state and logs', async () => {
+    const h = harness()
+    stores.push(h.store)
+    await h.login()
+    const res = await h.req('/api/server/replication')
+    expect(res.status).toBe(200)
+    expect(ReplicationInfoSchema.parse(await res.json())).toMatchObject({
+      role: 'standalone',
+      logs: [{ name: 'binlog.000001' }],
+    })
   })
 })
 

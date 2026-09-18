@@ -3,6 +3,7 @@ import type {
   KeyValue,
   KillMode,
   ProcessInfo,
+  ReplicationInfo,
   ServerCatalog,
   ServerCatalogKind,
   ServerInfo,
@@ -126,4 +127,34 @@ const PG_CATALOG = {
 export async function pgServerCatalog(conn: Conn, kind: ServerCatalogKind): Promise<ServerCatalog> {
   const { columns, sql } = PG_CATALOG[kind]
   return { columns, rows: asText(firstResult(await conn.query(sql)).rows) }
+}
+
+type Records = { name: string; value: string | null }[][]
+
+const records = (r: { columns: { name: string }[]; rows: unknown[][] }): Records =>
+  r.rows.map((row) => r.columns.map((c, i) => ({ name: c.name, value: row[i] == null ? null : String(row[i]) })))
+
+/** Reading the WAL directory needs pg_monitor (or superuser); without it the part is shown as unavailable. */
+async function readOrNull(conn: Conn, sql: string): Promise<Records | null> {
+  try {
+    return records(firstResult(await conn.query(sql)))
+  } catch (err) {
+    if (err instanceof AdapterError && err.code === 'PERMISSION_DENIED') return null
+    throw err
+  }
+}
+
+export async function pgReplicationInfo(conn: Conn): Promise<ReplicationInfo> {
+  // pg_stat_* views are readable by anyone, but show the detail columns only to pg_read_all_stats.
+  const source = await readOrNull(conn, 'SELECT * FROM pg_stat_wal_receiver')
+  const replicas = await readOrNull(conn, 'SELECT * FROM pg_stat_replication ORDER BY application_name')
+  const logs = await readOrNull(conn, 'SELECT name, size FROM pg_ls_waldir() ORDER BY name')
+  const reading = (source?.length ?? 0) > 0
+  const sending = (replicas?.length ?? 0) > 0
+  return {
+    role: reading && sending ? 'relay' : reading ? 'replica' : sending ? 'primary' : 'standalone',
+    source,
+    replicas,
+    logs: logs?.map((r) => ({ name: r[0]?.value ?? '', size: r[1]?.value ?? null })) ?? null,
+  }
 }

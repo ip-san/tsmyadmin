@@ -777,6 +777,31 @@ export const en = {
     },
     columns: (columns: string) => `Columns: ${columns}`,
   },
+  replication: {
+    title: 'Replication',
+    role: 'Role of this server',
+    roles: {
+      standalone: 'Standalone',
+      primary: 'Source (sends)',
+      replica: 'Replica (receives)',
+      relay: 'Relay (receives and sends)',
+    },
+    source: {
+      mysql: 'State as a replica (SHOW REPLICA STATUS)',
+      postgres: 'State as a replica (pg_stat_wal_receiver)',
+    },
+    replicas: 'Connected replicas',
+    notReplica: 'This server is not a replica.',
+    noReplicas: 'No replica is connected.',
+    unavailable: 'This account may not read it (MySQL: REPLICATION CLIENT; PostgreSQL: pg_read_all_stats).',
+    logs: { mysql: 'Binary logs', postgres: 'WAL segments' },
+    logsUnavailable: {
+      mysql: 'Binary logging is off, or this account may not read the logs (REPLICATION CLIENT).',
+      postgres: 'This account may not read the WAL directory (it takes pg_monitor).',
+    },
+    logName: 'Name',
+    logSize: 'Size',
+  },
   catalog: {
     filter: 'Filter (any column)',
     titles: {

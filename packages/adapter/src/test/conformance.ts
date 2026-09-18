@@ -2315,6 +2315,43 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
       })
     })
 
+    describe('replicationInfo', () => {
+      it('reports a lone server as standalone, with its logs, and hides what an account may not read', async () => {
+        const info = await db.replicationInfo()
+        // The compose servers replicate nothing.
+        expect(info.role).toBe('standalone')
+        expect(info.source ?? []).toEqual([])
+        expect(info.replicas ?? []).toEqual([])
+        // MySQL 8 keeps binary logs by default (MariaDB does not: null there); PostgreSQL always has WAL.
+        if (dialect === 'postgres' || !(await isMariaDb())) {
+          expect(info.logs?.length ?? 0).toBeGreaterThan(0)
+          expect(info.logs?.[0]?.name).toMatch(dialect === 'mysql' ? /\.\d+$/ : /^[0-9A-F]{24}$/)
+        }
+        // An account without the privilege gets the parts it cannot read as null, not an error.
+        const name = `rep_${scratch}`
+        if (dialect === 'mysql') {
+          await execOk(
+            `CREATE USER ${mysqlAccount({ name, host: '%' })} IDENTIFIED BY 'rp-pw'; GRANT SELECT ON ${quoteIdent(dialect, ns.database)}.* TO ${mysqlAccount({ name, host: '%' })}`
+          )
+        } else {
+          await execOk(
+            `CREATE ROLE ${quoteIdent(dialect, name)} LOGIN PASSWORD 'rp-pw'; GRANT CONNECT ON DATABASE ${quoteIdent(dialect, ns.database)} TO ${quoteIdent(dialect, name)}`
+          )
+        }
+        const plain = ctx.createAs(name, 'rp-pw')
+        try {
+          const limited = await plain.replicationInfo()
+          expect(limited.role).toBe('standalone')
+          expect(limited.logs).toBeNull()
+        } finally {
+          await plain.close()
+          if (dialect === 'mysql') await exec(`DROP USER IF EXISTS ${mysqlAccount({ name, host: '%' })}`)
+          else
+            await exec(`DROP OWNED BY ${quoteIdent(dialect, name)}; DROP ROLE IF EXISTS ${quoteIdent(dialect, name)}`)
+        }
+      })
+    })
+
     describe('listVariables', () => {
       it('includes max_connections', async () => {
         const vars = await db.listVariables()

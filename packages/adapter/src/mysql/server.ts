@@ -3,6 +3,7 @@ import type {
   KeyValue,
   KillMode,
   ProcessInfo,
+  ReplicationInfo,
   ServerCatalog,
   ServerCatalogKind,
   ServerInfo,
@@ -101,4 +102,39 @@ const MYSQL_CATALOG = {
 export async function mysqlServerCatalog(conn: Conn, kind: ServerCatalogKind): Promise<ServerCatalog> {
   const { columns, sql } = MYSQL_CATALOG[kind]
   return { columns, rows: asText(firstResult(await conn.query(sql)).rows) }
+}
+
+type Records = { name: string; value: string | null }[][]
+
+/** Every row as name → value pairs, whatever columns this server version has. */
+const records = (r: { columns: { name: string }[]; rows: unknown[][] }): Records =>
+  r.rows.map((row) => r.columns.map((c, i) => ({ name: c.name, value: row[i] == null ? null : String(row[i]) })))
+
+/** Not allowed, or not there at all (binary logging off): the part is shown as unavailable, not as an error. */
+const UNAVAILABLE = new Set(['ER_SPECIFIC_ACCESS_DENIED_ERROR', 'ER_ACCESS_DENIED_ERROR', 'ER_NO_BINARY_LOGGING'])
+
+/** A statement, falling back to its pre-8.0.22 / MariaDB spelling where the server does not know the new one. */
+async function readOrNull(conn: Conn, sql: string, legacy?: string): Promise<Records | null> {
+  try {
+    return records(firstResult(await conn.query(sql)))
+  } catch (err) {
+    if (!(err instanceof AdapterError)) throw err
+    if (legacy && err.nativeCode === 'ER_PARSE_ERROR') return readOrNull(conn, legacy)
+    if (UNAVAILABLE.has(err.nativeCode ?? '') || err.code === 'PERMISSION_DENIED') return null
+    throw err
+  }
+}
+
+export async function mysqlReplicationInfo(conn: Conn): Promise<ReplicationInfo> {
+  const source = await readOrNull(conn, 'SHOW REPLICA STATUS', 'SHOW SLAVE STATUS')
+  const replicas = await readOrNull(conn, 'SHOW REPLICAS', 'SHOW SLAVE HOSTS')
+  const logs = await readOrNull(conn, 'SHOW BINARY LOGS')
+  const reading = (source?.length ?? 0) > 0
+  const sending = (replicas?.length ?? 0) > 0
+  return {
+    role: reading && sending ? 'relay' : reading ? 'replica' : sending ? 'primary' : 'standalone',
+    source,
+    replicas,
+    logs: logs?.map((r) => ({ name: r[0]?.value ?? '', size: r[1]?.value ?? null })) ?? null,
+  }
 }

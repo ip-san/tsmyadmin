@@ -10,6 +10,7 @@ export function serverRoutes(cfg: SessionConfig) {
     .get('/server/info', async (c) => c.json(await c.get('session').adapter.serverInfo()))
     .get('/server/variables', async (c) => c.json(await c.get('session').adapter.listVariables()))
     .get('/server/status', async (c) => c.json(await c.get('session').adapter.listStatus()))
+    .get('/server/replication', async (c) => c.json(await c.get('session').adapter.replicationInfo()))
     .get('/server/catalog/:kind', validate('param', z.object({ kind: ServerCatalogKindSchema })), async (c) =>
       c.json(await c.get('session').adapter.serverCatalog(c.req.valid('param').kind))
     )

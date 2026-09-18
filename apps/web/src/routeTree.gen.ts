@@ -16,6 +16,7 @@ import { Route as AppCollationsRouteImport } from './routes/_app/collations'
 import { Route as AppEnginesRouteImport } from './routes/_app/engines'
 import { Route as AppPluginsRouteImport } from './routes/_app/plugins'
 import { Route as AppProcessesRouteImport } from './routes/_app/processes'
+import { Route as AppReplicationRouteImport } from './routes/_app/replication'
 import { Route as AppSecurityRouteImport } from './routes/_app/security'
 import { Route as AppSqlRouteImport } from './routes/_app/sql'
 import { Route as AppStatusRouteImport } from './routes/_app/status'
@@ -78,6 +79,11 @@ const AppPluginsRoute = AppPluginsRouteImport.update({
 const AppProcessesRoute = AppProcessesRouteImport.update({
   id: '/processes',
   path: '/processes',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppReplicationRoute = AppReplicationRouteImport.update({
+  id: '/replication',
+  path: '/replication',
   getParentRoute: () => AppRoute,
 } as any)
 const AppSecurityRoute = AppSecurityRouteImport.update({
@@ -237,6 +243,7 @@ export interface FileRoutesByFullPath {
   '/engines': typeof AppEnginesRoute
   '/plugins': typeof AppPluginsRoute
   '/processes': typeof AppProcessesRoute
+  '/replication': typeof AppReplicationRoute
   '/security': typeof AppSecurityRoute
   '/sql': typeof AppSqlRoute
   '/status': typeof AppStatusRoute
@@ -273,6 +280,7 @@ export interface FileRoutesByTo {
   '/engines': typeof AppEnginesRoute
   '/plugins': typeof AppPluginsRoute
   '/processes': typeof AppProcessesRoute
+  '/replication': typeof AppReplicationRoute
   '/security': typeof AppSecurityRoute
   '/sql': typeof AppSqlRoute
   '/status': typeof AppStatusRoute
@@ -310,6 +318,7 @@ export interface FileRoutesById {
   '/_app/engines': typeof AppEnginesRoute
   '/_app/plugins': typeof AppPluginsRoute
   '/_app/processes': typeof AppProcessesRoute
+  '/_app/replication': typeof AppReplicationRoute
   '/_app/security': typeof AppSecurityRoute
   '/_app/sql': typeof AppSqlRoute
   '/_app/status': typeof AppStatusRoute
@@ -350,6 +359,7 @@ export interface FileRouteTypes {
     | '/engines'
     | '/plugins'
     | '/processes'
+    | '/replication'
     | '/security'
     | '/sql'
     | '/status'
@@ -386,6 +396,7 @@ export interface FileRouteTypes {
     | '/engines'
     | '/plugins'
     | '/processes'
+    | '/replication'
     | '/security'
     | '/sql'
     | '/status'
@@ -422,6 +433,7 @@ export interface FileRouteTypes {
     | '/_app/engines'
     | '/_app/plugins'
     | '/_app/processes'
+    | '/_app/replication'
     | '/_app/security'
     | '/_app/sql'
     | '/_app/status'
@@ -508,6 +520,13 @@ declare module '@tanstack/react-router' {
       path: '/processes'
       fullPath: '/processes'
       preLoaderRoute: typeof AppProcessesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/replication': {
+      id: '/_app/replication'
+      path: '/replication'
+      fullPath: '/replication'
+      preLoaderRoute: typeof AppReplicationRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/security': {
@@ -785,6 +804,7 @@ interface AppRouteChildren {
   AppEnginesRoute: typeof AppEnginesRoute
   AppPluginsRoute: typeof AppPluginsRoute
   AppProcessesRoute: typeof AppProcessesRoute
+  AppReplicationRoute: typeof AppReplicationRoute
   AppSecurityRoute: typeof AppSecurityRoute
   AppSqlRoute: typeof AppSqlRoute
   AppStatusRoute: typeof AppStatusRoute
@@ -799,6 +819,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppEnginesRoute: AppEnginesRoute,
   AppPluginsRoute: AppPluginsRoute,
   AppProcessesRoute: AppProcessesRoute,
+  AppReplicationRoute: AppReplicationRoute,
   AppSecurityRoute: AppSecurityRoute,
   AppSqlRoute: AppSqlRoute,
   AppStatusRoute: AppStatusRoute,

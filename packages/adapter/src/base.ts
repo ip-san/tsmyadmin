@@ -16,6 +16,7 @@ import type {
   QueryBuilderResult,
   QueryBuilderSpec,
   RelationDef,
+  ReplicationInfo,
   RoutineInfo,
   RoutineKind,
   RowKey,
@@ -364,6 +365,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
   abstract serverInfo(): Promise<ServerInfo>
   abstract listVariables(): Promise<KeyValue[]>
   abstract serverCatalog(kind: ServerCatalogKind): Promise<ServerCatalog>
+  abstract replicationInfo(): Promise<ReplicationInfo>
   abstract listStatus(): Promise<KeyValue[]>
   abstract listProcesses(): Promise<ProcessInfo[]>
   abstract killProcess(id: string): Promise<void>

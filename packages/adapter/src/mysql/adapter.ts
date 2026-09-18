@@ -9,6 +9,7 @@ import type {
   ObjectDependency,
   ProcessInfo,
   RelationDef,
+  ReplicationInfo,
   RoutineInfo,
   RoutineKind,
   ServerCatalog,
@@ -54,6 +55,7 @@ import {
   mysqlListProcesses,
   mysqlListStatus,
   mysqlListVariables,
+  mysqlReplicationInfo,
   mysqlServerCatalog,
   mysqlServerInfo,
 } from './server.ts'
@@ -620,6 +622,10 @@ export class MysqlAdapter extends BaseAdapter {
 
   serverInfo(): Promise<ServerInfo> {
     return this.withConn(this.serverNs(), (conn) => mysqlServerInfo(conn))
+  }
+
+  replicationInfo(): Promise<ReplicationInfo> {
+    return this.withConn(this.serverNs(), (conn) => mysqlReplicationInfo(conn))
   }
 
   serverCatalog(kind: ServerCatalogKind): Promise<ServerCatalog> {

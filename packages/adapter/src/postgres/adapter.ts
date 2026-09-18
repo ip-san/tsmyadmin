@@ -8,6 +8,7 @@ import type {
   ObjectDependency,
   ProcessInfo,
   RelationDef,
+  ReplicationInfo,
   RoutineInfo,
   RoutineKind,
   ServerCatalog,
@@ -44,6 +45,7 @@ import {
   pgListProcesses,
   pgListStatus,
   pgListVariables,
+  pgReplicationInfo,
   pgServerCatalog,
   pgServerInfo,
 } from './server.ts'
@@ -434,6 +436,10 @@ export class PostgresAdapter extends BaseAdapter {
 
   serverInfo(): Promise<ServerInfo> {
     return this.withConn(this.serverNs(), (conn) => pgServerInfo(conn))
+  }
+
+  replicationInfo(): Promise<ReplicationInfo> {
+    return this.withConn(this.serverNs(), (conn) => pgReplicationInfo(conn))
   }
 
   serverCatalog(kind: ServerCatalogKind): Promise<ServerCatalog> {
