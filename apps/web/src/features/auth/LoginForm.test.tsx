@@ -3,7 +3,14 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '@/lib/api.ts'
+import { answerChallenge } from '@/lib/passkeys.ts'
 import { LoginForm } from './LoginForm.tsx'
+
+vi.mock('@/lib/passkeys.ts', () => ({
+  passkeysSupported: () => true,
+  answerChallenge: vi.fn(async (c: { ticket: string }) => ({ ticket: c.ticket, response: { id: 'k' } })),
+}))
 
 function wrap(ui: ReactNode) {
   const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
@@ -110,5 +117,38 @@ describe('LoginForm', () => {
     await userEvent.type(screen.getByLabelText('ユーザー名'), 'root')
     await userEvent.click(screen.getByRole('button', { name: '接続する' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('認証に失敗しました: Access denied for root')
+  })
+})
+
+describe('LoginForm with a passkey', () => {
+  beforeEach(() => {
+    const data = new Map<string, string>()
+    const memory = {
+      getItem: (k: string) => data.get(k) ?? null,
+      setItem: (k: string, v: string) => void data.set(k, v),
+      removeItem: (k: string) => void data.delete(k),
+      clear: () => data.clear(),
+    }
+    Object.defineProperty(globalThis, 'localStorage', { value: memory, configurable: true, writable: true })
+  })
+
+  it('answers the challenge a refused login carried, and drops it once an attempt is refused', async () => {
+    const required = new ApiError(401, {
+      code: 'SECOND_FACTOR_REQUIRED',
+      message: 'x',
+      passkey: { ticket: 't1', options: { challenge: 'c' } },
+    })
+    const invalid = new ApiError(401, { code: 'SECOND_FACTOR_INVALID', message: 'x' })
+    const onLogin = vi.fn().mockRejectedValueOnce(required).mockRejectedValueOnce(invalid)
+    wrap(<LoginForm onLogin={onLogin} />)
+    await userEvent.type(screen.getByLabelText('ユーザー名'), 'alice')
+    await userEvent.type(screen.getByLabelText('パスワード'), 'pw')
+    await userEvent.click(screen.getByRole('button', { name: '接続する' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'パスキーで確認' }))
+    await waitFor(() => expect(onLogin).toHaveBeenCalledTimes(2))
+    expect(onLogin.mock.calls[1]?.[0]).toMatchObject({ user: 'alice', password: 'pw', passkey: { ticket: 't1' } })
+    expect(vi.mocked(answerChallenge).mock.calls[0]?.[0]).toMatchObject({ ticket: 't1' })
+    // That ticket is spent: the button waits for the next attempt to hand out a fresh one.
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'パスキーで確認' })).not.toBeInTheDocument())
   })
 })

@@ -1,5 +1,10 @@
 import type { AppType } from '@tsmyadmin/api/app'
-import { type ApiError as ApiErrorBody, type ApiErrorCode, ApiErrorSchema } from '@tsmyadmin/shared'
+import {
+  type ApiError as ApiErrorBody,
+  type ApiErrorCode,
+  ApiErrorSchema,
+  type PasskeyChallenge,
+} from '@tsmyadmin/shared'
 import { hc } from 'hono/client'
 
 export const api = hc<AppType>('/', { init: { credentials: 'same-origin' } }).api
@@ -12,6 +17,8 @@ export class ApiError extends Error {
   /** Localisable reason of a VALIDATION error, with its parameters (see locale.reasons). */
   readonly reason: string | undefined
   readonly params: Record<string, string | number> | undefined
+  /** With SECOND_FACTOR_REQUIRED: a challenge the account's passkeys can answer on the next attempt. */
+  readonly passkey: PasskeyChallenge | undefined
   constructor(status: number, body: ApiErrorBody) {
     super(body.message)
     this.name = 'ApiError'
@@ -21,6 +28,7 @@ export class ApiError extends Error {
     this.nativeCode = body.nativeCode
     this.reason = body.reason
     this.params = body.params
+    this.passkey = body.passkey
   }
 }
 

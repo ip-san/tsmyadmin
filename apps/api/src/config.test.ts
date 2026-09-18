@@ -143,3 +143,30 @@ describe('TSMYADMIN_SERVERS', () => {
     expect(() => loadConfig({ TRUST_PROXY: 'yes' })).toThrow(/TRUST_PROXY/)
   })
 })
+
+describe('TSMYADMIN_PASSKEY_ORIGIN', () => {
+  const sqlite = { SESSION_STORE: 'sqlite' as const }
+
+  it('binds passkeys to the configured origin and its host name', () => {
+    expect(loadConfig({ ...sqlite, TSMYADMIN_PASSKEY_ORIGIN: 'https://db.example.com' }).passkey).toEqual({
+      origin: 'https://db.example.com',
+      rpId: 'db.example.com',
+    })
+    expect(loadConfig({ ...sqlite, TSMYADMIN_PASSKEY_ORIGIN: 'http://localhost:3198/' }).passkey).toEqual({
+      origin: 'http://localhost:3198',
+      rpId: 'localhost',
+    })
+    expect(loadConfig({}).passkey).toBeNull()
+  })
+
+  it('refuses what a browser would not accept, and a store that could not keep the passkeys', () => {
+    // Plain HTTP is allowed on localhost only; an IP address cannot be a relying party; a path is not an origin.
+    expect(() => loadConfig({ ...sqlite, TSMYADMIN_PASSKEY_ORIGIN: 'http://db.example.com' })).toThrow(/https/)
+    expect(() => loadConfig({ ...sqlite, TSMYADMIN_PASSKEY_ORIGIN: 'https://10.0.0.5' })).toThrow(/IP address/)
+    expect(() => loadConfig({ ...sqlite, TSMYADMIN_PASSKEY_ORIGIN: 'https://db.example.com/app' })).toThrow(
+      /origin only/
+    )
+    expect(() => loadConfig({ ...sqlite, TSMYADMIN_PASSKEY_ORIGIN: 'db.example.com' })).toThrow(/URL/)
+    expect(() => loadConfig({ TSMYADMIN_PASSKEY_ORIGIN: 'https://db.example.com' })).toThrow(/SESSION_STORE/)
+  })
+})

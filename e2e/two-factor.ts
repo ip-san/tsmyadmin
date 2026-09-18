@@ -69,11 +69,11 @@ export async function createAccount(page: Page, name: string, password: string) 
   await page.getByRole('button', { name: '切断' }).click()
 }
 
+/** Drops the throwaway account as the fixture one, from wherever the test left off (signed in or not). */
 export async function dropAccount(page: Page, name: string) {
-  await page
-    .getByRole('button', { name: '切断' })
-    .click()
-    .catch(() => undefined)
+  // Only when signed in: waiting for a button the login page does not have would spend the test's whole budget.
+  const logout = page.getByRole('button', { name: '切断' })
+  if (await logout.isVisible()) await logout.click()
   await login(page, t)
   await page.goto('/users')
   await page.getByRole('button', { name: `${t.dialect === 'mysql' ? `${name}@%` : name}: 削除` }).click()
@@ -83,7 +83,7 @@ export async function dropAccount(page: Page, name: string) {
 /** Enrols the signed-in account from the security tab and returns its secret. */
 export async function enrol(page: Page): Promise<string> {
   await page.goto('/security')
-  await page.getByRole('button', { name: '2 要素認証を登録する' }).click()
+  await page.getByRole('button', { name: '認証アプリで登録する' }).click()
   const secret = (await page.locator('#second-factor-secret').textContent()) ?? ''
   await page.getByLabel('コード', { exact: true }).fill(totp(secret))
   await page.getByRole('button', { name: '登録を完了する' }).click()

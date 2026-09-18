@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { AdapterError } from '@tsmyadmin/adapter'
 import { FakeAdapter, fakeTable } from '@tsmyadmin/adapter/testing'
 import {
@@ -10,6 +11,8 @@ import {
   IMPORT_MAX_BYTES,
   ImportEventSchema,
   KeyValueSchema,
+  PasskeyChallengeSchema,
+  PasskeyRegistrationSchema,
   ProcessInfoSchema,
   QueryBuilderResultSchema,
   RelationDefSchema,
@@ -39,6 +42,17 @@ import { MemorySessionStore } from './session/store.ts'
 
 const SECRET = 'test-secret'
 const LOGIN = { dialect: 'mysql', host: 'db', port: 3306, user: 'root', password: 'pw' }
+
+/**
+ * A passkey registration and four sign-ins (signature counter 2 to 5) recorded from Chrome's virtual authenticator
+ * on http://localhost:3199, all against a challenge of 32 bytes of 9: the tests fix the challenge to replay them.
+ */
+const PASSKEY_FIXTURE = JSON.parse(readFileSync(new URL('./lib/passkey.fixture.json', import.meta.url), 'utf8')) as {
+  origin: string
+  rpId: string
+  registration: Record<string, unknown>
+  assertions: (Record<string, unknown> & { response: Record<string, string> })[]
+}
 
 function fixtureAdapter(overrides: ConstructorParameters<typeof FakeAdapter>[0] = {}) {
   return new FakeAdapter({
@@ -1363,7 +1377,9 @@ describe('errors', () => {
 
 describe('second factor', () => {
   /** The same persistent-store harness, with a clock the test can hold still. */
-  function totpHarness(options: { require2fa?: boolean; maxPerIdentity?: number; manageAccounts?: boolean } = {}) {
+  function totpHarness(
+    options: { require2fa?: boolean; maxPerIdentity?: number; manageAccounts?: boolean; passkeys?: boolean } = {}
+  ) {
     let now = 1_700_000_000_000
     const store = new SqliteSessionStore({
       path: ':memory:',
@@ -1376,7 +1392,15 @@ describe('second factor', () => {
       sweepIntervalMs: 0,
       ...(options.maxPerIdentity === undefined ? {} : { maxPerIdentity: options.maxPerIdentity }),
     })
-    const app = createApp({ ...testConfig(), require2fa: options.require2fa ?? false }, { store, now: () => now })
+    const app = createApp(
+      {
+        ...testConfig(),
+        require2fa: options.require2fa ?? false,
+        // The origin and challenge the recorded passkey answers were made for (see passkey.fixture.json).
+        passkey: options.passkeys ? { origin: PASSKEY_FIXTURE.origin, rpId: PASSKEY_FIXTURE.rpId } : null,
+      },
+      { store, now: () => now, challenge: () => new Uint8Array(32).fill(9) }
+    )
     let cookie = ''
     const req = (path: string, init: RequestInit = {}) =>
       app.request(path, {
@@ -1395,7 +1419,7 @@ describe('second factor', () => {
   /** Enrols and returns the secret plus the recovery codes shown once. */
   async function enrol(h: ReturnType<typeof totpHarness>) {
     const setup = SecondFactorSetupSchema.parse(
-      await (await h.req('/api/second-factor/begin', { method: 'POST' })).json()
+      await (await h.req('/api/second-factor/begin', { method: 'POST', body: '{}' })).json()
     )
     const confirmed = await h.req('/api/second-factor/confirm', {
       method: 'POST',
@@ -1413,6 +1437,9 @@ describe('second factor', () => {
       expect(SecondFactorStatusSchema.parse(await (await h.req('/api/second-factor')).json())).toEqual({
         state: 'enrolled',
         recoveryCodesLeft: 10,
+        totp: true,
+        passkeys: [],
+        passkeysAvailable: false,
       })
 
       // The password alone is no longer enough, and a wrong code is a different answer from a missing one.
@@ -1495,7 +1522,7 @@ describe('second factor', () => {
       const setup = await enrol(h)
       // A session someone else got hold of must not be able to swap the factor for one of its own: that would
       // be a removal, and removing takes a code.
-      expect((await h.req('/api/second-factor/begin', { method: 'POST' })).status).toBe(401)
+      expect((await h.req('/api/second-factor/begin', { method: 'POST', body: '{}' })).status).toBe(401)
       expect(
         (await h.req('/api/second-factor/begin', { method: 'POST', body: JSON.stringify({ code: '000000' }) })).status
       ).toBe(401)
@@ -1532,6 +1559,139 @@ describe('second factor', () => {
   })
 
   const ALICE = { ...LOGIN, user: 'alice' }
+
+  describe('passkeys', () => {
+    const assertion = (n: number) => PASSKEY_FIXTURE.assertions[n] as Record<string, unknown>
+    /** Enrols the recorded passkey for the session's account; returns the recovery codes shown. */
+    async function addPasskey(h: ReturnType<typeof totpHarness>) {
+      const begun = await h.req('/api/second-factor/passkeys/begin', { method: 'POST', body: '{}' })
+      expect(begun.status).toBe(200)
+      const { recoveryCodes } = PasskeyRegistrationSchema.parse(await begun.json())
+      // As @simplewebauthn/browser sends it: with the new key's COSE algorithm as a number (-7, ES256).
+      const registration = PASSKEY_FIXTURE.registration as { response: Record<string, unknown> }
+      const response = { ...registration, response: { ...registration.response, publicKeyAlgorithm: -7 } }
+      const done = await h.req('/api/second-factor/passkeys/confirm', {
+        method: 'POST',
+        body: JSON.stringify({ response }),
+      })
+      expect(done.status).toBe(201)
+      return recoveryCodes
+    }
+    /** A refused login's passkey challenge ticket (the password was right; the factor is asked for). */
+    async function loginTicket(h: ReturnType<typeof totpHarness>, as = LOGIN) {
+      const res = await h.login(as)
+      expect(res.status).toBe(401)
+      const body = ApiErrorSchema.parse(await res.json())
+      expect(body.code).toBe('SECOND_FACTOR_REQUIRED')
+      return body.passkey?.ticket ?? ''
+    }
+    const withPasskey = (ticket: string, n: number, as = LOGIN) => ({
+      ...as,
+      passkey: { ticket, response: assertion(n) },
+    })
+
+    it('enrols a passkey, signs in with it, and takes each answer once', async () => {
+      const h = totpHarness({ passkeys: true })
+      try {
+        await h.login()
+        // The first factor comes with recovery codes, as it does with an app.
+        expect(await addPasskey(h)).toHaveLength(10)
+        expect(SecondFactorStatusSchema.parse(await (await h.req('/api/second-factor')).json())).toMatchObject({
+          state: 'enrolled',
+          totp: false,
+          passkeys: [{ id: PASSKEY_FIXTURE.assertions[0]?.id }],
+          passkeysAvailable: true,
+        })
+        await h.req('/api/session', { method: 'DELETE' })
+
+        const ticket = await loginTicket(h)
+        expect(ticket).not.toBe('')
+        expect((await h.login(withPasskey(ticket, 0))).status).toBe(201)
+        // The ticket is spent, and so is that answer: its counter no longer moves the stored one forward.
+        expect((await h.login(withPasskey(ticket, 1))).status).toBe(401)
+        expect((await h.login(withPasskey(await loginTicket(h), 0))).status).toBe(401)
+        expect((await h.login(withPasskey(await loginTicket(h), 1))).status).toBe(201)
+      } finally {
+        await h.store.closeAll()
+      }
+    })
+
+    it('refuses a tampered answer, and a challenge issued for something else', async () => {
+      const h = totpHarness({ passkeys: true })
+      try {
+        await h.login()
+        await addPasskey(h)
+        // A challenge this session was given as proof is not a login challenge.
+        const proofTicket = PasskeyChallengeSchema.parse(
+          await (await h.req('/api/second-factor/passkeys/challenge', { method: 'POST' })).json()
+        ).ticket
+        await h.req('/api/session', { method: 'DELETE' })
+        expect((await h.login(withPasskey(proofTicket, 0))).status).toBe(401)
+        // One flipped signature byte.
+        const good = assertion(0) as { response: Record<string, string> }
+        const signature = Buffer.from(good.response.signature ?? '', 'base64url')
+        signature[signature.length - 1] = (signature[signature.length - 1] ?? 0) ^ 1
+        const tampered = { ...good, response: { ...good.response, signature: signature.toString('base64url') } }
+        const bad = await h.login({ ...LOGIN, passkey: { ticket: await loginTicket(h), response: tampered } })
+        expect(ApiErrorSchema.parse(await bad.json()).code).toBe('SECOND_FACTOR_INVALID')
+        // Still good afterwards: nothing was spent by the refusals.
+        expect((await h.login(withPasskey(await loginTicket(h), 0))).status).toBe(201)
+      } finally {
+        await h.store.closeAll()
+      }
+    })
+
+    it('asks for proof before changing the factor, and a passkey is proof', async () => {
+      const h = totpHarness({ passkeys: true })
+      try {
+        await h.login()
+        await addPasskey(h)
+        // Adding an app over it without proof is refused; with a passkey's answer it goes ahead, keeping the codes.
+        expect((await h.req('/api/second-factor/begin', { method: 'POST', body: '{}' })).status).toBe(401)
+        const proof = async (n: number) => {
+          const { ticket } = PasskeyChallengeSchema.parse(
+            await (await h.req('/api/second-factor/passkeys/challenge', { method: 'POST' })).json()
+          )
+          return { passkey: { ticket, response: assertion(n) } }
+        }
+        const begun = await h.req('/api/second-factor/begin', { method: 'POST', body: JSON.stringify(await proof(0)) })
+        expect(begun.status).toBe(200)
+        expect(SecondFactorSetupSchema.parse(await begun.json()).recoveryCodes).toEqual([])
+        // Removing the passkey (the only method, as the app was not confirmed) turns the factor off.
+        const id = String(PASSKEY_FIXTURE.assertions[0]?.id)
+        expect(
+          (
+            await h.req(`/api/second-factor/passkeys/${id}`, {
+              method: 'DELETE',
+              body: JSON.stringify({ code: '000000' }),
+            })
+          ).status
+        ).toBe(401)
+        const removed = await h.req(`/api/second-factor/passkeys/${id}`, {
+          method: 'DELETE',
+          body: JSON.stringify(await proof(1)),
+        })
+        expect(SecondFactorStatusSchema.parse(await removed.json())).toMatchObject({ state: 'none', passkeys: [] })
+      } finally {
+        await h.store.closeAll()
+      }
+    })
+
+    it('is not offered where no origin is configured', async () => {
+      const h = totpHarness()
+      try {
+        await h.login()
+        expect(SecondFactorStatusSchema.parse(await (await h.req('/api/second-factor')).json()).passkeysAvailable).toBe(
+          false
+        )
+        const res = await h.req('/api/second-factor/passkeys/begin', { method: 'POST', body: '{}' })
+        expect(res.status).toBe(400)
+        expect(ApiErrorSchema.parse(await res.json()).code).toBe('UNSUPPORTED')
+      } finally {
+        await h.store.closeAll()
+      }
+    })
+  })
 
   it('lets an operator reset another account that lost its device, and nothing more', async () => {
     const h = totpHarness()
@@ -1606,13 +1766,16 @@ describe('second factor', () => {
     const h = harness()
     stores.push(h.store)
     await h.login()
-    const res = await h.req('/api/second-factor/begin', { method: 'POST' })
+    const res = await h.req('/api/second-factor/begin', { method: 'POST', body: '{}' })
     expect(res.status).toBe(400)
     expect(ApiErrorSchema.parse(await res.json()).code).toBe('UNSUPPORTED')
     // Reported as a state of its own, so the screen can leave the tab out instead of offering what would fail.
     expect(SecondFactorStatusSchema.parse(await (await h.req('/api/second-factor')).json())).toEqual({
       state: 'unsupported',
       recoveryCodesLeft: 0,
+      totp: false,
+      passkeys: [],
+      passkeysAvailable: false,
     })
     expect(SessionStateSchema.parse(await (await h.req('/api/session')).json()).secondFactor).toBe('unsupported')
   })

@@ -69,6 +69,7 @@ export const ja = {
   login: {
     code: 'ワンタイムコード',
     codeHint: '認証アプリの 6 桁、または回復用コードを入力してください。',
+    usePasskey: 'パスキーで確認',
     title: 'サーバーに接続',
     preset: '接続先',
     presetManual: '手動で入力',
@@ -746,10 +747,13 @@ export const ja = {
     title: '2 要素認証',
     intro:
       'ログインしている DB アカウントに、認証アプリのワンタイムコード（TOTP）を追加します。登録すると、次回から接続にコードが必要になります。',
+    introPasskeys:
+      'ログインしている DB アカウントに、認証アプリのワンタイムコード（TOTP）かパスキーを追加します。登録すると、次回から接続にどちらかが必要になります。',
     required: 'この配備では 2 要素認証が必須です。登録を終えるまで、ほかの操作はできません。',
     unsupported:
       'この配備では 2 要素認証を使えません。秘密鍵の保存先が必要なため、永続セッションストア（SESSION_STORE=sqlite / redis）で動かしてください。',
-    enrol: '2 要素認証を登録する',
+    enrol: '認証アプリで登録する',
+    enrolPasskey: 'パスキーで登録する',
     scan: '認証アプリで QR コードを読み取るか、鍵（または URI）を入力し、表示された 6 桁を入力してください。',
     qrLabel: '認証アプリで読み取る QR コード',
     secretLabel: '登録する鍵',
@@ -766,7 +770,24 @@ export const ja = {
     confirm: '登録を完了する',
     restart: 'やり直す',
     enrolled: (left: number) => `登録済みです（未使用の回復用コード: ${left.toLocaleString('ja-JP')} 個）`,
-    disableHint: '解除には認証アプリの 6 桁が必要です（回復用コードでは解除できません）',
+    proofHint: '変更や解除には、認証アプリの 6 桁が必要です（回復用コードは使えません）',
+    proofHintPasskey:
+      '変更や解除には、認証アプリの 6 桁か、登録済みのパスキーが必要です。コード欄が空のときはパスキーで確認します（回復用コードは使えません）',
+    proofNeeded: '認証アプリのコードを入力してください',
+    passkeyFailed: 'パスキーでの確認を完了できませんでした（取り消した場合や、対応するパスキーがない場合を含みます）',
+    methodsTitle: '登録済みの方法',
+    totpMethod: '認証アプリ（登録済み）',
+    totpMissing: '認証アプリ（未登録）',
+    addTotp: '認証アプリを追加',
+    removeTotp: '認証アプリを外す',
+    passkeyMethod: (n: number, date: string) => `パスキー ${n}（${date} 登録）`,
+    addPasskey: 'パスキーを追加',
+    removePasskey: '削除',
+    recoverySaved: '回復用コードを保管しました',
+    totpAddedNotice: '認証アプリを追加しました',
+    totpRemovedNotice: '認証アプリを外しました',
+    passkeyAddedNotice: 'パスキーを登録しました。次回の接続から使えます',
+    passkeyRemovedNotice: 'パスキーを削除しました',
     disable: '2 要素認証を解除する',
   },
   server: {

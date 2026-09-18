@@ -139,6 +139,47 @@ export const DdlPreviewRequestSchema = z.object({ schema: z.string().min(1).opti
 export const DdlPreviewResponseSchema = z.object({ sql: z.array(z.string()) })
 export type DdlPreviewResponse = z.infer<typeof DdlPreviewResponseSchema>
 
+export const SecondFactorCodeSchema = z.string().min(6).max(20)
+
+/**
+ * A passkey's answer as the browser serialises it (base64url fields). Only bounded here: the server verifies it
+ * cryptographically, and the fields differ between registration and sign-in.
+ */
+export const PasskeyResponseSchema = z.object({
+  id: z.string().min(1).max(1024),
+  rawId: z.string().min(1).max(1024),
+  type: z.literal('public-key'),
+  // Strings (base64url), the COSE algorithm number of a new key, and the transports list.
+  response: z.record(z.string(), z.union([z.string().max(16_384), z.number(), z.array(z.string().max(32)).max(16)])),
+  clientExtensionResults: z.record(z.string(), z.unknown()).default({}),
+  authenticatorAttachment: z.string().max(32).optional(),
+})
+export type PasskeyResponse = z.input<typeof PasskeyResponseSchema>
+
+/** A passkey assertion together with the ticket its challenge was issued under. */
+export const PasskeyAnswerSchema = z.object({ ticket: z.string().min(1).max(128), response: PasskeyResponseSchema })
+export type PasskeyAnswer = z.infer<typeof PasskeyAnswerSchema>
+
+/** WebAuthn options as the browser API takes them (JSON form); produced and checked by the server library. */
+const PasskeyOptionsSchema = z.record(z.string(), z.unknown())
+
+/** A challenge to answer with a passkey, and the ticket that ties the answer to it. */
+export const PasskeyChallengeSchema = z.object({ ticket: z.string().min(1), options: PasskeyOptionsSchema })
+export type PasskeyChallenge = z.infer<typeof PasskeyChallengeSchema>
+
+/**
+ * Proof of the second factor already enrolled, for changing it: a current code from the app, or a passkey
+ * (recovery codes are for getting in, not for changing what protects the account).
+ */
+export const SecondFactorProofSchema = z.union([
+  z.object({ code: SecondFactorCodeSchema }),
+  z.object({ passkey: PasskeyAnswerSchema }),
+])
+export type SecondFactorProof = z.infer<typeof SecondFactorProofSchema>
+
+/** Starting an enrolment: empty for the first factor, proof of the current one when adding another. */
+export const SecondFactorBeginRequestSchema = z.union([SecondFactorProofSchema, z.object({})])
+
 export const ApiErrorSchema = z.object({
   code: ApiErrorCodeSchema,
   message: z.string(),
@@ -148,17 +189,22 @@ export const ApiErrorSchema = z.object({
   /** Machine-readable reason of a VALIDATION error (the client localises it), with its parameters. */
   reason: z.string().optional(),
   params: z.record(z.string(), z.union([z.string(), z.number()])).optional(),
+  /** With SECOND_FACTOR_REQUIRED: a passkey challenge, when the account has passkeys and the deployment allows them. */
+  passkey: PasskeyChallengeSchema.optional(),
 })
 export type ApiError = z.infer<typeof ApiErrorSchema>
 
 /** A one-time code: six digits from an authenticator app, or a ten-character recovery code. */
-export const SecondFactorCodeSchema = z.string().min(6).max(20)
 
 /**
  * Login. The code travels with the credentials rather than in a second request: nothing is kept server-side
  * between the two, so a refused code leaves no session, no connection and nothing to expire.
  */
-export const LoginRequestSchema = ConnectRequestSchema.extend({ code: SecondFactorCodeSchema.optional() })
+export const LoginRequestSchema = ConnectRequestSchema.extend({
+  code: SecondFactorCodeSchema.optional(),
+  /** A passkey's answer to the challenge the previous (refused) login attempt handed out. */
+  passkey: PasskeyAnswerSchema.optional(),
+})
 export type LoginRequest = z.infer<typeof LoginRequestSchema>
 
 export const SecondFactorCodeRequestSchema = z.object({ code: SecondFactorCodeSchema })
@@ -174,10 +220,25 @@ export const SecondFactorSetupSchema = z.object({
 })
 export type SecondFactorSetup = z.infer<typeof SecondFactorSetupSchema>
 
+/** Starting a passkey registration: the options for the browser, and recovery codes if this is the first factor. */
+export const PasskeyRegistrationSchema = z.object({
+  options: PasskeyOptionsSchema,
+  recoveryCodes: z.array(z.string().min(1)),
+})
+export type PasskeyRegistration = z.infer<typeof PasskeyRegistrationSchema>
+export const PasskeyConfirmRequestSchema = z.object({ response: PasskeyResponseSchema })
+export const PasskeyIdSchema = z.object({ id: z.string().min(1).max(1024) })
+
 export const SecondFactorStatusSchema = z.object({
   state: SecondFactorStateSchema,
   /** How many recovery codes are still unused (0 when nothing is enrolled). */
   recoveryCodesLeft: z.number().int().min(0),
+  /** An authenticator app is enrolled. */
+  totp: z.boolean(),
+  /** Passkeys enrolled, by credential ID and when each was added. */
+  passkeys: z.array(z.object({ id: z.string(), at: z.number() })),
+  /** The deployment can take passkeys (TSMYADMIN_PASSKEY_ORIGIN is set). */
+  passkeysAvailable: z.boolean(),
 })
 export type SecondFactorStatus = z.infer<typeof SecondFactorStatusSchema>
 

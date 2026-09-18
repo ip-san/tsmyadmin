@@ -17,7 +17,7 @@ test.describe('second factor', () => {
     try {
       await signIn(page, name, password)
       await page.goto('/security')
-      await page.getByRole('button', { name: '2 要素認証を登録する' }).click()
+      await page.getByRole('button', { name: '認証アプリで登録する' }).click()
       const secret = (await page.locator('#second-factor-secret').textContent()) ?? ''
       expect(secret).toMatch(/^[A-Z2-7]{32}$/)
       await expect(page.getByRole('img', { name: '認証アプリで読み取る QR コード' })).toBeVisible()
@@ -61,7 +61,7 @@ test.describe('second factor', () => {
       await page.waitForTimeout(30_000 - (Date.now() % 30_000) + 1_000)
       await page.getByLabel('コード', { exact: true }).fill(totp(secret))
       await page.getByRole('button', { name: '2 要素認証を解除する' }).click()
-      await expect(page.getByRole('button', { name: '2 要素認証を登録する' })).toBeVisible()
+      await expect(page.getByRole('button', { name: '認証アプリで登録する' })).toBeVisible()
 
       // And the password alone is enough again.
       await page.getByRole('button', { name: '切断' }).click()

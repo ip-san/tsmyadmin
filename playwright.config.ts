@@ -66,7 +66,7 @@ export default defineConfig({
     {
       // Starts only once the build server answers, so both serve the same freshly built assets. The store file
       // is dropped first: a run must not inherit bookmarks (or sessions) from the last one.
-      command: `until bun -e 'await fetch("http://127.0.0.1:${port}/healthz")' >/dev/null 2>&1; do sleep 1; done; rm -f ${STORE_PATH} && API_PORT=${persistentPort} SESSION_SECRET=e2e-secret SESSION_STORE=sqlite SESSION_DB_PATH=${STORE_PATH} SESSION_MAX_PER_IDENTITY=1000 TSMYADMIN_SERVERS='${JSON.stringify(
+      command: `until bun -e 'await fetch("http://127.0.0.1:${port}/healthz")' >/dev/null 2>&1; do sleep 1; done; rm -f ${STORE_PATH} && API_PORT=${persistentPort} SESSION_SECRET=e2e-secret SESSION_STORE=sqlite SESSION_DB_PATH=${STORE_PATH} TSMYADMIN_PASSKEY_ORIGIN=http://localhost:${persistentPort} SESSION_MAX_PER_IDENTITY=1000 TSMYADMIN_SERVERS='${JSON.stringify(
         [
           { name: 'e2e-mysql', dialect: 'mysql', host: '127.0.0.1', port: 13306, database: 'tsmyadmin_test' },
           { name: 'e2e-postgres', dialect: 'postgres', host: '127.0.0.1', port: 15433, database: 'tsmyadmin_test' },

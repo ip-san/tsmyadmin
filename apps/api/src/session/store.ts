@@ -39,9 +39,26 @@ export interface SavedItems {
  * The second factor of one database account: the TOTP secret, the last step accepted for it (so a code cannot be
  * used twice), and the hashes of the recovery codes that are still unused.
  */
+/** A passkey registered as a second factor (WebAuthn), in the form the verifier needs it back. */
+export interface StoredPasskey {
+  /** Credential ID, base64url. */
+  id: string
+  /** COSE public key, base64url. */
+  publicKey: string
+  /** Signature counter last seen (0 for authenticators that do not keep one, such as synced passkeys). */
+  counter: number
+  transports?: string[]
+  /** When it was registered. */
+  at: number
+}
+
 export interface SecondFactor {
-  secret: string
+  /** TOTP secret, when an authenticator app is enrolled. */
+  secret?: string
+  /** Last TOTP step accepted (so a code is used once); -1 when none has been. */
   lastStep: number
+  /** Passkeys enrolled as a second factor; at least one of these or `secret` is present. */
+  passkeys?: StoredPasskey[]
   recoveryHashes: string[]
   /** When it was enrolled or last changed. */
   at: number

@@ -41,6 +41,7 @@ tsmyadmin は **1 プロセス（Bun）で API と SPA を配信する単一コ�
 | `TSMYADMIN_SERVERS` | （なし） | ログイン画面に出す接続先プリセットの JSON 配列。例: `[{"name":"prod","dialect":"postgres","host":"db.internal","port":5432,"database":"app"}]`。利用者はユーザー名とパスワードだけを入力。プリセットのホストは自動的に allowlist に加わる。**パスワードは書かない** |
 | `LOGIN_RATE_LIMIT` | `10` | `LOGIN_RATE_WINDOW_SECONDS` 内に許可するログイン試行回数（クライアント IP + ユーザー名ごと。IP 単位では 3 倍まで） |
 | `TSMYADMIN_REQUIRE_2FA` | `0` | `1` で全アカウントに 2 要素認証（TOTP）を必須にする。未登録のアカウントはログインできるが、登録を終えるまで他の操作はできない。秘密鍵の置き場が要るため `SESSION_STORE=sqlite` か `redis` が必須（`memory` では起動時に終了する）。既定の `0` では、登録したアカウントだけが 2 段階になる |
+| `TSMYADMIN_PASSKEY_ORIGIN` | （空） | 利用者がブラウザで開く URL の origin（例 `https://db.example.com`）。設定すると、2 要素目にパスキー（WebAuthn）も使える。パスキーはこのホスト名に結び付くため、**後からドメインを変えると登録済みのパスキーはすべて使えなくなる**。HTTPS 必須（`http://localhost` だけ例外）、IP アドレスは不可、パスは付けない。`SESSION_STORE=sqlite` か `redis` が必須。空ならパスキーは出さない（認証アプリだけ） |
 | `LOGIN_RATE_WINDOW_SECONDS` | `60` | 上記のウィンドウ（秒、1 以上。`LOGIN_RATE_LIMIT` も 1 以上） |
 | `TRUST_PROXY` | `0` | `1` でリバースプロキシの `X-Forwarded-For` をクライアント IP として信頼する（プロキシ配下では必須、直接公開時は `0` のまま）。`cloudflare` にすると `CF-Connecting-IP` を優先する。この 2 つを分けているのは、`CF-Connecting-IP` を必ず上書きしてくれるのが Cloudflare だけだからで、それ以外の環境で信頼するとクライアントが自分で名乗れてしまう |
 | `LOG_FORMAT` | 本番 `json` / 開発 `pretty` | 1 行 1 JSON（ログ収集向け）か人が読む形式か |

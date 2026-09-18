@@ -1,4 +1,4 @@
-<!-- translated-from: docs/user-guide.md sha256:5b77a9d533cc71495272a850b6a16977fa971806dcb9e3f146c60c4899b8be02 -->
+<!-- translated-from: docs/user-guide.md sha256:344a34268a363ddb65f2ed7beb3d02bb233b73d04ca96e306052422a02000e78 -->
 
 # User guide
 
@@ -14,17 +14,21 @@ What each screen does and how to work with it. The layout is the same three leve
 
 Your administrator restricts which hosts can be reached with `TSMYADMIN_ALLOWED_HOSTS`. Hosts outside that list cannot be connected to.
 
-### Two-factor authentication (one-time codes)
+### Two-factor authentication (one-time codes and passkeys)
 
 The **Security** tab at server level adds a one-time code from an authenticator app to the account this session logged in as.
 
-1. **Enrol** shows a QR code, the key, an `otpauth://` URI and ten recovery codes — **once, there and then**. Scan the QR code with the app (where it cannot scan, type the key in or paste the URI)
+1. **Enrol an authenticator app** shows a QR code, the key, an `otpauth://` URI and ten recovery codes — **once, there and then**. Scan the QR code with the app (where it cannot scan, type the key in or paste the URI)
 2. Print the recovery codes or keep them in a password manager. Each works once, and they cannot be looked up later
-3. Type the code the app is showing and **Confirm**. Nothing takes effect until that succeeds, so stopping half-way cannot lock you out
+3. Type the code the app is showing and **Finish enrolling**. Nothing takes effect until that succeeds, so stopping half-way cannot lock you out
 
 From the next sign-in on, a code is asked for after the password. A recovery code goes in the same field. A code that has been accepted cannot be used again even within its own 30 seconds, so wait for the next one when signing in twice in a row.
 
-To remove it, type the app's current code in the same tab and choose **Remove**. **If the device is gone and the recovery codes with it, you cannot undo this yourself** — ask the administrator to reset it from the **Users** tab. Where the administrator requires it of everyone (`TSMYADMIN_REQUIRE_2FA`), nothing else can be used until enrolment is finished.
+**Passkeys**: where the administrator has set `TSMYADMIN_PASSKEY_ORIGIN`, **Enrol a passkey** adds a passkey (the device's biometrics, or a security key). Enrolled as the first method, it shows the recovery codes there and then. At sign-in, choose **Use a passkey** below the code field. It does not replace the password: it is the second step after it.
+
+Once enrolled, the same tab lists the methods (authenticator app, passkeys) and lets you add or remove them. Changes take proof: type the app's current code in the **Code** field, or leave it empty to confirm with a passkey (a recovery code will not do).
+
+To turn it all off, choose **Remove**. **If the device is gone and the recovery codes with it, you cannot undo this yourself** — ask the administrator to reset it from the **Users** tab. Where the administrator requires it of everyone (`TSMYADMIN_REQUIRE_2FA`), nothing else can be used until enrolment is finished.
 
 ## Interface language
 

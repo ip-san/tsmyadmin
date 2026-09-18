@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto'
 import { type Context, Hono } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
 import { getSignedCookie } from 'hono/cookie'
@@ -11,6 +12,7 @@ import { clientIp, createLogger, type Logger, type RemoteAddress, requestLogger 
 import { RateLimiter } from './lib/rate-limit.ts'
 import { requestContext } from './lib/request-context.ts'
 import { databaseRoutes } from './routes/databases.ts'
+import { secondFactorRoutes } from './routes/second-factor.ts'
 import { serverRoutes } from './routes/server.ts'
 import { sessionRoutes } from './routes/session.ts'
 import { userRoutes } from './routes/users.ts'
@@ -26,6 +28,8 @@ export interface AppServices {
   remoteAddress?: RemoteAddress
   /** Injectable clock for the rate limiter (tests). */
   now?: () => number
+  /** WebAuthn challenges (tests replay a recorded passkey answer by fixing them). */
+  challenge?: () => Uint8Array
 }
 
 /**
@@ -107,6 +111,15 @@ export function createApp(config: AppConfig, services: AppServices) {
     // browser used, which is what the cookie rule looks at.
     return url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '[::1]'
   }
+  const now = services.now ?? Date.now
+  const secondFactorDeps = {
+    ipLimiter,
+    ip,
+    logger,
+    now,
+    passkey: config.passkey,
+    challenge: services.challenge ?? (() => new Uint8Array(randomBytes(32))),
+  }
   const sessionDeps = {
     allowedHosts,
     loginLimiter,
@@ -114,7 +127,8 @@ export function createApp(config: AppConfig, services: AppServices) {
     ip,
     secureTransport,
     logger,
-    now: services.now ?? Date.now,
+    now,
+    secondFactor: secondFactorDeps,
   }
   return (
     new Hono<AppEnv>()
@@ -151,6 +165,7 @@ export function createApp(config: AppConfig, services: AppServices) {
       .get('/api/health', (c) => c.json({ ok: true }))
       .get('/api/servers', (c) => c.json(config.servers))
       .route('/api', sessionRoutes(cfg, sessionDeps))
+      .route('/api', secondFactorRoutes(cfg, secondFactorDeps))
       .route('/api', databaseRoutes(cfg, logger))
       .route('/api', userRoutes(cfg))
       .route('/api', serverRoutes(cfg))

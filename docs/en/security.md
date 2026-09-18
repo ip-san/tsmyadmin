@@ -1,4 +1,4 @@
-<!-- translated-from: docs/security.md sha256:b361c2e96303d0469eae9c5d3ccb448b5e973fba53382bacfa30002832a1cc99 -->
+<!-- translated-from: docs/security.md sha256:17e8abe724bd61dbbaadae639c94cde7ee438fc70afea8940177ef5149377784 -->
 
 # Security model
 
@@ -18,13 +18,15 @@
 - An unexpected internal error is returned to the client as `INTERNAL` and nothing else; the message and stack stay in the server log
 - Request body limits: 64 KB for `/api/session`, 16 MB for running SQL, `IMPORT_MAX_BYTES` (64 MB) for imports, and 1 MB for other JSON. Over the limit is `413 PAYLOAD_TOO_LARGE` (for an import, both a file past 64 MB and a multipart body past 65 MB)
 
-## Two-factor authentication (TOTP)
+## Two-factor authentication (TOTP and passkeys)
 
 - Each database account that logs in can add a one-time code from an authenticator app (the **Security** tab). The secret and the hashes of the recovery codes are encrypted with the same key as the credentials and kept in the session store (one row per account, unrelated to the saved-item cap), so `SESSION_STORE=sqlite` or `redis` is required
 - **What it protects**: in this product the database credentials *are* the identity, so whoever knows the password can also enrol first. A second factor helps once it is enrolled — against a password that leaks later (reuse, shoulder-surfing, a dump). `TSMYADMIN_REQUIRE_2FA=1` closes that window: an account that has not enrolled can do nothing until it has
 - A code that has been accepted cannot be used again, even within its own 30 seconds (the accepted step is recorded). Each recovery code works once. Code attempts count against the same per-IP budget as failed logins
 - Removing it takes a current code from the app, and so does replacing an enrolled secret with a new one — otherwise that check could simply be walked around
 - **A lost device**: use a recovery code, or reset it from the **Users** tab as an account that could change that account's password (MySQL: `CREATE USER`, plus `SYSTEM_USER` on MySQL 8; PostgreSQL: a superuser, or `CREATEROLE` over that role). It only reaches accounts the database already lets it take over, so nothing is weakened. An account cannot reset its own there (that goes through the security tab, with a code). Each reset is logged as `second_factor.reset`. On MySQL 8, whether the target holds `SYSTEM_USER` is not visible to everyone, so an operator without `SYSTEM_USER` is not offered the reset at all, even for accounts that lack it (erring on the safe side). It reaches accounts enrolled through the same address (host name and port). As a last resort the stored factors can be deleted directly (`DELETE FROM second_factor;` on `sqlite`, `DEL <prefix>:2fa:*` on `redis` — that removes everyone's). Rotating `SESSION_SECRET` wipes every enrolment, so that a row nobody can read never locks an account out
+- **Passkeys (WebAuthn)**: with `TSMYADMIN_PASSKEY_ORIGIN` set, a passkey can be the second factor instead of (or next to) an authenticator app. It does not replace the password — connecting to the database needs the password itself. Verification is left to `@simplewebauthn/server`, which checks the origin and host name, the signature and the challenge the server handed out. A challenge expires after two minutes and can be answered once. At login it is handed out only after the password has been accepted, and is tied to that account, so nobody without the password even learns who has a passkey. Where the authenticator keeps a signature counter, an answer that does not move it forward (a cloned authenticator, say) is refused. A passkey is bound to the host name, so moving the deployment to another domain leaves the enrolled ones unusable (a recovery code, or an operator's reset, gets the account back)
+- Adding or removing a method, or turning it all off, takes proof with a method already there (a current code from the app, or an enrolled passkey). A recovery code is not proof — it is for getting in. Removing the last method turns two-factor off, recovery codes included
 - The QR code shown at enrolment is made inside the server, and the page only draws its grid of modules as shapes: the secret never goes to an outside QR service
 - The code field is `autocomplete="one-time-code"` so a password manager can fill it. Codes are never stored or logged
 

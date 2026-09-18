@@ -1,5 +1,5 @@
 import { useMutation } from '@tanstack/react-query'
-import type { Dialect, LoginRequest, ServerPreset } from '@tsmyadmin/shared'
+import type { Dialect, LoginRequest, PasskeyChallenge, ServerPreset } from '@tsmyadmin/shared'
 import { type FormEvent, useState } from 'react'
 import { z } from 'zod'
 import { Button } from '@/components/ui/Button.tsx'
@@ -7,6 +7,7 @@ import { ErrorBox } from '@/components/ui/Feedback.tsx'
 import { Field, Input, Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
 import { isApiError } from '@/lib/api.ts'
+import { answerChallenge, passkeysSupported } from '@/lib/passkeys.ts'
 import { readPreference, writePreference } from '@/lib/preferences.ts'
 
 const DEFAULT_PORTS: Record<Dialect, number> = { mysql: 3306, postgres: 5432 }
@@ -44,6 +45,9 @@ export function LoginForm({ onLogin, presets = [] }: LoginFormProps) {
   const [code, setCode] = useState('')
   /** Shown once the server says this account has a second factor; the rest of the form keeps what was typed. */
   const [codeNeeded, setCodeNeeded] = useState(false)
+  /** The passkey challenge that answer carried, when the account has passkeys; answered once. */
+  const [challenge, setChallenge] = useState<PasskeyChallenge | null>(null)
+  const [passkeyError, setPasskeyError] = useState<unknown>(null)
   const [database, setDatabase] = useState(
     manualLast?.database ?? (first ? (first.database ?? '') : (last?.database ?? ''))
   )
@@ -62,8 +66,15 @@ export function LoginForm({ onLogin, presets = [] }: LoginFormProps) {
     },
     onError: (error) => {
       // Not an error to read as a failure: the account has a second factor and the form has to ask for it.
-      if (isApiError(error, 'SECOND_FACTOR_REQUIRED')) setCodeNeeded(true)
-      if (isApiError(error, 'SECOND_FACTOR_INVALID')) setCode('')
+      if (isApiError(error, 'SECOND_FACTOR_REQUIRED')) {
+        setCodeNeeded(true)
+        setChallenge(error.passkey ?? null)
+      }
+      // A refused attempt may have spent the challenge: the next plain attempt hands out a fresh one.
+      if (isApiError(error, 'SECOND_FACTOR_INVALID')) {
+        setCode('')
+        setChallenge(null)
+      }
     },
   })
   const fixed = preset !== MANUAL
@@ -83,17 +94,28 @@ export function LoginForm({ onLogin, presets = [] }: LoginFormProps) {
     setDialect(next)
   }
 
+  const credentials = (): LoginRequest => ({
+    dialect,
+    host,
+    port: Number(port),
+    user,
+    password,
+    ...(database ? { database } : {}),
+  })
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    login.mutate({
-      dialect,
-      host,
-      port: Number(port),
-      user,
-      password,
-      ...(database ? { database } : {}),
-      ...(code.trim() ? { code: code.trim() } : {}),
-    })
+    setPasskeyError(null)
+    login.mutate({ ...credentials(), ...(code.trim() ? { code: code.trim() } : {}) })
+  }
+  const withPasskey = async () => {
+    if (!challenge) return
+    setPasskeyError(null)
+    try {
+      const passkey = await answerChallenge(challenge)
+      login.mutate({ ...credentials(), passkey })
+    } catch (err) {
+      setPasskeyError(err)
+    }
   }
 
   return (
@@ -202,6 +224,12 @@ export function LoginForm({ onLogin, presets = [] }: LoginFormProps) {
           />
         </Field>
       ) : null}
+      {codeNeeded && challenge && passkeysSupported() ? (
+        <Button onClick={() => void withPasskey()} disabled={login.isPending} className="w-full justify-center">
+          {locale.login.usePasskey}
+        </Button>
+      ) : null}
+      {passkeyError ? <ErrorBox error={passkeyError} /> : null}
       {/* A code is asked for, not failed: the form says so rather than showing it as an error. */}
       {login.isError && !isApiError(login.error, 'SECOND_FACTOR_REQUIRED') ? <ErrorBox error={login.error} /> : null}
       <Button type="submit" variant="primary" disabled={login.isPending} className="w-full justify-center">

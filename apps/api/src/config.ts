@@ -62,6 +62,7 @@ const EnvSchema = z.object({
    * Needs a session store that survives a restart, since that is where the secret lives.
    */
   TSMYADMIN_REQUIRE_2FA: z.enum(['0', '1']).optional(),
+  TSMYADMIN_PASSKEY_ORIGIN: z.string().optional(),
   SESSION_DB_PATH: z.string().default('data/sessions.sqlite'),
   /** Required by SESSION_STORE=redis. */
   REDIS_URL: z.string().optional(),
@@ -77,6 +78,11 @@ export type AppConfig = {
   isProd: boolean
   /** Every account must have a second factor (TSMYADMIN_REQUIRE_2FA). */
   require2fa: boolean
+  /**
+   * Where the app is reached, for passkeys (TSMYADMIN_PASSKEY_ORIGIN): a passkey is bound to this origin's host
+   * name, so it is configured rather than read from request headers. Unset: passkeys are not offered.
+   */
+  passkey: { origin: string; rpId: string } | null
   /** `Secure` on the session cookie; a production login over plain HTTP is refused while this is on. */
   cookieSecure: boolean
   port: number
@@ -124,6 +130,10 @@ export function loadConfig(env: Record<string, string | undefined>): AppConfig {
   if (require2fa && sessionStore === 'memory') {
     throw new ConfigError('TSMYADMIN_REQUIRE_2FA needs SESSION_STORE=sqlite or redis (the secrets live there)')
   }
+  const passkey = parsePasskeyOrigin(e.TSMYADMIN_PASSKEY_ORIGIN)
+  if (passkey && sessionStore === 'memory') {
+    throw new ConfigError('TSMYADMIN_PASSKEY_ORIGIN needs SESSION_STORE=sqlite or redis (the passkeys live there)')
+  }
   if (sessionStore === 'redis' && !e.REDIS_URL) {
     throw new ConfigError('REDIS_URL must be set when SESSION_STORE=redis')
   }
@@ -140,6 +150,7 @@ export function loadConfig(env: Record<string, string | undefined>): AppConfig {
   return {
     isProd,
     require2fa,
+    passkey,
     port: e.API_PORT,
     cookieSecure: e.COOKIE_SECURE ? e.COOKIE_SECURE === '1' : isProd,
     sessionSecret: e.SESSION_SECRET || 'dev-secret-do-not-use-in-production',
@@ -178,4 +189,29 @@ function parseServers(raw: string | undefined): ServerPreset[] {
     names.add(s.name)
   }
   return parsed.data
+}
+
+/**
+ * The origin passkeys are bound to: a bare `scheme://host[:port]`, over HTTPS — browsers allow WebAuthn over plain
+ * HTTP only on localhost, and a host that is an IP address cannot be a relying party at all.
+ */
+function parsePasskeyOrigin(value: string | undefined): { origin: string; rpId: string } | null {
+  if (value === undefined || value === '') return null
+  let url: URL
+  try {
+    url = new URL(value)
+  } catch {
+    throw new ConfigError('TSMYADMIN_PASSKEY_ORIGIN must be a URL such as https://db.example.com')
+  }
+  if (url.origin !== value.replace(/\/$/, '')) {
+    throw new ConfigError('TSMYADMIN_PASSKEY_ORIGIN must be an origin only (scheme, host and port; no path)')
+  }
+  const local = url.hostname === 'localhost'
+  if (url.protocol !== 'https:' && !(local && url.protocol === 'http:')) {
+    throw new ConfigError('TSMYADMIN_PASSKEY_ORIGIN must use https (http is allowed for localhost only)')
+  }
+  if (/^[\d.]+$/.test(url.hostname) || url.hostname.startsWith('[')) {
+    throw new ConfigError('TSMYADMIN_PASSKEY_ORIGIN must name a host, not an IP address')
+  }
+  return { origin: url.origin, rpId: url.hostname }
 }

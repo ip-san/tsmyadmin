@@ -10,6 +10,9 @@ import type {
   ExportTemplate,
   KeyValue,
   KillMode,
+  PasskeyChallenge,
+  PasskeyRegistration,
+  PasskeyResponse,
   ProcessInfo,
   QueryBuilderRequestInput,
   QueryBuilderResult,
@@ -21,6 +24,7 @@ import type {
   RowValues,
   SavedQuery,
   SaveExportTemplateRequest,
+  SecondFactorProof,
   SecondFactorSetup,
   SecondFactorStatus,
   ServerInfo,
@@ -244,10 +248,21 @@ export const mutations = {
   login: (body: Parameters<typeof api.session.$post>[0]['json']) =>
     unwrap<SessionState>(api.session.$post({ json: body })),
   logout: () => unwrap<{ ok: boolean }>(api.session.$delete()),
-  beginSecondFactor: () => unwrap<SecondFactorSetup>(api['second-factor'].begin.$post()),
+  beginSecondFactor: (proof?: SecondFactorProof) =>
+    unwrap<SecondFactorSetup>(api['second-factor'].begin.$post({ json: proof ?? {} })),
   confirmSecondFactor: (code: string) =>
     unwrap<SecondFactorStatus>(api['second-factor'].confirm.$post({ json: { code } })),
-  disableSecondFactor: (code: string) => unwrap<SecondFactorStatus>(api['second-factor'].$delete({ json: { code } })),
+  disableSecondFactor: (proof: SecondFactorProof) =>
+    unwrap<SecondFactorStatus>(api['second-factor'].$delete({ json: proof })),
+  removeTotp: (proof: SecondFactorProof) =>
+    unwrap<SecondFactorStatus>(api['second-factor'].totp.$delete({ json: proof })),
+  passkeyChallenge: () => unwrap<PasskeyChallenge>(api['second-factor'].passkeys.challenge.$post()),
+  beginPasskey: (proof?: SecondFactorProof) =>
+    unwrap<PasskeyRegistration>(api['second-factor'].passkeys.begin.$post({ json: proof ?? {} })),
+  confirmPasskey: (response: PasskeyResponse) =>
+    unwrap<SecondFactorStatus>(api['second-factor'].passkeys.confirm.$post({ json: { response } })),
+  removePasskey: (id: string, proof: SecondFactorProof) =>
+    unwrap<SecondFactorStatus>(api['second-factor'].passkeys[':id'].$delete({ param: { id: enc(id) }, json: proof })),
   resetSecondFactor: (user: string) =>
     unwrap<AccountSecondFactors>(api['second-factor'].accounts.reset.$post({ json: { user } })),
   insertRow: (ref: TableRef, values: RowValues) =>

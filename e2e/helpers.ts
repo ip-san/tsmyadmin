@@ -133,6 +133,11 @@ export async function login(page: Page, t: Target, { fromCurrentPage = false } =
  * kept with the account only where such a store exists, so that spec points itself here.
  */
 export const PERSISTENT_BASE_URL = `http://127.0.0.1:${Number(process.env.E2E_PORT ?? 3199) - 1}`
+/**
+ * The same server by host name: browsers refuse an IP address as a passkey's relying party, so the passkey spec
+ * goes through `localhost` (the server's TSMYADMIN_PASSKEY_ORIGIN).
+ */
+export const PASSKEY_BASE_URL = PERSISTENT_BASE_URL.replace('127.0.0.1', 'localhost')
 
 export function tableUrl(t: Target, table: string, sub = ''): string {
   const base = `/db/${t.database}/table/${table}${sub}`

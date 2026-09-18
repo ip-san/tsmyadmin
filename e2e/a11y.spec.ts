@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect } from '@playwright/test'
-import { login, PERSISTENT_BASE_URL, TARGETS, tableUrl, test } from './helpers.ts'
+import { login, PASSKEY_BASE_URL, PERSISTENT_BASE_URL, TARGETS, tableUrl, test } from './helpers.ts'
 import { createAccount, dropAccount, enrol, t as first, signIn } from './two-factor.ts'
 
 async function scan(page: Parameters<typeof login>[0]) {
@@ -49,7 +49,7 @@ test.describe('accessibility (axe-core, two-factor)', () => {
     if (!t) throw new Error('no target')
     await login(page, t)
     await page.goto('/security')
-    await page.getByRole('button', { name: '2 要素認証を登録する' }).click()
+    await page.getByRole('button', { name: '認証アプリで登録する' }).click()
     // Nothing is kept until a code confirms it, so the shared fixture account is left as it was.
     await page.locator('#second-factor-secret').waitFor()
     await scan(page)
@@ -74,6 +74,43 @@ test.describe('accessibility (axe-core, two-factor)', () => {
       await page.getByRole('dialog').getByRole('button', { name: '解除する' }).waitFor()
       await scan(page)
       await page.getByRole('dialog').getByRole('button', { name: 'キャンセル' }).click()
+    } finally {
+      await dropAccount(page, name)
+    }
+  })
+})
+
+test.describe('accessibility (axe-core, passkeys)', () => {
+  test.use({ baseURL: PASSKEY_BASE_URL })
+
+  test('security tab with a passkey, and the login asking for one', async ({ page }) => {
+    test.setTimeout(90_000)
+    const cdp = await page.context().newCDPSession(page)
+    await cdp.send('WebAuthn.enable')
+    await cdp.send('WebAuthn.addVirtualAuthenticator', {
+      options: {
+        protocol: 'ctap2',
+        transport: 'internal',
+        hasResidentKey: true,
+        hasUserVerification: true,
+        isUserVerified: true,
+      },
+    })
+    const name = `e2e_a11ypk_${Date.now().toString(36)}`
+    await createAccount(page, name, 'pw-a11y-pk')
+    try {
+      await signIn(page, name, 'pw-a11y-pk')
+      await page.goto('/security')
+      await page.getByRole('button', { name: 'パスキーで登録する' }).click()
+      await page.getByRole('heading', { name: '回復用コード' }).waitFor()
+      await scan(page)
+      await page.getByRole('button', { name: '回復用コードを保管しました' }).click()
+      await page.getByText(/パスキー 1（/).waitFor()
+      await scan(page)
+      await page.getByRole('button', { name: '切断' }).click()
+      await signIn(page, name, 'pw-a11y-pk')
+      await page.getByRole('button', { name: 'パスキーで確認' }).waitFor()
+      await scan(page)
     } finally {
       await dropAccount(page, name)
     }

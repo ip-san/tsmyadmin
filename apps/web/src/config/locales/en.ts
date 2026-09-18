@@ -73,6 +73,7 @@ export const en = {
   login: {
     code: 'One-time code',
     codeHint: 'The six digits from your authenticator app, or a recovery code.',
+    usePasskey: 'Use a passkey',
     title: 'Connect to a server',
     preset: 'Server',
     presetManual: 'Enter manually',
@@ -750,10 +751,13 @@ export const en = {
     title: 'Two-factor authentication',
     intro:
       'Adds a one-time code (TOTP) from an authenticator app to the database account this session is signed in as. Once enrolled, connecting asks for a code.',
+    introPasskeys:
+      'Adds a one-time code (TOTP) from an authenticator app, or a passkey, to the database account this session is signed in as. Once enrolled, connecting asks for one of them.',
     required: 'This deployment requires two-factor authentication. Nothing else is available until you enrol.',
     unsupported:
       'Two-factor authentication is not available in this deployment: the secret needs somewhere to live, so run it with a persistent session store (SESSION_STORE=sqlite or redis).',
-    enrol: 'Enrol',
+    enrol: 'Enrol an authenticator app',
+    enrolPasskey: 'Enrol a passkey',
     scan: 'Scan the QR code with your authenticator app, or enter the key (or the URI), then type the six digits it shows.',
     qrLabel: 'QR code for your authenticator app',
     secretLabel: 'Key to enrol',
@@ -770,7 +774,24 @@ export const en = {
     confirm: 'Finish enrolling',
     restart: 'Start over',
     enrolled: (left: number) => `Enrolled (${left.toLocaleString('en-US')} recovery codes left)`,
-    disableHint: 'Removing it takes the six digits from the app; a recovery code will not do',
+    proofHint: 'Changing or removing it takes the six digits from the app; a recovery code will not do',
+    proofHintPasskey:
+      'Changing or removing it takes the six digits from the app or one of your passkeys. With the field left empty, a passkey is asked for (a recovery code will not do)',
+    proofNeeded: 'Enter the code from your authenticator app',
+    passkeyFailed: 'The passkey check did not complete (it was cancelled, or no matching passkey was found)',
+    methodsTitle: 'Enrolled methods',
+    totpMethod: 'Authenticator app (enrolled)',
+    totpMissing: 'Authenticator app (not enrolled)',
+    addTotp: 'Add an authenticator app',
+    removeTotp: 'Remove the authenticator app',
+    passkeyMethod: (n: number, date: string) => `Passkey ${n} (added ${date})`,
+    addPasskey: 'Add a passkey',
+    removePasskey: 'Remove',
+    recoverySaved: 'I have stored the recovery codes',
+    totpAddedNotice: 'The authenticator app was added',
+    totpRemovedNotice: 'The authenticator app was removed',
+    passkeyAddedNotice: 'The passkey was added. It can be used from the next connection on',
+    passkeyRemovedNotice: 'The passkey was removed',
     disable: 'Remove',
   },
   server: {
