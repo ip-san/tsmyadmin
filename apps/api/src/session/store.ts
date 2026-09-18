@@ -78,7 +78,11 @@ export interface SecondFactors {
    * written since; `false` says it did not, and the caller must treat the code as unused.
    */
   set(config: Config, factor: SecondFactor): Promise<boolean>
-  clear(config: Config): Promise<void>
+  /**
+   * Removes it. Given the `version` it was read at, only if nothing has been written since (`false` if something
+   * has): a method added a moment ago in another tab must not go with it.
+   */
+  clear(config: Config, version?: string): Promise<boolean>
 }
 
 export interface Session {

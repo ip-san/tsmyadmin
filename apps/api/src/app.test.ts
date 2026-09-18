@@ -1715,6 +1715,44 @@ describe('second factor', () => {
       }
     })
 
+    it('does not remove the factor when a method arrived while its last one was being taken off', async () => {
+      const h = totpHarness({ passkeys: true })
+      try {
+        await h.login()
+        const setup = await enrol(h)
+        const store = h.store.secondFactor
+        if (!store) throw new Error('no store')
+        const config = { ...LOGIN, dialect: 'mysql' as const }
+        // The app is the only method; just before it goes, another tab adds a passkey.
+        const clear = store.clear.bind(store)
+        let raced = false
+        store.clear = async (cfg, version) => {
+          if (!raced) {
+            raced = true
+            const now = await store.get(cfg)
+            if (now) {
+              await store.set(cfg, { ...now, passkeys: [{ id: 'other-tab', publicKey: 'AA', counter: 0, at: h.at() }] })
+            }
+          }
+          return clear(cfg, version)
+        }
+        h.tick(30_000)
+        const res = await h.req('/api/second-factor/totp', {
+          method: 'DELETE',
+          body: JSON.stringify({ code: codeFor(setup.secret, stepAt(h.at())) }),
+        })
+        expect(res.status).toBe(200)
+        expect(raced).toBe(true)
+        // What is left is the passkey: the account is still protected, by the method that just arrived.
+        const after = await store.get(config)
+        expect(after?.secret).toBeUndefined()
+        expect(after?.passkeys?.map((p) => p.id)).toEqual(['other-tab'])
+        expect(SecondFactorStatusSchema.parse(await res.json()).state).toBe('enrolled')
+      } finally {
+        await h.store.closeAll()
+      }
+    })
+
     it('keeps one challenge per account: asking again replaces the one before', async () => {
       const h = totpHarness({ passkeys: true })
       try {

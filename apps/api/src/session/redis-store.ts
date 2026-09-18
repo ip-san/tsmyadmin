@@ -383,6 +383,14 @@ redis.call('SET', KEYS[1], ARGV[2])
 return 1
 `
 
+const DEL_IF_UNCHANGED = `
+local current = redis.call('GET', KEYS[1])
+if not current then return 0 end
+if redis.sha1hex(current):sub(1, 32) ~= ARGV[1] then return 0 end
+redis.call('DEL', KEYS[1])
+return 1
+`
+
 class RedisSecondFactors implements SecondFactors {
   constructor(
     private readonly redis: Redis,
@@ -422,7 +430,11 @@ class RedisSecondFactors implements SecondFactors {
     return applied === 1
   }
 
-  async clear(config: ConnectRequest): Promise<void> {
-    await this.redis.del(this.entry(config))
+  async clear(config: ConnectRequest, expected?: string): Promise<boolean> {
+    if (expected === undefined) {
+      await this.redis.del(this.entry(config))
+      return true
+    }
+    return (await this.redis.eval(DEL_IF_UNCHANGED, 1, this.entry(config), expected)) === 1
   }
 }

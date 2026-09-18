@@ -186,7 +186,15 @@ export function describeSessionStoreConformance(
         expect(await factor.get(CONFIG)).toMatchObject({ lastStep: 9, recoveryHashes: [] })
         await factor.clear({ ...CONFIG, user: 'someone-else' })
         expect(await factor.get(CONFIG)).not.toBeNull()
-        await factor.clear(CONFIG)
+        // Removed against what was read, like a write: not once something has been written since.
+        const read = await factor.get(CONFIG)
+        expect(read && (await factor.set(CONFIG, { ...read, lastStep: 10 }))).toBe(true)
+        expect(await factor.clear(CONFIG, read?.version)).toBe(false)
+        expect(await factor.get(CONFIG)).toMatchObject({ lastStep: 10 })
+        expect(await factor.clear(CONFIG, (await factor.get(CONFIG))?.version)).toBe(true)
+        expect(await factor.get(CONFIG)).toBeNull()
+        await factor.set(CONFIG, { secret: 'JBSWY3DPEHPK3PXP', lastStep: 1, recoveryHashes: [], at: 3 })
+        expect(await factor.clear(CONFIG)).toBe(true)
         expect(await factor.get(CONFIG)).toBeNull()
       } finally {
         await store.closeAll()

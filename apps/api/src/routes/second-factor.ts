@@ -236,9 +236,10 @@ async function changeFactor(
   for (let attempt = 0; attempt < CHANGE_ATTEMPTS; attempt++) {
     const current = await store.get(config)
     const changed = apply(current)
+    // Removing it is compared too: a method that arrived since the read means there is something left after all.
     if (changed === null) {
-      await store.clear(config)
-      return true
+      if (await store.clear(config, current?.version)) return true
+      continue
     }
     const { version: _stale, ...next } = changed
     // Nothing stored yet has no version to compare with: that write is the first.
@@ -359,7 +360,7 @@ export function secondFactorRoutes(cfg: SessionConfig, deps: SecondFactorDeps) {
         if (!(await proven(cfg, deps, session, factor, c.req.valid('json')))) {
           return codeRefused(c, deps, 'second_factor.disable.failed')
         }
-        await store.clear(session.config)
+        if (!(await changeFactor(store, session.config, () => null))) return conflict(c)
         logged(c, 'second_factor.disabled')
         return c.json(await secondFactorStatus(cfg, deps, session))
       })

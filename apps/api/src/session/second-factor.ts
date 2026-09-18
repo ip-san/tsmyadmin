@@ -75,8 +75,15 @@ export class SqliteSecondFactors implements SecondFactors {
     return true
   }
 
-  async clear(config: ConnectRequest): Promise<void> {
-    this.stmt.remove.run(this.identity(config))
+  async clear(config: ConnectRequest, expected?: string): Promise<boolean> {
+    const identity = this.identity(config)
+    if (expected !== undefined) {
+      // Synchronous like `set`: the read and the delete cannot be interleaved by another request here.
+      const row = this.stmt.get.get(identity) as { payload: Uint8Array } | undefined
+      if (!row || version(row.payload) !== expected) return false
+    }
+    this.stmt.remove.run(identity)
+    return true
   }
 }
 
