@@ -17,9 +17,9 @@ interface Options<TItem extends { id: string; name: string }, TBody> {
 
 /**
  * A list of named things kept wherever this deployment keeps them: with the account when the session store is
- * persistent (so they follow the user between browsers), otherwise in this browser. Both lists are addressed by
- * name from the UI — the server rows carry an id because the name is inside the sealed payload and cannot be
- * looked up in SQL.
+ * persistent (so they follow the user between browsers), otherwise in this browser. A saved thing is written
+ * under a name and deleted by the row it is (see `remove`): the server rows carry an id because the name is
+ * inside the sealed payload and cannot be looked up in SQL.
  */
 export interface NamedList<TItem, TBody> {
   entries: TItem[]
