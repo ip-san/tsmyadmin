@@ -89,6 +89,10 @@ export const ja = {
     sessionExpired: 'セッションの有効期限が切れました。もう一度接続してください。',
   },
   nav: {
+    favoriteTables: 'お気に入り',
+    recentTables: '最近使ったテーブル',
+    favorite: 'お気に入りに追加',
+    unfavorite: 'お気に入りから外す',
     server: 'サーバー',
     databases: 'データベース',
     tables: 'テーブル',

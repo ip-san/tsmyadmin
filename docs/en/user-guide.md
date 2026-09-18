@@ -1,4 +1,4 @@
-<!-- translated-from: docs/user-guide.md sha256:5bfac9bc66afda135d9ddd170ea5844fbfc8898322d04a8e129e6be48705144f -->
+<!-- translated-from: docs/user-guide.md sha256:64b3ac34e6fe809509bbc5ce305fdda741fdebb102564093b34045b3bc92ddac -->
 
 # User guide
 
@@ -38,7 +38,7 @@ The language menu at the top right switches between English and 日本語 (the p
 
 | Element | What it does |
 |---|---|
-| Sidebar | The tree of databases → (on PostgreSQL, schemas →) tables. The box at the top filters table names. The button at the left of the header, or `⌘/Ctrl + B`, shows and hides it (the setting is kept in this browser) |
+| Sidebar | The tree of databases → (on PostgreSQL, schemas →) tables. The box at the top filters table names. Below it come **Favorites** (added and removed with the star by a table's name) and **Recent tables** (the last 10), kept in this browser for each connection. The button at the left of the header, or `⌘/Ctrl + B`, shows and hides it (the setting is kept in this browser) |
 | Tabs | The features of each level (Browse / Structure / SQL / …). The state lives in the URL, so a page can be shared or bookmarked as it is |
 | Theme | The moon / sun icon in the header switches between light and dark |
 | Shortcuts | `?` lists them. `⌘/Ctrl + K` the sidebar filter, `←` `→` paging, `⌘/Ctrl + Enter` run SQL, `Enter` edit the focused cell |

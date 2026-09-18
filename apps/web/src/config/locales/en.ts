@@ -93,6 +93,10 @@ export const en = {
     sessionExpired: 'Your session has expired. Connect again.',
   },
   nav: {
+    favoriteTables: 'Favorites',
+    recentTables: 'Recent tables',
+    favorite: 'Add to favorites',
+    unfavorite: 'Remove from favorites',
     server: 'Server',
     databases: 'Databases',
     tables: 'Tables',

@@ -9,6 +9,7 @@ import { locale } from '@/config/locale.ts'
 import { databasesQuery, schemasQuery } from '@/lib/queries.ts'
 import { useShortcuts } from '@/lib/shortcuts.ts'
 import { TableList } from './TableList.tsx'
+import { TableShortcuts } from './TableShortcuts.tsx'
 
 function SchemaNodes({ db, filter }: { db: string; filter: string }) {
   const schemas = useQuery(schemasQuery(db))
@@ -88,6 +89,7 @@ export function DbTree({ dialect, activeDb }: { dialect: Dialect; activeDb?: str
         aria-label={locale.nav.filterTables}
         className="mb-2"
       />
+      <TableShortcuts />
       <ul>
         {databases.data.map((d) => {
           const expanded = open[d.name] ?? false

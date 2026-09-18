@@ -12,6 +12,8 @@
 
 ### 追加
 
+- サイドバーに「**お気に入り**」と「**最近使ったテーブル**」（直近 10 件）を追加（phpMyAdmin の Favorites / Recent）。テーブル名の横の星で追加・解除する。このブラウザに、接続先（サーバー・ポート・ユーザー）ごとに保存する
+
 - サーバーに「**文字セット・照合順序**」「**エンジン**」「**プラグイン**」タブを追加（phpMyAdmin の Charsets / Engines / Plugins）。PostgreSQL では同じ位置に照合順序・アクセスメソッド・拡張を示す。どの列でも絞り込める
 
 - テーブルの「操作」に**テーブルを移動**（同じ名前のまま行ごと。MySQL は別のデータベースへ `RENAME TABLE`、PostgreSQL は同じデータベースの別スキーマへ `ALTER TABLE … SET SCHEMA`）と、MySQL の**メンテナンスに REPAIR TABLE**（MyISAM など。InnoDB では対象外である旨が結果に出る）を追加
