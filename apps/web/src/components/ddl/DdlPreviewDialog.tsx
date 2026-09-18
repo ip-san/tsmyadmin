@@ -16,6 +16,8 @@ const DESTRUCTIVE = new Set<DdlOp['op']>([
   'dropEvent',
   'dropTables',
   'truncateTables',
+  // Rewrites values in place: nothing is dropped, but the old values are gone.
+  'replaceInColumn',
 ])
 
 /** Ops that destroy data with no undo: the user retypes the object name before they can run. */
@@ -57,6 +59,8 @@ function lossWarning(op: DdlOp, dialect: Dialect): string | null {
     case 'dropTables':
     case 'truncateTables':
       return locale.ddl.bulkLoss(op.tables.length)
+    case 'replaceInColumn':
+      return locale.ddl.replaceWarning
     case 'renameDatabase':
       return dialect === 'postgres' ? locale.databaseOps.renameWarningPostgres : locale.databaseOps.renameWarningMysql
     default:

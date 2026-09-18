@@ -99,6 +99,7 @@ const SAMPLE_OPS: Record<DdlOp['op'], DdlOp> = {
     identityColumns: ['id'],
     serialColumns: ['na`me'],
   },
+  replaceInColumn: { op: 'replaceInColumn', table: 'users', column: 'na`me"', find: "it's", replace: '%_\\' },
   moveTable: { op: 'moveTable', table: 'we"ird`tbl', to: 'arch`ive"' },
   createView: { op: 'createView', name: 'v`w"x', select: 'SELECT id, name FROM users WHERE id > 1;', orReplace: true },
   createRoutine: {

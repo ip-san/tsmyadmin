@@ -168,6 +168,12 @@ exports[`DDL builders > mysql: renameTable 1`] = `
 ]
 `;
 
+exports[`DDL builders > mysql: replaceInColumn 1`] = `
+[
+  "UPDATE \`db\`.\`users\` SET \`na\`\`me"\` = REPLACE(\`na\`\`me"\`, 'it''s', '%_\\\\') WHERE REPLACE(\`na\`\`me"\`, 'it''s', '%_\\\\') <> \`na\`\`me"\`",
+]
+`;
+
 exports[`DDL builders > mysql: setTableOptions 1`] = `
 [
   "ALTER TABLE \`db\`.\`t\` COMMENT = 'it''s'",
@@ -341,6 +347,12 @@ exports[`DDL builders > postgres: renameDatabase 1`] = `
 exports[`DDL builders > postgres: renameTable 1`] = `
 [
   "ALTER TABLE "app"."t" RENAME TO "we""ird\`new"",
+]
+`;
+
+exports[`DDL builders > postgres: replaceInColumn 1`] = `
+[
+  "UPDATE "app"."users" SET "na\`me""" = replace("na\`me""", 'it''s', '%_\\') WHERE replace("na\`me""", 'it''s', '%_\\') IS DISTINCT FROM "na\`me"""",
 ]
 `;
 

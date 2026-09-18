@@ -2839,6 +2839,34 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         }
       })
 
+      it('finds and replaces in a column, touching only the rows the replacement changes', async () => {
+        const t = `${scratch}_rep`
+        await execOk(`CREATE TABLE ${t} (id INT PRIMARY KEY, name VARCHAR(40))`)
+        await execOk(`INSERT INTO ${t} (id, name) VALUES (1, 'Apple pie'), (2, 'apple tart'), (3, 'Banana'), (4, NULL)`)
+        try {
+          const results = await runScript({
+            op: 'replaceInColumn',
+            table: t,
+            column: 'name',
+            find: 'Apple',
+            replace: 'Pear',
+          })
+          // Case-sensitive on both servers, although MySQL's own comparison would call 'apple' a match.
+          const updated = results.find((r) => r.kind === 'affected')
+          expect(updated?.kind === 'affected' ? updated.affectedRows : -1).toBe(1)
+          const rows = await exec(`SELECT id, name FROM ${t} ORDER BY id`)
+          const r = rows[0]
+          expect(r?.kind === 'rows' ? r.result.rows : []).toEqual([
+            [1, 'Pear pie'],
+            [2, 'apple tart'],
+            [3, 'Banana'],
+            [4, null],
+          ])
+        } finally {
+          await exec(`DROP TABLE IF EXISTS ${t}`, { stopOnError: false })
+        }
+      })
+
       it('creates a row trigger that fires', async () => {
         const t = `${scratch}_trg`
         const trigger = `${scratch}_up`

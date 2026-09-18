@@ -84,6 +84,13 @@ export const pgDdl: DdlBuilder = {
       case 'copyDatabase':
         if (!op.withData) throw new AdapterError('UNSUPPORTED', 'PostgreSQL copies a database with its data')
         return [releaseOwnConnections(op.name), `CREATE DATABASE ${id(op.newName)} TEMPLATE ${id(op.name)}`]
+      case 'replaceInColumn': {
+        const c = id(op.column)
+        const replaced = `replace(${c}, ${pgLiteral(op.find)}, ${pgLiteral(op.replace)})`
+        return [
+          `UPDATE ${quoteTable('postgres', ns, op.table)} SET ${c} = ${replaced} WHERE ${replaced} IS DISTINCT FROM ${c}`,
+        ]
+      }
       case 'moveTable':
         return [`ALTER TABLE ${quoteTable('postgres', ns, op.table)} SET SCHEMA ${id(op.to)}`]
       case 'createView':

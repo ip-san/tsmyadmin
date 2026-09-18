@@ -114,6 +114,11 @@ export const mysqlDdl: DdlBuilder = {
         }
         return out
       }
+      case 'replaceInColumn': {
+        const c = id(op.column)
+        const replaced = `REPLACE(${c}, ${mysqlLiteral(op.find)}, ${mysqlLiteral(op.replace)})`
+        return [`UPDATE ${quoteTable('mysql', ns, op.table)} SET ${c} = ${replaced} WHERE ${replaced} <> ${c}`]
+      }
       case 'moveTable':
         return [
           `RENAME TABLE ${quoteTable('mysql', ns, op.table)} TO ${quoteTable('mysql', { database: op.to }, op.table)}`,

@@ -478,6 +478,7 @@ export const ja = {
       disableEvent: 'イベントを無効化',
       dropEvent: 'イベントを削除',
       moveTable: 'テーブルを移動',
+      replaceInColumn: '検索して置換',
       createView: 'ビューを作成',
       createRoutine: 'ルーチンを作成',
       createTrigger: 'トリガーを作成',
@@ -569,6 +570,8 @@ export const ja = {
     autoIncrementHint: '現在の最大値より小さい値は無視されます。',
     unchanged: '変更なし',
     maintenanceTitle: 'メンテナンス',
+    replaceWarning:
+      '一致したすべての行の値をその場で書き換えます。元に戻せないので、必要なら先にエクスポートしてください。',
     moveTo: { mysql: '移動先のデータベース', postgres: '移動先のスキーマ' },
     moveHint: {
       mysql:
@@ -953,6 +956,13 @@ export const ja = {
       select: 'SELECT 文',
       orReplace: '同名のビューがあれば置き換える（OR REPLACE）',
     },
+  },
+  replace: {
+    title: '検索して置換',
+    hint: 'カラム内の文字列を、一致するすべての行で置き換えます（大文字と小文字は区別します）。実行前に SQL を確認できます。',
+    column: 'カラム',
+    find: '探す文字列',
+    with: '置き換える文字列',
   },
   routines: {
     title: 'ストアドプロシージャ / 関数',

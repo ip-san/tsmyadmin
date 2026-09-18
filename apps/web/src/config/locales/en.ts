@@ -482,6 +482,7 @@ export const en = {
       disableEvent: 'Disable event',
       dropEvent: 'Drop the event',
       moveTable: 'Move table',
+      replaceInColumn: 'Find and replace',
       createView: 'Create view',
       createRoutine: 'Create routine',
       createTrigger: 'Create trigger',
@@ -573,6 +574,8 @@ export const en = {
     autoIncrementHint: 'A value below the current maximum is ignored.',
     unchanged: 'unchanged',
     maintenanceTitle: 'Maintenance',
+    replaceWarning:
+      'Rewrites the value in every matching row, in place. It cannot be undone: export the table first if you may need it back.',
     moveTo: { mysql: 'Move to database', postgres: 'Move to schema' },
     moveHint: {
       mysql:
@@ -967,6 +970,13 @@ export const en = {
       select: 'SELECT statement',
       orReplace: 'Replace a view of the same name (OR REPLACE)',
     },
+  },
+  replace: {
+    title: 'Find and replace',
+    hint: 'Replaces a text in one column, in every row that holds it (case-sensitive). The SQL is shown before it runs.',
+    column: 'Column',
+    find: 'Find',
+    with: 'Replace with',
   },
   routines: {
     title: 'Stored procedures / functions',

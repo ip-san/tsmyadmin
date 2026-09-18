@@ -122,6 +122,17 @@ export const DdlOpSchema = z.discriminatedUnion('op', [
    * database on PostgreSQL (which cannot move a table between databases).
    */
   z.object({ op: z.literal('moveTable'), table, to: z.string().min(1) }),
+  /**
+   * phpMyAdmin's "Find and replace" on one text column: every occurrence of `find`, in the rows where replacing
+   * changes the value (so the server's comparison rules cannot pick rows the replacement then leaves alone).
+   */
+  z.object({
+    op: z.literal('replaceInColumn'),
+    table,
+    column: z.string().min(1),
+    find: z.string().min(1).max(10_000),
+    replace: z.string().max(10_000),
+  }),
   /** MySQL: database == schema, so createSchema also creates a database there. */
   z.object({ op: z.literal('createDatabase'), name: z.string().min(1) }),
   z.object({ op: z.literal('dropDatabase'), name: z.string().min(1) }),

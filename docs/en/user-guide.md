@@ -1,4 +1,4 @@
-<!-- translated-from: docs/user-guide.md sha256:64b3ac34e6fe809509bbc5ce305fdda741fdebb102564093b34045b3bc92ddac -->
+<!-- translated-from: docs/user-guide.md sha256:a243934655472b0e8c7e4278f9195288c125609b5c1dbc7da8b0bc5f6d6a10be -->
 
 # User guide
 
@@ -126,7 +126,7 @@ Every run is autocommitted. A script that ends with a transaction still open is 
 
 | Tab | Contents |
 |---|---|
-| Search | Combines per-column conditions (=, ≠, <, >, *contains*, *starts with* (no wildcards needed), LIKE, IS NULL …). The result carries over to the Browse tab |
+| Search | Combines per-column conditions (=, ≠, <, >, *contains*, *starts with* (no wildcards needed), LIKE, IS NULL …). The result carries over to the Browse tab **Find and replace** below replaces a text in one text column, in every row that holds it (case-sensitive; only rows whose value actually changes are updated; the SQL is shown first, and it cannot be undone) |
 | Insert | Inserts one row from a form, with **Use default** and **NULL** per column (the default is shown as the placeholder). The screen stays open afterwards so you can enter the next row (**Back to Browse** returns to the list) |
 | Export | Downloads this table as SQL / CSV / JSON (structure and/or data) |
 | Import | Loads a CSV into this table |
