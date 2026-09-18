@@ -1677,6 +1677,60 @@ describe('second factor', () => {
       }
     })
 
+    it('does not write over a method added at the same moment from another tab', async () => {
+      const h = totpHarness({ passkeys: true })
+      try {
+        await h.login()
+        const setup = await enrol(h)
+        const store = h.store.secondFactor
+        if (!store) throw new Error('no store')
+        const config = { ...LOGIN, dialect: 'mysql' as const }
+        const passkey = (id: string) => ({ id, publicKey: 'AA', counter: 0, at: h.at() })
+        const enrolled = await store.get(config)
+        if (!enrolled) throw new Error('not enrolled')
+        await store.set(config, { ...enrolled, passkeys: [passkey('first')] })
+        // Just before the app is taken off, another tab adds a passkey (a write that checks out on its own).
+        const set = store.set.bind(store)
+        let raced = false
+        store.set = async (cfg, factor) => {
+          if (!raced && factor.secret === undefined) {
+            raced = true
+            const now = await store.get(cfg)
+            if (now) await set(cfg, { ...now, passkeys: [...(now.passkeys ?? []), passkey('other-tab')] })
+          }
+          return set(cfg, factor)
+        }
+        h.tick(30_000)
+        const res = await h.req('/api/second-factor/totp', {
+          method: 'DELETE',
+          body: JSON.stringify({ code: codeFor(setup.secret, stepAt(h.at())) }),
+        })
+        expect(res.status).toBe(200)
+        expect(raced).toBe(true)
+        const after = await store.get(config)
+        expect(after?.secret).toBeUndefined()
+        expect(after?.passkeys?.map((p) => p.id)).toEqual(['first', 'other-tab'])
+      } finally {
+        await h.store.closeAll()
+      }
+    })
+
+    it('keeps one challenge per account: asking again replaces the one before', async () => {
+      const h = totpHarness({ passkeys: true })
+      try {
+        await h.login()
+        await addPasskey(h)
+        await h.req('/api/session', { method: 'DELETE' })
+        const first = await loginTicket(h)
+        const second = await loginTicket(h)
+        expect(second).not.toBe(first)
+        expect((await h.login(withPasskey(first, 0))).status).toBe(401)
+        expect((await h.login(withPasskey(await loginTicket(h), 0))).status).toBe(201)
+      } finally {
+        await h.store.closeAll()
+      }
+    })
+
     it('is not offered where no origin is configured', async () => {
       const h = totpHarness()
       try {

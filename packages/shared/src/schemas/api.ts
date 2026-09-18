@@ -97,6 +97,8 @@ export const ApiErrorCodeSchema = z.enum([
   'NOT_FOUND',
   'QUERY_FAILED',
   'KEY_MISMATCH',
+  /** A concurrent change landed first and this one was not applied (409). */
+  'CONFLICT',
   'UNSUPPORTED',
   'FORBIDDEN',
   /** The login target is outside TSMYADMIN_ALLOWED_HOSTS (403). */

@@ -31,7 +31,7 @@ import { hashRecoveryCode, newRecoveryCodes, newSecret, otpauthUri, verifyCode }
 import { validate } from '../lib/validate.ts'
 import { identityKey } from '../session/identity.ts'
 import { type AppEnv, requireSession, type SessionConfig } from '../session/middleware.ts'
-import type { SecondFactor, StoredPasskey } from '../session/store.ts'
+import type { SecondFactor, SecondFactors, StoredPasskey } from '../session/store.ts'
 import { type Session, sessionInfo } from '../session/store.ts'
 
 export interface SecondFactorDeps {
@@ -76,6 +76,9 @@ async function issueChallenge(
   have: StoredPasskey[]
 ): Promise<PasskeyChallenge> {
   sweep(challenges, deps.now(), CHALLENGE_WINDOW_MS)
+  // One outstanding challenge per account (at login) or session: asking again replaces it, so repeated asking
+  // cannot grow this map.
+  for (const [ticket, issued] of challenges) if (issued.bound === bound) challenges.delete(ticket)
   const options = await authenticationOptions(rp, deps.challenge(), have)
   const ticket = randomBytes(24).toString('base64url')
   challenges.set(ticket, { bound, challenge: options.challenge, at: deps.now() })
@@ -218,6 +221,34 @@ function proofIn(body: SecondFactorProof | Record<string, never>): SecondFactorP
   return 'code' in body || 'passkey' in body ? (body as SecondFactorProof) : null
 }
 
+const CHANGE_ATTEMPTS = 3
+
+/**
+ * Changes the stored factor with compare-and-set: read, apply, and write only if nothing changed in between —
+ * reading again if something did, so a method another tab added a moment ago is not written over. `apply` returns
+ * null when no method is left, which removes the factor. False if other changes kept landing first.
+ */
+async function changeFactor(
+  store: SecondFactors,
+  config: Session['config'],
+  apply: (current: SecondFactor | null) => SecondFactor | null
+): Promise<boolean> {
+  for (let attempt = 0; attempt < CHANGE_ATTEMPTS; attempt++) {
+    const current = await store.get(config)
+    const changed = apply(current)
+    if (changed === null) {
+      await store.clear(config)
+      return true
+    }
+    const { version: _stale, ...next } = changed
+    // Nothing stored yet has no version to compare with: that write is the first.
+    if (await store.set(config, current?.version === undefined ? next : { ...next, version: current.version })) {
+      return true
+    }
+  }
+  return false
+}
+
 /** Without one of its methods: the whole factor goes (recovery codes too) once nothing is left to sign in with. */
 function remaining(factor: SecondFactor): SecondFactor | null {
   return factor.secret !== undefined || factor.passkeys?.length ? factor : null
@@ -250,6 +281,8 @@ export function secondFactorRoutes(cfg: SessionConfig, deps: SecondFactorDeps) {
   const store = cfg.store.secondFactor
   const unsupported = (c: Context) => c.json(apiError('UNSUPPORTED', SECOND_FACTOR_NEEDS_STORE), 400)
   const noPasskeys = (c: Context) => c.json(apiError('UNSUPPORTED', PASSKEYS_NEED_ORIGIN), 400)
+  const conflict = (c: Context) =>
+    c.json(apiError('CONFLICT', 'Another change to the second factor landed at the same time; try again'), 409)
   const logged = (c: Context<AppEnv>, event: string) =>
     deps.logger.log('info', event, { requestId: c.get('requestId'), ...sessionInfo(c.get('session')) })
   return (
@@ -303,13 +336,13 @@ export function secondFactorRoutes(cfg: SessionConfig, deps: SecondFactorDeps) {
           }
           const step = verifyCode(started.secret, c.req.valid('json').code, deps.now())
           if (step === null) return codeRefused(c, deps, 'second_factor.confirm.failed')
-          const existing = await store.get(session.config)
-          await store.set(session.config, {
+          const written = await changeFactor(store, session.config, (existing) => ({
             ...(existing ?? { recoveryHashes: started.recoveryCodes.map(hashRecoveryCode) }),
             secret: started.secret,
             lastStep: step,
             at: deps.now(),
-          })
+          }))
+          if (!written) return conflict(c)
           pendingTotp.delete(session.id)
           logged(c, 'second_factor.enrolled')
           return c.json(await secondFactorStatus(cfg, deps, session), 201)
@@ -341,10 +374,12 @@ export function secondFactorRoutes(cfg: SessionConfig, deps: SecondFactorDeps) {
         if (!(await proven(cfg, deps, session, factor, c.req.valid('json')))) {
           return codeRefused(c, deps, 'second_factor.totp_remove.failed')
         }
-        const { secret: _removed, version: _read, ...rest } = (await store.get(session.config)) ?? factor
-        const left = remaining({ ...rest, lastStep: -1 })
-        if (left) await store.set(session.config, left)
-        else await store.clear(session.config)
+        const written = await changeFactor(store, session.config, (current) => {
+          if (!current) return null
+          const { secret: _removed, ...rest } = current
+          return remaining({ ...rest, lastStep: -1 })
+        })
+        if (!written) return conflict(c)
         logged(c, 'second_factor.totp_removed')
         return c.json(await secondFactorStatus(cfg, deps, session))
       })
@@ -352,6 +387,8 @@ export function secondFactorRoutes(cfg: SessionConfig, deps: SecondFactorDeps) {
       .post('/second-factor/passkeys/challenge', requireEnrollable(cfg), async (c) => {
         if (!store) return unsupported(c)
         if (!deps.passkey) return noPasskeys(c)
+        const limited = tooManyCodes(c, deps)
+        if (limited) return limited
         const session = c.get('session')
         const passkeys = (await store.get(session.config))?.passkeys ?? []
         if (passkeys.length === 0) return c.json(apiError('NOT_FOUND', 'No passkey is enrolled'), 404)
@@ -395,6 +432,8 @@ export function secondFactorRoutes(cfg: SessionConfig, deps: SecondFactorDeps) {
         async (c) => {
           if (!store) return unsupported(c)
           if (!deps.passkey) return noPasskeys(c)
+          const limited = tooManyCodes(c, deps)
+          if (limited) return limited
           const session = c.get('session')
           const started = pendingPasskey.get(session.id)
           pendingPasskey.delete(session.id)
@@ -408,12 +447,12 @@ export function secondFactorRoutes(cfg: SessionConfig, deps: SecondFactorDeps) {
             deps.now()
           )
           if (!passkey) return codeRefused(c, deps, 'second_factor.passkey_add.failed')
-          const existing = await store.get(session.config)
-          await store.set(session.config, {
+          const written = await changeFactor(store, session.config, (existing) => ({
             ...(existing ?? { lastStep: -1, recoveryHashes: started.recoveryCodes.map(hashRecoveryCode) }),
             passkeys: [...(existing?.passkeys ?? []), passkey],
             at: deps.now(),
-          })
+          }))
+          if (!written) return conflict(c)
           logged(c, 'second_factor.passkey_added')
           return c.json(await secondFactorStatus(cfg, deps, session), 201)
         }
@@ -436,10 +475,10 @@ export function secondFactorRoutes(cfg: SessionConfig, deps: SecondFactorDeps) {
           if (!(await proven(cfg, deps, session, factor, c.req.valid('json')))) {
             return codeRefused(c, deps, 'second_factor.passkey_remove.failed')
           }
-          const { version: _read, ...current } = (await store.get(session.config)) ?? factor
-          const left = remaining({ ...current, passkeys: (current.passkeys ?? []).filter((p) => p.id !== id) })
-          if (left) await store.set(session.config, left)
-          else await store.clear(session.config)
+          const written = await changeFactor(store, session.config, (current) =>
+            current ? remaining({ ...current, passkeys: (current.passkeys ?? []).filter((p) => p.id !== id) }) : null
+          )
+          if (!written) return conflict(c)
           logged(c, 'second_factor.passkey_removed')
           return c.json(await secondFactorStatus(cfg, deps, session))
         }

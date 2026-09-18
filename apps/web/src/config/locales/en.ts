@@ -924,6 +924,7 @@ export const en = {
     AUTH_FAILED: 'Authentication failed',
     NOT_FOUND: 'The database, table or object was not found',
     QUERY_FAILED: 'The query failed',
+    CONFLICT: 'Another change landed at the same time, so this one was not applied. Try again',
     KEY_MISMATCH:
       'The row could not be identified uniquely, so the change was rolled back (it may have been changed by someone else)',
     UNSUPPORTED: 'This operation is not supported',
