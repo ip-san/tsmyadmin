@@ -20,6 +20,8 @@ import type {
   RowValues,
   SavedQuery,
   SaveExportTemplateRequest,
+  SecondFactorSetup,
+  SecondFactorStatus,
   ServerInfo,
   ServerPreset,
   SessionState,
@@ -68,6 +70,11 @@ export const listSavedQueries = () => unwrap<SavedQuery[]>(api['saved-queries'].
 export const savedQueriesQuery = queryOptions({ queryKey: ['saved-queries'], queryFn: listSavedQueries })
 
 /** Saved export choices, per account; the list is filtered to the current database in the export page. */
+export const secondFactorQuery = queryOptions({
+  queryKey: ['second-factor'],
+  queryFn: () => unwrap<SecondFactorStatus>(api['second-factor'].$get()),
+})
+
 export const listExportTemplates = () => unwrap<ExportTemplate[]>(api['export-templates'].$get())
 export const exportTemplatesQuery = queryOptions({ queryKey: ['export-templates'], queryFn: listExportTemplates })
 
@@ -230,6 +237,10 @@ export const mutations = {
   login: (body: Parameters<typeof api.session.$post>[0]['json']) =>
     unwrap<SessionState>(api.session.$post({ json: body })),
   logout: () => unwrap<{ ok: boolean }>(api.session.$delete()),
+  beginSecondFactor: () => unwrap<SecondFactorSetup>(api['second-factor'].begin.$post()),
+  confirmSecondFactor: (code: string) =>
+    unwrap<SecondFactorStatus>(api['second-factor'].confirm.$post({ json: { code } })),
+  disableSecondFactor: (code: string) => unwrap<SecondFactorStatus>(api['second-factor'].$delete({ json: { code } })),
   insertRow: (ref: TableRef, values: RowValues) =>
     unwrap<{ affectedRows: number }>(
       api.databases[':db'].tables[':table'].rows.$post({

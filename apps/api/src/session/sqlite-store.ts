@@ -241,16 +241,22 @@ export class SqliteSessionStore implements SessionStore {
     return (this.stmt.count.get() as { n: number }).n
   }
 
-  async create(config: ConnectRequest): Promise<Session> {
+  async create(config: ConnectRequest, options: { keepOthers?: boolean } = {}): Promise<Session> {
     const adapter = await connectAdapter(this.factory, config)
     const identity = identityHash(this.key, config)
-    const same = this.stmt.byIdentity.all(identity) as { id: string }[]
-    for (const victim of same.slice(0, Math.max(0, same.length - this.maxPerIdentity + 1))) await this.delete(victim.id)
     const id = crypto.randomUUID()
     const now = this.now()
     this.stmt.insert.run(id, seal(this.key, JSON.stringify(config), rowAad(SESSIONS, id)), now, now, identity)
     this.live.set(id, { config, adapter, createdAt: now, lastTouch: now })
+    if (!options.keepOthers) await this.enforceLimit(config, id)
     return { id, config, adapter, createdAt: now, lastUsedAt: now }
+  }
+
+  async enforceLimit(config: ConnectRequest, keep: string): Promise<void> {
+    const same = (this.stmt.byIdentity.all(identityHash(this.key, config)) as { id: string }[]).filter(
+      (row) => row.id !== keep
+    )
+    for (const victim of same.slice(0, Math.max(0, same.length - this.maxPerIdentity + 1))) await this.delete(victim.id)
   }
 
   async get(id: string): Promise<Session | undefined> {

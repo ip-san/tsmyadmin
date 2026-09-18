@@ -18,6 +18,7 @@ export function ServerTabs({ tab }: { tab: string }) {
           { label: locale.tabs.variables, to: '/variables' },
           { label: locale.tabs.processes, to: '/processes' },
           { label: locale.tabs.users, to: '/users' },
+          { label: locale.tabs.security, to: '/security' },
         ]}
       />
     </>

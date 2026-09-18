@@ -1,11 +1,12 @@
 import { useMutation } from '@tanstack/react-query'
-import type { ConnectRequest, Dialect, ServerPreset } from '@tsmyadmin/shared'
+import type { Dialect, LoginRequest, ServerPreset } from '@tsmyadmin/shared'
 import { type FormEvent, useState } from 'react'
 import { z } from 'zod'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox } from '@/components/ui/Feedback.tsx'
 import { Field, Input, Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
+import { isApiError } from '@/lib/api.ts'
 import { readPreference, writePreference } from '@/lib/preferences.ts'
 
 const DEFAULT_PORTS: Record<Dialect, number> = { mysql: 3306, postgres: 5432 }
@@ -23,7 +24,7 @@ const LastLoginSchema = z.object({
 const LAST_LOGIN_KEY = 'login.last'
 
 export interface LoginFormProps {
-  onLogin: (body: ConnectRequest) => Promise<unknown>
+  onLogin: (body: LoginRequest) => Promise<unknown>
   /** Operator-defined presets (TSMYADMIN_SERVERS); when present the first one is selected. */
   presets?: ServerPreset[]
 }
@@ -40,11 +41,14 @@ export function LoginForm({ onLogin, presets = [] }: LoginFormProps) {
   const [port, setPort] = useState(String(manualLast?.port ?? first?.port ?? DEFAULT_PORTS.mysql))
   const [user, setUser] = useState(last?.user ?? '')
   const [password, setPassword] = useState('')
+  const [code, setCode] = useState('')
+  /** Shown once the server says this account has a second factor; the rest of the form keeps what was typed. */
+  const [codeNeeded, setCodeNeeded] = useState(false)
   const [database, setDatabase] = useState(
     manualLast?.database ?? (first ? (first.database ?? '') : (last?.database ?? ''))
   )
   const login = useMutation({
-    mutationFn: async (body: ConnectRequest) => {
+    mutationFn: async (body: LoginRequest) => {
       const result = await onLogin(body)
       writePreference(LAST_LOGIN_KEY, {
         preset,
@@ -55,6 +59,11 @@ export function LoginForm({ onLogin, presets = [] }: LoginFormProps) {
         database: body.database ?? '',
       })
       return result
+    },
+    onError: (error) => {
+      // Not an error to read as a failure: the account has a second factor and the form has to ask for it.
+      if (isApiError(error, 'SECOND_FACTOR_REQUIRED')) setCodeNeeded(true)
+      if (isApiError(error, 'SECOND_FACTOR_INVALID')) setCode('')
     },
   })
   const fixed = preset !== MANUAL
@@ -76,7 +85,15 @@ export function LoginForm({ onLogin, presets = [] }: LoginFormProps) {
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    login.mutate({ dialect, host, port: Number(port), user, password, ...(database ? { database } : {}) })
+    login.mutate({
+      dialect,
+      host,
+      port: Number(port),
+      user,
+      password,
+      ...(database ? { database } : {}),
+      ...(code.trim() ? { code: code.trim() } : {}),
+    })
   }
 
   return (
@@ -171,7 +188,22 @@ export function LoginForm({ onLogin, presets = [] }: LoginFormProps) {
           readOnly={fixed && dialect === 'postgres'}
         />
       </Field>
-      {login.isError ? <ErrorBox error={login.error} /> : null}
+      {codeNeeded ? (
+        <Field id="code" label={locale.login.code} hint={locale.login.codeHint}>
+          <Input
+            id="code"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            // Lets a phone or password manager fill the code, and puts digits under a touch keyboard.
+            autoComplete="one-time-code"
+            inputMode="numeric"
+            autoFocus
+            aria-describedby="code-hint"
+          />
+        </Field>
+      ) : null}
+      {/* A code is asked for, not failed: the form says so rather than showing it as an error. */}
+      {login.isError && !isApiError(login.error, 'SECOND_FACTOR_REQUIRED') ? <ErrorBox error={login.error} /> : null}
       <Button type="submit" variant="primary" disabled={login.isPending} className="w-full justify-center">
         {login.isPending ? locale.login.connecting : locale.login.submit}
       </Button>

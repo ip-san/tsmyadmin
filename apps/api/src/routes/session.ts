@@ -100,14 +100,29 @@ async function spendCode(
   const store = cfg.store.secondFactor
   if (!store) return false
   const step = verifyCode(factor.secret, code, at, factor.lastStep)
-  if (step !== null) {
-    await store.set(config, { ...factor, lastStep: step })
-    return true
-  }
+  // The write carries the version the factor was read at: if another login spent this same code first, it does
+  // not land, and this one is refused rather than both being let through.
+  if (step !== null) return store.set(config, { ...factor, lastStep: step })
   const hash = hashRecoveryCode(code)
   if (!factor.recoveryHashes.includes(hash)) return false
-  await store.set(config, { ...factor, recoveryHashes: factor.recoveryHashes.filter((h) => h !== hash) })
-  return true
+  return store.set(config, { ...factor, recoveryHashes: factor.recoveryHashes.filter((h) => h !== hash) })
+}
+
+/**
+ * A refused code, counted on the per-IP budget that limits login failures: six digits are guessable in a few
+ * hundred thousand tries, and these routes are otherwise only guarded by holding a session.
+ */
+function tooManyCodes(c: Context, deps: SessionRouteDeps) {
+  const budget = deps.ipLimiter.peek(deps.ip(c))
+  if (budget.allowed) return null
+  c.header('Retry-After', String(budget.retryAfterSec))
+  return c.json(apiError('RATE_LIMITED', 'Too many code attempts; try again later'), 429)
+}
+
+function codeRefused(c: Context, deps: SessionRouteDeps, event: string) {
+  deps.ipLimiter.hit(deps.ip(c))
+  deps.logger.log('warn', event, { requestId: c.get('requestId'), ...sessionInfo(c.get('session')) })
+  return c.json(apiError('SECOND_FACTOR_INVALID', 'That code is not valid'), 401)
 }
 
 /** Enrolment is the one thing an account that must enrol may do, so these routes bypass that gate. */
@@ -170,10 +185,14 @@ export function sessionRoutes(cfg: SessionConfig, deps: SessionRouteDeps) {
           return c.json(apiError('RATE_LIMITED', 'Too many login attempts; try again later'), 429)
         }
 
+        const config = { ...body, host: normaliseHost(body.host) }
+        // Read before connecting, so a login that is about to be refused for a missing or wrong code does not
+        // close the sessions this account is already using (the per-account limit is applied after the code).
+        const enrolled = (await cfg.store.secondFactor?.get(config)) !== null && cfg.store.secondFactor !== undefined
         let session: Awaited<ReturnType<typeof cfg.store.create>>
         try {
           // The store builds the (audited) adapter, pings it and persists the session in one step.
-          session = await cfg.store.create({ ...body, host: normaliseHost(body.host) })
+          session = await cfg.store.create(config, { keepOthers: enrolled })
         } catch (err) {
           deps.ipLimiter.hit(ip)
           deps.logger.log('warn', 'login.failed', audit)
@@ -190,7 +209,7 @@ export function sessionRoutes(cfg: SessionConfig, deps: SessionRouteDeps) {
         }
         // The password is right; now the second factor, if this account has one. A refusal leaves nothing
         // behind — the session and its connection go — so there is no half-authenticated state to expire.
-        const factor = (await cfg.store.secondFactor?.get(session.config)) ?? null
+        const factor = enrolled ? ((await cfg.store.secondFactor?.get(session.config)) ?? null) : null
         if (factor) {
           const checked = code === undefined ? null : await spendCode(cfg, session.config, factor, code, deps.now())
           if (!checked) {
@@ -206,6 +225,7 @@ export function sessionRoutes(cfg: SessionConfig, deps: SessionRouteDeps) {
               : c.json(apiError('SECOND_FACTOR_INVALID', 'That code is not valid'), 401)
           }
         }
+        if (enrolled) await cfg.store.enforceLimit(session.config, session.id)
         deps.loginLimiter.reset(rateKey)
         // A browser that logs in again without logging out must not keep its previous session (and pools) alive —
         // dropped only now, so a failed re-login leaves the existing session untouched.
@@ -215,16 +235,32 @@ export function sessionRoutes(cfg: SessionConfig, deps: SessionRouteDeps) {
         await setSignedCookie(c, SESSION_COOKIE, session.id, cfg.secret, sessionCookieOptions(cfg))
         return c.json(await sessionState(cfg, session, savedQueriesMode), 201)
       })
-      .get('/session', requireSession(cfg), async (c) =>
+      .get('/session', requireEnrollable(cfg), async (c) =>
         c.json(await sessionState(cfg, c.get('session'), savedQueriesMode))
       )
       // Enrolment: the secret is held here until a code proves the app has it, so a half-finished enrolment
       // cannot lock the account out. It is tied to the session and forgotten when that session goes.
       .post('/second-factor/begin', requireEnrollable(cfg), async (c) => {
-        if (!cfg.store.secondFactor) return c.json(apiError('UNSUPPORTED', SECOND_FACTOR_NEEDS_STORE), 400)
+        const store = cfg.store.secondFactor
+        if (!store) return c.json(apiError('UNSUPPORTED', SECOND_FACTOR_NEEDS_STORE), 400)
+        const limited = tooManyCodes(c, deps)
+        if (limited) return limited
         const session = c.get('session')
+        // Replacing one that exists proves the current one first: otherwise a stolen session could enrol its own
+        // secret over it, which is the removal this route is not — and the removal route does ask for a code.
+        const existing = await store.get(session.config)
+        if (existing) {
+          const body = await c.req.json().catch(() => ({}))
+          const given = SecondFactorCodeRequestSchema.safeParse(body)
+          const step = given.success
+            ? verifyCode(existing.secret, given.data.code, deps.now(), existing.lastStep)
+            : null
+          if (step === null) return codeRefused(c, deps, 'second_factor.reenrol.failed')
+          await store.set(session.config, { ...existing, lastStep: step })
+        }
         const secret = newSecret()
         const recoveryCodes = newRecoveryCodes()
+        for (const [id, started] of pending) if (deps.now() - started.at > ENROLMENT_WINDOW_MS) pending.delete(id)
         pending.set(session.id, { secret, recoveryCodes, at: deps.now() })
         const info = sessionInfo(session)
         return c.json({
@@ -240,6 +276,8 @@ export function sessionRoutes(cfg: SessionConfig, deps: SessionRouteDeps) {
         async (c) => {
           const store = cfg.store.secondFactor
           if (!store) return c.json(apiError('UNSUPPORTED', SECOND_FACTOR_NEEDS_STORE), 400)
+          const limited = tooManyCodes(c, deps)
+          if (limited) return limited
           const session = c.get('session')
           const started = pending.get(session.id)
           if (!started || deps.now() - started.at > ENROLMENT_WINDOW_MS) {
@@ -247,7 +285,7 @@ export function sessionRoutes(cfg: SessionConfig, deps: SessionRouteDeps) {
             return c.json(apiError('SECOND_FACTOR_INVALID', 'Start the enrolment again'), 401)
           }
           const step = verifyCode(started.secret, c.req.valid('json').code, deps.now())
-          if (step === null) return c.json(apiError('SECOND_FACTOR_INVALID', 'That code is not valid'), 401)
+          if (step === null) return codeRefused(c, deps, 'second_factor.confirm.failed')
           await store.set(session.config, {
             secret: started.secret,
             lastStep: step,
@@ -259,17 +297,21 @@ export function sessionRoutes(cfg: SessionConfig, deps: SessionRouteDeps) {
           return c.json(await secondFactorStatus(cfg, session), 201)
         }
       )
-      .get('/second-factor', requireSession(cfg), async (c) => c.json(await secondFactorStatus(cfg, c.get('session'))))
+      .get('/second-factor', requireEnrollable(cfg), async (c) =>
+        c.json(await secondFactorStatus(cfg, c.get('session')))
+      )
       // Turning it off takes a current code from the app, not a recovery code: a written-down code that leaked
       // should let its owner back in, not let someone else remove the factor.
-      .delete('/second-factor', requireSession(cfg), validate('json', SecondFactorCodeRequestSchema), async (c) => {
+      .delete('/second-factor', requireEnrollable(cfg), validate('json', SecondFactorCodeRequestSchema), async (c) => {
         const store = cfg.store.secondFactor
         if (!store) return c.json(apiError('UNSUPPORTED', SECOND_FACTOR_NEEDS_STORE), 400)
+        const limited = tooManyCodes(c, deps)
+        if (limited) return limited
         const session = c.get('session')
         const factor = await store.get(session.config)
         if (!factor) return c.json(apiError('NOT_FOUND', 'Nothing is enrolled for this account'), 404)
         const step = verifyCode(factor.secret, c.req.valid('json').code, deps.now(), factor.lastStep)
-        if (step === null) return c.json(apiError('SECOND_FACTOR_INVALID', 'That code is not valid'), 401)
+        if (step === null) return codeRefused(c, deps, 'second_factor.disable.failed')
         await store.clear(session.config)
         deps.logger.log('info', 'second_factor.disabled', { requestId: c.get('requestId'), ...sessionInfo(session) })
         return c.json(await secondFactorStatus(cfg, session))

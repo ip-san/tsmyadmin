@@ -1361,13 +1361,14 @@ describe('errors', () => {
 
 describe('second factor', () => {
   /** The same persistent-store harness, with a clock the test can hold still. */
-  function totpHarness(options: { require2fa?: boolean } = {}) {
+  function totpHarness(options: { require2fa?: boolean; maxPerIdentity?: number } = {}) {
     let now = 1_700_000_000_000
     const store = new SqliteSessionStore({
       path: ':memory:',
       secret: 's'.repeat(32),
       adapterFactory: () => fixtureAdapter(),
       sweepIntervalMs: 0,
+      ...(options.maxPerIdentity === undefined ? {} : { maxPerIdentity: options.maxPerIdentity }),
     })
     const app = createApp({ ...testConfig(), require2fa: options.require2fa ?? false }, { store, now: () => now })
     let cookie = ''
@@ -1476,6 +1477,49 @@ describe('second factor', () => {
       h.tick(30_000)
       expect((await h.login()).status).toBe(401)
       expect((await h.login({ ...LOGIN, code: codeFor(setup.secret, stepAt(h.at())) })).status).toBe(201)
+    } finally {
+      await h.store.closeAll()
+    }
+  })
+
+  it('needs the current code before a new one can replace it', async () => {
+    const h = totpHarness()
+    try {
+      await h.login()
+      const setup = await enrol(h)
+      // A session someone else got hold of must not be able to swap the factor for one of its own: that would
+      // be a removal, and removing takes a code.
+      expect((await h.req('/api/second-factor/begin', { method: 'POST' })).status).toBe(401)
+      expect(
+        (await h.req('/api/second-factor/begin', { method: 'POST', body: JSON.stringify({ code: '000000' }) })).status
+      ).toBe(401)
+      h.tick(30_000)
+      const again = await h.req('/api/second-factor/begin', {
+        method: 'POST',
+        body: JSON.stringify({ code: codeFor(setup.secret, stepAt(h.at())) }),
+      })
+      expect(again.status).toBe(200)
+      expect(SecondFactorSetupSchema.parse(await again.json()).secret).not.toBe(setup.secret)
+    } finally {
+      await h.store.closeAll()
+    }
+  })
+
+  it('does not close the account’s other sessions when the code is wrong', async () => {
+    // One session per account: a login that is refused would otherwise have taken the place of the live one.
+    const h = totpHarness({ maxPerIdentity: 1 })
+    try {
+      await h.login()
+      const setup = await enrol(h)
+      h.tick(30_000)
+      expect((await h.login()).status).toBe(401)
+      expect((await h.login({ ...LOGIN, code: '000000' })).status).toBe(401)
+      // The cookie is still the one from the first login: that session is expected to have survived.
+      expect((await h.req('/api/second-factor')).status).toBe(200)
+      expect(h.store.size).toBe(1)
+      // And a login that is accepted does take its place, as it did before.
+      expect((await h.login({ ...LOGIN, code: codeFor(setup.secret, stepAt(h.at())) })).status).toBe(201)
+      expect(h.store.size).toBe(1)
     } finally {
       await h.store.closeAll()
     }

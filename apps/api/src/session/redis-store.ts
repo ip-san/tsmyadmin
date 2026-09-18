@@ -5,7 +5,7 @@ import { Redis } from 'ioredis'
 import { deriveSessionKey, open, rowAad, seal } from './crypto.ts'
 import { identityHash } from './identity.ts'
 import { readPayload, SAVED_QUERIES, SAVED_QUERY_LIMIT } from './saved-queries.ts'
-import { SECOND_FACTOR } from './second-factor.ts'
+import { SECOND_FACTOR, version } from './second-factor.ts'
 import {
   type AdapterFactory,
   connectAdapter,
@@ -131,16 +131,10 @@ export class RedisSessionStore implements SessionStore {
     return this.live.size
   }
 
-  async create(config: ConnectRequest): Promise<Session> {
+  async create(config: ConnectRequest, options: { keepOthers?: boolean } = {}): Promise<Session> {
     const adapter = await connectAdapter(this.factory, config)
     const identity = identityHash(this.key, config)
     const index = this.identityKey(identity)
-    // Evict the least recently used sessions of this account beyond the cap. The index is a sorted set scored
-    // by last use, and Redis may already have expired members, so it is trimmed of those first.
-    await this.redis.zremrangebyscore(index, '-inf', this.now() - this.ttlMs)
-    const held = await this.heldSessions(index)
-    for (const victim of held.slice(0, Math.max(0, held.length - this.maxPerIdentity + 1))) await this.delete(victim)
-
     const id = randomUUID()
     const now = this.now()
     const payload = seal(this.key, JSON.stringify(config), rowAad(SESSIONS, id))
@@ -156,7 +150,18 @@ export class RedisSessionStore implements SessionStore {
       .pexpire(index, this.ttlMs)
       .exec()
     this.live.set(id, { config, adapter, createdAt: now })
+    // Evicted after a successful connect, so a wrong password cannot be used to log other people out — and,
+    // when a second factor is still to be checked, only once that has passed.
+    if (!options.keepOthers) await this.enforceLimit(config, id)
     return { id, config, adapter, createdAt: now, lastUsedAt: now }
+  }
+
+  async enforceLimit(config: ConnectRequest, keep: string): Promise<void> {
+    const index = this.identityKey(identityHash(this.key, config))
+    // The index is a sorted set scored by last use, and Redis may already have expired members: trimmed first.
+    await this.redis.zremrangebyscore(index, '-inf', this.now() - this.ttlMs)
+    const held = (await this.heldSessions(index)).filter((id) => id !== keep)
+    for (const victim of held.slice(0, Math.max(0, held.length - this.maxPerIdentity + 1))) await this.delete(victim)
   }
 
   /**
@@ -369,6 +374,15 @@ class RedisSavedQueries implements SavedItems {
  * The second factor of a database account, one key per account. Kept apart from the saved items for the same
  * reason the file store keeps it in its own table: those are capped and pruned, and this must not be.
  */
+/** Writes the value only when what is stored still hashes to the version the caller read. */
+const SET_IF_UNCHANGED = `
+local current = redis.call('GET', KEYS[1])
+if not current then return 0 end
+if redis.sha1hex(current):sub(1, 32) ~= ARGV[1] then return 0 end
+redis.call('SET', KEYS[1], ARGV[2])
+return 1
+`
+
 class RedisSecondFactors implements SecondFactors {
   constructor(
     private readonly redis: Redis,
@@ -384,7 +398,8 @@ class RedisSecondFactors implements SecondFactors {
     const payload = await this.redis.getBuffer(this.entry(config))
     if (!payload) return null
     try {
-      return JSON.parse(open(this.key, payload, rowAad(SECOND_FACTOR, identityHash(this.key, config))))
+      const factor = JSON.parse(open(this.key, payload, rowAad(SECOND_FACTOR, identityHash(this.key, config))))
+      return { ...factor, version: version(payload) }
     } catch {
       // Will not open (a different secret, a hand-written value): dropped, so the account can enrol again
       // rather than be locked out by something nothing can read.
@@ -393,9 +408,18 @@ class RedisSecondFactors implements SecondFactors {
     }
   }
 
-  async set(config: ConnectRequest, factor: SecondFactor): Promise<void> {
+  async set(config: ConnectRequest, factor: SecondFactor): Promise<boolean> {
     const aad = rowAad(SECOND_FACTOR, identityHash(this.key, config))
-    await this.redis.set(this.entry(config), seal(this.key, JSON.stringify(factor), aad))
+    const { version: expected, ...stored } = factor
+    const payload = seal(this.key, JSON.stringify(stored), aad)
+    if (expected === undefined) {
+      await this.redis.set(this.entry(config), payload)
+      return true
+    }
+    // Two requests carrying the same code reach here together: the write lands only for the one whose read is
+    // still what is stored, so the other is told its code went unused rather than both being accepted.
+    const applied = await this.redis.eval(SET_IF_UNCHANGED, 1, this.entry(config), expected, payload)
+    return applied === 1
   }
 
   async clear(config: ConnectRequest): Promise<void> {

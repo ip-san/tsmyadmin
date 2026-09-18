@@ -169,16 +169,20 @@ export function describeSessionStoreConformance(
         }
         expect(await factor.get(CONFIG)).toBeNull()
         await factor.set(CONFIG, { secret: 'JBSWY3DPEHPK3PXP', lastStep: 7, recoveryHashes: ['a', 'b'], at: 1 })
-        expect(await factor.get(CONFIG)).toEqual({
-          secret: 'JBSWY3DPEHPK3PXP',
-          lastStep: 7,
-          recoveryHashes: ['a', 'b'],
-          at: 1,
-        })
+        const stored = await factor.get(CONFIG)
+        expect(stored).toMatchObject({ secret: 'JBSWY3DPEHPK3PXP', lastStep: 7, recoveryHashes: ['a', 'b'], at: 1 })
+
+        // Written against what was read: the first write lands, a second one carrying the same (now stale)
+        // version does not — which is what stops two logins with one code from both being accepted.
+        expect(stored && (await factor.set(CONFIG, { ...stored, lastStep: 8 }))).toBe(true)
+        expect(stored && (await factor.set(CONFIG, { ...stored, lastStep: 99 }))).toBe(false)
+        expect(await factor.get(CONFIG)).toMatchObject({ lastStep: 8 })
         // Another account has its own, and cannot see this one.
         expect(await factor.get({ ...CONFIG, user: 'someone-else' })).toBeNull()
         // Replaced in place: one row per account, whatever the account does.
-        await factor.set(CONFIG, { secret: 'JBSWY3DPEHPK3PXP', lastStep: 9, recoveryHashes: [], at: 2 })
+        expect(await factor.set(CONFIG, { secret: 'JBSWY3DPEHPK3PXP', lastStep: 9, recoveryHashes: [], at: 2 })).toBe(
+          true
+        )
         expect(await factor.get(CONFIG)).toMatchObject({ lastStep: 9, recoveryHashes: [] })
         await factor.clear({ ...CONFIG, user: 'someone-else' })
         expect(await factor.get(CONFIG)).not.toBeNull()

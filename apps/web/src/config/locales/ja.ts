@@ -67,6 +67,8 @@ export const ja = {
     notFoundBody: 'URL が間違っているか、対象のデータベースやテーブルが存在しません。',
   },
   login: {
+    code: 'ワンタイムコード',
+    codeHint: '認証アプリの 6 桁、または回復用コードを入力してください。',
     title: 'サーバーに接続',
     preset: '接続先',
     presetManual: '手動で入力',
@@ -107,6 +109,7 @@ export const ja = {
     tree: 'データベースツリー',
   },
   tabs: {
+    security: 'セキュリティ',
     databases: 'データベース',
     structure: '構造',
     sql: 'SQL',
@@ -730,6 +733,25 @@ export const ja = {
       columns: '列挙したカラムだけへの権限です',
     },
     columns: (columns: string) => `カラム: ${columns}`,
+  },
+  secondFactor: {
+    title: '2 要素認証',
+    intro:
+      'ログインしている DB アカウントに、認証アプリのワンタイムコード（TOTP）を追加します。登録すると、次回から接続にコードが必要になります。',
+    required: 'この配備では 2 要素認証が必須です。登録を終えるまで、ほかの操作はできません。',
+    enrol: '2 要素認証を登録する',
+    scan: '認証アプリでこの鍵（または下の URI）を登録し、表示された 6 桁を入力してください。',
+    secretLabel: '登録する鍵',
+    recoveryTitle: '回復用コード',
+    recoveryHint:
+      '認証アプリを失ったときにログインするためのコードです。今だけ表示されます。安全な場所に保管してください（1 つにつき 1 回だけ使えます）。',
+    copyRecovery: '回復用コードをコピー',
+    codeLabel: 'コード',
+    confirmHint: '認証アプリに表示されている 6 桁',
+    confirm: '登録を完了する',
+    enrolled: (left: number) => `登録済みです（未使用の回復用コード: ${left.toLocaleString('ja-JP')} 個）`,
+    disableHint: '解除には認証アプリの 6 桁が必要です（回復用コードでは解除できません）',
+    disable: '2 要素認証を解除する',
   },
   server: {
     title: 'サーバー',

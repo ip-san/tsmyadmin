@@ -71,6 +71,8 @@ export const en = {
     notFoundBody: 'The URL is wrong, or the database or table it names does not exist.',
   },
   login: {
+    code: 'One-time code',
+    codeHint: 'The six digits from your authenticator app, or a recovery code.',
     title: 'Connect to a server',
     preset: 'Server',
     presetManual: 'Enter manually',
@@ -110,6 +112,7 @@ export const en = {
     tree: 'Database tree',
   },
   tabs: {
+    security: 'Security',
     databases: 'Databases',
     structure: 'Structure',
     sql: 'SQL',
@@ -734,6 +737,25 @@ export const en = {
       columns: 'Granted on the listed columns only',
     },
     columns: (columns: string) => `Columns: ${columns}`,
+  },
+  secondFactor: {
+    title: 'Two-factor authentication',
+    intro:
+      'Adds a one-time code (TOTP) from an authenticator app to the database account this session is signed in as. Once enrolled, connecting asks for a code.',
+    required: 'This deployment requires two-factor authentication. Nothing else is available until you enrol.',
+    enrol: 'Enrol',
+    scan: 'Add this key (or the URI below) to your authenticator app, then enter the six digits it shows.',
+    secretLabel: 'Key to enrol',
+    recoveryTitle: 'Recovery codes',
+    recoveryHint:
+      'These let you sign in if you lose the app. They are shown only now — keep them somewhere safe. Each works once.',
+    copyRecovery: 'Copy the recovery codes',
+    codeLabel: 'Code',
+    confirmHint: 'The six digits in your authenticator app',
+    confirm: 'Finish enrolling',
+    enrolled: (left: number) => `Enrolled (${left.toLocaleString('en-US')} recovery codes left)`,
+    disableHint: 'Removing it takes the six digits from the app; a recovery code will not do',
+    disable: 'Remove',
   },
   server: {
     title: 'Server',

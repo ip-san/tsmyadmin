@@ -45,12 +45,22 @@ export interface SecondFactor {
   recoveryHashes: string[]
   /** When it was enrolled or last changed. */
   at: number
+  /**
+   * What was stored when this was read, for `set` to write against. Two logins carrying the same code would
+   * otherwise both read the same `lastStep`, both check out and both be accepted — the guard that makes a code
+   * usable once only holds if the write refuses a value that has changed underneath it.
+   */
+  version?: string
 }
 
 /** Where the second factor lives; absent on a store that cannot keep anything past a restart. */
 export interface SecondFactors {
   get(config: Config): Promise<SecondFactor | null>
-  set(config: Config, factor: SecondFactor): Promise<void>
+  /**
+   * Writes it. When the value carries the `version` it was read at, the write only lands if nothing else has
+   * written since; `false` says it did not, and the caller must treat the code as unused.
+   */
+  set(config: Config, factor: SecondFactor): Promise<boolean>
   clear(config: Config): Promise<void>
 }
 
@@ -72,7 +82,14 @@ export type AdapterFactory = (config: ConnectRequest) => DatabaseAdapter
  */
 export interface SessionStore {
   /** Builds the adapter, verifies the connection (ping) and persists the session. Throws when the DB rejects. */
-  create(config: ConnectRequest): Promise<Session>
+  /**
+   * Opens a session. `keepOthers` holds back the per-account limit for this one login: a second factor is
+   * checked after the password, and a login about to be refused for a wrong code must not close the sessions
+   * the account is already using. `enforceLimit` applies it once the login is accepted.
+   */
+  create(config: ConnectRequest, options?: { keepOthers?: boolean }): Promise<Session>
+  /** Closes the least recently used sessions of this account beyond the cap, keeping `keep`. */
+  enforceLimit(config: ConnectRequest, keep: string): Promise<void>
   /** Returns the session and refreshes its TTL. */
   get(id: string): Promise<Session | undefined>
   delete(id: string): Promise<void>
@@ -155,20 +172,24 @@ export class MemorySessionStore implements SessionStore {
     return this.sessions.size
   }
 
-  async create(config: ConnectRequest): Promise<Session> {
+  async create(config: ConnectRequest, options: { keepOthers?: boolean } = {}): Promise<Session> {
     const adapter = await connectAdapter(this.factory, config)
-    // Evict the least recently used sessions of the same account beyond the cap (after a successful connect,
-    // so a wrong password cannot be used to log other people out).
-    const identity = identityKey(config)
-    const same = [...this.sessions.values()]
-      .filter((s) => identityKey(s.config) === identity)
-      .sort((a, b) => a.lastUsedAt - b.lastUsedAt)
-    for (const victim of same.slice(0, Math.max(0, same.length - this.maxPerIdentity + 1))) await this.delete(victim.id)
     const id = crypto.randomUUID()
     const now = this.now()
     const session: Session = { id, config, adapter, createdAt: now, lastUsedAt: now }
     this.sessions.set(id, session)
+    // Evicted after a successful connect, so a wrong password cannot be used to log other people out — and,
+    // when a second factor is still to be checked, only once that has passed.
+    if (!options.keepOthers) await this.enforceLimit(config, id)
     return session
+  }
+
+  async enforceLimit(config: ConnectRequest, keep: string): Promise<void> {
+    const identity = identityKey(config)
+    const same = [...this.sessions.values()]
+      .filter((s) => identityKey(s.config) === identity && s.id !== keep)
+      .sort((a, b) => a.lastUsedAt - b.lastUsedAt)
+    for (const victim of same.slice(0, Math.max(0, same.length - this.maxPerIdentity + 1))) await this.delete(victim.id)
   }
 
   async get(id: string): Promise<Session | undefined> {

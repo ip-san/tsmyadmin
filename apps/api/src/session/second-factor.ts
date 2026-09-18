@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import type { DatabaseSync, StatementSync } from 'node:sqlite'
 import type { ConnectRequest } from '@tsmyadmin/shared'
 import { open, rowAad, seal } from './crypto.ts'
@@ -48,7 +49,8 @@ export class SqliteSecondFactors implements SecondFactors {
     const row = this.stmt.get.get(identity) as { payload: Uint8Array } | undefined
     if (!row) return null
     try {
-      return JSON.parse(open(this.key, row.payload, rowAad(SECOND_FACTOR, identity))) as SecondFactor
+      const factor = JSON.parse(open(this.key, row.payload, rowAad(SECOND_FACTOR, identity))) as SecondFactor
+      return { ...factor, version: version(row.payload) }
     } catch {
       // Unreadable (a hand-edited file): dropped, so the account can enrol again rather than being locked out
       // by a row nothing can open. A rotated secret is purged at startup, before this can be reached.
@@ -57,12 +59,32 @@ export class SqliteSecondFactors implements SecondFactors {
     }
   }
 
-  async set(config: ConnectRequest, factor: SecondFactor): Promise<void> {
+  async set(config: ConnectRequest, factor: SecondFactor): Promise<boolean> {
     const identity = this.identity(config)
-    this.stmt.put.run(identity, seal(this.key, JSON.stringify(factor), rowAad(SECOND_FACTOR, identity)), factor.at)
+    const { version: expected, ...stored } = factor
+    const payload = seal(this.key, JSON.stringify(stored), rowAad(SECOND_FACTOR, identity))
+    if (expected === undefined) {
+      this.stmt.put.run(identity, payload, stored.at)
+      return true
+    }
+    // node:sqlite is synchronous, so the read and the write cannot be interleaved by another request here; the
+    // comparison is what keeps the contract true for any store, and what a second process would need.
+    const row = this.stmt.get.get(identity) as { payload: Uint8Array } | undefined
+    if (!row || version(row.payload) !== expected) return false
+    this.stmt.put.run(identity, payload, stored.at)
+    return true
   }
 
   async clear(config: ConnectRequest): Promise<void> {
     this.stmt.remove.run(this.identity(config))
   }
+}
+
+/**
+ * What was stored, as something short to compare a later write against. SHA-1 because Redis computes the same
+ * value inside its own script (`redis.sha1hex`), and this is a change detector rather than a security property:
+ * the value it fingerprints is already sealed.
+ */
+export function version(payload: Uint8Array): string {
+  return createHash('sha1').update(payload).digest('hex').slice(0, 32)
 }
