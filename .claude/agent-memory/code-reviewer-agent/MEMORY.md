@@ -80,3 +80,9 @@
 - 128d315 の CAS 欠落（上のエントリ）は 9f074f5 で `changeFactor()`（read→apply→CAS書き込み、衝突なら3回まで読み直し、だめなら `CONFLICT` 409）に直されたが、`apply(current)` が `null` を返す分岐（＝残り0方式になる＝ `SecondFactor` を丸ごと消す）だけは `store.clear(config)` を呼ぶ。`SecondFactors.clear(config): Promise<void>` はインターフェース上 CAS パラメータを持たないため、この分岐だけは読み直しも再試行もされない無条件削除のまま。`DELETE /second-factor/totp`（最後の1方式を外すとき）、`DELETE /second-factor/passkeys/:id`（同）、`DELETE /second-factor`（全解除ルート、`changeFactor` を経由せず直接 `store.clear`）の3箇所すべてが同じ制約を共有する。
 - 実証済み: `store.clear()` をフックして「削除ルートの読み直し直後・実際の clear() 実行直前」に、正しく CAS された別タブの追加書き込みを差し込むと、その追加ごとアカウントの2FA状態が丸ごと消える（`final stored factor: null`）。旧バグ（1方式だけ消える）より影響範囲が広い（factor全体が消える）。
 - 教訓: 「read→apply→CAS write」に集約するリファクタは、`null`（＝全削除）に相当する分岐だけ別の非CAS経路（`clear()`）に逃げがちなので、CAS化のレビューでは「削除ブランチ」を必ず個別にチェックする。今回のケースでは `SecondFactors.clear()` 自体に expected version を渡せるようにしない限り、根本修正には3ストア実装（Memory/Sqlite/Redis）全部の変更が要る。
+
+## api: `SecondFactors.clear()` の CAS 欠落は 3157765 で修正確認済み（3巡目）
+
+- 前エントリで指摘した「`changeFactor` の `null` 分岐と `DELETE /second-factor` が無条件 `store.clear()` を使う」ギャップは 3157765 で解消。`SecondFactors.clear(config, version?): Promise<boolean>` に signature変更し、Sqlite（同期の get→比較→delete）・Redis（Lua `DEL_IF_UNCHANGED`）双方で実装、`changeFactor` は `clear` が `false`（競合）を返したら `continue` して読み直す。操作者による強制リセット（`/second-factor/accounts/reset` の `store.clear(target)`、version 省略）は意図的に無条件のまま残しており、これは正しい（運用者権限による上書きは常に勝ってよい）。
+- 自分の再現手順（`clear()` をフックして直前に別タブの CAS 追加を差し込む）をそのまま新コードに当てて再実行し、追加が生き残ること（`changeFactor` が競合を検知して読み直し、正しく「削除対象＋残った新規分」を再計算する）を確認した。
+- 教訓: body-limit（`apps/api/src/app.ts` の `apiBodyLimit`: `/api/session` は 64KB、他の JSON ルートは 1MB）が、`PasskeyResponseSchema.response` のような「キー数上限のない `z.record`」を外側から実質的に縛っている。個々のフィールドに上限がある Zod スキーマでも、外側のトランスポート層の制限とセットで評価すること。
