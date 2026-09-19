@@ -6,15 +6,12 @@ import iconv from 'iconv-lite'
 import { apiError, toApiError } from './errors.ts'
 import { csvSource, decodeUpload, ImportValidationError, importRows, importSql, type RowsSource } from './import.ts'
 import { pickSheet, RowsParseError, readOds, readWikiTables, readXmlTables } from './import-rows.ts'
-import { readZip } from './zip.ts'
+import { MAX_UNPACKED, readZip, UnpackLimitError } from './zip.ts'
 
 /**
  * From the bytes a browser sent to a run: compressed files opened, text decoded in the character set chosen,
  * a spreadsheet / XML / wiki file turned into rows, and the run streamed back as NDJSON.
  */
-
-/** What a compressed upload may unpack to (a zip bomb of a few kilobytes must not fill the memory). */
-const IMPORT_MAX_UNPACKED = 256 * 1024 * 1024
 
 const HEARTBEAT_MS = 15_000
 /** NDJSON responses: progress lines must reach the browser as they are written, not when a proxy buffer fills. */
@@ -40,11 +37,11 @@ const isZip = (b: Uint8Array) =>
  * one after the other). A spreadsheet is a ZIP already and is left as it is.
  */
 export function unpack(bytes: Uint8Array, format: ImportForm['format']): Uint8Array {
-  const mb = Math.floor(IMPORT_MAX_UNPACKED / 1024 / 1024)
+  const mb = Math.floor(MAX_UNPACKED / 1024 / 1024)
   let out = bytes
   if (isGzip(out)) {
     try {
-      out = new Uint8Array(gunzipSync(out, { maxOutputLength: IMPORT_MAX_UNPACKED }))
+      out = new Uint8Array(gunzipSync(out, { maxOutputLength: MAX_UNPACKED }))
     } catch (err) {
       const tooBig = err instanceof RangeError || (err as { code?: string }).code === 'ERR_BUFFER_TOO_LARGE'
       throw tooBig
@@ -63,12 +60,16 @@ export function unpack(bytes: Uint8Array, format: ImportForm['format']): Uint8Ar
       message: err instanceof Error ? err.message : String(err),
     })
   }
+  // One budget for the whole zip: the entries together may not unpack to more than the limit either.
+  let budget = MAX_UNPACKED
   const open = (f: (typeof files)[number]) => {
     try {
-      return f.bytes(IMPORT_MAX_UNPACKED)
+      if (budget <= 0) throw new UnpackLimitError('The zip unpacks past the limit')
+      const out = f.bytes(budget)
+      budget -= out.length + 1
+      return out
     } catch (err) {
-      const tooBig = err instanceof RangeError || (err as { code?: string }).code === 'ERR_BUFFER_TOO_LARGE'
-      throw tooBig
+      throw err instanceof UnpackLimitError
         ? new ImportValidationError('ARCHIVE_TOO_LARGE', `The file unpacks to more than ${mb} MB`, { mb })
         : new ImportValidationError('ARCHIVE_INVALID', 'A file in the zip is damaged', {
             message: err instanceof Error ? err.message : String(err),
@@ -79,9 +80,6 @@ export function unpack(bytes: Uint8Array, format: ImportForm['format']): Uint8Ar
   if (files.length > 1 && format === 'sql' && files.every((f) => f.name.toLowerCase().endsWith('.sql'))) {
     // Run in the order of their names: a dump split into parts numbers them.
     const parts = [...files].sort((a, b) => a.name.localeCompare(b.name)).map(open)
-    const total = parts.reduce((n, p) => n + p.length + 1, 0)
-    if (total > IMPORT_MAX_UNPACKED)
-      throw new ImportValidationError('ARCHIVE_TOO_LARGE', `The files unpack to more than ${mb} MB`, { mb })
     return new Uint8Array(Buffer.concat(parts.flatMap((p) => [Buffer.from(p), Buffer.from('\n')])))
   }
   throw new ImportValidationError(
@@ -123,6 +121,10 @@ function rowsSource(format: 'ods' | 'xml' | 'mediawiki', bytes: Uint8Array, form
     const t = pickSheet(readWikiTables(text), form.sheet)
     return { header: t.header, format, records: () => t.rows }
   } catch (err) {
+    if (err instanceof UnpackLimitError) {
+      const mb = Math.floor(MAX_UNPACKED / 1024 / 1024)
+      throw new ImportValidationError('ARCHIVE_TOO_LARGE', `The file unpacks to more than ${mb} MB`, { mb })
+    }
     if (err instanceof RowsParseError) {
       throw new ImportValidationError(err.kind === 'NO_SHEET' ? 'ROWS_NO_SHEET' : 'ROWS_PARSE', err.message, err.params)
     }

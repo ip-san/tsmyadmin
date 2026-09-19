@@ -48,13 +48,21 @@ export async function* compressStream(
       await writer.abort(err)
     }
   })()
+  let finished = false
   try {
     for (;;) {
       const { done, value } = await reader.read()
       if (done) break
       yield value
     }
+    finished = true
   } finally {
+    // A consumer that leaves early (a client that went away) must not wait for a feeder that is blocked on
+    // backpressure: cancelling the reader and aborting the writer frees it, and closes the input in turn.
+    if (!finished) {
+      await reader.cancel().catch(() => undefined)
+      await writer.abort().catch(() => undefined)
+    }
     await feed
   }
 }
@@ -191,9 +199,15 @@ export async function* zipStream(
   yield end.bytes
 }
 
+/** What a compressed upload may unpack to (a zip bomb of a few kilobytes must not fill the memory). */
+export const MAX_UNPACKED = 256 * 1024 * 1024
+
+/** An entry (or a run of them) inflates past the size the caller allows. */
+export class UnpackLimitError extends Error {}
+
 export interface ZipFile {
   name: string
-  /** The entry's bytes, checked against its checksum; `max` refuses one that inflates past it (a RangeError). */
+  /** The entry's bytes, checked against its checksum; `max` refuses one that inflates past it (UnpackLimitError). */
   bytes: (max?: number) => Uint8Array
 }
 
@@ -231,10 +245,19 @@ export function readZip(archive: Uint8Array): ZipFile[] {
         const dataStart = local + 30 + dv.getUint16(local + 26, true) + dv.getUint16(local + 28, true)
         const raw = archive.subarray(dataStart, dataStart + compressed)
         let out: Uint8Array
-        if (method === 0) out = raw
-        else if (method === 8)
-          out = new Uint8Array(inflateRawSync(raw, max === undefined ? {} : { maxOutputLength: max }))
-        else throw new Error(`ZIP compression method ${method} is not supported`)
+        if (method === 0) {
+          if (max !== undefined && raw.length > max)
+            throw new UnpackLimitError(`The entry ${name} is larger than ${max} bytes`)
+          out = raw
+        } else if (method === 8) {
+          try {
+            out = new Uint8Array(inflateRawSync(raw, max === undefined ? {} : { maxOutputLength: max }))
+          } catch (err) {
+            const tooBig = err instanceof RangeError || (err as { code?: string }).code === 'ERR_BUFFER_TOO_LARGE'
+            if (tooBig) throw new UnpackLimitError(`The entry ${name} inflates to more than ${max} bytes`)
+            throw err
+          }
+        } else throw new Error(`ZIP compression method ${method} is not supported`)
         if (out.length !== size || crc32(out) !== crc) throw new Error(`ZIP entry ${name} is damaged`)
         return out
       },

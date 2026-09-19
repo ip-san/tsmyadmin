@@ -7,6 +7,7 @@ import {
   ExportFormatSchema,
   type ExportOptions,
   ExportStatementSchema,
+  UTF8_ONLY_FORMATS,
 } from '@tsmyadmin/shared'
 import type { ReactNode } from 'react'
 import { Field, Input, Select } from '@/components/ui/Field.tsx'
@@ -229,7 +230,8 @@ export function OutputFields({
   set: Patch
   filePerLabel?: string
 }) {
-  const binary = BINARY_FORMATS.includes(options.format)
+  // A spreadsheet or document file, and JSON / XML / YAML / HTML (always UTF-8), have no character set to choose.
+  const binary = BINARY_FORMATS.includes(options.format) || UTF8_ONLY_FORMATS.includes(options.format)
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-end gap-4">

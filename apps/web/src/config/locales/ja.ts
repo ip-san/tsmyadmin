@@ -2078,7 +2078,7 @@ export const ja = {
     TABLE_EXISTS: (p: Record<string, string | number>) =>
       `テーブル ${p.table ?? ''} はすでにあります（新しく作る場合は別の名前にしてください）`,
     CREATE_INVALID_NAME: (p: Record<string, string | number>) =>
-      `テーブル ${p.name ?? ''} を作れませんでした（テーブル名またはファイルのカラム名が使えません）`,
+      `テーブル ${p.name ?? ''} を作れませんでした（テーブル名またはファイルのカラム名が使えない可能性があります）: ${p.message ?? ''}`,
   } satisfies Record<ImportReason, (p: Record<string, string | number>) => string>,
   errors: {
     UNAUTHENTICATED: '接続が切れています。もう一度接続してください',

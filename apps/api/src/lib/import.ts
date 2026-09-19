@@ -164,8 +164,14 @@ interface WrappedScript {
 
 function wrapScript(text: string, dialect: 'mysql' | 'postgres', options: ImportSqlOptions): WrappedScript {
   const splitState: { delimiter?: string; unterminated?: boolean } = {}
-  // The first `skip` statements are read and left out: to go on where an earlier run stopped.
-  const own = splitStatements(text, dialect, splitState).slice(options.skip ?? 0)
+  // The first `skip` statements are read and left out: to go on where an earlier run stopped. The session set-up
+  // among them (USE, SET) still runs: the statements that follow depend on it (the database, the character set).
+  const every = splitStatements(text, dialect, splitState)
+  const skip = options.skip ?? 0
+  const own = [
+    ...every.slice(0, skip).filter((st) => /^(USE|SET)\b/i.test(stripLeadingComments(st.sql, dialect).trimStart())),
+    ...every.slice(skip),
+  ]
   const total = own.length
   if (total === 0) throw new ImportValidationError('NO_STATEMENTS', 'No SQL statements were found in the file')
   // Wrapping statements are the adapter builders' business (see SqlExporter); a plain pre/postamble is enough here.
@@ -382,6 +388,35 @@ export async function importRows(
   form: ImportForm,
   source: RowsSource
 ): Promise<ImportResult> {
+  const made = { table: false }
+  try {
+    return await loadRows(adapter, ns, form, source, made)
+  } catch (err) {
+    // The table was made for this file and nothing was loaded into it: leave no empty table that turns a retry into
+    // "exists already".
+    if (made.table && form.table) {
+      await adapter
+        .executeSql(ns, adapter.ddl.build(ns, { op: 'dropTable', table: form.table, kind: 'table' }).join(';\n'), {
+          maxRows: 1,
+          timeoutMs: 60_000,
+          stopOnError: true,
+        })
+        .catch(() => undefined)
+    }
+    // A quote left open is found while the file is read, which happens outside the insert as well.
+    if (err instanceof CsvParseError)
+      throw new ImportValidationError('CSV_UNTERMINATED_QUOTE', err.message, { line: err.line })
+    throw err
+  }
+}
+
+async function loadRows(
+  adapter: DatabaseAdapter,
+  ns: Namespace,
+  form: ImportForm,
+  source: RowsSource,
+  made: { table: boolean }
+): Promise<ImportResult> {
   const table = form.table
   if (!table) throw new ImportValidationError('CSV_NO_TABLE', 'CSV import requires a target table')
   const started = performance.now()
@@ -407,21 +442,23 @@ export async function importRows(
     for (const r of source.records()) rows.push(r.cells)
     const data = headerConsumed ? rows.slice(1) : rows
     const width = Math.max(header?.length ?? 0, ...rows.map((r) => r.length))
-    const names = columnNames(header, width)
+    const names = columnNames(header, width, adapter.dialect)
     const columns = inferColumns(names, data, adapter.dialect)
     const statements = adapter.ddl.build(ns, { op: 'createTable', table, columns, primaryKey: [] })
-    const made = await adapter.executeSql(ns, statements.join(';\n'), {
+    const outcome = await adapter.executeSql(ns, statements.join(';\n'), {
       maxRows: 1,
       timeoutMs: 60_000,
       stopOnError: true,
     })
-    const failure = made.find((r) => r.kind === 'error')
+    const failure = outcome.find((r) => r.kind === 'error')
     if (failure?.kind === 'error')
       throw new ImportValidationError('CREATE_INVALID_NAME', `The table could not be created: ${failure.message}`, {
         name: table,
+        message: failure.message,
       })
     created = columns.map((c) => ({ name: c.name, dataType: c.dataType }))
     createdTable = true
+    made.table = true
     header = names
   }
   const schema = await adapter.describeTable(ns, table)

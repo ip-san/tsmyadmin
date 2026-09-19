@@ -171,7 +171,7 @@ export function createApp(config: AppConfig, services: AppServices) {
       .route('/api', secondFactorRoutes(cfg, secondFactorDeps))
       .route('/api', databaseRoutes(cfg, logger))
       .route('/api', userRoutes(cfg))
-      .route('/api', serverRoutes(cfg))
+      .route('/api', serverRoutes(cfg, logger))
       .route('/api', storedRoutes(cfg))
       .route('/api', userGroupRoutes(cfg, logger))
       .route('/api', trackingRoutes(cfg, logger))

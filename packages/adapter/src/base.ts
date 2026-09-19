@@ -862,14 +862,9 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     const d = this.dialect
     // A PostgreSQL identity column declared ALWAYS refuses explicit values without OVERRIDING SYSTEM VALUE.
     const overriding = d === 'postgres' && options.overriding ? ' OVERRIDING SYSTEM VALUE' : ''
-    const verb =
-      d === 'mysql'
-        ? options.onDuplicate === 'replace'
-          ? 'REPLACE'
-          : options.onDuplicate === 'ignore'
-            ? 'INSERT IGNORE'
-            : 'INSERT'
-        : 'INSERT'
+    const mysqlVerb =
+      options.onDuplicate === 'replace' ? 'REPLACE' : options.onDuplicate === 'ignore' ? 'INSERT IGNORE' : 'INSERT'
+    const verb = d === 'mysql' ? mysqlVerb : 'INSERT'
     const head = `${verb} INTO ${quoteTable(d, ns, table)} (${columns.map((c) => quoteIdent(d, c)).join(', ')})${overriding} VALUES `
     // PostgreSQL has neither: a conflicting row is skipped, or its key's other columns are rewritten.
     const rest = columns.filter((c) => !(options.keyColumns ?? []).includes(c))

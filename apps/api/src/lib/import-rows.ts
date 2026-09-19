@@ -1,4 +1,4 @@
-import { readZip } from './zip.ts'
+import { MAX_UNPACKED, readZip, UnpackLimitError } from './zip.ts'
 
 /**
  * Rows read from a file that is not CSV: an OpenDocument spreadsheet, an XML export (this tool's or phpMyAdmin's),
@@ -48,24 +48,51 @@ type XmlEvent =
   | { type: 'end'; name: string }
   | { type: 'text'; text: string }
 
-const TAG =
-  /<!--[\s\S]*?-->|<\?[\s\S]*?\?>|<!DOCTYPE[^>]*>|<!\[CDATA\[([\s\S]*?)\]\]>|<(\/?)([\w:.-]+)((?:\s+[\w:.-]+\s*=\s*(?:"[^"]*"|'[^']*'))*)\s*(\/?)>|([^<]+)/g
+/** An opening or closing tag with its attributes, matched at one position (sticky), so a failed match costs one tag. */
+const TAG = /<(\/?)([\w:.-]+)((?:\s+[\w:.-]+\s*=\s*(?:"[^"]*"|'[^']*'))*)\s*(\/?)>/y
 const ATTR = /([\w:.-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g
 
-/** The events of an XML document, in order. Comments, processing instructions and a DOCTYPE are skipped. */
+/**
+ * The events of an XML document, in order. Comments, processing instructions and a DOCTYPE are skipped. A hand-written
+ * scan (`indexOf` for each terminator) rather than one big pattern: an unterminated `<!--` repeated a hundred thousand
+ * times would make a lazy pattern rescan the rest of the file each time.
+ */
 function* xmlEvents(xml: string): Generator<XmlEvent> {
-  TAG.lastIndex = 0
-  for (let m = TAG.exec(xml); m !== null; m = TAG.exec(xml)) {
-    if (m[1] !== undefined) yield { type: 'text', text: m[1] }
-    else if (m[3] !== undefined) {
-      if (m[2] === '/') yield { type: 'end', name: m[3] }
+  const skipTo = (from: number, end: string) => {
+    const at = xml.indexOf(end, from)
+    return at < 0 ? xml.length : at + end.length
+  }
+  let i = 0
+  while (i < xml.length) {
+    if (xml[i] !== '<') {
+      const next = xml.indexOf('<', i)
+      const end = next < 0 ? xml.length : next
+      yield { type: 'text', text: decodeEntities(xml.slice(i, end)) }
+      i = end
+    } else if (xml.startsWith('<!--', i)) i = skipTo(i + 4, '-->')
+    else if (xml.startsWith('<?', i)) i = skipTo(i + 2, '?>')
+    else if (xml.startsWith('<![CDATA[', i)) {
+      const end = xml.indexOf(']]>', i + 9)
+      yield { type: 'text', text: xml.slice(i + 9, end < 0 ? xml.length : end) }
+      i = end < 0 ? xml.length : end + 3
+    } else if (xml.startsWith('<!', i)) i = skipTo(i + 2, '>')
+    else {
+      TAG.lastIndex = i
+      const m = TAG.exec(xml)
+      if (!m) {
+        i++
+        continue
+      }
+      const name = m[2] as string
+      if (m[1] === '/') yield { type: 'end', name }
       else {
         const attrs: Record<string, string> = {}
-        for (const a of (m[4] ?? '').matchAll(ATTR)) attrs[a[1] as string] = decodeEntities(a[2] ?? a[3] ?? '')
-        yield { type: 'start', name: m[3], attrs, selfClosing: m[5] === '/' }
-        if (m[5] === '/') yield { type: 'end', name: m[3] }
+        for (const a of (m[3] ?? '').matchAll(ATTR)) attrs[a[1] as string] = decodeEntities(a[2] ?? a[3] ?? '')
+        yield { type: 'start', name, attrs, selfClosing: m[4] === '/' }
+        if (m[4] === '/') yield { type: 'end', name }
       }
-    } else if (m[6] !== undefined) yield { type: 'text', text: decodeEntities(m[6]) }
+      i = TAG.lastIndex
+    }
   }
 }
 
@@ -81,8 +108,9 @@ export function readOds(bytes: Uint8Array): { name: string; rows: SourceRow[] }[
   try {
     const file = readZip(bytes).find((f) => f.name === 'content.xml')
     if (!file) throw new Error('content.xml is missing')
-    content = new TextDecoder().decode(file.bytes())
+    content = new TextDecoder().decode(file.bytes(MAX_UNPACKED))
   } catch (err) {
+    if (err instanceof UnpackLimitError) throw err
     throw new RowsParseError('PARSE', err instanceof Error ? err.message : String(err), {
       message: err instanceof Error ? err.message : String(err),
     })

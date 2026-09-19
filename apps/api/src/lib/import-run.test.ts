@@ -96,7 +96,7 @@ describe('inferring columns', () => {
     expect(type(['1', '99999999999999999999'])).toBe('VARCHAR(255)')
     expect(type(['1.5', '20.25', '3'])).toBe('DECIMAL(4,2)')
     expect(type(['2026-01-02', '2027-12-31'])).toBe('DATE')
-    expect(type(['2026-01-02 03:04:05', '2026-01-02T03:04:05.5'])).toBe('DATETIME')
+    expect(type(['2026-01-02 03:04:05', '2026-01-02T03:04:05.5'])).toBe('DATETIME(1)')
     expect(type(['2026-01-02 03:04:05'], 'postgres')).toBe('TIMESTAMP')
     // One value that does not fit turns the whole column into text; leading zeros and mixed content are text.
     expect(type(['1', 'x'])).toBe('VARCHAR(255)')
@@ -104,15 +104,38 @@ describe('inferring columns', () => {
     expect(type(['a'.repeat(300)])).toBe('TEXT')
     expect(type([null, null])).toBe('VARCHAR(255)')
     expect(type([null, '5'])).toBe('INT')
+    // Only real calendar dates are dates; fractional seconds are kept on MySQL; TEXT is sized in bytes.
+    expect(type(['2024-02-30'])).toBe('VARCHAR(255)')
+    expect(type(['9999-99-99'])).toBe('VARCHAR(255)')
+    expect(type(['2024-02-29'])).toBe('DATE')
+    expect(type(['2026-01-02 25:00:00'])).toBe('VARCHAR(255)')
+    expect(type(['2026-01-02 03:04:05.25'])).toBe('DATETIME(2)')
+    expect(type(['あ'.repeat(200)])).toBe('VARCHAR(255)')
+    expect(type(['あ'.repeat(300)])).toBe('TEXT')
+    expect(type(['あ'.repeat(30_000)])).toBe('MEDIUMTEXT')
   })
 
   it('names columns from the header, filling blanks and repeats', () => {
-    expect(columnNames(['id', '', 'id', 'ID'], 4)).toEqual(['id', 'col2', 'id_2', 'ID_3'])
-    expect(columnNames(null, 2)).toEqual(['col1', 'col2'])
+    expect(columnNames(['id', '', 'id', 'ID'], 4, 'mysql')).toEqual(['id', 'col2', 'id_2', 'ID_3'])
+    expect(columnNames(null, 2, 'mysql')).toEqual(['col1', 'col2'])
     const specs = inferColumns(['a', 'b'], rows(['1', '2'], ['x', 'y']), 'mysql')
     expect(specs.map((c) => [c.name, c.dataType, c.nullable])).toEqual([
       ['a', 'INT', true],
       ['b', 'VARCHAR(255)', true],
     ])
+  })
+})
+
+describe('column names for a new table', () => {
+  it('clips to the server limit without splitting a character', () => {
+    const long = 'あ'.repeat(40)
+    const pg = columnNames([long], 1, 'postgres')[0] ?? ''
+    expect(Buffer.byteLength(pg)).toBeLessThanOrEqual(63)
+    expect(pg).toMatch(/^あ+$/)
+    expect([...(columnNames(['a'.repeat(100)], 1, 'mysql')[0] ?? '')].length).toBeLessThanOrEqual(64)
+    // Two headers that clip to the same text still get different names, and both fit.
+    const two = columnNames([`${long}1`, `${long}2`], 2, 'postgres')
+    expect(new Set(two.map((n) => n.toLowerCase())).size).toBe(2)
+    for (const n of two) expect(Buffer.byteLength(n)).toBeLessThanOrEqual(63)
   })
 })

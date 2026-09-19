@@ -1,6 +1,6 @@
 import { gunzipSync } from 'node:zlib'
 import { describe, expect, it } from 'vitest'
-import { compressStream, crc32, readZip, type ZipEntry, zipStream } from './zip.ts'
+import { compressStream, crc32, readZip, UnpackLimitError, type ZipEntry, zipStream } from './zip.ts'
 
 const collect = async (parts: AsyncIterable<Uint8Array>) => Buffer.concat(await Array.fromAsync(parts))
 
@@ -60,5 +60,34 @@ describe('zipStream and readZip', () => {
     const at = Buffer.from(archive).indexOf('payload')
     archive[at] = 0x58
     expect(() => readZip(archive)[0]?.bytes()).toThrow(/damaged/)
+  })
+})
+
+describe('limits', () => {
+  it('refuses an entry that inflates past the size allowed, stored or deflated', async () => {
+    const big = await collect(zipStream([{ name: 'a.txt', data: 'x'.repeat(100_000) }]))
+    const [file] = readZip(new Uint8Array(big))
+    expect(file?.bytes(200_000)).toHaveLength(100_000)
+    expect(() => file?.bytes(1000)).toThrow(UnpackLimitError)
+    const stored = await collect(zipStream([{ name: 'a.txt', data: 'x'.repeat(5000), store: true }]))
+    expect(() => readZip(new Uint8Array(stored))[0]?.bytes(1000)).toThrow(UnpackLimitError)
+  })
+
+  it('lets go of the input when the reader of a compressed stream stops early', async () => {
+    let closed = false
+    async function* endless() {
+      try {
+        for (;;) yield 'x'.repeat(100_000)
+      } finally {
+        closed = true
+      }
+    }
+    const iterator = compressStream('gzip', endless())[Symbol.asyncIterator]()
+    await iterator.next()
+    await Promise.race([
+      iterator.return?.(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('hung')), 5000)),
+    ])
+    expect(closed).toBe(true)
   })
 })

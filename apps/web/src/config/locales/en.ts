@@ -2102,7 +2102,7 @@ export const en = {
     TABLE_EXISTS: (p: Record<string, string | number>) =>
       `The table ${p.table ?? ''} exists already (give a new table another name)`,
     CREATE_INVALID_NAME: (p: Record<string, string | number>) =>
-      `The table ${p.name ?? ''} could not be created (the table name or a column name in the file is not usable)`,
+      `The table ${p.name ?? ''} could not be created (the table name or a column name in the file may not be usable): ${p.message ?? ''}`,
   } satisfies Record<ImportReason, (p: Record<string, string | number>) => string>,
   errors: {
     UNAUTHENTICATED: 'Your session has ended. Connect again',

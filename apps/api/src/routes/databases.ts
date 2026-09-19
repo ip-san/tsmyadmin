@@ -31,7 +31,7 @@ import { bodyLimit } from 'hono/body-limit'
 import { DatabaseOpRefused, prepareDatabaseOp } from '../lib/database-ops.ts'
 import { apiError, toApiError } from '../lib/errors.ts'
 import { contentDisposition, toReadableStream } from '../lib/export.ts'
-import { buildPackagedExport } from '../lib/export-package.ts'
+import { buildPackagedExport, keylessTables } from '../lib/export-package.ts'
 import { identifierTooLong, tooLongIdentifier } from '../lib/identifiers.ts'
 import { ImportValidationError } from '../lib/import.ts'
 import { importResponse, type PreparedImport, prepareImport, validationError } from '../lib/import-run.ts'
@@ -296,13 +296,8 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
           return c.json(apiError('VALIDATION', 'CSV export needs exactly one table (or one file per table)'), 400)
         }
         // UPDATE / REPLACE find a row by its primary key: said before the download starts, not by cutting it short.
-        if (q.format === 'sql' && q.data === '1' && q.statement !== 'insert') {
-          const keyless: string[] = []
-          for (const name of tables) {
-            const info = all.find((t) => t.name === name)
-            const written = info?.kind === 'table' || (q.viewsAsTables === '1' && info?.kind !== 'sequence')
-            if (written && (await adapter.describeTable(namespace, name)).primaryKey.length === 0) keyless.push(name)
-          }
+        if (q.format === 'sql') {
+          const keyless = await keylessTables(adapter, namespace, all, tables, q)
           if (keyless.length > 0)
             return c.json(
               apiError(

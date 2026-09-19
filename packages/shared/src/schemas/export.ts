@@ -23,6 +23,8 @@ export type ExportFormat = z.infer<typeof ExportFormatSchema>
 export const SINGLE_TABLE_FORMATS: readonly ExportFormat[] = ['csv', 'csvExcel']
 /** Formats that are binary (ZIP-based): no character set applies to them. */
 export const BINARY_FORMATS: readonly ExportFormat[] = ['ods', 'odt', 'docx']
+/** Formats that name their own encoding (UTF-8): a character set chosen for them would contradict the file. */
+export const UTF8_ONLY_FORMATS: readonly ExportFormat[] = ['json', 'xml', 'yaml', 'html']
 
 /** How the file is compressed: as one .gz, or as a .zip (which is what one file per table also makes). */
 export const ExportCompressionSchema = z.enum(['none', 'gzip', 'zip'])

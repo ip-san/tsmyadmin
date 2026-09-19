@@ -109,6 +109,37 @@ describe('buildPackagedExport', () => {
     expect(new TextDecoder().decode(files[1]?.bytes())).not.toContain('あ')
   })
 
+  it('gives every file of a per-table zip its own name even when the template names no table', async () => {
+    for (const filename of ['', '@DATABASE@_%Y']) {
+      const file = buildPackagedExport(
+        adapter(),
+        ns,
+        ['users', 'posts'],
+        q({ format: 'csv', filePerTable: '1', filename }),
+        {
+          server: 's',
+          baseName: 'shop',
+          everything: true,
+          now: NOW,
+        }
+      )
+      const names = readZip(new Uint8Array(await bytes(file.body))).map((f) => f.name)
+      expect(new Set(names).size).toBe(2)
+      expect(names.some((n) => n.includes('users'))).toBe(true)
+    }
+  })
+
+  it('writes JSON, XML, YAML and HTML as UTF-8 whatever character set was chosen', async () => {
+    const file = buildPackagedExport(adapter(), ns, ['users'], q({ format: 'json', charset: 'cp932' }), {
+      server: 's',
+      baseName: 'shop',
+      everything: false,
+      now: NOW,
+    })
+    expect(file.contentType).toContain('charset=utf-8')
+    expect(Buffer.from(await bytes(file.body)).toString('utf8')).toContain('あ')
+  })
+
   it('leaves binary formats alone by the character set and puts them in a ZIP of their own', async () => {
     const file = buildPackagedExport(adapter(), ns, ['users'], q({ format: 'ods', charset: 'cp932' }), {
       server: 's',

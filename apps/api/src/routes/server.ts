@@ -18,14 +18,15 @@ import { bodyLimit } from 'hono/body-limit'
 import { z } from 'zod'
 import { apiError } from '../lib/errors.ts'
 import { contentDisposition, toReadableStream } from '../lib/export.ts'
-import { buildServerExport } from '../lib/export-package.ts'
+import { buildServerExport, keylessTables } from '../lib/export-package.ts'
 import { ImportValidationError } from '../lib/import.ts'
 import { importResponse, type PreparedImport, prepareImport, validationError } from '../lib/import-run.ts'
+import type { Logger } from '../lib/logging.ts'
 import { redactInLogs } from '../lib/request-context.ts'
 import { validate } from '../lib/validate.ts'
 import { type AppEnv, requireSession, type SessionConfig } from '../session/middleware.ts'
 
-export function serverRoutes(cfg: SessionConfig) {
+export function serverRoutes(cfg: SessionConfig, logger?: Logger) {
   return (
     new Hono<AppEnv>()
       .use('/server/*', requireSession(cfg))
@@ -91,8 +92,34 @@ export function serverRoutes(cfg: SessionConfig) {
             ? { database: name }
             : { database: adapter.serverNamespace.database, schema: name }
         )
+        // UPDATE / REPLACE need a primary key: said before the download starts, not by cutting it short.
+        const keyless: string[] = []
+        for (const target of namespaces) {
+          const listing = await adapter.listTables(target)
+          for (const name of await keylessTables(
+            adapter,
+            target,
+            listing,
+            listing.map((t) => t.name),
+            q
+          ))
+            keyless.push(`${target.schema ?? target.database}.${name}`)
+        }
+        if (keyless.length > 0)
+          return c.json(
+            apiError(
+              'VALIDATION',
+              `These tables have no primary key, which the chosen statement type needs: ${keyless.join(', ')}`
+            ),
+            400
+          )
         const file = buildServerExport(adapter, namespaces, q, { server: c.get('session').config.host })
-        return c.body(toReadableStream(file.body), 200, {
+        const onError = (err: unknown) =>
+          logger?.log('error', 'export.aborted', {
+            requestId: c.get('requestId'),
+            error: err instanceof Error ? err.message : String(err),
+          })
+        return c.body(toReadableStream(file.body, onError), 200, {
           'content-type': file.contentType,
           'content-disposition': contentDisposition(file.filename),
         })

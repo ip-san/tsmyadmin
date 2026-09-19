@@ -140,3 +140,18 @@ describe('pickSheet', () => {
     expect(() => pickSheet([], undefined)).toThrow(/no table/)
   })
 })
+
+describe('the XML scanner on hostile input', () => {
+  it('takes linear time for many unterminated comments, tags and CDATA sections', () => {
+    const started = performance.now()
+    for (const piece of ['<!--', '<?x ', '<![CDATA[', '<a b="', '<']) readXmlTables(piece.repeat(50_000))
+    expect(performance.now() - started).toBeLessThan(2000)
+  })
+
+  it('skips comments and processing instructions and reads CDATA as text', () => {
+    const [t] = readXmlTables(
+      '<?xml version="1.0"?><!-- c --><table name="t"><row><column name="a"><![CDATA[<x>]]></column></row></table>'
+    )
+    expect(t?.rows[0]?.cells).toEqual(['<x>'])
+  })
+})

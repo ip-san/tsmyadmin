@@ -1,6 +1,6 @@
 import type { DatabaseAdapter } from '@tsmyadmin/adapter'
 import type { ExportCharset, ExportQuery, Namespace, ServerExportQuery, TableInfo } from '@tsmyadmin/shared'
-import { BINARY_FORMATS } from '@tsmyadmin/shared'
+import { BINARY_FORMATS, UTF8_ONLY_FORMATS } from '@tsmyadmin/shared'
 import iconv from 'iconv-lite'
 import { buildExport, type ExportFile } from './export.ts'
 import { compressStream, toBytes, type ZipEntry, zipStream } from './zip.ts'
@@ -9,6 +9,17 @@ import { compressStream, toBytes, type ZipEntry, zipStream } from './zip.ts'
  * The last stage of an export: the file name from a template, the character set, and the wrapping in gzip or ZIP
  * (one file per table always makes a ZIP). Every stage streams: nothing here holds the whole dump.
  */
+
+/**
+ * A name in a set of names that must differ (the files of one zip): a repeat gets `_2`, `_3`…, compared without regard
+ * to case (a file system may not tell `A.csv` from `a.csv`).
+ */
+function uniqueName(used: Set<string>, name: string): string {
+  let out = name
+  for (let n = 2; used.has(out.toLowerCase()); n++) out = `${name}_${n}`
+  used.add(out.toLowerCase())
+  return out
+}
 
 const pad = (n: number, width = 2) => String(n).padStart(width, '0')
 
@@ -122,6 +133,27 @@ export function withRowRange(adapter: DatabaseAdapter, offset: number, limit: nu
   })
 }
 
+/**
+ * The tables an UPDATE / REPLACE dump cannot be written for, because it finds each row by its primary key. Asked
+ * before the download starts: found mid-stream it would cut the file short. Empty for the other statement types.
+ */
+export async function keylessTables(
+  adapter: DatabaseAdapter,
+  ns: Namespace,
+  listing: TableInfo[],
+  tables: string[],
+  q: { data: string; statement: string; viewsAsTables: string }
+): Promise<string[]> {
+  if (q.data !== '1' || q.statement === 'insert') return []
+  const keyless: string[] = []
+  for (const name of tables) {
+    const info = listing.find((t) => t.name === name)
+    const written = info?.kind === 'table' || (q.viewsAsTables === '1' && info?.kind !== 'sequence')
+    if (written && (await adapter.describeTable(ns, name)).primaryKey.length === 0) keyless.push(name)
+  }
+  return keyless
+}
+
 export interface PackagedExport {
   body: AsyncIterable<Uint8Array>
   contentType: string
@@ -142,17 +174,23 @@ export function buildPackagedExport(
   const now = o.now ?? new Date()
   const source = q.rowOffset > 0 || q.rowLimit > 0 ? withRowRange(adapter, q.rowOffset, q.rowLimit) : adapter
   const binary = BINARY_FORMATS.includes(q.format)
+  // JSON, XML, YAML and HTML declare UTF-8 themselves: another set would make the file contradict its own header.
+  const charset = UTF8_ONLY_FORMATS.includes(q.format) ? 'utf-8' : q.charset
   const named = (table?: string) =>
     renderFileName(q.filename, { database: ns.database, table, server: o.server, now }, o.baseName)
   const extension = (file: ExportFile) => file.filename.slice(file.filename.lastIndexOf('.'))
   const encode = (file: ExportFile): AsyncIterable<Uint8Array> =>
-    binary ? asBytes(file.body) : encodeText(file.body, q.charset)
+    binary ? asBytes(file.body) : encodeText(file.body, charset)
   if (q.filePerTable === '1') {
+    const used = new Set<string>()
+    // A template with no @TABLE@ would give every file the same name: the table's own name is added then.
+    const perTable = (table: string) =>
+      /@TABLE@/.test(q.filename ?? '') ? named(table) : `${named(table)}_${safeFileName(table)}`
     async function* entries(): AsyncIterable<ZipEntry> {
       for (const table of tables) {
         // Each table on its own, so a routine or trigger goes with the one it belongs to.
         const file = buildExport(source, ns, [table], q, table, false, o.listing)
-        yield { name: `${named(table)}${extension(file)}`, data: encode(file) }
+        yield { name: `${uniqueName(used, perTable(table))}${extension(file)}`, data: encode(file) }
       }
     }
     return { body: zipStream(entries(), now), contentType: 'application/zip', filename: `${named()}.zip` }
@@ -160,7 +198,7 @@ export function buildPackagedExport(
   // A single table named on its own is what @TABLE@ means; a whole database has only its own name.
   const only = !o.everything && tables.length === 1 ? tables[0] : undefined
   const file = buildExport(source, ns, tables, q, named(only), o.everything, o.listing)
-  const contentType = binary ? file.contentType : withCharset(file.contentType, q.charset)
+  const contentType = binary ? file.contentType : withCharset(file.contentType, charset)
   if (q.compress === 'gzip') {
     return {
       body: compressStream('gzip', encode(file)),
@@ -209,10 +247,13 @@ export function buildServerExport(
   }
   const encode = (body: AsyncIterable<string | Uint8Array>) => encodeText(body, q.charset)
   if (q.filePerTable === '1') {
+    const used = new Set<string>()
+    const perTarget = (target: string) =>
+      /@DB(ATABASE)?@/.test(q.filename ?? '') ? named(target) : `${named(target)}_${safeFileName(target)}`
     async function* entries(): AsyncIterable<ZipEntry> {
       for (const ns of targets) {
         const file = await dump(ns)
-        yield { name: `${named(label(ns))}.sql`, data: encode(file.body) }
+        yield { name: `${uniqueName(used, perTarget(label(ns)))}.sql`, data: encode(file.body) }
       }
     }
     return { body: zipStream(entries(), now), contentType: 'application/zip', filename: `${named()}.zip` }
