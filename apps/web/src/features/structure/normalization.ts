@@ -16,6 +16,7 @@ export type Hint =
 /** Fewer rows than this and a dependency seen in them says nothing. */
 export const MIN_SAMPLE = 20
 const MAX_DEPENDENCIES = 10
+const MIN_DISTINCT = 3
 
 interface Sample {
   columns: string[]
@@ -65,7 +66,8 @@ function missingForeignKeys(schema: TableSchema, tables: string[]): { column: st
   const out: { column: string; table: string }[] = []
   for (const { name } of schema.columns) {
     if (covered.has(name) || name === sole) continue
-    const stem = /^(.+?)_?id$/i.exec(name)?.[1]
+    // `_id` or camelCase `Id`: a word that merely ends in "id" (paid, valid, grid) is not a reference.
+    const stem = /^(.+?)(?:_id|_ID|Id)$/.exec(name)?.[1]
     if (!stem || stem.length < 2) continue
     const s = stem.replace(/_$/, '')
     const candidates = [s, `${s}s`, `${s}es`, s.replace(/y$/i, 'ies')].map((c) => c.toLowerCase())
@@ -79,7 +81,9 @@ const keyOf = (cell: Cell | undefined) => JSON.stringify(cell ?? null)
 
 /**
  * Whether `from` determines `to` in the sample, in a way that means something: some value of `from` repeats (a
- * column whose values are all different determines everything), and `to` is not the same everywhere.
+ * column whose values are all different determines everything), `to` is not the same everywhere, and `from` has
+ * at least three values — two yes/no or light/dark columns line up by chance in a small sample far too often to
+ * read anything into it.
  */
 function determines(rows: readonly Cell[][], from: number, to: number): boolean {
   const seen = new Map<string, string>()
@@ -96,7 +100,7 @@ function determines(rows: readonly Cell[][], from: number, to: number): boolean 
     targets.add(b)
   }
   const repeated = [...repeats.values()].filter((n) => n >= 2).length
-  return repeated >= 2 && targets.size >= 2
+  return repeated >= 2 && targets.size >= 2 && seen.size >= MIN_DISTINCT
 }
 
 function dependencies(schema: TableSchema, sample: Sample): Hint[] {

@@ -109,6 +109,21 @@ describe('geometry', () => {
     expect(parseShape('ewkb-hex', hex(wkb(true, 1, [Number.NaN, Number.NaN])))).toBeNull()
   })
 
+  it('counts a value with a non-finite coordinate, or nothing to draw, as unreadable', () => {
+    // One coordinate out of range makes a browser drop the whole path: such a value is not "drawn".
+    expect(parseShape('ewkb-hex', hex(wkb(true, 1, [5, Number.NaN])))).toBeNull()
+    expect(parseShape('ewkb-hex', hex(wkb(true, 1, [Number.POSITIVE_INFINITY, 5])))).toBeNull()
+    expect(parseShape('ewkb-hex', hex(wkb(true, 2, ['u32', 2, 0, 0, 1, Number.NEGATIVE_INFINITY])))).toBeNull()
+    const bad = wkb(true, 1, [Number.NaN, 1])
+    expect(
+      parseShape('ewkb-hex', hex(new Uint8Array([...wkb(true, 7, ['u32', 2]), ...wkb(true, 1, [1, 1]), ...bad])))
+    ).toBeNull()
+    // GEOMETRYCOLLECTION EMPTY, an empty line, a circle with a negative radius.
+    expect(parseShape('ewkb-hex', hex(wkb(true, 7, ['u32', 0])))).toBeNull()
+    expect(parseShape('ewkb-hex', hex(wkb(true, 2, ['u32', 0])))).toBeNull()
+    expect(parseShape('pg-circle', '<(1,2),-3>')).toBeNull()
+  })
+
   it('reads MySQL values past their SRID prefix', () => {
     const value = new Uint8Array([0xe6, 0x10, 0, 0, ...wkb(true, 1, [135, 35])])
     expect(parseShape('mysql-wkb', { $bin: b64(value) })).toEqual({ type: 'point', at: [135, 35] })

@@ -37,16 +37,38 @@ export function spatialEncoding(dialect: Dialect, dataType: string): Encoding | 
 export function parseShape(encoding: Encoding, cell: Cell): Shape | null {
   if (cell === null) return null
   try {
+    let shape: Shape | null
     if (encoding === 'mysql-wkb') {
       if (typeof cell !== 'object' || !('$bin' in cell)) return null
       // MySQL stores a 4-byte SRID ahead of standard WKB.
-      return readWkb(base64Bytes(cell.$bin).subarray(4))
-    }
-    if (typeof cell !== 'string') return null
-    if (encoding === 'ewkb-hex') return readWkb(hexBytes(cell))
-    return readNative(encoding, cell)
+      shape = readWkb(base64Bytes(cell.$bin).subarray(4))
+    } else if (typeof cell !== 'string') return null
+    else shape = encoding === 'ewkb-hex' ? readWkb(hexBytes(cell)) : readNative(encoding, cell)
+    return shape && drawable(shape) ? shape : null
   } catch {
     return null
+  }
+}
+
+const finite = ([x, y]: Point) => Number.isFinite(x) && Number.isFinite(y)
+
+/**
+ * Whether a shape can be drawn as it is: every coordinate finite (one NaN in a path makes the browser drop the
+ * whole path, so a value holding one counts as unreadable rather than as drawn), and something to draw at all
+ * (an empty line or collection is not a shape on screen).
+ */
+function drawable(shape: Shape): boolean {
+  switch (shape.type) {
+    case 'point':
+      return finite(shape.at)
+    case 'circle':
+      return finite(shape.at) && Number.isFinite(shape.r) && shape.r >= 0
+    case 'line':
+      return shape.points.length > 0 && shape.points.every(finite)
+    case 'polygon':
+      return shape.rings.some((ring) => ring.length > 0) && shape.rings.every((ring) => ring.every(finite))
+    default:
+      return shape.parts.length > 0 && shape.parts.every(drawable)
   }
 }
 
@@ -109,7 +131,8 @@ export function readWkb(bytes: Uint8Array): Shape | null {
     switch (base) {
       case 1: {
         const p = point()
-        return Number.isNaN(p[0]) ? null : { type: 'point', at: p }
+        // POINT EMPTY is written as NaN coordinates.
+        return Number.isNaN(p[0]) && Number.isNaN(p[1]) ? null : { type: 'point', at: p }
       }
       case 2:
         return { type: 'line', points: points() }

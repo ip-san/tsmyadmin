@@ -77,10 +77,12 @@ describe('normalization hints', () => {
         ['categoryId', 'int'],
         ['user_id', 'int'],
         ['paid', 'int'],
+        ['grid', 'int'],
       ],
       { foreignKeys: [{ name: 'fk', columns: ['user_id'] } as TableSchema['foreignKeys'][number]] }
     )
-    expect(normalizationHints(t, ['customers', 'categories', 'users', 'orders'], null)).toEqual([
+    // `pa` and `gr` tables exist, yet paid and grid are words, not references.
+    expect(normalizationHints(t, ['customers', 'categories', 'users', 'orders', 'pas', 'gr'], null)).toEqual([
       { kind: 'missingForeignKey', column: 'customer_id', table: 'customers' },
       { kind: 'missingForeignKey', column: 'categoryId', table: 'categories' },
     ])
@@ -113,6 +115,14 @@ describe('normalization hints', () => {
     ])
     // A column with every value different (qty) decides everything, and is not reported.
     expect(hints.some((h) => 'from' in h && h.from === 'qty')).toBe(false)
+    // Two-valued columns that happen to line up (every admin on the light theme) are chance, not a dependency.
+    const flags = table([
+      ['id', 'int'],
+      ['is_admin', 'boolean'],
+      ['theme', 'varchar(5)'],
+    ])
+    const flagRows: Cell[][] = Array.from({ length: 24 }, (_, i) => [i, i % 2 === 0, i % 2 === 0 ? 'light' : 'dark'])
+    expect(normalizationHints(flags, [], { columns: ['id', 'is_admin', 'theme'], rows: flagRows })).toEqual([])
     // Too few rows: nothing is read from the values.
     expect(kinds(normalizationHints(t, [], { columns, rows: rows.slice(0, 10) }))).toEqual([])
   })
