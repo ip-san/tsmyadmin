@@ -1,4 +1,4 @@
-<!-- translated-from: docs/user-guide.md sha256:fcee5f66b460a72a359aa1c655d279e0d20bc05a03495e70c32c8bd4ce997eaf -->
+<!-- translated-from: docs/user-guide.md sha256:a7913e609f8a3b1fb1720f59b0264cb56c64bed5e813b7f7ca2acb49d2c41995 -->
 
 # User guide
 
@@ -140,7 +140,7 @@ Every run is autocommitted. A script that ends with a transaction still open is 
 | Import | Loads a CSV into this table |
 | Triggers | The triggers of this table. **Create trigger** there targets this table |
 | Privileges | For each account that can log in: SELECT / INSERT / UPDATE / DELETE / REFERENCES / TRIGGER on this table, and where each comes from (the table, some columns, the whole database, the whole server; on PostgreSQL, superuser). **Choose privileges…** opens with this table already chosen. A revoke here only removes table and column grants; database-wide and server-wide grants stay. Privileges held through a role are not shown (nor, on PostgreSQL, the owner's implicit privileges or PUBLIC's). MySQL partial revokes (`partial_revokes`) are taken into account |
-| Tracking | Keeps the table's definition (its CREATE statement) as versions recorded at a point in time, and shows line by line what differs between two versions (or a version and the current structure). **Record the current structure** records one; nothing is recorded on its own, and a change made from anywhere shows up as a difference from the latest version. Unlike phpMyAdmin, the statements run (data changes included) are not recorded. Shared by every account of the server; shown only where sessions are persistent |
+| Tracking | Keeps the table's definition (its CREATE statement) as versions recorded at a point in time, and shows line by line what differs between two versions (or a version and the current structure). **Record the current structure** records one; nothing is recorded on its own, and a change made from anywhere shows up as a difference from the latest version. Unlike phpMyAdmin, the statements run (data changes included) are not recorded. A definition may be up to 64 KB, and a server keeps up to 2,000 versions in all, beyond which the oldest go first. Shared by every account of the server; shown only where sessions are persistent |
 | Operations | **Rename table**, **Table options** (comment; on MySQL also engine, collation and the next AUTO_INCREMENT value), **Move table** (under the same name, rows and all: to another database on MySQL, to another schema of this database on PostgreSQL; the page then follows it), **Copy table** (with or without its data), **Maintenance** (MySQL: ANALYZE / OPTIMIZE / CHECK / REPAIR TABLE; PostgreSQL: ANALYZE / VACUUM / VACUUM FULL), **Empty the table…** (TRUNCATE) and **Drop the table…** (DROP). A view offers only **Drop the view…** |
 
 ### Export in detail

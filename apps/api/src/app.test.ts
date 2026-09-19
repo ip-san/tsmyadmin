@@ -32,6 +32,7 @@ import {
   TableInfoSchema,
   TableSchemaSchema,
   TableSearchResultSchema,
+  TRACKING_DEFINITION_MAX,
   TrackingStateSchema,
   UserGroupSchema,
 } from '@tsmyadmin/shared'
@@ -2379,6 +2380,10 @@ describe('change tracking', () => {
       ])
       expect(second.versions[1]?.definition).toContain('varchar(20)')
       expect(TrackingStateSchema.parse(await (await h.state('DELETE')).json()).versions).toEqual([])
+      expect(TrackingStateSchema.parse(await (await h.state()).json()).versions).toEqual([])
+      // A definition too long to keep is refused rather than stored.
+      h.users.definition = 'x'.repeat(TRACKING_DEFINITION_MAX + 1)
+      expect(await (await h.state('POST')).json()).toMatchObject({ code: 'UNSUPPORTED' })
       expect(TrackingStateSchema.parse(await (await h.state()).json()).versions).toEqual([])
     } finally {
       await h.store.closeAll()

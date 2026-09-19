@@ -19,6 +19,12 @@ export const TrackedVersionSchema = z.object({
 })
 export type TrackedVersion = z.infer<typeof TrackedVersionSchema>
 
+/**
+ * The longest definition a version keeps. Every stored body has a bound; without one, a table with thousands of
+ * partitions (a multi-megabyte SHOW CREATE TABLE) times the server's allowance of versions would fill the store.
+ */
+export const TRACKING_DEFINITION_MAX = 64 * 1024
+
 export const TrackingStateSchema = z.object({
   versions: z.array(TrackedVersionSchema),
   /** The definition now, to compare the latest version against. */

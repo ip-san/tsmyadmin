@@ -1,5 +1,5 @@
 import type { Namespace, TrackedVersion, TrackingState } from '@tsmyadmin/shared'
-import { SchemaQuerySchema, TrackedVersionSchema, trackedVersionKey } from '@tsmyadmin/shared'
+import { SchemaQuerySchema, TRACKING_DEFINITION_MAX, TrackedVersionSchema, trackedVersionKey } from '@tsmyadmin/shared'
 import { type Context, Hono } from 'hono'
 import { apiError } from '../lib/errors.ts'
 import type { Logger } from '../lib/logging.ts'
@@ -64,6 +64,12 @@ export function trackingRoutes(cfg: SessionConfig, logger: Logger) {
         const known = await versions(c, ns, table)
         const latest = known.at(-1)
         if (latest?.definition === current) return c.json<TrackingState>({ versions: known, current })
+        if (current.length > TRACKING_DEFINITION_MAX) {
+          return c.json(
+            apiError('UNSUPPORTED', `The definition is longer than ${TRACKING_DEFINITION_MAX} characters to keep`),
+            400
+          )
+        }
         const body = {
           database: ns.database,
           ...(ns.schema ? { schema: ns.schema } : {}),
