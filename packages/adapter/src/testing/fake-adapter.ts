@@ -1,3 +1,4 @@
+import { createHash, randomUUID } from 'node:crypto'
 import type {
   BrowseOptions,
   BrowseResult,
@@ -7,6 +8,7 @@ import type {
   EventInfo,
   InputCell,
   KeyValue,
+  KeyValues,
   Namespace,
   ObjectDependency,
   ProcessInfo,
@@ -29,6 +31,7 @@ import type {
   UserInfo,
   UserRef,
 } from '@tsmyadmin/shared'
+import { isFunctionCell } from '@tsmyadmin/shared'
 import { mysqlDdl } from '../mysql/ddl.ts'
 import { mysqlExporter } from '../mysql/export.ts'
 import { mysqlUsers } from '../mysql/users.ts'
@@ -45,7 +48,7 @@ import {
 
 export interface FakeTable {
   schema: TableSchema
-  rows: RowValues[]
+  rows: KeyValues[]
   /** What showCreateTable returns instead of the generic fake statement (views in export tests). */
   definition?: string
 }
@@ -72,6 +75,42 @@ export interface FakeAdapterOptions {
   routines?: Record<string, string>
 }
 
+/** Row values as stored: an allowed function is worked out here, the way the server would compute it. */
+function evaluate(values: RowValues): KeyValues {
+  const hash = (algorithm: string, v: unknown) =>
+    createHash(algorithm)
+      .update(String(v ?? ''))
+      .digest('hex')
+  return Object.fromEntries(
+    Object.entries(values).map(([k, v]) => {
+      if (!isFunctionCell(v)) return [k, v]
+      const arg = v.arg ?? null
+      const text = arg === null ? null : String(arg)
+      switch (v.$fn) {
+        case 'now':
+          return [k, '2026-01-01 00:00:00']
+        case 'current_date':
+          return [k, '2026-01-01']
+        case 'current_time':
+          return [k, '00:00:00']
+        case 'uuid':
+          return [k, randomUUID()]
+        case 'md5':
+        case 'sha1':
+          return [k, text === null ? null : hash(v.$fn, text)]
+        case 'sha256':
+          return [k, text === null ? null : hash('sha256', text)]
+        case 'upper':
+          return [k, text?.toUpperCase() ?? null]
+        case 'lower':
+          return [k, text?.toLowerCase() ?? null]
+        default:
+          return [k, text?.trim() ?? null]
+      }
+    })
+  )
+}
+
 export function fakeColumn(name: string, dataType = 'int', nullable = false): TableSchema['columns'][number] {
   return {
     name,
@@ -90,7 +129,7 @@ export function fakeColumn(name: string, dataType = 'int', nullable = false): Ta
 export function fakeTable(
   name: string,
   columns: string[],
-  rows: RowValues[],
+  rows: KeyValues[],
   primaryKey: string[] = ['id']
 ): FakeTable {
   return {
@@ -338,7 +377,7 @@ export class FakeAdapter implements DatabaseAdapter {
 
   async insertRow(ns: Namespace, table: string, values: RowValues): Promise<{ affectedRows: number }> {
     this.record('insertRow', ns, table, values)
-    this.table(ns, table).rows.push({ ...values })
+    this.table(ns, table).rows.push(evaluate(values))
     return { affectedRows: 1 }
   }
 
@@ -356,7 +395,7 @@ export class FakeAdapter implements DatabaseAdapter {
     return { affectedRows: all.length }
   }
 
-  private matchKey(row: RowValues, key: RowKey): boolean {
+  private matchKey(row: KeyValues, key: RowKey): boolean {
     if (key.kind === 'ctid') return false
     return Object.entries(key.values).every(([k, v]) => compare(row[k] ?? null, v) === 0)
   }
@@ -366,7 +405,7 @@ export class FakeAdapter implements DatabaseAdapter {
     const t = this.table(ns, table)
     const matches = t.rows.filter((r) => this.matchKey(r, key))
     if (matches.length !== 1) throw new AdapterError('KEY_MISMATCH', `matched ${matches.length} rows`)
-    Object.assign(matches[0] as RowValues, values)
+    Object.assign(matches[0] as KeyValues, evaluate(values))
     return { affectedRows: 1 }
   }
 

@@ -28,7 +28,60 @@ export type InputCell = z.infer<typeof InputCellSchema>
 export const CellSchema = z.union([InputCellSchema, TruncatedTextCellSchema])
 export type Cell = z.infer<typeof CellSchema>
 
-export const RowValuesSchema = z.record(z.string(), InputCellSchema)
+/**
+ * The functions a value can be written through (phpMyAdmin's "Function" column on the insert / edit form). A
+ * closed list: the adapter renders each one per dialect, the name is never taken from the request as SQL, and the
+ * argument — for the ones that take the field's value — is bound like any other value.
+ */
+export const ROW_FUNCTIONS = [
+  'now',
+  'current_date',
+  'current_time',
+  'uuid',
+  'md5',
+  'sha1',
+  'sha256',
+  'upper',
+  'lower',
+  'trim',
+] as const
+export const RowFunctionSchema = z.enum(ROW_FUNCTIONS)
+export type RowFunction = z.infer<typeof RowFunctionSchema>
+
+/** The functions a dialect offers: PostgreSQL has no SHA-1 without the pgcrypto extension. */
+export function rowFunctionsFor(dialect: 'mysql' | 'postgres'): RowFunction[] {
+  return dialect === 'postgres' ? ROW_FUNCTIONS.filter((fn) => fn !== 'sha1') : [...ROW_FUNCTIONS]
+}
+
+/** The functions that take the field's value as their argument; the others ignore it. */
+export const ROW_FUNCTIONS_WITH_ARG: ReadonlySet<RowFunction> = new Set([
+  'md5',
+  'sha1',
+  'sha256',
+  'upper',
+  'lower',
+  'trim',
+])
+
+export const FunctionCellSchema = z.strictObject({
+  $fn: RowFunctionSchema,
+  arg: z.union([z.string(), z.number(), z.null()]).optional(),
+})
+export type FunctionCell = z.infer<typeof FunctionCellSchema>
+
+/** A value to write into a row: a plain value, or one computed by an allowed function. */
+export const WriteCellSchema = z.union([InputCellSchema, FunctionCellSchema])
+export type WriteCell = z.infer<typeof WriteCellSchema>
+
+export function isFunctionCell(cell: unknown): cell is FunctionCell {
+  return typeof cell === 'object' && cell !== null && '$fn' in cell
+}
+
+/** Values that identify a row (keys, filters): plain values only — a key is matched, never computed. */
+export const KeyValuesSchema = z.record(z.string(), InputCellSchema)
+export type KeyValues = z.infer<typeof KeyValuesSchema>
+
+export const RowValuesSchema = z.record(z.string(), WriteCellSchema)
 export type RowValues = z.infer<typeof RowValuesSchema>
 
 export function isBinaryCell(cell: Cell): cell is BinaryCell {

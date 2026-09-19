@@ -2413,3 +2413,23 @@ describe('change tracking', () => {
     expect(await res.json()).toMatchObject({ code: 'UNSUPPORTED' })
   })
 })
+
+describe('row functions', () => {
+  it('writes through an allowed function and refuses anything else', async () => {
+    const h = harness()
+    stores.push(h.store)
+    await h.login()
+    const post = (values: unknown) =>
+      h.req('/api/databases/shop/tables/users/rows', { method: 'POST', body: JSON.stringify({ values }) })
+    expect((await post({ id: 9, name: { $fn: 'upper', arg: 'zed' } })).status).toBe(201)
+    // Only the listed functions, and never raw SQL in their place.
+    expect((await post({ id: 10, name: { $fn: 'sleep', arg: 5 } })).status).toBe(400)
+    expect((await post({ id: 10, name: { $fn: 'upper', arg: 'x', sql: 'DROP' } })).status).toBe(400)
+    // A key identifies a row: it is matched, never computed.
+    const patch = await h.req('/api/databases/shop/tables/users/rows', {
+      method: 'PATCH',
+      body: JSON.stringify({ key: { kind: 'pk', values: { id: { $fn: 'now' } } }, values: { name: 'x' } }),
+    })
+    expect(patch.status).toBe(400)
+  })
+})

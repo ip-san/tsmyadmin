@@ -1,4 +1,4 @@
-<!-- translated-from: docs/user-guide.md sha256:e6e1825323ebe244a2561d9f0bc8f7ed5c2e0df668994e3b619be7d83e7a9c53 -->
+<!-- translated-from: docs/user-guide.md sha256:d1d3b5a53ed30a79c87bd5b8c67691dcdae48d726ceec4968bc56437ce6e6d57 -->
 
 # User guide
 
@@ -136,7 +136,7 @@ Every run is autocommitted. A script that ends with a transaction still open is 
 | Tab | Contents |
 |---|---|
 | Search | Combines per-column conditions (=, ≠, <, >, *contains*, *starts with* (no wildcards needed), LIKE, IS NULL …). The result carries over to the Browse tab. **Zoom search** below plots two numeric columns of the matching rows (the first 500) as a scatter plot; picking a point opens its row (tables with a primary key). **Find and replace** replaces a text in one text column, in every row that holds it (case-sensitive; only rows whose value actually changes are updated; the SQL is shown first, and it cannot be undone) |
-| Insert | Inserts one row from a form, with **Use default** and **NULL** per column (the default is shown as the placeholder). The screen stays open afterwards so you can enter the next row (**Back to Browse** returns to the list) |
+| Insert | Inserts rows from a form (**Rows at once**: up to 10; a row left untouched is not inserted; the rows go one after another, stopping at a failure and saying how many were written). Per column: **Use default**, **NULL** and a **function** (NOW / CURRENT_DATE / CURRENT_TIME / UUID / MD5 / SHA1 / SHA-256 / UPPER / LOWER / TRIM; the ones that take a value take the field's; PostgreSQL has no SHA1). A foreign key column suggests the referenced values (the first 200). A binary column takes a file of up to 700 KB with **From a file** (also when editing). The screen stays open afterwards so you can enter the next rows (**Back to Browse** returns to the list) |
 | Export | Downloads this table as SQL / CSV / JSON (structure and/or data) |
 | Import | Loads a CSV into this table |
 | Triggers | The triggers of this table. **Create trigger** there targets this table |

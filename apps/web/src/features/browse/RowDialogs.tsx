@@ -38,6 +38,7 @@ export function EditRowDialog({ tableRef, values, rowKey, onClose, onDone }: Com
       ) : open ? (
         <RowForm
           columns={structure.data.columns}
+          foreignKeys={structure.data.foreignKeys}
           mode="edit"
           initial={values}
           pending={update.isPending}
@@ -77,6 +78,7 @@ export function CopyRowDialog({ tableRef, values, onClose, onDone }: CommonProps
           <Notice>{locale.rows.copyHint}</Notice>
           <RowForm
             columns={structure.data.columns}
+            foreignKeys={structure.data.foreignKeys}
             mode="insert"
             initial={values}
             pending={insert.isPending}

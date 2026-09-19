@@ -32,10 +32,19 @@ import type {
   TriggerInfo,
   UserInfo,
   UserRef,
+  WriteCell,
 } from '@tsmyadmin/shared'
-import { EXACT_COUNT_MAX_ROWS, isBinaryCell, isTruncatedCell, isViewKind, MAX_TEXT_CHARS } from '@tsmyadmin/shared'
+import {
+  EXACT_COUNT_MAX_ROWS,
+  isBinaryCell,
+  isFunctionCell,
+  isTruncatedCell,
+  isViewKind,
+  MAX_TEXT_CHARS,
+} from '@tsmyadmin/shared'
 import { mysqlLiteral, pgLiteral } from './sql/literal.ts'
 import { Params, quoteIdent, quoteTable } from './sql/quote.ts'
+import { rowFunctionSql } from './sql/row-functions.ts'
 import { splitStatements, stripLeadingComments } from './sql/split.ts'
 import {
   AdapterError,
@@ -710,6 +719,12 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     return { sql: lines.join('\n') }
   }
 
+  /** A value to write: bound as a parameter, or an allowed function around its bound argument. */
+  private writeValue(params: Params, cell: WriteCell): string {
+    if (!isFunctionCell(cell)) return params.add(toDbValue(cell))
+    return rowFunctionSql(this.dialect, cell.$fn, () => params.add(cell.arg ?? null))
+  }
+
   async insertRow(ns: Namespace, table: string, values: RowValues): Promise<{ affectedRows: number }> {
     const d = this.dialect
     const names = Object.keys(values)
@@ -720,7 +735,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
           ? `INSERT INTO ${quoteTable(d, ns, table)} () VALUES ()`
           : `INSERT INTO ${quoteTable(d, ns, table)} DEFAULT VALUES`
         : `INSERT INTO ${quoteTable(d, ns, table)} (${names.map((n) => quoteIdent(d, n)).join(', ')}) VALUES (${names
-            .map((n) => params.add(toDbValue(values[n] ?? null)))
+            .map((n) => this.writeValue(params, values[n] ?? null))
             .join(', ')})`
     return this.withConn(ns, async (conn) => {
       const r = firstResult(await conn.query(sql, params.values))
@@ -787,7 +802,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     const names = Object.keys(values)
     if (names.length === 0) return { affectedRows: 0 }
     const params = new Params(d)
-    const set = names.map((n) => `${quoteIdent(d, n)} = ${params.add(toDbValue(values[n] ?? null))}`).join(', ')
+    const set = names.map((n) => `${quoteIdent(d, n)} = ${this.writeValue(params, values[n] ?? null)}`).join(', ')
     const where = this.buildKeyWhere(key, params, await this.keyColumnTypes(ns, table))
     const limit = key.kind === 'all-columns' && d === 'mysql' ? ' LIMIT 1' : ''
     const sql = `UPDATE ${quoteTable(d, ns, table)} SET ${set}${where}${limit}`

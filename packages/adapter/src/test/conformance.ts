@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import type {
   Cell,
   ColumnSpec,
@@ -824,6 +825,33 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         expect(rows.total).toBe(2)
         expect(rows.rows.map((x) => x[1])).toEqual(['first', "quote ' here"])
         expect(rows.rows[0]?.[2]).toBeNull()
+      })
+
+      it('writes through an allowed function, the value bound as its argument', async () => {
+        const t = `${scratch}_fn`
+        try {
+          await exec(`CREATE TABLE ${t} (id INT PRIMARY KEY, h VARCHAR(64), u VARCHAR(64), at VARCHAR(40))`)
+          await db.insertRow(ns, t, {
+            id: 1,
+            h: { $fn: 'md5', arg: "abc' --" },
+            u: { $fn: 'uuid' },
+            at: { $fn: 'upper', arg: 'mixed' },
+          })
+          const [row] = (await browseAll(t)).rows
+          // The argument is data, not SQL: the quote and the comment are hashed with the rest.
+          expect(row?.[1]).toBe(createHash('md5').update("abc' --").digest('hex'))
+          expect(String(row?.[2])).toMatch(/^[0-9a-f-]{36}$/)
+          expect(row?.[3]).toBe('MIXED')
+          await db.updateRow(ns, t, { kind: 'pk', values: { id: 1 } }, { h: { $fn: 'sha256', arg: 'x' } })
+          expect((await browseAll(t)).rows[0]?.[1]).toBe(createHash('sha256').update('x').digest('hex'))
+          if (dialect === 'postgres') {
+            await expect(db.insertRow(ns, t, { id: 2, h: { $fn: 'sha1', arg: 'x' } })).rejects.toMatchObject({
+              code: 'UNSUPPORTED',
+            })
+          }
+        } finally {
+          await exec(`DROP TABLE IF EXISTS ${t}`, { stopOnError: false })
+        }
       })
 
       it('surfaces constraint violations as QUERY_FAILED', async () => {

@@ -272,6 +272,10 @@ for (const t of TARGETS) {
       await page.goto(tableUrl(t, 'users', '/insert'))
       await page.getByRole('button', { name: '挿入する' }).waitFor()
       await scan(page)
+      // Two rows at once, with a function chosen: every repeated control still has a name of its own.
+      await page.getByLabel('一度に入れる行数').selectOption('2')
+      await page.getByLabel('name（2 行目）: 関数').selectOption('upper')
+      await scan(page)
       await page.goto(t.schema ? `/db/${t.database}/events?schema=${t.schema}` : `/db/${t.database}/events`)
       await page
         .getByRole('heading', { name: 'イベントスケジューラ' })

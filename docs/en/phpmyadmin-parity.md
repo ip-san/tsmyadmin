@@ -1,4 +1,4 @@
-<!-- translated-from: docs/phpmyadmin-parity.md sha256:9994b9bc2ddc9f35f6d48122e20ba16d0403935b9c15109b75b3a617aac962e4 -->
+<!-- translated-from: docs/phpmyadmin-parity.md sha256:063fce89f457e844ca1b8a359ce1ebc0fa2815031abb656aad26d2cc9d88a6ac -->
 
 # Feature parity with phpMyAdmin
 
@@ -62,7 +62,7 @@ The basics (browsing and editing, structure changes, SQL, search, QBE, export / 
 | T1 | Browse: editing several rows, exporting / copying the chosen rows, creating a view from the result, charting it | ✗ |
 | T2 | Browse: reordering columns (remembered), full / partial text, binary as hex, downloading a BLOB, spatial values as WKT | △ |
 | T3 | Browse: ordering by an index, showing a foreign key's display column, profiling | ✗ |
-| T4 | Insert: functions (NOW / UUID / MD5 …), several rows at once, choosing a foreign key value, insert as a new row, a BLOB from a file | ✗ |
+| T4 | Insert: functions (NOW / UUID / MD5 …), several rows at once, choosing a foreign key value, insert as a new row (duplicate row), a BLOB from a file | ✅ |
 | T5 | Search operators: IN / NOT IN / BETWEEN / REGEXP / comparing with an empty string | △ |
 | T6 | Search: columns to show, DISTINCT, a free WHERE clause, ordering, page size | ✗ |
 | T7 | Find and replace: regular expressions | ✗ |
