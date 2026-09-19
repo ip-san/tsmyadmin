@@ -160,6 +160,11 @@ for (const t of TARGETS) {
       await scan(page)
       await page.goto(tableUrl(t, 'users', '/structure'))
       await page.getByRole('table', { name: 'カラム' }).waitFor()
+      // The column dialog with every section open (key, collation, generated column).
+      await page.getByRole('button', { name: 'カラムを追加' }).click()
+      await page.getByRole('dialog').getByLabel('生成カラム（式から値を計算する）').check()
+      await scan(page)
+      await page.getByRole('dialog').getByRole('button', { name: 'キャンセル' }).click()
       await page.getByText('正規化の手がかり').click()
       await page.getByText(/行から推定しています|行しかないため/).waitFor()
       await scan(page)

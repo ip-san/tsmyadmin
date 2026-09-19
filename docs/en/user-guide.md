@@ -1,4 +1,4 @@
-<!-- translated-from: docs/user-guide.md sha256:a7913e609f8a3b1fb1720f59b0264cb56c64bed5e813b7f7ca2acb49d2c41995 -->
+<!-- translated-from: docs/user-guide.md sha256:e6e1825323ebe244a2561d9f0bc8f7ed5c2e0df668994e3b619be7d83e7a9c53 -->
 
 # User guide
 
@@ -111,6 +111,7 @@ On PostgreSQL, **idle** tsmyadmin connections to that database under the same da
 ### Structure
 
 - Add, change and drop columns; add and drop indexes; add and drop foreign keys (to tables in the same schema); see what references this table; see the CREATE statement
+- Adding or changing a column takes a collation, MySQL's attributes (UNSIGNED / ZEROFILL / BINARY) and *Set CURRENT_TIMESTAMP on update*, a **generated column** (expression, STORED / VIRTUAL), a position (MySQL: first, or after a chosen column) and a key to add with a new column (PRIMARY / UNIQUE / INDEX). PostgreSQL cannot move a column, turn an existing column into a generated one or switch STORED / VIRTUAL (changing the expression takes PostgreSQL 17 or later)
 - Every change goes **preview of the generated SQL → Run**. An operation that cannot be undone (TRUNCATE, DROP …) also asks you to retype the object's name
 - **Display transformations** change how a column shows in Browse (a binary value as its image, a value as a link, JSON indented); the stored value is unchanged. Links are http / https only; put `{value}` in **Link to** and the value goes in URL-encoded. They are kept where saved queries are
 - **Normalization hints** below lists what in the definition and the first 500 rows looks like a break of the first to third normal forms (no primary key, numbered columns, several values joined in one, a reference with no foreign key, a column decided by part of the key or by a non-key column). Dependencies read from values are estimates, and the table is not changed

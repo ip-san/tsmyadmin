@@ -324,7 +324,7 @@ exports[`DDL builders > postgres: maintainTable 1`] = `
 exports[`DDL builders > postgres: modifyColumn 1`] = `
 [
   "ALTER TABLE "app"."t" RENAME COLUMN "n" TO "n2"",
-  "ALTER TABLE "app"."t" ALTER COLUMN "n2" TYPE BIGINT",
+  "ALTER TABLE "app"."t" ALTER COLUMN "n2" TYPE BIGINT COLLATE "utf8mb4_bin"",
   "ALTER TABLE "app"."t" ALTER COLUMN "n2" SET NOT NULL",
   "ALTER TABLE "app"."t" ALTER COLUMN "n2" DROP DEFAULT",
   "COMMENT ON COLUMN "app"."t"."n2" IS 'renamed'",

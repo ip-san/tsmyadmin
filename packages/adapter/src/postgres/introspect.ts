@@ -192,6 +192,9 @@ export async function pgDescribeTable(conn: Conn, ns: Namespace, table: string):
       extra,
       comment: strOrNull(row[6]),
       collation: strOrNull(row[7]),
+      // The generation expression is what pg_attrdef holds for such a column (also in `default`, which the
+      // dump reads).
+      generated: generated === 's' || generated === 'v' ? { expression: str(row[3]), stored: generated === 's' } : null,
     }
   })
 

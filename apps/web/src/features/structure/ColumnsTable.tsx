@@ -55,13 +55,13 @@ export function ColumnsTable({
             <Td className="text-xs">{c.comment ?? ''}</Td>
             {editable ? (
               <Td className="whitespace-nowrap">
-                {/* MySQL rewrites the whole column, and the form cannot express a generation expression: editing
-                    here would silently turn a generated column into a plain one. */}
+                {/* A generated column is editable when its expression was read back: MySQL rewrites the whole
+                    column, and without the expression the edit would silently turn it into a plain one. */}
                 <Button
                   size="sm"
                   onClick={() => onEdit(c.name)}
-                  disabled={isGeneratedColumn(c.extra)}
-                  title={isGeneratedColumn(c.extra) ? locale.ddl.generatedNotEditable : undefined}
+                  disabled={isGeneratedColumn(c.extra) && !c.generated}
+                  title={isGeneratedColumn(c.extra) && !c.generated ? locale.ddl.generatedNotEditable : undefined}
                   aria-label={`${c.name}: ${locale.ddl.edit}`}
                 >
                   {locale.ddl.edit}

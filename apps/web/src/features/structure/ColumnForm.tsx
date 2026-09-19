@@ -11,34 +11,50 @@ import {
   TYPE_SUGGESTIONS,
   validateColumn,
 } from '@/lib/column-spec.ts'
+import { ColumnExtras } from './ColumnExtras.tsx'
 
 export interface ColumnFormProps {
   dialect: Dialect
   initial?: ColumnFormValues
-  /** Existing column names, for the MySQL AFTER selector (omit to hide). */
+  /** Existing column names, for the MySQL position selector (omit to hide). */
   positions?: string[]
+  /** Adding a column (a key can go with it; the position defaults to the end) or changing one (it stays put). */
+  mode?: 'add' | 'modify'
   /** Central columns of the database, to start a new column from (omit or empty to hide). */
   presets?: CentralColumnBody[]
-  onSubmit: (values: ColumnFormValues, after: string | undefined) => void
+  onSubmit: (values: ColumnFormValues, placement: ColumnPlacement) => void
   onCancel: () => void
+}
+
+/** Where the column goes and the key that goes with it; each part absent when not asked for. */
+interface ColumnPlacement {
+  first?: boolean
+  after?: string
+  key?: 'primary' | 'unique' | 'index'
 }
 
 export function ColumnForm({
   dialect,
   initial = EMPTY_COLUMN,
   positions,
+  mode = 'add',
   presets = [],
   onSubmit,
   onCancel,
 }: ColumnFormProps) {
   const [v, setV] = useState<ColumnFormValues>(initial)
   const [after, setAfter] = useState('')
+  const [key, setKey] = useState<'' | 'primary' | 'unique' | 'index'>('')
   const set = (patch: Partial<ColumnFormValues>) => setV((cur) => ({ ...cur, ...patch }))
   const invalid = validateColumn(v)
   const submit = (e: FormEvent) => {
     e.preventDefault()
     if (invalid) return
-    onSubmit(v, after || undefined)
+    onSubmit(v, {
+      // Option values are `first` or `after:<column>`, so no column name can be mistaken for the other.
+      ...(after === 'first' ? { first: true } : after.startsWith('after:') ? { after: after.slice(6) } : {}),
+      ...(key ? { key } : {}),
+    })
   }
   return (
     <form onSubmit={submit} className="space-y-3">
@@ -91,6 +107,7 @@ export function ColumnForm({
             <Select
               id="col-default-kind"
               value={v.defaultKind}
+              disabled={v.generated !== null}
               onChange={(e) => set({ defaultKind: e.target.value as ColumnFormValues['defaultKind'] })}
               className="w-auto"
             >
@@ -101,7 +118,7 @@ export function ColumnForm({
             <Input
               aria-label={`${locale.ddl.default}: ${locale.rows.value}`}
               value={v.defaultValue}
-              disabled={v.defaultKind === 'none'}
+              disabled={v.defaultKind === 'none' || v.generated !== null}
               onChange={(e) => set({ defaultValue: e.target.value })}
               className="font-mono"
             />
@@ -113,23 +130,40 @@ export function ColumnForm({
         {positions && dialect === 'mysql' ? (
           <Field id="col-after" label={locale.ddl.after}>
             <Select id="col-after" value={after} onChange={(e) => setAfter(e.target.value)}>
-              <option value="">{locale.ddl.afterLast}</option>
+              <option value="">{mode === 'add' ? locale.ddl.afterLast : locale.ddl.extras.keepPosition}</option>
+              <option value="first">{locale.ddl.extras.first}</option>
               {positions.map((p) => (
-                <option key={p} value={p}>
+                <option key={p} value={`after:${p}`}>
                   {p}
                 </option>
               ))}
             </Select>
           </Field>
         ) : null}
+        {mode === 'add' ? (
+          <Field id="col-key" label={locale.ddl.extras.key}>
+            <Select id="col-key" value={key} onChange={(e) => setKey(e.target.value as typeof key)}>
+              <option value="">{locale.ddl.extras.none}</option>
+              <option value="primary">PRIMARY</option>
+              <option value="unique">UNIQUE</option>
+              <option value="index">INDEX</option>
+            </Select>
+          </Field>
+        ) : null}
       </div>
+      <ColumnExtras dialect={dialect} v={v} set={set} />
       <div className="flex gap-4 text-sm">
         <label className="flex items-center gap-1">
           <input type="checkbox" checked={v.nullable} onChange={(e) => set({ nullable: e.target.checked })} />
           {locale.ddl.nullable}
         </label>
         <label className="flex items-center gap-1">
-          <input type="checkbox" checked={v.autoIncrement} onChange={(e) => set({ autoIncrement: e.target.checked })} />
+          <input
+            type="checkbox"
+            checked={v.autoIncrement}
+            disabled={v.generated !== null}
+            onChange={(e) => set({ autoIncrement: e.target.checked })}
+          />
           {locale.ddl.autoIncrement}
         </label>
       </div>

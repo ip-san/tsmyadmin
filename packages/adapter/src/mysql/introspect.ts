@@ -151,6 +151,19 @@ function normaliseDefault(
 }
 
 /**
+ * A generated column's expression, as it replays. MySQL 8 escapes it the way it escapes an expression default
+ * (and hands its UTF-8 back as latin1); MariaDB prints it as written. `EXTRA` says which kind it is (`VIRTUAL
+ * GENERATED` / `STORED GENERATED`; MariaDB also `PERSISTENT GENERATED`).
+ */
+function generatedOf(extra: string, expression: string | null, mariadb: boolean): ColumnDef['generated'] {
+  if (!/\bGENERATED\b/i.test(extra) || /\bDEFAULT_GENERATED\b/i.test(extra) || !expression) return null
+  return {
+    expression: mariadb ? expression : unescapeDefault(repairEncoding(expression)),
+    stored: /\b(?:STORED|PERSISTENT)\b/i.test(extra),
+  }
+}
+
+/**
  * Rows of KEY_COLUMN_USAGE ⨝ REFERENTIAL_CONSTRAINTS — one per key column, in constraint then ordinal order — as
  * keys. Columns: constraint, column, referenced schema, referenced table, referenced column, ON UPDATE, ON DELETE,
  * table.
@@ -209,7 +222,7 @@ export async function mysqlDescribeTable(
 
   const cols = firstResult(
     await conn.query(
-      'SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT, EXTRA, COLUMN_COMMENT, COLLATION_NAME, COLUMN_KEY FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION',
+      'SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT, EXTRA, COLUMN_COMMENT, COLLATION_NAME, COLUMN_KEY, GENERATION_EXPRESSION FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION',
       [ns.database, table]
     )
   )
@@ -238,6 +251,7 @@ export async function mysqlDescribeTable(
       comment: strOrNull(row[5]) || null,
       collation: strOrNull(row[6]),
       check: checks.get(str(row[0])) ?? null,
+      generated: generatedOf(extra, strOrNull(row[8]), mariadb),
     }
   })
 

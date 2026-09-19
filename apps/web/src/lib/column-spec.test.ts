@@ -19,6 +19,7 @@ const def = (over: Partial<ColumnDef>): ColumnDef => ({
   comment: null,
   collation: null,
   check: null,
+  generated: null,
   ...over,
 })
 
@@ -34,6 +35,7 @@ describe('toColumnSpec', () => {
       collation: null,
       onUpdate: null,
       check: null,
+      generated: null,
     })
     expect(
       toColumnSpec({ ...EMPTY_COLUMN, name: 'n', dataType: 'x', defaultKind: 'literal', defaultValue: "it's" }).default
@@ -79,8 +81,9 @@ describe('fromColumnDef', () => {
       collation: 'latin1_bin',
       onUpdate: 'CURRENT_TIMESTAMP(3)',
     })
-    // PostgreSQL emits only the clauses that change, so it must not repeat a collation it never asked for.
-    expect(fromColumnDef(c, 'postgres')).toMatchObject({ collation: null, onUpdate: null })
+    // PostgreSQL carries the collation too (it can be changed there), but emits it only when it differs from the
+    // current definition; ON UPDATE is MySQL's alone.
+    expect(fromColumnDef(c, 'postgres')).toMatchObject({ collation: 'latin1_bin', onUpdate: null })
   })
 
   it('keeps the collation while the new type can hold it, and drops it when it cannot', () => {

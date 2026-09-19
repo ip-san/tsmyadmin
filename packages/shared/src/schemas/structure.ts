@@ -34,6 +34,9 @@ export const TableInfoSchema = z.object({
 })
 export type TableInfo = z.infer<typeof TableInfoSchema>
 
+export const GeneratedColumnSchema = z.object({ expression: z.string().min(1).max(100_000), stored: z.boolean() })
+export type GeneratedColumn = z.infer<typeof GeneratedColumnSchema>
+
 export const ColumnDefSchema = z.object({
   name: z.string(),
   /** Full type as the dialect prints it, e.g. "varchar(100)", "numeric(20,6)", "int[]". */
@@ -58,6 +61,11 @@ export const ColumnDefSchema = z.object({
    * survive on their own, so this stays null there.
    */
   check: z.string().nullable(),
+  /**
+   * A generated column's expression and whether it is stored (MySQL VIRTUAL / STORED, PostgreSQL STORED — and
+   * VIRTUAL from 18); null for an ordinary column. Carried so that changing such a column keeps it generated.
+   */
+  generated: GeneratedColumnSchema.nullable().default(null),
 })
 export type ColumnDef = z.infer<typeof ColumnDefSchema>
 

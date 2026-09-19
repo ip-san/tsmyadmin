@@ -15,6 +15,7 @@ const col = (name: string, dataType: string, extra: Partial<ColumnSpec> = {}): C
   collation: null,
   onUpdate: null,
   check: null,
+  generated: null,
   ...extra,
 })
 
@@ -180,6 +181,87 @@ describe('DDL builders', () => {
     }
     expect(mysqlDdl.build({ database: 'db' }, op)[0]).toBe(
       "ALTER TABLE `db`.`t` MODIFY COLUMN `n` timestamp COLLATE latin1_bin NULL ON UPDATE CURRENT_TIMESTAMP(3) COMMENT 'c'"
+    )
+  })
+
+  it('writes a generated column in each dialect, with no default of its own', () => {
+    const generated = col('total', 'int', {
+      generated: { expression: '`a` + `b`', stored: true },
+      default: { kind: 'literal', value: '0' },
+      comment: 'sum',
+    })
+    expect(mysqlDdl.build({ database: 'db' }, { op: 'addColumn', table: 't', column: generated })).toEqual([
+      "ALTER TABLE `db`.`t` ADD COLUMN `total` int GENERATED ALWAYS AS (`a` + `b`) STORED NULL COMMENT 'sum'",
+    ])
+    const virtual = col('v', 'int', { generated: { expression: 'a * 2', stored: false }, nullable: false })
+    expect(pgDdl.build({ database: 'db', schema: 'app' }, { op: 'addColumn', table: 't', column: virtual })).toEqual([
+      'ALTER TABLE "app"."t" ADD COLUMN "v" int GENERATED ALWAYS AS (a * 2) VIRTUAL NOT NULL',
+    ])
+  })
+
+  it('changes a generated column on PostgreSQL in place, or says it cannot', () => {
+    const before = col('v', 'int', { generated: { expression: 'a * 2', stored: true } })
+    const change = (column: ReturnType<typeof col>) =>
+      pgDdl.build(
+        { database: 'db', schema: 'app' },
+        { op: 'modifyColumn', table: 't', name: 'v', column, previous: before }
+      )
+    expect(change(col('v', 'int', { generated: { expression: 'a * 3', stored: true } }))).toEqual([
+      'ALTER TABLE "app"."t" ALTER COLUMN "v" SET EXPRESSION AS (a * 3)',
+    ])
+    // Dropping the expression keeps the values as an ordinary column; nothing about a default is touched.
+    expect(change(col('v', 'int'))).toEqual(['ALTER TABLE "app"."t" ALTER COLUMN "v" DROP EXPRESSION'])
+    expect(() => change(col('v', 'int', { generated: { expression: 'a * 2', stored: false } }))).toThrow(/cannot/)
+    const plain = col('p', 'int')
+    expect(() =>
+      pgDdl.build(
+        { database: 'db', schema: 'app' },
+        {
+          op: 'modifyColumn',
+          table: 't',
+          name: 'p',
+          column: { ...plain, generated: { expression: '1', stored: true } },
+          previous: plain,
+        }
+      )
+    ).toThrow(/cannot/)
+  })
+
+  it('changes a PostgreSQL collation with the type, quoted, and only when it changed', () => {
+    const before = col('n', 'text', { collation: 'C' })
+    const build = (column: ReturnType<typeof col>) =>
+      pgDdl.build(
+        { database: 'db', schema: 'app' },
+        { op: 'modifyColumn', table: 't', name: 'n', column, previous: before }
+      )
+    expect(build(col('n', 'text', { collation: 'en_US.utf8' }))).toEqual([
+      'ALTER TABLE "app"."t" ALTER COLUMN "n" TYPE text COLLATE "en_US.utf8"',
+    ])
+    expect(build(col('n', 'text', { collation: 'C' }))).toEqual([])
+  })
+
+  it('positions a column on MySQL and refuses to reorder on PostgreSQL', () => {
+    const c = col('n', 'int')
+    expect(mysqlDdl.build({ database: 'db' }, { op: 'addColumn', table: 't', column: c, first: true })[0]).toMatch(
+      / FIRST$/
+    )
+    expect(
+      mysqlDdl.build({ database: 'db' }, { op: 'modifyColumn', table: 't', name: 'n', column: c, after: 'id' })[0]
+    ).toMatch(/MODIFY COLUMN `n` int NULL AFTER `id`$/)
+    expect(() =>
+      pgDdl.build({ database: 'db' }, { op: 'modifyColumn', table: 't', name: 'n', column: c, first: true })
+    ).toThrow(/reorder/)
+  })
+
+  it('adds the key asked for with a new column', () => {
+    const c = col('code', 'varchar(10)', { nullable: false })
+    const add = (key: 'primary' | 'unique' | 'index') => ({ op: 'addColumn' as const, table: 't', column: c, key })
+    expect(mysqlDdl.build({ database: 'db' }, add('primary'))[1]).toBe('ALTER TABLE `db`.`t` ADD PRIMARY KEY (`code`)')
+    expect(mysqlDdl.build({ database: 'db' }, add('unique'))[1]).toBe(
+      'CREATE UNIQUE INDEX `t_code_key` ON `db`.`t` (`code`)'
+    )
+    expect(pgDdl.build({ database: 'db', schema: 'app' }, add('index')).at(-1)).toBe(
+      'CREATE INDEX "t_code_idx" ON "app"."t" ("code")'
     )
   })
 

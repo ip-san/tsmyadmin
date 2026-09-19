@@ -170,11 +170,12 @@ export function StructureView({ tableRef, dialect }: { tableRef: TableRef; diale
             key={columnDialog.mode === 'modify' ? columnDialog.name : 'add'}
             dialect={dialect}
             {...(editing ? { initial: fromColumnDef(editing, dialect) } : {})}
+            mode={columnDialog.mode}
             {...(columnDialog.mode === 'add'
               ? { positions: s.columns.map((c) => c.name), presets: central.entries }
-              : {})}
+              : { positions: s.columns.map((c) => c.name).filter((n) => n !== columnDialog.name) })}
             onCancel={() => setColumnDialog(null)}
-            onSubmit={(values, after) => {
+            onSubmit={(values, placement) => {
               const column = toColumnSpec(values)
               setColumnDialog(null)
               if (columnDialog.mode === 'modify')
@@ -185,8 +186,10 @@ export function StructureView({ tableRef, dialect }: { tableRef: TableRef; diale
                   column,
                   // The current definition lets PostgreSQL emit only the clauses that change.
                   ...(editing ? { previous: toColumnSpec(fromColumnDef(editing, dialect)) } : {}),
+                  ...(placement.first ? { first: true } : {}),
+                  ...(placement.after ? { after: placement.after } : {}),
                 })
-              else flow.preview({ op: 'addColumn', table, column, ...(after ? { after } : {}) })
+              else flow.preview({ op: 'addColumn', table, column, ...placement })
             }}
           />
         ) : null}

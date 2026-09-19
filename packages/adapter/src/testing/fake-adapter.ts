@@ -83,6 +83,7 @@ export function fakeColumn(name: string, dataType = 'int', nullable = false): Ta
     comment: null,
     collation: null,
     check: null,
+    generated: null,
   }
 }
 

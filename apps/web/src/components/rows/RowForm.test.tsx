@@ -14,6 +14,7 @@ const col = (name: string, over: Partial<ColumnDef> = {}): ColumnDef => ({
   comment: null,
   collation: null,
   check: null,
+  generated: null,
   ...over,
 })
 

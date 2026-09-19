@@ -1,5 +1,5 @@
 import type { ColumnSpec, DdlOp, Namespace } from '@tsmyadmin/shared'
-import { addForeignKeySql, createIndexSql } from '../sql/ddl-common.ts'
+import { addForeignKeySql, columnKeySql, createIndexSql } from '../sql/ddl-common.ts'
 import { mysqlLiteral } from '../sql/literal.ts'
 import { quoteIdent, quoteTable } from '../sql/quote.ts'
 import { AdapterError, type DdlBuilder } from '../types.ts'
@@ -35,11 +35,25 @@ function createRoutineSql(ns: Namespace, op: Extract<DdlOp, { op: 'createRoutine
   return `${head} ${traits.join(' ')} ${bare(op.body)}`
 }
 
+/** Where an added or changed column goes: first, after a column, or where it is. */
+function position(op: { first?: boolean | undefined; after?: string | undefined }): string {
+  return op.first ? ' FIRST' : op.after ? ` AFTER ${id(op.after)}` : ''
+}
+
 function columnDef(c: ColumnSpec): string {
   // MODIFY COLUMN replaces the whole definition, so anything omitted here is dropped from the column. The
   // collation and ON UPDATE clauses are schema-validated patterns, hence safe to render unquoted.
   const parts = [id(c.name), c.dataType]
   if (c.collation) parts.push(`COLLATE ${c.collation}`)
+  if (c.generated) {
+    // The server computes the value: it takes no default, AUTO_INCREMENT or ON UPDATE. The expression is code,
+    // shown in the preview before it runs.
+    parts.push(`GENERATED ALWAYS AS (${c.generated.expression}) ${c.generated.stored ? 'STORED' : 'VIRTUAL'}`)
+    parts.push(c.nullable ? 'NULL' : 'NOT NULL')
+    if (c.comment !== null) parts.push(`COMMENT ${mysqlLiteral(c.comment)}`)
+    if (c.check) parts.push(`CHECK (${c.check})`)
+    return parts.join(' ')
+  }
   parts.push(c.nullable ? 'NULL' : 'NOT NULL')
   if (c.default)
     parts.push(
@@ -172,12 +186,12 @@ export const mysqlDdl: DdlBuilder = {
         return [`CREATE TABLE ${t} (\n  ${defs.join(',\n  ')}\n)`]
       }
       case 'addColumn':
-        return [`ALTER TABLE ${t} ADD COLUMN ${columnDef(op.column)}${op.after ? ` AFTER ${id(op.after)}` : ''}`]
+        return [`ALTER TABLE ${t} ADD COLUMN ${columnDef(op.column)}${position(op)}`, ...columnKeySql('mysql', ns, op)]
       case 'modifyColumn':
         return [
           op.name === op.column.name
-            ? `ALTER TABLE ${t} MODIFY COLUMN ${columnDef(op.column)}`
-            : `ALTER TABLE ${t} CHANGE COLUMN ${id(op.name)} ${columnDef(op.column)}`,
+            ? `ALTER TABLE ${t} MODIFY COLUMN ${columnDef(op.column)}${position(op)}`
+            : `ALTER TABLE ${t} CHANGE COLUMN ${id(op.name)} ${columnDef(op.column)}${position(op)}`,
         ]
       case 'dropColumn':
         return [`ALTER TABLE ${t} DROP COLUMN ${id(op.name)}`]

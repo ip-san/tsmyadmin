@@ -1,4 +1,4 @@
-<!-- translated-from: docs/phpmyadmin-parity.md sha256:1b1a45c23d51c1ce2c357d398faf72e51e440531ffc859ad21f4bcf9ff72f4c8 -->
+<!-- translated-from: docs/phpmyadmin-parity.md sha256:9994b9bc2ddc9f35f6d48122e20ba16d0403935b9c15109b75b3a617aac962e4 -->
 
 # Feature parity with phpMyAdmin
 
@@ -67,7 +67,7 @@ The basics (browsing and editing, structure changes, SQL, search, QBE, export / 
 | T6 | Search: columns to show, DISTINCT, a free WHERE clause, ordering, page size | ✗ |
 | T7 | Find and replace: regular expressions | ✗ |
 | T8 | Zoom search: conditions per axis, a label column, a cap on points drawn | △ |
-| T9 | Column definition: collation, attributes (UNSIGNED / ZEROFILL / BINARY / ON UPDATE), generated columns, moving a column, a key when adding | △ |
+| T9 | Column definition: collation, attributes (UNSIGNED / ZEROFILL / BINARY / ON UPDATE), generated columns, moving a column, a key when adding | ✅ |
 | T10 | Structure: a key on the chosen columns, changing / dropping several at once, reordering columns | ✗ |
 | T11 | Indexes: FULLTEXT / SPATIAL, method, prefix length, renaming, editing | △ |
 | T12 | Structure information: space used, row statistics, printing | ✗ |

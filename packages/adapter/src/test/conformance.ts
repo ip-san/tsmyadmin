@@ -68,6 +68,7 @@ function col(name: string, dataType: string, extra: Partial<ColumnSpec> = {}): C
     collation: null,
     onUpdate: null,
     check: null,
+    generated: null,
     ...extra,
   }
 }
@@ -3345,6 +3346,51 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
 
         await runDdl({ op: 'dropTable', table: scratchDdl, kind: 'table' })
         await expect(db.describeTable(ns, scratchDdl)).rejects.toMatchObject({ code: 'NOT_FOUND' })
+      })
+
+      it('writes a generated column that describeTable reads back, and keeps it generated when changed', async () => {
+        const t = `${scratch}_gen`
+        try {
+          await runDdl({
+            op: 'createTable',
+            table: t,
+            columns: [col('id', 'INT', { nullable: false }), col('a', 'INT'), col('b', 'INT')],
+            primaryKey: ['id'],
+          })
+          const expression = dialect === 'mysql' ? '`a` + `b`' : 'a + b'
+          await runDdl({
+            op: 'addColumn',
+            table: t,
+            column: col('total', 'INT', { generated: { expression, stored: true } }),
+          })
+          let total = (await db.describeTable(ns, t)).columns.find((c) => c.name === 'total')
+          expect(total?.generated?.stored).toBe(true)
+          expect(total?.generated?.expression.replace(/[`"()\s]/g, '')).toBe('a+b')
+          await db.insertRow(ns, t, { id: 1, a: 2, b: 3 })
+          expect((await browseAll(t)).rows[0]?.[3]).toBe(5)
+
+          // Changing something else about it (its comment) leaves it generated: MySQL rewrites the whole column
+          // from the definition read back, PostgreSQL touches only what changed.
+          const generated = total?.generated ?? null
+          await runDdl({
+            op: 'modifyColumn',
+            table: t,
+            name: 'total',
+            column: col('total', 'INT', { generated, comment: 'sum' }),
+            previous: col('total', 'INT', { generated }),
+          })
+          total = (await db.describeTable(ns, t)).columns.find((c) => c.name === 'total')
+          expect(total).toMatchObject({ comment: 'sum', generated: { stored: true } })
+          expect((await browseAll(t)).rows[0]?.[3]).toBe(5)
+
+          // A new column with its key, and on MySQL in the first position.
+          await runDdl({ op: 'addColumn', table: t, column: col('code', 'VARCHAR(10)'), first: true, key: 'unique' })
+          const s = await db.describeTable(ns, t)
+          expect(s.columns.map((c) => c.name)[0]).toBe(dialect === 'mysql' ? 'code' : 'id')
+          expect(s.indexes.find((i) => i.columns.join() === 'code')).toMatchObject({ unique: true })
+        } finally {
+          await exec(`DROP TABLE IF EXISTS ${t}`, { stopOnError: false })
+        }
       })
 
       it('sets a table comment, runs maintenance and bulk-drops / truncates tables', async () => {

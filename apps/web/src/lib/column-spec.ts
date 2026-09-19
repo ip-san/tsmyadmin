@@ -18,6 +18,8 @@ export interface ColumnFormValues {
   collation: string | null
   onUpdate: string | null
   check: string | null
+  /** A generated column's expression and whether it is stored; null for an ordinary column. */
+  generated: { expression: string; stored: boolean } | null
 }
 
 export const EMPTY_COLUMN: ColumnFormValues = {
@@ -31,6 +33,7 @@ export const EMPTY_COLUMN: ColumnFormValues = {
   collation: null,
   onUpdate: null,
   check: null,
+  generated: null,
 }
 
 export const TYPE_SUGGESTIONS: Record<Dialect, string[]> = {
@@ -64,6 +67,21 @@ export const TYPE_SUGGESTIONS: Record<Dialect, string[]> = {
 }
 
 export function toColumnSpec(v: ColumnFormValues): ColumnSpec {
+  if (v.generated) {
+    // The server computes it: no default, identity or ON UPDATE goes with it.
+    return {
+      name: v.name.trim(),
+      dataType: v.dataType.trim(),
+      nullable: v.nullable,
+      default: null,
+      autoIncrement: false,
+      comment: v.comment.trim() === '' ? null : v.comment,
+      collation: v.collation,
+      onUpdate: null,
+      check: v.check,
+      generated: { expression: v.generated.expression.trim(), stored: v.generated.stored },
+    }
+  }
   return {
     name: v.name.trim(),
     dataType: v.dataType.trim(),
@@ -79,6 +97,7 @@ export function toColumnSpec(v: ColumnFormValues): ColumnSpec {
     collation: v.collation,
     onUpdate: v.onUpdate,
     check: v.check,
+    generated: null,
   }
 }
 
@@ -100,7 +119,8 @@ export function fromColumnDef(c: ColumnDef, dialect: Dialect): ColumnFormValues 
   const auto = c.extra.includes('auto_increment') || c.extra.includes('identity') || c.extra === 'serial'
   let defaultKind: DefaultKind = 'none'
   let defaultValue = ''
-  if (c.default !== null && !auto) {
+  // A generated column's expression is not a default (PostgreSQL reports it in the same place).
+  if (c.default !== null && !auto && !c.generated) {
     defaultKind = c.defaultIsExpression ? 'expression' : 'literal'
     defaultValue = c.default
   }
@@ -112,10 +132,12 @@ export function fromColumnDef(c: ColumnDef, dialect: Dialect): ColumnFormValues 
     defaultValue,
     autoIncrement: auto,
     comment: c.comment ?? '',
-    // PostgreSQL emits only the clauses that change, so it needs neither; MySQL replaces the definition.
-    collation: dialect === 'mysql' ? c.collation : null,
+    // Both dialects: MySQL replaces the whole definition, PostgreSQL compares with the current one and emits
+    // only what changed.
+    collation: c.collation,
     onUpdate: dialect === 'mysql' ? onUpdateExpression(c.extra) : null,
     check: c.check,
+    generated: c.generated,
   }
 }
 
@@ -184,13 +206,14 @@ export function retypeColumn(v: ColumnFormValues, initial: ColumnFormValues, dat
     ...v,
     ...shownDefault,
     dataType,
-    collation: keepsCollation ? initial.collation : null,
-    onUpdate: stamp === null || initial.onUpdate === null ? null : stamp,
+    collation: keepsCollation ? (v.collation ?? initial.collation) : null,
+    onUpdate: stamp === null || v.onUpdate === null ? null : stamp,
   }
 }
 
 export function validateColumn(v: ColumnFormValues): string | null {
   if (v.name.trim() === '') return 'name'
   if (v.dataType.trim() === '') return 'dataType'
+  if (v.generated && v.generated.expression.trim() === '') return 'generated'
   return null
 }

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { TableKindSchema } from './structure.ts'
+import { GeneratedColumnSchema, TableKindSchema } from './structure.ts'
 
 export const ColumnDefaultSchema = z
   .discriminatedUnion('kind', [
@@ -20,9 +20,10 @@ export const ColumnSpecSchema = z.object({
    * Attributes the column form does not show but a MySQL `MODIFY COLUMN` would silently drop, so they travel
    * with the spec and are re-emitted verbatim. Both are pattern-validated because they render unquoted.
    */
+  // Letters, digits, `_`, `.` and `-` (PostgreSQL's `en_US.utf8`); MySQL renders it bare, PostgreSQL quoted.
   collation: z
     .string()
-    .regex(/^[A-Za-z0-9_]+$/)
+    .regex(/^[A-Za-z0-9_.-]+$/)
     .nullable()
     .default(null),
   onUpdate: z
@@ -36,6 +37,11 @@ export const ColumnSpecSchema = z.object({
    * the preview shows it before anything runs.
    */
   check: z.string().nullable().default(null),
+  /**
+   * A generated column: its expression (server-dialect code, shown in the preview before it runs) and whether it
+   * is stored. A generated column has no default, identity or ON UPDATE of its own.
+   */
+  generated: GeneratedColumnSchema.nullable().default(null),
 })
 export type ColumnSpec = z.infer<typeof ColumnSpecSchema>
 export type ColumnSpecInput = z.input<typeof ColumnSpecSchema>
@@ -84,7 +90,16 @@ export const DdlOpSchema = z.discriminatedUnion('op', [
     columns: z.array(ColumnSpecSchema).min(1),
     primaryKey: z.array(z.string().min(1)).default([]),
   }),
-  z.object({ op: z.literal('addColumn'), table, column: ColumnSpecSchema, after: z.string().min(1).optional() }),
+  z.object({
+    op: z.literal('addColumn'),
+    table,
+    column: ColumnSpecSchema,
+    /** Position (MySQL; PostgreSQL always adds at the end): after this column, or first when `first`. */
+    after: z.string().min(1).optional(),
+    first: z.boolean().optional(),
+    /** A key on the new column, added with it (phpMyAdmin's Index choice in the column form). */
+    key: z.enum(['primary', 'unique', 'index']).optional(),
+  }),
   z.object({
     op: z.literal('modifyColumn'),
     table,
@@ -92,6 +107,9 @@ export const DdlOpSchema = z.discriminatedUnion('op', [
     column: ColumnSpecSchema,
     /** Current definition; when present PostgreSQL emits only the clauses that actually change. */
     previous: ColumnSpecSchema.optional(),
+    /** Moves the column (MySQL only; PostgreSQL cannot reorder columns). */
+    after: z.string().min(1).optional(),
+    first: z.boolean().optional(),
   }),
   z.object({ op: z.literal('dropColumn'), table, name: z.string().min(1) }),
   z.object({
