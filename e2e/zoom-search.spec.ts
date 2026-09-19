@@ -47,5 +47,29 @@ for (const t of TARGETS) {
         await sql(page, t, `DROP TABLE IF EXISTS ${table}`)
       }
     })
+
+    test('lets a pick lapse once the rows are fetched again', async ({ page }) => {
+      await login(page, t)
+      const table = `e2e_zoom2_${Date.now().toString(36)}`
+      await sql(page, t, `CREATE TABLE ${table} (id INT PRIMARY KEY, w INT)`)
+      await sql(page, t, `INSERT INTO ${table} (id, w) VALUES (1, 10), (2, 20)`)
+      try {
+        await page.goto(tableUrl(t, table, '/search'))
+        const zoom = page.getByRole('region', { name: 'ズーム検索' })
+        await zoom.getByRole('button', { name: '散布図を表示' }).click()
+        await zoom.locator('circle').first().click()
+        await expect(zoom.getByRole('heading', { name: '選んだ行' })).toBeVisible()
+        // A statement in the docked console refetches the rows: the position picked may now be another row.
+        await page.getByRole('button', { name: 'コンソール', exact: true }).click()
+        const dock = page.getByRole('region', { name: 'SQL コンソール（画面の下に常駐）' })
+        await dock.getByRole('textbox', { name: 'SQL エディタ' }).click()
+        await page.keyboard.type(`DELETE FROM ${table} WHERE id = 1`)
+        await dock.getByRole('button', { name: '実行する', exact: true }).click()
+        await expect(zoom.getByText('1 点', { exact: true })).toBeVisible()
+        await expect(zoom.getByRole('heading', { name: '選んだ行' })).toBeHidden()
+      } finally {
+        await sql(page, t, `DROP TABLE IF EXISTS ${table}`)
+      }
+    })
   })
 }

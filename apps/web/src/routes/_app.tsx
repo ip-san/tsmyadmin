@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { AppShell } from '@/components/layout/AppShell.tsx'
 import { Spinner } from '@/components/ui/Feedback.tsx'
 import { DbTree } from '@/features/sidebar/DbTree.tsx'
+import { loadAccountPreferences, resetAccountPreferences } from '@/lib/account-prefs.ts'
 import { mutations, sessionQuery } from '@/lib/queries.ts'
 
 // Loaded when first opened: the editor is the largest thing the app ships, and most pages never need it.
@@ -20,6 +21,10 @@ export const Route = createFileRoute('/_app')({
     if (session.secondFactor === 'enrollment_required' && location.pathname !== '/security') {
       throw redirect({ to: '/security' })
     }
+    // The account's preferences, once per login, before the shell reads them from this browser's storage.
+    const identity = JSON.stringify([session.dialect, session.host, session.port, session.user])
+    const { reload } = await loadAccountPreferences(identity, session.savedQueries === 'server')
+    if (reload) window.location.reload()
     return { session }
   },
   component: AppLayout,
@@ -36,6 +41,7 @@ function AppLayout() {
   const navigate = useNavigate()
   const logout = async () => {
     await mutations.logout().catch(() => undefined)
+    resetAccountPreferences()
     queryClient.clear()
     await navigate({ to: '/login' })
   }

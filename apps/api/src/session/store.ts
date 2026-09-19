@@ -2,10 +2,14 @@ import type { DatabaseAdapter } from '@tsmyadmin/adapter'
 import type { ConnectRequest as Config, ConnectRequest, SessionInfo } from '@tsmyadmin/shared'
 import { identityKey } from './identity.ts'
 
-/** What a stored item is: a bookmarked statement, or a saved set of export choices. */
-export type SavedItemKind = 'sql' | 'export'
+/**
+ * What a stored item is: a bookmarked statement, a saved set of export choices, a central column (a column
+ * definition kept for reuse), a column's display transformation, or the account's preferences (one item).
+ */
+export const SAVED_ITEM_KINDS = ['sql', 'export', 'central', 'transform', 'prefs'] as const
+export type SavedItemKind = (typeof SAVED_ITEM_KINDS)[number]
 
-/** A stored item. `body` is the statement for 'sql' and JSON for 'export'; only the routes interpret it. */
+/** A stored item. `body` is the statement for 'sql' and JSON for the others; only the routes interpret it. */
 export interface SavedItem {
   id: string
   kind: SavedItemKind
@@ -15,10 +19,11 @@ export interface SavedItem {
 }
 
 /**
- * Named items kept per database account: bookmarked statements and export templates. Async like `SessionStore`:
- * SQLite answers from the same process, Redis over a socket. Every method returns the account's whole list of
- * that kind, which is what the routes hand back. The two kinds share the per-account cap and the same rows; a
- * name is unique within its kind.
+ * Named items kept per database account (see SavedItemKind). Async like `SessionStore`: SQLite answers from the
+ * same process, Redis over a socket. Every method returns the account's whole list of that kind, which is what
+ * the routes hand back. The kinds share the same rows, but each has its own cap — the oldest of a kind makes room
+ * for a new one of that kind, so bookmarks piling up never push out the account's preferences. A name is unique
+ * within its kind.
  */
 export interface SavedItems {
   list(config: Config, kind: SavedItemKind): Promise<SavedItem[]>

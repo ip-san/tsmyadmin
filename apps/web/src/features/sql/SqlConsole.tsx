@@ -3,13 +3,14 @@ import { useRouteContext } from '@tanstack/react-router'
 import type { Dialect, StatementResult } from '@tsmyadmin/shared'
 import { SQL_MAX_ROWS_DEFAULT } from '@tsmyadmin/shared'
 import { Play, Square } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { z } from 'zod'
 import { Button } from '@/components/ui/Button.tsx'
 import { Dialog } from '@/components/ui/Dialog.tsx'
 import { ErrorBox, Notice } from '@/components/ui/Feedback.tsx'
 import { Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
+import { sharePreference } from '@/lib/account-prefs.ts'
 import { ApiError } from '@/lib/api.ts'
 import { consoleDraftKey, sessionStore } from '@/lib/console-draft.ts'
 import { readPreference, writePreference } from '@/lib/preferences.ts'
@@ -38,6 +39,8 @@ export interface SqlConsoleProps {
 }
 
 export function SqlConsole({ db, schema, dialect, initialSql = '', completion, draftId }: SqlConsoleProps) {
+  // The docked console can be open over a SQL tab: two of these on one page, so no fixed ids.
+  const maxRowsId = useId()
   // History and bookmarks belong to a server: two MySQL hosts opened from the same browser keep separate lists.
   const { session } = useRouteContext({ from: '/_app' })
   const scope = `${dialect}.${session.host}.${session.port}`
@@ -200,10 +203,10 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
           {locale.sql.explain}
         </Button>
         <span className="text-xs text-ink-sub">{locale.sql.runHint}</span>
-        <label htmlFor="sql-max-rows" className="ml-auto flex items-center gap-1 text-xs text-ink-sub">
+        <label htmlFor={maxRowsId} className="ml-auto flex items-center gap-1 text-xs text-ink-sub">
           {locale.sql.maxRows}
           <Select
-            id="sql-max-rows"
+            id={maxRowsId}
             value={maxRows}
             onChange={(e) => setMaxRows(Number(e.target.value))}
             className="w-auto py-1"
@@ -226,6 +229,7 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
             onChange={(e) => {
               setSafeMode(e.target.checked)
               writePreference(SAFE_MODE_PREF, e.target.checked)
+              sharePreference({ sqlSafeMode: e.target.checked })
             }}
           />
           {locale.sql.safeMode}

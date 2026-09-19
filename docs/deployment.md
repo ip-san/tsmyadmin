@@ -34,7 +34,7 @@ tsmyadmin は **1 プロセス（Bun）で API と SPA を配信する単一コ�
 | `SESSION_SECRET` | （開発用固定値） | セッション Cookie の署名鍵。**本番では 32 文字以上必須**。`openssl rand -hex 32` |
 | `SESSION_TTL_MINUTES` | `30` | 操作ごとに延長されるセッション寿命（1–1440） |
 | `SESSION_MAX_PER_IDENTITY` | `10`（1–1000） | 同じ DB アカウント（種別 / ホスト / ポート / ユーザー名）で同時に保持するセッション数。超えると最後に使われてから最も時間が経ったものを閉じる（LRU）（ログインの繰り返しで DB の `max_connections` を使い切らせない） |
-| `SESSION_STORE` | 本番 `sqlite` / 開発 `memory` | `redis` は複数レプリカでセッションを共有（`REDIS_URL` が必須。下の「複数レプリカ」を必ず読むこと）。 `sqlite` は再起動・ローリング更新後もセッションを維持（資格情報は `SESSION_SECRET` から導出した鍵で AES-256-GCM 暗号化して保存）。保存済みクエリも同じファイル・同じ鍵で保存され、DB アカウントに紐づく（アカウントあたり 200 件）。`memory` はプロセス内のみで、保存済みクエリは各ブラウザーに保存される |
+| `SESSION_STORE` | 本番 `sqlite` / 開発 `memory` | `redis` は複数レプリカでセッションを共有（`REDIS_URL` が必須。下の「複数レプリカ」を必ず読むこと）。 `sqlite` は再起動・ローリング更新後もセッションを維持（資格情報は `SESSION_SECRET` から導出した鍵で AES-256-GCM 暗号化して保存）。保存済みクエリ・エクスポートのテンプレート・個人設定・セントラルカラム・列の表示変換も同じファイル・同じ鍵で保存され、DB アカウントに紐づく（アカウントあたり種類ごとに 200 件）。`memory` はプロセス内のみで、これらは各ブラウザーに保存される |
 | `SESSION_DB_PATH` | `data/sessions.sqlite` | `sqlite` 時のファイル。Docker では `/app/data` をボリュームにする |
 | `REDIS_URL` | （なし） | `SESSION_STORE=redis` のとき必須（`redis://host:6379`、TLS は `rediss://`）。未設定なら起動時に終了する。セッションと保存済みクエリはここに入り、暗号化は sqlite と同一（`SESSION_SECRET` 由来の鍵、行ごとに結合） |
 | `TSMYADMIN_ALLOWED_HOSTS` | `127.0.0.1,localhost` | ログイン画面から接続を許可する DB ホスト。カンマ区切りで、完全一致 / `*.suffix` / `*`（無制限）、それぞれ `:port` 付き可（`db.internal:5432`、`[::1]:3306`）。ポート省略は全ポート許可 — **本番ではポートまで指定する**（`docs/security.md`）。**SSRF・踏み台防止の要** |

@@ -1,5 +1,6 @@
 import { BROWSE_MAX_LIMIT, type BrowseOptions, BrowseQuerySchema, parseBrowseQuery } from '@tsmyadmin/shared'
 import { z } from 'zod'
+import { sharePreference } from '@/lib/account-prefs.ts'
 import { readPreference, writePreference } from '@/lib/preferences.ts'
 
 const DEFAULT_LIMIT = 50
@@ -12,6 +13,7 @@ export function preferredLimit(): number {
 }
 export function rememberLimit(limit: number): void {
   writePreference(LIMIT_PREF, limit)
+  sharePreference({ browseLimit: limit })
 }
 
 export const BrowseSearchSchema = z.object({

@@ -4,7 +4,7 @@ import { type ConnectRequest, ConnectRequestSchema } from '@tsmyadmin/shared'
 import { Redis } from 'ioredis'
 import { deriveSessionKey, open, rowAad, seal } from './crypto.ts'
 import { identityHash } from './identity.ts'
-import { readPayload, SAVED_QUERIES, SAVED_QUERY_LIMIT } from './saved-queries.ts'
+import { overCap, readPayload, SAVED_QUERIES, SAVED_QUERY_LIMIT } from './saved-queries.ts'
 import { SECOND_FACTOR, version } from './second-factor.ts'
 import {
   type AdapterFactory,
@@ -31,6 +31,8 @@ export interface RedisSessionStoreOptions {
   sweepIntervalMs?: number
   now?: () => number
   maxPerIdentity?: number
+  /** Stored items kept per account and kind (tests lower it; the default matches the browser-side lists). */
+  savedItemLimit?: number
   /** Namespace for every key, so one Redis can hold more than one deployment. */
   prefix?: string
   /**
@@ -112,7 +114,13 @@ export class RedisSessionStore implements SessionStore {
     this.factory = options.adapterFactory
     this.maxPerIdentity = options.maxPerIdentity ?? DEFAULT_MAX_SESSIONS_PER_IDENTITY
     this.prefix = options.prefix ?? 'tsmyadmin'
-    this.savedQueries = new RedisSavedQueries(this.redis, this.key, this.prefix, this.now)
+    this.savedQueries = new RedisSavedQueries(
+      this.redis,
+      this.key,
+      this.prefix,
+      this.now,
+      options.savedItemLimit ?? SAVED_QUERY_LIMIT
+    )
     this.secondFactor = new RedisSecondFactors(this.redis, this.key, this.prefix)
     // Redis expires sessions itself; the sweep only closes the pools this process still holds for them.
     this.timer = startSweep(options.sweepIntervalMs ?? 60_000, () => void this.sweep())
@@ -299,7 +307,8 @@ class RedisSavedQueries implements SavedItems {
     private readonly redis: Redis,
     private readonly key: Buffer,
     private readonly prefix: string,
-    private readonly now: () => number
+    private readonly now: () => number,
+    private readonly limit: number
   ) {}
 
   private index(config: ConnectRequest): string {
@@ -343,19 +352,22 @@ class RedisSavedQueries implements SavedItems {
     const replaced = replaces === undefined ? undefined : mine.find((q) => q.id === replaces && q.id !== existing?.id)
     const id = existing?.id ?? randomUUID()
     const at = this.now()
-    // One transaction, so the row being replaced cannot survive a failed write of its replacement (nor be
-    // counted beside it by the cap below).
+    // Oldest of this kind first beyond its cap, so a runaway client cannot grow the store without bound. The kind
+    // is inside the sealed payload, so the victims come from the opened list, not the index.
+    const victims = existing
+      ? []
+      : overCap(
+          mine.filter((q) => q.id !== replaced?.id),
+          this.limit
+        )
+    // One transaction, so the row being replaced cannot survive a failed write of its replacement.
     const write = this.redis
       .multi()
       .set(this.entry(config, id), seal(this.key, JSON.stringify({ kind, name, body }), rowAad(SAVED_QUERIES, id)))
       .zadd(index, at, id)
     if (replaced) write.zrem(index, replaced.id).del(this.entry(config, replaced.id))
+    for (const victim of victims) write.zrem(index, victim.id).del(this.entry(config, victim.id))
     await write.exec()
-    // Oldest first beyond the cap, so a runaway client cannot grow the store without bound.
-    const ids = await this.redis.zrange(index, '0', '-1')
-    for (const victim of ids.slice(0, Math.max(0, ids.length - SAVED_QUERY_LIMIT))) {
-      await this.redis.multi().zrem(index, victim).del(this.entry(config, victim)).exec()
-    }
     return this.list(config, kind)
   }
 

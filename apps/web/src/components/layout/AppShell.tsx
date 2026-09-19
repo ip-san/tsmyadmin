@@ -4,6 +4,7 @@ import { CircleHelp, LogOut, Moon, PanelLeftClose, PanelLeftOpen, SquareTerminal
 import { type ReactNode, useState } from 'react'
 import { z } from 'zod'
 import { LOCALE_NAMES, LOCALES, locale, localeCode, setLocale } from '@/config/locale.ts'
+import { sharePreference, sharePreferenceNow } from '@/lib/account-prefs.ts'
 import { readPreference, writePreference } from '@/lib/preferences.ts'
 import { useShortcuts } from '@/lib/shortcuts.ts'
 import { useTheme } from '@/lib/theme.ts'
@@ -49,6 +50,7 @@ export function AppShell({
   const setDock = (open: boolean) => {
     setDocked(open)
     writePreference(DOCK_PREF, open)
+    sharePreference({ consoleDocked: open })
   }
   return (
     <div className="flex h-dvh flex-col bg-canvas text-ink print:block print:h-auto">
@@ -114,7 +116,10 @@ export function AppShell({
           <Select
             aria-label={locale.common.language}
             value={localeCode}
-            onChange={(e) => setLocale(e.target.value as keyof typeof LOCALES)}
+            onChange={(e) => {
+              const code = e.target.value as keyof typeof LOCALES
+              void sharePreferenceNow({ locale: code }).finally(() => setLocale(code))
+            }}
             className="w-auto py-1 text-xs"
           >
             {Object.keys(LOCALES).map((code) => (
@@ -126,7 +131,10 @@ export function AppShell({
           <Button
             variant="ghost"
             size="sm"
-            onClick={toggleTheme}
+            onClick={() => {
+              toggleTheme()
+              sharePreference({ theme: theme === 'dark' ? 'light' : 'dark' })
+            }}
             aria-label={locale.common.theme}
             aria-pressed={theme === 'dark'}
           >

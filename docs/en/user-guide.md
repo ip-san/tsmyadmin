@@ -1,4 +1,4 @@
-<!-- translated-from: docs/user-guide.md sha256:6b9df608a5a19bb3b518fc820102aecb0d9a9d12c667b240b40f40576cfba837 -->
+<!-- translated-from: docs/user-guide.md sha256:eb73d3a3de1c820067e647247b952ff65084d669367baf47c03a51042896651e -->
 
 # User guide
 
@@ -42,6 +42,7 @@ The language menu at the top right switches between English and 日本語 (the p
 | Tabs | The features of each level (Browse / Structure / SQL / …). The state lives in the URL, so a page can be shared or bookmarked as it is |
 | Console | **Console** in the header docks a SQL console at the foot of the page. It runs against the database on screen, and keeps its text and results while you move between tabs. Whether it is open is remembered in the browser |
 | Theme | The moon / sun icon in the header switches between light and dark |
+| Preferences | Theme, language, rows per page, SQL safe mode and whether the console is open are kept with the account when sessions are persistent (`SESSION_STORE=sqlite` / `redis`), so they follow you to another browser |
 | Shortcuts | `?` lists them. `⌘/Ctrl + K` the sidebar filter, `←` `→` paging, `⌘/Ctrl + Enter` run SQL, `Enter` edit the focused cell |
 | Errors | When something fails to load, **Retry** fetches it again. An error that takes out the whole page is cleared by reloading |
 

@@ -28,6 +28,13 @@ for (const t of TARGETS) {
       await page.reload()
       await expect(page.getByRole('table', { name: 'カラム' })).toBeVisible()
       await expect(dock).toBeHidden()
+      // Open over a SQL tab: two consoles on one page, and each control still belongs to its own label.
+      await page.goto(tableUrl(t, 'users', '/sql'))
+      await toggle.click()
+      await expect(page.getByLabel('最大行数')).toHaveCount(2)
+      await dock.getByLabel('最大行数').selectOption('100')
+      await expect(dock.getByLabel('最大行数')).toHaveValue('100')
+      await expect(page.getByRole('main').getByLabel('最大行数')).toHaveValue('1000')
     })
   })
 }

@@ -18,6 +18,17 @@ export function applyTheme(theme: Theme = read()): void {
   document.documentElement.classList.toggle('dark', theme === 'dark')
 }
 
+/** Sets the theme (the account's, at login) and tells every mounted toggle. */
+export function setTheme(theme: Theme): void {
+  try {
+    localStorage.setItem(KEY, theme)
+  } catch {
+    // ignore
+  }
+  applyTheme(theme)
+  for (const l of listeners) l()
+}
+
 export function useTheme(): [Theme, () => void] {
   const theme = useSyncExternalStore(
     (cb) => {
@@ -28,14 +39,7 @@ export function useTheme(): [Theme, () => void] {
     () => 'light' as Theme
   )
   const toggle = useCallback(() => {
-    const next: Theme = read() === 'dark' ? 'light' : 'dark'
-    try {
-      localStorage.setItem(KEY, next)
-    } catch {
-      // ignore
-    }
-    applyTheme(next)
-    for (const l of listeners) l()
+    setTheme(read() === 'dark' ? 'light' : 'dark')
   }, [])
   return [theme, toggle]
 }

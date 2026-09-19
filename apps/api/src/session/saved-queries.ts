@@ -3,13 +3,18 @@ import type { DatabaseSync } from 'node:sqlite'
 import type { ConnectRequest } from '@tsmyadmin/shared'
 import { open, rowAad, seal } from './crypto.ts'
 import { identityHash } from './identity.ts'
-import type { SavedItem, SavedItemKind, SavedItems } from './store.ts'
+import { SAVED_ITEM_KINDS, type SavedItem, type SavedItemKind, type SavedItems } from './store.ts'
 
 /** Table name in the AAD of a saved-item payload. The name is historical: export templates share the table. */
 export const SAVED_QUERIES = 'saved_queries'
 
-/** Per account, matching what the browser-side list holds. */
+/** Per account and kind, matching what the browser-side list holds. */
 export const SAVED_QUERY_LIMIT = 200
+
+/** The rows of `mine` (one kind, newest first) to drop so that one more fits under `limit`. */
+export function overCap(mine: readonly SavedItem[], limit: number): SavedItem[] {
+  return mine.slice(Math.max(0, limit - 1))
+}
 
 /**
  * Named items (bookmarked statements, export templates) kept on the server so they follow the account rather
@@ -27,7 +32,6 @@ export class SqliteSavedQueries implements SavedItems {
     insert: import('node:sqlite').StatementSync
     update: import('node:sqlite').StatementSync
     remove: import('node:sqlite').StatementSync
-    oldest: import('node:sqlite').StatementSync
   }
 
   private readonly db: DatabaseSync
@@ -35,7 +39,8 @@ export class SqliteSavedQueries implements SavedItems {
   constructor(
     db: DatabaseSync,
     private readonly key: Buffer,
-    private readonly now: () => number = Date.now
+    private readonly now: () => number = Date.now,
+    private readonly limit = SAVED_QUERY_LIMIT
   ) {
     this.db = db
     db.exec(`
@@ -52,9 +57,6 @@ export class SqliteSavedQueries implements SavedItems {
       insert: db.prepare('INSERT INTO saved_queries (id, identity, payload, updated_at) VALUES (?, ?, ?, ?)'),
       update: db.prepare('UPDATE saved_queries SET payload = ?, updated_at = ? WHERE id = ? AND identity = ?'),
       remove: db.prepare('DELETE FROM saved_queries WHERE id = ? AND identity = ?'),
-      oldest: db.prepare(
-        'SELECT id FROM saved_queries WHERE identity = ? ORDER BY updated_at ASC LIMIT max(0, (SELECT COUNT(*) FROM saved_queries WHERE identity = ?) - ?)'
-      ),
     }
   }
 
@@ -108,10 +110,12 @@ export class SqliteSavedQueries implements SavedItems {
     try {
       if (replaced) this.stmt.remove.run(replaced.id, identity)
       if (existing) this.stmt.update.run(payload, at, id, identity)
-      else this.stmt.insert.run(id, identity, payload, at)
-      // Oldest first beyond the cap, so a runaway client cannot grow the file without bound.
-      for (const row of this.stmt.oldest.all(identity, identity, SAVED_QUERY_LIMIT) as { id: string }[]) {
-        this.stmt.remove.run(row.id, identity)
+      else {
+        // Oldest of this kind first beyond its cap, so a runaway client cannot grow the file without bound. The
+        // kind is inside the sealed payload, which is why this works from the opened list rather than in SQL.
+        const others = mine.filter((q) => q.id !== replaced?.id)
+        for (const victim of overCap(others, this.limit)) this.stmt.remove.run(victim.id, identity)
+        this.stmt.insert.run(id, identity, payload, at)
       }
       this.db.exec('COMMIT')
     } catch (error) {
@@ -131,10 +135,10 @@ export class SqliteSavedQueries implements SavedItems {
 
 /**
  * A sealed payload as an item. Rows written before export templates existed hold `{ name, sql }` and no kind:
- * they are bookmarks, and are read as such rather than being thrown away.
+ * they are bookmarks, and are read as such rather than being thrown away (as is a kind this version does not know).
  */
 export function readPayload(json: string, id: string, at: number): SavedItem {
   const body = JSON.parse(json) as { kind?: string; name: string; sql?: string; body?: string }
-  const kind: SavedItemKind = body.kind === 'export' ? 'export' : 'sql'
+  const kind: SavedItemKind = SAVED_ITEM_KINDS.find((k) => k === body.kind) ?? 'sql'
   return { id, kind, name: body.name, body: body.body ?? body.sql ?? '', at }
 }

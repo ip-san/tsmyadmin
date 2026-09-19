@@ -5,6 +5,8 @@ import {
   AccountSecondFactorsSchema,
   ApiErrorSchema,
   BrowseResultSchema,
+  CentralColumnSchema,
+  ColumnTransformSchema,
   ConnectRequestSchema,
   DdlPreviewResponseSchema,
   ExportTemplateSchema,
@@ -2124,5 +2126,109 @@ describe('saved queries', () => {
     })
     expect(template.status).toBe(400)
     expect(ApiErrorSchema.parse(await template.json()).code).toBe('UNSUPPORTED')
+  })
+})
+
+describe('preferences, central columns and column transformations', () => {
+  function persistentHarness() {
+    const store = new SqliteSessionStore({
+      path: ':memory:',
+      secret: 's'.repeat(32),
+      adapterFactory: () => fixtureAdapter(),
+      sweepIntervalMs: 0,
+    })
+    const app = createApp(testConfig(), { store })
+    let cookie = ''
+    const req = (path: string, init: RequestInit = {}) =>
+      app.request(path, {
+        ...init,
+        headers: { 'content-type': 'application/json', ...(cookie ? { cookie } : {}), ...(init.headers ?? {}) },
+      })
+    const login = async (body: Record<string, unknown> = LOGIN) => {
+      const res = await req('/api/session', { method: 'POST', body: JSON.stringify(body) })
+      cookie = res.headers.get('set-cookie')?.split(';')[0] ?? ''
+      return res
+    }
+    const send = (path: string, method: string, body: unknown) => req(path, { method, body: JSON.stringify(body) })
+    return { store, req, login, send }
+  }
+
+  it('keeps preferences with the account, and only the known fields', async () => {
+    const h = persistentHarness()
+    try {
+      expect((await h.send('/api/preferences', 'PUT', { theme: 'dark' })).status).toBe(401)
+      await h.login()
+      expect(await (await h.req('/api/preferences')).json()).toEqual({})
+      const put = await h.send('/api/preferences', 'PUT', { theme: 'dark', browseLimit: 25, extra: 'dropped' })
+      expect(await put.json()).toEqual({ theme: 'dark', browseLimit: 25 })
+      expect(await (await h.req('/api/preferences')).json()).toEqual({ theme: 'dark', browseLimit: 25 })
+      expect((await h.send('/api/preferences', 'PUT', { browseLimit: 0 })).status).toBe(400)
+      // Another account has its own.
+      await h.login({ ...LOGIN, user: 'reader' })
+      expect(await (await h.req('/api/preferences')).json()).toEqual({})
+    } finally {
+      await h.store.closeAll()
+    }
+  })
+
+  it('keeps central columns per database, replacing one by name', async () => {
+    const h = persistentHarness()
+    try {
+      await h.login()
+      const column = { database: 'shop', name: 'created_at', dataType: 'datetime', nullable: false, default: null }
+      await h.send('/api/central-columns', 'POST', column)
+      await h.send('/api/central-columns', 'POST', { ...column, database: 'blog' })
+      const replaced = z
+        .array(CentralColumnSchema)
+        .parse(await (await h.send('/api/central-columns', 'POST', { ...column, dataType: 'timestamp' })).json())
+      expect(replaced.map((c) => [c.database, c.dataType]).sort()).toEqual([
+        ['blog', 'datetime'],
+        ['shop', 'timestamp'],
+      ])
+      const shop = replaced.find((c) => c.database === 'shop')
+      const left = await (await h.req(`/api/central-columns/${shop?.id}`, { method: 'DELETE' })).json()
+      expect(left).toMatchObject([{ database: 'blog' }])
+      expect((await h.send('/api/central-columns', 'POST', { ...column, name: '' })).status).toBe(400)
+    } finally {
+      await h.store.closeAll()
+    }
+  })
+
+  it('keeps one transformation per column, and refuses a link template that is not http(s)', async () => {
+    const h = persistentHarness()
+    try {
+      await h.login()
+      const target = { database: 'shop', table: 'items', column: 'url' }
+      await h.send('/api/column-transforms', 'POST', { ...target, kind: 'link' })
+      const set = z
+        .array(ColumnTransformSchema)
+        .parse(
+          await (
+            await h.send('/api/column-transforms', 'POST', { ...target, kind: 'link', template: 'https://x/{value}' })
+          ).json()
+        )
+      expect(set).toMatchObject([{ kind: 'link', template: 'https://x/{value}' }])
+      const refused = await h.send('/api/column-transforms', 'POST', {
+        ...target,
+        kind: 'link',
+        template: 'javascript:alert({value})',
+      })
+      expect(refused.status).toBe(400)
+      expect((await h.send('/api/column-transforms', 'POST', { ...target, kind: 'script' })).status).toBe(400)
+      expect(await (await h.req(`/api/column-transforms/${set[0]?.id}`, { method: 'DELETE' })).json()).toEqual([])
+    } finally {
+      await h.store.closeAll()
+    }
+  })
+
+  it('reads as empty, and refuses to write, without a persistent store', async () => {
+    const h = harness()
+    stores.push(h.store)
+    await h.login()
+    expect(await (await h.req('/api/preferences')).json()).toEqual({})
+    expect(await (await h.req('/api/central-columns')).json()).toEqual([])
+    const put = await h.req('/api/preferences', { method: 'PUT', body: JSON.stringify({ theme: 'dark' }) })
+    expect(put.status).toBe(400)
+    expect(await put.json()).toMatchObject({ code: 'UNSUPPORTED' })
   })
 })

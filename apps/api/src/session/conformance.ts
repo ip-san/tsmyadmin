@@ -11,6 +11,7 @@ export interface StoreOptions {
   maxPerIdentity?: number
   sweepIntervalMs?: number
   now?: () => number
+  savedItemLimit?: number
 }
 
 /**
@@ -253,6 +254,33 @@ export function describeSessionStoreConformance(
         for (const item of await saved.list(CONFIG, 'export')) await saved.remove(CONFIG, 'export', item.id)
         expect(await saved.list(CONFIG, 'export')).toEqual([])
         expect(await saved.list(CONFIG, 'sql')).toHaveLength(1)
+      } finally {
+        await store.closeAll()
+      }
+    })
+
+    it('caps stored items per kind, so one kind filling up never evicts another', async () => {
+      let t = 1_000
+      const store = await create({
+        adapterFactory: tracked().adapterFactory,
+        sweepIntervalMs: 0,
+        savedItemLimit: 3,
+        now: () => ++t,
+      })
+      try {
+        const saved = store.savedQueries
+        if (!saved) return
+        await saved.save(CONFIG, 'prefs', 'preferences', '{}')
+        for (const n of ['a', 'b', 'c', 'd', 'e']) await saved.save(CONFIG, 'sql', n, 'SELECT 1')
+        // The oldest bookmarks made room for the newest; the preferences, older than all of them, stayed.
+        expect((await saved.list(CONFIG, 'sql')).map((q) => q.name)).toEqual(['e', 'd', 'c'])
+        expect(await saved.list(CONFIG, 'prefs')).toHaveLength(1)
+        // Replacing by name is not a new item, and evicts nothing.
+        await saved.save(CONFIG, 'sql', 'c', 'SELECT 3')
+        expect((await saved.list(CONFIG, 'sql')).map((q) => q.name).sort()).toEqual(['c', 'd', 'e'])
+        for (const n of ['x', 'y', 'z']) await saved.save(CONFIG, 'central', n, '{}')
+        expect(await saved.list(CONFIG, 'central')).toHaveLength(3)
+        expect(await saved.list(CONFIG, 'sql')).toHaveLength(3)
       } finally {
         await store.closeAll()
       }

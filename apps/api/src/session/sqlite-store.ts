@@ -39,6 +39,8 @@ export interface SqliteSessionStoreOptions {
   /** Minimum interval between last_used_at writes for the same session (limits write amplification). */
   touchIntervalMs?: number
   maxPerIdentity?: number
+  /** Stored items kept per account and kind (tests lower it; the default matches the browser-side lists). */
+  savedItemLimit?: number
 }
 
 interface Row {
@@ -143,7 +145,7 @@ export class SqliteSessionStore implements SessionStore {
     this.now = options.now ?? Date.now
     // Same file and same key as the credentials: a bookmarked statement is written by hand and routinely
     // carries row values, so it is sealed exactly like them.
-    this.savedQueries = new SqliteSavedQueries(this.db, this.key, this.now)
+    this.savedQueries = new SqliteSavedQueries(this.db, this.key, this.now, options.savedItemLimit)
     this.secondFactor = new SqliteSecondFactors(this.db, this.key)
     // Saved queries go the same way, and must: a row is found by an HMAC of the account under this key, so after
     // a rotation no future request can name the old rows at all. Left alone they would never be listed, never

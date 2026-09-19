@@ -13,6 +13,12 @@ import { rowsQuery, structureQuery, type TableRef } from '@/lib/queries.ts'
 
 const t = locale.zoom
 
+/** A picked point: its row's position, in the rows fetched at `at`. */
+interface PickedPoint {
+  row: number
+  at: number
+}
+
 const WIDTH = 640
 const HEIGHT = 360
 const LEFT = 72
@@ -57,7 +63,7 @@ export function ZoomSearch({ tableRef, filters }: { tableRef: TableRef; filters:
   const x = axes.includes(chosenX) ? chosenX : (axes[0] ?? '')
   const y = axes.includes(chosenY) ? chosenY : (axes[1] ?? axes[0] ?? '')
   const [shown, setShown] = useState<{ x: string; y: string } | null>(null)
-  const [picked, setPicked] = useState<number | null>(null)
+  const [picked, setPicked] = useState<PickedPoint | null>(null)
   if (axes.length === 0) return null
   const submit = (e: FormEvent) => {
     e.preventDefault()
@@ -112,8 +118,8 @@ function Plot({
   filters: Filter[]
   x: string
   y: string
-  picked: number | null
-  onPick: (row: number) => void
+  picked: PickedPoint | null
+  onPick: (pick: PickedPoint) => void
 }) {
   const rows = useQuery(rowsQuery(tableRef, { offset: 0, limit: MAX_POINTS, sort: [], filters }))
   if (rows.isPending) return <Spinner />
@@ -133,7 +139,10 @@ function Plot({
   const px = (v: number) => LEFT + ((v - sx.min) / (sx.max - sx.min)) * (WIDTH - LEFT - RIGHT)
   const py = (v: number) => TOP + (1 - (v - sy.min) / (sy.max - sy.min)) * (HEIGHT - TOP - BOTTOM)
   const total = rows.data.total
-  const row = picked === null ? undefined : rows.data.rows[picked]
+  // A pick is a position in the rows it was made in. Once those are refetched (a statement in the docked console,
+  // say), the same position may be another row: the pick lapses rather than silently pointing elsewhere.
+  const current = picked !== null && picked.at === rows.dataUpdatedAt ? picked.row : null
+  const row = current === null ? undefined : rows.data.rows[current]
   const target = row ? rowFilters(rows.data.keyKind === 'pk' ? rows.data.keyColumns : [], names, row) : null
   return (
     <div className="mt-3 space-y-2">
@@ -178,13 +187,13 @@ function Plot({
                 data-row={p.row}
                 cx={px(p.x)}
                 cy={py(p.y)}
-                r={p.row === picked ? 6 : 4}
+                r={p.row === current ? 6 : 4}
                 className={
-                  p.row === picked
+                  p.row === current
                     ? 'cursor-pointer fill-chart-2 stroke-ink'
                     : 'cursor-pointer fill-chart-1 opacity-80 hover:opacity-100'
                 }
-                onClick={() => onPick(p.row)}
+                onClick={() => onPick({ row: p.row, at: rows.dataUpdatedAt })}
               />
             ))}
           </svg>
@@ -242,9 +251,9 @@ function Plot({
                   <Td>
                     <Button
                       size="sm"
-                      aria-pressed={p.row === picked}
+                      aria-pressed={p.row === current}
                       aria-label={t.pickPoint(x, p.x, y, p.y)}
-                      onClick={() => onPick(p.row)}
+                      onClick={() => onPick({ row: p.row, at: rows.dataUpdatedAt })}
                     >
                       {t.pick}
                     </Button>
