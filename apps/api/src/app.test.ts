@@ -1112,8 +1112,27 @@ describe('export', () => {
     expect((await h.req('/api/databases/shop/export?format=csv&tables=users,posts')).status).toBe(400)
     // Unknown tables are refused before the download starts (a JSON 404, not an aborted stream).
     expect((await h.req('/api/databases/shop/export?format=sql&tables=users,users2')).status).toBe(404)
-    // A format that is not offered (a spreadsheet file) is refused, not guessed at.
+    // A format that is not offered is refused, not guessed at.
     expect((await h.req('/api/databases/shop/export?format=xlsx')).status).toBe(400)
+  })
+
+  it('sends a file per format, packaged as asked, and refuses UPDATE for a table without a key', async () => {
+    const h = harness()
+    stores.push(h.store)
+    await h.login()
+    const ods = await h.req('/api/databases/shop/export?format=ods&tables=users')
+    expect(ods.status).toBe(200)
+    expect(ods.headers.get('content-type')).toBe('application/vnd.oasis.opendocument.spreadsheet')
+    expect(ods.headers.get('content-disposition')).toContain('shop_users.ods')
+    expect(new Uint8Array(await ods.arrayBuffer()).slice(0, 2)).toEqual(new Uint8Array([0x50, 0x4b]))
+    const gz = await h.req('/api/databases/shop/export?format=markdown&compress=gzip&filename=%40DATABASE%40-md')
+    expect(gz.headers.get('content-type')).toBe('application/gzip')
+    expect(gz.headers.get('content-disposition')).toContain('shop-md.md.gz')
+    // A CSV per table lifts the one-table limit and comes as a zip.
+    const zip = await h.req('/api/databases/shop/export?format=csv&filePerTable=1')
+    expect(zip.status).toBe(200)
+    expect(zip.headers.get('content-type')).toBe('application/zip')
+    expect((await h.req('/api/databases/shop/export?format=latex&tables=users&charset=nope')).status).toBe(400)
   })
 })
 

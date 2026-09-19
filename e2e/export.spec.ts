@@ -63,5 +63,41 @@ for (const t of TARGETS) {
       expect(text.match(/<table name="(users|posts)">/g)).toHaveLength(2)
       expect(text.match(/<row>/g)?.length).toBeGreaterThanOrEqual(5)
     })
+
+    test('downloads a spreadsheet file, and a gzip-compressed SQL dump named by a template', async ({ page }) => {
+      await page.goto(tableUrl(t, 'users', '/export'))
+      await page.getByLabel('OpenDocument スプレッドシート（ODS）').check()
+      let downloadPromise = page.waitForEvent('download')
+      await page.getByRole('link', { name: 'ダウンロード' }).click()
+      const ods = await downloadPromise
+      expect(ods.suggestedFilename()).toBe(`${t.database}_users.ods`)
+      const head = await (await ods.createReadStream()).toArray().then((chunks) => Buffer.concat(chunks).subarray(0, 4))
+      // A ZIP file (an OpenDocument file is one): PK\x03\x04.
+      expect([...head]).toEqual([0x50, 0x4b, 0x03, 0x04])
+
+      await page.getByLabel('SQL', { exact: true }).check()
+      await page.getByLabel('圧縮').selectOption('gzip')
+      await page.getByLabel('ファイル名のテンプレート').fill('backup-@TABLE@')
+      await page.getByLabel('出力する行数').fill('2')
+      downloadPromise = page.waitForEvent('download')
+      await page.getByRole('link', { name: 'ダウンロード' }).click()
+      const gz = await downloadPromise
+      expect(gz.suggestedFilename()).toBe('backup-users.sql.gz')
+      const bytes = await (await gz.createReadStream()).toArray().then((chunks) => Buffer.concat(chunks))
+      expect([...bytes.subarray(0, 2)]).toEqual([0x1f, 0x8b])
+    })
+
+    test('lets several tables go out as CSV when each gets its own file', async ({ page }) => {
+      await page.goto(t.schema ? `/db/${t.database}/export?schema=${t.schema}` : `/db/${t.database}/export`)
+      await page.getByLabel('users', { exact: true }).check()
+      await page.getByLabel('posts', { exact: true }).check()
+      await page.getByLabel('CSV', { exact: true }).check()
+      await expect(page.getByRole('button', { name: 'ダウンロード' })).toBeDisabled()
+      await page.getByLabel('テーブルごとに別のファイルにする（zip にまとめます）').check()
+      const downloadPromise = page.waitForEvent('download')
+      await page.getByRole('link', { name: 'ダウンロード' }).click()
+      const zip = await downloadPromise
+      expect(zip.suggestedFilename()).toBe(`${t.database}.zip`)
+    })
   })
 }

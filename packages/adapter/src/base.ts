@@ -862,7 +862,25 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     const d = this.dialect
     // A PostgreSQL identity column declared ALWAYS refuses explicit values without OVERRIDING SYSTEM VALUE.
     const overriding = d === 'postgres' && options.overriding ? ' OVERRIDING SYSTEM VALUE' : ''
-    const head = `INSERT INTO ${quoteTable(d, ns, table)} (${columns.map((c) => quoteIdent(d, c)).join(', ')})${overriding} VALUES `
+    const verb =
+      d === 'mysql'
+        ? options.onDuplicate === 'replace'
+          ? 'REPLACE'
+          : options.onDuplicate === 'ignore'
+            ? 'INSERT IGNORE'
+            : 'INSERT'
+        : 'INSERT'
+    const head = `${verb} INTO ${quoteTable(d, ns, table)} (${columns.map((c) => quoteIdent(d, c)).join(', ')})${overriding} VALUES `
+    // PostgreSQL has neither: a conflicting row is skipped, or its key's other columns are rewritten.
+    const rest = columns.filter((c) => !(options.keyColumns ?? []).includes(c))
+    if (d === 'postgres' && options.onDuplicate === 'replace' && (options.keyColumns ?? []).length === 0)
+      throw new AdapterError('VALIDATION', 'Replacing rows needs a primary key on the table')
+    const tail =
+      d !== 'postgres' || !options.onDuplicate
+        ? ''
+        : options.onDuplicate === 'ignore' || rest.length === 0
+          ? ' ON CONFLICT DO NOTHING'
+          : ` ON CONFLICT (${(options.keyColumns ?? []).map((c) => quoteIdent(d, c)).join(', ')}) DO UPDATE SET ${rest.map((c) => `${quoteIdent(d, c)} = EXCLUDED.${quoteIdent(d, c)}`).join(', ')}`
     const chunk = BaseAdapter.chunkSize(columns.length)
     const it = rows[Symbol.iterator]()
     let first = it.next()
@@ -882,7 +900,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
           .map((row) => `(${columns.map((_, j) => params.add(toDbValue(row[j] ?? null))).join(', ')})`)
           .join(', ')
         try {
-          const r = firstResult(await conn.query(head + values, params.values))
+          const r = firstResult(await conn.query(head + values + tail, params.values))
           affected += r.affectedRows
         } catch (err) {
           const e = err instanceof AdapterError ? err : this.toAdapterError(err)
@@ -1019,7 +1037,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
   async *iterateRows(
     ns: Namespace,
     table: string,
-    opts: { batchSize: number; schema?: TableSchema }
+    opts: { batchSize: number; schema?: TableSchema; utc?: boolean }
   ): AsyncIterable<RowBatch> {
     const schema = opts.schema ?? (await this.describeTable(ns, table))
     const key = this.resolveRowKey(schema)
@@ -1049,6 +1067,8 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     // (no statement timeout: full scans may legitimately be long).
     const { conn, done } = await this.borrow(ns, 0)
     try {
+      // Times as UTC, for a dump restored under a session that reads them as UTC (the pool resets the session after).
+      if (opts.utc) await conn.query("SET SESSION time_zone = '+00:00'")
       if (single && conn.stream) {
         // Streamed rows arrive one at a time, so a key-less table of any size costs one batch of memory.
         const sql = `SELECT ${selectList.join(', ')} FROM ${tableSql}`

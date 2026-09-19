@@ -1,14 +1,14 @@
 import { useQuery } from '@tanstack/react-query'
 import { useRouteContext } from '@tanstack/react-router'
-import type { CsvDelimiter, ExportFormat, ExportTemplate, ExportTemplateBody, TableInfo } from '@tsmyadmin/shared'
-import { CsvDelimiterSchema, EXPORT_TEMPLATE_MAX_TABLES, ExportFormatSchema } from '@tsmyadmin/shared'
+import type { ExportOptions, ExportTemplate, ExportTemplateBody, TableInfo } from '@tsmyadmin/shared'
+import { EXPORT_TEMPLATE_MAX_TABLES, ExportOptionsSchema, SINGLE_TABLE_FORMATS } from '@tsmyadmin/shared'
 import { Download } from 'lucide-react'
 import { useId, useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
-import { Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
 import { tablesQuery } from '@/lib/queries.ts'
+import { CsvFields, FormatFields, OutputFields, SqlFields } from './ExportOptionFields.tsx'
 import { ExportTemplatesPanel } from './ExportTemplatesPanel.tsx'
 import { applyTemplate } from './export-templates.ts'
 import { exportUrl } from './export-url.ts'
@@ -30,15 +30,9 @@ export function ExportForm({ db, schema, table, initialTables }: ExportFormProps
   const dialect = session.dialect
   const tables = useQuery({ ...tablesQuery(db, schema), enabled: table === undefined })
   const [selected, setSelected] = useState<string[]>(table ? [table] : (initialTables ?? []))
-  const [format, setFormat] = useState<ExportFormat>('sql')
-  const [structure, setStructure] = useState(true)
-  const [dropTable, setDropTable] = useState(true)
-  const [data, setData] = useState(true)
-  const [bom, setBom] = useState(true)
-  const [csvSafe, setCsvSafe] = useState(false)
-  const [csvDelimiter, setCsvDelimiter] = useState<CsvDelimiter>('comma')
-  const [routines, setRoutines] = useState(true)
-  const [stripDefiner, setStripDefiner] = useState(false)
+  const [options, setOptions] = useState<ExportOptions>(() => ExportOptionsSchema.parse({}))
+  const set = (patch: Partial<ExportOptions>) => setOptions((o) => ({ ...o, ...patch }))
+  const { format } = options
   /** Tables a loaded template named that are no longer there. */
   const [missing, setMissing] = useState<string[]>([])
   // Views are included: SQL dumps carry their CREATE VIEW, CSV/JSON export their rows.
@@ -54,26 +48,25 @@ export function ExportForm({ db, schema, table, initialTables }: ExportFormProps
   // CSV is one table at a time; views are left out of the count (a DB with one table and a view still exports).
   const csvTables = table ? [table] : effective.filter((n) => available.find((t) => t.name === n)?.kind === 'table')
   const tableCount = csvTables.length
-  const csvBlocked = format === 'csv' && tableCount !== 1
+  const oneTable = SINGLE_TABLE_FORMATS.includes(format)
+  // One file per table lifts the limit: each table gets a CSV of its own.
+  const csvBlocked = oneTable && !options.filePerTable && tableCount !== 1
   const nothing = effective.length === 0
   const url = exportUrl({
     db,
     schema,
     // Every table ticked = the whole database (routines and events included), so no table list is sent.
-    tables: table ? [table] : format === 'csv' ? csvTables : chosen.length === available.length ? [] : chosen,
-    format,
-    structure,
-    dropTable,
-    data,
-    bom,
-    csvSafe,
-    csvDelimiter,
-    routines,
-    stripDefiner,
+    tables: table
+      ? [table]
+      : oneTable && !options.filePerTable
+        ? csvTables
+        : chosen.length === available.length
+          ? []
+          : chosen,
+    ...options,
   })
   // The table list travels in the query string; hundreds of ticked tables would exceed what servers accept.
   const tooLong = url.length > MAX_EXPORT_URL_LENGTH
-  const options = { format, structure, dropTable, data, bom, csvSafe, csvDelimiter, routines, stripDefiner }
   const current: ExportTemplateBody = {
     database: db,
     ...(schema ? { schema } : {}),
@@ -88,15 +81,7 @@ export function ExportForm({ db, schema, table, initialTables }: ExportFormProps
     )
     setSelected(applied.tables)
     setMissing(applied.missing)
-    setFormat(template.options.format)
-    setStructure(template.options.structure)
-    setDropTable(template.options.dropTable)
-    setData(template.options.data)
-    setBom(template.options.bom)
-    setCsvSafe(template.options.csvSafe)
-    setCsvDelimiter(template.options.csvDelimiter)
-    setRoutines(template.options.routines)
-    setStripDefiner(template.options.stripDefiner)
+    setOptions(template.options)
   }
   const blockedReason = csvBlocked
     ? locale.export.csvSingle
@@ -153,92 +138,26 @@ export function ExportForm({ db, schema, table, initialTables }: ExportFormProps
           </div>
         </fieldset>
       )}
-      <fieldset>
-        <legend className="mb-1 text-xs font-medium text-ink-sub">{locale.export.format}</legend>
-        <div className="flex flex-wrap gap-4 text-sm">
-          {ExportFormatSchema.options.map((f) => (
-            <label key={f} className="flex items-center gap-1">
-              <input type="radio" name="export-format" value={f} checked={format === f} onChange={() => setFormat(f)} />
-              {locale.export.formats[f]}
-            </label>
-          ))}
-        </div>
-      </fieldset>
+      <FormatFields options={options} set={set} />
       {format === 'sql' ? (
-        <div className="flex gap-4 text-sm">
-          <label className="flex items-center gap-1">
-            <input type="checkbox" checked={structure} onChange={(e) => setStructure(e.target.checked)} />
-            {locale.export.structure}
-          </label>
-          <label className="ml-4 flex items-center gap-1 text-sm">
-            <input
-              type="checkbox"
-              checked={dropTable}
-              disabled={!structure}
-              onChange={(e) => setDropTable(e.target.checked)}
-            />
-            {locale.export.dropTable}
-          </label>
-          <label className="flex items-center gap-1">
-            <input type="checkbox" checked={data} onChange={(e) => setData(e.target.checked)} />
-            {locale.export.data}
-          </label>
-        </div>
-      ) : null}
-      {format === 'sql' ? (
-        <div className="flex flex-wrap gap-4 text-sm">
-          <label className="flex items-center gap-1">
-            <input
-              type="checkbox"
-              checked={routines}
-              disabled={!structure}
-              onChange={(e) => setRoutines(e.target.checked)}
-            />
-            {table || (chosen.length > 0 && chosen.length < available.length)
-              ? locale.export.triggersOnly
-              : locale.export.routines}
-          </label>
-          {dialect === 'mysql' ? (
-            <label className="flex items-center gap-1">
-              <input
-                type="checkbox"
-                checked={stripDefiner}
-                disabled={!structure}
-                onChange={(e) => setStripDefiner(e.target.checked)}
-              />
-              {locale.export.stripDefiner}
-            </label>
-          ) : null}
-        </div>
+        <SqlFields
+          options={options}
+          set={set}
+          dialect={dialect}
+          triggersOnly={Boolean(table) || (chosen.length > 0 && chosen.length < available.length)}
+        />
       ) : null}
       {format === 'markdown' ? <p className="text-xs text-ink-sub">{locale.export.markdownHint}</p> : null}
-      {format === 'csv' ? (
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-sm">
-            <label htmlFor="export-csv-delimiter">{locale.export.csvDelimiter}</label>
-            <Select
-              id="export-csv-delimiter"
-              value={csvDelimiter}
-              onChange={(e) => setCsvDelimiter(e.target.value as CsvDelimiter)}
-            >
-              {CsvDelimiterSchema.options.map((d) => (
-                <option key={d} value={d}>
-                  {locale.export.csvDelimiters[d]}
-                </option>
-              ))}
-            </Select>
-          </div>
-          <label className="flex items-center gap-1 text-sm">
-            <input type="checkbox" checked={bom} onChange={(e) => setBom(e.target.checked)} />
-            {locale.export.bom}
-          </label>
-          <label className="flex items-center gap-1 text-sm">
-            <input type="checkbox" checked={csvSafe} onChange={(e) => setCsvSafe(e.target.checked)} />
-            {locale.export.csvSafe}
-          </label>
-          <p className="text-xs text-ink-sub">{locale.export.csvSafeHint}</p>
-        </div>
+      {format === 'latex' || format === 'texy' || format === 'mediawiki' || format === 'html' ? (
+        <p className="text-xs text-ink-sub">
+          {format === 'html' ? locale.export.htmlHint : locale.export.documentHint}
+        </p>
       ) : null}
+      {format === 'ods' || format === 'odt' || format === 'docx' ? (
+        <p className="text-xs text-ink-sub">{locale.export.officeHint}</p>
+      ) : null}
+      {format === 'csv' || format === 'csvExcel' ? <CsvFields options={options} set={set} /> : null}
+      <OutputFields options={options} set={set} />
       {table ? null : (
         <ExportTemplatesPanel
           db={db}

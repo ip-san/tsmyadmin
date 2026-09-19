@@ -313,6 +313,19 @@ for (const t of TARGETS) {
       await page.goto(`/db/${t.database}/export`)
       await page.getByRole('link', { name: 'ダウンロード' }).waitFor()
       await scan(page)
+      // The database-level import with a CSV chosen (every option field shown), and the server-level pair.
+      await page.goto(t.schema ? `/db/${t.database}/import?schema=${t.schema}` : `/db/${t.database}/import`)
+      await page.getByRole('radio', { name: 'CSV', exact: true }).check()
+      await page.getByLabel('囲み文字').waitFor()
+      await scan(page)
+      await page.getByRole('radio', { name: 'SQL', exact: true }).check()
+      await page.getByLabel('外部キー制約のチェックを無効にする').waitFor()
+      await scan(page)
+      for (const path of ['/server-import', '/server-export']) {
+        await page.goto(path)
+        await page.getByRole('heading', { level: 2 }).waitFor()
+        await scan(page)
+      }
       // Central columns with one definition in the list (kept in this browser on this server).
       await page.goto(t.schema ? `/db/${t.database}/central?schema=${t.schema}` : `/db/${t.database}/central`)
       const add = page.locator('form').filter({ has: page.getByRole('button', { name: '追加する' }) })

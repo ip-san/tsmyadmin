@@ -1,8 +1,50 @@
 import { z } from 'zod'
 import { FlagSchema } from './common.ts'
 
-export const ExportFormatSchema = z.enum(['sql', 'csv', 'json', 'xml', 'yaml', 'markdown'])
+export const ExportFormatSchema = z.enum([
+  'sql',
+  'csv',
+  'csvExcel',
+  'json',
+  'xml',
+  'yaml',
+  'markdown',
+  'latex',
+  'texy',
+  'mediawiki',
+  'html',
+  'ods',
+  'odt',
+  'docx',
+])
 export type ExportFormat = z.infer<typeof ExportFormatSchema>
+
+/** Formats that hold one table's rows only (a table per file): the CSV family. */
+export const SINGLE_TABLE_FORMATS: readonly ExportFormat[] = ['csv', 'csvExcel']
+/** Formats that are binary (ZIP-based): no character set applies to them. */
+export const BINARY_FORMATS: readonly ExportFormat[] = ['ods', 'odt', 'docx']
+
+/** How the file is compressed: as one .gz, or as a .zip (which is what one file per table also makes). */
+export const ExportCompressionSchema = z.enum(['none', 'gzip', 'zip'])
+export type ExportCompression = z.infer<typeof ExportCompressionSchema>
+
+/** How SQL dumps write the rows. */
+export const ExportStatementSchema = z.enum(['insert', 'update', 'replace'])
+export type ExportStatement = z.infer<typeof ExportStatementSchema>
+
+/** Character sets a text export can be written in (UTF-8 is the default; the rest are for older programs). */
+export const EXPORT_CHARSETS = [
+  'utf-8',
+  'cp932',
+  'euc-jp',
+  'iso-8859-1',
+  'windows-1252',
+  'gbk',
+  'big5',
+  'euc-kr',
+] as const
+export const ExportCharsetSchema = z.enum(EXPORT_CHARSETS)
+export type ExportCharset = z.infer<typeof ExportCharsetSchema>
 
 /** CSV field separators: a semicolon is what Excel expects where the decimal separator is a comma. */
 export const CSV_DELIMITERS = { comma: ',', semicolon: ';', tab: '\t' } as const
@@ -34,6 +76,39 @@ export const ExportQuerySchema = z.object({
   routines: FlagSchema.default('1'),
   /** SQL (MySQL): drop `DEFINER=...` clauses so the dump restores under another account. */
   stripDefiner: FlagSchema.default('0'),
+  compress: ExportCompressionSchema.default('none'),
+  /** One file per table, in a ZIP. */
+  filePerTable: FlagSchema.default('0'),
+  /** File name template: `@DATABASE@`, `@TABLE@`, `@SERVER@` and the date parts `%Y %m %d %H %M %S`. */
+  filename: z.string().max(200).optional(),
+  charset: ExportCharsetSchema.default('utf-8'),
+  /** SQL: what the data is written as. `update` and `replace` need a primary key on every table. */
+  statement: ExportStatementSchema.default('insert'),
+  /** SQL: name the columns in every INSERT. */
+  columnNames: FlagSchema.default('1'),
+  /** SQL: several rows to an INSERT (false: one statement per row). */
+  extended: FlagSchema.default('1'),
+  /** SQL: the most bytes of one extended INSERT; 0 is no limit beyond a batch of rows. */
+  maxQuery: z.coerce.number().int().min(0).max(100_000_000).default(0),
+  /** SQL: INSERT IGNORE (MySQL) / ON CONFLICT DO NOTHING (PostgreSQL). */
+  ignore: FlagSchema.default('0'),
+  /** SQL: times as UTC, with the session set to UTC around them. */
+  utc: FlagSchema.default('0'),
+  /** SQL: the whole dump in one transaction. */
+  transaction: FlagSchema.default('0'),
+  /** SQL: views become tables holding their rows. */
+  viewsAsTables: FlagSchema.default('0'),
+  /** SQL: CREATE DATABASE IF NOT EXISTS + USE (PostgreSQL: CREATE SCHEMA + search_path). */
+  createDatabase: FlagSchema.default('0'),
+  /** SQL: CREATE TABLE IF NOT EXISTS. */
+  ifNotExists: FlagSchema.default('0'),
+  /** SQL: comment lines and section headings. */
+  comments: FlagSchema.default('1'),
+  /** SQL (MySQL): LOCK TABLES … WRITE around each table's rows. */
+  lockTables: FlagSchema.default('0'),
+  /** Every format: only these rows of each table (offset, then a limit; 0 is no limit). */
+  rowOffset: z.coerce.number().int().min(0).max(1_000_000_000_000).default(0),
+  rowLimit: z.coerce.number().int().min(0).max(1_000_000_000_000).default(0),
 })
 export type ExportQuery = z.infer<typeof ExportQuerySchema>
 
@@ -51,6 +126,24 @@ export const ExportOptionsSchema = z.object({
   csvDelimiter: CsvDelimiterSchema.default('comma'),
   routines: z.boolean().default(true),
   stripDefiner: z.boolean().default(false),
+  compress: ExportCompressionSchema.default('none'),
+  filePerTable: z.boolean().default(false),
+  filename: z.string().max(200).default(''),
+  charset: ExportCharsetSchema.default('utf-8'),
+  statement: ExportStatementSchema.default('insert'),
+  columnNames: z.boolean().default(true),
+  extended: z.boolean().default(true),
+  maxQuery: z.number().int().min(0).default(0),
+  ignore: z.boolean().default(false),
+  utc: z.boolean().default(false),
+  transaction: z.boolean().default(false),
+  viewsAsTables: z.boolean().default(false),
+  createDatabase: z.boolean().default(false),
+  ifNotExists: z.boolean().default(false),
+  comments: z.boolean().default(true),
+  lockTables: z.boolean().default(false),
+  rowOffset: z.number().int().min(0).default(0),
+  rowLimit: z.number().int().min(0).default(0),
 })
 export type ExportOptions = z.infer<typeof ExportOptionsSchema>
 
@@ -95,6 +188,16 @@ export function exportTemplateKey(template: { database: string; schema?: string 
   return JSON.stringify([template.database, template.schema ?? '', template.name])
 }
 export type ExportQueryInput = z.input<typeof ExportQuerySchema>
+
+/**
+ * Query of GET /server/export: several databases (MySQL) or schemas of the connected database (PostgreSQL) as one SQL
+ * dump, each written with its own CREATE DATABASE / CREATE SCHEMA. `filePerTable` here means one file per target.
+ */
+export const ServerExportQuerySchema = ExportQuerySchema.omit({ schema: true, tables: true, format: true }).extend({
+  /** Comma-separated database (or schema) names, percent-encoded like a table list. */
+  targets: z.string().min(1),
+})
+export type ServerExportQuery = z.infer<typeof ServerExportQuerySchema>
 
 /** NULL marker used in CSV exports (phpMyAdmin default). */
 /** Query-string form of a table list: names percent-encoded so `,` (and leading spaces) survive; deduplicated. */

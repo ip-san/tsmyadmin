@@ -97,6 +97,10 @@ export interface AdapterErrorExtra {
 export interface InsertRowsOptions {
   /** PostgreSQL: values for a GENERATED ALWAYS AS IDENTITY column are given (OVERRIDING SYSTEM VALUE). */
   overriding?: boolean
+  /** A row whose key exists already: left out (`ignore`) or written over the old one (`replace`). Default: an error. */
+  onDuplicate?: 'ignore' | 'replace'
+  /** The primary key, which `replace` needs on PostgreSQL. */
+  keyColumns?: string[]
 }
 
 export class AdapterError extends Error {
@@ -153,6 +157,24 @@ export interface ProgramStatement {
   timeZone?: string | null
 }
 
+/** How a table's rows are written into a dump. */
+export interface InsertOptions {
+  /** PostgreSQL identity ALWAYS columns need OVERRIDING SYSTEM VALUE. */
+  overriding?: boolean
+  /** `insert` (default), `replace` (MySQL REPLACE; PostgreSQL ON CONFLICT … DO UPDATE) or `update` (by primary key). */
+  kind?: 'insert' | 'replace' | 'update'
+  /** INSERT IGNORE (MySQL) / ON CONFLICT DO NOTHING (PostgreSQL). */
+  ignore?: boolean
+  /** Name the columns in every INSERT (default true). False writes VALUES in table order. */
+  columnNames?: boolean
+  /** Several rows to an INSERT (default true); false writes one statement per row. */
+  extended?: boolean
+  /** With `extended`: the most bytes of one statement (a row that is longer alone still goes out alone). */
+  maxQuery?: number
+  /** The primary key, for `update` and `replace`. */
+  keyColumns?: string[]
+}
+
 export interface SqlExporter {
   /**
    * Statements emitted once at the top / bottom of a SQL dump so it restores the way it was written
@@ -174,7 +196,7 @@ export interface SqlExporter {
    * One multi-row INSERT for `rows` (empty string when rows is empty). Includes the trailing semicolon.
    * `overriding` (PostgreSQL) adds OVERRIDING SYSTEM VALUE so GENERATED ALWAYS AS IDENTITY values are kept.
    */
-  insert(ns: Namespace, table: string, columns: string[], rows: Cell[][], options?: { overriding?: boolean }): string
+  insert(ns: Namespace, table: string, columns: string[], rows: Cell[][], options?: InsertOptions): string
   /** Statements to run after a table's data (PostgreSQL: advance identity/serial sequences past the loaded ids). */
   afterData(ns: Namespace, schema: TableSchema): string[]
   /** SQL literal for a wire cell. */
@@ -269,7 +291,11 @@ export interface DatabaseAdapter {
    * Reads every row in stable order, `batchSize` rows at a time (for exports). An empty table yields one
    * batch with `columns` and no rows, so callers always learn the column list.
    */
-  iterateRows(ns: Namespace, table: string, opts: { batchSize: number; schema?: TableSchema }): AsyncIterable<RowBatch>
+  iterateRows(
+    ns: Namespace,
+    table: string,
+    opts: { batchSize: number; schema?: TableSchema; utc?: boolean }
+  ): AsyncIterable<RowBatch>
   /** Login accounts (MySQL mysql.user, PostgreSQL pg_roles). Requires read privileges on the catalog. */
   /** Namespace that any account can use for server-level statements (MySQL: information_schema; PostgreSQL: the login database). */
   readonly serverNamespace: Namespace

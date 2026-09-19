@@ -1,45 +1,76 @@
+import { ExportOptionsSchema, ExportQuerySchema } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
 import { exportUrl } from './export-url.ts'
 
+const options = (over: Record<string, unknown> = {}) => ExportOptionsSchema.parse(over)
+const queryOf = (url: string) => Object.fromEntries(new URL(url, 'http://x').searchParams)
+
 describe('exportUrl', () => {
   it('encodes database, schema and table list', () => {
-    expect(
-      exportUrl({
-        db: 'my db',
-        schema: 'app',
-        tables: ['a', 'b,c'],
-        format: 'csv',
-        structure: false,
-        dropTable: true,
-        data: true,
-        bom: false,
-        csvSafe: false,
-        csvDelimiter: 'comma' as const,
-        routines: true,
-        stripDefiner: false,
-      })
-    ).toBe(
-      '/api/databases/my%20db/export?schema=app&tables=a%2Cb%252Cc&format=csv&structure=0&dropTable=1&data=1&bom=0&csvSafe=0&csvDelimiter=comma&routines=1&stripDefiner=0'
+    const url = exportUrl({
+      db: 'my db',
+      schema: 'app',
+      tables: ['a', 'b,c'],
+      ...options({ format: 'csv', structure: false, bom: false }),
+    })
+    expect(url.startsWith('/api/databases/my%20db/export?schema=app&tables=a%2Cb%252Cc&format=csv&structure=0&')).toBe(
+      true
     )
   })
 
   it('omits tables when exporting everything', () => {
-    expect(
-      exportUrl({
-        db: 'x',
-        tables: [],
-        format: 'sql',
-        structure: true,
-        dropTable: false,
-        data: true,
-        bom: true,
-        csvSafe: false,
-        csvDelimiter: 'comma' as const,
-        routines: false,
-        stripDefiner: true,
-      })
-    ).toBe(
-      '/api/databases/x/export?format=sql&structure=1&dropTable=0&data=1&bom=1&csvSafe=0&csvDelimiter=comma&routines=0&stripDefiner=1'
-    )
+    const url = exportUrl({
+      db: 'x',
+      tables: [],
+      ...options({ dropTable: false, routines: false, stripDefiner: true }),
+    })
+    expect(queryOf(url)).toMatchObject({ format: 'sql', dropTable: '0', routines: '0', stripDefiner: '1' })
+    expect(queryOf(url).tables).toBeUndefined()
+  })
+
+  it('carries every choice in a form the endpoint accepts, and reads back as what was chosen', () => {
+    const chosen = options({
+      format: 'ods',
+      compress: 'zip',
+      filePerTable: true,
+      filename: '@DATABASE@-%Y%m%d',
+      charset: 'cp932',
+      statement: 'replace',
+      columnNames: false,
+      extended: false,
+      maxQuery: 5000,
+      ignore: true,
+      utc: true,
+      transaction: true,
+      viewsAsTables: true,
+      createDatabase: true,
+      ifNotExists: true,
+      comments: false,
+      lockTables: true,
+      rowOffset: 10,
+      rowLimit: 25,
+    })
+    const parsed = ExportQuerySchema.parse(queryOf(exportUrl({ db: 'x', tables: [], ...chosen })))
+    expect(parsed).toMatchObject({
+      format: 'ods',
+      compress: 'zip',
+      filePerTable: '1',
+      filename: '@DATABASE@-%Y%m%d',
+      charset: 'cp932',
+      statement: 'replace',
+      columnNames: '0',
+      extended: '0',
+      maxQuery: 5000,
+      ignore: '1',
+      utc: '1',
+      transaction: '1',
+      viewsAsTables: '1',
+      createDatabase: '1',
+      ifNotExists: '1',
+      comments: '0',
+      lockTables: '1',
+      rowOffset: 10,
+      rowLimit: 25,
+    })
   })
 })

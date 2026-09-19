@@ -159,6 +159,105 @@ describe.each(targets)('API integration ($dialect)', ({ dialect, url }) => {
     }
   })
 
+  it('restores dumps written with the SQL options: REPLACE, UPDATE, one row per statement, IF NOT EXISTS, a transaction, no comments', async () => {
+    const t = `dump_opts_${dialect}`
+    const sql = async (text: string, db = 'tsmyadmin_test') =>
+      req(`/api/databases/${db}/sql`, { method: 'POST', body: JSON.stringify({ sql: text }) })
+    const rows = async () =>
+      BrowseResultSchema.parse(await (await req(`/api/databases/tsmyadmin_test/tables/${t}/rows`)).json()).rows
+    const run = async (dump: string) => {
+      const restored = z.array(StatementResultSchema).parse(await (await sql(dump)).json())
+      expect(restored.filter((r) => r.kind === 'error')).toEqual([])
+    }
+    const dumpOf = async (params: string) =>
+      (await req(`/api/databases/tsmyadmin_test/export?tables=${t}&format=sql&${params}`)).text()
+    await sql(`DROP TABLE IF EXISTS ${t}`)
+    await sql(
+      `CREATE TABLE ${t} (id INT PRIMARY KEY, name VARCHAR(20)); INSERT INTO ${t} VALUES (1, 'one'), (2, 'two'), (3, 'three')`
+    )
+    try {
+      // Rows written one to a statement, as REPLACE / ON CONFLICT, over a table that is there already.
+      const replace = await dumpOf('structure=0&data=1&statement=replace&extended=0&transaction=1&comments=0')
+      expect(replace).not.toContain('-- Table:')
+      expect(replace.match(/^(REPLACE|INSERT) INTO/gm)).toHaveLength(3)
+      await sql(`UPDATE ${t} SET name = 'changed'; DELETE FROM ${t} WHERE id = 3`)
+      await run(replace)
+      expect(await rows()).toEqual([
+        [1, 'one'],
+        [2, 'two'],
+        [3, 'three'],
+      ])
+
+      // UPDATE by primary key puts values back without touching which rows exist.
+      const update = await dumpOf('structure=0&data=1&statement=update')
+      expect(update).toContain('UPDATE')
+      await sql(`UPDATE ${t} SET name = 'x'; INSERT INTO ${t} VALUES (4, 'four')`)
+      await run(update)
+      expect(await rows()).toEqual([
+        [1, 'one'],
+        [2, 'two'],
+        [3, 'three'],
+        [4, 'four'],
+      ])
+
+      // IF NOT EXISTS + IGNORE restore over what is there without an error or a duplicate.
+      const gentle = await dumpOf('dropTable=0&ifNotExists=1&ignore=1')
+      expect(gentle).toMatch(/CREATE TABLE IF NOT EXISTS/)
+      await run(gentle)
+      expect(await rows()).toHaveLength(4)
+
+      // A range: the middle two rows of the table.
+      const middle = await dumpOf('structure=0&rowOffset=1&rowLimit=2')
+      expect(middle).toContain("'two'")
+      expect(middle).toContain("'three'")
+      expect(middle).not.toContain("'one'")
+      expect(middle).not.toContain("'four'")
+      // Without a key an UPDATE dump is refused before it starts.
+      const keyless = `${t}_keyless`
+      await sql(`DROP TABLE IF EXISTS ${keyless}; CREATE TABLE ${keyless} (a INT)`)
+      const refused = await req(`/api/databases/tsmyadmin_test/export?tables=${keyless}&format=sql&statement=update`)
+      await sql(`DROP TABLE IF EXISTS ${keyless}`)
+      expect(refused.status).toBe(400)
+    } finally {
+      await sql(`DROP TABLE IF EXISTS ${t}`)
+    }
+  })
+
+  it('writes a view as a table with its rows when asked, and packages a dump as gzip and as a zip', async () => {
+    const t = `dump_vt_${dialect}`
+    const v = `${t}_v`
+    const sql = async (text: string, db = 'tsmyadmin_test') =>
+      req(`/api/databases/${db}/sql`, { method: 'POST', body: JSON.stringify({ sql: text }) })
+    await sql(`DROP VIEW IF EXISTS ${v}; DROP TABLE IF EXISTS ${t}`)
+    await sql(
+      `CREATE TABLE ${t} (id INT PRIMARY KEY, name VARCHAR(20)); INSERT INTO ${t} VALUES (1, 'one'), (2, 'two'); CREATE VIEW ${v} AS SELECT id, name FROM ${t} WHERE id > 1`
+    )
+    try {
+      const dump = await (
+        await req(`/api/databases/tsmyadmin_test/export?tables=${v}&format=sql&viewsAsTables=1`)
+      ).text()
+      expect(dump).toContain(`CREATE TABLE`)
+      expect(dump).not.toContain('CREATE VIEW')
+      // Restored into another database the view's rows are a table's.
+      const other = dialect === 'mysql' ? 'tsmyadmin_other' : 'tsmyadmin_test'
+      const restore = dialect === 'mysql' ? dump : dump.replace(new RegExp(v, 'g'), `${v}_copy`)
+      const restored = z.array(StatementResultSchema).parse(await (await sql(restore, other)).json())
+      expect(restored.filter((r) => r.kind === 'error')).toEqual([])
+      const name = dialect === 'mysql' ? v : `${v}_copy`
+      const copied = BrowseResultSchema.parse(await (await req(`/api/databases/${other}/tables/${name}/rows`)).json())
+      expect(copied.rows.map((r) => r.slice(0, 2))).toEqual([[2, 'two']])
+      await sql(`DROP TABLE IF EXISTS ${name}`, other)
+
+      const gz = await req(`/api/databases/tsmyadmin_test/export?tables=${t}&format=sql&compress=gzip`)
+      expect(gz.headers.get('content-type')).toBe('application/gzip')
+      expect(new Uint8Array(await gz.arrayBuffer()).slice(0, 2)).toEqual(new Uint8Array([0x1f, 0x8b]))
+      const zip = await req(`/api/databases/tsmyadmin_test/export?tables=${t}&format=csv&filePerTable=1`)
+      expect(zip.headers.get('content-type')).toBe('application/zip')
+    } finally {
+      await sql(`DROP VIEW IF EXISTS ${v}; DROP TABLE IF EXISTS ${t}`)
+    }
+  })
+
   it('leaves generated columns out of the INSERTs it writes', async () => {
     // The server computes them; listing one in an INSERT makes the whole dump unrestorable.
     const t = `dump_gen_${dialect}`
@@ -420,6 +519,190 @@ describe.each(targets)('API integration ($dialect)', ({ dialect, url }) => {
       : [{ type: 'fatal' as const, error: ApiErrorSchema.parse(JSON.parse(text)) }]
     return { status: res.status, events, last: events.at(-1) }
   }
+
+  /** Like `upload`, to any import endpoint and with a file of any name. */
+  const uploadTo = async (path: string, fields: Record<string, string>, body: string | Uint8Array, name = 'f.csv') => {
+    const fd = new FormData()
+    for (const [k, v] of Object.entries(fields)) fd.set(k, v)
+    fd.set('file', new File([body], name))
+    const res = await app.request(path, { method: 'POST', body: fd, headers: { cookie, origin: 'http://localhost' } })
+    const text = await res.text()
+    const events = res.ok
+      ? text
+          .trim()
+          .split('\n')
+          .filter((l) => l.length > 0)
+          .map((l) => ImportEventSchema.parse(JSON.parse(l)))
+      : [{ type: 'fatal' as const, error: ApiErrorSchema.parse(JSON.parse(text)) }]
+    return { status: res.status, events, last: events.at(-1) }
+  }
+  const IMPORT = '/api/databases/tsmyadmin_test/import'
+  const runSql = (sql: string) =>
+    req('/api/databases/tsmyadmin_test/sql', { method: 'POST', body: JSON.stringify({ sql }) })
+  const firstColumns = async (table: string, n = 2) =>
+    BrowseResultSchema.parse(await (await req(`/api/databases/tsmyadmin_test/tables/${table}/rows`)).json()).rows.map(
+      (r) => r.slice(0, n)
+    )
+
+  it('loads a CSV with its own enclosure, escape and skip, and on a duplicate key ignores or replaces', async () => {
+    const t = `imp_opts_${dialect}`
+    await runSql(`DROP TABLE IF EXISTS ${t}`)
+    await runSql(`CREATE TABLE ${t} (id INT PRIMARY KEY, name VARCHAR(30))`)
+    try {
+      const csv = "id;name\n1;'a;b'\n2;'it\\'s'\n3;'three'\n"
+      const first = await uploadTo(
+        IMPORT,
+        { format: 'csv', table: t, delimiter: ';', enclosure: "'", escape: '\\', skip: '1' },
+        csv
+      )
+      expect(first.last).toMatchObject({ type: 'result', result: { format: 'csv', inserted: 2, skipped: 1 } })
+      expect(await firstColumns(t)).toEqual([
+        [2, "it's"],
+        [3, 'three'],
+      ])
+      const again = 'id,name\n2,changed\n4,four\n'
+      expect((await uploadTo(IMPORT, { format: 'csv', table: t }, again)).last).toMatchObject({ type: 'fatal' })
+      await uploadTo(IMPORT, { format: 'csv', table: t, onDuplicate: 'ignore' }, again)
+      expect(await firstColumns(t)).toEqual([
+        [2, "it's"],
+        [3, 'three'],
+        [4, 'four'],
+      ])
+      await uploadTo(IMPORT, { format: 'csv', table: t, onDuplicate: 'replace' }, again)
+      expect(await firstColumns(t)).toEqual([
+        [2, 'changed'],
+        [3, 'three'],
+        [4, 'four'],
+      ])
+    } finally {
+      await runSql(`DROP TABLE IF EXISTS ${t}`)
+    }
+  })
+
+  it('creates the table from a CSV, and from a spreadsheet the export wrote', async () => {
+    const t = `imp_new_${dialect}`
+    const src = `imp_src_${dialect}`
+    const copy = `imp_copy_${dialect}`
+    for (const name of [t, src, copy]) await runSql(`DROP TABLE IF EXISTS ${name}`)
+    try {
+      const csv = 'n,price,day,label\n1,1.50,2026-01-02,x\n22,20.25,2026-02-03,\\N\n'
+      const made = await uploadTo(IMPORT, { format: 'csv', table: t, createTable: '1' }, csv)
+      expect(made.last).toMatchObject({ type: 'result', result: { format: 'csv', inserted: 2 } })
+      const created = (made.last as { result: { created: { dataType: string }[] } }).result.created
+      expect(created.map((c) => c.dataType.toUpperCase().replace(/\(.*/, ''))).toEqual([
+        'INT',
+        'DECIMAL',
+        'DATE',
+        'VARCHAR',
+      ])
+      // The table exists now: a second create is refused.
+      expect((await uploadTo(IMPORT, { format: 'csv', table: t, createTable: '1' }, csv)).last).toMatchObject({
+        type: 'fatal',
+      })
+
+      await runSql(`CREATE TABLE ${src} (id INT PRIMARY KEY, name VARCHAR(20))`)
+      await runSql(`INSERT INTO ${src} VALUES (1, 'one'), (2, NULL)`)
+      const ods = new Uint8Array(
+        await (await req(`/api/databases/tsmyadmin_test/export?tables=${src}&format=ods`)).arrayBuffer()
+      )
+      const loaded = await uploadTo(IMPORT, { format: 'ods', table: copy, createTable: '1' }, ods, 'x.ods')
+      expect(loaded.last).toMatchObject({ type: 'result', result: { format: 'ods', inserted: 2 } })
+      expect(await firstColumns(copy)).toEqual([
+        [1, 'one'],
+        [2, null],
+      ])
+    } finally {
+      for (const name of [t, src, copy]) await runSql(`DROP TABLE IF EXISTS ${name}`)
+    }
+  })
+
+  it('opens gzip and zip uploads, reads a Shift_JIS file, and starts a SQL script partway', async () => {
+    const t = `imp_pack_${dialect}`
+    await runSql(`DROP TABLE IF EXISTS ${t}`)
+    await runSql(`CREATE TABLE ${t} (id INT PRIMARY KEY, name VARCHAR(30))`)
+    try {
+      const { gzipSync } = await import('node:zlib')
+      const iconv = (await import('iconv-lite')).default
+      const { zipStream } = await import('./lib/zip.ts')
+      const sql = `INSERT INTO ${t} VALUES (1, 'a');\nINSERT INTO ${t} VALUES (2, 'b');\nINSERT INTO ${t} VALUES (3, 'c');\n`
+      const gz = await uploadTo(IMPORT, { format: 'sql', skip: '1' }, new Uint8Array(gzipSync(sql)), 'd.sql.gz')
+      expect(gz.last).toMatchObject({ type: 'result', result: { format: 'sql', succeeded: 2 } })
+      expect(await firstColumns(t)).toEqual([
+        [2, 'b'],
+        [3, 'c'],
+      ])
+      await runSql(`DELETE FROM ${t}`)
+      const zipped = new Uint8Array(
+        Buffer.concat(await Array.fromAsync(zipStream([{ name: 'd.sql', data: sql }], new Date())))
+      )
+      expect((await uploadTo(IMPORT, { format: 'sql' }, zipped, 'd.zip')).last).toMatchObject({
+        result: { succeeded: 3 },
+      })
+      await runSql(`DELETE FROM ${t}`)
+      const sjis = new Uint8Array(iconv.encode(`INSERT INTO ${t} VALUES (1, '日本語');`, 'cp932'))
+      expect((await uploadTo(IMPORT, { format: 'sql', charset: 'cp932' }, sjis, 's.sql')).last).toMatchObject({
+        result: { succeeded: 1 },
+      })
+      expect(await firstColumns(t)).toEqual([[1, '日本語']])
+      // The same bytes read as UTF-8 are refused up front.
+      expect((await uploadTo(IMPORT, { format: 'sql' }, sjis, 's.sql')).status).toBe(400)
+    } finally {
+      await runSql(`DROP TABLE IF EXISTS ${t}`)
+    }
+  })
+
+  it('keeps a zero in an AUTO_INCREMENT column when asked (MySQL)', async () => {
+    if (dialect !== 'mysql') return
+    const t = 'imp_zero_mysql'
+    await runSql(`DROP TABLE IF EXISTS ${t}`)
+    await runSql(`CREATE TABLE ${t} (id INT AUTO_INCREMENT PRIMARY KEY, v INT)`)
+    try {
+      const script = `INSERT INTO ${t} (id, v) VALUES (0, 7);`
+      await uploadTo(IMPORT, { format: 'sql', noAutoValueOnZero: '1' }, script, 'z.sql')
+      expect((await firstColumns(t, 1)).flat()).toEqual([0])
+      await runSql(`DELETE FROM ${t}`)
+      await uploadTo(IMPORT, { format: 'sql' }, script, 'z.sql')
+      expect((await firstColumns(t, 1)).flat()).not.toEqual([0])
+    } finally {
+      await runSql(`DROP TABLE IF EXISTS ${t}`)
+    }
+  })
+
+  it('dumps several databases (MySQL) or schemas (PostgreSQL) together and restores them at the server level', async () => {
+    const mysql = dialect === 'mysql'
+    const a = `it_srv_a_${dialect}`
+    const b = `it_srv_b_${dialect}`
+    const kind = mysql ? 'DATABASE' : 'SCHEMA'
+    const cleanup = async () => {
+      for (const name of [a, b])
+        await runSql(mysql ? `DROP DATABASE IF EXISTS ${name}` : `DROP SCHEMA IF EXISTS ${name} CASCADE`)
+    }
+    await cleanup()
+    await runSql(`CREATE ${kind} ${a}`)
+    await runSql(`CREATE ${kind} ${b}`)
+    try {
+      await runSql(`CREATE TABLE ${a}.t (id INT PRIMARY KEY)`)
+      await runSql(`INSERT INTO ${a}.t VALUES (1), (2)`)
+      await runSql(`CREATE TABLE ${b}.u (name VARCHAR(10))`)
+      await runSql(`INSERT INTO ${b}.u VALUES ('x')`)
+      const res = await req(`/api/server/export?targets=${a},${b}`)
+      expect(res.status).toBe(200)
+      const dump = await res.text()
+      expect(dump).toContain(mysql ? `CREATE DATABASE IF NOT EXISTS \`${a}\`` : `CREATE SCHEMA IF NOT EXISTS "${a}"`)
+      expect(dump).toContain(`INSERT INTO`)
+      expect((await req('/api/server/export?targets=nope_missing')).status).toBe(404)
+      await cleanup()
+      const restored = await uploadTo('/api/server/import', { format: 'sql' }, dump, 'all.sql')
+      expect(restored.last).toMatchObject({ type: 'result', result: { format: 'sql', failed: 0 } })
+      const rows = await runSql(`SELECT id FROM ${a}.t ORDER BY id`)
+      expect(JSON.stringify(await rows.json())).toContain('"rows":[[1],[2]]')
+      const zip = await req(`/api/server/export?targets=${a},${b}&filePerTable=1`)
+      expect(zip.headers.get('content-type')).toBe('application/zip')
+      expect(new Uint8Array(await zip.arrayBuffer()).slice(0, 2)).toEqual(new Uint8Array([0x50, 0x4b]))
+    } finally {
+      await cleanup()
+    }
+  })
 
   it('imports a pg_dump plain-format file: \\restrict header and COPY … FROM stdin data', async () => {
     if (dialect !== 'postgres') return

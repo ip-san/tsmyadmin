@@ -1,8 +1,18 @@
 import type { DatabaseAdapter, DropTarget, ProgramStatement } from '@tsmyadmin/adapter'
-import { AdapterError, commentText, quoteTable, splitStatements } from '@tsmyadmin/adapter'
+import {
+  AdapterError,
+  commentText,
+  createNamespaceStatements,
+  createTableFromColumns,
+  quoteIdent,
+  quoteTable,
+  splitStatements,
+} from '@tsmyadmin/adapter'
 import type { ExportQuery, Namespace, ObjectDependency, TableInfo } from '@tsmyadmin/shared'
 import { CSV_DELIMITERS, csvField, EXPORT_BATCH_SIZE, isGeneratedColumn } from '@tsmyadmin/shared'
+import { htmlBody, latexBody, mediawikiBody, texyBody } from './export-documents.ts'
 import { markdownBody, xmlBody, yamlBody } from './export-formats.ts'
+import { OFFICE_TYPES, type OfficeKind, officeBody } from './export-office.ts'
 
 export const DUMP_COMPLETE_MARKER = '-- tsmyadmin dump complete'
 /** The parts of a PostgreSQL sequence's definition that are not structure (see showCreateTable). */
@@ -13,7 +23,7 @@ const ITER_OPTS = { batchSize: EXPORT_BATCH_SIZE }
 
 export interface ExportFile {
   /** Chunks are produced lazily so a large table never has to fit in memory at once. */
-  body: AsyncIterable<string>
+  body: AsyncIterable<string | Uint8Array>
   contentType: string
   filename: string
 }
@@ -62,7 +72,17 @@ async function* jsonBody(adapter: DatabaseAdapter, ns: Namespace, tables: string
  * tables are included; a whole-database dump carries everything. Statement text comes from the adapter's
  * exporter (the server's own CREATE definitions).
  */
-const section = (title: string) =>
+/** `CREATE TABLE` / `CREATE SEQUENCE` made `IF NOT EXISTS`: a dump restored over what is there leaves it alone. */
+function ifNotExists(statement: string): string {
+  return statement.replace(
+    /^(CREATE (?:(?:UNLOGGED|TEMPORARY|TEMP) )?(?:TABLE|SEQUENCE)) (?!IF NOT EXISTS)/i,
+    '$1 IF NOT EXISTS '
+  )
+}
+
+/** A section heading; a dump written without comments has none. */
+type Heading = (title: string) => string
+const section: Heading = (title) =>
   `-- ----------------------------------------\n-- ${title}\n-- ----------------------------------------\n\n`
 
 /**
@@ -145,9 +165,9 @@ async function collectRoutines(
   return out
 }
 
-function routinesBody(adapter: DatabaseAdapter, routines: Routines): string {
+function routinesBody(adapter: DatabaseAdapter, routines: Routines, heading: Heading): string {
   const parts: string[] = []
-  if (routines.early.length > 0 || routines.skipped.length > 0) parts.push(section('Routines'))
+  if (routines.early.length > 0 || routines.skipped.length > 0) parts.push(heading('Routines'))
   // A routine the account may not read is named rather than silently missing from the backup.
   for (const name of routines.skipped)
     parts.push(`-- skipped (definition not readable, or dropped meanwhile): ${commentText(name)}\n`)
@@ -176,14 +196,15 @@ async function* triggersAndEventsBody(
   adapter: DatabaseAdapter,
   ns: Namespace,
   tables: string[] | null,
-  stripDefiner: boolean
+  stripDefiner: boolean,
+  heading: Heading
 ): AsyncIterable<string> {
   const x = adapter.exporter
   const listed = (await adapter.listTriggers(ns)).filter((t) => tables === null || tables.includes(t.table))
   const triggers = listed.filter((t) => t.definition !== null).map((t) => x.trigger(ns, t, stripDefiner))
   // A trigger listed without a readable body is named rather than silently missing.
   const unreadable = listed.filter((t) => t.definition === null)
-  if (triggers.length > 0 || unreadable.length > 0) yield section('Triggers')
+  if (triggers.length > 0 || unreadable.length > 0) yield heading('Triggers')
   for (const t of unreadable) yield `-- skipped (definition not readable): trigger ${commentText(t.name)}\n`
   if (unreadable.length > 0) yield '\n'
   if (triggers.length > 0) yield x.programBlock(triggers)
@@ -192,7 +213,7 @@ async function* triggersAndEventsBody(
       .filter((e) => e.definition !== null)
       .map((e) => x.event(ns, e, stripDefiner))
     if (events.length > 0) {
-      yield section('Events')
+      yield heading('Events')
       yield x.programBlock(events)
     }
   }
@@ -255,18 +276,30 @@ async function* sqlBody(
   everything: boolean,
   listing?: TableInfo[]
 ): AsyncIterable<string> {
+  const comments = q.comments === '1'
+  const heading: Heading = comments ? section : () => ''
+  const inTransaction = q.transaction === '1'
+  const pg = adapter.dialect === 'postgres'
+  const utc = q.utc === '1'
   yield [
-    '-- tsmyadmin SQL dump',
-    `-- Dialect: ${adapter.dialect}`,
-    `-- Database: ${commentText(ns.database)}${ns.schema ? ` / schema ${commentText(ns.schema)}` : ''}`,
-    `-- Generated: ${new Date().toISOString()}`,
-    '',
-    ...adapter.exporter.preamble(ns),
+    ...(comments
+      ? [
+          '-- tsmyadmin SQL dump',
+          `-- Dialect: ${adapter.dialect}`,
+          `-- Database: ${commentText(ns.database)}${ns.schema ? ` / schema ${commentText(ns.schema)}` : ''}`,
+          `-- Generated: ${new Date().toISOString()}`,
+          '',
+        ]
+      : []),
+    // The database (or schema) the dump creates and works in.
+    ...(q.createDatabase === '1' ? createNamespaceStatements(adapter.dialect, ns) : []),
+    ...adapter.exporter.preamble(ns).filter((line) => comments || !line.startsWith('--')),
+    ...(utc ? [pg ? "SET TIME ZONE 'UTC';" : "SET @OLD_TIME_ZONE = @@TIME_ZONE, TIME_ZONE = '+00:00';"] : []),
+    ...(inTransaction ? [pg ? 'BEGIN;' : 'START TRANSACTION;'] : []),
     '',
     '',
   ].join('\n')
   const deferred: string[] = []
-  const pg = adapter.dialect === 'postgres'
   const structure = q.structure === '1'
   const drops = structure && q.dropTable === '1'
   const { infos, tableOrder } = resolveObjects(listing ?? (await adapter.listTables(ns)), tables)
@@ -287,8 +320,14 @@ async function* sqlBody(
   // PostgreSQL dump can also drop them first, dependents before their dependencies).
   const late: LateObject[] = []
   const unreadableViews: string[] = []
+  // Views written as tables of their own (their columns, and their rows as data).
+  const viewTables = new Set<string>()
   for (const [table, info] of infos) {
     if (info.kind === 'table' || info.kind === 'sequence') continue
+    if (q.viewsAsTables === '1' && (info.kind === 'view' || info.kind === 'materialized_view')) {
+      viewTables.add(table)
+      continue
+    }
     // A data-only dump still refreshes its materialized views, in dependency order: listed without text.
     if (!structure) {
       if (info.kind === 'materialized_view') late.push({ kind: 'view', name: table, statements: [], text: '' })
@@ -314,7 +353,7 @@ async function* sqlBody(
       kind: 'view',
       name: table,
       statements,
-      text: `${section(`View: ${commentText(table)}`)}${all.map((stmt) => `${stmt};\n\n`).join('')}`,
+      text: `${heading(`View: ${commentText(table)}`)}${all.map((stmt) => `${stmt};\n\n`).join('')}`,
     })
   }
   for (const [name, statements] of routines?.late ?? []) {
@@ -322,73 +361,103 @@ async function* sqlBody(
       kind: 'routine',
       name,
       statements: statements.map((s) => s.sql),
-      text: `${section(`Routine: ${commentText(name)}`)}${adapter.exporter.programBlock(statements)}`,
+      text: `${heading(`Routine: ${commentText(name)}`)}${adapter.exporter.programBlock(statements)}`,
     })
   }
   const ordered = orderObjects(late, catalog ?? (late.length > 1 ? await adapter.listDependencies(ns) : null))
-  if (drops && pg) yield dropSection(adapter, ns, infos, ordered)
-  const sequences = await sequenceSections(adapter, ns, infos, { structure, drops: drops && !pg, data: q.data === '1' })
+  // A view written as a table is dropped as one (the drop section names objects by their kind).
+  if (drops && pg) yield dropSection(adapter, ns, infos, ordered, heading, inTransaction)
+  const sequences = await sequenceSections(adapter, ns, infos, {
+    structure,
+    drops: drops && !pg,
+    data: q.data === '1',
+    heading,
+    ifNotExists: q.ifNotExists === '1',
+  })
   yield sequences.text
   const { positions, ownership } = sequences
-  if (routines) yield routinesBody(adapter, routines)
-  for (const table of tableOrder) {
-    if (infos.get(table)?.kind !== 'table') continue
+  if (routines) yield routinesBody(adapter, routines, heading)
+  for (const table of [...tableOrder, ...viewTables]) {
+    const asTable = viewTables.has(table)
+    if (infos.get(table)?.kind !== 'table' && !asTable) continue
     // Described only now (columns, keys, constraints), shared by the DDL reconstruction and the row scan.
     const schema = await adapter.describeTable(ns, table)
-    yield section(`Table: ${commentText(table)}`)
+    yield heading(`Table: ${commentText(table)}`)
     if (structure) {
-      if (drops && !pg) yield `${adapter.exporter.dropIfExists(ns, schema)};\n`
-      for (const stmt of await adapter.showCreateTable(ns, table, schema)) {
+      if (drops) {
+        // A view written as a table replaces a table of that name; PostgreSQL's Drop section has no entry for it.
+        yield `${asTable ? `DROP TABLE IF EXISTS ${quoteIdent(adapter.dialect, table)}` : pg ? '' : adapter.exporter.dropIfExists(ns, schema)}${asTable || !pg ? ';\n' : ''}`
+      }
+      const statements = asTable
+        ? [createTableFromColumns(adapter.dialect, table, schema.columns)]
+        : await adapter.showCreateTable(ns, table, schema)
+      for (const raw of statements) {
+        const stmt = q.ifNotExists === '1' ? ifNotExists(raw) : raw
         // PostgreSQL has no FOREIGN_KEY_CHECKS: constraints are emitted after every table exists and is loaded.
         if (adapter.dialect === 'postgres' && FK_STATEMENT.test(stmt)) deferred.push(stmt)
         else yield `${stmt};\n\n`
       }
     }
-    if (q.data === '1' && schema.kind === 'table') {
+    if (q.data === '1' && (schema.kind === 'table' || asTable)) {
       // Generated columns are computed by the server and rejected in INSERT; identity ALWAYS columns need
       // OVERRIDING SYSTEM VALUE; sequences are advanced afterwards so the next insert does not collide.
       const generated = new Set(schema.columns.filter((c) => isGeneratedColumn(c.extra)).map((c) => c.name))
       const overriding = schema.columns.some((c) => c.extra === 'identity always')
-      for await (const b of adapter.iterateRows(ns, table, { ...ITER_OPTS, schema })) {
+      // LOCK TABLES is MySQL's, and only where rows are written.
+      const lock = q.lockTables === '1' && !pg
+      if (lock) yield `LOCK TABLES ${quoteIdent('mysql', table)} WRITE;\n`
+      // Generated columns cannot be written, so a positional VALUES list would be short: names are kept then.
+      const insertOptions = {
+        overriding,
+        kind: q.statement,
+        ignore: q.ignore === '1',
+        columnNames: q.columnNames === '1' || generated.size > 0 || q.statement !== 'insert',
+        extended: q.extended === '1',
+        maxQuery: q.maxQuery,
+        keyColumns: schema.primaryKey,
+      }
+      for await (const b of adapter.iterateRows(ns, table, { ...ITER_OPTS, schema, utc })) {
         const keep = b.columns.map((c, i) => (generated.has(c.name) ? -1 : i)).filter((i) => i >= 0)
         const stmt = adapter.exporter.insert(
           ns,
           table,
           keep.map((i) => b.columns[i]?.name ?? ''),
           b.rows.map((row) => keep.map((i) => row[i] ?? null)),
-          { overriding }
+          insertOptions
         )
         if (stmt) yield `${stmt}\n\n`
       }
+      if (lock) yield 'UNLOCK TABLES;\n\n'
       for (const stmt of adapter.exporter.afterData(ns, schema)) yield `${stmt}\n\n`
     }
   }
   if (deferred.length > 0) {
-    yield section('Foreign keys')
+    yield heading('Foreign keys')
     for (const stmt of deferred) yield `${stmt};\n\n`
   }
   if (positions.length > 0) {
-    yield section('Sequence values')
+    yield heading('Sequence values')
     for (const stmt of positions) yield `${stmt};\n\n`
   }
   if (ownership.length > 0) {
-    yield section('Sequence ownership')
+    yield heading('Sequence ownership')
     for (const stmt of ownership) yield `${stmt};\n\n`
   }
   for (const o of ordered) yield o.text
   const refresh = q.data === '1' ? ordered.filter((o) => infos.get(o.name)?.kind === 'materialized_view') : []
   if (refresh.length > 0) {
-    yield section('Materialized view data')
+    yield heading('Materialized view data')
     for (const o of refresh) yield `REFRESH MATERIALIZED VIEW ${quoteTable(adapter.dialect, ns, o.name)};\n`
     yield '\n'
   }
   if (unreadableViews.length > 0) {
-    yield section('Views')
+    yield heading('Views')
     for (const v of unreadableViews) yield `-- skipped (definition not readable): view ${commentText(v)}\n`
     yield '\n'
   }
-  if (programs) yield* triggersAndEventsBody(adapter, ns, everything ? null : tables, q.stripDefiner === '1')
-  const postamble = adapter.exporter.postamble()
+  if (programs) yield* triggersAndEventsBody(adapter, ns, everything ? null : tables, q.stripDefiner === '1', heading)
+  if (inTransaction) yield 'COMMIT;\n\n'
+  const postamble = [...adapter.exporter.postamble(), ...(utc && !pg ? ['SET TIME_ZONE = @OLD_TIME_ZONE;'] : [])]
   if (postamble.length > 0) yield `${postamble.join('\n')}\n\n`
   // Terminal marker: a dump that lacks this line was cut short (the transfer is also aborted on errors).
   yield `${DUMP_COMPLETE_MARKER} (${infos.size} object${infos.size === 1 ? '' : 's'})\n`
@@ -434,7 +503,10 @@ function dropSection(
   adapter: DatabaseAdapter,
   ns: Namespace,
   infos: Map<string, TableInfo>,
-  ordered: LateObject[]
+  ordered: LateObject[],
+  heading: Heading,
+  /** The dump is one transaction already: a BEGIN / COMMIT of its own would end that one early. */
+  inTransaction: boolean
 ): string {
   const targets: DropTarget[] = [...ordered].reverse().map((o) => {
     if (o.kind === 'routine') return { kind: 'routine', name: o.name, statements: o.statements }
@@ -444,7 +516,7 @@ function dropSection(
   for (const t of infos.values()) if (t.kind === 'sequence') targets.push({ kind: 'sequence', name: t.name })
   const statements = adapter.exporter.dropAll(ns, targets)
   return statements.length > 0
-    ? `${section('Drop')}BEGIN;\n${statements.map((stmt) => `${stmt};\n`).join('')}COMMIT;\n\n`
+    ? `${heading('Drop')}${inTransaction ? '' : 'BEGIN;\n'}${statements.map((stmt) => `${stmt};\n`).join('')}${inTransaction ? '' : 'COMMIT;\n'}\n`
     : ''
 }
 
@@ -457,7 +529,7 @@ async function sequenceSections(
   adapter: DatabaseAdapter,
   ns: Namespace,
   infos: Map<string, TableInfo>,
-  opts: { structure: boolean; drops: boolean; data: boolean }
+  opts: { structure: boolean; drops: boolean; data: boolean; heading: Heading; ifNotExists: boolean }
 ): Promise<{ text: string; ownership: string[]; positions: string[] }> {
   let text = ''
   const ownership: string[] = []
@@ -466,11 +538,11 @@ async function sequenceSections(
     if (info.kind !== 'sequence') continue
     const statements = await adapter.showCreateTable(ns, table)
     if (opts.structure) {
-      text += section(`Sequence: ${commentText(table)}`)
+      text += opts.heading(`Sequence: ${commentText(table)}`)
       if (opts.drops) text += `${adapter.exporter.dropIfExists(ns, info)};\n`
       for (const stmt of statements) {
         if (SEQUENCE_OWNER.test(stmt)) ownership.push(stmt)
-        else if (!SEQUENCE_VALUE.test(stmt)) text += `${stmt};\n\n`
+        else if (!SEQUENCE_VALUE.test(stmt)) text += `${opts.ifNotExists ? ifNotExists(stmt) : stmt};\n\n`
       }
     }
     if (opts.data) positions.push(...statements.filter((s) => SEQUENCE_VALUE.test(s)))
@@ -480,14 +552,14 @@ async function sequenceSections(
 
 /** Response body for a chunk stream. A failing chunk errors the stream (the client sees a failed transfer). */
 export function toReadableStream(
-  body: AsyncIterable<string>,
+  body: AsyncIterable<string | Uint8Array>,
   onError?: (err: unknown) => void
 ): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder()
   const iterator = body[Symbol.asyncIterator]()
   return new ReadableStream<Uint8Array>({
     async pull(controller) {
-      let next: IteratorResult<string>
+      let next: IteratorResult<string | Uint8Array>
       try {
         next = await iterator.next()
       } catch (err) {
@@ -495,7 +567,7 @@ export function toReadableStream(
         throw err
       }
       if (next.done) controller.close()
-      else controller.enqueue(encoder.encode(next.value))
+      else controller.enqueue(typeof next.value === 'string' ? encoder.encode(next.value) : next.value)
     },
     async cancel() {
       await iterator.return?.()
@@ -518,15 +590,56 @@ export function buildExport(
   /** The namespace's listing when the caller already has it (saves the catalog pass a second time). */
   listing?: TableInfo[]
 ): ExportFile {
-  if (q.format === 'csv') {
+  if (q.format === 'csv' || q.format === 'csvExcel') {
     const table = tables[0]
     if (tables.length !== 1 || !table) throw new Error('CSV export needs exactly one table')
+    // "CSV for Excel": semicolons and a byte-order mark, whatever the form says about either.
+    const excel = q.format === 'csvExcel'
     return {
-      body: csvBody(adapter, ns, table, q.bom === '1', q.csvSafe === '1', CSV_DELIMITERS[q.csvDelimiter]),
+      body: csvBody(
+        adapter,
+        ns,
+        table,
+        excel || q.bom === '1',
+        q.csvSafe === '1',
+        excel ? CSV_DELIMITERS.semicolon : CSV_DELIMITERS[q.csvDelimiter]
+      ),
       contentType: 'text/csv; charset=utf-8',
       filename: `${baseName}.csv`,
     }
   }
+  if (q.format === 'ods' || q.format === 'odt' || q.format === 'docx') {
+    const kind: OfficeKind = q.format
+    return {
+      body: officeBody(kind, adapter, ns, tables),
+      contentType: OFFICE_TYPES[kind],
+      filename: `${baseName}.${kind}`,
+    }
+  }
+  if (q.format === 'latex')
+    return {
+      body: latexBody(adapter, ns, tables),
+      contentType: 'application/x-latex; charset=utf-8',
+      filename: `${baseName}.tex`,
+    }
+  if (q.format === 'texy')
+    return {
+      body: texyBody(adapter, ns, tables),
+      contentType: 'text/plain; charset=utf-8',
+      filename: `${baseName}.texy`,
+    }
+  if (q.format === 'mediawiki')
+    return {
+      body: mediawikiBody(adapter, ns, tables),
+      contentType: 'text/plain; charset=utf-8',
+      filename: `${baseName}.wiki`,
+    }
+  if (q.format === 'html')
+    return {
+      body: htmlBody(adapter, ns, tables),
+      contentType: 'text/html; charset=utf-8',
+      filename: `${baseName}.html`,
+    }
   if (q.format === 'xml') {
     return {
       body: xmlBody(adapter, ns, tables),
@@ -562,10 +675,11 @@ export function buildExport(
   }
 }
 
-/** Collects a chunk stream into one string (tests, small exports). */
-export async function collect(body: AsyncIterable<string>): Promise<string> {
+/** Collects a chunk stream into one string (tests, small exports); bytes are read as UTF-8. */
+export async function collect(body: AsyncIterable<string | Uint8Array>): Promise<string> {
+  const decoder = new TextDecoder()
   let out = ''
-  for await (const chunk of body) out += chunk
+  for await (const chunk of body) out += typeof chunk === 'string' ? chunk : decoder.decode(chunk, { stream: true })
   return out
 }
 

@@ -11,6 +11,8 @@ import type {
   StatementResult,
 } from '@tsmyadmin/shared'
 import { CsvParseError, isBinaryDataType, isGeneratedColumn, parseCsvRecords } from '@tsmyadmin/shared'
+import { columnNames, inferColumns } from './import-create.ts'
+import type { RowCell } from './import-rows.ts'
 
 const MAX_ERRORS = 20
 const SQL_IMPORT_TIMEOUT_MS = 10 * 60 * 1000
@@ -75,6 +77,10 @@ export interface ImportSqlOptions {
   stopOnError: boolean
   ignoreForeignKeys: boolean
   singleTransaction: boolean
+  /** MySQL: a 0 in an AUTO_INCREMENT column stays 0 (the session's sql_mode gets NO_AUTO_VALUE_ON_ZERO). */
+  noAutoValueOnZero?: boolean
+  /** Statements at the start of the file to leave out (to go on where an earlier run stopped). */
+  skip?: number
   /** Registered with the adapter so a client that goes away can interrupt the run. */
   queryId: string
   onProgress?: (done: number, total: number) => void | Promise<void>
@@ -117,7 +123,7 @@ export async function importSql(
       // An option the server refused (session_replication_role needs superuser) must stop the run before the
       // user's first statement: throwing here ends executeSql, which resets the connection.
       if (index < prefix.length && r.kind === 'error') {
-        const option = options.ignoreForeignKeys && index === 0 ? 'ignoreForeignKeys' : 'singleTransaction'
+        const option = script.prefixOptions[index] ?? 'singleTransaction'
         throw new ImportValidationError('OPTION_FAILED', `Import option could not be applied: ${r.message}`, {
           option,
           message: r.message,
@@ -148,6 +154,8 @@ interface WrappedScript {
   statements: Statement[]
   /** Option statements that run before the file (FK checks off, BEGIN). */
   prefix: string[]
+  /** The option each of them belongs to, for the message when the server refuses one. */
+  prefixOptions: string[]
   /** The file's own statement count. */
   total: number
   /** Index of the wrapper COMMIT among `statements`, or -1 without one. */
@@ -156,18 +164,33 @@ interface WrappedScript {
 
 function wrapScript(text: string, dialect: 'mysql' | 'postgres', options: ImportSqlOptions): WrappedScript {
   const splitState: { delimiter?: string; unterminated?: boolean } = {}
-  const own = splitStatements(text, dialect, splitState)
+  // The first `skip` statements are read and left out: to go on where an earlier run stopped.
+  const own = splitStatements(text, dialect, splitState).slice(options.skip ?? 0)
   const total = own.length
   if (total === 0) throw new ImportValidationError('NO_STATEMENTS', 'No SQL statements were found in the file')
   // Wrapping statements are the adapter builders' business (see SqlExporter); a plain pre/postamble is enough here.
-  const prefix = [
-    ...(options.ignoreForeignKeys
-      ? dialect === 'mysql'
-        ? ['SET FOREIGN_KEY_CHECKS = 0']
-        : ['SET session_replication_role = replica']
+  const optionStatements: { option: string; sql: string }[] = [
+    ...(options.noAutoValueOnZero && dialect === 'mysql'
+      ? [
+          {
+            option: 'noAutoValueOnZero',
+            sql: "SET SESSION sql_mode = CONCAT_WS(',', @@SESSION.sql_mode, 'NO_AUTO_VALUE_ON_ZERO')",
+          },
+        ]
       : []),
-    ...(options.singleTransaction ? [dialect === 'mysql' ? 'START TRANSACTION' : 'BEGIN'] : []),
+    ...(options.ignoreForeignKeys
+      ? [
+          {
+            option: 'ignoreForeignKeys',
+            sql: dialect === 'mysql' ? 'SET FOREIGN_KEY_CHECKS = 0' : 'SET session_replication_role = replica',
+          },
+        ]
+      : []),
+    ...(options.singleTransaction
+      ? [{ option: 'singleTransaction', sql: dialect === 'mysql' ? 'START TRANSACTION' : 'BEGIN' }]
+      : []),
   ]
+  const prefix = optionStatements.map((o) => o.sql)
   const suffix = options.singleTransaction ? ['COMMIT'] : []
   // A file whose last statement has no terminator must not merge it with the COMMIT: the delimiter in force at
   // the end is appended (the splitter drops the empty chunk it leaves otherwise). A MySQL file that ends under its
@@ -190,7 +213,14 @@ function wrapScript(text: string, dialect: 'mysql' | 'postgres', options: Import
     ...own.map((st) => ({ sql: st.sql, line: st.line + prefix.length })),
     ...suffix.map((sql) => ({ sql, line: commitLine })),
   ]
-  return { text: script, statements, prefix, total, commitIndex: suffix.length > 0 ? prefix.length + total : -1 }
+  return {
+    text: script,
+    statements,
+    prefix,
+    prefixOptions: optionStatements.map((o) => o.option),
+    total,
+    commitIndex: suffix.length > 0 ? prefix.length + total : -1,
+  }
 }
 
 /** The file's results, told apart from the wrapper's, counted in statements. */
@@ -298,15 +328,102 @@ function committedMidway(ran: string[], dialect: 'mysql' | 'postgres'): boolean 
 
 const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/
 
+/** Rows to load, wherever they came from: the file's own header (if it has one), and the records, in order. */
+export interface RowsSource {
+  header: string[] | null
+  /** Called more than once (a positional import counts the widest row first): each call starts again. */
+  records: () => Iterable<{ line: number; cells: RowCell[] }>
+  /** The result's format. */
+  format: 'csv' | 'ods' | 'xml' | 'mediawiki'
+}
+
+/** A CSV file as rows: a value is NULL when it is the marker written without quotes (a quoted one is the text). */
+export function csvSource(
+  text: string,
+  form: Pick<ImportForm, 'delimiter' | 'enclosure' | 'escape' | 'nullMarker'>
+): RowsSource {
+  const options = { delimiter: form.delimiter, quote: form.enclosure, escape: form.escape }
+  return {
+    header: null,
+    format: 'csv',
+    records: function* () {
+      for (const r of parseCsvRecords(text, options)) {
+        // Blank lines (a common artefact of hand-edited files) carry no row; they are skipped like LOAD DATA does.
+        if (r.fields.length === 1 && r.fields[0] === '' && !r.quoted[0]) continue
+        yield {
+          line: r.line,
+          cells: r.fields.map((v, i) => (v === form.nullMarker && !r.quoted[i] ? null : v)),
+        }
+      }
+    },
+  }
+}
+
+const cellText = (cell: RowCell | undefined): string | null =>
+  cell === undefined || cell === null
+    ? null
+    : typeof cell === 'string'
+      ? cell
+      : Buffer.from(cell.base64, 'base64').toString('utf8')
+
+/** The rows of a table read from a spreadsheet, XML or wiki file are loaded like a CSV's. */
 export async function importCsv(
   adapter: DatabaseAdapter,
   ns: Namespace,
   form: ImportForm,
   text: string
 ): Promise<ImportResult> {
+  return importRows(adapter, ns, form, csvSource(text, form))
+}
+
+export async function importRows(
+  adapter: DatabaseAdapter,
+  ns: Namespace,
+  form: ImportForm,
+  source: RowsSource
+): Promise<ImportResult> {
   const table = form.table
   if (!table) throw new ImportValidationError('CSV_NO_TABLE', 'CSV import requires a target table')
   const started = performance.now()
+  // The records, with the first taken as the header when the file has none of its own and one is asked for.
+  let first: { line: number; cells: RowCell[] } | undefined
+  const iterator = source.records()[Symbol.iterator]()
+  let peek = iterator.next()
+  if (peek.done) throw new ImportValidationError('CSV_EMPTY', 'The CSV file is empty')
+  first = peek.value
+  let header: string[] | null = source.header
+  let headerConsumed = false
+  if (header === null && form.header === '1') {
+    header = first.cells.map((c) => (cellText(c) ?? '').trim())
+    headerConsumed = true
+  } else if (header !== null) headerConsumed = false
+  // A file that names its columns itself (XML) needs no header row; one that does not (CSV without a header) is positional.
+  let created: { name: string; dataType: string }[] | undefined
+  let createdTable = false
+  if (form.createTable === '1') {
+    if ((await adapter.listTables(ns)).some((t) => t.name === table))
+      throw new ImportValidationError('TABLE_EXISTS', `The table ${table} exists already`, { table })
+    const rows: RowCell[][] = []
+    for (const r of source.records()) rows.push(r.cells)
+    const data = headerConsumed ? rows.slice(1) : rows
+    const width = Math.max(header?.length ?? 0, ...rows.map((r) => r.length))
+    const names = columnNames(header, width)
+    const columns = inferColumns(names, data, adapter.dialect)
+    const statements = adapter.ddl.build(ns, { op: 'createTable', table, columns, primaryKey: [] })
+    const made = await adapter.executeSql(ns, statements.join(';\n'), {
+      maxRows: 1,
+      timeoutMs: 60_000,
+      stopOnError: true,
+    })
+    const failure = made.find((r) => r.kind === 'error')
+    if (failure?.kind === 'error')
+      throw new ImportValidationError('CREATE_INVALID_NAME', `The table could not be created: ${failure.message}`, {
+        name: table,
+      })
+    created = columns.map((c) => ({ name: c.name, dataType: c.dataType }))
+    createdTable = true
+    header = names
+  }
   const schema = await adapter.describeTable(ns, table)
   const known = new Map(schema.columns.map((c) => [c.name, c]))
   // MySQL column names are case-insensitive; PostgreSQL's are not, unless the header matches exactly one column.
@@ -317,18 +434,10 @@ export async function importCsv(
   }
   const ambiguous = (name: string): boolean =>
     !known.has(name) && schema.columns.filter((c) => c.name.toLowerCase() === name.toLowerCase()).length > 1
-  const records = parseCsvRecords(text, { delimiter: form.delimiter })
-  // Blank lines (a common artefact of hand-edited files) carry no row; they are skipped like LOAD DATA does.
-  const isBlank = (r: { fields: string[]; quoted: boolean[] }) =>
-    r.fields.length === 1 && r.fields[0] === '' && !r.quoted[0]
-  let first = records.next()
-  while (!first.done && isBlank(first.value)) first = records.next()
-  if (first.done) throw new ImportValidationError('CSV_EMPTY', 'The CSV file is empty')
   let columns: string[]
   let skippedColumns: string[] = []
-  let headerConsumed = false
-  if (form.header === '1') {
-    const names = first.value.fields.map((c) => c.trim())
+  if (header !== null) {
+    const names = header
     const resolved = names.map((n) => resolve(n))
     const vague = names.filter((n) => ambiguous(n))
     if (vague.length > 0) {
@@ -364,12 +473,11 @@ export async function importCsv(
     // Generated columns are the server's to compute: the header may name them (a CSV export does), the INSERT may not.
     columns = resolved.filter((c): c is string => c !== undefined)
     skippedColumns = columns.filter((c) => isGeneratedColumn(known.get(c)?.extra ?? ''))
-    headerConsumed = true
   } else {
     // Positional: as many table columns as the widest row (a short row is padded with NULL, the rest keep their
-    // defaults). Counting the width is a second parse, but it holds no rows.
-    let width = first.value.fields.length
-    for (const r of parseCsvRecords(text, { delimiter: form.delimiter })) width = Math.max(width, r.fields.length)
+    // defaults). Counting the width is a second read, but it holds no rows.
+    let width = first.cells.length
+    for (const r of source.records()) width = Math.max(width, r.cells.length)
     columns = schema.columns.slice(0, width).map((c) => c.name)
     skippedColumns = columns.filter((c) => isGeneratedColumn(known.get(c)?.extra ?? ''))
   }
@@ -383,26 +491,42 @@ export async function importCsv(
   })
   const overriding = target.some((c) => known.get(c)?.extra === 'identity always')
   const lines: number[] = []
+  let skippedRows = 0
   function* rows(): Generator<InputCell[]> {
-    let rec = headerConsumed ? records.next() : first
-    while (!rec.done) {
-      const r = rec.value
-      rec = records.next()
-      if (isBlank(r)) continue
-      if (r.fields.length > columns.length) {
+    let dropHeader = headerConsumed
+    let toSkip = form.skip
+    // The first record is already taken; the iterator carries on from the second.
+    const all = (function* () {
+      yield first as { line: number; cells: RowCell[] }
+      for (let r = iterator.next(); !r.done; r = iterator.next()) yield r.value
+    })()
+    for (const r of all) {
+      if (dropHeader) {
+        dropHeader = false
+        continue
+      }
+      if (toSkip > 0) {
+        toSkip--
+        skippedRows++
+        continue
+      }
+      if (r.cells.length > columns.length) {
         throw new ImportValidationError(
           'CSV_FIELD_COUNT',
-          `Line ${r.line} has ${r.fields.length} fields but ${columns.length} columns`,
-          { line: r.line, fields: r.fields.length, columns: columns.length }
+          `Line ${r.line} has ${r.cells.length} fields but ${columns.length} columns`,
+          { line: r.line, fields: r.cells.length, columns: columns.length }
         )
       }
       const cells: InputCell[] = []
       columns.forEach((name, j) => {
         if (!keep[j]) return
-        const v = r.fields[j]
-        // Only an unquoted marker means NULL: a quoted one is the literal text (COPY / LOAD DATA semantics).
-        if (v === undefined || (v === form.nullMarker && !r.quoted[j])) cells.push(null)
-        else if (!binary[j]) cells.push(v)
+        const v = r.cells[j]
+        if (v === undefined || v === null) cells.push(null)
+        else if (typeof v !== 'string') {
+          // Bytes from an XML export: a binary column takes them, any other column takes their text.
+          if (binary[j]) cells.push({ $bin: v.base64 })
+          else cells.push(Buffer.from(v.base64, 'base64').toString('utf8'))
+        } else if (!binary[j]) cells.push(v)
         else if (BASE64.test(v)) cells.push({ $bin: v })
         else {
           throw new ImportValidationError('CSV_BINARY', `Line ${r.line}: column ${name} expects base64 binary data`, {
@@ -415,9 +539,13 @@ export async function importCsv(
       yield cells
     }
   }
+  peek = { done: false, value: first }
   let result: { affectedRows: number }
   try {
-    result = await adapter.insertRows(ns, table, target, rows(), { overriding })
+    result = await adapter.insertRows(ns, table, target, rows(), {
+      overriding,
+      ...(form.onDuplicate !== 'error' ? { onDuplicate: form.onDuplicate, keyColumns: schema.primaryKey } : {}),
+    })
   } catch (err) {
     if (err instanceof CsvParseError) {
       throw new ImportValidationError('CSV_UNTERMINATED_QUOTE', err.message, { line: err.line })
@@ -440,11 +568,13 @@ export async function importCsv(
     throw err
   }
   return {
-    format: 'csv',
+    format: source.format,
     table,
     columns: target,
     skippedColumns,
     inserted: result.affectedRows,
+    ...(createdTable ? { created } : {}),
+    skipped: skippedRows,
     durationMs: Math.round(performance.now() - started),
   }
 }

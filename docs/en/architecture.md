@@ -1,4 +1,4 @@
-<!-- translated-from: docs/architecture.md sha256:7989fa705d7c8964a147087c209625fd7eecf49438bd1785db47c0cb8d8f00ee -->
+<!-- translated-from: docs/architecture.md sha256:bce4006d8625aa890e4d506282eeef50debe6373465accdf93a027a33a7c7208 -->
 
 # Architecture
 
@@ -267,6 +267,8 @@ flowchart TD
   s10 --> s11["Completion marker (N objects)"]
 ```
 
+The dump is finished by later stages (`lib/export-package.ts`): the file name template → the character set (what was written is decoded again and compared, so a character the set cannot hold stops the export instead of turning into `?`) → gzip / ZIP (both stay streams; the ZIP writer is `lib/zip.ts`). A row range is an adapter with only `iterateRows` replaced (`withRowRange`), so every format takes it the same way. The body of each format lives in `export.ts` (SQL, CSV, JSON, XML, YAML), `export-documents.ts` (Markdown, LaTeX, Texy!, MediaWiki, HTML) and `export-office.ts` (ODS, ODT, DOCX).
+
 Importing lexes once, adds wrapper statements around the script and runs the whole thing as one.
 
 ```mermaid
@@ -279,6 +281,8 @@ flowchart LR
   exec --> sum["summariseRun<br/>tally per statement"]
   sum --> warn["runWarnings<br/>CANCELLED / ROLLED_BACK…"]
 ```
+
+An upload is opened first by `prepareImport` in `import-run.ts` (gzip and ZIP unpacked, the character set turned into UTF-8, the unpacked size capped). After that SQL goes to `importSql` and the rest (CSV, ODS, XML and MediaWiki tables) to `importRows`; a reader per format turns the file into a `RowsSource` (a heading plus rows), so creating the table (types inferred from the values), the duplicate-key choice and skipping rows are each in one place. The server-level import runs the same path in a namespace that has no database (`serverNamespace`).
 
 **Why it splits only once** — tokenising a 64 MB dump several times stalls the event loop for hundreds of milliseconds at a time, which makes other users wait (`ExecuteOptions.statements` hands the split result to the adapter).
 

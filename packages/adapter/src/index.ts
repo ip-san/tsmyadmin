@@ -6,7 +6,7 @@ import { pgDdl } from './postgres/ddl.ts'
 import type { ConnectionConfig, DatabaseAdapter, DdlBuilder } from './types.ts'
 
 export { MAX_BINARY_BYTES, READ_CELL_MAX_BYTES } from './base.ts'
-export { commentText } from './sql/export.ts'
+export { commentText, createNamespaceStatements, createTableFromColumns } from './sql/export.ts'
 export { quoteIdent, quoteTable } from './sql/quote.ts'
 export { buildReplicationOp } from './sql/replication.ts'
 export { type Statement, setAssignments, splitStatements, stripComments, stripLeadingComments } from './sql/split.ts'

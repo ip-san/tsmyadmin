@@ -13,7 +13,7 @@ for (const t of TARGETS) {
 
       // CSV of one table, without the structure: none of it is the default the page opens with.
       await page.getByRole('checkbox', { name: 'users', exact: true }).check()
-      await page.getByRole('radio', { name: 'CSV' }).check()
+      await page.getByRole('radio', { name: 'CSV', exact: true }).check()
       await page.getByLabel('BOM を付ける', { exact: false }).uncheck()
       await page.getByLabel('テンプレート名').fill('nightly')
       await page.getByRole('button', { name: '保存する', exact: true }).click()
@@ -27,7 +27,7 @@ for (const t of TARGETS) {
       await page.getByRole('checkbox', { name: 'users', exact: true }).uncheck()
       await page.getByRole('checkbox', { name: 'posts', exact: true }).check()
       await entry.getByRole('button', { name: '読み込む' }).click()
-      await expect(page.getByRole('radio', { name: 'CSV' })).toBeChecked()
+      await expect(page.getByRole('radio', { name: 'CSV', exact: true })).toBeChecked()
       await expect(page.getByRole('checkbox', { name: 'users', exact: true })).toBeChecked()
       await expect(page.getByRole('checkbox', { name: 'posts', exact: true })).not.toBeChecked()
       await expect(page.getByLabel('BOM を付ける', { exact: false })).not.toBeChecked()

@@ -20,6 +20,8 @@ import { Route as AppPluginsRouteImport } from './routes/_app/plugins'
 import { Route as AppProcessesRouteImport } from './routes/_app/processes'
 import { Route as AppReplicationRouteImport } from './routes/_app/replication'
 import { Route as AppSecurityRouteImport } from './routes/_app/security'
+import { Route as AppServerExportRouteImport } from './routes/_app/server-export'
+import { Route as AppServerImportRouteImport } from './routes/_app/server-import'
 import { Route as AppSqlRouteImport } from './routes/_app/sql'
 import { Route as AppStatusRouteImport } from './routes/_app/status'
 import { Route as AppUserGroupsRouteImport } from './routes/_app/user-groups'
@@ -106,6 +108,16 @@ const AppReplicationRoute = AppReplicationRouteImport.update({
 const AppSecurityRoute = AppSecurityRouteImport.update({
   id: '/security',
   path: '/security',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppServerExportRoute = AppServerExportRouteImport.update({
+  id: '/server-export',
+  path: '/server-export',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppServerImportRoute = AppServerImportRouteImport.update({
+  id: '/server-import',
+  path: '/server-import',
   getParentRoute: () => AppRoute,
 } as any)
 const AppSqlRoute = AppSqlRouteImport.update({
@@ -290,6 +302,8 @@ export interface FileRoutesByFullPath {
   '/processes': typeof AppProcessesRoute
   '/replication': typeof AppReplicationRoute
   '/security': typeof AppSecurityRoute
+  '/server-export': typeof AppServerExportRoute
+  '/server-import': typeof AppServerImportRoute
   '/sql': typeof AppSqlRoute
   '/status': typeof AppStatusRoute
   '/user-groups': typeof AppUserGroupsRoute
@@ -334,6 +348,8 @@ export interface FileRoutesByTo {
   '/processes': typeof AppProcessesRoute
   '/replication': typeof AppReplicationRoute
   '/security': typeof AppSecurityRoute
+  '/server-export': typeof AppServerExportRoute
+  '/server-import': typeof AppServerImportRoute
   '/sql': typeof AppSqlRoute
   '/status': typeof AppStatusRoute
   '/user-groups': typeof AppUserGroupsRoute
@@ -379,6 +395,8 @@ export interface FileRoutesById {
   '/_app/processes': typeof AppProcessesRoute
   '/_app/replication': typeof AppReplicationRoute
   '/_app/security': typeof AppSecurityRoute
+  '/_app/server-export': typeof AppServerExportRoute
+  '/_app/server-import': typeof AppServerImportRoute
   '/_app/sql': typeof AppSqlRoute
   '/_app/status': typeof AppStatusRoute
   '/_app/user-groups': typeof AppUserGroupsRoute
@@ -427,6 +445,8 @@ export interface FileRouteTypes {
     | '/processes'
     | '/replication'
     | '/security'
+    | '/server-export'
+    | '/server-import'
     | '/sql'
     | '/status'
     | '/user-groups'
@@ -471,6 +491,8 @@ export interface FileRouteTypes {
     | '/processes'
     | '/replication'
     | '/security'
+    | '/server-export'
+    | '/server-import'
     | '/sql'
     | '/status'
     | '/user-groups'
@@ -515,6 +537,8 @@ export interface FileRouteTypes {
     | '/_app/processes'
     | '/_app/replication'
     | '/_app/security'
+    | '/_app/server-export'
+    | '/_app/server-import'
     | '/_app/sql'
     | '/_app/status'
     | '/_app/user-groups'
@@ -633,6 +657,20 @@ declare module '@tanstack/react-router' {
       path: '/security'
       fullPath: '/security'
       preLoaderRoute: typeof AppSecurityRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/server-export': {
+      id: '/_app/server-export'
+      path: '/server-export'
+      fullPath: '/server-export'
+      preLoaderRoute: typeof AppServerExportRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/server-import': {
+      id: '/_app/server-import'
+      path: '/server-import'
+      fullPath: '/server-import'
+      preLoaderRoute: typeof AppServerImportRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/sql': {
@@ -950,6 +988,8 @@ interface AppRouteChildren {
   AppProcessesRoute: typeof AppProcessesRoute
   AppReplicationRoute: typeof AppReplicationRoute
   AppSecurityRoute: typeof AppSecurityRoute
+  AppServerExportRoute: typeof AppServerExportRoute
+  AppServerImportRoute: typeof AppServerImportRoute
   AppSqlRoute: typeof AppSqlRoute
   AppStatusRoute: typeof AppStatusRoute
   AppUserGroupsRoute: typeof AppUserGroupsRoute
@@ -968,6 +1008,8 @@ const AppRouteChildren: AppRouteChildren = {
   AppProcessesRoute: AppProcessesRoute,
   AppReplicationRoute: AppReplicationRoute,
   AppSecurityRoute: AppSecurityRoute,
+  AppServerExportRoute: AppServerExportRoute,
+  AppServerImportRoute: AppServerImportRoute,
   AppSqlRoute: AppSqlRoute,
   AppStatusRoute: AppStatusRoute,
   AppUserGroupsRoute: AppUserGroupsRoute,

@@ -1,8 +1,9 @@
 import { z } from 'zod'
 import { ApiErrorSchema } from './api.ts'
 import { FlagSchema } from './common.ts'
+import { ExportCharsetSchema } from './export.ts'
 
-export const ImportFormatSchema = z.enum(['sql', 'csv'])
+export const ImportFormatSchema = z.enum(['sql', 'csv', 'ods', 'xml', 'mediawiki'])
 export type ImportFormat = z.infer<typeof ImportFormatSchema>
 
 export const IMPORT_MAX_BYTES = 64 * 1024 * 1024
@@ -24,6 +25,29 @@ export const ImportFormSchema = z.object({
     .length(1)
     .refine((d) => !'"\r\n'.includes(d), 'delimiter cannot be a quote or a line break')
     .default(','),
+  /** csv: the character a field is enclosed in, and the one that escapes the next inside it (the quote: doubling). */
+  enclosure: z
+    .string()
+    .length(1)
+    .refine((c) => !'\r\n'.includes(c))
+    .default('"'),
+  escape: z
+    .string()
+    .length(1)
+    .refine((c) => !'\r\n'.includes(c))
+    .default('"'),
+  /** The character set of a text file (a spreadsheet file carries its own). */
+  charset: ExportCharsetSchema.default('utf-8'),
+  /** Statements (sql) or rows (the rest) to leave out from the start: to go on where an earlier run stopped. */
+  skip: z.coerce.number().int().min(0).max(1_000_000_000).default(0),
+  /** Rows formats: a row whose key exists already stops the run (`error`), is left out or replaces the row. */
+  onDuplicate: z.enum(['error', 'ignore', 'replace']).default('error'),
+  /** Rows formats: create the table (named by `table`) from the file's columns, then load it. */
+  createTable: FlagSchema.default('0'),
+  /** ods / xml / mediawiki: which sheet or table of the file, by name or 1-based number (default the first). */
+  sheet: z.string().max(200).optional(),
+  /** sql (MySQL): a 0 in an AUTO_INCREMENT column stays 0 instead of taking the next value. */
+  noAutoValueOnZero: FlagSchema.default('0'),
   /** sql: stop at the first failing statement */
   stopOnError: FlagSchema.default('1'),
   /** sql: disable foreign key checks for the run (mysqldump --compact files, tables in the wrong order) */
@@ -80,12 +104,16 @@ export const ImportResultSchema = z.discriminatedUnion('format', [
     durationMs: z.number(),
   }),
   z.object({
-    format: z.literal('csv'),
+    format: z.enum(['csv', 'ods', 'xml', 'mediawiki']),
     table: z.string(),
     columns: z.array(z.string()),
     /** Header columns the server computes itself (generated), left out of the INSERT. */
     skippedColumns: z.array(z.string()),
     inserted: z.number(),
+    /** The table was created for this import; its column types as written. */
+    created: z.array(z.object({ name: z.string(), dataType: z.string() })).optional(),
+    /** Rows the file held that were left out (`skip`). */
+    skipped: z.number().default(0),
     durationMs: z.number(),
   }),
 ])
@@ -126,5 +154,19 @@ export const ImportReasonSchema = z.enum([
   'OPTION_FAILED',
   /** Single-transaction mode: the file ends inside an unterminated comment or literal, which would swallow the COMMIT. */
   'UNTERMINATED_END',
+  /** The upload is a compressed file that could not be opened (params: message). */
+  'ARCHIVE_INVALID',
+  /** A compressed file that unpacks to more than the limit (params: mb). */
+  'ARCHIVE_TOO_LARGE',
+  /** A ZIP with several files that are not all SQL. */
+  'ARCHIVE_MULTIPLE',
+  /** The file names no sheet / table like the one asked for (params: sheet). */
+  'ROWS_NO_SHEET',
+  /** A spreadsheet, XML or wiki file that could not be read (params: message). */
+  'ROWS_PARSE',
+  /** `createTable` names a table that exists already (params: table). */
+  'TABLE_EXISTS',
+  /** The new table's name, or a column name in the file, is not usable (params: name). */
+  'CREATE_INVALID_NAME',
 ])
 export type ImportReason = z.infer<typeof ImportReasonSchema>

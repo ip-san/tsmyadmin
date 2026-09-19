@@ -10,21 +10,30 @@ export function ImportSummary({
   schema,
 }: {
   result: ImportResult
-  db: string
+  /** `null` for a script run at the server's level, which has no database to link to. */
+  db: string | null
   schema?: string | undefined
 }) {
-  if (result.format === 'csv') {
+  if (result.format !== 'sql') {
     return (
       <Notice>
-        {locale.import.csvResult(result.inserted, result.table, result.durationMs)}{' '}
-        <Link
-          to="/db/$db/table/$table"
-          params={{ db, table: result.table }}
-          search={schema ? { schema } : {}}
-          className="text-blue-700 underline dark:text-blue-300"
-        >
-          {locale.import.viewRows}
-        </Link>
+        {locale.import.rowsResult(result.inserted, result.table, result.durationMs)}{' '}
+        {db === null ? null : (
+          <Link
+            to="/db/$db/table/$table"
+            params={{ db, table: result.table }}
+            search={schema ? { schema } : {}}
+            className="text-blue-700 underline dark:text-blue-300"
+          >
+            {locale.import.viewRows}
+          </Link>
+        )}
+        {result.created ? (
+          <span className="block text-xs">
+            {locale.import.created(result.created.map((c) => `${c.name} ${c.dataType}`).join(', '))}
+          </span>
+        ) : null}
+        {result.skipped > 0 ? <span className="block text-xs">{locale.import.skippedRows(result.skipped)}</span> : null}
         {result.skippedColumns.length > 0 ? (
           <span className="block text-xs">{locale.import.skippedColumns(result.skippedColumns.join(', '))}</span>
         ) : null}

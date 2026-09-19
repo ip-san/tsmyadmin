@@ -1,4 +1,4 @@
-import type { ExportTemplate } from '@tsmyadmin/shared'
+import { ExportOptionsSchema, type ExportTemplate } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
 import { applyTemplate, deleteTemplate, loadTemplates, saveTemplate, templatesFor } from './export-templates.ts'
 
@@ -8,17 +8,7 @@ const template = (parts: Partial<ExportTemplate>): ExportTemplate => ({
   at: 1,
   database: 'shop',
   tables: [],
-  options: {
-    format: 'sql',
-    structure: true,
-    dropTable: true,
-    data: true,
-    bom: true,
-    csvSafe: false,
-    csvDelimiter: 'comma' as const,
-    routines: true,
-    stripDefiner: false,
-  },
+  options: ExportOptionsSchema.parse({}),
   ...parts,
 })
 

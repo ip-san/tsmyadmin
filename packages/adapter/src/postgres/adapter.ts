@@ -285,7 +285,7 @@ export class PostgresAdapter extends BaseAdapter {
   override async *iterateRows(
     ns: Namespace,
     table: string,
-    opts: { batchSize: number; schema?: TableSchema }
+    opts: { batchSize: number; schema?: TableSchema; utc?: boolean }
   ): AsyncIterable<RowBatch> {
     const schema = opts.schema ?? (await this.describeTable(ns, table))
     const columns = schema.columns.map((c) => quoteIdent('postgres', c.name)).join(', ')
@@ -302,6 +302,7 @@ export class PostgresAdapter extends BaseAdapter {
     let committed = false
     try {
       await conn.query('BEGIN')
+      if (opts.utc) await conn.query("SET LOCAL TIME ZONE 'UTC'")
       await conn.query(`DECLARE tsmyadmin_export NO SCROLL CURSOR FOR SELECT ${columns} FROM ${source}${orderBy}`)
       let first = true
       for (;;) {

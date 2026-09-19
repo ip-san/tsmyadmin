@@ -2,6 +2,7 @@ import { isGeneratedColumn } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
 import { mysqlExporter } from '../mysql/export.ts'
 import { pgExporter } from '../postgres/export.ts'
+import { createNamespaceStatements, createTableFromColumns } from '../sql/export.ts'
 
 const ns = { database: 'db', schema: 'app' }
 const rows = [
@@ -147,5 +148,31 @@ describe('isGeneratedColumn', () => {
       'serial',
     ])
       expect(isGeneratedColumn(extra)).toBe(false)
+  })
+})
+
+describe('the statements a dump makes its own', () => {
+  it('creates and enters the database (MySQL) or schema (PostgreSQL), quoting the name', () => {
+    expect(createNamespaceStatements('mysql', { database: 'we`ird' })).toEqual([
+      'CREATE DATABASE IF NOT EXISTS `we``ird`;',
+      'USE `we``ird`;',
+    ])
+    expect(createNamespaceStatements('postgres', { database: 'db', schema: 'a"b' })).toEqual([
+      'CREATE SCHEMA IF NOT EXISTS "a""b";',
+    ])
+    expect(createNamespaceStatements('postgres', { database: 'db' })).toEqual(['CREATE SCHEMA IF NOT EXISTS "public";'])
+  })
+
+  it('writes the columns of a view as a table', () => {
+    const columns = [
+      { name: 'id', dataType: 'int', nullable: false },
+      { name: 'n', dataType: 'text', nullable: true },
+    ]
+    expect(createTableFromColumns('mysql', 'v', columns)).toBe(
+      'CREATE TABLE `v` (\n  `id` int NOT NULL,\n  `n` text\n)'
+    )
+    expect(createTableFromColumns('postgres', 'v', columns)).toBe(
+      'CREATE TABLE "v" (\n  "id" int NOT NULL,\n  "n" text\n)'
+    )
   })
 })

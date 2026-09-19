@@ -39,6 +39,13 @@ export function toCsv(columns: string[], rows: Cell[][], neutralise = false): st
 /** RFC 4180 CSV parsing (quotes, escaped quotes, CR/LF/CRLF, optional BOM). */
 export interface CsvParseOptions {
   delimiter?: string
+  /** The character that encloses a field (default `"`). */
+  quote?: string
+  /**
+   * The character that escapes the next one inside a quoted field. Left at the quote character (the default) a
+   * doubled quote is a quote (RFC 4180); a backslash makes `\"` and `\\` literal.
+   */
+  escape?: string
 }
 
 export interface CsvDocument {
@@ -81,6 +88,8 @@ export function parseCsvDocument(text: string, options: CsvParseOptions = {}): C
 /** Records one at a time, so a large file is held once (as text) rather than twice (text plus every row). */
 export function* parseCsvRecords(text: string, options: CsvParseOptions = {}): Generator<CsvRecord> {
   const delimiter = options.delimiter ?? ','
+  const quoteChar = options.quote ?? '"'
+  const escapeChar = options.escape ?? quoteChar
   const input = text.startsWith('\ufeff') ? text.slice(1) : text
   let row: string[] = []
   let quotedRow: boolean[] = []
@@ -114,9 +123,17 @@ export function* parseCsvRecords(text: string, options: CsvParseOptions = {}): G
     }
     const ch = input[i] as string
     if (quoted) {
-      if (ch === '"') {
-        if (input[i + 1] === '"') {
-          field += '"'
+      // A separate escape character makes the next one literal, whatever it is (a quote, the escape itself…).
+      if (escapeChar !== quoteChar && ch === escapeChar && i + 1 < n) {
+        const next = input[i + 1] as string
+        if (next === '\n') line++
+        field += next
+        i += 2
+        continue
+      }
+      if (ch === quoteChar) {
+        if (escapeChar === quoteChar && input[i + 1] === quoteChar) {
+          field += quoteChar
           i += 2
           continue
         }
@@ -129,7 +146,7 @@ export function* parseCsvRecords(text: string, options: CsvParseOptions = {}): G
       i++
       continue
     }
-    if (ch === '"' && field.length === 0) {
+    if (ch === quoteChar && field.length === 0) {
       quoted = true
       wasQuoted = true
       quoteLine = line

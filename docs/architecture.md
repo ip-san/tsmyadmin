@@ -265,6 +265,8 @@ flowchart TD
   s10 --> s11["完了マーカー（N objects）"]
 ```
 
+ダンプの出力は続く段で仕上げます（`lib/export-package.ts`）: ファイル名のテンプレート → 文字コード（書き出した文字を読み戻して比べ、表せない文字は `?` にせずエクスポートを止める）→ gzip / ZIP（どちらもストリームのまま。ZIP は `lib/zip.ts`）。行の範囲は `iterateRows` だけを差し替えたアダプター（`withRowRange`）で、どの形式にも同じ効き方をします。形式ごとの本体は `export.ts`（SQL・CSV・JSON・XML・YAML）、`export-documents.ts`（Markdown・LaTeX・Texy!・MediaWiki・HTML）、`export-office.ts`（ODS・ODT・DOCX）です。
+
 インポートは 1 回だけ字句解析し、ラッパー文を前後に足して 1 スクリプトとして実行します。
 
 ```mermaid
@@ -277,6 +279,8 @@ flowchart LR
   exec --> sum["summariseRun<br/>文単位で集計"]
   sum --> warn["runWarnings<br/>CANCELLED / ROLLED_BACK…"]
 ```
+
+アップロードは `import-run.ts` の `prepareImport` が先に開きます（gzip・ZIP を展開し、文字コードを UTF-8 に直す。展開後の大きさに上限）。その先は SQL が `importSql`、そのほか（CSV・ODS・XML・MediaWiki の表）が `importRows` で、後者は形式ごとの読み手が `RowsSource`（見出し + 行）に揃えるので、テーブルの作成（値から型を推定）・重複キーの扱い・行の飛ばし方は 1 か所です。サーバー全体のインポートは同じ経路を、データベースを持たない名前空間（`serverNamespace`）で走らせます。
 
 **なぜ 1 回だけ分割するか** — 64 MB のダンプを複数回トークン化するとイベントループが数百 ms 単位で止まり、他の利用者のリクエストが待たされるためです（`ExecuteOptions.statements` で分割結果をアダプターに渡します）。
 

@@ -1,6 +1,5 @@
 import type { DatabaseAdapter } from '@tsmyadmin/adapter'
 import {
-  type ApiError,
   BrowseQuerySchema,
   CellQuerySchema,
   DdlPreviewRequestSchema,
@@ -9,7 +8,6 @@ import {
   decodeTableList,
   ExportQuerySchema,
   IMPORT_MAX_BYTES,
-  type ImportEvent,
   ImportFormSchema,
   InsertRowRequestSchema,
   isGeneratedColumn,
@@ -19,6 +17,7 @@ import {
   QueryBuilderRequestSchema,
   RoutineDefinitionQuerySchema,
   SchemaQuerySchema,
+  SINGLE_TABLE_FORMATS,
   SqlCancelRequestSchema,
   SqlRequestSchema,
   type SqlStreamEvent,
@@ -31,9 +30,11 @@ import { Hono } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
 import { DatabaseOpRefused, prepareDatabaseOp } from '../lib/database-ops.ts'
 import { apiError, toApiError } from '../lib/errors.ts'
-import { buildExport, contentDisposition, toReadableStream } from '../lib/export.ts'
+import { contentDisposition, toReadableStream } from '../lib/export.ts'
+import { buildPackagedExport } from '../lib/export-package.ts'
 import { identifierTooLong, tooLongIdentifier } from '../lib/identifiers.ts'
-import { decodeUpload, ImportValidationError, importCsv, importSql } from '../lib/import.ts'
+import { ImportValidationError } from '../lib/import.ts'
+import { importResponse, type PreparedImport, prepareImport, validationError } from '../lib/import-run.ts'
 import type { Logger } from '../lib/logging.ts'
 import { recordGridChange, recordStatements } from '../lib/tracking-log.ts'
 import { validate } from '../lib/validate.ts'
@@ -66,10 +67,6 @@ const NDJSON_HEADERS = {
   'content-type': 'application/x-ndjson; charset=utf-8',
   'cache-control': 'no-store',
   'x-accel-buffering': 'no',
-}
-
-function validationError(err: ImportValidationError): ApiError {
-  return { ...apiError('VALIDATION', err.message), reason: err.reason, params: err.params }
 }
 
 const BEGIN = /^\s*(?:BEGIN|START\s+TRANSACTION)\b/i
@@ -295,11 +292,33 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
           requested.length > 0
             ? requested
             : [...all.filter((t) => t.kind === 'table'), ...all.filter((t) => t.kind !== 'table')].map((t) => t.name)
-        if (q.format === 'csv' && tables.length !== 1) {
-          return c.json(apiError('VALIDATION', 'CSV export needs exactly one table'), 400)
+        if (SINGLE_TABLE_FORMATS.includes(q.format) && tables.length !== 1 && q.filePerTable !== '1') {
+          return c.json(apiError('VALIDATION', 'CSV export needs exactly one table (or one file per table)'), 400)
+        }
+        // UPDATE / REPLACE find a row by its primary key: said before the download starts, not by cutting it short.
+        if (q.format === 'sql' && q.data === '1' && q.statement !== 'insert') {
+          const keyless: string[] = []
+          for (const name of tables) {
+            const info = all.find((t) => t.name === name)
+            const written = info?.kind === 'table' || (q.viewsAsTables === '1' && info?.kind !== 'sequence')
+            if (written && (await adapter.describeTable(namespace, name)).primaryKey.length === 0) keyless.push(name)
+          }
+          if (keyless.length > 0)
+            return c.json(
+              apiError(
+                'VALIDATION',
+                `These tables have no primary key, which the chosen statement type needs: ${keyless.join(', ')}`
+              ),
+              400
+            )
         }
         const baseName = requested.length === 1 ? `${namespace.database}_${requested[0]}` : namespace.database
-        const file = buildExport(adapter, namespace, tables, q, baseName, requested.length === 0, all)
+        const file = buildPackagedExport(adapter, namespace, tables, q, {
+          server: c.get('session').config.host,
+          baseName,
+          everything: requested.length === 0,
+          listing: all,
+        })
         // Streamed so a large table is never held in memory. A failure mid-stream errors the response body
         // (the browser reports a failed download) instead of ending it normally, which would make a
         // truncated file look complete.
@@ -326,59 +345,15 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
           if (!(file instanceof File)) return c.json(apiError('VALIDATION', 'A file is required'), 400)
           if (file.size > IMPORT_MAX_BYTES)
             return c.json(apiError('PAYLOAD_TOO_LARGE', `File exceeds ${IMPORT_MAX_BYTES} bytes`), 413)
-          let text: string
+          const adapter = c.get('session').adapter
+          let prepared: PreparedImport
           try {
-            text = decodeUpload(new Uint8Array(await file.arrayBuffer()))
+            prepared = prepareImport(new Uint8Array(await file.arrayBuffer()), form)
           } catch (err) {
             if (err instanceof ImportValidationError) return c.json(validationError(err), 400)
             throw err
           }
-          const adapter = c.get('session').adapter
-          const namespace = ns(c.req.param('db'), form.schema)
-          // The run streams NDJSON (progress, then the result): a long import shows where it is, and a client that
-          // goes away cancels the statement instead of leaving it to run to the end on an abandoned connection.
-          const queryId = form.queryId ?? crypto.randomUUID()
-          const encoder = new TextEncoder()
-          let closed = false
-          const stream = new ReadableStream<Uint8Array>({
-            async start(controller) {
-              const send = (event: ImportEvent) => {
-                if (!closed) controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`))
-              }
-              const heartbeat = setInterval(() => {
-                if (!closed) controller.enqueue(encoder.encode('\n'))
-              }, HEARTBEAT_MS)
-              try {
-                const result =
-                  form.format === 'sql'
-                    ? await importSql(adapter, namespace, text, {
-                        stopOnError: form.stopOnError === '1',
-                        ignoreForeignKeys: form.ignoreForeignKeys === '1',
-                        singleTransaction: form.singleTransaction === '1',
-                        queryId,
-                        onProgress: (done, total) => send({ type: 'progress', done, total }),
-                      })
-                    : await importCsv(adapter, namespace, form, text)
-                send({ type: 'result', result })
-              } catch (err) {
-                send({
-                  type: 'fatal',
-                  error: err instanceof ImportValidationError ? validationError(err) : toApiError(err).body,
-                })
-              } finally {
-                clearInterval(heartbeat)
-                if (!closed) {
-                  closed = true
-                  controller.close()
-                }
-              }
-            },
-            async cancel() {
-              closed = true
-              await adapter.cancelQuery(queryId)
-            },
-          })
-          return c.body(stream, 200, NDJSON_HEADERS)
+          return importResponse(c, adapter, ns(c.req.param('db'), form.schema), form, prepared)
         }
       )
       // Builds a SELECT from structured choices and returns it for the SQL tab; nothing but structure is read.

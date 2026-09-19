@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useRouteContext } from '@tanstack/react-router'
 import type { ImportFormat, ImportResult } from '@tsmyadmin/shared'
 import { IMPORT_MAX_BYTES, ImportFormatSchema } from '@tsmyadmin/shared'
 import { Upload } from 'lucide-react'
@@ -11,32 +12,36 @@ import { cn } from '@/lib/cn.ts'
 import { runImport } from '@/lib/import-stream.ts'
 import { mutations, tablesQuery } from '@/lib/queries.ts'
 import { newQueryId } from '@/lib/uuid.ts'
+import { FileDropZone } from './FileDropZone.tsx'
+import { ImportOptionFields } from './ImportOptionFields.tsx'
 import { ImportSummary } from './ImportSummary.tsx'
+import {
+  csvCharsValid,
+  DEFAULT_IMPORT_OPTIONS,
+  detectFormat,
+  type ImportOptions,
+  importFields,
+  isRowsFormat,
+} from './import-options.ts'
 
 export interface ImportFormProps {
-  db: string
+  /** The database the file is loaded into; `null` runs a SQL script at the server's level (no database). */
+  db: string | null
   schema?: string | undefined
-  /** Table-level tab: CSV targets this table. */
+  /** Table-level tab: the rows go into this table. */
   table?: string
 }
 
-export function detectFormat(fileName: string): ImportFormat | null {
-  const ext = fileName.toLowerCase().split('.').pop()
-  return ext === 'csv' ? 'csv' : ext === 'sql' ? 'sql' : null
-}
-
 export function ImportForm({ db, schema, table }: ImportFormProps) {
-  const tables = useQuery({ ...tablesQuery(db, schema), enabled: table === undefined })
+  const { session } = useRouteContext({ from: '/_app' })
+  const server = db === null
+  const tables = useQuery({ ...tablesQuery(db ?? '', schema), enabled: table === undefined && !server })
   const queryClient = useQueryClient()
   const [file, setFile] = useState<File | null>(null)
   const [format, setFormat] = useState<ImportFormat>(table ? 'csv' : 'sql')
   const [target, setTarget] = useState(table ?? '')
-  const [header, setHeader] = useState(true)
-  const [nullMarker, setNullMarker] = useState('\\N')
-  const [delimiter, setDelimiter] = useState(',')
-  const [stopOnError, setStopOnError] = useState(true)
-  const [ignoreForeignKeys, setIgnoreForeignKeys] = useState(false)
-  const [singleTransaction, setSingleTransaction] = useState(false)
+  const [options, setOptions] = useState<ImportOptions>(DEFAULT_IMPORT_OPTIONS)
+  const set = (patch: Partial<ImportOptions>) => setOptions((o) => ({ ...o, ...patch }))
   const [result, setResult] = useState<ImportResult | null>(null)
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
   // Leaving the page aborts the upload, which makes the server stop the running statement. The 中止 button
@@ -47,7 +52,8 @@ export function ImportForm({ db, schema, table }: ImportFormProps) {
   // The submit / cancel buttons disable or unmount while focused: focus lands on the summary once the run ends.
   const summary = useRef<HTMLElement>(null)
   useEffect(() => () => abort.current?.abort(), [])
-  const cancel = useMutation({ mutationFn: (id: string) => mutations.cancelSql(db, id) })
+  // The cancel route reads the query id only; the database name is just a path segment.
+  const cancel = useMutation({ mutationFn: (id: string) => mutations.cancelSql(db ?? session.serverDatabase, id) })
 
   const run = useMutation({
     onMutate: () => {
@@ -62,15 +68,10 @@ export function ImportForm({ db, schema, table }: ImportFormProps) {
         {
           file: f,
           format,
-          schema,
+          ...(schema ? { schema } : {}),
           ...(queryId.current ? { queryId: queryId.current } : {}),
-          ...(format === 'csv'
-            ? { table: target, header: header ? ('1' as const) : ('0' as const), nullMarker, delimiter }
-            : {
-                stopOnError: stopOnError ? ('1' as const) : ('0' as const),
-                ignoreForeignKeys: ignoreForeignKeys ? ('1' as const) : ('0' as const),
-                singleTransaction: singleTransaction ? ('1' as const) : ('0' as const),
-              }),
+          ...(isRowsFormat(format) ? { table: target } : {}),
+          ...importFields(format, options),
         },
         (done, total) => setProgress({ done, total }),
         abort.current?.signal
@@ -104,13 +105,22 @@ export function ImportForm({ db, schema, table }: ImportFormProps) {
     setResult(null)
     run.reset()
     cancel.reset()
-    const detected = f ? detectFormat(f.name) : null
+    const detected = f && !server ? detectFormat(f.name) : null
     if (detected) setFormat(detected)
+  }
+  // The input's own list follows a drop, so the two never disagree about which file is chosen.
+  const onDrop = (f: File) => {
+    if (fileInput.current) {
+      const list = new DataTransfer()
+      list.items.add(f)
+      fileInput.current.files = list.files
+    }
+    onFile(f)
   }
   // Checked here so the user gets the limit in their own language before a 64 MB upload is attempted.
   const tooLarge = file !== null && file.size > IMPORT_MAX_BYTES
-  const badDelimiter = format === 'csv' && (delimiter.length !== 1 || '"\r\n'.includes(delimiter))
-  const blocked = !file || tooLarge || (format === 'csv' && !target) || badDelimiter
+  const badChars = format === 'csv' && !csvCharsValid(options)
+  const blocked = !file || tooLarge || (isRowsFormat(format) && !target) || badChars
   const submit = (e: FormEvent) => {
     e.preventDefault()
     if (run.isPending) return
@@ -121,42 +131,57 @@ export function ImportForm({ db, schema, table }: ImportFormProps) {
 
   return (
     <form onSubmit={submit} className="space-y-4" aria-busy={run.isPending}>
-      <h2 className="text-sm font-semibold text-ink">{locale.import.title}</h2>
+      <h2 className="text-sm font-semibold text-ink">{server ? locale.import.server.title : locale.import.title}</h2>
+      {server ? <p className="text-xs text-ink-sub">{locale.import.server.hint}</p> : null}
       {/* Everything is frozen while a run is in flight: changing the file would detach the running upload. */}
       <fieldset disabled={run.isPending} className="space-y-4">
-        <Field
-          id="import-file"
-          label={locale.import.file}
-          hint={locale.import.fileHint(IMPORT_MAX_BYTES / 1024 / 1024)}
-        >
-          <Input
+        <FileDropZone onFile={onDrop}>
+          <Field
             id="import-file"
-            ref={fileInput}
-            type="file"
-            accept=".sql,.csv,text/plain,text/csv"
-            onChange={(e) => onFile(e.target.files?.[0] ?? null)}
-          />
-        </Field>
-        <fieldset>
-          <legend className="mb-1 text-xs font-medium text-ink-sub">{locale.import.format}</legend>
-          <div className="flex gap-4 text-sm">
-            {ImportFormatSchema.options.map((f) => (
-              <label key={f} className="flex items-center gap-1">
-                <input
-                  type="radio"
-                  name="import-format"
-                  value={f}
-                  checked={format === f}
-                  onChange={() => setFormat(f)}
+            label={locale.import.file}
+            hint={locale.import.fileHint(IMPORT_MAX_BYTES / 1024 / 1024)}
+          >
+            <Input
+              id="import-file"
+              ref={fileInput}
+              type="file"
+              accept=".sql,.csv,.ods,.xml,.txt,.wiki,.gz,.zip"
+              onChange={(e) => onFile(e.target.files?.[0] ?? null)}
+            />
+          </Field>
+        </FileDropZone>
+        {server ? null : (
+          <fieldset>
+            <legend className="mb-1 text-xs font-medium text-ink-sub">{locale.import.format}</legend>
+            <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
+              {ImportFormatSchema.options.map((f) => (
+                <label key={f} className="flex items-center gap-1">
+                  <input
+                    type="radio"
+                    name="import-format"
+                    value={f}
+                    checked={format === f}
+                    onChange={() => setFormat(f)}
+                  />
+                  {locale.import.formats[f]}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        )}
+        {isRowsFormat(format) && !table ? (
+          <div className="max-w-sm">
+            {options.createTable ? (
+              <Field id="import-new-table" label={locale.import.newTable}>
+                <Input
+                  id="import-new-table"
+                  value={target}
+                  onChange={(e) => setTarget(e.target.value)}
+                  autoComplete="off"
+                  className="font-mono"
                 />
-                {locale.import.formats[f]}
-              </label>
-            ))}
-          </div>
-        </fieldset>
-        {format === 'csv' ? (
-          <div className="grid max-w-xl grid-cols-2 gap-3">
-            {table ? null : (
+              </Field>
+            ) : (
               <Field id="import-table" label={locale.import.targetTable}>
                 {tables.isPending ? (
                   <Spinner />
@@ -174,60 +199,22 @@ export function ImportForm({ db, schema, table }: ImportFormProps) {
                 )}
               </Field>
             )}
-            <Field id="import-null" label={locale.import.nullMarker}>
-              <Input
-                id="import-null"
-                value={nullMarker}
-                onChange={(e) => setNullMarker(e.target.value)}
-                className="font-mono"
-              />
-            </Field>
-            <Field id="import-delimiter" label={locale.import.delimiter}>
-              <Input
-                id="import-delimiter"
-                value={delimiter}
-                maxLength={1}
-                onChange={(e) => setDelimiter(e.target.value)}
-                className="font-mono"
-              />
-            </Field>
-            <label className="flex items-center gap-1 self-end text-sm">
-              <input type="checkbox" checked={header} onChange={(e) => setHeader(e.target.checked)} />
-              {locale.import.header}
-            </label>
           </div>
-        ) : (
-          <div className="space-y-1 text-sm">
-            <label className="flex items-center gap-1">
-              <input
-                type="checkbox"
-                checked={stopOnError || singleTransaction}
-                disabled={singleTransaction}
-                onChange={(e) => setStopOnError(e.target.checked)}
-              />
-              {locale.import.stopOnError}
-            </label>
-            <label className="flex items-center gap-1">
-              <input
-                type="checkbox"
-                checked={ignoreForeignKeys}
-                onChange={(e) => setIgnoreForeignKeys(e.target.checked)}
-              />
-              {locale.import.ignoreForeignKeys}
-            </label>
-            <label className="flex items-center gap-1">
-              <input
-                type="checkbox"
-                checked={singleTransaction}
-                onChange={(e) => setSingleTransaction(e.target.checked)}
-              />
-              {locale.import.singleTransaction}
-            </label>
-          </div>
-        )}
+        ) : null}
+        <ImportOptionFields
+          format={format}
+          options={options}
+          set={(patch) => {
+            // The name typed for a new table and the table picked from the list are different things.
+            if (patch.createTable !== undefined) setTarget('')
+            set(patch)
+          }}
+          mysql={session.dialect === 'mysql'}
+          canCreate={!table}
+        />
         <p className="text-xs text-ink-sub">{locale.import.notes[format]}</p>
       </fieldset>
-      {format === 'csv' && !target && !table ? <Notice>{locale.import.csvNeedsTable}</Notice> : null}
+      {isRowsFormat(format) && !target && !table ? <Notice>{locale.import.csvNeedsTable}</Notice> : null}
       {tooLarge ? (
         <p role="alert" className="text-sm text-red-800 dark:text-red-200">
           {locale.import.fileTooLarge(IMPORT_MAX_BYTES / 1024 / 1024)}

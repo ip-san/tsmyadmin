@@ -1,4 +1,4 @@
-<!-- translated-from: docs/phpmyadmin-parity.md sha256:f383ae30e5b7cea5861fd9e50240e067a7fc7409eccd11a36181a521f2f9a590 -->
+<!-- translated-from: docs/phpmyadmin-parity.md sha256:7465056580e87235fdc0f98e4b49df601a55ee62e0d6e383d9317655c2814a38 -->
 
 # Feature parity with phpMyAdmin
 
@@ -33,7 +33,7 @@ The basics (browsing and editing, structure changes, SQL, search, QBE, export / 
 | S14 | Editing global privileges one by one | ✅ |
 | S15 | Editing column-level and routine-level privileges | ✅ |
 | S16 | Renaming / copying an account | ✅ |
-| S17 | Server-wide export / import (several databases) | ✗ |
+| S17 | Server-wide export / import (several databases) | ✅ |
 
 ## Database
 
@@ -80,14 +80,14 @@ The basics (browsing and editing, structure changes, SQL, search, QBE, export / 
 
 | # | Feature | Status |
 |---|---|---|
-| E1 | Formats: ODS, ODT, PDF, Word, CSV for Excel, LaTeX, Texy!, MediaWiki | ✗ |
-| E2 | Compression (zip / gzip), a file per table, file name templates, character set | ✗ |
-| E3 | SQL options: INSERT / UPDATE / REPLACE, complete / extended INSERTs, maximum statement length, INSERT IGNORE, binary as hex, UTC times, a transaction, views as tables, CREATE DATABASE / USE, IF NOT EXISTS, comments | △ |
-| E4 | A range of rows; locking the tables | ✗ |
-| E5 | Import formats: ODS, XML, MediaWiki | ✗ |
-| E6 | Compressed files, the file's character set, resuming part way, drag and drop | ✗ |
-| E7 | CSV: creating a new table from it, REPLACE / IGNORE, enclosure and escape characters | △ |
-| E8 | SQL: NO_AUTO_VALUE_ON_ZERO | ✗ |
+| E1 | Formats: ODS, ODT, Word, CSV for Excel, LaTeX, Texy!, MediaWiki, HTML (PDF is out of scope, below) | ✅ |
+| E2 | Compression (zip / gzip), a file per table, file name templates, character set | ✅ |
+| E3 | SQL options: INSERT / UPDATE / REPLACE, complete / extended INSERTs, maximum statement length, INSERT IGNORE, binary as hex, UTC times, a transaction, views as tables, CREATE DATABASE / USE, IF NOT EXISTS, comments | ✅ |
+| E4 | A range of rows; locking the tables | ✅ |
+| E5 | Import formats: ODS, XML, MediaWiki | ✅ |
+| E6 | Compressed files, the file's character set, resuming part way, drag and drop | ✅ |
+| E7 | CSV: creating a new table from it, REPLACE / IGNORE, enclosure and escape characters | ✅ |
+| E8 | SQL: NO_AUTO_VALUE_ON_ZERO | ✅ |
 
 ## General
 
@@ -111,6 +111,7 @@ The basics (browsing and editing, structure changes, SQL, search, QBE, export / 
 | MySQL 3.23 / 4.0 compatibility modes (export / import) | Not used by current servers |
 | Export: CodeGen (NHibernate), PHP array | Tied to one language or framework; outside a general administration tool |
 | Import: LOAD DATA | `LOCAL` lets the server ask the client for any file, which is why it is off (mysql2 disables it too). Without `LOCAL` it reads files on the database server, which does not fit a container deployment |
+| Export: writing PDF directly | It would mean shipping fonts to embed for Japanese and other scripts. The "HTML (print / PDF)" export gives a PDF through "Save as PDF" |
 | Import: ESRI Shape files | A binary GIS format outside database administration (spatial data imports as WKT through SQL / CSV) |
 | Translation into about 80 languages | The quality could not be kept. A language is one added file; the steps are documented |
 | Themes other than light / dark | Every colour is a CSS variable, which is where a deployment changes its palette |

@@ -409,3 +409,80 @@ describe('buildExport failure mid-stream', () => {
     expect(partial).not.toContain(DUMP_COMPLETE_MARKER)
   })
 })
+
+describe('SQL dump options', () => {
+  const dump = async (over: Record<string, string>, dialect: 'mysql' | 'postgres' = 'mysql') => {
+    const a = new FakeAdapter({
+      dialect,
+      databases: {
+        shop: {
+          tables: {
+            users: {
+              ...fakeTable(
+                'users',
+                ['id', 'name'],
+                [
+                  { id: 1, name: 'a' },
+                  { id: 2, name: 'b' },
+                  { id: 3, name: 'c' },
+                ]
+              ),
+              definition: 'CREATE TABLE `users` (`id` int, `name` text)',
+            },
+          },
+        },
+      },
+    })
+    return collect(buildExport(a, ns, ['users'], q({ format: 'sql', ...over })).body)
+  }
+
+  it('writes one row to a statement, or as many as fit a byte limit', async () => {
+    const one = await dump({ extended: '0' })
+    expect(one.match(/^INSERT INTO/gm)).toHaveLength(3)
+    const all = await dump({})
+    expect(all.match(/^INSERT INTO/gm)).toHaveLength(1)
+    const limited = await dump({ maxQuery: '70' })
+    expect(limited.match(/^INSERT INTO/gm)?.length).toBeGreaterThan(1)
+    for (const statement of limited.split(';\n').filter((x) => x.includes('INSERT INTO')))
+      expect(statement.length).toBeLessThan(120)
+  })
+
+  it('writes REPLACE, INSERT IGNORE, UPDATE and unnamed columns', async () => {
+    expect(await dump({ statement: 'replace' })).toContain('REPLACE INTO `users` (`id`, `name`) VALUES')
+    expect(await dump({ ignore: '1' })).toContain('INSERT IGNORE INTO `users`')
+    expect(await dump({ statement: 'update' })).toContain("UPDATE `users` SET `name` = 'b' WHERE `id` = 2;")
+    expect(await dump({ columnNames: '0' })).toContain('INSERT INTO `users` VALUES')
+    const pg = await dump({ statement: 'replace' }, 'postgres')
+    expect(pg).toContain('ON CONFLICT ("id") DO UPDATE SET "name" = EXCLUDED."name"')
+    expect(await dump({ ignore: '1' }, 'postgres')).toContain('ON CONFLICT DO NOTHING')
+  })
+
+  it('wraps in a transaction, creates the database, locks tables and sets UTC', async () => {
+    const text = await dump({ transaction: '1', createDatabase: '1', lockTables: '1', utc: '1' })
+    expect(text).toContain('CREATE DATABASE IF NOT EXISTS `shop`;\nUSE `shop`;')
+    expect(text).toContain('START TRANSACTION;')
+    expect(text.indexOf('COMMIT;')).toBeGreaterThan(text.indexOf('INSERT INTO'))
+    expect(text).toContain('LOCK TABLES `users` WRITE;')
+    expect(text).toContain('UNLOCK TABLES;')
+    expect(text).toContain("TIME_ZONE = '+00:00'")
+    expect(text).toContain('SET TIME_ZONE = @OLD_TIME_ZONE;')
+    const pg = await dump({ transaction: '1', createDatabase: '1', utc: '1' }, 'postgres')
+    expect(pg).toContain('CREATE SCHEMA IF NOT EXISTS "public";')
+    expect(pg).toContain('BEGIN;')
+    expect(pg).toContain("SET TIME ZONE 'UTC';")
+    // LOCK TABLES is MySQL's.
+    expect(await dump({ lockTables: '1' }, 'postgres')).not.toContain('LOCK TABLES')
+  })
+
+  it('leaves the comments and headings out, but keeps the completeness marker', async () => {
+    const text = await dump({ comments: '0' })
+    expect(text).not.toContain('-- tsmyadmin SQL dump')
+    expect(text).not.toContain('-- Table:')
+    expect(text).toContain(DUMP_COMPLETE_MARKER)
+    expect(await dump({})).toContain('-- Table: users')
+  })
+
+  it('makes CREATE TABLE IF NOT EXISTS', async () => {
+    expect(await dump({ ifNotExists: '1' })).toMatch(/CREATE TABLE IF NOT EXISTS `users`/)
+  })
+})

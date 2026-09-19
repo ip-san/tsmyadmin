@@ -1,6 +1,6 @@
 import type { Cell, Dialect, EventInfo, Namespace, RoutineKind, TableSchema, TriggerInfo } from '@tsmyadmin/shared'
 import { isViewKind } from '@tsmyadmin/shared'
-import type { DropTarget, ProgramStatement, SqlExporter } from '../types.ts'
+import { AdapterError, type DropTarget, type InsertOptions, type ProgramStatement, type SqlExporter } from '../types.ts'
 import { cellLiteral, pgLiteral } from './literal.ts'
 import { quoteIdent, quoteTable } from './quote.ts'
 
@@ -10,6 +10,26 @@ import { quoteIdent, quoteTable } from './quote.ts'
  */
 export function commentText(text: string): string {
   return text.replace(/[\r\n]+/g, ' ')
+}
+
+/** The statements that create the database (MySQL) or schema (PostgreSQL) a dump works in, and enter it. */
+export function createNamespaceStatements(dialect: Dialect, ns: Namespace): string[] {
+  if (dialect === 'postgres') return [`CREATE SCHEMA IF NOT EXISTS ${quoteIdent('postgres', ns.schema ?? 'public')};`]
+  return [
+    `CREATE DATABASE IF NOT EXISTS ${quoteIdent('mysql', ns.database)};`,
+    `USE ${quoteIdent('mysql', ns.database)};`,
+  ]
+}
+
+/** A table of the given columns (names and types only: what a view has to give a table of its own). */
+export function createTableFromColumns(
+  dialect: Dialect,
+  name: string,
+  columns: { name: string; dataType: string; nullable: boolean }[]
+): string {
+  const id = (n: string) => quoteIdent(dialect, n)
+  const list = columns.map((c) => `  ${id(c.name)} ${c.dataType}${c.nullable ? '' : ' NOT NULL'}`).join(',\n')
+  return `CREATE TABLE ${id(name)} (\n${list}\n)`
 }
 
 /**
@@ -265,12 +285,66 @@ export function createExporter(dialect: Dialect): SqlExporter {
       // MySQL restores with FOREIGN_KEY_CHECKS off; PostgreSQL dumps drop everything up front through dropAll.
       return `DROP ${kind} IF EXISTS ${dumpTable(dialect, ns, schema.name)}`
     },
-    insert(ns: Namespace, table: string, columns: string[], rows: Cell[][], options = {}): string {
+    insert(ns: Namespace, table: string, columns: string[], rows: Cell[][], options: InsertOptions = {}): string {
       if (rows.length === 0) return ''
-      const cols = columns.map((c) => quoteIdent(dialect, c)).join(', ')
-      const values = rows.map((r) => `(${columns.map((_, i) => cellLiteral(dialect, r[i] ?? null)).join(', ')})`)
+      const target = dumpTable(dialect, ns, table)
+      const literalRow = (r: Cell[]) => columns.map((_, i) => cellLiteral(dialect, r[i] ?? null))
+      const kind = options.kind ?? 'insert'
+      const keys = options.keyColumns ?? []
+      if ((kind === 'update' || (kind === 'replace' && dialect === 'postgres')) && keys.length === 0)
+        throw new AdapterError(
+          'VALIDATION',
+          `${kind === 'update' ? 'UPDATE' : 'REPLACE'} needs a primary key on ${table}`
+        )
+      if (kind === 'update') {
+        const at = (name: string) => columns.indexOf(name)
+        const rest = columns.filter((c) => !keys.includes(c))
+        // A table whose every column is its key has nothing to update.
+        if (rest.length === 0) return ''
+        return rows
+          .map((r) => {
+            const values = literalRow(r)
+            const set = rest.map((c) => `${id(c)} = ${values[at(c)]}`).join(', ')
+            const where = keys.map((k) => `${id(k)} = ${values[at(k)]}`).join(' AND ')
+            return `UPDATE ${target} SET ${set} WHERE ${where};`
+          })
+          .join('\n')
+      }
+      const mysqlVerb = kind === 'replace' ? 'REPLACE' : options.ignore ? 'INSERT IGNORE' : 'INSERT'
+      const verb = dialect === 'mysql' ? mysqlVerb : 'INSERT'
+      const list = options.columnNames === false ? '' : ` (${columns.map(id).join(', ')})`
       const overriding = dialect === 'postgres' && options.overriding ? ' OVERRIDING SYSTEM VALUE' : ''
-      return `INSERT INTO ${dumpTable(dialect, ns, table)} (${cols})${overriding} VALUES\n${values.join(',\n')};`
+      let conflict = ''
+      if (dialect === 'postgres') {
+        const rest = columns.filter((c) => !keys.includes(c))
+        if (kind === 'replace')
+          conflict =
+            rest.length > 0
+              ? ` ON CONFLICT (${keys.map(id).join(', ')}) DO UPDATE SET ${rest.map((c) => `${id(c)} = EXCLUDED.${id(c)}`).join(', ')}`
+              : ' ON CONFLICT DO NOTHING'
+        else if (options.ignore) conflict = ' ON CONFLICT DO NOTHING'
+      }
+      const head = `${verb} INTO ${target}${list}${overriding} VALUES\n`
+      const values = rows.map((r) => `(${literalRow(r).join(', ')})`)
+      // One row to a statement, or as many as fit under the byte limit (a row longer than it goes out alone).
+      const groups: string[][] = []
+      if (options.extended === false) for (const v of values) groups.push([v])
+      else {
+        const limit = options.maxQuery && options.maxQuery > 0 ? options.maxQuery : Number.POSITIVE_INFINITY
+        let current: string[] = []
+        let size = head.length
+        for (const v of values) {
+          if (current.length > 0 && size + v.length + 2 > limit) {
+            groups.push(current)
+            current = []
+            size = head.length
+          }
+          current.push(v)
+          size += v.length + 2
+        }
+        if (current.length > 0) groups.push(current)
+      }
+      return groups.map((g) => `${head}${g.join(',\n')}${conflict};`).join('\n')
     },
     afterData(ns: Namespace, schema: TableSchema): string[] {
       if (dialect !== 'postgres') return [] // AUTO_INCREMENT follows explicit values on MySQL
