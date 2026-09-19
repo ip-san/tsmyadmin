@@ -29,3 +29,10 @@
 - 対照: 同じ値を YAML 側の yamlValue()（JSON.stringify(text(cell)) 経由）に通すと、JSON.stringify は ES2019 以降サロゲート単体をテキストのバックスラッシュ表記（6文字の ASCII、例: \uD800 という文字列そのもの）にエスケープする仕様があるため、後段の TextEncoder に渡っても壊れない。XML 側だけ独自のエスケープ関数（xmlEscape）を持っていて、この保護がない。
 - テストの抜け: apps/api/src/lib/export.test.ts の xml のテストは制御文字（bell = \u0007）はカバーしているが孤立サロゲートのケースがない。
 - 正しくは「対になっていないサロゲートだけ」を検出すべき（有効なサロゲートペア＝絵文字等の補助面文字はそのまま UTF-8 化できるので、ペア全体を無差別に base64 に回すと不要な base64 化が増える）。次にこのファイルを触ったら、孤立サロゲート検出のテストケースを必ず追加する。
+
+## api: RedisSavedQueries の per-kind cap 計算が read→write の外側にあるため、同時書き込みでキャップを一時的に超える（79b1dc3 で確認）
+
+- `apps/api/src/session/redis-store.ts` の `RedisSavedQueries.save()` は `mine = await this.list(...)`（複数の GET を順にawaitする、アトミックでない読み取り）で得た古いスナップショットから `overCap()` の victims を計算し、その後の `multi()` に isert/evictをまとめて詰めて実行する。read と write の間に他の書き込みが割り込める（CAS や WATCH が無い）ため、2 つの同時 `save()`（同じ kind、新規追加）がどちらも「まだ上限未満」というスナップショットを見て、両方が evict なしで insert すると、per-kind cap を一時的に超える。次の（非同時）書き込みで `overCap` が古い分もまとめて刈るので自己修復するが、同時リクエストを送り続ける限り上限を回避できる。
+- 対照: `SqliteSavedQueries.save()` は同じロジックだが `BEGIN IMMEDIATE` の中で読み直し不要な単一コネクション・同期 API（node:sqlite）なので、Hono + 単一プロセスの前提では事実上直列化される（過去の second-factor.ts の検証と同じ経験則）。Redis はマルチレプリカ前提なのでこの前提が効かず、Redis 側だけがこのレースを実際に踏む。
+- テストの欠落: `apps/api/src/session/conformance.ts` の `'caps stored items per kind'` テストは完全に逐次（`for` ループで `await` を挟む）なので、このレースを検出できない。狙って再現するには `redis.multi` や `list()` の GET をフックして片方の `save()` の書き込み直前にもう片方の `save()` を差し込む必要がある（second-factor.ts のときと同じ決定的フック手法が使えるはず、未実証）。
+- 修正方針: victims の計算を書き込みトランザクションの中に持ち込む（例: `WATCH` + `MULTI/EXEC` で index の変化を検知して再試行する、または Lua スクリプトで list 取得〜evict〜insert を一括のサーバーサイド処理にする）。

@@ -1,4 +1,4 @@
-<!-- translated-from: docs/user-guide.md sha256:29fd3046ce3db07aab366373ae35bd728fe3cc367533bf5688d2389271b4427a -->
+<!-- translated-from: docs/user-guide.md sha256:48ffc0b560d7b3ad5636cde80f854c9bf8e42855aa9bf63bbdf344eae869c7c1 -->
 
 # User guide
 
@@ -57,6 +57,7 @@ The language menu at the top right switches between English and 日本語 (the p
 | Replication | The role of this server (standalone / source / replica / relay; *unknown* where the account cannot read enough to tell), its state as a replica (MySQL: SHOW REPLICA STATUS; PostgreSQL: pg_stat_wal_receiver), the replicas connected to it, and the binary logs (on PostgreSQL, WAL segments) with their size. Parts the account may not read say so (MySQL: REPLICATION CLIENT; PostgreSQL: pg_read_all_stats / pg_monitor) |
 | Charsets and collations / Engines / Plugins | The character sets and collations, storage engines and plugins the server has (filtered on any column). PostgreSQL has none of these as such, so the same places show **Collations**, **Access methods** (table and index) and **Extensions** (available, and the version installed) |
 | Processes | The connections the server has open. tsmyadmin's own carry a **tsmyadmin** badge. **Cancel query** stops the running statement only and leaves the connection, its transaction and its temporary tables alone (no confirmation). **Kill** closes the connection itself (the confirmation shows the user, database and running query) |
+| User groups | For a set of accounts, which tabs are not shown (at the server, database and table levels; hiding the server's SQL also hides the console at the foot of the page). Only an account that can manage every member may change a group. **It tidies the screen; it is not a permission** — opening the URL directly still works within the account's own privileges. Shown only where sessions are persistent |
 | Users | The accounts, their privileges (as GRANT statements), **Create user**, **Change password** and **Drop**. Accounts with a second factor that you may manage also get **Reset two-factor…** (for someone who lost their device) |
 | Security | Two-factor authentication for the account this session logged in as (below). The secret needs somewhere to live, so the tab is only shown where the deployment has a persistent session store |
 

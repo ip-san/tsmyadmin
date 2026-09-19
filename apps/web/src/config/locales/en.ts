@@ -118,6 +118,7 @@ export const en = {
   },
   tabs: {
     security: 'Security',
+    userGroups: 'User groups',
     databases: 'Databases',
     structure: 'Structure',
     sql: 'SQL',
@@ -1042,6 +1043,21 @@ export const en = {
     none: 'None set.',
     clear: (column: string) => `${column}: remove`,
     imageAlt: (column: string) => `Image in ${column}`,
+  },
+  userGroups: {
+    title: 'User groups',
+    notice:
+      'Members of a group do not see the tabs chosen for it. This tidies the screen; it is not a permission (opening the URL directly still works, within the account’s own privileges). Only an account that can manage every member may change a group.',
+    empty: 'No group you can manage.',
+    name: 'Group name',
+    members: 'Members',
+    hidden: 'Hidden tabs',
+    hide: { server: 'Hidden tabs (server)', db: 'Hidden tabs (database)', table: 'Hidden tabs (table)' },
+    create: 'Create a group',
+    edit: (name: string) => `Edit ${name}`,
+    editShort: 'Edit',
+    remove: (name: string) => `${name}: delete`,
+    save: 'Save',
   },
   normalize: {
     title: 'Normalization hints',

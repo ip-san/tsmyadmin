@@ -10,11 +10,17 @@ vi.mock('@tanstack/react-router', () => ({
 
 vi.mock('@/lib/queries.ts', () => ({
   sessionQuery: { queryKey: ['session'], queryFn: async () => null, staleTime: Number.POSITIVE_INFINITY },
+  myGroupTabsQuery: {
+    queryKey: ['user-groups', 'mine'],
+    queryFn: async () => null,
+    staleTime: Number.POSITIVE_INFINITY,
+  },
 }))
 
-function renderTabs(secondFactor: string) {
+function renderTabs(secondFactor: string, hiddenTabs: string[] = []) {
   const client = new QueryClient()
   client.setQueryData(['session'], { secondFactor })
+  client.setQueryData(['user-groups', 'mine'], { hiddenTabs })
   return render(
     <QueryClientProvider client={client}>
       <ServerTabs tab="ユーザー" />
@@ -33,5 +39,13 @@ describe('ServerTabs', () => {
 
     renderTabs('none')
     expect(screen.getByRole('link', { name: 'セキュリティ' })).toHaveAttribute('href', '/security')
+  })
+
+  it('leaves out the tabs the account’s user groups hide, and never the first one', () => {
+    renderTabs('none', ['server:sql', 'server:processes'])
+    expect(screen.queryByRole('link', { name: 'SQL' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'プロセス' })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'ステータス' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'データベース' })).toBeInTheDocument()
   })
 })

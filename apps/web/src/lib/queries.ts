@@ -14,6 +14,7 @@ import type {
   ExportTemplate,
   KeyValue,
   KillMode,
+  MyGroupTabs,
   PasskeyChallenge,
   PasskeyRegistration,
   PasskeyResponse,
@@ -44,6 +45,8 @@ import type {
   TableSearchResult,
   TriggerInfo,
   UserGrants,
+  UserGroup,
+  UserGroupBody,
   UserInfo,
   UserRef,
 } from '@tsmyadmin/shared'
@@ -97,6 +100,16 @@ export const listExportTemplates = () => unwrap<ExportTemplate[]>(api['export-te
 export const exportTemplatesQuery = queryOptions({ queryKey: ['export-templates'], queryFn: listExportTemplates })
 export const listCentralColumns = () => unwrap<CentralColumn[]>(api['central-columns'].$get())
 export const centralColumnsQuery = queryOptions({ queryKey: ['central-columns'], queryFn: listCentralColumns })
+/** What the signed-in account's user groups hide; asked once per login (a group change is rare). */
+export const myGroupTabsQuery = queryOptions({
+  queryKey: ['user-groups', 'mine'],
+  queryFn: () => unwrap<MyGroupTabs>(api['user-groups'].mine.$get()),
+  staleTime: Number.POSITIVE_INFINITY,
+})
+export const userGroupsQuery = queryOptions({
+  queryKey: ['user-groups', 'all'],
+  queryFn: () => unwrap<UserGroup[]>(api['user-groups'].$get()),
+})
 export const listColumnTransforms = () => unwrap<ColumnTransform[]>(api['column-transforms'].$get())
 
 export const databasesQuery = queryOptions({
@@ -331,6 +344,8 @@ export const mutations = {
   saveCentralColumn: (body: CentralColumnBody) => unwrap<CentralColumn[]>(api['central-columns'].$post({ json: body })),
   deleteCentralColumn: (id: string) =>
     unwrap<CentralColumn[]>(api['central-columns'][':id'].$delete({ param: { id } })),
+  saveUserGroup: (body: UserGroupBody) => unwrap<UserGroup[]>(api['user-groups'].$post({ json: body })),
+  deleteUserGroup: (id: string) => unwrap<UserGroup[]>(api['user-groups'][':id'].$delete({ param: { id } })),
   saveColumnTransform: (body: ColumnTransformBody) =>
     unwrap<ColumnTransform[]>(api['column-transforms'].$post({ json: body })),
   deleteColumnTransform: (id: string) =>

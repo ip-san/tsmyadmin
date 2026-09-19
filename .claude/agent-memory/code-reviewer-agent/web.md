@@ -58,3 +58,16 @@
 
 - 上のエントリで「区切り文字なしの連結」と書いたが、実際のソースにはテンプレートリテラルの各項目の間に生の制御文字 U+0001（1バイト、印字不可）が埋め込まれていた（`git show <rev>:path | od -c` で確認しないと見えない。通常の Read ツールやエディタ表示、ターミナルへの cat / git show では何も表示されない）。なので「ab+c と a+bc が衝突する」という具体例は不正確だった（実際には区切られていたので衝突しない）。それでも f858fb1 で JSON.stringify([...]) に置き換えられた —— ソースに不可視の制御文字を区切り文字として埋め込む手法は、フォーマッタや手動編集で気づかず壊れる／消えるリスクがあり、レビューでは「動くから良い」ではなく「不可視文字への依存はメンテナンス上のリスク」として指摘すべきだった。
 - 教訓: 複合キーの文字列連結を読むときは、git show / Read で見える文字列だけを信用せず、疑わしい箇所は `od -c` や `od -An -tx1` でバイト単位に確認する。特に「区切りなしに見えるのに開発者が意図的にやっている」ように見える連結は、不可視文字が埋まっている可能性を疑う。
+
+## web: local-storage フォールバックの複合キーがまた素朴な連結に戻った（79b1dc3/b6b12cd/870a4b3、f858fb1 の後）
+
+- `apps/web/src/lib/central-columns.ts:9-10`（`` `central.${scope}.${database}.${schema ?? ''}` ``）と `apps/web/src/lib/column-transforms.ts:15`（`` `transform.${scope}.${ref.db}.${ref.schema ?? ''}.${ref.table}` ``）は区切り文字なしのテンプレートリテラル連結。db/schema/table 名にリテラルの `.`（バッククォートで囲めば MySQL/PostgreSQL とも合法）が入ると異なるテーブル間でキーが衝突しうる。
+- この exact パターンは `TableShortcuts.tsx` で一度指摘済み・f858fb1 で `JSON.stringify([...])` に修正済みなのに、f858fb1 より後に追加された本 3 コミットで再発している。しかも同じ PR のサーバー側キー（`packages/shared/src/schemas/stored.ts` の `centralColumnKey`/`columnTransformKey`）は正しく `JSON.stringify([...])` を使っており、クライアント側のローカルストレージ・フォールバックだけが古いパターンに戻っている——同一実装者が同一 PR 内で書き方を使い分けてしまう典型例。
+- 影響は「永続セッションストアがない（ブラウザ保存のみ）」デプロイに限定され、識別子にドットを使うのは稀なので Warning 止め。次に `key = (...) => \`prefix.${a}.${b}...\`` の形を見たら、必ず `JSON.stringify([a, b, ...])` になっているか確認する。
+
+## web: `sharePreference` はアカウント設定を「まるごと PUT」するため、別タブ/別ブラウザからの変更がロストアップデートになる
+
+- `apps/web/src/lib/account-prefs.ts` の `shared`（モジュールローカル変数、JS コンテキストごとに独立）は、そのタブがロード時に読んだサーバー設定を出発点に `sharePreference(patch)` で `{ ...shared, ...patch }` にマージしてから `PUT /api/preferences` で丸ごと送る。`apps/api/src/routes/stored.ts` の `PUT /preferences` はサーバー側でマージせず、送られてきた body でそのまま `PREFERENCES` 行を上書きする（name-keyed replace、部分更新ではない）。
+- 具体的な壊れ方: タブ A（起動時に `shared={}`）でテーマを切り替え → サーバーは `{theme:"dark"}`。タブ B（同じくロード時 `shared={}}`）でコンソールの開閉を切り替え → サーバーは `{consoleDocked:true}` になり、A が書いたテーマが消える。`e2e/account-preferences.spec.ts` は「タブ A で書く→タブ B で読む」の片方向しか検証しておらず、双方向の同時変更は通らない（テストは壊れたコードでも green のまま）。
+- 修正方針: サーバー側 `PUT /preferences` を「現在の行を読んでからマージして書く」（Preferences の全フィールドが optional で「明示的に unset する UI」が存在しないため、PATCH 的マージで安全に直せる）。あるいはクライアント側が最新のサーバー値を都度読んでからパッチを当てる。
+- 副次的な指摘: 初回ログイン直後に 2 つのタブから同時に初めて `PUT /preferences` が飛ぶと、どちらも `existing` が無い状態で `SqliteSavedQueries.save`/`RedisSavedQueries.save` に到達し `preferences` という同名行が 2 つできる（`overCap` の per-kind cap 対象にもなる）。`GET` は新しい方だけを拾うので実害は小さいが、ロストアップデートと同根（read-then-write に atomicity がない）としてまとめて報告してよい。

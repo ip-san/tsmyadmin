@@ -32,6 +32,7 @@ import {
   TableInfoSchema,
   TableSchemaSchema,
   TableSearchResultSchema,
+  UserGroupSchema,
 } from '@tsmyadmin/shared'
 import { afterEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
@@ -2230,5 +2231,91 @@ describe('preferences, central columns and column transformations', () => {
     const put = await h.req('/api/preferences', { method: 'PUT', body: JSON.stringify({ theme: 'dark' }) })
     expect(put.status).toBe(400)
     expect(await put.json()).toMatchObject({ code: 'UNSUPPORTED' })
+  })
+})
+
+describe('user groups', () => {
+  function sharedHarness() {
+    let manage = true
+    const store = new SqliteSessionStore({
+      path: ':memory:',
+      secret: 's'.repeat(32),
+      adapterFactory: () => fixtureAdapter({ manageAccounts: manage }),
+      sweepIntervalMs: 0,
+    })
+    const app = createApp(testConfig(), { store })
+    let cookie = ''
+    const req = (path: string, init: RequestInit = {}) =>
+      app.request(path, {
+        ...init,
+        headers: { 'content-type': 'application/json', ...(cookie ? { cookie } : {}), ...(init.headers ?? {}) },
+      })
+    /** Signs in as `user`; `canManage` decides what the new session's canManageAccount answers. */
+    const login = async (user: string, canManage = true) => {
+      manage = canManage
+      const res = await req('/api/session', { method: 'POST', body: JSON.stringify({ ...LOGIN, user }) })
+      cookie = res.headers.get('set-cookie')?.split(';')[0] ?? ''
+      return res
+    }
+    const save = (body: unknown) => req('/api/user-groups', { method: 'POST', body: JSON.stringify(body) })
+    return { store, req, login, save }
+  }
+
+  it('hides what a group says from its members, and only from them', async () => {
+    const h = sharedHarness()
+    try {
+      await h.login('root')
+      const saved = await h.save({ name: 'readers', members: ['alice'], hiddenTabs: ['server:sql', 'db:export'] })
+      expect(z.array(UserGroupSchema).parse(await saved.json())).toMatchObject([{ name: 'readers' }])
+      await h.login('alice', false)
+      expect(await (await h.req('/api/user-groups/mine')).json()).toEqual({ hiddenTabs: ['db:export', 'server:sql'] })
+      // A member who cannot manage the others does not see the group itself (it names accounts).
+      expect(await (await h.req('/api/user-groups')).json()).toEqual([])
+      await h.login('bob', false)
+      expect(await (await h.req('/api/user-groups/mine')).json()).toEqual({ hiddenTabs: [] })
+    } finally {
+      await h.store.closeAll()
+    }
+  })
+
+  it('lets only an account that can manage the members change or delete a group', async () => {
+    const h = sharedHarness()
+    try {
+      await h.login('root')
+      const [group] = z
+        .array(UserGroupSchema)
+        .parse(await (await h.save({ name: 'readers', members: ['alice'], hiddenTabs: [] })).json())
+      await h.login('alice', false)
+      // Neither by replacing it under the same name nor by deleting it: alice could lift her own restriction.
+      expect((await h.save({ name: 'readers', members: ['alice'], hiddenTabs: [] })).status).toBe(403)
+      expect((await h.req(`/api/user-groups/${group?.id}`, { method: 'DELETE' })).status).toBe(403)
+      await h.login('root')
+      expect(await (await h.req(`/api/user-groups/${group?.id}`, { method: 'DELETE' })).json()).toEqual([])
+    } finally {
+      await h.store.closeAll()
+    }
+  })
+
+  it('refuses an unknown tab, and a group without members', async () => {
+    const h = sharedHarness()
+    try {
+      await h.login('root')
+      expect((await h.save({ name: 'x', members: ['a'], hiddenTabs: ['server:security'] })).status).toBe(400)
+      expect((await h.save({ name: 'x', members: [], hiddenTabs: [] })).status).toBe(400)
+    } finally {
+      await h.store.closeAll()
+    }
+  })
+
+  it('has nothing to hide, and refuses to save, without a persistent store', async () => {
+    const h = harness()
+    stores.push(h.store)
+    await h.login()
+    expect(await (await h.req('/api/user-groups/mine')).json()).toEqual({ hiddenTabs: [] })
+    const res = await h.req('/api/user-groups', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'x', members: ['a'], hiddenTabs: [] }),
+    })
+    expect(await res.json()).toMatchObject({ code: 'UNSUPPORTED' })
   })
 })

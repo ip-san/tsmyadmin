@@ -3,6 +3,10 @@ import type { DatabaseSync } from 'node:sqlite'
 import type { ConnectRequest } from '@tsmyadmin/shared'
 import { open, rowAad, seal } from './crypto.ts'
 import { identityHash } from './identity.ts'
+
+/** Who a row belongs to: an account (the default), or a whole server for shared items. */
+export type RowOwner = (key: Buffer, config: ConnectRequest) => string
+
 import { SAVED_ITEM_KINDS, type SavedItem, type SavedItemKind, type SavedItems } from './store.ts'
 
 /** Table name in the AAD of a saved-item payload. The name is historical: export templates share the table. */
@@ -10,6 +14,9 @@ export const SAVED_QUERIES = 'saved_queries'
 
 /** Per account and kind, matching what the browser-side list holds. */
 export const SAVED_QUERY_LIMIT = 200
+
+/** Per server and kind for shared items: every account's tracked versions and groups add up in one list. */
+export const SHARED_ITEM_LIMIT = 2000
 
 /** The rows of `mine` (one kind, newest first) to drop so that one more fits under `limit`. */
 export function overCap(mine: readonly SavedItem[], limit: number): SavedItem[] {
@@ -40,7 +47,8 @@ export class SqliteSavedQueries implements SavedItems {
     db: DatabaseSync,
     private readonly key: Buffer,
     private readonly now: () => number = Date.now,
-    private readonly limit = SAVED_QUERY_LIMIT
+    private readonly limit = SAVED_QUERY_LIMIT,
+    private readonly owner: RowOwner = identityHash
   ) {
     this.db = db
     db.exec(`
@@ -61,7 +69,7 @@ export class SqliteSavedQueries implements SavedItems {
   }
 
   private identity(config: ConnectRequest): string {
-    return identityHash(this.key, config)
+    return this.owner(this.key, config)
   }
 
   async list(config: ConnectRequest, kind: SavedItemKind): Promise<SavedItem[]> {

@@ -1,4 +1,4 @@
-<!-- translated-from: docs/security.md sha256:5133382dab07789a9836ead5fb1e2624293da3c5509334c886f684794d8370cc -->
+<!-- translated-from: docs/security.md sha256:f4b418709a52156bb43b5aa0d235ee6061b2539dad0ff04bed473fe4a024d282 -->
 
 # Security model
 
@@ -99,4 +99,4 @@ The structured log (`LOG_FORMAT=json`) carries `login.ok`, `login.failed`, `logi
 
 - The session store is a SQLite file, so several replicas cannot share it (sticky sessions are required)
 - MySQL's `DELIMITER xx` is recognised only when it stands alone at the start of a line (matching the mysql client)
-- The database's own user privileges are the only access control; tsmyadmin has no roles of its own. A missing privilege is reported distinctly as `PERMISSION_DENIED` (403) — see [operations.md](operations.md)
+- The database's own user privileges are the only access control; tsmyadmin has no roles of its own. User groups only hide tabs: the API behind a hidden tab still works within the account's own privileges (changing a group is limited to an account that can manage every member, so a member cannot lift it). A missing privilege is reported distinctly as `PERMISSION_DENIED` (403) — see [operations.md](operations.md)

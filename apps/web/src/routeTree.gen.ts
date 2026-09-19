@@ -20,6 +20,7 @@ import { Route as AppReplicationRouteImport } from './routes/_app/replication'
 import { Route as AppSecurityRouteImport } from './routes/_app/security'
 import { Route as AppSqlRouteImport } from './routes/_app/sql'
 import { Route as AppStatusRouteImport } from './routes/_app/status'
+import { Route as AppUserGroupsRouteImport } from './routes/_app/user-groups'
 import { Route as AppUsersRouteImport } from './routes/_app/users'
 import { Route as AppVariablesRouteImport } from './routes/_app/variables'
 import { Route as AppDbDbRouteImport } from './routes/_app/db.$db'
@@ -100,6 +101,11 @@ const AppSqlRoute = AppSqlRouteImport.update({
 const AppStatusRoute = AppStatusRouteImport.update({
   id: '/status',
   path: '/status',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppUserGroupsRoute = AppUserGroupsRouteImport.update({
+  id: '/user-groups',
+  path: '/user-groups',
   getParentRoute: () => AppRoute,
 } as any)
 const AppUsersRoute = AppUsersRouteImport.update({
@@ -253,6 +259,7 @@ export interface FileRoutesByFullPath {
   '/security': typeof AppSecurityRoute
   '/sql': typeof AppSqlRoute
   '/status': typeof AppStatusRoute
+  '/user-groups': typeof AppUserGroupsRoute
   '/users': typeof AppUsersRoute
   '/variables': typeof AppVariablesRoute
   '/db/$db': typeof AppDbDbRouteWithChildren
@@ -291,6 +298,7 @@ export interface FileRoutesByTo {
   '/security': typeof AppSecurityRoute
   '/sql': typeof AppSqlRoute
   '/status': typeof AppStatusRoute
+  '/user-groups': typeof AppUserGroupsRoute
   '/users': typeof AppUsersRoute
   '/variables': typeof AppVariablesRoute
   '/': typeof AppIndexRoute
@@ -330,6 +338,7 @@ export interface FileRoutesById {
   '/_app/security': typeof AppSecurityRoute
   '/_app/sql': typeof AppSqlRoute
   '/_app/status': typeof AppStatusRoute
+  '/_app/user-groups': typeof AppUserGroupsRoute
   '/_app/users': typeof AppUsersRoute
   '/_app/variables': typeof AppVariablesRoute
   '/_app/': typeof AppIndexRoute
@@ -372,6 +381,7 @@ export interface FileRouteTypes {
     | '/security'
     | '/sql'
     | '/status'
+    | '/user-groups'
     | '/users'
     | '/variables'
     | '/db/$db'
@@ -410,6 +420,7 @@ export interface FileRouteTypes {
     | '/security'
     | '/sql'
     | '/status'
+    | '/user-groups'
     | '/users'
     | '/variables'
     | '/'
@@ -448,6 +459,7 @@ export interface FileRouteTypes {
     | '/_app/security'
     | '/_app/sql'
     | '/_app/status'
+    | '/_app/user-groups'
     | '/_app/users'
     | '/_app/variables'
     | '/_app/'
@@ -560,6 +572,13 @@ declare module '@tanstack/react-router' {
       path: '/status'
       fullPath: '/status'
       preLoaderRoute: typeof AppStatusRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/user-groups': {
+      id: '/_app/user-groups'
+      path: '/user-groups'
+      fullPath: '/user-groups'
+      preLoaderRoute: typeof AppUserGroupsRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/users': {
@@ -829,6 +848,7 @@ interface AppRouteChildren {
   AppSecurityRoute: typeof AppSecurityRoute
   AppSqlRoute: typeof AppSqlRoute
   AppStatusRoute: typeof AppStatusRoute
+  AppUserGroupsRoute: typeof AppUserGroupsRoute
   AppUsersRoute: typeof AppUsersRoute
   AppVariablesRoute: typeof AppVariablesRoute
   AppIndexRoute: typeof AppIndexRoute
@@ -844,6 +864,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppSecurityRoute: AppSecurityRoute,
   AppSqlRoute: AppSqlRoute,
   AppStatusRoute: AppStatusRoute,
+  AppUserGroupsRoute: AppUserGroupsRoute,
   AppUsersRoute: AppUsersRoute,
   AppVariablesRoute: AppVariablesRoute,
   AppIndexRoute: AppIndexRoute,

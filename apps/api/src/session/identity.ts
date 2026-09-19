@@ -21,6 +21,19 @@ export function identityKey(config: ConnectRequest): string {
   return [config.dialect, field(config.host.toLowerCase()), config.port, field(config.user)].join('|')
 }
 
+/**
+ * The server a row shared by all its accounts belongs to (tracking, user groups): dialect, host and port. Starts
+ * with a field no identityKey can have (`server` is not a dialect), so a server and an account never share a key.
+ */
+function serverKey(config: ConnectRequest): string {
+  return ['server', config.dialect, field(config.host.toLowerCase()), config.port].join('|')
+}
+
+/** The server a shared row belongs to, as an HMAC, like an account's. */
+export function serverHash(key: Buffer, config: ConnectRequest): string {
+  return createHmac('sha256', key).update(serverKey(config)).digest('hex')
+}
+
 /** The account an at-rest row belongs to, as an HMAC: the plain user / host never reaches the file. */
 export function identityHash(key: Buffer, config: ConnectRequest): string {
   return createHmac('sha256', key).update(identityKey(config)).digest('hex')

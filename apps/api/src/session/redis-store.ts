@@ -3,8 +3,15 @@ import type { DatabaseAdapter } from '@tsmyadmin/adapter'
 import { type ConnectRequest, ConnectRequestSchema } from '@tsmyadmin/shared'
 import { Redis } from 'ioredis'
 import { deriveSessionKey, open, rowAad, seal } from './crypto.ts'
-import { identityHash } from './identity.ts'
-import { overCap, readPayload, SAVED_QUERIES, SAVED_QUERY_LIMIT } from './saved-queries.ts'
+import { identityHash, serverHash } from './identity.ts'
+import {
+  overCap,
+  type RowOwner,
+  readPayload,
+  SAVED_QUERIES,
+  SAVED_QUERY_LIMIT,
+  SHARED_ITEM_LIMIT,
+} from './saved-queries.ts'
 import { SECOND_FACTOR, version } from './second-factor.ts'
 import {
   type AdapterFactory,
@@ -101,6 +108,7 @@ export class RedisSessionStore implements SessionStore {
   private readonly live = new Map<string, { config: ConnectRequest; adapter: DatabaseAdapter; createdAt: number }>()
   private timer: ReturnType<typeof setInterval> | null
   readonly savedQueries: SavedItems
+  readonly sharedItems: SavedItems
   readonly secondFactor: SecondFactors
 
   constructor(options: RedisSessionStoreOptions) {
@@ -120,6 +128,14 @@ export class RedisSessionStore implements SessionStore {
       this.prefix,
       this.now,
       options.savedItemLimit ?? SAVED_QUERY_LIMIT
+    )
+    this.sharedItems = new RedisSavedQueries(
+      this.redis,
+      this.key,
+      this.prefix,
+      this.now,
+      options.savedItemLimit ?? SHARED_ITEM_LIMIT,
+      serverHash
     )
     this.secondFactor = new RedisSecondFactors(this.redis, this.key, this.prefix)
     // Redis expires sessions itself; the sweep only closes the pools this process still holds for them.
@@ -308,11 +324,12 @@ class RedisSavedQueries implements SavedItems {
     private readonly key: Buffer,
     private readonly prefix: string,
     private readonly now: () => number,
-    private readonly limit: number
+    private readonly limit: number,
+    private readonly owner: RowOwner = identityHash
   ) {}
 
   private index(config: ConnectRequest): string {
-    return `${this.prefix}:saved:${identityHash(this.key, config)}`
+    return `${this.prefix}:saved:${this.owner(this.key, config)}`
   }
 
   private entry(config: ConnectRequest, id: string): string {

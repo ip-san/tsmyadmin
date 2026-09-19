@@ -285,5 +285,30 @@ export function describeSessionStoreConformance(
         await store.closeAll()
       }
     })
+
+    it('shares server-wide items between the accounts of one server, and only that server', async () => {
+      const store = await create({ adapterFactory: tracked().adapterFactory, sweepIntervalMs: 0 })
+      try {
+        const shared = store.sharedItems
+        if (!shared) {
+          expect(store.savedQueries).toBeUndefined()
+          return
+        }
+        await shared.save(CONFIG, 'usergroup', 'readers', '{}')
+        // Another account of the same server sees it (and the host is compared the way the server would).
+        expect(await shared.list({ ...CONFIG, user: 'someone-else', host: 'H' }, 'usergroup')).toMatchObject([
+          { name: 'readers' },
+        ])
+        // Another server does not, and it is not one of the account's own items either.
+        expect(await shared.list({ ...CONFIG, port: 2 }, 'usergroup')).toEqual([])
+        expect(await store.savedQueries?.list(CONFIG, 'usergroup')).toEqual([])
+        const id = (await shared.list(CONFIG, 'usergroup'))[0]?.id ?? ''
+        expect(await shared.remove({ ...CONFIG, port: 2 }, 'usergroup', id)).toEqual([])
+        expect(await shared.list(CONFIG, 'usergroup')).toHaveLength(1)
+        expect(await shared.remove({ ...CONFIG, user: 'someone-else' }, 'usergroup', id)).toEqual([])
+      } finally {
+        await store.closeAll()
+      }
+    })
   })
 }

@@ -115,6 +115,7 @@ export const ja = {
   },
   tabs: {
     security: 'セキュリティ',
+    userGroups: 'ユーザーグループ',
     databases: 'データベース',
     structure: '構造',
     sql: 'SQL',
@@ -1028,6 +1029,21 @@ export const ja = {
     none: '設定はありません。',
     clear: (column: string) => `${column}: 解除`,
     imageAlt: (column: string) => `${column} の画像`,
+  },
+  userGroups: {
+    title: 'ユーザーグループ',
+    notice:
+      'グループのメンバーには、選んだタブを表示しません。画面を整理するためのもので、権限ではありません（URL を直接開けば、その操作はアカウント自身の権限の範囲で行えます）。変更できるのは、メンバー全員を管理できるアカウントだけです。',
+    empty: '管理できるグループはありません。',
+    name: 'グループ名',
+    members: 'メンバー',
+    hidden: '隠すタブ',
+    hide: { server: '隠すタブ（サーバー）', db: '隠すタブ（データベース）', table: '隠すタブ（テーブル）' },
+    create: 'グループを作成',
+    edit: (name: string) => `${name} を編集`,
+    editShort: '編集',
+    remove: (name: string) => `${name}: 削除`,
+    save: '保存する',
   },
   normalize: {
     title: '正規化の手がかり',

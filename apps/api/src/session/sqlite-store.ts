@@ -5,8 +5,8 @@ import { DatabaseSync, type StatementSync } from 'node:sqlite'
 import type { DatabaseAdapter } from '@tsmyadmin/adapter'
 import { type ConnectRequest, ConnectRequestSchema } from '@tsmyadmin/shared'
 import { deriveSessionKey, open, openLegacy, rowAad, seal } from './crypto.ts'
-import { identityHash } from './identity.ts'
-import { SAVED_QUERIES, SqliteSavedQueries } from './saved-queries.ts'
+import { identityHash, serverHash } from './identity.ts'
+import { SAVED_QUERIES, SHARED_ITEM_LIMIT, SqliteSavedQueries } from './saved-queries.ts'
 import { SqliteSecondFactors } from './second-factor.ts'
 
 /** Table name in the AAD of a session payload. */
@@ -74,6 +74,7 @@ export class SqliteSessionStore implements SessionStore {
   private readonly factory: AdapterFactory
   private readonly live = new Map<string, Live>()
   readonly savedQueries: SqliteSavedQueries
+  readonly sharedItems: SqliteSavedQueries
   readonly secondFactor: SqliteSecondFactors
   private timer: ReturnType<typeof setInterval> | null
   private readonly stmt: {
@@ -146,6 +147,14 @@ export class SqliteSessionStore implements SessionStore {
     // Same file and same key as the credentials: a bookmarked statement is written by hand and routinely
     // carries row values, so it is sealed exactly like them.
     this.savedQueries = new SqliteSavedQueries(this.db, this.key, this.now, options.savedItemLimit)
+    // The same table: a shared row is sealed and purged on secret rotation exactly like an account's.
+    this.sharedItems = new SqliteSavedQueries(
+      this.db,
+      this.key,
+      this.now,
+      options.savedItemLimit ?? SHARED_ITEM_LIMIT,
+      serverHash
+    )
     this.secondFactor = new SqliteSecondFactors(this.db, this.key)
     // Saved queries go the same way, and must: a row is found by an HMAC of the account under this key, so after
     // a rotation no future request can name the old rows at all. Left alone they would never be listed, never

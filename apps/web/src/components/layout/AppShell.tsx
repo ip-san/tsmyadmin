@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query'
 import { Link, useRouterState } from '@tanstack/react-router'
 import type { SessionInfo } from '@tsmyadmin/shared'
 import { CircleHelp, LogOut, Moon, PanelLeftClose, PanelLeftOpen, SquareTerminal, Sun, X } from 'lucide-react'
@@ -6,6 +7,7 @@ import { z } from 'zod'
 import { LOCALE_NAMES, LOCALES, locale, localeCode, setLocale } from '@/config/locale.ts'
 import { sharePreference, sharePreferenceNow } from '@/lib/account-prefs.ts'
 import { readPreference, writePreference } from '@/lib/preferences.ts'
+import { myGroupTabsQuery } from '@/lib/queries.ts'
 import { useShortcuts } from '@/lib/shortcuts.ts'
 import { useTheme } from '@/lib/theme.ts'
 import { Button } from '../ui/Button.tsx'
@@ -46,6 +48,8 @@ export function AppShell({
       return !c
     })
   useShortcuts([{ keys: 'mod+b', global: true, handler: toggleSidebar }])
+  // A user group that hides the server's SQL tab hides the console too: it is the same thing at the foot of the page.
+  const consoleHidden = useQuery(myGroupTabsQuery).data?.hiddenTabs.includes('server:sql') ?? false
   const [docked, setDocked] = useState(() => readPreference(DOCK_PREF, z.boolean(), false))
   const setDock = (open: boolean) => {
     setDocked(open)
@@ -98,7 +102,7 @@ export function AppShell({
             {locale.nav.help}
             <span className="sr-only">{locale.nav.opensNewTab}</span>
           </a>
-          {dock ? (
+          {dock && !consoleHidden ? (
             <Button
               variant="ghost"
               size="sm"
@@ -169,7 +173,7 @@ export function AppShell({
           <main id="main" className="min-h-0 min-w-0 flex-1 overflow-y-auto p-4 print:overflow-visible print:p-0">
             {children}
           </main>
-          {dock && docked ? (
+          {dock && docked && !consoleHidden ? (
             <section
               id="sql-dock"
               aria-labelledby="sql-dock-title"

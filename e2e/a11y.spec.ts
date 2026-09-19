@@ -55,6 +55,15 @@ test.describe('accessibility (axe-core, two-factor)', () => {
     await scan(page)
   })
 
+  test('user groups tab', async ({ page }) => {
+    const t = TARGETS[0]
+    if (!t) throw new Error('no target')
+    await login(page, t)
+    await page.goto('/user-groups')
+    await page.getByRole('group', { name: '隠すタブ（テーブル）' }).waitFor()
+    await scan(page)
+  })
+
   test('users tab with an account to reset, and the reset dialog', async ({ page }) => {
     test.setTimeout(90_000)
     const name = `e2e_a11y2f_${Date.now().toString(36)}`

@@ -4,9 +4,10 @@ import { identityKey } from './identity.ts'
 
 /**
  * What a stored item is: a bookmarked statement, a saved set of export choices, a central column (a column
- * definition kept for reuse), a column's display transformation, or the account's preferences (one item).
+ * definition kept for reuse), a column's display transformation, or the account's preferences (one item) — all
+ * per account — or, shared by every account of a server, a tracked table version or a user group.
  */
-export const SAVED_ITEM_KINDS = ['sql', 'export', 'central', 'transform', 'prefs'] as const
+export const SAVED_ITEM_KINDS = ['sql', 'export', 'central', 'transform', 'prefs', 'tracking', 'usergroup'] as const
 export type SavedItemKind = (typeof SAVED_ITEM_KINDS)[number]
 
 /** A stored item. `body` is the statement for 'sql' and JSON for the others; only the routes interpret it. */
@@ -129,6 +130,11 @@ export interface SessionStore {
    */
   /** Named items (bookmarks, export templates); absent where the store cannot keep them past a restart. */
   readonly savedQueries?: SavedItems
+  /**
+   * Items shared by every account of one server (tracking, user groups): the same rows and sealing as
+   * `savedQueries`, owned by the server's address rather than an account. Absent where `savedQueries` is.
+   */
+  readonly sharedItems?: SavedItems
   /** Second factors per account; absent for the same reason, which is why requiring one needs a real store. */
   readonly secondFactor?: SecondFactors
 }
