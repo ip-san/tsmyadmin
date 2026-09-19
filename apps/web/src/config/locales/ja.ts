@@ -1327,6 +1327,37 @@ export const ja = {
     eventsOf: (name: string) => `${name} のイベント（先頭 200 件）`,
   },
   replication: {
+    controls: {
+      title: '操作',
+      hintMysql:
+        'レプリカのスレッドの開始・停止、止まったときの 1 件のスキップ、リセット、ソースの設定です。実行前に SQL を確認します。',
+      hintPostgres:
+        'スタンバイの WAL の適用を一時停止・再開します。ソースは設定の primary_conninfo で指定します（変数の変更から）。',
+      start: '開始',
+      stop: '停止',
+      resume: '再開',
+      pause: '一時停止',
+      skip: 'エラーの 1 件をスキップ',
+      reset: 'リセット',
+      changeSource: 'ソースを設定…',
+      changeSourceHint:
+        'レプリカを止めてからソースを設定し、必要なら開始します。位置には、ソースの SHOW BINARY LOG STATUS（古い版は SHOW MASTER STATUS）のファイルと位置を入れるか、GTID の自動位置合わせを使います。パスワードはプレビューでは **** で表示します。',
+      sourceHost: 'ソースのホスト',
+      sourcePort: 'ポート',
+      sourceUser: 'レプリケーション用ユーザー',
+      logFile: 'バイナリログのファイル',
+      logPos: '位置',
+      autoPosition: 'GTID で自動的に位置を合わせる',
+      startAfter: '設定したあと開始する',
+      previewHint: '以下の SQL を実行します（パスワードは **** で表示）。',
+      ops: {
+        startReplica: 'レプリカを開始',
+        stopReplica: 'レプリカを停止',
+        skipReplicaError: 'エラーの 1 件をスキップ',
+        resetReplica: 'レプリカをリセット',
+        changeSource: 'ソースを設定',
+      },
+    },
     title: 'レプリケーション',
     role: 'このサーバーの役割',
     roles: {

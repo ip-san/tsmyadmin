@@ -1,0 +1,101 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`replication SQL > mariadb: changeSource 1`] = `
+[
+  "STOP REPLICA",
+  "CHANGE MASTER TO MASTER_HOST = 'db''1.example', MASTER_PORT = 3307, MASTER_USER = 'repl', MASTER_PASSWORD = 'p''w', MASTER_LOG_FILE = 'binlog.000042', MASTER_LOG_POS = 157",
+  "START REPLICA",
+]
+`;
+
+exports[`replication SQL > mariadb: resetReplica 1`] = `
+[
+  "STOP REPLICA",
+  "RESET REPLICA ALL",
+]
+`;
+
+exports[`replication SQL > mariadb: skipReplicaError 1`] = `
+[
+  "STOP REPLICA SQL_THREAD",
+  "SET GLOBAL sql_slave_skip_counter = 2",
+  "START REPLICA SQL_THREAD",
+]
+`;
+
+exports[`replication SQL > mariadb: startReplica 1`] = `
+[
+  "START REPLICA SQL_THREAD",
+]
+`;
+
+exports[`replication SQL > mariadb: stopReplica 1`] = `
+[
+  "STOP REPLICA",
+]
+`;
+
+exports[`replication SQL > mysql: changeSource 1`] = `
+[
+  "STOP REPLICA",
+  "CHANGE REPLICATION SOURCE TO SOURCE_HOST = 'db''1.example', SOURCE_PORT = 3307, SOURCE_USER = 'repl', SOURCE_PASSWORD = 'p''w', SOURCE_LOG_FILE = 'binlog.000042', SOURCE_LOG_POS = 157",
+  "START REPLICA",
+]
+`;
+
+exports[`replication SQL > mysql: resetReplica 1`] = `
+[
+  "STOP REPLICA",
+  "RESET REPLICA ALL",
+]
+`;
+
+exports[`replication SQL > mysql: skipReplicaError 1`] = `
+[
+  "STOP REPLICA SQL_THREAD",
+  "SET GLOBAL sql_replica_skip_counter = 2",
+  "START REPLICA SQL_THREAD",
+]
+`;
+
+exports[`replication SQL > mysql: startReplica 1`] = `
+[
+  "START REPLICA SQL_THREAD",
+]
+`;
+
+exports[`replication SQL > mysql: stopReplica 1`] = `
+[
+  "STOP REPLICA",
+]
+`;
+
+exports[`replication SQL > postgres: changeSource 1`] = `
+[
+  "refused: PostgreSQL points a standby at its source with the primary_conninfo setting",
+]
+`;
+
+exports[`replication SQL > postgres: resetReplica 1`] = `
+[
+  "refused: PostgreSQL points a standby at its source with the primary_conninfo setting",
+]
+`;
+
+exports[`replication SQL > postgres: skipReplicaError 1`] = `
+[
+  "refused: PostgreSQL points a standby at its source with the primary_conninfo setting",
+]
+`;
+
+exports[`replication SQL > postgres: startReplica 1`] = `
+[
+  "SELECT pg_wal_replay_resume()",
+]
+`;
+
+exports[`replication SQL > postgres: stopReplica 1`] = `
+[
+  "SELECT pg_wal_replay_pause()",
+]
+`;

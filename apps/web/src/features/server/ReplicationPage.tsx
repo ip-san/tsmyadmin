@@ -7,6 +7,7 @@ import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
 import { replicationQuery } from '@/lib/queries.ts'
 import { DiagnosticReport } from './DiagnosticReport.tsx'
+import { ReplicationControls } from './ReplicationControls.tsx'
 
 const t = locale.replication
 
@@ -60,6 +61,7 @@ export function ReplicationPage({ dialect }: { dialect: Dialect }) {
       <p className="flex items-center gap-2 text-sm text-ink">
         {t.role}: <Badge tone={role === 'standalone' || role === 'unknown' ? 'neutral' : 'info'}>{t.roles[role]}</Badge>
       </p>
+      <ReplicationControls dialect={dialect} info={info.data} />
       <Part title={t.source[dialect]} records={source} empty={t.notReplica} />
       <Part title={t.replicas} records={replicas} empty={t.noReplicas} />
       <section className="space-y-2">

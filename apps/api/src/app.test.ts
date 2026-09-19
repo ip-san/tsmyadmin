@@ -1140,6 +1140,23 @@ describe('server catalog', () => {
     })
   })
 
+  it('previews a replication change with the password masked, and refuses one that is not valid', async () => {
+    const h = harness()
+    stores.push(h.store)
+    await h.login()
+    const change = { op: 'changeSource', host: 'db1', user: 'repl', password: 'secret-pw', autoPosition: true }
+    const res = await h.req('/api/server/replication/preview', { method: 'POST', body: JSON.stringify({ op: change }) })
+    expect(res.status).toBe(200)
+    const { sql } = (await res.json()) as { sql: string[] }
+    expect(sql.join('\n')).toContain('****')
+    expect(sql.join('\n')).not.toContain('secret-pw')
+    const bad = await h.req('/api/server/replication/preview', {
+      method: 'POST',
+      body: JSON.stringify({ op: { ...change, port: 0 } }),
+    })
+    expect(bad.status).toBe(400)
+  })
+
   it('serves a diagnostic report by kind, and refuses a kind or a file it does not know', async () => {
     const h = harness()
     stores.push(h.store)

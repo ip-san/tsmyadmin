@@ -1,4 +1,4 @@
-<!-- translated-from: docs/phpmyadmin-parity.md sha256:bc2b4548a788939af8eaac99e870894ca9a7aac67b876bf0ffffde54106640a0 -->
+<!-- translated-from: docs/phpmyadmin-parity.md sha256:f383ae30e5b7cea5861fd9e50240e067a7fc7409eccd11a36181a521f2f9a590 -->
 
 # Feature parity with phpMyAdmin
 
@@ -26,7 +26,7 @@ The basics (browsing and editing, structure changes, SQL, search, QBE, export / 
 | S7 | Changing a system variable (SET GLOBAL) | ✅ |
 | S8 | Storage engine details (InnoDB status and the like) | ✅ |
 | S9 | Binary log events | ✅ |
-| S10 | Replication control (start / stop, skip errors, set up) | ✗ |
+| S10 | Replication control (start / stop, skip errors, set up) | ✅ |
 | S11 | Locking / unlocking accounts; exporting privileges as SQL | ✅ |
 | S12 | Creating an account: host choices, authentication plugin, password generator, a database of the same name with its grant | ✅ |
 | S13 | Resource limits, SSL requirements | ✅ |

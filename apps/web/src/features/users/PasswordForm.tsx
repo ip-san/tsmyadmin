@@ -1,7 +1,7 @@
 import type { FormEvent } from 'react'
+import { PasswordFields, usePasswordConfirm } from '@/components/forms/PasswordFields.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { locale } from '@/config/locale.ts'
-import { PasswordFields, usePasswordConfirm } from './PasswordFields.tsx'
 
 export function PasswordForm({ onSubmit, onCancel }: { onSubmit: (password: string) => void; onCancel: () => void }) {
   const pw = usePasswordConfirm()

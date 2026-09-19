@@ -8,6 +8,7 @@ import {
   type UserRef,
 } from '@tsmyadmin/shared'
 import { type FormEvent, useState } from 'react'
+import { PasswordFields, usePasswordConfirm } from '@/components/forms/PasswordFields.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Spinner } from '@/components/ui/Feedback.tsx'
 import { Field, Input, Select } from '@/components/ui/Field.tsx'
@@ -15,7 +16,6 @@ import { locale } from '@/config/locale.ts'
 import { grantsQuery } from '@/lib/queries.ts'
 import { userLabel } from '@/lib/user-ops.ts'
 import { globalPrivilegeChange, heldGlobalPrivileges } from './global-privileges.ts'
-import { PasswordFields, usePasswordConfirm } from './PasswordFields.tsx'
 
 const t = locale.users.account
 

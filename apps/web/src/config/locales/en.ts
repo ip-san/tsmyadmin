@@ -1339,6 +1339,37 @@ export const en = {
     eventsOf: (name: string) => `Events of ${name} (first 200)`,
   },
   replication: {
+    controls: {
+      title: 'Controls',
+      hintMysql:
+        'Start and stop the replica’s threads, skip the one statement that stopped it, reset it, and point it at a source. The SQL is shown before it runs.',
+      hintPostgres:
+        'Pauses and resumes a standby’s WAL replay. The source is the primary_conninfo setting (change it under Variables).',
+      start: 'Start',
+      stop: 'Stop',
+      resume: 'Resume',
+      pause: 'Pause',
+      skip: 'Skip one failed statement',
+      reset: 'Reset',
+      changeSource: 'Set the source…',
+      changeSourceHint:
+        'Stops the replica, sets the source and, if asked, starts it again. For the position give the file and position from the source’s SHOW BINARY LOG STATUS (SHOW MASTER STATUS on older versions), or use GTID auto-positioning. The password is shown as **** in the preview.',
+      sourceHost: 'Source host',
+      sourcePort: 'Port',
+      sourceUser: 'Replication user',
+      logFile: 'Binary log file',
+      logPos: 'Position',
+      autoPosition: 'Position automatically with GTIDs',
+      startAfter: 'Start after setting',
+      previewHint: 'The following SQL runs (the password is shown as ****).',
+      ops: {
+        startReplica: 'Start the replica',
+        stopReplica: 'Stop the replica',
+        skipReplicaError: 'Skip one failed statement',
+        resetReplica: 'Reset the replica',
+        changeSource: 'Set the source',
+      },
+    },
     title: 'Replication',
     role: 'Role of this server',
     roles: {

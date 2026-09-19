@@ -45,5 +45,30 @@ for (const t of TARGETS) {
         page.getByRole('table', { name: /のイベント/ }).or(page.getByText('イベントを読む権限がありません'))
       ).toBeVisible()
     })
+
+    test('previews replica controls with the password masked, and reports what a standalone server answers', async ({
+      page,
+    }) => {
+      test.skip(t.dialect !== 'mysql', 'The replica controls run SQL that only MySQL / MariaDB has')
+      await page.goto('/replication')
+      await page.getByRole('button', { name: 'ソースを設定…' }).click()
+      const form = page.getByRole('form', { name: 'ソースを設定…' })
+      await form.getByLabel('ソースのホスト').fill('primary.example')
+      await form.getByLabel('レプリケーション用ユーザー').fill('repl')
+      await form.getByLabel('パスワード', { exact: true }).fill('secret-repl-pw')
+      await form.getByLabel('パスワード（確認）').fill('secret-repl-pw')
+      await form.getByLabel('GTID で自動的に位置を合わせる').check()
+      await form.getByRole('button', { name: '次へ（SQL を確認）' }).click()
+      const dialog = page.getByRole('dialog')
+      await expect(dialog.getByLabel('SQL')).toContainText(/(SOURCE|MASTER)_PASSWORD = '\*\*\*\*'/)
+      await expect(dialog.getByLabel('SQL')).not.toContainText('secret-repl-pw')
+      await dialog.getByRole('button', { name: 'キャンセル' }).click()
+
+      // On a server that replicates nothing, starting the replica is refused with the server's own message.
+      await page.getByRole('button', { name: '開始', exact: true }).click()
+      await expect(page.getByRole('dialog').getByLabel('SQL')).toContainText('START REPLICA')
+      await page.getByRole('dialog').getByRole('button', { name: '実行する' }).click()
+      await expect(page.getByRole('dialog').getByRole('alert')).toBeVisible()
+    })
   })
 }

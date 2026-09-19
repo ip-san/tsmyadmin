@@ -1,11 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
 import { AUTH_PLUGINS, type Dialect, type UserOp } from '@tsmyadmin/shared'
 import { type FormEvent, useState } from 'react'
+import { PasswordFields, usePasswordConfirm } from '@/components/forms/PasswordFields.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { Field, Input, Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
 import { serverInfoQuery } from '@/lib/queries.ts'
-import { PasswordFields, usePasswordConfirm } from './PasswordFields.tsx'
 
 type HostChoice = 'any' | 'local' | 'this' | 'custom'
 
