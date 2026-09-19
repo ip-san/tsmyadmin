@@ -3,6 +3,10 @@ import type {
   AccountSecondFactors,
   BrowseOptions,
   BrowseResult,
+  CentralColumn,
+  CentralColumnBody,
+  ColumnTransform,
+  ColumnTransformBody,
   DatabaseInfo,
   DdlOp,
   DdlPreviewResponse,
@@ -91,6 +95,8 @@ export const accountSecondFactorsQuery = queryOptions({
 
 export const listExportTemplates = () => unwrap<ExportTemplate[]>(api['export-templates'].$get())
 export const exportTemplatesQuery = queryOptions({ queryKey: ['export-templates'], queryFn: listExportTemplates })
+export const listCentralColumns = () => unwrap<CentralColumn[]>(api['central-columns'].$get())
+export const centralColumnsQuery = queryOptions({ queryKey: ['central-columns'], queryFn: listCentralColumns })
 
 export const databasesQuery = queryOptions({
   queryKey: ['databases'],
@@ -321,6 +327,13 @@ export const mutations = {
     unwrap<ExportTemplate[]>(api['export-templates'].$post({ json: body })),
   deleteExportTemplate: (id: string) =>
     unwrap<ExportTemplate[]>(api['export-templates'][':id'].$delete({ param: { id } })),
+  saveCentralColumn: (body: CentralColumnBody) => unwrap<CentralColumn[]>(api['central-columns'].$post({ json: body })),
+  deleteCentralColumn: (id: string) =>
+    unwrap<CentralColumn[]>(api['central-columns'][':id'].$delete({ param: { id } })),
+  saveColumnTransform: (body: ColumnTransformBody) =>
+    unwrap<ColumnTransform[]>(api['column-transforms'].$post({ json: body })),
+  deleteColumnTransform: (id: string) =>
+    unwrap<ColumnTransform[]>(api['column-transforms'][':id'].$delete({ param: { id } })),
   buildQuery: (db: string, body: QueryBuilderRequestInput) =>
     unwrap<QueryBuilderResult>(api.databases[':db'].query.$post({ param: { db: enc(db) }, json: body })),
 }

@@ -1,4 +1,4 @@
-import type { ColumnDef, ColumnSpec, Dialect } from '@tsmyadmin/shared'
+import type { CentralColumnBody, ColumnDef, ColumnSpec, Dialect } from '@tsmyadmin/shared'
 import { onUpdateExpression } from '@tsmyadmin/shared'
 
 type DefaultKind = 'none' | 'literal' | 'expression'
@@ -83,6 +83,19 @@ export function toColumnSpec(v: ColumnFormValues): ColumnSpec {
 }
 
 /** Prefills the form from catalog metadata. Existing defaults are kept as raw expressions so they round-trip. */
+/** A central column as the starting values of a new column. */
+export function fromCentralColumn(c: CentralColumnBody): ColumnFormValues {
+  return {
+    ...EMPTY_COLUMN,
+    name: c.name,
+    dataType: c.dataType,
+    nullable: c.nullable,
+    defaultKind: c.default === null ? 'none' : c.defaultIsExpression ? 'expression' : 'literal',
+    defaultValue: c.default ?? '',
+    comment: c.comment,
+  }
+}
+
 export function fromColumnDef(c: ColumnDef, dialect: Dialect): ColumnFormValues {
   const auto = c.extra.includes('auto_increment') || c.extra.includes('identity') || c.extra === 'serial'
   let defaultKind: DefaultKind = 'none'

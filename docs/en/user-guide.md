@@ -1,4 +1,4 @@
-<!-- translated-from: docs/user-guide.md sha256:eb73d3a3de1c820067e647247b952ff65084d669367baf47c03a51042896651e -->
+<!-- translated-from: docs/user-guide.md sha256:a435c388bd6a1511eca11f43f313c3038ae6e47ee88919a56c205850288c0c27 -->
 
 # User guide
 
@@ -75,6 +75,7 @@ The language menu at the top right switches between English and 日本語 (the p
 | Routines | Stored procedures and functions. **Show definition** fetches the CREATE statement. **Create routine** below builds one from its kind, name, parameters, return type and body (a MySQL BEGIN … END block is written as it is, semicolons and all — no DELIMITER needed) |
 | Triggers | The triggers and their definitions. **Create trigger** builds one from its table, timing, event and body (on PostgreSQL a trigger function "name_fn" is created with it) |
 | Events | MySQL's event scheduler (enable / disable / drop, and **Create event** on a one-off or repeating schedule). On PostgreSQL the tab says it is not supported |
+| Central columns | Column definitions this database uses again and again (name, type, NULL, default, comment). Add one by hand or take them from an existing table; in Structure → **Add column**, **Fill from a central column** starts from one. They are kept where saved queries are |
 | Operations | **Rename** and **copy** the database (see *Renaming and copying a database* below) |
 
 ### Renaming and copying a database

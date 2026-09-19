@@ -203,6 +203,14 @@ for (const t of TARGETS) {
       await page.goto(`/db/${t.database}/export`)
       await page.getByRole('link', { name: 'ダウンロード' }).waitFor()
       await scan(page)
+      // Central columns with one definition in the list (kept in this browser on this server).
+      await page.goto(t.schema ? `/db/${t.database}/central?schema=${t.schema}` : `/db/${t.database}/central`)
+      const add = page.locator('form').filter({ has: page.getByRole('button', { name: '追加する' }) })
+      await add.getByLabel('カラム名').fill('created_at')
+      await add.getByLabel('型', { exact: true }).fill('timestamp')
+      await add.getByRole('button', { name: '追加する' }).click()
+      await page.getByRole('table', { name: 'セントラルカラム' }).waitFor()
+      await scan(page)
     })
 
     test('SQL console with results, insert form, events and dialogs', async ({ page }) => {

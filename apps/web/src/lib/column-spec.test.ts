@@ -1,6 +1,13 @@
 import type { ColumnDef } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
-import { EMPTY_COLUMN, fromColumnDef, retypeColumn, toColumnSpec, validateColumn } from '@/lib/column-spec.ts'
+import {
+  EMPTY_COLUMN,
+  fromCentralColumn,
+  fromColumnDef,
+  retypeColumn,
+  toColumnSpec,
+  validateColumn,
+} from '@/lib/column-spec.ts'
 
 const def = (over: Partial<ColumnDef>): ColumnDef => ({
   name: 'c',
@@ -160,5 +167,20 @@ describe('validateColumn', () => {
     expect(validateColumn(EMPTY_COLUMN)).toBe('name')
     expect(validateColumn({ ...EMPTY_COLUMN, name: 'a' })).toBe('dataType')
     expect(validateColumn({ ...EMPTY_COLUMN, name: 'a', dataType: 'int' })).toBeNull()
+  })
+
+  it('starts a new column from a central column, its default kind included', () => {
+    const base = { database: 'shop', name: 'created_at', dataType: 'datetime', nullable: false, comment: 'when' }
+    expect(fromCentralColumn({ ...base, default: 'CURRENT_TIMESTAMP', defaultIsExpression: true })).toMatchObject({
+      name: 'created_at',
+      dataType: 'datetime',
+      nullable: false,
+      defaultKind: 'expression',
+      defaultValue: 'CURRENT_TIMESTAMP',
+      comment: 'when',
+      autoIncrement: false,
+    })
+    expect(fromCentralColumn({ ...base, default: 'new', defaultIsExpression: false }).defaultKind).toBe('literal')
+    expect(fromCentralColumn({ ...base, default: null, defaultIsExpression: false }).defaultKind).toBe('none')
   })
 })

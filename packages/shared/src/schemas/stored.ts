@@ -30,6 +30,8 @@ export const CentralColumnBodySchema = z.object({
   dataType: z.string().min(1).max(200),
   nullable: z.boolean(),
   default: z.string().max(1000).nullable(),
+  /** Whether `default` is an expression (CURRENT_TIMESTAMP) rather than a literal value. */
+  defaultIsExpression: z.boolean().default(false),
   comment: z.string().max(1000).default(''),
 })
 export type CentralColumnBody = z.infer<typeof CentralColumnBodySchema>

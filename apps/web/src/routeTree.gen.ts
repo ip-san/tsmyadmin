@@ -24,6 +24,7 @@ import { Route as AppUsersRouteImport } from './routes/_app/users'
 import { Route as AppVariablesRouteImport } from './routes/_app/variables'
 import { Route as AppDbDbRouteImport } from './routes/_app/db.$db'
 import { Route as AppDbDbIndexRouteImport } from './routes/_app/db.$db/index'
+import { Route as AppDbDbCentralRouteImport } from './routes/_app/db.$db/central'
 import { Route as AppDbDbDesignerRouteImport } from './routes/_app/db.$db/designer'
 import { Route as AppDbDbEventsRouteImport } from './routes/_app/db.$db/events'
 import { Route as AppDbDbExportRouteImport } from './routes/_app/db.$db/export'
@@ -119,6 +120,11 @@ const AppDbDbRoute = AppDbDbRouteImport.update({
 const AppDbDbIndexRoute = AppDbDbIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AppDbDbRoute,
+} as any)
+const AppDbDbCentralRoute = AppDbDbCentralRouteImport.update({
+  id: '/central',
+  path: '/central',
   getParentRoute: () => AppDbDbRoute,
 } as any)
 const AppDbDbDesignerRoute = AppDbDbDesignerRouteImport.update({
@@ -250,6 +256,7 @@ export interface FileRoutesByFullPath {
   '/users': typeof AppUsersRoute
   '/variables': typeof AppVariablesRoute
   '/db/$db': typeof AppDbDbRouteWithChildren
+  '/db/$db/central': typeof AppDbDbCentralRoute
   '/db/$db/designer': typeof AppDbDbDesignerRoute
   '/db/$db/events': typeof AppDbDbEventsRoute
   '/db/$db/export': typeof AppDbDbExportRoute
@@ -287,6 +294,7 @@ export interface FileRoutesByTo {
   '/users': typeof AppUsersRoute
   '/variables': typeof AppVariablesRoute
   '/': typeof AppIndexRoute
+  '/db/$db/central': typeof AppDbDbCentralRoute
   '/db/$db/designer': typeof AppDbDbDesignerRoute
   '/db/$db/events': typeof AppDbDbEventsRoute
   '/db/$db/export': typeof AppDbDbExportRoute
@@ -326,6 +334,7 @@ export interface FileRoutesById {
   '/_app/variables': typeof AppVariablesRoute
   '/_app/': typeof AppIndexRoute
   '/_app/db/$db': typeof AppDbDbRouteWithChildren
+  '/_app/db/$db/central': typeof AppDbDbCentralRoute
   '/_app/db/$db/designer': typeof AppDbDbDesignerRoute
   '/_app/db/$db/events': typeof AppDbDbEventsRoute
   '/_app/db/$db/export': typeof AppDbDbExportRoute
@@ -366,6 +375,7 @@ export interface FileRouteTypes {
     | '/users'
     | '/variables'
     | '/db/$db'
+    | '/db/$db/central'
     | '/db/$db/designer'
     | '/db/$db/events'
     | '/db/$db/export'
@@ -403,6 +413,7 @@ export interface FileRouteTypes {
     | '/users'
     | '/variables'
     | '/'
+    | '/db/$db/central'
     | '/db/$db/designer'
     | '/db/$db/events'
     | '/db/$db/export'
@@ -441,6 +452,7 @@ export interface FileRouteTypes {
     | '/_app/variables'
     | '/_app/'
     | '/_app/db/$db'
+    | '/_app/db/$db/central'
     | '/_app/db/$db/designer'
     | '/_app/db/$db/events'
     | '/_app/db/$db/export'
@@ -576,6 +588,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/db/$db/'
       preLoaderRoute: typeof AppDbDbIndexRouteImport
+      parentRoute: typeof AppDbDbRoute
+    }
+    '/_app/db/$db/central': {
+      id: '/_app/db/$db/central'
+      path: '/central'
+      fullPath: '/db/$db/central'
+      preLoaderRoute: typeof AppDbDbCentralRouteImport
       parentRoute: typeof AppDbDbRoute
     }
     '/_app/db/$db/designer': {
@@ -765,6 +784,7 @@ const AppDbDbTableTableRouteWithChildren =
   AppDbDbTableTableRoute._addFileChildren(AppDbDbTableTableRouteChildren)
 
 interface AppDbDbRouteChildren {
+  AppDbDbCentralRoute: typeof AppDbDbCentralRoute
   AppDbDbDesignerRoute: typeof AppDbDbDesignerRoute
   AppDbDbEventsRoute: typeof AppDbDbEventsRoute
   AppDbDbExportRoute: typeof AppDbDbExportRoute
@@ -781,6 +801,7 @@ interface AppDbDbRouteChildren {
 }
 
 const AppDbDbRouteChildren: AppDbDbRouteChildren = {
+  AppDbDbCentralRoute: AppDbDbCentralRoute,
   AppDbDbDesignerRoute: AppDbDbDesignerRoute,
   AppDbDbEventsRoute: AppDbDbEventsRoute,
   AppDbDbExportRoute: AppDbDbExportRoute,

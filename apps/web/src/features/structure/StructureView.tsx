@@ -11,6 +11,7 @@ import { Badge, ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
 import { ColumnsTable } from '@/features/structure/ColumnsTable.tsx'
+import { useCentralColumns } from '@/lib/central-columns.ts'
 import { fromColumnDef, toColumnSpec } from '@/lib/column-spec.ts'
 import { useDdlFlow } from '@/lib/ddl.ts'
 import { createStatementQuery, structureQuery, type TableRef } from '@/lib/queries.ts'
@@ -80,6 +81,7 @@ export function StructureView({ tableRef, dialect }: { tableRef: TableRef; diale
   const structure = useQuery(structureQuery(tableRef))
   const flow = useDdlFlow(tableRef.db, tableRef.schema)
   const [columnDialog, setColumnDialog] = useState<ColumnDialog>(null)
+  const central = useCentralColumns(tableRef.db, tableRef.schema)
   const [indexDialog, setIndexDialog] = useState(false)
   const [fkDialog, setFkDialog] = useState(false)
   if (structure.isPending) return <Spinner />
@@ -166,7 +168,9 @@ export function StructureView({ tableRef, dialect }: { tableRef: TableRef; diale
             key={columnDialog.mode === 'modify' ? columnDialog.name : 'add'}
             dialect={dialect}
             {...(editing ? { initial: fromColumnDef(editing, dialect) } : {})}
-            {...(columnDialog.mode === 'add' ? { positions: s.columns.map((c) => c.name) } : {})}
+            {...(columnDialog.mode === 'add'
+              ? { positions: s.columns.map((c) => c.name), presets: central.entries }
+              : {})}
             onCancel={() => setColumnDialog(null)}
             onSubmit={(values, after) => {
               const column = toColumnSpec(values)

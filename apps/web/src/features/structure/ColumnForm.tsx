@@ -1,4 +1,4 @@
-import type { Dialect } from '@tsmyadmin/shared'
+import type { CentralColumnBody, Dialect } from '@tsmyadmin/shared'
 import { type FormEvent, useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { Field, Input, Select } from '@/components/ui/Field.tsx'
@@ -6,6 +6,7 @@ import { locale } from '@/config/locale.ts'
 import {
   type ColumnFormValues,
   EMPTY_COLUMN,
+  fromCentralColumn,
   retypeColumn,
   TYPE_SUGGESTIONS,
   validateColumn,
@@ -16,11 +17,20 @@ export interface ColumnFormProps {
   initial?: ColumnFormValues
   /** Existing column names, for the MySQL AFTER selector (omit to hide). */
   positions?: string[]
+  /** Central columns of the database, to start a new column from (omit or empty to hide). */
+  presets?: CentralColumnBody[]
   onSubmit: (values: ColumnFormValues, after: string | undefined) => void
   onCancel: () => void
 }
 
-export function ColumnForm({ dialect, initial = EMPTY_COLUMN, positions, onSubmit, onCancel }: ColumnFormProps) {
+export function ColumnForm({
+  dialect,
+  initial = EMPTY_COLUMN,
+  positions,
+  presets = [],
+  onSubmit,
+  onCancel,
+}: ColumnFormProps) {
   const [v, setV] = useState<ColumnFormValues>(initial)
   const [after, setAfter] = useState('')
   const set = (patch: Partial<ColumnFormValues>) => setV((cur) => ({ ...cur, ...patch }))
@@ -32,6 +42,25 @@ export function ColumnForm({ dialect, initial = EMPTY_COLUMN, positions, onSubmi
   }
   return (
     <form onSubmit={submit} className="space-y-3">
+      {presets.length > 0 ? (
+        <Field id="col-preset" label={locale.central.preset}>
+          <Select
+            id="col-preset"
+            defaultValue=""
+            onChange={(e) => {
+              const preset = presets.find((p) => p.name === e.target.value)
+              setV(preset ? fromCentralColumn(preset) : initial)
+            }}
+          >
+            <option value="">{locale.central.noPreset}</option>
+            {presets.map((p) => (
+              <option key={p.name} value={p.name}>
+                {p.name} ({p.dataType})
+              </option>
+            ))}
+          </Select>
+        </Field>
+      ) : null}
       <div className="grid grid-cols-2 gap-3">
         <Field id="col-name" label={locale.ddl.columnName}>
           <Input
