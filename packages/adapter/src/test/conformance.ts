@@ -962,6 +962,40 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
       })
     })
 
+    describe('readCell', () => {
+      it('reads one value whole, past the cut a browse page makes, for exactly one row', async () => {
+        const t = `${scratch}_cell`
+        const blob = dialect === 'mysql' ? 'MEDIUMBLOB' : 'BYTEA'
+        await execOk(`CREATE TABLE ${t} (id INT PRIMARY KEY, b ${blob} NULL, s TEXT NULL)`)
+        try {
+          const bytes = Buffer.alloc(70_000, 7)
+          bytes[69_999] = 9
+          await db.insertRow(ns, t, { id: 1, b: { $bin: bytes.toString('base64') }, s: 'x'.repeat(5) })
+          await db.insertRow(ns, t, { id: 2, b: null, s: null })
+          const page = await db.browseRows(ns, t, { offset: 0, limit: 1, sort: [], filters: [] })
+          const cut = page.rows[0]?.[1]
+          expect(cut && typeof cut === 'object' && '$bin' in cut ? Buffer.from(cut.$bin, 'base64').length : 0).toBe(
+            65_536
+          )
+
+          const whole = await db.readCell(ns, t, { kind: 'pk', values: { id: 1 } }, 'b')
+          expect(
+            whole && typeof whole === 'object' && '$bin' in whole ? Buffer.from(whole.$bin, 'base64') : null
+          ).toEqual(bytes)
+          expect(await db.readCell(ns, t, { kind: 'pk', values: { id: 1 } }, 's')).toBe('xxxxx')
+          expect(await db.readCell(ns, t, { kind: 'pk', values: { id: 2 } }, 'b')).toBeNull()
+          await expect(db.readCell(ns, t, { kind: 'pk', values: { id: 3 } }, 'b')).rejects.toMatchObject({
+            code: 'KEY_MISMATCH',
+          })
+          await expect(db.readCell(ns, t, { kind: 'pk', values: { id: 1 } }, 'nope')).rejects.toMatchObject({
+            code: 'NOT_FOUND',
+          })
+        } finally {
+          await execOk(`DROP TABLE ${t}`)
+        }
+      })
+    })
+
     describe('updateRow', () => {
       it.skipIf(dialect !== 'mysql')(
         'addresses the row the caller named, not one the collation calls equal',

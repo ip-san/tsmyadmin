@@ -1,4 +1,4 @@
-<!-- translated-from: docs/architecture.md sha256:7eccc8bae78d4104fd8e5f8e94c2438f7f05a28df41b4d818d1c82ebcdc485d8 -->
+<!-- translated-from: docs/architecture.md sha256:72bfb17d52a0454049897faef515e8a1eadb026df5a52a9a7c4fbdec0bb715bd -->
 
 # Architecture
 
@@ -77,7 +77,7 @@ classDiagram
     <<interface>>
     +dialect
     +listDatabases() / listTables() / describeTable()
-    +browseRows() / insertRow() / updateRow() / deleteRows()
+    +browseRows() / insertRow() / updateRow() / deleteRows() / readCell()
     +executeSql(ns, sql, opts) / cancelQuery(id)
     +iterateRows(ns, table) AsyncIterable~RowBatch~
     +showCreateTable() / listRoutines() / listTriggers()

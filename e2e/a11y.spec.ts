@@ -158,6 +158,13 @@ for (const t of TARGETS) {
       await page.goto(tableUrl(t, 'users'))
       await page.getByText('全 5 行').waitFor()
       await scan(page)
+      // The display options and the column list with its move buttons, both open.
+      await page.locator('summary', { hasText: '表示のしかた' }).click()
+      await page.getByRole('button', { name: /^カラム \d/ }).click()
+      await page.getByRole('button', { name: 'name を左へ' }).waitFor()
+      await scan(page)
+      await page.keyboard.press('Escape')
+      await page.locator('summary', { hasText: '表示のしかた' }).click()
       // Two rows ticked, their actions shown, and the dialog that edits them together.
       const grid = page.getByRole('table', { name: 'users' })
       await grid.getByRole('row').nth(1).getByRole('checkbox').check()

@@ -1,7 +1,9 @@
 import type { Cell } from '@tsmyadmin/shared'
+import { isBinaryCell } from '@tsmyadmin/shared'
 import { useState } from 'react'
 import { locale } from '@/config/locale.ts'
 import { describeCell } from '@/lib/format.ts'
+import { useCellDisplay } from './cell-display.ts'
 
 const MAX_PREVIEW = 200
 const NUMERIC = /^-?\d{1,40}(?:\.\d{1,40})?(?:[eE][+-]?\d{1,4})?$/
@@ -9,11 +11,34 @@ const NUMERIC = /^-?\d{1,40}(?:\.\d{1,40})?(?:[eE][+-]?\d{1,4})?$/
 const TEMPORAL =
   /^-?\d{1,4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:[+-]\d{2}(?::?\d{2})?|Z)?)?$|^-?\d{1,3}:\d{2}(?::\d{2}(?:\.\d+)?)?$/
 
+/** Bytes shown as hex before the rest is summarised: a BLOB would otherwise fill the page. */
+const HEX_BYTES = 256
+
+/** The first HEX_BYTES of a binary value as `0x…` hex. */
+function hexPreview(b64: string): string {
+  const raw = atob(b64)
+  let out = '0x'
+  for (let i = 0; i < Math.min(raw.length, HEX_BYTES); i++) out += raw.charCodeAt(i).toString(16).padStart(2, '0')
+  return out
+}
+
 export function CellValue({ cell }: { cell: Cell }) {
-  const [expanded, setExpanded] = useState(false)
+  const { display } = useCellDisplay()
+  // Null until toggled here: the grid-wide "full text" option decides until then.
+  const [toggled, setExpanded] = useState<boolean | null>(null)
+  const expanded = toggled ?? display.fullText
   const d = describeCell(cell)
   if (d.kind === 'null') return <span className="italic text-ink-sub">{locale.common.null}</span>
-  if (d.kind === 'binary') return <span className="text-xs text-ink-sub">{locale.common.binary(d.bytes)}</span>
+  if (d.kind === 'binary') {
+    if (!display.binaryAsHex || !isBinaryCell(cell))
+      return <span className="text-xs text-ink-sub">{locale.common.binary(d.bytes)}</span>
+    return (
+      <span className="break-all font-mono text-xs">
+        {hexPreview(cell.$bin)}
+        {d.bytes > HEX_BYTES ? <span className="text-ink-sub">{locale.browse.hexMore(d.bytes)}</span> : null}
+      </span>
+    )
+  }
   const note =
     d.kind === 'truncated' ? (
       <span className="whitespace-nowrap text-xs text-ink-sub">{locale.common.truncatedText(d.length)}</span>
@@ -34,7 +59,7 @@ export function CellValue({ cell }: { cell: Cell }) {
       <button
         type="button"
         className="whitespace-nowrap text-xs text-blue-700 hover:underline dark:text-blue-300"
-        onClick={() => setExpanded((e) => !e)}
+        onClick={() => setExpanded(!expanded)}
         aria-expanded={expanded}
       >
         {expanded

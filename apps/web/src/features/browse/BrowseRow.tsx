@@ -1,5 +1,6 @@
 import type { BrowseResult, Cell, ColumnTransform, InputCell, RowKey } from '@tsmyadmin/shared'
 import { memo } from 'react'
+import { useCellDisplay } from '@/components/cells/cell-display.ts'
 import { TransformedCell } from '@/components/cells/TransformedCell.tsx'
 import { ErrorBox } from '@/components/ui/Feedback.tsx'
 import { Td, Tr } from '@/components/ui/Table.tsx'
@@ -9,7 +10,9 @@ import { isOpaqueCell } from '@/lib/format.ts'
 import { CellEditor } from './CellEditor.tsx'
 import { FkCell } from './FkCell.tsx'
 import type { linkableForeignKeys, linkableReverseKeys } from './fk-links.ts'
+import { spatialEncoding } from './geometry.ts'
 import { RowActions } from './RowActions.tsx'
+import { spatialCellToWkt } from './wkt.ts'
 
 export interface BrowseRowProps {
   index: number
@@ -64,6 +67,13 @@ export const BrowseRow = memo(function BrowseRow({
   onInlineSave,
   onInlineCancel,
 }: BrowseRowProps) {
+  const { display, dialect, downloadUrl } = useCellDisplay()
+  // WKB-encoded columns (MySQL's spatial types, PostGIS): PostgreSQL's own shapes already arrive as text.
+  const wktColumn = (dataType: string) => {
+    if (!display.geometryAsWkt || !dialect) return false
+    const encoding = spatialEncoding(dialect, dataType)
+    return encoding === 'mysql-wkb' || encoding === 'ewkb-hex'
+  }
   return (
     <Tr className={cn(selected && 'bg-blue-50 dark:bg-blue-950/40')}>
       {editable ? (
@@ -121,14 +131,31 @@ export const BrowseRow = memo(function BrowseRow({
                 {updateError ? <ErrorBox error={updateError} className="mt-1" /> : null}
               </>
             ) : (
-              (() => {
-                const transform = transforms.get(c.name)
-                return transform ? (
-                  <TransformedCell cell={cell} transform={transform} />
-                ) : (
-                  <FkCell cell={cell} fk={fks.get(c.name)} reverse={reverse.get(c.name) ?? []} db={db} />
-                )
-              })()
+              <>
+                {(() => {
+                  const transform = transforms.get(c.name)
+                  if (wktColumn(c.dataType)) {
+                    const wkt = spatialCellToWkt(cell)
+                    if (wkt !== null) return <span className="break-all font-mono text-xs">{wkt}</span>
+                  }
+                  return transform ? (
+                    <TransformedCell cell={cell} transform={transform} />
+                  ) : (
+                    <FkCell cell={cell} fk={fks.get(c.name)} reverse={reverse.get(c.name) ?? []} db={db} />
+                  )
+                })()}
+                {/* A binary or cut-off value: the page holds only its head, the download the whole of it. */}
+                {key && downloadUrl && isOpaqueCell(cell) ? (
+                  <a
+                    href={downloadUrl(key, c.name)}
+                    download
+                    className="ml-1 whitespace-nowrap text-blue-700 underline dark:text-blue-300"
+                    aria-label={locale.browse.downloadValue(c.name)}
+                  >
+                    {locale.browse.download}
+                  </a>
+                ) : null}
+              </>
             )}
           </Td>
         )

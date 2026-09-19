@@ -1,7 +1,7 @@
 import { BROWSE_MAX_LIMIT, type BrowseOptions, BrowseQuerySchema, parseBrowseQuery } from '@tsmyadmin/shared'
 import { z } from 'zod'
 import { sharePreference } from '@/lib/account-prefs.ts'
-import { readPreference, writePreference } from '@/lib/preferences.ts'
+import { readPreference, removePreference, writePreference } from '@/lib/preferences.ts'
 
 const DEFAULT_LIMIT = 50
 const LimitSchema = z.number().int().min(1).max(BROWSE_MAX_LIMIT)
@@ -36,14 +36,30 @@ export function browseOptionsFromSearch(s: BrowseSearch, limit = s.limit ?? pref
   return { offset: (s.page - 1) * limit, limit, sort: [], filters: [] }
 }
 
-/** Column names to show, or null when every column is visible. Unknown names are dropped. */
+/**
+ * Column names to show, in the order given, or null when every column shows in the table's own order. Unknown
+ * names are dropped.
+ */
 export function visibleColumnNames(cols: string | undefined, available: string[]): string[] | null {
   if (!cols) return null
-  const wanted = new Set(cols.split(',').filter((c) => c.length > 0))
-  const kept = available.filter((c) => wanted.has(c))
-  return kept.length === available.length ? null : kept
+  const known = new Set(available)
+  const kept = [...new Set(cols.split(',').filter((c) => known.has(c)))]
+  return kept.length === 0 || sameList(kept, available) ? null : kept
 }
 
 export function encodeColumns(selected: string[], available: string[]): string | undefined {
-  return selected.length === available.length ? undefined : selected.join(',')
+  return sameList(selected, available) ? undefined : selected.join(',')
+}
+
+const sameList = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((x, i) => x === b[i])
+
+/** The columns chosen for a table (shown and in which order), remembered per browser like phpMyAdmin does. */
+const colsKey = (db: string, schema: string | undefined, table: string) =>
+  `browse.cols.${JSON.stringify([db, schema ?? '', table])}`
+export function rememberedColumns(db: string, schema: string | undefined, table: string): string | undefined {
+  return readPreference(colsKey(db, schema, table), z.string().optional(), undefined)
+}
+export function rememberColumns(db: string, schema: string | undefined, table: string, cols: string | undefined) {
+  if (cols === undefined) removePreference(colsKey(db, schema, table))
+  else writePreference(colsKey(db, schema, table), cols)
 }

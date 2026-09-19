@@ -6,6 +6,7 @@ import type {
   DatabaseInfo,
   Dialect,
   EventInfo,
+  Filter,
   InputCell,
   KeyValue,
   KeyValues,
@@ -176,6 +177,69 @@ function compare(a: Cell, b: Cell): number {
   return String(JSON.stringify(a)).localeCompare(String(JSON.stringify(b)))
 }
 
+/** A value as SQL would compare it: numbers as numbers (a filter's '5' equals 5), anything else as text. */
+function sqlCompare(a: Cell, b: InputCell | undefined): number {
+  const x = Number(a)
+  const y = Number(b)
+  if (a !== '' && b !== '' && Number.isFinite(x) && Number.isFinite(y)) return x - y
+  return String(a).localeCompare(String(b))
+}
+
+/** One browse filter, with SQL's NULL rule: only IS NULL / IS NOT NULL say anything about a NULL. */
+function matchesFilter(v: Cell, f: Filter): boolean {
+  if (f.op === 'is_null') return v === null
+  if (f.op === 'is_not_null') return v !== null
+  if (v === null) return false
+  const text = String(v)
+  const like = (pattern: string) =>
+    new RegExp(
+      `^${pattern
+        .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        .replaceAll('%', '.*')
+        .replaceAll('_', '.')}$`,
+      's'
+    ).test(text)
+  const values = f.values ?? []
+  switch (f.op) {
+    case 'eq':
+      return sqlCompare(v, f.value) === 0
+    case 'neq':
+      return sqlCompare(v, f.value) !== 0
+    case 'lt':
+      return sqlCompare(v, f.value) < 0
+    case 'lte':
+      return sqlCompare(v, f.value) <= 0
+    case 'gt':
+      return sqlCompare(v, f.value) > 0
+    case 'gte':
+      return sqlCompare(v, f.value) >= 0
+    case 'contains':
+      return text.includes(String(f.value))
+    case 'starts_with':
+      return text.startsWith(String(f.value))
+    case 'like':
+      return like(String(f.value))
+    case 'not_like':
+      return !like(String(f.value))
+    case 'in':
+      return values.some((x) => sqlCompare(v, x) === 0)
+    case 'not_in':
+      return !values.some((x) => sqlCompare(v, x) === 0)
+    case 'between':
+      return sqlCompare(v, values[0]) >= 0 && sqlCompare(v, values[1]) <= 0
+    case 'not_between':
+      return !(sqlCompare(v, values[0]) >= 0 && sqlCompare(v, values[1]) <= 0)
+    case 'regexp':
+      return new RegExp(String(f.value)).test(text)
+    case 'not_regexp':
+      return !new RegExp(String(f.value)).test(text)
+    case 'empty':
+      return text === ''
+    case 'not_empty':
+      return text !== ''
+  }
+}
+
 /**
  * In-memory DatabaseAdapter for API route tests. Deterministic, no I/O.
  * Records every call in `calls` so tests can assert on what the API asked for.
@@ -338,23 +402,7 @@ export class FakeAdapter implements DatabaseAdapter {
     const t = this.table(ns, table)
     let rows = [...t.rows]
     for (const f of opts.filters) {
-      rows = rows.filter((r) => {
-        const v = r[f.column] ?? null
-        switch (f.op) {
-          case 'eq':
-            return compare(v, f.value ?? null) === 0
-          case 'neq':
-            return compare(v, f.value ?? null) !== 0
-          case 'is_null':
-            return v === null
-          case 'is_not_null':
-            return v !== null
-          case 'like':
-            return typeof v === 'string' && new RegExp(`^${String(f.value).replaceAll('%', '.*')}$`).test(v)
-          default:
-            return true
-        }
-      })
+      rows = rows.filter((r) => matchesFilter(r[f.column] ?? null, f))
     }
     for (const s of [...opts.sort].reverse()) {
       rows.sort((a, b) => compare(a[s.column] ?? null, b[s.column] ?? null) * (s.direction === 'desc' ? -1 : 1))
@@ -408,6 +456,16 @@ export class FakeAdapter implements DatabaseAdapter {
     if (matches.length !== 1) throw new AdapterError('KEY_MISMATCH', `matched ${matches.length} rows`)
     Object.assign(matches[0] as KeyValues, evaluate(values))
     return { affectedRows: 1 }
+  }
+
+  async readCell(ns: Namespace, table: string, key: RowKey, column: string): Promise<Cell> {
+    this.record('readCell', ns, table, key, column)
+    const t = this.table(ns, table)
+    if (!t.schema.columns.some((c) => c.name === column))
+      throw new AdapterError('NOT_FOUND', `Unknown column: ${column}`)
+    const matches = t.rows.filter((r) => this.matchKey(r, key))
+    if (matches.length !== 1) throw new AdapterError('KEY_MISMATCH', `matched ${matches.length} rows`)
+    return matches[0]?.[column] ?? null
   }
 
   async deleteRows(ns: Namespace, table: string, keys: RowKey[]): Promise<{ affectedRows: number }> {

@@ -29,10 +29,10 @@ bun run lighthouse        # Lighthouse CI（警告のみ、要 Chrome）
 
 ## 現在の規模（`scripts/validate-docs.mjs` が同期）
 
-- ユニット/API/Web テスト定義: <!-- stat:unit-tests -->567<!-- /stat --> 件
-- Adapter conformance: <!-- stat:conformance -->153<!-- /stat --> 件 × 2 方言
-- E2E: <!-- stat:e2e -->111<!-- /stat --> 件
-- API ルート: <!-- stat:routes -->65<!-- /stat -->
+- ユニット/API/Web テスト定義: <!-- stat:unit-tests -->573<!-- /stat --> 件
+- Adapter conformance: <!-- stat:conformance -->154<!-- /stat --> 件 × 2 方言
+- E2E: <!-- stat:e2e -->113<!-- /stat --> 件
+- API ルート: <!-- stat:routes -->66<!-- /stat -->
 
 ## 設計ドキュメント
 

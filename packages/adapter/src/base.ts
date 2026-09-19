@@ -193,6 +193,8 @@ export function wrapReadOnly(sql: string, limit: number, dialect: Dialect = 'pos
 
 const DEFAULT_TIMEOUT_MS = 30_000
 export const MAX_BINARY_BYTES = 64 * 1024
+/** The largest single value readCell hands over (a download, held in memory while it is sent). */
+export const READ_CELL_MAX_BYTES = 64 * 1024 * 1024
 
 /** Converts a wire Cell into a driver parameter. */
 function toDbValue(cell: Cell): unknown {
@@ -856,6 +858,30 @@ export abstract class BaseAdapter implements DatabaseAdapter {
         )
       }
       return { affectedRows: r.affectedRows }
+    })
+  }
+
+  async readCell(ns: Namespace, table: string, key: RowKey, column: string): Promise<Cell> {
+    const d = this.dialect
+    const schema = await this.describeTable(ns, table)
+    if (!schema.columns.some((c) => c.name === column)) throw new AdapterError('NOT_FOUND', `Unknown column: ${column}`)
+    const params = new Params(d)
+    const where = this.buildKeyWhere(key, params, await this.keyColumnTypes(ns, table))
+    const col = quoteIdent(d, column)
+    // The size first, so a value too large to hand over is refused before it is read into memory.
+    const sql = `SELECT OCTET_LENGTH(${col}) FROM ${quoteTable(d, ns, table)}${where} LIMIT 2`
+    return this.withConn(ns, async (conn) => {
+      const sized = firstResult(await conn.query(sql, params.values))
+      if (sized.rows.length !== 1)
+        throw new AdapterError('KEY_MISMATCH', `Expected exactly 1 row but matched ${sized.rows.length}`)
+      if (Number(sized.rows[0]?.[0] ?? 0) > READ_CELL_MAX_BYTES)
+        throw new AdapterError('VALIDATION', `The value is larger than ${READ_CELL_MAX_BYTES} bytes`)
+      const read = firstResult(
+        await conn.query(`SELECT ${col} FROM ${quoteTable(d, ns, table)}${where} LIMIT 2`, params.values, UNCAPPED)
+      )
+      if (read.rows.length !== 1)
+        throw new AdapterError('KEY_MISMATCH', `Expected exactly 1 row but matched ${read.rows.length}`)
+      return read.rows[0]?.[0] ?? null
     })
   }
 

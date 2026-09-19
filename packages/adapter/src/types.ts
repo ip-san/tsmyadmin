@@ -234,6 +234,11 @@ export interface DatabaseAdapter {
     options?: InsertRowsOptions
   ): Promise<{ affectedRows: number }>
   updateRow(ns: Namespace, table: string, key: RowKey, values: RowValues): Promise<{ affectedRows: number }>
+  /**
+   * One value of one row, whole (browse pages cut binary values at 64 KB and long texts too): a BLOB to download.
+   * For binary and text columns. Refuses a value over READ_CELL_MAX_BYTES, and a key that matches other than one row.
+   */
+  readCell(ns: Namespace, table: string, key: RowKey, column: string): Promise<Cell>
   deleteRows(ns: Namespace, table: string, keys: RowKey[]): Promise<{ affectedRows: number }>
   executeSql(ns: Namespace, sql: string, opts: ExecuteOptions): Promise<StatementResult[]>
   /** Interrupts a running executeSql registered with `queryId`. Resolves false when nothing is running under that id. */
@@ -314,6 +319,7 @@ export const ADAPTER_METHOD_NAMES = [
   'insertRow',
   'insertRows',
   'updateRow',
+  'readCell',
   'deleteRows',
   'executeSql',
   'cancelQuery',

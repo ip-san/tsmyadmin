@@ -2,6 +2,7 @@ import type { DatabaseAdapter } from '@tsmyadmin/adapter'
 import {
   type ApiError,
   BrowseQuerySchema,
+  CellQuerySchema,
   DdlPreviewRequestSchema,
   DeleteRowsRequestSchema,
   decodeTableList,
@@ -13,6 +14,7 @@ import {
   isGeneratedColumn,
   type Namespace,
   parseBrowseQuery,
+  parseCellKey,
   QueryBuilderRequestSchema,
   RoutineDefinitionQuerySchema,
   SchemaQuerySchema,
@@ -132,6 +134,25 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
           .get('session')
           .adapter.browseRows(ns(c.req.param('db'), q.schema), c.req.param('table'), parsed.options)
         return c.json(result)
+      })
+      // One value whole, as a download (a browse page cuts binary values at 64 KB): opened as a link.
+      .get('/databases/:db/tables/:table/cell', validate('query', CellQuerySchema), async (c) => {
+        const q = c.req.valid('query')
+        const key = parseCellKey(q.key)
+        if (!key) return c.json(apiError('VALIDATION', 'Invalid row key'), 400)
+        const table = c.req.param('table')
+        const cell = await c.get('session').adapter.readCell(ns(c.req.param('db'), q.schema), table, key, q.column)
+        if (cell === null) return c.json(apiError('NOT_FOUND', 'The value is NULL'), 404)
+        const binary = typeof cell === 'object' && '$bin' in cell
+        const body = binary
+          ? Buffer.from(cell.$bin, 'base64')
+          : typeof cell === 'object' && '$text' in cell
+            ? cell.$text
+            : String(cell)
+        return c.body(body, 200, {
+          'Content-Type': binary ? 'application/octet-stream' : 'text/plain; charset=utf-8',
+          'Content-Disposition': contentDisposition(`${table}.${q.column}.${binary ? 'bin' : 'txt'}`),
+        })
       })
       .post(
         '/databases/:db/tables/:table/rows',

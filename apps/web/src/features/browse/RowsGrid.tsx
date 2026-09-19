@@ -164,7 +164,7 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
   const { allColumns, columnIndex, keys, fks, reverse } = derived
   const allNames = allColumns.map((c) => c.name)
   const picked = visibleColumnNames(cols, allNames)
-  const columns = picked ? allColumns.filter((c) => picked.includes(c.name)) : allColumns
+  const columns = picked ? picked.flatMap((n) => allColumns.filter((c) => c.name === n)) : allColumns
   const editable = data.keyKind !== 'none'
   const selectableIdx = keys.flatMap((k, i) => (k ? [i] : []))
   const allSelected = selectableIdx.length > 0 && selectableIdx.every((i) => selected.has(i))

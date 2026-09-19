@@ -633,6 +633,55 @@ describe('rows', () => {
     })
   })
 
+  it('takes list operators with their values from the query string', async () => {
+    const h = harness()
+    stores.push(h.store)
+    await h.login()
+    const ids = async (filters: unknown) => {
+      const res = await h.req(
+        `/api/databases/shop/tables/users/rows?sort=id:asc&filters=${encodeURIComponent(JSON.stringify(filters))}`
+      )
+      expect(res.status).toBe(200)
+      return BrowseResultSchema.parse(await res.json()).rows.map((r) => r[0])
+    }
+    expect(await ids([{ column: 'id', op: 'in', values: [1, '3'] }])).toEqual([1, 3])
+    expect(await ids([{ column: 'id', op: 'not_between', values: ['2', 2] }])).toEqual([1, 3])
+    expect(await ids([{ column: 'name', op: 'regexp', value: '^[AB]' }])).toEqual([1, 2])
+  })
+
+  it('hands one value over whole as a download', async () => {
+    const h = harness(
+      fixtureAdapter({
+        databases: {
+          shop: {
+            tables: {
+              files: fakeTable(
+                'files',
+                ['id', 'data'],
+                [
+                  { id: 1, data: { $bin: Buffer.from([0, 1, 255]).toString('base64') } },
+                  { id: 2, data: null },
+                ]
+              ),
+            },
+          },
+        },
+      })
+    )
+    stores.push(h.store)
+    await h.login()
+    const url = (id: unknown, column = 'data') =>
+      `/api/databases/shop/tables/files/cell?column=${column}&key=${encodeURIComponent(JSON.stringify(id))}`
+    const res = await h.req(url({ kind: 'pk', values: { id: 1 } }))
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toBe('application/octet-stream')
+    expect(res.headers.get('content-disposition')).toContain('filename="files.data.bin"')
+    expect([...new Uint8Array(await res.arrayBuffer())]).toEqual([0, 1, 255])
+    expect((await h.req(url({ kind: 'pk', values: { id: 2 } }))).status).toBe(404)
+    expect((await h.req(url({ kind: 'nope' }))).status).toBe(400)
+    expect((await h.req(url({ kind: 'pk', values: { id: 9 } }))).status).toBe(409)
+  })
+
   it('rejects malformed browse parameters', async () => {
     const h = harness()
     stores.push(h.store)

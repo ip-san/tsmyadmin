@@ -1,4 +1,4 @@
-<!-- translated-from: docs/user-guide.md sha256:b5b7e5c130c5420f925ef5146675e540d43930df900c152a6327534b39d51e41 -->
+<!-- translated-from: docs/user-guide.md sha256:4c49b64bf1adb051a832b14faddc516c8820c279431a79bd29c6e2c9f122d767 -->
 
 # User guide
 
@@ -98,7 +98,9 @@ On PostgreSQL, **idle** tsmyadmin connections to that database under the same da
 ### Browse
 
 - Click a column heading to sort (ascending → descending → off). Shift-click sorts by several columns (the number shows the order). **Rows per page** is kept in this browser
-- **Columns N/M** chooses which columns to show (kept in the URL)
+- **Columns N/M** chooses which columns to show and their order (the arrows move a column left or right). The choice goes in the URL, and the browser remembers it per table
+- **Display** switches long values to full text, binary values to hex (the first 256 bytes) and spatial values to WKT (MySQL's spatial types and PostGIS); the browser remembers the choice
+- A page holds only the head of a value (64 KB of a binary value, and the start of a long text). Where rows can be addressed, **Download** beside such a value fetches all of it (up to 64 MB)
 - A foreign key value links to the row it references (↗); a primary key links to the rows referencing it (↵)
 - On a table over 100,000 rows with no filter, the exact count is skipped and the total reads *Approx. N rows*
 - **Editing**: the pencil at the start of a row opens a dialog; double-clicking a cell edits it in place (`Enter` saves, `Esc` cancels). The copy icon **duplicates a row** (auto-increment columns take a new value)

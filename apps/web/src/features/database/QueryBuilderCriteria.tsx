@@ -92,6 +92,11 @@ export function QueryBuilderCriteria({
                     <Input
                       aria-label={t.fieldLabel(label, t.value)}
                       value={c.value}
+                      placeholder={
+                        valueShape(c.op) === 'list'
+                          ? locale.search.listPlaceholder[c.op === 'in' || c.op === 'not_in' ? 'in' : 'between']
+                          : undefined
+                      }
                       onChange={(e) => update(gi, c.id, { value: e.target.value })}
                       className="w-56"
                       autoComplete="off"

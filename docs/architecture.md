@@ -75,7 +75,7 @@ classDiagram
     <<interface>>
     +dialect
     +listDatabases() / listTables() / describeTable()
-    +browseRows() / insertRow() / updateRow() / deleteRows()
+    +browseRows() / insertRow() / updateRow() / deleteRows() / readCell()
     +executeSql(ns, sql, opts) / cancelQuery(id)
     +iterateRows(ns, table) AsyncIterable~RowBatch~
     +showCreateTable() / listRoutines() / listTriggers()

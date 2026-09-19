@@ -29,4 +29,11 @@ describe('column visibility', () => {
     expect(encodeColumns(['a'], ['a', 'b'])).toBe('a')
     expect(encodeColumns(['a', 'b'], ['a', 'b'])).toBeUndefined()
   })
+
+  it('keeps the order the columns were put in, even with every column shown', () => {
+    expect(visibleColumnNames('b,a', ['a', 'b'])).toEqual(['b', 'a'])
+    expect(visibleColumnNames('b,b,a', ['a', 'b'])).toEqual(['b', 'a'])
+    expect(visibleColumnNames('zzz', ['a', 'b'])).toBeNull()
+    expect(encodeColumns(['b', 'a'], ['a', 'b'])).toBe('b,a')
+  })
 })

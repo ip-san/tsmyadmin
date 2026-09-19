@@ -178,7 +178,7 @@ for (const t of TARGETS) {
     test('column picker hides columns and keeps the choice in the URL', async ({ page }) => {
       await page.goto(tableUrl(t, 'users'))
       await page.getByRole('button', { name: 'カラム 5/5' }).click()
-      await page.getByRole('group', { name: 'カラム' }).getByLabel('email').uncheck()
+      await page.getByRole('group', { name: 'カラム' }).getByRole('checkbox', { name: 'email' }).uncheck()
       await expect(page).toHaveURL(/cols=/)
       await expect(page.getByRole('button', { name: 'カラム 4/5' })).toBeVisible()
       await expect(page.getByRole('columnheader').filter({ hasText: 'email' })).toHaveCount(0)
