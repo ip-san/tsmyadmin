@@ -6,8 +6,12 @@ import { locale } from '@/config/locale.ts'
 import { rowsQuery, sessionQuery } from '@/lib/queries.ts'
 import { Input, Select, Textarea } from '../ui/Field.tsx'
 
-/** Largest file taken into a binary column from the form: its base64 has to fit the 1 MB request body. */
-const MAX_UPLOAD_BYTES = 700 * 1024
+/**
+ * Largest file taken into a binary column from the form. A row travels as JSON in a request of at most 1 MB, and
+ * base64 makes a file a third larger: 512 KB leaves room for the rest of the row (RowForm also checks a row's files
+ * together, for a table with several binary columns).
+ */
+export const MAX_UPLOAD_BYTES = 512 * 1024
 /** Values offered for a foreign key column: the first ones of the referenced column. */
 const FK_OPTIONS = 200
 

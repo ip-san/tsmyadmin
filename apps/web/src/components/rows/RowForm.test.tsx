@@ -174,4 +174,18 @@ describe('RowForm (functions, files, several rows)', () => {
     await userEvent.click(screen.getByRole('button', { name: '挿入する' }))
     expect(onSubmit.mock.lastCall?.[1]).toEqual([{ name: 'a' }, { name: 'c' }])
   })
+
+  it('refuses a row whose files together would not fit the request', async () => {
+    const onSubmit = vi.fn()
+    const binaries = [col('a', { dataType: 'blob' }), col('b', { dataType: 'blob' })]
+    render(<RowForm columns={binaries} mode="insert" onSubmit={onSubmit} />)
+    // Each under the per-file limit, both together over what one request carries.
+    const half = new Uint8Array(400 * 1024)
+    await userEvent.upload(screen.getByLabelText('a: ファイルから'), new File([half], 'a.bin'))
+    await userEvent.upload(screen.getByLabelText('b: ファイルから'), new File([half], 'b.bin'))
+    await vi.waitFor(() => expect(screen.getByLabelText('b')).toHaveValue('b.bin'))
+    await userEvent.click(screen.getByRole('button', { name: '挿入する' }))
+    expect(onSubmit).not.toHaveBeenCalled()
+    expect(screen.getByRole('alert')).toHaveTextContent('合わせて大きすぎます')
+  })
 })

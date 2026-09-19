@@ -292,7 +292,7 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
           }}
         />
       </div>
-      {results ? <ResultsView results={results} maxRows={maxRows} /> : null}
+      {results ? <ResultsView results={results} maxRows={maxRows} viewTarget={{ db, schema }} /> : null}
     </div>
   )
 }

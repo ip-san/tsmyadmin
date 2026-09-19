@@ -158,6 +158,16 @@ for (const t of TARGETS) {
       await page.goto(tableUrl(t, 'users'))
       await page.getByText('全 5 行').waitFor()
       await scan(page)
+      // Two rows ticked, their actions shown, and the dialog that edits them together.
+      const grid = page.getByRole('table', { name: 'users' })
+      await grid.getByRole('row').nth(1).getByRole('checkbox').check()
+      await grid.getByRole('row').nth(2).getByRole('checkbox').check()
+      await page.getByRole('button', { name: 'このページのグラフ' }).click()
+      await scan(page)
+      await page.getByRole('button', { name: '選択行を編集' }).click()
+      await page.getByRole('dialog').getByLabel('name（2 行目）', { exact: true }).waitFor()
+      await scan(page)
+      await page.getByRole('dialog').getByRole('button', { name: 'キャンセル' }).click()
       await page.goto(tableUrl(t, 'users', '/structure'))
       await page.getByRole('table', { name: 'カラム' }).waitFor()
       // The column dialog with every section open (key, collation, generated column).

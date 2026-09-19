@@ -283,6 +283,14 @@ export const en = {
     fromTable: 'Referencing table',
   },
   browse: {
+    selection: {
+      edit: 'Edit selected rows',
+      csv: 'Selected rows as CSV',
+      json: 'Selected rows as JSON',
+      copy: 'Copy selected rows',
+      chart: 'Chart this page',
+      cut: 'A selected row holds a value cut for display: download or copy them from the Export tab.',
+    },
     total: (n: number | null, count: CountKind = 'exact') =>
       n === null
         ? 'Row count unknown'
@@ -338,6 +346,12 @@ export const en = {
     },
   },
   rows: {
+    filesTooLarge:
+      'The files in this row are too large together (about 512 KB at most). Put larger values in with SQL.',
+    updatedRows: (n: number) => `Updated ${plural(n, 'row', 'rows')}`,
+    editRowsTitle: (n: number) => `Edit ${plural(n, 'row', 'rows')}`,
+    updatedBeforeError: (n: number) =>
+      `${plural(n, 'row was', 'rows were')} updated; the rest were not, because of the error.`,
     function: 'Function',
     noFunction: '(no function)',
     functions: {
@@ -409,6 +423,7 @@ export const en = {
     },
   },
   sql: {
+    createView: 'Create a view from this SELECT',
     run: 'Run',
     runHint: 'Ctrl/⌘ + Enter runs',
     running: 'Running…',

@@ -1,8 +1,10 @@
+import { Link } from '@tanstack/react-router'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { Cell, ResultSet, StatementResult } from '@tsmyadmin/shared'
 import { type CSSProperties, memo, useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { CellValue } from '@/components/cells/CellValue.tsx'
+import { ResultChart } from '@/components/results/ResultChart.tsx'
 import { Notice } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
@@ -10,7 +12,14 @@ import { cn } from '@/lib/cn.ts'
 import { setPrinting, usePrinting } from '@/lib/printing.ts'
 import { locateInSql } from '@/lib/sql-position.ts'
 import { ResultActions } from './ResultActions.tsx'
-import { ResultChart } from './ResultChart.tsx'
+
+interface ViewTarget {
+  db: string
+  schema?: string | undefined
+}
+
+/** A statement a view can be made of (phpMyAdmin's "Create view" under a result): a SELECT or a WITH query. */
+const SELECT = /^\s*(?:SELECT|WITH|\()\b/i
 
 /** Rendered per statement; memoised because streaming appends re-render the list many times. */
 const Statement = memo(function Statement({
@@ -19,10 +28,13 @@ const Statement = memo(function Statement({
   maxRows,
   printHidden,
   onPrint,
+  viewTarget,
 }: {
   index: number
   result: StatementResult
   maxRows: number
+  /** Where a view made from this SELECT would be created (the console's database); absent to offer none. */
+  viewTarget: ViewTarget | undefined
   /** Another statement's result is being printed on its own. */
   printHidden: boolean
   onPrint: (index: number) => void
@@ -109,6 +121,16 @@ const Statement = memo(function Statement({
       <pre tabIndex={0} className="overflow-x-auto font-mono text-xs text-ink-sub">
         {result.sql}
       </pre>
+      {viewTarget && SELECT.test(result.sql) ? (
+        <Link
+          to="/db/$db"
+          params={{ db: viewTarget.db }}
+          search={{ ...(viewTarget.schema ? { schema: viewTarget.schema } : {}), createView: result.sql }}
+          className="text-xs text-blue-700 underline print:hidden dark:text-blue-300"
+        >
+          {locale.sql.createView}
+        </Link>
+      ) : null}
       {rows.length === 0 ? (
         <Notice>{locale.browse.noRows}</Notice>
       ) : (
@@ -203,7 +225,15 @@ function RowsTable({
   )
 }
 
-export function ResultsView({ results, maxRows }: { results: StatementResult[]; maxRows: number }) {
+export function ResultsView({
+  results,
+  maxRows,
+  viewTarget,
+}: {
+  results: StatementResult[]
+  maxRows: number
+  viewTarget?: ViewTarget
+}) {
   /** The statement whose Print button was pressed: only it goes on paper. Ctrl+P alone prints every result. */
   const [printTarget, setPrintTarget] = useState<{ index: number; at: Date } | null>(null)
   useEffect(() => {
@@ -264,6 +294,7 @@ export function ResultsView({ results, maxRows }: { results: StatementResult[]; 
           maxRows={maxRows}
           printHidden={printTarget !== null && printTarget.index !== i}
           onPrint={onPrint}
+          viewTarget={viewTarget}
         />
       ))}
     </div>

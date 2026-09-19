@@ -17,6 +17,8 @@ import { linkableForeignKeys, linkableReverseKeys } from './fk-links.ts'
 import { Pagination } from './Pagination.tsx'
 import { CopyRowDialog, EditRowDialog } from './RowDialogs.tsx'
 import { othersOf, rowKeys, rowToValues } from './row-key.ts'
+import { useRowSelection } from './row-selection.ts'
+import { SelectionActions } from './SelectionActions.tsx'
 import { SortHeader } from './SortHeader.tsx'
 import { useSettleFocus } from './settle-focus.ts'
 
@@ -48,7 +50,7 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
   // biome-ignore lint/correctness/useExhaustiveDependencies: keyed by content; the map is rebuilt with each render
   const transforms = useMemo(() => transformList.byColumn, [transformKey])
   const queryClient = useQueryClient()
-  const [selected, setSelected] = useState<ReadonlySet<number>>(new Set())
+  const { selected, setSelected, toggle, clear: clearSelection } = useRowSelection()
   const [editingRow, setEditingRow] = useState<number | null>(null)
   const [copyingRow, setCopyingRow] = useState<number | null>(null)
   const [inline, setInline] = useState<{ row: number; col: number } | null>(null)
@@ -63,7 +65,7 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
   const [prevOptionsKey, setPrevOptionsKey] = useState(optionsKey)
   if (prevOptionsKey !== optionsKey) {
     setPrevOptionsKey(optionsKey)
-    setSelected(new Set())
+    clearSelection()
     setInline(null)
     setEditingRow(null)
     setCopyingRow(null)
@@ -80,16 +82,6 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
     if (!cell) return
     gridRef.current?.querySelector<HTMLElement>(`[data-cell="${cell.row},${cell.col}"]`)?.focus()
   }, [])
-  const toggle = useCallback(
-    (i: number) =>
-      setSelected((s) => {
-        const next = new Set(s)
-        if (next.has(i)) next.delete(i)
-        else next.add(i)
-        return next
-      }),
-    []
-  )
   const data = rows.data
   const settleFocus = useSettleFocus(data, rows.isFetching, gridRef, noticeRef)
   // Derived per page, not per render: keys/indexes are reused by every checkbox toggle and inline edit.
@@ -157,7 +149,7 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
     onSuccess: async (r) => {
       update.reset()
       setNotice(locale.rows.deleted(r.affectedRows))
-      setSelected(new Set())
+      clearSelection()
       setDeleteTarget(null)
       await invalidate()
       // The deleted rows' checkboxes and the (now disabled) delete button cannot take focus back; the notice is
@@ -204,6 +196,14 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
         selectedCount={selected.size}
         canDelete={selectedKeys.length > 0}
         onDelete={() => setDeleteTarget({ keys: selectedKeys })}
+      />
+      <SelectionActions
+        tableRef={tableRef}
+        data={data}
+        selected={selected}
+        keys={keys}
+        editable={editable}
+        onDone={dialogDone}
       />
       {/* The live region stays mounted so screen readers announce a message that appears later. */}
       <output ref={noticeRef} tabIndex={-1} aria-live="polite" className={notice ? 'block' : 'sr-only'}>

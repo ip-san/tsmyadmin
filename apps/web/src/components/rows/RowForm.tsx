@@ -6,13 +6,18 @@ import { cellToEditable, isOpaqueCell } from '@/lib/format.ts'
 import { Button } from '../ui/Button.tsx'
 import { ErrorBox } from '../ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '../ui/Table.tsx'
-import { type FieldState, RowField } from './RowField.tsx'
+import { type FieldState, MAX_UPLOAD_BYTES, RowField } from './RowField.tsx'
+
+/** A row's files together, as base64: under the 1 MB request body with room for the rest of the row. */
+const ROW_FILES_MAX = Math.ceil((MAX_UPLOAD_BYTES * 4) / 3)
 
 export interface RowFormProps {
   columns: ColumnDef[]
   mode: 'insert' | 'edit'
   /** Edit: the current row. Insert: values to prefill (duplicate row); generated columns still use their default. */
   initial?: Record<string, Cell>
+  /** Edit several rows at once: their current values, one section each (takes the place of `initial`). */
+  initialRows?: Record<string, Cell>[]
   /** The table's foreign keys, to suggest the referenced values. */
   foreignKeys?: ForeignKeyDef[]
   /** Insert: how many rows the form holds (phpMyAdmin's "Continue insertion with N rows"). */
@@ -21,7 +26,8 @@ export interface RowFormProps {
   error?: unknown
   /**
    * The first row's values, and every row to write: in insert mode with several rows, the rows beyond the first
-   * that were left untouched are not included.
+   * that were left untouched are not included; editing several rows gives one entry per row, in order, empty where
+   * nothing changed.
    */
   onSubmit: (values: RowValues, rows: RowValues[]) => void
   onCancel?: () => void
@@ -81,6 +87,7 @@ export function RowForm({
   columns,
   mode,
   initial,
+  initialRows,
   foreignKeys = [],
   rowCount = 1,
   pending,
@@ -88,19 +95,24 @@ export function RowForm({
   onSubmit,
   onCancel,
 }: RowFormProps) {
-  const count = mode === 'insert' ? Math.max(1, rowCount) : 1
+  const count = mode === 'insert' ? Math.max(1, rowCount) : Math.max(1, initialRows?.length ?? 1)
+  /** The values a row started from: its own when editing several. */
+  const startOf = (row: number) => initialRows?.[row] ?? initial
   const [rows, setRows] = useState<RowState[]>(() =>
-    Array.from({ length: count }, () => initialState(columns, mode, initial))
+    Array.from({ length: count }, (_, i) => initialState(columns, mode, startOf(i)))
   )
-  // Rows beyond the first are written only once something in them was changed.
-  const [touched, setTouched] = useState<boolean[]>(() => Array.from({ length: count }, (_, i) => i === 0))
+  // Inserting: rows beyond the first are written only once something in them was changed. Editing: every row
+  // (only what changed in it is sent).
+  const [touched, setTouched] = useState<boolean[]>(() =>
+    Array.from({ length: count }, (_, i) => mode === 'edit' || i === 0)
+  )
   // The count can change while the form is open: grow or shrink the rows, keeping what was typed.
   if (rows.length !== count) {
-    setRows((r) => Array.from({ length: count }, (_, i) => r[i] ?? initialState(columns, mode, initial)))
+    setRows((r) => Array.from({ length: count }, (_, i) => r[i] ?? initialState(columns, mode, startOf(i))))
     setTouched((t) => Array.from({ length: count }, (_, i) => t[i] ?? i === 0))
   }
   // The structure query may refetch with a new column while the form is mounted: fall back to a fresh field.
-  const fieldFor = (row: number, c: ColumnDef): FieldState => rows[row]?.[c.name] ?? initialField(c, mode, initial)
+  const fieldFor = (row: number, c: ColumnDef): FieldState => rows[row]?.[c.name] ?? initialField(c, mode, startOf(row))
   const update = (row: number, column: ColumnDef, patch: Partial<FieldState>) => {
     setRows((all) =>
       all.map((r, i) => (i === row ? { ...r, [column.name]: { ...fieldFor(row, column), ...patch } } : r))
@@ -115,16 +127,24 @@ export function RowForm({
     if (!pending) submitted.current = false
   }, [pending])
 
+  const [filesTooLarge, setFilesTooLarge] = useState(false)
   const submit = (e: FormEvent) => {
     e.preventDefault()
     if (submitted.current || pending) return
+    // Every row is its own request: its files together must fit the request body, as base64.
+    const heaviest = Math.max(
+      0,
+      ...rows.map((r) => Object.values(r).reduce((n, f) => n + (f.file?.base64.length ?? 0), 0))
+    )
+    setFilesTooLarge(heaviest > ROW_FILES_MAX)
+    if (heaviest > ROW_FILES_MAX) return
     submitted.current = true
     const all: RowValues[] = []
     rows.forEach((_, row) => {
       if (!touched[row]) return
       const values: RowValues = {}
       for (const c of columns) {
-        const v = writtenValue(c, fieldFor(row, c), mode, initial?.[c.name] ?? null)
+        const v = writtenValue(c, fieldFor(row, c), mode, startOf(row)?.[c.name] ?? null)
         if (v !== undefined) values[c.name] = v
       }
       all.push(values)
@@ -154,7 +174,7 @@ export function RowForm({
           <tbody>
             {columns.map((c) => {
               const f = fieldFor(row, c)
-              const opaque = isOpaqueCell(initial?.[c.name] ?? null)
+              const opaque = isOpaqueCell(startOf(row)?.[c.name] ?? null)
               // Editing keeps an opaque value untouched unless a file replaces it; duplicating leaves it open.
               const locked = mode === 'edit' && opaque && !f.isNull
               const id = row === 0 ? `field-${c.name}` : `field-${row}-${c.name}`
@@ -212,6 +232,11 @@ export function RowForm({
           </tbody>
         </Table>
       ))}
+      {filesTooLarge ? (
+        <p role="alert" className="text-sm text-red-700 dark:text-red-300">
+          {locale.rows.filesTooLarge}
+        </p>
+      ) : null}
       {error ? <ErrorBox error={error} /> : null}
       <div className="flex justify-end gap-2">
         {onCancel ? (

@@ -279,6 +279,14 @@ export const ja = {
     fromTable: '参照元テーブル',
   },
   browse: {
+    selection: {
+      edit: '選択行を編集',
+      csv: '選択行を CSV で',
+      json: '選択行を JSON で',
+      copy: '選択行をコピー',
+      chart: 'このページのグラフ',
+      cut: '選択行に途中で切った値があるため、ダウンロードとコピーはエクスポートタブで行ってください。',
+    },
     total: (n: number | null, count: CountKind = 'exact') =>
       n === null
         ? '行数不明'
@@ -334,6 +342,11 @@ export const ja = {
     },
   },
   rows: {
+    filesTooLarge: 'この行のファイルは合わせて大きすぎます（512 KB 程度まで）。大きな値は SQL で入れてください。',
+    updatedRows: (n: number) => `${n.toLocaleString('ja-JP')} 行を更新しました`,
+    editRowsTitle: (n: number) => `${n.toLocaleString('ja-JP')} 行を編集`,
+    updatedBeforeError: (n: number) =>
+      `${n.toLocaleString('ja-JP')} 行は更新済みです。残りの行はエラーのため更新していません。`,
     function: '関数',
     noFunction: '（関数なし）',
     functions: {
@@ -404,6 +417,7 @@ export const ja = {
     },
   },
   sql: {
+    createView: 'この SELECT からビューを作成',
     run: '実行する',
     runHint: 'Ctrl/⌘ + Enter で実行',
     running: '実行中…',

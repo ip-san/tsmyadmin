@@ -10,9 +10,15 @@ import { useDdlFlow } from '@/lib/ddl.ts'
 const t = locale.create
 
 /** phpMyAdmin's "Create view": a name over a SELECT, optionally replacing a view of that name. */
-function CreateViewForm({ onSubmit }: { onSubmit: (op: DdlOp) => void }) {
+function CreateViewForm({
+  onSubmit,
+  initialSelect = '',
+}: {
+  onSubmit: (op: DdlOp) => void
+  initialSelect?: string | undefined
+}) {
   const [name, setName] = useState('')
-  const [select, setSelect] = useState('')
+  const [select, setSelect] = useState(initialSelect)
   const [orReplace, setOrReplace] = useState(false)
   const submit = (e: FormEvent) => {
     e.preventDefault()
@@ -47,13 +53,22 @@ function CreateViewForm({ onSubmit }: { onSubmit: (op: DdlOp) => void }) {
 }
 
 /** The create-view block under the database structure list, with its own preview. */
-export function CreateViewSection({ db, schema }: { db: string; schema?: string | undefined }) {
+export function CreateViewSection({
+  db,
+  schema,
+  initialSelect,
+}: {
+  db: string
+  schema?: string | undefined
+  /** A SELECT to start from (the SQL console's "Create view" under a result). */
+  initialSelect?: string | undefined
+}) {
   const flow = useDdlFlow(db, schema)
   return (
     <>
       <DdlPreviewDialog flow={flow} />
-      <CreateSection title={t.view.title}>
-        <CreateViewForm onSubmit={flow.preview} />
+      <CreateSection title={t.view.title} open={initialSelect !== undefined}>
+        <CreateViewForm key={initialSelect ?? ''} onSubmit={flow.preview} initialSelect={initialSelect} />
       </CreateSection>
     </>
   )
