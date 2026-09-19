@@ -1,4 +1,4 @@
-<!-- translated-from: docs/security.md sha256:17e8abe724bd61dbbaadae639c94cde7ee438fc70afea8940177ef5149377784 -->
+<!-- translated-from: docs/security.md sha256:5133382dab07789a9836ead5fb1e2624293da3c5509334c886f684794d8370cc -->
 
 # Security model
 
@@ -78,6 +78,7 @@ On a shared machine, run **Clear history** in the SQL tab and sign out before yo
 - On top of the `SameSite=Strict` cookie, form (multipart) POSTs are protected by `Origin` validation (`hono/csrf`). The JSON API cannot be called from another site because of the browser's cross-origin rules (CORS is not granted)
 - `Content-Security-Policy: default-src 'self'; script-src 'self'; frame-ancestors 'none'` and the rest (`CONTENT_SECURITY_POLICY` in `apps/api/src/app.ts`). Inline script is not allowed; only `style-src 'unsafe-inline'` is, because CodeMirror needs it
 - Every value is rendered through React (`dangerouslySetInnerHTML` is never used)
+- A display transformation's link (Structure tab) is http / https only, with the value URL-encoded into the template (a value cannot choose the host or make a `javascript:` URL; checked when the template is saved and when it is drawn). An image is shown as a `data:` URL only when the cell's bytes are a PNG, JPEG, GIF or WebP; SVG is never used. External image URLs are not loaded, under the CSP's `img-src 'self' data:`
 
 ## How SQL is built
 

@@ -1017,6 +1017,18 @@ export const ja = {
     preset: 'セントラルカラムから入力',
     noPreset: '（使わない）',
   },
+  transform: {
+    title: '表示の変換',
+    hint: '表示タブでのカラムの見せ方を変えます（値そのものは変わりません）。リンクは http / https だけで、値は URL エンコードして差し込みます。',
+    column: 'カラム',
+    kind: '表示',
+    kinds: { image: '画像（バイナリ）', link: 'リンク', json: 'JSON を整形' },
+    template: 'リンク先（{value} が値に置き換わる。空なら値そのもの）',
+    set: '設定する',
+    none: '設定はありません。',
+    clear: (column: string) => `${column}: 解除`,
+    imageAlt: (column: string) => `${column} の画像`,
+  },
   normalize: {
     title: '正規化の手がかり',
     hint: 'テーブルの定義と先頭の行から、第 1〜第 3 正規形に反していそうな箇所を挙げます。提案だけで、テーブルは変更しません。',

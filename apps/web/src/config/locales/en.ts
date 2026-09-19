@@ -1031,6 +1031,18 @@ export const en = {
     preset: 'Fill from a central column',
     noPreset: '(none)',
   },
+  transform: {
+    title: 'Display transformations',
+    hint: 'Changes how a column shows in Browse (the value itself is unchanged). Links are http / https only, with the value URL-encoded into them.',
+    column: 'Column',
+    kind: 'Show as',
+    kinds: { image: 'Image (binary)', link: 'Link', json: 'Indented JSON' },
+    template: 'Link to ({value} stands for the value; empty for the value itself)',
+    set: 'Set',
+    none: 'None set.',
+    clear: (column: string) => `${column}: remove`,
+    imageAlt: (column: string) => `Image in ${column}`,
+  },
   normalize: {
     title: 'Normalization hints',
     hint: 'Points out what in the table definition and its first rows looks like a break of the first to third normal forms. Suggestions only: the table is not changed.',

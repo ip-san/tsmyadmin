@@ -1,5 +1,6 @@
-import type { BrowseResult, Cell, InputCell, RowKey } from '@tsmyadmin/shared'
+import type { BrowseResult, Cell, ColumnTransform, InputCell, RowKey } from '@tsmyadmin/shared'
 import { memo } from 'react'
+import { TransformedCell } from '@/components/cells/TransformedCell.tsx'
 import { ErrorBox } from '@/components/ui/Feedback.tsx'
 import { Td, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
@@ -18,6 +19,8 @@ export interface BrowseRowProps {
   columnIndex: Map<string, number>
   fks: ReturnType<typeof linkableForeignKeys>
   reverse: ReturnType<typeof linkableReverseKeys>
+  /** Display transformations by column name (stable per page: the row is memoised). */
+  transforms: ReadonlyMap<string, ColumnTransform>
   db: string
   editable: boolean
   selected: boolean
@@ -46,6 +49,7 @@ export const BrowseRow = memo(function BrowseRow({
   columnIndex,
   fks,
   reverse,
+  transforms,
   db,
   editable,
   selected,
@@ -117,7 +121,14 @@ export const BrowseRow = memo(function BrowseRow({
                 {updateError ? <ErrorBox error={updateError} className="mt-1" /> : null}
               </>
             ) : (
-              <FkCell cell={cell} fk={fks.get(c.name)} reverse={reverse.get(c.name) ?? []} db={db} />
+              (() => {
+                const transform = transforms.get(c.name)
+                return transform ? (
+                  <TransformedCell cell={cell} transform={transform} />
+                ) : (
+                  <FkCell cell={cell} fk={fks.get(c.name)} reverse={reverse.get(c.name) ?? []} db={db} />
+                )
+              })()
             )}
           </Td>
         )

@@ -5,6 +5,7 @@ import { flushSync } from 'react-dom'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Th } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
+import { useColumnTransforms } from '@/lib/column-transforms.ts'
 import { mutations, rowsKey, rowsQuery, type TableRef } from '@/lib/queries.ts'
 import { BrowseRow } from './BrowseRow.tsx'
 import { BrowseToolbar } from './BrowseToolbar.tsx'
@@ -41,6 +42,11 @@ export function visibleColumns(result: BrowseResult): BrowseResult['columns'] {
 
 export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridProps) {
   const rows = useQuery(rowsQuery(tableRef, options))
+  const transformList = useColumnTransforms(tableRef)
+  // Rebuilt only when the list changes, so the memoised rows are not all re-rendered on every render of the grid.
+  const transformKey = JSON.stringify(transformList.entries)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed by content; the map is rebuilt with each render
+  const transforms = useMemo(() => transformList.byColumn, [transformKey])
   const queryClient = useQueryClient()
   const [selected, setSelected] = useState<ReadonlySet<number>>(new Set())
   const [editingRow, setEditingRow] = useState<number | null>(null)
@@ -243,6 +249,7 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
                 columnIndex={columnIndex}
                 fks={fks}
                 reverse={reverse}
+                transforms={transforms}
                 db={tableRef.db}
                 editable={editable}
                 selected={selected.has(i)}

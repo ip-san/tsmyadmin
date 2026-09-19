@@ -97,6 +97,7 @@ export const listExportTemplates = () => unwrap<ExportTemplate[]>(api['export-te
 export const exportTemplatesQuery = queryOptions({ queryKey: ['export-templates'], queryFn: listExportTemplates })
 export const listCentralColumns = () => unwrap<CentralColumn[]>(api['central-columns'].$get())
 export const centralColumnsQuery = queryOptions({ queryKey: ['central-columns'], queryFn: listCentralColumns })
+export const listColumnTransforms = () => unwrap<ColumnTransform[]>(api['column-transforms'].$get())
 
 export const databasesQuery = queryOptions({
   queryKey: ['databases'],

@@ -1,4 +1,4 @@
-<!-- translated-from: docs/user-guide.md sha256:a435c388bd6a1511eca11f43f313c3038ae6e47ee88919a56c205850288c0c27 -->
+<!-- translated-from: docs/user-guide.md sha256:29fd3046ce3db07aab366373ae35bd728fe3cc367533bf5688d2389271b4427a -->
 
 # User guide
 
@@ -111,6 +111,7 @@ On PostgreSQL, **idle** tsmyadmin connections to that database under the same da
 
 - Add, change and drop columns; add and drop indexes; add and drop foreign keys (to tables in the same schema); see what references this table; see the CREATE statement
 - Every change goes **preview of the generated SQL → Run**. An operation that cannot be undone (TRUNCATE, DROP …) also asks you to retype the object's name
+- **Display transformations** change how a column shows in Browse (a binary value as its image, a value as a link, JSON indented); the stored value is unchanged. Links are http / https only; put `{value}` in **Link to** and the value goes in URL-encoded. They are kept where saved queries are
 - **Normalization hints** below lists what in the definition and the first 500 rows looks like a break of the first to third normal forms (no primary key, numbered columns, several values joined in one, a reference with no foreign key, a column decided by part of the key or by a non-key column). Dependencies read from values are estimates, and the table is not changed
 
 ### SQL
