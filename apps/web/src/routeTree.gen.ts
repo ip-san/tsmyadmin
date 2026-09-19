@@ -27,6 +27,7 @@ import { Route as AppDbDbRouteImport } from './routes/_app/db.$db'
 import { Route as AppDbDbIndexRouteImport } from './routes/_app/db.$db/index'
 import { Route as AppDbDbCentralRouteImport } from './routes/_app/db.$db/central'
 import { Route as AppDbDbDesignerRouteImport } from './routes/_app/db.$db/designer'
+import { Route as AppDbDbDictionaryRouteImport } from './routes/_app/db.$db/dictionary'
 import { Route as AppDbDbEventsRouteImport } from './routes/_app/db.$db/events'
 import { Route as AppDbDbExportRouteImport } from './routes/_app/db.$db/export'
 import { Route as AppDbDbImportRouteImport } from './routes/_app/db.$db/import'
@@ -138,6 +139,11 @@ const AppDbDbCentralRoute = AppDbDbCentralRouteImport.update({
 const AppDbDbDesignerRoute = AppDbDbDesignerRouteImport.update({
   id: '/designer',
   path: '/designer',
+  getParentRoute: () => AppDbDbRoute,
+} as any)
+const AppDbDbDictionaryRoute = AppDbDbDictionaryRouteImport.update({
+  id: '/dictionary',
+  path: '/dictionary',
   getParentRoute: () => AppDbDbRoute,
 } as any)
 const AppDbDbEventsRoute = AppDbDbEventsRouteImport.update({
@@ -278,6 +284,7 @@ export interface FileRoutesByFullPath {
   '/db/$db': typeof AppDbDbRouteWithChildren
   '/db/$db/central': typeof AppDbDbCentralRoute
   '/db/$db/designer': typeof AppDbDbDesignerRoute
+  '/db/$db/dictionary': typeof AppDbDbDictionaryRoute
   '/db/$db/events': typeof AppDbDbEventsRoute
   '/db/$db/export': typeof AppDbDbExportRoute
   '/db/$db/import': typeof AppDbDbImportRoute
@@ -319,6 +326,7 @@ export interface FileRoutesByTo {
   '/': typeof AppIndexRoute
   '/db/$db/central': typeof AppDbDbCentralRoute
   '/db/$db/designer': typeof AppDbDbDesignerRoute
+  '/db/$db/dictionary': typeof AppDbDbDictionaryRoute
   '/db/$db/events': typeof AppDbDbEventsRoute
   '/db/$db/export': typeof AppDbDbExportRoute
   '/db/$db/import': typeof AppDbDbImportRoute
@@ -362,6 +370,7 @@ export interface FileRoutesById {
   '/_app/db/$db': typeof AppDbDbRouteWithChildren
   '/_app/db/$db/central': typeof AppDbDbCentralRoute
   '/_app/db/$db/designer': typeof AppDbDbDesignerRoute
+  '/_app/db/$db/dictionary': typeof AppDbDbDictionaryRoute
   '/_app/db/$db/events': typeof AppDbDbEventsRoute
   '/_app/db/$db/export': typeof AppDbDbExportRoute
   '/_app/db/$db/import': typeof AppDbDbImportRoute
@@ -406,6 +415,7 @@ export interface FileRouteTypes {
     | '/db/$db'
     | '/db/$db/central'
     | '/db/$db/designer'
+    | '/db/$db/dictionary'
     | '/db/$db/events'
     | '/db/$db/export'
     | '/db/$db/import'
@@ -447,6 +457,7 @@ export interface FileRouteTypes {
     | '/'
     | '/db/$db/central'
     | '/db/$db/designer'
+    | '/db/$db/dictionary'
     | '/db/$db/events'
     | '/db/$db/export'
     | '/db/$db/import'
@@ -489,6 +500,7 @@ export interface FileRouteTypes {
     | '/_app/db/$db'
     | '/_app/db/$db/central'
     | '/_app/db/$db/designer'
+    | '/_app/db/$db/dictionary'
     | '/_app/db/$db/events'
     | '/_app/db/$db/export'
     | '/_app/db/$db/import'
@@ -646,6 +658,13 @@ declare module '@tanstack/react-router' {
       path: '/designer'
       fullPath: '/db/$db/designer'
       preLoaderRoute: typeof AppDbDbDesignerRouteImport
+      parentRoute: typeof AppDbDbRoute
+    }
+    '/_app/db/$db/dictionary': {
+      id: '/_app/db/$db/dictionary'
+      path: '/dictionary'
+      fullPath: '/db/$db/dictionary'
+      preLoaderRoute: typeof AppDbDbDictionaryRouteImport
       parentRoute: typeof AppDbDbRoute
     }
     '/_app/db/$db/events': {
@@ -846,6 +865,7 @@ const AppDbDbTableTableRouteWithChildren =
 interface AppDbDbRouteChildren {
   AppDbDbCentralRoute: typeof AppDbDbCentralRoute
   AppDbDbDesignerRoute: typeof AppDbDbDesignerRoute
+  AppDbDbDictionaryRoute: typeof AppDbDbDictionaryRoute
   AppDbDbEventsRoute: typeof AppDbDbEventsRoute
   AppDbDbExportRoute: typeof AppDbDbExportRoute
   AppDbDbImportRoute: typeof AppDbDbImportRoute
@@ -864,6 +884,7 @@ interface AppDbDbRouteChildren {
 const AppDbDbRouteChildren: AppDbDbRouteChildren = {
   AppDbDbCentralRoute: AppDbDbCentralRoute,
   AppDbDbDesignerRoute: AppDbDbDesignerRoute,
+  AppDbDbDictionaryRoute: AppDbDbDictionaryRoute,
   AppDbDbEventsRoute: AppDbDbEventsRoute,
   AppDbDbExportRoute: AppDbDbExportRoute,
   AppDbDbImportRoute: AppDbDbImportRoute,

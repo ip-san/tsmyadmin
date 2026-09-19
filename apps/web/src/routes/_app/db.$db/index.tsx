@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
-import { createFileRoute, useRouteContext } from '@tanstack/react-router'
+import { createFileRoute, Link, useRouteContext } from '@tanstack/react-router'
 import { z } from 'zod'
+import { locale } from '@/config/locale.ts'
 import { CreateDatabaseForm } from '@/features/database/CreateDatabaseForm.tsx'
 import { CreateTableForm } from '@/features/database/CreateTableForm.tsx'
 import { CreateViewSection } from '@/features/database/CreateViewForm.tsx'
@@ -22,6 +23,16 @@ function DatabaseStructurePage() {
   return (
     <div className="space-y-8">
       <TablesList db={db} schema={schema} />
+      {tables.isError ? null : (
+        <Link
+          to="/db/$db/dictionary"
+          params={{ db }}
+          search={schema ? { schema } : {}}
+          className="inline-block text-sm text-blue-700 underline dark:text-blue-300"
+        >
+          {locale.dictionary.link}
+        </Link>
+      )}
       {tables.isError ? null : (
         <>
           <CreateTableForm db={db} schema={schema} dialect={session.dialect} />
