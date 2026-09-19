@@ -156,6 +156,11 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
           await c.get('session').adapter.listPartitions(ns(c.req.param('db'), q.schema), c.req.param('table'))
         )
       })
+      .get('/databases/:db/tables/:table/count', validate('query', SchemaQuerySchema), async (c) => {
+        const q = c.req.valid('query')
+        const count = await c.get('session').adapter.countRows(ns(c.req.param('db'), q.schema), c.req.param('table'))
+        return c.json({ count })
+      })
       .get('/databases/:db/tables/:table/stats', validate('query', SchemaQuerySchema), async (c) => {
         const q = c.req.valid('query')
         return c.json(await c.get('session').adapter.tableStats(ns(c.req.param('db'), q.schema), c.req.param('table')))

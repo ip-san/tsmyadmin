@@ -365,6 +365,11 @@ export class FakeAdapter implements DatabaseAdapter {
     return this.dependencies
   }
 
+  async countRows(ns: Namespace, table: string): Promise<number> {
+    this.record('countRows', ns, table)
+    return this.table(ns, table).rows.length
+  }
+
   async listPartitions(ns: Namespace, table: string): Promise<Partitioning> {
     this.record('listPartitions', ns, table)
     this.table(ns, table)

@@ -30,7 +30,7 @@ function mysqlKind(tableType: string): TableInfo['kind'] {
 export async function mysqlListTables(conn: Conn, ns: Namespace): Promise<TableInfo[]> {
   const r = firstResult(
     await conn.query(
-      'SELECT TABLE_NAME, TABLE_TYPE, TABLE_ROWS, ENGINE, TABLE_COMMENT, DATA_LENGTH + INDEX_LENGTH FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? ORDER BY TABLE_NAME',
+      'SELECT TABLE_NAME, TABLE_TYPE, TABLE_ROWS, ENGINE, TABLE_COMMENT, DATA_LENGTH + INDEX_LENGTH, TABLE_COLLATION, CREATE_TIME, UPDATE_TIME FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? ORDER BY TABLE_NAME',
       [ns.database]
     )
   )
@@ -48,6 +48,9 @@ export async function mysqlListTables(conn: Conn, ns: Namespace): Promise<TableI
     engine: strOrNull(row[3]),
     comment: strOrNull(row[4]) || null,
     sizeBytes: str(row[1]).includes('VIEW') ? null : num(row[5]),
+    collation: strOrNull(row[6]),
+    createdAt: strOrNull(row[7]),
+    updatedAt: strOrNull(row[8]),
     inherits: [],
   }))
 }

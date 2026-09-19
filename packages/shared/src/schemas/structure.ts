@@ -31,6 +31,10 @@ export const TableInfoSchema = z.object({
   inherits: z.array(z.string()).default([]),
   /** For a PostgreSQL sequence OWNED BY a column: that column (the sequence goes wherever the table goes). */
   ownedBy: z.object({ table: z.string(), column: z.string() }).optional(),
+  /** MySQL: the table's default collation, and when it was created / last written (InnoDB may not keep the latter). */
+  collation: z.string().nullable().optional(),
+  createdAt: z.string().nullable().optional(),
+  updatedAt: z.string().nullable().optional(),
 })
 export type TableInfo = z.infer<typeof TableInfoSchema>
 
@@ -192,3 +196,7 @@ export const PartitioningSchema = z.object({
   partitions: z.array(PartitionInfoSchema),
 })
 export type Partitioning = z.infer<typeof PartitioningSchema>
+
+/** An exact row count, counted when asked for. */
+export const RowCountSchema = z.object({ count: z.number().int().min(0) })
+export type RowCount = z.infer<typeof RowCountSchema>

@@ -8,6 +8,7 @@ import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
 import { useDdlFlow } from '@/lib/ddl.ts'
 import { sessionQuery, tablesQuery } from '@/lib/queries.ts'
+import { RowCountCell } from './RowCountCell.tsx'
 import { TableBulkBar } from './TableBulkBar.tsx'
 import { tableTotals } from './table-totals.ts'
 
@@ -55,7 +56,14 @@ export function TablesList({ db, schema }: { db: string; schema?: string | undef
             <Th>{locale.database.kind}</Th>
             <Th className="text-right">{locale.database.rowEstimate}</Th>
             <Th className="text-right">{locale.database.size}</Th>
-            {hasEngine ? <Th>{locale.database.engine}</Th> : null}
+            {hasEngine ? (
+              <>
+                <Th>{locale.database.engine}</Th>
+                <Th>{locale.table.collation}</Th>
+                <Th>{locale.table.stats.createdAt}</Th>
+                <Th>{locale.table.stats.updatedAt}</Th>
+              </>
+            ) : null}
             <Th>{locale.database.comment}</Th>
             <Th>{locale.database.actions}</Th>
           </tr>
@@ -84,13 +92,26 @@ export function TablesList({ db, schema }: { db: string; schema?: string | undef
                 </Link>
               </Td>
               <Td className="whitespace-nowrap">{locale.database.kinds[t.kind]}</Td>
-              <Td className="text-right tabular-nums">
-                {t.rowEstimate === null ? '–' : t.rowEstimate.toLocaleString('ja-JP')}
+              <Td className="whitespace-nowrap text-right tabular-nums">
+                {t.kind === 'table' ? (
+                  <RowCountCell tableRef={{ db, schema, table: t.name }} estimate={t.rowEstimate} />
+                ) : t.rowEstimate === null ? (
+                  '–'
+                ) : (
+                  t.rowEstimate.toLocaleString('ja-JP')
+                )}
               </Td>
               <Td className="whitespace-nowrap text-right tabular-nums">
                 {t.sizeBytes === null ? '–' : locale.common.bytes(t.sizeBytes)}
               </Td>
-              {hasEngine ? <Td>{t.engine ?? '–'}</Td> : null}
+              {hasEngine ? (
+                <>
+                  <Td>{t.engine ?? '–'}</Td>
+                  <Td className="font-mono text-xs">{t.collation ?? '–'}</Td>
+                  <Td className="whitespace-nowrap text-xs tabular-nums">{t.createdAt ?? '–'}</Td>
+                  <Td className="whitespace-nowrap text-xs tabular-nums">{t.updatedAt ?? '–'}</Td>
+                </>
+              ) : null}
               <Td className="max-w-xs">
                 <CellValue cell={t.comment ?? ''} />
               </Td>
@@ -141,7 +162,7 @@ export function TablesList({ db, schema }: { db: string; schema?: string | undef
               {totals.bytes === null ? '–' : locale.common.bytes(totals.bytes)}
             </Td>
             {/* engine (MySQL only), comment, actions */}
-            <Td colSpan={hasEngine ? 3 : 2} />
+            <Td colSpan={hasEngine ? 6 : 2} />
           </tr>
         </tfoot>
       </Table>

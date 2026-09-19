@@ -27,6 +27,7 @@ import type {
   RoutineDefinition,
   RoutineInfo,
   RoutineKind,
+  RowCount,
   RowKey,
   RowValues,
   SavedQuery,
@@ -229,6 +230,21 @@ export const structureQuery = (ref: TableRef) =>
           query: schemaQuery(ref.schema),
         })
       ),
+  })
+
+/** An exact COUNT(*), run only when asked for. */
+export const rowCountQuery = (ref: TableRef) =>
+  queryOptions({
+    queryKey: ['structure', ref.db, ref.schema ?? '', ref.table, 'count'],
+    queryFn: async () =>
+      (
+        await unwrap<RowCount>(
+          api.databases[':db'].tables[':table'].count.$get({
+            param: { db: enc(ref.db), table: enc(ref.table) },
+            query: schemaQuery(ref.schema),
+          })
+        )
+      ).count,
   })
 
 /** A table's partitioning; under the structure key so a DDL that refreshes the structure refreshes it too. */

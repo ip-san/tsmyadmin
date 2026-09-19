@@ -1064,6 +1064,18 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
       })
     })
 
+    describe('countRows', () => {
+      it('counts every row exactly, and lists MySQL tables with their collation and creation time', async () => {
+        expect(await db.countRows(ns, 'users')).toBe(5)
+        await expect(db.countRows(ns, `${scratch}_none`)).rejects.toMatchObject({ code: expect.any(String) })
+        const users = (await db.listTables(ns)).find((x) => x.name === 'users')
+        if (dialect === 'mysql') {
+          expect(users?.collation).toMatch(/^utf8mb4_/)
+          expect(users?.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}/)
+        }
+      })
+    })
+
     describe('tableStats', () => {
       it('reports the space a table uses and its rows; a view has no sizes', async () => {
         const t = `${scratch}_stats`

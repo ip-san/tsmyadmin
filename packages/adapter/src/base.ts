@@ -874,6 +874,13 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     })
   }
 
+  async countRows(ns: Namespace, table: string): Promise<number> {
+    const r = await this.withConn(ns, async (conn) =>
+      firstResult(await conn.query(`SELECT COUNT(*) FROM ${quoteTable(this.dialect, ns, table)}`))
+    )
+    return Number(r.rows[0]?.[0] ?? 0)
+  }
+
   async readCell(ns: Namespace, table: string, key: RowKey, column: string): Promise<Cell> {
     const d = this.dialect
     const schema = await this.describeTable(ns, table)
