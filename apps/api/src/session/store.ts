@@ -7,7 +7,18 @@ import { identityKey } from './identity.ts'
  * definition kept for reuse), a column's display transformation, or the account's preferences (one item) — all
  * per account — or, shared by every account of a server, a tracked table version or a user group.
  */
-export const SAVED_ITEM_KINDS = ['sql', 'export', 'central', 'transform', 'prefs', 'tracking', 'usergroup'] as const
+export const SAVED_ITEM_KINDS = [
+  'sql',
+  'export',
+  'central',
+  'transform',
+  'prefs',
+  'tracking',
+  'usergroup',
+  // Shared: which statement kinds a tracked table records, and the statements recorded.
+  'trackconf',
+  'tracklog',
+] as const
 export type SavedItemKind = (typeof SAVED_ITEM_KINDS)[number]
 
 /** A stored item. `body` is the statement for 'sql' and JSON for the others; only the routes interpret it. */

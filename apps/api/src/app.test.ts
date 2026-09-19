@@ -2419,7 +2419,7 @@ describe('change tracking', () => {
     }
     const state = async (method = 'GET', table = 'users') =>
       req(`/api/databases/shop/tables/${table}/tracking`, { method })
-    return { store, users, login, state }
+    return { store, users, login, state, req }
   }
 
   it('records versions only when the definition changed, shared by every account of the server', async () => {
@@ -2446,6 +2446,52 @@ describe('change tracking', () => {
       h.users.definition = 'x'.repeat(TRACKING_DEFINITION_MAX + 1)
       expect(await (await h.state('POST')).json()).toMatchObject({ code: 'UNSUPPORTED' })
       expect(TrackingStateSchema.parse(await (await h.state()).json()).versions).toEqual([])
+    } finally {
+      await h.store.closeAll()
+    }
+  })
+
+  it('records the statement kinds chosen for a tracked table, and grid edits without their values', async () => {
+    const h = trackingHarness()
+    try {
+      await h.login()
+      const sql = (text: string) =>
+        h.req('/api/databases/shop/sql', { method: 'POST', body: JSON.stringify({ sql: text }) })
+      const kinds = (list: string[]) =>
+        h.req('/api/databases/shop/tables/users/tracking/kinds', {
+          method: 'PUT',
+          body: JSON.stringify({ kinds: list }),
+        })
+      // Not tracked yet: nothing is recorded, and kinds cannot be set.
+      await sql('ALTER TABLE users ADD COLUMN a INT')
+      expect((await kinds(['alter'])).status).toBe(400)
+      // Tracking starts with the definition changes.
+      const started = TrackingStateSchema.parse(await (await h.state('POST')).json())
+      expect(started.kinds).toEqual(['create', 'alter', 'rename', 'drop', 'truncate', 'index'])
+      await sql('ALTER TABLE `shop`.`users` ADD COLUMN b INT')
+      await sql("UPDATE users SET name = 'x'")
+      await sql('ALTER TABLE posts ADD COLUMN c INT')
+      let log = TrackingStateSchema.parse(await (await h.state()).json()).log ?? []
+      expect(log.map((e) => [e.kind, e.statement])).toEqual([['alter', 'ALTER TABLE `shop`.`users` ADD COLUMN b INT']])
+      // Row changes, once asked for: the statement from the console, and a grid edit as what it touched.
+      await kinds(['alter', 'update'])
+      await sql("UPDATE users SET name = 'y'")
+      await h.req('/api/databases/shop/tables/users/rows', {
+        method: 'PATCH',
+        body: JSON.stringify({ key: { kind: 'pk', values: { id: 1 } }, values: { name: 'secret value' } }),
+      })
+      log = TrackingStateSchema.parse(await (await h.state()).json()).log ?? []
+      expect(log.slice(0, 2).map((e) => [e.kind, e.statement, e.columns ?? null])).toEqual([
+        ['update', null, ['name']],
+        ['update', "UPDATE users SET name = 'y'", null],
+      ])
+      expect(JSON.stringify(log)).not.toContain('secret value')
+      // The database's list of tracked tables.
+      const list = await (await h.req('/api/databases/shop/tracking')).json()
+      expect(list).toMatchObject([{ table: 'users', versions: 1, latest: 1, kinds: ['alter', 'update'] }])
+      // Stopping forgets the settings and the log with the versions.
+      await h.state('DELETE')
+      expect(await (await h.req('/api/databases/shop/tracking')).json()).toEqual([])
     } finally {
       await h.store.closeAll()
     }

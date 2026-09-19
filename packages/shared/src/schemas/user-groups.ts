@@ -19,6 +19,7 @@ export const GROUP_TABS = {
     'triggers',
     'events',
     'central',
+    'tracking',
     'operations',
   ],
   table: [

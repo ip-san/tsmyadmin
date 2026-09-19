@@ -1,4 +1,4 @@
-<!-- translated-from: docs/phpmyadmin-parity.md sha256:93eb3d24c9e49b8738c127579e95dee7e2d4658ed3644cd3df6f033b868e379a -->
+<!-- translated-from: docs/phpmyadmin-parity.md sha256:098b634d07e3aa0f4cf8efa02abd86398adbd47abe0ebd57e431b486b1a1fb4f -->
 
 # Feature parity with phpMyAdmin
 
@@ -52,7 +52,7 @@ The basics (browsing and editing, structure changes, SQL, search, QBE, export / 
 | D11 | Events: editing, exporting; ON COMPLETION PRESERVE; DEFINER | △ |
 | D12 | Views: OR REPLACE, ALGORITHM, DEFINER, SQL SECURITY, column names, WITH CHECK OPTION, editing a view | △ |
 | D13 | Designer: creating / dropping relations on the diagram, display column, saved pages, exporting the schema (SVG / PDF) | △ |
-| D14 | Tracking: a per-database list, recording the DDL / DML statements run | △ |
+| D14 | Tracking: a per-database list, recording the DDL / DML statements run | ✅ |
 | D15 | Normalization steps (as far as creating the new tables) | △ |
 
 ## Table
@@ -74,7 +74,7 @@ The basics (browsing and editing, structure changes, SQL, search, QBE, export / 
 | T13 | Creating and managing partitions | ✅ |
 | T14 | Relations: foreign keys to another database, display column | ✅ |
 | T15 | Operations: ROW_FORMAT, changing every column's collation, ALTER TABLE ORDER BY, CHECKSUM, FLUSH, copy options | ✅ |
-| T16 | Tracking: choosing which kinds of statement to record | △ |
+| T16 | Tracking: choosing which kinds of statement to record | ✅ |
 
 ## Export / import
 

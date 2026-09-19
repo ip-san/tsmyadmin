@@ -54,5 +54,52 @@ for (const t of TARGETS) {
         await sql(page, t, `DROP TABLE IF EXISTS ${table}`)
       }
     })
+
+    test('records the statements chosen, grid edits without values, and lists the tracked tables', async ({ page }) => {
+      await login(page, t)
+      const table = `e2e_trks_${Date.now().toString(36)}`
+      await sql(page, t, `CREATE TABLE ${table} (id INT PRIMARY KEY, name VARCHAR(20))`)
+      await sql(page, t, `INSERT INTO ${table} VALUES (1, 'a')`)
+      try {
+        await page.goto(tableUrl(t, table, '/tracking'))
+        await page.getByRole('button', { name: /追跡を始める/ }).click()
+        // Definition changes by default; row changes once ticked.
+        await expect(page.getByLabel('ALTER TABLE', { exact: true })).toBeChecked()
+        await expect(page.getByLabel('UPDATE', { exact: true })).not.toBeChecked()
+        await page.getByLabel('UPDATE', { exact: true }).check()
+        await page.getByRole('button', { name: '種類を保存' }).click()
+        await expect(page.getByRole('button', { name: '種類を保存' })).toBeDisabled()
+
+        await sql(page, t, `ALTER TABLE ${table} ADD COLUMN note VARCHAR(50)`)
+        await sql(page, t, `DELETE FROM ${table} WHERE id = 99`)
+        await page.goto(tableUrl(t, table))
+        await page.getByRole('table', { name: table }).getByRole('cell', { name: 'a', exact: true }).dblclick()
+        await page.keyboard.press('ControlOrMeta+a')
+        await page.keyboard.type('secret')
+        await page.keyboard.press('Enter')
+        await expect(
+          page.getByRole('table', { name: table }).getByRole('cell', { name: 'secret', exact: true })
+        ).toBeVisible()
+
+        await page.goto(tableUrl(t, table, '/tracking'))
+        const log = page.getByRole('table', { name: '記録された文' })
+        await expect(log.getByRole('row')).toHaveCount(3)
+        await expect(log).toContainText(`ADD COLUMN note`)
+        await expect(log).toContainText('表の編集: 1 行（name）')
+        await expect(log).not.toContainText('secret')
+        // DELETE was not chosen: not recorded.
+        await expect(log).not.toContainText('DELETE')
+
+        await page.goto(t.schema ? `/db/${t.database}/tracking?schema=${t.schema}` : `/db/${t.database}/tracking`)
+        await expect(
+          page.getByRole('table', { name: '追跡しているテーブル' }).getByRole('link', { name: table })
+        ).toBeVisible()
+      } finally {
+        await page.request.delete(
+          `/api/databases/${t.database}/tables/${table}/tracking${t.schema ? `?schema=${t.schema}` : ''}`
+        )
+        await sql(page, t, `DROP TABLE IF EXISTS ${table}`)
+      }
+    })
   })
 }

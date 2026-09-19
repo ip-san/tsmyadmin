@@ -60,6 +60,9 @@ for (const t of TARGETS) {
         )
 
         await page.goto(`/db/${renamed}/operations`)
+        // PostgreSQL copies from a template no one is using: this page's own requests to the database (the tree,
+        // the table list) finish first, as a person reading the form would let them.
+        await page.waitForLoadState('networkidle')
         await page.getByLabel('コピー先のデータベース名').fill(copied)
         await page
           .getByRole('form', { name: 'データベースをコピー' })

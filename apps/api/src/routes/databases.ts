@@ -21,6 +21,7 @@ import {
   SqlCancelRequestSchema,
   SqlRequestSchema,
   type SqlStreamEvent,
+  type StatementResult,
   TableSearchQuerySchema,
   TriggerQuerySchema,
   UpdateRowRequestSchema,
@@ -33,6 +34,7 @@ import { buildExport, contentDisposition, toReadableStream } from '../lib/export
 import { identifierTooLong, tooLongIdentifier } from '../lib/identifiers.ts'
 import { decodeUpload, ImportValidationError, importCsv, importSql } from '../lib/import.ts'
 import type { Logger } from '../lib/logging.ts'
+import { recordGridChange, recordStatements } from '../lib/tracking-log.ts'
 import { validate } from '../lib/validate.ts'
 import { type AppEnv, requireSession, type SessionConfig } from '../session/middleware.ts'
 
@@ -67,6 +69,17 @@ const NDJSON_HEADERS = {
 
 function validationError(err: ImportValidationError): ApiError {
   return { ...apiError('VALIDATION', err.message), reason: err.reason, params: err.params }
+}
+
+/** The statements that ran (one per statement: a CALL's several result sets share it), for tracking. */
+function executed(results: readonly StatementResult[]): string[] {
+  const seen = new Set<number>()
+  return results.flatMap((r, i) => {
+    const at = r.statement ?? i
+    if (r.kind === 'error' || seen.has(at)) return []
+    seen.add(at)
+    return [r.sql]
+  })
 }
 
 export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
@@ -171,9 +184,18 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
         async (c) => {
           const q = c.req.valid('query')
           const body = c.req.valid('json')
-          const r = await c
-            .get('session')
-            .adapter.insertRow(ns(c.req.param('db'), q.schema), c.req.param('table'), body.values)
+          const namespace = ns(c.req.param('db'), q.schema)
+          const r = await c.get('session').adapter.insertRow(namespace, c.req.param('table'), body.values)
+          await recordGridChange(
+            cfg.store.sharedItems,
+            c.get('session').config,
+            namespace,
+            c.req.param('table'),
+            'insert',
+            r.affectedRows,
+            Object.keys(body.values),
+            logger
+          )
           return c.json(r, 201)
         }
       )
@@ -184,9 +206,18 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
         async (c) => {
           const q = c.req.valid('query')
           const body = c.req.valid('json')
-          const r = await c
-            .get('session')
-            .adapter.updateRow(ns(c.req.param('db'), q.schema), c.req.param('table'), body.key, body.values)
+          const namespace = ns(c.req.param('db'), q.schema)
+          const r = await c.get('session').adapter.updateRow(namespace, c.req.param('table'), body.key, body.values)
+          await recordGridChange(
+            cfg.store.sharedItems,
+            c.get('session').config,
+            namespace,
+            c.req.param('table'),
+            'update',
+            r.affectedRows,
+            Object.keys(body.values),
+            logger
+          )
           return c.json(r)
         }
       )
@@ -197,9 +228,18 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
         async (c) => {
           const q = c.req.valid('query')
           const body = c.req.valid('json')
-          const r = await c
-            .get('session')
-            .adapter.deleteRows(ns(c.req.param('db'), q.schema), c.req.param('table'), body.keys)
+          const namespace = ns(c.req.param('db'), q.schema)
+          const r = await c.get('session').adapter.deleteRows(namespace, c.req.param('table'), body.keys)
+          await recordGridChange(
+            cfg.store.sharedItems,
+            c.get('session').config,
+            namespace,
+            c.req.param('table'),
+            'delete',
+            r.affectedRows,
+            [],
+            logger
+          )
           return c.json(r)
         }
       )
@@ -321,6 +361,13 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
           profile: body.profile,
           ...(body.queryId ? { queryId: body.queryId } : {}),
         })
+        await recordStatements(
+          cfg.store.sharedItems,
+          c.get('session').config,
+          ns(c.req.param('db'), body.schema),
+          executed(results),
+          logger
+        )
         return c.json(results)
       })
       /** Same as POST /sql but streams one NDJSON line per statement as it completes. */
@@ -356,17 +403,24 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
           try {
             // Answered by the server itself once the script is done, just before its transaction is rolled back.
             let openTransaction = false
+            const ran: StatementResult[] = []
             const results = await adapter.executeSql(namespace, body.sql, {
               maxRows: body.maxRows,
               timeoutMs: body.timeoutMs,
               stopOnError: body.stopOnError,
               profile: body.profile,
               queryId,
-              onResult: (result, index) => send({ type: 'result', index, result }),
+              onResult: (result, index) => {
+                ran.push(result)
+                return send({ type: 'result', index, result })
+              },
               onTransactionOpen: (open) => {
                 openTransaction = open
               },
             })
+            // A transaction left open is rolled back: what ran in it did not happen.
+            if (!openTransaction)
+              await recordStatements(cfg.store.sharedItems, c.get('session').config, namespace, executed(ran), logger)
             await send({
               type: 'done',
               statements: results.length,

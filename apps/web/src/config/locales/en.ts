@@ -1269,6 +1269,33 @@ export const en = {
     versionLabel: (v: number) => `Version ${v}`,
     diff: 'Differences (- only in From, + only in To)',
     noDifference: 'No differences.',
+    statements: 'Recorded statements',
+    kinds: 'Statements to record',
+    kindsHint:
+      'Of the statements run through this tool, the kinds chosen are recorded (changes from other clients show only as differences between versions). Row-change statements hold values, so they are shown only to those who can read the table. Edits in the grid are recorded without their values.',
+    kindNames: {
+      create: 'CREATE TABLE',
+      alter: 'ALTER TABLE',
+      rename: 'RENAME',
+      drop: 'DROP TABLE',
+      truncate: 'TRUNCATE',
+      index: 'CREATE / DROP INDEX',
+      insert: 'INSERT',
+      update: 'UPDATE',
+      delete: 'DELETE',
+    },
+    saveKinds: 'Save the kinds',
+    noStatements: 'No statement recorded yet.',
+    logHidden:
+      "The recorded statements are not shown: you cannot read this table's rows (a statement may hold row values).",
+    grid: (rows: number, columns: string[]) =>
+      `Edited in the grid: ${rows.toLocaleString('en-US')} row${rows === 1 ? '' : 's'}${columns.length > 0 ? ` (${columns.join(', ')})` : ''}; values not recorded`,
+    cut: '(cut short)',
+    kind: 'Kind',
+    statement: 'Statement',
+    tables: 'Tracked tables',
+    noTables: "No table of this database is tracked. Start from a table's Tracking tab.",
+    latest: 'Latest version',
   },
   normalize: {
     title: 'Normalization hints',

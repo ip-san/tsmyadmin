@@ -10,6 +10,7 @@ import { Field, Select } from '@/components/ui/Field.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale, localeCode } from '@/config/locale.ts'
 import { mutations, type TableRef, trackingQuery } from '@/lib/queries.ts'
+import { TrackedStatements } from './TrackedStatements.tsx'
 
 const t = locale.tracking
 /** The option standing for the definition as it is now. */
@@ -132,6 +133,7 @@ export function TrackingPage({ tableRef }: { tableRef: TableRef }) {
               </tbody>
             </Table>
           </Card>
+          <TrackedStatements key={state.data.kinds.join()} tableRef={tableRef} state={state.data} />
           <Card title={t.compare}>
             <div className="mb-3 flex flex-wrap items-end gap-2">
               <Field id={`${id}-from`} label={t.from}>

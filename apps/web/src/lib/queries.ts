@@ -45,7 +45,9 @@ import type {
   TableSchema,
   TableSearchResult,
   TableStats,
+  TrackedTable,
   TrackingState,
+  TrackKind,
   TriggerInfo,
   UserGrants,
   UserGroup,
@@ -190,6 +192,16 @@ export const trackingQuery = (ref: TableRef) =>
   queryOptions({
     queryKey: ['tracking', ref.db, ref.schema ?? '', ref.table],
     queryFn: () => unwrap<TrackingState>(api.databases[':db'].tables[':table'].tracking.$get(trackingRequest(ref))),
+  })
+
+/** The tracked tables of a database / schema. */
+export const databaseTrackingQuery = (db: string, schema?: string) =>
+  queryOptions({
+    queryKey: ['tracking', db, schema ?? ''],
+    queryFn: () =>
+      unwrap<TrackedTable[]>(
+        api.databases[':db'].tracking.$get({ param: { db: enc(db) }, query: schemaQuery(schema) })
+      ),
   })
 
 export const createStatementQuery = (ref: TableRef) =>
@@ -387,6 +399,10 @@ export const mutations = {
     unwrap<CentralColumn[]>(api['central-columns'][':id'].$delete({ param: { id } })),
   recordVersion: (ref: TableRef) =>
     unwrap<TrackingState>(api.databases[':db'].tables[':table'].tracking.$post(trackingRequest(ref))),
+  setTrackingKinds: (ref: TableRef, kinds: TrackKind[]) =>
+    unwrap<TrackingState>(
+      api.databases[':db'].tables[':table'].tracking.kinds.$put({ ...trackingRequest(ref), json: { kinds } })
+    ),
   stopTracking: (ref: TableRef) =>
     unwrap<TrackingState>(api.databases[':db'].tables[':table'].tracking.$delete(trackingRequest(ref))),
   saveUserGroup: (body: UserGroupBody) => unwrap<UserGroup[]>(api['user-groups'].$post({ json: body })),
