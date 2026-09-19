@@ -64,6 +64,26 @@ test.describe('accessibility (axe-core, two-factor)', () => {
     await scan(page)
   })
 
+  test('tracking tab with a difference to show', async ({ page }) => {
+    const t = TARGETS[0]
+    if (!t) throw new Error('no target')
+    await login(page, t)
+    const table = `e2e_a11ytr_${Date.now().toString(36)}`
+    const run = (sql: string) => page.request.post(`/api/databases/${t.database}/sql`, { data: { sql } })
+    await run(`CREATE TABLE ${table} (id INT PRIMARY KEY)`)
+    try {
+      await page.goto(tableUrl(t, table, '/tracking'))
+      await page.getByRole('button', { name: /追跡を始める/ }).click()
+      await run(`ALTER TABLE ${table} ADD COLUMN note INT`)
+      await page.reload()
+      await page.getByLabel(/違い（/).waitFor()
+      await scan(page)
+    } finally {
+      await page.request.delete(`/api/databases/${t.database}/tables/${table}/tracking`)
+      await run(`DROP TABLE IF EXISTS ${table}`)
+    }
+  })
+
   test('users tab with an account to reset, and the reset dialog', async ({ page }) => {
     test.setTimeout(90_000)
     const name = `e2e_a11y2f_${Date.now().toString(36)}`

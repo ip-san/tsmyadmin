@@ -32,6 +32,7 @@ import {
   TableInfoSchema,
   TableSchemaSchema,
   TableSearchResultSchema,
+  TrackingStateSchema,
   UserGroupSchema,
 } from '@tsmyadmin/shared'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -2327,6 +2328,83 @@ describe('user groups', () => {
       method: 'POST',
       body: JSON.stringify({ name: 'x', members: ['a'], hiddenTabs: [] }),
     })
+    expect(await res.json()).toMatchObject({ code: 'UNSUPPORTED' })
+  })
+})
+
+describe('change tracking', () => {
+  function trackingHarness() {
+    // One set of tables behind every session, so a change to it is seen by all of them.
+    const users = fakeTable('users', ['id', 'name'], [{ id: 1, name: 'Alice' }])
+    users.definition = 'CREATE TABLE users (\n  id int,\n  name text\n)'
+    const tables = { users }
+    const store = new SqliteSessionStore({
+      path: ':memory:',
+      secret: 's'.repeat(32),
+      adapterFactory: () => new FakeAdapter({ databases: { shop: { tables } } }),
+      sweepIntervalMs: 0,
+    })
+    const app = createApp(testConfig(), { store })
+    let cookie = ''
+    const req = (path: string, init: RequestInit = {}) =>
+      app.request(path, {
+        ...init,
+        headers: { 'content-type': 'application/json', ...(cookie ? { cookie } : {}), ...(init.headers ?? {}) },
+      })
+    const login = async (user = 'root') => {
+      const res = await req('/api/session', { method: 'POST', body: JSON.stringify({ ...LOGIN, user }) })
+      cookie = res.headers.get('set-cookie')?.split(';')[0] ?? ''
+    }
+    const state = async (method = 'GET', table = 'users') =>
+      req(`/api/databases/shop/tables/${table}/tracking`, { method })
+    return { store, users, login, state }
+  }
+
+  it('records versions only when the definition changed, shared by every account of the server', async () => {
+    const h = trackingHarness()
+    try {
+      await h.login()
+      expect(TrackingStateSchema.parse(await (await h.state()).json()).versions).toEqual([])
+      const first = TrackingStateSchema.parse(await (await h.state('POST')).json())
+      expect(first.versions).toMatchObject([{ version: 1, by: 'root', table: 'users' }])
+      // Nothing changed: no second version.
+      expect(TrackingStateSchema.parse(await (await h.state('POST')).json()).versions).toHaveLength(1)
+      h.users.definition = 'CREATE TABLE users (\n  id int,\n  name varchar(20)\n)'
+      // Another account records the next one, and sees the first.
+      await h.login('reader')
+      const second = TrackingStateSchema.parse(await (await h.state('POST')).json())
+      expect(second.versions.map((v) => [v.version, v.by])).toEqual([
+        [1, 'root'],
+        [2, 'reader'],
+      ])
+      expect(second.versions[1]?.definition).toContain('varchar(20)')
+      expect(TrackingStateSchema.parse(await (await h.state('DELETE')).json()).versions).toEqual([])
+      expect(TrackingStateSchema.parse(await (await h.state()).json()).versions).toEqual([])
+    } finally {
+      await h.store.closeAll()
+    }
+  })
+
+  it('reveals nothing about a table the account cannot read', async () => {
+    const h = trackingHarness()
+    try {
+      await h.login()
+      await h.state('POST')
+      // The definition is read through the caller's session first: a table it cannot see answers as missing.
+      const missing = await h.state('GET', 'secret')
+      expect(missing.status).toBe(404)
+      expect(await missing.json()).not.toHaveProperty('versions')
+    } finally {
+      await h.store.closeAll()
+    }
+  })
+
+  it('reads, and refuses to record, without a persistent store', async () => {
+    const h = harness()
+    stores.push(h.store)
+    await h.login()
+    expect(await (await h.req('/api/databases/shop/tables/users/tracking')).json()).toMatchObject({ versions: [] })
+    const res = await h.req('/api/databases/shop/tables/users/tracking', { method: 'POST' })
     expect(await res.json()).toMatchObject({ code: 'UNSUPPORTED' })
   })
 })

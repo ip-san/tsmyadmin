@@ -47,6 +47,7 @@ import { Route as AppDbDbTableTablePrivilegesRouteImport } from './routes/_app/d
 import { Route as AppDbDbTableTableSearchRouteImport } from './routes/_app/db.$db/table.$table/search'
 import { Route as AppDbDbTableTableSqlRouteImport } from './routes/_app/db.$db/table.$table/sql'
 import { Route as AppDbDbTableTableStructureRouteImport } from './routes/_app/db.$db/table.$table/structure'
+import { Route as AppDbDbTableTableTrackingRouteImport } from './routes/_app/db.$db/table.$table/tracking'
 import { Route as AppDbDbTableTableTriggersRouteImport } from './routes/_app/db.$db/table.$table/triggers'
 
 const AppRoute = AppRouteImport.update({
@@ -241,6 +242,12 @@ const AppDbDbTableTableStructureRoute =
     path: '/structure',
     getParentRoute: () => AppDbDbTableTableRoute,
   } as any)
+const AppDbDbTableTableTrackingRoute =
+  AppDbDbTableTableTrackingRouteImport.update({
+    id: '/tracking',
+    path: '/tracking',
+    getParentRoute: () => AppDbDbTableTableRoute,
+  } as any)
 const AppDbDbTableTableTriggersRoute =
   AppDbDbTableTableTriggersRouteImport.update({
     id: '/triggers',
@@ -285,6 +292,7 @@ export interface FileRoutesByFullPath {
   '/db/$db/table/$table/search': typeof AppDbDbTableTableSearchRoute
   '/db/$db/table/$table/sql': typeof AppDbDbTableTableSqlRoute
   '/db/$db/table/$table/structure': typeof AppDbDbTableTableStructureRoute
+  '/db/$db/table/$table/tracking': typeof AppDbDbTableTableTrackingRoute
   '/db/$db/table/$table/triggers': typeof AppDbDbTableTableTriggersRoute
   '/db/$db/table/$table/': typeof AppDbDbTableTableIndexRoute
 }
@@ -323,6 +331,7 @@ export interface FileRoutesByTo {
   '/db/$db/table/$table/search': typeof AppDbDbTableTableSearchRoute
   '/db/$db/table/$table/sql': typeof AppDbDbTableTableSqlRoute
   '/db/$db/table/$table/structure': typeof AppDbDbTableTableStructureRoute
+  '/db/$db/table/$table/tracking': typeof AppDbDbTableTableTrackingRoute
   '/db/$db/table/$table/triggers': typeof AppDbDbTableTableTriggersRoute
   '/db/$db/table/$table': typeof AppDbDbTableTableIndexRoute
 }
@@ -365,6 +374,7 @@ export interface FileRoutesById {
   '/_app/db/$db/table/$table/search': typeof AppDbDbTableTableSearchRoute
   '/_app/db/$db/table/$table/sql': typeof AppDbDbTableTableSqlRoute
   '/_app/db/$db/table/$table/structure': typeof AppDbDbTableTableStructureRoute
+  '/_app/db/$db/table/$table/tracking': typeof AppDbDbTableTableTrackingRoute
   '/_app/db/$db/table/$table/triggers': typeof AppDbDbTableTableTriggersRoute
   '/_app/db/$db/table/$table/': typeof AppDbDbTableTableIndexRoute
 }
@@ -407,6 +417,7 @@ export interface FileRouteTypes {
     | '/db/$db/table/$table/search'
     | '/db/$db/table/$table/sql'
     | '/db/$db/table/$table/structure'
+    | '/db/$db/table/$table/tracking'
     | '/db/$db/table/$table/triggers'
     | '/db/$db/table/$table/'
   fileRoutesByTo: FileRoutesByTo
@@ -445,6 +456,7 @@ export interface FileRouteTypes {
     | '/db/$db/table/$table/search'
     | '/db/$db/table/$table/sql'
     | '/db/$db/table/$table/structure'
+    | '/db/$db/table/$table/tracking'
     | '/db/$db/table/$table/triggers'
     | '/db/$db/table/$table'
   id:
@@ -486,6 +498,7 @@ export interface FileRouteTypes {
     | '/_app/db/$db/table/$table/search'
     | '/_app/db/$db/table/$table/sql'
     | '/_app/db/$db/table/$table/structure'
+    | '/_app/db/$db/table/$table/tracking'
     | '/_app/db/$db/table/$table/triggers'
     | '/_app/db/$db/table/$table/'
   fileRoutesById: FileRoutesById
@@ -763,6 +776,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppDbDbTableTableStructureRouteImport
       parentRoute: typeof AppDbDbTableTableRoute
     }
+    '/_app/db/$db/table/$table/tracking': {
+      id: '/_app/db/$db/table/$table/tracking'
+      path: '/tracking'
+      fullPath: '/db/$db/table/$table/tracking'
+      preLoaderRoute: typeof AppDbDbTableTableTrackingRouteImport
+      parentRoute: typeof AppDbDbTableTableRoute
+    }
     '/_app/db/$db/table/$table/triggers': {
       id: '/_app/db/$db/table/$table/triggers'
       path: '/triggers'
@@ -782,6 +802,7 @@ interface AppDbDbTableTableRouteChildren {
   AppDbDbTableTableSearchRoute: typeof AppDbDbTableTableSearchRoute
   AppDbDbTableTableSqlRoute: typeof AppDbDbTableTableSqlRoute
   AppDbDbTableTableStructureRoute: typeof AppDbDbTableTableStructureRoute
+  AppDbDbTableTableTrackingRoute: typeof AppDbDbTableTableTrackingRoute
   AppDbDbTableTableTriggersRoute: typeof AppDbDbTableTableTriggersRoute
   AppDbDbTableTableIndexRoute: typeof AppDbDbTableTableIndexRoute
 }
@@ -795,6 +816,7 @@ const AppDbDbTableTableRouteChildren: AppDbDbTableTableRouteChildren = {
   AppDbDbTableTableSearchRoute: AppDbDbTableTableSearchRoute,
   AppDbDbTableTableSqlRoute: AppDbDbTableTableSqlRoute,
   AppDbDbTableTableStructureRoute: AppDbDbTableTableStructureRoute,
+  AppDbDbTableTableTrackingRoute: AppDbDbTableTableTrackingRoute,
   AppDbDbTableTableTriggersRoute: AppDbDbTableTableTriggersRoute,
   AppDbDbTableTableIndexRoute: AppDbDbTableTableIndexRoute,
 }

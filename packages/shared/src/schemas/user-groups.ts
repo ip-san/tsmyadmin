@@ -21,7 +21,18 @@ export const GROUP_TABS = {
     'central',
     'operations',
   ],
-  table: ['structure', 'sql', 'search', 'insert', 'export', 'import', 'triggers', 'privileges', 'operations'],
+  table: [
+    'structure',
+    'sql',
+    'search',
+    'insert',
+    'export',
+    'import',
+    'triggers',
+    'privileges',
+    'tracking',
+    'operations',
+  ],
 } as const
 export type GroupTabLevel = keyof typeof GROUP_TABS
 

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { createFileRoute, Outlet, useMatches } from '@tanstack/react-router'
+import { createFileRoute, Outlet, useMatches, useRouteContext } from '@tanstack/react-router'
 import { isViewKind } from '@tsmyadmin/shared'
 import { Star } from 'lucide-react'
 import { useEffect } from 'react'
@@ -23,6 +23,7 @@ function TableLayout() {
   // Views cannot take rows: the insert / import tabs would only lead to a "read-only" notice.
   const structure = useQuery(structureQuery({ db, schema, table }))
   const view = structure.data !== undefined && isViewKind(structure.data.kind)
+  const { session } = useRouteContext({ from: '/_app' })
   const shortcuts = useTableShortcuts()
   const ref = { db, schema, table }
   const favorite = shortcuts.isFavorite(ref)
@@ -70,6 +71,14 @@ function TableLayout() {
           { label: locale.tabs.import, to: '/db/$db/table/$table/import', params, search, hidden: view },
           { label: locale.tabs.triggers, to: '/db/$db/table/$table/triggers', params, search },
           { label: locale.tabs.privileges, to: '/db/$db/table/$table/privileges', params, search },
+          {
+            label: locale.tabs.tracking,
+            to: '/db/$db/table/$table/tracking',
+            params,
+            search,
+            // Versions are kept by the session store, so without a persistent one there is nowhere to keep them.
+            hidden: view || session.savedQueries !== 'server',
+          },
           { label: locale.tabs.operations, to: '/db/$db/table/$table/operations', params, search },
         ]}
       />
@@ -88,5 +97,6 @@ const TAB_LABELS: Record<string, string> = {
   import: locale.tabs.import,
   triggers: locale.tabs.triggers,
   privileges: locale.tabs.privileges,
+  tracking: locale.tabs.tracking,
   operations: locale.tabs.operations,
 }

@@ -43,6 +43,7 @@ import type {
   TableInfo,
   TableSchema,
   TableSearchResult,
+  TrackingState,
   TriggerInfo,
   UserGrants,
   UserGroup,
@@ -179,6 +180,16 @@ export const eventsQuery = (db: string, schema?: string) =>
   })
 
 /** CREATE TABLE / VIEW statements as the server prints (MySQL) or reconstructs (PostgreSQL) them. */
+const trackingRequest = (ref: TableRef) => ({
+  param: { db: enc(ref.db), table: enc(ref.table) },
+  query: schemaQuery(ref.schema),
+})
+export const trackingQuery = (ref: TableRef) =>
+  queryOptions({
+    queryKey: ['tracking', ref.db, ref.schema ?? '', ref.table],
+    queryFn: () => unwrap<TrackingState>(api.databases[':db'].tables[':table'].tracking.$get(trackingRequest(ref))),
+  })
+
 export const createStatementQuery = (ref: TableRef) =>
   queryOptions({
     queryKey: ['create-statement', ref.db, ref.schema ?? '', ref.table],
@@ -344,6 +355,10 @@ export const mutations = {
   saveCentralColumn: (body: CentralColumnBody) => unwrap<CentralColumn[]>(api['central-columns'].$post({ json: body })),
   deleteCentralColumn: (id: string) =>
     unwrap<CentralColumn[]>(api['central-columns'][':id'].$delete({ param: { id } })),
+  recordVersion: (ref: TableRef) =>
+    unwrap<TrackingState>(api.databases[':db'].tables[':table'].tracking.$post(trackingRequest(ref))),
+  stopTracking: (ref: TableRef) =>
+    unwrap<TrackingState>(api.databases[':db'].tables[':table'].tracking.$delete(trackingRequest(ref))),
   saveUserGroup: (body: UserGroupBody) => unwrap<UserGroup[]>(api['user-groups'].$post({ json: body })),
   deleteUserGroup: (id: string) => unwrap<UserGroup[]>(api['user-groups'][':id'].$delete({ param: { id } })),
   saveColumnTransform: (body: ColumnTransformBody) =>
