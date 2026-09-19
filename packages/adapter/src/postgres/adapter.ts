@@ -1,5 +1,6 @@
 import type {
   ColumnMeta,
+  DatabaseGrant,
   DatabaseInfo,
   EventInfo,
   KeyValue,
@@ -429,6 +430,11 @@ export class PostgresAdapter extends BaseAdapter {
 
   listPartitions(ns: Namespace, table: string): Promise<Partitioning> {
     return this.withConn(ns, (conn) => pgListPartitions(conn, ns, table))
+  }
+
+  // Privileges are per object in PostgreSQL, and a database copied from a template keeps them.
+  async databaseGrants(_database: string): Promise<DatabaseGrant[]> {
+    return []
   }
 
   tableStats(ns: Namespace, table: string): Promise<TableStats> {

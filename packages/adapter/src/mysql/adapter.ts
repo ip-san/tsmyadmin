@@ -1,6 +1,7 @@
 import type {
   Cell,
   ColumnMeta,
+  DatabaseGrant,
   DatabaseInfo,
   EventInfo,
   KeyValue,
@@ -46,6 +47,7 @@ import { AdapterError, type AdapterErrorCode, type ConnectionConfig } from '../t
 import { mysqlDdl } from './ddl.ts'
 import { mysqlExporter } from './export.ts'
 import {
+  mysqlDatabaseGrants,
   mysqlDescribeTable,
   mysqlListForeignKeys,
   mysqlListPartitions,
@@ -603,6 +605,11 @@ export class MysqlAdapter extends BaseAdapter {
 
   listPartitions(ns: Namespace, table: string): Promise<Partitioning> {
     return this.withConn(ns, (conn) => mysqlListPartitions(conn, ns, table))
+  }
+
+  databaseGrants(database: string): Promise<DatabaseGrant[]> {
+    // Read through the server's own schema: the database asked about may not exist (yet), and need not be entered.
+    return this.withConn(this.serverNamespace, (conn) => mysqlDatabaseGrants(conn, database))
   }
 
   tableStats(ns: Namespace, table: string): Promise<TableStats> {

@@ -1,5 +1,6 @@
 import type {
   ColumnDef,
+  DatabaseGrant,
   ForeignKeyDef,
   IndexDef,
   Namespace,
@@ -399,4 +400,32 @@ export async function mysqlListPartitions(conn: Conn, ns: Namespace, table: stri
       sizeBytes: num(row[5]),
     })),
   }
+}
+
+/** `'user'@'host'` as information_schema prints a grantee, with the quotes and doubled quotes undone. */
+function parseGrantee(grantee: string): { user: string; host: string } | null {
+  const m = /^'((?:[^']|'')*)'@'((?:[^']|'')*)'$/.exec(grantee)
+  return m ? { user: (m[1] ?? '').replaceAll("''", "'"), host: (m[2] ?? '').replaceAll("''", "'") } : null
+}
+
+/** Database-level privileges on one database (exact name; grants on a name pattern are not this database's own). */
+export async function mysqlDatabaseGrants(conn: Conn, database: string): Promise<DatabaseGrant[]> {
+  const r = firstResult(
+    await conn.query(
+      'SELECT GRANTEE, PRIVILEGE_TYPE, IS_GRANTABLE FROM information_schema.SCHEMA_PRIVILEGES WHERE TABLE_SCHEMA = ? ORDER BY GRANTEE, PRIVILEGE_TYPE',
+      [database]
+    )
+  )
+  const out = new Map<string, DatabaseGrant>()
+  for (const row of r.rows) {
+    const who = parseGrantee(str(row[0]))
+    if (!who) continue
+    const key = `${who.user}@${who.host}`
+    const grant = out.get(key) ?? { ...who, privileges: [], grantable: false }
+    grant.privileges.push(str(row[1]))
+    // IS_GRANTABLE is per row but the same for every row of one grant.
+    if (str(row[2]) === 'YES') grant.grantable = true
+    out.set(key, grant)
+  }
+  return [...out.values()]
 }

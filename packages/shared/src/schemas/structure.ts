@@ -200,3 +200,12 @@ export type Partitioning = z.infer<typeof PartitioningSchema>
 /** An exact row count, counted when asked for. */
 export const RowCountSchema = z.object({ count: z.number().int().min(0) })
 export type RowCount = z.infer<typeof RowCountSchema>
+
+/** What an account may do in one database, as MySQL keeps it at the database level (`GRANT … ON db.*`). */
+export const DatabaseGrantSchema = z.object({
+  user: z.string(),
+  host: z.string(),
+  privileges: z.array(z.string()),
+  grantable: z.boolean(),
+})
+export type DatabaseGrant = z.infer<typeof DatabaseGrantSchema>

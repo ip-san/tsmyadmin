@@ -33,6 +33,7 @@ export const PASSTHROUGH_METHODS = [
   'describeTable',
   'tableStats',
   'countRows',
+  'databaseGrants',
   'listPartitions',
   'listRoutines',
   'routineDefinition',

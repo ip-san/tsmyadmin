@@ -5,6 +5,9 @@ export const Route = createFileRoute('/_app/db/$db/operations')({ component: Ope
 
 function Operations() {
   const { db } = Route.useParams()
+  const { schema } = Route.useSearch()
   const { session } = useRouteContext({ from: '/_app' })
-  return <DatabaseOperations db={db} dialect={session.dialect} serverDatabase={session.serverDatabase} />
+  return (
+    <DatabaseOperations db={db} schema={schema} dialect={session.dialect} serverDatabase={session.serverDatabase} />
+  )
 }

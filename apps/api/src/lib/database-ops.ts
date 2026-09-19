@@ -1,5 +1,12 @@
 import type { DatabaseAdapter } from '@tsmyadmin/adapter'
-import { type DdlOp, isGeneratedColumn, type Namespace, SYSTEM_DATABASES } from '@tsmyadmin/shared'
+import {
+  type DdlOp,
+  type FkAction,
+  FkActionSchema,
+  isGeneratedColumn,
+  type Namespace,
+  SYSTEM_DATABASES,
+} from '@tsmyadmin/shared'
 
 export type DatabaseOp = Extract<DdlOp, { op: 'renameDatabase' | 'copyDatabase' }>
 
@@ -84,13 +91,37 @@ export async function prepareDatabaseOp(
     return { ...op, tables: baseTables, ...(collation ? { collation } : { collation: undefined }) }
   }
 
+  const copy = op.op === 'copyDatabase' ? op : null
   const tables = await Promise.all(
-    baseTables.map(async (name) => ({
-      name,
-      columns: (await adapter.describeTable(ns, name)).columns
-        .filter((c) => !isGeneratedColumn(c.extra))
-        .map((c) => c.name),
-    }))
+    baseTables.map(async (name) => {
+      const schema = await adapter.describeTable(ns, name)
+      return {
+        name,
+        columns: schema.columns.filter((c) => !isGeneratedColumn(c.extra)).map((c) => c.name),
+        // Read here, and only when asked for: the copy carries exactly what the server reports now.
+        ...(copy?.autoIncrement && schema.autoIncrement ? { autoIncrement: schema.autoIncrement } : {}),
+        ...(copy?.foreignKeys && schema.foreignKeys.length > 0
+          ? {
+              foreignKeys: schema.foreignKeys.map((fk) => ({
+                name: fk.name,
+                columns: fk.columns,
+                refTable: fk.refTable,
+                refDatabase: fk.refNamespace.database,
+                refColumns: fk.refColumns,
+                ...(fk.onUpdate && fk.onUpdate !== 'NO ACTION' ? { onUpdate: toAction(fk.onUpdate) } : {}),
+                ...(fk.onDelete && fk.onDelete !== 'NO ACTION' ? { onDelete: toAction(fk.onDelete) } : {}),
+              })),
+            }
+          : {}),
+      }
+    })
   )
-  return { ...op, tables, ...(collation ? { collation } : { collation: undefined }) }
+  const grants = copy?.privileges ? await adapter.databaseGrants(op.name) : undefined
+  return { ...op, tables, ...(grants ? { grants } : {}), ...(collation ? { collation } : { collation: undefined }) }
+}
+
+/** A referential action the catalog reported, as the builders write it (anything else is left as the default). */
+function toAction(value: string): FkAction | undefined {
+  const parsed = FkActionSchema.safeParse(value.toUpperCase())
+  return parsed.success ? parsed.data : undefined
 }

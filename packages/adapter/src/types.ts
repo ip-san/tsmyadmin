@@ -4,6 +4,7 @@ import type {
   BrowseResult,
   Cell,
   ColumnMeta,
+  DatabaseGrant,
   DatabaseInfo,
   DdlOp,
   Dialect,
@@ -202,6 +203,8 @@ export interface DatabaseAdapter {
   listSchemas(database: string): Promise<string[]>
   listTables(ns: Namespace): Promise<TableInfo[]>
   describeTable(ns: Namespace, table: string): Promise<TableSchema>
+  /** Database-level privileges accounts hold on a database (MySQL; none on PostgreSQL, whose grants are per object). */
+  databaseGrants(database: string): Promise<DatabaseGrant[]>
   /** The exact number of rows (COUNT(*)), for a table whose listed count is the catalog's estimate. */
   countRows(ns: Namespace, table: string): Promise<number>
   /** Space used and row statistics from the catalog (sizes are null for a view). */
@@ -320,6 +323,7 @@ export const ADAPTER_METHOD_NAMES = [
   'describeTable',
   'tableStats',
   'countRows',
+  'databaseGrants',
   'listPartitions',
   'listRoutines',
   'routineDefinition',

@@ -246,6 +246,16 @@ export const en = {
     constraint: 'Constraint',
   },
   databaseOps: {
+    copyKeep: {
+      foreignKeys: 'Copy the foreign keys too',
+      autoIncrement: 'Carry the next AUTO_INCREMENT values over',
+      privileges: 'Give accounts the same privileges (on this database)',
+    },
+    collationHintMysql: (current: string) =>
+      `The default collation of new tables (now: ${current || 'unknown'}). With the box ticked every table and column is converted too (values are converted to the new character set).`,
+    collationHintPostgres:
+      "A PostgreSQL database's collation is set when it is created and cannot change; this gives every text column of the schema's tables the collation.",
+    applyToTables: 'Apply to the existing tables and columns too',
     newName: 'New database name',
     copyName: 'Name of the copy',
     renameHintMysql:
@@ -590,6 +600,7 @@ export const en = {
   },
   ddl: {
     titles: {
+      setDatabaseCollation: 'Change the default collation',
       maintainTables: 'Maintain the selected tables',
       renameTables: 'Rename the selected tables',
       copyTables: 'Copy the selected tables',

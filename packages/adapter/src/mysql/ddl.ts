@@ -100,6 +100,17 @@ export const mysqlDdl: DdlBuilder = {
 
       case 'dropDatabase':
         return [`DROP DATABASE ${id(op.name)}`]
+      case 'setDatabaseCollation': {
+        const charset = op.collation === 'binary' ? 'binary' : (op.collation.split('_')[0] ?? op.collation)
+        const into = { database: op.name }
+        return [
+          `ALTER DATABASE ${id(op.name)} CHARACTER SET ${charset} COLLATE ${op.collation}`,
+          ...(op.applyToTables ? (op.tables ?? []) : []).map(
+            (x) =>
+              `ALTER TABLE ${quoteTable('mysql', into, x)} CONVERT TO CHARACTER SET ${charset} COLLATE ${op.collation}`
+          ),
+        ]
+      }
       case 'renameDatabase': {
         // MySQL has no RENAME DATABASE, so the tables move to a new one. The old database is deliberately NOT
         // dropped: DROP DATABASE would take whatever was not moved with it, and some of that cannot be seen from
@@ -135,6 +146,31 @@ export const mysqlDdl: DdlBuilder = {
             out.push(`INSERT INTO ${target} (${cols}) SELECT ${cols} FROM ${source}`)
           }
         }
+        // After the rows, which would set the counter from their maximum: the source's own next value wins.
+        if (op.autoIncrement)
+          for (const t of op.tables)
+            if (t.autoIncrement)
+              out.push(`ALTER TABLE ${quoteTable('mysql', to, t.name)} AUTO_INCREMENT = ${t.autoIncrement}`)
+        // A key that pointed into the source database points at the copy's own table instead.
+        if (op.foreignKeys)
+          for (const t of op.tables)
+            for (const fk of t.foreignKeys ?? [])
+              out.push(
+                addForeignKeySql('mysql', to, {
+                  op: 'addForeignKey',
+                  table: t.name,
+                  ...fk,
+                  refDatabase: !fk.refDatabase || fk.refDatabase === op.name ? op.newName : fk.refDatabase,
+                })
+              )
+        if (op.privileges)
+          for (const g of op.grants ?? []) {
+            const privs = g.privileges.filter((p) => /^[A-Z][A-Z ]*$/.test(p) && p !== 'GRANT OPTION')
+            if (privs.length > 0)
+              out.push(
+                `GRANT ${privs.join(', ')} ON ${id(op.newName)}.* TO ${mysqlLiteral(g.user)}@${mysqlLiteral(g.host)}${g.grantable ? ' WITH GRANT OPTION' : ''}`
+              )
+          }
         return out
       }
       case 'replaceInColumn': {

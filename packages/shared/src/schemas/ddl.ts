@@ -244,6 +244,19 @@ export const DdlOpSchema = z.discriminatedUnion('op', [
     /** `find` is a regular expression in the server's dialect; back-references in `replace` follow it too. */
     regex: z.boolean().optional(),
   }),
+  /**
+   * A database's default collation (MySQL; PostgreSQL fixes it when the database is created), and — when
+   * `applyToTables` — every table and text column converted to it (PostgreSQL: every text column of the schema).
+   * The server fills in the tables, and on PostgreSQL their text columns, when it builds the preview.
+   */
+  z.object({
+    op: z.literal('setDatabaseCollation'),
+    name: z.string().min(1),
+    collation: z.string().regex(/^[A-Za-z0-9_.-]+$/),
+    applyToTables: z.boolean().default(false),
+    tables: z.array(table).max(10_000).optional(),
+    columns: z.record(z.string(), z.array(z.object({ name: z.string().min(1), dataType: SqlType }))).optional(),
+  }),
   /** MySQL: database == schema, so createSchema also creates a database there. */
   z.object({ op: z.literal('createDatabase'), name: z.string().min(1) }),
   z.object({ op: z.literal('dropDatabase'), name: z.string().min(1) }),
@@ -274,8 +287,40 @@ export const DdlOpSchema = z.discriminatedUnion('op', [
     name: z.string().min(1),
     newName: z.string().min(1),
     withData: z.boolean().default(true),
-    /** MySQL: each base table with its insertable columns (generated columns excluded). Filled by the preview. */
-    tables: z.array(z.object({ name: z.string().min(1), columns: z.array(z.string().min(1)) })).optional(),
+    /** MySQL: add each table's foreign keys to the copy (which keep pointing at the copy's own tables). */
+    foreignKeys: z.boolean().optional(),
+    /** MySQL: carry each table's next AUTO_INCREMENT value over (the rows alone would set it from their maximum). */
+    autoIncrement: z.boolean().optional(),
+    /** MySQL: give the accounts that hold database-level privileges on the source the same on the copy. */
+    privileges: z.boolean().optional(),
+    /**
+     * MySQL: each base table with its insertable columns (generated columns excluded), and — when the options above
+     * ask for them — its foreign keys and AUTO_INCREMENT value; `grants` the accounts' privileges. All filled by
+     * the preview from the server, never taken from the client.
+     */
+    tables: z
+      .array(
+        z.object({
+          name: z.string().min(1),
+          columns: z.array(z.string().min(1)),
+          autoIncrement: z
+            .string()
+            .regex(/^\d{1,20}$/)
+            .optional(),
+          foreignKeys: z.array(ForeignKeyShape).optional(),
+        })
+      )
+      .optional(),
+    grants: z
+      .array(
+        z.object({
+          user: z.string(),
+          host: z.string(),
+          privileges: z.array(z.string().regex(/^[A-Z][A-Z ]*$/)),
+          grantable: z.boolean(),
+        })
+      )
+      .optional(),
     collation: z
       .string()
       .regex(/^[A-Za-z0-9_]+$/)

@@ -1107,6 +1107,21 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
       })
     })
 
+    describe('databaseGrants', () => {
+      it('lists the accounts’ database-level privileges (MySQL), and none on PostgreSQL', async () => {
+        const grants = await db.databaseGrants(ns.database)
+        expect(Array.isArray(grants)).toBe(true)
+        if (dialect === 'postgres') expect(grants).toEqual([])
+        // Every entry names an account and only privileges a GRANT can carry.
+        for (const g of grants) {
+          expect(g.user).toEqual(expect.any(String))
+          expect(g.privileges.every((p) => /^[A-Z][A-Z ]*$/.test(p))).toBe(true)
+        }
+        // A database nobody was granted anything on.
+        expect(await db.databaseGrants(`${scratch}_nobody`)).toEqual([])
+      })
+    })
+
     describe('countRows', () => {
       it('counts every row exactly, and lists MySQL tables with their collation and creation time', async () => {
         expect(await db.countRows(ns, 'users')).toBe(5)
@@ -3286,6 +3301,43 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         }
       })
 
+      it('changes the database collation (MySQL) and converts the tables and their text columns to it', async () => {
+        const t = `${scratch}_dbcoll`
+        const collation = dialect === 'mysql' ? 'utf8mb4_bin' : 'C'
+        const schemaDefault = async () => {
+          const [r] = await exec(
+            'SELECT DEFAULT_COLLATION_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = DATABASE()'
+          )
+          return r?.kind === 'rows' ? String(r.result.rows[0]?.[0] ?? '') : ''
+        }
+        const before = dialect === 'mysql' ? await schemaDefault() : ''
+        try {
+          await execOk(`CREATE TABLE ${t} (id INT PRIMARY KEY, name VARCHAR(20))`)
+          // Only the scratch table: converting the shared fixtures would change them for every other test.
+          await runScript({
+            op: 'setDatabaseCollation',
+            name: ns.database,
+            collation,
+            applyToTables: true,
+            tables: [t],
+            ...(dialect === 'postgres'
+              ? { columns: { [t]: [{ name: 'name', dataType: 'character varying(20)' }] } }
+              : {}),
+          })
+          expect((await db.describeTable(ns, t)).columns.find((c) => c.name === 'name')?.collation).toBe(collation)
+          if (dialect === 'mysql') expect(await schemaDefault()).toBe(collation)
+          else
+            expect(() =>
+              db.ddl.build(ns, { op: 'setDatabaseCollation', name: ns.database, collation, applyToTables: false })
+            ).toThrow(/cannot change/)
+        } finally {
+          await exec(`DROP TABLE IF EXISTS ${t}`, { stopOnError: false })
+          // The shared database goes back to the default it had.
+          if (dialect === 'mysql' && before)
+            await runScript({ op: 'setDatabaseCollation', name: ns.database, collation: before, applyToTables: false })
+        }
+      })
+
       it('maintains, renames and copies several tables at once', async () => {
         const [a, b] = [`${scratch}_bka`, `${scratch}_bkb`]
         const [pa, pb] = [`p_${a}`, `p_${b}`]
@@ -4125,6 +4177,65 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         expect(await rowIds(copied, 'parent')).toEqual([1, 2])
         expect(await rowIds(copied, 'child')).toEqual([10, 20])
         expect(await rowIds(src, 'child')).toEqual([10, 20])
+      })
+
+      it('copies the foreign keys, the AUTO_INCREMENT counters and the accounts’ privileges when asked (MySQL)', async () => {
+        if (dialect !== 'mysql') return
+        const account = { name: `cp_${scratch}`.slice(0, 32), host: '%' }
+        const q = (n: string) => quoteIdent('mysql', n)
+        await seed(src)
+        await inDb(src, 'CREATE TABLE counter (id INT AUTO_INCREMENT PRIMARY KEY)')
+        await inDb(src, 'INSERT INTO counter (id) VALUES (1)')
+        await inDb(src, 'ALTER TABLE counter AUTO_INCREMENT = 500')
+        await execOk(`CREATE USER ${mysqlAccount(account)} IDENTIFIED BY 'cp-pw'`)
+        try {
+          await execOk(`GRANT SELECT, INSERT ON ${q(src)}.* TO ${mysqlAccount(account)} WITH GRANT OPTION`)
+          const grants = await db.databaseGrants(src)
+          expect(grants.find((g) => g.user === account.name)).toMatchObject({
+            host: '%',
+            privileges: ['INSERT', 'SELECT'],
+            grantable: true,
+          })
+          const tables = await Promise.all(
+            (await tablesOf(src)).map(async (name) => {
+              const s = await db.describeTable({ database: src }, name)
+              return {
+                name,
+                columns: s.columns.map((c) => c.name),
+                ...(s.autoIncrement ? { autoIncrement: s.autoIncrement } : {}),
+                foreignKeys: s.foreignKeys.map((fk) => ({
+                  name: fk.name,
+                  columns: fk.columns,
+                  refTable: fk.refTable,
+                  refDatabase: fk.refNamespace.database,
+                  refColumns: fk.refColumns,
+                })),
+              }
+            })
+          )
+          await runDdl({
+            op: 'copyDatabase',
+            name: src,
+            newName: copied,
+            withData: true,
+            foreignKeys: true,
+            autoIncrement: true,
+            privileges: true,
+            tables,
+            grants: grants.filter((g) => g.user === account.name),
+          })
+          // The key points at the copy's own parent, not the source's.
+          const fk = (await db.describeTable({ database: copied }, 'child')).foreignKeys[0]
+          expect(fk).toMatchObject({ refTable: 'parent', refNamespace: { database: copied } })
+          // The counter is the source's, not the one the single row would give.
+          expect((await db.describeTable({ database: copied }, 'counter')).autoIncrement).toBe('500')
+          expect((await db.databaseGrants(copied)).find((g) => g.user === account.name)).toMatchObject({
+            privileges: ['INSERT', 'SELECT'],
+            grantable: true,
+          })
+        } finally {
+          await exec(`DROP USER IF EXISTS ${mysqlAccount(account)}`, { stopOnError: false })
+        }
       })
     })
 

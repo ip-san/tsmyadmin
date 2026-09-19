@@ -159,6 +159,17 @@ export const pgDdl: DdlBuilder = {
       case 'disableEvent':
       case 'dropEvent':
         throw new AdapterError('UNSUPPORTED', 'PostgreSQL has no event scheduler')
+      case 'setDatabaseCollation': {
+        // A database's collation is fixed when it is created; what can change is each text column's.
+        if (!op.applyToTables)
+          throw new AdapterError('UNSUPPORTED', 'PostgreSQL cannot change a database collation after creating it')
+        return (op.tables ?? []).flatMap((x) => {
+          const cols = op.columns?.[x] ?? []
+          return cols.length === 0
+            ? []
+            : pgDdl.build(ns, { op: 'convertCollation', table: x, collation: op.collation, columns: cols })
+        })
+      }
       case 'dropTables':
         return [`DROP TABLE ${op.tables.map((x) => quoteTable('postgres', ns, x)).join(', ')}`]
       case 'truncateTables':

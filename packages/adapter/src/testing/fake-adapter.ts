@@ -3,6 +3,7 @@ import type {
   BrowseOptions,
   BrowseResult,
   Cell,
+  DatabaseGrant,
   DatabaseInfo,
   Dialect,
   EventInfo,
@@ -364,6 +365,11 @@ export class FakeAdapter implements DatabaseAdapter {
   async listDependencies(ns: Namespace): Promise<ObjectDependency[] | null> {
     this.record('listDependencies', ns)
     return this.dependencies
+  }
+
+  async databaseGrants(database: string): Promise<DatabaseGrant[]> {
+    this.record('databaseGrants', database)
+    return []
   }
 
   async countRows(ns: Namespace, table: string): Promise<number> {

@@ -537,6 +537,16 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
                 schema.columns.map((col) => col.name)
               )),
           }
+        } else if (op.op === 'setDatabaseCollation' && op.applyToTables && op.tables === undefined) {
+          // The tables as they are now, and on PostgreSQL their text columns: the preview lists every statement.
+          const tables = (await adapter.listTables(target)).filter((t) => t.kind === 'table').map((t) => t.name)
+          const columns: Record<string, { name: string; dataType: string }[]> = {}
+          if (adapter.dialect === 'postgres')
+            for (const table of tables)
+              columns[table] = (await adapter.describeTable(target, table)).columns
+                .filter((col) => /char|text|citext/i.test(col.dataType) && col.generated === null)
+                .map((col) => ({ name: col.name, dataType: col.dataType }))
+          op = { ...op, tables, ...(adapter.dialect === 'postgres' ? { columns } : {}) }
         } else if (op.op === 'copyTables' && op.withData && op.details === undefined) {
           // Each table as copyTable would get it: the insertable columns, and on PostgreSQL its sequences.
           const details: Record<string, { columns?: string[]; identityColumns?: string[]; serialColumns?: string[] }> =

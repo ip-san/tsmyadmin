@@ -242,6 +242,16 @@ export const ja = {
     constraint: '制約名',
   },
   databaseOps: {
+    copyKeep: {
+      foreignKeys: '外部キーもコピーする',
+      autoIncrement: '次の AUTO_INCREMENT 値も引き継ぐ',
+      privileges: 'アカウントの権限も同じにする（このデータベースの権限）',
+    },
+    collationHintMysql: (current: string) =>
+      `新しいテーブルの既定の照合順序です（現在: ${current || '不明'}）。「既存のテーブルにも反映」で、全テーブルと全カラムを変換します（値は新しい文字セットに変換されます）。`,
+    collationHintPostgres:
+      'PostgreSQL のデータベースの照合順序は作成時に決まり、あとから変えられません。このスキーマの全テーブルの文字列カラムに照合順序を付けます。',
+    applyToTables: '既存のテーブル・カラムにも反映する',
     newName: '新しいデータベース名',
     copyName: 'コピー先のデータベース名',
     renameHintMysql:
@@ -584,6 +594,7 @@ export const ja = {
   },
   ddl: {
     titles: {
+      setDatabaseCollation: '既定の照合順序を変更',
       maintainTables: '選択したテーブルのメンテナンス',
       renameTables: '選択したテーブルの名前を変更',
       copyTables: '選択したテーブルをコピー',

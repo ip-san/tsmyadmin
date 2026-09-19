@@ -80,6 +80,14 @@ const SAMPLE_OPS: Record<DdlOp['op'], DdlOp> = {
     collation: 'utf8mb4_0900_ai_ci',
     columns: [{ name: 'na"me', dataType: 'varchar(20)' }],
   },
+  setDatabaseCollation: {
+    op: 'setDatabaseCollation',
+    name: 'd`b',
+    collation: 'utf8mb4_bin',
+    applyToTables: true,
+    tables: ['t`1'],
+    columns: { 't`1': [{ name: 'na"me', dataType: 'text' }] },
+  },
   maintainTables: { op: 'maintainTables', tables: ['a`1', 'b"2'], action: 'analyze' },
   renameTables: {
     op: 'renameTables',

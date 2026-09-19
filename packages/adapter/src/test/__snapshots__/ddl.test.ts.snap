@@ -268,6 +268,13 @@ exports[`DDL builders > mysql: replaceInColumn 1`] = `
 ]
 `;
 
+exports[`DDL builders > mysql: setDatabaseCollation 1`] = `
+[
+  "ALTER DATABASE \`d\`\`b\` CHARACTER SET utf8mb4 COLLATE utf8mb4_bin",
+  "ALTER TABLE \`d\`\`b\`.\`t\`\`1\` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_bin",
+]
+`;
+
 exports[`DDL builders > mysql: setPrimaryKey 1`] = `
 [
   "ALTER TABLE \`db\`.\`t\` DROP PRIMARY KEY, ADD PRIMARY KEY (\`a\`, \`b\`)",
@@ -552,6 +559,12 @@ exports[`DDL builders > postgres: renameTables 1`] = `
 exports[`DDL builders > postgres: replaceInColumn 1`] = `
 [
   "UPDATE "app"."users" SET "na\`me""" = replace("na\`me""", 'it''s', '%_\\') WHERE replace("na\`me""", 'it''s', '%_\\') IS DISTINCT FROM "na\`me"""",
+]
+`;
+
+exports[`DDL builders > postgres: setDatabaseCollation 1`] = `
+[
+  "ALTER TABLE "app"."t\`1" ALTER COLUMN "na""me" TYPE text COLLATE "utf8mb4_bin"",
 ]
 `;
 

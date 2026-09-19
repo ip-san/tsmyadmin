@@ -1,4 +1,4 @@
-<!-- translated-from: docs/user-guide.md sha256:2d6b46e0e16d2077cff0b4fe4ec4fcfc9c26b7ec4a151553c950565958af9294 -->
+<!-- translated-from: docs/user-guide.md sha256:f812cdd33750b2845789b7258a4fca42b866a61f34db4d04dc64f1e8e11e859b -->
 
 # User guide
 
@@ -81,7 +81,7 @@ The language menu at the top right switches between English and 日本語 (the p
 
 ### Renaming and copying a database
 
-Both show the SQL before anything runs. The server's own databases are excluded, and on PostgreSQL so is the database you signed in with (the one this session is connected through).
+Both show the SQL before anything runs. **Change the default collation** also works on the connected database (MySQL: the default collation and, if chosen, every table and column; PostgreSQL cannot change a database's collation after creating it, so it only gives every text column of this schema the collation). The server's own databases are excluded, and on PostgreSQL so is the database you signed in with (the one this session is connected through).
 
 | | MySQL | PostgreSQL |
 |---|---|---|
@@ -89,7 +89,7 @@ Both show the SQL before anything runs. The server's own databases are excluded,
 | When a rename is refused | The database has any view, routine, trigger or event (they would be left behind, and views would lose the tables they read, so it stops before running) | Something is running in it |
 | What a rename does not carry over | Privileges granted on the database (GRANT) | Nothing |
 | Confirmation | Retype the current database name | Retype the current database name |
-| What a copy includes | The tables' structure and, if chosen, their data. Foreign keys, views, routines, triggers, events and privileges are not copied | The whole database — tables, views, functions and data. It fails while anyone else is connected to the source |
+| What a copy includes | The tables' structure and, if chosen, their data. If chosen, also the foreign keys (pointing at the copy's own tables), the next AUTO_INCREMENT values and the accounts' privileges on this database (GRANT). Views, routines, triggers and events are not copied | The whole database — tables, views, functions and data. It fails while anyone else is connected to the source |
 
 On PostgreSQL, **idle** tsmyadmin connections to that database under the same database account are closed first. Nothing that is running is interrupted; in that case nothing changes and the operation fails. Copying needs the owner of the source database or a superuser.
 

@@ -7,6 +7,7 @@ import { Notice } from '@/components/ui/Feedback.tsx'
 import { Field, Input } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
 import { type DdlFlow, useDdlFlow } from '@/lib/ddl.ts'
+import { DatabaseCollationForm } from './DatabaseCollationForm.tsx'
 import { isProtectedDatabase, isSystemDatabase } from './system-databases.ts'
 
 /**
@@ -15,10 +16,12 @@ import { isProtectedDatabase, isSystemDatabase } from './system-databases.ts'
  */
 export function DatabaseOperations({
   db,
+  schema,
   dialect,
   serverDatabase,
 }: {
   db: string
+  schema?: string | undefined
   dialect: Dialect
   serverDatabase: string
 }) {
@@ -28,17 +31,22 @@ export function DatabaseOperations({
     if (op.op === 'renameDatabase' || op.op === 'copyDatabase')
       await navigate({ to: '/db/$db', params: { db: op.newName } })
   })
-  if (isProtectedDatabase(dialect, db, serverDatabase))
-    return (
-      <Notice>
-        {isSystemDatabase(dialect, db) ? locale.databaseOps.systemDatabase : locale.databaseOps.connectedDatabase}
-      </Notice>
-    )
+  // The server's own databases take no operation; the one this session is connected to cannot be renamed or copied
+  // (its connection would be pulled from under it), but its collation can change.
+  if (isSystemDatabase(dialect, db)) return <Notice>{locale.databaseOps.systemDatabase}</Notice>
+  const connected = isProtectedDatabase(dialect, db, serverDatabase)
   return (
     <div className="space-y-4">
-      <RenameDatabaseForm key={`rename-${db}`} db={db} dialect={dialect} flow={flow} />
-      <CopyDatabaseForm key={`copy-${db}`} db={db} dialect={dialect} flow={flow} />
-      <DdlPreviewDialog flow={flow} />
+      <DatabaseCollationForm key={`collation-${db}-${schema ?? ''}`} db={db} schema={schema} dialect={dialect} />
+      {connected ? (
+        <Notice>{locale.databaseOps.connectedDatabase}</Notice>
+      ) : (
+        <>
+          <RenameDatabaseForm key={`rename-${db}`} db={db} dialect={dialect} flow={flow} />
+          <CopyDatabaseForm key={`copy-${db}`} db={db} dialect={dialect} flow={flow} />
+          <DdlPreviewDialog flow={flow} />
+        </>
+      )}
     </div>
   )
 }
@@ -80,12 +88,26 @@ function RenameDatabaseForm({ db, dialect, flow }: { db: string; dialect: Dialec
 function CopyDatabaseForm({ db, dialect, flow }: { db: string; dialect: Dialect; flow: DdlFlow }) {
   const [newName, setNewName] = useState(`${db}_copy`)
   const [withData, setWithData] = useState(true)
+  // MySQL's copy leaves these behind by default; PostgreSQL copies from a template that already brings them.
+  const [keep, setKeep] = useState({ foreignKeys: false, autoIncrement: false, privileges: false })
   const name = newName.trim()
   const valid = name !== '' && name !== db
   const submit = (e: FormEvent) => {
     e.preventDefault()
     if (valid)
-      flow.preview({ op: 'copyDatabase', name: db, newName: name, withData: dialect === 'postgres' || withData })
+      flow.preview({
+        op: 'copyDatabase',
+        name: db,
+        newName: name,
+        withData: dialect === 'postgres' || withData,
+        ...(dialect === 'mysql'
+          ? {
+              ...(keep.foreignKeys ? { foreignKeys: true } : {}),
+              ...(keep.autoIncrement ? { autoIncrement: true } : {}),
+              ...(keep.privileges ? { privileges: true } : {}),
+            }
+          : {}),
+      })
   }
   return (
     <section className="rounded border border-line p-3">
@@ -112,10 +134,22 @@ function CopyDatabaseForm({ db, dialect, flow }: { db: string; dialect: Dialect;
         </div>
         {/* PostgreSQL copies from a template, which always brings the data. */}
         {dialect === 'mysql' ? (
-          <label className="flex items-center gap-1 text-sm">
-            <input type="checkbox" checked={withData} onChange={(e) => setWithData(e.target.checked)} />
-            {locale.ddl.copyWithData}
-          </label>
+          <div className="flex flex-wrap gap-4 text-sm">
+            <label className="flex items-center gap-1">
+              <input type="checkbox" checked={withData} onChange={(e) => setWithData(e.target.checked)} />
+              {locale.ddl.copyWithData}
+            </label>
+            {(['foreignKeys', 'autoIncrement', 'privileges'] as const).map((k) => (
+              <label key={k} className="flex items-center gap-1">
+                <input
+                  type="checkbox"
+                  checked={keep[k]}
+                  onChange={(e) => setKeep((prev) => ({ ...prev, [k]: e.target.checked }))}
+                />
+                {locale.databaseOps.copyKeep[k]}
+              </label>
+            ))}
+          </div>
         ) : null}
       </form>
     </section>

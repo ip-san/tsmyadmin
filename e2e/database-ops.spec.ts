@@ -77,6 +77,32 @@ for (const t of TARGETS) {
       }
     })
 
+    test('copies the foreign keys and AUTO_INCREMENT counters when asked (MySQL)', async ({ page }) => {
+      test.skip(t.dialect !== 'mysql', 'PostgreSQL copies from a template, which keeps them')
+      const base = `e2e_dbkeep_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
+      // The form's own default name for the copy.
+      const copied = `${base}_copy`
+      await sqlIn(page, t.database, `CREATE DATABASE ${base}`)
+      await sqlIn(
+        page,
+        base,
+        'CREATE TABLE parent (id INT AUTO_INCREMENT PRIMARY KEY); CREATE TABLE child (id INT PRIMARY KEY, p INT, CONSTRAINT child_p FOREIGN KEY (p) REFERENCES parent (id)); INSERT INTO parent VALUES (1); ALTER TABLE parent AUTO_INCREMENT = 700'
+      )
+      try {
+        await page.goto(`/db/${base}/operations`)
+        const form = page.getByRole('form', { name: 'データベースをコピー' })
+        await form.getByLabel('外部キーもコピーする').check()
+        await form.getByLabel('次の AUTO_INCREMENT 値も引き継ぐ').check()
+        await form.getByRole('button', { name: '次へ（SQL を確認）' }).click()
+        await confirmPreview(page, /AUTO_INCREMENT = 700[\s\S]*FOREIGN KEY[\s\S]*REFERENCES `[^`]+_copy`\.`parent`/)
+        const structure = await (await page.request.get(`/api/databases/${copied}/tables/child/structure`)).json()
+        expect(structure.foreignKeys[0]).toMatchObject({ refTable: 'parent', refNamespace: { database: copied } })
+      } finally {
+        await dropQuietly(page, t, copied)
+        await dropQuietly(page, t, base)
+      }
+    })
+
     test('does not offer to rename the server’s own databases', async ({ page }) => {
       await page.goto(`/db/${t.dialect === 'mysql' ? 'mysql' : 'postgres'}/operations`)
       await expect(page.getByText('サーバー自身のデータベースは、名前変更もコピーもできません。')).toBeVisible()

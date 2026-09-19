@@ -74,7 +74,7 @@ classDiagram
   class DatabaseAdapter {
     <<interface>>
     +dialect
-    +listDatabases() / listTables() / describeTable() / tableStats() / listPartitions() / countRows()
+    +listDatabases() / listTables() / describeTable() / tableStats() / listPartitions() / countRows() / databaseGrants()
     +browseRows() / insertRow() / updateRow() / deleteRows() / readCell()
     +executeSql(ns, sql, opts) / cancelQuery(id)
     +iterateRows(ns, table) AsyncIterable~RowBatch~
