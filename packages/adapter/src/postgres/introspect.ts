@@ -3,6 +3,7 @@ import type {
   ForeignKeyDef,
   IndexDef,
   Namespace,
+  Partitioning,
   ReferencingKeyDef,
   RelationDef,
   TableInfo,
@@ -339,5 +340,45 @@ export async function pgTableStats(conn: Conn, ns: Namespace, table: string): Pr
     deadRows: n(row[5]),
     lastVacuum: stored ? strOrNull(row[6]) : null,
     lastAnalyze: stored ? strOrNull(row[7]) : null,
+  }
+}
+
+/** A partitioned table's key and its partitions (direct children), each with its bound as pg_get_expr prints it. */
+export async function pgListPartitions(conn: Conn, ns: Namespace, table: string): Promise<Partitioning> {
+  const parent = firstResult(
+    await conn.query(
+      `SELECT c.oid::int8, CASE WHEN c.relkind = 'p' THEN pg_get_partkeydef(c.oid) END
+       FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+       WHERE n.nspname = $1 AND c.relname = $2`,
+      [ns.schema ?? 'public', table]
+    )
+  )
+  const row = parent.rows[0]
+  if (!row) throw new AdapterError('NOT_FOUND', `Table not found: ${ns.schema ?? 'public'}.${table}`)
+  const key = strOrNull(row[1])
+  if (key === null) return { method: null, expression: null, partitions: [] }
+  // "RANGE (created_at)" → method and the key list without its parentheses.
+  const m = /^(\w+)\s*\((.*)\)$/s.exec(key)
+  const method = (m?.[1] ?? '').toLowerCase()
+  const children = firstResult(
+    await conn.query(
+      `SELECT c.relname, pg_get_expr(c.relpartbound, c.oid),
+              CASE WHEN c.reltuples < 0 THEN NULL ELSE c.reltuples::float8 END, pg_total_relation_size(c.oid)::float8
+       FROM pg_inherits i JOIN pg_class c ON c.oid = i.inhrelid
+       WHERE i.inhparent = $1::int8::oid
+       ORDER BY pg_get_expr(c.relpartbound, c.oid) = 'DEFAULT', c.relname`,
+      [str(row[0])]
+    )
+  )
+  const n = (v: unknown) => (v === null || v === undefined ? null : Number(v))
+  return {
+    method: method === 'range' || method === 'list' || method === 'hash' ? method : null,
+    expression: m?.[2] ?? key,
+    partitions: children.rows.map((c) => ({
+      name: str(c[0]),
+      bound: str(c[1]),
+      rowEstimate: n(c[2]),
+      sizeBytes: n(c[3]),
+    })),
   }
 }

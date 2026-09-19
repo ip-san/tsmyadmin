@@ -3,6 +3,7 @@ import type {
   ForeignKeyDef,
   IndexDef,
   Namespace,
+  Partitioning,
   ReferencingKeyDef,
   RelationDef,
   TableInfo,
@@ -13,6 +14,7 @@ import type {
 import { type Conn, firstResult } from '../base.ts'
 import { str, strOrNull } from '../sql/format.ts'
 import { AdapterError } from '../types.ts'
+import { mysqlPartitionBound } from './ddl.ts'
 
 const num = (v: unknown): number | null => {
   if (v === null || v === undefined) return null
@@ -361,5 +363,37 @@ export async function mysqlTableStats(conn: Conn, ns: Namespace, table: string):
     deadRows: null,
     lastVacuum: null,
     lastAnalyze: null,
+  }
+}
+
+/** Partitions in definition order (information_schema.PARTITIONS; one NULL-named row for a plain table). */
+export async function mysqlListPartitions(conn: Conn, ns: Namespace, table: string): Promise<Partitioning> {
+  const r = firstResult(
+    await conn.query(
+      'SELECT PARTITION_NAME, PARTITION_METHOD, PARTITION_EXPRESSION, PARTITION_DESCRIPTION, TABLE_ROWS, DATA_LENGTH + INDEX_LENGTH FROM information_schema.PARTITIONS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY PARTITION_ORDINAL_POSITION',
+      [ns.database, table]
+    )
+  )
+  if (r.rows.length === 0) throw new AdapterError('NOT_FOUND', `Table not found: ${ns.database}.${table}`)
+  const first = r.rows[0] ?? []
+  if (first[0] === null) return { method: null, expression: null, partitions: [] }
+  // 'RANGE COLUMNS' / 'LINEAR HASH' / 'LINEAR KEY' read as their base method.
+  const method = str(first[1]).toUpperCase()
+  const base = method.includes('RANGE')
+    ? 'range'
+    : method.includes('LIST')
+      ? 'list'
+      : method.includes('KEY')
+        ? 'key'
+        : 'hash'
+  return {
+    method: base,
+    expression: strOrNull(first[2]),
+    partitions: r.rows.map((row) => ({
+      name: str(row[0]),
+      bound: mysqlPartitionBound(method, strOrNull(row[3])),
+      rowEstimate: num(row[4]),
+      sizeBytes: num(row[5]),
+    })),
   }
 }

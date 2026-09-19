@@ -15,6 +15,7 @@ import type {
   KeyValue,
   KillMode,
   MyGroupTabs,
+  Partitioning,
   PasskeyChallenge,
   PasskeyRegistration,
   PasskeyResponse,
@@ -212,6 +213,19 @@ export const structureQuery = (ref: TableRef) =>
     queryFn: () =>
       unwrap<TableSchema>(
         api.databases[':db'].tables[':table'].structure.$get({
+          param: { db: enc(ref.db), table: enc(ref.table) },
+          query: schemaQuery(ref.schema),
+        })
+      ),
+  })
+
+/** A table's partitioning; under the structure key so a DDL that refreshes the structure refreshes it too. */
+export const partitionsQuery = (ref: TableRef) =>
+  queryOptions({
+    queryKey: ['structure', ref.db, ref.schema ?? '', ref.table, 'partitions'],
+    queryFn: () =>
+      unwrap<Partitioning>(
+        api.databases[':db'].tables[':table'].partitions.$get({
           param: { db: enc(ref.db), table: enc(ref.table) },
           query: schemaQuery(ref.schema),
         })

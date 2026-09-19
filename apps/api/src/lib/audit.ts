@@ -32,6 +32,7 @@ export const PASSTHROUGH_METHODS = [
   'listTables',
   'describeTable',
   'tableStats',
+  'listPartitions',
   'listRoutines',
   'routineDefinition',
   'listTriggers',

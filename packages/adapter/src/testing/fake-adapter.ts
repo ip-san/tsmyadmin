@@ -12,6 +12,7 @@ import type {
   KeyValues,
   Namespace,
   ObjectDependency,
+  Partitioning,
   ProcessInfo,
   QueryBuilderResult,
   QueryBuilderSpec,
@@ -362,6 +363,12 @@ export class FakeAdapter implements DatabaseAdapter {
   async listDependencies(ns: Namespace): Promise<ObjectDependency[] | null> {
     this.record('listDependencies', ns)
     return this.dependencies
+  }
+
+  async listPartitions(ns: Namespace, table: string): Promise<Partitioning> {
+    this.record('listPartitions', ns, table)
+    this.table(ns, table)
+    return { method: null, expression: null, partitions: [] }
   }
 
   async tableStats(ns: Namespace, table: string): Promise<TableStats> {

@@ -962,6 +962,84 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
       })
     })
 
+    describe('listPartitions', () => {
+      it('partitions a table, adds, empties, analyses and removes partitions, and reads them back', async () => {
+        const t = `${scratch}_part`
+        const count = async () => {
+          const [r] = await exec(`SELECT COUNT(*) FROM ${t}`)
+          return r?.kind === 'rows' ? Number(r.result.rows[0]?.[0]) : -1
+        }
+        try {
+          expect((await db.listPartitions(ns, 'users')).method).toBeNull()
+          if (dialect === 'mysql') {
+            await execOk(`CREATE TABLE ${t} (id INT NOT NULL, n INT)`)
+            await runDdl({
+              op: 'partitionTable',
+              table: t,
+              method: 'range',
+              expression: 'id',
+              partitions: [
+                { name: 'p0', bound: 'VALUES LESS THAN (10)' },
+                { name: 'p1', bound: 'VALUES LESS THAN (20)' },
+              ],
+            })
+            await runDdl({ op: 'addPartition', table: t, partition: { name: 'p2', bound: 'VALUES LESS THAN (30)' } })
+          } else {
+            await runDdl({
+              op: 'createTable',
+              table: t,
+              columns: [col('id', 'INT', { nullable: false }), col('n', 'INT')],
+              primaryKey: [],
+              partitionBy: { method: 'range', expression: 'id' },
+            })
+            await runDdl({
+              op: 'addPartition',
+              table: t,
+              partition: { name: `${t}_p0`, bound: 'FOR VALUES FROM (0) TO (10)' },
+            })
+            await runDdl({
+              op: 'addPartition',
+              table: t,
+              partition: { name: `${t}_p1`, bound: 'FOR VALUES FROM (10) TO (20)' },
+            })
+            await runDdl({ op: 'addPartition', table: t, partition: { name: `${t}_p2`, bound: 'DEFAULT' } })
+          }
+          const [p0, p1, p2] = dialect === 'mysql' ? ['p0', 'p1', 'p2'] : [`${t}_p0`, `${t}_p1`, `${t}_p2`]
+          await execOk(`INSERT INTO ${t} (id, n) VALUES (1, 1), (15, 2), (25, 3)`)
+          const parts = await db.listPartitions(ns, t)
+          expect(parts.method).toBe('range')
+          expect(parts.expression?.replaceAll('`', '')).toBe('id')
+          expect(parts.partitions.map((p) => p.name)).toEqual([p0, p1, p2])
+          expect(parts.partitions[0]?.bound).toBe(
+            dialect === 'mysql' ? 'VALUES LESS THAN (10)' : 'FOR VALUES FROM (0) TO (10)'
+          )
+          if (dialect === 'postgres') expect(parts.partitions[2]?.bound).toBe('DEFAULT')
+
+          await runDdl({ op: 'truncatePartition', table: t, name: p0 ?? '' })
+          expect(await count()).toBe(2)
+          await runDdl({ op: 'maintainPartition', table: t, name: p1 ?? '', action: 'analyze' })
+          if (dialect === 'postgres') {
+            // Detached, the partition is a table of its own with its rows.
+            await runDdl({ op: 'detachPartition', table: t, name: p1 ?? '' })
+            expect(await count()).toBe(1)
+            await execOk(`DROP TABLE ${p1}`)
+          }
+          await runDdl({ op: 'dropPartition', table: t, name: p2 ?? '' })
+          expect((await db.listPartitions(ns, t)).partitions.map((p) => p.name)).toEqual(
+            dialect === 'mysql' ? [p0, p1] : [p0]
+          )
+          if (dialect === 'mysql') {
+            await runDdl({ op: 'removePartitioning', table: t })
+            expect(await db.listPartitions(ns, t)).toEqual({ method: null, expression: null, partitions: [] })
+            expect(await count()).toBe(1)
+          }
+          await expect(db.listPartitions(ns, `${t}_missing`)).rejects.toMatchObject({ code: 'NOT_FOUND' })
+        } finally {
+          await exec(`DROP TABLE IF EXISTS ${t}`, { stopOnError: false })
+        }
+      })
+    })
+
     describe('tableStats', () => {
       it('reports the space a table uses and its rows; a view has no sizes', async () => {
         const t = `${scratch}_stats`

@@ -197,6 +197,11 @@ for (const t of TARGETS) {
         await page.getByRole('dialog').getByRole('button', { name: 'name を上へ' }).waitFor()
         await scan(page)
         await page.getByRole('dialog').getByRole('button', { name: 'キャンセル' }).click()
+        // The partitioning form, with a second range row.
+        await page.getByRole('button', { name: 'パーティションに分割…' }).click()
+        await page.getByRole('dialog').getByRole('button', { name: '行を追加' }).click()
+        await scan(page)
+        await page.getByRole('dialog').getByRole('button', { name: 'キャンセル' }).click()
       }
       await page.getByText('正規化の手がかり').click()
       await page.getByText(/行から推定しています|行しかないため/).waitFor()

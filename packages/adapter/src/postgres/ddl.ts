@@ -172,8 +172,32 @@ export const pgDdl: DdlBuilder = {
       case 'createTable': {
         const defs = op.columns.map(columnDef)
         if (op.primaryKey.length > 0) defs.push(`PRIMARY KEY (${op.primaryKey.map(id).join(', ')})`)
-        return [`CREATE TABLE ${t} (\n  ${defs.join(',\n  ')}\n)`, ...op.columns.flatMap((c) => commentSql(t, c))]
+        if (op.partitionBy?.method === 'key')
+          throw new AdapterError('UNSUPPORTED', 'PostgreSQL has no KEY partitioning')
+        const by = op.partitionBy
+          ? ` PARTITION BY ${op.partitionBy.method.toUpperCase()} (${op.partitionBy.expression})`
+          : ''
+        return [`CREATE TABLE ${t} (\n  ${defs.join(',\n  ')}\n)${by}`, ...op.columns.flatMap((c) => commentSql(t, c))]
       }
+      case 'partitionTable':
+        throw new AdapterError('UNSUPPORTED', 'PostgreSQL cannot partition an existing table; create it partitioned')
+      case 'addPartition':
+        // A partition is a table of its own, in the parent's schema.
+        if (!op.partition.bound)
+          throw new AdapterError('VALIDATION', 'A partition needs its bound (FOR VALUES … or DEFAULT)')
+        return [`CREATE TABLE ${quoteTable('postgres', ns, op.partition.name)} PARTITION OF ${t} ${op.partition.bound}`]
+      case 'dropPartition':
+        return [`DROP TABLE ${quoteTable('postgres', ns, op.name)}`]
+      case 'truncatePartition':
+        return [`TRUNCATE TABLE ${quoteTable('postgres', ns, op.name)}`]
+      case 'detachPartition':
+        return [`ALTER TABLE ${t} DETACH PARTITION ${quoteTable('postgres', ns, op.name)}`]
+      case 'removePartitioning':
+        throw new AdapterError('UNSUPPORTED', 'PostgreSQL cannot turn a partitioned table back into a plain one')
+      case 'maintainPartition':
+        if (op.action !== 'analyze')
+          throw new AdapterError('UNSUPPORTED', `PostgreSQL has no ${op.action} for a partition`)
+        return [`ANALYZE ${quoteTable('postgres', ns, op.name)}`]
       case 'addColumn':
         // PostgreSQL cannot position columns; `after` / `first` are ignored.
         return [

@@ -13,6 +13,7 @@ import type {
   KillMode,
   Namespace,
   ObjectDependency,
+  Partitioning,
   ProcessInfo,
   QueryBuilderResult,
   QueryBuilderSpec,
@@ -202,6 +203,8 @@ export interface DatabaseAdapter {
   describeTable(ns: Namespace, table: string): Promise<TableSchema>
   /** Space used and row statistics from the catalog (sizes are null for a view). */
   tableStats(ns: Namespace, table: string): Promise<TableStats>
+  /** How a table is partitioned and its partitions; `method` null for a table that is not. */
+  listPartitions(ns: Namespace, table: string): Promise<Partitioning>
   /** Stored procedures and functions in the namespace (metadata only; see routineDefinition). */
   listRoutines(ns: Namespace): Promise<RoutineInfo[]>
   /** CREATE statement of one routine; null when the account may not read it, NOT_FOUND when it does not exist. */
@@ -313,6 +316,7 @@ export const ADAPTER_METHOD_NAMES = [
   'listTables',
   'describeTable',
   'tableStats',
+  'listPartitions',
   'listRoutines',
   'routineDefinition',
   'listTriggers',

@@ -43,6 +43,11 @@ export function CreateTableForm({
     },
     newRow(),
   ])
+  // PostgreSQL only: a partitioned table is created as one (its partitions are added under its structure).
+  const [partitionBy, setPartitionBy] = useState<{ method: '' | 'range' | 'list' | 'hash'; expression: string }>({
+    method: '',
+    expression: '',
+  })
   const navigate = useNavigate()
   const flow = useDdlFlow(db, schema, async (op) => {
     setName('')
@@ -69,6 +74,9 @@ export function CreateTableForm({
       table: name.trim(),
       columns: filled.map(toColumnSpec),
       primaryKey: filled.filter((r) => r.primary).map((r) => r.name.trim()),
+      ...(partitionBy.method && partitionBy.expression.trim()
+        ? { partitionBy: { method: partitionBy.method, expression: partitionBy.expression.trim() } }
+        : {}),
     })
   }
   return (
@@ -194,6 +202,34 @@ export function CreateTableForm({
           <option key={t} value={t} />
         ))}
       </datalist>
+      {dialect === 'postgres' ? (
+        <div className="flex flex-wrap items-end gap-2">
+          <Field id="new-table-partition" label={locale.partitions.createBy}>
+            <Select
+              id="new-table-partition"
+              value={partitionBy.method}
+              onChange={(e) => setPartitionBy((p) => ({ ...p, method: e.target.value as typeof p.method }))}
+            >
+              <option value="">{locale.partitions.notPartitioned}</option>
+              {(['range', 'list', 'hash'] as const).map((m) => (
+                <option key={m} value={m}>
+                  {m.toUpperCase()}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          {partitionBy.method ? (
+            <Field id="new-table-partition-key" label={locale.partitions.expression}>
+              <Input
+                id="new-table-partition-key"
+                value={partitionBy.expression}
+                onChange={(e) => setPartitionBy((p) => ({ ...p, expression: e.target.value }))}
+                className="font-mono"
+              />
+            </Field>
+          ) : null}
+        </div>
+      ) : null}
       <div className="flex gap-2">
         <Button onClick={() => setRows((r) => [...r, newRow()])}>{locale.ddl.addColumnRow}</Button>
         <Button type="submit" variant="primary" disabled={!valid}>

@@ -59,6 +59,22 @@ const SAMPLE_OPS: Record<DdlOp['op'], DdlOp> = {
     ],
   },
   reorderColumns: { op: 'reorderColumns', table: 't', columns: [col('b', 'INT'), col('a', 'INT')] },
+  partitionTable: {
+    op: 'partitionTable',
+    table: 'lo`g',
+    method: 'range',
+    expression: 'YEAR(created)',
+    partitions: [
+      { name: 'p2`024', bound: 'VALUES LESS THAN (2025)' },
+      { name: 'pmax', bound: 'VALUES LESS THAN MAXVALUE' },
+    ],
+  },
+  addPartition: { op: 'addPartition', table: 'lo"g', partition: { name: 'p"1', bound: 'FOR VALUES FROM (1) TO (10)' } },
+  dropPartition: { op: 'dropPartition', table: 'lo"g', name: 'p"1' },
+  truncatePartition: { op: 'truncatePartition', table: 'lo"g', name: 'p"1' },
+  detachPartition: { op: 'detachPartition', table: 'lo"g', name: 'p"1' },
+  removePartitioning: { op: 'removePartitioning', table: 'lo`g' },
+  maintainPartition: { op: 'maintainPartition', table: 'lo`g', name: 'p`1', action: 'analyze' },
   setPrimaryKey: { op: 'setPrimaryKey', table: 't', columns: ['a', 'b'], current: 't_pkey' },
   setTableOptions: { op: 'setTableOptions', table: 't', comment: "it's" },
   maintainTable: { op: 'maintainTable', table: 't', action: 'analyze' },
@@ -160,12 +176,15 @@ describe('DDL builders', () => {
 
   for (const name of DDL_OP_NAMES) {
     it(`mysql: ${name}`, () => {
-      expect(mysqlDdl.build({ database: 'db' }, SAMPLE_OPS[name])).toMatchSnapshot()
+      const build = () => mysqlDdl.build({ database: 'db' }, SAMPLE_OPS[name])
+      if (name === 'detachPartition') expect(build).toThrow(/no DETACH/)
+      else expect(build()).toMatchSnapshot()
     })
     it(`postgres: ${name}`, () => {
       const build = () => pgDdl.build({ database: 'db', schema: 'app' }, SAMPLE_OPS[name])
       if (name.endsWith('Event')) expect(build).toThrow(/no event scheduler/)
       else if (name === 'reorderColumns') expect(build).toThrow(/cannot reorder/)
+      else if (name === 'partitionTable' || name === 'removePartitioning') expect(build).toThrow(/PostgreSQL cannot/)
       else expect(build()).toMatchSnapshot()
     })
   }
@@ -410,6 +429,8 @@ describe('DDL builders', () => {
     for (const name of DDL_OP_NAMES) {
       for (const dialect of [mysqlDdl, pgDdl]) {
         if (dialect === pgDdl && (name.endsWith('Event') || name === 'reorderColumns')) continue
+        if (dialect === pgDdl && (name === 'partitionTable' || name === 'removePartitioning')) continue
+        if (dialect === mysqlDdl && name === 'detachPartition') continue
         for (const sql of dialect.build({ database: 'db' }, SAMPLE_OPS[name])) {
           expect(sql).not.toMatch(/\bwe"ird`tbl\b/)
         }

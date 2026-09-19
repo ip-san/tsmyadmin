@@ -18,6 +18,12 @@ exports[`DDL builders > mysql: addIndex 1`] = `
 ]
 `;
 
+exports[`DDL builders > mysql: addPartition 1`] = `
+[
+  "ALTER TABLE \`db\`.\`lo"g\` ADD PARTITION (PARTITION \`p"1\` FOR VALUES FROM (1) TO (10))",
+]
+`;
+
 exports[`DDL builders > mysql: alterIndex 1`] = `
 [
   "ALTER TABLE \`db\`.\`t\` DROP INDEX \`idx_t_a_b\`, ADD INDEX \`idx_t_a\` (\`a\`) USING BTREE",
@@ -131,6 +137,12 @@ exports[`DDL builders > mysql: dropIndex 1`] = `
 ]
 `;
 
+exports[`DDL builders > mysql: dropPartition 1`] = `
+[
+  "ALTER TABLE \`db\`.\`lo"g\` DROP PARTITION \`p"1\`",
+]
+`;
+
 exports[`DDL builders > mysql: dropTable 1`] = `
 [
   "DROP TABLE \`db\`.\`t\`",
@@ -146,6 +158,12 @@ exports[`DDL builders > mysql: dropTables 1`] = `
 exports[`DDL builders > mysql: enableEvent 1`] = `
 [
   "ALTER EVENT \`db\`.\`ev\`\`x\` ENABLE",
+]
+`;
+
+exports[`DDL builders > mysql: maintainPartition 1`] = `
+[
+  "ALTER TABLE \`db\`.\`lo\`\`g\` ANALYZE PARTITION \`p\`\`1\`",
 ]
 `;
 
@@ -170,6 +188,21 @@ exports[`DDL builders > mysql: modifyColumns 1`] = `
 exports[`DDL builders > mysql: moveTable 1`] = `
 [
   "RENAME TABLE \`db\`.\`we"ird\`\`tbl\` TO \`arch\`\`ive"\`.\`we"ird\`\`tbl\`",
+]
+`;
+
+exports[`DDL builders > mysql: partitionTable 1`] = `
+[
+  "ALTER TABLE \`db\`.\`lo\`\`g\` PARTITION BY RANGE (YEAR(created)) (
+  PARTITION \`p2\`\`024\` VALUES LESS THAN (2025),
+  PARTITION \`pmax\` VALUES LESS THAN MAXVALUE
+)",
+]
+`;
+
+exports[`DDL builders > mysql: removePartitioning 1`] = `
+[
+  "ALTER TABLE \`db\`.\`lo\`\`g\` REMOVE PARTITIONING",
 ]
 `;
 
@@ -216,6 +249,12 @@ exports[`DDL builders > mysql: setTableOptions 1`] = `
 ]
 `;
 
+exports[`DDL builders > mysql: truncatePartition 1`] = `
+[
+  "ALTER TABLE \`db\`.\`lo"g\` TRUNCATE PARTITION \`p"1\`",
+]
+`;
+
 exports[`DDL builders > mysql: truncateTable 1`] = `
 [
   "TRUNCATE TABLE \`db\`.\`t\`",
@@ -244,6 +283,12 @@ exports[`DDL builders > postgres: addForeignKey 1`] = `
 exports[`DDL builders > postgres: addIndex 1`] = `
 [
   "CREATE UNIQUE INDEX "idx_t_a_b" ON "app"."t" ("a", "b")",
+]
+`;
+
+exports[`DDL builders > postgres: addPartition 1`] = `
+[
+  "CREATE TABLE "app"."p""1" PARTITION OF "app"."lo""g" FOR VALUES FROM (1) TO (10)",
 ]
 `;
 
@@ -324,6 +369,12 @@ exports[`DDL builders > postgres: createView 1`] = `
 ]
 `;
 
+exports[`DDL builders > postgres: detachPartition 1`] = `
+[
+  "ALTER TABLE "app"."lo""g" DETACH PARTITION "app"."p""1"",
+]
+`;
+
 exports[`DDL builders > postgres: dropColumn 1`] = `
 [
   "ALTER TABLE "app"."t" DROP COLUMN "n"",
@@ -354,6 +405,12 @@ exports[`DDL builders > postgres: dropIndex 1`] = `
 ]
 `;
 
+exports[`DDL builders > postgres: dropPartition 1`] = `
+[
+  "DROP TABLE "app"."p""1"",
+]
+`;
+
 exports[`DDL builders > postgres: dropTable 1`] = `
 [
   "DROP TABLE "app"."t"",
@@ -363,6 +420,12 @@ exports[`DDL builders > postgres: dropTable 1`] = `
 exports[`DDL builders > postgres: dropTables 1`] = `
 [
   "DROP TABLE "app"."t", "app"."we""ird\`tbl"",
+]
+`;
+
+exports[`DDL builders > postgres: maintainPartition 1`] = `
+[
+  "ANALYZE "app"."p\`1"",
 ]
 `;
 
@@ -436,6 +499,12 @@ exports[`DDL builders > postgres: setPrimaryKey 1`] = `
 exports[`DDL builders > postgres: setTableOptions 1`] = `
 [
   "COMMENT ON TABLE "app"."t" IS 'it''s'",
+]
+`;
+
+exports[`DDL builders > postgres: truncatePartition 1`] = `
+[
+  "TRUNCATE TABLE "app"."p""1"",
 ]
 `;
 

@@ -19,6 +19,8 @@ const DESTRUCTIVE = new Set<DdlOp['op']>([
   'truncateTables',
   // Rewrites values in place: nothing is dropped, but the old values are gone.
   'replaceInColumn',
+  'dropPartition',
+  'truncatePartition',
 ])
 
 /** Ops that destroy data with no undo: the user retypes the object name before they can run. */
@@ -29,6 +31,10 @@ function confirmName(op: DdlOp, bulkName: string | null): string | null {
       return op.table
     case 'dropDatabase':
     case 'renameDatabase':
+      return op.name
+    // A partition's rows go with it: confirmed by the partition's name.
+    case 'dropPartition':
+    case 'truncatePartition':
       return op.name
     // Bulk ops: one table is confirmed by its name; several by the database they live in (set by the caller).
     case 'dropTables':
@@ -54,6 +60,9 @@ function lossWarning(op: DdlOp, dialect: Dialect): string | null {
     case 'dropColumn':
     case 'dropColumns':
       return locale.ddl.columnLoss
+    case 'dropPartition':
+    case 'truncatePartition':
+      return locale.ddl.partitionLoss
     case 'dropDatabase':
       return dialect === 'postgres'
         ? `${locale.ddl.databaseLoss} ${locale.ddl.databaseLossForce}`

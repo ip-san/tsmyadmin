@@ -81,6 +81,14 @@ function defaultExpression(sql: string): string {
   return `(${s})`
 }
 
+/** A partition's bound as addPartition takes it, from PARTITIONS.PARTITION_DESCRIPTION ('100', 'MAXVALUE', '1,2'). */
+export function mysqlPartitionBound(method: string, description: string | null): string {
+  if (description === null) return ''
+  if (method.startsWith('RANGE'))
+    return description === 'MAXVALUE' ? 'VALUES LESS THAN MAXVALUE' : `VALUES LESS THAN (${description})`
+  return method.startsWith('LIST') ? `VALUES IN (${description})` : ''
+}
+
 export const mysqlDdl: DdlBuilder = {
   build(ns: Namespace, op: DdlOp): string[] {
     // Database-level ops have no table; handle them before touching op.table.
@@ -182,10 +190,35 @@ export const mysqlDdl: DdlBuilder = {
     const t = quoteTable('mysql', ns, op.table)
     switch (op.op) {
       case 'createTable': {
+        // MySQL declares RANGE / LIST partitions with the partitioning itself: partition the table once created.
+        if (op.partitionBy) throw new AdapterError('UNSUPPORTED', 'MySQL: create the table, then partition it')
         const defs = op.columns.map(columnDef)
         if (op.primaryKey.length > 0) defs.push(`PRIMARY KEY (${op.primaryKey.map(id).join(', ')})`)
         return [`CREATE TABLE ${t} (\n  ${defs.join(',\n  ')}\n)`]
       }
+      case 'partitionTable': {
+        const by = `PARTITION BY ${op.method.toUpperCase()} (${op.expression})`
+        if (op.method === 'hash' || op.method === 'key')
+          return [`ALTER TABLE ${t} ${by}${op.count ? ` PARTITIONS ${op.count}` : ''}`]
+        if (op.partitions.length === 0)
+          throw new AdapterError('VALIDATION', 'RANGE / LIST partitioning needs its partitions')
+        const parts = op.partitions.map((p) => `  PARTITION ${id(p.name)} ${p.bound}`.trimEnd())
+        return [`ALTER TABLE ${t} ${by} (\n${parts.join(',\n')}\n)`]
+      }
+      case 'addPartition':
+        return [
+          `ALTER TABLE ${t} ADD PARTITION (PARTITION ${id(op.partition.name)}${op.partition.bound ? ` ${op.partition.bound}` : ''})`,
+        ]
+      case 'dropPartition':
+        return [`ALTER TABLE ${t} DROP PARTITION ${id(op.name)}`]
+      case 'truncatePartition':
+        return [`ALTER TABLE ${t} TRUNCATE PARTITION ${id(op.name)}`]
+      case 'detachPartition':
+        throw new AdapterError('UNSUPPORTED', 'MySQL has no DETACH PARTITION')
+      case 'removePartitioning':
+        return [`ALTER TABLE ${t} REMOVE PARTITIONING`]
+      case 'maintainPartition':
+        return [`ALTER TABLE ${t} ${op.action.toUpperCase()} PARTITION ${id(op.name)}`]
       case 'addColumn':
         return [`ALTER TABLE ${t} ADD COLUMN ${columnDef(op.column)}${position(op)}`, ...columnKeySql('mysql', ns, op)]
       case 'modifyColumn':

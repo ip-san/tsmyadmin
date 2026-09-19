@@ -11,6 +11,7 @@ import type {
   KeyValue,
   Namespace,
   ObjectDependency,
+  Partitioning,
   ProcessInfo,
   ProfileStage,
   QueryBuilderCondition,
@@ -388,6 +389,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
   abstract listForeignKeys(ns: Namespace): Promise<RelationDef[]>
   abstract describeTable(ns: Namespace, table: string): Promise<TableSchema>
   abstract tableStats(ns: Namespace, table: string): Promise<TableStats>
+  abstract listPartitions(ns: Namespace, table: string): Promise<Partitioning>
   abstract listRoutines(ns: Namespace): Promise<RoutineInfo[]>
   abstract routineDefinition(ns: Namespace, name: string, kind: RoutineKind): Promise<string | null>
   abstract listTriggers(ns: Namespace, table?: string): Promise<TriggerInfo[]>

@@ -174,3 +174,21 @@ export const TableStatsSchema = z.object({
   lastAnalyze: z.string().nullable(),
 })
 export type TableStats = z.infer<typeof TableStatsSchema>
+
+/** One partition as the catalog reports it; `bound` in the same form addPartition takes. */
+export const PartitionInfoSchema = z.object({
+  name: z.string(),
+  bound: z.string(),
+  rowEstimate: z.number().nullable(),
+  sizeBytes: z.number().nullable(),
+})
+export type PartitionInfo = z.infer<typeof PartitionInfoSchema>
+
+/** A table's partitioning; `method` null when it is not partitioned (then `partitions` is empty). */
+export const PartitioningSchema = z.object({
+  method: z.enum(['range', 'list', 'hash', 'key']).nullable(),
+  /** As the server prints it: MySQL `year(created)`, PostgreSQL `RANGE (id)` less the method. */
+  expression: z.string().nullable(),
+  partitions: z.array(PartitionInfoSchema),
+})
+export type Partitioning = z.infer<typeof PartitioningSchema>

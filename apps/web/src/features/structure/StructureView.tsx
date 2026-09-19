@@ -18,6 +18,7 @@ import { ColumnBulk } from './ColumnBulk.tsx'
 import { ColumnForm } from './ColumnForm.tsx'
 import { type IndexDialog, IndexesCard } from './IndexesCard.tsx'
 import { NormalizationHints } from './NormalizationHints.tsx'
+import { PartitionsCard } from './PartitionsCard.tsx'
 import { ForeignKeysTable, ReferencedByTable } from './RelationsTables.tsx'
 import { StatsCard } from './StatsCard.tsx'
 import { TransformsCard } from './TransformsCard.tsx'
@@ -118,6 +119,7 @@ export function StructureView({ tableRef, dialect }: { tableRef: TableRef; diale
       <Card title={locale.table.referencedBy} bleed>
         <ReferencedByTable schema={s} />
       </Card>
+      {editable ? <PartitionsCard tableRef={tableRef} dialect={dialect} onPreview={flow.preview} /> : null}
       <StatsCard tableRef={tableRef} />
       <Card title={locale.table.createStatement}>
         <DefinitionToggle query={createStatementQuery(tableRef)} label={table} />

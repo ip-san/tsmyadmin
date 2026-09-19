@@ -97,6 +97,27 @@ export const EventScheduleSchema = z.discriminatedUnion('kind', [
 ])
 export type EventSchedule = z.infer<typeof EventScheduleSchema>
 
+/**
+ * Partitioning. The method is a closed list (MySQL RANGE / LIST / HASH / KEY; PostgreSQL RANGE / LIST / HASH); the
+ * expression (`YEAR(created)`, `(id)`) and each partition's bound are server-dialect code shown in the preview.
+ * A bound is the clause after the partition's name as the server spells it: MySQL `VALUES LESS THAN (100)` /
+ * `VALUES IN (1, 2)`, PostgreSQL `FOR VALUES FROM (1) TO (100)` / `FOR VALUES IN ('a')` /
+ * `FOR VALUES WITH (MODULUS 4, REMAINDER 0)` / `DEFAULT`. MySQL HASH / KEY partitions take none.
+ */
+export const PartitionMethodSchema = z.enum(['range', 'list', 'hash', 'key'])
+export type PartitionMethod = z.infer<typeof PartitionMethodSchema>
+const PartitionCode = z.string().trim().min(1).max(10_000)
+export const PartitionSpecSchema = z.object({
+  name: z.string().min(1),
+  bound: z.string().trim().max(10_000).default(''),
+})
+export const PartitionByShape = {
+  method: PartitionMethodSchema,
+  expression: PartitionCode,
+}
+/** Partition maintenance (MySQL `ALTER TABLE … <action> PARTITION`; PostgreSQL only ANALYZE, on the partition). */
+export const PartitionActionSchema = z.enum(['analyze', 'check', 'optimize', 'rebuild', 'repair'])
+
 /** Referential actions accepted by both dialects. */
 export const FkActionSchema = z.enum(['CASCADE', 'SET NULL', 'RESTRICT', 'NO ACTION', 'SET DEFAULT'])
 export type FkAction = z.infer<typeof FkActionSchema>
@@ -107,7 +128,26 @@ export const DdlOpSchema = z.discriminatedUnion('op', [
     table,
     columns: z.array(ColumnSpecSchema).min(1),
     primaryKey: z.array(z.string().min(1)).default([]),
+    /** Created partitioned (PostgreSQL's only way to get a partitioned table): its partitions are added after. */
+    partitionBy: z.object(PartitionByShape).optional(),
   }),
+  /** MySQL: partition an existing table (PostgreSQL cannot; it creates a partitioned table instead). */
+  z.object({
+    op: z.literal('partitionTable'),
+    table,
+    ...PartitionByShape,
+    /** RANGE / LIST: each partition with its bound. HASH / KEY: only `count` is used. */
+    partitions: z.array(PartitionSpecSchema).max(1024).default([]),
+    count: z.number().int().min(1).max(1024).optional(),
+  }),
+  z.object({ op: z.literal('addPartition'), table, partition: PartitionSpecSchema }),
+  z.object({ op: z.literal('dropPartition'), table, name: z.string().min(1) }),
+  z.object({ op: z.literal('truncatePartition'), table, name: z.string().min(1) }),
+  /** PostgreSQL: the partition becomes a table of its own, rows kept. */
+  z.object({ op: z.literal('detachPartition'), table, name: z.string().min(1) }),
+  /** MySQL: back to one table, rows kept. */
+  z.object({ op: z.literal('removePartitioning'), table }),
+  z.object({ op: z.literal('maintainPartition'), table, name: z.string().min(1), action: PartitionActionSchema }),
   z.object({
     op: z.literal('addColumn'),
     table,

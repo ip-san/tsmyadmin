@@ -7,6 +7,7 @@ import type {
   KillMode,
   Namespace,
   ObjectDependency,
+  Partitioning,
   ProcessInfo,
   ProfileStage,
   RelationDef,
@@ -44,7 +45,13 @@ import { quoteIdent, quoteTable } from '../sql/quote.ts'
 import { AdapterError, type AdapterErrorCode, type ConnectionConfig } from '../types.ts'
 import { mysqlDdl } from './ddl.ts'
 import { mysqlExporter } from './export.ts'
-import { mysqlDescribeTable, mysqlListForeignKeys, mysqlListTables, mysqlTableStats } from './introspect.ts'
+import {
+  mysqlDescribeTable,
+  mysqlListForeignKeys,
+  mysqlListPartitions,
+  mysqlListTables,
+  mysqlTableStats,
+} from './introspect.ts'
 import {
   mysqlListDependencies,
   mysqlListEvents,
@@ -592,6 +599,10 @@ export class MysqlAdapter extends BaseAdapter {
 
   listForeignKeys(ns: Namespace): Promise<RelationDef[]> {
     return this.withConn(ns, (conn) => mysqlListForeignKeys(conn, ns))
+  }
+
+  listPartitions(ns: Namespace, table: string): Promise<Partitioning> {
+    return this.withConn(ns, (conn) => mysqlListPartitions(conn, ns, table))
   }
 
   tableStats(ns: Namespace, table: string): Promise<TableStats> {
