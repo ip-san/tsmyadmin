@@ -154,7 +154,7 @@ export const pgDdl: DdlBuilder = {
         onlyMysql('DEFINER', op.definer)
         onlyMysql('SQL SECURITY', op.sqlSecurity)
         const cols = op.columns && op.columns.length > 0 ? ` (${op.columns.map(id).join(', ')})` : ''
-        const check = op.checkOption ? ` WITH ${op.checkOption} CHECK OPTION` : ''
+        const check = op.checkOption ? `\nWITH ${op.checkOption} CHECK OPTION` : ''
         return [
           `CREATE ${op.orReplace ? 'OR REPLACE ' : ''}VIEW ${quoteTable('postgres', ns, op.name)}${cols} AS ${op.select.trim().replace(/[\s;]+$/, '')}${check}`,
         ]

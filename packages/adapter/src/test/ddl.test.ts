@@ -560,12 +560,14 @@ describe('DDL builders', () => {
       sqlSecurity: 'INVOKER',
     }
     expect(mysql(view)[0]).toBe(
-      "CREATE OR REPLACE ALGORITHM = MERGE DEFINER = 'o''brien'@'%' SQL SECURITY INVOKER VIEW `db`.`v` (`x`) AS SELECT a FROM t WITH LOCAL CHECK OPTION"
+      "CREATE OR REPLACE ALGORITHM = MERGE DEFINER = 'o''brien'@'%' SQL SECURITY INVOKER VIEW `db`.`v` (`x`) AS SELECT a FROM t\nWITH LOCAL CHECK OPTION"
     )
     expect(pg({ ...view, algorithm: undefined, definer: undefined, sqlSecurity: undefined })[0]).toBe(
-      'CREATE OR REPLACE VIEW "app"."v" ("x") AS SELECT a FROM t WITH LOCAL CHECK OPTION'
+      'CREATE OR REPLACE VIEW "app"."v" ("x") AS SELECT a FROM t\nWITH LOCAL CHECK OPTION'
     )
     expect(() => pg(view)).toThrow(/ALGORITHM is a MySQL option/)
+    // The clause starts a line of its own: a trailing `--` comment in the SELECT must not swallow it.
+    expect(mysql({ ...view, select: 'SELECT a FROM t -- all' })[0]).toContain('-- all\nWITH LOCAL CHECK OPTION')
 
     const event: DdlOp = {
       op: 'createEvent',

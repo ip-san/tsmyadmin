@@ -19,10 +19,13 @@ describe('parseParameters', () => {
 describe('callSql', () => {
   const params = parseParameters('IN a int, INOUT b varchar(10), OUT c int')
   it('writes literals by type: numbers bare, text quoted with its quotes doubled, null as NULL', () => {
-    expect(literalFor('int', '42')).toBe('42')
-    expect(literalFor('int', 'x')).toBe("'x'")
-    expect(literalFor('text', "it's")).toBe("'it''s'")
-    expect(literalFor('text', null)).toBe('NULL')
+    expect(literalFor('mysql', 'int', '42')).toBe('42')
+    expect(literalFor('mysql', 'int', 'x')).toBe("'x'")
+    expect(literalFor('mysql', 'text', "it's")).toBe("'it''s'")
+    expect(literalFor('mysql', 'text', null)).toBe('NULL')
+    // A backslash escapes on MySQL and is an ordinary character on PostgreSQL.
+    expect(literalFor('mysql', 'text', 'C:\\temp')).toBe("'C:\\\\temp'")
+    expect(literalFor('postgres', 'text', 'C:\\temp')).toBe("'C:\\temp'")
   })
 
   it('runs a MySQL procedure through user variables and selects what comes back', () => {
@@ -38,5 +41,16 @@ describe('callSql', () => {
     expect(callSql({ dialect: 'postgres', kind: 'function', name: 'f', params, values: ['1', 'x', null] })).toBe(
       'SELECT "f"(1, \'x\');\n'
     )
+  })
+
+  it('keeps a bracketed default whole and reads an unnamed argument as its type', () => {
+    expect(parseParameters('a integer[] DEFAULT ARRAY[1, 2], b text')).toEqual([
+      { mode: 'IN', name: 'a', type: 'integer[]' },
+      { mode: 'IN', name: 'b', type: 'text' },
+    ])
+    expect(parseParameters('integer, text')).toEqual([
+      { mode: 'IN', name: 'arg1', type: 'integer' },
+      { mode: 'IN', name: 'arg2', type: 'text' },
+    ])
   })
 })

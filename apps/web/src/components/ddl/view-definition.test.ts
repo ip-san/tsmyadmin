@@ -27,4 +27,8 @@ describe('parseViewDefinition', () => {
     })
     expect(parseViewDefinition('CREATE TABLE t (a int)')).toBeNull()
   })
+
+  it('does not offer to edit a PostgreSQL view that carries reloptions', () => {
+    expect(parseViewDefinition('CREATE VIEW v WITH (security_invoker=true) AS\n SELECT 1;')).toBeNull()
+  })
 })

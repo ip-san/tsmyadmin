@@ -87,7 +87,7 @@ const DataAccessSchema = z.enum(DATA_ACCESS)
 const RoutineSignature = z
   .string()
   .max(4000)
-  .refine((s) => !hasStatementBreak(s), 'A parameter list cannot contain ;')
+  .refine((s) => !hasStatementBreak(s) && !/--|\/\*/.test(s), 'A parameter list cannot contain ; or a comment')
 /** A body of server-dialect code (SELECT, routine, trigger or event body), shown in the preview before it runs. */
 const SqlBody = z.string().trim().min(1).max(1_000_000)
 /** `YYYY-MM-DD HH:MM:SS`, as the event scheduler takes a moment. */

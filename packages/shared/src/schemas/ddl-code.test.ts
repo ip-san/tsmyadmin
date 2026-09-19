@@ -15,4 +15,13 @@ describe('partition code', () => {
         .success
     ).toBe(false)
   })
+
+  it('refuses a comment or a statement break in a PostgreSQL routine signature', () => {
+    const drop = (parameters: string) =>
+      DdlOpSchema.safeParse({ op: 'dropRoutine', kind: 'function', name: 'f', parameters }).success
+    expect(drop('IN a integer, b text')).toBe(true)
+    expect(drop('integer) CASCADE --')).toBe(false)
+    expect(drop('integer /* x */')).toBe(false)
+    expect(drop('integer); DROP TABLE t')).toBe(false)
+  })
 })

@@ -22,6 +22,8 @@ export function parseViewDefinition(definition: string): ParsedView | null {
   const head = /^CREATE\b[\s\S]*?\bVIEW\b[\s\S]*?\bAS\b\s*/i.exec(statement)
   if (!head) return null
   const header = head[0]
+  // security_invoker / security_barrier: the form cannot express them, and replacing the view would drop them.
+  if (/\bVIEW\b[\s\S]*?\bWITH\s*\(/i.test(header)) return null
   let select = statement.slice(head[0].length).trim()
   const out: ParsedView = { select }
   const check = /\s*\bWITH(?:\s+(CASCADED|LOCAL))?\s+CHECK\s+OPTION\s*$/i.exec(select)

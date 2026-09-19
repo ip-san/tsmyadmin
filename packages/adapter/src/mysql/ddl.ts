@@ -209,7 +209,7 @@ export const mysqlDdl: DdlBuilder = {
         ]
       case 'createView': {
         const cols = op.columns && op.columns.length > 0 ? ` (${op.columns.map(id).join(', ')})` : ''
-        const check = op.checkOption ? ` WITH ${op.checkOption} CHECK OPTION` : ''
+        const check = op.checkOption ? `\nWITH ${op.checkOption} CHECK OPTION` : ''
         return [
           `CREATE ${op.orReplace ? 'OR REPLACE ' : ''}${op.algorithm ? `ALGORITHM = ${op.algorithm} ` : ''}${definerClause(op.definer)}${op.sqlSecurity ? `SQL SECURITY ${op.sqlSecurity} ` : ''}VIEW ${quoteTable('mysql', ns, op.name)}${cols} AS ${bare(op.select)}${check}`,
         ]

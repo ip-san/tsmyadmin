@@ -19,10 +19,10 @@ function splitTopLevel(text: string): string[] {
     } else if (ch === "'" || ch === '"' || ch === '`') {
       quote = ch
       current += ch
-    } else if (ch === '(') {
+    } else if (ch === '(' || ch === '[') {
       depth++
       current += ch
-    } else if (ch === ')') {
+    } else if (ch === ')' || ch === ']') {
       depth--
       current += ch
     } else if (ch === ',' && depth === 0) {
@@ -45,11 +45,10 @@ export function parseParameters(text: string): RoutineParam[] {
     const mode = first === 'IN' || first === 'OUT' || first === 'INOUT' ? first : null
     // PostgreSQL's VARIADIC is an input.
     const rest = mode || first === 'VARIADIC' ? words.slice(1) : words
-    const name = rest[0] ?? `arg${i + 1}`
-    const type = rest
-      .slice(1)
-      .join(' ')
-      .replace(/\s+(?:DEFAULT|=)\s+[\s\S]*$/i, '')
+    // PostgreSQL prints an unnamed argument as its type alone.
+    const unnamed = rest.length === 1
+    const name = unnamed ? `arg${i + 1}` : (rest[0] ?? `arg${i + 1}`)
+    const type = (unnamed ? rest : rest.slice(1)).join(' ').replace(/\s+(?:DEFAULT|=)\s+[\s\S]*$/i, '')
     return { mode: mode ?? 'IN', name, type }
   })
 }
@@ -59,10 +58,12 @@ const NUMERIC_TYPE =
 const NUMBER = /^-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?$/
 
 /** A value as an SQL literal: a number for a numeric parameter, else a quoted string; null is NULL. */
-export function literalFor(type: string, value: string | null): string {
+export function literalFor(dialect: Dialect, type: string, value: string | null): string {
   if (value === null) return 'NULL'
   if (NUMERIC_TYPE.test(type) && NUMBER.test(value.trim())) return value.trim()
-  return `'${value.replaceAll("'", "''")}'`
+  // MySQL reads a backslash as an escape; PostgreSQL (standard_conforming_strings) does not.
+  const text = dialect === 'mysql' ? value.replaceAll('\\', '\\\\') : value
+  return `'${text.replaceAll("'", "''")}'`
 }
 
 const quote = (dialect: Dialect, name: string) =>
@@ -81,7 +82,7 @@ export function callSql(o: {
   values: (string | null)[]
 }): string {
   const name = quote(o.dialect, o.name)
-  const value = (p: RoutineParam, i: number) => literalFor(p.type, o.values[i] ?? null)
+  const value = (p: RoutineParam, i: number) => literalFor(o.dialect, p.type, o.values[i] ?? null)
   if (o.kind === 'function') {
     // A function's OUT arguments are not passed (PostgreSQL) — MySQL functions have none.
     const args = o.params.flatMap((p, i) => (p.mode === 'OUT' ? [] : [value(p, i)]))
