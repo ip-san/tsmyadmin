@@ -49,6 +49,24 @@ export type ColumnSpecInput = z.input<typeof ColumnSpecSchema>
 const table = z.string().min(1)
 
 /**
+ * An index: its columns, whether it is unique, and — beyond phpMyAdmin's basics — MySQL's FULLTEXT / SPATIAL kinds,
+ * the access method (MySQL BTREE / HASH; PostgreSQL btree, hash, gin, gist, brin, spgist) and MySQL prefix
+ * lengths per column. Method and kind are closed lists: they render unquoted.
+ */
+export const IndexKindSchema = z.enum(['index', 'unique', 'fulltext', 'spatial'])
+export const IndexMethodSchema = z.enum(['btree', 'hash', 'gin', 'gist', 'brin', 'spgist'])
+const IndexShape = {
+  name: z.string().min(1),
+  columns: z.array(z.string().min(1)).min(1),
+  unique: z.boolean().default(false),
+  /** Overrides `unique` when given. */
+  kind: IndexKindSchema.optional(),
+  method: IndexMethodSchema.optional(),
+  /** MySQL: index only the first N characters / bytes of a column. */
+  lengths: z.record(z.string(), z.number().int().min(1).max(3072)).optional(),
+}
+
+/**
  * A type as the server spells it (`INT`, `varchar(20)`, `numeric(10,2)`), rendered as written like a column's
  * data type — the preview shows it before anything runs.
  */
@@ -112,14 +130,30 @@ export const DdlOpSchema = z.discriminatedUnion('op', [
     first: z.boolean().optional(),
   }),
   z.object({ op: z.literal('dropColumn'), table, name: z.string().min(1) }),
+  /** Several columns in one statement (phpMyAdmin's "Drop" with columns ticked). */
+  z.object({ op: z.literal('dropColumns'), table, names: z.array(z.string().min(1)).min(1) }),
+  /** Several columns changed at once, in one ALTER on MySQL (phpMyAdmin's "Change" with columns ticked). */
   z.object({
-    op: z.literal('addIndex'),
+    op: z.literal('modifyColumns'),
     table,
-    name: z.string().min(1),
-    columns: z.array(z.string().min(1)).min(1),
-    unique: z.boolean().default(false),
+    changes: z
+      .array(z.object({ name: z.string().min(1), column: ColumnSpecSchema, previous: ColumnSpecSchema.optional() }))
+      .min(1),
   }),
+  /** Every column in a new order, with its definition (MySQL rewrites each moved one; PostgreSQL cannot). */
+  z.object({ op: z.literal('reorderColumns'), table, columns: z.array(ColumnSpecSchema).min(2) }),
+  /** The primary key on these columns, replacing the one there is (named `current` on PostgreSQL). */
+  z.object({
+    op: z.literal('setPrimaryKey'),
+    table,
+    columns: z.array(z.string().min(1)).min(1),
+    current: z.string().min(1).optional(),
+  }),
+  z.object({ op: z.literal('addIndex'), table, ...IndexShape }),
   z.object({ op: z.literal('dropIndex'), table, name: z.string().min(1) }),
+  z.object({ op: z.literal('renameIndex'), table, name: z.string().min(1), newName: z.string().min(1) }),
+  /** An index replaced by a new definition: one ALTER on MySQL, DROP + CREATE on PostgreSQL. */
+  z.object({ op: z.literal('alterIndex'), table, name: z.string().min(1), index: z.object(IndexShape) }),
   z.object({
     op: z.literal('addForeignKey'),
     table,

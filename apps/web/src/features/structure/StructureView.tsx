@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import type { Dialect, TableSchema } from '@tsmyadmin/shared'
+import type { DdlOp, Dialect } from '@tsmyadmin/shared'
 import { useState } from 'react'
 import { DdlPreviewDialog } from '@/components/ddl/DdlPreviewDialog.tsx'
 import { DefinitionToggle } from '@/components/ddl/DefinitionToggle.tsx'
@@ -7,83 +7,29 @@ import { ForeignKeyForm } from '@/components/ddl/ForeignKeyForm.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { Card } from '@/components/ui/Card.tsx'
 import { Dialog } from '@/components/ui/Dialog.tsx'
-import { Badge, ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
-import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
+import { ErrorBox, Spinner } from '@/components/ui/Feedback.tsx'
 import { locale } from '@/config/locale.ts'
 import { ColumnsTable } from '@/features/structure/ColumnsTable.tsx'
 import { useCentralColumns } from '@/lib/central-columns.ts'
 import { fromColumnDef, toColumnSpec } from '@/lib/column-spec.ts'
 import { useDdlFlow } from '@/lib/ddl.ts'
 import { createStatementQuery, structureQuery, type TableRef } from '@/lib/queries.ts'
+import { ColumnBulk } from './ColumnBulk.tsx'
 import { ColumnForm } from './ColumnForm.tsx'
-import { IndexForm } from './IndexForm.tsx'
+import { type IndexDialog, IndexesCard } from './IndexesCard.tsx'
 import { NormalizationHints } from './NormalizationHints.tsx'
 import { ForeignKeysTable, ReferencedByTable } from './RelationsTables.tsx'
 import { TransformsCard } from './TransformsCard.tsx'
 
 type ColumnDialog = { mode: 'add' } | { mode: 'modify'; name: string } | null
 
-function IndexesTable({
-  schema,
-  editable,
-  onDrop,
-}: {
-  schema: TableSchema
-  editable: boolean
-  onDrop: (name: string) => void
-}) {
-  if (schema.indexes.length === 0) return <Notice>{locale.table.noIndexes}</Notice>
-  return (
-    <Table aria-label={locale.table.indexes}>
-      <thead>
-        <tr>
-          <Th>{locale.table.name}</Th>
-          <Th>{locale.table.columns}</Th>
-          <Th>{locale.table.unique}</Th>
-          <Th>{locale.table.indexType}</Th>
-          {editable ? <Th>{locale.ddl.actions}</Th> : null}
-        </tr>
-      </thead>
-      <tbody>
-        {schema.indexes.map((i) => (
-          <Tr key={i.name}>
-            <Td className="font-medium">
-              {i.name} {i.primary ? <Badge tone="info">{locale.table.primary}</Badge> : null}
-            </Td>
-            <Td className="font-mono text-xs">
-              {i.columns.join(', ')}
-              {i.predicate ? <span className="text-ink-sub"> WHERE {i.predicate}</span> : null}
-            </Td>
-            <Td>{i.unique ? locale.common.yes : locale.common.no}</Td>
-            <Td className="text-xs">{i.type ?? ''}</Td>
-            {editable ? (
-              <Td>
-                {i.primary ? null : (
-                  <Button
-                    size="sm"
-                    variant="danger"
-                    aria-haspopup="dialog"
-                    onClick={() => onDrop(i.name)}
-                    aria-label={`${i.name}: ${locale.ddl.drop}`}
-                  >
-                    {locale.ddl.drop}
-                  </Button>
-                )}
-              </Td>
-            ) : null}
-          </Tr>
-        ))}
-      </tbody>
-    </Table>
-  )
-}
-
 export function StructureView({ tableRef, dialect }: { tableRef: TableRef; dialect: Dialect }) {
   const structure = useQuery(structureQuery(tableRef))
   const flow = useDdlFlow(tableRef.db, tableRef.schema)
   const [columnDialog, setColumnDialog] = useState<ColumnDialog>(null)
   const central = useCentralColumns(tableRef.db, tableRef.schema)
-  const [indexDialog, setIndexDialog] = useState(false)
+  const [indexDialog, setIndexDialog] = useState<IndexDialog>(null)
+  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set())
   const [fkDialog, setFkDialog] = useState(false)
   if (structure.isPending) return <Spinner />
   if (structure.isError) return <ErrorBox error={structure.error} onRetry={() => void structure.refetch()} />
@@ -91,6 +37,12 @@ export function StructureView({ tableRef, dialect }: { tableRef: TableRef; diale
   const editable = s.kind === 'table'
   const table = tableRef.table
   const editing = columnDialog?.mode === 'modify' ? s.columns.find((c) => c.name === columnDialog.name) : undefined
+  // In table order, and only columns that still exist after a refetch.
+  const selected = s.columns.map((c) => c.name).filter((n) => picked.has(n))
+  const preview = (op: DdlOp) => {
+    setPicked(new Set())
+    flow.preview(op)
+  }
 
   return (
     <div className="space-y-4">
@@ -116,25 +68,36 @@ export function StructureView({ tableRef, dialect }: { tableRef: TableRef; diale
           editable={editable}
           onEdit={(name) => setColumnDialog({ mode: 'modify', name })}
           onDrop={(name) => flow.preview({ op: 'dropColumn', table, name })}
+          selected={picked}
+          onToggle={(name) =>
+            setPicked((p) => {
+              const next = new Set(p)
+              if (next.has(name)) next.delete(name)
+              else next.add(name)
+              return next
+            })
+          }
         />
+        {editable ? (
+          <ColumnBulk
+            schema={s}
+            dialect={dialect}
+            selected={selected}
+            onPreview={preview}
+            onIndex={(kind, columns) =>
+              setIndexDialog({ mode: 'add', initial: { kind, columns, unique: kind === 'unique' } })
+            }
+          />
+        ) : null}
       </Card>
-      <Card
-        title={locale.table.indexes}
-        actions={
-          editable ? (
-            <Button size="sm" onClick={() => setIndexDialog(true)}>
-              {locale.ddl.titles.addIndex}
-            </Button>
-          ) : null
-        }
-        bleed
-      >
-        <IndexesTable
-          schema={s}
-          editable={editable}
-          onDrop={(name) => flow.preview({ op: 'dropIndex', table, name })}
-        />
-      </Card>
+      <IndexesCard
+        schema={s}
+        dialect={dialect}
+        editable={editable}
+        dialog={indexDialog}
+        onDialog={setIndexDialog}
+        onPreview={preview}
+      />
       <Card
         title={locale.table.foreignKeys}
         actions={
@@ -190,19 +153,6 @@ export function StructureView({ tableRef, dialect }: { tableRef: TableRef; diale
                   ...(placement.after ? { after: placement.after } : {}),
                 })
               else flow.preview({ op: 'addColumn', table, column, ...placement })
-            }}
-          />
-        ) : null}
-      </Dialog>
-      <Dialog open={indexDialog} title={locale.ddl.titles.addIndex} onClose={() => setIndexDialog(false)}>
-        {indexDialog ? (
-          <IndexForm
-            table={table}
-            columns={s.columns.map((c) => c.name)}
-            onCancel={() => setIndexDialog(false)}
-            onSubmit={(v) => {
-              setIndexDialog(false)
-              flow.preview({ op: 'addIndex', table, ...v })
             }}
           />
         ) : null}

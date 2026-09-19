@@ -10,17 +10,27 @@ export function ColumnsTable({
   editable,
   onEdit,
   onDrop,
+  selected,
+  onToggle,
 }: {
   schema: TableSchema
   editable: boolean
   onEdit: (name: string) => void
   onDrop: (name: string) => void
+  /** Ticked columns, for the actions under the list (omit to show no checkboxes). */
+  selected?: ReadonlySet<string>
+  onToggle?: (name: string) => void
 }) {
   const pk = new Set(schema.primaryKey)
   return (
     <Table aria-label={locale.table.columns}>
       <thead>
         <tr>
+          {editable && selected ? (
+            <Th>
+              <span className="sr-only">{locale.ddl.bulk.pick}</span>
+            </Th>
+          ) : null}
           <Th>#</Th>
           <Th>{locale.table.name}</Th>
           <Th>{locale.table.type}</Th>
@@ -35,6 +45,16 @@ export function ColumnsTable({
       <tbody>
         {schema.columns.map((c, i) => (
           <Tr key={c.name}>
+            {editable && selected ? (
+              <Td>
+                <input
+                  type="checkbox"
+                  aria-label={`${c.name}: ${locale.ddl.bulk.pick}`}
+                  checked={selected.has(c.name)}
+                  onChange={() => onToggle?.(c.name)}
+                />
+              </Td>
+            ) : null}
             <Td>{i + 1}</Td>
             <Td className="font-medium">
               {c.name} {pk.has(c.name) ? <Badge tone="info">{locale.table.primary}</Badge> : null}

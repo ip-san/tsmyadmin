@@ -18,6 +18,12 @@ exports[`DDL builders > mysql: addIndex 1`] = `
 ]
 `;
 
+exports[`DDL builders > mysql: alterIndex 1`] = `
+[
+  "ALTER TABLE \`db\`.\`t\` DROP INDEX \`idx_t_a_b\`, ADD INDEX \`idx_t_a\` (\`a\`) USING BTREE",
+]
+`;
+
 exports[`DDL builders > mysql: copyDatabase 1`] = `
 [
   "CREATE DATABASE \`new"db\`\`x\` COLLATE utf8mb4_0900_ai_ci",
@@ -95,6 +101,12 @@ exports[`DDL builders > mysql: dropColumn 1`] = `
 ]
 `;
 
+exports[`DDL builders > mysql: dropColumns 1`] = `
+[
+  "ALTER TABLE \`db\`.\`t\` DROP COLUMN \`a\`, DROP COLUMN \`b\`",
+]
+`;
+
 exports[`DDL builders > mysql: dropDatabase 1`] = `
 [
   "DROP DATABASE \`new"db\`\`x\`",
@@ -149,6 +161,12 @@ exports[`DDL builders > mysql: modifyColumn 1`] = `
 ]
 `;
 
+exports[`DDL builders > mysql: modifyColumns 1`] = `
+[
+  "ALTER TABLE \`db\`.\`t\` MODIFY COLUMN \`a\` BIGINT NOT NULL, CHANGE COLUMN \`b\` \`b2\` TEXT NULL",
+]
+`;
+
 exports[`DDL builders > mysql: moveTable 1`] = `
 [
   "RENAME TABLE \`db\`.\`we"ird\`\`tbl\` TO \`arch\`\`ive"\`.\`we"ird\`\`tbl\`",
@@ -162,15 +180,33 @@ exports[`DDL builders > mysql: renameDatabase 1`] = `
 ]
 `;
 
+exports[`DDL builders > mysql: renameIndex 1`] = `
+[
+  "ALTER TABLE \`db\`.\`t\` RENAME INDEX \`idx_t_a_b\` TO \`idx_t_ab\`",
+]
+`;
+
 exports[`DDL builders > mysql: renameTable 1`] = `
 [
   "RENAME TABLE \`db\`.\`t\` TO \`db\`.\`we"ird\`\`new\`",
 ]
 `;
 
+exports[`DDL builders > mysql: reorderColumns 1`] = `
+[
+  "ALTER TABLE \`db\`.\`t\` MODIFY COLUMN \`b\` INT NULL FIRST, MODIFY COLUMN \`a\` INT NULL AFTER \`b\`",
+]
+`;
+
 exports[`DDL builders > mysql: replaceInColumn 1`] = `
 [
   "UPDATE \`db\`.\`users\` SET \`na\`\`me"\` = REPLACE(\`na\`\`me"\`, 'it''s', '%_\\\\') WHERE CAST(REPLACE(\`na\`\`me"\`, 'it''s', '%_\\\\') AS BINARY) <> CAST(\`na\`\`me"\` AS BINARY)",
+]
+`;
+
+exports[`DDL builders > mysql: setPrimaryKey 1`] = `
+[
+  "ALTER TABLE \`db\`.\`t\` DROP PRIMARY KEY, ADD PRIMARY KEY (\`a\`, \`b\`)",
 ]
 `;
 
@@ -208,6 +244,13 @@ exports[`DDL builders > postgres: addForeignKey 1`] = `
 exports[`DDL builders > postgres: addIndex 1`] = `
 [
   "CREATE UNIQUE INDEX "idx_t_a_b" ON "app"."t" ("a", "b")",
+]
+`;
+
+exports[`DDL builders > postgres: alterIndex 1`] = `
+[
+  "DROP INDEX "app"."idx_t_a_b"",
+  "CREATE INDEX "idx_t_a" ON "app"."t" USING btree ("a")",
 ]
 `;
 
@@ -285,6 +328,12 @@ exports[`DDL builders > postgres: dropColumn 1`] = `
 ]
 `;
 
+exports[`DDL builders > postgres: dropColumns 1`] = `
+[
+  "ALTER TABLE "app"."t" DROP COLUMN "a", DROP COLUMN "b"",
+]
+`;
+
 exports[`DDL builders > postgres: dropDatabase 1`] = `
 [
   "DROP DATABASE "new""db\`x" WITH (FORCE)",
@@ -331,6 +380,18 @@ exports[`DDL builders > postgres: modifyColumn 1`] = `
 ]
 `;
 
+exports[`DDL builders > postgres: modifyColumns 1`] = `
+[
+  "ALTER TABLE "app"."t" ALTER COLUMN "a" TYPE BIGINT",
+  "ALTER TABLE "app"."t" ALTER COLUMN "a" SET NOT NULL",
+  "ALTER TABLE "app"."t" ALTER COLUMN "a" DROP DEFAULT",
+  "ALTER TABLE "app"."t" RENAME COLUMN "b" TO "b2"",
+  "ALTER TABLE "app"."t" ALTER COLUMN "b2" TYPE TEXT",
+  "ALTER TABLE "app"."t" ALTER COLUMN "b2" DROP NOT NULL",
+  "ALTER TABLE "app"."t" ALTER COLUMN "b2" DROP DEFAULT",
+]
+`;
+
 exports[`DDL builders > postgres: moveTable 1`] = `
 [
   "ALTER TABLE "app"."we""ird\`tbl" SET SCHEMA "arch\`ive"""",
@@ -344,6 +405,12 @@ exports[`DDL builders > postgres: renameDatabase 1`] = `
 ]
 `;
 
+exports[`DDL builders > postgres: renameIndex 1`] = `
+[
+  "ALTER INDEX "app"."idx_t_a_b" RENAME TO "idx_t_ab"",
+]
+`;
+
 exports[`DDL builders > postgres: renameTable 1`] = `
 [
   "ALTER TABLE "app"."t" RENAME TO "we""ird\`new"",
@@ -353,6 +420,12 @@ exports[`DDL builders > postgres: renameTable 1`] = `
 exports[`DDL builders > postgres: replaceInColumn 1`] = `
 [
   "UPDATE "app"."users" SET "na\`me""" = replace("na\`me""", 'it''s', '%_\\') WHERE replace("na\`me""", 'it''s', '%_\\') IS DISTINCT FROM "na\`me"""",
+]
+`;
+
+exports[`DDL builders > postgres: setPrimaryKey 1`] = `
+[
+  "ALTER TABLE "app"."t" DROP CONSTRAINT "t_pkey", ADD PRIMARY KEY ("a", "b")",
 ]
 `;
 

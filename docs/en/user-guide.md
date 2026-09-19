@@ -1,4 +1,4 @@
-<!-- translated-from: docs/user-guide.md sha256:a543239f1f702fc99282140f44a6499dd3e024745b78fd1b9d389dc8697ee983 -->
+<!-- translated-from: docs/user-guide.md sha256:3eb5c358042333b879caaff5ce6958d778717adcfd0b2b4d057931478cea80bc -->
 
 # User guide
 
@@ -113,6 +113,8 @@ On PostgreSQL, **idle** tsmyadmin connections to that database under the same da
 
 - Add, change and drop columns; add and drop indexes; add and drop foreign keys (to tables in the same schema); see what references this table; see the CREATE statement
 - Adding or changing a column takes a collation, MySQL's attributes (UNSIGNED / ZEROFILL / BINARY) and *Set CURRENT_TIMESTAMP on update*, a **generated column** (expression, STORED / VIRTUAL), a position (MySQL: first, or after a chosen column) and a key to add with a new column (PRIMARY / UNIQUE / INDEX). PostgreSQL cannot move a column, turn an existing column into a generated one or switch STORED / VIRTUAL (changing the expression takes PostgreSQL 17 or later)
+- Tick columns on the left and use the buttons under the list to give the chosen columns a primary key (replacing the current one), a unique key or an index (MySQL also full-text / spatial), to **change them together** (one form per column, then one SQL preview) or to **drop them together**. On MySQL, *Reorder columns…* puts every column in a new order (PostgreSQL cannot reorder columns)
+- An index takes a kind (MySQL including full-text / spatial), a method (MySQL: BTREE / HASH; PostgreSQL: BTREE / HASH / GIN / GiST / BRIN / SP-GiST) and, on MySQL, prefix lengths (how many leading characters to index). An existing index can be **renamed** and **changed** (dropped and created again under one confirmation)
 - Every change goes **preview of the generated SQL → Run**. An operation that cannot be undone (TRUNCATE, DROP …) also asks you to retype the object's name
 - **Display transformations** change how a column shows in Browse (a binary value as its image, a value as a link, JSON indented); the stored value is unchanged. Links are http / https only; put `{value}` in **Link to** and the value goes in URL-encoded. They are kept where saved queries are
 - **Normalization hints** below lists what in the definition and the first 500 rows looks like a break of the first to third normal forms (no primary key, numbered columns, several values joined in one, a reference with no foreign key, a column decided by part of the key or by a non-key column). Dependencies read from values are estimates, and the table is not changed

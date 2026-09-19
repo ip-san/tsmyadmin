@@ -175,6 +175,20 @@ for (const t of TARGETS) {
       await page.getByRole('dialog').getByLabel('生成カラム（式から値を計算する）').check()
       await scan(page)
       await page.getByRole('dialog').getByRole('button', { name: 'キャンセル' }).click()
+      // Two columns ticked, the bar under the list, and the index form on them (prefix lengths on MySQL).
+      await page.getByLabel('id: 選ぶ').check()
+      await page.getByLabel('name: 選ぶ').check()
+      await scan(page)
+      await page.getByRole('button', { name: 'インデックス', exact: true }).click()
+      await page.getByRole('dialog').getByLabel('種類').waitFor()
+      await scan(page)
+      await page.getByRole('dialog').getByRole('button', { name: 'キャンセル' }).click()
+      if (t.dialect === 'mysql') {
+        await page.getByRole('button', { name: 'カラムを並べ替え…' }).click()
+        await page.getByRole('dialog').getByRole('button', { name: 'name を上へ' }).waitFor()
+        await scan(page)
+        await page.getByRole('dialog').getByRole('button', { name: 'キャンセル' }).click()
+      }
       await page.getByText('正規化の手がかり').click()
       await page.getByText(/行から推定しています|行しかないため/).waitFor()
       await scan(page)

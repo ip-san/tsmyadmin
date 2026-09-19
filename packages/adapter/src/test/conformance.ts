@@ -3376,6 +3376,81 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         await expect(db.describeTable(ns, scratchDdl)).rejects.toMatchObject({ code: 'NOT_FOUND' })
       })
 
+      it('manages indexes and columns in bulk: kinds, lengths, rename, replace, several columns at once', async () => {
+        const t = `${scratch}_bulk`
+        const idx = `${t}_idx`
+        try {
+          await runDdl({
+            op: 'createTable',
+            table: t,
+            columns: [col('id', 'INT', { nullable: false }), col('a', 'VARCHAR(40)'), col('b', 'INT'), col('c', 'INT')],
+            primaryKey: ['id'],
+          })
+          // MySQL: a prefix length; PostgreSQL: an access method.
+          await runDdl({
+            op: 'addIndex',
+            table: t,
+            name: idx,
+            columns: ['a'],
+            unique: false,
+            ...(dialect === 'mysql' ? { lengths: { a: 5 } } : { method: 'hash' as const }),
+          })
+          let s = await db.describeTable(ns, t)
+          let i = s.indexes.find((x) => x.name === idx)
+          if (dialect === 'mysql') expect(i?.lengths).toEqual({ a: 5 })
+          else expect(i?.type).toBe('hash')
+
+          await runDdl({ op: 'renameIndex', table: t, name: idx, newName: `${idx}2` })
+          await runDdl({
+            op: 'alterIndex',
+            table: t,
+            name: `${idx}2`,
+            index: { name: `${idx}3`, columns: ['a', 'b'], unique: true },
+          })
+          s = await db.describeTable(ns, t)
+          i = s.indexes.find((x) => x.name === `${idx}3`)
+          expect(i).toMatchObject({ unique: true, columns: ['a', 'b'] })
+          expect(s.indexes.some((x) => x.name === idx || x.name === `${idx}2`)).toBe(false)
+
+          // The primary key replaced by another, in one statement.
+          const current = s.indexes.find((x) => x.primary)?.name
+          await runDdl({
+            op: 'setPrimaryKey',
+            table: t,
+            columns: ['id', 'c'],
+            ...(dialect === 'postgres' && current ? { current } : { current: 'PRIMARY' }),
+          })
+          expect((await db.describeTable(ns, t)).primaryKey).toEqual(['id', 'c'])
+
+          await runDdl({
+            op: 'modifyColumns',
+            table: t,
+            changes: [
+              { name: 'b', column: col('b', 'BIGINT'), previous: col('b', 'INT') },
+              { name: 'a', column: col('a', 'VARCHAR(60)'), previous: col('a', 'VARCHAR(40)') },
+            ],
+          })
+          s = await db.describeTable(ns, t)
+          expect(s.columns.find((c) => c.name === 'b')?.dataType.toLowerCase()).toContain('bigint')
+          expect(s.columns.find((c) => c.name === 'a')?.dataType.toLowerCase()).toContain('60')
+
+          if (dialect === 'mysql') {
+            const specs = (await db.describeTable(ns, t)).columns.map((c) =>
+              col(c.name, c.dataType, { nullable: c.nullable })
+            )
+            const reordered = [specs[3], specs[0], specs[1], specs[2]].filter((c): c is ColumnSpec => c !== undefined)
+            await runDdl({ op: 'reorderColumns', table: t, columns: reordered })
+            expect((await db.describeTable(ns, t)).columns.map((c) => c.name)).toEqual(['c', 'id', 'a', 'b'])
+          }
+
+          await runDdl({ op: 'dropIndex', table: t, name: `${idx}3` })
+          await runDdl({ op: 'dropColumns', table: t, names: ['a', 'b'] })
+          expect((await db.describeTable(ns, t)).columns.map((c) => c.name).sort()).toEqual(['c', 'id'])
+        } finally {
+          await exec(`DROP TABLE IF EXISTS ${t}`, { stopOnError: false })
+        }
+      })
+
       it('writes a generated column that describeTable reads back, and keeps it generated when changed', async () => {
         const t = `${scratch}_gen`
         try {

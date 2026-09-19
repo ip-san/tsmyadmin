@@ -8,6 +8,7 @@ const DESTRUCTIVE = new Set<DdlOp['op']>([
   'dropTable',
   'truncateTable',
   'dropColumn',
+  'dropColumns',
   'dropIndex',
   'dropForeignKey',
   'dropDatabase',
@@ -51,6 +52,7 @@ function lossWarning(op: DdlOp, dialect: Dialect): string | null {
     case 'truncateTable':
       return locale.ddl.dataLoss
     case 'dropColumn':
+    case 'dropColumns':
       return locale.ddl.columnLoss
     case 'dropDatabase':
       return dialect === 'postgres'

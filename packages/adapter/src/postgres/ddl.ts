@@ -201,8 +201,23 @@ export const pgDdl: DdlBuilder = {
       }
       case 'dropColumn':
         return [`ALTER TABLE ${t} DROP COLUMN ${id(op.name)}`]
+      case 'dropColumns':
+        return [`ALTER TABLE ${t} ${op.names.map((n) => `DROP COLUMN ${id(n)}`).join(', ')}`]
+      case 'modifyColumns':
+        // Each change as modifyColumn writes it: only the clauses that differ from the current definition.
+        return op.changes.flatMap((c) => pgDdl.build(ns, { op: 'modifyColumn', table: op.table, ...c }))
+      case 'reorderColumns':
+        throw new AdapterError('UNSUPPORTED', 'PostgreSQL cannot reorder columns')
+      case 'setPrimaryKey':
+        return [
+          `ALTER TABLE ${t} ${op.current ? `DROP CONSTRAINT ${id(op.current)}, ` : ''}ADD PRIMARY KEY (${op.columns.map(id).join(', ')})`,
+        ]
       case 'addIndex':
         return [createIndexSql('postgres', ns, op)]
+      case 'renameIndex':
+        return [`ALTER INDEX ${schema}.${id(op.name)} RENAME TO ${id(op.newName)}`]
+      case 'alterIndex':
+        return [`DROP INDEX ${schema}.${id(op.name)}`, createIndexSql('postgres', ns, { ...op.index, table: op.table })]
       case 'dropIndex':
         return [`DROP INDEX ${schema}.${id(op.name)}`]
       case 'addForeignKey':

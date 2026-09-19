@@ -1,5 +1,5 @@
 import type { ColumnSpec, DdlOp, Namespace } from '@tsmyadmin/shared'
-import { addForeignKeySql, columnKeySql, createIndexSql } from '../sql/ddl-common.ts'
+import { addForeignKeySql, columnKeySql, createIndexSql, mysqlAddIndexClause } from '../sql/ddl-common.ts'
 import { mysqlLiteral } from '../sql/literal.ts'
 import { quoteIdent, quoteTable } from '../sql/quote.ts'
 import { AdapterError, type DdlBuilder } from '../types.ts'
@@ -195,10 +195,45 @@ export const mysqlDdl: DdlBuilder = {
         ]
       case 'dropColumn':
         return [`ALTER TABLE ${t} DROP COLUMN ${id(op.name)}`]
+      case 'dropColumns':
+        return [`ALTER TABLE ${t} ${op.names.map((n) => `DROP COLUMN ${id(n)}`).join(', ')}`]
+      case 'modifyColumns':
+        // One statement: the table is rebuilt once, and either every change lands or none does.
+        return [
+          `ALTER TABLE ${t} ${op.changes
+            .map((c) =>
+              c.name === c.column.name
+                ? `MODIFY COLUMN ${columnDef(c.column)}`
+                : `CHANGE COLUMN ${id(c.name)} ${columnDef(c.column)}`
+            )
+            .join(', ')}`,
+        ]
+      case 'reorderColumns':
+        // Each column rewritten in its new place, from its full definition (MODIFY replaces it).
+        return [
+          `ALTER TABLE ${t} ${op.columns
+            .map(
+              (c, i) =>
+                `MODIFY COLUMN ${columnDef(c)} ${i === 0 ? 'FIRST' : `AFTER ${id(op.columns[i - 1]?.name ?? '')}`}`
+            )
+            .join(', ')}`,
+        ]
+      case 'setPrimaryKey':
+        return [
+          `ALTER TABLE ${t} ${op.current ? 'DROP PRIMARY KEY, ' : ''}ADD PRIMARY KEY (${op.columns.map(id).join(', ')})`,
+        ]
       case 'addIndex':
         return [createIndexSql('mysql', ns, op)]
       case 'dropIndex':
         return [`DROP INDEX ${id(op.name)} ON ${t}`]
+      case 'renameIndex':
+        return [`ALTER TABLE ${t} RENAME INDEX ${id(op.name)} TO ${id(op.newName)}`]
+      case 'alterIndex': {
+        // One ALTER: the old index is never gone without the new one in place.
+        const primary = op.name === 'PRIMARY'
+        const drop = primary ? 'DROP PRIMARY KEY' : `DROP INDEX ${id(op.name)}`
+        return [`ALTER TABLE ${t} ${drop}, ${mysqlAddIndexClause({ ...op.index, table: op.table }, primary)}`]
+      }
       case 'addForeignKey':
         return [addForeignKeySql('mysql', ns, op)]
       case 'dropForeignKey':

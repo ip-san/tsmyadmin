@@ -157,6 +157,7 @@ export function fakeTable(
                 type: null,
                 predicate: null,
                 definition: null,
+                lengths: {},
               },
             ]
           : [],

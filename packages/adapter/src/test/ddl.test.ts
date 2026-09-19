@@ -49,12 +49,30 @@ const SAMPLE_OPS: Record<DdlOp['op'], DdlOp> = {
     }),
   },
   dropColumn: { op: 'dropColumn', table: 't', name: 'n' },
+  dropColumns: { op: 'dropColumns', table: 't', names: ['a', 'b'] },
+  modifyColumns: {
+    op: 'modifyColumns',
+    table: 't',
+    changes: [
+      { name: 'a', column: col('a', 'BIGINT', { nullable: false }) },
+      { name: 'b', column: col('b2', 'TEXT') },
+    ],
+  },
+  reorderColumns: { op: 'reorderColumns', table: 't', columns: [col('b', 'INT'), col('a', 'INT')] },
+  setPrimaryKey: { op: 'setPrimaryKey', table: 't', columns: ['a', 'b'], current: 't_pkey' },
   setTableOptions: { op: 'setTableOptions', table: 't', comment: "it's" },
   maintainTable: { op: 'maintainTable', table: 't', action: 'analyze' },
   dropTables: { op: 'dropTables', tables: ['t', 'we"ird`tbl'] },
   truncateTables: { op: 'truncateTables', tables: ['t', 'we"ird`tbl'] },
   addIndex: { op: 'addIndex', table: 't', name: 'idx_t_a_b', columns: ['a', 'b'], unique: true },
   dropIndex: { op: 'dropIndex', table: 't', name: 'idx_t_a_b' },
+  renameIndex: { op: 'renameIndex', table: 't', name: 'idx_t_a_b', newName: 'idx_t_ab' },
+  alterIndex: {
+    op: 'alterIndex',
+    table: 't',
+    name: 'idx_t_a_b',
+    index: { name: 'idx_t_a', columns: ['a'], unique: false, method: 'btree' },
+  },
   addForeignKey: {
     op: 'addForeignKey',
     table: 't',
@@ -147,6 +165,7 @@ describe('DDL builders', () => {
     it(`postgres: ${name}`, () => {
       const build = () => pgDdl.build({ database: 'db', schema: 'app' }, SAMPLE_OPS[name])
       if (name.endsWith('Event')) expect(build).toThrow(/no event scheduler/)
+      else if (name === 'reorderColumns') expect(build).toThrow(/cannot reorder/)
       else expect(build()).toMatchSnapshot()
     })
   }
@@ -352,10 +371,45 @@ describe('DDL builders', () => {
     expect(pgLiteral("a'b\\c")).toBe("'a''b\\c'")
   })
 
+  it('writes index kinds, methods and prefix lengths each dialect has, and refuses the rest', () => {
+    const idx = (over: Partial<Extract<DdlOp, { op: 'addIndex' }>>): DdlOp => ({
+      op: 'addIndex',
+      table: 't',
+      name: 'i',
+      columns: ['a', 'b'],
+      unique: false,
+      ...over,
+    })
+    const my = (op: DdlOp) => mysqlDdl.build({ database: 'db' }, op)[0]
+    const pg = (op: DdlOp) => pgDdl.build({ database: 'db', schema: 'app' }, op)[0]
+    expect(my(idx({ kind: 'fulltext' }))).toBe('CREATE FULLTEXT INDEX `i` ON `db`.`t` (`a`, `b`)')
+    expect(my(idx({ kind: 'spatial', columns: ['g'] }))).toBe('CREATE SPATIAL INDEX `i` ON `db`.`t` (`g`)')
+    expect(my(idx({ unique: true, method: 'hash', lengths: { a: 10 } }))).toBe(
+      'CREATE UNIQUE INDEX `i` ON `db`.`t` (`a`(10), `b`) USING HASH'
+    )
+    expect(pg(idx({ method: 'gin' }))).toBe('CREATE INDEX "i" ON "app"."t" USING gin ("a", "b")')
+    expect(() => my(idx({ method: 'gin' }))).toThrow(/no gin/)
+    expect(() => my(idx({ kind: 'fulltext', method: 'btree' }))).toThrow(/no method/)
+    expect(() => pg(idx({ kind: 'fulltext' }))).toThrow(/GIN or GiST/)
+    expect(() => pg(idx({ lengths: { a: 10 } }))).toThrow(/prefix length/)
+  })
+
+  it('replaces the MySQL primary key in one ALTER when it is the index being changed', () => {
+    const op: DdlOp = {
+      op: 'alterIndex',
+      table: 't',
+      name: 'PRIMARY',
+      index: { name: 'PRIMARY', columns: ['a', 'b'], unique: true },
+    }
+    expect(mysqlDdl.build({ database: 'db' }, op)).toEqual([
+      'ALTER TABLE `db`.`t` DROP PRIMARY KEY, ADD PRIMARY KEY (`a`, `b`)',
+    ])
+  })
+
   it('never emits an unquoted identifier from user input', () => {
     for (const name of DDL_OP_NAMES) {
       for (const dialect of [mysqlDdl, pgDdl]) {
-        if (dialect === pgDdl && name.endsWith('Event')) continue
+        if (dialect === pgDdl && (name.endsWith('Event') || name === 'reorderColumns')) continue
         for (const sql of dialect.build({ database: 'db' }, SAMPLE_OPS[name])) {
           expect(sql).not.toMatch(/\bwe"ird`tbl\b/)
         }

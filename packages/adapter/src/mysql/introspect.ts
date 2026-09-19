@@ -49,7 +49,7 @@ export async function mysqlListTables(conn: Conn, ns: Namespace): Promise<TableI
   }))
 }
 
-const INDEX_COLUMNS = 'SELECT INDEX_NAME, NON_UNIQUE, SEQ_IN_INDEX, COLUMN_NAME, INDEX_TYPE'
+const INDEX_COLUMNS = 'SELECT INDEX_NAME, NON_UNIQUE, SEQ_IN_INDEX, COLUMN_NAME, INDEX_TYPE, SUB_PART'
 const INDEX_FROM =
   'FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY INDEX_NAME, SEQ_IN_INDEX'
 
@@ -267,8 +267,11 @@ export async function mysqlDescribeTable(
       definition: null,
       columns: [],
       type: strOrNull(row[4]),
+      lengths: {},
     }
-    entry.columns.push(row[3] === null ? `(${str(row[5])})` : str(row[3]))
+    // SUB_PART is the prefix length of a column indexed by its first N characters; EXPRESSION a functional part.
+    if (row[3] !== null && row[5] !== null) entry.lengths[str(row[3])] = num(row[5]) ?? 0
+    entry.columns.push(row[3] === null ? `(${str(row[6])})` : str(row[3]))
     indexMap.set(name, entry)
   }
   const indexes = [...indexMap.values()].sort((a, b) => (a.primary ? -1 : b.primary ? 1 : a.name.localeCompare(b.name)))

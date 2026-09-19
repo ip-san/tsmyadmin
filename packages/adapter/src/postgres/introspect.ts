@@ -222,6 +222,7 @@ export async function pgDescribeTable(conn: Conn, ns: Namespace, table: string):
     columns: list(row[4]),
     type: strOrNull(row[3]),
     predicate: strOrNull(row[5]),
+    lengths: {},
     definition: strOrNull(row[6]),
   }))
   const primaryKey = indexes.find((i) => i.primary)?.columns ?? []

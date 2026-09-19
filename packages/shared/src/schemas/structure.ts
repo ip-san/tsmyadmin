@@ -93,6 +93,8 @@ export const IndexDefSchema = z.object({
   predicate: z.string().nullable(),
   /** Complete CREATE INDEX statement as the server prints it (PostgreSQL: access method, direction, opclass, INCLUDE); null on MySQL. */
   definition: z.string().nullable(),
+  /** MySQL prefix lengths by column (`name(10)`), so an edited index keeps them. Empty on PostgreSQL. */
+  lengths: z.record(z.string(), z.number().int()).default({}),
 })
 export type IndexDef = z.infer<typeof IndexDefSchema>
 

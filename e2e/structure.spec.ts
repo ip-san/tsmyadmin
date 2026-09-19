@@ -58,7 +58,7 @@ for (const t of TARGETS) {
       await expect(fks.getByRole('row').filter({ hasText: fkName })).toHaveCount(0)
 
       // modify column: rename n → n2, BIGINT NOT NULL
-      await page.getByRole('button', { name: 'n: 変更' }).click()
+      await page.getByRole('button', { name: 'n: 変更', exact: true }).click()
       await page.getByLabel('カラム名').fill('n2')
       await page.getByLabel('型', { exact: true }).fill('BIGINT')
       await page.getByLabel('NULL を許可').uncheck()
@@ -70,13 +70,13 @@ for (const t of TARGETS) {
       // add + drop index
       await page.getByRole('button', { name: 'インデックスを追加' }).click()
       await page.getByRole('dialog').getByLabel('name', { exact: true }).check()
-      await page.getByRole('dialog').getByLabel('ユニーク').check()
+      await page.getByRole('dialog').getByLabel('種類').selectOption('unique')
       await page.getByRole('dialog').getByRole('button', { name: '次へ（SQL を確認）' }).click()
       await confirmPreview(page, /CREATE UNIQUE INDEX/)
       const indexes = page.getByRole('table', { name: 'インデックス' })
       const idxName = `idx_${table}_name`
       await expect(indexes.getByRole('row').filter({ hasText: idxName })).toContainText('はい')
-      await page.getByRole('button', { name: `${idxName}: 削除` }).click()
+      await page.getByRole('button', { name: `インデックス ${idxName}: 削除` }).click()
       await confirmPreview(page, /DROP INDEX/)
       await expect(indexes.getByRole('row').filter({ hasText: idxName })).toHaveCount(0)
 

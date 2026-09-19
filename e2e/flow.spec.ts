@@ -214,7 +214,7 @@ for (const t of TARGETS) {
       await expect(columns.getByRole('row').filter({ hasText: 'user_id' })).toBeVisible()
       const pkRow = columns.getByRole('row').filter({ hasText: '主キー' })
       await expect(pkRow).toHaveCount(1)
-      await expect(pkRow.getByRole('cell').nth(1)).toHaveText(/^id/)
+      await expect(pkRow.getByRole('cell').nth(2)).toHaveText(/^id/)
       const fks = page.getByRole('table', { name: '外部キー' })
       await expect(fks.getByRole('row').filter({ hasText: 'fk_posts_user' })).toContainText('CASCADE')
     })
