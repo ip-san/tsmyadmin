@@ -160,6 +160,23 @@ const SAMPLE_OPS: Record<DdlOp['op'], DdlOp> = {
   },
   replaceInColumn: { op: 'replaceInColumn', table: 'users', column: 'na`me"', find: "it's", replace: '%_\\' },
   moveTable: { op: 'moveTable', table: 'we"ird`tbl', to: 'arch`ive"' },
+  splitTable: {
+    op: 'splitTable',
+    table: 'orders',
+    newName: 'we"ird`cust',
+    keyColumns: ['customer_id'],
+    columns: ['customer_name', 'customer_city'],
+    dropMoved: true,
+  },
+  moveRepeatingGroup: {
+    op: 'moveRepeatingGroup',
+    table: 'contacts',
+    newName: 'contact_phones',
+    keyColumns: ['id'],
+    columns: ['phone1', 'phone2'],
+    valueColumn: 'phone',
+    dropMoved: false,
+  },
   createView: { op: 'createView', name: 'v`w"x', select: 'SELECT id, name FROM users WHERE id > 1;', orReplace: true },
   dropRoutine: { op: 'dropRoutine', kind: 'function', name: 'f`n"x', parameters: 'IN a integer, b text' },
   alterRoutine: {

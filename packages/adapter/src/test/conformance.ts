@@ -3310,6 +3310,76 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         }
       })
 
+      it('normalizes: splits a table on a dependency (refusing one the rows break) and turns a repeating group into rows', async () => {
+        const orders = `${scratch}_nord`
+        const customers = `${scratch}_ncust`
+        const bad = `${scratch}_nbad`
+        const badCustomers = `${scratch}_nbadc`
+        const contacts = `${scratch}_ncon`
+        const phones = `${scratch}_nph`
+        const count = async (table: string) => Number(await firstValue(`SELECT COUNT(*) FROM ${table}`))
+        try {
+          await execOk(
+            `CREATE TABLE ${orders} (id INT PRIMARY KEY, customer_id INT, customer_name VARCHAR(20), customer_city VARCHAR(20))`
+          )
+          await execOk(
+            `INSERT INTO ${orders} VALUES (1, 10, 'Ann', 'Oslo'), (2, 10, 'Ann', 'Oslo'), (3, 11, 'Bob', 'Rome'), (4, NULL, 'Zed', 'Nice')`
+          )
+          await runScript({
+            op: 'splitTable',
+            table: orders,
+            newName: customers,
+            keyColumns: ['customer_id'],
+            columns: ['customer_name', 'customer_city'],
+            dropMoved: true,
+          })
+          // One row per distinct key (a row without a key has nowhere to go), keyed by it, and the original points at it.
+          expect(await count(customers)).toBe(2)
+          expect((await db.describeTable(ns, customers)).primaryKey).toEqual(['customer_id'])
+          const kept = await db.describeTable(ns, orders)
+          expect(kept.columns.map((c) => c.name)).toEqual(['id', 'customer_id'])
+          expect(kept.foreignKeys.map((f) => f.refTable)).toEqual([customers])
+          expect(await count(orders)).toBe(4)
+
+          // The same key with two different values: the primary key of the new table is what refuses it, and the
+          // original keeps its columns because the statements after the failure never run.
+          await execOk(`CREATE TABLE ${bad} (id INT PRIMARY KEY, k INT, v VARCHAR(20))`)
+          await execOk(`INSERT INTO ${bad} VALUES (1, 10, 'Ann'), (2, 10, 'Anna')`)
+          const statements = db.ddl.build(ns, {
+            op: 'splitTable',
+            table: bad,
+            newName: badCustomers,
+            keyColumns: ['k'],
+            columns: ['v'],
+            dropMoved: true,
+          })
+          await execOk(statements[0] ?? '')
+          const refused = await exec(statements[1] ?? '', { stopOnError: false })
+          expect(refused[0]).toMatchObject({ kind: 'error' })
+          expect((await db.describeTable(ns, bad)).columns.map((c) => c.name)).toEqual(['id', 'k', 'v'])
+
+          await execOk(`CREATE TABLE ${contacts} (id INT PRIMARY KEY, phone1 VARCHAR(20), phone2 VARCHAR(20))`)
+          await execOk(`INSERT INTO ${contacts} VALUES (1, 'a', 'b'), (2, 'c', NULL)`)
+          await runScript({
+            op: 'moveRepeatingGroup',
+            table: contacts,
+            newName: phones,
+            keyColumns: ['id'],
+            columns: ['phone1', 'phone2'],
+            valueColumn: 'phone',
+            dropMoved: true,
+          })
+          expect(await count(phones)).toBe(3)
+          expect((await db.describeTable(ns, phones)).columns.map((c) => c.name)).toEqual(['id', 'phone'])
+          expect((await db.describeTable(ns, phones)).foreignKeys.map((f) => f.refTable)).toEqual([contacts])
+          expect((await db.describeTable(ns, contacts)).columns.map((c) => c.name)).toEqual(['id'])
+        } finally {
+          // Referencing tables first.
+          for (const table of [phones, contacts, badCustomers, bad, orders, customers])
+            await exec(`DROP TABLE IF EXISTS ${table}`, { stopOnError: false })
+        }
+      })
+
       it('moves a table, rows and all, to another database (MySQL) or schema (PostgreSQL)', async () => {
         const t = `${scratch}_mv`
         const target = dialect === 'mysql' ? ctx.otherDatabase : `${scratch}_sch`

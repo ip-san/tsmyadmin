@@ -1,4 +1,4 @@
-<!-- translated-from: docs/user-guide.md sha256:e520a654156f0b8a4f966e3b9c98bb340964108f33534c43f3f8f24ec9046ed7 -->
+<!-- translated-from: docs/user-guide.md sha256:a1dfdfeedc47de0a65a0d5631f4e791fd24f87ae4a389ba4b01b4c5d14b53c82 -->
 
 # User guide
 
@@ -123,7 +123,7 @@ On PostgreSQL, **idle** tsmyadmin connections to that database under the same da
 - **Space and row statistics**: data, index, free (MySQL; reclaimed by OPTIMIZE) and TOAST (PostgreSQL) space, the estimated row count, the average row size, the row format and creation / update times (MySQL), dead rows and the last VACUUM / ANALYZE (PostgreSQL), all from the server's catalog. **Print this structure** prints the structure without the header and sidebar
 - Every change goes **preview of the generated SQL → Run**. An operation that cannot be undone (TRUNCATE, DROP …) also asks you to retype the object's name
 - **Display transformations** change how a column shows in Browse (a binary value as its image, a value as a link, JSON indented); the stored value is unchanged. Links are http / https only; put `{value}` in **Link to** and the value goes in URL-encoded. They are kept where saved queries are
-- **Normalization hints** below lists what in the definition and the first 500 rows looks like a break of the first to third normal forms (no primary key, numbered columns, several values joined in one, a reference with no foreign key, a column decided by part of the key or by a non-key column). Dependencies read from values are estimates, and the table is not changed
+- **Normalization hints** below lists what in the definition and the first 500 rows looks like a break of the first to third normal forms (no primary key, numbered columns, several values joined in one, a reference with no foreign key, a column decided by part of the key or by a non-key column). Dependencies read from values are estimates, and listing them changes nothing. Columns decided by a non-key column or part of the key, and numbered repeating columns (when there is a primary key), come with **Move into a new table…**: choose the new table's name, the columns to move and whether to drop them from the original, and review the SQL (the dependency is checked against every row when the new table's primary key is added; if it does not hold, that step fails and the original is unchanged)
 
 ### SQL
 

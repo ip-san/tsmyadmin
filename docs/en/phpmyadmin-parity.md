@@ -1,4 +1,4 @@
-<!-- translated-from: docs/phpmyadmin-parity.md sha256:3f55fc982414833a3274304a7eea89b30d31e8bb084c736042adbf1ae833a848 -->
+<!-- translated-from: docs/phpmyadmin-parity.md sha256:7155a7b680a43415b24dc850d50eaeb37eba8ecf5d57f883c1b91d85eee9c559 -->
 
 # Feature parity with phpMyAdmin
 
@@ -53,7 +53,7 @@ The basics (browsing and editing, structure changes, SQL, search, QBE, export / 
 | D12 | Views: OR REPLACE, ALGORITHM, DEFINER, SQL SECURITY, column names, WITH CHECK OPTION, editing a view | ✅ |
 | D13 | Designer: creating / dropping relations on the diagram, display column, saved pages, exporting the schema (SVG / PDF) | ✅ |
 | D14 | Tracking: a per-database list, recording the DDL / DML statements run | ✅ |
-| D15 | Normalization steps (as far as creating the new tables) | △ |
+| D15 | Normalization steps (as far as creating the new tables) | ✅ |
 
 ## Table
 

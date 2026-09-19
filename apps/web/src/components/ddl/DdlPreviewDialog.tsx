@@ -70,6 +70,9 @@ function lossWarning(op: DdlOp, dialect: Dialect): string | null {
       return locale.ddl.partitionLoss
     case 'copyTable':
       return op.dropExisting ? locale.ddl.copyReplaceLoss : null
+    case 'splitTable':
+    case 'moveRepeatingGroup':
+      return op.dropMoved ? locale.ddl.normalizeLoss : null
     case 'dropDatabase':
       return dialect === 'postgres'
         ? `${locale.ddl.databaseLoss} ${locale.ddl.databaseLossForce}`
@@ -93,7 +96,11 @@ export function DdlPreviewDialog({ flow, bulkConfirmName = null }: { flow: DdlFl
       flow={flow}
       title={opTitle}
       // A copy that first drops a table of the new name loses that table.
-      destructive={(op) => DESTRUCTIVE.has(op.op) || (op.op === 'copyTable' && op.dropExisting === true)}
+      destructive={(op) =>
+        DESTRUCTIVE.has(op.op) ||
+        (op.op === 'copyTable' && op.dropExisting === true) ||
+        ((op.op === 'splitTable' || op.op === 'moveRepeatingGroup') && op.dropMoved)
+      }
       confirmName={(op) => confirmName(op, bulkConfirmName)}
       lossWarning={(op) => lossWarning(op, session.dialect)}
       hint={locale.ddl.previewHint}

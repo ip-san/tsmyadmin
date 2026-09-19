@@ -6,7 +6,7 @@ function identifierLimit(dialect: Dialect): { max: number; unit: 'chars' | 'byte
   return dialect === 'mysql' ? { max: 64, unit: 'chars' } : { max: 63, unit: 'bytes' }
 }
 
-const NAME_KEYS = new Set(['name', 'newName', 'table', 'database', 'schema', 'refTable', 'user'])
+const NAME_KEYS = new Set(['name', 'newName', 'table', 'database', 'schema', 'refTable', 'user', 'valueColumn'])
 /** MySQL account names are shorter than other identifiers (the host part may be 255). */
 const MYSQL_USER_MAX = 32
 const encoder = new TextEncoder()
@@ -27,7 +27,7 @@ export function tooLongIdentifier(op: unknown, dialect: Dialect): { name: string
     }
     if (Array.isArray(value)) {
       for (const v of value) {
-        const hit = visit(v, key === 'columns' || key === 'refColumns' ? 'name' : null)
+        const hit = visit(v, key === 'columns' || key === 'refColumns' || key === 'keyColumns' ? 'name' : null)
         if (hit) return hit
       }
       return null

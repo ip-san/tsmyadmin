@@ -1,6 +1,6 @@
 import type { Cell, TableSchema } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
-import { normalizationHints } from './normalization.ts'
+import { type Hint, normalizationHints, proposals } from './normalization.ts'
 
 function table(columns: [string, string][], extra: Partial<TableSchema> = {}): TableSchema {
   return {
@@ -125,5 +125,28 @@ describe('normalization hints', () => {
     expect(normalizationHints(flags, [], { columns: ['id', 'is_admin', 'theme'], rows: flagRows })).toEqual([])
     // Too few rows: nothing is read from the values.
     expect(kinds(normalizationHints(t, [], { columns, rows: rows.slice(0, 10) }))).toEqual([])
+  })
+})
+
+describe('proposals', () => {
+  it('gathers the columns one key decides into a single table, and turns a numbered group into rows', () => {
+    const hints: Hint[] = [
+      { kind: 'transitiveDependency', from: 'city', column: 'country' },
+      { kind: 'transitiveDependency', from: 'city', column: 'region' },
+      { kind: 'partialDependency', key: 'order_id', column: 'customer' },
+      { kind: 'repeatingGroup', columns: ['phone_1', 'phone_2'] },
+      { kind: 'noPrimaryKey' },
+    ]
+    const schema = table([['id', 'int']])
+    expect(proposals(hints, schema)).toEqual([
+      { kind: 'split', level: '3', keyColumns: ['city'], columns: ['country', 'region'] },
+      { kind: 'split', level: '2', keyColumns: ['order_id'], columns: ['customer'] },
+      { kind: 'group', stem: 'phone', columns: ['phone_1', 'phone_2'] },
+    ])
+  })
+
+  it('offers no group without a primary key to point back at', () => {
+    const hints: Hint[] = [{ kind: 'repeatingGroup', columns: ['a1', 'a2'] }]
+    expect(proposals(hints, table([['a1', 'int']], { primaryKey: [] }))).toEqual([])
   })
 })

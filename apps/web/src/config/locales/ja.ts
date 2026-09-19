@@ -620,6 +620,8 @@ export const ja = {
   },
   ddl: {
     titles: {
+      splitTable: 'テーブルを分ける',
+      moveRepeatingGroup: '繰り返しのカラムを行にする',
       dropRoutine: 'ルーチンを削除',
       alterRoutine: 'ルーチンの特性を変更',
       dropTrigger: 'トリガーを削除',
@@ -679,6 +681,8 @@ export const ja = {
     /** Appended to `irreversible` for the ops that destroy stored data (not for dropping an index / key / account). */
     dataLoss: 'テーブルのデータは失われます。',
     columnLoss: 'このカラムのデータは失われます。',
+    normalizeLoss:
+      '移したカラムは元のテーブルから削除されます。値は新しいテーブルにコピーされてから削除されますが、途中で失敗した場合はそこで止まります。',
     partitionLoss: 'このパーティションの行は失われます。',
     copyReplaceLoss: 'コピー先に同じ名前のテーブルがあれば、その中身ごと削除されます。',
     databaseLoss: 'データベース内のすべてのテーブルとデータが失われます。',
@@ -1364,7 +1368,7 @@ export const ja = {
   },
   normalize: {
     title: '正規化の手がかり',
-    hint: 'テーブルの定義と先頭の行から、第 1〜第 3 正規形に反していそうな箇所を挙げます。提案だけで、テーブルは変更しません。',
+    hint: 'テーブルの定義と先頭の行から、第 1〜第 3 正規形に反していそうな箇所を挙げます。挙げるだけでは、テーブルは変更しません。',
     sampled: (n: number) =>
       `先頭 ${n.toLocaleString('ja-JP')} 行から推定しています。行の値から読んだ依存関係は、たまたまそう見えるだけのこともあります。`,
     smallSample: (n: number, min: number) =>
@@ -1380,6 +1384,21 @@ export const ja = {
       `${column} は ${table} を指しているように見えますが、外部キーがありません。外部キーを付けると、存在しない行を参照できなくなります。`,
     partialDependency: (key: string, column: string) =>
       `${column} は主キーの一部 ${key} だけで決まっているようです。${key} ごとの別テーブルに移すと、同じ値の重複がなくなります。`,
+    actions: {
+      title: '新しいテーブルに分ける',
+      make: '新しいテーブルに分ける…',
+      splitLabel: (key: string, columns: string) => `${columns} を ${key} をキーにしたテーブルへ`,
+      groupLabel: (columns: string) => `${columns} を 1 行ずつのテーブルへ`,
+      formLabel: (table: string) => `${table} を分ける`,
+      splitHint: (key: string) =>
+        `${key} の値ごとに 1 行の新しいテーブル（主キーは ${key}）を作り、選んだカラムの値をコピーして、元のテーブルから ${key} で参照します。同じ ${key} に別の値がある行が実際にあると、主キーの追加で失敗します（元のテーブルは変わりません。作りかけの新しいテーブルは削除してください）。`,
+      groupHint:
+        '選んだカラムを、元の主キーと 1 つの値のカラムを持つ新しいテーブルの行にします（NULL は行になりません）。元のテーブルを参照する外部キーも付きます。',
+      newTable: '新しいテーブル名',
+      valueColumn: '値のカラム名',
+      columns: '移すカラム',
+      dropMoved: '移したあと、元のテーブルからこのカラムを削除する',
+    },
     transitiveDependency: (from: string, column: string) =>
       `${column} は主キーではない ${from} で決まっているようです。${from} をキーにした別テーブルに移すと、更新漏れによる食い違いを防げます。`,
   },

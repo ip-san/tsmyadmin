@@ -222,6 +222,13 @@ exports[`DDL builders > mysql: modifyColumns 1`] = `
 ]
 `;
 
+exports[`DDL builders > mysql: moveRepeatingGroup 1`] = `
+[
+  "CREATE TABLE \`db\`.\`contact_phones\` AS SELECT \`id\`, \`phone1\` AS \`phone\` FROM \`db\`.\`contacts\` WHERE \`phone1\` IS NOT NULL UNION ALL SELECT \`id\`, \`phone2\` AS \`phone\` FROM \`db\`.\`contacts\` WHERE \`phone2\` IS NOT NULL",
+  "ALTER TABLE \`db\`.\`contact_phones\` ADD CONSTRAINT \`fk_contact_phones_contacts\` FOREIGN KEY (\`id\`) REFERENCES \`db\`.\`contacts\` (\`id\`)",
+]
+`;
+
 exports[`DDL builders > mysql: moveTable 1`] = `
 [
   "RENAME TABLE \`db\`.\`we"ird\`\`tbl\` TO \`arch\`\`ive"\`.\`we"ird\`\`tbl\`",
@@ -302,6 +309,15 @@ exports[`DDL builders > mysql: setPrimaryKey 1`] = `
 exports[`DDL builders > mysql: setTableOptions 1`] = `
 [
   "ALTER TABLE \`db\`.\`t\` COMMENT = 'it''s'",
+]
+`;
+
+exports[`DDL builders > mysql: splitTable 1`] = `
+[
+  "CREATE TABLE \`db\`.\`we"ird\`\`cust\` AS SELECT DISTINCT \`customer_id\`, \`customer_name\`, \`customer_city\` FROM \`db\`.\`orders\` WHERE \`customer_id\` IS NOT NULL",
+  "ALTER TABLE \`db\`.\`we"ird\`\`cust\` ADD PRIMARY KEY (\`customer_id\`)",
+  "ALTER TABLE \`db\`.\`orders\` ADD CONSTRAINT \`fk_orders_we"ird\`\`cust\` FOREIGN KEY (\`customer_id\`) REFERENCES \`db\`.\`we"ird\`\`cust\` (\`customer_id\`)",
+  "ALTER TABLE \`db\`.\`orders\` DROP COLUMN \`customer_name\`, DROP COLUMN \`customer_city\`",
 ]
 `;
 
@@ -555,6 +571,14 @@ exports[`DDL builders > postgres: modifyColumns 1`] = `
 ]
 `;
 
+exports[`DDL builders > postgres: moveRepeatingGroup 1`] = `
+[
+  "CREATE TABLE "app"."contact_phones" AS SELECT "id", "phone1" AS "phone" FROM "app"."contacts" WHERE "phone1" IS NOT NULL UNION ALL SELECT "id", "phone2" AS "phone" FROM "app"."contacts" WHERE "phone2" IS NOT NULL",
+  "CREATE INDEX "contact_phones_id_idx" ON "app"."contact_phones" ("id")",
+  "ALTER TABLE "app"."contact_phones" ADD CONSTRAINT "fk_contact_phones_contacts" FOREIGN KEY ("id") REFERENCES "app"."contacts" ("id")",
+]
+`;
+
 exports[`DDL builders > postgres: moveTable 1`] = `
 [
   "ALTER TABLE "app"."we""ird\`tbl" SET SCHEMA "arch\`ive"""",
@@ -616,6 +640,15 @@ exports[`DDL builders > postgres: setPrimaryKey 1`] = `
 exports[`DDL builders > postgres: setTableOptions 1`] = `
 [
   "COMMENT ON TABLE "app"."t" IS 'it''s'",
+]
+`;
+
+exports[`DDL builders > postgres: splitTable 1`] = `
+[
+  "CREATE TABLE "app"."we""ird\`cust" AS SELECT DISTINCT "customer_id", "customer_name", "customer_city" FROM "app"."orders" WHERE "customer_id" IS NOT NULL",
+  "ALTER TABLE "app"."we""ird\`cust" ADD PRIMARY KEY ("customer_id")",
+  "ALTER TABLE "app"."orders" ADD CONSTRAINT "fk_orders_we""ird\`cust" FOREIGN KEY ("customer_id") REFERENCES "app"."we""ird\`cust" ("customer_id")",
+  "ALTER TABLE "app"."orders" DROP COLUMN "customer_name", DROP COLUMN "customer_city"",
 ]
 `;
 

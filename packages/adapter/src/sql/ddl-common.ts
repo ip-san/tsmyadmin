@@ -96,3 +96,65 @@ export function mysqlAddIndexClause(i: IndexSpec, primary: boolean): string {
     ? `ADD PRIMARY KEY (${columns})`
     : `ADD ${keyword}INDEX ${quoteIdent('mysql', i.name)} (${columns})${method}`
 }
+
+type SplitTable = Extract<DdlOp, { op: 'splitTable' }>
+type MoveRepeatingGroup = Extract<DdlOp, { op: 'moveRepeatingGroup' }>
+
+/** A constraint name for the key a normalization adds, kept within both servers' identifier limits. */
+const linkName = (table: string, other: string) => `fk_${table}_${other}`.slice(0, 60)
+
+const dropColumnsSql = (dialect: Dialect, ns: Namespace, table: string, columns: readonly string[]) =>
+  `ALTER TABLE ${quoteTable(dialect, ns, table)} ${columns.map((c) => `DROP COLUMN ${quoteIdent(dialect, c)}`).join(', ')}`
+
+/**
+ * `CREATE TABLE … AS SELECT DISTINCT key, moved FROM t`, then the primary key on the new table (which is where a
+ * dependency the rows do not follow is caught), then the foreign key from the original, then the drop.
+ */
+export function splitTableSql(dialect: Dialect, ns: Namespace, op: SplitTable): string[] {
+  const id = (s: string) => quoteIdent(dialect, s)
+  const from = quoteTable(dialect, ns, op.table)
+  const into = quoteTable(dialect, ns, op.newName)
+  const keys = op.keyColumns.map(id).join(', ')
+  const notNull = op.keyColumns.map((c) => `${id(c)} IS NOT NULL`).join(' AND ')
+  return [
+    `CREATE TABLE ${into} AS SELECT DISTINCT ${[...op.keyColumns, ...op.columns].map(id).join(', ')} FROM ${from} WHERE ${notNull}`,
+    `ALTER TABLE ${into} ADD PRIMARY KEY (${keys})`,
+    addForeignKeySql(dialect, ns, {
+      op: 'addForeignKey',
+      table: op.table,
+      name: linkName(op.table, op.newName),
+      columns: op.keyColumns,
+      refTable: op.newName,
+      refColumns: op.keyColumns,
+    }),
+    ...(op.dropMoved ? [dropColumnsSql(dialect, ns, op.table, op.columns)] : []),
+  ]
+}
+
+/** The group's columns as rows: one `SELECT key, column AS value … WHERE column IS NOT NULL` per column, joined. */
+export function moveRepeatingGroupSql(dialect: Dialect, ns: Namespace, op: MoveRepeatingGroup): string[] {
+  const id = (s: string) => quoteIdent(dialect, s)
+  const from = quoteTable(dialect, ns, op.table)
+  const into = quoteTable(dialect, ns, op.newName)
+  const keys = op.keyColumns.map(id).join(', ')
+  const rows = op.columns.map(
+    (c) => `SELECT ${keys}, ${id(c)} AS ${id(op.valueColumn)} FROM ${from} WHERE ${id(c)} IS NOT NULL`
+  )
+  return [
+    `CREATE TABLE ${into} AS ${rows.join(' UNION ALL ')}`,
+    // MySQL indexes the referencing columns itself when the key is added; PostgreSQL does not, and the lookup
+    // from the original's row to its values is what this table is for.
+    ...(dialect === 'postgres'
+      ? [`CREATE INDEX ${id(`${op.newName}_${op.keyColumns.join('_')}_idx`.slice(0, 60))} ON ${into} (${keys})`]
+      : []),
+    addForeignKeySql(dialect, ns, {
+      op: 'addForeignKey',
+      table: op.newName,
+      name: linkName(op.newName, op.table),
+      columns: op.keyColumns,
+      refTable: op.table,
+      refColumns: op.keyColumns,
+    }),
+    ...(op.dropMoved ? [dropColumnsSql(dialect, ns, op.table, op.columns)] : []),
+  ]
+}

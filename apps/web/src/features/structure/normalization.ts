@@ -143,3 +143,39 @@ export function normalizationHints(schema: TableSchema, tables: string[], sample
   if (sample) hints.push(...dependencies(schema, sample))
   return hints
 }
+
+/**
+ * A hint that can be acted on by making a new table: columns that depend on a key other than the table's own
+ * (`split`, second and third normal form: they move to a table keyed by it) or numbered copies of one value
+ * (`group`, first normal form: they become rows).
+ */
+export type Proposal =
+  | { kind: 'split'; level: '2' | '3'; keyColumns: string[]; columns: string[] }
+  | { kind: 'group'; stem: string; columns: string[] }
+
+/** The dependencies grouped by what decides them, and the repeating groups a primary key lets us point back at. */
+export function proposals(hints: readonly Hint[], schema: TableSchema): Proposal[] {
+  const out: Proposal[] = []
+  const bucket = new Map<string, Extract<Proposal, { kind: 'split' }>>()
+  for (const h of hints) {
+    if (h.kind === 'partialDependency' || h.kind === 'transitiveDependency') {
+      const key = h.kind === 'partialDependency' ? h.key : h.from
+      const id = `${h.kind}:${key}`
+      const found = bucket.get(id)
+      if (found) found.columns.push(h.column)
+      else {
+        const next: Extract<Proposal, { kind: 'split' }> = {
+          kind: 'split',
+          level: h.kind === 'partialDependency' ? '2' : '3',
+          keyColumns: [key],
+          columns: [h.column],
+        }
+        bucket.set(id, next)
+        out.push(next)
+      }
+    } else if (h.kind === 'repeatingGroup' && schema.primaryKey.length > 0) {
+      out.push({ kind: 'group', stem: (h.columns[0] ?? '').replace(/_?\d+$/, ''), columns: h.columns })
+    }
+  }
+  return out
+}

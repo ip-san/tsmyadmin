@@ -1,5 +1,12 @@
 import type { ColumnSpec, DdlOp, Namespace } from '@tsmyadmin/shared'
-import { addForeignKeySql, columnKeySql, createIndexSql, mysqlAddIndexClause } from '../sql/ddl-common.ts'
+import {
+  addForeignKeySql,
+  columnKeySql,
+  createIndexSql,
+  moveRepeatingGroupSql,
+  mysqlAddIndexClause,
+  splitTableSql,
+} from '../sql/ddl-common.ts'
 import { mysqlLiteral } from '../sql/literal.ts'
 import { quoteIdent, quoteTable } from '../sql/quote.ts'
 import { AdapterError, type DdlBuilder } from '../types.ts'
@@ -203,6 +210,10 @@ export const mysqlDdl: DdlBuilder = {
         const changes = `CAST(${replaced} AS BINARY) <> CAST(${c} AS BINARY)`
         return [`UPDATE ${quoteTable('mysql', ns, op.table)} SET ${c} = ${replaced} WHERE ${changes}`]
       }
+      case 'splitTable':
+        return splitTableSql('mysql', ns, op)
+      case 'moveRepeatingGroup':
+        return moveRepeatingGroupSql('mysql', ns, op)
       case 'moveTable':
         return [
           `RENAME TABLE ${quoteTable('mysql', ns, op.table)} TO ${quoteTable('mysql', { database: op.to }, op.table)}`,

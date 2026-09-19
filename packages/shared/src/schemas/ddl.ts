@@ -365,6 +365,33 @@ export const DdlOpSchema = z.discriminatedUnion('op', [
     /** Foreign keys to add to the copy (LIKE copies none); named for the copy by the caller. */
     foreignKeys: z.array(ForeignKeyShape).max(100).optional(),
   }),
+  /**
+   * Normalization: moves the columns that depend on `keyColumns` into a new table keyed by them (one row per
+   * distinct value), points the original at it with a foreign key, and optionally drops the moved columns. The
+   * new table's primary key is added after the rows are copied, so a dependency the data does not follow is
+   * refused by the server instead of silently losing values.
+   */
+  z.object({
+    op: z.literal('splitTable'),
+    table,
+    newName: z.string().min(1),
+    keyColumns: z.array(z.string().min(1)).min(1).max(16),
+    columns: z.array(z.string().min(1)).min(1).max(200),
+    dropMoved: z.boolean().default(false),
+  }),
+  /**
+   * Normalization: a group of numbered columns (`phone1`, `phone2`) becomes rows of a new table — the original's
+   * primary key plus one value column — that points back at the original, and the group may then be dropped.
+   */
+  z.object({
+    op: z.literal('moveRepeatingGroup'),
+    table,
+    newName: z.string().min(1),
+    keyColumns: z.array(z.string().min(1)).min(1).max(16),
+    columns: z.array(z.string().min(1)).min(2).max(200),
+    valueColumn: z.string().min(1),
+    dropMoved: z.boolean().default(false),
+  }),
   /** Table-level options; engine / collation / autoIncrement are MySQL-only (PostgreSQL: UNSUPPORTED). */
   z.object({
     op: z.literal('setTableOptions'),

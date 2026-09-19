@@ -626,6 +626,8 @@ export const en = {
   },
   ddl: {
     titles: {
+      splitTable: 'Split the table',
+      moveRepeatingGroup: 'Turn repeating columns into rows',
       dropRoutine: 'Drop the routine',
       alterRoutine: "Change the routine's characteristics",
       dropTrigger: 'Drop the trigger',
@@ -685,6 +687,8 @@ export const en = {
     /** Appended to `irreversible` for the ops that destroy stored data (not for dropping an index / key / account). */
     dataLoss: 'The table data is lost.',
     columnLoss: 'The data in this column is lost.',
+    normalizeLoss:
+      'The moved columns are dropped from the original table. Their values are copied into the new table first; if a statement fails, the rest do not run.',
     partitionLoss: "This partition's rows are lost.",
     copyReplaceLoss: 'A table of that name where the copy goes is dropped, with its rows.',
     databaseLoss: 'Every table in the database, and its data, is lost.',
@@ -1385,7 +1389,7 @@ export const en = {
   },
   normalize: {
     title: 'Normalization hints',
-    hint: 'Points out what in the table definition and its first rows looks like a break of the first to third normal forms. Suggestions only: the table is not changed.',
+    hint: 'Points out what in the table definition and its first rows looks like a break of the first to third normal forms. Listing them changes nothing.',
     sampled: (n: number) =>
       `Read from the first ${plural(n, 'row', 'rows')}. A dependency read from values may only happen to hold in them.`,
     smallSample: (n: number, min: number) =>
@@ -1402,6 +1406,21 @@ export const en = {
       `${column} looks like it points at ${table}, but there is no foreign key. With one, it cannot refer to a row that does not exist.`,
     partialDependency: (key: string, column: string) =>
       `${column} seems to be decided by ${key}, only part of the primary key. Moving it to a table keyed by ${key} removes the repeated values.`,
+    actions: {
+      title: 'Move into a new table',
+      make: 'Move into a new table…',
+      splitLabel: (key: string, columns: string) => `${columns} into a table keyed by ${key}`,
+      groupLabel: (columns: string) => `${columns} into a table with one row each`,
+      formLabel: (table: string) => `Split ${table}`,
+      splitHint: (key: string) =>
+        `Makes a new table with one row per value of ${key} (its primary key), copies the chosen columns' values into it, and points the original at it by ${key}. If some rows really do have different values for the same ${key}, adding the primary key fails (the original is left as it was; drop the half-made new table).`,
+      groupHint:
+        'Turns the chosen columns into rows of a new table holding the original primary key and one value column (NULLs make no row). A foreign key back to the original is added.',
+      newTable: 'New table name',
+      valueColumn: 'Value column name',
+      columns: 'Columns to move',
+      dropMoved: 'After moving, drop these columns from the original table',
+    },
     transitiveDependency: (from: string, column: string) =>
       `${column} seems to be decided by ${from}, which is not the primary key. Moving it to a table keyed by ${from} stops copies from drifting apart.`,
   },

@@ -1,6 +1,12 @@
 import type { ColumnSpec, DdlOp, Namespace, TableSchema } from '@tsmyadmin/shared'
 import { type Conn, firstResult } from '../base.ts'
-import { addForeignKeySql, columnKeySql, createIndexSql } from '../sql/ddl-common.ts'
+import {
+  addForeignKeySql,
+  columnKeySql,
+  createIndexSql,
+  moveRepeatingGroupSql,
+  splitTableSql,
+} from '../sql/ddl-common.ts'
 import { pgAdvanceSequence } from '../sql/export.ts'
 import { pgLiteral } from '../sql/literal.ts'
 import { OPTIONS_SEQUENCE_OF_COLUMN } from '../sql/pg-sequence.ts'
@@ -147,6 +153,10 @@ export const pgDdl: DdlBuilder = {
           `UPDATE ${quoteTable('postgres', ns, op.table)} SET ${c} = ${replaced} WHERE ${replaced} IS DISTINCT FROM ${c}`,
         ]
       }
+      case 'splitTable':
+        return splitTableSql('postgres', ns, op)
+      case 'moveRepeatingGroup':
+        return moveRepeatingGroupSql('postgres', ns, op)
       case 'moveTable':
         return [`ALTER TABLE ${quoteTable('postgres', ns, op.table)} SET SCHEMA ${id(op.to)}`]
       case 'createView': {

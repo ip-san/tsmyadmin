@@ -4,7 +4,8 @@ import { useState } from 'react'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { locale } from '@/config/locale.ts'
 import { rowsQuery, type TableRef, tablesQuery } from '@/lib/queries.ts'
-import { type Hint, MIN_SAMPLE, normalizationHints } from './normalization.ts'
+import { NormalizeActions } from './NormalizeActions.tsx'
+import { type Hint, MIN_SAMPLE, normalizationHints, proposals } from './normalization.ts'
 
 const t = locale.normalize
 const SAMPLE_ROWS = 500
@@ -65,6 +66,7 @@ function Hints({ tableRef, schema }: { tableRef: TableRef; schema: TableSchema }
           ))}
         </ul>
       )}
+      <NormalizeActions tableRef={tableRef} schema={schema} proposals={proposals(hints, schema)} />
     </div>
   )
 }
