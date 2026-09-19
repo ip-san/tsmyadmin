@@ -1,7 +1,17 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link, useRouterState } from '@tanstack/react-router'
 import type { SessionInfo } from '@tsmyadmin/shared'
-import { CircleHelp, LogOut, Moon, PanelLeftClose, PanelLeftOpen, SquareTerminal, Sun, X } from 'lucide-react'
+import {
+  CircleHelp,
+  LogOut,
+  Moon,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Settings as SettingsIcon,
+  SquareTerminal,
+  Sun,
+  X,
+} from 'lucide-react'
 import { type ReactNode, useState } from 'react'
 import { z } from 'zod'
 import { LOCALE_CODES, LOCALE_NAMES, type LocaleCode, locale, localeCode, setLocale } from '@/config/locale.ts'
@@ -114,6 +124,13 @@ export function AppShell({
               {locale.dock.toggle}
             </Button>
           ) : null}
+          <Link
+            to="/settings"
+            className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-ink hover:bg-surface-sub"
+          >
+            <SettingsIcon className="size-4" aria-hidden />
+            {locale.settings.title}
+          </Link>
           <ShortcutHelp />
           {/* Switching reloads the page: every string is read once at load, so a live swap would leave half the
               screen in the other language. */}

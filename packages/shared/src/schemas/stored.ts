@@ -1,5 +1,7 @@
 import { z } from 'zod'
 import { BROWSE_MAX_LIMIT } from './browse.ts'
+import { ExportOptionsSchema } from './export.ts'
+import { ImportDefaultsSchema } from './import.ts'
 
 /**
  * Things an account keeps on the server (when the session store is persistent), besides bookmarks and export
@@ -16,8 +18,34 @@ export const PreferencesSchema = z.object({
   browseLimit: z.number().int().min(1).max(BROWSE_MAX_LIMIT).optional(),
   sqlSafeMode: z.boolean().optional(),
   consoleDocked: z.boolean().optional(),
+  /** Statements the SQL console remembers per server. */
+  sqlHistoryMax: z.number().int().min(10).max(1000).optional(),
+  /** The sidebar groups tables whose names start alike up to this separator ('' is off). */
+  navGroupDelimiter: z.string().max(3).optional(),
+  /** Tables (or groups) the sidebar shows at once before offering the rest on demand; 0 shows everything. */
+  navPageSize: z.number().int().min(0).max(1000).optional(),
+  /** Names of databases the sidebar leaves out (they stay reachable from the server's database list). */
+  navHidden: z.array(z.string().min(1).max(256)).max(500).optional(),
+  exportDefaults: ExportOptionsSchema.optional(),
+  importDefaults: ImportDefaultsSchema.optional(),
 })
 export type Preferences = z.infer<typeof PreferencesSchema>
+
+/** A change to the preferences: a `null` removes that one (back to "this browser's own"). */
+export const PreferencesUpdateSchema = z.object({
+  theme: PreferencesSchema.shape.theme.unwrap().nullable().optional(),
+  locale: PreferencesSchema.shape.locale.unwrap().nullable().optional(),
+  browseLimit: PreferencesSchema.shape.browseLimit.unwrap().nullable().optional(),
+  sqlSafeMode: PreferencesSchema.shape.sqlSafeMode.unwrap().nullable().optional(),
+  consoleDocked: PreferencesSchema.shape.consoleDocked.unwrap().nullable().optional(),
+  sqlHistoryMax: PreferencesSchema.shape.sqlHistoryMax.unwrap().nullable().optional(),
+  navGroupDelimiter: PreferencesSchema.shape.navGroupDelimiter.unwrap().nullable().optional(),
+  navPageSize: PreferencesSchema.shape.navPageSize.unwrap().nullable().optional(),
+  navHidden: PreferencesSchema.shape.navHidden.unwrap().nullable().optional(),
+  exportDefaults: PreferencesSchema.shape.exportDefaults.unwrap().nullable().optional(),
+  importDefaults: PreferencesSchema.shape.importDefaults.unwrap().nullable().optional(),
+})
+export type PreferencesUpdate = z.infer<typeof PreferencesUpdateSchema>
 
 /**
  * phpMyAdmin's central columns: column definitions kept per database for reuse when adding a column, so the

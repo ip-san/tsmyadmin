@@ -1,14 +1,15 @@
 import { useQuery } from '@tanstack/react-query'
 import { useRouteContext } from '@tanstack/react-router'
 import type { ExportOptions, ExportTemplate, ExportTemplateBody, TableInfo } from '@tsmyadmin/shared'
-import { EXPORT_TEMPLATE_MAX_TABLES, ExportOptionsSchema, SINGLE_TABLE_FORMATS } from '@tsmyadmin/shared'
+import { EXPORT_TEMPLATE_MAX_TABLES, SINGLE_TABLE_FORMATS } from '@tsmyadmin/shared'
 import { Download } from 'lucide-react'
 import { useId, useState } from 'react'
+import { CsvFields, FormatFields, OutputFields, SqlFields } from '@/components/export/ExportOptionFields.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { locale } from '@/config/locale.ts'
 import { tablesQuery } from '@/lib/queries.ts'
-import { CsvFields, FormatFields, OutputFields, SqlFields } from './ExportOptionFields.tsx'
+import { exportDefaults } from '@/lib/settings.ts'
 import { ExportTemplatesPanel } from './ExportTemplatesPanel.tsx'
 import { applyTemplate } from './export-templates.ts'
 import { exportUrl } from './export-url.ts'
@@ -30,7 +31,7 @@ export function ExportForm({ db, schema, table, initialTables }: ExportFormProps
   const dialect = session.dialect
   const tables = useQuery({ ...tablesQuery(db, schema), enabled: table === undefined })
   const [selected, setSelected] = useState<string[]>(table ? [table] : (initialTables ?? []))
-  const [options, setOptions] = useState<ExportOptions>(() => ExportOptionsSchema.parse({}))
+  const [options, setOptions] = useState<ExportOptions>(exportDefaults)
   const set = (patch: Partial<ExportOptions>) => setOptions((o) => ({ ...o, ...patch }))
   const { format } = options
   /** Tables a loaded template named that are no longer there. */

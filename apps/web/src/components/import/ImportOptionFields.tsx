@@ -2,7 +2,7 @@ import { EXPORT_CHARSETS, type ExportCharset, type ImportFormat } from '@tsmyadm
 import type { ReactNode } from 'react'
 import { Field, Input, Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
-import { type ImportOptions, isRowsFormat } from './import-options.ts'
+import { type ImportOptions, isRowsFormat } from '@/lib/import-options.ts'
 
 const t = locale.import
 
@@ -41,6 +41,7 @@ export function ImportOptionFields({
   set,
   mysql,
   canCreate,
+  defaultsOnly = false,
 }: {
   format: ImportFormat
   options: ImportOptions
@@ -48,6 +49,8 @@ export function ImportOptionFields({
   mysql: boolean
   /** A new table can be made only where no table is fixed (the database-level tab). */
   canCreate: boolean
+  /** Choosing starting values (the settings): what belongs to one file — where to start, which sheet — is left out. */
+  defaultsOnly?: boolean
 }) {
   const rows = isRowsFormat(format)
   return (
@@ -69,17 +72,19 @@ export function ImportOptionFields({
             </Select>
           </Field>
         )}
-        <Field id="import-skip" label={t.skip} hint={t.skipHint}>
-          <Input
-            id="import-skip"
-            type="number"
-            min={0}
-            value={options.skip}
-            onChange={(e) => set({ skip: Math.max(0, Math.floor(Number(e.target.value)) || 0) })}
-            className="w-32 tabular-nums"
-          />
-        </Field>
-        {format === 'ods' || format === 'xml' || format === 'mediawiki' ? (
+        {defaultsOnly ? null : (
+          <Field id="import-skip" label={t.skip} hint={t.skipHint}>
+            <Input
+              id="import-skip"
+              type="number"
+              min={0}
+              value={options.skip}
+              onChange={(e) => set({ skip: Math.max(0, Math.floor(Number(e.target.value)) || 0) })}
+              className="w-32 tabular-nums"
+            />
+          </Field>
+        )}
+        {!defaultsOnly && (format === 'ods' || format === 'xml' || format === 'mediawiki') ? (
           <Field id="import-sheet" label={t.sheet} hint={t.sheetHint}>
             <Input id="import-sheet" value={options.sheet} onChange={(e) => set({ sheet: e.target.value })} />
           </Field>
@@ -142,7 +147,7 @@ export function ImportOptionFields({
               ))}
             </Select>
           </Field>
-          {canCreate ? (
+          {canCreate && !defaultsOnly ? (
             <Check checked={options.createTable} onChange={(createTable) => set({ createTable })}>
               {t.createTable}
             </Check>
@@ -164,7 +169,7 @@ export function ImportOptionFields({
           <Check checked={options.singleTransaction} onChange={(singleTransaction) => set({ singleTransaction })}>
             {t.singleTransaction}
           </Check>
-          {mysql ? (
+          {mysql && !defaultsOnly ? (
             <Check checked={options.noAutoValueOnZero} onChange={(noAutoValueOnZero) => set({ noAutoValueOnZero })}>
               {t.noAutoValueOnZero}
             </Check>

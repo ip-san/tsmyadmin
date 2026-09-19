@@ -1,14 +1,14 @@
 import { useQuery } from '@tanstack/react-query'
 import { useRouteContext } from '@tanstack/react-router'
 import type { ExportOptions } from '@tsmyadmin/shared'
-import { ExportOptionsSchema } from '@tsmyadmin/shared'
 import { Download } from 'lucide-react'
 import { useId, useState } from 'react'
+import { OutputFields, SqlFields } from '@/components/export/ExportOptionFields.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { locale } from '@/config/locale.ts'
 import { databasesQuery, schemasQuery } from '@/lib/queries.ts'
-import { OutputFields, SqlFields } from './ExportOptionFields.tsx'
+import { exportDefaults } from '@/lib/settings.ts'
 import { serverExportUrl } from './export-url.ts'
 
 /** The URL carries every name: a few hundred databases would exceed what servers accept. */
@@ -24,7 +24,7 @@ export function ServerExportForm() {
   const listing = mysql ? databases : schemas
   const names = mysql ? (databases.data ?? []).map((d) => d.name) : (schemas.data ?? [])
   const [selected, setSelected] = useState<string[]>([])
-  const [options, setOptions] = useState<ExportOptions>(() => ExportOptionsSchema.parse({}))
+  const [options, setOptions] = useState<ExportOptions>(exportDefaults)
   const set = (patch: Partial<ExportOptions>) => setOptions((o) => ({ ...o, ...patch }))
   const chosen = selected.filter((n) => names.includes(n))
   const url = serverExportUrl(chosen, options)

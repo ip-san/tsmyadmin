@@ -6,6 +6,7 @@ import {
   columnTransformKey,
   designerPageKey,
   PreferencesSchema,
+  PreferencesUpdateSchema,
   queryTemplateKey,
   SaveDesignerPageRequestSchema,
   SavedQueryIdSchema,
@@ -102,14 +103,17 @@ export function storedRoutes(cfg: SessionConfig) {
       const prefs = PreferencesSchema.safeParse(row ? safeJson(row.body) : {})
       return c.json<Preferences>(prefs.success ? prefs.data : {})
     })
-    .put('/preferences', validate('json', PreferencesSchema), async (c) => {
+    .put('/preferences', validate('json', PreferencesUpdateSchema), async (c) => {
       const store = cfg.store.savedQueries
       if (!store) return unsupported(c)
       // Merged into what is stored rather than replacing it: two tabs each send only what they know, and the
       // theme set in one must survive the console toggled in the other.
       const row = (await list(c, 'prefs')).find((item) => item.name === PREFERENCES)
       const stored = PreferencesSchema.safeParse(row ? safeJson(row.body) : {})
-      const prefs = { ...(stored.success ? stored.data : {}), ...c.req.valid('json') }
+      const merged: Record<string, unknown> = { ...(stored.success ? stored.data : {}), ...c.req.valid('json') }
+      // A `null` in the update removes that preference.
+      for (const [name, value] of Object.entries(merged)) if (value === null) delete merged[name]
+      const prefs = PreferencesSchema.parse(merged)
       await store.save(c.get('session').config, 'prefs', PREFERENCES, JSON.stringify(prefs))
       return c.json<Preferences>(prefs)
     })

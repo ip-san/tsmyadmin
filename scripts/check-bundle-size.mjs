@@ -12,7 +12,12 @@ import { join } from 'node:path'
 import { brotliCompressSync } from 'node:zlib'
 
 const DIST = join(process.cwd(), 'apps/web/dist')
-const LIMIT_KB = 150
+/**
+ * 160: raised from 150 when the phpMyAdmin-parity work (export / import, settings, server tools) took the initial
+ * download to the old limit. Most of the growth is the language file (about a quarter of the total, one file per
+ * language because every string is read once at load); the screens themselves are route chunks and are not counted.
+ */
+const LIMIT_KB = 160
 
 let manifest
 try {

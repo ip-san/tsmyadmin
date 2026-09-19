@@ -8,6 +8,21 @@ export type ImportFormat = z.infer<typeof ImportFormatSchema>
 
 export const IMPORT_MAX_BYTES = 64 * 1024 * 1024
 
+/** The import form's starting values, as a user saved them in the settings. */
+export const ImportDefaultsSchema = z.object({
+  charset: ExportCharsetSchema.default('utf-8'),
+  onDuplicate: z.enum(['error', 'ignore', 'replace']).default('error'),
+  header: z.boolean().default(true),
+  nullMarker: z.string().max(20).default('\\N'),
+  delimiter: z.string().length(1).default(','),
+  enclosure: z.string().length(1).default('"'),
+  escape: z.string().length(1).default('"'),
+  stopOnError: z.boolean().default(true),
+  ignoreForeignKeys: z.boolean().default(false),
+  singleTransaction: z.boolean().default(false),
+})
+export type ImportDefaults = z.infer<typeof ImportDefaultsSchema>
+
 /** multipart/form-data fields of POST /databases/:db/import. */
 export const ImportFormSchema = z.object({
   file: z.instanceof(File),

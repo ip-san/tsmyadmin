@@ -4,17 +4,12 @@ import type { ImportFormat, ImportResult } from '@tsmyadmin/shared'
 import { IMPORT_MAX_BYTES, ImportFormatSchema } from '@tsmyadmin/shared'
 import { Upload } from 'lucide-react'
 import { type FormEvent, useEffect, useRef, useState } from 'react'
+import { ImportOptionFields } from '@/components/import/ImportOptionFields.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Field, Input, Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
 import { cn } from '@/lib/cn.ts'
-import { runImport } from '@/lib/import-stream.ts'
-import { mutations, tablesQuery } from '@/lib/queries.ts'
-import { newQueryId } from '@/lib/uuid.ts'
-import { FileDropZone } from './FileDropZone.tsx'
-import { ImportOptionFields } from './ImportOptionFields.tsx'
-import { ImportSummary } from './ImportSummary.tsx'
 import {
   csvCharsValid,
   DEFAULT_IMPORT_OPTIONS,
@@ -22,7 +17,13 @@ import {
   type ImportOptions,
   importFields,
   isRowsFormat,
-} from './import-options.ts'
+} from '@/lib/import-options.ts'
+import { runImport } from '@/lib/import-stream.ts'
+import { mutations, tablesQuery } from '@/lib/queries.ts'
+import { importDefaults } from '@/lib/settings.ts'
+import { newQueryId } from '@/lib/uuid.ts'
+import { FileDropZone } from './FileDropZone.tsx'
+import { ImportSummary } from './ImportSummary.tsx'
 
 export interface ImportFormProps {
   /** The database the file is loaded into; `null` runs a SQL script at the server's level (no database). */
@@ -40,7 +41,7 @@ export function ImportForm({ db, schema, table }: ImportFormProps) {
   const [file, setFile] = useState<File | null>(null)
   const [format, setFormat] = useState<ImportFormat>(table ? 'csv' : 'sql')
   const [target, setTarget] = useState(table ?? '')
-  const [options, setOptions] = useState<ImportOptions>(DEFAULT_IMPORT_OPTIONS)
+  const [options, setOptions] = useState<ImportOptions>(() => ({ ...DEFAULT_IMPORT_OPTIONS, ...importDefaults() }))
   const set = (patch: Partial<ImportOptions>) => setOptions((o) => ({ ...o, ...patch }))
   const [result, setResult] = useState<ImportResult | null>(null)
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)

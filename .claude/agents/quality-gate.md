@@ -38,7 +38,7 @@ bun run check:all
 ```bash
 bun run build && bun run size
 ```
-閾値は 150 kB（brotli）。超過時は fail。
+閾値は 160 kB（brotli）。超過時は fail。
 
 ### 4. E2E テスト（test:e2e）
 

@@ -2337,6 +2337,21 @@ describe('preferences, central columns and column transformations', () => {
         browseLimit: 25,
         consoleDocked: true,
       })
+      // The settings screen's fields are kept too, and a `null` takes one away again.
+      const settings = {
+        sqlHistoryMax: 250,
+        navGroupDelimiter: '_',
+        navHidden: ['scratch'],
+        exportDefaults: { format: 'json' },
+      }
+      await h.send('/api/preferences', 'PUT', settings)
+      const kept = (await (await h.req('/api/preferences')).json()) as Record<string, unknown>
+      expect(kept).toMatchObject({ sqlHistoryMax: 250, navGroupDelimiter: '_', navHidden: ['scratch'] })
+      expect((kept.exportDefaults as { format: string }).format).toBe('json')
+      expect((await h.send('/api/preferences', 'PUT', { navPageSize: 5000 })).status).toBe(400)
+      await h.send('/api/preferences', 'PUT', { sqlHistoryMax: null, exportDefaults: null, browseLimit: null })
+      const left = (await (await h.req('/api/preferences')).json()) as Record<string, unknown>
+      expect(Object.keys(left).sort()).toEqual(['consoleDocked', 'navGroupDelimiter', 'navHidden', 'theme'])
       // Another account has its own.
       await h.login({ ...LOGIN, user: 'reader' })
       expect(await (await h.req('/api/preferences')).json()).toEqual({})

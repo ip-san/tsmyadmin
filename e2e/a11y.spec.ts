@@ -321,9 +321,9 @@ for (const t of TARGETS) {
       await page.getByRole('radio', { name: 'SQL', exact: true }).check()
       await page.getByLabel('外部キー制約のチェックを無効にする').waitFor()
       await scan(page)
-      for (const path of ['/server-import', '/server-export']) {
+      for (const path of ['/server-import', '/server-export', '/settings']) {
         await page.goto(path)
-        await page.getByRole('heading', { level: 2 }).waitFor()
+        await page.getByRole('heading').first().waitFor()
         await scan(page)
       }
       // Central columns with one definition in the list (kept in this browser on this server).

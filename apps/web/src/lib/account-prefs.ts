@@ -11,11 +11,17 @@ import { setTheme } from '@/lib/theme.ts'
  * account's copy (kept by the server when the session store is persistent) is laid over it at login and updated
  * whenever one of these changes, so the settings follow the account to another browser.
  */
-const LOCAL: Record<Exclude<keyof Preferences, 'theme'>, { key: string }> = {
+export const LOCAL: Record<Exclude<keyof Preferences, 'theme'>, { key: string }> = {
   locale: { key: 'locale' },
   browseLimit: { key: 'browse.limit' },
   sqlSafeMode: { key: 'sql.safeMode' },
   consoleDocked: { key: 'console.docked' },
+  sqlHistoryMax: { key: 'sql.historyMax' },
+  navGroupDelimiter: { key: 'nav.groupDelimiter' },
+  navPageSize: { key: 'nav.pageSize' },
+  navHidden: { key: 'nav.hidden' },
+  exportDefaults: { key: 'export.defaults' },
+  importDefaults: { key: 'import.defaults' },
 }
 
 let syncing = false
@@ -94,4 +100,13 @@ export async function sharePreferenceNow(patch: Preferences): Promise<void> {
   if (!syncing) return
   shared = { ...shared, ...patch }
   await send()
+}
+
+/** Removes some preferences from the account (the settings page's reset), sent at once. */
+export async function clearSharedPreferences(names: (keyof Preferences)[]): Promise<void> {
+  if (!syncing) return
+  const gone = Object.fromEntries(names.map((n) => [n, null]))
+  shared = Object.fromEntries(Object.entries(shared).filter(([k]) => !names.includes(k as keyof Preferences)))
+  cancelPending()
+  await api.preferences.$put({ json: gone }, { init: { keepalive: true } }).catch(() => undefined)
 }

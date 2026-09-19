@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { clearHistory, HISTORY_LIMIT, loadHistory, pushHistory } from './history.ts'
+import { SETTING_DEFAULTS } from '@/lib/settings.ts'
+import { clearHistory, loadHistory, pushHistory } from './history.ts'
+
+const HISTORY_LIMIT = SETTING_DEFAULTS.sqlHistoryMax
 
 function memoryStorage() {
   const map = new Map<string, string>()

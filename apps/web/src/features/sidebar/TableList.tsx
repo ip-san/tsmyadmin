@@ -1,49 +1,21 @@
 import { useQuery } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { isViewKind, type TableInfo } from '@tsmyadmin/shared'
-import { Eye, ListOrdered, Table2 } from 'lucide-react'
+import type { TableInfo } from '@tsmyadmin/shared'
 import { useDeferredValue, useLayoutEffect, useRef, useState } from 'react'
 import { ErrorBox, Spinner } from '@/components/ui/Feedback.tsx'
 import { locale } from '@/config/locale.ts'
 import { tablesQuery } from '@/lib/queries.ts'
+import { resolveSettings } from '@/lib/settings.ts'
+import { groupTables, pageEntries } from './nav-groups.ts'
+import { TableGroup } from './TableGroup.tsx'
+import { ROW_HEIGHT, TableLink } from './TableLink.tsx'
 
-const ROW_HEIGHT = 26
 /** Below this many rows plain rendering is cheaper than a virtualizer. */
 const VIRTUALIZE_FROM = 60
 
 export function filterTables(tables: TableInfo[], filter: string): TableInfo[] {
   const q = filter.trim().toLowerCase()
   return q ? tables.filter((t) => t.name.toLowerCase().includes(q)) : tables
-}
-
-interface RowProps {
-  db: string
-  schema?: string | undefined
-  table: TableInfo
-}
-
-/** The link itself; the caller supplies the <li> (static or absolutely positioned when virtualized). */
-function TableLink({ db, schema, table }: RowProps) {
-  return (
-    <Link
-      to="/db/$db/table/$table"
-      params={{ db, table: table.name }}
-      search={schema ? { schema } : {}}
-      className="flex h-full items-center gap-1 truncate rounded px-1 text-sm text-ink hover:bg-surface-sub"
-      activeProps={{ className: 'bg-brand/10 font-medium text-brand' }}
-      title={table.name}
-    >
-      {table.kind === 'sequence' ? (
-        <ListOrdered className="size-3.5 shrink-0" aria-hidden />
-      ) : isViewKind(table.kind) ? (
-        <Eye className="size-3.5 shrink-0" aria-hidden />
-      ) : (
-        <Table2 className="size-3.5 shrink-0" aria-hidden />
-      )}
-      <span className="truncate">{table.name}</span>
-    </Link>
-  )
 }
 
 /**
@@ -54,8 +26,21 @@ export function TableList({ db, schema, filter }: { db: string; schema?: string 
   const tables = useQuery(tablesQuery(db, schema))
   const deferred = useDeferredValue(filter)
   const listRef = useRef<HTMLUListElement>(null)
-  const shown = tables.data ? filterTables(tables.data, deferred) : []
-  const virtual = shown.length >= VIRTUALIZE_FROM
+  // Read once when the list appears: changing a setting reloads the page.
+  const [{ navGroupDelimiter, navPageSize }] = useState(resolveSettings)
+  // 0 is "everything": the list scrolls (and, when long and ungrouped, is virtualized) instead of paging.
+  const step = navPageSize === 0 ? Number.POSITIVE_INFINITY : navPageSize
+  const [limit, setLimit] = useState(step)
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({})
+  const matches = tables.data ? filterTables(tables.data, deferred) : []
+  const grouped = navGroupDelimiter !== ''
+  const entries = pageEntries(grouped ? groupTables(matches, navGroupDelimiter) : [], limit)
+  const page = pageEntries(matches, limit)
+  const shown = page.shown
+  const rest = grouped ? entries.rest : page.rest
+  const virtual = !grouped && shown.length >= VIRTUALIZE_FROM
+  // A search opens every group it found something in: the match is what was asked for.
+  const searching = deferred.trim() !== ''
   // Offset of this list inside the shared scroll container (it is not the container's first child). Measured
   // after every commit (the ref is null during the first render, and expanding a sibling above moves the list);
   // setState only when it actually changed, so the extra render happens once per layout change.
@@ -79,14 +64,51 @@ export function TableList({ db, schema, filter }: { db: string; schema?: string 
       aria-live="polite"
       className={deferred.trim() !== '' ? 'block px-2 py-0.5 text-xs text-ink-sub' : 'sr-only'}
     >
-      {deferred.trim() !== '' ? locale.nav.matchCount(shown.length, total) : ''}
+      {deferred.trim() !== '' ? locale.nav.matchCount(matches.length, total) : ''}
     </output>
   )
-  if (shown.length === 0) {
+  if (matches.length === 0) {
     return (
       <>
         {count}
         <p className="px-2 py-1 text-xs text-ink-sub">{locale.nav.noTables}</p>
+      </>
+    )
+  }
+  const more =
+    rest > 0 ? (
+      <button
+        type="button"
+        onClick={() => setLimit((n) => n + step)}
+        className="ml-3 rounded px-2 py-1 text-xs text-brand hover:bg-surface-sub"
+      >
+        {locale.nav.showMore(rest)}
+      </button>
+    ) : null
+  if (grouped) {
+    return (
+      <>
+        {count}
+        <ul className="ml-3 border-l border-line pl-2">
+          {entries.shown.map((e) =>
+            e.kind === 'group' ? (
+              <TableGroup
+                key={`group:${e.prefix}`}
+                db={db}
+                schema={schema}
+                prefix={e.prefix}
+                tables={e.tables}
+                open={searching || (openGroups[e.prefix] ?? false)}
+                onToggle={() => setOpenGroups((o) => ({ ...o, [e.prefix]: !o[e.prefix] }))}
+              />
+            ) : (
+              <li key={e.table.name} style={{ height: ROW_HEIGHT }}>
+                <TableLink db={db} schema={schema} table={e.table} />
+              </li>
+            )
+          )}
+        </ul>
+        {more}
       </>
     )
   }
@@ -101,6 +123,7 @@ export function TableList({ db, schema, filter }: { db: string; schema?: string 
             </li>
           ))}
         </ul>
+        {more}
       </>
     )
   }
@@ -127,6 +150,7 @@ export function TableList({ db, schema, filter }: { db: string; schema?: string 
           )
         })}
       </ul>
+      {more}
     </>
   )
 }

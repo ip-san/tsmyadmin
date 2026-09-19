@@ -7,6 +7,7 @@ import { ErrorBox, Spinner } from '@/components/ui/Feedback.tsx'
 import { Input } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
 import { databasesQuery, schemasQuery } from '@/lib/queries.ts'
+import { resolveSettings } from '@/lib/settings.ts'
 import { useShortcuts } from '@/lib/shortcuts.ts'
 import { TableList } from './TableList.tsx'
 import { TableShortcuts } from './TableShortcuts.tsx'
@@ -63,6 +64,7 @@ export function DbTree({ dialect, activeDb }: { dialect: Dialect; activeDb?: str
     setPrevActive(activeDb)
     if (activeDb) setOpen((o) => ({ ...o, [activeDb]: true }))
   }
+  const [hidden] = useState(() => resolveSettings().navHidden)
   const [filter, setFilter] = useState('')
   const searchRef = useRef<HTMLInputElement>(null)
   useShortcuts([{ keys: 'mod+k', global: true, handler: () => searchRef.current?.focus() }])
@@ -78,6 +80,8 @@ export function DbTree({ dialect, activeDb }: { dialect: Dialect; activeDb?: str
         <ErrorBox error={databases.error} onRetry={() => void databases.refetch()} />
       </div>
     )
+  // Databases the settings hide are left out, but the one being worked in never disappears from under the user.
+  const visible = databases.data.filter((d) => !hidden.includes(d.name) || d.name === activeDb)
   return (
     <div className="p-2">
       <Input
@@ -91,7 +95,7 @@ export function DbTree({ dialect, activeDb }: { dialect: Dialect; activeDb?: str
       />
       <TableShortcuts />
       <ul>
-        {databases.data.map((d) => {
+        {visible.map((d) => {
           const expanded = open[d.name] ?? false
           return (
             <li key={d.name}>

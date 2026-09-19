@@ -1,4 +1,4 @@
-<!-- translated-from: docs/user-guide.md sha256:597f6a8267ec1e86de808d553f49551e0c497fc709c8bd4681bdbe2bf4b9d6fd -->
+<!-- translated-from: docs/user-guide.md sha256:56903ca27a17ffa2ec845d8545a4edfcbe81a7dfd41a7066a08e6d3078ed652a -->
 
 # User guide
 
@@ -190,6 +190,19 @@ Every run is autocommitted. A script that ends with a transaction still open is 
 - ODS is a spreadsheet written by this tool, LibreOffice or Excel: the first row is the column names, an empty cell is NULL, and a formula is read as its calculated value. XML is this tool's or phpMyAdmin's export, and MediaWiki is a `{| … |}` table. When a file holds several sheets or tables, name one (or give its number) in **Sheet / table**; empty means the first
 - For SQL, **Keep a 0 in an AUTO_INCREMENT column** (`NO_AUTO_VALUE_ON_ZERO` on MySQL) stores 0 as a value instead of taking the next number — for dumps restored from another server
 - The result reports how many statements ran, succeeded, failed and did not run, the line number of an error, and warnings about switching databases or rolling a transaction back
+
+## Settings
+
+**Settings**, at the top of the page, holds the choices below. They are kept in this browser and, where sessions are persistent, with the account you are connected as, so they follow you to another browser (the language and the theme are switched at the top of the page). Saving loads the page again to apply them.
+
+| Group | Settings |
+|---|---|
+| Main panel | Rows per page of a table |
+| SQL | Safe mode, keeping the SQL console at the foot of the page, statements kept in the history (per server, 10 to 1,000) |
+| Navigation | The separator that groups table names (with `_`, `shop_orders` and `shop_items` sit under "shop" in the sidebar; a prefix with a single table is not grouped; empty means no grouping), the items shown at once (the rest come with "Show more"; 0, the default, shows everything), and the databases the sidebar leaves out (they open from the server's list of databases; the database you are in never disappears) |
+| Export / import defaults | What the export and import screens start with (format, options, character set, the CSV separators and so on) |
+
+**Save settings to a file** writes a JSON file, and **Load a settings file** brings it to another browser or server (what you load applies only after you press Save). **Restore defaults** puts every setting on the page back to how it was before you chose any.
 
 ## How values are shown
 
