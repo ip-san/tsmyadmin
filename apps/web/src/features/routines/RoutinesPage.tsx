@@ -3,24 +3,28 @@ import type { Dialect } from '@tsmyadmin/shared'
 import { CreateSection } from '@/components/ddl/CreateSection.tsx'
 import { DdlPreviewDialog } from '@/components/ddl/DdlPreviewDialog.tsx'
 import { DefinitionToggle } from '@/components/ddl/DefinitionToggle.tsx'
+import { UserOpPreviewDialog } from '@/components/ddl/UserOpPreviewDialog.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
 import { useDdlFlow } from '@/lib/ddl.ts'
 import { useEditDefinition } from '@/lib/open-in-console.ts'
 import { routineDefinitionQuery, routinesQuery } from '@/lib/queries.ts'
+import { useUserOpFlow } from '@/lib/user-ops.ts'
 import { CreateRoutineForm } from './CreateRoutineForm.tsx'
 import { RoutineActions } from './RoutineActions.tsx'
 
 export function RoutinesPage({ db, schema, dialect }: { db: string; schema?: string | undefined; dialect: Dialect }) {
   const edit = useEditDefinition(db, schema)
   const flow = useDdlFlow(db, schema)
+  const userFlow = useUserOpFlow()
   const routines = useQuery(routinesQuery(db, schema))
   if (routines.isPending) return <Spinner />
   if (routines.isError) return <ErrorBox error={routines.error} onRetry={() => void routines.refetch()} />
   return (
     <section className="space-y-2">
       <DdlPreviewDialog flow={flow} />
+      <UserOpPreviewDialog flow={userFlow} />
       <h2 className="text-sm font-semibold text-ink">{locale.routines.title}</h2>
       {routines.data.length === 0 ? (
         <Notice>{locale.routines.none}</Notice>
@@ -67,7 +71,14 @@ export function RoutinesPage({ db, schema, dialect }: { db: string; schema?: str
                   />
                 </Td>
                 <Td>
-                  <RoutineActions routine={r} dialect={dialect} db={db} schema={schema} onPreview={flow.preview} />
+                  <RoutineActions
+                    routine={r}
+                    dialect={dialect}
+                    db={db}
+                    schema={schema}
+                    onPreview={flow.preview}
+                    onUserOp={userFlow.preview}
+                  />
                 </Td>
               </Tr>
             ))}

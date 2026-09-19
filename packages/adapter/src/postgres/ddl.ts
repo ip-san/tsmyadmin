@@ -137,6 +137,13 @@ export const pgDdl: DdlBuilder = {
         ]
       case 'createSchema':
         return [`CREATE SCHEMA ${id(op.name)}`]
+      case 'setServerVariable':
+        return [
+          op.value === undefined
+            ? `ALTER SYSTEM RESET ${op.name}`
+            : `ALTER SYSTEM SET ${op.name} = ${pgLiteral(op.value)}`,
+          'SELECT pg_reload_conf()',
+        ]
       case 'dropDatabases':
         return op.names.map((name) => `DROP DATABASE ${id(name)} WITH (FORCE)`)
       case 'dropDatabase':

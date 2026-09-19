@@ -285,6 +285,16 @@ export const DdlOpSchema = z.discriminatedUnion('op', [
       .optional(),
   }),
   z.object({ op: z.literal('dropDatabase'), name: z.string().min(1) }),
+  /**
+   * A server setting (the Variables tab): MySQL `SET GLOBAL`, PostgreSQL `ALTER SYSTEM SET` followed by a
+   * configuration reload. No `value` puts the setting back to its default. The name is checked because it is
+   * written unquoted, as the servers spell it.
+   */
+  z.object({
+    op: z.literal('setServerVariable'),
+    name: z.string().regex(/^[A-Za-z][A-Za-z0-9_.]{0,127}$/),
+    value: z.string().max(1000).optional(),
+  }),
   /** Several databases in one go (the server page's checkboxes): one DROP DATABASE each, in the order given. */
   z.object({ op: z.literal('dropDatabases'), names: z.array(z.string().min(1)).min(1).max(100) }),
   z.object({ op: z.literal('createSchema'), name: z.string().min(1) }),

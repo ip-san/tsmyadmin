@@ -2942,6 +2942,171 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
     })
 
     describe('users', () => {
+      it('locks, limits, renames and copies an account, and edits its global and routine privileges', async () => {
+        const name = `acc_${scratch}`
+        const renamed = `${name}_rn`
+        const copied = `${name}_cp`
+        const fn = `${scratch}_accfn`
+        const ref = (n: string) => (dialect === 'mysql' ? { name: n, host: '%' } : { name: n })
+        const runOp = async (op: Parameters<typeof db.users.build>[0]) => {
+          const target = db.users.namespace(op, db.serverNamespace)
+          const r = await db.executeSql(
+            target,
+            db.users
+              .build(op)
+              .map((x) => x.sql)
+              .join(';\n'),
+            EXEC
+          )
+          for (const x of r) if (x.kind === 'error') throw new Error(`${x.message}\n${x.sql}`)
+        }
+        const find = async (n: string) => (await db.listUsers()).find((u) => u.name === n)
+        try {
+          await runOp({
+            op: 'createUser',
+            user: ref(name),
+            password: 'acc-pw-1',
+            attributes: { superuser: false, createdb: false, createrole: false },
+          })
+          // Locked accounts cannot log in; unlocked ones can again.
+          await runOp({ op: 'lockUser', user: ref(name), locked: true })
+          expect((await find(name))?.canLogin).toBe(false)
+          await runOp({ op: 'lockUser', user: ref(name), locked: false })
+          expect((await find(name))?.canLogin).toBe(true)
+
+          // Limits: MySQL's whole set, PostgreSQL's connection limit only (which refuses the rest).
+          if (dialect === 'mysql') {
+            await runOp({
+              op: 'setAccountLimits',
+              user: ref(name),
+              require: 'SSL',
+              maxQueries: 100,
+              maxUserConnections: 3,
+            })
+            expect((await find(name))?.limits).toMatchObject({ require: 'SSL', maxQueries: 100, maxUserConnections: 3 })
+            await runOp({
+              op: 'setAccountLimits',
+              user: ref(name),
+              require: 'NONE',
+              maxQueries: 0,
+              maxUserConnections: 0,
+            })
+            expect((await find(name))?.limits).toMatchObject({ require: 'NONE', maxQueries: 0, maxUserConnections: 0 })
+          } else {
+            await runOp({ op: 'setAccountLimits', user: ref(name), maxUserConnections: 3 })
+            expect((await find(name))?.limits?.maxUserConnections).toBe(3)
+            expect(() => db.users.build({ op: 'setAccountLimits', user: ref(name), maxQueries: 5 })).toThrow(
+              /limits only/
+            )
+          }
+
+          // Global privileges (MySQL) / role attributes (PostgreSQL), one at a time.
+          if (dialect === 'mysql') {
+            await runOp({ op: 'changeGlobalPrivileges', user: ref(name), grant: ['PROCESS', 'RELOAD'], revoke: [] })
+            const granted = (await db.showGrants(ref(name))).join('\n')
+            expect(granted).toMatch(/PROCESS/)
+            await runOp({ op: 'changeGlobalPrivileges', user: ref(name), grant: [], revoke: ['RELOAD'] })
+            expect((await db.showGrants(ref(name))).join('\n')).not.toMatch(/RELOAD/)
+          } else {
+            await runOp({ op: 'alterRole', user: ref(name), createdb: true })
+            expect((await find(name))?.attributes).toContain('CREATEDB')
+            await runOp({ op: 'alterRole', user: ref(name), createdb: false })
+            expect((await find(name))?.attributes).not.toContain('CREATEDB')
+          }
+
+          // Privileges on one routine.
+          await execOk(
+            dialect === 'mysql'
+              ? `CREATE FUNCTION ${fn}(n INT) RETURNS INT DETERMINISTIC RETURN n`
+              : `CREATE FUNCTION ${fn}(n integer) RETURNS integer LANGUAGE sql AS 'SELECT n'`
+          )
+          const routine = {
+            user: ref(name),
+            privileges: ['EXECUTE' as const],
+            database: ns.database,
+            ...(ns.schema ? { schema: ns.schema } : {}),
+            routine: fn,
+            kind: 'FUNCTION' as const,
+            ...(dialect === 'postgres' ? { parameters: 'n integer' } : {}),
+          }
+          await runOp({ op: 'grantRoutinePrivileges', ...routine })
+          const acl = async () =>
+            dialect === 'mysql'
+              ? (await db.showGrants(ref(name))).join('\n')
+              : String(
+                  (await exec(`SELECT proacl::text FROM pg_proc WHERE proname = '${fn}'`).then((r) => {
+                    const first = r[0]
+                    return first?.kind === 'rows' ? first.result.rows[0]?.[0] : ''
+                  })) ?? ''
+                )
+          expect(await acl()).toMatch(dialect === 'mysql' ? /EXECUTE ON FUNCTION/ : new RegExp(`${name}=X/`))
+          await runOp({ op: 'revokeRoutinePrivileges', ...routine })
+          expect(await acl()).not.toMatch(dialect === 'mysql' ? /EXECUTE ON FUNCTION/ : new RegExp(`${name}=X/`))
+
+          // Renamed, then copied with what it holds.
+          await runOp({ op: 'renameUser', user: ref(name), newUser: ref(renamed) })
+          expect(await find(name)).toBeUndefined()
+          expect(await find(renamed)).toBeDefined()
+          await runOp({
+            op: 'copyUser',
+            user: ref(renamed),
+            newUser: ref(copied),
+            password: 'acc-pw-2',
+            grants: await db.showGrants(ref(renamed)),
+          })
+          const copy = await find(copied)
+          expect(copy).toBeDefined()
+          expect(copy?.canLogin).toBe(true)
+          if (dialect === 'mysql') expect((await db.showGrants(ref(copied))).join('\n')).toMatch(/PROCESS/)
+        } finally {
+          await exec(`DROP FUNCTION IF EXISTS ${fn}`, { stopOnError: false })
+          for (const n of [name, renamed, copied])
+            await exec(
+              [
+                ...(dialect === 'postgres'
+                  ? db.users.build({
+                      op: 'revokeAll',
+                      user: ref(n),
+                      database: ns.database,
+                      ...(ns.schema ? { schema: ns.schema } : {}),
+                    })
+                  : []),
+                ...db.users.build({ op: 'dropUser', user: ref(n) }),
+              ]
+                .map((x) => x.sql)
+                .join(';\n'),
+              { stopOnError: false }
+            )
+        }
+      })
+
+      it('creates an account with a database of its own name and a wildcard grant (MySQL)', async () => {
+        if (dialect !== 'mysql') return
+        const name = `own_${scratch}`.slice(0, 30)
+        const user = { name, host: '%' }
+        const build = db.users.build({
+          op: 'createUser',
+          user,
+          password: 'own-pw',
+          attributes: { superuser: false, createdb: false, createrole: false },
+          createDatabase: true,
+          grantWildcard: true,
+        })
+        try {
+          for (const statement of build) await execOk(statement.sql)
+          expect((await db.listDatabases()).map((d) => d.name)).toContain(name)
+          const grants = (await db.showGrants(user)).join('\n')
+          // The database's own name, and the wildcard over `name_…` (underscores escaped in the pattern).
+          expect(grants).toContain(`${name}`)
+          expect(grants).toMatch(/\\_%/)
+        } finally {
+          for (const statement of db.ddl.build(ns, { op: 'dropDatabase', name }))
+            await exec(statement, { stopOnError: false })
+          for (const statement of db.users.build({ op: 'dropUser', user }))
+            await exec(statement.sql, { stopOnError: false })
+        }
+      })
+
       it('grants exactly the privileges asked for: a read-only account can select but not write', async () => {
         // The point of per-table grants is this account. Checked by connecting as it, not by reading the SQL.
         const name = `ro_${scratch}`
@@ -4310,6 +4475,28 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         const left = (await db.listDatabases()).map((d) => d.name)
         expect(left).not.toContain(first)
         expect(left).not.toContain(second)
+      })
+
+      it('changes a server setting and puts it back to its default', async () => {
+        const name = dialect === 'mysql' ? 'long_query_time' : 'work_mem'
+        const wanted = dialect === 'mysql' ? '7' : '8MB'
+        const read = async () =>
+          (await db.listVariables()).find((v) => v.name === name)?.value?.replace(/\.0+$/, '') ?? ''
+        const original = await read()
+        try {
+          await runDdl({ op: 'setServerVariable', name, value: wanted })
+          if (dialect === 'postgres') {
+            // The reload reaches new sessions a moment later.
+            for (let i = 0; i < 20 && !(await read()).startsWith('8'); i++) await new Promise((r) => setTimeout(r, 100))
+          }
+          expect(await read()).toMatch(dialect === 'mysql' ? /^7/ : /^8/)
+        } finally {
+          await runDdl({ op: 'setServerVariable', name })
+        }
+        if (dialect === 'postgres') {
+          for (let i = 0; i < 20 && (await read()) !== original; i++) await new Promise((r) => setTimeout(r, 100))
+        }
+        expect(await read()).toBe(dialect === 'mysql' ? '10' : original)
       })
 
       it('creates and drops a database, and a schema on PostgreSQL', async () => {

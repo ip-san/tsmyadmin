@@ -1,4 +1,4 @@
-<!-- translated-from: docs/phpmyadmin-parity.md sha256:b67f079a4d4490c3d12962e6845df4580eb41382ee1c93ba4e103f65fc6b89f4 -->
+<!-- translated-from: docs/phpmyadmin-parity.md sha256:bc2b4548a788939af8eaac99e870894ca9a7aac67b876bf0ffffde54106640a0 -->
 
 # Feature parity with phpMyAdmin
 
@@ -18,21 +18,21 @@ The basics (browsing and editing, structure changes, SQL, search, QBE, export / 
 | # | Feature | Status |
 |---|---|---|
 | S1 | Collation when creating a database; dropping several databases at once | ✅ |
-| S2 | SQL: formatting, bound parameters, a delimiter field, roll back when finished, toggling foreign key checks | △ |
+| S2 | SQL: formatting, bound parameters, a delimiter field, roll back when finished, toggling foreign key checks | ✅ |
 | S3 | Status: overview (traffic, connections), query statistics, filtering variables by category and flagging alerts | ✅ |
 | S4 | Live monitor (charts, refresh rate). Slow / general log analysis only with `log_output=TABLE` | ✅ |
 | S5 | Advisor (configuration suggestions) | ✅ |
 | S6 | Processes: show only the active ones, choose the refresh rate | ✅ |
-| S7 | Changing a system variable (SET GLOBAL) | ✗ |
+| S7 | Changing a system variable (SET GLOBAL) | ✅ |
 | S8 | Storage engine details (InnoDB status and the like) | ✅ |
 | S9 | Binary log events | ✅ |
 | S10 | Replication control (start / stop, skip errors, set up) | ✗ |
-| S11 | Locking / unlocking accounts; exporting privileges as SQL | ✗ |
-| S12 | Creating an account: host choices, authentication plugin, password generator, a database of the same name with its grant | △ |
-| S13 | Resource limits, SSL requirements | ✗ |
-| S14 | Editing global privileges one by one | △ |
-| S15 | Editing column-level and routine-level privileges | △ |
-| S16 | Renaming / copying an account | ✗ |
+| S11 | Locking / unlocking accounts; exporting privileges as SQL | ✅ |
+| S12 | Creating an account: host choices, authentication plugin, password generator, a database of the same name with its grant | ✅ |
+| S13 | Resource limits, SSL requirements | ✅ |
+| S14 | Editing global privileges one by one | ✅ |
+| S15 | Editing column-level and routine-level privileges | ✅ |
+| S16 | Renaming / copying an account | ✅ |
 | S17 | Server-wide export / import (several databases) | ✗ |
 
 ## Database

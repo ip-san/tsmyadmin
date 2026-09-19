@@ -114,6 +114,17 @@ export const mysqlDdl: DdlBuilder = {
 
       case 'dropDatabase':
         return [`DROP DATABASE ${id(op.name)}`]
+      case 'setServerVariable':
+        // A number or a keyword goes in as itself (`ON`, `1`), anything else as a string literal.
+        return [
+          `SET GLOBAL ${op.name} = ${
+            op.value === undefined
+              ? 'DEFAULT'
+              : /^-?\d+(\.\d+)?$|^(ON|OFF|TRUE|FALSE|DEFAULT)$/i.test(op.value.trim())
+                ? op.value.trim()
+                : mysqlLiteral(op.value)
+          }`,
+        ]
       case 'dropDatabases':
         return op.names.map((name) => `DROP DATABASE ${id(name)}`)
       case 'dropRoutine':

@@ -549,6 +549,29 @@ export const ja = {
     cancelled: 'キャンセルしました',
     openTransaction:
       '実行の終わりでトランザクションが開いたままだったため、取り消しました。1 回の実行ごとに接続が返却されるため、BEGIN と COMMIT は同じ実行に入れてください。',
+    format: '整形',
+    formatHint: '節ごとに改行して読みやすくします（語の大文字・小文字と文字列の中身は変えません）',
+    runOptions: {
+      title: '実行のオプション',
+      delimiter: '区切り文字',
+      delimiterHint:
+        '文の終わりを表す文字です（mysql クライアントの DELIMITER）。ルーチンの本体に ; を含めるときに変えます',
+      rollback: '終了時にロールバック',
+      rollbackHint: {
+        mysql:
+          'START TRANSACTION から始め、終わりにロールバックします。テーブルの定義変更など、暗黙にコミットされる文は戻りません',
+        postgres: 'BEGIN から始め、終わりにロールバックします。PostgreSQL の定義変更もロールバックされます',
+      },
+      foreignKeyChecks: '外部キーを検査する',
+      foreignKeyChecksHint: {
+        mysql: 'オフにすると、この実行の間だけ FOREIGN_KEY_CHECKS = 0 にします',
+        postgres:
+          'オフにすると、この実行の間だけ session_replication_role = replica にします（スーパーユーザーが必要。外部キーのトリガーが動かなくなります）',
+      },
+      parameters: 'パラメーター（:名前 に入る値）',
+      parameterCount: (n: number) => `${n} 個のパラメーター`,
+      valueOf: (name: string) => `${name} の値`,
+    },
     maxRows: '最大行数',
     profiling: {
       option: 'プロファイリング',
@@ -624,6 +647,7 @@ export const ja = {
     titles: {
       splitTable: 'テーブルを分ける',
       moveRepeatingGroup: '繰り返しのカラムを行にする',
+      setServerVariable: 'サーバーの設定を変更',
       dropRoutine: 'ルーチンを削除',
       alterRoutine: 'ルーチンの特性を変更',
       dropTrigger: 'トリガーを削除',
@@ -961,6 +985,45 @@ export const ja = {
     name: 'ユーザー名',
     host: 'ホスト',
     anyHost: '任意のホスト（%）',
+    localHost: 'ローカル（localhost）',
+    thisHost: (host: string) => `このホスト（${host}）`,
+    customHost: 'ホストを指定',
+    hostPattern: '名前かパターンです（例: 192.168.1.%）',
+    plugin: '認証プラグイン',
+    pluginDefault: '（サーバーの既定）',
+    createDatabase: '同じ名前のデータベースを作り、全権限を付与する',
+    grantWildcard: '名前_ で始まるデータベースすべてに全権限を付与する（ワイルドカード）',
+    generatePassword: 'パスワードを生成',
+    generatedPassword: '生成したパスワード',
+    account: {
+      lock: 'ロック',
+      unlock: 'ロック解除',
+      rename: '名前を変更',
+      copy: 'コピー',
+      limits: '制限',
+      globalPrivileges: 'グローバル権限',
+      roleAttributes: 'ロールの属性',
+      exportGrants: '権限を SQL でダウンロード',
+      newName: '新しい名前',
+      renameHintMysql:
+        'RENAME USER で名前とホストを変えます。権限は引き継がれますが、この名前で接続しているアプリは接続できなくなります。',
+      renameHintPostgres:
+        'ALTER ROLE … RENAME TO で名前を変えます。権限は引き継がれますが、MD5 形式のパスワードは消えるため、変更後にパスワードを設定し直してください。',
+      copyHintMysql:
+        '同じ権限（SHOW GRANTS の内容）を持つ新しいアカウントを作ります。パスワードはコピーできないため、新しく決めます。',
+      copyHintPostgres:
+        '同じ属性とグループへの所属、接続中のデータベースの権限を持つ新しいロールを作ります。パスワードは新しく決めます。ほかのデータベースの権限は移りません。',
+      limitsHintMysql: '1 時間あたりの上限です。0 は制限なし。SSL / X509 を選ぶと、暗号化した接続だけを受け付けます。',
+      limitsHintPostgres: 'ロールの同時接続数の上限です。0 は制限なし。',
+      require: '接続の要件',
+      requireOptions: { NONE: 'なし', SSL: 'SSL', X509: 'X509（有効な証明書）' },
+      maxQueries: '1 時間あたりのクエリ数',
+      maxUpdates: '1 時間あたりの更新数',
+      maxConnections: '1 時間あたりの接続数',
+      maxUserConnections: '同時接続数',
+      globalHint: 'サーバー全体（*.*）に対する権限です。チェックを変えた分だけを GRANT / REVOKE します。',
+      roleHint: 'CREATE ROLE / ALTER ROLE の属性です。変えたものだけを ALTER ROLE で書き換えます。',
+    },
     login: 'ログイン可',
     attributes: '属性',
     grants: '権限',
@@ -1001,6 +1064,14 @@ export const ja = {
       'ユーザーごとに、このデータベース（PostgreSQL は現在のスキーマ）へのすべての権限を付与・取り消しできます。',
     ops: {
       createUser: 'ユーザーを作成',
+      lockUser: 'アカウントのロック / 解除',
+      renameUser: 'アカウント名を変更',
+      copyUser: 'アカウントをコピー',
+      setAccountLimits: 'リソース制限と接続の要件',
+      changeGlobalPrivileges: 'グローバル権限を変更',
+      alterRole: 'ロールの属性を変更',
+      grantRoutinePrivileges: 'ルーチンの権限を付与',
+      revokeRoutinePrivileges: 'ルーチンの権限を取り消し',
       dropUser: 'ユーザーを削除',
       setPassword: 'パスワードを変更',
       grantAll: '全権限を付与',
@@ -1374,6 +1445,12 @@ export const ja = {
     title: 'サーバー',
     databasesTitle: 'データベース一覧',
     overviewTitle: '通信量と接続',
+    editVariable: '変更',
+    editVariableHintMysql:
+      'SET GLOBAL で変更します。実行中のサーバーにだけ効き、再起動すると設定ファイルの値に戻ります。読み取り専用の変数は変更できません（実行時にエラーになります）。',
+    editVariableHintPostgres:
+      'ALTER SYSTEM SET で postgresql.auto.conf に書き、設定を再読み込みします。再起動が必要な設定は、再起動するまで反映されません。スーパーユーザーだけが変更できます。',
+    resetVariable: '既定値に戻す',
     figure: '項目',
     perHour: '1 時間あたり',
     traffic: {
@@ -1773,6 +1850,12 @@ export const ja = {
   routines: {
     run: '実行',
     runHint: '値を入れると、CALL / SELECT を SQL タブに用意します。実行するのは、SQL タブで内容を確認してからです。',
+    privileges: '権限',
+    privilegesHint: 'このルーチンに対する権限を、アカウントに付与または取り消します（SQL を確認してから実行します）。',
+    account: 'アカウント',
+    privilegeList: '権限',
+    grant: '付与',
+    revoke: '取り消し',
     noParameters: 'この引数のない呼び出しを用意します。',
     openInSql: 'SQL タブで開く',
     characteristics: '特性を変更',

@@ -1,5 +1,5 @@
 import { expect } from '@playwright/test'
-import { login, slowSql, TARGETS, test } from './helpers.ts'
+import { confirmPreview, login, slowSql, TARGETS, test } from './helpers.ts'
 
 for (const t of TARGETS) {
   test.describe(`server (${t.dialect})`, () => {
@@ -35,6 +35,43 @@ for (const t of TARGETS) {
       // The interval is a choice, not just on / off.
       await page.getByLabel('更新間隔').selectOption('2')
       await expect(page.getByLabel('更新間隔')).toHaveValue('2')
+    })
+
+    test('changes a server setting through the preview, and puts it back to its default', async ({ page }) => {
+      test.setTimeout(60_000)
+      const name = t.dialect === 'mysql' ? 'long_query_time' : 'work_mem'
+      const value = t.dialect === 'mysql' ? '9' : '9MB'
+      const rows = page.getByRole('table', { name: 'システム変数' })
+      const change = async () => {
+        await page.goto('/variables')
+        await page.getByLabel('名前で絞り込む').fill(name)
+        await rows.getByRole('button', { name: `${name}: 変更`, exact: true }).click()
+      }
+      try {
+        await change()
+        await page.getByLabel(name, { exact: true }).fill(value)
+        await page
+          .getByRole('form', { name: `${name}: 変更` })
+          .getByRole('button', { name: 'SQL を確認' })
+          .click()
+        await confirmPreview(
+          page,
+          t.dialect === 'mysql' ? new RegExp(`SET GLOBAL ${name} = 9`) : /ALTER SYSTEM SET work_mem = '9MB'/
+        )
+        await page.reload()
+        await page.getByLabel('名前で絞り込む').fill(name)
+        await expect(
+          rows.getByRole('row').filter({ has: page.getByRole('cell', { name, exact: true }) })
+        ).toContainText(t.dialect === 'mysql' ? '9' : '9216')
+      } finally {
+        await change()
+        await page.getByLabel('既定値に戻す').check()
+        await page
+          .getByRole('form', { name: `${name}: 変更` })
+          .getByRole('button', { name: 'SQL を確認' })
+          .click()
+        await confirmPreview(page, t.dialect === 'mysql' ? /DEFAULT/ : /RESET work_mem/)
+      }
     })
 
     test('shows traffic and query statistics, filters status by category, and advises', async ({ page }) => {

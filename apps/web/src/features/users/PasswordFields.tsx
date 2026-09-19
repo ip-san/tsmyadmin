@@ -1,16 +1,30 @@
 import { useState } from 'react'
+import { Button } from '@/components/ui/Button.tsx'
 import { Notice } from '@/components/ui/Feedback.tsx'
 import { Field, Input } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
+import { generatePassword } from '@/lib/generate-password.ts'
 
 /** Password + confirmation inputs with a mismatch notice, shared by the create-user and change-password forms. */
 export function usePasswordConfirm() {
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
+  // A generated password is shown, so it can be copied before it is only dots.
+  const [generated, setGenerated] = useState<string | null>(null)
   return {
+    generated,
+    generate: () => {
+      const made = generatePassword()
+      setPassword(made)
+      setConfirm(made)
+      setGenerated(made)
+    },
     password,
     confirm,
-    setPassword,
+    setPassword: (v: string) => {
+      setGenerated(null)
+      setPassword(v)
+    },
     setConfirm,
     /** Shown only once the confirmation has content (no alert while the user is still on the first field). */
     mismatch: confirm !== '' && password !== confirm,
@@ -48,6 +62,19 @@ export function PasswordFields({
           aria-describedby={state.mismatch ? `${idPrefix}-mismatch` : undefined}
         />
       </Field>
+      <div className="col-span-2 flex flex-wrap items-center gap-2">
+        <Button type="button" size="sm" onClick={state.generate}>
+          {locale.users.generatePassword}
+        </Button>
+        {state.generated ? (
+          <code
+            className="rounded bg-surface-sub px-2 py-1 font-mono text-xs"
+            aria-label={locale.users.generatedPassword}
+          >
+            {state.generated}
+          </code>
+        ) : null}
+      </div>
       {state.mismatch ? (
         <div className="col-span-2" id={`${idPrefix}-mismatch`} role="alert">
           <Notice>{locale.users.passwordMismatch}</Notice>

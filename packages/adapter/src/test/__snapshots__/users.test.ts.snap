@@ -1,10 +1,47 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`user SQL builders > mysql: alterRole 1`] = `
+[
+  "refused: Role attributes are PostgreSQL’s: MySQL has global privileges",
+]
+`;
+
+exports[`user SQL builders > mysql: changeGlobalPrivileges 1`] = `
+[
+  "GRANT PROCESS, RELOAD, GRANT OPTION ON *.* TO 'o''brien'@'10.0.%'",
+  "REVOKE FILE ON *.* FROM 'o''brien'@'10.0.%'",
+]
+`;
+
+exports[`user SQL builders > mysql: copyUser 1`] = `
+[
+  "CREATE USER 'c''opy'@'%' IDENTIFIED BY 'pw'",
+  "GRANT SELECT, INSERT ON \`shop\`.* TO 'c''opy'@'%' WITH GRANT OPTION",
+  "GRANT SELECT ON "shop"."t" TO "o'brien"",
+  "ALTER ROLE "o'brien" NOSUPERUSER LOGIN",
+]
+`;
+
 exports[`user SQL builders > mysql: createUser 1`] = `
 [
   "CREATE USER 'o''brien'@'10.0.%' IDENTIFIED BY 'p''w\\\\d'",
   "GRANT CREATE ON *.* TO 'o''brien'@'10.0.%'",
   "GRANT CREATE USER ON *.* TO 'o''brien'@'10.0.%'",
+]
+`;
+
+exports[`user SQL builders > mysql: createUser with ownDatabase 1`] = `
+[
+  "CREATE USER 'my_app'@'localhost' IDENTIFIED BY 'pw'",
+  "CREATE DATABASE \`my_app\`",
+  "GRANT ALL PRIVILEGES ON \`my\\_app\`.* TO 'my_app'@'localhost'",
+  "GRANT ALL PRIVILEGES ON \`my\\_app\\_%\`.* TO 'my_app'@'localhost'",
+]
+`;
+
+exports[`user SQL builders > mysql: createUser with plugin 1`] = `
+[
+  "CREATE USER 'o''brien'@'10.0.%' IDENTIFIED WITH caching_sha2_password BY 'pw'",
 ]
 `;
 
@@ -32,6 +69,24 @@ exports[`user SQL builders > mysql: grantPrivileges 1`] = `
 ]
 `;
 
+exports[`user SQL builders > mysql: grantRoutinePrivileges 1`] = `
+[
+  "GRANT EXECUTE ON FUNCTION \`shop\`.\`do"it\` TO 'o''brien'@'10.0.%'",
+]
+`;
+
+exports[`user SQL builders > mysql: lockUser 1`] = `
+[
+  "ALTER USER 'o''brien'@'10.0.%' ACCOUNT LOCK",
+]
+`;
+
+exports[`user SQL builders > mysql: renameUser 1`] = `
+[
+  "RENAME USER 'o''brien'@'10.0.%' TO 'new"name'@'localhost'",
+]
+`;
+
 exports[`user SQL builders > mysql: revoke on named columns 1`] = `
 [
   "REVOKE SELECT (\`na"me\`) ON \`shop\`.\`ord ers\` FROM 'o''brien'@'10.0.%'",
@@ -50,9 +105,43 @@ exports[`user SQL builders > mysql: revokePrivileges 1`] = `
 ]
 `;
 
+exports[`user SQL builders > mysql: revokeRoutinePrivileges 1`] = `
+[
+  "REVOKE EXECUTE ON PROCEDURE \`shop\`.\`p\`\`roc\` FROM 'o''brien'@'10.0.%'",
+]
+`;
+
+exports[`user SQL builders > mysql: setAccountLimits 1`] = `
+[
+  "ALTER USER 'o''brien'@'10.0.%' REQUIRE SSL WITH MAX_QUERIES_PER_HOUR 100 MAX_UPDATES_PER_HOUR 0 MAX_CONNECTIONS_PER_HOUR 20 MAX_USER_CONNECTIONS 5",
+]
+`;
+
 exports[`user SQL builders > mysql: setPassword 1`] = `
 [
   "ALTER USER 'o''brien'@'10.0.%' IDENTIFIED BY 'new'",
+]
+`;
+
+exports[`user SQL builders > postgres: alterRole 1`] = `
+[
+  "ALTER ROLE "o'brien" NOSUPERUSER CREATEDB REPLICATION NOLOGIN",
+]
+`;
+
+exports[`user SQL builders > postgres: changeGlobalPrivileges 1`] = `
+[
+  "refused: Global privileges are MySQL’s: PostgreSQL has role attributes",
+]
+`;
+
+exports[`user SQL builders > postgres: copyUser 1`] = `
+[
+  "CREATE ROLE "c'opy" LOGIN PASSWORD 'pw'",
+  "GRANT USAGE ON *.* TO \`o'brien\`@\`10.0.%\`",
+  "GRANT SELECT, INSERT ON \`shop\`.* TO \`o'brien\`@\`10.0.%\` WITH GRANT OPTION",
+  "GRANT SELECT ON "shop"."t" TO "c'opy"",
+  "ALTER ROLE "c'opy" NOSUPERUSER LOGIN",
 ]
 `;
 
@@ -94,6 +183,24 @@ exports[`user SQL builders > postgres: grantPrivileges 1`] = `
 ]
 `;
 
+exports[`user SQL builders > postgres: grantRoutinePrivileges 1`] = `
+[
+  "GRANT EXECUTE ON FUNCTION "app"."do""it"(integer, text) TO "o'brien"",
+]
+`;
+
+exports[`user SQL builders > postgres: lockUser 1`] = `
+[
+  "ALTER ROLE "o'brien" NOLOGIN",
+]
+`;
+
+exports[`user SQL builders > postgres: renameUser 1`] = `
+[
+  "ALTER ROLE "o'brien" RENAME TO "new""name"",
+]
+`;
+
 exports[`user SQL builders > postgres: revoke on named columns 1`] = `
 [
   "REVOKE SELECT ("na""me") ON "app"."ord ers" FROM "o'brien"",
@@ -114,6 +221,18 @@ exports[`user SQL builders > postgres: revokePrivileges 1`] = `
 [
   "ALTER DEFAULT PRIVILEGES IN SCHEMA "app" REVOKE SELECT ON TABLES FROM "o'brien"",
   "REVOKE SELECT ON ALL TABLES IN SCHEMA "app" FROM "o'brien"",
+]
+`;
+
+exports[`user SQL builders > postgres: revokeRoutinePrivileges 1`] = `
+[
+  "REVOKE EXECUTE ON PROCEDURE "public"."p\`roc"() FROM "o'brien"",
+]
+`;
+
+exports[`user SQL builders > postgres: setAccountLimits 1`] = `
+[
+  "refused: PostgreSQL limits only the simultaneous connections of a role",
 ]
 `;
 

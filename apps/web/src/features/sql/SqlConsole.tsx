@@ -14,11 +14,14 @@ import { ApiError } from '@/lib/api.ts'
 import { consoleDraftKey, sessionStore } from '@/lib/console-draft.ts'
 import { readPreference, writePreference } from '@/lib/preferences.ts'
 import { mutations } from '@/lib/queries.ts'
+import { formatSql } from '@/lib/sql-format.ts'
+import { DEFAULT_RUN_OPTIONS, prepareScript, type RunOptions } from '@/lib/sql-prepare.ts'
 import { streamSql } from '@/lib/sql-stream.ts'
 import { newQueryId } from '@/lib/uuid.ts'
 import { MaxRowsSelect, ProfileOption } from './ConsoleOptions.tsx'
 import { clearHistory, type HistoryEntry, loadHistory, pushHistory } from './history.ts'
 import { ResultsView } from './ResultsView.tsx'
+import { RunOptionsPanel } from './RunOptionsPanel.tsx'
 import { SqlEditor } from './SqlEditor.tsx'
 import { HistoryPanel, SavedQueriesPanel } from './SqlPanels.tsx'
 import { isSingleStatement, stripTrailingSemicolons, unboundedWrites } from './statement.ts'
@@ -75,6 +78,7 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
   const [maxRows, setMaxRows] = useState(SQL_MAX_ROWS_DEFAULT)
   const [stopOnError, setStopOnError] = useState(true)
   const [profile, setProfile] = useState(false)
+  const [runOptions, setRunOptions] = useState<RunOptions>(DEFAULT_RUN_OPTIONS)
   const [history, setHistory] = useState<HistoryEntry[]>(() => loadHistory(scope))
   const saved = useSavedQueries(scope, session.savedQueries === 'server')
   const [results, setResults] = useState<StatementResult[] | null>(null)
@@ -95,7 +99,7 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
   const run = useMutation({
     // Statement results are appended to the view as the server streams them (NDJSON), so long scripts
     // show progress instead of one big response at the end.
-    mutationFn: async (sql: string) => {
+    mutationFn: async ({ script: sql }: { script: string; shown: string }) => {
       queryId.current = newQueryId()
       const collected: StatementResult[] = []
       setResults([])
@@ -146,7 +150,7 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
     onSettled: () => {
       queryId.current = null
     },
-    onSuccess: async (res, sql) => {
+    onSuccess: async (res, { shown: sql }) => {
       setHistory(pushHistory(scope, { sql, at: Date.now(), ok: res.every((r) => r.kind !== 'error'), db }))
       if (res.some((r) => r.kind !== 'rows')) {
         await queryClient.invalidateQueries({ predicate: (q) => q.queryKey[0] !== 'session' })
@@ -156,7 +160,7 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
   const cancelled = cancel.isSuccess && cancel.data.cancelled && !run.isPending
   const send = () => {
     cancel.reset()
-    run.mutate(text)
+    run.mutate({ script: prepareScript(text, dialect, runOptions), shown: text })
   }
   const execute = () => {
     if (text.trim().length === 0 || run.isPending) return
@@ -171,7 +175,8 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
   }
   const explain = () => {
     if (!isSingleStatement(text) || run.isPending) return
-    run.mutate(`EXPLAIN ${stripTrailingSemicolons(text)}`)
+    const explained = `EXPLAIN ${stripTrailingSemicolons(text)}`
+    run.mutate({ script: prepareScript(explained, dialect, runOptions), shown: explained })
   }
 
   return (
@@ -202,6 +207,13 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
         <Button onClick={explain} disabled={run.isPending || !isSingleStatement(text)} title={locale.sql.explainHint}>
           {locale.sql.explain}
         </Button>
+        <Button
+          onClick={() => setText(formatSql(text))}
+          disabled={run.isPending || text.trim().length === 0}
+          title={locale.sql.formatHint}
+        >
+          {locale.sql.format}
+        </Button>
         <span className="text-xs text-ink-sub">{locale.sql.runHint}</span>
         <MaxRowsSelect value={maxRows} onChange={setMaxRows} />
         <label className="flex items-center gap-1 text-xs text-ink-sub">
@@ -222,6 +234,7 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
           {locale.sql.safeMode}
         </label>
       </div>
+      <RunOptionsPanel dialect={dialect} text={text} options={runOptions} onChange={setRunOptions} />
       <Dialog
         open={confirming.length > 0}
         title={locale.sql.safeModeTitle}

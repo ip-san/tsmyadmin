@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import type { Dialect, UserRef } from '@tsmyadmin/shared'
+import type { Dialect, UserInfo, UserOp, UserRef } from '@tsmyadmin/shared'
 import { useState } from 'react'
 import { UserOpPreviewDialog } from '@/components/ddl/UserOpPreviewDialog.tsx'
 import { Button } from '@/components/ui/Button.tsx'
@@ -7,8 +7,10 @@ import { Dialog } from '@/components/ui/Dialog.tsx'
 import { Badge, ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
+import { downloadText, safeFilename } from '@/lib/download.ts'
 import { grantsQuery, usersQuery } from '@/lib/queries.ts'
 import { userLabel, userRef, useUserOpFlow } from '@/lib/user-ops.ts'
+import { CopyForm, GlobalPrivilegesForm, LimitsForm, RenameForm, RoleAttributesForm } from './AccountDialogs.tsx'
 import { PasswordForm } from './PasswordForm.tsx'
 import { SecondFactorResetDialog, useResettableAccounts } from './SecondFactorReset.tsx'
 import { UserForm } from './UserForm.tsx'
@@ -18,14 +20,53 @@ function GrantsPanel({ user }: { user: UserRef }) {
   if (grants.isPending) return <Spinner />
   if (grants.isError) return <ErrorBox error={grants.error} onRetry={() => void grants.refetch()} />
   if (grants.data.statements.length === 0) return <Notice>{locale.users.noGrants}</Notice>
+  const script = grants.data.statements.map((s) => `${s};`).join('\n')
   return (
-    <pre
-      aria-label={`${userLabel(user)}: ${locale.users.grants}`}
-      className="max-w-3xl whitespace-pre-wrap [overflow-wrap:anywhere] rounded border border-line bg-surface-sub p-3 font-mono text-xs"
-    >
-      {grants.data.statements.map((s) => `${s};`).join('\n')}
-    </pre>
+    <div className="space-y-1">
+      <pre
+        aria-label={`${userLabel(user)}: ${locale.users.grants}`}
+        className="max-w-3xl whitespace-pre-wrap [overflow-wrap:anywhere] rounded border border-line bg-surface-sub p-3 font-mono text-xs"
+      >
+        {script}
+      </pre>
+      <Button
+        size="sm"
+        onClick={() =>
+          downloadText(safeFilename(`${userLabel(user)}-grants`, 'sql'), `${script}\n`, 'application/sql;charset=utf-8')
+        }
+      >
+        {locale.users.account.exportGrants}
+      </Button>
+    </div>
   )
+}
+
+type AccountDialogKind = 'rename' | 'copy' | 'limits' | 'global' | 'role'
+
+const accountTitle = (kind: AccountDialogKind) =>
+  locale.users.account[kind === 'global' ? 'globalPrivileges' : kind === 'role' ? 'roleAttributes' : kind]
+
+function AccountForm({
+  kind,
+  info,
+  dialect,
+  onSubmit,
+  onCancel,
+}: {
+  kind: AccountDialogKind
+  info: UserInfo
+  dialect: Dialect
+  onSubmit: (op: UserOp) => void
+  onCancel: () => void
+}) {
+  const user = userRef(info)
+  const mysql = dialect === 'mysql'
+  if (kind === 'rename') return <RenameForm user={user} mysql={mysql} onSubmit={onSubmit} onCancel={onCancel} />
+  if (kind === 'copy') return <CopyForm user={user} mysql={mysql} onSubmit={onSubmit} onCancel={onCancel} />
+  if (kind === 'limits')
+    return <LimitsForm user={user} limits={info.limits} mysql={mysql} onSubmit={onSubmit} onCancel={onCancel} />
+  if (kind === 'global') return <GlobalPrivilegesForm user={user} onSubmit={onSubmit} onCancel={onCancel} />
+  return <RoleAttributesForm user={user} info={info} onSubmit={onSubmit} onCancel={onCancel} />
 }
 
 export function UsersPage({ dialect }: { dialect: Dialect }) {
@@ -35,6 +76,7 @@ export function UsersPage({ dialect }: { dialect: Dialect }) {
   const [passwordFor, setPasswordFor] = useState<UserRef | null>(null)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [resetFor, setResetFor] = useState<string | null>(null)
+  const [account, setAccount] = useState<{ kind: AccountDialogKind; info: UserInfo } | null>(null)
   const resettable = useResettableAccounts()
   if (users.isPending) return <Spinner />
   if (users.isError)
@@ -113,6 +155,29 @@ export function UsersPage({ dialect }: { dialect: Dialect }) {
                   ) : null}
                   <Button
                     size="sm"
+                    aria-haspopup="dialog"
+                    aria-label={`${key}: ${u.canLogin ? locale.users.account.lock : locale.users.account.unlock}`}
+                    onClick={() => flow.preview({ op: 'lockUser', user: r, locked: u.canLogin })}
+                  >
+                    {u.canLogin ? locale.users.account.lock : locale.users.account.unlock}
+                  </Button>
+                  {(['rename', 'copy', 'limits', dialect === 'mysql' ? 'global' : 'role'] as const).map((kind) => (
+                    <Button
+                      key={kind}
+                      size="sm"
+                      aria-haspopup="dialog"
+                      aria-label={`${key}: ${locale.users.account[kind === 'global' ? 'globalPrivileges' : kind === 'role' ? 'roleAttributes' : kind]}`}
+                      onClick={() => setAccount({ kind, info: u })}
+                    >
+                      {
+                        locale.users.account[
+                          kind === 'global' ? 'globalPrivileges' : kind === 'role' ? 'roleAttributes' : kind
+                        ]
+                      }
+                    </Button>
+                  ))}
+                  <Button
+                    size="sm"
                     variant="danger"
                     aria-haspopup="dialog"
                     onClick={() => flow.preview({ op: 'dropUser', user: r })}
@@ -150,6 +215,24 @@ export function UsersPage({ dialect }: { dialect: Dialect }) {
               const user = passwordFor
               setPasswordFor(null)
               flow.preview({ op: 'setPassword', user, password })
+            }}
+          />
+        ) : null}
+      </Dialog>
+      <Dialog
+        open={account !== null}
+        title={account ? `${accountTitle(account.kind)}: ${userLabel(userRef(account.info))}` : ''}
+        onClose={() => setAccount(null)}
+      >
+        {account ? (
+          <AccountForm
+            kind={account.kind}
+            info={account.info}
+            dialect={dialect}
+            onCancel={() => setAccount(null)}
+            onSubmit={(op) => {
+              setAccount(null)
+              flow.preview(op)
             }}
           />
         ) : null}

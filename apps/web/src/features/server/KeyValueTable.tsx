@@ -1,6 +1,7 @@
 import type { KeyValue } from '@tsmyadmin/shared'
 import { useDeferredValue, useState } from 'react'
 import { CellValue } from '@/components/cells/CellValue.tsx'
+import { Button } from '@/components/ui/Button.tsx'
 import { Badge, Notice } from '@/components/ui/Feedback.tsx'
 import { Input, Select } from '@/components/ui/Field.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
@@ -17,6 +18,7 @@ export function KeyValueTable({
   label,
   categorize,
   flags,
+  onEdit,
 }: {
   items: KeyValue[]
   label: string
@@ -24,6 +26,8 @@ export function KeyValueTable({
   categorize?: (name: string) => string
   /** Names the advisor has something to say about, with what it says. */
   flags?: ReadonlyMap<string, string>
+  /** When given, each row has a button that hands its item to this. */
+  onEdit?: (item: KeyValue) => void
 }) {
   const [filter, setFilter] = useState('')
   const [category, setCategory] = useState('')
@@ -70,6 +74,7 @@ export function KeyValueTable({
               <Th>{locale.server.name}</Th>
               <Th>{locale.server.value}</Th>
               {hasDescription ? <Th>{locale.server.description}</Th> : null}
+              {onEdit ? <Th>{locale.ddl.actions}</Th> : null}
             </tr>
           </thead>
           <tbody>
@@ -90,6 +95,18 @@ export function KeyValueTable({
                   <CellValue cell={i.value} />
                 </Td>
                 {hasDescription ? <Td className="text-xs text-ink-sub">{i.description ?? ''}</Td> : null}
+                {onEdit ? (
+                  <Td>
+                    <Button
+                      size="sm"
+                      aria-haspopup="dialog"
+                      aria-label={`${i.name}: ${locale.server.editVariable}`}
+                      onClick={() => onEdit(i)}
+                    >
+                      {locale.server.editVariable}
+                    </Button>
+                  </Td>
+                ) : null}
               </Tr>
             ))}
           </tbody>

@@ -556,6 +556,29 @@ export const en = {
     cancelled: 'Cancelled',
     openTransaction:
       'A transaction was still open when the run finished, so it was rolled back. The connection is returned after every run: keep BEGIN and COMMIT in the same run.',
+    format: 'Format',
+    formatHint:
+      'Breaks the statement into a line per clause (the case of words and the text of strings are left as they are)',
+    runOptions: {
+      title: 'Run options',
+      delimiter: 'Delimiter',
+      delimiterHint: 'What ends a statement (the mysql client’s DELIMITER). Change it when a routine body holds ;',
+      rollback: 'Roll back at the end',
+      rollbackHint: {
+        mysql:
+          'Starts with START TRANSACTION and rolls back at the end. Statements that commit implicitly, such as table definition changes, are not undone',
+        postgres: 'Starts with BEGIN and rolls back at the end. PostgreSQL definition changes are rolled back too',
+      },
+      foreignKeyChecks: 'Check foreign keys',
+      foreignKeyChecksHint: {
+        mysql: 'Off sets FOREIGN_KEY_CHECKS = 0 for this run only',
+        postgres:
+          'Off sets session_replication_role = replica for this run only (superuser; foreign key triggers stop firing)',
+      },
+      parameters: 'Parameters (values for :name)',
+      parameterCount: (n: number) => `${n} parameters`,
+      valueOf: (name: string) => `Value of ${name}`,
+    },
     maxRows: 'Row limit',
     profiling: {
       option: 'Profiling',
@@ -630,6 +653,7 @@ export const en = {
     titles: {
       splitTable: 'Split the table',
       moveRepeatingGroup: 'Turn repeating columns into rows',
+      setServerVariable: 'Change a server setting',
       dropRoutine: 'Drop the routine',
       alterRoutine: "Change the routine's characteristics",
       dropTrigger: 'Drop the trigger',
@@ -973,6 +997,45 @@ export const en = {
     name: 'Username',
     host: 'Host',
     anyHost: 'Any host (%)',
+    localHost: 'Local (localhost)',
+    thisHost: (host: string) => `This host (${host})`,
+    customHost: 'Specify a host',
+    hostPattern: 'A name or a pattern (for example 192.168.1.%)',
+    plugin: 'Authentication plugin',
+    pluginDefault: '(the server’s default)',
+    createDatabase: 'Create a database of the same name and grant all privileges on it',
+    grantWildcard: 'Grant all privileges on every database starting with name_ (wildcard)',
+    generatePassword: 'Generate a password',
+    generatedPassword: 'The generated password',
+    account: {
+      lock: 'Lock',
+      unlock: 'Unlock',
+      rename: 'Rename',
+      copy: 'Copy',
+      limits: 'Limits',
+      globalPrivileges: 'Global privileges',
+      roleAttributes: 'Role attributes',
+      exportGrants: 'Download the privileges as SQL',
+      newName: 'New name',
+      renameHintMysql:
+        'RENAME USER changes the name and host. The privileges go with it, but applications that connect under the old name can no longer connect.',
+      renameHintPostgres:
+        'ALTER ROLE … RENAME TO changes the name. The privileges go with it, but an MD5 password is cleared by the rename: set the password again afterwards.',
+      copyHintMysql:
+        'Makes a new account holding the same privileges (the SHOW GRANTS statements). A password cannot be copied: choose a new one.',
+      copyHintPostgres:
+        'Makes a new role with the same attributes, group memberships and privileges in the connected database. Choose a new password. Privileges in other databases are not copied.',
+      limitsHintMysql: 'Limits per hour; 0 is no limit. SSL / X509 accept encrypted connections only.',
+      limitsHintPostgres: 'The most connections the role may hold at once; 0 is no limit.',
+      require: 'Connection requirement',
+      requireOptions: { NONE: 'None', SSL: 'SSL', X509: 'X509 (a valid certificate)' },
+      maxQueries: 'Queries per hour',
+      maxUpdates: 'Updates per hour',
+      maxConnections: 'Connections per hour',
+      maxUserConnections: 'Simultaneous connections',
+      globalHint: 'Privileges on the whole server (*.*). Only what you change is written, as GRANT / REVOKE.',
+      roleHint: 'The attributes of CREATE ROLE / ALTER ROLE. Only what you change is rewritten with ALTER ROLE.',
+    },
     login: 'Can log in',
     attributes: 'Attributes',
     grants: 'Privileges',
@@ -1012,6 +1075,14 @@ export const en = {
     privilegesHint: 'Grant or revoke all privileges on this database (on PostgreSQL, the current schema) per user.',
     ops: {
       createUser: 'Create the user',
+      lockUser: 'Lock or unlock the account',
+      renameUser: 'Rename the account',
+      copyUser: 'Copy the account',
+      setAccountLimits: 'Resource limits and connection requirements',
+      changeGlobalPrivileges: 'Change global privileges',
+      alterRole: 'Change the role’s attributes',
+      grantRoutinePrivileges: 'Grant privileges on a routine',
+      revokeRoutinePrivileges: 'Revoke privileges on a routine',
       dropUser: 'Drop the user',
       setPassword: 'Change password',
       grantAll: 'Grant all privileges',
@@ -1386,6 +1457,12 @@ export const en = {
     title: 'Server',
     databasesTitle: 'Databases',
     overviewTitle: 'Traffic and connections',
+    editVariable: 'Change',
+    editVariableHintMysql:
+      'Changed with SET GLOBAL. It affects the running server only and reverts to the configuration file at the next restart. A read-only variable cannot be changed (it fails when run).',
+    editVariableHintPostgres:
+      'Written to postgresql.auto.conf with ALTER SYSTEM SET and the configuration reloaded. A setting that needs a restart takes effect only after one. Only a superuser can change it.',
+    resetVariable: 'Put back to the default',
     figure: 'Figure',
     perHour: 'Per hour',
     traffic: {
@@ -1796,6 +1873,12 @@ export const en = {
   routines: {
     run: 'Run',
     runHint: 'Fill in values and a CALL / SELECT is prepared in the SQL tab. Nothing runs until you review it there.',
+    privileges: 'Privileges',
+    privilegesHint: 'Grants or revokes privileges on this routine for an account (the SQL is shown before it runs).',
+    account: 'Account',
+    privilegeList: 'Privileges',
+    grant: 'Grant',
+    revoke: 'Revoke',
     noParameters: 'A call without arguments is prepared.',
     openInSql: 'Open in SQL tab',
     characteristics: 'Change characteristics',

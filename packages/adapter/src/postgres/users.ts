@@ -4,14 +4,14 @@ import { type Conn, firstResult } from '../base.ts'
 import { pgLiteral } from '../sql/literal.ts'
 import { privilegeList } from '../sql/privileges.ts'
 import { quoteIdent } from '../sql/quote.ts'
-import type { UserSqlBuilder, UserStatement } from '../types.ts'
+import { AdapterError, type UserSqlBuilder, type UserStatement } from '../types.ts'
 
 const id = (s: string) => quoteIdent('postgres', s)
 
 export async function pgListUsers(conn: Conn): Promise<UserInfo[]> {
   const r = firstResult(
     await conn.query(
-      `SELECT rolname, rolsuper, rolcreaterole, rolcreatedb, rolcanlogin, rolvaliduntil
+      `SELECT rolname, rolsuper, rolcreaterole, rolcreatedb, rolcanlogin, rolvaliduntil, rolconnlimit, rolreplication, rolbypassrls, rolinherit
        FROM pg_roles WHERE rolname NOT LIKE 'pg\\_%' ORDER BY rolname`
     )
   )
@@ -20,10 +20,26 @@ export async function pgListUsers(conn: Conn): Promise<UserInfo[]> {
     if (row[1] === true) attributes.push('SUPERUSER')
     if (row[2] === true) attributes.push('CREATEROLE')
     if (row[3] === true) attributes.push('CREATEDB')
+    if (row[7] === true) attributes.push('REPLICATION')
+    if (row[8] === true) attributes.push('BYPASSRLS')
+    if (row[9] !== true) attributes.push('NOINHERIT')
     if (row[4] !== true) attributes.push('NOLOGIN')
     if (row[5] !== null && row[5] !== undefined && String(row[5]) !== 'infinity')
       attributes.push(`VALID UNTIL ${String(row[5])}`)
-    return { name: String(row[0]), host: null, canLogin: row[4] === true, attributes }
+    const limit = Number(row[6] ?? -1)
+    return {
+      name: String(row[0]),
+      host: null,
+      canLogin: row[4] === true,
+      attributes,
+      limits: {
+        require: 'NONE',
+        maxQueries: 0,
+        maxUpdates: 0,
+        maxConnections: 0,
+        maxUserConnections: Math.max(limit, 0),
+      },
+    }
   })
 }
 
@@ -140,7 +156,14 @@ const secret = (template: (password: string) => string, password: string): UserS
 
 export const pgUsers: UserSqlBuilder = {
   namespace(op: UserOp, serverNamespace: Namespace): Namespace {
-    if (op.op === 'grantAll' || op.op === 'revokeAll' || op.op === 'grantPrivileges' || op.op === 'revokePrivileges')
+    if (
+      op.op === 'grantAll' ||
+      op.op === 'revokeAll' ||
+      op.op === 'grantPrivileges' ||
+      op.op === 'revokePrivileges' ||
+      op.op === 'grantRoutinePrivileges' ||
+      op.op === 'revokeRoutinePrivileges'
+    )
       return op.schema ? { database: op.database, schema: op.schema } : { database: op.database }
     return serverNamespace
   },
@@ -148,6 +171,11 @@ export const pgUsers: UserSqlBuilder = {
     const role = id(op.user.name)
     switch (op.op) {
       case 'createUser': {
+        if (op.plugin !== undefined || op.createDatabase || op.grantWildcard)
+          throw new AdapterError(
+            'UNSUPPORTED',
+            'A password plugin, a same-named database and a wildcard grant are MySQL options'
+          )
         const flags = ['LOGIN']
         if (op.attributes.superuser) flags.push('SUPERUSER')
         if (op.attributes.createdb) flags.push('CREATEDB')
@@ -156,6 +184,67 @@ export const pgUsers: UserSqlBuilder = {
       }
       case 'dropUser':
         return [plain(`DROP ROLE ${role}`)]
+      case 'lockUser':
+        return [plain(`ALTER ROLE ${role} ${op.locked ? 'NOLOGIN' : 'LOGIN'}`)]
+      case 'renameUser':
+        return [plain(`ALTER ROLE ${role} RENAME TO ${id(op.newUser.name)}`)]
+      case 'copyUser': {
+        if (!op.grants) throw new AdapterError('VALIDATION', 'copyUser needs the grants of the role to copy')
+        const target = id(op.newUser.name)
+        const retarget = (g: string) =>
+          g.startsWith(`ALTER ROLE ${role} `)
+            ? `ALTER ROLE ${target} ${g.slice(`ALTER ROLE ${role} `.length)}`
+            : g.endsWith(` TO ${role}`)
+              ? `${g.slice(0, g.length - role.length)}${target}`
+              : g
+        return [
+          secret((pw) => `CREATE ROLE ${target} LOGIN PASSWORD ${pw}`, op.password),
+          ...op.grants.map((g) => plain(retarget(g))),
+        ]
+      }
+      case 'setAccountLimits':
+        if (
+          op.require !== undefined ||
+          op.maxQueries !== undefined ||
+          op.maxUpdates !== undefined ||
+          op.maxConnections !== undefined
+        )
+          throw new AdapterError('UNSUPPORTED', 'PostgreSQL limits only the simultaneous connections of a role')
+        if (op.maxUserConnections === undefined) throw new AdapterError('VALIDATION', 'No account limit to change')
+        return [
+          plain(`ALTER ROLE ${role} CONNECTION LIMIT ${op.maxUserConnections === 0 ? -1 : op.maxUserConnections}`),
+        ]
+      case 'changeGlobalPrivileges':
+        throw new AdapterError('UNSUPPORTED', 'Global privileges are MySQL’s: PostgreSQL has role attributes')
+      case 'alterRole': {
+        const flags = [
+          op.superuser === undefined ? '' : op.superuser ? 'SUPERUSER' : 'NOSUPERUSER',
+          op.createdb === undefined ? '' : op.createdb ? 'CREATEDB' : 'NOCREATEDB',
+          op.createrole === undefined ? '' : op.createrole ? 'CREATEROLE' : 'NOCREATEROLE',
+          op.replication === undefined ? '' : op.replication ? 'REPLICATION' : 'NOREPLICATION',
+          op.bypassrls === undefined ? '' : op.bypassrls ? 'BYPASSRLS' : 'NOBYPASSRLS',
+          op.inherit === undefined ? '' : op.inherit ? 'INHERIT' : 'NOINHERIT',
+          op.login === undefined ? '' : op.login ? 'LOGIN' : 'NOLOGIN',
+        ].filter((f) => f !== '')
+        if (flags.length === 0) throw new AdapterError('VALIDATION', 'No role attribute to change')
+        return [plain(`ALTER ROLE ${role} ${flags.join(' ')}`)]
+      }
+      case 'grantRoutinePrivileges':
+      case 'revokeRoutinePrivileges': {
+        if (op.privileges.some((p) => p !== 'EXECUTE'))
+          throw new AdapterError(
+            'UNSUPPORTED',
+            'PostgreSQL has EXECUTE on a routine; ALTER ROUTINE and GRANT OPTION are MySQL’s'
+          )
+        const routine = `${op.kind} ${id(op.schema ?? 'public')}.${id(op.routine)}(${op.parameters ?? ''})`
+        return [
+          plain(
+            op.op === 'grantRoutinePrivileges'
+              ? `GRANT EXECUTE ON ${routine} TO ${role}`
+              : `REVOKE EXECUTE ON ${routine} FROM ${role}`
+          ),
+        ]
+      }
       case 'setPassword':
         return [secret((pw) => `ALTER ROLE ${role} PASSWORD ${pw}`, op.password)]
       case 'grantAll': {

@@ -1,3 +1,4 @@
+import type { DatabaseAdapter } from '@tsmyadmin/adapter'
 import {
   PASSWORD_MASK,
   type StatementResult,
@@ -11,6 +12,17 @@ import { redactInLogs } from '../lib/request-context.ts'
 import { validate } from '../lib/validate.ts'
 import { type AppEnv, requireSession, type SessionConfig } from '../session/middleware.ts'
 
+/**
+ * A copy carries the source account's own statements. They are read here, from the server, and whatever the client
+ * sent in their place is dropped: the statements that run are the ones the source really has.
+ */
+async function withServerGrants(adapter: DatabaseAdapter, op: UserOp): Promise<UserOp> {
+  return op.op === 'copyUser' ? { ...op, grants: await adapter.showGrants(op.user) } : op
+}
+
+/** The names an operation would create: the account, and the one it is renamed or copied to. */
+const namesOf = (op: UserOp) => ({ user: op.user.name, ...('newUser' in op ? { newName: op.newUser.name } : {}) })
+
 export function userRoutes(cfg: SessionConfig) {
   return new Hono<AppEnv>()
     .use('/users', requireSession(cfg))
@@ -22,23 +34,21 @@ export function userRoutes(cfg: SessionConfig) {
       const statements = await c.get('session').adapter.showGrants(user, ns)
       return c.json({ statements })
     })
-    .post('/users/preview', validate('json', UserOpRequestSchema), (c) => {
-      const { op } = c.req.valid('json')
-      const long = tooLongIdentifier({ user: op.user.name }, c.get('session').adapter.dialect)
+    .post('/users/preview', validate('json', UserOpRequestSchema), async (c) => {
+      const adapter = c.get('session').adapter
+      const { op: requested } = c.req.valid('json')
+      const long = tooLongIdentifier(namesOf(requested), adapter.dialect)
       if (long) return c.json(identifierTooLong(long), 400)
-      return c.json({
-        sql: c
-          .get('session')
-          .adapter.users.build(op)
-          .map((s) => s.display),
-      })
+      const op = await withServerGrants(adapter, requested)
+      return c.json({ sql: adapter.users.build(op).map((s) => s.display) })
     })
     .post('/users/execute', validate('json', UserOpRequestSchema), async (c) => {
-      const { op } = c.req.valid('json')
+      const { op: requested } = c.req.valid('json')
       const adapter = c.get('session').adapter
       // The UI previews first; a direct call must not create a role under a silently truncated name.
-      const long = tooLongIdentifier({ user: op.user.name }, adapter.dialect)
+      const long = tooLongIdentifier(namesOf(requested), adapter.dialect)
       if (long) return c.json(identifierTooLong(long), 400)
+      const op = await withServerGrants(adapter, requested)
       const statements = adapter.users.build(op)
       if ('password' in op) {
         // The audit line carries the SQL text, where the password appears literal-encoded (quotes doubled, backslashes

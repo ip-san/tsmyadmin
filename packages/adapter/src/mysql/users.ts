@@ -11,7 +11,8 @@ export function mysqlAccount(user: UserRef): string {
   return `${mysqlLiteral(user.name)}@${mysqlLiteral(user.host ?? '%')}`
 }
 
-const USERS_MYSQL = 'SELECT User, Host, account_locked, password_expired FROM mysql.user ORDER BY User, Host'
+const USERS_MYSQL =
+  'SELECT User, Host, account_locked, password_expired, ssl_type, max_questions, max_updates, max_connections, max_user_connections FROM mysql.user ORDER BY User, Host'
 /**
  * MariaDB 10.4+: mysql.user is a view over mysql.global_priv without account_locked (the lock lives in the
  * Priv JSON); roles appear there too (is_role = 'Y', empty Host) and are not login accounts. The literal is
@@ -19,7 +20,7 @@ const USERS_MYSQL = 'SELECT User, Host, account_locked, password_expired FROM my
  * refuses to compare utf8mb4_general_ci with the connection's utf8mb4_unicode_ci).
  */
 const USERS_MARIADB =
-  "SELECT u.User, u.Host, IF(JSON_VALUE(g.Priv, '$.account_locked') = 1, 'Y', 'N') AS account_locked, u.password_expired FROM mysql.user u JOIN mysql.global_priv g ON g.User = u.User AND g.Host = u.Host WHERE u.is_role <> _binary'Y' ORDER BY u.User, u.Host"
+  "SELECT u.User, u.Host, IF(JSON_VALUE(g.Priv, '$.account_locked') = 1, 'Y', 'N') AS account_locked, u.password_expired, u.ssl_type, u.max_questions, u.max_updates, u.max_connections, u.max_user_connections FROM mysql.user u JOIN mysql.global_priv g ON g.User = u.User AND g.Host = u.Host WHERE u.is_role <> _binary'Y' ORDER BY u.User, u.Host"
 
 /** Password hashes MariaDB prints inside SHOW GRANTS (MySQL 8 never does); not for the privileges screen. */
 const GRANT_SECRET = / IDENTIFIED (?:BY PASSWORD '[^']*'|VIA \S+ USING '[^']*')/g
@@ -42,7 +43,20 @@ export async function mysqlListUsers(conn: Conn): Promise<UserInfo[]> {
     const attributes: string[] = []
     if (String(row[2]) === 'Y') attributes.push('LOCKED')
     if (String(row[3]) === 'Y') attributes.push('EXPIRED')
-    return { name: String(row[0]), host: String(row[1]), canLogin: String(row[2]) !== 'Y', attributes }
+    const ssl = String(row[4] ?? '')
+    return {
+      name: String(row[0]),
+      host: String(row[1]),
+      canLogin: String(row[2]) !== 'Y',
+      attributes,
+      limits: {
+        require: ssl === 'X509' ? 'X509' : ssl === '' ? 'NONE' : 'SSL',
+        maxQueries: Number(row[5] ?? 0),
+        maxUpdates: Number(row[6] ?? 0),
+        maxConnections: Number(row[7] ?? 0),
+        maxUserConnections: Number(row[8] ?? 0),
+      },
+    }
   })
 }
 
@@ -91,6 +105,20 @@ const secret = (template: (password: string) => string, password: string): UserS
   display: template(mysqlLiteral(PASSWORD_MASK)),
 })
 
+/** An account as SHOW GRANTS prints it: `user`@`host` (MySQL 8) or 'user'@'host' (MariaDB). */
+const ACCOUNT_IN_GRANT = /(`(?:[^`]|``)*`|'(?:[^'\\]|\\.|'')*')@(`(?:[^`]|``)*`|'(?:[^'\\]|\\.|'')*')/g
+
+/**
+ * A GRANT of the source account, pointed at another account: what follows the last ` TO ` (or, for a REVOKE-free
+ * SHOW GRANTS, the only account named there) is replaced. Statements that name no account are left alone.
+ */
+function retargetGrant(statement: string, account: string): string {
+  const at = statement.lastIndexOf(' TO ')
+  if (at === -1) return statement
+  const tail = statement.slice(at + 4).replace(ACCOUNT_IN_GRANT, () => account)
+  return statement.slice(0, at + 4) + tail
+}
+
 const grantPattern = (database: string) =>
   database.replaceAll('\\', '\\\\').replaceAll('_', '\\_').replaceAll('%', '\\%')
 
@@ -102,7 +130,17 @@ export const mysqlUsers: UserSqlBuilder = {
     const account = mysqlAccount(op.user)
     switch (op.op) {
       case 'createUser': {
-        const out = [secret((pw) => `CREATE USER ${account} IDENTIFIED BY ${pw}`, op.password)]
+        const identified = op.plugin ? `IDENTIFIED WITH ${op.plugin} BY` : 'IDENTIFIED BY'
+        const out = [secret((pw) => `CREATE USER ${account} ${identified} ${pw}`, op.password)]
+        // A database of the account's own name, and/or every database that starts with `name_`.
+        if (op.createDatabase) {
+          out.push(plain(`CREATE DATABASE ${quoteIdent('mysql', op.user.name)}`))
+          out.push(plain(`GRANT ALL PRIVILEGES ON ${quoteIdent('mysql', grantPattern(op.user.name))}.* TO ${account}`))
+        }
+        if (op.grantWildcard)
+          out.push(
+            plain(`GRANT ALL PRIVILEGES ON ${quoteIdent('mysql', `${grantPattern(op.user.name)}\\_%`)}.* TO ${account}`)
+          )
         if (op.attributes.superuser) out.push(plain(`GRANT ALL PRIVILEGES ON *.* TO ${account} WITH GRANT OPTION`))
         else if (op.attributes.createdb) out.push(plain(`GRANT CREATE ON *.* TO ${account}`))
         if (op.attributes.createrole) out.push(plain(`GRANT CREATE USER ON *.* TO ${account}`))
@@ -110,6 +148,58 @@ export const mysqlUsers: UserSqlBuilder = {
       }
       case 'dropUser':
         return [plain(`DROP USER ${account}`)]
+      case 'lockUser':
+        return [plain(`ALTER USER ${account} ACCOUNT ${op.locked ? 'LOCK' : 'UNLOCK'}`)]
+      case 'renameUser':
+        return [plain(`RENAME USER ${account} TO ${mysqlAccount(op.newUser)}`)]
+      case 'copyUser': {
+        if (!op.grants) throw new AdapterError('VALIDATION', 'copyUser needs the grants of the account to copy')
+        const target = mysqlAccount(op.newUser)
+        return [
+          secret((pw) => `CREATE USER ${target} IDENTIFIED BY ${pw}`, op.password),
+          // USAGE alone says only that the account exists: CREATE USER has already done that.
+          ...op.grants
+            .filter((g) => !/^GRANT USAGE ON \*\.\* TO [^ ]+$/.test(g))
+            .map((g) => plain(retargetGrant(g, target))),
+        ]
+      }
+      case 'setAccountLimits': {
+        const limits = [
+          op.maxQueries !== undefined ? `MAX_QUERIES_PER_HOUR ${op.maxQueries}` : '',
+          op.maxUpdates !== undefined ? `MAX_UPDATES_PER_HOUR ${op.maxUpdates}` : '',
+          op.maxConnections !== undefined ? `MAX_CONNECTIONS_PER_HOUR ${op.maxConnections}` : '',
+          op.maxUserConnections !== undefined ? `MAX_USER_CONNECTIONS ${op.maxUserConnections}` : '',
+        ].filter((x) => x !== '')
+        if (op.require === undefined && limits.length === 0)
+          throw new AdapterError('VALIDATION', 'No account limit or requirement to change')
+        return [
+          plain(
+            `ALTER USER ${account}${op.require ? ` REQUIRE ${op.require}` : ''}${limits.length > 0 ? ` WITH ${limits.join(' ')}` : ''}`
+          ),
+        ]
+      }
+      case 'changeGlobalPrivileges': {
+        if (op.grant.length === 0 && op.revoke.length === 0)
+          throw new AdapterError('VALIDATION', 'No global privilege to change')
+        return [
+          ...(op.grant.length > 0 ? [plain(`GRANT ${op.grant.join(', ')} ON *.* TO ${account}`)] : []),
+          ...(op.revoke.length > 0 ? [plain(`REVOKE ${op.revoke.join(', ')} ON *.* FROM ${account}`)] : []),
+        ]
+      }
+      case 'alterRole':
+        throw new AdapterError('UNSUPPORTED', 'Role attributes are PostgreSQL’s: MySQL has global privileges')
+      case 'grantRoutinePrivileges':
+      case 'revokeRoutinePrivileges': {
+        const routine = `${op.kind} ${quoteIdent('mysql', op.database)}.${quoteIdent('mysql', op.routine)}`
+        const list = op.privileges.join(', ')
+        return [
+          plain(
+            op.op === 'grantRoutinePrivileges'
+              ? `GRANT ${list} ON ${routine} TO ${account}`
+              : `REVOKE ${list} ON ${routine} FROM ${account}`
+          ),
+        ]
+      }
       case 'setPassword':
         return [secret((pw) => `ALTER USER ${account} IDENTIFIED BY ${pw}`, op.password)]
       // The database part of a GRANT is a LIKE pattern: escape _ and % so `my_db` does not also cover `myXdb`.

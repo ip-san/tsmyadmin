@@ -14,6 +14,54 @@ const SAMPLE_OPS: Record<UserOp['op'], UserOp> = {
     attributes: { superuser: false, createdb: true, createrole: true },
   },
   dropUser: { op: 'dropUser', user },
+  lockUser: { op: 'lockUser', user, locked: true },
+  renameUser: { op: 'renameUser', user, newUser: { name: 'new"name', host: 'localhost' } },
+  copyUser: {
+    op: 'copyUser',
+    user,
+    newUser: { name: "c'opy", host: '%' },
+    password: 'pw',
+    grants: [
+      "GRANT USAGE ON *.* TO `o'brien`@`10.0.%`",
+      "GRANT SELECT, INSERT ON `shop`.* TO `o'brien`@`10.0.%` WITH GRANT OPTION",
+      'GRANT SELECT ON "shop"."t" TO "o\'brien"',
+      'ALTER ROLE "o\'brien" NOSUPERUSER LOGIN',
+    ],
+  },
+  setAccountLimits: {
+    op: 'setAccountLimits',
+    user,
+    require: 'SSL',
+    maxQueries: 100,
+    maxUpdates: 0,
+    maxConnections: 20,
+    maxUserConnections: 5,
+  },
+  changeGlobalPrivileges: {
+    op: 'changeGlobalPrivileges',
+    user,
+    grant: ['PROCESS', 'RELOAD', 'GRANT OPTION'],
+    revoke: ['FILE'],
+  },
+  alterRole: { op: 'alterRole', user, superuser: false, createdb: true, replication: true, login: false },
+  grantRoutinePrivileges: {
+    op: 'grantRoutinePrivileges',
+    user,
+    privileges: ['EXECUTE'],
+    database: 'shop',
+    schema: 'app',
+    routine: 'do"it',
+    kind: 'FUNCTION',
+    parameters: 'integer, text',
+  },
+  revokeRoutinePrivileges: {
+    op: 'revokeRoutinePrivileges',
+    user,
+    privileges: ['EXECUTE'],
+    database: 'shop',
+    routine: 'p`roc',
+    kind: 'PROCEDURE',
+  },
   setPassword: { op: 'setPassword', user, password: 'new' },
   grantAll: { op: 'grantAll', user, database: 'shop', schema: 'app' },
   revokeAll: { op: 'revokeAll', user, database: 'shop', schema: 'app' },
@@ -53,17 +101,54 @@ const COLUMN_OPS = {
   },
 } satisfies Record<string, UserOp>
 
+/** Options of createUser that the samples above do not use. */
+const CREATE_OPTIONS = {
+  plugin: {
+    op: 'createUser',
+    user,
+    password: 'pw',
+    attributes: { superuser: false, createdb: false, createrole: false },
+    plugin: 'caching_sha2_password',
+  },
+  ownDatabase: {
+    op: 'createUser',
+    user: { name: 'my_app', host: 'localhost' },
+    password: 'pw',
+    attributes: { superuser: false, createdb: false, createrole: false },
+    createDatabase: true,
+    grantWildcard: true,
+  },
+} satisfies Record<string, UserOp>
+
 describe('user SQL builders', () => {
+  for (const [kind, op] of Object.entries(CREATE_OPTIONS)) {
+    it(`mysql: createUser with ${kind}`, () => {
+      expect(mysqlUsers.build(op).map((s) => s.sql)).toMatchSnapshot()
+    })
+    it(`postgres: createUser with ${kind} is refused`, () => {
+      expect(() => pgUsers.build(op)).toThrow(/MySQL options/)
+    })
+  }
+
   it('has a sample for every UserOp', () => {
     expect(Object.keys(SAMPLE_OPS).sort()).toEqual([...USER_OP_NAMES].sort())
   })
 
+  /** The statements, or the refusal for an op the dialect has no equivalent of. */
+  const built = (builder: typeof mysqlUsers, op: UserOp) => {
+    try {
+      return builder.build(op).map((s) => s.sql)
+    } catch (err) {
+      return [`refused: ${(err as Error).message}`]
+    }
+  }
+
   for (const name of USER_OP_NAMES) {
     it(`mysql: ${name}`, () => {
-      expect(mysqlUsers.build(SAMPLE_OPS[name]).map((s) => s.sql)).toMatchSnapshot()
+      expect(built(mysqlUsers, SAMPLE_OPS[name])).toMatchSnapshot()
     })
     it(`postgres: ${name}`, () => {
-      expect(pgUsers.build(SAMPLE_OPS[name]).map((s) => s.sql)).toMatchSnapshot()
+      expect(built(pgUsers, SAMPLE_OPS[name])).toMatchSnapshot()
     })
   }
 

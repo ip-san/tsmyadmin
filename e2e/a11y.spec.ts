@@ -287,6 +287,20 @@ for (const t of TARGETS) {
       await page.goto('/users')
       await page.getByRole('cell', { name: 'tsmyadmin', exact: true }).waitFor()
       await scan(page)
+      // The dialogs behind the account row: limits, and the global privileges / role attributes.
+      await page
+        .getByRole('button', { name: /^tsmyadmin(@.*)?: 制限$/ })
+        .first()
+        .click()
+      await page.getByRole('dialog').getByLabel('同時接続数').waitFor()
+      await scan(page)
+      await page.keyboard.press('Escape')
+      await page
+        .getByRole('button', { name: /^tsmyadmin(@.*)?: (グローバル権限|ロールの属性)$/ })
+        .first()
+        .click()
+      await page.getByRole('dialog').getByRole('checkbox').first().waitFor()
+      await scan(page)
       // Collations, engines (access methods) and plugins (extensions): one table each, named per server.
       for (const path of ['/replication', '/collations', '/engines', '/plugins']) {
         await page.goto(path)

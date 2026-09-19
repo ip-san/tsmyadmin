@@ -1,7 +1,19 @@
 import { z } from 'zod'
+import { hasStatementBreak } from './ddl.ts'
 import { StatementResultSchema } from './result.ts'
 
 /** A login account: MySQL user@host or a PostgreSQL role. */
+/** What an account may use per hour and how it may connect (MySQL `REQUIRE` and `WITH MAX_…`; PostgreSQL: connections). */
+export const AccountLimitsSchema = z.object({
+  require: z.enum(['NONE', 'SSL', 'X509']).default('NONE'),
+  maxQueries: z.number().int().min(0).default(0),
+  maxUpdates: z.number().int().min(0).default(0),
+  maxConnections: z.number().int().min(0).default(0),
+  /** Simultaneous connections: 0 is no limit on MySQL, PostgreSQL uses -1 for that and reports 0 here. */
+  maxUserConnections: z.number().int().min(0).default(0),
+})
+export type AccountLimits = z.infer<typeof AccountLimitsSchema>
+
 export const UserInfoSchema = z.object({
   name: z.string(),
   /** MySQL host part; null for PostgreSQL. */
@@ -9,6 +21,8 @@ export const UserInfoSchema = z.object({
   canLogin: z.boolean(),
   /** Dialect attributes, e.g. SUPERUSER / CREATEDB / CREATEROLE / LOCKED / EXPIRED. */
   attributes: z.array(z.string()),
+  /** Resource limits and connection requirements; null where the server does not say. */
+  limits: AccountLimitsSchema.nullable().optional(),
 })
 export type UserInfo = z.infer<typeof UserInfoSchema>
 
@@ -38,6 +52,65 @@ export const PRIVILEGES = PrivilegeSchema.options
 export const ColumnPrivilegeSchema = PrivilegeSchema.extract(['SELECT', 'INSERT', 'UPDATE', 'REFERENCES'])
 export type ColumnPrivilege = z.infer<typeof ColumnPrivilegeSchema>
 export const COLUMN_PRIVILEGES = ColumnPrivilegeSchema.options
+
+/**
+ * MySQL's global privileges, for the account editor. A closed list: they are written unquoted into GRANT / REVOKE.
+ * GRANT OPTION is here too — `GRANT GRANT OPTION ON *.*` is how it is given on its own.
+ */
+export const GLOBAL_PRIVILEGES = [
+  'SELECT',
+  'INSERT',
+  'UPDATE',
+  'DELETE',
+  'CREATE',
+  'DROP',
+  'RELOAD',
+  'SHUTDOWN',
+  'PROCESS',
+  'FILE',
+  'REFERENCES',
+  'INDEX',
+  'ALTER',
+  'SHOW DATABASES',
+  'SUPER',
+  'CREATE TEMPORARY TABLES',
+  'LOCK TABLES',
+  'EXECUTE',
+  'REPLICATION SLAVE',
+  'REPLICATION CLIENT',
+  'CREATE VIEW',
+  'SHOW VIEW',
+  'CREATE ROUTINE',
+  'ALTER ROUTINE',
+  'CREATE USER',
+  'EVENT',
+  'TRIGGER',
+  'GRANT OPTION',
+] as const
+export const GlobalPrivilegeSchema = z.enum(GLOBAL_PRIVILEGES)
+export type GlobalPrivilege = z.infer<typeof GlobalPrivilegeSchema>
+
+/** MySQL's password plugins the create form offers (MariaDB spells them differently and is left to its default). */
+export const AUTH_PLUGINS = ['mysql_native_password', 'caching_sha2_password', 'sha256_password'] as const
+
+/** Privileges on one routine (PostgreSQL has EXECUTE only). */
+export const RoutinePrivilegeSchema = z.enum(['EXECUTE', 'ALTER ROUTINE', 'GRANT OPTION'])
+export type RoutinePrivilege = z.infer<typeof RoutinePrivilegeSchema>
+
+const RoutineTarget = {
+  user: UserRefSchema,
+  privileges: z.array(RoutinePrivilegeSchema).min(1),
+  database: z.string().min(1),
+  schema: z.string().min(1).optional(),
+  routine: z.string().min(1),
+  kind: z.enum(['PROCEDURE', 'FUNCTION']),
+  /** PostgreSQL names an overload by its argument types. */
+  parameters: z
+    .string()
+    .max(4000)
+    .refine((s) => !hasStatementBreak(s) && !/--|\/\*/.test(s), 'A parameter list cannot contain ; or a comment')
+    .optional(),
+}
 
 /**
  * `table` absent = the whole database (PostgreSQL: the schema, plus the default for tables created later).
@@ -80,7 +153,56 @@ export const UserOpSchema = z.discriminatedUnion('op', [
     user: UserRefSchema,
     password: z.string().min(1),
     attributes: UserAttributesSchema.default({ superuser: false, createdb: false, createrole: false }),
+    /** MySQL: the password plugin. */
+    plugin: z.enum(AUTH_PLUGINS).optional(),
+    /** MySQL: a database of the account's own name, with all privileges on it. */
+    createDatabase: z.boolean().optional(),
+    /** MySQL: all privileges on every database named `account_…` (the name followed by `_` and anything). */
+    grantWildcard: z.boolean().optional(),
   }),
+  z.object({ op: z.literal('lockUser'), user: UserRefSchema, locked: z.boolean() }),
+  z.object({ op: z.literal('renameUser'), user: UserRefSchema, newUser: UserRefSchema }),
+  /**
+   * A new account with the same privileges. `grants` are the source's own statements (SHOW GRANTS), filled in by
+   * the server from the source account — never taken from the client — and pointed at the new account.
+   */
+  z.object({
+    op: z.literal('copyUser'),
+    user: UserRefSchema,
+    newUser: UserRefSchema,
+    password: z.string().min(1),
+    grants: z.array(z.string()).max(5000).optional(),
+  }),
+  z.object({
+    op: z.literal('setAccountLimits'),
+    user: UserRefSchema,
+    require: z.enum(['NONE', 'SSL', 'X509']).optional(),
+    maxQueries: z.number().int().min(0).max(4_294_967_295).optional(),
+    maxUpdates: z.number().int().min(0).max(4_294_967_295).optional(),
+    maxConnections: z.number().int().min(0).max(4_294_967_295).optional(),
+    maxUserConnections: z.number().int().min(0).max(4_294_967_295).optional(),
+  }),
+  /** MySQL global privileges: the ones to add and the ones to take away, in one preview. */
+  z.object({
+    op: z.literal('changeGlobalPrivileges'),
+    user: UserRefSchema,
+    grant: z.array(GlobalPrivilegeSchema).max(64).default([]),
+    revoke: z.array(GlobalPrivilegeSchema).max(64).default([]),
+  }),
+  /** PostgreSQL role attributes; each one given is switched on or off. */
+  z.object({
+    op: z.literal('alterRole'),
+    user: UserRefSchema,
+    superuser: z.boolean().optional(),
+    createdb: z.boolean().optional(),
+    createrole: z.boolean().optional(),
+    replication: z.boolean().optional(),
+    bypassrls: z.boolean().optional(),
+    inherit: z.boolean().optional(),
+    login: z.boolean().optional(),
+  }),
+  z.object({ op: z.literal('grantRoutinePrivileges'), ...RoutineTarget }),
+  z.object({ op: z.literal('revokeRoutinePrivileges'), ...RoutineTarget }),
   z.object({ op: z.literal('dropUser'), user: UserRefSchema }),
   z.object({ op: z.literal('setPassword'), user: UserRefSchema, password: z.string().min(1) }),
   z.object({

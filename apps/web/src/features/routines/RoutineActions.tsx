@@ -1,4 +1,4 @@
-import type { DATA_ACCESS, DdlOp, Dialect, RoutineInfo, SqlSecurity } from '@tsmyadmin/shared'
+import type { DATA_ACCESS, DdlOp, Dialect, RoutineInfo, SqlSecurity, UserOp } from '@tsmyadmin/shared'
 import { type FormEvent, useState } from 'react'
 import { SecuritySelect } from '@/components/ddl/DefinerFields.tsx'
 import { Button } from '@/components/ui/Button.tsx'
@@ -7,6 +7,8 @@ import { Field, Input, Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
 import { useOpenInDatabaseConsole } from '@/lib/open-in-console.ts'
 import { callSql, parseParameters } from '@/lib/routine-call.ts'
+import { RoutinePrivilegesDialog } from './RoutinePrivilegesDialog.tsx'
+import { signatureOf } from './routine-signature.ts'
 
 const t = locale.routines
 const DATA_ACCESS_OPTIONS: readonly (typeof DATA_ACCESS)[number][] = [
@@ -15,14 +17,6 @@ const DATA_ACCESS_OPTIONS: readonly (typeof DATA_ACCESS)[number][] = [
   'READS SQL DATA',
   'MODIFIES SQL DATA',
 ]
-
-/** A PostgreSQL overload is named by its argument types: the printed list without DEFAULT tails. */
-function signatureOf(dialect: Dialect, parameters: string): string | undefined {
-  if (dialect !== 'postgres') return undefined
-  return parseParameters(parameters)
-    .map((p) => `${p.mode} ${p.name} ${p.type}`.trim())
-    .join(', ')
-}
 
 function RunDialog({
   routine,
@@ -152,14 +146,16 @@ export function RoutineActions({
   db,
   schema,
   onPreview,
+  onUserOp,
 }: {
   routine: RoutineInfo
   dialect: Dialect
   db: string
   schema: string | undefined
   onPreview: (op: DdlOp) => void
+  onUserOp: (op: UserOp) => void
 }) {
-  const [dialog, setDialog] = useState<'run' | 'alter' | null>(null)
+  const [dialog, setDialog] = useState<'run' | 'alter' | 'privileges' | null>(null)
   if (routine.kind !== 'procedure' && routine.kind !== 'function') return null
   const r = routine as RoutineInfo & { kind: 'procedure' | 'function' }
   const close = () => setDialog(null)
@@ -175,6 +171,14 @@ export function RoutineActions({
         aria-label={`${r.name}: ${t.characteristics}`}
       >
         {t.characteristics}
+      </Button>
+      <Button
+        size="sm"
+        onClick={() => setDialog('privileges')}
+        aria-haspopup="dialog"
+        aria-label={`${r.name}: ${t.privileges}`}
+      >
+        {t.privileges}
       </Button>
       <Button
         size="sm"
@@ -194,6 +198,16 @@ export function RoutineActions({
         {t.drop}
       </Button>
       {dialog === 'run' ? <RunDialog routine={r} dialect={dialect} db={db} schema={schema} onClose={close} /> : null}
+      {dialog === 'privileges' ? (
+        <RoutinePrivilegesDialog
+          routine={r}
+          dialect={dialect}
+          db={db}
+          schema={schema}
+          onSubmit={onUserOp}
+          onClose={close}
+        />
+      ) : null}
       {dialog === 'alter' ? (
         <CharacteristicsDialog routine={r} dialect={dialect} onSubmit={onPreview} onClose={close} />
       ) : null}
