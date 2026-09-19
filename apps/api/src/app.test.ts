@@ -17,6 +17,7 @@ import {
   PasskeyRegistrationSchema,
   ProcessInfoSchema,
   QueryBuilderResultSchema,
+  QueryTemplateSchema,
   RelationDefSchema,
   ReplicationInfoSchema,
   SAVED_QUERY_MAX_SQL,
@@ -2045,6 +2046,35 @@ describe('saved queries', () => {
       expect((await h.save('long', 'x'.repeat(SAVED_QUERY_MAX_SQL))).status).toBe(200)
       // Without a cap, the 200-row allowance alone would let one account write 200 MB into the session file.
       expect((await h.save('longer', 'x'.repeat(SAVED_QUERY_MAX_SQL + 1))).status).toBe(400)
+    } finally {
+      await h.store.closeAll()
+    }
+  })
+
+  it('keeps query-builder setups per database and name, and refuses one the builder would refuse', async () => {
+    const h = persistentHarness()
+    try {
+      await h.login()
+      const setup = (database: string, tables: string[]) => ({
+        name: 'mine',
+        database,
+        request: { tables, columns: [], where: [] },
+      })
+      const post = (body: unknown) => h.req('/api/query-templates', { method: 'POST', body: JSON.stringify(body) })
+      await post(setup('shop', ['users']))
+      // The same name in another database is another setup; in the same one it replaces.
+      await post(setup('other', ['t']))
+      const saved = z.array(QueryTemplateSchema).parse(await (await post(setup('shop', ['users', 'posts']))).json())
+      expect(saved.map((x) => [x.database, x.request.tables])).toEqual(
+        expect.arrayContaining([
+          ['shop', ['users', 'posts']],
+          ['other', ['t']],
+        ])
+      )
+      expect(saved).toHaveLength(2)
+      expect((await post(setup('shop', []))).status).toBe(400)
+      const id = saved.find((x) => x.database === 'other')?.id ?? ''
+      expect(await (await h.req(`/api/query-templates/${id}`, { method: 'DELETE' })).json()).toHaveLength(1)
     } finally {
       await h.store.closeAll()
     }

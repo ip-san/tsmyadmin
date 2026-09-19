@@ -1,11 +1,13 @@
-import type { CentralColumn, ColumnTransform, Preferences } from '@tsmyadmin/shared'
+import type { CentralColumn, ColumnTransform, Preferences, QueryTemplate } from '@tsmyadmin/shared'
 import {
   CentralColumnBodySchema,
   ColumnTransformBodySchema,
   centralColumnKey,
   columnTransformKey,
   PreferencesSchema,
+  queryTemplateKey,
   SavedQueryIdSchema,
+  SaveQueryTemplateRequestSchema,
 } from '@tsmyadmin/shared'
 import { type Context, Hono } from 'hono'
 import type { z } from 'zod'
@@ -49,7 +51,26 @@ export function storedRoutes(cfg: SessionConfig) {
     (await cfg.store.savedQueries?.list(c.get('session').config, kind)) ?? []
   const central = (items: SavedItem[]): CentralColumn[] => parsed(items, CentralColumnBodySchema)
   const transforms = (items: SavedItem[]): ColumnTransform[] => parsed(items, ColumnTransformBodySchema)
+  // The name is in the body (the row is keyed by namespace + name).
+  const queryTemplates = (items: SavedItem[]): QueryTemplate[] => parsed(items, SaveQueryTemplateRequestSchema)
   return new Hono<AppEnv>()
+    .use('/query-templates', requireSession(cfg))
+    .use('/query-templates/*', requireSession(cfg))
+    .get('/query-templates', async (c) => c.json(queryTemplates(await list(c, 'qbe'))))
+    .post('/query-templates', validate('json', SaveQueryTemplateRequestSchema), async (c) => {
+      const store = cfg.store.savedQueries
+      if (!store) return unsupported(c)
+      const body = c.req.valid('json')
+      // Keyed by namespace and name: the store replaces by name, and two databases may use the same one.
+      return c.json(
+        queryTemplates(await store.save(c.get('session').config, 'qbe', queryTemplateKey(body), JSON.stringify(body)))
+      )
+    })
+    .delete('/query-templates/:id', validate('param', SavedQueryIdSchema), async (c) => {
+      const store = cfg.store.savedQueries
+      if (!store) return unsupported(c)
+      return c.json(queryTemplates(await store.remove(c.get('session').config, 'qbe', c.req.valid('param').id)))
+    })
     .use('/preferences', requireSession(cfg))
     .use('/central-columns/*', requireSession(cfg))
     .use('/central-columns', requireSession(cfg))

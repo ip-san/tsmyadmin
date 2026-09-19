@@ -176,9 +176,21 @@ export const en = {
     searching: 'Searching…',
   },
   queryBuilder: {
+    templates: {
+      title: 'Saved setups',
+      name: 'Name',
+      saveHint: 'Saves the tables, columns, conditions and joins as they are, under a name',
+      empty: 'Nothing saved for this database',
+      deleteLabel: (name: string) => `Delete ${name}`,
+    },
+    joins: 'Joins (blank: along a foreign key)',
+    joinAuto: 'Along a foreign key',
+    joinKind: (table: string) => `Join of ${table}`,
+    joinFrom: (table: string) => `Join of ${table}: its column`,
+    joinTo: (table: string) => `Join of ${table}: a column of a table before it`,
     title: 'Build a query',
     intro:
-      'Choose tables, columns and conditions to build a SELECT. Several tables are joined along their foreign keys (tables no foreign key connects cannot be combined). The SQL opens in the SQL tab to edit and run. Add LIKE patterns or free-form expressions there.',
+      'Choose tables, columns and conditions to build a SELECT. Several tables are joined along their foreign keys, or as set under Joins (the kind and the columns). The SQL opens in the SQL tab to edit and run; add free-form expressions there. A setup can be saved under a name.',
     tables: 'Tables',
     tablesHint:
       'The first table you choose is the starting point; the others are LEFT JOINed in turn along the foreign keys that reach them.',

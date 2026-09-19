@@ -15,6 +15,7 @@ import type {
   ProcessInfo,
   ProfileStage,
   QueryBuilderCondition,
+  QueryBuilderJoin,
   QueryBuilderResult,
   QueryBuilderSpec,
   RelationDef,
@@ -308,7 +309,13 @@ export function isSearchableType(dialect: Dialect, dataType: string): boolean {
  * refused rather than cross-joined: a product of two tables is almost never what was meant, and the SQL tab is
  * there for queries that need it.
  */
-export function joinPlan(d: Dialect, ns: Namespace, tables: string[], schemas: Map<string, TableSchema>): string[] {
+export function joinPlan(
+  d: Dialect,
+  ns: Namespace,
+  tables: string[],
+  schemas: Map<string, TableSchema>,
+  explicit: readonly QueryBuilderJoin[] = []
+): string[] {
   const home = (other: Namespace) =>
     other.database === ns.database && (d === 'mysql' || (other.schema ?? 'public') === (ns.schema ?? 'public'))
   const col = (table: string, column: string) => `${quoteIdent(d, table)}.${quoteIdent(d, column)}`
@@ -320,6 +327,22 @@ export function joinPlan(d: Dialect, ns: Namespace, tables: string[], schemas: M
   )
   const joined = new Set(tables.slice(0, 1))
   const out: string[] = []
+  // Joins spelled out come first, in the order of the tables; each may use only tables already joined.
+  const has = (r: { table: string; column: string }) =>
+    schemas.get(r.table)?.columns.some((c) => c.name === r.column) === true
+  for (const table of tables.slice(1)) {
+    const j = explicit.find((x) => x.table === table)
+    if (!j) continue
+    for (const p of j.on) {
+      if (!has(p.from) || !has(p.to)) throw new AdapterError('NOT_FOUND', `Unknown column in the join of ${table}`)
+      const other = p.from.table === table ? p.to.table : p.from.table
+      if (!(p.from.table === table || p.to.table === table) || !(joined.has(other) || other === table))
+        throw new AdapterError('VALIDATION', `The join of ${table} must use ${table} and a table joined before it`)
+    }
+    const on = j.on.map((p) => `${col(p.from.table, p.from.column)} = ${col(p.to.table, p.to.column)}`).join(' AND ')
+    out.push(`${j.kind.toUpperCase()} JOIN ${quoteTable(d, ns, table)} ON ${on}`)
+    joined.add(table)
+  }
   // Repeated passes in the order given, so a table reachable only through a later one still joins, and the same
   // request always gives the same SQL.
   for (let progress = true; progress; ) {
@@ -781,7 +804,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     const lines = [
       `SELECT ${spec.distinct ? 'DISTINCT ' : ''}${select.length === 0 ? '*' : select.join(', ')}`,
       `FROM ${quoteTable(d, ns, spec.tables[0] ?? '')}`,
-      ...joinPlan(d, ns, spec.tables, schemas),
+      ...joinPlan(d, ns, spec.tables, schemas, spec.joins),
     ]
     const typed = (spec.whereSql ?? '').trim()
     const built = groups.length === 1 ? groups[0] : groups.length > 1 ? groups.map((g) => `(${g})`).join(' OR ') : ''

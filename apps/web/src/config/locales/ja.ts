@@ -173,9 +173,21 @@ export const ja = {
     searching: '検索中…',
   },
   queryBuilder: {
+    templates: {
+      title: '保存した組み立て',
+      name: '名前',
+      saveHint: 'いまのテーブル・カラム・条件・結合に名前を付けて保存します',
+      empty: 'このデータベースで保存したものはありません',
+      deleteLabel: (name: string) => `${name} を削除`,
+    },
+    joins: '結合（空欄は外部キーでつなぐ）',
+    joinAuto: '外部キーでつなぐ',
+    joinKind: (table: string) => `${table} の結合`,
+    joinFrom: (table: string) => `${table} の結合: このテーブルのカラム`,
+    joinTo: (table: string) => `${table} の結合: 前のテーブルのカラム`,
     title: 'クエリを作成',
     intro:
-      'テーブル・カラム・条件を選んで SELECT 文を作ります。複数のテーブルは外部キーでつなぎます（外部キーでつながらないテーブルは組み合わせられません）。作った SQL は SQL タブで編集してから実行します。LIKE のパターンや自由な式の条件は、SQL タブで書き足してください。',
+      'テーブル・カラム・条件を選んで SELECT 文を作ります。複数のテーブルは外部キーでつなぐか、「結合」で種類とカラムを指定します。作った SQL は SQL タブで編集してから実行します。自由な式の条件は、SQL タブで書き足してください。組み立ては名前を付けて保存できます。',
     tables: '対象のテーブル',
     tablesHint: '最初に選んだテーブルを起点に、外部キーでつながるテーブルを順に LEFT JOIN します。',
     joinOrder: (tables: string) => `結合の順: ${tables}`,

@@ -49,6 +49,23 @@ export const QueryBuilderRequestSchema = z.object({
     .array(z.array(QueryBuilderConditionSchema).min(1).max(QUERY_BUILDER_MAX_CONDITIONS))
     .max(QUERY_BUILDER_MAX_GROUPS)
     .default([]),
+  /**
+   * Joins spelled out (phpMyAdmin's "Relationship" rows): how a table joins the ones before it. A table without
+   * one is joined along a foreign key, as before.
+   */
+  joins: z
+    .array(
+      z.object({
+        table: z.string().min(1),
+        kind: z.enum(['inner', 'left', 'right']).default('inner'),
+        on: z
+          .array(z.object({ from: ColumnRefSchema, to: ColumnRefSchema }))
+          .min(1)
+          .max(10),
+      })
+    )
+    .max(QUERY_BUILDER_MAX_TABLES)
+    .default([]),
   /** SELECT DISTINCT. */
   distinct: z.boolean().default(false),
   /**
@@ -62,9 +79,31 @@ export const QueryBuilderRequestSchema = z.object({
 export type QueryBuilderRequest = z.infer<typeof QueryBuilderRequestSchema>
 export type QueryBuilderRequestInput = z.input<typeof QueryBuilderRequestSchema>
 /** The request without its namespace, which the adapter receives separately; the options may be left out. */
-export type QueryBuilderSpec = Omit<QueryBuilderRequest, 'schema' | 'distinct' | 'whereSql' | 'limit'> &
-  Partial<Pick<QueryBuilderRequest, 'distinct' | 'whereSql' | 'limit'>>
+export type QueryBuilderSpec = Omit<QueryBuilderRequest, 'schema' | 'distinct' | 'whereSql' | 'limit' | 'joins'> &
+  Partial<Pick<QueryBuilderRequest, 'distinct' | 'whereSql' | 'limit' | 'joins'>>
+export type QueryBuilderJoin = QueryBuilderRequest['joins'][number]
 
 /** A SELECT for the SQL tab. Nothing is run to produce it beyond reading the tables' structure. */
 export const QueryBuilderResultSchema = z.object({ sql: z.string() })
 export type QueryBuilderResult = z.infer<typeof QueryBuilderResultSchema>
+
+/**
+ * A query-builder setup kept under a name (phpMyAdmin's saved searches in "Query by example"): the tables,
+ * columns, conditions and joins, for one database (and schema). Restored into the form, not run.
+ */
+export const QueryTemplateBodySchema = z.object({
+  database: z.string().min(1).max(256),
+  schema: z.string().min(1).max(256).optional(),
+  request: QueryBuilderRequestSchema.omit({ schema: true }),
+})
+export type QueryTemplateBody = z.infer<typeof QueryTemplateBodySchema>
+export const QueryTemplateSchema = QueryTemplateBodySchema.extend({
+  id: z.string().default(''),
+  name: z.string().min(1).max(200),
+  at: z.number(),
+})
+export type QueryTemplate = z.infer<typeof QueryTemplateSchema>
+export const SaveQueryTemplateRequestSchema = QueryTemplateBodySchema.extend({ name: z.string().min(1).max(200) })
+export type SaveQueryTemplateRequest = z.infer<typeof SaveQueryTemplateRequestSchema>
+export const queryTemplateKey = (t: { database: string; schema?: string | undefined; name: string }) =>
+  JSON.stringify([t.database, t.schema ?? '', t.name])

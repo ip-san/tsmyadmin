@@ -9,7 +9,17 @@ import { locale } from '@/config/locale.ts'
 import { useOpenInDatabaseConsole } from '@/lib/open-in-console.ts'
 import { mutations, structureQuery, tablesQuery } from '@/lib/queries.ts'
 import { type ColumnOption, ColumnSelect, QueryBuilderCriteria } from './QueryBuilderCriteria.tsx'
-import { type ConditionGroup, columnKey, type OutputRow, toRequest, withoutTable } from './query-builder-model.ts'
+import { QueryBuilderJoins } from './QueryBuilderJoins.tsx'
+import { QueryTemplatesPanel } from './QueryTemplatesPanel.tsx'
+import {
+  type ConditionGroup,
+  columnKey,
+  fromRequest,
+  type JoinRow,
+  type OutputRow,
+  toRequest,
+  withoutTable,
+} from './query-builder-model.ts'
 
 const t = locale.queryBuilder
 
@@ -25,6 +35,7 @@ export function QueryBuilder({ db, schema }: { db: string; schema?: string | und
   const [chosen, setChosen] = useState<string[]>([])
   const [outputs, setOutputs] = useState<OutputRow[]>([])
   const [groups, setGroups] = useState<ConditionGroup[]>([])
+  const [joins, setJoins] = useState<Record<string, JoinRow>>({})
   const lastId = useRef(0)
   const addColumnButton = useRef<HTMLButtonElement>(null)
   const newId = () => {
@@ -52,7 +63,7 @@ export function QueryBuilder({ db, schema }: { db: string; schema?: string | und
   const activeStructures = structures.filter((_, i) => active.includes(chosen[i] ?? ''))
   const loadingColumns = activeStructures.some((s) => s.isPending)
   const failed = activeStructures.find((s) => s.isError)
-  const request = toRequest(active, outputs, groups, schema)
+  const request = toRequest(active, outputs, groups, schema, joins)
   // The SQL shown is for the choices it was built from; after any change it is hidden rather than left looking current.
   const current = build.isSuccess && JSON.stringify(build.variables) === JSON.stringify(request)
 
@@ -69,6 +80,19 @@ export function QueryBuilder({ db, schema }: { db: string; schema?: string | und
         <h2 className="text-sm font-semibold text-ink">{t.title}</h2>
         <p className="max-w-3xl text-sm text-ink-sub">{t.intro}</p>
       </div>
+      {/* Outside the form: the panel has a form of its own, and forms do not nest. */}
+      <QueryTemplatesPanel
+        db={db}
+        schema={schema}
+        current={request}
+        onLoad={(template) => {
+          const restored = fromRequest(template.request, newId)
+          setChosen(restored.tables.filter((name) => names.includes(name)))
+          setOutputs(restored.outputs)
+          setGroups(restored.groups)
+          setJoins(restored.joins)
+        }}
+      />
       <form onSubmit={submit} className="space-y-4" aria-label={t.title}>
         <fieldset className="space-y-1">
           <legend className="text-sm text-ink-sub">{t.tables}</legend>
@@ -97,6 +121,14 @@ export function QueryBuilder({ db, schema }: { db: string; schema?: string | und
         </fieldset>
         {/* Which table the rest join to follows the order they were ticked, which the grid above cannot show. */}
         {active.length > 1 ? <p className="text-xs text-ink-sub">{t.joinOrder(active.join(' → '))}</p> : null}
+        {active.length > 1 && !loadingColumns ? (
+          <QueryBuilderJoins
+            tables={active}
+            options={options}
+            joins={joins}
+            onChange={(table, row) => setJoins((prev) => ({ ...prev, [table]: row }))}
+          />
+        ) : null}
 
         {active.length === 0 ? (
           <p className="text-sm text-ink-sub">{t.chooseTable}</p>

@@ -22,6 +22,7 @@ import type {
   ProcessInfo,
   QueryBuilderRequestInput,
   QueryBuilderResult,
+  QueryTemplate,
   RelationDef,
   ReplicationInfo,
   RoutineDefinition,
@@ -32,6 +33,7 @@ import type {
   RowValues,
   SavedQuery,
   SaveExportTemplateRequest,
+  SaveQueryTemplateRequest,
   SearchOptions,
   SecondFactorProof,
   SecondFactorSetup,
@@ -103,6 +105,8 @@ export const accountSecondFactorsQuery = queryOptions({
   queryFn: () => unwrap<AccountSecondFactors>(api['second-factor'].accounts.$get()),
 })
 
+export const listQueryTemplates = () => unwrap<QueryTemplate[]>(api['query-templates'].$get())
+export const queryTemplatesQuery = queryOptions({ queryKey: ['query-templates'], queryFn: listQueryTemplates })
 export const listExportTemplates = () => unwrap<ExportTemplate[]>(api['export-templates'].$get())
 export const exportTemplatesQuery = queryOptions({ queryKey: ['export-templates'], queryFn: listExportTemplates })
 export const listCentralColumns = () => unwrap<CentralColumn[]>(api['central-columns'].$get())
@@ -412,6 +416,10 @@ export const mutations = {
     unwrap<DdlPreviewResponse>(
       api.databases[':db'].ddl.preview.$post({ param: { db: enc(db) }, json: { ...schemaQuery(schema), op } })
     ),
+  saveQueryTemplate: (body: SaveQueryTemplateRequest) =>
+    unwrap<QueryTemplate[]>(api['query-templates'].$post({ json: body })),
+  deleteQueryTemplate: (id: string) =>
+    unwrap<QueryTemplate[]>(api['query-templates'][':id'].$delete({ param: { id } })),
   saveExportTemplate: (body: SaveExportTemplateRequest) =>
     unwrap<ExportTemplate[]>(api['export-templates'].$post({ json: body })),
   deleteExportTemplate: (id: string) =>

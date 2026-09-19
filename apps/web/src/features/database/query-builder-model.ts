@@ -1,5 +1,5 @@
 import type { QueryBuilderOp, QueryBuilderRequestInput } from '@tsmyadmin/shared'
-import { conditionValue } from '@/lib/filter-values.ts'
+import { conditionText, conditionValue } from '@/lib/filter-values.ts'
 
 type SortDirection = 'asc' | 'desc'
 
@@ -34,12 +34,33 @@ export interface ConditionGroup {
   conditions: ConditionRow[]
 }
 
+/** How one table joins: along a foreign key (kind ''), or of a kind on one pair of columns. */
+export interface JoinRow {
+  kind: '' | 'inner' | 'left' | 'right'
+  /** A column of this table. */
+  from: ColumnKey
+  /** A column of a table before it. */
+  to: ColumnKey
+}
+
+/** The joins spelled out, for the tables still chosen; a row missing a column falls back to the foreign key. */
+export function toJoins(tables: readonly string[], joins: Readonly<Record<string, JoinRow>>) {
+  return tables.slice(1).flatMap((table) => {
+    const j = joins[table]
+    const from = j ? parseKey(j.from) : null
+    const to = j ? parseKey(j.to) : null
+    if (!j || j.kind === '' || !from || !to || !tables.includes(to.table)) return []
+    return [{ table, kind: j.kind, on: [{ from, to }] }]
+  })
+}
+
 /** The request for the rows as they stand. Rows with no column chosen, or of a table no longer chosen, are left out. */
 export function toRequest(
   tables: readonly string[],
   outputs: readonly OutputRow[],
   groups: readonly ConditionGroup[],
-  schema: string | undefined
+  schema: string | undefined,
+  joins: Readonly<Record<string, JoinRow>> = {}
 ): QueryBuilderRequestInput {
   const ref = (key: ColumnKey) => {
     const r = parseKey(key)
@@ -58,7 +79,14 @@ export function toRequest(
       })
     )
     .filter((g) => g.length > 0)
-  return { ...(schema ? { schema } : {}), tables: [...tables], columns, where }
+  const spelled = toJoins(tables, joins)
+  return {
+    ...(schema ? { schema } : {}),
+    tables: [...tables],
+    columns,
+    where,
+    ...(spelled.length > 0 ? { joins: spelled } : {}),
+  }
 }
 
 /** Rows of `table` removed when it is unticked, so none is left on screen pointing at a column no longer offered. */
@@ -74,4 +102,38 @@ export function withoutTable(
       .map((g) => ({ ...g, conditions: g.conditions.filter((c) => keep(c.key)) }))
       .filter((g) => g.conditions.length > 0),
   }
+}
+
+/** A saved request back as the form's rows (new ids), so a saved setup can be edited like one built by hand. */
+export function fromRequest(
+  request: Pick<QueryBuilderRequestInput, 'tables' | 'columns' | 'where' | 'joins'>,
+  newId: () => number
+): { tables: string[]; outputs: OutputRow[]; groups: ConditionGroup[]; joins: Record<string, JoinRow> } {
+  const outputs = (request.columns ?? []).map((c) => ({
+    id: newId(),
+    key: columnKey(c.table, c.column),
+    alias: c.alias ?? '',
+    show: c.show ?? true,
+    sort: c.sort ?? ('' as const),
+  }))
+  const groups = (request.where ?? []).map((g) => ({
+    id: newId(),
+    conditions: g.map((c) => ({
+      id: newId(),
+      key: columnKey(c.table, c.column),
+      op: c.op,
+      value: conditionText(c),
+    })),
+  }))
+  const joins: Record<string, JoinRow> = {}
+  for (const j of request.joins ?? []) {
+    const on = j.on[0]
+    if (on)
+      joins[j.table] = {
+        kind: j.kind ?? 'inner',
+        from: columnKey(on.from.table, on.from.column),
+        to: columnKey(on.to.table, on.to.column),
+      }
+  }
+  return { tables: [...request.tables], outputs, groups, joins }
 }

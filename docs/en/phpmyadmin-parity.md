@@ -1,4 +1,4 @@
-<!-- translated-from: docs/phpmyadmin-parity.md sha256:b04ed71fe7be1e305445f2863909071df90496340f5a1c126c920c17acfbedb7 -->
+<!-- translated-from: docs/phpmyadmin-parity.md sha256:3d1a12707a702bc175445d01d9fe0389d393bfc7f54b38d2677021de6d688c8e -->
 
 # Feature parity with phpMyAdmin
 
@@ -43,8 +43,8 @@ The basics (browsing and editing, structure changes, SQL, search, QBE, export / 
 | D2 | More list columns (charset, created / updated), counting the exact rows on the spot | ✅ |
 | D3 | Data dictionary (every table's definition, for printing) | ✅ |
 | D4 | Search kinds (any word / all words / exact phrase / regular expression), filtering by column name | ✅ |
-| D5 | Multi-table query (with the joins) | △ |
-| D6 | Saving query builder criteria | ✗ |
+| D5 | Multi-table query (with the joins) | ✅ |
+| D6 | Saving query builder criteria | ✅ |
 | D7 | Changing the default collation (applied to every table and column) | ✗ |
 | D8 | Copy options (carrying over foreign keys, AUTO_INCREMENT, privileges and the like) | △ |
 | D9 | Routines: editing, running, dropping, exporting; DEFINER / SQL SECURITY / data access | △ |

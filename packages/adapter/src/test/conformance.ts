@@ -594,6 +594,31 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         }
       })
 
+      it('joins the way it is told: the kind and the columns, not only along a foreign key', async () => {
+        const plan = (kind: 'inner' | 'left' | 'right', on: { from: string; to: string }) =>
+          db.buildQuery(ns, {
+            tables: ['users', 'posts'],
+            columns: [shown('users', 'name', { sort: 'asc' }), shown('posts', 'id')],
+            where: [],
+            joins: [
+              {
+                table: 'posts',
+                kind,
+                on: [{ from: { table: 'posts', column: on.from }, to: { table: 'users', column: on.to } }],
+              },
+            ],
+          })
+        // INNER along user_id: only users with posts (Alice twice, Bob once).
+        const inner = await plan('inner', { from: 'user_id', to: 'id' })
+        expect(inner.sql).toMatch(/INNER JOIN/)
+        expect((await rowsOf(inner.sql)).result.rows.map((r) => r[0])).toEqual(['Alice', 'Alice', 'Bob'])
+        // LEFT keeps every user.
+        expect((await rowsOf((await plan('left', { from: 'user_id', to: 'id' })).sql)).result.rows).toHaveLength(6)
+        // Any columns, not only a key: posts.id = users.id.
+        expect((await rowsOf((await plan('inner', { from: 'id', to: 'id' })).sql)).result.rows).toHaveLength(3)
+        await expect(plan('inner', { from: 'nope', to: 'id' })).rejects.toMatchObject({ code: 'NOT_FOUND' })
+      })
+
       it('writes DISTINCT, typed conditions kept apart from the built ones, and LIMIT', async () => {
         const { sql } = await db.buildQuery(ns, {
           tables: ['posts'],

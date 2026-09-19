@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { columnKey, toRequest, withoutTable } from './query-builder-model.ts'
+import { columnKey, fromRequest, toJoins, toRequest, withoutTable } from './query-builder-model.ts'
 
 describe('toRequest', () => {
   it('sends only complete rows of chosen tables, in the shape the server expects', () => {
@@ -62,5 +62,48 @@ describe('withoutTable', () => {
     const rest = withoutTable('posts', outputs, groups)
     expect(rest.outputs.map((o) => o.id)).toEqual([1, 3])
     expect(rest.groups).toEqual([{ id: 6, conditions: [groups[1]?.conditions[1]] }])
+  })
+})
+
+describe('toJoins', () => {
+  it('spells out the joins with a kind and both columns, for tables still chosen', () => {
+    const k = (t: string, c: string) => JSON.stringify([t, c])
+    expect(
+      toJoins(['users', 'posts', 'tags'], {
+        posts: { kind: 'left', from: k('posts', 'user_id'), to: k('users', 'id') },
+        // Along the foreign key: nothing spelled out.
+        tags: { kind: '', from: '', to: '' },
+      })
+    ).toEqual([
+      {
+        table: 'posts',
+        kind: 'left',
+        on: [{ from: { table: 'posts', column: 'user_id' }, to: { table: 'users', column: 'id' } }],
+      },
+    ])
+    // A column of a table no longer chosen: falls back to the foreign key.
+    expect(
+      toJoins(['users', 'posts'], { posts: { kind: 'inner', from: k('posts', 'id'), to: k('gone', 'id') } })
+    ).toEqual([])
+  })
+})
+
+describe('fromRequest', () => {
+  it('puts a saved request back as rows that build the same request', () => {
+    let n = 0
+    const request = {
+      tables: ['users', 'posts'],
+      columns: [{ table: 'users', column: 'name', alias: 'who', show: true, sort: 'asc' as const }],
+      where: [[{ table: 'posts', column: 'id', op: 'in' as const, values: ['1', '2'] }]],
+      joins: [
+        {
+          table: 'posts',
+          kind: 'left' as const,
+          on: [{ from: { table: 'posts', column: 'user_id' }, to: { table: 'users', column: 'id' } }],
+        },
+      ],
+    }
+    const rows = fromRequest(request, () => ++n)
+    expect(toRequest(rows.tables, rows.outputs, rows.groups, undefined, rows.joins)).toEqual(request)
   })
 })
