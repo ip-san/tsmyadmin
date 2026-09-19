@@ -76,21 +76,30 @@ export async function trackedStatements(
   ns: Namespace,
   table: string
 ): Promise<(TrackedStatement & { storeId: string })[]> {
-  const out: (TrackedStatement & { storeId: string })[] = []
+  const out: (TrackedStatement & { storeId: string; order: string })[] = []
   for (const item of await store.list(config, 'tracklog')) {
     const body = parse(LogBodySchema, item.body)
     if (!body || !inNs(body, ns) || body.table !== table) continue
     const { database: _d, schema: _s, table: _t, ...entry } = body
-    out.push({ ...entry, id: item.id, at: item.at, storeId: item.id })
+    out.push({ ...entry, id: item.id, at: item.at, storeId: item.id, order: item.name })
   }
-  return out.sort((a, b) => b.at - a.at)
+  // Newest first; two recorded in the same millisecond keep the order they were written in (see `append`).
+  return out
+    .sort((a, b) => b.at - a.at || (b.order > a.order ? 1 : b.order < a.order ? -1 : 0))
+    .map(({ order: _, ...e }) => e)
 }
 
 type Entry = Omit<z.infer<typeof LogBodySchema>, 'database' | 'schema' | 'by'>
 
+/** Written in this order within a millisecond (per process; across processes the time decides). */
+let sequence = 0
+
 async function append(store: SavedItems, config: ConnectRequest, ns: Namespace, entry: Entry) {
   const body = { database: ns.database, ...(ns.schema ? { schema: ns.schema } : {}), ...entry, by: config.user }
-  await store.save(config, 'tracklog', `${Date.now()}-${randomUUID()}`, JSON.stringify(body))
+  sequence = (sequence + 1) % 1_000_000
+  // Sortable as text: the time, then the sequence, zero-padded; the random part keeps names unique.
+  const name = `${String(Date.now()).padStart(15, '0')}-${String(sequence).padStart(6, '0')}-${randomUUID()}`
+  await store.save(config, 'tracklog', name, JSON.stringify(body))
 }
 
 /**

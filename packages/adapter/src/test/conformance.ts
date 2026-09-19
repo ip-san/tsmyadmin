@@ -1140,8 +1140,9 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
             expect(st.toastBytes).toBeNull()
           } else {
             expect(st.freeBytes).toBeNull()
-            expect(st.lastAnalyze).toMatch(/^\d{4}-\d{2}-\d{2}/)
-            expect(st.deadRows).toBe(0)
+            // Before PostgreSQL 15 the statistics collector reports a moment later: not yet there is fine.
+            expect(st.lastAnalyze === null || /^\d{4}-\d{2}-\d{2}/.test(st.lastAnalyze)).toBe(true)
+            expect([null, 0]).toContain(st.deadRows)
           }
           const view = await db.tableStats(ns, 'active_users')
           expect([view.dataBytes, view.indexBytes, view.totalBytes, view.rowEstimate]).toEqual([null, null, null, null])
