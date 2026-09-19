@@ -1,4 +1,4 @@
-<!-- translated-from: docs/phpmyadmin-parity.md sha256:f18d5894e079a0cc3c57e4ef299df9fbade840373fd6d7dc87ffccd2f29ab478 -->
+<!-- translated-from: docs/phpmyadmin-parity.md sha256:e1e7ecf61a74867390c1b21b73443157dc8779a6996bdaf28e31a2253c36e35c -->
 
 # Feature parity with phpMyAdmin
 
@@ -63,9 +63,9 @@ The basics (browsing and editing, structure changes, SQL, search, QBE, export / 
 | T2 | Browse: reordering columns (remembered), full / partial text, binary as hex, downloading a BLOB, spatial values as WKT | △ |
 | T3 | Browse: ordering by an index, showing a foreign key's display column, profiling | ✗ |
 | T4 | Insert: functions (NOW / UUID / MD5 …), several rows at once, choosing a foreign key value, insert as a new row (duplicate row), a BLOB from a file | ✅ |
-| T5 | Search operators: IN / NOT IN / BETWEEN / REGEXP / comparing with an empty string | △ |
-| T6 | Search: columns to show, DISTINCT, a free WHERE clause, ordering, page size | ✗ |
-| T7 | Find and replace: regular expressions | ✗ |
+| T5 | Search operators: IN / NOT IN / BETWEEN / REGEXP / comparing with an empty string | ✅ |
+| T6 | Search: columns to show, DISTINCT, a free WHERE clause, ordering, page size | ✅ |
+| T7 | Find and replace: regular expressions | ✅ |
 | T8 | Zoom search: conditions per axis, a label column, a cap on points drawn | △ |
 | T9 | Column definition: collation, attributes (UNSIGNED / ZEROFILL / BINARY / ON UPDATE), generated columns, moving a column, a key when adding | ✅ |
 | T10 | Structure: a key on the chosen columns, changing / dropping several at once, reordering columns | ✅ |

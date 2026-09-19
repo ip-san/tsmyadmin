@@ -213,6 +213,11 @@ for (const t of TARGETS) {
         .click()
       await zoom.getByRole('link', { name: 'この行を表示タブで開く' }).waitFor()
       await scan(page)
+      // The search options open, with a sort chosen (its direction appears) and regex replace ticked.
+      await page.getByText(/^オプション/).click()
+      await page.getByLabel('並べ替え', { exact: true }).selectOption('id')
+      await page.getByLabel('正規表現として扱う').check()
+      await scan(page)
     })
 
     test('GIS view of a page of shapes', async ({ page }) => {

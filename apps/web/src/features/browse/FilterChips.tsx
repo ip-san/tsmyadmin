@@ -13,7 +13,8 @@ export function FilterChips({ options, onClear }: { options: BrowseOptions; onCl
           key={`${f.column}-${f.op}`}
           className="rounded bg-amber-100 px-1.5 py-0.5 font-mono text-amber-900 dark:bg-amber-900 dark:text-amber-100"
         >
-          {f.column} {locale.search.ops[f.op]} {f.value === undefined ? '' : cellToText(f.value)}
+          {f.column} {locale.search.ops[f.op]}{' '}
+          {f.values ? f.values.map(cellToText).join(', ') : f.value === undefined ? '' : cellToText(f.value)}
         </span>
       ))}
       <Button size="sm" onClick={onClear}>

@@ -97,6 +97,15 @@ function createRoutineSql(ns: Namespace, op: Extract<DdlOp, { op: 'createRoutine
   return op.comment ? [create, `COMMENT ON ${kind} ${signature} IS ${pgLiteral(op.comment)}`] : [create]
 }
 
+/**
+ * Statements that must land together, in one transaction (PostgreSQL's DDL is transactional). The SQL console runs
+ * a script on one connection, stops at the first error and rolls back what is open, so a CREATE INDEX that fails
+ * on duplicates leaves the dropped index in place instead of gone.
+ */
+function inTransaction(statements: string[]): string[] {
+  return statements.length > 1 ? ['BEGIN', ...statements, 'COMMIT'] : statements
+}
+
 export const pgDdl: DdlBuilder = {
   build(ns: Namespace, op: DdlOp): string[] {
     // Database-level ops have no table; handle them before touching op.table.
@@ -119,7 +128,9 @@ export const pgDdl: DdlBuilder = {
         return [releaseOwnConnections(op.name), `CREATE DATABASE ${id(op.newName)} TEMPLATE ${id(op.name)}`]
       case 'replaceInColumn': {
         const c = id(op.column)
-        const replaced = `replace(${c}, ${pgLiteral(op.find)}, ${pgLiteral(op.replace)})`
+        const replaced = op.regex
+          ? `regexp_replace(${c}, ${pgLiteral(op.find)}, ${pgLiteral(op.replace)}, 'g')`
+          : `replace(${c}, ${pgLiteral(op.find)}, ${pgLiteral(op.replace)})`
         return [
           `UPDATE ${quoteTable('postgres', ns, op.table)} SET ${c} = ${replaced} WHERE ${replaced} IS DISTINCT FROM ${c}`,
         ]
@@ -205,7 +216,7 @@ export const pgDdl: DdlBuilder = {
         return [`ALTER TABLE ${t} ${op.names.map((n) => `DROP COLUMN ${id(n)}`).join(', ')}`]
       case 'modifyColumns':
         // Each change as modifyColumn writes it: only the clauses that differ from the current definition.
-        return op.changes.flatMap((c) => pgDdl.build(ns, { op: 'modifyColumn', table: op.table, ...c }))
+        return inTransaction(op.changes.flatMap((c) => pgDdl.build(ns, { op: 'modifyColumn', table: op.table, ...c })))
       case 'reorderColumns':
         throw new AdapterError('UNSUPPORTED', 'PostgreSQL cannot reorder columns')
       case 'setPrimaryKey':
@@ -217,7 +228,10 @@ export const pgDdl: DdlBuilder = {
       case 'renameIndex':
         return [`ALTER INDEX ${schema}.${id(op.name)} RENAME TO ${id(op.newName)}`]
       case 'alterIndex':
-        return [`DROP INDEX ${schema}.${id(op.name)}`, createIndexSql('postgres', ns, { ...op.index, table: op.table })]
+        return inTransaction([
+          `DROP INDEX ${schema}.${id(op.name)}`,
+          createIndexSql('postgres', ns, { ...op.index, table: op.table }),
+        ])
       case 'dropIndex':
         return [`DROP INDEX ${schema}.${id(op.name)}`]
       case 'addForeignKey':

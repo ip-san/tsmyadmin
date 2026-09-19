@@ -184,6 +184,8 @@ export const DdlOpSchema = z.discriminatedUnion('op', [
     column: z.string().min(1),
     find: z.string().min(1).max(10_000),
     replace: z.string().max(10_000),
+    /** `find` is a regular expression in the server's dialect; back-references in `replace` follow it too. */
+    regex: z.boolean().optional(),
   }),
   /** MySQL: database == schema, so createSchema also creates a database there. */
   z.object({ op: z.literal('createDatabase'), name: z.string().min(1) }),

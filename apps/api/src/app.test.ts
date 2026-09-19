@@ -973,9 +973,10 @@ describe('sql & ddl', () => {
       args: [{ database: 'shop' }, { tables: ['users'], columns: [] }],
     })
     expect((await post({ tables: [] })).status).toBe(400)
-    // Free-text patterns are not offered: every condition is a column, an operator and a value.
+    // Only the listed operators: an unknown one is refused before any SQL is written.
     expect(
-      (await post({ tables: ['users'], where: [[{ table: 'users', column: 'name', op: 'like', value: '%' }]] })).status
+      (await post({ tables: ['users'], where: [[{ table: 'users', column: 'name', op: 'matches', value: '%' }]] }))
+        .status
     ).toBe(400)
     expect((await post({ tables: ['missing'] })).status).toBe(404)
   })

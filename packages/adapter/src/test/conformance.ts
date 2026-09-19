@@ -4,6 +4,7 @@ import type {
   ColumnSpec,
   DdlOp,
   Dialect,
+  Filter,
   Namespace,
   RowKey,
   StatementResult,
@@ -551,6 +552,24 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         }
       })
 
+      it('writes DISTINCT, typed conditions kept apart from the built ones, and LIMIT', async () => {
+        const { sql } = await db.buildQuery(ns, {
+          tables: ['posts'],
+          columns: [shown('posts', 'user_id', { sort: 'asc' })],
+          // Two groups OR-ed, then a typed condition with its own OR: neither may widen the other.
+          where: [
+            [{ table: 'posts', column: 'user_id', op: 'eq', value: '1' }],
+            [{ table: 'posts', column: 'user_id', op: 'eq', value: '2' }],
+          ],
+          distinct: true,
+          whereSql: `${quoteIdent(dialect, 'user_id')} = 1 OR 1 = 0`,
+          limit: 5,
+        })
+        expect(sql).toMatch(/^SELECT DISTINCT /)
+        expect(sql).toMatch(/LIMIT 5$/)
+        expect((await rowsOf(sql)).result.rows).toEqual([[1]])
+      })
+
       it('compares against the column type and handles IS NULL without a value', async () => {
         const columns = [shown('users', 'name', { sort: 'asc' })]
         const older = await db.buildQuery(ns, {
@@ -772,6 +791,52 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         expect(await find('contains', '!')).toEqual([4])
         expect(await find('starts_with', 'a')).toEqual([2, 3])
         await execOk(`DROP TABLE ${t}`)
+      })
+
+      it('filters with IN / BETWEEN lists, regular expressions and the empty string', async () => {
+        const t = `${scratch}_ops`
+        await execOk(`CREATE TABLE ${t} (id INT PRIMARY KEY, n INT NULL, s VARCHAR(30) NULL)`)
+        try {
+          await execOk(
+            `INSERT INTO ${t} (id, n, s) VALUES (1, 0, ''), (2, 5, 'abc'), (3, 10, 'Abd'), (4, NULL, NULL), (5, 7, 'x1')`
+          )
+          const find = async (filter: Filter) =>
+            (
+              await db.browseRows(ns, t, {
+                offset: 0,
+                limit: 10,
+                sort: [{ column: 'id', direction: 'asc' }],
+                filters: [filter],
+              })
+            ).rows.map((r) => r[0])
+          expect(await find({ column: 'n', op: 'in', values: ['5', 10] })).toEqual([2, 3])
+          // NULL is neither in nor out of a list.
+          expect(await find({ column: 'n', op: 'not_in', values: [5] })).toEqual([1, 3, 5])
+          expect(await find({ column: 'n', op: 'between', values: ['5', '7'] })).toEqual([2, 5])
+          expect(await find({ column: 'n', op: 'not_between', values: [5, 7] })).toEqual([1, 3])
+          expect(await find({ column: 's', op: 'regexp', value: '^ab' })).toEqual(
+            // MySQL's REGEXP follows the column's case-insensitive collation; PostgreSQL's ~ is case-sensitive.
+            dialect === 'mysql' ? [2, 3] : [2]
+          )
+          expect(await find({ column: 's', op: 'not_regexp', value: '[0-9]' })).toEqual([1, 2, 3])
+          expect(await find({ column: 'n', op: 'regexp', value: '^1' })).toEqual([3])
+          expect(await find({ column: 's', op: 'empty' })).toEqual([1])
+          expect(await find({ column: 's', op: 'not_empty' })).toEqual([2, 3, 5])
+          // An INT 0 is not the empty string (MySQL would convert '' to 0 in a plain comparison).
+          expect(await find({ column: 'n', op: 'empty' })).toEqual([])
+          await expect(find({ column: 'n', op: 'between', values: [1] })).rejects.toMatchObject({ code: 'VALIDATION' })
+          await expect(find({ column: 'n', op: 'in', values: [] })).rejects.toMatchObject({ code: 'VALIDATION' })
+
+          const { sql } = await db.buildQuery(ns, {
+            tables: [t],
+            columns: [],
+            where: [[{ table: t, column: 'n', op: 'in', values: ['5', '7'] }]],
+          })
+          const [r] = await exec(`${sql} ORDER BY 1`)
+          expect(r?.kind === 'rows' ? r.result.rows.map((x) => x[0]) : r).toEqual([2, 5])
+        } finally {
+          await execOk(`DROP TABLE ${t}`)
+        }
       })
 
       it('rejects unknown sort/filter columns', async () => {
@@ -2943,6 +3008,20 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
           expect(await exec(`SELECT name FROM ${t} WHERE id = 1`)).toMatchObject([
             { kind: 'rows', result: { rows: [['PEAR pie']] } },
           ])
+          // A regular expression, every match in the value replaced.
+          const regex = await runScript({
+            op: 'replaceInColumn',
+            table: t,
+            column: 'name',
+            find: 'an+',
+            replace: 'X',
+            regex: true,
+          })
+          const third = regex.find((r) => r.kind === 'affected')
+          expect(third?.kind === 'affected' ? third.affectedRows : -1).toBe(1)
+          expect(await exec(`SELECT name FROM ${t} WHERE id = 3`)).toMatchObject([
+            { kind: 'rows', result: { rows: [['BXXa']] } },
+          ])
         } finally {
           await exec(`DROP TABLE IF EXISTS ${t}`, { stopOnError: false })
         }
@@ -3442,6 +3521,27 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
             await runDdl({ op: 'reorderColumns', table: t, columns: reordered })
             expect((await db.describeTable(ns, t)).columns.map((c) => c.name)).toEqual(['c', 'id', 'a', 'b'])
           }
+
+          // A change that fails part-way (UNIQUE over duplicates) leaves the index as it was, run as the UI runs
+          // it: one script, stopping at the first error.
+          await execOk(`INSERT INTO ${t} (id, a, b, c) VALUES (1, 'dup', 1, 1), (2, 'dup', 2, 2)`)
+          await runDdl({ op: 'addIndex', table: t, name: `${idx}c`, columns: ['c'], unique: false })
+          const failed = await exec(
+            sqlScript(
+              dialect,
+              db.ddl.build(ns, {
+                op: 'alterIndex',
+                table: t,
+                name: `${idx}c`,
+                index: { name: `${idx}c`, columns: ['a'], unique: true },
+              })
+            )
+          )
+          expect(failed.some((r) => r.kind === 'error')).toBe(true)
+          expect((await db.describeTable(ns, t)).indexes.find((x) => x.name === `${idx}c`)).toMatchObject({
+            columns: ['c'],
+            unique: false,
+          })
 
           await runDdl({ op: 'dropIndex', table: t, name: `${idx}3` })
           await runDdl({ op: 'dropColumns', table: t, names: ['a', 'b'] })

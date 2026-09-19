@@ -39,4 +39,22 @@ describe('search conditions', () => {
       b: { op: 'is_not_null', value: '' },
     })
   })
+
+  it('reads IN and BETWEEN as comma-separated lists, and empty-string tests as taking no value', () => {
+    const filters = conditionsToFilters([col('a'), col('b'), col('c')], {
+      a: { op: 'in', value: ' 1, 2 ,, 3 ' },
+      b: { op: 'between', value: '10,20' },
+      c: { op: 'empty', value: 'ignored' },
+    })
+    expect(filters).toEqual([
+      { column: 'a', op: 'in', values: ['1', '2', '3'] },
+      { column: 'b', op: 'between', values: ['10', '20'] },
+      { column: 'c', op: 'empty' },
+    ])
+    expect(filtersToConditions(filters)).toEqual({
+      a: { op: 'in', value: '1, 2, 3' },
+      b: { op: 'between', value: '10, 20' },
+      c: { op: 'empty', value: '' },
+    })
+  })
 })

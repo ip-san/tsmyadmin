@@ -1,4 +1,5 @@
 import type { QueryBuilderOp, QueryBuilderRequestInput } from '@tsmyadmin/shared'
+import { conditionValue } from '@/lib/filter-values.ts'
 
 type SortDirection = 'asc' | 'desc'
 
@@ -33,8 +34,6 @@ export interface ConditionGroup {
   conditions: ConditionRow[]
 }
 
-export const NO_VALUE: ReadonlySet<QueryBuilderOp> = new Set(['is_null', 'is_not_null'])
-
 /** The request for the rows as they stand. Rows with no column chosen, or of a table no longer chosen, are left out. */
 export function toRequest(
   tables: readonly string[],
@@ -55,7 +54,7 @@ export function toRequest(
       g.conditions.flatMap((c) => {
         const r = ref(c.key)
         if (!r) return []
-        return [NO_VALUE.has(c.op) ? { ...r, op: c.op } : { ...r, op: c.op, value: c.value }]
+        return [{ ...r, op: c.op, ...conditionValue(c.op, c.value) }]
       })
     )
     .filter((g) => g.length > 0)

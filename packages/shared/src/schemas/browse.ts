@@ -21,13 +21,32 @@ export const FilterOpSchema = z.enum([
   'not_like',
   'is_null',
   'is_not_null',
+  /** Against `values`: IN takes one or more, BETWEEN exactly two (low, high). */
+  'in',
+  'not_in',
+  'between',
+  'not_between',
+  /** A regular expression in the server's own dialect (MySQL REGEXP, PostgreSQL `~`). */
+  'regexp',
+  'not_regexp',
+  /** The empty string (not NULL), compared on the column's text form. */
+  'empty',
+  'not_empty',
 ])
 export type FilterOp = z.infer<typeof FilterOpSchema>
+
+/** Operators that take no value, and those that take `values` (a list) instead of `value`. */
+export const NO_VALUE_OPS: ReadonlySet<FilterOp> = new Set(['is_null', 'is_not_null', 'empty', 'not_empty'])
+export const LIST_OPS: ReadonlySet<FilterOp> = new Set(['in', 'not_in', 'between', 'not_between'])
+/** Longest IN list one condition takes. */
+export const FILTER_MAX_VALUES = 1000
 
 export const FilterSchema = z.object({
   column: z.string().min(1),
   op: FilterOpSchema,
   value: InputCellSchema.optional(),
+  /** For in / not_in / between / not_between only. */
+  values: z.array(InputCellSchema).max(FILTER_MAX_VALUES).optional(),
 })
 export type Filter = z.infer<typeof FilterSchema>
 

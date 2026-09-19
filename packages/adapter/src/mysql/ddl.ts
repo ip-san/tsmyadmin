@@ -49,7 +49,8 @@ function columnDef(c: ColumnSpec): string {
     // The server computes the value: it takes no default, AUTO_INCREMENT or ON UPDATE. The expression is code,
     // shown in the preview before it runs.
     parts.push(`GENERATED ALWAYS AS (${c.generated.expression}) ${c.generated.stored ? 'STORED' : 'VIRTUAL'}`)
-    parts.push(c.nullable ? 'NULL' : 'NOT NULL')
+    // Nullable is the default; MariaDB's grammar has no NULL / NOT NULL for a generated column at all.
+    if (!c.nullable) parts.push('NOT NULL')
     if (c.comment !== null) parts.push(`COMMENT ${mysqlLiteral(c.comment)}`)
     if (c.check) parts.push(`CHECK (${c.check})`)
     return parts.join(' ')
@@ -130,7 +131,7 @@ export const mysqlDdl: DdlBuilder = {
       }
       case 'replaceInColumn': {
         const c = id(op.column)
-        const replaced = `REPLACE(${c}, ${mysqlLiteral(op.find)}, ${mysqlLiteral(op.replace)})`
+        const replaced = `${op.regex ? 'REGEXP_REPLACE' : 'REPLACE'}(${c}, ${mysqlLiteral(op.find)}, ${mysqlLiteral(op.replace)})`
         // REPLACE matches bytes; `<>` would compare in the column's collation, where a case-only change
         // (ABC → abc under _ai_ci) is "equal" and the row that changes would be skipped. Compared as bytes.
         const changes = `CAST(${replaced} AS BINARY) <> CAST(${c} AS BINARY)`

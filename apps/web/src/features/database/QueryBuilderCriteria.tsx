@@ -3,7 +3,8 @@ import { useRef } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { Input, Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
-import { type ColumnKey, type ConditionGroup, type ConditionRow, NO_VALUE } from './query-builder-model.ts'
+import { valueShape } from '@/lib/filter-values.ts'
+import { type ColumnKey, type ConditionGroup, type ConditionRow } from './query-builder-model.ts'
 
 export interface ColumnOption {
   key: ColumnKey
@@ -87,7 +88,7 @@ export function QueryBuilderCriteria({
                       </option>
                     ))}
                   </Select>
-                  {NO_VALUE.has(c.op) ? null : (
+                  {valueShape(c.op) === 'none' ? null : (
                     <Input
                       aria-label={t.fieldLabel(label, t.value)}
                       value={c.value}

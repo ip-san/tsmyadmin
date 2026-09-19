@@ -82,8 +82,8 @@ export function IndexesCard({
   const table = schema.name
   const columns = schema.columns.map((c) => c.name)
   const close = () => onDialog(null)
-  // PostgreSQL's primary key is a constraint: it is replaced from the column list, not edited as an index.
-  const canEdit = (i: IndexDef) => !(i.primary && dialect === 'postgres')
+  // A primary key takes no kind, method or prefix length: it is replaced from the column list instead.
+  const canEdit = (i: IndexDef) => !i.primary
   return (
     <Card
       title={locale.table.indexes}

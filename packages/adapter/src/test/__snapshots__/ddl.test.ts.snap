@@ -249,8 +249,10 @@ exports[`DDL builders > postgres: addIndex 1`] = `
 
 exports[`DDL builders > postgres: alterIndex 1`] = `
 [
+  "BEGIN",
   "DROP INDEX "app"."idx_t_a_b"",
   "CREATE INDEX "idx_t_a" ON "app"."t" USING btree ("a")",
+  "COMMIT",
 ]
 `;
 
@@ -382,6 +384,7 @@ exports[`DDL builders > postgres: modifyColumn 1`] = `
 
 exports[`DDL builders > postgres: modifyColumns 1`] = `
 [
+  "BEGIN",
   "ALTER TABLE "app"."t" ALTER COLUMN "a" TYPE BIGINT",
   "ALTER TABLE "app"."t" ALTER COLUMN "a" SET NOT NULL",
   "ALTER TABLE "app"."t" ALTER COLUMN "a" DROP DEFAULT",
@@ -389,6 +392,7 @@ exports[`DDL builders > postgres: modifyColumns 1`] = `
   "ALTER TABLE "app"."t" ALTER COLUMN "b2" TYPE TEXT",
   "ALTER TABLE "app"."t" ALTER COLUMN "b2" DROP NOT NULL",
   "ALTER TABLE "app"."t" ALTER COLUMN "b2" DROP DEFAULT",
+  "COMMIT",
 ]
 `;
 

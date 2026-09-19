@@ -25,18 +25,22 @@ export function ReplaceForm({ tableRef }: { tableRef: TableRef }) {
   const [column, setColumn] = useState('')
   const [find, setFind] = useState('')
   const [replace, setReplace] = useState('')
+  const [regex, setRegex] = useState(false)
   const columns = replaceableColumns(structure.data?.columns ?? [])
   const target = columns.includes(column) ? column : (columns[0] ?? '')
   // Views are left out: whether one takes the UPDATE depends on its definition, and a table is what it is for.
   if (!structure.data || isViewKind(structure.data.kind) || columns.length === 0) return null
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    if (target && find) flow.preview({ op: 'replaceInColumn', table: tableRef.table, column: target, find, replace })
+    if (target && find)
+      flow.preview({ op: 'replaceInColumn', table: tableRef.table, column: target, find, replace, regex })
   }
   return (
     <section className="mt-6 rounded border border-line p-3">
       <h2 className="mb-1 text-sm font-semibold text-ink">{t.title}</h2>
-      <p className="mb-2 text-xs text-ink-sub">{t.hint}</p>
+      <p className="mb-2 text-xs text-ink-sub">
+        {t.hint} {regex ? t.regexHint : null}
+      </p>
       <form onSubmit={submit} className="flex flex-wrap items-end gap-2">
         <Field id="replace-column" label={t.column}>
           <Select id="replace-column" value={target} onChange={(e) => setColumn(e.target.value)}>
@@ -53,6 +57,10 @@ export function ReplaceForm({ tableRef }: { tableRef: TableRef }) {
         <Field id="replace-with" label={t.with}>
           <Input id="replace-with" value={replace} onChange={(e) => setReplace(e.target.value)} />
         </Field>
+        <label className="flex items-center gap-1 self-center text-sm text-ink" title={t.regexHint}>
+          <input type="checkbox" checked={regex} onChange={(e) => setRegex(e.target.checked)} />
+          {t.regex}
+        </label>
         <Button type="submit" variant="primary" disabled={!find} aria-haspopup="dialog">
           {locale.create.review}
         </Button>

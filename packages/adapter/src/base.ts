@@ -40,6 +40,7 @@ import {
   isFunctionCell,
   isTruncatedCell,
   isViewKind,
+  LIST_OPS,
   MAX_TEXT_CHARS,
 } from '@tsmyadmin/shared'
 import { mysqlLiteral, pgLiteral } from './sql/literal.ts'
@@ -233,6 +234,16 @@ export function driverValueToCell(value: unknown, options: QueryOptions = {}): C
   }
 }
 
+/** Operators that match on the text form, where a BIT column is not written as its bytes. */
+const TEXT_OPS: ReadonlySet<Filter['op']> = new Set([
+  'contains',
+  'starts_with',
+  'like',
+  'not_like',
+  'regexp',
+  'not_regexp',
+])
+
 const FILTER_SQL: Record<Filter['op'], string> = {
   eq: '=',
   neq: '<>',
@@ -246,6 +257,14 @@ const FILTER_SQL: Record<Filter['op'], string> = {
   starts_with: 'LIKE',
   is_null: 'IS NULL',
   is_not_null: 'IS NOT NULL',
+  in: 'IN',
+  not_in: 'NOT IN',
+  between: 'BETWEEN',
+  not_between: 'NOT BETWEEN',
+  regexp: 'REGEXP',
+  not_regexp: 'NOT REGEXP',
+  empty: '=',
+  not_empty: '<>',
 }
 
 /**
@@ -650,23 +669,41 @@ export abstract class BaseAdapter implements DatabaseAdapter {
    */
   private conditionSql(
     col: string,
-    f: Pick<Filter, 'column' | 'op' | 'value'>,
+    f: Pick<Filter, 'column' | 'op' | 'value' | 'values'>,
     type: string,
     bind: (value: InputCell) => string
   ): string {
+    const d = this.dialect
     const op = FILTER_SQL[f.op]
     if (f.op === 'is_null' || f.op === 'is_not_null') return `${col} ${op}`
+    // The column's text form: PostgreSQL has no implicit cast for LIKE / ~ on numbers, dates or json. On MySQL an
+    // INT compared with '' would convert '' to 0; CONCAT gives the text ('0') instead, and keeps NULL as NULL.
+    const textCol = d === 'postgres' ? `${col}::text` : col
+    if (f.op === 'empty' || f.op === 'not_empty') return `${d === 'mysql' ? `CONCAT(${col})` : textCol} ${op} ''`
+    if (LIST_OPS.has(f.op)) {
+      const values = f.values ?? []
+      const between = f.op === 'between' || f.op === 'not_between'
+      if (between ? values.length !== 2 : values.length === 0)
+        throw new AdapterError(
+          'VALIDATION',
+          `Filter "${f.op}" on ${f.column} takes ${between ? 'two values' : 'at least one value'}`
+        )
+      const typed = values.map((v) => this.keyParam(bind(v), type))
+      return between ? `${col} ${op} ${typed[0]} AND ${typed[1]}` : `${col} ${op} (${typed.join(', ')})`
+    }
     if (f.value === undefined)
       throw new AdapterError('QUERY_FAILED', `Filter "${f.op}" on ${f.column} requires a value`)
-    // PostgreSQL has no implicit cast for LIKE on numbers / dates / json; match against the text form.
-    const likeCol = this.dialect === 'postgres' ? `${col}::text` : col
     if (f.op === 'contains' || f.op === 'starts_with') {
       // The user's text is matched literally: LIKE metacharacters are escaped, wildcards added here.
       const text = escapeLike(String(f.value ?? ''))
       const pattern = f.op === 'contains' ? `%${text}%` : `${text}%`
-      return `${likeCol} LIKE ${bind(pattern)} ESCAPE '!'`
+      return `${textCol} LIKE ${bind(pattern)} ESCAPE '!'`
     }
-    if (f.op === 'like' || f.op === 'not_like') return `${likeCol} ${op} ${bind(f.value)}`
+    if (f.op === 'like' || f.op === 'not_like') return `${textCol} ${op} ${bind(f.value)}`
+    if (f.op === 'regexp' || f.op === 'not_regexp')
+      return d === 'postgres'
+        ? `${textCol} ${f.op === 'regexp' ? '~' : '!~'} ${bind(f.value)}`
+        : `${col} ${op} ${bind(f.value)}`
     // Comparisons use the column's own type (FLOAT 0.1 is not the DOUBLE literal 0.1; BIT is not a hex string).
     return `${col} ${op} ${this.keyParam(bind(f.value), type)}`
   }
@@ -697,7 +734,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
       const type = typeOf(c)
       // MySQL compares BIT through the bytes bound for it (see keyParam): a quoted '170' would be read as the
       // bytes of the text "170". The number is written as those bytes instead.
-      const bitCompare = d === 'mysql' && /^bit\b/i.test(type) && c.op !== 'contains' && c.op !== 'starts_with'
+      const bitCompare = d === 'mysql' && /^bit\b/i.test(type) && !TEXT_OPS.has(c.op)
       return this.conditionSql(ref(c), c, type, bitCompare ? bitLiteral : literal)
     }
     const groups = spec.where.map((g) => g.map(condition).join(' AND '))
@@ -709,13 +746,17 @@ export abstract class BaseAdapter implements DatabaseAdapter {
       })
 
     const lines = [
-      `SELECT ${select.length === 0 ? '*' : select.join(', ')}`,
+      `SELECT ${spec.distinct ? 'DISTINCT ' : ''}${select.length === 0 ? '*' : select.join(', ')}`,
       `FROM ${quoteTable(d, ns, spec.tables[0] ?? '')}`,
       ...joinPlan(d, ns, spec.tables, schemas),
     ]
-    if (groups.length === 1) lines.push(`WHERE ${groups[0]}`)
-    else if (groups.length > 1) lines.push(`WHERE ${groups.map((g) => `(${g})`).join(' OR ')}`)
+    const typed = (spec.whereSql ?? '').trim()
+    const built = groups.length === 1 ? groups[0] : groups.length > 1 ? groups.map((g) => `(${g})`).join(' OR ') : ''
+    // Typed SQL goes in its own parentheses, so an OR in it cannot escape the AND with the built conditions.
+    const where = [built && typed && groups.length > 1 ? `(${built})` : built, typed && `(${typed})`].filter(Boolean)
+    if (where.length > 0) lines.push(`WHERE ${where.join(' AND ')}`)
     if (order.length > 0) lines.push(`ORDER BY ${order.join(', ')}`)
+    if (spec.limit != null) lines.push(`LIMIT ${spec.limit}`)
     return { sql: lines.join('\n') }
   }
 

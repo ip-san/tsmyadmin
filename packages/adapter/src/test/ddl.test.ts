@@ -210,7 +210,7 @@ describe('DDL builders', () => {
       comment: 'sum',
     })
     expect(mysqlDdl.build({ database: 'db' }, { op: 'addColumn', table: 't', column: generated })).toEqual([
-      "ALTER TABLE `db`.`t` ADD COLUMN `total` int GENERATED ALWAYS AS (`a` + `b`) STORED NULL COMMENT 'sum'",
+      "ALTER TABLE `db`.`t` ADD COLUMN `total` int GENERATED ALWAYS AS (`a` + `b`) STORED COMMENT 'sum'",
     ])
     const virtual = col('v', 'int', { generated: { expression: 'a * 2', stored: false }, nullable: false })
     expect(pgDdl.build({ database: 'db', schema: 'app' }, { op: 'addColumn', table: 't', column: virtual })).toEqual([
@@ -415,5 +415,13 @@ describe('DDL builders', () => {
         }
       }
     }
+  })
+
+  it('replaces by regular expression in each dialect, every match', () => {
+    const op: DdlOp = { op: 'replaceInColumn', table: 't', column: 'c', find: "a'+", replace: 'b', regex: true }
+    expect(mysqlDdl.build({ database: 'db' }, op)[0]).toContain("SET `c` = REGEXP_REPLACE(`c`, 'a''+', 'b')")
+    expect(pgDdl.build({ database: 'db', schema: 'app' }, op)[0]).toContain(
+      `SET "c" = regexp_replace("c", 'a''+', 'b', 'g')`
+    )
   })
 })

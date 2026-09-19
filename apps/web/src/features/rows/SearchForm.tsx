@@ -7,7 +7,9 @@ import { ErrorBox, Spinner } from '@/components/ui/Feedback.tsx'
 import { Input, Select } from '@/components/ui/Field.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
+import { conditionText, conditionValue, valueShape } from '@/lib/filter-values.ts'
 import { structureQuery, type TableRef } from '@/lib/queries.ts'
+import { defaultSearchOptions, SearchOptions, type SearchOptionsValue } from './SearchOptions.tsx'
 
 type Op = FilterOp | ''
 interface Condition {
@@ -15,25 +17,20 @@ interface Condition {
   value: string
 }
 
-const NO_VALUE: ReadonlySet<FilterOp> = new Set(['is_null', 'is_not_null'])
-
 /** Builds the Filter[] for the browse route from per-column conditions. */
 export function conditionsToFilters(columns: ColumnDef[], conditions: Record<string, Condition>): Filter[] {
   const out: Filter[] = []
   for (const c of columns) {
     const cond = conditions[c.name]
     if (!cond || cond.op === '') continue
-    out.push(
-      NO_VALUE.has(cond.op) ? { column: c.name, op: cond.op } : { column: c.name, op: cond.op, value: cond.value }
-    )
+    out.push({ column: c.name, op: cond.op, ...conditionValue(cond.op, cond.value) })
   }
   return out
 }
 
 export function filtersToConditions(filters: Filter[]): Record<string, Condition> {
   const out: Record<string, Condition> = {}
-  for (const f of filters)
-    out[f.column] = { op: f.op, value: f.value === undefined || f.value === null ? '' : String(f.value) }
+  for (const f of filters) out[f.column] = { op: f.op, value: conditionText(f) }
   return out
 }
 
@@ -44,18 +41,22 @@ export function SearchForm({
 }: {
   tableRef: TableRef
   initial: Filter[]
-  onSearch: (filters: Filter[]) => void
+  onSearch: (filters: Filter[], options: SearchOptionsValue, columns: string[]) => void
 }) {
   const structure = useQuery(structureQuery(tableRef))
   const [conditions, setConditions] = useState<Record<string, Condition>>(() => filtersToConditions(initial))
+  // Null until changed: the defaults depend on the columns, which arrive with the structure.
+  const [options, setOptions] = useState<SearchOptionsValue | null>(null)
   if (structure.isPending) return <Spinner />
   if (structure.isError) return <ErrorBox error={structure.error} onRetry={() => void structure.refetch()} />
   const columns = structure.data.columns
+  const names = columns.map((c) => c.name)
+  const current = options ?? defaultSearchOptions(names)
   const update = (name: string, patch: Partial<Condition>) =>
     setConditions((c) => ({ ...c, [name]: { op: '', value: '', ...c[name], ...patch } }))
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    onSearch(conditionsToFilters(columns, conditions))
+    onSearch(conditionsToFilters(columns, conditions), current, names)
   }
   return (
     <form onSubmit={submit} className="space-y-3">
@@ -72,7 +73,7 @@ export function SearchForm({
         <tbody>
           {columns.map((c) => {
             const cond = conditions[c.name] ?? { op: '', value: '' }
-            const needsValue = cond.op !== '' && !NO_VALUE.has(cond.op)
+            const shape = valueShape(cond.op)
             return (
               <Tr key={c.name}>
                 <Td className="whitespace-nowrap font-medium">{c.name}</Td>
@@ -96,7 +97,12 @@ export function SearchForm({
                   <Input
                     aria-label={`${c.name}: ${locale.rows.value}`}
                     value={cond.value}
-                    disabled={!needsValue}
+                    disabled={shape === 'none'}
+                    placeholder={
+                      shape === 'list'
+                        ? locale.search.listPlaceholder[cond.op === 'in' || cond.op === 'not_in' ? 'in' : 'between']
+                        : undefined
+                    }
                     onChange={(e) => update(c.name, { value: e.target.value })}
                     className="font-mono text-xs"
                   />
@@ -106,9 +112,19 @@ export function SearchForm({
           })}
         </tbody>
       </Table>
+      <SearchOptions columns={names} value={current} onChange={setOptions} />
       <div className="flex flex-wrap items-center justify-end gap-2">
-        <p className="mr-auto text-xs text-ink-sub">{locale.search.likeHint}</p>
-        <Button onClick={() => setConditions({})}>{locale.search.clear}</Button>
+        <p className="mr-auto text-xs text-ink-sub">
+          {locale.search.likeHint} {locale.search.listHint}
+        </p>
+        <Button
+          onClick={() => {
+            setConditions({})
+            setOptions(null)
+          }}
+        >
+          {locale.search.clear}
+        </Button>
         <Button type="submit" variant="primary">
           {locale.search.apply}
         </Button>
