@@ -1,4 +1,4 @@
-<!-- translated-from: docs/user-guide.md sha256:0c6fef28c878a94703422de8eade385a38f398b3f5ac1abc7e0ac06fd6fdbb10 -->
+<!-- translated-from: docs/user-guide.md sha256:2a98dbc1226683084584d24802983224e8494480a680cc1c7c85db217c873c24 -->
 
 # User guide
 
@@ -114,10 +114,11 @@ On PostgreSQL, **idle** tsmyadmin connections to that database under the same da
 
 ### Structure
 
-- Add, change and drop columns; add and drop indexes; add and drop foreign keys (to tables in the same schema); see what references this table; see the CREATE statement
+- Add, change and drop columns; add and drop indexes; add and drop foreign keys (MySQL can reference a table in another database, PostgreSQL one in another schema of the same database); see what references this table; see the CREATE statement
 - Adding or changing a column takes a collation, MySQL's attributes (UNSIGNED / ZEROFILL / BINARY) and *Set CURRENT_TIMESTAMP on update*, a **generated column** (expression, STORED / VIRTUAL), a position (MySQL: first, or after a chosen column) and a key to add with a new column (PRIMARY / UNIQUE / INDEX). PostgreSQL cannot move a column, turn an existing column into a generated one or switch STORED / VIRTUAL (changing the expression takes PostgreSQL 17 or later)
 - Tick columns on the left and use the buttons under the list to give the chosen columns a primary key (replacing the current one), a unique key or an index (MySQL also full-text / spatial), to **change them together** (one form per column, then one SQL preview) or to **drop them together**. On MySQL, *Reorder columns…* puts every column in a new order (PostgreSQL cannot reorder columns)
 - An index takes a kind (MySQL including full-text / spatial), a method (MySQL: BTREE / HASH; PostgreSQL: BTREE / HASH / GIN / GiST / BRIN / SP-GiST) and, on MySQL, prefix lengths (how many leading characters to index). An existing index can be **renamed** and **changed** (dropped and created again under one confirmation)
+- **Display column** (beside **Referenced by**) chooses the column that names this table's rows, used by Browse's *show the referenced row's name beside a foreign key* (the first text column by default; remembered by the browser)
 - **Partitions** lists the partitions (range / values, rows, size) and adds, empties, drops and maintains them (MySQL: ANALYZE / CHECK / OPTIMIZE / REBUILD / REPAIR; PostgreSQL: ANALYZE). A bound is what follows the partition's name, written as the server spells it (MySQL `VALUES LESS THAN (100)`, PostgreSQL `FOR VALUES FROM (0) TO (100)` / `DEFAULT`). On MySQL, **Partition the table…** partitions an existing table (RANGE / LIST / HASH / KEY) and **Remove partitioning** turns it back into one. PostgreSQL cannot partition an existing table: choose **Partitioning** in the database's **Create table**, then add partitions. On PostgreSQL a partition can also be **detached** (it becomes a table of its own, rows kept)
 - **Space and row statistics**: data, index, free (MySQL; reclaimed by OPTIMIZE) and TOAST (PostgreSQL) space, the estimated row count, the average row size, the row format and creation / update times (MySQL), dead rows and the last VACUUM / ANALYZE (PostgreSQL), all from the server's catalog. **Print this structure** prints the structure without the header and sidebar
 - Every change goes **preview of the generated SQL → Run**. An operation that cannot be undone (TRUNCATE, DROP …) also asks you to retype the object's name

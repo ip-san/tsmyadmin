@@ -451,6 +451,30 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
     })
 
     describe('listForeignKeys', () => {
+      it('adds a foreign key to a table in another database (MySQL) or schema (PostgreSQL) and reads it back', async () => {
+        const t = `${scratch}_xfk`
+        const other = dialect === 'mysql' ? { database: 'tsmyadmin_other' } : { database: ns.database, schema: 'app' }
+        const ref = dialect === 'mysql' ? 'marker' : `${scratch}_xref`
+        try {
+          if (dialect === 'postgres') await execOk(`CREATE TABLE app.${ref} (id INT PRIMARY KEY)`)
+          await execOk(`CREATE TABLE ${t} (id INT PRIMARY KEY, ref_id INT)`)
+          await runDdl({
+            op: 'addForeignKey',
+            table: t,
+            name: `${t}_fk`,
+            columns: ['ref_id'],
+            refTable: ref,
+            ...(dialect === 'mysql' ? { refDatabase: 'tsmyadmin_other' } : { refSchema: 'app' }),
+            refColumns: ['id'],
+          })
+          const fk = (await db.describeTable(ns, t)).foreignKeys.find((k) => k.name === `${t}_fk`)
+          expect(fk).toMatchObject({ refTable: ref, refNamespace: other, refColumns: ['id'] })
+        } finally {
+          await exec(`DROP TABLE IF EXISTS ${t}`, { stopOnError: false })
+          if (dialect === 'postgres') await exec(`DROP TABLE IF EXISTS app.${ref}`, { stopOnError: false })
+        }
+      })
+
       it('lists every key of the namespace, as describeTable reports them, ordered by table', async () => {
         const t = `${scratch}_fk`
         await execOk(`DROP TABLE IF EXISTS ${t}`)

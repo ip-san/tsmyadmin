@@ -200,6 +200,10 @@ export const DdlOpSchema = z.discriminatedUnion('op', [
     name: z.string().min(1),
     columns: z.array(z.string().min(1)).min(1),
     refTable: z.string().min(1),
+    /** MySQL: a table in another database (PostgreSQL cannot reference across databases). */
+    refDatabase: z.string().min(1).optional(),
+    /** PostgreSQL: a table in another schema of the same database. */
+    refSchema: z.string().min(1).optional(),
     refColumns: z.array(z.string().min(1)).min(1),
     onUpdate: FkActionSchema.optional(),
     onDelete: FkActionSchema.optional(),

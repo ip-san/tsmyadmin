@@ -258,6 +258,10 @@ export const ja = {
     indexes: 'インデックス',
     foreignKeys: '外部キー',
     createStatement: 'CREATE 文',
+    displayColumn: '表示カラム',
+    displayColumnAuto: '（自動: 最初の文字列カラム）',
+    displayColumnHint:
+      '他のテーブルの外部キーがこのテーブルを指すとき、値の横に出す名前のカラム（ブラウザーが覚えます）',
     stats: {
       title: '容量と行の統計',
       print: 'この構造を印刷',
@@ -676,7 +680,9 @@ export const ja = {
     fkOnDelete: 'ON DELETE',
     fkDefaultAction: '（既定）',
     fkHint:
-      '参照先のカラムは主キーまたはユニークキーである必要があります。別のスキーマ / データベースのテーブルを参照する場合は SQL で作成してください。',
+      '参照先のカラムは主キーまたはユニークキーである必要があります。MySQL は別のデータベースの、PostgreSQL は同じデータベースの別のスキーマのテーブルも参照できます。',
+    fkRefDatabase: '参照先のデータベース',
+    fkRefSchema: '参照先のスキーマ',
     unique: 'ユニーク',
     primaryKey: '主キー',
     tableName: 'テーブル名',

@@ -19,7 +19,7 @@ import { ColumnForm } from './ColumnForm.tsx'
 import { type IndexDialog, IndexesCard } from './IndexesCard.tsx'
 import { NormalizationHints } from './NormalizationHints.tsx'
 import { PartitionsCard } from './PartitionsCard.tsx'
-import { ForeignKeysTable, ReferencedByTable } from './RelationsTables.tsx'
+import { DisplayColumnSelect, ForeignKeysTable, ReferencedByTable } from './RelationsTables.tsx'
 import { StatsCard } from './StatsCard.tsx'
 import { TransformsCard } from './TransformsCard.tsx'
 
@@ -116,7 +116,11 @@ export function StructureView({ tableRef, dialect }: { tableRef: TableRef; diale
           {...(editable ? { onDrop: (name: string) => flow.preview({ op: 'dropForeignKey', table, name }) } : {})}
         />
       </Card>
-      <Card title={locale.table.referencedBy} bleed>
+      <Card
+        title={locale.table.referencedBy}
+        actions={<DisplayColumnSelect tableRef={tableRef} columns={s.columns.map((c) => c.name)} />}
+        bleed
+      >
         <ReferencedByTable schema={s} />
       </Card>
       {editable ? <PartitionsCard tableRef={tableRef} dialect={dialect} onPreview={flow.preview} /> : null}

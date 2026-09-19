@@ -445,4 +445,22 @@ describe('DDL builders', () => {
       `SET "c" = regexp_replace("c", 'a''+', 'b', 'g')`
     )
   })
+
+  it('references a table in another database (MySQL) or schema (PostgreSQL), and refuses another PostgreSQL database', () => {
+    const fk = (extra: object): DdlOp => ({
+      op: 'addForeignKey',
+      table: 't',
+      name: 'fk',
+      columns: ['a'],
+      refTable: 'r',
+      refColumns: ['id'],
+      ...extra,
+    })
+    expect(mysqlDdl.build({ database: 'db' }, fk({ refDatabase: 'o`ther' }))[0]).toContain('REFERENCES `o``ther`.`r`')
+    expect(pgDdl.build({ database: 'db', schema: 'app' }, fk({ refSchema: 'pub"lic' }))[0]).toContain(
+      'REFERENCES "pub""lic"."r"'
+    )
+    expect(pgDdl.build({ database: 'db', schema: 'app' }, fk({}))[0]).toContain('REFERENCES "app"."r"')
+    expect(() => pgDdl.build({ database: 'db' }, fk({ refDatabase: 'other' }))).toThrow(/another database/)
+  })
 })

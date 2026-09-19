@@ -74,5 +74,8 @@ describe('displayColumn', () => {
     expect(displayColumn(cols, 'id')).toBe('code')
     expect(displayColumn(cols, 'code')).toBe('name')
     expect(displayColumn([{ name: 'id', dataType: 'int' }], 'id')).toBeNull()
+    // The column chosen for the table wins, while it still exists.
+    expect(displayColumn(cols, 'id', 'name')).toBe('name')
+    expect(displayColumn(cols, 'id', 'gone')).toBe('code')
   })
 })

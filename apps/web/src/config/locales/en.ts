@@ -262,6 +262,10 @@ export const en = {
     indexes: 'Indexes',
     foreignKeys: 'Foreign keys',
     createStatement: 'CREATE statement',
+    displayColumn: 'Display column',
+    displayColumnAuto: '(automatic: the first text column)',
+    displayColumnHint:
+      "The column that names this table's rows beside another table's foreign key values (remembered by the browser)",
     stats: {
       title: 'Space and row statistics',
       print: 'Print this structure',
@@ -682,7 +686,9 @@ export const en = {
     fkOnDelete: 'ON DELETE',
     fkDefaultAction: '(default)',
     fkHint:
-      'The referenced columns must be a primary or unique key. Use the SQL tab to reference a table in another schema or database.',
+      'The referenced columns must be a primary or unique key. MySQL can reference a table in another database, PostgreSQL one in another schema of the same database.',
+    fkRefDatabase: 'Referenced database',
+    fkRefSchema: 'Referenced schema',
     unique: 'Unique',
     primaryKey: 'Primary key',
     tableName: 'Table name',

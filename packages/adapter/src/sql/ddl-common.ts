@@ -7,12 +7,19 @@ type AddForeignKey = Extract<DdlOp, { op: 'addForeignKey' }>
 /** `ALTER TABLE t ADD CONSTRAINT name FOREIGN KEY (...) REFERENCES ref (...) [ON UPDATE x] [ON DELETE y]` — same on both dialects. */
 export function addForeignKeySql(dialect: Dialect, ns: Namespace, op: AddForeignKey): string {
   const id = (s: string) => quoteIdent(dialect, s)
+  if (dialect === 'postgres' && op.refDatabase && op.refDatabase !== ns.database)
+    throw new AdapterError('UNSUPPORTED', 'PostgreSQL cannot reference a table in another database')
+  // The referenced table's namespace: another database (MySQL) or schema (PostgreSQL), else the table's own.
+  const refNs: Namespace =
+    dialect === 'mysql'
+      ? { database: op.refDatabase ?? ns.database }
+      : { database: ns.database, ...((op.refSchema ?? ns.schema) ? { schema: op.refSchema ?? ns.schema } : {}) }
   const actions = [op.onUpdate ? ` ON UPDATE ${op.onUpdate}` : '', op.onDelete ? ` ON DELETE ${op.onDelete}` : '']
   return `ALTER TABLE ${quoteTable(dialect, ns, op.table)} ADD CONSTRAINT ${id(op.name)} FOREIGN KEY (${op.columns
     .map(id)
     .join(
       ', '
-    )}) REFERENCES ${quoteTable(dialect, ns, op.refTable)} (${op.refColumns.map(id).join(', ')})${actions.join('')}`
+    )}) REFERENCES ${quoteTable(dialect, refNs, op.refTable)} (${op.refColumns.map(id).join(', ')})${actions.join('')}`
 }
 
 /** An index's definition, as addIndex and alterIndex carry it. */

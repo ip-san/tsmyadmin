@@ -1,10 +1,19 @@
 import { useQueries, useQuery } from '@tanstack/react-query'
 import type { BrowseOptions, BrowseResult, Cell, ColumnDef, ForeignKeyDef } from '@tsmyadmin/shared'
+import { chosenDisplayColumn } from '@/lib/display-column.ts'
 import { rowsQuery, structureQuery, type TableRef } from '@/lib/queries.ts'
 import { visibleColumns } from './browse-search.ts'
 
-/** The column that names a referenced row: its table's first text column other than the referenced one. */
-export function displayColumn(columns: Pick<ColumnDef, 'name' | 'dataType'>[], refColumn: string): string | null {
+/**
+ * The column that names a referenced row: the one chosen for its table, when it still exists, else the table's
+ * first text column other than the referenced one.
+ */
+export function displayColumn(
+  columns: Pick<ColumnDef, 'name' | 'dataType'>[],
+  refColumn: string,
+  chosen?: string
+): string | null {
+  if (chosen && columns.some((c) => c.name === chosen)) return chosen
   return columns.find((c) => c.name !== refColumn && /char|text/i.test(c.dataType))?.name ?? null
 }
 
@@ -42,7 +51,9 @@ export function useFkLabels(tableRef: TableRef, options: BrowseOptions, enabled:
   const structures = useQueries({ queries: keys.map((k) => structureQuery(refOf(k.fk))) })
   const lookups = useQueries({
     queries: keys.map((k, i) => {
-      const show = structures[i]?.data ? displayColumn(structures[i].data.columns, k.refColumn) : null
+      const show = structures[i]?.data
+        ? displayColumn(structures[i].data.columns, k.refColumn, chosenDisplayColumn(refOf(k.fk)))
+        : null
       return {
         ...rowsQuery(refOf(k.fk), {
           offset: 0,

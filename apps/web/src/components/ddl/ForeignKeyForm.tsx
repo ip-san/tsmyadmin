@@ -5,12 +5,21 @@ import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Field, Input, Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
-import { structureQuery, type TableRef, tablesQuery } from '@/lib/queries.ts'
+import {
+  databasesQuery,
+  schemasQuery,
+  sessionQuery,
+  structureQuery,
+  type TableRef,
+  tablesQuery,
+} from '@/lib/queries.ts'
 
 interface ForeignKeyValues {
   name: string
   columns: string[]
   refTable: string
+  refDatabase?: string
+  refSchema?: string
   refColumns: string[]
   onUpdate?: FkAction
   onDelete?: FkAction
@@ -23,16 +32,26 @@ export interface ForeignKeyFormProps {
   onCancel: () => void
 }
 
-/** Foreign key to another table of the same namespace: local columns ↔ referenced columns, pairwise in order. */
+/**
+ * Foreign key to another table — of this namespace, another database (MySQL) or another schema (PostgreSQL):
+ * local columns ↔ referenced columns, pairwise in order.
+ */
 export function ForeignKeyForm({ tableRef, columns, onSubmit, onCancel }: ForeignKeyFormProps) {
-  const tables = useQuery(tablesQuery(tableRef.db, tableRef.schema))
+  const dialect = useQuery(sessionQuery).data?.dialect ?? 'mysql'
+  const own = dialect === 'mysql' ? tableRef.db : (tableRef.schema ?? 'public')
+  const [space, setSpace] = useState(own)
+  const databases = useQuery({ ...databasesQuery, enabled: dialect === 'mysql' })
+  const schemas = useQuery({ ...schemasQuery(tableRef.db), enabled: dialect === 'postgres' })
+  const spaceNames = dialect === 'mysql' ? (databases.data ?? []).map((d) => d.name) : (schemas.data ?? [])
+  const refNs = dialect === 'mysql' ? { db: space, schema: undefined } : { db: tableRef.db, schema: space }
+  const tables = useQuery(tablesQuery(refNs.db, refNs.schema))
   const [name, setName] = useState('')
   const [selected, setSelected] = useState<string[]>([])
   const [refTable, setRefTable] = useState('')
   const [refSelected, setRefSelected] = useState<string[]>([])
   const [onUpdate, setOnUpdate] = useState<FkAction | ''>('')
   const [onDelete, setOnDelete] = useState<FkAction | ''>('')
-  const ref = useQuery({ ...structureQuery({ ...tableRef, table: refTable }), enabled: refTable !== '' })
+  const ref = useQuery({ ...structureQuery({ ...refNs, table: refTable }), enabled: refTable !== '' })
   const suggested = selected.length > 0 ? `fk_${tableRef.table}_${selected.join('_')}` : ''
   const finalName = name.trim() || suggested
   const toggle = (list: string[], set: (v: string[]) => void, c: string) =>
@@ -45,6 +64,7 @@ export function ForeignKeyForm({ tableRef, columns, onSubmit, onCancel }: Foreig
       name: finalName,
       columns: selected,
       refTable,
+      ...(space !== own ? (dialect === 'mysql' ? { refDatabase: space } : { refSchema: space }) : {}),
       refColumns: refSelected,
       ...(onUpdate ? { onUpdate } : {}),
       ...(onDelete ? { onDelete } : {}),
@@ -87,6 +107,23 @@ export function ForeignKeyForm({ tableRef, columns, onSubmit, onCancel }: Foreig
           ))}
         </div>
       </fieldset>
+      <Field id="fk-ref-space" label={dialect === 'mysql' ? locale.ddl.fkRefDatabase : locale.ddl.fkRefSchema}>
+        <Select
+          id="fk-ref-space"
+          value={space}
+          onChange={(e) => {
+            setSpace(e.target.value)
+            setRefTable('')
+            setRefSelected([])
+          }}
+        >
+          {[own, ...spaceNames.filter((n) => n !== own)].map((n) => (
+            <option key={n} value={n}>
+              {n}
+            </option>
+          ))}
+        </Select>
+      </Field>
       <Field id="fk-ref-table" label={locale.ddl.fkRefTable}>
         <Select
           id="fk-ref-table"
