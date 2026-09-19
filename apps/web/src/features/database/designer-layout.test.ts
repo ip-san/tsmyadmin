@@ -1,6 +1,6 @@
 import type { RelationDef } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
-import { autoLayout, boxColumns, drawnRelations } from './designer-layout.ts'
+import { autoLayout, boxColumns, drawnRelations, relationPath, withAllColumns } from './designer-layout.ts'
 
 const rel = (table: string, refTable: string, extra: Partial<RelationDef> = {}): RelationDef => ({
   table,
@@ -51,5 +51,17 @@ describe('designer layout', () => {
     expect(drawnRelations([rel('posts', 'users')], 'mysql', { database: 'app' }, ['posts', 'users'])).toHaveLength(1)
     const elsewhere = rel('posts', 'users', { refNamespace: { database: 'other' } })
     expect(drawnRelations([elsewhere], 'mysql', { database: 'app' }, ['posts', 'users'])).toHaveLength(0)
+  })
+
+  it('lists the key columns first, then the rest once, when every column is shown', () => {
+    expect(withAllColumns(['user_id'], ['id', 'user_id', 'title'])).toEqual(['user_id', 'id', 'title'])
+    expect(withAllColumns(['user_id'], undefined)).toEqual(['user_id'])
+  })
+
+  it('draws a key from its column row to the referenced column row', () => {
+    const at = (t: string) => (t === 'posts' ? { x: 300, y: 0 } : { x: 0, y: 0 })
+    const columns = (t: string) => (t === 'posts' ? ['id', 'user_id'] : ['id'])
+    // posts.user_id is the second row of its box; users.id the first, and the users box is on the left.
+    expect(relationPath(rel('posts', 'users', { columns: ['user_id'] }), at, columns)).toMatch(/^M 300 58 C .* 200 38$/)
   })
 })

@@ -3291,7 +3291,7 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
             await runScript({
               op: 'createEvent',
               name: event,
-              schedule: { kind: 'at', at: '2099-01-01 00:00:00' },
+              schedule: { kind: 'at', at: '2037-01-01 00:00:00' },
               body: 'SELECT 1',
               enabled: false,
               preserve: true,

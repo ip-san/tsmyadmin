@@ -20,14 +20,24 @@ export function DesignerAddForeignKey({
   db,
   schema,
   tables,
+  preset,
+  onPresetDone,
 }: {
   db: string
   schema?: string | undefined
   tables: string[]
+  /** Columns picked on the diagram: opens the dialog with them filled in. */
+  preset?: { table: string; column: string; refTable: string; refColumn: string } | undefined
+  onPresetDone?: () => void
 }) {
-  const [open, setOpen] = useState(false)
+  const [opened, setOpen] = useState(false)
+  const open = opened || preset !== undefined
+  const close = () => {
+    setOpen(false)
+    onPresetDone?.()
+  }
   const [from, setFrom] = useState('')
-  const table = tables.includes(from) ? from : (tables[0] ?? '')
+  const table = preset?.table ?? (tables.includes(from) ? from : (tables[0] ?? ''))
   const tableRef = { db, schema, table }
   const structure = useQuery({ ...structureQuery(tableRef), enabled: open && table !== '' })
   const flow = useDdlFlow(db, schema)
@@ -36,11 +46,16 @@ export function DesignerAddForeignKey({
       <Button size="sm" aria-haspopup="dialog" onClick={() => setOpen(true)} disabled={tables.length === 0}>
         {locale.ddl.titles.addForeignKey}
       </Button>
-      <Dialog open={open} title={locale.ddl.titles.addForeignKey} onClose={() => setOpen(false)}>
+      <Dialog open={open} title={locale.ddl.titles.addForeignKey} onClose={close}>
         {open ? (
           <div className="space-y-3">
             <Field id="designer-fk-table" label={t.fromTable}>
-              <Select id="designer-fk-table" value={table} onChange={(e) => setFrom(e.target.value)}>
+              <Select
+                id="designer-fk-table"
+                value={table}
+                disabled={preset !== undefined}
+                onChange={(e) => setFrom(e.target.value)}
+              >
                 {tables.map((x) => (
                   <option key={x} value={x}>
                     {x}
@@ -50,12 +65,15 @@ export function DesignerAddForeignKey({
             </Field>
             {structure.data ? (
               <ForeignKeyForm
-                key={table}
+                key={`${table}:${preset?.column}:${preset?.refColumn}`}
                 tableRef={tableRef}
                 columns={structure.data.columns.map((c) => c.name)}
-                onCancel={() => setOpen(false)}
+                {...(preset
+                  ? { initial: { columns: [preset.column], refTable: preset.refTable, refColumns: [preset.refColumn] } }
+                  : {})}
+                onCancel={close}
                 onSubmit={(v) => {
-                  setOpen(false)
+                  close()
                   flow.preview({ op: 'addForeignKey', table, ...v })
                 }}
               />

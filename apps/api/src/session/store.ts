@@ -20,6 +20,8 @@ export const SAVED_ITEM_KINDS = [
   'tracklog',
   // Per account: a query-builder setup kept under a name.
   'qbe',
+  // Per account: a Designer page (where the tables sit on the diagram) kept under a name.
+  'designer',
 ] as const
 export type SavedItemKind = (typeof SAVED_ITEM_KINDS)[number]
 

@@ -10,6 +10,7 @@ import type {
   DatabaseInfo,
   DdlOp,
   DdlPreviewResponse,
+  DesignerPage,
   EventInfo,
   ExportTemplate,
   KeyValue,
@@ -31,6 +32,7 @@ import type {
   RowCount,
   RowKey,
   RowValues,
+  SaveDesignerPageRequest,
   SavedQuery,
   SaveExportTemplateRequest,
   SaveQueryTemplateRequest,
@@ -107,6 +109,8 @@ export const accountSecondFactorsQuery = queryOptions({
 
 export const listQueryTemplates = () => unwrap<QueryTemplate[]>(api['query-templates'].$get())
 export const queryTemplatesQuery = queryOptions({ queryKey: ['query-templates'], queryFn: listQueryTemplates })
+export const listDesignerPages = () => unwrap<DesignerPage[]>(api['designer-pages'].$get())
+export const designerPagesQuery = queryOptions({ queryKey: ['designer-pages'], queryFn: listDesignerPages })
 export const listExportTemplates = () => unwrap<ExportTemplate[]>(api['export-templates'].$get())
 export const exportTemplatesQuery = queryOptions({ queryKey: ['export-templates'], queryFn: listExportTemplates })
 export const listCentralColumns = () => unwrap<CentralColumn[]>(api['central-columns'].$get())
@@ -420,6 +424,9 @@ export const mutations = {
     unwrap<QueryTemplate[]>(api['query-templates'].$post({ json: body })),
   deleteQueryTemplate: (id: string) =>
     unwrap<QueryTemplate[]>(api['query-templates'][':id'].$delete({ param: { id } })),
+  saveDesignerPage: (body: SaveDesignerPageRequest) =>
+    unwrap<DesignerPage[]>(api['designer-pages'].$post({ json: body })),
+  deleteDesignerPage: (id: string) => unwrap<DesignerPage[]>(api['designer-pages'][':id'].$delete({ param: { id } })),
   saveExportTemplate: (body: SaveExportTemplateRequest) =>
     unwrap<ExportTemplate[]>(api['export-templates'].$post({ json: body })),
   deleteExportTemplate: (id: string) =>

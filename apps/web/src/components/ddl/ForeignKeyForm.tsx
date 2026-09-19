@@ -28,6 +28,8 @@ interface ForeignKeyValues {
 export interface ForeignKeyFormProps {
   tableRef: TableRef
   columns: string[]
+  /** A key to start from (the Designer's column-to-column pick). */
+  initial?: { columns: string[]; refTable: string; refColumns: string[] }
   onSubmit: (values: ForeignKeyValues) => void
   onCancel: () => void
 }
@@ -36,7 +38,7 @@ export interface ForeignKeyFormProps {
  * Foreign key to another table — of this namespace, another database (MySQL) or another schema (PostgreSQL):
  * local columns ↔ referenced columns, pairwise in order.
  */
-export function ForeignKeyForm({ tableRef, columns, onSubmit, onCancel }: ForeignKeyFormProps) {
+export function ForeignKeyForm({ tableRef, columns, initial, onSubmit, onCancel }: ForeignKeyFormProps) {
   const dialect = useQuery(sessionQuery).data?.dialect ?? 'mysql'
   const own = dialect === 'mysql' ? tableRef.db : (tableRef.schema ?? 'public')
   const [space, setSpace] = useState(own)
@@ -46,9 +48,9 @@ export function ForeignKeyForm({ tableRef, columns, onSubmit, onCancel }: Foreig
   const refNs = dialect === 'mysql' ? { db: space, schema: undefined } : { db: tableRef.db, schema: space }
   const tables = useQuery(tablesQuery(refNs.db, refNs.schema))
   const [name, setName] = useState('')
-  const [selected, setSelected] = useState<string[]>([])
-  const [refTable, setRefTable] = useState('')
-  const [refSelected, setRefSelected] = useState<string[]>([])
+  const [selected, setSelected] = useState<string[]>(initial?.columns ?? [])
+  const [refTable, setRefTable] = useState(initial?.refTable ?? '')
+  const [refSelected, setRefSelected] = useState<string[]>(initial?.refColumns ?? [])
   const [onUpdate, setOnUpdate] = useState<FkAction | ''>('')
   const [onDelete, setOnDelete] = useState<FkAction | ''>('')
   const ref = useQuery({ ...structureQuery({ ...refNs, table: refTable }), enabled: refTable !== '' })

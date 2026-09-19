@@ -1,7 +1,7 @@
 import type { RelationDef } from '@tsmyadmin/shared'
 import { type KeyboardEvent, type PointerEvent, useRef } from 'react'
 import { locale } from '@/config/locale.ts'
-import { anchor, BOX_WIDTH, boxColumns, boxHeight, HEADER_HEIGHT, type Point, ROW_HEIGHT } from './designer-layout.ts'
+import { BOX_WIDTH, boxHeight, HEADER_HEIGHT, type Point, ROW_HEIGHT, relationPath } from './designer-layout.ts'
 
 const t = locale.designer
 const STEP = 10
@@ -20,20 +20,28 @@ export const relationKey = (r: RelationDef) => JSON.stringify([r.table, r.name])
 export function DesignerDiagram({
   tables,
   relations,
+  columns,
+  display,
   positions,
   onMove,
+  relate,
 }: {
   tables: readonly string[]
   relations: readonly RelationDef[]
+  /** What each box lists. */
+  columns: ReadonlyMap<string, readonly string[]>
+  /** The column marked as each table's display column. */
+  display: ReadonlyMap<string, string>
   positions: Readonly<Record<string, Point>>
   onMove: (table: string, to: Point, commit: boolean) => void
+  /** While set, the columns are the buttons (pick one, then the one it refers to) and boxes stay where they are. */
+  relate?: { from: { table: string; column: string } | null; onPick: (table: string, column: string) => void }
 }) {
   /** Where in the box it was grabbed, and where it was last put. */
   const drag = useRef<{ table: string; dx: number; dy: number; start: Point; last: Point; moved: boolean } | null>(null)
-  const columns = new Map(tables.map((name) => [name, boxColumns(name, relations)]))
   const at = (table: string): Point => positions[table] ?? { x: 0, y: 0 }
   const width = Math.max(...tables.map((name) => at(name).x + BOX_WIDTH)) + PAD
-  const height = Math.max(...tables.map((name) => at(name).y + boxHeight(columns.get(name)?.length ?? 0))) + PAD
+  const height = Math.max(...tables.map((name) => at(name).y + boxHeight((columns.get(name) ?? []).length))) + PAD
   const clamp = (p: Point): Point => ({ x: Math.max(0, p.x), y: Math.max(0, p.y) })
 
   // In diagram coordinates, measured against the SVG each time, so scrolling the diagram mid-drag does not jump the box.
@@ -83,17 +91,10 @@ export function DesignerDiagram({
       <figcaption className="sr-only">{t.diagram}</figcaption>
       <svg width={width} height={height} className="select-none">
         {relations.map((r) => {
-          const from = at(r.table)
-          const to = at(r.refTable)
-          const a = anchor(from, columns.get(r.table) ?? [], r.columns[0] ?? '', to.x + BOX_WIDTH / 2)
-          const b = anchor(to, columns.get(r.refTable) ?? [], r.refColumns[0] ?? '', from.x + BOX_WIDTH / 2)
-          const bend = Math.max(40, Math.abs(b.x - a.x) / 2)
-          const ax = a.x === from.x ? a.x - bend : a.x + bend
-          const bx = b.x === to.x ? b.x - bend : b.x + bend
           return (
             <path
               key={relationKey(r)}
-              d={`M ${a.x} ${a.y} C ${ax} ${a.y}, ${bx} ${b.y}, ${b.x} ${b.y}`}
+              d={relationPath(r, at, (table) => columns.get(table) ?? [])}
               className="fill-none stroke-brand"
               strokeWidth={1.5}
               aria-hidden
@@ -103,6 +104,61 @@ export function DesignerDiagram({
         {tables.map((name) => {
           const p = at(name)
           const cols = columns.get(name) ?? []
+          const contents = (
+            <>
+              <rect
+                width={BOX_WIDTH}
+                height={boxHeight(cols.length)}
+                rx={4}
+                className="fill-surface stroke-line-strong group-focus-visible:stroke-brand"
+                strokeWidth={1.5}
+              />
+              <text x={8} y={18} className="fill-ink text-xs font-semibold">
+                {name}
+              </text>
+              <line x1={0} x2={BOX_WIDTH} y1={HEADER_HEIGHT} y2={HEADER_HEIGHT} className="stroke-line" />
+            </>
+          )
+          const label = (c: string) => (display.get(name) === c ? `◆ ${c}` : c)
+          if (relate) {
+            return (
+              <g key={name} transform={`translate(${p.x} ${p.y})`}>
+                {contents}
+                {cols.map((c, i) => {
+                  const picked = relate.from?.table === name && relate.from.column === c
+                  const y = HEADER_HEIGHT + i * ROW_HEIGHT
+                  return (
+                    // biome-ignore lint/a11y/useSemanticElements: an SVG group cannot be a <button>.
+                    <g
+                      key={c}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={t.columnLabel(name, c)}
+                      aria-pressed={picked}
+                      className="group cursor-pointer outline-none"
+                      onClick={() => relate.onPick(name, c)}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'Enter' && e.key !== ' ') return
+                        e.preventDefault()
+                        relate.onPick(name, c)
+                      }}
+                    >
+                      <rect
+                        x={1}
+                        y={y}
+                        width={BOX_WIDTH - 2}
+                        height={ROW_HEIGHT}
+                        className={`${picked ? 'fill-row-hover stroke-brand' : 'fill-transparent'} group-hover:fill-row-hover group-focus-visible:stroke-brand`}
+                      />
+                      <text x={8} y={y + 14} className="fill-ink-sub text-xs">
+                        {label(c)}
+                      </text>
+                    </g>
+                  )
+                })}
+              </g>
+            )
+          }
           return (
             // biome-ignore lint/a11y/useSemanticElements: an SVG group cannot be a <button>.
             <g
@@ -119,20 +175,10 @@ export function DesignerDiagram({
               onPointerCancel={endDrag}
               onKeyDown={nudge(name)}
             >
-              <rect
-                width={BOX_WIDTH}
-                height={boxHeight(cols.length)}
-                rx={4}
-                className="fill-surface stroke-line-strong group-focus-visible:stroke-brand"
-                strokeWidth={1.5}
-              />
-              <text x={8} y={18} className="fill-ink text-xs font-semibold">
-                {name}
-              </text>
-              <line x1={0} x2={BOX_WIDTH} y1={HEADER_HEIGHT} y2={HEADER_HEIGHT} className="stroke-line" />
+              {contents}
               {cols.map((c, i) => (
                 <text key={c} x={8} y={HEADER_HEIGHT + i * ROW_HEIGHT + 14} className="fill-ink-sub text-xs">
-                  {c}
+                  {label(c)}
                 </text>
               ))}
             </g>

@@ -1,11 +1,13 @@
-import type { CentralColumn, ColumnTransform, Preferences, QueryTemplate } from '@tsmyadmin/shared'
+import type { CentralColumn, ColumnTransform, DesignerPage, Preferences, QueryTemplate } from '@tsmyadmin/shared'
 import {
   CentralColumnBodySchema,
   ColumnTransformBodySchema,
   centralColumnKey,
   columnTransformKey,
+  designerPageKey,
   PreferencesSchema,
   queryTemplateKey,
+  SaveDesignerPageRequestSchema,
   SavedQueryIdSchema,
   SaveQueryTemplateRequestSchema,
 } from '@tsmyadmin/shared'
@@ -53,7 +55,26 @@ export function storedRoutes(cfg: SessionConfig) {
   const transforms = (items: SavedItem[]): ColumnTransform[] => parsed(items, ColumnTransformBodySchema)
   // The name is in the body (the row is keyed by namespace + name).
   const queryTemplates = (items: SavedItem[]): QueryTemplate[] => parsed(items, SaveQueryTemplateRequestSchema)
+  const designerPages = (items: SavedItem[]): DesignerPage[] => parsed(items, SaveDesignerPageRequestSchema)
   return new Hono<AppEnv>()
+    .use('/designer-pages', requireSession(cfg))
+    .use('/designer-pages/*', requireSession(cfg))
+    .get('/designer-pages', async (c) => c.json(designerPages(await list(c, 'designer'))))
+    .post('/designer-pages', validate('json', SaveDesignerPageRequestSchema), async (c) => {
+      const store = cfg.store.savedQueries
+      if (!store) return unsupported(c)
+      const body = c.req.valid('json')
+      return c.json(
+        designerPages(
+          await store.save(c.get('session').config, 'designer', designerPageKey(body), JSON.stringify(body))
+        )
+      )
+    })
+    .delete('/designer-pages/:id', validate('param', SavedQueryIdSchema), async (c) => {
+      const store = cfg.store.savedQueries
+      if (!store) return unsupported(c)
+      return c.json(designerPages(await store.remove(c.get('session').config, 'designer', c.req.valid('param').id)))
+    })
     .use('/query-templates', requireSession(cfg))
     .use('/query-templates/*', requireSession(cfg))
     .get('/query-templates', async (c) => c.json(queryTemplates(await list(c, 'qbe'))))

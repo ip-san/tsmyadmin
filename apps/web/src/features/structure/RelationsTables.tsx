@@ -1,12 +1,8 @@
 import type { TableSchema } from '@tsmyadmin/shared'
-import { useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { Notice } from '@/components/ui/Feedback.tsx'
-import { Select } from '@/components/ui/Field.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
-import { chooseDisplayColumn, chosenDisplayColumn } from '@/lib/display-column.ts'
-import type { TableRef } from '@/lib/queries.ts'
 
 export function ForeignKeysTable({ schema, onDrop }: { schema: TableSchema; onDrop?: (name: string) => void }) {
   if (schema.foreignKeys.length === 0) return <Notice>{locale.table.noForeignKeys}</Notice>
@@ -77,30 +73,5 @@ export function ReferencedByTable({ schema }: { schema: TableSchema }) {
         ))}
       </tbody>
     </Table>
-  )
-}
-
-/** This table's display column: what names its rows beside another table's foreign key values. */
-export function DisplayColumnSelect({ tableRef, columns }: { tableRef: TableRef; columns: string[] }) {
-  const [chosen, setChosen] = useState(() => chosenDisplayColumn(tableRef) ?? '')
-  return (
-    <label className="flex items-center gap-1 text-xs text-ink-sub" title={locale.table.displayColumnHint}>
-      {locale.table.displayColumn}
-      <Select
-        value={columns.includes(chosen) ? chosen : ''}
-        onChange={(e) => {
-          setChosen(e.target.value)
-          chooseDisplayColumn(tableRef, e.target.value || undefined)
-        }}
-        className="w-auto py-1"
-      >
-        <option value="">{locale.table.displayColumnAuto}</option>
-        {columns.map((c) => (
-          <option key={c} value={c}>
-            {c}
-          </option>
-        ))}
-      </Select>
-    </label>
   )
 }

@@ -9,6 +9,7 @@ import {
   ColumnTransformSchema,
   ConnectRequestSchema,
   DdlPreviewResponseSchema,
+  DesignerPageSchema,
   ExportTemplateSchema,
   IMPORT_MAX_BYTES,
   ImportEventSchema,
@@ -2075,6 +2076,30 @@ describe('saved queries', () => {
       expect((await post(setup('shop', []))).status).toBe(400)
       const id = saved.find((x) => x.database === 'other')?.id ?? ''
       expect(await (await h.req(`/api/query-templates/${id}`, { method: 'DELETE' })).json()).toHaveLength(1)
+    } finally {
+      await h.store.closeAll()
+    }
+  })
+
+  it('keeps Designer pages per database and name, and refuses positions that are not numbers', async () => {
+    const h = persistentHarness()
+    try {
+      await h.login()
+      const page = (database: string, x: number) => ({ name: 'overview', database, positions: { users: { x, y: 0 } } })
+      const post = (body: unknown) => h.req('/api/designer-pages', { method: 'POST', body: JSON.stringify(body) })
+      await post(page('shop', 1))
+      await post(page('other', 2))
+      const saved = z.array(DesignerPageSchema).parse(await (await post(page('shop', 3))).json())
+      expect(saved.map((x) => [x.database, x.positions.users?.x, x.allColumns])).toEqual(
+        expect.arrayContaining([
+          ['shop', 3, false],
+          ['other', 2, false],
+        ])
+      )
+      expect(saved).toHaveLength(2)
+      expect((await post({ ...page('shop', 1), positions: { users: { x: 'left', y: 0 } } })).status).toBe(400)
+      const id = saved.find((x) => x.database === 'other')?.id ?? ''
+      expect(await (await h.req(`/api/designer-pages/${id}`, { method: 'DELETE' })).json()).toHaveLength(1)
     } finally {
       await h.store.closeAll()
     }

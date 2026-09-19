@@ -21,6 +21,7 @@ for (const t of TARGETS) {
         'CASCADE',
         'RESTRICT',
         'fk_posts_user',
+        '削除',
       ])
       await expect(page.getByRole('button', { name: /^テーブル posts/ })).toBeVisible()
       await expect(page.getByRole('button', { name: /^テーブル users/ })).toBeVisible()

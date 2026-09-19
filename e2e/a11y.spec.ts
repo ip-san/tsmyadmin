@@ -216,6 +216,14 @@ for (const t of TARGETS) {
       await page.goto(t.schema ? `/db/${t.database}/designer?schema=${t.schema}` : `/db/${t.database}/designer`)
       await page.getByRole('table', { name: '外部キー' }).waitFor()
       await scan(page)
+      // Every column listed, picking columns to relate, and the pages panel open.
+      await page.getByRole('button', { name: '図で外部キーを作る' }).click()
+      await page
+        .getByRole('button', { name: /^.+ の .+$/ })
+        .first()
+        .waitFor()
+      await page.getByText(/^保存したページ/).click()
+      await scan(page)
       // Zoom search with a plot, a picked row and the table of points open.
       await page.goto(tableUrl(t, 'users', '/search'))
       const zoom = page.getByRole('region', { name: 'ズーム検索' })

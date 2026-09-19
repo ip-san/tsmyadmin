@@ -72,11 +72,36 @@ export function autoLayout(tables: readonly string[], relations: readonly Relati
 }
 
 /** Where a column's row meets the side of its box nearer to `towardsX`. */
-export function anchor(box: Point, columns: readonly string[], column: string, towardsX: number): Point {
+function anchor(box: Point, columns: readonly string[], column: string, towardsX: number): Point {
   const row = Math.max(columns.indexOf(column), 0)
   const centre = box.x + BOX_WIDTH / 2
   return {
     x: towardsX < centre ? box.x : box.x + BOX_WIDTH,
     y: box.y + HEADER_HEIGHT + row * ROW_HEIGHT + ROW_HEIGHT / 2,
   }
+}
+
+/**
+ * A box's columns when every column is listed: the ones its keys use first (so the lines still attach at the top),
+ * then the rest in table order.
+ */
+export function withAllColumns(keyColumns: readonly string[], all: readonly string[] | undefined): string[] {
+  if (!all) return [...keyColumns]
+  return [...keyColumns, ...all.filter((c) => !keyColumns.includes(c))]
+}
+
+/** The curve of one key between the two boxes it joins, from its column's row to the referenced column's row. */
+export function relationPath(
+  r: RelationDef,
+  at: (table: string) => Point,
+  columnsOf: (table: string) => readonly string[]
+): string {
+  const from = at(r.table)
+  const to = at(r.refTable)
+  const a = anchor(from, columnsOf(r.table), r.columns[0] ?? '', to.x + BOX_WIDTH / 2)
+  const b = anchor(to, columnsOf(r.refTable), r.refColumns[0] ?? '', from.x + BOX_WIDTH / 2)
+  const bend = Math.max(40, Math.abs(b.x - a.x) / 2)
+  const ax = a.x === from.x ? a.x - bend : a.x + bend
+  const bx = b.x === to.x ? b.x - bend : b.x + bend
+  return `M ${a.x} ${a.y} C ${ax} ${a.y}, ${bx} ${b.y}, ${b.x} ${b.y}`
 }
