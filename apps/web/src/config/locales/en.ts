@@ -341,9 +341,13 @@ export const en = {
     moveLeft: (c: string) => `Move ${c} left`,
     moveRight: (c: string) => `Move ${c} right`,
     display: 'Display',
+    sortByKey: 'Sort by key',
+    noKeySort: '(none)',
+    byIndex: (name: string, asc: boolean) => `${name} (${asc ? 'ascending' : 'descending'})`,
     download: 'Download',
     downloadValue: (column: string) => `Download the value of ${column}`,
     fullText: 'Show long values in full',
+    fkDisplay: "Show the referenced row's name beside a foreign key",
     binaryAsHex: 'Show binary values as hex',
     geometryAsWkt: 'Show spatial values as WKT',
     hexMore: (bytes: number) => `… (${bytes.toLocaleString('en-US')} bytes in all)`,
@@ -465,6 +469,14 @@ export const en = {
     openTransaction:
       'A transaction was still open when the run finished, so it was rolled back. The connection is returned after every run: keep BEGIN and COMMIT in the same run.',
     maxRows: 'Row limit',
+    profiling: {
+      option: 'Profiling',
+      hint: 'Shows, for each statement, the time the server spent in each stage (MySQL / MariaDB SHOW PROFILE)',
+      title: 'Profile',
+      summary: (seconds: number) => `Profile (${seconds.toFixed(6)} s in all)`,
+      state: 'Stage',
+      seconds: 'Seconds',
+    },
     stopOnError: 'Stop on error',
     safeMode: 'Confirm UPDATE / DELETE without WHERE',
     safeModeHint:

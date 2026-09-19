@@ -337,9 +337,13 @@ export const ja = {
     moveLeft: (c: string) => `${c} を左へ`,
     moveRight: (c: string) => `${c} を右へ`,
     display: '表示のしかた',
+    sortByKey: 'キーで並べ替え',
+    noKeySort: '（なし）',
+    byIndex: (name: string, asc: boolean) => `${name}（${asc ? '昇順' : '降順'}）`,
     download: 'ダウンロード',
     downloadValue: (column: string) => `${column} の値をダウンロード`,
     fullText: '長い値を全文で表示',
+    fkDisplay: '外部キーの参照先の名前を併記',
     binaryAsHex: 'バイナリを 16 進で表示',
     geometryAsWkt: '空間データを WKT で表示',
     hexMore: (bytes: number) => `…（全 ${bytes.toLocaleString('ja-JP')} バイト）`,
@@ -458,6 +462,14 @@ export const ja = {
     openTransaction:
       '実行の終わりでトランザクションが開いたままだったため、取り消しました。1 回の実行ごとに接続が返却されるため、BEGIN と COMMIT は同じ実行に入れてください。',
     maxRows: '最大行数',
+    profiling: {
+      option: 'プロファイリング',
+      hint: '文ごとに、サーバーが各段階で使った時間を表示します（MySQL / MariaDB の SHOW PROFILE）',
+      title: 'プロファイル',
+      summary: (seconds: number) => `プロファイル（合計 ${seconds.toFixed(6)} 秒）`,
+      state: '段階',
+      seconds: '秒',
+    },
     stopOnError: 'エラーで停止',
     safeMode: 'WHERE のない UPDATE / DELETE を確認',
     safeModeHint:

@@ -1,5 +1,6 @@
 import type { BrowseResult, ForeignKeyDef } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
+import { displayColumn } from './fk-labels.ts'
 import { fkTarget, linkableForeignKeys, linkableReverseKeys, reverseTarget } from './fk-links.ts'
 
 const fk = (over: Partial<ForeignKeyDef> = {}): ForeignKeyDef => ({
@@ -60,5 +61,18 @@ describe('reverse references', () => {
       filters: JSON.stringify([{ column: 'user_id', op: 'eq', value: 1 }]),
     })
     expect(reverseTarget(ref, null, 'shop')).toBeNull()
+  })
+})
+
+describe('displayColumn', () => {
+  it('names a referenced row by its first text column other than the key', () => {
+    const cols = [
+      { name: 'id', dataType: 'int' },
+      { name: 'code', dataType: 'char(3)' },
+      { name: 'name', dataType: 'varchar(20)' },
+    ]
+    expect(displayColumn(cols, 'id')).toBe('code')
+    expect(displayColumn(cols, 'code')).toBe('name')
+    expect(displayColumn([{ name: 'id', dataType: 'int' }], 'id')).toBeNull()
   })
 })

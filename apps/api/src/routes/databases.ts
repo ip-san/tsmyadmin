@@ -308,6 +308,7 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
           maxRows: body.maxRows,
           timeoutMs: body.timeoutMs,
           stopOnError: body.stopOnError,
+          profile: body.profile,
           ...(body.queryId ? { queryId: body.queryId } : {}),
         })
         return c.json(results)
@@ -349,6 +350,7 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
               maxRows: body.maxRows,
               timeoutMs: body.timeoutMs,
               stopOnError: body.stopOnError,
+              profile: body.profile,
               queryId,
               onResult: (result, index) => send({ type: 'result', index, result }),
               onTransactionOpen: (open) => {

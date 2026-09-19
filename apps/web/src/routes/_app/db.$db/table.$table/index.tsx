@@ -14,7 +14,9 @@ import {
   rememberedColumns,
   rememberLimit,
 } from '@/features/browse/browse-search.ts'
+import { useFkLabels } from '@/features/browse/fk-labels.ts'
 import { GisView } from '@/features/browse/GisView.tsx'
+import { IndexSort } from '@/features/browse/IndexSort.tsx'
 import { RowsGrid } from '@/features/browse/RowsGrid.tsx'
 import { cellUrl } from '@/lib/cell-url.ts'
 import { useShortcuts } from '@/lib/shortcuts.ts'
@@ -44,6 +46,7 @@ function BrowsePage() {
   const limit = search.limit ?? preferredLimit()
   const tableRef = { db, schema: search.schema, table }
   const options = browseOptionsFromSearch(search, limit)
+  const fkLabels = useFkLabels(tableRef, options, display.fkDisplay)
   return (
     <CellDisplayContext
       value={{
@@ -51,8 +54,14 @@ function BrowsePage() {
         setDisplay,
         dialect: session.dialect,
         downloadUrl: (key, column) => cellUrl({ ...tableRef, key, column }),
+        fkLabel: (column, value) => fkLabels.get(column)?.get(String(value)),
       }}
     >
+      <IndexSort
+        tableRef={tableRef}
+        sort={options.sort}
+        onSort={(sort) => navigate({ search: (prev) => ({ ...prev, sort, page: 1 }) })}
+      />
       <RowsGrid
         tableRef={tableRef}
         options={options}

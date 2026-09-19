@@ -760,7 +760,7 @@ describe('sql & ddl', () => {
     expect(h.adapter.calls.at(-1)?.args).toEqual([
       { database: 'shop' },
       'SELECT 1',
-      { maxRows: 1000, timeoutMs: 30_000, stopOnError: true },
+      { maxRows: 1000, timeoutMs: 30_000, stopOnError: true, profile: false },
     ])
   })
 

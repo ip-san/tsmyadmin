@@ -1,6 +1,6 @@
 import type { BrowseResult } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
-import { visibleColumns } from './RowsGrid.tsx'
+import { visibleColumns } from './browse-search.ts'
 
 const base: BrowseResult = {
   columns: [

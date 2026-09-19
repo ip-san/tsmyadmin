@@ -2,6 +2,7 @@ import { Link } from '@tanstack/react-router'
 import type { Cell, ForeignKeyDef, ReferencingKeyDef } from '@tsmyadmin/shared'
 import { CornerDownLeft, ExternalLink } from 'lucide-react'
 import { CellValue } from '@/components/cells/CellValue.tsx'
+import { useCellDisplay } from '@/components/cells/cell-display.ts'
 import { locale } from '@/config/locale.ts'
 import { fkTarget, reverseTarget } from './fk-links.ts'
 
@@ -17,7 +18,9 @@ export function FkCell({
   reverse?: ReferencingKeyDef[]
   db: string
 }) {
+  const { fkLabel } = useCellDisplay()
   const target = fk ? fkTarget(fk, cell, db) : null
+  const label = fk ? fkLabel?.(fk.columns[0] ?? '', cell) : undefined
   const reverseLinks = reverse
     .map((r) => ({ ref: r, target: reverseTarget(r, cell, db) }))
     .filter((x) => x.target !== null)
@@ -27,6 +30,7 @@ export function FkCell({
   return (
     <span className="inline-flex items-center gap-1">
       <CellValue cell={cell} />
+      {label !== undefined ? <span className="font-sans text-ink-sub">{label}</span> : null}
       {fk && target ? (
         <Link
           to="/db/$db/table/$table"

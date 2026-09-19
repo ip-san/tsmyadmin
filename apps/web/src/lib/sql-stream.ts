@@ -3,7 +3,7 @@ import { SqlStreamEventSchema } from '@tsmyadmin/shared'
 import { api, enc } from './api.ts'
 import { ndjsonEvents, streamError } from './ndjson.ts'
 
-export type SqlStreamBody = Omit<SqlRequest, 'maxRows' | 'timeoutMs' | 'stopOnError'> & Partial<SqlRequest>
+export type SqlStreamBody = Omit<SqlRequest, 'maxRows' | 'timeoutMs' | 'stopOnError' | 'profile'> & Partial<SqlRequest>
 
 /**
  * Runs a script through POST /sql/stream and yields events as statements complete.

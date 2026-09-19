@@ -1166,6 +1166,22 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
     })
 
     describe('executeSql', () => {
+      it('times each statement by stage when profiling is asked for (MySQL / MariaDB only)', async () => {
+        const results = await exec('SELECT 1; SELECT COUNT(*) FROM users', { profile: true })
+        expect(results.map((r) => r.kind)).toEqual(['rows', 'rows'])
+        for (const r of results) {
+          const profile = r.kind === 'rows' ? r.profile : undefined
+          if (dialect === 'postgres') expect(profile).toBeUndefined()
+          else {
+            expect(profile?.length).toBeGreaterThan(0)
+            expect(profile?.every((p) => p.state.length > 0 && p.seconds >= 0)).toBe(true)
+          }
+        }
+        // Profiling is session state: the next run on the pooled connection is not profiled.
+        const plain = await exec('SELECT 1')
+        expect(plain[0]?.kind === 'rows' ? plain[0].profile : 'x').toBeUndefined()
+      })
+
       it('asks the server whether the script left a transaction open', async () => {
         // The answer has to come from the server: MySQL's implicit commits depend on how far a statement got
         // (a DDL the parser rejected never committed), which reading the script cannot reproduce.

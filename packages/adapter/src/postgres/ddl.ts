@@ -16,9 +16,12 @@ const id = (s: string) => quoteIdent('postgres', s)
  * Idle, because application name and account do not single out this person: two people sharing one database
  * account both show up as `tsmyadmin` / that user. A pooled connection waiting for its next query is idle; someone
  * else's running export is not, and is left alone — PostgreSQL then refuses the rename, which is the right outcome.
+ *
+ * With a timeout (PostgreSQL 14+): the plain call only signals the backend and returns, so the ALTER right after it
+ * could still find the connection there and fail with "being accessed by other users".
  */
 function releaseOwnConnections(database: string): string {
-  return `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = ${pgLiteral(database)} AND application_name = 'tsmyadmin' AND usename = session_user AND state = 'idle' AND pid <> pg_backend_pid()`
+  return `SELECT pg_terminate_backend(pid, 5000) FROM pg_stat_activity WHERE datname = ${pgLiteral(database)} AND application_name = 'tsmyadmin' AND usename = session_user AND state = 'idle' AND pid <> pg_backend_pid()`
 }
 /** Separators for string_agg results (never part of a name or a statement): between entries, and inside one. */
 const SEP = String.fromCharCode(31)

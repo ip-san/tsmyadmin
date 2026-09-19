@@ -12,6 +12,7 @@ import type {
   Namespace,
   ObjectDependency,
   ProcessInfo,
+  ProfileStage,
   QueryBuilderCondition,
   QueryBuilderResult,
   QueryBuilderSpec,
@@ -427,6 +428,14 @@ export abstract class BaseAdapter implements DatabaseAdapter {
    */
   protected async capResultRows(_conn: Conn, _maxRows: number): Promise<boolean> {
     return false
+  }
+  /** Turns on per-statement profiling for this run; false where the server has none. Reset with the session. */
+  protected async startProfiling(_conn: Conn): Promise<boolean> {
+    return false
+  }
+  /** The stages of the statement just run, when profiling is on. */
+  protected async readProfile(_conn: Conn): Promise<ProfileStage[] | null> {
+    return null
   }
   /** Native error codes that mean "the read-only wrapper broke this statement", after which it is re-run unwrapped. */
   protected wrapperOnlyErrors(): ReadonlySet<string> {
@@ -1061,6 +1070,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
             // User SQL may SET the session timeout / namespace itself; never trust the cached values afterwards.
             this.forgetSessionState(conn)
             let capped = await this.capResultRows(conn, opts.maxRows)
+            const profiling = opts.profile ? await this.startProfiling(conn) : false
             // Published only now: a cancel must interrupt the user's first statement, not the session setup.
             if (opts.queryId) resolveBackend(await this.backendId(conn))
             for (const [statement, st] of statements.entries()) {
@@ -1098,6 +1108,9 @@ export abstract class BaseAdapter implements DatabaseAdapter {
                 } finally {
                   entry.inFlight = false
                 }
+                // Read before anything else runs: the profile is of the most recent statement.
+                const stages = profiling ? await this.readProfile(conn).catch(() => null) : null
+                const profile = stages && stages.length > 0 ? { profile: stages } : {}
                 // A script that changed the cap itself (SET SESSION sql_select_limit …) gets it re-applied.
                 if (capped && TOUCHES_CAP.test(code)) capped = await this.capResultRows(conn, opts.maxRows)
                 const durationMs = Math.round(performance.now() - started)
@@ -1111,6 +1124,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
                       statement,
                       durationMs,
                       ...(r.notices && r.notices.length > 0 ? { notices: r.notices } : {}),
+                      ...profile,
                       result: {
                         columns: r.columns,
                         rows: truncated ? r.rows.slice(0, opts.maxRows) : r.rows,
@@ -1126,6 +1140,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
                       durationMs,
                       affectedRows: r.affectedRows,
                       ...(r.notices && r.notices.length > 0 ? { notices: r.notices } : {}),
+                      ...profile,
                     })
                   }
                 }

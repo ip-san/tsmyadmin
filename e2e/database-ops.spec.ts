@@ -32,7 +32,7 @@ for (const t of TARGETS) {
     })
 
     test('renames a database, then copies it with its rows', async ({ page }) => {
-      const base = `e2e_dbops_${Date.now().toString(36)}`
+      const base = `e2e_dbops_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
       const renamed = `${base}_ren`
       const copied = `${base}_cpy`
       await seedDatabase(page, t, base)

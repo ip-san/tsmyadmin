@@ -4,6 +4,7 @@ import { locale } from '@/config/locale.ts'
 
 const OPTIONS: { key: keyof CellDisplay; label: string }[] = [
   { key: 'fullText', label: locale.browse.fullText },
+  { key: 'fkDisplay', label: locale.browse.fkDisplay },
   { key: 'binaryAsHex', label: locale.browse.binaryAsHex },
   { key: 'geometryAsWkt', label: locale.browse.geometryAsWkt },
 ]

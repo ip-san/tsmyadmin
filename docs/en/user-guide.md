@@ -1,4 +1,4 @@
-<!-- translated-from: docs/user-guide.md sha256:4c49b64bf1adb051a832b14faddc516c8820c279431a79bd29c6e2c9f122d767 -->
+<!-- translated-from: docs/user-guide.md sha256:6403053e69f8dabfbe933e8c413b09e0d2bcf7a612444e42e6730ef1d60fbacb -->
 
 # User guide
 
@@ -99,7 +99,8 @@ On PostgreSQL, **idle** tsmyadmin connections to that database under the same da
 
 - Click a column heading to sort (ascending → descending → off). Shift-click sorts by several columns (the number shows the order). **Rows per page** is kept in this browser
 - **Columns N/M** chooses which columns to show and their order (the arrows move a column left or right). The choice goes in the URL, and the browser remembers it per table
-- **Display** switches long values to full text, binary values to hex (the first 256 bytes) and spatial values to WKT (MySQL's spatial types and PostGIS); the browser remembers the choice
+- **Sort by key** orders the rows by an index, ascending or descending
+- **Display** switches long values to full text, shows the referenced row's name beside a foreign key (the referenced table's first text column), binary values to hex (the first 256 bytes) and spatial values to WKT (MySQL's spatial types and PostGIS); the browser remembers the choice
 - A page holds only the head of a value (64 KB of a binary value, and the start of a long text). Where rows can be addressed, **Download** beside such a value fetches all of it (up to 64 MB)
 - A foreign key value links to the row it references (↗); a primary key links to the rows referencing it (↵)
 - On a table over 100,000 rows with no filter, the exact count is skipped and the total reads *Approx. N rows*
@@ -126,6 +127,7 @@ On PostgreSQL, **idle** tsmyadmin connections to that database under the same da
 - `⌘/Ctrl + Enter` runs. Several statements each get their own result (rows / affected rows / the position of an error), drawn as each one finishes
 - **Cancel** stops a run in progress. A result past the **Row limit** shows only the first rows (and says so)
 - **EXPLAIN** shows the query plan for a single statement
+- **Profiling** (MySQL / MariaDB) shows, for each statement, the time the server spent in each stage (`SHOW PROFILE`). PostgreSQL has no per-stage timing; use `EXPLAIN ANALYZE` for the plan and its times
 - **Confirm UPDATE / DELETE without WHERE** (on by default) asks before running a statement that would touch every row. It reads the text you typed, so it may ask once too often; it never stays silent when it should ask. Clearing the box runs without asking
 - **CSV** and **JSON** download what is on screen. CSV has an option to **stop spreadsheets from running values as formulas** (off by default; it prefixes the value with an apostrophe, so do not use it for a file you intend to import back)
 - **Copy** puts the result on the clipboard as tab-separated text (column names first, NULL as `NULL`; the formula option above applies to it too), which a spreadsheet splits into cells when pasted. Over a connection that is neither HTTPS nor localhost some browsers refuse, and the screen says the copy failed. A result holding values cut for display cannot be copied, as it cannot be downloaded

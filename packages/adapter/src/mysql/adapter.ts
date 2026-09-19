@@ -8,6 +8,7 @@ import type {
   Namespace,
   ObjectDependency,
   ProcessInfo,
+  ProfileStage,
   RelationDef,
   ReplicationInfo,
   RoutineInfo,
@@ -388,6 +389,22 @@ export class MysqlAdapter extends BaseAdapter {
   protected override async capResultRows(conn: Conn, maxRows: number): Promise<boolean> {
     await conn.query(`SET SESSION sql_select_limit = ${Math.max(1, Math.floor(maxRows)) + 1}`)
     return true
+  }
+
+  // SHOW PROFILE is deprecated in MySQL 8 but still answers there and on MariaDB, where it is the only per-stage
+  // timing a session can ask for without the privileges performance_schema's history tables need.
+  protected override async startProfiling(conn: Conn): Promise<boolean> {
+    try {
+      await conn.query('SET SESSION profiling = 1')
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  protected override async readProfile(conn: Conn): Promise<ProfileStage[]> {
+    const r = firstResult(await conn.query('SHOW PROFILE'))
+    return r.rows.map((row) => ({ state: String(row[0] ?? ''), seconds: Number(row[1] ?? 0) }))
   }
 
   protected override wrapperOnlyErrors(): ReadonlySet<string> {

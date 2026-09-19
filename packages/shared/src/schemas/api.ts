@@ -82,6 +82,8 @@ export const SqlRequestSchema = z.object({
   maxRows: z.number().int().min(1).max(SQL_MAX_ROWS_LIMIT).default(SQL_MAX_ROWS_DEFAULT),
   timeoutMs: z.number().int().min(1000).max(300_000).default(SQL_TIMEOUT_DEFAULT_MS),
   stopOnError: z.boolean().default(true),
+  /** Time each statement's stages (MySQL / MariaDB `SHOW PROFILE`); PostgreSQL has no such breakdown. */
+  profile: z.boolean().default(false),
 })
 export type SqlRequest = z.infer<typeof SqlRequestSchema>
 

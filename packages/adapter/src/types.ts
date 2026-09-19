@@ -61,6 +61,8 @@ export interface ExecuteOptions {
    * Each run is autocommitted on its own pooled connection, so anything still open is about to be rolled back.
    */
   onTransactionOpen?: (open: boolean) => void
+  /** Time each statement's stages where the server can (MySQL / MariaDB); ignored elsewhere. */
+  profile?: boolean
   /** The script already split (a caller that had to split it anyway); `script` is then only the audited text. */
   statements?: Statement[]
 }

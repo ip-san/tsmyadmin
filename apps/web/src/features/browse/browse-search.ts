@@ -1,4 +1,10 @@
-import { BROWSE_MAX_LIMIT, type BrowseOptions, BrowseQuerySchema, parseBrowseQuery } from '@tsmyadmin/shared'
+import {
+  BROWSE_MAX_LIMIT,
+  type BrowseOptions,
+  BrowseQuerySchema,
+  type BrowseResult,
+  parseBrowseQuery,
+} from '@tsmyadmin/shared'
 import { z } from 'zod'
 import { sharePreference } from '@/lib/account-prefs.ts'
 import { readPreference, removePreference, writePreference } from '@/lib/preferences.ts'
@@ -62,4 +68,9 @@ export function rememberedColumns(db: string, schema: string | undefined, table:
 export function rememberColumns(db: string, schema: string | undefined, table: string, cols: string | undefined) {
   if (cols === undefined) removePreference(colsKey(db, schema, table))
   else writePreference(colsKey(db, schema, table), cols)
+}
+
+/** Data columns exclude the hidden key column (PG ctid) appended by the adapter. */
+export function visibleColumns(result: BrowseResult): BrowseResult['columns'] {
+  return result.keyKind === 'ctid' ? result.columns.slice(0, -1) : result.columns
 }

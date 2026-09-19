@@ -150,6 +150,8 @@ test.describe('accessibility (axe-core, passkeys)', () => {
 for (const t of TARGETS) {
   test.describe(`accessibility (axe-core, ${t.dialect})`, () => {
     test('server, database, browse and structure screens', async ({ page }) => {
+      // Many screens and dialogs scanned in turn.
+      test.setTimeout(90_000)
       await login(page, t)
       await scan(page)
       await page.goto(`/db/${t.database}`)

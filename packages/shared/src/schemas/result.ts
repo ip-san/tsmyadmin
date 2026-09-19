@@ -22,6 +22,10 @@ const line = z.number().int().min(1).optional()
 const statement = z.number().int().min(0).optional()
 /** Server-side NOTICE / WARNING messages raised by the statement (PostgreSQL); a "success" may hide one. */
 const notices = z.array(z.string()).optional()
+/** How long the server spent in each stage of the statement (MySQL / MariaDB profiling), when it was asked for. */
+export const ProfileStageSchema = z.object({ state: z.string(), seconds: z.number() })
+export type ProfileStage = z.infer<typeof ProfileStageSchema>
+const profile = z.array(ProfileStageSchema).optional()
 
 export const StatementResultSchema = z.discriminatedUnion('kind', [
   z.object({
@@ -32,6 +36,7 @@ export const StatementResultSchema = z.discriminatedUnion('kind', [
     line,
     statement,
     notices,
+    profile,
   }),
   z.object({
     kind: z.literal('affected'),
@@ -41,6 +46,7 @@ export const StatementResultSchema = z.discriminatedUnion('kind', [
     line,
     statement,
     notices,
+    profile,
   }),
   z.object({
     kind: z.literal('error'),

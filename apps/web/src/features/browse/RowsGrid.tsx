@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { BrowseOptions, BrowseResult, InputCell, RowKey, RowValues } from '@tsmyadmin/shared'
+import type { BrowseOptions, InputCell, RowKey, RowValues } from '@tsmyadmin/shared'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
@@ -9,7 +9,7 @@ import { useColumnTransforms } from '@/lib/column-transforms.ts'
 import { mutations, rowsKey, rowsQuery, type TableRef } from '@/lib/queries.ts'
 import { BrowseRow } from './BrowseRow.tsx'
 import { BrowseToolbar } from './BrowseToolbar.tsx'
-import { encodeColumns, visibleColumnNames } from './browse-search.ts'
+import { encodeColumns, visibleColumnNames, visibleColumns } from './browse-search.ts'
 import { DeleteRowsDialog } from './DeleteRowsDialog.tsx'
 import { ExecutedStatement } from './ExecutedStatement.tsx'
 import { FilterChips } from './FilterChips.tsx'
@@ -35,11 +35,6 @@ export interface RowsGridProps {
   }) => void
   /** Comma-separated visible columns from the URL (undefined = all). */
   cols?: string | undefined
-}
-
-/** Data columns exclude the hidden key column (PG ctid) appended by the adapter. */
-export function visibleColumns(result: BrowseResult): BrowseResult['columns'] {
-  return result.keyKind === 'ctid' ? result.columns.slice(0, -1) : result.columns
 }
 
 export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridProps) {
