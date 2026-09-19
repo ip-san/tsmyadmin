@@ -1213,6 +1213,11 @@ export const ja = {
     picked: '選んだ行',
     open: 'この行を表示タブで開く',
     noKey: 'このテーブルには主キーがないため、行を開けません。',
+    min: (axis: string) => `${axis}の最小`,
+    max: (axis: string) => `${axis}の最大`,
+    label: 'ラベルのカラム',
+    noLabel: '（なし）',
+    limit: '描く行数の上限',
   },
   replace: {
     title: '検索して置換',

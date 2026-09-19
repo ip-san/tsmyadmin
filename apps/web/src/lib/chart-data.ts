@@ -92,15 +92,15 @@ interface ScatterPoint {
   y: number
 }
 
-/** Rows with a number in both columns, the first MAX_POINTS of them; the others cannot be placed. */
-export function scatterPoints(rows: readonly Cell[][], x: number, y: number) {
+/** Rows with a number in both columns, the first `max` of them; the others cannot be placed. */
+export function scatterPoints(rows: readonly Cell[][], x: number, y: number, max = MAX_POINTS) {
   const points: ScatterPoint[] = []
   let skipped = 0
   rows.forEach((row, i) => {
     const px = toNumber(row[x])
     const py = toNumber(row[y])
     if (px === null || py === null) skipped++
-    else if (points.length < MAX_POINTS) points.push({ row: i, x: px, y: py })
+    else if (points.length < max) points.push({ row: i, x: px, y: py })
   })
   return { points, skipped }
 }

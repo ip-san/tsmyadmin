@@ -23,12 +23,12 @@ for (const t of TARGETS) {
         await page.goto(tableUrl(t, table, '/search'))
         const zoom = page.getByRole('region', { name: 'ズーム検索' })
         // Only the numeric columns are offered as axes.
-        await expect(zoom.getByLabel('横軸').locator('option')).toHaveText(['id', 'w', 'h'])
+        await expect(zoom.getByLabel('横軸', { exact: true }).locator('option')).toHaveText(['id', 'w', 'h'])
         // The defaults (the first two numeric columns) plot as shown, before anything is chosen.
         await zoom.getByRole('button', { name: '散布図を表示' }).click()
         await expect(zoom.getByText('2 点（値が NULL か数値でない 1 行は除外）')).toBeVisible()
-        await zoom.getByLabel('横軸').selectOption('w')
-        await zoom.getByLabel('縦軸').selectOption('h')
+        await zoom.getByLabel('横軸', { exact: true }).selectOption('w')
+        await zoom.getByLabel('縦軸', { exact: true }).selectOption('h')
         await zoom.getByRole('button', { name: '散布図を表示' }).click()
         await expect(zoom.getByText('2 点（値が NULL か数値でない 1 行は除外）')).toBeVisible()
         await expect(zoom.locator('circle')).toHaveCount(2)
@@ -43,6 +43,31 @@ for (const t of TARGETS) {
         await zoom.getByRole('link', { name: 'この行を表示タブで開く' }).click()
         await expect(page.getByText('全 1 行')).toBeVisible()
         await expect(page.getByRole('cell', { name: 'a', exact: true })).toBeVisible()
+      } finally {
+        await sql(page, t, `DROP TABLE IF EXISTS ${table}`)
+      }
+    })
+
+    test('limits an axis to a range and names the points by a label column', async ({ page }) => {
+      await login(page, t)
+      const table = `e2e_zoom3_${Date.now().toString(36)}`
+      await sql(page, t, `CREATE TABLE ${table} (id INT PRIMARY KEY, w INT, h INT, name VARCHAR(10))`)
+      await sql(page, t, `INSERT INTO ${table} VALUES (1, 10, 1, 'ant'), (2, 20, 2, 'bee'), (3, 30, 3, 'cat')`)
+      try {
+        await page.goto(tableUrl(t, table, '/search'))
+        const zoom = page.getByRole('region', { name: 'ズーム検索' })
+        await zoom.getByLabel('横軸', { exact: true }).selectOption('w')
+        await zoom.getByLabel('縦軸', { exact: true }).selectOption('h')
+        await zoom.getByLabel('横軸の最小').fill('15')
+        await zoom.getByLabel('縦軸の最大').fill('2')
+        await zoom.getByLabel('ラベルのカラム').selectOption('name')
+        await zoom.getByLabel('描く行数の上限').selectOption('100')
+        await zoom.getByRole('button', { name: '散布図を表示' }).click()
+        // Only bee is inside both ranges.
+        await expect(zoom.getByText('1 点', { exact: true })).toBeVisible()
+        await expect(zoom.locator('circle title')).toHaveText('bee')
+        await zoom.getByText('点を表で見る（1 点）').click()
+        await expect(zoom.getByRole('button', { name: 'bee: w = 20、h = 2 の行を選ぶ' })).toBeVisible()
       } finally {
         await sql(page, t, `DROP TABLE IF EXISTS ${table}`)
       }

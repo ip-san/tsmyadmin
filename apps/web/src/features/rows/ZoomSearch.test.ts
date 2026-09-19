@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { plottableColumns, rowFilters } from './ZoomSearch.tsx'
+import { plottableColumns, rangeFilters, rowFilters } from './zoom-rows.ts'
 
 describe('zoom search', () => {
   it('offers the columns declared as numbers on both dialects', () => {
@@ -24,5 +24,14 @@ describe('zoom search', () => {
     expect(rowFilters([], ['a'], [1])).toBeNull()
     expect(rowFilters(['a'], ['a'], [null])).toBeNull()
     expect(rowFilters(['a'], ['a'], [{ $bin: 'AA==' }])).toBeNull()
+  })
+})
+
+describe('rangeFilters', () => {
+  it('limits an axis at either end or both, and not at all when empty', () => {
+    expect(rangeFilters('n', ' 1 ', '5')).toEqual([{ column: 'n', op: 'between', values: ['1', '5'] }])
+    expect(rangeFilters('n', '1', '')).toEqual([{ column: 'n', op: 'gte', value: '1' }])
+    expect(rangeFilters('n', '', '5')).toEqual([{ column: 'n', op: 'lte', value: '5' }])
+    expect(rangeFilters('n', ' ', '')).toEqual([])
   })
 })

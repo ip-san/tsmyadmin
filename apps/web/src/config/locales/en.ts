@@ -1229,6 +1229,11 @@ export const en = {
       `Pick the row with ${x} = ${xv.toLocaleString('en-US')}, ${y} = ${yv.toLocaleString('en-US')}`,
     picked: 'Picked row',
     open: 'Open this row in Browse',
+    min: (axis: string) => `${axis} from`,
+    max: (axis: string) => `${axis} to`,
+    label: 'Label column',
+    noLabel: '(none)',
+    limit: 'Rows to plot, at most',
     noKey: 'This table has no primary key, so the row cannot be opened.',
   },
   replace: {
