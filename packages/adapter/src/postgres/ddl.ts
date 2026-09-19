@@ -163,6 +163,35 @@ export const pgDdl: DdlBuilder = {
         return [`DROP TABLE ${op.tables.map((x) => quoteTable('postgres', ns, x)).join(', ')}`]
       case 'truncateTables':
         return [`TRUNCATE TABLE ${op.tables.map((x) => quoteTable('postgres', ns, x)).join(', ')}`]
+      case 'maintainTables': {
+        const list = op.tables.map((x) => quoteTable('postgres', ns, x)).join(', ')
+        switch (op.action) {
+          case 'analyze':
+            return [`ANALYZE ${list}`]
+          case 'vacuum':
+            return [`VACUUM (ANALYZE) ${list}`]
+          case 'optimize':
+            return [`VACUUM (FULL, ANALYZE) ${list}`]
+          default:
+            throw new AdapterError('UNSUPPORTED', `PostgreSQL has no ${op.action.toUpperCase()} TABLE`)
+        }
+      }
+      case 'renameTables':
+        // Renaming keeps each table in its schema; all or none.
+        return inTransaction(
+          op.renames.map((r) => `ALTER TABLE ${quoteTable('postgres', ns, r.from)} RENAME TO ${id(r.to)}`)
+        )
+      case 'copyTables':
+        return op.tables.flatMap((x) =>
+          pgDdl.build(ns, {
+            op: 'copyTable',
+            table: x,
+            newName: x,
+            withData: op.withData,
+            ...(op.toSchema ? { toSchema: op.toSchema } : {}),
+            ...(op.details?.[x] ?? {}),
+          })
+        )
       default:
         break
     }
@@ -324,6 +353,9 @@ export const pgDdl: DdlBuilder = {
           ...((op.toSchema ?? ns.schema) ? { schema: op.toSchema ?? ns.schema } : {}),
         }
         const target = quoteTable('postgres', into, op.newName)
+        // Rows only go into a table that is there: dropping it first would leave nothing to insert into.
+        if (op.dropExisting && op.structure === false)
+          throw new AdapterError('VALIDATION', 'A data-only copy cannot drop the table it copies into')
         const out = op.dropExisting ? [`DROP TABLE IF EXISTS ${target}`] : []
         // INCLUDING ALL keeps defaults, constraints (incl. PK), indexes and comments; foreign keys are added after.
         if (op.structure !== false) out.push(`CREATE TABLE ${target} (LIKE ${t} INCLUDING ALL)`)

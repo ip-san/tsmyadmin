@@ -258,6 +258,8 @@ for (const t of TARGETS) {
     })
 
     test('server status, processes and users screens', async ({ page }) => {
+      // Five screens scanned in turn: about 20 s alone, more beside the rest of the suite.
+      test.setTimeout(60_000)
       await login(page, t)
       await page.goto('/status')
       await page.getByRole('table', { name: 'ステータス変数' }).waitFor()

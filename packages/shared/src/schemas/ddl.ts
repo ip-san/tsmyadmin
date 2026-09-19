@@ -354,6 +354,39 @@ export const DdlOpSchema = z.discriminatedUnion('op', [
   /** Bulk actions from the database structure page. */
   z.object({ op: z.literal('dropTables'), tables: z.array(table).min(1) }),
   z.object({ op: z.literal('truncateTables'), tables: z.array(table).min(1) }),
+  /** Maintenance over several tables at once (MySQL takes the list in one statement; PostgreSQL too). */
+  z.object({
+    op: z.literal('maintainTables'),
+    tables: z.array(table).min(1),
+    action: z.enum(['analyze', 'optimize', 'check', 'repair', 'vacuum', 'checksum']),
+  }),
+  /** Several renames together (phpMyAdmin's "Add / Replace table prefix"). */
+  z.object({
+    op: z.literal('renameTables'),
+    renames: z
+      .array(z.object({ from: table, to: table }))
+      .min(1)
+      .max(1000),
+  }),
+  /** Several tables copied under their own names into another database (MySQL) or schema (PostgreSQL). */
+  z.object({
+    op: z.literal('copyTables'),
+    tables: z.array(table).min(1),
+    toDatabase: z.string().min(1).optional(),
+    toSchema: z.string().min(1).optional(),
+    withData: z.boolean().default(true),
+    /** Per table, what copyTable needs to copy the rows faithfully (filled in by the server's preview). */
+    details: z
+      .record(
+        z.string(),
+        z.object({
+          columns: z.array(z.string().min(1)).optional(),
+          identityColumns: z.array(z.string().min(1)).optional(),
+          serialColumns: z.array(z.string().min(1)).optional(),
+        })
+      )
+      .optional(),
+  }),
   /** A view over a SELECT; `orReplace` swaps the definition of one that exists. */
   z.object({
     op: z.literal('createView'),

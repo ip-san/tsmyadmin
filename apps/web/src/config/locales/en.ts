@@ -565,6 +565,9 @@ export const en = {
   },
   ddl: {
     titles: {
+      maintainTables: 'Maintain the selected tables',
+      renameTables: 'Rename the selected tables',
+      copyTables: 'Copy the selected tables',
       convertCollation: "Change every column's collation",
       orderTable: 'Reorder the rows',
       partitionTable: 'Partition the table',
@@ -1355,6 +1358,19 @@ export const en = {
     orderColumn: 'Order by column',
     orderIndex: 'Index to order along',
     descending: 'Descending',
+  },
+  bulk: {
+    showCreate: 'Show CREATE statements',
+    maintain: 'Maintenance…',
+    copy: 'Copy elsewhere…',
+    copyHint: 'Copies the tables under their own names into another database (MySQL) / schema (PostgreSQL).',
+    addPrefix: 'Add a prefix…',
+    replacePrefix: 'Replace a prefix…',
+    prefix: 'Prefix to add',
+    prefixFrom: 'Prefix to replace',
+    prefixTo: 'New prefix',
+    prefixToHint: 'Empty removes the prefix. Tables not starting with it are left alone',
+    createFailed: 'could not read the CREATE statement',
   },
   partitions: {
     title: 'Partitions',

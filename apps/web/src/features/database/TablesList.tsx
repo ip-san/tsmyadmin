@@ -1,19 +1,19 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { encodeTableList } from '@tsmyadmin/shared'
 import { useState } from 'react'
 import { CellValue } from '@/components/cells/CellValue.tsx'
 import { DdlPreviewDialog } from '@/components/ddl/DdlPreviewDialog.tsx'
-import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
 import { useDdlFlow } from '@/lib/ddl.ts'
-import { tablesQuery } from '@/lib/queries.ts'
+import { sessionQuery, tablesQuery } from '@/lib/queries.ts'
+import { TableBulkBar } from './TableBulkBar.tsx'
 import { tableTotals } from './table-totals.ts'
 
 export function TablesList({ db, schema }: { db: string; schema?: string | undefined }) {
   const tables = useQuery(tablesQuery(db, schema))
+  const dialect = useQuery(sessionQuery).data?.dialect ?? 'mysql'
   // Bulk selection (tables only — views cannot be truncated and have their own DROP).
   const [selected, setSelected] = useState<string[]>([])
   const flow = useDdlFlow(db, schema, () => setSelected([]))
@@ -147,33 +147,7 @@ export function TablesList({ db, schema }: { db: string; schema?: string | undef
       </Table>
       {/* Below the table, next to the last checkbox in tab order (phpMyAdmin's "With selected" position). */}
       {chosen.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-2 rounded border border-line bg-surface-sub px-3 py-2 text-sm">
-          <span>{locale.ddl.bulkSelected(chosen.length)}</span>
-          <Link
-            to="/db/$db/export"
-            params={{ db }}
-            search={{ ...search, tables: encodeTableList(chosen) }}
-            className={`text-xs ${link}`}
-          >
-            {locale.ddl.bulkExport}
-          </Link>
-          <Button
-            size="sm"
-            variant="danger"
-            aria-haspopup="dialog"
-            onClick={() => flow.preview({ op: 'truncateTables', tables: chosen })}
-          >
-            {locale.ddl.bulkTruncate}
-          </Button>
-          <Button
-            size="sm"
-            variant="danger"
-            aria-haspopup="dialog"
-            onClick={() => flow.preview({ op: 'dropTables', tables: chosen })}
-          >
-            {locale.ddl.bulkDrop}
-          </Button>
-        </div>
+        <TableBulkBar db={db} schema={schema} dialect={dialect} chosen={chosen} onPreview={flow.preview} />
       ) : null}
     </div>
   )

@@ -5,6 +5,7 @@ import {
   CellQuerySchema,
   DdlPreviewRequestSchema,
   DeleteRowsRequestSchema,
+  type Dialect,
   decodeTableList,
   ExportQuerySchema,
   IMPORT_MAX_BYTES,
@@ -71,15 +72,41 @@ function validationError(err: ImportValidationError): ApiError {
   return { ...apiError('VALIDATION', err.message), reason: err.reason, params: err.params }
 }
 
-/** The statements that ran (one per statement: a CALL's several result sets share it), for tracking. */
-function executed(results: readonly StatementResult[]): string[] {
+const BEGIN = /^\s*(?:BEGIN|START\s+TRANSACTION)\b/i
+const COMMIT = /^\s*(?:COMMIT|END)\b/i
+const ROLLBACK = /^\s*ROLLBACK\b(?!\s+TO\b)/i
+/** Savepoints: transaction control, not a change of their own. */
+const SAVEPOINT = /^\s*(?:SAVEPOINT|RELEASE|ROLLBACK\s+TO)\b/i
+/** MySQL commits the open transaction before (and after) a statement that changes a definition. */
+const MYSQL_IMPLICIT_COMMIT = /^\s*(?:CREATE|ALTER|DROP|RENAME|TRUNCATE)\b/i
+
+/**
+ * The statements whose effect stayed, for tracking: one per statement (a CALL's several result sets share it), not
+ * the failed ones, and not what ran inside a transaction that was rolled back — or left open, which the connection
+ * rolls back when the script ends. MySQL's definition statements commit implicitly; PostgreSQL's are
+ * transactional like any other.
+ */
+export function executed(results: readonly StatementResult[], dialect: Dialect): string[] {
   const seen = new Set<number>()
-  return results.flatMap((r, i) => {
+  const kept: string[] = []
+  let pending: string[] | null = null
+  results.forEach((r, i) => {
     const at = r.statement ?? i
-    if (r.kind === 'error' || seen.has(at)) return []
+    if (r.kind === 'error' || seen.has(at)) return
     seen.add(at)
-    return [r.sql]
+    if (SAVEPOINT.test(r.sql)) return
+    if (BEGIN.test(r.sql)) pending = []
+    else if (COMMIT.test(r.sql)) {
+      kept.push(...(pending ?? []))
+      pending = null
+    } else if (ROLLBACK.test(r.sql)) pending = null
+    else if (pending !== null && dialect === 'mysql' && MYSQL_IMPLICIT_COMMIT.test(r.sql)) {
+      kept.push(...pending, r.sql)
+      pending = null
+    } else if (pending !== null) pending.push(r.sql)
+    else kept.push(r.sql)
   })
+  return kept
 }
 
 export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
@@ -365,7 +392,8 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
           cfg.store.sharedItems,
           c.get('session').config,
           ns(c.req.param('db'), body.schema),
-          executed(results),
+          executed(results, c.get('session').adapter.dialect),
+          c.get('session').adapter.dialect,
           logger
         )
         return c.json(results)
@@ -418,9 +446,15 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
                 openTransaction = open
               },
             })
-            // A transaction left open is rolled back: what ran in it did not happen.
-            if (!openTransaction)
-              await recordStatements(cfg.store.sharedItems, c.get('session').config, namespace, executed(ran), logger)
+            // What ran inside a transaction left open is rolled back with it (executed() leaves it out).
+            await recordStatements(
+              cfg.store.sharedItems,
+              c.get('session').config,
+              namespace,
+              executed(ran, adapter.dialect),
+              adapter.dialect,
+              logger
+            )
             await send({
               type: 'done',
               statements: results.length,
@@ -495,6 +529,30 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
                 schema.columns.map((col) => col.name)
               )),
           }
+        } else if (op.op === 'copyTables' && op.withData && op.details === undefined) {
+          // Each table as copyTable would get it: the insertable columns, and on PostgreSQL its sequences.
+          const details: Record<string, { columns?: string[]; identityColumns?: string[]; serialColumns?: string[] }> =
+            {}
+          for (const table of op.tables) {
+            const schema = await adapter.describeTable(target, table)
+            const columns = schema.columns.filter((col) => !isGeneratedColumn(col.extra)).map((col) => col.name)
+            details[table] =
+              adapter.dialect === 'postgres'
+                ? {
+                    columns,
+                    identityColumns: schema.columns
+                      .filter((col) => col.extra.startsWith('identity'))
+                      .map((col) => col.name),
+                    serialColumns: await ownedSequenceColumns(
+                      adapter,
+                      target,
+                      table,
+                      schema.columns.map((col) => col.name)
+                    ),
+                  }
+                : { columns }
+          }
+          op = { ...op, details }
         } else if (op.op === 'copyTable' && op.withData && op.columns === undefined) {
           const schema = await adapter.describeTable(target, op.table)
           op = { ...op, columns: schema.columns.filter((col) => !isGeneratedColumn(col.extra)).map((col) => col.name) }

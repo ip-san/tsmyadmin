@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { ConnectRequest } from '@tsmyadmin/shared'
 import {
   classifyStatement,
+  type Dialect,
   type Namespace,
   TRACKED_STATEMENT_MAX,
   type TrackedStatement,
@@ -102,6 +103,7 @@ export async function recordStatements(
   config: ConnectRequest,
   ns: Namespace,
   statements: readonly string[],
+  dialect: Dialect,
   logger?: Logger
 ): Promise<void> {
   if (!store || statements.length === 0) return
@@ -113,8 +115,9 @@ export async function recordStatements(
     if (found.length === 0) return
     const confs = new Map<string, Awaited<ReturnType<typeof trackedKinds>>>()
     for (const f of found) {
+      // A qualifier is a database on MySQL, a schema of this database on PostgreSQL.
       const target: Namespace = f.qualifier
-        ? ns.schema !== undefined
+        ? dialect === 'postgres'
           ? { database: ns.database, schema: f.qualifier }
           : { database: f.qualifier }
         : ns

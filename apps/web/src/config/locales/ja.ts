@@ -559,6 +559,9 @@ export const ja = {
   },
   ddl: {
     titles: {
+      maintainTables: '選択したテーブルのメンテナンス',
+      renameTables: '選択したテーブルの名前を変更',
+      copyTables: '選択したテーブルをコピー',
       convertCollation: '全カラムの照合順序を変更',
       orderTable: '行の並び順を変更',
       partitionTable: 'パーティションに分割',
@@ -1333,6 +1336,19 @@ export const ja = {
     orderColumn: '並べ替えるカラム',
     orderIndex: '並び順に使うインデックス',
     descending: '降順',
+  },
+  bulk: {
+    showCreate: 'CREATE 文を表示',
+    maintain: 'メンテナンス…',
+    copy: '別の場所へコピー…',
+    copyHint: '同じ名前のまま、別のデータベース（MySQL）/ スキーマ（PostgreSQL）へコピーします。',
+    addPrefix: '接頭辞を追加…',
+    replacePrefix: '接頭辞を置換…',
+    prefix: '付ける接頭辞',
+    prefixFrom: '置き換える接頭辞',
+    prefixTo: '新しい接頭辞',
+    prefixToHint: '空にすると接頭辞を取り除きます。その接頭辞で始まらないテーブルはそのままです',
+    createFailed: 'CREATE 文を読めませんでした',
   },
   partitions: {
     title: 'パーティション',

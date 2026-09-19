@@ -80,6 +80,15 @@ const SAMPLE_OPS: Record<DdlOp['op'], DdlOp> = {
     collation: 'utf8mb4_0900_ai_ci',
     columns: [{ name: 'na"me', dataType: 'varchar(20)' }],
   },
+  maintainTables: { op: 'maintainTables', tables: ['a`1', 'b"2'], action: 'analyze' },
+  renameTables: {
+    op: 'renameTables',
+    renames: [
+      { from: 'a`1', to: 'p_a`1' },
+      { from: 'b"2', to: 'p_b"2' },
+    ],
+  },
+  copyTables: { op: 'copyTables', tables: ['a`1'], toDatabase: 'ar`chive', toSchema: 'ar"chive', withData: true },
   orderTable: { op: 'orderTable', table: 't`1', column: 'cr`eated', desc: true, index: 'i"dx' },
   maintainPartition: { op: 'maintainPartition', table: 'lo`g', name: 'p`1', action: 'analyze' },
   setPrimaryKey: { op: 'setPrimaryKey', table: 't', columns: ['a', 'b'], current: 't_pkey' },
@@ -469,5 +478,33 @@ describe('DDL builders', () => {
     )
     expect(pgDdl.build({ database: 'db', schema: 'app' }, fk({}))[0]).toContain('REFERENCES "app"."r"')
     expect(() => pgDdl.build({ database: 'db' }, fk({ refDatabase: 'other' }))).toThrow(/another database/)
+  })
+
+  it('writes MySQL row format, checksum and the CHECKSUM / FLUSH maintenance, and refuses them on PostgreSQL', () => {
+    const opts: DdlOp = { op: 'setTableOptions', table: 't', rowFormat: 'DYNAMIC', checksum: true }
+    expect(mysqlDdl.build({ database: 'db' }, opts)).toEqual([
+      'ALTER TABLE `db`.`t` ROW_FORMAT = DYNAMIC, CHECKSUM = 1',
+    ])
+    expect(() => pgDdl.build({ database: 'db' }, opts)).toThrow(/row format/)
+    expect(mysqlDdl.build({ database: 'db' }, { op: 'maintainTable', table: 't', action: 'checksum' })).toEqual([
+      'CHECKSUM TABLE `db`.`t`',
+    ])
+    expect(mysqlDdl.build({ database: 'db' }, { op: 'maintainTable', table: 't', action: 'flush' })).toEqual([
+      'FLUSH TABLES `db`.`t`',
+    ])
+    expect(() => pgDdl.build({ database: 'db' }, { op: 'maintainTable', table: 't', action: 'flush' })).toThrow()
+  })
+
+  it('refuses a data-only copy that would first drop the table it copies into', () => {
+    const op: DdlOp = {
+      op: 'copyTable',
+      table: 't',
+      newName: 'c',
+      withData: true,
+      structure: false,
+      dropExisting: true,
+    }
+    expect(() => mysqlDdl.build({ database: 'db' }, op)).toThrow(/data-only/)
+    expect(() => pgDdl.build({ database: 'db' }, op)).toThrow(/data-only/)
   })
 })

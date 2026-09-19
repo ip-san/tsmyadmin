@@ -52,6 +52,13 @@ exports[`DDL builders > mysql: copyTable 1`] = `
 ]
 `;
 
+exports[`DDL builders > mysql: copyTables 1`] = `
+[
+  "CREATE TABLE \`ar\`\`chive\`.\`a\`\`1\` LIKE \`db\`.\`a\`\`1\`",
+  "INSERT INTO \`ar\`\`chive\`.\`a\`\`1\` SELECT * FROM \`db\`.\`a\`\`1\`",
+]
+`;
+
 exports[`DDL builders > mysql: createDatabase 1`] = `
 [
   "CREATE DATABASE \`new"db\`\`x\`",
@@ -179,6 +186,12 @@ exports[`DDL builders > mysql: maintainTable 1`] = `
 ]
 `;
 
+exports[`DDL builders > mysql: maintainTables 1`] = `
+[
+  "ANALYZE TABLE \`db\`.\`a\`\`1\`, \`db\`.\`b"2\`",
+]
+`;
+
 exports[`DDL builders > mysql: modifyColumn 1`] = `
 [
   "ALTER TABLE \`db\`.\`t\` CHANGE COLUMN \`n\` \`n2\` BIGINT COLLATE utf8mb4_bin NOT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT 'renamed'",
@@ -234,6 +247,12 @@ exports[`DDL builders > mysql: renameIndex 1`] = `
 exports[`DDL builders > mysql: renameTable 1`] = `
 [
   "RENAME TABLE \`db\`.\`t\` TO \`db\`.\`we"ird\`\`new\`",
+]
+`;
+
+exports[`DDL builders > mysql: renameTables 1`] = `
+[
+  "RENAME TABLE \`db\`.\`a\`\`1\` TO \`db\`.\`p_a\`\`1\`, \`db\`.\`b"2\` TO \`db\`.\`p_b"2\`",
 ]
 `;
 
@@ -334,6 +353,13 @@ exports[`DDL builders > postgres: copyTable 1`] = `
   "ALTER TABLE "app"."t_copy" ALTER COLUMN "na\`me" SET DEFAULT nextval('"app"."t_copy_na\`me_seq"'::regclass)",
   "SELECT setval(s.seqrelid, CASE WHEN s.seqincrement > 0 THEN GREATEST(m.max_id, s.seqmin, COALESCE(pg_sequence_last_value(s.seqrelid), s.seqmin)) ELSE LEAST(m.min_id, s.seqmax, COALESCE(pg_sequence_last_value(s.seqrelid), s.seqmax)) END, CASE WHEN s.seqincrement > 0 THEN m.max_id >= s.seqmin ELSE m.min_id <= s.seqmax END OR pg_sequence_last_value(s.seqrelid) IS NOT NULL) FROM pg_sequence s CROSS JOIN LATERAL (SELECT (SELECT MAX("id")::bigint FROM "app"."t_copy" WHERE "id" BETWEEN s.seqmin AND s.seqmax) AS max_id, (SELECT MIN("id")::bigint FROM "app"."t_copy" WHERE "id" BETWEEN s.seqmin AND s.seqmax) AS min_id) m WHERE s.seqrelid = pg_get_serial_sequence('"app"."t_copy"', 'id')::regclass AND m.max_id IS NOT NULL",
   "SELECT setval(s.seqrelid, CASE WHEN s.seqincrement > 0 THEN GREATEST(m.max_id, s.seqmin, COALESCE(pg_sequence_last_value(s.seqrelid), s.seqmin)) ELSE LEAST(m.min_id, s.seqmax, COALESCE(pg_sequence_last_value(s.seqrelid), s.seqmax)) END, CASE WHEN s.seqincrement > 0 THEN m.max_id >= s.seqmin ELSE m.min_id <= s.seqmax END OR pg_sequence_last_value(s.seqrelid) IS NOT NULL) FROM pg_sequence s CROSS JOIN LATERAL (SELECT (SELECT MAX("na\`me")::bigint FROM "app"."t_copy" WHERE "na\`me" BETWEEN s.seqmin AND s.seqmax) AS max_id, (SELECT MIN("na\`me")::bigint FROM "app"."t_copy" WHERE "na\`me" BETWEEN s.seqmin AND s.seqmax) AS min_id) m WHERE s.seqrelid = pg_get_serial_sequence('"app"."t_copy"', 'na\`me')::regclass AND m.max_id IS NOT NULL",
+]
+`;
+
+exports[`DDL builders > postgres: copyTables 1`] = `
+[
+  "CREATE TABLE "ar""chive"."a\`1" (LIKE "app"."a\`1" INCLUDING ALL)",
+  "INSERT INTO "ar""chive"."a\`1" OVERRIDING SYSTEM VALUE SELECT * FROM "app"."a\`1"",
 ]
 `;
 
@@ -453,6 +479,12 @@ exports[`DDL builders > postgres: maintainTable 1`] = `
 ]
 `;
 
+exports[`DDL builders > postgres: maintainTables 1`] = `
+[
+  "ANALYZE "app"."a\`1", "app"."b""2"",
+]
+`;
+
 exports[`DDL builders > postgres: modifyColumn 1`] = `
 [
   "ALTER TABLE "app"."t" RENAME COLUMN "n" TO "n2"",
@@ -505,6 +537,15 @@ exports[`DDL builders > postgres: renameIndex 1`] = `
 exports[`DDL builders > postgres: renameTable 1`] = `
 [
   "ALTER TABLE "app"."t" RENAME TO "we""ird\`new"",
+]
+`;
+
+exports[`DDL builders > postgres: renameTables 1`] = `
+[
+  "BEGIN",
+  "ALTER TABLE "app"."a\`1" RENAME TO "p_a\`1"",
+  "ALTER TABLE "app"."b""2" RENAME TO "p_b""2"",
+  "COMMIT",
 ]
 `;
 

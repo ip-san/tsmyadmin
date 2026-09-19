@@ -184,6 +184,27 @@ export const mysqlDdl: DdlBuilder = {
         return [`DROP TABLE ${op.tables.map((x) => quoteTable('mysql', ns, x)).join(', ')}`]
       case 'truncateTables':
         return op.tables.map((x) => `TRUNCATE TABLE ${quoteTable('mysql', ns, x)}`)
+      case 'maintainTables': {
+        if (op.action === 'vacuum') throw new AdapterError('UNSUPPORTED', 'MySQL has no VACUUM; use OPTIMIZE TABLE')
+        const list = op.tables.map((x) => quoteTable('mysql', ns, x)).join(', ')
+        return [`${op.action.toUpperCase()} TABLE ${list}`]
+      }
+      case 'renameTables':
+        // One statement: MySQL renames the whole list atomically.
+        return [
+          `RENAME TABLE ${op.renames.map((r) => `${quoteTable('mysql', ns, r.from)} TO ${quoteTable('mysql', ns, r.to)}`).join(', ')}`,
+        ]
+      case 'copyTables':
+        return op.tables.flatMap((x) =>
+          mysqlDdl.build(ns, {
+            op: 'copyTable',
+            table: x,
+            newName: x,
+            withData: op.withData,
+            ...(op.toDatabase ? { toDatabase: op.toDatabase } : {}),
+            ...(op.details?.[x]?.columns ? { columns: op.details[x].columns } : {}),
+          })
+        )
       default:
         break
     }
@@ -321,6 +342,9 @@ export const mysqlDdl: DdlBuilder = {
       case 'copyTable': {
         const into = { database: op.toDatabase ?? ns.database }
         const target = quoteTable('mysql', into, op.newName)
+        // Rows only go into a table that is there: dropping it first would leave nothing to insert into.
+        if (op.dropExisting && op.structure === false)
+          throw new AdapterError('VALIDATION', 'A data-only copy cannot drop the table it copies into')
         const out = op.dropExisting ? [`DROP TABLE IF EXISTS ${target}`] : []
         // LIKE keeps indexes, keys and AUTO_INCREMENT; foreign keys are added after, when asked for.
         if (op.structure !== false) out.push(`CREATE TABLE ${target} LIKE ${t}`)

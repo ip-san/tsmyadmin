@@ -3230,6 +3230,44 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         }
       })
 
+      it('maintains, renames and copies several tables at once', async () => {
+        const [a, b] = [`${scratch}_bka`, `${scratch}_bkb`]
+        const [pa, pb] = [`p_${a}`, `p_${b}`]
+        const other = dialect === 'mysql' ? 'tsmyadmin_other' : 'app'
+        const drop = async () => {
+          for (const x of [a, b, pa, pb]) await exec(`DROP TABLE IF EXISTS ${x}`, { stopOnError: false })
+          for (const x of [pa, pb]) await exec(`DROP TABLE IF EXISTS ${other}.${x}`, { stopOnError: false })
+        }
+        try {
+          await drop()
+          for (const x of [a, b]) {
+            await execOk(`CREATE TABLE ${x} (id INT PRIMARY KEY)`)
+            await execOk(`INSERT INTO ${x} (id) VALUES (1), (2)`)
+          }
+          await runScript({ op: 'maintainTables', tables: [a, b], action: 'analyze' })
+          await runScript({
+            op: 'renameTables',
+            renames: [
+              { from: a, to: pa },
+              { from: b, to: pb },
+            ],
+          })
+          const names = (await db.listTables(ns)).map((x) => x.name)
+          expect(names).toEqual(expect.arrayContaining([pa, pb]))
+          expect(names).not.toContain(a)
+          await runScript({
+            op: 'copyTables',
+            tables: [pa, pb],
+            withData: true,
+            ...(dialect === 'mysql' ? { toDatabase: other } : { toSchema: other }),
+          })
+          const [n] = await exec(`SELECT COUNT(*) FROM ${other}.${pb}`)
+          expect(n?.kind === 'rows' ? Number(n.result.rows[0]?.[0]) : -1).toBe(2)
+        } finally {
+          await drop()
+        }
+      })
+
       it('finds and replaces in a column, touching only the rows the replacement changes', async () => {
         const t = `${scratch}_rep`
         await execOk(`CREATE TABLE ${t} (id INT PRIMARY KEY, name VARCHAR(40))`)
