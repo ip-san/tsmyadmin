@@ -17,6 +17,10 @@ function createDatabaseSql(name: string, collation: string | undefined): string 
  */
 const bare = (code: string) => code.trim().replace(/[\s;]+$/, '')
 
+/** `DEFINER = 'user'@'host'` (both parts quoted as literals). */
+const definerClause = (d: { user: string; host: string } | undefined) =>
+  d ? `DEFINER = ${mysqlLiteral(d.user)}@${mysqlLiteral(d.host)} ` : ''
+
 function createRoutineSql(ns: Namespace, op: Extract<DdlOp, { op: 'createRoutine' }>): string {
   const params = op.params.map((p) => {
     // MySQL functions take IN parameters only, and do not spell the mode out.
@@ -25,12 +29,14 @@ function createRoutineSql(ns: Namespace, op: Extract<DdlOp, { op: 'createRoutine
     }
     return `${op.kind === 'procedure' ? `${p.mode} ` : ''}${id(p.name)} ${p.type}`
   })
-  const head = `CREATE ${op.kind === 'function' ? 'FUNCTION' : 'PROCEDURE'} ${quoteTable('mysql', ns, op.name)}(${params.join(', ')})`
+  const head = `CREATE ${definerClause(op.definer)}${op.kind === 'function' ? 'FUNCTION' : 'PROCEDURE'} ${quoteTable('mysql', ns, op.name)}(${params.join(', ')})`
   if (op.kind === 'function' && !op.returns) throw new AdapterError('UNSUPPORTED', 'A function needs a return type')
   const traits = [
     ...(op.kind === 'function' ? [`RETURNS ${op.returns}`] : []),
     ...(op.comment ? [`COMMENT ${mysqlLiteral(op.comment)}`] : []),
     op.deterministic ? 'DETERMINISTIC' : 'NOT DETERMINISTIC',
+    ...(op.dataAccess ? [op.dataAccess] : []),
+    ...(op.sqlSecurity ? [`SQL SECURITY ${op.sqlSecurity}`] : []),
   ]
   return `${head} ${traits.join(' ')} ${bare(op.body)}`
 }
@@ -100,6 +106,22 @@ export const mysqlDdl: DdlBuilder = {
 
       case 'dropDatabase':
         return [`DROP DATABASE ${id(op.name)}`]
+      case 'dropRoutine':
+        return [`DROP ${op.kind === 'function' ? 'FUNCTION' : 'PROCEDURE'} ${quoteTable('mysql', ns, op.name)}`]
+      case 'alterRoutine': {
+        // Only characteristics: the body and the DEFINER cannot be altered, only replaced.
+        const parts = [
+          ...(op.comment !== undefined ? [`COMMENT ${mysqlLiteral(op.comment)}`] : []),
+          ...(op.dataAccess ? [op.dataAccess] : []),
+          ...(op.sqlSecurity ? [`SQL SECURITY ${op.sqlSecurity}`] : []),
+        ]
+        if (parts.length === 0) throw new AdapterError('VALIDATION', 'No routine characteristic to change')
+        return [
+          `ALTER ${op.kind === 'function' ? 'FUNCTION' : 'PROCEDURE'} ${quoteTable('mysql', ns, op.name)} ${parts.join(' ')}`,
+        ]
+      }
+      case 'dropTrigger':
+        return [`DROP TRIGGER ${quoteTable('mysql', ns, op.name)}`]
       case 'setDatabaseCollation': {
         const charset = op.collation === 'binary' ? 'binary' : (op.collation.split('_')[0] ?? op.collation)
         const into = { database: op.name }
@@ -185,15 +207,18 @@ export const mysqlDdl: DdlBuilder = {
         return [
           `RENAME TABLE ${quoteTable('mysql', ns, op.table)} TO ${quoteTable('mysql', { database: op.to }, op.table)}`,
         ]
-      case 'createView':
+      case 'createView': {
+        const cols = op.columns && op.columns.length > 0 ? ` (${op.columns.map(id).join(', ')})` : ''
+        const check = op.checkOption ? ` WITH ${op.checkOption} CHECK OPTION` : ''
         return [
-          `CREATE ${op.orReplace ? 'OR REPLACE ' : ''}VIEW ${quoteTable('mysql', ns, op.name)} AS ${bare(op.select)}`,
+          `CREATE ${op.orReplace ? 'OR REPLACE ' : ''}${op.algorithm ? `ALGORITHM = ${op.algorithm} ` : ''}${definerClause(op.definer)}${op.sqlSecurity ? `SQL SECURITY ${op.sqlSecurity} ` : ''}VIEW ${quoteTable('mysql', ns, op.name)}${cols} AS ${bare(op.select)}${check}`,
         ]
+      }
       case 'createRoutine':
         return [createRoutineSql(ns, op)]
       case 'createTrigger':
         return [
-          `CREATE TRIGGER ${quoteTable('mysql', ns, op.name)} ${op.timing} ${op.event} ON ${quoteTable('mysql', ns, op.table)} FOR EACH ROW ${bare(op.body)}`,
+          `CREATE ${definerClause(op.definer)}TRIGGER ${quoteTable('mysql', ns, op.name)} ${op.timing} ${op.event} ON ${quoteTable('mysql', ns, op.table)} FOR EACH ROW ${bare(op.body)}`,
         ]
       case 'createEvent': {
         const s = op.schedule
@@ -207,7 +232,7 @@ export const mysqlDdl: DdlBuilder = {
               ].join(' ')
         const comment = op.comment ? ` COMMENT ${mysqlLiteral(op.comment)}` : ''
         return [
-          `CREATE EVENT ${quoteTable('mysql', ns, op.name)} ON SCHEDULE ${schedule} ON COMPLETION NOT PRESERVE ${op.enabled ? 'ENABLE' : 'DISABLE'}${comment} DO ${bare(op.body)}`,
+          `CREATE ${definerClause(op.definer)}EVENT ${quoteTable('mysql', ns, op.name)} ON SCHEDULE ${schedule} ON COMPLETION ${op.preserve ? 'PRESERVE' : 'NOT PRESERVE'} ${op.enabled ? 'ENABLE' : 'DISABLE'}${comment} DO ${bare(op.body)}`,
         ]
       }
       case 'enableEvent':

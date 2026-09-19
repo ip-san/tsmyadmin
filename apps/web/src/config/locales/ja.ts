@@ -594,6 +594,9 @@ export const ja = {
   },
   ddl: {
     titles: {
+      dropRoutine: 'ルーチンを削除',
+      alterRoutine: 'ルーチンの特性を変更',
+      dropTrigger: 'トリガーを削除',
       setDatabaseCollation: '既定の照合順序を変更',
       maintainTables: '選択したテーブルのメンテナンス',
       renameTables: '選択したテーブルの名前を変更',
@@ -1154,6 +1157,16 @@ export const ja = {
     },
   },
   create: {
+    security: {
+      definer: 'DEFINER',
+      definerHint: 'ユーザー名@ホスト名（例: app@%）。空なら、作成するアカウントになります',
+      definerInvalid: 'ユーザー名@ホスト名の形で入力してください',
+      sqlSecurity: 'SQL SECURITY',
+      defaultOption: '（既定）',
+      definerOption: 'DEFINER（作成者の権限で実行）',
+      invokerOption: 'INVOKER（呼び出した人の権限で実行）',
+      dataAccess: 'データアクセス',
+    },
     review: 'SQL を確認',
     name: '名前',
     comment: 'コメント',
@@ -1187,6 +1200,8 @@ export const ja = {
       },
     },
     event: {
+      preserve: '実行後も残す（ON COMPLETION PRESERVE）',
+      preserveHint: '1 回だけ実行するイベントは、通常は実行後に削除されます',
       title: 'イベントを作成',
       once: '1 回だけ',
       every: '繰り返し',
@@ -1200,6 +1215,12 @@ export const ja = {
       bodyHint: '実行する 1 文、または BEGIN … END のブロック。',
     },
     view: {
+      editTitle: 'ビューの定義を変更',
+      unreadable: 'このビューの定義は読み取れませんでした。SQL タブで CREATE OR REPLACE VIEW を実行してください。',
+      columns: 'カラム名（カンマ区切り。空なら SELECT のまま）',
+      columnsHint: '例: id, name',
+      checkOption: 'チェックオプション',
+      algorithm: 'ALGORITHM',
       title: 'ビューを作成',
       select: 'SELECT 文',
       orReplace: '同名のビューがあれば置き換える（OR REPLACE）',
@@ -1439,6 +1460,15 @@ export const ja = {
       '正規表現の書き方と、後方参照（MySQL 8 は $1、MariaDB と PostgreSQL は \\1）はサーバーに従います。MySQL / MariaDB ではカラムの照合順序により大文字と小文字を区別しないことがあります。',
   },
   routines: {
+    run: '実行',
+    runHint: '値を入れると、CALL / SELECT を SQL タブに用意します。実行するのは、SQL タブで内容を確認してからです。',
+    noParameters: 'この引数のない呼び出しを用意します。',
+    openInSql: 'SQL タブで開く',
+    characteristics: '特性を変更',
+    characteristicsHint:
+      '本体は変えず、セキュリティ・データアクセス・コメントだけを変更します。本体を変えるときは「SQL タブで編集」を使います。',
+    drop: '削除',
+    download: 'SQL をダウンロード',
     title: 'ストアドプロシージャ / 関数',
     name: '名前',
     kind: '種類',
@@ -1474,6 +1504,7 @@ export const ja = {
     schedulerHint: 'サーバーの event_scheduler 変数が OFF の場合、イベントは実行されません（「変数」タブで確認）。',
   },
   triggers: {
+    drop: '削除',
     title: 'トリガー',
     name: '名前',
     table: 'テーブル',

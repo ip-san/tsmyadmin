@@ -3,6 +3,7 @@ import type { Dialect } from '@tsmyadmin/shared'
 import { CreateSection } from '@/components/ddl/CreateSection.tsx'
 import { DdlPreviewDialog } from '@/components/ddl/DdlPreviewDialog.tsx'
 import { DefinitionToggle } from '@/components/ddl/DefinitionToggle.tsx'
+import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
@@ -45,6 +46,7 @@ export function TriggersPage({
               <Th>{locale.triggers.events}</Th>
               <Th>{locale.triggers.orientation}</Th>
               <Th>{locale.triggers.definition}</Th>
+              <Th>{locale.ddl.actions}</Th>
             </tr>
           </thead>
           <tbody>
@@ -59,8 +61,20 @@ export function TriggersPage({
                   <DefinitionToggle
                     definition={t.definition}
                     label={t.name}
+                    file={{ dialect, name: t.name }}
                     onEdit={(definition) => edit({ kind: 'trigger', name: t.name, definition, table: t.table })}
                   />
+                </Td>
+                <Td>
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    aria-haspopup="dialog"
+                    aria-label={`${t.name}: ${locale.triggers.drop}`}
+                    onClick={() => flow.preview({ op: 'dropTrigger', name: t.name, table: t.table })}
+                  >
+                    {locale.triggers.drop}
+                  </Button>
                 </Td>
               </Tr>
             ))}

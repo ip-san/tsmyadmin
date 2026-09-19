@@ -1,4 +1,4 @@
-<!-- translated-from: docs/phpmyadmin-parity.md sha256:96af68d0d2cc7d4385dceb5778d7d8340c5428ae170259fa4620f28d49aab8d6 -->
+<!-- translated-from: docs/phpmyadmin-parity.md sha256:0eccb3060feaf7ad7a7c83f902fb16dabf8274e3b00159b5ef5689efd65ca043 -->
 
 # Feature parity with phpMyAdmin
 
@@ -47,10 +47,10 @@ The basics (browsing and editing, structure changes, SQL, search, QBE, export / 
 | D6 | Saving query builder criteria | ✅ |
 | D7 | Changing the default collation (applied to every table and column) | ✅ |
 | D8 | Copy options (carrying over foreign keys, AUTO_INCREMENT, privileges and the like) | ✅ |
-| D9 | Routines: editing, running, dropping, exporting; DEFINER / SQL SECURITY / data access | △ |
-| D10 | Triggers: editing, exporting; DEFINER | △ |
-| D11 | Events: editing, exporting; ON COMPLETION PRESERVE; DEFINER | △ |
-| D12 | Views: OR REPLACE, ALGORITHM, DEFINER, SQL SECURITY, column names, WITH CHECK OPTION, editing a view | △ |
+| D9 | Routines: editing, running, dropping, exporting; DEFINER / SQL SECURITY / data access | ✅ |
+| D10 | Triggers: editing, exporting; DEFINER | ✅ |
+| D11 | Events: editing, exporting; ON COMPLETION PRESERVE; DEFINER | ✅ |
+| D12 | Views: OR REPLACE, ALGORITHM, DEFINER, SQL SECURITY, column names, WITH CHECK OPTION, editing a view | ✅ |
 | D13 | Designer: creating / dropping relations on the diagram, display column, saved pages, exporting the schema (SVG / PDF) | △ |
 | D14 | Tracking: a per-database list, recording the DDL / DML statements run | ✅ |
 | D15 | Normalization steps (as far as creating the new tables) | △ |

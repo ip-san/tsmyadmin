@@ -8,12 +8,14 @@ import { Badge, ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
 import { useDdlFlow } from '@/lib/ddl.ts'
+import { useEditDefinition } from '@/lib/open-in-console.ts'
 import { eventsQuery } from '@/lib/queries.ts'
 import { CreateEventForm } from './CreateEventForm.tsx'
 
 export function EventsPage({ db, schema, dialect }: { db: string; schema?: string | undefined; dialect: Dialect }) {
   const events = useQuery({ ...eventsQuery(db, schema), enabled: dialect === 'mysql' })
   const flow = useDdlFlow(db, schema)
+  const edit = useEditDefinition(db, schema)
   if (dialect !== 'mysql') return <Notice>{locale.events.unsupported}</Notice>
   if (events.isPending) return <Spinner />
   if (events.isError) return <ErrorBox error={events.error} onRetry={() => void events.refetch()} />
@@ -54,7 +56,12 @@ export function EventsPage({ db, schema, dialect }: { db: string; schema?: strin
                   <Td className="font-mono text-xs">{e.lastExecuted ?? ''}</Td>
                   <Td className="text-xs">{e.comment ?? ''}</Td>
                   <Td>
-                    <DefinitionToggle definition={e.definition} label={e.name} />
+                    <DefinitionToggle
+                      definition={e.definition}
+                      label={e.name}
+                      file={{ dialect, name: e.name }}
+                      onEdit={(definition) => edit({ kind: 'event', name: e.name, definition })}
+                    />
                   </Td>
                   <Td className="space-x-1 whitespace-nowrap">
                     <Button

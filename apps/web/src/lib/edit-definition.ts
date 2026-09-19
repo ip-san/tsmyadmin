@@ -11,7 +11,7 @@ function quote(dialect: Dialect, name: string): string {
 }
 
 /** What is being edited; each needs a different way of putting the new definition in place. */
-type DefinitionKind = 'procedure' | 'function' | 'trigger' | 'view'
+type DefinitionKind = 'procedure' | 'function' | 'trigger' | 'view' | 'event'
 
 export interface EditDefinitionOptions {
   dialect: Dialect
@@ -55,7 +55,9 @@ export function editDefinitionSql(o: EditDefinitionOptions): string {
   const drop =
     o.kind === 'trigger'
       ? `DROP TRIGGER IF EXISTS ${q(o.name)};`
-      : `DROP ${o.kind === 'function' ? 'FUNCTION' : 'PROCEDURE'} IF EXISTS ${q(o.name)};`
+      : o.kind === 'event'
+        ? `DROP EVENT IF EXISTS ${q(o.name)};`
+        : `DROP ${o.kind === 'function' ? 'FUNCTION' : 'PROCEDURE'} IF EXISTS ${q(o.name)};`
   // The body runs between DELIMITER lines because it contains its own `;`, and under the sql_mode it was
   // written for — restored afterwards so the rest of the session is unaffected.
   const lines: string[] = []

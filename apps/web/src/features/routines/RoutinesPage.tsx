@@ -10,6 +10,7 @@ import { useDdlFlow } from '@/lib/ddl.ts'
 import { useEditDefinition } from '@/lib/open-in-console.ts'
 import { routineDefinitionQuery, routinesQuery } from '@/lib/queries.ts'
 import { CreateRoutineForm } from './CreateRoutineForm.tsx'
+import { RoutineActions } from './RoutineActions.tsx'
 
 export function RoutinesPage({ db, schema, dialect }: { db: string; schema?: string | undefined; dialect: Dialect }) {
   const edit = useEditDefinition(db, schema)
@@ -34,6 +35,7 @@ export function RoutinesPage({ db, schema, dialect }: { db: string; schema?: str
               <Th>{locale.routines.language}</Th>
               <Th>{locale.routines.comment}</Th>
               <Th>{locale.routines.definition}</Th>
+              <Th>{locale.ddl.actions}</Th>
             </tr>
           </thead>
           <tbody>
@@ -49,6 +51,7 @@ export function RoutinesPage({ db, schema, dialect }: { db: string; schema?: str
                   <DefinitionToggle
                     query={routineDefinitionQuery(db, r.name, r.kind, schema)}
                     label={r.name}
+                    file={{ dialect, name: r.name }}
                     {...(r.kind === 'procedure' || r.kind === 'function'
                       ? {
                           // MariaDB packages are listed and dumped but never created here, so they get no editor.
@@ -62,6 +65,9 @@ export function RoutinesPage({ db, schema, dialect }: { db: string; schema?: str
                         }
                       : {})}
                   />
+                </Td>
+                <Td>
+                  <RoutineActions routine={r} dialect={dialect} db={db} schema={schema} onPreview={flow.preview} />
                 </Td>
               </Tr>
             ))}

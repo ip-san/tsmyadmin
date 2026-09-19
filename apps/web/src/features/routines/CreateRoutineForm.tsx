@@ -1,5 +1,7 @@
-import type { DdlOp, Dialect, RoutineParam } from '@tsmyadmin/shared'
+import { DATA_ACCESS, type DdlOp, type Dialect, type RoutineParam, type SqlSecurity } from '@tsmyadmin/shared'
 import { type FormEvent, useState } from 'react'
+import { DefinerField, SecuritySelect } from '@/components/ddl/DefinerFields.tsx'
+import { parseDefiner } from '@/components/ddl/definer.ts'
 import { Button } from '@/components/ui/Button.tsx'
 import { Field, Input, Select, Textarea } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
@@ -26,6 +28,9 @@ export function CreateRoutineForm({ dialect, onSubmit }: { dialect: Dialect; onS
   const [language, setLanguage] = useState('plpgsql')
   const [deterministic, setDeterministic] = useState(false)
   const [comment, setComment] = useState('')
+  const [definerText, setDefinerText] = useState('')
+  const [sqlSecurity, setSqlSecurity] = useState<SqlSecurity | ''>('')
+  const [dataAccess, setDataAccess] = useState<(typeof DATA_ACCESS)[number] | ''>('')
   const [body, setBody] = useState(template(dialect, 'procedure'))
   // A MySQL function's parameters are IN only; PostgreSQL functions and procedures take OUT / INOUT too.
   const modes = dialect === 'mysql' && kind === 'function' ? (['IN'] as const) : (['IN', 'OUT', 'INOUT'] as const)
@@ -38,7 +43,8 @@ export function CreateRoutineForm({ dialect, onSubmit }: { dialect: Dialect; onS
     setParams((all) => all.map((p, j) => (j === i ? { ...p, ...patch } : p)))
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    if (!name.trim() || !body.trim()) return
+    const definer = dialect === 'mysql' ? parseDefiner(definerText) : null
+    if (!name.trim() || !body.trim() || definer === 'invalid') return
     onSubmit({
       op: 'createRoutine',
       kind,
@@ -55,6 +61,9 @@ export function CreateRoutineForm({ dialect, onSubmit }: { dialect: Dialect; onS
       language,
       deterministic,
       ...(comment.trim() ? { comment: comment.trim() } : {}),
+      ...(sqlSecurity ? { sqlSecurity } : {}),
+      ...(dialect === 'mysql' && dataAccess ? { dataAccess } : {}),
+      ...(definer ? { definer } : {}),
     })
   }
   return (
@@ -141,6 +150,26 @@ export function CreateRoutineForm({ dialect, onSubmit }: { dialect: Dialect; onS
         <Field id="routine-comment" label={t.comment}>
           <Input id="routine-comment" value={comment} onChange={(e) => setComment(e.target.value)} />
         </Field>
+        <SecuritySelect id="routine-security" value={sqlSecurity} onChange={setSqlSecurity} />
+        {dialect === 'mysql' ? (
+          <>
+            <Field id="routine-data-access" label={t.security.dataAccess}>
+              <Select
+                id="routine-data-access"
+                value={dataAccess}
+                onChange={(e) => setDataAccess(e.target.value as typeof dataAccess)}
+              >
+                <option value="">{t.security.defaultOption}</option>
+                {DATA_ACCESS.map((d) => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <DefinerField id="routine-definer" value={definerText} onChange={setDefinerText} />
+          </>
+        ) : null}
       </div>
       <Button type="submit" variant="primary" aria-haspopup="dialog" aria-label={`${t.routine.title}: ${t.review}`}>
         {t.review}

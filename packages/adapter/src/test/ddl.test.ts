@@ -1,5 +1,5 @@
 import type { ColumnSpec, DdlOp } from '@tsmyadmin/shared'
-import { DDL_OP_NAMES } from '@tsmyadmin/shared'
+import { DDL_OP_NAMES, DdlOpSchema } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
 import { mysqlDdl } from '../mysql/ddl.ts'
 import { pgDdl } from '../postgres/ddl.ts'
@@ -161,6 +161,16 @@ const SAMPLE_OPS: Record<DdlOp['op'], DdlOp> = {
   replaceInColumn: { op: 'replaceInColumn', table: 'users', column: 'na`me"', find: "it's", replace: '%_\\' },
   moveTable: { op: 'moveTable', table: 'we"ird`tbl', to: 'arch`ive"' },
   createView: { op: 'createView', name: 'v`w"x', select: 'SELECT id, name FROM users WHERE id > 1;', orReplace: true },
+  dropRoutine: { op: 'dropRoutine', kind: 'function', name: 'f`n"x', parameters: 'IN a integer, b text' },
+  alterRoutine: {
+    op: 'alterRoutine',
+    kind: 'procedure',
+    name: 'p`r"x',
+    parameters: 'IN a integer',
+    sqlSecurity: 'INVOKER',
+    comment: "it's",
+  },
+  dropTrigger: { op: 'dropTrigger', name: 'tr`g"x', table: 'ta`b"x' },
   createRoutine: {
     op: 'createRoutine',
     kind: 'function',
@@ -514,5 +524,79 @@ describe('DDL builders', () => {
     }
     expect(() => mysqlDdl.build({ database: 'db' }, op)).toThrow(/data-only/)
     expect(() => pgDdl.build({ database: 'db' }, op)).toThrow(/data-only/)
+  })
+
+  it('writes DEFINER, SQL SECURITY, data access, view options and event completion (MySQL), and refuses them on PostgreSQL', () => {
+    const definer = { user: "o'brien", host: '%' }
+    const mysql = (op: DdlOp) => mysqlDdl.build({ database: 'db' }, op)
+    const pg = (op: DdlOp) => pgDdl.build({ database: 'db', schema: 'app' }, op)
+    const routine: DdlOp = {
+      op: 'createRoutine',
+      kind: 'procedure',
+      name: 'p',
+      params: [],
+      body: 'SELECT 1',
+      language: 'plpgsql',
+      deterministic: false,
+      definer,
+      sqlSecurity: 'INVOKER',
+      dataAccess: 'READS SQL DATA',
+    }
+    expect(mysql(routine)[0]).toContain("CREATE DEFINER = 'o''brien'@'%' PROCEDURE `db`.`p`()")
+    expect(mysql(routine)[0]).toContain('READS SQL DATA SQL SECURITY INVOKER')
+    expect(() => pg(routine)).toThrow(/DEFINER is a MySQL option/)
+    const secure: DdlOp = { ...routine, definer: undefined, dataAccess: undefined, sqlSecurity: 'DEFINER' }
+    expect(pg(secure)[0]).toContain('LANGUAGE plpgsql SECURITY DEFINER AS')
+
+    const view: DdlOp = {
+      op: 'createView',
+      name: 'v',
+      select: 'SELECT a FROM t',
+      orReplace: true,
+      columns: ['x'],
+      checkOption: 'LOCAL',
+      algorithm: 'MERGE',
+      definer,
+      sqlSecurity: 'INVOKER',
+    }
+    expect(mysql(view)[0]).toBe(
+      "CREATE OR REPLACE ALGORITHM = MERGE DEFINER = 'o''brien'@'%' SQL SECURITY INVOKER VIEW `db`.`v` (`x`) AS SELECT a FROM t WITH LOCAL CHECK OPTION"
+    )
+    expect(pg({ ...view, algorithm: undefined, definer: undefined, sqlSecurity: undefined })[0]).toBe(
+      'CREATE OR REPLACE VIEW "app"."v" ("x") AS SELECT a FROM t WITH LOCAL CHECK OPTION'
+    )
+    expect(() => pg(view)).toThrow(/ALGORITHM is a MySQL option/)
+
+    const event: DdlOp = {
+      op: 'createEvent',
+      name: 'e',
+      schedule: { kind: 'at', at: '2030-01-01 00:00:00' },
+      body: 'SELECT 1',
+      enabled: true,
+      preserve: true,
+      definer,
+    }
+    expect(mysql(event)[0]).toContain("CREATE DEFINER = 'o''brien'@'%' EVENT `db`.`e`")
+    expect(mysql(event)[0]).toContain('ON COMPLETION PRESERVE')
+    expect(mysql({ ...event, preserve: undefined, definer: undefined })[0]).toContain('NOT PRESERVE')
+    const trigger: DdlOp = {
+      op: 'createTrigger',
+      name: 'tg',
+      table: 't',
+      timing: 'BEFORE',
+      event: 'INSERT',
+      body: 'SET NEW.a = 1',
+      definer,
+    }
+    expect(mysql(trigger)[0]).toContain("CREATE DEFINER = 'o''brien'@'%' TRIGGER")
+    expect(() => pg(trigger)).toThrow(/DEFINER is a MySQL option/)
+  })
+
+  it('refuses a routine signature that would end the statement early', () => {
+    const accepts = (parameters: string) =>
+      DdlOpSchema.safeParse({ op: 'dropRoutine', kind: 'function', name: 'f', parameters }).success
+    expect(accepts('IN a integer, b text')).toBe(true)
+    expect(accepts("IN a text DEFAULT 'x;y'")).toBe(true)
+    expect(accepts('IN a integer); SELECT 1; --')).toBe(false)
   })
 })

@@ -21,6 +21,9 @@ const DESTRUCTIVE = new Set<DdlOp['op']>([
   'replaceInColumn',
   'dropPartition',
   'truncatePartition',
+  // Definitions only, but what calls them breaks: the run button is red, as for an index or a key.
+  'dropRoutine',
+  'dropTrigger',
 ])
 
 /** Ops that destroy data with no undo: the user retypes the object name before they can run. */

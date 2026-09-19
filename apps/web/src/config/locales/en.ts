@@ -600,6 +600,9 @@ export const en = {
   },
   ddl: {
     titles: {
+      dropRoutine: 'Drop the routine',
+      alterRoutine: "Change the routine's characteristics",
+      dropTrigger: 'Drop the trigger',
       setDatabaseCollation: 'Change the default collation',
       maintainTables: 'Maintain the selected tables',
       renameTables: 'Rename the selected tables',
@@ -1165,6 +1168,16 @@ export const en = {
     },
   },
   create: {
+    security: {
+      definer: 'DEFINER',
+      definerHint: 'user@host (for example app@%). Blank: the account creating it',
+      definerInvalid: 'Write it as user@host',
+      sqlSecurity: 'SQL SECURITY',
+      defaultOption: '(default)',
+      definerOption: 'DEFINER (runs with its creator’s privileges)',
+      invokerOption: 'INVOKER (runs with the caller’s privileges)',
+      dataAccess: 'Data access',
+    },
     review: 'Review SQL',
     name: 'Name',
     comment: 'Comment',
@@ -1199,6 +1212,8 @@ export const en = {
       },
     },
     event: {
+      preserve: 'Keep it after it has run (ON COMPLETION PRESERVE)',
+      preserveHint: 'A one-time event is otherwise dropped once it has run',
       title: 'Create event',
       once: 'Once',
       every: 'Repeating',
@@ -1220,6 +1235,12 @@ export const en = {
       bodyHint: 'One statement to run, or a BEGIN … END block.',
     },
     view: {
+      editTitle: "Change the view's definition",
+      unreadable: 'This view’s definition could not be read. Run CREATE OR REPLACE VIEW in the SQL tab.',
+      columns: "Column names (comma-separated; blank: the SELECT's own)",
+      columnsHint: 'For example id, name',
+      checkOption: 'Check option',
+      algorithm: 'ALGORITHM',
       title: 'Create view',
       select: 'SELECT statement',
       orReplace: 'Replace a view of the same name (OR REPLACE)',
@@ -1461,6 +1482,15 @@ export const en = {
       "The syntax and back-references ($1 on MySQL 8, \\1 on MariaDB and PostgreSQL) follow the server. On MySQL / MariaDB the column's collation may make it case-insensitive.",
   },
   routines: {
+    run: 'Run',
+    runHint: 'Fill in values and a CALL / SELECT is prepared in the SQL tab. Nothing runs until you review it there.',
+    noParameters: 'A call without arguments is prepared.',
+    openInSql: 'Open in SQL tab',
+    characteristics: 'Change characteristics',
+    characteristicsHint:
+      'Changes the security, data access and comment without touching the body. To change the body use “Edit in SQL tab”.',
+    drop: 'Delete',
+    download: 'Download SQL',
     title: 'Stored procedures / functions',
     name: 'Name',
     kind: 'Type',
@@ -1496,6 +1526,7 @@ export const en = {
     schedulerHint: 'Events do not run while the server’s event_scheduler variable is OFF (see the Variables tab).',
   },
   triggers: {
+    drop: 'Delete',
     title: 'Triggers',
     name: 'Name',
     table: 'Table',

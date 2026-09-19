@@ -25,6 +25,8 @@ const SQL_BUILDER_ALLOWLIST = [
   /^apps\/web\/src\/features\/sql\/prefill\.ts$/,
   // Script that replaces an object's definition, shown in the editor for the user to run (identifiers quoted).
   /^apps\/web\/src\/lib\/edit-definition\.ts$/,
+  // A CALL / SELECT that runs a routine, shown in the editor for the user to run (identifiers quoted, values literal-escaped).
+  /^apps\/web\/src\/lib\/routine-call\.ts$/,
   // Regular expressions that *parse* GRANT statements returned by the server; nothing here is executed.
   /^apps\/web\/src\/features\/users\/privilege-level\.ts$/,
 ]

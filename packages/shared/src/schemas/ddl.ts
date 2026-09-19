@@ -71,6 +71,23 @@ const IndexShape = {
  * data type — the preview shows it before anything runs.
  */
 const SqlType = z.string().min(1).max(200)
+/** The account an object runs as (MySQL `DEFINER = 'user'@'host'`); rendered as quoted literals. */
+const DefinerSchema = z.object({ user: z.string().min(1).max(80), host: z.string().min(1).max(255) })
+export type Definer = z.infer<typeof DefinerSchema>
+/** `SQL SECURITY` (MySQL) / `SECURITY` (PostgreSQL routines): whose privileges the object runs with. */
+const SqlSecuritySchema = z.enum(['DEFINER', 'INVOKER'])
+export type SqlSecurity = z.infer<typeof SqlSecuritySchema>
+/** What a MySQL routine says about its data access. */
+export const DATA_ACCESS = ['CONTAINS SQL', 'NO SQL', 'READS SQL DATA', 'MODIFIES SQL DATA'] as const
+const DataAccessSchema = z.enum(DATA_ACCESS)
+/**
+ * A PostgreSQL routine's signature as the catalog prints its arguments (`IN uid integer, OUT n text`): needed to
+ * name one of several overloads. Code-like, shown in the preview; a `;` outside quotes is refused.
+ */
+const RoutineSignature = z
+  .string()
+  .max(4000)
+  .refine((s) => !hasStatementBreak(s), 'A parameter list cannot contain ;')
 /** A body of server-dialect code (SELECT, routine, trigger or event body), shown in the preview before it runs. */
 const SqlBody = z.string().trim().min(1).max(1_000_000)
 /** `YYYY-MM-DD HH:MM:SS`, as the event scheduler takes a moment. */
@@ -438,6 +455,14 @@ export const DdlOpSchema = z.discriminatedUnion('op', [
     name: z.string().min(1),
     select: SqlBody,
     orReplace: z.boolean().default(false),
+    /** Names for the view's columns (otherwise the SELECT's own). */
+    columns: z.array(z.string().min(1)).max(1000).optional(),
+    /** `WITH [CASCADED | LOCAL] CHECK OPTION`: an INSERT / UPDATE through the view must satisfy its WHERE. */
+    checkOption: z.enum(['CASCADED', 'LOCAL']).optional(),
+    /** MySQL only. */
+    algorithm: z.enum(['UNDEFINED', 'MERGE', 'TEMPTABLE']).optional(),
+    definer: DefinerSchema.optional(),
+    sqlSecurity: SqlSecuritySchema.optional(),
   }),
   /**
    * A stored procedure or function. The body is the dialect's own: MySQL a statement or BEGIN … END block,
@@ -459,7 +484,31 @@ export const DdlOpSchema = z.discriminatedUnion('op', [
     /** MySQL functions under binary logging must declare it. */
     deterministic: z.boolean().default(false),
     comment: z.string().max(1024).optional(),
+    /** MySQL only. */
+    definer: DefinerSchema.optional(),
+    /** MySQL `SQL SECURITY`, PostgreSQL `SECURITY`. */
+    sqlSecurity: SqlSecuritySchema.optional(),
+    /** MySQL only. */
+    dataAccess: DataAccessSchema.optional(),
   }),
+  /** Drops a procedure or function; PostgreSQL names it by its parameter list (overloads). */
+  z.object({
+    op: z.literal('dropRoutine'),
+    kind: z.enum(['procedure', 'function']),
+    name: z.string().min(1),
+    parameters: RoutineSignature.optional(),
+  }),
+  /** Changes what can change without rewriting the body: security, data access (MySQL) and the comment. */
+  z.object({
+    op: z.literal('alterRoutine'),
+    kind: z.enum(['procedure', 'function']),
+    name: z.string().min(1),
+    parameters: RoutineSignature.optional(),
+    sqlSecurity: SqlSecuritySchema.optional(),
+    dataAccess: DataAccessSchema.optional(),
+    comment: z.string().max(1024).optional(),
+  }),
+  z.object({ op: z.literal('dropTrigger'), name: z.string().min(1), table }),
   /**
    * A row-level trigger. MySQL: the body is a statement or BEGIN … END block. PostgreSQL: a PL/pgSQL block that
    * returns the row (`BEGIN … RETURN NEW; END`), put in a trigger function named after the trigger.
@@ -471,6 +520,8 @@ export const DdlOpSchema = z.discriminatedUnion('op', [
     timing: z.enum(['BEFORE', 'AFTER']),
     event: z.enum(['INSERT', 'UPDATE', 'DELETE']),
     body: SqlBody,
+    /** MySQL only. */
+    definer: DefinerSchema.optional(),
   }),
   /** MySQL event scheduler (PostgreSQL: UNSUPPORTED). */
   z.object({
@@ -480,6 +531,9 @@ export const DdlOpSchema = z.discriminatedUnion('op', [
     body: SqlBody,
     enabled: z.boolean().default(true),
     comment: z.string().max(1024).optional(),
+    /** Keep the event after it has run (a one-time AT event is otherwise dropped). */
+    preserve: z.boolean().optional(),
+    definer: DefinerSchema.optional(),
   }),
   z.object({ op: z.literal('enableEvent'), name: z.string().min(1) }),
   z.object({ op: z.literal('disableEvent'), name: z.string().min(1) }),

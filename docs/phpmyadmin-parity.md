@@ -45,10 +45,10 @@ phpMyAdmin 5.2 の全画面（サーバー・データベース・テーブル�
 | D6 | クエリビルダーの条件の保存 | ✅ |
 | D7 | 既定の照合順序の変更（全テーブル・全カラムへの反映つき） | ✅ |
 | D8 | コピーのオプション（外部キー・AUTO_INCREMENT・権限の引き継ぎなど） | ✅ |
-| D9 | ルーチン: 既存の編集、実行、削除、エクスポート、DEFINER / SQL SECURITY / データアクセス特性 | △ |
-| D10 | トリガー: 既存の編集、エクスポート、DEFINER | △ |
-| D11 | イベント: 既存の編集、エクスポート、ON COMPLETION PRESERVE、DEFINER | △ |
-| D12 | ビュー: OR REPLACE、ALGORITHM、DEFINER、SQL SECURITY、カラム名、WITH CHECK OPTION、既存ビューの編集 | △ |
+| D9 | ルーチン: 既存の編集、実行、削除、エクスポート、DEFINER / SQL SECURITY / データアクセス特性 | ✅ |
+| D10 | トリガー: 既存の編集、エクスポート、DEFINER | ✅ |
+| D11 | イベント: 既存の編集、エクスポート、ON COMPLETION PRESERVE、DEFINER | ✅ |
+| D12 | ビュー: OR REPLACE、ALGORITHM、DEFINER、SQL SECURITY、カラム名、WITH CHECK OPTION、既存ビューの編集 | ✅ |
 | D13 | デザイナ: 図上でのリレーション作成 / 削除、表示カラム、ページの保存、スキーマ図の出力（SVG / PDF） | △ |
 | D14 | 追跡: データベース単位の一覧、実行された DDL / DML の記録 | ✅ |
 | D15 | 正規化の手順（新しいテーブルを作るところまで） | △ |

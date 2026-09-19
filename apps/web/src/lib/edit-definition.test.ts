@@ -50,6 +50,17 @@ describe('editDefinitionSql', () => {
     }
   })
 
+  it('drops a MySQL event first and replaces it under its own delimiter', () => {
+    const sql = editDefinitionSql({
+      dialect: 'mysql',
+      kind: 'event',
+      name: 'ev',
+      definition: 'CREATE EVENT `ev` ON SCHEDULE EVERY 1 DAY DO BEGIN SELECT 1; END;',
+    })
+    expect(sql).toContain('DROP EVENT IF EXISTS `ev`;')
+    expect(sql).toContain('DELIMITER ;;\nCREATE EVENT `ev`')
+  })
+
   it('quotes the identifiers it builds', () => {
     const sql = editDefinitionSql({
       dialect: 'mysql',

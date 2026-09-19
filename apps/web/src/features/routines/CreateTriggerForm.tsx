@@ -1,5 +1,7 @@
 import type { DdlOp, Dialect } from '@tsmyadmin/shared'
 import { type FormEvent, useState } from 'react'
+import { DefinerField } from '@/components/ddl/DefinerFields.tsx'
+import { parseDefiner } from '@/components/ddl/definer.ts'
 import { Button } from '@/components/ui/Button.tsx'
 import { Field, Input, Select, Textarea } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
@@ -33,10 +35,12 @@ export function CreateTriggerForm({
   const [timing, setTiming] = useState<(typeof TIMINGS)[number]>('BEFORE')
   const [event, setEvent] = useState<(typeof EVENTS)[number]>('INSERT')
   const [body, setBody] = useState(TEMPLATE[dialect])
+  const [definerText, setDefinerText] = useState('')
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    if (!name.trim() || !table || !body.trim()) return
-    onSubmit({ op: 'createTrigger', name: name.trim(), table, timing, event, body })
+    const definer = dialect === 'mysql' ? parseDefiner(definerText) : null
+    if (!name.trim() || !table || !body.trim() || definer === 'invalid') return
+    onSubmit({ op: 'createTrigger', name: name.trim(), table, timing, event, body, ...(definer ? { definer } : {}) })
   }
   return (
     <form onSubmit={submit} className="space-y-3">
@@ -81,6 +85,9 @@ export function CreateTriggerForm({
             ))}
           </Select>
         </Field>
+        {dialect === 'mysql' ? (
+          <DefinerField id="trigger-definer" value={definerText} onChange={setDefinerText} />
+        ) : null}
       </div>
       <Field id="trigger-body" label={t.body} hint={t.trigger.bodyHint[dialect]}>
         <Textarea

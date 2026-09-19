@@ -3208,6 +3208,108 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         }
       })
 
+      it('sets, changes and drops routine characteristics; drops a trigger; makes a view with columns and a check option', async () => {
+        const fn = `${scratch}_sec`
+        const view = `${scratch}_cv`
+        const table = `${scratch}_trgt`
+        const trigger = `${scratch}_trg`
+        const event = `${scratch}_evp`
+        const security = async () =>
+          dialect === 'mysql'
+            ? await firstValue(
+                `SELECT SECURITY_TYPE FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA = DATABASE() AND ROUTINE_NAME = '${fn}'`
+              )
+            : (await firstValue(`SELECT prosecdef FROM pg_proc WHERE proname = '${fn}'`)) === true
+              ? 'DEFINER'
+              : 'INVOKER'
+        try {
+          // MySQL: the connecting account as DEFINER (allowed without SUPER) and a data-access characteristic.
+          const me = dialect === 'mysql' ? String(await firstValue('SELECT CURRENT_USER()')) : ''
+          const at = me.lastIndexOf('@')
+          await runScript({
+            op: 'createRoutine',
+            kind: 'function',
+            name: fn,
+            params: [{ mode: 'IN', name: 'n', type: 'INT' }],
+            returns: 'INT',
+            body: dialect === 'mysql' ? 'RETURN n + 1;' : 'BEGIN\n  RETURN n + 1;\nEND;',
+            language: 'plpgsql',
+            deterministic: true,
+            sqlSecurity: 'INVOKER',
+            ...(dialect === 'mysql'
+              ? { definer: { user: me.slice(0, at), host: me.slice(at + 1) }, dataAccess: 'NO SQL' as const }
+              : {}),
+          })
+          expect(await security()).toBe('INVOKER')
+          const parameters = (await db.listRoutines(ns)).find((r) => r.name === fn)?.parameters
+          await runScript({
+            op: 'alterRoutine',
+            kind: 'function',
+            name: fn,
+            ...(dialect === 'postgres' ? { parameters } : {}),
+            sqlSecurity: 'DEFINER',
+            comment: 'changed',
+          })
+          expect(await security()).toBe('DEFINER')
+          expect((await db.listRoutines(ns)).find((r) => r.name === fn)?.comment).toBe('changed')
+          await runScript({
+            op: 'dropRoutine',
+            kind: 'function',
+            name: fn,
+            ...(dialect === 'postgres' ? { parameters } : {}),
+          })
+          expect((await db.listRoutines(ns)).map((r) => r.name)).not.toContain(fn)
+
+          await execOk(`CREATE TABLE ${table} (id INT PRIMARY KEY, v INT)`)
+          await runScript({
+            op: 'createTrigger',
+            name: trigger,
+            table,
+            timing: 'BEFORE',
+            event: 'INSERT',
+            body: dialect === 'mysql' ? 'SET NEW.v = 1;' : 'BEGIN\n  NEW.v := 1;\n  RETURN NEW;\nEND;',
+          })
+          expect((await db.listTriggers(ns, table)).map((x) => x.name)).toContain(trigger)
+          await runScript({ op: 'dropTrigger', name: trigger, table })
+          expect((await db.listTriggers(ns, table)).map((x) => x.name)).not.toContain(trigger)
+
+          // The view's own column names, and a check option: a change moving a row out of it is refused.
+          await runScript({
+            op: 'createView',
+            name: view,
+            select: 'SELECT id, name FROM users WHERE id <= 2',
+            orReplace: false,
+            columns: ['a', 'b'],
+            checkOption: 'CASCADED',
+          })
+          expect(await firstValue(`SELECT COUNT(a) FROM ${view}`)).toBe(2)
+          const refused = await exec(`UPDATE ${view} SET a = 999 WHERE a = 1`, { stopOnError: false })
+          expect(refused[0]).toMatchObject({ kind: 'error', message: expect.stringMatching(/check option/i) })
+
+          if (dialect === 'mysql') {
+            // PRESERVE keeps a one-time event after it has run.
+            await runScript({
+              op: 'createEvent',
+              name: event,
+              schedule: { kind: 'at', at: '2099-01-01 00:00:00' },
+              body: 'SELECT 1',
+              enabled: false,
+              preserve: true,
+            })
+            expect(
+              await firstValue(
+                `SELECT ON_COMPLETION FROM information_schema.EVENTS WHERE EVENT_SCHEMA = DATABASE() AND EVENT_NAME = '${event}'`
+              )
+            ).toBe('PRESERVE')
+          }
+        } finally {
+          await exec(`DROP VIEW IF EXISTS ${view}`, { stopOnError: false })
+          await exec(`DROP FUNCTION IF EXISTS ${fn}`, { stopOnError: false })
+          await exec(`DROP TABLE IF EXISTS ${table}`, { stopOnError: false })
+          if (dialect === 'mysql') await exec(`DROP EVENT IF EXISTS ${event}`, { stopOnError: false })
+        }
+      })
+
       it('moves a table, rows and all, to another database (MySQL) or schema (PostgreSQL)', async () => {
         const t = `${scratch}_mv`
         const target = dialect === 'mysql' ? ctx.otherDatabase : `${scratch}_sch`

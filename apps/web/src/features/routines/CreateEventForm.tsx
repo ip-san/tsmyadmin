@@ -1,5 +1,7 @@
 import { type DdlOp, EVENT_INTERVAL_UNITS, type EventSchedule } from '@tsmyadmin/shared'
 import { type FormEvent, useState } from 'react'
+import { DefinerField } from '@/components/ddl/DefinerFields.tsx'
+import { parseDefiner } from '@/components/ddl/definer.ts'
 import { Button } from '@/components/ui/Button.tsx'
 import { Field, Input, Select, Textarea } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
@@ -24,6 +26,8 @@ export function CreateEventForm({ onSubmit }: { onSubmit: (op: DdlOp) => void })
   const [starts, setStarts] = useState('')
   const [ends, setEnds] = useState('')
   const [enabled, setEnabled] = useState(true)
+  const [preserve, setPreserve] = useState(false)
+  const [definerText, setDefinerText] = useState('')
   const [comment, setComment] = useState('')
   const [body, setBody] = useState('BEGIN\n  SELECT 1;\nEND')
   const schedule = (): EventSchedule | null => {
@@ -46,13 +50,16 @@ export function CreateEventForm({ onSubmit }: { onSubmit: (op: DdlOp) => void })
   const submit = (e: FormEvent) => {
     e.preventDefault()
     const s = schedule()
-    if (!name.trim() || !s || !body.trim()) return
+    const definer = parseDefiner(definerText)
+    if (!name.trim() || !s || !body.trim() || definer === 'invalid') return
     onSubmit({
       op: 'createEvent',
       name: name.trim(),
       schedule: s,
       body,
       enabled,
+      ...(preserve ? { preserve: true } : {}),
+      ...(definer ? { definer } : {}),
       ...(comment.trim() ? { comment: comment.trim() } : {}),
     })
   }
@@ -142,9 +149,14 @@ export function CreateEventForm({ onSubmit }: { onSubmit: (op: DdlOp) => void })
           <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
           {t.event.enabled}
         </label>
+        <label className="flex items-center gap-1 text-sm text-ink" title={t.event.preserveHint}>
+          <input type="checkbox" checked={preserve} onChange={(e) => setPreserve(e.target.checked)} />
+          {t.event.preserve}
+        </label>
         <Field id="event-comment" label={t.comment}>
           <Input id="event-comment" value={comment} onChange={(e) => setComment(e.target.value)} />
         </Field>
+        <DefinerField id="event-definer" value={definerText} onChange={setDefinerText} />
       </div>
       <Button type="submit" variant="primary" aria-haspopup="dialog" aria-label={`${t.event.title}: ${t.review}`}>
         {t.review}

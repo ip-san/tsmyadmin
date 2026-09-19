@@ -1,22 +1,54 @@
 import { useQuery } from '@tanstack/react-query'
+import { type Dialect, sqlScript } from '@tsmyadmin/shared'
 import { useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Spinner } from '@/components/ui/Feedback.tsx'
 import { locale } from '@/config/locale.ts'
+import { downloadText, safeFilename } from '@/lib/download.ts'
 import type { createStatementQuery, routineDefinitionQuery } from '@/lib/queries.ts'
 
 type DefinitionQuery = ReturnType<typeof routineDefinitionQuery> | ReturnType<typeof createStatementQuery>
 type Source = { definition: string | null } | { query: DefinitionQuery }
 
-function Definition({ definition, onEdit }: { definition: string | null; onEdit?: (d: string) => void }) {
+/** Where the definition is saved as an .sql file, and the dialect that decides how its statements are delimited. */
+export interface DefinitionFile {
+  dialect: Dialect
+  name: string
+}
+
+function Definition({
+  definition,
+  onEdit,
+  file,
+}: {
+  definition: string | null
+  onEdit?: (d: string) => void
+  file?: DefinitionFile
+}) {
   if (definition === null) return <span className="text-xs text-ink-sub">{locale.routines.noDefinition}</span>
   return (
     <>
-      {onEdit ? (
-        <div className="mt-2">
-          <Button size="sm" onClick={() => onEdit(definition)} title={locale.routines.editHint}>
-            {locale.routines.edit}
-          </Button>
+      {onEdit || file ? (
+        <div className="mt-2 space-x-1">
+          {onEdit ? (
+            <Button size="sm" onClick={() => onEdit(definition)} title={locale.routines.editHint}>
+              {locale.routines.edit}
+            </Button>
+          ) : null}
+          {file ? (
+            <Button
+              size="sm"
+              onClick={() =>
+                downloadText(
+                  safeFilename(file.name, 'sql'),
+                  `${sqlScript(file.dialect, [definition.replace(/;\s*$/, '')])};\n`,
+                  'application/sql;charset=utf-8'
+                )
+              }
+            >
+              {locale.routines.download}
+            </Button>
+          ) : null}
         </div>
       ) : null}
       <pre
@@ -30,11 +62,19 @@ function Definition({ definition, onEdit }: { definition: string | null; onEdit?
   )
 }
 
-function LazyDefinition({ query, onEdit }: { query: DefinitionQuery; onEdit?: (d: string) => void }) {
+function LazyDefinition({
+  query,
+  onEdit,
+  file,
+}: {
+  query: DefinitionQuery
+  onEdit?: (d: string) => void
+  file?: DefinitionFile
+}) {
   const q = useQuery(query)
   if (q.isPending) return <Spinner />
   if (q.isError) return <ErrorBox error={q.error} onRetry={() => void q.refetch()} />
-  return <Definition definition={q.data.definition} {...(onEdit ? { onEdit } : {})} />
+  return <Definition definition={q.data.definition} {...(onEdit ? { onEdit } : {})} {...(file ? { file } : {})} />
 }
 
 /**
@@ -44,8 +84,9 @@ function LazyDefinition({ query, onEdit }: { query: DefinitionQuery; onEdit?: (d
 export function DefinitionToggle({
   label,
   onEdit,
+  file,
   ...source
-}: { label: string; onEdit?: (definition: string) => void } & Source) {
+}: { label: string; onEdit?: (definition: string) => void; file?: DefinitionFile } & Source) {
   const [open, setOpen] = useState(false)
   if ('definition' in source && source.definition === null) return <Definition definition={null} />
   return (
@@ -60,9 +101,9 @@ export function DefinitionToggle({
       </Button>
       {open ? (
         'definition' in source ? (
-          <Definition definition={source.definition} {...(onEdit ? { onEdit } : {})} />
+          <Definition definition={source.definition} {...(onEdit ? { onEdit } : {})} {...(file ? { file } : {})} />
         ) : (
-          <LazyDefinition query={source.query} {...(onEdit ? { onEdit } : {})} />
+          <LazyDefinition query={source.query} {...(onEdit ? { onEdit } : {})} {...(file ? { file } : {})} />
         )
       ) : null}
     </div>

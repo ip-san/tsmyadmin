@@ -30,6 +30,12 @@ exports[`DDL builders > mysql: alterIndex 1`] = `
 ]
 `;
 
+exports[`DDL builders > mysql: alterRoutine 1`] = `
+[
+  "ALTER PROCEDURE \`db\`.\`p\`\`r"x\` COMMENT 'it''s' SQL SECURITY INVOKER",
+]
+`;
+
 exports[`DDL builders > mysql: convertCollation 1`] = `
 [
   "ALTER TABLE \`db\`.\`t\`\`1\` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci",
@@ -156,6 +162,12 @@ exports[`DDL builders > mysql: dropPartition 1`] = `
 ]
 `;
 
+exports[`DDL builders > mysql: dropRoutine 1`] = `
+[
+  "DROP FUNCTION \`db\`.\`f\`\`n"x\`",
+]
+`;
+
 exports[`DDL builders > mysql: dropTable 1`] = `
 [
   "DROP TABLE \`db\`.\`t\`",
@@ -165,6 +177,12 @@ exports[`DDL builders > mysql: dropTable 1`] = `
 exports[`DDL builders > mysql: dropTables 1`] = `
 [
   "DROP TABLE \`db\`.\`t\`, \`db\`.\`we"ird\`\`tbl\`",
+]
+`;
+
+exports[`DDL builders > mysql: dropTrigger 1`] = `
+[
+  "DROP TRIGGER \`db\`.\`tr\`\`g"x\`",
 ]
 `;
 
@@ -339,6 +357,15 @@ exports[`DDL builders > postgres: alterIndex 1`] = `
 ]
 `;
 
+exports[`DDL builders > postgres: alterRoutine 1`] = `
+[
+  "BEGIN",
+  "ALTER PROCEDURE "app"."p\`r""x"(IN a integer) SECURITY INVOKER",
+  "COMMENT ON PROCEDURE "app"."p\`r""x"(IN a integer) IS 'it''s'",
+  "COMMIT",
+]
+`;
+
 exports[`DDL builders > postgres: convertCollation 1`] = `
 [
   "ALTER TABLE "app"."t\`1" ALTER COLUMN "na""me" TYPE varchar(20) COLLATE "utf8mb4_0900_ai_ci"",
@@ -462,6 +489,12 @@ exports[`DDL builders > postgres: dropPartition 1`] = `
 ]
 `;
 
+exports[`DDL builders > postgres: dropRoutine 1`] = `
+[
+  "DROP FUNCTION "app"."f\`n""x"(IN a integer, b text)",
+]
+`;
+
 exports[`DDL builders > postgres: dropTable 1`] = `
 [
   "DROP TABLE "app"."t"",
@@ -471,6 +504,12 @@ exports[`DDL builders > postgres: dropTable 1`] = `
 exports[`DDL builders > postgres: dropTables 1`] = `
 [
   "DROP TABLE "app"."t", "app"."we""ird\`tbl"",
+]
+`;
+
+exports[`DDL builders > postgres: dropTrigger 1`] = `
+[
+  "DROP TRIGGER "tr\`g""x" ON "app"."ta\`b""x"",
 ]
 `;
 

@@ -88,7 +88,15 @@ function dollarQuoted(code: string): string {
   return `$${tag}$\n${code.trim()}\n$${tag}$`
 }
 
+/** PostgreSQL has no DEFINER clause or MySQL-style characteristics: say so instead of dropping them silently. */
+function onlyMysql(what: string, present: unknown): void {
+  if (present !== undefined)
+    throw new AdapterError('UNSUPPORTED', `${what} is a MySQL option; PostgreSQL has no equivalent`)
+}
+
 function createRoutineSql(ns: Namespace, op: Extract<DdlOp, { op: 'createRoutine' }>): string[] {
+  onlyMysql('DEFINER', op.definer)
+  onlyMysql('A data-access characteristic', op.dataAccess)
   const kind = op.kind === 'function' ? 'FUNCTION' : 'PROCEDURE'
   const signature = `${quoteTable('postgres', ns, op.name)}(${op.params
     .map((p) => `${p.mode} ${id(p.name)} ${p.type}`)
@@ -96,7 +104,8 @@ function createRoutineSql(ns: Namespace, op: Extract<DdlOp, { op: 'createRoutine
   if (op.kind === 'function' && !op.returns) throw new AdapterError('UNSUPPORTED', 'A function needs a return type')
   const returns = op.kind === 'function' ? ` RETURNS ${op.returns}` : ''
   // The language is schema-validated as an identifier, hence safe unquoted.
-  const create = `CREATE ${kind} ${signature}${returns} LANGUAGE ${op.language} AS ${dollarQuoted(op.body)}`
+  const security = op.sqlSecurity ? ` SECURITY ${op.sqlSecurity}` : ''
+  const create = `CREATE ${kind} ${signature}${returns} LANGUAGE ${op.language}${security} AS ${dollarQuoted(op.body)}`
   return op.comment ? [create, `COMMENT ON ${kind} ${signature} IS ${pgLiteral(op.comment)}`] : [create]
 }
 
@@ -140,13 +149,40 @@ export const pgDdl: DdlBuilder = {
       }
       case 'moveTable':
         return [`ALTER TABLE ${quoteTable('postgres', ns, op.table)} SET SCHEMA ${id(op.to)}`]
-      case 'createView':
+      case 'createView': {
+        onlyMysql('ALGORITHM', op.algorithm)
+        onlyMysql('DEFINER', op.definer)
+        onlyMysql('SQL SECURITY', op.sqlSecurity)
+        const cols = op.columns && op.columns.length > 0 ? ` (${op.columns.map(id).join(', ')})` : ''
+        const check = op.checkOption ? ` WITH ${op.checkOption} CHECK OPTION` : ''
         return [
-          `CREATE ${op.orReplace ? 'OR REPLACE ' : ''}VIEW ${quoteTable('postgres', ns, op.name)} AS ${op.select.trim().replace(/[\s;]+$/, '')}`,
+          `CREATE ${op.orReplace ? 'OR REPLACE ' : ''}VIEW ${quoteTable('postgres', ns, op.name)}${cols} AS ${op.select.trim().replace(/[\s;]+$/, '')}${check}`,
         ]
+      }
+      case 'dropRoutine':
+        // A PostgreSQL routine is known by its parameter list: two may share a name.
+        return [
+          `DROP ${op.kind === 'function' ? 'FUNCTION' : 'PROCEDURE'} ${quoteTable('postgres', ns, op.name)}(${op.parameters ?? ''})`,
+        ]
+      case 'alterRoutine': {
+        onlyMysql('A data-access characteristic', op.dataAccess)
+        const kind = op.kind === 'function' ? 'FUNCTION' : 'PROCEDURE'
+        const signature = `${quoteTable('postgres', ns, op.name)}(${op.parameters ?? ''})`
+        const out = [
+          ...(op.sqlSecurity ? [`ALTER ${kind} ${signature} SECURITY ${op.sqlSecurity}`] : []),
+          ...(op.comment !== undefined
+            ? [`COMMENT ON ${kind} ${signature} IS ${op.comment === '' ? 'NULL' : pgLiteral(op.comment)}`]
+            : []),
+        ]
+        if (out.length === 0) throw new AdapterError('VALIDATION', 'No routine characteristic to change')
+        return inTransaction(out)
+      }
+      case 'dropTrigger':
+        return [`DROP TRIGGER ${id(op.name)} ON ${quoteTable('postgres', ns, op.table)}`]
       case 'createRoutine':
         return createRoutineSql(ns, op)
       case 'createTrigger': {
+        onlyMysql('DEFINER', op.definer)
         // PostgreSQL runs a trigger function; it is created next to the trigger and named after it.
         const fn = quoteTable('postgres', ns, `${op.name}_fn`)
         return [
