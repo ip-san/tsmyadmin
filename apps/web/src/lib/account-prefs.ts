@@ -28,7 +28,19 @@ let pending: ReturnType<typeof setTimeout> | null = null
  * the caller reloads, because every string is read once at load. Nothing happens for a deployment that keeps
  * preferences in the browser only.
  */
+/** Drops a change still waiting to be sent: it belongs to the account that made it, not to the next one. */
+function cancelPending(): void {
+  if (pending !== null) clearTimeout(pending)
+  pending = null
+}
+
 export async function loadAccountPreferences(identity: string, onServer: boolean): Promise<{ reload: boolean }> {
+  if (loadedFor !== identity) {
+    // Another account in this tab (a session that expired, then someone else signing in): nothing of the last
+    // one's may be sent with this one's cookie.
+    cancelPending()
+    shared = {}
+  }
   syncing = onServer
   if (!onServer || loadedFor === identity) return { reload: false }
   loadedFor = identity
@@ -57,14 +69,14 @@ export async function loadAccountPreferences(identity: string, onServer: boolean
 
 /** Forgets the account at logout, so the next login reads its own preferences. */
 export function resetAccountPreferences(): void {
+  cancelPending()
   loadedFor = null
   syncing = false
   shared = {}
 }
 
 function send(): Promise<unknown> {
-  if (pending !== null) clearTimeout(pending)
-  pending = null
+  cancelPending()
   // Kept alive so a change made just before a reload (the language switch) still arrives.
   return api.preferences.$put({ json: shared }, { init: { keepalive: true } }).catch(() => undefined)
 }

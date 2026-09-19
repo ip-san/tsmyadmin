@@ -257,6 +257,9 @@ for (const t of TARGETS) {
       const dock = page.getByRole('region', { name: 'SQL コンソール（画面の下に常駐）' })
       await dock.getByRole('textbox', { name: 'SQL エディタ' }).click()
       await page.keyboard.type('SELECT 1 AS one')
+      // Close the editor's completion popup (CodeMirror's own), which a slower machine may still be showing.
+      await page.keyboard.press('Escape')
+      await expect(page.getByRole('listbox', { name: 'Completions' })).toHaveCount(0)
       await dock.getByRole('button', { name: '実行する', exact: true }).click()
       await dock.getByRole('region', { name: '文 1' }).waitFor()
       await scan(page)

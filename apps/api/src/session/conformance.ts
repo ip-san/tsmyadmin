@@ -284,6 +284,9 @@ export function describeSessionStoreConformance(
         // Saves at once each see room for themselves; the kind still ends at its cap.
         await Promise.all(['p', 'q', 'r', 's', 't'].map((n) => saved.save(CONFIG, 'transform', n, '{}')))
         expect(await saved.list(CONFIG, 'transform')).toHaveLength(3)
+        // Saves of one name at once are one item, not several (tracking numbers its versions by name).
+        await Promise.all([1, 2, 3].map((n) => saved.save(CONFIG, 'prefs', 'twice', JSON.stringify({ n }))))
+        expect((await saved.list(CONFIG, 'prefs')).filter((item) => item.name === 'twice')).toHaveLength(1)
       } finally {
         await store.closeAll()
       }

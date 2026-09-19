@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { createHmac, randomUUID } from 'node:crypto'
 import type { DatabaseAdapter } from '@tsmyadmin/adapter'
 import { type ConnectRequest, ConnectRequestSchema } from '@tsmyadmin/shared'
 import { Redis } from 'ioredis'
@@ -332,6 +332,14 @@ class RedisSavedQueries implements SavedItems {
     return `${this.prefix}:saved:${this.owner(this.key, config)}`
   }
 
+  /** A stable id for a new row: an HMAC under the store key, so it says nothing about the name it stands for. */
+  private idFor(config: ConnectRequest, kind: SavedItemKind, name: string): string {
+    return createHmac('sha256', this.key)
+      .update(JSON.stringify([this.owner(this.key, config), kind, name]))
+      .digest('hex')
+      .slice(0, 32)
+  }
+
   private entry(config: ConnectRequest, id: string): string {
     return `${this.index(config)}:${id}`
   }
@@ -367,7 +375,9 @@ class RedisSavedQueries implements SavedItems {
     const existing = mine.find((q) => q.name === name)
     // Never the row being written: replacing a row with itself would delete what this call just stored.
     const replaced = replaces === undefined ? undefined : mine.find((q) => q.id === replaces && q.id !== existing?.id)
-    const id = existing?.id ?? randomUUID()
+    // A new row's id follows from what it is (owner, kind, name) rather than chance: the read above is not atomic
+    // with the write below, and two saves of one name at once then land on the same key instead of two rows.
+    const id = existing?.id ?? this.idFor(config, kind, name)
     const at = this.now()
     // Oldest of this kind first beyond its cap, so a runaway client cannot grow the store without bound. The kind
     // is inside the sealed payload, so the victims come from the opened list, not the index.

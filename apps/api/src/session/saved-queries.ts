@@ -73,6 +73,14 @@ export class SqliteSavedQueries implements SavedItems {
   }
 
   async list(config: ConnectRequest, kind: SavedItemKind): Promise<SavedItem[]> {
+    return this.read(config, kind)
+  }
+
+  /**
+   * The account's rows of one kind, newest first. Synchronous (node:sqlite is), which is what lets `save` read and
+   * write inside one transaction with nothing else running in between.
+   */
+  private read(config: ConnectRequest, kind: SavedItemKind): SavedItem[] {
     const rows = this.stmt.byIdentity.all(this.identity(config)) as {
       id: string
       payload: Uint8Array
@@ -104,18 +112,19 @@ export class SqliteSavedQueries implements SavedItems {
     replaces?: string
   ): Promise<SavedItem[]> {
     const identity = this.identity(config)
-    const mine = await this.list(config, kind)
-    const existing = mine.find((q) => q.name === name)
-    // Never the row being written: replacing a row with itself would delete what this call just stored.
-    const replaced = replaces === undefined ? undefined : mine.find((q) => q.id === replaces && q.id !== existing?.id)
-    // Sealed against the row it lands in, so the id has to be decided first.
-    const id = existing?.id ?? randomUUID()
-    const payload = seal(this.key, JSON.stringify({ kind, name, body }), rowAad(SAVED_QUERIES, id))
     const at = this.now()
-    // One transaction: the row being replaced goes in the same write as the new one, so a failure leaves the
-    // account exactly as it was and the cap never sees the two of them at once.
+    // One transaction, read included and nothing awaited inside it: two saves at once cannot both find the name
+    // missing and both insert it, nor both see room under the cap. The row being replaced goes in the same write
+    // as the new one, so a failure leaves the account exactly as it was.
     this.db.exec('BEGIN IMMEDIATE')
     try {
+      const mine = this.read(config, kind)
+      const existing = mine.find((q) => q.name === name)
+      // Never the row being written: replacing a row with itself would delete what this call just stored.
+      const replaced = replaces === undefined ? undefined : mine.find((q) => q.id === replaces && q.id !== existing?.id)
+      // Sealed against the row it lands in, so the id has to be decided first.
+      const id = existing?.id ?? randomUUID()
+      const payload = seal(this.key, JSON.stringify({ kind, name, body }), rowAad(SAVED_QUERIES, id))
       if (replaced) this.stmt.remove.run(replaced.id, identity)
       if (existing) this.stmt.update.run(payload, at, id, identity)
       else {
@@ -130,11 +139,7 @@ export class SqliteSavedQueries implements SavedItems {
       this.db.exec('ROLLBACK')
       throw error
     }
-    // Two saves at once each saw room for themselves (the list is read before the transaction); whichever
-    // finishes second trims the kind back to its cap.
-    const after = await this.list(config, kind)
-    for (const victim of after.slice(this.limit)) this.stmt.remove.run(victim.id, identity)
-    return after.slice(0, this.limit)
+    return this.read(config, kind)
   }
 
   /** Deletes one of the caller's own rows of that kind; any other id matches nothing. */
