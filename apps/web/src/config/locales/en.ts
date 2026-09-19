@@ -1003,6 +1003,18 @@ export const en = {
     title: 'SQL console (docked)',
     close: 'Close the console',
   },
+  gis: {
+    title: 'Show as shapes (GIS)',
+    hint: 'Draws the spatial values of the rows on this page, to scale in their own coordinates (there is no map behind them). Hover a shape to see the label column.',
+    column: 'Spatial column',
+    label: 'Label',
+    noLabel: '(none)',
+    summary: (shapes: number, unreadable: number) =>
+      unreadable > 0
+        ? `${plural(shapes, 'shape', 'shapes')} (${plural(unreadable, 'value', 'values')} that could not be read left out)`
+        : plural(shapes, 'shape', 'shapes'),
+    caption: (column: string, shapes: number) => `${plural(shapes, 'shape', 'shapes')} of ${column}`,
+  },
   zoom: {
     title: 'Zoom search',
     hint: 'Pick two numeric columns to plot the rows matching the search. Pick a point to open its row.',

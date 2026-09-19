@@ -155,6 +155,29 @@ for (const t of TARGETS) {
       await scan(page)
     })
 
+    test('GIS view of a page of shapes', async ({ page }) => {
+      await login(page, t)
+      const table = `e2e_a11ygis_${Date.now().toString(36)}`
+      const run = (sql: string) =>
+        page.request.post(`/api/databases/${t.database}/sql`, {
+          data: { sql, ...(t.schema ? { schema: t.schema } : {}) },
+        })
+      await run(`CREATE TABLE ${table} (id INT PRIMARY KEY, shape ${t.dialect === 'mysql' ? 'GEOMETRY' : 'POLYGON'})`)
+      await run(
+        t.dialect === 'mysql'
+          ? `INSERT INTO ${table} VALUES (1, ST_GeomFromText('POLYGON((0 0, 1 0, 1 1, 0 0))'))`
+          : `INSERT INTO ${table} VALUES (1, '((0,0),(1,0),(1,1))')`
+      )
+      try {
+        await page.goto(tableUrl(t, table))
+        await page.getByText('図形で表示（GIS）').click()
+        await page.getByRole('img', { name: 'shape の図形 1 件' }).waitFor()
+        await scan(page)
+      } finally {
+        await run(`DROP TABLE IF EXISTS ${table}`)
+      }
+    })
+
     test('server status, processes and users screens', async ({ page }) => {
       await login(page, t)
       await page.goto('/status')

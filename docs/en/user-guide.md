@@ -1,4 +1,4 @@
-<!-- translated-from: docs/user-guide.md sha256:818d5b496d5e152a368a82727187b2c0c4c6266adb9407fdb27e6dc056b8c787 -->
+<!-- translated-from: docs/user-guide.md sha256:b7551aff006bb8875d3d349e265674d05916de4cdffd026e79625dd72348f6c5 -->
 
 # User guide
 
@@ -100,6 +100,7 @@ On PostgreSQL, **idle** tsmyadmin connections to that database under the same da
 - On a table over 100,000 rows with no filter, the exact count is skipped and the total reads *Approx. N rows*
 - **Editing**: the pencil at the start of a row opens a dialog; double-clicking a cell edits it in place (`Enter` saves, `Esc` cancels). The copy icon **duplicates a row** (auto-increment columns take a new value)
 - **Deleting**: the bin at the start of a row deletes that row alone, or tick rows and press **Delete selected rows**; a confirmation follows
+- A table with a spatial column (MySQL's GEOMETRY family; PostgreSQL's point, polygon and the like, and PostGIS geometry / geography) has **Show as shapes (GIS)** below the grid: it draws the values on the page to scale in their own coordinates. There is no map behind them, and nothing is fetched from an outside service
 - Above the table is the SQL that fetched the page and how long it took. Filter values are not spliced into the SQL; they are listed as *Bound values*
 - A table with neither a primary key nor a unique key is addressed by `ctid` on PostgreSQL and by every column on MySQL (compared byte for byte, so rows that differ only in case or accents — which the collation would treat as equal — count as different rows). If that does not match exactly one row, the change fails and nothing is written. `ctid` is a physical position, so once another session has updated or deleted a row, an edit made from a stale screen can land on a different one — reload just before editing a table without a primary key (adding a primary key is the real fix)
 - Views and sequences are read-only. So are PostgreSQL partitioned parents and inheritance parents (`ctid` repeats across children, so a row cannot be identified — edit through the child table)

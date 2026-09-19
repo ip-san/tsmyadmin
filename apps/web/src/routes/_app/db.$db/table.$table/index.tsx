@@ -5,6 +5,7 @@ import {
   preferredLimit,
   rememberLimit,
 } from '@/features/browse/browse-search.ts'
+import { GisView } from '@/features/browse/GisView.tsx'
 import { RowsGrid } from '@/features/browse/RowsGrid.tsx'
 import { useShortcuts } from '@/lib/shortcuts.ts'
 
@@ -25,16 +26,21 @@ function BrowsePage() {
     { keys: 'arrowright', handler: () => navigate({ search: (prev) => ({ ...prev, page: search.page + 1 }) }) },
   ])
   const limit = search.limit ?? preferredLimit()
+  const tableRef = { db, schema: search.schema, table }
+  const options = browseOptionsFromSearch(search, limit)
   return (
-    <RowsGrid
-      tableRef={{ db, schema: search.schema, table }}
-      options={browseOptionsFromSearch(search, limit)}
-      page={search.page}
-      cols={search.cols}
-      onChange={(patch) => {
-        if (patch.limit !== undefined) rememberLimit(patch.limit)
-        return navigate({ search: (prev) => ({ ...prev, ...patch }) })
-      }}
-    />
+    <>
+      <RowsGrid
+        tableRef={tableRef}
+        options={options}
+        page={search.page}
+        cols={search.cols}
+        onChange={(patch) => {
+          if (patch.limit !== undefined) rememberLimit(patch.limit)
+          return navigate({ search: (prev) => ({ ...prev, ...patch }) })
+        }}
+      />
+      <GisView tableRef={tableRef} options={options} />
+    </>
   )
 }

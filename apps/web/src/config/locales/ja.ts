@@ -989,6 +989,18 @@ export const ja = {
     title: 'SQL コンソール（画面の下に常駐）',
     close: 'コンソールを閉じる',
   },
+  gis: {
+    title: '図形で表示（GIS）',
+    hint: 'このページの行の空間データを、座標どおりの縮尺で描きます（背景の地図はありません）。図形にポインタを重ねると、ラベルのカラムの値が出ます。',
+    column: '空間カラム',
+    label: 'ラベル',
+    noLabel: '（なし）',
+    summary: (shapes: number, unreadable: number) =>
+      unreadable > 0
+        ? `${shapes.toLocaleString('ja-JP')} 件の図形（読み取れない値 ${unreadable.toLocaleString('ja-JP')} 件は除外）`
+        : `${shapes.toLocaleString('ja-JP')} 件の図形`,
+    caption: (column: string, shapes: number) => `${column} の図形 ${shapes.toLocaleString('ja-JP')} 件`,
+  },
   zoom: {
     title: 'ズーム検索',
     hint: '数値のカラムを 2 つ選ぶと、検索条件に合う行を散布図にします。点を選ぶとその行を開けます。',
