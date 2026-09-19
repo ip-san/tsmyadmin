@@ -84,6 +84,7 @@ docker run -d --name tsmyadmin \
 **利用者**
 
 - [docs/user-guide.md](docs/user-guide.md) — 画面と操作のガイド、値の表し方、制限事項
+- [docs/phpmyadmin-parity.md](docs/phpmyadmin-parity.md) — phpMyAdmin との機能対応表（残りの差と、作らないものの理由）
 
 **運用・導入**
 

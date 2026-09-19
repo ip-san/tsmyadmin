@@ -4,7 +4,7 @@ import type { SessionInfo } from '@tsmyadmin/shared'
 import { CircleHelp, LogOut, Moon, PanelLeftClose, PanelLeftOpen, SquareTerminal, Sun, X } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
 import { z } from 'zod'
-import { LOCALE_NAMES, LOCALES, locale, localeCode, setLocale } from '@/config/locale.ts'
+import { LOCALE_CODES, LOCALE_NAMES, type LocaleCode, locale, localeCode, setLocale } from '@/config/locale.ts'
 import { sharePreference, sharePreferenceNow } from '@/lib/account-prefs.ts'
 import { readPreference, writePreference } from '@/lib/preferences.ts'
 import { myGroupTabsQuery } from '@/lib/queries.ts'
@@ -121,14 +121,14 @@ export function AppShell({
             aria-label={locale.common.language}
             value={localeCode}
             onChange={(e) => {
-              const code = e.target.value as keyof typeof LOCALES
+              const code = e.target.value as LocaleCode
               void sharePreferenceNow({ locale: code }).finally(() => setLocale(code))
             }}
             className="w-auto py-1 text-xs"
           >
-            {Object.keys(LOCALES).map((code) => (
+            {LOCALE_CODES.map((code) => (
               <option key={code} value={code}>
-                {LOCALE_NAMES[code as keyof typeof LOCALES]}
+                {LOCALE_NAMES[code]}
               </option>
             ))}
           </Select>

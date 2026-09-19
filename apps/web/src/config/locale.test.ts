@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { LOCALE_NAMES, LOCALES, resolveLocaleCode } from './locale.ts'
+import { LOCALE_NAMES, resolveLocaleCode } from './locale.ts'
+import { en } from './locales/en.ts'
+import { ja } from './locales/ja.ts'
+
+const LOCALES = { ja, en }
 
 /** Every leaf of a locale, as `path -> 'string' | arity`. */
 function shape(value: unknown, path = ''): Record<string, string> {

@@ -1,4 +1,4 @@
-<!-- translated-from: README.md sha256:1e9e0251edb8395d556f402f4978e5b7b4d6de05b1e4bfb9359ae61d6b8b3e36 -->
+<!-- translated-from: README.md sha256:fbe3c22576d36545bce0eff00e431b59041ba85a048ee6d89b7dab21749757cd -->
 
 # tsmyadmin
 
@@ -84,6 +84,7 @@ A single container, with the API serving the SPA. You **must** list the `host:po
 **For users**
 
 - [docs/en/user-guide.md](docs/en/user-guide.md) — the screens and how to work with them, how values are shown, the limits
+- [docs/en/phpmyadmin-parity.md](docs/en/phpmyadmin-parity.md) — feature parity with phpMyAdmin (what is still different, and what will not be built and why)
 
 **For running it**
 

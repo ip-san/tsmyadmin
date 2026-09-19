@@ -10,6 +10,8 @@ const apiPort = process.env.API_PORT ?? '3100'
 export default defineConfig({
   plugins: [tanstackRouter({ target: 'react', autoCodeSplitting: true }), react(), tailwindcss()],
   define: { __APP_VERSION__: JSON.stringify(pkg.version) },
+  // The size check follows the startup chain through it (scripts/check-bundle-size.mjs).
+  build: { manifest: true },
   resolve: { alias: { '@': path.resolve(import.meta.dirname, './src') } },
   server: {
     host: '127.0.0.1',

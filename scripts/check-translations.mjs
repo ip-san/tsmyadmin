@@ -27,6 +27,7 @@ const PAIRS = [
   ['docs/cloudflare.md', 'docs/en/cloudflare.md'],
   ['docs/hosting.md', 'docs/en/hosting.md'],
   ['docs/architecture.md', 'docs/en/architecture.md'],
+  ['docs/phpmyadmin-parity.md', 'docs/en/phpmyadmin-parity.md'],
 ]
 
 const MARKER = /<!-- translated-from: (\S+) sha256:([0-9a-f]{64}) -->/
