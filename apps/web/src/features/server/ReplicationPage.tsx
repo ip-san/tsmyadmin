@@ -1,9 +1,12 @@
 import { useQuery } from '@tanstack/react-query'
 import type { Dialect, ReplicationInfo } from '@tsmyadmin/shared'
+import { useState } from 'react'
+import { Button } from '@/components/ui/Button.tsx'
 import { Badge, ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
 import { replicationQuery } from '@/lib/queries.ts'
+import { DiagnosticReport } from './DiagnosticReport.tsx'
 
 const t = locale.replication
 
@@ -48,6 +51,7 @@ function Part({ title, records, empty }: { title: string; records: Records | nul
 /** phpMyAdmin's Replication and Binary log tabs; PostgreSQL's streaming replication and WAL in the same places. */
 export function ReplicationPage({ dialect }: { dialect: Dialect }) {
   const info = useQuery(replicationQuery)
+  const [events, setEvents] = useState<string | null>(null)
   if (info.isPending) return <Spinner />
   if (info.isError) return <ErrorBox error={info.error} onRetry={() => void info.refetch()} />
   const { role, source, replicas, logs } = info.data
@@ -68,6 +72,7 @@ export function ReplicationPage({ dialect }: { dialect: Dialect }) {
               <tr>
                 <Th>{t.logName}</Th>
                 <Th className="text-right">{t.logSize}</Th>
+                {dialect === 'mysql' ? <Th>{locale.diagnostics.events}</Th> : null}
               </tr>
             </thead>
             <tbody>
@@ -77,11 +82,29 @@ export function ReplicationPage({ dialect }: { dialect: Dialect }) {
                   <Td className="text-right text-xs tabular-nums">
                     {l.size === null ? '' : locale.common.bytes(Number(l.size))}
                   </Td>
+                  {dialect === 'mysql' ? (
+                    <Td>
+                      <Button
+                        size="sm"
+                        aria-pressed={events === l.name}
+                        aria-label={`${l.name}: ${locale.diagnostics.showEvents}`}
+                        onClick={() => setEvents(events === l.name ? null : l.name)}
+                      >
+                        {locale.diagnostics.showEvents}
+                      </Button>
+                    </Td>
+                  ) : null}
                 </Tr>
               ))}
             </tbody>
           </Table>
         )}
+        {events !== null ? (
+          <div className="space-y-2">
+            <h4 className="text-sm text-ink">{locale.diagnostics.eventsOf(events)}</h4>
+            <DiagnosticReport kind="binlogEvents" file={events} title={locale.diagnostics.eventsOf(events)} />
+          </div>
+        ) : null}
       </section>
     </div>
   )

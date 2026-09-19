@@ -12,8 +12,10 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as AppAdvisorRouteImport } from './routes/_app/advisor'
 import { Route as AppCollationsRouteImport } from './routes/_app/collations'
 import { Route as AppEnginesRouteImport } from './routes/_app/engines'
+import { Route as AppMonitorRouteImport } from './routes/_app/monitor'
 import { Route as AppPluginsRouteImport } from './routes/_app/plugins'
 import { Route as AppProcessesRouteImport } from './routes/_app/processes'
 import { Route as AppReplicationRouteImport } from './routes/_app/replication'
@@ -66,6 +68,11 @@ const AppIndexRoute = AppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRoute,
 } as any)
+const AppAdvisorRoute = AppAdvisorRouteImport.update({
+  id: '/advisor',
+  path: '/advisor',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppCollationsRoute = AppCollationsRouteImport.update({
   id: '/collations',
   path: '/collations',
@@ -74,6 +81,11 @@ const AppCollationsRoute = AppCollationsRouteImport.update({
 const AppEnginesRoute = AppEnginesRouteImport.update({
   id: '/engines',
   path: '/engines',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppMonitorRoute = AppMonitorRouteImport.update({
+  id: '/monitor',
+  path: '/monitor',
   getParentRoute: () => AppRoute,
 } as any)
 const AppPluginsRoute = AppPluginsRouteImport.update({
@@ -270,8 +282,10 @@ const AppDbDbTableTableTriggersRoute =
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/login': typeof LoginRoute
+  '/advisor': typeof AppAdvisorRoute
   '/collations': typeof AppCollationsRoute
   '/engines': typeof AppEnginesRoute
+  '/monitor': typeof AppMonitorRoute
   '/plugins': typeof AppPluginsRoute
   '/processes': typeof AppProcessesRoute
   '/replication': typeof AppReplicationRoute
@@ -312,8 +326,10 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
+  '/advisor': typeof AppAdvisorRoute
   '/collations': typeof AppCollationsRoute
   '/engines': typeof AppEnginesRoute
+  '/monitor': typeof AppMonitorRoute
   '/plugins': typeof AppPluginsRoute
   '/processes': typeof AppProcessesRoute
   '/replication': typeof AppReplicationRoute
@@ -355,8 +371,10 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
+  '/_app/advisor': typeof AppAdvisorRoute
   '/_app/collations': typeof AppCollationsRoute
   '/_app/engines': typeof AppEnginesRoute
+  '/_app/monitor': typeof AppMonitorRoute
   '/_app/plugins': typeof AppPluginsRoute
   '/_app/processes': typeof AppProcessesRoute
   '/_app/replication': typeof AppReplicationRoute
@@ -401,8 +419,10 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/login'
+    | '/advisor'
     | '/collations'
     | '/engines'
+    | '/monitor'
     | '/plugins'
     | '/processes'
     | '/replication'
@@ -443,8 +463,10 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
+    | '/advisor'
     | '/collations'
     | '/engines'
+    | '/monitor'
     | '/plugins'
     | '/processes'
     | '/replication'
@@ -485,8 +507,10 @@ export interface FileRouteTypes {
     | '__root__'
     | '/_app'
     | '/login'
+    | '/_app/advisor'
     | '/_app/collations'
     | '/_app/engines'
+    | '/_app/monitor'
     | '/_app/plugins'
     | '/_app/processes'
     | '/_app/replication'
@@ -555,6 +579,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/advisor': {
+      id: '/_app/advisor'
+      path: '/advisor'
+      fullPath: '/advisor'
+      preLoaderRoute: typeof AppAdvisorRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/collations': {
       id: '/_app/collations'
       path: '/collations'
@@ -567,6 +598,13 @@ declare module '@tanstack/react-router' {
       path: '/engines'
       fullPath: '/engines'
       preLoaderRoute: typeof AppEnginesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/monitor': {
+      id: '/_app/monitor'
+      path: '/monitor'
+      fullPath: '/monitor'
+      preLoaderRoute: typeof AppMonitorRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/plugins': {
@@ -904,8 +942,10 @@ const AppDbDbRouteWithChildren =
   AppDbDbRoute._addFileChildren(AppDbDbRouteChildren)
 
 interface AppRouteChildren {
+  AppAdvisorRoute: typeof AppAdvisorRoute
   AppCollationsRoute: typeof AppCollationsRoute
   AppEnginesRoute: typeof AppEnginesRoute
+  AppMonitorRoute: typeof AppMonitorRoute
   AppPluginsRoute: typeof AppPluginsRoute
   AppProcessesRoute: typeof AppProcessesRoute
   AppReplicationRoute: typeof AppReplicationRoute
@@ -920,8 +960,10 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppAdvisorRoute: AppAdvisorRoute,
   AppCollationsRoute: AppCollationsRoute,
   AppEnginesRoute: AppEnginesRoute,
+  AppMonitorRoute: AppMonitorRoute,
   AppPluginsRoute: AppPluginsRoute,
   AppProcessesRoute: AppProcessesRoute,
   AppReplicationRoute: AppReplicationRoute,

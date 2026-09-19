@@ -107,12 +107,15 @@ export const mysqlDdl: DdlBuilder = {
     // Database-level ops have no table; handle them before touching op.table.
     switch (op.op) {
       case 'createDatabase':
+        return [createDatabaseSql(op.name, op.collation)]
       case 'createSchema':
         // MySQL: database and schema are the same object.
         return [`CREATE DATABASE ${id(op.name)}`]
 
       case 'dropDatabase':
         return [`DROP DATABASE ${id(op.name)}`]
+      case 'dropDatabases':
+        return op.names.map((name) => `DROP DATABASE ${id(name)}`)
       case 'dropRoutine':
         return [`DROP ${op.kind === 'function' ? 'FUNCTION' : 'PROCEDURE'} ${quoteTable('mysql', ns, op.name)}`]
       case 'alterRoutine': {

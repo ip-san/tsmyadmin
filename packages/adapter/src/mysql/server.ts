@@ -1,5 +1,8 @@
 import type {
   CatalogColumn,
+  DiagnosticKind,
+  DiagnosticQuery,
+  DiagnosticReport,
   KeyValue,
   KillMode,
   ProcessInfo,
@@ -11,6 +14,7 @@ import type {
 import { replicationRole } from '@tsmyadmin/shared'
 import { type Conn, firstResult } from '../base.ts'
 import { joinParts, str, strOrNull } from '../sql/format.ts'
+import { mysqlLiteral } from '../sql/literal.ts'
 import { AdapterError } from '../types.ts'
 
 export async function mysqlServerInfo(conn: Conn): Promise<ServerInfo> {
@@ -135,5 +139,102 @@ export async function mysqlReplicationInfo(conn: Conn): Promise<ReplicationInfo>
     source,
     replicas,
     logs: logs?.map((r) => ({ name: r[0]?.value ?? '', size: r[1]?.value ?? null })) ?? null,
+  }
+}
+
+const NOTHING = (status: DiagnosticReport['status']): DiagnosticReport => ({
+  status,
+  columns: [],
+  rows: [],
+  text: null,
+})
+const text = (v: unknown) => (v === null || v === undefined ? null : String(v))
+const isOff = (v: unknown) => /^(0|off|false)$/i.test(String(v ?? '0'))
+
+/** Seconds of a TIME(6) `query_time`, with its fraction. */
+const SECONDS = (column: string) => `TIME_TO_SEC(${column}) + MICROSECOND(${column}) / 1000000`
+
+/** A logged-statement report from a log kept in a table: only when the log is on and writes to a table. */
+async function mysqlLogTable(conn: Conn, kind: 'slow' | 'general'): Promise<DiagnosticReport> {
+  const flags = firstResult(
+    await conn.query(
+      kind === 'slow'
+        ? 'SELECT @@GLOBAL.slow_query_log, @@GLOBAL.log_output'
+        : 'SELECT @@GLOBAL.general_log, @@GLOBAL.log_output'
+    )
+  ).rows[0]
+  if (isOff(flags?.[0])) return NOTHING('disabled')
+  if (!/table/i.test(String(flags?.[1] ?? ''))) return NOTHING('notTable')
+  if (kind === 'general') {
+    const r = firstResult(
+      await conn.query(
+        "SELECT CAST(argument AS CHAR), COUNT(*) FROM mysql.general_log WHERE command_type = 'Query' GROUP BY 1 ORDER BY 2 DESC LIMIT 50"
+      )
+    )
+    return { status: 'ok', columns: ['statement', 'runs'], rows: r.rows.map((row) => row.map(text)), text: null }
+  }
+  const r = firstResult(
+    await conn.query(
+      `SELECT CAST(sql_text AS CHAR), COUNT(*), SUM(${SECONDS('query_time')}), MAX(${SECONDS('query_time')}), SUM(rows_examined)
+       FROM mysql.slow_log GROUP BY 1 ORDER BY 3 DESC LIMIT 50`
+    )
+  )
+  return {
+    status: 'ok',
+    columns: ['statement', 'runs', 'totalSeconds', 'maxSeconds', 'rowsExamined'],
+    rows: r.rows.map((row) => row.map(text)),
+    text: null,
+  }
+}
+
+async function mysqlBinlogEvents(conn: Conn, file: string | undefined): Promise<DiagnosticReport> {
+  let logs: string[]
+  try {
+    logs = firstResult(await conn.query('SHOW BINARY LOGS')).rows.map((r) => String(r[0]))
+  } catch (err) {
+    if (err instanceof AdapterError && err.nativeCode === 'ER_NO_BINARY_LOGGING') return NOTHING('disabled')
+    throw err
+  }
+  const chosen = file ?? logs.at(-1)
+  if (chosen === undefined) return NOTHING('disabled')
+  // The name goes into a SHOW statement (which takes no placeholders): only one the server itself listed.
+  if (!logs.includes(chosen)) throw new AdapterError('VALIDATION', 'Unknown binary log')
+  const r = firstResult(await conn.query(`SHOW BINLOG EVENTS IN ${mysqlLiteral(chosen)} LIMIT 200`))
+  return {
+    status: 'ok',
+    columns: ['logName', 'position', 'eventType', 'serverId', 'endPosition', 'info'],
+    rows: r.rows.map((row) => row.slice(0, 6).map(text)),
+    text: null,
+  }
+}
+
+/** Logged statements, InnoDB status and binary log events. What the account may not read is `denied`, not an error. */
+export async function mysqlDiagnostics(
+  conn: Conn,
+  kind: DiagnosticKind,
+  query?: DiagnosticQuery
+): Promise<DiagnosticReport> {
+  try {
+    switch (kind) {
+      case 'slowLog':
+        return await mysqlLogTable(conn, 'slow')
+      case 'generalLog':
+        return await mysqlLogTable(conn, 'general')
+      case 'binlogEvents':
+        return await mysqlBinlogEvents(conn, query?.file)
+      case 'engineStatus': {
+        const row = firstResult(await conn.query('SHOW ENGINE INNODB STATUS')).rows[0]
+        return { status: 'ok', columns: [], rows: [], text: text(row?.[2]) }
+      }
+      case 'statements':
+        return NOTHING('unsupported')
+    }
+  } catch (err) {
+    if (
+      err instanceof AdapterError &&
+      (err.code === 'PERMISSION_DENIED' || err.nativeCode === 'ER_SPECIFIC_ACCESS_DENIED_ERROR')
+    )
+      return NOTHING('denied')
+    throw err
   }
 }

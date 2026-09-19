@@ -7,6 +7,9 @@ import type {
   DatabaseGrant,
   DatabaseInfo,
   DdlOp,
+  DiagnosticKind,
+  DiagnosticQuery,
+  DiagnosticReport,
   Dialect,
   EventInfo,
   InputCell,
@@ -277,6 +280,8 @@ export interface DatabaseAdapter {
   serverCatalog(kind: ServerCatalogKind): Promise<ServerCatalog>
   /** Replication role and state, and the binary logs / WAL segments; each part null where it cannot be read. */
   replicationInfo(): Promise<ReplicationInfo>
+  /** Logged statements, engine status and binary log events (see DiagnosticKind); never throws for a missing feature. */
+  diagnostics(kind: DiagnosticKind, query?: DiagnosticQuery): Promise<DiagnosticReport>
   /** Runtime counters (SHOW GLOBAL STATUS / pg_stat_*). */
   listStatus(): Promise<KeyValue[]>
   listProcesses(): Promise<ProcessInfo[]>
@@ -350,6 +355,7 @@ export const ADAPTER_METHOD_NAMES = [
   'listVariables',
   'serverCatalog',
   'replicationInfo',
+  'diagnostics',
   'listStatus',
   'listProcesses',
   'killProcess',

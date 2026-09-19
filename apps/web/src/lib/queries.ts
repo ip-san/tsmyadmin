@@ -11,6 +11,8 @@ import type {
   DdlOp,
   DdlPreviewResponse,
   DesignerPage,
+  DiagnosticKind,
+  DiagnosticReport,
   EventInfo,
   ExportTemplate,
   KeyValue,
@@ -329,6 +331,16 @@ export const serverCatalogQuery = (kind: ServerCatalogKind) =>
     queryKey: ['server', 'catalog', kind],
     queryFn: () => unwrap<ServerCatalog>(api.server.catalog[':kind'].$get({ param: { kind } })),
     staleTime: Number.POSITIVE_INFINITY,
+  })
+/** Logged statements, InnoDB status or binary log events; `file` picks the binary log. */
+export const diagnosticsQuery = (kind: DiagnosticKind, file?: string) =>
+  queryOptions({
+    queryKey: ['server', 'diagnostics', kind, file ?? ''],
+    queryFn: () =>
+      unwrap<DiagnosticReport>(
+        api.server.diagnostics[':kind'].$get({ param: { kind }, query: file === undefined ? {} : { file } })
+      ),
+    staleTime: 0,
   })
 export const replicationQuery = queryOptions({
   queryKey: ['server', 'replication'],

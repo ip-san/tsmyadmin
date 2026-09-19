@@ -1,5 +1,8 @@
 import type {
   CatalogColumn,
+  DiagnosticKind,
+  DiagnosticQuery,
+  DiagnosticReport,
   KeyValue,
   KillMode,
   ProcessInfo,
@@ -155,5 +158,53 @@ export async function pgReplicationInfo(conn: Conn): Promise<ReplicationInfo> {
     source,
     replicas,
     logs: logs?.map((r) => ({ name: r[0]?.value ?? '', size: r[1]?.value ?? null })) ?? null,
+  }
+}
+
+const NOTHING = (status: DiagnosticReport['status']): DiagnosticReport => ({
+  status,
+  columns: [],
+  rows: [],
+  text: null,
+})
+const cell = (v: unknown) => (v === null || v === undefined ? null : String(v))
+
+/** The most expensive statements, when pg_stat_statements is installed and loaded. */
+async function pgStatements(conn: Conn): Promise<DiagnosticReport> {
+  const installed = firstResult(await conn.query("SELECT 1 FROM pg_extension WHERE extname = 'pg_stat_statements'"))
+  if (installed.rows.length === 0) return NOTHING('noExtension')
+  const read = (total: string, max: string) =>
+    conn.query(
+      `SELECT query, calls, ${total} / 1000, ${max} / 1000, rows FROM pg_stat_statements ORDER BY ${total} DESC LIMIT 50`
+    )
+  let result: Awaited<ReturnType<typeof read>>
+  try {
+    result = await read('total_exec_time', 'max_exec_time')
+  } catch (err) {
+    // 42703: PostgreSQL 12 and earlier name the columns total_time / max_time. 55000: installed, not preloaded.
+    if (err instanceof AdapterError && err.nativeCode === '55000') return NOTHING('noExtension')
+    if (!(err instanceof AdapterError && err.nativeCode === '42703')) throw err
+    result = await read('total_time', 'max_time')
+  }
+  return {
+    status: 'ok',
+    columns: ['statement', 'runs', 'totalSeconds', 'maxSeconds', 'rows'],
+    rows: firstResult(result).rows.map((row) => row.map(cell)),
+    text: null,
+  }
+}
+
+/** Only the statement statistics exist here: the log tables, InnoDB and binary logs are MySQL's. */
+export async function pgDiagnostics(
+  conn: Conn,
+  kind: DiagnosticKind,
+  _query?: DiagnosticQuery
+): Promise<DiagnosticReport> {
+  if (kind !== 'statements') return NOTHING('unsupported')
+  try {
+    return await pgStatements(conn)
+  } catch (err) {
+    if (err instanceof AdapterError && err.code === 'PERMISSION_DENIED') return NOTHING('denied')
+    throw err
   }
 }

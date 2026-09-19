@@ -127,7 +127,8 @@ const SAMPLE_OPS: Record<DdlOp['op'], DdlOp> = {
   dropTable: { op: 'dropTable', table: 't', kind: 'table' },
   truncateTable: { op: 'truncateTable', table: 't' },
   renameTable: { op: 'renameTable', table: 't', newName: 'we"ird`new' },
-  createDatabase: { op: 'createDatabase', name: 'new"db`x' },
+  createDatabase: { op: 'createDatabase', name: 'new"db`x', collation: 'C' },
+  dropDatabases: { op: 'dropDatabases', names: ['a"b', 'c`d'] },
   dropDatabase: { op: 'dropDatabase', name: 'new"db`x' },
   renameDatabase: {
     op: 'renameDatabase',

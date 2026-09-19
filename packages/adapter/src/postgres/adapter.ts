@@ -2,6 +2,9 @@ import type {
   ColumnMeta,
   DatabaseGrant,
   DatabaseInfo,
+  DiagnosticKind,
+  DiagnosticQuery,
+  DiagnosticReport,
   EventInfo,
   KeyValue,
   KillMode,
@@ -51,6 +54,7 @@ import {
 } from './introspect.ts'
 import { pgListDependencies, pgListRoutines, pgListTriggers, pgRoutineDefinition } from './routines.ts'
 import {
+  pgDiagnostics,
   pgKillProcess,
   pgListProcesses,
   pgListStatus,
@@ -463,6 +467,10 @@ export class PostgresAdapter extends BaseAdapter {
 
   replicationInfo(): Promise<ReplicationInfo> {
     return this.withConn(this.serverNs(), (conn) => pgReplicationInfo(conn))
+  }
+
+  diagnostics(kind: DiagnosticKind, query?: DiagnosticQuery): Promise<DiagnosticReport> {
+    return this.withConn(this.serverNs(), (conn) => pgDiagnostics(conn, kind, query))
   }
 
   serverCatalog(kind: ServerCatalogKind): Promise<ServerCatalog> {

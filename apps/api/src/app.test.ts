@@ -10,6 +10,7 @@ import {
   ConnectRequestSchema,
   DdlPreviewResponseSchema,
   DesignerPageSchema,
+  DiagnosticReportSchema,
   ExportTemplateSchema,
   IMPORT_MAX_BYTES,
   ImportEventSchema,
@@ -1137,6 +1138,17 @@ describe('server catalog', () => {
       role: 'standalone',
       logs: [{ name: 'binlog.000001' }],
     })
+  })
+
+  it('serves a diagnostic report by kind, and refuses a kind or a file it does not know', async () => {
+    const h = harness()
+    stores.push(h.store)
+    await h.login()
+    const res = await h.req('/api/server/diagnostics/slowLog')
+    expect(res.status).toBe(200)
+    expect(DiagnosticReportSchema.parse(await res.json())).toMatchObject({ status: 'unsupported', rows: [] })
+    expect((await h.req('/api/server/diagnostics/nothing')).status).toBe(400)
+    expect((await h.req('/api/server/diagnostics/binlogEvents?file=')).status).toBe(400)
   })
 })
 

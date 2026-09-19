@@ -3,6 +3,9 @@ import type {
   ColumnMeta,
   DatabaseGrant,
   DatabaseInfo,
+  DiagnosticKind,
+  DiagnosticQuery,
+  DiagnosticReport,
   EventInfo,
   KeyValue,
   KillMode,
@@ -62,6 +65,7 @@ import {
   mysqlRoutineDefinition,
 } from './routines.ts'
 import {
+  mysqlDiagnostics,
   mysqlKillProcess,
   mysqlListProcesses,
   mysqlListStatus,
@@ -666,6 +670,10 @@ export class MysqlAdapter extends BaseAdapter {
 
   replicationInfo(): Promise<ReplicationInfo> {
     return this.withConn(this.serverNs(), (conn) => mysqlReplicationInfo(conn))
+  }
+
+  diagnostics(kind: DiagnosticKind, query?: DiagnosticQuery): Promise<DiagnosticReport> {
+    return this.withConn(this.serverNs(), (conn) => mysqlDiagnostics(conn, kind, query))
   }
 
   serverCatalog(kind: ServerCatalogKind): Promise<ServerCatalog> {

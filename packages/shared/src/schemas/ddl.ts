@@ -275,8 +275,18 @@ export const DdlOpSchema = z.discriminatedUnion('op', [
     columns: z.record(z.string(), z.array(z.object({ name: z.string().min(1), dataType: SqlType }))).optional(),
   }),
   /** MySQL: database == schema, so createSchema also creates a database there. */
-  z.object({ op: z.literal('createDatabase'), name: z.string().min(1) }),
+  z.object({
+    op: z.literal('createDatabase'),
+    name: z.string().min(1),
+    /** MySQL: the default collation. PostgreSQL: LC_COLLATE and LC_CTYPE, from template0. */
+    collation: z
+      .string()
+      .regex(/^[A-Za-z0-9_.-]+$/)
+      .optional(),
+  }),
   z.object({ op: z.literal('dropDatabase'), name: z.string().min(1) }),
+  /** Several databases in one go (the server page's checkboxes): one DROP DATABASE each, in the order given. */
+  z.object({ op: z.literal('dropDatabases'), names: z.array(z.string().min(1)).min(1).max(100) }),
   z.object({ op: z.literal('createSchema'), name: z.string().min(1) }),
   /**
    * MySQL has no RENAME DATABASE: a new database and one atomic multi-table RENAME TABLE. The old database is

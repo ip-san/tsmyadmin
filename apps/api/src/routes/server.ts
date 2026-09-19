@@ -1,4 +1,10 @@
-import { KillQuerySchema, ProcessIdSchema, ServerCatalogKindSchema } from '@tsmyadmin/shared'
+import {
+  DiagnosticKindSchema,
+  DiagnosticQuerySchema,
+  KillQuerySchema,
+  ProcessIdSchema,
+  ServerCatalogKindSchema,
+} from '@tsmyadmin/shared'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { validate } from '../lib/validate.ts'
@@ -11,6 +17,12 @@ export function serverRoutes(cfg: SessionConfig) {
     .get('/server/variables', async (c) => c.json(await c.get('session').adapter.listVariables()))
     .get('/server/status', async (c) => c.json(await c.get('session').adapter.listStatus()))
     .get('/server/replication', async (c) => c.json(await c.get('session').adapter.replicationInfo()))
+    .get(
+      '/server/diagnostics/:kind',
+      validate('param', z.object({ kind: DiagnosticKindSchema })),
+      validate('query', DiagnosticQuerySchema),
+      async (c) => c.json(await c.get('session').adapter.diagnostics(c.req.valid('param').kind, c.req.valid('query')))
+    )
     .get('/server/catalog/:kind', validate('param', z.object({ kind: ServerCatalogKindSchema })), async (c) =>
       c.json(await c.get('session').adapter.serverCatalog(c.req.valid('param').kind))
     )

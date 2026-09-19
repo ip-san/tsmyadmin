@@ -67,7 +67,7 @@ exports[`DDL builders > mysql: copyTables 1`] = `
 
 exports[`DDL builders > mysql: createDatabase 1`] = `
 [
-  "CREATE DATABASE \`new"db\`\`x\`",
+  "CREATE DATABASE \`new"db\`\`x\` COLLATE C",
 ]
 `;
 
@@ -135,6 +135,13 @@ exports[`DDL builders > mysql: dropColumns 1`] = `
 exports[`DDL builders > mysql: dropDatabase 1`] = `
 [
   "DROP DATABASE \`new"db\`\`x\`",
+]
+`;
+
+exports[`DDL builders > mysql: dropDatabases 1`] = `
+[
+  "DROP DATABASE \`a"b\`",
+  "DROP DATABASE \`c\`\`d\`",
 ]
 `;
 
@@ -415,7 +422,7 @@ exports[`DDL builders > postgres: copyTables 1`] = `
 
 exports[`DDL builders > postgres: createDatabase 1`] = `
 [
-  "CREATE DATABASE "new""db\`x"",
+  "CREATE DATABASE "new""db\`x" TEMPLATE template0 LC_COLLATE 'C' LC_CTYPE 'C'",
 ]
 `;
 
@@ -484,6 +491,13 @@ exports[`DDL builders > postgres: dropColumns 1`] = `
 exports[`DDL builders > postgres: dropDatabase 1`] = `
 [
   "DROP DATABASE "new""db\`x" WITH (FORCE)",
+]
+`;
+
+exports[`DDL builders > postgres: dropDatabases 1`] = `
+[
+  "DROP DATABASE "a""b" WITH (FORCE)",
+  "DROP DATABASE "c\`d" WITH (FORCE)",
 ]
 `;
 

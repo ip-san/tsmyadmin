@@ -12,6 +12,7 @@ const DESTRUCTIVE = new Set<DdlOp['op']>([
   'dropIndex',
   'dropForeignKey',
   'dropDatabase',
+  'dropDatabases',
   // Not data loss, but every application still using the old name breaks: confirmed by retyping it.
   'renameDatabase',
   'dropEvent',
@@ -35,6 +36,9 @@ function confirmName(op: DdlOp, bulkName: string | null): string | null {
     case 'dropDatabase':
     case 'renameDatabase':
       return op.name
+    // One database is confirmed by its name; several by the server they are on (set by the caller).
+    case 'dropDatabases':
+      return op.names.length === 1 ? (op.names[0] ?? null) : bulkName
     case 'copyTable':
       return op.dropExisting ? op.newName : null
     // A partition's rows go with it: confirmed by the partition's name.
@@ -74,6 +78,7 @@ function lossWarning(op: DdlOp, dialect: Dialect): string | null {
     case 'moveRepeatingGroup':
       return op.dropMoved ? locale.ddl.normalizeLoss : null
     case 'dropDatabase':
+    case 'dropDatabases':
       return dialect === 'postgres'
         ? `${locale.ddl.databaseLoss} ${locale.ddl.databaseLossForce}`
         : locale.ddl.databaseLoss

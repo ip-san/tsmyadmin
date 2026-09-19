@@ -1,4 +1,4 @@
-<!-- translated-from: docs/phpmyadmin-parity.md sha256:7155a7b680a43415b24dc850d50eaeb37eba8ecf5d57f883c1b91d85eee9c559 -->
+<!-- translated-from: docs/phpmyadmin-parity.md sha256:b67f079a4d4490c3d12962e6845df4580eb41382ee1c93ba4e103f65fc6b89f4 -->
 
 # Feature parity with phpMyAdmin
 
@@ -17,15 +17,15 @@ The basics (browsing and editing, structure changes, SQL, search, QBE, export / 
 
 | # | Feature | Status |
 |---|---|---|
-| S1 | Collation when creating a database; dropping several databases at once | ✗ |
+| S1 | Collation when creating a database; dropping several databases at once | ✅ |
 | S2 | SQL: formatting, bound parameters, a delimiter field, roll back when finished, toggling foreign key checks | △ |
-| S3 | Status: overview (traffic, connections), query statistics, filtering variables by category and flagging alerts | △ |
-| S4 | Live monitor (charts, refresh rate). Slow / general log analysis only with `log_output=TABLE` | ✗ |
-| S5 | Advisor (configuration suggestions) | ✗ |
-| S6 | Processes: show only the active ones, choose the refresh rate | △ |
+| S3 | Status: overview (traffic, connections), query statistics, filtering variables by category and flagging alerts | ✅ |
+| S4 | Live monitor (charts, refresh rate). Slow / general log analysis only with `log_output=TABLE` | ✅ |
+| S5 | Advisor (configuration suggestions) | ✅ |
+| S6 | Processes: show only the active ones, choose the refresh rate | ✅ |
 | S7 | Changing a system variable (SET GLOBAL) | ✗ |
-| S8 | Storage engine details (InnoDB status and the like) | ✗ |
-| S9 | Binary log events | ✗ |
+| S8 | Storage engine details (InnoDB status and the like) | ✅ |
+| S9 | Binary log events | ✅ |
 | S10 | Replication control (start / stop, skip errors, set up) | ✗ |
 | S11 | Locking / unlocking accounts; exporting privileges as SQL | ✗ |
 | S12 | Creating an account: host choices, authentication plugin, password generator, a database of the same name with its grant | △ |

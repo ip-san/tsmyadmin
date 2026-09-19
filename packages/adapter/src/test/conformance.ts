@@ -2667,6 +2667,66 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
       })
     })
 
+    describe('diagnostics', () => {
+      it('answers with a status instead of an error for what this server lacks or the account may not read', async () => {
+        if (dialect === 'postgres') {
+          // pg_stat_statements is not installed in the compose server; everything else is MySQL's.
+          expect(['ok', 'noExtension', 'denied']).toContain((await db.diagnostics('statements')).status)
+          for (const kind of ['slowLog', 'generalLog', 'engineStatus', 'binlogEvents'] as const)
+            expect((await db.diagnostics(kind)).status).toBe('unsupported')
+          return
+        }
+        expect((await db.diagnostics('statements')).status).toBe('unsupported')
+        const engine = await db.diagnostics('engineStatus')
+        expect(['ok', 'denied']).toContain(engine.status)
+        if (engine.status === 'ok') expect(engine.text).toMatch(/INNODB/i)
+
+        // MariaDB keeps no binary log until asked; MySQL 8 does.
+        const events = await db.diagnostics('binlogEvents')
+        expect(['ok', 'disabled', 'denied']).toContain(events.status)
+        if (events.status === 'ok') {
+          expect(events.columns).toEqual(['logName', 'position', 'eventType', 'serverId', 'endPosition', 'info'])
+          expect(events.rows.length).toBeGreaterThan(0)
+          // The file name is only taken from what SHOW BINARY LOGS lists.
+          await expect(db.diagnostics('binlogEvents', { file: "nope'; SELECT 1 -- " })).rejects.toThrow(
+            /Unknown binary log/
+          )
+        }
+
+        // A log that is off, or goes to a file, says so.
+        expect(['ok', 'disabled', 'notTable', 'denied']).toContain((await db.diagnostics('slowLog')).status)
+        expect(['ok', 'disabled', 'notTable', 'denied']).toContain((await db.diagnostics('generalLog')).status)
+      })
+
+      it('groups the statements of the slow log table when it is switched on', async () => {
+        if (dialect !== 'mysql') return
+        const value = async (sql: string) => {
+          const first = (await exec(sql))[0]
+          return first?.kind === 'rows' ? first.result.rows[0]?.[0] : undefined
+        }
+        const on = await value('SELECT @@GLOBAL.slow_query_log')
+        const output = await value('SELECT @@GLOBAL.log_output')
+        const marker = `slowmark_${scratch}`
+        const set = await exec("SET GLOBAL log_output = 'TABLE'; SET GLOBAL slow_query_log = 1", { stopOnError: false })
+        // The account may not change server variables (the CI MariaDB user): nothing to enable, nothing to check.
+        if (set.some((r) => r.kind === 'error')) return
+        try {
+          await exec(`SET SESSION long_query_time = 0; SELECT '${marker}'`, { stopOnError: false })
+          const report = await db.diagnostics('slowLog')
+          expect(report.status).toBe('ok')
+          expect(report.columns).toEqual(['statement', 'runs', 'totalSeconds', 'maxSeconds', 'rowsExamined'])
+          expect(report.rows.some((r) => r[0]?.includes(marker) && Number(r[1]) >= 1)).toBe(true)
+        } finally {
+          await exec(
+            `SET GLOBAL slow_query_log = ${on === 1 || on === '1' ? 1 : 0}; SET GLOBAL log_output = '${String(output).replaceAll("'", '')}'`,
+            {
+              stopOnError: false,
+            }
+          )
+        }
+      })
+    })
+
     describe('replicationInfo', () => {
       it('reports a lone server as standalone, with its logs, and hides what an account may not read', async () => {
         const info = await db.replicationInfo()
@@ -4226,6 +4286,30 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         expect((await browseAll(copy)).rows.map((r) => r[0])).toEqual([1, 2, 3, 4])
         await execOk(`DROP TABLE ${copy}`)
         await execOk(`DROP TABLE ${src2}`)
+      })
+
+      it('creates databases with a collation and drops several at once', async () => {
+        const first = `${scratch}_cdb1`
+        const second = `${scratch}_cdb2`
+        const collation = dialect === 'mysql' ? 'utf8mb4_bin' : 'C'
+        await runDdl({ op: 'createDatabase', name: first, collation })
+        await runDdl({ op: 'createDatabase', name: second })
+        try {
+          const found = (await db.listDatabases()).map((d) => d.name)
+          expect(found).toEqual(expect.arrayContaining([first, second]))
+          expect(
+            await firstValue(
+              dialect === 'mysql'
+                ? `SELECT DEFAULT_COLLATION_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = '${first}'`
+                : `SELECT datcollate FROM pg_database WHERE datname = '${first}'`
+            )
+          ).toBe(collation)
+        } finally {
+          await runDdl({ op: 'dropDatabases', names: [first, second] })
+        }
+        const left = (await db.listDatabases()).map((d) => d.name)
+        expect(left).not.toContain(first)
+        expect(left).not.toContain(second)
       })
 
       it('creates and drops a database, and a schema on PostgreSQL', async () => {

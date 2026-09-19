@@ -5,6 +5,8 @@ import type {
   Cell,
   DatabaseGrant,
   DatabaseInfo,
+  DiagnosticKind,
+  DiagnosticReport,
   Dialect,
   EventInfo,
   Filter,
@@ -538,6 +540,11 @@ export class FakeAdapter implements DatabaseAdapter {
   async replicationInfo(): Promise<ReplicationInfo> {
     this.record('replicationInfo')
     return { role: 'standalone', source: [], replicas: [], logs: [{ name: 'binlog.000001', size: '1024' }] }
+  }
+
+  async diagnostics(kind: DiagnosticKind): Promise<DiagnosticReport> {
+    this.record('diagnostics', kind)
+    return { status: 'unsupported', columns: [], rows: [], text: null }
   }
 
   async serverCatalog(kind: ServerCatalogKind): Promise<ServerCatalog> {

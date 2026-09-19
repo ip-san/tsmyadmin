@@ -5,6 +5,9 @@ import type {
   ColumnMeta,
   DatabaseGrant,
   DatabaseInfo,
+  DiagnosticKind,
+  DiagnosticQuery,
+  DiagnosticReport,
   Dialect,
   EventInfo,
   Filter,
@@ -427,6 +430,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
   abstract listVariables(): Promise<KeyValue[]>
   abstract serverCatalog(kind: ServerCatalogKind): Promise<ServerCatalog>
   abstract replicationInfo(): Promise<ReplicationInfo>
+  abstract diagnostics(kind: DiagnosticKind, query?: DiagnosticQuery): Promise<DiagnosticReport>
   abstract listStatus(): Promise<KeyValue[]>
   abstract listProcesses(): Promise<ProcessInfo[]>
   abstract killProcess(id: string): Promise<void>

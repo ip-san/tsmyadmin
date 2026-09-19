@@ -23,6 +23,8 @@ export function ServerTabs({ tab }: { tab: string }) {
           { label: locale.tabs.status, to: '/status' },
           { label: locale.tabs.variables, to: '/variables' },
           { label: locale.tabs.processes, to: '/processes' },
+          { label: locale.tabs.monitor, to: '/monitor' },
+          { label: locale.tabs.advisor, to: '/advisor' },
           { label: locale.tabs.users, to: '/users' },
           // Groups are kept by the session store: without a persistent one there is nowhere to keep them.
           { label: locale.tabs.userGroups, to: '/user-groups', hidden: session?.savedQueries !== 'server' },

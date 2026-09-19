@@ -73,6 +73,44 @@ export const ServerCatalogSchema = z.object({
 })
 export type ServerCatalog = z.infer<typeof ServerCatalogSchema>
 
+/**
+ * What phpMyAdmin's Monitor, Engines and Binary log tabs read beyond the counters: the statements the server has
+ * logged (MySQL's slow / general log tables, PostgreSQL's pg_stat_statements), InnoDB's own status, and the events
+ * of one binary log.
+ */
+export const DiagnosticKindSchema = z.enum(['slowLog', 'generalLog', 'statements', 'engineStatus', 'binlogEvents'])
+export type DiagnosticKind = z.infer<typeof DiagnosticKindSchema>
+export const DiagnosticColumnSchema = z.enum([
+  'statement',
+  'runs',
+  'totalSeconds',
+  'maxSeconds',
+  'rowsExamined',
+  'rows',
+  'logName',
+  'position',
+  'eventType',
+  'serverId',
+  'endPosition',
+  'info',
+])
+export type DiagnosticColumn = z.infer<typeof DiagnosticColumnSchema>
+export const DiagnosticReportSchema = z.object({
+  /**
+   * `ok`, or why there is nothing to show: the log is off (`disabled`) or goes to a file (`notTable`), the account
+   * may not read it (`denied`), the extension is not installed (`noExtension`), or this server has no such thing.
+   */
+  status: z.enum(['ok', 'disabled', 'notTable', 'denied', 'noExtension', 'unsupported']),
+  columns: z.array(DiagnosticColumnSchema),
+  rows: z.array(z.array(z.string().nullable())),
+  /** A report that is one block of text (InnoDB status). */
+  text: z.string().nullable(),
+})
+export type DiagnosticReport = z.infer<typeof DiagnosticReportSchema>
+/** `file` picks the binary log whose events are listed. */
+export const DiagnosticQuerySchema = z.object({ file: z.string().min(1).max(255).optional() })
+export type DiagnosticQuery = z.infer<typeof DiagnosticQuerySchema>
+
 /** One result row as name → value (the replication views have many columns, and they differ by version). */
 export const RecordSchema = z.array(z.object({ name: z.string(), value: z.string().nullable() }))
 

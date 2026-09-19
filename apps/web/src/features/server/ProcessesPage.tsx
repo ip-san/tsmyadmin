@@ -5,16 +5,20 @@ import { CellValue } from '@/components/cells/CellValue.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { Dialog } from '@/components/ui/Dialog.tsx'
 import { Badge, ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
+import { Select } from '@/components/ui/Field.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
 import { mutations, processesQuery } from '@/lib/queries.ts'
+import { isActiveProcess, REFRESH_SECONDS } from './processes.ts'
 
 export function ProcessesPage() {
-  const [auto, setAuto] = useState(false)
+  // 0: only when asked.
+  const [every, setEvery] = useState(0)
+  const [activeOnly, setActiveOnly] = useState(false)
   const [victim, setVictim] = useState<ProcessInfo | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const queryClient = useQueryClient()
-  const procs = useQuery({ ...processesQuery, refetchInterval: auto ? 5000 : false })
+  const procs = useQuery({ ...processesQuery, refetchInterval: every > 0 ? every * 1000 : false })
   const refresh = async () => {
     setNotice(null)
     await procs.refetch()
@@ -35,8 +39,19 @@ export function ProcessesPage() {
           {locale.server.refresh}
         </Button>
         <label className="flex items-center gap-1 text-xs text-ink-sub">
-          <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} />
-          {locale.server.autoRefresh}
+          {locale.server.refreshEvery}
+          <Select value={String(every)} onChange={(e) => setEvery(Number(e.target.value))} className="w-auto py-1">
+            <option value="0">{locale.server.refreshManual}</option>
+            {REFRESH_SECONDS.map((s) => (
+              <option key={s} value={s}>
+                {locale.server.refreshSeconds(s)}
+              </option>
+            ))}
+          </Select>
+        </label>
+        <label className="flex items-center gap-1 text-xs text-ink-sub">
+          <input type="checkbox" checked={activeOnly} onChange={(e) => setActiveOnly(e.target.checked)} />
+          {locale.server.activeOnly}
         </label>
       </div>
       <output aria-live="polite" className={notice ? 'block' : 'sr-only'}>
@@ -61,59 +76,61 @@ export function ProcessesPage() {
             </tr>
           </thead>
           <tbody>
-            {procs.data.map((p) => (
-              <Tr key={p.id}>
-                <Td className="whitespace-nowrap font-mono text-xs">
-                  {p.id}
-                  {p.self ? (
-                    <>
-                      {' '}
-                      <Badge tone="neutral" title={locale.server.selfConnectionHint}>
-                        {locale.server.selfConnection}
-                      </Badge>
-                    </>
-                  ) : null}
-                </Td>
-                <Td>{p.user ?? ''}</Td>
-                <Td className="font-mono text-xs">{p.host ?? ''}</Td>
-                <Td>{p.database ?? ''}</Td>
-                <Td className="text-xs">{p.state ?? ''}</Td>
-                <Td className="text-right tabular-nums">{p.timeSec ?? ''}</Td>
-                <Td className="max-w-md font-mono text-xs">
-                  {p.query === null ? (
-                    <span className="text-ink-sub" aria-hidden>
-                      –
-                    </span>
-                  ) : (
-                    <CellValue cell={p.query} />
-                  )}
-                </Td>
-                <Td className="whitespace-nowrap">
-                  {/* Ending the statement is the gentler action: the session, its transaction and its
+            {procs.data
+              .filter((p) => !activeOnly || isActiveProcess(p))
+              .map((p) => (
+                <Tr key={p.id}>
+                  <Td className="whitespace-nowrap font-mono text-xs">
+                    {p.id}
+                    {p.self ? (
+                      <>
+                        {' '}
+                        <Badge tone="neutral" title={locale.server.selfConnectionHint}>
+                          {locale.server.selfConnection}
+                        </Badge>
+                      </>
+                    ) : null}
+                  </Td>
+                  <Td>{p.user ?? ''}</Td>
+                  <Td className="font-mono text-xs">{p.host ?? ''}</Td>
+                  <Td>{p.database ?? ''}</Td>
+                  <Td className="text-xs">{p.state ?? ''}</Td>
+                  <Td className="text-right tabular-nums">{p.timeSec ?? ''}</Td>
+                  <Td className="max-w-md font-mono text-xs">
+                    {p.query === null ? (
+                      <span className="text-ink-sub" aria-hidden>
+                        –
+                      </span>
+                    ) : (
+                      <CellValue cell={p.query} />
+                    )}
+                  </Td>
+                  <Td className="whitespace-nowrap">
+                    {/* Ending the statement is the gentler action: the session, its transaction and its
                       temporary tables survive, so it needs no confirmation. */}
-                  <Button
-                    size="sm"
-                    onClick={() => {
-                      setNotice(null)
-                      kill.mutate({ id: p.id, mode: 'query' })
-                    }}
-                    disabled={kill.isPending}
-                    title={locale.server.cancelQueryHint}
-                    aria-label={`${p.id}: ${locale.server.cancelQuery}`}
-                  >
-                    {locale.server.cancelQuery}
-                  </Button>{' '}
-                  <Button
-                    size="sm"
-                    variant="danger"
-                    onClick={() => setVictim(p)}
-                    aria-label={`${p.id}: ${locale.server.kill}`}
-                  >
-                    {locale.server.kill}
-                  </Button>
-                </Td>
-              </Tr>
-            ))}
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        setNotice(null)
+                        kill.mutate({ id: p.id, mode: 'query' })
+                      }}
+                      disabled={kill.isPending}
+                      title={locale.server.cancelQueryHint}
+                      aria-label={`${p.id}: ${locale.server.cancelQuery}`}
+                    >
+                      {locale.server.cancelQuery}
+                    </Button>{' '}
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      onClick={() => setVictim(p)}
+                      aria-label={`${p.id}: ${locale.server.kill}`}
+                    >
+                      {locale.server.kill}
+                    </Button>
+                  </Td>
+                </Tr>
+              ))}
           </tbody>
         </Table>
       )}

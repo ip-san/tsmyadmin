@@ -129,9 +129,16 @@ export const pgDdl: DdlBuilder = {
     // Database-level ops have no table; handle them before touching op.table.
     switch (op.op) {
       case 'createDatabase':
-        return [`CREATE DATABASE ${id(op.name)}`]
+        // A collation other than the template's needs template0, which has no connections to conflict with it.
+        return [
+          op.collation
+            ? `CREATE DATABASE ${id(op.name)} TEMPLATE template0 LC_COLLATE ${pgLiteral(op.collation)} LC_CTYPE ${pgLiteral(op.collation)}`
+            : `CREATE DATABASE ${id(op.name)}`,
+        ]
       case 'createSchema':
         return [`CREATE SCHEMA ${id(op.name)}`]
+      case 'dropDatabases':
+        return op.names.map((name) => `DROP DATABASE ${id(name)} WITH (FORCE)`)
       case 'dropDatabase':
         // FORCE (PostgreSQL 13+): other sessions — including this tool's own idle pooled connections to the
         // database just browsed — would otherwise make the DROP wait and fail with "being accessed by other users".
