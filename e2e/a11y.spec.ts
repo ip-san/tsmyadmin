@@ -131,6 +131,8 @@ for (const t of TARGETS) {
       await scan(page)
       await page.goto(tableUrl(t, 'users', '/structure'))
       await page.getByRole('table', { name: 'カラム' }).waitFor()
+      await page.getByText('正規化の手がかり').click()
+      await page.getByText(/行から推定しています|行しかないため/).waitFor()
       await scan(page)
       // The query builder with a column row and a condition row, so every generated control is labelled.
       await page.goto(t.schema ? `/db/${t.database}/query?schema=${t.schema}` : `/db/${t.database}/query`)

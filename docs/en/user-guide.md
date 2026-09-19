@@ -1,4 +1,4 @@
-<!-- translated-from: docs/user-guide.md sha256:b7551aff006bb8875d3d349e265674d05916de4cdffd026e79625dd72348f6c5 -->
+<!-- translated-from: docs/user-guide.md sha256:6b9df608a5a19bb3b518fc820102aecb0d9a9d12c667b240b40f40576cfba837 -->
 
 # User guide
 
@@ -109,6 +109,7 @@ On PostgreSQL, **idle** tsmyadmin connections to that database under the same da
 
 - Add, change and drop columns; add and drop indexes; add and drop foreign keys (to tables in the same schema); see what references this table; see the CREATE statement
 - Every change goes **preview of the generated SQL → Run**. An operation that cannot be undone (TRUNCATE, DROP …) also asks you to retype the object's name
+- **Normalization hints** below lists what in the definition and the first 500 rows looks like a break of the first to third normal forms (no primary key, numbered columns, several values joined in one, a reference with no foreign key, a column decided by part of the key or by a non-key column). Dependencies read from values are estimates, and the table is not changed
 
 ### SQL
 

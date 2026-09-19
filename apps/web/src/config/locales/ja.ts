@@ -1001,6 +1001,27 @@ export const ja = {
         : `${shapes.toLocaleString('ja-JP')} 件の図形`,
     caption: (column: string, shapes: number) => `${column} の図形 ${shapes.toLocaleString('ja-JP')} 件`,
   },
+  normalize: {
+    title: '正規化の手がかり',
+    hint: 'テーブルの定義と先頭の行から、第 1〜第 3 正規形に反していそうな箇所を挙げます。提案だけで、テーブルは変更しません。',
+    sampled: (n: number) =>
+      `先頭 ${n.toLocaleString('ja-JP')} 行から推定しています。行の値から読んだ依存関係は、たまたまそう見えるだけのこともあります。`,
+    smallSample: (n: number, min: number) =>
+      `行が ${n.toLocaleString('ja-JP')} 行しかないため、値の依存関係は調べていません（${min} 行以上で調べます）。`,
+    none: '目立つ問題は見つかりませんでした。',
+    levels: { '1': '第 1 正規形', '2': '第 2 正規形', '3': '第 3 正規形', fk: '参照' },
+    noPrimaryKey: '主キーがありません。行を 1 つに特定できる列（または自動採番の列）を主キーにしてください。',
+    repeatingGroup: (columns: string) =>
+      `${columns} は同じ種類の値を番号付きで並べています。別テーブルに 1 行ずつ持つ形に分けると、件数の上限がなくなります。`,
+    listValues: (column: string, count: number) =>
+      `${column} には区切り文字で複数の値を並べた値があります（${count.toLocaleString('ja-JP')} 行）。1 つの値を 1 行に持つ別テーブルに分けると、検索や結合がしやすくなります。`,
+    missingForeignKey: (column: string, table: string) =>
+      `${column} は ${table} を指しているように見えますが、外部キーがありません。外部キーを付けると、存在しない行を参照できなくなります。`,
+    partialDependency: (key: string, column: string) =>
+      `${column} は主キーの一部 ${key} だけで決まっているようです。${key} ごとの別テーブルに移すと、同じ値の重複がなくなります。`,
+    transitiveDependency: (from: string, column: string) =>
+      `${column} は主キーではない ${from} で決まっているようです。${from} をキーにした別テーブルに移すと、更新漏れによる食い違いを防げます。`,
+  },
   zoom: {
     title: 'ズーム検索',
     hint: '数値のカラムを 2 つ選ぶと、検索条件に合う行を散布図にします。点を選ぶとその行を開けます。',

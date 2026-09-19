@@ -1015,6 +1015,28 @@ export const en = {
         : plural(shapes, 'shape', 'shapes'),
     caption: (column: string, shapes: number) => `${plural(shapes, 'shape', 'shapes')} of ${column}`,
   },
+  normalize: {
+    title: 'Normalization hints',
+    hint: 'Points out what in the table definition and its first rows looks like a break of the first to third normal forms. Suggestions only: the table is not changed.',
+    sampled: (n: number) =>
+      `Read from the first ${plural(n, 'row', 'rows')}. A dependency read from values may only happen to hold in them.`,
+    smallSample: (n: number, min: number) =>
+      `Only ${plural(n, 'row', 'rows')}, so dependencies between values were not looked for (that takes ${min} or more).`,
+    none: 'Nothing stands out.',
+    levels: { '1': '1st normal form', '2': '2nd normal form', '3': '3rd normal form', fk: 'Reference' },
+    noPrimaryKey:
+      'There is no primary key. Make a column that identifies each row (or an auto-increment one) the primary key.',
+    repeatingGroup: (columns: string) =>
+      `${columns} hold the same kind of value in numbered copies. A separate table with one row per value removes the limit on how many there can be.`,
+    listValues: (column: string, count: number) =>
+      `${column} holds several values joined by a separator (${plural(count, 'row', 'rows')}). A separate table with one value per row is easier to search and join.`,
+    missingForeignKey: (column: string, table: string) =>
+      `${column} looks like it points at ${table}, but there is no foreign key. With one, it cannot refer to a row that does not exist.`,
+    partialDependency: (key: string, column: string) =>
+      `${column} seems to be decided by ${key}, only part of the primary key. Moving it to a table keyed by ${key} removes the repeated values.`,
+    transitiveDependency: (from: string, column: string) =>
+      `${column} seems to be decided by ${from}, which is not the primary key. Moving it to a table keyed by ${from} stops copies from drifting apart.`,
+  },
   zoom: {
     title: 'Zoom search',
     hint: 'Pick two numeric columns to plot the rows matching the search. Pick a point to open its row.',

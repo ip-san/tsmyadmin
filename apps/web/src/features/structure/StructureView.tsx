@@ -16,6 +16,7 @@ import { useDdlFlow } from '@/lib/ddl.ts'
 import { createStatementQuery, structureQuery, type TableRef } from '@/lib/queries.ts'
 import { ColumnForm } from './ColumnForm.tsx'
 import { IndexForm } from './IndexForm.tsx'
+import { NormalizationHints } from './NormalizationHints.tsx'
 import { ForeignKeysTable, ReferencedByTable } from './RelationsTables.tsx'
 
 type ColumnDialog = { mode: 'add' } | { mode: 'modify'; name: string } | null
@@ -153,6 +154,7 @@ export function StructureView({ tableRef, dialect }: { tableRef: TableRef; diale
       <Card title={locale.table.createStatement}>
         <DefinitionToggle query={createStatementQuery(tableRef)} label={table} />
       </Card>
+      {editable ? <NormalizationHints tableRef={tableRef} schema={s} /> : null}
 
       <Dialog
         open={columnDialog !== null}
