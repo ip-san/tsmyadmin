@@ -30,6 +30,7 @@ import type {
   TableInfo,
   TableSchema,
   TableSearchResult,
+  TableStats,
   TriggerInfo,
   UserInfo,
   UserRef,
@@ -386,6 +387,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
   abstract listTables(ns: Namespace): Promise<TableInfo[]>
   abstract listForeignKeys(ns: Namespace): Promise<RelationDef[]>
   abstract describeTable(ns: Namespace, table: string): Promise<TableSchema>
+  abstract tableStats(ns: Namespace, table: string): Promise<TableStats>
   abstract listRoutines(ns: Namespace): Promise<RoutineInfo[]>
   abstract routineDefinition(ns: Namespace, name: string, kind: RoutineKind): Promise<string | null>
   abstract listTriggers(ns: Namespace, table?: string): Promise<TriggerInfo[]>
@@ -873,12 +875,16 @@ export abstract class BaseAdapter implements DatabaseAdapter {
   async readCell(ns: Namespace, table: string, key: RowKey, column: string): Promise<Cell> {
     const d = this.dialect
     const schema = await this.describeTable(ns, table)
-    if (!schema.columns.some((c) => c.name === column)) throw new AdapterError('NOT_FOUND', `Unknown column: ${column}`)
+    const def = schema.columns.find((c) => c.name === column)
+    if (!def) throw new AdapterError('NOT_FOUND', `Unknown column: ${column}`)
     const params = new Params(d)
     const where = this.buildKeyWhere(key, params, await this.keyColumnTypes(ns, table))
     const col = quoteIdent(d, column)
+    // PostgreSQL's octet_length takes only text, bytea and bit: any other type is measured by its text form.
+    const measured =
+      d === 'postgres' && !/^(bytea|bit|text|character|varchar)\b/i.test(def.dataType) ? `${col}::text` : col
     // The size first, so a value too large to hand over is refused before it is read into memory.
-    const sql = `SELECT OCTET_LENGTH(${col}) FROM ${quoteTable(d, ns, table)}${where} LIMIT 2`
+    const sql = `SELECT OCTET_LENGTH(${measured}) FROM ${quoteTable(d, ns, table)}${where} LIMIT 2`
     return this.withConn(ns, async (conn) => {
       const sized = firstResult(await conn.query(sql, params.values))
       if (sized.rows.length !== 1)

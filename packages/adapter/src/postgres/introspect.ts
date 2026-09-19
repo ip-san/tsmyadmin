@@ -7,6 +7,7 @@ import type {
   RelationDef,
   TableInfo,
   TableSchema,
+  TableStats,
 } from '@tsmyadmin/shared'
 import { type Conn, firstResult } from '../base.ts'
 import { str, strOrNull } from '../sql/format.ts'
@@ -291,5 +292,52 @@ export async function pgDescribeTable(conn: Conn, ns: Namespace, table: string):
     indexes,
     foreignKeys,
     referencedBy,
+  }
+}
+
+/**
+ * Space and row statistics. A partitioned table holds nothing itself: its sizes add up its partitions. TOAST is
+ * what the total holds beyond the heap and the indexes.
+ */
+export async function pgTableStats(conn: Conn, ns: Namespace, table: string): Promise<TableStats> {
+  const r = firstResult(
+    await conn.query(
+      `SELECT c.relkind,
+              CASE WHEN c.relkind = 'p' THEN (SELECT sum(pg_relation_size(t.relid)) FROM pg_partition_tree(c.oid) t) ELSE pg_relation_size(c.oid) END::float8,
+              CASE WHEN c.relkind = 'p' THEN (SELECT sum(pg_indexes_size(t.relid)) FROM pg_partition_tree(c.oid) t) ELSE pg_indexes_size(c.oid) END::float8,
+              CASE WHEN c.relkind = 'p' THEN (SELECT sum(pg_total_relation_size(t.relid)) FROM pg_partition_tree(c.oid) t) ELSE pg_total_relation_size(c.oid) END::float8,
+              CASE WHEN c.reltuples < 0 THEN s.n_live_tup::float8 ELSE c.reltuples::float8 END,
+              s.n_dead_tup::float8,
+              greatest(s.last_vacuum, s.last_autovacuum)::text,
+              greatest(s.last_analyze, s.last_autoanalyze)::text
+       FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+       LEFT JOIN pg_stat_all_tables s ON s.relid = c.oid
+       WHERE n.nspname = $1 AND c.relname = $2`,
+      [ns.schema ?? 'public', table]
+    )
+  )
+  const row = r.rows[0]
+  if (!row) throw new AdapterError('NOT_FOUND', `Table not found: ${ns.schema ?? 'public'}.${table}`)
+  const stored = ['r', 'p', 'm'].includes(str(row[0]))
+  const n = (v: unknown) => (stored && v !== null && v !== undefined && Number.isFinite(Number(v)) ? Number(v) : null)
+  const data = n(row[1])
+  const index = n(row[2])
+  const total = n(row[3])
+  const rows = n(row[4])
+  return {
+    dataBytes: data,
+    indexBytes: index,
+    freeBytes: null,
+    toastBytes: total === null || data === null || index === null ? null : Math.max(0, total - data - index),
+    totalBytes: total,
+    rowEstimate: rows,
+    avgRowBytes: data !== null && rows !== null && rows > 0 ? Math.round(data / rows) : null,
+    rowFormat: null,
+    createdAt: null,
+    updatedAt: null,
+    checkedAt: null,
+    deadRows: n(row[5]),
+    lastVacuum: stored ? strOrNull(row[6]) : null,
+    lastAnalyze: stored ? strOrNull(row[7]) : null,
   }
 }

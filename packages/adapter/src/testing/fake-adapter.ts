@@ -28,6 +28,7 @@ import type {
   TableInfo,
   TableSchema,
   TableSearchResult,
+  TableStats,
   TriggerInfo,
   UserInfo,
   UserRef,
@@ -361,6 +362,29 @@ export class FakeAdapter implements DatabaseAdapter {
   async listDependencies(ns: Namespace): Promise<ObjectDependency[] | null> {
     this.record('listDependencies', ns)
     return this.dependencies
+  }
+
+  async tableStats(ns: Namespace, table: string): Promise<TableStats> {
+    this.record('tableStats', ns, table)
+    const t = this.table(ns, table)
+    const rows = t.rows.length
+    const data = rows * 100
+    return {
+      dataBytes: data,
+      indexBytes: 0,
+      freeBytes: null,
+      toastBytes: null,
+      totalBytes: data,
+      rowEstimate: rows,
+      avgRowBytes: rows > 0 ? 100 : null,
+      rowFormat: null,
+      createdAt: null,
+      updatedAt: null,
+      checkedAt: null,
+      deadRows: null,
+      lastVacuum: null,
+      lastAnalyze: null,
+    }
   }
 
   async describeTable(ns: Namespace, table: string): Promise<TableSchema> {

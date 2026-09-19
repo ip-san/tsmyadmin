@@ -32,6 +32,7 @@ import {
   TableInfoSchema,
   TableSchemaSchema,
   TableSearchResultSchema,
+  TableStatsSchema,
   TRACKING_DEFINITION_MAX,
   TrackingStateSchema,
   UserGroupSchema,
@@ -647,6 +648,16 @@ describe('rows', () => {
     expect(await ids([{ column: 'id', op: 'in', values: [1, '3'] }])).toEqual([1, 3])
     expect(await ids([{ column: 'id', op: 'not_between', values: ['2', 2] }])).toEqual([1, 3])
     expect(await ids([{ column: 'name', op: 'regexp', value: '^[AB]' }])).toEqual([1, 2])
+  })
+
+  it("reports a table's space and row statistics", async () => {
+    const h = harness()
+    stores.push(h.store)
+    await h.login()
+    const res = await h.req('/api/databases/shop/tables/users/stats')
+    expect(res.status).toBe(200)
+    expect(TableStatsSchema.parse(await res.json())).toMatchObject({ rowEstimate: 3, dataBytes: 300 })
+    expect((await h.req('/api/databases/shop/tables/nope/stats')).status).toBe(404)
   })
 
   it('hands one value over whole as a download', async () => {

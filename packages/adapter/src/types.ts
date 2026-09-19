@@ -29,6 +29,7 @@ import type {
   TableInfo,
   TableSchema,
   TableSearchResult,
+  TableStats,
   TriggerInfo,
   UserInfo,
   UserOp,
@@ -199,6 +200,8 @@ export interface DatabaseAdapter {
   listSchemas(database: string): Promise<string[]>
   listTables(ns: Namespace): Promise<TableInfo[]>
   describeTable(ns: Namespace, table: string): Promise<TableSchema>
+  /** Space used and row statistics from the catalog (sizes are null for a view). */
+  tableStats(ns: Namespace, table: string): Promise<TableStats>
   /** Stored procedures and functions in the namespace (metadata only; see routineDefinition). */
   listRoutines(ns: Namespace): Promise<RoutineInfo[]>
   /** CREATE statement of one routine; null when the account may not read it, NOT_FOUND when it does not exist. */
@@ -309,6 +312,7 @@ export const ADAPTER_METHOD_NAMES = [
   'listSchemas',
   'listTables',
   'describeTable',
+  'tableStats',
   'listRoutines',
   'routineDefinition',
   'listTriggers',

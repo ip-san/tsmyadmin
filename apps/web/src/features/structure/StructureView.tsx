@@ -19,6 +19,7 @@ import { ColumnForm } from './ColumnForm.tsx'
 import { type IndexDialog, IndexesCard } from './IndexesCard.tsx'
 import { NormalizationHints } from './NormalizationHints.tsx'
 import { ForeignKeysTable, ReferencedByTable } from './RelationsTables.tsx'
+import { StatsCard } from './StatsCard.tsx'
 import { TransformsCard } from './TransformsCard.tsx'
 
 type ColumnDialog = { mode: 'add' } | { mode: 'modify'; name: string } | null
@@ -117,6 +118,7 @@ export function StructureView({ tableRef, dialect }: { tableRef: TableRef; diale
       <Card title={locale.table.referencedBy} bleed>
         <ReferencedByTable schema={s} />
       </Card>
+      <StatsCard tableRef={tableRef} />
       <Card title={locale.table.createStatement}>
         <DefinitionToggle query={createStatementQuery(tableRef)} label={table} />
       </Card>

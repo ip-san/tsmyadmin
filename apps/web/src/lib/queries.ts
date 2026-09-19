@@ -43,6 +43,7 @@ import type {
   TableInfo,
   TableSchema,
   TableSearchResult,
+  TableStats,
   TrackingState,
   TriggerInfo,
   UserGrants,
@@ -211,6 +212,19 @@ export const structureQuery = (ref: TableRef) =>
     queryFn: () =>
       unwrap<TableSchema>(
         api.databases[':db'].tables[':table'].structure.$get({
+          param: { db: enc(ref.db), table: enc(ref.table) },
+          query: schemaQuery(ref.schema),
+        })
+      ),
+  })
+
+/** Space and row statistics; under the structure key, so whatever refreshes the structure refreshes these too. */
+export const tableStatsQuery = (ref: TableRef) =>
+  queryOptions({
+    queryKey: ['structure', ref.db, ref.schema ?? '', ref.table, 'stats'],
+    queryFn: () =>
+      unwrap<TableStats>(
+        api.databases[':db'].tables[':table'].stats.$get({
           param: { db: enc(ref.db), table: enc(ref.table) },
           query: schemaQuery(ref.schema),
         })

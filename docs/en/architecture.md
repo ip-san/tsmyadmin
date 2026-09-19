@@ -1,4 +1,4 @@
-<!-- translated-from: docs/architecture.md sha256:72bfb17d52a0454049897faef515e8a1eadb026df5a52a9a7c4fbdec0bb715bd -->
+<!-- translated-from: docs/architecture.md sha256:9bad2d95d9425380b613bc22b612ffdea431377f7466613e1a1cf28135d42954 -->
 
 # Architecture
 
@@ -76,7 +76,7 @@ classDiagram
   class DatabaseAdapter {
     <<interface>>
     +dialect
-    +listDatabases() / listTables() / describeTable()
+    +listDatabases() / listTables() / describeTable() / tableStats()
     +browseRows() / insertRow() / updateRow() / deleteRows() / readCell()
     +executeSql(ns, sql, opts) / cancelQuery(id)
     +iterateRows(ns, table) AsyncIterable~RowBatch~

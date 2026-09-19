@@ -7,6 +7,7 @@ import type {
   RelationDef,
   TableInfo,
   TableSchema,
+  TableStats,
 } from '@tsmyadmin/shared'
 
 import { type Conn, firstResult } from '../base.ts'
@@ -329,5 +330,36 @@ export async function mysqlDescribeTable(
     indexes,
     foreignKeys,
     referencedBy: [...refMap.values()],
+  }
+}
+
+/** Space and row statistics from information_schema.TABLES (connection sets information_schema_stats_expiry = 0). */
+export async function mysqlTableStats(conn: Conn, ns: Namespace, table: string): Promise<TableStats> {
+  const r = firstResult(
+    await conn.query(
+      'SELECT TABLE_TYPE, DATA_LENGTH, INDEX_LENGTH, DATA_FREE, TABLE_ROWS, AVG_ROW_LENGTH, ROW_FORMAT, CREATE_TIME, UPDATE_TIME, CHECK_TIME FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?',
+      [ns.database, table]
+    )
+  )
+  const row = r.rows[0]
+  if (!row) throw new AdapterError('NOT_FOUND', `Table not found: ${ns.database}.${table}`)
+  const view = mysqlKind(str(row[0])) === 'view'
+  const data = view ? null : num(row[1])
+  const index = view ? null : num(row[2])
+  return {
+    dataBytes: data,
+    indexBytes: index,
+    freeBytes: view ? null : num(row[3]),
+    toastBytes: null,
+    totalBytes: data === null || index === null ? null : data + index,
+    rowEstimate: view ? null : num(row[4]),
+    avgRowBytes: view ? null : num(row[5]),
+    rowFormat: strOrNull(row[6]),
+    createdAt: strOrNull(row[7]),
+    updatedAt: strOrNull(row[8]),
+    checkedAt: strOrNull(row[9]),
+    deadRows: null,
+    lastVacuum: null,
+    lastAnalyze: null,
   }
 }

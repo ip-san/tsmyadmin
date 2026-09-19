@@ -46,7 +46,7 @@ export function ColumnBulk({
   const current = changing ? selected[changing.step] : undefined
   const currentDef = current ? schema.columns.find((c) => c.name === current) : undefined
   return (
-    <div className="flex flex-wrap items-center gap-2 border-t border-line px-4 py-2 text-xs">
+    <div className="flex flex-wrap items-center gap-2 border-t border-line px-4 py-2 text-xs print:hidden">
       <span className="text-ink-sub">{t.selected(selected.length)}</span>
       <Button
         size="sm"

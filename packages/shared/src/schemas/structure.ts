@@ -149,3 +149,28 @@ export const TableSchemaSchema = z.object({
   referencedBy: z.array(ReferencingKeyDefSchema),
 })
 export type TableSchema = z.infer<typeof TableSchemaSchema>
+
+/**
+ * Space and row statistics of one table (phpMyAdmin's "Space usage" and "Row statistics"). Figures the server
+ * does not keep are null: MySQL has free (reclaimable) space and a row format, PostgreSQL TOAST space, dead rows
+ * and the last vacuum / analyze. Row counts and sizes are the catalog's, as of its last update.
+ */
+export const TableStatsSchema = z.object({
+  dataBytes: z.number().nullable(),
+  indexBytes: z.number().nullable(),
+  /** MySQL DATA_FREE: allocated but unused, reclaimed by OPTIMIZE TABLE. */
+  freeBytes: z.number().nullable(),
+  /** PostgreSQL: out-of-line storage of large values. */
+  toastBytes: z.number().nullable(),
+  totalBytes: z.number().nullable(),
+  rowEstimate: z.number().nullable(),
+  avgRowBytes: z.number().nullable(),
+  rowFormat: z.string().nullable(),
+  createdAt: z.string().nullable(),
+  updatedAt: z.string().nullable(),
+  checkedAt: z.string().nullable(),
+  deadRows: z.number().nullable(),
+  lastVacuum: z.string().nullable(),
+  lastAnalyze: z.string().nullable(),
+})
+export type TableStats = z.infer<typeof TableStatsSchema>

@@ -18,6 +18,7 @@ import type {
   ServerInfo,
   TableInfo,
   TableSchema,
+  TableStats,
   TriggerInfo,
   UserInfo,
   UserRef,
@@ -43,7 +44,7 @@ import { quoteIdent, quoteTable } from '../sql/quote.ts'
 import { AdapterError, type AdapterErrorCode, type ConnectionConfig } from '../types.ts'
 import { mysqlDdl } from './ddl.ts'
 import { mysqlExporter } from './export.ts'
-import { mysqlDescribeTable, mysqlListForeignKeys, mysqlListTables } from './introspect.ts'
+import { mysqlDescribeTable, mysqlListForeignKeys, mysqlListTables, mysqlTableStats } from './introspect.ts'
 import {
   mysqlListDependencies,
   mysqlListEvents,
@@ -591,6 +592,10 @@ export class MysqlAdapter extends BaseAdapter {
 
   listForeignKeys(ns: Namespace): Promise<RelationDef[]> {
     return this.withConn(ns, (conn) => mysqlListForeignKeys(conn, ns))
+  }
+
+  tableStats(ns: Namespace, table: string): Promise<TableStats> {
+    return this.withConn(ns, (conn) => mysqlTableStats(conn, ns, table))
   }
 
   describeTable(ns: Namespace, table: string): Promise<TableSchema> {

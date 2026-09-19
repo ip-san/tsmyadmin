@@ -962,6 +962,39 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
       })
     })
 
+    describe('tableStats', () => {
+      it('reports the space a table uses and its rows; a view has no sizes', async () => {
+        const t = `${scratch}_stats`
+        await execOk(`CREATE TABLE ${t} (id INT PRIMARY KEY, s VARCHAR(100))`)
+        try {
+          // A secondary index: InnoDB counts the clustered primary key as data, not index.
+          await execOk(`CREATE INDEX ${t}_s ON ${t} (s)`)
+          await execOk(`INSERT INTO ${t} (id, s) VALUES (1, 'a'), (2, 'b'), (3, 'c')`)
+          // The catalog's figures are as of its last update: have it look now.
+          await execOk(dialect === 'mysql' ? `ANALYZE TABLE ${t}` : `ANALYZE ${t}`)
+          const st = await db.tableStats(ns, t)
+          expect(st.dataBytes).toBeGreaterThan(0)
+          expect(st.indexBytes).toBeGreaterThan(0)
+          expect(st.totalBytes).toBeGreaterThanOrEqual((st.dataBytes ?? 0) + (st.indexBytes ?? 0))
+          expect(st.rowEstimate).toBe(3)
+          if (dialect === 'mysql') {
+            expect(st.rowFormat).toBeTruthy()
+            expect(st.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}/)
+            expect(st.toastBytes).toBeNull()
+          } else {
+            expect(st.freeBytes).toBeNull()
+            expect(st.lastAnalyze).toMatch(/^\d{4}-\d{2}-\d{2}/)
+            expect(st.deadRows).toBe(0)
+          }
+          const view = await db.tableStats(ns, 'active_users')
+          expect([view.dataBytes, view.indexBytes, view.totalBytes, view.rowEstimate]).toEqual([null, null, null, null])
+          await expect(db.tableStats(ns, `${t}_missing`)).rejects.toMatchObject({ code: 'NOT_FOUND' })
+        } finally {
+          await execOk(`DROP TABLE ${t}`)
+        }
+      })
+    })
+
     describe('readCell', () => {
       it('reads one value whole, past the cut a browse page makes, for exactly one row', async () => {
         const t = `${scratch}_cell`
@@ -983,6 +1016,8 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
             whole && typeof whole === 'object' && '$bin' in whole ? Buffer.from(whole.$bin, 'base64') : null
           ).toEqual(bytes)
           expect(await db.readCell(ns, t, { kind: 'pk', values: { id: 1 } }, 's')).toBe('xxxxx')
+          // Any type, not only text and binary (PostgreSQL's octet_length has no integer form).
+          expect(await db.readCell(ns, t, { kind: 'pk', values: { id: 1 } }, 'id')).toBe(1)
           expect(await db.readCell(ns, t, { kind: 'pk', values: { id: 2 } }, 'b')).toBeNull()
           await expect(db.readCell(ns, t, { kind: 'pk', values: { id: 3 } }, 'b')).rejects.toMatchObject({
             code: 'KEY_MISMATCH',
