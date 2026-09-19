@@ -17,7 +17,8 @@ export const ConnectRequestSchema = z.object({
   /** MySQL / MariaDB: the collation the connection talks in (its character set is the part before the first `_`). */
   collation: z
     .string()
-    .regex(/^[A-Za-z0-9_]{1,64}$/)
+    .regex(/^[A-Za-z0-9]+_[A-Za-z0-9_]+$/)
+    .max(64)
     .optional(),
 })
 export type ConnectRequest = z.infer<typeof ConnectRequestSchema>

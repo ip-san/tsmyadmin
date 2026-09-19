@@ -14,6 +14,8 @@ import type { SavedItem, SavedItems } from '../session/store.ts'
 
 const SharedBodySchema = z.object({ sql: z.string().min(1), by: z.string() })
 const HISTORY = 'history'
+/** Shared bookmarks one account may hold (the server's list is capped, and the oldest go when it is full). */
+const SHARED_PER_ACCOUNT = 100
 
 function safeJson(text: string): unknown {
   try {
@@ -56,9 +58,13 @@ export function sqlListRoutes(cfg: SessionConfig) {
       const config = c.get('session').config
       const { name, sql } = c.req.valid('json')
       // A name is one statement for the whole server: saving over another account's would replace theirs.
-      const taken = shared(await store.list(config, 'sharedsql')).find((q) => q.name === name)
+      const all = shared(await store.list(config, 'sharedsql'))
+      const taken = all.find((q) => q.name === name)
       if (taken && taken.by !== config.user)
         return c.json(apiError('CONFLICT', `A shared query named ${name} belongs to another account`), 409)
+      // The list is shared and capped: one account filling it would push the others' bookmarks out.
+      if (!taken && all.filter((q) => q.by === config.user).length >= SHARED_PER_ACCOUNT)
+        return c.json(apiError('CONFLICT', `An account can share at most ${SHARED_PER_ACCOUNT} queries`), 409)
       return c.json(shared(await store.save(config, 'sharedsql', name, JSON.stringify({ sql, by: config.user }))))
     })
     .delete('/shared-queries/:id', validate('param', SavedQueryIdSchema), async (c) => {
@@ -67,7 +73,9 @@ export function sqlListRoutes(cfg: SessionConfig) {
       const config = c.get('session').config
       const id = c.req.valid('param').id
       const target = shared(await store.list(config, 'sharedsql')).find((q) => q.id === id)
-      if (target && target.by !== config.user)
+      // An id that is not a readable shared query is nobody's to remove (it must not open a way round the owner check).
+      if (!target) return c.json(apiError('NOT_FOUND', 'No such shared query'), 404)
+      if (target.by !== config.user)
         return c.json(apiError('FORBIDDEN', 'Only the account that saved a shared query can remove it'), 403)
       return c.json(shared(await store.remove(config, 'sharedsql', id)))
     })

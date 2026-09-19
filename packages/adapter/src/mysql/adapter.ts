@@ -195,8 +195,13 @@ export class MysqlAdapter extends BaseAdapter {
     super()
   }
 
+  /** The connection's collation. It reaches `SET NAMES` as text, so it is checked here as well as at login. */
   private get collation(): string {
-    return this.config.collation ?? DEFAULT_COLLATION
+    const chosen = this.config.collation ?? DEFAULT_COLLATION
+    // A character set alone (`utf8mb4`) is not a collation: SET NAMES x COLLATE x would fail on every reset.
+    if (!/^[A-Za-z0-9]+_[A-Za-z0-9_]+$/.test(chosen))
+      throw new AdapterError('VALIDATION', `Not a collation name: ${chosen}`)
+    return chosen
   }
 
   private getPool(): Pool {

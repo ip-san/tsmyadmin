@@ -4,8 +4,15 @@ export type Project = (p: [number, number]) => [number, number]
 
 const STROKE = '#2563eb'
 const FILL = 'rgba(37,99,235,0.2)'
+// Characters XML 1.0 cannot carry at all (a control character in a label would make the whole file unreadable).
 const xmlEscape = (text: string) =>
-  text.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] as string)
+  Array.from(text)
+    .filter((ch) => {
+      const code = ch.charCodeAt(0)
+      return code >= 0x20 || code === 0x09 || code === 0x0a || code === 0x0d
+    })
+    .join('')
+    .replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] as string)
 const num = (n: number) => String(Math.round(n * 100) / 100)
 
 function pathData(points: [number, number][], project: Project): string {

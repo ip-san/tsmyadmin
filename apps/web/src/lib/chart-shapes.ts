@@ -87,15 +87,20 @@ export function slicePath(cx: number, cy: number, r: number, from: number, to: n
   return `M ${cx} ${cy} L ${fixed(x0)} ${fixed(y0)} A ${r} ${r} 0 ${large} 1 ${fixed(x1)} ${fixed(y1)} Z`
 }
 
-const TIME = /^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)?$/
+const TIME = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2})(\.\d+)?)?\s*(Z|[+-]\d{2}(?::?\d{2})?)?)?$/
 
-/** A date or date-time as it comes from a server, as milliseconds (read as UTC, which is only a common scale here). */
+/**
+ * A date or date-time as it comes from a server, as milliseconds. One without a zone is read as UTC (only a common
+ * scale here); one with a zone (PostgreSQL's `+09`) keeps it. A day that the month does not have is refused.
+ */
 export function parseTime(text: string): number | null {
-  const t = text.trim()
-  if (!TIME.test(t)) return null
-  const iso =
-    t.length === 10 ? `${t}T00:00:00Z` : `${t.replace(' ', 'T')}${t.includes(':') && t.length <= 16 ? ':00' : ''}Z`
-  const ms = Date.parse(iso)
+  const m = TIME.exec(text.trim())
+  if (!m) return null
+  const [, y, mo, d, h = '00', mi = '00', s = '00', fraction = '', zone = 'Z'] = m
+  const day = Number(d)
+  if (day < 1 || day > new Date(Date.UTC(Number(y), Number(mo), 0)).getUTCDate()) return null
+  const offset = zone === 'Z' ? 'Z' : `${zone.slice(0, 3)}:${zone.length > 3 ? zone.slice(-2) : '00'}`
+  const ms = Date.parse(`${y}-${mo}-${d}T${h}:${mi}:${s}${fraction}${offset}`)
   return Number.isNaN(ms) ? null : ms
 }
 

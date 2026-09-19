@@ -73,6 +73,7 @@ export function RowField({
   field: f,
   fk,
   input,
+  checkInput = true,
   locked,
   describedBy,
   onChange,
@@ -85,6 +86,8 @@ export function RowField({
   fk: ForeignKeyDef | undefined
   /** The column's input transformation: a pattern to match, or an editor that checks what is typed. */
   input?: ColumnTransform | undefined
+  /** Whether to judge the value against `input` (false for an edit value that is still what it was). */
+  checkInput?: boolean
   /** A value that cannot be edited here (binary or cut off) and is kept unless a file replaces it. */
   locked: boolean
   describedBy: string | undefined
@@ -99,7 +102,7 @@ export function RowField({
   const [tooLarge, setTooLarge] = useState(false)
   // What is typed is checked as it is typed; a value that is NULL, left to the default, a function's or a file's is not.
   const typed = !(f.isNull || f.useDefault || f.fn !== '' || f.file !== null)
-  const problem = input && typed ? inputProblem(input, f.text) : null
+  const problem = input && typed && checkInput ? inputProblem(input, f.text) : null
   const problemText =
     problem === null
       ? ''

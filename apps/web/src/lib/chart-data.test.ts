@@ -67,3 +67,10 @@ describe('chart data', () => {
     expect(scatterPoints(many, 0, 1).points).toHaveLength(MAX_POINTS)
   })
 })
+
+describe('niceScale on values no step fits', () => {
+  it('falls back to a plain scale instead of looping', () => {
+    expect(niceScale([5e-324, 1e-323], 5, { includeZero: false }).ticks.length).toBeLessThanOrEqual(201)
+    expect(niceScale([-Number.MAX_VALUE, Number.MAX_VALUE]).ticks.length).toBeLessThanOrEqual(201)
+  })
+})

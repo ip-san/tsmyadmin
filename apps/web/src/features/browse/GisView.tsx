@@ -106,9 +106,9 @@ export function GisView({ tableRef, options }: { tableRef: TableRef; options: Br
   // North up: larger y is drawn higher.
   const project: Project = ([x, y]) => [WIDTH / 2 + (x - cx) * scale, HEIGHT / 2 - (y - cy) * scale]
   const file = safeFilename(`${tableRef.table}_${column.name}`, 'svg')
-  const document = () => gisDocument(drawn, project, scale, WIDTH, HEIGHT)
+  const svgFile = () => gisDocument(drawn, project, scale, WIDTH, HEIGHT)
   const savePng = () =>
-    svgToPng(document(), WIDTH, HEIGHT).then(
+    svgToPng(svgFile(), WIDTH, HEIGHT).then(
       (blob) => {
         setFailed(false)
         downloadBlob(file.replace(/\.svg$/, '.png'), blob)
@@ -148,7 +148,7 @@ export function GisView({ tableRef, options }: { tableRef: TableRef; options: Br
         </p>
         {drawn.length > 0 ? (
           <div className="flex flex-wrap items-center gap-2">
-            <Button size="sm" onClick={() => downloadText(file, document(), 'image/svg+xml')}>
+            <Button size="sm" onClick={() => downloadText(file, svgFile(), 'image/svg+xml')}>
               {t.saveSvg}
             </Button>
             <Button size="sm" onClick={() => void savePng()}>

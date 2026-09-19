@@ -27,6 +27,8 @@ export const LOCAL: Record<Exclude<keyof Preferences, 'theme'>, { key: string }>
 let syncing = false
 let loadedFor: string | null = null
 let shared: Preferences = {}
+/** What changed here since the last send: only that is sent, so a stale copy of the rest cannot overwrite another browser's newer choice. */
+let dirty: Preferences = {}
 let pending: ReturnType<typeof setTimeout> | null = null
 
 /**
@@ -46,6 +48,7 @@ export async function loadAccountPreferences(identity: string, onServer: boolean
     // one's may be sent with this one's cookie.
     cancelPending()
     shared = {}
+    dirty = {}
   }
   syncing = onServer
   if (!onServer || loadedFor === identity) return { reload: false }
@@ -85,18 +88,26 @@ export function resetAccountPreferences(): void {
   loadedFor = null
   syncing = false
   shared = {}
+  dirty = {}
 }
 
 function send(): Promise<unknown> {
   cancelPending()
-  // Kept alive so a change made just before a reload (the language switch) still arrives.
-  return api.preferences.$put({ json: shared }, { init: { keepalive: true } }).catch(() => undefined)
+  const body = dirty
+  dirty = {}
+  if (Object.keys(body).length === 0) return Promise.resolve()
+  // Kept alive so a change made just before a reload (the language switch) still arrives. A failed send keeps the
+  // change to go out with the next one.
+  return api.preferences.$put({ json: body }, { init: { keepalive: true } }).catch(() => {
+    dirty = { ...body, ...dirty }
+  })
 }
 
 /** Records a change to one of the shared preferences with the account (debounced; a no-op in browser mode). */
 export function sharePreference(patch: Preferences): void {
   if (!syncing) return
   shared = { ...shared, ...patch }
+  dirty = { ...dirty, ...patch }
   if (pending !== null) clearTimeout(pending)
   pending = setTimeout(() => void send(), 500)
 }
@@ -105,6 +116,7 @@ export function sharePreference(patch: Preferences): void {
 export async function sharePreferenceNow(patch: Preferences): Promise<void> {
   if (!syncing) return
   shared = { ...shared, ...patch }
+  dirty = { ...dirty, ...patch }
   await send()
 }
 
@@ -112,7 +124,10 @@ export async function sharePreferenceNow(patch: Preferences): Promise<void> {
 export async function clearSharedPreferences(names: (keyof Preferences)[]): Promise<void> {
   if (!syncing) return
   const gone = Object.fromEntries(names.map((n) => [n, null]))
-  shared = Object.fromEntries(Object.entries(shared).filter(([k]) => !names.includes(k as keyof Preferences)))
+  const kept = (p: Preferences): Preferences =>
+    Object.fromEntries(Object.entries(p).filter(([k]) => !names.includes(k as keyof Preferences)))
+  shared = kept(shared)
+  dirty = kept(dirty)
   cancelPending()
   await api.preferences.$put({ json: gone }, { init: { keepalive: true } }).catch(() => undefined)
 }

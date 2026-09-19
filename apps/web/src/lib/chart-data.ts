@@ -77,11 +77,15 @@ export function niceScale(
   const rough = (hi - lo) / tickCount
   const magnitude = 10 ** Math.floor(Math.log10(rough))
   const step = ([1, 2, 5, 10].find((m) => m * magnitude >= rough) ?? 10) * magnitude
+  // Values too close together (denormals) or too large to divide give no usable step: a plain 0-to-1 scale, not a loop.
+  if (!Number.isFinite(step) || step <= 0 || !Number.isFinite(lo) || !Number.isFinite(hi))
+    return { min: 0, max: 1, ticks: [0, 1] }
   const min = Math.floor(lo / step) * step
   const max = Math.ceil(hi / step) * step
   const ticks: number[] = []
   // Integer steps from min avoid accumulating float error (0.1 + 0.2).
-  for (let i = 0; min + i * step <= max + step / 1e6; i++) ticks.push(Number((min + i * step).toPrecision(12)))
+  for (let i = 0; i <= 200 && min + i * step <= max + step / 1e6; i++)
+    ticks.push(Number((min + i * step).toPrecision(12)))
   return { min, max, ticks }
 }
 

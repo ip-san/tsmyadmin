@@ -58,11 +58,11 @@ export function ChartXY({
   if (xs.length === 0) return <p className="text-sm text-ink-sub">{t.noPoints}</p>
   const xScale = kind === 'scatter' ? niceScale(xs, 6, { includeZero: false }) : timeScale(xs)
   const yScale = niceScale(vs, 5, { includeZero: false })
-  const plotW = WIDTH - LEFT - RIGHT
-  const plotH = HEIGHT - TOP - BOTTOM
-  const px = (v: number) => LEFT + ((v - xScale.min) / (xScale.max - xScale.min || 1)) * plotW
-  const py = (v: number) => TOP + plotH - ((v - yScale.min) / (yScale.max - yScale.min || 1)) * plotH
   const left = Math.max(LEFT, 12 + 6 * Math.max(...yScale.ticks.map((tick) => tick.toLocaleString('ja-JP').length)))
+  const plotW = WIDTH - left - RIGHT
+  const plotH = HEIGHT - TOP - BOTTOM
+  const px = (v: number) => left + ((v - xScale.min) / (xScale.max - xScale.min || 1)) * plotW
+  const py = (v: number) => TOP + plotH - ((v - yScale.min) / (yScale.max - yScale.min || 1)) * plotH
   const span = xScale.max - xScale.min
   return (
     <figure className="overflow-x-auto">

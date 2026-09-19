@@ -20,4 +20,9 @@ describe('sqlToCode', () => {
     expect(sqlToCode('python', '  SELECT 1 ')).toBe('sql = """SELECT 1"""')
     for (const language of CODE_LANGUAGES) expect(sqlToCode(language, 'SELECT 1')).toContain('SELECT 1')
   })
+
+  it('does not let a quote at the end join the closing quotes', () => {
+    expect(sqlToCode('python', 'SELECT "a"')).toBe('sql = """SELECT "a\\""""')
+    expect(sqlToCode('java', 'SELECT "a"')).toContain('"a\\"""";')
+  })
 })

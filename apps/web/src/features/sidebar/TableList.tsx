@@ -31,6 +31,12 @@ export function TableList({ db, schema, filter }: { db: string; schema?: string 
   // 0 is "everything": the list scrolls (and, when long and ungrouped, is virtualized) instead of paging.
   const step = navPageSize === 0 ? Number.POSITIVE_INFINITY : navPageSize
   const [limit, setLimit] = useState(step)
+  // A new search starts from the first page again.
+  const [pagedFor, setPagedFor] = useState(deferred)
+  if (pagedFor !== deferred) {
+    setPagedFor(deferred)
+    setLimit(step)
+  }
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({})
   const matches = tables.data ? filterTables(tables.data, deferred) : []
   const grouped = navGroupDelimiter !== ''

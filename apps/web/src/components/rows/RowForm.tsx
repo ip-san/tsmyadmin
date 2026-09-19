@@ -219,6 +219,8 @@ export function RowForm({
                         field={f}
                         fk={fks.get(c.name)}
                         input={inputTransforms?.get(c.name)}
+                        // Editing: a value nobody touched is not judged (it may predate the rule).
+                        checkInput={mode === 'insert' || f.text !== cellToEditable(startOf(row)?.[c.name] ?? null)}
                         locked={locked}
                         describedBy={opaque && mode === 'insert' ? `${id}-note` : undefined}
                         onChange={(patch) => update(row, c, patch)}

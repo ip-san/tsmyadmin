@@ -35,7 +35,7 @@ export function ChartPie({
           const a = angles[i]
           return a ? (
             <path
-              key={s.label}
+              key={`${i}-${s.label}`}
               d={slicePath(SIZE / 2, SIZE / 2, r, a.from, a.to)}
               className={`${FILL[i % FILL.length]} stroke-surface`}
               strokeWidth={1}
@@ -46,7 +46,7 @@ export function ChartPie({
       <figcaption>
         <ul className="space-y-1 text-xs text-ink">
           {slices.map((s, i) => (
-            <li key={s.label} className="flex items-center gap-2">
+            <li key={`${i}-${s.label}`} className="flex items-center gap-2">
               <svg width={12} height={12} aria-hidden className={FILL[i % FILL.length]}>
                 <rect width={12} height={12} rx={2} />
               </svg>

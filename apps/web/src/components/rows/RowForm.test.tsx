@@ -228,4 +228,20 @@ describe('RowForm input transformations', () => {
     await userEvent.clear(screen.getByLabelText('zip'))
     expect(screen.queryByText('JSON として読めません')).not.toBeInTheDocument()
   })
+
+  it('does not judge an edit value nobody touched, but does once it is changed', async () => {
+    const inputs = new Map([['zip', rule({ pattern: '^\\d+$' })]])
+    render(
+      <RowForm
+        columns={[col('zip')]}
+        mode="edit"
+        initial={{ zip: 'old-style' }}
+        inputTransforms={inputs}
+        onSubmit={vi.fn()}
+      />
+    )
+    expect(screen.getByLabelText('zip')).toBeValid()
+    await userEvent.type(screen.getByLabelText('zip'), 'x')
+    expect(screen.getByLabelText('zip')).toBeInvalid()
+  })
 })

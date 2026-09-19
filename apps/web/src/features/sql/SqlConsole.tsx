@@ -96,23 +96,19 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
   // With a persistent session store the history belongs to the account (and follows it to another browser); without
   // one it is this browser's.
   const serverHistory = useQuery({ ...sqlHistoryQuery, enabled: onServer })
-  const [history, setHistory] = useState<HistoryEntry[]>(() => (onServer ? [] : loadHistory(scope)))
-  const [historyLoaded, setHistoryLoaded] = useState(!onServer)
-  if (!historyLoaded && serverHistory.data) {
-    setHistoryLoaded(true)
-    setHistory(serverHistory.data.entries)
-  }
+  const [localHistory, setLocalHistory] = useState<HistoryEntry[]>(() => (onServer ? [] : loadHistory(scope)))
+  const history = onServer ? (serverHistory.data?.entries ?? []) : localHistory
   const historyNow = useRef(history)
   historyNow.current = history
-  // With the account, the server adds the run to its own list (so another browser's runs are not overwritten) and
-  // answers with the result.
+  // With the account, the query cache is the list: a run is put in it at once, and the server (which adds to its own
+  // list, so another browser's runs are not overwritten) is asked again afterwards.
   const record = (entry: HistoryEntry) => {
-    if (!onServer) return setHistory(pushHistory(scope, entry))
-    setHistory(withEntry(historyNow.current, entry))
-    void mutations.addSqlHistory(forServer(entry), historyLimit()).then(
-      (list) => setHistory(list.entries),
-      () => undefined
-    )
+    if (!onServer) return setLocalHistory(pushHistory(scope, entry))
+    queryClient.setQueryData(sqlHistoryQuery.queryKey, { entries: withEntry(historyNow.current, entry) })
+    void mutations
+      .addSqlHistory(forServer(entry), historyLimit())
+      .catch(() => undefined)
+      .finally(() => queryClient.invalidateQueries({ queryKey: sqlHistoryQuery.queryKey }))
   }
   const saved = useSavedQueries(scope, onServer)
   const shared = useSharedQueries(onServer)
@@ -224,6 +220,14 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
     edit: setText,
     rerun: (sql) => {
       if (run.isPending) return
+      // The same guard as Run: a statement that changes every row is asked about first (its text goes to the editor,
+      // which is what the confirmation runs).
+      const unbounded = safeMode ? unboundedWrites(sql) : []
+      if (unbounded.length > 0) {
+        setText(sql)
+        setConfirming(unbounded)
+        return
+      }
       cancel.reset()
       run.mutate({ script: prepareScript(sql, dialect, runOptions), shown: sql })
     },
@@ -358,8 +362,11 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
           onBookmark={(sql) => saved.save(bookmarkName(sql), sql)}
           onClear={() => {
             clearHistory(scope)
-            setHistory([])
-            if (onServer) void mutations.clearSqlHistory().catch(() => undefined)
+            setLocalHistory([])
+            if (onServer) {
+              queryClient.setQueryData(sqlHistoryQuery.queryKey, { entries: [] })
+              void mutations.clearSqlHistory().catch(() => undefined)
+            }
           }}
         />
       </div>

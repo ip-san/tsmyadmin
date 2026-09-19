@@ -86,8 +86,8 @@ export function ResultChart({ result }: { result: ResultSet }) {
   const file = (extension: string) => safeFilename(`${names[xNow] ?? 'chart'}_${kind}`, extension)
   const save = async (format: 'svg' | 'png') => {
     const svg = svgRef.current
-    if (!svg) return
-    const { text, width: w, height: h } = standaloneSvg(svg, getComputedStyle(document.body).backgroundColor || '#fff')
+    if (!svg) return setSaveFailed(true)
+    const { text, width: w, height: h } = standaloneSvg(svg, pageBackground())
     if (format === 'svg') return downloadText(file('svg'), text, 'image/svg+xml')
     try {
       setSaveFailed(false)
@@ -238,4 +238,11 @@ export function ResultChart({ result }: { result: ResultSet }) {
 function short(label: string): string {
   const chars = Array.from(label)
   return chars.length > LABEL_CHARS ? `${chars.slice(0, LABEL_CHARS - 1).join('')}…` : label
+}
+
+/** The page's own background, so a saved chart reads the same as on screen (a transparent body falls back on the theme). */
+function pageBackground(): string {
+  const set = getComputedStyle(document.body).backgroundColor
+  if (set && set !== 'transparent' && !/rgba\(\s*0,\s*0,\s*0,\s*0\s*\)/.test(set)) return set
+  return document.documentElement.classList.contains('dark') ? '#18181b' : '#ffffff'
 }
