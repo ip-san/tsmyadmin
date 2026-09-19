@@ -559,6 +559,8 @@ export const ja = {
   },
   ddl: {
     titles: {
+      convertCollation: '全カラムの照合順序を変更',
+      orderTable: '行の並び順を変更',
       partitionTable: 'パーティションに分割',
       addPartition: 'パーティションを追加',
       dropPartition: 'パーティションを削除',
@@ -610,6 +612,7 @@ export const ja = {
     dataLoss: 'テーブルのデータは失われます。',
     columnLoss: 'このカラムのデータは失われます。',
     partitionLoss: 'このパーティションの行は失われます。',
+    copyReplaceLoss: 'コピー先に同じ名前のテーブルがあれば、その中身ごと削除されます。',
     databaseLoss: 'データベース内のすべてのテーブルとデータが失われます。',
     databaseLossForce: 'このデータベースに接続中の他のユーザーのセッションも強制的に切断されます。',
     typeToConfirm: (name: string) => `続行するには「${name}」と入力してください`,
@@ -719,6 +722,12 @@ export const ja = {
     renameTitle: '名前の変更',
     copyTargetName: 'コピー先のテーブル名',
     copyWithData: 'データもコピーする',
+    copyToDatabase: 'コピー先のデータベース',
+    copyToSchema: 'コピー先のスキーマ',
+    copyWhat: 'コピーするもの',
+    copyWhatOptions: { both: '構造とデータ', structure: '構造のみ', data: 'データのみ（同じ名前の既存のテーブルへ）' },
+    copyDropExisting: '同じ名前のテーブルがあれば削除してから作る',
+    copyForeignKeys: (n: number) => `外部キーもコピーする（${n} 件）`,
     copyHint: 'インデックス・主キーはコピーされます。外部キーはコピーされません。',
     renameHint:
       'ビュー・外部キー・権限は参照先を自動では追従しない場合があります。PostgreSQL ではインデックスやシーケンスの名前は変わりません。',
@@ -732,6 +741,8 @@ export const ja = {
     autoIncrementHint: '現在の最大値より小さい値は無視されます。',
     unchanged: '変更なし',
     maintenanceTitle: 'メンテナンス',
+    checksumOption: 'チェックサムを保持（CHECKSUM）',
+    checksumOptionHint: 'MyISAM / Aria で、行の変更ごとにチェックサムを更新します',
     replaceWarning:
       '一致したすべての行の値をその場で書き換えます。元に戻せないので、必要なら先にエクスポートしてください。',
     moveTo: { mysql: '移動先のデータベース', postgres: '移動先のスキーマ' },
@@ -743,7 +754,7 @@ export const ja = {
     },
     maintenanceHint: {
       mysql:
-        'ANALYZE は統計を更新、OPTIMIZE は領域を再編成（ロックあり）、CHECK は整合性を検査、REPAIR は壊れたテーブルを修復します（MyISAM など。InnoDB は対象外で、その旨が結果に出ます）。',
+        'ANALYZE は統計を更新、OPTIMIZE は領域を再編成（ロックあり）、CHECK は整合性を検査、REPAIR は壊れたテーブルを修復します（MyISAM など。InnoDB は対象外で、その旨が結果に出ます）。CHECKSUM は内容のチェックサムを計算、FLUSH はテーブルを閉じてディスクに書き出します（RELOAD 権限が必要）。',
       postgres: 'ANALYZE は統計を更新、VACUUM は不要領域を回収、VACUUM FULL はテーブルを書き直します（排他ロック）。',
     },
     maintenance: {
@@ -753,8 +764,18 @@ export const ja = {
         check: 'CHECK TABLE',
         repair: 'REPAIR TABLE',
         vacuum: 'VACUUM',
+        checksum: 'CHECKSUM TABLE',
+        flush: 'FLUSH TABLE',
       },
-      postgres: { analyze: 'ANALYZE', vacuum: 'VACUUM', optimize: 'VACUUM FULL', check: 'CHECK', repair: 'REPAIR' },
+      postgres: {
+        analyze: 'ANALYZE',
+        vacuum: 'VACUUM',
+        optimize: 'VACUUM FULL',
+        check: 'CHECK',
+        repair: 'REPAIR',
+        checksum: 'CHECKSUM',
+        flush: 'FLUSH',
+      },
     },
     bulkSelected: (n: number) => `${n.toLocaleString('ja-JP')} 件のテーブルを選択中`,
     bulkTruncate: '選択したテーブルを空にする…',
@@ -1274,6 +1295,18 @@ export const ja = {
     label: 'ラベルのカラム',
     noLabel: '（なし）',
     limit: '描く行数の上限',
+  },
+  operations: {
+    convertHintMysql:
+      'テーブルの既定と、すべての文字列カラムを指定した照合順序（とその文字セット）に変換します。値は新しい文字セットに変換されます。',
+    convertHintPostgres: 'すべての文字列カラムに指定した照合順序を付けます（型はそのまま）。',
+    orderHintMysql:
+      '行を指定したカラムの順に並べ替えて格納し直します（InnoDB では主キーの順が優先されるため、効果があるのは主キーのないテーブルです）。',
+    orderHintPostgres:
+      '行をインデックスの順に並べ替えて格納し直します（CLUSTER。排他ロック。以後の変更で順は崩れます）。',
+    orderColumn: '並べ替えるカラム',
+    orderIndex: '並び順に使うインデックス',
+    descending: '降順',
   },
   partitions: {
     title: 'パーティション',

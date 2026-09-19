@@ -9,7 +9,7 @@ type Action = Extract<DdlOp, { op: 'maintainTable' }>['action']
 
 /** The maintenance statements each server offers (MySQL: ANALYZE / OPTIMIZE / CHECK / REPAIR; PostgreSQL: ANALYZE / VACUUM). */
 const ACTIONS: Record<Dialect, Action[]> = {
-  mysql: ['analyze', 'optimize', 'check', 'repair'],
+  mysql: ['analyze', 'optimize', 'check', 'repair', 'checksum', 'flush'],
   postgres: ['analyze', 'vacuum', 'optimize'],
 }
 

@@ -106,10 +106,18 @@ export type EventSchedule = z.infer<typeof EventScheduleSchema>
  */
 export const PartitionMethodSchema = z.enum(['range', 'list', 'hash', 'key'])
 export type PartitionMethod = z.infer<typeof PartitionMethodSchema>
-const PartitionCode = z.string().trim().min(1).max(10_000)
+/**
+ * Whether code has a `;` outside its quoted literals ('…', "…", `…`): a second statement riding along. A partition
+ * bound or key never needs one, and the preview would show it only as part of the same statement's text.
+ */
+export function hasStatementBreak(code: string): boolean {
+  return code.replace(/'(?:[^'\\]|\\.|'')*'|"(?:[^"]|"")*"|`(?:[^`]|``)*`/g, '').includes(';')
+}
+const noBreak = (s: string) => !hasStatementBreak(s)
+const PartitionCode = z.string().trim().min(1).max(10_000).refine(noBreak, 'A partition key cannot contain ;')
 export const PartitionSpecSchema = z.object({
   name: z.string().min(1),
-  bound: z.string().trim().max(10_000).default(''),
+  bound: z.string().trim().max(10_000).refine(noBreak, 'A partition bound cannot contain ;').default(''),
 })
 export const PartitionByShape = {
   method: PartitionMethodSchema,
@@ -121,6 +129,20 @@ export const PartitionActionSchema = z.enum(['analyze', 'check', 'optimize', 're
 /** Referential actions accepted by both dialects. */
 export const FkActionSchema = z.enum(['CASCADE', 'SET NULL', 'RESTRICT', 'NO ACTION', 'SET DEFAULT'])
 export type FkAction = z.infer<typeof FkActionSchema>
+
+/** A foreign key as addForeignKey (and a copy's keys) take it. */
+const ForeignKeyShape = z.object({
+  name: z.string().min(1),
+  columns: z.array(z.string().min(1)).min(1),
+  refTable: z.string().min(1),
+  /** MySQL: a table in another database (PostgreSQL cannot reference across databases). */
+  refDatabase: z.string().min(1).optional(),
+  /** PostgreSQL: a table in another schema of the same database. */
+  refSchema: z.string().min(1).optional(),
+  refColumns: z.array(z.string().min(1)).min(1),
+  onUpdate: FkActionSchema.optional(),
+  onDelete: FkActionSchema.optional(),
+})
 
 export const DdlOpSchema = z.discriminatedUnion('op', [
   z.object({
@@ -197,16 +219,7 @@ export const DdlOpSchema = z.discriminatedUnion('op', [
   z.object({
     op: z.literal('addForeignKey'),
     table,
-    name: z.string().min(1),
-    columns: z.array(z.string().min(1)).min(1),
-    refTable: z.string().min(1),
-    /** MySQL: a table in another database (PostgreSQL cannot reference across databases). */
-    refDatabase: z.string().min(1).optional(),
-    /** PostgreSQL: a table in another schema of the same database. */
-    refSchema: z.string().min(1).optional(),
-    refColumns: z.array(z.string().min(1)).min(1),
-    onUpdate: FkActionSchema.optional(),
-    onDelete: FkActionSchema.optional(),
+    ...ForeignKeyShape.shape,
   }),
   z.object({ op: z.literal('dropForeignKey'), table, name: z.string().min(1) }),
   /** `kind` selects DROP TABLE / DROP VIEW / DROP MATERIALIZED VIEW (the Operations tab serves views as well). */
@@ -280,6 +293,15 @@ export const DdlOpSchema = z.discriminatedUnion('op', [
     identityColumns: z.array(z.string().min(1)).optional(),
     /** serial columns: the copy gets its own sequence instead of sharing the source's (PostgreSQL). */
     serialColumns: z.array(z.string().min(1)).optional(),
+    /** Where the copy goes: another database (MySQL) or schema (PostgreSQL); the source's own by default. */
+    toDatabase: z.string().min(1).optional(),
+    toSchema: z.string().min(1).optional(),
+    /** false: rows only, into a table that already exists under the new name. */
+    structure: z.boolean().optional(),
+    /** Drop a table of the new name first. */
+    dropExisting: z.boolean().optional(),
+    /** Foreign keys to add to the copy (LIKE copies none); named for the copy by the caller. */
+    foreignKeys: z.array(ForeignKeyShape).max(100).optional(),
   }),
   /** Table-level options; engine / collation / autoIncrement are MySQL-only (PostgreSQL: UNSUPPORTED). */
   z.object({
@@ -299,12 +321,35 @@ export const DdlOpSchema = z.discriminatedUnion('op', [
       .string()
       .regex(/^\d{1,20}$/)
       .optional(),
+    /** MySQL ROW_FORMAT. */
+    rowFormat: z.enum(['DEFAULT', 'DYNAMIC', 'FIXED', 'COMPRESSED', 'REDUNDANT', 'COMPACT']).optional(),
+    /** MySQL CHECKSUM table option (a live checksum, MyISAM / Aria). */
+    checksum: z.boolean().optional(),
+  }),
+  /**
+   * Every text column (and, on MySQL, the table default) to one collation. MySQL converts the table in one
+   * statement; PostgreSQL rewrites each listed column with its type and the new collation.
+   */
+  z.object({
+    op: z.literal('convertCollation'),
+    table,
+    collation: z.string().regex(/^[A-Za-z0-9_.-]+$/),
+    /** PostgreSQL: the text columns with their types. */
+    columns: z.array(z.object({ name: z.string().min(1), dataType: SqlType })).optional(),
+  }),
+  /** The rows' physical order: MySQL ALTER TABLE … ORDER BY a column; PostgreSQL CLUSTER on an index. */
+  z.object({
+    op: z.literal('orderTable'),
+    table,
+    column: z.string().min(1).optional(),
+    desc: z.boolean().optional(),
+    index: z.string().min(1).optional(),
   }),
   /** Maintenance statements: MySQL ANALYZE / OPTIMIZE / CHECK TABLE, PostgreSQL ANALYZE / VACUUM (FULL). */
   z.object({
     op: z.literal('maintainTable'),
     table,
-    action: z.enum(['analyze', 'optimize', 'check', 'repair', 'vacuum']),
+    action: z.enum(['analyze', 'optimize', 'check', 'repair', 'vacuum', 'checksum', 'flush']),
   }),
   /** Bulk actions from the database structure page. */
   z.object({ op: z.literal('dropTables'), tables: z.array(table).min(1) }),

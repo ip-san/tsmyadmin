@@ -32,6 +32,8 @@ function confirmName(op: DdlOp, bulkName: string | null): string | null {
     case 'dropDatabase':
     case 'renameDatabase':
       return op.name
+    case 'copyTable':
+      return op.dropExisting ? op.newName : null
     // A partition's rows go with it: confirmed by the partition's name.
     case 'dropPartition':
     case 'truncatePartition':
@@ -63,6 +65,8 @@ function lossWarning(op: DdlOp, dialect: Dialect): string | null {
     case 'dropPartition':
     case 'truncatePartition':
       return locale.ddl.partitionLoss
+    case 'copyTable':
+      return op.dropExisting ? locale.ddl.copyReplaceLoss : null
     case 'dropDatabase':
       return dialect === 'postgres'
         ? `${locale.ddl.databaseLoss} ${locale.ddl.databaseLossForce}`
@@ -85,7 +89,8 @@ export function DdlPreviewDialog({ flow, bulkConfirmName = null }: { flow: DdlFl
     <PreviewDialog
       flow={flow}
       title={opTitle}
-      destructive={(op) => DESTRUCTIVE.has(op.op)}
+      // A copy that first drops a table of the new name loses that table.
+      destructive={(op) => DESTRUCTIVE.has(op.op) || (op.op === 'copyTable' && op.dropExisting === true)}
       confirmName={(op) => confirmName(op, bulkConfirmName)}
       lossWarning={(op) => lossWarning(op, session.dialect)}
       hint={locale.ddl.previewHint}

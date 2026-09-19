@@ -3159,6 +3159,77 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         }
       })
 
+      it("changes table options, every column's collation, the rows' order, and copies with the extra options", async () => {
+        const t = `${scratch}_ops15`
+        const ref = `${scratch}_ops15r`
+        const copy = `${scratch}_ops15c`
+        const [other, otherNs] =
+          dialect === 'mysql'
+            ? ['tsmyadmin_other', { database: 'tsmyadmin_other' }]
+            : ['app', { database: ns.database, schema: 'app' }]
+        try {
+          await execOk(`CREATE TABLE ${ref} (id INT PRIMARY KEY)`)
+          await execOk(`INSERT INTO ${ref} (id) VALUES (1), (2)`)
+          await execOk(`CREATE TABLE ${t} (id INT PRIMARY KEY, name VARCHAR(20), ref_id INT)`)
+          await execOk(`INSERT INTO ${t} (id, name, ref_id) VALUES (2, 'b', 1), (1, 'a', 2)`)
+          const collation = dialect === 'mysql' ? 'utf8mb4_bin' : 'C'
+          await runDdl({
+            op: 'convertCollation',
+            table: t,
+            collation,
+            columns: [{ name: 'name', dataType: 'varchar(20)' }],
+          })
+          expect((await db.describeTable(ns, t)).columns.find((c) => c.name === 'name')?.collation).toBe(collation)
+          if (dialect === 'mysql') {
+            await runDdl({ op: 'setTableOptions', table: t, rowFormat: 'DYNAMIC' })
+            expect((await db.tableStats(ns, t)).rowFormat).toBe('Dynamic')
+            await runDdl({ op: 'orderTable', table: t, column: 'name', desc: true })
+            const [sum] = await exec(
+              sqlScript(dialect, db.ddl.build(ns, { op: 'maintainTable', table: t, action: 'checksum' }))
+            )
+            expect(sum?.kind).toBe('rows')
+          } else {
+            const pk = (await db.describeTable(ns, t)).indexes.find((i) => i.primary)?.name ?? ''
+            await runDdl({ op: 'orderTable', table: t, index: pk })
+          }
+          // Into another database / schema, dropping what is there, with the foreign key the source would have.
+          await execOk(`CREATE TABLE ${dialect === 'mysql' ? 'tsmyadmin_other' : 'app'}.${copy} (x INT)`)
+          await runDdl({
+            op: 'copyTable',
+            table: t,
+            newName: copy,
+            withData: true,
+            ...(dialect === 'mysql' ? { toDatabase: other } : { toSchema: other }),
+            dropExisting: true,
+            foreignKeys: [{ name: `${copy}_fk`, columns: ['ref_id'], refTable: ref, refColumns: ['id'] }],
+          })
+          const copied = await db.describeTable(otherNs, copy)
+          expect(copied.columns.map((c) => c.name)).toEqual(['id', 'name', 'ref_id'])
+          expect(copied.foreignKeys[0]).toMatchObject({
+            refTable: ref,
+            refNamespace: dialect === 'mysql' ? ns : { database: ns.database, schema: ns.schema ?? 'public' },
+          })
+          // Rows only, into the copy that now exists.
+          await execOk(`DELETE FROM ${dialect === 'mysql' ? 'tsmyadmin_other' : 'app'}.${copy}`)
+          await runDdl({
+            op: 'copyTable',
+            table: t,
+            newName: copy,
+            withData: true,
+            structure: false,
+            ...(dialect === 'mysql' ? { toDatabase: other } : { toSchema: other }),
+          })
+          const [n] = await exec(`SELECT COUNT(*) FROM ${dialect === 'mysql' ? 'tsmyadmin_other' : 'app'}.${copy}`)
+          expect(n?.kind === 'rows' ? Number(n.result.rows[0]?.[0]) : -1).toBe(2)
+        } finally {
+          await exec(`DROP TABLE IF EXISTS ${dialect === 'mysql' ? 'tsmyadmin_other' : 'app'}.${copy}`, {
+            stopOnError: false,
+          })
+          await exec(`DROP TABLE IF EXISTS ${t}`, { stopOnError: false })
+          await exec(`DROP TABLE IF EXISTS ${ref}`, { stopOnError: false })
+        }
+      })
+
       it('finds and replaces in a column, touching only the rows the replacement changes', async () => {
         const t = `${scratch}_rep`
         await execOk(`CREATE TABLE ${t} (id INT PRIMARY KEY, name VARCHAR(40))`)

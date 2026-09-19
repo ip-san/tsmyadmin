@@ -74,6 +74,13 @@ const SAMPLE_OPS: Record<DdlOp['op'], DdlOp> = {
   truncatePartition: { op: 'truncatePartition', table: 'lo"g', name: 'p"1' },
   detachPartition: { op: 'detachPartition', table: 'lo"g', name: 'p"1' },
   removePartitioning: { op: 'removePartitioning', table: 'lo`g' },
+  convertCollation: {
+    op: 'convertCollation',
+    table: 't`1',
+    collation: 'utf8mb4_0900_ai_ci',
+    columns: [{ name: 'na"me', dataType: 'varchar(20)' }],
+  },
+  orderTable: { op: 'orderTable', table: 't`1', column: 'cr`eated', desc: true, index: 'i"dx' },
   maintainPartition: { op: 'maintainPartition', table: 'lo`g', name: 'p`1', action: 'analyze' },
   setPrimaryKey: { op: 'setPrimaryKey', table: 't', columns: ['a', 'b'], current: 't_pkey' },
   setTableOptions: { op: 'setTableOptions', table: 't', comment: "it's" },

@@ -3,12 +3,14 @@ import type { Dialect, TableSchema } from '@tsmyadmin/shared'
 import { type FormEvent, useState } from 'react'
 import { DdlPreviewDialog } from '@/components/ddl/DdlPreviewDialog.tsx'
 import { Button } from '@/components/ui/Button.tsx'
-import { Field, Input } from '@/components/ui/Field.tsx'
+import { Field, Input, Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
 import { useDdlFlow } from '@/lib/ddl.ts'
 import { structureQuery, type TableRef } from '@/lib/queries.ts'
 
 const IDENT = /^[A-Za-z0-9_]+$/
+const ROW_FORMATS = ['DEFAULT', 'DYNAMIC', 'COMPACT', 'COMPRESSED', 'REDUNDANT', 'FIXED'] as const
+type RowFormat = (typeof ROW_FORMATS)[number]
 
 /** Table comment (both dialects) and MySQL's engine / collation / AUTO_INCREMENT, through the preview flow. */
 export function TableOptionsForm({
@@ -25,7 +27,12 @@ export function TableOptionsForm({
   const [engine, setEngine] = useState(schema.engine ?? '')
   const [collation, setCollation] = useState(schema.collation ?? '')
   const [autoIncrement, setAutoIncrement] = useState(schema.autoIncrement ?? '')
+  // Not part of TableSchema: empty means "leave as it is".
+  const [rowFormat, setRowFormat] = useState<RowFormat | ''>('')
+  const [checksum, setChecksum] = useState<'' | 'on' | 'off'>('')
   const reseed = (from: TableSchema) => {
+    setRowFormat('')
+    setChecksum('')
     setComment(from.comment ?? '')
     setEngine(from.engine ?? '')
     setCollation(from.collation ?? '')
@@ -57,7 +64,8 @@ export function TableOptionsForm({
     (engineChanged && !IDENT.test(engine.trim())) ||
     (collationChanged && !IDENT.test(collation.trim())) ||
     (autoIncrementChanged && !/^\d{1,20}$/.test(autoIncrement.trim()))
-  const changed = commentChanged || engineChanged || collationChanged || autoIncrementChanged
+  const changed =
+    commentChanged || engineChanged || collationChanged || autoIncrementChanged || rowFormat !== '' || checksum !== ''
   const submit = (e: FormEvent) => {
     e.preventDefault()
     if (!changed || invalid) return
@@ -68,6 +76,8 @@ export function TableOptionsForm({
       ...(engineChanged ? { engine: engine.trim() } : {}),
       ...(collationChanged ? { collation: collation.trim() } : {}),
       ...(autoIncrementChanged ? { autoIncrement: autoIncrement.trim() } : {}),
+      ...(mysql && rowFormat ? { rowFormat } : {}),
+      ...(mysql && checksum ? { checksum: checksum === 'on' } : {}),
     })
   }
   return (
@@ -99,6 +109,31 @@ export function TableOptionsForm({
                   onChange={(e) => setAutoIncrement(e.target.value)}
                   placeholder={locale.ddl.unchanged}
                 />
+              </Field>
+              <Field id="table-row-format" label={locale.table.stats.rowFormat}>
+                <Select
+                  id="table-row-format"
+                  value={rowFormat}
+                  onChange={(e) => setRowFormat(e.target.value as RowFormat | '')}
+                >
+                  <option value="">{locale.ddl.unchanged}</option>
+                  {ROW_FORMATS.map((f) => (
+                    <option key={f} value={f}>
+                      {f}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field id="table-checksum" label={locale.ddl.checksumOption} hint={locale.ddl.checksumOptionHint}>
+                <Select
+                  id="table-checksum"
+                  value={checksum}
+                  onChange={(e) => setChecksum(e.target.value as '' | 'on' | 'off')}
+                >
+                  <option value="">{locale.ddl.unchanged}</option>
+                  <option value="on">{locale.common.yes}</option>
+                  <option value="off">{locale.common.no}</option>
+                </Select>
               </Field>
             </>
           ) : null}

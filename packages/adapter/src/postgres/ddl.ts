@@ -275,8 +275,17 @@ export const pgDdl: DdlBuilder = {
         // Renaming keeps the table in its schema; the new name must not be qualified.
         return [`ALTER TABLE ${t} RENAME TO ${id(op.newName)}`]
       case 'setTableOptions':
-        if (op.engine !== undefined || op.collation !== undefined || op.autoIncrement !== undefined) {
-          throw new AdapterError('UNSUPPORTED', 'PostgreSQL tables have no engine, collation or AUTO_INCREMENT option')
+        if (
+          op.engine !== undefined ||
+          op.collation !== undefined ||
+          op.autoIncrement !== undefined ||
+          op.rowFormat !== undefined ||
+          op.checksum !== undefined
+        ) {
+          throw new AdapterError(
+            'UNSUPPORTED',
+            'PostgreSQL tables have no engine, collation, AUTO_INCREMENT, row format or checksum option'
+          )
         }
         if (op.comment === undefined) throw new AdapterError('VALIDATION', 'No table option to change')
         return [`COMMENT ON TABLE ${t} IS ${op.comment === null ? 'NULL' : pgLiteral(op.comment)}`]
@@ -292,12 +301,32 @@ export const pgDdl: DdlBuilder = {
             throw new AdapterError('UNSUPPORTED', 'PostgreSQL has no CHECK TABLE')
           case 'repair':
             throw new AdapterError('UNSUPPORTED', 'PostgreSQL has no REPAIR TABLE')
+          case 'checksum':
+          case 'flush':
+            throw new AdapterError('UNSUPPORTED', `PostgreSQL has no ${op.action.toUpperCase()} TABLE`)
         }
         break
+      case 'convertCollation': {
+        // Each text column keeps its type and takes the collation, all in one ALTER.
+        const cols = op.columns ?? []
+        if (cols.length === 0) throw new AdapterError('VALIDATION', 'No text column to change')
+        const collation = id(op.collation)
+        return [
+          `ALTER TABLE ${t} ${cols.map((c) => `ALTER COLUMN ${id(c.name)} TYPE ${c.dataType} COLLATE ${collation}`).join(', ')}`,
+        ]
+      }
+      case 'orderTable':
+        if (!op.index) throw new AdapterError('VALIDATION', 'PostgreSQL orders a table along an index (CLUSTER)')
+        return [`CLUSTER ${t} USING ${id(op.index)}`]
       case 'copyTable': {
-        const target = quoteTable('postgres', ns, op.newName)
-        // INCLUDING ALL keeps defaults, constraints (incl. PK), indexes and comments; foreign keys are not copied.
-        const out = [`CREATE TABLE ${target} (LIKE ${t} INCLUDING ALL)`]
+        const into: Namespace = {
+          database: ns.database,
+          ...((op.toSchema ?? ns.schema) ? { schema: op.toSchema ?? ns.schema } : {}),
+        }
+        const target = quoteTable('postgres', into, op.newName)
+        const out = op.dropExisting ? [`DROP TABLE IF EXISTS ${target}`] : []
+        // INCLUDING ALL keeps defaults, constraints (incl. PK), indexes and comments; foreign keys are added after.
+        if (op.structure !== false) out.push(`CREATE TABLE ${target} (LIKE ${t} INCLUDING ALL)`)
         if (op.withData) {
           // OVERRIDING SYSTEM VALUE keeps GENERATED ALWAYS AS IDENTITY values; generated columns are left out by the caller.
           const cols = op.columns?.map(id).join(', ')
@@ -310,8 +339,8 @@ export const pgDdl: DdlBuilder = {
         // LIKE copies a serial column's DEFAULT nextval('<source>_seq'): the copy would draw ids from the
         // source's sequence and pin it (DROP TABLE source then fails). Give the copy its own sequence, as
         // MySQL's CREATE TABLE ... LIKE gives it its own AUTO_INCREMENT.
-        for (const c of op.serialColumns ?? []) {
-          const seq = quoteTable('postgres', ns, `${op.newName}_${c}_seq`)
+        for (const c of op.structure === false ? [] : (op.serialColumns ?? [])) {
+          const seq = quoteTable('postgres', into, `${op.newName}_${c}_seq`)
           out.push(
             `CREATE SEQUENCE ${seq} OWNED BY ${target}.${id(c)}`,
             `ALTER TABLE ${target} ALTER COLUMN ${id(c)} SET DEFAULT nextval(${pgLiteral(seq)}::regclass)`
@@ -324,6 +353,15 @@ export const pgDdl: DdlBuilder = {
             out.push(pgAdvanceSequence(target, c))
           }
         }
+        for (const fk of op.foreignKeys ?? [])
+          out.push(
+            addForeignKeySql('postgres', into, {
+              op: 'addForeignKey',
+              table: op.newName,
+              ...fk,
+              ...((fk.refSchema ?? ns.schema) ? { refSchema: fk.refSchema ?? ns.schema } : {}),
+            })
+          )
         return out
       }
     }

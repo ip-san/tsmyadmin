@@ -285,6 +285,8 @@ export const mysqlDdl: DdlBuilder = {
         if (op.engine !== undefined) parts.push(`ENGINE = ${op.engine}`)
         if (op.collation !== undefined) parts.push(`COLLATE = ${op.collation}`)
         if (op.autoIncrement !== undefined) parts.push(`AUTO_INCREMENT = ${op.autoIncrement}`)
+        if (op.rowFormat !== undefined) parts.push(`ROW_FORMAT = ${op.rowFormat}`)
+        if (op.checksum !== undefined) parts.push(`CHECKSUM = ${op.checksum ? 1 : 0}`)
         if (parts.length === 0) throw new AdapterError('VALIDATION', 'No table option to change')
         return [`ALTER TABLE ${t} ${parts.join(', ')}`]
       }
@@ -301,12 +303,27 @@ export const mysqlDdl: DdlBuilder = {
             return [`REPAIR TABLE ${t}`]
           case 'vacuum':
             throw new AdapterError('UNSUPPORTED', 'MySQL has no VACUUM; use OPTIMIZE TABLE')
+          case 'checksum':
+            return [`CHECKSUM TABLE ${t}`]
+          case 'flush':
+            // Needs the RELOAD privilege.
+            return [`FLUSH TABLES ${t}`]
         }
         break
+      case 'convertCollation': {
+        // A MySQL collation name begins with its character set: utf8mb4_0900_ai_ci → utf8mb4.
+        const charset = op.collation === 'binary' ? 'binary' : (op.collation.split('_')[0] ?? op.collation)
+        return [`ALTER TABLE ${t} CONVERT TO CHARACTER SET ${charset} COLLATE ${op.collation}`]
+      }
+      case 'orderTable':
+        if (!op.column) throw new AdapterError('VALIDATION', 'MySQL orders a table by a column')
+        return [`ALTER TABLE ${t} ORDER BY ${id(op.column)}${op.desc ? ' DESC' : ''}`]
       case 'copyTable': {
-        const target = quoteTable('mysql', ns, op.newName)
-        // LIKE keeps indexes, keys and AUTO_INCREMENT; foreign keys are not copied (as in phpMyAdmin).
-        const out = [`CREATE TABLE ${target} LIKE ${t}`]
+        const into = { database: op.toDatabase ?? ns.database }
+        const target = quoteTable('mysql', into, op.newName)
+        const out = op.dropExisting ? [`DROP TABLE IF EXISTS ${target}`] : []
+        // LIKE keeps indexes, keys and AUTO_INCREMENT; foreign keys are added after, when asked for.
+        if (op.structure !== false) out.push(`CREATE TABLE ${target} LIKE ${t}`)
         if (op.withData) {
           // Generated columns cannot be inserted, so the caller lists the copyable columns.
           const cols = op.columns?.map((c) => quoteIdent('mysql', c)).join(', ')
@@ -316,6 +333,16 @@ export const mysqlDdl: DdlBuilder = {
               : `INSERT INTO ${target} SELECT * FROM ${t}`
           )
         }
+        // The keys still point where the source's do, even when the copy is in another database.
+        for (const fk of op.foreignKeys ?? [])
+          out.push(
+            addForeignKeySql('mysql', into, {
+              op: 'addForeignKey',
+              table: op.newName,
+              ...fk,
+              refDatabase: fk.refDatabase ?? ns.database,
+            })
+          )
         return out
       }
     }

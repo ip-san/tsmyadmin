@@ -565,6 +565,8 @@ export const en = {
   },
   ddl: {
     titles: {
+      convertCollation: "Change every column's collation",
+      orderTable: 'Reorder the rows',
       partitionTable: 'Partition the table',
       addPartition: 'Add a partition',
       dropPartition: 'Drop a partition',
@@ -616,6 +618,7 @@ export const en = {
     dataLoss: 'The table data is lost.',
     columnLoss: 'The data in this column is lost.',
     partitionLoss: "This partition's rows are lost.",
+    copyReplaceLoss: 'A table of that name where the copy goes is dropped, with its rows.',
     databaseLoss: 'Every table in the database, and its data, is lost.',
     databaseLossForce: 'Other users connected to this database are disconnected as well.',
     typeToConfirm: (name: string) => `Type "${name}" to continue`,
@@ -725,6 +728,16 @@ export const en = {
     renameTitle: 'Rename',
     copyTargetName: 'Name of the copy',
     copyWithData: 'Include data',
+    copyToDatabase: 'Copy to database',
+    copyToSchema: 'Copy to schema',
+    copyWhat: 'What to copy',
+    copyWhatOptions: {
+      both: 'Structure and data',
+      structure: 'Structure only',
+      data: 'Data only (into an existing table of that name)',
+    },
+    copyDropExisting: 'Drop a table of that name first',
+    copyForeignKeys: (n: number) => `Copy the foreign keys too (${n})`,
     copyHint: 'Indexes and the primary key are copied. Foreign keys are not.',
     renameHint:
       'Views, foreign keys and privileges may not follow the new name. On PostgreSQL, indexes and sequences keep their own names.',
@@ -738,6 +751,8 @@ export const en = {
     autoIncrementHint: 'A value below the current maximum is ignored.',
     unchanged: 'unchanged',
     maintenanceTitle: 'Maintenance',
+    checksumOption: 'Keep a live checksum (CHECKSUM)',
+    checksumOptionHint: 'MyISAM / Aria update a checksum as rows change',
     replaceWarning:
       'Rewrites the value in every matching row, in place. It cannot be undone: export the table first if you may need it back.',
     moveTo: { mysql: 'Move to database', postgres: 'Move to schema' },
@@ -749,7 +764,7 @@ export const en = {
     },
     maintenanceHint: {
       mysql:
-        'ANALYZE refreshes statistics, OPTIMIZE rebuilds the storage (locking), CHECK verifies integrity, REPAIR mends a damaged table (MyISAM and the like; InnoDB is not covered, and the result says so).',
+        'ANALYZE refreshes statistics, OPTIMIZE rebuilds the storage (locking), CHECK verifies integrity, REPAIR mends a damaged table (MyISAM and the like; InnoDB is not covered, and the result says so). CHECKSUM computes a checksum of the contents; FLUSH closes the table and writes it to disk (needs the RELOAD privilege).',
       postgres:
         'ANALYZE refreshes statistics, VACUUM reclaims dead space, VACUUM FULL rewrites the table (exclusive lock).',
     },
@@ -760,8 +775,18 @@ export const en = {
         check: 'CHECK TABLE',
         repair: 'REPAIR TABLE',
         vacuum: 'VACUUM',
+        checksum: 'CHECKSUM TABLE',
+        flush: 'FLUSH TABLE',
       },
-      postgres: { analyze: 'ANALYZE', vacuum: 'VACUUM', optimize: 'VACUUM FULL', check: 'CHECK', repair: 'REPAIR' },
+      postgres: {
+        analyze: 'ANALYZE',
+        vacuum: 'VACUUM',
+        optimize: 'VACUUM FULL',
+        check: 'CHECK',
+        repair: 'REPAIR',
+        checksum: 'CHECKSUM',
+        flush: 'FLUSH',
+      },
     },
     bulkSelected: (n: number) => `${plural(n, 'table', 'tables')} selected`,
     bulkTruncate: 'Empty the selected tables…',
@@ -1291,6 +1316,18 @@ export const en = {
     noLabel: '(none)',
     limit: 'Rows to plot, at most',
     noKey: 'This table has no primary key, so the row cannot be opened.',
+  },
+  operations: {
+    convertHintMysql:
+      "Converts the table's default and every text column to the collation (and its character set); values are converted to the new character set.",
+    convertHintPostgres: 'Gives every text column the collation (types unchanged).',
+    orderHintMysql:
+      'Stores the rows again in the order of a column (InnoDB keeps primary key order, so this matters for tables without a primary key).',
+    orderHintPostgres:
+      'Stores the rows again in the order of an index (CLUSTER; exclusive lock; later changes do not keep the order).',
+    orderColumn: 'Order by column',
+    orderIndex: 'Index to order along',
+    descending: 'Descending',
   },
   partitions: {
     title: 'Partitions',

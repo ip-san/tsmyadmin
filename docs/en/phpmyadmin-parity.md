@@ -1,4 +1,4 @@
-<!-- translated-from: docs/phpmyadmin-parity.md sha256:0381ab74107473fe0d7df50b91f254b68bedc03b5de78e71330b241cf3456e3a -->
+<!-- translated-from: docs/phpmyadmin-parity.md sha256:93eb3d24c9e49b8738c127579e95dee7e2d4658ed3644cd3df6f033b868e379a -->
 
 # Feature parity with phpMyAdmin
 
@@ -73,7 +73,7 @@ The basics (browsing and editing, structure changes, SQL, search, QBE, export / 
 | T12 | Structure information: space used, row statistics, printing | ✅ |
 | T13 | Creating and managing partitions | ✅ |
 | T14 | Relations: foreign keys to another database, display column | ✅ |
-| T15 | Operations: ROW_FORMAT, changing every column's collation, ALTER TABLE ORDER BY, CHECKSUM, FLUSH, copy options | △ |
+| T15 | Operations: ROW_FORMAT, changing every column's collation, ALTER TABLE ORDER BY, CHECKSUM, FLUSH, copy options | ✅ |
 | T16 | Tracking: choosing which kinds of statement to record | △ |
 
 ## Export / import

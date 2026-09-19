@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, useRouteContext } from '@tanstack/react-router'
 import { isViewKind } from '@tsmyadmin/shared'
 import { ErrorBox, Spinner } from '@/components/ui/Feedback.tsx'
+import { CollationOrderForm } from '@/features/operations/CollationOrderForm.tsx'
 import { CopyTableForm } from '@/features/operations/CopyTableForm.tsx'
 import { MaintenanceActions } from '@/features/operations/MaintenanceActions.tsx'
 import { MoveTableForm } from '@/features/operations/MoveTableForm.tsx'
@@ -34,8 +35,18 @@ function Operations() {
           schema={structure.data}
         />
       )}
+      {view ? null : (
+        <CollationOrderForm
+          key={`${table}-collation`}
+          tableRef={tableRef}
+          dialect={session.dialect}
+          schema={structure.data}
+        />
+      )}
       {view ? null : <MoveTableForm key={`${table}-move`} tableRef={tableRef} dialect={session.dialect} />}
-      {view ? null : <CopyTableForm key={table} tableRef={tableRef} />}
+      {view ? null : (
+        <CopyTableForm key={table} tableRef={tableRef} dialect={session.dialect} schema={structure.data} />
+      )}
       {view ? null : <MaintenanceActions tableRef={tableRef} dialect={session.dialect} />}
       <TableOperations tableRef={tableRef} kind={structure.data.kind} />
     </div>
