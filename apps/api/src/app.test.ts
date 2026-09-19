@@ -2414,12 +2414,83 @@ describe('preferences, central columns and column transformations', () => {
     }
   })
 
+  it('shares bookmarks with the whole server, removable only by whoever saved them', async () => {
+    const h = persistentHarness()
+    try {
+      await h.login()
+      expect(await (await h.req('/api/shared-queries')).json()).toEqual([])
+      const saved = (await (
+        await h.send('/api/shared-queries', 'POST', { name: 'daily', sql: 'SELECT 1' })
+      ).json()) as {
+        id: string
+        by: string
+      }[]
+      expect(saved).toMatchObject([{ name: 'daily', sql: 'SELECT 1', by: LOGIN.user }])
+      // Another account sees it, cannot write over the name, and cannot remove it.
+      await h.login({ ...LOGIN, user: 'reader' })
+      expect(await (await h.req('/api/shared-queries')).json()).toMatchObject([{ name: 'daily' }])
+      expect((await h.send('/api/shared-queries', 'POST', { name: 'daily', sql: 'DROP' })).status).toBe(409)
+      const refused = await h.req(`/api/shared-queries/${saved[0]?.id}`, { method: 'DELETE' })
+      expect(refused.status).toBe(403)
+      expect(await (await h.req('/api/shared-queries')).json()).toMatchObject([{ sql: 'SELECT 1' }])
+      // Its owner can replace and remove it.
+      await h.login()
+      await h.send('/api/shared-queries', 'POST', { name: 'daily', sql: 'SELECT 2' })
+      expect(await (await h.req('/api/shared-queries')).json()).toMatchObject([{ sql: 'SELECT 2' }])
+      const id = ((await (await h.req('/api/shared-queries')).json()) as { id: string }[])[0]?.id
+      expect(await (await h.req(`/api/shared-queries/${id}`, { method: 'DELETE' })).json()).toEqual([])
+    } finally {
+      await h.store.closeAll()
+    }
+  })
+
+  it('keeps the SQL history with the account: added to, deduplicated and cut to the limit asked', async () => {
+    const h = persistentHarness()
+    try {
+      await h.login()
+      expect(await (await h.req('/api/sql-history')).json()).toEqual({ entries: [] })
+      const add = async (sql: string, limit = 3) =>
+        (await (
+          await h.send('/api/sql-history', 'POST', { entry: { sql, at: 1, ok: true, db: 'shop' }, limit })
+        ).json()) as {
+          entries: { sql: string }[]
+        }
+      await add('SELECT 1')
+      await add('SELECT 2')
+      expect((await add('SELECT 1')).entries.map((e) => e.sql)).toEqual(['SELECT 1', 'SELECT 2'])
+      await add('SELECT 3')
+      expect((await add('SELECT 4')).entries.map((e) => e.sql)).toEqual(['SELECT 4', 'SELECT 3', 'SELECT 1'])
+      expect(await (await h.req('/api/sql-history')).json()).toMatchObject({ entries: [{ sql: 'SELECT 4' }, {}, {}] })
+      // A statement or a limit past the bounds is refused; clearing empties it; another account has its own.
+      expect((await add('x'.repeat(10_001))).entries).toBeUndefined()
+      const refusedLimit = await h.send('/api/sql-history', 'POST', {
+        entry: { sql: 'a', at: 1, ok: true },
+        limit: 1001,
+      })
+      expect(refusedLimit.status).toBe(400)
+      await h.login({ ...LOGIN, user: 'reader' })
+      expect(await (await h.req('/api/sql-history')).json()).toEqual({ entries: [] })
+      await h.login()
+      expect(await (await h.req('/api/sql-history', { method: 'DELETE' })).json()).toEqual({ entries: [] })
+      expect(await (await h.req('/api/sql-history')).json()).toEqual({ entries: [] })
+    } finally {
+      await h.store.closeAll()
+    }
+  })
+
   it('reads as empty, and refuses to write, without a persistent store', async () => {
     const h = harness()
     stores.push(h.store)
     await h.login()
     expect(await (await h.req('/api/preferences')).json()).toEqual({})
     expect(await (await h.req('/api/central-columns')).json()).toEqual([])
+    expect(await (await h.req('/api/shared-queries')).json()).toEqual([])
+    expect(await (await h.req('/api/sql-history')).json()).toEqual({ entries: [] })
+    const shareRes = await h.req('/api/shared-queries', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'a', sql: 'SELECT 1' }),
+    })
+    expect(shareRes.status).toBe(400)
     const put = await h.req('/api/preferences', { method: 'PUT', body: JSON.stringify({ theme: 'dark' }) })
     expect(put.status).toBe(400)
     expect(await put.json()).toMatchObject({ code: 'UNSUPPORTED' })

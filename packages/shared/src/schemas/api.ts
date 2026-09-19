@@ -47,6 +47,35 @@ export const SaveQueryRequestSchema = SavedQuerySchema.pick({ name: true, sql: t
 })
 export const SavedQueryIdSchema = z.object({ id: z.string().min(1) })
 
+/** A statement bookmarked for every account of the server: who saved it is the only one who can remove it. */
+export const SharedQuerySchema = SavedQuerySchema.extend({ by: z.string() })
+export type SharedQuery = z.infer<typeof SharedQuerySchema>
+
+/** One run in the SQL console's history. */
+export const HistoryEntrySchema = z.object({
+  sql: z.string(),
+  at: z.number(),
+  ok: z.boolean(),
+  db: z.string().optional(),
+})
+export type HistoryEntry = z.infer<typeof HistoryEntrySchema>
+
+/** The most a history keeps (and the statement text kept per entry): it is stored with the account, so it is bounded. */
+export const SQL_HISTORY_MAX_ENTRIES = 1000
+export const SQL_HISTORY_MAX_SQL = 10_000
+/** The account's history, newest first. */
+export const SqlHistorySchema = z.object({ entries: z.array(HistoryEntrySchema) })
+export type SqlHistory = z.infer<typeof SqlHistorySchema>
+
+/**
+ * One run to add to the account's history. The server puts it first (an identical statement moves up), and keeps
+ * `limit` entries: adding rather than replacing, so two browsers on the same account do not overwrite each other.
+ */
+export const AddHistoryRequestSchema = z.object({
+  entry: HistoryEntrySchema.extend({ sql: z.string().max(SQL_HISTORY_MAX_SQL) }),
+  limit: z.number().int().min(1).max(SQL_HISTORY_MAX_ENTRIES),
+})
+
 /**
  * Where the account stands with its second factor: nothing enrolled, enrolled (so a code was given at login),
  * the deployment requires one and this account has not enrolled yet — which is the only state that restricts

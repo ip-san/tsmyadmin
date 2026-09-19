@@ -15,6 +15,7 @@ import type {
   DiagnosticReport,
   EventInfo,
   ExportTemplate,
+  HistoryEntry,
   KeyValue,
   KillMode,
   MyGroupTabs,
@@ -47,6 +48,8 @@ import type {
   ServerInfo,
   ServerPreset,
   SessionState,
+  SharedQuery,
+  SqlHistory,
   SqlRequest,
   StatementResult,
   TableInfo,
@@ -96,6 +99,11 @@ export const serversQuery = queryOptions({
 /** Bookmarks stored with the account; only fetched where the session says the server keeps them. */
 export const listSavedQueries = () => unwrap<SavedQuery[]>(api['saved-queries'].$get())
 export const savedQueriesQuery = queryOptions({ queryKey: ['saved-queries'], queryFn: listSavedQueries })
+export const listSharedQueries = () => unwrap<SharedQuery[]>(api['shared-queries'].$get())
+export const sqlHistoryQuery = queryOptions({
+  queryKey: ['sql-history'],
+  queryFn: () => unwrap<SqlHistory>(api['sql-history'].$get()),
+})
 
 /** Saved export choices, per account; the list is filtered to the current database in the export page. */
 export const secondFactorQuery = queryOptions({
@@ -426,6 +434,12 @@ export const mutations = {
     ),
   saveQuery: (name: string, sql: string) => unwrap<SavedQuery[]>(api['saved-queries'].$post({ json: { name, sql } })),
   deleteSavedQuery: (id: string) => unwrap<SavedQuery[]>(api['saved-queries'][':id'].$delete({ param: { id } })),
+  saveSharedQuery: (name: string, sql: string) =>
+    unwrap<SharedQuery[]>(api['shared-queries'].$post({ json: { name, sql } })),
+  deleteSharedQuery: (id: string) => unwrap<SharedQuery[]>(api['shared-queries'][':id'].$delete({ param: { id } })),
+  addSqlHistory: (entry: HistoryEntry, limit: number) =>
+    unwrap<SqlHistory>(api['sql-history'].$post({ json: { entry, limit } }, { init: { keepalive: true } })),
+  clearSqlHistory: () => unwrap<SqlHistory>(api['sql-history'].$delete()),
   killProcess: (id: string, mode: KillMode) =>
     unwrap<{ ok: boolean }>(api.server.processes[':id'].kill.$post({ param: { id: enc(id) }, query: { mode } })),
   previewDdl: (db: string, schema: string | undefined, op: DdlOp) =>

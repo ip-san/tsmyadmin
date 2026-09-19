@@ -23,6 +23,7 @@ export function NamedListPanel({
   note,
   error = null,
   saveTitle,
+  saveLabel = locale.sql.save,
   canSave,
   onSave,
   onLoad,
@@ -40,6 +41,8 @@ export function NamedListPanel({
   /** A failed read or write of the server-side list (nothing is shown when null). */
   error?: Error | null
   saveTitle: string
+  /** The button that saves (default: Save). */
+  saveLabel?: string
   canSave: boolean
   onSave: (name: string) => void
   onLoad: (entry: NamedEntry) => void
@@ -75,7 +78,7 @@ export function NamedListPanel({
             className="max-w-xs py-1 text-xs"
           />
           <Button size="sm" type="submit" disabled={!ready} title={saveTitle}>
-            {locale.sql.save}
+            {saveLabel}
           </Button>
           {children}
         </form>

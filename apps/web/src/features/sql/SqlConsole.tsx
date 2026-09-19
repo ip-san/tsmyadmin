@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouteContext } from '@tanstack/react-router'
 import type { Dialect, StatementResult } from '@tsmyadmin/shared'
 import { SQL_MAX_ROWS_DEFAULT } from '@tsmyadmin/shared'
@@ -13,19 +13,32 @@ import { sharePreference } from '@/lib/account-prefs.ts'
 import { ApiError } from '@/lib/api.ts'
 import { consoleDraftKey, sessionStore } from '@/lib/console-draft.ts'
 import { readPreference, writePreference } from '@/lib/preferences.ts'
-import { mutations } from '@/lib/queries.ts'
+import { mutations, sqlHistoryQuery } from '@/lib/queries.ts'
+import { historyLimit } from '@/lib/settings.ts'
 import { formatSql } from '@/lib/sql-format.ts'
 import { DEFAULT_RUN_OPTIONS, prepareScript, type RunOptions } from '@/lib/sql-prepare.ts'
 import { streamSql } from '@/lib/sql-stream.ts'
 import { newQueryId } from '@/lib/uuid.ts'
 import { MaxRowsSelect, ProfileOption } from './ConsoleOptions.tsx'
-import { clearHistory, type HistoryEntry, loadHistory, pushHistory } from './history.ts'
+import {
+  bookmarkName,
+  clearHistory,
+  forServer,
+  type HistoryEntry,
+  loadHistory,
+  pushHistory,
+  withEntry,
+} from './history.ts'
 import { ResultsView } from './ResultsView.tsx'
 import { RunOptionsPanel } from './RunOptionsPanel.tsx'
+import { SqlCodeDialog } from './SqlCodeDialog.tsx'
 import { SqlEditor } from './SqlEditor.tsx'
-import { HistoryPanel, SavedQueriesPanel } from './SqlPanels.tsx'
+import { HistoryPanel, SavedQueriesPanel, SharedQueriesPanel } from './SqlPanels.tsx'
+import type { StatementHandlers } from './StatementActions.tsx'
 import { isSingleStatement, stripTrailingSemicolons, unboundedWrites } from './statement.ts'
 import { useSavedQueries } from './use-saved-queries.ts'
+import { useSharedQueries } from './use-shared-queries.ts'
+import { expandVariables } from './variables.ts'
 
 /** Asking before an UPDATE / DELETE that has no WHERE; on unless the user turns it off. */
 const SAFE_MODE_PREF = 'sql.safeMode'
@@ -79,8 +92,31 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
   const [stopOnError, setStopOnError] = useState(true)
   const [profile, setProfile] = useState(false)
   const [runOptions, setRunOptions] = useState<RunOptions>(DEFAULT_RUN_OPTIONS)
-  const [history, setHistory] = useState<HistoryEntry[]>(() => loadHistory(scope))
-  const saved = useSavedQueries(scope, session.savedQueries === 'server')
+  const onServer = session.savedQueries === 'server'
+  // With a persistent session store the history belongs to the account (and follows it to another browser); without
+  // one it is this browser's.
+  const serverHistory = useQuery({ ...sqlHistoryQuery, enabled: onServer })
+  const [history, setHistory] = useState<HistoryEntry[]>(() => (onServer ? [] : loadHistory(scope)))
+  const [historyLoaded, setHistoryLoaded] = useState(!onServer)
+  if (!historyLoaded && serverHistory.data) {
+    setHistoryLoaded(true)
+    setHistory(serverHistory.data.entries)
+  }
+  const historyNow = useRef(history)
+  historyNow.current = history
+  // With the account, the server adds the run to its own list (so another browser's runs are not overwritten) and
+  // answers with the result.
+  const record = (entry: HistoryEntry) => {
+    if (!onServer) return setHistory(pushHistory(scope, entry))
+    setHistory(withEntry(historyNow.current, entry))
+    void mutations.addSqlHistory(forServer(entry), historyLimit()).then(
+      (list) => setHistory(list.entries),
+      () => undefined
+    )
+  }
+  const saved = useSavedQueries(scope, onServer)
+  const shared = useSharedQueries(onServer)
+  const bookmarkContext = { db, schema, user: session.user, host: session.host }
   const [results, setResults] = useState<StatementResult[] | null>(null)
   const [safeMode, setSafeMode] = useState(() => readPreference(SAFE_MODE_PREF, z.boolean(), true))
   /** Statement kinds waiting for confirmation because they would change every row (empty = no dialog). */
@@ -151,7 +187,8 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
       queryId.current = null
     },
     onSuccess: async (res, { shown: sql }) => {
-      setHistory(pushHistory(scope, { sql, at: Date.now(), ok: res.every((r) => r.kind !== 'error'), db }))
+      const entry = { sql, at: Date.now(), ok: res.every((r) => r.kind !== 'error'), db }
+      record(entry)
       if (res.some((r) => r.kind !== 'rows')) {
         await queryClient.invalidateQueries({ predicate: (q) => q.queryKey[0] !== 'session' })
       }
@@ -173,11 +210,32 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
     }
     send()
   }
-  const explain = () => {
-    if (!isSingleStatement(text) || run.isPending) return
-    const explained = `EXPLAIN ${stripTrailingSemicolons(text)}`
+  const explainSql = (sql: string) => {
+    if (!isSingleStatement(sql) || run.isPending) return
+    const explained = `EXPLAIN ${stripTrailingSemicolons(sql)}`
     run.mutate({ script: prepareScript(explained, dialect, runOptions), shown: explained })
   }
+  const explain = () => explainSql(text)
+  // What to do with a statement that ran. Held in a ref behind stable functions: the results are memoised, and a
+  // new function on every render would redo them all each time a streamed result arrives.
+  const [codeOf, setCodeOf] = useState<string | null>(null)
+  const latest = useRef<StatementHandlers | null>(null)
+  latest.current = {
+    edit: setText,
+    rerun: (sql) => {
+      if (run.isPending) return
+      cancel.reset()
+      run.mutate({ script: prepareScript(sql, dialect, runOptions), shown: sql })
+    },
+    explain: explainSql,
+    code: setCodeOf,
+  }
+  const [handlers] = useState<StatementHandlers>(() => ({
+    edit: (sql) => latest.current?.edit(sql),
+    rerun: (sql) => latest.current?.rerun(sql),
+    explain: (sql) => latest.current?.explain(sql),
+    code: (sql) => latest.current?.code(sql),
+  }))
 
   return (
     <div className="space-y-3">
@@ -280,19 +338,35 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
           error={saved.error}
           currentSql={text}
           onSave={(name) => saved.save(name, text)}
-          onLoad={setText}
+          onLoad={(sql) => setText(expandVariables(sql, bookmarkContext))}
           onDelete={saved.remove}
         />
+        {onServer ? (
+          <SharedQueriesPanel
+            entries={shared.entries}
+            error={shared.error}
+            currentSql={text}
+            onSave={(name) => shared.save(name, text)}
+            onLoad={(sql) => setText(expandVariables(sql, bookmarkContext))}
+            onDelete={shared.remove}
+          />
+        ) : null}
         <HistoryPanel
           entries={history}
+          onServer={onServer}
           onLoad={setText}
+          onBookmark={(sql) => saved.save(bookmarkName(sql), sql)}
           onClear={() => {
             clearHistory(scope)
             setHistory([])
+            if (onServer) void mutations.clearSqlHistory().catch(() => undefined)
           }}
         />
       </div>
-      {results ? <ResultsView results={results} maxRows={maxRows} viewTarget={{ db, schema }} /> : null}
+      {results ? (
+        <ResultsView results={results} maxRows={maxRows} viewTarget={{ db, schema }} handlers={handlers} />
+      ) : null}
+      <SqlCodeDialog sql={codeOf} onClose={() => setCodeOf(null)} />
     </div>
   )
 }

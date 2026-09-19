@@ -22,6 +22,10 @@ export const SAVED_ITEM_KINDS = [
   'qbe',
   // Per account: a Designer page (where the tables sit on the diagram) kept under a name.
   'designer',
+  // Shared: a statement bookmarked for every account of the server, with who saved it.
+  'sharedsql',
+  // Per account: the SQL console's history (one item).
+  'history',
 ] as const
 export type SavedItemKind = (typeof SAVED_ITEM_KINDS)[number]
 

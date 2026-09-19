@@ -1,7 +1,8 @@
-import type { SavedQuery } from '@tsmyadmin/shared'
-import type { ReactNode } from 'react'
+import type { SavedQuery, SharedQuery } from '@tsmyadmin/shared'
+import { type ReactNode, useState } from 'react'
 import { NamedListPanel } from '@/components/panels/NamedListPanel.tsx'
 import { Button } from '@/components/ui/Button.tsx'
+import { Input } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
 import type { HistoryEntry } from './history.ts'
 
@@ -23,18 +24,50 @@ export function HistoryPanel({
   entries,
   onLoad,
   onClear,
+  onBookmark,
+  onServer = false,
 }: {
   entries: HistoryEntry[]
   onLoad: (sql: string) => void
   onClear: () => void
+  /** Keeps a run's statement as a bookmark (under a name made from its start). */
+  onBookmark?: (sql: string) => void
+  /** The list is kept with the account (else in this browser). */
+  onServer?: boolean
 }) {
+  const [term, setTerm] = useState('')
+  const [failedOnly, setFailedOnly] = useState(false)
+  const needle = term.trim().toLowerCase()
+  const shown = entries.filter((e) => (!failedOnly || !e.ok) && (needle === '' || e.sql.toLowerCase().includes(needle)))
   return (
     <Panel title={locale.sql.history} count={entries.length}>
+      {entries.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-3 border-b border-line px-3 py-2">
+          <Input
+            type="search"
+            aria-label={locale.sql.historySearch}
+            placeholder={locale.sql.historySearch}
+            value={term}
+            onChange={(e) => setTerm(e.target.value)}
+            className="max-w-xs py-1 text-xs"
+          />
+          <label className="flex items-center gap-1 text-xs text-ink-sub">
+            <input type="checkbox" checked={failedOnly} onChange={(e) => setFailedOnly(e.target.checked)} />
+            {locale.sql.historyFailedOnly}
+          </label>
+          <span className="text-xs text-ink-sub" role="status">
+            {term.trim() !== '' || failedOnly ? locale.sql.historyMatches(shown.length) : ''}
+          </span>
+          <span className="ml-auto text-xs text-ink-sub">
+            {onServer ? locale.sql.historyOnServer : locale.sql.historyInBrowser}
+          </span>
+        </div>
+      ) : null}
       {entries.length === 0 ? (
         <p className={EMPTY}>{locale.sql.noHistory}</p>
       ) : (
         <ul>
-          {entries.map((e) => (
+          {shown.map((e) => (
             <li key={`${e.at}-${e.sql}`} className={ROW}>
               <span
                 className={e.ok ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}
@@ -54,6 +87,11 @@ export function HistoryPanel({
               <Button size="sm" onClick={() => onLoad(e.sql)}>
                 {locale.sql.load}
               </Button>
+              {onBookmark ? (
+                <Button size="sm" onClick={() => onBookmark(e.sql)}>
+                  {locale.sql.bookmark}
+                </Button>
+              ) : null}
             </li>
           ))}
         </ul>
@@ -104,6 +142,42 @@ export function SavedQueriesPanel({
       deleteLabel={locale.sql.deleteSaved}
       onDelete={(entry) => onDelete(entry)}
       empty={locale.sql.noSaved}
+    />
+  )
+}
+
+/** Statements bookmarked for every account of the server (only the account that saved one can remove it). */
+export function SharedQueriesPanel({
+  entries,
+  error = null,
+  currentSql,
+  onSave,
+  onLoad,
+  onDelete,
+}: {
+  entries: SharedQuery[]
+  error?: Error | null
+  currentSql: string
+  onSave: (name: string) => void
+  onLoad: (sql: string) => void
+  onDelete: (entry: { id: string; name: string }) => void
+}) {
+  return (
+    <NamedListPanel
+      title={locale.sql.shared}
+      nameLabel={locale.sql.sharedName}
+      entries={entries.map((q) => ({ id: q.id, name: q.name, summary: `${q.by}: ${q.sql}` }))}
+      note={locale.sql.sharedNote}
+      error={error}
+      saveTitle={locale.sql.saveShared}
+      saveLabel={locale.sql.share}
+      canSave={currentSql.trim().length > 0}
+      onSave={onSave}
+      onLoad={(entry) => onLoad(entries.find((q) => q.id === entry.id)?.sql ?? '')}
+      loadLabel={locale.sql.load}
+      deleteLabel={locale.sql.deleteSaved}
+      onDelete={onDelete}
+      empty={locale.sql.noShared}
     />
   )
 }

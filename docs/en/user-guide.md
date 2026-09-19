@@ -1,4 +1,4 @@
-<!-- translated-from: docs/user-guide.md sha256:70c9fb097f6e39a446895f64707101dbb3adea10f5959e3070cb377a51921d58 -->
+<!-- translated-from: docs/user-guide.md sha256:556f2bd2191b7f4273e879461ccafb30c775ef386e6cc2ae352508198fd9ea3b -->
 
 # User guide
 
@@ -145,7 +145,10 @@ On PostgreSQL, **idle** tsmyadmin connections to that database under the same da
 - **Create a view from this SELECT**, under a SELECT's result, opens **Create view** on the database's Structure tab with the statement filled in
 - **Chart** draws the result as bars or lines: one column for the categories (horizontal axis) and up to six numeric columns as values. A column can be a value only if it has at least one non-NULL value and every non-NULL value is a number (a single non-number rules it out). A row whose value is NULL is left out of that series (a line breaks there). Up to the first 500 rows are drawn; there are no other chart types such as pie charts
 - **Saved queries** stores the editor text under a name (up to 200). Where they are kept depends on the deployment, and the panel says which: with a persistent session store (`SESSION_STORE=sqlite`, the production default) they are encrypted and tied to the connection account, so the same list appears when you sign in from another browser; with `SESSION_STORE=memory` they stay in this browser only
-- **History** keeps the last 100 (**Clear history** removes them — do that before leaving a shared machine). Unsent editor text survives moving between tabs (within this browser tab)
+- **History** keeps the last 100 (10 to 1,000 in the settings; **Clear history** removes them — do that before leaving a shared machine). It can be filtered by a word or to failed runs only, and **Bookmark** on a row keeps that statement as a bookmark. Where sessions are persistent it is kept, encrypted, with the account you are connected as, so another browser shows the same history. Unsent editor text survives moving between tabs (within this browser tab)
+- `[DB]`, `[SCHEMA]`, `[USER]` and `[HOST]` written in a bookmarked statement are replaced when it is loaded, by the console's database, schema, connection user and host (so one bookmark serves every database)
+- **Shared bookmarks** (only where sessions are persistent) are visible to every account of this server. Only the account that saved one can replace or remove it
+- Under a statement that ran come **Edit** (puts it back in the editor), **Run again**, **EXPLAIN** (for one statement of a kind EXPLAIN takes) and **As code** (a string literal in PHP, JavaScript, Python or Java; pass values through placeholders)
 
 Every run is autocommitted. A script that ends with a transaction still open is rolled back before the connection is returned (the screen then says the transaction was still open and was rolled back). Keep `BEGIN` and `COMMIT` in the same run.
 

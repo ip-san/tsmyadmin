@@ -127,7 +127,7 @@ for (const t of TARGETS) {
     test('EXPLAIN, saved queries and result download', async ({ page }) => {
       await page.goto(t.schema ? `/db/${t.database}/sql?schema=${t.schema}` : `/db/${t.database}/sql`)
       await typeSql(page, 'SELECT name FROM users ORDER BY id LIMIT 2')
-      await page.getByRole('button', { name: 'EXPLAIN' }).click()
+      await page.getByRole('button', { name: 'EXPLAIN', exact: true }).click()
       const plan = page.getByRole('region', { name: '文 1' })
       await expect(plan).toContainText(/EXPLAIN SELECT/)
       await expect(plan.getByRole('table')).toBeVisible()
@@ -157,7 +157,7 @@ for (const t of TARGETS) {
       expect(text).toBe('name\r\nAlice\r\nBob\r\n')
       // Multi-statement scripts cannot be EXPLAINed.
       await typeSql(page, 'SELECT 1; SELECT 2')
-      await expect(page.getByRole('button', { name: 'EXPLAIN' })).toBeDisabled()
+      await expect(page.getByRole('button', { name: 'EXPLAIN', exact: true })).toBeDisabled()
       // The unsent draft survives leaving and returning to the console.
       await page.goto(t.schema ? `/db/${t.database}?schema=${t.schema}` : `/db/${t.database}`)
       await page.goto(t.schema ? `/db/${t.database}/sql?schema=${t.schema}` : `/db/${t.database}/sql`)

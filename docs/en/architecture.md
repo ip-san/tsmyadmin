@@ -1,4 +1,4 @@
-<!-- translated-from: docs/architecture.md sha256:c14d73210041de756ad8657e510426e9e7926976d8c56a3a4e8191977eab74de -->
+<!-- translated-from: docs/architecture.md sha256:61dacdb76515b02419446526131d2645c0b123d9c8f3d83baf8de1eb9967399a -->
 
 # Architecture
 
@@ -163,7 +163,7 @@ stateDiagram-v2
 
 The cookie holds nothing but a signed session ID. Credentials live only in `apps/api/src/session/store.ts` (in memory) or `sqlite-store.ts` (encrypted with a key derived from `SESSION_SECRET`).
 
-Besides sessions, a persistent store (SQLite / Redis) keeps two kinds of stored items in the same encrypted table: `savedQueries`, per account (saved queries, export templates, preferences, central columns, column transformations), and `sharedItems`, shared by every account of one database server — dialect, host and port — (user groups, change tracking). Both are owned by an HMAC, and each row's content is sealed and bound to the row. Each kind has its own cap (200 per account, 2,000 per server), beyond which the oldest go first. The memory store has neither: the former stay in the browser, and the screens for the latter are not shown.
+Besides sessions, a persistent store (SQLite / Redis) keeps two kinds of stored items in the same encrypted table: `savedQueries`, per account (saved queries, export templates, preferences, central columns, column transformations, the SQL history), and `sharedItems`, shared by every account of one database server — dialect, host and port — (user groups, change tracking, shared bookmarks). Both are owned by an HMAC, and each row's content is sealed and bound to the row. Each kind has its own cap (200 per account, 2,000 per server), beyond which the oldest go first. The memory store has neither: the former stay in the browser, and the screens for the latter are not shown.
 
 ## 5. The path of a request
 

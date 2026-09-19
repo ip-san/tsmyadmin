@@ -12,6 +12,7 @@ import { cn } from '@/lib/cn.ts'
 import { setPrinting, usePrinting } from '@/lib/printing.ts'
 import { ProfileView } from './ProfileView.tsx'
 import { ResultActions } from './ResultActions.tsx'
+import { StatementActions, type StatementHandlers } from './StatementActions.tsx'
 import { StatementError } from './StatementError.tsx'
 
 interface ViewTarget {
@@ -30,9 +31,11 @@ const Statement = memo(function Statement({
   printHidden,
   onPrint,
   viewTarget,
+  handlers,
 }: {
   index: number
   result: StatementResult
+  handlers: StatementHandlers | undefined
   maxRows: number
   /** Where a view made from this SELECT would be created (the console's database); absent to offer none. */
   viewTarget: ViewTarget | undefined
@@ -60,6 +63,7 @@ const Statement = memo(function Statement({
         <pre tabIndex={0} className="overflow-x-auto font-mono text-xs text-ink-sub">
           {result.sql}
         </pre>
+        {handlers ? <StatementActions sql={result.sql} index={index} handlers={handlers} /> : null}
       </section>
     )
   }
@@ -86,6 +90,7 @@ const Statement = memo(function Statement({
       <pre tabIndex={0} className="overflow-x-auto font-mono text-xs text-ink-sub">
         {result.sql}
       </pre>
+      {handlers ? <StatementActions sql={result.sql} index={index} handlers={handlers} /> : null}
       {viewTarget && SELECT.test(result.sql) ? (
         <Link
           to="/db/$db"
@@ -194,10 +199,13 @@ export function ResultsView({
   results,
   maxRows,
   viewTarget,
+  handlers,
 }: {
   results: StatementResult[]
   maxRows: number
   viewTarget?: ViewTarget
+  /** What can be done with a statement after it ran (absent: nothing is offered). */
+  handlers?: StatementHandlers
 }) {
   /** The statement whose Print button was pressed: only it goes on paper. Ctrl+P alone prints every result. */
   const [printTarget, setPrintTarget] = useState<{ index: number; at: Date } | null>(null)
@@ -260,6 +268,7 @@ export function ResultsView({
           printHidden={printTarget !== null && printTarget.index !== i}
           onPrint={onPrint}
           viewTarget={viewTarget}
+          handlers={handlers}
         />
       ))}
     </div>

@@ -15,6 +15,7 @@ import { databaseRoutes } from './routes/databases.ts'
 import { secondFactorRoutes } from './routes/second-factor.ts'
 import { serverRoutes } from './routes/server.ts'
 import { sessionRoutes } from './routes/session.ts'
+import { sqlListRoutes } from './routes/sql-lists.ts'
 import { storedRoutes } from './routes/stored.ts'
 import { trackingRoutes } from './routes/tracking.ts'
 import { userGroupRoutes } from './routes/user-groups.ts'
@@ -173,6 +174,7 @@ export function createApp(config: AppConfig, services: AppServices) {
       .route('/api', userRoutes(cfg))
       .route('/api', serverRoutes(cfg, logger))
       .route('/api', storedRoutes(cfg))
+      .route('/api', sqlListRoutes(cfg))
       .route('/api', userGroupRoutes(cfg, logger))
       .route('/api', trackingRoutes(cfg, logger))
       // Unknown /api paths get the JSON envelope (registered last, before index.ts adds the SPA fallback for `*`).

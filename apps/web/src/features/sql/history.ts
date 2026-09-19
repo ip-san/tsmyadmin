@@ -1,9 +1,10 @@
+import { type HistoryEntry, HistoryEntrySchema, SQL_HISTORY_MAX_SQL } from '@tsmyadmin/shared'
 import { z } from 'zod'
 import { type PreferenceStore, readPreference, removePreference, writePreference } from '@/lib/preferences.ts'
 import { historyLimit } from '@/lib/settings.ts'
 
-const HistoryEntrySchema = z.object({ sql: z.string(), at: z.number(), ok: z.boolean(), db: z.string().optional() })
-export type HistoryEntry = z.infer<typeof HistoryEntrySchema>
+export type { HistoryEntry }
+
 const ListSchema = z.array(HistoryEntrySchema)
 
 /** `scope` identifies the server (dialect:host:port): two MySQL servers must not share one list. */
@@ -14,9 +15,14 @@ export function loadHistory(scope: string, store?: PreferenceStore): HistoryEntr
   return readPreference(key(scope), ListSchema, [], store)
 }
 
-/** Prepends an entry (de-duplicating identical SQL) and trims to the limit in the settings. Returns the new list. */
+/** The list with `entry` first (identical SQL de-duplicated), cut to the limit in the settings. */
+export function withEntry(list: HistoryEntry[], entry: HistoryEntry, limit = historyLimit()): HistoryEntry[] {
+  return [entry, ...list.filter((e) => e.sql !== entry.sql)].slice(0, limit)
+}
+
+/** Prepends an entry and stores the list in this browser. Returns the new list. */
 export function pushHistory(scope: string, entry: HistoryEntry, store?: PreferenceStore): HistoryEntry[] {
-  const next = [entry, ...loadHistory(scope, store).filter((e) => e.sql !== entry.sql)].slice(0, historyLimit())
+  const next = withEntry(loadHistory(scope, store), entry)
   writePreference(key(scope), next, store)
   return next
 }
@@ -24,3 +30,10 @@ export function pushHistory(scope: string, entry: HistoryEntry, store?: Preferen
 export function clearHistory(scope: string, store?: PreferenceStore): void {
   removePreference(key(scope), store)
 }
+
+/** A name for a bookmark made from a statement in the history: the start of the statement, on one line. */
+export const bookmarkName = (sql: string): string => sql.replace(/\s+/g, ' ').trim().slice(0, 60) || 'query'
+
+/** The entry as the server takes it: a statement past its bound is cut (a history is a memory aid, not an archive). */
+export const forServer = (entry: HistoryEntry): HistoryEntry =>
+  entry.sql.length > SQL_HISTORY_MAX_SQL ? { ...entry, sql: entry.sql.slice(0, SQL_HISTORY_MAX_SQL) } : entry

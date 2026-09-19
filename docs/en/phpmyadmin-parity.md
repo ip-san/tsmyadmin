@@ -1,4 +1,4 @@
-<!-- translated-from: docs/phpmyadmin-parity.md sha256:180eba6396dc58e7e57a505e8bcb81522a707666f64573e02def57431f49657c -->
+<!-- translated-from: docs/phpmyadmin-parity.md sha256:664420adca0b35ddb0db6aa0e43f9bfed07269515d6abc3dd53d6598c81a1117 -->
 
 # Feature parity with phpMyAdmin
 
@@ -94,9 +94,9 @@ The basics (browsing and editing, structure changes, SQL, search, QBE, export / 
 | # | Feature | Status |
 |---|---|---|
 | G1 | A settings screen (features, SQL, navigation, main panel, export / import defaults; saving to a file, loading, resetting) | ✅ |
-| G2 | Shared bookmarks with `[VARIABLE]` substitution; SQL history kept on the server | △ |
-| G3 | Console: history, bookmarks, options | △ |
-| G4 | After a statement runs: edit / EXPLAIN / code for an application / run again | △ |
+| G2 | Shared bookmarks with `[VARIABLE]` substitution; SQL history kept on the server | ✅ |
+| G3 | Console: history, bookmarks, options | ✅ |
+| G4 | After a statement runs: edit / EXPLAIN / code for an application / run again | ✅ |
 | G5 | Chart kinds (column, spline, area, pie, timeline, scatter); saving as an image | △ |
 | G6 | GIS: saving as PNG / SVG | ✅ |
 | G7 | More display transformations (hex, substring, boolean, date format, IPv4, prepend / append, image and text links) and input transformations (image upload, regular expression check, JSON / XML / SQL editors) | △ |
