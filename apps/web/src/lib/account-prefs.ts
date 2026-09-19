@@ -1,8 +1,9 @@
 import type { Preferences } from '@tsmyadmin/shared'
 import { PreferencesSchema } from '@tsmyadmin/shared'
+import { z } from 'zod'
 import { localeCode } from '@/config/locale.ts'
 import { api, unwrap } from '@/lib/api.ts'
-import { writePreference } from '@/lib/preferences.ts'
+import { readPreference, writePreference } from '@/lib/preferences.ts'
 import { setTheme } from '@/lib/theme.ts'
 
 /**
@@ -44,8 +45,12 @@ export async function loadAccountPreferences(identity: string, onServer: boolean
   for (const name of Object.keys(LOCAL) as (keyof typeof LOCAL)[]) {
     const value = prefs[name]
     if (value === undefined) continue
-    if (name === 'locale' && value !== localeCode) reload = true
     writePreference(LOCAL[name].key, value)
+    // Only when the language really was stored: storage that refuses the write (full, or a private window) would
+    // otherwise come back with the old language after every reload, and reload again.
+    if (name === 'locale' && value !== localeCode && readPreference(LOCAL[name].key, z.string(), '') === value) {
+      reload = true
+    }
   }
   return { reload }
 }

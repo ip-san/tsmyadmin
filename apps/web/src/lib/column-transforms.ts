@@ -12,7 +12,9 @@ const NamedTransformSchema = z.intersection(ColumnTransformSchema, z.object({ na
 const named = (t: ColumnTransform): NamedTransform => ({ ...t, name: t.column })
 
 /** Per server and table in this browser. */
-const key = (scope: string, ref: TableRef) => `transform.${scope}.${ref.db}.${ref.schema ?? ''}.${ref.table}`
+// JSON rather than dots: a name may itself contain a dot, and `a.b` + `c` must not be `a` + `b.c`.
+const key = (scope: string, ref: TableRef) =>
+  `transform.${JSON.stringify([scope, ref.db, ref.schema ?? '', ref.table])}`
 
 export type ColumnTransforms = NamedList<NamedTransform, ColumnTransformBody> & {
   /** The transformation of each column that has one. */

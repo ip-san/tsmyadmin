@@ -2164,6 +2164,13 @@ describe('preferences, central columns and column transformations', () => {
       expect(await put.json()).toEqual({ theme: 'dark', browseLimit: 25 })
       expect(await (await h.req('/api/preferences')).json()).toEqual({ theme: 'dark', browseLimit: 25 })
       expect((await h.send('/api/preferences', 'PUT', { browseLimit: 0 })).status).toBe(400)
+      // Merged, not replaced: a second tab sending only what it changed keeps what the first one set.
+      await h.send('/api/preferences', 'PUT', { consoleDocked: true })
+      expect(await (await h.req('/api/preferences')).json()).toEqual({
+        theme: 'dark',
+        browseLimit: 25,
+        consoleDocked: true,
+      })
       // Another account has its own.
       await h.login({ ...LOGIN, user: 'reader' })
       expect(await (await h.req('/api/preferences')).json()).toEqual({})
@@ -2187,6 +2194,10 @@ describe('preferences, central columns and column transformations', () => {
         ['shop', 'timestamp'],
       ])
       const shop = replaced.find((c) => c.database === 'shop')
+      // Another account can neither see nor delete it by id.
+      await h.login({ ...LOGIN, user: 'reader' })
+      expect(await (await h.req(`/api/central-columns/${shop?.id}`, { method: 'DELETE' })).json()).toEqual([])
+      await h.login()
       const left = await (await h.req(`/api/central-columns/${shop?.id}`, { method: 'DELETE' })).json()
       expect(left).toMatchObject([{ database: 'blog' }])
       expect((await h.send('/api/central-columns', 'POST', { ...column, name: '' })).status).toBe(400)

@@ -63,7 +63,11 @@ export function storedRoutes(cfg: SessionConfig) {
     .put('/preferences', validate('json', PreferencesSchema), async (c) => {
       const store = cfg.store.savedQueries
       if (!store) return unsupported(c)
-      const prefs = c.req.valid('json')
+      // Merged into what is stored rather than replacing it: two tabs each send only what they know, and the
+      // theme set in one must survive the console toggled in the other.
+      const row = (await list(c, 'prefs')).find((item) => item.name === PREFERENCES)
+      const stored = PreferencesSchema.safeParse(row ? safeJson(row.body) : {})
+      const prefs = { ...(stored.success ? stored.data : {}), ...c.req.valid('json') }
       await store.save(c.get('session').config, 'prefs', PREFERENCES, JSON.stringify(prefs))
       return c.json<Preferences>(prefs)
     })

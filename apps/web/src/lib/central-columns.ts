@@ -6,8 +6,9 @@ import { centralColumnsQuery, listCentralColumns, mutations } from '@/lib/querie
 import { type NamedList, useNamedList } from '@/lib/use-named-list.ts'
 
 /** Per server and namespace in this browser, as export templates are. */
+// JSON rather than dots: a name may itself contain a dot, and `a.b` + `c` must not be `a` + `b.c`.
 const key = (scope: string, database: string, schema: string | undefined) =>
-  `central.${scope}.${database}.${schema ?? ''}`
+  `central.${JSON.stringify([scope, database, schema ?? ''])}`
 
 /**
  * The central columns of one database (and schema): kept with the account where the deployment can, otherwise

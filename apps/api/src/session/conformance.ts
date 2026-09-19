@@ -281,6 +281,9 @@ export function describeSessionStoreConformance(
         for (const n of ['x', 'y', 'z']) await saved.save(CONFIG, 'central', n, '{}')
         expect(await saved.list(CONFIG, 'central')).toHaveLength(3)
         expect(await saved.list(CONFIG, 'sql')).toHaveLength(3)
+        // Saves at once each see room for themselves; the kind still ends at its cap.
+        await Promise.all(['p', 'q', 'r', 's', 't'].map((n) => saved.save(CONFIG, 'transform', n, '{}')))
+        expect(await saved.list(CONFIG, 'transform')).toHaveLength(3)
       } finally {
         await store.closeAll()
       }

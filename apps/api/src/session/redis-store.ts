@@ -385,7 +385,14 @@ class RedisSavedQueries implements SavedItems {
     if (replaced) write.zrem(index, replaced.id).del(this.entry(config, replaced.id))
     for (const victim of victims) write.zrem(index, victim.id).del(this.entry(config, victim.id))
     await write.exec()
-    return this.list(config, kind)
+    // Two saves at once each saw room for themselves; whichever finishes second trims the kind back to its cap.
+    const after = await this.list(config, kind)
+    const excess = after.slice(this.limit)
+    if (excess.length === 0) return after
+    const trim = this.redis.multi()
+    for (const victim of excess) trim.zrem(index, victim.id).del(this.entry(config, victim.id))
+    await trim.exec()
+    return after.slice(0, this.limit)
   }
 
   async remove(config: ConnectRequest, kind: SavedItemKind, id: string): Promise<SavedItem[]> {

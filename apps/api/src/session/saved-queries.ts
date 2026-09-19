@@ -130,7 +130,11 @@ export class SqliteSavedQueries implements SavedItems {
       this.db.exec('ROLLBACK')
       throw error
     }
-    return this.list(config, kind)
+    // Two saves at once each saw room for themselves (the list is read before the transaction); whichever
+    // finishes second trims the kind back to its cap.
+    const after = await this.list(config, kind)
+    for (const victim of after.slice(this.limit)) this.stmt.remove.run(victim.id, identity)
+    return after.slice(0, this.limit)
   }
 
   /** Deletes one of the caller's own rows of that kind; any other id matches nothing. */
