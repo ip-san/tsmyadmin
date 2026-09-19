@@ -9,6 +9,16 @@ for (const t of TARGETS) {
       await login(page, t)
     })
 
+    test('searches for any of the words, only in columns named like', async ({ page }) => {
+      await page.goto(searchUrl)
+      await page.getByLabel('検索する語').fill('alice bob')
+      await page.getByLabel('探し方').selectOption('any')
+      await page.getByLabel('カラム名で絞る').fill('name')
+      await page.getByRole('form', { name: 'データベース内を検索' }).getByRole('button', { name: '検索する' }).click()
+      const results = page.getByRole('table', { name: 'データベース内を検索' })
+      await expect(results.getByRole('row').filter({ hasText: /^users/ })).toContainText('2 行')
+    })
+
     test('finds a term across tables and opens the matching rows in the SQL tab', async ({ page }) => {
       await page.goto(searchUrl)
       await page.getByLabel('検索する語').fill('ALICE')

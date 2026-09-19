@@ -178,7 +178,10 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
         const q = c.req.valid('query')
         const result = await c
           .get('session')
-          .adapter.searchTable(ns(c.req.param('db'), q.schema), c.req.param('table'), q.q)
+          .adapter.searchTable(ns(c.req.param('db'), q.schema), c.req.param('table'), q.q, {
+            mode: q.mode,
+            ...(q.column ? { column: q.column } : {}),
+          })
         return c.json(result)
       })
       .get('/databases/:db/tables/:table/rows', validate('query', BrowseQuerySchema), async (c) => {

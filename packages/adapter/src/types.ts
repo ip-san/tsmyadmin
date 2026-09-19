@@ -23,6 +23,7 @@ import type {
   RoutineKind,
   RowKey,
   RowValues,
+  SearchOptions,
   ServerCatalog,
   ServerCatalogKind,
   ServerInfo,
@@ -222,7 +223,7 @@ export interface DatabaseAdapter {
   listDependencies(ns: Namespace): Promise<ObjectDependency[] | null>
   browseRows(ns: Namespace, table: string, opts: BrowseOptions): Promise<BrowseResult>
   /** Rows containing `term` in any searchable column (case-insensitive), for the database-wide search. */
-  searchTable(ns: Namespace, table: string, term: string): Promise<TableSearchResult>
+  searchTable(ns: Namespace, table: string, term: string, options?: SearchOptions): Promise<TableSearchResult>
   /**
    * A SELECT over the given tables for the SQL tab, joined along the foreign keys between them. Only reads
    * structure; refuses tables that no foreign key connects to the rest.

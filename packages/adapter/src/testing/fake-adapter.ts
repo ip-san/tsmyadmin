@@ -22,6 +22,7 @@ import type {
   RoutineKind,
   RowKey,
   RowValues,
+  SearchOptions,
   ServerCatalog,
   ServerCatalogKind,
   ServerInfo,
@@ -404,8 +405,8 @@ export class FakeAdapter implements DatabaseAdapter {
     return structuredClone(this.table(ns, table).schema)
   }
 
-  async searchTable(ns: Namespace, table: string, term: string): Promise<TableSearchResult> {
-    this.record('searchTable', ns, table, term)
+  async searchTable(ns: Namespace, table: string, term: string, options?: SearchOptions): Promise<TableSearchResult> {
+    this.record('searchTable', ns, table, term, options)
     const t = this.table(ns, table)
     const columns = t.schema.columns.map((c) => c.name)
     const needle = term.toLowerCase()

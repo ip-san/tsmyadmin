@@ -147,6 +147,15 @@ export const en = {
     termHint:
       'Not case-sensitive. % and _ are searched for as the characters themselves. Columns whose values have no readable text form (binary, spatial and the like) are not searched.',
     tables: 'Tables to search',
+    mode: 'Search for',
+    modes: {
+      phrase: 'the phrase',
+      any: 'any of the words (separated by spaces)',
+      all: 'all of the words (anywhere in the row)',
+      regexp: "a regular expression (the server's syntax)",
+    },
+    column: 'Only columns named like',
+    columnHint: 'Searches only columns whose name contains this',
     selectAll: 'Select all',
     selectNone: 'Clear selection',
     run: 'Search',

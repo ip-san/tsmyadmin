@@ -406,6 +406,24 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
     })
 
     describe('searchTable', () => {
+      it('reads the term as any word, every word, a regular expression, within columns named like', async () => {
+        const total = async (term: string, options: Parameters<typeof db.searchTable>[3]) =>
+          (await db.searchTable(ns, 'users', term, options)).total
+        expect(await total('alice bob', { mode: 'any' })).toBe(2)
+        expect(await total('alice example', { mode: 'all' })).toBe(1)
+        expect(await total('alice bob', { mode: 'all' })).toBe(0)
+        expect(await total('alice bob', { mode: 'phrase' })).toBe(0)
+        expect(await total('^(al|bo)', { mode: 'regexp' })).toBe(2)
+        expect(await total('example', { column: 'name' })).toBe(0)
+        const inEmail = await db.searchTable(ns, 'users', 'example', { column: 'MAIL' })
+        expect(inEmail.columns).toEqual(['email'])
+        expect(inEmail.total).toBe(5)
+        // The SELECT for the SQL tab finds the same rows.
+        const any = await db.searchTable(ns, 'users', 'alice bob', { mode: 'any' })
+        const [r] = await exec(any.sql)
+        expect(r?.kind === 'rows' ? r.result.rows.length : -1).toBe(2)
+      })
+
       it('counts rows containing the term in any column, ignoring case', async () => {
         // "alice" is in both the name (Alice) and the email of the same row: one row, not two.
         expect(await db.searchTable(ns, 'users', 'ALICE')).toMatchObject({ total: 1, count: 'exact' })

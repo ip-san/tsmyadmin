@@ -109,6 +109,18 @@ export type BrowseResult = z.infer<typeof BrowseResultSchema>
 /** Longest term the database-wide search accepts. */
 export const SEARCH_TERM_MAX = 200
 
+/**
+ * How a database-wide search reads its term (phpMyAdmin's "Find"): the words as one phrase; any of the words; all
+ * of them (anywhere in the row); or a regular expression in the server's own dialect.
+ */
+export const SearchModeSchema = z.enum(['phrase', 'any', 'all', 'regexp'])
+export type SearchMode = z.infer<typeof SearchModeSchema>
+export interface SearchOptions {
+  mode?: SearchMode
+  /** Only columns whose name contains this (case-insensitive). */
+  column?: string
+}
+
 export const TableSearchQuerySchema = z.object({
   q: z
     .string()
@@ -117,6 +129,8 @@ export const TableSearchQuerySchema = z.object({
     // PostgreSQL cannot hold NUL in text at all, so every table would fail with an encoding error.
     .refine((s) => !s.includes('\0'), 'The search term cannot contain a NUL character'),
   schema: z.string().min(1).optional(),
+  mode: SearchModeSchema.default('phrase'),
+  column: z.string().max(64).optional(),
 })
 export type TableSearchQuery = z.infer<typeof TableSearchQuerySchema>
 

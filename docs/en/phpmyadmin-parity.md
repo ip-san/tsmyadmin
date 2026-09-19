@@ -1,4 +1,4 @@
-<!-- translated-from: docs/phpmyadmin-parity.md sha256:667e73948b5a21eef3704d9515546f4bc2cc3f2858c79800a227ea213695a9cc -->
+<!-- translated-from: docs/phpmyadmin-parity.md sha256:b04ed71fe7be1e305445f2863909071df90496340f5a1c126c920c17acfbedb7 -->
 
 # Feature parity with phpMyAdmin
 
@@ -42,7 +42,7 @@ The basics (browsing and editing, structure changes, SQL, search, QBE, export / 
 | D1 | Bulk actions on the chosen tables: copy, show CREATE, ANALYZE / CHECK / CHECKSUM / OPTIMIZE / REPAIR, add / replace a prefix | ✅ |
 | D2 | More list columns (charset, created / updated), counting the exact rows on the spot | ✅ |
 | D3 | Data dictionary (every table's definition, for printing) | ✅ |
-| D4 | Search kinds (any word / all words / exact phrase / regular expression), filtering by column name | △ |
+| D4 | Search kinds (any word / all words / exact phrase / regular expression), filtering by column name | ✅ |
 | D5 | Multi-table query (with the joins) | △ |
 | D6 | Saving query builder criteria | ✗ |
 | D7 | Changing the default collation (applied to every table and column) | ✗ |

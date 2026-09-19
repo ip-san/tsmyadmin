@@ -32,6 +32,7 @@ import type {
   RowValues,
   SavedQuery,
   SaveExportTemplateRequest,
+  SearchOptions,
   SecondFactorProof,
   SecondFactorSetup,
   SecondFactorStatus,
@@ -337,11 +338,16 @@ export const processesQuery = queryOptions({
 })
 
 /** One table of the database-wide search. The page calls these one at a time, so it can stop between tables. */
-export const searchTable = (ref: TableRef, term: string) =>
+export const searchTable = (ref: TableRef, term: string, options: SearchOptions = {}) =>
   unwrap<TableSearchResult>(
     api.databases[':db'].tables[':table'].search.$get({
       param: { db: enc(ref.db), table: enc(ref.table) },
-      query: { q: term, ...schemaQuery(ref.schema) },
+      query: {
+        q: term,
+        ...schemaQuery(ref.schema),
+        ...(options.mode ? { mode: options.mode } : {}),
+        ...(options.column ? { column: options.column } : {}),
+      },
     })
   )
 

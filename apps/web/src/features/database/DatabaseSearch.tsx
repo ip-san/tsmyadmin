@@ -1,10 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
-import type { TableSearchResult } from '@tsmyadmin/shared'
-import { SEARCH_TERM_MAX } from '@tsmyadmin/shared'
+import type { SearchMode, TableSearchResult } from '@tsmyadmin/shared'
+import { SEARCH_TERM_MAX, SearchModeSchema } from '@tsmyadmin/shared'
 import { type FormEvent, useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
-import { Field, Input } from '@/components/ui/Field.tsx'
+import { Field, Input, Select } from '@/components/ui/Field.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
 import { useOpenInDatabaseConsole } from '@/lib/open-in-console.ts'
@@ -21,6 +21,8 @@ export function DatabaseSearch({ db, schema }: { db: string; schema?: string | u
   const tables = useQuery(tablesQuery(db, schema))
   const openInSql = useOpenInDatabaseConsole(db, schema)
   const [term, setTerm] = useState('')
+  const [mode, setMode] = useState<SearchMode>('phrase')
+  const [column, setColumn] = useState('')
   const [excluded, setExcluded] = useState<ReadonlySet<string>>(new Set())
   const [outcomes, setOutcomes] = useState<Outcome[]>([])
   const [planned, setPlanned] = useState(0)
@@ -62,7 +64,10 @@ export function DatabaseSearch({ db, schema }: { db: string; schema?: string | u
       for (const table of chosen) {
         if (currentRun.current !== runId) break
         setSettling(true)
-        const outcome: Outcome = await searchTable({ db, schema, table }, q).then(
+        const outcome: Outcome = await searchTable({ db, schema, table }, q, {
+          mode,
+          ...(column.trim() ? { column: column.trim() } : {}),
+        }).then(
           (result) => ({ table, result }),
           (error: unknown) => ({ table, error })
         )
@@ -113,6 +118,30 @@ export function DatabaseSearch({ db, schema }: { db: string; schema?: string | u
           >
             {locale.databaseSearch.run}
           </Button>
+        </div>
+        <div className="flex flex-wrap items-end gap-3">
+          <Field id="database-search-mode" label={locale.databaseSearch.mode}>
+            <Select id="database-search-mode" value={mode} onChange={(e) => setMode(e.target.value as SearchMode)}>
+              {SearchModeSchema.options.map((m) => (
+                <option key={m} value={m}>
+                  {locale.databaseSearch.modes[m]}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field
+            id="database-search-column"
+            label={locale.databaseSearch.column}
+            hint={locale.databaseSearch.columnHint}
+          >
+            <Input
+              id="database-search-column"
+              value={column}
+              onChange={(e) => setColumn(e.target.value)}
+              maxLength={64}
+              autoComplete="off"
+            />
+          </Field>
         </div>
         <fieldset className="space-y-1">
           <legend className="flex items-center gap-2 text-sm text-ink-sub">

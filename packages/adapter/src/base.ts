@@ -24,6 +24,7 @@ import type {
   RowKey,
   RowKeyKind,
   RowValues,
+  SearchOptions,
   ServerCatalog,
   ServerCatalogKind,
   ServerInfo,
@@ -553,25 +554,42 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     return { keyKind: kind, keyColumns: kind === 'ctid' ? ['ctid'] : schema.columns.map((c) => c.name) }
   }
 
-  async searchTable(ns: Namespace, table: string, term: string): Promise<TableSearchResult> {
+  async searchTable(
+    ns: Namespace,
+    table: string,
+    term: string,
+    options: SearchOptions = {}
+  ): Promise<TableSearchResult> {
     const schema = await this.describeTable(ns, table)
     const d = this.dialect
+    const mode = options.mode ?? 'phrase'
+    const only = options.column?.trim().toLowerCase()
     // Columns whose values have no readable text form are skipped (see UNSEARCHABLE_TYPE).
-    const columns = schema.columns.filter((c) => isSearchableType(d, c.dataType)).map((c) => c.name)
+    const columns = schema.columns
+      .filter((c) => isSearchableType(d, c.dataType) && (!only || c.name.toLowerCase().includes(only)))
+      .map((c) => c.name)
     if (columns.length === 0) return { total: 0, count: 'exact', columns: [], sql: '' }
     const tableSql = quoteTable(d, ns, table)
     // Same meaning of "contains" as the browse filter: the term is literal, wildcards added here. Case-insensitive
-    // on both servers — MySQL through the connection's collation, PostgreSQL with ILIKE — as phpMyAdmin searches.
-    const pattern = `%${escapeLike(term)}%`
+    // on both servers — MySQL through the connection's collation, PostgreSQL with ILIKE / ~* — as phpMyAdmin
+    // searches. A regular expression is the server's own.
+    const words = mode === 'any' || mode === 'all' ? term.split(/\s+/).filter((w) => w !== '') : [term]
     const text = (c: string) => (d === 'mysql' ? `CAST(${quoteIdent(d, c)} AS CHAR)` : `${quoteIdent(d, c)}::text`)
-    const like = d === 'mysql' ? 'LIKE' : 'ILIKE'
+    const match = (bind: (v: string) => string) => {
+      const one = (c: string, w: string) =>
+        mode === 'regexp'
+          ? `${text(c)} ${d === 'mysql' ? 'REGEXP' : '~*'} ${bind(w)}`
+          : `${text(c)} ${d === 'mysql' ? 'LIKE' : 'ILIKE'} ${bind(`%${escapeLike(w)}%`)} ESCAPE '!'`
+      // A word matches the row when any column holds it; "all" needs every word, the others any.
+      const perWord = words.map((w) => `(${columns.map((c) => one(c, w)).join(' OR ')})`)
+      return perWord.join(mode === 'all' ? ' AND ' : ' OR ')
+    }
     const params = new Params(d)
-    const where = columns.map((c) => `${text(c)} ${like} ${params.add(pattern)} ESCAPE '!'`).join(' OR ')
+    const where = match((v) => params.add(v))
     // Bounded like the browse count: a term that matches most of a huge table is still one limited scan.
     const countSql = `SELECT COUNT(*) FROM (SELECT 1 FROM ${tableSql} WHERE ${where} LIMIT ${params.add(EXACT_COUNT_MAX_ROWS + 1)}) AS tsmyadmin_search`
     // For the SQL tab, where it is edited and run: the term is written in as a literal there.
-    const literal = d === 'mysql' ? mysqlLiteral(pattern) : pgLiteral(pattern)
-    const sql = `SELECT * FROM ${tableSql} WHERE ${columns.map((c) => `${text(c)} ${like} ${literal} ESCAPE '!'`).join(' OR ')}`
+    const sql = `SELECT * FROM ${tableSql} WHERE ${match((v) => (d === 'mysql' ? mysqlLiteral(v) : pgLiteral(v)))}`
     return this.withConn(ns, async (conn) => {
       const cell = firstResult(await conn.query(countSql, params.values)).rows[0]?.[0]
       const counted = typeof cell === 'number' ? cell : Number(cell ?? 0)
