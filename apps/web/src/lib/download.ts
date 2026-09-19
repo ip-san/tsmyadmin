@@ -1,6 +1,11 @@
 /** Hands `text` to the browser as a file download (client-side data such as SQL console results). */
 export function downloadText(filename: string, text: string, mime: string): void {
-  const url = URL.createObjectURL(new Blob([text], { type: mime }))
+  downloadBlob(filename, new Blob([text], { type: mime }))
+}
+
+/** Hands a Blob to the browser as a file download. */
+export function downloadBlob(filename: string, blob: Blob): void {
+  const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
   a.download = filename

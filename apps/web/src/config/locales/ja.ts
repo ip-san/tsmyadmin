@@ -35,6 +35,7 @@ export const ja = {
     no: 'いいえ',
     null: 'NULL',
     empty: '（空）',
+    printList: '一覧を印刷',
     binary: (bytes: number) => `[バイナリ ${bytes.toLocaleString('ja-JP')} バイト]`,
     truncatedText: (length: number) => `（全 ${length.toLocaleString('ja-JP')} 文字のうち先頭のみ表示）`,
     bytes: (n: number) => {
@@ -67,6 +68,9 @@ export const ja = {
     notFoundBody: 'URL が間違っているか、対象のデータベースやテーブルが存在しません。',
   },
   login: {
+    collation: '接続の照合順序',
+    collationHint: 'この接続が SQL の文字列を比べたり、文字コードを変換したりするときの規則です（MySQL / MariaDB）。',
+    collationDefault: '（既定: utf8mb4_unicode_ci）',
     code: 'ワンタイムコード',
     codeHint: '認証アプリの 6 桁、または回復用コードを入力してください。',
     usePasskey: 'パスキーで確認',
@@ -1610,6 +1614,8 @@ export const ja = {
     disable: '2 要素認証を解除する',
   },
   server: {
+    connection: '接続先',
+    connectionCollation: '接続の照合順序',
     title: 'サーバー',
     databasesTitle: 'データベース一覧',
     overviewTitle: '通信量と接続',
@@ -1778,6 +1784,9 @@ export const ja = {
     column: '空間カラム',
     label: 'ラベル',
     noLabel: '（なし）',
+    saveSvg: 'SVG で保存',
+    savePng: 'PNG で保存',
+    saveFailed: '画像を作れませんでした',
     summary: (shapes: number, unreadable: number) =>
       unreadable > 0
         ? `${shapes.toLocaleString('ja-JP')} 件の図形（読み取れない値 ${unreadable.toLocaleString('ja-JP')} 件は除外）`

@@ -1,4 +1,4 @@
-<!-- translated-from: docs/phpmyadmin-parity.md sha256:c636fcd09fa36e99a5cb7a0f5a9bfcb05c11491d97a56cc3dabefc5d2f9b2fd1 -->
+<!-- translated-from: docs/phpmyadmin-parity.md sha256:180eba6396dc58e7e57a505e8bcb81522a707666f64573e02def57431f49657c -->
 
 # Feature parity with phpMyAdmin
 
@@ -98,11 +98,11 @@ The basics (browsing and editing, structure changes, SQL, search, QBE, export / 
 | G3 | Console: history, bookmarks, options | △ |
 | G4 | After a statement runs: edit / EXPLAIN / code for an application / run again | △ |
 | G5 | Chart kinds (column, spline, area, pie, timeline, scatter); saving as an image | △ |
-| G6 | GIS: saving as PNG / SVG | △ |
+| G6 | GIS: saving as PNG / SVG | ✅ |
 | G7 | More display transformations (hex, substring, boolean, date format, IPv4, prepend / append, image and text links) and input transformations (image upload, regular expression check, JSON / XML / SQL editors) | △ |
 | G8 | Navigation: grouping by prefix, hiding items, paging when there are many | ✅ |
-| G9 | Choosing the connection collation; server information on the home page | △ |
-| G12 | Printable lists | △ |
+| G9 | Choosing the connection collation; server information on the home page | ✅ |
+| G12 | Printable lists | ✅ |
 
 ## Out of scope
 
@@ -113,7 +113,7 @@ The basics (browsing and editing, structure changes, SQL, search, QBE, export / 
 | Import: LOAD DATA | `LOCAL` lets the server ask the client for any file, which is why it is off (mysql2 disables it too). Without `LOCAL` it reads files on the database server, which does not fit a container deployment |
 | Export: writing PDF directly | It would mean shipping fonts to embed for Japanese and other scripts. The "HTML (print / PDF)" export gives a PDF through "Save as PDF" |
 | Import: ESRI Shape files | A binary GIS format outside database administration (spatial data imports as WKT through SQL / CSV) |
-| Translation into about 80 languages | The quality could not be kept. A language is one added file; the steps are documented |
+| Translation into about 80 languages | The quality could not be kept. A language is one added file and two lines (the steps are under "Adding a language" in architecture.md) |
 | Themes other than light / dark | Every colour is a CSS variable, which is where a deployment changes its palette |
 | Update checks, error reports | They talk to an outside service, which an administration tool kept inside the network does not do |
 | GIS map tiles (OpenStreetMap) | The coordinates on screen would leave for an outside service |

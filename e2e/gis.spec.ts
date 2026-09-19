@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import { expect, type Page } from '@playwright/test'
 import { login, TARGETS, type Target, tableUrl, test } from './helpers.ts'
 
@@ -39,6 +40,22 @@ for (const t of TARGETS) {
         await expect(picture.locator('g')).toHaveCount(2)
         await page.getByLabel('ラベル').selectOption('name')
         await expect(picture.locator('title')).toHaveText(['spot', 'field'])
+        // The picture as files: a standalone SVG (colours written in, labels as tooltips) and a PNG.
+        const [svg] = await Promise.all([
+          page.waitForEvent('download'),
+          page.getByRole('button', { name: 'SVG で保存' }).click(),
+        ])
+        expect(svg.suggestedFilename()).toMatch(/\.svg$/)
+        const svgText = await readFile(await svg.path(), 'utf8')
+        expect(svgText).toContain('xmlns="http://www.w3.org/2000/svg"')
+        expect(svgText).toContain('<title>field</title>')
+        expect(svgText).not.toContain('class=')
+        const [png] = await Promise.all([
+          page.waitForEvent('download'),
+          page.getByRole('button', { name: 'PNG で保存' }).click(),
+        ])
+        expect(png.suggestedFilename()).toMatch(/\.png$/)
+        expect((await readFile(await png.path())).subarray(1, 4).toString('latin1')).toBe('PNG')
         if (t.dialect === 'postgres') {
           // A second spatial column can be chosen instead.
           await page.getByLabel('空間カラム').selectOption('spot')

@@ -111,6 +111,8 @@ html.dark {
  * part that was scrolled into view.
  */
 @media print {
+  /* Columns that only carry controls (checkboxes, row actions) are not part of the list on paper. */
+  [data-print-hide] { display: none !important; }
   .print-expand * {
     max-height: none !important;
     overflow: visible !important;

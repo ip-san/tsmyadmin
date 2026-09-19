@@ -5,11 +5,13 @@ import { DdlPreviewDialog } from '@/components/ddl/DdlPreviewDialog.tsx'
 import { ServerTabs } from '@/components/layout/ServerTabs.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Spinner } from '@/components/ui/Feedback.tsx'
+import { PrintButton } from '@/components/ui/PrintButton.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
 import { CreateDatabaseForm } from '@/features/database/CreateDatabaseForm.tsx'
 import { DropDatabaseButton } from '@/features/database/DropDatabaseButton.tsx'
 import { isProtectedDatabase } from '@/features/database/system-databases.ts'
+import { ServerInfoCard } from '@/features/server/ServerInfoCard.tsx'
 import { useDdlFlow } from '@/lib/ddl.ts'
 import { databasesQuery } from '@/lib/queries.ts'
 
@@ -29,7 +31,11 @@ function ServerPage() {
     <>
       <ServerTabs tab={locale.tabs.databases} />
       <DdlPreviewDialog flow={dropFlow} bulkConfirmName={session.host} />
-      <h2 className="mb-2 text-sm font-semibold text-ink">{locale.server.databasesTitle}</h2>
+      <ServerInfoCard />
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold text-ink">{locale.server.databasesTitle}</h2>
+        <PrintButton />
+      </div>
       {databases.isPending ? (
         <Spinner />
       ) : databases.isError ? (
@@ -38,7 +44,7 @@ function ServerPage() {
         <Table>
           <thead>
             <tr>
-              <Th>
+              <Th data-print-hide>
                 <input
                   type="checkbox"
                   aria-label={locale.browse.selectAll}
@@ -53,13 +59,13 @@ function ServerPage() {
               <Th>{locale.server.databaseName}</Th>
               <Th className="text-right">{locale.database.size}</Th>
               {session.dialect === 'mysql' ? <Th className="text-right">{locale.database.tableCount}</Th> : null}
-              <Th>{locale.database.actions}</Th>
+              <Th data-print-hide>{locale.database.actions}</Th>
             </tr>
           </thead>
           <tbody>
             {databases.data.map((d) => (
               <Tr key={d.name}>
-                <Td>
+                <Td data-print-hide>
                   {droppable.includes(d.name) ? (
                     <input
                       type="checkbox"
@@ -86,7 +92,7 @@ function ServerPage() {
                 {session.dialect === 'mysql' ? (
                   <Td className="text-right tabular-nums">{d.tableCount === null ? '–' : d.tableCount}</Td>
                 ) : null}
-                <Td className="space-x-2 whitespace-nowrap">
+                <Td className="space-x-2 whitespace-nowrap" data-print-hide>
                   <Link
                     to="/db/$db"
                     params={{ db: d.name }}

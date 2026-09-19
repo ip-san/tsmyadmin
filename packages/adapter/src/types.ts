@@ -51,6 +51,8 @@ export interface ConnectionConfig {
   password: string
   /** Initial database. Required for PostgreSQL (defaults to `user` when omitted). */
   database?: string | undefined
+  /** MySQL: the connection's collation (default utf8mb4_unicode_ci); its character set is the part before the first `_`. */
+  collation?: string | undefined
 }
 
 export interface ExecuteOptions {

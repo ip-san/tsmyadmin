@@ -212,7 +212,7 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
           <thead>
             <tr>
               {editable ? (
-                <Th className="w-16">
+                <Th className="w-16" data-print-hide>
                   <input
                     type="checkbox"
                     aria-label={locale.browse.selectAll}

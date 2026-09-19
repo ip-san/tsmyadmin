@@ -1,4 +1,4 @@
-<!-- translated-from: docs/user-guide.md sha256:56903ca27a17ffa2ec845d8545a4edfcbe81a7dfd41a7066a08e6d3078ed652a -->
+<!-- translated-from: docs/user-guide.md sha256:70c9fb097f6e39a446895f64707101dbb3adea10f5959e3070cb377a51921d58 -->
 
 # User guide
 
@@ -13,6 +13,8 @@ What each screen does and how to work with it. The layout is the same three leve
 3. Your credentials are held in a server-side session; the browser only gets a cookie with a signed session ID. (Separately, the last server, username and database are remembered in `localStorage` — never the password. On a shared machine, bear in mind that the next person sees which server you connected to.) After `SESSION_TTL_MINUTES` of inactivity (30 by default) the session ends; connecting again returns you to the page you were on
 
 Your administrator restricts which hosts can be reached with `TSMYADMIN_ALLOWED_HOSTS`. Hosts outside that list cannot be connected to.
+
+On MySQL / MariaDB the **connection collation** can be chosen too (`utf8mb4_unicode_ci` by default: the rules this connection uses to compare strings and convert character sets, so `utf8mb4_bin` tells upper and lower case apart). The choice is shown under **Server information** on the server's top page, with the address, version and uptime.
 
 ### Two-factor authentication (one-time codes and passkeys)
 
@@ -110,7 +112,7 @@ On PostgreSQL, **idle** tsmyadmin connections to that database under the same da
 - **Editing**: the pencil at the start of a row opens a dialog; double-clicking a cell edits it in place (`Enter` saves, `Esc` cancels). The copy icon **duplicates a row** (auto-increment columns take a new value)
 - **Deleting**: the bin at the start of a row deletes that row alone, or tick rows and press **Delete selected rows**; a confirmation follows
 - **Selected rows**: **Edit selected rows** edits the ticked rows together (in each row only the changed columns are updated; the rows go one after another and stop at a failure). **Selected rows as CSV / JSON** and **Copy selected rows** are there too (rows holding a value cut for display go through the Export tab). **Chart this page** charts the rows on screen
-- A table with a spatial column (MySQL's GEOMETRY family; PostgreSQL's point, polygon and the like, and PostGIS geometry / geography) has **Show as shapes (GIS)** below the grid: it draws the values on the page to scale in their own coordinates. There is no map behind them, and nothing is fetched from an outside service
+- A table with a spatial column (MySQL's GEOMETRY family; PostgreSQL's point, polygon and the like, and PostGIS geometry / geography) has **Show as shapes (GIS)** below the grid: it draws the values on the page to scale in their own coordinates. There is no map behind them, and nothing is fetched from an outside service. **Save as SVG** and **Save as PNG** write the picture to a file (the SVG is standalone, with its colours written in)
 - Above the table is the SQL that fetched the page and how long it took. Filter values are not spliced into the SQL; they are listed as *Bound values*
 - A table with neither a primary key nor a unique key is addressed by `ctid` on PostgreSQL and by every column on MySQL (compared byte for byte, so rows that differ only in case or accents — which the collation would treat as equal — count as different rows). If that does not match exactly one row, the change fails and nothing is written. `ctid` is a physical position, so once another session has updated or deleted a row, an edit made from a stale screen can land on a different one — reload just before editing a table without a primary key (adding a primary key is the real fix)
 - Views and sequences are read-only. So are PostgreSQL partitioned parents and inheritance parents (`ctid` repeats across children, so a row cannot be identified — edit through the child table)

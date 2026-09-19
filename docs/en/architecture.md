@@ -1,4 +1,4 @@
-<!-- translated-from: docs/architecture.md sha256:bce4006d8625aa890e4d506282eeef50debe6373465accdf93a027a33a7c7208 -->
+<!-- translated-from: docs/architecture.md sha256:c14d73210041de756ad8657e510426e9e7926976d8c56a3a4e8191977eab74de -->
 
 # Architecture
 
@@ -292,6 +292,7 @@ An upload is opened first by `prepareImport` in `import-run.ts` (gzip and ZIP un
 - `features/*` never import each other; sharing goes through `components/` and `lib/`.
 - UI strings live only in `config/locales/{ja,en}.ts` and are read through `locale.*`. `satisfies Locale` on `en.ts` makes the type system guarantee it has the same shape as the Japanese one.
 - The language is decided in the order "the user's choice → the browser's language → Japanese", and switching reloads the page (each module reads `locale` once, when it is loaded).
+- **Adding a language**: (1) create `config/locales/xx.ts` and translate every string in the shape of `ja.ts` (`satisfies Locale` makes a missing one a type error); (2) add `xx: 'display name'` to `LOCALE_NAMES` in `config/locale.ts` and a line to `LOADERS` (forgetting it is a type error); (3) add it to `LOCALES` in `config/locale.test.ts`, which checks that every key and function arity matches `ja`; (4) run `bun run check`. The switcher lists it by itself. The server keeps no list of languages: when the account stores one, it only checks for two or three lower-case letters.
 
 ## 8. Quality gates
 
@@ -323,7 +324,7 @@ The test layers, from the bottom: unit (`sql/split`, the DDL snapshots, the pure
 | Add a DDL operation | `packages/shared/src/schemas/ddl.ts` → `*/ddl.ts` → the web form | Snapshots for both dialects in `SAMPLE_OPS` in `test/ddl.test.ts`, and a UI that goes through the preview. When the SQL depends on the server's state (`copyTable`'s columns, the table list of `renameDatabase` / `copyDatabase`), the `/ddl/preview` route fills it in — **overwriting whatever the request carried** (`apps/api/src/lib/database-ops.ts`). Do not build a destructive statement that depends on what was visible or listed at preview time: that is why a MySQL rename does not DROP the old database (it would take routines and events the account cannot see, and tables created after the preview) |
 | Change a UI string | `config/locales/ja.ts` and `en.ts` | Add the same key to both (`locale.test.ts` checks the shapes match). Writing it into a component is not allowed |
 | Fix the documentation | `docs/*.md` (Japanese is the original) | Translate the matching file under `docs/en/` and re-stamp with `bun run docs:sync` (`bun run docs:i18n` checks they keep up) |
-| Add an interface language | `LOCALES` / `LOCALE_NAMES` / `LocaleCodeSchema` in `config/locale.ts`, and `locales/<code>.ts` | `ja.ts` is where the type comes from. Give a new table `satisfies Locale` |
+| Add an interface language | `LOCALE_NAMES` / `LOADERS` in `config/locale.ts`, `locales/<code>.ts`, and `LOCALES` in `locale.test.ts` | `ja.ts` is where the type comes from. Give a new table `satisfies Locale` (steps in §7) |
 | Change a colour or the look | Tailwind classes | Always include the `dark:` variant |
 | Add an environment variable | `apps/api/src/config.ts` | Update `.env.example` and the table in `docs/deployment.md` at the same time (and its translation; `bun run docs:i18n` checks it) |
 | Support a new type | `docker/fixtures/*` → `*/values.ts` → conformance | `bun run db:reset`, and `typesRow1` on both dialects |

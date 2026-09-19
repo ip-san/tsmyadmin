@@ -88,6 +88,30 @@ describe.each(targets)('API integration ($dialect)', ({ dialect, url }) => {
     expect(res.status).toBe(401)
   })
 
+  it('connects in the collation asked for (MySQL), and refuses a name that is not one', async () => {
+    if (dialect !== 'mysql') return
+    const asked = await app.request('/api/session', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ...login, collation: 'utf8mb4_bin' }),
+    })
+    expect(asked.status).toBe(201)
+    const own = asked.headers.get('set-cookie')?.split(';')[0] ?? ''
+    const ran = await app.request('/api/databases/tsmyadmin_test/sql', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: own },
+      body: JSON.stringify({ sql: 'SELECT @@collation_connection AS c' }),
+    })
+    const [result] = z.array(StatementResultSchema).parse(await ran.json())
+    expect(result?.kind === 'rows' ? result.result.rows : null).toEqual([['utf8mb4_bin']])
+    const bad = await app.request('/api/session', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ...login, collation: 'x; y' }),
+    })
+    expect(bad.status).toBe(400)
+  })
+
   it('walks databases → tables → structure → rows', async () => {
     const dbs = z.array(z.object({ name: z.string() })).parse(await (await req('/api/databases')).json())
     expect(dbs.map((d) => d.name)).toContain('tsmyadmin_test')

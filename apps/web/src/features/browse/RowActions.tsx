@@ -28,7 +28,7 @@ export function RowActions({
 }) {
   const reasonId = useId()
   return (
-    <Td className="whitespace-nowrap">
+    <Td className="whitespace-nowrap" data-print-hide>
       <label
         className="inline-flex min-h-6 min-w-6 items-center justify-center align-middle"
         title={addressable ? undefined : locale.rows.notAddressable}

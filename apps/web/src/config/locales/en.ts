@@ -39,6 +39,7 @@ export const en = {
     no: 'No',
     null: 'NULL',
     empty: '(empty)',
+    printList: 'Print this list',
     binary: (bytes: number) => `[binary, ${bytes.toLocaleString('en-US')} bytes]`,
     truncatedText: (length: number) => ` … (truncated, ${length.toLocaleString('en-US')} characters in total)`,
     bytes: (n: number) => {
@@ -71,6 +72,10 @@ export const en = {
     notFoundBody: 'The URL is wrong, or the database or table it names does not exist.',
   },
   login: {
+    collation: 'Connection collation',
+    collationHint:
+      'The rules this connection uses to compare strings and convert character sets in SQL (MySQL / MariaDB).',
+    collationDefault: '(default: utf8mb4_unicode_ci)',
     code: 'One-time code',
     codeHint: 'The six digits from your authenticator app, or a recovery code.',
     usePasskey: 'Use a passkey',
@@ -1624,6 +1629,8 @@ export const en = {
     disable: 'Remove',
   },
   server: {
+    connection: 'Connected to',
+    connectionCollation: 'Connection collation',
     title: 'Server',
     databasesTitle: 'Databases',
     overviewTitle: 'Traffic and connections',
@@ -1801,6 +1808,9 @@ export const en = {
     column: 'Spatial column',
     label: 'Label',
     noLabel: '(none)',
+    saveSvg: 'Save as SVG',
+    savePng: 'Save as PNG',
+    saveFailed: 'The picture could not be made',
     summary: (shapes: number, unreadable: number) =>
       unreadable > 0
         ? `${plural(shapes, 'shape', 'shapes')} (${plural(unreadable, 'value', 'values')} that could not be read left out)`

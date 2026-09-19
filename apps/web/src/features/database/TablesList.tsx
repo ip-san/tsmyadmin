@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { CellValue } from '@/components/cells/CellValue.tsx'
 import { DdlPreviewDialog } from '@/components/ddl/DdlPreviewDialog.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
+import { PrintButton } from '@/components/ui/PrintButton.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
 import { useDdlFlow } from '@/lib/ddl.ts'
@@ -37,10 +38,13 @@ export function TablesList({ db, schema }: { db: string; schema?: string | undef
         {chosen.length > 0 ? locale.ddl.bulkSelected(chosen.length) : ''}
       </output>
       <DdlPreviewDialog flow={flow} bulkConfirmName={db} />
+      <div className="flex justify-end print:hidden">
+        <PrintButton />
+      </div>
       <Table>
         <thead>
           <tr>
-            <Th>
+            <Th data-print-hide>
               <input
                 type="checkbox"
                 aria-label={locale.browse.selectAll}
@@ -65,13 +69,13 @@ export function TablesList({ db, schema }: { db: string; schema?: string | undef
               </>
             ) : null}
             <Th>{locale.database.comment}</Th>
-            <Th>{locale.database.actions}</Th>
+            <Th data-print-hide>{locale.database.actions}</Th>
           </tr>
         </thead>
         <tbody>
           {tables.data.map((t) => (
             <Tr key={t.name}>
-              <Td>
+              <Td data-print-hide>
                 {t.kind === 'table' ? (
                   <input
                     type="checkbox"
@@ -115,7 +119,7 @@ export function TablesList({ db, schema }: { db: string; schema?: string | undef
               <Td className="max-w-xs">
                 <CellValue cell={t.comment ?? ''} />
               </Td>
-              <Td>
+              <Td data-print-hide>
                 <span className="flex gap-2 whitespace-nowrap text-xs">
                   <Link to="/db/$db/table/$table" params={{ db, table: t.name }} search={search} className={link}>
                     {locale.tabs.browse}
@@ -151,7 +155,7 @@ export function TablesList({ db, schema }: { db: string; schema?: string | undef
         </tbody>
         <tfoot>
           <tr className="font-semibold">
-            <Td />
+            <Td data-print-hide />
             <th scope="row" colSpan={2} className="border-b border-line px-2 py-1 text-left text-ink">
               {locale.database.total(totals.count)}
             </th>

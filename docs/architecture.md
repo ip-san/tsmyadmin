@@ -290,6 +290,7 @@ flowchart LR
 - `features/*` は互いを直接 import しません（共有は `components/` と `lib/`）。
 - UI 文字列は `config/locales/{ja,en}.ts` にのみ置き、`locale.*` で参照します。`en.ts` は `satisfies Locale` で日本語版と同じ形であることが型で保証されます。
 - 表示言語は「利用者の選択 → ブラウザ言語 → 日本語」の順に決まり、切り替え時はページを再読み込みします（各モジュールが読み込み時に一度だけ `locale` を読むため）。
+- **言語を足す手順**: ① `config/locales/xx.ts` を作り、`ja.ts` と同じ形ですべての文字列を訳します（`satisfies Locale` で漏れは型エラーになります）。② `config/locale.ts` の `LOCALE_NAMES` に `xx: '表示名'` を、`LOADERS` に読み込みの 1 行を足します（足し忘れると型エラー）。③ `config/locale.test.ts` の `LOCALES` に足します（全キーと関数の引数の数が `ja` と同じであることを確かめます）。④ `bun run check`。切り替えの選択肢には自動で出ます。サーバー側に言語の一覧はなく、アカウントの設定に保存するときは 2〜3 文字の小文字であることしか見ません。
 
 ## 8. 品質ゲート
 
@@ -321,7 +322,7 @@ flowchart LR
 | DDL 操作を追加 | `packages/shared/src/schemas/ddl.ts` → `*/ddl.ts` → web のフォーム | `test/ddl.test.ts` の `SAMPLE_OPS` に両方言のスナップショット、プレビュー経由の UI。SQL がサーバーの状態に依存する操作（`copyTable` の列、`renameDatabase` / `copyDatabase` のテーブル一覧）は `/ddl/preview` のルートで埋める。**依頼に含まれていても上書きする**（`apps/api/src/lib/database-ops.ts`）。ただし、依頼時点の一覧や権限で見える範囲に依存する破壊的な文は組み立てない — MySQL の名前変更が元のデータベースを DROP しないのはそのため（見えないルーチン・イベントや、確認後に作られたテーブルを巻き込む） |
 | 画面の文言を変える | `config/locales/ja.ts` と `en.ts` | 両方に同じキーを足す（`locale.test.ts` が形の一致を検査）。コンポーネントへの直書きは禁止 |
 | ドキュメントを直す | `docs/*.md`（日本語が原文） | `docs/en/` の対応ファイルも翻訳し、`bun run docs:sync` でハッシュを打ち直す（`bun run docs:i18n` が追随を検査） |
-| 表示言語を追加する | `config/locale.ts` の `LOCALES` / `LOCALE_NAMES` / `LocaleCodeSchema` と `locales/<code>.ts` | `ja.ts` が型の出どころ。新しい表は `satisfies Locale` を付ける |
+| 表示言語を追加する | `config/locale.ts` の `LOCALE_NAMES` / `LOADERS` と `locales/<code>.ts`、`locale.test.ts` の `LOCALES` | `ja.ts` が型の出どころ。新しい表は `satisfies Locale` を付ける（手順は §7） |
 | 色・見た目を変える | Tailwind のクラス | `dark:` 対応を必ず付ける |
 | 環境変数を追加 | `apps/api/src/config.ts` | `.env.example` と `docs/deployment.md` の表を同時に更新（英訳も。`bun run docs:i18n` が検査します） |
 | 新しい型のサポート | `docker/fixtures/*` → `*/values.ts` → conformance | `bun run db:reset`、両方言の `typesRow1` |

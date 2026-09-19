@@ -2,17 +2,19 @@ import { useQuery } from '@tanstack/react-query'
 import type { BrowseOptions, Cell } from '@tsmyadmin/shared'
 import { isBinaryCell, isTruncatedCell } from '@tsmyadmin/shared'
 import { useId, useState } from 'react'
+import { Button } from '@/components/ui/Button.tsx'
 import { Field, Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
+import { downloadBlob, downloadText, safeFilename } from '@/lib/download.ts'
 import { rowsQuery, sessionQuery, structureQuery, type TableRef } from '@/lib/queries.ts'
+import { svgToPng } from '@/lib/svg-png.ts'
 import { bounds, parseShape, type Shape, spatialEncoding } from './geometry.ts'
+import { gisDocument, type Project } from './gis-svg.ts'
 
 const t = locale.gis
 const WIDTH = 640
 const HEIGHT = 400
 const PAD = 16
-
-type Project = (p: [number, number]) => [number, number]
 
 function ShapePath({ shape, project, scale }: { shape: Shape; project: Project; scale: number }) {
   switch (shape.type) {
@@ -73,6 +75,7 @@ export function GisView({ tableRef, options }: { tableRef: TableRef; options: Br
   const rows = useQuery(rowsQuery(tableRef, options))
   const [chosen, setChosen] = useState('')
   const [label, setLabel] = useState('')
+  const [failed, setFailed] = useState(false)
   const spatial = (structure.data?.columns ?? []).flatMap((c) => {
     const encoding = dialect ? spatialEncoding(dialect, c.dataType) : null
     return encoding ? [{ name: c.name, encoding }] : []
@@ -102,6 +105,16 @@ export function GisView({ tableRef, options }: { tableRef: TableRef; options: Br
   const cy = box ? (box.minY + box.maxY) / 2 : 0
   // North up: larger y is drawn higher.
   const project: Project = ([x, y]) => [WIDTH / 2 + (x - cx) * scale, HEIGHT / 2 - (y - cy) * scale]
+  const file = safeFilename(`${tableRef.table}_${column.name}`, 'svg')
+  const document = () => gisDocument(drawn, project, scale, WIDTH, HEIGHT)
+  const savePng = () =>
+    svgToPng(document(), WIDTH, HEIGHT).then(
+      (blob) => {
+        setFailed(false)
+        downloadBlob(file.replace(/\.svg$/, '.png'), blob)
+      },
+      () => setFailed(true)
+    )
   return (
     <details className="mt-4 rounded border border-line p-3">
       <summary className="cursor-pointer text-sm font-semibold text-ink">{t.title}</summary>
@@ -133,6 +146,21 @@ export function GisView({ tableRef, options }: { tableRef: TableRef; options: Br
         <p className="text-xs text-ink-sub" aria-live="polite">
           {t.summary(drawn.length, unreadable)}
         </p>
+        {drawn.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" onClick={() => downloadText(file, document(), 'image/svg+xml')}>
+              {t.saveSvg}
+            </Button>
+            <Button size="sm" onClick={() => void savePng()}>
+              {t.savePng}
+            </Button>
+            {failed ? (
+              <span role="alert" className="text-xs text-red-800 dark:text-red-200">
+                {t.saveFailed}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
         {drawn.length > 0 ? (
           <svg
             width={WIDTH}

@@ -14,7 +14,11 @@ const IDENT = z.string().min(1).max(256)
 /** Preferences that follow the account. Every field is optional: an absent one means "this browser's own". */
 export const PreferencesSchema = z.object({
   theme: z.enum(['light', 'dark']).optional(),
-  locale: z.enum(['ja', 'en']).optional(),
+  // A language code (`ja`, `en`, `de`…): which ones this build has is the web app's to say, so adding one changes no schema.
+  locale: z
+    .string()
+    .regex(/^[a-z]{2,3}$/)
+    .optional(),
   browseLimit: z.number().int().min(1).max(BROWSE_MAX_LIMIT).optional(),
   sqlSafeMode: z.boolean().optional(),
   consoleDocked: z.boolean().optional(),

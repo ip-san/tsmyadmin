@@ -1,5 +1,6 @@
 import type { RowKeyKind } from '@tsmyadmin/shared'
 import { Button } from '@/components/ui/Button.tsx'
+import { PrintButton } from '@/components/ui/PrintButton.tsx'
 import { locale } from '@/config/locale.ts'
 import { ColumnPicker } from './ColumnPicker.tsx'
 import { DisplayMenu } from './DisplayMenu.tsx'
@@ -26,8 +27,9 @@ export function BrowseToolbar({
   onDelete,
 }: BrowseToolbarProps) {
   return (
-    <div className="flex flex-wrap items-center gap-3 text-xs text-ink-sub">
+    <div className="flex flex-wrap items-center gap-3 text-xs text-ink-sub print:hidden">
       <ColumnPicker columns={columns} visible={visible} onChange={onColumns} />
+      <PrintButton />
       <DisplayMenu />
       <span>{locale.browse.keyHint[keyKind]}</span>
       {editable ? (

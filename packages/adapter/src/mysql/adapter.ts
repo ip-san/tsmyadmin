@@ -133,8 +133,8 @@ const MARIADB_ERRNO_NAMES: Record<number, string> = {
 
 type QueryOutput = [unknown, FieldPacket[] | FieldPacket[][] | undefined]
 
-/** Collation negotiated at handshake; SET NAMES after a connection reset must restore the same one. */
-const SESSION_COLLATION = 'utf8mb4_unicode_ci'
+/** Collation negotiated at handshake unless the login chose another; SET NAMES after a connection reset must restore it. */
+const DEFAULT_COLLATION = 'utf8mb4_unicode_ci'
 /**
  * Placeholder values are escaped client-side by the driver with backslashes (mysql2 does not prepare `query()`);
  * a server running with NO_BACKSLASH_ESCAPES would read `\'` as a backslash plus a string terminator, turning any
@@ -195,6 +195,10 @@ export class MysqlAdapter extends BaseAdapter {
     super()
   }
 
+  private get collation(): string {
+    return this.config.collation ?? DEFAULT_COLLATION
+  }
+
   private getPool(): Pool {
     if (this.pool) return this.pool
     this.pool = mysql.createPool({
@@ -216,7 +220,7 @@ export class MysqlAdapter extends BaseAdapter {
       dateStrings: true,
       jsonStrings: true,
       rowsAsArray: true,
-      charset: SESSION_COLLATION,
+      charset: this.collation,
       // GEOMETRY arrives as the raw SRID+WKB bytes (a binary cell that round-trips through a dump) instead of
       // the driver's lossy {x, y} objects.
       typeCast: (field, next) => (field.type === 'GEOMETRY' ? field.buffer() : next()),
@@ -302,7 +306,7 @@ export class MysqlAdapter extends BaseAdapter {
       forget()
       try {
         await conn.reset()
-        await this.run(conn, `SET NAMES utf8mb4 COLLATE ${SESSION_COLLATION}`)
+        await this.run(conn, `SET NAMES ${this.collation.split('_')[0]} COLLATE ${this.collation}`)
       } catch {
         this.broken.add(core)
       }

@@ -12,6 +12,16 @@ import { readPreference, writePreference } from '@/lib/preferences.ts'
 
 const DEFAULT_PORTS: Record<Dialect, number> = { mysql: 3306, postgres: 5432 }
 const MANUAL = ''
+/** Collations offered for the connection (MySQL / MariaDB); the default is utf8mb4_unicode_ci. */
+const CONNECTION_COLLATIONS = [
+  'utf8mb4_general_ci',
+  'utf8mb4_0900_ai_ci',
+  'utf8mb4_bin',
+  'utf8mb3_general_ci',
+  'latin1_swedish_ci',
+  'cp932_japanese_ci',
+  'ujis_japanese_ci',
+]
 
 /** Last successful connection (no password): a session that expired should not cost the whole form again. */
 const LastLoginSchema = z.object({
@@ -21,6 +31,7 @@ const LastLoginSchema = z.object({
   port: z.number(),
   user: z.string(),
   database: z.string(),
+  collation: z.string().optional(),
 })
 const LAST_LOGIN_KEY = 'login.last'
 
@@ -48,6 +59,7 @@ export function LoginForm({ onLogin, presets = [] }: LoginFormProps) {
   /** The passkey challenge that answer carried, when the account has passkeys; answered once. */
   const [challenge, setChallenge] = useState<PasskeyChallenge | null>(null)
   const [passkeyError, setPasskeyError] = useState<unknown>(null)
+  const [collation, setCollation] = useState(last?.collation ?? '')
   const [database, setDatabase] = useState(
     manualLast?.database ?? (first ? (first.database ?? '') : (last?.database ?? ''))
   )
@@ -61,6 +73,7 @@ export function LoginForm({ onLogin, presets = [] }: LoginFormProps) {
         port: body.port,
         user: body.user,
         database: body.database ?? '',
+        ...(body.collation ? { collation: body.collation } : {}),
       })
       return result
     },
@@ -101,6 +114,7 @@ export function LoginForm({ onLogin, presets = [] }: LoginFormProps) {
     user,
     password,
     ...(database ? { database } : {}),
+    ...(dialect === 'mysql' && collation ? { collation } : {}),
   })
   const submit = (e: FormEvent) => {
     e.preventDefault()
@@ -210,6 +224,18 @@ export function LoginForm({ onLogin, presets = [] }: LoginFormProps) {
           readOnly={fixed && dialect === 'postgres'}
         />
       </Field>
+      {dialect === 'mysql' ? (
+        <Field id="collation" label={locale.login.collation} hint={locale.login.collationHint}>
+          <Select id="collation" value={collation} onChange={(e) => setCollation(e.target.value)}>
+            <option value="">{locale.login.collationDefault}</option>
+            {CONNECTION_COLLATIONS.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      ) : null}
       {codeNeeded ? (
         <Field id="code" label={locale.login.code} hint={locale.login.codeHint}>
           <Input

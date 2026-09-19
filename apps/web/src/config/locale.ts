@@ -4,11 +4,21 @@ import type { Locale } from './locales/ja.ts'
 
 export type { Locale }
 
-/** The languages the UI ships with, in the order the switcher lists them. */
+/** The languages the UI ships with, in the order the switcher lists them (each names itself). */
 export const LOCALE_NAMES = { ja: '日本語', en: 'English' } as const
 export type LocaleCode = keyof typeof LOCALE_NAMES
-export const LOCALE_CODES = Object.keys(LOCALE_NAMES) as LocaleCode[]
-const LocaleCodeSchema = z.enum(['ja', 'en'])
+export const LOCALE_CODES = Object.keys(LOCALE_NAMES) as [LocaleCode, ...LocaleCode[]]
+const LocaleCodeSchema = z.enum(LOCALE_CODES)
+
+/**
+ * Where each language's strings come from. One dynamic import per language, so each is its own chunk and only the
+ * one in use is downloaded. Adding a language is a file in `locales/`, a line in `LOCALE_NAMES` and a line here (the
+ * type refuses a code that has no loader).
+ */
+const LOADERS: Record<LocaleCode, () => Promise<Locale>> = {
+  ja: async () => (await import('./locales/ja.ts')).ja,
+  en: async () => (await import('./locales/en.ts')).en,
+}
 const LOCALE_PREFERENCE = 'locale'
 
 /**
@@ -41,9 +51,9 @@ export const localeCode: LocaleCode = resolveLocaleCode(
  */
 export let locale = undefined as unknown as Locale
 
-/** Downloads this page's language (the branches are literal, so each language is its own chunk). */
+/** Downloads this page's language. */
 export async function loadLocale(): Promise<void> {
-  locale = localeCode === 'en' ? (await import('./locales/en.ts')).en : (await import('./locales/ja.ts')).ja
+  locale = await LOADERS[localeCode]()
 }
 
 export function setLocale(code: LocaleCode): void {
