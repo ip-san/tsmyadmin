@@ -21,8 +21,12 @@ export function Input({
   return <input ref={ref} className={cn(control, className)} {...rest} />
 }
 
-export function Textarea({ className, ...rest }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea className={cn(control, className)} {...rest} />
+export function Textarea({
+  className,
+  ref,
+  ...rest
+}: TextareaHTMLAttributes<HTMLTextAreaElement> & { ref?: Ref<HTMLTextAreaElement> }) {
+  return <textarea ref={ref} className={cn(control, className)} {...rest} />
 }
 
 export function Select({ className, ...rest }: SelectHTMLAttributes<HTMLSelectElement>) {

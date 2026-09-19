@@ -2414,6 +2414,37 @@ describe('preferences, central columns and column transformations', () => {
     }
   })
 
+  it('keeps the display and the input transformation of a column apart, and refuses options a kind cannot use', async () => {
+    const h = persistentHarness()
+    try {
+      await h.login()
+      const target = { database: 'shop', table: 'items', column: 'zip' }
+      const post = (body: Record<string, unknown>) => h.send('/api/column-transforms', 'POST', { ...target, ...body })
+      await post({ kind: 'substring', start: 0, length: 3 })
+      const both = z
+        .array(ColumnTransformSchema)
+        .parse(await (await post({ kind: 'pattern', pattern: '^\\d+$' })).json())
+      expect(both.map((t) => t.kind).sort()).toEqual(['pattern', 'substring'])
+      // Setting the display one again replaces it, not the input one.
+      const again = z.array(ColumnTransformSchema).parse(await (await post({ kind: 'hex' })).json())
+      expect(again.map((t) => t.kind).sort()).toEqual(['hex', 'pattern'])
+      for (const bad of [
+        { kind: 'substring' },
+        { kind: 'date' },
+        { kind: 'affix' },
+        { kind: 'pattern' },
+        { kind: 'pattern', pattern: '(' },
+        { kind: 'hex', template: 'https://x/{value}' },
+        { kind: 'substring', length: 0 },
+        { kind: 'date', format: 'x'.repeat(61) },
+      ])
+        expect((await post(bad)).status).toBe(400)
+      expect((await post({ kind: 'json-input' })).status).toBe(200)
+    } finally {
+      await h.store.closeAll()
+    }
+  })
+
   it('shares bookmarks with the whole server, removable only by whoever saved them', async () => {
     const h = persistentHarness()
     try {

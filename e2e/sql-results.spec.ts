@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import { expect, type Page } from '@playwright/test'
 import { login, TARGETS, test } from './helpers.ts'
 
@@ -93,6 +94,48 @@ for (const t of TARGETS) {
       // The line lifts over the missing value: two separate strokes.
       const d = await result.locator('path[data-series="age"]').getAttribute('d')
       expect(d?.match(/M/g)).toHaveLength(2)
+    })
+
+    test('draws a result as a spline, an area, a pie, a scatter plot or a timeline, and saves the picture', async ({
+      page,
+    }) => {
+      await run(page, 'SELECT name, age, id, created_at FROM users ORDER BY id')
+      const result = page.getByRole('region', { name: '文 1' })
+      await result.getByRole('button', { name: '文 1 の結果: グラフ' }).click()
+      const kind = result.getByLabel('グラフの種類')
+      await kind.selectOption('spline')
+      expect(await result.locator('path[data-series="age"]').getAttribute('d')).toContain('C ')
+      await kind.selectOption('area')
+      await expect(result.locator('figure svg path')).toHaveCount(2)
+      // A pie: one slice for each user who has an age (Bob's is NULL).
+      await kind.selectOption('pie')
+      await expect(result.locator('figure svg path')).toHaveCount(4)
+      // A scatter plot takes numbers on the horizontal axis; a timeline takes dates.
+      await kind.selectOption('scatter')
+      const axis = result.getByLabel('横軸のカラム')
+      await expect(axis.locator('option')).toHaveText(['age', 'id'])
+      await axis.selectOption({ label: 'id' })
+      await expect(result.locator('g[data-series="age"] circle')).toHaveCount(4)
+      await kind.selectOption('timeline')
+      await expect(axis.locator('option')).toHaveText(['created_at'])
+      await expect(result.locator('g[data-series="age"] circle')).toHaveCount(4)
+      await expect(result.locator('g[data-series="age"] path')).toHaveCount(1)
+
+      // The picture as files: a standalone SVG with its colours written in, and a PNG.
+      const [svg] = await Promise.all([
+        page.waitForEvent('download'),
+        result.getByRole('button', { name: 'SVG で保存' }).click(),
+      ])
+      expect(svg.suggestedFilename()).toMatch(/\.svg$/)
+      const text = await readFile(await svg.path(), 'utf8')
+      expect(text).toContain('xmlns="http://www.w3.org/2000/svg"')
+      expect(text).not.toContain('class=')
+      expect(text).toMatch(/fill: rgb/)
+      const [png] = await Promise.all([
+        page.waitForEvent('download'),
+        result.getByRole('button', { name: 'PNG で保存' }).click(),
+      ])
+      expect((await readFile(await png.path())).subarray(1, 4).toString('latin1')).toBe('PNG')
     })
   })
 }

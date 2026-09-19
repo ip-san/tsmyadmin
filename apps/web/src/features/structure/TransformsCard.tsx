@@ -1,13 +1,15 @@
 import type { TransformKind } from '@tsmyadmin/shared'
-import { TransformKindSchema } from '@tsmyadmin/shared'
+import { DISPLAY_TRANSFORMS, INPUT_TRANSFORMS, TransformKindSchema } from '@tsmyadmin/shared'
 import { type FormEvent, useId, useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { Card } from '@/components/ui/Card.tsx'
 import { ErrorBox } from '@/components/ui/Feedback.tsx'
-import { Field, Input, Select } from '@/components/ui/Field.tsx'
+import { Field, Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
 import { useColumnTransforms } from '@/lib/column-transforms.ts'
 import type { TableRef } from '@/lib/queries.ts'
+import { TransformFields } from './TransformFields.tsx'
+import { describeOptions, EMPTY_PARAMS, type TransformParams, transformOptions } from './transform-params.ts'
 
 const t = locale.transform
 
@@ -20,7 +22,7 @@ export function TransformsCard({ tableRef, columns }: { tableRef: TableRef; colu
   const list = useColumnTransforms(tableRef)
   const [chosen, setChosen] = useState('')
   const [kind, setKind] = useState<TransformKind>('link')
-  const [template, setTemplate] = useState('')
+  const [params, setParams] = useState<TransformParams>(EMPTY_PARAMS)
   const column = columns.includes(chosen) ? chosen : (columns[0] ?? '')
   const submit = (e: FormEvent) => {
     e.preventDefault()
@@ -31,9 +33,9 @@ export function TransformsCard({ tableRef, columns }: { tableRef: TableRef; colu
       table: tableRef.table,
       column,
       kind,
-      ...(kind === 'link' && template.trim() ? { template: template.trim() } : {}),
+      ...transformOptions(kind, params),
     })
-    setTemplate('')
+    setParams(EMPTY_PARAMS)
   }
   return (
     <Card title={t.title}>
@@ -47,7 +49,9 @@ export function TransformsCard({ tableRef, columns }: { tableRef: TableRef; colu
             <li key={x.column} className="flex flex-wrap items-center gap-2">
               <span className="font-mono">{x.column}</span>
               <span className="text-ink-sub">→ {t.kinds[x.kind]}</span>
-              {x.template ? <span className="break-all font-mono text-xs text-ink-sub">{x.template}</span> : null}
+              {describeOptions(x) ? (
+                <span className="break-all font-mono text-xs text-ink-sub">{describeOptions(x)}</span>
+              ) : null}
               <Button size="sm" onClick={() => list.remove(x)} aria-label={t.clear(x.column)}>
                 {locale.common.delete}
               </Button>
@@ -71,26 +75,26 @@ export function TransformsCard({ tableRef, columns }: { tableRef: TableRef; colu
             value={kind}
             onChange={(e) => setKind(TransformKindSchema.catch('link').parse(e.target.value))}
           >
-            {TransformKindSchema.options.map((k) => (
-              <option key={k} value={k}>
-                {t.kinds[k]}
-              </option>
+            {[
+              [t.groupDisplay, DISPLAY_TRANSFORMS],
+              [t.groupInput, INPUT_TRANSFORMS],
+            ].map(([group, kinds]) => (
+              <optgroup key={group as string} label={group as string}>
+                {(kinds as readonly TransformKind[]).map((k) => (
+                  <option key={k} value={k}>
+                    {t.kinds[k]}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </Select>
         </Field>
-        {kind === 'link' ? (
-          <Field id={`${id}-template`} label={t.template}>
-            <Input
-              id={`${id}-template`}
-              type="url"
-              pattern="https?://.+"
-              placeholder="https://example.com/items/{value}"
-              value={template}
-              onChange={(e) => setTemplate(e.target.value)}
-              className="w-96 max-w-full font-mono"
-            />
-          </Field>
-        ) : null}
+        <TransformFields
+          id={id}
+          kind={kind}
+          params={params}
+          onChange={(patch) => setParams((p) => ({ ...p, ...patch }))}
+        />
         <Button type="submit" variant="primary" disabled={!column}>
           {t.set}
         </Button>

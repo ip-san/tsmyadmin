@@ -78,15 +78,32 @@ export function centralColumnKey(c: { database: string; schema?: string | undefi
 }
 
 /**
- * phpMyAdmin's browser transformations, the ones that are safe to offer: a binary value shown as the image it
- * holds; a value shown as a link (http / https only, the value URL-encoded into an optional template); JSON
- * shown indented. Display only — what is stored and what an edit writes are unchanged.
+ * phpMyAdmin's browser transformations, the ones that are safe to offer. Display: a binary value shown as the image it
+ * holds; a value as a link (http / https only, the value URL-encoded into an optional template); JSON indented; a
+ * value as hex, cut to a part, as a yes / no, as a formatted date, as an IPv4 address, or with text around it. Input
+ * (the insert and edit forms): a pattern the value must match, and editors that check JSON or XML, or just give room to
+ * SQL. Display only changes how a value looks — what is stored and what an edit writes are unchanged.
  */
-export const TransformKindSchema = z.enum(['image', 'link', 'json'])
+export const DISPLAY_TRANSFORMS = [
+  'image',
+  'link',
+  'json',
+  'hex',
+  'substring',
+  'boolean',
+  'date',
+  'ipv4',
+  'affix',
+] as const
+export const INPUT_TRANSFORMS = ['pattern', 'json-input', 'xml-input', 'sql-input'] as const
+export const TransformKindSchema = z.enum([...DISPLAY_TRANSFORMS, ...INPUT_TRANSFORMS])
 export type TransformKind = z.infer<typeof TransformKindSchema>
+export const isInputTransform = (kind: TransformKind): boolean => (INPUT_TRANSFORMS as readonly string[]).includes(kind)
 
 /** A link template: an http(s) URL where `{value}` stands for the cell. */
 const LINK_TEMPLATE = /^https?:\/\/[^\s]+$/i
+
+const TEXT = z.string().max(60)
 
 export const ColumnTransformBodySchema = z
   .object({
@@ -96,8 +113,38 @@ export const ColumnTransformBodySchema = z
     column: IDENT,
     kind: TransformKindSchema,
     template: z.string().max(1000).regex(LINK_TEMPLATE).optional(),
+    /** substring: where the part starts (0-based) and how long it is. */
+    start: z.number().int().min(0).max(10_000).optional(),
+    length: z.number().int().min(1).max(10_000).optional(),
+    /** boolean: what a true and a false value read as (empty: yes / no in the interface's language). */
+    trueText: TEXT.optional(),
+    falseText: TEXT.optional(),
+    /** date: the pattern (YYYY YY MM M DD D HH H hh h mm ss A; text in [brackets] is kept as written). */
+    format: TEXT.min(1).optional(),
+    /** affix: what goes before and after the value. */
+    prefix: TEXT.optional(),
+    suffix: TEXT.optional(),
+    /** pattern: a regular expression the value has to match somewhere in it, and what to say when it does not. */
+    pattern: z.string().min(1).max(200).optional(),
+    message: z.string().max(200).optional(),
   })
-  .refine((t) => t.kind === 'link' || t.template === undefined, { message: 'Only a link takes a template' })
+  .superRefine((t, ctx) => {
+    const need = (ok: boolean, path: string, message: string) => {
+      if (!ok) ctx.addIssue({ code: 'custom', path: [path], message })
+    }
+    need(t.kind === 'link' || t.template === undefined, 'template', 'Only a link takes a template')
+    need(t.kind !== 'substring' || t.length !== undefined, 'length', 'A substring needs a length')
+    need(t.kind !== 'date' || t.format !== undefined, 'format', 'A date needs a format')
+    need(t.kind !== 'affix' || Boolean(t.prefix || t.suffix), 'prefix', 'An affix needs text before or after')
+    need(t.kind !== 'pattern' || t.pattern !== undefined, 'pattern', 'A pattern needs an expression')
+    if (t.kind === 'pattern' && t.pattern !== undefined) {
+      try {
+        new RegExp(t.pattern)
+      } catch {
+        need(false, 'pattern', 'The expression is not a valid regular expression')
+      }
+    }
+  })
 export type ColumnTransformBody = z.infer<typeof ColumnTransformBodySchema>
 
 export const ColumnTransformSchema = z.intersection(
@@ -111,8 +158,11 @@ export function columnTransformKey(t: {
   schema?: string | undefined
   table: string
   column: string
+  kind?: TransformKind
 }): string {
-  return JSON.stringify([t.database, t.schema ?? '', t.table, t.column])
+  // A column has one display transformation and one for input: the input one is keyed apart.
+  const base = [t.database, t.schema ?? '', t.table, t.column]
+  return JSON.stringify(t.kind !== undefined && isInputTransform(t.kind) ? [...base, 'input'] : base)
 }
 
 /**

@@ -1,4 +1,4 @@
-import type { Cell, ColumnDef, ForeignKeyDef, RowValues, WriteCell } from '@tsmyadmin/shared'
+import type { Cell, ColumnDef, ColumnTransform, ForeignKeyDef, RowValues, WriteCell } from '@tsmyadmin/shared'
 import { isGeneratedColumn, ROW_FUNCTIONS_WITH_ARG } from '@tsmyadmin/shared'
 import { type FormEvent, useEffect, useRef, useState } from 'react'
 import { locale } from '@/config/locale.ts'
@@ -20,6 +20,8 @@ export interface RowFormProps {
   initialRows?: Record<string, Cell>[]
   /** The table's foreign keys, to suggest the referenced values. */
   foreignKeys?: ForeignKeyDef[]
+  /** Input transformations by column: a pattern the value must match, or an editor that checks JSON / XML. */
+  inputTransforms?: ReadonlyMap<string, ColumnTransform>
   /** Insert: how many rows the form holds (phpMyAdmin's "Continue insertion with N rows"). */
   rowCount?: number
   pending?: boolean
@@ -89,6 +91,7 @@ export function RowForm({
   initial,
   initialRows,
   foreignKeys = [],
+  inputTransforms,
   rowCount = 1,
   pending,
   error,
@@ -215,6 +218,7 @@ export function RowForm({
                         column={c}
                         field={f}
                         fk={fks.get(c.name)}
+                        input={inputTransforms?.get(c.name)}
                         locked={locked}
                         describedBy={opaque && mode === 'insert' ? `${id}-note` : undefined}
                         onChange={(patch) => update(row, c, patch)}

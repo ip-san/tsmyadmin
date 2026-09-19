@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
-import type { ColumnDef, Dialect, ForeignKeyDef, RowFunction } from '@tsmyadmin/shared'
+import type { ColumnDef, ColumnTransform, Dialect, ForeignKeyDef, RowFunction } from '@tsmyadmin/shared'
 import { ROW_FUNCTIONS_WITH_ARG, rowFunctionsFor } from '@tsmyadmin/shared'
 import { useState } from 'react'
 import { locale } from '@/config/locale.ts'
 import { rowsQuery, sessionQuery } from '@/lib/queries.ts'
+import { inputProblem } from '../cells/transform-text.ts'
 import { Input, Select, Textarea } from '../ui/Field.tsx'
 
 /**
@@ -71,6 +72,7 @@ export function RowField({
   column: c,
   field: f,
   fk,
+  input,
   locked,
   describedBy,
   onChange,
@@ -81,6 +83,8 @@ export function RowField({
   column: ColumnDef
   field: FieldState
   fk: ForeignKeyDef | undefined
+  /** The column's input transformation: a pattern to match, or an editor that checks what is typed. */
+  input?: ColumnTransform | undefined
   /** A value that cannot be edited here (binary or cut off) and is kept unless a file replaces it. */
   locked: boolean
   describedBy: string | undefined
@@ -93,6 +97,22 @@ export function RowField({
   const takeOver = (text: string) => onChange({ text, isNull: false, useDefault: false, file: null })
   const binary = isBinaryColumn(c)
   const [tooLarge, setTooLarge] = useState(false)
+  // What is typed is checked as it is typed; a value that is NULL, left to the default, a function's or a file's is not.
+  const typed = !(f.isNull || f.useDefault || f.fn !== '' || f.file !== null)
+  const problem = input && typed ? inputProblem(input, f.text) : null
+  const problemText =
+    problem === null
+      ? ''
+      : problem === 'pattern'
+        ? input?.message || locale.rows.patternMismatch
+        : problem === 'json'
+          ? locale.rows.invalidJson
+          : locale.rows.invalidXml
+  const editor = input !== undefined && ['json-input', 'xml-input', 'sql-input'].includes(input.kind)
+  // The browser's own form validation stops the submit and says why, which is what a required field does too.
+  const checked = (el: HTMLInputElement | HTMLTextAreaElement | null) => el?.setCustomValidity(problemText)
+  const problemId = `${id}-problem`
+  const described = [describedBy, problemText ? problemId : undefined].filter(Boolean).join(' ') || undefined
   return (
     <div className="flex flex-wrap items-start gap-2">
       <Select
@@ -113,13 +133,15 @@ export function RowField({
       <div className="min-w-48 flex-1">
         {locked && !f.file && f.fn === '' ? (
           <span className="text-xs text-ink-sub">{locale.rows.binaryReadOnly}</span>
-        ) : MULTILINE.test(c.dataType) ? (
+        ) : editor || MULTILINE.test(c.dataType) ? (
           <Textarea
             id={id}
-            aria-describedby={describedBy}
+            ref={checked}
+            aria-describedby={described}
+            aria-invalid={problemText !== ''}
             value={shown}
             disabled={!takesArg || f.file !== null}
-            rows={Math.min(12, Math.max(2, f.text.split('\n').length))}
+            rows={Math.min(12, Math.max(editor ? 4 : 2, f.text.split('\n').length))}
             onChange={(e) => takeOver(e.target.value)}
             placeholder={f.useDefault && c.default !== null ? c.default : undefined}
             className="font-mono text-xs"
@@ -127,7 +149,9 @@ export function RowField({
         ) : (
           <Input
             id={id}
-            aria-describedby={describedBy}
+            ref={checked}
+            aria-describedby={described}
+            aria-invalid={problemText !== ''}
             value={f.file ? f.file.name : shown}
             disabled={!takesArg || f.file !== null}
             list={listId}
@@ -137,6 +161,11 @@ export function RowField({
           />
         )}
         {listId && fk ? <FkOptions id={listId} fk={fk} /> : null}
+        {problemText ? (
+          <p id={problemId} className="mt-1 text-xs text-red-700 dark:text-red-300">
+            {problemText}
+          </p>
+        ) : null}
       </div>
       {binary && f.fn === '' ? (
         <label className="flex items-center gap-1 text-xs text-ink">

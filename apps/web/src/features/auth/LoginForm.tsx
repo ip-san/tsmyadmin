@@ -224,17 +224,23 @@ export function LoginForm({ onLogin, presets = [] }: LoginFormProps) {
           readOnly={fixed && dialect === 'postgres'}
         />
       </Field>
+      {/* Rarely changed, so folded away: the form's main path stays short. Open when a collation was chosen. */}
       {dialect === 'mysql' ? (
-        <Field id="collation" label={locale.login.collation} hint={locale.login.collationHint}>
-          <Select id="collation" value={collation} onChange={(e) => setCollation(e.target.value)}>
-            <option value="">{locale.login.collationDefault}</option>
-            {CONNECTION_COLLATIONS.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </Select>
-        </Field>
+        <details open={collation !== ''} className="text-sm">
+          <summary className="cursor-pointer text-ink-sub">{locale.login.advanced}</summary>
+          <div className="mt-2">
+            <Field id="collation" label={locale.login.collation} hint={locale.login.collationHint}>
+              <Select id="collation" value={collation} onChange={(e) => setCollation(e.target.value)}>
+                <option value="">{locale.login.collationDefault}</option>
+                {CONNECTION_COLLATIONS.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </div>
+        </details>
       ) : null}
       {codeNeeded ? (
         <Field id="code" label={locale.login.code} hint={locale.login.codeHint}>

@@ -3,6 +3,7 @@ import { isBinaryCell, transformLink } from '@tsmyadmin/shared'
 import { useState } from 'react'
 import { locale } from '@/config/locale.ts'
 import { CellValue } from './CellValue.tsx'
+import { displayText } from './transform-text.ts'
 
 const bytesOf = (text: string) => Array.from(text, (c) => c.charCodeAt(0))
 const startsWith = (head: number[], magic: number[]) => magic.every((b, i) => head[i] === b)
@@ -49,8 +50,17 @@ export function TransformedCell({ cell, transform }: { cell: Cell; transform: Co
   if (transform.kind === 'image') {
     return isBinaryCell(cell) ? <Image cell={cell} column={transform.column} /> : <CellValue cell={cell} />
   }
+  if (transform.kind === 'hex') {
+    const shown = displayText(transform, cell)
+    return shown === null ? <CellValue cell={cell} /> : <span className="break-all font-mono text-xs">{shown}</span>
+  }
   if (typeof cell === 'object') return <CellValue cell={cell} />
   const text = String(cell)
+  if (['substring', 'boolean', 'date', 'ipv4', 'affix'].includes(transform.kind)) {
+    const shown = displayText(transform, cell)
+    // The value as stored stays one hover away (a transformation changes how it looks, not what it is).
+    return shown === null ? <CellValue cell={cell} /> : <span title={text}>{shown}</span>
+  }
   if (transform.kind === 'link') {
     const href = transformLink(text, transform.template)
     if (!href) return <CellValue cell={cell} />

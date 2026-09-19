@@ -7,6 +7,7 @@ import { RowForm } from '@/components/rows/RowForm.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
+import { useColumnTransforms } from '@/lib/column-transforms.ts'
 import { mutations, rowsKey, structureQuery, type TableRef } from '@/lib/queries.ts'
 
 /** How many rows the insert form holds at once. */
@@ -14,6 +15,7 @@ const ROW_COUNTS = [1, 2, 3, 5, 10]
 
 export function InsertPage({ tableRef }: { tableRef: TableRef }) {
   const structure = useQuery(structureQuery(tableRef))
+  const inputs = useColumnTransforms(tableRef).inputByColumn
   const queryClient = useQueryClient()
   const [inserted, setInserted] = useState(0)
   const [rowCount, setRowCount] = useState(1)
@@ -82,6 +84,7 @@ export function InsertPage({ tableRef }: { tableRef: TableRef }) {
       </label>
       <div ref={formRef}>
         <RowForm
+          inputTransforms={inputs}
           key={round}
           columns={structure.data.columns}
           foreignKeys={structure.data.foreignKeys}

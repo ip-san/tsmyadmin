@@ -1,4 +1,4 @@
-<!-- translated-from: docs/phpmyadmin-parity.md sha256:664420adca0b35ddb0db6aa0e43f9bfed07269515d6abc3dd53d6598c81a1117 -->
+<!-- translated-from: docs/phpmyadmin-parity.md sha256:8edf2f2758a5a95965ef3c7fab9c21da31b9bc09298a1e422a3d03288e18bd49 -->
 
 # Feature parity with phpMyAdmin
 
@@ -97,9 +97,9 @@ The basics (browsing and editing, structure changes, SQL, search, QBE, export / 
 | G2 | Shared bookmarks with `[VARIABLE]` substitution; SQL history kept on the server | ✅ |
 | G3 | Console: history, bookmarks, options | ✅ |
 | G4 | After a statement runs: edit / EXPLAIN / code for an application / run again | ✅ |
-| G5 | Chart kinds (column, spline, area, pie, timeline, scatter); saving as an image | △ |
+| G5 | Chart kinds (column, spline, area, pie, timeline, scatter); saving as an image | ✅ |
 | G6 | GIS: saving as PNG / SVG | ✅ |
-| G7 | More display transformations (hex, substring, boolean, date format, IPv4, prepend / append, image and text links) and input transformations (image upload, regular expression check, JSON / XML / SQL editors) | △ |
+| G7 | More display transformations (hex, substring, boolean, date format, IPv4, prepend / append, image and text links) and input transformations (image upload, regular expression check, JSON / XML / SQL editors) | ✅ |
 | G8 | Navigation: grouping by prefix, hiding items, paging when there are many | ✅ |
 | G9 | Choosing the connection collation; server information on the home page | ✅ |
 | G12 | Printable lists | ✅ |

@@ -1,8 +1,18 @@
 import type { ResultSet } from '@tsmyadmin/shared'
-import { useId, useMemo, useState } from 'react'
+import { useId, useMemo, useRef, useState } from 'react'
+import { Button } from '@/components/ui/Button.tsx'
 import { Field, Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
 import { chartData, MAX_POINTS, niceScale, numericColumns } from '@/lib/chart-data.ts'
+import { areaPath, type Pt, parseTime, polylinePath, splinePath } from '@/lib/chart-shapes.ts'
+import { downloadBlob, downloadText, safeFilename } from '@/lib/download.ts'
+import { standaloneSvg } from '@/lib/svg-export.ts'
+import { svgToPng } from '@/lib/svg-png.ts'
+import { ChartPie } from './ChartPie.tsx'
+import { ChartXY } from './ChartXY.tsx'
+
+const KINDS = ['bar', 'line', 'spline', 'area', 'pie', 'scatter', 'timeline'] as const
+type Kind = (typeof KINDS)[number]
 
 const t = locale.sql.chart
 /**
@@ -39,13 +49,28 @@ export function ResultChart({ result }: { result: ResultSet }) {
   const numeric = useMemo(() => numericColumns(result.columns.length, result.rows), [result])
   // Defaults: the first non-numeric column as categories (or the first column), the first numeric one plotted.
   const firstText = names.findIndex((_, i) => !numeric.includes(i))
-  const [kind, setKind] = useState<'bar' | 'line'>('bar')
+  const [kind, setKind] = useState<Kind>('bar')
   const [x, setX] = useState(firstText === -1 ? 0 : firstText)
+  const svgRef = useRef<SVGSVGElement>(null)
+  const [saveFailed, setSaveFailed] = useState(false)
+  // A timeline needs a column of dates; a scatter plot, one of numbers. The other kinds take any column as categories.
+  const dates = useMemo(
+    () =>
+      names.flatMap((_, i) =>
+        result.rows.some((r) => r[i] !== null && r[i] !== undefined) &&
+        result.rows.every((r) => r[i] === null || (typeof r[i] === 'string' && parseTime(r[i] as string) !== null))
+          ? [i]
+          : []
+      ),
+    [result, names]
+  )
   const [ys, setYs] = useState<number[]>(() => numeric.filter((c) => c !== x).slice(0, 1))
 
   if (numeric.length === 0) return <p className="text-sm text-ink-sub">{t.noNumbers}</p>
-  const plotted = ys.filter((c) => c !== x)
-  const { labels, series, clipped } = chartData(result.rows, x, plotted)
+  const xChoices = kind === 'scatter' ? numeric : kind === 'timeline' ? dates : names.map((_, i) => i)
+  const xNow = xChoices.includes(x) ? x : (xChoices[0] ?? x)
+  const plotted = ys.filter((c) => c !== xNow)
+  const { labels, series, clipped } = chartData(result.rows, xNow, plotted)
   const scale = niceScale(series.flatMap((s) => s.values.filter((v): v is number => v !== null)))
   const step = Math.max(MIN_STEP, Math.min(64, 720 / Math.max(labels.length, 1)))
   // Room for the widest tick label (large sums print many digits).
@@ -55,26 +80,42 @@ export function ResultChart({ result }: { result: ResultSet }) {
   const y = (v: number) => TOP + plotHeight - ((v - scale.min) / (scale.max - scale.min)) * plotHeight
   const labelEvery = Math.ceil(labels.length / 60)
   const barWidth = (step * 0.8) / Math.max(series.length, 1)
+  const at = (i: number) => left + i * step + step / 2
+  const pointsOf = (values: readonly (number | null)[]): (Pt | null)[] =>
+    values.map((v, i) => (v === null ? null : ([at(i), y(v)] as Pt)))
+  const file = (extension: string) => safeFilename(`${names[xNow] ?? 'chart'}_${kind}`, extension)
+  const save = async (format: 'svg' | 'png') => {
+    const svg = svgRef.current
+    if (!svg) return
+    const { text, width: w, height: h } = standaloneSvg(svg, getComputedStyle(document.body).backgroundColor || '#fff')
+    if (format === 'svg') return downloadText(file('svg'), text, 'image/svg+xml')
+    try {
+      setSaveFailed(false)
+      downloadBlob(file('png'), await svgToPng(text, w, h))
+    } catch {
+      setSaveFailed(true)
+    }
+  }
+  const categorical = kind === 'bar' || kind === 'line' || kind === 'spline' || kind === 'area'
+  const drawable = series.length > 0 && (kind !== 'scatter' && kind !== 'timeline' ? true : xChoices.length > 0)
 
   return (
     <div className="space-y-2 rounded border border-line bg-surface p-3">
       <div className="flex flex-wrap items-end gap-4 text-sm">
         <Field id={`${id}-kind`} label={t.kind}>
-          <Select
-            id={`${id}-kind`}
-            value={kind}
-            onChange={(e) => setKind(e.target.value === 'line' ? 'line' : 'bar')}
-            className="w-32"
-          >
-            <option value="bar">{t.bar}</option>
-            <option value="line">{t.line}</option>
+          <Select id={`${id}-kind`} value={kind} onChange={(e) => setKind(e.target.value as Kind)} className="w-36">
+            {KINDS.map((k) => (
+              <option key={k} value={k}>
+                {t.kinds[k]}
+              </option>
+            ))}
           </Select>
         </Field>
-        <Field id={`${id}-x`} label={t.x}>
-          <Select id={`${id}-x`} value={x} onChange={(e) => setX(Number(e.target.value))} className="w-48">
-            {names.map((n, i) => (
-              <option key={`${n}-${i}`} value={i}>
-                {n}
+        <Field id={`${id}-x`} label={kind === 'scatter' || kind === 'timeline' ? t.xAxis : t.x}>
+          <Select id={`${id}-x`} value={xNow} onChange={(e) => setX(Number(e.target.value))} className="w-48">
+            {xChoices.map((i) => (
+              <option key={`${names[i]}-${i}`} value={i}>
+                {names[i]}
               </option>
             ))}
           </Select>
@@ -86,21 +127,45 @@ export function ResultChart({ result }: { result: ResultSet }) {
               <input
                 type="checkbox"
                 checked={ys.includes(c)}
-                disabled={c === x || (!ys.includes(c) && plotted.length >= MAX_SERIES)}
+                disabled={c === xNow || (!ys.includes(c) && plotted.length >= MAX_SERIES)}
                 onChange={(e) => setYs((prev) => (e.target.checked ? [...prev, c] : prev.filter((v) => v !== c)))}
               />
               {names[c]}
             </label>
           ))}
         </fieldset>
+        {drawable ? (
+          <div className="flex items-center gap-2">
+            <Button size="sm" onClick={() => void save('svg')}>
+              {t.saveSvg}
+            </Button>
+            <Button size="sm" onClick={() => void save('png')}>
+              {t.savePng}
+            </Button>
+          </div>
+        ) : null}
       </div>
+      {saveFailed ? (
+        <p role="alert" className="text-xs text-red-800 dark:text-red-200">
+          {t.saveFailed}
+        </p>
+      ) : null}
+      {kind === 'pie' ? <p className="text-xs text-ink-sub">{t.pieNote}</p> : null}
       {clipped ? <p className="text-xs text-ink-sub">{t.clipped(MAX_POINTS)}</p> : null}
-      {series.length === 0 ? (
+      {xChoices.length === 0 ? (
+        <p className="text-sm text-ink-sub">{kind === 'timeline' ? t.noDates : t.noNumbers}</p>
+      ) : series.length === 0 ? (
         <p className="text-sm text-ink-sub">{t.chooseSeries}</p>
-      ) : (
+      ) : kind === 'pie' ? (
+        <ChartPie labels={labels} values={series[0]?.values ?? []} svgRef={svgRef} />
+      ) : kind === 'scatter' || kind === 'timeline' ? (
+        <ChartXY kind={kind} rows={result.rows} x={xNow} ys={plotted} names={names} svgRef={svgRef} />
+      ) : categorical ? (
         <figure className="overflow-x-auto">
           <figcaption className="mb-1 flex flex-wrap gap-3 text-xs text-ink">
-            <span className="sr-only">{t.caption(names[x] ?? '', plotted.map((c) => names[c] ?? '').join(', '))}</span>
+            <span className="sr-only">
+              {t.caption(names[xNow] ?? '', plotted.map((c) => names[c] ?? '').join(', '))}
+            </span>
             {series.map((s, i) => (
               <span key={s.column} className="flex items-center gap-1" aria-hidden>
                 <svg width={12} height={12} className={FILL[i]}>
@@ -110,7 +175,7 @@ export function ResultChart({ result }: { result: ResultSet }) {
               </span>
             ))}
           </figcaption>
-          <svg width={width} height={HEIGHT} aria-hidden className="text-ink-sub">
+          <svg ref={svgRef} width={width} height={HEIGHT} aria-hidden className="text-ink-sub">
             {scale.ticks.map((tick) => (
               <g key={tick}>
                 <line x1={left} x2={width - 8} y1={y(tick)} y2={y(tick)} className="stroke-line" />
@@ -149,35 +214,24 @@ export function ResultChart({ result }: { result: ResultSet }) {
                   )}
                 </g>
               ) : (
-                <path
-                  key={s.column}
-                  data-series={names[s.column]}
-                  d={linePath(s.values, (i) => left + i * step + step / 2, y)}
-                  className={`fill-none ${STROKE[si]}`}
-                  strokeWidth={2}
-                />
+                <g key={s.column}>
+                  {kind === 'area' ? (
+                    <path d={areaPath(pointsOf(s.values), y(0))} className={FILL[si]} fillOpacity={0.25} />
+                  ) : null}
+                  <path
+                    data-series={names[s.column]}
+                    d={kind === 'spline' ? splinePath(pointsOf(s.values)) : polylinePath(pointsOf(s.values))}
+                    className={`fill-none ${STROKE[si]}`}
+                    strokeWidth={2}
+                  />
+                </g>
               )
             )}
           </svg>
         </figure>
-      )}
+      ) : null}
     </div>
   )
-}
-
-/** A line through the points, lifting the pen over a missing value instead of joining across it. */
-function linePath(values: readonly (number | null)[], px: (i: number) => number, py: (v: number) => number): string {
-  let d = ''
-  let pen = false
-  values.forEach((v, i) => {
-    if (v === null) {
-      pen = false
-      return
-    }
-    d += `${pen ? 'L' : 'M'} ${px(i)} ${py(v)} `
-    pen = true
-  })
-  return d.trim()
 }
 
 /** A category label cut to LABEL_CHARS characters (by code point, so no surrogate pair is split). */

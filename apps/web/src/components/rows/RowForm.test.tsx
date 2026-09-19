@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render as rtlRender, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import type { ColumnDef } from '@tsmyadmin/shared'
+import type { ColumnDef, ColumnTransform } from '@tsmyadmin/shared'
 import type { ReactElement, ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { RowForm } from './RowForm.tsx'
@@ -187,5 +187,45 @@ describe('RowForm (functions, files, several rows)', () => {
     await userEvent.click(screen.getByRole('button', { name: '挿入する' }))
     expect(onSubmit).not.toHaveBeenCalled()
     expect(screen.getByRole('alert')).toHaveTextContent('合わせて大きすぎます')
+  })
+})
+
+describe('RowForm input transformations', () => {
+  const rule = (over: Partial<ColumnTransform>): ColumnTransform => ({
+    database: 'd',
+    table: 't',
+    column: 'zip',
+    kind: 'pattern',
+    id: '',
+    at: 0,
+    ...over,
+  })
+  const form = (transform: ColumnTransform, onSubmit = vi.fn()) => {
+    const inputs = new Map([[transform.column, transform]])
+    render(<RowForm columns={[col('zip')]} mode="insert" inputTransforms={inputs} onSubmit={onSubmit} />)
+    return onSubmit
+  }
+
+  it('says what is wrong with a value that does not match the pattern, and holds the submit back', async () => {
+    const onSubmit = form(rule({ pattern: '^\\d{3}-\\d{4}$', message: 'Give a postal code' }))
+    await userEvent.type(screen.getByLabelText('zip'), '12-345')
+    expect(screen.getByText('Give a postal code')).toBeInTheDocument()
+    expect(screen.getByLabelText('zip')).toBeInvalid()
+    await userEvent.click(screen.getByRole('button', { name: '挿入する' }))
+    expect(onSubmit).not.toHaveBeenCalled()
+    await userEvent.clear(screen.getByLabelText('zip'))
+    await userEvent.type(screen.getByLabelText('zip'), '123-4567')
+    expect(screen.queryByText('Give a postal code')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: '挿入する' }))
+    expect(onSubmit).toHaveBeenCalled()
+  })
+
+  it('checks JSON in an editor, and leaves an empty (NULL) value alone', async () => {
+    form(rule({ kind: 'json-input' }))
+    expect(screen.getByLabelText('zip').tagName).toBe('TEXTAREA')
+    await userEvent.type(screen.getByLabelText('zip'), 'not json')
+    expect(screen.getByText('JSON として読めません')).toBeInTheDocument()
+    await userEvent.clear(screen.getByLabelText('zip'))
+    expect(screen.queryByText('JSON として読めません')).not.toBeInTheDocument()
   })
 })

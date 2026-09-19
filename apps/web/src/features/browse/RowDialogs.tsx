@@ -5,6 +5,7 @@ import { RowForm } from '@/components/rows/RowForm.tsx'
 import { Dialog } from '@/components/ui/Dialog.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { locale } from '@/config/locale.ts'
+import { useColumnTransforms } from '@/lib/column-transforms.ts'
 import { mutations, structureQuery, type TableRef } from '@/lib/queries.ts'
 
 interface CommonProps {
@@ -18,6 +19,7 @@ interface CommonProps {
 /** Edit one row in a modal form (only changed columns are sent). */
 export function EditRowDialog({ tableRef, values, rowKey, onClose, onDone }: CommonProps & { rowKey: RowKey | null }) {
   const open = values !== null && rowKey !== null
+  const inputs = useColumnTransforms(tableRef).inputByColumn
   const structure = useQuery({ ...structureQuery(tableRef), enabled: open })
   const update = useMutation({
     mutationFn: ({ key, next }: { key: RowKey; next: RowValues }) => mutations.updateRow(tableRef, key, next),
@@ -37,6 +39,7 @@ export function EditRowDialog({ tableRef, values, rowKey, onClose, onDone }: Com
         <ErrorBox error={structure.error} onRetry={() => void structure.refetch()} />
       ) : open ? (
         <RowForm
+          inputTransforms={inputs}
           columns={structure.data.columns}
           foreignKeys={structure.data.foreignKeys}
           mode="edit"
@@ -57,6 +60,7 @@ export function EditRowDialog({ tableRef, values, rowKey, onClose, onDone }: Com
 /** Insert a copy of an existing row (generated columns take fresh values). */
 export function CopyRowDialog({ tableRef, values, onClose, onDone }: CommonProps) {
   const open = values !== null
+  const inputs = useColumnTransforms(tableRef).inputByColumn
   const structure = useQuery({ ...structureQuery(tableRef), enabled: open })
   const insert = useMutation({
     mutationFn: (next: RowValues) => mutations.insertRow(tableRef, next),
@@ -77,6 +81,7 @@ export function CopyRowDialog({ tableRef, values, onClose, onDone }: CommonProps
         <div className="space-y-3">
           <Notice>{locale.rows.copyHint}</Notice>
           <RowForm
+            inputTransforms={inputs}
             columns={structure.data.columns}
             foreignKeys={structure.data.foreignKeys}
             mode="insert"
@@ -108,6 +113,7 @@ export function EditRowsDialog({
   onDone: (notice: string) => Promise<void>
 }) {
   const open = rows !== null && rows.length > 0
+  const inputs = useColumnTransforms(tableRef).inputByColumn
   const structure = useQuery({ ...structureQuery(tableRef), enabled: open })
   const [done, setDone] = useState(0)
   const update = useMutation({
@@ -141,6 +147,7 @@ export function EditRowsDialog({
         <div className="space-y-3">
           {update.isError && done > 0 ? <Notice>{locale.rows.updatedBeforeError(done)}</Notice> : null}
           <RowForm
+            inputTransforms={inputs}
             columns={structure.data.columns}
             foreignKeys={structure.data.foreignKeys}
             mode="edit"
