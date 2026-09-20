@@ -1,7 +1,7 @@
 import { FakeAdapter, fakeTable } from '@tsmyadmin/adapter/testing'
 import { ExportQuerySchema } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
-import { buildExport, collect, contentDisposition, DUMP_COMPLETE_MARKER } from './export.ts'
+import { buildExport, collect, contentDisposition, DUMP_COMPLETE_MARKER, toReadableStream } from './export.ts'
 
 const adapter = () =>
   new FakeAdapter({
@@ -576,5 +576,36 @@ describe('SQL dump options', () => {
 
   it('makes CREATE TABLE IF NOT EXISTS', async () => {
     expect(await dump({ ifNotExists: '1' })).toMatch(/CREATE TABLE IF NOT EXISTS `users`/)
+  })
+})
+
+describe('toReadableStream', () => {
+  async function* failsAfterOneChunk(): AsyncIterable<string> {
+    yield 'first,'
+    throw new Error('connection closed')
+  }
+
+  it('hands over what was written, then errors the body and reports the failure once', async () => {
+    const failures: unknown[] = []
+    const reader = toReadableStream(failsAfterOneChunk(), (err) => failures.push(err)).getReader()
+    const first = await reader.read()
+    expect(new TextDecoder().decode(first.value)).toBe('first,')
+    await expect(reader.read()).rejects.toThrow('connection closed')
+    expect(failures).toHaveLength(1)
+  })
+
+  it('stops the source when the client goes away', async () => {
+    let closed = false
+    async function* endless(): AsyncIterable<string> {
+      try {
+        for (;;) yield 'x'
+      } finally {
+        closed = true
+      }
+    }
+    const reader = toReadableStream(endless()).getReader()
+    await reader.read()
+    await reader.cancel()
+    expect(closed).toBe(true)
   })
 })

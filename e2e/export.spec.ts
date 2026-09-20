@@ -98,6 +98,9 @@ for (const t of TARGETS) {
       await page.getByRole('link', { name: 'ダウンロード' }).click()
       const zip = await downloadPromise
       expect(zip.suggestedFilename()).toBe(`${t.database}.zip`)
+      // Read to the end: a download still streaming when the test's session is closed fails on the server
+      // (logged as export.aborted, and reported by Bun as a raw error that clutters the run's output).
+      await zip.path()
     })
 
     test('format options: CSV without a header and fully quoted, compact JSON, XML with a view, structure only', async ({
