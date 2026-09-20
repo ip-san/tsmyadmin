@@ -124,7 +124,7 @@ export function AppShell({
             className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-ink hover:bg-surface-sub"
           >
             <CircleHelp className="size-4" aria-hidden />
-            {locale.nav.help}
+            <span className="sr-only sm:not-sr-only">{locale.nav.help}</span>
             <span className="sr-only">{locale.nav.opensNewTab}</span>
           </a>
           {dock && !consoleHidden ? (
@@ -136,7 +136,7 @@ export function AppShell({
               aria-controls={docked ? 'sql-dock' : undefined}
             >
               <SquareTerminal className="size-4" aria-hidden />
-              {locale.dock.toggle}
+              <span className="sr-only sm:not-sr-only">{locale.dock.toggle}</span>
             </Button>
           ) : null}
           <Link
@@ -144,9 +144,12 @@ export function AppShell({
             className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-ink hover:bg-surface-sub"
           >
             <SettingsIcon className="size-4" aria-hidden />
-            {locale.settings.title}
+            <span className="sr-only sm:not-sr-only">{locale.settings.title}</span>
           </Link>
-          <ShortcutHelp />
+          {/* Keyboard shortcuts mean nothing on a phone, and the bar has no room for them there. */}
+          <div className="hidden sm:block">
+            <ShortcutHelp />
+          </div>
           {/* Switching reloads the page: every string is read once at load, so a live swap would leave half the
               screen in the other language. */}
           <Select
@@ -178,7 +181,7 @@ export function AppShell({
           </Button>
           <Button variant="ghost" size="sm" onClick={onLogout}>
             <LogOut className="size-4" aria-hidden />
-            {locale.nav.logout}
+            <span className="sr-only sm:not-sr-only">{locale.nav.logout}</span>
           </Button>
         </div>
       </header>

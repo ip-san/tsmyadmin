@@ -1,11 +1,13 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect } from '@playwright/test'
 import { fillType, login, PASSKEY_BASE_URL, PERSISTENT_BASE_URL, TARGETS, tableUrl, test } from './helpers.ts'
+import { layoutViolations } from './layout-lint.ts'
 import { createAccount, dropAccount, enrol, t as first, signIn } from './two-factor.ts'
 
 async function scan(page: Parameters<typeof login>[0]) {
   const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()
   expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([])
+  expect(await layoutViolations(page), 'layout').toEqual([])
 }
 
 test.describe('accessibility (axe-core)', () => {
@@ -240,6 +242,37 @@ for (const t of TARGETS) {
       await page.getByLabel('並べ替え', { exact: true }).selectOption('id')
       await page.getByLabel('正規表現として扱う').check()
       await scan(page)
+    })
+
+    // Forms with hints under their fields, checked for layout as well (levels, overlaps, widths).
+    test('create, import, export and operations forms, and a narrow window', async ({ page }) => {
+      test.setTimeout(90_000)
+      await login(page, t)
+      const dbUrl = t.schema ? `/db/${t.database}?schema=${t.schema}` : `/db/${t.database}`
+      await page.goto(dbUrl)
+      await page.getByLabel('テーブル名').waitFor()
+      await page.getByRole('button', { name: 'カラムを追加' }).click()
+      await scan(page)
+      for (const sub of ['import', 'export']) {
+        await page.goto(t.schema ? `/db/${t.database}/${sub}?schema=${t.schema}` : `/db/${t.database}/${sub}`)
+        await page.getByRole('radio', { name: 'CSV', exact: true }).check()
+        await scan(page)
+      }
+      await page.goto(tableUrl(t, 'users', '/operations'))
+      await page.getByRole('button', { name: 'テーブルを削除…' }).waitFor()
+      await scan(page)
+      // A phone-width window: nothing may push the page sideways or pile controls on each other.
+      await page.setViewportSize({ width: 390, height: 800 })
+      for (const url of [
+        dbUrl,
+        tableUrl(t, 'users'),
+        tableUrl(t, 'users', '/structure'),
+        tableUrl(t, 'users', '/operations'),
+      ]) {
+        await page.goto(url)
+        await page.getByRole('heading').first().waitFor()
+        expect(await layoutViolations(page), `layout at 390px: ${url}`).toEqual([])
+      }
     })
 
     test('GIS view of a page of shapes', async ({ page }) => {

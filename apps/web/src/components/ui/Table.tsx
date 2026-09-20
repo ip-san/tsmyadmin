@@ -21,7 +21,9 @@ export function Table({
   return (
     <div
       ref={scrollRef}
-      className={cn('w-full overflow-x-auto rounded border border-line', scrollClassName)}
+      // `relative`: an `sr-only` (absolutely positioned) cell label would otherwise sit outside the scroller and
+      // widen the whole page when the table is wider than the screen.
+      className={cn('relative w-full overflow-x-auto rounded border border-line', scrollClassName)}
       {...scroller}
     >
       <table ref={ref} className={cn('w-full border-collapse text-sm', className)} {...rest} />
