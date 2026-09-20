@@ -15,6 +15,7 @@ import { type PreferenceStore, readPreference, removePreference, writePreference
  */
 const SETTING_NAMES = [
   'browseLimit',
+  'browseUnlimited',
   'sqlSafeMode',
   'consoleDocked',
   'sqlHistoryMax',
@@ -32,6 +33,7 @@ export type ResolvedSettings = { [K in SettingName]-?: Exclude<Settings[K], unde
 /** What a setting is when nobody chose one: the values the screens use on their own. */
 export const SETTING_DEFAULTS: ResolvedSettings = {
   browseLimit: 50,
+  browseUnlimited: false,
   sqlSafeMode: true,
   consoleDocked: false,
   sqlHistoryMax: 100,

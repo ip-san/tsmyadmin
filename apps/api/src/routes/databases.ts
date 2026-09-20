@@ -193,6 +193,20 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
           .adapter.showCreateTable(ns(c.req.param('db'), q.schema), c.req.param('table'))
         return c.json({ sql })
       })
+      .get('/databases/:db/tables/:table/references', validate('query', SchemaQuerySchema), async (c) => {
+        const q = c.req.valid('query')
+        return c.json(
+          await c.get('session').adapter.checkReferences(ns(c.req.param('db'), q.schema), c.req.param('table'))
+        )
+      })
+      .get('/databases/:db/tables/:table/columns/:column/distinct', validate('query', SchemaQuerySchema), async (c) => {
+        const q = c.req.valid('query')
+        return c.json(
+          await c
+            .get('session')
+            .adapter.distinctValues(ns(c.req.param('db'), q.schema), c.req.param('table'), c.req.param('column'))
+        )
+      })
       // One table per request: the page runs them in turn, so a search can stop between tables and never ties up the
       // session's small connection pool with a scan per table at once.
       .get('/databases/:db/tables/:table/search', validate('query', TableSearchQuerySchema), async (c) => {
@@ -233,6 +247,26 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
           'Content-Disposition': contentDisposition(`${table}.${q.column}.${binary ? 'bin' : 'txt'}`),
         })
       })
+      // The INSERT a form would run, shown before it does (values apart from the text). Nothing is executed.
+      .post(
+        '/databases/:db/tables/:table/rows/preview',
+        validate('query', SchemaQuerySchema),
+        validate('json', InsertRowRequestSchema),
+        async (c) => {
+          const q = c.req.valid('query')
+          const body = c.req.valid('json')
+          return c.json(
+            c
+              .get('session')
+              .adapter.insertPreview(
+                ns(c.req.param('db'), q.schema),
+                c.req.param('table'),
+                body.values,
+                body.ignore ? { ignore: true } : {}
+              )
+          )
+        }
+      )
       .post(
         '/databases/:db/tables/:table/rows',
         validate('query', SchemaQuerySchema),
@@ -241,7 +275,9 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
           const q = c.req.valid('query')
           const body = c.req.valid('json')
           const namespace = ns(c.req.param('db'), q.schema)
-          const r = await c.get('session').adapter.insertRow(namespace, c.req.param('table'), body.values)
+          const r = await c
+            .get('session')
+            .adapter.insertRow(namespace, c.req.param('table'), body.values, body.ignore ? { ignore: true } : {})
           await recordGridChange(
             cfg.store.sharedItems,
             c.get('session').config,

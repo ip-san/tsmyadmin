@@ -1,5 +1,6 @@
-import type { Dialect, Namespace } from '@tsmyadmin/shared'
+import type { Cell, Dialect, Namespace } from '@tsmyadmin/shared'
 import { AdapterError } from '../types.ts'
+import { cellLiteral } from './literal.ts'
 
 /**
  * Identifier quoting. Every user-supplied identifier (database, schema, table, column, index)
@@ -21,12 +22,20 @@ export function placeholder(dialect: Dialect, index: number): string {
   return dialect === 'mysql' ? '?' : `$${index}`
 }
 
-/** Accumulates parameters and hands back the matching placeholder text. */
+/**
+ * Accumulates parameters and hands back the matching placeholder text. In `literal` mode it hands back the value
+ * written as an SQL literal instead: the same statement, for reading and for the SQL tab — never the one that runs.
+ */
 export class Params {
   readonly values: unknown[] = []
-  constructor(private readonly dialect: Dialect) {}
+  constructor(
+    private readonly dialect: Dialect,
+    private readonly literal = false
+  ) {}
   add(value: unknown): string {
     this.values.push(value)
-    return placeholder(this.dialect, this.values.length)
+    if (!this.literal) return placeholder(this.dialect, this.values.length)
+    const cell = value instanceof Uint8Array ? { $bin: Buffer.from(value).toString('base64') } : (value as Cell)
+    return cellLiteral(this.dialect, cell)
   }
 }

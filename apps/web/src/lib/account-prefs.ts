@@ -14,6 +14,7 @@ import { setTheme } from '@/lib/theme.ts'
 export const LOCAL: Record<Exclude<keyof Preferences, 'theme'>, { key: string }> = {
   locale: { key: 'locale' },
   browseLimit: { key: 'browse.limit' },
+  browseUnlimited: { key: 'browse.unlimited' },
   sqlSafeMode: { key: 'sql.safeMode' },
   consoleDocked: { key: 'console.docked' },
   sqlHistoryMax: { key: 'sql.historyMax' },

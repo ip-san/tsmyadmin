@@ -185,3 +185,24 @@ for (const t of TARGETS) {
     })
   })
 }
+
+test('an ENUM column is searched by picking one of its values (MySQL)', async ({ page }) => {
+  const t = TARGETS[0] as (typeof TARGETS)[number]
+  await login(page, t)
+  const table = `e2e_enum_${Date.now().toString(36)}`
+  const run = (sql: string) => page.request.post(`/api/databases/${t.database}/sql`, { data: { sql } })
+  try {
+    await run(`CREATE TABLE ${table} (id INT PRIMARY KEY, size ENUM('small','it''s big','large'))`)
+    await run(`INSERT INTO ${table} VALUES (1, 'small'), (2, 'it''s big'), (3, 'large'), (4, 'it''s big')`)
+    await page.goto(tableUrl(t, table, '/search'))
+    await page.getByLabel('size: 条件').selectOption('eq')
+    // A list of the column's own values, not a text box.
+    const value = page.getByLabel('size: 値')
+    await expect(value.locator('option')).toHaveText(['（値を選ぶ）', 'small', "it's big", 'large'])
+    await value.selectOption("it's big")
+    await page.getByRole('button', { name: '検索する' }).click()
+    await expect(page.getByText('全 2 行')).toBeVisible()
+  } finally {
+    await run(`DROP TABLE IF EXISTS ${table}`)
+  }
+})

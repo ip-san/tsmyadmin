@@ -9,6 +9,8 @@ export interface StatementHandlers {
   rerun: (sql: string) => void
   explain: (sql: string) => void
   code: (sql: string) => void
+  /** Optional: keep the statement as a bookmark (the console's own results have it in the history instead). */
+  bookmark?: (sql: string) => void
 }
 
 /** Under a statement that ran: carry on from it — edit it, run it again, explain it, or turn it into code. */
@@ -44,6 +46,11 @@ export function StatementActions({
       <Button size="sm" onClick={() => handlers.code(sql)} aria-label={of(t.code)}>
         {t.code}
       </Button>
+      {handlers.bookmark ? (
+        <Button size="sm" onClick={() => handlers.bookmark?.(sql)} aria-label={of(t.bookmark)}>
+          {t.bookmark}
+        </Button>
+      ) : null}
     </div>
   )
 }

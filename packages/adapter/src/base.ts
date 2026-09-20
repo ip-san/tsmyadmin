@@ -9,10 +9,12 @@ import type {
   DiagnosticQuery,
   DiagnosticReport,
   Dialect,
+  DistinctValues,
   EventDetail,
   EventInfo,
   Filter,
   InputCell,
+  InsertPreview,
   KeyValue,
   Namespace,
   ObjectDependency,
@@ -23,6 +25,7 @@ import type {
   QueryBuilderJoin,
   QueryBuilderResult,
   QueryBuilderSpec,
+  ReferenceCheck,
   RelationDef,
   ReplicationInfo,
   RoutineDetail,
@@ -47,6 +50,8 @@ import type {
   WriteCell,
 } from '@tsmyadmin/shared'
 import {
+  BROWSE_ALL_MAX,
+  DISTINCT_VALUES_LIMIT,
   EXACT_COUNT_MAX_ROWS,
   isBinaryCell,
   isFunctionCell,
@@ -599,6 +604,54 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     return { keyKind: kind, keyColumns: kind === 'ctid' ? ['ctid'] : schema.columns.map((c) => c.name) }
   }
 
+  async checkReferences(ns: Namespace, table: string): Promise<ReferenceCheck[]> {
+    const schema = await this.describeTable(ns, table)
+    const d = this.dialect
+    return this.withConn(ns, async (conn) => {
+      const out: ReferenceCheck[] = []
+      for (const fk of schema.foreignKeys) {
+        const child = quoteTable(d, ns, table)
+        const parent = quoteTable(d, fk.refNamespace, fk.refTable)
+        const on = fk.columns
+          .map((c, i) => `c.${quoteIdent(d, c)} = p.${quoteIdent(d, fk.refColumns[i] ?? '')}`)
+          .join(' AND ')
+        // A key with a NULL in it names no parent (MATCH SIMPLE): only rows with every column set are checked.
+        const where = [
+          `p.${quoteIdent(d, fk.refColumns[0] ?? '')} IS NULL`,
+          ...fk.columns.map((c) => `c.${quoteIdent(d, c)} IS NOT NULL`),
+        ].join(' AND ')
+        const from = `FROM ${child} c LEFT JOIN ${parent} p ON ${on} WHERE ${where}`
+        const count = firstResult(await conn.query(`SELECT COUNT(*) ${from}`)).rows[0]?.[0]
+        out.push({
+          name: fk.name,
+          columns: fk.columns,
+          refNamespace: fk.refNamespace,
+          refTable: fk.refTable,
+          refColumns: fk.refColumns,
+          orphans: Number(count ?? 0),
+          sql: `SELECT c.* ${from}`,
+        })
+      }
+      return out
+    })
+  }
+
+  async distinctValues(ns: Namespace, table: string, column: string): Promise<DistinctValues> {
+    const schema = await this.describeTable(ns, table)
+    if (!schema.columns.some((c) => c.name === column)) throw new AdapterError('NOT_FOUND', `Unknown column: ${column}`)
+    const d = this.dialect
+    const col = quoteIdent(d, column)
+    const params = new Params(d)
+    const sql = `SELECT ${col}, COUNT(*) AS n FROM ${quoteTable(d, ns, table)} GROUP BY ${col} ORDER BY n DESC, ${col} LIMIT ${params.add(DISTINCT_VALUES_LIMIT + 1)}`
+    return this.withConn(ns, async (conn) => {
+      const rows = firstResult(await conn.query(sql, params.values)).rows
+      return {
+        values: rows.slice(0, DISTINCT_VALUES_LIMIT).map((r) => ({ value: r[0] ?? null, count: Number(r[1]) })),
+        truncated: rows.length > DISTINCT_VALUES_LIMIT,
+      }
+    })
+  }
+
   async searchTable(
     ns: Namespace,
     table: string,
@@ -661,9 +714,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
 
     const d = this.dialect
     const key = this.resolveRowKey(schema)
-    const params = new Params(d)
     const types = new Map(schema.columns.map((c) => [c.name, c.dataType]))
-    const where = this.buildWhere(opts.filters, params, types)
     const tableSql = quoteTable(d, ns, table)
     const selectList = schema.columns.map((c) => quoteIdent(d, c.name))
     const fallback = this.fallbackKeySelect()
@@ -683,8 +734,13 @@ export abstract class BaseAdapter implements DatabaseAdapter {
         : defaultOrder
           ? ` ORDER BY ${defaultOrder}`
           : ''
-    const limit = ` LIMIT ${params.add(opts.limit)} OFFSET ${params.add(opts.offset)}`
-    const dataSql = `SELECT ${selectList.join(', ')} FROM ${tableSql}${where}${order}${limit}`
+    // Built twice from the same pieces: with placeholders (what runs) and with the values written in (what is shown
+    // to edit, explain or save).
+    const build = (p: Params) =>
+      `SELECT ${selectList.join(', ')} FROM ${tableSql}${this.buildWhere(opts.filters, p, types)}${order} LIMIT ${p.add(opts.limit === 0 ? BROWSE_ALL_MAX : opts.limit)} OFFSET ${p.add(opts.limit === 0 ? 0 : opts.offset)}`
+    const params = new Params(d)
+    const dataSql = build(params)
+    const literalSql = build(new Params(d, true))
 
     // The count stops at the threshold: a filter matching millions of rows costs one bounded scan, and the page
     // then says "100,000+" instead of the exact figure.
@@ -693,13 +749,19 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     const countSql = `SELECT COUNT(*) FROM (SELECT 1 FROM ${tableSql}${countWhere} LIMIT ${countParams.add(EXACT_COUNT_MAX_ROWS + 1)}) AS tsmyadmin_count`
 
     return this.withConn(ns, async (conn) => {
+      const profiling = opts.profile ? await this.startProfiling(conn) : false
       const started = performance.now()
       const data = firstResult(await conn.query(dataSql, params.values, DISPLAY))
+      const duration = performance.now() - started
+      // Read before anything else runs: the profile is of the most recent statement.
+      const stages = profiling ? await this.readProfile(conn).catch(() => null) : null
       const statement = {
         sql: dataSql,
+        literal: literalSql,
+        ...(stages && stages.length > 0 ? { profile: stages } : {}),
         // Bound values go back as cells: a binary filter was turned into a Buffer for the driver.
         params: params.values.map((v) => (v instanceof Uint8Array ? bufferToCell(v) : (v as Cell))),
-        durationMs: performance.now() - started,
+        durationMs: duration,
       }
       // Large unfiltered tables: COUNT(*) is a full scan on InnoDB / PostgreSQL, so use the catalog estimate
       // that describeTable already fetched (no extra round trip).
@@ -852,22 +914,47 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     return rowFunctionSql(this.dialect, cell.$fn, () => params.add(cell.arg ?? null))
   }
 
-  async insertRow(ns: Namespace, table: string, values: RowValues): Promise<{ affectedRows: number }> {
+  private insertStatement(
+    ns: Namespace,
+    table: string,
+    values: RowValues,
+    ignore: boolean
+  ): { sql: string; params: unknown[] } {
     const d = this.dialect
     const names = Object.keys(values)
     const params = new Params(d)
-    const sql =
+    const verb = d === 'mysql' && ignore ? 'INSERT IGNORE' : 'INSERT'
+    const head =
       names.length === 0
         ? d === 'mysql'
-          ? `INSERT INTO ${quoteTable(d, ns, table)} () VALUES ()`
-          : `INSERT INTO ${quoteTable(d, ns, table)} DEFAULT VALUES`
-        : `INSERT INTO ${quoteTable(d, ns, table)} (${names.map((n) => quoteIdent(d, n)).join(', ')}) VALUES (${names
+          ? `${verb} INTO ${quoteTable(d, ns, table)} () VALUES ()`
+          : `${verb} INTO ${quoteTable(d, ns, table)} DEFAULT VALUES`
+        : `${verb} INTO ${quoteTable(d, ns, table)} (${names.map((n) => quoteIdent(d, n)).join(', ')}) VALUES (${names
             .map((n) => this.writeValue(params, values[n] ?? null))
             .join(', ')})`
+    return { sql: d === 'postgres' && ignore ? `${head} ON CONFLICT DO NOTHING` : head, params: params.values }
+  }
+
+  async insertRow(
+    ns: Namespace,
+    table: string,
+    values: RowValues,
+    options: { ignore?: boolean } = {}
+  ): Promise<{ affectedRows: number }> {
+    const { sql, params } = this.insertStatement(ns, table, values, options.ignore === true)
     return this.withConn(ns, async (conn) => {
-      const r = firstResult(await conn.query(sql, params.values))
+      const r = firstResult(await conn.query(sql, params))
       return { affectedRows: r.affectedRows }
     })
+  }
+
+  insertPreview(ns: Namespace, table: string, values: RowValues, options: { ignore?: boolean } = {}): InsertPreview {
+    const { sql, params } = this.insertStatement(ns, table, values, options.ignore === true)
+    // What the driver would be given, as wire cells: bytes as base64, the rest as they are.
+    return {
+      sql,
+      params: params.map((p) => (Buffer.isBuffer(p) ? { $bin: p.toString('base64') } : (p as Cell))),
+    }
   }
 
   /** Rows per INSERT statement, bounded so PostgreSQL's 65535-parameter limit is never hit. */

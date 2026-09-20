@@ -15,7 +15,7 @@ const base: BrowseResult = {
   referencedBy: [],
   keyKind: 'ctid',
   keyColumns: ['ctid'],
-  statement: { sql: 'SELECT 1', params: [], durationMs: 0 },
+  statement: { sql: 'SELECT 1', literal: 'SELECT 1', params: [], durationMs: 0 },
 }
 
 describe('visibleColumns', () => {

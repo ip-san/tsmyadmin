@@ -1,4 +1,4 @@
-<!-- translated-from: docs/phpmyadmin-parity.md sha256:00afdc241b80dfaa8c11eefc802f664689536c80dd45cd1274ea98eef7320103 -->
+<!-- translated-from: docs/phpmyadmin-parity.md sha256:9b605df59f6a73372002ca24a36cb8fe7e7a184f0dbd6ee379c3c7e77d1c3dd9 -->
 
 # Feature parity with phpMyAdmin
 
@@ -78,10 +78,10 @@ In 2026-09 every phpMyAdmin screen was audited again: ten rows marked ✅ went b
 
 | # | Feature | Status |
 |---|---|---|
-| T1 | Browse: editing several rows, exporting / copying the chosen rows, creating a view from the result, charting it | △ (the executed-SQL box has no Edit / EXPLAIN / As code / Bookmark / Refresh → T1) |
+| T1 | Browse: editing several rows, exporting / copying the chosen rows, creating a view from the result, charting it | ✅ |
 | T2 | Browse: reordering columns (remembered), full / partial text, binary as hex, downloading a BLOB, spatial values as WKT | ✅ |
 | T3 | Browse: ordering by an index, showing a foreign key's display column, profiling | ✅ |
-| T4 | Insert: functions (NOW / UUID / MD5 …), several rows at once, choosing a foreign key value, insert as a new row (duplicate row), a BLOB from a file | △ (no choice of what happens after the insert, no SQL preview, no insert-ignoring-errors → T4) |
+| T4 | Insert: functions (NOW / UUID / MD5 …), several rows at once, choosing a foreign key value, insert as a new row (duplicate row), a BLOB from a file | ✅ |
 | T5 | Search operators: IN / NOT IN / BETWEEN / REGEXP / comparing with an empty string | ✅ |
 | T6 | Search: columns to show, DISTINCT, a free WHERE clause, ordering, page size | ✅ |
 | T7 | Find and replace: regular expressions | ✅ |
@@ -94,13 +94,13 @@ In 2026-09 every phpMyAdmin screen was audited again: ten rows marked ✅ went b
 | T14 | Relations: foreign keys to another database, display column | ✅ |
 | T15 | Operations: ROW_FORMAT, changing every column's collation, ALTER TABLE ORDER BY, CHECKSUM, FLUSH, copy options | ✅ |
 | T16 | Tracking: choosing which kinds of statement to record | ✅ |
-| T17 | Browse: show all rows (a setting lifts the 1,000 rows per page cap; a warning above 10,000 rows) | ✗ |
-| T18 | Structure: "browse distinct values" of a column (DISTINCT with counts) | ✗ |
-| T19 | Operations: check referential integrity (rows without a parent, per foreign key) | ✗ |
-| T20 | Operations: more table options (PACK_KEYS / DELAY_KEY_WRITE / TRANSACTIONAL / PAGE_CHECKSUM / STATS_PERSISTENT / STATS_AUTO_RECALC) | ✗ |
-| T21 | Browse: a profiling toggle (MySQL) | ✗ (SQL tab only) |
-| T22 | Browse: highlighting the row under the pointer | ✗ |
-| T23 | Search: ENUM / SET columns offer their values | ✗ |
+| T17 | Browse: show all rows (a setting lifts the 1,000 rows per page cap; a warning above 10,000 rows) | ✅ |
+| T18 | Structure: "browse distinct values" of a column (DISTINCT with counts) | ✅ |
+| T19 | Operations: check referential integrity (rows without a parent, per foreign key) | ✅ |
+| T20 | Operations: more table options (PACK_KEYS / DELAY_KEY_WRITE / TRANSACTIONAL / PAGE_CHECKSUM / STATS_PERSISTENT / STATS_AUTO_RECALC) | ✅ |
+| T21 | Browse: a profiling toggle (MySQL) | ✅ |
+| T22 | Browse: highlighting the row under the pointer | ✅ |
+| T23 | Search: ENUM / SET columns offer their values | ✅ |
 
 ## Export / import
 

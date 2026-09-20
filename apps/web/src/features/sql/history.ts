@@ -31,9 +31,6 @@ export function clearHistory(scope: string, store?: PreferenceStore): void {
   removePreference(key(scope), store)
 }
 
-/** A name for a bookmark made from a statement in the history: the start of the statement, on one line. */
-export const bookmarkName = (sql: string): string => sql.replace(/\s+/g, ' ').trim().slice(0, 60) || 'query'
-
 /** The entry as the server takes it: a statement past its bound is cut (a history is a memory aid, not an archive). */
 export const forServer = (entry: HistoryEntry): HistoryEntry =>
   entry.sql.length > SQL_HISTORY_MAX_SQL ? { ...entry, sql: entry.sql.slice(0, SQL_HISTORY_MAX_SQL) } : entry

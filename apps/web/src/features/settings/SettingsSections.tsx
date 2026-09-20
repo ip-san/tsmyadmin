@@ -85,6 +85,9 @@ export function MainPanelSection({ value, set }: { value: ResolvedSettings; set:
         max={BROWSE_MAX_LIMIT}
         onChange={(browseLimit) => set({ browseLimit })}
       />
+      <Check checked={value.browseUnlimited} onChange={(browseUnlimited) => set({ browseUnlimited })}>
+        {t.browseUnlimited}
+      </Check>
     </Section>
   )
 }

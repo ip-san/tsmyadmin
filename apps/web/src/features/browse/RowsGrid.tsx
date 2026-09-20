@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import type { BrowseOptions, InputCell, RowKey, RowValues } from '@tsmyadmin/shared'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
@@ -6,7 +6,7 @@ import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Th } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
 import { useColumnTransforms } from '@/lib/column-transforms.ts'
-import { mutations, rowsKey, rowsQuery, type TableRef } from '@/lib/queries.ts'
+import { mutations, rowsKey, type TableRef } from '@/lib/queries.ts'
 import { BrowseRow } from './BrowseRow.tsx'
 import { BrowseToolbar } from './BrowseToolbar.tsx'
 import { encodeColumns, visibleColumnNames, visibleColumns } from './browse-search.ts'
@@ -21,6 +21,7 @@ import { useRowSelection } from './row-selection.ts'
 import { SelectionActions } from './SelectionActions.tsx'
 import { SortHeader } from './SortHeader.tsx'
 import { useSettleFocus } from './settle-focus.ts'
+import { useBrowseRows } from './use-browse-rows.ts'
 
 export interface RowsGridProps {
   tableRef: TableRef
@@ -38,7 +39,7 @@ export interface RowsGridProps {
 }
 
 export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridProps) {
-  const rows = useQuery(rowsQuery(tableRef, options))
+  const { rows, all, profile, setProfile, dialect } = useBrowseRows(tableRef, options)
   const transformList = useColumnTransforms(tableRef)
   // Rebuilt only when the list changes, so the memoised rows are not all re-rendered on every render of the grid.
   const transformKey = JSON.stringify(transformList.entries)
@@ -172,8 +173,9 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
 
   return (
     <div className="space-y-2" aria-busy={rows.isFetching}>
-      <ExecutedStatement statement={data.statement} />
+      <ExecutedStatement statement={data.statement} tableRef={tableRef} onRefresh={() => void rows.refetch()} />
       <Pagination
+        all={all.pagination(data.total)}
         page={page}
         limit={options.limit}
         total={data.total}
@@ -191,6 +193,7 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
         selectedCount={selected.size}
         canDelete={selectedKeys.length > 0}
         onDelete={() => setDeleteTarget({ keys: selectedKeys })}
+        {...(dialect === 'mysql' ? { profile, onProfile: setProfile } : {})}
       />
       <SelectionActions
         tableRef={tableRef}
@@ -290,6 +293,7 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
         }}
         onConfirm={() => remove.mutate(deleteKeys)}
       />
+      {all.dialog(data.total)}
     </div>
   )
 }

@@ -12,6 +12,13 @@ const IDENT = /^[A-Za-z0-9_]+$/
 const ROW_FORMATS = ['DEFAULT', 'DYNAMIC', 'COMPACT', 'COMPRESSED', 'REDUNDANT', 'FIXED'] as const
 type RowFormat = (typeof ROW_FORMATS)[number]
 
+/** Options that are on, off or the server's default (`''` = leave as it is). */
+type Triple = '' | 'DEFAULT' | '0' | '1'
+/** Options that are on or off. */
+type Toggle = '' | 'on' | 'off'
+const TRIPLES = ['packKeys', 'statsPersistent', 'statsAutoRecalc'] as const
+const TOGGLES = ['delayKeyWrite', 'transactional', 'pageChecksum'] as const
+
 /** Table comment (both dialects) and MySQL's engine / collation / AUTO_INCREMENT, through the preview flow. */
 export function TableOptionsForm({
   tableRef,
@@ -30,9 +37,21 @@ export function TableOptionsForm({
   // Not part of TableSchema: empty means "leave as it is".
   const [rowFormat, setRowFormat] = useState<RowFormat | ''>('')
   const [checksum, setChecksum] = useState<'' | 'on' | 'off'>('')
+  const [triples, setTriples] = useState<Record<(typeof TRIPLES)[number], Triple>>({
+    packKeys: '',
+    statsPersistent: '',
+    statsAutoRecalc: '',
+  })
+  const [toggles, setToggles] = useState<Record<(typeof TOGGLES)[number], Toggle>>({
+    delayKeyWrite: '',
+    transactional: '',
+    pageChecksum: '',
+  })
   const reseed = (from: TableSchema) => {
     setRowFormat('')
     setChecksum('')
+    setTriples({ packKeys: '', statsPersistent: '', statsAutoRecalc: '' })
+    setToggles({ delayKeyWrite: '', transactional: '', pageChecksum: '' })
     setComment(from.comment ?? '')
     setEngine(from.engine ?? '')
     setCollation(from.collation ?? '')
@@ -65,7 +84,13 @@ export function TableOptionsForm({
     (collationChanged && !IDENT.test(collation.trim())) ||
     (autoIncrementChanged && !/^\d{1,20}$/.test(autoIncrement.trim()))
   const changed =
-    commentChanged || engineChanged || collationChanged || autoIncrementChanged || rowFormat !== '' || checksum !== ''
+    commentChanged ||
+    engineChanged ||
+    collationChanged ||
+    autoIncrementChanged ||
+    rowFormat !== '' ||
+    checksum !== '' ||
+    (mysql && (TRIPLES.some((k) => triples[k] !== '') || TOGGLES.some((k) => toggles[k] !== '')))
   const submit = (e: FormEvent) => {
     e.preventDefault()
     if (!changed || invalid) return
@@ -78,6 +103,12 @@ export function TableOptionsForm({
       ...(autoIncrementChanged ? { autoIncrement: autoIncrement.trim() } : {}),
       ...(mysql && rowFormat ? { rowFormat } : {}),
       ...(mysql && checksum ? { checksum: checksum === 'on' } : {}),
+      ...(mysql
+        ? Object.fromEntries([
+            ...TRIPLES.flatMap((k) => (triples[k] ? [[k, triples[k]]] : [])),
+            ...TOGGLES.flatMap((k) => (toggles[k] ? [[k, toggles[k] === 'on']] : [])),
+          ])
+        : {}),
     })
   }
   return (
@@ -135,6 +166,38 @@ export function TableOptionsForm({
                   <option value="off">{locale.common.no}</option>
                 </Select>
               </Field>
+              {TRIPLES.map((k) => (
+                <Field key={k} id={`table-${k}`} label={locale.ddl.tableOptions[k]}>
+                  <Select
+                    id={`table-${k}`}
+                    value={triples[k]}
+                    onChange={(e) => setTriples((prev) => ({ ...prev, [k]: e.target.value as Triple }))}
+                  >
+                    <option value="">{locale.ddl.unchanged}</option>
+                    <option value="DEFAULT">{locale.ddl.tableOptions.defaultValue}</option>
+                    <option value="1">{locale.common.yes}</option>
+                    <option value="0">{locale.common.no}</option>
+                  </Select>
+                </Field>
+              ))}
+              {TOGGLES.map((k) => (
+                <Field
+                  key={k}
+                  id={`table-${k}`}
+                  label={locale.ddl.tableOptions[k]}
+                  {...(k === 'transactional' || k === 'pageChecksum' ? { hint: locale.ddl.tableOptions.ariaHint } : {})}
+                >
+                  <Select
+                    id={`table-${k}`}
+                    value={toggles[k]}
+                    onChange={(e) => setToggles((prev) => ({ ...prev, [k]: e.target.value as Toggle }))}
+                  >
+                    <option value="">{locale.ddl.unchanged}</option>
+                    <option value="on">{locale.common.yes}</option>
+                    <option value="off">{locale.common.no}</option>
+                  </Select>
+                </Field>
+              ))}
             </>
           ) : null}
         </div>

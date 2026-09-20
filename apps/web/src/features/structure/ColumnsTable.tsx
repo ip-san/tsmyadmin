@@ -12,6 +12,7 @@ export function ColumnsTable({
   onDrop,
   selected,
   onToggle,
+  onDistinct,
 }: {
   schema: TableSchema
   editable: boolean
@@ -20,6 +21,8 @@ export function ColumnsTable({
   /** Ticked columns, for the actions under the list (omit to show no checkboxes). */
   selected?: ReadonlySet<string>
   onToggle?: (name: string) => void
+  /** Opens the distinct values of a column (a view's columns too: it only reads). */
+  onDistinct?: (name: string) => void
 }) {
   const pk = new Set(schema.primaryKey)
   return (
@@ -39,7 +42,7 @@ export function ColumnsTable({
           <Th>{locale.table.default}</Th>
           <Th>{locale.table.extra}</Th>
           <Th>{locale.table.comment}</Th>
-          {editable ? <Th>{locale.ddl.actions}</Th> : null}
+          {editable || onDistinct ? <Th>{locale.ddl.actions}</Th> : null}
         </tr>
       </thead>
       <tbody>
@@ -73,28 +76,44 @@ export function ColumnsTable({
             </Td>
             <Td className="text-xs">{c.extra}</Td>
             <Td className="text-xs">{c.comment ?? ''}</Td>
-            {editable ? (
+            {editable || onDistinct ? (
               <Td className="whitespace-nowrap">
-                {/* A generated column is editable when its expression was read back: MySQL rewrites the whole
+                {onDistinct ? (
+                  <>
+                    <Button
+                      size="sm"
+                      aria-haspopup="dialog"
+                      onClick={() => onDistinct(c.name)}
+                      aria-label={`${c.name}: ${locale.table.distinct.button}`}
+                    >
+                      {locale.table.distinct.button}
+                    </Button>{' '}
+                  </>
+                ) : null}
+                {editable ? (
+                  <>
+                    {/* A generated column is editable when its expression was read back: MySQL rewrites the whole
                     column, and without the expression the edit would silently turn it into a plain one. */}
-                <Button
-                  size="sm"
-                  onClick={() => onEdit(c.name)}
-                  disabled={isGeneratedColumn(c.extra) && !c.generated}
-                  title={isGeneratedColumn(c.extra) && !c.generated ? locale.ddl.generatedNotEditable : undefined}
-                  aria-label={`${c.name}: ${locale.ddl.edit}`}
-                >
-                  {locale.ddl.edit}
-                </Button>{' '}
-                <Button
-                  size="sm"
-                  variant="danger"
-                  aria-haspopup="dialog"
-                  onClick={() => onDrop(c.name)}
-                  aria-label={`${c.name}: ${locale.ddl.drop}`}
-                >
-                  {locale.ddl.drop}
-                </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => onEdit(c.name)}
+                      disabled={isGeneratedColumn(c.extra) && !c.generated}
+                      title={isGeneratedColumn(c.extra) && !c.generated ? locale.ddl.generatedNotEditable : undefined}
+                      aria-label={`${c.name}: ${locale.ddl.edit}`}
+                    >
+                      {locale.ddl.edit}
+                    </Button>{' '}
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      aria-haspopup="dialog"
+                      onClick={() => onDrop(c.name)}
+                      aria-label={`${c.name}: ${locale.ddl.drop}`}
+                    >
+                      {locale.ddl.drop}
+                    </Button>
+                  </>
+                ) : null}
               </Td>
             ) : null}
           </Tr>

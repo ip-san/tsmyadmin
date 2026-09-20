@@ -205,6 +205,9 @@ const EventShape = {
   definer: DefinerSchema.optional(),
 }
 
+/** A table option that is on, off or left to the server's own default. */
+const TableOptionSwitch = z.enum(['DEFAULT', '0', '1'])
+
 export const DdlOpSchema = z.discriminatedUnion('op', [
   z.object({
     op: z.literal('createTable'),
@@ -490,6 +493,16 @@ export const DdlOpSchema = z.discriminatedUnion('op', [
     rowFormat: z.enum(['DEFAULT', 'DYNAMIC', 'FIXED', 'COMPRESSED', 'REDUNDANT', 'COMPACT']).optional(),
     /** MySQL CHECKSUM table option (a live checksum, MyISAM / Aria). */
     checksum: z.boolean().optional(),
+    /** MySQL PACK_KEYS (MyISAM): 0 / 1, or DEFAULT. */
+    packKeys: TableOptionSwitch.optional(),
+    /** MySQL DELAY_KEY_WRITE (MyISAM). */
+    delayKeyWrite: z.boolean().optional(),
+    /** MariaDB TRANSACTIONAL and PAGE_CHECKSUM (Aria). */
+    transactional: z.boolean().optional(),
+    pageChecksum: z.boolean().optional(),
+    /** MySQL STATS_PERSISTENT and STATS_AUTO_RECALC (InnoDB): 0 / 1, or DEFAULT. */
+    statsPersistent: TableOptionSwitch.optional(),
+    statsAutoRecalc: TableOptionSwitch.optional(),
   }),
   /**
    * Every text column (and, on MySQL, the table default) to one collation. MySQL converts the table in one

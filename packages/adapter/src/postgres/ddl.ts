@@ -448,7 +448,13 @@ export const pgDdl: DdlBuilder = {
           op.collation !== undefined ||
           op.autoIncrement !== undefined ||
           op.rowFormat !== undefined ||
-          op.checksum !== undefined
+          op.checksum !== undefined ||
+          op.packKeys !== undefined ||
+          op.delayKeyWrite !== undefined ||
+          op.transactional !== undefined ||
+          op.pageChecksum !== undefined ||
+          op.statsPersistent !== undefined ||
+          op.statsAutoRecalc !== undefined
         ) {
           throw new AdapterError(
             'UNSUPPORTED',

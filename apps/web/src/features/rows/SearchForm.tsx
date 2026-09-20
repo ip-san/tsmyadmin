@@ -7,6 +7,7 @@ import { ErrorBox, Spinner } from '@/components/ui/Feedback.tsx'
 import { Input, Select } from '@/components/ui/Field.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
+import { enumChoices } from '@/lib/enum-values.ts'
 import { conditionText, conditionValue, valueShape } from '@/lib/filter-values.ts'
 import { structureQuery, type TableRef } from '@/lib/queries.ts'
 import { defaultSearchOptions, SearchOptions, type SearchOptionsValue } from './SearchOptions.tsx'
@@ -74,6 +75,8 @@ export function SearchForm({
           {columns.map((c) => {
             const cond = conditions[c.name] ?? { op: '', value: '' }
             const shape = valueShape(cond.op)
+            // An ENUM / SET column is compared with one of its own values: pick it instead of typing it.
+            const choices = shape === 'one' && (cond.op === 'eq' || cond.op === 'neq') ? enumChoices(c.dataType) : null
             return (
               <Tr key={c.name}>
                 <Td className="whitespace-nowrap font-medium">{c.name}</Td>
@@ -94,18 +97,34 @@ export function SearchForm({
                   </Select>
                 </Td>
                 <Td className="min-w-40">
-                  <Input
-                    aria-label={`${c.name}: ${locale.rows.value}`}
-                    value={cond.value}
-                    disabled={shape === 'none'}
-                    placeholder={
-                      shape === 'list'
-                        ? locale.search.listPlaceholder[cond.op === 'in' || cond.op === 'not_in' ? 'in' : 'between']
-                        : undefined
-                    }
-                    onChange={(e) => update(c.name, { value: e.target.value })}
-                    className="font-mono text-xs"
-                  />
+                  {choices ? (
+                    <Select
+                      aria-label={`${c.name}: ${locale.rows.value}`}
+                      value={cond.value}
+                      onChange={(e) => update(c.name, { value: e.target.value })}
+                      className="w-auto"
+                    >
+                      <option value="">{locale.search.chooseValue}</option>
+                      {choices.map((v) => (
+                        <option key={v} value={v}>
+                          {v}
+                        </option>
+                      ))}
+                    </Select>
+                  ) : (
+                    <Input
+                      aria-label={`${c.name}: ${locale.rows.value}`}
+                      value={cond.value}
+                      disabled={shape === 'none'}
+                      placeholder={
+                        shape === 'list'
+                          ? locale.search.listPlaceholder[cond.op === 'in' || cond.op === 'not_in' ? 'in' : 'between']
+                          : undefined
+                      }
+                      onChange={(e) => update(c.name, { value: e.target.value })}
+                      className="font-mono text-xs"
+                    />
+                  )}
                 </Td>
               </Tr>
             )

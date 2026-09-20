@@ -12,6 +12,7 @@ import type {
 } from '@tsmyadmin/shared'
 import {
   COLUMN_PRIVILEGES,
+  DISTINCT_VALUES_LIMIT,
   EXACT_COUNT_MAX_ROWS,
   type InputCell,
   isBinaryCell,
@@ -417,6 +418,69 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
       })
     })
 
+    describe('checkReferences', () => {
+      it('counts the rows that name a parent which is not there, per foreign key, leaving NULL keys out', async () => {
+        const parent = `${scratch}_crp`
+        const child = `${scratch}_crc`
+        await execOk(`CREATE TABLE ${parent} (id INT PRIMARY KEY)`)
+        await execOk(`CREATE TABLE ${child} (id INT PRIMARY KEY, pid INT)`)
+        try {
+          await execOk(`INSERT INTO ${parent} VALUES (1), (2)`)
+          await execOk(`INSERT INTO ${child} VALUES (1, 1), (2, 3), (3, 4), (4, NULL), (5, 2)`)
+          // Rows that already break the rule can only be under a key the server does not check them against.
+          await execOk(
+            dialect === 'mysql'
+              ? `SET FOREIGN_KEY_CHECKS = 0; ALTER TABLE ${child} ADD CONSTRAINT ${child}_fk FOREIGN KEY (pid) REFERENCES ${parent} (id)`
+              : `ALTER TABLE ${child} ADD CONSTRAINT ${child}_fk FOREIGN KEY (pid) REFERENCES ${parent} (id) NOT VALID`
+          )
+          const [check] = await db.checkReferences(ns, child)
+          expect(check).toMatchObject({ name: `${child}_fk`, columns: ['pid'], refTable: parent, orphans: 2 })
+          const [listed] = await exec(check?.sql ?? '')
+          expect(listed?.kind === 'rows' ? listed.result.rows.map((r) => r[0]).sort() : []).toEqual([2, 3])
+          expect(await db.checkReferences(ns, parent)).toEqual([])
+        } finally {
+          await execOk(`DROP TABLE IF EXISTS ${child}`)
+          await execOk(`DROP TABLE IF EXISTS ${parent}`)
+        }
+      })
+    })
+
+    describe('distinctValues', () => {
+      it('lists each value with its count, most frequent first, NULL included, and refuses an unknown column', async () => {
+        const t = `${scratch}_dv`
+        await execOk(`CREATE TABLE ${t} (id INT PRIMARY KEY, colour VARCHAR(10))`)
+        try {
+          await execOk(
+            `INSERT INTO ${t} VALUES (1, 'red'), (2, 'blue'), (3, 'red'), (4, NULL), (5, 'red'), (6, 'blue')`
+          )
+          const found = await db.distinctValues(ns, t, 'colour')
+          expect(found.truncated).toBe(false)
+          expect(found.values).toEqual([
+            { value: 'red', count: 3 },
+            { value: 'blue', count: 2 },
+            { value: null, count: 1 },
+          ])
+          await expect(db.distinctValues(ns, t, 'nope')).rejects.toMatchObject({ code: 'NOT_FOUND' })
+        } finally {
+          await execOk(`DROP TABLE IF EXISTS ${t}`)
+        }
+      })
+
+      it('stops at the limit and says so', async () => {
+        const t = `${scratch}_dvl`
+        await execOk(`CREATE TABLE ${t} (id INT PRIMARY KEY)`)
+        try {
+          const values = Array.from({ length: DISTINCT_VALUES_LIMIT + 5 }, (_, i) => `(${i + 1})`).join(', ')
+          await execOk(`INSERT INTO ${t} VALUES ${values}`)
+          const found = await db.distinctValues(ns, t, 'id')
+          expect(found.values).toHaveLength(DISTINCT_VALUES_LIMIT)
+          expect(found.truncated).toBe(true)
+        } finally {
+          await execOk(`DROP TABLE IF EXISTS ${t}`)
+        }
+      })
+    })
+
     describe('searchTable', () => {
       it('reads the term as any word, every word, a regular expression, within columns named like', async () => {
         const total = async (term: string, options: Parameters<typeof db.searchTable>[3]) =>
@@ -740,6 +804,42 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         expect(r.columns.every((c) => typeof c.dataType === 'string' && c.dataType.length > 0)).toBe(true)
       })
 
+      it('also gives the statement with its values written in, which finds the same rows when run', async () => {
+        const opts = {
+          offset: 0,
+          limit: 3,
+          sort: [{ column: 'id', direction: 'asc' as const }],
+          filters: [
+            { column: 'name', op: 'neq' as const, value: "o'hara; \\ --" },
+            { column: 'age', op: 'gt' as const, value: 0 },
+          ],
+        }
+        const r = await db.browseRows(ns, 'users', opts)
+        expect(r.statement.literal).toMatch(/^SELECT /)
+        // No placeholder is left in it, and the text with a quote in it is a literal, not code.
+        expect(r.statement.literal).not.toMatch(/\?|\$1/)
+        const [again] = await exec(r.statement.literal)
+        expect(again?.kind === 'rows' ? again.result.rows.map((row) => row[0]) : []).toEqual(
+          r.rows.map((row) => row[0])
+        )
+      })
+
+      it('returns every row when the limit is 0, up to the cap', async () => {
+        const r = await db.browseRows(ns, 'users', { offset: 3, limit: 0, sort: [], filters: [] })
+        // The offset is ignored: "all" starts at the first row.
+        expect(r.rows).toHaveLength(5)
+        expect(r.statement.sql).toMatch(/LIMIT/)
+      })
+
+      it('times the stages of the statement when asked (MySQL / MariaDB), and says nothing elsewhere', async () => {
+        const r = await db.browseRows(ns, 'users', { offset: 0, limit: 5, sort: [], filters: [], profile: true })
+        if (dialect === 'mysql') {
+          expect(r.statement.profile?.length).toBeGreaterThan(0)
+          expect(r.statement.profile?.every((p) => p.state !== '' && p.seconds >= 0)).toBe(true)
+        } else expect(r.statement.profile).toBeUndefined()
+        expect((await browseAll('users')).statement.profile).toBeUndefined()
+      })
+
       it('reports the statement it ran, with values bound and never spliced into the text', async () => {
         // A value that would break the SQL if it were ever interpolated rather than bound.
         const needle = "o'hara; --"
@@ -976,6 +1076,18 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
       })
     })
 
+    describe('insertPreview', () => {
+      it('shows the INSERT without running it, the values apart from the text', () => {
+        const preview = db.insertPreview(ns, scratch, { id: 7, name: "it's", n: { $bin: 'AQID' } }, { ignore: true })
+        expect(preview.sql).toMatch(
+          dialect === 'mysql' ? /^INSERT IGNORE INTO / : /^INSERT INTO [\s\S]* ON CONFLICT DO NOTHING$/
+        )
+        // The value is bound, so the text has no quote of it in it.
+        expect(preview.sql).not.toContain("it's")
+        expect(preview.params).toEqual([7, "it's", { $bin: 'AQID' }])
+      })
+    })
+
     describe('insertRow', () => {
       it('inserts values including NULL and binary', async () => {
         const r = await db.insertRow(ns, scratch, { id: 1, name: 'first', n: null })
@@ -985,6 +1097,16 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         expect(rows.total).toBe(2)
         expect(rows.rows.map((x) => x[1])).toEqual(['first', "quote ' here"])
         expect(rows.rows[0]?.[2]).toBeNull()
+      })
+
+      it('skips a row the server refuses when asked to ignore errors, and refuses it otherwise', async () => {
+        await db.insertRow(ns, scratch, { id: 100, name: 'first', n: null })
+        await expect(db.insertRow(ns, scratch, { id: 100, name: 'again', n: null })).rejects.toBeInstanceOf(Error)
+        const skipped = await db.insertRow(ns, scratch, { id: 100, name: 'again', n: null }, { ignore: true })
+        expect(skipped.affectedRows).toBe(0)
+        expect((await browseAll(scratch)).rows.filter((x) => x[0] === 100).map((x) => x[1])).toEqual(['first'])
+        // The scratch table is shared by the tests that follow: leave it as it was.
+        await execOk(`DELETE FROM ${scratch} WHERE id = 100`)
       })
 
       it('writes through an allowed function, the value bound as its argument', async () => {
@@ -4028,6 +4150,11 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
           if (dialect === 'mysql') {
             await runDdl({ op: 'setTableOptions', table: t, rowFormat: 'DYNAMIC' })
             expect((await db.tableStats(ns, t)).rowFormat).toBe('Dynamic')
+            // InnoDB's statistics options, read back from the statement the server prints.
+            await runDdl({ op: 'setTableOptions', table: t, statsPersistent: '0', statsAutoRecalc: '1' })
+            const printed = (await db.showCreateTable(ns, t)).join('\n')
+            expect(printed).toMatch(/STATS_PERSISTENT=0/i)
+            expect(printed).toMatch(/STATS_AUTO_RECALC=1/i)
             await runDdl({ op: 'orderTable', table: t, column: 'name', desc: true })
             const [sum] = await exec(
               sqlScript(dialect, db.ddl.build(ns, { op: 'maintainTable', table: t, action: 'checksum' }))

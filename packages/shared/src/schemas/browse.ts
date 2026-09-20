@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { CellSchema, InputCellSchema } from './cell.ts'
-import { ResultSetSchema } from './result.ts'
+import { ProfileStageSchema, ResultSetSchema } from './result.ts'
 import { ForeignKeyDefSchema, ReferencingKeyDefSchema } from './structure.ts'
 
 export const SortDirectionSchema = z.enum(['asc', 'desc'])
@@ -51,12 +51,17 @@ export const FilterSchema = z.object({
 export type Filter = z.infer<typeof FilterSchema>
 
 export const BROWSE_MAX_LIMIT = 1000
+/** `limit: 0` asks for every row; the server stops here, which the page says (phpMyAdmin's "Show all"). */
+export const BROWSE_ALL_MAX = 100_000
 
 export const BrowseOptionsSchema = z.object({
   offset: z.number().int().min(0).default(0),
-  limit: z.number().int().min(1).max(BROWSE_MAX_LIMIT).default(100),
+  /** 0: every row, up to BROWSE_ALL_MAX. */
+  limit: z.number().int().min(0).max(BROWSE_MAX_LIMIT).default(100),
   sort: z.array(SortSpecSchema).default([]),
   filters: z.array(FilterSchema).default([]),
+  /** Time each stage of the statement (MySQL / MariaDB profiling; other servers ignore it). */
+  profile: z.boolean().optional(),
 })
 export type BrowseOptions = z.infer<typeof BrowseOptionsSchema>
 export type BrowseOptionsInput = z.input<typeof BrowseOptionsSchema>
@@ -79,15 +84,18 @@ export type CountKind = z.infer<typeof CountKindSchema>
  * The statement that fetched a page, exactly as it was sent: placeholders (`?` on MySQL, `$1`… on PostgreSQL)
  * with the bound values listed beside them.
  *
- * Never with the values spliced into the text. That string would look runnable, and making it runnable means
- * quoting each value for the dialect and the server's settings (MySQL's NO_BACKSLASH_ESCAPES changes what a
- * backslash means) — a guess, shown as if it were what ran.
+ * `sql` is never the values spliced into the text: that string would look runnable while being a guess at what
+ * ran. The values written in are a separate field, `literal`, offered only where a person edits or runs it.
  */
 export const BrowseStatementSchema = z.object({
   sql: z.string(),
   params: z.array(CellSchema),
+  /** The same statement with its values written in, for editing, EXPLAIN, code and bookmarks (not what ran). */
+  literal: z.string(),
   /** The data query alone; the row count, when one is run, is not included. */
   durationMs: z.number().nonnegative(),
+  /** The stages of the data query, when profiling was asked for and the server has it. */
+  profile: z.array(ProfileStageSchema).optional(),
 })
 export type BrowseStatement = z.infer<typeof BrowseStatementSchema>
 
@@ -151,3 +159,12 @@ export const TableSearchResultSchema = z.object({
   deleteSql: z.string(),
 })
 export type TableSearchResult = z.infer<typeof TableSearchResultSchema>
+
+/** Most values one column's distinct-value list carries; more than this and `truncated` is set. */
+export const DISTINCT_VALUES_LIMIT = 100
+/** A column's distinct values with how many rows hold each, most frequent first (phpMyAdmin's "Show distinct values"). */
+export const DistinctValuesSchema = z.object({
+  values: z.array(z.object({ value: CellSchema, count: z.number() })),
+  truncated: z.boolean(),
+})
+export type DistinctValues = z.infer<typeof DistinctValuesSchema>

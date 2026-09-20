@@ -70,3 +70,18 @@ for (const t of TARGETS) {
     })
   })
 }
+
+for (const t of TARGETS) {
+  test(`a row under the pointer is highlighted (${t.dialect})`, async ({ page }) => {
+    await login(page, t)
+    await page.goto(tableUrl(t, 'users'))
+    await page.getByRole('table', { name: 'users' }).getByRole('row').nth(1).waitFor()
+    const row = page.getByRole('table', { name: 'users' }).getByRole('row').nth(2)
+    const background = () => row.evaluate((el) => getComputedStyle(el).backgroundColor)
+    await page.mouse.move(0, 0)
+    const before = await background()
+    await row.hover()
+    // The row-hover colour of the theme, not the (transparent) resting one.
+    await expect.poll(background).not.toBe(before)
+  })
+}

@@ -350,6 +350,13 @@ export const ja = {
     total: (count: number) => `合計（${count.toLocaleString('ja-JP')} 件）`,
   },
   table: {
+    distinct: {
+      button: '個別の値',
+      title: (column: string) => `${column} の個別の値`,
+      count: '行数',
+      none: '行がありません。',
+      truncated: (n: number) => `多い順に先頭 ${n.toLocaleString('ja-JP')} 件だけを示しています。`,
+    },
     columns: 'カラム',
     indexes: 'インデックス',
     foreignKeys: '外部キー',
@@ -400,6 +407,14 @@ export const ja = {
     fromTable: '参照元テーブル',
   },
   browse: {
+    showAll: 'すべて表示',
+    showAllConfirm: 'すべて表示する',
+    showAllWarning: (n: number) =>
+      `この表は ${n.toLocaleString('ja-JP')} 行あります。すべてを読み込むと時間がかかり、ブラウザーが重くなります（サーバーは最大 100,000 行で止めます）。表示しますか？`,
+    showingAll: (n: number) => `${n.toLocaleString('ja-JP')} 行を表示中`,
+    backToPages: 'ページ表示に戻す',
+    profiling: '実行の内訳（プロファイル）を見る',
+    bookmarked: 'ブックマークに保存しました',
     selection: {
       edit: '選択行を編集',
       csv: '選択行を CSV で',
@@ -476,6 +491,20 @@ export const ja = {
     },
   },
   rows: {
+    previewSql: 'SQL をプレビュー',
+    previewTitle: '挿入する SQL',
+    previewNote: '実行はしません。値は SQL の文に書き込まず、下に別に示します（バインドして渡します）。',
+    boundValues: 'バインドする値',
+    afterInsert: {
+      label: '挿入後',
+      blank: 'この画面に留まる（空のフォーム）',
+      keep: 'この画面に留まる（入力を残す）',
+      browse: '一覧へ戻る',
+    },
+    ignoreErrors: 'エラーを無視して挿入する',
+    ignoreHint:
+      'MySQL は INSERT IGNORE、PostgreSQL は ON CONFLICT DO NOTHING。重複などで入れられない行は、エラーにせず飛ばします。',
+    ignoredRows: (n: number) => `${n.toLocaleString('ja-JP')} 行は、サーバーが受け付けなかったため飛ばしました`,
     patternMismatch: '入力の形式が指定と合いません',
     invalidJson: 'JSON として読めません',
     invalidXml: 'XML として読めません',
@@ -531,6 +560,7 @@ export const ja = {
     backToBrowse: '一覧へ戻る',
   },
   search: {
+    chooseValue: '（値を選ぶ）',
     title: 'テーブル内を検索',
     operator: '条件',
     noCondition: '（条件なし）',
@@ -576,7 +606,7 @@ export const ja = {
     listPlaceholder: { in: '1, 2, 3', between: '10, 20' },
   },
   sql: {
-    after: { edit: '編集', rerun: '再実行', explain: 'EXPLAIN', code: 'コードにする' },
+    after: { edit: '編集', rerun: '再実行', explain: 'EXPLAIN', code: 'コードにする', bookmark: 'ブックマーク' },
     code: {
       title: 'アプリケーション用のコード',
       language: '言語',
@@ -719,6 +749,28 @@ export const ja = {
     failed: '失敗',
   },
   ddl: {
+    tableOptions: {
+      packKeys: 'PACK_KEYS（MyISAM）',
+      delayKeyWrite: 'DELAY_KEY_WRITE（MyISAM）',
+      transactional: 'TRANSACTIONAL（Aria）',
+      pageChecksum: 'PAGE_CHECKSUM（Aria）',
+      statsPersistent: 'STATS_PERSISTENT（InnoDB）',
+      statsAutoRecalc: 'STATS_AUTO_RECALC（InnoDB）',
+      defaultValue: 'サーバーの既定',
+      ariaHint: 'MariaDB の Aria エンジンだけ',
+    },
+    referenceCheck: {
+      title: '参照整合性の確認',
+      hint: '外部キーごとに、参照先の行がない行（親のない行）を数えます。値に NULL が入っているキーは調べません。テーブルを 1 回ずつ読むので、大きいテーブルでは時間がかかります。',
+      button: '参照整合性を確認',
+      key: '外部キー',
+      references: '参照先',
+      orphans: '親のない行',
+      none: 'なし',
+      noKeys: 'このテーブルには外部キーがありません。',
+      open: 'SQL タブで開く',
+      openLabel: (name: string) => `${name}: 親のない行を SQL タブで開く`,
+    },
     titles: {
       splitTable: 'テーブルを分ける',
       moveRepeatingGroup: '繰り返しのカラムを行にする',
@@ -1172,6 +1224,7 @@ export const ja = {
       file: '設定ファイル',
     },
     browseLimit: '表の 1 ページの行数',
+    browseUnlimited: '表の行を「すべて表示」できるようにする（大きな表を全部読むと遅くなります）',
     rangeHint: (min: number, max: number) => `${min.toLocaleString('ja-JP')}〜${max.toLocaleString('ja-JP')}`,
     sqlSafeMode: 'セーフモード（WHERE のない UPDATE / DELETE を、実行の前に確認する）',
     consoleDocked: 'SQL コンソールを画面の下に常駐させる',

@@ -426,6 +426,12 @@ export const mysqlDdl: DdlBuilder = {
         if (op.autoIncrement !== undefined) parts.push(`AUTO_INCREMENT = ${op.autoIncrement}`)
         if (op.rowFormat !== undefined) parts.push(`ROW_FORMAT = ${op.rowFormat}`)
         if (op.checksum !== undefined) parts.push(`CHECKSUM = ${op.checksum ? 1 : 0}`)
+        if (op.packKeys !== undefined) parts.push(`PACK_KEYS = ${op.packKeys}`)
+        if (op.delayKeyWrite !== undefined) parts.push(`DELAY_KEY_WRITE = ${op.delayKeyWrite ? 1 : 0}`)
+        if (op.transactional !== undefined) parts.push(`TRANSACTIONAL = ${op.transactional ? 1 : 0}`)
+        if (op.pageChecksum !== undefined) parts.push(`PAGE_CHECKSUM = ${op.pageChecksum ? 1 : 0}`)
+        if (op.statsPersistent !== undefined) parts.push(`STATS_PERSISTENT = ${op.statsPersistent}`)
+        if (op.statsAutoRecalc !== undefined) parts.push(`STATS_AUTO_RECALC = ${op.statsAutoRecalc}`)
         if (parts.length === 0) throw new AdapterError('VALIDATION', 'No table option to change')
         return [`ALTER TABLE ${t} ${parts.join(', ')}`]
       }

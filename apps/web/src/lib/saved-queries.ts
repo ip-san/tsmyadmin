@@ -22,3 +22,6 @@ export function saveQuery(scope: string, entry: SavedQuery, store?: PreferenceSt
 export function deleteSaved(scope: string, name: string, store?: PreferenceStore): SavedQuery[] {
   return removeNamed(key(scope), SavedQuerySchema, name, store)
 }
+
+/** A name for a bookmark made from a statement: the start of the statement, on one line. */
+export const bookmarkName = (sql: string): string => sql.replace(/\s+/g, ' ').trim().slice(0, 60) || 'query'

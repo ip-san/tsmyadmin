@@ -11,9 +11,11 @@ import type {
   DiagnosticQuery,
   DiagnosticReport,
   Dialect,
+  DistinctValues,
   EventDetail,
   EventInfo,
   InputCell,
+  InsertPreview,
   KeyValue,
   KillMode,
   Namespace,
@@ -22,6 +24,7 @@ import type {
   ProcessInfo,
   QueryBuilderResult,
   QueryBuilderSpec,
+  ReferenceCheck,
   RelationDef,
   ReplicationInfo,
   RoutineDetail,
@@ -267,6 +270,10 @@ export interface DatabaseAdapter {
   browseRows(ns: Namespace, table: string, opts: BrowseOptions): Promise<BrowseResult>
   /** Rows containing `term` in any searchable column (case-insensitive), for the database-wide search. */
   searchTable(ns: Namespace, table: string, term: string, options?: SearchOptions): Promise<TableSearchResult>
+  /** Per foreign key of the table, the rows that name a parent which is not there (the constraint may be unenforced, or disabled). */
+  checkReferences(ns: Namespace, table: string): Promise<ReferenceCheck[]>
+  /** The distinct values of one column with their counts, most frequent first (at most `DISTINCT_VALUES_LIMIT`). */
+  distinctValues(ns: Namespace, table: string, column: string): Promise<DistinctValues>
   /**
    * A SELECT over the given tables for the SQL tab, joined along the foreign keys between them. Only reads
    * structure; refuses tables that no foreign key connects to the rest.
@@ -274,7 +281,14 @@ export interface DatabaseAdapter {
   buildQuery(ns: Namespace, spec: QueryBuilderSpec): Promise<QueryBuilderResult>
   /** Every foreign key held by a table of the namespace, ordered by table and constraint name (the designer). */
   listForeignKeys(ns: Namespace): Promise<RelationDef[]>
-  insertRow(ns: Namespace, table: string, values: RowValues): Promise<{ affectedRows: number }>
+  insertRow(
+    ns: Namespace,
+    table: string,
+    values: RowValues,
+    options?: { ignore?: boolean }
+  ): Promise<{ affectedRows: number }>
+  /** The INSERT that insertRow would run (values apart, as they are bound), without running it. */
+  insertPreview(ns: Namespace, table: string, values: RowValues, options?: { ignore?: boolean }): InsertPreview
   /** Bulk insert (imports): parameterised multi-row INSERTs inside one transaction; all-or-nothing. */
   /**
    * Bulk insert in one transaction (all or nothing); `rows` may be lazy so a large file is never held twice.
@@ -381,9 +395,12 @@ export const ADAPTER_METHOD_NAMES = [
   'listDependencies',
   'browseRows',
   'searchTable',
+  'distinctValues',
+  'checkReferences',
   'buildQuery',
   'listForeignKeys',
   'insertRow',
+  'insertPreview',
   'insertRows',
   'updateRow',
   'readCell',

@@ -6,6 +6,7 @@ import { locale } from '@/config/locale.ts'
 import { useDdlFlow } from '@/lib/ddl.ts'
 import type { TableRef } from '@/lib/queries.ts'
 import { EditViewForm } from './EditViewForm.tsx'
+import { ReferenceCheck } from './ReferenceCheck.tsx'
 
 /** Truncate / drop for tables; views (which cannot be truncated) get a DROP VIEW of the matching kind. */
 export function TableOperations({ tableRef, kind }: { tableRef: TableRef; kind: TableKind }) {
@@ -57,6 +58,7 @@ export function TableOperations({ tableRef, kind }: { tableRef: TableRef; kind: 
           </Button>
         </section>
       </div>
+      {kind === 'table' ? <ReferenceCheck tableRef={tableRef} /> : null}
       {kind === 'view' ? <EditViewForm tableRef={tableRef} flow={flow} /> : null}
       <DdlPreviewDialog flow={flow} />
     </div>

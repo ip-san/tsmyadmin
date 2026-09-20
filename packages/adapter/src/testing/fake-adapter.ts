@@ -8,10 +8,12 @@ import type {
   DiagnosticKind,
   DiagnosticReport,
   Dialect,
+  DistinctValues,
   EventDetail,
   EventInfo,
   Filter,
   InputCell,
+  InsertPreview,
   KeyValue,
   KeyValues,
   Namespace,
@@ -20,6 +22,7 @@ import type {
   ProcessInfo,
   QueryBuilderResult,
   QueryBuilderSpec,
+  ReferenceCheck,
   RelationDef,
   ReplicationInfo,
   RoutineDetail,
@@ -440,6 +443,31 @@ export class FakeAdapter implements DatabaseAdapter {
     return structuredClone(this.table(ns, table).schema)
   }
 
+  async checkReferences(ns: Namespace, table: string): Promise<ReferenceCheck[]> {
+    this.record('checkReferences', ns, table)
+    return this.table(ns, table).schema.foreignKeys.map((fk) => ({
+      name: fk.name,
+      columns: fk.columns,
+      refNamespace: fk.refNamespace,
+      refTable: fk.refTable,
+      refColumns: fk.refColumns,
+      orphans: 0,
+      sql: `SELECT c.* FROM ${table} c`,
+    }))
+  }
+
+  async distinctValues(ns: Namespace, table: string, column: string): Promise<DistinctValues> {
+    this.record('distinctValues', ns, table, column)
+    const counts = new Map<string, { value: Cell; count: number }>()
+    for (const row of this.table(ns, table).rows) {
+      const value = (row[column] ?? null) as Cell
+      const entry = counts.get(JSON.stringify(value)) ?? { value, count: 0 }
+      entry.count++
+      counts.set(JSON.stringify(value), entry)
+    }
+    return { values: [...counts.values()].sort((a, b) => b.count - a.count), truncated: false }
+  }
+
   async searchTable(ns: Namespace, table: string, term: string, options?: SearchOptions): Promise<TableSearchResult> {
     this.record('searchTable', ns, table, term, options)
     const t = this.table(ns, table)
@@ -492,14 +520,33 @@ export class FakeAdapter implements DatabaseAdapter {
       foreignKeys: t.schema.foreignKeys,
       referencedBy: t.schema.referencedBy,
       // No SQL runs here; a stand-in keeps the result shaped like a real adapter's.
-      statement: { sql: `SELECT * FROM ${table}`, params: [opts.limit, opts.offset], durationMs: 0 },
+      statement: {
+        sql: `SELECT * FROM ${table}`,
+        literal: `SELECT * FROM ${table} LIMIT ${opts.limit} OFFSET ${opts.offset}`,
+        params: [opts.limit, opts.offset],
+        durationMs: 0,
+      },
     }
   }
 
-  async insertRow(ns: Namespace, table: string, values: RowValues): Promise<{ affectedRows: number }> {
-    this.record('insertRow', ns, table, values)
+  async insertRow(
+    ns: Namespace,
+    table: string,
+    values: RowValues,
+    options?: { ignore?: boolean }
+  ): Promise<{ affectedRows: number }> {
+    this.record('insertRow', ns, table, values, options)
     this.table(ns, table).rows.push(evaluate(values))
     return { affectedRows: 1 }
+  }
+
+  insertPreview(ns: Namespace, table: string, values: RowValues, options?: { ignore?: boolean }): InsertPreview {
+    this.record('insertPreview', ns, table, values, options)
+    const names = Object.keys(values)
+    return {
+      sql: `INSERT ${options?.ignore ? 'IGNORE ' : ''}INTO ${table} (${names.join(', ')}) VALUES (${names.map(() => '?').join(', ')})`,
+      params: names.map((n) => (values[n] ?? null) as Cell),
+    }
   }
 
   async insertRows(

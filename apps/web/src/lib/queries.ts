@@ -13,10 +13,12 @@ import type {
   DesignerPage,
   DiagnosticKind,
   DiagnosticReport,
+  DistinctValues,
   EventDetail,
   EventInfo,
   ExportTemplate,
   HistoryEntry,
+  InsertPreview,
   KeyValue,
   KillMode,
   MyGroupTabs,
@@ -28,6 +30,7 @@ import type {
   QueryBuilderRequestInput,
   QueryBuilderResult,
   QueryTemplate,
+  ReferenceCheck,
   RelationDef,
   ReplicationInfo,
   RoutineDefinition,
@@ -345,6 +348,32 @@ export const tableStatsQuery = (ref: TableRef) =>
 /** Key prefix shared by every rows page of one table (invalidate this after a mutation, not the whole database). */
 export const rowsKey = (ref: TableRef) => ['rows', ref.db, ref.schema ?? '', ref.table] as const
 
+export const referenceCheckQuery = (ref: TableRef) =>
+  queryOptions({
+    queryKey: ['references', ref.db, ref.schema ?? '', ref.table],
+    queryFn: () =>
+      unwrap<ReferenceCheck[]>(
+        api.databases[':db'].tables[':table'].references.$get({
+          param: { db: enc(ref.db), table: enc(ref.table) },
+          query: schemaQuery(ref.schema),
+        })
+      ),
+    staleTime: 0,
+  })
+
+export const distinctValuesQuery = (ref: TableRef, column: string) =>
+  queryOptions({
+    queryKey: ['distinct', ref.db, ref.schema ?? '', ref.table, column],
+    queryFn: () =>
+      unwrap<DistinctValues>(
+        api.databases[':db'].tables[':table'].columns[':column'].distinct.$get({
+          param: { db: enc(ref.db), table: enc(ref.table), column: enc(column) },
+          query: schemaQuery(ref.schema),
+        })
+      ),
+    staleTime: 0,
+  })
+
 export const rowsQuery = (ref: TableRef, options: BrowseOptions) =>
   queryOptions({
     queryKey: [...rowsKey(ref), options],
@@ -450,12 +479,20 @@ export const mutations = {
     unwrap<SecondFactorStatus>(api['second-factor'].passkeys[':id'].$delete({ param: { id: enc(id) }, json: proof })),
   resetSecondFactor: (user: string) =>
     unwrap<AccountSecondFactors>(api['second-factor'].accounts.reset.$post({ json: { user } })),
-  insertRow: (ref: TableRef, values: RowValues) =>
+  insertRow: (ref: TableRef, values: RowValues, ignore = false) =>
     unwrap<{ affectedRows: number }>(
       api.databases[':db'].tables[':table'].rows.$post({
         param: { db: enc(ref.db), table: enc(ref.table) },
         query: schemaQuery(ref.schema),
-        json: { values },
+        json: { values, ...(ignore ? { ignore: true } : {}) },
+      })
+    ),
+  previewInsert: (ref: TableRef, values: RowValues, ignore = false) =>
+    unwrap<InsertPreview>(
+      api.databases[':db'].tables[':table'].rows.preview.$post({
+        param: { db: enc(ref.db), table: enc(ref.table) },
+        query: schemaQuery(ref.schema),
+        json: { values, ...(ignore ? { ignore: true } : {}) },
       })
     ),
   updateRow: (ref: TableRef, key: RowKey, values: RowValues) =>

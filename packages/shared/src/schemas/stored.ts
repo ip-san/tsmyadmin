@@ -20,6 +20,8 @@ export const PreferencesSchema = z.object({
     .regex(/^[a-z]{2,3}$/)
     .optional(),
   browseLimit: z.number().int().min(1).max(BROWSE_MAX_LIMIT).optional(),
+  /** Offers "show all rows" on a table's rows (off unless chosen: a large table read whole is slow). */
+  browseUnlimited: z.boolean().optional(),
   sqlSafeMode: z.boolean().optional(),
   consoleDocked: z.boolean().optional(),
   /** Statements the SQL console remembers per server. */
@@ -40,6 +42,7 @@ export const PreferencesUpdateSchema = z.object({
   theme: PreferencesSchema.shape.theme.unwrap().nullable().optional(),
   locale: PreferencesSchema.shape.locale.unwrap().nullable().optional(),
   browseLimit: PreferencesSchema.shape.browseLimit.unwrap().nullable().optional(),
+  browseUnlimited: PreferencesSchema.shape.browseUnlimited.unwrap().nullable().optional(),
   sqlSafeMode: PreferencesSchema.shape.sqlSafeMode.unwrap().nullable().optional(),
   consoleDocked: PreferencesSchema.shape.consoleDocked.unwrap().nullable().optional(),
   sqlHistoryMax: PreferencesSchema.shape.sqlHistoryMax.unwrap().nullable().optional(),

@@ -12,9 +12,11 @@ export interface PaginationProps {
   count?: CountKind
   shown: number
   onChange: (patch: { page?: number; limit?: number }) => void
+  /** "Show all rows": offered only where the setting allows it; while on, the paging controls give way to it. */
+  all?: { on: boolean; onToggle: () => void } | undefined
 }
 
-export function Pagination({ page, limit, total, count = 'exact', shown, onChange }: PaginationProps) {
+export function Pagination({ page, limit, total, count = 'exact', shown, onChange, all }: PaginationProps) {
   const from = shown === 0 ? 0 : (page - 1) * limit + 1
   const to = shown === 0 ? 0 : (page - 1) * limit + shown
   // A floor says nothing about where the rows end: page forward while pages come back full. A catalog estimate
@@ -24,6 +26,17 @@ export function Pagination({ page, limit, total, count = 'exact', shown, onChang
     lastPage === null || count === 'estimate'
       ? shown === limit || (lastPage !== null && page < lastPage)
       : page < lastPage
+  if (all?.on)
+    return (
+      <nav aria-label={locale.tabs.browse} className="flex flex-wrap items-center gap-2 text-sm">
+        <span className="text-ink-sub">
+          {locale.browse.total(total, count)} · {locale.browse.showingAll(shown)}
+        </span>
+        <Button size="sm" className="ml-auto" onClick={all.onToggle}>
+          {locale.browse.backToPages}
+        </Button>
+      </nav>
+    )
   return (
     <nav aria-label={locale.tabs.browse} className="flex flex-wrap items-center gap-2 text-sm">
       <span className="text-ink-sub">
@@ -49,6 +62,11 @@ export function Pagination({ page, limit, total, count = 'exact', shown, onChang
         >
           »
         </Button>
+        {all ? (
+          <Button size="sm" onClick={all.onToggle}>
+            {locale.browse.showAll}
+          </Button>
+        ) : null}
         <label htmlFor="browse-limit" className="ml-2 flex items-center gap-1 text-xs text-ink-sub">
           {locale.browse.perPage}
           <Select

@@ -1,5 +1,4 @@
-import type { Cell, ColumnDef, ColumnTransform, ForeignKeyDef, RowValues, WriteCell } from '@tsmyadmin/shared'
-import { isGeneratedColumn, ROW_FUNCTIONS_WITH_ARG } from '@tsmyadmin/shared'
+import type { Cell, ColumnDef, ColumnTransform, ForeignKeyDef, RowValues } from '@tsmyadmin/shared'
 import { type FormEvent, useEffect, useRef, useState } from 'react'
 import { locale } from '@/config/locale.ts'
 import { cellToEditable, isOpaqueCell } from '@/lib/format.ts'
@@ -8,6 +7,7 @@ import { Button } from '../ui/Button.tsx'
 import { ErrorBox } from '../ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '../ui/Table.tsx'
 import { type FieldState, MAX_UPLOAD_BYTES, RowField } from './RowField.tsx'
+import { computed, initialField, initialState, isGenerated, type RowState, writtenValue } from './row-form-state.ts'
 
 /** A row's files together, as base64: under the 1 MB request body with room for the rest of the row. */
 const ROW_FILES_MAX = Math.ceil((MAX_UPLOAD_BYTES * 4) / 3)
@@ -33,56 +33,9 @@ export interface RowFormProps {
    * nothing changed.
    */
   onSubmit: (values: RowValues, rows: RowValues[]) => void
+  /** Insert: shows the statement for the rows written so far instead of running it (they go through the same checks). */
+  onPreview?: (rows: RowValues[]) => void
   onCancel?: () => void
-}
-
-/** The server supplies the value: a key column with a sequence, or a column computed from the others. */
-function isGenerated(c: ColumnDef): boolean {
-  return c.extra.includes('auto_increment') || c.extra.includes('identity') || c.extra === 'serial' || computed(c)
-}
-
-/** Stronger than `isGenerated`: the server refuses a value for these at all, so they never enter the payload. */
-function computed(c: ColumnDef): boolean {
-  return isGeneratedColumn(c.extra)
-}
-
-function initialField(c: ColumnDef, mode: RowFormProps['mode'], initial?: Record<string, Cell>): FieldState {
-  const cell = initial?.[c.name] ?? null
-  const hasDefault = c.default !== null || isGenerated(c)
-  const blank = { fn: '' as const, file: null }
-  // Duplicating a row: keep every value except generated keys, which must get a fresh value. A value the page
-  // does not hold whole (binary, cut text) cannot be copied: the column falls back to its default or NULL.
-  if (mode === 'insert' && initial !== undefined) {
-    if (isOpaqueCell(cell)) return { ...blank, text: '', isNull: c.nullable && !hasDefault, useDefault: hasDefault }
-    return { ...blank, text: cellToEditable(cell), isNull: cell === null, useDefault: isGenerated(c) }
-  }
-  return {
-    ...blank,
-    text: cellToEditable(cell),
-    isNull: mode === 'edit' ? cell === null : c.nullable && !hasDefault,
-    useDefault: mode === 'insert' && hasDefault,
-  }
-}
-
-type RowState = Record<string, FieldState>
-
-function initialState(columns: ColumnDef[], mode: RowFormProps['mode'], initial?: Record<string, Cell>): RowState {
-  const out: RowState = {}
-  for (const c of columns) out[c.name] = initialField(c, mode, initial)
-  return out
-}
-
-/** A field as the value to write, or undefined when it is not written (default, generated, unchanged). */
-function writtenValue(c: ColumnDef, f: FieldState, mode: RowFormProps['mode'], original: Cell): WriteCell | undefined {
-  // A generated column rejects any value, including NULL (MySQL ER_NON_DEFAULT_VALUE_FOR_GENERATED_COLUMN).
-  if (computed(c) || f.useDefault) return undefined
-  if (f.isNull) return mode === 'edit' && original === null ? undefined : null
-  if (f.fn !== '') return ROW_FUNCTIONS_WITH_ARG.has(f.fn) ? { $fn: f.fn, arg: f.text } : { $fn: f.fn }
-  if (f.file) return { $bin: f.file.base64 }
-  // Editing keeps an opaque value untouched (it cannot be shown whole); duplicating sends whatever was typed.
-  if (mode === 'edit' && isOpaqueCell(original)) return undefined
-  if (mode === 'edit' && !changed(original, f.text)) return undefined
-  return f.text
 }
 
 /** Shared insert / edit form. In edit mode only changed columns are submitted. */
@@ -97,6 +50,7 @@ export function RowForm({
   pending,
   error,
   onSubmit,
+  onPreview,
   onCancel,
 }: RowFormProps) {
   const count = mode === 'insert' ? Math.max(1, rowCount) : Math.max(1, initialRows?.length ?? 1)
@@ -127,6 +81,8 @@ export function RowForm({
 
   // `pending` comes from a mutation and only flips on the next render, so a double click would submit twice.
   const submitted = useRef(false)
+  // Which button submitted the form: the preview button sets this, and it is read (and cleared) by `submit`.
+  const previewing = useRef(false)
   useEffect(() => {
     if (!pending) submitted.current = false
   }, [pending])
@@ -150,7 +106,9 @@ export function RowForm({
   }
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    if (submitted.current || pending) return
+    const preview = previewing.current
+    previewing.current = false
+    if ((submitted.current && !preview) || pending) return
     const refusing = refusals()
     setRefused(refusing)
     if (refusing.length > 0) return
@@ -161,7 +119,7 @@ export function RowForm({
     )
     setFilesTooLarge(heaviest > ROW_FILES_MAX)
     if (heaviest > ROW_FILES_MAX) return
-    submitted.current = true
+    if (!preview) submitted.current = true
     const all: RowValues[] = []
     rows.forEach((_, row) => {
       if (!touched[row]) return
@@ -172,7 +130,8 @@ export function RowForm({
       }
       all.push(values)
     })
-    onSubmit(all[0] ?? {}, all)
+    if (preview && onPreview) onPreview(all)
+    else onSubmit(all[0] ?? {}, all)
   }
 
   return (
@@ -277,16 +236,22 @@ export function RowForm({
             {locale.common.cancel}
           </Button>
         ) : null}
+        {onPreview ? (
+          <Button
+            type="submit"
+            aria-haspopup="dialog"
+            disabled={pending}
+            onClick={() => {
+              previewing.current = true
+            }}
+          >
+            {locale.rows.previewSql}
+          </Button>
+        ) : null}
         <Button type="submit" variant="primary" disabled={pending}>
           {mode === 'insert' ? locale.rows.insert : locale.rows.save}
         </Button>
       </div>
     </form>
   )
-}
-
-function changed(original: Cell, next: string): boolean {
-  if (original === null) return true
-  if (isOpaqueCell(original)) return true
-  return String(original) !== next
 }

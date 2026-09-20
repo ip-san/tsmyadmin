@@ -42,6 +42,14 @@ for (const t of TARGETS) {
             .getByRole('button', { name: '次へ（SQL を確認）' })
             .click()
           await confirmPreview(page, /ROW_FORMAT = DYNAMIC/)
+          // The statistics options of InnoDB: on, off, or the server's own default.
+          await page.getByLabel('STATS_PERSISTENT（InnoDB）').selectOption('0')
+          await page.getByLabel('STATS_AUTO_RECALC（InnoDB）').selectOption('DEFAULT')
+          await page
+            .getByRole('form', { name: 'テーブルオプション' })
+            .getByRole('button', { name: '次へ（SQL を確認）' })
+            .click()
+          await confirmPreview(page, /STATS_PERSISTENT = 0, STATS_AUTO_RECALC = DEFAULT/)
         }
 
         // Into another database / schema, replacing whatever has that name (confirmed by it), keys included.

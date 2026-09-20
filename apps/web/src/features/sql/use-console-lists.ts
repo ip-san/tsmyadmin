@@ -3,8 +3,8 @@ import type { Dialect } from '@tsmyadmin/shared'
 import { useRef, useState } from 'react'
 import { mutations, sqlHistoryQuery } from '@/lib/queries.ts'
 import { historyLimit } from '@/lib/settings.ts'
+import { useSavedQueries } from '@/lib/use-saved-queries.ts'
 import { clearHistory, forServer, type HistoryEntry, loadHistory, pushHistory, withEntry } from './history.ts'
-import { useSavedQueries } from './use-saved-queries.ts'
 import { useSharedQueries } from './use-shared-queries.ts'
 
 /**

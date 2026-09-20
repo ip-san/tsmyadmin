@@ -14,6 +14,9 @@ export interface BrowseToolbarProps {
   selectedCount: number
   canDelete: boolean
   onDelete: () => void
+  /** MySQL / MariaDB: time the statement's stages (the toggle is left out where the server has no profiling). */
+  profile?: boolean
+  onProfile?: (on: boolean) => void
 }
 
 export function BrowseToolbar({
@@ -25,12 +28,20 @@ export function BrowseToolbar({
   selectedCount,
   canDelete,
   onDelete,
+  profile,
+  onProfile,
 }: BrowseToolbarProps) {
   return (
     <div className="flex flex-wrap items-center gap-3 text-xs text-ink-sub print:hidden">
       <ColumnPicker columns={columns} visible={visible} onChange={onColumns} />
       <PrintButton />
       <DisplayMenu />
+      {onProfile ? (
+        <label className="flex items-center gap-1">
+          <input type="checkbox" checked={profile === true} onChange={(e) => onProfile(e.target.checked)} />
+          {locale.browse.profiling}
+        </label>
+      ) : null}
       <span>{locale.browse.keyHint[keyKind]}</span>
       {editable ? (
         <>

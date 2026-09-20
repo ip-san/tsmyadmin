@@ -633,6 +633,25 @@ describe('DDL builders', () => {
     expect(() => pgDdl.build({ database: 'db' }, { op: 'maintainTable', table: 't', action: 'flush' })).toThrow()
   })
 
+  it('writes the MyISAM, Aria and InnoDB table options, and refuses them on PostgreSQL', () => {
+    const opts: DdlOp = {
+      op: 'setTableOptions',
+      table: 't',
+      packKeys: '1',
+      delayKeyWrite: true,
+      transactional: false,
+      pageChecksum: true,
+      statsPersistent: 'DEFAULT',
+      statsAutoRecalc: '0',
+    }
+    expect(mysqlDdl.build({ database: 'db' }, opts)).toEqual([
+      'ALTER TABLE `db`.`t` PACK_KEYS = 1, DELAY_KEY_WRITE = 1, TRANSACTIONAL = 0, PAGE_CHECKSUM = 1, STATS_PERSISTENT = DEFAULT, STATS_AUTO_RECALC = 0',
+    ])
+    expect(() => pgDdl.build({ database: 'db' }, opts)).toThrow(/no engine/)
+    // Only the three the server accepts as a keyword are taken.
+    expect(DdlOpSchema.safeParse({ ...opts, packKeys: '2' }).success).toBe(false)
+  })
+
   it('refuses a data-only copy that would first drop the table it copies into', () => {
     const op: DdlOp = {
       op: 'copyTable',

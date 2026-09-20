@@ -15,7 +15,7 @@ const base = (over: Partial<BrowseResult>): BrowseResult => ({
   referencedBy: [],
   keyKind: 'pk',
   keyColumns: ['a'],
-  statement: { sql: 'SELECT 1', params: [], durationMs: 0 },
+  statement: { sql: 'SELECT 1', literal: 'SELECT 1', params: [], durationMs: 0 },
   ...over,
 })
 

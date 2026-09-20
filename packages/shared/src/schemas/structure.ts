@@ -113,6 +113,21 @@ export const ForeignKeyDefSchema = z.object({
 })
 export type ForeignKeyDef = z.infer<typeof ForeignKeyDefSchema>
 
+/**
+ * One foreign key's referential check (phpMyAdmin's "Check referential integrity"): how many rows of the table name a
+ * parent that is not there. `sql` is a SELECT that lists those rows, for the SQL tab.
+ */
+export const ReferenceCheckSchema = z.object({
+  name: z.string(),
+  columns: z.array(z.string()),
+  refNamespace: NamespaceSchema,
+  refTable: z.string(),
+  refColumns: z.array(z.string()),
+  orphans: z.number(),
+  sql: z.string(),
+})
+export type ReferenceCheck = z.infer<typeof ReferenceCheckSchema>
+
 /** A foreign key with the table that holds it: every key of a database or schema at once (the designer). */
 export const RelationDefSchema = ForeignKeyDefSchema.extend({ table: z.string() })
 export type RelationDef = z.infer<typeof RelationDefSchema>

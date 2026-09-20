@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { RowValuesSchema } from './cell.ts'
+import { CellSchema, RowValuesSchema } from './cell.ts'
 import { DdlOpSchema } from './ddl.ts'
 import { DialectSchema } from './dialect.ts'
 import { StatementResultSchema } from './result.ts'
@@ -107,7 +107,14 @@ export const RoutineDetailQuerySchema = RoutineDefinitionQuerySchema.extend({
 })
 export const TriggerDetailQuerySchema = SchemaQuerySchema.extend({ table: z.string().min(1) })
 
-export const InsertRowRequestSchema = z.object({ values: RowValuesSchema })
+export const InsertRowRequestSchema = z.object({
+  values: RowValuesSchema,
+  /** INSERT IGNORE (MySQL) / ON CONFLICT DO NOTHING (PostgreSQL): a row the server refuses is skipped, not an error. */
+  ignore: z.boolean().optional(),
+})
+/** The INSERT a row would run, with its values apart from it (they are bound, never written into the text). */
+export const InsertPreviewSchema = z.object({ sql: z.string(), params: z.array(CellSchema) })
+export type InsertPreview = z.infer<typeof InsertPreviewSchema>
 export const UpdateRowRequestSchema = z.object({ key: RowKeySchema, values: RowValuesSchema })
 export const DeleteRowsRequestSchema = z.object({ keys: z.array(RowKeySchema).min(1) })
 export const AffectedRowsSchema = z.object({ affectedRows: z.number() })

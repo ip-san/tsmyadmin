@@ -5,11 +5,13 @@ import { BROWSE_MAX_LIMIT, type BrowseOptions, FilterSchema, SortSpecSchema } fr
 export const BrowseQuerySchema = z.object({
   schema: z.string().min(1).optional(),
   offset: z.coerce.number().int().min(0).default(0),
-  limit: z.coerce.number().int().min(1).max(BROWSE_MAX_LIMIT).default(100),
+  limit: z.coerce.number().int().min(0).max(BROWSE_MAX_LIMIT).default(100),
   /** "col:asc,col2:desc" — column names are percent-encoded so `,` / `:` / `%` in a name survive (see encodeSort) */
   sort: z.string().optional(),
   /** JSON-encoded Filter[] */
   filters: z.string().optional(),
+  /** `1` times the statement's stages (MySQL / MariaDB). */
+  profile: z.enum(['0', '1']).optional(),
 })
 export type BrowseQuery = z.infer<typeof BrowseQuerySchema>
 export type BrowseQueryInput = z.input<typeof BrowseQuerySchema>
@@ -42,7 +44,16 @@ export function parseBrowseQuery(q: BrowseQuery): ParsedBrowseQuery {
   const filters = FilterListSchema.safeParse(filtersRaw)
   if (!filters.success)
     return { ok: false, message: `Invalid filters: ${filters.error.issues[0]?.message ?? 'malformed'}` }
-  return { ok: true, options: { offset: q.offset, limit: q.limit, sort: sort.data, filters: filters.data } }
+  return {
+    ok: true,
+    options: {
+      offset: q.offset,
+      limit: q.limit,
+      sort: sort.data,
+      filters: filters.data,
+      ...(q.profile === '1' ? { profile: true } : {}),
+    },
+  }
 }
 
 /** Inverse of parseBrowseQuery, for clients building the query string. */
@@ -51,6 +62,7 @@ export function buildBrowseQuery(options: BrowseOptions, schema?: string): Recor
   if (schema) out.schema = schema
   if (options.sort.length > 0) out.sort = encodeSort(options.sort)
   if (options.filters.length > 0) out.filters = JSON.stringify(options.filters)
+  if (options.profile) out.profile = '1'
   return out
 }
 

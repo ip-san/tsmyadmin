@@ -355,6 +355,13 @@ export const en = {
     total: (count: number) => `Total (${count.toLocaleString('en-US')})`,
   },
   table: {
+    distinct: {
+      button: 'Distinct values',
+      title: (column: string) => `Distinct values of ${column}`,
+      count: 'Rows',
+      none: 'There are no rows.',
+      truncated: (n: number) => `Only the ${n.toLocaleString('en-US')} most frequent values are shown.`,
+    },
     columns: 'Columns',
     indexes: 'Indexes',
     foreignKeys: 'Foreign keys',
@@ -405,6 +412,14 @@ export const en = {
     fromTable: 'Referencing table',
   },
   browse: {
+    showAll: 'Show all',
+    showAllConfirm: 'Show all rows',
+    showAllWarning: (n: number) =>
+      `This table has ${n.toLocaleString('en-US')} rows. Reading them all takes a while and slows the browser (the server stops at 100,000). Show them?`,
+    showingAll: (n: number) => `showing ${n.toLocaleString('en-US')} rows`,
+    backToPages: 'Back to pages',
+    profiling: 'Show where the time goes (profile)',
+    bookmarked: 'Saved as a bookmark',
     selection: {
       edit: 'Edit selected rows',
       csv: 'Selected rows as CSV',
@@ -481,6 +496,21 @@ export const en = {
     },
   },
   rows: {
+    previewSql: 'Preview the SQL',
+    previewTitle: 'The INSERT',
+    previewNote:
+      'Nothing is run. The values are not written into the statement: they are shown apart, as they are bound.',
+    boundValues: 'Bound values',
+    afterInsert: {
+      label: 'After insertion',
+      blank: 'Stay here (empty form)',
+      keep: 'Stay here (keep what I typed)',
+      browse: 'Back to the rows',
+    },
+    ignoreErrors: 'Ignore errors while inserting',
+    ignoreHint:
+      'INSERT IGNORE on MySQL, ON CONFLICT DO NOTHING on PostgreSQL: a row the server cannot take (a duplicate, say) is skipped instead of failing.',
+    ignoredRows: (n: number) => `${n.toLocaleString('en-US')} row(s) skipped: the server did not accept them`,
     patternMismatch: 'The value does not fit the pattern set for this column',
     invalidJson: 'That is not valid JSON',
     invalidXml: 'That is not valid XML',
@@ -538,6 +568,7 @@ export const en = {
     backToBrowse: 'Back to Browse',
   },
   search: {
+    chooseValue: '(choose a value)',
     title: 'Search the table',
     operator: 'Operator',
     noCondition: '(no condition)',
@@ -584,7 +615,7 @@ export const en = {
     listPlaceholder: { in: '1, 2, 3', between: '10, 20' },
   },
   sql: {
-    after: { edit: 'Edit', rerun: 'Run again', explain: 'EXPLAIN', code: 'As code' },
+    after: { edit: 'Edit', rerun: 'Run again', explain: 'EXPLAIN', code: 'As code', bookmark: 'Bookmark' },
     code: {
       title: 'Code for an application',
       language: 'Language',
@@ -726,6 +757,28 @@ export const en = {
     failed: 'Failed',
   },
   ddl: {
+    tableOptions: {
+      packKeys: 'PACK_KEYS (MyISAM)',
+      delayKeyWrite: 'DELAY_KEY_WRITE (MyISAM)',
+      transactional: 'TRANSACTIONAL (Aria)',
+      pageChecksum: 'PAGE_CHECKSUM (Aria)',
+      statsPersistent: 'STATS_PERSISTENT (InnoDB)',
+      statsAutoRecalc: 'STATS_AUTO_RECALC (InnoDB)',
+      defaultValue: 'Server default',
+      ariaHint: 'MariaDB’s Aria engine only',
+    },
+    referenceCheck: {
+      title: 'Referential integrity',
+      hint: 'For each foreign key, counts the rows that name a parent which is not there. A key with a NULL in it is not checked. It reads the table once per key, so a large table takes a while.',
+      button: 'Check referential integrity',
+      key: 'Foreign key',
+      references: 'References',
+      orphans: 'Rows without a parent',
+      none: 'None',
+      noKeys: 'This table has no foreign keys.',
+      open: 'Open in the SQL tab',
+      openLabel: (name: string) => `${name}: open the rows without a parent in the SQL tab`,
+    },
     titles: {
       splitTable: 'Split the table',
       moveRepeatingGroup: 'Turn repeating columns into rows',
@@ -1186,6 +1239,7 @@ export const en = {
       file: 'Settings file',
     },
     browseLimit: 'Rows per page of a table',
+    browseUnlimited: 'Offer “Show all rows” on a table (reading a large table whole is slow)',
     rangeHint: (min: number, max: number) => `${min.toLocaleString('en-US')} to ${max.toLocaleString('en-US')}`,
     sqlSafeMode: 'Safe mode (ask before an UPDATE / DELETE without a WHERE runs)',
     consoleDocked: 'Keep the SQL console at the foot of the page',

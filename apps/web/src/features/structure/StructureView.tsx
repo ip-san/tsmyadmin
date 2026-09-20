@@ -17,6 +17,7 @@ import { useDdlFlow } from '@/lib/ddl.ts'
 import { createStatementQuery, structureQuery, type TableRef } from '@/lib/queries.ts'
 import { ColumnBulk } from './ColumnBulk.tsx'
 import { ColumnForm } from './ColumnForm.tsx'
+import { DistinctValuesDialog } from './DistinctValuesDialog.tsx'
 import { type IndexDialog, IndexesCard } from './IndexesCard.tsx'
 import { NormalizationHints } from './NormalizationHints.tsx'
 import { PartitionsCard } from './PartitionsCard.tsx'
@@ -35,6 +36,7 @@ export function StructureView({ tableRef, dialect }: { tableRef: TableRef; diale
   const [indexDialog, setIndexDialog] = useState<IndexDialog>(null)
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set())
   const [fkDialog, setFkDialog] = useState(false)
+  const [distinctFor, setDistinctFor] = useState<string | null>(null)
   if (structure.isPending) return <Spinner />
   if (structure.isError) return <ErrorBox error={structure.error} onRetry={() => void structure.refetch()} />
   const s = structure.data
@@ -51,6 +53,7 @@ export function StructureView({ tableRef, dialect }: { tableRef: TableRef; diale
   return (
     <div className="space-y-4">
       <DdlPreviewDialog flow={flow} />
+      <DistinctValuesDialog tableRef={tableRef} column={distinctFor} onClose={() => setDistinctFor(null)} />
       <Card
         title={
           <>
@@ -73,6 +76,7 @@ export function StructureView({ tableRef, dialect }: { tableRef: TableRef; diale
           onEdit={(name) => setColumnDialog({ mode: 'modify', name })}
           onDrop={(name) => flow.preview({ op: 'dropColumn', table, name })}
           selected={picked}
+          onDistinct={setDistinctFor}
           onToggle={(name) =>
             setPicked((p) => {
               const next = new Set(p)
