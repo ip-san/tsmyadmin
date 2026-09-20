@@ -6,15 +6,18 @@ import { Button } from '@/components/ui/Button.tsx'
 import { Dialog } from '@/components/ui/Dialog.tsx'
 import { Badge, ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Select } from '@/components/ui/Field.tsx'
+import { nextListSort, SortTh } from '@/components/ui/SortTh.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
 import { mutations, processesQuery } from '@/lib/queries.ts'
-import { isActiveProcess, REFRESH_SECONDS } from './processes.ts'
+import { abbreviateQuery, isActiveProcess, type ProcessColumn, REFRESH_SECONDS, sortProcesses } from './processes.ts'
 
 export function ProcessesPage() {
   // 0: only when asked.
   const [every, setEvery] = useState(0)
   const [activeOnly, setActiveOnly] = useState(false)
+  const [fullQuery, setFullQuery] = useState(false)
+  const [sort, setSort] = useState<{ key: ProcessColumn; dir: 'asc' | 'desc' } | null>(null)
   const [victim, setVictim] = useState<ProcessInfo | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const queryClient = useQueryClient()
@@ -53,6 +56,10 @@ export function ProcessesPage() {
           <input type="checkbox" checked={activeOnly} onChange={(e) => setActiveOnly(e.target.checked)} />
           {locale.server.activeOnly}
         </label>
+        <label className="flex items-center gap-1 text-xs text-ink-sub">
+          <input type="checkbox" checked={fullQuery} onChange={(e) => setFullQuery(e.target.checked)} />
+          {locale.server.fullQuery}
+        </label>
       </div>
       <output aria-live="polite" className={notice ? 'block' : 'sr-only'}>
         {notice ? <Notice>{notice}</Notice> : null}
@@ -65,18 +72,31 @@ export function ProcessesPage() {
         <Table aria-label={locale.server.processesTitle}>
           <thead>
             <tr>
-              <Th>{locale.server.pid}</Th>
-              <Th>{locale.server.user}</Th>
-              <Th>{locale.server.host}</Th>
-              <Th>{locale.server.database}</Th>
-              <Th>{locale.server.state}</Th>
-              <Th className="text-right">{locale.server.time}</Th>
-              <Th>{locale.server.query}</Th>
+              {(
+                [
+                  ['id', locale.server.pid],
+                  ['user', locale.server.user],
+                  ['host', locale.server.host],
+                  ['database', locale.server.database],
+                  ['state', locale.server.state],
+                  ['timeSec', locale.server.time],
+                  ['query', locale.server.query],
+                ] as const
+              ).map(([key, label]) => (
+                <SortTh
+                  key={key}
+                  dir={sort?.key === key ? sort.dir : null}
+                  onSort={() => setSort(nextListSort(sort, key))}
+                  {...(key === 'timeSec' ? { className: 'text-right' } : {})}
+                >
+                  {label}
+                </SortTh>
+              ))}
               <Th>{locale.ddl.actions}</Th>
             </tr>
           </thead>
           <tbody>
-            {procs.data
+            {(sort ? sortProcesses(procs.data, sort.key, sort.dir) : procs.data)
               .filter((p) => !activeOnly || isActiveProcess(p))
               .map((p) => (
                 <Tr key={p.id}>
@@ -102,7 +122,7 @@ export function ProcessesPage() {
                         –
                       </span>
                     ) : (
-                      <CellValue cell={p.query} />
+                      <CellValue cell={abbreviateQuery(p.query, fullQuery)} />
                     )}
                   </Td>
                   <Td className="whitespace-nowrap">

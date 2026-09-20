@@ -1,25 +1,32 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link, useRouteContext } from '@tanstack/react-router'
 import { useState } from 'react'
+import { z } from 'zod'
 import { DdlPreviewDialog } from '@/components/ddl/DdlPreviewDialog.tsx'
 import { ServerTabs } from '@/components/layout/ServerTabs.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Spinner } from '@/components/ui/Feedback.tsx'
 import { PrintButton } from '@/components/ui/PrintButton.tsx'
+import { nextListSort, SortTh } from '@/components/ui/SortTh.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
 import { CreateDatabaseForm } from '@/features/database/CreateDatabaseForm.tsx'
 import { DropDatabaseButton } from '@/features/database/DropDatabaseButton.tsx'
+import { type DatabaseColumn, sortDatabases } from '@/features/database/sort-databases.ts'
 import { isProtectedDatabase } from '@/features/database/system-databases.ts'
 import { ServerInfoCard } from '@/features/server/ServerInfoCard.tsx'
 import { useDdlFlow } from '@/lib/ddl.ts'
-import { databasesQuery } from '@/lib/queries.ts'
+import { readPreference, writePreference } from '@/lib/preferences.ts'
+import { databaseListQuery } from '@/lib/queries.ts'
 
 export const Route = createFileRoute('/_app/')({ component: ServerPage })
 
 function ServerPage() {
-  const databases = useQuery(databasesQuery)
   const { session } = useRouteContext({ from: '/_app' })
+  // Counting sizes reads the whole catalog: a server with very many tables can turn it off (kept in this browser).
+  const [counted, setCounted] = useState(() => readPreference('databaseStats', z.boolean(), true))
+  const [sort, setSort] = useState<{ key: DatabaseColumn; dir: 'asc' | 'desc' } | null>(null)
+  const databases = useQuery(databaseListQuery(counted))
   const [selected, setSelected] = useState<string[]>([])
   const dropFlow = useDdlFlow(session.serverDatabase, undefined, () => setSelected([]))
   const droppable = (databases.data ?? [])
@@ -34,6 +41,17 @@ function ServerPage() {
       <ServerInfoCard />
       <div className="mb-2 flex items-center justify-between gap-2">
         <h2 className="text-sm font-semibold text-ink">{locale.server.databasesTitle}</h2>
+        <label className="flex items-center gap-1 text-xs text-ink-sub" data-print-hide>
+          <input
+            type="checkbox"
+            checked={counted}
+            onChange={(e) => {
+              setCounted(e.target.checked)
+              writePreference('databaseStats', e.target.checked)
+            }}
+          />
+          {locale.server.countSizes}
+        </label>
         <PrintButton />
       </div>
       {databases.isPending ? (
@@ -56,14 +74,27 @@ function ServerPage() {
                   onChange={() => setSelected(allChecked ? [] : droppable)}
                 />
               </Th>
-              <Th>{locale.server.databaseName}</Th>
-              <Th className="text-right">{locale.database.size}</Th>
-              {session.dialect === 'mysql' ? <Th className="text-right">{locale.database.tableCount}</Th> : null}
+              {(
+                [
+                  ['name', locale.server.databaseName, ''],
+                  ['sizeBytes', locale.database.size, 'text-right'],
+                  ...(session.dialect === 'mysql' ? [['tableCount', locale.database.tableCount, 'text-right']] : []),
+                ] as [DatabaseColumn, string, string][]
+              ).map(([key, label, align]) => (
+                <SortTh
+                  key={key}
+                  dir={sort?.key === key ? sort.dir : null}
+                  onSort={() => setSort(nextListSort(sort, key))}
+                  {...(align ? { className: align } : {})}
+                >
+                  {label}
+                </SortTh>
+              ))}
               <Th data-print-hide>{locale.database.actions}</Th>
             </tr>
           </thead>
           <tbody>
-            {databases.data.map((d) => (
+            {(sort ? sortDatabases(databases.data, sort.key, sort.dir) : databases.data).map((d) => (
               <Tr key={d.name}>
                 <Td data-print-hide>
                   {droppable.includes(d.name) ? (

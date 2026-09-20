@@ -70,5 +70,32 @@ for (const t of TARGETS) {
       await page.getByRole('dialog').getByRole('button', { name: '実行する' }).click()
       await expect(page.getByRole('dialog').getByRole('alert')).toBeVisible()
     })
+    test('creates a replica user through the preview, and reports whether this server can be a source', async ({
+      page,
+    }) => {
+      test.setTimeout(60_000)
+      const name = `e2e_repl_${Date.now().toString(36)}`
+      const mysql = t.dialect === 'mysql'
+      await page.goto('/replication')
+      const settings = page.getByRole('table', { name: 'このサーバーをソースにする準備' })
+      await expect(settings.getByRole('row', { name: new RegExp(mysql ? 'server_id' : 'wal_level') })).toBeVisible()
+      try {
+        await page.getByRole('button', { name: 'レプリカ用ユーザーを作成…' }).click()
+        const form = page.getByRole('form', { name: 'レプリカ用ユーザーを作成…' })
+        await form.getByLabel('ユーザー名').fill(name)
+        await form.getByLabel('パスワード', { exact: true }).fill('repl-pw-1')
+        await form.getByLabel('パスワード（確認）').fill('repl-pw-1')
+        await form.getByRole('button', { name: '次へ（SQL を確認）' }).click()
+        const dialog = page.getByRole('dialog')
+        await expect(dialog.getByLabel('SQL')).toContainText(mysql ? 'REPLICATION SLAVE' : 'REPLICATION')
+        await expect(dialog.getByLabel('SQL')).not.toContainText('repl-pw-1')
+        await dialog.getByRole('button', { name: '実行する' }).click()
+        await expect(dialog).toBeHidden()
+      } finally {
+        await page.request.post('/api/users/execute', {
+          data: { op: { op: 'dropUser', user: mysql ? { name, host: '%' } : { name } } },
+        })
+      }
+    })
   })
 }

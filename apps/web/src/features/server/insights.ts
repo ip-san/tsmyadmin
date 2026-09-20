@@ -118,3 +118,8 @@ export function statusCategory(dialect: Dialect, name: string): string {
   const i = name.indexOf('_')
   return i > 0 ? name.slice(0, i) : name
 }
+
+/** When the server started, from its uptime; null when the uptime is unknown. */
+export function startedAt(uptimeSec: number | null, now = Date.now()): Date | null {
+  return uptimeSec === null ? null : new Date(now - uptimeSec * 1000)
+}

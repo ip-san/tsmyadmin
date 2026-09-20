@@ -2,6 +2,7 @@ import type { DatabaseAdapter } from '@tsmyadmin/adapter'
 import {
   BrowseQuerySchema,
   CellQuerySchema,
+  DatabasesQuerySchema,
   DdlPreviewRequestSchema,
   DeleteRowsRequestSchema,
   type Dialect,
@@ -111,7 +112,9 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
     new Hono<AppEnv>()
       .use('/databases/*', requireSession(cfg))
       .use('/databases', requireSession(cfg))
-      .get('/databases', async (c) => c.json(await c.get('session').adapter.listDatabases()))
+      .get('/databases', validate('query', DatabasesQuerySchema), async (c) =>
+        c.json(await c.get('session').adapter.listDatabases({ stats: c.req.valid('query').stats !== '0' }))
+      )
       .get('/databases/:db/schemas', async (c) => c.json(await c.get('session').adapter.listSchemas(c.req.param('db'))))
       .get('/databases/:db/tables', validate('query', SchemaQuerySchema), async (c) => {
         const q = c.req.valid('query')

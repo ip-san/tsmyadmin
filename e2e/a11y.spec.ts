@@ -304,7 +304,7 @@ for (const t of TARGETS) {
       // Collations, engines (access methods) and plugins (extensions): one table each, named per server.
       for (const path of ['/replication', '/collations', '/engines', '/plugins']) {
         await page.goto(path)
-        await page.getByRole('table').waitFor()
+        await page.getByRole('table').first().waitFor()
         await scan(page)
       }
       await page.goto(tableUrl(t, 'posts', '/privileges'))

@@ -8,9 +8,11 @@ import { Badge, ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
 import { downloadText, safeFilename } from '@/lib/download.ts'
-import { grantsQuery, usersQuery } from '@/lib/queries.ts'
+import { grantsQuery, sessionQuery, usersQuery } from '@/lib/queries.ts'
 import { userLabel, userRef, useUserOpFlow } from '@/lib/user-ops.ts'
+import { AccountDatabasesPanel } from './AccountDatabasesPanel.tsx'
 import { CopyForm, LimitsForm, RenameForm } from './AccountDialogs.tsx'
+import { BulkDropBar } from './BulkDropBar.tsx'
 import { PasswordForm } from './PasswordForm.tsx'
 import { GlobalPrivilegesForm, RoleAttributesForm } from './PrivilegeForms.tsx'
 import { SecondFactorResetDialog, useResettableAccounts } from './SecondFactorReset.tsx'
@@ -72,11 +74,13 @@ function AccountForm({
 
 export function UsersPage({ dialect }: { dialect: Dialect }) {
   const users = useQuery(usersQuery)
+  const session = useQuery(sessionQuery)
   const flow = useUserOpFlow()
   const [creating, setCreating] = useState(false)
   const [passwordFor, setPasswordFor] = useState<UserRef | null>(null)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [resetFor, setResetFor] = useState<string | null>(null)
+  const [ticked, setTicked] = useState<string[]>([])
   const [account, setAccount] = useState<{ kind: AccountDialogKind; info: UserInfo } | null>(null)
   const resettable = useResettableAccounts()
   if (users.isPending) return <Spinner />
@@ -99,6 +103,16 @@ export function UsersPage({ dialect }: { dialect: Dialect }) {
       <Table>
         <thead>
           <tr>
+            <Th data-print-hide>
+              <input
+                type="checkbox"
+                aria-label={locale.users.bulk.selectAll}
+                checked={users.data.length > 0 && ticked.length === users.data.length}
+                onChange={() =>
+                  setTicked(ticked.length === users.data.length ? [] : users.data.map((u) => userLabel(userRef(u))))
+                }
+              />
+            </Th>
             <Th>{locale.users.name}</Th>
             {dialect === 'mysql' ? <Th>{locale.users.host}</Th> : null}
             <Th>{locale.users.login}</Th>
@@ -112,6 +126,14 @@ export function UsersPage({ dialect }: { dialect: Dialect }) {
             const key = userLabel(r)
             return (
               <Tr key={key}>
+                <Td data-print-hide>
+                  <input
+                    type="checkbox"
+                    aria-label={locale.users.bulk.select(key)}
+                    checked={ticked.includes(key)}
+                    onChange={() => setTicked((t) => (t.includes(key) ? t.filter((k) => k !== key) : [...t, key]))}
+                  />
+                </Td>
                 <Td className="font-medium">{u.name}</Td>
                 {dialect === 'mysql' ? <Td className="font-mono text-xs">{u.host}</Td> : null}
                 <Td>{u.canLogin ? locale.common.yes : locale.common.no}</Td>
@@ -125,6 +147,14 @@ export function UsersPage({ dialect }: { dialect: Dialect }) {
                   {expanded === key ? (
                     <div className="mt-2">
                       <GrantsPanel user={r} />
+                      <div className="mt-3">
+                        <AccountDatabasesPanel
+                          user={r}
+                          dialect={dialect}
+                          database={session.data?.database ?? ''}
+                          onRevoke={flow.preview}
+                        />
+                      </div>
                     </div>
                   ) : null}
                 </Td>
@@ -192,6 +222,14 @@ export function UsersPage({ dialect }: { dialect: Dialect }) {
           })}
         </tbody>
       </Table>
+      <BulkDropBar
+        users={users.data.filter((u) => ticked.includes(userLabel(userRef(u)))).map(userRef)}
+        dialect={dialect}
+        onPreview={(op) => {
+          setTicked([])
+          flow.preview(op)
+        }}
+      />
       <Dialog open={creating} title={locale.users.create} onClose={() => setCreating(false)}>
         {creating ? (
           <UserForm

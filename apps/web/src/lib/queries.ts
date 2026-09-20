@@ -139,8 +139,15 @@ export const listColumnTransforms = () => unwrap<ColumnTransform[]>(api['column-
 
 export const databasesQuery = queryOptions({
   queryKey: ['databases'],
-  queryFn: () => unwrap<DatabaseInfo[]>(api.databases.$get()),
+  queryFn: () => unwrap<DatabaseInfo[]>(api.databases.$get({ query: {} })),
 })
+
+/** The database list of the top page: without `counted` the server skips the size and table-count aggregates. */
+export const databaseListQuery = (counted: boolean) =>
+  queryOptions({
+    queryKey: ['databases', counted ? 'counted' : 'plain'],
+    queryFn: () => unwrap<DatabaseInfo[]>(api.databases.$get({ query: { stats: counted ? '1' : '0' } })),
+  })
 
 export const schemasQuery = (db: string) =>
   queryOptions({

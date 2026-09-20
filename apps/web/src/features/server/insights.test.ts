@@ -1,6 +1,6 @@
 import type { KeyValue } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
-import { queryStatistics, statusCategory, traffic } from './insights.ts'
+import { queryStatistics, startedAt, statusCategory, traffic } from './insights.ts'
 
 const kv = (o: Record<string, string>): KeyValue[] =>
   Object.entries(o).map(([name, value]) => ({ name, value, description: null }))
@@ -45,5 +45,12 @@ describe('statusCategory', () => {
     expect(statusCategory('mysql', 'Innodb_buffer_pool_reads')).toBe('Innodb')
     expect(statusCategory('mysql', 'Uptime')).toBe('Uptime')
     expect(statusCategory('postgres', 'blks_read')).toBe('')
+  })
+})
+
+describe('startedAt', () => {
+  it('is the uptime before now, and unknown without one', () => {
+    expect(startedAt(3600, Date.UTC(2026, 0, 1, 12))?.toISOString()).toBe('2026-01-01T11:00:00.000Z')
+    expect(startedAt(null)).toBeNull()
   })
 })

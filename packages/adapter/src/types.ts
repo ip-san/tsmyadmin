@@ -225,7 +225,8 @@ export interface DatabaseAdapter {
   readonly dialect: Dialect
   ping(): Promise<void>
   close(): Promise<void>
-  listDatabases(): Promise<DatabaseInfo[]>
+  /** `stats: false` skips the size and table-count aggregates (they read the whole catalog); those fields are then null. */
+  listDatabases(options?: { stats?: boolean }): Promise<DatabaseInfo[]>
   /** PostgreSQL schemas inside `database`; MySQL returns []. */
   listSchemas(database: string): Promise<string[]>
   listTables(ns: Namespace): Promise<TableInfo[]>

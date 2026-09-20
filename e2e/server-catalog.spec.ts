@@ -27,6 +27,15 @@ for (const t of TARGETS) {
       }
     })
 
+    test("opens an engine's own variables (MySQL)", async ({ page }) => {
+      test.skip(t.dialect !== 'mysql', 'PostgreSQL has no storage engines')
+      await login(page, t)
+      await page.goto('/engines')
+      await page.getByRole('button', { name: 'InnoDB: 変数を表示' }).click()
+      const variables = page.getByRole('table', { name: 'InnoDB の変数' })
+      await expect(variables.getByRole('cell', { name: 'innodb_buffer_pool_size', exact: true })).toBeVisible()
+    })
+
     test('shows the replication role and the binary logs / WAL segments', async ({ page }) => {
       await login(page, t)
       await page

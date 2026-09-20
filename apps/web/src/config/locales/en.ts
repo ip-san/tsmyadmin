@@ -97,6 +97,7 @@ export const en = {
     submit: 'Connect',
     connecting: 'Connecting…',
     sessionExpired: 'Your session has expired. Connect again.',
+    passwordChanged: 'Your password was changed. Connect with the new one.',
   },
   nav: {
     showMore: (n: number) => `Show ${n.toLocaleString('en-US')} more`,
@@ -1174,6 +1175,29 @@ export const en = {
     invalid: 'A value is out of range. Check the range of each field.',
   },
   users: {
+    databases: {
+      title: 'Privileges per database',
+      none: 'No privileges on any database or table',
+      database: 'Database',
+      object: 'Applies to',
+      privileges: 'Privileges',
+      grantOption: 'GRANT OPTION',
+      edit: 'Edit',
+      revoke: 'Revoke…',
+      kind: { database: '(whole database)', schema: '(whole schema)', table: 'table', routine: 'routine' },
+      postgresNote: (db: string) =>
+        `PostgreSQL keeps privileges per database, so only the connected database, ${db}, is listed.`,
+    },
+    bulk: {
+      selected: (n: number) => `${plural(n, 'user', 'users')} selected`,
+      selectAll: 'Select all users',
+      select: (name: string) => `Select ${name}`,
+      drop: 'Drop the selected users…',
+      title: 'Drop the selected users',
+      revokeFirst: 'Revoke privileges first (on PostgreSQL: hand what they own to you and drop their grants)',
+      sameNameDatabases: 'Also drop the databases with the same names (MySQL; system databases are never dropped)',
+      note: 'A connection the dropped account has open already stays usable until it is closed.',
+    },
     secondFactor: {
       badge: 'Two-factor',
       reset: 'Reset two-factor…',
@@ -1252,6 +1276,9 @@ export const en = {
       needsTable: 'Choose the table those columns belong to as well.',
       notColumnPrivilege: 'DELETE and TRIGGER apply to the whole table: clear them to name columns.',
     },
+    grantOption: 'WITH GRANT OPTION (the account may pass these privileges on)',
+    grantOptionHint:
+      'On grant, adds WITH GRANT OPTION. On revoke, keeps the privileges and removes only the grant option.',
     privilegesNote:
       'Only privileges that mean the same thing on both servers are listed. Anything else (MySQL INDEX, PostgreSQL TRUNCATE) goes through the SQL tab.',
     grantAll: 'Grant all privileges on this database',
@@ -1273,6 +1300,7 @@ export const en = {
       grantRoutinePrivileges: 'Grant privileges on a routine',
       revokeRoutinePrivileges: 'Revoke privileges on a routine',
       dropUser: 'Drop the user',
+      dropUsers: 'Drop the selected users',
       setPassword: 'Change password',
       grantAll: 'Grant all privileges',
       revokeAll: 'Revoke all privileges',
@@ -1280,6 +1308,8 @@ export const en = {
       revokePrivileges: 'Revoke privileges',
     },
     previewHint: 'The SQL below will be run (the password is shown as ****).',
+    ownPasswordHint:
+      'The SQL below will be run (the password is shown as ****). Changing your own password disconnects you: connect again with the new one.',
     dropHint:
       'PostgreSQL refuses to drop a role that still holds privileges. Revoke them first on each database’s Privileges tab.',
     selfWarning: 'This is the account you are connected as: running this may disconnect you or lock you out.',
@@ -1529,6 +1559,24 @@ export const en = {
   },
   replication: {
     controls: {
+      source: {
+        title: 'Is this server ready to be a source?',
+        hint: {
+          mysql:
+            'Checks the variables a replica needs: a non-zero server_id, log_bin ON (binlog_format ROW, and gtid_mode ON if you use GTIDs). Change them under Variables.',
+          postgres:
+            'Checks the settings a standby needs: wal_level replica or logical, and non-zero max_wal_senders and max_replication_slots. Changing them needs a restart.',
+        },
+        state: 'State',
+        ready: 'OK',
+        check: 'Check',
+        createUser: 'Create a replica user…',
+        userHint: {
+          mysql: 'Creates the account a replica connects with and grants it REPLICATION SLAVE.',
+          postgres:
+            'Creates the role a standby connects with (LOGIN REPLICATION). pg_hba.conf needs a replication line for it as well.',
+        },
+      },
       title: 'Controls',
       hintMysql:
         'Start and stop the replica’s threads, skip the one statement that stopped it, reset it, and point it at a source. The SQL is shown before it runs.',
@@ -1585,6 +1633,9 @@ export const en = {
     logSize: 'Size',
   },
   catalog: {
+    showVariables: 'Show variables',
+    engineVariables: (engine: string) => `Variables of ${engine}`,
+    noEngineVariables: (engine: string) => `No variables start with ${engine}_`,
     filter: 'Filter (any column)',
     titles: {
       collations: { mysql: 'Charsets and collations', postgres: 'Collations' },
@@ -1724,7 +1775,11 @@ export const en = {
     infoTitle: 'Server information',
     version: 'Version',
     uptime: 'Uptime',
+    countSizes: 'Count sizes and tables',
+    manual: 'Manual',
+    startedAt: 'Started',
     currentUser: 'Connected as',
+    changeOwnPassword: 'Change my password',
     statusTitle: 'Status variables',
     variablesTitle: 'System variables',
     processesTitle: 'Processes',
@@ -1755,6 +1810,7 @@ export const en = {
     refreshManual: 'Manually',
     refreshSeconds: (s: number) => `Every ${s} s`,
     activeOnly: 'Only connections doing something',
+    fullQuery: 'Show the whole statement (100 characters by default)',
     refresh: 'Refresh',
     uptimeFormat: (sec: number) => {
       const d = Math.floor(sec / 86400)

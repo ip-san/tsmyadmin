@@ -335,6 +335,21 @@ describe('hardening', () => {
     expect(res.headers.get('set-cookie')).toMatch(/HttpOnly/)
   })
 
+  it('lists databases with their sizes, or without when stats=0, and refuses another value', async () => {
+    const h = harness(fixtureAdapter())
+    stores.push(h.store)
+    await h.login()
+    const counted = (await (await h.req('/api/databases')).json()) as { sizeBytes: number | null }[]
+    expect(counted.every((d) => d.sizeBytes !== null)).toBe(true)
+    const bare = (await (await h.req('/api/databases?stats=0')).json()) as {
+      sizeBytes: number | null
+      tableCount: number | null
+    }[]
+    expect(bare.length).toBe(counted.length)
+    expect(bare.every((d) => d.sizeBytes === null && d.tableCount === null)).toBe(true)
+    expect((await h.req('/api/databases?stats=maybe')).status).toBe(400)
+  })
+
   it('never returns internal error details to the client', async () => {
     const adapter = fixtureAdapter()
     adapter.listDatabases = async () => {

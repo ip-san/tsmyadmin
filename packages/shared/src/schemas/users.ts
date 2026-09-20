@@ -124,6 +124,8 @@ const PrivilegeTarget = {
   schema: z.string().min(1).optional(),
   table: z.string().min(1).optional(),
   columns: z.array(z.string().min(1)).min(1).optional(),
+  /** Grant: add WITH GRANT OPTION. Revoke: take only the grant option away and keep the privileges. */
+  grantOption: z.boolean().optional(),
 }
 
 type PrivilegeTargetValue = {
@@ -159,6 +161,8 @@ export const UserOpSchema = z.discriminatedUnion('op', [
     createDatabase: z.boolean().optional(),
     /** MySQL: all privileges on every database named `account_…` (the name followed by `_` and anything). */
     grantWildcard: z.boolean().optional(),
+    /** An account a replica connects with: MySQL REPLICATION SLAVE on `*.*`, PostgreSQL the REPLICATION attribute. */
+    replication: z.boolean().optional(),
   }),
   z.object({ op: z.literal('lockUser'), user: UserRefSchema, locked: z.boolean() }),
   z.object({ op: z.literal('renameUser'), user: UserRefSchema, newUser: UserRefSchema }),
@@ -204,6 +208,18 @@ export const UserOpSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('grantRoutinePrivileges'), ...RoutineTarget }),
   z.object({ op: z.literal('revokeRoutinePrivileges'), ...RoutineTarget }),
   z.object({ op: z.literal('dropUser'), user: UserRefSchema }),
+  /**
+   * Several accounts dropped together (phpMyAdmin's "Remove selected user accounts"). `revokeFirst` takes their privileges
+   * away before dropping (PostgreSQL: hands what they own to the acting role and drops their grants, which a role that
+   * owns or holds anything needs before it can be dropped); `dropSameNameDatabases` also drops the database each account's
+   * name names (MySQL only, never a system one).
+   */
+  z.object({
+    op: z.literal('dropUsers'),
+    users: z.array(UserRefSchema).min(1).max(200),
+    revokeFirst: z.boolean().optional(),
+    dropSameNameDatabases: z.boolean().optional(),
+  }),
   z.object({ op: z.literal('setPassword'), user: UserRefSchema, password: z.string().min(1) }),
   z.object({
     op: z.literal('grantAll'),

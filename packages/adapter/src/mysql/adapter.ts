@@ -550,17 +550,19 @@ export class MysqlAdapter extends BaseAdapter {
     if (pool) await pool.end()
   }
 
-  async listDatabases(): Promise<DatabaseInfo[]> {
+  async listDatabases({ stats: withStats = true }: { stats?: boolean } = {}): Promise<DatabaseInfo[]> {
     try {
       const [rows] = (await this.getPool().query({ sql: 'SHOW DATABASES', rowsAsArray: true })) as [
         unknown[][],
         unknown,
       ]
       // One aggregate over the catalog for every database (sizes are the storage engine's estimates).
-      const [stats] = (await this.getPool().query({
-        sql: 'SELECT TABLE_SCHEMA, SUM(COALESCE(DATA_LENGTH, 0) + COALESCE(INDEX_LENGTH, 0)), COUNT(*) FROM information_schema.TABLES GROUP BY TABLE_SCHEMA',
-        rowsAsArray: true,
-      })) as [unknown[][], unknown]
+      const [stats] = withStats
+        ? ((await this.getPool().query({
+            sql: 'SELECT TABLE_SCHEMA, SUM(COALESCE(DATA_LENGTH, 0) + COALESCE(INDEX_LENGTH, 0)), COUNT(*) FROM information_schema.TABLES GROUP BY TABLE_SCHEMA',
+            rowsAsArray: true,
+          })) as [unknown[][], unknown])
+        : [[] as unknown[][]]
       const byName = new Map(stats.map((r) => [String(r[0]), { size: Number(r[1]), count: Number(r[2]) }]))
       const [schemata] = (await this.getPool().query({
         sql: 'SELECT SCHEMA_NAME, DEFAULT_COLLATION_NAME FROM information_schema.SCHEMATA',
@@ -573,8 +575,8 @@ export class MysqlAdapter extends BaseAdapter {
           const s = byName.get(name)
           return {
             name,
-            sizeBytes: s ? s.size : 0,
-            tableCount: s ? s.count : 0,
+            sizeBytes: withStats ? (s ? s.size : 0) : null,
+            tableCount: withStats ? (s ? s.count : 0) : null,
             collation: collations.get(name) ?? null,
           }
         })

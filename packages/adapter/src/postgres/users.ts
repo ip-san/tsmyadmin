@@ -66,7 +66,7 @@ export async function pgShowGrants(conn: Conn, user: UserRef): Promise<string[]>
   const role = firstResult(
     await conn.query(
       `SELECT rolsuper, rolcreaterole, rolcreatedb, rolcanlogin, rolinherit,
-              current_database(), has_database_privilege($1, current_database(), 'CREATE')
+              current_database(), has_database_privilege($1, current_database(), 'CREATE'), rolreplication
        FROM pg_roles WHERE rolname = $1`,
       [user.name]
     )
@@ -79,6 +79,8 @@ export async function pgShowGrants(conn: Conn, user: UserRef): Promise<string[]>
     attrs[2] === true ? 'CREATEDB' : 'NOCREATEDB',
     attrs[3] === true ? 'LOGIN' : 'NOLOGIN',
     attrs[4] === true ? 'INHERIT' : 'NOINHERIT',
+    // Only when held: a copy of an account keeps it, and every other account's grants read as they always did.
+    ...(attrs[7] === true ? ['REPLICATION'] : []),
   ]
   const out = [`ALTER ROLE ${id(user.name)} ${flags.join(' ')}`]
   const members = firstResult(
@@ -102,18 +104,20 @@ export async function pgShowGrants(conn: Conn, user: UserRef): Promise<string[]>
   // the grantor, the grantee or a member of it, so grants made by another owner would be silently missing.
   const tables = firstResult(
     await conn.query(
-      `SELECT n.nspname, c.relname, string_agg(a.privilege_type, ', ' ORDER BY a.privilege_type)
+      `SELECT n.nspname, c.relname, string_agg(a.privilege_type, ', ' ORDER BY a.privilege_type), a.is_grantable
        FROM pg_class c
        JOIN pg_namespace n ON n.oid = c.relnamespace
        CROSS JOIN LATERAL aclexplode(c.relacl) a
        WHERE c.relkind IN ('r', 'p', 'v', 'm', 'f') AND a.grantee = (SELECT oid FROM pg_roles WHERE rolname = $1)
          AND n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast') AND n.nspname NOT LIKE 'pg\\_%'
-       GROUP BY n.nspname, c.relname ORDER BY n.nspname, c.relname`,
+       GROUP BY n.nspname, c.relname, a.is_grantable ORDER BY n.nspname, c.relname, a.is_grantable`,
       [user.name]
     )
   )
   for (const row of tables.rows)
-    out.push(`GRANT ${String(row[2])} ON ${id(String(row[0]))}.${id(String(row[1]))} TO ${id(user.name)}`)
+    out.push(
+      `GRANT ${String(row[2])} ON ${id(String(row[0]))}.${id(String(row[1]))} TO ${id(user.name)}${row[3] === true ? ' WITH GRANT OPTION' : ''}`
+    )
   // Column privileges live in pg_attribute.attacl, not in the table's relacl, so a column grant is invisible to
   // the query above. One row per column rather than a string_agg: the names are quoted here with the same
   // helper as every other identifier in this function, instead of by the server's quote_ident (which quotes
@@ -168,6 +172,22 @@ export const pgUsers: UserSqlBuilder = {
     return serverNamespace
   },
   build(op: UserOp): UserStatement[] {
+    if (op.op === 'dropUsers') {
+      if (op.dropSameNameDatabases)
+        throw new AdapterError(
+          'UNSUPPORTED',
+          'Dropping a same-named database is MySQL’s option: PostgreSQL cannot drop a database inside the transaction that drops the roles'
+        )
+      const roles = op.users.map((u) => id(u.name))
+      return [
+        // A role that owns objects or holds grants cannot be dropped: what it owns goes to the acting role first, then its
+        // grants (in the connected database; another database's are for its own operation).
+        ...(op.revokeFirst
+          ? roles.flatMap((r) => [plain(`REASSIGN OWNED BY ${r} TO CURRENT_USER`), plain(`DROP OWNED BY ${r}`)])
+          : []),
+        plain(`DROP ROLE ${roles.join(', ')}`),
+      ]
+    }
     const role = id(op.user.name)
     switch (op.op) {
       case 'createUser': {
@@ -180,6 +200,7 @@ export const pgUsers: UserSqlBuilder = {
         if (op.attributes.superuser) flags.push('SUPERUSER')
         if (op.attributes.createdb) flags.push('CREATEDB')
         if (op.attributes.createrole) flags.push('CREATEROLE')
+        if (op.replication) flags.push('REPLICATION')
         return [secret((pw) => `CREATE ROLE ${role} ${flags.join(' ')} PASSWORD ${pw}`, op.password)]
       }
       case 'dropUser':
@@ -260,16 +281,17 @@ export const pgUsers: UserSqlBuilder = {
       case 'grantPrivileges': {
         const schema = id(op.schema ?? 'public')
         const list = privilegeList('postgres', op.privileges, op.columns)
+        const withOption = op.grantOption ? ' WITH GRANT OPTION' : ''
         // Without CONNECT and USAGE the role cannot reach the table at all, so a table grant implies them.
         const out = [
           `GRANT CONNECT ON DATABASE ${id(op.database)} TO ${role}`,
           `GRANT USAGE ON SCHEMA ${schema} TO ${role}`,
         ]
-        if (op.table) out.push(`GRANT ${list} ON ${schema}.${id(op.table)} TO ${role}`)
+        if (op.table) out.push(`GRANT ${list} ON ${schema}.${id(op.table)} TO ${role}${withOption}`)
         else {
-          out.push(`GRANT ${list} ON ALL TABLES IN SCHEMA ${schema} TO ${role}`)
+          out.push(`GRANT ${list} ON ALL TABLES IN SCHEMA ${schema} TO ${role}${withOption}`)
           // Tables created later would otherwise be invisible to the role.
-          out.push(`ALTER DEFAULT PRIVILEGES IN SCHEMA ${schema} GRANT ${list} ON TABLES TO ${role}`)
+          out.push(`ALTER DEFAULT PRIVILEGES IN SCHEMA ${schema} GRANT ${list} ON TABLES TO ${role}${withOption}`)
         }
         return out.map(plain)
       }
@@ -277,11 +299,12 @@ export const pgUsers: UserSqlBuilder = {
         const schema = id(op.schema ?? 'public')
         const list = privilegeList('postgres', op.privileges, op.columns)
         // CONNECT and USAGE stay: they may be carrying other grants the caller did not ask about.
+        const revoke = op.grantOption ? `REVOKE GRANT OPTION FOR ${list}` : `REVOKE ${list}`
         const out = op.table
-          ? [`REVOKE ${list} ON ${schema}.${id(op.table)} FROM ${role}`]
+          ? [`${revoke} ON ${schema}.${id(op.table)} FROM ${role}`]
           : [
-              `ALTER DEFAULT PRIVILEGES IN SCHEMA ${schema} REVOKE ${list} ON TABLES FROM ${role}`,
-              `REVOKE ${list} ON ALL TABLES IN SCHEMA ${schema} FROM ${role}`,
+              `ALTER DEFAULT PRIVILEGES IN SCHEMA ${schema} ${revoke} ON TABLES FROM ${role}`,
+              `${revoke} ON ALL TABLES IN SCHEMA ${schema} FROM ${role}`,
             ]
         return out.map(plain)
       }

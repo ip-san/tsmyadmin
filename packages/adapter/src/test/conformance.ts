@@ -192,6 +192,18 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         expect(names).toContain(ns.database)
         expect(names).toContain(ctx.otherDatabase)
       })
+
+      it('leaves out the sizes and table counts when asked not to count them', async () => {
+        const counted = await db.listDatabases()
+        const bare = await db.listDatabases({ stats: false })
+        expect(bare.map((d) => d.name)).toEqual(counted.map((d) => d.name))
+        for (const d of bare) {
+          expect(d.sizeBytes).toBeNull()
+          expect(d.tableCount).toBeNull()
+        }
+        // The fixture database has tables, so the counted list is not all nulls.
+        expect(counted.find((d) => d.name === ns.database)?.sizeBytes).not.toBeNull()
+      })
     })
 
     describe('listSchemas', () => {
@@ -3133,6 +3145,68 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         }
       })
 
+      it('drops several accounts at once, taking their privileges away first and their same-named databases with them', async () => {
+        const one = `bd1_${scratch}`.slice(0, 28)
+        const two = `bd2_${scratch}`.slice(0, 28)
+        const refs = [one, two].map((n) => (dialect === 'mysql' ? { name: n, host: '%' } : { name: n }))
+        const attributes = { superuser: false, createdb: false, createrole: false }
+        const listed = async () => new Set((await db.listUsers()).map((u) => u.name))
+        try {
+          for (const user of refs)
+            for (const st of db.users.build({ op: 'createUser', user, password: 'bulk-pw-1', attributes }))
+              await execOk(st.sql)
+          // Holding a privilege on a table is what stops PostgreSQL from dropping a role; MySQL drops it anyway.
+          for (const user of refs)
+            await execOk(
+              db.users.build({
+                op: 'grantPrivileges',
+                user,
+                privileges: ['SELECT'],
+                database: ns.database,
+                ...(ns.schema ? { schema: ns.schema } : {}),
+                table: scratch,
+              })[0]?.sql ?? ''
+            )
+          if (dialect === 'postgres') {
+            const refused = await exec(db.users.build({ op: 'dropUsers', users: refs })[0]?.sql ?? '', {
+              stopOnError: false,
+            })
+            expect(refused[0]?.kind).toBe('error')
+            expect(await listed()).toContain(one)
+          }
+          for (const st of db.users.build({ op: 'dropUsers', users: refs, revokeFirst: true })) await execOk(st.sql)
+          const after = await listed()
+          expect(after.has(one)).toBe(false)
+          expect(after.has(two)).toBe(false)
+        } finally {
+          for (const user of refs)
+            for (const st of db.users.build({ op: 'dropUser', user })) await exec(st.sql, { stopOnError: false })
+        }
+      })
+
+      it("drops the database that has an account's name along with it (MySQL)", async () => {
+        if (dialect !== 'mysql') return
+        const name = `bdd_${scratch}`.slice(0, 28)
+        const user = { name, host: '%' }
+        try {
+          for (const st of db.users.build({
+            op: 'createUser',
+            user,
+            password: 'bulk-pw-2',
+            attributes: { superuser: false, createdb: false, createrole: false },
+            createDatabase: true,
+          }))
+            await execOk(st.sql)
+          expect((await db.listDatabases()).map((d) => d.name)).toContain(name)
+          for (const st of db.users.build({ op: 'dropUsers', users: [user], dropSameNameDatabases: true }))
+            await execOk(st.sql)
+          expect((await db.listDatabases()).map((d) => d.name)).not.toContain(name)
+        } finally {
+          for (const st of db.ddl.build(ns, { op: 'dropDatabase', name })) await exec(st, { stopOnError: false })
+          for (const st of db.users.build({ op: 'dropUser', user })) await exec(st.sql, { stopOnError: false })
+        }
+      })
+
       it('grants exactly the privileges asked for: a read-only account can select but not write', async () => {
         // The point of per-table grants is this account. Checked by connecting as it, not by reading the SQL.
         const name = `ro_${scratch}`
@@ -3196,6 +3270,91 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         } finally {
           await reader?.close()
           // PostgreSQL refuses to drop a role that still holds privileges, so they go first.
+          await exec(
+            [
+              ...db.users.build({
+                op: 'revokeAll',
+                user,
+                database: ns.database,
+                ...(ns.schema ? { schema: ns.schema } : {}),
+              }),
+              ...db.users.build({ op: 'dropUser', user }),
+            ]
+              .map((x) => x.sql)
+              .join(';\n'),
+            { stopOnError: false }
+          )
+        }
+      })
+
+      it('creates an account a replica can connect with, and shows the replication right', async () => {
+        const name = `repl_${scratch}`
+        const user = dialect === 'mysql' ? { name, host: '%' } : { name }
+        const op = {
+          op: 'createUser',
+          user,
+          password: 'r3pl pw!',
+          attributes: { superuser: false, createdb: false, createrole: false },
+          replication: true,
+        } as const
+        try {
+          const r = await db.executeSql(
+            db.users.namespace(op, db.serverNamespace),
+            db.users
+              .build(op)
+              .map((x) => x.sql)
+              .join(';\n'),
+            EXEC
+          )
+          for (const x of r) if (x.kind === 'error') throw new Error(`${x.message}\n${x.sql}`)
+          expect((await db.showGrants(user)).join('\n')).toMatch(
+            dialect === 'mysql' ? /GRANT .*REPLICATION (SLAVE|REPLICA)/i : /ALTER ROLE .* REPLICATION/
+          )
+        } finally {
+          await exec(
+            db.users
+              .build({ op: 'dropUser', user })
+              .map((x) => x.sql)
+              .join(';\n'),
+            { stopOnError: false }
+          )
+        }
+      })
+
+      it('grants WITH GRANT OPTION on a table, shows it, and takes only the grant option away again', async () => {
+        const name = `gopt_${scratch}`
+        const password = 'gr4nt opt!'
+        const user = dialect === 'mysql' ? { name, host: '%' } : { name }
+        const runOp = async (op: Parameters<typeof db.users.build>[0]) => {
+          const target = db.users.namespace(op, db.serverNamespace)
+          const r = await db.executeSql(
+            target,
+            db.users
+              .build(op)
+              .map((x) => x.sql)
+              .join(';\n'),
+            EXEC
+          )
+          for (const x of r) if (x.kind === 'error') throw new Error(`${x.message}\n${x.sql}`)
+        }
+        const target = { database: ns.database, ...(ns.schema ? { schema: ns.schema } : {}), table: 'users' }
+        await runOp({
+          op: 'createUser',
+          user,
+          password,
+          attributes: { superuser: false, createdb: false, createrole: false },
+        })
+        try {
+          await runOp({ op: 'grantPrivileges', user, privileges: ['SELECT'], grantOption: true, ...target })
+          const held = (await db.showGrants(user)).filter((g) => /users/.test(g))
+          expect(held.join('\n')).toMatch(/GRANT SELECT ON .*users.* TO .* WITH GRANT OPTION/i)
+
+          await runOp({ op: 'revokePrivileges', user, privileges: ['SELECT'], grantOption: true, ...target })
+          const after = (await db.showGrants(user)).filter((g) => /users/.test(g))
+          // The privilege is still held; only the right to pass it on is gone.
+          expect(after.join('\n')).toMatch(/GRANT SELECT ON .*users/i)
+          expect(after.join('\n')).not.toMatch(/WITH GRANT OPTION/i)
+        } finally {
           await exec(
             [
               ...db.users.build({

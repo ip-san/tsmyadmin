@@ -30,6 +30,13 @@ exports[`user SQL builders > mysql: createUser 1`] = `
 ]
 `;
 
+exports[`user SQL builders > mysql: createUser for a replica grants REPLICATION SLAVE 1`] = `
+[
+  "CREATE USER 'repl'@'10.0.%' IDENTIFIED BY 'pw'",
+  "GRANT REPLICATION SLAVE ON *.* TO 'repl'@'10.0.%'",
+]
+`;
+
 exports[`user SQL builders > mysql: createUser with ownDatabase 1`] = `
 [
   "CREATE USER 'my_app'@'localhost' IDENTIFIED BY 'pw'",
@@ -51,6 +58,14 @@ exports[`user SQL builders > mysql: dropUser 1`] = `
 ]
 `;
 
+exports[`user SQL builders > mysql: dropUsers 1`] = `
+[
+  "REVOKE ALL PRIVILEGES, GRANT OPTION FROM 'o''brien'@'10.0.%'",
+  "REVOKE ALL PRIVILEGES, GRANT OPTION FROM 'b"ob'@'localhost'",
+  "DROP USER 'o''brien'@'10.0.%', 'b"ob'@'localhost'",
+]
+`;
+
 exports[`user SQL builders > mysql: grant on named columns 1`] = `
 [
   "GRANT SELECT (\`na"me\`, \`no\`\`te\`), UPDATE (\`na"me\`, \`no\`\`te\`) ON \`shop\`.\`ord ers\` TO 'o''brien'@'10.0.%'",
@@ -60,6 +75,18 @@ exports[`user SQL builders > mysql: grant on named columns 1`] = `
 exports[`user SQL builders > mysql: grantAll 1`] = `
 [
   "GRANT ALL PRIVILEGES ON \`shop\`.* TO 'o''brien'@'10.0.%'",
+]
+`;
+
+exports[`user SQL builders > mysql: grantOnDatabase with the grant option 1`] = `
+[
+  "GRANT SELECT ON \`shop\\_1\`.* TO 'o''brien'@'10.0.%' WITH GRANT OPTION",
+]
+`;
+
+exports[`user SQL builders > mysql: grantOnTable with the grant option 1`] = `
+[
+  "GRANT SELECT, UPDATE ON \`shop\`.\`ord ers\` TO 'o''brien'@'10.0.%' WITH GRANT OPTION",
 ]
 `;
 
@@ -96,6 +123,18 @@ exports[`user SQL builders > mysql: revoke on named columns 1`] = `
 exports[`user SQL builders > mysql: revokeAll 1`] = `
 [
   "REVOKE ALL PRIVILEGES ON \`shop\`.* FROM 'o''brien'@'10.0.%'",
+]
+`;
+
+exports[`user SQL builders > mysql: revokeOnDatabase with the grant option 1`] = `
+[
+  "REVOKE GRANT OPTION ON \`shop\\_1\`.* FROM 'o''brien'@'10.0.%'",
+]
+`;
+
+exports[`user SQL builders > mysql: revokeOnTable with the grant option 1`] = `
+[
+  "REVOKE GRANT OPTION ON \`shop\`.\`ord ers\` FROM 'o''brien'@'10.0.%'",
 ]
 `;
 
@@ -151,9 +190,25 @@ exports[`user SQL builders > postgres: createUser 1`] = `
 ]
 `;
 
+exports[`user SQL builders > postgres: createUser for a replica gets the REPLICATION attribute 1`] = `
+[
+  "CREATE ROLE "repl" LOGIN REPLICATION PASSWORD 'pw'",
+]
+`;
+
 exports[`user SQL builders > postgres: dropUser 1`] = `
 [
   "DROP ROLE "o'brien"",
+]
+`;
+
+exports[`user SQL builders > postgres: dropUsers 1`] = `
+[
+  "REASSIGN OWNED BY "o'brien" TO CURRENT_USER",
+  "DROP OWNED BY "o'brien"",
+  "REASSIGN OWNED BY "b""ob" TO CURRENT_USER",
+  "DROP OWNED BY "b""ob"",
+  "DROP ROLE "o'brien", "b""ob"",
 ]
 `;
 
@@ -172,6 +227,23 @@ exports[`user SQL builders > postgres: grantAll 1`] = `
   "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA "app" TO "o'brien"",
   "GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA "app" TO "o'brien"",
   "ALTER DEFAULT PRIVILEGES IN SCHEMA "app" GRANT ALL PRIVILEGES ON TABLES TO "o'brien"",
+]
+`;
+
+exports[`user SQL builders > postgres: grantOnDatabase with the grant option 1`] = `
+[
+  "GRANT CONNECT ON DATABASE "shop_1" TO "o'brien"",
+  "GRANT USAGE ON SCHEMA "app" TO "o'brien"",
+  "GRANT SELECT ON ALL TABLES IN SCHEMA "app" TO "o'brien" WITH GRANT OPTION",
+  "ALTER DEFAULT PRIVILEGES IN SCHEMA "app" GRANT SELECT ON TABLES TO "o'brien" WITH GRANT OPTION",
+]
+`;
+
+exports[`user SQL builders > postgres: grantOnTable with the grant option 1`] = `
+[
+  "GRANT CONNECT ON DATABASE "shop" TO "o'brien"",
+  "GRANT USAGE ON SCHEMA "app" TO "o'brien"",
+  "GRANT SELECT, UPDATE ON "app"."ord ers" TO "o'brien" WITH GRANT OPTION",
 ]
 `;
 
@@ -214,6 +286,19 @@ exports[`user SQL builders > postgres: revokeAll 1`] = `
   "REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA "app" FROM "o'brien"",
   "REVOKE ALL PRIVILEGES ON SCHEMA "app" FROM "o'brien"",
   "REVOKE ALL PRIVILEGES ON DATABASE "shop" FROM "o'brien"",
+]
+`;
+
+exports[`user SQL builders > postgres: revokeOnDatabase with the grant option 1`] = `
+[
+  "ALTER DEFAULT PRIVILEGES IN SCHEMA "app" REVOKE GRANT OPTION FOR SELECT ON TABLES FROM "o'brien"",
+  "REVOKE GRANT OPTION FOR SELECT ON ALL TABLES IN SCHEMA "app" FROM "o'brien"",
+]
+`;
+
+exports[`user SQL builders > postgres: revokeOnTable with the grant option 1`] = `
+[
+  "REVOKE GRANT OPTION FOR SELECT ON "app"."ord ers" FROM "o'brien"",
 ]
 `;
 

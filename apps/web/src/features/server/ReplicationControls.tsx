@@ -1,12 +1,15 @@
 import type { Dialect, ReplicationInfo, ReplicationOp } from '@tsmyadmin/shared'
 import { type FormEvent, useState } from 'react'
 import { PreviewDialog } from '@/components/ddl/PreviewDialog.tsx'
+import { UserOpPreviewDialog } from '@/components/ddl/UserOpPreviewDialog.tsx'
 import { PasswordFields, usePasswordConfirm } from '@/components/forms/PasswordFields.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { Dialog } from '@/components/ui/Dialog.tsx'
 import { Field, Input } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
 import { useReplicationOpFlow } from '@/lib/replication-ops.ts'
+import { useUserOpFlow } from '@/lib/user-ops.ts'
+import { ReplicaUserForm, SourceSettings } from './ReplicaSetup.tsx'
 
 const t = locale.replication.controls
 
@@ -96,7 +99,9 @@ function ChangeSourceForm({ onSubmit, onCancel }: { onSubmit: (op: ReplicationOp
  */
 export function ReplicationControls({ dialect, info }: { dialect: Dialect; info: ReplicationInfo }) {
   const flow = useReplicationOpFlow()
+  const userFlow = useUserOpFlow()
   const [configuring, setConfiguring] = useState(false)
+  const [creatingUser, setCreatingUser] = useState(false)
   const replica = info.role === 'replica' || info.role === 'relay'
   const ask = (op: ReplicationOp) => flow.preview(op)
   return (
@@ -132,7 +137,24 @@ export function ReplicationControls({ dialect, info }: { dialect: Dialect; info:
             </Button>
           </>
         ) : null}
+        <Button size="sm" aria-haspopup="dialog" onClick={() => setCreatingUser(true)}>
+          {t.source.createUser}
+        </Button>
       </div>
+      <SourceSettings dialect={dialect} />
+      <Dialog open={creatingUser} title={t.source.createUser} onClose={() => setCreatingUser(false)}>
+        {creatingUser ? (
+          <ReplicaUserForm
+            dialect={dialect}
+            onCancel={() => setCreatingUser(false)}
+            onSubmit={(op) => {
+              setCreatingUser(false)
+              userFlow.preview(op)
+            }}
+          />
+        ) : null}
+      </Dialog>
+      <UserOpPreviewDialog flow={userFlow} />
       <Dialog open={configuring} title={t.changeSource} onClose={() => setConfiguring(false)}>
         {configuring ? (
           <ChangeSourceForm

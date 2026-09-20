@@ -1,4 +1,4 @@
-<!-- translated-from: docs/phpmyadmin-parity.md sha256:cbb802f05624ae1bee9dac24d3786e2b43ed11ce85b877fca5de6751d847b156 -->
+<!-- translated-from: docs/phpmyadmin-parity.md sha256:bdb99a34abe2db17fe236333f30b87d3aff7d9cf05bd8308f894c0cc70d30143 -->
 
 # Feature parity with phpMyAdmin
 
@@ -36,15 +36,15 @@ In 2026-09 every phpMyAdmin screen was audited again: ten rows marked ✅ went b
 | S15 | Editing column-level and routine-level privileges | ✅ |
 | S16 | Renaming / copying an account | ✅ |
 | S17 | Server-wide export / import (several databases) | ✅ |
-| S18 | Removing several users at once (dropping same-named databases, REVOKE and disconnect first) | ✗ |
-| S19 | A per-account "database privileges" list (every DB the account has rights on, edit / revoke per row) | ✗ |
-| S20 | WITH GRANT OPTION on database / table grants | ✗ |
-| S21 | Changing one's own password (from the top page, without account-management rights) | △ (only from the users list) |
-| S22 | Replication: creating the replica user, guidance on the source settings (server_id / log_bin / binlog_format / gtid_mode) | ✗ |
-| S23 | Details per engine (that engine's variables) | △ (InnoDB status only) |
-| S24 | The server's start time on Status; sorting the process list by column and a "full query" toggle | △ |
-| S25 | A documentation link per variable (MySQL / MariaDB / PostgreSQL manuals) | ✗ |
-| S26 | Database list: a toggle for computing statistics (sizes) and sorting by column | △ (sizes always computed) |
+| S18 | Removing several users at once (dropping same-named databases, REVOKE first) | ✅ |
+| S19 | A per-account "database privileges" list (every DB the account has rights on, edit / revoke per row) | ✅ |
+| S20 | WITH GRANT OPTION on database / table grants | ✅ |
+| S21 | Changing one's own password (from the top page, without account-management rights) | ✅ |
+| S22 | Replication: creating the replica user, guidance on the source settings (server_id / log_bin / binlog_format / gtid_mode) | ✅ |
+| S23 | Details per engine (that engine's variables) | ✅ |
+| S24 | The server's start time on Status; sorting the process list by column and a "full query" toggle | ✅ |
+| S25 | A documentation link per variable (MySQL / MariaDB / PostgreSQL manuals) | ✅ |
+| S26 | Database list: a toggle for computing statistics (sizes) and sorting by column | ✅ |
 
 ## Database
 

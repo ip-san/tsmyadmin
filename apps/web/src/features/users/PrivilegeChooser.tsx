@@ -38,6 +38,7 @@ export function PrivilegeChooser({
   const [chosen, setChosen] = useState<Privilege[]>(['SELECT'])
   const [table, setTable] = useState(initialTable)
   const [columns, setColumns] = useState<string[]>([])
+  const [grantOption, setGrantOption] = useState(false)
   // Only fetched once a table is chosen: there are no columns to offer for a whole-database grant.
   const structure = useQuery({ ...structureQuery({ db, schema, table }), enabled: table !== '' })
   const target = {
@@ -47,6 +48,7 @@ export function PrivilegeChooser({
     ...(schema ? { schema } : {}),
     ...(table ? { table } : {}),
     ...(columns.length > 0 ? { columns } : {}),
+    ...(grantOption ? { grantOption } : {}),
   }
   // The same rule the request schema enforces, so the form says why instead of failing at execute.
   const problem = columnTargetError(target)
@@ -136,6 +138,13 @@ export function PrivilegeChooser({
           </div>
         </fieldset>
       )}
+      <label className="mt-3 flex items-start gap-2 text-sm">
+        <input type="checkbox" checked={grantOption} onChange={(e) => setGrantOption(e.target.checked)} />
+        <span>
+          {locale.users.grantOption}
+          <span className="block text-xs text-ink-sub">{locale.users.grantOptionHint}</span>
+        </span>
+      </label>
       {problem ? <Notice className="mt-3">{locale.users.columnProblem[problem]}</Notice> : null}
       <p className="mt-2 text-xs text-ink-sub">{locale.users.privilegesNote}</p>
     </Dialog>

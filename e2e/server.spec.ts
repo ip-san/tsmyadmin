@@ -10,6 +10,7 @@ for (const t of TARGETS) {
     test('status, variables and processes tabs', async ({ page }) => {
       await page.goto('/status')
       await expect(page.getByText('バージョン')).toBeVisible()
+      await expect(page.getByText('起動日時')).toBeVisible()
       await expect(page.getByRole('definition').first()).toContainText(/\d+\./)
       await expect(page.getByRole('table', { name: 'ステータス変数' })).toBeVisible()
 
@@ -20,6 +21,16 @@ for (const t of TARGETS) {
       await expect(vars).toContainText('max_connections')
       await expect(vars).not.toContainText(t.dialect === 'mysql' ? 'version_comment' : 'work_mem')
       await expect(vars.getByRole('row')).toHaveCount(t.dialect === 'mysql' ? 3 : 2)
+      // Each variable links to its manual page, in a new tab and without handing the page to the vendor's site.
+      const manual = vars.getByRole('link', { name: 'max_connections: マニュアル', exact: true })
+      await expect(manual).toHaveAttribute('target', '_blank')
+      await expect(manual).toHaveAttribute('rel', /noopener/)
+      await expect(manual).toHaveAttribute(
+        'href',
+        t.dialect === 'mysql'
+          ? /(dev\.mysql\.com|mariadb\.com)\/.*max_connections/
+          : /postgresql\.org\/search\/.*max_connections/
+      )
 
       await page.goto('/processes')
       const procs = page.getByRole('table', { name: 'プロセス一覧' })
@@ -35,6 +46,18 @@ for (const t of TARGETS) {
       // The interval is a choice, not just on / off.
       await page.getByLabel('更新間隔').selectOption('2')
       await expect(page.getByLabel('更新間隔')).toHaveValue('2')
+
+      // A column sorts the list (click: ascending, again: descending, again: as the server sent it).
+      const idHeader = procs.getByRole('columnheader', { name: /^(プロセス ID|ID)/ })
+      await idHeader.getByRole('button').click()
+      await expect(idHeader).toHaveAttribute('aria-sort', 'ascending')
+      await idHeader.getByRole('button').click()
+      await expect(idHeader).toHaveAttribute('aria-sort', 'descending')
+      await idHeader.getByRole('button').click()
+      await expect(idHeader).toHaveAttribute('aria-sort', 'none')
+      // Long statements are cut unless the whole text is asked for.
+      await page.getByLabel(/クエリの全文を表示/).check()
+      await expect(page.getByLabel(/クエリの全文を表示/)).toBeChecked()
     })
 
     test('changes a server setting through the preview, and puts it back to its default', async ({ page }) => {

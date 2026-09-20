@@ -386,12 +386,14 @@ export class PostgresAdapter extends BaseAdapter {
     await Promise.all(pools.map((p) => p.end()))
   }
 
-  async listDatabases(): Promise<DatabaseInfo[]> {
+  async listDatabases({ stats = true }: { stats?: boolean } = {}): Promise<DatabaseInfo[]> {
     try {
       // pg_database_size needs CONNECT on the database; others are reported without a size.
       const res = await this.poolFor(this.defaultDatabase()).query<{ datname: string; size: string | null }>(
-        `SELECT datname, CASE WHEN has_database_privilege(datname, 'CONNECT') THEN pg_database_size(datname) END AS size
-         FROM pg_database WHERE datistemplate = false ORDER BY datname`
+        `SELECT datname,
+                CASE WHEN $1 AND has_database_privilege(datname, 'CONNECT') THEN pg_database_size(datname) END AS size
+         FROM pg_database WHERE datistemplate = false ORDER BY datname`,
+        [stats]
       )
       return res.rows.map((r) => ({
         name: r.datname,

@@ -304,14 +304,14 @@ export class FakeAdapter implements DatabaseAdapter {
     this.closed = true
   }
 
-  async listDatabases(): Promise<DatabaseInfo[]> {
+  async listDatabases({ stats = true }: { stats?: boolean } = {}): Promise<DatabaseInfo[]> {
     this.record('listDatabases')
     return Object.keys(this.databases)
       .sort()
       .map((name) => ({
         name,
-        sizeBytes: 0,
-        tableCount: Object.keys(this.databases[name]?.tables ?? {}).length,
+        sizeBytes: stats ? 0 : null,
+        tableCount: stats ? Object.keys(this.databases[name]?.tables ?? {}).length : null,
         collation: null,
       }))
   }

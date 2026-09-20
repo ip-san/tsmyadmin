@@ -10,7 +10,11 @@ import { mutations, serversQuery, sessionQuery } from '@/lib/queries.ts'
 import { safeRedirect } from '@/lib/redirect.ts'
 
 export const Route = createFileRoute('/login')({
-  validateSearch: z.object({ redirect: z.string().optional(), expired: z.boolean().optional() }),
+  validateSearch: z.object({
+    redirect: z.string().optional(),
+    expired: z.boolean().optional(),
+    passwordChanged: z.boolean().optional(),
+  }),
   beforeLoad: async ({ context, search }) => {
     const session = await context.queryClient.ensureQueryData(sessionQuery)
     if (session) throw redirect({ href: safeRedirect(search.redirect) })
@@ -37,6 +41,7 @@ function LoginPage() {
         </div>
         <div className="rounded-card border border-line bg-surface p-6 shadow-raised">
           <h2 className="mb-4 text-sm font-semibold text-ink">{locale.login.title}</h2>
+          {search.passwordChanged ? <Notice className="mb-4">{locale.login.passwordChanged}</Notice> : null}
           {search.expired ? <Notice className="mb-4">{locale.login.sessionExpired}</Notice> : null}
           {servers.isPending ? (
             <Spinner />

@@ -92,6 +92,7 @@ export const ja = {
     submit: '接続する',
     connecting: '接続中…',
     sessionExpired: 'セッションの有効期限が切れました。もう一度接続してください。',
+    passwordChanged: 'パスワードを変更しました。新しいパスワードで接続してください。',
   },
   nav: {
     showMore: (n: number) => `さらに ${n.toLocaleString('ja-JP')} 件を表示`,
@@ -1159,6 +1160,29 @@ export const ja = {
     invalid: '範囲外の値があります。各欄の範囲を確かめてください。',
   },
   users: {
+    databases: {
+      title: 'データベースごとの権限',
+      none: 'データベース・テーブルに対する権限はありません',
+      database: 'データベース',
+      object: '対象',
+      privileges: '権限',
+      grantOption: 'GRANT OPTION',
+      edit: '編集',
+      revoke: '取り消す…',
+      kind: { database: '（データベース全体）', schema: '（スキーマ全体）', table: 'テーブル', routine: 'ルーチン' },
+      postgresNote: (db: string) =>
+        `PostgreSQL の権限はデータベースごとに保存されるため、接続中の ${db} だけを表示します。`,
+    },
+    bulk: {
+      selected: (n: number) => `${n.toLocaleString('ja-JP')} 件のユーザーを選択中`,
+      selectAll: 'すべてのユーザーを選択',
+      select: (name: string) => `${name} を選択`,
+      drop: '選んだユーザーを削除…',
+      title: '選んだユーザーを削除',
+      revokeFirst: '先に権限を取り消す（PostgreSQL では、持っているオブジェクトを自分に付け替え、付与を外す）',
+      sameNameDatabases: '同じ名前のデータベースも削除する（MySQL。システムのデータベースは対象外）',
+      note: '削除したアカウントがすでに開いている接続は、閉じるまで使えます。',
+    },
     secondFactor: {
       badge: '2 要素認証',
       reset: '2 要素認証を解除…',
@@ -1237,6 +1261,9 @@ export const ja = {
       needsTable: 'カラムを指定するときは対象のテーブルも選んでください。',
       notColumnPrivilege: 'DELETE と TRIGGER はテーブル単位のみです。カラムを指定するなら外してください。',
     },
+    grantOption: 'WITH GRANT OPTION（受け取った側が、同じ権限を他のアカウントに付けられる）',
+    grantOptionHint:
+      '付与のときは WITH GRANT OPTION を付けます。取り消しのときは、権限は残して GRANT OPTION だけを外します。',
     privilegesNote:
       '両方の DB で同じ意味を持つ権限だけを並べています。これ以外（MySQL の INDEX、PostgreSQL の TRUNCATE など）は SQL タブで付与してください。',
     grantAll: 'このデータベースの全権限を付与',
@@ -1259,6 +1286,7 @@ export const ja = {
       grantRoutinePrivileges: 'ルーチンの権限を付与',
       revokeRoutinePrivileges: 'ルーチンの権限を取り消し',
       dropUser: 'ユーザーを削除',
+      dropUsers: '選んだユーザーを削除',
       setPassword: 'パスワードを変更',
       grantAll: '全権限を付与',
       revokeAll: '全権限を取り消す',
@@ -1266,6 +1294,8 @@ export const ja = {
       revokePrivileges: '権限を取り消す',
     },
     previewHint: '以下の SQL を実行します（パスワードは **** で表示）。',
+    ownPasswordHint:
+      '以下の SQL を実行します（パスワードは **** で表示）。自分のパスワードを変えると、いったん切断されます。新しいパスワードで接続し直してください。',
     dropHint:
       'PostgreSQL では権限を持ったままのロールは削除できません。先に各データベースの「権限」タブで取り消してください。',
     selfWarning: '現在接続中のユーザーです。実行すると切断される、または操作できなくなる可能性があります。',
@@ -1514,6 +1544,24 @@ export const ja = {
   },
   replication: {
     controls: {
+      source: {
+        title: 'このサーバーをソースにする準備',
+        hint: {
+          mysql:
+            'レプリカが追いかけられるかを、変数から確かめます。server_id は 0 でなく、log_bin が ON であること（binlog_format は ROW、GTID を使うなら gtid_mode が ON）。変えるときは「変数」から。',
+          postgres:
+            'スタンバイが追いかけられるかを、設定から確かめます。wal_level が replica か logical、max_wal_senders と max_replication_slots が 0 でないこと。変えるには再起動が要ります。',
+        },
+        state: '状態',
+        ready: '問題なし',
+        check: '要確認',
+        createUser: 'レプリカ用ユーザーを作成…',
+        userHint: {
+          mysql: 'レプリカがこのサーバーに接続するためのアカウントを作り、REPLICATION SLAVE を付与します。',
+          postgres:
+            'スタンバイがこのサーバーに接続するためのロールを作ります（LOGIN REPLICATION）。pg_hba.conf にも replication の行が要ります。',
+        },
+      },
       title: '操作',
       hintMysql:
         'レプリカのスレッドの開始・停止、止まったときの 1 件のスキップ、リセット、ソースの設定です。実行前に SQL を確認します。',
@@ -1570,6 +1618,9 @@ export const ja = {
     logSize: 'サイズ',
   },
   catalog: {
+    showVariables: '変数を表示',
+    engineVariables: (engine: string) => `${engine} の変数`,
+    noEngineVariables: (engine: string) => `${engine}_ で始まる変数はありません`,
     filter: '絞り込む（どの列でも）',
     titles: {
       collations: { mysql: '文字セット・照合順序', postgres: '照合順序' },
@@ -1709,7 +1760,11 @@ export const ja = {
     infoTitle: 'サーバー情報',
     version: 'バージョン',
     uptime: '稼働時間',
+    countSizes: 'サイズとテーブル数を数える',
+    manual: 'マニュアル',
+    startedAt: '起動日時',
     currentUser: '接続ユーザー',
+    changeOwnPassword: '自分のパスワードを変更',
     statusTitle: 'ステータス変数',
     variablesTitle: 'システム変数',
     processesTitle: 'プロセス一覧',
@@ -1740,6 +1795,7 @@ export const ja = {
     refreshManual: '手動',
     refreshSeconds: (s: number) => `${s} 秒`,
     activeOnly: '実行中のものだけ表示',
+    fullQuery: 'クエリの全文を表示（既定は 100 文字まで）',
     refresh: '更新',
     uptimeFormat: (sec: number) => {
       const d = Math.floor(sec / 86400)

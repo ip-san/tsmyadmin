@@ -80,6 +80,7 @@ SQL エクスポートの「`DEFINER` 句を除く」は、復元したビュー
 - `Content-Security-Policy: default-src 'self'; script-src 'self'; frame-ancestors 'none'` など（`apps/api/src/app.ts` の `CONTENT_SECURITY_POLICY`）。インライン script は許可しません。CodeMirror の都合で `style-src 'unsafe-inline'` のみ許可しています
 - 値の描画はすべて React 経由（`dangerouslySetInnerHTML` 不使用）
 - 列の表示変換（構造タブ）のリンクは http / https だけで、値は URL エンコードしてテンプレートに差し込みます（値でリンク先のホストや `javascript:` を作れない。テンプレートの登録時と描画時の両方で検査）。画像はセルのバイト列から PNG / JPEG / GIF / WebP と判別できたものだけを `data:` URL で表示し、SVG は扱いません。外部の画像 URL は CSP の `img-src 'self' data:` で読み込まれません
+- 変数ページの「マニュアル」リンクは、公式マニュアルの固定のホスト（`dev.mysql.com`、`mariadb.com`、`www.postgresql.org`）だけを指し、変数名は英数字・`_`・`.` に限って（それ以外は作らない）URL に入れます。新しいタブで `noopener noreferrer` を付けて開くので、外部へ渡るのは変数名だけです
 
 ## SQL の組み立て
 

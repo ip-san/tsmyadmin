@@ -96,6 +96,8 @@ export const SessionStateSchema = SessionInfoSchema.extend({
 })
 export type SessionState = z.infer<typeof SessionStateSchema>
 
+/** `stats=0` skips the size and table-count aggregates of the database list. */
+export const DatabasesQuerySchema = z.object({ stats: z.enum(['0', '1']).optional() })
 export const SchemaQuerySchema = z.object({ schema: z.string().min(1).optional() })
 export const TriggerQuerySchema = SchemaQuerySchema.extend({ table: z.string().min(1).optional() })
 export const RoutineDefinitionQuerySchema = SchemaQuerySchema.extend({ kind: RoutineKindSchema })

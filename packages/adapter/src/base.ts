@@ -416,7 +416,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
 
   abstract ping(): Promise<void>
   abstract close(): Promise<void>
-  abstract listDatabases(): Promise<DatabaseInfo[]>
+  abstract listDatabases(options?: { stats?: boolean }): Promise<DatabaseInfo[]>
   abstract listSchemas(database: string): Promise<string[]>
   abstract listTables(ns: Namespace): Promise<TableInfo[]>
   abstract listForeignKeys(ns: Namespace): Promise<RelationDef[]>

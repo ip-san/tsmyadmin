@@ -9,8 +9,9 @@ import { ErrorBox, Spinner } from '@/components/ui/Feedback.tsx'
 import { Field, Input } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
 import { useDdlFlow } from '@/lib/ddl.ts'
-import { variablesQuery } from '@/lib/queries.ts'
+import { serverInfoQuery, variablesQuery } from '@/lib/queries.ts'
 import { KeyValueTable } from './KeyValueTable.tsx'
+import { variableDocUrl } from './variable-docs.ts'
 
 const t = locale.server
 
@@ -68,6 +69,7 @@ function EditVariable({
 export function VariablesPage() {
   const { session } = useRouteContext({ from: '/_app' })
   const vars = useQuery(variablesQuery)
+  const info = useQuery(serverInfoQuery)
   const [editing, setEditing] = useState<KeyValue | null>(null)
   const flow = useDdlFlow(session.serverDatabase, undefined)
   return (
@@ -79,7 +81,12 @@ export function VariablesPage() {
       ) : vars.isError ? (
         <ErrorBox error={vars.error} onRetry={() => void vars.refetch()} />
       ) : (
-        <KeyValueTable items={vars.data} label={t.variablesTitle} onEdit={setEditing} />
+        <KeyValueTable
+          items={vars.data}
+          label={t.variablesTitle}
+          onEdit={setEditing}
+          docUrl={(name) => variableDocUrl(session.dialect, info.data?.version ?? '', name)}
+        />
       )}
       <Dialog open={editing !== null} title={t.editVariable} onClose={() => setEditing(null)}>
         {editing ? (

@@ -14,6 +14,7 @@ const SAMPLE_OPS: Record<UserOp['op'], UserOp> = {
     attributes: { superuser: false, createdb: true, createrole: true },
   },
   dropUser: { op: 'dropUser', user },
+  dropUsers: { op: 'dropUsers', users: [user, { name: 'b"ob', host: 'localhost' }], revokeFirst: true },
   lockUser: { op: 'lockUser', user, locked: true },
   renameUser: { op: 'renameUser', user, newUser: { name: 'new"name', host: 'localhost' } },
   copyUser: {
@@ -101,6 +102,44 @@ const COLUMN_OPS = {
   },
 } satisfies Record<string, UserOp>
 
+/** WITH GRANT OPTION on a grant, and revoking only the grant option, for a table and for the whole database. */
+const GRANT_OPTION_OPS = {
+  grantOnTable: {
+    op: 'grantPrivileges',
+    user,
+    privileges: ['SELECT', 'UPDATE'],
+    database: 'shop',
+    schema: 'app',
+    table: 'ord ers',
+    grantOption: true,
+  },
+  grantOnDatabase: {
+    op: 'grantPrivileges',
+    user,
+    privileges: ['SELECT'],
+    database: 'shop_1',
+    schema: 'app',
+    grantOption: true,
+  },
+  revokeOnTable: {
+    op: 'revokePrivileges',
+    user,
+    privileges: ['SELECT'],
+    database: 'shop',
+    schema: 'app',
+    table: 'ord ers',
+    grantOption: true,
+  },
+  revokeOnDatabase: {
+    op: 'revokePrivileges',
+    user,
+    privileges: ['SELECT'],
+    database: 'shop_1',
+    schema: 'app',
+    grantOption: true,
+  },
+} satisfies Record<string, UserOp>
+
 /** Options of createUser that the samples above do not use. */
 const CREATE_OPTIONS = {
   plugin: {
@@ -120,7 +159,23 @@ const CREATE_OPTIONS = {
   },
 } satisfies Record<string, UserOp>
 
+/** The account a replica connects with: the same op on both dialects, a different statement on each. */
+const REPLICA_USER = {
+  op: 'createUser',
+  user: { name: 'repl', host: '10.0.%' },
+  password: 'pw',
+  attributes: { superuser: false, createdb: false, createrole: false },
+  replication: true,
+} satisfies UserOp
+
 describe('user SQL builders', () => {
+  it('mysql: createUser for a replica grants REPLICATION SLAVE', () => {
+    expect(mysqlUsers.build(REPLICA_USER).map((s) => s.sql)).toMatchSnapshot()
+  })
+  it('postgres: createUser for a replica gets the REPLICATION attribute', () => {
+    expect(pgUsers.build(REPLICA_USER).map((s) => s.sql)).toMatchSnapshot()
+  })
+
   for (const [kind, op] of Object.entries(CREATE_OPTIONS)) {
     it(`mysql: createUser with ${kind}`, () => {
       expect(mysqlUsers.build(op).map((s) => s.sql)).toMatchSnapshot()
@@ -161,6 +216,20 @@ describe('user SQL builders', () => {
     })
   }
 
+  for (const [kind, op] of Object.entries(GRANT_OPTION_OPS)) {
+    it(`mysql: ${kind} with the grant option`, () => {
+      expect(mysqlUsers.build(op).map((s) => s.sql)).toMatchSnapshot()
+    })
+    it(`postgres: ${kind} with the grant option`, () => {
+      expect(pgUsers.build(op).map((s) => s.sql)).toMatchSnapshot()
+    })
+  }
+
+  it('refuses to take the grant option off single columns on MySQL', () => {
+    const op = { ...GRANT_OPTION_OPS.revokeOnTable, columns: ['a'] } as UserOp
+    expect(() => mysqlUsers.build(op)).toThrow(/per table or database/)
+  })
+
   it('quotes column names per dialect and repeats them for each privilege', () => {
     const mysql = mysqlUsers.build(COLUMN_OPS.grant)[0]?.sql ?? ''
     expect(mysql).toContain('GRANT SELECT (`na"me`, `no``te`), UPDATE (`na"me`, `no``te`) ON')
@@ -196,6 +265,32 @@ describe('user SQL builders', () => {
     expect(mysqlUsers.build(SAMPLE_OPS.dropUser)[0]?.sql).toBe("DROP USER 'o''brien'@'10.0.%'")
     expect(pgUsers.build(SAMPLE_OPS.dropUser)[0]?.sql).toBe('DROP ROLE "o\'brien"')
     expect(mysqlUsers.build(SAMPLE_OPS.setPassword)[0]?.sql).toContain("IDENTIFIED BY 'new'")
+  })
+
+  it('drops several accounts in one statement, and with their same-named databases only on MySQL', () => {
+    const op = { ...SAMPLE_OPS.dropUsers, revokeFirst: false, dropSameNameDatabases: true } as UserOp
+    expect(mysqlUsers.build(op).map((s) => s.sql)).toEqual([
+      "DROP USER 'o''brien'@'10.0.%', 'b\"ob'@'localhost'",
+      "DROP DATABASE IF EXISTS `o'brien`",
+      'DROP DATABASE IF EXISTS `b"ob`',
+    ])
+    // Two accounts of one name (different hosts) name one database.
+    const same = {
+      op: 'dropUsers',
+      users: [user, { ...user, host: 'localhost' }],
+      dropSameNameDatabases: true,
+    } as UserOp
+    expect(mysqlUsers.build(same).filter((s) => s.sql.startsWith('DROP DATABASE'))).toHaveLength(1)
+    // A system database is never dropped along with an account of its name.
+    const sys = { op: 'dropUsers', users: [{ name: 'mysql', host: '%' }], dropSameNameDatabases: true } as UserOp
+    expect(() => mysqlUsers.build(sys)).toThrow(/system database/)
+    expect(() => pgUsers.build(op)).toThrow(/MySQL/)
+    const revoke = { op: 'dropUsers', users: [user], revokeFirst: true } as UserOp
+    expect(pgUsers.build(revoke).map((s) => s.sql)).toEqual([
+      'REASSIGN OWNED BY "o\'brien" TO CURRENT_USER',
+      'DROP OWNED BY "o\'brien"',
+      'DROP ROLE "o\'brien"',
+    ])
   })
 
   it('runs PostgreSQL grants inside the target database', () => {

@@ -21,7 +21,9 @@ async function withServerGrants(adapter: DatabaseAdapter, op: UserOp): Promise<U
 }
 
 /** The names an operation would create: the account, and the one it is renamed or copied to. */
-const namesOf = (op: UserOp) => ({ user: op.user.name, ...('newUser' in op ? { newName: op.newUser.name } : {}) })
+const namesOf = (op: UserOp) =>
+  // Dropping creates nothing, so an account whose name is already past the limit can still be removed.
+  op.op === 'dropUsers' ? {} : { user: op.user.name, ...('newUser' in op ? { newName: op.newUser.name } : {}) }
 
 export function userRoutes(cfg: SessionConfig) {
   return new Hono<AppEnv>()

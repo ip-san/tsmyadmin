@@ -19,6 +19,7 @@ export function KeyValueTable({
   categorize,
   flags,
   onEdit,
+  docUrl,
 }: {
   items: KeyValue[]
   label: string
@@ -28,6 +29,8 @@ export function KeyValueTable({
   flags?: ReadonlyMap<string, string>
   /** When given, each row has a button that hands its item to this. */
   onEdit?: (item: KeyValue) => void
+  /** When given, a name with a manual page gets a link to it (opens in a new tab). */
+  docUrl?: (name: string) => string | null
 }) {
   const [filter, setFilter] = useState('')
   const [category, setCategory] = useState('')
@@ -74,6 +77,7 @@ export function KeyValueTable({
               <Th>{locale.server.name}</Th>
               <Th>{locale.server.value}</Th>
               {hasDescription ? <Th>{locale.server.description}</Th> : null}
+              {docUrl ? <Th data-print-hide>{locale.server.manual}</Th> : null}
               {onEdit ? <Th>{locale.ddl.actions}</Th> : null}
             </tr>
           </thead>
@@ -95,6 +99,22 @@ export function KeyValueTable({
                   <CellValue cell={i.value} />
                 </Td>
                 {hasDescription ? <Td className="text-xs text-ink-sub">{i.description ?? ''}</Td> : null}
+                {docUrl ? (
+                  <Td data-print-hide>
+                    {docUrl(i.name) ? (
+                      <a
+                        href={docUrl(i.name) ?? undefined}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={`${i.name}: ${locale.server.manual}`}
+                        className="text-xs text-blue-700 hover:underline dark:text-blue-300"
+                      >
+                        {locale.server.manual}
+                        <span className="sr-only">{locale.nav.opensNewTab}</span>
+                      </a>
+                    ) : null}
+                  </Td>
+                ) : null}
                 {onEdit ? (
                   <Td>
                     <Button

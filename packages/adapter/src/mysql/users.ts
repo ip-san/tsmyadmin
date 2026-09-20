@@ -1,5 +1,5 @@
 import type { Namespace, UserInfo, UserOp, UserRef } from '@tsmyadmin/shared'
-import { PASSWORD_MASK } from '@tsmyadmin/shared'
+import { PASSWORD_MASK, SYSTEM_DATABASES } from '@tsmyadmin/shared'
 import { type Conn, firstResult } from '../base.ts'
 import { mysqlLiteral } from '../sql/literal.ts'
 import { privilegeList } from '../sql/privileges.ts'
@@ -122,11 +122,30 @@ function retargetGrant(statement: string, account: string): string {
 const grantPattern = (database: string) =>
   database.replaceAll('\\', '\\\\').replaceAll('_', '\\_').replaceAll('%', '\\%')
 
+/** Several accounts dropped in one statement, after taking their privileges away and/or with their same-named databases. */
+function dropUsers(op: Extract<UserOp, { op: 'dropUsers' }>): UserStatement[] {
+  const accounts = op.users.map(mysqlAccount)
+  const out: UserStatement[] = []
+  if (op.revokeFirst) for (const a of accounts) out.push(plain(`REVOKE ALL PRIVILEGES, GRANT OPTION FROM ${a}`))
+  out.push(plain(`DROP USER ${accounts.join(', ')}`))
+  if (op.dropSameNameDatabases) {
+    const names = [...new Set(op.users.map((u) => u.name))]
+    // An account named like a system schema must not take it with it.
+    const system = names.find((n) => SYSTEM_DATABASES.mysql.has(n.toLowerCase()))
+    if (system !== undefined)
+      throw new AdapterError('VALIDATION', `The database ${system} is a system database and is never dropped`)
+    // IF EXISTS: not every account has a database of its name, and the ones that do not must not stop the rest.
+    for (const name of names) out.push(plain(`DROP DATABASE IF EXISTS ${quoteIdent('mysql', name)}`))
+  }
+  return out
+}
+
 export const mysqlUsers: UserSqlBuilder = {
   namespace(_op: UserOp, serverNamespace: Namespace): Namespace {
     return serverNamespace
   },
   build(op: UserOp): UserStatement[] {
+    if (op.op === 'dropUsers') return dropUsers(op)
     const account = mysqlAccount(op.user)
     switch (op.op) {
       case 'createUser': {
@@ -144,6 +163,7 @@ export const mysqlUsers: UserSqlBuilder = {
         if (op.attributes.superuser) out.push(plain(`GRANT ALL PRIVILEGES ON *.* TO ${account} WITH GRANT OPTION`))
         else if (op.attributes.createdb) out.push(plain(`GRANT CREATE ON *.* TO ${account}`))
         if (op.attributes.createrole) out.push(plain(`GRANT CREATE USER ON *.* TO ${account}`))
+        if (op.replication) out.push(plain(`GRANT REPLICATION SLAVE ON *.* TO ${account}`))
         return out
       }
       case 'dropUser':
@@ -215,13 +235,13 @@ export const mysqlUsers: UserSqlBuilder = {
           ? `${quoteIdent('mysql', op.database)}.${quoteIdent('mysql', op.table)}`
           : `${quoteIdent('mysql', grantPattern(op.database))}.*`
         const list = privilegeList('mysql', op.privileges, op.columns)
-        return [
-          plain(
-            op.op === 'grantPrivileges'
-              ? `GRANT ${list} ON ${target} TO ${account}`
-              : `REVOKE ${list} ON ${target} FROM ${account}`
-          ),
-        ]
+        if (op.op === 'grantPrivileges')
+          return [plain(`GRANT ${list} ON ${target} TO ${account}${op.grantOption ? ' WITH GRANT OPTION' : ''}`)]
+        // MySQL has no per-privilege grant option: it is one flag on the row, so the list is not part of the statement.
+        if (op.grantOption && op.columns)
+          throw new AdapterError('VALIDATION', 'MySQL keeps the grant option per table or database, not per column')
+        if (op.grantOption) return [plain(`REVOKE GRANT OPTION ON ${target} FROM ${account}`)]
+        return [plain(`REVOKE ${list} ON ${target} FROM ${account}`)]
       }
     }
   },

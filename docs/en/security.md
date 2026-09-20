@@ -1,4 +1,4 @@
-<!-- translated-from: docs/security.md sha256:023f1a67072d7cbf3f30589ab9e265ec06ecbae2a64b1fb05665392d52bf88be -->
+<!-- translated-from: docs/security.md sha256:7cea8c7a9f1f9982fd389fad2db168aca0f55a1ba3a833dcc9314f87de5b67ed -->
 
 # Security model
 
@@ -79,6 +79,7 @@ On a shared machine, run **Clear history** in the SQL tab and sign out before yo
 - `Content-Security-Policy: default-src 'self'; script-src 'self'; frame-ancestors 'none'` and the rest (`CONTENT_SECURITY_POLICY` in `apps/api/src/app.ts`). Inline script is not allowed; only `style-src 'unsafe-inline'` is, because CodeMirror needs it
 - Every value is rendered through React (`dangerouslySetInnerHTML` is never used)
 - A display transformation's link (Structure tab) is http / https only, with the value URL-encoded into the template (a value cannot choose the host or make a `javascript:` URL; checked when the template is saved and when it is drawn). An image is shown as a `data:` URL only when the cell's bytes are a PNG, JPEG, GIF or WebP; SVG is never used. External image URLs are not loaded, under the CSP's `img-src 'self' data:`
+- The **Manual** links on the Variables page point only at the vendors' own fixed hosts (`dev.mysql.com`, `mariadb.com`, `www.postgresql.org`). A variable name goes into the URL only if it is letters, digits, `_` and `.` (otherwise no link is made), and the link opens in a new tab with `noopener noreferrer`, so the variable's name is the only thing that leaves
 
 ## How SQL is built
 
