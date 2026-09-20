@@ -50,6 +50,8 @@ bun run db:up      # docker compose: MySQL 8.4 (localhost:13306) + PostgreSQL 17
 bun run dev        # API http://localhost:3100 + Web http://localhost:5175
 ```
 
+`bun run dev` では Docker の自動検出が既定で有効です（ログイン画面に、動いている DB のコンテナが出ます。切るときは `TSMYADMIN_DOCKER_DISCOVERY=0 bun run dev`）。
+
 ログイン例（テスト DB）: MySQL `127.0.0.1:13306` / PostgreSQL `127.0.0.1:15433`、ユーザー `tsmyadmin`、パスワード `tsmyadmin`、データベース `tsmyadmin_test`。
 
 ## 品質ゲート

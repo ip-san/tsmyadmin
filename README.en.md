@@ -1,4 +1,4 @@
-<!-- translated-from: README.md sha256:7eed36feb794cd7e1b3fb16354f3f66a6da35b8f9af550999a8657bc3081ef09 -->
+<!-- translated-from: README.md sha256:3c28fbb47910036162d122f753af595e81295c4f6f64f3e67abf361b1aa80bca -->
 
 # tsmyadmin
 
@@ -51,6 +51,8 @@ bun install
 bun run db:up      # docker compose: MySQL 8.4 (localhost:13306) + PostgreSQL 17 (localhost:15433), fixtures loaded automatically
 bun run dev        # API http://localhost:3100 + web http://localhost:5175
 ```
+
+`bun run dev` has Docker discovery on by default (the login screen lists the database containers that are running; turn it off with `TSMYADMIN_DOCKER_DISCOVERY=0 bun run dev`).
 
 To sign in to the test databases: MySQL `127.0.0.1:13306` or PostgreSQL `127.0.0.1:15433`, user `tsmyadmin`, password `tsmyadmin`, database `tsmyadmin_test`.
 

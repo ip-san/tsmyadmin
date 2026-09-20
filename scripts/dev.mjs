@@ -3,6 +3,8 @@
  * Starts the API (bun --hot) and the web dev server (vite) side by side with prefixed output.
  * `bun run --filter '*' dev` cannot be used: it runs scripts in dependency order and web depends
  * on api for its types, so vite would wait for the API process to exit.
+ * Docker discovery is on by default here (the login screen lists the database containers of the local Docker);
+ * `TSMYADMIN_DOCKER_DISCOVERY=0 bun run dev` turns it off.
  */
 import { spawn } from 'node:child_process'
 
@@ -10,7 +12,11 @@ const procs = [
   { name: 'api', cwd: 'apps/api', color: '\x1b[36m' },
   { name: 'web', cwd: 'apps/web', color: '\x1b[35m' },
 ].map(({ name, cwd, color }) => {
-  const child = spawn('bun', ['run', 'dev'], { cwd, stdio: ['ignore', 'pipe', 'pipe'], env: process.env })
+  const child = spawn('bun', ['run', 'dev'], {
+    cwd,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: { TSMYADMIN_DOCKER_DISCOVERY: '1', ...process.env },
+  })
   const prefix = (chunk) => {
     for (const line of chunk.toString().split('\n'))
       if (line.trim()) process.stdout.write(`${color}[${name}]\x1b[0m ${line}\n`)

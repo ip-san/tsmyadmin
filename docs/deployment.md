@@ -149,7 +149,7 @@ docker run -d --name tsmyadmin --user 0 \
 - `NODE_ENV=development`: イメージは既定で production なので、開発の既定（メモリのセッション、Secure なし）に上書きします
 - `--user 0`（compose では `user: "0:0"`）: `docker.sock` は root（Linux では docker グループ）だけが読めます。イメージの既定の uid 1000 では開けず、検出は空になります。ソケットを渡した時点でホストの root 相当なので、root で動かしても権限は増えません
 
-ホストで `bun run dev` している場合は `TSMYADMIN_DOCKER_DISCOVERY=1` を付けるだけです（接続先は `127.0.0.1` になります）。
+ホストで `bun run dev` している場合は、何も付けなくても有効です（接続先は `127.0.0.1` になります。切るときは `TSMYADMIN_DOCKER_DISCOVERY=0 bun run dev`）。ほかの方法で API を起動するときは `TSMYADMIN_DOCKER_DISCOVERY=1` を付けます。
 
 - **見つかるもの**: イメージ名（`mysql` / `mariadb` / `percona` / `postgres` / `postgis` など）か、公開している 3306 / 5432 から MySQL・MariaDB・PostgreSQL と判断し、**ホストにポートを公開しているコンテナだけ**を出します。公開していないコンテナには、このプロセスから届きません。一覧は数秒ごとに取り直され、後から起動したコンテナもログイン画面を開き直すと出ます
 - **接続できる範囲**: 検出したコンテナの公開 `ホスト:ポート` に限ります（同じホストの別ポートや、検出されていない先は `TSMYADMIN_ALLOWED_HOSTS` の設定どおり）。コンテナの環境変数から読むのは `MYSQL_DATABASE` / `MARIADB_DATABASE` / `POSTGRES_DB`（データベース名の入力補助）だけで、パスワードは読みも返しも記録もしません。ユーザー名とパスワードは各プロジェクトの設定を見て入力します

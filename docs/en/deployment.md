@@ -1,4 +1,4 @@
-<!-- translated-from: docs/deployment.md sha256:dec635e2e10a5ab3e04f325191b2cd283c6e92db72da08beedaf98e71088ce7c -->
+<!-- translated-from: docs/deployment.md sha256:d9875f416d3cac89cc41be16794d27dad4aa97ea5cd2325d58ac3ccc0aaf748e -->
 
 # Deployment guide
 
@@ -152,7 +152,7 @@ docker run -d --name tsmyadmin --user 0 \
 - `NODE_ENV=development`: the image defaults to production, so this overrides it with the development defaults (in-memory sessions, no Secure cookie)
 - `--user 0` (`user: "0:0"` in compose): `docker.sock` is readable only by root (on Linux, the docker group). The image's default uid 1000 cannot open it and discovery comes up empty. Handing over the socket is already root on the host, so running as root adds no power
 
-When you run `bun run dev` on the host, just set `TSMYADMIN_DOCKER_DISCOVERY=1` (targets are then `127.0.0.1`).
+When you run `bun run dev` on the host, it is on without anything extra (targets are then `127.0.0.1`; turn it off with `TSMYADMIN_DOCKER_DISCOVERY=0 bun run dev`). Start the API some other way and set `TSMYADMIN_DOCKER_DISCOVERY=1` yourself.
 
 - **What is found**: a container is taken for MySQL, MariaDB or PostgreSQL by its image name (`mysql`, `mariadb`, `percona`, `postgres`, `postgis` and so on) or by publishing 3306 / 5432, and only **containers that publish the port on the host** are listed. One that publishes nothing cannot be reached from this process. The list is refreshed every few seconds, so a container started later shows up when the login screen is opened again
 - **What may be connected to**: exactly the discovered containers' published `host:port` (another port on the same host, or a target that was not discovered, follows `TSMYADMIN_ALLOWED_HOSTS` as usual). From a container's environment only `MYSQL_DATABASE` / `MARIADB_DATABASE` / `POSTGRES_DB` are read, to prefill the database name; a password is never read, returned or logged. Enter the username and password from that project's own settings
