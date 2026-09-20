@@ -21,6 +21,21 @@ export type ExportFormat = z.infer<typeof ExportFormatSchema>
 
 /** Formats that hold one table's rows only (a table per file): the CSV family. */
 export const SINGLE_TABLE_FORMATS: readonly ExportFormat[] = ['csv', 'csvExcel']
+/**
+ * Formats whose file can hold a table's structure (its columns) and its data, each on its own: the document
+ * formats and XML. SQL has its own switches, CSV and JSON hold rows only, and a spreadsheet is data.
+ */
+export const STRUCTURE_FORMATS: readonly ExportFormat[] = [
+  'xml',
+  'yaml',
+  'markdown',
+  'latex',
+  'texy',
+  'mediawiki',
+  'html',
+  'odt',
+  'docx',
+]
 /** Formats that are binary (ZIP-based): no character set applies to them. */
 export const BINARY_FORMATS: readonly ExportFormat[] = ['ods', 'odt', 'docx']
 /** Formats that name their own encoding (UTF-8): a character set chosen for them would contradict the file. */
@@ -74,6 +89,23 @@ export const ExportQuerySchema = z.object({
    */
   csvSafe: FlagSchema.default('0'),
   csvDelimiter: CsvDelimiterSchema.default('comma'),
+  /** CSV: the column names as the first line. */
+  csvHeader: FlagSchema.default('1'),
+  /** CSV: every value in quotes (NULL stays the bare marker). */
+  csvQuoteAll: FlagSchema.default('0'),
+  /** CSV: line breaks inside a value written as a space, so a record is one line. */
+  csvStripEol: FlagSchema.default('0'),
+  /** JSON: one line, no spaces, instead of one row to a line. */
+  jsonCompact: FlagSchema.default('0'),
+  /** XML: the definitions of the namespace's views, routines and triggers, after the tables. */
+  xmlViews: FlagSchema.default('0'),
+  xmlRoutines: FlagSchema.default('0'),
+  xmlTriggers: FlagSchema.default('0'),
+  /** LaTeX: a caption over each table, and a `\label` to refer to it by. */
+  latexCaption: FlagSchema.default('1'),
+  latexLabel: FlagSchema.default('0'),
+  /** ODS: the text a NULL is written as (empty: an empty cell). */
+  odsNull: z.string().max(100).default(''),
   /** SQL: include stored routines, triggers and events (triggers of the requested tables when tables are named). */
   routines: FlagSchema.default('1'),
   /** SQL (MySQL): drop `DEFINER=...` clauses so the dump restores under another account. */
@@ -126,6 +158,16 @@ export const ExportOptionsSchema = z.object({
   bom: z.boolean().default(true),
   csvSafe: z.boolean().default(false),
   csvDelimiter: CsvDelimiterSchema.default('comma'),
+  csvHeader: z.boolean().default(true),
+  csvQuoteAll: z.boolean().default(false),
+  csvStripEol: z.boolean().default(false),
+  jsonCompact: z.boolean().default(false),
+  xmlViews: z.boolean().default(false),
+  xmlRoutines: z.boolean().default(false),
+  xmlTriggers: z.boolean().default(false),
+  latexCaption: z.boolean().default(true),
+  latexLabel: z.boolean().default(false),
+  odsNull: z.string().max(100).default(''),
   routines: z.boolean().default(true),
   stripDefiner: z.boolean().default(false),
   compress: ExportCompressionSchema.default('none'),

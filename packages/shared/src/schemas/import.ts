@@ -8,6 +8,36 @@ export type ImportFormat = z.infer<typeof ImportFormatSchema>
 
 export const IMPORT_MAX_BYTES = 64 * 1024 * 1024
 
+/** CSV: what ends a record (see CsvParseOptions.lineEnd). */
+export const LineEndSchema = z.enum(['auto', 'lf', 'crlf', 'cr'])
+/** ODS: a percentage as the fraction the sheet holds (25% → 0.25) or as it is shown (`25%`). */
+export const OdsPercentSchema = z.enum(['fraction', 'text'])
+/** ODS: a currency amount as the number (5) or as it is shown (`$5.00`). */
+export const OdsCurrencySchema = z.enum(['number', 'text'])
+/** ODS: a date as the value the sheet stores (2024-01-02) or as it is shown. */
+export const OdsDateSchema = z.enum(['iso', 'text'])
+
+/** The most columns a mapping may name. */
+export const IMPORT_MAX_MAPPED_COLUMNS = 500
+
+/**
+ * The columns a file's fields go into, in the file's order: a JSON array of names, where an empty name leaves that
+ * field out. Null when it is not one (the form refuses it; nothing else reads a bad one).
+ */
+export function parseColumnMapping(text: string | undefined): string[] | null {
+  if (text === undefined || text.trim() === '') return null
+  try {
+    const parsed: unknown = JSON.parse(text)
+    return Array.isArray(parsed) &&
+      parsed.length <= IMPORT_MAX_MAPPED_COLUMNS &&
+      parsed.every((n) => typeof n === 'string' && n.length <= 256)
+      ? (parsed as string[])
+      : null
+  } catch {
+    return null
+  }
+}
+
 /** The import form's starting values, as a user saved them in the settings. */
 export const ImportDefaultsSchema = z.object({
   charset: ExportCharsetSchema.default('utf-8'),
@@ -20,6 +50,11 @@ export const ImportDefaultsSchema = z.object({
   stopOnError: z.boolean().default(true),
   ignoreForeignKeys: z.boolean().default(false),
   singleTransaction: z.boolean().default(false),
+  lineEnd: LineEndSchema.default('auto'),
+  skipBlank: z.boolean().default(true),
+  odsPercent: OdsPercentSchema.default('fraction'),
+  odsCurrency: OdsCurrencySchema.default('number'),
+  odsDate: OdsDateSchema.default('iso'),
 })
 export type ImportDefaults = z.infer<typeof ImportDefaultsSchema>
 
@@ -51,6 +86,23 @@ export const ImportFormSchema = z.object({
     .length(1)
     .refine((c) => !'\r\n'.includes(c))
     .default('"'),
+  /**
+   * Rows formats: the table columns the file's fields go into, in the file's order, as a JSON array of names — an
+   * empty name leaves that field out. Replaces the header's names (or names a headerless file's fields).
+   */
+  columns: z
+    .string()
+    .max(100_000)
+    .refine((v) => v.trim() === '' || parseColumnMapping(v) !== null, 'columns must be a JSON array of names')
+    .optional(),
+  /** csv: what ends a record. */
+  lineEnd: LineEndSchema.default('auto'),
+  /** Rows formats: a blank line / empty row / empty `<row>` is not a row of the file (off: it is one with no values). */
+  skipBlank: FlagSchema.default('1'),
+  /** ods: how a percentage, a currency amount and a date are read. */
+  odsPercent: OdsPercentSchema.default('fraction'),
+  odsCurrency: OdsCurrencySchema.default('number'),
+  odsDate: OdsDateSchema.default('iso'),
   /** The character set of a text file (a spreadsheet file carries its own). */
   charset: ExportCharsetSchema.default('utf-8'),
   /** Statements (sql) or rows (the rest) to leave out from the start: to go on where an earlier run stopped. */

@@ -100,6 +100,24 @@ describe('office exports', () => {
     expect(document).toContain('A &amp; B &lt;c&gt; 50% _x_')
   })
 
+  it('writes a chosen text for NULL in a spreadsheet, and the structure into a text or Word document', async () => {
+    const zip = async (kind: 'ods' | 'odt' | 'docx', o: Parameters<typeof officeBody>[4], nullText?: string) =>
+      readZip(
+        new Uint8Array(Buffer.concat(await Array.fromAsync(officeBody(kind, adapter(), ns, ['users'], o, nullText))))
+      )
+    const ods = text(await zip('ods', undefined, '(none)'), 'content.xml')
+    expect(ods).toContain('office:value-type="string"><text:p>(none)</text:p>')
+    expect(ods).not.toContain('<table:table-cell/>')
+    const both = { structure: true, data: true }
+    const odt = text(await zip('odt', both), 'content.xml')
+    expect(odt).toContain('<text:h text:outline-level="2">users (structure)</text:h>')
+    expect(odt).toContain('<text:h text:outline-level="2">users (data)</text:h>')
+    expect(balanced(odt)).toBe(true)
+    const docx = text(await zip('docx', { structure: true, data: false }), 'word/document.xml')
+    expect(docx).toContain('Column')
+    expect(docx).not.toContain('A &amp; B')
+  })
+
   it('names sheets within Excel’s and LibreOffice’s rules', () => {
     expect(sheetNames(['a/b', 'A/B', 'x'.repeat(40), "'q'"])).toEqual(['a_b', 'A_B_2', 'x'.repeat(31), '_q_'])
   })

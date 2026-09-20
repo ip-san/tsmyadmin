@@ -1,4 +1,4 @@
-<!-- translated-from: docs/cloudflare.md sha256:f67a84ca9bbc18fecf66c52666a868b286d22954e27435dac76cbb74c400607c -->
+<!-- translated-from: docs/cloudflare.md sha256:65db5144063d9e9db8afe778deeb3cea04ca86f9dcea56f7daa9f0ac6efd9da5 -->
 
 # Deploying to Cloudflare
 
@@ -18,21 +18,21 @@ bun run cf:deploy    # deploy (after steps 1 and 2)
 | | |
 |---|---|
 | **What runs it** | Cloudflare Containers (the Workers Paid plan, from $5/month) |
-| **What you also need** | A Redis of your own. `SESSION_STORE=redis` is required |
+| **What you may also need** | A Redis of your own. It runs without one, but sign-ins and saved queries are lost every time the instance sleeps |
 | **What will not work** | Workers on their own, Pages |
 
 **Workers alone will not run it.** tsmyadmin uses `node:sqlite` (the session store), the `mysql2` / `pg` connection pools and `ioredis`, none of which exist in the Workers runtime. Pages serves static files only, so the API has nowhere to live. **Containers run the `Dockerfile` in this repository as it is.**
 
-**Redis is required because the disk does not survive.** A container's disk is ephemeral: every time an instance sleeps it starts again from the image. With the default `SESSION_STORE=sqlite`, everyone is signed out and every saved query is lost each time that happens. A managed Redis over TLS (`rediss://`) is the easy answer.
+**Redis matters because the disk does not survive.** A container's disk is ephemeral: every time an instance sleeps (or is redeployed) it starts again from the image. Without `REDIS_URL`, sessions go to `SESSION_STORE=sqlite` inside the container, so each time that happens **everyone is signed out and saved queries and personal settings are lost**. That is fine for a trial or a handful of users. To keep them, set up a managed Redis over TLS (`rediss://`) and store `REDIS_URL`; the worker then switches to `SESSION_STORE=redis`.
 
 ## Steps
 
 ### 1. Get ready
 
-Two things to arrange first:
+Two things to arrange first (the second is optional):
 
 1. **The Workers Paid plan** (from $5/month), enabled in the Cloudflare dashboard. On the free plan, `bun run cf:deploy` fails
-2. **A Redis**, ideally managed and over TLS. You will need its connection URL in the next step
+2. **(Optional) A Redis**, ideally managed and over TLS. Without one it runs on SQLite. You will need its connection URL in the next step
 
 ```bash
 bunx wrangler login
@@ -41,7 +41,7 @@ bunx wrangler login
 `wrangler` and `@cloudflare/containers` are already dev dependencies. The configuration is these two files, and you should not normally need to change either:
 
 - `wrangler.jsonc` (at the root) — the container class, `./Dockerfile`, `max_instances`
-- `deploy/cloudflare/worker.ts` — the port it forwards to, `sleepAfter`, `SESSION_STORE=redis`, `TRUST_PROXY=cloudflare`
+- `deploy/cloudflare/worker.ts` — the port it forwards to, `sleepAfter`, `SESSION_STORE` (`redis` when `REDIS_URL` is set, `sqlite` otherwise), `TRUST_PROXY=cloudflare`
 
 > That port has to match `EXPOSE` in the `Dockerfile`. `bun run check:static` fails if they drift apart.
 
@@ -49,7 +49,7 @@ bunx wrangler login
 
 ```bash
 bunx wrangler secret put SESSION_SECRET            # openssl rand -hex 32
-bunx wrangler secret put REDIS_URL                 # rediss://…
+bunx wrangler secret put REDIS_URL                 # rediss://… (optional; SQLite without it)
 bunx wrangler secret put TSMYADMIN_ALLOWED_HOSTS   # db.example.com:5432
 ```
 
@@ -74,13 +74,13 @@ The first build and push take the longest.
 
 | What to confirm | How | If it does not hold |
 |---|---|---|
-| TCP reaches the database and Redis | `/readyz` returns 200 (Redis is reachable) and you can log in (the database is reachable) | Containers will not work. Giving the database a Cloudflare private network connection (`cloudflared`) would reach it, but that is not covered here. The dependable answer is *Only the front door* below |
+| TCP reaches the database and Redis | `/readyz` returns 200 (if you use Redis, it is reachable) and you can log in (the database is reachable) | Containers will not work. Giving the database a Cloudflare private network connection (`cloudflared`) would reach it, but that is not covered here. The dependable answer is *Only the front door* below |
 | The client's IP arrives | The `ip` field of the `event: http` log lines differs per visitor | Everyone shares one rate-limit bucket and brute-force protection stops working. First check the startup log that `TRUST_PROXY=cloudflare` reached the container; if it did and the values are still identical, switch to *Only the front door* below |
 | Stopping waits for work in flight | Redeploy with `bun run cf:deploy` during an export, and an export that finishes within `SHUTDOWN_TIMEOUT_SECONDS` (30 seconds by default) completes | An export or import in flight is cut off immediately |
 
 > **Anything longer than the grace period is cut off by default.** To lengthen it, set `SHUTDOWN_TIMEOUT_SECONDS` (up to 600) **and add it to `envVars` in `deploy/cloudflare/worker.ts`** — for the same reason as step 2.
 
-> **Verified, all of it locally**: `bun run cf:check`, `docker build --platform linux/amd64`, and booting the production image with the same environment Cloudflare gives it (`SESSION_STORE=redis` + `TRUST_PROXY=cloudflare` + the secrets) — logging in to MySQL, the session landing in Redis, and the `ip` in the logs taking the value of a `CF-Connecting-IP` header supplied by hand.
+> **Verified, all of it locally**: `bun run cf:check`, `docker build --platform linux/amd64`, and booting the production image with the same environment Cloudflare gives it (`SESSION_STORE=redis` + `TRUST_PROXY=cloudflare` + the secrets; the `sqlite` path without `REDIS_URL` was not booted locally) — logging in to MySQL, the session landing in Redis, and the `ip` in the logs taking the value of a `CF-Connecting-IP` header supplied by hand.
 >
 > **Not verified**: running on a Cloudflare account. All three rows above are unverified. For the second one, what is verified is only that the header is read correctly when present — **whether Cloudflare actually supplies a distinct value per visitor is a separate question**, so confirm it after deploying.
 

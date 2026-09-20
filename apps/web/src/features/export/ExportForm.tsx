@@ -5,6 +5,7 @@ import { EXPORT_TEMPLATE_MAX_TABLES, SINGLE_TABLE_FORMATS } from '@tsmyadmin/sha
 import { Download } from 'lucide-react'
 import { useId, useState } from 'react'
 import { CsvFields, FormatFields, OutputFields } from '@/components/export/ExportOptionFields.tsx'
+import { FormatOptionFields, holdsStructure } from '@/components/export/FormatOptionFields.tsx'
 import { SqlFields } from '@/components/export/SqlExportFields.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
@@ -85,13 +86,16 @@ export function ExportForm({ db, schema, table, initialTables }: ExportFormProps
     setMissing(applied.missing)
     setOptions(template.options)
   }
+  const noParts = holdsStructure(format) && !options.structure && !options.data
   const blockedReason = csvBlocked
     ? locale.export.csvSingle
     : nothing
       ? locale.export.nothing
-      : tooLong
-        ? locale.export.selectionTooLong
-        : null
+      : noParts
+        ? locale.export.noParts
+        : tooLong
+          ? locale.export.selectionTooLong
+          : null
   const reasonId = useId()
 
   return (
@@ -159,6 +163,7 @@ export function ExportForm({ db, schema, table, initialTables }: ExportFormProps
         <p className="text-xs text-ink-sub">{locale.export.officeHint}</p>
       ) : null}
       {format === 'csv' || format === 'csvExcel' ? <CsvFields options={options} set={set} /> : null}
+      <FormatOptionFields options={options} set={set} />
       <OutputFields options={options} set={set} />
       {table ? null : (
         <ExportTemplatesPanel

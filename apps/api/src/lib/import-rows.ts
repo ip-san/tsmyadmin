@@ -103,8 +103,18 @@ const trimRow = (cells: RowCell[]) => {
   return cells.slice(0, end)
 }
 
+/** How a file's rows are read where a format leaves a choice. */
+export interface ReadOptions {
+  /** A blank row is not a row of the file (default). Off: it is one with no values. */
+  skipBlank?: boolean
+  /** ODS: read a percentage, currency amount or date as it is shown instead of as the number / date it holds. */
+  odsText?: { percentage?: boolean; currency?: boolean; date?: boolean }
+}
+
 /** The sheets of an OpenDocument spreadsheet, each as rows of text (a value's own text, dates and numbers included). */
-export function readOds(bytes: Uint8Array): { name: string; rows: SourceRow[] }[] {
+export function readOds(bytes: Uint8Array, options: ReadOptions = {}): { name: string; rows: SourceRow[] }[] {
+  const skipBlank = options.skipBlank !== false
+  const shown = options.odsText ?? {}
   let content: string
   try {
     const file = readZip(bytes).find((f) => f.name === 'content.xml')
@@ -130,8 +140,9 @@ export function readOds(bytes: Uint8Array): { name: string; rows: SourceRow[] }[
     const cells = trimRow(row)
     const empty = cells.length === 0
     const repeats = Math.min(rowRepeat, MAX_REPEAT)
-    // A run of empty rows (a sheet is padded to a million) is not data.
-    if (!empty) for (let r = 0; r < repeats; r++) sheet.rows.push({ line: rowNumber + r + 1, cells })
+    // A run of empty rows (a sheet is padded to a million) is not data. Kept when asked, between the rows that have
+    // values: the padding after the last of them is trimmed below.
+    if (!empty || !skipBlank) for (let r = 0; r < repeats; r++) sheet.rows.push({ line: rowNumber + r + 1, cells })
     rowNumber += rowRepeat
     row = null
   }
@@ -150,8 +161,14 @@ export function readOds(bytes: Uint8Array): { name: string; rows: SourceRow[] }[
         case 'table:table-cell':
         case 'table:covered-table-cell': {
           const type = e.attrs['office:value-type']
-          const value =
-            type === 'float' || type === 'percentage' || type === 'currency'
+          // As it is shown: the cell's own paragraphs, read like a string's.
+          const asShown =
+            (type === 'percentage' && shown.percentage === true) ||
+            (type === 'currency' && shown.currency === true) ||
+            (type === 'date' && shown.date === true)
+          const value = asShown
+            ? null
+            : type === 'float' || type === 'percentage' || type === 'currency'
               ? (e.attrs['office:value'] ?? null)
               : type === 'date'
                 ? (e.attrs['office:date-value'] ?? null)
@@ -165,7 +182,7 @@ export function readOds(bytes: Uint8Array): { name: string; rows: SourceRow[] }[
           cell = {
             value,
             repeat: Math.min(Number(e.attrs['table:number-columns-repeated'] ?? 1) || 1, MAX_CELLS_PER_ROW),
-            typed: type === 'string' && value === null,
+            typed: (type === 'string' && value === null) || asShown,
           }
           paragraphs = []
           break
@@ -215,6 +232,12 @@ export function readOds(bytes: Uint8Array): { name: string; rows: SourceRow[] }[
       }
     }
   }
+  // Empty rows kept: not the padding after the last row that holds a value.
+  if (!skipBlank) {
+    for (const s of sheets) {
+      while (s.rows.length > 0 && (s.rows.at(-1)?.cells.length ?? 0) === 0) s.rows.pop()
+    }
+  }
   return sheets
 }
 
@@ -234,15 +257,21 @@ export function pickSheet<T extends { name: string }>(sheets: T[], wanted: strin
  * phpMyAdmin's (`<table name><column name>…` — one `<table>` element per row). `null="true"` is NULL and
  * `encoding="base64"` carries bytes.
  */
-export function readXmlTables(xml: string): { name: string; header: string[]; rows: SourceRow[] }[] {
+export function readXmlTables(
+  xml: string,
+  options: ReadOptions = {}
+): { name: string; header: string[]; rows: SourceRow[] }[] {
+  const skipBlank = options.skipBlank !== false
   const tables = new Map<string, { header: string[]; rows: { line: number; cells: Map<string, RowCell> }[] }>()
   let table = ''
   let direct: Map<string, RowCell> | null = null
   let rowCells: Map<string, RowCell> | null = null
   let column: { name: string; isNull: boolean; base64: boolean; text: string } | null = null
   let count = 0
+  // This tool's export may hold a table's structure (its columns as `<column>` elements): not rows.
+  let inStructure = false
   const emit = (cells: Map<string, RowCell>) => {
-    if (cells.size === 0) return
+    if (cells.size === 0 && skipBlank) return
     const t = tables.get(table) ?? { header: [], rows: [] }
     tables.set(table, t)
     for (const name of cells.keys()) if (!t.header.includes(name)) t.header.push(name)
@@ -254,8 +283,9 @@ export function readXmlTables(xml: string): { name: string; header: string[]; ro
       if (e.name === 'table') {
         table = e.attrs.name ?? `table${tables.size + 1}`
         direct = new Map()
-      } else if (e.name === 'row') rowCells = new Map()
-      else if (e.name === 'column' && e.attrs.name !== undefined)
+      } else if (e.name === 'structure') inStructure = true
+      else if (e.name === 'row') rowCells = new Map()
+      else if (e.name === 'column' && e.attrs.name !== undefined && !inStructure)
         column = {
           name: e.attrs.name,
           isNull: e.attrs.null === 'true',
@@ -264,7 +294,8 @@ export function readXmlTables(xml: string): { name: string; header: string[]; ro
         }
     } else if (e.type === 'text') {
       if (column) column.text += e.text
-    } else if (e.name === 'column' && column) {
+    } else if (e.name === 'structure') inStructure = false
+    else if (e.name === 'column' && column) {
       const target = rowCells ?? direct
       target?.set(column.name, column.isNull ? null : column.base64 ? { base64: column.text.trim() } : column.text)
       column = null
@@ -272,7 +303,8 @@ export function readXmlTables(xml: string): { name: string; header: string[]; ro
       emit(rowCells)
       rowCells = null
     } else if (e.name === 'table') {
-      if (direct) emit(direct)
+      // A `<table>` that holds `<row>` elements has no columns of its own: only phpMyAdmin's form does.
+      if (direct && direct.size > 0) emit(direct)
       direct = null
     }
   }
@@ -297,7 +329,11 @@ function wikiCell(part: string): string {
 }
 
 /** The tables of MediaWiki markup: `{|` … `|}`, rows by `|-`, header cells `!`, cells `|` (or `||` on one line). */
-export function readWikiTables(text: string): { name: string; header: string[] | null; rows: SourceRow[] }[] {
+export function readWikiTables(
+  text: string,
+  options: ReadOptions = {}
+): { name: string; header: string[] | null; rows: SourceRow[] }[] {
+  const skipBlank = options.skipBlank !== false
   const tables: { name: string; header: string[] | null; rows: SourceRow[] }[] = []
   let table: { name: string; header: string[] | null; rows: SourceRow[] } | null = null
   let row: RowCell[] | null = null
@@ -306,7 +342,7 @@ export function readWikiTables(text: string): { name: string; header: string[] |
   const finish = () => {
     if (!table) return
     if (headerRow && !table.header) table.header = headerRow
-    else if (row && row.length > 0) table.rows.push({ line: rowLine, cells: row })
+    else if (row && (row.length > 0 || !skipBlank)) table.rows.push({ line: rowLine, cells: row })
     row = null
     headerRow = null
   }

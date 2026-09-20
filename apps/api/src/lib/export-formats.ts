@@ -1,6 +1,7 @@
 import type { DatabaseAdapter } from '@tsmyadmin/adapter'
 import type { Cell, Namespace } from '@tsmyadmin/shared'
 import { EXPORT_BATCH_SIZE, isBinaryCell, isTruncatedCell } from '@tsmyadmin/shared'
+import { DATA_ONLY, type DocOptions, structureRows, tableSections } from './export-documents.ts'
 
 /**
  * Data exports besides SQL, CSV and JSON: XML and YAML keep every value (NULL, binary and text told apart);
@@ -30,6 +31,13 @@ function xmlUnrepresentable(s: string): boolean {
 const xmlEscape = (s: string) =>
   s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;')
 
+/** An attribute's value: escaped, with the line breaks a parser would otherwise turn into spaces kept, and what XML cannot carry replaced. */
+const xmlAttribute = (s: string) =>
+  xmlEscape(Array.from(s, (ch) => (xmlUnrepresentable(ch) ? '\ufffd' : ch)).join(''))
+    .replaceAll('\r', '&#13;')
+    .replaceAll('\n', '&#10;')
+    .replaceAll('\t', '&#9;')
+
 function xmlColumn(name: string, cell: Cell): string {
   const open = `<column name="${xmlEscape(name)}"`
   if (cell === null) return `${open} null="true"/>`
@@ -42,21 +50,114 @@ function xmlColumn(name: string, cell: Cell): string {
   return `${open}>${xmlEscape(value)}</column>`
 }
 
-export async function* xmlBody(adapter: DatabaseAdapter, ns: Namespace, tables: string[]): AsyncIterable<string> {
+/** What XML adds to the tables, besides their structure and data: the definitions of these objects of the namespace. */
+export interface XmlObjects {
+  views: boolean
+  routines: boolean
+  triggers: boolean
+}
+const NO_XML_OBJECTS: XmlObjects = { views: false, routines: false, triggers: false }
+
+/** A definition as a `<definition>` element: text XML cannot carry goes as base64, like a value does. */
+function xmlDefinition(indent: string, sql: string): string {
+  if (xmlUnrepresentable(sql)) {
+    return `${indent}<definition encoding="base64">${Buffer.from(sql, 'utf8').toString('base64')}</definition>\n`
+  }
+  return `${indent}<definition>${xmlEscape(sql)}</definition>\n`
+}
+
+async function* xmlStructure(adapter: DatabaseAdapter, ns: Namespace, table: string): AsyncIterable<string> {
+  const rows = await structureRows(adapter, ns, table)
+  yield '    <structure>\n'
+  for (const [name, type, nullable, def, key, extra, comment] of rows) {
+    const attrs = [
+      ['name', name],
+      ['type', type],
+      ['nullable', nullable === 'YES' ? 'true' : 'false'],
+      ...(def === null ? [] : [['default', def]]),
+      ...(key ? [['key', key]] : []),
+      ...(extra ? [['extra', extra]] : []),
+      ...(comment ? [['comment', comment]] : []),
+    ]
+    yield `      <column ${attrs.map(([k, v]) => `${k}="${xmlAttribute(text(v as string))}"`).join(' ')}/>\n`
+  }
+  yield '    </structure>\n'
+}
+
+async function* xmlObjects(
+  adapter: DatabaseAdapter,
+  ns: Namespace,
+  tables: string[],
+  o: XmlObjects
+): AsyncIterable<string> {
+  if (o.views) {
+    const views = (await adapter.listTables(ns)).filter((t) => t.kind === 'view' || t.kind === 'materialized_view')
+    if (views.length > 0) yield '  <views>\n'
+    for (const v of views) {
+      yield `    <view name="${xmlEscape(v.name)}">\n`
+      // A view the account may not read is named without a definition rather than failing the download.
+      try {
+        yield xmlDefinition('      ', (await adapter.showCreateTable(ns, v.name)).join(';\n'))
+      } catch {
+        yield '      <unreadable/>\n'
+      }
+      yield '    </view>\n'
+    }
+    if (views.length > 0) yield '  </views>\n'
+  }
+  if (o.routines) {
+    const seen = new Set<string>()
+    const routines = (await adapter.listRoutines(ns)).filter((r) => {
+      const key = `${r.kind}:${r.name}`
+      return seen.has(key) ? false : (seen.add(key), true)
+    })
+    if (routines.length > 0) yield '  <routines>\n'
+    for (const r of routines) {
+      yield `    <routine name="${xmlEscape(r.name)}" kind="${xmlEscape(r.kind)}">\n`
+      const def = await adapter.routineDefinition(ns, r.name, r.kind).catch(() => null)
+      yield def === null ? '      <unreadable/>\n' : xmlDefinition('      ', def)
+      yield '    </routine>\n'
+    }
+    if (routines.length > 0) yield '  </routines>\n'
+  }
+  if (o.triggers) {
+    // Of the requested tables only, as in a SQL dump of some tables; a whole-namespace export names them all.
+    const triggers = (await adapter.listTriggers(ns)).filter((t) => tables.includes(t.table))
+    if (triggers.length > 0) yield '  <triggers>\n'
+    for (const t of triggers) {
+      yield `    <trigger name="${xmlEscape(t.name)}" table="${xmlEscape(t.table)}" timing="${xmlEscape(t.timing)}" events="${xmlEscape(t.events)}">\n`
+      yield t.definition === null ? '      <unreadable/>\n' : xmlDefinition('      ', t.definition)
+      yield '    </trigger>\n'
+    }
+    if (triggers.length > 0) yield '  </triggers>\n'
+  }
+}
+
+export async function* xmlBody(
+  adapter: DatabaseAdapter,
+  ns: Namespace,
+  tables: string[],
+  o: DocOptions = DATA_ONLY,
+  objects: XmlObjects = NO_XML_OBJECTS
+): AsyncIterable<string> {
   yield `<?xml version="1.0" encoding="UTF-8"?>\n<export database="${xmlEscape(ns.database)}"${ns.schema ? ` schema="${xmlEscape(ns.schema)}"` : ''}>\n`
   for (const table of tables) {
     yield `  <table name="${xmlEscape(table)}">\n`
-    for await (const b of adapter.iterateRows(ns, table, ITER_OPTS)) {
-      if (b.rows.length === 0) continue
-      yield b.rows
-        .map(
-          (row) =>
-            `    <row>\n${b.columns.map((c, i) => `      ${xmlColumn(c.name, row[i] ?? null)}`).join('\n')}\n    </row>\n`
-        )
-        .join('')
+    if (o.structure) yield* xmlStructure(adapter, ns, table)
+    if (o.data) {
+      for await (const b of adapter.iterateRows(ns, table, ITER_OPTS)) {
+        if (b.rows.length === 0) continue
+        yield b.rows
+          .map(
+            (row) =>
+              `    <row>\n${b.columns.map((c, i) => `      ${xmlColumn(c.name, row[i] ?? null)}`).join('\n')}\n    </row>\n`
+          )
+          .join('')
+      }
     }
     yield '  </table>\n'
   }
+  yield* xmlObjects(adapter, ns, tables, objects)
   yield '</export>\n'
 }
 
@@ -68,21 +169,28 @@ function yamlValue(cell: Cell): string {
   return JSON.stringify(text(cell))
 }
 
-export async function* yamlBody(adapter: DatabaseAdapter, ns: Namespace, tables: string[]): AsyncIterable<string> {
+export async function* yamlBody(
+  adapter: DatabaseAdapter,
+  ns: Namespace,
+  tables: string[],
+  o: DocOptions = DATA_ONLY
+): AsyncIterable<string> {
   for (const table of tables) {
-    let rows = 0
-    for await (const b of adapter.iterateRows(ns, table, ITER_OPTS)) {
-      if (b.rows.length === 0) continue
-      if (rows === 0) yield `${JSON.stringify(table)}:\n`
-      rows += b.rows.length
-      yield b.rows
-        .map(
-          (row) =>
-            `${b.columns.map((c, i) => `${i === 0 ? '  - ' : '    '}${JSON.stringify(c.name)}: ${yamlValue(row[i] ?? null)}`).join('\n')}\n`
-        )
-        .join('')
+    for (const sec of tableSections(adapter, ns, table, o)) {
+      let rows = 0
+      for await (const b of sec.batches()) {
+        if (b.rows.length === 0) continue
+        if (rows === 0) yield `${JSON.stringify(sec.title)}:\n`
+        rows += b.rows.length
+        yield b.rows
+          .map(
+            (row) =>
+              `${b.columns.map((c, i) => `${i === 0 ? '  - ' : '    '}${JSON.stringify(c)}: ${yamlValue(row[i] ?? null)}`).join('\n')}\n`
+          )
+          .join('')
+      }
+      if (rows === 0) yield `${JSON.stringify(sec.title)}: []\n`
     }
-    if (rows === 0) yield `${JSON.stringify(table)}: []\n`
   }
 }
 
@@ -96,13 +204,18 @@ function markdownCell(cell: Cell): string {
     .replace(/\r\n|\r|\n/g, '<br>')
 }
 
-export async function* markdownBody(adapter: DatabaseAdapter, ns: Namespace, tables: string[]): AsyncIterable<string> {
-  for (const [t, table] of tables.entries()) {
-    yield `${t > 0 ? '\n' : ''}## ${table}\n\n`
+export async function* markdownBody(
+  adapter: DatabaseAdapter,
+  ns: Namespace,
+  tables: string[],
+  o: DocOptions = DATA_ONLY
+): AsyncIterable<string> {
+  for (const [t, sec] of tables.flatMap((table) => tableSections(adapter, ns, table, o)).entries()) {
+    yield `${t > 0 ? '\n' : ''}## ${sec.title}\n\n`
     let header = false
-    for await (const b of adapter.iterateRows(ns, table, ITER_OPTS)) {
+    for await (const b of sec.batches()) {
       if (!header) {
-        yield `| ${b.columns.map((c) => markdownCell(c.name)).join(' | ')} |\n`
+        yield `| ${b.columns.map((c) => markdownCell(c)).join(' | ')} |\n`
         yield `|${b.columns.map(() => ' --- |').join('')}\n`
         header = true
       }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { csvCharsValid, DEFAULT_IMPORT_OPTIONS, detectFormat, importFields } from './import-options.ts'
+import { columnsField, csvCharsValid, DEFAULT_IMPORT_OPTIONS, detectFormat, importFields } from './import-options.ts'
 
 describe('detectFormat', () => {
   it('detects by extension, case-insensitively, and looks through .gz', () => {
@@ -32,7 +32,11 @@ describe('importFields', () => {
       skip: '3',
       onDuplicate: 'error',
       createTable: '0',
+      skipBlank: '1',
       sheet: 'Sheet2',
+      odsPercent: 'fraction',
+      odsCurrency: 'number',
+      odsDate: 'iso',
     })
     expect(importFields('csv', { ...o, skip: 0 })).toMatchObject({ header: '1', nullMarker: '\\N', enclosure: '"' })
   })
@@ -42,5 +46,24 @@ describe('importFields', () => {
     expect(csvCharsValid({ ...DEFAULT_IMPORT_OPTIONS, delimiter: '"' })).toBe(false)
     expect(csvCharsValid({ ...DEFAULT_IMPORT_OPTIONS, delimiter: '' })).toBe(false)
     expect(csvCharsValid({ ...DEFAULT_IMPORT_OPTIONS, escape: '' })).toBe(false)
+  })
+})
+
+describe('the choices of a rows import', () => {
+  it('sends the column mapping as a list that keeps its blanks, and not when a table is made', () => {
+    expect(columnsField('id, name, , email')).toBe('["id","name","","email"]')
+    expect(columnsField('  ')).toBeUndefined()
+    const mapped = { ...DEFAULT_IMPORT_OPTIONS, columns: 'a,,b' }
+    expect(importFields('csv', mapped)).toMatchObject({ columns: '["a","","b"]', skipBlank: '1', lineEnd: 'auto' })
+    expect(importFields('csv', { ...mapped, createTable: true })).not.toHaveProperty('columns')
+    expect(importFields('sql', mapped)).not.toHaveProperty('columns')
+  })
+  it('sends the spreadsheet reading choices for ODS only, the line ending for CSV only', () => {
+    const o = { ...DEFAULT_IMPORT_OPTIONS, lineEnd: 'lf' as const, odsPercent: 'text' as const, skipBlank: false }
+    expect(importFields('ods', o)).toMatchObject({ odsPercent: 'text', odsCurrency: 'number', skipBlank: '0' })
+    expect(importFields('ods', o)).not.toHaveProperty('lineEnd')
+    expect(importFields('csv', o)).toMatchObject({ lineEnd: 'lf' })
+    expect(importFields('csv', o)).not.toHaveProperty('odsPercent')
+    expect(importFields('xml', o)).not.toHaveProperty('odsPercent')
   })
 })

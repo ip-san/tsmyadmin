@@ -23,6 +23,7 @@ import {
   SqlCancelRequestSchema,
   SqlRequestSchema,
   type SqlStreamEvent,
+  STRUCTURE_FORMATS,
   type StatementResult,
   TableSearchQuerySchema,
   TriggerDetailQuerySchema,
@@ -354,6 +355,9 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
             : [...all.filter((t) => t.kind === 'table'), ...all.filter((t) => t.kind !== 'table')].map((t) => t.name)
         if (SINGLE_TABLE_FORMATS.includes(q.format) && tables.length !== 1 && q.filePerTable !== '1') {
           return c.json(apiError('VALIDATION', 'CSV export needs exactly one table (or one file per table)'), 400)
+        }
+        if (STRUCTURE_FORMATS.includes(q.format) && q.structure !== '1' && q.data !== '1') {
+          return c.json(apiError('VALIDATION', 'Choose the structure, the data, or both'), 400)
         }
         // UPDATE / REPLACE find a row by its primary key: said before the download starts, not by cutting it short.
         if (q.format === 'sql') {

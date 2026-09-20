@@ -99,5 +99,51 @@ for (const t of TARGETS) {
       const zip = await downloadPromise
       expect(zip.suggestedFilename()).toBe(`${t.database}.zip`)
     })
+
+    test('format options: CSV without a header and fully quoted, compact JSON, XML with a view, structure only', async ({
+      page,
+    }) => {
+      const read = async (action: () => Promise<void>) => {
+        const pending = page.waitForEvent('download')
+        await action()
+        const file = await pending
+        return (await file.createReadStream()).toArray().then((chunks) => Buffer.concat(chunks).toString('utf8'))
+      }
+      const download = () => page.getByRole('link', { name: 'ダウンロード' }).click()
+
+      await page.goto(tableUrl(t, 'users', '/export'))
+      await page.getByLabel('CSV', { exact: true }).check()
+      await page.getByLabel('1 行目にカラム名を書く').uncheck()
+      await page.getByLabel('すべての値を引用符で囲む').check()
+      const csv = await read(download)
+      expect(csv.startsWith('\ufeff"1","Alice"')).toBe(true)
+      expect(csv).not.toContain('"id"')
+      // NULL stays the bare marker even when everything else is quoted.
+      expect(csv).toContain('"2","Bob","bob@example.com",\\N,')
+
+      await page.getByLabel('JSON', { exact: true }).check()
+      await page.getByLabel('1 行に詰める').check()
+      const json = await read(download)
+      expect(json.trim().split('\n')).toHaveLength(1)
+      expect(JSON.parse(json).users).toHaveLength(5)
+
+      await page.getByLabel('XML', { exact: true }).check()
+      await page.getByLabel('データ（行）').uncheck()
+      const structure = await read(download)
+      expect(structure).toContain('<structure>')
+      expect(structure).toMatch(/<column name="id" type="[^"]+" nullable="false"[^>]* key="PRI"/)
+      expect(structure).not.toContain('<row>')
+      await page.getByLabel('データ（行）').check()
+      await page.getByLabel('構造（カラムの一覧）').uncheck()
+      await page.getByLabel('ビュー', { exact: true }).check()
+      const withView = await read(download)
+      expect(withView).toContain('<row>')
+      expect(withView).not.toContain('<structure>')
+      expect(withView).toContain('<view name="active_users">')
+
+      // Neither part: refused before the download, in words.
+      await page.getByLabel('データ（行）').uncheck()
+      await expect(page.getByText('構造とデータの少なくとも一方を選んでください')).toBeVisible()
+    })
   })
 }

@@ -16,21 +16,21 @@ bun run cf:deploy    # デプロイ（手順 1・2 のあと）
 | | |
 |---|---|
 | **使うもの** | Cloudflare Containers（Workers Paid プラン、$5/月〜） |
-| **別途必要** | 外部の Redis。`SESSION_STORE=redis` が必須です |
+| **別途必要（任意）** | 外部の Redis。無くても動きますが、ログインと保存済みクエリが休止のたびに消えます |
 | **使えない** | Workers 単体、Pages |
 
 **Workers 単体では動きません。** `node:sqlite`（セッションストア）、`mysql2` / `pg` の接続プール、`ioredis` を使っていて、いずれも Workers ランタイムにありません。Pages は静的配信だけなので API を置けません。**Containers なら同梱の `Dockerfile` がそのまま動きます。**
 
-**Redis が必須なのはディスクが消えるからです。** Containers のディスクは ephemeral で、インスタンスが眠るたびに初期状態に戻ります。既定の `SESSION_STORE=sqlite` では、寝るたびに全員ログアウトし保存済みクエリも消えます。マネージドの Redis（TLS 付き、`rediss://`）が手軽です。
+**Redis が要るのはディスクが消えるからです。** Containers のディスクは ephemeral で、インスタンスが眠るたび（再デプロイも同じ）に初期状態に戻ります。`REDIS_URL` を登録しない場合、セッションは `SESSION_STORE=sqlite` でコンテナ内のファイルに入るため、そのたびに**全員ログアウトし、保存済みクエリと個人設定も消えます**。試用や少人数の利用ならこれで足ります。残したいなら、マネージドの Redis（TLS 付き、`rediss://`）を用意して `REDIS_URL` を登録してください。worker が `SESSION_STORE=redis` に切り替えます。
 
 ## 手順
 
 ### 1. 準備
 
-先に 2 つ用意します。
+先に用意するものです（2 は任意）。
 
 1. **Workers Paid プラン**（$5/月〜）を Cloudflare ダッシュボードで有効にする。無料プランのままだと `bun run cf:deploy` が失敗します
-2. **Redis を 1 つ用意する**（マネージドの TLS 付きが手軽です）。接続 URL は次の手順で使います
+2. **（任意）Redis を 1 つ用意する**（マネージドの TLS 付きが手軽です）。無ければ SQLite で動きます。接続 URL は次の手順で使います
 
 ```bash
 bunx wrangler login
@@ -39,7 +39,7 @@ bunx wrangler login
 `wrangler` と `@cloudflare/containers` は開発依存として入っています。設定は次の 2 つで、中身を変える必要は普通ありません。
 
 - `wrangler.jsonc`（ルート）— コンテナのクラス、`./Dockerfile`、`max_instances`
-- `deploy/cloudflare/worker.ts` — 転送先ポート、`sleepAfter`、`SESSION_STORE=redis`、`TRUST_PROXY=cloudflare`
+- `deploy/cloudflare/worker.ts` — 転送先ポート、`sleepAfter`、`SESSION_STORE`（`REDIS_URL` があれば `redis`、無ければ `sqlite`）、`TRUST_PROXY=cloudflare`
 
 > 転送先ポートは `Dockerfile` の `EXPOSE` と一致している必要があります。ずれると `bun run check:static` が落ちます。
 
@@ -47,7 +47,7 @@ bunx wrangler login
 
 ```bash
 bunx wrangler secret put SESSION_SECRET            # openssl rand -hex 32
-bunx wrangler secret put REDIS_URL                 # rediss://…
+bunx wrangler secret put REDIS_URL                 # rediss://…（任意。無ければ SQLite）
 bunx wrangler secret put TSMYADMIN_ALLOWED_HOSTS   # db.example.com:5432
 ```
 
@@ -72,13 +72,13 @@ bun run cf:deploy
 
 | 確認すること | 見かた | 外れていた場合 |
 |---|---|---|
-| DB / Redis へ TCP が出られる | `/readyz` が 200（Redis に届いている）、かつログインできる（DB に届いている） | Containers 案が成立しません。DB 側に Cloudflare のプライベートネットワーク接続（`cloudflared`）を用意すれば届きますが、この手順書では扱いません。確実なのは下の「別案: 前だけ Cloudflare にする」です |
+| DB / Redis へ TCP が出られる | `/readyz` が 200（Redis を使っているときは Redis に届いている）、かつログインできる（DB に届いている） | Containers 案が成立しません。DB 側に Cloudflare のプライベートネットワーク接続（`cloudflared`）を用意すれば届きますが、この手順書では扱いません。確実なのは下の「別案: 前だけ Cloudflare にする」です |
 | クライアント IP が届いている | `event: http` のログの `ip` が利用者ごとに違う | 全員が同じレート制限の枠に入り、総当たり対策が効きません。まず起動ログで `TRUST_PROXY=cloudflare` がコンテナまで渡っているか確認し、渡っていて値が同じままなら下の「別案: 前だけ Cloudflare にする」に切り替えてください |
 | 停止時に猶予がある | エクスポート中に `bun run cf:deploy` で再デプロイし、`SHUTDOWN_TIMEOUT_SECONDS`（既定 30 秒）以内に終わるエクスポートが完了する | 実行中のエクスポート / インポートが即座に切られます |
 
 > **猶予より長い処理は既定では切られます。** 伸ばすなら `SHUTDOWN_TIMEOUT_SECONDS`（最大 600）を設定し、**`deploy/cloudflare/worker.ts` の `envVars` にも追記してください**（手順 2 と同じ理由です）。
 
-> **確認済み（すべてローカル）**: `bun run cf:check`、`docker build --platform linux/amd64`、および本番イメージを Cloudflare と同じ環境変数（`SESSION_STORE=redis` + `TRUST_PROXY=cloudflare` + シークレット）で起動して MySQL にログインし、セッションが Redis に入り、`CF-Connecting-IP` を自分で付けたときにログの `ip` がその値になること。
+> **確認済み（すべてローカル）**: `bun run cf:check`、`docker build --platform linux/amd64`、および本番イメージを Cloudflare と同じ環境変数（`SESSION_STORE=redis` + `TRUST_PROXY=cloudflare` + シークレット。`REDIS_URL` なしの `sqlite` 側はローカルで起動して確かめていません）で起動して MySQL にログインし、セッションが Redis に入り、`CF-Connecting-IP` を自分で付けたときにログの `ip` がその値になること。
 >
 > **未確認**: Cloudflare アカウント上での実行。上の表の 3 行はすべて未確認です。2 行目について確認済みなのは「ヘッダーがあれば正しく読める」ことだけで、**Cloudflare が実際に利用者ごとの値を付けてくれるかは別の話**なので、デプロイ後に必ず確かめてください。
 

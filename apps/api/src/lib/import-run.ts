@@ -5,7 +5,7 @@ import type { Context } from 'hono'
 import iconv from 'iconv-lite'
 import { apiError, toApiError } from './errors.ts'
 import { csvSource, decodeUpload, ImportValidationError, importRows, importSql, type RowsSource } from './import.ts'
-import { pickSheet, RowsParseError, readOds, readWikiTables, readXmlTables } from './import-rows.ts'
+import { pickSheet, type ReadOptions, RowsParseError, readOds, readWikiTables, readXmlTables } from './import-rows.ts'
 import { MAX_UNPACKED, readZip, UnpackLimitError } from './zip.ts'
 
 /**
@@ -106,19 +106,31 @@ export function decodeText(bytes: Uint8Array, charset: ExportCharset): string {
   return text.startsWith('﻿') ? text.slice(1) : text
 }
 
+/** What the form chose about how a spreadsheet, XML or wiki file is read. */
+function readOptions(form: ImportForm): ReadOptions {
+  return {
+    skipBlank: form.skipBlank !== '0',
+    odsText: {
+      percentage: form.odsPercent === 'text',
+      currency: form.odsCurrency === 'text',
+      date: form.odsDate === 'text',
+    },
+  }
+}
+
 /** The rows of a spreadsheet, XML or wiki file. */
 function rowsSource(format: 'ods' | 'xml' | 'mediawiki', bytes: Uint8Array, form: ImportForm): RowsSource {
   try {
     if (format === 'ods') {
-      const sheet = pickSheet(readOds(bytes), form.sheet)
+      const sheet = pickSheet(readOds(bytes, readOptions(form)), form.sheet)
       return { header: null, format, records: () => sheet.rows }
     }
     const text = decodeText(bytes, form.charset)
     if (format === 'xml') {
-      const t = pickSheet(readXmlTables(text), form.sheet)
+      const t = pickSheet(readXmlTables(text, readOptions(form)), form.sheet)
       return { header: t.header, format, records: () => t.rows }
     }
-    const t = pickSheet(readWikiTables(text), form.sheet)
+    const t = pickSheet(readWikiTables(text, readOptions(form)), form.sheet)
     return { header: t.header, format, records: () => t.rows }
   } catch (err) {
     if (err instanceof UnpackLimitError) {

@@ -1,6 +1,6 @@
 import type { DatabaseAdapter } from '@tsmyadmin/adapter'
 import type { Cell, Namespace } from '@tsmyadmin/shared'
-import { cellText, tableRows } from './export-documents.ts'
+import { cellText, DATA_ONLY, type DocOptions, tableSections } from './export-documents.ts'
 import { type ZipEntry, zipStream } from './zip.ts'
 
 /**
@@ -47,9 +47,13 @@ const odfParagraphs = (text: string) =>
     .map((l) => `<text:p>${clean(l)}</text:p>`)
     .join('')
 
-function odfCell(cell: Cell): string {
+function odfCell(cell: Cell, nullText = ''): string {
   const text = cellText(cell)
-  if (text === null) return '<table:table-cell/>'
+  if (text === null) {
+    return nullText === ''
+      ? '<table:table-cell/>'
+      : `<table:table-cell office:value-type="string">${odfParagraphs(nullText)}</table:table-cell>`
+  }
   if (typeof cell === 'number' && Number.isFinite(cell))
     return `<table:table-cell office:value-type="float" office:value="${cell}"><text:p>${cell}</text:p></table:table-cell>`
   return `<table:table-cell office:value-type="string">${odfParagraphs(text)}</table:table-cell>`
@@ -59,20 +63,25 @@ async function* odfContent(
   kind: 'ods' | 'odt',
   adapter: DatabaseAdapter,
   ns: Namespace,
-  tables: string[]
+  tables: string[],
+  o: DocOptions,
+  nullText: string
 ): AsyncIterable<string> {
   yield `<?xml version="1.0" encoding="UTF-8"?>\n<office:document-content ${ODF_NS} office:version="1.2">\n<office:body>\n<office:${kind === 'ods' ? 'spreadsheet' : 'text'}>\n`
-  const names = sheetNames(tables)
-  for (const [t, table] of tables.entries()) {
-    if (kind === 'odt') yield `<text:h text:outline-level="2">${clean(table)}</text:h>\n`
+  const sections = tables.flatMap((table) => tableSections(adapter, ns, table, o))
+  const names = sheetNames(sections.map((sec) => sec.title))
+  for (const [t, sec] of sections.entries()) {
+    if (kind === 'odt') yield `<text:h text:outline-level="2">${clean(sec.title)}</text:h>\n`
     let opened = false
-    for await (const { columns, rows } of tableRows(adapter, ns, table)) {
+    for await (const { columns, rows } of sec.batches()) {
       if (!opened) {
-        yield `<table:table table:name="${clean(kind === 'ods' ? (names[t] ?? table) : `Table${t + 1}`)}">\n<table:table-column table:number-columns-repeated="${Math.max(columns.length, 1)}"/>\n`
+        yield `<table:table table:name="${clean(kind === 'ods' ? (names[t] ?? sec.title) : `Table${t + 1}`)}">\n<table:table-column table:number-columns-repeated="${Math.max(columns.length, 1)}"/>\n`
         yield `<table:table-row>${columns.map((c) => `<table:table-cell office:value-type="string"><text:p>${clean(c)}</text:p></table:table-cell>`).join('')}</table:table-row>\n`
         opened = true
       }
-      yield rows.map((row) => `<table:table-row>${row.map(odfCell).join('')}</table:table-row>\n`).join('')
+      yield rows
+        .map((row) => `<table:table-row>${row.map((c) => odfCell(c, nullText)).join('')}</table:table-row>\n`)
+        .join('')
     }
     yield '</table:table>\n'
   }
@@ -91,7 +100,12 @@ const docxParagraphs = (text: string) =>
     .map((l) => `<w:p><w:r><w:t xml:space="preserve">${clean(l)}</w:t></w:r></w:p>`)
     .join('')
 
-async function* docxContent(adapter: DatabaseAdapter, ns: Namespace, tables: string[]): AsyncIterable<string> {
+async function* docxContent(
+  adapter: DatabaseAdapter,
+  ns: Namespace,
+  tables: string[],
+  o: DocOptions
+): AsyncIterable<string> {
   yield `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:document ${W_NS}>\n<w:body>\n`
   const borders =
     '<w:tblPr><w:tblBorders>' +
@@ -99,10 +113,10 @@ async function* docxContent(adapter: DatabaseAdapter, ns: Namespace, tables: str
       .map((side) => `<w:${side} w:val="single" w:sz="4" w:space="0" w:color="808080"/>`)
       .join('') +
     '</w:tblBorders></w:tblPr>'
-  for (const table of tables) {
-    yield `<w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">${clean(table)}</w:t></w:r></w:p>\n`
+  for (const sec of tables.flatMap((table) => tableSections(adapter, ns, table, o))) {
+    yield `<w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">${clean(sec.title)}</w:t></w:r></w:p>\n`
     let opened = false
-    for await (const { columns, rows } of tableRows(adapter, ns, table)) {
+    for await (const { columns, rows } of sec.batches()) {
       if (!opened) {
         yield `<w:tbl>${borders}\n<w:tr>${columns.map((c) => `<w:tc><w:p><w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">${clean(c)}</w:t></w:r></w:p></w:tc>`).join('')}</w:tr>\n`
         opened = true
@@ -129,20 +143,23 @@ export function officeBody(
   kind: OfficeKind,
   adapter: DatabaseAdapter,
   ns: Namespace,
-  tables: string[]
+  tables: string[],
+  o: DocOptions = DATA_ONLY,
+  /** ODS: what a NULL is written as (empty: an empty cell). */
+  nullText = ''
 ): AsyncIterable<Uint8Array> {
   const entries: ZipEntry[] =
     kind === 'docx'
       ? [
           { name: '[Content_Types].xml', data: DOCX_TYPES },
           { name: '_rels/.rels', data: DOCX_RELS },
-          { name: 'word/document.xml', data: docxContent(adapter, ns, tables) },
+          { name: 'word/document.xml', data: docxContent(adapter, ns, tables, o) },
         ]
       : [
           // The media type comes first and is not compressed, so a program can tell the file's kind from its head.
           { name: 'mimetype', data: OFFICE_TYPES[kind], store: true },
           { name: 'META-INF/manifest.xml', data: odfManifest(OFFICE_TYPES[kind]) },
-          { name: 'content.xml', data: odfContent(kind, adapter, ns, tables) },
+          { name: 'content.xml', data: odfContent(kind, adapter, ns, tables, o, nullText) },
         ]
   return zipStream(entries)
 }

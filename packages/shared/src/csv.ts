@@ -7,13 +7,22 @@ import { CSV_NULL } from './schemas/export.ts'
  * that equals the NULL marker is quoted so the import can tell the two apart (as COPY / LOAD DATA do), and so
  * is the empty string: in a one-column table it would otherwise be a blank line, which the import skips.
  */
-export function csvField(cell: Cell, neutralise = false, delimiter = ','): string {
+export function csvField(
+  cell: Cell,
+  neutralise = false,
+  delimiter = ',',
+  style: { quoteAll?: boolean; stripEol?: boolean } = {}
+): string {
   if (cell === null) return CSV_NULL
   // A cut value must never land in a file that looks complete; callers check with isTruncatedCell first.
   if (isTruncatedCell(cell)) throw new Error('truncated text cannot be written to CSV')
   const raw = isBinaryCell(cell) ? cell.$bin : typeof cell === 'string' ? cell : String(cell)
-  const text = neutralise ? neutraliseFormula(raw) : raw
-  const needsQuotes = /["\r\n]/.test(text) || text.includes(delimiter) || text === CSV_NULL || text === ''
+  // Line breaks read as a space, for a program that takes one record per line (the value changes: opt-in).
+  const flat = style.stripEol ? raw.replace(/\r\n|\r|\n/g, ' ') : raw
+  const text = neutralise ? neutraliseFormula(flat) : flat
+  // NULL stays the bare marker even when everything else is quoted: that is what tells it from the text \N.
+  const needsQuotes =
+    style.quoteAll === true || /["\r\n]/.test(text) || text.includes(delimiter) || text === CSV_NULL || text === ''
   return needsQuotes ? `"${text.replaceAll('"', '""')}"` : text
 }
 
@@ -46,6 +55,11 @@ export interface CsvParseOptions {
    * doubled quote is a quote (RFC 4180); a backslash makes `\"` and `\\` literal.
    */
   escape?: string
+  /**
+   * What ends a record: any line break (the default, `auto`: LF, CRLF and CR alike), or only this one — then the
+   * other line-break characters are part of the value, as they are in a file that only ever ends records with one.
+   */
+  lineEnd?: 'auto' | 'lf' | 'crlf' | 'cr'
 }
 
 export interface CsvDocument {
@@ -91,6 +105,8 @@ export function* parseCsvRecords(text: string, options: CsvParseOptions = {}): G
   const quoteChar = options.quote ?? '"'
   const escapeChar = options.escape ?? quoteChar
   const input = text.startsWith('\ufeff') ? text.slice(1) : text
+  const terminator =
+    options.lineEnd === 'lf' ? '\n' : options.lineEnd === 'crlf' ? '\r\n' : options.lineEnd === 'cr' ? '\r' : null
   let row: string[] = []
   let quotedRow: boolean[] = []
   let field = ''
@@ -155,6 +171,19 @@ export function* parseCsvRecords(text: string, options: CsvParseOptions = {}): G
     }
     if (ch === delimiter) {
       endField()
+      i++
+      continue
+    }
+    if (terminator !== null) {
+      if (input.startsWith(terminator, i)) {
+        line++
+        i += terminator.length
+        endRow()
+        continue
+      }
+      // Not this file's record end: a line break here is part of the value.
+      if (ch === '\n') line++
+      field += ch
       i++
       continue
     }

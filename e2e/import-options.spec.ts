@@ -114,5 +114,43 @@ for (const t of TARGETS) {
         await cleanup()
       }
     })
+
+    test('loads the fields into the columns it is told to, and reads only the chosen line ending as a record end', async ({
+      page,
+    }) => {
+      test.setTimeout(60_000)
+      const table = `e2e_map_${Date.now().toString(36)}`
+      const importUrl = t.schema ? `/db/${t.database}/import?schema=${t.schema}` : `/db/${t.database}/import`
+      await page.request.post(
+        `/api/databases/${t.database}/sql`,
+        inDb(`CREATE TABLE ${table} (id INT PRIMARY KEY, name VARCHAR(40), note VARCHAR(40))`)
+      )
+      try {
+        await page.goto(importUrl)
+        // Fields are (name, skipped, id); the file has no header row and ends its records with LF only.
+        await page.getByLabel('ファイル', { exact: true }).setInputFiles({
+          name: 'rows.csv',
+          mimeType: 'text/csv',
+          buffer: Buffer.from('Alice,x,1\nBob\r,y,2\n'),
+        })
+        await page.getByLabel('取り込み先テーブル').selectOption(table)
+        await page.getByLabel('1 行目をカラム名として扱う').uncheck()
+        await page.getByLabel('行の終わり').selectOption('lf')
+        await page.getByLabel(/カラムの対応/).fill('name, , id')
+        await page.getByRole('button', { name: 'インポートする' }).click()
+        await expect(page.getByText(`${table} に 2 行を挿入しました`)).toBeVisible()
+        const rows = await page.request.get(
+          `/api/databases/${t.database}/tables/${table}/rows${t.schema ? `?schema=${t.schema}` : ''}`
+        )
+        const cells = (await rows.json()).rows as (string | number | null)[][]
+        expect(cells.map((r) => r.slice(0, 2)).sort()).toEqual([
+          [1, 'Alice'],
+          [2, 'Bob\r'],
+        ])
+        expect(cells.every((r) => r[2] === null)).toBe(true)
+      } finally {
+        await page.request.post(`/api/databases/${t.database}/sql`, inDb(`DROP TABLE IF EXISTS ${table}`))
+      }
+    })
   })
 }

@@ -127,9 +127,56 @@ export function ImportOptionFields({
               className={mono}
             />
           </Field>
+          <Field id="import-line-end" label={t.lineEnd} hint={t.lineEndHint}>
+            <Select
+              id="import-line-end"
+              value={options.lineEnd}
+              onChange={(e) => set({ lineEnd: e.target.value as ImportOptions['lineEnd'] })}
+            >
+              {(['auto', 'lf', 'crlf', 'cr'] as const).map((l) => (
+                <option key={l} value={l}>
+                  {t.lineEnds[l]}
+                </option>
+              ))}
+            </Select>
+          </Field>
           <Check checked={options.header} onChange={(header) => set({ header })}>
             {t.header}
           </Check>
+        </div>
+      ) : null}
+      {format === 'ods' ? (
+        <div className="flex flex-wrap items-end gap-4">
+          <Field id="import-ods-percent" label={t.odsPercent}>
+            <Select
+              id="import-ods-percent"
+              value={options.odsPercent}
+              onChange={(e) => set({ odsPercent: e.target.value as ImportOptions['odsPercent'] })}
+            >
+              <option value="fraction">{t.odsPercents.fraction}</option>
+              <option value="text">{t.odsPercents.text}</option>
+            </Select>
+          </Field>
+          <Field id="import-ods-currency" label={t.odsCurrency}>
+            <Select
+              id="import-ods-currency"
+              value={options.odsCurrency}
+              onChange={(e) => set({ odsCurrency: e.target.value as ImportOptions['odsCurrency'] })}
+            >
+              <option value="number">{t.odsCurrencies.number}</option>
+              <option value="text">{t.odsCurrencies.text}</option>
+            </Select>
+          </Field>
+          <Field id="import-ods-date" label={t.odsDate}>
+            <Select
+              id="import-ods-date"
+              value={options.odsDate}
+              onChange={(e) => set({ odsDate: e.target.value as ImportOptions['odsDate'] })}
+            >
+              <option value="iso">{t.odsDates.iso}</option>
+              <option value="text">{t.odsDates.text}</option>
+            </Select>
+          </Field>
         </div>
       ) : null}
       {rows ? (
@@ -147,6 +194,21 @@ export function ImportOptionFields({
               ))}
             </Select>
           </Field>
+          <Check checked={options.skipBlank} onChange={(skipBlank) => set({ skipBlank })}>
+            {t.skipBlank}
+          </Check>
+          {defaultsOnly || options.createTable ? null : (
+            <Field id="import-columns" label={t.columns} hint={t.columnsHint}>
+              <Input
+                id="import-columns"
+                value={options.columns}
+                onChange={(e) => set({ columns: e.target.value })}
+                placeholder="id, name, , email"
+                className="max-w-md font-mono"
+                autoComplete="off"
+              />
+            </Field>
+          )}
           {canCreate && !defaultsOnly ? (
             <Check checked={options.createTable} onChange={(createTable) => set({ createTable })}>
               {t.createTable}

@@ -10,7 +10,13 @@ import type {
   Namespace,
   StatementResult,
 } from '@tsmyadmin/shared'
-import { CsvParseError, isBinaryDataType, isGeneratedColumn, parseCsvRecords } from '@tsmyadmin/shared'
+import {
+  CsvParseError,
+  isBinaryDataType,
+  isGeneratedColumn,
+  parseColumnMapping,
+  parseCsvRecords,
+} from '@tsmyadmin/shared'
 import { columnNames, inferColumns } from './import-create.ts'
 import type { RowCell } from './import-rows.ts'
 
@@ -346,16 +352,24 @@ export interface RowsSource {
 /** A CSV file as rows: a value is NULL when it is the marker written without quotes (a quoted one is the text). */
 export function csvSource(
   text: string,
-  form: Pick<ImportForm, 'delimiter' | 'enclosure' | 'escape' | 'nullMarker'>
+  form: Pick<ImportForm, 'delimiter' | 'enclosure' | 'escape' | 'nullMarker'> &
+    Partial<Pick<ImportForm, 'lineEnd' | 'skipBlank'>>
 ): RowsSource {
-  const options = { delimiter: form.delimiter, quote: form.enclosure, escape: form.escape }
+  const options = {
+    delimiter: form.delimiter,
+    quote: form.enclosure,
+    escape: form.escape,
+    lineEnd: form.lineEnd ?? 'auto',
+  }
+  const skipBlank = form.skipBlank !== '0'
   return {
     header: null,
     format: 'csv',
     records: function* () {
       for (const r of parseCsvRecords(text, options)) {
-        // Blank lines (a common artefact of hand-edited files) carry no row; they are skipped like LOAD DATA does.
-        if (r.fields.length === 1 && r.fields[0] === '' && !r.quoted[0]) continue
+        // Blank lines (a common artefact of hand-edited files) carry no row; they are skipped like LOAD DATA does,
+        // unless asked to keep them (then a blank line is a row whose first field is empty).
+        if (skipBlank && r.fields.length === 1 && r.fields[0] === '' && !r.quoted[0]) continue
         yield {
           line: r.line,
           cells: r.fields.map((v, i) => (v === form.nullMarker && !r.quoted[i] ? null : v)),
@@ -432,6 +446,10 @@ async function loadRows(
     header = first.cells.map((c) => (cellText(c) ?? '').trim())
     headerConsumed = true
   } else if (header !== null) headerConsumed = false
+  // The columns the fields go into, when the user named them: they take the place of the header's names. A table
+  // made from the file keeps the file's own names (there is nothing to map to yet).
+  const mapping = form.createTable === '1' ? null : parseColumnMapping(form.columns)
+  if (mapping !== null) header = mapping
   // A file that names its columns itself (XML) needs no header row; one that does not (CSV without a header) is positional.
   let created: { name: string; dataType: string }[] | undefined
   let createdTable = false
@@ -473,8 +491,11 @@ async function loadRows(
     !known.has(name) && schema.columns.filter((c) => c.name.toLowerCase() === name.toLowerCase()).length > 1
   let columns: string[]
   let skippedColumns: string[] = []
+  // Where each column's value is in the file's row: the fields themselves, but for those the mapping leaves out.
+  let fieldOf: number[] = []
   if (header !== null) {
-    const names = header
+    fieldOf = header.map((_, j) => j).filter((j) => mapping === null || (header?.[j] ?? '').trim() !== '')
+    const names = fieldOf.map((j) => header?.[j] ?? '')
     const resolved = names.map((n) => resolve(n))
     const vague = names.filter((n) => ambiguous(n))
     if (vague.length > 0) {
@@ -516,8 +537,13 @@ async function loadRows(
     let width = first.cells.length
     for (const r of source.records()) width = Math.max(width, r.cells.length)
     columns = schema.columns.slice(0, width).map((c) => c.name)
+    fieldOf = columns.map((_, j) => j)
     skippedColumns = columns.filter((c) => isGeneratedColumn(known.get(c)?.extra ?? ''))
   }
+  // How many fields a row of the file may have: the names it was given (mapped or from its header), else the columns.
+  const fieldCount = header !== null ? header.length : columns.length
+  if (mapping !== null && columns.length === 0)
+    throw new ImportValidationError('CSV_NO_COLUMNS', 'No columns to import')
   const keep = columns.map((c) => !skippedColumns.includes(c))
   const target = columns.filter((_, j) => keep[j])
   if (target.length === 0) throw new ImportValidationError('CSV_NO_COLUMNS', 'No columns to import')
@@ -547,17 +573,17 @@ async function loadRows(
         skippedRows++
         continue
       }
-      if (r.cells.length > columns.length) {
+      if (r.cells.length > fieldCount) {
         throw new ImportValidationError(
           'CSV_FIELD_COUNT',
-          `Line ${r.line} has ${r.cells.length} fields but ${columns.length} columns`,
-          { line: r.line, fields: r.cells.length, columns: columns.length }
+          `Line ${r.line} has ${r.cells.length} fields but ${fieldCount} columns`,
+          { line: r.line, fields: r.cells.length, columns: fieldCount }
         )
       }
       const cells: InputCell[] = []
       columns.forEach((name, j) => {
         if (!keep[j]) return
-        const v = r.cells[j]
+        const v = r.cells[fieldOf[j] ?? j]
         if (v === undefined || v === null) cells.push(null)
         else if (typeof v !== 'string') {
           // Bytes from an XML export: a binary column takes them, any other column takes their text.

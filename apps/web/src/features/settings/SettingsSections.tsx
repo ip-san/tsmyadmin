@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { BROWSE_MAX_LIMIT, type ExportOptions, type ImportDefaults } from '@tsmyadmin/shared'
 import { useState } from 'react'
 import { CsvFields, FormatFields, OutputFields } from '@/components/export/ExportOptionFields.tsx'
+import { FormatOptionFields } from '@/components/export/FormatOptionFields.tsx'
 import { SqlFields } from '@/components/export/SqlExportFields.tsx'
 import { ImportOptionFields } from '@/components/import/ImportOptionFields.tsx'
 import { Field, Input } from '@/components/ui/Field.tsx'
@@ -184,6 +185,7 @@ export function ExportDefaultsSection({
       <FormatFields options={value} set={patch} />
       {value.format === 'sql' ? <SqlFields options={value} set={patch} dialect={dialect} triggersOnly={false} /> : null}
       {value.format === 'csv' || value.format === 'csvExcel' ? <CsvFields options={value} set={patch} /> : null}
+      <FormatOptionFields options={value} set={patch} />
       <OutputFields options={value} set={patch} />
     </Section>
   )
@@ -213,6 +215,11 @@ export function ImportDefaultsSection({
       stopOnError: next.stopOnError,
       ignoreForeignKeys: next.ignoreForeignKeys,
       singleTransaction: next.singleTransaction,
+      lineEnd: next.lineEnd,
+      skipBlank: next.skipBlank,
+      odsPercent: next.odsPercent,
+      odsCurrency: next.odsCurrency,
+      odsDate: next.odsDate,
     })
   }
   return (

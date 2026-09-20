@@ -67,6 +67,62 @@ describe('importCsv', () => {
     for (const delimiter of ['"', '\n', '\r', 'ab', '']) expect(() => form({ delimiter })).toThrow()
   })
 
+  it('sends the fields to the columns it is told to, leaving out those named blank', async () => {
+    const a = adapter()
+    const r = await importCsv(
+      a,
+      ns,
+      form({ header: '0', columns: JSON.stringify(['name', '', 'id']) }),
+      'Alice,ignored,1\nBob,ignored,2\n'
+    )
+    expect(r).toMatchObject({ columns: ['name', 'id'], inserted: 2 })
+    expect(a.calls.at(-1)).toMatchObject({
+      method: 'insertRows',
+      args: [
+        ns,
+        'users',
+        ['name', 'id'],
+        [
+          ['Alice', '1'],
+          ['Bob', '2'],
+        ],
+        { overriding: false },
+      ],
+    })
+    // The names replace the file's own header, which is then not a row of data.
+    const b = adapter()
+    await importCsv(b, ns, form({ columns: JSON.stringify(['id', 'name']) }), 'x,y\n1,A\n')
+    expect(b.calls.at(-1)).toMatchObject({ args: [ns, 'users', ['id', 'name'], [['1', 'A']], { overriding: false }] })
+    // A row wider than the mapping is refused; an unknown name is too.
+    await expect(importCsv(adapter(), ns, form({ header: '0', columns: '["id"]' }), '1,2\n')).rejects.toThrow(
+      /2 fields but 1/
+    )
+    await expect(importCsv(adapter(), ns, form({ header: '0', columns: '["nope"]' }), '1\n')).rejects.toThrow(
+      /Unknown column/
+    )
+    // Only a JSON list of names is a mapping.
+    expect(() => form({ columns: 'id,name' })).toThrow()
+  })
+
+  it('ends a record only where told to, keeping the other line breaks in the value', async () => {
+    const lf = adapter()
+    await importCsv(lf, ns, form({ header: '0', lineEnd: 'lf', columns: '["name"]' }), 'a\r\nb\nc\n')
+    expect(lf.calls.at(-1)).toMatchObject({
+      args: [ns, 'users', ['name'], [['a\r'], ['b'], ['c']], { overriding: false }],
+    })
+    const crlf = adapter()
+    await importCsv(crlf, ns, form({ header: '0', lineEnd: 'crlf', columns: '["name"]' }), 'a\r\nb\nc\r\n')
+    expect(crlf.calls.at(-1)).toMatchObject({ args: [ns, 'users', ['name'], [['a'], ['b\nc']], { overriding: false }] })
+    expect(() => form({ lineEnd: 'nl' })).toThrow()
+  })
+
+  it('keeps a blank line as a row when asked not to skip it', async () => {
+    const a = adapter()
+    const r = await importCsv(a, ns, form({ skipBlank: '0', header: '0', columns: '["name"]' }), 'a\n\nb\n')
+    expect(r).toMatchObject({ inserted: 3 })
+    expect(a.calls.at(-1)).toMatchObject({ args: [ns, 'users', ['name'], [['a'], [''], ['b']], { overriding: false }] })
+  })
+
   it('uses positional table columns without a header and pads short rows with NULL', async () => {
     const a = adapter()
     const r = await importCsv(a, ns, form({ header: '0', delimiter: ';' }), '1;A\n2\n')

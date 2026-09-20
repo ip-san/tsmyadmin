@@ -1,4 +1,4 @@
-import type { ExportCharset, ImportFormat } from '@tsmyadmin/shared'
+import type { ExportCharset, ImportDefaults, ImportFormat } from '@tsmyadmin/shared'
 
 /** Everything the import form lets the user choose besides the file and the target. */
 export interface ImportOptions {
@@ -16,6 +16,13 @@ export interface ImportOptions {
   ignoreForeignKeys: boolean
   singleTransaction: boolean
   noAutoValueOnZero: boolean
+  lineEnd: ImportDefaults['lineEnd']
+  skipBlank: boolean
+  odsPercent: ImportDefaults['odsPercent']
+  odsCurrency: ImportDefaults['odsCurrency']
+  odsDate: ImportDefaults['odsDate']
+  /** The table columns the file's fields go into, comma-separated in the file's order (a blank leaves a field out). */
+  columns: string
 }
 
 export const DEFAULT_IMPORT_OPTIONS: ImportOptions = {
@@ -33,6 +40,18 @@ export const DEFAULT_IMPORT_OPTIONS: ImportOptions = {
   ignoreForeignKeys: false,
   singleTransaction: false,
   noAutoValueOnZero: false,
+  lineEnd: 'auto',
+  skipBlank: true,
+  odsPercent: 'fraction',
+  odsCurrency: 'number',
+  odsDate: 'iso',
+  columns: '',
+}
+
+/** The columns the user typed as the list the server reads (names trimmed; a blank one stays, to leave a field out). */
+export function columnsField(text: string): string | undefined {
+  if (text.trim() === '') return undefined
+  return JSON.stringify(text.split(',').map((n) => n.trim()))
 }
 
 /** The format a file name suggests (`dump.sql.gz` is read as `dump.sql`), or null. */
@@ -74,15 +93,20 @@ export function importFields(format: ImportFormat, o: ImportOptions) {
       noAutoValueOnZero: flag(o.noAutoValueOnZero),
     }
   }
+  const mapping = o.createTable ? undefined : columnsField(o.columns)
   const rows = {
     ...common,
     onDuplicate: o.onDuplicate,
     createTable: flag(o.createTable),
+    skipBlank: flag(o.skipBlank),
+    ...(mapping ? { columns: mapping } : {}),
     ...(o.sheet.trim() ? { sheet: o.sheet.trim() } : {}),
+    ...(format === 'ods' ? { odsPercent: o.odsPercent, odsCurrency: o.odsCurrency, odsDate: o.odsDate } : {}),
   }
   if (format !== 'csv') return rows
   return {
     ...rows,
+    lineEnd: o.lineEnd,
     header: flag(o.header),
     nullMarker: o.nullMarker,
     delimiter: o.delimiter,

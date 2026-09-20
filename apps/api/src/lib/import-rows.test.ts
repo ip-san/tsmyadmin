@@ -5,6 +5,7 @@ import { mediawikiBody } from './export-documents.ts'
 import { xmlBody } from './export-formats.ts'
 import { officeBody } from './export-office.ts'
 import { decodeEntities, pickSheet, RowsParseError, readOds, readWikiTables, readXmlTables } from './import-rows.ts'
+import { zipStream } from './zip.ts'
 
 const adapter = () =>
   new FakeAdapter({
@@ -153,5 +154,69 @@ describe('the XML scanner on hostile input', () => {
       '<?xml version="1.0"?><!-- c --><table name="t"><row><column name="a"><![CDATA[<x>]]></column></row></table>'
     )
     expect(t?.rows[0]?.cells).toEqual(['<x>'])
+  })
+})
+
+describe('reading choices', () => {
+  const bytes = async (kind: 'ods', o?: Parameters<typeof officeBody>[4]) =>
+    new Uint8Array(Buffer.concat(await Array.fromAsync(officeBody(kind, adapter(), ns, ['users'], o))))
+
+  /** A one-sheet spreadsheet written by hand: a percentage, a currency amount and a date, each with its shown text. */
+  const sheet = async (rows: string) =>
+    new Uint8Array(
+      Buffer.concat(
+        await Array.fromAsync(
+          zipStream([
+            {
+              name: 'content.xml',
+              data: `<?xml version="1.0"?><office:document-content xmlns:office="o" xmlns:table="t" xmlns:text="x"><office:body><office:spreadsheet><table:table table:name="S">${rows}</table:table></office:spreadsheet></office:body></office:document-content>`,
+            },
+          ])
+        )
+      )
+    )
+
+  it('reads a percentage, a currency amount and a date as the value or as shown', async () => {
+    const row =
+      '<table:table-row>' +
+      '<table:table-cell office:value-type="percentage" office:value="0.25"><text:p>25%</text:p></table:table-cell>' +
+      '<table:table-cell office:value-type="currency" office:value="5" office:currency="USD"><text:p>$5.00</text:p></table:table-cell>' +
+      '<table:table-cell office:value-type="date" office:date-value="2024-01-02"><text:p>Jan 2, 2024</text:p></table:table-cell>' +
+      '</table:table-row>'
+    const file = await sheet(row)
+    expect(readOds(file)[0]?.rows[0]?.cells).toEqual(['0.25', '5', '2024-01-02'])
+    expect(readOds(file, { odsText: { percentage: true } })[0]?.rows[0]?.cells).toEqual(['25%', '5', '2024-01-02'])
+    expect(readOds(file, { odsText: { currency: true, date: true } })[0]?.rows[0]?.cells).toEqual([
+      '0.25',
+      '$5.00',
+      'Jan 2, 2024',
+    ])
+  })
+
+  it('leaves empty rows out, or keeps those between the rows that have values', async () => {
+    const full =
+      '<table:table-row><table:table-cell office:value-type="string"><text:p>a</text:p></table:table-cell></table:table-row>'
+    const empty = '<table:table-row><table:table-cell/></table:table-row>'
+    const file = await sheet(`${full}${empty}${full}${empty}${empty}`)
+    expect(readOds(file)[0]?.rows.map((r) => r.cells)).toEqual([['a'], ['a']])
+    expect(readOds(file, { skipBlank: false })[0]?.rows.map((r) => r.cells)).toEqual([['a'], [], ['a']])
+  })
+
+  it('reads XML and wiki rows with no values only when asked', () => {
+    const xml = '<export><table name="t"><row><column name="a">1</column></row><row></row></table></export>'
+    expect(readXmlTables(xml)[0]?.rows).toHaveLength(1)
+    expect(readXmlTables(xml, { skipBlank: false })[0]?.rows).toHaveLength(2)
+    const wiki = '{| class="wikitable"\n|-\n! a\n|-\n| 1\n|-\n|-\n| 2\n|}\n'
+    expect(readWikiTables(wiki)[0]?.rows.map((r) => r.cells)).toEqual([['1'], ['2']])
+    expect(readWikiTables(wiki, { skipBlank: false })[0]?.rows.map((r) => r.cells)).toEqual([['1'], [], ['2']])
+  })
+
+  it('does not read a table’s structure, in this tool’s XML, as rows of data', async () => {
+    const xml = await collect(xmlBody(adapter(), ns, ['users'], { structure: true, data: true }))
+    expect(xml).toContain('<structure>')
+    const table = readXmlTables(xml)[0]
+    expect(table?.header).toEqual(['id', 'name'])
+    expect(table?.rows).toHaveLength(3)
+    expect((await bytes('ods')).length).toBeGreaterThan(0)
   })
 })

@@ -64,6 +64,15 @@ export function CsvFields({ options, set }: { options: ExportOptions; set: Expor
           {t.bom}
         </ExportCheck>
       )}
+      <ExportCheck checked={options.csvHeader} onChange={(csvHeader) => set({ csvHeader })}>
+        {t.csvHeader}
+      </ExportCheck>
+      <ExportCheck checked={options.csvQuoteAll} onChange={(csvQuoteAll) => set({ csvQuoteAll })}>
+        {t.csvQuoteAll}
+      </ExportCheck>
+      <ExportCheck checked={options.csvStripEol} onChange={(csvStripEol) => set({ csvStripEol })}>
+        {t.csvStripEol}
+      </ExportCheck>
       <ExportCheck checked={options.csvSafe} onChange={(csvSafe) => set({ csvSafe })}>
         {t.csvSafe}
       </ExportCheck>

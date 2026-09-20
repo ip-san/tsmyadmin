@@ -121,7 +121,7 @@ describe('buildExport', () => {
     })
 
   it('xml: NULL, binary and unrepresentable text each marked, everything else escaped', async () => {
-    const f = buildExport(oddAdapter(), ns, ['odd', 'empty'], q({ format: 'xml' }))
+    const f = buildExport(oddAdapter(), ns, ['odd', 'empty'], q({ format: 'xml', structure: '0' }))
     expect(f.filename).toBe('shop.xml')
     expect(await collect(f.body)).toBe(
       [
@@ -154,7 +154,7 @@ describe('buildExport', () => {
   })
 
   it('yaml: one list of mappings per table, strings double-quoted, binary tagged', async () => {
-    const f = buildExport(oddAdapter(), ns, ['odd', 'empty'], q({ format: 'yaml' }))
+    const f = buildExport(oddAdapter(), ns, ['odd', 'empty'], q({ format: 'yaml', structure: '0' }))
     expect(f.filename).toBe('shop.yaml')
     expect(await collect(f.body)).toBe(
       [
@@ -174,7 +174,7 @@ describe('buildExport', () => {
   })
 
   it('markdown: a table per section, cells kept on one line', async () => {
-    const f = buildExport(oddAdapter(), ns, ['odd'], q({ format: 'markdown' }))
+    const f = buildExport(oddAdapter(), ns, ['odd'], q({ format: 'markdown', structure: '0' }))
     expect(f.filename).toBe('shop.md')
     expect(await collect(f.body)).toBe(
       [
@@ -201,6 +201,98 @@ describe('buildExport', () => {
         { id: 3, name: 'line\nbreak' },
       ],
     })
+  })
+
+  it('csv: leaves out the header line, quotes every value, and writes line breaks as spaces — when asked', async () => {
+    const noHeader = buildExport(adapter(), ns, ['users'], q({ format: 'csv', bom: '0', csvHeader: '0' }))
+    expect(await collect(noHeader.body)).toBe('1,"A,""quoted"""\r\n2,\\N\r\n3,"line\nbreak"\r\n')
+    // NULL stays the bare marker: quoted, it would read as the text \N.
+    const all = buildExport(adapter(), ns, ['users'], q({ format: 'csv', bom: '0', csvQuoteAll: '1' }))
+    expect(await collect(all.body)).toBe('"id","name"\r\n"1","A,""quoted"""\r\n"2",\\N\r\n"3","line\nbreak"\r\n')
+    const flat = buildExport(adapter(), ns, ['users'], q({ format: 'csv', bom: '0', csvStripEol: '1' }))
+    expect(await collect(flat.body)).toContain('3,line break\r\n')
+    const both = buildExport(
+      adapter(),
+      ns,
+      ['users'],
+      q({ format: 'csv', bom: '0', csvHeader: '0', csvQuoteAll: '1', csvStripEol: '1' })
+    )
+    expect(await collect(both.body)).toBe('"1","A,""quoted"""\r\n"2",\\N\r\n"3","line break"\r\n')
+  })
+
+  it('json: one line with no spaces when compact', async () => {
+    const f = buildExport(adapter(), ns, ['users', 'empty'], q({ format: 'json', jsonCompact: '1' }))
+    const body = await collect(f.body)
+    expect(body).toBe(
+      '{"users":[{"id":1,"name":"A,\\"quoted\\""},{"id":2,"name":null},{"id":3,"name":"line\\nbreak"}],"empty":[]}\n'
+    )
+    expect(JSON.parse(body).users).toHaveLength(3)
+  })
+
+  it('markdown, yaml and xml: the structure, the data, or both', async () => {
+    const run = async (format: string, over: Record<string, string>) =>
+      collect(buildExport(adapter(), ns, ['users'], q({ format, ...over })).body)
+    const structureOnly = await run('markdown', { structure: '1', data: '0' })
+    expect(structureOnly).toContain('## users\n')
+    expect(structureOnly).toContain('| Column | Type | Null | Default | Key | Extra | Comment |')
+    expect(structureOnly).toContain('| id |')
+    expect(structureOnly).not.toContain('line<br>break')
+    const both = await run('markdown', { structure: '1', data: '1' })
+    expect(both).toContain('## users (structure)')
+    expect(both).toContain('## users (data)')
+    expect(both).toContain('line<br>break')
+    expect(await run('markdown', { structure: '0', data: '1' })).not.toContain('Column')
+
+    const yaml = await run('yaml', { structure: '1', data: '1' })
+    expect(yaml).toContain('"users (structure)":')
+    expect(yaml).toContain('"users (data)":')
+    const xml = await run('xml', { structure: '1', data: '0' })
+    expect(xml).toMatch(/<structure>\s*<column name="id" type="[^"]+" nullable="(true|false)"/)
+    expect(xml).not.toContain('<row>')
+  })
+
+  it('latex, texy, mediawiki, html and the office documents follow the same choice', async () => {
+    for (const format of ['latex', 'texy', 'mediawiki', 'html']) {
+      const f = buildExport(adapter(), ns, ['users'], q({ format, structure: '1', data: '0' }))
+      const body = await collect(f.body)
+      expect(body, format).toContain('Column')
+      expect(body, format).not.toContain('quoted')
+    }
+    const latex = await collect(buildExport(adapter(), ns, ['users'], q({ format: 'latex' })).body)
+    expect(latex).toContain('users (structure)')
+    expect(latex).toContain('users (data)')
+    // A caption over each table, unless turned off; a label to refer to it by, when asked.
+    expect(latex).toContain('\\multicolumn')
+    const bare = await collect(buildExport(adapter(), ns, ['users'], q({ format: 'latex', latexCaption: '0' })).body)
+    expect(bare).not.toContain('\\multicolumn')
+    const labelled = await collect(buildExport(adapter(), ns, ['users'], q({ format: 'latex', latexLabel: '1' })).body)
+    expect(labelled).toContain('\\label{tbl:1:users_structure_}')
+  })
+
+  it('xml: carries the definitions of views, routines and triggers when asked', async () => {
+    const a = new FakeAdapter({
+      databases: {
+        shop: {
+          tables: { users: fakeTable('users', ['id'], [{ id: 1 }]), v: fakeView('v', 'SELECT id FROM users') },
+        },
+      },
+      routines: { calc: 'CREATE FUNCTION calc() RETURNS INT RETURN 1' },
+    })
+    const plain = await collect(buildExport(a, ns, ['users'], q({ format: 'xml', structure: '0' })).body)
+    expect(plain).not.toContain('<views>')
+    expect(plain).not.toContain('<routines>')
+    const withObjects = await collect(
+      buildExport(
+        a,
+        ns,
+        ['users'],
+        q({ format: 'xml', structure: '0', xmlViews: '1', xmlRoutines: '1', xmlTriggers: '1' })
+      ).body
+    )
+    expect(withObjects).toContain('<view name="v">')
+    expect(withObjects).toMatch(
+      /<routine name="calc" kind="function">\s*<definition>CREATE FUNCTION calc\(\) RETURNS INT RETURN 1<\/definition>/
+    )
   })
 })
 

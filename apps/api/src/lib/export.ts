@@ -10,7 +10,7 @@ import {
 } from '@tsmyadmin/adapter'
 import type { ExportQuery, Namespace, ObjectDependency, TableInfo } from '@tsmyadmin/shared'
 import { CSV_DELIMITERS, csvField, EXPORT_BATCH_SIZE, isGeneratedColumn } from '@tsmyadmin/shared'
-import { htmlBody, latexBody, mediawikiBody, texyBody } from './export-documents.ts'
+import { DATA_ONLY, docOptions, htmlBody, latexBody, mediawikiBody, texyBody } from './export-documents.ts'
 import { markdownBody, xmlBody, yamlBody } from './export-formats.ts'
 import { OFFICE_TYPES, type OfficeKind, officeBody } from './export-office.ts'
 
@@ -34,21 +34,47 @@ async function* csvBody(
   table: string,
   bom: boolean,
   safe: boolean,
-  delimiter: string
+  delimiter: string,
+  style: { header: boolean; quoteAll: boolean; stripEol: boolean }
 ): AsyncIterable<string> {
-  const field = (c: Parameters<typeof csvField>[0]) => csvField(c, safe, delimiter)
+  const field = (c: Parameters<typeof csvField>[0]) => csvField(c, safe, delimiter, style)
   if (bom) yield '﻿'
   let header = false
   for await (const b of adapter.iterateRows(ns, table, ITER_OPTS)) {
     if (!header) {
-      yield `${b.columns.map((c) => field(c.name)).join(delimiter)}\r\n`
+      // The names are text like any value, so they follow the same quoting; the line itself is the setting's.
+      if (style.header) yield `${b.columns.map((c) => field(c.name)).join(delimiter)}\r\n`
       header = true
     }
     if (b.rows.length > 0) yield `${b.rows.map((row) => row.map(field).join(delimiter)).join('\r\n')}\r\n`
   }
 }
 
-async function* jsonBody(adapter: DatabaseAdapter, ns: Namespace, tables: string[]): AsyncIterable<string> {
+async function* jsonBody(
+  adapter: DatabaseAdapter,
+  ns: Namespace,
+  tables: string[],
+  compact = false
+): AsyncIterable<string> {
+  if (compact) {
+    // One line, no spaces: the smallest file, for a program rather than a person.
+    yield '{'
+    for (const [t, table] of tables.entries()) {
+      yield `${t > 0 ? ',' : ''}${JSON.stringify(table)}:[`
+      let first = true
+      for await (const b of adapter.iterateRows(ns, table, ITER_OPTS)) {
+        if (b.rows.length === 0) continue
+        const objects = b.rows.map((row) =>
+          JSON.stringify(Object.fromEntries(b.columns.map((c, i) => [c.name, row[i] ?? null])))
+        )
+        yield `${first ? '' : ','}${objects.join(',')}`
+        first = false
+      }
+      yield ']'
+    }
+    yield '}\n'
+    return
+  }
   yield '{\n'
   for (const [t, table] of tables.entries()) {
     yield `${t > 0 ? ',\n' : ''}  ${JSON.stringify(table)}: [`
@@ -602,7 +628,8 @@ export function buildExport(
         table,
         excel || q.bom === '1',
         q.csvSafe === '1',
-        excel ? CSV_DELIMITERS.semicolon : CSV_DELIMITERS[q.csvDelimiter]
+        excel ? CSV_DELIMITERS.semicolon : CSV_DELIMITERS[q.csvDelimiter],
+        { header: q.csvHeader === '1', quoteAll: q.csvQuoteAll === '1', stripEol: q.csvStripEol === '1' }
       ),
       contentType: 'text/csv; charset=utf-8',
       filename: `${baseName}.csv`,
@@ -611,59 +638,71 @@ export function buildExport(
   if (q.format === 'ods' || q.format === 'odt' || q.format === 'docx') {
     const kind: OfficeKind = q.format
     return {
-      body: officeBody(kind, adapter, ns, tables),
+      // A spreadsheet is the rows: its structure/data switches are not offered, and a sheet of columns would come back as data.
+      body: officeBody(
+        kind,
+        adapter,
+        ns,
+        tables,
+        kind === 'ods' ? DATA_ONLY : docOptions(q),
+        kind === 'ods' ? q.odsNull : ''
+      ),
       contentType: OFFICE_TYPES[kind],
       filename: `${baseName}.${kind}`,
     }
   }
   if (q.format === 'latex')
     return {
-      body: latexBody(adapter, ns, tables),
+      body: latexBody(adapter, ns, tables, docOptions(q)),
       contentType: 'application/x-latex; charset=utf-8',
       filename: `${baseName}.tex`,
     }
   if (q.format === 'texy')
     return {
-      body: texyBody(adapter, ns, tables),
+      body: texyBody(adapter, ns, tables, docOptions(q)),
       contentType: 'text/plain; charset=utf-8',
       filename: `${baseName}.texy`,
     }
   if (q.format === 'mediawiki')
     return {
-      body: mediawikiBody(adapter, ns, tables),
+      body: mediawikiBody(adapter, ns, tables, docOptions(q)),
       contentType: 'text/plain; charset=utf-8',
       filename: `${baseName}.wiki`,
     }
   if (q.format === 'html')
     return {
-      body: htmlBody(adapter, ns, tables),
+      body: htmlBody(adapter, ns, tables, docOptions(q)),
       contentType: 'text/html; charset=utf-8',
       filename: `${baseName}.html`,
     }
   if (q.format === 'xml') {
     return {
-      body: xmlBody(adapter, ns, tables),
+      body: xmlBody(adapter, ns, tables, docOptions(q), {
+        views: q.xmlViews === '1',
+        routines: q.xmlRoutines === '1',
+        triggers: q.xmlTriggers === '1',
+      }),
       contentType: 'application/xml; charset=utf-8',
       filename: `${baseName}.xml`,
     }
   }
   if (q.format === 'yaml') {
     return {
-      body: yamlBody(adapter, ns, tables),
+      body: yamlBody(adapter, ns, tables, docOptions(q)),
       contentType: 'application/yaml; charset=utf-8',
       filename: `${baseName}.yaml`,
     }
   }
   if (q.format === 'markdown') {
     return {
-      body: markdownBody(adapter, ns, tables),
+      body: markdownBody(adapter, ns, tables, docOptions(q)),
       contentType: 'text/markdown; charset=utf-8',
       filename: `${baseName}.md`,
     }
   }
   if (q.format === 'json') {
     return {
-      body: jsonBody(adapter, ns, tables),
+      body: jsonBody(adapter, ns, tables, q.jsonCompact === '1'),
       contentType: 'application/json; charset=utf-8',
       filename: `${baseName}.json`,
     }

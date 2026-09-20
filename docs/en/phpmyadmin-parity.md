@@ -1,4 +1,4 @@
-<!-- translated-from: docs/phpmyadmin-parity.md sha256:3797ceb541486717bd7380c8db64fe02ec473c3675f39ef889b0dfe5e9bf80de -->
+<!-- translated-from: docs/phpmyadmin-parity.md sha256:94f05e42744b55570665c34a4910e39535fc9871bb84ce90b6a5291560c177af -->
 
 # Feature parity with phpMyAdmin
 
@@ -114,8 +114,8 @@ In 2026-09 every phpMyAdmin screen was audited again: ten rows marked ✅ went b
 | E6 | Compressed files, the file's character set, resuming part way, drag and drop | ✅ |
 | E7 | CSV: creating a new table from it, REPLACE / IGNORE, enclosure and escape characters | ✅ |
 | E8 | SQL: NO_AUTO_VALUE_ON_ZERO | ✅ |
-| E9 | Export options per format (LaTeX caption / label, what XML includes (routines, triggers, views, data), JSON pretty / compact, CSV remove line breaks / always quote / header row, YAML / Markdown / Texy! / MediaWiki / ODT / Word structure-and-data choice, ODS NULL text) | ✗ |
-| E10 | Import options per format (CSV column mapping and line terminator, ODS / XML percentages, currencies and dates, skipping empty rows) | ✗ |
+| E9 | Export options per format (LaTeX caption / label, what XML includes (routines, triggers, views, data), JSON pretty / compact, CSV remove line breaks / always quote / header row, YAML / Markdown / Texy! / MediaWiki / ODT / Word structure-and-data choice, ODS NULL text) | ✅ |
+| E10 | Import options per format (CSV column mapping and line terminator, ODS / XML percentages, currencies and dates, skipping empty rows) | ✅ |
 
 ## General
 
