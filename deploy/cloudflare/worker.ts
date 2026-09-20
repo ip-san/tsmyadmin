@@ -12,10 +12,10 @@ import { Container } from '@cloudflare/containers'
 /** Must match EXPOSE in the Dockerfile; `bun run check:static` fails if the two drift apart. */
 const CONTAINER_PORT = 3100
 
-/** What `wrangler secret put` stores. `TSMYADMIN_SERVERS` is optional (only for connection presets). */
+/** What `wrangler secret put` stores. `TSMYADMIN_SERVERS` is optional (only for connection presets), and so is `REDIS_URL`. */
 interface Env {
   SESSION_SECRET: string
-  REDIS_URL: string
+  REDIS_URL?: string
   TSMYADMIN_ALLOWED_HOSTS: string
   TSMYADMIN_SERVERS?: string
   TSMYADMIN: DurableObjectNamespace<TsmyadminContainer>
@@ -33,9 +33,8 @@ export class TsmyadminContainer extends Container<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env)
     // Secrets reach the *Worker*, not the container: a container only receives what is listed here. Leave one
-    // out and the process exits at startup — `SESSION_SECRET` is required in production, and `SESSION_STORE=redis`
-    // makes `REDIS_URL` required too.
-    for (const name of ['SESSION_SECRET', 'REDIS_URL', 'TSMYADMIN_ALLOWED_HOSTS']) {
+    // out and the process exits at startup — `SESSION_SECRET` is required in production.
+    for (const name of ['SESSION_SECRET', 'TSMYADMIN_ALLOWED_HOSTS']) {
       // Fail here with a readable message rather than passing `undefined` through and having the container exit
       // with `Invalid environment: …` from inside a process whose logs may not be wired up yet.
       if (!env[name]) throw new Error(`${name} is not set. Run: bunx wrangler secret put ${name}`)
@@ -45,14 +44,15 @@ export class TsmyadminContainer extends Container<Env> {
       // Pinned so CONTAINER_PORT is what the app actually listens on, rather than matching its default by
       // coincidence. scripts/validate-docs.mjs ties CONTAINER_PORT to the Dockerfile's EXPOSE.
       API_PORT: String(CONTAINER_PORT),
-      // Required: a container's disk is wiped whenever it sleeps, so the file-backed store would sign everyone
-      // out and drop every saved query each time that happened.
-      SESSION_STORE: 'redis',
+      // With `REDIS_URL` the sessions and saved queries live in Redis. Without it they go to the container's
+      // SQLite file, which is wiped whenever the instance sleeps or is redeployed: everyone is signed out and
+      // saved queries and personal settings are lost each time. Fine for a trial; set `REDIS_URL` to keep them.
+      SESSION_STORE: env.REDIS_URL ? 'redis' : 'sqlite',
       // Reads CF-Connecting-IP. A request forwarded by a Worker may carry no X-Forwarded-For, and '1' would then
       // fall back to the socket address — the Worker's own — giving every visitor one shared rate-limit bucket.
       TRUST_PROXY: 'cloudflare',
       SESSION_SECRET: env.SESSION_SECRET,
-      REDIS_URL: env.REDIS_URL,
+      ...(env.REDIS_URL ? { REDIS_URL: env.REDIS_URL } : {}),
       TSMYADMIN_ALLOWED_HOSTS: env.TSMYADMIN_ALLOWED_HOSTS,
       ...(env.TSMYADMIN_SERVERS ? { TSMYADMIN_SERVERS: env.TSMYADMIN_SERVERS } : {}),
     }

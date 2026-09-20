@@ -1,0 +1,36 @@
+name: Deploy to Cloudflare
+
+# Cloudflare Containers (Worker + Dockerfile), not Pages: see docs/cloudflare.md for why.
+# One-time setup (Workers Paid plan, `wrangler secret put SESSION_SECRET` etc.) is in that document; the two
+# repository secrets below are all this workflow itself needs.
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [production]
+
+# Never run two deploys at once, and never cancel one that is already pushing an image.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.0
+      # The Worker imports @cloudflare/containers, and this pins wrangler to the version in bun.lock.
+      - run: bun install --frozen-lockfile
+      # wrangler builds ./Dockerfile with the runner's Docker (ubuntu-latest is linux/amd64, which Containers
+      # requires) and pushes the image; the web build happens inside that Dockerfile, not here.
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy
