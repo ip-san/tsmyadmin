@@ -58,7 +58,8 @@ test.describe('sidebar at scale', () => {
     await page.goto(`/db/${t.database}?schema=${schema}`)
     await page.getByRole('button', { name: `${schema} を展開` }).click()
     const aside = page.locator('aside')
-    await expect(aside.getByRole('link', { name: 't_0001' })).toBeVisible()
+    // Listing 1500 tables is the slow part, and WebKit under a parallel run needs longer than the default 5 s.
+    await expect(aside.getByRole('link', { name: 't_0001' })).toBeVisible({ timeout: 20_000 })
     const rendered = await aside.locator('a[href*="/table/"]').count()
     expect(rendered).toBeLessThan(120)
     // The aside is the scroll container: scrolling to the bottom must materialise the last rows.

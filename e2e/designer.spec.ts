@@ -1,4 +1,4 @@
-import { expect } from '@playwright/test'
+import { expect, type Locator } from '@playwright/test'
 import { login, TARGETS, test } from './helpers.ts'
 
 for (const t of TARGETS) {
@@ -33,7 +33,24 @@ for (const t of TARGETS) {
       page,
     }) => {
       const posts = page.getByRole('button', { name: /^テーブル posts/ })
-      const start = await posts.getAttribute('transform')
+      // The automatic layout depends on the tables of the database, and other tests add and drop tables here: a
+      // position is only comparable once it has held still, and only with one read close to it.
+      const settled = async (box: Locator) => {
+        let previous: string | null = null
+        await expect
+          .poll(
+            async () => {
+              const now = await box.getAttribute('transform')
+              const same = now !== null && now === previous
+              previous = now
+              return same
+            },
+            { intervals: [300] }
+          )
+          .toBe(true)
+        return previous
+      }
+      const start = await settled(posts)
       await posts.focus()
       await page.keyboard.press('Shift+ArrowDown')
       await expect(posts).not.toHaveAttribute('transform', start ?? '')
@@ -52,6 +69,9 @@ for (const t of TARGETS) {
       await expect(page.getByRole('button', { name: /^テーブル posts/ })).toHaveAttribute('transform', moved ?? '')
 
       await page.getByRole('button', { name: '配置を元に戻す' }).click()
+      await expect(page.getByRole('button', { name: '配置を元に戻す' })).toBeDisabled()
+      const auto = await settled(page.getByRole('button', { name: /^テーブル posts/ }))
+      expect(auto).not.toBe(moved)
       // Clicking a box without dragging it saves nothing, even if the hand moves a pixel or two.
       const users = await page.getByRole('button', { name: /^テーブル users/ }).boundingBox()
       if (!users) throw new Error('users box is not rendered')
@@ -60,7 +80,7 @@ for (const t of TARGETS) {
       await page.mouse.move(users.x + 22, users.y + 11)
       await page.mouse.up()
       await expect(page.getByRole('button', { name: '配置を元に戻す' })).toBeDisabled()
-      await expect(page.getByRole('button', { name: /^テーブル posts/ })).toHaveAttribute('transform', start ?? '')
+      await expect(page.getByRole('button', { name: /^テーブル posts/ })).toHaveAttribute('transform', auto ?? '')
     })
   })
 }

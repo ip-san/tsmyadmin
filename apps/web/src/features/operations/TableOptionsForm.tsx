@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query'
 import type { Dialect, TableSchema } from '@tsmyadmin/shared'
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, useRef, useState } from 'react'
 import { DdlPreviewDialog } from '@/components/ddl/DdlPreviewDialog.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { Field, Input, Select } from '@/components/ui/Field.tsx'
@@ -69,10 +69,12 @@ export function TableOptionsForm({
   // current one) does not linger as a pending change: the structure is refetched first and read from the cache
   // (the flow invalidates everything else afterwards; `prevSeed` re-seeds on any later change too).
   const queryClient = useQueryClient()
+  // The dialog closes before the refetch lands: a field changed in that gap is the person's next edit, not a leftover.
+  const editedSinceRun = useRef(false)
   const flow = useDdlFlow(tableRef.db, tableRef.schema, async () => {
     const query = structureQuery(tableRef)
     await queryClient.invalidateQueries({ queryKey: query.queryKey })
-    reseed(queryClient.getQueryData(query.queryKey) ?? schema)
+    if (!editedSinceRun.current) reseed(queryClient.getQueryData(query.queryKey) ?? schema)
   })
   const commentChanged = comment !== (schema.comment ?? '')
   const engineChanged = mysql && engine.trim() !== '' && engine.trim() !== (schema.engine ?? '')
@@ -94,6 +96,7 @@ export function TableOptionsForm({
   const submit = (e: FormEvent) => {
     e.preventDefault()
     if (!changed || invalid) return
+    editedSinceRun.current = false
     flow.preview({
       op: 'setTableOptions',
       table: tableRef.table,
@@ -113,7 +116,14 @@ export function TableOptionsForm({
   }
   return (
     <section className="rounded border border-line p-3">
-      <form onSubmit={submit} className="space-y-2" aria-label={locale.ddl.titles.setTableOptions}>
+      <form
+        onSubmit={submit}
+        onChange={() => {
+          editedSinceRun.current = true
+        }}
+        className="space-y-2"
+        aria-label={locale.ddl.titles.setTableOptions}
+      >
         <h2 className="text-sm font-semibold text-ink">{locale.ddl.titles.setTableOptions}</h2>
         <div className="grid max-w-2xl gap-2 sm:grid-cols-2">
           <Field id="table-comment" label={locale.database.comment}>

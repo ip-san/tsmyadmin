@@ -112,6 +112,8 @@ for (const t of TARGETS) {
           page,
           mysql ? /DROP FUNCTION[\s\S]*CREATE[\s\S]*`b` INT/ : /DROP FUNCTION[\s\S]*CREATE FUNCTION/
         )
+        // The dialog closes before the list is fetched again; opened from the old list it would show the old parameters.
+        await expect(page.getByRole('row', { name: new RegExp(fn) })).toContainText(/\bb\b/)
         await page.getByRole('button', { name: `${fn}: 編集`, exact: true }).click()
         await expect(page.getByRole('dialog').getByLabel('引数 2 の名前')).toHaveValue('b')
         await page.getByRole('dialog').getByRole('button', { name: 'キャンセル' }).click()
