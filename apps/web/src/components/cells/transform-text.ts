@@ -83,6 +83,26 @@ export function ipv4(text: string): string | null {
   return [n >>> 24, (n >>> 16) & 255, (n >>> 8) & 255, n & 255].join('.')
 }
 
+/** An IPv4 address written as four parts as the whole number it stands for; a whole number is kept; else null. */
+export function ipv4ToInt(text: string): number | null {
+  const t = text.trim()
+  const parts = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(t)
+  if (parts) {
+    const octets = parts.slice(1).map(Number)
+    if (octets.some((o) => o > 255)) return null
+    return octets.reduce((n, o) => n * 256 + o, 0)
+  }
+  if (/^\d{1,10}$/.test(t) && Number(t) <= 0xffff_ffff) return Number(t)
+  return null
+}
+
+/** What an input transformation makes of the text typed into the form before it is written (most leave it alone). */
+export function inputValue(t: ColumnTransform | undefined, text: string): string {
+  if (t?.kind !== 'ipv4-to-int') return text
+  const n = ipv4ToInt(text)
+  return n === null ? text : String(n)
+}
+
 /**
  * A cell as the text its column's display transformation makes of it, or null when the transformation does not apply
  * to this value (a NULL, or a value of the wrong shape): the caller then shows the plain value. Image, link and JSON
@@ -132,11 +152,12 @@ export function inputMessage(t: ColumnTransform, text: string): string {
   const problem = inputProblem(t, text)
   if (problem === null) return ''
   if (problem === 'pattern') return t.message || locale.rows.patternMismatch
+  if (problem === 'ipv4') return locale.rows.invalidIpv4
   return problem === 'json' ? locale.rows.invalidJson : locale.rows.invalidXml
 }
 
 /** What is wrong with a value typed into a form, by the column's input transformation: null when nothing is. */
-export function inputProblem(t: ColumnTransform, text: string): 'pattern' | 'json' | 'xml' | null {
+export function inputProblem(t: ColumnTransform, text: string): 'pattern' | 'json' | 'xml' | 'ipv4' | null {
   if (text === '') return null
   if (t.kind === 'pattern') {
     try {
@@ -145,6 +166,7 @@ export function inputProblem(t: ColumnTransform, text: string): 'pattern' | 'jso
       return null
     }
   }
+  if (t.kind === 'ipv4-to-int') return ipv4ToInt(text) === null ? 'ipv4' : null
   if (t.kind === 'json-input') {
     try {
       JSON.parse(text)

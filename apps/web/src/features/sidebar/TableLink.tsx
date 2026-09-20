@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import { isViewKind, type TableInfo } from '@tsmyadmin/shared'
 import { Eye, ListOrdered, Table2 } from 'lucide-react'
+import { tableHomeTo } from '@/lib/default-tabs.ts'
 
 export const ROW_HEIGHT = 26
 
@@ -14,12 +15,12 @@ interface RowProps {
 export function TableLink({ db, schema, table }: RowProps) {
   return (
     <Link
-      to="/db/$db/table/$table"
+      to={tableHomeTo()}
       params={{ db, table: table.name }}
       search={schema ? { schema } : {}}
       className="flex h-full items-center gap-1 truncate rounded px-1 text-sm text-ink hover:bg-surface-sub"
       activeProps={{ className: 'bg-brand/10 font-medium text-brand' }}
-      title={table.name}
+      title={table.comment ? `${table.name}\n${table.comment}` : table.name}
     >
       {table.kind === 'sequence' ? (
         <ListOrdered className="size-3.5 shrink-0" aria-hidden />

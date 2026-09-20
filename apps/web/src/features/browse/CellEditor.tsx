@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button.tsx'
 import { Input, Textarea } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
 import { cellToEditable } from '@/lib/format.ts'
+import { readSetting } from '@/lib/settings.ts'
 
 export interface CellEditorProps {
   column: string
@@ -25,11 +26,15 @@ export function CellEditor({ column, initial, dataType, pending, error, onSave, 
   const [text, setText] = useState(() => cellToEditable(initial))
   const [isNull, setIsNull] = useState(initial === null)
   const wrapper = useRef<HTMLDivElement>(null)
+  // Set once the edit is over (saved or cancelled) so the blur caused by the editor unmounting saves nothing more.
+  const finished = useRef(false)
   // A NULL cell opens with the text field disabled, so autoFocus has nothing to land on: focus the checkbox.
   useEffect(() => {
     if (initial === null) wrapper.current?.querySelector<HTMLElement>('input[type="checkbox"]')?.focus()
   }, [initial])
   useEffect(() => {
+    // A failed save leaves the editor open: it can be saved again.
+    if (error) finished.current = false
     // A failed save disables nothing permanently, but the button that had focus was disabled while pending
     // and focus fell to <body>: bring it back into the editor.
     if (error && wrapper.current && !wrapper.current.contains(document.activeElement)) {
@@ -37,24 +42,35 @@ export function CellEditor({ column, initial, dataType, pending, error, onSave, 
     }
   }, [error])
   const multiline = dataType !== undefined && (MULTILINE.test(dataType) || text.includes('\n'))
-  const save = () => onSave(isNull ? null : text)
+  const save = () => {
+    finished.current = true
+    onSave(isNull ? null : text)
+  }
+  const cancel = () => {
+    finished.current = true
+    onCancel()
+  }
   const onKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey && !(multiline && !(e.metaKey || e.ctrlKey))) {
       e.preventDefault()
       save()
     } else if (e.key === 'Escape') {
       e.preventDefault()
-      onCancel()
+      cancel()
     }
   }
   // Focus moving outside the editor (a click elsewhere in the grid) ends an untouched edit instead of leaving a
   // stale box; typed input is never discarded silently — a dirty editor stays open until saved or cancelled.
   const dirty = text !== cellToEditable(initial) || isNull !== (initial === null)
   const onBlur = (e: FocusEvent<HTMLElement>) => {
-    if (pending || dirty) return
+    if (pending || finished.current) return
     const next = e.relatedTarget
     if (next instanceof Node && e.currentTarget.contains(next)) return
-    onCancel()
+    if (dirty) {
+      if (readSetting('saveOnBlur')) save()
+      return
+    }
+    cancel()
   }
   const field = {
     autoFocus: true,
@@ -95,7 +111,7 @@ export function CellEditor({ column, initial, dataType, pending, error, onSave, 
         <Button size="sm" variant="primary" onClick={save} disabled={pending}>
           {locale.common.save}
         </Button>
-        <Button size="sm" onClick={onCancel} disabled={pending}>
+        <Button size="sm" onClick={cancel} disabled={pending}>
           {locale.common.cancel}
         </Button>
       </div>

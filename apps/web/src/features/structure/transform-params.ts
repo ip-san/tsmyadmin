@@ -40,6 +40,7 @@ export function transformOptions(
 ): Partial<Omit<ColumnTransformBody, 'database' | 'table' | 'column' | 'kind' | 'schema'>> {
   switch (kind) {
     case 'link':
+    case 'imagelink':
       return nonEmpty('template', p.template)
     case 'substring':
       return { start: Math.max(0, whole(p.start, 0)), length: Math.max(1, whole(p.length, 1)) }
@@ -64,6 +65,7 @@ export function transformOptions(
 export function describeOptions(t: ColumnTransformBody): string {
   switch (t.kind) {
     case 'link':
+    case 'imagelink':
       return t.template ?? ''
     case 'substring':
       return `${t.start ?? 0}+${t.length ?? ''}`

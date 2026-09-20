@@ -3,6 +3,7 @@ import { createFileRoute, Outlet, useMatches, useRouteContext } from '@tanstack/
 import { isViewKind } from '@tsmyadmin/shared'
 import { useEffect } from 'react'
 import { PageTitle } from '@/components/layout/PageTitle.tsx'
+import { SettingsLink } from '@/components/layout/SettingsLink.tsx'
 import { TabNav } from '@/components/layout/TabNav.tsx'
 import { FavoriteStar } from '@/components/ui/FavoriteStar.tsx'
 import { locale } from '@/config/locale.ts'
@@ -32,7 +33,14 @@ function TableLayout() {
   }, [db, schema, table, visit])
   return (
     <>
-      <PageTitle actions={<FavoriteStar table={ref} />}>
+      <PageTitle
+        actions={
+          <>
+            <SettingsLink section="main-panel" />
+            <FavoriteStar table={ref} />
+          </>
+        }
+      >
         <span className="text-ink-sub">
           {db}
           {schema ? `.${schema}` : ''}.

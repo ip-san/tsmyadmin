@@ -68,6 +68,8 @@ async function sessionState(cfg: SessionConfig, session: Session, savedQueries: 
     serverDatabase: session.adapter.serverNamespace.database,
     savedQueries,
     secondFactor: await secondFactorState(cfg, session),
+    ttlSeconds: Math.floor(cfg.ttlMs / 1000),
+    imageHosts: cfg.imageHosts ?? [],
   }
 }
 

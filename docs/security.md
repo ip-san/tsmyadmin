@@ -77,9 +77,9 @@ SQL エクスポートの「`DEFINER` 句を除く」は、復元したビュー
 ## CSRF / XSS
 
 - `SameSite=Strict` Cookie に加え、フォーム（マルチパート）POST は `Origin` 検証（`hono/csrf`）で保護します。JSON API はブラウザのクロスオリジン制約（CORS 未許可）により外部サイトから呼べません
-- `Content-Security-Policy: default-src 'self'; script-src 'self'; frame-ancestors 'none'` など（`apps/api/src/app.ts` の `CONTENT_SECURITY_POLICY`）。インライン script は許可しません。CodeMirror の都合で `style-src 'unsafe-inline'` のみ許可しています
+- `Content-Security-Policy: default-src 'self'; script-src 'self'; frame-ancestors 'none'` など（`apps/api/src/app.ts` の `contentSecurityPolicy`）。インライン script は許可しません。CodeMirror の都合で `style-src 'unsafe-inline'` のみ許可しています
 - 値の描画はすべて React 経由（`dangerouslySetInnerHTML` 不使用）
-- 列の表示変換（構造タブ）のリンクは http / https だけで、値は URL エンコードしてテンプレートに差し込みます（値でリンク先のホストや `javascript:` を作れない。テンプレートの登録時と描画時の両方で検査）。画像はセルのバイト列から PNG / JPEG / GIF / WebP と判別できたものだけを `data:` URL で表示し、SVG は扱いません。外部の画像 URL は CSP の `img-src 'self' data:` で読み込まれません
+- 列の表示変換（構造タブ）のリンクは http / https だけで、値は URL エンコードしてテンプレートに差し込みます（値でリンク先のホストや `javascript:` を作れない。テンプレートの登録時と描画時の両方で検査）。画像はセルのバイト列から PNG / JPEG / GIF / WebP と判別できたものだけを `data:` URL で表示し、SVG は扱いません。外部の画像 URL は、環境変数 `TSMYADMIN_IMAGE_HOSTS` に書いたホストだけが CSP の `img-src` に加わり（書式は起動時に検証し、CSP の記述を足せない形に限ります）、そのホスト以外は読み込まれずリンクになります。ホストを書くと、画像を開いた閲覧者の IP アドレスなどがそのホストに伝わります。「HTML を整形して表示」の変換は、値を不活性な文書として解析し、許可リストの要素だけを新しく作って描きます（属性は http(s) の `href` だけ。`script`・`style`・`iframe`・イベント属性・`javascript:` と `data:` のリンクは捨てる。文字列として HTML に差し込むことはしません）
 - 変数ページの「マニュアル」リンクは、公式マニュアルの固定のホスト（`dev.mysql.com`、`mariadb.com`、`www.postgresql.org`）だけを指し、変数名は英数字・`_`・`.` に限って（それ以外は作らない）URL に入れます。新しいタブで `noopener noreferrer` を付けて開くので、外部へ渡るのは変数名だけです
 
 ## SQL の組み立て

@@ -16,6 +16,8 @@ export interface SessionConfig {
   ttlMs: number
   /** Every account must have a second factor: one that has not enrolled may only enrol (TSMYADMIN_REQUIRE_2FA). */
   require2fa?: boolean
+  /** Hosts an image link may load pictures from (TSMYADMIN_IMAGE_HOSTS). */
+  imageHosts?: string[]
 }
 
 /** Whether this account still has to enrol before it may do anything else. */

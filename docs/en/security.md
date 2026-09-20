@@ -1,4 +1,4 @@
-<!-- translated-from: docs/security.md sha256:7cea8c7a9f1f9982fd389fad2db168aca0f55a1ba3a833dcc9314f87de5b67ed -->
+<!-- translated-from: docs/security.md sha256:b31530a417c0ef108a95e18acb672b1551aca3a37ab00d307357ed0055df1c0e -->
 
 # Security model
 
@@ -76,9 +76,9 @@ On a shared machine, run **Clear history** in the SQL tab and sign out before yo
 ## CSRF and XSS
 
 - On top of the `SameSite=Strict` cookie, form (multipart) POSTs are protected by `Origin` validation (`hono/csrf`). The JSON API cannot be called from another site because of the browser's cross-origin rules (CORS is not granted)
-- `Content-Security-Policy: default-src 'self'; script-src 'self'; frame-ancestors 'none'` and the rest (`CONTENT_SECURITY_POLICY` in `apps/api/src/app.ts`). Inline script is not allowed; only `style-src 'unsafe-inline'` is, because CodeMirror needs it
+- `Content-Security-Policy: default-src 'self'; script-src 'self'; frame-ancestors 'none'` and the rest (`contentSecurityPolicy` in `apps/api/src/app.ts`). Inline script is not allowed; only `style-src 'unsafe-inline'` is, because CodeMirror needs it
 - Every value is rendered through React (`dangerouslySetInnerHTML` is never used)
-- A display transformation's link (Structure tab) is http / https only, with the value URL-encoded into the template (a value cannot choose the host or make a `javascript:` URL; checked when the template is saved and when it is drawn). An image is shown as a `data:` URL only when the cell's bytes are a PNG, JPEG, GIF or WebP; SVG is never used. External image URLs are not loaded, under the CSP's `img-src 'self' data:`
+- A display transformation's link (Structure tab) is http / https only, with the value URL-encoded into the template (a value cannot choose the host or make a `javascript:` URL; checked when the template is saved and when it is drawn). An image is shown as a `data:` URL only when the cell's bytes are a PNG, JPEG, GIF or WebP; SVG is never used. External image URLs are loaded only from the hosts named in the environment variable `TSMYADMIN_IMAGE_HOSTS`, which are the only addition to the CSP's `img-src` (the format is checked at start-up and cannot carry any other CSP source); any other host is shown as a link. Naming a host tells it the IP address and more of whoever opens the image. The "HTML as formatted text" transformation parses the value into an inert document and draws only newly created elements from an allowlist (the only attribute kept is an http(s) `href`; `script`, `style`, `iframe`, event attributes and `javascript:` / `data:` links are dropped; nothing is ever put into the page as an HTML string)
 - The **Manual** links on the Variables page point only at the vendors' own fixed hosts (`dev.mysql.com`, `mariadb.com`, `www.postgresql.org`). A variable name goes into the URL only if it is letters, digits, `_` and `.` (otherwise no link is made), and the link opens in a new tab with `noopener noreferrer`, so the variable's name is the only thing that leaves
 
 ## How SQL is built

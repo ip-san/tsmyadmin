@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { shareWorkspaceEntry } from './account-prefs.ts'
 import { readPreference, removePreference, writePreference } from './preferences.ts'
 import type { TableRef } from './queries.ts'
 
@@ -15,4 +16,5 @@ export function chosenDisplayColumn(ref: TableRef): string | undefined {
 export function chooseDisplayColumn(ref: TableRef, column: string | undefined): void {
   if (column === undefined) removePreference(key(ref))
   else writePreference(key(ref), column)
+  shareWorkspaceEntry(key(ref), column ?? null)
 }

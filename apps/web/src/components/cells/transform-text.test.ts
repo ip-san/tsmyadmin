@@ -1,6 +1,6 @@
 import type { ColumnTransform } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
-import { displayText, formatDate, inputProblem, ipv4 } from './transform-text.ts'
+import { displayText, formatDate, inputProblem, inputValue, ipv4, ipv4ToInt } from './transform-text.ts'
 
 const t = (over: Partial<ColumnTransform>): ColumnTransform => ({
   database: 'd',
@@ -76,5 +76,29 @@ describe('inputProblem', () => {
     expect(inputProblem(t({ kind: 'xml-input' }), '<a><b/></a>')).toBeNull()
     expect(inputProblem(t({ kind: 'xml-input' }), '<a><b></a>')).toBe('xml')
     expect(inputProblem(t({ kind: 'sql-input' }), 'SELECT (')).toBeNull()
+  })
+})
+
+describe('ipv4-to-int', () => {
+  it('reads a dotted address as the number it stands for', () => {
+    expect(ipv4ToInt('192.168.0.1')).toBe(3232235521)
+    expect(ipv4ToInt('0.0.0.0')).toBe(0)
+    expect(ipv4ToInt('255.255.255.255')).toBe(4294967295)
+    expect(ipv4(String(ipv4ToInt('10.1.2.3')))).toBe('10.1.2.3')
+  })
+  it('keeps a whole number, and refuses the rest', () => {
+    expect(ipv4ToInt('3232235521')).toBe(3232235521)
+    expect(ipv4ToInt('4294967296')).toBeNull()
+    expect(ipv4ToInt('256.0.0.1')).toBeNull()
+    expect(ipv4ToInt('1.2.3')).toBeNull()
+    expect(ipv4ToInt('a.b.c.d')).toBeNull()
+  })
+  it('is the value written, and a problem when it does not read', () => {
+    const rule = t({ kind: 'ipv4-to-int' })
+    expect(inputValue(rule, '127.0.0.1')).toBe('2130706433')
+    expect(inputValue(undefined, '127.0.0.1')).toBe('127.0.0.1')
+    expect(inputProblem(rule, '127.0.0.1')).toBeNull()
+    expect(inputProblem(rule, 'localhost')).toBe('ipv4')
+    expect(inputProblem(rule, '')).toBeNull()
   })
 })

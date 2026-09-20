@@ -9,73 +9,15 @@ import { locale } from '@/config/locale.ts'
 import { DEFAULT_IMPORT_OPTIONS, type ImportOptions } from '@/lib/import-options.ts'
 import { databasesQuery } from '@/lib/queries.ts'
 import type { ResolvedSettings } from '@/lib/settings.ts'
+import { Check, ChoiceField, NumberField, Section } from './SettingsFields.tsx'
 
 const t = locale.settings
 
 type Patch = (patch: Partial<ResolvedSettings>) => void
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <fieldset className="space-y-3 rounded border border-line p-4">
-      <legend className="px-1 text-sm font-semibold text-ink">{title}</legend>
-      {children}
-    </fieldset>
-  )
-}
-
-function Check({
-  checked,
-  onChange,
-  children,
-}: {
-  checked: boolean
-  onChange: (on: boolean) => void
-  children: string
-}) {
-  return (
-    <label className="flex items-center gap-1 text-sm">
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
-      {children}
-    </label>
-  )
-}
-
-/** A whole number in a box; kept as typed while it is not a number, so a field can be emptied to be retyped. */
-function NumberField({
-  id,
-  label,
-  hint,
-  value,
-  min,
-  max,
-  onChange,
-}: {
-  id: string
-  label: string
-  hint: string
-  value: number
-  min: number
-  max: number
-  onChange: (n: number) => void
-}) {
-  return (
-    <Field id={id} label={label} hint={`${t.rangeHint(min, max)}${hint ? ` ${hint}` : ''}`}>
-      <Input
-        id={id}
-        type="number"
-        min={min}
-        max={max}
-        value={Number.isFinite(value) ? value : ''}
-        onChange={(e) => onChange(e.target.value === '' ? Number.NaN : Math.floor(Number(e.target.value)))}
-        className="w-32 tabular-nums"
-      />
-    </Field>
-  )
-}
-
 export function MainPanelSection({ value, set }: { value: ResolvedSettings; set: Patch }) {
   return (
-    <Section title={t.sections.mainPanel}>
+    <Section id="main-panel" title={t.sections.mainPanel}>
       <NumberField
         id="setting-browse-limit"
         label={t.browseLimit}
@@ -88,18 +30,73 @@ export function MainPanelSection({ value, set }: { value: ResolvedSettings; set:
       <Check checked={value.browseUnlimited} onChange={(browseUnlimited) => set({ browseUnlimited })}>
         {t.browseUnlimited}
       </Check>
+      <NumberField
+        id="setting-header-every"
+        label={t.headerEvery}
+        hint={t.headerEveryHint}
+        value={value.headerEvery}
+        min={0}
+        max={1000}
+        onChange={(headerEvery) => set({ headerEvery })}
+      />
+      <NumberField
+        id="setting-insert-rows"
+        label={t.insertRowCount}
+        hint=""
+        value={value.insertRowCount}
+        min={1}
+        max={10}
+        onChange={(insertRowCount) => set({ insertRowCount })}
+      />
+      <ChoiceField
+        id="setting-grid-edit"
+        label={t.gridEdit}
+        value={value.gridEdit}
+        options={t.gridEdits}
+        onChange={(gridEdit) => set({ gridEdit })}
+      />
+      <Check checked={value.saveOnBlur} onChange={(saveOnBlur) => set({ saveOnBlur })}>
+        {t.saveOnBlur}
+      </Check>
+      <Check checked={value.confirmDrop} onChange={(confirmDrop) => set({ confirmDrop })}>
+        {t.confirmDrop}
+      </Check>
+      <ChoiceField
+        id="setting-tab-server"
+        label={t.defaultServerTab}
+        value={value.defaultServerTab}
+        options={t.serverTabs}
+        onChange={(defaultServerTab) => set({ defaultServerTab })}
+      />
+      <ChoiceField
+        id="setting-tab-db"
+        label={t.defaultDbTab}
+        value={value.defaultDbTab}
+        options={t.dbTabs}
+        onChange={(defaultDbTab) => set({ defaultDbTab })}
+      />
+      <ChoiceField
+        id="setting-tab-table"
+        label={t.defaultTableTab}
+        value={value.defaultTableTab}
+        options={t.tableTabs}
+        onChange={(defaultTableTab) => set({ defaultTableTab })}
+      />
     </Section>
   )
 }
 
 export function SqlSection({ value, set }: { value: ResolvedSettings; set: Patch }) {
   return (
-    <Section title={t.sections.sql}>
+    <Section id="sql" title={t.sections.sql}>
       <Check checked={value.sqlSafeMode} onChange={(sqlSafeMode) => set({ sqlSafeMode })}>
         {t.sqlSafeMode}
       </Check>
       <Check checked={value.consoleDocked} onChange={(consoleDocked) => set({ consoleDocked })}>
         {t.consoleDocked}
+      </Check>
+      <Check checked={value.sqlEnterRuns} onChange={(sqlEnterRuns) => set({ sqlEnterRuns })}>
+        {t.sqlEnterRuns}
       </Check>
       <NumberField
         id="setting-history-max"
@@ -125,7 +122,7 @@ export function NavigationSection({ value, set }: { value: ResolvedSettings; set
         : [...value.navHidden, name],
     })
   return (
-    <Section title={t.sections.navigation}>
+    <Section id="navigation" title={t.sections.navigation}>
       <Field id="setting-nav-delimiter" label={t.navGroupDelimiter} hint={t.navGroupDelimiterHint}>
         <Input
           id="setting-nav-delimiter"
@@ -135,6 +132,18 @@ export function NavigationSection({ value, set }: { value: ResolvedSettings; set
           className="w-24 font-mono"
         />
       </Field>
+      <NumberField
+        id="setting-nav-width"
+        label={t.navWidth}
+        hint=""
+        value={value.navWidth}
+        min={200}
+        max={480}
+        onChange={(navWidth) => set({ navWidth })}
+      />
+      <Check checked={value.navShowRoutines} onChange={(navShowRoutines) => set({ navShowRoutines })}>
+        {t.navShowRoutines}
+      </Check>
       <NumberField
         id="setting-nav-page"
         label={t.navPageSize}
@@ -171,7 +180,7 @@ export function ExportDefaultsSection({
 }) {
   const patch = (p: Partial<ExportOptions>) => set({ ...value, ...p })
   return (
-    <Section title={t.sections.exportDefaults}>
+    <Section id="export" title={t.sections.exportDefaults}>
       <FormatFields options={value} set={patch} />
       {value.format === 'sql' ? <SqlFields options={value} set={patch} dialect={dialect} triggersOnly={false} /> : null}
       {value.format === 'csv' || value.format === 'csvExcel' ? <CsvFields options={value} set={patch} /> : null}
@@ -207,7 +216,7 @@ export function ImportDefaultsSection({
     })
   }
   return (
-    <Section title={t.sections.importDefaults}>
+    <Section id="import" title={t.sections.importDefaults}>
       <fieldset>
         <legend className="mb-1 text-xs font-medium text-ink-sub">{t.importFormat}</legend>
         <div className="flex gap-4 text-sm">

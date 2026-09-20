@@ -93,6 +93,10 @@ export const SessionStateSchema = SessionInfoSchema.extend({
    */
   savedQueries: z.enum(['server', 'browser']).default('browser'),
   secondFactor: SecondFactorStateSchema.default('none'),
+  /** How long a session lasts without use (every request starts it again). */
+  ttlSeconds: z.number().int().positive().optional(),
+  /** Hosts an image link transformation may load pictures from (see transformImage). */
+  imageHosts: z.array(z.string()).default([]),
 })
 export type SessionState = z.infer<typeof SessionStateSchema>
 

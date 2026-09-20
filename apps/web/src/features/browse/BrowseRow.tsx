@@ -7,6 +7,7 @@ import { Td, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
 import { cn } from '@/lib/cn.ts'
 import { isOpaqueCell } from '@/lib/format.ts'
+import { readSetting } from '@/lib/settings.ts'
 import { CellEditor } from './CellEditor.tsx'
 import { FkCell } from './FkCell.tsx'
 import type { linkableForeignKeys, linkableReverseKeys } from './fk-links.ts'
@@ -68,6 +69,7 @@ export const BrowseRow = memo(function BrowseRow({
   onInlineCancel,
 }: BrowseRowProps) {
   const { display, dialect, downloadUrl } = useCellDisplay()
+  const gridEdit = readSetting('gridEdit')
   // WKB-encoded columns (MySQL's spatial types, PostGIS): PostgreSQL's own shapes already arrive as text.
   const wktColumn = (dataType: string) => {
     if (!display.geometryAsWkt || !dialect) return false
@@ -99,13 +101,22 @@ export const BrowseRow = memo(function BrowseRow({
               'max-w-md font-mono text-xs',
               canInline && 'focus-visible:outline-2 focus-visible:outline-blue-500'
             )}
-            onDoubleClick={canInline ? () => onInline(i, j) : undefined}
+            onDoubleClick={canInline && gridEdit === 'doubleClick' ? () => onInline(i, j) : undefined}
+            onClick={
+              canInline && gridEdit === 'click' && !isInline
+                ? (e) => {
+                    // A link (foreign key) or button inside the cell keeps its own click.
+                    if (e.target instanceof Element && e.target.closest('a, button, input')) return
+                    onInline(i, j)
+                  }
+                : undefined
+            }
             // Keyboard path to the same inline editor: focus the cell, press Enter or F2.
             // Links inside the cell (foreign keys) keep their own Enter.
-            tabIndex={canInline && !isInline ? 0 : undefined}
+            tabIndex={canInline && !isInline && gridEdit !== 'off' ? 0 : undefined}
             data-cell={`${i},${j}`}
             onKeyDown={
-              canInline && !isInline
+              canInline && !isInline && gridEdit !== 'off'
                 ? (e) => {
                     if (e.target !== e.currentTarget) return
                     if (e.key === 'Enter' || e.key === 'F2') {
@@ -115,7 +126,7 @@ export const BrowseRow = memo(function BrowseRow({
                   }
                 : undefined
             }
-            title={canInline ? locale.browse.editCell : undefined}
+            title={canInline && gridEdit !== 'off' ? locale.browse.editCell : undefined}
           >
             {isInline && key ? (
               <>
@@ -138,6 +149,18 @@ export const BrowseRow = memo(function BrowseRow({
                     const wkt = spatialCellToWkt(cell)
                     if (wkt !== null) return <span className="break-all font-mono text-xs">{wkt}</span>
                   }
+                  if (transform?.kind === 'download' && key && downloadUrl && cell !== null) {
+                    return (
+                      <a
+                        href={downloadUrl(key, c.name)}
+                        download
+                        className="whitespace-nowrap text-blue-700 underline dark:text-blue-300"
+                        aria-label={locale.browse.downloadValue(c.name)}
+                      >
+                        {locale.browse.download}
+                      </a>
+                    )
+                  }
                   return transform ? (
                     <TransformedCell cell={cell} transform={transform} />
                   ) : (
@@ -145,7 +168,7 @@ export const BrowseRow = memo(function BrowseRow({
                   )
                 })()}
                 {/* A binary or cut-off value: the page holds only its head, the download the whole of it. */}
-                {key && downloadUrl && isOpaqueCell(cell) ? (
+                {key && downloadUrl && isOpaqueCell(cell) && transforms.get(c.name)?.kind !== 'download' ? (
                   <a
                     href={downloadUrl(key, c.name)}
                     download

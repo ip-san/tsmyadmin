@@ -1,8 +1,10 @@
 import type { Cell, ColumnTransform } from '@tsmyadmin/shared'
-import { isBinaryCell, transformLink } from '@tsmyadmin/shared'
+import { isBinaryCell, transformImage, transformLink } from '@tsmyadmin/shared'
 import { useState } from 'react'
 import { locale } from '@/config/locale.ts'
 import { CellValue } from './CellValue.tsx'
+import { useImageHosts } from './cell-display.ts'
+import { HtmlCell } from './HtmlCell.tsx'
 import { displayText } from './transform-text.ts'
 
 const bytesOf = (text: string) => Array.from(text, (c) => c.charCodeAt(0))
@@ -41,6 +43,38 @@ function Image({ cell, column }: { cell: { $bin: string }; column: string }) {
   )
 }
 
+/** An image on another host: drawn when the deployment allows that host (TSMYADMIN_IMAGE_HOSTS), else a link to it. */
+function ImageLink({ text, transform }: { text: string; transform: ColumnTransform }) {
+  const hosts = useImageHosts()
+  const [broken, setBroken] = useState(false)
+  const src = transformImage(text, transform.template, hosts)
+  if (src && !broken) {
+    return (
+      <img
+        src={src}
+        alt={locale.transform.imageAlt(transform.column)}
+        referrerPolicy="no-referrer"
+        loading="lazy"
+        onError={() => setBroken(true)}
+        className="max-h-24 max-w-48 rounded border border-line object-contain"
+      />
+    )
+  }
+  const href = transformLink(text, transform.template)
+  if (!href) return <CellValue cell={text} />
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer nofollow"
+      className="break-all text-blue-700 underline dark:text-blue-300"
+    >
+      {text}
+      <span className="sr-only">{locale.nav.opensNewTab}</span>
+    </a>
+  )
+}
+
 /**
  * A cell shown through its column's display transformation (phpMyAdmin's browser transformations). Anything the
  * transformation cannot show — a NULL, a value that is not a link or not JSON — falls back to the plain value.
@@ -56,6 +90,10 @@ export function TransformedCell({ cell, transform }: { cell: Cell; transform: Co
   }
   if (typeof cell === 'object') return <CellValue cell={cell} />
   const text = String(cell)
+  // Download is drawn by the grid, which knows the row the value is in; anywhere else it is the plain value.
+  if (transform.kind === 'download') return <CellValue cell={cell} />
+  if (transform.kind === 'html') return <HtmlCell text={text} />
+  if (transform.kind === 'imagelink') return <ImageLink text={text} transform={transform} />
   if (['substring', 'boolean', 'date', 'ipv4', 'affix'].includes(transform.kind)) {
     const shown = displayText(transform, cell)
     // The value as stored stays one hover away (a transformation changes how it looks, not what it is).

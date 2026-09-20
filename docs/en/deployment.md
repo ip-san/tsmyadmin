@@ -1,4 +1,4 @@
-<!-- translated-from: docs/deployment.md sha256:ac84e032952f867a4c740883718640bf5a57dad1d4306a734a3e1c9ebe1c0cec -->
+<!-- translated-from: docs/deployment.md sha256:89a4c5cec318f662bbd94bc76d916dab05d53da5c8cfd2871198ff02ab003fec -->
 
 # Deployment guide
 
@@ -44,6 +44,7 @@ tsmyadmin runs as **a single container whose one process (Bun) serves both the A
 | `LOGIN_RATE_LIMIT` | `10` | How many sign-in attempts are allowed within `LOGIN_RATE_WINDOW_SECONDS`, per client IP and username (per IP alone, up to three times that) |
 | `TSMYADMIN_REQUIRE_2FA` | `0` | `1` requires a second factor (TOTP) of every account: one that has not enrolled can log in but can do nothing until it has. It needs somewhere to keep the secrets, so `SESSION_STORE=sqlite` or `redis` is required (with `memory` the process exits at startup). At the default `0`, only accounts that enrol get the second step |
 | `TSMYADMIN_PASSKEY_ORIGIN` | (empty) | The origin users open the app at (e.g. `https://db.example.com`). When set, passkeys (WebAuthn) can be the second factor too. A passkey is bound to this host name, so **moving to another domain later makes every enrolled passkey unusable**. HTTPS only (`http://localhost` is the exception), no IP address, no path. Needs `SESSION_STORE=sqlite` or `redis`. Empty: no passkeys (authenticator apps only) |
+| `TSMYADMIN_IMAGE_HOSTS` | (empty) | Hosts the column display transformation "Image (from a URL)" may load pictures from. Comma-separated `host` / `*.suffix`, each optionally with `:port` (no port means the default one, 80 / 443). The hosts listed are added to the CSP's `img-src`; any other image URL is not loaded and is shown as a link. **Opening an image URL tells that host the viewer's IP address and more**, so list only hosts you trust. Empty: no outside pictures are loaded |
 | `LOGIN_RATE_WINDOW_SECONDS` | `60` | The window for the above, in seconds (at least 1; `LOGIN_RATE_LIMIT` likewise) |
 | `TRUST_PROXY` | `0` | `1` trusts a reverse proxy's `X-Forwarded-For` as the client IP (required behind a proxy; leave it `0` when exposed directly). `cloudflare` prefers `CF-Connecting-IP`. They are separate settings because only Cloudflare can be relied on to overwrite that header — anywhere else, trusting it lets a client name its own address |
 | `LOG_FORMAT` | `json` in production, `pretty` in development | One JSON object per line (for a log collector), or a human-readable form |

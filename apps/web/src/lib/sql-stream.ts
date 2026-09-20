@@ -1,6 +1,7 @@
 import type { SqlRequest, SqlStreamEvent } from '@tsmyadmin/shared'
 import { SqlStreamEventSchema } from '@tsmyadmin/shared'
-import { api, enc } from './api.ts'
+import { api, enc, noteServerContact } from './api.ts'
+import { recordStatement } from './debug-sql.ts'
 import { ndjsonEvents, streamError } from './ndjson.ts'
 
 export type SqlStreamBody = Omit<SqlRequest, 'maxRows' | 'timeoutMs' | 'stopOnError' | 'profile'> & Partial<SqlRequest>
@@ -18,10 +19,12 @@ export async function* streamSql(
     { param: { db: enc(db) }, json: body },
     { init: signal ? { signal } : {} }
   )
+  noteServerContact()
   if (!res.ok || !res.body) throw await streamError(res)
   let done = false
   for await (const event of ndjsonEvents(res.body, SqlStreamEventSchema)) {
     if (event.type !== 'result') done = true
+    else recordStatement(event.result)
     yield event
   }
   if (!done) yield { type: 'fatal', message: 'connection closed before the run finished' }

@@ -45,6 +45,11 @@ const EnvSchema = z.object({
    * Preset hosts are allowed automatically. Never put passwords here.
    */
   TSMYADMIN_SERVERS: z.string().optional(),
+  /**
+   * Hosts the "image link" display transformation may load pictures from (added to the CSP's img-src). Comma-separated
+   * `host` or `*.suffix` entries, each optionally with `:port`; without one, the default port. Empty: none.
+   */
+  TSMYADMIN_IMAGE_HOSTS: z.string().default(''),
   /** Login attempts allowed per client IP + user within the window. */
   LOGIN_RATE_LIMIT: z.coerce.number().int().min(1).default(10),
   LOGIN_RATE_WINDOW_SECONDS: z.coerce.number().int().min(1).default(60),
@@ -99,6 +104,8 @@ export type AppConfig = {
   webDist: string | undefined
   shutdownTimeoutMs: number
   sessionMaxPerIdentity: number
+  /** Hosts an image link may load pictures from (TSMYADMIN_IMAGE_HOSTS). */
+  imageHosts: string[]
 }
 
 /** Every startup-validation failure reads `Invalid environment: ...` (docs/deployment.md, docs/operations.md). */
@@ -147,6 +154,13 @@ export function loadConfig(env: Record<string, string | undefined>): AppConfig {
     const hint = 'expected host, host:port or [ipv6]:port with a numeric port'
     throw new ConfigError(`TSMYADMIN_ALLOWED_HOSTS: invalid entry ${invalid.join(', ')} (${hint})`)
   }
+  const imageHosts = csv(e.TSMYADMIN_IMAGE_HOSTS).map((h) => h.toLowerCase())
+  const badImageHosts = imageHosts.filter((h) => !IMAGE_HOST.test(h))
+  if (badImageHosts.length > 0) {
+    throw new ConfigError(
+      `TSMYADMIN_IMAGE_HOSTS: invalid entry ${badImageHosts.join(', ')} (expected host or *.host, optionally with :port)`
+    )
+  }
   return {
     isProd,
     require2fa,
@@ -166,8 +180,12 @@ export function loadConfig(env: Record<string, string | undefined>): AppConfig {
     webDist: e.WEB_DIST,
     shutdownTimeoutMs: e.SHUTDOWN_TIMEOUT_SECONDS * 1000,
     sessionMaxPerIdentity: e.SESSION_MAX_PER_IDENTITY,
+    imageHosts,
   }
 }
+
+/** A host name or IPv4 address, a leading `*.` allowed, and an optional port: nothing that could add to a CSP source list. */
+const IMAGE_HOST = /^(\*\.)?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*(:\d{1,5})?$/
 
 function parseServers(raw: string | undefined): ServerPreset[] {
   if (!raw || raw.trim() === '') return []

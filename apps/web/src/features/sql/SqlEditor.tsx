@@ -7,6 +7,7 @@ import type { Dialect } from '@tsmyadmin/shared'
 import { basicSetup } from 'codemirror'
 import { useEffect, useRef } from 'react'
 import { locale } from '@/config/locale.ts'
+import { resolveSettings } from '@/lib/settings.ts'
 import { useTheme } from '@/lib/theme.ts'
 
 /** Dark palette (zinc surfaces, the same accent hues as the light default) — basicSetup only ships the light one. */
@@ -92,6 +93,20 @@ export function SqlEditor({ value, onChange, onRun, dialect, schema }: SqlEditor
                 return true
               },
             },
+            // The setting "Enter runs": the completion list keeps Enter while it is open, and Shift + Enter is a new line.
+            ...(resolveSettings().sqlEnterRuns
+              ? [
+                  {
+                    key: 'Enter',
+                    shift: () => false,
+                    run: () => {
+                      if (document.querySelector('.cm-tooltip-autocomplete')) return false
+                      latest.current.onRun()
+                      return true
+                    },
+                  },
+                ]
+              : []),
           ])
         ),
         EditorView.updateListener.of((u) => {

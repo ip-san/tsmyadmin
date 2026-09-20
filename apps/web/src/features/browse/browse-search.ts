@@ -6,7 +6,7 @@ import {
   parseBrowseQuery,
 } from '@tsmyadmin/shared'
 import { z } from 'zod'
-import { sharePreference } from '@/lib/account-prefs.ts'
+import { sharePreference, shareWorkspaceEntry } from '@/lib/account-prefs.ts'
 import { readPreference, removePreference, writePreference } from '@/lib/preferences.ts'
 
 const DEFAULT_LIMIT = 50
@@ -68,6 +68,7 @@ export function rememberedColumns(db: string, schema: string | undefined, table:
 export function rememberColumns(db: string, schema: string | undefined, table: string, cols: string | undefined) {
   if (cols === undefined) removePreference(colsKey(db, schema, table))
   else writePreference(colsKey(db, schema, table), cols)
+  shareWorkspaceEntry(colsKey(db, schema, table), cols ?? null)
 }
 
 /** Data columns exclude the hidden key column (PG ctid) appended by the adapter. */

@@ -15,15 +15,19 @@ import {
 import { type ReactNode, useState } from 'react'
 import { z } from 'zod'
 import { LOCALE_CODES, LOCALE_NAMES, type LocaleCode, locale, localeCode, setLocale } from '@/config/locale.ts'
-import { sharePreference, sharePreferenceNow } from '@/lib/account-prefs.ts'
+import { LOCAL, sharePreference, sharePreferenceNow, shareWorkspaceEntry } from '@/lib/account-prefs.ts'
 import { readPreference, writePreference } from '@/lib/preferences.ts'
 import { myGroupTabsQuery } from '@/lib/queries.ts'
+import { resolveSettings } from '@/lib/settings.ts'
 import { useShortcuts } from '@/lib/shortcuts.ts'
 import { useTheme } from '@/lib/theme.ts'
 import { Button } from '../ui/Button.tsx'
 import { Select } from '../ui/Field.tsx'
 import { BrandMark } from './BrandMark.tsx'
+import { SessionExpiryNotice } from './SessionExpiryNotice.tsx'
 import { ShortcutHelp } from './ShortcutHelp.tsx'
+import { SidebarResizer } from './SidebarResizer.tsx'
+import { useLevelShortcuts } from './useLevelShortcuts.ts'
 
 const SIDEBAR_PREF = 'sidebar.collapsed'
 const DOCK_PREF = 'console.docked'
@@ -35,7 +39,7 @@ export function AppShell({
   children,
   onLogout,
 }: {
-  session: SessionInfo
+  session: SessionInfo & { ttlSeconds?: number | undefined }
   sidebar: ReactNode
   /** The SQL console kept at the foot of the page; mounted only while it is open. */
   dock?: ReactNode
@@ -52,12 +56,23 @@ export function AppShell({
     setPrevLocation(location)
     if (narrow() && !collapsed) setCollapsed(true)
   }
+  // Width of the sidebar from md up (a setting; the handle at its edge changes it and keeps the new width).
+  const [navWidth, setNavWidth] = useState(() => resolveSettings().navWidth)
+  const keepNavWidth = (w: number) => {
+    setNavWidth(w)
+    writePreference(LOCAL.navWidth.key, w)
+    sharePreference({ navWidth: w })
+  }
   const toggleSidebar = () =>
     setCollapsed((c) => {
-      if (!narrow()) writePreference(SIDEBAR_PREF, !c)
+      if (!narrow()) {
+        writePreference(SIDEBAR_PREF, !c)
+        shareWorkspaceEntry(SIDEBAR_PREF, !c)
+      }
       return !c
     })
   useShortcuts([{ keys: 'mod+b', global: true, handler: toggleSidebar }])
+  useLevelShortcuts()
   // A user group that hides the server's SQL tab hides the console too: it is the same thing at the foot of the page.
   const consoleHidden = useQuery(myGroupTabsQuery).data?.hiddenTabs.includes('server:sql') ?? false
   const [docked, setDocked] = useState(() => readPreference(DOCK_PREF, z.boolean(), false))
@@ -181,12 +196,15 @@ export function AppShell({
         <aside
           data-scroll-root
           hidden={collapsed}
-          className="absolute inset-y-0 left-0 z-20 mt-[49px] w-64 shrink-0 overflow-y-auto border-r border-line bg-surface shadow-lg md:static md:mt-0 md:shadow-none print:hidden"
+          style={{ '--nav-width': `${navWidth}px` } as React.CSSProperties}
+          className="absolute inset-y-0 left-0 z-20 mt-[49px] w-64 shrink-0 overflow-y-auto border-r border-line bg-surface shadow-lg md:static md:mt-0 md:w-[var(--nav-width)] md:shadow-none print:hidden"
           aria-label={locale.nav.tree}
         >
           {sidebar}
         </aside>
+        {!collapsed ? <SidebarResizer width={navWidth} onChange={setNavWidth} onCommit={keepNavWidth} /> : null}
         <div className="flex min-w-0 flex-1 flex-col print:block">
+          <SessionExpiryNotice ttlSeconds={session.ttlSeconds} />
           <main id="main" className="min-h-0 min-w-0 flex-1 overflow-y-auto p-4 print:overflow-visible print:p-0">
             {children}
           </main>

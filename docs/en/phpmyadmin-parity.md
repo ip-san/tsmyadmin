@@ -1,4 +1,4 @@
-<!-- translated-from: docs/phpmyadmin-parity.md sha256:9b605df59f6a73372002ca24a36cb8fe7e7a184f0dbd6ee379c3c7e77d1c3dd9 -->
+<!-- translated-from: docs/phpmyadmin-parity.md sha256:3797ceb541486717bd7380c8db64fe02ec473c3675f39ef889b0dfe5e9bf80de -->
 
 # Feature parity with phpMyAdmin
 
@@ -19,19 +19,19 @@ In 2026-09 every phpMyAdmin screen was audited again: ten rows marked ✅ went b
 
 | # | Feature | Status |
 |---|---|---|
-| S1 | Collation when creating a database; dropping several databases at once | ✅ |
+| S1 | Collation when creating a database; dropping several databases at once | ✅ (in PostgreSQL a database's collation is chosen when it is created and cannot be changed later) |
 | S2 | SQL: formatting, bound parameters, a delimiter field, roll back when finished, toggling foreign key checks | ✅ |
 | S3 | Status: overview (traffic, connections), query statistics, filtering variables by category and flagging alerts | ✅ |
 | S4 | Live monitor (charts, refresh rate). Slow / general log analysis only with `log_output=TABLE` | ✅ |
 | S5 | Advisor (configuration suggestions) | ✅ |
 | S6 | Processes: show only the active ones, choose the refresh rate | ✅ |
 | S7 | Changing a system variable (SET GLOBAL) | ✅ |
-| S8 | Storage engine details (InnoDB status and the like) | ✅ |
+| S8 | Storage engine details (InnoDB status and the like) | ✅ (PostgreSQL has no storage engines: the table access methods are listed; nothing corresponds to the InnoDB status) |
 | S9 | Binary log events | ✅ |
 | S10 | Replication control (start / stop, skip errors, set up) | ✅ |
 | S11 | Locking / unlocking accounts; exporting privileges as SQL | ✅ |
 | S12 | Creating an account: host choices, authentication plugin, password generator, a database of the same name with its grant | ✅ |
-| S13 | Resource limits, SSL requirements | ✅ |
+| S13 | Resource limits, SSL requirements | ✅ (PostgreSQL has no REQUIRE SSL, `pg_hba.conf` decides; the only resource limit is a role's connection limit) |
 | S14 | Editing global privileges one by one | ✅ |
 | S15 | Editing column-level and routine-level privileges | ✅ |
 | S16 | Renaming / copying an account | ✅ |
@@ -50,7 +50,7 @@ In 2026-09 every phpMyAdmin screen was audited again: ten rows marked ✅ went b
 
 | # | Feature | Status |
 |---|---|---|
-| D1 | Bulk actions on the chosen tables: copy, show CREATE, ANALYZE / CHECK / CHECKSUM / OPTIMIZE / REPAIR, add / replace a prefix | ✅ |
+| D1 | Bulk actions on the chosen tables: copy, show CREATE, ANALYZE / CHECK / CHECKSUM / OPTIMIZE / REPAIR, add / replace a prefix | ✅ (PostgreSQL has no CHECK / CHECKSUM / REPAIR TABLE; OPTIMIZE is `VACUUM FULL`, ANALYZE is `ANALYZE`) |
 | D2 | More list columns (charset, created / updated), counting the exact rows on the spot | ✅ |
 | D3 | Data dictionary (every table's definition, for printing) | ✅ |
 | D4 | Search kinds (any word / all words / exact phrase / regular expression), filtering by column name | ✅ |
@@ -58,9 +58,9 @@ In 2026-09 every phpMyAdmin screen was audited again: ten rows marked ✅ went b
 | D6 | Saving query builder criteria | ✅ |
 | D7 | Changing the default collation (applied to every table and column) | ✅ |
 | D8 | Copy options (carrying over foreign keys, AUTO_INCREMENT, privileges and the like) | ✅ |
-| D9 | Routines: editing, running, dropping, exporting; DEFINER / SQL SECURITY / data access | ✅ |
+| D9 | Routines: editing, running, dropping, exporting; DEFINER / SQL SECURITY / data access | ✅ (PostgreSQL has no DEFINER or data-access characteristics) |
 | D10 | Triggers: editing, exporting; DEFINER | ✅ |
-| D11 | Events: editing, exporting; ON COMPLETION PRESERVE; DEFINER | ✅ |
+| D11 | Events: editing, exporting; ON COMPLETION PRESERVE; DEFINER | ✅ (PostgreSQL has no event scheduler, so the tab has nothing to show) |
 | D12 | Views: OR REPLACE, ALGORITHM, DEFINER, SQL SECURITY, column names, WITH CHECK OPTION, editing a view | ✅ |
 | D13 | Designer: creating / dropping relations on the diagram, display column, saved pages, exporting the schema (SVG / PDF) | ✅ |
 | D14 | Tracking: a per-database list, recording the DDL / DML statements run | ✅ |
@@ -87,12 +87,12 @@ In 2026-09 every phpMyAdmin screen was audited again: ten rows marked ✅ went b
 | T7 | Find and replace: regular expressions | ✅ |
 | T8 | Zoom search: conditions per axis, a label column, a cap on points drawn | ✅ |
 | T9 | Column definition: collation, attributes (UNSIGNED / ZEROFILL / BINARY / ON UPDATE), generated columns, moving a column, a key when adding | ✅ |
-| T10 | Structure: a key on the chosen columns, changing / dropping several at once, reordering columns | ✅ |
+| T10 | Structure: a key on the chosen columns, changing / dropping several at once, reordering columns | ✅ (PostgreSQL cannot change a column's position) |
 | T11 | Indexes: FULLTEXT / SPATIAL, method, prefix length, renaming, editing | ✅ |
 | T12 | Structure information: space used, row statistics, printing | ✅ |
-| T13 | Creating and managing partitions | ✅ |
+| T13 | Creating and managing partitions | ✅ (PostgreSQL cannot partition an existing table: it is chosen when creating it; there is no KEY partitioning) |
 | T14 | Relations: foreign keys to another database, display column | ✅ |
-| T15 | Operations: ROW_FORMAT, changing every column's collation, ALTER TABLE ORDER BY, CHECKSUM, FLUSH, copy options | ✅ |
+| T15 | Operations: ROW_FORMAT, changing every column's collation, ALTER TABLE ORDER BY, CHECKSUM, FLUSH, copy options | ✅ (PostgreSQL has no ROW_FORMAT, CHECKSUM, FLUSH, engine or table collation option) |
 | T16 | Tracking: choosing which kinds of statement to record | ✅ |
 | T17 | Browse: show all rows (a setting lifts the 1,000 rows per page cap; a warning above 10,000 rows) | ✅ |
 | T18 | Structure: "browse distinct values" of a column (DISTINCT with counts) | ✅ |
@@ -121,32 +121,32 @@ In 2026-09 every phpMyAdmin screen was audited again: ten rows marked ✅ went b
 
 | # | Feature | Status |
 |---|---|---|
-| G1 | A settings screen (features, SQL, navigation, main panel, export / import defaults; saving to a file, loading, resetting) | △ (the "Features" and "Main panel" items (default tab, default insert row count, repeated headers…) are missing → G1) |
+| G1 | A settings screen (features, SQL, navigation, main panel, export / import defaults; saving to a file, loading, resetting) | ✅ |
 | G2 | Shared bookmarks with `[VARIABLE]` substitution; SQL history kept on the server | ✅ |
-| G3 | Console: history, bookmarks, options | △ (Enter-to-run, open at start and expand-messages settings are missing → G3) |
+| G3 | Console: history, bookmarks, options | ✅ (the console opens as it was left; results and messages are always shown open) |
 | G4 | After a statement runs: edit / EXPLAIN / code for an application / run again | ✅ |
 | G5 | Chart kinds (column, spline, area, pie, timeline, scatter); saving as an image | ✅ |
 | G6 | GIS: saving as PNG / SVG | ✅ |
-| G7 | More display transformations (hex, substring, boolean, date format, IPv4, prepend / append, image and text links) and input transformations (image upload, regular expression check, JSON / XML / SQL editors) | △ (the download link and the IP → integer input transformation are missing; Formatted / Imagelink / External are out of scope → G7) |
+| G7 | More display transformations (hex, substring, boolean, date format, IPv4, prepend / append, image and text links) and input transformations (image upload, regular expression check, JSON / XML / SQL editors) | ✅ (External is out of scope) |
 | G8 | Navigation: grouping by prefix, hiding items, paging when there are many | ✅ |
 | G9 | Choosing the connection collation; server information on the home page | ✅ |
 | G12 | Printable lists | ✅ |
-| G13 | Favourites, recent tables, column order / visibility, display column and the sidebar state kept with the account (pmadb's recent / favorite / table_uiprefs / table_info) | ✗ (this browser only) |
-| G14 | Navigation: expand all / collapse all / reload | ✗ |
-| G15 | Routines and events in the navigation tree (optional setting) | ✗ |
-| G16 | Resizable sidebar (remembered, keyboard too) | ✗ |
-| G17 | Table comments as tooltips in the tree | ✗ |
-| G18 | Console settings: Enter runs (Shift+Enter for a new line), open at start, expand messages | ✗ |
-| G19 | A settings icon per page (to that screen's settings) | ✗ |
-| G20 | A manual link per page (per dialect) | ✗ (one help link only) |
-| G21 | A warning before the session expires, with "extend" | ✗ (redirect after it expires) |
-| G22 | More keyboard shortcuts (d / s / t / h / b / e, Ctrl+Space for completion) | △ (7) |
-| G23 | The "Features" and "Main panel" settings (default tab, default insert row count, repeated headers every N rows, confirm DROP, grid editing default, save on blur…) | ✗ |
-| G24 | Display transformation: a download link for binary values. Input transformation: IPv4 → integer | ✗ |
-| G25 | A PostgreSQL note on each row where the equivalent is missing or different (S1 / S8 / S13 / D1 / D9 / D11 / T10 / T13 / T15) | ✗ (docs only) |
-| G26 | The console's "Debug SQL" tab (the statements the screens issued, with timings) | ✗ |
-| G27 | The Formatted display transformation (a value shown as HTML; sanitising is a must) | ✗ |
-| G28 | The Imagelink display transformation (an external image URL; the allowed hosts come from an environment variable and are added to the CSP's `img-src`) | ✗ |
+| G13 | Favourites, recent tables, column order / visibility, display column and the sidebar state kept with the account (pmadb's recent / favorite / table_uiprefs / table_info) | ✅ (kept under `/workspace` with `SESSION_STORE=sqlite` / `redis`) |
+| G14 | Navigation: expand all / collapse all / reload | ✅ |
+| G15 | Routines and events in the navigation tree (optional setting) | ✅ |
+| G16 | Resizable sidebar (remembered, keyboard too) | ✅ |
+| G17 | Table comments as tooltips in the tree | ✅ |
+| G18 | Console settings: Enter runs (Shift+Enter for a new line), open at start, expand messages | ✅ |
+| G19 | A settings icon per page (to that screen's settings) | ✅ |
+| G20 | A manual link per page (per dialect) | ✅ |
+| G21 | A warning before the session expires, with "extend" | ✅ |
+| G22 | More keyboard shortcuts (d / s / t / h / b / e, Ctrl+Space for completion) | ✅ |
+| G23 | The "Features" and "Main panel" settings (default tab, default insert row count, repeated headers every N rows, confirm DROP, grid editing default, save on blur…) | ✅ |
+| G24 | Display transformation: a download link for binary values. Input transformation: IPv4 → integer | ✅ |
+| G25 | A PostgreSQL note on each row where the equivalent is missing or different (S1 / S8 / S13 / D1 / D9 / D11 / T10 / T13 / T15) | ✅ |
+| G26 | The console's "Debug SQL" tab (the statements the screens issued, with timings) | ✅ |
+| G27 | The Formatted display transformation (a value shown as HTML; sanitising is a must) | ✅ |
+| G28 | The Imagelink display transformation (an external image URL; the allowed hosts come from an environment variable and are added to the CSP's `img-src`) | ✅ |
 
 ## Quality debt (found in review, still open)
 

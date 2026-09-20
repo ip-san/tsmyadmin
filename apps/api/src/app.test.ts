@@ -156,6 +156,9 @@ describe('session', () => {
       port: 3306,
       user: 'root',
       serverDatabase: 'information_schema',
+      // How long a session lasts unused (the default is 30 minutes), and where a picture may come from (nowhere).
+      ttlSeconds: 1800,
+      imageHosts: [],
     })
     const setCookie = res.headers.get('set-cookie') ?? ''
     expect(setCookie).toMatch(/tsmyadmin_session=/)
@@ -2375,6 +2378,38 @@ describe('preferences, central columns and column transformations', () => {
     }
   })
 
+  it('keeps the favourite tables and the like with the account, merged and limited to known keys', async () => {
+    const h = persistentHarness()
+    try {
+      expect((await h.send('/api/workspace', 'PUT', { set: { 'sidebar.collapsed': true } })).status).toBe(401)
+      await h.login()
+      expect(await (await h.req('/api/workspace')).json()).toEqual({ entries: {} })
+      const favourites = [{ db: 'shop', table: 'orders' }]
+      const put = await h.send('/api/workspace', 'PUT', {
+        set: { 'tables.favorites.mysql|h|3306|u': favourites, 'sidebar.collapsed': true },
+      })
+      expect(await put.json()).toEqual({
+        entries: { 'tables.favorites.mysql|h|3306|u': favourites, 'sidebar.collapsed': true },
+      })
+      // Merged: a second browser sending only what it changed keeps the rest; `remove` takes one away.
+      await h.send('/api/workspace', 'PUT', { set: { 'display-column.["shop","","orders"]': 'name' } })
+      await h.send('/api/workspace', 'PUT', { remove: ['sidebar.collapsed'] })
+      const kept = (await (await h.req('/api/workspace')).json()) as { entries: Record<string, unknown> }
+      expect(Object.keys(kept.entries).sort()).toEqual([
+        'display-column.["shop","","orders"]',
+        'tables.favorites.mysql|h|3306|u',
+      ])
+      // Only the keys the account is meant to keep, and values of a sane size.
+      expect((await h.send('/api/workspace', 'PUT', { set: { 'sql.safeMode': false } })).status).toBe(400)
+      expect((await h.send('/api/workspace', 'PUT', { set: { 'browse.cols.x': 'a'.repeat(9000) } })).status).toBe(400)
+      // Another account has its own.
+      await h.login({ ...LOGIN, user: 'reader' })
+      expect(await (await h.req('/api/workspace')).json()).toEqual({ entries: {} })
+    } finally {
+      await h.store.closeAll()
+    }
+  })
+
   it('keeps central columns per database, replacing one by name', async () => {
     const h = persistentHarness()
     try {
@@ -2546,6 +2581,8 @@ describe('preferences, central columns and column transformations', () => {
     stores.push(h.store)
     await h.login()
     expect(await (await h.req('/api/preferences')).json()).toEqual({})
+    expect(await (await h.req('/api/workspace')).json()).toEqual({ entries: {} })
+    expect((await h.req('/api/workspace', { method: 'PUT', body: JSON.stringify({ remove: [] }) })).status).toBe(400)
     expect(await (await h.req('/api/central-columns')).json()).toEqual([])
     expect(await (await h.req('/api/shared-queries')).json()).toEqual([])
     expect(await (await h.req('/api/sql-history')).json()).toEqual({ entries: [] })

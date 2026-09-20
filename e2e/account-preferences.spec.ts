@@ -35,4 +35,29 @@ test.describe('preferences kept with the account', () => {
       await dropAccount(page, name)
     }
   })
+
+  test('carry how the sidebar was left into another browser', async ({ page, browser }) => {
+    test.setTimeout(90_000)
+    const name = `e2e_ws_${Date.now().toString(36)}`
+    await createAccount(page, name, 'pw-ws')
+    try {
+      await signIn(page, name, 'pw-ws')
+      await page.getByRole('button', { name: 'サイドバーを隠す' }).first().click()
+      await expect
+        .poll(async () => (await (await page.request.get('/api/workspace')).json()).entries['sidebar.collapsed'])
+        .toBe(true)
+
+      const other = await browser.newContext({ baseURL: PERSISTENT_BASE_URL })
+      const second = await other.newPage()
+      try {
+        await signIn(second, name, 'pw-ws')
+        await expect(second.getByRole('button', { name: 'サイドバーを表示' })).toBeVisible()
+        await expect(second.getByRole('complementary')).toBeHidden()
+      } finally {
+        await other.close()
+      }
+    } finally {
+      await dropAccount(page, name)
+    }
+  })
 })

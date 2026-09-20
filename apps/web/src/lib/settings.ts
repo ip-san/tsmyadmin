@@ -16,6 +16,17 @@ import { type PreferenceStore, readPreference, removePreference, writePreference
 const SETTING_NAMES = [
   'browseLimit',
   'browseUnlimited',
+  'navWidth',
+  'navShowRoutines',
+  'sqlEnterRuns',
+  'defaultServerTab',
+  'defaultDbTab',
+  'defaultTableTab',
+  'insertRowCount',
+  'headerEvery',
+  'confirmDrop',
+  'gridEdit',
+  'saveOnBlur',
   'sqlSafeMode',
   'consoleDocked',
   'sqlHistoryMax',
@@ -34,6 +45,17 @@ export type ResolvedSettings = { [K in SettingName]-?: Exclude<Settings[K], unde
 export const SETTING_DEFAULTS: ResolvedSettings = {
   browseLimit: 50,
   browseUnlimited: false,
+  navWidth: 256,
+  navShowRoutines: false,
+  sqlEnterRuns: false,
+  defaultServerTab: 'databases',
+  defaultDbTab: 'structure',
+  defaultTableTab: 'browse',
+  insertRowCount: 1,
+  headerEvery: 0,
+  confirmDrop: true,
+  gridEdit: 'doubleClick',
+  saveOnBlur: false,
   sqlSafeMode: true,
   consoleDocked: false,
   sqlHistoryMax: 100,
@@ -61,6 +83,13 @@ export function readSettings(store?: PreferenceStore): Settings {
 /** Every setting with its value, or the default where none was chosen. */
 export function resolveSettings(settings: Settings = readSettings()): ResolvedSettings {
   return { ...SETTING_DEFAULTS, ...settings } as ResolvedSettings
+}
+
+/** One setting's value (the default where none was chosen), without reading every other setting. */
+export function readSetting<N extends SettingName>(name: N): ResolvedSettings[N] {
+  const raw = readPreference(LOCAL[name].key, z.unknown(), undefined)
+  const parsed = raw === undefined ? undefined : SHAPES[name].safeParse(raw)
+  return (parsed?.success && parsed.data !== undefined ? parsed.data : SETTING_DEFAULTS[name]) as ResolvedSettings[N]
 }
 
 export const exportDefaults = () => resolveSettings().exportDefaults

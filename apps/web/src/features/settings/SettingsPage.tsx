@@ -1,5 +1,5 @@
-import { useRouteContext } from '@tanstack/react-router'
-import { useRef, useState } from 'react'
+import { useLocation, useRouteContext } from '@tanstack/react-router'
+import { useEffect, useRef, useState } from 'react'
 import { PageTitle } from '@/components/layout/PageTitle.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { Dialog } from '@/components/ui/Dialog.tsx'
@@ -39,7 +39,15 @@ const wasSaved = (): boolean => {
 
 /** The settings as the file / server takes them: a number the box was emptied of is not a value. */
 const valid = (v: ResolvedSettings) =>
-  [v.browseLimit, v.sqlHistoryMax, v.navPageSize].every((n) => Number.isFinite(n)) &&
+  [v.browseLimit, v.sqlHistoryMax, v.navPageSize, v.navWidth, v.insertRowCount, v.headerEvery].every((n) =>
+    Number.isFinite(n)
+  ) &&
+  v.navWidth >= 200 &&
+  v.navWidth <= 480 &&
+  v.insertRowCount >= 1 &&
+  v.insertRowCount <= 10 &&
+  v.headerEvery >= 0 &&
+  v.headerEvery <= 1000 &&
   v.browseLimit >= 1 &&
   v.browseLimit <= 1000 &&
   v.sqlHistoryMax >= 10 &&
@@ -96,6 +104,11 @@ export function SettingsPage() {
     setMessage({ text: t.loaded, error: false })
     if (fileInput.current) fileInput.current.value = ''
   }
+  // Arriving by a gear beside a page's title (`/settings#sql`): the section that governs that page is brought into view.
+  const hash = useLocation().hash
+  useEffect(() => {
+    if (hash) document.getElementById(hash)?.scrollIntoView({ block: 'start' })
+  }, [hash])
   const mysql = session.dialect === 'mysql'
   return (
     <div className="max-w-3xl space-y-4">

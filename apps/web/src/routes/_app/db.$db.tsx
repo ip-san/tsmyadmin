@@ -1,5 +1,6 @@
 import { createFileRoute, Link, Outlet, useMatch } from '@tanstack/react-router'
 import { PageTitle } from '@/components/layout/PageTitle.tsx'
+import { SettingsLink } from '@/components/layout/SettingsLink.tsx'
 import { TabNav } from '@/components/layout/TabNav.tsx'
 import { Badge } from '@/components/ui/Feedback.tsx'
 import { locale } from '@/config/locale.ts'
@@ -34,7 +35,7 @@ function DatabaseLayout() {
   }
   return (
     <>
-      <PageTitle>
+      <PageTitle actions={<SettingsLink section="navigation" />}>
         {locale.database.title(db)}{' '}
         {schema ? (
           <Badge>

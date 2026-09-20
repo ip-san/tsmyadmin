@@ -1,5 +1,5 @@
 import type { Preferences } from '@tsmyadmin/shared'
-import { PreferencesSchema } from '@tsmyadmin/shared'
+import { isWorkspaceKey, PreferencesSchema, WorkspaceEntriesSchema, type WorkspaceUpdate } from '@tsmyadmin/shared'
 import { z } from 'zod'
 import { LOCALE_CODES, localeCode } from '@/config/locale.ts'
 import { api, unwrap } from '@/lib/api.ts'
@@ -15,6 +15,17 @@ export const LOCAL: Record<Exclude<keyof Preferences, 'theme'>, { key: string }>
   locale: { key: 'locale' },
   browseLimit: { key: 'browse.limit' },
   browseUnlimited: { key: 'browse.unlimited' },
+  navWidth: { key: 'nav.width' },
+  navShowRoutines: { key: 'nav.showRoutines' },
+  sqlEnterRuns: { key: 'sql.enterRuns' },
+  defaultServerTab: { key: 'tab.server' },
+  defaultDbTab: { key: 'tab.db' },
+  defaultTableTab: { key: 'tab.table' },
+  insertRowCount: { key: 'insert.rows' },
+  headerEvery: { key: 'browse.headerEvery' },
+  confirmDrop: { key: 'confirm.drop' },
+  gridEdit: { key: 'grid.edit' },
+  saveOnBlur: { key: 'grid.saveOnBlur' },
   sqlSafeMode: { key: 'sql.safeMode' },
   consoleDocked: { key: 'console.docked' },
   sqlHistoryMax: { key: 'sql.historyMax' },
@@ -30,6 +41,8 @@ let loadedFor: string | null = null
 let shared: Preferences = {}
 /** What changed here since the last send: only that is sent, so a stale copy of the rest cannot overwrite another browser's newer choice. */
 let dirty: Preferences = {}
+/** The same for the workspace entries (favourite tables, chosen columns…): keys set since the last send, and keys removed. */
+let dirtyKeys: { set: Record<string, unknown>; remove: string[] } = { set: {}, remove: [] }
 let pending: ReturnType<typeof setTimeout> | null = null
 
 /**
@@ -50,6 +63,7 @@ export async function loadAccountPreferences(identity: string, onServer: boolean
     cancelPending()
     shared = {}
     dirty = {}
+    dirtyKeys = { set: {}, remove: [] }
   }
   syncing = onServer
   if (!onServer || loadedFor === identity) return { reload: false }
@@ -63,6 +77,13 @@ export async function loadAccountPreferences(identity: string, onServer: boolean
   }
   shared = prefs
   if (prefs.theme) setTheme(prefs.theme)
+  // Which tables are favourites, the columns chosen for a table…: laid over this browser's the same way.
+  try {
+    const { entries } = WorkspaceEntriesSchema.parse(await unwrap<unknown>(api.workspace.$get()))
+    for (const [key, value] of Object.entries(entries)) writePreference(key, value)
+  } catch {
+    // Unreachable just now: this browser's own copy still works.
+  }
   let reload = false
   for (const name of Object.keys(LOCAL) as (keyof typeof LOCAL)[]) {
     const value = prefs[name]
@@ -90,18 +111,55 @@ export function resetAccountPreferences(): void {
   syncing = false
   shared = {}
   dirty = {}
+  dirtyKeys = { set: {}, remove: [] }
 }
 
 function send(): Promise<unknown> {
   cancelPending()
   const body = dirty
   dirty = {}
-  if (Object.keys(body).length === 0) return Promise.resolve()
+  const keyed = dirtyKeys
+  dirtyKeys = { set: {}, remove: [] }
+  const sends: Promise<unknown>[] = []
   // Kept alive so a change made just before a reload (the language switch) still arrives. A failed send keeps the
   // change to go out with the next one.
-  return api.preferences.$put({ json: body }, { init: { keepalive: true } }).catch(() => {
-    dirty = { ...body, ...dirty }
-  })
+  if (Object.keys(body).length > 0) {
+    sends.push(
+      api.preferences.$put({ json: body }, { init: { keepalive: true } }).catch(() => {
+        dirty = { ...body, ...dirty }
+      })
+    )
+  }
+  if (Object.keys(keyed.set).length > 0 || keyed.remove.length > 0) {
+    const update: WorkspaceUpdate = { set: keyed.set, remove: keyed.remove }
+    sends.push(
+      api.workspace.$put({ json: update }, { init: { keepalive: true } }).catch(() => {
+        // Whatever was changed again meanwhile is newer than what failed to go out.
+        dirtyKeys = {
+          set: { ...keyed.set, ...dirtyKeys.set },
+          remove: [...new Set([...keyed.remove, ...dirtyKeys.remove])].filter((k) => !(k in dirtyKeys.set)),
+        }
+      })
+    )
+  }
+  return Promise.all(sends)
+}
+
+/**
+ * Records a change to one of the entries the account keeps of how it works with the tables (see
+ * WORKSPACE_KEY_PREFIXES): the new value, or `null` when it was removed. Debounced; a no-op in browser mode.
+ */
+export function shareWorkspaceEntry(key: string, value: unknown | null): void {
+  if (!syncing || !isWorkspaceKey(key)) return
+  if (value === null) {
+    delete dirtyKeys.set[key]
+    dirtyKeys.remove = [...new Set([...dirtyKeys.remove, key])]
+  } else {
+    dirtyKeys.remove = dirtyKeys.remove.filter((k) => k !== key)
+    dirtyKeys.set[key] = value
+  }
+  if (pending !== null) clearTimeout(pending)
+  pending = setTimeout(() => void send(), 500)
 }
 
 /** Records a change to one of the shared preferences with the account (debounced; a no-op in browser mode). */

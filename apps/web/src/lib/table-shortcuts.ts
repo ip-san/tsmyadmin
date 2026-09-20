@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useCallback, useMemo, useSyncExternalStore } from 'react'
 import { z } from 'zod'
+import { shareWorkspaceEntry } from './account-prefs.ts'
 import { type PreferenceStore, readPreference, writePreference } from './preferences.ts'
 import { sessionQuery } from './queries.ts'
 
@@ -56,6 +57,7 @@ export function shortcutStore(server: string, store?: PreferenceStore | null) {
     // Revisiting the table already at the top changes nothing: no write, and no re-render for the listeners.
     if (JSON.stringify(read(kind)) === JSON.stringify(list)) return
     writePreference(key(kind), list, store)
+    shareWorkspaceEntry(key(kind), list)
     changed()
   }
   return {

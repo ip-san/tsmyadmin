@@ -1,14 +1,16 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import type { Dialect } from '@tsmyadmin/shared'
-import { ChevronDown, ChevronRight, Database } from 'lucide-react'
+import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Database, RefreshCw } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { ErrorBox, Spinner } from '@/components/ui/Feedback.tsx'
 import { Input } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
+import { dbHomeTo } from '@/lib/default-tabs.ts'
 import { databasesQuery, schemasQuery } from '@/lib/queries.ts'
 import { resolveSettings } from '@/lib/settings.ts'
 import { useShortcuts } from '@/lib/shortcuts.ts'
+import { ProgramNodes } from './ProgramNodes.tsx'
 import { TableList } from './TableList.tsx'
 import { TableShortcuts } from './TableShortcuts.tsx'
 
@@ -48,7 +50,12 @@ function SchemaNodes({ db, filter }: { db: string; filter: string }) {
               <span className="truncate">{s}</span>
             </Link>
           </div>
-          {open[s] ? <TableList db={db} schema={s} filter={filter} /> : null}
+          {open[s] ? (
+            <>
+              <TableList db={db} schema={s} filter={filter} />
+              {resolveSettings().navShowRoutines ? <ProgramNodes db={db} schema={s} dialect="postgres" /> : null}
+            </>
+          ) : null}
         </li>
       ))}
     </ul>
@@ -57,6 +64,7 @@ function SchemaNodes({ db, filter }: { db: string; filter: string }) {
 
 export function DbTree({ dialect, activeDb }: { dialect: Dialect; activeDb?: string | undefined }) {
   const databases = useQuery(databasesQuery)
+  const queryClient = useQueryClient()
   const [open, setOpen] = useState<Record<string, boolean>>(activeDb ? { [activeDb]: true } : {})
   // Navigating to another database (server list, FK link) expands it (state-from-props reset pattern).
   const [prevActive, setPrevActive] = useState(activeDb)
@@ -93,6 +101,40 @@ export function DbTree({ dialect, activeDb }: { dialect: Dialect; activeDb?: str
         aria-label={locale.nav.filterTables}
         className="mb-2"
       />
+      <div className="mb-2 flex items-center gap-1 text-ink-sub">
+        <button
+          type="button"
+          className="rounded p-1 hover:bg-surface-sub hover:text-ink"
+          title={locale.nav.expandAll}
+          aria-label={locale.nav.expandAll}
+          onClick={() => setOpen(Object.fromEntries(visible.map((d) => [d.name, true])))}
+        >
+          <ChevronsUpDown className="size-4" aria-hidden />
+        </button>
+        <button
+          type="button"
+          className="rounded p-1 hover:bg-surface-sub hover:text-ink"
+          title={locale.nav.collapseAll}
+          aria-label={locale.nav.collapseAll}
+          onClick={() => setOpen({})}
+        >
+          <ChevronsDownUp className="size-4" aria-hidden />
+        </button>
+        <button
+          type="button"
+          className="rounded p-1 hover:bg-surface-sub hover:text-ink"
+          title={locale.nav.reloadTree}
+          aria-label={locale.nav.reloadTree}
+          // The databases, the schemas and every table list are read again (a table made elsewhere shows up).
+          onClick={() =>
+            void queryClient.invalidateQueries({
+              predicate: (q) => ['databases', 'schemas', 'tables'].includes(String(q.queryKey[0])),
+            })
+          }
+        >
+          <RefreshCw className="size-4" aria-hidden />
+        </button>
+      </div>
       <TableShortcuts />
       <ul>
         {visible.map((d) => {
@@ -114,7 +156,7 @@ export function DbTree({ dialect, activeDb }: { dialect: Dialect; activeDb?: str
                   )}
                 </button>
                 <Link
-                  to="/db/$db"
+                  to={dbHomeTo()}
                   params={{ db: d.name }}
                   className="flex min-w-0 flex-1 items-center gap-1 truncate rounded px-1 py-0.5 text-sm font-medium text-ink hover:bg-surface-sub"
                   activeProps={{ className: 'text-brand' }}
@@ -129,7 +171,10 @@ export function DbTree({ dialect, activeDb }: { dialect: Dialect; activeDb?: str
                 dialect === 'postgres' ? (
                   <SchemaNodes db={d.name} filter={filter} />
                 ) : (
-                  <TableList db={d.name} filter={filter} />
+                  <>
+                    <TableList db={d.name} filter={filter} />
+                    {resolveSettings().navShowRoutines ? <ProgramNodes db={d.name} dialect="mysql" /> : null}
+                  </>
                 )
               ) : null}
             </li>

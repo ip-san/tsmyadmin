@@ -1,7 +1,10 @@
+import { useQuery } from '@tanstack/react-query'
 import type { Cell, Dialect, RowKey } from '@tsmyadmin/shared'
 import { createContext, useContext } from 'react'
 import { z } from 'zod'
+import { shareWorkspaceEntry } from '@/lib/account-prefs.ts'
 import { readPreference, writePreference } from '@/lib/preferences.ts'
+import { sessionQuery } from '@/lib/queries.ts'
 
 /** How the browse grid shows values: phpMyAdmin's "Options" above the rows (full texts, binary, geometry). */
 const CellDisplaySchema = z.object({
@@ -21,6 +24,7 @@ export function preferredCellDisplay(): CellDisplay {
 }
 export function rememberCellDisplay(d: CellDisplay): void {
   writePreference(PREF, d)
+  shareWorkspaceEntry(PREF, d)
 }
 
 /** The current choice, and (where the grid offers the options) a way to change it and the session's dialect. */
@@ -34,3 +38,9 @@ export const CellDisplayContext = createContext<{
   fkLabel?: (column: string, value: Cell) => string | undefined
 }>({ display: DEFAULT })
 export const useCellDisplay = () => useContext(CellDisplayContext)
+
+/** Hosts an image link may load pictures from (the session's TSMYADMIN_IMAGE_HOSTS). */
+export function useImageHosts(): readonly string[] {
+  return useQuery(sessionQuery).data?.imageHosts ?? NO_HOSTS
+}
+const NO_HOSTS: readonly string[] = []

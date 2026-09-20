@@ -20,6 +20,7 @@ import { DEFAULT_RUN_OPTIONS, prepareScript, type RunOptions } from '@/lib/sql-p
 import { streamSql } from '@/lib/sql-stream.ts'
 import { newQueryId } from '@/lib/uuid.ts'
 import { MaxRowsSelect, ProfileOption, SAFE_MODE_PREF, SafeModeOption } from './ConsoleOptions.tsx'
+import { DebugSqlPanel } from './DebugSqlPanel.tsx'
 import { ResultsView } from './ResultsView.tsx'
 import { RunOptionsPanel } from './RunOptionsPanel.tsx'
 import { SafeModeDialog } from './SafeModeDialog.tsx'
@@ -287,6 +288,7 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
           onBookmark={(sql) => saved.save(bookmarkName(sql), sql)}
           onClear={lists.clear}
         />
+        <DebugSqlPanel onLoad={setText} onRerun={handlers.rerun} />
       </div>
       {results ? (
         <ResultsView results={results} maxRows={maxRows} viewTarget={{ db, schema }} handlers={handlers} />

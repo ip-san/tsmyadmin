@@ -29,6 +29,7 @@ export function TransformFields({
   )
   switch (kind) {
     case 'link':
+    case 'imagelink':
       return (
         <Field id={`${id}-template`} label={t.template}>
           <Input

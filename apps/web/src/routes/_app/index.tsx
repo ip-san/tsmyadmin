@@ -16,6 +16,7 @@ import { type DatabaseColumn, sortDatabases } from '@/features/database/sort-dat
 import { isProtectedDatabase } from '@/features/database/system-databases.ts'
 import { ServerInfoCard } from '@/features/server/ServerInfoCard.tsx'
 import { useDdlFlow } from '@/lib/ddl.ts'
+import { dbHomeTo } from '@/lib/default-tabs.ts'
 import { readPreference, writePreference } from '@/lib/preferences.ts'
 import { databaseListQuery } from '@/lib/queries.ts'
 
@@ -110,7 +111,7 @@ function ServerPage() {
                 </Td>
                 <Td>
                   <Link
-                    to="/db/$db"
+                    to={dbHomeTo()}
                     params={{ db: d.name }}
                     className="font-medium text-blue-700 hover:underline dark:text-blue-300"
                   >
@@ -125,7 +126,7 @@ function ServerPage() {
                 ) : null}
                 <Td className="space-x-2 whitespace-nowrap" data-print-hide>
                   <Link
-                    to="/db/$db"
+                    to={dbHomeTo()}
                     params={{ db: d.name }}
                     className="text-xs text-blue-700 hover:underline dark:text-blue-300"
                   >

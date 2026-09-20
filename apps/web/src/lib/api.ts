@@ -39,6 +39,13 @@ export class ApiError extends Error {
  */
 export const enc = (value: string) => encodeURIComponent(value)
 
+/** When the server last answered (ms): the session lasts a set time from then. */
+let lastContact = Date.now()
+export const serverContactAt = () => lastContact
+export const noteServerContact = () => {
+  lastContact = Date.now()
+}
+
 export async function unwrap<T>(
   pending: Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>
 ): Promise<T> {
@@ -49,6 +56,8 @@ export async function unwrap<T>(
     throw new ApiError(0, { code: 'INTERNAL', message: err instanceof Error ? err.message : 'network error' })
   }
   const body: unknown = await res.json().catch(() => null)
+  // The server starts the session's clock again on every request it answers.
+  if (res.status !== 401) noteServerContact()
   if (!res.ok) {
     const parsed = ApiErrorSchema.safeParse(body)
     throw new ApiError(res.status, parsed.success ? parsed.data : { code: 'INTERNAL', message: `HTTP ${res.status}` })

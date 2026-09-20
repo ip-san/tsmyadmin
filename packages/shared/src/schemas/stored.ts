@@ -22,6 +22,17 @@ export const PreferencesSchema = z.object({
   browseLimit: z.number().int().min(1).max(BROWSE_MAX_LIMIT).optional(),
   /** Offers "show all rows" on a table's rows (off unless chosen: a large table read whole is slow). */
   browseUnlimited: z.boolean().optional(),
+  navWidth: z.number().int().min(200).max(480).optional(),
+  navShowRoutines: z.boolean().optional(),
+  sqlEnterRuns: z.boolean().optional(),
+  defaultServerTab: z.enum(['databases', 'sql', 'status', 'variables', 'processes', 'users']).optional(),
+  defaultDbTab: z.enum(['structure', 'sql', 'search', 'query']).optional(),
+  defaultTableTab: z.enum(['browse', 'structure', 'search', 'insert']).optional(),
+  insertRowCount: z.number().int().min(1).max(10).optional(),
+  headerEvery: z.number().int().min(0).max(1000).optional(),
+  confirmDrop: z.boolean().optional(),
+  gridEdit: z.enum(['doubleClick', 'click', 'off']).optional(),
+  saveOnBlur: z.boolean().optional(),
   sqlSafeMode: z.boolean().optional(),
   consoleDocked: z.boolean().optional(),
   /** Statements the SQL console remembers per server. */
@@ -43,6 +54,17 @@ export const PreferencesUpdateSchema = z.object({
   locale: PreferencesSchema.shape.locale.unwrap().nullable().optional(),
   browseLimit: PreferencesSchema.shape.browseLimit.unwrap().nullable().optional(),
   browseUnlimited: PreferencesSchema.shape.browseUnlimited.unwrap().nullable().optional(),
+  navWidth: PreferencesSchema.shape.navWidth.unwrap().nullable().optional(),
+  navShowRoutines: PreferencesSchema.shape.navShowRoutines.unwrap().nullable().optional(),
+  sqlEnterRuns: PreferencesSchema.shape.sqlEnterRuns.unwrap().nullable().optional(),
+  defaultServerTab: PreferencesSchema.shape.defaultServerTab.unwrap().nullable().optional(),
+  defaultDbTab: PreferencesSchema.shape.defaultDbTab.unwrap().nullable().optional(),
+  defaultTableTab: PreferencesSchema.shape.defaultTableTab.unwrap().nullable().optional(),
+  insertRowCount: PreferencesSchema.shape.insertRowCount.unwrap().nullable().optional(),
+  headerEvery: PreferencesSchema.shape.headerEvery.unwrap().nullable().optional(),
+  confirmDrop: PreferencesSchema.shape.confirmDrop.unwrap().nullable().optional(),
+  gridEdit: PreferencesSchema.shape.gridEdit.unwrap().nullable().optional(),
+  saveOnBlur: PreferencesSchema.shape.saveOnBlur.unwrap().nullable().optional(),
   sqlSafeMode: PreferencesSchema.shape.sqlSafeMode.unwrap().nullable().optional(),
   consoleDocked: PreferencesSchema.shape.consoleDocked.unwrap().nullable().optional(),
   sqlHistoryMax: PreferencesSchema.shape.sqlHistoryMax.unwrap().nullable().optional(),
@@ -97,8 +119,11 @@ export const DISPLAY_TRANSFORMS = [
   'date',
   'ipv4',
   'affix',
+  'download',
+  'html',
+  'imagelink',
 ] as const
-export const INPUT_TRANSFORMS = ['pattern', 'json-input', 'xml-input', 'sql-input'] as const
+export const INPUT_TRANSFORMS = ['pattern', 'json-input', 'xml-input', 'sql-input', 'ipv4-to-int'] as const
 export const TransformKindSchema = z.enum([...DISPLAY_TRANSFORMS, ...INPUT_TRANSFORMS])
 export type TransformKind = z.infer<typeof TransformKindSchema>
 export const isInputTransform = (kind: TransformKind): boolean => (INPUT_TRANSFORMS as readonly string[]).includes(kind)
@@ -135,7 +160,11 @@ export const ColumnTransformBodySchema = z
     const need = (ok: boolean, path: string, message: string) => {
       if (!ok) ctx.addIssue({ code: 'custom', path: [path], message })
     }
-    need(t.kind === 'link' || t.template === undefined, 'template', 'Only a link takes a template')
+    need(
+      t.kind === 'link' || t.kind === 'imagelink' || t.template === undefined,
+      'template',
+      'Only a link or an image link takes a template'
+    )
     need(t.kind !== 'substring' || t.length !== undefined, 'length', 'A substring needs a length')
     need(t.kind !== 'date' || t.format !== undefined, 'format', 'A date needs a format')
     need(t.kind !== 'affix' || Boolean(t.prefix || t.suffix), 'prefix', 'An affix needs text before or after')
@@ -182,3 +211,61 @@ export function transformLink(value: string, template?: string): string | null {
     return null
   }
 }
+
+/** Whether an entry of TSMYADMIN_IMAGE_HOSTS (`host`, `*.suffix`, either with `:port`) admits this URL. No port: the default one. */
+function imageHostMatches(entry: string, url: URL): boolean {
+  const at = entry.lastIndexOf(':')
+  const hostPart = at === -1 ? entry : entry.slice(0, at)
+  const port = at === -1 ? '' : entry.slice(at + 1)
+  if (url.port !== port) return false
+  const host = url.hostname.toLowerCase()
+  const wanted = hostPart.toLowerCase()
+  return wanted.startsWith('*.') ? host.endsWith(wanted.slice(1)) && host.length > wanted.length - 1 : host === wanted
+}
+
+/**
+ * The address an image link transformation loads, or null when it is not one to load: not an http(s) URL (see
+ * transformLink), or on a host the deployment has not allowed (TSMYADMIN_IMAGE_HOSTS — the browser's CSP refuses
+ * the rest anyway). The caller then shows the link as a link.
+ */
+export function transformImage(value: string, template: string | undefined, hosts: readonly string[]): string | null {
+  const href = transformLink(value, template)
+  if (!href) return null
+  const url = new URL(href)
+  return hosts.some((entry) => imageHostMatches(entry, url)) ? href : null
+}
+
+/**
+ * What an account keeps of how it works with the tables, besides its settings: the favourite and recent tables per
+ * connection, the columns chosen for a table, its display column, whether the sidebar is folded, and how the rows
+ * are shown. Each is one entry of this browser's storage — the key names it, the value is what the screens read —
+ * and the server keeps the entries whose key starts with one of these, nothing else.
+ */
+export const WORKSPACE_KEY_PREFIXES = [
+  'tables.recent.',
+  'tables.favorites.',
+  'browse.cols.',
+  'display-column.',
+  'sidebar.collapsed',
+  'browse.display',
+] as const
+export const WORKSPACE_MAX_ENTRIES = 2000
+export const WORKSPACE_MAX_VALUE_BYTES = 8192
+
+export const isWorkspaceKey = (key: string): boolean =>
+  key.length <= 400 && WORKSPACE_KEY_PREFIXES.some((p) => key.startsWith(p))
+
+const WorkspaceKeySchema = z.string().refine(isWorkspaceKey, 'Not a key the account keeps')
+const WorkspaceValueSchema = z
+  .unknown()
+  .refine((v) => v !== undefined && JSON.stringify(v).length <= WORKSPACE_MAX_VALUE_BYTES, 'The value is too large')
+
+export const WorkspaceEntriesSchema = z.object({ entries: z.record(WorkspaceKeySchema, WorkspaceValueSchema) })
+export type WorkspaceEntries = z.infer<typeof WorkspaceEntriesSchema>
+
+/** A change to the entries: those to set (or replace), and the keys to remove. */
+export const WorkspaceUpdateSchema = z.object({
+  set: z.record(WorkspaceKeySchema, WorkspaceValueSchema).optional(),
+  remove: z.array(WorkspaceKeySchema).max(200).optional(),
+})
+export type WorkspaceUpdate = z.infer<typeof WorkspaceUpdateSchema>

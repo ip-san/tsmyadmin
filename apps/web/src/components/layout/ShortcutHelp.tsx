@@ -12,6 +12,13 @@ const ROWS: { keys: string; label: string }[] = [
   { keys: 'arrowright', label: locale.shortcuts.nextPage },
   { keys: 'enter', label: locale.shortcuts.editCell },
   { keys: 'mod+enter', label: locale.shortcuts.runSql },
+  { keys: 'h', label: locale.shortcuts.home },
+  { keys: 'd', label: locale.shortcuts.database },
+  { keys: 't', label: locale.shortcuts.tableStructure },
+  { keys: 'b', label: locale.shortcuts.tableBrowse },
+  { keys: 's', label: locale.shortcuts.sql },
+  { keys: 'e', label: locale.shortcuts.export },
+  { keys: 'ctrl+space', label: locale.shortcuts.complete },
   { keys: 'shift+?', label: locale.shortcuts.help },
 ]
 

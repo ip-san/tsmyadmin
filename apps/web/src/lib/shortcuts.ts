@@ -76,17 +76,21 @@ export function shortcutLabel(keys: string): string {
         ? IS_MAC
           ? '⌘'
           : 'Ctrl'
-        : k === 'shift'
-          ? 'Shift'
-          : k === 'alt'
-            ? 'Alt'
-            : k === 'arrowleft'
-              ? '←'
-              : k === 'arrowright'
-                ? '→'
-                : k === 'enter'
-                  ? 'Enter'
-                  : k.toUpperCase()
+        : k === 'ctrl'
+          ? 'Ctrl'
+          : k === 'space'
+            ? 'Space'
+            : k === 'shift'
+              ? 'Shift'
+              : k === 'alt'
+                ? 'Alt'
+                : k === 'arrowleft'
+                  ? '←'
+                  : k === 'arrowright'
+                    ? '→'
+                    : k === 'enter'
+                      ? 'Enter'
+                      : k.toUpperCase()
     )
     .join(' + ')
 }

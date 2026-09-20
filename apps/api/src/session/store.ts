@@ -26,6 +26,8 @@ export const SAVED_ITEM_KINDS = [
   'sharedsql',
   // Per account: the SQL console's history (one item).
   'history',
+  // Per account: favourite / recent tables, chosen columns and the like (one item; see WORKSPACE_KEY_PREFIXES).
+  'workspace',
 ] as const
 export type SavedItemKind = (typeof SAVED_ITEM_KINDS)[number]
 

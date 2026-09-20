@@ -11,6 +11,7 @@ import { Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
 import { useColumnTransforms } from '@/lib/column-transforms.ts'
 import { mutations, rowsKey, structureQuery, type TableRef } from '@/lib/queries.ts'
+import { resolveSettings } from '@/lib/settings.ts'
 
 type After = 'blank' | 'keep' | 'browse'
 
@@ -22,7 +23,7 @@ export function InsertPage({ tableRef }: { tableRef: TableRef }) {
   const inputs = useColumnTransforms(tableRef).inputByColumn
   const queryClient = useQueryClient()
   const [inserted, setInserted] = useState(0)
-  const [rowCount, setRowCount] = useState(1)
+  const [rowCount, setRowCount] = useState(() => resolveSettings().insertRowCount)
   const [round, setRound] = useState(0)
   // What happens once the rows are in (phpMyAdmin's "After insertion"), and whether a refused row is skipped.
   const [after, setAfter] = useState<After>('blank')

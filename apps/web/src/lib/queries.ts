@@ -74,6 +74,7 @@ import type {
 } from '@tsmyadmin/shared'
 import { buildBrowseQuery } from '@tsmyadmin/shared'
 import { api, enc, isApiError, unwrap } from './api.ts'
+import { recordSql, recordStatement } from './debug-sql.ts'
 
 export interface TableRef {
   db: string
@@ -377,13 +378,17 @@ export const distinctValuesQuery = (ref: TableRef, column: string) =>
 export const rowsQuery = (ref: TableRef, options: BrowseOptions) =>
   queryOptions({
     queryKey: [...rowsKey(ref), options],
-    queryFn: () =>
-      unwrap<BrowseResult>(
+    queryFn: async () => {
+      const started = performance.now()
+      const page = await unwrap<BrowseResult>(
         api.databases[':db'].tables[':table'].rows.$get({
           param: { db: enc(ref.db), table: enc(ref.table) },
           query: buildBrowseQuery(options, ref.schema),
         })
-      ),
+      )
+      recordSql(page.statement.sql, Math.round(performance.now() - started), true, page.statement.literal)
+      return page
+    },
     placeholderData: (prev) => prev,
   })
 
@@ -514,7 +519,13 @@ export const mutations = {
   executeSql: (
     db: string,
     body: Omit<SqlRequest, 'maxRows' | 'timeoutMs' | 'stopOnError' | 'profile'> & Partial<SqlRequest>
-  ) => unwrap<StatementResult[]>(api.databases[':db'].sql.$post({ param: { db: enc(db) }, json: body })),
+  ) =>
+    unwrap<StatementResult[]>(api.databases[':db'].sql.$post({ param: { db: enc(db) }, json: body })).then(
+      (results) => {
+        for (const r of results) recordStatement(r)
+        return results
+      }
+    ),
   cancelSql: (db: string, queryId: string) =>
     unwrap<{ cancelled: boolean }>(
       api.databases[':db'].sql.cancel.$post({ param: { db: enc(db) }, json: { queryId } })

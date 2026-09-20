@@ -2,7 +2,7 @@ import type { Cell, ColumnDef, ColumnTransform, ForeignKeyDef, RowValues } from 
 import { type FormEvent, useEffect, useRef, useState } from 'react'
 import { locale } from '@/config/locale.ts'
 import { cellToEditable, isOpaqueCell } from '@/lib/format.ts'
-import { inputMessage } from '../cells/transform-text.ts'
+import { inputMessage, inputValue } from '../cells/transform-text.ts'
 import { Button } from '../ui/Button.tsx'
 import { ErrorBox } from '../ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '../ui/Table.tsx'
@@ -126,7 +126,7 @@ export function RowForm({
       const values: RowValues = {}
       for (const c of columns) {
         const v = writtenValue(c, fieldFor(row, c), mode, startOf(row)?.[c.name] ?? null)
-        if (v !== undefined) values[c.name] = v
+        if (v !== undefined) values[c.name] = typeof v === 'string' ? inputValue(inputTransforms?.get(c.name), v) : v
       }
       all.push(values)
     })

@@ -170,3 +170,17 @@ describe('TSMYADMIN_PASSKEY_ORIGIN', () => {
     expect(() => loadConfig({ TSMYADMIN_PASSKEY_ORIGIN: 'https://db.example.com' })).toThrow(/SESSION_STORE/)
   })
 })
+
+describe('TSMYADMIN_IMAGE_HOSTS', () => {
+  it('is empty by default and lists the hosts pictures may come from', () => {
+    expect(loadConfig({}).imageHosts).toEqual([])
+    expect(loadConfig({ TSMYADMIN_IMAGE_HOSTS: 'img.example.com, *.cdn.example.com:8443' }).imageHosts).toEqual([
+      'img.example.com',
+      '*.cdn.example.com:8443',
+    ])
+  })
+  it('refuses an entry that could add to the CSP source list', () => {
+    for (const bad of ['*', "img.example.com 'unsafe-inline'", 'https://img.example.com', 'a;b', 'img.example.com/x'])
+      expect(() => loadConfig({ TSMYADMIN_IMAGE_HOSTS: bad })).toThrow(/TSMYADMIN_IMAGE_HOSTS/)
+  })
+})

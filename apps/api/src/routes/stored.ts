@@ -5,15 +5,19 @@ import {
   centralColumnKey,
   columnTransformKey,
   designerPageKey,
+  isWorkspaceKey,
   PreferencesSchema,
   PreferencesUpdateSchema,
   queryTemplateKey,
   SaveDesignerPageRequestSchema,
   SavedQueryIdSchema,
   SaveQueryTemplateRequestSchema,
+  WORKSPACE_MAX_ENTRIES,
+  type WorkspaceEntries,
+  WorkspaceUpdateSchema,
 } from '@tsmyadmin/shared'
 import { type Context, Hono } from 'hono'
-import type { z } from 'zod'
+import { z } from 'zod'
 import { apiError } from '../lib/errors.ts'
 import { validate } from '../lib/validate.ts'
 import { type AppEnv, requireSession, type SessionConfig } from '../session/middleware.ts'
@@ -21,6 +25,8 @@ import type { SavedItem, SavedItemKind } from '../session/store.ts'
 
 /** The one row a preferences item is stored under. */
 const PREFERENCES = 'preferences'
+/** The one row the workspace entries are stored under. */
+const WORKSPACE = 'workspace'
 
 function safeJson(text: string): unknown {
   try {
@@ -39,6 +45,13 @@ function parsed<T>(items: SavedItem[], schema: z.ZodType<T>): (T & { id: string;
     const body = schema.safeParse(safeJson(item.body))
     return body.success ? [{ ...body.data, id: item.id, at: item.at }] : []
   })
+}
+
+function readWorkspace(body: string | undefined): WorkspaceEntries {
+  // Read loosely: an entry a newer build wrote (a key this one does not know) must not make the rest unreadable.
+  const loose = z.object({ entries: z.record(z.string(), z.unknown()) }).safeParse(safeJson(body ?? ''))
+  if (!loose.success) return { entries: {} }
+  return { entries: Object.fromEntries(Object.entries(loose.data.entries).filter(([key]) => isWorkspaceKey(key))) }
 }
 
 const unsupported = (c: Context) =>
@@ -94,6 +107,7 @@ export function storedRoutes(cfg: SessionConfig) {
       return c.json(queryTemplates(await store.remove(c.get('session').config, 'qbe', c.req.valid('param').id)))
     })
     .use('/preferences', requireSession(cfg))
+    .use('/workspace', requireSession(cfg))
     .use('/central-columns/*', requireSession(cfg))
     .use('/central-columns', requireSession(cfg))
     .use('/column-transforms/*', requireSession(cfg))
@@ -116,6 +130,22 @@ export function storedRoutes(cfg: SessionConfig) {
       const prefs = PreferencesSchema.parse(merged)
       await store.save(c.get('session').config, 'prefs', PREFERENCES, JSON.stringify(prefs))
       return c.json<Preferences>(prefs)
+    })
+    .get('/workspace', async (c) => c.json<WorkspaceEntries>(readWorkspace((await list(c, WORKSPACE))[0]?.body)))
+    .put('/workspace', validate('json', WorkspaceUpdateSchema), async (c) => {
+      const store = cfg.store.savedQueries
+      if (!store) return unsupported(c)
+      const { set = {}, remove = [] } = c.req.valid('json')
+      // Applied to what the store holds at that moment: two browsers each add theirs without dropping the other's.
+      const items = await store.update(c.get('session').config, WORKSPACE, WORKSPACE, (current) => {
+        const entries = { ...readWorkspace(current?.body).entries, ...set }
+        for (const key of remove) delete entries[key]
+        // Bounded: the oldest-written keys go first (insertion order), so a runaway client cannot grow the row without limit.
+        const keys = Object.keys(entries)
+        for (const key of keys.slice(0, Math.max(0, keys.length - WORKSPACE_MAX_ENTRIES))) delete entries[key]
+        return JSON.stringify({ entries })
+      })
+      return c.json<WorkspaceEntries>(readWorkspace(items[0]?.body))
     })
     .get('/central-columns', async (c) => c.json(central(await list(c, 'central'))))
     .post('/central-columns', validate('json', CentralColumnBodySchema), async (c) => {

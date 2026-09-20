@@ -6,10 +6,12 @@ import { ServerTabs } from './ServerTabs.tsx'
 
 vi.mock('@tanstack/react-router', () => ({
   Link: ({ to, children }: { to: string; children: ReactNode }) => <a href={to}>{children}</a>,
+  useRouterState: () => '',
 }))
 
 vi.mock('@/lib/queries.ts', () => ({
   sessionQuery: { queryKey: ['session'], queryFn: async () => null, staleTime: Number.POSITIVE_INFINITY },
+  serverInfoQuery: { queryKey: ['server', 'info'], queryFn: async () => null, staleTime: Number.POSITIVE_INFINITY },
   myGroupTabsQuery: {
     queryKey: ['user-groups', 'mine'],
     queryFn: async () => null,

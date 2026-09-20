@@ -1,12 +1,13 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import type { BrowseOptions, InputCell, RowKey, RowValues } from '@tsmyadmin/shared'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
-import { Table, Th } from '@/components/ui/Table.tsx'
+import { Table } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
 import { useColumnTransforms } from '@/lib/column-transforms.ts'
 import { mutations, rowsKey, type TableRef } from '@/lib/queries.ts'
+import { readSetting } from '@/lib/settings.ts'
 import { BrowseRow } from './BrowseRow.tsx'
 import { BrowseToolbar } from './BrowseToolbar.tsx'
 import { encodeColumns, visibleColumnNames, visibleColumns } from './browse-search.ts'
@@ -14,12 +15,12 @@ import { DeleteRowsDialog } from './DeleteRowsDialog.tsx'
 import { ExecutedStatement } from './ExecutedStatement.tsx'
 import { FilterChips } from './FilterChips.tsx'
 import { linkableForeignKeys, linkableReverseKeys } from './fk-links.ts'
+import { GridHead, RepeatedHeader } from './GridHead.tsx'
 import { Pagination } from './Pagination.tsx'
 import { CopyRowDialog, EditRowDialog } from './RowDialogs.tsx'
 import { othersOf, rowKeys, rowToValues } from './row-key.ts'
 import { useRowSelection } from './row-selection.ts'
 import { SelectionActions } from './SelectionActions.tsx'
-import { SortHeader } from './SortHeader.tsx'
 import { useSettleFocus } from './settle-focus.ts'
 import { useBrowseRows } from './use-browse-rows.ts'
 
@@ -58,6 +59,7 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
   // Reset transient UI state when the table, page, sort or filters change (state-from-props reset pattern):
   // the route component is reused across tables, so a selection or an open editor must not carry over.
   const optionsKey = JSON.stringify([tableRef.db, tableRef.schema ?? '', tableRef.table, options])
+  const headerEvery = readSetting('headerEvery')
   const [prevOptionsKey, setPrevOptionsKey] = useState(optionsKey)
   if (prevOptionsKey !== optionsKey) {
     setPrevOptionsKey(optionsKey)
@@ -212,56 +214,46 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
         <Notice>{locale.browse.noRows}</Notice>
       ) : (
         <Table aria-label={tableRef.table} ref={gridRef}>
-          <thead>
-            <tr>
-              {editable ? (
-                <Th className="w-16" data-print-hide>
-                  <input
-                    type="checkbox"
-                    aria-label={locale.browse.selectAll}
-                    checked={allSelected}
-                    onChange={toggleAll}
-                    disabled={selectableIdx.length === 0}
-                  />
-                </Th>
-              ) : null}
-              {columns.map((c) => (
-                <SortHeader
-                  key={c.name}
-                  column={c}
-                  sort={options.sort}
-                  onSort={(sort) => onChange({ sort, page: 1 })}
-                />
-              ))}
-            </tr>
-          </thead>
+          <GridHead
+            columns={columns}
+            sort={options.sort}
+            onSort={(sort) => onChange({ sort, page: 1 })}
+            editable={editable}
+            allSelected={allSelected}
+            selectableCount={selectableIdx.length}
+            onToggleAll={toggleAll}
+          />
           {/* Keyed per page/table so per-cell state (expanded values) never carries over to another row. */}
           <tbody key={optionsKey}>
             {data.rows.map((row, i) => (
-              <BrowseRow
-                key={i}
-                index={i}
-                row={row}
-                rowKey={keys[i] ?? null}
-                columns={columns}
-                columnIndex={columnIndex}
-                fks={fks}
-                reverse={reverse}
-                transforms={transforms}
-                db={tableRef.db}
-                editable={editable}
-                selected={selected.has(i)}
-                inlineCol={inline?.row === i ? inline.col : -1}
-                updatePending={update.isPending}
-                updateError={inline?.row === i && update.isError ? update.error : null}
-                onToggle={toggle}
-                onEdit={setEditingRow}
-                onCopy={setCopyingRow}
-                onDelete={openRowDelete}
-                onInline={openInline}
-                onInlineSave={saveInline}
-                onInlineCancel={cancelInline}
-              />
+              <Fragment key={i}>
+                {headerEvery > 0 && i > 0 && i % headerEvery === 0 ? (
+                  <RepeatedHeader columns={columns} editable={editable} />
+                ) : null}
+                <BrowseRow
+                  index={i}
+                  row={row}
+                  rowKey={keys[i] ?? null}
+                  columns={columns}
+                  columnIndex={columnIndex}
+                  fks={fks}
+                  reverse={reverse}
+                  transforms={transforms}
+                  db={tableRef.db}
+                  editable={editable}
+                  selected={selected.has(i)}
+                  inlineCol={inline?.row === i ? inline.col : -1}
+                  updatePending={update.isPending}
+                  updateError={inline?.row === i && update.isError ? update.error : null}
+                  onToggle={toggle}
+                  onEdit={setEditingRow}
+                  onCopy={setCopyingRow}
+                  onDelete={openRowDelete}
+                  onInline={openInline}
+                  onInlineSave={saveInline}
+                  onInlineCancel={cancelInline}
+                />
+              </Fragment>
             ))}
           </tbody>
         </Table>

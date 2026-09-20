@@ -5,6 +5,7 @@ import { BrandMark } from '@/components/layout/BrandMark.tsx'
 import { Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { locale } from '@/config/locale.ts'
 import { LoginForm } from '@/features/auth/LoginForm.tsx'
+import { serverHomePath } from '@/lib/default-tabs.ts'
 import { useDocumentTitle } from '@/lib/document-title.ts'
 import { mutations, serversQuery, sessionQuery } from '@/lib/queries.ts'
 import { safeRedirect } from '@/lib/redirect.ts'
@@ -55,7 +56,7 @@ function LoginPage() {
                 queryClient.clear()
                 // ensureQueryData() in route guards returns cached data as-is, so write the new session directly.
                 queryClient.setQueryData(sessionQuery.queryKey, info)
-                await navigate({ href: safeRedirect(search.redirect) })
+                await navigate({ href: search.redirect ? safeRedirect(search.redirect) : serverHomePath() })
               }}
             />
           )}

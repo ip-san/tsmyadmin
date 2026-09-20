@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { locale } from '@/config/locale.ts'
 import type { PreviewFlow } from '@/lib/preview-flow.ts'
+import { readSetting } from '@/lib/settings.ts'
 import { Button } from '../ui/Button.tsx'
 import { Dialog } from '../ui/Dialog.tsx'
 import { ErrorBox, Notice, Spinner } from '../ui/Feedback.tsx'
@@ -40,7 +41,7 @@ export function PreviewDialog<Op>({
   useEffect(() => {
     if (flow.failed || flow.error) failureRef.current?.focus()
   }, [flow.failed, flow.error])
-  const required = op === null ? null : (confirmName?.(op) ?? null)
+  const required = op === null || !readSetting('confirmDrop') ? null : (confirmName?.(op) ?? null)
   const warning = op === null ? '' : `${locale.ddl.irreversible}${lossWarning?.(op) ? ` ${lossWarning(op) ?? ''}` : ''}`
   const [typed, setTyped] = useState('')
   // Reset the confirmation text whenever a different op is previewed (state-from-props reset pattern).

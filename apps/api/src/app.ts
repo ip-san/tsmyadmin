@@ -40,18 +40,19 @@ export interface AppServices {
  * Content-Security-Policy for the SPA served by this process. CodeMirror injects <style> elements,
  * so inline styles must be allowed; scripts are only ever loaded from our own origin.
  */
-export const CONTENT_SECURITY_POLICY = {
+export const contentSecurityPolicy = (imageHosts: readonly string[]) => ({
   defaultSrc: ["'self'"],
   scriptSrc: ["'self'"],
   styleSrc: ["'self'", "'unsafe-inline'"],
-  imgSrc: ["'self'", 'data:'],
+  // Pictures from other hosts only where the deployment named them (TSMYADMIN_IMAGE_HOSTS).
+  imgSrc: ["'self'", 'data:', ...imageHosts],
   fontSrc: ["'self'", 'data:'],
   connectSrc: ["'self'"],
   frameAncestors: ["'none'"],
   formAction: ["'self'"],
   baseUri: ["'self'"],
   objectSrc: ["'none'"],
-}
+})
 
 const KB = 1024
 const MB = 1024 * KB
@@ -88,6 +89,7 @@ export function createApp(config: AppConfig, services: AppServices) {
     secure: config.cookieSecure,
     ttlMs: config.sessionTtlMs,
     require2fa: config.require2fa,
+    imageHosts: config.imageHosts,
   }
   const loginLimiter = new RateLimiter(config.loginRateLimit.max, config.loginRateLimit.windowMs, services.now)
   // Rotating the user name must not grant a fresh window: a second limiter keyed on the IP alone, IP_LIMIT_FACTOR×.
@@ -145,7 +147,13 @@ export function createApp(config: AppConfig, services: AppServices) {
       })
       .use('*', requestContext())
       .use('*', requestLogger(logger, ip))
-      .use('*', secureHeaders({ contentSecurityPolicy: CONTENT_SECURITY_POLICY, referrerPolicy: 'same-origin' }))
+      .use(
+        '*',
+        secureHeaders({
+          contentSecurityPolicy: contentSecurityPolicy(config.imageHosts),
+          referrerPolicy: 'same-origin',
+        })
+      )
       .use('/api/*', csrf())
       // Row values and the login target are as sensitive as the credentials behind them: no store may keep a
       // copy — not the browser's disk cache, not an intermediary that ignores the Cookie header.
