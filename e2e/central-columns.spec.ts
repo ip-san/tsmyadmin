@@ -22,7 +22,7 @@ async function exercise(page: Page, t: Target) {
     await add.getByLabel('既定値', { exact: true }).fill('new')
     await add.getByRole('button', { name: '追加する' }).click()
     const list = page.getByRole('table', { name: 'セントラルカラム' })
-    await expect(list.getByRole('row', { name: /status/ })).toContainText('VARCHAR(20)')
+    await expect(list.getByRole('row', { name: /status/ })).toContainText(/VARCHAR\(20\)/i)
 
     // Edit fills the form with the definition; saving replaces it under the same name.
     await page.getByRole('button', { name: 'status: 編集' }).click()
@@ -30,8 +30,8 @@ async function exercise(page: Page, t: Target) {
     await expect(edit.getByLabel('カラム名')).toHaveValue('status')
     await fillType(edit, 'VARCHAR(40)')
     await edit.getByRole('button', { name: '保存する' }).click()
-    await expect(list.getByRole('row', { name: /status/ })).toContainText('VARCHAR(40)')
-    await expect(list.getByRole('row', { name: /status/ })).not.toContainText('VARCHAR(20)')
+    await expect(list.getByRole('row', { name: /status/ })).toContainText(/VARCHAR\(40\)/i)
+    await expect(list.getByRole('row', { name: /status/ })).not.toContainText(/VARCHAR\(20\)/i)
     await expect(page.getByRole('button', { name: '追加する' })).toBeVisible()
 
     // Taken from the fixture table: its definition, not typed again.

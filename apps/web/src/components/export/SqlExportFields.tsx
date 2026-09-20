@@ -96,7 +96,7 @@ export function SqlFields({
       </div>
       <fieldset className="space-y-2" disabled={!options.data}>
         <legend className="text-xs font-medium text-ink-sub">{t.rowsAs}</legend>
-        <div className="flex flex-wrap items-end gap-4">
+        <div className="flex flex-wrap items-start gap-4">
           <Field id="export-statement" label={t.statement}>
             <Select
               id="export-statement"

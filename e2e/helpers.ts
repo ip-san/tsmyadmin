@@ -176,7 +176,9 @@ export async function fillType(scope: Page | Locator, dataType: string, row?: nu
   const suffix = row === undefined ? '' : ` ${row}`
   const select = scope.getByLabel(`型${suffix}`, { exact: true })
   const options = await select.locator('option').allTextContents()
-  const label = options.find((o) => o.toLowerCase() === name.toLowerCase())
+  // PostgreSQL lists `integer`, not its alias `INT`.
+  const wanted = name.toLowerCase() === 'int' && options.includes('integer') ? 'integer' : name.toLowerCase()
+  const label = options.find((o) => o.toLowerCase() === wanted)
   if (!label) throw new Error(`no type option for ${dataType}`)
   await select.selectOption({ label })
   await scope.getByLabel(`長さ・値・属性${suffix}`, { exact: true }).fill(rest)

@@ -55,7 +55,7 @@ export function ImportOptionFields({
   const rows = isRowsFormat(format)
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-end gap-4">
+      <div className="flex flex-wrap items-start gap-4">
         {/* A spreadsheet file carries its own character set. */}
         {format === 'ods' ? null : (
           <Field id="import-charset" label={t.charset}>
@@ -91,7 +91,7 @@ export function ImportOptionFields({
         ) : null}
       </div>
       {format === 'csv' ? (
-        <div className="flex flex-wrap items-end gap-4">
+        <div className="flex flex-wrap items-start gap-4">
           <Field id="import-null" label={t.nullMarker}>
             <Input
               id="import-null"
@@ -146,7 +146,7 @@ export function ImportOptionFields({
         </div>
       ) : null}
       {format === 'ods' ? (
-        <div className="flex flex-wrap items-end gap-4">
+        <div className="flex flex-wrap items-start gap-4">
           <Field id="import-ods-percent" label={t.odsPercent}>
             <Select
               id="import-ods-percent"

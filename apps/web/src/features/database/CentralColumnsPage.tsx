@@ -71,7 +71,7 @@ function AddForm({
         <Input id={`${id}-name`} value={name} onChange={(e) => setName(e.target.value)} required autoComplete="off" />
       </Field>
       <Field id={`${id}-type`} label={locale.ddl.dataType}>
-        <TypeInput id={`${id}-type`} dialect={dialect} value={dataType} onChange={setDataType} />
+        <TypeInput id={`${id}-type`} required dialect={dialect} value={dataType} onChange={setDataType} />
       </Field>
       <Field id={`${id}-default`} label={locale.ddl.default}>
         <Input id={`${id}-default`} value={def} onChange={(e) => setDef(e.target.value)} className="font-mono" />

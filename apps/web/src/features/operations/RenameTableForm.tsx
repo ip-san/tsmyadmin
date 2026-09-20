@@ -34,7 +34,7 @@ export function RenameTableForm({
   }
   return (
     <section className="rounded border border-line p-3">
-      <form onSubmit={submit} className="flex max-w-md items-end gap-2" aria-label={locale.ddl.titles.renameTable}>
+      <form onSubmit={submit} className="flex max-w-md items-start gap-2" aria-label={locale.ddl.titles.renameTable}>
         <div className="flex-1">
           <Field
             id="rename-table"
@@ -50,7 +50,7 @@ export function RenameTableForm({
             />
           </Field>
         </div>
-        <Button type="submit" variant="primary" disabled={!changed}>
+        <Button type="submit" variant="primary" disabled={!changed} className="mt-5">
           {locale.ddl.submit}
         </Button>
       </form>

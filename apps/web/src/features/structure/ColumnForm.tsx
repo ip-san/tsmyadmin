@@ -90,6 +90,7 @@ export function ColumnForm({
         <Field id="col-type" label={locale.ddl.dataType}>
           <TypeInput
             id="col-type"
+            required
             dialect={dialect}
             value={v.dataType}
             onChange={(dataType) => setV((cur) => retypeColumn(cur, initial, dataType))}

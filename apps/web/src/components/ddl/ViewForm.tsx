@@ -83,7 +83,7 @@ export function ViewForm({
           required
         />
       </Field>
-      <div className="flex flex-wrap items-end gap-3">
+      <div className="flex flex-wrap items-start gap-3">
         <Field id="view-columns" label={t.view.columns} hint={t.view.columnsHint}>
           <Input
             id="view-columns"

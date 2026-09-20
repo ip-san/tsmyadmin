@@ -121,7 +121,7 @@ export function SecondFactorManage({
           {t.addPasskey}
         </Button>
       ) : null}
-      <div className="flex flex-wrap items-end gap-2 border-t border-line pt-3">
+      <div className="flex flex-wrap items-start gap-2 border-t border-line pt-3">
         <Field id="proof-code" label={t.codeLabel} hint={withPasskey ? t.proofHintPasskey : t.proofHint}>
           <Input
             id="proof-code"
@@ -132,7 +132,7 @@ export function SecondFactorManage({
             className="w-40"
           />
         </Field>
-        <Button variant="danger" onClick={() => act.mutate({ kind: 'disable' })} disabled={busy}>
+        <Button variant="danger" onClick={() => act.mutate({ kind: 'disable' })} disabled={busy} className="mt-5">
           {t.disable}
         </Button>
       </div>

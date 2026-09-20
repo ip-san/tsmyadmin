@@ -55,7 +55,7 @@ for (const t of TARGETS) {
         await expect(page.getByRole('dialog', { name: 'カラムを変更（2 / 2）' })).toBeVisible()
         await fillType(dialog, 'BIGINT')
         await dialog.getByRole('button', { name: '次へ（SQL を確認）' }).click()
-        await confirmPreview(page, /BIGINT[\s\S]*BIGINT/)
+        await confirmPreview(page, /BIGINT[\s\S]*BIGINT/i)
         await expect(columns.getByRole('row').filter({ hasText: /bigint/i })).toHaveCount(2)
 
         if (t.dialect === 'mysql') {

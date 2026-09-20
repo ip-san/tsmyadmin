@@ -107,7 +107,7 @@ export function DatabaseSearch({ db, schema }: { db: string; schema?: string | u
     <section className="space-y-3">
       <h2 className="text-sm font-semibold text-ink">{locale.databaseSearch.title}</h2>
       <form onSubmit={run} className="space-y-3" aria-label={locale.databaseSearch.title}>
-        <div className="flex max-w-xl items-end gap-2">
+        <div className="flex max-w-xl items-start gap-2">
           <div className="flex-1">
             <Field id="database-search-term" label={locale.databaseSearch.term} hint={locale.databaseSearch.termHint}>
               <Input
@@ -126,12 +126,13 @@ export function DatabaseSearch({ db, schema }: { db: string; schema?: string | u
           <Button
             type="submit"
             variant="primary"
+            className="mt-5"
             disabled={running || settling || term.trim() === '' || chosen.length === 0}
           >
             {locale.databaseSearch.run}
           </Button>
         </div>
-        <div className="flex flex-wrap items-end gap-3">
+        <div className="flex flex-wrap items-start gap-3">
           <Field id="database-search-mode" label={locale.databaseSearch.mode}>
             <Select id="database-search-mode" value={mode} onChange={(e) => setMode(e.target.value as SearchMode)}>
               {SearchModeSchema.options.map((m) => (

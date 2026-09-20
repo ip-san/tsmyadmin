@@ -25,7 +25,11 @@ for (const t of TARGETS) {
           await form.getByLabel('エンジン', { exact: true }).fill('InnoDB')
           await form.getByLabel('照合順序', { exact: true }).fill('utf8mb4_bin')
         }
+        // A second column given only a name and a comment is complete: the type starts as a string.
+        await form.getByLabel('カラム名 2').fill('title')
+        await form.getByLabel('コメント 2', { exact: true }).fill('タイトル')
         await form.getByRole('button', { name: '次へ（SQL を確認）' }).click()
+        await expect(page.getByRole('dialog').getByLabel('SQL')).toContainText(/title.*varchar\(255\)/is)
         await confirmPreview(
           page,
           mysql

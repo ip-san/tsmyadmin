@@ -95,7 +95,7 @@ export function OutputFields({
   const binary = BINARY_FORMATS.includes(options.format) || UTF8_ONLY_FORMATS.includes(options.format)
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-end gap-4">
+      <div className="flex flex-wrap items-start gap-4">
         <Field id="export-row-offset" label={t.rowOffset}>
           <Input
             id="export-row-offset"
@@ -117,7 +117,7 @@ export function OutputFields({
           />
         </Field>
       </div>
-      <div className="flex flex-wrap items-end gap-4">
+      <div className="flex flex-wrap items-start gap-4">
         <Field id="export-compress" label={t.compress}>
           <Select
             id="export-compress"

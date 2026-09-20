@@ -7,6 +7,7 @@ import {
   retypeColumn,
   retypeName,
   splitType,
+  TYPE_NAMES,
   toColumnSpec,
   validateColumn,
 } from '@/lib/column-spec.ts'
@@ -200,8 +201,8 @@ describe('splitType / retypeName', () => {
   })
 
   it('keeps an unlisted name and text with no name as they are', () => {
-    expect(splitType('mysql', 'MULTIPOLYGON')).toEqual({ base: 'MULTIPOLYGON', rest: '' })
-    expect(splitType('mysql', 'INTEGER(5)')).toEqual({ base: 'INTEGER', rest: '(5)' })
+    expect(splitType('postgres', 'citext')).toEqual({ base: 'citext', rest: '' })
+    expect(splitType('postgres', 'geometry(Point,4326)')).toEqual({ base: 'geometry', rest: '(Point,4326)' })
     expect(splitType('mysql', '')).toEqual({ base: '', rest: '' })
     expect(splitType('mysql', '(255)')).toEqual({ base: '', rest: '(255)' })
   })
@@ -212,5 +213,14 @@ describe('splitType / retypeName', () => {
     expect(retypeName('mysql', 'VARCHAR(100)', 'CHAR')).toBe('CHAR(100)')
     expect(retypeName('mysql', 'INT UNSIGNED', 'BIGINT')).toBe('BIGINT UNSIGNED')
     expect(retypeName('postgres', 'numeric(10,2)', 'text')).toBe('text')
+  })
+})
+
+describe('type names', () => {
+  it('lists every name once and never a name that only differs by case', () => {
+    for (const dialect of ['mysql', 'postgres'] as const) {
+      const lower = TYPE_NAMES[dialect].map((n) => n.toLowerCase())
+      expect(new Set(lower).size).toBe(lower.length)
+    }
   })
 })

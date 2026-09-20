@@ -14,7 +14,9 @@ interface Row extends ColumnFormValues {
   primary: boolean
 }
 
-const newRow = (): Row => ({ ...EMPTY_COLUMN, primary: false })
+/** A new row starts as a string column, the most common kind after the key, so choosing a type is not a step. */
+const blankType = (dialect: Dialect) => (dialect === 'mysql' ? 'VARCHAR(255)' : 'varchar(255)')
+const newRow = (dialect: Dialect): Row => ({ ...EMPTY_COLUMN, dataType: blankType(dialect), primary: false })
 
 /** phpMyAdmin-style "create table" block shown under the database structure list. */
 export function CreateTableForm({
@@ -29,14 +31,14 @@ export function CreateTableForm({
   const [name, setName] = useState('')
   const [rows, setRows] = useState<Row[]>([
     {
-      ...newRow(),
+      ...newRow(dialect),
       name: 'id',
       dataType: TYPE_NAMES[dialect][0] ?? 'INT',
       nullable: false,
       autoIncrement: true,
       primary: true,
     },
-    newRow(),
+    newRow(dialect),
   ])
   // PostgreSQL only: a partitioned table is created as one (its partitions are added under its structure).
   const [partitionBy, setPartitionBy] = useState<{ method: '' | 'range' | 'list' | 'hash'; expression: string }>({
@@ -47,7 +49,7 @@ export function CreateTableForm({
   const navigate = useNavigate()
   const flow = useDdlFlow(db, schema, async (op) => {
     setName('')
-    setRows([newRow()])
+    setRows([newRow(dialect)])
     setOptions({ comment: '', engine: '', collation: '' })
     // Land on the new table's structure, where the next steps (indexes, keys, rows) are.
     if (op.op === 'createTable') {
@@ -60,8 +62,8 @@ export function CreateTableForm({
   })
   const update = (i: number, patch: Partial<Row>) =>
     setRows((r) => r.map((row, j) => (j === i ? { ...row, ...patch } : row)))
-  // A row with no name and no type is an untouched blank line, not an error.
-  const filled = rows.filter((r) => r.name.trim() !== '' || r.dataType.trim() !== '')
+  // A row with no name and its starting type is an untouched blank line, not an error.
+  const filled = rows.filter((r) => r.name.trim() !== '' || r.dataType !== blankType(dialect))
   const identifier = /^[A-Za-z0-9_]*$/
   const valid =
     name.trim() !== '' &&
@@ -108,6 +110,7 @@ export function CreateTableForm({
             <Th>{locale.ddl.autoIncrement}</Th>
             <Th>{locale.ddl.primaryKey}</Th>
             <Th>{locale.ddl.default}</Th>
+            <Th>{locale.ddl.comment}</Th>
             <Th>
               <span className="sr-only">{locale.ddl.actions}</span>
             </Th>
@@ -131,6 +134,7 @@ export function CreateTableForm({
                   labelSuffix={String(i + 1)}
                   value={r.dataType}
                   onChange={(dataType) => update(i, { dataType })}
+                  compact
                 />
               </Td>
               <Td className="text-center">
@@ -179,6 +183,15 @@ export function CreateTableForm({
                     className="min-w-24 font-mono"
                   />
                 </div>
+              </Td>
+              <Td>
+                <Input
+                  aria-label={`${locale.ddl.comment} ${i + 1}`}
+                  value={r.comment}
+                  onChange={(e) => update(i, { comment: e.target.value })}
+                  className="min-w-32"
+                  autoComplete="off"
+                />
               </Td>
               <Td>
                 <Button
@@ -262,7 +275,7 @@ export function CreateTableForm({
         </div>
       ) : null}
       <div className="flex gap-2">
-        <Button onClick={() => setRows((r) => [...r, newRow()])}>{locale.ddl.addColumnRow}</Button>
+        <Button onClick={() => setRows((r) => [...r, newRow(dialect)])}>{locale.ddl.addColumnRow}</Button>
         <Button type="submit" variant="primary" disabled={!valid}>
           {locale.ddl.submit}
         </Button>

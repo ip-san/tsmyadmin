@@ -83,7 +83,7 @@ export function CopyTableForm({
   return (
     <section className="rounded border border-line p-3">
       <form onSubmit={submit} className="space-y-2" aria-label={locale.ddl.titles.copyTable}>
-        <div className="flex flex-wrap items-end gap-2">
+        <div className="flex flex-wrap items-start gap-2">
           <Field id="copy-space" label={dialect === 'mysql' ? locale.ddl.copyToDatabase : locale.ddl.copyToSchema}>
             <Select id="copy-space" value={space} onChange={(e) => setSpace(e.target.value)}>
               {[own, ...spaces.filter((n) => n !== own)].map((n) => (
@@ -104,7 +104,7 @@ export function CopyTableForm({
               />
             </Field>
           </div>
-          <Button type="submit" variant="primary" disabled={!valid}>
+          <Button type="submit" variant="primary" disabled={!valid} className="mt-5">
             {locale.ddl.submit}
           </Button>
         </div>

@@ -69,7 +69,7 @@ function RenameDatabaseForm({ db, dialect, flow }: { db: string; dialect: Dialec
   }
   return (
     <section className="rounded border border-line p-3">
-      <form onSubmit={submit} className="flex max-w-xl items-end gap-2" aria-label={locale.ddl.titles.renameDatabase}>
+      <form onSubmit={submit} className="flex max-w-xl items-start gap-2" aria-label={locale.ddl.titles.renameDatabase}>
         <div className="flex-1">
           <Field
             id="rename-database"
@@ -85,7 +85,7 @@ function RenameDatabaseForm({ db, dialect, flow }: { db: string; dialect: Dialec
             />
           </Field>
         </div>
-        <Button type="submit" variant="primary" disabled={!valid}>
+        <Button type="submit" variant="primary" disabled={!valid} className="mt-5">
           {locale.ddl.submit}
         </Button>
       </form>
@@ -135,7 +135,7 @@ function CopyDatabaseForm({
   return (
     <section className="rounded border border-line p-3">
       <form onSubmit={submit} className="space-y-2" aria-label={locale.ddl.titles.copyDatabase}>
-        <div className="flex max-w-xl items-end gap-2">
+        <div className="flex max-w-xl items-start gap-2">
           <div className="flex-1">
             <Field
               id="copy-database"
@@ -151,7 +151,7 @@ function CopyDatabaseForm({
               />
             </Field>
           </div>
-          <Button type="submit" variant="primary" disabled={!valid}>
+          <Button type="submit" variant="primary" disabled={!valid} className="mt-5">
             {locale.ddl.submit}
           </Button>
         </div>

@@ -39,7 +39,7 @@ export function MoveTableForm({ tableRef, dialect }: { tableRef: TableRef; diale
   }
   return (
     <section className="rounded border border-line p-3">
-      <form onSubmit={submit} className="flex max-w-md items-end gap-2" aria-label={locale.ddl.titles.moveTable}>
+      <form onSubmit={submit} className="flex max-w-md items-start gap-2" aria-label={locale.ddl.titles.moveTable}>
         <div className="flex-1">
           <Field id="move-table" label={locale.ddl.moveTo[dialect]} hint={locale.ddl.moveHint[dialect]}>
             <Select
@@ -56,7 +56,7 @@ export function MoveTableForm({ tableRef, dialect }: { tableRef: TableRef; diale
             </Select>
           </Field>
         </div>
-        <Button type="submit" variant="primary" disabled={!target} aria-haspopup="dialog">
+        <Button type="submit" variant="primary" disabled={!target} aria-haspopup="dialog" className="mt-5">
           {locale.ddl.titles.moveTable}
         </Button>
       </form>

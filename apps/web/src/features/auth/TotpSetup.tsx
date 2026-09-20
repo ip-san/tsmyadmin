@@ -43,7 +43,7 @@ export function TotpSetup({
       <p className="break-all text-xs text-ink-sub">{setup.uri}</p>
       {/* Only with the first factor: an account adding an app keeps the codes it has. */}
       {setup.recoveryCodes.length > 0 ? <RecoveryCodes codes={setup.recoveryCodes} /> : null}
-      <form onSubmit={submit} className="flex flex-wrap items-end gap-2">
+      <form onSubmit={submit} className="flex flex-wrap items-start gap-2">
         <Field id="confirm-code" label={t.codeLabel} hint={t.confirmHint}>
           <Input
             id="confirm-code"
@@ -54,11 +54,13 @@ export function TotpSetup({
             className="w-40"
           />
         </Field>
-        <Button type="submit" variant="primary" disabled={confirm.isPending || code.trim() === ''}>
+        <Button type="submit" variant="primary" disabled={confirm.isPending || code.trim() === ''} className="mt-5">
           {t.confirm}
         </Button>
         {/* The secret is only held for ten minutes: without this, an expired enrolment would be a dead end. */}
-        <Button onClick={onCancel}>{t.restart}</Button>
+        <Button onClick={onCancel} className="mt-5">
+          {t.restart}
+        </Button>
       </form>
       {confirm.isError ? <ErrorBox error={confirm.error} /> : null}
     </div>

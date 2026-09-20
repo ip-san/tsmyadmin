@@ -16,8 +16,9 @@ for (const t of TARGETS) {
       await page.getByLabel('テーブル名').fill(table)
       await page.getByLabel('カラム名 2').fill('name')
       await fillType(page, 'VARCHAR(50)', 2)
+      await page.getByLabel('コメント 2', { exact: true }).fill('表示名')
       await page.getByRole('button', { name: '次へ（SQL を確認）' }).click()
-      await confirmPreview(page, /CREATE TABLE/)
+      await confirmPreview(page, /CREATE TABLE[\s\S]*表示名/)
       // A new table opens on its structure tab; the database list shows it too. The destination must be rendered
       // before the test navigates away: the flow still invalidates its queries, and WebKit aborts a goto that
       // starts while the app is navigating.

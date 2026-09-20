@@ -36,71 +36,111 @@ export const EMPTY_COLUMN: ColumnFormValues = {
   generated: null,
 }
 
-/** The type names offered in the dropdown, most common first; length, values and attributes are typed beside it. */
-export const TYPE_NAMES: Record<Dialect, string[]> = {
+export type TypeGroupKey =
+  | 'numeric'
+  | 'text'
+  | 'binary'
+  | 'datetime'
+  | 'boolean'
+  | 'json'
+  | 'network'
+  | 'spatial'
+  | 'other'
+
+/** The type names offered in the dropdown, by kind and most common first; length, values and attributes are typed beside it. */
+export const TYPE_GROUPS: Record<Dialect, { key: TypeGroupKey; names: string[] }[]> = {
   mysql: [
-    'INT',
-    'BIGINT',
-    'VARCHAR',
-    'TEXT',
-    'DATETIME',
-    'TIMESTAMP',
-    'DATE',
-    'DECIMAL',
-    'BOOLEAN',
-    'JSON',
-    'BLOB',
-    'TINYINT',
-    'SMALLINT',
-    'MEDIUMINT',
-    'FLOAT',
-    'DOUBLE',
-    'BIT',
-    'CHAR',
-    'TINYTEXT',
-    'MEDIUMTEXT',
-    'LONGTEXT',
-    'BINARY',
-    'VARBINARY',
-    'TINYBLOB',
-    'MEDIUMBLOB',
-    'LONGBLOB',
-    'ENUM',
-    'SET',
-    'TIME',
-    'YEAR',
-    'GEOMETRY',
+    {
+      key: 'numeric',
+      names: [
+        'INT',
+        'BIGINT',
+        'TINYINT',
+        'SMALLINT',
+        'MEDIUMINT',
+        'INTEGER',
+        'DECIMAL',
+        'NUMERIC',
+        'FLOAT',
+        'DOUBLE',
+        'DOUBLE PRECISION',
+        'REAL',
+        'BIT',
+      ],
+    },
+    { key: 'text', names: ['VARCHAR', 'TEXT', 'CHAR', 'TINYTEXT', 'MEDIUMTEXT', 'LONGTEXT', 'ENUM', 'SET'] },
+    { key: 'binary', names: ['BLOB', 'VARBINARY', 'BINARY', 'TINYBLOB', 'MEDIUMBLOB', 'LONGBLOB'] },
+    { key: 'datetime', names: ['DATETIME', 'TIMESTAMP', 'DATE', 'TIME', 'YEAR'] },
+    { key: 'boolean', names: ['BOOLEAN'] },
+    { key: 'json', names: ['JSON'] },
+    {
+      key: 'spatial',
+      names: [
+        'GEOMETRY',
+        'POINT',
+        'LINESTRING',
+        'POLYGON',
+        'MULTIPOINT',
+        'MULTILINESTRING',
+        'MULTIPOLYGON',
+        'GEOMETRYCOLLECTION',
+      ],
+    },
   ],
   postgres: [
-    'integer',
-    'bigint',
-    'varchar',
-    'text',
-    'timestamp',
-    'timestamptz',
-    'date',
-    'numeric',
-    'boolean',
-    'jsonb',
-    'bytea',
-    'uuid',
-    'smallint',
-    'serial',
-    'bigserial',
-    'real',
-    'double precision',
-    'char',
-    'character varying',
-    'timestamp without time zone',
-    'timestamp with time zone',
-    'time',
-    'timetz',
-    'interval',
-    'json',
-    'inet',
-    'cidr',
-    'macaddr',
+    {
+      key: 'numeric',
+      names: [
+        'integer',
+        'bigint',
+        'smallint',
+        'numeric',
+        'decimal',
+        'real',
+        'double precision',
+        'serial',
+        'bigserial',
+        'smallserial',
+        'money',
+        'int',
+        'int2',
+        'int4',
+        'int8',
+        'float4',
+        'float8',
+      ],
+    },
+    { key: 'text', names: ['varchar', 'text', 'char', 'character varying', 'character', 'name', 'xml'] },
+    { key: 'binary', names: ['bytea', 'bit', 'bit varying', 'varbit'] },
+    {
+      key: 'datetime',
+      names: [
+        'timestamp',
+        'timestamptz',
+        'date',
+        'time',
+        'timetz',
+        'interval',
+        'timestamp without time zone',
+        'timestamp with time zone',
+        'time without time zone',
+        'time with time zone',
+      ],
+    },
+    { key: 'boolean', names: ['boolean', 'bool'] },
+    { key: 'json', names: ['jsonb', 'json', 'jsonpath', 'uuid'] },
+    { key: 'network', names: ['inet', 'cidr', 'macaddr', 'macaddr8'] },
+    { key: 'spatial', names: ['point', 'line', 'lseg', 'box', 'path', 'polygon', 'circle'] },
+    {
+      key: 'other',
+      names: ['tsvector', 'tsquery', 'int4range', 'int8range', 'numrange', 'daterange', 'tsrange', 'tstzrange', 'oid'],
+    },
   ],
+}
+
+export const TYPE_NAMES: Record<Dialect, string[]> = {
+  mysql: TYPE_GROUPS.mysql.flatMap((g) => g.names),
+  postgres: TYPE_GROUPS.postgres.flatMap((g) => g.names),
 }
 
 /** What a type usually needs after its name, filled in when it is picked (MySQL refuses a bare VARCHAR). */
@@ -111,7 +151,7 @@ const DEFAULT_TYPE_ARGS: Record<string, string> = {
   numeric: '(10,2)',
 }
 
-const defaultArgs = (base: string): string => DEFAULT_TYPE_ARGS[base.toLowerCase()] ?? ''
+export const defaultArgs = (base: string): string => DEFAULT_TYPE_ARGS[base.toLowerCase()] ?? ''
 
 /**
  * A type expression as its name and the rest (`(255)`, `(10,2) UNSIGNED`, `[]`). Whatever the server reports or the
