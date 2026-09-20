@@ -178,12 +178,15 @@ export const mysqlDdl: DdlBuilder = {
         if (!op.tables) throw new AdapterError('VALIDATION', 'copyDatabase needs the list of tables to copy')
         const from = { database: op.name }
         const to = { database: op.newName }
-        const out = [createDatabaseSql(op.newName, op.collation)]
+        const structure = op.structure !== false
+        if (!structure && !op.withData)
+          throw new AdapterError('VALIDATION', 'Copying neither the structure nor the rows copies nothing')
+        const out = structure ? [createDatabaseSql(op.newName, op.collation)] : []
         for (const t of op.tables) {
           const source = quoteTable('mysql', from, t.name)
           const target = quoteTable('mysql', to, t.name)
           // LIKE keeps indexes, keys and AUTO_INCREMENT; foreign keys are not copied (as in copyTable).
-          out.push(`CREATE TABLE ${target} LIKE ${source}`)
+          if (structure) out.push(`CREATE TABLE ${target} LIKE ${source}`)
           if (op.withData && t.columns.length > 0) {
             const cols = t.columns.map((c) => quoteIdent('mysql', c)).join(', ')
             out.push(`INSERT INTO ${target} (${cols}) SELECT ${cols} FROM ${source}`)
@@ -195,7 +198,7 @@ export const mysqlDdl: DdlBuilder = {
             if (t.autoIncrement)
               out.push(`ALTER TABLE ${quoteTable('mysql', to, t.name)} AUTO_INCREMENT = ${t.autoIncrement}`)
         // A key that pointed into the source database points at the copy's own table instead.
-        if (op.foreignKeys)
+        if (op.foreignKeys && structure)
           for (const t of op.tables)
             for (const fk of t.foreignKeys ?? [])
               out.push(
@@ -206,7 +209,7 @@ export const mysqlDdl: DdlBuilder = {
                   refDatabase: !fk.refDatabase || fk.refDatabase === op.name ? op.newName : fk.refDatabase,
                 })
               )
-        if (op.privileges)
+        if (op.privileges && structure)
           for (const g of op.grants ?? []) {
             const privs = g.privileges.filter((p) => /^[A-Z][A-Z ]*$/.test(p) && p !== 'GRANT OPTION')
             if (privs.length > 0)
@@ -241,6 +244,29 @@ export const mysqlDdl: DdlBuilder = {
       }
       case 'createRoutine':
         return [createRoutineSql(ns, op)]
+      case 'replaceRoutine': {
+        // MySQL has no CREATE OR REPLACE for routines, and DDL commits as it goes: the drop is not undone if the
+        // new definition is refused, which is why the whole script is shown first.
+        const { replaces, op: _replace, ...rest } = op
+        return [
+          ...mysqlDdl.build(ns, { op: 'dropRoutine', kind: replaces.kind, name: replaces.name }),
+          createRoutineSql(ns, { op: 'createRoutine', ...rest }),
+        ]
+      }
+      case 'replaceTrigger': {
+        const { replaces, op: _replace, ...rest } = op
+        return [
+          ...mysqlDdl.build(ns, { op: 'dropTrigger', name: replaces.name, table: replaces.table }),
+          ...mysqlDdl.build(ns, { op: 'createTrigger', ...rest }),
+        ]
+      }
+      case 'replaceEvent': {
+        const { replaces, op: _replace, ...rest } = op
+        return [
+          ...mysqlDdl.build(ns, { op: 'dropEvent', name: replaces }),
+          ...mysqlDdl.build(ns, { op: 'createEvent', ...rest }),
+        ]
+      }
       case 'createTrigger':
         return [
           `CREATE ${definerClause(op.definer)}TRIGGER ${quoteTable('mysql', ns, op.name)} ${op.timing} ${op.event} ON ${quoteTable('mysql', ns, op.table)} FOR EACH ROW ${bare(op.body)}`,
@@ -301,7 +327,13 @@ export const mysqlDdl: DdlBuilder = {
         if (op.partitionBy) throw new AdapterError('UNSUPPORTED', 'MySQL: create the table, then partition it')
         const defs = op.columns.map(columnDef)
         if (op.primaryKey.length > 0) defs.push(`PRIMARY KEY (${op.primaryKey.map(id).join(', ')})`)
-        return [`CREATE TABLE ${t} (\n  ${defs.join(',\n  ')}\n)`]
+        // engine / collation are schema-validated identifiers (`[A-Za-z0-9_]+`), so they are safe unquoted.
+        const options = [
+          op.engine ? `ENGINE = ${op.engine}` : '',
+          op.collation ? `COLLATE = ${op.collation}` : '',
+          op.comment ? `COMMENT = ${mysqlLiteral(op.comment)}` : '',
+        ].filter(Boolean)
+        return [`CREATE TABLE ${t} (\n  ${defs.join(',\n  ')}\n)${options.length > 0 ? ` ${options.join(' ')}` : ''}`]
       }
       case 'partitionTable': {
         const by = `PARTITION BY ${op.method.toUpperCase()} (${op.expression})`

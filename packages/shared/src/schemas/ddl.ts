@@ -161,6 +161,50 @@ const ForeignKeyShape = z.object({
   onDelete: FkActionSchema.optional(),
 })
 
+const RoutineShape = {
+  kind: z.enum(['procedure', 'function']),
+  name: z.string().min(1),
+  params: z.array(RoutineParamSchema).default([]),
+  /** Functions only. */
+  returns: SqlType.optional(),
+  body: SqlBody,
+  /** PostgreSQL only (MySQL routines are SQL): a language name. */
+  language: z
+    .string()
+    .regex(/^[A-Za-z][A-Za-z0-9_]*$/)
+    .default('plpgsql'),
+  /** MySQL functions under binary logging must declare it. */
+  deterministic: z.boolean().default(false),
+  comment: z.string().max(1024).optional(),
+  /** MySQL only. */
+  definer: DefinerSchema.optional(),
+  /** MySQL `SQL SECURITY`, PostgreSQL `SECURITY`. */
+  sqlSecurity: SqlSecuritySchema.optional(),
+  /** MySQL only. */
+  dataAccess: DataAccessSchema.optional(),
+}
+
+const TriggerShape = {
+  name: z.string().min(1),
+  table,
+  timing: z.enum(['BEFORE', 'AFTER']),
+  event: z.enum(['INSERT', 'UPDATE', 'DELETE']),
+  body: SqlBody,
+  /** MySQL only. */
+  definer: DefinerSchema.optional(),
+}
+
+const EventShape = {
+  name: z.string().min(1),
+  schedule: EventScheduleSchema,
+  body: SqlBody,
+  enabled: z.boolean().default(true),
+  comment: z.string().max(1024).optional(),
+  /** Keep the event after it has run (a one-time AT event is otherwise dropped). */
+  preserve: z.boolean().optional(),
+  definer: DefinerSchema.optional(),
+}
+
 export const DdlOpSchema = z.discriminatedUnion('op', [
   z.object({
     op: z.literal('createTable'),
@@ -169,6 +213,16 @@ export const DdlOpSchema = z.discriminatedUnion('op', [
     primaryKey: z.array(z.string().min(1)).default([]),
     /** Created partitioned (PostgreSQL's only way to get a partitioned table): its partitions are added after. */
     partitionBy: z.object(PartitionByShape).optional(),
+    /** Table options at creation: the comment on both dialects, engine and collation on MySQL only. */
+    comment: z.string().max(2048).optional(),
+    engine: z
+      .string()
+      .regex(/^[A-Za-z0-9_]+$/)
+      .optional(),
+    collation: z
+      .string()
+      .regex(/^[A-Za-z0-9_]+$/)
+      .optional(),
   }),
   /** MySQL: partition an existing table (PostgreSQL cannot; it creates a partitioned table instead). */
   z.object({
@@ -330,6 +384,8 @@ export const DdlOpSchema = z.discriminatedUnion('op', [
     autoIncrement: z.boolean().optional(),
     /** MySQL: give the accounts that hold database-level privileges on the source the same on the copy. */
     privileges: z.boolean().optional(),
+    /** MySQL: false = rows only, into the tables an existing database of the new name already has. */
+    structure: z.boolean().optional(),
     /**
      * MySQL: each base table with its insertable columns (generated columns excluded), and — when the options above
      * ask for them — its foreign keys and AUTO_INCREMENT value; `grants` the accounts' privileges. All filled by
@@ -515,28 +571,20 @@ export const DdlOpSchema = z.discriminatedUnion('op', [
    * A stored procedure or function. The body is the dialect's own: MySQL a statement or BEGIN … END block,
    * PostgreSQL the code of the function in `language` (plpgsql: a BEGIN … END block).
    */
+  z.object({ op: z.literal('createRoutine'), ...RoutineShape }),
+  /**
+   * Replaces a routine by a new definition (editing one): the old one is dropped and this created — in one step on
+   * PostgreSQL when the name and the parameters stay (`CREATE OR REPLACE`, which keeps its privileges).
+   * `replaces` names the one being replaced, by its parameter list on PostgreSQL.
+   */
   z.object({
-    op: z.literal('createRoutine'),
-    kind: z.enum(['procedure', 'function']),
-    name: z.string().min(1),
-    params: z.array(RoutineParamSchema).default([]),
-    /** Functions only. */
-    returns: SqlType.optional(),
-    body: SqlBody,
-    /** PostgreSQL only (MySQL routines are SQL): a language name. */
-    language: z
-      .string()
-      .regex(/^[A-Za-z][A-Za-z0-9_]*$/)
-      .default('plpgsql'),
-    /** MySQL functions under binary logging must declare it. */
-    deterministic: z.boolean().default(false),
-    comment: z.string().max(1024).optional(),
-    /** MySQL only. */
-    definer: DefinerSchema.optional(),
-    /** MySQL `SQL SECURITY`, PostgreSQL `SECURITY`. */
-    sqlSecurity: SqlSecuritySchema.optional(),
-    /** MySQL only. */
-    dataAccess: DataAccessSchema.optional(),
+    op: z.literal('replaceRoutine'),
+    ...RoutineShape,
+    replaces: z.object({
+      kind: z.enum(['procedure', 'function']),
+      name: z.string().min(1),
+      parameters: RoutineSignature.optional(),
+    }),
   }),
   /** Drops a procedure or function; PostgreSQL names it by its parameter list (overloads). */
   z.object({
@@ -560,32 +608,25 @@ export const DdlOpSchema = z.discriminatedUnion('op', [
    * A row-level trigger. MySQL: the body is a statement or BEGIN … END block. PostgreSQL: a PL/pgSQL block that
    * returns the row (`BEGIN … RETURN NEW; END`), put in a trigger function named after the trigger.
    */
+  z.object({ op: z.literal('createTrigger'), ...TriggerShape }),
+  /** Replaces a trigger by a new definition: the old one (`replaces`, on its table) is dropped and this created. */
   z.object({
-    op: z.literal('createTrigger'),
-    name: z.string().min(1),
-    table,
-    timing: z.enum(['BEFORE', 'AFTER']),
-    event: z.enum(['INSERT', 'UPDATE', 'DELETE']),
-    body: SqlBody,
-    /** MySQL only. */
-    definer: DefinerSchema.optional(),
+    op: z.literal('replaceTrigger'),
+    ...TriggerShape,
+    replaces: z.object({ name: z.string().min(1), table: z.string().min(1) }),
   }),
   /** MySQL event scheduler (PostgreSQL: UNSUPPORTED). */
-  z.object({
-    op: z.literal('createEvent'),
-    name: z.string().min(1),
-    schedule: EventScheduleSchema,
-    body: SqlBody,
-    enabled: z.boolean().default(true),
-    comment: z.string().max(1024).optional(),
-    /** Keep the event after it has run (a one-time AT event is otherwise dropped). */
-    preserve: z.boolean().optional(),
-    definer: DefinerSchema.optional(),
-  }),
+  z.object({ op: z.literal('createEvent'), ...EventShape }),
+  /** Replaces an event by a new definition (MySQL): the old one, `replaces`, is dropped and this created. */
+  z.object({ op: z.literal('replaceEvent'), ...EventShape, replaces: z.string().min(1) }),
   z.object({ op: z.literal('enableEvent'), name: z.string().min(1) }),
   z.object({ op: z.literal('disableEvent'), name: z.string().min(1) }),
   z.object({ op: z.literal('dropEvent'), name: z.string().min(1) }),
 ])
 export type DdlOp = z.infer<typeof DdlOpSchema>
+/** What the create forms take, read back from the server to edit an existing routine, trigger or event. */
+export type RoutineDetail = Omit<Extract<DdlOp, { op: 'createRoutine' }>, 'op'>
+export type TriggerDetail = Omit<Extract<DdlOp, { op: 'createTrigger' }>, 'op'>
+export type EventDetail = Omit<Extract<DdlOp, { op: 'createEvent' }>, 'op'>
 export type DdlOpInput = z.input<typeof DdlOpSchema>
 export const DDL_OP_NAMES = DdlOpSchema.options.map((o) => o.shape.op.value)

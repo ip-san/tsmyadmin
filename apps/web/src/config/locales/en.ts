@@ -153,6 +153,11 @@ export const en = {
     events: 'Events',
   },
   databaseSearch: {
+    deleteRows: 'Delete the matching rows…',
+    deleteLabel: (table: string) => `${table}: delete the matching rows`,
+    deleteTitle: (table: string) => `Delete the matching rows of ${table}`,
+    deleteWarning: 'Every matching row is removed — only the rows this search found.',
+    deleted: (table: string) => `Deleted the matching rows of ${table}`,
     title: 'Search the database',
     term: 'Search for',
     termHint:
@@ -187,6 +192,8 @@ export const en = {
     searching: 'Searching…',
   },
   queryBuilder: {
+    insert: 'Insert before',
+    insertBefore: (label: string) => `${label}: insert before`,
     templates: {
       title: 'Saved setups',
       name: 'Name',
@@ -241,6 +248,16 @@ export const en = {
     openInSql: 'Open in the SQL tab',
   },
   designer: {
+    compact: 'Table names only',
+    snap: 'Snap to grid',
+    showLines: 'Show lines',
+    lineLabels: 'Label the lines',
+    lineStyle: 'Line shape',
+    lineStyles: { curve: 'Curve', straight: 'Straight', polyline: 'Right angles' },
+    fullscreen: 'Full screen',
+    exitFullscreen: 'Exit full screen',
+    exportDia: 'Save as DIA',
+    exportEps: 'Save as EPS',
     title: 'Designer',
     hint: 'Tables and the foreign keys between them. Drag a table to move it (or focus it and use the arrow keys; Shift moves further). The layout can be kept in this browser, or under a name as a page.',
     relateHint:
@@ -283,6 +300,14 @@ export const en = {
     constraint: 'Constraint',
   },
   databaseOps: {
+    copyMode: {
+      label: 'What to copy',
+      both: 'Structure and data',
+      structure: 'Structure only',
+      data: 'Data only',
+      dataHint: 'The target needs the same tables already. Only the columns it has are copied.',
+    },
+    switchToCopy: 'Switch to the database after copying',
     copyKeep: {
       foreignKeys: 'Copy the foreign keys too',
       autoIncrement: 'Carry the next AUTO_INCREMENT values over',
@@ -755,6 +780,9 @@ export const en = {
       moveTable: 'Move table',
       replaceInColumn: 'Find and replace',
       createView: 'Create view',
+      replaceRoutine: 'Replace routine',
+      replaceTrigger: 'Replace trigger',
+      replaceEvent: 'Replace event',
       createRoutine: 'Create routine',
       createTrigger: 'Create trigger',
       createEvent: 'Create event',
@@ -800,6 +828,17 @@ export const en = {
       editOf: (name: string) => `Index ${name}: change`,
       renameOf: (name: string) => `Index ${name}: rename`,
       dropOf: (name: string) => `Index ${name}: drop`,
+    },
+    proposal: {
+      button: 'Propose table structure',
+      title: 'Proposed types',
+      none: (rows: number) =>
+        `Looked at the first ${rows.toLocaleString('en-US')} rows: no text column has a narrower type to propose.`,
+      basis: (rows: number) =>
+        `Decided from the first ${rows.toLocaleString('en-US')} rows only. A later value that does not fit makes the change fail (no value is lost).`,
+      current: 'Current type',
+      proposed: 'Proposed',
+      preview: 'Review the ticked proposals…',
     },
     bulk: {
       pick: 'Pick',
@@ -1820,6 +1859,13 @@ export const en = {
     },
   },
   create: {
+    edit: {
+      button: 'Edit',
+      notEditable:
+        'This definition cannot be shown in the form (a parameter without a name, a WHEN clause, …). Use “Edit in the SQL tab”.',
+      title: (name: string) => `Edit ${name}`,
+      hint: 'MySQL has no syntax to replace one, so the old definition is dropped and the new one created. If the new one is refused, the old one is gone: check the SQL shown, and the original definition, before you run it.',
+    },
     security: {
       definer: 'DEFINER',
       definerHint: 'user@host (for example app@%). Blank: the account creating it',
@@ -1919,6 +1965,10 @@ export const en = {
     caption: (column: string, shapes: number) => `${plural(shapes, 'shape', 'shapes')} of ${column}`,
   },
   central: {
+    edit: (name: string) => `${name}: Edit`,
+    editTitle: (name: string) => `Edit ${name}`,
+    saveEdit: 'Save',
+    download: 'Download as JSON',
     title: 'Central columns',
     hint: 'Column definitions this database uses again and again, kept so Structure → Add column can start from them. Tables are not changed.',
     empty: 'None yet.',
@@ -1990,6 +2040,15 @@ export const en = {
     save: 'Save',
   },
   tracking: {
+    download: 'Download SQL',
+    downloadVersion: (v: number) => `Version ${v}: download SQL`,
+    deleteVersion: (v: number) => `Version ${v}: delete`,
+    deleteVersionTitle: 'Delete a version',
+    deleteVersionConfirm: 'Delete',
+    deleteVersionBody: (v: number, count: number) =>
+      count === 1
+        ? `Version ${v} is the last one. Deleting it stops tracking (the settings and the recorded statements go too).`
+        : `Deletes the record of version ${v}. The other versions stay.`,
     title: 'Change tracking',
     notice:
       'Keeps the table’s definition (its CREATE statement) as versions recorded at a point in time, to compare. Record with “Record the current structure” (nothing is recorded on its own); a change made from anywhere shows up as a difference from the latest version. Shared by every account of the server.',

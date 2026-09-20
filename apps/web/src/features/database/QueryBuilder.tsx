@@ -199,7 +199,22 @@ export function QueryBuilder({ db, schema }: { db: string; schema?: string | und
                               <option value="desc">{t.desc}</option>
                             </Select>
                           </Td>
-                          <Td>
+                          <Td className="whitespace-nowrap">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              aria-label={t.insertBefore(label)}
+                              onClick={() =>
+                                setOutputs((prev) => [
+                                  ...prev.slice(0, i),
+                                  { id: newId(), key: '', alias: '', show: true, sort: '' },
+                                  ...prev.slice(i),
+                                ])
+                              }
+                            >
+                              {t.insert}
+                            </Button>
                             <Button
                               type="button"
                               variant="ghost"

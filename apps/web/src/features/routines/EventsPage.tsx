@@ -1,21 +1,23 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Dialect } from '@tsmyadmin/shared'
 import { CreateSection } from '@/components/ddl/CreateSection.tsx'
 import { DdlPreviewDialog } from '@/components/ddl/DdlPreviewDialog.tsx'
 import { DefinitionToggle } from '@/components/ddl/DefinitionToggle.tsx'
+import { EditDetail } from '@/components/ddl/EditDetail.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { Badge, ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
 import { useDdlFlow } from '@/lib/ddl.ts'
 import { useEditDefinition } from '@/lib/open-in-console.ts'
-import { eventsQuery } from '@/lib/queries.ts'
+import { eventDetailQuery, eventsQuery } from '@/lib/queries.ts'
 import { CreateEventForm } from './CreateEventForm.tsx'
 
 export function EventsPage({ db, schema, dialect }: { db: string; schema?: string | undefined; dialect: Dialect }) {
   const events = useQuery({ ...eventsQuery(db, schema), enabled: dialect === 'mysql' })
   const flow = useDdlFlow(db, schema)
   const edit = useEditDefinition(db, schema)
+  const queryClient = useQueryClient()
   if (dialect !== 'mysql') return <Notice>{locale.events.unsupported}</Notice>
   if (events.isPending) return <Spinner />
   if (events.isError) return <ErrorBox error={events.error} onRetry={() => void events.refetch()} />
@@ -64,6 +66,26 @@ export function EventsPage({ db, schema, dialect }: { db: string; schema?: strin
                     />
                   </Td>
                   <Td className="space-x-1 whitespace-nowrap">
+                    <EditDetail
+                      label={`${e.name}: ${locale.create.edit.button}`}
+                      title={locale.create.edit.title(e.name)}
+                      load={() => queryClient.fetchQuery(eventDetailQuery(db, e.name, schema))}
+                    >
+                      {(detail, close) => (
+                        <div className="space-y-3">
+                          <p className="text-xs text-ink-sub">{locale.create.edit.hint}</p>
+                          <CreateEventForm
+                            initial={detail}
+                            replaces={e.name}
+                            onCancel={close}
+                            onSubmit={(op) => {
+                              close()
+                              flow.preview(op)
+                            }}
+                          />
+                        </div>
+                      )}
+                    </EditDetail>
                     <Button
                       size="sm"
                       aria-haspopup="dialog"

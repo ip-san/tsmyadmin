@@ -75,7 +75,7 @@ export async function mysqlRoutineDefinition(
 }
 
 /** SHOW CREATE TRIGGER | EVENT: the statement as written; null when the account lacks the privilege. */
-async function showCreateProgram(
+export async function showCreateProgram(
   conn: Conn,
   ns: Namespace,
   kind: 'TRIGGER' | 'EVENT',

@@ -1,4 +1,5 @@
 export * from './csv.ts'
+export * from './infer-type.ts'
 export * from './schemas/api.ts'
 export * from './schemas/browse.ts'
 export * from './schemas/browse-query.ts'

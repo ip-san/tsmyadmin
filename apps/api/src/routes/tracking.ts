@@ -72,11 +72,22 @@ export function trackingRoutes(cfg: SessionConfig, logger: Logger) {
     const db = c.req.param('db') ?? ''
     return { ns: schema ? { database: db, schema } : { database: db }, table: c.req.param('table') ?? '' }
   }
+  /** Everything kept for a table: its versions, its statement settings and its log. */
+  const forget = async (c: Context<AppEnv>, ns: Namespace, table: string) => {
+    const store = cfg.store.sharedItems
+    if (!store) return
+    const config = c.get('session').config
+    for (const v of await versions(c, ns, table)) await store.remove(config, 'tracking', v.id)
+    const conf = (await trackedKinds(store, config, ns)).get(table)
+    if (conf) await store.remove(config, 'trackconf', conf.id)
+    for (const e of await trackedStatements(store, config, ns, table)) await store.remove(config, 'tracklog', e.storeId)
+  }
   const path = '/databases/:db/tables/:table/tracking'
   return (
     new Hono<AppEnv>()
       .use(path, requireSession(cfg))
       .use(`${path}/kinds`, requireSession(cfg))
+      .use(`${path}/:version`, requireSession(cfg))
       .use('/databases/:db/tracking', requireSession(cfg))
       // Every tracked table of a database / schema (phpMyAdmin's database-level Tracking), among the tables the
       // caller can see.
@@ -179,11 +190,7 @@ export function trackingRoutes(cfg: SessionConfig, logger: Logger) {
         const session = c.get('session')
         const { ns, table } = target(c, c.req.valid('query').schema)
         const current = await definition(c, ns, table)
-        for (const v of await versions(c, ns, table)) await store.remove(session.config, 'tracking', v.id)
-        const conf = (await trackedKinds(store, session.config, ns)).get(table)
-        if (conf) await store.remove(session.config, 'trackconf', conf.id)
-        for (const e of await trackedStatements(store, session.config, ns, table))
-          await store.remove(session.config, 'tracklog', e.storeId)
+        await forget(c, ns, table)
         logger.log('info', 'tracking.stop', {
           requestId: c.get('requestId'),
           ...sessionInfo(session),
@@ -191,6 +198,28 @@ export function trackingRoutes(cfg: SessionConfig, logger: Logger) {
           table,
         })
         return c.json<TrackingState>({ versions: [], current, kinds: [], log: [] })
+      })
+      // Forgets one version. The last one going is the same as stopping: nothing is left to track against.
+      .delete(`${path}/:version`, validate('query', SchemaQuerySchema), async (c) => {
+        const store = cfg.store.sharedItems
+        if (!store) return unsupported(c)
+        const session = c.get('session')
+        const { ns, table } = target(c, c.req.valid('query').schema)
+        const number = Number(c.req.param('version'))
+        const current = await definition(c, ns, table)
+        const known = await versions(c, ns, table)
+        const doomed = known.find((v) => v.version === number)
+        if (!doomed) return c.json(apiError('NOT_FOUND', `Version ${c.req.param('version')} does not exist`), 404)
+        if (known.length === 1) await forget(c, ns, table)
+        else await store.remove(session.config, 'tracking', doomed.id)
+        logger.log('info', 'tracking.deleteVersion', {
+          requestId: c.get('requestId'),
+          ...sessionInfo(session),
+          database: ns.database,
+          table,
+          version: number,
+        })
+        return c.json<TrackingState>(await stateOf(c, ns, table, current))
       })
   )
 }

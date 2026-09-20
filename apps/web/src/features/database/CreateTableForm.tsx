@@ -48,10 +48,12 @@ export function CreateTableForm({
     method: '',
     expression: '',
   })
+  const [options, setOptions] = useState({ comment: '', engine: '', collation: '' })
   const navigate = useNavigate()
   const flow = useDdlFlow(db, schema, async (op) => {
     setName('')
     setRows([newRow()])
+    setOptions({ comment: '', engine: '', collation: '' })
     // Land on the new table's structure, where the next steps (indexes, keys, rows) are.
     if (op.op === 'createTable') {
       await navigate({
@@ -65,7 +67,13 @@ export function CreateTableForm({
     setRows((r) => r.map((row, j) => (j === i ? { ...row, ...patch } : row)))
   // A row with no name and no type is an untouched blank line, not an error.
   const filled = rows.filter((r) => r.name.trim() !== '' || r.dataType.trim() !== '')
-  const valid = name.trim() !== '' && filled.length > 0 && filled.every((r) => validateColumn(r) === null)
+  const identifier = /^[A-Za-z0-9_]*$/
+  const valid =
+    name.trim() !== '' &&
+    filled.length > 0 &&
+    filled.every((r) => validateColumn(r) === null) &&
+    identifier.test(options.engine.trim()) &&
+    identifier.test(options.collation.trim())
   const submit = (e: FormEvent) => {
     e.preventDefault()
     if (!valid) return
@@ -77,6 +85,9 @@ export function CreateTableForm({
       ...(partitionBy.method && partitionBy.expression.trim()
         ? { partitionBy: { method: partitionBy.method, expression: partitionBy.expression.trim() } }
         : {}),
+      ...(options.comment.trim() ? { comment: options.comment.trim() } : {}),
+      ...(dialect === 'mysql' && options.engine.trim() ? { engine: options.engine.trim() } : {}),
+      ...(dialect === 'mysql' && options.collation.trim() ? { collation: options.collation.trim() } : {}),
     })
   }
   return (
@@ -202,6 +213,36 @@ export function CreateTableForm({
           <option key={t} value={t} />
         ))}
       </datalist>
+      <div className="grid max-w-3xl gap-2 sm:grid-cols-3">
+        <Field id="new-table-comment" label={locale.database.comment}>
+          <Input
+            id="new-table-comment"
+            value={options.comment}
+            onChange={(e) => setOptions((o) => ({ ...o, comment: e.target.value }))}
+            autoComplete="off"
+          />
+        </Field>
+        {dialect === 'mysql' ? (
+          <>
+            <Field id="new-table-engine" label={locale.database.engine} hint={locale.ddl.engineHint}>
+              <Input
+                id="new-table-engine"
+                value={options.engine}
+                onChange={(e) => setOptions((o) => ({ ...o, engine: e.target.value }))}
+                autoComplete="off"
+              />
+            </Field>
+            <Field id="new-table-collation" label={locale.table.collation} hint={locale.ddl.collationHint}>
+              <Input
+                id="new-table-collation"
+                value={options.collation}
+                onChange={(e) => setOptions((o) => ({ ...o, collation: e.target.value }))}
+                autoComplete="off"
+              />
+            </Field>
+          </>
+        ) : null}
+      </div>
       {dialect === 'postgres' ? (
         <div className="flex flex-wrap items-end gap-2">
           <Field id="new-table-partition" label={locale.partitions.createBy}>

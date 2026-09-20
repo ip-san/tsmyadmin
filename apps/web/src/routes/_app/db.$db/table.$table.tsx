@@ -1,10 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Outlet, useMatches, useRouteContext } from '@tanstack/react-router'
 import { isViewKind } from '@tsmyadmin/shared'
-import { Star } from 'lucide-react'
 import { useEffect } from 'react'
 import { PageTitle } from '@/components/layout/PageTitle.tsx'
 import { TabNav } from '@/components/layout/TabNav.tsx'
+import { FavoriteStar } from '@/components/ui/FavoriteStar.tsx'
 import { locale } from '@/config/locale.ts'
 import { useDocumentTitle } from '@/lib/document-title.ts'
 import { structureQuery } from '@/lib/queries.ts'
@@ -24,35 +24,15 @@ function TableLayout() {
   const structure = useQuery(structureQuery({ db, schema, table }))
   const view = structure.data !== undefined && isViewKind(structure.data.kind)
   const { session } = useRouteContext({ from: '/_app' })
-  const shortcuts = useTableShortcuts()
+  const { visit } = useTableShortcuts()
   const ref = { db, schema, table }
-  const favorite = shortcuts.isFavorite(ref)
-  const { visit } = shortcuts
   // Each table opened goes to the top of the recent list (phpMyAdmin's "Recent").
   useEffect(() => {
     visit({ db, schema, table })
   }, [db, schema, table, visit])
   return (
     <>
-      <PageTitle
-        actions={
-          <button
-            type="button"
-            aria-pressed={favorite}
-            onClick={() => shortcuts.toggleFavorite(ref)}
-            className="rounded p-1 text-ink-sub hover:text-ink"
-            title={favorite ? locale.nav.unfavorite : locale.nav.favorite}
-          >
-            <Star
-              aria-hidden="true"
-              className={
-                favorite ? 'size-4 fill-amber-400 text-amber-500 dark:fill-amber-300 dark:text-amber-300' : 'size-4'
-              }
-            />
-            <span className="sr-only">{favorite ? locale.nav.unfavorite : locale.nav.favorite}</span>
-          </button>
-        }
-      >
+      <PageTitle actions={<FavoriteStar table={ref} />}>
         <span className="text-ink-sub">
           {db}
           {schema ? `.${schema}` : ''}.

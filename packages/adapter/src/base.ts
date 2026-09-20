@@ -9,6 +9,7 @@ import type {
   DiagnosticQuery,
   DiagnosticReport,
   Dialect,
+  EventDetail,
   EventInfo,
   Filter,
   InputCell,
@@ -24,6 +25,7 @@ import type {
   QueryBuilderSpec,
   RelationDef,
   ReplicationInfo,
+  RoutineDetail,
   RoutineInfo,
   RoutineKind,
   RowKey,
@@ -38,6 +40,7 @@ import type {
   TableSchema,
   TableSearchResult,
   TableStats,
+  TriggerDetail,
   TriggerInfo,
   UserInfo,
   UserRef,
@@ -426,6 +429,14 @@ export abstract class BaseAdapter implements DatabaseAdapter {
   abstract listPartitions(ns: Namespace, table: string): Promise<Partitioning>
   abstract listRoutines(ns: Namespace): Promise<RoutineInfo[]>
   abstract routineDefinition(ns: Namespace, name: string, kind: RoutineKind): Promise<string | null>
+  abstract routineDetail(
+    ns: Namespace,
+    name: string,
+    kind: RoutineKind,
+    parameters?: string
+  ): Promise<RoutineDetail | null>
+  abstract triggerDetail(ns: Namespace, table: string, name: string): Promise<TriggerDetail | null>
+  abstract eventDetail(ns: Namespace, name: string): Promise<EventDetail | null>
   abstract listTriggers(ns: Namespace, table?: string): Promise<TriggerInfo[]>
   abstract listEvents(ns: Namespace): Promise<EventInfo[]>
   abstract listDependencies(ns: Namespace): Promise<ObjectDependency[] | null>
@@ -602,7 +613,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     const columns = schema.columns
       .filter((c) => isSearchableType(d, c.dataType) && (!only || c.name.toLowerCase().includes(only)))
       .map((c) => c.name)
-    if (columns.length === 0) return { total: 0, count: 'exact', columns: [], sql: '' }
+    if (columns.length === 0) return { total: 0, count: 'exact', columns: [], sql: '', deleteSql: '' }
     const tableSql = quoteTable(d, ns, table)
     // Same meaning of "contains" as the browse filter: the term is literal, wildcards added here. Case-insensitive
     // on both servers — MySQL through the connection's collation, PostgreSQL with ILIKE / ~* — as phpMyAdmin
@@ -623,12 +634,20 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     // Bounded like the browse count: a term that matches most of a huge table is still one limited scan.
     const countSql = `SELECT COUNT(*) FROM (SELECT 1 FROM ${tableSql} WHERE ${where} LIMIT ${params.add(EXACT_COUNT_MAX_ROWS + 1)}) AS tsmyadmin_search`
     // For the SQL tab, where it is edited and run: the term is written in as a literal there.
-    const sql = `SELECT * FROM ${tableSql} WHERE ${match((v) => (d === 'mysql' ? mysqlLiteral(v) : pgLiteral(v)))}`
+    const literalWhere = match((v) => (d === 'mysql' ? mysqlLiteral(v) : pgLiteral(v)))
+    const sql = `SELECT * FROM ${tableSql} WHERE ${literalWhere}`
+    const deleteSql = `DELETE FROM ${tableSql} WHERE ${literalWhere}`
     return this.withConn(ns, async (conn) => {
       const cell = firstResult(await conn.query(countSql, params.values)).rows[0]?.[0]
       const counted = typeof cell === 'number' ? cell : Number(cell ?? 0)
       const bounded = counted > EXACT_COUNT_MAX_ROWS
-      return { total: bounded ? EXACT_COUNT_MAX_ROWS : counted, count: bounded ? 'lower_bound' : 'exact', columns, sql }
+      return {
+        total: bounded ? EXACT_COUNT_MAX_ROWS : counted,
+        count: bounded ? 'lower_bound' : 'exact',
+        columns,
+        sql,
+        deleteSql,
+      }
     })
   }
 

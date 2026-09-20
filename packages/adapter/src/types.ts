@@ -11,6 +11,7 @@ import type {
   DiagnosticQuery,
   DiagnosticReport,
   Dialect,
+  EventDetail,
   EventInfo,
   InputCell,
   KeyValue,
@@ -23,6 +24,7 @@ import type {
   QueryBuilderSpec,
   RelationDef,
   ReplicationInfo,
+  RoutineDetail,
   RoutineInfo,
   RoutineKind,
   RowKey,
@@ -36,6 +38,7 @@ import type {
   TableSchema,
   TableSearchResult,
   TableStats,
+  TriggerDetail,
   TriggerInfo,
   UserInfo,
   UserOp,
@@ -243,6 +246,15 @@ export interface DatabaseAdapter {
   listRoutines(ns: Namespace): Promise<RoutineInfo[]>
   /** CREATE statement of one routine; null when the account may not read it, NOT_FOUND when it does not exist. */
   routineDefinition(ns: Namespace, name: string, kind: RoutineKind): Promise<string | null>
+  /**
+   * One routine as the create form takes it, to edit it. `parameters` (as the list prints them) picks an overload
+   * (PostgreSQL). null for what the form cannot say, or when the account may not read the definition.
+   */
+  routineDetail(ns: Namespace, name: string, kind: RoutineKind, parameters?: string): Promise<RoutineDetail | null>
+  /** One trigger as the create form takes it (null: edit it in the SQL tab). */
+  triggerDetail(ns: Namespace, table: string, name: string): Promise<TriggerDetail | null>
+  /** One event as the create form takes it (MySQL; PostgreSQL has none, so null). */
+  eventDetail(ns: Namespace, name: string): Promise<EventDetail | null>
   /** Triggers in the namespace, optionally only for one table. */
   listTriggers(ns: Namespace, table?: string): Promise<TriggerInfo[]>
   /** Scheduled events (MySQL). PostgreSQL returns []. */
@@ -361,6 +373,9 @@ export const ADAPTER_METHOD_NAMES = [
   'listPartitions',
   'listRoutines',
   'routineDefinition',
+  'routineDetail',
+  'triggerDetail',
+  'eventDetail',
   'listTriggers',
   'listEvents',
   'listDependencies',

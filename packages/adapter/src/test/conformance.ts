@@ -436,6 +436,22 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         expect(r?.kind === 'rows' ? r.result.rows.length : -1).toBe(2)
       })
 
+      it('offers the same match as a DELETE that removes exactly the rows found', async () => {
+        const t = `${scratch}_sdel`
+        await execOk(`CREATE TABLE ${t} (id INT PRIMARY KEY, note VARCHAR(40))`)
+        try {
+          await execOk(`INSERT INTO ${t} VALUES (1, 'it''s zap'), (2, 'keep'), (3, 'ZAP too')`)
+          const found = await db.searchTable(ns, t, "it's zap", { mode: 'any' })
+          expect(found.total).toBe(2)
+          expect(found.deleteSql).toMatch(/^DELETE FROM /)
+          await execOk(found.deleteSql)
+          const [left] = await exec(`SELECT id FROM ${t}`)
+          expect(left?.kind === 'rows' ? left.result.rows : []).toEqual([[2]])
+        } finally {
+          await execOk(`DROP TABLE IF EXISTS ${t}`)
+        }
+      })
+
       it('counts rows containing the term in any column, ignoring case', async () => {
         // "alice" is in both the name (Alice) and the email of the same row: one row, not two.
         expect(await db.searchTable(ns, 'users', 'ALICE')).toMatchObject({ total: 1, count: 'exact' })
@@ -1064,6 +1080,182 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
       it('returns 0 for no rows and rejects an empty column list', async () => {
         expect(await db.insertRows(ns, scratch, ['id'], [])).toEqual({ affectedRows: 0 })
         await expect(db.insertRows(ns, scratch, [], [[1]])).rejects.toMatchObject({ code: 'QUERY_FAILED' })
+      })
+    })
+
+    describe('modifyColumn to a narrower type', () => {
+      it('turns a text column of integers into INT, keeping the values (PostgreSQL needs the cast spelled out)', async () => {
+        const t = `${scratch}_narrow`
+        try {
+          await runDdl({
+            op: 'createTable',
+            table: t,
+            columns: [col('id', 'INT', { nullable: false }), col('code', 'VARCHAR(255)')],
+            primaryKey: ['id'],
+          })
+          await execOk(`INSERT INTO ${t} VALUES (1, '10'), (2, '200'), (3, NULL)`)
+          await runDdl({
+            op: 'modifyColumn',
+            table: t,
+            name: 'code',
+            column: col('code', 'INT'),
+            previous: col('code', 'VARCHAR(255)'),
+          })
+          const described = await db.describeTable(ns, t)
+          expect(described.columns.find((c) => c.name === 'code')?.dataType).toMatch(/^(int|integer)/i)
+          const [r] = await exec(`SELECT code FROM ${t} ORDER BY id`)
+          expect(r?.kind === 'rows' ? r.result.rows : []).toEqual([[10], [200], [null]])
+        } finally {
+          await execOk(`DROP TABLE IF EXISTS ${t}`)
+        }
+      })
+    })
+
+    describe('routineDetail', () => {
+      it('reads a routine back as the create form takes it, body escapes intact, and replaces it', async () => {
+        const name = `${scratch}_rd`
+        const body =
+          dialect === 'mysql' ? "RETURN CONCAT('a\\'b', \"c\\\\d\", n)" : "BEGIN RETURN 'a''b' || n::text; END"
+        const create = {
+          op: 'createRoutine' as const,
+          kind: 'function' as const,
+          name,
+          params: [{ mode: 'IN' as const, name: 'n', type: dialect === 'mysql' ? 'INT' : 'integer' }],
+          returns: dialect === 'mysql' ? 'VARCHAR(30)' : 'text',
+          body,
+          language: dialect === 'mysql' ? 'sql' : 'plpgsql',
+          deterministic: true,
+          comment: "it's a note",
+        }
+        try {
+          await runDdl(create)
+          const detail = await db.routineDetail(ns, name, 'function')
+          expect(detail).toMatchObject({ kind: 'function', name, comment: "it's a note", deterministic: true })
+          expect(detail?.body.trim().replace(/;$/, '')).toBe(body.replace(/;$/, ''))
+          expect(detail?.params.map((p) => [p.mode, p.name])).toEqual([['IN', 'n']])
+          // Edit: change the body through replaceRoutine, from what was read back.
+          if (!detail) throw new Error('no detail')
+          const info = (await db.listRoutines(ns)).find((r) => r.name === name)
+          await runDdl({
+            op: 'replaceRoutine',
+            ...detail,
+            body: dialect === 'mysql' ? 'RETURN n + 1' : 'BEGIN RETURN (n + 1)::text; END',
+            replaces: {
+              kind: 'function',
+              name,
+              ...(dialect === 'postgres' ? { parameters: info?.parameters ?? '' } : {}),
+            },
+          })
+          const after = await db.routineDetail(ns, name, 'function')
+          expect(after?.body).toContain('n + 1')
+          expect(after?.comment).toBe("it's a note")
+        } finally {
+          const info = (await db.listRoutines(ns)).find((r) => r.name === name)
+          await exec(
+            db.ddl
+              .build(ns, {
+                op: 'dropRoutine',
+                kind: 'function',
+                name,
+                ...(dialect === 'postgres' ? { parameters: info?.parameters ?? '' } : {}),
+              })
+              .join(';\n'),
+            { stopOnError: false }
+          )
+        }
+      })
+    })
+
+    describe('triggerDetail', () => {
+      it('reads a trigger back as the create form takes it, and replaces it with another event', async () => {
+        const table = `${scratch}_trt`
+        const trigger = `${scratch}_trg`
+        const body =
+          dialect === 'mysql' ? "SET NEW.s = CONCAT('x\\'y', \"z\\\\w\")" : "BEGIN NEW.s := 'x''y'; RETURN NEW; END"
+        try {
+          await execOk(`CREATE TABLE ${table} (id INT PRIMARY KEY, s VARCHAR(30))`)
+          await runDdl({ op: 'createTrigger', name: trigger, table, timing: 'BEFORE', event: 'INSERT', body })
+          const detail = await db.triggerDetail(ns, table, trigger)
+          expect(detail).toMatchObject({ name: trigger, table, timing: 'BEFORE', event: 'INSERT' })
+          expect(detail?.body.trim()).toBe(body)
+          if (!detail) throw new Error('no detail')
+          await runDdl({
+            op: 'replaceTrigger',
+            ...detail,
+            event: 'UPDATE',
+            replaces: { name: trigger, table },
+          })
+          expect(await db.triggerDetail(ns, table, trigger)).toMatchObject({ timing: 'BEFORE', event: 'UPDATE' })
+        } finally {
+          await execOk(`DROP TABLE IF EXISTS ${table}`)
+          if (dialect === 'postgres') await exec(`DROP FUNCTION IF EXISTS ${trigger}_fn()`, { stopOnError: false })
+        }
+      })
+    })
+
+    describe('eventDetail', () => {
+      it('reads an event back (MySQL) and replaces its schedule; PostgreSQL has none', async () => {
+        const name = `${scratch}_evd`
+        if (dialect === 'postgres') {
+          expect(await db.eventDetail(ns, name)).toBeNull()
+          return
+        }
+        const body = "INSERT INTO users_log_none VALUES (1, 'q\\'r')"
+        try {
+          await execOk('CREATE TABLE IF NOT EXISTS users_log_none (id INT, s VARCHAR(20))')
+          await runDdl({
+            op: 'createEvent',
+            name,
+            schedule: { kind: 'every', interval: 1, unit: 'DAY', starts: '2031-01-01 00:00:00' },
+            body,
+            enabled: false,
+            comment: 'c',
+          })
+          const detail = await db.eventDetail(ns, name)
+          expect(detail).toMatchObject({
+            name,
+            schedule: { kind: 'every', interval: 1, unit: 'DAY', starts: '2031-01-01 00:00:00' },
+            enabled: false,
+            comment: 'c',
+            preserve: false,
+          })
+          expect(detail?.body).toBe(body)
+          if (!detail) throw new Error('no detail')
+          await runDdl({
+            op: 'replaceEvent',
+            ...detail,
+            schedule: { kind: 'every', interval: 2, unit: 'HOUR' },
+            replaces: name,
+          })
+          expect((await db.eventDetail(ns, name))?.schedule).toMatchObject({ kind: 'every', interval: 2, unit: 'HOUR' })
+        } finally {
+          await exec(`DROP EVENT IF EXISTS \`${name}\``, { stopOnError: false })
+          await exec('DROP TABLE IF EXISTS users_log_none', { stopOnError: false })
+        }
+      })
+    })
+
+    describe('createTable options', () => {
+      it('creates a table with its comment, and with its engine and collation on MySQL', async () => {
+        const t = `${scratch}_copt`
+        try {
+          await runDdl({
+            op: 'createTable',
+            table: t,
+            columns: [col('id', 'INT', { nullable: false })],
+            primaryKey: ['id'],
+            comment: "made 'with' options",
+            ...(dialect === 'mysql' ? { engine: 'InnoDB', collation: 'utf8mb4_bin' } : {}),
+          })
+          const described = await db.describeTable(ns, t)
+          expect(described.comment).toBe("made 'with' options")
+          if (dialect === 'mysql') {
+            expect(described.engine).toBe('InnoDB')
+            expect(described.collation).toBe('utf8mb4_bin')
+          }
+        } finally {
+          await execOk(`DROP TABLE IF EXISTS ${t}`)
+        }
       })
     })
 

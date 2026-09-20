@@ -1,5 +1,5 @@
 import { useRouteContext } from '@tanstack/react-router'
-import type { DesignerPage, DesignerPageBody } from '@tsmyadmin/shared'
+import type { DesignerPage, DesignerPageBody, DesignerView } from '@tsmyadmin/shared'
 import { NamedListPanel } from '@/components/panels/NamedListPanel.tsx'
 import { locale } from '@/config/locale.ts'
 import { designerPagesQuery, listDesignerPages, mutations } from '@/lib/queries.ts'
@@ -18,12 +18,14 @@ export function DesignerPages({
   schema,
   positions,
   allColumns,
+  view,
   onLoad,
 }: {
   db: string
   schema: string | undefined
   positions: Record<string, Point>
   allColumns: boolean
+  view: DesignerView
   onLoad: (page: DesignerPage) => void
 }) {
   const { session } = useRouteContext({ from: '/_app' })
@@ -49,7 +51,7 @@ export function DesignerPages({
       error={list.error}
       saveTitle={t.saveHint}
       canSave={Object.keys(positions).length > 0}
-      onSave={(name) => list.save(name, { database: db, ...(schema ? { schema } : {}), positions, allColumns })}
+      onSave={(name) => list.save(name, { database: db, ...(schema ? { schema } : {}), positions, allColumns, view })}
       onLoad={(entry) => {
         const found = entries.find((x) => x.id === entry.id && x.name === entry.name)
         if (found) onLoad(found)

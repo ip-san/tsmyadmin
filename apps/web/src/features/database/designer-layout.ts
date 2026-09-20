@@ -1,4 +1,4 @@
-import type { Dialect, Namespace, RelationDef } from '@tsmyadmin/shared'
+import type { DesignerView, Dialect, Namespace, RelationDef } from '@tsmyadmin/shared'
 
 export interface Point {
   x: number
@@ -39,7 +39,20 @@ export function boxColumns(table: string, relations: readonly RelationDef[]): st
   return out
 }
 
-export const boxHeight = (columns: number) => HEADER_HEIGHT + Math.max(columns, 1) * ROW_HEIGHT
+export const boxHeight = (columns: number, compact = false) =>
+  compact ? HEADER_HEIGHT : HEADER_HEIGHT + Math.max(columns, 1) * ROW_HEIGHT
+
+export const DEFAULT_VIEW: DesignerView = {
+  compact: false,
+  snap: false,
+  lineStyle: 'curve',
+  lineLabels: false,
+  showLines: true,
+}
+
+export const GRID = 20
+/** A point on the grid nearest to it. */
+export const snapToGrid = (p: Point): Point => ({ x: Math.round(p.x / GRID) * GRID, y: Math.round(p.y / GRID) * GRID })
 
 /**
  * A layered starting layout: tables nothing else is referenced from sit in the first column, and a table goes one
@@ -72,12 +85,13 @@ export function autoLayout(tables: readonly string[], relations: readonly Relati
 }
 
 /** Where a column's row meets the side of its box nearer to `towardsX`. */
-function anchor(box: Point, columns: readonly string[], column: string, towardsX: number): Point {
+function anchor(box: Point, columns: readonly string[], column: string, towardsX: number, compact: boolean): Point {
   const row = Math.max(columns.indexOf(column), 0)
   const centre = box.x + BOX_WIDTH / 2
   return {
     x: towardsX < centre ? box.x : box.x + BOX_WIDTH,
-    y: box.y + HEADER_HEIGHT + row * ROW_HEIGHT + ROW_HEIGHT / 2,
+    // A compact box has no rows: its lines meet the header.
+    y: compact ? box.y + HEADER_HEIGHT / 2 : box.y + HEADER_HEIGHT + row * ROW_HEIGHT + ROW_HEIGHT / 2,
   }
 }
 
@@ -90,18 +104,71 @@ export function withAllColumns(keyColumns: readonly string[], all: readonly stri
   return [...keyColumns, ...all.filter((c) => !keyColumns.includes(c))]
 }
 
-/** The curve of one key between the two boxes it joins, from its column's row to the referenced column's row. */
+/** How one key is drawn: a Bézier curve, or a run of straight segments. */
+export type Route =
+  | { kind: 'curve'; from: Point; control1: Point; control2: Point; to: Point }
+  | { kind: 'lines'; points: Point[] }
+
+/** The line of one key between the two boxes it joins, from its column's row to the referenced column's row. */
+export function relationRoute(
+  r: RelationDef,
+  at: (table: string) => Point,
+  columnsOf: (table: string) => readonly string[],
+  style: DesignerView['lineStyle'] = 'curve',
+  compact = false
+): Route {
+  const box = at(r.table)
+  const refBox = at(r.refTable)
+  const a = anchor(box, columnsOf(r.table), r.columns[0] ?? '', refBox.x + BOX_WIDTH / 2, compact)
+  const b = anchor(refBox, columnsOf(r.refTable), r.refColumns[0] ?? '', box.x + BOX_WIDTH / 2, compact)
+  if (style === 'straight') return { kind: 'lines', points: [a, b] }
+  const bend = Math.max(40, Math.abs(b.x - a.x) / 2)
+  const out1 = { x: a.x === box.x ? a.x - bend : a.x + bend, y: a.y }
+  const out2 = { x: b.x === refBox.x ? b.x - bend : b.x + bend, y: b.y }
+  // Right angles: out of the side of the box, across at the middle, and into the other side.
+  if (style === 'polyline') {
+    const midX = (out1.x + out2.x) / 2
+    return { kind: 'lines', points: [a, out1, { x: midX, y: a.y }, { x: midX, y: b.y }, out2, b] }
+  }
+  return { kind: 'curve', from: a, control1: out1, control2: out2, to: b }
+}
+
+/** The same line as an SVG path. */
 export function relationPath(
   r: RelationDef,
   at: (table: string) => Point,
-  columnsOf: (table: string) => readonly string[]
+  columnsOf: (table: string) => readonly string[],
+  style: DesignerView['lineStyle'] = 'curve',
+  compact = false
 ): string {
-  const from = at(r.table)
-  const to = at(r.refTable)
-  const a = anchor(from, columnsOf(r.table), r.columns[0] ?? '', to.x + BOX_WIDTH / 2)
-  const b = anchor(to, columnsOf(r.refTable), r.refColumns[0] ?? '', from.x + BOX_WIDTH / 2)
-  const bend = Math.max(40, Math.abs(b.x - a.x) / 2)
-  const ax = a.x === from.x ? a.x - bend : a.x + bend
-  const bx = b.x === to.x ? b.x - bend : b.x + bend
-  return `M ${a.x} ${a.y} C ${ax} ${a.y}, ${bx} ${b.y}, ${b.x} ${b.y}`
+  const route = relationRoute(r, at, columnsOf, style, compact)
+  if (route.kind === 'lines') return route.points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
+  return `M ${route.from.x} ${route.from.y} C ${route.control1.x} ${route.control1.y}, ${route.control2.x} ${route.control2.y}, ${route.to.x} ${route.to.y}`
+}
+
+/** The middle of a route, where its label goes. */
+export function routeMiddle(route: Route): Point {
+  if (route.kind === 'curve') {
+    const { from: a, control1: b, control2: c, to: d } = route
+    return { x: (a.x + 3 * b.x + 3 * c.x + d.x) / 8, y: (a.y + 3 * b.y + 3 * c.y + d.y) / 8 }
+  }
+  const at = Math.floor((route.points.length - 1) / 2)
+  const from = route.points[at] as Point
+  const to = route.points[at + 1] as Point
+  return { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 }
+}
+
+/** The text of a key's label: the columns it joins. */
+export const relationLabel = (r: RelationDef) => `${r.columns.join(', ')} → ${r.refColumns.join(', ')}`
+
+/** What every export format draws: the tables, the keys between them, where the boxes are and what each lists. */
+export interface DiagramInput {
+  tables: readonly string[]
+  relations: readonly RelationDef[]
+  positions: Readonly<Record<string, Point>>
+  columns: ReadonlyMap<string, readonly string[]>
+  /** Columns marked as their table's display column. */
+  display?: ReadonlyMap<string, string> | undefined
+  /** How the diagram is drawn; the default view when omitted. */
+  view?: DesignerView | undefined
 }

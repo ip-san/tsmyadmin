@@ -13,6 +13,7 @@ import type {
   DesignerPage,
   DiagnosticKind,
   DiagnosticReport,
+  EventDetail,
   EventInfo,
   ExportTemplate,
   HistoryEntry,
@@ -30,6 +31,7 @@ import type {
   RelationDef,
   ReplicationInfo,
   RoutineDefinition,
+  RoutineDetail,
   RoutineInfo,
   RoutineKind,
   RowCount,
@@ -59,6 +61,7 @@ import type {
   TrackedTable,
   TrackingState,
   TrackKind,
+  TriggerDetail,
   TriggerInfo,
   UserGrants,
   UserGroup,
@@ -182,6 +185,46 @@ export const foreignKeysQuery = (db: string, schema?: string) =>
       unwrap<RelationDef[]>(
         api.databases[':db']['foreign-keys'].$get({ param: { db: enc(db) }, query: schemaQuery(schema) })
       ),
+  })
+
+/** Read when "Edit" is pressed, never cached: the form must start from what the server holds now. */
+export const routineDetailQuery = (db: string, name: string, kind: RoutineKind, schema?: string, parameters?: string) =>
+  queryOptions({
+    queryKey: ['routine-detail', db, schema ?? '', kind, name, parameters ?? ''],
+    queryFn: () =>
+      unwrap<RoutineDetail | null>(
+        api.databases[':db'].routines[':name'].detail.$get({
+          param: { db: enc(db), name: enc(name) },
+          query: { ...schemaQuery(schema), kind, ...(parameters !== undefined ? { parameters } : {}) },
+        })
+      ),
+    staleTime: 0,
+  })
+
+export const triggerDetailQuery = (db: string, table: string, name: string, schema?: string) =>
+  queryOptions({
+    queryKey: ['trigger-detail', db, schema ?? '', table, name],
+    queryFn: () =>
+      unwrap<TriggerDetail | null>(
+        api.databases[':db'].triggers[':name'].detail.$get({
+          param: { db: enc(db), name: enc(name) },
+          query: { ...schemaQuery(schema), table },
+        })
+      ),
+    staleTime: 0,
+  })
+
+export const eventDetailQuery = (db: string, name: string, schema?: string) =>
+  queryOptions({
+    queryKey: ['event-detail', db, schema ?? '', name],
+    queryFn: () =>
+      unwrap<EventDetail | null>(
+        api.databases[':db'].events[':name'].detail.$get({
+          param: { db: enc(db), name: enc(name) },
+          query: schemaQuery(schema),
+        })
+      ),
+    staleTime: 0,
   })
 
 export const routinesQuery = (db: string, schema?: string) =>
@@ -472,6 +515,13 @@ export const mutations = {
   setTrackingKinds: (ref: TableRef, kinds: TrackKind[]) =>
     unwrap<TrackingState>(
       api.databases[':db'].tables[':table'].tracking.kinds.$put({ ...trackingRequest(ref), json: { kinds } })
+    ),
+  deleteTrackedVersion: (ref: TableRef, version: number) =>
+    unwrap<TrackingState>(
+      api.databases[':db'].tables[':table'].tracking[':version'].$delete({
+        ...trackingRequest(ref),
+        param: { ...trackingRequest(ref).param, version: String(version) },
+      })
     ),
   stopTracking: (ref: TableRef) =>
     unwrap<TrackingState>(api.databases[':db'].tables[':table'].tracking.$delete(trackingRequest(ref))),

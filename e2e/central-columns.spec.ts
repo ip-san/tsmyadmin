@@ -24,6 +24,16 @@ async function exercise(page: Page, t: Target) {
     const list = page.getByRole('table', { name: 'セントラルカラム' })
     await expect(list.getByRole('row', { name: /status/ })).toContainText('VARCHAR(20)')
 
+    // Edit fills the form with the definition; saving replaces it under the same name.
+    await page.getByRole('button', { name: 'status: 編集' }).click()
+    const edit = page.locator('form').filter({ has: page.getByRole('button', { name: '保存する' }) })
+    await expect(edit.getByLabel('カラム名')).toHaveValue('status')
+    await edit.getByLabel('型', { exact: true }).fill('VARCHAR(40)')
+    await edit.getByRole('button', { name: '保存する' }).click()
+    await expect(list.getByRole('row', { name: /status/ })).toContainText('VARCHAR(40)')
+    await expect(list.getByRole('row', { name: /status/ })).not.toContainText('VARCHAR(20)')
+    await expect(page.getByRole('button', { name: '追加する' })).toBeVisible()
+
     // Taken from the fixture table: its definition, not typed again.
     await page.getByLabel('テーブル', { exact: true }).selectOption('users')
     await page.getByRole('checkbox', { name: 'email' }).check()
@@ -32,14 +42,18 @@ async function exercise(page: Page, t: Target) {
     await expect(list.getByRole('row', { name: /email/ })).toBeVisible()
     await expect(list.getByRole('row', { name: /^name/ })).toBeVisible()
 
+    const download = page.waitForEvent('download')
+    await page.getByRole('button', { name: 'JSON でダウンロード' }).click()
+    expect((await download).suggestedFilename()).toMatch(/central-columns\.json$/)
+
     await page.goto(tableUrl(t, table, '/structure'))
     await page.getByRole('button', { name: 'カラムを追加' }).click()
     const dialog = page.getByRole('dialog')
     await dialog.getByLabel('セントラルカラムから入力').selectOption('status')
     await expect(dialog.getByLabel('カラム名')).toHaveValue('status')
-    await expect(dialog.getByLabel('型', { exact: true })).toHaveValue('VARCHAR(20)')
+    await expect(dialog.getByLabel('型', { exact: true })).toHaveValue('VARCHAR(40)')
     await dialog.getByRole('button', { name: /SQL を確認|次へ/ }).click()
-    await expect(page.getByRole('dialog').getByLabel('SQL')).toContainText(/status.*VARCHAR\(20\).*DEFAULT 'new'/is)
+    await expect(page.getByRole('dialog').getByLabel('SQL')).toContainText(/status.*VARCHAR\(40\).*DEFAULT 'new'/is)
   } finally {
     await sql(page, t, `DROP TABLE IF EXISTS ${table}`)
   }

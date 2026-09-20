@@ -6,6 +6,7 @@ import type {
   DiagnosticKind,
   DiagnosticQuery,
   DiagnosticReport,
+  EventDetail,
   EventInfo,
   KeyValue,
   KillMode,
@@ -16,6 +17,7 @@ import type {
   ProfileStage,
   RelationDef,
   ReplicationInfo,
+  RoutineDetail,
   RoutineInfo,
   RoutineKind,
   ServerCatalog,
@@ -24,6 +26,7 @@ import type {
   TableInfo,
   TableSchema,
   TableStats,
+  TriggerDetail,
   TriggerInfo,
   UserInfo,
   UserRef,
@@ -57,6 +60,7 @@ import {
   mysqlListTables,
   mysqlTableStats,
 } from './introspect.ts'
+import { mysqlEventDetail, mysqlRoutineDetail, mysqlTriggerDetail } from './program-detail.ts'
 import {
   mysqlListDependencies,
   mysqlListEvents,
@@ -600,6 +604,18 @@ export class MysqlAdapter extends BaseAdapter {
 
   routineDefinition(ns: Namespace, name: string, kind: RoutineKind): Promise<string | null> {
     return this.withConn(ns, (conn) => mysqlRoutineDefinition(conn, ns, name, kind))
+  }
+
+  routineDetail(ns: Namespace, name: string, kind: RoutineKind): Promise<RoutineDetail | null> {
+    return this.withConn(ns, (conn) => mysqlRoutineDetail(conn, ns, name, kind))
+  }
+
+  triggerDetail(ns: Namespace, table: string, name: string): Promise<TriggerDetail | null> {
+    return this.withConn(ns, (conn) => mysqlTriggerDetail(conn, ns, table, name))
+  }
+
+  eventDetail(ns: Namespace, name: string): Promise<EventDetail | null> {
+    return this.withConn(ns, (conn) => mysqlEventDetail(conn, ns, name))
   }
 
   listTriggers(ns: Namespace, table?: string): Promise<TriggerInfo[]> {

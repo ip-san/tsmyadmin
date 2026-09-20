@@ -1,4 +1,11 @@
-import { DATA_ACCESS, type DdlOp, type Dialect, type RoutineParam, type SqlSecurity } from '@tsmyadmin/shared'
+import {
+  DATA_ACCESS,
+  type DdlOp,
+  type Dialect,
+  type RoutineDetail,
+  type RoutineParam,
+  type SqlSecurity,
+} from '@tsmyadmin/shared'
 import { type FormEvent, useState } from 'react'
 import { DefinerField, SecuritySelect } from '@/components/ddl/DefinerFields.tsx'
 import { parseDefiner } from '@/components/ddl/definer.ts'
@@ -20,18 +27,33 @@ function template(dialect: Dialect, kind: Kind): string {
  * phpMyAdmin's "Add routine": name, parameters, return type and body. The body is the server's own code, so it
  * is written as is; the statement around it is built for the dialect and shown before it runs.
  */
-export function CreateRoutineForm({ dialect, onSubmit }: { dialect: Dialect; onSubmit: (op: DdlOp) => void }) {
-  const [kind, setKind] = useState<Kind>('procedure')
-  const [name, setName] = useState('')
-  const [params, setParams] = useState<RoutineParam[]>([])
-  const [returns, setReturns] = useState('INT')
-  const [language, setLanguage] = useState('plpgsql')
-  const [deterministic, setDeterministic] = useState(false)
-  const [comment, setComment] = useState('')
-  const [definerText, setDefinerText] = useState('')
-  const [sqlSecurity, setSqlSecurity] = useState<SqlSecurity | ''>('')
-  const [dataAccess, setDataAccess] = useState<(typeof DATA_ACCESS)[number] | ''>('')
-  const [body, setBody] = useState(template(dialect, 'procedure'))
+export function CreateRoutineForm({
+  dialect,
+  onSubmit,
+  initial,
+  replaces,
+  onCancel,
+}: {
+  dialect: Dialect
+  onSubmit: (op: DdlOp) => void
+  /** An existing routine to edit: the form starts from it and submits a replacement of `replaces`. */
+  initial?: RoutineDetail
+  replaces?: { kind: Kind; name: string; parameters?: string | undefined }
+  onCancel?: () => void
+}) {
+  const [kind, setKind] = useState<Kind>(initial?.kind ?? 'procedure')
+  const [name, setName] = useState(initial?.name ?? '')
+  const [params, setParams] = useState<RoutineParam[]>(initial ? initial.params.map((p) => ({ ...p })) : [])
+  const [returns, setReturns] = useState(initial?.returns ?? 'INT')
+  const [language, setLanguage] = useState(initial?.language ?? 'plpgsql')
+  const [deterministic, setDeterministic] = useState(initial?.deterministic ?? false)
+  const [comment, setComment] = useState(initial?.comment ?? '')
+  const [definerText, setDefinerText] = useState(
+    initial?.definer ? `${initial.definer.user}@${initial.definer.host}` : ''
+  )
+  const [sqlSecurity, setSqlSecurity] = useState<SqlSecurity | ''>(initial?.sqlSecurity ?? '')
+  const [dataAccess, setDataAccess] = useState<(typeof DATA_ACCESS)[number] | ''>(initial?.dataAccess ?? '')
+  const [body, setBody] = useState(initial?.body ?? template(dialect, 'procedure'))
   // A MySQL function's parameters are IN only; PostgreSQL functions and procedures take OUT / INOUT too.
   const modes = dialect === 'mysql' && kind === 'function' ? (['IN'] as const) : (['IN', 'OUT', 'INOUT'] as const)
   const changeKind = (next: Kind) => {
@@ -45,8 +67,7 @@ export function CreateRoutineForm({ dialect, onSubmit }: { dialect: Dialect; onS
     e.preventDefault()
     const definer = dialect === 'mysql' ? parseDefiner(definerText) : null
     if (!name.trim() || !body.trim() || definer === 'invalid') return
-    onSubmit({
-      op: 'createRoutine',
+    const create = {
       kind,
       name: name.trim(),
       params: params
@@ -64,7 +85,8 @@ export function CreateRoutineForm({ dialect, onSubmit }: { dialect: Dialect; onS
       ...(sqlSecurity ? { sqlSecurity } : {}),
       ...(dialect === 'mysql' && dataAccess ? { dataAccess } : {}),
       ...(definer ? { definer } : {}),
-    })
+    }
+    onSubmit(replaces ? { op: 'replaceRoutine', ...create, replaces } : { op: 'createRoutine', ...create })
   }
   return (
     <form onSubmit={submit} className="space-y-3">
@@ -171,9 +193,12 @@ export function CreateRoutineForm({ dialect, onSubmit }: { dialect: Dialect; onS
           </>
         ) : null}
       </div>
-      <Button type="submit" variant="primary" aria-haspopup="dialog" aria-label={`${t.routine.title}: ${t.review}`}>
-        {t.review}
-      </Button>
+      <div className="flex gap-2">
+        <Button type="submit" variant="primary" aria-haspopup="dialog" aria-label={`${t.routine.title}: ${t.review}`}>
+          {t.review}
+        </Button>
+        {onCancel ? <Button onClick={onCancel}>{locale.common.cancel}</Button> : null}
+      </div>
     </form>
   )
 }

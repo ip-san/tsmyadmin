@@ -147,5 +147,7 @@ export const TableSearchResultSchema = z.object({
   count: CountKindSchema,
   columns: z.array(z.string()),
   sql: z.string(),
+  /** The same match as a DELETE, with the term written in as a literal: shown, confirmed and run from the search page. */
+  deleteSql: z.string(),
 })
 export type TableSearchResult = z.infer<typeof TableSearchResultSchema>

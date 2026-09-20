@@ -1,9 +1,9 @@
 import { gzipSync } from 'node:zlib'
-import { parseCsvRecords } from '@tsmyadmin/shared'
+import { inferType, parseCsvRecords } from '@tsmyadmin/shared'
 import iconv from 'iconv-lite'
 import { describe, expect, it } from 'vitest'
 import { ImportValidationError } from './import.ts'
-import { columnNames, inferColumns, inferType } from './import-create.ts'
+import { columnNames, inferColumns } from './import-create.ts'
 import { decodeText, unpack } from './import-run.ts'
 import { zipStream } from './zip.ts'
 

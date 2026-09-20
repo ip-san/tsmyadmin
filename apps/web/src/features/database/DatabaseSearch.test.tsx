@@ -18,7 +18,13 @@ vi.mock('@/lib/queries.ts', () => ({
       { name: 'posts', kind: 'table', rowEstimate: 1 },
     ],
   }),
-  searchTable: vi.fn(async () => ({ total: 1, count: 'exact', columns: ['name'], sql: 'SELECT 1' })),
+  searchTable: vi.fn(async () => ({
+    total: 1,
+    count: 'exact',
+    columns: ['name'],
+    sql: 'SELECT 1',
+    deleteSql: 'DELETE FROM t',
+  })),
 }))
 
 describe('DatabaseSearch', () => {

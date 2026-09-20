@@ -294,9 +294,32 @@ exports[`DDL builders > mysql: reorderColumns 1`] = `
 ]
 `;
 
+exports[`DDL builders > mysql: replaceEvent 1`] = `
+[
+  "DROP EVENT \`db\`.\`ev\`\`x\`",
+  "CREATE EVENT \`db\`.\`ev\`\`y\` ON SCHEDULE AT '2030-01-01 00:00:00' ON COMPLETION NOT PRESERVE DISABLE DO DELETE FROM logs",
+]
+`;
+
 exports[`DDL builders > mysql: replaceInColumn 1`] = `
 [
   "UPDATE \`db\`.\`users\` SET \`na\`\`me"\` = REPLACE(\`na\`\`me"\`, 'it''s', '%_\\\\') WHERE CAST(REPLACE(\`na\`\`me"\`, 'it''s', '%_\\\\') AS BINARY) <> CAST(\`na\`\`me"\` AS BINARY)",
+]
+`;
+
+exports[`DDL builders > mysql: replaceRoutine 1`] = `
+[
+  "DROP FUNCTION \`db\`.\`add\`\`o"ne\`",
+  "CREATE FUNCTION \`db\`.\`add\`\`o"ne\`(\`n\` INT) RETURNS INT DETERMINISTIC RETURN n + 2",
+]
+`;
+
+exports[`DDL builders > mysql: replaceTrigger 1`] = `
+[
+  "DROP TRIGGER \`db\`.\`tr\`\`g\`",
+  "CREATE TRIGGER \`db\`.\`tr\`\`g2\` AFTER UPDATE ON \`db\`.\`users\` FOR EACH ROW BEGIN
+  SET NEW.name = TRIM(NEW.name);
+END",
 ]
 `;
 
@@ -434,7 +457,7 @@ exports[`DDL builders > postgres: createDatabase 1`] = `
 
 exports[`DDL builders > postgres: createRoutine 1`] = `
 [
-  "CREATE FUNCTION "app"."add\`o""ne"(IN "n" INT) RETURNS INT LANGUAGE sql AS $body$
+  "CREATE FUNCTION "app"."add\`o""ne"(IN "n" INT) RETURNS INT LANGUAGE sql IMMUTABLE AS $body$
 RETURN n + 1;
 $body$",
   "COMMENT ON FUNCTION "app"."add\`o""ne"(IN "n" INT) IS 'adds ''one'''",
@@ -642,6 +665,32 @@ exports[`DDL builders > postgres: renameTables 1`] = `
 exports[`DDL builders > postgres: replaceInColumn 1`] = `
 [
   "UPDATE "app"."users" SET "na\`me""" = replace("na\`me""", 'it''s', '%_\\') WHERE replace("na\`me""", 'it''s', '%_\\') IS DISTINCT FROM "na\`me"""",
+]
+`;
+
+exports[`DDL builders > postgres: replaceRoutine 1`] = `
+[
+  "BEGIN",
+  "DROP FUNCTION "app"."add\`o""ne"(n integer)",
+  "CREATE FUNCTION "app"."add\`o""ne"(IN "n" INT) RETURNS INT LANGUAGE sql IMMUTABLE AS $body$
+RETURN n + 2;
+$body$",
+  "COMMIT",
+]
+`;
+
+exports[`DDL builders > postgres: replaceTrigger 1`] = `
+[
+  "BEGIN",
+  "DROP TRIGGER "tr\`g" ON "app"."users"",
+  "DROP FUNCTION IF EXISTS "app"."tr\`g_fn"()",
+  "CREATE OR REPLACE FUNCTION "app"."tr\`g2_fn"() RETURNS trigger LANGUAGE plpgsql AS $body$
+BEGIN
+  SET NEW.name = TRIM(NEW.name);
+END;
+$body$",
+  "CREATE TRIGGER "tr\`g2" AFTER UPDATE ON "app"."users" FOR EACH ROW EXECUTE FUNCTION "app"."tr\`g2_fn"()",
+  "COMMIT",
 ]
 `;
 

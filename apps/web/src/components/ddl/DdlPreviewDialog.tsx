@@ -25,6 +25,10 @@ const DESTRUCTIVE = new Set<DdlOp['op']>([
   // Definitions only, but what calls them breaks: the run button is red, as for an index or a key.
   'dropRoutine',
   'dropTrigger',
+  // MySQL drops the old definition first and cannot undo it if the new one is refused.
+  'replaceRoutine',
+  'replaceTrigger',
+  'replaceEvent',
 ])
 
 /** Ops that destroy data with no undo: the user retypes the object name before they can run. */

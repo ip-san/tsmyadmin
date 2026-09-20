@@ -17,6 +17,7 @@ import {
   parseCellKey,
   QueryBuilderRequestSchema,
   RoutineDefinitionQuerySchema,
+  RoutineDetailQuerySchema,
   SchemaQuerySchema,
   SINGLE_TABLE_FORMATS,
   SqlCancelRequestSchema,
@@ -24,6 +25,7 @@ import {
   type SqlStreamEvent,
   type StatementResult,
   TableSearchQuerySchema,
+  TriggerDetailQuerySchema,
   TriggerQuerySchema,
   UpdateRowRequestSchema,
 } from '@tsmyadmin/shared'
@@ -135,6 +137,25 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
           .get('session')
           .adapter.routineDefinition(ns(c.req.param('db'), q.schema), c.req.param('name'), q.kind)
         return c.json({ definition })
+      })
+      // What the create form takes, read back to edit a routine, trigger or event (null: not editable there).
+      .get('/databases/:db/routines/:name/detail', validate('query', RoutineDetailQuerySchema), async (c) => {
+        const q = c.req.valid('query')
+        return c.json(
+          await c
+            .get('session')
+            .adapter.routineDetail(ns(c.req.param('db'), q.schema), c.req.param('name'), q.kind, q.parameters)
+        )
+      })
+      .get('/databases/:db/triggers/:name/detail', validate('query', TriggerDetailQuerySchema), async (c) => {
+        const q = c.req.valid('query')
+        return c.json(
+          await c.get('session').adapter.triggerDetail(ns(c.req.param('db'), q.schema), q.table, c.req.param('name'))
+        )
+      })
+      .get('/databases/:db/events/:name/detail', validate('query', SchemaQuerySchema), async (c) => {
+        const q = c.req.valid('query')
+        return c.json(await c.get('session').adapter.eventDetail(ns(c.req.param('db'), q.schema), c.req.param('name')))
       })
       .get('/databases/:db/triggers', validate('query', TriggerQuerySchema), async (c) => {
         const q = c.req.valid('query')

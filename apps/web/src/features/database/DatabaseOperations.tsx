@@ -26,9 +26,10 @@ export function DatabaseOperations({
   serverDatabase: string
 }) {
   const navigate = useNavigate()
-  // Either way the database to look at next is the new one.
+  // After a rename the database to look at is the new one; after a copy it is too, unless asked to stay.
+  const [switchToCopy, setSwitchToCopy] = useState(true)
   const flow = useDdlFlow(serverDatabase, undefined, async (op) => {
-    if (op.op === 'renameDatabase' || op.op === 'copyDatabase')
+    if (op.op === 'renameDatabase' || (op.op === 'copyDatabase' && switchToCopy))
       await navigate({ to: '/db/$db', params: { db: op.newName } })
   })
   // The server's own databases take no operation; the one this session is connected to cannot be renamed or copied
@@ -43,7 +44,14 @@ export function DatabaseOperations({
       ) : (
         <>
           <RenameDatabaseForm key={`rename-${db}`} db={db} dialect={dialect} flow={flow} />
-          <CopyDatabaseForm key={`copy-${db}`} db={db} dialect={dialect} flow={flow} />
+          <CopyDatabaseForm
+            key={`copy-${db}`}
+            db={db}
+            dialect={dialect}
+            flow={flow}
+            switchToCopy={switchToCopy}
+            onSwitchToCopy={setSwitchToCopy}
+          />
           <DdlPreviewDialog flow={flow} />
         </>
       )}
@@ -85,9 +93,23 @@ function RenameDatabaseForm({ db, dialect, flow }: { db: string; dialect: Dialec
   )
 }
 
-function CopyDatabaseForm({ db, dialect, flow }: { db: string; dialect: Dialect; flow: DdlFlow }) {
+type CopyMode = 'both' | 'structure' | 'data'
+
+function CopyDatabaseForm({
+  db,
+  dialect,
+  flow,
+  switchToCopy,
+  onSwitchToCopy,
+}: {
+  db: string
+  dialect: Dialect
+  flow: DdlFlow
+  switchToCopy: boolean
+  onSwitchToCopy: (on: boolean) => void
+}) {
   const [newName, setNewName] = useState(`${db}_copy`)
-  const [withData, setWithData] = useState(true)
+  const [mode, setMode] = useState<CopyMode>('both')
   // MySQL's copy leaves these behind by default; PostgreSQL copies from a template that already brings them.
   const [keep, setKeep] = useState({ foreignKeys: false, autoIncrement: false, privileges: false })
   const name = newName.trim()
@@ -99,7 +121,8 @@ function CopyDatabaseForm({ db, dialect, flow }: { db: string; dialect: Dialect;
         op: 'copyDatabase',
         name: db,
         newName: name,
-        withData: dialect === 'postgres' || withData,
+        withData: dialect === 'postgres' || mode !== 'structure',
+        ...(dialect === 'mysql' && mode === 'data' ? { structure: false } : {}),
         ...(dialect === 'mysql'
           ? {
               ...(keep.foreignKeys ? { foreignKeys: true } : {}),
@@ -136,9 +159,21 @@ function CopyDatabaseForm({ db, dialect, flow }: { db: string; dialect: Dialect;
         {dialect === 'mysql' ? (
           <div className="flex flex-wrap gap-4 text-sm">
             <label className="flex items-center gap-1">
-              <input type="checkbox" checked={withData} onChange={(e) => setWithData(e.target.checked)} />
-              {locale.ddl.copyWithData}
+              {locale.databaseOps.copyMode.label}
+              <select
+                aria-label={locale.databaseOps.copyMode.label}
+                value={mode}
+                onChange={(e) => setMode(e.target.value as CopyMode)}
+                className="rounded-control border border-line-strong bg-surface px-2 py-1 text-sm text-ink"
+              >
+                <option value="both">{locale.databaseOps.copyMode.both}</option>
+                <option value="structure">{locale.databaseOps.copyMode.structure}</option>
+                <option value="data">{locale.databaseOps.copyMode.data}</option>
+              </select>
             </label>
+            {mode === 'data' ? (
+              <p className="w-full text-xs text-ink-sub">{locale.databaseOps.copyMode.dataHint}</p>
+            ) : null}
             {(['foreignKeys', 'autoIncrement', 'privileges'] as const).map((k) => (
               <label key={k} className="flex items-center gap-1">
                 <input
@@ -151,6 +186,10 @@ function CopyDatabaseForm({ db, dialect, flow }: { db: string; dialect: Dialect;
             ))}
           </div>
         ) : null}
+        <label className="flex items-center gap-1 text-sm">
+          <input type="checkbox" checked={switchToCopy} onChange={(e) => onSwitchToCopy(e.target.checked)} />
+          {locale.databaseOps.switchToCopy}
+        </label>
       </form>
     </section>
   )

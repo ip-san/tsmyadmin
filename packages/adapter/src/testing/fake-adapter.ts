@@ -8,6 +8,7 @@ import type {
   DiagnosticKind,
   DiagnosticReport,
   Dialect,
+  EventDetail,
   EventInfo,
   Filter,
   InputCell,
@@ -21,6 +22,7 @@ import type {
   QueryBuilderSpec,
   RelationDef,
   ReplicationInfo,
+  RoutineDetail,
   RoutineInfo,
   RoutineKind,
   RowKey,
@@ -34,6 +36,7 @@ import type {
   TableSchema,
   TableSearchResult,
   TableStats,
+  TriggerDetail,
   TriggerInfo,
   UserInfo,
   UserRef,
@@ -354,6 +357,30 @@ export class FakeAdapter implements DatabaseAdapter {
     return this.routines[name] ?? `CREATE ${kind.toUpperCase()} ${name}() BEGIN END`
   }
 
+  async routineDetail(ns: Namespace, name: string, kind: RoutineKind): Promise<RoutineDetail | null> {
+    this.record('routineDetail', ns, name, kind)
+    if (kind !== 'procedure' && kind !== 'function') return null
+    return {
+      kind,
+      name,
+      params: [],
+      ...(kind === 'function' ? { returns: 'int' } : {}),
+      body: 'BEGIN END',
+      language: 'sql',
+      deterministic: false,
+    }
+  }
+
+  async triggerDetail(ns: Namespace, table: string, name: string): Promise<TriggerDetail | null> {
+    this.record('triggerDetail', ns, table, name)
+    return { name, table, timing: 'BEFORE', event: 'INSERT', body: 'BEGIN END' }
+  }
+
+  async eventDetail(ns: Namespace, name: string): Promise<EventDetail | null> {
+    this.record('eventDetail', ns, name)
+    return null
+  }
+
   async listTriggers(ns: Namespace, table?: string): Promise<TriggerInfo[]> {
     this.record('listTriggers', ns, table)
     return []
@@ -424,7 +451,7 @@ export class FakeAdapter implements DatabaseAdapter {
         return (typeof v === 'string' || typeof v === 'number') && String(v).toLowerCase().includes(needle)
       })
     ).length
-    return { total, count: 'exact', columns, sql: `SELECT * FROM ${table}` }
+    return { total, count: 'exact', columns, sql: `SELECT * FROM ${table}`, deleteSql: `DELETE FROM ${table}` }
   }
 
   async listForeignKeys(ns: Namespace): Promise<RelationDef[]> {

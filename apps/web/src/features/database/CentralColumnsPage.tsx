@@ -9,6 +9,7 @@ import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
 import { useCentralColumns } from '@/lib/central-columns.ts'
 import { TYPE_SUGGESTIONS } from '@/lib/column-spec.ts'
+import { downloadText, safeFilename } from '@/lib/download.ts'
 import { centralColumnsQuery, mutations, structureQuery, tablesQuery } from '@/lib/queries.ts'
 
 const t = locale.central
@@ -27,14 +28,27 @@ function toCentral(c: ColumnDef, database: string, schema: string | undefined): 
   }
 }
 
-function AddForm({ onAdd, dialect }: { onAdd: (c: Omit<CentralColumnBody, 'database'>) => void; dialect: Dialect }) {
+type CentralDraft = Omit<CentralColumnBody, 'database'>
+
+/** The form to add a central column; with `initial` it edits that one instead (remount it with a new `key`). */
+function AddForm({
+  onAdd,
+  onCancel,
+  initial,
+  dialect,
+}: {
+  onAdd: (c: CentralDraft) => void
+  onCancel?: () => void
+  initial?: CentralDraft | undefined
+  dialect: Dialect
+}) {
   const id = useId()
-  const [name, setName] = useState('')
-  const [dataType, setDataType] = useState('')
-  const [nullable, setNullable] = useState(true)
-  const [def, setDef] = useState('')
-  const [expression, setExpression] = useState(false)
-  const [comment, setComment] = useState('')
+  const [name, setName] = useState(initial?.name ?? '')
+  const [dataType, setDataType] = useState(initial?.dataType ?? '')
+  const [nullable, setNullable] = useState(initial?.nullable ?? true)
+  const [def, setDef] = useState(initial?.default ?? '')
+  const [expression, setExpression] = useState(initial?.defaultIsExpression ?? false)
+  const [comment, setComment] = useState(initial?.comment ?? '')
   const submit = (e: FormEvent) => {
     e.preventDefault()
     if (!name.trim() || !dataType.trim()) return
@@ -86,8 +100,9 @@ function AddForm({ onAdd, dialect }: { onAdd: (c: Omit<CentralColumnBody, 'datab
         <Input id={`${id}-comment`} value={comment} onChange={(e) => setComment(e.target.value)} />
       </Field>
       <Button type="submit" variant="primary">
-        {t.add}
+        {initial ? t.saveEdit : t.add}
       </Button>
+      {onCancel ? <Button onClick={onCancel}>{locale.common.cancel}</Button> : null}
     </form>
   )
 }
@@ -171,8 +186,8 @@ export function CentralColumnsPage({
   const list = useCentralColumns(db, schema)
   const queryClient = useQueryClient()
   const [importError, setImportError] = useState<Error | null>(null)
-  const save = (c: Omit<CentralColumnBody, 'database'>) =>
-    list.save(c.name, { ...c, database: db, ...(schema ? { schema } : {}) })
+  const [editing, setEditing] = useState<(typeof list.entries)[number] | null>(null)
+  const save = (c: CentralDraft) => list.save(c.name, { ...c, database: db, ...(schema ? { schema } : {}) })
   // One after another on the server: fired together, the replies (each the whole list) could arrive out of order
   // and the last to land would not be the last written.
   const importColumns = async (columns: ColumnDef[]) => {
@@ -220,6 +235,9 @@ export function CentralColumnsPage({
                   <Td className="font-mono text-xs">{c.default ?? ''}</Td>
                   <Td className="text-xs">{c.comment}</Td>
                   <Td>
+                    <Button size="sm" onClick={() => setEditing(c)} aria-label={t.edit(c.name)}>
+                      {locale.server.editVariable}
+                    </Button>{' '}
                     <Button size="sm" variant="danger" onClick={() => list.remove(c)} aria-label={t.remove(c.name)}>
                       {locale.common.delete}
                     </Button>
@@ -230,8 +248,36 @@ export function CentralColumnsPage({
           </Table>
         )}
       </Card>
-      <Card title={t.addTitle}>
-        <AddForm dialect={dialect} onAdd={save} />
+      {list.entries.length > 0 ? (
+        <Button
+          onClick={() =>
+            downloadText(
+              safeFilename(`${db}-central-columns`, 'json'),
+              `${JSON.stringify(
+                list.entries.map(({ id: _id, ...c }) => c),
+                null,
+                2
+              )}\n`,
+              'application/json;charset=utf-8'
+            )
+          }
+        >
+          {t.download}
+        </Button>
+      ) : null}
+      <Card title={editing ? t.editTitle(editing.name) : t.addTitle}>
+        <AddForm
+          key={editing?.id || editing?.name || 'new'}
+          dialect={dialect}
+          initial={editing ?? undefined}
+          {...(editing ? { onCancel: () => setEditing(null) } : {})}
+          onAdd={(c) => {
+            // A renamed column is a new entry: the old name goes.
+            if (editing && editing.name !== c.name) list.remove(editing)
+            save(c)
+            setEditing(null)
+          }}
+        />
       </Card>
       <Card title={t.fromTable}>
         <ImportFromTable db={db} schema={schema} onImport={(cols) => void importColumns(cols)} />

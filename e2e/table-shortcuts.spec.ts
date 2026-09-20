@@ -25,3 +25,21 @@ test('lists recently opened tables and favorites in the sidebar', async ({ page 
   await page.getByRole('button', { name: 'お気に入りから外す' }).click()
   await expect(sidebar.locator('details', { hasText: 'お気に入り' }).filter({ hasNotText: '最近' })).toHaveCount(0)
 })
+
+test('stars a table from the structure list of its database', async ({ page }) => {
+  await login(page, t)
+  await page.goto(t.schema ? `/db/${t.database}?schema=${t.schema}` : `/db/${t.database}`)
+  const star = page.getByRole('button', { name: 'users: お気に入りに追加', exact: true })
+  await star.click()
+  await expect(page.getByRole('button', { name: 'users: お気に入りから外す', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  )
+  const favorites = page.getByRole('complementary').locator('details', { hasText: 'お気に入り' }).first()
+  await expect(favorites.getByRole('link', { name: /users$/ })).toBeVisible()
+  await page.getByRole('button', { name: 'users: お気に入りから外す', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'users: お気に入りに追加', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'false'
+  )
+})

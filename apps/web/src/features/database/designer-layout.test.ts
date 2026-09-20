@@ -1,6 +1,19 @@
 import type { RelationDef } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
-import { autoLayout, boxColumns, drawnRelations, relationPath, withAllColumns } from './designer-layout.ts'
+import {
+  autoLayout,
+  boxColumns,
+  boxHeight,
+  drawnRelations,
+  GRID,
+  HEADER_HEIGHT,
+  relationLabel,
+  relationPath,
+  relationRoute,
+  routeMiddle,
+  snapToGrid,
+  withAllColumns,
+} from './designer-layout.ts'
 
 const rel = (table: string, refTable: string, extra: Partial<RelationDef> = {}): RelationDef => ({
   table,
@@ -63,5 +76,44 @@ describe('designer layout', () => {
     const columns = (t: string) => (t === 'posts' ? ['id', 'user_id'] : ['id'])
     // posts.user_id is the second row of its box; users.id the first, and the users box is on the left.
     expect(relationPath(rel('posts', 'users', { columns: ['user_id'] }), at, columns)).toMatch(/^M 300 58 C .* 200 38$/)
+  })
+})
+
+describe('relationRoute and friends', () => {
+  const key: RelationDef = {
+    table: 'posts',
+    name: 'fk',
+    columns: ['user_id'],
+    refNamespace: { database: 'app' },
+    refTable: 'users',
+    refColumns: ['id'],
+    onUpdate: null,
+    onDelete: null,
+  }
+  const at = (t: string) => (t === 'posts' ? { x: 400, y: 0 } : { x: 0, y: 0 })
+  const columnsOf = (t: string) => (t === 'posts' ? ['user_id'] : ['id'])
+
+  it('draws the key as a curve, a straight line or right angles', () => {
+    expect(relationRoute(key, at, columnsOf).kind).toBe('curve')
+    expect(relationRoute(key, at, columnsOf, 'straight')).toMatchObject({
+      kind: 'lines',
+      points: [expect.anything(), expect.anything()],
+    })
+    const angles = relationRoute(key, at, columnsOf, 'polyline')
+    expect(angles.kind === 'lines' && angles.points).toHaveLength(6)
+    expect(relationPath(key, at, columnsOf, 'straight')).toMatch(/^M [\d.]+ [\d.]+ L [\d.]+ [\d.]+$/)
+  })
+
+  it('meets the header of a compact box, and puts the label at the middle of the line', () => {
+    const route = relationRoute(key, at, columnsOf, 'straight', true)
+    expect(route.kind === 'lines' && route.points.map((p) => p.y)).toEqual([HEADER_HEIGHT / 2, HEADER_HEIGHT / 2])
+    expect(routeMiddle(route).y).toBe(HEADER_HEIGHT / 2)
+    expect(relationLabel(key)).toBe('user_id → id')
+    expect(boxHeight(5, true)).toBe(HEADER_HEIGHT)
+  })
+
+  it('snaps a point to the grid', () => {
+    expect(snapToGrid({ x: 29, y: 31 })).toEqual({ x: 20, y: 40 })
+    expect(GRID).toBe(20)
   })
 })

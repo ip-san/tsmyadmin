@@ -103,6 +103,47 @@ for (const t of TARGETS) {
       }
     })
 
+    test('copies the structure only, then the rows only into it, and stays on the source when asked (MySQL)', async ({
+      page,
+    }) => {
+      test.skip(t.dialect !== 'mysql', 'PostgreSQL copies from a template: structure and data together')
+      test.setTimeout(90_000)
+      const base = `e2e_dbmode_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
+      const copied = `${base}_copy`
+      await sqlIn(page, t.database, `CREATE DATABASE ${base}`)
+      await sqlIn(
+        page,
+        base,
+        "CREATE TABLE items (id INT PRIMARY KEY, name VARCHAR(20)); INSERT INTO items VALUES (1, 'a'), (2, 'b')"
+      )
+      const countIn = async (database: string) => {
+        const res = await page.request.post(`/api/databases/${database}/sql`, {
+          data: { sql: 'SELECT COUNT(*) FROM items' },
+        })
+        const body = (await res.json()) as { result?: { rows: number[][] } }[]
+        return body[0]?.result?.rows[0]?.[0]
+      }
+      try {
+        await page.goto(`/db/${base}/operations`)
+        const form = page.getByRole('form', { name: 'データベースをコピー' })
+        await form.getByLabel('コピーする内容').selectOption('structure')
+        await form.getByLabel('コピーしたら、そのデータベースへ移動する').uncheck()
+        await form.getByRole('button', { name: '次へ（SQL を確認）' }).click()
+        await confirmPreview(page, /CREATE TABLE[\s\S]*LIKE/)
+        // Still on the source: the copy was not switched to.
+        await expect(page).toHaveURL(new RegExp(`/db/${base}/operations`))
+        expect(await countIn(copied)).toBe(0)
+
+        await form.getByLabel('コピーする内容').selectOption('data')
+        await form.getByRole('button', { name: '次へ（SQL を確認）' }).click()
+        await confirmPreview(page, /^INSERT INTO[\s\S]*SELECT/)
+        expect(await countIn(copied)).toBe(2)
+      } finally {
+        await dropQuietly(page, t, copied)
+        await dropQuietly(page, t, base)
+      }
+    })
+
     test('does not offer to rename the server’s own databases', async ({ page }) => {
       await page.goto(`/db/${t.dialect === 'mysql' ? 'mysql' : 'postgres'}/operations`)
       await expect(page.getByText('サーバー自身のデータベースは、名前変更もコピーもできません。')).toBeVisible()

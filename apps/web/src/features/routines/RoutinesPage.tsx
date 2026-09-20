@@ -1,21 +1,23 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Dialect } from '@tsmyadmin/shared'
 import { CreateSection } from '@/components/ddl/CreateSection.tsx'
 import { DdlPreviewDialog } from '@/components/ddl/DdlPreviewDialog.tsx'
 import { DefinitionToggle } from '@/components/ddl/DefinitionToggle.tsx'
+import { EditDetail } from '@/components/ddl/EditDetail.tsx'
 import { UserOpPreviewDialog } from '@/components/ddl/UserOpPreviewDialog.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
 import { useDdlFlow } from '@/lib/ddl.ts'
 import { useEditDefinition } from '@/lib/open-in-console.ts'
-import { routineDefinitionQuery, routinesQuery } from '@/lib/queries.ts'
+import { routineDefinitionQuery, routineDetailQuery, routinesQuery } from '@/lib/queries.ts'
 import { useUserOpFlow } from '@/lib/user-ops.ts'
 import { CreateRoutineForm } from './CreateRoutineForm.tsx'
 import { RoutineActions } from './RoutineActions.tsx'
 
 export function RoutinesPage({ db, schema, dialect }: { db: string; schema?: string | undefined; dialect: Dialect }) {
   const edit = useEditDefinition(db, schema)
+  const queryClient = useQueryClient()
   const flow = useDdlFlow(db, schema)
   const userFlow = useUserOpFlow()
   const routines = useQuery(routinesQuery(db, schema))
@@ -71,6 +73,48 @@ export function RoutinesPage({ db, schema, dialect }: { db: string; schema?: str
                   />
                 </Td>
                 <Td>
+                  {r.kind === 'procedure' || r.kind === 'function' ? (
+                    <EditDetail
+                      label={`${r.name}: ${locale.create.edit.button}`}
+                      title={locale.create.edit.title(r.name)}
+                      load={() =>
+                        queryClient.fetchQuery(
+                          routineDetailQuery(
+                            db,
+                            r.name,
+                            r.kind,
+                            schema,
+                            dialect === 'postgres' ? r.parameters : undefined
+                          )
+                        )
+                      }
+                    >
+                      {(detail, close) => {
+                        const kind = r.kind as 'procedure' | 'function'
+                        return (
+                          <div className="space-y-3">
+                            {dialect === 'mysql' ? (
+                              <p className="text-xs text-ink-sub">{locale.create.edit.hint}</p>
+                            ) : null}
+                            <CreateRoutineForm
+                              dialect={dialect}
+                              initial={detail}
+                              replaces={{
+                                kind,
+                                name: r.name,
+                                ...(dialect === 'postgres' ? { parameters: r.parameters } : {}),
+                              }}
+                              onCancel={close}
+                              onSubmit={(op) => {
+                                close()
+                                flow.preview(op)
+                              }}
+                            />
+                          </div>
+                        )
+                      }}
+                    </EditDetail>
+                  ) : null}
                   <RoutineActions
                     routine={r}
                     dialect={dialect}

@@ -1,7 +1,8 @@
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { useRouteContext } from '@tanstack/react-router'
-import type { RelationDef } from '@tsmyadmin/shared'
-import { useState } from 'react'
+import type { DesignerView, RelationDef } from '@tsmyadmin/shared'
+import { DesignerViewSchema } from '@tsmyadmin/shared'
+import { useEffect, useRef, useState } from 'react'
 import { z } from 'zod'
 import { DdlPreviewDialog } from '@/components/ddl/DdlPreviewDialog.tsx'
 import { DisplayColumnSelect } from '@/components/ddl/DisplayColumnSelect.tsx'
@@ -17,7 +18,9 @@ import { DesignerAddForeignKey } from './DesignerAddForeignKey.tsx'
 import { DesignerDiagram, relationKey } from './DesignerDiagram.tsx'
 import { DesignerPages } from './DesignerPages.tsx'
 import { DesignerToolbar } from './DesignerToolbar.tsx'
-import { autoLayout, boxColumns, drawnRelations, type Point, withAllColumns } from './designer-layout.ts'
+import { diagramDia } from './designer-dia.ts'
+import { diagramEps } from './designer-eps.ts'
+import { autoLayout, boxColumns, DEFAULT_VIEW, drawnRelations, type Point, withAllColumns } from './designer-layout.ts'
 import { diagramSvg } from './designer-svg.ts'
 
 const t = locale.designer
@@ -42,7 +45,26 @@ export function Designer({ db, schema }: { db: string; schema?: string | undefin
   const storageKey = `designer.${session.dialect}.${session.host}.${session.port}.${db}.${schema ?? ''}`
   const [saved, setSaved] = useState<Record<string, Point>>(() => readPreference(storageKey, PositionsSchema, {}))
   const [allColumns, setAllColumns] = useState(false)
+  const viewKey = `${storageKey}.view`
+  const [view, setView] = useState<DesignerView>(() => readPreference(viewKey, DesignerViewSchema, DEFAULT_VIEW))
+  const changeView = (patch: Partial<DesignerView>) => {
+    const next = { ...view, ...patch }
+    setView(next)
+    writePreference(viewKey, next)
+  }
   const [relate, setRelate] = useState(false)
+  // Full screen is the browser's: the section fills the screen, and leaving it (Esc) is noticed here.
+  const sectionRef = useRef<HTMLElement>(null)
+  const [fullscreen, setFullscreen] = useState(false)
+  useEffect(() => {
+    const sync = () => setFullscreen(document.fullscreenElement === sectionRef.current && sectionRef.current !== null)
+    document.addEventListener('fullscreenchange', sync)
+    return () => document.removeEventListener('fullscreenchange', sync)
+  }, [])
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) void document.exitFullscreen()
+    else void sectionRef.current?.requestFullscreen?.()
+  }
   const [from, setFrom] = useState<Pick | null>(null)
   const [pair, setPair] = useState<{ from: Pick; to: Pick } | null>(null)
   // Only to redraw the ◆ marks when a display column is chosen (that choice is kept by the browser).
@@ -50,6 +72,8 @@ export function Designer({ db, schema }: { db: string; schema?: string | undefin
   const flow = useDdlFlow(db, schema)
   const names = (tables.data ?? []).filter((x) => x.kind === 'table').map((x) => x.name)
   const showAll = allColumns || relate
+  // Picking a column needs the columns: a compact box has none.
+  const shownView = relate ? { ...view, compact: false } : view
   const structures = useQueries({
     queries: names.map((table) => ({ ...structureQuery({ db, schema, table }), enabled: showAll })),
   })
@@ -92,7 +116,7 @@ export function Designer({ db, schema }: { db: string; schema?: string | undefin
     drawn.includes(r) ? r.refTable : `${r.refNamespace.schema ?? r.refNamespace.database}.${r.refTable}`
 
   return (
-    <section className="print-expand space-y-3">
+    <section ref={sectionRef} className="print-expand space-y-3 overflow-auto bg-canvas">
       <div className="flex flex-wrap items-center gap-3 print:hidden">
         <h2 className="text-sm font-semibold text-ink">{t.title}</h2>
         <p className="text-xs text-ink-sub">{relate ? t.relateHint : t.hint}</p>
@@ -110,8 +134,14 @@ export function Designer({ db, schema }: { db: string; schema?: string | undefin
           removePreference(storageKey)
           setSaved({})
         }}
-        svg={() => diagramSvg({ tables: names, relations: drawn, positions, columns, display })}
+        svg={() => diagramSvg({ tables: names, relations: drawn, positions, columns, display, view: shownView })}
+        dia={() => diagramDia({ tables: names, relations: drawn, positions, columns, display, view: shownView })}
+        eps={() => diagramEps({ tables: names, relations: drawn, positions, columns, display, view: shownView })}
         fileBase={db}
+        view={view}
+        onView={changeView}
+        fullscreen={fullscreen}
+        onFullscreen={toggleFullscreen}
       >
         <DesignerAddForeignKey
           db={db}
@@ -137,6 +167,7 @@ export function Designer({ db, schema }: { db: string; schema?: string | undefin
         display={display}
         positions={positions}
         onMove={move}
+        view={shownView}
         {...(relate ? { relate: { from, onPick: pick } } : {})}
       />
       <h3 className="text-sm font-semibold text-ink">{t.relations}</h3>
@@ -206,9 +237,14 @@ export function Designer({ db, schema }: { db: string; schema?: string | undefin
           schema={schema}
           positions={positions}
           allColumns={allColumns}
+          view={view}
           onLoad={(page) => {
             keep(page.positions)
             setAllColumns(page.allColumns)
+            if (page.view) {
+              setView(page.view)
+              writePreference(viewKey, page.view)
+            }
           }}
         />
       </div>

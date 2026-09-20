@@ -1,3 +1,4 @@
+import type { RowCell } from '@tsmyadmin/shared'
 import { MAX_UNPACKED, readZip, UnpackLimitError } from './zip.ts'
 
 /**
@@ -8,7 +9,7 @@ import { MAX_UNPACKED, readZip, UnpackLimitError } from './zip.ts'
  */
 
 /** A value of a cell: text, NULL, or bytes as base64 (an XML export carries binary that way). */
-export type RowCell = string | null | { base64: string }
+export type { RowCell }
 
 export interface SourceRow {
   /** 1-based line of the file (ODS: the row number of the sheet). */

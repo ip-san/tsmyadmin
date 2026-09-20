@@ -5,6 +5,7 @@ import type {
   DiagnosticKind,
   DiagnosticQuery,
   DiagnosticReport,
+  EventDetail,
   EventInfo,
   KeyValue,
   KillMode,
@@ -14,6 +15,7 @@ import type {
   ProcessInfo,
   RelationDef,
   ReplicationInfo,
+  RoutineDetail,
   RoutineInfo,
   RoutineKind,
   ServerCatalog,
@@ -22,6 +24,7 @@ import type {
   TableInfo,
   TableSchema,
   TableStats,
+  TriggerDetail,
   TriggerInfo,
   UserInfo,
   UserRef,
@@ -52,6 +55,7 @@ import {
   pgListTables,
   pgTableStats,
 } from './introspect.ts'
+import { pgRoutineDetail, pgTriggerDetail } from './program-detail.ts'
 import { pgListDependencies, pgListRoutines, pgListTriggers, pgRoutineDefinition } from './routines.ts'
 import {
   pgDiagnostics,
@@ -420,6 +424,19 @@ export class PostgresAdapter extends BaseAdapter {
 
   routineDefinition(ns: Namespace, name: string, kind: RoutineKind): Promise<string | null> {
     return this.withConn(ns, (conn) => pgRoutineDefinition(conn, ns, name, kind))
+  }
+
+  routineDetail(ns: Namespace, name: string, kind: RoutineKind, parameters?: string): Promise<RoutineDetail | null> {
+    return this.withConn(ns, (conn) => pgRoutineDetail(conn, ns, name, kind, parameters))
+  }
+
+  triggerDetail(ns: Namespace, table: string, name: string): Promise<TriggerDetail | null> {
+    return this.withConn(ns, (conn) => pgTriggerDetail(conn, ns, table, name))
+  }
+
+  eventDetail(_ns: Namespace, _name: string): Promise<EventDetail | null> {
+    // PostgreSQL has no built-in event scheduler.
+    return Promise.resolve(null)
   }
 
   listTriggers(ns: Namespace, table?: string): Promise<TriggerInfo[]> {

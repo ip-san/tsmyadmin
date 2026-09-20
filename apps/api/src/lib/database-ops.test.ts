@@ -111,6 +111,37 @@ describe('prepareDatabaseOp', () => {
     ])
   })
 
+  it('copies rows only into a target that has the same tables, and only the columns it has', async () => {
+    const adapter = new FakeAdapter({
+      dialect: 'mysql',
+      databases: {
+        shop: { tables: { orders: withGenerated(), users: fakeTable('users', ['id'], []) } },
+        mirror: { tables: { orders: fakeTable('orders', ['id'], []), users: fakeTable('users', ['id'], []) } },
+        partial: { tables: { users: fakeTable('users', ['id'], []) } },
+        mysql: { tables: {} },
+      },
+    })
+    const rowsOnly = (newName: string) =>
+      prepareDatabaseOp(adapter, server, {
+        op: 'copyDatabase',
+        name: 'shop',
+        newName,
+        withData: true,
+        structure: false,
+      })
+    const op = await rowsOnly('mirror')
+    // `qty` is not in the target's `orders`, and `total` is generated: neither is copied.
+    expect(op.op === 'copyDatabase' && op.tables).toEqual([
+      { name: 'orders', columns: ['id'] },
+      { name: 'users', columns: ['id'] },
+    ])
+    expect(await refusal(rowsOnly('partial'))).toMatchObject({
+      code: 'VALIDATION',
+      message: expect.stringContaining('has no table "orders"'),
+    })
+    expect(await refusal(rowsOnly('nowhere'))).toMatchObject({ code: 'NOT_FOUND' })
+  })
+
   it('refuses the same name, an existing target, a missing source and the server’s own databases', async () => {
     const a = mysql()
     expect(

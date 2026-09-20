@@ -39,7 +39,13 @@ export async function prepareDatabaseOp(
   const source = databases.find((d) => d.name === op.name)
   if (!source) throw new DatabaseOpRefused('NOT_FOUND', `Unknown database: ${op.name}`)
   const existing = databases.find((d) => d.name === op.newName)
-  if (existing)
+  // Rows only: the target is the database the rows go into, so it has to be there (MySQL only; PostgreSQL copies
+  // from a template).
+  const rowsOnly = op.op === 'copyDatabase' && op.structure === false
+  if (rowsOnly && dialect === 'postgres')
+    throw new DatabaseOpRefused('VALIDATION', 'PostgreSQL copies a database with its structure and its data')
+  if (rowsOnly && !existing) throw new DatabaseOpRefused('NOT_FOUND', `Unknown database: ${op.newName}`)
+  if (existing && !rowsOnly)
     throw new DatabaseOpRefused(
       'VALIDATION',
       // Not "empty": the count only covers tables this account can see. A database a MySQL rename left behind is
@@ -92,12 +98,29 @@ export async function prepareDatabaseOp(
   }
 
   const copy = op.op === 'copyDatabase' ? op : null
+  // Rows only: each table must already exist in the target, and only the columns it has are copied.
+  const targetTables = rowsOnly ? new Map<string, Set<string>>() : null
+  if (targetTables) {
+    const targetNs = { database: op.newName }
+    const there = (await adapter.listTables(targetNs)).filter((t) => t.kind === 'table').map((t) => t.name)
+    const missing = baseTables.filter((n) => !there.includes(n))
+    if (missing.length > 0)
+      throw new DatabaseOpRefused(
+        'VALIDATION',
+        `"${op.newName}" has no table ${missing.map((n) => `"${n}"`).join(', ')}: copying rows only needs the same tables in the target`
+      )
+    for (const n of baseTables)
+      targetTables.set(n, new Set((await adapter.describeTable(targetNs, n)).columns.map((c) => c.name)))
+  }
   const tables = await Promise.all(
     baseTables.map(async (name) => {
       const schema = await adapter.describeTable(ns, name)
+      const inTarget = targetTables?.get(name)
       return {
         name,
-        columns: schema.columns.filter((c) => !isGeneratedColumn(c.extra)).map((c) => c.name),
+        columns: schema.columns
+          .filter((c) => !isGeneratedColumn(c.extra) && (!inTarget || inTarget.has(c.name)))
+          .map((c) => c.name),
         // Read here, and only when asked for: the copy carries exactly what the server reports now.
         ...(copy?.autoIncrement && schema.autoIncrement ? { autoIncrement: schema.autoIncrement } : {}),
         ...(copy?.foreignKeys && schema.foreignKeys.length > 0

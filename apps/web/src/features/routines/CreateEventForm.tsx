@@ -1,4 +1,4 @@
-import { type DdlOp, EVENT_INTERVAL_UNITS, type EventSchedule } from '@tsmyadmin/shared'
+import { type DdlOp, EVENT_INTERVAL_UNITS, type EventDetail, type EventSchedule } from '@tsmyadmin/shared'
 import { type FormEvent, useState } from 'react'
 import { DefinerField } from '@/components/ddl/DefinerFields.tsx'
 import { parseDefiner } from '@/components/ddl/definer.ts'
@@ -16,20 +16,37 @@ export function toMoment(local: string): string | undefined {
   return m ? `${m[1]} ${m[2]}:${m[3] ?? '00'}` : undefined
 }
 
+/** The scheduler's `YYYY-MM-DD HH:MM:SS` as a `datetime-local` value. */
+const toLocal = (moment: string) => moment.replace(' ', 'T')
+
 /** phpMyAdmin's "Add event" (MySQL event scheduler): once at a moment, or every so often. */
-export function CreateEventForm({ onSubmit }: { onSubmit: (op: DdlOp) => void }) {
-  const [name, setName] = useState('')
-  const [kind, setKind] = useState<'at' | 'every'>('every')
-  const [at, setAt] = useState('')
-  const [interval, setInterval] = useState('1')
-  const [unit, setUnit] = useState<Unit>('DAY')
-  const [starts, setStarts] = useState('')
-  const [ends, setEnds] = useState('')
-  const [enabled, setEnabled] = useState(true)
-  const [preserve, setPreserve] = useState(false)
-  const [definerText, setDefinerText] = useState('')
-  const [comment, setComment] = useState('')
-  const [body, setBody] = useState('BEGIN\n  SELECT 1;\nEND')
+export function CreateEventForm({
+  onSubmit,
+  initial,
+  replaces,
+  onCancel,
+}: {
+  onSubmit: (op: DdlOp) => void
+  /** An existing event to edit: the form starts from it and submits a replacement of `replaces` (its name). */
+  initial?: EventDetail
+  replaces?: string
+  onCancel?: () => void
+}) {
+  const schedule0 = initial?.schedule
+  const [name, setName] = useState(initial?.name ?? '')
+  const [kind, setKind] = useState<'at' | 'every'>(schedule0?.kind ?? 'every')
+  const [at, setAt] = useState(schedule0?.kind === 'at' ? toLocal(schedule0.at) : '')
+  const [interval, setInterval] = useState(schedule0?.kind === 'every' ? String(schedule0.interval) : '1')
+  const [unit, setUnit] = useState<Unit>(schedule0?.kind === 'every' ? schedule0.unit : 'DAY')
+  const [starts, setStarts] = useState(schedule0?.kind === 'every' && schedule0.starts ? toLocal(schedule0.starts) : '')
+  const [ends, setEnds] = useState(schedule0?.kind === 'every' && schedule0.ends ? toLocal(schedule0.ends) : '')
+  const [enabled, setEnabled] = useState(initial?.enabled ?? true)
+  const [preserve, setPreserve] = useState(initial?.preserve ?? false)
+  const [definerText, setDefinerText] = useState(
+    initial?.definer ? `${initial.definer.user}@${initial.definer.host}` : ''
+  )
+  const [comment, setComment] = useState(initial?.comment ?? '')
+  const [body, setBody] = useState(initial?.body ?? 'BEGIN\n  SELECT 1;\nEND')
   const schedule = (): EventSchedule | null => {
     if (kind === 'at') {
       const moment = toMoment(at)
@@ -52,8 +69,7 @@ export function CreateEventForm({ onSubmit }: { onSubmit: (op: DdlOp) => void })
     const s = schedule()
     const definer = parseDefiner(definerText)
     if (!name.trim() || !s || !body.trim() || definer === 'invalid') return
-    onSubmit({
-      op: 'createEvent',
+    const create = {
       name: name.trim(),
       schedule: s,
       body,
@@ -61,7 +77,8 @@ export function CreateEventForm({ onSubmit }: { onSubmit: (op: DdlOp) => void })
       ...(preserve ? { preserve: true } : {}),
       ...(definer ? { definer } : {}),
       ...(comment.trim() ? { comment: comment.trim() } : {}),
-    })
+    }
+    onSubmit(replaces ? { op: 'replaceEvent', ...create, replaces } : { op: 'createEvent', ...create })
   }
   return (
     <form onSubmit={submit} className="space-y-3">
@@ -158,9 +175,12 @@ export function CreateEventForm({ onSubmit }: { onSubmit: (op: DdlOp) => void })
         </Field>
         <DefinerField id="event-definer" value={definerText} onChange={setDefinerText} />
       </div>
-      <Button type="submit" variant="primary" aria-haspopup="dialog" aria-label={`${t.event.title}: ${t.review}`}>
-        {t.review}
-      </Button>
+      <div className="flex gap-2">
+        <Button type="submit" variant="primary" aria-haspopup="dialog" aria-label={`${t.event.title}: ${t.review}`}>
+          {t.review}
+        </Button>
+        {onCancel ? <Button onClick={onCancel}>{locale.common.cancel}</Button> : null}
+      </div>
     </form>
   )
 }

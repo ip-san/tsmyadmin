@@ -101,6 +101,11 @@ export const DatabasesQuerySchema = z.object({ stats: z.enum(['0', '1']).optiona
 export const SchemaQuerySchema = z.object({ schema: z.string().min(1).optional() })
 export const TriggerQuerySchema = SchemaQuerySchema.extend({ table: z.string().min(1).optional() })
 export const RoutineDefinitionQuerySchema = SchemaQuerySchema.extend({ kind: RoutineKindSchema })
+/** `parameters` (as the routine list prints them) picks one overload of a PostgreSQL routine. */
+export const RoutineDetailQuerySchema = RoutineDefinitionQuerySchema.extend({
+  parameters: z.string().max(4000).optional(),
+})
+export const TriggerDetailQuerySchema = SchemaQuerySchema.extend({ table: z.string().min(1) })
 
 export const InsertRowRequestSchema = z.object({ values: RowValuesSchema })
 export const UpdateRowRequestSchema = z.object({ key: RowKeySchema, values: RowValuesSchema })

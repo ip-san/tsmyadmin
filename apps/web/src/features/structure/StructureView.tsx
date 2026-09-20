@@ -22,6 +22,7 @@ import { NormalizationHints } from './NormalizationHints.tsx'
 import { PartitionsCard } from './PartitionsCard.tsx'
 import { ForeignKeysTable, ReferencedByTable } from './RelationsTables.tsx'
 import { StatsCard } from './StatsCard.tsx'
+import { StructureProposal } from './StructureProposal.tsx'
 import { TransformsCard } from './TransformsCard.tsx'
 
 type ColumnDialog = { mode: 'add' } | { mode: 'modify'; name: string } | null
@@ -92,6 +93,7 @@ export function StructureView({ tableRef, dialect }: { tableRef: TableRef; diale
             }
           />
         ) : null}
+        {editable ? <StructureProposal tableRef={tableRef} schema={s} dialect={dialect} onPreview={preview} /> : null}
       </Card>
       <IndexesCard
         schema={s}

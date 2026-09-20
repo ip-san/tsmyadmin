@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { CellValue } from '@/components/cells/CellValue.tsx'
 import { DdlPreviewDialog } from '@/components/ddl/DdlPreviewDialog.tsx'
+import { FavoriteStar } from '@/components/ui/FavoriteStar.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { PrintButton } from '@/components/ui/PrintButton.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
@@ -93,7 +94,10 @@ export function TablesList({ db, schema }: { db: string; schema?: string | undef
                   className={`font-medium ${link}`}
                 >
                   {t.name}
-                </Link>
+                </Link>{' '}
+                <span data-print-hide>
+                  <FavoriteStar table={{ db, schema, table: t.name }} label={t.name} />
+                </span>
               </Td>
               <Td className="whitespace-nowrap">{locale.database.kinds[t.kind]}</Td>
               <Td className="whitespace-nowrap text-right tabular-nums">

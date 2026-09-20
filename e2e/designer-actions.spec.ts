@@ -45,6 +45,17 @@ for (const t of TARGETS) {
       }
     })
 
+    test('goes full screen and leaves it again', async ({ page }) => {
+      await login(page, t)
+      await page.goto(designerUrl(t))
+      const button = page.getByRole('button', { name: '全画面', exact: true })
+      await button.click()
+      await expect(page.getByRole('button', { name: '全画面を終える' })).toHaveAttribute('aria-pressed', 'true')
+      expect(await page.evaluate(() => document.fullscreenElement !== null)).toBe(true)
+      await page.getByRole('button', { name: '全画面を終える' }).click()
+      await expect(page.getByRole('button', { name: '全画面', exact: true })).toHaveAttribute('aria-pressed', 'false')
+    })
+
     test('lists every column, marks the display column, saves a page and exports SVG', async ({ page }) => {
       test.setTimeout(60_000)
       await login(page, t)
@@ -70,6 +81,30 @@ for (const t of TARGETS) {
         await item.getByRole('combobox').selectOption('label')
         await expect(page.getByText('◆ label')).toBeVisible()
 
+        // The drawing options: the lines' shape and labels, hiding them, and boxes with only the table name.
+        const lines = page.locator('figure svg path')
+        expect(await lines.count()).toBeGreaterThan(0)
+        await page.getByLabel('線の形').selectOption('straight')
+        await expect(lines.first()).toHaveAttribute('d', /^M [\d.]+ [\d.]+ L [\d.]+ [\d.]+$/)
+        await page.getByLabel('線にカラム名を付ける').check()
+        await expect(page.locator('figure svg text').filter({ hasText: 'parent_id → id' }).first()).toBeVisible()
+        await page.getByLabel('線を表示').uncheck()
+        await expect(lines).toHaveCount(0)
+        await page.getByLabel('線を表示').check()
+        await page.getByLabel('表名だけにする').check()
+        await expect(page.getByText('◆ label')).toHaveCount(0)
+        await page.getByLabel('表名だけにする').uncheck()
+        await expect(page.getByText('◆ label')).toBeVisible()
+        await page.getByLabel('線の形').selectOption('curve')
+        await page.getByLabel('線にカラム名を付ける').uncheck()
+        // Kept in this browser: still there after a reload.
+        await page.getByLabel('格子に合わせる').check()
+        await page.reload()
+        await expect(page.getByLabel('格子に合わせる')).toBeChecked()
+        await page.getByLabel('格子に合わせる').uncheck()
+        await page.getByLabel('全カラムを表示').check()
+        await page.getByRole('listitem').filter({ hasText: parent }).getByRole('combobox').selectOption('label')
+
         // A page: the layout kept under a name, and put back after moving a box.
         const panel = page.getByText(/^保存したページ/)
         await panel.click()
@@ -85,6 +120,25 @@ for (const t of TARGETS) {
         expect(body).toContain('<svg')
         expect(body).toContain('◆ label')
         expect(body).toContain(parent)
+
+        // The same diagram as a Dia file and as PostScript.
+        const fs = await import('node:fs/promises')
+        const diaDownload = page.waitForEvent('download')
+        await page.getByRole('button', { name: 'DIA で保存' }).click()
+        const diaFile = await diaDownload
+        expect(diaFile.suggestedFilename()).toMatch(/designer\.dia$/)
+        const dia = await fs.readFile(await diaFile.path(), 'utf8')
+        expect(dia).toContain('<dia:diagram')
+        expect(dia).toContain(parent)
+        expect(dia).toContain('Standard - BezierLine')
+        const epsDownload = page.waitForEvent('download')
+        await page.getByRole('button', { name: 'EPS で保存' }).click()
+        const epsFile = await epsDownload
+        expect(epsFile.suggestedFilename()).toMatch(/designer\.eps$/)
+        const eps = await fs.readFile(await epsFile.path(), 'utf8')
+        expect(eps.startsWith('%!PS-Adobe-3.0 EPSF-3.0')).toBe(true)
+        expect(eps).toContain(`(${parent}) show`)
+        expect(eps).toContain('curveto')
 
         await page.getByRole('button', { name: 'overview を削除' }).click()
         await expect(page.getByText('このデータベースで保存したページはありません')).toBeVisible()

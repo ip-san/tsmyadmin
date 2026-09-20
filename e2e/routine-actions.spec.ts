@@ -64,6 +64,83 @@ for (const t of TARGETS) {
       }
     })
 
+    test('edits a function’s parameters and body, a trigger’s event and an event’s schedule in the create form', async ({
+      page,
+    }) => {
+      test.setTimeout(90_000)
+      const id = Date.now().toString(36)
+      const fn = `e2e_edit_${id}`
+      const table = `e2e_edtt_${id}`
+      const trg = `e2e_edtg_${id}`
+      const ev = `e2e_edev_${id}`
+      const mysql = t.dialect === 'mysql'
+      await sql(page, t, `CREATE TABLE ${table} (id INT PRIMARY KEY, s VARCHAR(20))`)
+      await sql(
+        page,
+        t,
+        mysql
+          ? `CREATE FUNCTION ${fn}(a INT) RETURNS INT DETERMINISTIC RETURN a + 1`
+          : `CREATE FUNCTION ${fn}(a integer) RETURNS integer LANGUAGE sql AS 'SELECT a + 1'`
+      )
+      await sql(
+        page,
+        t,
+        mysql
+          ? `CREATE TRIGGER ${trg} BEFORE INSERT ON ${table} FOR EACH ROW SET NEW.s = 'x'`
+          : `CREATE FUNCTION ${trg}_fn() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN NEW.s := 'x'; RETURN NEW; END $$`
+      )
+      if (!mysql)
+        await sql(page, t, `CREATE TRIGGER ${trg} BEFORE INSERT ON ${table} FOR EACH ROW EXECUTE FUNCTION ${trg}_fn()`)
+      if (mysql)
+        await sql(
+          page,
+          t,
+          `CREATE EVENT ${ev} ON SCHEDULE EVERY 1 DAY STARTS '2031-01-01 00:00:00' DISABLE DO SET @e2e = 1`
+        )
+      try {
+        // The function: a second parameter and a new body, through the same form as "create".
+        await page.goto(dbUrl(t, '/routines'))
+        await page.getByRole('button', { name: `${fn}: 編集`, exact: true }).click()
+        const dialog = page.getByRole('dialog')
+        await expect(dialog.getByLabel('名前', { exact: true })).toHaveValue(fn)
+        await dialog.getByRole('button', { name: /引数を追加/ }).click()
+        await dialog.getByLabel('引数 2 の名前').fill('b')
+        await dialog.getByLabel('本体').fill(mysql ? 'RETURN a + b' : 'BEGIN RETURN a + b; END')
+        if (!mysql) await dialog.getByLabel('言語').selectOption('plpgsql')
+        await dialog.getByRole('button', { name: /確認/ }).click()
+        await confirmPreview(
+          page,
+          mysql ? /DROP FUNCTION[\s\S]*CREATE[\s\S]*`b` INT/ : /DROP FUNCTION[\s\S]*CREATE FUNCTION/
+        )
+        await page.getByRole('button', { name: `${fn}: 編集`, exact: true }).click()
+        await expect(page.getByRole('dialog').getByLabel('引数 2 の名前')).toHaveValue('b')
+        await page.getByRole('dialog').getByRole('button', { name: 'キャンセル' }).click()
+
+        // The trigger: the event changes from INSERT to UPDATE.
+        await page.goto(dbUrl(t, '/triggers'))
+        await page.getByRole('button', { name: `${trg}: 編集`, exact: true }).click()
+        await page.getByRole('dialog').getByLabel('イベント').selectOption('UPDATE')
+        await page.getByRole('dialog').getByRole('button', { name: /確認/ }).click()
+        await confirmPreview(page, /DROP TRIGGER[\s\S]*UPDATE/)
+        await expect(page.getByRole('row', { name: new RegExp(trg) })).toContainText('UPDATE')
+
+        if (mysql) {
+          await page.goto(dbUrl(t, '/events'))
+          await page.getByRole('button', { name: `${ev}: 編集`, exact: true }).click()
+          await page.getByRole('dialog').getByLabel('間隔').fill('3')
+          await page.getByRole('dialog').getByRole('button', { name: /確認/ }).click()
+          await confirmPreview(page, /DROP EVENT[\s\S]*EVERY 3 DAY/)
+          await expect(page.getByRole('row', { name: new RegExp(ev) })).toContainText('EVERY 3 DAY')
+        }
+      } finally {
+        await sql(page, t, `DROP TABLE IF EXISTS ${table}`)
+        if (mysql) await sql(page, t, `DROP EVENT IF EXISTS ${ev}`)
+        else await sql(page, t, `DROP FUNCTION IF EXISTS ${trg}_fn()`)
+        await sql(page, t, `DROP FUNCTION IF EXISTS ${fn}${mysql ? '' : '(integer)'}`)
+        if (!mysql) await sql(page, t, `DROP FUNCTION IF EXISTS ${fn}(integer, integer)`)
+      }
+    })
+
     test('deletes a trigger from its list', async ({ page }) => {
       const suffix = Date.now().toString(36)
       const table = `e2e_trgd_${suffix}`

@@ -9,6 +9,7 @@ import { Badge, ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Field, Select } from '@/components/ui/Field.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale, numberLocale } from '@/config/locale.ts'
+import { downloadText, safeFilename } from '@/lib/download.ts'
 import { mutations, type TableRef, trackingQuery } from '@/lib/queries.ts'
 import { TrackedStatements } from './TrackedStatements.tsx'
 
@@ -63,6 +64,14 @@ export function TrackingPage({ tableRef }: { tableRef: TableRef }) {
     },
   })
   const [confirming, setConfirming] = useState(false)
+  const [deleting, setDeleting] = useState<number | null>(null)
+  const removeVersion = useMutation({
+    mutationFn: (version: number) => mutations.deleteTrackedVersion(tableRef, version),
+    onSuccess: (next) => {
+      settle(next)
+      setDeleting(null)
+    },
+  })
   const [from, setFrom] = useState('')
   const [to, setTo] = useState(NOW)
   if (state.isPending) return <Spinner />
@@ -72,7 +81,7 @@ export function TrackingPage({ tableRef }: { tableRef: TableRef }) {
   const text = (key: string) =>
     key === NOW ? current : (versions.find((v) => String(v.version) === key)?.definition ?? '')
   const fromKey = versions.some((v) => String(v.version) === from) ? from : String(latest?.version ?? '')
-  const error = record.error ?? stop.error
+  const error = record.error ?? stop.error ?? removeVersion.error
   return (
     <div className="space-y-4">
       <Notice>{t.notice}</Notice>
@@ -118,6 +127,9 @@ export function TrackingPage({ tableRef }: { tableRef: TableRef }) {
                   <Th>{t.version}</Th>
                   <Th>{t.recordedAt}</Th>
                   <Th>{t.recordedBy}</Th>
+                  <Th>
+                    <span className="sr-only">{locale.ddl.actions}</span>
+                  </Th>
                 </tr>
               </thead>
               <tbody>
@@ -126,6 +138,30 @@ export function TrackingPage({ tableRef }: { tableRef: TableRef }) {
                     <Td className="tabular-nums">{v.version}</Td>
                     <Td className="text-xs tabular-nums">{new Date(v.at).toLocaleString(numberLocale)}</Td>
                     <Td className="font-mono text-xs">{v.by}</Td>
+                    <Td className="space-x-1 whitespace-nowrap">
+                      <Button
+                        size="sm"
+                        aria-label={t.downloadVersion(v.version)}
+                        onClick={() =>
+                          downloadText(
+                            safeFilename(`${tableRef.table}-version-${v.version}`, 'sql'),
+                            `${v.definition};\n`,
+                            'application/sql;charset=utf-8'
+                          )
+                        }
+                      >
+                        {t.download}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        aria-haspopup="dialog"
+                        aria-label={t.deleteVersion(v.version)}
+                        onClick={() => setDeleting(v.version)}
+                      >
+                        {locale.common.delete}
+                      </Button>
+                    </Td>
                   </Tr>
                 ))}
               </tbody>
@@ -158,6 +194,25 @@ export function TrackingPage({ tableRef }: { tableRef: TableRef }) {
           </Card>
         </>
       )}
+      <Dialog
+        open={deleting !== null}
+        title={t.deleteVersionTitle}
+        onClose={() => setDeleting(null)}
+        footer={
+          <>
+            <Button onClick={() => setDeleting(null)}>{locale.common.cancel}</Button>
+            <Button
+              variant="danger"
+              onClick={() => deleting !== null && removeVersion.mutate(deleting)}
+              disabled={removeVersion.isPending}
+            >
+              {t.deleteVersionConfirm}
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-ink">{deleting !== null ? t.deleteVersionBody(deleting, versions.length) : ''}</p>
+      </Dialog>
       <Dialog
         open={confirming}
         title={t.stop}

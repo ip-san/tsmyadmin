@@ -2749,6 +2749,26 @@ describe('change tracking', () => {
     }
   })
 
+  it('forgets one version of a tracked table, and the last one is the same as stopping', async () => {
+    const h = trackingHarness()
+    try {
+      await h.login()
+      await h.state('POST')
+      h.users.definition = 'CREATE TABLE users (\n  id int,\n  name varchar(20)\n)'
+      const two = TrackingStateSchema.parse(await (await h.state('POST')).json())
+      expect(two.versions.map((v) => v.version)).toEqual([1, 2])
+      const del = (v: number) => h.req(`/api/databases/shop/tables/users/tracking/${v}`, { method: 'DELETE' })
+      expect((await del(9)).status).toBe(404)
+      const one = TrackingStateSchema.parse(await (await del(1)).json())
+      expect(one.versions.map((v) => v.version)).toEqual([2])
+      const none = TrackingStateSchema.parse(await (await del(2)).json())
+      expect(none.versions).toEqual([])
+      expect(await (await h.req('/api/databases/shop/tracking')).json()).toEqual([])
+    } finally {
+      await h.store.closeAll()
+    }
+  })
+
   it('reveals nothing about a table the account cannot read', async () => {
     const h = trackingHarness()
     try {

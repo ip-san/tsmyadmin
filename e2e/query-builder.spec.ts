@@ -64,6 +64,21 @@ for (const t of TARGETS) {
       await expect(page.getByText('結合の順: users → posts')).toBeVisible()
     })
 
+    test('inserts an output column before another one', async ({ page }) => {
+      await page.getByRole('checkbox', { name: 'users', exact: true }).check()
+      await page.getByRole('checkbox', { name: 'posts', exact: true }).check()
+      await page.getByRole('button', { name: 'カラムを追加' }).click()
+      await expect(page.getByLabel('出力 1 行目のカラム').locator('option', { hasText: 'users.name' })).toHaveCount(1)
+      await page.getByLabel('出力 1 行目のカラム').selectOption({ label: 'users.name' })
+      await page.getByRole('button', { name: '出力 1 行目: 前に挿入' }).click()
+      // The new row is first and empty; the one written before it is now second.
+      await expect(page.getByLabel('出力 1 行目のカラム')).toHaveValue('')
+      await expect(page.getByLabel('出力 2 行目のカラム')).not.toHaveValue('')
+      await page.getByLabel('出力 1 行目のカラム').selectOption({ label: 'users.id' })
+      await page.getByRole('button', { name: 'SQL を作成' }).click()
+      await expect(page.locator('pre')).toContainText(/SELECT[\s\S]*id[\s\S]*name/)
+    })
+
     test('refuses tables that no foreign key connects', async ({ page }) => {
       await page.getByRole('checkbox', { name: 'users', exact: true }).check()
       await page.getByRole('checkbox', { name: 'types_all', exact: true }).check()

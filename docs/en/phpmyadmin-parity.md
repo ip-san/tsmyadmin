@@ -1,4 +1,4 @@
-<!-- translated-from: docs/phpmyadmin-parity.md sha256:bdb99a34abe2db17fe236333f30b87d3aff7d9cf05bd8308f894c0cc70d30143 -->
+<!-- translated-from: docs/phpmyadmin-parity.md sha256:00afdc241b80dfaa8c11eefc802f664689536c80dd45cd1274ea98eef7320103 -->
 
 # Feature parity with phpMyAdmin
 
@@ -57,22 +57,22 @@ In 2026-09 every phpMyAdmin screen was audited again: ten rows marked ✅ went b
 | D5 | Multi-table query (with the joins) | ✅ |
 | D6 | Saving query builder criteria | ✅ |
 | D7 | Changing the default collation (applied to every table and column) | ✅ |
-| D8 | Copy options (carrying over foreign keys, AUTO_INCREMENT, privileges and the like) | △ (the database-level copy only has "copy the data"; structure-only / data-only, AUTO_INCREMENT, constraints and switching to the copy are missing → D8) |
-| D9 | Routines: editing, running, dropping, exporting; DEFINER / SQL SECURITY / data access | △ (editing opens the SQL tab; a form pre-filled with parameters and body is missing → D9) |
-| D10 | Triggers: editing, exporting; DEFINER | △ (editing opens the SQL tab → D10) |
-| D11 | Events: editing, exporting; ON COMPLETION PRESERVE; DEFINER | △ (editing opens the SQL tab; PostgreSQL has no events → D11) |
+| D8 | Copy options (carrying over foreign keys, AUTO_INCREMENT, privileges and the like) | ✅ |
+| D9 | Routines: editing, running, dropping, exporting; DEFINER / SQL SECURITY / data access | ✅ |
+| D10 | Triggers: editing, exporting; DEFINER | ✅ |
+| D11 | Events: editing, exporting; ON COMPLETION PRESERVE; DEFINER | ✅ |
 | D12 | Views: OR REPLACE, ALGORITHM, DEFINER, SQL SECURITY, column names, WITH CHECK OPTION, editing a view | ✅ |
-| D13 | Designer: creating / dropping relations on the diagram, display column, saved pages, exporting the schema (SVG / PDF) | △ (small/big boxes, snap to grid, labels on relation lines, straight/angled lines, hiding lines, full screen are missing → D13) |
+| D13 | Designer: creating / dropping relations on the diagram, display column, saved pages, exporting the schema (SVG / PDF) | ✅ |
 | D14 | Tracking: a per-database list, recording the DDL / DML statements run | ✅ |
 | D15 | Normalization steps (as far as creating the new tables) | ✅ |
-| D16 | Table options on the create-table form (engine, collation, comment) | ✗ (set afterwards under Operations) |
-| D17 | A favourite star per row of the structure list | ✗ (only on the table page) |
-| D18 | Editing and downloading central columns | ✗ |
-| D19 | Tracking: deleting a version, and downloading its definition as SQL | ✗ |
-| D20 | Query builder: inserting a column before another (Ins / Del) | △ (append only) |
-| D21 | Database search: deleting the matching rows | ✗ (browse only) |
-| D22 | Designer: exporting the schema as DIA / EPS | ✗ |
-| D23 | Structure: proposing a table structure (the best type for each column from its values; MySQL 8.0 has no PROCEDURE ANALYSE, so the values are read and the type inferred on the client) | ✗ |
+| D16 | Table options on the create-table form (engine, collation, comment) | ✅ |
+| D17 | A favourite star per row of the structure list | ✅ |
+| D18 | Editing and downloading central columns | ✅ |
+| D19 | Tracking: deleting a version, and downloading its definition as SQL | ✅ |
+| D20 | Query builder: inserting a column before another (Ins / Del) | ✅ |
+| D21 | Database search: deleting the matching rows | ✅ |
+| D22 | Designer: exporting the schema as DIA / EPS | ✅ |
+| D23 | Structure: proposing a table structure (the best type for each column from its values; MySQL 8.0 has no PROCEDURE ANALYSE, so the values are read and the type inferred on the client) | ✅ |
 
 ## Table
 

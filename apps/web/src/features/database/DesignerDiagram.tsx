@@ -1,7 +1,19 @@
-import type { RelationDef } from '@tsmyadmin/shared'
+import type { DesignerView, RelationDef } from '@tsmyadmin/shared'
 import { type KeyboardEvent, type PointerEvent, useRef } from 'react'
 import { locale } from '@/config/locale.ts'
-import { BOX_WIDTH, boxHeight, HEADER_HEIGHT, type Point, ROW_HEIGHT, relationPath } from './designer-layout.ts'
+import {
+  BOX_WIDTH,
+  boxHeight,
+  DEFAULT_VIEW,
+  HEADER_HEIGHT,
+  type Point,
+  ROW_HEIGHT,
+  relationLabel,
+  relationPath,
+  relationRoute,
+  routeMiddle,
+  snapToGrid,
+} from './designer-layout.ts'
 
 const t = locale.designer
 const STEP = 10
@@ -25,6 +37,7 @@ export function DesignerDiagram({
   positions,
   onMove,
   relate,
+  view = DEFAULT_VIEW,
 }: {
   tables: readonly string[]
   relations: readonly RelationDef[]
@@ -36,13 +49,19 @@ export function DesignerDiagram({
   onMove: (table: string, to: Point, commit: boolean) => void
   /** While set, the columns are the buttons (pick one, then the one it refers to) and boxes stay where they are. */
   relate?: { from: { table: string; column: string } | null; onPick: (table: string, column: string) => void }
+  view?: DesignerView
 }) {
   /** Where in the box it was grabbed, and where it was last put. */
   const drag = useRef<{ table: string; dx: number; dy: number; start: Point; last: Point; moved: boolean } | null>(null)
   const at = (table: string): Point => positions[table] ?? { x: 0, y: 0 }
+  const listed = (table: string) => (view.compact ? [] : (columns.get(table) ?? []))
   const width = Math.max(...tables.map((name) => at(name).x + BOX_WIDTH)) + PAD
-  const height = Math.max(...tables.map((name) => at(name).y + boxHeight((columns.get(name) ?? []).length))) + PAD
-  const clamp = (p: Point): Point => ({ x: Math.max(0, p.x), y: Math.max(0, p.y) })
+  const height = Math.max(...tables.map((name) => at(name).y + boxHeight(listed(name).length, view.compact))) + PAD
+  // Dragged boxes land on the grid when snapping is on; the arrow keys already move by whole steps.
+  const clamp = (p: Point): Point => {
+    const kept = { x: Math.max(0, p.x), y: Math.max(0, p.y) }
+    return view.snap ? snapToGrid(kept) : kept
+  }
 
   // In diagram coordinates, measured against the SVG each time, so scrolling the diagram mid-drag does not jump the box.
   const pointerAt = (e: PointerEvent<SVGGElement>): Point => {
@@ -90,25 +109,31 @@ export function DesignerDiagram({
     <figure className="max-h-[70vh] overflow-auto rounded border border-line bg-surface-sub">
       <figcaption className="sr-only">{t.diagram}</figcaption>
       <svg width={width} height={height} className="select-none">
-        {relations.map((r) => {
+        {(view.showLines ? relations : []).map((r) => {
+          const mid = view.lineLabels ? routeMiddle(relationRoute(r, at, listed, view.lineStyle, view.compact)) : null
           return (
-            <path
-              key={relationKey(r)}
-              d={relationPath(r, at, (table) => columns.get(table) ?? [])}
-              className="fill-none stroke-brand"
-              strokeWidth={1.5}
-              aria-hidden
-            />
+            <g key={relationKey(r)} aria-hidden>
+              <path
+                d={relationPath(r, at, listed, view.lineStyle, view.compact)}
+                className="fill-none stroke-brand"
+                strokeWidth={1.5}
+              />
+              {mid ? (
+                <text x={mid.x} y={mid.y - 4} textAnchor="middle" className="fill-brand text-[10px]">
+                  {relationLabel(r)}
+                </text>
+              ) : null}
+            </g>
           )
         })}
         {tables.map((name) => {
           const p = at(name)
-          const cols = columns.get(name) ?? []
+          const cols = listed(name)
           const contents = (
             <>
               <rect
                 width={BOX_WIDTH}
-                height={boxHeight(cols.length)}
+                height={boxHeight(cols.length, view.compact)}
                 rx={4}
                 className="fill-surface stroke-line-strong group-focus-visible:stroke-brand"
                 strokeWidth={1.5}

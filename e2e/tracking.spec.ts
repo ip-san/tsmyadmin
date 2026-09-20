@@ -44,6 +44,15 @@ for (const t of TARGETS) {
             .filter({ hasText: /^\+ .*note/ })
         ).toHaveCount(1)
 
+        // A version's definition downloads as SQL, and one version can be forgotten without stopping.
+        const download = page.waitForEvent('download')
+        await page.getByRole('button', { name: 'バージョン 2: SQL をダウンロード' }).click()
+        expect((await download).suggestedFilename()).toMatch(/version-2\.sql$/)
+        await page.getByRole('button', { name: 'バージョン 1: 削除' }).click()
+        await page.getByRole('dialog').getByRole('button', { name: '削除する' }).click()
+        await expect(page.getByRole('table', { name: 'バージョン' }).getByRole('row')).toHaveCount(2)
+        await expect(page.getByText('バージョン 2 から変わっていません')).toBeVisible()
+
         await page.getByRole('button', { name: '追跡をやめる…' }).click()
         await page.getByRole('dialog').getByRole('button', { name: '追跡をやめる' }).click()
         await expect(page.getByText('このテーブルは追跡していません。')).toBeVisible()

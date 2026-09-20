@@ -217,6 +217,34 @@ const SAMPLE_OPS: Record<DdlOp['op'], DdlOp> = {
     enabled: true,
     comment: "prune 'old' logs",
   },
+  replaceRoutine: {
+    op: 'replaceRoutine',
+    kind: 'function',
+    name: 'add`o"ne',
+    params: [{ mode: 'IN', name: 'n', type: 'INT' }],
+    returns: 'INT',
+    body: 'RETURN n + 2;',
+    language: 'sql',
+    deterministic: true,
+    replaces: { kind: 'function', name: 'add`o"ne', parameters: 'n integer' },
+  },
+  replaceTrigger: {
+    op: 'replaceTrigger',
+    name: 'tr`g2',
+    table: 'users',
+    timing: 'AFTER',
+    event: 'UPDATE',
+    body: 'BEGIN\n  SET NEW.name = TRIM(NEW.name);\nEND;',
+    replaces: { name: 'tr`g', table: 'users' },
+  },
+  replaceEvent: {
+    op: 'replaceEvent',
+    name: 'ev`y',
+    schedule: { kind: 'at', at: '2030-01-01 00:00:00' },
+    body: 'DELETE FROM logs',
+    enabled: false,
+    replaces: 'ev`x',
+  },
   enableEvent: { op: 'enableEvent', name: 'ev`x' },
   disableEvent: { op: 'disableEvent', name: 'ev`x' },
   dropEvent: { op: 'dropEvent', name: 'ev`x' },
@@ -385,8 +413,19 @@ describe('DDL builders', () => {
       previous,
     }
     expect(pgDdl.build({ database: 'db', schema: 'app' }, typed)).toEqual([
-      'ALTER TABLE "app"."t" ALTER COLUMN "n" TYPE BIGINT',
+      'ALTER TABLE "app"."t" ALTER COLUMN "n" TYPE BIGINT USING "n"::BIGINT',
       'ALTER TABLE "app"."t" ALTER COLUMN "n" SET NOT NULL',
+    ])
+    // Only the collation changes: the type stays, so there is nothing to convert.
+    const collated: DdlOp = {
+      op: 'modifyColumn',
+      table: 't',
+      name: 's',
+      column: col('s', 'TEXT', { collation: 'C' }),
+      previous: col('s', 'TEXT'),
+    }
+    expect(pgDdl.build({ database: 'db', schema: 'app' }, collated)).toEqual([
+      'ALTER TABLE "app"."t" ALTER COLUMN "s" TYPE TEXT COLLATE "C"',
     ])
   })
 
@@ -400,6 +439,68 @@ describe('DDL builders', () => {
       previous,
     }
     expect(pgDdl.build({ database: 'db', schema: 'app' }, op)).toEqual(['COMMENT ON COLUMN "app"."t"."n" IS NULL'])
+  })
+
+  it('creates a table with its comment, and engine and collation on MySQL only', () => {
+    const op: DdlOp = {
+      op: 'createTable',
+      table: 't',
+      columns: [col('id', 'INT')],
+      primaryKey: [],
+      comment: "it's",
+      engine: 'InnoDB',
+      collation: 'utf8mb4_bin',
+    }
+    expect(mysqlDdl.build({ database: 'db' }, op)).toEqual([
+      "CREATE TABLE `db`.`t` (\n  `id` INT NULL\n) ENGINE = InnoDB COLLATE = utf8mb4_bin COMMENT = 'it''s'",
+    ])
+    expect(() => pgDdl.build({ database: 'db' }, op)).toThrow(/no engine or collation/)
+    const withComment = pgDdl.build({ database: 'db' }, { ...op, engine: undefined, collation: undefined } as DdlOp)
+    expect(withComment.at(1)).toBe('COMMENT ON TABLE "public"."t" IS \'it\'\'s\'')
+  })
+
+  it("copies a database's rows only, into tables that are already there (MySQL), and says PostgreSQL cannot", () => {
+    const op: DdlOp = {
+      op: 'copyDatabase',
+      name: 'a',
+      newName: 'b',
+      withData: true,
+      structure: false,
+      foreignKeys: true,
+      privileges: true,
+      tables: [{ name: 't', columns: ['id', 'n'] }],
+    }
+    expect(mysqlDdl.build({ database: 'db' }, op)).toEqual([
+      'INSERT INTO `b`.`t` (`id`, `n`) SELECT `id`, `n` FROM `a`.`t`',
+    ])
+    expect(() => mysqlDdl.build({ database: 'db' }, { ...op, withData: false } as DdlOp)).toThrow(/copies nothing/)
+    expect(() => pgDdl.build({ database: 'db' }, op)).toThrow(/structure and its data/)
+  })
+
+  it('replaces a PostgreSQL routine in place when its name and parameters stay, and by drop and create otherwise', () => {
+    const base = {
+      op: 'replaceRoutine' as const,
+      kind: 'function' as const,
+      name: 'f',
+      params: [{ mode: 'IN' as const, name: 'n', type: 'int' }],
+      returns: 'int',
+      body: 'BEGIN RETURN n; END',
+      language: 'plpgsql',
+      deterministic: false,
+    }
+    const same = pgDdl.build(
+      { database: 'db', schema: 'app' },
+      { ...base, replaces: { kind: 'function', name: 'f', parameters: 'IN n  int' } }
+    )
+    // One statement, atomic by itself: no transaction around it.
+    expect(same).toHaveLength(1)
+    expect(same[0]).toMatch(/^CREATE OR REPLACE FUNCTION "app"\."f"\(IN "n" int\)/)
+    const changed = pgDdl.build(
+      { database: 'db', schema: 'app' },
+      { ...base, replaces: { kind: 'function', name: 'f', parameters: 'n int, m int' } }
+    )
+    expect(changed[1]).toBe('DROP FUNCTION "app"."f"(n int, m int)')
+    expect(changed[2]).toMatch(/^CREATE FUNCTION/)
   })
 
   it('table options and maintenance follow each dialect', () => {

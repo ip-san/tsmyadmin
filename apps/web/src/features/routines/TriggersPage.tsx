@@ -1,15 +1,16 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Dialect } from '@tsmyadmin/shared'
 import { CreateSection } from '@/components/ddl/CreateSection.tsx'
 import { DdlPreviewDialog } from '@/components/ddl/DdlPreviewDialog.tsx'
 import { DefinitionToggle } from '@/components/ddl/DefinitionToggle.tsx'
+import { EditDetail } from '@/components/ddl/EditDetail.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
 import { useDdlFlow } from '@/lib/ddl.ts'
 import { useEditDefinition } from '@/lib/open-in-console.ts'
-import { tablesQuery, triggersQuery } from '@/lib/queries.ts'
+import { tablesQuery, triggerDetailQuery, triggersQuery } from '@/lib/queries.ts'
 import { CreateTriggerForm } from './CreateTriggerForm.tsx'
 
 export function TriggersPage({
@@ -25,6 +26,7 @@ export function TriggersPage({
 }) {
   const edit = useEditDefinition(db, schema)
   const flow = useDdlFlow(db, schema)
+  const queryClient = useQueryClient()
   // Only needed to choose a table; on a table's own tab the table is given.
   const tables = useQuery({ ...tablesQuery(db, schema), enabled: !table })
   const triggers = useQuery(triggersQuery(db, schema, table))
@@ -65,7 +67,30 @@ export function TriggersPage({
                     onEdit={(definition) => edit({ kind: 'trigger', name: t.name, definition, table: t.table })}
                   />
                 </Td>
-                <Td>
+                <Td className="space-x-1 whitespace-nowrap">
+                  <EditDetail
+                    label={`${t.name}: ${locale.create.edit.button}`}
+                    title={locale.create.edit.title(t.name)}
+                    load={() => queryClient.fetchQuery(triggerDetailQuery(db, t.table, t.name, schema))}
+                  >
+                    {(detail, close) => (
+                      <div className="space-y-3">
+                        {dialect === 'mysql' ? <p className="text-xs text-ink-sub">{locale.create.edit.hint}</p> : null}
+                        <CreateTriggerForm
+                          dialect={dialect}
+                          table={t.table}
+                          tables={[t.table]}
+                          initial={detail}
+                          replaces={{ name: t.name, table: t.table }}
+                          onCancel={close}
+                          onSubmit={(op) => {
+                            close()
+                            flow.preview(op)
+                          }}
+                        />
+                      </div>
+                    )}
+                  </EditDetail>
                   <Button
                     size="sm"
                     variant="danger"

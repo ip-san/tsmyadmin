@@ -149,6 +149,11 @@ export const ja = {
     events: 'イベント',
   },
   databaseSearch: {
+    deleteRows: '一致した行を削除…',
+    deleteLabel: (table: string) => `${table}: 一致した行を削除`,
+    deleteTitle: (table: string) => `${table} の一致した行を削除`,
+    deleteWarning: '一致した行がすべて消えます。この検索で見つけた行だけが対象です。',
+    deleted: (table: string) => `${table} の一致した行を削除しました`,
     title: 'データベース内を検索',
     term: '検索する語',
     termHint:
@@ -183,6 +188,8 @@ export const ja = {
     searching: '検索中…',
   },
   queryBuilder: {
+    insert: '前に挿入',
+    insertBefore: (label: string) => `${label}: 前に挿入`,
     templates: {
       title: '保存した組み立て',
       name: '名前',
@@ -236,6 +243,16 @@ export const ja = {
     openInSql: 'SQL タブで開く',
   },
   designer: {
+    compact: '表名だけにする',
+    snap: '格子に合わせる',
+    showLines: '線を表示',
+    lineLabels: '線にカラム名を付ける',
+    lineStyle: '線の形',
+    lineStyles: { curve: '曲線', straight: '直線', polyline: '折れ線' },
+    fullscreen: '全画面',
+    exitFullscreen: '全画面を終える',
+    exportDia: 'DIA で保存',
+    exportEps: 'EPS で保存',
     title: 'デザイナ',
     hint: 'テーブルと外部キーの図です。テーブルはドラッグで動かせます（選択して矢印キーでも動かせ、Shift で大きく動きます）。配置は、このブラウザか、名前を付けたページとして保存できます。',
     relateHint:
@@ -278,6 +295,14 @@ export const ja = {
     constraint: '制約名',
   },
   databaseOps: {
+    copyMode: {
+      label: 'コピーする内容',
+      both: '構造とデータ',
+      structure: '構造のみ',
+      data: 'データのみ',
+      dataHint: 'コピー先に、同じ名前のテーブルがそろっている必要があります。コピー先にあるカラムだけを写します。',
+    },
+    switchToCopy: 'コピーしたら、そのデータベースへ移動する',
     copyKeep: {
       foreignKeys: '外部キーもコピーする',
       autoIncrement: '次の AUTO_INCREMENT 値も引き継ぐ',
@@ -748,6 +773,9 @@ export const ja = {
       moveTable: 'テーブルを移動',
       replaceInColumn: '検索して置換',
       createView: 'ビューを作成',
+      replaceRoutine: 'ルーチンを置き換え',
+      replaceTrigger: 'トリガーを置き換え',
+      replaceEvent: 'イベントを置き換え',
       createRoutine: 'ルーチンを作成',
       createTrigger: 'トリガーを作成',
       createEvent: 'イベントを作成',
@@ -793,6 +821,17 @@ export const ja = {
       editOf: (name: string) => `インデックス ${name}: 変更`,
       renameOf: (name: string) => `インデックス ${name}: 名前を変更`,
       dropOf: (name: string) => `インデックス ${name}: 削除`,
+    },
+    proposal: {
+      button: '構造の提案',
+      title: '型の提案',
+      none: (rows: number) =>
+        `先頭 ${rows.toLocaleString('ja-JP')} 行を調べましたが、今より狭い型を提案できる文字列カラムはありません。`,
+      basis: (rows: number) =>
+        `先頭 ${rows.toLocaleString('ja-JP')} 行の値だけで決めた提案です。それ以降に合わない値があると、変更は失敗します（値は失われません）。`,
+      current: '今の型',
+      proposed: '提案',
+      preview: '選んだ提案を確認…',
     },
     bulk: {
       pick: '選ぶ',
@@ -1805,6 +1844,13 @@ export const ja = {
     },
   },
   create: {
+    edit: {
+      button: '編集',
+      notEditable:
+        'この定義はフォームで表せません（引数に名前がない、WHEN 句があるなど）。「SQL タブで編集」を使ってください。',
+      title: (name: string) => `${name} を編集`,
+      hint: 'MySQL には置き換えの構文がないため、古い定義を削除してから新しい定義を作ります。新しい定義が受け付けられないと、古い定義は残りません。実行前に、表示される SQL と元の定義を確かめてください。',
+    },
     security: {
       definer: 'DEFINER',
       definerHint: 'ユーザー名@ホスト名（例: app@%）。空なら、作成するアカウントになります',
@@ -1895,6 +1941,10 @@ export const ja = {
     caption: (column: string, shapes: number) => `${column} の図形 ${shapes.toLocaleString('ja-JP')} 件`,
   },
   central: {
+    edit: (name: string) => `${name}: 編集`,
+    editTitle: (name: string) => `${name} を編集`,
+    saveEdit: '保存する',
+    download: 'JSON でダウンロード',
     title: 'セントラルカラム',
     hint: 'このデータベースで繰り返し使うカラムの定義を保存しておき、構造タブでカラムを追加するときに呼び出せます。テーブルは変更しません。',
     empty: 'まだありません。',
@@ -1966,6 +2016,15 @@ export const ja = {
     save: '保存する',
   },
   tracking: {
+    download: 'SQL をダウンロード',
+    downloadVersion: (v: number) => `バージョン ${v}: SQL をダウンロード`,
+    deleteVersion: (v: number) => `バージョン ${v}: 削除`,
+    deleteVersionTitle: 'バージョンを削除',
+    deleteVersionConfirm: '削除する',
+    deleteVersionBody: (v: number, count: number) =>
+      count === 1
+        ? `バージョン ${v} は最後の 1 つです。削除すると追跡をやめます（設定と記録した文も消えます）。`
+        : `バージョン ${v} の記録を削除します。ほかのバージョンは残ります。`,
     title: '変更の追跡',
     notice:
       'テーブルの定義（CREATE 文）を、記録した時点のバージョンとして残し、比べられます。記録は「現在の構造を記録」で行います（自動では記録しません）。どこから変更されても、最新のバージョンとの違いとして表れます。サーバーの全アカウントで共有します。',

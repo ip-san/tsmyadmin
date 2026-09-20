@@ -100,7 +100,27 @@ function onlyMysql(what: string, present: unknown): void {
     throw new AdapterError('UNSUPPORTED', `${what} is a MySQL option; PostgreSQL has no equivalent`)
 }
 
-function createRoutineSql(ns: Namespace, op: Extract<DdlOp, { op: 'createRoutine' }>): string[] {
+/** A parameter list with the modes and spacing the catalog may or may not print, for comparing two of them. */
+const normalizedParams = (list: string) =>
+  list
+    .split(',')
+    .map((p) =>
+      p
+        .trim()
+        .replace(/^in\s+/i, '')
+        .replace(/\s+/g, ' ')
+        .toLowerCase()
+    )
+    .filter((p) => p !== '')
+    .join(',')
+
+/** The trigger function a PostgreSQL trigger runs, created next to it and named after it. */
+function triggerFunction(ns: Namespace, op: Extract<DdlOp, { op: 'createTrigger' }>, orReplace: boolean): string {
+  const fn = quoteTable('postgres', ns, `${op.name}_fn`)
+  return `CREATE ${orReplace ? 'OR REPLACE ' : ''}FUNCTION ${fn}() RETURNS trigger LANGUAGE plpgsql AS ${dollarQuoted(op.body)}`
+}
+
+function createRoutineSql(ns: Namespace, op: Extract<DdlOp, { op: 'createRoutine' }>, orReplace = false): string[] {
   onlyMysql('DEFINER', op.definer)
   onlyMysql('A data-access characteristic', op.dataAccess)
   const kind = op.kind === 'function' ? 'FUNCTION' : 'PROCEDURE'
@@ -111,7 +131,7 @@ function createRoutineSql(ns: Namespace, op: Extract<DdlOp, { op: 'createRoutine
   const returns = op.kind === 'function' ? ` RETURNS ${op.returns}` : ''
   // The language is schema-validated as an identifier, hence safe unquoted.
   const security = op.sqlSecurity ? ` SECURITY ${op.sqlSecurity}` : ''
-  const create = `CREATE ${kind} ${signature}${returns} LANGUAGE ${op.language}${security} AS ${dollarQuoted(op.body)}`
+  const create = `CREATE ${orReplace ? 'OR REPLACE ' : ''}${kind} ${signature}${returns} LANGUAGE ${op.language}${op.deterministic ? ' IMMUTABLE' : ''}${security} AS ${dollarQuoted(op.body)}`
   return op.comment ? [create, `COMMENT ON ${kind} ${signature} IS ${pgLiteral(op.comment)}`] : [create]
 }
 
@@ -156,7 +176,8 @@ export const pgDdl: DdlBuilder = {
       case 'renameDatabase':
         return [releaseOwnConnections(op.name), `ALTER DATABASE ${id(op.name)} RENAME TO ${id(op.newName)}`]
       case 'copyDatabase':
-        if (!op.withData) throw new AdapterError('UNSUPPORTED', 'PostgreSQL copies a database with its data')
+        if (!op.withData || op.structure === false)
+          throw new AdapterError('UNSUPPORTED', 'PostgreSQL copies a database with its structure and its data')
         return [releaseOwnConnections(op.name), `CREATE DATABASE ${id(op.newName)} TEMPLATE ${id(op.name)}`]
       case 'replaceInColumn': {
         const c = id(op.column)
@@ -205,6 +226,44 @@ export const pgDdl: DdlBuilder = {
         return [`DROP TRIGGER ${id(op.name)} ON ${quoteTable('postgres', ns, op.table)}`]
       case 'createRoutine':
         return createRoutineSql(ns, op)
+      case 'replaceRoutine': {
+        const { replaces, op: _replace, ...rest } = op
+        const create = { op: 'createRoutine' as const, ...rest }
+        const params = create.params.map((p) => `${p.mode} ${id(p.name)} ${p.type}`).join(', ')
+        // The same name and parameters: replaced in place, which keeps the privileges. Otherwise the old overload is
+        // dropped and this created, in one transaction so a refused definition leaves the old one as it was.
+        const inPlace =
+          replaces.kind === create.kind &&
+          replaces.name === create.name &&
+          normalizedParams(replaces.parameters ?? '') === normalizedParams(params.replaceAll('"', ''))
+        return inPlace
+          ? inTransaction(createRoutineSql(ns, create, true))
+          : inTransaction([
+              ...pgDdl.build(ns, {
+                op: 'dropRoutine',
+                kind: replaces.kind,
+                name: replaces.name,
+                ...(replaces.parameters !== undefined ? { parameters: replaces.parameters } : {}),
+              }),
+              ...createRoutineSql(ns, create),
+            ])
+      }
+      case 'replaceTrigger': {
+        onlyMysql('DEFINER', op.definer)
+        const { replaces, op: _replace, ...rest } = op
+        const create = { op: 'createTrigger' as const, ...rest }
+        return inTransaction([
+          ...pgDdl.build(ns, { op: 'dropTrigger', name: replaces.name, table: replaces.table }),
+          // A renamed trigger leaves its old function behind; one shared with another trigger stays (and refuses).
+          ...(replaces.name !== create.name
+            ? [`DROP FUNCTION IF EXISTS ${quoteTable('postgres', ns, `${replaces.name}_fn`)}()`]
+            : []),
+          triggerFunction(ns, create, true),
+          `CREATE TRIGGER ${id(create.name)} ${create.timing} ${create.event} ON ${quoteTable('postgres', ns, create.table)} FOR EACH ROW EXECUTE FUNCTION ${quoteTable('postgres', ns, `${create.name}_fn`)}()`,
+        ])
+      }
+      case 'replaceEvent':
+        throw new AdapterError('UNSUPPORTED', 'PostgreSQL has no event scheduler')
       case 'createTrigger': {
         onlyMysql('DEFINER', op.definer)
         // PostgreSQL runs a trigger function; it is created next to the trigger and named after it.
@@ -274,10 +333,16 @@ export const pgDdl: DdlBuilder = {
         if (op.primaryKey.length > 0) defs.push(`PRIMARY KEY (${op.primaryKey.map(id).join(', ')})`)
         if (op.partitionBy?.method === 'key')
           throw new AdapterError('UNSUPPORTED', 'PostgreSQL has no KEY partitioning')
+        if (op.engine || op.collation)
+          throw new AdapterError('UNSUPPORTED', 'PostgreSQL tables have no engine or collation option')
         const by = op.partitionBy
           ? ` PARTITION BY ${op.partitionBy.method.toUpperCase()} (${op.partitionBy.expression})`
           : ''
-        return [`CREATE TABLE ${t} (\n  ${defs.join(',\n  ')}\n)${by}`, ...op.columns.flatMap((c) => commentSql(t, c))]
+        return [
+          `CREATE TABLE ${t} (\n  ${defs.join(',\n  ')}\n)${by}`,
+          ...(op.comment ? [`COMMENT ON TABLE ${t} IS ${pgLiteral(op.comment)}`] : []),
+          ...op.columns.flatMap((c) => commentSql(t, c)),
+        ]
       }
       case 'partitionTable':
         throw new AdapterError('UNSUPPORTED', 'PostgreSQL cannot partition an existing table; create it partitioned')
@@ -316,8 +381,11 @@ export const pgDdl: DdlBuilder = {
         // With the current definition known, only what changed is emitted: an ALTER TYPE rewrites the table
         // and a DROP DEFAULT the user never asked for is exactly what a reviewing DBA refuses to run.
         if (prev === undefined || prev.dataType !== c.dataType || (prev.collation ?? null) !== c.collation) {
+          // A change of type with no implicit conversion (text to integer, say) needs the cast spelled out; when the
+          // type is unchanged (only the collation) there is nothing to convert.
+          const using = prev !== undefined && prev.dataType !== c.dataType ? ` USING ${col}::${c.dataType}` : ''
           out.push(
-            `ALTER TABLE ${t} ALTER COLUMN ${col} TYPE ${c.dataType}${c.collation ? ` COLLATE ${id(c.collation)}` : ''}`
+            `ALTER TABLE ${t} ALTER COLUMN ${col} TYPE ${c.dataType}${c.collation ? ` COLLATE ${id(c.collation)}` : ''}${using}`
           )
         }
         out.push(...generated)

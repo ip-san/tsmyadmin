@@ -1,5 +1,5 @@
 import { expect } from '@playwright/test'
-import { login, TARGETS, test } from './helpers.ts'
+import { confirmPreview, login, TARGETS, test } from './helpers.ts'
 
 for (const t of TARGETS) {
   const searchUrl = `/db/${t.database}/search${t.schema ? `?schema=${t.schema}` : ''}`
@@ -84,6 +84,34 @@ for (const t of TARGETS) {
       await page.waitForTimeout(2500)
       expect(sent).toBe(1)
       await page.unroute(isSearch)
+    })
+
+    test('deletes the rows a search found, after showing the DELETE and asking for the table name', async ({
+      page,
+    }) => {
+      test.setTimeout(60_000)
+      const table = `e2e_sdel_${Date.now().toString(36)}`
+      const term = `zz${Date.now().toString(36)}`
+      const run = (sql: string) =>
+        page.request.post(`/api/databases/${t.database}/sql`, {
+          data: { sql, ...(t.schema ? { schema: t.schema } : {}) },
+        })
+      try {
+        await run(`CREATE TABLE ${table} (id INT PRIMARY KEY, note VARCHAR(40))`)
+        await run(`INSERT INTO ${table} VALUES (1, '${term} one'), (2, 'keep'), (3, '${term} two')`)
+        await page.goto(searchUrl)
+        await page.getByLabel('検索する語').fill(term)
+        await page.getByRole('form', { name: 'データベース内を検索' }).getByRole('button', { name: '検索する' }).click()
+        const results = page.getByRole('table', { name: 'データベース内を検索' })
+        await expect(results.getByRole('row').filter({ hasText: table })).toContainText('2 行')
+        await page.getByRole('button', { name: `${table}: 一致した行を削除` }).click()
+        await confirmPreview(page, /DELETE FROM/, table)
+        await expect(results.getByRole('row').filter({ hasText: table })).toContainText('0 行')
+        const left = await (await run(`SELECT COUNT(*) FROM ${table}`)).json()
+        expect(JSON.stringify(left)).toContain('1')
+      } finally {
+        await run(`DROP TABLE IF EXISTS ${table}`)
+      }
     })
 
     test('a double click on Search does not stop the search it started', async ({ page }) => {

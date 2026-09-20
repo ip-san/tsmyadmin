@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import type { SearchMode, TableSearchResult } from '@tsmyadmin/shared'
 import { SEARCH_TERM_MAX, SearchModeSchema } from '@tsmyadmin/shared'
 import { type FormEvent, useEffect, useRef, useState } from 'react'
+import { PreviewDialog } from '@/components/ddl/PreviewDialog.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Field, Input, Select } from '@/components/ui/Field.tsx'
@@ -9,6 +10,7 @@ import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
 import { useOpenInDatabaseConsole } from '@/lib/open-in-console.ts'
 import { searchTable, tablesQuery } from '@/lib/queries.ts'
+import { useSearchDelete } from './use-search-delete.ts'
 
 type Outcome = { table: string } & ({ result: TableSearchResult } | { error: unknown })
 
@@ -32,6 +34,16 @@ export function DatabaseSearch({ db, schema }: { db: string; schema?: string | u
   const [settling, setSettling] = useState(false)
   const [searchedTerm, setSearchedTerm] = useState('')
   const termInput = useRef<HTMLInputElement>(null)
+  const deleteFlow = useSearchDelete(db, schema, async (table) => {
+    const again: Outcome = await searchTable({ db, schema, table }, searchedTerm, {
+      mode,
+      ...(column.trim() ? { column: column.trim() } : {}),
+    }).then(
+      (result) => ({ table, result }),
+      (error: unknown) => ({ table, error })
+    )
+    setOutcomes((prev) => prev.map((o) => (o.table === table ? again : o)))
+  })
   /** The run that may still append results; a new run, Stop, or leaving the page invalidates the previous one. */
   const currentRun = useRef(0)
   // Leaving the page must end the loop: otherwise every remaining table is still scanned in the background, each
@@ -246,6 +258,19 @@ export function DatabaseSearch({ db, schema }: { db: string; schema?: string | u
                             {locale.databaseSearch.openInSql}
                           </Button>
                         ) : null}
+                        {o.result.total > 0 && o.result.deleteSql !== '' ? (
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            aria-haspopup="dialog"
+                            aria-label={locale.databaseSearch.deleteLabel(o.table)}
+                            onClick={() =>
+                              deleteFlow.preview({ table: o.table, sql: (o.result as TableSearchResult).deleteSql })
+                            }
+                          >
+                            {locale.databaseSearch.deleteRows}
+                          </Button>
+                        ) : null}
                       </Td>
                     </>
                   )}
@@ -257,6 +282,15 @@ export function DatabaseSearch({ db, schema }: { db: string; schema?: string | u
       ) : running ? (
         <p className="text-sm text-ink-sub">{locale.databaseSearch.searching}</p>
       ) : null}
+      <PreviewDialog
+        flow={deleteFlow}
+        title={(op) => locale.databaseSearch.deleteTitle(op.table)}
+        destructive={() => true}
+        confirmName={(op) => op.table}
+        lossWarning={() => locale.databaseSearch.deleteWarning}
+        hint={locale.ddl.previewHint}
+        successMessage={(op) => locale.databaseSearch.deleted(op.table)}
+      />
     </section>
   )
 }
