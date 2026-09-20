@@ -593,7 +593,9 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
           `CREATE TABLE ${t} (id INT PRIMARY KEY, y INT NULL, x INT NULL, CONSTRAINT ${t}_c FOREIGN KEY (y, x) REFERENCES composite_pk (a, b))`
         )
         try {
-          const keys = await db.listForeignKeys(ns)
+          // The API integration suite may be creating and dropping its own `dump_*` tables in this database at the same
+          // moment (the MariaDB job runs both files against one server): a table that comes and goes is not compared.
+          const keys = (await db.listForeignKeys(ns)).filter((k) => !k.table.startsWith('dump_'))
           expect(keys).toContainEqual({
             table: 'posts',
             name: 'fk_posts_user',
