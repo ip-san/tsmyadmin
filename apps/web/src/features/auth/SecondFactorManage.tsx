@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox } from '@/components/ui/Feedback.tsx'
 import { Field, Input } from '@/components/ui/Field.tsx'
-import { locale, localeCode } from '@/config/locale.ts'
+import { locale, numberLocale } from '@/config/locale.ts'
 import { answerChallenge, createPasskey, passkeysSupported } from '@/lib/passkeys.ts'
 import { mutations } from '@/lib/queries.ts'
 
@@ -36,7 +36,7 @@ async function prove(code: string, withPasskey: boolean): Promise<SecondFactorPr
   return { passkey: await answerChallenge(await mutations.passkeyChallenge()) }
 }
 
-const passkeyDate = (at: number) => new Date(at).toLocaleDateString(localeCode === 'ja' ? 'ja-JP' : 'en-US')
+const passkeyDate = (at: number) => new Date(at).toLocaleDateString(numberLocale)
 
 /** The methods an enrolled account has, and the changes it can make to them. */
 export function SecondFactorManage({

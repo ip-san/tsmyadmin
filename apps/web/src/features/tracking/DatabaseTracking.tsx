@@ -3,7 +3,7 @@ import { Link } from '@tanstack/react-router'
 import { Card } from '@/components/ui/Card.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
-import { locale, localeCode } from '@/config/locale.ts'
+import { locale, numberLocale } from '@/config/locale.ts'
 import { databaseTrackingQuery } from '@/lib/queries.ts'
 
 const t = locale.tracking
@@ -41,9 +41,7 @@ export function DatabaseTracking({ db, schema }: { db: string; schema: string | 
                   </Link>
                 </Td>
                 <Td className="tabular-nums">{t.versionLabel(row.latest)}</Td>
-                <Td className="text-xs tabular-nums">
-                  {new Date(row.at).toLocaleString(localeCode === 'ja' ? 'ja-JP' : 'en-US')}
-                </Td>
+                <Td className="text-xs tabular-nums">{new Date(row.at).toLocaleString(numberLocale)}</Td>
                 <Td className="text-xs">{row.kinds.map((k) => t.kindNames[k]).join(', ')}</Td>
               </Tr>
             ))}

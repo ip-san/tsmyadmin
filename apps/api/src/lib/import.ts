@@ -577,7 +577,7 @@ async function loadRows(
     }
   }
   peek = { done: false, value: first }
-  let result: { affectedRows: number }
+  let result: { affectedRows: number; warnings?: string[] }
   try {
     result = await adapter.insertRows(ns, table, target, rows(), {
       overriding,
@@ -610,6 +610,7 @@ async function loadRows(
     columns: target,
     skippedColumns,
     inserted: result.affectedRows,
+    warnings: result.warnings ?? [],
     ...(createdTable ? { created } : {}),
     skipped: skippedRows,
     durationMs: Math.round(performance.now() - started),

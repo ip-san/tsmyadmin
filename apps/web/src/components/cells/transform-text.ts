@@ -127,6 +127,14 @@ export function displayText(t: ColumnTransform, cell: Cell): string | null {
   }
 }
 
+/** What is said about a value the input transformation refuses, in the interface's language; '' when it is fine. */
+export function inputMessage(t: ColumnTransform, text: string): string {
+  const problem = inputProblem(t, text)
+  if (problem === null) return ''
+  if (problem === 'pattern') return t.message || locale.rows.patternMismatch
+  return problem === 'json' ? locale.rows.invalidJson : locale.rows.invalidXml
+}
+
 /** What is wrong with a value typed into a form, by the column's input transformation: null when nothing is. */
 export function inputProblem(t: ColumnTransform, text: string): 'pattern' | 'json' | 'xml' | null {
   if (text === '') return null

@@ -4,7 +4,8 @@ import { ROW_FUNCTIONS_WITH_ARG, rowFunctionsFor } from '@tsmyadmin/shared'
 import { useState } from 'react'
 import { locale } from '@/config/locale.ts'
 import { rowsQuery, sessionQuery } from '@/lib/queries.ts'
-import { inputProblem } from '../cells/transform-text.ts'
+import { useDebounced } from '@/lib/use-debounced.ts'
+import { inputMessage } from '../cells/transform-text.ts'
 import { Input, Select, Textarea } from '../ui/Field.tsx'
 
 /**
@@ -102,15 +103,10 @@ export function RowField({
   const [tooLarge, setTooLarge] = useState(false)
   // What is typed is checked as it is typed; a value that is NULL, left to the default, a function's or a file's is not.
   const typed = !(f.isNull || f.useDefault || f.fn !== '' || f.file !== null)
-  const problem = input && typed && checkInput ? inputProblem(input, f.text) : null
-  const problemText =
-    problem === null
-      ? ''
-      : problem === 'pattern'
-        ? input?.message || locale.rows.patternMismatch
-        : problem === 'json'
-          ? locale.rows.invalidJson
-          : locale.rows.invalidXml
+  // Checked a moment after the typing stops, not on every key: a long pasted JSON, or a pattern that backtracks badly,
+  // would otherwise stall each keystroke. The submit checks again at once (RowForm), so nothing slips through.
+  const settled = useDebounced(f.text, 150)
+  const problemText = input && typed && checkInput ? inputMessage(input, settled) : ''
   const editor = input !== undefined && ['json-input', 'xml-input', 'sql-input'].includes(input.kind)
   // The browser's own form validation stops the submit and says why, which is what a required field does too.
   const checked = (el: HTMLInputElement | HTMLTextAreaElement | null) => el?.setCustomValidity(problemText)

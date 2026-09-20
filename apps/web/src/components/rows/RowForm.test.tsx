@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render as rtlRender, screen } from '@testing-library/react'
+import { fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ColumnDef, ColumnTransform } from '@tsmyadmin/shared'
 import type { ReactElement, ReactNode } from 'react'
@@ -209,24 +209,33 @@ describe('RowForm input transformations', () => {
   it('says what is wrong with a value that does not match the pattern, and holds the submit back', async () => {
     const onSubmit = form(rule({ pattern: '^\\d{3}-\\d{4}$', message: 'Give a postal code' }))
     await userEvent.type(screen.getByLabelText('zip'), '12-345')
-    expect(screen.getByText('Give a postal code')).toBeInTheDocument()
+    expect(await screen.findByText('Give a postal code')).toBeInTheDocument()
     expect(screen.getByLabelText('zip')).toBeInvalid()
     await userEvent.click(screen.getByRole('button', { name: '挿入する' }))
     expect(onSubmit).not.toHaveBeenCalled()
     await userEvent.clear(screen.getByLabelText('zip'))
     await userEvent.type(screen.getByLabelText('zip'), '123-4567')
-    expect(screen.queryByText('Give a postal code')).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByText('Give a postal code')).not.toBeInTheDocument())
     await userEvent.click(screen.getByRole('button', { name: '挿入する' }))
     expect(onSubmit).toHaveBeenCalled()
+  })
+
+  it('checks at once on submit even when the field has not yet caught up with the typing', async () => {
+    const onSubmit = form(rule({ pattern: '^\\d+$', message: 'Digits only' }))
+    // fireEvent.change sets the value and submits in the same tick: the field's debounced check has not run.
+    fireEvent.change(screen.getByLabelText('zip'), { target: { value: 'abc' } })
+    fireEvent.submit(screen.getByLabelText('zip').closest('form') as HTMLFormElement)
+    expect(onSubmit).not.toHaveBeenCalled()
+    expect(screen.getByRole('alert')).toHaveTextContent('zip: Digits only')
   })
 
   it('checks JSON in an editor, and leaves an empty (NULL) value alone', async () => {
     form(rule({ kind: 'json-input' }))
     expect(screen.getByLabelText('zip').tagName).toBe('TEXTAREA')
     await userEvent.type(screen.getByLabelText('zip'), 'not json')
-    expect(screen.getByText('JSON として読めません')).toBeInTheDocument()
+    expect(await screen.findByText('JSON として読めません')).toBeInTheDocument()
     await userEvent.clear(screen.getByLabelText('zip'))
-    expect(screen.queryByText('JSON として読めません')).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByText('JSON として読めません')).not.toBeInTheDocument())
   })
 
   it('does not judge an edit value nobody touched, but does once it is changed', async () => {
@@ -242,6 +251,6 @@ describe('RowForm input transformations', () => {
     )
     expect(screen.getByLabelText('zip')).toBeValid()
     await userEvent.type(screen.getByLabelText('zip'), 'x')
-    expect(screen.getByLabelText('zip')).toBeInvalid()
+    await waitFor(() => expect(screen.getByLabelText('zip')).toBeInvalid())
   })
 })

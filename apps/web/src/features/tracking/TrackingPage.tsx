@@ -8,7 +8,7 @@ import { Dialog } from '@/components/ui/Dialog.tsx'
 import { Badge, ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Field, Select } from '@/components/ui/Field.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
-import { locale, localeCode } from '@/config/locale.ts'
+import { locale, numberLocale } from '@/config/locale.ts'
 import { mutations, type TableRef, trackingQuery } from '@/lib/queries.ts'
 import { TrackedStatements } from './TrackedStatements.tsx'
 
@@ -124,9 +124,7 @@ export function TrackingPage({ tableRef }: { tableRef: TableRef }) {
                 {[...versions].reverse().map((v) => (
                   <Tr key={v.id}>
                     <Td className="tabular-nums">{v.version}</Td>
-                    <Td className="text-xs tabular-nums">
-                      {new Date(v.at).toLocaleString(localeCode === 'ja' ? 'ja-JP' : 'en-US')}
-                    </Td>
+                    <Td className="text-xs tabular-nums">{new Date(v.at).toLocaleString(numberLocale)}</Td>
                     <Td className="font-mono text-xs">{v.by}</Td>
                   </Tr>
                 ))}

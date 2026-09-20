@@ -10,6 +10,8 @@ export interface NamedEntry {
   name: string
   /** One line describing what is stored, shown beside the name (and in full on hover). */
   summary: string
+  /** What loading it hands over, when that is more than the summary (a whole statement, not its first line). */
+  payload?: string
 }
 
 /**

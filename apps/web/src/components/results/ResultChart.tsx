@@ -2,12 +2,14 @@ import type { ResultSet } from '@tsmyadmin/shared'
 import { useId, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { Field, Select } from '@/components/ui/Field.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale, numberLocale } from '@/config/locale.ts'
 import { chartData, MAX_POINTS, niceScale, numericColumns } from '@/lib/chart-data.ts'
+import { layoutLegend } from '@/lib/chart-legend.ts'
 import { areaPath, type Pt, parseTime, polylinePath, splinePath } from '@/lib/chart-shapes.ts'
 import { downloadBlob, downloadText, safeFilename } from '@/lib/download.ts'
 import { standaloneSvg } from '@/lib/svg-export.ts'
 import { svgToPng } from '@/lib/svg-png.ts'
+import { ChartLegend } from './ChartLegend.tsx'
 import { ChartPie } from './ChartPie.tsx'
 import { ChartXY } from './ChartXY.tsx'
 
@@ -74,13 +76,18 @@ export function ResultChart({ result }: { result: ResultSet }) {
   const scale = niceScale(series.flatMap((s) => s.values.filter((v): v is number => v !== null)))
   const step = Math.max(MIN_STEP, Math.min(64, 720 / Math.max(labels.length, 1)))
   // Room for the widest tick label (large sums print many digits).
-  const left = Math.max(LEFT, 12 + 6 * Math.max(...scale.ticks.map((tick) => tick.toLocaleString('ja-JP').length)))
+  const left = Math.max(LEFT, 12 + 6 * Math.max(...scale.ticks.map((tick) => tick.toLocaleString(numberLocale).length)))
   const width = left + labels.length * step + 16
   const plotHeight = HEIGHT - TOP - BOTTOM
   const y = (v: number) => TOP + plotHeight - ((v - scale.min) / (scale.max - scale.min)) * plotHeight
   const labelEvery = Math.ceil(labels.length / 60)
   const barWidth = (step * 0.8) / Math.max(series.length, 1)
   const at = (i: number) => left + i * step + step / 2
+  // Inside the SVG, under the plot, so a saved file carries it.
+  const legend = layoutLegend(
+    series.map((s) => names[s.column] ?? ''),
+    Math.max(width - left, 200)
+  )
   const pointsOf = (values: readonly (number | null)[]): (Pt | null)[] =>
     values.map((v, i) => (v === null ? null : ([at(i), y(v)] as Pt)))
   const file = (extension: string) => safeFilename(`${names[xNow] ?? 'chart'}_${kind}`, extension)
@@ -162,25 +169,15 @@ export function ResultChart({ result }: { result: ResultSet }) {
         <ChartXY kind={kind} rows={result.rows} x={xNow} ys={plotted} names={names} svgRef={svgRef} />
       ) : categorical ? (
         <figure className="overflow-x-auto">
-          <figcaption className="mb-1 flex flex-wrap gap-3 text-xs text-ink">
-            <span className="sr-only">
-              {t.caption(names[xNow] ?? '', plotted.map((c) => names[c] ?? '').join(', '))}
-            </span>
-            {series.map((s, i) => (
-              <span key={s.column} className="flex items-center gap-1" aria-hidden>
-                <svg width={12} height={12} className={FILL[i]}>
-                  <rect width={12} height={12} rx={2} />
-                </svg>
-                {names[s.column]}
-              </span>
-            ))}
+          <figcaption className="sr-only">
+            {t.caption(names[xNow] ?? '', plotted.map((c) => names[c] ?? '').join(', '))}
           </figcaption>
-          <svg ref={svgRef} width={width} height={HEIGHT} aria-hidden className="text-ink-sub">
+          <svg ref={svgRef} width={width} height={HEIGHT + legend.height} aria-hidden className="text-ink-sub">
             {scale.ticks.map((tick) => (
               <g key={tick}>
                 <line x1={left} x2={width - 8} y1={y(tick)} y2={y(tick)} className="stroke-line" />
                 <text x={left - 6} y={y(tick) + 4} textAnchor="end" className="fill-ink-sub text-[10px]">
-                  {tick.toLocaleString('ja-JP')}
+                  {tick.toLocaleString(numberLocale)}
                 </text>
               </g>
             ))}
@@ -227,6 +224,7 @@ export function ResultChart({ result }: { result: ResultSet }) {
                 </g>
               )
             )}
+            <ChartLegend items={legend.items} x={left} y={HEIGHT} />
           </svg>
         </figure>
       ) : null}

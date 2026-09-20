@@ -1,4 +1,4 @@
-<!-- translated-from: docs/phpmyadmin-parity.md sha256:35c0edf7f2aa002e331f3a982d485b697df7ed1bf402ba01282f746bf9a68977 -->
+<!-- translated-from: docs/phpmyadmin-parity.md sha256:cbb802f05624ae1bee9dac24d3786e2b43ed11ce85b877fca5de6751d847b156 -->
 
 # Feature parity with phpMyAdmin
 
@@ -152,16 +152,16 @@ In 2026-09 every phpMyAdmin screen was audited again: ten rows marked ✅ went b
 
 | # | Item | State |
 |---|---|---|
-| Q1 | `POST /sql-history` reads then writes without atomicity: two tabs on one account lose each other's runs (`apps/api/src/routes/sql-lists.ts`) | ✗ |
-| Q2 | The shared-bookmark name check is not atomic: two accounts saving the same name at once swap the owner (same file) | ✗ |
-| Q3 | `toLocaleString('ja-JP')` and the like hard-coded in 32 places under `apps/web/src` (Japanese separators and clock in the English UI). Put number / time formatters in `config/locale.ts` and replace them | ✗ |
-| Q4 | A chart saved as SVG / PNG has no legend (the legend is a `<figcaption>` outside the SVG); scatter and timeline show no legend on screen either | ✗ |
-| Q5 | Input transformations run the regular expression / JSON / XML check on every keystroke on the main thread; debounce or check on blur | ✗ |
-| Q6 | MySQL "leave out duplicates" is `INSERT IGNORE`, which also lets truncation and other warnings pass silently; surface `SHOW WARNINGS` in the import result (optional) | ✗ |
-| Q7 | Bookmark variables such as `[DB]` expand unquoted; quote them as identifiers per dialect | ✗ |
-| Q8 | "Load" on a shared bookmark blanks the editor if the list refetched before the click (`SqlPanels.tsx`); carry the body in `NamedEntry` | ✗ |
-| Q9 | Components over 300 lines (`SqlConsole.tsx` 380, `ExportOptionFields.tsx` 303, `AccountDialogs.tsx` 302) to split | ✗ |
-| Q10 | The sidebar's open-group state is keyed by prefix alone (`TableList.tsx`); include db / schema | ✗ |
+| Q1 | `POST /sql-history` reads then writes without atomicity: two tabs on one account lose each other's runs (`apps/api/src/routes/sql-lists.ts`) | ✅ |
+| Q2 | The shared-bookmark name check is not atomic: two accounts saving the same name at once swap the owner (same file) | ✅ |
+| Q3 | `toLocaleString('ja-JP')` and the like hard-coded in 32 places under `apps/web/src` (Japanese separators and clock in the English UI). Put number / time formatters in `config/locale.ts` and replace them | ✅ |
+| Q4 | A chart saved as SVG / PNG has no legend (the legend is a `<figcaption>` outside the SVG); scatter and timeline show no legend on screen either | ✅ |
+| Q5 | Input transformations run the regular expression / JSON / XML check on every keystroke on the main thread; debounce or check on blur | ✅ |
+| Q6 | MySQL "leave out duplicates" is `INSERT IGNORE`, which also lets truncation and other warnings pass silently; surface `SHOW WARNINGS` in the import result (optional) | ✅ |
+| Q7 | Bookmark variables such as `[DB]` expand unquoted; quote them as identifiers per dialect | ✅ |
+| Q8 | "Load" on a shared bookmark blanks the editor if the list refetched before the click (`SqlPanels.tsx`); carry the body in `NamedEntry` | ✅ |
+| Q9 | Components over 300 lines (`SqlConsole.tsx` 380, `ExportOptionFields.tsx` 303, `AccountDialogs.tsx` 302) to split | ✅ |
+| Q10 | The sidebar's open-group state is keyed by prefix alone (`TableList.tsx`); include db / schema | ✅ |
 
 ## Out of scope
 

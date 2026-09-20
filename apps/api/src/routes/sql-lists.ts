@@ -25,11 +25,17 @@ function safeJson(text: string): unknown {
   }
 }
 
-async function readHistory(store: SavedItems, config: ConnectRequest): Promise<HistoryEntry[]> {
-  const item = (await store.list(config, HISTORY))[0]
-  const body = z.object({ entries: z.array(HistoryEntrySchema) }).safeParse(safeJson(item?.body ?? ''))
-  return body.success ? body.data.entries : []
+function parseHistory(body: string | undefined): HistoryEntry[] {
+  const parsed = z.object({ entries: z.array(HistoryEntrySchema) }).safeParse(safeJson(body ?? ''))
+  return parsed.success ? parsed.data.entries : []
 }
+
+async function readHistory(store: SavedItems, config: ConnectRequest): Promise<HistoryEntry[]> {
+  return parseHistory((await store.list(config, HISTORY))[0]?.body)
+}
+
+/** A change the store was asked to make that the rules refuse (thrown from inside `update`, so nothing is written). */
+class Refused extends Error {}
 
 function shared(items: SavedItem[]): SharedQuery[] {
   return items.flatMap((item) => {
@@ -57,15 +63,23 @@ export function sqlListRoutes(cfg: SessionConfig) {
       if (!store) return unsupported(c)
       const config = c.get('session').config
       const { name, sql } = c.req.valid('json')
-      // A name is one statement for the whole server: saving over another account's would replace theirs.
-      const all = shared(await store.list(config, 'sharedsql'))
-      const taken = all.find((q) => q.name === name)
-      if (taken && taken.by !== config.user)
-        return c.json(apiError('CONFLICT', `A shared query named ${name} belongs to another account`), 409)
-      // The list is shared and capped: one account filling it would push the others' bookmarks out.
-      if (!taken && all.filter((q) => q.by === config.user).length >= SHARED_PER_ACCOUNT)
-        return c.json(apiError('CONFLICT', `An account can share at most ${SHARED_PER_ACCOUNT} queries`), 409)
-      return c.json(shared(await store.save(config, 'sharedsql', name, JSON.stringify({ sql, by: config.user }))))
+      try {
+        // Decided inside the store's own read-modify-write, so two accounts saving one name at once cannot both pass.
+        const items = await store.update(config, 'sharedsql', name, (current, others) => {
+          // A name is one statement for the whole server: saving over another account's would replace theirs.
+          const taken = current ? shared([current])[0] : undefined
+          if (taken && taken.by !== config.user)
+            throw new Refused(`A shared query named ${name} belongs to another account`)
+          // The list is shared and capped: one account filling it would push the others' bookmarks out.
+          if (!current && shared([...others]).filter((q) => q.by === config.user).length >= SHARED_PER_ACCOUNT)
+            throw new Refused(`An account can share at most ${SHARED_PER_ACCOUNT} queries`)
+          return JSON.stringify({ sql, by: config.user })
+        })
+        return c.json(shared(items))
+      } catch (err) {
+        if (err instanceof Refused) return c.json(apiError('CONFLICT', err.message), 409)
+        throw err
+      }
     })
     .delete('/shared-queries/:id', validate('param', SavedQueryIdSchema), async (c) => {
       const store = cfg.store.sharedItems
@@ -88,9 +102,13 @@ export function sqlListRoutes(cfg: SessionConfig) {
       if (!store) return unsupported(c)
       const config = c.get('session').config
       const { entry, limit } = c.req.valid('json')
-      const kept = [entry, ...(await readHistory(store, config)).filter((e) => e.sql !== entry.sql)].slice(0, limit)
-      await store.save(config, HISTORY, HISTORY, JSON.stringify({ entries: kept }))
-      return c.json<SqlHistory>({ entries: kept })
+      // Added to what the store holds at that moment, not to what this request read earlier: two tabs each get theirs in.
+      const items = await store.update(config, HISTORY, HISTORY, (current) =>
+        JSON.stringify({
+          entries: [entry, ...parseHistory(current?.body).filter((e) => e.sql !== entry.sql)].slice(0, limit),
+        })
+      )
+      return c.json<SqlHistory>({ entries: parseHistory(items[0]?.body) })
     })
     .delete('/sql-history', async (c) => {
       const store = cfg.store.savedQueries

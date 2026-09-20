@@ -4,7 +4,7 @@ import { Printer } from 'lucide-react'
 import { Button } from '@/components/ui/Button.tsx'
 import { Card } from '@/components/ui/Card.tsx'
 import { ErrorBox, Spinner } from '@/components/ui/Feedback.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale, numberLocale } from '@/config/locale.ts'
 import { type TableRef, tableStatsQuery } from '@/lib/queries.ts'
 
 const t = locale.table.stats
@@ -14,7 +14,7 @@ type Row = [label: string, value: string | null]
 /** The figures the server keeps, each with its label; the ones it does not keep are left out. */
 export function statsRows(s: TableStats): { space: Row[]; rows: Row[] } {
   const bytes = (n: number | null) => (n === null ? null : locale.common.bytes(n))
-  const count = (n: number | null) => (n === null ? null : n.toLocaleString('ja-JP'))
+  const count = (n: number | null) => (n === null ? null : n.toLocaleString(numberLocale))
   const keep = (list: Row[]) => list.filter((r) => r[1] !== null)
   return {
     space: keep([

@@ -3,7 +3,7 @@ import type { Filter } from '@tsmyadmin/shared'
 import { type FormEvent, useId, useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { Field, Input, Select } from '@/components/ui/Field.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale, numberLocale } from '@/config/locale.ts'
 import { MAX_POINTS } from '@/lib/chart-data.ts'
 import { structureQuery, type TableRef } from '@/lib/queries.ts'
 import { type PickedPoint, ZoomPlot, type ZoomView } from './ZoomPlot.tsx'
@@ -143,7 +143,7 @@ export function ZoomSearch({ tableRef, filters }: { tableRef: TableRef; filters:
             <Select id={`${id}-limit`} value={limit} onChange={(e) => setLimit(Number(e.target.value))}>
               {LIMITS.map((n) => (
                 <option key={n} value={n}>
-                  {n.toLocaleString('ja-JP')}
+                  {n.toLocaleString(numberLocale)}
                 </option>
               ))}
             </Select>

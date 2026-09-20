@@ -131,6 +131,8 @@ for (const t of TARGETS) {
       expect(text).toContain('xmlns="http://www.w3.org/2000/svg"')
       expect(text).not.toContain('class=')
       expect(text).toMatch(/fill: rgb/)
+      // The legend is part of the drawing: the series names are in the saved file.
+      expect(text).toContain('>age<')
       const [png] = await Promise.all([
         page.waitForEvent('download'),
         result.getByRole('button', { name: 'PNG で保存' }).click(),

@@ -292,6 +292,32 @@ export function describeSessionStoreConformance(
       }
     })
 
+    it('applies updates made at once one after the other, each seeing the one before', async () => {
+      const store = await create({ adapterFactory: tracked().adapterFactory, sweepIntervalMs: 0 })
+      try {
+        const saved = store.savedQueries
+        if (!saved) return
+        const add = (n: number) =>
+          saved.update(CONFIG, 'prefs', 'counter', (current) =>
+            JSON.stringify([...JSON.parse(current?.body ?? '[]'), n])
+          )
+        await Promise.all([1, 2, 3, 4, 5, 6].map(add))
+        const [row] = await saved.list(CONFIG, 'prefs')
+        expect((JSON.parse(row?.body ?? '[]') as number[]).sort()).toEqual([1, 2, 3, 4, 5, 6])
+        // Returning null writes nothing; throwing refuses and leaves the row as it was.
+        const before = await saved.list(CONFIG, 'prefs')
+        expect(await saved.update(CONFIG, 'prefs', 'counter', () => null)).toEqual(before)
+        await expect(
+          saved.update(CONFIG, 'prefs', 'counter', () => {
+            throw new Error('refused')
+          })
+        ).rejects.toThrow('refused')
+        expect(await saved.list(CONFIG, 'prefs')).toEqual(before)
+      } finally {
+        await store.closeAll()
+      }
+    })
+
     it('shares server-wide items between the accounts of one server, and only that server', async () => {
       const store = await create({ adapterFactory: tracked().adapterFactory, sweepIntervalMs: 0 })
       try {

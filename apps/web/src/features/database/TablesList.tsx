@@ -6,7 +6,7 @@ import { DdlPreviewDialog } from '@/components/ddl/DdlPreviewDialog.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { PrintButton } from '@/components/ui/PrintButton.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale, numberLocale } from '@/config/locale.ts'
 import { useDdlFlow } from '@/lib/ddl.ts'
 import { sessionQuery, tablesQuery } from '@/lib/queries.ts'
 import { RowCountCell } from './RowCountCell.tsx'
@@ -102,7 +102,7 @@ export function TablesList({ db, schema }: { db: string; schema?: string | undef
                 ) : t.rowEstimate === null ? (
                   '–'
                 ) : (
-                  t.rowEstimate.toLocaleString('ja-JP')
+                  t.rowEstimate.toLocaleString(numberLocale)
                 )}
               </Td>
               <Td className="whitespace-nowrap text-right tabular-nums">
@@ -160,7 +160,7 @@ export function TablesList({ db, schema }: { db: string; schema?: string | undef
               {locale.database.total(totals.count)}
             </th>
             <Td className="text-right tabular-nums">
-              {totals.rows === null ? '–' : totals.rows.toLocaleString('ja-JP')}
+              {totals.rows === null ? '–' : totals.rows.toLocaleString(numberLocale)}
             </Td>
             <Td className="whitespace-nowrap text-right tabular-nums">
               {totals.bytes === null ? '–' : locale.common.bytes(totals.bytes)}

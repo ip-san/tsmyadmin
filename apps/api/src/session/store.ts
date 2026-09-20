@@ -54,6 +54,19 @@ export interface SavedItems {
    */
   save(config: Config, kind: SavedItemKind, name: string, body: string, replaces?: string): Promise<SavedItem[]>
   /**
+   * Changes the row under one name from what it holds now, atomically: `change` gets that row (undefined when there is
+   * none) and the whole list of the kind, and returns the body to store, or null to leave everything as it is. Two
+   * updates at once are applied one after the other, each seeing the other's result — which a `list` followed by a
+   * `save` cannot promise. `change` may throw to refuse; nothing is written then and the error goes to the caller. It
+   * must not await: the SQLite store holds a write transaction while it runs.
+   */
+  update(
+    config: Config,
+    kind: SavedItemKind,
+    name: string,
+    change: (current: SavedItem | undefined, all: readonly SavedItem[]) => string | null
+  ): Promise<SavedItem[]>
+  /**
    * Deletes one of the caller's own rows of that kind; an id belonging to another account, or to the other kind,
    * matches nothing (a bookmark is not deleted by the route that deletes templates).
    */

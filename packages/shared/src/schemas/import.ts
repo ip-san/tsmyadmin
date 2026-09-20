@@ -129,6 +129,8 @@ export const ImportResultSchema = z.discriminatedUnion('format', [
     created: z.array(z.object({ name: z.string(), dataType: z.string() })).optional(),
     /** Rows the file held that were left out (`skip`). */
     skipped: z.number().default(0),
+    /** What the server let pass with a warning under "leave out duplicates" (MySQL's INSERT IGNORE: cut values and the like). */
+    warnings: z.array(z.string()).default([]),
     durationMs: z.number(),
   }),
 ])

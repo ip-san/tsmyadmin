@@ -1110,6 +1110,8 @@ export const ja = {
     sheet: 'シート / 表（名前または番号）',
     sheetHint: '空欄なら最初の 1 つです',
     noAutoValueOnZero: 'AUTO_INCREMENT 列の 0 をそのまま入れる（NO_AUTO_VALUE_ON_ZERO、MySQL）',
+    rowWarnings: (n: number) =>
+      `重複を飛ばす取り込みで、サーバーが警告として通した内容が ${n.toLocaleString('ja-JP')} 件あります`,
     skippedRows: (n: number) => `${n.toLocaleString('ja-JP')} 行は取り込みませんでした（先頭から飛ばす件数の指定）`,
     created: (cols: string) => `テーブルを作成しました（${cols}）`,
     server: {

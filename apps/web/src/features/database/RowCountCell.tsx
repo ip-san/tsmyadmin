@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Button } from '@/components/ui/Button.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale, numberLocale } from '@/config/locale.ts'
 import { rowCountQuery, type TableRef } from '@/lib/queries.ts'
 
 /**
@@ -10,10 +10,12 @@ import { rowCountQuery, type TableRef } from '@/lib/queries.ts'
 export function RowCountCell({ tableRef, estimate }: { tableRef: TableRef; estimate: number | null }) {
   const exact = useQuery({ ...rowCountQuery(tableRef), enabled: false })
   if (exact.data !== undefined)
-    return <span title={locale.database.exactCount}>{exact.data.toLocaleString('ja-JP')}</span>
+    return <span title={locale.database.exactCount}>{exact.data.toLocaleString(numberLocale)}</span>
   return (
     <span className="inline-flex items-center gap-1">
-      <span title={locale.database.estimated}>{estimate === null ? '–' : `~${estimate.toLocaleString('ja-JP')}`}</span>
+      <span title={locale.database.estimated}>
+        {estimate === null ? '–' : `~${estimate.toLocaleString(numberLocale)}`}
+      </span>
       <Button
         size="sm"
         variant="ghost"

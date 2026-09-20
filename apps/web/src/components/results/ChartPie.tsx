@@ -1,10 +1,14 @@
 import type { Ref } from 'react'
 import { locale } from '@/config/locale.ts'
+import { layoutLegend } from '@/lib/chart-legend.ts'
 import { pieAngles, slicePath } from '@/lib/chart-shapes.ts'
+import { ChartLegend } from './ChartLegend.tsx'
 
 const t = locale.sql.chart
 const FILL = ['fill-chart-1', 'fill-chart-2', 'fill-chart-3', 'fill-chart-4', 'fill-chart-5', 'fill-chart-6']
 const SIZE = 260
+/** Room to the right of the pie for its legend. */
+const LEGEND_WIDTH = 260
 /** Slices drawn on their own; the smaller ones together are "other" (a pie of hundreds of slivers says nothing). */
 const MAX_SLICES = 11
 
@@ -28,9 +32,20 @@ export function ChartPie({
   if (slices.length === 0) return <p className="text-sm text-ink-sub">{t.noPositive}</p>
   const angles = pieAngles(slices.map((s) => s.value))
   const r = SIZE / 2 - 8
+  const legend = layoutLegend(
+    slices.map((s, i) => `${s.label} ${((angles[i]?.share ?? 0) * 100).toFixed(1)}%`),
+    LEGEND_WIDTH,
+    { vertical: true }
+  )
   return (
-    <figure className="flex flex-wrap items-center gap-6">
-      <svg ref={svgRef} width={SIZE} height={SIZE} aria-hidden className="text-ink-sub">
+    <figure className="overflow-x-auto">
+      <svg
+        ref={svgRef}
+        width={SIZE + LEGEND_WIDTH}
+        height={Math.max(SIZE, legend.height + 16)}
+        aria-hidden
+        className="text-ink-sub"
+      >
         {slices.map((s, i) => {
           const a = angles[i]
           return a ? (
@@ -42,16 +57,14 @@ export function ChartPie({
             />
           ) : null
         })}
+        <ChartLegend items={legend.items} x={SIZE + 8} y={8} />
       </svg>
-      <figcaption>
-        <ul className="space-y-1 text-xs text-ink">
+      {/* The same numbers for a screen reader (the legend above is part of the picture). */}
+      <figcaption className="sr-only">
+        <ul>
           {slices.map((s, i) => (
-            <li key={`${i}-${s.label}`} className="flex items-center gap-2">
-              <svg width={12} height={12} aria-hidden className={FILL[i % FILL.length]}>
-                <rect width={12} height={12} rx={2} />
-              </svg>
-              <span>{s.label}</span>
-              <span className="tabular-nums text-ink-sub">{((angles[i]?.share ?? 0) * 100).toFixed(1)}%</span>
+            <li key={`${i}-${s.label}`}>
+              {s.label} {((angles[i]?.share ?? 0) * 100).toFixed(1)}%
             </li>
           ))}
         </ul>

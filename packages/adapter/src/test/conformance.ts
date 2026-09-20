@@ -1023,6 +1023,32 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
         expect((await browseAll(scratch)).total).toBe(before)
       })
 
+      it('under "ignore" hands back what INSERT IGNORE let pass besides the duplicate keys (MySQL)', async () => {
+        // PostgreSQL refuses a value that is too long instead of cutting it, and has no such warnings.
+        if (dialect !== 'mysql') return
+        const table = `${scratch}_ign`
+        await execOk(`CREATE TABLE ${table} (id INT PRIMARY KEY, s VARCHAR(3))`)
+        try {
+          await execOk(`INSERT INTO ${table} VALUES (1, 'a')`)
+          const r = await db.insertRows(
+            ns,
+            table,
+            ['id', 's'],
+            [
+              [1, 'dup'],
+              [2, 'toolong'],
+              [3, 'ok'],
+            ],
+            { onDuplicate: 'ignore', keyColumns: ['id'] }
+          )
+          // The duplicate is left out and is not a warning; the value cut to fit is, and the row still went in.
+          expect(r.affectedRows).toBe(2)
+          expect(r.warnings).toEqual([expect.stringMatching(/truncated/i)])
+        } finally {
+          await execOk(`DROP TABLE IF EXISTS ${table}`)
+        }
+      })
+
       it('returns 0 for no rows and rejects an empty column list', async () => {
         expect(await db.insertRows(ns, scratch, ['id'], [])).toEqual({ affectedRows: 0 })
         await expect(db.insertRows(ns, scratch, [], [[1]])).rejects.toMatchObject({ code: 'QUERY_FAILED' })

@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useRouteContext } from '@tanstack/react-router'
 import type { Dialect, StatementResult } from '@tsmyadmin/shared'
 import { SQL_MAX_ROWS_DEFAULT } from '@tsmyadmin/shared'
@@ -6,42 +6,29 @@ import { Play, Square } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { z } from 'zod'
 import { Button } from '@/components/ui/Button.tsx'
-import { Dialog } from '@/components/ui/Dialog.tsx'
 import { ErrorBox, Notice } from '@/components/ui/Feedback.tsx'
 import { locale } from '@/config/locale.ts'
-import { sharePreference } from '@/lib/account-prefs.ts'
 import { ApiError } from '@/lib/api.ts'
-import { consoleDraftKey, sessionStore } from '@/lib/console-draft.ts'
-import { readPreference, writePreference } from '@/lib/preferences.ts'
-import { mutations, sqlHistoryQuery } from '@/lib/queries.ts'
-import { historyLimit } from '@/lib/settings.ts'
+import { consoleDraftKey } from '@/lib/console-draft.ts'
+import { readPreference } from '@/lib/preferences.ts'
+import { mutations } from '@/lib/queries.ts'
 import { formatSql } from '@/lib/sql-format.ts'
 import { DEFAULT_RUN_OPTIONS, prepareScript, type RunOptions } from '@/lib/sql-prepare.ts'
 import { streamSql } from '@/lib/sql-stream.ts'
 import { newQueryId } from '@/lib/uuid.ts'
-import { MaxRowsSelect, ProfileOption } from './ConsoleOptions.tsx'
-import {
-  bookmarkName,
-  clearHistory,
-  forServer,
-  type HistoryEntry,
-  loadHistory,
-  pushHistory,
-  withEntry,
-} from './history.ts'
+import { MaxRowsSelect, ProfileOption, SAFE_MODE_PREF, SafeModeOption } from './ConsoleOptions.tsx'
+import { bookmarkName } from './history.ts'
 import { ResultsView } from './ResultsView.tsx'
 import { RunOptionsPanel } from './RunOptionsPanel.tsx'
+import { SafeModeDialog } from './SafeModeDialog.tsx'
 import { SqlCodeDialog } from './SqlCodeDialog.tsx'
 import { SqlEditor } from './SqlEditor.tsx'
 import { HistoryPanel, SavedQueriesPanel, SharedQueriesPanel } from './SqlPanels.tsx'
 import type { StatementHandlers } from './StatementActions.tsx'
 import { isSingleStatement, stripTrailingSemicolons, unboundedWrites } from './statement.ts'
-import { useSavedQueries } from './use-saved-queries.ts'
-import { useSharedQueries } from './use-shared-queries.ts'
+import { useConsoleDraft } from './use-console-draft.ts'
+import { useConsoleLists } from './use-console-lists.ts'
 import { expandVariables } from './variables.ts'
-
-/** Asking before an UPDATE / DELETE that has no WHERE; on unless the user turns it off. */
-const SAFE_MODE_PREF = 'sql.safeMode'
 
 export interface SqlConsoleProps {
   db: string
@@ -54,65 +41,27 @@ export interface SqlConsoleProps {
 }
 
 export function SqlConsole({ db, schema, dialect, initialSql = '', completion, draftId }: SqlConsoleProps) {
-  // The docked console can be open over a SQL tab: two of these on one page, so no fixed ids.
   // History and bookmarks belong to a server: two MySQL hosts opened from the same browser keep separate lists.
   const { session } = useRouteContext({ from: '/_app' })
   const scope = `${dialect}.${session.host}.${session.port}`
   // Unsent editor text survives tab switches and a session-expiry round trip (per console, this browser tab).
   // The server console is one editor whose target database can change: its draft is not keyed by database.
   const key = consoleDraftKey(scope, db, schema, draftId)
-  const [text, setTextState] = useState(() => readPreference(key, z.string(), initialSql, sessionStore()))
-  // Draft writes are debounced: a multi-MB pasted script would otherwise be serialised on every keystroke.
-  const pending = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const latestText = useRef(text)
-  const setText = (next: string) => {
-    setTextState(next)
-    latestText.current = next
-    if (pending.current !== null) clearTimeout(pending.current)
-    pending.current = setTimeout(() => {
-      pending.current = null
-      writePreference(key, latestText.current, sessionStore())
-    }, 300)
-  }
-  useEffect(() => {
-    // Flush a pending draft when the console unmounts or the document is left / reloaded.
-    const flushDraft = () => {
-      if (pending.current === null) return
-      clearTimeout(pending.current)
-      pending.current = null
-      writePreference(key, latestText.current, sessionStore())
-    }
-    window.addEventListener('pagehide', flushDraft)
-    return () => {
-      window.removeEventListener('pagehide', flushDraft)
-      flushDraft()
-    }
-  }, [key])
+  const [text, setText] = useConsoleDraft(key, initialSql)
   const [maxRows, setMaxRows] = useState(SQL_MAX_ROWS_DEFAULT)
   const [stopOnError, setStopOnError] = useState(true)
   const [profile, setProfile] = useState(false)
   const [runOptions, setRunOptions] = useState<RunOptions>(DEFAULT_RUN_OPTIONS)
-  const onServer = session.savedQueries === 'server'
-  // With a persistent session store the history belongs to the account (and follows it to another browser); without
-  // one it is this browser's.
-  const serverHistory = useQuery({ ...sqlHistoryQuery, enabled: onServer })
-  const [localHistory, setLocalHistory] = useState<HistoryEntry[]>(() => (onServer ? [] : loadHistory(scope)))
-  const history = onServer ? (serverHistory.data?.entries ?? []) : localHistory
-  const historyNow = useRef(history)
-  historyNow.current = history
-  // With the account, the query cache is the list: a run is put in it at once, and the server (which adds to its own
-  // list, so another browser's runs are not overwritten) is asked again afterwards.
-  const record = (entry: HistoryEntry) => {
-    if (!onServer) return setLocalHistory(pushHistory(scope, entry))
-    queryClient.setQueryData(sqlHistoryQuery.queryKey, { entries: withEntry(historyNow.current, entry) })
-    void mutations
-      .addSqlHistory(forServer(entry), historyLimit())
-      .catch(() => undefined)
-      .finally(() => queryClient.invalidateQueries({ queryKey: sqlHistoryQuery.queryKey }))
-  }
-  const saved = useSavedQueries(scope, onServer)
-  const shared = useSharedQueries(onServer)
-  const bookmarkContext = { db, schema, user: session.user, host: session.host }
+  const lists = useConsoleLists({
+    scope,
+    db,
+    schema,
+    dialect,
+    user: session.user,
+    host: session.host,
+    onServer: session.savedQueries === 'server',
+  })
+  const { onServer, history, saved, shared, bookmarkContext } = lists
   const [results, setResults] = useState<StatementResult[] | null>(null)
   const [safeMode, setSafeMode] = useState(() => readPreference(SAFE_MODE_PREF, z.boolean(), true))
   /** Statement kinds waiting for confirmation because they would change every row (empty = no dialog). */
@@ -184,7 +133,7 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
     },
     onSuccess: async (res, { shown: sql }) => {
       const entry = { sql, at: Date.now(), ok: res.every((r) => r.kind !== 'error'), db }
-      record(entry)
+      lists.record(entry)
       if (res.some((r) => r.kind !== 'rows')) {
         await queryClient.invalidateQueries({ predicate: (q) => q.queryKey[0] !== 'session' })
       }
@@ -283,41 +232,17 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
           {locale.sql.stopOnError}
         </label>
         {dialect === 'mysql' ? <ProfileOption checked={profile} onChange={setProfile} /> : null}
-        <label className="flex items-center gap-1 text-xs text-ink-sub" title={locale.sql.safeModeHint}>
-          <input
-            type="checkbox"
-            checked={safeMode}
-            onChange={(e) => {
-              setSafeMode(e.target.checked)
-              writePreference(SAFE_MODE_PREF, e.target.checked)
-              sharePreference({ sqlSafeMode: e.target.checked })
-            }}
-          />
-          {locale.sql.safeMode}
-        </label>
+        <SafeModeOption checked={safeMode} onChange={setSafeMode} />
       </div>
       <RunOptionsPanel dialect={dialect} text={text} options={runOptions} onChange={setRunOptions} />
-      <Dialog
-        open={confirming.length > 0}
-        title={locale.sql.safeModeTitle}
-        onClose={() => setConfirming([])}
-        footer={
-          <>
-            <Button onClick={() => setConfirming([])}>{locale.common.cancel}</Button>
-            <Button
-              variant="danger"
-              onClick={() => {
-                setConfirming([])
-                send()
-              }}
-            >
-              {locale.sql.run}
-            </Button>
-          </>
-        }
-      >
-        <p className="text-sm text-ink">{locale.sql.safeModeBody(confirming.join(' / '))}</p>
-      </Dialog>
+      <SafeModeDialog
+        kinds={confirming}
+        onCancel={() => setConfirming([])}
+        onRun={() => {
+          setConfirming([])
+          send()
+        }}
+      />
       {run.isError ? <ErrorBox error={run.error} /> : null}
       {/* Screen readers hear the outcome; results themselves stream into the DOM below without announcements. */}
       {/* One always-mounted live region: running → completed / cancelled (visible as a notice when cancelled). */}
@@ -360,14 +285,7 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
           onServer={onServer}
           onLoad={setText}
           onBookmark={(sql) => saved.save(bookmarkName(sql), sql)}
-          onClear={() => {
-            clearHistory(scope)
-            setLocalHistory([])
-            if (onServer) {
-              queryClient.setQueryData(sqlHistoryQuery.queryKey, { entries: [] })
-              void mutations.clearSqlHistory().catch(() => undefined)
-            }
-          }}
+          onClear={lists.clear}
         />
       </div>
       {results ? (

@@ -2475,6 +2475,23 @@ describe('preferences, central columns and column transformations', () => {
     }
   })
 
+  it('does not lose a run when two are added at once, nor let two accounts take one shared name', async () => {
+    const h = persistentHarness()
+    try {
+      await h.login()
+      const add = (sql: string) => h.send('/api/sql-history', 'POST', { entry: { sql, at: 1, ok: true }, limit: 100 })
+      await Promise.all(['SELECT 1', 'SELECT 2', 'SELECT 3', 'SELECT 4'].map(add))
+      const kept = (await (await h.req('/api/sql-history')).json()) as { entries: { sql: string }[] }
+      expect(kept.entries.map((e) => e.sql).sort()).toEqual(['SELECT 1', 'SELECT 2', 'SELECT 3', 'SELECT 4'])
+      // Saved at once under one name by the same account: one bookmark, and never a second owner.
+      await Promise.all(['a', 'b', 'c'].map((sql) => h.send('/api/shared-queries', 'POST', { name: 'same', sql })))
+      const list = (await (await h.req('/api/shared-queries')).json()) as { name: string; by: string }[]
+      expect(list.filter((q) => q.name === 'same')).toHaveLength(1)
+    } finally {
+      await h.store.closeAll()
+    }
+  })
+
   it('keeps the SQL history with the account: added to, deduplicated and cut to the limit asked', async () => {
     const h = persistentHarness()
     try {

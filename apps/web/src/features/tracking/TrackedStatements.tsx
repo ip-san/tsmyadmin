@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/Button.tsx'
 import { Card } from '@/components/ui/Card.tsx'
 import { ErrorBox, Notice } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
-import { locale, localeCode } from '@/config/locale.ts'
+import { locale, numberLocale } from '@/config/locale.ts'
 import { mutations, type TableRef, trackingQuery } from '@/lib/queries.ts'
 
 const t = locale.tracking
@@ -29,7 +29,7 @@ export function TrackedStatements({ tableRef, state }: { tableRef: TableRef; sta
       else next.add(k)
       return next
     })
-  const when = (at: number) => new Date(at).toLocaleString(localeCode === 'ja' ? 'ja-JP' : 'en-US')
+  const when = (at: number) => new Date(at).toLocaleString(numberLocale)
   return (
     <>
       <Card title={t.kinds}>

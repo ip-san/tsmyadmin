@@ -111,15 +111,41 @@ export class SqliteSavedQueries implements SavedItems {
     body: string,
     replaces?: string
   ): Promise<SavedItem[]> {
+    return this.transaction(config, kind, name, () => body, replaces)
+  }
+
+  async update(
+    config: ConnectRequest,
+    kind: SavedItemKind,
+    name: string,
+    change: (current: SavedItem | undefined, all: readonly SavedItem[]) => string | null
+  ): Promise<SavedItem[]> {
+    return this.transaction(config, kind, name, change)
+  }
+
+  /**
+   * One transaction, read included and nothing awaited inside it: two saves at once cannot both find the name
+   * missing and both insert it, nor both see room under the cap, and an update sees the result of the one before.
+   * The row being replaced goes in the same write as the new one, so a failure leaves the account exactly as it was.
+   */
+  private transaction(
+    config: ConnectRequest,
+    kind: SavedItemKind,
+    name: string,
+    change: (current: SavedItem | undefined, all: readonly SavedItem[]) => string | null,
+    replaces?: string
+  ): SavedItem[] {
     const identity = this.identity(config)
     const at = this.now()
-    // One transaction, read included and nothing awaited inside it: two saves at once cannot both find the name
-    // missing and both insert it, nor both see room under the cap. The row being replaced goes in the same write
-    // as the new one, so a failure leaves the account exactly as it was.
     this.db.exec('BEGIN IMMEDIATE')
     try {
       const mine = this.read(config, kind)
       const existing = mine.find((q) => q.name === name)
+      const body = change(existing, mine)
+      if (body === null) {
+        this.db.exec('COMMIT')
+        return mine
+      }
       // Never the row being written: replacing a row with itself would delete what this call just stored.
       const replaced = replaces === undefined ? undefined : mine.find((q) => q.id === replaces && q.id !== existing?.id)
       // Sealed against the row it lands in, so the id has to be decided first.

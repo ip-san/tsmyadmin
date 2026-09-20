@@ -403,6 +403,11 @@ export function firstResult(r: RawResult | RawResult[]): RawResult {
  * Dialect-independent implementation of browsing, row mutation and script execution.
  * Subclasses provide connections, value conversion, introspection and DDL.
  */
+/** MySQL's error number for a duplicate key. */
+const DUPLICATE_ENTRY = 1062
+/** Warnings an insert reports back at most (a file with a thousand bad values must not return a thousand lines). */
+const MAX_INSERT_WARNINGS = 20
+
 export abstract class BaseAdapter implements DatabaseAdapter {
   abstract readonly dialect: Dialect
   abstract readonly ddl: DdlBuilder
@@ -857,7 +862,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     columns: string[],
     rows: Iterable<InputCell[]>,
     options: InsertRowsOptions = {}
-  ): Promise<{ affectedRows: number }> {
+  ): Promise<{ affectedRows: number; warnings?: string[] }> {
     if (columns.length === 0) throw new AdapterError('QUERY_FAILED', 'insertRows requires at least one column')
     const d = this.dialect
     // A PostgreSQL identity column declared ALWAYS refuses explicit values without OVERRIDING SYSTEM VALUE.
@@ -884,6 +889,9 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     return this.withTransaction(ns, async (conn) => {
       let affected = 0
       let offset = 0
+      // INSERT IGNORE turns more than a key clash into a warning (a value cut to fit, a bad conversion): what it let
+      // pass is read back after each statement and handed to the caller, which says so rather than saying nothing.
+      const warnings: string[] = []
       while (!first.done) {
         const batch: Cell[][] = []
         while (!first.done && batch.length < chunk) {
@@ -897,6 +905,12 @@ export abstract class BaseAdapter implements DatabaseAdapter {
         try {
           const r = firstResult(await conn.query(head + values + tail, params.values))
           affected += r.affectedRows
+          if (d === 'mysql' && options.onDuplicate === 'ignore') {
+            for (const w of firstResult(await conn.query('SHOW WARNINGS')).rows) {
+              // 1062 is the duplicate key itself, which is what was asked to be left out.
+              if (Number(w[1]) !== DUPLICATE_ENTRY && warnings.length < MAX_INSERT_WARNINGS) warnings.push(String(w[2]))
+            }
+          }
         } catch (err) {
           const e = err instanceof AdapterError ? err : this.toAdapterError(err)
           // MySQL names the failing row of the statement; PostgreSQL does not — the batch is the best it gets.
@@ -909,7 +923,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
         }
         offset += batch.length
       }
-      return { affectedRows: affected }
+      return { affectedRows: affected, ...(warnings.length > 0 ? { warnings } : {}) }
     })
   }
 

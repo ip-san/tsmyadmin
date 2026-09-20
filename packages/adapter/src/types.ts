@@ -273,7 +273,7 @@ export interface DatabaseAdapter {
     columns: string[],
     rows: Iterable<InputCell[]>,
     options?: InsertRowsOptions
-  ): Promise<{ affectedRows: number }>
+  ): Promise<{ affectedRows: number; warnings?: string[] }>
   updateRow(ns: Namespace, table: string, key: RowKey, values: RowValues): Promise<{ affectedRows: number }>
   /**
    * One value of one row, whole (browse pages cut binary values at 64 KB and long texts too): a BLOB to download.

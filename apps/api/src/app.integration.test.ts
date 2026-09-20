@@ -603,6 +603,22 @@ describe.each(targets)('API integration ($dialect)', ({ dialect, url }) => {
     }
   })
 
+  it('says what "leave out duplicates" let pass besides the duplicates (MySQL)', async () => {
+    if (dialect !== 'mysql') return
+    const t = 'imp_warn_mysql'
+    await runSql(`DROP TABLE IF EXISTS ${t}`)
+    await runSql(`CREATE TABLE ${t} (id INT PRIMARY KEY, s VARCHAR(3))`)
+    try {
+      const done = await uploadTo(IMPORT, { format: 'csv', table: t, onDuplicate: 'ignore' }, 'id,s\n1,ok\n2,toolong\n')
+      expect(done.last).toMatchObject({ type: 'result', result: { format: 'csv', inserted: 2 } })
+      const warnings = (done.last as { result: { warnings: string[] } }).result.warnings
+      expect(warnings).toHaveLength(1)
+      expect(warnings[0]).toMatch(/truncated/i)
+    } finally {
+      await runSql(`DROP TABLE IF EXISTS ${t}`)
+    }
+  })
+
   it('creates the table from a CSV, and from a spreadsheet the export wrote', async () => {
     const t = `imp_new_${dialect}`
     const src = `imp_src_${dialect}`

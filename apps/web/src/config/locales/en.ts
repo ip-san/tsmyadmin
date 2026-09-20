@@ -1124,6 +1124,8 @@ export const en = {
     sheet: 'Sheet / table (name or number)',
     sheetHint: 'Empty means the first one',
     noAutoValueOnZero: 'Keep a 0 in an AUTO_INCREMENT column (NO_AUTO_VALUE_ON_ZERO, MySQL)',
+    rowWarnings: (n: number) =>
+      `${plural(n, 'thing', 'things')} the server let pass as a warning while leaving out duplicates`,
     skippedRows: (n: number) => `${plural(n, 'row', 'rows')} left out (the setting for leaving out from the start)`,
     created: (cols: string) => `Created the table (${cols})`,
     server: {

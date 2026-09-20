@@ -1,4 +1,4 @@
-import { locale } from '@/config/locale.ts'
+import { locale, numberLocale } from '@/config/locale.ts'
 import { niceScale } from '@/lib/chart-data.ts'
 
 const STROKE = ['stroke-chart-1', 'stroke-chart-2', 'stroke-chart-3', 'stroke-chart-4']
@@ -36,7 +36,7 @@ export function MonitorChart({
   const plotHeight = HEIGHT - TOP - BOTTOM
   const x = (i: number) => LEFT + (times.length <= 1 ? plotWidth : (i / (times.length - 1)) * plotWidth)
   const y = (v: number) => TOP + plotHeight - ((v - scale.min) / (scale.max - scale.min)) * plotHeight
-  const clock = (ms: number) => new Date(ms).toLocaleTimeString('ja-JP', { hour12: false })
+  const clock = (ms: number) => new Date(ms).toLocaleTimeString(numberLocale, { hour12: false })
   return (
     <figure className="rounded border border-line bg-surface p-3">
       <figcaption className="mb-1 text-sm font-medium text-ink">{title}</figcaption>

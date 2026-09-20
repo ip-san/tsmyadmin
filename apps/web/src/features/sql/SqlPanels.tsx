@@ -3,7 +3,7 @@ import { type ReactNode, useState } from 'react'
 import { NamedListPanel } from '@/components/panels/NamedListPanel.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { Input } from '@/components/ui/Field.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale, numberLocale } from '@/config/locale.ts'
 import type { HistoryEntry } from './history.ts'
 
 function Panel({ title, count, children }: { title: string; count: number; children: ReactNode }) {
@@ -78,7 +78,7 @@ export function HistoryPanel({
                 {e.ok ? '✓' : '✗'}
               </span>
               <span className="text-ink-sub">
-                {new Date(e.at).toLocaleTimeString('ja-JP')}
+                {new Date(e.at).toLocaleTimeString(numberLocale, { hour12: false })}
                 {e.db ? ` · ${locale.sql.historyDb(e.db)}` : ''}
               </span>
               <code className="min-w-0 flex-1 truncate font-mono" title={e.sql}>
@@ -131,13 +131,13 @@ export function SavedQueriesPanel({
     <NamedListPanel
       title={locale.sql.saved}
       nameLabel={locale.sql.savedName}
-      entries={entries.map((q) => ({ id: q.id, name: q.name, summary: q.sql }))}
+      entries={entries.map((q) => ({ id: q.id, name: q.name, summary: q.sql, payload: q.sql }))}
       note={savedOnServer ? locale.sql.savedOnServer : locale.sql.savedInBrowser}
       error={error}
       saveTitle={locale.sql.saveQuery}
       canSave={currentSql.trim().length > 0}
       onSave={onSave}
-      onLoad={(entry) => onLoad(entries.find((q) => q.id === entry.id && q.name === entry.name)?.sql ?? entry.summary)}
+      onLoad={(entry) => onLoad(entry.payload ?? entry.summary)}
       loadLabel={locale.sql.load}
       deleteLabel={locale.sql.deleteSaved}
       onDelete={(entry) => onDelete(entry)}
@@ -166,14 +166,14 @@ export function SharedQueriesPanel({
     <NamedListPanel
       title={locale.sql.shared}
       nameLabel={locale.sql.sharedName}
-      entries={entries.map((q) => ({ id: q.id, name: q.name, summary: `${q.by}: ${q.sql}` }))}
+      entries={entries.map((q) => ({ id: q.id, name: q.name, summary: `${q.by}: ${q.sql}`, payload: q.sql }))}
       note={locale.sql.sharedNote}
       error={error}
       saveTitle={locale.sql.saveShared}
       saveLabel={locale.sql.share}
       canSave={currentSql.trim().length > 0}
       onSave={onSave}
-      onLoad={(entry) => onLoad(entries.find((q) => q.id === entry.id)?.sql ?? '')}
+      onLoad={(entry) => onLoad(entry.payload ?? '')}
       loadLabel={locale.sql.load}
       deleteLabel={locale.sql.deleteSaved}
       onDelete={onDelete}

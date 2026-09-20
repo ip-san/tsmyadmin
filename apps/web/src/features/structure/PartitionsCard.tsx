@@ -7,7 +7,7 @@ import { Dialog } from '@/components/ui/Dialog.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Select } from '@/components/ui/Field.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale, numberLocale } from '@/config/locale.ts'
 import { partitionsQuery, type TableRef } from '@/lib/queries.ts'
 import { AddPartitionForm, boundExample, PartitionTableForm } from './PartitionForms.tsx'
 
@@ -71,7 +71,7 @@ export function PartitionsCard({
                 <Tr key={x.name}>
                   <Td className="font-medium">{x.name}</Td>
                   <Td className="font-mono text-xs">{x.bound}</Td>
-                  <Td className="text-right tabular-nums">{x.rowEstimate?.toLocaleString('ja-JP') ?? '–'}</Td>
+                  <Td className="text-right tabular-nums">{x.rowEstimate?.toLocaleString(numberLocale) ?? '–'}</Td>
                   <Td className="text-right tabular-nums">
                     {x.sizeBytes === null ? '–' : locale.common.bytes(x.sizeBytes)}
                   </Td>

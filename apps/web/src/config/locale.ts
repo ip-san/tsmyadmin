@@ -7,6 +7,9 @@ export type { Locale }
 /** The languages the UI ships with, in the order the switcher lists them (each names itself). */
 export const LOCALE_NAMES = { ja: '日本語', en: 'English' } as const
 export type LocaleCode = keyof typeof LOCALE_NAMES
+/** The BCP 47 tag each language formats numbers and dates with (`Intl`, `toLocaleString`). One line per language. */
+const INTL_LOCALES: Record<LocaleCode, string> = { ja: 'ja-JP', en: 'en-US' }
+export const intlLocaleFor = (code: LocaleCode): string => INTL_LOCALES[code]
 export const LOCALE_CODES = Object.keys(LOCALE_NAMES) as [LocaleCode, ...LocaleCode[]]
 const LocaleCodeSchema = z.enum(LOCALE_CODES)
 
@@ -39,6 +42,9 @@ export const localeCode: LocaleCode = resolveLocaleCode(
   readPreference(LOCALE_PREFERENCE, LocaleCodeSchema.nullable(), null),
   typeof navigator === 'undefined' ? [] : (navigator.languages ?? [navigator.language])
 )
+
+/** The tag for formatting numbers and times in the language of this page. */
+export const numberLocale = intlLocaleFor(localeCode)
 
 /**
  * The strings of the current language. Resolved once at load: every component reads `locale.*` directly, and

@@ -3,6 +3,7 @@ import { isGeneratedColumn, ROW_FUNCTIONS_WITH_ARG } from '@tsmyadmin/shared'
 import { type FormEvent, useEffect, useRef, useState } from 'react'
 import { locale } from '@/config/locale.ts'
 import { cellToEditable, isOpaqueCell } from '@/lib/format.ts'
+import { inputMessage } from '../cells/transform-text.ts'
 import { Button } from '../ui/Button.tsx'
 import { ErrorBox } from '../ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '../ui/Table.tsx'
@@ -131,9 +132,28 @@ export function RowForm({
   }, [pending])
 
   const [filesTooLarge, setFilesTooLarge] = useState(false)
+  const [refused, setRefused] = useState<string[]>([])
+  /** The values the column rules refuse right now (the fields check themselves a moment late; this is at once). */
+  const refusals = (): string[] => {
+    const out: string[] = []
+    rows.forEach((_, row) => {
+      for (const c of columns) {
+        const rule = inputTransforms?.get(c.name)
+        const f = fieldFor(row, c)
+        const typed = !(f.isNull || f.useDefault || f.fn !== '' || f.file !== null)
+        const changed = mode === 'insert' || f.text !== cellToEditable(startOf(row)?.[c.name] ?? null)
+        const message = rule && typed && changed ? inputMessage(rule, f.text) : ''
+        if (message) out.push(`${count > 1 ? locale.rows.inRow(c.name, row + 1) : c.name}: ${message}`)
+      }
+    })
+    return out
+  }
   const submit = (e: FormEvent) => {
     e.preventDefault()
     if (submitted.current || pending) return
+    const refusing = refusals()
+    setRefused(refusing)
+    if (refusing.length > 0) return
     // Every row is its own request: its files together must fit the request body, as base64.
     const heaviest = Math.max(
       0,
@@ -238,6 +258,13 @@ export function RowForm({
           </tbody>
         </Table>
       ))}
+      {refused.length > 0 ? (
+        <ul role="alert" className="list-disc pl-5 text-sm text-red-700 dark:text-red-300">
+          {refused.map((message) => (
+            <li key={message}>{message}</li>
+          ))}
+        </ul>
+      ) : null}
       {filesTooLarge ? (
         <p role="alert" className="text-sm text-red-700 dark:text-red-300">
           {locale.rows.filesTooLarge}

@@ -38,6 +38,8 @@ export function TableList({ db, schema, filter }: { db: string; schema?: string 
     setLimit(step)
   }
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({})
+  // Keyed by where the group is, not by its prefix alone: one prefix can be in several schemas.
+  const groupKey = (prefix: string) => `${db}/${schema ?? ''}/${prefix}`
   const matches = tables.data ? filterTables(tables.data, deferred) : []
   const grouped = navGroupDelimiter !== ''
   const entries = pageEntries(grouped ? groupTables(matches, navGroupDelimiter) : [], limit)
@@ -104,8 +106,8 @@ export function TableList({ db, schema, filter }: { db: string; schema?: string 
                 schema={schema}
                 prefix={e.prefix}
                 tables={e.tables}
-                open={searching || (openGroups[e.prefix] ?? false)}
-                onToggle={() => setOpenGroups((o) => ({ ...o, [e.prefix]: !o[e.prefix] }))}
+                open={searching || (openGroups[groupKey(e.prefix)] ?? false)}
+                onToggle={() => setOpenGroups((o) => ({ ...o, [groupKey(e.prefix)]: !o[groupKey(e.prefix)] }))}
               />
             ) : (
               <li key={e.table.name} style={{ height: ROW_HEIGHT }}>

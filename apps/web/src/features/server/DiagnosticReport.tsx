@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import type { DiagnosticColumn, DiagnosticKind } from '@tsmyadmin/shared'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale, numberLocale } from '@/config/locale.ts'
 import { diagnosticsQuery } from '@/lib/queries.ts'
 
 const t = locale.diagnostics
@@ -24,8 +24,8 @@ function figure(column: DiagnosticColumn, value: string | null): string {
   const n = Number(value)
   if (!Number.isFinite(n)) return value
   return column === 'totalSeconds' || column === 'maxSeconds'
-    ? n.toLocaleString('ja-JP', { maximumFractionDigits: 3 })
-    : n.toLocaleString('ja-JP')
+    ? n.toLocaleString(numberLocale, { maximumFractionDigits: 3 })
+    : n.toLocaleString(numberLocale)
 }
 
 /**

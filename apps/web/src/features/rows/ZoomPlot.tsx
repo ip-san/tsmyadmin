@@ -5,7 +5,7 @@ import { CellValue } from '@/components/cells/CellValue.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale, numberLocale } from '@/config/locale.ts'
 import { niceScale, scatterPoints } from '@/lib/chart-data.ts'
 import { cellToText } from '@/lib/format.ts'
 import { rowsQuery, type TableRef } from '@/lib/queries.ts'
@@ -92,7 +92,7 @@ export function ZoomPlot({
               <g key={`x${tick}`}>
                 <line x1={px(tick)} x2={px(tick)} y1={TOP} y2={HEIGHT - BOTTOM} className="stroke-line" />
                 <text x={px(tick)} y={HEIGHT - BOTTOM + 14} textAnchor="middle" className="fill-ink-sub text-[10px]">
-                  {tick.toLocaleString('ja-JP')}
+                  {tick.toLocaleString(numberLocale)}
                 </text>
               </g>
             ))}
@@ -100,7 +100,7 @@ export function ZoomPlot({
               <g key={`y${tick}`}>
                 <line x1={LEFT} x2={WIDTH - RIGHT} y1={py(tick)} y2={py(tick)} className="stroke-line" />
                 <text x={LEFT - 6} y={py(tick) + 4} textAnchor="end" className="fill-ink-sub text-[10px]">
-                  {tick.toLocaleString('ja-JP')}
+                  {tick.toLocaleString(numberLocale)}
                 </text>
               </g>
             ))}
@@ -183,8 +183,8 @@ export function ZoomPlot({
               {points.map((p) => (
                 <Tr key={p.row}>
                   {labelAt >= 0 ? <Td>{labelOf(p.row)}</Td> : null}
-                  <Td className="text-right tabular-nums">{p.x.toLocaleString('ja-JP')}</Td>
-                  <Td className="text-right tabular-nums">{p.y.toLocaleString('ja-JP')}</Td>
+                  <Td className="text-right tabular-nums">{p.x.toLocaleString(numberLocale)}</Td>
+                  <Td className="text-right tabular-nums">{p.y.toLocaleString(numberLocale)}</Td>
                   <Td>
                     <Button
                       size="sm"

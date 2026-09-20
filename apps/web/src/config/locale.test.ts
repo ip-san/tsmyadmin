@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { LOCALE_NAMES, resolveLocaleCode } from './locale.ts'
+import { intlLocaleFor, LOCALE_NAMES, numberLocale, resolveLocaleCode } from './locale.ts'
 import { en } from './locales/en.ts'
 import { ja } from './locales/ja.ts'
 
@@ -38,5 +38,21 @@ describe('locales', () => {
     expect(resolveLocaleCode(null, ['fr-FR', 'ja-JP'])).toBe('ja')
     expect(resolveLocaleCode(null, [])).toBe('ja')
     expect(resolveLocaleCode('klingon', ['de'])).toBe('ja')
+  })
+})
+
+describe('number and time formats follow the language', () => {
+  it('has a format tag for every language, and English groups digits with commas on a 24-hour clock', () => {
+    for (const code of Object.keys(LOCALE_NAMES))
+      expect(intlLocaleFor(code as keyof typeof LOCALE_NAMES)).toMatch(/^[a-z]{2}-[A-Z]{2}$/)
+    expect((1234567).toLocaleString(intlLocaleFor('en'))).toBe('1,234,567')
+    expect(
+      new Date(Date.UTC(2026, 0, 2, 15, 4, 5)).toLocaleTimeString(intlLocaleFor('en'), {
+        hour12: false,
+        timeZone: 'UTC',
+      })
+    ).toBe('15:04:05')
+    // The page in Japanese (the test setup's language) formats as Japanese.
+    expect(numberLocale).toBe('ja-JP')
   })
 })

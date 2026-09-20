@@ -33,6 +33,11 @@ export function ImportSummary({
             {locale.import.created(result.created.map((c) => `${c.name} ${c.dataType}`).join(', '))}
           </span>
         ) : null}
+        {result.warnings.length > 0 ? (
+          <span className="block text-xs text-amber-900 dark:text-amber-200">
+            {locale.import.rowWarnings(result.warnings.length)}: {result.warnings.join(' / ')}
+          </span>
+        ) : null}
         {result.skipped > 0 ? <span className="block text-xs">{locale.import.skippedRows(result.skipped)}</span> : null}
         {result.skippedColumns.length > 0 ? (
           <span className="block text-xs">{locale.import.skippedColumns(result.skippedColumns.join(', '))}</span>

@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Select } from '@/components/ui/Field.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale, numberLocale } from '@/config/locale.ts'
 import { sessionQuery, statusQuery } from '@/lib/queries.ts'
 import { DiagnosticReport } from './DiagnosticReport.tsx'
 import { MonitorChart } from './MonitorChart.tsx'
@@ -13,7 +13,7 @@ const t = locale.monitor
 
 const formatters = {
   perSecond: (v: number) => t.perSecond(v),
-  count: (v: number) => v.toLocaleString('ja-JP'),
+  count: (v: number) => v.toLocaleString(numberLocale),
   bytesPerSecond: (v: number) => `${locale.common.bytes(v)}/s`,
 }
 

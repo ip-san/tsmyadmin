@@ -405,6 +405,41 @@ class RedisSavedQueries implements SavedItems {
     return after.slice(0, this.limit)
   }
 
+  async update(
+    config: ConnectRequest,
+    kind: SavedItemKind,
+    name: string,
+    change: (current: SavedItem | undefined, all: readonly SavedItem[]) => string | null
+  ): Promise<SavedItem[]> {
+    return this.withLock(config, kind, async () => {
+      const mine = await this.list(config, kind)
+      const body = change(
+        mine.find((q) => q.name === name),
+        mine
+      )
+      return body === null ? mine : this.save(config, kind, name, body)
+    })
+  }
+
+  /**
+   * Runs `run` while holding this account's lock on the kind (a short-lived key), so read-modify-write updates from
+   * every process sharing the Redis take turns. The lock expires on its own: a process that dies holding it delays
+   * the others by a few seconds, not for good.
+   */
+  private async withLock<T>(config: ConnectRequest, kind: SavedItemKind, run: () => Promise<T>): Promise<T> {
+    const lock = `${this.index(config)}:lock:${kind}`
+    const token = randomUUID()
+    for (let attempt = 0; (await this.redis.set(lock, token, 'PX', LOCK_MS, 'NX')) !== 'OK'; attempt++) {
+      if (attempt >= LOCK_TRIES) throw new Error('The stored items are busy: try again')
+      await new Promise((resolve) => setTimeout(resolve, LOCK_WAIT_MS))
+    }
+    try {
+      return await run()
+    } finally {
+      await this.redis.eval(RELEASE_LOCK, 1, lock, token)
+    }
+  }
+
   async remove(config: ConnectRequest, kind: SavedItemKind, id: string): Promise<SavedItem[]> {
     // Scoped to the caller's own index and kind, so an id of another account — or of a bookmark, when deleting a
     // template — matches nothing.
@@ -421,6 +456,15 @@ class RedisSavedQueries implements SavedItems {
  * reason the file store keeps it in its own table: those are capped and pruned, and this must not be.
  */
 /** Writes the value only when what is stored still hashes to the version the caller read. */
+const LOCK_MS = 5000
+const LOCK_WAIT_MS = 15
+const LOCK_TRIES = 400
+/** Deletes the lock only if it is still ours (it may have expired and been taken by someone else). */
+const RELEASE_LOCK = `
+  if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) end
+  return 0
+`
+
 const SET_IF_UNCHANGED = `
 local current = redis.call('GET', KEYS[1])
 if not current then return 0 end

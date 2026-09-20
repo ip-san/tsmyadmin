@@ -1,8 +1,10 @@
 import type { Cell } from '@tsmyadmin/shared'
 import type { Ref } from 'react'
-import { locale } from '@/config/locale.ts'
+import { locale, numberLocale } from '@/config/locale.ts'
 import { MAX_POINTS, niceScale, toNumber } from '@/lib/chart-data.ts'
+import { layoutLegend } from '@/lib/chart-legend.ts'
 import { type Pt, parseTime, polylinePath, timeLabel } from '@/lib/chart-shapes.ts'
+import { ChartLegend } from './ChartLegend.tsx'
 
 const t = locale.sql.chart
 const FILL = ['fill-chart-1', 'fill-chart-2', 'fill-chart-3', 'fill-chart-4', 'fill-chart-5', 'fill-chart-6']
@@ -58,21 +60,28 @@ export function ChartXY({
   if (xs.length === 0) return <p className="text-sm text-ink-sub">{t.noPoints}</p>
   const xScale = kind === 'scatter' ? niceScale(xs, 6, { includeZero: false }) : timeScale(xs)
   const yScale = niceScale(vs, 5, { includeZero: false })
-  const left = Math.max(LEFT, 12 + 6 * Math.max(...yScale.ticks.map((tick) => tick.toLocaleString('ja-JP').length)))
+  const left = Math.max(
+    LEFT,
+    12 + 6 * Math.max(...yScale.ticks.map((tick) => tick.toLocaleString(numberLocale).length))
+  )
   const plotW = WIDTH - left - RIGHT
   const plotH = HEIGHT - TOP - BOTTOM
   const px = (v: number) => left + ((v - xScale.min) / (xScale.max - xScale.min || 1)) * plotW
   const py = (v: number) => TOP + plotH - ((v - yScale.min) / (yScale.max - yScale.min || 1)) * plotH
   const span = xScale.max - xScale.min
+  const legend = layoutLegend(
+    series.map((s) => names[s.column] ?? ''),
+    WIDTH - left
+  )
   return (
     <figure className="overflow-x-auto">
       <figcaption className="sr-only">{t.caption(names[x] ?? '', ys.map((c) => names[c] ?? '').join(', '))}</figcaption>
-      <svg ref={svgRef} width={WIDTH} height={HEIGHT} aria-hidden className="text-ink-sub">
+      <svg ref={svgRef} width={WIDTH} height={HEIGHT + legend.height} aria-hidden className="text-ink-sub">
         {yScale.ticks.map((tick) => (
           <g key={tick}>
             <line x1={left} x2={WIDTH - RIGHT} y1={py(tick)} y2={py(tick)} className="stroke-line" />
             <text x={left - 6} y={py(tick) + 4} textAnchor="end" className="fill-ink-sub text-[10px]">
-              {tick.toLocaleString('ja-JP')}
+              {tick.toLocaleString(numberLocale)}
             </text>
           </g>
         ))}
@@ -84,7 +93,7 @@ export function ChartXY({
             textAnchor="middle"
             className="fill-ink-sub text-[10px]"
           >
-            {kind === 'scatter' ? tick.toLocaleString('ja-JP') : timeLabel(tick, span)}
+            {kind === 'scatter' ? tick.toLocaleString(numberLocale) : timeLabel(tick, span)}
           </text>
         ))}
         <line x1={left} x2={WIDTH - RIGHT} y1={TOP + plotH} y2={TOP + plotH} className="stroke-line-strong" />
@@ -102,6 +111,7 @@ export function ChartXY({
             ))}
           </g>
         ))}
+        <ChartLegend items={legend.items} x={left} y={HEIGHT} />
       </svg>
     </figure>
   )

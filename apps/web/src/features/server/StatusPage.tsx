@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale, numberLocale } from '@/config/locale.ts'
 import { serverInfoQuery, sessionQuery, statusQuery, variablesQuery } from '@/lib/queries.ts'
 import { advise, fill } from './advisor.ts'
 import { queryStatistics, statusCategory, traffic } from './insights.ts'
@@ -63,14 +63,14 @@ export function StatusPage() {
                 <Tr key={f.key}>
                   <Td>{t.traffic[f.key]}</Td>
                   <Td className="text-right tabular-nums">
-                    {f.kind === 'bytes' ? locale.common.bytes(f.value) : f.value.toLocaleString('ja-JP')}
+                    {f.kind === 'bytes' ? locale.common.bytes(f.value) : f.value.toLocaleString(numberLocale)}
                   </Td>
                   <Td className="text-right tabular-nums">
                     {f.perHour === null
                       ? ''
                       : f.kind === 'bytes'
                         ? locale.common.bytes(f.perHour)
-                        : Math.round(f.perHour).toLocaleString('ja-JP')}
+                        : Math.round(f.perHour).toLocaleString(numberLocale)}
                   </Td>
                 </Tr>
               ))}
@@ -96,7 +96,7 @@ export function StatusPage() {
               {statements.map((s) => (
                 <Tr key={s.name}>
                   <Td className="font-mono text-xs">{s.name}</Td>
-                  <Td className="text-right tabular-nums">{s.count.toLocaleString('ja-JP')}</Td>
+                  <Td className="text-right tabular-nums">{s.count.toLocaleString(numberLocale)}</Td>
                   <Td className="text-right tabular-nums">{(s.share * 100).toFixed(1)}%</Td>
                 </Tr>
               ))}
