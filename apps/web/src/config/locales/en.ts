@@ -489,6 +489,7 @@ export const en = {
     editHintMultiline: 'Ctrl/⌘ + Enter saves, Esc cancels',
     fkLink: (table: string, column: string) => `Open the referenced row in ${table}.${column}`,
     reverseLink: (table: string, column: string) => `Show the rows referencing this one through ${table}.${column}`,
+    reverseMany: (n: number) => `Show the ${n} tables referencing this row`,
     columns: 'Columns',
     columnsShown: (shown: number, total: number) => `Columns ${shown}/${total}`,
     columnsAll: 'Show all',
@@ -2096,7 +2097,7 @@ export const en = {
   },
   gis: {
     title: 'Show as shapes (GIS)',
-    hint: 'Draws the spatial values of the rows on this page, to scale in their own coordinates (there is no map behind them). Hover a shape to see the label column.',
+    hint: 'Draws the spatial values of the rows on this page, to scale in their own coordinates (there is no map behind them). Hover a shape to see the label column; scroll to zoom and drag to move.',
     column: 'Spatial column',
     label: 'Label',
     noLabel: '(none)',
@@ -2107,6 +2108,15 @@ export const en = {
       unreadable > 0
         ? `${plural(shapes, 'shape', 'shapes')} (${plural(unreadable, 'value', 'values')} that could not be read left out)`
         : plural(shapes, 'shape', 'shapes'),
+    includeLarge: (n: number) =>
+      `Include the ${plural(n, 'shape', 'shapes')} far larger than the rest (leaving them out keeps the others from shrinking to dots)`,
+    cut: (n: number) => `${plural(n, 'value', 'values')} too large: only the start reached this page (over 64 KB)`,
+    loadCut: (n: number) => `Load them whole (${n})`,
+    loading: (done: number, of: number) => `Loading ${done} / ${of}`,
+    unloadable: (n: number) => `${plural(n, 'value', 'values')} could not be loaded`,
+    zoomIn: 'Zoom in',
+    zoomOut: 'Zoom out',
+    zoomReset: 'Show all',
     caption: (column: string, shapes: number) => `${plural(shapes, 'shape', 'shapes')} of ${column}`,
   },
   central: {

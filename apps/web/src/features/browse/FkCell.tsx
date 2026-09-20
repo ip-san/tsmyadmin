@@ -4,7 +4,11 @@ import { CornerDownLeft, ExternalLink } from 'lucide-react'
 import { CellValue } from '@/components/cells/CellValue.tsx'
 import { useCellDisplay } from '@/components/cells/cell-display.ts'
 import { locale } from '@/config/locale.ts'
+import { cn } from '@/lib/cn.ts'
 import { fkTarget, reverseTarget } from './fk-links.ts'
+
+/** Up to this many referencing tables get an icon of their own; more are folded into one list. */
+const MAX_INLINE_REVERSE = 2
 
 /** A cell value, followed by a link to the referenced row when the column is a single-column foreign key. */
 export function FkCell({
@@ -43,20 +47,54 @@ export function FkCell({
           <ExternalLink className="size-3" aria-hidden />
         </Link>
       ) : null}
-      {reverseLinks.map(({ ref, target: t }) =>
-        t ? (
-          <Link
-            key={ref.name}
-            to="/db/$db/table/$table"
-            params={{ db: t.db, table: t.table }}
-            search={{ ...(t.schema ? { schema: t.schema } : {}), filters: t.filters, page: 1 }}
-            className={linkClass}
-            aria-label={locale.browse.reverseLink(ref.fromTable, ref.fromColumns[0] ?? '')}
-            title={locale.browse.reverseLink(ref.fromTable, ref.fromColumns[0] ?? '')}
+      {reverseLinks.length > MAX_INLINE_REVERSE ? (
+        // A key that many tables point at (a company id): one icon each would run out of the cell and over the next.
+        <details className="inline-block align-middle">
+          <summary
+            className={cn(
+              linkClass,
+              'cursor-pointer list-none gap-0.5 px-1 text-xs [&::-webkit-details-marker]:hidden'
+            )}
+            aria-label={locale.browse.reverseMany(reverseLinks.length)}
+            title={locale.browse.reverseMany(reverseLinks.length)}
           >
             <CornerDownLeft className="size-3" aria-hidden />
-          </Link>
-        ) : null
+            {reverseLinks.length}
+          </summary>
+          <ul className="mt-1 font-sans text-xs">
+            {reverseLinks.map(({ ref, target: t }) =>
+              t ? (
+                <li key={ref.name}>
+                  <Link
+                    to="/db/$db/table/$table"
+                    params={{ db: t.db, table: t.table }}
+                    search={{ ...(t.schema ? { schema: t.schema } : {}), filters: t.filters, page: 1 }}
+                    className="inline-flex min-h-6 items-center text-blue-600 hover:underline dark:text-blue-300"
+                    aria-label={locale.browse.reverseLink(ref.fromTable, ref.fromColumns[0] ?? '')}
+                  >
+                    {ref.fromTable}.{ref.fromColumns[0]}
+                  </Link>
+                </li>
+              ) : null
+            )}
+          </ul>
+        </details>
+      ) : (
+        reverseLinks.map(({ ref, target: t }) =>
+          t ? (
+            <Link
+              key={ref.name}
+              to="/db/$db/table/$table"
+              params={{ db: t.db, table: t.table }}
+              search={{ ...(t.schema ? { schema: t.schema } : {}), filters: t.filters, page: 1 }}
+              className={linkClass}
+              aria-label={locale.browse.reverseLink(ref.fromTable, ref.fromColumns[0] ?? '')}
+              title={locale.browse.reverseLink(ref.fromTable, ref.fromColumns[0] ?? '')}
+            >
+              <CornerDownLeft className="size-3" aria-hidden />
+            </Link>
+          ) : null
+        )
       )}
     </span>
   )

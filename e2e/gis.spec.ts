@@ -65,5 +65,61 @@ for (const t of TARGETS) {
         await sql(page, t, `DROP TABLE IF EXISTS ${table}`)
       }
     })
+
+    test('keeps a whole-world rectangle out of the frame, loads a value cut at 64 KB, and zooms', async ({ page }) => {
+      await login(page, t)
+      const table = `e2e_gisfit_${Date.now().toString(36)}`
+      const ring = Array.from({ length: 5000 }, (_, i) => {
+        const a = (i / 5000) * 2 * Math.PI
+        return [(127 + 0.5 * Math.cos(a)).toFixed(6), (26 + 0.5 * Math.sin(a)).toFixed(6)]
+      })
+      const closed = [...ring, ring[0] as string[]]
+      const mysql = t.dialect === 'mysql'
+      const square = (x: number, y: number, n: number) =>
+        mysql
+          ? `ST_GeomFromText('POLYGON((${x} ${y}, ${x + n} ${y}, ${x + n} ${y + n}, ${x} ${y}))')`
+          : `'((${x},${y}),(${x + n},${y}),(${x + n},${y + n}))'`
+      const big = mysql
+        ? `ST_GeomFromText('POLYGON((${closed.map(([x, y]) => `${x} ${y}`).join(',')}))')`
+        : `'(${ring.map(([x, y]) => `(${x},${y})`).join(',')})'`
+      await sql(
+        page,
+        t,
+        `CREATE TABLE ${table} (id INT PRIMARY KEY, name VARCHAR(20), shape ${mysql ? 'GEOMETRY' : 'POLYGON'})`
+      )
+      await sql(
+        page,
+        t,
+        `INSERT INTO ${table} VALUES (1, 'world', ${square(-180, -90, 180)}), (2, 'a', ${square(127, 26, 0.2)}), ` +
+          `(3, 'b', ${square(127.3, 26, 0.2)}), (4, 'c', ${square(127.6, 26, 0.2)}), (5, 'd', ${square(127.9, 26, 0.2)}), ` +
+          `(6, 'okinawa', ${big})`
+      )
+      try {
+        await page.goto(tableUrl(t, table))
+        await page.getByText('全 6 行').waitFor()
+        await page.getByText('図形で表示（GIS）').click()
+        // The world rectangle is left out of the frame (offered as a checkbox), and the large value is not "unreadable".
+        await expect(page.getByText('4 件の図形', { exact: true })).toBeVisible()
+        await expect(page.getByLabel(/範囲が広すぎる図形 1 件も含めて表示/)).not.toBeChecked()
+        await expect(
+          page.getByText('1 件は大きすぎて、このページには途中までしか届いていません（64 KB 超）')
+        ).toBeVisible()
+        // Loading it whole draws it.
+        await page.getByRole('button', { name: '全体を読み込む（1 件）' }).click()
+        await expect(page.getByText('5 件の図形', { exact: true })).toBeVisible()
+        await expect(page.getByRole('img', { name: 'shape の図形 5 件' }).locator('title')).toContainText(['okinawa'])
+        await page.getByLabel(/範囲が広すぎる図形 1 件も含めて表示/).check()
+        await expect(page.getByText('6 件の図形', { exact: true })).toBeVisible()
+        // Zoom and back.
+        const picture = page.getByRole('img', { name: 'shape の図形 6 件' })
+        const before = await picture.locator('path').first().getAttribute('d')
+        await page.getByRole('button', { name: '拡大' }).click()
+        expect(await picture.locator('path').first().getAttribute('d')).not.toBe(before)
+        await page.getByRole('button', { name: '全体を表示' }).click()
+        expect(await picture.locator('path').first().getAttribute('d')).toBe(before)
+      } finally {
+        await sql(page, t, `DROP TABLE IF EXISTS ${table}`)
+      }
+    })
   })
 }

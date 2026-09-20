@@ -1,4 +1,5 @@
 import type { Cell, Dialect } from '@tsmyadmin/shared'
+import { isBinaryCell, isTruncatedCell, MAX_BINARY_BYTES } from '@tsmyadmin/shared'
 
 type Point = [number, number]
 
@@ -11,7 +12,15 @@ export type Shape =
   | { type: 'collection'; parts: Shape[] }
 
 /** How a column's values arrive: WKB bytes, PostGIS hex EWKB, or PostgreSQL's own geometric text. */
-type Encoding = 'mysql-wkb' | 'ewkb-hex' | 'pg-point' | 'pg-lseg' | 'pg-box' | 'pg-path' | 'pg-polygon' | 'pg-circle'
+export type Encoding =
+  | 'mysql-wkb'
+  | 'ewkb-hex'
+  | 'pg-point'
+  | 'pg-lseg'
+  | 'pg-box'
+  | 'pg-path'
+  | 'pg-polygon'
+  | 'pg-circle'
 
 const MYSQL_SPATIAL =
   /^(geometry|point|linestring|polygon|multipoint|multilinestring|multipolygon|geometrycollection|geomcollection)\b/i
@@ -44,6 +53,36 @@ export function parseShape(encoding: Encoding, cell: Cell): Shape | null {
       shape = readWkb(base64Bytes(cell.$bin).subarray(4))
     } else if (typeof cell !== 'string') return null
     else shape = encoding === 'ewkb-hex' ? readWkb(hexBytes(cell)) : readNative(encoding, cell)
+    return shape && drawable(shape) ? shape : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * A value the page holds only the start of: text cut to the display limit, or binary that reached the browse limit
+ * (a longer value is cut without a marker, so a value of exactly that many bytes counts as cut too). Its whole
+ * value is one download away, so such a value is not "unreadable".
+ */
+export function isCutCell(cell: Cell): boolean {
+  if (isTruncatedCell(cell)) return true
+  if (!isBinaryCell(cell)) return false
+  const padding = cell.$bin.endsWith('==') ? 2 : cell.$bin.endsWith('=') ? 1 : 0
+  return (cell.$bin.length * 3) / 4 - padding >= MAX_BINARY_BYTES
+}
+
+/** A whole value fetched on its own: the bytes MySQL keeps (SRID first, then WKB), or the text of the others. */
+export function parseWholeValue(encoding: Encoding, value: Uint8Array | string): Shape | null {
+  try {
+    let shape: Shape | null
+    if (typeof value !== 'string') shape = encoding === 'mysql-wkb' ? readWkb(value.subarray(4)) : null
+    else
+      shape =
+        encoding === 'ewkb-hex'
+          ? readWkb(hexBytes(value))
+          : encoding === 'mysql-wkb'
+            ? null
+            : readNative(encoding, value)
     return shape && drawable(shape) ? shape : null
   } catch {
     return null

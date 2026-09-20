@@ -58,6 +58,7 @@ import {
   isTruncatedCell,
   isViewKind,
   LIST_OPS,
+  MAX_BINARY_BYTES,
   MAX_TEXT_CHARS,
 } from '@tsmyadmin/shared'
 import { mysqlLiteral, pgLiteral } from './sql/literal.ts'
@@ -209,7 +210,8 @@ export function wrapReadOnly(sql: string, limit: number, dialect: Dialect = 'pos
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000
-export const MAX_BINARY_BYTES = 64 * 1024
+
+export { MAX_BINARY_BYTES }
 /** The largest single value readCell hands over (a download, held in memory while it is sent). */
 export const READ_CELL_MAX_BYTES = 64 * 1024 * 1024
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bounds, parseShape, readWkb, spatialEncoding } from './geometry.ts'
+import { bounds, isCutCell, parseShape, parseWholeValue, readWkb, spatialEncoding } from './geometry.ts'
 
 /** WKB built by hand: byte order, type code, then the numbers, so the tests do not trust the reader to build it. */
 function wkb(little: boolean, type: number, body: (number | 'u32')[], extra: { srid?: number } = {}): Uint8Array {
@@ -164,5 +164,28 @@ describe('geometry', () => {
       ])
     ).toEqual({ minX: -1, minY: 0, maxX: 7, maxY: 7 })
     expect(bounds([])).toBeNull()
+  })
+})
+
+describe('values cut at the browse limit', () => {
+  const bytes = (n: number) => btoa('a'.repeat(n))
+
+  it('tells a value that reached the 64 KB limit from one that fits, and text cut for display', () => {
+    expect(isCutCell({ $bin: bytes(65535) })).toBe(false)
+    expect(isCutCell({ $bin: bytes(65536) })).toBe(true)
+    expect(isCutCell({ $bin: bytes(70000) })).toBe(true)
+    expect(isCutCell({ $text: 'abc', length: 900000 })).toBe(true)
+    expect(isCutCell('POLYGON')).toBe(false)
+    expect(isCutCell(null)).toBe(false)
+  })
+
+  it('reads a whole value fetched on its own, in the form each dialect keeps', () => {
+    const point = wkb(true, 1, [3, 4])
+    const withSrid = new Uint8Array([0, 0, 0, 0, ...point])
+    expect(parseWholeValue('mysql-wkb', withSrid)).toEqual({ type: 'point', at: [3, 4] })
+    expect(parseWholeValue('ewkb-hex', hex(point))).toEqual({ type: 'point', at: [3, 4] })
+    expect(parseWholeValue('pg-polygon', '((0,0),(1,0),(1,1))')).toMatchObject({ type: 'polygon' })
+    expect(parseWholeValue('mysql-wkb', 'text')).toBeNull()
+    expect(parseWholeValue('mysql-wkb', new Uint8Array([0, 0, 0, 0, 1]))).toBeNull()
   })
 })

@@ -275,6 +275,35 @@ for (const t of TARGETS) {
       }
     })
 
+    test('a key that many tables reference folds them into one list', async ({ page }) => {
+      await login(page, t)
+      const stamp = Date.now().toString(36)
+      const parent = `e2e_a11yfk_${stamp}`
+      const children = [1, 2, 3, 4].map((n) => `${parent}_c${n}`)
+      const run = (sql: string) =>
+        page.request.post(`/api/databases/${t.database}/sql`, {
+          data: { sql, ...(t.schema ? { schema: t.schema } : {}) },
+        })
+      await run(`CREATE TABLE ${parent} (id INT PRIMARY KEY)`)
+      await run(`INSERT INTO ${parent} VALUES (1)`)
+      for (const c of children) {
+        await run(`CREATE TABLE ${c} (id INT PRIMARY KEY, p_id INT, FOREIGN KEY (p_id) REFERENCES ${parent} (id))`)
+      }
+      try {
+        await page.goto(tableUrl(t, parent))
+        const fold = page.locator('summary[aria-label="この行を参照している 4 件のテーブルを表示"]')
+        await fold.waitFor()
+        // One control for the four tables (not four icons running over the next cell), listing them when opened.
+        await expect(page.getByRole('link', { name: /でこの行を参照している行を表示/ })).toHaveCount(0)
+        await fold.click()
+        await expect(page.getByRole('link', { name: /でこの行を参照している行を表示/ })).toHaveCount(4)
+        await scan(page)
+      } finally {
+        for (const c of children) await run(`DROP TABLE IF EXISTS ${c}`)
+        await run(`DROP TABLE IF EXISTS ${parent}`)
+      }
+    })
+
     test('GIS view of a page of shapes', async ({ page }) => {
       await login(page, t)
       const table = `e2e_a11ygis_${Date.now().toString(36)}`

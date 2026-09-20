@@ -484,6 +484,7 @@ export const ja = {
     editHintMultiline: 'Ctrl/⌘ + Enter で保存、Esc でキャンセル',
     fkLink: (table: string, column: string) => `参照先 ${table}.${column} を開く`,
     reverseLink: (table: string, column: string) => `${table}.${column} でこの行を参照している行を表示`,
+    reverseMany: (n: number) => `この行を参照している ${n} 件のテーブルを表示`,
     columns: 'カラム',
     columnsShown: (shown: number, total: number) => `カラム ${shown}/${total}`,
     columnsAll: 'すべて表示',
@@ -2071,7 +2072,7 @@ export const ja = {
   },
   gis: {
     title: '図形で表示（GIS）',
-    hint: 'このページの行の空間データを、座標どおりの縮尺で描きます（背景の地図はありません）。図形にポインタを重ねると、ラベルのカラムの値が出ます。',
+    hint: 'このページの行の空間データを、座標どおりの縮尺で描きます（背景の地図はありません）。図形にポインタを重ねると、ラベルのカラムの値が出ます。ホイールで拡大・縮小、ドラッグで動かせます。',
     column: '空間カラム',
     label: 'ラベル',
     noLabel: '（なし）',
@@ -2082,6 +2083,16 @@ export const ja = {
       unreadable > 0
         ? `${shapes.toLocaleString('ja-JP')} 件の図形（読み取れない値 ${unreadable.toLocaleString('ja-JP')} 件は除外）`
         : `${shapes.toLocaleString('ja-JP')} 件の図形`,
+    includeLarge: (n: number) =>
+      `範囲が広すぎる図形 ${n.toLocaleString('ja-JP')} 件も含めて表示（外していると、ほかの図形が小さくなりすぎません）`,
+    cut: (n: number) =>
+      `${n.toLocaleString('ja-JP')} 件は大きすぎて、このページには途中までしか届いていません（64 KB 超）`,
+    loadCut: (n: number) => `全体を読み込む（${n.toLocaleString('ja-JP')} 件）`,
+    loading: (done: number, of: number) => `読み込み中 ${done} / ${of}`,
+    unloadable: (n: number) => `${n.toLocaleString('ja-JP')} 件は読み込めませんでした`,
+    zoomIn: '拡大',
+    zoomOut: '縮小',
+    zoomReset: '全体を表示',
     caption: (column: string, shapes: number) => `${column} の図形 ${shapes.toLocaleString('ja-JP')} 件`,
   },
   central: {
