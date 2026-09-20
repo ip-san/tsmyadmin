@@ -110,15 +110,21 @@ export function SqlFields({
               ))}
             </Select>
           </Field>
-          <ExportCheck checked={options.columnNames} disabled={!write} onChange={(columnNames) => set({ columnNames })}>
-            {t.columnNames}
-          </ExportCheck>
-          <ExportCheck checked={options.extended} disabled={!write} onChange={(extended) => set({ extended })}>
-            {t.extended}
-          </ExportCheck>
-          <ExportCheck checked={options.ignore} disabled={!write} onChange={(ignore) => set({ ignore })}>
-            {mysql ? t.ignoreMysql : t.ignorePostgres}
-          </ExportCheck>
+          <div className="mt-5 flex min-h-[2.375rem] flex-wrap items-center gap-x-4 gap-y-1">
+            <ExportCheck
+              checked={options.columnNames}
+              disabled={!write}
+              onChange={(columnNames) => set({ columnNames })}
+            >
+              {t.columnNames}
+            </ExportCheck>
+            <ExportCheck checked={options.extended} disabled={!write} onChange={(extended) => set({ extended })}>
+              {t.extended}
+            </ExportCheck>
+            <ExportCheck checked={options.ignore} disabled={!write} onChange={(ignore) => set({ ignore })}>
+              {mysql ? t.ignoreMysql : t.ignorePostgres}
+            </ExportCheck>
+          </div>
           <Field id="export-max-query" label={t.maxQuery} hint={t.maxQueryHint}>
             <Input
               id="export-max-query"

@@ -57,7 +57,7 @@ export function ReplaceForm({ tableRef }: { tableRef: TableRef }) {
         <Field id="replace-with" label={t.with}>
           <Input id="replace-with" value={replace} onChange={(e) => setReplace(e.target.value)} />
         </Field>
-        <label className="flex items-center gap-1 self-center text-sm text-ink" title={t.regexHint}>
+        <label className="flex min-h-[2.375rem] items-center gap-1 text-sm text-ink" title={t.regexHint}>
           <input type="checkbox" checked={regex} onChange={(e) => setRegex(e.target.checked)} />
           {t.regex}
         </label>

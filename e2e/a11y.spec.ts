@@ -255,9 +255,14 @@ for (const t of TARGETS) {
       await scan(page)
       for (const sub of ['import', 'export']) {
         await page.goto(t.schema ? `/db/${t.database}/${sub}?schema=${t.schema}` : `/db/${t.database}/${sub}`)
-        await page.getByRole('radio', { name: 'CSV', exact: true }).check()
-        await scan(page)
+        for (const format of ['SQL', 'CSV']) {
+          await page.getByRole('radio', { name: format, exact: true }).check()
+          await scan(page)
+        }
       }
+      await page.goto('/settings')
+      await page.getByRole('heading', { name: '設定' }).first().waitFor()
+      await scan(page)
       await page.goto(tableUrl(t, 'users', '/operations'))
       await page.getByRole('button', { name: 'テーブルを削除…' }).waitFor()
       await scan(page)

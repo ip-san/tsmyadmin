@@ -12,15 +12,18 @@ function Check({
   checked,
   onChange,
   disabled,
+  besideField,
   children,
 }: {
   checked: boolean
   onChange: (on: boolean) => void
   disabled?: boolean
+  /** In a row of labelled fields: lined up with their controls (a label above them is 1.25rem; a control 2.375rem). */
+  besideField?: boolean
   children: ReactNode
 }) {
   return (
-    <label className="flex items-center gap-1">
+    <label className={besideField ? 'mt-5 flex min-h-[2.375rem] items-center gap-1' : 'flex items-center gap-1'}>
       <input
         type="checkbox"
         checked={checked}
@@ -140,7 +143,7 @@ export function ImportOptionFields({
               ))}
             </Select>
           </Field>
-          <Check checked={options.header} onChange={(header) => set({ header })}>
+          <Check besideField checked={options.header} onChange={(header) => set({ header })}>
             {t.header}
           </Check>
         </div>
@@ -194,7 +197,7 @@ export function ImportOptionFields({
               ))}
             </Select>
           </Field>
-          <Check checked={options.skipBlank} onChange={(skipBlank) => set({ skipBlank })}>
+          <Check besideField checked={options.skipBlank} onChange={(skipBlank) => set({ skipBlank })}>
             {t.skipBlank}
           </Check>
           {defaultsOnly || options.createTable ? null : (
@@ -210,7 +213,7 @@ export function ImportOptionFields({
             </Field>
           )}
           {canCreate && !defaultsOnly ? (
-            <Check checked={options.createTable} onChange={(createTable) => set({ createTable })}>
+            <Check besideField checked={options.createTable} onChange={(createTable) => set({ createTable })}>
               {t.createTable}
             </Check>
           ) : null}

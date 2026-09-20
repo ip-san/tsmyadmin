@@ -200,7 +200,7 @@ export function AppShell({
           data-scroll-root
           hidden={collapsed}
           style={{ '--nav-width': `${navWidth}px` } as React.CSSProperties}
-          className="absolute inset-y-0 left-0 z-20 mt-[49px] w-64 shrink-0 overflow-y-auto border-r border-line bg-surface shadow-lg md:static md:mt-0 md:w-[var(--nav-width)] md:shadow-none print:hidden"
+          className="absolute inset-y-0 left-0 z-20 mt-[49px] w-64 shrink-0 overflow-y-auto border-r border-line bg-surface shadow-lg md:relative md:mt-0 md:w-[var(--nav-width)] md:shadow-none print:hidden"
           aria-label={locale.nav.tree}
         >
           {sidebar}
@@ -208,7 +208,12 @@ export function AppShell({
         {!collapsed ? <SidebarResizer width={navWidth} onChange={setNavWidth} onCommit={keepNavWidth} /> : null}
         <div className="flex min-w-0 flex-1 flex-col print:block">
           <SessionExpiryNotice ttlSeconds={session.ttlSeconds} />
-          <main id="main" className="min-h-0 min-w-0 flex-1 overflow-y-auto p-4 print:overflow-visible print:p-0">
+          {/* `relative`: an `sr-only` element (absolute) inside a scrolling pane would otherwise be placed against the
+            page and stretch it, so the whole document scrolls past the end of the content. */}
+          <main
+            id="main"
+            className="relative min-h-0 min-w-0 flex-1 overflow-y-auto p-4 print:overflow-visible print:p-0"
+          >
             {children}
           </main>
           {dock && docked && !consoleHidden ? (
@@ -225,7 +230,7 @@ export function AppShell({
                   <X className="size-4" aria-hidden />
                 </Button>
               </div>
-              <div className="min-h-0 flex-1 overflow-y-auto p-4">{dock}</div>
+              <div className="relative min-h-0 flex-1 overflow-y-auto p-4">{dock}</div>
             </section>
           ) : null}
         </div>

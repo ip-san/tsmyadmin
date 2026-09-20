@@ -8,6 +8,9 @@ import type { Page } from '@playwright/test'
  * - two controls drawn on top of each other;
  * - the page scrolling sideways (naming the element that sticks out);
  * - a button, label or cell whose text is cut off or spills out of its box;
+ * - a checkbox beside labelled fields that is not level with their controls (it drifts up to the label row);
+ * - the page itself taller than the window inside the app shell (an absolutely placed element stretching it, so the
+ *   page scrolls past the end of the content);
  * - the same id used twice (a `<label for>` then points at the wrong control);
  * - placeholders that leaked into the text (`undefined`, `NaN`, `[object Object]`, `Invalid Date`).
  * Runs in the page, so it costs one evaluate per screen. Each finding is one line naming the element.
@@ -46,29 +49,50 @@ export async function layoutViolations(page: Page): Promise<string[]> {
     for (const row of document.querySelectorAll('div, form, section')) {
       if (getComputedStyle(row).display !== 'flex' || !visible(row)) continue
       const kids = [...row.children].filter((k) => visible(k) && exposed(k))
-      const fields = kids.filter((k) => k.querySelector(':scope > label[for]') && controlOf(k))
-      const first = fields[0]
-      if (!first) continue
-      const lineTop = first.getBoundingClientRect()
-      const level = fields.filter((f) => {
-        const r = f.getBoundingClientRect()
-        return r.top < lineTop.bottom && r.bottom > lineTop.top
-      })
-      const tops = level.map((f) => (controlOf(f) as Element).getBoundingClientRect().top)
-      if (level.length > 1 && Math.max(...tops) - Math.min(...tops) > 2) {
-        out.push(`fields in a row are not level: ${level.map((f) => name(controlOf(f) as Element)).join(', ')}`)
+      const isField = (k: Element) => k.querySelector(':scope > label[for]') !== null && controlOf(k) !== null
+      // Wrapped rows are judged line by line: the children that overlap vertically share a line.
+      const lines: Element[][] = []
+      let reach = Number.NEGATIVE_INFINITY
+      for (const k of [...kids].sort((x, y) => x.getBoundingClientRect().top - y.getBoundingClientRect().top)) {
+        const r = k.getBoundingClientRect()
+        const line = lines[lines.length - 1]
+        if (line && r.top < reach - 1) {
+          line.push(k)
+          reach = Math.max(reach, r.bottom)
+        } else {
+          lines.push([k])
+          reach = r.bottom
+        }
       }
-      const anchor = controlOf(first)?.getBoundingClientRect()
-      if (!anchor) continue
-      for (const k of kids) {
-        if (k.tagName !== 'BUTTON') continue
-        const b = k.getBoundingClientRect()
-        if (
-          b.top >= lineTop.top &&
-          b.top < lineTop.bottom &&
-          Math.abs(b.top + b.height / 2 - (anchor.top + anchor.height / 2)) > 4
-        ) {
-          out.push(`button is not level with the field beside it: ${name(k)}`)
+      for (const line of lines) {
+        const fields = line.filter(isField)
+        const first = fields[0]
+        if (!first) continue
+        // Fields side by side: their controls must start at the same height.
+        const tops = fields.map((f) => (controlOf(f) as Element).getBoundingClientRect().top)
+        if (fields.length > 1 && Math.max(...tops) - Math.min(...tops) > 2) {
+          out.push(`fields in a row are not level: ${fields.map((f) => name(controlOf(f) as Element)).join(', ')}`)
+        }
+        const anchor = (controlOf(first) as Element).getBoundingClientRect()
+        const middle = anchor.top + anchor.height / 2
+        for (const k of line) {
+          if (fields.includes(k)) continue
+          const r = k.getBoundingClientRect()
+          if (k.tagName === 'BUTTON') {
+            // A button beside a field: level with the field's control.
+            if (Math.abs(r.top + r.height / 2 - middle) > 4) {
+              out.push(`button is not level with the field beside it: ${name(k)}`)
+            }
+            continue
+          }
+          // A checkbox with no label field of its own: centred on the controls beside it.
+          const box = k.querySelector('input[type=checkbox], input[type=radio]')
+          if (!box || k.querySelector('legend, select, input:not([type=checkbox]):not([type=radio]), textarea'))
+            continue
+          const c = box.getBoundingClientRect()
+          if (Math.abs(c.top + c.height / 2 - middle) > 8) {
+            out.push(`checkbox is not level with the fields beside it: ${name(k)}`)
+          }
         }
       }
     }
@@ -104,6 +128,20 @@ export async function layoutViolations(page: Page): Promise<string[]> {
         .map(name)
       out.push(
         `page scrolls sideways: ${root.scrollWidth}px of content in ${root.clientWidth}px${sticking.length ? `, sticking out: ${sticking.join(', ')}` : ''}`
+      )
+    }
+
+    // In the app shell the panes scroll, never the page: a taller document means something escaped its pane.
+    if (document.querySelector('aside[data-scroll-root]') && root.scrollHeight > root.clientHeight + 1) {
+      const escaped = [...document.body.querySelectorAll('*')]
+        .filter(
+          (el) =>
+            el.getBoundingClientRect().bottom > root.clientHeight + 1 && getComputedStyle(el).position === 'absolute'
+        )
+        .slice(0, 3)
+        .map(name)
+      out.push(
+        `page is taller than the window in the app shell: ${root.scrollHeight}px in ${root.clientHeight}px${escaped.length ? `, escaping: ${escaped.join(', ')}` : ''}`
       )
     }
 

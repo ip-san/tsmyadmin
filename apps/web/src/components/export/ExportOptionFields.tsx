@@ -130,7 +130,7 @@ export function OutputFields({
             <option value="zip">{t.compressions.zip}</option>
           </Select>
         </Field>
-        <ExportCheck checked={options.filePerTable} onChange={(filePerTable) => set({ filePerTable })}>
+        <ExportCheck besideField checked={options.filePerTable} onChange={(filePerTable) => set({ filePerTable })}>
           {filePerLabel}
         </ExportCheck>
         <Field id="export-charset" label={t.charset}>
