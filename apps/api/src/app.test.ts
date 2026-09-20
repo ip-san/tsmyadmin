@@ -97,6 +97,7 @@ interface HarnessOptions {
   remoteAddress?: (c: { req: { header: (name: string) => string | undefined } }) => string | undefined
   servers?: AppConfig['servers']
   logger?: Logger
+  discover?: () => Promise<AppConfig['servers']>
 }
 
 /** Development defaults from loadConfig, overridden per test. */
@@ -119,6 +120,7 @@ function harness(adapter: FakeAdapter = fixtureAdapter(), options: HarnessOption
       ...(options.now ? { now: options.now } : {}),
       ...(options.remoteAddress ? { remoteAddress: options.remoteAddress } : {}),
       ...(options.logger ? { logger: options.logger } : {}),
+      ...(options.discover ? { discover: options.discover } : {}),
     }
   )
   let cookie = ''
@@ -561,6 +563,39 @@ describe('server presets', () => {
     const none = harness()
     stores.push(none.store)
     expect(await (await none.app.request('/api/servers')).json()).toEqual([])
+  })
+
+  it('adds the discovered containers, and lets a login reach exactly their published host:port', async () => {
+    const found = [{ name: 'docker: shop/mysql', dialect: 'mysql' as const, host: '127.0.0.1', port: 13306 }]
+    const h = harness(fixtureAdapter(), {
+      allowedHosts: ['db'],
+      servers: [{ name: 'prod', dialect: 'postgres', host: 'db.internal', port: 5432 }],
+      discover: async () => found,
+    })
+    stores.push(h.store)
+    const names = ((await (await h.app.request('/api/servers')).json()) as { name: string }[]).map((s) => s.name)
+    expect(names).toEqual(['prod', 'docker: shop/mysql'])
+    expect((await h.login({ ...LOGIN, host: '127.0.0.1', port: 13306 })).status).toBe(201)
+    // Only what is running: another port on the same host, or another host, is still refused.
+    expect((await h.login({ ...LOGIN, host: '127.0.0.1', port: 9999 })).status).toBe(403)
+    expect((await h.login({ ...LOGIN, host: 'elsewhere', port: 13306 })).status).toBe(403)
+  })
+
+  it('ignores a discovered container named like a configured preset, and asks Docker only when the list says no', async () => {
+    let asked = 0
+    const h = harness(fixtureAdapter(), {
+      servers: [{ name: 'same', dialect: 'mysql', host: 'db', port: 3306 }],
+      discover: async () => {
+        asked++
+        return [{ name: 'same', dialect: 'postgres' as const, host: 'other', port: 5432 }]
+      },
+    })
+    stores.push(h.store)
+    const list = (await (await h.app.request('/api/servers')).json()) as { host: string }[]
+    expect(list.map((s) => s.host)).toEqual(['db'])
+    asked = 0
+    expect((await h.login({ ...LOGIN, host: 'db' })).status).toBe(201)
+    expect(asked).toBe(0)
   })
 })
 

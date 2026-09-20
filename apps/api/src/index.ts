@@ -7,6 +7,7 @@ import { createApp } from './app.ts'
 import { ConfigError, loadConfig } from './config.ts'
 import { entriesWithoutPort } from './lib/allowlist.ts'
 import { auditedAdapterFactory } from './lib/audit.ts'
+import { createDockerDiscovery, dockerSocketGet } from './lib/docker-discovery.ts'
 import { createLogger } from './lib/logging.ts'
 import { RedisSessionStore } from './session/redis-store.ts'
 import { SqliteSessionStore } from './session/sqlite-store.ts'
@@ -107,9 +108,21 @@ const store: SessionStore =
           adapterFactory,
         })
 
+// Development only (refused in production by loadConfig): the database containers of the local Docker daemon.
+const discovery = config.dockerDiscovery
+  ? createDockerDiscovery({
+      get: dockerSocketGet(config.dockerDiscovery.socketPath),
+      // From inside a container, the host's published ports are reached through the host gateway.
+      connectHost:
+        config.dockerDiscovery.connectHost ?? (existsSync('/.dockerenv') ? 'host.docker.internal' : '127.0.0.1'),
+      logger,
+    })
+  : null
+
 const app = createApp(config, {
   store,
   logger,
+  ...(discovery ? { discover: discovery.list } : {}),
   remoteAddress: (c) => {
     try {
       return getConnInfo(c).remote.address
@@ -179,6 +192,7 @@ process.on('SIGTERM', () => void shutdown('SIGTERM'))
 
 logger.log('info', 'startup', {
   port: config.port,
+  dockerDiscovery: config.dockerDiscovery !== null,
   env: config.isProd ? 'production' : 'development',
   allowedHosts: config.allowedHosts,
   sessionStore: config.sessionStore,

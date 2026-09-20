@@ -1,17 +1,36 @@
-<!-- translated-from: README.md sha256:fbe3c22576d36545bce0eff00e431b59041ba85a048ee6d89b7dab21749757cd -->
+<!-- translated-from: README.md sha256:7eed36feb794cd7e1b3fb16354f3f66a6da35b8f9af550999a8657bc3081ef09 -->
 
 # tsmyadmin
 
 *日本語版: [README.md](README.md)*
 
-A modern TypeScript phpMyAdmin clone, for MySQL and PostgreSQL alike.
+**A phpMyAdmin clone that opens the MySQL / PostgreSQL databases running in your development Docker from the browser, without writing their addresses down** (written in TypeScript, for MySQL and PostgreSQL alike).
+
+## Quick start (development)
+
+All you need is Docker.
+
+```bash
+git clone https://github.com/ip-san/tsmyadmin.git && cd tsmyadmin
+docker compose -f docker-compose.dev.yml up -d --build
+```
+
+Open <http://localhost:3100>: the MySQL / MariaDB / PostgreSQL containers running in Docker right now are listed on the login screen as `docker: project/service`. Pick one and enter that project's username and password.
+
+- The databases your other projects started with `docker compose up` are found automatically through the ports they publish on the host (one started later shows up when you open the login screen again). No addresses to write and no network to set up
+- All it reads is the container list and the database names; **passwords are never read or stored**
+- It is **for development only**. It needs the Docker socket (root on the host), so it refuses to start with `NODE_ENV=production`. How it works and what to watch (published ports on Linux, the socket's permissions): [docs/en/deployment.md](docs/en/deployment.md#using-it-for-development-with-docker-container-discovery)
+- To offer fixed targets, or to deploy it, use server presets and the allowlist ([docs/en/deployment.md](docs/en/deployment.md#environment-variables-the-only-list))
+
+## Features
+
 
 The interface is available in English and Japanese (it follows the browser's language setting and can be switched at the top right). Supported: **MySQL 8.0–9**, **MariaDB 10.11 (LTS) / 11**, **Percona Server 8.4**, **PostgreSQL 14–18**. MySQL 8.0 / 8.4, MariaDB 10.11 / 11 and PostgreSQL 14 / 17 are verified on every CI run; MySQL 9, PostgreSQL 18 and Percona are verified by hand. For the details — including measured results for the compatible engines TiDB and CockroachDB — see [docs/en/deployment.md](docs/en/deployment.md#supported-databases).
 
 - **A Bun workspaces monorepo**: `apps/api` (Hono) / `apps/web` (Vite + React 19 + TanStack Router/Query) / `packages/shared` (Zod DTOs) / `packages/adapter` (a thin database abstraction over `mysql2` and `pg`; no ORM)
 - **The same layout as phpMyAdmin**: server (Databases / SQL / Status / Variables / Processes / Users) → database (Structure / SQL / Export / Import / Privileges / Routines / Triggers / Events) → table (Browse / Structure / SQL / Search / Insert / Export / Import / Triggers / Operations)
 - **Features**
-  - Connecting: server presets defined by the administrator, cookie sessions
+  - Connecting: **Docker container discovery (for development)**, server presets defined by the administrator, cookie sessions
   - Viewing: a tree of databases / schemas / tables, browsing rows (sorting, paging, filtering, choosing which columns to show, links from a foreign key to the row it references and back)
   - Editing: inserting rows (with insert-again and duplicate), editing them (in a dialog or in place), deleting them
   - SQL console: CodeMirror, several statements at once, MySQL `DELIMITER`, per-statement results streamed as each one finishes, EXPLAIN, history and saved queries, CSV / JSON download of the result, cancelling a run
@@ -23,7 +42,7 @@ The interface is available in English and Japanese (it follows the browser's lan
 - **Safe by construction**: every DDL and account operation shows the generated SQL for review before it runs (passwords are masked). Each run in the SQL console is autocommitted, and a transaction left open is rolled back before the connection returns to the pool
 - **Lossless values**: BIGINT, DECIMAL, date-time values and JSON stay exactly as the server returned them; binary is base64; NULL and the empty string stay distinct
 
-## Development
+## Developing this repository
 
 You need **Bun 1.4 or newer** (CI uses 1.4.0), **Docker** (Compose v2 — `db:up` uses `docker compose up --wait`) and **Node** (the check scripts such as `bun run check` run on Node). No `.env` is required: sessions are in memory and the allowed hosts are `127.0.0.1,localhost` by default (the variables are listed in `.env.example` and [docs/en/deployment.md](docs/en/deployment.md)).
 
@@ -64,7 +83,9 @@ The project's own checks:
 
 Nothing outstanding. The shared session store for several replicas ships as `SESSION_STORE=redis` — see [docs/en/deployment.md](docs/en/deployment.md#several-replicas) for what is shared and what is not.
 
-## Production build
+## In production (optional)
+
+Development is what it is built for first, but it also has the safeguards for production (a host allowlist, login rate limiting, a CSP, an audit log, an encrypted session store).
 
 ```bash
 docker build -t tsmyadmin .

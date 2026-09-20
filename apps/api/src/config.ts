@@ -50,6 +50,18 @@ const EnvSchema = z.object({
    * `host` or `*.suffix` entries, each optionally with `:port`; without one, the default port. Empty: none.
    */
   TSMYADMIN_IMAGE_HOSTS: z.string().default(''),
+  /**
+   * `1` lists the database containers the local Docker daemon runs on the login screen and allows connecting to
+   * them (development only: it reads the Docker socket, which is root on the host). Refused in production.
+   */
+  TSMYADMIN_DOCKER_DISCOVERY: z.enum(['0', '1']).optional(),
+  /** Unix socket of the Docker Engine API, read with GET requests only. */
+  TSMYADMIN_DOCKER_SOCKET: z.string().default('/var/run/docker.sock'),
+  /**
+   * The host name that reaches a container's published port from where this process runs. Unset: `127.0.0.1` on the
+   * host, `host.docker.internal` inside a container.
+   */
+  TSMYADMIN_DOCKER_CONNECT_HOST: z.string().optional(),
   /** Login attempts allowed per client IP + user within the window. */
   LOGIN_RATE_LIMIT: z.coerce.number().int().min(1).default(10),
   LOGIN_RATE_WINDOW_SECONDS: z.coerce.number().int().min(1).default(60),
@@ -106,6 +118,8 @@ export type AppConfig = {
   sessionMaxPerIdentity: number
   /** Hosts an image link may load pictures from (TSMYADMIN_IMAGE_HOSTS). */
   imageHosts: string[]
+  /** Docker container discovery (TSMYADMIN_DOCKER_DISCOVERY); null when off. */
+  dockerDiscovery: { socketPath: string; connectHost: string | undefined } | null
 }
 
 /** Every startup-validation failure reads `Invalid environment: ...` (docs/deployment.md, docs/operations.md). */
@@ -161,6 +175,11 @@ export function loadConfig(env: Record<string, string | undefined>): AppConfig {
       `TSMYADMIN_IMAGE_HOSTS: invalid entry ${badImageHosts.join(', ')} (expected host or *.host, optionally with :port)`
     )
   }
+  if (isProd && e.TSMYADMIN_DOCKER_DISCOVERY === '1') {
+    throw new ConfigError(
+      'TSMYADMIN_DOCKER_DISCOVERY is for development only (it reads the Docker socket); it cannot be used with NODE_ENV=production'
+    )
+  }
   return {
     isProd,
     require2fa,
@@ -181,6 +200,10 @@ export function loadConfig(env: Record<string, string | undefined>): AppConfig {
     shutdownTimeoutMs: e.SHUTDOWN_TIMEOUT_SECONDS * 1000,
     sessionMaxPerIdentity: e.SESSION_MAX_PER_IDENTITY,
     imageHosts,
+    dockerDiscovery:
+      e.TSMYADMIN_DOCKER_DISCOVERY === '1'
+        ? { socketPath: e.TSMYADMIN_DOCKER_SOCKET, connectHost: e.TSMYADMIN_DOCKER_CONNECT_HOST }
+        : null,
   }
 }
 

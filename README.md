@@ -2,14 +2,33 @@
 
 *English: [README.en.md](README.en.md)*
 
-MySQL / PostgreSQL 両対応の、モダン TypeScript 製 phpMyAdmin クローン。
+**開発環境の Docker で動いている MySQL / PostgreSQL を、接続先を書かずにブラウザで開ける** phpMyAdmin クローン（TypeScript 製、MySQL / PostgreSQL 両対応）。
+
+## すぐ使う（開発環境）
+
+必要なのは Docker だけです。
+
+```bash
+git clone https://github.com/ip-san/tsmyadmin.git && cd tsmyadmin
+docker compose -f docker-compose.dev.yml up -d --build
+```
+
+<http://localhost:3100> を開くと、いま Docker で動いている MySQL / MariaDB / PostgreSQL のコンテナが、ログイン画面に `docker: プロジェクト/サービス` の名前で並びます。選んで、そのプロジェクトのユーザー名とパスワードを入れるだけです。
+
+- 他のプロジェクトの `docker compose up` で立ち上げた DB を、ホストに公開しているポートから自動で見つけます（後から起動したものも、ログイン画面を開き直すと出ます）。接続先の書き方も、ネットワークの設定も要りません
+- 読むのはコンテナの一覧とデータベース名だけで、**パスワードは読みも保存もしません**
+- **開発専用**です。Docker ソケットを渡す（ホストの root 相当）ため、`NODE_ENV=production` では起動しません。仕組みと注意（Linux の公開ポート、ソケットの権限）は [docs/deployment.md](docs/deployment.md#docker-で開発用に使うコンテナの自動検出)
+- 特定の DB だけ決め打ちで出したいとき、本番に置くときは、接続先プリセットと許可リスト（[docs/deployment.md](docs/deployment.md#環境変数唯一の一覧)）を使います
+
+## 特長
+
 
 UI は日本語 / English（ブラウザの言語設定に追従、画面右上で切替）。対応: **MySQL 8.0〜9**、**MariaDB 10.11 (LTS) / 11**、**Percona Server 8.4**、**PostgreSQL 14〜18**（MySQL 8.0 / 8.4、MariaDB 10.11 / 11、PostgreSQL 14 / 17 は CI で毎回検証。MySQL 9・PostgreSQL 18・Percona は手動検証。互換エンジン（TiDB / CockroachDB）の実測結果を含む詳細は [docs/deployment.md](docs/deployment.md#対応データベース)）。
 
 - **Bun workspaces モノレポ**: `apps/api`（Hono）/ `apps/web`（Vite + React 19 + TanStack Router/Query）/ `packages/shared`（Zod DTO）/ `packages/adapter`（`mysql2` / `pg` 上の薄い DB 抽象層。ORM 不使用）
 - **phpMyAdmin と同じ画面構成**: サーバー（データベース / SQL / ステータス / 変数 / プロセス / ユーザー）→ データベース（構造 / SQL / エクスポート / インポート / 権限 / ルーチン / トリガー / イベント）→ テーブル（表示 / 構造 / SQL / 検索 / 挿入 / エクスポート / インポート / トリガー / 操作）
 - **機能**
-  - 接続: 管理者が定義する接続先プリセット、Cookie セッション
+  - 接続: **Docker コンテナの自動検出（開発用）**、管理者が定義する接続先プリセット、Cookie セッション
   - 閲覧: DB / スキーマ / テーブルのツリー、行のブラウズ（ソート・ページング・絞り込み・表示カラムの選択、外部キーから参照先 / 参照元へのリンク）
   - 編集: 行の挿入（続けて挿入・複製）・編集（ダイアログ / インライン）・削除
   - SQL コンソール: CodeMirror、複数文、MySQL `DELIMITER` 対応、文ごとの結果を完了順にストリーミング表示、EXPLAIN、履歴・保存済みクエリ、結果の CSV / JSON ダウンロード、実行中のキャンセル
@@ -21,7 +40,7 @@ UI は日本語 / English（ブラウザの言語設定に追従、画面右上�
 - **安全側の設計**: DDL・アカウント操作はすべて生成 SQL をプレビューして確認後に実行（パスワードはマスク表示）。SQL コンソールの各実行は自動コミットで、開きっぱなしのトランザクションは接続をプールへ戻す前にロールバック
 - **ロスレスな値**: BIGINT / DECIMAL / 日時 / JSON はサーバーの文字列のまま、バイナリは base64、NULL と空文字を区別
 
-## 開発
+## このリポジトリの開発
 
 前提: **Bun 1.4 以上**（CI は 1.4.0）、**Docker**（Compose v2。`db:up` は `docker compose up --wait` を使います）、**Node**（`bun run check` などの検査スクリプトは Node で動きます）。`.env` は不要です — 既定でメモリセッション、許可ホストは `127.0.0.1,localhost` です（変数の一覧は `.env.example` と [docs/deployment.md](docs/deployment.md)）。
 
@@ -62,7 +81,9 @@ bun run lighthouse       # Lighthouse CI（ログイン画面の性能 / a11y / 
 
 特にありません。複数レプリカ向けの共有セッションストアは `SESSION_STORE=redis` として実装済みです（共有されるものとされないものは [docs/deployment.md](docs/deployment.md#複数レプリカ) を参照）。
 
-## 本番ビルド
+## 本番で使う場合（任意）
+
+まず想定しているのは開発環境ですが、本番で動かすための守り（接続先の許可リスト、ログインのレート制限、CSP、監査ログ、暗号化したセッションストア）も備えています。
 
 ```bash
 docker build -t tsmyadmin .

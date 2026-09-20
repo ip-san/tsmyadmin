@@ -3,6 +3,26 @@ import { describe, expect, it } from 'vitest'
 import { loadConfig } from './config.ts'
 
 describe('loadConfig', () => {
+  it('keeps Docker discovery off unless asked, and refuses it in production', () => {
+    expect(loadConfig({}).dockerDiscovery).toBeNull()
+    expect(loadConfig({ TSMYADMIN_DOCKER_DISCOVERY: '0' }).dockerDiscovery).toBeNull()
+    expect(loadConfig({ TSMYADMIN_DOCKER_DISCOVERY: '1' }).dockerDiscovery).toEqual({
+      socketPath: '/var/run/docker.sock',
+      connectHost: undefined,
+    })
+    expect(
+      loadConfig({
+        TSMYADMIN_DOCKER_DISCOVERY: '1',
+        TSMYADMIN_DOCKER_SOCKET: '/tmp/d.sock',
+        TSMYADMIN_DOCKER_CONNECT_HOST: 'host.docker.internal',
+      }).dockerDiscovery
+    ).toEqual({ socketPath: '/tmp/d.sock', connectHost: 'host.docker.internal' })
+    expect(() =>
+      loadConfig({ NODE_ENV: 'production', SESSION_SECRET: 'x'.repeat(32), TSMYADMIN_DOCKER_DISCOVERY: '1' })
+    ).toThrow(/TSMYADMIN_DOCKER_DISCOVERY.*development/)
+    expect(() => loadConfig({ TSMYADMIN_DOCKER_DISCOVERY: 'yes' })).toThrow(/TSMYADMIN_DOCKER_DISCOVERY/)
+  })
+
   it('applies development defaults', () => {
     const c = loadConfig({})
     expect(c).toMatchObject({

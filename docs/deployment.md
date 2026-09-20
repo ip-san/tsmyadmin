@@ -39,6 +39,9 @@ tsmyadmin は **1 プロセス（Bun）で API と SPA を配信する単一コ�
 | `REDIS_URL` | （なし） | `SESSION_STORE=redis` のとき必須（`redis://host:6379`、TLS は `rediss://`）。未設定なら起動時に終了する。セッションと保存済みクエリはここに入り、暗号化は sqlite と同一（`SESSION_SECRET` 由来の鍵、行ごとに結合） |
 | `TSMYADMIN_ALLOWED_HOSTS` | `127.0.0.1,localhost` | ログイン画面から接続を許可する DB ホスト。カンマ区切りで、完全一致 / `*.suffix` / `*`（無制限）、それぞれ `:port` 付き可（`db.internal:5432`、`[::1]:3306`）。ポート省略は全ポート許可 — **本番ではポートまで指定する**（`docs/security.md`）。**SSRF・踏み台防止の要** |
 | `TSMYADMIN_SERVERS` | （なし） | ログイン画面に出す接続先プリセットの JSON 配列。例: `[{"name":"prod","dialect":"postgres","host":"db.internal","port":5432,"database":"app"}]`。利用者はユーザー名とパスワードだけを入力。プリセットのホストは自動的に allowlist に加わる。**パスワードは書かない** |
+| `TSMYADMIN_DOCKER_DISCOVERY` | `0` | `1` で、ローカルの Docker デーモンが動かしている MySQL / MariaDB / PostgreSQL のコンテナを、ログイン画面の接続先（`docker: プロジェクト/サービス`）に出し、その公開ポートへの接続を許可する。**開発専用**: Docker ソケットを読めることはホストの root 相当なので、`NODE_ENV=production` では起動時に拒否する。下の「Docker で開発用に使う」 |
+| `TSMYADMIN_DOCKER_SOCKET` | `/var/run/docker.sock` | 検出に使う Docker Engine API の Unix ソケット。GET しか発行しない |
+| `TSMYADMIN_DOCKER_CONNECT_HOST` | ホスト上では `127.0.0.1` / コンテナ内では `host.docker.internal` | 検出したコンテナの公開ポートに、このプロセスから届くホスト名 |
 | `LOGIN_RATE_LIMIT` | `10` | `LOGIN_RATE_WINDOW_SECONDS` 内に許可するログイン試行回数（クライアント IP + ユーザー名ごと。IP 単位では 3 倍まで） |
 | `TSMYADMIN_REQUIRE_2FA` | `0` | `1` で全アカウントに 2 要素認証（TOTP）を必須にする。未登録のアカウントはログインできるが、登録を終えるまで他の操作はできない。秘密鍵の置き場が要るため `SESSION_STORE=sqlite` か `redis` が必須（`memory` では起動時に終了する）。既定の `0` では、登録したアカウントだけが 2 段階になる |
 | `TSMYADMIN_PASSKEY_ORIGIN` | （空） | 利用者がブラウザで開く URL の origin（例 `https://db.example.com`）。設定すると、2 要素目にパスキー（WebAuthn）も使える。パスキーはこのホスト名に結び付くため、**後からドメインを変えると登録済みのパスキーはすべて使えなくなる**。HTTPS 必須（`http://localhost` だけ例外）、IP アドレスは不可、パスは付けない。`SESSION_STORE=sqlite` か `redis` が必須。空ならパスキーは出さない（認証アプリだけ） |
@@ -118,6 +121,40 @@ healthcheck:
 ```
 
 置き場所ごとの違い（さくらの VPS などのサーバー、AWS、Azure）は [hosting.md](hosting.md) に、Cloudflare Containers は [cloudflare.md](cloudflare.md) にあります。
+
+## Docker で開発用に使う（コンテナの自動検出）
+
+開発マシンで動いている他のプロジェクトの MySQL / PostgreSQL コンテナを、接続先を書かずに開けます。ログイン画面に `docker: プロジェクト/サービス` の名前で並ぶので、選んでユーザー名とパスワードを入れるだけです。**本番では使えません**（`NODE_ENV=production` で `TSMYADMIN_DOCKER_DISCOVERY=1` を指定すると起動時に拒否します）。
+
+リポジトリの `docker-compose.dev.yml` がそのまま使えます。
+
+```bash
+docker compose -f docker-compose.dev.yml up -d --build
+# → http://localhost:3100 を開き、`docker:` で始まる接続先を選ぶ
+```
+
+`docker run` で同じことをする場合（イメージを作ってから）:
+
+```bash
+docker build -t tsmyadmin .
+docker run -d --name tsmyadmin --user 0 \
+  -p 127.0.0.1:3100:3100 \
+  -e NODE_ENV=development \
+  -e TSMYADMIN_DOCKER_DISCOVERY=1 \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  --add-host=host.docker.internal:host-gateway \
+  tsmyadmin
+```
+
+- `NODE_ENV=development`: イメージは既定で production なので、開発の既定（メモリのセッション、Secure なし）に上書きします
+- `--user 0`（compose では `user: "0:0"`）: `docker.sock` は root（Linux では docker グループ）だけが読めます。イメージの既定の uid 1000 では開けず、検出は空になります。ソケットを渡した時点でホストの root 相当なので、root で動かしても権限は増えません
+
+ホストで `bun run dev` している場合は `TSMYADMIN_DOCKER_DISCOVERY=1` を付けるだけです（接続先は `127.0.0.1` になります）。
+
+- **見つかるもの**: イメージ名（`mysql` / `mariadb` / `percona` / `postgres` / `postgis` など）か、公開している 3306 / 5432 から MySQL・MariaDB・PostgreSQL と判断し、**ホストにポートを公開しているコンテナだけ**を出します。公開していないコンテナには、このプロセスから届きません。一覧は数秒ごとに取り直され、後から起動したコンテナもログイン画面を開き直すと出ます
+- **接続できる範囲**: 検出したコンテナの公開 `ホスト:ポート` に限ります（同じホストの別ポートや、検出されていない先は `TSMYADMIN_ALLOWED_HOSTS` の設定どおり）。コンテナの環境変数から読むのは `MYSQL_DATABASE` / `MARIADB_DATABASE` / `POSTGRES_DB`（データベース名の入力補助）だけで、パスワードは読みも返しも記録もしません。ユーザー名とパスワードは各プロジェクトの設定を見て入力します
+- **届く条件**: このプロセスから公開ポートに接続できる必要があります。Docker Desktop（macOS / Windows）は `host.docker.internal` で届きます。Linux の Docker Engine で、ホストの `127.0.0.1` だけに公開したポート（`127.0.0.1:5433:5432` など）は、コンテナからは届かないことがあります。その場合は `0.0.0.0` で公開するか、`TSMYADMIN_DOCKER_CONNECT_HOST` を届く名前にしてください。Docker に届かないとき（ソケットがない、権限がない）は、検出は空になり、理由が 1 回だけログに出ます
+- **ソケットの権限**: `docker.sock` を `:ro` でマウントしても Docker API への書き込みは防げません（`:ro` はファイルシステムの操作を止めるだけです）。tsmyadmin は `GET /containers/json` と `GET /containers/<id>/json` しか発行しませんが、ソケットを渡す時点でコンテナ内のプロセスはホストの Docker を操作できます。信頼できる手元の開発環境だけで使い、公開ネットワークには出さないでください
 
 ## リバースプロキシと TLS
 

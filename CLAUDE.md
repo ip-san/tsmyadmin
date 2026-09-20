@@ -9,6 +9,7 @@ MySQL / PostgreSQL 両対応の、モダン TypeScript 製 phpMyAdmin クロー�
 - **画面構成**: phpMyAdmin と同じ 3 階層（サーバー: DB 一覧/SQL/ステータス/変数/プロセス/ユーザー、DB: 構造/SQL/エクスポート/インポート/権限/ルーチン/トリガー/イベント、テーブル: 表示/構造/SQL/検索/挿入/エクスポート/インポート/トリガー/操作）
 - **型の流れ**: `packages/shared` の Zod → API (`@hono/zod-validator`) → web (`hc<AppType>`)
 - **テスト DB**: `docker compose`（MySQL `13306` / PostgreSQL `15433`、fixtures 自動投入）
+- **開発での使い方（売りの機能）**: `docker-compose.dev.yml` 1 つで、手元の Docker の MySQL / PostgreSQL コンテナを自動検出してログイン画面に出す（`TSMYADMIN_DOCKER_DISCOVERY=1`、`apps/api/src/lib/docker-discovery.ts`。読むのは GET だけ、パスワードは読まない、`NODE_ENV=production` では拒否）
 - **本番運用**: 設定は `apps/api/src/config.ts` で起動時検証（環境変数の一覧は `docs/deployment.md` が唯一の正）。接続先 allowlist・ログイン レート制限・CSP・リクエスト ID 付き構造化ログ・監査ログ（`withAudit`）・`/healthz` `/readyz`・暗号化 SQLite セッションストア（`SESSION_STORE=sqlite`）
 - **品質**: Vitest / Playwright（`e2e/a11y.spec.ts` は axe に加え `e2e/layout-lint.ts` で矢印の重なり・入力欄の高さのずれ・コントロールの重なり・横スクロール・文字のはみ出し・id の重複・`undefined` の混入を DOM の幾何で検査。画面を足したら `scan(page)` を通す）/ Biome / knip / madge / jscpd / type-coverage + 自前検査（`check:arch`, `check:sql-safety`, `docs:validate`, `size` = 初期 JS の brotli 合計 160 kB 予算）
 
@@ -29,7 +30,7 @@ bun run lighthouse        # Lighthouse CI（警告のみ、要 Chrome）
 
 ## 現在の規模（`scripts/validate-docs.mjs` が同期）
 
-- ユニット/API/Web テスト定義: <!-- stat:unit-tests -->849<!-- /stat --> 件
+- ユニット/API/Web テスト定義: <!-- stat:unit-tests -->859<!-- /stat --> 件
 - Adapter conformance: <!-- stat:conformance -->194<!-- /stat --> 件 × 2 方言
 - E2E: <!-- stat:e2e -->192<!-- /stat --> 件
 - API ルート: <!-- stat:routes -->95<!-- /stat -->

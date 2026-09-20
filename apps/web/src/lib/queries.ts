@@ -100,7 +100,8 @@ export const sessionQuery = queryOptions({
 export const serversQuery = queryOptions({
   queryKey: ['servers'],
   queryFn: () => unwrap<ServerPreset[]>(api.servers.$get()),
-  staleTime: Number.POSITIVE_INFINITY,
+  // Containers started while the page is open (Docker discovery) show up when the login screen is opened again.
+  staleTime: 10_000,
 })
 
 /** Bookmarks stored with the account; only fetched where the session says the server keeps them. */

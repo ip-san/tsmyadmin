@@ -1,4 +1,4 @@
-<!-- translated-from: docs/deployment.md sha256:89a4c5cec318f662bbd94bc76d916dab05d53da5c8cfd2871198ff02ab003fec -->
+<!-- translated-from: docs/deployment.md sha256:dec635e2e10a5ab3e04f325191b2cd283c6e92db72da08beedaf98e71088ce7c -->
 
 # Deployment guide
 
@@ -41,6 +41,9 @@ tsmyadmin runs as **a single container whose one process (Bun) serves both the A
 | `REDIS_URL` | (none) | Required with `SESSION_STORE=redis` (`redis://host:6379`, or `rediss://` for TLS). Without it the process exits at startup. Sessions and saved queries live here, encrypted exactly as the SQLite store encrypts them (a key derived from `SESSION_SECRET`, each value bound to its own key) |
 | `TSMYADMIN_ALLOWED_HOSTS` | `127.0.0.1,localhost` | The database hosts the login screen may connect to. Comma-separated; each entry is an exact name, `*.suffix` or `*` (no restriction), optionally with `:port` (`db.internal:5432`, `[::1]:3306`). Leaving the port off allows every port — **name the port in production** (see [security.md](security.md)). **This is what stops SSRF and use as a jump host** |
 | `TSMYADMIN_SERVERS` | (none) | A JSON array of the server presets offered on the login screen. For example: `[{"name":"prod","dialect":"postgres","host":"db.internal","port":5432,"database":"app"}]`. Users then enter only a username and password. A preset's host joins the allowlist automatically. **Never put a password here** |
+| `TSMYADMIN_DOCKER_DISCOVERY` | `0` | `1` lists the MySQL / MariaDB / PostgreSQL containers the local Docker daemon is running as login targets (`docker: project/service`) and allows connecting to their published ports. **Development only**: being able to read the Docker socket is root on the host, so `NODE_ENV=production` refuses it at startup. See "Using it for development with Docker" below |
+| `TSMYADMIN_DOCKER_SOCKET` | `/var/run/docker.sock` | The Unix socket of the Docker Engine API used for discovery. Only GET requests are issued |
+| `TSMYADMIN_DOCKER_CONNECT_HOST` | `127.0.0.1` on the host / `host.docker.internal` in a container | The host name that reaches a discovered container's published port from where this process runs |
 | `LOGIN_RATE_LIMIT` | `10` | How many sign-in attempts are allowed within `LOGIN_RATE_WINDOW_SECONDS`, per client IP and username (per IP alone, up to three times that) |
 | `TSMYADMIN_REQUIRE_2FA` | `0` | `1` requires a second factor (TOTP) of every account: one that has not enrolled can log in but can do nothing until it has. It needs somewhere to keep the secrets, so `SESSION_STORE=sqlite` or `redis` is required (with `memory` the process exits at startup). At the default `0`, only accounts that enrol get the second step |
 | `TSMYADMIN_PASSKEY_ORIGIN` | (empty) | The origin users open the app at (e.g. `https://db.example.com`). When set, passkeys (WebAuthn) can be the second factor too. A passkey is bound to this host name, so **moving to another domain later makes every enrolled passkey unusable**. HTTPS only (`http://localhost` is the exception), no IP address, no path. Needs `SESSION_STORE=sqlite` or `redis`. Empty: no passkeys (authenticator apps only) |
@@ -121,6 +124,40 @@ healthcheck:
 ```
 
 What differs between places to run it — an ordinary server such as Sakura VPS, AWS, Azure — is covered by [hosting.md](hosting.md); Cloudflare Containers has its own page, [cloudflare.md](cloudflare.md).
+
+## Using it for development with Docker (container discovery)
+
+Open the MySQL / PostgreSQL containers of your other projects on the development machine without writing their addresses down. They appear on the login screen as `docker: project/service`: pick one and enter the username and password. **It cannot be used in production** (`TSMYADMIN_DOCKER_DISCOVERY=1` with `NODE_ENV=production` is refused at startup).
+
+The repository's `docker-compose.dev.yml` works as it is.
+
+```bash
+docker compose -f docker-compose.dev.yml up -d --build
+# → open http://localhost:3100 and pick a target that starts with `docker:`
+```
+
+To do the same with `docker run` (after building the image):
+
+```bash
+docker build -t tsmyadmin .
+docker run -d --name tsmyadmin --user 0 \
+  -p 127.0.0.1:3100:3100 \
+  -e NODE_ENV=development \
+  -e TSMYADMIN_DOCKER_DISCOVERY=1 \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  --add-host=host.docker.internal:host-gateway \
+  tsmyadmin
+```
+
+- `NODE_ENV=development`: the image defaults to production, so this overrides it with the development defaults (in-memory sessions, no Secure cookie)
+- `--user 0` (`user: "0:0"` in compose): `docker.sock` is readable only by root (on Linux, the docker group). The image's default uid 1000 cannot open it and discovery comes up empty. Handing over the socket is already root on the host, so running as root adds no power
+
+When you run `bun run dev` on the host, just set `TSMYADMIN_DOCKER_DISCOVERY=1` (targets are then `127.0.0.1`).
+
+- **What is found**: a container is taken for MySQL, MariaDB or PostgreSQL by its image name (`mysql`, `mariadb`, `percona`, `postgres`, `postgis` and so on) or by publishing 3306 / 5432, and only **containers that publish the port on the host** are listed. One that publishes nothing cannot be reached from this process. The list is refreshed every few seconds, so a container started later shows up when the login screen is opened again
+- **What may be connected to**: exactly the discovered containers' published `host:port` (another port on the same host, or a target that was not discovered, follows `TSMYADMIN_ALLOWED_HOSTS` as usual). From a container's environment only `MYSQL_DATABASE` / `MARIADB_DATABASE` / `POSTGRES_DB` are read, to prefill the database name; a password is never read, returned or logged. Enter the username and password from that project's own settings
+- **When it reaches**: this process must be able to connect to the published port. Docker Desktop (macOS / Windows) reaches it through `host.docker.internal`. With Docker Engine on Linux, a port published only on the host's `127.0.0.1` (`127.0.0.1:5433:5432`, say) may not be reachable from a container: publish it on `0.0.0.0`, or set `TSMYADMIN_DOCKER_CONNECT_HOST` to a name that reaches it. When Docker cannot be reached (no socket, no permission), discovery is simply empty and the reason is logged once
+- **The socket's power**: mounting `docker.sock` as `:ro` does not stop writes to the Docker API (`:ro` only stops file-system operations). tsmyadmin issues only `GET /containers/json` and `GET /containers/<id>/json`, but handing over the socket lets any process in the container drive the host's Docker. Use it only on a trusted development machine and never on a public network
 
 ## Reverse proxies and TLS
 

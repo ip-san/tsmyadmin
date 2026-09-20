@@ -11,7 +11,7 @@ import {
 } from '@tsmyadmin/shared'
 import { type Context, Hono } from 'hono'
 import { deleteCookie, getSignedCookie, setSignedCookie } from 'hono/cookie'
-import { isHostAllowed, normaliseHost } from '../lib/allowlist.ts'
+import { isHostAllowed, normaliseHost, presetEntry } from '../lib/allowlist.ts'
 import { apiError, errorResponse } from '../lib/errors.ts'
 import type { Logger } from '../lib/logging.ts'
 import type { RateLimiter } from '../lib/rate-limit.ts'
@@ -39,6 +39,8 @@ import { type Session, sessionInfo } from '../session/store.ts'
 
 export interface SessionRouteDeps {
   allowedHosts: readonly string[]
+  /** Containers found running (development); allowed on exactly their published host:port, looked up only when the list above says no. */
+  discovered?: () => Promise<readonly { host: string; port: number }[]>
   /** Per ip|user window (reset on success). */
   loginLimiter: RateLimiter
   /** Coarser per-IP window of *failed* attempts so rotating the user name cannot bypass the limit. */
@@ -110,7 +112,11 @@ export function sessionRoutes(cfg: SessionConfig, deps: SessionRouteDeps) {
         // Before the per-user counter, so a mistyped host does not spend the budget for the user's real logins;
         // counted on the IP instead, because probing the allowlist is exactly the kind of sweep that limiter is
         // for (the 403-vs-401 difference tells a caller which hosts exist).
-        if (!isHostAllowed(body.host, body.port, deps.allowedHosts)) {
+        const allowed =
+          isHostAllowed(body.host, body.port, deps.allowedHosts) ||
+          (deps.discovered !== undefined &&
+            isHostAllowed(body.host, body.port, (await deps.discovered()).map(presetEntry)))
+        if (!allowed) {
           deps.ipLimiter.hit(ip)
           deps.logger.log('warn', 'login.host_not_allowed', audit)
           return c.json(

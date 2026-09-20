@@ -1,4 +1,4 @@
-<!-- translated-from: docs/security.md sha256:b31530a417c0ef108a95e18acb672b1551aca3a37ab00d307357ed0055df1c0e -->
+<!-- translated-from: docs/security.md sha256:17858f9c7b2ef82e92a94e344755e6e7a48caedf73bef786cfee161ff8718ab3 -->
 
 # Security model
 
@@ -35,6 +35,10 @@
 The login screen can name only the database hosts listed in `TSMYADMIN_ALLOWED_HOSTS`. The default is local only; use `*` in development only. A connection to a host or port that is not allowed is refused with `403 HOST_NOT_ALLOWED` before any database is touched, and recorded as `login.host_not_allowed`.
 
 An entry is `host[:port]` (`db.internal:5432`, `[::1]:3306`, `*.rds.amazonaws.com:5432`). **Name the port in production**: an entry without one allows every port on that host, which lets an unauthenticated login request tell "connected" from "authentication failed" and so use the service as a port scanner against whatever else listens on an allowed host. In production (`NODE_ENV=production`), an entry without a port warns at startup as `config.allowlist_without_port`. A server preset (`TSMYADMIN_SERVERS`) automatically allows that preset's `host:port` and nothing more.
+
+### Docker container discovery (for development)
+
+`TSMYADMIN_DOCKER_DISCOVERY=1` reads the Docker socket and adds **only the discovered containers' published `host:port`** to the allowlist (per port: another port or another host is not opened up). Being able to read the socket is as strong as root on the host, so use it **only on a development machine you control**; `NODE_ENV=production` refuses it at startup. The code issues only `GET /containers/json` and `GET /containers/<id>/json`, and takes from a container's environment only `MYSQL_DATABASE` / `MARIADB_DATABASE` / `POSTGRES_DB` (a password is never read, returned or logged). Mounting the socket as `:ro` does not stop writes to the Docker API, so the safeguard is not handing it over. Usage: [deployment.md](deployment.md#using-it-for-development-with-docker-container-discovery).
 
 ## Brute-force protection
 

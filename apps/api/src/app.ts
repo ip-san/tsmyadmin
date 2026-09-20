@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto'
+import type { ServerPreset } from '@tsmyadmin/shared'
 import { type Context, Hono } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
 import { getSignedCookie } from 'hono/cookie'
@@ -34,6 +35,8 @@ export interface AppServices {
   now?: () => number
   /** WebAuthn challenges (tests replay a recorded passkey answer by fixing them). */
   challenge?: () => Uint8Array
+  /** Database containers found on the local Docker daemon (development; see TSMYADMIN_DOCKER_DISCOVERY). */
+  discover?: () => Promise<readonly ServerPreset[]>
 }
 
 /**
@@ -128,6 +131,7 @@ export function createApp(config: AppConfig, services: AppServices) {
   }
   const sessionDeps = {
     allowedHosts,
+    ...(services.discover ? { discovered: services.discover } : {}),
     loginLimiter,
     ipLimiter,
     ip,
@@ -175,7 +179,11 @@ export function createApp(config: AppConfig, services: AppServices) {
         }
       })
       .get('/api/health', (c) => c.json({ ok: true }))
-      .get('/api/servers', (c) => c.json(config.servers))
+      .get('/api/servers', async (c) => {
+        const found = services.discover ? await services.discover() : []
+        const named = new Set(config.servers.map((s) => s.name))
+        return c.json([...config.servers, ...found.filter((s) => !named.has(s.name))])
+      })
       .route('/api', sessionRoutes(cfg, sessionDeps))
       .route('/api', secondFactorRoutes(cfg, secondFactorDeps))
       .route('/api', databaseRoutes(cfg, logger))

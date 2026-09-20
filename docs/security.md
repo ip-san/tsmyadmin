@@ -34,6 +34,10 @@
 
 エントリは `host[:port]` です（`db.internal:5432`、`[::1]:3306`、`*.rds.amazonaws.com:5432`）。**本番ではポートまで指定してください**: ポートを省略したエントリはそのホストの全ポートを許可するため、未認証のログイン要求が「接続できた / 認証に失敗した」の違いから、許可ホスト上で待ち受けている他サービスを探るポートスキャンの踏み台になり得ます。本番（`NODE_ENV=production`）では起動時にポート省略のエントリがあると `config.allowlist_without_port` を警告します。接続先プリセット（`TSMYADMIN_SERVERS`）はそのプリセットの `host:port` だけを自動で許可します。
 
+### Docker コンテナの自動検出（開発用）
+
+`TSMYADMIN_DOCKER_DISCOVERY=1` は、Docker ソケットを読み、検出したコンテナの**公開 `ホスト:ポート` だけ**を許可リストに加えます（ポート単位で、別のポートや別のホストは広げません）。ソケットを読めることはホストの root と同じ強さなので、**開発機の手元だけ**で使い、`NODE_ENV=production` では起動時に拒否します。コードが発行するのは `GET /containers/json` と `GET /containers/<id>/json` だけで、コンテナの環境変数からは `MYSQL_DATABASE` / `MARIADB_DATABASE` / `POSTGRES_DB` しか取り出しません（パスワードは読まず、返さず、記録しません）。ソケットを `:ro` でマウントしても Docker API への書き込みは防げないので、守りは「渡さないこと」です。使い方は [deployment.md](deployment.md#docker-で開発用に使うコンテナの自動検出)。
+
 ## ブルートフォース対策
 
 `POST /api/session` はクライアント IP + ユーザー名ごとに `LOGIN_RATE_LIMIT` 回 / `LOGIN_RATE_WINDOW_SECONDS` 秒に制限され、超過は `429 RATE_LIMITED`（`Retry-After` 付き）になります。

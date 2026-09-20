@@ -1,0 +1,20 @@
+# 開発用: 手元の Docker で動いている MySQL / MariaDB / PostgreSQL のコンテナを自動で見つけて開く。
+#   docker compose -f docker-compose.dev.yml up -d --build   →   http://localhost:3100
+# 本番では使えない（NODE_ENV=production では TSMYADMIN_DOCKER_DISCOVERY を拒否する）。詳細は docs/deployment.md。
+services:
+  tsmyadmin:
+    build: .
+    container_name: tsmyadmin-dev
+    # docker.sock は root（または docker グループ）だけが読める。イメージの既定 uid 1000 では開けない
+    user: "0:0"
+    environment:
+      # イメージは既定で production: 開発の既定（メモリのセッション、Secure なし）に上書きする
+      NODE_ENV: development
+      TSMYADMIN_DOCKER_DISCOVERY: "1"
+    ports:
+      - "127.0.0.1:3100:3100"
+    volumes:
+      # 読むのは GET /containers/json と GET /containers/<id>/json だけ。ソケットを渡すこと自体が強い権限なので手元の開発専用
+      - /var/run/docker.sock:/var/run/docker.sock
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
