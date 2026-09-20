@@ -1,4 +1,4 @@
-<!-- translated-from: docs/user-guide.md sha256:b6e0d7f9461648cf9c3a24da26328a66ce465bcf47ae27be64379aefc488a78e -->
+<!-- translated-from: docs/user-guide.md sha256:932dcdb21827113e180451c8aeb0ea95f673d155d6fd117e7113c67e6d68be64 -->
 
 # User guide
 
@@ -232,4 +232,4 @@ Every run is autocommitted. A script that ends with a transaction still open is 
 - An import file may be up to 64 MB
 - The DROP half of **Add DROP TABLE IF EXISTS** (PostgreSQL) is wrapped in one transaction, but if the client restoring the dump does not stop on errors (`psql`'s default) and a DROP fails because an object outside the dump depends on it, the INSERTs still run and rows can be duplicated. Restore with errors fatal (`psql -v ON_ERROR_STOP=1`; tsmyadmin's own import does this by default)
 - PostgreSQL has no event scheduler (use an extension such as `pg_cron`)
-- Routines and triggers can be listed and their definitions shown, and **Edit in SQL tab** loads a script that replaces the definition into the editor (read it before running it). Creating a new one is done from the SQL tab
+- Routines, triggers and events are created with a form and can be run, dropped and downloaded. Changing an existing definition goes through **Open in SQL tab**, which loads a script that replaces the definition into the editor (read it before running it; editing in a form is not available yet)

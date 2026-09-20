@@ -1,4 +1,4 @@
-<!-- translated-from: docs/security.md sha256:f4b418709a52156bb43b5aa0d235ee6061b2539dad0ff04bed473fe4a024d282 -->
+<!-- translated-from: docs/security.md sha256:023f1a67072d7cbf3f30589ab9e265ec06ecbae2a64b1fb05665392d52bf88be -->
 
 # Security model
 
@@ -65,7 +65,7 @@ Credentials stay on the server, but for convenience the following is kept in **t
 | The last server signed in to | Dialect, host, port, username and database (**never the password**) |
 | Display settings | Language, theme, whether the sidebar is open, rows per page, and so on |
 
-On a shared machine, run **Clear history** in the SQL tab and sign out before you leave. `localStorage` is never sent to the server, so tsmyadmin cannot clear it for you.
+On a shared machine, run **Clear history** in the SQL tab and sign out before you leave. Without a persistent session store the history lives only in the browser's `localStorage`, which is never sent to the server, so tsmyadmin cannot clear it for you. With a persistent store the history is kept, encrypted, with the account, and **Clear history** removes the server's copy too.
 
 ## If `SESSION_SECRET` leaks
 
