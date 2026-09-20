@@ -1,4 +1,4 @@
-<!-- translated-from: docs/phpmyadmin-parity.md sha256:694f5aa999e5f47979aefabf9e9dacc43b58dfaf1e13d0f50df33d6bbcb60afa -->
+<!-- translated-from: docs/phpmyadmin-parity.md sha256:35c0edf7f2aa002e331f3a982d485b697df7ed1bf402ba01282f746bf9a68977 -->
 
 # Feature parity with phpMyAdmin
 
@@ -71,6 +71,8 @@ In 2026-09 every phpMyAdmin screen was audited again: ten rows marked ✅ went b
 | D19 | Tracking: deleting a version, and downloading its definition as SQL | ✗ |
 | D20 | Query builder: inserting a column before another (Ins / Del) | △ (append only) |
 | D21 | Database search: deleting the matching rows | ✗ (browse only) |
+| D22 | Designer: exporting the schema as DIA / EPS | ✗ |
+| D23 | Structure: proposing a table structure (the best type for each column from its values; MySQL 8.0 has no PROCEDURE ANALYSE, so the values are read and the type inferred on the client) | ✗ |
 
 ## Table
 
@@ -92,7 +94,7 @@ In 2026-09 every phpMyAdmin screen was audited again: ten rows marked ✅ went b
 | T14 | Relations: foreign keys to another database, display column | ✅ |
 | T15 | Operations: ROW_FORMAT, changing every column's collation, ALTER TABLE ORDER BY, CHECKSUM, FLUSH, copy options | ✅ |
 | T16 | Tracking: choosing which kinds of statement to record | ✅ |
-| T17 | Browse: show all rows (to decide: the 1,000 rows per page cap is deliberate; make it a setting, or mark it out of scope) | ✗ |
+| T17 | Browse: show all rows (a setting lifts the 1,000 rows per page cap; a warning above 10,000 rows) | ✗ |
 | T18 | Structure: "browse distinct values" of a column (DISTINCT with counts) | ✗ |
 | T19 | Operations: check referential integrity (rows without a parent, per foreign key) | ✗ |
 | T20 | Operations: more table options (PACK_KEYS / DELAY_KEY_WRITE / TRANSACTIONAL / PAGE_CHECKSUM / STATS_PERSISTENT / STATS_AUTO_RECALC) | ✗ |
@@ -142,6 +144,9 @@ In 2026-09 every phpMyAdmin screen was audited again: ten rows marked ✅ went b
 | G23 | The "Features" and "Main panel" settings (default tab, default insert row count, repeated headers every N rows, confirm DROP, grid editing default, save on blur…) | ✗ |
 | G24 | Display transformation: a download link for binary values. Input transformation: IPv4 → integer | ✗ |
 | G25 | A PostgreSQL note on each row where the equivalent is missing or different (S1 / S8 / S13 / D1 / D9 / D11 / T10 / T13 / T15) | ✗ (docs only) |
+| G26 | The console's "Debug SQL" tab (the statements the screens issued, with timings) | ✗ |
+| G27 | The Formatted display transformation (a value shown as HTML; sanitising is a must) | ✗ |
+| G28 | The Imagelink display transformation (an external image URL; the allowed hosts come from an environment variable and are added to the CSP's `img-src`) | ✗ |
 
 ## Quality debt (found in review, still open)
 
@@ -174,10 +179,7 @@ In 2026-09 every phpMyAdmin screen was audited again: ten rows marked ✅ went b
 | HTTP / config / signon authentication, reCAPTCHA, the web setup script | Replaced by the login form, two-factor authentication and environment variables |
 | Saving files on the server, upload directories | Does not fit running in a container (downloads and uploads are used instead) |
 | Display transformations that run external commands | They would run arbitrary commands on the server |
-| Designer DIA / EPS export | Legacy formats; SVG and PDF (print) cover the use |
-| Proposing a table structure (PROCEDURE ANALYSE) | Removed in MySQL 8.0 |
-| The Formatted (raw HTML), Imagelink (external image URL) and External (external command) transformations | XSS, the CSP (no external images) and arbitrary command execution respectively |
-| The console's "Debug SQL" tab | A list of the statements the screens issue internally; profiling and the audit log cover it |
+| The External (external command) transformation | It would run arbitrary commands on the server (the same reason as the row above) |
 
 ## Remaining work in detail
 
@@ -218,12 +220,14 @@ Steps for the next (implementing) session. Go batch by batch from A, one commit 
 - **D19** (M): `DELETE …/tracking/:version` in `apps/api/src/routes/tracking.ts`; delete and "Download SQL" in `TrackingPage.tsx`.
 - **D20** (S): "insert before" on each output column of the query builder.
 - **D21** (S): a "Delete" action on database search results (a DELETE with the same WHERE, through the preview).
+- **D22** (M): from the same layout as `features/database/designer-svg.ts`, write DIA (XML: boxes and lines in a `<dia:diagram>`) and EPS (PostScript text) in `designer-dia.ts` / `designer-eps.ts`, and add them to the toolbar. Done: the files open in `dia` and `gs` (checked once by hand; the unit tests look at the structure only).
+- **D23** (M): move the type inference of `apps/api/src/lib/import-create.ts` to `packages/shared` so the web can use it; "Propose a structure" in `ColumnsTable.tsx` reads the first rows of each column (`/rows`, up to 1,000), proposes a narrower type than the current one and hands it to the `changeColumn` preview. Done: an E2E proposes `INT` for a `VARCHAR(255)` column holding only integers.
 
 ### Batch D: table (the △ of T1 / T4, T17–T23)
 
 - **T1** (M): move `features/sql/StatementActions.tsx` and `SqlCodeDialog.tsx` to `components/` and give `features/browse/ExecutedStatement.tsx` Edit / EXPLAIN / As code / Bookmark (`useSavedQueries`) / Refresh.
 - **T4** (M): at the foot of `RowForm.tsx`: "afterwards: stay here / back to the list / edit the next row", "ignore errors" (`INSERT IGNORE` / `ON CONFLICT DO NOTHING`), and "Preview SQL" (values shown as bound).
-- **T17** (S–M, to decide): the 1,000-row cap is deliberate. If built, lift it through a setting and warn above 10,000 rows; if not, write the reason under out of scope.
+- **T17** (S–M): "Show all" in `Pagination.tsx`, enabled by a `browseUnlimited` setting (off by default). Allow `limit=0` beyond `BROWSE_MAX_LIMIT` (shared schema and the adapter's `browseRows`) and warn before fetching more than 10,000 rows. The grid is already virtualised.
 - **T18** (S): "distinct values" per column in `ColumnsTable.tsx` (`SELECT col, COUNT(*) … GROUP BY` through `/sql` into a small dialog).
 - **T19** (S): "Check referential integrity" in `TableOperations.tsx` (`LEFT JOIN … WHERE ref IS NULL` per foreign key).
 - **T20** (S): the MySQL options on the `setTableOptions` op, `TableOptionsForm.tsx` and snapshots (PostgreSQL: UNSUPPORTED).
@@ -247,6 +251,9 @@ Steps for the next (implementing) session. Go batch by batch from A, one commit 
 - **G3** (S): covered by the G18 change.
 - **G7 / G24** (S): `download` in `DISPLAY_TRANSFORMS` (the download URL from `lib/cell-url.ts`), `ipv4-to-int` in `INPUT_TRANSFORMS` (converted in `RowForm`'s `writtenValue`).
 - **G25** (S, docs only): a "On PostgreSQL…" note on the rows concerned (no events, no REQUIRE SSL, no CHECK / REPAIR, no column reordering, no partitioning of an existing table…), based on the UNSUPPORTED cases in `packages/adapter/src/postgres/ddl.ts`.
+- **G26** (M): in `lib/api.ts` (`unwrap` / `streamSql`), record the SQL the screens issue (`/sql`, the `executedSql` of `/rows`) with its duration in a ring buffer of this browser (200 at most), and add a "Debug SQL" tab to the docked console (time, duration, statement, run again). Mask statements holding a password as the audit log does.
+- **G27** (M): add `html` to `DISPLAY_TRANSFORMS` and draw it in `TransformedCell.tsx` **after sanitising** (the `Sanitizer` API where it exists, else an allowlist of tags and attributes — `p b i u em strong a[href=http(s)] ul ol li br code pre table tr td th` — of our own). `javascript:` / `data:` hrefs and `on*` attributes are always dropped. Done: a unit test shows `<img onerror>` and `<script>` are not rendered.
+- **G28** (M): an environment variable `TSMYADMIN_IMAGE_HOSTS` (comma-separated hosts allowed; in `apps/api/src/config.ts`, `.env.example`, `docs/deployment.md` and `docs/en/deployment.md`) added to the CSP's `img-src` (`apps/api/src/app.ts`); `imagelink` in `DISPLAY_TRANSFORMS` (the value, or the template with the value put in, as an http(s) URL in an `<img>`; a host outside the list is shown as a link). Done: an E2E in which only images from an allowed host are drawn (the API serves a test image at `/e2e-image`).
 
 ### Batch F: export / import (E9–E10)
 

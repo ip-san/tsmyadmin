@@ -69,6 +69,8 @@ phpMyAdmin 5.2 の全画面（サーバー・データベース・テーブル�
 | D19 | 追跡: バージョンごとの削除と、その定義の SQL ダウンロード | ✗ |
 | D20 | クエリビルダー: カラムの前への挿入（Ins / Del） | △（末尾に追加のみ） |
 | D21 | データベース検索: 一致した行の削除 | ✗（表示のみ） |
+| D22 | デザイナ: DIA / EPS 形式でのスキーマ図の出力 | ✗ |
+| D23 | 構造: テーブル構造の提案（各カラムの値から最適な型を提案。MySQL 8.0 に PROCEDURE ANALYSE はないため、値を読んでクライアント側で推定する） | ✗ |
 
 ## テーブル
 
@@ -90,7 +92,7 @@ phpMyAdmin 5.2 の全画面（サーバー・データベース・テーブル�
 | T14 | リレーション: 別データベースへの外部キー、表示カラム | ✅ |
 | T15 | 操作: ROW_FORMAT、全カラムの照合順序の変更、ALTER TABLE ORDER BY、CHECKSUM、FLUSH、コピーの詳細オプション | ✅ |
 | T16 | 追跡: 記録する文の種類の選択 | ✅ |
-| T17 | 表示: すべての行を表示（要判断: 1 ページ 1,000 行の上限は意図した制限。設定で解除できる形にするか、対象外にするか） | ✗ |
+| T17 | 表示: すべての行を表示（設定で 1 ページ 1,000 行の上限を外せるようにし、10,000 行を超えるときは警告する） | ✗ |
 | T18 | 構造: カラムの「個別の値を表示」（DISTINCT と件数） | ✗ |
 | T19 | 操作: 参照整合性の確認（外部キーごとに親のない行を探す） | ✗ |
 | T20 | 操作: テーブルオプションの追加（PACK_KEYS / DELAY_KEY_WRITE / TRANSACTIONAL / PAGE_CHECKSUM / STATS_PERSISTENT / STATS_AUTO_RECALC） | ✗ |
@@ -140,6 +142,9 @@ phpMyAdmin 5.2 の全画面（サーバー・データベース・テーブル�
 | G23 | 設定の「機能」「メインパネル」の項目（既定のタブ、挿入の既定行数、N 行ごとの見出し、DROP の確認、グリッド編集の既定、フォーカスが外れたら保存 など） | ✗ |
 | G24 | 表示変換: バイナリのダウンロードリンク。入力変換: IPv4 → 整数 | ✗ |
 | G25 | 対応表の各行に PostgreSQL での差（同等機能がない・代替）を注記する（S1 / S8 / S13 / D1 / D9 / D11 / T10 / T13 / T15） | ✗（文書のみ） |
+| G26 | コンソールの「デバッグ SQL」タブ（画面が発行した文と所要時間の一覧） | ✗ |
+| G27 | 表示変換の Formatted（値を HTML として表示。サニタイズ必須） | ✗ |
+| G28 | 表示変換の Imagelink（外部の画像 URL を表示。許可するホストを環境変数で指定し、CSP の `img-src` に足す） | ✗ |
 
 ## 品質負債（レビューで見つかり、未対応のもの）
 
@@ -172,10 +177,7 @@ phpMyAdmin 5.2 の全画面（サーバー・データベース・テーブル�
 | HTTP / config / signon 認証、reCAPTCHA、Web の設定スクリプト | ログインフォーム・2 要素認証・環境変数で置き換えている |
 | サーバー上へのファイル保存、アップロード用ディレクトリ | コンテナで動かす前提と合わない（ダウンロード / アップロードで扱う） |
 | 外部コマンドを使う表示変換 | サーバーで任意のコマンドを実行することになる |
-| デザイナの DIA / EPS 出力 | 旧来の形式で、SVG と PDF（印刷）で用が足りる |
-| テーブル構造の提案（PROCEDURE ANALYSE） | MySQL 8.0 で削除された |
-| 表示変換の Formatted（HTML をそのまま表示）、Imagelink（外部画像の URL）、External（外部コマンド） | それぞれ XSS、CSP（外部画像を読まない）、任意コマンドの実行になる |
-| コンソールの「デバッグ SQL」タブ | 画面が内部で発行する文の一覧。プロファイリングと監査ログで足りる |
+| 表示変換の External（外部コマンド） | サーバーで任意のコマンドを実行することになる（上の行と同じ理由） |
 
 ## 残作業の詳細
 
@@ -216,12 +218,14 @@ phpMyAdmin 5.2 の全画面（サーバー・データベース・テーブル�
 - **D19**（M）: `apps/api/src/routes/tracking.ts` に `DELETE …/tracking/:version`、`TrackingPage.tsx` に削除と「SQL をダウンロード」。
 - **D20**（S）: クエリビルダーの各出力カラムに「前に挿入」。
 - **D21**（S）: データベース検索の結果に「削除」（同じ WHERE の DELETE をプレビュー経由で）。
+- **D22**（M）: `features/database/designer-svg.ts` と同じ配置から DIA（XML。`<dia:diagram>` に箱と線）と EPS（PostScript のテキスト）を書き出す関数を `designer-dia.ts` / `designer-eps.ts` に置き、ツールバーに追加。完了条件: 出力を `dia` と `gs` で開ける（手元で 1 度確認し、単体テストは構造だけ見る）。
+- **D23**（M）: `apps/api/src/lib/import-create.ts` の型推定を `packages/shared` に移して web から使い、`ColumnsTable.tsx` の「構造の提案」で各カラムの先頭 N 行（`/rows` で最大 1,000 行）を読み、今の型より狭い型を提案して `changeColumn` のプレビューへ渡す。完了条件: `VARCHAR(255)` に整数だけ入ったカラムに `INT` を提案する E2E。
 
 ### バッチ D: テーブル（T1 / T4 の △、T17〜T23）
 
 - **T1**（M）: `features/sql/StatementActions.tsx` と `SqlCodeDialog.tsx` を `components/` に移し、`features/browse/ExecutedStatement.tsx` に 編集 / EXPLAIN / コード化 / ブックマーク（`useSavedQueries`）/ 更新 を付ける。
 - **T4**（M）: `RowForm.tsx` の末尾に「挿入後: この画面に留まる / 一覧へ戻る / 次の行を編集」と「エラーを無視」（`INSERT IGNORE` / `ON CONFLICT DO NOTHING`）、「SQL をプレビュー」（値はバインド表示）。
-- **T17**（S〜M、要判断）: 1,000 行の上限は意図した制限。実装するなら設定で解除し、10,000 行超で警告する。対象外にするなら理由を書く。
+- **T17**（S〜M）: `Pagination.tsx` に「すべて表示」を足し、設定 `browseUnlimited`（既定オフ）で有効にする。`BROWSE_MAX_LIMIT` を超える取得は `limit=0` を許す形にし（shared スキーマと adapter の `browseRows`）、10,000 行を超えるときは取得前に警告する。グリッドは既に仮想化されている。
 - **T18**（S）: `ColumnsTable.tsx` の各カラムに「個別の値」（`SELECT col, COUNT(*) … GROUP BY` を `/sql` で実行して小さなダイアログに）。
 - **T19**（S）: `TableOperations.tsx` に「参照整合性の確認」（外部キーごとに `LEFT JOIN … WHERE ref IS NULL`）。
 - **T20**（S）: `setTableOptions` op に MySQL のオプションを足し、`TableOptionsForm.tsx` と スナップショット（PostgreSQL は UNSUPPORTED）。
@@ -245,6 +249,9 @@ phpMyAdmin 5.2 の全画面（サーバー・データベース・テーブル�
 - **G3**（S）: G18 と同じ変更で満たす。
 - **G7 / G24**（S）: `DISPLAY_TRANSFORMS` に `download`（`lib/cell-url.ts` のダウンロード URL）、`INPUT_TRANSFORMS` に `ipv4-to-int`（`RowForm` の `writtenValue` で変換）。
 - **G25**（S、文書のみ）: 対応表の該当行に「PostgreSQL では…」を足す（イベントなし、REQUIRE SSL なし、CHECK / REPAIR なし、カラム順の変更なし、既存テーブルのパーティション化なし など。`packages/adapter/src/postgres/ddl.ts` の UNSUPPORTED を根拠に）。
+- **G26**（M）: `lib/api.ts` の `unwrap` / `streamSql` で、画面が発行した SQL（`/sql`、`/rows` の `executedSql`）とその所要時間をこのブラウザーの ring buffer（最大 200 件）に記録し、ドックのコンソールに「デバッグ SQL」タブ（時刻・所要時間・文・再実行）。パスワードを含む文は監査ログと同じマスクをかける。
+- **G27**（M）: `DISPLAY_TRANSFORMS` に `html` を足し、`TransformedCell.tsx` で **サニタイズしてから** 描く（`Sanitizer` API があればそれを、なければ許可タグ・属性の allowlist（`p b i u em strong a[href=http(s)] ul ol li br code pre table tr td th`）で自前に）。`javascript:` / `data:` の href と `on*` 属性は必ず落とす。完了条件: `<img onerror>` と `<script>` が描かれない単体テスト。
+- **G28**（M）: 環境変数 `TSMYADMIN_IMAGE_HOSTS`（許可するホストのカンマ区切り。`apps/api/src/config.ts`・`.env.example`・`docs/deployment.md`・`docs/en/deployment.md` の 3 か所 + 英訳）を足し、CSP の `img-src` にそれを加える（`apps/api/src/app.ts`）。`DISPLAY_TRANSFORMS` に `imagelink`（値、またはテンプレートに値を差し込んだ http(s) URL を `<img>` に。ホストが許可リストになければリンクとして表示）。完了条件: 許可したホストの画像だけが描かれる E2E（テスト用の画像は API が `/e2e-image` で配る）。
 
 ### バッチ F: エクスポート / インポート（E9〜E10）
 
