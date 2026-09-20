@@ -32,7 +32,8 @@ export function Textarea({
 export function Select({ className, ...rest }: SelectHTMLAttributes<HTMLSelectElement>) {
   // Tailwind emits `w-auto` before `w-full`, so a caller's width class must replace the control's, not join it.
   const base = className && /(?:^|\s)w-/.test(className) ? control.replace('w-full ', '') : control
-  return <select className={cn(base, 'select-chevron', className)} {...rest} />
+  // `pr-8` repeats the chevron's right padding: `px-2.5` in the control is emitted later than a custom utility and would win.
+  return <select className={cn(base, 'select-chevron pr-8', className)} {...rest} />
 }
 
 function Label({ children, htmlFor, className }: { children: ReactNode; htmlFor: string; className?: string }) {

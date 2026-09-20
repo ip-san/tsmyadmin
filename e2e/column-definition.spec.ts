@@ -1,5 +1,5 @@
 import { expect, type Page } from '@playwright/test'
-import { confirmPreview, login, TARGETS, type Target, tableUrl, test } from './helpers.ts'
+import { confirmPreview, fillType, login, TARGETS, type Target, tableUrl, test } from './helpers.ts'
 
 async function sql(page: Page, t: Target, statement: string) {
   const res = await page.request.post(`/api/databases/${t.database}/sql`, {
@@ -19,7 +19,7 @@ for (const t of TARGETS) {
         await page.getByRole('button', { name: 'カラムを追加' }).click()
         const dialog = page.getByRole('dialog')
         await dialog.getByLabel('カラム名').fill('total')
-        await dialog.getByLabel('型', { exact: true }).fill('INT')
+        await fillType(dialog, 'INT')
         await dialog.getByLabel('生成カラム（式から値を計算する）').check()
         // A generated column has no default or auto-increment of its own.
         await expect(dialog.getByLabel('既定値', { exact: true })).toBeDisabled()

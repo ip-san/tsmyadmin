@@ -1,5 +1,5 @@
 import { expect, type Page } from '@playwright/test'
-import { login, PERSISTENT_BASE_URL, TARGETS, type Target, tableUrl, test } from './helpers.ts'
+import { fillType, login, PERSISTENT_BASE_URL, TARGETS, type Target, tableUrl, test } from './helpers.ts'
 
 async function sql(page: Page, t: Target, statement: string) {
   const res = await page.request.post(`/api/databases/${t.database}/sql`, {
@@ -18,7 +18,7 @@ async function exercise(page: Page, t: Target) {
     await page.goto(dbUrl(t, '/central'))
     const add = page.locator('form').filter({ has: page.getByRole('button', { name: '追加する' }) })
     await add.getByLabel('カラム名').fill('status')
-    await add.getByLabel('型', { exact: true }).fill('VARCHAR(20)')
+    await fillType(add, 'VARCHAR(20)')
     await add.getByLabel('既定値', { exact: true }).fill('new')
     await add.getByRole('button', { name: '追加する' }).click()
     const list = page.getByRole('table', { name: 'セントラルカラム' })
@@ -28,7 +28,7 @@ async function exercise(page: Page, t: Target) {
     await page.getByRole('button', { name: 'status: 編集' }).click()
     const edit = page.locator('form').filter({ has: page.getByRole('button', { name: '保存する' }) })
     await expect(edit.getByLabel('カラム名')).toHaveValue('status')
-    await edit.getByLabel('型', { exact: true }).fill('VARCHAR(40)')
+    await fillType(edit, 'VARCHAR(40)')
     await edit.getByRole('button', { name: '保存する' }).click()
     await expect(list.getByRole('row', { name: /status/ })).toContainText('VARCHAR(40)')
     await expect(list.getByRole('row', { name: /status/ })).not.toContainText('VARCHAR(20)')
@@ -51,7 +51,7 @@ async function exercise(page: Page, t: Target) {
     const dialog = page.getByRole('dialog')
     await dialog.getByLabel('セントラルカラムから入力').selectOption('status')
     await expect(dialog.getByLabel('カラム名')).toHaveValue('status')
-    await expect(dialog.getByLabel('型', { exact: true })).toHaveValue('VARCHAR(40)')
+    await expect(dialog.getByLabel('長さ・値・属性', { exact: true })).toHaveValue('(40)')
     await dialog.getByRole('button', { name: /SQL を確認|次へ/ }).click()
     await expect(page.getByRole('dialog').getByLabel('SQL')).toContainText(/status.*VARCHAR\(40\).*DEFAULT 'new'/is)
   } finally {

@@ -6,9 +6,9 @@ import { Card } from '@/components/ui/Card.tsx'
 import { ErrorBox, Notice } from '@/components/ui/Feedback.tsx'
 import { Field, Input, Select } from '@/components/ui/Field.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
+import { TypeInput } from '@/components/ui/TypeInput.tsx'
 import { locale } from '@/config/locale.ts'
 import { useCentralColumns } from '@/lib/central-columns.ts'
-import { TYPE_SUGGESTIONS } from '@/lib/column-spec.ts'
 import { downloadText, safeFilename } from '@/lib/download.ts'
 import { centralColumnsQuery, mutations, structureQuery, tablesQuery } from '@/lib/queries.ts'
 
@@ -71,19 +71,7 @@ function AddForm({
         <Input id={`${id}-name`} value={name} onChange={(e) => setName(e.target.value)} required autoComplete="off" />
       </Field>
       <Field id={`${id}-type`} label={locale.ddl.dataType}>
-        <Input
-          id={`${id}-type`}
-          list={`${id}-types`}
-          value={dataType}
-          onChange={(e) => setDataType(e.target.value)}
-          required
-          className="font-mono"
-        />
-        <datalist id={`${id}-types`}>
-          {TYPE_SUGGESTIONS[dialect].map((s) => (
-            <option key={s} value={s} />
-          ))}
-        </datalist>
+        <TypeInput id={`${id}-type`} dialect={dialect} value={dataType} onChange={setDataType} />
       </Field>
       <Field id={`${id}-default`} label={locale.ddl.default}>
         <Input id={`${id}-default`} value={def} onChange={(e) => setDef(e.target.value)} className="font-mono" />

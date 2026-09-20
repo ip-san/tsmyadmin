@@ -1,5 +1,5 @@
 import { expect } from '@playwright/test'
-import { confirmPreview, login, TARGETS, tableUrl, test } from './helpers.ts'
+import { confirmPreview, fillType, login, TARGETS, tableUrl, test } from './helpers.ts'
 
 for (const t of TARGETS) {
   test.describe(`structure / ddl (${t.dialect})`, () => {
@@ -15,7 +15,7 @@ for (const t of TARGETS) {
       await page.goto(dbUrl)
       await page.getByLabel('テーブル名').fill(table)
       await page.getByLabel('カラム名 2').fill('name')
-      await page.getByLabel('型 2').fill('VARCHAR(50)')
+      await fillType(page, 'VARCHAR(50)', 2)
       await page.getByRole('button', { name: '次へ（SQL を確認）' }).click()
       await confirmPreview(page, /CREATE TABLE/)
       // A new table opens on its structure tab; the database list shows it too. The destination must be rendered
@@ -30,7 +30,7 @@ for (const t of TARGETS) {
       await page.goto(tableUrl(t, table, '/structure'))
       await page.getByRole('button', { name: 'カラムを追加' }).click()
       await page.getByLabel('カラム名').fill('n')
-      await page.getByLabel('型', { exact: true }).fill('INT')
+      await fillType(page, 'INT')
       await page.getByRole('dialog').getByRole('button', { name: '次へ（SQL を確認）' }).click()
       await confirmPreview(page, /ADD COLUMN/)
       // CREATE statement section loads on demand.
@@ -60,7 +60,7 @@ for (const t of TARGETS) {
       // modify column: rename n → n2, BIGINT NOT NULL
       await page.getByRole('button', { name: 'n: 変更', exact: true }).click()
       await page.getByLabel('カラム名').fill('n2')
-      await page.getByLabel('型', { exact: true }).fill('BIGINT')
+      await fillType(page, 'BIGINT')
       await page.getByLabel('NULL を許可').uncheck()
       await page.getByRole('dialog').getByRole('button', { name: '次へ（SQL を確認）' }).click()
       await confirmPreview(page, /ALTER TABLE/)
@@ -308,7 +308,7 @@ for (const t of TARGETS) {
       await page.goto(tableUrl(t, 'users', '/structure'))
       await page.getByRole('button', { name: 'カラムを追加' }).click()
       await page.getByLabel('カラム名').fill('id')
-      await page.getByLabel('型', { exact: true }).fill('INT')
+      await fillType(page, 'INT')
       await page.getByRole('dialog').getByRole('button', { name: '次へ（SQL を確認）' }).click()
       const dialog = page.getByRole('dialog')
       await dialog.getByRole('button', { name: '実行する' }).click()

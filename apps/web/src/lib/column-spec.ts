@@ -36,34 +36,115 @@ export const EMPTY_COLUMN: ColumnFormValues = {
   generated: null,
 }
 
-export const TYPE_SUGGESTIONS: Record<Dialect, string[]> = {
+/** The type names offered in the dropdown, most common first; length, values and attributes are typed beside it. */
+export const TYPE_NAMES: Record<Dialect, string[]> = {
   mysql: [
     'INT',
     'BIGINT',
-    'VARCHAR(255)',
+    'VARCHAR',
     'TEXT',
     'DATETIME',
     'TIMESTAMP',
     'DATE',
-    'DECIMAL(10,2)',
+    'DECIMAL',
     'BOOLEAN',
     'JSON',
     'BLOB',
+    'TINYINT',
+    'SMALLINT',
+    'MEDIUMINT',
+    'FLOAT',
+    'DOUBLE',
+    'BIT',
+    'CHAR',
+    'TINYTEXT',
+    'MEDIUMTEXT',
+    'LONGTEXT',
+    'BINARY',
+    'VARBINARY',
+    'TINYBLOB',
+    'MEDIUMBLOB',
+    'LONGBLOB',
+    'ENUM',
+    'SET',
+    'TIME',
+    'YEAR',
+    'GEOMETRY',
   ],
   postgres: [
     'integer',
     'bigint',
-    'varchar(255)',
+    'varchar',
     'text',
     'timestamp',
     'timestamptz',
     'date',
-    'numeric(10,2)',
+    'numeric',
     'boolean',
     'jsonb',
     'bytea',
     'uuid',
+    'smallint',
+    'serial',
+    'bigserial',
+    'real',
+    'double precision',
+    'char',
+    'character varying',
+    'timestamp without time zone',
+    'timestamp with time zone',
+    'time',
+    'timetz',
+    'interval',
+    'json',
+    'inet',
+    'cidr',
+    'macaddr',
   ],
+}
+
+/** What a type usually needs after its name, filled in when it is picked (MySQL refuses a bare VARCHAR). */
+const DEFAULT_TYPE_ARGS: Record<string, string> = {
+  varchar: '(255)',
+  varbinary: '(255)',
+  decimal: '(10,2)',
+  numeric: '(10,2)',
+}
+
+const defaultArgs = (base: string): string => DEFAULT_TYPE_ARGS[base.toLowerCase()] ?? ''
+
+/**
+ * A type expression as its name and the rest (`(255)`, `(10,2) UNSIGNED`, `[]`). Whatever the server reports or the
+ * user typed survives the round trip: an unlisted name is kept as it is, and text that starts with no name at all
+ * stays whole in the rest.
+ */
+export function splitType(dialect: Dialect, dataType: string): { base: string; rest: string } {
+  const t = dataType.trimStart()
+  const lower = t.toLowerCase()
+  let known = ''
+  for (const name of TYPE_NAMES[dialect]) {
+    if (
+      name.length > known.length &&
+      lower.startsWith(name.toLowerCase()) &&
+      !/[a-z0-9_]/.test(lower[name.length] ?? '')
+    ) {
+      known = name
+    }
+  }
+  if (known) return { base: known, rest: t.slice(known.length) }
+  const word = /^[A-Za-z_][A-Za-z0-9_]*/.exec(t)?.[0] ?? ''
+  return { base: word, rest: t.slice(word.length) }
+}
+
+export function joinType(base: string, rest: string): string {
+  return `${base}${rest}`
+}
+
+/** Picking another name keeps what the user typed after the old one, unless it was only the old name's usual arguments. */
+export function retypeName(dialect: Dialect, dataType: string, base: string): string {
+  const cur = splitType(dialect, dataType)
+  const rest = cur.rest === '' || cur.rest === defaultArgs(cur.base) ? defaultArgs(base) : cur.rest
+  return joinType(base, rest)
 }
 
 export function toColumnSpec(v: ColumnFormValues): ColumnSpec {

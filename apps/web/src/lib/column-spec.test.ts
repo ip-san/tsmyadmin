@@ -5,6 +5,8 @@ import {
   fromCentralColumn,
   fromColumnDef,
   retypeColumn,
+  retypeName,
+  splitType,
   toColumnSpec,
   validateColumn,
 } from '@/lib/column-spec.ts'
@@ -185,5 +187,30 @@ describe('validateColumn', () => {
     })
     expect(fromCentralColumn({ ...base, default: 'new', defaultIsExpression: false }).defaultKind).toBe('literal')
     expect(fromCentralColumn({ ...base, default: null, defaultIsExpression: false }).defaultKind).toBe('none')
+  })
+})
+
+describe('splitType / retypeName', () => {
+  it('splits a listed name from its arguments whatever the casing, longest name first', () => {
+    expect(splitType('mysql', 'varchar(255)')).toEqual({ base: 'VARCHAR', rest: '(255)' })
+    expect(splitType('mysql', 'int unsigned')).toEqual({ base: 'INT', rest: ' unsigned' })
+    expect(splitType('mysql', 'BIGINT')).toEqual({ base: 'BIGINT', rest: '' })
+    expect(splitType('postgres', 'timestamp with time zone')).toEqual({ base: 'timestamp with time zone', rest: '' })
+    expect(splitType('postgres', 'integer[]')).toEqual({ base: 'integer', rest: '[]' })
+  })
+
+  it('keeps an unlisted name and text with no name as they are', () => {
+    expect(splitType('mysql', 'MULTIPOLYGON')).toEqual({ base: 'MULTIPOLYGON', rest: '' })
+    expect(splitType('mysql', 'INTEGER(5)')).toEqual({ base: 'INTEGER', rest: '(5)' })
+    expect(splitType('mysql', '')).toEqual({ base: '', rest: '' })
+    expect(splitType('mysql', '(255)')).toEqual({ base: '', rest: '(255)' })
+  })
+
+  it('fills the usual arguments of a new name but keeps what the user typed', () => {
+    expect(retypeName('mysql', '', 'VARCHAR')).toBe('VARCHAR(255)')
+    expect(retypeName('mysql', 'VARCHAR(255)', 'INT')).toBe('INT')
+    expect(retypeName('mysql', 'VARCHAR(100)', 'CHAR')).toBe('CHAR(100)')
+    expect(retypeName('mysql', 'INT UNSIGNED', 'BIGINT')).toBe('BIGINT UNSIGNED')
+    expect(retypeName('postgres', 'numeric(10,2)', 'text')).toBe('text')
   })
 })

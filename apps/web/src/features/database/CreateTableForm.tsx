@@ -5,14 +5,9 @@ import { DdlPreviewDialog } from '@/components/ddl/DdlPreviewDialog.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { Field, Input, Select } from '@/components/ui/Field.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
+import { TypeInput } from '@/components/ui/TypeInput.tsx'
 import { locale } from '@/config/locale.ts'
-import {
-  type ColumnFormValues,
-  EMPTY_COLUMN,
-  TYPE_SUGGESTIONS,
-  toColumnSpec,
-  validateColumn,
-} from '@/lib/column-spec.ts'
+import { type ColumnFormValues, EMPTY_COLUMN, TYPE_NAMES, toColumnSpec, validateColumn } from '@/lib/column-spec.ts'
 import { useDdlFlow } from '@/lib/ddl.ts'
 
 interface Row extends ColumnFormValues {
@@ -36,7 +31,7 @@ export function CreateTableForm({
     {
       ...newRow(),
       name: 'id',
-      dataType: TYPE_SUGGESTIONS[dialect][0] ?? 'INT',
+      dataType: TYPE_NAMES[dialect][0] ?? 'INT',
       nullable: false,
       autoIncrement: true,
       primary: true,
@@ -130,12 +125,12 @@ export function CreateTableForm({
                 />
               </Td>
               <Td>
-                <Input
-                  aria-label={`${locale.ddl.dataType} ${i + 1}`}
-                  list="create-type-suggestions"
+                <TypeInput
+                  dialect={dialect}
+                  label={locale.ddl.dataType}
+                  labelSuffix={String(i + 1)}
                   value={r.dataType}
-                  onChange={(e) => update(i, { dataType: e.target.value })}
-                  className="min-w-28 font-mono"
+                  onChange={(dataType) => update(i, { dataType })}
                 />
               </Td>
               <Td className="text-center">
@@ -208,11 +203,6 @@ export function CreateTableForm({
           ))}
         </tbody>
       </Table>
-      <datalist id="create-type-suggestions">
-        {TYPE_SUGGESTIONS[dialect].map((t) => (
-          <option key={t} value={t} />
-        ))}
-      </datalist>
       <div className="grid max-w-3xl gap-2 sm:grid-cols-3">
         <Field id="new-table-comment" label={locale.database.comment}>
           <Input

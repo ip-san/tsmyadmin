@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect } from '@playwright/test'
-import { login, PASSKEY_BASE_URL, PERSISTENT_BASE_URL, TARGETS, tableUrl, test } from './helpers.ts'
+import { fillType, login, PASSKEY_BASE_URL, PERSISTENT_BASE_URL, TARGETS, tableUrl, test } from './helpers.ts'
 import { createAccount, dropAccount, enrol, t as first, signIn } from './two-factor.ts'
 
 async function scan(page: Parameters<typeof login>[0]) {
@@ -330,7 +330,7 @@ for (const t of TARGETS) {
       await page.goto(t.schema ? `/db/${t.database}/central?schema=${t.schema}` : `/db/${t.database}/central`)
       const add = page.locator('form').filter({ has: page.getByRole('button', { name: '追加する' }) })
       await add.getByLabel('カラム名').fill('created_at')
-      await add.getByLabel('型', { exact: true }).fill('timestamp')
+      await fillType(add, 'timestamp')
       await add.getByRole('button', { name: '追加する' }).click()
       await page.getByRole('table', { name: 'セントラルカラム' }).waitFor()
       await scan(page)

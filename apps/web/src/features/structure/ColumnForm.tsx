@@ -2,13 +2,13 @@ import type { CentralColumnBody, Dialect } from '@tsmyadmin/shared'
 import { type FormEvent, useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { Field, Input, Select } from '@/components/ui/Field.tsx'
+import { TypeInput } from '@/components/ui/TypeInput.tsx'
 import { locale } from '@/config/locale.ts'
 import {
   type ColumnFormValues,
   EMPTY_COLUMN,
   fromCentralColumn,
   retypeColumn,
-  TYPE_SUGGESTIONS,
   validateColumn,
 } from '@/lib/column-spec.ts'
 import { ColumnExtras } from './ColumnExtras.tsx'
@@ -88,19 +88,12 @@ export function ColumnForm({
           />
         </Field>
         <Field id="col-type" label={locale.ddl.dataType}>
-          <Input
+          <TypeInput
             id="col-type"
-            list="col-type-suggestions"
+            dialect={dialect}
             value={v.dataType}
-            onChange={(e) => setV((cur) => retypeColumn(cur, initial, e.target.value))}
-            required
-            className="font-mono"
+            onChange={(dataType) => setV((cur) => retypeColumn(cur, initial, dataType))}
           />
-          <datalist id="col-type-suggestions" aria-label={locale.ddl.typeSuggestions}>
-            {TYPE_SUGGESTIONS[dialect].map((t) => (
-              <option key={t} value={t} />
-            ))}
-          </datalist>
         </Field>
         <Field id="col-default-kind" label={locale.ddl.default}>
           <div className="flex gap-2">

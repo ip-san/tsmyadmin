@@ -1,5 +1,5 @@
 import { expect, type Page } from '@playwright/test'
-import { confirmPreview, login, TARGETS, type Target, tableUrl, test } from './helpers.ts'
+import { confirmPreview, fillType, login, TARGETS, type Target, tableUrl, test } from './helpers.ts'
 
 async function sql(page: Page, t: Target, statement: string) {
   const res = await page.request.post(`/api/databases/${t.database}/sql`, {
@@ -50,10 +50,10 @@ for (const t of TARGETS) {
         await page.getByLabel('c: 選ぶ').check()
         await page.getByRole('button', { name: 'まとめて変更…' }).click()
         await expect(page.getByRole('dialog', { name: 'カラムを変更（1 / 2）' })).toBeVisible()
-        await dialog.getByLabel('型', { exact: true }).fill('BIGINT')
+        await fillType(dialog, 'BIGINT')
         await dialog.getByRole('button', { name: '次へ（SQL を確認）' }).click()
         await expect(page.getByRole('dialog', { name: 'カラムを変更（2 / 2）' })).toBeVisible()
-        await dialog.getByLabel('型', { exact: true }).fill('BIGINT')
+        await fillType(dialog, 'BIGINT')
         await dialog.getByRole('button', { name: '次へ（SQL を確認）' }).click()
         await confirmPreview(page, /BIGINT[\s\S]*BIGINT/)
         await expect(columns.getByRole('row').filter({ hasText: /bigint/i })).toHaveCount(2)

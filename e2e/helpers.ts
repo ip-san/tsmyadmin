@@ -1,5 +1,5 @@
 import { mkdir, rm, stat } from 'node:fs/promises'
-import { test as base, expect, type Page } from '@playwright/test'
+import { test as base, expect, type Locator, type Page } from '@playwright/test'
 
 export interface Target {
   dialect: 'mysql' | 'postgres'
@@ -168,4 +168,16 @@ export async function confirmPreview(page: Page, expectSql: RegExp, confirmName?
   }
   await dialog.getByRole('button', { name: '実行する' }).click()
   await expect(dialog).toBeHidden()
+}
+
+/** Sets a data type such as `VARCHAR(50)`: the name in the dropdown (either dialect's casing), the rest in the field beside it. */
+export async function fillType(scope: Page | Locator, dataType: string, row?: number): Promise<void> {
+  const [, name = '', rest = ''] = /^([A-Za-z_]+)(.*)$/.exec(dataType) ?? []
+  const suffix = row === undefined ? '' : ` ${row}`
+  const select = scope.getByLabel(`型${suffix}`, { exact: true })
+  const options = await select.locator('option').allTextContents()
+  const label = options.find((o) => o.toLowerCase() === name.toLowerCase())
+  if (!label) throw new Error(`no type option for ${dataType}`)
+  await select.selectOption({ label })
+  await scope.getByLabel(`長さ・値・属性${suffix}`, { exact: true }).fill(rest)
 }
