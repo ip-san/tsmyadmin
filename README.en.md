@@ -1,4 +1,4 @@
-<!-- translated-from: README.md sha256:56f975300e70b913c918d6bd066705974aeac47d1496fc3de3bb09288c490b55 -->
+<!-- translated-from: README.md sha256:0b5641f8e01dce953bad242b2e0c546539b854fff3a7080edf295a20c3cffa63 -->
 
 # tsmyadmin
 
@@ -133,3 +133,5 @@ A single container, with the API serving the SPA. You **must** list the `host:po
 ## Licence
 
 MIT ([LICENSE](LICENSE))
+
+tsmyadmin takes its features and screen layout from phpMyAdmin (GPL), but contains none of its code, translations or images: everything is implemented independently. It is a separate tool and is not affiliated with phpMyAdmin.

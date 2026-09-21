@@ -133,3 +133,5 @@ docker run -d --name tsmyadmin \
 ## ライセンス
 
 MIT（[LICENSE](LICENSE)）
+
+phpMyAdmin（GPL）の機能と画面構成を参考にしていますが、そのコード・翻訳・画像は含まず、すべて独自に実装しています。phpMyAdmin とは無関係の別のツールです。
