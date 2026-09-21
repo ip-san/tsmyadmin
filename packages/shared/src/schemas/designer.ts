@@ -8,6 +8,8 @@ export const DesignerViewSchema = z.object({
   compact: z.boolean().default(false),
   /** Boxes snap to a grid while they are moved. */
   snap: z.boolean().default(false),
+  /** Each box is as wide as its longest table or column name (up to a limit), not a fixed width. */
+  fitWidth: z.boolean().default(false),
   /** The lines: curved, straight, or straight segments at right angles. */
   lineStyle: z.enum(['curve', 'straight', 'polyline']).default('curve'),
   /** A label (the key's columns) at the middle of each line. */

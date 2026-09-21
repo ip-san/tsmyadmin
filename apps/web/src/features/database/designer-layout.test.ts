@@ -2,16 +2,22 @@ import type { RelationDef } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
 import {
   autoLayout,
+  BOX_WIDTH,
   boxColumns,
   boxHeight,
+  columnLabel,
+  DEFAULT_VIEW,
   drawnRelations,
   fitText,
   GRID,
   HEADER_HEIGHT,
+  MAX_BOX_WIDTH,
+  makeWidthOf,
   relationLabel,
   relationPath,
   relationRoute,
   routeMiddle,
+  snapAll,
   snapToGrid,
   textRoom,
   withAllColumns,
@@ -152,5 +158,67 @@ describe('fitText', () => {
 
   it('always keeps something of a name that cannot fit at all', () => {
     expect(fitText('abcdef', 12, 1)).toBe('a…')
+  })
+})
+
+describe('box width to fit names', () => {
+  const columns = new Map([
+    ['users', ['id']],
+    ['customer_billing_address_history', ['id', 'a_rather_long_column_name']],
+    ['x'.repeat(200), []],
+  ])
+  const tables = [...columns.keys()]
+  const fit = { ...DEFAULT_VIEW, fitWidth: true }
+
+  it('is the fixed width unless asked', () => {
+    const widthOf = makeWidthOf({ tables, columns })
+    expect(tables.map(widthOf)).toEqual([BOX_WIDTH, BOX_WIDTH, BOX_WIDTH])
+  })
+
+  it('grows a box to its longest name, never below the fixed width or above the limit', () => {
+    const widthOf = makeWidthOf({ tables, columns, view: fit })
+    expect(widthOf('users')).toBe(BOX_WIDTH)
+    expect(widthOf('customer_billing_address_history')).toBeGreaterThan(BOX_WIDTH)
+    expect(widthOf('x'.repeat(200))).toBe(MAX_BOX_WIDTH)
+    // What it grew to is room enough: the name is not cut.
+    const name = 'customer_billing_address_history'
+    expect(fitText(name, 12, textRoom(8, widthOf(name)), true)).toBe(name)
+  })
+
+  it('counts only the table name in a compact box, and the display mark in a column', () => {
+    const widthOf = makeWidthOf({ tables, columns, view: { ...fit, compact: true } })
+    expect(widthOf('customer_billing_address_history')).toBeGreaterThan(BOX_WIDTH)
+    expect(columnLabel(new Map([['users', 'id']]), 'users', 'id')).toBe('◆ id')
+  })
+
+  it('anchors a line at the right edge of a wide box', () => {
+    const at = (t: string) => (t === 'posts' ? { x: 0, y: 0 } : { x: 600, y: 0 })
+    const columnsOf = () => ['id']
+    const key = rel('posts', 'users', { columns: ['id'], refColumns: ['id'] })
+    const route = relationRoute(key, at, columnsOf, 'straight', false, (t) => (t === 'posts' ? 400 : BOX_WIDTH))
+    expect(route).toMatchObject({ kind: 'lines', points: [{ x: 400 }, { x: 600 }] })
+  })
+
+  it('pushes the next automatic column to the right of a wide box', () => {
+    const relations = [rel('posts', 'users')]
+    const narrow = autoLayout(['users', 'posts'], relations)
+    const wide = autoLayout(['users', 'posts'], relations, (t) => (t === 'users' ? 400 : BOX_WIDTH))
+    expect(wide.users?.x).toBe(narrow.users?.x)
+    expect((wide.posts?.x ?? 0) - (narrow.posts?.x ?? 0)).toBe(200)
+  })
+})
+
+describe('snapAll', () => {
+  it('moves every position to the grid', () => {
+    expect(snapAll({ a: { x: 29, y: 31 }, b: { x: 16, y: 16 } })).toEqual({ a: { x: 20, y: 40 }, b: { x: 20, y: 20 } })
+  })
+})
+
+describe('automatic layout heights', () => {
+  it('leaves room for the columns a box lists when told how tall it is', () => {
+    const tables = ['a', 'b']
+    const tall = autoLayout(tables, [], undefined, () => boxHeight(10))
+    const short = autoLayout(tables, [])
+    expect((tall.b?.y ?? 0) - (short.b?.y ?? 0)).toBe(boxHeight(10) - boxHeight(0))
   })
 })

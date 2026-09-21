@@ -66,6 +66,26 @@ for (const t of TARGETS) {
         expect(problems.axe, JSON.stringify(problems.axe, null, 2)).toEqual([])
         expect(problems.layout, 'layout').toEqual([])
         await expect(whole.getByRole('listitem').filter({ hasText: column })).toHaveCount(1)
+
+        // Widening the boxes to their names: nothing is cut any more, and still nothing runs out of its box.
+        await page.getByLabel('名前に合わせて幅を広げる').check()
+        await expect(page.locator('figure svg title')).toHaveCount(0)
+        const stillOverflowing = await page.evaluate(() => {
+          const out: string[] = []
+          for (const group of document.querySelectorAll<SVGGElement>('figure svg g[role="button"]')) {
+            const width = group.querySelector('rect')?.getBBox().width ?? 0
+            for (const text of group.querySelectorAll('text')) {
+              const box = text.getBBox()
+              if (box.x + box.width > width + 0.5)
+                out.push(`${text.textContent} ends at ${box.x + box.width} of ${width}`)
+            }
+          }
+          return out
+        })
+        expect(stillOverflowing).toEqual([])
+        const wideProblems = await pageProblems(page)
+        expect(wideProblems.layout, 'layout').toEqual([])
+        await page.getByLabel('名前に合わせて幅を広げる').uncheck()
         // From the keyboard: focusing the other box shows its names instead.
         await page.getByRole('button', { name: new RegExp(`^テーブル ${parent}`) }).focus()
         await expect(whole).toContainText(parent)

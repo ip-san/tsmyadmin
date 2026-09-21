@@ -8,6 +8,7 @@ import { locale } from '@/config/locale.ts'
 import { useOpenInDatabaseConsole } from '@/lib/open-in-console.ts'
 import type { TableRef } from '@/lib/queries.ts'
 import { bookmarkName } from '@/lib/saved-queries.ts'
+import { explainStatement } from '@/lib/sql-text.ts'
 import { useSavedQueries } from '@/lib/use-saved-queries.ts'
 
 /** A bound value as text for reading, not for pasting back: strings are shown as they are, only marked. */
@@ -64,7 +65,7 @@ export function ExecutedStatement({
           handlers={{
             edit: openInSql,
             rerun: onRefresh,
-            explain: (sql) => openInSql(`EXPLAIN ${sql}`),
+            explain: (sql) => openInSql(explainStatement(sql), true),
             code: setCodeOf,
             bookmark: (sql) => {
               saved.save(bookmarkName(sql), sql)

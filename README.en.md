@@ -1,10 +1,10 @@
-<!-- translated-from: README.md sha256:a4fbffe112d8333798d3f73e6bb4fd498677c745398ba834a1f5adce28d4fd81 -->
+<!-- translated-from: README.md sha256:56f975300e70b913c918d6bd066705974aeac47d1496fc3de3bb09288c490b55 -->
 
 # tsmyadmin
 
 *日本語版: [README.md](README.md)*
 
-**A phpMyAdmin clone that opens the MySQL / PostgreSQL databases running in your development Docker from the browser, without writing their addresses down** (written in TypeScript, for MySQL and PostgreSQL alike).
+**A web-based MySQL / PostgreSQL admin tool that opens the databases running in your development Docker from the browser, without writing their addresses down** (with a phpMyAdmin-style layout, written in TypeScript, for MySQL and PostgreSQL alike).
 
 ## Quick start (development)
 

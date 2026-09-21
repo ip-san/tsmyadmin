@@ -282,6 +282,10 @@ export const en = {
   designer: {
     compact: 'Table names only',
     snap: 'Snap to grid',
+    snapHint: 'Shows a 20 px grid and lines up the boxes already placed on it; later moves land on it too',
+    fitWidth: 'Widen boxes to fit names',
+    fitWidthHint:
+      'Makes each box as wide as its longest table or column name (up to a limit); the automatic layout spaces its columns to match',
     showLines: 'Show lines',
     lineLabels: 'Label the lines',
     lineStyle: 'Line shape',

@@ -1,10 +1,11 @@
 import {
-  BOX_WIDTH,
   boxHeight,
+  columnLabel,
   DEFAULT_VIEW,
   type DiagramInput,
   fitText,
   HEADER_HEIGHT,
+  makeWidthOf,
   ROW_HEIGHT,
   relationLabel,
   relationPath,
@@ -26,13 +27,14 @@ export function diagramSvg(o: DiagramInput): string {
   const at = (table: string) => o.positions[table] ?? { x: 0, y: 0 }
   const view = o.view ?? DEFAULT_VIEW
   const columnsOf = (table: string) => (view.compact ? [] : (o.columns.get(table) ?? []))
-  const width = Math.max(...o.tables.map((n) => at(n).x + BOX_WIDTH)) + PAD
+  const widthOf = makeWidthOf(o)
+  const width = Math.max(...o.tables.map((n) => at(n).x + widthOf(n))) + PAD
   const height = Math.max(...o.tables.map((n) => at(n).y + boxHeight(columnsOf(n).length, view.compact))) + PAD
   const lines = view.showLines
     ? o.relations.flatMap((r) => {
-        const path = `<path d="${relationPath(r, at, columnsOf, view.lineStyle, view.compact)}" fill="none" stroke="#2563eb" stroke-width="1.5"/>`
+        const path = `<path d="${relationPath(r, at, columnsOf, view.lineStyle, view.compact, widthOf)}" fill="none" stroke="#2563eb" stroke-width="1.5"/>`
         if (!view.lineLabels) return [path]
-        const mid = routeMiddle(relationRoute(r, at, columnsOf, view.lineStyle, view.compact))
+        const mid = routeMiddle(relationRoute(r, at, columnsOf, view.lineStyle, view.compact, widthOf))
         return [
           path,
           `<text x="${mid.x}" y="${mid.y - 4}" font-size="10" text-anchor="middle" fill="#2563eb">${xmlText(relationLabel(r))}</text>`,
@@ -45,21 +47,21 @@ export function diagramSvg(o: DiagramInput): string {
     // A name longer than the box is cut with an ellipsis (and named in full in a tooltip): drawn whole it would run
     // across the box's edge.
     const drawn = (full: string, bold: boolean) => {
-      const fitted = fitText(full, 12, textRoom(8), bold)
+      const fitted = fitText(full, 12, textRoom(8, widthOf(name)), bold)
       return fitted === full ? xmlText(full) : `${xmlText(fitted)}<title>${xmlText(full)}</title>`
     }
     const rows = cols.map(
       (c, i) =>
         `<text x="8" y="${HEADER_HEIGHT + i * ROW_HEIGHT + 14}" font-size="12" fill="#52525b">${drawn(
-          o.display?.get(name) === c ? `◆ ${c}` : c,
+          columnLabel(o.display, name, c),
           false
         )}</text>`
     )
     return [
       `<g transform="translate(${p.x} ${p.y})">`,
-      `<rect width="${BOX_WIDTH}" height="${boxHeight(cols.length, view.compact)}" rx="4" fill="#ffffff" stroke="#71717a" stroke-width="1.5"/>`,
+      `<rect width="${widthOf(name)}" height="${boxHeight(cols.length, view.compact)}" rx="4" fill="#ffffff" stroke="#71717a" stroke-width="1.5"/>`,
       `<text x="8" y="18" font-size="12" font-weight="600" fill="#18181b">${drawn(name, true)}</text>`,
-      `<line x1="0" x2="${BOX_WIDTH}" y1="${HEADER_HEIGHT}" y2="${HEADER_HEIGHT}" stroke="#d4d4d8"/>`,
+      `<line x1="0" x2="${widthOf(name)}" y1="${HEADER_HEIGHT}" y2="${HEADER_HEIGHT}" stroke="#d4d4d8"/>`,
       ...rows,
       '</g>',
     ].join('')

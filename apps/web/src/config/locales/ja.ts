@@ -276,6 +276,9 @@ export const ja = {
   designer: {
     compact: '表名だけにする',
     snap: '格子に合わせる',
+    snapHint: '格子（20 px）を表示し、置いてある箱を格子に揃える。以降の移動も格子に合う',
+    fitWidth: '名前に合わせて幅を広げる',
+    fitWidthHint: '箱の幅を、表名とカラム名のいちばん長いものに合わせる（上限あり）。自動配置の列の間隔も広がる',
     showLines: '線を表示',
     lineLabels: '線にカラム名を付ける',
     lineStyle: '線の形',

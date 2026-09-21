@@ -66,9 +66,13 @@ export function DesignerToolbar({
         />
         {t.compact}
       </label>
-      <label className="flex items-center gap-1 text-sm text-ink">
+      <label className="flex items-center gap-1 text-sm text-ink" title={t.snapHint}>
         <input type="checkbox" checked={view.snap} onChange={(e) => onView({ snap: e.target.checked })} />
         {t.snap}
+      </label>
+      <label className="flex items-center gap-1 text-sm text-ink" title={t.fitWidthHint}>
+        <input type="checkbox" checked={view.fitWidth} onChange={(e) => onView({ fitWidth: e.target.checked })} />
+        {t.fitWidth}
       </label>
       <label className="flex items-center gap-1 text-sm text-ink">
         <input type="checkbox" checked={view.showLines} onChange={(e) => onView({ showLines: e.target.checked })} />

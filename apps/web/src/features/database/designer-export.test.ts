@@ -74,7 +74,14 @@ describe('diagramDia', () => {
 })
 
 describe('the drawing options in the exports', () => {
-  const view = { compact: true, snap: false, lineStyle: 'polyline' as const, lineLabels: true, showLines: true }
+  const view = {
+    compact: true,
+    snap: false,
+    fitWidth: false,
+    lineStyle: 'polyline' as const,
+    lineLabels: true,
+    showLines: true,
+  }
 
   it('draws right-angled lines with their label, and boxes with only their name, in every format', () => {
     const eps = diagramEps({ ...input, view })
@@ -93,5 +100,31 @@ describe('the drawing options in the exports', () => {
     const hidden = { ...view, showLines: false }
     expect(diagramEps({ ...input, view: hidden })).not.toMatch(/curveto| lineto/)
     expect(diagramDia({ ...input, view: hidden })).not.toContain('Line')
+  })
+})
+
+describe('boxes as wide as their names', () => {
+  const long = 'a_very_long_column_name_that_needs_room'
+  const wide = {
+    ...input,
+    columns: new Map([
+      ['users', ['id', long]],
+      ['posts', ['user_id']],
+    ]),
+    display: new Map<string, string>(),
+  }
+  const view = {
+    compact: false,
+    snap: false,
+    fitWidth: true,
+    lineStyle: 'curve' as const,
+    lineLabels: false,
+    showLines: true,
+  }
+
+  it('draws the whole name in a wider box in every format, and keeps the fixed width otherwise', () => {
+    expect(diagramEps({ ...wide, view })).toContain(`(${long}) show`)
+    expect(diagramDia({ ...wide, view })).toContain(`#${long}#`)
+    expect(diagramEps({ ...wide, view: { ...view, fitWidth: false } })).not.toContain(`(${long}) show`)
   })
 })

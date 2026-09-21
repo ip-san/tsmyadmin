@@ -2,7 +2,7 @@
   "name": "tsmyadmin",
   "version": "0.1.0",
   "private": true,
-  "description": "Modern TypeScript phpMyAdmin clone (MySQL + PostgreSQL) — Hono API + React SPA",
+  "description": "Web-based MySQL / PostgreSQL admin tool with a phpMyAdmin-style layout — Hono API + React SPA, TypeScript",
   "license": "MIT",
   "type": "module",
   "workspaces": [

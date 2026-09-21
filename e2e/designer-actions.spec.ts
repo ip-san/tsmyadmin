@@ -99,9 +99,19 @@ for (const t of TARGETS) {
         await page.getByLabel('線にカラム名を付ける').uncheck()
         // Kept in this browser: still there after a reload.
         await page.getByLabel('格子に合わせる').check()
+        // The grid is drawn, and every box (placed by hand or by the automatic layout) already sits on it.
+        await expect(page.getByTestId('designer-grid')).toBeVisible()
+        const off = await page.evaluate(() =>
+          [...document.querySelectorAll('figure svg g[role="button"]')].flatMap((g) => {
+            const m = /translate\(([-\d.]+) ([-\d.]+)\)/.exec(g.getAttribute('transform') ?? '')
+            return m && (Number(m[1]) % 20 !== 0 || Number(m[2]) % 20 !== 0) ? [g.getAttribute('transform')] : []
+          })
+        )
+        expect(off).toEqual([])
         await page.reload()
         await expect(page.getByLabel('格子に合わせる')).toBeChecked()
         await page.getByLabel('格子に合わせる').uncheck()
+        await expect(page.getByTestId('designer-grid')).toHaveCount(0)
         await page.getByLabel('全カラムを表示').check()
         await page.getByRole('listitem').filter({ hasText: parent }).getByRole('combobox').selectOption('label')
 

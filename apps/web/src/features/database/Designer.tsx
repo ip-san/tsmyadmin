@@ -20,7 +20,17 @@ import { DesignerPages } from './DesignerPages.tsx'
 import { DesignerToolbar } from './DesignerToolbar.tsx'
 import { diagramDia } from './designer-dia.ts'
 import { diagramEps } from './designer-eps.ts'
-import { autoLayout, boxColumns, DEFAULT_VIEW, drawnRelations, type Point, withAllColumns } from './designer-layout.ts'
+import {
+  autoLayout,
+  boxColumns,
+  boxHeight,
+  DEFAULT_VIEW,
+  drawnRelations,
+  makeWidthOf,
+  type Point,
+  snapAll,
+  withAllColumns,
+} from './designer-layout.ts'
 import { diagramSvg } from './designer-svg.ts'
 
 const t = locale.designer
@@ -51,6 +61,8 @@ export function Designer({ db, schema }: { db: string; schema?: string | undefin
     const next = { ...view, ...patch }
     setView(next)
     writePreference(viewKey, next)
+    // Turning the grid on lines up the boxes that were placed by hand; the automatic layout is drawn on it.
+    if (patch.snap === true && !view.snap) keep(snapAll(saved))
   }
   const [relate, setRelate] = useState(false)
   // Full screen is the browser's: the section fills the screen, and leaving it (Esc) is noticed here.
@@ -94,7 +106,11 @@ export function Designer({ db, schema }: { db: string; schema?: string | undefin
     })
   )
   // A table without a saved position (new, or never moved) takes its place in the automatic layout.
-  const positions = { ...autoLayout(names, drawn), ...saved }
+  // The boxes are as wide as their names when asked, which moves the columns of the automatic layout apart.
+  const widthOf = makeWidthOf({ tables: names, columns, display, view: shownView })
+  // Boxes that list every column are taller than the key columns they are laid out for otherwise.
+  const auto = autoLayout(names, drawn, widthOf, (n) => boxHeight(columns.get(n)?.length ?? 0))
+  const positions = { ...(shownView.snap ? snapAll(auto) : auto), ...saved }
   const keep = (next: Record<string, Point>) => {
     setSaved(next)
     // Positions of tables that are gone are dropped, so a table created later under that name starts fresh.

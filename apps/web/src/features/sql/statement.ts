@@ -1,6 +1,4 @@
-export function stripTrailingSemicolons(sql: string): string {
-  return sql.trim().replace(/;+\s*$/, '')
-}
+import { stripTrailingSemicolons } from '@/lib/sql-text.ts'
 
 /**
  * EXPLAIN only makes sense for exactly one statement. A `;` before the end means several — a conservative

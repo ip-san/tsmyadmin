@@ -11,13 +11,14 @@ import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice } from '@/components/ui/Feedback.tsx'
 import { locale } from '@/config/locale.ts'
 import { ApiError } from '@/lib/api.ts'
-import { consoleDraftKey } from '@/lib/console-draft.ts'
+import { consoleDraftKey, takeConsoleAutorun } from '@/lib/console-draft.ts'
 import { readPreference } from '@/lib/preferences.ts'
 import { mutations } from '@/lib/queries.ts'
 import { bookmarkName } from '@/lib/saved-queries.ts'
 import { formatSql } from '@/lib/sql-format.ts'
 import { DEFAULT_RUN_OPTIONS, prepareScript, type RunOptions } from '@/lib/sql-prepare.ts'
 import { streamSql } from '@/lib/sql-stream.ts'
+import { explainStatement } from '@/lib/sql-text.ts'
 import { newQueryId } from '@/lib/uuid.ts'
 import { MaxRowsSelect, ProfileOption, SAFE_MODE_PREF, SafeModeOption } from './ConsoleOptions.tsx'
 import { DebugSqlPanel } from './DebugSqlPanel.tsx'
@@ -26,7 +27,7 @@ import { RunOptionsPanel } from './RunOptionsPanel.tsx'
 import { SafeModeDialog } from './SafeModeDialog.tsx'
 import { SqlEditor } from './SqlEditor.tsx'
 import { HistoryPanel, SavedQueriesPanel, SharedQueriesPanel } from './SqlPanels.tsx'
-import { isSingleStatement, stripTrailingSemicolons, unboundedWrites } from './statement.ts'
+import { isSingleStatement, unboundedWrites } from './statement.ts'
 import { useConsoleDraft } from './use-console-draft.ts'
 import { useConsoleLists } from './use-console-lists.ts'
 import { expandVariables } from './variables.ts'
@@ -74,7 +75,9 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
   // Leaving the page aborts the stream, which makes the server cancel the running statement.
   const abort = useRef(new AbortController())
   useEffect(() => {
-    const controller = abort.current
+    // Made per mount: React's dev-only remount would otherwise leave a signal that is already aborted.
+    const controller = new AbortController()
+    abort.current = controller
     return () => controller.abort()
   }, [])
   const cancel = useMutation({ mutationFn: (id: string) => mutations.cancelSql(db, id) })
@@ -158,7 +161,7 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
   }
   const explainSql = (sql: string) => {
     if (!isSingleStatement(sql) || run.isPending) return
-    const explained = `EXPLAIN ${stripTrailingSemicolons(sql)}`
+    const explained = explainStatement(sql)
     run.mutate({ script: prepareScript(explained, dialect, runOptions), shown: explained })
   }
   const explain = () => explainSql(text)
@@ -184,6 +187,15 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
     explain: explainSql,
     code: setCodeOf,
   }
+  // A page can hand the console a statement to run on arrival (a table's EXPLAIN). The timer keeps React's dev-only
+  // remount from consuming it in the pass that is thrown away.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const sql = takeConsoleAutorun(key)
+      if (sql !== null) latest.current?.rerun(sql)
+    }, 0)
+    return () => clearTimeout(timer)
+  }, [key])
   const [handlers] = useState<StatementHandlers>(() => ({
     edit: (sql) => latest.current?.edit(sql),
     rerun: (sql) => latest.current?.rerun(sql),

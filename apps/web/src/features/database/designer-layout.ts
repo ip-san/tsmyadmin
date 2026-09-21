@@ -39,8 +39,8 @@ export function boxColumns(table: string, relations: readonly RelationDef[]): st
   return out
 }
 
-/** Room for a line of text inside a box, with `pad` left free on each side. */
-export const textRoom = (pad: number) => BOX_WIDTH - 2 * pad
+/** Room for a line of text inside a box of `width`, with `pad` left free on each side. */
+export const textRoom = (pad: number, width = BOX_WIDTH) => width - 2 * pad
 
 const NARROW = new Set([..."iljtfrI.,:;'!|()[]/\\- "])
 /** How wide one character is, in em: a guess that errs wide, since a name that fits the guess must fit the box. */
@@ -54,13 +54,46 @@ function glyphEm(ch: string): number {
   return 0.6
 }
 
+/** The estimated width of `text` in pixels at `size` (see `glyphEm`). */
+const textWidth = (text: string, size: number, bold = false): number =>
+  [...text].reduce((n, ch) => n + glyphEm(ch), 0) * size * (bold ? 1.1 : 1)
+
+/** The widest a box grows to fit its names: beyond it a name is cut with an ellipsis, as in a fixed-width box. */
+export const MAX_BOX_WIDTH = 480
+
+/**
+ * How wide a box is. Fixed, or (`view.fitWidth`) as wide as its table name and the columns it lists need, so nothing
+ * is cut, up to `MAX_BOX_WIDTH`. Sized for the SVG's 12 px text and 8 px padding, which is the largest any export uses.
+ */
+export function makeWidthOf(o: {
+  tables: readonly string[]
+  columns: ReadonlyMap<string, readonly string[]>
+  display?: ReadonlyMap<string, string> | undefined
+  view?: DesignerView | undefined
+}): (table: string) => number {
+  const view = o.view ?? DEFAULT_VIEW
+  if (!view.fitWidth) return () => BOX_WIDTH
+  const widths = new Map(
+    o.tables.map((name) => {
+      const labels = view.compact ? [] : (o.columns.get(name) ?? []).map((c) => columnLabel(o.display, name, c))
+      const need = Math.max(textWidth(name, 12, true), ...labels.map((l) => textWidth(l, 12)))
+      return [name, Math.min(MAX_BOX_WIDTH, Math.max(BOX_WIDTH, Math.ceil(need + 2 * 8)))] as const
+    })
+  )
+  return (table) => widths.get(table) ?? BOX_WIDTH
+}
+
+/** A column's text in a box: the table's display column is marked. */
+export const columnLabel = (display: ReadonlyMap<string, string> | undefined, table: string, column: string) =>
+  display?.get(table) === column ? `◆ ${column}` : column
+
 /**
  * The text cut with an ellipsis where it would run out of `room` pixels at `size`: a long table or column name
  * would otherwise be drawn across the edge of its box (and, in an export, out of the picture). Widths are an
  * estimate (an SVG has no way to measure text before it is drawn), so the cut is a little early rather than late.
  */
 export function fitText(text: string, size: number, room: number, bold = false): string {
-  const em = (t: string) => [...t].reduce((n, ch) => n + glyphEm(ch), 0) * size * (bold ? 1.1 : 1)
+  const em = (t: string) => textWidth(t, size, bold)
   if (em(text) <= room) return text
   const chars = [...text]
   while (chars.length > 1 && em(`${chars.join('')}…`) > room) chars.pop()
@@ -73,6 +106,7 @@ export const boxHeight = (columns: number, compact = false) =>
 export const DEFAULT_VIEW: DesignerView = {
   compact: false,
   snap: false,
+  fitWidth: false,
   lineStyle: 'curve',
   lineLabels: false,
   showLines: true,
@@ -82,12 +116,21 @@ export const GRID = 20
 /** A point on the grid nearest to it. */
 export const snapToGrid = (p: Point): Point => ({ x: Math.round(p.x / GRID) * GRID, y: Math.round(p.y / GRID) * GRID })
 
+/** Every position moved to the grid. */
+export const snapAll = (positions: Readonly<Record<string, Point>>): Record<string, Point> =>
+  Object.fromEntries(Object.entries(positions).map(([name, p]) => [name, snapToGrid(p)]))
+
 /**
  * A layered starting layout: tables nothing else is referenced from sit in the first column, and a table goes one
  * column to the right of the furthest table it references, so lines mostly run right to left. Cycles (including a
  * key back to an earlier table) are cut where they are met.
  */
-export function autoLayout(tables: readonly string[], relations: readonly RelationDef[]): Record<string, Point> {
+export function autoLayout(
+  tables: readonly string[],
+  relations: readonly RelationDef[],
+  widthOf: (table: string) => number = () => BOX_WIDTH,
+  heightOf: (table: string) => number = (table) => boxHeight(boxColumns(table, relations).length)
+): Record<string, Point> {
   const rank = new Map<string, number>()
   const visiting = new Set<string>()
   const rankOf = (table: string): number => {
@@ -101,23 +144,42 @@ export function autoLayout(tables: readonly string[], relations: readonly Relati
     rank.set(table, value)
     return value
   }
+  // A column is as wide as its widest box, so wider boxes push the columns after them to the right.
+  const columnWidth: number[] = []
+  for (const table of tables) {
+    const r = rankOf(table)
+    columnWidth[r] = Math.max(columnWidth[r] ?? 0, widthOf(table))
+  }
+  const columnX: number[] = []
+  let x = MARGIN
+  columnWidth.forEach((w, r) => {
+    columnX[r] = x
+    x += (w ?? BOX_WIDTH) + GAP_X
+  })
   const out: Record<string, Point> = {}
   const nextY: number[] = []
   for (const table of tables) {
     const r = rankOf(table)
     const y = nextY[r] ?? MARGIN
-    out[table] = { x: MARGIN + r * (BOX_WIDTH + GAP_X), y }
-    nextY[r] = y + boxHeight(boxColumns(table, relations).length) + GAP_Y
+    out[table] = { x: columnX[r] ?? MARGIN, y }
+    nextY[r] = y + heightOf(table) + GAP_Y
   }
   return out
 }
 
 /** Where a column's row meets the side of its box nearer to `towardsX`. */
-function anchor(box: Point, columns: readonly string[], column: string, towardsX: number, compact: boolean): Point {
+function anchor(
+  box: Point,
+  width: number,
+  columns: readonly string[],
+  column: string,
+  towardsX: number,
+  compact: boolean
+): Point {
   const row = Math.max(columns.indexOf(column), 0)
-  const centre = box.x + BOX_WIDTH / 2
+  const centre = box.x + width / 2
   return {
-    x: towardsX < centre ? box.x : box.x + BOX_WIDTH,
+    x: towardsX < centre ? box.x : box.x + width,
     // A compact box has no rows: its lines meet the header.
     y: compact ? box.y + HEADER_HEIGHT / 2 : box.y + HEADER_HEIGHT + row * ROW_HEIGHT + ROW_HEIGHT / 2,
   }
@@ -143,12 +205,15 @@ export function relationRoute(
   at: (table: string) => Point,
   columnsOf: (table: string) => readonly string[],
   style: DesignerView['lineStyle'] = 'curve',
-  compact = false
+  compact = false,
+  widthOf: (table: string) => number = () => BOX_WIDTH
 ): Route {
   const box = at(r.table)
   const refBox = at(r.refTable)
-  const a = anchor(box, columnsOf(r.table), r.columns[0] ?? '', refBox.x + BOX_WIDTH / 2, compact)
-  const b = anchor(refBox, columnsOf(r.refTable), r.refColumns[0] ?? '', box.x + BOX_WIDTH / 2, compact)
+  const w = widthOf(r.table)
+  const refW = widthOf(r.refTable)
+  const a = anchor(box, w, columnsOf(r.table), r.columns[0] ?? '', refBox.x + refW / 2, compact)
+  const b = anchor(refBox, refW, columnsOf(r.refTable), r.refColumns[0] ?? '', box.x + w / 2, compact)
   if (style === 'straight') return { kind: 'lines', points: [a, b] }
   const bend = Math.max(40, Math.abs(b.x - a.x) / 2)
   const out1 = { x: a.x === box.x ? a.x - bend : a.x + bend, y: a.y }
@@ -167,9 +232,10 @@ export function relationPath(
   at: (table: string) => Point,
   columnsOf: (table: string) => readonly string[],
   style: DesignerView['lineStyle'] = 'curve',
-  compact = false
+  compact = false,
+  widthOf: (table: string) => number = () => BOX_WIDTH
 ): string {
-  const route = relationRoute(r, at, columnsOf, style, compact)
+  const route = relationRoute(r, at, columnsOf, style, compact, widthOf)
   if (route.kind === 'lines') return route.points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
   return `M ${route.from.x} ${route.from.y} C ${route.control1.x} ${route.control1.y}, ${route.control2.x} ${route.control2.y}, ${route.to.x} ${route.to.y}`
 }

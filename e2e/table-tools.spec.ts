@@ -163,6 +163,13 @@ for (const t of TARGETS) {
       await statement.getByRole('button', { name: /EXPLAIN/ }).click()
       await expect(page).toHaveURL(/\/sql/)
       await expect(page.locator('.cm-content')).toContainText(/EXPLAIN SELECT[\s\S]*> .*30/)
+      // It runs on arrival: the plan is shown without pressing Run, and only once (a reload does not run it again).
+      const plan = page.getByRole('region', { name: '文 1' })
+      await expect(plan).toContainText(/EXPLAIN SELECT/)
+      await expect(plan.getByRole('table')).toBeVisible()
+      await page.reload()
+      await expect(page.locator('.cm-content')).toContainText(/EXPLAIN SELECT/)
+      await expect(page.getByRole('region', { name: '文 1' })).toHaveCount(0)
     })
   })
 }

@@ -1,4 +1,5 @@
-import { writePreference } from '@/lib/preferences.ts'
+import { z } from 'zod'
+import { readPreference, removePreference, writePreference } from '@/lib/preferences.ts'
 
 /**
  * Unsent editor text, per console and per browser tab. The key is shared with `SqlConsole`, which reads it on
@@ -20,7 +21,23 @@ export function sessionStore(): Storage | null {
   }
 }
 
-/** Puts `sql` in the database console's editor, replacing whatever draft was there. */
-export function setDatabaseConsoleDraft(scope: string, db: string, schema: string | undefined, sql: string): void {
-  writePreference(consoleDraftKey(scope, db, schema, 'db'), sql, sessionStore())
+/** Puts `sql` in the database console's editor, replacing whatever draft was there. `run` also has it run once on arrival. */
+export function setDatabaseConsoleDraft(
+  scope: string,
+  db: string,
+  schema: string | undefined,
+  sql: string,
+  run = false
+): void {
+  const key = consoleDraftKey(scope, db, schema, 'db')
+  writePreference(key, sql, sessionStore())
+  if (run) writePreference(`${key}.autorun`, sql, sessionStore())
+}
+
+/** The statement a page asked the console to run on arrival, once: reading it clears it. */
+export function takeConsoleAutorun(key: string): string | null {
+  const store = sessionStore()
+  const sql = readPreference<string | null>(`${key}.autorun`, z.string().nullable(), null, store)
+  removePreference(`${key}.autorun`, store)
+  return sql
 }

@@ -2,7 +2,7 @@
 
 *English: [README.en.md](README.en.md)*
 
-**開発環境の Docker で動いている MySQL / PostgreSQL を、接続先を書かずにブラウザで開ける** phpMyAdmin クローン（TypeScript 製、MySQL / PostgreSQL 両対応）。
+**開発環境の Docker で動いている MySQL / PostgreSQL を、接続先を書かずにブラウザで開ける** DB 管理ツール（phpMyAdmin のような画面構成、TypeScript 製、MySQL / PostgreSQL 両対応）。
 
 ## すぐ使う（開発環境）
 

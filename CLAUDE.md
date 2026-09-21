@@ -1,6 +1,6 @@
 # tsmyadmin
 
-MySQL / PostgreSQL 両対応の、モダン TypeScript 製 phpMyAdmin クローン。
+MySQL / PostgreSQL 両対応の、モダン TypeScript 製の Web DB 管理ツール（画面構成は phpMyAdmin に倣う）。
 
 ## 構成
 
@@ -30,7 +30,7 @@ bun run lighthouse        # Lighthouse CI（警告のみ、要 Chrome）
 
 ## 現在の規模（`scripts/validate-docs.mjs` が同期）
 
-- ユニット/API/Web テスト定義: <!-- stat:unit-tests -->904<!-- /stat --> 件
+- ユニット/API/Web テスト定義: <!-- stat:unit-tests -->916<!-- /stat --> 件
 - Adapter conformance: <!-- stat:conformance -->195<!-- /stat --> 件 × 2 方言
 - E2E: <!-- stat:e2e -->200<!-- /stat --> 件
 - API ルート: <!-- stat:routes -->95<!-- /stat -->

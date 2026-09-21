@@ -1,10 +1,11 @@
 import {
-  BOX_WIDTH,
   boxHeight,
+  columnLabel,
   DEFAULT_VIEW,
   type DiagramInput,
   fitText,
   HEADER_HEIGHT,
+  makeWidthOf,
   ROW_HEIGHT,
   relationLabel,
   relationRoute,
@@ -32,6 +33,7 @@ export function diagramDia(o: DiagramInput): string {
   const at = (table: string) => o.positions[table] ?? { x: 0, y: 0 }
   const view = o.view ?? DEFAULT_VIEW
   const columnsOf = (table: string) => (view.compact ? [] : (o.columns.get(table) ?? []))
+  const widthOf = makeWidthOf(o)
   let id = 0
   const nextId = () => `O${id++}`
   const objects: string[] = []
@@ -57,15 +59,15 @@ export function diagramDia(o: DiagramInput): string {
         `<dia:object type="Standard - Box" version="0" id="${nextId()}">`,
         `<dia:attribute name="obj_pos">${point(p.x, p.y)}</dia:attribute>`,
         `<dia:attribute name="elem_corner">${point(p.x, p.y)}</dia:attribute>`,
-        `<dia:attribute name="elem_width"><dia:real val="${cm(BOX_WIDTH)}"/></dia:attribute>`,
+        `<dia:attribute name="elem_width"><dia:real val="${cm(widthOf(name))}"/></dia:attribute>`,
         `<dia:attribute name="elem_height"><dia:real val="${cm(boxHeight(cols.length, view.compact))}"/></dia:attribute>`,
         '<dia:attribute name="inner_color"><dia:color val="#ffffff"/></dia:attribute>',
         '</dia:object>',
       ].join(''),
-      text(fitText(name, 11, textRoom(6), true), p.x + 6, p.y + 14, true),
+      text(fitText(name, 11, textRoom(6, widthOf(name)), true), p.x + 6, p.y + 14, true),
       ...cols.map((c, i) =>
         text(
-          fitText(o.display?.get(name) === c ? `◆ ${c}` : c, 11, textRoom(6)),
+          fitText(columnLabel(o.display, name, c), 11, textRoom(6, widthOf(name))),
           p.x + 6,
           p.y + HEADER_HEIGHT + i * ROW_HEIGHT + 12,
           false
@@ -74,7 +76,7 @@ export function diagramDia(o: DiagramInput): string {
     )
   }
   for (const r of view.showLines ? o.relations : []) {
-    const route = relationRoute(r, at, columnsOf, view.lineStyle, view.compact)
+    const route = relationRoute(r, at, columnsOf, view.lineStyle, view.compact, widthOf)
     const points =
       route.kind === 'curve'
         ? `<dia:attribute name="bez_points">${point(route.from.x, route.from.y)}${point(route.control1.x, route.control1.y)}${point(route.control2.x, route.control2.y)}${point(route.to.x, route.to.y)}</dia:attribute>`
@@ -92,7 +94,7 @@ export function diagramDia(o: DiagramInput): string {
       objects.push(text(relationLabel(r), mid.x, mid.y - 4, false))
     }
   }
-  const width = Math.max(0, ...o.tables.map((n) => at(n).x + BOX_WIDTH)) + PAD
+  const width = Math.max(0, ...o.tables.map((n) => at(n).x + widthOf(n))) + PAD
   const height = Math.max(0, ...o.tables.map((n) => at(n).y + boxHeight(columnsOf(n).length, view.compact))) + PAD
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',

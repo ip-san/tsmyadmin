@@ -1,12 +1,13 @@
 import type { DesignerView, RelationDef } from '@tsmyadmin/shared'
-import { type KeyboardEvent, type PointerEvent, useRef, useState } from 'react'
+import { type KeyboardEvent, type PointerEvent, useId, useRef, useState } from 'react'
 import { locale } from '@/config/locale.ts'
 import {
-  BOX_WIDTH,
   boxHeight,
   DEFAULT_VIEW,
   fitText,
+  GRID,
   HEADER_HEIGHT,
+  makeWidthOf,
   type Point,
   ROW_HEIGHT,
   relationLabel,
@@ -60,14 +61,17 @@ export function DesignerDiagram({
   const at = (table: string): Point => positions[table] ?? { x: 0, y: 0 }
   const listed = (table: string) => (view.compact ? [] : (columns.get(table) ?? []))
   const fullLabel = (table: string, c: string) => (display.get(table) === c ? `◆ ${c}` : c)
+  const widthOf = makeWidthOf({ tables, columns, display, view })
+  const room = (name: string) => textRoom(8, widthOf(name))
   const cutAny = tables.some(
     (name) =>
-      fitText(name, 12, textRoom(8), true) !== name ||
-      listed(name).some((c) => fitText(fullLabel(name, c), 12, textRoom(8)) !== fullLabel(name, c))
+      fitText(name, 12, room(name), true) !== name ||
+      listed(name).some((c) => fitText(fullLabel(name, c), 12, room(name)) !== fullLabel(name, c))
   )
-  const width = Math.max(...tables.map((name) => at(name).x + BOX_WIDTH)) + PAD
+  const gridId = `grid${useId().replace(/\W/g, '')}`
+  const width = Math.max(...tables.map((name) => at(name).x + widthOf(name))) + PAD
   const height = Math.max(...tables.map((name) => at(name).y + boxHeight(listed(name).length, view.compact))) + PAD
-  // Dragged boxes land on the grid when snapping is on; the arrow keys already move by whole steps.
+  // Dragged boxes land on the grid when snapping is on.
   const clamp = (p: Point): Point => {
     const kept = { x: Math.max(0, p.x), y: Math.max(0, p.y) }
     return view.snap ? snapToGrid(kept) : kept
@@ -103,7 +107,8 @@ export function DesignerDiagram({
     if (d.moved) onMove(d.table, d.last, true)
   }
   const nudge = (table: string) => (e: KeyboardEvent<SVGGElement>) => {
-    const step = e.shiftKey ? BIG_STEP : STEP
+    // On the grid the small step is a whole cell: half a cell would round back to where the box was.
+    const step = e.shiftKey ? BIG_STEP : view.snap ? GRID : STEP
     const delta: Partial<Record<string, Point>> = {
       ArrowLeft: { x: -step, y: 0 },
       ArrowRight: { x: step, y: 0 },
@@ -123,12 +128,24 @@ export function DesignerDiagram({
       <figure className="max-h-[70vh] overflow-auto rounded border border-line bg-surface-sub">
         <figcaption className="sr-only">{t.diagram}</figcaption>
         <svg width={width} height={height} className="select-none">
+          {view.snap ? (
+            <>
+              <defs>
+                <pattern id={gridId} width={GRID} height={GRID} patternUnits="userSpaceOnUse">
+                  <circle cx={1} cy={1} r={1} className="fill-line-strong" />
+                </pattern>
+              </defs>
+              <rect width="100%" height="100%" fill={`url(#${gridId})`} aria-hidden data-testid="designer-grid" />
+            </>
+          ) : null}
           {(view.showLines ? relations : []).map((r) => {
-            const mid = view.lineLabels ? routeMiddle(relationRoute(r, at, listed, view.lineStyle, view.compact)) : null
+            const mid = view.lineLabels
+              ? routeMiddle(relationRoute(r, at, listed, view.lineStyle, view.compact, widthOf))
+              : null
             return (
               <g key={relationKey(r)} aria-hidden>
                 <path
-                  d={relationPath(r, at, listed, view.lineStyle, view.compact)}
+                  d={relationPath(r, at, listed, view.lineStyle, view.compact, widthOf)}
                   className="fill-none stroke-brand"
                   strokeWidth={1.5}
                 />
@@ -146,18 +163,18 @@ export function DesignerDiagram({
             const contents = (
               <>
                 <rect
-                  width={BOX_WIDTH}
+                  width={widthOf(name)}
                   height={boxHeight(cols.length, view.compact)}
                   rx={4}
                   className="fill-surface stroke-line-strong group-focus-visible:stroke-brand"
                   strokeWidth={1.5}
                 />
                 <text x={8} y={18} className="fill-ink text-xs font-semibold">
-                  {fitText(name, 12, textRoom(8), true)}
+                  {fitText(name, 12, room(name), true)}
                   {/* The whole name, when it was cut: shown as a tooltip. */}
-                  {fitText(name, 12, textRoom(8), true) === name ? null : <title>{name}</title>}
+                  {fitText(name, 12, room(name), true) === name ? null : <title>{name}</title>}
                 </text>
-                <line x1={0} x2={BOX_WIDTH} y1={HEADER_HEIGHT} y2={HEADER_HEIGHT} className="stroke-line" />
+                <line x1={0} x2={widthOf(name)} y1={HEADER_HEIGHT} y2={HEADER_HEIGHT} className="stroke-line" />
               </>
             )
             const label = (c: string) => (display.get(name) === c ? `◆ ${c}` : c)
@@ -188,13 +205,13 @@ export function DesignerDiagram({
                         <rect
                           x={1}
                           y={y}
-                          width={BOX_WIDTH - 2}
+                          width={widthOf(name) - 2}
                           height={ROW_HEIGHT}
                           className={`${picked ? 'fill-row-hover stroke-brand' : 'fill-transparent'} group-hover:fill-row-hover group-focus-visible:stroke-brand`}
                         />
                         <text x={8} y={y + 14} className="fill-ink-sub text-xs">
-                          {fitText(label(c), 12, textRoom(8))}
-                          {fitText(label(c), 12, textRoom(8)) === label(c) ? null : <title>{label(c)}</title>}
+                          {fitText(label(c), 12, room(name))}
+                          {fitText(label(c), 12, room(name)) === label(c) ? null : <title>{label(c)}</title>}
                         </text>
                       </g>
                     )
@@ -222,8 +239,8 @@ export function DesignerDiagram({
                 {contents}
                 {cols.map((c, i) => (
                   <text key={c} x={8} y={HEADER_HEIGHT + i * ROW_HEIGHT + 14} className="fill-ink-sub text-xs">
-                    {fitText(label(c), 12, textRoom(8))}
-                    {fitText(label(c), 12, textRoom(8)) === label(c) ? null : <title>{label(c)}</title>}
+                    {fitText(label(c), 12, room(name))}
+                    {fitText(label(c), 12, room(name)) === label(c) ? null : <title>{label(c)}</title>}
                   </text>
                 ))}
               </g>
