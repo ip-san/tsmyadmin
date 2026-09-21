@@ -27,6 +27,7 @@ const PAIRS = [
   ['docs/cloudflare.md', 'docs/en/cloudflare.md'],
   ['docs/hosting.md', 'docs/en/hosting.md'],
   ['docs/architecture.md', 'docs/en/architecture.md'],
+  ['docs/dev-environment.md', 'docs/en/dev-environment.md'],
   ['docs/phpmyadmin-parity.md', 'docs/en/phpmyadmin-parity.md'],
 ]
 

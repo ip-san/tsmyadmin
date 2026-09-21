@@ -1,5 +1,5 @@
 import { FakeAdapter, fakeTable } from '@tsmyadmin/adapter/testing'
-import type { ConnectRequest, ServerPreset } from '@tsmyadmin/shared'
+import type { ConnectRequest, DiscoveryDiagnosis, ServerPreset } from '@tsmyadmin/shared'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createApp } from '../app.ts'
 import { loadConfig } from '../config.ts'
@@ -15,7 +15,7 @@ const PRESET: ServerPreset = {
 }
 const LOGIN = { user: 'root', password: 'container-secret' }
 
-function harness(withLogin: boolean) {
+function harness(withLogin: boolean, diagnose?: () => Promise<DiscoveryDiagnosis>) {
   const seen: ConnectRequest[] = []
   const adapter = new FakeAdapter({ databases: { shop: { tables: { users: fakeTable('users', ['id'], []) } } } })
   const store = new MemorySessionStore({
@@ -30,6 +30,7 @@ function harness(withLogin: boolean) {
     {
       store,
       discover: async () => [PRESET],
+      ...(diagnose ? { diagnose } : {}),
       ...(withLogin
         ? { dockerLogin: async (name: string) => (name === PRESET.name ? { preset: PRESET, login: LOGIN } : null) }
         : {}),
@@ -114,5 +115,29 @@ describe('signing in with a Docker container login', () => {
     const res = await h.post({ dialect: 'mysql', host: '127.0.0.1', port: 13306, user: 'me', password: 'mine' })
     expect(res.status).toBe(201)
     expect(h.seen[0]).toMatchObject({ user: 'me', password: 'mine' })
+  })
+})
+
+describe('the discovery diagnosis', () => {
+  it('says discovery is off when nothing is wired', async () => {
+    const h = harness(false)
+    stores.push(h.store)
+    const res = await h.app.request('/api/servers/diagnosis')
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({ enabled: false, found: 0, issues: [] })
+  })
+
+  it('returns what discovery found out, to someone who is not signed in yet', async () => {
+    const diagnosis: DiscoveryDiagnosis = {
+      enabled: true,
+      connectHost: '127.0.0.1',
+      unavailable: null,
+      found: 1,
+      issues: [{ name: 'docker: shop/pg', dialect: 'postgres', reason: 'notPublished', port: 5432 }],
+    }
+    const h = harness(false, async () => diagnosis)
+    stores.push(h.store)
+    const res = await h.app.request('/api/servers/diagnosis')
+    expect(await res.json()).toEqual(diagnosis)
   })
 })

@@ -83,6 +83,17 @@ export const en = {
     notFoundBody: 'The URL is wrong, or the database or table it names does not exist.',
   },
   login: {
+    discovery: {
+      title: 'When a database is missing or cannot be reached',
+      unavailable:
+        'Docker cannot be read. Mount the socket (`-v /var/run/docker.sock:/var/run/docker.sock`) and run as root (`user: "0:0"`).',
+      none: 'No running MySQL / MariaDB / PostgreSQL container was found. Start the database, for example with `docker compose up -d`.',
+      stopped: 'It is stopped. Start it and it shows up here.',
+      notPublished:
+        'It does not publish a port on the host, so it cannot be reached from here. Add this to your compose file.',
+      unreachable: (host: string, port: number) =>
+        `${host}:${port} cannot be reached. With Docker Engine on Linux, a port published on the host's 127.0.0.1 only may not be reachable from a container. Publish it on 0.0.0.0, or set TSMYADMIN_DOCKER_CONNECT_HOST to a name that reaches it.`,
+    },
     dockerLogin:
       "Connects with the login in this container's environment (the user and password it was started with). Nothing to type.",
     advanced: 'Advanced',

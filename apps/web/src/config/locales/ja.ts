@@ -79,6 +79,16 @@ export const ja = {
     notFoundBody: 'URL が間違っているか、対象のデータベースやテーブルが存在しません。',
   },
   login: {
+    discovery: {
+      title: '接続先が見つからない・つながらないとき',
+      unavailable:
+        'Docker を読めません。ソケットをマウントし（`-v /var/run/docker.sock:/var/run/docker.sock`）、root で動かして（`user: "0:0"`）ください。',
+      none: '起動している MySQL / MariaDB / PostgreSQL のコンテナが見つかりません。`docker compose up -d` などで DB を起動してください。',
+      stopped: '停止しています。起動すると、ここに出ます。',
+      notPublished: 'ホストにポートを公開していないので、ここからは届きません。compose に次を足してください。',
+      unreachable: (host: string, port: number) =>
+        `${host}:${port} に届きません。Linux の Docker Engine で、ホストの 127.0.0.1 だけに公開したポートは、コンテナからは届かないことがあります。0.0.0.0 で公開するか、TSMYADMIN_DOCKER_CONNECT_HOST を届く名前にしてください。`,
+    },
     dockerLogin:
       'このコンテナの環境変数にある資格情報（起動時に渡されたユーザーとパスワード）で接続します。入力は要りません。',
     advanced: '詳細設定',

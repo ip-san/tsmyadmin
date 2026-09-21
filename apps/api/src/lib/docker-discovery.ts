@@ -1,4 +1,5 @@
-import type { Dialect, ServerPreset } from '@tsmyadmin/shared'
+import { createConnection } from 'node:net'
+import type { Dialect, DiscoveryDiagnosis, DiscoveryIssue, ServerPreset } from '@tsmyadmin/shared'
 import type { Logger } from './logging.ts'
 
 /** The parts of the Docker Engine API answers this module reads. Everything else in them is ignored. */
@@ -9,6 +10,8 @@ interface DockerPort {
 }
 interface DockerContainer {
   Id: string
+  /** `running`, `exited`, … — absent in a fixture means running. */
+  State?: string
   Names?: string[]
   Image?: string
   Labels?: Record<string, string>
@@ -126,21 +129,39 @@ export interface DiscoveredDatabase {
   login?: DockerLogin
 }
 
+/** A database container that cannot be offered, and why (`stopped`, or running without a published port). */
+export type SkippedDatabase = DiscoveryIssue
+
 /**
- * The database containers the Docker daemon is running, as login presets. A container counts when its image or its
- * usual port says MySQL / MariaDB / PostgreSQL and it publishes that port (so it can be reached from where this
- * process runs). Reads only. With `withLogin`, each also carries the login its environment holds, kept apart from the
- * preset (which is what the login screen is told) and marked `autoLogin` there.
+ * The database containers the Docker daemon knows, as login presets. A container counts when its image or its
+ * usual port says MySQL / MariaDB / PostgreSQL and it is running and publishes that port (so it can be reached from
+ * where this process runs); the others are returned as `skipped`, with the reason. Reads only. With `withLogin`,
+ * each found one also carries the login its environment holds, kept apart from the preset (which is what the login
+ * screen is told) and marked `autoLogin` there.
  */
-export async function discover(get: DockerGet, connectHost: string, withLogin = false): Promise<DiscoveredDatabase[]> {
-  const containers = (await get('/containers/json')) as DockerContainer[]
+export async function discoverAll(
+  get: DockerGet,
+  connectHost: string,
+  withLogin = false
+): Promise<{ found: DiscoveredDatabase[]; skipped: SkippedDatabase[] }> {
+  // `all=1`: stopped containers too, to say that one is stopped rather than leave it out without a word.
+  const containers = (await get('/containers/json?all=1')) as DockerContainer[]
   const found: DiscoveredDatabase[] = []
+  const skipped: SkippedDatabase[] = []
   const taken = new Set<string>()
   for (const c of [...containers].sort((a, b) => displayName(a).localeCompare(displayName(b)))) {
     const ports = c.Ports ?? []
     const dialect = dialectOf(c.Image ?? '', ports)
-    const port = dialect ? databasePort(dialect, ports) : null
-    if (!dialect || port === null) continue
+    if (!dialect) continue
+    if (c.State !== undefined && c.State !== 'running') {
+      skipped.push({ name: `docker: ${displayName(c)}`, dialect, reason: 'stopped', port: null })
+      continue
+    }
+    const port = databasePort(dialect, ports)
+    if (port === null) {
+      skipped.push({ name: `docker: ${displayName(c)}`, dialect, reason: 'notPublished', port: DEFAULT_PORT[dialect] })
+      continue
+    }
     let name = `docker: ${displayName(c)}`
     if (taken.has(name)) name = `${name} :${port}`
     taken.add(name)
@@ -159,7 +180,11 @@ export async function discover(get: DockerGet, connectHost: string, withLogin = 
       ...(login ? { login } : {}),
     })
   }
-  return found
+  return { found, skipped }
+}
+
+export async function discover(get: DockerGet, connectHost: string, withLogin = false): Promise<DiscoveredDatabase[]> {
+  return (await discoverAll(get, connectHost, withLogin)).found
 }
 
 /** The presets only (what the login screen lists): no login is read. */
@@ -182,11 +207,27 @@ export function dockerSocketGet(socketPath: string): DockerGet {
   }
 }
 
+/** Whether a TCP connection to host:port opens from this process (what a login would need first). */
+export function tcpReachable(host: string, port: number, timeoutMs = 1500): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = createConnection({ host, port })
+    const done = (ok: boolean) => {
+      socket.destroy()
+      resolve(ok)
+    }
+    socket.setTimeout(timeoutMs, () => done(false))
+    socket.once('connect', () => done(true))
+    socket.once('error', () => done(false))
+  })
+}
+
 export interface DockerDiscovery {
   /** The presets for the login screen: never a login. */
   list: () => Promise<readonly ServerPreset[]>
   /** The preset and the login of a discovered container, for a sign-in that names it; null when there is none. */
   login: (name: string) => Promise<{ preset: ServerPreset; login: DockerLogin } | null>
+  /** Why a database container is not on the list, or is on it but cannot be reached; what to tell someone who is stuck. */
+  diagnosis: () => Promise<DiscoveryDiagnosis>
 }
 
 /**
@@ -198,30 +239,35 @@ export function createDockerDiscovery(opts: {
   connectHost: string
   /** Also read each container's own login (TSMYADMIN_DOCKER_LOGIN). */
   withLogin?: boolean
+  /** Whether host:port opens (a TCP connect); replaceable in tests. */
+  reach?: (host: string, port: number) => Promise<boolean>
   logger: Logger
   ttlMs?: number
   now?: () => number
 }): DockerDiscovery {
   const ttl = opts.ttlMs ?? 5000
   const now = opts.now ?? Date.now
-  let cached: { at: number; list: readonly DiscoveredDatabase[] } | null = null
-  let inflight: Promise<readonly DiscoveredDatabase[]> | null = null
+  type Snapshot = { found: readonly DiscoveredDatabase[]; skipped: readonly SkippedDatabase[] }
+  const nothing: Snapshot = { found: [], skipped: [] }
+  const reach = opts.reach ?? tcpReachable
+  let cached: { at: number; snapshot: Snapshot } | null = null
+  let inflight: Promise<Snapshot> | null = null
   let lastError = ''
-  const all = (): Promise<readonly DiscoveredDatabase[]> => {
-    if (cached && now() - cached.at < ttl) return Promise.resolve(cached.list)
-    inflight ??= discover(opts.get, opts.connectHost, opts.withLogin === true)
-      .then((list) => {
-        if (lastError !== '') opts.logger.log('info', 'discovery.recovered', { count: list.length })
+  const all = (): Promise<Snapshot> => {
+    if (cached && now() - cached.at < ttl) return Promise.resolve(cached.snapshot)
+    inflight ??= discoverAll(opts.get, opts.connectHost, opts.withLogin === true)
+      .then((snapshot) => {
+        if (lastError !== '') opts.logger.log('info', 'discovery.recovered', { count: snapshot.found.length })
         lastError = ''
-        cached = { at: now(), list }
-        return list
+        cached = { at: now(), snapshot }
+        return snapshot
       })
       .catch((err: unknown) => {
         const message = err instanceof Error ? err.message : String(err)
         if (message !== lastError) opts.logger.log('warn', 'discovery.failed', { error: message })
         lastError = message
-        cached = { at: now(), list: [] }
-        return [] as readonly DiscoveredDatabase[]
+        cached = { at: now(), snapshot: nothing }
+        return nothing
       })
       .finally(() => {
         inflight = null
@@ -230,11 +276,29 @@ export function createDockerDiscovery(opts: {
   }
   return {
     async list() {
-      return (await all()).map((d) => d.preset)
+      return (await all()).found.map((d) => d.preset)
     },
     async login(name) {
-      const hit = (await all()).find((d) => d.preset.name === name)
+      const hit = (await all()).found.find((d) => d.preset.name === name)
       return hit?.login ? { preset: hit.preset, login: hit.login } : null
+    },
+    async diagnosis() {
+      const { found, skipped } = await all()
+      // Each container's port is tried from here: a port published on the host's 127.0.0.1 only is not reachable
+      // from inside a container, and the login would just time out.
+      const open = await Promise.all(found.map((d) => reach(d.preset.host, d.preset.port)))
+      const unreachable: DiscoveryIssue[] = found.flatMap((d, i) =>
+        open[i]
+          ? []
+          : [{ name: d.preset.name, dialect: d.preset.dialect, reason: 'unreachable' as const, port: d.preset.port }]
+      )
+      return {
+        enabled: true,
+        connectHost: opts.connectHost,
+        unavailable: lastError === '' ? null : lastError,
+        found: found.length,
+        issues: [...skipped, ...unreachable],
+      }
     },
   }
 }

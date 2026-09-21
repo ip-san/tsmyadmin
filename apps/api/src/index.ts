@@ -123,7 +123,7 @@ const discovery = config.dockerDiscovery
 const app = createApp(config, {
   store,
   logger,
-  ...(discovery ? { discover: discovery.list } : {}),
+  ...(discovery ? { discover: discovery.list, diagnose: discovery.diagnosis } : {}),
   ...(discovery && config.dockerDiscovery?.login ? { dockerLogin: discovery.login } : {}),
   remoteAddress: (c) => {
     try {

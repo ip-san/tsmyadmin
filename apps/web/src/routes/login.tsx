@@ -4,10 +4,11 @@ import { z } from 'zod'
 import { BrandMark } from '@/components/layout/BrandMark.tsx'
 import { Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { locale } from '@/config/locale.ts'
+import { DiscoveryHelp } from '@/features/auth/DiscoveryHelp.tsx'
 import { LoginForm } from '@/features/auth/LoginForm.tsx'
 import { serverHomePath } from '@/lib/default-tabs.ts'
 import { useDocumentTitle } from '@/lib/document-title.ts'
-import { mutations, serversQuery, sessionQuery } from '@/lib/queries.ts'
+import { discoveryDiagnosisQuery, mutations, serversQuery, sessionQuery } from '@/lib/queries.ts'
 import { safeRedirect } from '@/lib/redirect.ts'
 
 export const Route = createFileRoute('/login')({
@@ -28,6 +29,7 @@ function LoginPage() {
   const navigate = useNavigate()
   const search = Route.useSearch()
   const servers = useQuery(serversQuery)
+  const diagnosis = useQuery(discoveryDiagnosisQuery)
   useDocumentTitle(locale.login.title)
   return (
     <main className="flex min-h-dvh items-center justify-center bg-canvas p-4">
@@ -61,6 +63,7 @@ function LoginPage() {
             />
           )}
         </div>
+        <DiscoveryHelp diagnosis={diagnosis.data} />
         <p className="mt-4 text-center text-xs text-ink-faint">
           {locale.app.name} v{__APP_VERSION__}
         </p>

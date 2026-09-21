@@ -30,13 +30,14 @@ bun run lighthouse        # Lighthouse CI（警告のみ、要 Chrome）
 
 ## 現在の規模（`scripts/validate-docs.mjs` が同期）
 
-- ユニット/API/Web テスト定義: <!-- stat:unit-tests -->889<!-- /stat --> 件
+- ユニット/API/Web テスト定義: <!-- stat:unit-tests -->899<!-- /stat --> 件
 - Adapter conformance: <!-- stat:conformance -->195<!-- /stat --> 件 × 2 方言
-- E2E: <!-- stat:e2e -->198<!-- /stat --> 件
+- E2E: <!-- stat:e2e -->199<!-- /stat --> 件
 - API ルート: <!-- stat:routes -->95<!-- /stat -->
 
 ## 設計ドキュメント
 
+- [docs/dev-environment.md](docs/dev-environment.md) — 開発環境向けに足した機能（実行された文・スナップショット・ワンクリック ログイン・診断）と、見送った判断（MCP など）、次の候補、既知の限界
 - [docs/architecture.md](docs/architecture.md) — 設計の全体像（Mermaid 図）。パッケージ依存の向き、アダプター層の契約、セッションと接続プール、行の閲覧 / SQL 実行 / DDL の流れ、エクスポート・インポート、品質ゲート、逆引き表
 
 ## 詳細ルール（path-scoped）

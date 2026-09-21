@@ -19,3 +19,30 @@ export const ServerPresetSchema = z.strictObject({
 })
 export type ServerPreset = z.infer<typeof ServerPresetSchema>
 export const ServerPresetsSchema = z.array(ServerPresetSchema)
+
+/**
+ * Why a database container is not on the login screen's list, or is on it but cannot be reached: `stopped`, running
+ * without a published port (`notPublished`; `port` is the usual one to publish), or published on a port this process
+ * cannot open (`unreachable`).
+ */
+export const DiscoveryIssueSchema = z.object({
+  name: z.string(),
+  dialect: DialectSchema,
+  reason: z.enum(['stopped', 'notPublished', 'unreachable']),
+  port: z.number().int().nullable(),
+})
+export type DiscoveryIssue = z.infer<typeof DiscoveryIssueSchema>
+
+/** What Docker discovery can say to someone who cannot find or reach their database (development only). */
+export const DiscoveryDiagnosisSchema = z.object({
+  /** False when discovery is off: there is nothing to diagnose. */
+  enabled: z.boolean(),
+  /** The host name discovery reaches published ports by (what `unreachable` was tried against). */
+  connectHost: z.string(),
+  /** Why Docker itself could not be read (no socket, no permission); null when it could. */
+  unavailable: z.string().nullable(),
+  /** How many containers are on the list. */
+  found: z.number().int().min(0),
+  issues: z.array(DiscoveryIssueSchema),
+})
+export type DiscoveryDiagnosis = z.infer<typeof DiscoveryDiagnosisSchema>

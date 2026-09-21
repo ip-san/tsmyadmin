@@ -13,6 +13,7 @@ import type {
   DesignerPage,
   DiagnosticKind,
   DiagnosticReport,
+  DiscoveryDiagnosis,
   DistinctValues,
   EventDetail,
   EventInfo,
@@ -105,6 +106,16 @@ export const serversQuery = queryOptions({
   queryFn: () => unwrap<ServerPreset[]>(api.servers.$get()),
   // Containers started while the page is open (Docker discovery) show up when the login screen is opened again.
   staleTime: 10_000,
+})
+
+/** Why a database container is missing from the login list or cannot be reached (Docker discovery, development). */
+export const discoveryDiagnosisQuery = queryOptions({
+  queryKey: ['servers', 'diagnosis'],
+  queryFn: () => unwrap<DiscoveryDiagnosis>(api.servers.diagnosis.$get()),
+  // Someone stuck fixes a compose file and comes back: re-read while the screen is open.
+  // Only where discovery is on: with it off there is nothing that could change.
+  refetchInterval: (query) => (query.state.data?.enabled ? 5000 : false),
+  staleTime: 0,
 })
 
 /** Bookmarks stored with the account; only fetched where the session says the server keeps them. */

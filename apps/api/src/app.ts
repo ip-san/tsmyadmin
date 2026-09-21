@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import type { ServerPreset } from '@tsmyadmin/shared'
+import type { DiscoveryDiagnosis, ServerPreset } from '@tsmyadmin/shared'
 import { type Context, Hono } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
 import { getSignedCookie } from 'hono/cookie'
@@ -38,6 +38,8 @@ export interface AppServices {
   challenge?: () => Uint8Array
   /** Database containers found on the local Docker daemon (development; see TSMYADMIN_DOCKER_DISCOVERY). */
   discover?: () => Promise<readonly ServerPreset[]>
+  /** Why a database container is missing from the list or cannot be reached (development; see TSMYADMIN_DOCKER_DISCOVERY). */
+  diagnose?: () => Promise<DiscoveryDiagnosis>
   /** The login of a discovered container, for a one-click sign-in (TSMYADMIN_DOCKER_LOGIN); see SessionRouteDeps. */
   dockerLogin?: NonNullable<SessionRouteDeps['dockerLogin']>
 }
@@ -188,6 +190,19 @@ export function createApp(config: AppConfig, services: AppServices) {
         const named = new Set(config.servers.map((s) => s.name))
         return c.json([...config.servers, ...found.filter((s) => !named.has(s.name))])
       })
+      .get('/api/servers/diagnosis', async (c) =>
+        c.json(
+          services.diagnose
+            ? await services.diagnose()
+            : ({
+                enabled: false,
+                connectHost: '',
+                unavailable: null,
+                found: 0,
+                issues: [],
+              } satisfies DiscoveryDiagnosis)
+        )
+      )
       .route('/api', sessionRoutes(cfg, sessionDeps))
       .route('/api', secondFactorRoutes(cfg, secondFactorDeps))
       .route('/api', databaseRoutes(cfg, logger))

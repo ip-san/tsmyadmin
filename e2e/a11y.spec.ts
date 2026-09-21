@@ -11,6 +11,27 @@ async function scan(page: Parameters<typeof login>[0]) {
 }
 
 test.describe('accessibility (axe-core)', () => {
+  test('login form with the Docker discovery help open', async ({ page }) => {
+    // Discovery is off in the test server: the answer is faked, as it reads when a container cannot be reached.
+    await page.route('**/api/servers/diagnosis', (route) =>
+      route.fulfill({
+        json: {
+          enabled: true,
+          connectHost: 'host.docker.internal',
+          unavailable: null,
+          found: 1,
+          issues: [
+            { name: 'docker: shop/pg', dialect: 'postgres', reason: 'notPublished', port: 5432 },
+            { name: 'docker: api/mysql', dialect: 'mysql', reason: 'unreachable', port: 3306 },
+          ],
+        },
+      })
+    )
+    await page.goto('/login')
+    await page.getByText('接続先が見つからない・つながらないとき').waitFor()
+    await scan(page)
+  })
+
   test('login form (with presets and manual entry)', async ({ page }) => {
     await page.goto('/login')
     await page.getByLabel('ホスト').waitFor()

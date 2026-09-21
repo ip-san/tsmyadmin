@@ -1,5 +1,14 @@
+import { createServer } from 'node:net'
 import { describe, expect, it } from 'vitest'
-import { createDockerDiscovery, type DockerGet, discover, discoverDatabases, loginFromEnv } from './docker-discovery.ts'
+import {
+  createDockerDiscovery,
+  type DockerGet,
+  discover,
+  discoverAll,
+  discoverDatabases,
+  loginFromEnv,
+  tcpReachable,
+} from './docker-discovery.ts'
 import { createLogger } from './logging.ts'
 
 const id = (n: number) => n.toString(16).padStart(64, '0')
@@ -34,6 +43,8 @@ const CONTAINERS = [
   { Id: id(4), Names: ['/internal-db'], Image: 'mariadb:11', Ports: [{ PrivatePort: 3306, Type: 'tcp' }] },
   // A custom image recognised by the port it exposes, on a mapped host port.
   { Id: id(5), Names: ['/legacy'], Image: 'acme/db', Ports: [{ PrivatePort: 3306, PublicPort: 3307, Type: 'tcp' }] },
+  // A database that is not running: named as stopped, not left out without a word.
+  { Id: id(7), Names: ['/old-pg'], Image: 'postgres:16', State: 'exited', Ports: [] },
   // Not a server: an exporter whose name only starts like one.
   {
     Id: id(6),
@@ -51,7 +62,7 @@ const fakeGet =
   (calls: string[] = []): DockerGet =>
   async (path) => {
     calls.push(path)
-    if (path === '/containers/json') return CONTAINERS
+    if (path.startsWith('/containers/json')) return CONTAINERS
     const m = /^\/containers\/([0-9a-f]+)\/json$/.exec(path)
     if (m?.[1] && INSPECT[m[1]]) return INSPECT[m[1]]
     throw new Error(`unexpected ${path}`)
@@ -76,13 +87,13 @@ describe('discoverDatabases', () => {
   it('only reads: the list, then the environment of each database container', async () => {
     const calls: string[] = []
     await discoverDatabases(fakeGet(calls), '127.0.0.1')
-    expect(calls[0]).toBe('/containers/json')
+    expect(calls[0]).toBe('/containers/json?all=1')
     expect(calls.slice(1).every((c) => /^\/containers\/[0-9a-f]+\/json$/.test(c))).toBe(true)
   })
 
   it('keeps a container whose environment cannot be read, without a database name', async () => {
     const get: DockerGet = async (path) => {
-      if (path === '/containers/json') return CONTAINERS.slice(0, 1)
+      if (path.startsWith('/containers/json')) return CONTAINERS.slice(0, 1)
       throw new Error('gone')
     }
     expect(await discoverDatabases(get, '127.0.0.1')).toEqual([
@@ -117,7 +128,7 @@ describe('createDockerDiscovery', () => {
     const calls: string[] = []
     const d = createDockerDiscovery({ get: fakeGet(calls), connectHost: '127.0.0.1', logger })
     await Promise.all([d.list(), d.list(), d.list()])
-    expect(calls.filter((c) => c === '/containers/json')).toHaveLength(1)
+    expect(calls.filter((c) => c.startsWith('/containers/json'))).toHaveLength(1)
   })
 
   it('is an empty list, logged once, when Docker cannot be reached', async () => {
@@ -205,5 +216,76 @@ describe('discover with logins', () => {
     const off = createDockerDiscovery({ get: fakeGet(), connectHost: '127.0.0.1', logger })
     expect(await off.login('docker: tsmyadmin/mysql')).toBeNull()
     expect(JSON.stringify(await on.list())).not.toMatch(/secret|"root"/)
+  })
+})
+
+describe('discovery diagnosis', () => {
+  const logger = createLogger('json', () => undefined)
+
+  it('names the database containers it left out, and why', async () => {
+    const { skipped } = await discoverAll(fakeGet(), '127.0.0.1')
+    expect(skipped).toEqual([
+      // Running, but no published port: the usual one is what to publish.
+      { name: 'docker: internal-db', dialect: 'mysql', reason: 'notPublished', port: 3306 },
+      { name: 'docker: old-pg', dialect: 'postgres', reason: 'stopped', port: null },
+    ])
+  })
+
+  it('tries every listed container from here and reports the ones that do not open', async () => {
+    const reached: string[] = []
+    const d = createDockerDiscovery({
+      get: fakeGet(),
+      connectHost: 'host.docker.internal',
+      logger,
+      reach: async (host, port) => {
+        reached.push(`${host}:${port}`)
+        return port !== 5432
+      },
+    })
+    const diagnosis = await d.diagnosis()
+    expect(reached.sort()).toEqual([
+      'host.docker.internal:13306',
+      'host.docker.internal:3307',
+      'host.docker.internal:5432',
+    ])
+    expect(diagnosis).toMatchObject({ enabled: true, connectHost: 'host.docker.internal', unavailable: null, found: 3 })
+    expect(diagnosis.issues).toContainEqual({
+      name: 'docker: snook/pgsql',
+      dialect: 'postgres',
+      reason: 'unreachable',
+      port: 5432,
+    })
+    expect(diagnosis.issues.map((i) => i.reason).sort()).toEqual(['notPublished', 'stopped', 'unreachable'])
+  })
+
+  it('says why Docker itself could not be read', async () => {
+    const d = createDockerDiscovery({
+      get: async () => {
+        throw new Error('Cannot open the Docker socket /var/run/docker.sock: it is missing')
+      },
+      connectHost: '127.0.0.1',
+      logger,
+      reach: async () => true,
+    })
+    expect(await d.diagnosis()).toMatchObject({
+      unavailable: 'Cannot open the Docker socket /var/run/docker.sock: it is missing',
+      found: 0,
+      issues: [],
+    })
+  })
+})
+
+describe('tcpReachable', () => {
+  it('is true for a port that is listening and false for one that is not', async () => {
+    const server = createServer()
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const address = server.address()
+    const port = typeof address === 'object' && address ? address.port : 0
+    try {
+      expect(await tcpReachable('127.0.0.1', port)).toBe(true)
+    } finally {
+      await new Promise((resolve) => server.close(resolve))
+    }
+    expect(await tcpReachable('127.0.0.1', port, 500)).toBe(false)
   })
 })
