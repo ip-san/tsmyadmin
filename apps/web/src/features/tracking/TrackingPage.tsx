@@ -27,7 +27,6 @@ function Diff({ before, after }: { before: string; after: string }) {
     >
       {lines.map((l, i) => (
         <div
-          // biome-ignore lint/suspicious/noArrayIndexKey: lines of one diff, in order; recomputed as a whole
           key={i}
           className={
             l.kind === 'add'

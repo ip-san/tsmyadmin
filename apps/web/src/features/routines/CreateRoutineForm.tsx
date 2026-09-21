@@ -119,7 +119,6 @@ export function CreateRoutineForm({
         {params.map((p, i) => {
           const n = i + 1
           return (
-            // biome-ignore lint/suspicious/noArrayIndexKey: rows have no identity of their own besides their place
             <div key={i} className="flex flex-wrap items-center gap-2">
               <Select
                 aria-label={t.routine.paramMode(n)}

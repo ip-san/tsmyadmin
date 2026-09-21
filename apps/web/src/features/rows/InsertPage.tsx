@@ -148,7 +148,6 @@ export function InsertPage({ tableRef }: { tableRef: TableRef }) {
       >
         <p className="mb-2 text-xs text-ink-sub">{locale.rows.previewNote}</p>
         {statements?.map((st, i) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: statements of one preview, in order
           <div key={i} className="mb-3 space-y-1">
             <pre
               aria-label="SQL"

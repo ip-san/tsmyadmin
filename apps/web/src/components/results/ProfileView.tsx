@@ -21,7 +21,6 @@ export function ProfileView({ profile }: { profile: ProfileStage[] | undefined }
         <tbody>
           {profile.map((p, i) => (
             // Stages repeat (e.g. "executing" twice): the position keeps them apart.
-            // biome-ignore lint/suspicious/noArrayIndexKey: the list is fixed once shown
             <Tr key={i}>
               <Td>{p.state}</Td>
               <Td className="text-right tabular-nums">{p.seconds.toFixed(6)}</Td>

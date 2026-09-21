@@ -41,7 +41,6 @@ function Part({ title, records, empty }: { title: string; records: Records | nul
         <p className="text-sm text-ink-sub">{empty}</p>
       ) : (
         records.map((r, i) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: channels / replicas in server order, shown once per load
           <RecordTable key={i} record={r} label={records.length > 1 ? `${title} ${i + 1}` : title} />
         ))
       )}

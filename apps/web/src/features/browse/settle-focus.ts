@@ -25,21 +25,22 @@ export function useSettleFocus(
     const saved = settleFocus.current
     if (!saved || fetching) return
     settleFocus.current = null
+    const grid = gridRef.current
+    const notice = noticeRef.current
     // Rows are keyed by index: the cell may still exist but now belong to another row (the edited one left a
     // filtered result set), so the row at that index is compared on every column but the edited one (a row key
     // would change with the edit on all-columns / ctid tables, or when a key column was edited).
     const row = data?.rows[saved.index]
     const stillThere = data !== undefined && row !== undefined && othersOf(data, row, saved.column) === saved.others
-    if (stillThere && gridRef.current?.contains(document.activeElement)) return
+    if (stillThere && grid?.contains(document.activeElement)) return
     // The row may have re-sorted (a key column edited, a new ctid): follow it when exactly one row matches.
     const matches = data
       ? data.rows.flatMap((r, i) => (othersOf(data, r, saved.column) === saved.others ? [i] : []))
       : []
     const moved = matches.length === 1 ? matches[0] : undefined
-    const cell =
-      moved === undefined ? null : gridRef.current?.querySelector<HTMLElement>(`[data-cell="${moved},${saved.col}"]`)
+    const cell = moved === undefined ? null : grid?.querySelector<HTMLElement>(`[data-cell="${moved},${saved.col}"]`)
     if (cell) cell.focus({ preventScroll: true })
-    else noticeRef.current?.focus({ preventScroll: true })
-  }, [data, fetching])
+    else notice?.focus({ preventScroll: true })
+  }, [data, fetching, gridRef, noticeRef])
   return settleFocus
 }

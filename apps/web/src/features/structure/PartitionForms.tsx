@@ -73,7 +73,6 @@ export function PartitionTableForm({
         <fieldset className="space-y-2">
           <legend className="mb-1 text-xs font-medium text-ink-sub">{t.partitions}</legend>
           {rows.map((r, i) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: rows are edited in place and only appended / removed at the end
             <div key={i} className="flex flex-wrap items-end gap-2">
               <Field id={`part-name-${i}`} label={t.nameOf(i + 1)}>
                 <Input

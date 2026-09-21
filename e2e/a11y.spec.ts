@@ -1,13 +1,13 @@
-import AxeBuilder from '@axe-core/playwright'
 import { expect } from '@playwright/test'
 import { fillType, login, PASSKEY_BASE_URL, PERSISTENT_BASE_URL, TARGETS, tableUrl, test } from './helpers.ts'
 import { layoutViolations } from './layout-lint.ts'
+import { pageProblems } from './scan.ts'
 import { createAccount, dropAccount, enrol, t as first, signIn } from './two-factor.ts'
 
 async function scan(page: Parameters<typeof login>[0]) {
-  const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()
-  expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([])
-  expect(await layoutViolations(page), 'layout').toEqual([])
+  const problems = await pageProblems(page)
+  expect(problems.axe, JSON.stringify(problems.axe, null, 2)).toEqual([])
+  expect(problems.layout, 'layout').toEqual([])
 }
 
 test.describe('accessibility (axe-core)', () => {

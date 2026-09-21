@@ -15,7 +15,7 @@
     "db:down": "docker compose down",
     "db:reset": "docker compose down -v && docker compose up -d --wait",
     "typecheck": "node scripts/typecheck.mjs",
-    "lint": "biome check .",
+    "lint": "biome check --error-on-warnings .",
     "format": "biome check --write .",
     "test": "vitest run",
     "test:watch": "vitest",

@@ -64,7 +64,6 @@ function ShapePath({ shape, project, scale }: { shape: Shape; project: Project; 
       return (
         <>
           {shape.parts.map((part, i) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: the parts of one value, in their stored order
             <ShapePath key={i} shape={part} project={project} scale={scale} />
           ))}
         </>

@@ -137,11 +137,7 @@ export function RowForm({
   return (
     <form onSubmit={submit} aria-busy={pending} className="space-y-3">
       {rows.map((_, row) => (
-        <Table
-          // biome-ignore lint/suspicious/noArrayIndexKey: the rows of the form, by position; never reordered
-          key={row}
-          aria-label={count > 1 ? locale.rows.rowNumber(row + 1) : undefined}
-        >
+        <Table key={row} aria-label={count > 1 ? locale.rows.rowNumber(row + 1) : undefined}>
           <thead>
             <tr>
               <Th>{locale.rows.column}</Th>

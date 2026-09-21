@@ -11,7 +11,7 @@ MySQL / PostgreSQL 両対応の、モダン TypeScript 製 phpMyAdmin クロー�
 - **テスト DB**: `docker compose`（MySQL `13306` / PostgreSQL `15433`、fixtures 自動投入）
 - **開発での使い方（売りの機能）**: `docker-compose.dev.yml` 1 つで、手元の Docker の MySQL / PostgreSQL コンテナを自動検出してログイン画面に出す（`TSMYADMIN_DOCKER_DISCOVERY=1`、`apps/api/src/lib/docker-discovery.ts`。読むのは GET だけ、パスワードは読まない、`NODE_ENV=production` では拒否）
 - **本番運用**: 設定は `apps/api/src/config.ts` で起動時検証（環境変数の一覧は `docs/deployment.md` が唯一の正）。接続先 allowlist・ログイン レート制限・CSP・リクエスト ID 付き構造化ログ・監査ログ（`withAudit`）・`/healthz` `/readyz`・暗号化 SQLite セッションストア（`SESSION_STORE=sqlite`）
-- **品質**: Vitest / Playwright（`e2e/a11y.spec.ts` は axe に加え `e2e/layout-lint.ts` で矢印の重なり・入力欄と（ラベルのない）チェックボックス・ボタンの高さのずれ・コントロールの重なり・横スクロール・アプリシェルでページが縦に伸びていないか・文字のはみ出し・id の重複・`undefined` の混入を DOM の幾何で検査。画面を足したら `scan(page)` を通す）/ Biome / knip / madge / jscpd / type-coverage + 自前検査（`check:arch`, `check:sql-safety`, `docs:validate`, `size` = 初期 JS の brotli 合計 160 kB 予算）
+- **品質**: Vitest / Playwright（**アクセシビリティ**: Biome の a11y ルールは全部 error で警告 0 を維持（`bun run lint` は警告でも落ちる）、`e2e/routes-a11y.spec.ts` は生成されたルート木の**全画面**を初期状態で axe + レイアウト検査（画面を足すと自動で対象になる）、`check:contrast` はデザイン トークンの比。`e2e/a11y.spec.ts` は状態つきの画面（ダイアログ・結果・登録中）を検査。`e2e/a11y.spec.ts` は axe に加え `e2e/layout-lint.ts` で矢印の重なり・入力欄と（ラベルのない）チェックボックス・ボタンの高さのずれ・コントロールの重なり・横スクロール・アプリシェルでページが縦に伸びていないか・文字のはみ出し・id の重複・`undefined` の混入を DOM の幾何で検査。画面を足したら `scan(page)` を通す）/ Biome / knip / madge / jscpd / type-coverage + 自前検査（`check:arch`, `check:sql-safety`, `docs:validate`, `size` = 初期 JS の brotli 合計 160 kB 予算）
 
 ## 開発コマンド
 
@@ -32,7 +32,7 @@ bun run lighthouse        # Lighthouse CI（警告のみ、要 Chrome）
 
 - ユニット/API/Web テスト定義: <!-- stat:unit-tests -->866<!-- /stat --> 件
 - Adapter conformance: <!-- stat:conformance -->194<!-- /stat --> 件 × 2 方言
-- E2E: <!-- stat:e2e -->194<!-- /stat --> 件
+- E2E: <!-- stat:e2e -->196<!-- /stat --> 件
 - API ルート: <!-- stat:routes -->95<!-- /stat -->
 
 ## 設計ドキュメント

@@ -94,7 +94,6 @@ export function ServerCatalogPage({ kind, dialect }: { kind: ServerCatalogKind; 
                 <Fragment key={JSON.stringify(row)}>
                   <Tr>
                     {row.map((cell, i) => (
-                      // biome-ignore lint/suspicious/noArrayIndexKey: columns are fixed per kind; the position is the column
                       <Td key={i} className={i === 0 ? 'font-mono text-xs' : 'text-xs'}>
                         {cell ?? ''}
                       </Td>
