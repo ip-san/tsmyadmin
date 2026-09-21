@@ -320,6 +320,9 @@ export const en = {
     },
     diagram: 'Diagram of tables and foreign keys (the same as the Foreign keys table below)',
     boxLabel: (table: string) => `Table ${table} (arrow keys move it)`,
+    selectedBox: 'Selected table',
+    cutHint:
+      'Names that do not fit a box are cut with “…”. Select a table (click, tap or focus) to read its names in full here.',
     resetLayout: 'Reset layout',
     fromTable: 'Table the key belongs to',
     relations: 'Foreign keys',

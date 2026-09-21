@@ -42,4 +42,22 @@ describe('diagramSvg', () => {
     expect(svg).toContain('&lt;b&gt;&amp;&quot;')
     expect(svg).not.toContain('<b>')
   })
+
+  it('cuts a name that would run over its box and names it in full in a tooltip', () => {
+    const long = 'a_table_name_that_is_far_too_long_for_a_box_two_hundred_pixels_wide'
+    const column = 'a_column_name_that_is_also_far_too_long_for_the_room_the_box_has_for_it'
+    const svg = diagramSvg({
+      tables: [long],
+      relations: [],
+      positions: { [long]: { x: 0, y: 0 } },
+      columns: new Map([[long, [column, 'id']]]),
+    })
+    expect(svg).toContain(`<title>${long}</title>`)
+    expect(svg).toContain(`<title>${column}</title>`)
+    // The drawn text is the cut one; a name that fits has no tooltip.
+    expect(svg).toContain('…')
+    expect(svg).not.toContain('<title>id</title>')
+    // The text of the header is the cut name (the whole one is only in the title beside it).
+    expect(svg).not.toContain(`fill="#18181b">${long}`)
+  })
 })

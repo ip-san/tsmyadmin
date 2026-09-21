@@ -5,6 +5,7 @@ import {
   boxColumns,
   boxHeight,
   drawnRelations,
+  fitText,
   GRID,
   HEADER_HEIGHT,
   relationLabel,
@@ -12,6 +13,7 @@ import {
   relationRoute,
   routeMiddle,
   snapToGrid,
+  textRoom,
   withAllColumns,
 } from './designer-layout.ts'
 
@@ -115,5 +117,40 @@ describe('relationRoute and friends', () => {
   it('snaps a point to the grid', () => {
     expect(snapToGrid({ x: 29, y: 31 })).toEqual({ x: 20, y: 40 })
     expect(GRID).toBe(20)
+  })
+})
+
+describe('fitText', () => {
+  const room = textRoom(8)
+
+  it('leaves a name that fits as it is', () => {
+    expect(fitText('users', 12, room)).toBe('users')
+    expect(fitText('user_id', 12, room)).toBe('user_id')
+    expect(fitText('', 12, room)).toBe('')
+  })
+
+  it('cuts a long name with an ellipsis so it stays inside the box', () => {
+    const long = 'customer_billing_address_postal_code_verification_status'
+    const cut = fitText(long, 12, room)
+    expect(cut.endsWith('…')).toBe(true)
+    expect(cut.length).toBeLessThan(long.length)
+    expect(long.startsWith(cut.slice(0, -1))).toBe(true)
+    // Cutting again changes nothing: it already fits.
+    expect(fitText(cut, 12, room)).toBe(cut)
+  })
+
+  it('counts a Japanese name as one em a character, and bold as wider', () => {
+    // Twelve full-width characters are 144 px at 12 px: past the 184 px of room only after a few more.
+    expect(fitText('顧客請求先住所', 12, room)).toBe('顧客請求先住所')
+    const long = '顧客請求先住所郵便番号確認状況区分コード'
+    const cut = fitText(long, 12, room)
+    expect(cut.endsWith('…')).toBe(true)
+    expect(([...cut].length - 1) * 12).toBeLessThanOrEqual(room)
+    const name = 'a_table_name_that_is_fairly_long'
+    expect(fitText(name, 12, room, true).length).toBeLessThanOrEqual(fitText(name, 12, room).length)
+  })
+
+  it('always keeps something of a name that cannot fit at all', () => {
+    expect(fitText('abcdef', 12, 1)).toBe('a…')
   })
 })

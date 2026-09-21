@@ -3,11 +3,13 @@ import {
   boxHeight,
   DEFAULT_VIEW,
   type DiagramInput,
+  fitText,
   HEADER_HEIGHT,
   ROW_HEIGHT,
   relationLabel,
   relationRoute,
   routeMiddle,
+  textRoom,
 } from './designer-layout.ts'
 
 /** Dia counts in centimetres; the diagram is laid out in pixels. */
@@ -60,9 +62,14 @@ export function diagramDia(o: DiagramInput): string {
         '<dia:attribute name="inner_color"><dia:color val="#ffffff"/></dia:attribute>',
         '</dia:object>',
       ].join(''),
-      text(name, p.x + 6, p.y + 14, true),
+      text(fitText(name, 11, textRoom(6), true), p.x + 6, p.y + 14, true),
       ...cols.map((c, i) =>
-        text(o.display?.get(name) === c ? `◆ ${c}` : c, p.x + 6, p.y + HEADER_HEIGHT + i * ROW_HEIGHT + 12, false)
+        text(
+          fitText(o.display?.get(name) === c ? `◆ ${c}` : c, 11, textRoom(6)),
+          p.x + 6,
+          p.y + HEADER_HEIGHT + i * ROW_HEIGHT + 12,
+          false
+        )
       )
     )
   }

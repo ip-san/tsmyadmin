@@ -39,6 +39,34 @@ export function boxColumns(table: string, relations: readonly RelationDef[]): st
   return out
 }
 
+/** Room for a line of text inside a box, with `pad` left free on each side. */
+export const textRoom = (pad: number) => BOX_WIDTH - 2 * pad
+
+const NARROW = new Set([..."iljtfrI.,:;'!|()[]/\\- "])
+/** How wide one character is, in em: a guess that errs wide, since a name that fits the guess must fit the box. */
+function glyphEm(ch: string): number {
+  const code = ch.codePointAt(0) ?? 0
+  // Japanese and other full-width characters are one em wide (table names in the language of the business).
+  if (code >= 0x2e80) return 1
+  if (NARROW.has(ch)) return 0.36
+  if (ch === 'm' || ch === 'w' || ch === 'M' || ch === 'W') return 0.92
+  if (ch >= 'A' && ch <= 'Z') return 0.72
+  return 0.6
+}
+
+/**
+ * The text cut with an ellipsis where it would run out of `room` pixels at `size`: a long table or column name
+ * would otherwise be drawn across the edge of its box (and, in an export, out of the picture). Widths are an
+ * estimate (an SVG has no way to measure text before it is drawn), so the cut is a little early rather than late.
+ */
+export function fitText(text: string, size: number, room: number, bold = false): string {
+  const em = (t: string) => [...t].reduce((n, ch) => n + glyphEm(ch), 0) * size * (bold ? 1.1 : 1)
+  if (em(text) <= room) return text
+  const chars = [...text]
+  while (chars.length > 1 && em(`${chars.join('')}…`) > room) chars.pop()
+  return `${chars.join('')}…`
+}
+
 export const boxHeight = (columns: number, compact = false) =>
   compact ? HEADER_HEIGHT : HEADER_HEIGHT + Math.max(columns, 1) * ROW_HEIGHT
 

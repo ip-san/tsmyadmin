@@ -314,6 +314,9 @@ export const ja = {
     },
     diagram: 'テーブルと外部キーの図（下の「外部キー」の表と同じ内容）',
     boxLabel: (table: string) => `テーブル ${table}（矢印キーで移動）`,
+    selectedBox: '選択中のテーブル',
+    cutHint:
+      '枠に収まらない名前は「…」で切っています。テーブルを選ぶと（クリック・タップ・フォーカス）、名前の全文をここに表示します。',
     resetLayout: '配置を元に戻す',
     fromTable: '外部キーを付けるテーブル',
     relations: '外部キー',

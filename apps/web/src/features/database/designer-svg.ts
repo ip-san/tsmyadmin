@@ -3,12 +3,14 @@ import {
   boxHeight,
   DEFAULT_VIEW,
   type DiagramInput,
+  fitText,
   HEADER_HEIGHT,
   ROW_HEIGHT,
   relationLabel,
   relationPath,
   relationRoute,
   routeMiddle,
+  textRoom,
 } from './designer-layout.ts'
 
 const PAD = 40
@@ -40,16 +42,23 @@ export function diagramSvg(o: DiagramInput): string {
   const boxes = o.tables.map((name) => {
     const p = at(name)
     const cols = columnsOf(name)
+    // A name longer than the box is cut with an ellipsis (and named in full in a tooltip): drawn whole it would run
+    // across the box's edge.
+    const drawn = (full: string, bold: boolean) => {
+      const fitted = fitText(full, 12, textRoom(8), bold)
+      return fitted === full ? xmlText(full) : `${xmlText(fitted)}<title>${xmlText(full)}</title>`
+    }
     const rows = cols.map(
       (c, i) =>
-        `<text x="8" y="${HEADER_HEIGHT + i * ROW_HEIGHT + 14}" font-size="12" fill="#52525b">${xmlText(
-          o.display?.get(name) === c ? `◆ ${c}` : c
+        `<text x="8" y="${HEADER_HEIGHT + i * ROW_HEIGHT + 14}" font-size="12" fill="#52525b">${drawn(
+          o.display?.get(name) === c ? `◆ ${c}` : c,
+          false
         )}</text>`
     )
     return [
       `<g transform="translate(${p.x} ${p.y})">`,
       `<rect width="${BOX_WIDTH}" height="${boxHeight(cols.length, view.compact)}" rx="4" fill="#ffffff" stroke="#71717a" stroke-width="1.5"/>`,
-      `<text x="8" y="18" font-size="12" font-weight="600" fill="#18181b">${xmlText(name)}</text>`,
+      `<text x="8" y="18" font-size="12" font-weight="600" fill="#18181b">${drawn(name, true)}</text>`,
       `<line x1="0" x2="${BOX_WIDTH}" y1="${HEADER_HEIGHT}" y2="${HEADER_HEIGHT}" stroke="#d4d4d8"/>`,
       ...rows,
       '</g>',

@@ -3,11 +3,13 @@ import {
   boxHeight,
   DEFAULT_VIEW,
   type DiagramInput,
+  fitText,
   HEADER_HEIGHT,
   ROW_HEIGHT,
   relationLabel,
   relationRoute,
   routeMiddle,
+  textRoom,
 } from './designer-layout.ts'
 
 const PAD = 40
@@ -69,12 +71,14 @@ export function diagramEps(o: DiagramInput): string {
       `gsave 1 setgray newpath ${n(p.x)} ${y(p.y + h)} ${BOX_WIDTH} ${h} rectfill grestore`,
       `newpath ${n(p.x)} ${y(p.y + h)} ${BOX_WIDTH} ${h} rectstroke`,
       `newpath ${n(p.x)} ${y(p.y + HEADER_HEIGHT)} moveto ${BOX_WIDTH} 0 rlineto stroke`,
-      `/Helvetica-Bold findfont 9 scalefont setfont ${n(p.x + 6)} ${y(p.y + 14)} moveto (${psText(name)}) show`,
+      `/Helvetica-Bold findfont 9 scalefont setfont ${n(p.x + 6)} ${y(p.y + 14)} moveto (${psText(fitText(name, 9, textRoom(6), true))}) show`,
       '/Helvetica findfont 9 scalefont setfont'
     )
     cols.forEach((c, i) => {
       const label = o.display?.get(name) === c ? `* ${c}` : c
-      out.push(`${n(p.x + 6)} ${y(p.y + HEADER_HEIGHT + i * ROW_HEIGHT + 12)} moveto (${psText(label)}) show`)
+      out.push(
+        `${n(p.x + 6)} ${y(p.y + HEADER_HEIGHT + i * ROW_HEIGHT + 12)} moveto (${psText(fitText(label, 9, textRoom(6)))}) show`
+      )
     })
   }
   out.push('showpage', '%%EOF')
