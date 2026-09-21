@@ -531,6 +531,15 @@ export const DdlOpSchema = z.discriminatedUnion('op', [
   }),
   /** Bulk actions from the database structure page. */
   z.object({ op: z.literal('dropTables'), tables: z.array(table).min(1) }),
+  /**
+   * Tables, views and sequences removed if they are still there, each as what it is (views first, so a table a view
+   * reads is not the first to go). PostgreSQL adds CASCADE: what merely refers to them (a key of another table) goes
+   * with them. A snapshot restore uses it for what was made since the snapshot.
+   */
+  z.object({
+    op: z.literal('dropObjects'),
+    objects: z.array(z.object({ name: z.string().min(1), kind: TableKindSchema })).min(1),
+  }),
   z.object({ op: z.literal('truncateTables'), tables: z.array(table).min(1) }),
   /** Maintenance over several tables at once (MySQL takes the list in one statement; PostgreSQL too). */
   z.object({

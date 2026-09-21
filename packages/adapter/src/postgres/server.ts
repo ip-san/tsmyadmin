@@ -194,15 +194,37 @@ async function pgStatements(conn: Conn): Promise<DiagnosticReport> {
   }
 }
 
+/** Statements the tool itself sends (session housekeeping, catalog reads): not what the application under test ran. */
+const OWN_STATEMENTS =
+  "query !~* '^\\s*(discard|rollback|begin|commit|set|show|deallocate|select pg_terminate_backend)\\M' AND query !~* '\\mpg_|information_schema' AND query !~ '_tsmyadmin'"
+
+/** Every statement pg_stat_statements has counted, with its call count: two reads of it, subtracted, are what ran between. */
+async function pgRecentStatements(conn: Conn): Promise<DiagnosticReport> {
+  const installed = firstResult(await conn.query("SELECT 1 FROM pg_extension WHERE extname = 'pg_stat_statements'"))
+  if (installed.rows.length === 0) return NOTHING('noExtension')
+  try {
+    const r = firstResult(
+      await conn.query(
+        `SELECT query, SUM(calls) FROM pg_stat_statements WHERE ${OWN_STATEMENTS} GROUP BY query LIMIT 2000`
+      )
+    )
+    return { status: 'ok', columns: ['statement', 'runs'], rows: r.rows.map((row) => row.map(cell)), text: null }
+  } catch (err) {
+    // 55000: installed, not preloaded.
+    if (err instanceof AdapterError && err.nativeCode === '55000') return NOTHING('noExtension')
+    throw err
+  }
+}
+
 /** Only the statement statistics exist here: the log tables, InnoDB and binary logs are MySQL's. */
 export async function pgDiagnostics(
   conn: Conn,
   kind: DiagnosticKind,
   _query?: DiagnosticQuery
 ): Promise<DiagnosticReport> {
-  if (kind !== 'statements') return NOTHING('unsupported')
+  if (kind !== 'statements' && kind !== 'recentStatements') return NOTHING('unsupported')
   try {
-    return await pgStatements(conn)
+    return kind === 'statements' ? await pgStatements(conn) : await pgRecentStatements(conn)
   } catch (err) {
     if (err instanceof AdapterError && err.code === 'PERMISSION_DENIED') return NOTHING('denied')
     throw err

@@ -83,6 +83,8 @@ export const en = {
     notFoundBody: 'The URL is wrong, or the database or table it names does not exist.',
   },
   login: {
+    dockerLogin:
+      "Connects with the login in this container's environment (the user and password it was started with). Nothing to type.",
     advanced: 'Advanced',
     collation: 'Connection collation',
     collationHint:
@@ -147,6 +149,7 @@ export const en = {
     security: 'Security',
     userGroups: 'User groups',
     tracking: 'Tracking',
+    snapshots: 'Snapshots',
     databases: 'Databases',
     structure: 'Structure',
     sql: 'SQL',
@@ -853,6 +856,7 @@ export const en = {
       setTableOptions: 'Table options',
       maintainTable: 'Maintenance',
       dropTables: 'Drop the selected tables',
+      dropObjects: 'Drop tables and views',
       truncateTables: 'Empty the selected tables',
       enableEvent: 'Enable event',
       disableEvent: 'Disable event',
@@ -1676,6 +1680,7 @@ export const en = {
   diagnostics: {
     empty: 'Nothing recorded yet.',
     columns: {
+      time: 'Time',
       statement: 'Statement',
       runs: 'Runs',
       totalSeconds: 'Total (s)',
@@ -1707,6 +1712,15 @@ export const en = {
         noExtension: '',
         unsupported: 'This is a MySQL / MariaDB feature.',
       },
+      recentStatements: {
+        ok: '',
+        disabled: 'The general log is off (general_log = OFF). Turn it on and the statements that run stream in here.',
+        notTable: 'The general log goes to a file. Set log_output to TABLE and they stream in here.',
+        denied: 'You may not read mysql.general_log.',
+        noExtension:
+          'The pg_stat_statements extension is not available. With Docker, add -c shared_preload_libraries=pg_stat_statements to the container command, restart, and run CREATE EXTENSION pg_stat_statements.',
+        unsupported: '',
+      },
       statements: {
         ok: '',
         disabled: '',
@@ -1732,6 +1746,22 @@ export const en = {
         noExtension: '',
         unsupported: 'Binary logs are a MySQL / MariaDB feature.',
       },
+    },
+    recent: {
+      title: 'Statements as they run',
+      hintMysql:
+        "Streams what the application ran from the general log (a table), newest first. This tool's own statements are left out. The log is a server-wide setting and grows fast: turn it off when you are done.",
+      hintPostgres:
+        "Shows the statements whose call count grew in pg_stat_statements, per read (the counts of each interval, not one line per execution). This tool's own statements and catalog reads are left out.",
+      every: 'Read interval',
+      waiting: 'Nothing has run yet. Use the application and it shows up here.',
+      turnOn: 'Turn the general log on…',
+      turnOff: 'Turn the general log off…',
+      onHint:
+        'A server-wide setting. While it is on, every statement that runs is stored in mysql.general_log. You review the SQL before it runs.',
+      offHint: 'A server-wide setting. What was logged stays. You review the SQL before it runs.',
+      turnedOn: 'The general log is on.',
+      turnedOff: 'The general log is off.',
     },
     logsTitle: 'Recorded statements',
     slowLog: 'Slow query log',
@@ -2197,6 +2227,30 @@ export const en = {
     editShort: 'Edit',
     remove: (name: string) => `${name}: delete`,
     save: 'Save',
+  },
+  snapshots: {
+    title: 'Snapshots',
+    notice:
+      "Saves the database as it is now (structure, data, routines) so that after trying a migration or a seed you can put it back. Snapshots are held in tsmyadmin's memory and are gone when it restarts. For a large database, use Export.",
+    name: 'Name',
+    namePlaceholder: 'e.g. before the migration',
+    take: 'Take a snapshot',
+    taking: 'Saving…',
+    full: (n: number) => `A database keeps at most ${n}. Delete one you no longer need.`,
+    list: 'Saved snapshots',
+    none: 'None yet.',
+    at: 'Taken',
+    objects: 'Tables and views',
+    size: 'Size',
+    restore: 'Restore…',
+    delete: 'Delete',
+    restoreTitle: (name: string) => `Go back to "${name}"`,
+    restoreHint:
+      'Puts the database back as it was when saved: drops the tables and views made since, then runs the saved SQL (DROP, CREATE, INSERT). PostgreSQL does it in one transaction, so a failure leaves it as it was; MySQL keeps what had already run. Functions, triggers and events made since the snapshot stay.',
+    lossWarning: 'Every change to the data since the snapshot is lost.',
+    replayNote: (n: number) => `Then runs the ${n.toLocaleString('en-US')} saved statements`,
+    restored: (name: string) => `Went back to "${name}".`,
+    failed: 'The restore failed.',
   },
   tracking: {
     download: 'Download SQL',

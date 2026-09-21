@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { AdapterError } from '@tsmyadmin/adapter'
-import type { ExportTemplate, SavedQuery } from '@tsmyadmin/shared'
+import type { ExportTemplate, SavedQuery, ServerPreset } from '@tsmyadmin/shared'
 import {
   ExportTemplateBodySchema,
   exportTemplateKey,
@@ -12,6 +12,7 @@ import {
 import { type Context, Hono } from 'hono'
 import { deleteCookie, getSignedCookie, setSignedCookie } from 'hono/cookie'
 import { isHostAllowed, normaliseHost, presetEntry } from '../lib/allowlist.ts'
+import type { DockerLogin } from '../lib/docker-discovery.ts'
 import { apiError, errorResponse } from '../lib/errors.ts'
 import type { Logger } from '../lib/logging.ts'
 import type { RateLimiter } from '../lib/rate-limit.ts'
@@ -41,6 +42,11 @@ export interface SessionRouteDeps {
   allowedHosts: readonly string[]
   /** Containers found running (development); allowed on exactly their published host:port, looked up only when the list above says no. */
   discovered?: () => Promise<readonly { host: string; port: number }[]>
+  /**
+   * The login a discovered container was started with, for a sign-in that names it (TSMYADMIN_DOCKER_LOGIN); null
+   * when there is none. Returns the preset too: the address and account come from here, never from the request.
+   */
+  dockerLogin?: (name: string) => Promise<{ preset: ServerPreset; login: DockerLogin } | null>
   /** Per ip|user window (reset on success). */
   loginLimiter: RateLimiter
   /** Coarser per-IP window of *failed* attempts so rotating the user name cannot bypass the limit. */
@@ -81,7 +87,24 @@ export function sessionRoutes(cfg: SessionConfig, deps: SessionRouteDeps) {
   return (
     new Hono<AppEnv>()
       .post('/session', validate('json', LoginRequestSchema), async (c) => {
-        const { code, passkey, ...body } = c.req.valid('json')
+        const { code, passkey, dockerPreset, ...requested } = c.req.valid('json')
+        let body = requested
+        if (dockerPreset !== undefined) {
+          // The container's own login, for the container's own address: nothing of the request's host, port, user
+          // or password is used, so this cannot be pointed at another server.
+          const found = await deps.dockerLogin?.(dockerPreset)
+          if (!found) return c.json(apiError('VALIDATION', 'No login is held for that Docker container'), 400)
+          const { preset, login } = found
+          body = {
+            ...requested,
+            dialect: preset.dialect,
+            host: preset.host,
+            port: preset.port,
+            user: login.user,
+            password: login.password,
+            ...(requested.database || !preset.database ? {} : { database: preset.database }),
+          }
+        }
         const ip = deps.ip(c)
         const rateKey = `${ip}|${body.user}`
         const audit = {

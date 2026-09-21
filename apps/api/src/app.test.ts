@@ -1239,6 +1239,19 @@ describe('server catalog', () => {
     expect((await h.req('/api/server/diagnostics/nothing')).status).toBe(400)
     expect((await h.req('/api/server/diagnostics/binlogEvents?file=')).status).toBe(400)
   })
+
+  it('reads the statements after a logged time, and refuses a time that is not one', async () => {
+    const h = harness()
+    stores.push(h.store)
+    await h.login()
+    expect((await h.req('/api/server/diagnostics/recentStatements')).status).toBe(200)
+    expect((await h.req('/api/server/diagnostics/recentStatements?since=2026-09-21%2010:00:00.123456')).status).toBe(
+      200
+    )
+    // The time is bound as a parameter, but it is still only ever a time.
+    expect((await h.req("/api/server/diagnostics/recentStatements?since=1'%20OR%201=1")).status).toBe(400)
+    expect((await h.req('/api/server/diagnostics/recentStatements?since=yesterday')).status).toBe(400)
+  })
 })
 
 describe('import', () => {

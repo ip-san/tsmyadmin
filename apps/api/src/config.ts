@@ -55,6 +55,12 @@ const EnvSchema = z.object({
    * them (development only: it reads the Docker socket, which is root on the host). Refused in production.
    */
   TSMYADMIN_DOCKER_DISCOVERY: z.enum(['0', '1']).optional(),
+  /**
+   * `1` (with TSMYADMIN_DOCKER_DISCOVERY) reads each container's own login from its environment (the root or
+   * application password it was started with) and lets the login screen sign in to it in one click. The password
+   * stays in this process: it is never sent to the browser, logged or stored. Off by default; development only.
+   */
+  TSMYADMIN_DOCKER_LOGIN: z.enum(['0', '1']).optional(),
   /** Unix socket of the Docker Engine API, read with GET requests only. */
   TSMYADMIN_DOCKER_SOCKET: z.string().default('/var/run/docker.sock'),
   /**
@@ -119,7 +125,7 @@ export type AppConfig = {
   /** Hosts an image link may load pictures from (TSMYADMIN_IMAGE_HOSTS). */
   imageHosts: string[]
   /** Docker container discovery (TSMYADMIN_DOCKER_DISCOVERY); null when off. */
-  dockerDiscovery: { socketPath: string; connectHost: string | undefined } | null
+  dockerDiscovery: { socketPath: string; connectHost: string | undefined; login: boolean } | null
 }
 
 /** Every startup-validation failure reads `Invalid environment: ...` (docs/deployment.md, docs/operations.md). */
@@ -180,6 +186,11 @@ export function loadConfig(env: Record<string, string | undefined>): AppConfig {
       'TSMYADMIN_DOCKER_DISCOVERY is for development only (it reads the Docker socket); it cannot be used with NODE_ENV=production'
     )
   }
+  if (e.TSMYADMIN_DOCKER_LOGIN === '1' && e.TSMYADMIN_DOCKER_DISCOVERY !== '1') {
+    throw new ConfigError(
+      'TSMYADMIN_DOCKER_LOGIN needs TSMYADMIN_DOCKER_DISCOVERY=1 (it signs in to the containers discovery finds)'
+    )
+  }
   return {
     isProd,
     require2fa,
@@ -202,7 +213,11 @@ export function loadConfig(env: Record<string, string | undefined>): AppConfig {
     imageHosts,
     dockerDiscovery:
       e.TSMYADMIN_DOCKER_DISCOVERY === '1'
-        ? { socketPath: e.TSMYADMIN_DOCKER_SOCKET, connectHost: e.TSMYADMIN_DOCKER_CONNECT_HOST }
+        ? {
+            socketPath: e.TSMYADMIN_DOCKER_SOCKET,
+            connectHost: e.TSMYADMIN_DOCKER_CONNECT_HOST,
+            login: e.TSMYADMIN_DOCKER_LOGIN === '1',
+          }
         : null,
   }
 }
@@ -228,6 +243,8 @@ function parseServers(raw: string | undefined): ServerPreset[] {
   for (const s of parsed.data) {
     if (names.has(s.name)) throw new ConfigError(`TSMYADMIN_SERVERS: duplicate preset name "${s.name}"`)
     names.add(s.name)
+    if (s.autoLogin)
+      throw new ConfigError(`TSMYADMIN_SERVERS: "${s.name}": autoLogin is set by Docker discovery, not here`)
   }
   return parsed.data
 }

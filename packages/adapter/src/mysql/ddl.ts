@@ -3,6 +3,7 @@ import {
   addForeignKeySql,
   columnKeySql,
   createIndexSql,
+  dropOrder,
   moveRepeatingGroupSql,
   mysqlAddIndexClause,
   splitTableSql,
@@ -294,6 +295,11 @@ export const mysqlDdl: DdlBuilder = {
         return [`DROP EVENT ${quoteTable('mysql', ns, op.name)}`]
       case 'dropTables':
         return [`DROP TABLE ${op.tables.map((x) => quoteTable('mysql', ns, x)).join(', ')}`]
+      case 'dropObjects':
+        return dropOrder(op.objects).map(
+          (o) =>
+            `DROP ${o.kind === 'table' ? 'TABLE' : o.kind === 'sequence' ? 'SEQUENCE' : 'VIEW'} IF EXISTS ${quoteTable('mysql', ns, o.name)}`
+        )
       case 'truncateTables':
         return op.tables.map((x) => `TRUNCATE TABLE ${quoteTable('mysql', ns, x)}`)
       case 'maintainTables': {

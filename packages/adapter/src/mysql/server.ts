@@ -154,8 +154,8 @@ const isOff = (v: unknown) => /^(0|off|false)$/i.test(String(v ?? '0'))
 /** Seconds of a TIME(6) `query_time`, with its fraction. */
 const SECONDS = (column: string) => `TIME_TO_SEC(${column}) + MICROSECOND(${column}) / 1000000`
 
-/** A logged-statement report from a log kept in a table: only when the log is on and writes to a table. */
-async function mysqlLogTable(conn: Conn, kind: 'slow' | 'general'): Promise<DiagnosticReport> {
+/** Why a log cannot be read from its table (off, or written to a file), or null when it can. */
+async function mysqlLogUnreadable(conn: Conn, kind: 'slow' | 'general'): Promise<DiagnosticReport | null> {
   const flags = firstResult(
     await conn.query(
       kind === 'slow'
@@ -165,6 +165,40 @@ async function mysqlLogTable(conn: Conn, kind: 'slow' | 'general'): Promise<Diag
   ).rows[0]
   if (isOff(flags?.[0])) return NOTHING('disabled')
   if (!/table/i.test(String(flags?.[1] ?? ''))) return NOTHING('notTable')
+  return null
+}
+
+/** The most recent statements of the general log table, newest first, without the ones this tool ran itself. */
+async function mysqlRecentStatements(
+  conn: Conn,
+  since: string | undefined,
+  ownThreads: readonly number[]
+): Promise<DiagnosticReport> {
+  const unreadable = await mysqlLogUnreadable(conn, 'general')
+  if (unreadable) return unreadable
+  const params: unknown[] = []
+  const where = ["command_type IN ('Query', 'Execute')"]
+  if (ownThreads.length > 0) {
+    where.push(`thread_id NOT IN (${ownThreads.map(() => '?').join(', ')})`)
+    params.push(...ownThreads)
+  }
+  if (since !== undefined) {
+    where.push('event_time > ?')
+    params.push(since)
+  }
+  const r = firstResult(
+    await conn.query(
+      `SELECT CAST(event_time AS CHAR), CAST(argument AS CHAR) FROM mysql.general_log WHERE ${where.join(' AND ')} ORDER BY event_time DESC LIMIT 200`,
+      params
+    )
+  )
+  return { status: 'ok', columns: ['time', 'statement'], rows: r.rows.map((row) => row.map(text)), text: null }
+}
+
+/** A logged-statement report from a log kept in a table: only when the log is on and writes to a table. */
+async function mysqlLogTable(conn: Conn, kind: 'slow' | 'general'): Promise<DiagnosticReport> {
+  const unreadable = await mysqlLogUnreadable(conn, kind)
+  if (unreadable) return unreadable
   if (kind === 'general') {
     const r = firstResult(
       await conn.query(
@@ -212,10 +246,13 @@ async function mysqlBinlogEvents(conn: Conn, file: string | undefined): Promise<
 export async function mysqlDiagnostics(
   conn: Conn,
   kind: DiagnosticKind,
-  query?: DiagnosticQuery
+  query?: DiagnosticQuery,
+  ownThreads: readonly number[] = []
 ): Promise<DiagnosticReport> {
   try {
     switch (kind) {
+      case 'recentStatements':
+        return await mysqlRecentStatements(conn, query?.since, ownThreads)
       case 'slowLog':
         return await mysqlLogTable(conn, 'slow')
       case 'generalLog':

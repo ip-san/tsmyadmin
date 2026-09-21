@@ -1,4 +1,4 @@
-<!-- translated-from: README.md sha256:3c28fbb47910036162d122f753af595e81295c4f6f64f3e67abf361b1aa80bca -->
+<!-- translated-from: README.md sha256:a4fbffe112d8333798d3f73e6bb4fd498677c745398ba834a1f5adce28d4fd81 -->
 
 # tsmyadmin
 
@@ -18,7 +18,7 @@ docker compose -f docker-compose.dev.yml up -d --build
 Open <http://localhost:3100>: the MySQL / MariaDB / PostgreSQL containers running in Docker right now are listed on the login screen as `docker: project/service`. Pick one and enter that project's username and password.
 
 - The databases your other projects started with `docker compose up` are found automatically through the ports they publish on the host (one started later shows up when you open the login screen again). No addresses to write and no network to set up
-- All it reads is the container list and the database names; **passwords are never read or stored**
+- By default all it reads is the container list and the database names; **passwords are never read or stored**. Only when you set `TSMYADMIN_DOCKER_LOGIN=1` does it read a container's login from its environment, inside the API process, to sign in in one click with no password (never sent to the browser, logged or stored; anyone who can reach the tool can then open those databases, so publish it on `127.0.0.1` only; see `docs/deployment.md`)
 - It is **for development only**. It needs the Docker socket (root on the host), so it refuses to start with `NODE_ENV=production`. How it works and what to watch (published ports on Linux, the socket's permissions): [docs/en/deployment.md](docs/en/deployment.md#using-it-for-development-with-docker-container-discovery)
 - To offer fixed targets, or to deploy it, use server presets and the allowlist ([docs/en/deployment.md](docs/en/deployment.md#environment-variables-the-only-list))
 

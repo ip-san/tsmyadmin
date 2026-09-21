@@ -9,7 +9,7 @@ MySQL / PostgreSQL 両対応の、モダン TypeScript 製 phpMyAdmin クロー�
 - **画面構成**: phpMyAdmin と同じ 3 階層（サーバー: DB 一覧/SQL/ステータス/変数/プロセス/ユーザー、DB: 構造/SQL/エクスポート/インポート/権限/ルーチン/トリガー/イベント、テーブル: 表示/構造/SQL/検索/挿入/エクスポート/インポート/トリガー/操作）
 - **型の流れ**: `packages/shared` の Zod → API (`@hono/zod-validator`) → web (`hc<AppType>`)
 - **テスト DB**: `docker compose`（MySQL `13306` / PostgreSQL `15433`、fixtures 自動投入）
-- **開発での使い方（売りの機能）**: `docker-compose.dev.yml` 1 つで、手元の Docker の MySQL / PostgreSQL コンテナを自動検出してログイン画面に出す（`TSMYADMIN_DOCKER_DISCOVERY=1`、`apps/api/src/lib/docker-discovery.ts`。読むのは GET だけ、パスワードは読まない、`NODE_ENV=production` では拒否）
+- **開発での使い方（売りの機能）**: `docker-compose.dev.yml` 1 つで、手元の Docker の MySQL / PostgreSQL コンテナを自動検出してログイン画面に出す（`TSMYADMIN_DOCKER_DISCOVERY=1`、`apps/api/src/lib/docker-discovery.ts`。読むのは GET だけ、パスワードは既定では読まない（`TSMYADMIN_DOCKER_LOGIN=1` を明示したときだけコンテナの資格情報をプロセス内に読み、ブラウザには返さず 1 クリックで入る）、`NODE_ENV=production` では拒否）
 - **本番運用**: 設定は `apps/api/src/config.ts` で起動時検証（環境変数の一覧は `docs/deployment.md` が唯一の正）。接続先 allowlist・ログイン レート制限・CSP・リクエスト ID 付き構造化ログ・監査ログ（`withAudit`）・`/healthz` `/readyz`・暗号化 SQLite セッションストア（`SESSION_STORE=sqlite`）
 - **品質**: Vitest / Playwright（**アクセシビリティ**: Biome の a11y ルールは全部 error で警告 0 を維持（`bun run lint` は警告でも落ちる）、`e2e/routes-a11y.spec.ts` は生成されたルート木の**全画面**を初期状態で axe + レイアウト検査（画面を足すと自動で対象になる）、`check:contrast` はデザイン トークンの比。`e2e/a11y.spec.ts` は状態つきの画面（ダイアログ・結果・登録中）を検査。`e2e/a11y.spec.ts` は axe に加え `e2e/layout-lint.ts` で矢印の重なり・入力欄と（ラベルのない）チェックボックス・ボタンの高さのずれ・コントロールの重なり・横スクロール・アプリシェルでページが縦に伸びていないか・文字のはみ出し・id の重複・`undefined` の混入を DOM の幾何で検査。画面を足したら `scan(page)` を通す）/ Biome / knip / madge / jscpd / type-coverage + 自前検査（`check:arch`, `check:sql-safety`, `docs:validate`, `size` = 初期 JS の brotli 合計 160 kB 予算）
 
@@ -30,9 +30,9 @@ bun run lighthouse        # Lighthouse CI（警告のみ、要 Chrome）
 
 ## 現在の規模（`scripts/validate-docs.mjs` が同期）
 
-- ユニット/API/Web テスト定義: <!-- stat:unit-tests -->866<!-- /stat --> 件
-- Adapter conformance: <!-- stat:conformance -->194<!-- /stat --> 件 × 2 方言
-- E2E: <!-- stat:e2e -->196<!-- /stat --> 件
+- ユニット/API/Web テスト定義: <!-- stat:unit-tests -->889<!-- /stat --> 件
+- Adapter conformance: <!-- stat:conformance -->195<!-- /stat --> 件 × 2 方言
+- E2E: <!-- stat:e2e -->198<!-- /stat --> 件
 - API ルート: <!-- stat:routes -->95<!-- /stat -->
 
 ## 設計ドキュメント

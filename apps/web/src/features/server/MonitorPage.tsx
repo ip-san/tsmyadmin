@@ -8,6 +8,7 @@ import { sessionQuery, statusQuery } from '@/lib/queries.ts'
 import { DiagnosticReport } from './DiagnosticReport.tsx'
 import { MonitorChart } from './MonitorChart.tsx'
 import { CHARTS, MONITOR_SECONDS, pushSample, type Sample, seriesValues, toSample } from './monitor.ts'
+import { RecentStatements } from './RecentStatements.tsx'
 
 const t = locale.monitor
 
@@ -72,6 +73,9 @@ export function MonitorPage() {
           ))}
         </div>
       ) : null}
+      <div className="pt-3">
+        <RecentStatements />
+      </div>
       <div className="space-y-2 pt-3">
         <h2 className="text-sm font-semibold text-ink">{locale.diagnostics.logsTitle}</h2>
         {dialect === 'mysql' ? (

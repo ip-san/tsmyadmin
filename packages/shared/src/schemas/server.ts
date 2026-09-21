@@ -78,9 +78,17 @@ export type ServerCatalog = z.infer<typeof ServerCatalogSchema>
  * logged (MySQL's slow / general log tables, PostgreSQL's pg_stat_statements), InnoDB's own status, and the events
  * of one binary log.
  */
-export const DiagnosticKindSchema = z.enum(['slowLog', 'generalLog', 'statements', 'engineStatus', 'binlogEvents'])
+export const DiagnosticKindSchema = z.enum([
+  'slowLog',
+  'generalLog',
+  'statements',
+  'recentStatements',
+  'engineStatus',
+  'binlogEvents',
+])
 export type DiagnosticKind = z.infer<typeof DiagnosticKindSchema>
 export const DiagnosticColumnSchema = z.enum([
+  'time',
   'statement',
   'runs',
   'totalSeconds',
@@ -107,8 +115,13 @@ export const DiagnosticReportSchema = z.object({
   text: z.string().nullable(),
 })
 export type DiagnosticReport = z.infer<typeof DiagnosticReportSchema>
-/** `file` picks the binary log whose events are listed. */
-export const DiagnosticQuerySchema = z.object({ file: z.string().min(1).max(255).optional() })
+/** A logged time as the server prints it (`2026-09-21 10:00:00.123456`): the newest one a caller has seen. */
+export const LogTimeSchema = z.string().regex(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d{1,6})?$/)
+/** `file` picks the binary log whose events are listed; `since` limits `recentStatements` to what ran after it. */
+export const DiagnosticQuerySchema = z.object({
+  file: z.string().min(1).max(255).optional(),
+  since: LogTimeSchema.optional(),
+})
 export type DiagnosticQuery = z.infer<typeof DiagnosticQuerySchema>
 
 /** One result row as name → value (the replication views have many columns, and they differ by version). */

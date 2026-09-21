@@ -79,6 +79,8 @@ export const ja = {
     notFoundBody: 'URL が間違っているか、対象のデータベースやテーブルが存在しません。',
   },
   login: {
+    dockerLogin:
+      'このコンテナの環境変数にある資格情報（起動時に渡されたユーザーとパスワード）で接続します。入力は要りません。',
     advanced: '詳細設定',
     collation: '接続の照合順序',
     collationHint: 'この接続が SQL の文字列を比べたり、文字コードを変換したりするときの規則です（MySQL / MariaDB）。',
@@ -143,6 +145,7 @@ export const ja = {
     security: 'セキュリティ',
     userGroups: 'ユーザーグループ',
     tracking: '追跡',
+    snapshots: 'スナップショット',
     databases: 'データベース',
     structure: '構造',
     sql: 'SQL',
@@ -845,6 +848,7 @@ export const ja = {
       setTableOptions: 'テーブルオプション',
       maintainTable: 'メンテナンス',
       dropTables: '選択したテーブルを削除',
+      dropObjects: 'テーブル・ビューを削除',
       truncateTables: '選択したテーブルを空にする',
       enableEvent: 'イベントを有効化',
       disableEvent: 'イベントを無効化',
@@ -1661,6 +1665,7 @@ export const ja = {
   diagnostics: {
     empty: '記録はまだありません。',
     columns: {
+      time: '時刻',
       statement: '文',
       runs: '回数',
       totalSeconds: '合計（秒）',
@@ -1691,6 +1696,15 @@ export const ja = {
         noExtension: '',
         unsupported: 'この機能は MySQL / MariaDB のものです。',
       },
+      recentStatements: {
+        ok: '',
+        disabled: '一般ログが無効です（general_log = OFF）。有効にすると、実行された文がここに流れます。',
+        notTable: '一般ログがファイルに出力されています。log_output を TABLE にすると、ここに流れます。',
+        denied: 'mysql.general_log を読む権限がありません。',
+        noExtension:
+          '拡張 pg_stat_statements が使えません。Docker なら、コンテナの起動コマンドに -c shared_preload_libraries=pg_stat_statements を足して再起動し、CREATE EXTENSION pg_stat_statements を実行してください。',
+        unsupported: '',
+      },
       statements: {
         ok: '',
         disabled: '',
@@ -1716,6 +1730,22 @@ export const ja = {
         noExtension: '',
         unsupported: 'バイナリログは MySQL / MariaDB のものです。',
       },
+    },
+    recent: {
+      title: '実行された文（リアルタイム）',
+      hintMysql:
+        '一般ログ（テーブル）から、アプリが実行した文を新しい順に流します。tsmyadmin 自身の文は除きます。ログはサーバー全体の設定で、量が増えるので、使い終わったら無効にしてください。',
+      hintPostgres:
+        'pg_stat_statements の回数の増えた文を、読み取りの間隔ごとに示します（実行のたびに並ぶのではなく、間隔ごとの回数です）。tsmyadmin 自身の文とカタログの参照は除きます。',
+      every: '読み取り間隔',
+      waiting: 'まだ実行された文はありません。アプリを動かすと、ここに流れます。',
+      turnOn: '一般ログを有効にする…',
+      turnOff: '一般ログを無効にする…',
+      onHint:
+        'サーバー全体の設定です。有効な間は、実行された文がすべて mysql.general_log に溜まります。実行前に SQL を確認します。',
+      offHint: 'サーバー全体の設定です。溜まった記録は消えません。実行前に SQL を確認します。',
+      turnedOn: '一般ログを有効にしました。',
+      turnedOff: '一般ログを無効にしました。',
     },
     logsTitle: '記録された文',
     slowLog: 'スロークエリログ',
@@ -2173,6 +2203,30 @@ export const ja = {
     editShort: '編集',
     remove: (name: string) => `${name}: 削除`,
     save: '保存する',
+  },
+  snapshots: {
+    title: 'スナップショット',
+    notice:
+      'このデータベースの今の状態（構造・データ・ルーチン）を保存し、マイグレーションやシードを試したあとで、保存した時点に戻せます。保存したものは tsmyadmin のメモリに置くので、再起動すると消えます。大きなデータベースにはエクスポートを使ってください。',
+    name: '名前',
+    namePlaceholder: '例: マイグレーション前',
+    take: 'スナップショットを取る',
+    taking: '保存しています…',
+    full: (n: number) => `1 つのデータベースにつき ${n} 件までです。不要なものを削除してください。`,
+    list: '保存したスナップショット',
+    none: 'まだありません。',
+    at: '取得日時',
+    objects: 'テーブル・ビュー',
+    size: 'サイズ',
+    restore: '復元…',
+    delete: '削除',
+    restoreTitle: (name: string) => `「${name}」に戻す`,
+    restoreHint:
+      '保存した時点に戻します。その後に作ったテーブルとビューを削除し、保存した SQL（DROP・CREATE・INSERT）を実行します。PostgreSQL は 1 つのトランザクションで行い、失敗すると元の状態に戻ります。MySQL は途中で失敗すると、そこまでの変更が残ります。保存のあとに作った関数・トリガー・イベントは残ります。',
+    lossWarning: '保存のあとに変更したデータはすべて失われます。',
+    replayNote: (n: number) => `そのあと、保存した ${n.toLocaleString('ja-JP')} 件の文を実行します`,
+    restored: (name: string) => `「${name}」に戻しました。`,
+    failed: '復元に失敗しました。',
   },
   tracking: {
     download: 'SQL をダウンロード',

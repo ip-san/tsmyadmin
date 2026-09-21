@@ -163,6 +163,15 @@ exports[`DDL builders > mysql: dropIndex 1`] = `
 ]
 `;
 
+exports[`DDL builders > mysql: dropObjects 1`] = `
+[
+  "DROP VIEW IF EXISTS \`db\`.\`v\`\`1\`",
+  "DROP VIEW IF EXISTS \`db\`.\`m"1\`",
+  "DROP TABLE IF EXISTS \`db\`.\`t\`",
+  "DROP SEQUENCE IF EXISTS \`db\`.\`s\`",
+]
+`;
+
 exports[`DDL builders > mysql: dropPartition 1`] = `
 [
   "ALTER TABLE \`db\`.\`lo"g\` DROP PARTITION \`p"1\`",
@@ -539,6 +548,15 @@ exports[`DDL builders > postgres: dropForeignKey 1`] = `
 exports[`DDL builders > postgres: dropIndex 1`] = `
 [
   "DROP INDEX "app"."idx_t_a_b"",
+]
+`;
+
+exports[`DDL builders > postgres: dropObjects 1`] = `
+[
+  "DROP VIEW IF EXISTS "app"."v\`1" CASCADE",
+  "DROP MATERIALIZED VIEW IF EXISTS "app"."m""1" CASCADE",
+  "DROP TABLE IF EXISTS "app"."t" CASCADE",
+  "DROP SEQUENCE IF EXISTS "app"."s" CASCADE",
 ]
 `;
 

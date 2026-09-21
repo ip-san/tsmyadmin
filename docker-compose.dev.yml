@@ -11,6 +11,9 @@ services:
       # イメージは既定で production: 開発の既定（メモリのセッション、Secure なし）に上書きする
       NODE_ENV: development
       TSMYADMIN_DOCKER_DISCOVERY: "1"
+      # 見つけたコンテナの環境変数（MYSQL_ROOT_PASSWORD / POSTGRES_PASSWORD など）で、パスワードなしの 1 クリックで入る。
+      # 既定はオフ。オンにすると、このツールに届く人は誰でもそれらの DB に入れる（127.0.0.1 にだけ公開すること）。docs/deployment.md
+      # TSMYADMIN_DOCKER_LOGIN: "1"
     ports:
       - "127.0.0.1:3100:3100"
     volumes:

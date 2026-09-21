@@ -115,6 +115,7 @@ const discovery = config.dockerDiscovery
       // From inside a container, the host's published ports are reached through the host gateway.
       connectHost:
         config.dockerDiscovery.connectHost ?? (existsSync('/.dockerenv') ? 'host.docker.internal' : '127.0.0.1'),
+      withLogin: config.dockerDiscovery.login,
       logger,
     })
   : null
@@ -123,6 +124,7 @@ const app = createApp(config, {
   store,
   logger,
   ...(discovery ? { discover: discovery.list } : {}),
+  ...(discovery && config.dockerDiscovery?.login ? { dockerLogin: discovery.login } : {}),
   remoteAddress: (c) => {
     try {
       return getConnInfo(c).remote.address

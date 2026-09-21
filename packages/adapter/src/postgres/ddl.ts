@@ -4,6 +4,7 @@ import {
   addForeignKeySql,
   columnKeySql,
   createIndexSql,
+  dropOrder,
   moveRepeatingGroupSql,
   splitTableSql,
 } from '../sql/ddl-common.ts'
@@ -14,6 +15,12 @@ import { quoteIdent, quoteTable } from '../sql/quote.ts'
 import { AdapterError, type DdlBuilder } from '../types.ts'
 
 const id = (s: string) => quoteIdent('postgres', s)
+const PG_DROP_KEYWORD = {
+  table: 'TABLE',
+  view: 'VIEW',
+  materialized_view: 'MATERIALIZED VIEW',
+  sequence: 'SEQUENCE',
+} as const
 
 /**
  * Ends this tool's **idle** connections to a database under the account that signed in (`session_user`, which a
@@ -291,6 +298,10 @@ export const pgDdl: DdlBuilder = {
       }
       case 'dropTables':
         return [`DROP TABLE ${op.tables.map((x) => quoteTable('postgres', ns, x)).join(', ')}`]
+      case 'dropObjects':
+        return dropOrder(op.objects).map(
+          (o) => `DROP ${PG_DROP_KEYWORD[o.kind]} IF EXISTS ${quoteTable('postgres', ns, o.name)} CASCADE`
+        )
       case 'truncateTables':
         return [`TRUNCATE TABLE ${op.tables.map((x) => quoteTable('postgres', ns, x)).join(', ')}`]
       case 'maintainTables': {

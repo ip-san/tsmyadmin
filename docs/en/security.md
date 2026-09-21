@@ -1,4 +1,4 @@
-<!-- translated-from: docs/security.md sha256:17858f9c7b2ef82e92a94e344755e6e7a48caedf73bef786cfee161ff8718ab3 -->
+<!-- translated-from: docs/security.md sha256:ff41c65b134d58904ff2b9c4f7748116de3bf5c8b222bfeb868821b758e3bf0a -->
 
 # Security model
 
@@ -38,7 +38,7 @@ An entry is `host[:port]` (`db.internal:5432`, `[::1]:3306`, `*.rds.amazonaws.co
 
 ### Docker container discovery (for development)
 
-`TSMYADMIN_DOCKER_DISCOVERY=1` reads the Docker socket and adds **only the discovered containers' published `host:port`** to the allowlist (per port: another port or another host is not opened up). Being able to read the socket is as strong as root on the host, so use it **only on a development machine you control**; `NODE_ENV=production` refuses it at startup. The code issues only `GET /containers/json` and `GET /containers/<id>/json`, and takes from a container's environment only `MYSQL_DATABASE` / `MARIADB_DATABASE` / `POSTGRES_DB` (a password is never read, returned or logged). Mounting the socket as `:ro` does not stop writes to the Docker API, so the safeguard is not handing it over. Usage: [deployment.md](deployment.md#using-it-for-development-with-docker-container-discovery).
+`TSMYADMIN_DOCKER_DISCOVERY=1` reads the Docker socket and adds **only the discovered containers' published `host:port`** to the allowlist (per port: another port or another host is not opened up). Being able to read the socket is as strong as root on the host, so use it **only on a development machine you control**; `NODE_ENV=production` refuses it at startup. The code issues only `GET /containers/json` and `GET /containers/<id>/json`, and takes from a container's environment only `MYSQL_DATABASE` / `MARIADB_DATABASE` / `POSTGRES_DB` (by default a password is never read, returned or logged). Only when you set `TSMYADMIN_DOCKER_LOGIN=1` does it read a container's start-up login (`MYSQL_ROOT_PASSWORD`, `POSTGRES_PASSWORD`, …) inside the API process, to sign in in one click with no password; that password is never sent to the browser, logged or stored, and is used only for that container's own `host:port`. Note that **anyone who can reach the tool can then open those databases without a password**: publish it on `127.0.0.1` only, and do not use it on a shared machine or a public network (`NODE_ENV=production` refuses discovery altogether). Mounting the socket as `:ro` does not stop writes to the Docker API, so the safeguard is not handing it over. Usage: [deployment.md](deployment.md#using-it-for-development-with-docker-container-discovery).
 
 ## Brute-force protection
 

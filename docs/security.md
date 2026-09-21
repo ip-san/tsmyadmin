@@ -36,7 +36,7 @@
 
 ### Docker コンテナの自動検出（開発用）
 
-`TSMYADMIN_DOCKER_DISCOVERY=1` は、Docker ソケットを読み、検出したコンテナの**公開 `ホスト:ポート` だけ**を許可リストに加えます（ポート単位で、別のポートや別のホストは広げません）。ソケットを読めることはホストの root と同じ強さなので、**開発機の手元だけ**で使い、`NODE_ENV=production` では起動時に拒否します。コードが発行するのは `GET /containers/json` と `GET /containers/<id>/json` だけで、コンテナの環境変数からは `MYSQL_DATABASE` / `MARIADB_DATABASE` / `POSTGRES_DB` しか取り出しません（パスワードは読まず、返さず、記録しません）。ソケットを `:ro` でマウントしても Docker API への書き込みは防げないので、守りは「渡さないこと」です。使い方は [deployment.md](deployment.md#docker-で開発用に使うコンテナの自動検出)。
+`TSMYADMIN_DOCKER_DISCOVERY=1` は、Docker ソケットを読み、検出したコンテナの**公開 `ホスト:ポート` だけ**を許可リストに加えます（ポート単位で、別のポートや別のホストは広げません）。ソケットを読めることはホストの root と同じ強さなので、**開発機の手元だけ**で使い、`NODE_ENV=production` では起動時に拒否します。コードが発行するのは `GET /containers/json` と `GET /containers/<id>/json` だけで、コンテナの環境変数からは `MYSQL_DATABASE` / `MARIADB_DATABASE` / `POSTGRES_DB` しか取り出しません（既定ではパスワードは読まず、返さず、記録しません）。`TSMYADMIN_DOCKER_LOGIN=1` を明示したときだけ、コンテナの起動時の資格情報（`MYSQL_ROOT_PASSWORD` / `POSTGRES_PASSWORD` など）を API のプロセスの中に読み、パスワードなしの 1 クリックで入れるようにします。そのパスワードはブラウザに返さず、ログにも保存にも出さず、検出したコンテナ自身の `ホスト:ポート` にだけ使います。ただし、**このツールに届く人は誰でも、パスワードなしでそれらの DB に入れます**。`127.0.0.1` にだけ公開し、共有マシンや公開ネットワークでは使わないでください（`NODE_ENV=production` では検出ごと拒否します）。ソケットを `:ro` でマウントしても Docker API への書き込みは防げないので、守りは「渡さないこと」です。使い方は [deployment.md](deployment.md#docker-で開発用に使うコンテナの自動検出)。
 
 ## ブルートフォース対策
 

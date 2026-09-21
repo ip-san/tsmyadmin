@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createDockerDiscovery, type DockerGet, discoverDatabases } from './docker-discovery.ts'
+import { createDockerDiscovery, type DockerGet, discover, discoverDatabases, loginFromEnv } from './docker-discovery.ts'
 import { createLogger } from './logging.ts'
 
 const id = (n: number) => n.toString(16).padStart(64, '0')
@@ -136,5 +136,74 @@ describe('createDockerDiscovery', () => {
     now = 100
     expect(await d.list()).toEqual([])
     expect(lines.filter((l) => l.includes('discovery.failed'))).toHaveLength(1)
+  })
+})
+
+const env = (...entries: string[]) =>
+  new Map(entries.map((e) => [e.slice(0, e.indexOf('=')), e.slice(e.indexOf('=') + 1)]))
+
+describe('loginFromEnv', () => {
+  it('reads what a MySQL / MariaDB image set up: the root password first, then the application account', () => {
+    expect(loginFromEnv(env('MYSQL_ROOT_PASSWORD=root', 'MYSQL_USER=app', 'MYSQL_PASSWORD=pw'), 'mysql')).toEqual({
+      user: 'root',
+      password: 'root',
+    })
+    expect(loginFromEnv(env('MARIADB_ROOT_PASSWORD=r2'), 'mysql')).toEqual({ user: 'root', password: 'r2' })
+    expect(loginFromEnv(env('MYSQL_USER=app', 'MYSQL_PASSWORD=pw'), 'mysql')).toEqual({ user: 'app', password: 'pw' })
+    expect(loginFromEnv(env('MARIADB_USER=a2', 'MARIADB_PASSWORD=p2'), 'mysql')).toEqual({ user: 'a2', password: 'p2' })
+    expect(loginFromEnv(env('MYSQL_ALLOW_EMPTY_PASSWORD=yes'), 'mysql')).toEqual({ user: 'root', password: '' })
+    expect(loginFromEnv(env('MARIADB_ALLOW_EMPTY_ROOT_PASSWORD=1'), 'mysql')).toEqual({ user: 'root', password: '' })
+  })
+
+  it('reads what a PostgreSQL image set up, with postgres as the default account', () => {
+    expect(loginFromEnv(env('POSTGRES_PASSWORD=secret'), 'postgres')).toEqual({ user: 'postgres', password: 'secret' })
+    expect(loginFromEnv(env('POSTGRES_USER=me', 'POSTGRES_PASSWORD=secret'), 'postgres')).toEqual({
+      user: 'me',
+      password: 'secret',
+    })
+    expect(loginFromEnv(env('POSTGRES_HOST_AUTH_METHOD=trust'), 'postgres')).toEqual({ user: 'postgres', password: '' })
+  })
+
+  it('is null when the environment holds no login (a user without a password, a password kept in a file)', () => {
+    expect(loginFromEnv(env('MYSQL_USER=app'), 'mysql')).toBeNull()
+    expect(loginFromEnv(env('MYSQL_ROOT_PASSWORD_FILE=/run/secrets/x'), 'mysql')).toBeNull()
+    expect(loginFromEnv(env('POSTGRES_PASSWORD_FILE=/run/secrets/x'), 'postgres')).toBeNull()
+    expect(loginFromEnv(env(), 'postgres')).toBeNull()
+  })
+})
+
+describe('discover with logins', () => {
+  it('marks a container that has a login and keeps the login out of the preset', async () => {
+    const found = await discover(fakeGet(), '127.0.0.1', true)
+    const by = (name: string) => found.find((d) => d.preset.name === name)
+    expect(by('docker: tsmyadmin/mysql')).toMatchObject({
+      preset: { autoLogin: true },
+      login: { user: 'root', password: 'root' },
+    })
+    expect(by('docker: snook/pgsql')).toMatchObject({ login: { user: 'postgres', password: 'secret' } })
+    // No password in its environment: no login, no flag.
+    expect(by('docker: legacy')?.login).toBeUndefined()
+    expect(by('docker: legacy')?.preset.autoLogin).toBeUndefined()
+    // What the login screen is told carries the flag and nothing of the login.
+    expect(JSON.stringify(found.map((d) => d.preset))).not.toMatch(/root"|secret|PASSWORD|password/)
+  })
+
+  it('reads no login unless asked to', async () => {
+    const found = await discover(fakeGet(), '127.0.0.1')
+    expect(found.some((d) => d.login !== undefined || d.preset.autoLogin !== undefined)).toBe(false)
+  })
+
+  it('answers a sign-in by preset name, only when logins were asked for', async () => {
+    const logger = createLogger('json', () => undefined)
+    const on = createDockerDiscovery({ get: fakeGet(), connectHost: '127.0.0.1', withLogin: true, logger })
+    expect(await on.login('docker: tsmyadmin/mysql')).toMatchObject({
+      preset: { host: '127.0.0.1', port: 13306 },
+      login: { user: 'root', password: 'root' },
+    })
+    expect(await on.login('docker: nothing')).toBeNull()
+    expect(await on.login('docker: legacy')).toBeNull()
+    const off = createDockerDiscovery({ get: fakeGet(), connectHost: '127.0.0.1', logger })
+    expect(await off.login('docker: tsmyadmin/mysql')).toBeNull()
+    expect(JSON.stringify(await on.list())).not.toMatch(/secret|"root"/)
   })
 })

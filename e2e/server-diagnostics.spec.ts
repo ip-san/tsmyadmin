@@ -13,9 +13,9 @@ for (const t of TARGETS) {
       const title = t.dialect === 'mysql' ? 'クエリ数（1 秒あたり）' : 'トランザクション数（1 秒あたり）'
       await expect(page.getByRole('img', { name: title })).toBeVisible({ timeout: 15_000 })
       // Paused, nothing more is read; clearing empties the charts.
-      await page.getByRole('button', { name: '一時停止' }).click()
-      await expect(page.getByRole('button', { name: '再開' })).toBeVisible()
-      await page.getByRole('button', { name: '消去' }).click()
+      await page.getByRole('button', { name: '一時停止', exact: true }).click()
+      await expect(page.getByRole('button', { name: '再開', exact: true })).toBeVisible()
+      await page.getByRole('button', { name: '消去', exact: true }).click()
       await expect(page.getByRole('img', { name: title })).toHaveCount(0)
       // The logs: a table of statements or the reason there is none, whatever this server is set to.
       const logs = t.dialect === 'mysql' ? 'スロークエリログ' : '負荷の高い文（pg_stat_statements）'
@@ -26,6 +26,28 @@ for (const t of TARGETS) {
           .or(page.getByText(/無効です|ファイルに出力|権限がありません|使えません|記録はまだありません/))
           .first()
       ).toBeVisible()
+    })
+
+    test('offers the statements as they run, and previews the general log switch before touching it', async ({
+      page,
+    }) => {
+      await page.goto('/monitor')
+      await expect(page.getByRole('heading', { name: '実行された文（リアルタイム）' })).toBeVisible()
+      // The stream, its "nothing yet", or the reason there is none — whatever this server is set to.
+      await expect(
+        page
+          .getByRole('table', { name: '実行された文（リアルタイム）' })
+          .or(page.getByText(/まだ実行された文はありません|無効です|ファイルに出力|権限がありません|使えません/))
+          .first()
+      ).toBeVisible({ timeout: 15_000 })
+      if (t.dialect !== 'mysql') return
+      // Turning the log on or off is server-wide: the SQL is shown first, and cancelling runs nothing.
+      const button = page.getByRole('button', { name: /一般ログを(有効|無効)にする…/ })
+      await button.click()
+      const dialog = page.getByRole('dialog')
+      await expect(dialog.getByLabel('SQL')).toContainText('general_log')
+      await dialog.getByRole('button', { name: 'キャンセル' }).click()
+      await expect(dialog).toHaveCount(0)
     })
 
     test('shows the InnoDB status, and the events of a binary log (MySQL)', async ({ page }) => {

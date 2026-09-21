@@ -4,6 +4,12 @@ import { quoteIdent, quoteTable } from './quote.ts'
 
 type AddForeignKey = Extract<DdlOp, { op: 'addForeignKey' }>
 
+const DROP_KIND_ORDER = ['view', 'materialized_view', 'table', 'sequence'] as const
+/** The objects of a `dropObjects` op in the order they can go: views before the tables they read, sequences last. */
+export function dropOrder(objects: Extract<DdlOp, { op: 'dropObjects' }>['objects']) {
+  return DROP_KIND_ORDER.flatMap((kind) => objects.filter((o) => o.kind === kind))
+}
+
 /** `ALTER TABLE t ADD CONSTRAINT name FOREIGN KEY (...) REFERENCES ref (...) [ON UPDATE x] [ON DELETE y]` — same on both dialects. */
 export function addForeignKeySql(dialect: Dialect, ns: Namespace, op: AddForeignKey): string {
   const id = (s: string) => quoteIdent(dialect, s)

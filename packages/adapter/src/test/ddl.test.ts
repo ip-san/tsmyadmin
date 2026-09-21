@@ -103,6 +103,15 @@ const SAMPLE_OPS: Record<DdlOp['op'], DdlOp> = {
   setTableOptions: { op: 'setTableOptions', table: 't', comment: "it's" },
   maintainTable: { op: 'maintainTable', table: 't', action: 'analyze' },
   dropTables: { op: 'dropTables', tables: ['t', 'we"ird`tbl'] },
+  dropObjects: {
+    op: 'dropObjects',
+    objects: [
+      { name: 't', kind: 'table' },
+      { name: 'v`1', kind: 'view' },
+      { name: 'm"1', kind: 'materialized_view' },
+      { name: 's', kind: 'sequence' },
+    ],
+  },
   truncateTables: { op: 'truncateTables', tables: ['t', 'we"ird`tbl'] },
   addIndex: { op: 'addIndex', table: 't', name: 'idx_t_a_b', columns: ['a', 'b'], unique: true },
   dropIndex: { op: 'dropIndex', table: 't', name: 'idx_t_a_b' },

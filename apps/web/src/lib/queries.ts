@@ -54,6 +54,9 @@ import type {
   ServerPreset,
   SessionState,
   SharedQuery,
+  SnapshotList,
+  SnapshotRestorePreview,
+  SnapshotRestoreResult,
   SqlHistory,
   SqlRequest,
   StatementResult,
@@ -269,6 +272,14 @@ export const trackingQuery = (ref: TableRef) =>
     queryFn: () => unwrap<TrackingState>(api.databases[':db'].tables[':table'].tracking.$get(trackingRequest(ref))),
   })
 
+/** The snapshots this account holds of a database / schema. */
+export const snapshotsQuery = (db: string, schema?: string) =>
+  queryOptions({
+    queryKey: ['snapshots', db, schema ?? ''],
+    queryFn: () =>
+      unwrap<SnapshotList>(api.databases[':db'].snapshots.$get({ param: { db: enc(db) }, query: schemaQuery(schema) })),
+  })
+
 /** The tracked tables of a database / schema. */
 export const databaseTrackingQuery = (db: string, schema?: string) =>
   queryOptions({
@@ -435,6 +446,22 @@ export const diagnosticsQuery = (kind: DiagnosticKind, file?: string) =>
       ),
     staleTime: 0,
   })
+/** The statements that ran since `since` (a logged time; none: the latest). Not cached: every read is a fresh one. */
+export const recentStatementsQuery = (since: () => string | undefined) =>
+  queryOptions({
+    queryKey: ['server', 'diagnostics', 'recentStatements'],
+    queryFn: () => {
+      const from = since()
+      return unwrap<DiagnosticReport>(
+        api.server.diagnostics[':kind'].$get({
+          param: { kind: 'recentStatements' },
+          query: from === undefined ? {} : { since: from },
+        })
+      )
+    },
+    staleTime: 0,
+    gcTime: 0,
+  })
 export const replicationQuery = queryOptions({
   queryKey: ['server', 'replication'],
   queryFn: () => unwrap<ReplicationInfo>(api.server.replication.$get()),
@@ -465,6 +492,28 @@ export const searchTable = (ref: TableRef, term: string, options: SearchOptions 
   )
 
 export const mutations = {
+  takeSnapshot: (db: string, schema: string | undefined, name: string) =>
+    unwrap<SnapshotList>(
+      api.databases[':db'].snapshots.$post({ param: { db: enc(db) }, query: schemaQuery(schema), json: { name } })
+    ),
+  deleteSnapshot: (db: string, schema: string | undefined, id: string) =>
+    unwrap<SnapshotList>(
+      api.databases[':db'].snapshots[':id'].$delete({ param: { db: enc(db), id: enc(id) }, query: schemaQuery(schema) })
+    ),
+  previewRestore: (db: string, schema: string | undefined, id: string) =>
+    unwrap<SnapshotRestorePreview>(
+      api.databases[':db'].snapshots[':id'].restore.preview.$get({
+        param: { db: enc(db), id: enc(id) },
+        query: schemaQuery(schema),
+      })
+    ),
+  restoreSnapshot: (db: string, schema: string | undefined, id: string) =>
+    unwrap<SnapshotRestoreResult>(
+      api.databases[':db'].snapshots[':id'].restore.$post({
+        param: { db: enc(db), id: enc(id) },
+        query: schemaQuery(schema),
+      })
+    ),
   login: (body: Parameters<typeof api.session.$post>[0]['json']) =>
     unwrap<SessionState>(api.session.$post({ json: body })),
   logout: () => unwrap<{ ok: boolean }>(api.session.$delete()),

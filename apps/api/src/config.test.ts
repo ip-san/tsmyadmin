@@ -3,12 +3,18 @@ import { describe, expect, it } from 'vitest'
 import { loadConfig } from './config.ts'
 
 describe('loadConfig', () => {
+  it('refuses an autoLogin flag in TSMYADMIN_SERVERS: only Docker discovery sets it', () => {
+    const servers = JSON.stringify([{ name: 'a', dialect: 'mysql', host: 'db', port: 3306, autoLogin: true }])
+    expect(() => loadConfig({ TSMYADMIN_SERVERS: servers })).toThrow(/autoLogin is set by Docker discovery/)
+  })
+
   it('keeps Docker discovery off unless asked, and refuses it in production', () => {
     expect(loadConfig({}).dockerDiscovery).toBeNull()
     expect(loadConfig({ TSMYADMIN_DOCKER_DISCOVERY: '0' }).dockerDiscovery).toBeNull()
     expect(loadConfig({ TSMYADMIN_DOCKER_DISCOVERY: '1' }).dockerDiscovery).toEqual({
       socketPath: '/var/run/docker.sock',
       connectHost: undefined,
+      login: false,
     })
     expect(
       loadConfig({
@@ -16,11 +22,27 @@ describe('loadConfig', () => {
         TSMYADMIN_DOCKER_SOCKET: '/tmp/d.sock',
         TSMYADMIN_DOCKER_CONNECT_HOST: 'host.docker.internal',
       }).dockerDiscovery
-    ).toEqual({ socketPath: '/tmp/d.sock', connectHost: 'host.docker.internal' })
+    ).toEqual({ socketPath: '/tmp/d.sock', connectHost: 'host.docker.internal', login: false })
     expect(() =>
       loadConfig({ NODE_ENV: 'production', SESSION_SECRET: 'x'.repeat(32), TSMYADMIN_DOCKER_DISCOVERY: '1' })
     ).toThrow(/TSMYADMIN_DOCKER_DISCOVERY.*development/)
     expect(() => loadConfig({ TSMYADMIN_DOCKER_DISCOVERY: 'yes' })).toThrow(/TSMYADMIN_DOCKER_DISCOVERY/)
+    // Signing in with a container's own login is a second, explicit choice, and needs the discovery it builds on.
+    expect(loadConfig({ TSMYADMIN_DOCKER_DISCOVERY: '1' }).dockerDiscovery?.login).toBe(false)
+    expect(loadConfig({ TSMYADMIN_DOCKER_DISCOVERY: '1', TSMYADMIN_DOCKER_LOGIN: '1' }).dockerDiscovery?.login).toBe(
+      true
+    )
+    expect(() => loadConfig({ TSMYADMIN_DOCKER_LOGIN: '1' })).toThrow(
+      /TSMYADMIN_DOCKER_LOGIN needs TSMYADMIN_DOCKER_DISCOVERY/
+    )
+    expect(() =>
+      loadConfig({
+        NODE_ENV: 'production',
+        SESSION_SECRET: 'x'.repeat(32),
+        TSMYADMIN_DOCKER_DISCOVERY: '1',
+        TSMYADMIN_DOCKER_LOGIN: '1',
+      })
+    ).toThrow(/development/)
   })
 
   it('applies development defaults', () => {

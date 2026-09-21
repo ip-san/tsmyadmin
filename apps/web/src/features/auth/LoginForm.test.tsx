@@ -109,6 +109,46 @@ describe('LoginForm', () => {
     expect(screen.getByLabelText('ホスト')).not.toHaveAttribute('readonly')
   })
 
+  it('signs in to a Docker container the server holds the login of, with nothing typed and no password sent', async () => {
+    const onLogin = vi.fn().mockResolvedValue({})
+    wrap(
+      <LoginForm
+        onLogin={onLogin}
+        presets={[
+          {
+            name: 'docker: shop/db',
+            dialect: 'mysql',
+            host: '127.0.0.1',
+            port: 13306,
+            database: 'shop',
+            autoLogin: true,
+          },
+          { name: 'docker: other/db', dialect: 'postgres', host: '127.0.0.1', port: 5432 },
+        ]}
+      />
+    )
+    // The first is one the server can sign in to: no user or password fields, one press of Connect.
+    expect(screen.queryByLabelText('ユーザー名')).toBeNull()
+    expect(screen.queryByLabelText('パスワード')).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: '接続する' }))
+    await waitFor(() =>
+      expect(onLogin).toHaveBeenCalledWith({
+        dialect: 'mysql',
+        host: '127.0.0.1',
+        port: 13306,
+        user: 'docker',
+        password: '',
+        dockerPreset: 'docker: shop/db',
+        database: 'shop',
+      })
+    )
+    // A container without one asks for the login as usual, and so does manual entry.
+    await userEvent.selectOptions(screen.getByLabelText('接続先'), 'docker: other/db')
+    expect(screen.getByLabelText('ユーザー名')).toBeInTheDocument()
+    await userEvent.selectOptions(screen.getByLabelText('接続先'), '')
+    expect(screen.getByLabelText('パスワード')).toBeInTheDocument()
+  })
+
   it('shows the error returned by the server', async () => {
     const onLogin = vi
       .fn()

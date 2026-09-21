@@ -15,7 +15,8 @@ import { requestContext } from './lib/request-context.ts'
 import { databaseRoutes } from './routes/databases.ts'
 import { secondFactorRoutes } from './routes/second-factor.ts'
 import { serverRoutes } from './routes/server.ts'
-import { sessionRoutes } from './routes/session.ts'
+import { type SessionRouteDeps, sessionRoutes } from './routes/session.ts'
+import { snapshotRoutes } from './routes/snapshots.ts'
 import { sqlListRoutes } from './routes/sql-lists.ts'
 import { storedRoutes } from './routes/stored.ts'
 import { trackingRoutes } from './routes/tracking.ts'
@@ -37,6 +38,8 @@ export interface AppServices {
   challenge?: () => Uint8Array
   /** Database containers found on the local Docker daemon (development; see TSMYADMIN_DOCKER_DISCOVERY). */
   discover?: () => Promise<readonly ServerPreset[]>
+  /** The login of a discovered container, for a one-click sign-in (TSMYADMIN_DOCKER_LOGIN); see SessionRouteDeps. */
+  dockerLogin?: NonNullable<SessionRouteDeps['dockerLogin']>
 }
 
 /**
@@ -132,6 +135,7 @@ export function createApp(config: AppConfig, services: AppServices) {
   const sessionDeps = {
     allowedHosts,
     ...(services.discover ? { discovered: services.discover } : {}),
+    ...(services.dockerLogin ? { dockerLogin: services.dockerLogin } : {}),
     loginLimiter,
     ipLimiter,
     ip,
@@ -193,6 +197,7 @@ export function createApp(config: AppConfig, services: AppServices) {
       .route('/api', sqlListRoutes(cfg))
       .route('/api', userGroupRoutes(cfg, logger))
       .route('/api', trackingRoutes(cfg, logger))
+      .route('/api', snapshotRoutes(cfg, logger))
       // Unknown /api paths get the JSON envelope (registered last, before index.ts adds the SPA fallback for `*`).
       .all('/api/*', (c) => notFoundResponse(c))
   )

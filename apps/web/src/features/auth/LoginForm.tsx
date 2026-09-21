@@ -71,7 +71,8 @@ export function LoginForm({ onLogin, presets = [] }: LoginFormProps) {
         dialect: body.dialect,
         host: body.host,
         port: body.port,
-        user: body.user,
+        // Not the placeholder of a Docker login: the next manual login should not start with it.
+        user: body.dockerPreset ? '' : body.user,
         database: body.database ?? '',
         ...(body.collation ? { collation: body.collation } : {}),
       })
@@ -91,6 +92,8 @@ export function LoginForm({ onLogin, presets = [] }: LoginFormProps) {
     },
   })
   const fixed = preset !== MANUAL
+  /** A Docker container the server holds the login of: no user or password to type, one press of Connect. */
+  const dockerLogin = presets.find((p) => p.name === preset)?.autoLogin === true
 
   const choosePreset = (name: string) => {
     setPreset(name)
@@ -111,8 +114,10 @@ export function LoginForm({ onLogin, presets = [] }: LoginFormProps) {
     dialect,
     host,
     port: Number(port),
-    user,
-    password,
+    // For a Docker login the server takes the address and the account from the container: these are placeholders.
+    user: dockerLogin ? 'docker' : user,
+    password: dockerLogin ? '' : password,
+    ...(dockerLogin ? { dockerPreset: preset } : {}),
     ...(database ? { database } : {}),
     ...(dialect === 'mysql' && collation ? { collation } : {}),
   })
@@ -190,26 +195,32 @@ export function LoginForm({ onLogin, presets = [] }: LoginFormProps) {
           />
         </Field>
       </div>
-      <Field id="user" label={locale.login.user}>
-        <Input
-          id="user"
-          value={user}
-          onChange={(e) => setUser(e.target.value)}
-          required
-          autoComplete="username"
-          autoFocus={!last?.user}
-        />
-      </Field>
-      <Field id="password" label={locale.login.password}>
-        <Input
-          id="password"
-          type="password"
-          autoFocus={Boolean(last?.user)}
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          autoComplete="current-password"
-        />
-      </Field>
+      {dockerLogin ? (
+        <p className="text-sm text-ink-sub">{locale.login.dockerLogin}</p>
+      ) : (
+        <>
+          <Field id="user" label={locale.login.user}>
+            <Input
+              id="user"
+              value={user}
+              onChange={(e) => setUser(e.target.value)}
+              required
+              autoComplete="username"
+              autoFocus={!last?.user}
+            />
+          </Field>
+          <Field id="password" label={locale.login.password}>
+            <Input
+              id="password"
+              type="password"
+              autoFocus={Boolean(last?.user)}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+            />
+          </Field>
+        </>
+      )}
       <Field
         id="database"
         label={locale.login.database}

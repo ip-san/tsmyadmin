@@ -59,6 +59,7 @@ function DatabaseLayout() {
           { label: locale.tabs.events, to: '/db/$db/events', params: { db }, search },
           { label: locale.tabs.central, to: '/db/$db/central', params: { db }, search },
           { label: locale.tabs.tracking, to: '/db/$db/tracking', params: { db }, search },
+          { label: locale.tabs.snapshots, to: '/db/$db/snapshots', params: { db }, search },
           { label: locale.tabs.operations, to: '/db/$db/operations', params: { db }, search },
         ]}
       />

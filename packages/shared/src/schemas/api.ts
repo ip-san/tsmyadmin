@@ -261,6 +261,11 @@ export const LoginRequestSchema = ConnectRequestSchema.extend({
   code: SecondFactorCodeSchema.optional(),
   /** A passkey's answer to the challenge the previous (refused) login attempt handed out. */
   passkey: PasskeyAnswerSchema.optional(),
+  /**
+   * Sign in with the login the server itself holds for this Docker preset (TSMYADMIN_DOCKER_LOGIN). The server then
+   * takes the address and the account from the container, never from this request: `user` and `password` are ignored.
+   */
+  dockerPreset: z.string().min(1).max(200).optional(),
 })
 export type LoginRequest = z.infer<typeof LoginRequestSchema>
 

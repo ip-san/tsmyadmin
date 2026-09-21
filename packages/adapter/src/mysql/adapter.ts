@@ -139,6 +139,8 @@ type QueryOutput = [unknown, FieldPacket[] | FieldPacket[][] | undefined]
 
 /** Collation negotiated at handshake unless the login chose another; SET NAMES after a connection reset must restore it. */
 const DEFAULT_COLLATION = 'utf8mb4_unicode_ci'
+/** How many of the pool's own thread ids are remembered (see `ownThreads`). */
+const OWN_THREADS_KEPT = 64
 /**
  * Placeholder values are escaped client-side by the driver with backslashes (mysql2 does not prepare `query()`);
  * a server running with NO_BACKSLASH_ESCAPES would read `\'` as a backslash plus a string terminator, turning any
@@ -194,6 +196,8 @@ export class MysqlAdapter extends BaseAdapter {
   readonly exporter = mysqlExporter
   readonly users = mysqlUsers
   private pool: Pool | null = null
+  /** Thread ids of the connections this pool opened (the latest few: the pool is small, connections come and go). */
+  private readonly ownThreads: number[] = []
 
   constructor(private readonly config: ConnectionConfig) {
     super()
@@ -233,6 +237,12 @@ export class MysqlAdapter extends BaseAdapter {
       // GEOMETRY arrives as the raw SRID+WKB bytes (a binary cell that round-trips through a dump) instead of
       // the driver's lossy {x, y} objects.
       typeCast: (field, next) => (field.type === 'GEOMETRY' ? field.buffer() : next()),
+    })
+    // The general log names a statement's connection by thread id: these are the ones to leave out of its history.
+    // (The event hands over the driver's core connection, not the promise wrapper the typings describe.)
+    this.pool.on('connection', (conn) => {
+      this.ownThreads.push((conn as unknown as CoreConnection).threadId)
+      if (this.ownThreads.length > OWN_THREADS_KEPT) this.ownThreads.shift()
     })
     return this.pool
   }
@@ -700,7 +710,7 @@ export class MysqlAdapter extends BaseAdapter {
   }
 
   diagnostics(kind: DiagnosticKind, query?: DiagnosticQuery): Promise<DiagnosticReport> {
-    return this.withConn(this.serverNs(), (conn) => mysqlDiagnostics(conn, kind, query))
+    return this.withConn(this.serverNs(), (conn) => mysqlDiagnostics(conn, kind, query, this.ownThreads))
   }
 
   serverCatalog(kind: ServerCatalogKind): Promise<ServerCatalog> {
