@@ -1,4 +1,4 @@
-<!-- translated-from: README.md sha256:cdb5c13ab30ec980488b6b0afa88976c34010b98fb27bdaf33c842186f18c0a4 -->
+<!-- translated-from: README.md sha256:7bfe15c7ee85b24792c0b45f2ca63820bbd2e2395152b4d9655d04166614fe4f -->
 
 # tsmyadmin
 
@@ -136,7 +136,7 @@ The Japanese files are the originals; `bun run docs:i18n` checks that the Englis
 - [CLAUDE.md](CLAUDE.md): the development commands, the layout, and the invariants to preserve (Compact Instructions). These are the conventions for human developers too (Japanese)
 - [CHANGELOG.md](CHANGELOG.md): the release notes (Japanese)
 - `.claude/rules/`: the detailed per-path rules (adapter / api-routes / fixtures / skill-scoping)
-- `.claude/agents/`, `.claude/skills/`: the quality-gate / code-reviewer / test-developer agents and the `/self-review` and `/quality-loop` skills
+- `.claude/agents/`, `.claude/skills/`: the quality-gate / code-reviewer / test-developer agents and the `/self-review`, `/quality-loop` and `/docs-polish` skills
 
 ## Requirements
 

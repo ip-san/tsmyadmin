@@ -134,7 +134,7 @@ bun run lighthouse       # Lighthouse CI（ログイン画面の性能 / a11y / 
 - [CLAUDE.md](CLAUDE.md): 開発コマンド、構成、守るべき不変条件（Compact Instructions）。人間の開発者向けの規約でもあります
 - [CHANGELOG.md](CHANGELOG.md): リリースノート
 - `.claude/rules/`: パス別の詳細ルール（adapter / api-routes / fixtures / skill-scoping）
-- `.claude/agents/`, `.claude/skills/`: quality-gate / code-reviewer / test-developer エージェント、`/self-review` / `/quality-loop` スキル
+- `.claude/agents/`, `.claude/skills/`: quality-gate / code-reviewer / test-developer エージェント、`/self-review` / `/quality-loop` / `/docs-polish` スキル
 
 ## 動作要件
 
