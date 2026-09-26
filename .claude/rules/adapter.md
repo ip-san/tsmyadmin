@@ -40,6 +40,10 @@ PostgreSQL は読み取り文を `SELECT * FROM (...) AS _tsmyadmin LIMIT maxRow
 
 MySQL はキーセットページング（PK / NOT NULL ユニークキーで `WHERE (k) > (last) ORDER BY k LIMIT n`、キーがなければ `conn.stream` で 1 行ずつ受け取り `batchSize` 単位でまとめる。全件をメモリに載せることはない）。PostgreSQL はサーバーサイドカーソル（`DECLARE ... NO SCROLL CURSOR FOR SELECT ... FROM ONLY t`、`FETCH n`）で、キーの有無に関わらず O(N)・メモリはバッチ 1 つ分。`ONLY` により継承の親テーブルは自分の行だけを出す（pg_dump と同じ）。パーティション親（`relkind = 'p'`）は `ONLY` だと空になるので付けない。行の同一性（ブラウズ）はパーティション親（`partitioned`）と継承の親（`hasChildren`）で `ctid` を使わず `none`（編集不可）にする。述語つき（部分）ユニークインデックスも行を特定できないので主キー代わりには使わない。
 
+## DDL 本体の区切り文字（DELIMITER・末尾コメント）
+
+MySQL の DELIMITER 切り替え（`packages/shared/src/sql-script.ts`）で本体（`createRoutine`/`createTrigger`/`createEvent`）を区切り文字で包むときは、閉じ記号の前に **改行を挟む**。改行なしで直接連結すると、本体の最後の行が `--` / `#` の行コメントで終わっている場合に閉じ記号がそのコメントへ吸収され、`sql/split.ts` の `splitStatements` が区切りを認識できず、実行時にだけ構文エラーになる（プレビューでは正しく見える生成 SQL が壊れる）。この種の変更をするときは、本体が行コメントで終わるケースを `sql-script.test.ts` と `test/conformance.ts` の createRoutine/createTrigger/createEvent のテストに必ず含める（PostgreSQL の `dollarQuoted()` は閉じタグの前に改行を挟んでおり同じ問題は起きない）。
+
 ## 接続の返却
 
 `executeSql` はユーザー SQL の後に `finally` で `ROLLBACK` → `Conn.reset()`（MySQL: `COM_RESET_CONNECTION` + `SET NAMES utf8mb4`、PostgreSQL: `DISCARD ALL`）を必ず行う。ただしキャンセルされた実行だけは例外で、`reset()` せず `discard()` して接続を捨てる（飛んでいる KILL / cancel シグナルが次の借り手に当たらないようにするため）。セッション変数・ロール・ユーザー変数・一時テーブルがプールの次の借り手に漏れてはならない（conformance の「does not leak session state」が検証）。

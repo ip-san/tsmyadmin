@@ -12,3 +12,4 @@ paths:
 - ルーチン / トリガー（`count_users`, `user_label`, `posts_before_insert`）も両方言で同名。conformance の `listRoutines` / `listTriggers` が参照する
 - MySQL のみ `purge_old_posts` イベント（DISABLED）。conformance の `listEvents` が参照
 - ホストポートは MySQL `13306`、PostgreSQL `15433`（既定ポートは他のスタックが使用中）
+- 統合テストが作る一時テーブル・一時データベース名は、実行ごとに一意な接頭辞を付ける。`information_schema` / `pg_catalog` を素朴に前方一致（LIKE）で舐める検証は、同じ DB を共有して並列に走る他の統合テストの残骸（例: `dump_*` テーブル）を拾うことを想定して書く

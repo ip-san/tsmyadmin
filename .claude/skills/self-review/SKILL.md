@@ -23,7 +23,7 @@ context: fork
 ```
 /self-review
 ├── Step 0: /code-review を実行（汎用: コード品質, React/TS, a11y, perf）
-└── Step 1: プロジェクト固有チェック（13項目を順次実行）
+└── Step 1: プロジェクト固有チェック（17項目を順次実行）
 ```
 
 ### チームモード（`--team`）
@@ -33,8 +33,8 @@ context: fork
 │   ├── Agent: /code-review（汎用レビュー）
 │   └── 並列 Phase B（プロジェクト固有チェック）:
 │       ├── Agent: sql-adapter-checks → check:sql-safety + check:arch + 方言パリティ + Adapter契約
-│       ├── Agent: dto-web-checks     → 共有DTO追随 + ダークモード + ハードコード日本語
-│       └── Agent: meta-checks        → テスト命名 + hooks旧参照 + テスト内ハードコード + circular
+│       ├── Agent: dto-web-checks     → 共有DTO追随 + ダークモード + ハードコード日本語 + 複合キー連結 + 条件付きUIのa11yカバレッジ
+│       └── Agent: meta-checks        → テスト命名 + hooks旧参照 + テスト内ハードコード + circular + CAS/バージョン分割代入 + 保存項目のスコープキー
 └── 結果集約 → --fix なら修正実行
 ```
 
@@ -166,6 +166,30 @@ grep -rn ': any\|as any' apps packages --include='*.ts' --include='*.tsx' 2>/dev
 bun run circular
 ```
 
+### 14. CAS / バージョン分割代入
+
+```bash
+git diff --name-only HEAD | grep -E 'session/.*store|second-factor|saved-quer|central-columns|column-transforms' | xargs grep -n 'version' 2>/dev/null
+```
+
+**判定:** 「読む→変更する→書く」で状態を更新する新規/変更ストアで、`get()` が返す `version` を分割代入で明示的に捨てて `set()` に渡していないか、`set()` の戻り値（CAS 成否）を握りつぶしていないかを目で確認する。**「null（全消去）に相当する分岐だけ `clear()` のような別の非 CAS 経路に逃げていないか」を必ず個別に確認する**（second-factor.ts で3世代にわたって発生・修正済みの再発パターン）。
+
+### 15. 複合キーの区切りなし連結
+
+```bash
+grep -rn '`[a-zA-Z_.]*\${[a-zA-Z0-9_.]*}\${[a-zA-Z0-9_.]*}' apps/web/src --include='*.ts' --include='*.tsx' 2>/dev/null
+```
+
+**判定:** ローカルストレージのキーや React の `key` に使う複合キーが、区切り文字なしのテンプレートリテラル連結になっていないか。識別子に区切り文字と同じ文字（`.` など）が入ると衝突する。既存パターンの `JSON.stringify([a, b, ...])` に揃えるべき（`TableShortcuts.tsx` で一度修正済みだが `central-columns.ts` / `column-transforms.ts` で再発した既往症）。
+
+### 16. 条件付き UI 要素の a11y カバレッジ
+
+**判定:** 既存の a11y スキャン対象ページ（`e2e/a11y.spec.ts` / `e2e/routes-a11y.spec.ts`）に、ある条件下でだけ描画される新規要素（`xxx.has(...)` や真になる条件つきの分岐で出る UI）を追加したら、そのテストのシナリオが実際にその条件を満たす fixture 状態になっているかを確認する。ページに到達しているだけでは不十分（`/security` 自体がスイート未収載だった例、条件を満たすアカウントが常にいないため要素が一度もスキャンされなかった例が既往症）。満たしていなければシナリオを追加する。
+
+### 17. 回帰テストのミューテーション確認（`--fix` 実行後）
+
+**判定:** 追加・修正した回帰テストは、対象の修正を一時的に元のロジックへ戻して（コメントアウトや `git stash push -- <file>` 等）確実に失敗することを確認し、その後に戻す。green のまま「テストを足した」と報告しない。複数のレビューが個別に採用してきた実証済みの検証手法。
+
 ## 出力フォーマット
 
 ```
@@ -190,6 +214,10 @@ bun run circular
 | 11 | 統合テスト命名 | OK / NG | DB依存だが命名違反のファイル |
 | 12 | 型安全性（any） | OK / NG (N件) | ファイル:行 |
 | 13 | 循環依存 | OK / NG | サイクル一覧 |
+| 14 | CAS / バージョン分割代入 | OK / 要確認 (N件) | version を捨てている箇所、非CASの削除分岐 |
+| 15 | 複合キーの区切りなし連結 | OK / NG (N件) | ファイル:行 |
+| 16 | 条件付きUIのa11yカバレッジ | OK / 要確認 | 未カバーの新規要素 |
+| 17 | ミューテーション確認（`--fix`後） | OK / 未実施 | 確認した回帰テスト一覧 |
 ```
 
 `--fix` 指定時は NG 項目を自動修正し、修正内容を報告する。修正後は `bun run check` で回帰がないか確認する。
