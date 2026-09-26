@@ -1,6 +1,6 @@
 # tsmyadmin
 
-*English: [README.en.md](README.en.md)*
+*English: [README.en.md](README.en.md) ・ [GitHub](https://github.com/ip-san/tsmyadmin)*
 
 手元の Docker で動いている MySQL / PostgreSQL を、接続先を書かずにブラウザで開ける DB 管理ツールです。画面構成は phpMyAdmin にならい、TypeScript で書いています。MySQL / MariaDB / PostgreSQL を同じ画面で扱えます。
 

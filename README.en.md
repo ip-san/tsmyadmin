@@ -1,8 +1,8 @@
-<!-- translated-from: README.md sha256:7bfe15c7ee85b24792c0b45f2ca63820bbd2e2395152b4d9655d04166614fe4f -->
+<!-- translated-from: README.md sha256:4faefe094f319bdd84c2b7e40e1aca83abec0f210bec1e33f3a474d1379f02fc -->
 
 # tsmyadmin
 
-*日本語版: [README.md](README.md)*
+*日本語版: [README.md](README.md) · [GitHub](https://github.com/ip-san/tsmyadmin)*
 
 A web-based database admin tool that opens the MySQL / PostgreSQL databases running in your local Docker from the browser, with no connection settings to write. The layout follows phpMyAdmin, and it is written in TypeScript. MySQL, MariaDB and PostgreSQL share the same screens.
 
