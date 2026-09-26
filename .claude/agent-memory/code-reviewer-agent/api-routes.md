@@ -19,6 +19,7 @@
 - 前エントリで指摘した「`changeFactor` の `null` 分岐と `DELETE /second-factor` が無条件 `store.clear()` を使う」ギャップは 3157765 で解消。`SecondFactors.clear(config, version?): Promise<boolean>` に signature変更し、Sqlite（同期の get→比較→delete）・Redis（Lua `DEL_IF_UNCHANGED`）双方で実装、`changeFactor` は `clear` が `false`（競合）を返したら `continue` して読み直す。操作者による強制リセット（`/second-factor/accounts/reset` の `store.clear(target)`、version 省略）は意図的に無条件のまま残しており、これは正しい（運用者権限による上書きは常に勝ってよい）。
 - 自分の再現手順（`clear()` をフックして直前に別タブの CAS 追加を差し込む）をそのまま新コードに当てて再実行し、追加が生き残ること（`changeFactor` が競合を検知して読み直し、正しく「削除対象＋残った新規分」を再計算する）を確認した。
 - 教訓: body-limit（`apps/api/src/app.ts` の `apiBodyLimit`: `/api/session` は 64KB、他の JSON ルートは 1MB）が、`PasskeyResponseSchema.response` のような「キー数上限のない `z.record`」を外側から実質的に縛っている。個々のフィールドに上限がある Zod スキーマでも、外側のトランスポート層の制限とセットで評価すること。
+- **2026-09: この3エントリ（128d315 → 9f074f5 → 3157765）の教訓は `.claude/rules/api-routes.md`（「保存項目の同時書き込みは CAS を通す」節）と `self-review` の項目14に昇格済み。** `paths: apps/api/src/**` に一致するため、以後このディレクトリを読み書きするセッションには rules 側が自動で提示される。ただし `RedisSavedQueries` の per-kind cap レース（下のエントリ）はまだ未修正・未昇格のまま。
 
 
 ## api: XML エクスポートは孤立サロゲートを検出できず「値を失わない」設計目標が UTF-8 変換時に静かに破れる（b785ef4 で実機確認済み）

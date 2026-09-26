@@ -64,6 +64,7 @@
 - `apps/web/src/lib/central-columns.ts:9-10`（`` `central.${scope}.${database}.${schema ?? ''}` ``）と `apps/web/src/lib/column-transforms.ts:15`（`` `transform.${scope}.${ref.db}.${ref.schema ?? ''}.${ref.table}` ``）は区切り文字なしのテンプレートリテラル連結。db/schema/table 名にリテラルの `.`（バッククォートで囲めば MySQL/PostgreSQL とも合法）が入ると異なるテーブル間でキーが衝突しうる。
 - この exact パターンは `TableShortcuts.tsx` で一度指摘済み・f858fb1 で `JSON.stringify([...])` に修正済みなのに、f858fb1 より後に追加された本 3 コミットで再発している。しかも同じ PR のサーバー側キー（`packages/shared/src/schemas/stored.ts` の `centralColumnKey`/`columnTransformKey`）は正しく `JSON.stringify([...])` を使っており、クライアント側のローカルストレージ・フォールバックだけが古いパターンに戻っている——同一実装者が同一 PR 内で書き方を使い分けてしまう典型例。
 - 影響は「永続セッションストアがない（ブラウザ保存のみ）」デプロイに限定され、識別子にドットを使うのは稀なので Warning 止め。次に `key = (...) => \`prefix.${a}.${b}...\`` の形を見たら、必ず `JSON.stringify([a, b, ...])` になっているか確認する。
+- **2026-09: `self-review` の項目15に昇格済み（ただし grep 化はできなかった）。** この再発パターン（`}.${` のようにドット区切り）は、`${session.dialect}.${session.host}.${session.port}` という codebase 全体で意図的に多用されているスコープキーの形と正規表現では区別できず、grep を書くと本物の再発は見逃し無関係な60箇所超を拾うことを実機で確認した。項目15は grep を諦め「diff を読んで、連結しているのが db/schema/table/column のようなユーザー選択可能な識別子かどうか」で判断する方式にしてある。次にこのパターンを見たら、この判断基準（識別子 vs. dialect/host/port のような固定形式の値）をそのまま使う。
 
 ## web: `sharePreference` はアカウント設定を「まるごと PUT」するため、別タブ/別ブラウザからの変更がロストアップデートになる
 

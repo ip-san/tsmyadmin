@@ -29,6 +29,7 @@
 - packages/shared/src/sql-script.test.ts にはこのケースがない（末尾コメントなしの単純な ; を含む文のみ）。test/conformance.ts の createRoutine/createTrigger/createEvent のボディもすべて末尾がコメントなしなので、mutation を入れても検出できない抜け。
 - 修正案（提案のみ、実施はしていない）: delimiter を追記する前に改行を挟む（`${s}\n${delimiter}`）。splitStatements は複数文字delimiterを行頭に限定せずどこでも認識するので、行コメントの外に出すだけで直る。
 - 次にこのファイルを触ったら、末尾が行コメントで終わる本体（-- comment の後に空白/; だけが続く、または ; の後に -- comment が続く）を必ずテストケースに足す。PostgreSQL 側の dollarQuoted()（postgres/ddl.ts）は閉じタグの前に必ず改行を挟む実装になっており、同じ問題は起きない（意図的か偶然かは不明だが、参考実装として比較に使える）。
+- **2026-09: `.claude/rules/adapter.md`（「DDL 本体の区切り文字」節）に昇格済み。** `paths: packages/adapter/**` に一致するため、このファイルを読み書きする以後のセッションには自動で提示される。修正案（改行を挟む）自体はまだ未実施のままなので、次にこのファイルを触るときは提案止まりだったことを踏まえて実施する。
 
 ## adapter: `replaceInColumn` の MySQL 版 `WHERE REPLACE(...) <> c` は照合順序比較で「置換で変わった行」まで落とす（f9f3d6f で実機確認・Critical）
 
