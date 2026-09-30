@@ -216,7 +216,7 @@ export { MAX_BINARY_BYTES }
 export const READ_CELL_MAX_BYTES = 64 * 1024 * 1024
 
 /** Converts a wire Cell into a driver parameter. */
-function toDbValue(cell: Cell): unknown {
+export function toDbValue(cell: Cell): unknown {
   if (isBinaryCell(cell)) return Buffer.from(cell.$bin, 'base64')
   // The schemas already reject it at the API; this guards adapter-internal callers (row keys built from a page).
   if (isTruncatedCell(cell)) throw new AdapterError('VALIDATION', 'a truncated text value cannot be written back')
@@ -517,10 +517,6 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     return expr
   }
 
-  /** Expression a key column is ordered and compared by in keyset paging (MySQL ENUM/SET: label, not index). */
-  protected keyColumnExpr(quoted: string, _type: string): string {
-    return quoted
-  }
   /** Whether keyParam needs the column types (saves the describeTable round trips on dialects that never cast). */
   protected readonly castsKeyParams: boolean = false
 
@@ -1146,88 +1142,15 @@ export abstract class BaseAdapter implements DatabaseAdapter {
   }
 
   /**
-   * Stable-order full scan with keyset pagination: PK (or NOT NULL unique key) → `WHERE (k1, k2) > (last)`
-   * ordered by the key; PostgreSQL without a key → `WHERE ctid > last` ordered by ctid; MySQL without a key →
-   * one unordered SELECT streamed from the driver in batches (no total order exists to page over). Keyset
-   * paging keeps each batch O(batch) instead of OFFSET's O(offset + batch) rescans on large tables.
+   * Full scan of a table for a dump, in batches of `batchSize` rows and with bounded memory. How a scan pages
+   * differs by dialect (MySQL: keyset paging or a streamed read; PostgreSQL: a server-side cursor), so each one
+   * implements it. An empty table still yields one batch so callers learn the column list.
    */
-  async *iterateRows(
+  abstract iterateRows(
     ns: Namespace,
     table: string,
     opts: { batchSize: number; schema?: TableSchema; utc?: boolean }
-  ): AsyncIterable<RowBatch> {
-    const schema = opts.schema ?? (await this.describeTable(ns, table))
-    const key = this.resolveRowKey(schema)
-    const d = this.dialect
-    const columns = schema.columns.map((c) => quoteIdent(d, c.name))
-    const tableSql = quoteTable(d, ns, table)
-    const fallback = this.fallbackKeySelect()
-    const byCtid = key.keyKind === 'ctid' && fallback !== null
-    // Position of each key column in the selected row (ctid is appended as an extra trailing column).
-    const keyIndexes =
-      key.keyKind === 'pk' ? key.keyColumns.map((c) => schema.columns.findIndex((col) => col.name === c)) : []
-    if (keyIndexes.includes(-1)) throw new AdapterError('QUERY_FAILED', 'Key column missing from table schema')
-    const keyTypes = keyIndexes.map((i) => schema.columns[i]?.dataType ?? '')
-    // The fallback key is selected as `ctid::text AS "ctid"`; an unqualified ORDER BY ctid would bind to that
-    // text output column (sorting '(0,10)' before '(0,2)') and disagree with the tid comparison in WHERE.
-    const keyExprs =
-      key.keyKind === 'pk'
-        ? key.keyColumns.map((c, i) => this.keyColumnExpr(quoteIdent(d, c), keyTypes[i] ?? ''))
-        : byCtid
-          ? [`${tableSql}.ctid`]
-          : []
-    const selectList = byCtid && fallback ? [...columns, fallback] : columns
-    const orderBy = keyExprs.length > 0 ? ` ORDER BY ${keyExprs.join(', ')}` : ''
-    const single = orderBy === ''
-    const batchSize = Math.max(1, Math.floor(opts.batchSize))
-    // Generators cannot run inside withConn's callback, so the borrow/done pair is shared instead
-    // (no statement timeout: full scans may legitimately be long).
-    const { conn, done } = await this.borrow(ns, 0)
-    try {
-      // Times as UTC, for a dump restored under a session that reads them as UTC (the pool resets the session after).
-      if (opts.utc) await conn.query("SET SESSION time_zone = '+00:00'")
-      if (single && conn.stream) {
-        // Streamed rows arrive one at a time, so a key-less table of any size costs one batch of memory.
-        const sql = `SELECT ${selectList.join(', ')} FROM ${tableSql}`
-        for await (const r of conn.stream(sql, [], batchSize, UNCAPPED)) yield { columns: r.columns, rows: r.rows }
-        return
-      }
-      let last: Cell[] | null = null
-      let first = true
-      for (;;) {
-        const params = new Params(d)
-        let where = ''
-        if (last) {
-          if (byCtid) where = ` WHERE ${tableSql}.ctid > ${params.add(last[last.length - 1])}::tid`
-          else {
-            const lastRow = last
-            const lastKey = keyIndexes.map((i, k) =>
-              this.keyParam(params.add(toDbValue(lastRow[i] ?? null)), keyTypes[k] ?? '')
-            )
-            where = ` WHERE (${keyExprs.join(', ')}) > (${lastKey.join(', ')})`
-          }
-        }
-        const limit = single ? '' : ` LIMIT ${params.add(batchSize)}`
-        // Exports must carry whole binaries; the display cap only applies to browsing.
-        const r = firstResult(
-          await conn.query(
-            `SELECT ${selectList.join(', ')} FROM ${tableSql}${where}${orderBy}${limit}`,
-            params.values,
-            UNCAPPED
-          )
-        )
-        const rows = byCtid ? r.rows.map((row) => row.slice(0, -1)) : r.rows
-        const cols = byCtid ? r.columns.slice(0, -1) : r.columns
-        // An empty table still yields one batch so callers learn the column list.
-        if (rows.length > 0 || first) yield { columns: cols, rows }
-        first = false
-        if (single || r.rows.length < batchSize) return
-        last = r.rows[r.rows.length - 1] ?? null
-      }
-    } finally {
-      await done()
-    }
-  }
+  ): AsyncIterable<RowBatch>
 
   /**
    * Running executeSql calls by queryId. The entry is registered synchronously when executeSql starts so a

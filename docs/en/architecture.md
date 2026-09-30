@@ -1,4 +1,4 @@
-<!-- translated-from: docs/architecture.md sha256:61dacdb76515b02419446526131d2645c0b123d9c8f3d83baf8de1eb9967399a -->
+<!-- translated-from: docs/architecture.md sha256:d58a53916251c72b1e99c99b0c0c409291b0a3909a073de93cf177b41940a2d0 -->
 
 # Architecture
 
@@ -91,9 +91,8 @@ classDiagram
     #borrow(ns) / withConn()
     +resolveRowKey(schema)
     +executeSql(ns, sql, opts)
-    +iterateRows(ns, table, opts)
   }
-  note for BaseAdapter "Only the dialect-independent part: splitting and running statements one by one, cancellation, deciding the row key, keyset scanning"
+  note for BaseAdapter "Only the dialect-independent part: splitting and running statements one by one, cancellation, deciding the row key. The full-table scan (iterateRows) is implemented per dialect (MySQL: keyset paging, PostgreSQL: a cursor)"
   class MysqlAdapter
   class PostgresAdapter
   DatabaseAdapter <|.. BaseAdapter

@@ -89,9 +89,8 @@ classDiagram
     #borrow(ns) / withConn()
     +resolveRowKey(schema)
     +executeSql(ns, sql, opts)
-    +iterateRows(ns, table, opts)
   }
-  note for BaseAdapter "方言に依らない部分だけ: 文の分割と逐次実行、キャンセル管理、行キーの決定、キーセット走査"
+  note for BaseAdapter "方言に依らない部分だけ: 文の分割と逐次実行、キャンセル管理、行キーの決定。表の全件走査（iterateRows）は方言ごとに実装する（MySQL はキーセット、PostgreSQL はカーソル）"
   class MysqlAdapter
   class PostgresAdapter
   DatabaseAdapter <|.. BaseAdapter
