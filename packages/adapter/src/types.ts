@@ -153,12 +153,11 @@ export interface RowBatch {
   rows: Cell[][]
 }
 
-/** Renders dialect-specific SQL for dumps (INSERT statements with properly escaped literals). */
-/** One program object for the dump with the session settings it must be created under. */
 export type DropTarget =
   | { kind: 'table' | 'view' | 'materialized_view' | 'sequence'; name: string }
   | { kind: 'routine'; name: string; statements: string[] }
 
+/** One program object for the dump with the session settings it must be created under. */
 export interface ProgramStatement {
   sql: string
   sqlMode?: string | null
@@ -183,6 +182,7 @@ export interface InsertOptions {
   keyColumns?: string[]
 }
 
+/** Renders dialect-specific SQL for dumps (INSERT statements with properly escaped literals). */
 export interface SqlExporter {
   /**
    * Statements emitted once at the top / bottom of a SQL dump so it restores the way it was written
@@ -289,9 +289,8 @@ export interface DatabaseAdapter {
   ): Promise<{ affectedRows: number }>
   /** The INSERT that insertRow would run (values apart, as they are bound), without running it. */
   insertPreview(ns: Namespace, table: string, values: RowValues, options?: { ignore?: boolean }): InsertPreview
-  /** Bulk insert (imports): parameterised multi-row INSERTs inside one transaction; all-or-nothing. */
   /**
-   * Bulk insert in one transaction (all or nothing); `rows` may be lazy so a large file is never held twice.
+   * Bulk insert (imports): parameterised multi-row INSERTs in one transaction (all or nothing); `rows` may be lazy so a large file is never held twice.
    * A failure names the 0-based row(s) of `rows` it came from (`AdapterError.rows`).
    */
   insertRows(
@@ -325,7 +324,6 @@ export interface DatabaseAdapter {
     table: string,
     opts: { batchSize: number; schema?: TableSchema; utc?: boolean }
   ): AsyncIterable<RowBatch>
-  /** Login accounts (MySQL mysql.user, PostgreSQL pg_roles). Requires read privileges on the catalog. */
   /** Namespace that any account can use for server-level statements (MySQL: information_schema; PostgreSQL: the login database). */
   readonly serverNamespace: Namespace
   serverInfo(): Promise<ServerInfo>
@@ -340,9 +338,12 @@ export interface DatabaseAdapter {
   /** Runtime counters (SHOW GLOBAL STATUS / pg_stat_*). */
   listStatus(): Promise<KeyValue[]>
   listProcesses(): Promise<ProcessInfo[]>
-  /** Terminates a connection (KILL / pg_terminate_backend). `id` must be numeric. */
-  /** Stops a server-side process: `query` cancels its running statement, `connection` closes it outright. */
+  /**
+   * Stops a server-side process (KILL / pg_terminate_backend; `id` must be numeric): `query` cancels its running
+   * statement, `connection` closes it outright.
+   */
   killProcess(id: string, mode?: KillMode): Promise<void>
+  /** Login accounts (MySQL mysql.user, PostgreSQL pg_roles). Requires read privileges on the catalog. */
   listUsers(): Promise<UserInfo[]>
   /**
    * Effective grants as SQL statements (MySQL SHOW GRANTS; PostgreSQL reconstructed from the catalog).

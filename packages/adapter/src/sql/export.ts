@@ -96,7 +96,6 @@ const DEFINER =
  */
 const DELIM = ';;'
 
-/** `user@host` as information_schema prints it → `\`user\`@\`host\``. */
 /**
  * MariaDB's SHOW CREATE TRIGGER / EVENT returns the statement as typed, database qualifiers included; a dump is
  * database-relative, so `db.` / `\`db\`.` are removed from the header (up to the body) when they name the dumped
@@ -117,6 +116,7 @@ function unqualifyHeader(statement: string, database: string, bodyStart: RegExp,
   return statement.slice(0, m.index).replace(qualifier, '') + statement.slice(m.index)
 }
 
+/** `user@host` as information_schema prints it → `\`user\`@\`host\``. */
 function quoteAccount(account: string): string {
   const at = account.lastIndexOf('@')
   const user = at === -1 ? account : account.slice(0, at)
@@ -124,7 +124,6 @@ function quoteAccount(account: string): string {
   return `${quoteIdent('mysql', user)}@${quoteIdent('mysql', host)}`
 }
 
-/** Dump statements: every identifier is quoted and every value goes through cellLiteral. Dialect-agnostic. */
 /** `name(identity arguments)` for DROP FUNCTION / PROCEDURE, read from a pg_get_functiondef statement. */
 function pgRoutineSignature(statement: string): string | null {
   // The name may be quoted (and then contain spaces or parentheses) and schema-qualified.
@@ -161,6 +160,7 @@ function pgRoutineSignature(statement: string): string | null {
   return `${m[1]}(${identity.join(', ')})`
 }
 
+/** Dump statements: every identifier is quoted and every value goes through cellLiteral. Dialect-agnostic. */
 export function createExporter(dialect: Dialect): SqlExporter {
   const id = (name: string) => quoteIdent(dialect, name)
   const withoutDefiner = (sql: string, strip: boolean) =>

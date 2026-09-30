@@ -116,19 +116,19 @@ const PERMISSION_CODES = new Set([
  * is deliberately *not* here: it ends the statement but leaves the connection usable, so it stays QUERY_FAILED.
  */
 const KILLED_CODES = new Set(['ER_CONNECTION_KILLED', 'PROTOCOL_CONNECTION_LOST', 'ER_SERVER_SHUTDOWN'])
-/** Derived-table wrapping (only used for statements with their own LIMIT) fails where the bare statement would not. */
 /** Character column types, whose collation would otherwise decide what counts as the same row. */
 const CHARACTER_KEY_TYPE = /^(?:char|varchar|tinytext|text|mediumtext|longtext|enum|set)\b/i
 
+/** Derived-table wrapping (only used for statements with their own LIMIT) fails where the bare statement would not. */
 const WRAPPER_ONLY_ERRORS: ReadonlySet<string> = new Set([
   'ER_DUP_FIELDNAME',
   'ER_CANT_USE_OPTION_HERE',
   'ER_PARSE_ERROR',
 ])
-/** MariaDB-only errno values the driver has no symbolic name for; anything else unnamed becomes `ER_<errno>`. */
 /** `SEQUENCE=1` among the table options (the line after the column list), not inside a quoted comment. */
 const SEQUENCE_OPTION = /^\)(?:[^'\n]|'(?:[^']|'')*')*\bSEQUENCE=1\b/m
 
+/** MariaDB-only errno values the driver has no symbolic name for; anything else unnamed becomes `ER_<errno>`. */
 const MARIADB_ERRNO_NAMES: Record<number, string> = {
   1969: 'ER_STATEMENT_TIMEOUT',
   4084: 'ER_SEQUENCE_RUN_OUT',

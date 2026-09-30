@@ -87,7 +87,6 @@ export interface RawResult {
   notices?: string[]
 }
 
-/** A connection checked out of a pool and bound to a namespace. */
 /** Per-query options handed to the driver layer. */
 export interface QueryOptions {
   /** Bytes kept of each binary value (default MAX_BINARY_BYTES for display; Infinity for exports). */
@@ -105,6 +104,7 @@ export const UNCAPPED: QueryOptions = { binaryLimit: Number.POSITIVE_INFINITY, t
 /** Rows rendered on a page: a multi-megabyte TEXT / JSON cell travels as its head plus its length. */
 const DISPLAY: QueryOptions = { textLimit: MAX_TEXT_CHARS }
 
+/** A connection checked out of a pool and bound to a namespace. */
 export interface Conn {
   query(text: string, params?: unknown[], options?: QueryOptions): Promise<RawResult | RawResult[]>
   release(): void
@@ -314,10 +314,6 @@ export function isSearchableType(dialect: Dialect, dataType: string): boolean {
 }
 
 /**
- * Escapes LIKE metacharacters so a user string matches literally. `!` is the escape character (declared with
- * ESCAPE '!'): unlike a backslash it needs no dialect-specific string escaping of its own.
- */
-/**
  * LEFT JOINs that bring every table after the first into the query, each along a foreign key to a table already
  * joined (either direction). Keys into another database or schema do not count. A table no key reaches is
  * refused rather than cross-joined: a product of two tables is almost never what was meant, and the SQL tab is
@@ -391,6 +387,10 @@ function bitLiteral(value: InputCell): string {
   return `X'${hex.length % 2 === 0 ? hex : `0${hex}`}'`
 }
 
+/**
+ * Escapes LIKE metacharacters so a user string matches literally. `!` is the escape character (declared with
+ * ESCAPE '!'): unlike a backslash it needs no dialect-specific string escaping of its own.
+ */
 export function escapeLike(text: string): string {
   return text.replaceAll('!', '!!').replaceAll('%', '!%').replaceAll('_', '!_')
 }
@@ -409,15 +409,15 @@ export function firstResult(r: RawResult | RawResult[]): RawResult {
   return r
 }
 
-/**
- * Dialect-independent implementation of browsing, row mutation and script execution.
- * Subclasses provide connections, value conversion, introspection and DDL.
- */
 /** MySQL's error number for a duplicate key. */
 const DUPLICATE_ENTRY = 1062
 /** Warnings an insert reports back at most (a file with a thousand bad values must not return a thousand lines). */
 const MAX_INSERT_WARNINGS = 20
 
+/**
+ * Dialect-independent implementation of browsing, row mutation and script execution.
+ * Subclasses provide connections, value conversion, introspection and DDL.
+ */
 export abstract class BaseAdapter implements DatabaseAdapter {
   abstract readonly dialect: Dialect
   abstract readonly ddl: DdlBuilder
