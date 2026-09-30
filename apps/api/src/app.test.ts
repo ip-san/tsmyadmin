@@ -3,6 +3,7 @@ import { AdapterError } from '@tsmyadmin/adapter'
 import { FakeAdapter, fakeTable } from '@tsmyadmin/adapter/testing'
 import {
   AccountSecondFactorsSchema,
+  AffectedRowsSchema,
   ApiErrorSchema,
   BrowseResultSchema,
   CentralColumnSchema,
@@ -30,6 +31,7 @@ import {
   ServerCatalogSchema,
   ServerInfoSchema,
   SessionStateSchema,
+  SqlCancelResponseSchema,
   SqlStreamEventSchema,
   StatementResultSchema,
   TableInfoSchema,
@@ -771,7 +773,7 @@ describe('rows', () => {
       method: 'PATCH',
       body: JSON.stringify({ key: { kind: 'pk', values: { id: 4 } }, values: { name: 'David' } }),
     })
-    expect(await upd.json()).toEqual({ affectedRows: 1 })
+    expect(AffectedRowsSchema.parse(await upd.json())).toEqual({ affectedRows: 1 })
     const del = await h.req('/api/databases/shop/tables/users/rows', {
       method: 'DELETE',
       body: JSON.stringify({
@@ -781,7 +783,7 @@ describe('rows', () => {
         ],
       }),
     })
-    expect(await del.json()).toEqual({ affectedRows: 2 })
+    expect(AffectedRowsSchema.parse(await del.json())).toEqual({ affectedRows: 2 })
     const rows = BrowseResultSchema.parse(await (await h.req('/api/databases/shop/tables/users/rows')).json())
     expect(rows.rows.map((r) => r[1])).toEqual(['Alice', 'Bob'])
   })
@@ -959,7 +961,7 @@ describe('sql & ddl', () => {
     await h.req('/api/databases/shop/sql', { method: 'POST', body: JSON.stringify({ sql: 'SELECT 1', queryId }) })
     expect(h.adapter.calls.at(-1)?.args[2]).toMatchObject({ queryId })
     const miss = await h.req('/api/databases/shop/sql/cancel', { method: 'POST', body: JSON.stringify({ queryId }) })
-    expect(await miss.json()).toEqual({ cancelled: false })
+    expect(SqlCancelResponseSchema.parse(await miss.json())).toEqual({ cancelled: false })
     expect(
       (await h.req('/api/databases/shop/sql/cancel', { method: 'POST', body: JSON.stringify({ queryId: 'nope' }) }))
         .status
