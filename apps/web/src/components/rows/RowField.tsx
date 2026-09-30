@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
-import type { ColumnDef, ColumnTransform, Dialect, ForeignKeyDef, RowFunction } from '@tsmyadmin/shared'
+import type { ColumnDef, ColumnTransform, ForeignKeyDef, RowFunction } from '@tsmyadmin/shared'
 import { ROW_FUNCTIONS_WITH_ARG, rowFunctionsFor } from '@tsmyadmin/shared'
 import { useState } from 'react'
 import { locale } from '@/config/locale.ts'
-import { rowsQuery, sessionQuery } from '@/lib/queries.ts'
+import { rowsQuery } from '@/lib/queries.ts'
+import { useDialect } from '@/lib/session.ts'
 import { useDebounced } from '@/lib/use-debounced.ts'
 import { inputMessage } from '../cells/transform-text.ts'
 import { Input, Select, Textarea } from '../ui/Field.tsx'
@@ -94,7 +95,7 @@ export function RowField({
   describedBy: string | undefined
   onChange: (patch: Partial<FieldState>) => void
 }) {
-  const dialect: Dialect = useQuery(sessionQuery).data?.dialect ?? 'mysql'
+  const dialect = useDialect()
   const takesArg = f.fn === '' || ROW_FUNCTIONS_WITH_ARG.has(f.fn)
   const listId = fk && fk.columns.length === 1 ? `${id}-fk` : undefined
   const shown = f.isNull || f.useDefault || !takesArg ? '' : f.text

@@ -90,7 +90,7 @@ bun run dev        # API http://localhost:3100 + Web http://localhost:5175
 
 ```bash
 bun run check            # typecheck + lint + ユニット/API/Web テスト + type-coverage
-bun run check:static     # check + knip / 循環依存 / クローン / アーキテクチャ / SQL 安全性 / docs（pre-push で実行）
+bun run check:static     # check + knip / 循環依存 / クローン / アーキテクチャ / SQL 安全性 / docs / 英訳の同期 / 色のコントラスト（pre-push で実行）
 bun run check:all        # check:static + 両 DB の統合テスト
 bun run test:e2e         # Playwright（Chromium / WebKit の機能 / axe a11y / VRT light+dark）。事前に db:up
 bun run lighthouse       # Lighthouse CI（ログイン画面の性能 / a11y / ベストプラクティス、警告のみ。要 Chrome）

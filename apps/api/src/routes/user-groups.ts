@@ -1,20 +1,16 @@
+/**
+ * User groups and the tabs their members see.
+ */
 import type { MyGroupTabs, UserGroup } from '@tsmyadmin/shared'
 import { SavedQueryIdSchema, UserGroupBodySchema } from '@tsmyadmin/shared'
 import { type Context, Hono } from 'hono'
 import { apiError } from '../lib/errors.ts'
 import type { Logger } from '../lib/logging.ts'
+import { safeJson } from '../lib/saved-items.ts'
 import { validate } from '../lib/validate.ts'
 import { type AppEnv, requireSession, type SessionConfig } from '../session/middleware.ts'
 import type { SavedItem, Session } from '../session/store.ts'
 import { sessionInfo } from '../session/store.ts'
-
-function safeJson(text: string): unknown {
-  try {
-    return JSON.parse(text)
-  } catch {
-    return null
-  }
-}
 
 function groups(items: SavedItem[]): UserGroup[] {
   return items.flatMap((item) => {

@@ -1,3 +1,7 @@
+/**
+ * Accounts and privileges: the list, the grants, and the preview → execute pair. The server builds the SQL from `op`
+ * (the preview masks the password), so the browser never sends a statement to run.
+ */
 import type { DatabaseAdapter } from '@tsmyadmin/adapter'
 import {
   PASSWORD_MASK,

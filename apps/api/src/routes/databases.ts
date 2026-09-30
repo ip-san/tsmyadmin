@@ -1,3 +1,8 @@
+/**
+ * Everything under `/databases/:db/…`: catalogue reads (tables, routines, triggers, events), row browsing and
+ * editing, SQL execution (streamed as NDJSON), DDL preview, export and import. A route validates its input, calls the
+ * adapter and returns JSON; anything with rules of its own lives in `lib/`.
+ */
 import type { DatabaseAdapter } from '@tsmyadmin/adapter'
 import {
   BrowseQuerySchema,
@@ -40,6 +45,7 @@ import { identifierTooLong, tooLongIdentifier } from '../lib/identifiers.ts'
 import { ImportValidationError } from '../lib/import.ts'
 import { importResponse, type PreparedImport, prepareImport, validationError } from '../lib/import-run.ts'
 import type { Logger } from '../lib/logging.ts'
+import { ndjsonResponse } from '../lib/ndjson.ts'
 import { recordGridChange, recordStatements } from '../lib/tracking-log.ts'
 import { validate } from '../lib/validate.ts'
 import { type AppEnv, requireSession, type SessionConfig } from '../session/middleware.ts'
@@ -62,15 +68,6 @@ async function ownedSequenceColumns(
     if (t.kind === 'sequence' && t.ownedBy?.table === table && columns.includes(t.ownedBy.column))
       own.add(t.ownedBy.column)
   return [...own]
-}
-
-/** Blank line sent on an NDJSON stream while a statement runs (well inside every idle timeout in the path). */
-const HEARTBEAT_MS = 15_000
-/** NDJSON responses: progress lines must reach the browser as they are written, not when a proxy buffer fills. */
-const NDJSON_HEADERS = {
-  'content-type': 'application/x-ndjson; charset=utf-8',
-  'cache-control': 'no-store',
-  'x-accel-buffering': 'no',
 }
 
 const BEGIN = /^\s*(?:BEGIN|START\s+TRANSACTION)\b/i
@@ -448,29 +445,8 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
         // Always register the run so a client that disconnects mid-script gets its statement interrupted
         // instead of running to completion on an abandoned connection.
         const queryId = body.queryId ?? crypto.randomUUID()
-        const encoder = new TextEncoder()
-        let closed = false
-        // Backpressure: a slow consumer must not make this process buffer every result set. Statement results
-        // wait until the stream has room again (pull() resolves the gate).
-        let gate: (() => void) | null = null
-        let started = false
-        // The script runs from the first pull(), not start(): the stream calls pull() again only after start()
-        // settles, so awaiting the whole run there would deadlock the backpressure gate.
-        const run = async (controller: ReadableStreamDefaultController<Uint8Array>) => {
-          const send = async (event: SqlStreamEvent) => {
-            if (closed) return
-            while (!closed && controller.desiredSize !== null && controller.desiredSize <= 0) {
-              await new Promise<void>((resolve) => {
-                gate = resolve
-              })
-            }
-            if (!closed) controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`))
-          }
-          // A statement longer than the connection's idle timeout would drop the stream: keep it warm.
-          const heartbeat = setInterval(() => {
-            if (!closed) controller.enqueue(encoder.encode('\n'))
-          }, HEARTBEAT_MS)
-          try {
+        return ndjsonResponse<SqlStreamEvent>(c, {
+          run: async (send) => {
             // Answered by the server itself once the script is done, just before its transaction is rolled back.
             let openTransaction = false
             const ran: StatementResult[] = []
@@ -502,41 +478,20 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
               statements: results.length,
               openTransaction,
             })
-          } catch (err) {
-            const { body } = toApiError(err)
-            await send({
-              type: 'fatal',
-              message: body.message,
-              code: body.code,
-              ...(body.nativeCode ? { nativeCode: body.nativeCode } : {}),
-            })
-          } finally {
-            clearInterval(heartbeat)
-            if (!closed) {
-              closed = true
-              controller.close()
-            }
-          }
-        }
-        const stream = new ReadableStream<Uint8Array>({
-          pull(controller) {
-            if (!started) {
-              started = true
-              void run(controller)
-              return
-            }
-            gate?.()
-            gate = null
           },
-          async cancel() {
-            // Consumer went away (tab closed, request aborted): stop the statement and drop further events.
-            closed = true
-            gate?.()
-            gate = null
+          fatal: (err) => {
+            const { body: failure } = toApiError(err)
+            return {
+              type: 'fatal',
+              message: failure.message,
+              code: failure.code,
+              ...(failure.nativeCode ? { nativeCode: failure.nativeCode } : {}),
+            }
+          },
+          onCancel: async () => {
             await adapter.cancelQuery(queryId)
           },
         })
-        return c.body(stream, 200, NDJSON_HEADERS)
       })
       .post('/databases/:db/sql/cancel', validate('json', SqlCancelRequestSchema), async (c) => {
         const cancelled = await c.get('session').adapter.cancelQuery(c.req.valid('json').queryId)

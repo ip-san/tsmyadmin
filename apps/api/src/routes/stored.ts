@@ -1,3 +1,7 @@
+/**
+ * Per-account stored items: designer pages, query templates, preferences and workspace, central columns and column
+ * transforms.
+ */
 import type { CentralColumn, ColumnTransform, DesignerPage, Preferences, QueryTemplate } from '@tsmyadmin/shared'
 import {
   CentralColumnBodySchema,
@@ -19,6 +23,7 @@ import {
 import { type Context, Hono } from 'hono'
 import { z } from 'zod'
 import { apiError } from '../lib/errors.ts'
+import { safeJson } from '../lib/saved-items.ts'
 import { validate } from '../lib/validate.ts'
 import { type AppEnv, requireSession, type SessionConfig } from '../session/middleware.ts'
 import type { SavedItem, SavedItemKind } from '../session/store.ts'
@@ -27,14 +32,6 @@ import type { SavedItem, SavedItemKind } from '../session/store.ts'
 const PREFERENCES = 'preferences'
 /** The one row the workspace entries are stored under. */
 const WORKSPACE = 'workspace'
-
-function safeJson(text: string): unknown {
-  try {
-    return JSON.parse(text)
-  } catch {
-    return null
-  }
-}
 
 /**
  * Stored rows of one kind as the client sees them. A body that does not parse is left out and left alone: a newer

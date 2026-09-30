@@ -1,5 +1,5 @@
 import type { Namespace, RoutineDetail, RoutineKind, TriggerDetail } from '@tsmyadmin/shared'
-import { type Conn, firstResult } from '../base.ts'
+import { type Conn, firstResult } from '../driver.ts'
 import { str, strOrNull } from '../sql/format.ts'
 import { AdapterError } from '../types.ts'
 

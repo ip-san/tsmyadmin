@@ -1,3 +1,7 @@
+/**
+ * Server-level pages: info, variables, status, replication (preview, then execute), the catalogue of collations,
+ * engines and plugins, and the process list.
+ */
 import { buildReplicationOp } from '@tsmyadmin/adapter'
 import {
   DiagnosticKindSchema,

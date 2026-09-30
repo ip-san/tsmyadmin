@@ -1,10 +1,24 @@
-<!-- translated-from: docs/architecture.md sha256:61dacdb76515b02419446526131d2645c0b123d9c8f3d83baf8de1eb9967399a -->
+<!-- translated-from: docs/architecture.md sha256:eea42f085b59d107ef18321a4d8c38e50604943737f393b918f8f2f6fe954d7b -->
 
 # Architecture
 
 *日本語版: [docs/architecture.md](../architecture.md)*
 
 For a developer meeting this codebase for the first time: **where everything is, and why it is that way.** Running it is covered by [deployment.md](deployment.md) and [operations.md](operations.md), using it by [user-guide.md](user-guide.md), and the conventions every change must keep by [CLAUDE.md](../../CLAUDE.md) and `.claude/rules/` (Japanese).
+
+## Five files to read first
+
+Before reading the whole document, follow one thread, "showing a table's rows", and you will see a type flow from `shared` → `adapter` → `api` → `web`. Read §2 (packages and the direction of dependencies) first and you will not get lost.
+
+| # | File | What to look for |
+|---|---|---|
+| 1 | `packages/adapter/src/types.ts` | `DatabaseAdapter` is the contract MySQL and PostgreSQL keep in the same way. Find `browseRows`. The rule for adding a method is enforced by `ADAPTER_METHOD_NAMES` and the conformance tests |
+| 2 | `packages/shared/src/schemas/browse.ts` | The shape of a browse request and response (Zod). The comments say why, for example why a table estimated above 100,000 rows is not `COUNT(*)`ed |
+| 3 | `apps/api/src/routes/databases.ts` | `GET /databases/:db/tables/:table/rows`. Validate → call the adapter → JSON, all in one screenful: a model of a thin route |
+| 4 | `apps/web/src/lib/queries/tables.ts` (`rowsQuery`) and `apps/web/src/routes/_app/db.$db/table.$table/index.tsx` | The call typed through `hc<AppType>`, and the route that shows it (the substance is in `features/browse`) |
+| 5 | `packages/adapter/src/test/conformance.ts` (`describe('browseRows')`) | The same test runs on both MySQL and PostgreSQL: a specification you can run |
+
+To see how a convention is enforced by machine, start with `scripts/check-sql-safety.mjs` (§8).
 
 ## 1. The whole picture
 
@@ -69,7 +83,7 @@ Terms: **`hc<AppType>`** is Hono's RPC client (`hc` from `hono/client`), where `
 
 **Why there is no ORM** — the target's schema is known only at run time, because the user opens whatever database they like. An ORM that fixes the schema at compile time (Prisma and its kind) does not match that premise. What is actually needed is per-dialect SQL generation, catalog queries and wire conversion of values, and `packages/adapter` is exactly that, laid thinly over the drivers (`mysql2`, `pg`).
 
-The point of this layer is to confine the dialect differences to one place. `base.ts` holds the dialect-independent logic (keyset scanning, resolving a row key, running statements and shaping results, managing cancellation), and dialect-specific SQL lives only in `mysql/` and `postgres/`.
+The point of this layer is to confine the dialect differences to one place. `base.ts` holds the dialect-independent logic (resolving a row key, browsing and updating rows, borrowing a connection); running a script in the SQL console and cancelling it is `ScriptRunner` in `sql-console.ts`, and the contract a dialect's driver keeps (`Conn` and the like) is in `driver.ts`. Dialect-specific SQL lives only in `mysql/` and `postgres/`.
 
 ```mermaid
 classDiagram
@@ -91,9 +105,8 @@ classDiagram
     #borrow(ns) / withConn()
     +resolveRowKey(schema)
     +executeSql(ns, sql, opts)
-    +iterateRows(ns, table, opts)
   }
-  note for BaseAdapter "Only the dialect-independent part: splitting and running statements one by one, cancellation, deciding the row key, keyset scanning"
+  note for BaseAdapter "Only the dialect-independent part: deciding the row key, browsing and updating rows, borrowing a connection. Running and cancelling console scripts is left to ScriptRunner (sql-console.ts), and the full-table scan (iterateRows) is implemented per dialect (MySQL: keyset paging, PostgreSQL: a cursor)"
   class MysqlAdapter
   class PostgresAdapter
   DatabaseAdapter <|.. BaseAdapter
@@ -299,7 +312,7 @@ An upload is opened first by `prepareImport` in `import-run.ts` (gzip and ZIP un
 ```mermaid
 flowchart LR
   subgraph local["Local"]
-    pc["pre-commit<br/>lint + tests for what changed"] --> pp["pre-push<br/>check:static"]
+    pc["pre-commit<br/>lint + tests for what changed + CLAUDE.md stat sync"] --> pp["pre-push<br/>check:static"]
   end
   subgraph ci["CI"]
     chk["check (types / lint / tests / static checks)"]
@@ -337,7 +350,7 @@ Working through it once is the quickest way to see where the types flow. To add 
 2. Add the value to what `serverInfo()` returns in `packages/adapter/src/{mysql,postgres}/server.ts`. The return type comes from shared, so **doing only one of them fails the typecheck**
 3. Add assertions for both dialects to `describe('serverInfo')` in `packages/adapter/src/test/conformance.ts`, and give the value to `testing/fake-adapter.ts` (the in-memory implementation the API tests use)
 4. `apps/api/src/routes/server.ts` needs no change — the route returns what the adapter gave it and **does not validate the response at run time**. What holds the shape is `ServerInfoSchema.parse(...)` in `apps/api/src/app.test.ts`
-5. `apps/web`: `lib/queries.ts` names the shared type explicitly, as in `unwrap<ServerInfo>` (the `hc` types cover the path, the parameters and the body; the response is whatever type was passed to `unwrap<T>`). Add the display and the labels in `config/locales/{ja,en}.ts`
+5. `apps/web`: each file in `lib/queries/` names the shared type explicitly, as in `unwrap<ServerInfo>` (the `hc` types cover the path, the parameters and the body; the response is whatever type was passed to `unwrap<T>`). Add the display and the labels in `config/locales/{ja,en}.ts`
 6. `bun run check`, then `bun run db:up && bun run test:integration`
 
 The step-by-step rules and checklists are in [CLAUDE.md](../../CLAUDE.md) (Compact Instructions) and `.claude/rules/`, in Japanese.

@@ -20,7 +20,7 @@ bun run db:up             # テスト DB 起動（初回は fixtures 投入）
 bun run db:reset          # ボリューム削除して再作成
 bun run dev               # api + web 同時起動
 bun run check             # 型 + lint + ユニット/API/Web テスト + type-coverage（日常ゲート）
-bun run check:static      # check + knip + circular + cpd + arch + sql-safety + docs（pre-push で実行、DB 不要）
+bun run check:static      # check + knip + circular + cpd + arch + sql-safety + docs + i18n + contrast（pre-push で実行、DB 不要）
 bun run check:all         # check:static + 両 DB の統合テスト
 bun run test              # DB 不要のテスト
 bun run test:integration  # 両 DB の adapter conformance + API 統合（compose 必須）
@@ -30,7 +30,7 @@ bun run lighthouse        # Lighthouse CI（警告のみ、要 Chrome）
 
 ## 現在の規模（`scripts/validate-docs.mjs` が同期）
 
-- ユニット/API/Web テスト定義: <!-- stat:unit-tests -->916<!-- /stat --> 件
+- ユニット/API/Web テスト定義: <!-- stat:unit-tests -->924<!-- /stat --> 件
 - Adapter conformance: <!-- stat:conformance -->195<!-- /stat --> 件 × 2 方言
 - E2E: <!-- stat:e2e -->200<!-- /stat --> 件
 - API ルート: <!-- stat:routes -->95<!-- /stat -->
@@ -45,6 +45,7 @@ bun run lighthouse        # Lighthouse CI（警告のみ、要 Chrome）
 - [.claude/rules/adapter.md](.claude/rules/adapter.md) — `packages/adapter/**`
 - [.claude/rules/api-routes.md](.claude/rules/api-routes.md) — `apps/api/src/**`
 - [.claude/rules/fixtures.md](.claude/rules/fixtures.md) — `docker/**`
+- [.claude/rules/web.md](.claude/rules/web.md) — `apps/web/**`
 - [.claude/rules/skill-scoping.md](.claude/rules/skill-scoping.md) — `.claude/{skills,agents}/**`
 
 ## Compact Instructions

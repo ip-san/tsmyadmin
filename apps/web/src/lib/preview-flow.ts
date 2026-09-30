@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import type { StatementResult } from '@tsmyadmin/shared'
 import { useRef, useState } from 'react'
+import { isDatabaseData } from './queries.ts'
 
 export interface PreviewFlow<Op> {
   /** Operation currently being previewed (null = dialog closed). */
@@ -57,7 +58,7 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
         setFailed(err)
         return
       }
-      const invalidate = config.invalidate ?? ((key) => key[0] !== 'session')
+      const invalidate = config.invalidate ?? isDatabaseData
       setOp(null)
       setSql([])
       setExecuted(o)

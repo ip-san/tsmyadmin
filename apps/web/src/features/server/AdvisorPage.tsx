@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { Badge, ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { locale } from '@/config/locale.ts'
-import { serverInfoQuery, sessionQuery, statusQuery, variablesQuery } from '@/lib/queries.ts'
+import { serverInfoQuery, statusQuery, variablesQuery } from '@/lib/queries.ts'
+import { useDialect } from '@/lib/session.ts'
 import { advise, fill } from './advisor.ts'
 
 const t = locale.advisor
@@ -11,7 +12,7 @@ export function AdvisorPage() {
   const status = useQuery(statusQuery)
   const variables = useQuery(variablesQuery)
   const info = useQuery(serverInfoQuery)
-  const dialect = useQuery(sessionQuery).data?.dialect ?? 'mysql'
+  const dialect = useDialect()
   const failed = status.error ?? variables.error
   if (status.isPending || variables.isPending) return <Spinner />
   if (!status.data || !variables.data)

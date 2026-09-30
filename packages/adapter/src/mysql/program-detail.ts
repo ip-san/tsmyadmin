@@ -1,6 +1,6 @@
 import type { EventDetail, Namespace, RoutineDetail, RoutineKind, TriggerDetail } from '@tsmyadmin/shared'
 import { DATA_ACCESS, EVENT_INTERVAL_UNITS } from '@tsmyadmin/shared'
-import { type Conn, firstResult } from '../base.ts'
+import { type Conn, firstResult } from '../driver.ts'
 import { str, strOrNull } from '../sql/format.ts'
 import { AdapterError } from '../types.ts'
 import { mysqlRoutineDefinition, showCreateProgram } from './routines.ts'

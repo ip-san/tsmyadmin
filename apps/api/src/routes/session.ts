@@ -1,3 +1,7 @@
+/**
+ * Login and logout (`POST` / `DELETE /session`), the state of the current session, and the per-account saved queries
+ * and export templates.
+ */
 import { createHash } from 'node:crypto'
 import { AdapterError } from '@tsmyadmin/adapter'
 import type { ExportTemplate, SavedQuery, ServerPreset } from '@tsmyadmin/shared'
@@ -16,6 +20,7 @@ import type { DockerLogin } from '../lib/docker-discovery.ts'
 import { apiError, errorResponse } from '../lib/errors.ts'
 import type { Logger } from '../lib/logging.ts'
 import type { RateLimiter } from '../lib/rate-limit.ts'
+import { safeJson } from '../lib/saved-items.ts'
 import { validate } from '../lib/validate.ts'
 import {
   checkLoginFactor,
@@ -297,12 +302,4 @@ function sameTemplate(item: SavedItem, template: { database: string; schema?: st
   return (
     body.success && body.data.database === template.database && (body.data.schema ?? '') === (template.schema ?? '')
   )
-}
-
-function safeJson(text: string): unknown {
-  try {
-    return JSON.parse(text)
-  } catch {
-    return null
-  }
 }

@@ -1,5 +1,5 @@
-import type { ObjectDependency } from '@tsmyadmin/shared'
 /** Catalog-row value normalisers shared by introspection and server queries. */
+import type { ObjectDependency } from '@tsmyadmin/shared'
 /** Builds ObjectDependency entries from (kind, name, refKind, refName) rows, dropping self-references. */
 export function groupDependencies(
   rows: { kind: 'view' | 'routine'; name: string; refKind: 'table' | 'view' | 'routine'; refName: string }[]

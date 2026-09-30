@@ -9,13 +9,6 @@ export interface Statement {
 
 const DELIMITER_LINE = /^[ \t]*DELIMITER[ \t]+(\S+)[ \t]*(?:\r?\n|$)/i
 
-/**
- * Splits a multi-statement script on top-level statement terminators (`;` by default).
- * Handles: '...' / "..." strings (with '' and MySQL backslash escapes), `...` identifiers (MySQL),
- * -- and # (MySQL) line comments, block comments, PostgreSQL dollar quoting ($$ / $tag$), and the MySQL client's
- * `DELIMITER xx` command (a line on its own; `DELIMITER ;` restores the default) so stored routines can be pasted as-is.
- * Chunks that contain only comments/whitespace are dropped.
- */
 /** `COPY table (cols) FROM stdin` — the data that follows is part of the statement (see splitStatements). */
 const COPY_FROM_STDIN = /^COPY\b[\s\S]*?\bFROM\s+STDIN\b/i
 
@@ -177,6 +170,13 @@ function trackSqlMode(statement: string, current: boolean, saved: Map<string, bo
   return next
 }
 
+/**
+ * Splits a multi-statement script on top-level statement terminators (`;` by default).
+ * Handles: '...' / "..." strings (with '' and MySQL backslash escapes), `...` identifiers (MySQL),
+ * -- and # (MySQL) line comments, block comments, PostgreSQL dollar quoting ($$ / $tag$), and the MySQL client's
+ * `DELIMITER xx` command (a line on its own; `DELIMITER ;` restores the default) so stored routines can be pasted as-is.
+ * Chunks that contain only comments/whitespace are dropped.
+ */
 export function splitStatements(
   input: string,
   dialect: Dialect,

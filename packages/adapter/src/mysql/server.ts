@@ -12,7 +12,7 @@ import type {
   ServerInfo,
 } from '@tsmyadmin/shared'
 import { replicationRole } from '@tsmyadmin/shared'
-import { type Conn, firstResult } from '../base.ts'
+import { type Conn, firstResult } from '../driver.ts'
 import { joinParts, str, strOrNull } from '../sql/format.ts'
 import { mysqlLiteral } from '../sql/literal.ts'
 import { AdapterError } from '../types.ts'

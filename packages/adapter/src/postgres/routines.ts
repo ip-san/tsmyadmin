@@ -1,5 +1,5 @@
 import type { Namespace, ObjectDependency, RoutineInfo, RoutineKind, TriggerInfo } from '@tsmyadmin/shared'
-import { type Conn, firstResult } from '../base.ts'
+import { type Conn, firstResult } from '../driver.ts'
 import { groupDependencies, str, strOrNull } from '../sql/format.ts'
 import { pgLiteral } from '../sql/literal.ts'
 import { quoteIdent } from '../sql/quote.ts'

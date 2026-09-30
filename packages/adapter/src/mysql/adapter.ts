@@ -39,17 +39,11 @@ import mysql, {
   type PoolConnection,
   type ResultSetHeader,
 } from 'mysql2/promise'
-import {
-  BaseAdapter,
-  type Canceller,
-  type Conn,
-  driverValueToCell,
-  firstResult,
-  type QueryOptions,
-  type RawResult,
-} from '../base.ts'
-import { quoteIdent, quoteTable } from '../sql/quote.ts'
-import { AdapterError, type AdapterErrorCode, type ConnectionConfig } from '../types.ts'
+import { BaseAdapter } from '../base.ts'
+import { type Canceller, type Conn, firstResult, type RawResult } from '../driver.ts'
+import { driverValueToCell, type QueryOptions, toDbValue, UNCAPPED } from '../sql/cells.ts'
+import { Params, quoteIdent, quoteTable } from '../sql/quote.ts'
+import { AdapterError, type AdapterErrorCode, type ConnectionConfig, type RowBatch } from '../types.ts'
 import { mysqlDdl } from './ddl.ts'
 import { mysqlExporter } from './export.ts'
 import {
@@ -116,19 +110,19 @@ const PERMISSION_CODES = new Set([
  * is deliberately *not* here: it ends the statement but leaves the connection usable, so it stays QUERY_FAILED.
  */
 const KILLED_CODES = new Set(['ER_CONNECTION_KILLED', 'PROTOCOL_CONNECTION_LOST', 'ER_SERVER_SHUTDOWN'])
-/** Derived-table wrapping (only used for statements with their own LIMIT) fails where the bare statement would not. */
 /** Character column types, whose collation would otherwise decide what counts as the same row. */
 const CHARACTER_KEY_TYPE = /^(?:char|varchar|tinytext|text|mediumtext|longtext|enum|set)\b/i
 
+/** Derived-table wrapping (only used for statements with their own LIMIT) fails where the bare statement would not. */
 const WRAPPER_ONLY_ERRORS: ReadonlySet<string> = new Set([
   'ER_DUP_FIELDNAME',
   'ER_CANT_USE_OPTION_HERE',
   'ER_PARSE_ERROR',
 ])
-/** MariaDB-only errno values the driver has no symbolic name for; anything else unnamed becomes `ER_<errno>`. */
 /** `SEQUENCE=1` among the table options (the line after the column list), not inside a quoted comment. */
 const SEQUENCE_OPTION = /^\)(?:[^'\n]|'(?:[^']|'')*')*\bSEQUENCE=1\b/m
 
+/** MariaDB-only errno values the driver has no symbolic name for; anything else unnamed becomes `ER_<errno>`. */
 const MARIADB_ERRNO_NAMES: Record<number, string> = {
   1969: 'ER_STATEMENT_TIMEOUT',
   4084: 'ER_SEQUENCE_RUN_OUT',
@@ -487,8 +481,79 @@ export class MysqlAdapter extends BaseAdapter {
    * in the binary collation — CAST AS CHAR would take collation_connection (case-insensitive), making labels
    * that differ only by case or accent tie in ORDER BY and be skipped by the `>` comparison.
    */
-  protected override keyColumnExpr(quoted: string, type: string): string {
+  private keyColumnExpr(quoted: string, type: string): string {
     return /^(?:enum|set)\(/i.test(type) ? `CAST(${quoted} AS CHAR) COLLATE utf8mb4_bin` : quoted
+  }
+
+  /**
+   * Stable-order full scan with keyset pagination: PK (or NOT NULL unique key) → `WHERE (k1, k2) > (last)`
+   * ordered by the key; without a key → one unordered SELECT streamed from the driver in batches (no total order
+   * exists to page over). Keyset paging keeps each batch O(batch) instead of OFFSET's O(offset + batch) rescans
+   * on large tables. PostgreSQL scans with a server-side cursor instead (see its iterateRows).
+   */
+  async *iterateRows(
+    ns: Namespace,
+    table: string,
+    opts: { batchSize: number; schema?: TableSchema; utc?: boolean }
+  ): AsyncIterable<RowBatch> {
+    const schema = opts.schema ?? (await this.describeTable(ns, table))
+    const key = this.resolveRowKey(schema)
+    const columns = schema.columns.map((c) => quoteIdent('mysql', c.name))
+    const tableSql = quoteTable('mysql', ns, table)
+    // Position of each key column in the selected row.
+    const keyIndexes =
+      key.keyKind === 'pk' ? key.keyColumns.map((c) => schema.columns.findIndex((col) => col.name === c)) : []
+    if (keyIndexes.includes(-1)) throw new AdapterError('QUERY_FAILED', 'Key column missing from table schema')
+    const keyTypes = keyIndexes.map((i) => schema.columns[i]?.dataType ?? '')
+    const keyExprs =
+      key.keyKind === 'pk'
+        ? key.keyColumns.map((c, i) => this.keyColumnExpr(quoteIdent('mysql', c), keyTypes[i] ?? ''))
+        : []
+    const orderBy = keyExprs.length > 0 ? ` ORDER BY ${keyExprs.join(', ')}` : ''
+    const single = orderBy === ''
+    const batchSize = Math.max(1, Math.floor(opts.batchSize))
+    // Generators cannot run inside withConn's callback, so the borrow/done pair is shared instead
+    // (no statement timeout: full scans may legitimately be long).
+    const { conn, done } = await this.borrow(ns, 0)
+    try {
+      // Times as UTC, for a dump restored under a session that reads them as UTC (the pool resets the session after).
+      if (opts.utc) await conn.query("SET SESSION time_zone = '+00:00'")
+      if (single && conn.stream) {
+        // Streamed rows arrive one at a time, so a key-less table of any size costs one batch of memory.
+        const sql = `SELECT ${columns.join(', ')} FROM ${tableSql}`
+        for await (const r of conn.stream(sql, [], batchSize, UNCAPPED)) yield { columns: r.columns, rows: r.rows }
+        return
+      }
+      let last: Cell[] | null = null
+      let first = true
+      for (;;) {
+        const params = new Params('mysql')
+        let where = ''
+        if (last) {
+          const lastRow = last
+          const lastKey = keyIndexes.map((i, k) =>
+            this.keyParam(params.add(toDbValue(lastRow[i] ?? null)), keyTypes[k] ?? '')
+          )
+          where = ` WHERE (${keyExprs.join(', ')}) > (${lastKey.join(', ')})`
+        }
+        const limit = single ? '' : ` LIMIT ${params.add(batchSize)}`
+        // Exports must carry whole binaries; the display cap only applies to browsing.
+        const r = firstResult(
+          await conn.query(
+            `SELECT ${columns.join(', ')} FROM ${tableSql}${where}${orderBy}${limit}`,
+            params.values,
+            UNCAPPED
+          )
+        )
+        // An empty table still yields one batch so callers learn the column list.
+        if (r.rows.length > 0 || first) yield { columns: r.columns, rows: r.rows }
+        first = false
+        if (single || r.rows.length < batchSize) return
+        last = r.rows[r.rows.length - 1] ?? null
+      }
+    } finally {
+      await done()
+    }
   }
 
   protected async setStatementTimeout(conn: Conn, ms: number): Promise<void> {

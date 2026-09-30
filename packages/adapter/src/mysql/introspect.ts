@@ -12,7 +12,7 @@ import type {
   TableStats,
 } from '@tsmyadmin/shared'
 
-import { type Conn, firstResult } from '../base.ts'
+import { type Conn, firstResult } from '../driver.ts'
 import { str, strOrNull } from '../sql/format.ts'
 import { AdapterError } from '../types.ts'
 import { mysqlPartitionBound } from './ddl.ts'

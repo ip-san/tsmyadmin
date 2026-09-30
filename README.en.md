@@ -1,4 +1,4 @@
-<!-- translated-from: README.md sha256:4faefe094f319bdd84c2b7e40e1aca83abec0f210bec1e33f3a474d1379f02fc -->
+<!-- translated-from: README.md sha256:9f70226c4f3b0e6efcb29ea57b0d31d1fdf1d42ad822bc79939da6721cca9866 -->
 
 # tsmyadmin
 
@@ -92,7 +92,7 @@ The repository is a Bun workspaces monorepo: `apps/api` (Hono) / `apps/web` (Vit
 
 ```bash
 bun run check            # typecheck + lint + unit/API/web tests + type-coverage
-bun run check:static     # check + knip / circular imports / clones / architecture / SQL safety / docs (runs on pre-push)
+bun run check:static     # check + knip / circular imports / clones / architecture / SQL safety / docs / translation sync / colour contrast (runs on pre-push)
 bun run check:all        # check:static + the integration tests against both databases
 bun run test:e2e         # Playwright (Chromium / WebKit functional, axe a11y, VRT light+dark). Run db:up first
 bun run lighthouse       # Lighthouse CI (performance / a11y / best practices on the login screen; warnings only, needs Chrome)

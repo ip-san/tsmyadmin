@@ -6,6 +6,7 @@ import './index.css'
 import { ErrorPage, NotFoundPage } from './components/layout/ErrorPage.tsx'
 import { localeCode } from './config/locale.ts'
 import { sessionExpired } from './lib/api.ts'
+import { sessionQuery } from './lib/queries.ts'
 import { applyTheme } from './lib/theme.ts'
 import { routeTree } from './routeTree.gen.ts'
 
@@ -16,8 +17,8 @@ import { routeTree } from './routeTree.gen.ts'
  */
 function onUnauthorized(error: unknown): void {
   if (!sessionExpired(error)) return
-  if (router.state.location.pathname === '/login' || queryClient.getQueryData(['session']) === null) return
-  queryClient.setQueryData(['session'], null)
+  if (router.state.location.pathname === '/login' || queryClient.getQueryData(sessionQuery.queryKey) === null) return
+  queryClient.setQueryData(sessionQuery.queryKey, null)
   void router.navigate({ to: '/login', search: { redirect: router.state.location.href, expired: true } })
 }
 

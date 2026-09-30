@@ -3,7 +3,7 @@ import type { ColumnTransform, ColumnTransformBody } from '@tsmyadmin/shared'
 import { ColumnTransformSchema, isInputTransform } from '@tsmyadmin/shared'
 import { z } from 'zod'
 import { loadNamed, removeNamed, saveNamed } from '@/lib/named-storage.ts'
-import { listColumnTransforms, mutations, type TableRef } from '@/lib/queries.ts'
+import { columnTransformsKey, listColumnTransforms, mutations, type TableRef } from '@/lib/queries.ts'
 import { type NamedList, useNamedList } from '@/lib/use-named-list.ts'
 
 /** A transformation named by its column, which is what the lists key on (one per column). */
@@ -37,7 +37,7 @@ export function useColumnTransforms(ref: TableRef): ColumnTransforms {
   const list = useNamedList<NamedTransform, ColumnTransformBody>({
     onServer: session.savedQueries === 'server',
     query: {
-      queryKey: ['column-transforms'],
+      queryKey: columnTransformsKey,
       queryFn: async () => (await listColumnTransforms()).map(named),
     },
     saveOnServer: async (_name, body) => (await mutations.saveColumnTransform(body)).map(named),

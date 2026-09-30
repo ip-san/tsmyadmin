@@ -1,10 +1,9 @@
-import { useQuery } from '@tanstack/react-query'
 import { CreateSection } from '@/components/ddl/CreateSection.tsx'
 import { DdlPreviewDialog } from '@/components/ddl/DdlPreviewDialog.tsx'
 import { ViewForm } from '@/components/ddl/ViewForm.tsx'
 import { locale } from '@/config/locale.ts'
 import { useDdlFlow } from '@/lib/ddl.ts'
-import { sessionQuery } from '@/lib/queries.ts'
+import { useDialect } from '@/lib/session.ts'
 
 const t = locale.create
 
@@ -20,7 +19,7 @@ export function CreateViewSection({
   initialSelect?: string | undefined
 }) {
   const flow = useDdlFlow(db, schema)
-  const dialect = useQuery(sessionQuery).data?.dialect ?? 'mysql'
+  const dialect = useDialect()
   return (
     <>
       <DdlPreviewDialog flow={flow} />

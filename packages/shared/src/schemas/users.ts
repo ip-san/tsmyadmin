@@ -2,7 +2,6 @@ import { z } from 'zod'
 import { hasStatementBreak } from './ddl.ts'
 import { StatementResultSchema } from './result.ts'
 
-/** A login account: MySQL user@host or a PostgreSQL role. */
 /** What an account may use per hour and how it may connect (MySQL `REQUIRE` and `WITH MAX_…`; PostgreSQL: connections). */
 export const AccountLimitsSchema = z.object({
   require: z.enum(['NONE', 'SSL', 'X509']).default('NONE'),
@@ -14,6 +13,7 @@ export const AccountLimitsSchema = z.object({
 })
 export type AccountLimits = z.infer<typeof AccountLimitsSchema>
 
+/** A login account: MySQL user@host or a PostgreSQL role. */
 export const UserInfoSchema = z.object({
   name: z.string(),
   /** MySQL host part; null for PostgreSQL. */

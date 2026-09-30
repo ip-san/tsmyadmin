@@ -7,7 +7,7 @@ import { ErrorBox, Spinner } from '@/components/ui/Feedback.tsx'
 import { Input } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
 import { dbHomeTo } from '@/lib/default-tabs.ts'
-import { databasesQuery, schemasQuery } from '@/lib/queries.ts'
+import { databasesQuery, isDatabaseTreeQuery, schemasQuery } from '@/lib/queries.ts'
 import { resolveSettings } from '@/lib/settings.ts'
 import { useShortcuts } from '@/lib/shortcuts.ts'
 import { ProgramNodes } from './ProgramNodes.tsx'
@@ -128,7 +128,7 @@ export function DbTree({ dialect, activeDb }: { dialect: Dialect; activeDb?: str
           // The databases, the schemas and every table list are read again (a table made elsewhere shows up).
           onClick={() =>
             void queryClient.invalidateQueries({
-              predicate: (q) => ['databases', 'schemas', 'tables'].includes(String(q.queryKey[0])),
+              predicate: (q) => isDatabaseTreeQuery(q.queryKey),
             })
           }
         >

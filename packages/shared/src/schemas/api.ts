@@ -26,7 +26,6 @@ export type ConnectRequest = z.infer<typeof ConnectRequestSchema>
 export const SessionInfoSchema = ConnectRequestSchema.omit({ password: true })
 export type SessionInfo = z.infer<typeof SessionInfoSchema>
 
-/** What GET/POST /session return: the identity plus the namespace usable for server-level SQL/DDL. */
 /**
  * The longest statement the server will bookmark. Far more than anything written by hand, and unlike the 16 MB a
  * run is allowed this is kept on disk: with the 200-per-account cap it bounds what one account can store. It
@@ -85,6 +84,7 @@ export const AddHistoryRequestSchema = z.object({
 export const SecondFactorStateSchema = z.enum(['none', 'enrolled', 'enrollment_required', 'unsupported'])
 export type SecondFactorState = z.infer<typeof SecondFactorStateSchema>
 
+/** What GET/POST /session return: the identity plus the namespace usable for server-level SQL/DDL. */
 export const SessionStateSchema = SessionInfoSchema.extend({
   serverDatabase: z.string().min(1),
   /**
@@ -196,6 +196,7 @@ export const DdlPreviewRequestSchema = z.object({ schema: z.string().min(1).opti
 export const DdlPreviewResponseSchema = z.object({ sql: z.array(z.string()) })
 export type DdlPreviewResponse = z.infer<typeof DdlPreviewResponseSchema>
 
+/** A one-time code: six digits from an authenticator app, or a ten-character recovery code. */
 export const SecondFactorCodeSchema = z.string().min(6).max(20)
 
 /**
@@ -250,8 +251,6 @@ export const ApiErrorSchema = z.object({
   passkey: PasskeyChallengeSchema.optional(),
 })
 export type ApiError = z.infer<typeof ApiErrorSchema>
-
-/** A one-time code: six digits from an authenticator app, or a ten-character recovery code. */
 
 /**
  * Login. The code travels with the credentials rather than in a second request: nothing is kept server-side

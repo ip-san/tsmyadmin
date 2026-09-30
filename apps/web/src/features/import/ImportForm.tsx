@@ -19,7 +19,7 @@ import {
   isRowsFormat,
 } from '@/lib/import-options.ts'
 import { runImport } from '@/lib/import-stream.ts'
-import { mutations, tablesQuery } from '@/lib/queries.ts'
+import { invalidateDatabaseData, mutations, tablesQuery } from '@/lib/queries.ts'
 import { importDefaults } from '@/lib/settings.ts'
 import { newQueryId } from '@/lib/uuid.ts'
 import { FileDropZone } from './FileDropZone.tsx'
@@ -83,7 +83,7 @@ export function ImportForm({ db, schema, table }: ImportFormProps) {
       // The file is consumed: a second click must not import it again (the summary stays on screen).
       setFile(null)
       if (fileInput.current) fileInput.current.value = ''
-      await queryClient.invalidateQueries({ predicate: (q) => q.queryKey[0] !== 'session' })
+      await invalidateDatabaseData(queryClient)
     },
     onSettled: () => {
       abort.current = null
