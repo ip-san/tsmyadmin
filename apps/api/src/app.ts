@@ -89,6 +89,20 @@ function apiBodyLimit(secret: string) {
 /** Failed login attempts allowed per IP (across all user names) = LOGIN_RATE_LIMIT × this. */
 export const IP_LIMIT_FACTOR = 3
 
+/**
+ * The whole HTTP application, in the order a request meets it:
+ *
+ * 1. a server-generated request id, then the AsyncLocalStorage request context and the structured request log
+ * 2. security headers (CSP), and for `/api/*` the CSRF check, `Cache-Control: no-store` and the body-size limit
+ * 3. `/healthz` `/readyz` and the login-free `/api/*` endpoints (server list, discovery diagnosis)
+ * 4. one router per area, each declaring `requireSession` on its own paths (see session/middleware.ts: Hono flattens
+ *    mounted routers, so a path can meet more than one router's guard)
+ * 5. the JSON 404 for an unknown `/api/*` path; `index.ts` adds the SPA fallback after this
+ *
+ * Errors from any step end in `errorResponse`. The audit log is not a middleware: `withAudit` wraps the adapter the
+ * session store hands out (lib/audit.ts), so a route cannot reach a database without it. The returned `AppType` is
+ * what the web client's `hc<AppType>` reads its types from.
+ */
 export function createApp(config: AppConfig, services: AppServices) {
   const logger = services.logger ?? createLogger('pretty', () => undefined)
   const cfg = {

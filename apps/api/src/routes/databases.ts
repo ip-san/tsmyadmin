@@ -1,3 +1,8 @@
+/**
+ * Everything under `/databases/:db/…`: catalogue reads (tables, routines, triggers, events), row browsing and
+ * editing, SQL execution (streamed as NDJSON), DDL preview, export and import. A route validates its input, calls the
+ * adapter and returns JSON; anything with rules of its own lives in `lib/`.
+ */
 import type { DatabaseAdapter } from '@tsmyadmin/adapter'
 import {
   BrowseQuerySchema,

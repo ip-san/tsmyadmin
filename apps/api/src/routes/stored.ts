@@ -1,3 +1,7 @@
+/**
+ * Per-account stored items: designer pages, query templates, preferences and workspace, central columns and column
+ * transforms.
+ */
 import type { CentralColumn, ColumnTransform, DesignerPage, Preferences, QueryTemplate } from '@tsmyadmin/shared'
 import {
   CentralColumnBodySchema,

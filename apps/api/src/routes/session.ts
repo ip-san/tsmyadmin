@@ -1,3 +1,7 @@
+/**
+ * Login and logout (`POST` / `DELETE /session`), the state of the current session, and the per-account saved queries
+ * and export templates.
+ */
 import { createHash } from 'node:crypto'
 import { AdapterError } from '@tsmyadmin/adapter'
 import type { ExportTemplate, SavedQuery, ServerPreset } from '@tsmyadmin/shared'

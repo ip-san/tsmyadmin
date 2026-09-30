@@ -1,3 +1,7 @@
+/**
+ * Change tracking: the versions of a table's definition, and the database-level list of tracked tables. Kept in the
+ * shared item store, so every account of the server sees the same history.
+ */
 import type { Namespace, TrackedTable, TrackedVersion, TrackingState } from '@tsmyadmin/shared'
 import {
   DEFAULT_TRACK_KINDS,

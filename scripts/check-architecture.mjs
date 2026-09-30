@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Architecture checks (fail = exit 1):
+ * Architecture checks (1 and 2 fail with exit 1; 3 only warns):
  * 1. Package/layer dependency rules
  * 2. Feature isolation in apps/web (features import each other only through components/ or lib/)
  * 3. Component size limit

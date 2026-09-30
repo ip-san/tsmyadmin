@@ -1,3 +1,7 @@
+/**
+ * Second factors (TOTP and passkeys): status, enrolment and removal per account, and the login-time challenge that
+ * `session.ts` calls.
+ */
 import { randomBytes } from 'node:crypto'
 import type {
   AccountSecondFactors,

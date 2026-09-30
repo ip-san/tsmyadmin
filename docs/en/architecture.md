@@ -1,10 +1,24 @@
-<!-- translated-from: docs/architecture.md sha256:d58a53916251c72b1e99c99b0c0c409291b0a3909a073de93cf177b41940a2d0 -->
+<!-- translated-from: docs/architecture.md sha256:62a02b76cc309d3c3b45b8899bd94ed87df20c20fddf166be79c1d4069048267 -->
 
 # Architecture
 
 *日本語版: [docs/architecture.md](../architecture.md)*
 
 For a developer meeting this codebase for the first time: **where everything is, and why it is that way.** Running it is covered by [deployment.md](deployment.md) and [operations.md](operations.md), using it by [user-guide.md](user-guide.md), and the conventions every change must keep by [CLAUDE.md](../../CLAUDE.md) and `.claude/rules/` (Japanese).
+
+## Five files to read first
+
+Before reading the whole document, follow one thread, "showing a table's rows", and you will see a type flow from `shared` → `adapter` → `api` → `web`. Read §2 (packages and the direction of dependencies) first and you will not get lost.
+
+| # | File | What to look for |
+|---|---|---|
+| 1 | `packages/adapter/src/types.ts` | `DatabaseAdapter` is the contract MySQL and PostgreSQL keep in the same way. Find `browseRows`. The rule for adding a method is enforced by `ADAPTER_METHOD_NAMES` and the conformance tests |
+| 2 | `packages/shared/src/schemas/browse.ts` | The shape of a browse request and response (Zod). The comments say why, for example why a table estimated above 100,000 rows is not `COUNT(*)`ed |
+| 3 | `apps/api/src/routes/databases.ts` | `GET /databases/:db/tables/:table/rows`. Validate → call the adapter → JSON, all in one screenful: a model of a thin route |
+| 4 | `apps/web/src/lib/queries.ts` (`rowsQuery`) and `apps/web/src/routes/_app/db.$db/table.$table/index.tsx` | The call typed through `hc<AppType>`, and the route that shows it (the substance is in `features/browse`) |
+| 5 | `packages/adapter/src/test/conformance.ts` (`describe('browseRows')`) | The same test runs on both MySQL and PostgreSQL: a specification you can run |
+
+To see how a convention is enforced by machine, start with `scripts/check-sql-safety.mjs` (§8).
 
 ## 1. The whole picture
 
@@ -298,7 +312,7 @@ An upload is opened first by `prepareImport` in `import-run.ts` (gzip and ZIP un
 ```mermaid
 flowchart LR
   subgraph local["Local"]
-    pc["pre-commit<br/>lint + tests for what changed"] --> pp["pre-push<br/>check:static"]
+    pc["pre-commit<br/>lint + tests for what changed + CLAUDE.md stat sync"] --> pp["pre-push<br/>check:static"]
   end
   subgraph ci["CI"]
     chk["check (types / lint / tests / static checks)"]

@@ -1,3 +1,6 @@
+/**
+ * User groups and the tabs their members see.
+ */
 import type { MyGroupTabs, UserGroup } from '@tsmyadmin/shared'
 import { SavedQueryIdSchema, UserGroupBodySchema } from '@tsmyadmin/shared'
 import { type Context, Hono } from 'hono'

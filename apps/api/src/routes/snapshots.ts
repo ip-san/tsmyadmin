@@ -1,3 +1,7 @@
+/**
+ * Database snapshots: taking, listing, deleting and restoring (a preview first, then the execution). The dump stays in the API's
+ * memory and is never sent to the browser; see `.claude/rules/api-routes.md`.
+ */
 import type { Namespace, SnapshotList } from '@tsmyadmin/shared'
 import { SchemaQuerySchema, SnapshotCreateSchema } from '@tsmyadmin/shared'
 import { type Context, Hono } from 'hono'

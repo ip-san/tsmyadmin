@@ -1,3 +1,6 @@
+/**
+ * Queries shared between accounts, and the SQL history.
+ */
 import type { ConnectRequest, HistoryEntry, SharedQuery, SqlHistory } from '@tsmyadmin/shared'
 import {
   AddHistoryRequestSchema,

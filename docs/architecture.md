@@ -4,6 +4,20 @@
 
 このコードベースを初めて触る開発者向けに、**どこに何があり、なぜそうなっているか**を説明します。運用は [deployment.md](deployment.md) / [operations.md](operations.md)、利用者向けは [user-guide.md](user-guide.md)、変更時に必ず守る規約は [CLAUDE.md](../CLAUDE.md) と `.claude/rules/` にあります。
 
+## 最初に読む 5 つ
+
+全体を頭から読む前に、「テーブルの行を表示する」という 1 本の流れを追うと、型が `shared` → `adapter` → `api` → `web` と流れる様子がつかめます。先に §2（パッケージ構成と依存の向き）だけ読んでおくと迷いません。
+
+| 順 | ファイル | 見どころ |
+|---|---|---|
+| 1 | `packages/adapter/src/types.ts` | `DatabaseAdapter` は MySQL と PostgreSQL が同じに守る契約。`browseRows` を探す。メソッドを足したときの決まりは `ADAPTER_METHOD_NAMES` と conformance テストが守る |
+| 2 | `packages/shared/src/schemas/browse.ts` | 閲覧のリクエストとレスポンスの形（Zod）。「行数の見積もりが 10 万行を超える表は `COUNT(*)` しない」など、なぜそうするかがコメントにある |
+| 3 | `apps/api/src/routes/databases.ts` | `GET /databases/:db/tables/:table/rows`。検証 → アダプターの呼び出し → JSON が 1 画面に収まる、薄いルートの見本 |
+| 4 | `apps/web/src/lib/queries.ts`（`rowsQuery`）と `apps/web/src/routes/_app/db.$db/table.$table/index.tsx` | `hc<AppType>` で型が付いた呼び出しと、それを表示するルート（実体は `features/browse`） |
+| 5 | `packages/adapter/src/test/conformance.ts`（`describe('browseRows')`） | 同じテストが MySQL と PostgreSQL の両方で走る。実行できる仕様書 |
+
+規約を機械で守らせる仕組みの作りを見るなら、`scripts/check-sql-safety.mjs` から（§8）。
+
 ## 1. 全体像
 
 tsmyadmin は **1 プロセス**です。Bun 上の Hono が API を提供し、同じプロセスがビルド済み SPA を配信します。データベースは接続先として外部にあり、tsmyadmin 自身が持つ永続データはセッションストアだけです。
@@ -296,7 +310,7 @@ flowchart LR
 ```mermaid
 flowchart LR
   subgraph local["ローカル"]
-    pc["pre-commit<br/>lint + 変更テスト"] --> pp["pre-push<br/>check:static"]
+    pc["pre-commit<br/>lint + 変更テスト + CLAUDE.md の件数同期"] --> pp["pre-push<br/>check:static"]
   end
   subgraph ci["CI"]
     chk["check（型 / lint / テスト / 静的検査）"]

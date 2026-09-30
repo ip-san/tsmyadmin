@@ -1,3 +1,14 @@
+/**
+ * What the screens know about the server, in two shapes:
+ *
+ * - `*Query` (`queryOptions`): a read. They are definitions, not hooks, so `useQuery`, a prefetch and an
+ *   invalidation all take the same object. A query key starts with a root name (`'session'`, `'servers'`, …) and a
+ *   write refreshes queries by that root; `isDatabaseData` is the one shared rule about which roots a write leaves alone.
+ * - `mutations`: a write, as a plain async function. The caller decides what to refetch afterwards.
+ *
+ * Every call goes through `api` (`hc<AppType>`) and `unwrap`, so the types come from the API's routes and the shared
+ * Zod schemas rather than being written twice.
+ */
 import { type QueryClient, queryOptions } from '@tanstack/react-query'
 import type {
   AccountSecondFactors,
