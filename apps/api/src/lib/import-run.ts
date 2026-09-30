@@ -6,20 +6,13 @@ import iconv from 'iconv-lite'
 import { apiError, toApiError } from './errors.ts'
 import { csvSource, decodeUpload, ImportValidationError, importRows, importSql, type RowsSource } from './import.ts'
 import { pickSheet, type ReadOptions, RowsParseError, readOds, readWikiTables, readXmlTables } from './import-rows.ts'
+import { ndjsonResponse } from './ndjson.ts'
 import { MAX_UNPACKED, readZip, UnpackLimitError } from './zip.ts'
 
 /**
  * From the bytes a browser sent to a run: compressed files opened, text decoded in the character set chosen,
  * a spreadsheet / XML / wiki file turned into rows, and the run streamed back as NDJSON.
  */
-
-const HEARTBEAT_MS = 15_000
-/** NDJSON responses: progress lines must reach the browser as they are written, not when a proxy buffer fills. */
-const NDJSON_HEADERS = {
-  'content-type': 'application/x-ndjson; charset=utf-8',
-  'cache-control': 'no-store',
-  'x-accel-buffering': 'no',
-}
 
 export const validationError = (err: ImportValidationError): ApiError => ({
   ...apiError('VALIDATION', err.message),
@@ -186,38 +179,19 @@ export function importResponse(
 ): Response {
   // A client that goes away cancels the statement instead of leaving it to run on an abandoned connection.
   const queryId = form.queryId ?? crypto.randomUUID()
-  const encoder = new TextEncoder()
-  let closed = false
-  const stream = new ReadableStream<Uint8Array>({
-    async start(controller) {
-      const send = (event: ImportEvent) => {
-        if (!closed) controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`))
-      }
-      const heartbeat = setInterval(() => {
-        if (!closed) controller.enqueue(encoder.encode('\n'))
-      }, HEARTBEAT_MS)
-      try {
-        const result = await prepared.run(adapter, namespace, queryId, (done, total) =>
-          send({ type: 'progress', done, total })
-        )
-        send({ type: 'result', result })
-      } catch (err) {
-        send({
-          type: 'fatal',
-          error: err instanceof ImportValidationError ? validationError(err) : toApiError(err).body,
-        })
-      } finally {
-        clearInterval(heartbeat)
-        if (!closed) {
-          closed = true
-          controller.close()
-        }
-      }
+  return ndjsonResponse<ImportEvent>(c, {
+    run: async (send) => {
+      const result = await prepared.run(adapter, namespace, queryId, (done, total) => {
+        void send({ type: 'progress', done, total })
+      })
+      await send({ type: 'result', result })
     },
-    async cancel() {
-      closed = true
+    fatal: (err) => ({
+      type: 'fatal',
+      error: err instanceof ImportValidationError ? validationError(err) : toApiError(err).body,
+    }),
+    onCancel: async () => {
       await adapter.cancelQuery(queryId)
     },
   })
-  return c.body(stream, 200, NDJSON_HEADERS)
 }
