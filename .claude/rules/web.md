@@ -9,7 +9,7 @@ paths:
 
 | 場所 | 置くもの |
 |------|----------|
-| `routes/` | URL・パラメータ・検索クエリの受け渡しだけ。画面の実体は `features/` を呼ぶ薄い受け口（目安 100 行以下）。`routeTree.gen.ts` は生成物なので手で触らない |
+| `routes/` | URL・パラメータ・検索クエリの受け渡しだけ。画面の実体は `features/` を呼ぶ薄い受け口（目安 100 行以下）。別々の feature の部品を 1 つの画面に並べるのもここ（`children` などで渡す。例: `routes/_app/index.tsx`）。`routeTree.gen.ts` は生成物なので手で触らない |
 | `features/<領域>/` | 1 つの領域の画面・フック・純粋関数。**features 同士は import しない**（共有は `components/` と `lib/`。`check:arch` が fail する） |
 | `components/` | 複数の feature で使う UI（`ddl/PreviewDialog`、`cells/`、`ui/` など） |
 | `lib/` | UI を持たない共有部品（API クライアント `api.ts`、クエリ定義 `queries.ts`、`preview-flow.ts` など） |

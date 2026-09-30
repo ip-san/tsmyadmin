@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link, useRouteContext } from '@tanstack/react-router'
-import { useState } from 'react'
+import { type ReactNode, useState } from 'react'
 import { z } from 'zod'
 import { DdlPreviewDialog } from '@/components/ddl/DdlPreviewDialog.tsx'
 import { ServerTabs } from '@/components/layout/ServerTabs.tsx'
@@ -14,14 +14,16 @@ import { CreateDatabaseForm } from '@/features/database/CreateDatabaseForm.tsx'
 import { DropDatabaseButton } from '@/features/database/DropDatabaseButton.tsx'
 import { type DatabaseColumn, sortDatabases } from '@/features/database/sort-databases.ts'
 import { isProtectedDatabase } from '@/features/database/system-databases.ts'
-import { ServerInfoCard } from '@/features/server/ServerInfoCard.tsx'
 import { useDdlFlow } from '@/lib/ddl.ts'
 import { dbHomeTo } from '@/lib/default-tabs.ts'
 import { readPreference, writePreference } from '@/lib/preferences.ts'
 import { databaseListQuery } from '@/lib/queries.ts'
 
-/** The server home: its databases with sizes, bulk drop, and the create form. */
-export function DatabaseListPage() {
+/**
+ * The server home: its databases with sizes, bulk drop, and the create form. `children` show above the list: the
+ * route puts the server's info card there, since a feature does not import another feature.
+ */
+export function DatabaseListPage({ children }: { children?: ReactNode }) {
   const { session } = useRouteContext({ from: '/_app' })
   // Counting sizes reads the whole catalog: a server with very many tables can turn it off (kept in this browser).
   const [counted, setCounted] = useState(() => readPreference('databaseStats', z.boolean(), true))
@@ -38,7 +40,7 @@ export function DatabaseListPage() {
     <>
       <ServerTabs tab={locale.tabs.databases} />
       <DdlPreviewDialog flow={dropFlow} bulkConfirmName={session.host} />
-      <ServerInfoCard />
+      {children}
       <div className="mb-2 flex items-center justify-between gap-2">
         <h2 className="text-sm font-semibold text-ink">{locale.server.databasesTitle}</h2>
         <label className="flex items-center gap-1 text-xs text-ink-sub" data-print-hide>
