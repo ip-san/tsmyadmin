@@ -81,7 +81,7 @@ flowchart TD
 
 **なぜ ORM を使わないか** — 接続先のスキーマが分かるのは実行時です（利用者が任意のデータベースを開く）。コンパイル時にスキーマを固定する ORM（Prisma など）は前提が合いません。必要なのは方言ごとの SQL 生成・カタログ問い合わせ・値のワイヤー変換だけで、それをドライバー（`mysql2` / `pg`）の上に薄く置いたのが `packages/adapter` です。
 
-方言差を 1 か所に閉じ込めるのがこの層の目的です。`base.ts` は方言非依存のロジック（キーセット走査、行キー解決、実行と結果整形、キャンセル管理）を持ち、方言固有の SQL は `mysql/` と `postgres/` にだけ置きます。
+方言差を 1 か所に閉じ込めるのがこの層の目的です。`base.ts` は方言非依存のロジック（行キーの解決、閲覧と行の更新、接続の借用）を持ち、SQL コンソールの実行とキャンセルは `sql-console.ts` の `ScriptRunner` が、方言のドライバが満たす契約（`Conn` など）は `driver.ts` が担います。方言固有の SQL は `mysql/` と `postgres/` にだけ置きます。
 
 ```mermaid
 classDiagram
@@ -104,7 +104,7 @@ classDiagram
     +resolveRowKey(schema)
     +executeSql(ns, sql, opts)
   }
-  note for BaseAdapter "方言に依らない部分だけ: 文の分割と逐次実行、キャンセル管理、行キーの決定。表の全件走査（iterateRows）は方言ごとに実装する（MySQL はキーセット、PostgreSQL はカーソル）"
+  note for BaseAdapter "方言に依らない部分だけ: 行キーの決定、閲覧と行の更新、接続の借用。SQL コンソールの実行とキャンセルは ScriptRunner（sql-console.ts）に任せ、表の全件走査（iterateRows）は方言ごとに実装する（MySQL はキーセット、PostgreSQL はカーソル）"
   class MysqlAdapter
   class PostgresAdapter
   DatabaseAdapter <|.. BaseAdapter

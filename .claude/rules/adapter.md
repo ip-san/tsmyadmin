@@ -46,7 +46,7 @@ MySQL の DELIMITER 切り替え（`packages/shared/src/sql-script.ts`）で本�
 
 ## 接続の返却
 
-`executeSql` はユーザー SQL の後に `finally` で `ROLLBACK` → `Conn.reset()`（MySQL: `COM_RESET_CONNECTION` + `SET NAMES utf8mb4`、PostgreSQL: `DISCARD ALL`）を必ず行う。ただしキャンセルされた実行だけは例外で、`reset()` せず `discard()` して接続を捨てる（飛んでいる KILL / cancel シグナルが次の借り手に当たらないようにするため）。セッション変数・ロール・ユーザー変数・一時テーブルがプールの次の借り手に漏れてはならない（conformance の「does not leak session state」が検証）。
+`executeSql`（実体は `sql-console.ts` の `ScriptRunner.execute`）はユーザー SQL の後に `finally` で `ROLLBACK` → `Conn.reset()`（MySQL: `COM_RESET_CONNECTION` + `SET NAMES utf8mb4`、PostgreSQL: `DISCARD ALL`）を必ず行う。ただしキャンセルされた実行だけは例外で、`reset()` せず `discard()` して接続を捨てる（飛んでいる KILL / cancel シグナルが次の借り手に当たらないようにするため）。セッション変数・ロール・ユーザー変数・一時テーブルがプールの次の借り手に漏れてはならない（conformance の「does not leak session state」が検証）。
 
 `base.ts` は接続ごとに statement timeout をキャッシュし（`appliedTimeout`、`Conn.id` がキー）、方言は現在の DB / `search_path` をキャッシュする（`Conn.forget()` で破棄）。方言実装の契約: `id` はチェックアウト間で安定していること（mysql2 の promise ラッパーは毎回新しいオブジェクトなので、MySQL は `conn.connection`（コア接続）をキーにする）、`reset()` は失敗時に接続を破棄対象にすること、ユーザー SQL の前に `forgetSessionState` が呼ばれることを前提にキャッシュを持つこと。
 

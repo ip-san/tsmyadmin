@@ -1,4 +1,4 @@
-<!-- translated-from: docs/architecture.md sha256:94781a2c6308ad7e46151a2d44c6c4f8126c678bcca7eff6ccc041c956baf6f4 -->
+<!-- translated-from: docs/architecture.md sha256:eea42f085b59d107ef18321a4d8c38e50604943737f393b918f8f2f6fe954d7b -->
 
 # Architecture
 
@@ -83,7 +83,7 @@ Terms: **`hc<AppType>`** is Hono's RPC client (`hc` from `hono/client`), where `
 
 **Why there is no ORM** — the target's schema is known only at run time, because the user opens whatever database they like. An ORM that fixes the schema at compile time (Prisma and its kind) does not match that premise. What is actually needed is per-dialect SQL generation, catalog queries and wire conversion of values, and `packages/adapter` is exactly that, laid thinly over the drivers (`mysql2`, `pg`).
 
-The point of this layer is to confine the dialect differences to one place. `base.ts` holds the dialect-independent logic (keyset scanning, resolving a row key, running statements and shaping results, managing cancellation), and dialect-specific SQL lives only in `mysql/` and `postgres/`.
+The point of this layer is to confine the dialect differences to one place. `base.ts` holds the dialect-independent logic (resolving a row key, browsing and updating rows, borrowing a connection); running a script in the SQL console and cancelling it is `ScriptRunner` in `sql-console.ts`, and the contract a dialect's driver keeps (`Conn` and the like) is in `driver.ts`. Dialect-specific SQL lives only in `mysql/` and `postgres/`.
 
 ```mermaid
 classDiagram
@@ -106,7 +106,7 @@ classDiagram
     +resolveRowKey(schema)
     +executeSql(ns, sql, opts)
   }
-  note for BaseAdapter "Only the dialect-independent part: splitting and running statements one by one, cancellation, deciding the row key. The full-table scan (iterateRows) is implemented per dialect (MySQL: keyset paging, PostgreSQL: a cursor)"
+  note for BaseAdapter "Only the dialect-independent part: deciding the row key, browsing and updating rows, borrowing a connection. Running and cancelling console scripts is left to ScriptRunner (sql-console.ts), and the full-table scan (iterateRows) is implemented per dialect (MySQL: keyset paging, PostgreSQL: a cursor)"
   class MysqlAdapter
   class PostgresAdapter
   DatabaseAdapter <|.. BaseAdapter
