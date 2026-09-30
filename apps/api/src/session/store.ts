@@ -75,10 +75,6 @@ export interface SavedItems {
   remove(config: Config, kind: SavedItemKind, id: string): Promise<SavedItem[]>
 }
 
-/**
- * The second factor of one database account: the TOTP secret, the last step accepted for it (so a code cannot be
- * used twice), and the hashes of the recovery codes that are still unused.
- */
 /** A passkey registered as a second factor (WebAuthn), in the form the verifier needs it back. */
 export interface StoredPasskey {
   /** Credential ID, base64url. */
@@ -92,6 +88,10 @@ export interface StoredPasskey {
   at: number
 }
 
+/**
+ * The second factor of one database account: the TOTP secret, the last step accepted for it (so a code cannot be
+ * used twice), and the hashes of the recovery codes that are still unused.
+ */
 export interface SecondFactor {
   /** TOTP secret, when an authenticator app is enrolled. */
   secret?: string
@@ -142,9 +142,9 @@ export type AdapterFactory = (config: ConnectRequest) => DatabaseAdapter
  * both on login and when resuming a session after a restart.
  */
 export interface SessionStore {
-  /** Builds the adapter, verifies the connection (ping) and persists the session. Throws when the DB rejects. */
   /**
-   * Opens a session. `keepOthers` holds back the per-account limit for this one login: a second factor is
+   * Opens a session: builds the adapter, verifies the connection (ping) and persists it; throws when the DB rejects.
+   * `keepOthers` holds back the per-account limit for this one login: a second factor is
    * checked after the password, and a login about to be refused for a wrong code must not close the sessions
    * the account is already using. `enforceLimit` applies it once the login is accepted.
    */
@@ -159,10 +159,9 @@ export interface SessionStore {
   /** Closes every adapter (shutdown / tests). */
   closeAll(): Promise<void>
   /**
-   * Bookmarked statements, when the deployment has somewhere to keep them. Absent for the in-memory store,
-   * where they would vanish on restart — the browser keeps its own list in that case.
+   * Named items (bookmarks, export templates), when the deployment has somewhere to keep them. Absent for the
+   * in-memory store, where they would vanish on restart — the browser keeps its own list in that case.
    */
-  /** Named items (bookmarks, export templates); absent where the store cannot keep them past a restart. */
   readonly savedQueries?: SavedItems
   /**
    * Items shared by every account of one server (tracking, user groups): the same rows and sealing as

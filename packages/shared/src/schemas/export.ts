@@ -243,7 +243,6 @@ export const ServerExportQuerySchema = ExportQuerySchema.omit({ schema: true, ta
 })
 export type ServerExportQuery = z.infer<typeof ServerExportQuerySchema>
 
-/** NULL marker used in CSV exports (phpMyAdmin default). */
 /** Query-string form of a table list: names percent-encoded so `,` (and leading spaces) survive; deduplicated. */
 export function encodeTableList(tables: string[]): string {
   return [...new Set(tables)].map((t) => encodeURIComponent(t)).join(',')
@@ -264,5 +263,6 @@ export function decodeTableList(text: string | undefined): string[] {
   return out
 }
 
+/** NULL marker used in CSV exports (phpMyAdmin default). */
 export const CSV_NULL = '\\N'
 export const EXPORT_BATCH_SIZE = 500

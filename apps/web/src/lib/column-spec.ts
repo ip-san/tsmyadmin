@@ -222,7 +222,6 @@ export function toColumnSpec(v: ColumnFormValues): ColumnSpec {
   }
 }
 
-/** Prefills the form from catalog metadata. Existing defaults are kept as raw expressions so they round-trip. */
 /** A central column as the starting values of a new column. */
 export function fromCentralColumn(c: CentralColumnBody): ColumnFormValues {
   return {
@@ -236,6 +235,7 @@ export function fromCentralColumn(c: CentralColumnBody): ColumnFormValues {
   }
 }
 
+/** Prefills the form from catalog metadata. Existing defaults are kept as raw expressions so they round-trip. */
 export function fromColumnDef(c: ColumnDef, dialect: Dialect): ColumnFormValues {
   const auto = c.extra.includes('auto_increment') || c.extra.includes('identity') || c.extra === 'serial'
   let defaultKind: DefaultKind = 'none'

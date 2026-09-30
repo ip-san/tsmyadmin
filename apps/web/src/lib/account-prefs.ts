@@ -45,17 +45,17 @@ let dirty: Preferences = {}
 let dirtyKeys: { set: Record<string, unknown>; remove: string[] } = { set: {}, remove: [] }
 let pending: ReturnType<typeof setTimeout> | null = null
 
-/**
- * Reads the account's preferences once per login and applies them here. Returns whether the language changed —
- * the caller reloads, because every string is read once at load. Nothing happens for a deployment that keeps
- * preferences in the browser only.
- */
 /** Drops a change still waiting to be sent: it belongs to the account that made it, not to the next one. */
 function cancelPending(): void {
   if (pending !== null) clearTimeout(pending)
   pending = null
 }
 
+/**
+ * Reads the account's preferences once per login and applies them here. Returns whether the language changed —
+ * the caller reloads, because every string is read once at load. Nothing happens for a deployment that keeps
+ * preferences in the browser only.
+ */
 export async function loadAccountPreferences(identity: string, onServer: boolean): Promise<{ reload: boolean }> {
   if (loadedFor !== identity) {
     // Another account in this tab (a session that expired, then someone else signing in): nothing of the last

@@ -2531,7 +2531,6 @@ export const en = {
     definition: 'Definition',
     none: 'No triggers',
   },
-  /** Prefixes: a server-side detail (DB message, validation issue) may follow after ": ", so no trailing period. */
   /** Server-named reasons of a VALIDATION error, rendered with their parameters. */
   reasons: {
     INVALID_ENCODING: (p: Record<string, string | number>) =>
@@ -2576,6 +2575,7 @@ export const en = {
     CREATE_INVALID_NAME: (p: Record<string, string | number>) =>
       `The table ${p.name ?? ''} could not be created (the table name or a column name in the file may not be usable): ${p.message ?? ''}`,
   } satisfies Record<ImportReason, (p: Record<string, string | number>) => string>,
+  /** Prefixes: a server-side detail (DB message, validation issue) may follow after ": ", so no trailing period. */
   errors: {
     UNAUTHENTICATED: 'Your session has ended. Connect again',
     VALIDATION: 'Some of the input is not valid',

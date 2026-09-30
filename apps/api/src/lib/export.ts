@@ -93,11 +93,6 @@ async function* jsonBody(
   yield '\n}\n'
 }
 
-/**
- * Stored routines, triggers and events. With `tables` given (a table-level export) only the triggers of those
- * tables are included; a whole-database dump carries everything. Statement text comes from the adapter's
- * exporter (the server's own CREATE definitions).
- */
 /** `CREATE TABLE` / `CREATE SEQUENCE` made `IF NOT EXISTS`: a dump restored over what is there leaves it alone. */
 function ifNotExists(statement: string): string {
   return statement.replace(
@@ -191,6 +186,11 @@ async function collectRoutines(
   return out
 }
 
+/**
+ * Stored routines, triggers and events. With `tables` given (a table-level export) only the triggers of those
+ * tables are included; a whole-database dump carries everything. Statement text comes from the adapter's
+ * exporter (the server's own CREATE definitions).
+ */
 function routinesBody(adapter: DatabaseAdapter, routines: Routines, heading: Heading): string {
   const parts: string[] = []
   if (routines.early.length > 0 || routines.skipped.length > 0) parts.push(heading('Routines'))

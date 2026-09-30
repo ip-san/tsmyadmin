@@ -2503,7 +2503,6 @@ export const ja = {
     definition: '定義',
     none: 'トリガーはありません',
   },
-  /** Prefixes: a server-side detail (DB message, validation issue) may follow after 「: 」, so no trailing 。. */
   /** Server-named reasons of a VALIDATION error, rendered with their parameters. */
   reasons: {
     INVALID_ENCODING: (p: Record<string, string | number>) =>
@@ -2548,6 +2547,7 @@ export const ja = {
     CREATE_INVALID_NAME: (p: Record<string, string | number>) =>
       `テーブル ${p.name ?? ''} を作れませんでした（テーブル名またはファイルのカラム名が使えない可能性があります）: ${p.message ?? ''}`,
   } satisfies Record<ImportReason, (p: Record<string, string | number>) => string>,
+  /** Prefixes: a server-side detail (DB message, validation issue) may follow after 「: 」, so no trailing 。. */
   errors: {
     UNAUTHENTICATED: '接続が切れています。もう一度接続してください',
     VALIDATION: '入力内容に誤りがあります',

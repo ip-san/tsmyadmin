@@ -451,11 +451,6 @@ class RedisSavedQueries implements SavedItems {
   }
 }
 
-/**
- * The second factor of a database account, one key per account. Kept apart from the saved items for the same
- * reason the file store keeps it in its own table: those are capped and pruned, and this must not be.
- */
-/** Writes the value only when what is stored still hashes to the version the caller read. */
 const LOCK_MS = 5000
 const LOCK_WAIT_MS = 15
 const LOCK_TRIES = 400
@@ -465,6 +460,7 @@ const RELEASE_LOCK = `
   return 0
 `
 
+/** Writes the value only when what is stored still hashes to the version the caller read. */
 const SET_IF_UNCHANGED = `
 local current = redis.call('GET', KEYS[1])
 if not current then return 0 end
@@ -481,6 +477,10 @@ redis.call('DEL', KEYS[1])
 return 1
 `
 
+/**
+ * The second factor of a database account, one key per account. Kept apart from the saved items for the same
+ * reason the file store keeps it in its own table: those are capped and pruned, and this must not be.
+ */
 class RedisSecondFactors implements SecondFactors {
   constructor(
     private readonly redis: Redis,

@@ -32,7 +32,6 @@ export class ApiError extends Error {
   }
 }
 
-/** Unwraps a Hono RPC response: typed JSON on success, ApiError otherwise. */
 /**
  * hc splices path params in verbatim, so names with `/`, `?`, `#` or `%` (legal in both dialects) must be
  * percent-encoded here; Hono decodes `c.req.param()` on the way in.
@@ -46,6 +45,7 @@ export const noteServerContact = () => {
   lastContact = Date.now()
 }
 
+/** Unwraps a Hono RPC response: typed JSON on success, ApiError otherwise. */
 export async function unwrap<T>(
   pending: Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>
 ): Promise<T> {
