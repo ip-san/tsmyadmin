@@ -1,5 +1,5 @@
 import type { ColumnSpec, DdlOp, Namespace, TableSchema } from '@tsmyadmin/shared'
-import { type Conn, firstResult } from '../base.ts'
+import { type Conn, firstResult } from '../driver.ts'
 import {
   addForeignKeySql,
   columnKeySql,

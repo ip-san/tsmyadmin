@@ -2,7 +2,6 @@ import type {
   BrowseOptions,
   BrowseResult,
   Cell,
-  ColumnMeta,
   DatabaseGrant,
   DatabaseInfo,
   DiagnosticKind,
@@ -56,9 +55,9 @@ import {
   isViewKind,
   LIST_OPS,
   MAX_BINARY_BYTES,
-  MAX_TEXT_CHARS,
 } from '@tsmyadmin/shared'
-import { bufferToCell, type QueryOptions, toDbValue, UNCAPPED } from './sql/cells.ts'
+import { type Canceller, type Conn, firstResult, type RawResult } from './driver.ts'
+import { bufferToCell, DISPLAY, toDbValue, UNCAPPED } from './sql/cells.ts'
 import { joinPlan } from './sql/join-plan.ts'
 import { mysqlLiteral, pgLiteral } from './sql/literal.ts'
 import { Params, quoteIdent, quoteTable } from './sql/quote.ts'
@@ -76,51 +75,6 @@ import {
   type SqlExporter,
   type UserSqlBuilder,
 } from './types.ts'
-
-/** Normalised driver result: rows already converted to wire Cells. */
-export interface RawResult {
-  columns: ColumnMeta[]
-  rows: Cell[][]
-  affectedRows: number
-  /** True when the statement produced a result set (even an empty one). */
-  hasRows: boolean
-  /** NOTICE / WARNING lines the server raised while running it (PostgreSQL). */
-  notices?: string[]
-}
-
-/** Rows rendered on a page: a multi-megabyte TEXT / JSON cell travels as its head plus its length. */
-const DISPLAY: QueryOptions = { textLimit: MAX_TEXT_CHARS }
-
-/** A connection checked out of a pool and bound to a namespace. */
-export interface Conn {
-  query(text: string, params?: unknown[], options?: QueryOptions): Promise<RawResult | RawResult[]>
-  release(): void
-  /** Identity of the underlying pooled driver connection (stable across checkouts); used to cache session state. */
-  readonly id: object
-  /**
-   * Restores the server-side session to its defaults (variables, roles, user variables, temp tables) so state
-   * set by user SQL cannot leak to the next borrower. Implementations that cannot reset must discard the connection.
-   */
-  reset(): Promise<void>
-  /** Drops any per-connection cache the dialect keeps (current database / search_path) so the next acquire re-applies it. */
-  forget(): void
-  /** Marks the connection as not reusable: release() closes it instead of returning it to the pool. */
-  discard(): void
-  /**
-   * Whether the server considers a transaction to still be open on this connection. Only the server knows:
-   * MySQL's implicit commits depend on the statement AND on how far it got (a DDL the parser rejected never
-   * committed), which no amount of reading the script can reproduce.
-   */
-  inTransaction?(): Promise<boolean>
-  /** PostgreSQL `COPY … FROM stdin` with the block's data (pg_dump's default format); absent on other dialects. */
-  copyFrom?(sql: string, data: string): Promise<number>
-  /**
-   * Runs one SELECT and hands its rows over in batches as the driver reads them, so a full scan never holds the
-   * whole result set (MySQL; PostgreSQL pages with a cursor instead). Every batch carries the column list; the
-   * last one may be empty. Abandoning the iteration early discards the connection.
-   */
-  stream?(sql: string, params: unknown[], batchSize: number, options?: QueryOptions): AsyncIterable<RawResult>
-}
 
 /** psql meta-command line (`\connect`, `\copy`, `\.`) that reached the server-side splitter. */
 const META_COMMAND = /^\\/
@@ -148,12 +102,6 @@ interface RunningEntry {
   inFlight: boolean
   /** The cancel in progress, shared by concurrent cancel requests for the same run. */
   cancelling: Promise<boolean> | null
-}
-
-/** One dedicated connection that sends cancel signals for a run (KILL QUERY / pg_cancel_backend). */
-export interface Canceller {
-  cancel(backendId: string): Promise<void>
-  close(): Promise<void>
 }
 
 const CANCEL_RETRY_MS = 50
@@ -220,15 +168,6 @@ function bitLiteral(value: InputCell): string {
 /** Exact COUNT(*) unless the catalog says the table is large (callers pass null when the browse is filtered). */
 export function countMode(estimate: number | null, threshold = EXACT_COUNT_MAX_ROWS): 'exact' | 'estimate' {
   return estimate !== null && estimate > threshold ? 'estimate' : 'exact'
-}
-
-export function firstResult(r: RawResult | RawResult[]): RawResult {
-  if (Array.isArray(r)) {
-    const first = r[0]
-    if (!first) return { columns: [], rows: [], affectedRows: 0, hasRows: false }
-    return first
-  }
-  return r
 }
 
 /** MySQL's error number for a duplicate key. */

@@ -10,7 +10,7 @@ import type {
   TableSchema,
   TableStats,
 } from '@tsmyadmin/shared'
-import { type Conn, firstResult } from '../base.ts'
+import { type Conn, firstResult } from '../driver.ts'
 import { str, strOrNull } from '../sql/format.ts'
 import { COLUMN_HAS_SERIAL_SEQUENCE, SEQUENCE_BEHIND_COLUMN } from '../sql/pg-sequence.ts'
 import { quoteTable } from '../sql/quote.ts'

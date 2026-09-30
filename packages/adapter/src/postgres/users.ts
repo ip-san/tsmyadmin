@@ -1,6 +1,6 @@
 import type { Namespace, UserInfo, UserOp, UserRef } from '@tsmyadmin/shared'
 import { PASSWORD_MASK } from '@tsmyadmin/shared'
-import { type Conn, firstResult } from '../base.ts'
+import { type Conn, firstResult } from '../driver.ts'
 import { pgLiteral } from '../sql/literal.ts'
 import { privilegeList } from '../sql/privileges.ts'
 import { quoteIdent } from '../sql/quote.ts'

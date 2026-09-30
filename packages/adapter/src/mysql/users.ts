@@ -1,6 +1,6 @@
 import type { Namespace, UserInfo, UserOp, UserRef } from '@tsmyadmin/shared'
 import { PASSWORD_MASK, SYSTEM_DATABASES } from '@tsmyadmin/shared'
-import { type Conn, firstResult } from '../base.ts'
+import { type Conn, firstResult } from '../driver.ts'
 import { mysqlLiteral } from '../sql/literal.ts'
 import { privilegeList } from '../sql/privileges.ts'
 import { quoteIdent } from '../sql/quote.ts'

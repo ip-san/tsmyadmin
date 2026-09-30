@@ -1,6 +1,6 @@
 /** Conversion between driver values and the wire `Cell`, and how much of a large value a read keeps. */
 import type { Cell } from '@tsmyadmin/shared'
-import { isBinaryCell, isTruncatedCell, MAX_BINARY_BYTES } from '@tsmyadmin/shared'
+import { isBinaryCell, isTruncatedCell, MAX_BINARY_BYTES, MAX_TEXT_CHARS } from '@tsmyadmin/shared'
 import { AdapterError } from '../types.ts'
 
 /** Per-query options handed to the driver layer. */
@@ -17,6 +17,8 @@ export interface QueryOptions {
 
 /** Export reads: whole values, whatever their size. */
 export const UNCAPPED: QueryOptions = { binaryLimit: Number.POSITIVE_INFINITY, textLimit: Number.POSITIVE_INFINITY }
+/** Rows rendered on a page: a multi-megabyte TEXT / JSON cell travels as its head plus its length. */
+export const DISPLAY: QueryOptions = { textLimit: MAX_TEXT_CHARS }
 
 /** Converts a wire Cell into a driver parameter. */
 export function toDbValue(cell: Cell): unknown {
