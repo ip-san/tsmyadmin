@@ -13,7 +13,7 @@
 | 1 | `packages/adapter/src/types.ts` | `DatabaseAdapter` は MySQL と PostgreSQL が同じに守る契約。`browseRows` を探す。メソッドを足したときの決まりは `ADAPTER_METHOD_NAMES` と conformance テストが守る |
 | 2 | `packages/shared/src/schemas/browse.ts` | 閲覧のリクエストとレスポンスの形（Zod）。「行数の見積もりが 10 万行を超える表は `COUNT(*)` しない」など、なぜそうするかがコメントにある |
 | 3 | `apps/api/src/routes/databases.ts` | `GET /databases/:db/tables/:table/rows`。検証 → アダプターの呼び出し → JSON が 1 画面に収まる、薄いルートの見本 |
-| 4 | `apps/web/src/lib/queries.ts`（`rowsQuery`）と `apps/web/src/routes/_app/db.$db/table.$table/index.tsx` | `hc<AppType>` で型が付いた呼び出しと、それを表示するルート（実体は `features/browse`） |
+| 4 | `apps/web/src/lib/queries/tables.ts`（`rowsQuery`）と `apps/web/src/routes/_app/db.$db/table.$table/index.tsx` | `hc<AppType>` で型が付いた呼び出しと、それを表示するルート（実体は `features/browse`） |
 | 5 | `packages/adapter/src/test/conformance.ts`（`describe('browseRows')`） | 同じテストが MySQL と PostgreSQL の両方で走る。実行できる仕様書 |
 
 規約を機械で守らせる仕組みの作りを見るなら、`scripts/check-sql-safety.mjs` から（§8）。
@@ -348,7 +348,7 @@ flowchart LR
 2. `packages/adapter/src/{mysql,postgres}/server.ts` の `serverInfo()` が返す値に足す。戻り値の型は shared から来ているので、**片方だけだと typecheck が落ちます**
 3. `packages/adapter/src/test/conformance.ts` の `describe('serverInfo')` に両方言の検証を足し、`testing/fake-adapter.ts`（API テストが使うインメモリ実装）にも値を入れる
 4. `apps/api/src/routes/server.ts` は変更不要 — ルートはアダプターの戻り値をそのまま返し、**レスポンスを実行時に検証しません**。形を守るのは `apps/api/src/app.test.ts` の `ServerInfoSchema.parse(...)` です
-5. `apps/web`: `lib/queries.ts` が `unwrap<ServerInfo>` のように shared の型を明示しています（`hc` の型が効くのはパス・パラメータ・ボディまでで、レスポンスは `unwrap<T>` に渡した型になります）。表示側と `config/locales/{ja,en}.ts` のラベルを足す
+5. `apps/web`: `lib/queries/` の各ファイルが `unwrap<ServerInfo>` のように shared の型を明示しています（`hc` の型が効くのはパス・パラメータ・ボディまでで、レスポンスは `unwrap<T>` に渡した型になります）。表示側と `config/locales/{ja,en}.ts` のラベルを足す
 6. `bun run check` → `bun run db:up && bun run test:integration`
 
 詳細な手順とチェックリストは [CLAUDE.md](../CLAUDE.md)（Compact Instructions）と `.claude/rules/` にあります。

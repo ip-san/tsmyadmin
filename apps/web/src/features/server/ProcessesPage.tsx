@@ -31,7 +31,7 @@ export function ProcessesPage() {
     onSuccess: async (_r, { id, mode }) => {
       setNotice(mode === 'query' ? locale.server.cancelled(id) : locale.server.killed(id))
       setVictim(null)
-      await queryClient.invalidateQueries({ queryKey: ['server', 'processes'] })
+      await queryClient.invalidateQueries({ queryKey: processesQuery.queryKey })
     },
   })
   return (

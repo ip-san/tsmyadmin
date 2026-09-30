@@ -8,7 +8,7 @@ import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Field, Input } from '@/components/ui/Field.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
-import { mutations, userGroupsQuery, usersQuery } from '@/lib/queries.ts'
+import { mutations, myGroupTabsQuery, userGroupsQuery, usersQuery } from '@/lib/queries.ts'
 
 const t = locale.userGroups
 const LEVELS = Object.keys(GROUP_TABS) as GroupTabLevel[]
@@ -107,7 +107,7 @@ export function UserGroupsPage({ dialect }: { dialect: Dialect }) {
   const settle = (groups: UserGroup[]) => {
     queryClient.setQueryData(userGroupsQuery.queryKey, groups)
     // The signed-in account may be a member of what just changed.
-    void queryClient.invalidateQueries({ queryKey: ['user-groups', 'mine'] })
+    void queryClient.invalidateQueries({ queryKey: myGroupTabsQuery.queryKey })
     setEditing(null)
   }
   const save = useMutation({ mutationFn: mutations.saveUserGroup, onSuccess: settle })

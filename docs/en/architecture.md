@@ -1,4 +1,4 @@
-<!-- translated-from: docs/architecture.md sha256:62a02b76cc309d3c3b45b8899bd94ed87df20c20fddf166be79c1d4069048267 -->
+<!-- translated-from: docs/architecture.md sha256:94781a2c6308ad7e46151a2d44c6c4f8126c678bcca7eff6ccc041c956baf6f4 -->
 
 # Architecture
 
@@ -15,7 +15,7 @@ Before reading the whole document, follow one thread, "showing a table's rows", 
 | 1 | `packages/adapter/src/types.ts` | `DatabaseAdapter` is the contract MySQL and PostgreSQL keep in the same way. Find `browseRows`. The rule for adding a method is enforced by `ADAPTER_METHOD_NAMES` and the conformance tests |
 | 2 | `packages/shared/src/schemas/browse.ts` | The shape of a browse request and response (Zod). The comments say why, for example why a table estimated above 100,000 rows is not `COUNT(*)`ed |
 | 3 | `apps/api/src/routes/databases.ts` | `GET /databases/:db/tables/:table/rows`. Validate → call the adapter → JSON, all in one screenful: a model of a thin route |
-| 4 | `apps/web/src/lib/queries.ts` (`rowsQuery`) and `apps/web/src/routes/_app/db.$db/table.$table/index.tsx` | The call typed through `hc<AppType>`, and the route that shows it (the substance is in `features/browse`) |
+| 4 | `apps/web/src/lib/queries/tables.ts` (`rowsQuery`) and `apps/web/src/routes/_app/db.$db/table.$table/index.tsx` | The call typed through `hc<AppType>`, and the route that shows it (the substance is in `features/browse`) |
 | 5 | `packages/adapter/src/test/conformance.ts` (`describe('browseRows')`) | The same test runs on both MySQL and PostgreSQL: a specification you can run |
 
 To see how a convention is enforced by machine, start with `scripts/check-sql-safety.mjs` (§8).
@@ -350,7 +350,7 @@ Working through it once is the quickest way to see where the types flow. To add 
 2. Add the value to what `serverInfo()` returns in `packages/adapter/src/{mysql,postgres}/server.ts`. The return type comes from shared, so **doing only one of them fails the typecheck**
 3. Add assertions for both dialects to `describe('serverInfo')` in `packages/adapter/src/test/conformance.ts`, and give the value to `testing/fake-adapter.ts` (the in-memory implementation the API tests use)
 4. `apps/api/src/routes/server.ts` needs no change — the route returns what the adapter gave it and **does not validate the response at run time**. What holds the shape is `ServerInfoSchema.parse(...)` in `apps/api/src/app.test.ts`
-5. `apps/web`: `lib/queries.ts` names the shared type explicitly, as in `unwrap<ServerInfo>` (the `hc` types cover the path, the parameters and the body; the response is whatever type was passed to `unwrap<T>`). Add the display and the labels in `config/locales/{ja,en}.ts`
+5. `apps/web`: each file in `lib/queries/` names the shared type explicitly, as in `unwrap<ServerInfo>` (the `hc` types cover the path, the parameters and the body; the response is whatever type was passed to `unwrap<T>`). Add the display and the labels in `config/locales/{ja,en}.ts`
 6. `bun run check`, then `bun run db:up && bun run test:integration`
 
 The step-by-step rules and checklists are in [CLAUDE.md](../../CLAUDE.md) (Compact Instructions) and `.claude/rules/`, in Japanese.
