@@ -39,17 +39,8 @@ import mysql, {
   type PoolConnection,
   type ResultSetHeader,
 } from 'mysql2/promise'
-import {
-  BaseAdapter,
-  type Canceller,
-  type Conn,
-  driverValueToCell,
-  firstResult,
-  type QueryOptions,
-  type RawResult,
-  toDbValue,
-  UNCAPPED,
-} from '../base.ts'
+import { BaseAdapter, type Canceller, type Conn, firstResult, type RawResult } from '../base.ts'
+import { driverValueToCell, type QueryOptions, toDbValue, UNCAPPED } from '../sql/cells.ts'
 import { Params, quoteIdent, quoteTable } from '../sql/quote.ts'
 import { AdapterError, type AdapterErrorCode, type ConnectionConfig, type RowBatch } from '../types.ts'
 import { mysqlDdl } from './ddl.ts'

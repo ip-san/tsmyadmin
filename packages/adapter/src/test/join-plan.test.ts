@@ -1,6 +1,6 @@
 import type { Dialect, Namespace, TableSchema } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
-import { joinPlan } from '../base.ts'
+import { joinPlan } from '../sql/join-plan.ts'
 
 function table(name: string, parts: Partial<TableSchema> = {}): TableSchema {
   return {

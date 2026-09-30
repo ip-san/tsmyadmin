@@ -22,7 +22,6 @@ import type {
   ProcessInfo,
   ProfileStage,
   QueryBuilderCondition,
-  QueryBuilderJoin,
   QueryBuilderResult,
   QueryBuilderSpec,
   ReferenceCheck,
@@ -53,17 +52,19 @@ import {
   BROWSE_ALL_MAX,
   DISTINCT_VALUES_LIMIT,
   EXACT_COUNT_MAX_ROWS,
-  isBinaryCell,
   isFunctionCell,
-  isTruncatedCell,
   isViewKind,
   LIST_OPS,
   MAX_BINARY_BYTES,
   MAX_TEXT_CHARS,
 } from '@tsmyadmin/shared'
+import { bufferToCell, type QueryOptions, toDbValue, UNCAPPED } from './sql/cells.ts'
+import { joinPlan } from './sql/join-plan.ts'
 import { mysqlLiteral, pgLiteral } from './sql/literal.ts'
 import { Params, quoteIdent, quoteTable } from './sql/quote.ts'
+import { stripLiterals, WRAP_PREFIX, wrapReadOnly } from './sql/read-wrap.ts'
 import { rowFunctionSql } from './sql/row-functions.ts'
+import { escapeLike, isSearchableType } from './sql/search.ts'
 import { splitStatements, stripLeadingComments } from './sql/split.ts'
 import {
   AdapterError,
@@ -87,20 +88,6 @@ export interface RawResult {
   notices?: string[]
 }
 
-/** Per-query options handed to the driver layer. */
-export interface QueryOptions {
-  /** Bytes kept of each binary value (default MAX_BINARY_BYTES for display; Infinity for exports). */
-  binaryLimit?: number
-  /**
-   * Characters kept of each text value. Unlimited by default: catalog reads (a view definition, a routine body,
-   * SHOW CREATE TABLE) must arrive whole. Only the rows shown to the user (browse pages, console results) pass
-   * DISPLAY.
-   */
-  textLimit?: number
-}
-
-/** Export reads: whole values, whatever their size. */
-export const UNCAPPED: QueryOptions = { binaryLimit: Number.POSITIVE_INFINITY, textLimit: Number.POSITIVE_INFINITY }
 /** Rows rendered on a page: a multi-megabyte TEXT / JSON cell travels as its head plus its length. */
 const DISPLAY: QueryOptions = { textLimit: MAX_TEXT_CHARS }
 
@@ -174,86 +161,16 @@ const CANCEL_RETRIES = 40
 /** How long a cancel waits for the script loop to report what the signal did before answering "stopping". */
 const CANCEL_SETTLE_MS = 10_000
 
-const READ_START = /^\s*(?:\(|(?:SELECT|WITH|VALUES|TABLE)\b)/i
-const NOT_WRAPPABLE =
-  /\b(?:INTO|FOR\s+(?:UPDATE|SHARE|NO\s+KEY\s+UPDATE|KEY\s+SHARE)|LOCK\s+IN\s+SHARE\s+MODE|INSERT|UPDATE|DELETE|MERGE)\b/i
-/** Leading whitespace and comments (kept in Statement.sql so the user sees what ran, ignored for the wrap test). */
-
-/** String literals, quoted identifiers, dollar-quoted bodies and comments, replaced by a space (`'delete'` is data, not DML). */
-const LITERALS_AND_COMMENTS =
-  /\bE'(?:[^'\\]|\\.|'')*'|'(?:[^'\\]|\\.|'')*'|"(?:[^"]|"")*"|`(?:[^`]|``)*`|(\$[A-Za-z_][A-Za-z0-9_]*\$|\$\$)[\s\S]*?\1|--[^\n]*|#[^\n]*|\/\*[\s\S]*?\*\//g
-
-const LITERALS_AND_COMMENTS_STANDARD =
-  /\bE'(?:[^'\\]|\\.|'')*'|'(?:[^']|'')*'|"(?:[^"]|"")*"|(\$[A-Za-z_][A-Za-z0-9_]*\$|\$\$)[\s\S]*?\1|--[^\n]*|\/\*[\s\S]*?\*\//g
-
-/** Backslashes escape quotes in MySQL strings; in PostgreSQL only inside E'...' (standard_conforming_strings). */
-function stripLiterals(code: string, dialect: Dialect): string {
-  return code.replace(dialect === 'mysql' ? LITERALS_AND_COMMENTS : LITERALS_AND_COMMENTS_STANDARD, ' ')
-}
-
-const WRAP_PREFIX = 'SELECT * FROM (\n'
 const NO_CODES: ReadonlySet<string> = new Set()
 /** A statement's own LIMIT takes precedence over MySQL's sql_select_limit. */
 const HAS_LIMIT = /\bLIMIT\b/i
 const TOUCHES_CAP = /sql_select_limit/i
-
-/**
- * Subquery form of a plain read with a row cap, or null when the statement must run as written. The body is
- * placed on its own line so a trailing `--` comment cannot swallow the closing parenthesis; data-modifying
- * statements (also inside a WITH) are never wrapped.
- */
-export function wrapReadOnly(sql: string, limit: number, dialect: Dialect = 'postgres'): string | null {
-  const body = sql.trim().replace(/;+\s*$/, '')
-  const code = stripLeadingComments(body, dialect)
-  if (!READ_START.test(code) || NOT_WRAPPABLE.test(stripLiterals(code, dialect))) return null
-  return `${WRAP_PREFIX}${body}\n) AS _tsmyadmin LIMIT ${Math.max(1, Math.floor(limit))}`
-}
 
 const DEFAULT_TIMEOUT_MS = 30_000
 
 export { MAX_BINARY_BYTES }
 /** The largest single value readCell hands over (a download, held in memory while it is sent). */
 export const READ_CELL_MAX_BYTES = 64 * 1024 * 1024
-
-/** Converts a wire Cell into a driver parameter. */
-export function toDbValue(cell: Cell): unknown {
-  if (isBinaryCell(cell)) return Buffer.from(cell.$bin, 'base64')
-  // The schemas already reject it at the API; this guards adapter-internal callers (row keys built from a page).
-  if (isTruncatedCell(cell)) throw new AdapterError('VALIDATION', 'a truncated text value cannot be written back')
-  return cell
-}
-
-/** Binary cell for the wire, cut at `limit` bytes (display) or kept whole (`Infinity`, exports). */
-function bufferToCell(buf: Uint8Array, limit = MAX_BINARY_BYTES): Cell {
-  const slice = buf.byteLength > limit ? buf.subarray(0, limit) : buf
-  return { $bin: Buffer.from(slice).toString('base64') }
-}
-
-/**
- * Converts a driver value into a wire Cell (both drivers are configured to return BIGINT/DECIMAL/dates as
- * strings already; binaries arrive as Buffers, JSON as text or objects).
- */
-export function driverValueToCell(value: unknown, options: QueryOptions = {}): Cell {
-  if (value === null || value === undefined) return null
-  if (Buffer.isBuffer(value) || value instanceof Uint8Array) return bufferToCell(value, options.binaryLimit)
-  switch (typeof value) {
-    case 'string': {
-      const limit = options.textLimit ?? Number.POSITIVE_INFINITY
-      if (value.length <= limit) return value
-      // Cut between code points: a high surrogate at the edge would leave a lone half of a character.
-      const cut = value.charCodeAt(limit - 1)
-      const end = cut >= 0xd800 && cut <= 0xdbff ? limit - 1 : limit
-      return { $text: value.slice(0, end), length: value.length }
-    }
-    case 'number':
-    case 'boolean':
-      return value
-    case 'bigint':
-      return value.toString()
-    default:
-      return JSON.stringify(value)
-  }
-}
 
 /** Operators that match on the text form, where a BIT column is not written as its bytes. */
 const TEXT_OPS: ReadonlySet<Filter['op']> = new Set([
@@ -288,93 +205,6 @@ const FILTER_SQL: Record<Filter['op'], string> = {
   not_empty: '<>',
 }
 
-/**
- * Column types the database-wide search skips, per dialect, matched on the type name as the catalog prints it.
- *
- * MySQL: binary strings, BIT and the spatial types store bytes, so their text form is raw WKB or binary and a
- * match would be noise (CAST to CHAR accepts them; it just compares bytes). GEOMETRYCOLLECTION is printed as
- * `geomcollection` since 8.0; VECTOR is binary too.
- * PostgreSQL: bytea (and arrays of it), and PostGIS geometry / geography / raster, whose text form is hex EWKB —
- * a short term like "01" would match every row. The built-in bit, point, polygon and the like have a readable
- * `::text` form ("1010", "(1.5,2)") that is worth searching.
- */
-const UNSEARCHABLE_TYPE: Record<Dialect, RegExp> = {
-  mysql:
-    /^(tiny|medium|long)?blob\b|^(var)?binary\b|^bit\b|^vector\b|^(multi)?(point|linestring|polygon)\b|^geometry\b|^geometrycollection\b|^geomcollection\b/i,
-  // PostGIS types may be schema-qualified: format_type adds the schema when it is not on the search path, which
-  // is the usual case (PostGIS in public or its own schema, browsing another).
-  // The whole name has to be the type (optionally with a typmod and array brackets), so a readable type that only
-  // starts with one of these words, or sits in a schema named after one, is still searched.
-  postgres: /^bytea(?:\[\])*$|(?:^|\.)"?(?:geometry|geography|raster)"?(?:\(.*\))?(?:\[\])*$/i,
-}
-
-/** Whether the database-wide search looks at a column of this type (see UNSEARCHABLE_TYPE). */
-export function isSearchableType(dialect: Dialect, dataType: string): boolean {
-  return !UNSEARCHABLE_TYPE[dialect].test(dataType)
-}
-
-/**
- * LEFT JOINs that bring every table after the first into the query, each along a foreign key to a table already
- * joined (either direction). Keys into another database or schema do not count. A table no key reaches is
- * refused rather than cross-joined: a product of two tables is almost never what was meant, and the SQL tab is
- * there for queries that need it.
- */
-export function joinPlan(
-  d: Dialect,
-  ns: Namespace,
-  tables: string[],
-  schemas: Map<string, TableSchema>,
-  explicit: readonly QueryBuilderJoin[] = []
-): string[] {
-  const home = (other: Namespace) =>
-    other.database === ns.database && (d === 'mysql' || (other.schema ?? 'public') === (ns.schema ?? 'public'))
-  const col = (table: string, column: string) => `${quoteIdent(d, table)}.${quoteIdent(d, column)}`
-  // Every table is described, so their own foreign keys already hold every link between them.
-  const links = tables.flatMap((from) =>
-    (schemas.get(from)?.foreignKeys ?? [])
-      .filter((fk) => home(fk.refNamespace) && fk.refTable !== from)
-      .map((fk) => ({ from, to: fk.refTable, fk }))
-  )
-  const joined = new Set(tables.slice(0, 1))
-  const out: string[] = []
-  // Joins spelled out come first, in the order of the tables; each may use only tables already joined.
-  const has = (r: { table: string; column: string }) =>
-    schemas.get(r.table)?.columns.some((c) => c.name === r.column) === true
-  for (const table of tables.slice(1)) {
-    const j = explicit.find((x) => x.table === table)
-    if (!j) continue
-    for (const p of j.on) {
-      if (!has(p.from) || !has(p.to)) throw new AdapterError('NOT_FOUND', `Unknown column in the join of ${table}`)
-      const other = p.from.table === table ? p.to.table : p.from.table
-      if (!(p.from.table === table || p.to.table === table) || !(joined.has(other) || other === table))
-        throw new AdapterError('VALIDATION', `The join of ${table} must use ${table} and a table joined before it`)
-    }
-    const on = j.on.map((p) => `${col(p.from.table, p.from.column)} = ${col(p.to.table, p.to.column)}`).join(' AND ')
-    out.push(`${j.kind.toUpperCase()} JOIN ${quoteTable(d, ns, table)} ON ${on}`)
-    joined.add(table)
-  }
-  // Repeated passes in the order given, so a table reachable only through a later one still joins, and the same
-  // request always gives the same SQL.
-  for (let progress = true; progress; ) {
-    progress = false
-    for (const table of tables) {
-      if (joined.has(table)) continue
-      const link = links.find((l) => (l.from === table && joined.has(l.to)) || (l.to === table && joined.has(l.from)))
-      if (!link) continue
-      const on = link.fk.columns
-        .map((c, i) => `${col(link.to, link.fk.refColumns[i] ?? '')} = ${col(link.from, c)}`)
-        .join(' AND ')
-      out.push(`LEFT JOIN ${quoteTable(d, ns, table)} ON ${on}`)
-      joined.add(table)
-      progress = true
-    }
-  }
-  const unreached = tables.filter((t) => !joined.has(t))
-  if (unreached.length > 0)
-    throw new AdapterError('VALIDATION', `No foreign key connects ${unreached.join(', ')} to ${tables[0]}`)
-  return out
-}
-
 const BIT_MAX = 2n ** 64n - 1n
 
 /** A MySQL BIT value typed as a whole number, as the hex literal of its bytes (170 → X'AA'). */
@@ -385,14 +215,6 @@ function bitLiteral(value: InputCell): string {
     throw new AdapterError('VALIDATION', 'A BIT value must be a whole number from 0 to 18446744073709551615')
   const hex = BigInt(text).toString(16)
   return `X'${hex.length % 2 === 0 ? hex : `0${hex}`}'`
-}
-
-/**
- * Escapes LIKE metacharacters so a user string matches literally. `!` is the escape character (declared with
- * ESCAPE '!'): unlike a backslash it needs no dialect-specific string escaping of its own.
- */
-export function escapeLike(text: string): string {
-  return text.replaceAll('!', '!!').replaceAll('%', '!%').replaceAll('_', '!_')
 }
 
 /** Exact COUNT(*) unless the catalog says the table is large (callers pass null when the browse is filtered). */

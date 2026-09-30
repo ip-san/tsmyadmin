@@ -32,16 +32,8 @@ import type {
 import { isViewKind } from '@tsmyadmin/shared'
 import pg, { type FieldDef, type PoolClient, type QueryResult } from 'pg'
 import { from as copyFrom } from 'pg-copy-streams'
-import {
-  BaseAdapter,
-  type Canceller,
-  type Conn,
-  driverValueToCell,
-  firstResult,
-  type QueryOptions,
-  type RawResult,
-  UNCAPPED,
-} from '../base.ts'
+import { BaseAdapter, type Canceller, type Conn, firstResult, type RawResult } from '../base.ts'
+import { driverValueToCell, type QueryOptions, UNCAPPED } from '../sql/cells.ts'
 import { pgLiteral } from '../sql/literal.ts'
 import { quoteIdent, quoteTable } from '../sql/quote.ts'
 import { AdapterError, type AdapterErrorCode, type ConnectionConfig, type RowBatch } from '../types.ts'

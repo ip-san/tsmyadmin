@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { escapeLike, isSearchableType, wrapReadOnly } from '../base.ts'
+import { wrapReadOnly } from '../sql/read-wrap.ts'
+import { escapeLike, isSearchableType } from '../sql/search.ts'
 
 describe('wrapReadOnly', () => {
   it('wraps plain reads with a LIMIT and keeps the body verbatim', () => {
