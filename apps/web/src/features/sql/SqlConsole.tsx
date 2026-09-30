@@ -13,7 +13,7 @@ import { locale } from '@/config/locale.ts'
 import { ApiError } from '@/lib/api.ts'
 import { consoleDraftKey, takeConsoleAutorun } from '@/lib/console-draft.ts'
 import { readPreference } from '@/lib/preferences.ts'
-import { mutations } from '@/lib/queries.ts'
+import { invalidateDatabaseData, mutations } from '@/lib/queries.ts'
 import { bookmarkName } from '@/lib/saved-queries.ts'
 import { formatSql } from '@/lib/sql-format.ts'
 import { DEFAULT_RUN_OPTIONS, prepareScript, type RunOptions } from '@/lib/sql-prepare.ts'
@@ -139,7 +139,7 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
       const entry = { sql, at: Date.now(), ok: res.every((r) => r.kind !== 'error'), db }
       lists.record(entry)
       if (res.some((r) => r.kind !== 'rows')) {
-        await queryClient.invalidateQueries({ predicate: (q) => q.queryKey[0] !== 'session' })
+        await invalidateDatabaseData(queryClient)
       }
     },
   })
