@@ -10,19 +10,12 @@ import {
 import { type Context, Hono } from 'hono'
 import { apiError } from '../lib/errors.ts'
 import type { Logger } from '../lib/logging.ts'
+import { safeJson } from '../lib/saved-items.ts'
 import { setTrackedKinds, trackedKinds, trackedStatements } from '../lib/tracking-log.ts'
 import { validate } from '../lib/validate.ts'
 import { type AppEnv, requireSession, type SessionConfig } from '../session/middleware.ts'
 import type { SavedItem } from '../session/store.ts'
 import { sessionInfo } from '../session/store.ts'
-
-function safeJson(text: string): unknown {
-  try {
-    return JSON.parse(text)
-  } catch {
-    return null
-  }
-}
 
 const VersionBodySchema = TrackedVersionSchema.omit({ id: true, at: true })
 

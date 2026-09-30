@@ -8,6 +8,7 @@ import {
 import { type Context, Hono } from 'hono'
 import { z } from 'zod'
 import { apiError } from '../lib/errors.ts'
+import { safeJson } from '../lib/saved-items.ts'
 import { validate } from '../lib/validate.ts'
 import { type AppEnv, requireSession, type SessionConfig } from '../session/middleware.ts'
 import type { SavedItem, SavedItems } from '../session/store.ts'
@@ -16,14 +17,6 @@ const SharedBodySchema = z.object({ sql: z.string().min(1), by: z.string() })
 const HISTORY = 'history'
 /** Shared bookmarks one account may hold (the server's list is capped, and the oldest go when it is full). */
 const SHARED_PER_ACCOUNT = 100
-
-function safeJson(text: string): unknown {
-  try {
-    return JSON.parse(text)
-  } catch {
-    return null
-  }
-}
 
 function parseHistory(body: string | undefined): HistoryEntry[] {
   const parsed = z.object({ entries: z.array(HistoryEntrySchema) }).safeParse(safeJson(body ?? ''))
