@@ -3,11 +3,12 @@ import { ViewForm } from '@/components/ddl/ViewForm.tsx'
 import { parseViewDefinition } from '@/components/ddl/view-definition.ts'
 import { locale } from '@/config/locale.ts'
 import type { useDdlFlow } from '@/lib/ddl.ts'
-import { createStatementQuery, sessionQuery, type TableRef } from '@/lib/queries.ts'
+import { createStatementQuery, type TableRef } from '@/lib/queries.ts'
+import { useDialect } from '@/lib/session.ts'
 
 /** phpMyAdmin's view "Edit": the current definition read back into the view form, saved as CREATE OR REPLACE. */
 export function EditViewForm({ tableRef, flow }: { tableRef: TableRef; flow: ReturnType<typeof useDdlFlow> }) {
-  const dialect = useQuery(sessionQuery).data?.dialect ?? 'mysql'
+  const dialect = useDialect()
   const statement = useQuery(createStatementQuery(tableRef))
   if (!statement.data) return null
   const parsed = parseViewDefinition(statement.data.definition ?? '')

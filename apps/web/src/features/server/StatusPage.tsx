@@ -3,7 +3,8 @@ import { Link } from '@tanstack/react-router'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale, numberLocale } from '@/config/locale.ts'
-import { serverInfoQuery, sessionQuery, statusQuery, variablesQuery } from '@/lib/queries.ts'
+import { serverInfoQuery, statusQuery, variablesQuery } from '@/lib/queries.ts'
+import { useDialect } from '@/lib/session.ts'
 import { advise, fill } from './advisor.ts'
 import { queryStatistics, statusCategory, traffic } from './insights.ts'
 import { KeyValueTable } from './KeyValueTable.tsx'
@@ -15,7 +16,7 @@ export function StatusPage() {
   const info = useQuery(serverInfoQuery)
   const status = useQuery(statusQuery)
   const variables = useQuery(variablesQuery)
-  const dialect = useQuery(sessionQuery).data?.dialect ?? 'mysql'
+  const dialect = useDialect()
   const uptime = info.data?.uptimeSec ?? null
   const findings =
     status.data && variables.data

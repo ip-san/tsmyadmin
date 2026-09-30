@@ -21,6 +21,7 @@ paths:
 
 - API は `lib/api.ts` の `hc<AppType>` 経由でだけ呼ぶ。生の `fetch` を書かない（ダウンロードのようにブラウザのナビゲーションで開く GET は、URL ビルダー + `<a href>` が例外）
 - サーバーの状態は TanStack Query が唯一の持ち主。クエリ定義は `lib/queries.ts` に `queryOptions` で置く。フォームは初期値としてクエリの値を一度だけ写し、`useEffect` で再同期しない
+- セッション（誰がどこに接続しているか）の読み方は 2 つある。`/_app` の中の画面は `useRouteContext({ from: '/_app' }).session`（ルートに入った時点の値で、必ずある）。ルーターなしで描画される部品や、登録の完了のように途中で変わる値が要るときは `useQuery(sessionQuery)`（ライブのキャッシュ。取得前は `undefined`）。方言だけなら `useDialect()`（`lib/session.ts`。取得前は MySQL）
 - 書き込みのあとに全部を取り直したいときは `invalidateDatabaseData(queryClient)`（session 以外を無効化する）を使い、`key[0] !== 'session'` を各所に書き直さない
 - DDL・アカウント操作は `usePreviewFlow` + `PreviewDialog` を通す。プレビューなしで実行する UI を作らない
 

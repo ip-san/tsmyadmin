@@ -5,14 +5,8 @@ import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Field, Input, Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
-import {
-  databasesQuery,
-  schemasQuery,
-  sessionQuery,
-  structureQuery,
-  type TableRef,
-  tablesQuery,
-} from '@/lib/queries.ts'
+import { databasesQuery, schemasQuery, structureQuery, type TableRef, tablesQuery } from '@/lib/queries.ts'
+import { useDialect } from '@/lib/session.ts'
 
 interface ForeignKeyValues {
   name: string
@@ -39,7 +33,7 @@ export interface ForeignKeyFormProps {
  * local columns ↔ referenced columns, pairwise in order.
  */
 export function ForeignKeyForm({ tableRef, columns, initial, onSubmit, onCancel }: ForeignKeyFormProps) {
-  const dialect = useQuery(sessionQuery).data?.dialect ?? 'mysql'
+  const dialect = useDialect()
   const own = dialect === 'mysql' ? tableRef.db : (tableRef.schema ?? 'public')
   const [space, setSpace] = useState(own)
   const databases = useQuery({ ...databasesQuery, enabled: dialect === 'mysql' })

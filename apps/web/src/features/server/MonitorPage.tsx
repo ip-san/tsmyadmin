@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Select } from '@/components/ui/Field.tsx'
 import { locale, numberLocale } from '@/config/locale.ts'
-import { sessionQuery, statusQuery } from '@/lib/queries.ts'
+import { statusQuery } from '@/lib/queries.ts'
+import { useDialect } from '@/lib/session.ts'
 import { DiagnosticReport } from './DiagnosticReport.tsx'
 import { MonitorChart } from './MonitorChart.tsx'
 import { CHARTS, MONITOR_SECONDS, pushSample, type Sample, seriesValues, toSample } from './monitor.ts'
@@ -23,7 +24,7 @@ const formatters = {
  * (counters as a rate, connection counts as they are). Samples live in this page only; leaving it starts afresh.
  */
 export function MonitorPage() {
-  const dialect = useQuery(sessionQuery).data?.dialect ?? 'mysql'
+  const dialect = useDialect()
   const [every, setEvery] = useState<number>(2)
   const [paused, setPaused] = useState(false)
   const [samples, setSamples] = useState<Sample[]>([])

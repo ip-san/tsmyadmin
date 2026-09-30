@@ -1,7 +1,7 @@
-import { useQuery } from '@tanstack/react-query'
 import { type DdlOp, sqlScript } from '@tsmyadmin/shared'
 import { type PreviewFlow, usePreviewFlow } from './preview-flow.ts'
-import { mutations, sessionQuery } from './queries.ts'
+import { mutations } from './queries.ts'
+import { useDialect } from './session.ts'
 
 export type DdlFlow = PreviewFlow<DdlOp>
 
@@ -14,7 +14,7 @@ export function useDdlFlow(
   schema: string | undefined,
   onSuccess?: (op: DdlOp) => void | Promise<void>
 ): DdlFlow {
-  const dialect = useQuery(sessionQuery).data?.dialect ?? 'mysql'
+  const dialect = useDialect()
   return usePreviewFlow<DdlOp>({
     preview: (op) => mutations.previewDdl(db, schema, op),
     // DDL runs through the SQL route, which is not transactional: a failure leaves what already ran in place.

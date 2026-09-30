@@ -9,14 +9,15 @@ import { PrintButton } from '@/components/ui/PrintButton.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale, numberLocale } from '@/config/locale.ts'
 import { useDdlFlow } from '@/lib/ddl.ts'
-import { sessionQuery, tablesQuery } from '@/lib/queries.ts'
+import { tablesQuery } from '@/lib/queries.ts'
+import { useDialect } from '@/lib/session.ts'
 import { RowCountCell } from './RowCountCell.tsx'
 import { TableBulkBar } from './TableBulkBar.tsx'
 import { tableTotals } from './table-totals.ts'
 
 export function TablesList({ db, schema }: { db: string; schema?: string | undefined }) {
   const tables = useQuery(tablesQuery(db, schema))
-  const dialect = useQuery(sessionQuery).data?.dialect ?? 'mysql'
+  const dialect = useDialect()
   // Bulk selection (tables only — views cannot be truncated and have their own DROP).
   const [selected, setSelected] = useState<string[]>([])
   const flow = useDdlFlow(db, schema, () => setSelected([]))
