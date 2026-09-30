@@ -37,8 +37,15 @@ export function sessionCookieOptions(cfg: SessionConfig) {
   }
 }
 
+/**
+ * Loads the session named by the signed cookie, or answers 401. Each router declares this guard on its own paths so
+ * it stays protected when mounted alone, but Hono flattens mounted routers into one: a request under `/databases/*`
+ * also matches the tracking router's guard. The second run in a request is therefore a no-op, not a second store read
+ * and cookie refresh.
+ */
 export function requireSession(cfg: SessionConfig) {
   return createMiddleware<AppEnv>(async (c, next) => {
+    if (c.get('session')) return next()
     const id = await getSignedCookie(c, cfg.secret, SESSION_COOKIE)
     const session = id ? await cfg.store.get(id) : undefined
     if (!session || !id) return c.json(apiError('UNAUTHENTICATED', 'Not connected'), 401)

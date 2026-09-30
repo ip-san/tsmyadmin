@@ -40,7 +40,7 @@ import {
   TrackingStateSchema,
   UserGroupSchema,
 } from '@tsmyadmin/shared'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { createApp, IP_LIMIT_FACTOR } from './app.ts'
 import { type AppConfig, loadConfig } from './config.ts'
@@ -2758,6 +2758,19 @@ describe('change tracking', () => {
       req(`/api/databases/shop/tables/${table}/tracking`, { method })
     return { store, users, login, state, req }
   }
+
+  it('reads the session once although the databases and tracking guards both match the path', async () => {
+    const h = trackingHarness()
+    try {
+      await h.login()
+      const get = vi.spyOn(h.store, 'get')
+      expect((await h.req('/api/databases/shop/tracking')).status).toBe(200)
+      expect((await h.state()).status).toBe(200)
+      expect(get).toHaveBeenCalledTimes(2)
+    } finally {
+      await h.store.closeAll()
+    }
+  })
 
   it('records versions only when the definition changed, shared by every account of the server', async () => {
     const h = trackingHarness()
