@@ -100,21 +100,23 @@ export function describeSessionStoreConformance(
       }
     })
 
+    // The TTLs below are long on purpose: a store may also expire keys by the real clock (Redis does), and a run
+    // of a few milliseconds must never age a session there. The fake clock alone decides what is stale.
     it('slides the TTL on every use and expires once it is untouched', async () => {
-      let t = 1000
+      let t = 1_000_000
       const store = await create({
         adapterFactory: tracked().adapterFactory,
-        ttlMs: 100,
+        ttlMs: 100_000,
         sweepIntervalMs: 0,
         now: () => t,
       })
       try {
         const s = await store.create(CONFIG)
-        t += 80
+        t += 80_000
         expect(await store.get(s.id)).toBeDefined()
-        t += 80
+        t += 80_000
         expect(await store.get(s.id)).toBeDefined()
-        t += 150
+        t += 150_000
         expect(await store.get(s.id)).toBeUndefined()
       } finally {
         await store.closeAll()
@@ -124,12 +126,12 @@ export function describeSessionStoreConformance(
     it('sweeps only the stale sessions, and closeAll closes the rest', async () => {
       let t = 0
       const { made, adapterFactory } = tracked()
-      const store = await create({ adapterFactory, ttlMs: 10, sweepIntervalMs: 0, now: () => t })
+      const store = await create({ adapterFactory, ttlMs: 10_000, sweepIntervalMs: 0, now: () => t })
       try {
         await store.create(CONFIG)
-        t = 5
+        t = 5_000
         const fresh = await store.create(CONFIG)
-        t = 12
+        t = 12_000
         await store.sweep()
         expect(made[0]?.closed).toBe(true)
         expect(made[1]?.closed).toBe(false)
