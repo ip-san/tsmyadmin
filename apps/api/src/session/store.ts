@@ -186,10 +186,31 @@ export const SESSION_TTL_MS = 30 * 60 * 1000
 /** Live sessions allowed per database identity (dialect|host|port|user); the oldest is evicted beyond this. */
 export const DEFAULT_MAX_SESSIONS_PER_IDENTITY = 10
 
-/** Interval timer that never keeps the process alive; null when disabled. */
-export function startSweep(intervalMs: number, fn: () => void): ReturnType<typeof setInterval> | null {
+function reportSweepFailure(err: unknown): void {
+  console.error('[api] session sweep failed:', err instanceof Error ? err.message : String(err))
+}
+
+/**
+ * Interval timer that never keeps the process alive; null when disabled.
+ *
+ * A run that fails (a store whose backend is down) is handed to `onError` and the next tick tries again. It must
+ * not escape: the callers used to start the run with `void`, and a rejection nobody handles ends the process, so
+ * a Redis outage took every user's session down with it within a minute.
+ */
+export function startSweep(
+  intervalMs: number,
+  fn: () => void | Promise<void>,
+  onError: (err: unknown) => void = reportSweepFailure
+): ReturnType<typeof setInterval> | null {
   if (intervalMs <= 0) return null
-  const timer = setInterval(fn, intervalMs)
+  const tick = async () => {
+    try {
+      await fn()
+    } catch (err) {
+      onError(err)
+    }
+  }
+  const timer = setInterval(() => void tick(), intervalMs)
   if (typeof timer === 'object' && 'unref' in timer) timer.unref()
   return timer
 }
@@ -230,7 +251,7 @@ export class MemorySessionStore implements SessionStore {
     this.ttlMs = options.ttlMs ?? SESSION_TTL_MS
     this.maxPerIdentity = options.maxPerIdentity ?? DEFAULT_MAX_SESSIONS_PER_IDENTITY
     this.now = options.now ?? Date.now
-    this.timer = startSweep(options.sweepIntervalMs ?? 60_000, () => void this.sweep())
+    this.timer = startSweep(options.sweepIntervalMs ?? 60_000, () => this.sweep())
   }
 
   get size(): number {

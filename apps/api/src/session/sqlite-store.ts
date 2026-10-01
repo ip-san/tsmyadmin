@@ -168,7 +168,7 @@ export class SqliteSessionStore implements SessionStore {
     this.bindPayloadsToRows()
     this.touchIntervalMs = options.touchIntervalMs ?? 60_000
     this.factory = options.adapterFactory
-    this.timer = startSweep(options.sweepIntervalMs ?? 60_000, () => void this.sweep())
+    this.timer = startSweep(options.sweepIntervalMs ?? 60_000, () => this.sweep())
   }
 
   /**

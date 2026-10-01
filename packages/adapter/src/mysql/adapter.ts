@@ -516,7 +516,8 @@ export class MysqlAdapter extends BaseAdapter {
     // (no statement timeout: full scans may legitimately be long).
     const { conn, done } = await this.borrow(ns, 0)
     try {
-      // Times as UTC, for a dump restored under a session that reads them as UTC (the pool resets the session after).
+      // Times as UTC, for a dump restored under a session that reads them as UTC. The setting would outlive this scan
+      // (release() hands the connection back as it is), so the `finally` below resets the session.
       if (opts.utc) await conn.query("SET SESSION time_zone = '+00:00'")
       if (single && conn.stream) {
         // Streamed rows arrive one at a time, so a key-less table of any size costs one batch of memory.
@@ -552,6 +553,9 @@ export class MysqlAdapter extends BaseAdapter {
         last = r.rows[r.rows.length - 1] ?? null
       }
     } finally {
+      // After a utc scan the session is not the one the next borrower expects (reset() also drops the cached current
+      // database and marks the connection broken if the reset fails).
+      if (opts.utc) await conn.reset()
       await done()
     }
   }
