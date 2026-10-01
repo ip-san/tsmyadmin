@@ -1,4 +1,4 @@
-<!-- translated-from: README.md sha256:9f70226c4f3b0e6efcb29ea57b0d31d1fdf1d42ad822bc79939da6721cca9866 -->
+<!-- translated-from: README.md sha256:661e86ed2f746e7d4bf5ad8642f8cd4d6b15b4fa546bebd9dce82561bfab66e5 -->
 
 # tsmyadmin
 
@@ -92,7 +92,7 @@ The repository is a Bun workspaces monorepo: `apps/api` (Hono) / `apps/web` (Vit
 
 ```bash
 bun run check            # typecheck + lint + unit/API/web tests + type-coverage
-bun run check:static     # check + knip / circular imports / clones / architecture / SQL safety / docs / translation sync / colour contrast (runs on pre-push)
+bun run check:static     # check + knip / circular imports / clones / architecture / SQL safety / docs / translation sync / colour contrast / doc-comment placement (runs on pre-push)
 bun run check:all        # check:static + the integration tests against both databases
 bun run test:e2e         # Playwright (Chromium / WebKit functional, axe a11y, VRT light+dark). Run db:up first
 bun run lighthouse       # Lighthouse CI (performance / a11y / best practices on the login screen; warnings only, needs Chrome)
@@ -106,6 +106,7 @@ The project's own checks:
 
 - `scripts/check-architecture.mjs`: layer dependencies (the web app never touches a database driver, routes go through the adapter, features do not import each other) and component length
 - `scripts/check-sql-safety.mjs`: that no SQL is built by interpolation or concatenation outside the adapter's builders, and that no identifier is quoted by hand
+- `scripts/check-doc-comments.mjs`: that no doc comment (`/** */`) is directly followed by another one (a description left behind when a declaration moved would show wrongly in the editor's hover; with a `--self-test`)
 - `scripts/validate-docs.mjs`: that the statistics in `CLAUDE.md` match reality (`--fix`), and that the port the Cloudflare worker forwards to matches `EXPOSE` in the `Dockerfile`
 - `scripts/check-contrast.mjs`: that every combination of the design tokens meets the WCAG contrast ratios (with a `--self-test`). axe judges text only, and only the combinations a test happens to render, so this is checked separately
 - `scripts/check-translations.mjs`: that each English document has been updated for the Japanese original it was written from (with a `--self-test`; `bun run docs:sync` stamps them after translating)

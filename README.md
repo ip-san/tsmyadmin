@@ -90,7 +90,7 @@ bun run dev        # API http://localhost:3100 + Web http://localhost:5175
 
 ```bash
 bun run check            # typecheck + lint + ユニット/API/Web テスト + type-coverage
-bun run check:static     # check + knip / 循環依存 / クローン / アーキテクチャ / SQL 安全性 / docs / 英訳の同期 / 色のコントラスト（pre-push で実行）
+bun run check:static     # check + knip / 循環依存 / クローン / アーキテクチャ / SQL 安全性 / docs / 英訳の同期 / 色のコントラスト / doc コメントの位置（pre-push で実行）
 bun run check:all        # check:static + 両 DB の統合テスト
 bun run test:e2e         # Playwright（Chromium / WebKit の機能 / axe a11y / VRT light+dark）。事前に db:up
 bun run lighthouse       # Lighthouse CI（ログイン画面の性能 / a11y / ベストプラクティス、警告のみ。要 Chrome）
@@ -104,6 +104,7 @@ bun run lighthouse       # Lighthouse CI（ログイン画面の性能 / a11y / 
 
 - `scripts/check-architecture.mjs`: レイヤー依存（web は DB ドライバーに触れない、ルートはアダプター経由のみ、feature 間の直接 import 禁止）とコンポーネント行数
 - `scripts/check-sql-safety.mjs`: アダプターのビルダー以外で SQL を文字列補間・連結していないか、識別子を生でクォートしていないか
+- `scripts/check-doc-comments.mjs`: doc コメント（`/** */`）の直後に別の doc コメントが続いていないか（宣言を動かしたときに取り残された説明が、エディタのホバーに誤って出るのを防ぐ。`--self-test` 付き）
 - `scripts/validate-docs.mjs`: `CLAUDE.md` の統計値と実体の同期（`--fix`）、Cloudflare の worker が転送するポートと `Dockerfile` の `EXPOSE` の一致
 - `scripts/check-contrast.mjs`: デザイン トークンの全組み合わせが WCAG のコントラスト比を満たすか（`--self-test` 付き）。axe はテキストしか見ず、しかもテストが描画した組み合わせしか見ないため、別に検査します
 - `scripts/check-translations.mjs`: 英語ドキュメントが日本語の原文の更新に追随しているか（`--self-test` 付き。翻訳後に `bun run docs:sync` でハッシュを打ち直す）
