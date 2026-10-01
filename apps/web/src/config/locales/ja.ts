@@ -2566,6 +2566,7 @@ export const ja = {
     SECOND_FACTOR_INVALID: 'コードが正しくありません（使用済み・期限切れを含みます）',
     RATE_LIMITED: '試行回数が多すぎます。しばらく待ってから再度お試しください',
     PAYLOAD_TOO_LARGE: '送信データが大きすぎます',
+    STORE_UNAVAILABLE: 'サーバーのセッション保存先がいま使えません。しばらくしてからもう一度お試しください',
     INTERNAL: '内部エラーが発生しました',
     NETWORK: 'サーバーと通信できません。ネットワーク接続を確認してください',
   } satisfies Record<ApiErrorCode | 'NETWORK', string>,

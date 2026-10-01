@@ -2595,6 +2595,7 @@ export const en = {
     SECOND_FACTOR_INVALID: 'That code is not valid (it may already have been used, or have expired)',
     RATE_LIMITED: 'Too many attempts. Wait a while and try again',
     PAYLOAD_TOO_LARGE: 'The request is too large',
+    STORE_UNAVAILABLE: 'The server cannot use its session store right now. Try again in a moment',
     INTERNAL: 'Something went wrong on the server',
     NETWORK: 'The server cannot be reached. Check your network connection',
   },
