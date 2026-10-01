@@ -23,6 +23,14 @@ try {
   process.exit(1)
 }
 const logger = createLogger(config.logFormat)
+// A rejection nobody handles ends a Bun process. One stray background failure must not take every user's session
+// (and the imports running for them) down with it, so it is logged as an error. An uncaught exception is left to
+// end the process, as before.
+process.on('unhandledRejection', (reason) => {
+  logger.log('error', 'process.unhandled_rejection', {
+    error: reason instanceof Error ? (reason.stack ?? reason.message) : String(reason),
+  })
+})
 if (!process.env.SESSION_SECRET)
   logger.log('warn', 'config.dev_secret', { hint: 'SESSION_SECRET not set; using a development secret' })
 if (config.isProd && !config.cookieSecure)

@@ -139,7 +139,12 @@ export class RedisSessionStore implements SessionStore {
     )
     this.secondFactor = new RedisSecondFactors(this.redis, this.key, this.prefix)
     // Redis expires sessions itself; the sweep only closes the pools this process still holds for them.
-    this.timer = startSweep(options.sweepIntervalMs ?? 60_000, () => void this.sweep())
+    // Redis being down makes every sweep fail; it is reported the way the client's own errors are, not thrown.
+    this.timer = startSweep(
+      options.sweepIntervalMs ?? 60_000,
+      () => this.sweep(),
+      onError ? (err) => onError(err instanceof Error ? err : new Error(String(err))) : undefined
+    )
   }
 
   private sessionKey(id: string): string {

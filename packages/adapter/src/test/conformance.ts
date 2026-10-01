@@ -2369,6 +2369,29 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
     })
 
     describe('iterateRows', () => {
+      it('leaves the connection session as it found it after a utc scan', async () => {
+        // A scan that asks for UTC sets the session time zone; the connection goes back to the pool, and the next
+        // borrower (a browse, an edit) must not read its timestamps in that zone. Each adapter below has a pool of
+        // its own, so the connection that did the scan is the one the next call gets.
+        const showZone = dialect === 'mysql' ? 'SELECT @@session.time_zone' : 'SHOW TIME ZONE'
+        const zoneOf = async (adapter: DatabaseAdapter) => {
+          const [r] = await adapter.executeSql(ns, showZone, EXEC)
+          return r?.kind === 'rows' ? String(r.result.rows[0]?.[0]) : 'no rows'
+        }
+        const fresh = ctx.create()
+        const scanned = ctx.create()
+        try {
+          const baseline = await zoneOf(fresh)
+          for await (const _ of scanned.iterateRows(ns, 'users', { batchSize: 10, utc: true })) {
+            // drained: only the connection afterwards matters
+          }
+          expect(await zoneOf(scanned)).toBe(baseline)
+        } finally {
+          await fresh.close()
+          await scanned.close()
+        }
+      })
+
       it('streams every row in primary-key order across batches', async () => {
         const batches: number[][] = []
         for await (const b of db.iterateRows(ns, 'users', { batchSize: 2 }))
