@@ -211,15 +211,19 @@ export class ScriptRunner {
             // signal still in transit would otherwise interrupt whatever the next borrower runs on it.
             // Asked before the ROLLBACK, including after a cancel: KILL QUERY / pg_cancel_backend end the
             // statement, not the transaction, so an interrupted script leaves work behind just like any other.
-            if (opts.onTransactionOpen) {
-              // A probe that cannot run says nothing rather than something wrong.
-              const open = await conn.inTransaction?.().catch(() => false)
-              opts.onTransactionOpen(open === true)
-            }
-            if (entry.cancelled) conn.discard()
-            else {
-              await conn.query('ROLLBACK').catch(() => undefined)
-              await conn.reset()
+            // The caller's callback may throw; the connection is cleaned up all the same, and the error goes on.
+            try {
+              if (opts.onTransactionOpen) {
+                // A probe that cannot run says nothing rather than something wrong.
+                const open = await conn.inTransaction?.().catch(() => false)
+                opts.onTransactionOpen(open === true)
+              }
+            } finally {
+              if (entry.cancelled) conn.discard()
+              else {
+                await conn.query('ROLLBACK').catch(() => undefined)
+                await conn.reset()
+              }
             }
           }
         },
@@ -227,7 +231,8 @@ export class ScriptRunner {
       )
     } finally {
       if (opts.queryId) {
-        this.running.delete(opts.queryId)
+        // Only its own registration: a later run that reused the id has replaced it, and must stay cancellable.
+        if (this.running.get(opts.queryId) === entry) this.running.delete(opts.queryId)
         resolveBackend('') // release any waiting cancelQuery
       }
       resolveSettled()
