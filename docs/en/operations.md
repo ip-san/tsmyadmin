@@ -1,4 +1,4 @@
-<!-- translated-from: docs/operations.md sha256:eb235a24b3ca1e6a2fbf158198bc4fb5f522eb16c23969a4a48458484ddf36e1 -->
+<!-- translated-from: docs/operations.md sha256:a6789c8e3116b36350b7a940626423cb92f2e612397abf93a88ef2a94bafbca7 -->
 
 # Operations guide
 
@@ -62,6 +62,7 @@ Every response carries an `X-Request-Id`. When a user reports a problem, look th
 | Sign-in returns 429 | The rate limit. Retry after `Retry-After` seconds. If it is a false positive, check `TRUST_PROXY` — behind a proxy with `0`, everyone shares one IP |
 | Everyone is signed out after a restart | `SESSION_STORE=memory`, no volume, or a changed `SESSION_SECRET`. See the upgrade section of [deployment.md](deployment.md) |
 | Exits at startup with `session_store.open_failed` (the container restart-loops) | The `bun` user (uid 1000) cannot write to `SESSION_DB_PATH` (`/app/data` under Docker). A bind mount needs `chown 1000:1000`. The `error` line reads `unable to open database file` or `attempt to write a readonly database` |
+| The screen shows 502 `CONNECTION_FAILED` "No connection became free in time" after 10 seconds | The target database is reachable, but a long statement, a scan of a large table, an export or the like is holding all four of the session's connections. Once it ends they are usable again (the answer comes without waiting any longer, so the sidebar and the like do not freeze). Wait for it to end, or stop it with *Cancel* in the SQL console. Trying again while still signed in is fine |
 | An import returns 429 `RATE_LIMITED` (`Retry-After: 5`; the screen says there were too many attempts) | The limit on imports running at once (`IMPORT_MAX_CONCURRENT`, 2 by default) has been reached. Wait for one to finish and try again. If memory allows, raise the limit (one import takes up to about 0.6 GB). The log line is `import.refused` |
 | An API call returns 503 `STORE_UNAVAILABLE` (with `Retry-After: 5`; the screen says the server cannot use its session store right now) | The session store is temporarily unusable. The causes are those of `/readyz` returning 503 (Redis stopped; a SQLite file that cannot be opened, is locked, is read-only or sits on a full disk). With Redis it recovers by itself once Redis is back. The log line is `session_store.unavailable` (once a minute) |
 | `/readyz` returns 503 | The session store cannot be reached. Under `SESSION_STORE=redis` that means Redis is down or `REDIS_URL` is wrong (a `session_store.unreachable` line accompanies it); under `sqlite`, the file became unreadable or corrupt after startup. Check the `error` in `readyz.failed` |

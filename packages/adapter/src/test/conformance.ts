@@ -1728,6 +1728,32 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
     })
 
     describe('executeSql', () => {
+      it('tells a request that no connection became free in time, instead of making it wait without end', async () => {
+        // A session has four pooled connections. Four long statements hold all of them; a fifth request must be
+        // answered (both dialects give up after ACQUIRE_TIMEOUT_MS), not left hanging until one of them ends.
+        const sleep = dialect === 'mysql' ? 'SELECT SLEEP(30)' : 'SELECT pg_sleep(30)'
+        const busy = ctx.create()
+        const ids = Array.from({ length: 4 }, () => crypto.randomUUID())
+        const holders = ids.map((queryId) =>
+          busy.executeSql(ns, sleep, { ...EXEC, timeoutMs: 60_000, queryId }).catch(() => undefined)
+        )
+        // Long enough for all four statements to have taken a connection and started.
+        await new Promise((resolve) => setTimeout(resolve, 1_000))
+        const started = performance.now()
+        const err = await busy.listTables(ns).then(
+          () => null,
+          (e: unknown) => e
+        )
+        const waited = performance.now() - started
+        for (const id of ids) await busy.cancelQuery(id).catch(() => undefined)
+        await Promise.all(holders)
+        await busy.close()
+        expect(err).toBeInstanceOf(AdapterError)
+        expect(err).toMatchObject({ code: 'CONNECTION_FAILED', message: 'No connection became free in time' })
+        expect(waited).toBeGreaterThan(8_000)
+        expect(waited).toBeLessThan(20_000)
+      }, 40_000)
+
       it('times each statement by stage when profiling is asked for (MySQL / MariaDB only)', async () => {
         const results = await exec('SELECT 1; SELECT COUNT(*) FROM users', { profile: true })
         expect(results.map((r) => r.kind)).toEqual(['rows', 'rows'])

@@ -40,7 +40,7 @@ import mysql, {
   type ResultSetHeader,
 } from 'mysql2/promise'
 import { BaseAdapter } from '../base.ts'
-import { type Canceller, type Conn, firstResult, type RawResult } from '../driver.ts'
+import { type Canceller, type Conn, firstResult, type RawResult, withinAcquireTimeout } from '../driver.ts'
 import { driverValueToCell, type QueryOptions, toDbValue, UNCAPPED } from '../sql/cells.ts'
 import { Params, quoteIdent, quoteTable } from '../sql/quote.ts'
 import { AdapterError, type AdapterErrorCode, type ConnectionConfig, type RowBatch } from '../types.ts'
@@ -206,6 +206,24 @@ export class MysqlAdapter extends BaseAdapter {
     return chosen
   }
 
+  /**
+   * A pooled connection, or CONNECTION_FAILED if none became free in ACQUIRE_TIMEOUT_MS: mysql2 would queue the
+   * request for as long as the four connections stay busy (see withinAcquireTimeout).
+   */
+  private getConnection(): Promise<PoolConnection> {
+    return withinAcquireTimeout(this.getPool().getConnection())
+  }
+
+  /** A connection for one call, under the same acquire timeout: `pool.query` itself would wait without end. */
+  private async withPoolConnection<T>(fn: (conn: PoolConnection) => Promise<T>): Promise<T> {
+    const conn = await this.getConnection()
+    try {
+      return await fn(conn)
+    } finally {
+      conn.release()
+    }
+  }
+
   private getPool(): Pool {
     if (this.pool) return this.pool
     this.pool = mysql.createPool({
@@ -273,7 +291,7 @@ export class MysqlAdapter extends BaseAdapter {
   protected async acquire(ns: Namespace): Promise<Conn> {
     let conn: PoolConnection
     try {
-      conn = await this.getPool().getConnection()
+      conn = await this.getConnection()
     } catch (err) {
       throw this.toAdapterError(err)
     }
@@ -621,7 +639,7 @@ export class MysqlAdapter extends BaseAdapter {
 
   async ping(): Promise<void> {
     try {
-      await this.getPool().query('SELECT 1')
+      await this.withPoolConnection((c) => c.query('SELECT 1'))
     } catch (err) {
       throw this.toAdapterError(err)
     }
@@ -635,22 +653,26 @@ export class MysqlAdapter extends BaseAdapter {
 
   async listDatabases({ stats: withStats = true }: { stats?: boolean } = {}): Promise<DatabaseInfo[]> {
     try {
-      const [rows] = (await this.getPool().query({ sql: 'SHOW DATABASES', rowsAsArray: true })) as [
+      const [rows] = (await this.withPoolConnection((c) => c.query({ sql: 'SHOW DATABASES', rowsAsArray: true }))) as [
         unknown[][],
         unknown,
       ]
       // One aggregate over the catalog for every database (sizes are the storage engine's estimates).
       const [stats] = withStats
-        ? ((await this.getPool().query({
-            sql: 'SELECT TABLE_SCHEMA, SUM(COALESCE(DATA_LENGTH, 0) + COALESCE(INDEX_LENGTH, 0)), COUNT(*) FROM information_schema.TABLES GROUP BY TABLE_SCHEMA',
-            rowsAsArray: true,
-          })) as [unknown[][], unknown])
+        ? ((await this.withPoolConnection((c) =>
+            c.query({
+              sql: 'SELECT TABLE_SCHEMA, SUM(COALESCE(DATA_LENGTH, 0) + COALESCE(INDEX_LENGTH, 0)), COUNT(*) FROM information_schema.TABLES GROUP BY TABLE_SCHEMA',
+              rowsAsArray: true,
+            })
+          )) as [unknown[][], unknown])
         : [[] as unknown[][]]
       const byName = new Map(stats.map((r) => [String(r[0]), { size: Number(r[1]), count: Number(r[2]) }]))
-      const [schemata] = (await this.getPool().query({
-        sql: 'SELECT SCHEMA_NAME, DEFAULT_COLLATION_NAME FROM information_schema.SCHEMATA',
-        rowsAsArray: true,
-      })) as [unknown[][], unknown]
+      const [schemata] = (await this.withPoolConnection((c) =>
+        c.query({
+          sql: 'SELECT SCHEMA_NAME, DEFAULT_COLLATION_NAME FROM information_schema.SCHEMATA',
+          rowsAsArray: true,
+        })
+      )) as [unknown[][], unknown]
       const collations = new Map(schemata.map((r) => [String(r[0]), r[1] === null ? null : String(r[1])]))
       return rows
         .map((r) => {

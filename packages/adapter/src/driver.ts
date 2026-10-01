@@ -5,6 +5,7 @@
  */
 import type { Cell, ColumnMeta } from '@tsmyadmin/shared'
 import type { QueryOptions } from './sql/cells.ts'
+import { AdapterError } from './types.ts'
 
 /** Normalised driver result: rows already converted to wire Cells. */
 export interface RawResult {
@@ -62,4 +63,48 @@ export function firstResult(r: RawResult | RawResult[]): RawResult {
     return first
   }
   return r
+}
+
+/**
+ * How long a request waits for one of a session's four pooled connections before giving up, in both dialects.
+ * Without a limit a pool held by long statements, scans or exports leaves every other request of the session
+ * hanging with no answer; with one, the caller is told, and the browser can show it and retry.
+ */
+const ACQUIRE_TIMEOUT_MS = 10_000
+
+/** What a request gets when no connection became free in time. */
+export function poolBusyError(): AdapterError {
+  return new AdapterError(
+    'CONNECTION_FAILED',
+    'No connection became free in time',
+    'Every connection of this session is busy (a long statement, a scan or an export), or the server is slow to answer. Try again in a moment.'
+  )
+}
+
+/**
+ * A connection from `attempt`, or `poolBusyError()` once `ms` have passed. mysql2 queues a request for a connection
+ * for as long as it takes and has no acquire timeout of its own (`queueLimit` only counts the queue); this is that
+ * timeout. The queued request cannot be withdrawn, so when it is finally served after the caller gave up, the
+ * connection goes straight back to the pool.
+ */
+export async function withinAcquireTimeout<C extends { release(): void }>(
+  attempt: Promise<C>,
+  ms: number = ACQUIRE_TIMEOUT_MS
+): Promise<C> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timedOut = Symbol('timed out')
+  const timeout = new Promise<typeof timedOut>((resolve) => {
+    timer = setTimeout(() => resolve(timedOut), ms)
+  })
+  try {
+    const first = await Promise.race([attempt, timeout])
+    if (first !== timedOut) return first
+    attempt.then(
+      (late) => late.release(),
+      () => undefined
+    )
+    throw poolBusyError()
+  } finally {
+    clearTimeout(timer)
+  }
 }

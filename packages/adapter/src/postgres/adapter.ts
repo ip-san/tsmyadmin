@@ -33,7 +33,7 @@ import { isViewKind } from '@tsmyadmin/shared'
 import pg, { type FieldDef, type PoolClient, type QueryResult } from 'pg'
 import { from as copyFrom } from 'pg-copy-streams'
 import { BaseAdapter } from '../base.ts'
-import { type Canceller, type Conn, firstResult, type RawResult } from '../driver.ts'
+import { type Canceller, type Conn, firstResult, poolBusyError, type RawResult } from '../driver.ts'
 import { driverValueToCell, type QueryOptions, UNCAPPED } from '../sql/cells.ts'
 import { pgLiteral } from '../sql/literal.ts'
 import { quoteIdent, quoteTable } from '../sql/quote.ts'
@@ -617,6 +617,8 @@ export class PostgresAdapter extends BaseAdapter {
   toAdapterError(err: unknown): AdapterError {
     if (err instanceof AdapterError) return err
     const e = err as { code?: unknown; message?: unknown; detail?: unknown; hint?: unknown; position?: unknown }
+    // pg-pool's wording when every connection stayed busy (or a new one did not open) for connectionTimeoutMillis.
+    if (e.code === undefined && e.message === 'timeout exceeded when trying to connect') return poolBusyError()
     const code = typeof e.code === 'string' ? e.code : 'UNKNOWN'
     const message = typeof e.message === 'string' ? e.message : String(err)
     let kind: AdapterErrorCode = 'QUERY_FAILED'

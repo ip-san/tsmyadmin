@@ -60,6 +60,7 @@ docker logs tsmyadmin 2>&1 | jq -c 'select(.event=="audit") | {time, dbUser, act
 | ログインが 429 | レート制限。`Retry-After` 秒後に再試行。誤検知なら `TRUST_PROXY` の設定を確認（プロキシ配下で `0` だと全員が同じ IP になる） |
 | 再起動後に全員ログアウト | `SESSION_STORE=memory`、またはボリューム未設定 / `SESSION_SECRET` 変更。`docs/deployment.md` のアップグレード節 |
 | 起動直後に `session_store.open_failed` で終了（コンテナが再起動ループ） | `SESSION_DB_PATH`（Docker では `/app/data`）に `bun` ユーザー（uid 1000）の書き込み権限がない。バインドマウントは `chown 1000:1000`。`unable to open database file` / `attempt to write a readonly database` が `error` に出る |
+| 画面が 10 秒後に 502 `CONNECTION_FAILED`「No connection became free in time」 | 接続先 DB には届いているが、セッションの接続（4 本）をすべて、長い文・大きな表の走査・エクスポートなどが使っている。終われば使えるようになる（待たずに返すので、サイドバーなどが固まらない）。終わるのを待つか、SQL コンソールの「キャンセル」で止める。ログインしたまま再試行してよい |
 | インポートが 429 `RATE_LIMITED`（`Retry-After: 5`。画面には「試行回数が多すぎます」） | 同時に実行できるインポートの上限（`IMPORT_MAX_CONCURRENT`、既定 2）に達している。終わるのを待って再試行する。メモリに余裕があれば上限を上げる（1 本は最大で約 0.6 GB）。ログは `import.refused` |
 | API が 503 `STORE_UNAVAILABLE`（`Retry-After: 5`。画面には「サーバーのセッション保存先がいま使えません」） | セッションストアが一時的に使えない。原因は `/readyz` が 503 のときと同じ（Redis 停止、SQLite のファイルが開けない・ロック中・読み取り専用・ディスク満杯）。Redis なら復旧すれば自動で戻る。ログは `session_store.unavailable`（1 分に 1 行） |
 | `/readyz` が 503 | セッションストアに届かない。`SESSION_STORE=redis` なら Redis が落ちている / `REDIS_URL` が誤り（ログ `session_store.unreachable` も出ます）、`sqlite` なら起動後にファイルが読めなくなった / 破損。`readyz.failed` の `error` を確認 |
