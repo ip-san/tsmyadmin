@@ -1,11 +1,13 @@
 import { gunzipSync } from 'node:zlib'
 import type { DatabaseAdapter } from '@tsmyadmin/adapter'
 import type { ApiError, ExportCharset, ImportEvent, ImportForm, ImportResult, Namespace } from '@tsmyadmin/shared'
-import type { Context } from 'hono'
+import type { Context, MiddlewareHandler } from 'hono'
 import iconv from 'iconv-lite'
+import { type ConcurrencyLimit, limitConcurrency } from './concurrency.ts'
 import { apiError, toApiError } from './errors.ts'
 import { csvSource, decodeUpload, ImportValidationError, importRows, importSql, type RowsSource } from './import.ts'
 import { pickSheet, type ReadOptions, RowsParseError, readOds, readWikiTables, readXmlTables } from './import-rows.ts'
+import type { Logger } from './logging.ts'
 import { ndjsonResponse } from './ndjson.ts'
 import { MAX_UNPACKED, readZip, UnpackLimitError } from './zip.ts'
 
@@ -13,6 +15,19 @@ import { MAX_UNPACKED, readZip, UnpackLimitError } from './zip.ts'
  * From the bytes a browser sent to a run: compressed files opened, text decoded in the character set chosen,
  * a spreadsheet / XML / wiki file turned into rows, and the run streamed back as NDJSON.
  */
+
+/**
+ * One of the places for imports (IMPORT_MAX_CONCURRENT), taken before the upload is read and kept until the streamed
+ * answer is over. An import holds the upload, what it unpacks to and the decoded text at once, about 0.6 GB for a
+ * file at the limits, so a few in parallel could take the process down; the others are told to come back shortly.
+ */
+export function importSlot(limit: ConcurrencyLimit | undefined, logger?: Logger): MiddlewareHandler {
+  return limitConcurrency(limit, (c, l) => {
+    logger?.log('warn', 'import.refused', { requestId: c.get('requestId'), active: l.active, max: l.max })
+    c.header('Retry-After', '5')
+    return c.json(apiError('RATE_LIMITED', 'Too many imports are running at once; try again in a moment'), 429)
+  })
+}
 
 export const validationError = (err: ImportValidationError): ApiError => ({
   ...apiError('VALIDATION', err.message),

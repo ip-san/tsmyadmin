@@ -24,7 +24,7 @@ import { apiError } from '../lib/errors.ts'
 import { contentDisposition, toReadableStream } from '../lib/export.ts'
 import { buildServerExport, keylessTables } from '../lib/export-package.ts'
 import { ImportValidationError } from '../lib/import.ts'
-import { importResponse, type PreparedImport, prepareImport, validationError } from '../lib/import-run.ts'
+import { importResponse, importSlot, type PreparedImport, prepareImport, validationError } from '../lib/import-run.ts'
 import type { Logger } from '../lib/logging.ts'
 import { redactInLogs } from '../lib/request-context.ts'
 import { validate } from '../lib/validate.ts'
@@ -130,6 +130,7 @@ export function serverRoutes(cfg: SessionConfig, logger?: Logger) {
       })
       .post(
         '/server/import',
+        importSlot(cfg.importLimit, logger),
         bodyLimit({ maxSize: IMPORT_MAX_BYTES + 1024 * 1024 }),
         validate('form', ImportFormSchema),
         async (c) => {

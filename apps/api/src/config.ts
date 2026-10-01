@@ -95,6 +95,8 @@ const EnvSchema = z.object({
   SESSION_MAX_PER_IDENTITY: z.coerce.number().int().min(1).max(1000).default(10),
   /** On SIGTERM/SIGINT: stop accepting requests, wait up to this long for in-flight ones, then exit. */
   SHUTDOWN_TIMEOUT_SECONDS: z.coerce.number().int().min(0).max(600).default(30),
+  /** Imports running at once in this process; one holds up to ~0.6 GB (the upload, what it unpacks to, the text). */
+  IMPORT_MAX_CONCURRENT: z.coerce.number().int().min(1).max(32).default(2),
 })
 
 export type AppConfig = {
@@ -121,6 +123,7 @@ export type AppConfig = {
   redisUrl: string | undefined
   webDist: string | undefined
   shutdownTimeoutMs: number
+  importMaxConcurrent: number
   sessionMaxPerIdentity: number
   /** Hosts an image link may load pictures from (TSMYADMIN_IMAGE_HOSTS). */
   imageHosts: string[]
@@ -209,6 +212,7 @@ export function loadConfig(env: Record<string, string | undefined>): AppConfig {
     redisUrl: e.REDIS_URL,
     webDist: e.WEB_DIST,
     shutdownTimeoutMs: e.SHUTDOWN_TIMEOUT_SECONDS * 1000,
+    importMaxConcurrent: e.IMPORT_MAX_CONCURRENT,
     sessionMaxPerIdentity: e.SESSION_MAX_PER_IDENTITY,
     imageHosts,
     dockerDiscovery:

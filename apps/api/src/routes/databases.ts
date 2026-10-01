@@ -43,7 +43,7 @@ import { contentDisposition, toReadableStream } from '../lib/export.ts'
 import { buildPackagedExport, keylessTables } from '../lib/export-package.ts'
 import { identifierTooLong, tooLongIdentifier } from '../lib/identifiers.ts'
 import { ImportValidationError } from '../lib/import.ts'
-import { importResponse, type PreparedImport, prepareImport, validationError } from '../lib/import-run.ts'
+import { importResponse, importSlot, type PreparedImport, prepareImport, validationError } from '../lib/import-run.ts'
 import type { Logger } from '../lib/logging.ts'
 import { ndjsonResponse } from '../lib/ndjson.ts'
 import { recordGridChange, recordStatements } from '../lib/tracking-log.ts'
@@ -392,6 +392,7 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
       })
       .post(
         '/databases/:db/import',
+        importSlot(cfg.importLimit, logger),
         bodyLimit({ maxSize: IMPORT_MAX_BYTES + 1024 * 1024 }),
         validate('form', ImportFormSchema),
         async (c) => {

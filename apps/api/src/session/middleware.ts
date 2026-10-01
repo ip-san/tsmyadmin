@@ -1,5 +1,6 @@
 import { getSignedCookie, setSignedCookie } from 'hono/cookie'
 import { createMiddleware } from 'hono/factory'
+import type { ConcurrencyLimit } from '../lib/concurrency.ts'
 import { apiError } from '../lib/errors.ts'
 import type { Session, SessionStore } from './store.ts'
 
@@ -18,6 +19,8 @@ export interface SessionConfig {
   require2fa?: boolean
   /** Hosts an image link may load pictures from (TSMYADMIN_IMAGE_HOSTS). */
   imageHosts?: string[]
+  /** Imports running at once (IMPORT_MAX_CONCURRENT); absent means no limit, as in a test that builds one route. */
+  importLimit?: ConcurrencyLimit
 }
 
 /** Whether this account still has to enrol before it may do anything else. */
