@@ -8,6 +8,7 @@ import { createMiddleware } from 'hono/factory'
 import { secureHeaders } from 'hono/secure-headers'
 import type { AppConfig } from './config.ts'
 import { presetEntry } from './lib/allowlist.ts'
+import { ConcurrencyLimit } from './lib/concurrency.ts'
 import { apiError, errorResponse, notFoundResponse } from './lib/errors.ts'
 import { clientIp, createLogger, type Logger, type RemoteAddress, requestLogger } from './lib/logging.ts'
 import { RateLimiter } from './lib/rate-limit.ts'
@@ -112,6 +113,7 @@ export function createApp(config: AppConfig, services: AppServices) {
     ttlMs: config.sessionTtlMs,
     require2fa: config.require2fa,
     imageHosts: config.imageHosts,
+    importLimit: new ConcurrencyLimit(config.importMaxConcurrent),
   }
   const loginLimiter = new RateLimiter(config.loginRateLimit.max, config.loginRateLimit.windowMs, services.now)
   // Rotating the user name must not grant a fresh window: a second limiter keyed on the IP alone, IP_LIMIT_FACTOR×.
