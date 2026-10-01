@@ -21,6 +21,7 @@ import { apiError, errorResponse } from '../lib/errors.ts'
 import type { Logger } from '../lib/logging.ts'
 import type { RateLimiter } from '../lib/rate-limit.ts'
 import { safeJson } from '../lib/saved-items.ts'
+import { isStoreUnavailable } from '../lib/store-errors.ts'
 import { validate } from '../lib/validate.ts'
 import {
   checkLoginFactor,
@@ -131,90 +132,102 @@ export function sessionRoutes(cfg: SessionConfig, deps: SessionRouteDeps) {
             400
           )
         }
-        const perIp = deps.ipLimiter.peek(ip)
-        if (!perIp.allowed) {
+        // Counted now, before any await. A check that only sees failures recorded after each connection attempt has
+        // finished lets a burst of parallel attempts (each with another user name) all through, however low the
+        // limit. Only a failed attempt keeps its slot; every other way out gives it back (the `finally` below), so
+        // successful logins from a shared address never use up the budget, and neither does a refusal that is
+        // not the client's doing.
+        const slot = deps.ipLimiter.hit(ip)
+        if (!slot.allowed) {
+          deps.ipLimiter.refund(ip, slot.windowEnd)
           deps.logger.log('warn', 'login.rate_limited', audit)
-          c.header('Retry-After', String(perIp.retryAfterSec))
+          c.header('Retry-After', String(slot.retryAfterSec))
           return c.json(apiError('RATE_LIMITED', 'Too many login attempts; try again later'), 429)
         }
-        // Before the per-user counter, so a mistyped host does not spend the budget for the user's real logins;
-        // counted on the IP instead, because probing the allowlist is exactly the kind of sweep that limiter is
-        // for (the 403-vs-401 difference tells a caller which hosts exist).
-        const allowed =
-          isHostAllowed(body.host, body.port, deps.allowedHosts) ||
-          (deps.discovered !== undefined &&
-            isHostAllowed(body.host, body.port, (await deps.discovered()).map(presetEntry)))
-        if (!allowed) {
-          deps.ipLimiter.hit(ip)
-          deps.logger.log('warn', 'login.host_not_allowed', audit)
-          return c.json(
-            apiError(
-              'HOST_NOT_ALLOWED',
-              `Connections to "${body.host}:${body.port}" are not allowed (TSMYADMIN_ALLOWED_HOSTS)`
-            ),
-            403
-          )
-        }
-        const limit = deps.loginLimiter.hit(rateKey)
-        if (!limit.allowed) {
-          deps.logger.log('warn', 'login.rate_limited', audit)
-          c.header('Retry-After', String(limit.retryAfterSec))
-          return c.json(apiError('RATE_LIMITED', 'Too many login attempts; try again later'), 429)
-        }
-
-        const config = { ...body, host: normaliseHost(body.host) }
-        // Read before connecting, so a login that is about to be refused for a missing or wrong code does not
-        // close the sessions this account is already using (the per-account limit is applied after the code).
-        const enrolled = (await cfg.store.secondFactor?.get(config)) !== null && cfg.store.secondFactor !== undefined
-        let session: Awaited<ReturnType<typeof cfg.store.create>>
+        let failed = false
         try {
-          // The store builds the (audited) adapter, pings it and persists the session in one step.
-          session = await cfg.store.create(config, { keepOthers: enrolled })
-        } catch (err) {
-          deps.ipLimiter.hit(ip)
-          deps.logger.log('warn', 'login.failed', audit)
-          // The server's own wording ("Access denied for user 'u'@'<api host address>'") would hand an
-          // unauthenticated caller the API's egress address; the code says everything the user needs.
-          if (err instanceof AdapterError && err.code === 'AUTH_FAILED') {
-            return c.json(apiError('AUTH_FAILED', 'Authentication failed'), 401)
-          }
-          // MySQL host ACL errors ("Host '<api address>' is not allowed / blocked") name the API's own address.
-          if (err instanceof AdapterError && HOST_ACL_CODES.has(err.nativeCode ?? '')) {
-            return c.json(apiError('CONNECTION_FAILED', 'The server refused connections from this host'), 502)
-          }
-          return errorResponse(c, err, deps.logger)
-        }
-        // The password is right; now the second factor, if this account has one. A refusal leaves nothing
-        // behind — the session and its connection go — so there is no half-authenticated state to expire.
-        const factor = enrolled ? ((await cfg.store.secondFactor?.get(session.config)) ?? null) : null
-        if (factor) {
-          const checked = await checkLoginFactor(cfg, deps.secondFactor, session.config, factor, { code, passkey })
-          if (checked !== 'ok') {
-            await cfg.store.delete(session.id)
-            deps.ipLimiter.hit(ip)
-            const missing = checked === 'missing'
-            deps.logger.log('warn', missing ? 'login.second_factor.missing' : 'login.second_factor.failed', audit)
-            if (!missing) return c.json(apiError('SECOND_FACTOR_INVALID', 'That code is not valid'), 401)
-            // The password was right: the answer may now carry a passkey challenge for the next attempt.
-            const challenge = await loginChallenge(deps.secondFactor, session.config, factor)
+          // Before the per-user counter, so a mistyped host does not spend the budget for the user's real logins;
+          // counted on the IP instead, because probing the allowlist is exactly the kind of sweep that limiter is
+          // for (the 403-vs-401 difference tells a caller which hosts exist).
+          const allowed =
+            isHostAllowed(body.host, body.port, deps.allowedHosts) ||
+            (deps.discovered !== undefined &&
+              isHostAllowed(body.host, body.port, (await deps.discovered()).map(presetEntry)))
+          if (!allowed) {
+            failed = true
+            deps.logger.log('warn', 'login.host_not_allowed', audit)
             return c.json(
-              {
-                ...apiError('SECOND_FACTOR_REQUIRED', 'This account needs a one-time code or a passkey'),
-                ...(challenge ? { passkey: challenge } : {}),
-              },
-              401
+              apiError(
+                'HOST_NOT_ALLOWED',
+                `Connections to "${body.host}:${body.port}" are not allowed (TSMYADMIN_ALLOWED_HOSTS)`
+              ),
+              403
             )
           }
+          const limit = deps.loginLimiter.hit(rateKey)
+          if (!limit.allowed) {
+            deps.logger.log('warn', 'login.rate_limited', audit)
+            c.header('Retry-After', String(limit.retryAfterSec))
+            return c.json(apiError('RATE_LIMITED', 'Too many login attempts; try again later'), 429)
+          }
+
+          const config = { ...body, host: normaliseHost(body.host) }
+          // Read before connecting, so a login that is about to be refused for a missing or wrong code does not
+          // close the sessions this account is already using (the per-account limit is applied after the code).
+          const enrolled = (await cfg.store.secondFactor?.get(config)) !== null && cfg.store.secondFactor !== undefined
+          let session: Awaited<ReturnType<typeof cfg.store.create>>
+          try {
+            // The store builds the (audited) adapter, pings it and persists the session in one step.
+            session = await cfg.store.create(config, { keepOthers: enrolled })
+          } catch (err) {
+            // A store that is down is not a wrong guess: the slot goes back with the 503 it will answer with.
+            failed = !isStoreUnavailable(err)
+            deps.logger.log('warn', 'login.failed', audit)
+            // The server's own wording ("Access denied for user 'u'@'<api host address>'") would hand an
+            // unauthenticated caller the API's egress address; the code says everything the user needs.
+            if (err instanceof AdapterError && err.code === 'AUTH_FAILED') {
+              return c.json(apiError('AUTH_FAILED', 'Authentication failed'), 401)
+            }
+            // MySQL host ACL errors ("Host '<api address>' is not allowed / blocked") name the API's own address.
+            if (err instanceof AdapterError && HOST_ACL_CODES.has(err.nativeCode ?? '')) {
+              return c.json(apiError('CONNECTION_FAILED', 'The server refused connections from this host'), 502)
+            }
+            return errorResponse(c, err, deps.logger)
+          }
+          // The password is right; now the second factor, if this account has one. A refusal leaves nothing
+          // behind — the session and its connection go — so there is no half-authenticated state to expire.
+          const factor = enrolled ? ((await cfg.store.secondFactor?.get(session.config)) ?? null) : null
+          if (factor) {
+            const checked = await checkLoginFactor(cfg, deps.secondFactor, session.config, factor, { code, passkey })
+            if (checked !== 'ok') {
+              await cfg.store.delete(session.id)
+              failed = true
+              const missing = checked === 'missing'
+              deps.logger.log('warn', missing ? 'login.second_factor.missing' : 'login.second_factor.failed', audit)
+              if (!missing) return c.json(apiError('SECOND_FACTOR_INVALID', 'That code is not valid'), 401)
+              // The password was right: the answer may now carry a passkey challenge for the next attempt.
+              const challenge = await loginChallenge(deps.secondFactor, session.config, factor)
+              return c.json(
+                {
+                  ...apiError('SECOND_FACTOR_REQUIRED', 'This account needs a one-time code or a passkey'),
+                  ...(challenge ? { passkey: challenge } : {}),
+                },
+                401
+              )
+            }
+          }
+          if (enrolled) await cfg.store.enforceLimit(session.config, session.id)
+          deps.loginLimiter.reset(rateKey)
+          // A browser that logs in again without logging out must not keep its previous session (and pools) alive —
+          // dropped only now, so a failed re-login leaves the existing session untouched.
+          const previous = await getSignedCookie(c, cfg.secret, SESSION_COOKIE)
+          if (previous && previous !== session.id) await cfg.store.delete(previous)
+          deps.logger.log('info', 'login.ok', { ...audit, sessionId: sessionTag(session.id) })
+          await setSignedCookie(c, SESSION_COOKIE, session.id, cfg.secret, sessionCookieOptions(cfg))
+          return c.json(await sessionState(cfg, session, savedQueriesMode), 201)
+        } finally {
+          if (!failed) deps.ipLimiter.refund(ip, slot.windowEnd)
         }
-        if (enrolled) await cfg.store.enforceLimit(session.config, session.id)
-        deps.loginLimiter.reset(rateKey)
-        // A browser that logs in again without logging out must not keep its previous session (and pools) alive —
-        // dropped only now, so a failed re-login leaves the existing session untouched.
-        const previous = await getSignedCookie(c, cfg.secret, SESSION_COOKIE)
-        if (previous && previous !== session.id) await cfg.store.delete(previous)
-        deps.logger.log('info', 'login.ok', { ...audit, sessionId: sessionTag(session.id) })
-        await setSignedCookie(c, SESSION_COOKIE, session.id, cfg.secret, sessionCookieOptions(cfg))
-        return c.json(await sessionState(cfg, session, savedQueriesMode), 201)
       })
       .get('/session', requireEnrollable(cfg), async (c) =>
         c.json(await sessionState(cfg, c.get('session'), savedQueriesMode))

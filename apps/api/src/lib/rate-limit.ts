@@ -18,8 +18,11 @@ export class RateLimiter {
     this.timer = startSweep(sweepIntervalMs, () => this.sweep())
   }
 
-  /** Records an attempt and reports whether it is allowed. */
-  hit(key: string): { allowed: boolean; remaining: number; retryAfterSec: number } {
+  /**
+   * Records an attempt and reports whether it is allowed. `windowEnd` names the window the attempt was counted in,
+   * so `refund` can take it back only while that window is still the current one.
+   */
+  hit(key: string): { allowed: boolean; remaining: number; retryAfterSec: number; windowEnd: number } {
     const t = this.now()
     let w = this.windows.get(key)
     if (!w || w.resetAt <= t) {
@@ -28,7 +31,22 @@ export class RateLimiter {
     }
     w.count++
     const allowed = w.count <= this.max
-    return { allowed, remaining: Math.max(0, this.max - w.count), retryAfterSec: Math.ceil((w.resetAt - t) / 1000) }
+    return {
+      allowed,
+      remaining: Math.max(0, this.max - w.count),
+      retryAfterSec: Math.ceil((w.resetAt - t) / 1000),
+      windowEnd: w.resetAt,
+    }
+  }
+
+  /**
+   * Takes back one attempt counted by `hit`: for a caller that counts first, because the outcome is only known after
+   * an await, and gives the slot back when the outcome turns out not to count. Ignored once the window it was
+   * counted in has ended (the new window never saw it).
+   */
+  refund(key: string, windowEnd: number): void {
+    const w = this.windows.get(key)
+    if (w && w.resetAt === windowEnd && w.count > 0) w.count--
   }
 
   /** Reports the state of a key without recording an attempt. */

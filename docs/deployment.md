@@ -43,7 +43,7 @@ tsmyadmin は **1 プロセス（Bun）で API と SPA を配信する単一コ�
 | `TSMYADMIN_DOCKER_LOGIN` | `0` | `TSMYADMIN_DOCKER_DISCOVERY=1` と一緒に `1` にすると、検出したコンテナの環境変数（`MYSQL_ROOT_PASSWORD` / `POSTGRES_PASSWORD` など）から ログインの資格情報を読み、ログイン画面で**パスワードなしの 1 クリック**で接続できるようにする。パスワードはこのプロセスの中だけに置き、ブラウザには返さず、ログにも保存にも出さない。**開発専用**（`DISCOVERY` が本番で拒否されるので、本番では使えない）。下の「Docker で開発用に使う」 |
 | `TSMYADMIN_DOCKER_SOCKET` | `/var/run/docker.sock` | 検出に使う Docker Engine API の Unix ソケット。GET しか発行しない |
 | `TSMYADMIN_DOCKER_CONNECT_HOST` | ホスト上では `127.0.0.1` / コンテナ内では `host.docker.internal` | 検出したコンテナの公開ポートに、このプロセスから届くホスト名 |
-| `LOGIN_RATE_LIMIT` | `10` | `LOGIN_RATE_WINDOW_SECONDS` 内に許可するログイン試行回数（クライアント IP + ユーザー名ごと。IP 単位では 3 倍まで） |
+| `LOGIN_RATE_LIMIT` | `10` | `LOGIN_RATE_WINDOW_SECONDS` 内に許可するログイン試行回数（クライアント IP + ユーザー名ごと。IP 単位では 3 倍まで）。IP 単位は、**処理中のログインも数えます**（失敗したものだけが残り、成功したもの・ユーザー別の制限で断られたもの・セッションストアの障害で失敗したものは終わると戻る）。ユーザー名を変えた並列の試行が、上限を超えて DB に接続しにいくことはありません |
 | `TSMYADMIN_REQUIRE_2FA` | `0` | `1` で全アカウントに 2 要素認証（TOTP）を必須にする。未登録のアカウントはログインできるが、登録を終えるまで他の操作はできない。秘密鍵の置き場が要るため `SESSION_STORE=sqlite` か `redis` が必須（`memory` では起動時に終了する）。既定の `0` では、登録したアカウントだけが 2 段階になる |
 | `TSMYADMIN_PASSKEY_ORIGIN` | （空） | 利用者がブラウザで開く URL の origin（例 `https://db.example.com`）。設定すると、2 要素目にパスキー（WebAuthn）も使える。パスキーはこのホスト名に結び付くため、**後からドメインを変えると登録済みのパスキーはすべて使えなくなる**。HTTPS 必須（`http://localhost` だけ例外）、IP アドレスは不可、パスは付けない。`SESSION_STORE=sqlite` か `redis` が必須。空ならパスキーは出さない（認証アプリだけ） |
 | `TSMYADMIN_IMAGE_HOSTS` | （空） | 列の表示変換「画像（URL から）」が画像を読み込んでよいホスト。カンマ区切りで `host` / `*.suffix`、それぞれ `:port` 付き可（ポート省略は既定のポート 80 / 443）。ここに書いたホストは CSP の `img-src` に加わり、それ以外の画像 URL は読み込まれずリンクとして表示される。**画像の URL を開くとそのホストに閲覧者の IP アドレスなどが伝わる**ため、信頼できるホストだけを書く。空なら外部の画像は読み込まない |
