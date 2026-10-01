@@ -1,4 +1,4 @@
-<!-- translated-from: docs/operations.md sha256:3f0d417ed8969d7726bd7e821e9865f84f10377250c29a6cb9445f8e020b7733 -->
+<!-- translated-from: docs/operations.md sha256:4663823ddfa3201734303f46a24bab0be91d0930f5fecf271743768fc3066739 -->
 
 # Operations guide
 
@@ -22,6 +22,8 @@ The production default is one JSON object per line (`LOG_FORMAT=json`). The main
 | `login.ok` / `login.failed` / `login.host_not_allowed` / `login.insecure_transport` / `login.rate_limited` / `logout` | Authentication events (they carry the host, the username and the first 16 characters of a hash of the session ID — never a password or a raw session ID) |
 | `audit` | **The audit log**: every call that changes data, structure, an account or server state (`insertRow(s)`, `updateRow`, `deleteRows`, `executeSql`, `cancelQuery`, `killProcess`). It carries `requestId`, `dialect`, `dbUser`, `dbHost`, `database`, `schema`, `table`, row counts, the kind of key and the column names; for `executeSql`, the first 500 characters of the SQL plus the statement and error counts; and `ok`, `ms`. A failure records only `error` (the error code) and `nativeCode`, never the server's message. **Row values are never recorded** (a SQL console statement is recorded to 500 characters, so it can contain values; an import records only `<import>` and a character count, and nothing of the file itself). Passwords — in account operations and in `IDENTIFIED BY` / `PASSWORD` statements from the SQL console — are replaced with `****` |
 | `readyz.failed` | The session store is unhealthy (`error` level) |
+| `session_store.unavailable` | The session store (Redis / SQLite) could not be used and a request became `503 STORE_UNAVAILABLE` (`error` level). Logged **at most once a minute**, with the number of lines left out in `suppressed`. No stack |
+| `process.unhandled_rejection` | A Promise rejection nothing handled (`error` level), with its stack. It used to end the process (which is how a Redis outage dropped everyone's session); now it is logged and the process keeps running. An uncaught exception (`uncaughtException`) still ends the process |
 | `unhandled` | An unexpected exception (`error` level). It carries the `requestId` and a stack, and the response is `500 INTERNAL`; look it up by `X-Request-Id` |
 | `export.aborted` | An export stream failed part-way (`error` level). Whatever was downloaded is incomplete |
 | `session_store.open_failed` / `session_store.reset` | The SQLite session store could not be opened and the process exited (`path`, `error`, `hint`) / a changed `SESSION_SECRET` was detected and the stored sessions were deleted |
@@ -59,6 +61,7 @@ Every response carries an `X-Request-Id`. When a user reports a problem, look th
 | Sign-in returns 429 | The rate limit. Retry after `Retry-After` seconds. If it is a false positive, check `TRUST_PROXY` — behind a proxy with `0`, everyone shares one IP |
 | Everyone is signed out after a restart | `SESSION_STORE=memory`, no volume, or a changed `SESSION_SECRET`. See the upgrade section of [deployment.md](deployment.md) |
 | Exits at startup with `session_store.open_failed` (the container restart-loops) | The `bun` user (uid 1000) cannot write to `SESSION_DB_PATH` (`/app/data` under Docker). A bind mount needs `chown 1000:1000`. The `error` line reads `unable to open database file` or `attempt to write a readonly database` |
+| An API call returns 503 `STORE_UNAVAILABLE` (with `Retry-After: 5`; the screen says the server cannot use its session store right now) | The session store is temporarily unusable. The causes are those of `/readyz` returning 503 (Redis stopped; a SQLite file that cannot be opened, is locked, is read-only or sits on a full disk). With Redis it recovers by itself once Redis is back. The log line is `session_store.unavailable` (once a minute) |
 | `/readyz` returns 503 | The session store cannot be reached. Under `SESSION_STORE=redis` that means Redis is down or `REDIS_URL` is wrong (a `session_store.unreachable` line accompanies it); under `sqlite`, the file became unreadable or corrupt after startup. Check the `error` in `readyz.failed` |
 | A statement times out in the SQL console | 30 seconds by default. A run can be stopped with **Cancel** (`KILL QUERY` / `pg_cancel_backend`, audited as `cancelQuery`). Use Import (up to 10 minutes) for long bulk work |
 | An import returns 413 `PAYLOAD_TOO_LARGE` (a file past 64 MB, or a body past 65 MB) | Split the file, and check the reverse proxy's `client_max_body_size` as well |

@@ -168,6 +168,8 @@ export const ApiErrorCodeSchema = z.enum([
   'RATE_LIMITED',
   /** Request body / uploaded file over the limit (413). */
   'PAYLOAD_TOO_LARGE',
+  /** The session store (Redis / SQLite) cannot be used right now; trying again later may work (503). */
+  'STORE_UNAVAILABLE',
   'INTERNAL',
 ])
 export type ApiErrorCode = z.infer<typeof ApiErrorCodeSchema>

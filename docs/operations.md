@@ -20,6 +20,8 @@
 | `login.ok` / `login.failed` / `login.host_not_allowed` / `login.insecure_transport` / `login.rate_limited` / `logout` | 認証イベント（ホスト・ユーザー名・セッション ID のハッシュ先頭 16 桁は含む、パスワードと生のセッション ID は含まない） |
 | `audit` | **監査ログ**: データ・構造・アカウント・サーバー状態を変える呼び出し（`insertRow(s)` / `updateRow` / `deleteRows` / `executeSql` / `cancelQuery` / `killProcess`）。`requestId`, `dialect`, `dbUser`, `dbHost`, `database`, `schema`, `table`, 行数・キー種別・カラム名、`executeSql` は SQL 先頭 500 文字と文数 / エラー数、`ok`, `ms`。失敗時は `error`（エラーコード）と `nativeCode` だけで、サーバーのメッセージは記録しない。**行の値は記録しない**（SQL コンソールの文は先頭 500 文字を記録するため値を含み得る。インポートは `<import>` と文字数だけを記録し、ファイルの中身は一切残さない）。パスワード（アカウント操作、SQL コンソールの `IDENTIFIED BY` / `PASSWORD` 文）は `****` に置換 |
 | `readyz.failed` | セッションストア異常（`error` レベル） |
+| `session_store.unavailable` | セッションストア（Redis / SQLite）が使えず、リクエストが `503 STORE_UNAVAILABLE` になった（`error` レベル）。**1 分に 1 行**だけ記録し、間引いた件数を `suppressed` に持つ。スタックは含まない |
+| `process.unhandled_rejection` | どこでも処理されなかった Promise の reject（`error` レベル）。スタックを含む。以前はこれでプロセスが落ちた（Redis 障害で全員のセッションが落ちる原因だった）が、いまはログに残して動き続ける。例外（`uncaughtException`）は従来どおりプロセスを終了する |
 | `unhandled` | 想定外の例外（`error` レベル）。`requestId` とスタックを含み、レスポンスは `500 INTERNAL`。`X-Request-Id` から引ける |
 | `export.aborted` | エクスポートのストリーミングが途中で失敗（`error` レベル）。ダウンロード済みのファイルは不完全 |
 | `session_store.open_failed` / `session_store.reset` | SQLite セッションストアを開けず終了（`path`, `error`, `hint`）/ `SESSION_SECRET` 変更を検出して保存済みセッションを削除 |
@@ -57,6 +59,7 @@ docker logs tsmyadmin 2>&1 | jq -c 'select(.event=="audit") | {time, dbUser, act
 | ログインが 429 | レート制限。`Retry-After` 秒後に再試行。誤検知なら `TRUST_PROXY` の設定を確認（プロキシ配下で `0` だと全員が同じ IP になる） |
 | 再起動後に全員ログアウト | `SESSION_STORE=memory`、またはボリューム未設定 / `SESSION_SECRET` 変更。`docs/deployment.md` のアップグレード節 |
 | 起動直後に `session_store.open_failed` で終了（コンテナが再起動ループ） | `SESSION_DB_PATH`（Docker では `/app/data`）に `bun` ユーザー（uid 1000）の書き込み権限がない。バインドマウントは `chown 1000:1000`。`unable to open database file` / `attempt to write a readonly database` が `error` に出る |
+| API が 503 `STORE_UNAVAILABLE`（`Retry-After: 5`。画面には「サーバーのセッション保存先がいま使えません」） | セッションストアが一時的に使えない。原因は `/readyz` が 503 のときと同じ（Redis 停止、SQLite のファイルが開けない・ロック中・読み取り専用・ディスク満杯）。Redis なら復旧すれば自動で戻る。ログは `session_store.unavailable`（1 分に 1 行） |
 | `/readyz` が 503 | セッションストアに届かない。`SESSION_STORE=redis` なら Redis が落ちている / `REDIS_URL` が誤り（ログ `session_store.unreachable` も出ます）、`sqlite` なら起動後にファイルが読めなくなった / 破損。`readyz.failed` の `error` を確認 |
 | SQL コンソールでタイムアウト | 既定 30 秒。実行中は「キャンセル」で中断できる（`KILL QUERY` / `pg_cancel_backend`、監査ログ `cancelQuery`）。長時間の一括処理はインポート（最大 10 分）を使う |
 | インポートが 413 `PAYLOAD_TOO_LARGE`（ファイルが 64 MB 超 / 本文が 65 MB 超） | 分割するか、リバースプロキシの `client_max_body_size` も確認 |
