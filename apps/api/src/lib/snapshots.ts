@@ -9,6 +9,7 @@ import type {
   TableInfo,
 } from '@tsmyadmin/shared'
 import { ExportQuerySchema } from '@tsmyadmin/shared'
+import { startSweep } from '../session/store.ts'
 import { buildExport, DUMP_COMPLETE_MARKER } from './export.ts'
 import { importSql } from './import.ts'
 
@@ -16,6 +17,10 @@ import { importSql } from './import.ts'
 export const SNAPSHOT_MAX_COUNT = 10
 export const SNAPSHOT_MAX_BYTES = 64 * 1024 * 1024
 const SNAPSHOT_TOTAL_BYTES = 256 * 1024 * 1024
+/** How long one is kept after it was taken: long enough to try a migration and go back, short enough not to pile up. */
+export const SNAPSHOT_TTL_MS = 24 * 60 * 60_000
+/** How often what has outlived that is let go even when nobody asks for a snapshot. */
+const SWEEP_INTERVAL_MS = 10 * 60_000
 
 /** Held and being-taken together would pass the total: what to do about it differs from a dump that is too large. */
 function fullError(): SnapshotError {
@@ -52,8 +57,45 @@ export class SnapshotStore {
   private nextId = 1
   /** What the snapshots being taken right now may still add: counted with what is held, from the moment they start. */
   private reserved = 0
+  private readonly totalLimit: number
+  private readonly ttlMs: number
+  private readonly now: () => number
+  private readonly onExpire: ((count: number) => void) | undefined
 
-  constructor(private readonly totalLimit = SNAPSHOT_TOTAL_BYTES) {}
+  /**
+   * The total they may fill, how long one is kept, a clock, and who is told when some were let go (the count only).
+   * A snapshot is dropped once it is older than the time to live, checked before every operation; the timer only
+   * gives the memory back when nobody is asking, and never keeps the process alive.
+   */
+  constructor(
+    options: {
+      totalLimit?: number
+      ttlMs?: number
+      now?: () => number
+      sweepIntervalMs?: number
+      onExpire?: (count: number) => void
+    } = {}
+  ) {
+    this.totalLimit = options.totalLimit ?? SNAPSHOT_TOTAL_BYTES
+    this.ttlMs = options.ttlMs ?? SNAPSHOT_TTL_MS
+    this.now = options.now ?? Date.now
+    this.onExpire = options.onExpire
+    startSweep(options.sweepIntervalMs ?? SWEEP_INTERVAL_MS, () => this.expire())
+  }
+
+  /** Lets go of every snapshot older than the time to live; an account's list never shows one that has expired. */
+  private expire(): void {
+    const oldest = this.now() - this.ttlMs
+    let gone = 0
+    for (const [scope, list] of this.held) {
+      const kept = list.filter((h) => Date.parse(h.snapshot.at) > oldest)
+      if (kept.length === list.length) continue
+      gone += list.length - kept.length
+      if (kept.length === 0) this.held.delete(scope)
+      else this.held.set(scope, kept)
+    }
+    if (gone > 0) this.onExpire?.(gone)
+  }
 
   /** Who took it, on which server, of which database (and PostgreSQL schema). */
   static scope(config: Pick<ConnectRequest, 'host' | 'port' | 'user'>, ns: Namespace): string {
@@ -61,10 +103,12 @@ export class SnapshotStore {
   }
 
   list(scope: string): Snapshot[] {
+    this.expire()
     return (this.held.get(scope) ?? []).map((h) => h.snapshot)
   }
 
   get(scope: string, id: string): Held | undefined {
+    this.expire()
     return this.held.get(scope)?.find((h) => h.snapshot.id === id)
   }
 
@@ -82,6 +126,7 @@ export class SnapshotStore {
    * stored or given up; calling it twice does nothing.
    */
   reserve(most: number): { limit: number; release: () => void } {
+    this.expire()
     const limit = Math.min(most, this.totalLimit - this.totalBytes())
     if (limit <= 0) throw fullError()
     this.reserved += limit
@@ -97,6 +142,7 @@ export class SnapshotStore {
   }
 
   add(scope: string, held: Omit<Held, 'snapshot'>, name: string, at: Date): Snapshot {
+    this.expire()
     const list = this.held.get(scope) ?? []
     if (list.length >= SNAPSHOT_MAX_COUNT)
       throw new SnapshotError('TOO_MANY', `A database keeps at most ${SNAPSHOT_MAX_COUNT} snapshots: remove one first`)
@@ -114,6 +160,7 @@ export class SnapshotStore {
   }
 
   remove(scope: string, id: string): boolean {
+    this.expire()
     const list = this.held.get(scope) ?? []
     const rest = list.filter((h) => h.snapshot.id !== id)
     if (rest.length === list.length) return false

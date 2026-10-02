@@ -1,4 +1,4 @@
-<!-- translated-from: docs/operations.md sha256:f1f1b0e601a07d18bb495ee5e0fbbd68b53fd7d23f30641d9e4ba0c8ad71cf53 -->
+<!-- translated-from: docs/operations.md sha256:8559a4bdf74c3773c1bb5f16cb026a7a8bf6435df68470e2be6d3fe04dee1d0f -->
 
 # Operations guide
 
@@ -24,6 +24,7 @@ The production default is one JSON object per line (`LOG_FORMAT=json`). The main
 | `readyz.failed` | The session store is unhealthy (`error` level) |
 | `session_store.unavailable` | The session store (Redis / SQLite) could not be used and a request became `503 STORE_UNAVAILABLE` (`error` level). Logged **at most once a minute**, with the number of lines left out in `suppressed`. No stack |
 | `login.second_factor.locked` / `second_factor.locked` | An account whose second-factor code was wrong 10 times in a row was refused with `429 RATE_LIMITED` without the code being looked at (`warn`; the latter carries the action in `attempt`). It clears after 15 minutes |
+| `snapshot.expired` | Snapshots 24 hours after being taken were removed (`info`; only the number removed, `count` — never a name or content) |
 | `import.refused` | The imports that may run at once (`IMPORT_MAX_CONCURRENT`) were all taken, and a new import was turned away with `429 RATE_LIMITED` (`warn` level; carries `active` and `max`) |
 | `process.unhandled_rejection` | A Promise rejection nothing handled (`error` level), with its stack. It used to end the process (which is how a Redis outage dropped everyone's session); now it is logged and the process keeps running. An uncaught exception (`uncaughtException`) still ends the process |
 | `unhandled` | An unexpected exception (`error` level). It carries the `requestId` and a stack, and the response is `500 INTERNAL`; look it up by `X-Request-Id` |

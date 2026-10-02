@@ -22,6 +22,7 @@
 | `readyz.failed` | セッションストア異常（`error` レベル） |
 | `session_store.unavailable` | セッションストア（Redis / SQLite）が使えず、リクエストが `503 STORE_UNAVAILABLE` になった（`error` レベル）。**1 分に 1 行**だけ記録し、間引いた件数を `suppressed` に持つ。スタックは含まない |
 | `login.second_factor.locked` / `second_factor.locked` | 2 要素認証のコードを連続 10 回まちがえたアカウントで、コードを見ずに `429 RATE_LIMITED` で断った（`warn` レベル。後者は `attempt` に操作を含む）。15 分で解ける |
+| `snapshot.expired` | 取ってから 24 時間たったスナップショットを消した（`info` レベル。消した件数 `count` だけ。名前や中身は出さない） |
 | `import.refused` | 同時に実行できるインポート（`IMPORT_MAX_CONCURRENT`）が埋まっていて、新しいインポートを `429 RATE_LIMITED` で断った（`warn` レベル。`active` と `max` を含む） |
 | `process.unhandled_rejection` | どこでも処理されなかった Promise の reject（`error` レベル）。スタックを含む。以前はこれでプロセスが落ちた（Redis 障害で全員のセッションが落ちる原因だった）が、いまはログに残して動き続ける。例外（`uncaughtException`）は従来どおりプロセスを終了する |
 | `unhandled` | 想定外の例外（`error` レベル）。`requestId` とスタックを含み、レスポンスは `500 INTERNAL`。`X-Request-Id` から引ける |
