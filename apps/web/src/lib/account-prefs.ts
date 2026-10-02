@@ -44,6 +44,11 @@ let dirty: Preferences = {}
 /** The same for the workspace entries (favourite tables, chosen columns…): keys set since the last send, and keys removed. */
 let dirtyKeys: { set: Record<string, unknown>; remove: string[] } = { set: {}, remove: [] }
 let pending: ReturnType<typeof setTimeout> | null = null
+/**
+ * Counts the accounts this tab has served. A send that fails after the account has changed belongs to the one that
+ * has gone, and must not put its change back for the next to send.
+ */
+let generation = 0
 
 /** Drops a change still waiting to be sent: it belongs to the account that made it, not to the next one. */
 function cancelPending(): void {
@@ -61,6 +66,7 @@ export async function loadAccountPreferences(identity: string, onServer: boolean
     // Another account in this tab (a session that expired, then someone else signing in): nothing of the last
     // one's may be sent with this one's cookie.
     cancelPending()
+    generation++
     shared = {}
     dirty = {}
     dirtyKeys = { set: {}, remove: [] }
@@ -107,6 +113,7 @@ export async function loadAccountPreferences(identity: string, onServer: boolean
 /** Forgets the account at logout, so the next login reads its own preferences. */
 export function resetAccountPreferences(): void {
   cancelPending()
+  generation++
   loadedFor = null
   syncing = false
   shared = {}
@@ -116,6 +123,7 @@ export function resetAccountPreferences(): void {
 
 function send(): Promise<unknown> {
   cancelPending()
+  const sentFor = generation
   const body = dirty
   dirty = {}
   const keyed = dirtyKeys
@@ -126,7 +134,7 @@ function send(): Promise<unknown> {
   if (Object.keys(body).length > 0) {
     sends.push(
       api.preferences.$put({ json: body }, { init: { keepalive: true } }).catch(() => {
-        dirty = { ...body, ...dirty }
+        if (sentFor === generation) dirty = { ...body, ...dirty }
       })
     )
   }
@@ -134,6 +142,7 @@ function send(): Promise<unknown> {
     const update: WorkspaceUpdate = { set: keyed.set, remove: keyed.remove }
     sends.push(
       api.workspace.$put({ json: update }, { init: { keepalive: true } }).catch(() => {
+        if (sentFor !== generation) return
         // Whatever was changed again meanwhile is newer than what failed to go out.
         dirtyKeys = {
           set: { ...keyed.set, ...dirtyKeys.set },

@@ -10,7 +10,7 @@ export async function streamError(res: Response): Promise<ApiError> {
 
 /**
  * The events of an NDJSON response, one per non-blank line (blank lines are the server's heartbeats), parsed
- * with `schema`. Only the unparsed tail of the current chunk is kept in memory. A bad line closes the body
+ * with `schema` (a last line with no newline included). Only the unparsed tail of the current chunk is kept in memory. A bad line closes the body
  * (the connection would otherwise stay open until the server finishes) before the error propagates.
  */
 export async function* ndjsonEvents<T>(body: ReadableStream, schema: ZodType<T>): AsyncGenerator<T> {
@@ -19,7 +19,13 @@ export async function* ndjsonEvents<T>(body: ReadableStream, schema: ZodType<T>)
   try {
     for (;;) {
       const chunk = await reader.read()
-      if (chunk.done) break
+      if (chunk.done) {
+        // The last line may arrive without its newline (the stream cut right after it): it is still an event, and
+        // may be the one that says the run is over.
+        const rest = buffer.trim()
+        if (rest) yield schema.parse(JSON.parse(rest))
+        break
+      }
       buffer += chunk.value
       let nl = buffer.indexOf('\n')
       while (nl !== -1) {
