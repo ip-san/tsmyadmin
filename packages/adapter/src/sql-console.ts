@@ -223,6 +223,11 @@ export class ScriptRunner {
               else {
                 await conn.query('ROLLBACK').catch(() => undefined)
                 await conn.reset()
+                // Asked again after those round trips: a cancel that arrived during them has sent (or is about to
+                // send) its signal to this backend, and the connection must not go back to the pool with it.
+                // Nothing here waits on I/O before the release, and a cancel opens its own connection before it
+                // looks again, so one that arrives from now on finds the run over and sends nothing.
+                if (entry.cancelled) conn.discard()
               }
             }
           }

@@ -35,6 +35,8 @@ interface RigOptions {
   inTransaction?: () => Promise<boolean>
   copyFrom?: (sql: string, data: string) => Promise<number>
   backendId?: () => Promise<string>
+  /** The connection's session reset, which a test may hold on the wire. */
+  reset?: () => Promise<void>
   wrapperOnlyErrors?: string[]
 }
 
@@ -52,6 +54,7 @@ function rig(options: RigOptions = {}) {
     id: {},
     reset: async () => {
       log.push('reset')
+      await options.reset?.()
     },
     forget: () => log.push('forget-conn'),
     discard: () => log.push('discard'),
@@ -387,6 +390,22 @@ describe('cancelling', () => {
     // A cancel signal may still be in transit: the connection is closed, not reset and reused.
     expect(r.log).toContain('discard')
     expect(r.log).not.toContain('reset')
+  })
+
+  it('drops the connection when the cancel arrives while the finished run is cleaning it up', async () => {
+    // The run decided to keep its connection (nothing had been cancelled), then spent a round trip on the ROLLBACK
+    // and the session reset. A cancel that lands in that gap still sends its signal, to a connection that goes back
+    // to the pool and may already be serving the next request when the signal arrives.
+    const resetting = deferred<void>()
+    const r = rig({ reset: () => resetting.promise })
+    const run = r.runner.execute(ns, 'SELECT 1', { ...EXEC, queryId: 'q' })
+    await vi.waitFor(() => expect(r.log).toContain('reset'))
+    const cancelled = r.runner.cancel('q')
+    await vi.waitFor(() => expect(r.canceller.cancel).toHaveBeenCalledWith('42'))
+    resetting.resolve()
+    await run
+    await cancelled
+    expect(r.log).toContain('discard')
   })
 
   it('counts a statement the server stopped without failing it (MySQL: KILL QUERY on SLEEP returns a row)', async () => {
