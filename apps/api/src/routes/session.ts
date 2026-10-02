@@ -202,6 +202,12 @@ export function sessionRoutes(cfg: SessionConfig, deps: SessionRouteDeps) {
             if (checked !== 'ok') {
               await cfg.store.delete(session.id)
               failed = true
+              if (typeof checked === 'object') {
+                // The account's wrong guesses, from every address together, reached the limit: not looked at.
+                deps.logger.log('warn', 'login.second_factor.locked', audit)
+                c.header('Retry-After', String(checked.locked))
+                return c.json(apiError('RATE_LIMITED', 'Too many code attempts; try again later'), 429)
+              }
               const missing = checked === 'missing'
               deps.logger.log('warn', missing ? 'login.second_factor.missing' : 'login.second_factor.failed', audit)
               if (!missing) return c.json(apiError('SECOND_FACTOR_INVALID', 'That code is not valid'), 401)

@@ -102,6 +102,9 @@ export interface SecondFactor {
   recoveryHashes: string[]
   /** When it was enrolled or last changed. */
   at: number
+  /** Wrong proofs in a row, and when the last one was given; see `second-factor-lock.ts`. Absent while there are none. */
+  misses?: number
+  lastMissAt?: number
   /**
    * What was stored when this was read, for `set` to write against. Two logins carrying the same code would
    * otherwise both read the same `lastStep`, both check out and both be accepted — the guard that makes a code

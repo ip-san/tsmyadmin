@@ -187,6 +187,10 @@ export function describeSessionStoreConformance(
           true
         )
         expect(await factor.get(CONFIG)).toMatchObject({ lastStep: 9, recoveryHashes: [] })
+        // The count of wrong proofs lives in the record, so it is shared with every process that reads it.
+        const counted = await factor.get(CONFIG)
+        expect(counted && (await factor.set(CONFIG, { ...counted, misses: 3, lastMissAt: 1234 }))).toBe(true)
+        expect(await factor.get(CONFIG)).toMatchObject({ lastStep: 9, misses: 3, lastMissAt: 1234 })
         await factor.clear({ ...CONFIG, user: 'someone-else' })
         expect(await factor.get(CONFIG)).not.toBeNull()
         // Removed against what was read, like a write: not once something has been written since.

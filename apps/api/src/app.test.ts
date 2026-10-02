@@ -50,8 +50,9 @@ import { auditedAdapterFactory } from './lib/audit.ts'
 import { createLogger, type Logger, type TrustProxy } from './lib/logging.ts'
 import { codeFor, stepAt } from './lib/totp.ts'
 import { SAVED_QUERY_LIMIT } from './session/saved-queries.ts'
+import { LOCK_MS, MAX_MISSES, withMiss } from './session/second-factor-lock.ts'
 import { SqliteSessionStore } from './session/sqlite-store.ts'
-import { MemorySessionStore } from './session/store.ts'
+import { MemorySessionStore, type SecondFactor } from './session/store.ts'
 
 const SECRET = 'test-secret'
 const LOGIN = { dialect: 'mysql', host: 'db', port: 3306, user: 'root', password: 'pw' }
@@ -1589,7 +1590,13 @@ describe('errors', () => {
 describe('second factor', () => {
   /** The same persistent-store harness, with a clock the test can hold still. */
   function totpHarness(
-    options: { require2fa?: boolean; maxPerIdentity?: number; manageAccounts?: boolean; passkeys?: boolean } = {}
+    options: {
+      require2fa?: boolean
+      maxPerIdentity?: number
+      manageAccounts?: boolean
+      passkeys?: boolean
+      trustProxy?: TrustProxy
+    } = {}
   ) {
     let now = 1_700_000_000_000
     const store = new SqliteSessionStore({
@@ -1607,6 +1614,7 @@ describe('second factor', () => {
       {
         ...testConfig(),
         require2fa: options.require2fa ?? false,
+        ...(options.trustProxy !== undefined ? { trustProxy: options.trustProxy } : {}),
         // The origin and challenge the recorded passkey answers were made for (see passkey.fixture.json).
         passkey: options.passkeys ? { origin: PASSKEY_FIXTURE.origin, rpId: PASSKEY_FIXTURE.rpId } : null,
       },
@@ -1618,8 +1626,8 @@ describe('second factor', () => {
         ...init,
         headers: { 'content-type': 'application/json', ...(cookie ? { cookie } : {}), ...(init.headers ?? {}) },
       })
-    const login = async (body: Record<string, unknown> = LOGIN) => {
-      const res = await req('/api/session', { method: 'POST', body: JSON.stringify(body) })
+    const login = async (body: Record<string, unknown> = LOGIN, headers: Record<string, string> = {}) => {
+      const res = await req('/api/session', { method: 'POST', body: JSON.stringify(body), headers })
       const set = res.headers.get('set-cookie')?.split(';')[0]
       if (set) cookie = set
       return res
@@ -1639,6 +1647,115 @@ describe('second factor', () => {
     expect(confirmed.status).toBe(201)
     return setup
   }
+
+  /** A caller on its own address each time, as one with many of them is: no per-address limit is reached. */
+  const from = (n: number) => ({ 'x-forwarded-for': `203.0.113.${n}` })
+  const WRONG = { ...LOGIN, code: '000000' }
+
+  describe('the lock on wrong codes', () => {
+    it('stops after ten wrong codes from any addresses, even for the right one, and opens again after the lock', async () => {
+      const h = totpHarness({ trustProxy: 'forwarded' })
+      try {
+        await h.login()
+        const setup = await enrol(h)
+        for (let i = 1; i <= MAX_MISSES; i++) {
+          const res = await h.login(WRONG, from(i))
+          expect(ApiErrorSchema.parse(await res.json()).code).toBe('SECOND_FACTOR_INVALID')
+        }
+        h.tick(30_000)
+        const code = codeFor(setup.secret, stepAt(h.at()))
+        const locked = await h.login({ ...LOGIN, code }, from(100))
+        expect(locked.status).toBe(429)
+        expect(ApiErrorSchema.parse(await locked.json()).code).toBe('RATE_LIMITED')
+        // The seconds the lock has left, counted from the last wrong code: a little under the full 15 minutes.
+        const wait = Number(locked.headers.get('retry-after'))
+        expect(wait).toBeGreaterThan(14 * 60)
+        expect(wait).toBeLessThanOrEqual(15 * 60)
+        expect(locked.headers.get('set-cookie')).toBeNull()
+
+        h.tick(LOCK_MS)
+        const opened = await h.login({ ...LOGIN, code: codeFor(setup.secret, stepAt(h.at())) }, from(101))
+        expect(opened.status).toBe(201)
+      } finally {
+        await h.store.closeAll()
+      }
+    })
+
+    it('forgets the misses once a right code is accepted, so they never add up across logins', async () => {
+      const h = totpHarness({ trustProxy: 'forwarded' })
+      try {
+        await h.login()
+        const setup = await enrol(h)
+        let n = 0
+        for (let round = 0; round < 3; round++) {
+          for (let i = 0; i < MAX_MISSES - 1; i++) {
+            expect((await h.login(WRONG, from(++n))).status).toBe(401)
+          }
+          h.tick(30_000)
+          const right = { ...LOGIN, code: codeFor(setup.secret, stepAt(h.at())) }
+          expect((await h.login(right, from(++n))).status).toBe(201)
+        }
+      } finally {
+        await h.store.closeAll()
+      }
+    })
+
+    it('does not let a burst of guesses see more than the limit allows', async () => {
+      const h = totpHarness({ trustProxy: 'forwarded' })
+      try {
+        await h.login()
+        const setup = await enrol(h)
+        // One miss short of the lock, then guesses arrive together with the right code among them.
+        const account = { ...LOGIN, dialect: 'mysql' as const }
+        const read = await h.store.secondFactor?.get(account)
+        expect(read).not.toBeNull()
+        let counted = read as SecondFactor
+        for (let i = 0; i < MAX_MISSES - 1; i++) counted = withMiss(counted, h.at())
+        expect(await h.store.secondFactor?.set(account, counted)).toBe(true)
+
+        h.tick(30_000)
+        const right = { ...LOGIN, code: codeFor(setup.secret, stepAt(h.at())) }
+        const burst = await Promise.all(
+          Array.from({ length: 8 }, (_, i) => h.login(i === 3 ? right : WRONG, from(i + 1)))
+        )
+        // The first of them takes the last try; nothing after it is looked at, the right code among them included.
+        expect(burst.map((r) => r.status).filter((s) => s === 201)).toEqual([])
+        expect((await h.login(right, from(50))).status).toBe(429)
+      } finally {
+        await h.store.closeAll()
+      }
+    })
+
+    it('guards the changes made from inside a session the same way', async () => {
+      const h = totpHarness({ trustProxy: 'forwarded' })
+      try {
+        await h.login()
+        const setup = await enrol(h)
+        for (let i = 1; i <= MAX_MISSES; i++) {
+          const res = await h.req('/api/second-factor', {
+            method: 'DELETE',
+            body: JSON.stringify({ code: '000000' }),
+            headers: from(i),
+          })
+          expect(res.status).toBe(401)
+        }
+        h.tick(30_000)
+        const right = await h.req('/api/second-factor', {
+          method: 'DELETE',
+          body: JSON.stringify({ code: codeFor(setup.secret, stepAt(h.at())) }),
+          headers: from(99),
+        })
+        expect(right.status).toBe(429)
+        expect(Number(right.headers.get('retry-after'))).toBeGreaterThan(0)
+        // Nothing was removed, and the login is locked as well: it is one account.
+        expect(SecondFactorStatusSchema.parse(await (await h.req('/api/second-factor')).json()).state).toBe('enrolled')
+        const login = await h.login({ ...LOGIN, code: codeFor(setup.secret, stepAt(h.at())) }, from(98))
+        expect(login.status).toBe(429)
+      } finally {
+        await h.store.closeAll()
+      }
+    })
+  })
 
   it('asks for a code at the next login, and refuses one that was already used', async () => {
     const h = totpHarness()
