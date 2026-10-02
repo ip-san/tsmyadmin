@@ -22,7 +22,7 @@ import {
   MAX_TEXT_CHARS,
   sqlScript,
 } from '@tsmyadmin/shared'
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { mysqlAccount } from '../mysql/users.ts'
 import { quoteIdent, quoteTable } from '../sql/quote.ts'
 import { AdapterError, type DatabaseAdapter, type ExecuteOptions, type RowBatch } from '../types.ts'
@@ -195,15 +195,23 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
       })
 
       it('leaves out the sizes and table counts when asked not to count them', async () => {
-        const counted = await db.listDatabases()
-        const bare = await db.listDatabases({ stats: false })
-        expect(bare.map((d) => d.name)).toEqual(counted.map((d) => d.name))
-        for (const d of bare) {
-          expect(d.sizeBytes).toBeNull()
-          expect(d.tableCount).toBeNull()
-        }
-        // The fixture database has tables, so the counted list is not all nulls.
-        expect(counted.find((d) => d.name === ns.database)?.sizeBytes).not.toBeNull()
+        // Two listings, one after the other: another test file creates and drops databases on this same server at
+        // the same time, so one taken between those can differ by them. Taken again until the names agree — a real
+        // difference (the option changing which databases are listed) does not go away, and still fails here.
+        await vi.waitFor(
+          async () => {
+            const counted = await db.listDatabases()
+            const bare = await db.listDatabases({ stats: false })
+            expect(bare.map((d) => d.name)).toEqual(counted.map((d) => d.name))
+            for (const d of bare) {
+              expect(d.sizeBytes).toBeNull()
+              expect(d.tableCount).toBeNull()
+            }
+            // The fixture database has tables, so the counted list is not all nulls.
+            expect(counted.find((d) => d.name === ns.database)?.sizeBytes).not.toBeNull()
+          },
+          { timeout: 5000, interval: 50 }
+        )
       })
     })
 
