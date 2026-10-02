@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { setAssignments, splitStatements, stripComments, stripLeadingComments } from './split.ts'
+import { countStatements, setAssignments, splitStatements, stripComments, stripLeadingComments } from './split.ts'
 
 describe('splitStatements', () => {
   it('splits on semicolons and trims', () => {
@@ -328,5 +328,48 @@ describe('splitStatements: MySQL DELIMITER', () => {
       "SELECT 'DELIMITER //'",
       'SELECT 2',
     ])
+  })
+})
+
+describe('countStatements', () => {
+  const samples: { name: string; dialect: 'mysql' | 'postgres'; sql: string }[] = [
+    { name: 'plain statements', dialect: 'mysql', sql: 'SELECT 1; SELECT 2 ;\n\nSELECT 3' },
+    { name: 'chunks of only comments', dialect: 'mysql', sql: '-- a\n/* b */;\nSELECT 1;\n# c\n;' },
+    {
+      name: 'a DELIMITER block',
+      dialect: 'mysql',
+      sql: 'DELIMITER //\nCREATE PROCEDURE p() BEGIN SELECT 1; END//\nDELIMITER ;\nSELECT 2;',
+    },
+    {
+      name: 'strings holding semicolons',
+      dialect: 'mysql',
+      sql: 'INSERT INTO t VALUES (\'a;b\'); INSERT INTO t VALUES ("c;d");',
+    },
+    {
+      name: 'a COPY block, whose data belongs to its statement',
+      dialect: 'postgres',
+      sql: 'COPY t (a) FROM stdin;\n1\n2;\n3\n\\.\nSELECT 1;\nSELECT 2;',
+    },
+    {
+      name: 'psql meta-commands',
+      dialect: 'postgres',
+      sql: '\\restrict abc\nSELECT 1;\n\\connect db\nSELECT 2;\n\\unrestrict abc\n',
+    },
+    {
+      name: 'dollar quoting',
+      dialect: 'postgres',
+      sql: 'CREATE FUNCTION f() RETURNS int AS $$ SELECT 1; SELECT 2; $$ LANGUAGE sql;\nSELECT 3;',
+    },
+    { name: 'nothing at all', dialect: 'mysql', sql: '  \n' },
+    { name: 'no final terminator', dialect: 'postgres', sql: 'SELECT 1;\nSELECT 2' },
+  ]
+
+  it.each(samples)('gives the length of the split, for $name', ({ sql, dialect }) => {
+    expect(countStatements(sql, dialect)).toBe(splitStatements(sql, dialect).length)
+  })
+
+  it('counts a large script', () => {
+    const many = 'INSERT INTO t VALUES (1);\n'.repeat(300_000)
+    expect(countStatements(many, 'mysql')).toBe(300_000)
   })
 })

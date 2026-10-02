@@ -1,4 +1,4 @@
-<!-- translated-from: docs/deployment.md sha256:b18b4492557b638716bba2568cf557e13d1b2bdd6f74e8b4be0ceb0ad98ecbb1 -->
+<!-- translated-from: docs/deployment.md sha256:85491d6d5dd22de7ff5f29289369639a13ba6b10102b7806318aebc0ef7296b0 -->
 
 # Deployment guide
 
@@ -287,7 +287,7 @@ With `SESSION_STORE=redis`, **sessions and saved queries are shared between repl
 | Connections just after a logout | Deleting on one replica leaves another replica's pool open until its next use or sweep (up to 60 seconds) |
 | A second factor being enrolled | The app secret (TOTP) and the passkey registration challenge are held in the process for at most 10 minutes. If the confirming step reaches another replica, it answers `401 SECOND_FACTOR_INVALID` ("start again") and the enrolment has to be started over (nothing was stored, so nobody is locked out halfway) |
 | Signing in with a passkey | The challenge is held in the process for 2 minutes and can be used once. If the answer reaches a replica other than the one that issued it, that sign-in attempt fails (trying again gets a new challenge and works). The six-digit code of an authenticator app and recovery codes are not affected |
-| Snapshots | Kept in the process's memory and gone when it restarts (per account and database; 256 MB in total per process). Another replica does not list them, and restoring one there answers `404 NOT_FOUND` ("Unknown snapshot"). Add up to 256 MB per replica to the memory estimate |
+| Snapshots | Kept in the process's memory and gone when it restarts (per account and database; 256 MB in total per process, **the ones being taken counted in that total**: a take that would pass 256 MB with what is held and what is being taken is refused as full before it starts). Another replica does not list them, and restoring one there answers `404 NOT_FOUND` ("Unknown snapshot"). Add up to 256 MB per replica to the memory estimate |
 | How many imports run at once | `IMPORT_MAX_CONCURRENT` is a limit per process. The effective limit is the number of replicas times that, and so is the memory needed (up to about 0.6 GB per import) |
 
 So what Redis buys is that losing or adding a replica costs nobody their session or their saved queries — not that any request may go to any replica.

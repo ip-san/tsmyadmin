@@ -186,8 +186,32 @@ export function splitStatements(
    */
   state?: { delimiter?: string; unterminated?: boolean }
 ): Statement[] {
+  return scan(input, dialect, state, true).statements
+}
+
+/**
+ * How many statements `splitStatements` would return, without keeping them. A dump of 64 MB has well over a million,
+ * and it is the array of them, not the count, that costs the memory (several times the size of the dump).
+ */
+export function countStatements(input: string, dialect: Dialect): number {
+  return scan(input, dialect, undefined, false).count
+}
+
+/** The scan behind both: `keepAll` false holds only the last statement (a COPY block's data is added to it). */
+function scan(
+  input: string,
+  dialect: Dialect,
+  state: { delimiter?: string; unterminated?: boolean } | undefined,
+  keepAll: boolean
+): { statements: Statement[]; count: number } {
   let unterminated = false
   const out: Statement[] = []
+  let count = 0
+  const emit = (statement: Statement) => {
+    count++
+    if (!keepAll) out.length = 0
+    out.push(statement)
+  }
   const n = input.length
   let i = 0
   let start = 0
@@ -213,7 +237,7 @@ export function splitStatements(
       // pg_dump / mysqldump put a comment block above every statement: errors point at the code below it.
       const body = stripLeadingComments(sql, dialect)
       const lead = sql.slice(0, sql.length - body.length)
-      out.push({ sql, line: startLine + lead.split('\n').length - 1 })
+      emit({ sql, line: startLine + lead.split('\n').length - 1 })
       if (dialect === 'mysql') noBackslash = trackSqlMode(sql, noBackslash, savedModes)
       if (dialect === 'postgres' && COPY_FROM_STDIN.test(body)) copyData = true
     }
@@ -251,7 +275,7 @@ export function splitStatements(
       const stop = end < 0 ? n : end
       const command = input.slice(i, stop).trim()
       // pg_dump ≥ 17.6 brackets the file in \restrict / \unrestrict, which only psql understands: no-ops here.
-      if (!/^\\(?:un)?restrict\b/.test(command)) out.push({ sql: command, line })
+      if (!/^\\(?:un)?restrict\b/.test(command)) emit({ sql: command, line })
       skipTo(stop)
       start = i
       startLine = line
@@ -336,5 +360,5 @@ export function splitStatements(
     state.delimiter = delimiter
     state.unterminated = unterminated
   }
-  return out
+  return { statements: out, count }
 }
