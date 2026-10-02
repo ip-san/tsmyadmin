@@ -8,7 +8,7 @@ import { type Context, Hono } from 'hono'
 import { z } from 'zod'
 import { apiError } from '../lib/errors.ts'
 import { ImportValidationError } from '../lib/import.ts'
-import { validationError } from '../lib/import-run.ts'
+import { importSlot, validationError } from '../lib/import-run.ts'
 import type { Logger } from '../lib/logging.ts'
 import {
   previewRestore,
@@ -46,58 +46,68 @@ export function snapshotRoutes(
     maxBytes: SNAPSHOT_MAX_BYTES,
   })
   const path = '/databases/:db/snapshots'
-  return new Hono<AppEnv>()
-    .use(path, requireSession(cfg))
-    .use(`${path}/:id`, requireSession(cfg))
-    .use(`${path}/:id/restore`, requireSession(cfg))
-    .use(`${path}/:id/restore/preview`, requireSession(cfg))
-    .get(path, validate('query', SchemaQuerySchema), (c) => {
-      const { scope } = target(c, c.req.valid('query').schema)
-      return c.json(listOf(scope))
-    })
-    .post(path, validate('query', SchemaQuerySchema), validate('json', SnapshotCreateSchema), async (c) => {
-      const { ns, scope } = target(c, c.req.valid('query').schema)
-      try {
-        await takeSnapshot(store, scope, c.get('session').adapter, ns, c.req.valid('json').name)
-      } catch (err) {
-        if (err instanceof SnapshotError) return c.json(apiError('VALIDATION', err.message), 400)
-        throw err
-      }
-      logger.log('info', 'snapshot.taken', { database: ns.database, ...(ns.schema ? { schema: ns.schema } : {}) })
-      return c.json(listOf(scope))
-    })
-    .delete(`${path}/:id`, validate('param', IdParamSchema), validate('query', SchemaQuerySchema), (c) => {
-      const { scope } = target(c, c.req.valid('query').schema)
-      if (!store.remove(scope, c.req.valid('param').id)) return c.json(apiError('NOT_FOUND', 'Unknown snapshot'), 404)
-      return c.json(listOf(scope))
-    })
-    .get(
-      `${path}/:id/restore/preview`,
-      validate('param', IdParamSchema),
-      validate('query', SchemaQuerySchema),
-      async (c) => {
+  return (
+    new Hono<AppEnv>()
+      .use(path, requireSession(cfg))
+      .use(`${path}/:id`, requireSession(cfg))
+      .use(`${path}/:id/restore`, requireSession(cfg))
+      .use(`${path}/:id/restore/preview`, requireSession(cfg))
+      .get(path, validate('query', SchemaQuerySchema), (c) => {
+        const { scope } = target(c, c.req.valid('query').schema)
+        return c.json(listOf(scope))
+      })
+      .post(path, validate('query', SchemaQuerySchema), validate('json', SnapshotCreateSchema), async (c) => {
         const { ns, scope } = target(c, c.req.valid('query').schema)
-        const held = store.get(scope, c.req.valid('param').id)
-        if (!held) return c.json(apiError('NOT_FOUND', 'Unknown snapshot'), 404)
-        return c.json(await previewRestore(c.get('session').adapter, ns, held))
-      }
-    )
-    .post(`${path}/:id/restore`, validate('param', IdParamSchema), validate('query', SchemaQuerySchema), async (c) => {
-      const { ns, scope } = target(c, c.req.valid('query').schema)
-      const held = store.get(scope, c.req.valid('param').id)
-      if (!held) return c.json(apiError('NOT_FOUND', 'Unknown snapshot'), 404)
-      try {
-        const result = await restoreSnapshot(c.get('session').adapter, ns, held, crypto.randomUUID())
-        logger.log('info', 'snapshot.restored', {
-          database: ns.database,
-          ...(ns.schema ? { schema: ns.schema } : {}),
-          statements: result.statements,
-          failed: result.failed,
-        })
-        return c.json(result)
-      } catch (err) {
-        if (err instanceof ImportValidationError) return c.json(validationError(err), 400)
-        throw err
-      }
-    })
+        try {
+          await takeSnapshot(store, scope, c.get('session').adapter, ns, c.req.valid('json').name)
+        } catch (err) {
+          if (err instanceof SnapshotError) return c.json(apiError('VALIDATION', err.message), 400)
+          throw err
+        }
+        logger.log('info', 'snapshot.taken', { database: ns.database, ...(ns.schema ? { schema: ns.schema } : {}) })
+        return c.json(listOf(scope))
+      })
+      .delete(`${path}/:id`, validate('param', IdParamSchema), validate('query', SchemaQuerySchema), (c) => {
+        const { scope } = target(c, c.req.valid('query').schema)
+        if (!store.remove(scope, c.req.valid('param').id)) return c.json(apiError('NOT_FOUND', 'Unknown snapshot'), 404)
+        return c.json(listOf(scope))
+      })
+      .get(
+        `${path}/:id/restore/preview`,
+        validate('param', IdParamSchema),
+        validate('query', SchemaQuerySchema),
+        async (c) => {
+          const { ns, scope } = target(c, c.req.valid('query').schema)
+          const held = store.get(scope, c.req.valid('param').id)
+          if (!held) return c.json(apiError('NOT_FOUND', 'Unknown snapshot'), 404)
+          return c.json(await previewRestore(c.get('session').adapter, ns, held))
+        }
+      )
+      // A restore runs the whole dump through the same script runner an import uses, so it takes one of the places for
+      // imports (IMPORT_MAX_CONCURRENT): its statements are split into an array several times the size of the dump.
+      .post(
+        `${path}/:id/restore`,
+        importSlot(cfg.importLimit, logger),
+        validate('param', IdParamSchema),
+        validate('query', SchemaQuerySchema),
+        async (c) => {
+          const { ns, scope } = target(c, c.req.valid('query').schema)
+          const held = store.get(scope, c.req.valid('param').id)
+          if (!held) return c.json(apiError('NOT_FOUND', 'Unknown snapshot'), 404)
+          try {
+            const result = await restoreSnapshot(c.get('session').adapter, ns, held, crypto.randomUUID())
+            logger.log('info', 'snapshot.restored', {
+              database: ns.database,
+              ...(ns.schema ? { schema: ns.schema } : {}),
+              statements: result.statements,
+              failed: result.failed,
+            })
+            return c.json(result)
+          } catch (err) {
+            if (err instanceof ImportValidationError) return c.json(validationError(err), 400)
+            throw err
+          }
+        }
+      )
+  )
 }

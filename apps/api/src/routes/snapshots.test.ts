@@ -1,6 +1,11 @@
 import { FakeAdapter, fakeTable } from '@tsmyadmin/adapter/testing'
-import { SnapshotListSchema, SnapshotRestorePreviewSchema, SnapshotRestoreResultSchema } from '@tsmyadmin/shared'
-import { afterEach, describe, expect, it } from 'vitest'
+import {
+  ApiErrorSchema,
+  SnapshotListSchema,
+  SnapshotRestorePreviewSchema,
+  SnapshotRestoreResultSchema,
+} from '@tsmyadmin/shared'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createApp } from '../app.ts'
 import { loadConfig } from '../config.ts'
 import { SNAPSHOT_MAX_COUNT } from '../lib/snapshots.ts'
@@ -8,8 +13,20 @@ import { MemorySessionStore } from '../session/store.ts'
 
 const LOGIN = { dialect: 'mysql', host: 'db', port: 3306, user: 'root', password: 'pw' }
 
-function harness() {
-  const adapter = new FakeAdapter({
+/** An adapter whose statements wait for the test to say go: a restore that is visibly still running. */
+class GatedAdapter extends FakeAdapter {
+  gate: Promise<void> = Promise.resolve()
+  /** How many scripts have reached the server, those still waiting included. */
+  entered = 0
+  override async executeSql(...args: Parameters<FakeAdapter['executeSql']>) {
+    this.entered++
+    await this.gate
+    return super.executeSql(...args)
+  }
+}
+
+function harness(importMaxConcurrent?: number) {
+  const adapter = new GatedAdapter({
     databases: {
       shop: {
         tables: {
@@ -29,7 +46,15 @@ function harness() {
       })),
   })
   const store = new MemorySessionStore({ adapterFactory: () => adapter, sweepIntervalMs: 0 })
-  const app = createApp({ ...loadConfig({}), sessionSecret: 'x'.repeat(48), allowedHosts: ['db'] }, { store })
+  const app = createApp(
+    {
+      ...loadConfig({}),
+      sessionSecret: 'x'.repeat(48),
+      allowedHosts: ['db'],
+      ...(importMaxConcurrent === undefined ? {} : { importMaxConcurrent }),
+    },
+    { store }
+  )
   let cookie = ''
   const req = (path: string, init: RequestInit = {}) =>
     app.request(path, {
@@ -100,6 +125,31 @@ describe('snapshots', () => {
     const drops = 'DROP VIEW IF EXISTS `shop`.`v_new`;\nDROP TABLE IF EXISTS `shop`.`tmp_new`;\n'
     expect(text).toContain(drops)
     expect(text.indexOf(drops)).toBeLessThan(text.indexOf('DROP TABLE IF EXISTS `users`'))
+  })
+
+  it('takes one of the places for imports while it runs, and turns the next restore away with 429', async () => {
+    const h = harness(1)
+    stores.push(h.store)
+    await h.login()
+    const id = SnapshotListSchema.parse(await (await take(h, 'a')).json()).snapshots[0]?.id ?? ''
+    let open: () => void = () => undefined
+    h.adapter.gate = new Promise<void>((resolve) => {
+      open = resolve
+    })
+    const restore = () => h.req(`/api/databases/shop/snapshots/${id}/restore`, { method: 'POST' })
+    const first = restore()
+    // The first has reached the server and waits there; nothing else has been answered.
+    await vi.waitFor(() => expect(h.adapter.entered).toBe(1))
+    const second = await restore()
+    expect(second.status).toBe(429)
+    expect(second.headers.get('retry-after')).toBe('5')
+    expect(ApiErrorSchema.parse(await second.json()).code).toBe('RATE_LIMITED')
+    open()
+    const done = await first
+    expect(done.status).toBe(200)
+    // The place is kept until the answer has been read to its end, as for an import.
+    await done.text()
+    expect((await restore()).status).toBe(200)
   })
 
   it('keeps a snapshot to the account that took it, and refuses past the count limit', async () => {
