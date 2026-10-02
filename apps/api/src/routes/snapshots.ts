@@ -30,7 +30,11 @@ const IdParamSchema = z.object({ db: z.string().min(1), id: z.string().min(1).ma
  * snapshot the server holds (its dump is too large to round-trip through a preview), after the same kind of
  * preview the account operations have: what will be dropped, and how much will run.
  */
-export function snapshotRoutes(cfg: SessionConfig, logger: Logger, store: SnapshotStore = new SnapshotStore()) {
+export function snapshotRoutes(
+  cfg: SessionConfig,
+  logger: Logger,
+  store: SnapshotStore = new SnapshotStore({ onExpire: (count) => logger.log('info', 'snapshot.expired', { count }) })
+) {
   const target = (c: Context<AppEnv>, schema: string | undefined): { ns: Namespace; scope: string } => {
     const db = c.req.param('db') ?? ''
     const ns: Namespace = schema ? { database: db, schema } : { database: db }

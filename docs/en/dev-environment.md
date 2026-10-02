@@ -1,4 +1,4 @@
-<!-- translated-from: docs/dev-environment.md sha256:eb1d9714a32e5e83606014c8a8df56007ae9b6c587d52101a132633011441e3d -->
+<!-- translated-from: docs/dev-environment.md sha256:79c19c458d831125cb96e178af2ae99607a11c3d82a910ebb6d4ddb7eb63b38d -->
 
 # Development features: what was built, and what was set aside
 
@@ -15,7 +15,7 @@ phpMyAdmin is for MySQL / MariaDB only, and you name the server in `config.inc.p
 | Feature | Where | In short |
 |---|---|---|
 | **Statements as they run** | Server → Monitor | Streams the SQL the application under development is running now. MySQL / MariaDB: the general log (a table), newest first. PostgreSQL: the statements whose call count grew in `pg_stat_statements`, per read. This tool's own statements are left out. The MySQL general log can be turned on after you review the SQL |
-| **Snapshots** | Database → Snapshots | Saves the database as it is (structure, data, views, routines, triggers) so that after trying a migration or a seed you can put it back. A snapshot is the existing SQL export and a restore runs that SQL, the same on both dialects. Before a restore you review the SQL that drops the tables and views made since. PostgreSQL does it in one transaction. Held in memory (gone when it restarts), per account |
+| **Snapshots** | Database → Snapshots | Saves the database as it is (structure, data, views, routines, triggers) so that after trying a migration or a seed you can put it back. A snapshot is the existing SQL export and a restore runs that SQL, the same on both dialects. Before a restore you review the SQL that drops the tables and views made since. PostgreSQL does it in one transaction. Held in memory (gone when it restarts, and 24 hours after being taken), per account |
 | **One-click login** | Login screen | With `TSMYADMIN_DOCKER_LOGIN=1` (off by default), reads a container's login from its environment (`MYSQL_ROOT_PASSWORD`, `POSTGRES_PASSWORD`, …) inside the API process only and signs in without a password. Never sent to the browser, logged or stored. Anyone who can reach the tool can then get in, so publish it on `127.0.0.1` only |
 | **Why a database is missing** | Login screen | Shows the database containers left off the list (stopped, port not published), why Docker cannot be read, and listed ports this process cannot reach, each with how to fix it |
 
@@ -23,7 +23,7 @@ phpMyAdmin is for MySQL / MariaDB only, and you name the server in `config.inc.p
 
 - **An MCP server (on hold)**: for a client that has Bash, such as Claude Code, `docker exec … psql` and reading the migration files cover most of it. The real advantages of MCP are two: it can *enforce* "read-only" in the implementation (with Bash, allowing `docker exec` allows a DROP after it), and it works in clients without Bash (Claude Desktop, say). Both can wait until they are needed. A cheaper way is to write the connection commands in CLAUDE.md or a Skill.
 - **Making zero-click login the development default**: it stays off even for `bun run dev` and `docker-compose.dev.yml`. Anyone who can reach the tool could then open the databases without a password, so it is an explicit choice (`docker-compose.dev.yml` has the line to turn it on, commented out).
-- **Persisting snapshots**: they are kept in memory so as not to add an environment variable or put data on disk in the clear. They are lost on restart. If needed, saving to disk can be added as a separate choice.
+- **Persisting snapshots**: they are kept in memory so as not to add an environment variable or put data on disk in the clear. They are lost on restart, and 24 hours after being taken (so that the ones of an account that never comes back do not keep filling the total shared by every account, where nobody can remove them). If needed, saving to disk can be added as a separate choice.
 - **A real-time PostgreSQL stream**: `pg_stat_statements` is aggregated, normalised statements rather than a timeline of executions, and turning it on needs `shared_preload_libraries` and a restart (tsmyadmin issues only GET requests to Docker, so it cannot do that for you). So it shows the growth in call counts per read, and when the extension is unavailable it gives the steps to enable it in Docker.
 
 ## Next candidates (not built)
