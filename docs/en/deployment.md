@@ -1,4 +1,4 @@
-<!-- translated-from: docs/deployment.md sha256:3b12b244b8717d17d6f009a72f9834a0b024bcce3abb0c1d44edea84c9ba01f5 -->
+<!-- translated-from: docs/deployment.md sha256:b18b4492557b638716bba2568cf557e13d1b2bdd6f74e8b4be0ceb0ad98ecbb1 -->
 
 # Deployment guide
 
@@ -285,6 +285,10 @@ With `SESSION_STORE=redis`, **sessions and saved queries are shared between repl
 | The login rate limit | Counted per process, so the effective limit is multiplied by the number of replicas |
 | Database connection pools | Each replica opens its own pool per session — multiply the `max_connections` estimate **by the number of replicas** |
 | Connections just after a logout | Deleting on one replica leaves another replica's pool open until its next use or sweep (up to 60 seconds) |
+| A second factor being enrolled | The app secret (TOTP) and the passkey registration challenge are held in the process for at most 10 minutes. If the confirming step reaches another replica, it answers `401 SECOND_FACTOR_INVALID` ("start again") and the enrolment has to be started over (nothing was stored, so nobody is locked out halfway) |
+| Signing in with a passkey | The challenge is held in the process for 2 minutes and can be used once. If the answer reaches a replica other than the one that issued it, that sign-in attempt fails (trying again gets a new challenge and works). The six-digit code of an authenticator app and recovery codes are not affected |
+| Snapshots | Kept in the process's memory and gone when it restarts (per account and database; 256 MB in total per process). Another replica does not list them, and restoring one there answers `404 NOT_FOUND` ("Unknown snapshot"). Add up to 256 MB per replica to the memory estimate |
+| How many imports run at once | `IMPORT_MAX_CONCURRENT` is a limit per process. The effective limit is the number of replicas times that, and so is the memory needed (up to about 0.6 GB per import) |
 
 So what Redis buys is that losing or adding a replica costs nobody their session or their saved queries — not that any request may go to any replica.
 
