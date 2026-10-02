@@ -1,5 +1,5 @@
 import type { DatabaseAdapter } from '@tsmyadmin/adapter'
-import { splitStatements } from '@tsmyadmin/adapter'
+import { countStatements } from '@tsmyadmin/adapter'
 import type {
   ConnectRequest,
   Namespace,
@@ -16,6 +16,14 @@ import { importSql } from './import.ts'
 export const SNAPSHOT_MAX_COUNT = 10
 export const SNAPSHOT_MAX_BYTES = 64 * 1024 * 1024
 const SNAPSHOT_TOTAL_BYTES = 256 * 1024 * 1024
+
+/** Held and being-taken together would pass the total: what to do about it differs from a dump that is too large. */
+function fullError(): SnapshotError {
+  return new SnapshotError(
+    'FULL',
+    'The snapshots held in memory, and the ones being taken, would pass their total limit: remove some, or try again shortly'
+  )
+}
 
 export class SnapshotError extends Error {
   constructor(
@@ -42,6 +50,10 @@ interface Held {
 export class SnapshotStore {
   private readonly held = new Map<string, Held[]>()
   private nextId = 1
+  /** What the snapshots being taken right now may still add: counted with what is held, from the moment they start. */
+  private reserved = 0
+
+  constructor(private readonly totalLimit = SNAPSHOT_TOTAL_BYTES) {}
 
   /** Who took it, on which server, of which database (and PostgreSQL schema). */
   static scope(config: Pick<ConnectRequest, 'host' | 'port' | 'user'>, ns: Namespace): string {
@@ -57,9 +69,31 @@ export class SnapshotStore {
   }
 
   private totalBytes(): number {
-    let total = 0
+    let total = this.reserved
     for (const list of this.held.values()) for (const h of list) total += h.snapshot.bytes
     return total
+  }
+
+  /**
+   * Sets aside the room a snapshot about to be read may fill — `most`, or what is left of the total if that is less —
+   * so the dumps being taken count against the limit as soon as they start, not only once they are held (taken at
+   * once, they could otherwise add up to many times it). A small database still fits when the store is nearly full:
+   * only a dump that outgrows the room is refused. Returns that room and the release, to call when the dump is
+   * stored or given up; calling it twice does nothing.
+   */
+  reserve(most: number): { limit: number; release: () => void } {
+    const limit = Math.min(most, this.totalLimit - this.totalBytes())
+    if (limit <= 0) throw fullError()
+    this.reserved += limit
+    let released = false
+    return {
+      limit,
+      release: () => {
+        if (released) return
+        released = true
+        this.reserved -= limit
+      },
+    }
   }
 
   add(scope: string, held: Omit<Held, 'snapshot'>, name: string, at: Date): Snapshot {
@@ -67,8 +101,7 @@ export class SnapshotStore {
     if (list.length >= SNAPSHOT_MAX_COUNT)
       throw new SnapshotError('TOO_MANY', `A database keeps at most ${SNAPSHOT_MAX_COUNT} snapshots: remove one first`)
     const bytes = Buffer.byteLength(held.sql)
-    if (this.totalBytes() + bytes > SNAPSHOT_TOTAL_BYTES)
-      throw new SnapshotError('FULL', 'The snapshots held in memory would pass their total limit: remove some first')
+    if (this.totalBytes() + bytes > this.totalLimit) throw fullError()
     const snapshot: Snapshot = {
       id: String(this.nextId++),
       name,
@@ -90,17 +123,27 @@ export class SnapshotStore {
   }
 }
 
-/** A dump read to the end, refused past the limit (a snapshot is memory: a big database is an export's job). */
-async function readDump(body: AsyncIterable<string | Uint8Array>): Promise<string> {
+/**
+ * A dump read to the end, refused past the limit (a snapshot is memory: a big database is an export's job). The limit
+ * is in bytes, as the screen says: counting characters would let text in a wide script through at up to three times it.
+ */
+async function readDump(
+  body: AsyncIterable<string | Uint8Array>,
+  maxBytes: number,
+  tooLarge: () => SnapshotError
+): Promise<string> {
   const decoder = new TextDecoder()
   let text = ''
+  let bytes = 0
   for await (const chunk of body) {
-    text += typeof chunk === 'string' ? chunk : decoder.decode(chunk, { stream: true })
-    if (text.length > SNAPSHOT_MAX_BYTES)
-      throw new SnapshotError(
-        'TOO_LARGE',
-        `The dump is larger than ${SNAPSHOT_MAX_BYTES / 1024 / 1024} MB: a database this size is for Export`
-      )
+    if (typeof chunk === 'string') {
+      text += chunk
+      bytes += Buffer.byteLength(chunk)
+    } else {
+      text += decoder.decode(chunk, { stream: true })
+      bytes += chunk.byteLength
+    }
+    if (bytes > maxBytes) throw tooLarge()
   }
   return text
 }
@@ -116,16 +159,34 @@ export async function takeSnapshot(
   adapter: DatabaseAdapter,
   ns: Namespace,
   name: string,
-  now: Date = new Date()
+  now: Date = new Date(),
+  maxBytes: number = SNAPSHOT_MAX_BYTES
 ): Promise<Snapshot> {
-  const all = await adapter.listTables(ns)
-  const q = ExportQuerySchema.parse({ format: 'sql' })
-  const file = buildExport(adapter, ns, tableNames(all), q, ns.database, true, all)
-  const sql = await readDump(file.body)
-  if (!sql.includes(DUMP_COMPLETE_MARKER))
-    throw new SnapshotError('INCOMPLETE', 'The dump did not finish: nothing was saved')
-  const statements = splitStatements(sql, adapter.dialect).length
-  return store.add(scope, { sql, statements, names: new Set(all.map((t) => t.name)) }, name, now)
+  // First of all, before anything is awaited: what this one may weigh is counted from the moment it starts.
+  const { limit, release } = store.reserve(maxBytes)
+  try {
+    const all = await adapter.listTables(ns)
+    const q = ExportQuerySchema.parse({ format: 'sql' })
+    const file = buildExport(adapter, ns, tableNames(all), q, ns.database, true, all)
+    // Past the room that was left rather than past the dump limit: the same dump would fit once something is removed.
+    const tooLarge = () =>
+      limit < maxBytes
+        ? fullError()
+        : new SnapshotError(
+            'TOO_LARGE',
+            `The dump is larger than ${maxBytes / 1024 / 1024} MB: a database this size is for Export`
+          )
+    const sql = await readDump(file.body, limit, tooLarge)
+    if (!sql.includes(DUMP_COMPLETE_MARKER))
+      throw new SnapshotError('INCOMPLETE', 'The dump did not finish: nothing was saved')
+    // Counted, not split: the array of a big dump's statements weighs several times the dump itself.
+    const statements = countStatements(sql, adapter.dialect)
+    // Given back just before it is stored, with nothing awaited between: held and reserved never count it twice.
+    release()
+    return store.add(scope, { sql, statements, names: new Set(all.map((t) => t.name)) }, name, now)
+  } finally {
+    release()
+  }
 }
 
 /** The statements that remove what the database has now and the snapshot did not (made since). */

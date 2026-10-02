@@ -9,7 +9,14 @@ export { MAX_BINARY_BYTES, READ_CELL_MAX_BYTES } from './base.ts'
 export { commentText, createNamespaceStatements, createTableFromColumns } from './sql/export.ts'
 export { quoteIdent, quoteTable } from './sql/quote.ts'
 export { buildReplicationOp } from './sql/replication.ts'
-export { type Statement, setAssignments, splitStatements, stripComments, stripLeadingComments } from './sql/split.ts'
+export {
+  countStatements,
+  type Statement,
+  setAssignments,
+  splitStatements,
+  stripComments,
+  stripLeadingComments,
+} from './sql/split.ts'
 export * from './types.ts'
 
 /** Creates an adapter. No connection is opened until the first call; use ping() to verify credentials. */
