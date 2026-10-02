@@ -35,6 +35,7 @@ import { hashRecoveryCode, newRecoveryCodes, newSecret, otpauthUri, verifyCode }
 import { validate } from '../lib/validate.ts'
 import { identityKey } from '../session/identity.ts'
 import { type AppEnv, requireSession, type SessionConfig } from '../session/middleware.ts'
+import { lockLeftMs, withMiss, withoutMisses } from '../session/second-factor-lock.ts'
 import type { SecondFactor, SecondFactors, StoredPasskey } from '../session/store.ts'
 import { type Session, sessionInfo } from '../session/store.ts'
 
@@ -143,6 +144,31 @@ async function secondFactorStatus(
   }
 }
 
+/** What came of asking for a proof: accepted, refused, or not asked at all because the account is locked (seconds left). */
+export type Proof = 'ok' | 'refused' | { locked: number }
+
+/**
+ * Looks at a proof only after it has been counted. The miss is written first, against the version the factor was
+ * read at: a burst of guesses reads the same count, one write lands and the rest are refused without being looked
+ * at, so a burst cannot get more tries than the limit allows. Accepting a proof writes the factor back without the
+ * count (`verify` receives it cleared), which is what ends a run of misses.
+ */
+async function attempt(
+  store: SecondFactors,
+  config: Session['config'],
+  factor: SecondFactor,
+  now: number,
+  verify: (fresh: SecondFactor) => Promise<boolean>
+): Promise<Proof> {
+  const left = lockLeftMs(factor, now)
+  if (left > 0) return { locked: Math.ceil(left / 1000) }
+  if (!(await store.set(config, withMiss(factor, now)))) return 'refused'
+  // Read again for the version that write produced: the proof is spent against that one.
+  const fresh = await store.get(config)
+  if (!fresh) return 'refused'
+  return (await verify(withoutMisses(fresh))) ? 'ok' : 'refused'
+}
+
 /**
  * The second factor at login: the app's code, a passkey's answer to the challenge the previous attempt was given,
  * or one of the recovery codes — each usable once. What was used is written down before the login is accepted,
@@ -154,21 +180,26 @@ export async function checkLoginFactor(
   config: Session['config'],
   factor: SecondFactor,
   given: { code?: string | undefined; passkey?: PasskeyAnswer | undefined }
-): Promise<'ok' | 'missing' | 'refused'> {
+): Promise<Proof | 'missing'> {
   const store = cfg.store.secondFactor
   if (!store) return 'refused'
-  if (given.passkey) {
-    return (await spendPasskey(cfg, deps, config, factor, given.passkey, identityKey(config))) ? 'ok' : 'refused'
+  const passkey = given.passkey
+  const code = given.code
+  if (passkey) {
+    return attempt(store, config, factor, deps.now(), (fresh) =>
+      spendPasskey(cfg, deps, config, fresh, passkey, identityKey(config))
+    )
   }
-  if (given.code === undefined) return 'missing'
-  const step = factor.secret ? verifyCode(factor.secret, given.code, deps.now(), factor.lastStep) : null
-  // The write carries the version the factor was read at: if another login spent this same code first, it does
-  // not land, and this one is refused rather than both being let through.
-  if (step !== null) return (await store.set(config, { ...factor, lastStep: step })) ? 'ok' : 'refused'
-  const hash = hashRecoveryCode(given.code)
-  if (!factor.recoveryHashes.includes(hash)) return 'refused'
-  const spent = await store.set(config, { ...factor, recoveryHashes: factor.recoveryHashes.filter((h) => h !== hash) })
-  return spent ? 'ok' : 'refused'
+  if (code === undefined) return 'missing'
+  return attempt(store, config, factor, deps.now(), async (fresh) => {
+    const step = fresh.secret ? verifyCode(fresh.secret, code, deps.now(), fresh.lastStep) : null
+    // The write carries the version the factor was read at: if another login spent this same code first, it does
+    // not land, and this one is refused rather than both being let through.
+    if (step !== null) return store.set(config, { ...fresh, lastStep: step })
+    const hash = hashRecoveryCode(code)
+    if (!fresh.recoveryHashes.includes(hash)) return false
+    return store.set(config, { ...fresh, recoveryHashes: fresh.recoveryHashes.filter((h) => h !== hash) })
+  })
 }
 
 /**
@@ -195,12 +226,14 @@ async function proven(
   session: Session,
   factor: SecondFactor,
   proof: SecondFactorProof
-): Promise<boolean> {
+): Promise<Proof> {
   const store = cfg.store.secondFactor
-  if (!store) return false
-  if ('passkey' in proof) return spendPasskey(cfg, deps, session.config, factor, proof.passkey, session.id)
-  const step = factor.secret ? verifyCode(factor.secret, proof.code, deps.now(), factor.lastStep) : null
-  return step !== null && store.set(session.config, { ...factor, lastStep: step })
+  if (!store) return 'refused'
+  return attempt(store, session.config, factor, deps.now(), async (fresh) => {
+    if ('passkey' in proof) return spendPasskey(cfg, deps, session.config, fresh, proof.passkey, session.id)
+    const step = fresh.secret ? verifyCode(fresh.secret, proof.code, deps.now(), fresh.lastStep) : null
+    return step !== null && store.set(session.config, { ...fresh, lastStep: step })
+  })
 }
 
 /**
@@ -218,6 +251,37 @@ function codeRefused(c: Context<AppEnv>, deps: SecondFactorDeps, event: string) 
   deps.ipLimiter.hit(deps.ip(c))
   deps.logger.log('warn', event, { requestId: c.get('requestId'), ...sessionInfo(c.get('session')) })
   return c.json(apiError('SECOND_FACTOR_INVALID', 'That code is not valid'), 401)
+}
+
+/** An account that is locked: the wrong guesses of every address together reached the limit. */
+function codeLocked(c: Context<AppEnv>, deps: SecondFactorDeps, event: string, seconds: number) {
+  // Still a try from this address, so one that keeps knocking on a locked account runs into its own limit too.
+  deps.ipLimiter.hit(deps.ip(c))
+  deps.logger.log('warn', 'second_factor.locked', {
+    requestId: c.get('requestId'),
+    ...sessionInfo(c.get('session')),
+    attempt: event,
+  })
+  c.header('Retry-After', String(seconds))
+  return c.json(apiError('RATE_LIMITED', 'Too many code attempts; try again later'), 429)
+}
+
+/**
+ * Asks for the proof a change needs: null when it was given and is right, otherwise the answer to send (a missing
+ * or wrong proof is a 401, a locked account a 429).
+ */
+async function requireProof(
+  c: Context<AppEnv>,
+  deps: SecondFactorDeps,
+  cfg: SessionConfig,
+  factor: SecondFactor,
+  proof: SecondFactorProof | null,
+  event: string
+) {
+  if (!proof) return codeRefused(c, deps, event)
+  const outcome = await proven(cfg, deps, c.get('session'), factor, proof)
+  if (outcome === 'ok') return null
+  return outcome === 'refused' ? codeRefused(c, deps, event) : codeLocked(c, deps, event, outcome.locked)
 }
 
 /** The proof in a begin request, when one was given. */
@@ -310,10 +374,15 @@ export function secondFactorRoutes(cfg: SessionConfig, deps: SecondFactorDeps) {
           // own secret there, which is the removal this route is not — and the removal route does ask for proof.
           const existing = await store.get(session.config)
           if (existing) {
-            const proof = proofIn(c.req.valid('json'))
-            if (!proof || !(await proven(cfg, deps, session, existing, proof))) {
-              return codeRefused(c, deps, 'second_factor.reenrol.failed')
-            }
+            const refusal = await requireProof(
+              c,
+              deps,
+              cfg,
+              existing,
+              proofIn(c.req.valid('json')),
+              'second_factor.reenrol.failed'
+            )
+            if (refusal) return refusal
           }
           const secret = newSecret()
           // Recovery codes come with the first factor; adding an app to an account that has one keeps them.
@@ -361,9 +430,8 @@ export function secondFactorRoutes(cfg: SessionConfig, deps: SecondFactorDeps) {
         const session = c.get('session')
         const factor = await store.get(session.config)
         if (!factor) return c.json(apiError('NOT_FOUND', 'Nothing is enrolled for this account'), 404)
-        if (!(await proven(cfg, deps, session, factor, c.req.valid('json')))) {
-          return codeRefused(c, deps, 'second_factor.disable.failed')
-        }
+        const refusal = await requireProof(c, deps, cfg, factor, c.req.valid('json'), 'second_factor.disable.failed')
+        if (refusal) return refusal
         if (!(await changeFactor(store, session.config, () => null))) return conflict(c)
         logged(c, 'second_factor.disabled')
         return c.json(await secondFactorStatus(cfg, deps, session))
@@ -376,9 +444,15 @@ export function secondFactorRoutes(cfg: SessionConfig, deps: SecondFactorDeps) {
         const session = c.get('session')
         const factor = await store.get(session.config)
         if (!factor?.secret) return c.json(apiError('NOT_FOUND', 'No authenticator app is enrolled'), 404)
-        if (!(await proven(cfg, deps, session, factor, c.req.valid('json')))) {
-          return codeRefused(c, deps, 'second_factor.totp_remove.failed')
-        }
+        const refusal = await requireProof(
+          c,
+          deps,
+          cfg,
+          factor,
+          c.req.valid('json'),
+          'second_factor.totp_remove.failed'
+        )
+        if (refusal) return refusal
         const written = await changeFactor(store, session.config, (current) => {
           if (!current) return null
           const { secret: _removed, ...rest } = current
@@ -412,10 +486,15 @@ export function secondFactorRoutes(cfg: SessionConfig, deps: SecondFactorDeps) {
           const session = c.get('session')
           const existing = await store.get(session.config)
           if (existing) {
-            const proof = proofIn(c.req.valid('json'))
-            if (!proof || !(await proven(cfg, deps, session, existing, proof))) {
-              return codeRefused(c, deps, 'second_factor.passkey_add.failed')
-            }
+            const refusal = await requireProof(
+              c,
+              deps,
+              cfg,
+              existing,
+              proofIn(c.req.valid('json')),
+              'second_factor.passkey_add.failed'
+            )
+            if (refusal) return refusal
           }
           const recoveryCodes = existing ? [] : newRecoveryCodes()
           const info = sessionInfo(session)
@@ -477,9 +556,15 @@ export function secondFactorRoutes(cfg: SessionConfig, deps: SecondFactorDeps) {
           if (!factor?.passkeys?.some((p) => p.id === id)) {
             return c.json(apiError('NOT_FOUND', 'No such passkey'), 404)
           }
-          if (!(await proven(cfg, deps, session, factor, c.req.valid('json')))) {
-            return codeRefused(c, deps, 'second_factor.passkey_remove.failed')
-          }
+          const refusal = await requireProof(
+            c,
+            deps,
+            cfg,
+            factor,
+            c.req.valid('json'),
+            'second_factor.passkey_remove.failed'
+          )
+          if (refusal) return refusal
           const written = await changeFactor(store, session.config, (current) =>
             current ? remaining({ ...current, passkeys: (current.passkeys ?? []).filter((p) => p.id !== id) }) : null
           )

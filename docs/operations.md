@@ -21,6 +21,7 @@
 | `audit` | **監査ログ**: データ・構造・アカウント・サーバー状態を変える呼び出し（`insertRow(s)` / `updateRow` / `deleteRows` / `executeSql` / `cancelQuery` / `killProcess`）。`requestId`, `dialect`, `dbUser`, `dbHost`, `database`, `schema`, `table`, 行数・キー種別・カラム名、`executeSql` は SQL 先頭 500 文字と文数 / エラー数、`ok`, `ms`。失敗時は `error`（エラーコード）と `nativeCode` だけで、サーバーのメッセージは記録しない。**行の値は記録しない**（SQL コンソールの文は先頭 500 文字を記録するため値を含み得る。インポートは `<import>` と文字数だけを記録し、ファイルの中身は一切残さない）。パスワード（アカウント操作、SQL コンソールの `IDENTIFIED BY` / `PASSWORD` 文）は `****` に置換 |
 | `readyz.failed` | セッションストア異常（`error` レベル） |
 | `session_store.unavailable` | セッションストア（Redis / SQLite）が使えず、リクエストが `503 STORE_UNAVAILABLE` になった（`error` レベル）。**1 分に 1 行**だけ記録し、間引いた件数を `suppressed` に持つ。スタックは含まない |
+| `login.second_factor.locked` / `second_factor.locked` | 2 要素認証のコードを連続 10 回まちがえたアカウントで、コードを見ずに `429 RATE_LIMITED` で断った（`warn` レベル。後者は `attempt` に操作を含む）。15 分で解ける |
 | `import.refused` | 同時に実行できるインポート（`IMPORT_MAX_CONCURRENT`）が埋まっていて、新しいインポートを `429 RATE_LIMITED` で断った（`warn` レベル。`active` と `max` を含む） |
 | `process.unhandled_rejection` | どこでも処理されなかった Promise の reject（`error` レベル）。スタックを含む。以前はこれでプロセスが落ちた（Redis 障害で全員のセッションが落ちる原因だった）が、いまはログに残して動き続ける。例外（`uncaughtException`）は従来どおりプロセスを終了する |
 | `unhandled` | 想定外の例外（`error` レベル）。`requestId` とスタックを含み、レスポンスは `500 INTERNAL`。`X-Request-Id` から引ける |
@@ -57,6 +58,7 @@ docker logs tsmyadmin 2>&1 | jq -c 'select(.event=="audit") | {time, dbUser, act
 | 起動直後に `Invalid environment` で終了 | 環境変数の型 / 必須違反。メッセージの変数名を修正 |
 | ログインが 400 `INSECURE_TRANSPORT`（画面は「HTTPS で接続してください（HTTP ではログイン状態を保持できません）」、ログは `login.insecure_transport`） | Cookie が `Secure`（`NODE_ENV=production`）なのに平文 HTTP で届いている。HTTPS で終端し、プロキシが `X-Forwarded-Proto: https` を付けて `TRUST_PROXY=1` にする。TLS を終端しない社内ネットワークでは `COOKIE_SECURE=0` |
 | ログインが 403 `HOST_NOT_ALLOWED` | 接続先が `TSMYADMIN_ALLOWED_HOSTS` にない（画面には「この接続先は管理者により許可されていません」） |
+| ログインが 429 で、コードを入れたところだった（または「セキュリティ」の操作が 429） | そのアカウントの 2 要素認証のコードを連続 10 回まちがえた（どのアドレスからの分も合わせて数える）。最後のまちがいから 15 分は、正しいコードでも受け付けない（`Retry-After` が残りの秒数）。待てば解ける。急ぐときは、そのアカウントのパスワードを変えられる別のアカウントが「ユーザー」タブから 2 要素認証を解除する（`second_factor.reset`。数も消える）。ログは `login.second_factor.locked` / `second_factor.locked` |
 | ログインが 429 | レート制限。`Retry-After` 秒後に再試行。誤検知なら `TRUST_PROXY` の設定を確認（プロキシ配下で `0` だと全員が同じ IP になる） |
 | 再起動後に全員ログアウト | `SESSION_STORE=memory`、またはボリューム未設定 / `SESSION_SECRET` 変更。`docs/deployment.md` のアップグレード節 |
 | 起動直後に `session_store.open_failed` で終了（コンテナが再起動ループ） | `SESSION_DB_PATH`（Docker では `/app/data`）に `bun` ユーザー（uid 1000）の書き込み権限がない。バインドマウントは `chown 1000:1000`。`unable to open database file` / `attempt to write a readonly database` が `error` に出る |
