@@ -23,7 +23,7 @@
 | `session_store.unavailable` | セッションストア（Redis / SQLite）が使えず、リクエストが `503 STORE_UNAVAILABLE` になった（`error` レベル）。**1 分に 1 行**だけ記録し、間引いた件数を `suppressed` に持つ。スタックは含まない |
 | `login.second_factor.locked` / `second_factor.locked` | 2 要素認証のコードを連続 10 回まちがえたアカウントで、コードを見ずに `429 RATE_LIMITED` で断った（`warn` レベル。後者は `attempt` に操作を含む）。15 分で解ける |
 | `snapshot.expired` | 取ってから 24 時間たったスナップショットを消した（`info` レベル。消した件数 `count` だけ。名前や中身は出さない） |
-| `import.refused` | 同時に実行できるインポート（`IMPORT_MAX_CONCURRENT`）が埋まっていて、新しいインポートを `429 RATE_LIMITED` で断った（`warn` レベル。`active` と `max` を含む） |
+| `import.refused` | 同時に実行できるインポート（`IMPORT_MAX_CONCURRENT`。スナップショットの復元を含む）が埋まっていて、新しいインポートか復元を `429 RATE_LIMITED` で断った（`warn` レベル。`active` と `max` を含む） |
 | `process.unhandled_rejection` | どこでも処理されなかった Promise の reject（`error` レベル）。スタックを含む。以前はこれでプロセスが落ちた（Redis 障害で全員のセッションが落ちる原因だった）が、いまはログに残して動き続ける。例外（`uncaughtException`）は従来どおりプロセスを終了する |
 | `unhandled` | 想定外の例外（`error` レベル）。`requestId` とスタックを含み、レスポンスは `500 INTERNAL`。`X-Request-Id` から引ける |
 | `export.aborted` | エクスポートのストリーミングが途中で失敗（`error` レベル）。ダウンロード済みのファイルは不完全 |
@@ -64,7 +64,7 @@ docker logs tsmyadmin 2>&1 | jq -c 'select(.event=="audit") | {time, dbUser, act
 | 再起動後に全員ログアウト | `SESSION_STORE=memory`、またはボリューム未設定 / `SESSION_SECRET` 変更。`docs/deployment.md` のアップグレード節 |
 | 起動直後に `session_store.open_failed` で終了（コンテナが再起動ループ） | `SESSION_DB_PATH`（Docker では `/app/data`）に `bun` ユーザー（uid 1000）の書き込み権限がない。バインドマウントは `chown 1000:1000`。`unable to open database file` / `attempt to write a readonly database` が `error` に出る |
 | 画面が 10 秒後に 502 `CONNECTION_FAILED`「No connection became free in time」 | 接続先 DB には届いているが、セッションの接続（4 本）をすべて、長い文・大きな表の走査・エクスポートなどが使っている。終われば使えるようになる（待たずに返すので、サイドバーなどが固まらない）。終わるのを待つか、SQL コンソールの「キャンセル」で止める。ログインしたまま再試行してよい |
-| インポートが 429 `RATE_LIMITED`（`Retry-After: 5`。画面には「試行回数が多すぎます」） | 同時に実行できるインポートの上限（`IMPORT_MAX_CONCURRENT`、既定 2）に達している。終わるのを待って再試行する。メモリに余裕があれば上限を上げる（1 本は最大で約 0.6 GB）。ログは `import.refused` |
+| インポート（またはスナップショットの復元）が 429 `RATE_LIMITED`（`Retry-After: 5`。画面には「試行回数が多すぎます」） | 同時に実行できるインポートの上限（`IMPORT_MAX_CONCURRENT`、既定 2）に達している。終わるのを待って再試行する。メモリに余裕があれば上限を上げる（1 本は最大で約 0.6 GB）。ログは `import.refused` |
 | API が 503 `STORE_UNAVAILABLE`（`Retry-After: 5`。画面には「サーバーのセッション保存先がいま使えません」） | セッションストアが一時的に使えない。原因は `/readyz` が 503 のときと同じ（Redis 停止、SQLite のファイルが開けない・ロック中・読み取り専用・ディスク満杯）。Redis なら復旧すれば自動で戻る。ログは `session_store.unavailable`（1 分に 1 行） |
 | `/readyz` が 503 | セッションストアに届かない。`SESSION_STORE=redis` なら Redis が落ちている / `REDIS_URL` が誤り（ログ `session_store.unreachable` も出ます）、`sqlite` なら起動後にファイルが読めなくなった / 破損。`readyz.failed` の `error` を確認 |
 | SQL コンソールでタイムアウト | 既定 30 秒。実行中は「キャンセル」で中断できる（`KILL QUERY` / `pg_cancel_backend`、監査ログ `cancelQuery`）。長時間の一括処理はインポート（最大 10 分）を使う |

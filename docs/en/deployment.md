@@ -1,4 +1,4 @@
-<!-- translated-from: docs/deployment.md sha256:3420dbc1bbb5af445090c0f2da553bfd7623521f526de862abd6e60589fe87fc -->
+<!-- translated-from: docs/deployment.md sha256:11dbbb5065da911d466785847b92e7d61e05e96a8593f0aeddf478a540a55475 -->
 
 # Deployment guide
 
@@ -53,7 +53,7 @@ tsmyadmin runs as **a single container whose one process (Bun) serves both the A
 | `TRUST_PROXY` | `0` | `1` trusts a reverse proxy's `X-Forwarded-For` as the client IP (required behind a proxy; leave it `0` when exposed directly). `cloudflare` prefers `CF-Connecting-IP`. They are separate settings because only Cloudflare can be relied on to overwrite that header — anywhere else, trusting it lets a client name its own address |
 | `LOG_FORMAT` | `json` in production, `pretty` in development | One JSON object per line (for a log collector), or a human-readable form |
 | `WEB_DIST` | `apps/web/dist` | The directory of the SPA build to serve. When unset it is resolved from the location of the API source, so it does not depend on the working directory. If you do set it, use an absolute path or one relative to the working directory |
-| `IMPORT_MAX_CONCURRENT` | `2` (1–32) | How many imports this process runs at once. One holds the upload, what it unpacks to and the decoded text at the same time, so a file at the limits (64 MB uploaded, 256 MB unpacked) takes about 0.6 GB. Any beyond that are turned away with `429 RATE_LIMITED` (`Retry-After: 5`) before their body is read. With several processes the limit is per process |
+| `IMPORT_MAX_CONCURRENT` | `2` (1–32) | How many imports this process runs at once (**snapshot restores included**: a restore runs its dump the way a SQL import does). One holds the upload, what it unpacks to and the decoded text at the same time, so a file at the limits (64 MB uploaded, 256 MB unpacked) takes about 0.6 GB. Any beyond that are turned away with `429 RATE_LIMITED` (`Retry-After: 5`) before their body is read. With several processes the limit is per process |
 | `SHUTDOWN_TIMEOUT_SECONDS` | `30` (0–600) | How long to wait, after `SIGTERM`, for requests in flight (a long SQL statement, an export, an import) to finish. Past that the process exits immediately |
 
 These are validated at startup: anything out of range or malformed prints the reason and exits with code 1 (the message always starts with `Invalid environment: ...`). An empty value (`NAME=`) counts as unset and takes the default. The one exception is `TSMYADMIN_ALLOWED_HOSTS=`, which means "do not even allow the default localhost — only the preset servers". An unknown key in a `TSMYADMIN_SERVERS` preset (`password`, say) is refused at startup.
