@@ -35,6 +35,17 @@ describe('the lock on a second factor', () => {
     expect(withMiss(locked, after).misses).toBe(1)
   })
 
+  it('starts the count again at the very instant the lock runs out, not an eleventh miss that locks again', () => {
+    const locked = missed(MAX_MISSES)
+    const last = T + (MAX_MISSES - 1) * 1000
+    const at = last + LOCK_MS
+    // One millisecond before: still locked, and a miss would still be the eleventh.
+    expect(lockLeftMs(locked, at - 1)).toBe(1)
+    // At the instant: it answers, and the try it lets in is the first of a new count.
+    expect(lockLeftMs(locked, at)).toBe(0)
+    expect(withMiss(locked, at).misses).toBe(1)
+  })
+
   it('clears the count and keeps everything else, the version included', () => {
     const cleared = withoutMisses(missed(3))
     expect(cleared).toEqual(factor)
