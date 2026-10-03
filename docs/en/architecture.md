@@ -1,4 +1,4 @@
-<!-- translated-from: docs/architecture.md sha256:438c8fc7352a6410702e09a21910956bf453501b5ccf7310886ee7e0068c60dc -->
+<!-- translated-from: docs/architecture.md sha256:bb23582225c52f61e2446fec89ac27bcd3551e94adf9bdf00bda07defcb8cf74 -->
 
 # Architecture
 
@@ -325,6 +325,8 @@ flowchart LR
   end
   pp --> chk
 ```
+
+`check:static` also holds checks of the repository's own structure: the direction of dependencies (`check:arch`), how SQL is built (`check:sql-safety`), where doc comments sit (`check:doc-comments`), and **the length of a file (`check:file-size`)**. The last one fails a file past 800 lines (more than a reader holds in their head). The few files already past it are recorded with a reason in `scripts/file-size-baseline.json`: growing one fails, and when one shrinks its baseline comes down (`bun run check:file-size -- --update-baseline` only lowers; it never adds or raises, because that is a decision for a person: split the file, or add it by hand with the reason). Generated code and the string tables are exempt.
 
 The test layers, from the bottom: unit (`sql/split`, the DDL snapshots, the pure functions of the web app) → **conformance** (real databases, one suite on both dialects) → API integration (real databases, per route) → E2E (Playwright: functional, a11y, visual).
 
