@@ -91,11 +91,11 @@ done
 
 ### 4. Adapter 契約の増分チェック
 
-`DatabaseAdapter` にメソッドを追加したら `ADAPTER_METHOD_NAMES`（`packages/adapter/src/types.ts`）と `test/conformance.ts` の `describe('<method>')` が揃っているか。
+`DatabaseAdapter` にメソッドを追加したら `ADAPTER_METHOD_NAMES`（`packages/adapter/src/types.ts`）と `test/conformance/` の `describe('<method>')` が揃っているか。
 
 ```bash
 grep -A 20 'ADAPTER_METHOD_NAMES' packages/adapter/src/types.ts
-grep "describe('" packages/adapter/src/test/conformance.ts
+grep -rh "describe('" packages/adapter/src/test/conformance packages/adapter/src/test/conformance.ts
 ```
 
 ### 5. DdlOp スナップショット

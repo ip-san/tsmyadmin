@@ -16,7 +16,7 @@ memory: project
 1. **SQL 安全性**: 識別子は `quoteIdent`/`quoteTable`、値は `Params` プレースホルダ経由か。SQL テンプレート文字列の補間は `base.ts` / `sql/*` / `*/ddl.ts` / `*/adapter.ts` 以外で使われていないか。`bun run check:sql-safety` を優先し、grep は補助
 2. **ドライバ隔離**: `mysql2` / `pg` の import が `packages/adapter/src/**` の外にないか（`bun run check:arch`）
 3. **方言パリティ**: `packages/adapter/src/mysql/{adapter,ddl,introspect,values}.ts` を変更したら `postgres/` の同名ファイルの対応箇所も更新されているか。`git diff --name-only` で mysql/ と postgres/ の変更ファイルを突き合わせる
-4. **Adapter 契約の一貫性**: `DatabaseAdapter` にメソッドを追加したら `types.ts` の `ADAPTER_METHOD_NAMES` と `test/conformance.ts` の `describe('<method>')` が両方追加されているか
+4. **Adapter 契約の一貫性**: `DatabaseAdapter` にメソッドを追加したら `types.ts` の `ADAPTER_METHOD_NAMES` と `test/conformance/` の該当ファイルの `describe('<method>')` が両方追加されているか
 5. **DdlOp スナップショット**: 新しい `DdlOp` を追加したら `test/ddl.test.ts` の `SAMPLE_OPS` に両方言分のケースがあるか
 6. **共有 DTO の追随漏れ**: `packages/shared` の Zod スキーマを変更したら、`apps/api/src/routes/**` のバリデータと `apps/web` 側の `hc<AppType>` 呼び出しが追随しているか。web が生の `fetch` で API を叩いていないか
 7. **DDL プレビュー経路**: `/ddl/preview` を経由せず直接 `/sql` を実行する UI やコードパスが追加されていないか
