@@ -77,6 +77,9 @@ const CONNECTION_CODES = new Set([
   'EHOSTUNREACH',
   '57P01',
   '57P03',
+  // too_many_connections: the server has no slot to give (max_connections, or the role's connection limit). A capacity
+  // problem on the server's side, not a mistake in the request: CONNECTION_FAILED (502) rather than QUERY_FAILED (400).
+  '53300',
 ])
 
 type ArrayResult = QueryResult<unknown[]>

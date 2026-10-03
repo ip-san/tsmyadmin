@@ -85,6 +85,11 @@ const CONNECTION_CODES = new Set([
   'PROTOCOL_CONNECTION_LOST',
   'ER_HOST_NOT_PRIVILEGED',
   'ER_HOST_IS_BLOCKED',
+  // The server has no connection to give (max_connections, or the account's own limit): a capacity problem on the
+  // server's side, not a mistake in the request, so it is a CONNECTION_FAILED (502) rather than a QUERY_FAILED (400).
+  'ER_CON_COUNT_ERROR',
+  'ER_TOO_MANY_USER_CONNECTIONS',
+  'ER_USER_LIMIT_REACHED',
 ])
 const NOT_FOUND_CODES = new Set([
   'ER_NO_SUCH_TABLE',
