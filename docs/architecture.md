@@ -14,7 +14,7 @@
 | 2 | `packages/shared/src/schemas/browse.ts` | 閲覧のリクエストとレスポンスの形（Zod）。「行数の見積もりが 10 万行を超える表は `COUNT(*)` しない」など、なぜそうするかがコメントにある |
 | 3 | `apps/api/src/routes/databases.ts` | `GET /databases/:db/tables/:table/rows`。検証 → アダプターの呼び出し → JSON が 1 画面に収まる、薄いルートの見本 |
 | 4 | `apps/web/src/lib/queries/tables.ts`（`rowsQuery`）と `apps/web/src/routes/_app/db.$db/table.$table/index.tsx` | `hc<AppType>` で型が付いた呼び出しと、それを表示するルート（実体は `features/browse`） |
-| 5 | `packages/adapter/src/test/conformance.ts`（`describe('browseRows')`） | 同じテストが MySQL と PostgreSQL の両方で走る。実行できる仕様書 |
+| 5 | `packages/adapter/src/test/conformance/search-and-browse.ts`（`describe('browseRows')`） | 同じテストが MySQL と PostgreSQL の両方で走る。実行できる仕様書 |
 
 規約を機械で守らせる仕組みの作りを見るなら、`scripts/check-sql-safety.mjs` から（§8）。
 
@@ -112,7 +112,7 @@ classDiagram
   BaseAdapter <|-- PostgresAdapter
 ```
 
-- **契約の同一性は conformance テストが保証します。** `packages/adapter/src/test/conformance.ts` は 1 つのスイートを MySQL と PostgreSQL の両方に対して実行します。`ADAPTER_METHOD_NAMES` に載ったメソッドすべてに `describe('<method>')` があることは `test/spec-consistency.test.ts` が検査するので、載せた時点で自動的に両方言のテストになります。
+- **契約の同一性は conformance テストが保証します。** `packages/adapter/src/test/conformance.ts` は 1 つのスイートを MySQL と PostgreSQL の両方に対して実行します（スイートは、グループごとの `test/conformance/*.ts` に分かれており、`conformance.ts` が元の順番で呼びます。あとのテストは前のテストが残したものを使うので、順番は変えません）。`ADAPTER_METHOD_NAMES` に載ったメソッドすべてに `describe('<method>')` があることは `test/spec-consistency.test.ts` が検査するので、載せた時点で自動的に両方言のテストになります。
 - **SQL の組み立て**: 識別子は `quoteIdent` / `quoteTable`、値は `Params` のプレースホルダ。文字列補間が許されるファイルは `scripts/check-sql-safety.mjs` の許可リストが唯一の正です。
 - **字句解析は 1 か所**: `sql/split.ts` が公開するのは `splitStatements` / `stripComments` / `stripLeadingComments` / `setAssignments`（MySQL の `SET` 文から代入を取り出す。インポートの autocommit 判定が使う）の 4 つで、文の分割・先頭コメント除去・監査ログのマスクはすべてこれを通ります。リテラル・コメント・方言差（`#` は MySQL のみ、PostgreSQL はブロックコメントが入れ子、`E'…'` のエスケープ、`$tag$`）を知っているのは内部の `scanToken` だけです。なお読み取り文の判定（`base.ts` の `stripLiterals`）と監査ログのパスワード照合は、速度優先で別の正規表現を使っています。詳しくは下の「字句解析と文の分割」を参照。
 
@@ -346,7 +346,7 @@ flowchart LR
 
 1. `packages/shared/src/schemas/server.ts` の `ServerInfoSchema` に `timezone: z.string().nullable()` を足す（契約はここが唯一の正）
 2. `packages/adapter/src/{mysql,postgres}/server.ts` の `serverInfo()` が返す値に足す。戻り値の型は shared から来ているので、**片方だけだと typecheck が落ちます**
-3. `packages/adapter/src/test/conformance.ts` の `describe('serverInfo')` に両方言の検証を足し、`testing/fake-adapter.ts`（API テストが使うインメモリ実装）にも値を入れる
+3. `packages/adapter/src/test/conformance/server.ts` の `describe('serverInfo')` に両方言の検証を足し、`testing/fake-adapter.ts`（API テストが使うインメモリ実装）にも値を入れる
 4. `apps/api/src/routes/server.ts` は変更不要 — ルートはアダプターの戻り値をそのまま返し、**レスポンスを実行時に検証しません**。形を守るのは `apps/api/src/app-server.test.ts` の `ServerInfoSchema.parse(...)` です
 5. `apps/web`: `lib/queries/` の各ファイルが `unwrap<ServerInfo>` のように shared の型を明示しています（`hc` の型が効くのはパス・パラメータ・ボディまでで、レスポンスは `unwrap<T>` に渡した型になります）。表示側と `config/locales/{ja,en}.ts` のラベルを足す
 6. `bun run check` → `bun run db:up && bun run test:integration`

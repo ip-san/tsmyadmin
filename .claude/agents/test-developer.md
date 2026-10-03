@@ -16,10 +16,10 @@ color: cyan
 
 ### 1. Adapter conformance ケース（両方言必須）
 
-対象: `packages/adapter/src/`。`DatabaseAdapter` にメソッドを追加/変更したら `packages/adapter/src/test/conformance.ts` の `describeAdapterConformance()` 内に `describe('<methodName>', ...)` を追加する。**MySQL と PostgreSQL の両方**（`mysql.integration.test.ts` / `postgres.integration.test.ts` が同じ関数を呼ぶ）で通ることが条件。
+対象: `packages/adapter/src/`。`DatabaseAdapter` にメソッドを追加/変更したら `packages/adapter/src/test/conformance/` の該当するグループのファイル（実行側は `conformance.ts` の `describeAdapterConformance()`）に `describe('<methodName>', ...)` を追加する。**MySQL と PostgreSQL の両方**（`mysql.integration.test.ts` / `postgres.integration.test.ts` が同じ関数を呼ぶ）で通ることが条件。
 
 ```typescript
-// packages/adapter/src/test/conformance.ts 内、describeAdapterConformance() の中に追加
+// packages/adapter/src/test/conformance/<group>.ts の describeXxx(env) の中に追加（db は env.db、補助関数は env から取る）
 describe('newMethod', () => {
   it('does the normal case', async () => {
     await execOk(`INSERT INTO ${scratch} (id, name, n) VALUES (1, 'a', 10)`)

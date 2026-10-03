@@ -1,4 +1,4 @@
-<!-- translated-from: docs/architecture.md sha256:039aa673e7bee031713989c21cf5a1fbde12c77c711ac36822e9123653cc717e -->
+<!-- translated-from: docs/architecture.md sha256:438c8fc7352a6410702e09a21910956bf453501b5ccf7310886ee7e0068c60dc -->
 
 # Architecture
 
@@ -16,7 +16,7 @@ Before reading the whole document, follow one thread, "showing a table's rows", 
 | 2 | `packages/shared/src/schemas/browse.ts` | The shape of a browse request and response (Zod). The comments say why, for example why a table estimated above 100,000 rows is not `COUNT(*)`ed |
 | 3 | `apps/api/src/routes/databases.ts` | `GET /databases/:db/tables/:table/rows`. Validate → call the adapter → JSON, all in one screenful: a model of a thin route |
 | 4 | `apps/web/src/lib/queries/tables.ts` (`rowsQuery`) and `apps/web/src/routes/_app/db.$db/table.$table/index.tsx` | The call typed through `hc<AppType>`, and the route that shows it (the substance is in `features/browse`) |
-| 5 | `packages/adapter/src/test/conformance.ts` (`describe('browseRows')`) | The same test runs on both MySQL and PostgreSQL: a specification you can run |
+| 5 | `packages/adapter/src/test/conformance/search-and-browse.ts` (`describe('browseRows')`) | The same test runs on both MySQL and PostgreSQL: a specification you can run |
 
 To see how a convention is enforced by machine, start with `scripts/check-sql-safety.mjs` (§8).
 
@@ -114,7 +114,7 @@ classDiagram
   BaseAdapter <|-- PostgresAdapter
 ```
 
-- **The conformance suite is what guarantees the contract is the same.** `packages/adapter/src/test/conformance.ts` runs one suite against both MySQL and PostgreSQL. `test/spec-consistency.test.ts` checks that every method listed in `ADAPTER_METHOD_NAMES` has a `describe('<method>')`, so listing a method makes it tested on both dialects automatically.
+- **The conformance suite is what guarantees the contract is the same.** `packages/adapter/src/test/conformance.ts` runs one suite against both MySQL and PostgreSQL (the suite is split into a file per group in `test/conformance/*.ts`, which `conformance.ts` calls in the original order; a later test uses what an earlier one left, so the order stays). `test/spec-consistency.test.ts` checks that every method listed in `ADAPTER_METHOD_NAMES` has a `describe('<method>')`, so listing a method makes it tested on both dialects automatically.
 - **Building SQL**: identifiers go through `quoteIdent` / `quoteTable`, values through `Params` placeholders. The allowlist in `scripts/check-sql-safety.mjs` is the authority on which files may interpolate strings at all.
 - **Lexing happens in one place**: `sql/split.ts` exports four things — `splitStatements`, `stripComments`, `stripLeadingComments` and `setAssignments` (which pulls the assignments out of a MySQL `SET`, used to decide autocommit during an import) — and splitting statements, stripping leading comments and masking the audit log all go through them. Only the internal `scanToken` knows about literals, comments and the dialect differences (`#` is MySQL only; PostgreSQL nests block comments, has `E'…'` escapes and `$tag$`). Deciding whether a statement reads (`stripLiterals` in `base.ts`) and matching passwords for the audit log use separate regular expressions, for speed. See *Lexing and splitting statements* below.
 
@@ -348,7 +348,7 @@ Working through it once is the quickest way to see where the types flow. To add 
 
 1. Add `timezone: z.string().nullable()` to `ServerInfoSchema` in `packages/shared/src/schemas/server.ts` (the contract lives here and nowhere else)
 2. Add the value to what `serverInfo()` returns in `packages/adapter/src/{mysql,postgres}/server.ts`. The return type comes from shared, so **doing only one of them fails the typecheck**
-3. Add assertions for both dialects to `describe('serverInfo')` in `packages/adapter/src/test/conformance.ts`, and give the value to `testing/fake-adapter.ts` (the in-memory implementation the API tests use)
+3. Add assertions for both dialects to `describe('serverInfo')` in `packages/adapter/src/test/conformance/server.ts`, and give the value to `testing/fake-adapter.ts` (the in-memory implementation the API tests use)
 4. `apps/api/src/routes/server.ts` needs no change — the route returns what the adapter gave it and **does not validate the response at run time**. What holds the shape is `ServerInfoSchema.parse(...)` in `apps/api/src/app-server.test.ts`
 5. `apps/web`: each file in `lib/queries/` names the shared type explicitly, as in `unwrap<ServerInfo>` (the `hc` types cover the path, the parameters and the body; the response is whatever type was passed to `unwrap<T>`). Add the display and the labels in `config/locales/{ja,en}.ts`
 6. `bun run check`, then `bun run db:up && bun run test:integration`
