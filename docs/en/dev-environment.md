@@ -1,4 +1,4 @@
-<!-- translated-from: docs/dev-environment.md sha256:79c19c458d831125cb96e178af2ae99607a11c3d82a910ebb6d4ddb7eb63b38d -->
+<!-- translated-from: docs/dev-environment.md sha256:7454cc2641735048647d744c302f2c7638dab1d43e1387e39d0dcd095175e638 -->
 
 # Development features: what was built, and what was set aside
 
@@ -38,6 +38,6 @@ Ordered by how much they ease getting started and everyday troubleshooting.
 
 ## Known limits
 
-- **Initial JS budget**: about 159 kB of the 160 kB is used (`bun run size`). The next feature would exceed it. Splitting the Japanese / English strings (the locales) per screen is the likely fix.
+- **Initial JS budget**: about 160 kB of the 170 kB is used (`bun run size`). At 159.9 kB of 160 kB the budget was raised to 170 kB rather than trimmed. Where it goes (initial JS, minified): react-dom 33%, zod 17%, the language file 13%, TanStack Router and Query about 18%, the shared schemas about 7%. **zod cannot leave the first paint** (the route definitions validate their search parameters with it, and `readPreference` takes a zod schema, both on the first-paint path). Only the strings are a lever: loading each screen's strings with the screen could save up to about 20 kB, but it touches all 208 files that read `locale.` (53 of them capture a section at module level), and a section that is missed shows only at run time, as `undefined` on the screen that needs it, not in the types. Not worth it at this size: start from here when the budget is next exceeded.
 - **A real PostgreSQL test**: the test compose has no `pg_stat_statements`, so the PostgreSQL path of "statements as they run" has been checked only in a throwaway container with the extension. Putting it in CI needs a change to the compose command and the fixtures (and a `db:reset`).
 - **Leaving out "its own statements" is per connection** on MySQL: a second tsmyadmin session on the same server shows up as application traffic.
