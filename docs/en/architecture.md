@@ -1,4 +1,4 @@
-<!-- translated-from: docs/architecture.md sha256:eea42f085b59d107ef18321a4d8c38e50604943737f393b918f8f2f6fe954d7b -->
+<!-- translated-from: docs/architecture.md sha256:039aa673e7bee031713989c21cf5a1fbde12c77c711ac36822e9123653cc717e -->
 
 # Architecture
 
@@ -349,7 +349,7 @@ Working through it once is the quickest way to see where the types flow. To add 
 1. Add `timezone: z.string().nullable()` to `ServerInfoSchema` in `packages/shared/src/schemas/server.ts` (the contract lives here and nowhere else)
 2. Add the value to what `serverInfo()` returns in `packages/adapter/src/{mysql,postgres}/server.ts`. The return type comes from shared, so **doing only one of them fails the typecheck**
 3. Add assertions for both dialects to `describe('serverInfo')` in `packages/adapter/src/test/conformance.ts`, and give the value to `testing/fake-adapter.ts` (the in-memory implementation the API tests use)
-4. `apps/api/src/routes/server.ts` needs no change — the route returns what the adapter gave it and **does not validate the response at run time**. What holds the shape is `ServerInfoSchema.parse(...)` in `apps/api/src/app.test.ts`
+4. `apps/api/src/routes/server.ts` needs no change — the route returns what the adapter gave it and **does not validate the response at run time**. What holds the shape is `ServerInfoSchema.parse(...)` in `apps/api/src/app-server.test.ts`
 5. `apps/web`: each file in `lib/queries/` names the shared type explicitly, as in `unwrap<ServerInfo>` (the `hc` types cover the path, the parameters and the body; the response is whatever type was passed to `unwrap<T>`). Add the display and the labels in `config/locales/{ja,en}.ts`
 6. `bun run check`, then `bun run db:up && bun run test:integration`
 

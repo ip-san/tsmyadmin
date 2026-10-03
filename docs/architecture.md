@@ -347,7 +347,7 @@ flowchart LR
 1. `packages/shared/src/schemas/server.ts` の `ServerInfoSchema` に `timezone: z.string().nullable()` を足す（契約はここが唯一の正）
 2. `packages/adapter/src/{mysql,postgres}/server.ts` の `serverInfo()` が返す値に足す。戻り値の型は shared から来ているので、**片方だけだと typecheck が落ちます**
 3. `packages/adapter/src/test/conformance.ts` の `describe('serverInfo')` に両方言の検証を足し、`testing/fake-adapter.ts`（API テストが使うインメモリ実装）にも値を入れる
-4. `apps/api/src/routes/server.ts` は変更不要 — ルートはアダプターの戻り値をそのまま返し、**レスポンスを実行時に検証しません**。形を守るのは `apps/api/src/app.test.ts` の `ServerInfoSchema.parse(...)` です
+4. `apps/api/src/routes/server.ts` は変更不要 — ルートはアダプターの戻り値をそのまま返し、**レスポンスを実行時に検証しません**。形を守るのは `apps/api/src/app-server.test.ts` の `ServerInfoSchema.parse(...)` です
 5. `apps/web`: `lib/queries/` の各ファイルが `unwrap<ServerInfo>` のように shared の型を明示しています（`hc` の型が効くのはパス・パラメータ・ボディまでで、レスポンスは `unwrap<T>` に渡した型になります）。表示側と `config/locales/{ja,en}.ts` のラベルを足す
 6. `bun run check` → `bun run db:up && bun run test:integration`
 
