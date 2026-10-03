@@ -33,7 +33,10 @@ const all = [...walk(join(ROOT, 'apps')), ...walk(join(ROOT, 'packages')), ...wa
 const unitTests = all
   .filter((f) => /\.test\.tsx?$/.test(f) && !f.includes('.integration.test.'))
   .reduce((n, f) => n + count(f, IT), 0)
-const conformance = count(join(ROOT, 'packages/adapter/src/test/conformance.ts'), IT)
+// The suite is the runner `conformance.ts` and one file per group in `conformance/`.
+const conformance = all
+  .filter((f) => /packages\/adapter\/src\/test\/conformance(\.ts$|\/)/.test(f))
+  .reduce((n, f) => n + count(f, IT), 0)
 const e2e = all
   .filter((f) => f.endsWith('.spec.ts') && relative(ROOT, f).startsWith('e2e'))
   .reduce((n, f) => n + count(f, IT), 0)

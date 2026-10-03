@@ -9,7 +9,7 @@ paths:
 
 ## 変更時の必須手順
 
-1. `types.ts` の `DatabaseAdapter` にメソッドを足したら `ADAPTER_METHOD_NAMES` にも追加し、`test/conformance.ts` に `describe('<method>')` を書く（spec-consistency が検出）
+1. `types.ts` の `DatabaseAdapter` にメソッドを足したら `ADAPTER_METHOD_NAMES` にも追加し、`test/conformance/` の該当するグループのファイル（`catalog` / `search-and-browse` / `row-edits` / `sql-console` / `dump-and-export` / `server` / `accounts` / `ddl` …）に `describe('<method>')` を書く（spec-consistency が検出）。グループは `test/conformance.ts` が元の順番で呼ぶ（あとのテストは前のテストが残したものを使うので、順番を変えない）
 2. 方言ファイルを片方だけ変更しない。`mysql/x.ts` を触ったら `postgres/x.ts` の同等箇所を確認する
 3. 新しい型の扱いを変えたら `docker/fixtures/*` と各 `*.integration.test.ts` の `typesRow1` を更新する
 4. 検証は `bun run test`（ユニット）→ `bun run db:up && bun run test:integration`（両 DB の conformance）
@@ -42,7 +42,7 @@ MySQL はキーセットページング（PK / NOT NULL ユニークキーで `W
 
 ## DDL 本体の区切り文字（DELIMITER・末尾コメント）
 
-MySQL の DELIMITER 切り替え（`packages/shared/src/sql-script.ts`）で本体（`createRoutine`/`createTrigger`/`createEvent`）を区切り文字で包むときは、閉じ記号の前に **改行を挟む**。改行なしで直接連結すると、本体の最後の行が `--` / `#` の行コメントで終わっている場合に閉じ記号がそのコメントへ吸収され、`sql/split.ts` の `splitStatements` が区切りを認識できず、実行時にだけ構文エラーになる（プレビューでは正しく見える生成 SQL が壊れる）。この種の変更をするときは、本体が行コメントで終わるケースを `sql-script.test.ts` と `test/conformance.ts` の createRoutine/createTrigger/createEvent のテストに必ず含める（PostgreSQL の `dollarQuoted()` は閉じタグの前に改行を挟んでおり同じ問題は起きない）。
+MySQL の DELIMITER 切り替え（`packages/shared/src/sql-script.ts`）で本体（`createRoutine`/`createTrigger`/`createEvent`）を区切り文字で包むときは、閉じ記号の前に **改行を挟む**。改行なしで直接連結すると、本体の最後の行が `--` / `#` の行コメントで終わっている場合に閉じ記号がそのコメントへ吸収され、`sql/split.ts` の `splitStatements` が区切りを認識できず、実行時にだけ構文エラーになる（プレビューでは正しく見える生成 SQL が壊れる）。この種の変更をするときは、本体が行コメントで終わるケースを `sql-script.test.ts` と `test/conformance/ddl.ts` の createRoutine/createTrigger/createEvent のテストに必ず含める（PostgreSQL の `dollarQuoted()` は閉じタグの前に改行を挟んでおり同じ問題は起きない）。
 
 ## 接続の返却
 
