@@ -16,8 +16,16 @@ const DIST = join(process.cwd(), 'apps/web/dist')
  * 160: raised from 150 when the phpMyAdmin-parity work (export / import, settings, server tools) took the initial
  * download to the old limit. Most of the growth is the language file (about a quarter of the total, one file per
  * language because every string is read once at load); the screens themselves are route chunks and are not counted.
+ *
+ * 170: raised from 160 at 159.9, rather than trimmed. Measured (initial JS, minified): react-dom 33%, zod 17%, the
+ * language file 13%, TanStack Router and Query about 18%, the shared schemas about 7%. zod is not removable from the
+ * first paint: the route definitions validate their search parameters with it, and every `readPreference` takes a zod
+ * schema. The one lever that matters is the language file, up to about 20 kB of it by loading each screen's strings
+ * with the screen; that touches all 208 files that read `locale.` (53 capture a section at module level), and a
+ * section missed shows only at run time, as `undefined` on the screen that needs it. Not worth it at this size: do it
+ * when the budget is next exceeded, with `docs/dev-environment.md` ("Initial JS budget") as the starting point.
  */
-const LIMIT_KB = 160
+const LIMIT_KB = 170
 
 let manifest
 try {
