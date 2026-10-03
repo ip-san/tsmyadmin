@@ -324,6 +324,8 @@ flowchart LR
   pp --> chk
 ```
 
+静的検査（`check:static`）には、構造を守る自前の検査も入っています: 依存の向き（`check:arch`）、SQL の組み立て（`check:sql-safety`）、doc コメントの位置（`check:doc-comments`）、**ファイルの長さ（`check:file-size`）**。最後のものは、800 行を超えるファイルを落とします（読む人が頭に収められる量を超えるため）。すでに超えている少数のファイルは `scripts/file-size-baseline.json` に理由つきで記録してあり、増やすと落ち、縮めたら基準線を下げます（`bun run check:file-size -- --update-baseline` は下げるだけで、追加も引き上げもしません。それは、ファイルを分けるか、理由を書いて手で足す、という人の判断にします）。生成物と文言の表は除外です。
+
 テストの層は下から: ユニット（`sql/split`、DDL スナップショット、web の純粋関数）→ **conformance**（実 DB、両方言で同一スイート）→ API 統合（実 DB、ルート単位）→ E2E（Playwright、機能 / a11y / ビジュアル）。
 
 ## 9. 逆引き: どこを変更するか
@@ -347,7 +349,7 @@ flowchart LR
 1. `packages/shared/src/schemas/server.ts` の `ServerInfoSchema` に `timezone: z.string().nullable()` を足す（契約はここが唯一の正）
 2. `packages/adapter/src/{mysql,postgres}/server.ts` の `serverInfo()` が返す値に足す。戻り値の型は shared から来ているので、**片方だけだと typecheck が落ちます**
 3. `packages/adapter/src/test/conformance/server.ts` の `describe('serverInfo')` に両方言の検証を足し、`testing/fake-adapter.ts`（API テストが使うインメモリ実装）にも値を入れる
-4. `apps/api/src/routes/server.ts` は変更不要 — ルートはアダプターの戻り値をそのまま返し、**レスポンスを実行時に検証しません**。形を守るのは `apps/api/src/app.test.ts` の `ServerInfoSchema.parse(...)` です
+4. `apps/api/src/routes/server.ts` は変更不要 — ルートはアダプターの戻り値をそのまま返し、**レスポンスを実行時に検証しません**。形を守るのは `apps/api/src/app-server.test.ts` の `ServerInfoSchema.parse(...)` です
 5. `apps/web`: `lib/queries/` の各ファイルが `unwrap<ServerInfo>` のように shared の型を明示しています（`hc` の型が効くのはパス・パラメータ・ボディまでで、レスポンスは `unwrap<T>` に渡した型になります）。表示側と `config/locales/{ja,en}.ts` のラベルを足す
 6. `bun run check` → `bun run db:up && bun run test:integration`
 

@@ -1,4 +1,4 @@
-<!-- translated-from: docs/phpmyadmin-parity.md sha256:94f05e42744b55570665c34a4910e39535fc9871bb84ce90b6a5291560c177af -->
+<!-- translated-from: docs/phpmyadmin-parity.md sha256:460dd9951be0459ab818be14b4d40e67231efad24a022b403323e50e6aa921e4 -->
 
 # Feature parity with phpMyAdmin
 
@@ -187,7 +187,7 @@ Steps for the next (implementing) session. Go batch by batch from A, one commit 
 
 ### Batch A: quality debt (Q1–Q10)
 
-- **Q1 / Q2** (M): add `update(config, kind, name, fn)` to `SavedItems` in `apps/api/src/session/store.ts`, doing the read and the write in one transaction (SQLite) / WATCH-MULTI (Redis), with implementations in `sqlite-store.ts` / `redis-store.ts` and tests in `session/conformance.ts`; rewrite the history add and the shared-bookmark save in `routes/sql-lists.ts` on it. Done: concurrent POSTs from two clients of one account both remain in `GET /sql-history` (`app.test.ts`); a second save of a taken name always gets 409.
+- **Q1 / Q2** (M): add `update(config, kind, name, fn)` to `SavedItems` in `apps/api/src/session/store.ts`, doing the read and the write in one transaction (SQLite) / WATCH-MULTI (Redis), with implementations in `sqlite-store.ts` / `redis-store.ts` and tests in `session/conformance.ts`; rewrite the history add and the shared-bookmark save in `routes/sql-lists.ts` on it. Done: concurrent POSTs from two clients of one account both remain in `GET /sql-history` (`app-stored.test.ts`); a second save of a taken name always gets 409.
 - **Q3** (M): put `numberLocale` (`'ja-JP' | 'en-US'`) and `formatNumber` / `formatTime` in `config/locale.ts` and replace the 32 sites of `git grep "'ja-JP'" apps/web/src` (`SqlPanels.tsx`, `MonitorChart.tsx`, `ResultChart.tsx`, `ChartXY.tsx`, `ConsoleOptions.tsx`…). Done: the grep returns only `locales/ja.ts`; a web test renders HistoryPanel under `en` and sees `1,234` and a 24-hour clock.
 - **Q4** (M): draw the legend inside the SVG (a `<g>` top-right with a rect + text per series) and keep only an sr-only description in the HTML (`components/results/ResultChart.tsx`, `ChartPie.tsx`, `ChartXY.tsx`). Done: `e2e/sql-results.spec.ts` finds each series name in the saved SVG text.
 - **Q5** (S): debounce the check in `components/rows/RowField.tsx` by 150 ms, or run it on blur; the pattern length cap (200) exists. Done: the RowForm test shows no `JSON.parse` per keystroke.

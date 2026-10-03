@@ -11,7 +11,7 @@ MySQL / PostgreSQL 両対応の、モダン TypeScript 製の Web DB 管理ツ�
 - **テスト DB**: `docker compose`（MySQL `13306` / PostgreSQL `15433`、fixtures 自動投入）
 - **開発での使い方（売りの機能）**: `docker-compose.dev.yml` 1 つで、手元の Docker の MySQL / PostgreSQL コンテナを自動検出してログイン画面に出す（`TSMYADMIN_DOCKER_DISCOVERY=1`、`apps/api/src/lib/docker-discovery.ts`。読むのは GET だけ、パスワードは既定では読まない（`TSMYADMIN_DOCKER_LOGIN=1` を明示したときだけコンテナの資格情報をプロセス内に読み、ブラウザには返さず 1 クリックで入る）、`NODE_ENV=production` では拒否）
 - **本番運用**: 設定は `apps/api/src/config.ts` で起動時検証（環境変数の一覧は `docs/deployment.md` が唯一の正）。接続先 allowlist・ログイン レート制限・CSP・リクエスト ID 付き構造化ログ・監査ログ（`withAudit`）・`/healthz` `/readyz`・暗号化 SQLite セッションストア（`SESSION_STORE=sqlite`）
-- **品質**: Vitest / Playwright（**アクセシビリティ**: Biome の a11y ルールは全部 error で警告 0 を維持（`bun run lint` は警告でも落ちる）、`e2e/routes-a11y.spec.ts` は生成されたルート木の**全画面**を初期状態で axe + レイアウト検査（画面を足すと自動で対象になる）、`check:contrast` はデザイン トークンの比。`e2e/a11y.spec.ts` は状態つきの画面（ダイアログ・結果・登録中）を検査。`e2e/a11y.spec.ts` は axe に加え `e2e/layout-lint.ts` で矢印の重なり・入力欄と（ラベルのない）チェックボックス・ボタンの高さのずれ・コントロールの重なり・横スクロール・アプリシェルでページが縦に伸びていないか・文字のはみ出し・id の重複・`undefined` の混入を DOM の幾何で検査。画面を足したら `scan(page)` を通す）/ Biome / knip / madge / jscpd / type-coverage + 自前検査（`check:arch`, `check:sql-safety`, `check:doc-comments` = doc コメントが別の宣言の上に残っていないか, `docs:validate`, `size` = 初期 JS の brotli 合計 170 kB 予算）
+- **品質**: Vitest / Playwright（**アクセシビリティ**: Biome の a11y ルールは全部 error で警告 0 を維持（`bun run lint` は警告でも落ちる）、`e2e/routes-a11y.spec.ts` は生成されたルート木の**全画面**を初期状態で axe + レイアウト検査（画面を足すと自動で対象になる）、`check:contrast` はデザイン トークンの比。`e2e/a11y.spec.ts` は状態つきの画面（ダイアログ・結果・登録中）を検査。`e2e/a11y.spec.ts` は axe に加え `e2e/layout-lint.ts` で矢印の重なり・入力欄と（ラベルのない）チェックボックス・ボタンの高さのずれ・コントロールの重なり・横スクロール・アプリシェルでページが縦に伸びていないか・文字のはみ出し・id の重複・`undefined` の混入を DOM の幾何で検査。画面を足したら `scan(page)` を通す）/ Biome / knip / madge / jscpd / type-coverage + 自前検査（`check:arch`, `check:sql-safety`, `check:doc-comments` = doc コメントが別の宣言の上に残っていないか, `check:file-size` = ファイルが 800 行を超えないか（既存の大きなファイルは基準線で「増やさない」）, `docs:validate`, `size` = 初期 JS の brotli 合計 170 kB 予算）
 
 ## 開発コマンド
 
@@ -20,7 +20,7 @@ bun run db:up             # テスト DB 起動（初回は fixtures 投入）
 bun run db:reset          # ボリューム削除して再作成
 bun run dev               # api + web 同時起動
 bun run check             # 型 + lint + ユニット/API/Web テスト + type-coverage（日常ゲート）
-bun run check:static      # check + knip + circular + cpd + arch + sql-safety + docs + i18n + contrast + doc-comments（pre-push で実行、DB 不要）
+bun run check:static      # check + knip + circular + cpd + arch + sql-safety + docs + i18n + contrast + doc-comments + file-size（pre-push で実行、DB 不要）
 bun run check:all         # check:static + 両 DB の統合テスト
 bun run test              # DB 不要のテスト
 bun run test:integration  # 両 DB の adapter conformance + API 統合（compose 必須）
@@ -65,5 +65,6 @@ IMPORTANT: コンテキスト圧縮後も以下を必ず守ること。
 - **YOU MUST** フィクスチャ（`docker/fixtures/**`）を変えたら `bun run db:reset`。既存の checkout でも MySQL の `WITH GRANT OPTION` 追加以降はリセットが必要
 - **YOU MUST** web の UI 文字列は `apps/web/src/config/locales/{ja,en}.ts` の両方に定義し（`en.ts` は `satisfies Locale` で型が揃う）、`locale.*` で参照する。Tailwind の色指定には `dark:` 対応を付ける
 - **YOU MUST** E2E は本番ビルドを API が配信する。Playwright のプロジェクトは `chromium`（機能）/ `webkit`（機能・Safari 差分）/ `a11y` / `visual-light` / `visual-dark`。**ビジュアルの 2 つはローカル専用**で、CI は `chromium` / `a11y` / `webkit` だけを実行する（スナップショットは `-darwin` のみ。OS が変わると描画差で落ちるため）。したがって見た目の退行はローカルで `bun run test:e2e` を回したときにしか検出されない。`bun run test:e2e` は毎回ビルドするが、ポート 3199 / 3198（永続セッションストアの検証用）に古いサーバーが残っていると再利用される（`reuseExistingServer`）ので、web を変更したら `bun run build` してから実行するか、残っているサーバーを止める
+- **YOU MUST** 1 ファイル 800 行を超えない（`bun run check:file-size` が fail する）。超えそうなら、中身で分ける。既存の大きなファイルは `scripts/file-size-baseline.json` に理由つきで記録してあり、**増やさず、縮めたら基準線を下げる**（`-- --update-baseline` は下げるだけ）。基準線に足す・数を上げるのは、分けられない理由を書いたうえでの手作業にする
 - **YOU MUST** 利用者に見える変更（機能・挙動・文言・対応バージョン）は `CHANGELOG.md` の `[Unreleased]` に追記する
 - **YOU MUST** 統合テストは `*.integration.test.ts` 命名（DB 不要の `bun run test` / pre-commit から除外される）

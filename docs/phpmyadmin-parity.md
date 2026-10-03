@@ -185,7 +185,7 @@ phpMyAdmin 5.2 の全画面（サーバー・データベース・テーブル�
 
 ### バッチ A: 品質負債（Q1〜Q10）
 
-- **Q1 / Q2**（M）: `apps/api/src/session/store.ts` の `SavedItems` に、読み取りと書き込みを 1 つのトランザクション（SQLite）/ WATCH-MULTI（Redis）で行う `update(config, kind, name, fn)` を足し、`sqlite-store.ts` / `redis-store.ts` / `session/conformance.ts` に実装とテストを足す。`routes/sql-lists.ts` の履歴の追加と共有ブックマークの保存をそれで書き直す。完了条件: 同じアカウントの 2 クライアントからの同時 POST が両方 `GET /sql-history` に残る（`app.test.ts`）。取られた名前への 2 回目の保存が必ず 409。
+- **Q1 / Q2**（M）: `apps/api/src/session/store.ts` の `SavedItems` に、読み取りと書き込みを 1 つのトランザクション（SQLite）/ WATCH-MULTI（Redis）で行う `update(config, kind, name, fn)` を足し、`sqlite-store.ts` / `redis-store.ts` / `session/conformance.ts` に実装とテストを足す。`routes/sql-lists.ts` の履歴の追加と共有ブックマークの保存をそれで書き直す。完了条件: 同じアカウントの 2 クライアントからの同時 POST が両方 `GET /sql-history` に残る（`app-stored.test.ts`）。取られた名前への 2 回目の保存が必ず 409。
 - **Q3**（M）: `config/locale.ts` に `numberLocale`（`'ja-JP' | 'en-US'`）と `formatNumber` / `formatTime` を置き、`git grep "'ja-JP'" apps/web/src` の 32 か所を置き換える（`SqlPanels.tsx`、`MonitorChart.tsx`、`ResultChart.tsx`、`ChartXY.tsx`、`ConsoleOptions.tsx` など）。完了条件: grep が `locales/ja.ts` だけを返す。`en` で HistoryPanel を描く web テストが `1,234` と 24 時間表記を確かめる。
 - **Q4**（M）: 凡例を SVG の中（右上の `<g>` に系列ごとの rect + text）に描き、HTML の `<figcaption>` は sr-only の説明だけにする（`components/results/ResultChart.tsx`、`ChartPie.tsx`、`ChartXY.tsx`）。完了条件: `e2e/sql-results.spec.ts` で保存した SVG の文字列に各系列名が入っている。
 - **Q5**（S）: `components/rows/RowField.tsx` の検査を 150 ms デバウンス、または blur 時にする。パターン長の上限（200）は既にある。完了条件: RowForm のテストでキー入力ごとに `JSON.parse` が呼ばれない。
