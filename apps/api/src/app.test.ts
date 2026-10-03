@@ -1632,7 +1632,22 @@ describe('second factor', () => {
       if (set) cookie = set
       return res
     }
-    return { store, req, login, at: () => now, tick: (ms: number) => (now += ms) }
+    /** Another browser: its own cookie, so a second session of the same account that does not close the first. */
+    const browser = () => {
+      let own = ''
+      const request = (path: string, init: RequestInit = {}) =>
+        app.request(path, {
+          ...init,
+          headers: { 'content-type': 'application/json', ...(own ? { cookie: own } : {}), ...(init.headers ?? {}) },
+        })
+      const signIn = async (body: Record<string, unknown> = LOGIN) => {
+        const res = await request('/api/session', { method: 'POST', body: JSON.stringify(body) })
+        own = res.headers.get('set-cookie')?.split(';')[0] ?? own
+        return res
+      }
+      return { req: request, login: signIn }
+    }
+    return { store, req, login, browser, at: () => now, tick: (ms: number) => (now += ms) }
   }
 
   /** Enrols and returns the secret plus the recovery codes shown once. */
@@ -1651,6 +1666,65 @@ describe('second factor', () => {
   /** A caller on its own address each time, as one with many of them is: no per-address limit is reached. */
   const from = (n: number) => ({ 'x-forwarded-for': `203.0.113.${n}` })
   const WRONG = { ...LOGIN, code: '000000' }
+
+  describe('an enrolment that was started before the account had a second factor, or while it had one', () => {
+    const account = { ...LOGIN, dialect: 'mysql' as const }
+    const begin = async (b: ReturnType<ReturnType<typeof totpHarness>['browser']>) =>
+      SecondFactorSetupSchema.parse(
+        await (await b.req('/api/second-factor/begin', { method: 'POST', body: '{}' })).json()
+      )
+    const confirm = (b: ReturnType<ReturnType<typeof totpHarness>['browser']>, secret: string, at: number) =>
+      b.req('/api/second-factor/confirm', {
+        method: 'POST',
+        body: JSON.stringify({ code: codeFor(secret, stepAt(at)) }),
+      })
+
+    it('does not put its secret on a factor another session enrolled meanwhile, which asked for no proof', async () => {
+      const h = totpHarness()
+      try {
+        const a = h.browser()
+        await a.login()
+        const started = await begin(a)
+        // While A holds a half-finished enrolment, the account is enrolled from another session.
+        const b = h.browser()
+        await b.login()
+        const other = await begin(b)
+        expect((await confirm(b, other.secret, h.at())).status).toBe(201)
+
+        const late = await confirm(a, started.secret, h.at())
+        expect(late.status).toBe(401)
+        expect(ApiErrorSchema.parse(await late.json()).code).toBe('SECOND_FACTOR_INVALID')
+        // What the account has is still what the proof-giving session set.
+        expect((await h.store.secondFactor?.get(account))?.secret).toBe(other.secret)
+      } finally {
+        await h.store.closeAll()
+      }
+    })
+
+    it('does not make a factor with no recovery codes when the one it proved itself against was removed meanwhile', async () => {
+      const h = totpHarness()
+      try {
+        const a = h.browser()
+        await a.login()
+        const first = await begin(a)
+        expect((await confirm(a, first.secret, h.at())).status).toBe(201)
+        h.tick(30_000)
+        // A adds a second app: it proves the first one, and the new secret waits for its confirmation.
+        const proof = { code: codeFor(first.secret, stepAt(h.at())) }
+        const again = SecondFactorSetupSchema.parse(
+          await (await a.req('/api/second-factor/begin', { method: 'POST', body: JSON.stringify(proof) })).json()
+        )
+        // Meanwhile the account's factor is turned off (from the same account in another session).
+        await h.store.secondFactor?.clear(account)
+        h.tick(30_000)
+        const late = await confirm(a, again.secret, h.at())
+        expect(late.status).toBe(401)
+        expect(await h.store.secondFactor?.get(account)).toBeNull()
+      } finally {
+        await h.store.closeAll()
+      }
+    })
+  })
 
   describe('the lock on wrong codes', () => {
     it('stops after ten wrong codes from any addresses, even for the right one, and opens again after the lock', async () => {
@@ -1916,6 +1990,40 @@ describe('second factor', () => {
     const withPasskey = (ticket: string, n: number, as = LOGIN) => ({
       ...as,
       passkey: { ticket, response: assertion(n) },
+    })
+
+    it('does not add a passkey to a factor another session enrolled after this one began, which asked for no proof', async () => {
+      const h = totpHarness({ passkeys: true })
+      try {
+        const a = h.browser()
+        await a.login()
+        const begun = await a.req('/api/second-factor/passkeys/begin', { method: 'POST', body: '{}' })
+        expect(begun.status).toBe(200)
+
+        // Meanwhile the account is enrolled with an app from another session.
+        const b = h.browser()
+        await b.login()
+        const setup = SecondFactorSetupSchema.parse(
+          await (await b.req('/api/second-factor/begin', { method: 'POST', body: '{}' })).json()
+        )
+        const enrolled = await b.req('/api/second-factor/confirm', {
+          method: 'POST',
+          body: JSON.stringify({ code: codeFor(setup.secret, stepAt(h.at())) }),
+        })
+        expect(enrolled.status).toBe(201)
+
+        const registration = PASSKEY_FIXTURE.registration as { response: Record<string, unknown> }
+        const response = { ...registration, response: { ...registration.response, publicKeyAlgorithm: -7 } }
+        const late = await a.req('/api/second-factor/passkeys/confirm', {
+          method: 'POST',
+          body: JSON.stringify({ response }),
+        })
+        expect(late.status).toBe(401)
+        expect(ApiErrorSchema.parse(await late.json()).code).toBe('SECOND_FACTOR_INVALID')
+        expect((await h.store.secondFactor?.get({ ...LOGIN, dialect: 'mysql' as const }))?.passkeys ?? []).toEqual([])
+      } finally {
+        await h.store.closeAll()
+      }
     })
 
     it('enrols a passkey, signs in with it, and takes each answer once', async () => {

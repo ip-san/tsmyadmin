@@ -318,6 +318,32 @@ async function changeFactor(
   return false
 }
 
+/** An enrolment that the account has moved on from since it began: it has to be started again. */
+class StaleEnrolment extends Error {}
+
+/**
+ * `changeFactor` for confirming an enrolment, or null when the account is no longer in the state the enrolment began
+ * in. Only an account with no factor is handed recovery codes at the start, so their absence says it had one (and
+ * that proof of it was given). If one has appeared since, nobody proved anything before this one was added to it; if
+ * the one proved against has gone, what is made would have no recovery codes. Either way: start again.
+ */
+async function changeForEnrolment(
+  store: SecondFactors,
+  config: Session['config'],
+  recoveryCodes: readonly string[],
+  apply: (current: SecondFactor | null) => SecondFactor
+): Promise<boolean | null> {
+  try {
+    return await changeFactor(store, config, (current) => {
+      if ((current !== null) !== (recoveryCodes.length === 0)) throw new StaleEnrolment()
+      return apply(current)
+    })
+  } catch (err) {
+    if (err instanceof StaleEnrolment) return null
+    throw err
+  }
+}
+
 /** Without one of its methods: the whole factor goes (recovery codes too) once nothing is left to sign in with. */
 function remaining(factor: SecondFactor): SecondFactor | null {
   return factor.secret !== undefined || factor.passkeys?.length ? factor : null
@@ -410,12 +436,16 @@ export function secondFactorRoutes(cfg: SessionConfig, deps: SecondFactorDeps) {
           }
           const step = verifyCode(started.secret, c.req.valid('json').code, deps.now())
           if (step === null) return codeRefused(c, deps, 'second_factor.confirm.failed')
-          const written = await changeFactor(store, session.config, (existing) => ({
+          const written = await changeForEnrolment(store, session.config, started.recoveryCodes, (existing) => ({
             ...(existing ?? { recoveryHashes: started.recoveryCodes.map(hashRecoveryCode) }),
             secret: started.secret,
             lastStep: step,
             at: deps.now(),
           }))
+          if (written === null) {
+            pendingTotp.delete(session.id)
+            return c.json(apiError('SECOND_FACTOR_INVALID', 'Start the enrolment again'), 401)
+          }
           if (!written) return conflict(c)
           pendingTotp.delete(session.id)
           logged(c, 'second_factor.enrolled')
@@ -531,11 +561,12 @@ export function secondFactorRoutes(cfg: SessionConfig, deps: SecondFactorDeps) {
             deps.now()
           )
           if (!passkey) return codeRefused(c, deps, 'second_factor.passkey_add.failed')
-          const written = await changeFactor(store, session.config, (existing) => ({
+          const written = await changeForEnrolment(store, session.config, started.recoveryCodes, (existing) => ({
             ...(existing ?? { lastStep: -1, recoveryHashes: started.recoveryCodes.map(hashRecoveryCode) }),
             passkeys: [...(existing?.passkeys ?? []), passkey],
             at: deps.now(),
           }))
+          if (written === null) return c.json(apiError('SECOND_FACTOR_INVALID', 'Start adding the passkey again'), 401)
           if (!written) return conflict(c)
           logged(c, 'second_factor.passkey_added')
           return c.json(await secondFactorStatus(cfg, deps, session), 201)

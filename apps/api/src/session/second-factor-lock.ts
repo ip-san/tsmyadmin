@@ -11,7 +11,9 @@ export const LOCK_MS = 15 * 60_000
 
 /** The misses that still count at `now`. */
 function recent(factor: SecondFactor, now: number): number {
-  return factor.lastMissAt !== undefined && now - factor.lastMissAt <= LOCK_MS ? (factor.misses ?? 0) : 0
+  // Strictly inside the window, as the lock is: at the very instant it runs out the count is already gone, or the
+  // first try after it would be counted as an eleventh and lock again.
+  return factor.lastMissAt !== undefined && now - factor.lastMissAt < LOCK_MS ? (factor.misses ?? 0) : 0
 }
 
 /** How long the account stays locked from `now`; 0 when it answers. */
