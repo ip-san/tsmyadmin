@@ -9,7 +9,7 @@ paths:
 
 ## 変更時の必須手順
 
-1. `types.ts` の `DatabaseAdapter` にメソッドを足したら `ADAPTER_METHOD_NAMES` にも追加し、`test/conformance/` の該当するグループのファイル（`catalog` / `search-and-query` / `browse-and-insert` / `row-edits` / `sql-console` / `dump-and-export` / `row-identity-and-export` / `server` / `accounts` / `ddl-*` …）に `describe('<method>')` を書く（spec-consistency が検出）。グループは `test/conformance.ts` が元の順番で呼ぶ（あとのテストは前のテストが残したものを使うので、順番を変えない）
+1. `types.ts` の `DatabaseAdapter` にメソッドを足す前に、既存のメソッドで足りないか確認する（例: `tableStats` はすでに `indexBytes` を返す）。足すなら、`ADAPTER_METHOD_NAMES` にも追加し、`testing/fake-adapter.ts` に実装し（API のテストが使う）、`apps/api/src/lib/audit.ts` の `AUDITED_METHODS` か `PASSTHROUGH_METHODS` に分類し（`audit.test.ts` が検査）、`test/conformance/` の該当するグループのファイル（`catalog` / `search-and-query` / `browse-and-insert` / `row-edits` / `sql-console` / `dump-and-export` / `row-identity-and-export` / `server` / `accounts` / `ddl-*` …）に `describe('<method>')` を書く（spec-consistency が検出）。グループは `test/conformance.ts` が元の順番で呼ぶ（あとのテストは前のテストが残したものを使うので、順番を変えない）
 2. 方言ファイルを片方だけ変更しない。`mysql/x.ts` を触ったら `postgres/x.ts` の同等箇所を確認する
 3. 新しい型の扱いを変えたら `docker/fixtures/*` と各 `*.integration.test.ts` の `typesRow1` を更新する
 4. 検証は `bun run test`（ユニット）→ `bun run db:up && bun run test:integration`（両 DB の conformance）

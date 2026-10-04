@@ -2,6 +2,8 @@
 
 MySQL / PostgreSQL 両対応の、モダン TypeScript 製の Web DB 管理ツール（画面構成は phpMyAdmin に倣う）。
 
+**はじめて読む人へ**: 起動は README の「すぐ使う（開発環境）」、全体の見取り図は [docs/architecture.md](docs/architecture.md) の「最初に読む 5 つ」から。このファイルは、規則と数字の一覧です（順に読むものではありません）。
+
 ## 構成
 
 - **モノレポ (Bun workspaces)**: `apps/api`（Hono on Bun, :3100）/ `apps/web`（Vite + React 19 + TanStack, :5175）/ `packages/shared`（Zod DTO）/ `packages/adapter`（DB 抽象層）
@@ -30,7 +32,7 @@ bun run lighthouse        # Lighthouse CI（警告のみ、要 Chrome）
 
 ## 現在の規模（`scripts/validate-docs.mjs` が同期）
 
-- ユニット/API/Web テスト定義: <!-- stat:unit-tests -->1059<!-- /stat --> 件
+- ユニット/API/Web テスト定義: <!-- stat:unit-tests -->1060<!-- /stat --> 件
 - Adapter conformance: <!-- stat:conformance -->197<!-- /stat --> 件 × 2 方言
 - E2E: <!-- stat:e2e -->200<!-- /stat --> 件
 - API ルート: <!-- stat:routes -->95<!-- /stat -->
@@ -54,7 +56,7 @@ IMPORTANT: コンテキスト圧縮後も以下を必ず守ること。
 
 - **YOU MUST** 識別子は `quoteIdent`/`quoteTable`、値はプレースホルダ（`Params`）。SQL を文字列補間で組み立てない（`bun run check:sql-safety` が fail する）
 - **YOU MUST** `mysql2` / `pg` の import は `packages/adapter/src/**` の中だけ（`bun run check:arch` が fail する）
-- **YOU MUST** `DatabaseAdapter` にメソッドを追加したら `ADAPTER_METHOD_NAMES` と `test/conformance/`（グループごとのファイル。`test/conformance.ts` は実行側）の `describe('<method>')` を同時に追加し、**MySQL と PostgreSQL 両方**で通す
+- **YOU MUST** `DatabaseAdapter` にメソッドを追加したら、次の 4 つを同時に足し、**MySQL と PostgreSQL 両方**で通す: ① `types.ts` の `ADAPTER_METHOD_NAMES`、② `packages/adapter/src/test/conformance/` の該当するグループのファイルの `describe('<method>')`（実行側は `test/conformance.ts`）、③ `packages/adapter/src/testing/fake-adapter.ts` の実装（API のテストが使う）、④ `apps/api/src/lib/audit.ts` の `AUDITED_METHODS` か `PASSTHROUGH_METHODS` への分類（`audit.test.ts` が検査）。足す前に、既存のメソッドで足りないか確認する（例: `tableStats` はすでに `indexBytes` を返す）
 - **YOU MUST** `DdlOp` を追加したら `test/ddl.test.ts` の `SAMPLE_OPS` に両方言のスナップショットを追加する
 - **YOU MUST** API の入出力は先に `packages/shared` の Zod スキーマを定義し、web は `hc<AppType>` 経由でのみ呼ぶ（例外: ダウンロード等ブラウザのナビゲーションで開く GET は URL ビルダー経由の `<a href>` 可）
 - **YOU MUST** DDL は `/ddl/preview` → ユーザー確認 → `/sql` 実行、アカウント操作は `/users/preview`（パスワードはマスク）→ `/users/execute`。プレビューなしで実行する UI を作らない（`usePreviewFlow` + `PreviewDialog` を使う）

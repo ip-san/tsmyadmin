@@ -1,4 +1,4 @@
-<!-- translated-from: docs/operations.md sha256:f7cbe9ab404c53ed55b4c4fb961f8a652b84118fe520011b79103d8a7b44afdb -->
+<!-- translated-from: docs/operations.md sha256:65da157ed00b73de28f2de6f4fe12c116c5b5acab7a91c66faaef57791204d2b -->
 
 # Operations guide
 

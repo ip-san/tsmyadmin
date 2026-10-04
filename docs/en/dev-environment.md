@@ -1,10 +1,10 @@
-<!-- translated-from: docs/dev-environment.md sha256:7454cc2641735048647d744c302f2c7638dab1d43e1387e39d0dcd095175e638 -->
+<!-- translated-from: docs/dev-environment.md sha256:e77471521b2560185e0c18200bc373822a98af1e7d93a6f65978db35c26c79d6 -->
 
 # Development features: what was built, and what was set aside
 
 *日本語版: [docs/dev-environment.md](../dev-environment.md)*
 
-tsmyadmin's core for development is opening the MySQL / PostgreSQL running in your local Docker in the browser without writing their addresses down ([deployment.md](deployment.md#using-it-for-development-with-docker-container-discovery)). This page records what was added on top of that for development, what was considered and set aside, and what comes next, with the reasons. Usage is in [user-guide.md](user-guide.md); [deployment.md](deployment.md) is the only source for environment variables.
+tsmyadmin's core for development is opening the MySQL / PostgreSQL running in your local Docker in the browser without writing their addresses down ([deployment.md](deployment.md#using-it-for-development-with-docker-container-discovery)). This page records what was added on top of that for development, what was considered and set aside, and what comes next, with the reasons. How to start it is in the README ("すぐ使う（開発環境）", the quick start for development), usage is in [user-guide.md](user-guide.md); [deployment.md](deployment.md) is the only source for environment variables.
 
 ## How this differs from phpMyAdmin
 

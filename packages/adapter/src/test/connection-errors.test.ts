@@ -3,9 +3,9 @@ import { MysqlAdapter } from '../mysql/adapter.ts'
 import { PostgresAdapter } from '../postgres/adapter.ts'
 
 /**
- * A server that has no connection left to give is a capacity problem on its side, not a mistake in the request: it
- * is reported as CONNECTION_FAILED (the API answers 502), where it used to be QUERY_FAILED (400, "your request is
- * wrong"). Seen against the real servers: 40 sessions of 4 connections each against PostgreSQL's default 100.
+ * A connection that cannot be had or kept is reported as CONNECTION_FAILED (the API answers 502), never as a query the
+ * caller got wrong (400): a server that has no connection left to give (seen against the real servers: 40 sessions of
+ * 4 connections each against PostgreSQL's default 100), and a server that restarts while a statement runs.
  */
 describe('a server that has run out of connections', () => {
   const mysql = new MysqlAdapter({ dialect: 'mysql', host: 'h', port: 1, user: 'u', password: 'p' })
@@ -26,6 +26,16 @@ describe('a server that has run out of connections', () => {
     const e = postgres.toAdapterError({ code: '53300', message: 'sorry, too many clients already' })
     expect(e).toMatchObject({ code: 'CONNECTION_FAILED', nativeCode: '53300' })
     expect(e.message).toContain('too many clients')
+  })
+
+  // PostgreSQL's words for being restarted or stopped (seen: `docker restart` while a long query ran).
+  it.each([
+    ['57P01', 'terminating connection due to administrator command'],
+    ['57P03', 'the database system is starting up'],
+    ['ECONNRESET', 'read ECONNRESET'],
+    ['ETIMEDOUT', 'connect ETIMEDOUT'],
+  ])('is a CONNECTION_FAILED on PostgreSQL when the server goes away (%s)', (code, message) => {
+    expect(postgres.toAdapterError({ code, message })).toMatchObject({ code: 'CONNECTION_FAILED', nativeCode: code })
   })
 
   it('leaves an ordinary query error alone', () => {
