@@ -38,7 +38,8 @@ import { driverValueToCell, type QueryOptions, UNCAPPED } from '../sql/cells.ts'
 import { pgLiteral } from '../sql/literal.ts'
 import { quoteIdent, quoteTable } from '../sql/quote.ts'
 import { AdapterError, type AdapterErrorCode, type ConnectionConfig, type RowBatch } from '../types.ts'
-import { pgCreateStatements, pgDdl, pgTableCatalog } from './ddl.ts'
+import { pgCreateStatements, pgTableCatalog } from './create-statements.ts'
+import { pgDdl } from './ddl.ts'
 import { pgExporter } from './export.ts'
 import {
   pgDescribeTable,

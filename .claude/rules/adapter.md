@@ -17,7 +17,7 @@ paths:
 ## SQL 組み立て
 
 - 識別子は `quoteIdent` / `quoteTable`、値は `Params.add()` のプレースホルダ。文字列補間で値を埋め込まない
-- SQL テンプレート補間が許されるのは `base.ts`, `sql/*`, `*/{ddl,adapter,export,users,server}.ts`, `mysql/routines.ts`（許可リストは `scripts/check-sql-safety.mjs` が正）。それ以外で `.query()` に渡すテンプレートは UPPER_CASE の SQL 定数の合成だけが許され、値をクォートに隣接させる補間はどこでも禁止
+- SQL テンプレート補間が許されるのは `base.ts`, `sql/*`, `*/{ddl,adapter,export,users,server,create-statements}.ts`, `mysql/routines.ts`（許可リストは `scripts/check-sql-safety.mjs` が正）。それ以外で `.query()` に渡すテンプレートは UPPER_CASE の SQL 定数の合成だけが許され、値をクォートに隣接させる補間はどこでも禁止
 - イントロスペクションは information_schema / pg_catalog を **静的 SQL + パラメータ** で問い合わせる
 
 ## 値のワイヤー規則
