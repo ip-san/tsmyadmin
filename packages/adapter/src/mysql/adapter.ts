@@ -43,8 +43,9 @@ import { BaseAdapter } from '../base.ts'
 import { type Canceller, type Conn, firstResult, type RawResult, withinAcquireTimeout } from '../driver.ts'
 import { driverValueToCell, type QueryOptions, toDbValue, UNCAPPED } from '../sql/cells.ts'
 import { Params, quoteIdent, quoteTable } from '../sql/quote.ts'
-import { AdapterError, type AdapterErrorCode, type ConnectionConfig, type RowBatch } from '../types.ts'
+import { AdapterError, type ConnectionConfig, type RowBatch } from '../types.ts'
 import { mysqlDdl } from './ddl.ts'
+import { mapMysqlError } from './errors.ts'
 import { mysqlExporter } from './export.ts'
 import {
   mysqlDatabaseGrants,
@@ -54,6 +55,7 @@ import {
   mysqlListTables,
   mysqlTableStats,
 } from './introspect.ts'
+import { keyColumnExpr, keyMatchExpr, keyParam } from './key-types.ts'
 import { mysqlEventDetail, mysqlRoutineDetail, mysqlTriggerDetail } from './program-detail.ts'
 import {
   mysqlListDependencies,
@@ -75,49 +77,6 @@ import {
 import { mysqlCanManageAccount, mysqlListUsers, mysqlShowGrants, mysqlUsers } from './users.ts'
 import { mysqlColumnMeta } from './values.ts'
 
-const AUTH_CODES = new Set(['ER_ACCESS_DENIED_ERROR', 'ER_ACCESS_DENIED_NO_PASSWORD_ERROR'])
-const CONNECTION_CODES = new Set([
-  'ECONNREFUSED',
-  'ECONNRESET',
-  'ETIMEDOUT',
-  'ENOTFOUND',
-  'EHOSTUNREACH',
-  'PROTOCOL_CONNECTION_LOST',
-  'ER_HOST_NOT_PRIVILEGED',
-  'ER_HOST_IS_BLOCKED',
-  // The server has no connection to give (max_connections, or the account's own limit): a capacity problem on the
-  // server's side, not a mistake in the request, so it is a CONNECTION_FAILED (502) rather than a QUERY_FAILED (400).
-  'ER_CON_COUNT_ERROR',
-  'ER_TOO_MANY_USER_CONNECTIONS',
-  'ER_USER_LIMIT_REACHED',
-])
-const NOT_FOUND_CODES = new Set([
-  'ER_NO_SUCH_TABLE',
-  'ER_UNKNOWN_SEQUENCES',
-  'ER_TRG_DOES_NOT_EXIST',
-  'ER_EVENT_DOES_NOT_EXIST',
-  'ER_BAD_DB_ERROR',
-  'ER_BAD_FIELD_ERROR',
-  'ER_NO_SUCH_THREAD',
-  'ER_SP_DOES_NOT_EXIST',
-])
-/** The account is authenticated but lacks a privilege for this statement/object. */
-const PERMISSION_CODES = new Set([
-  'ER_TABLEACCESS_DENIED_ERROR',
-  'ER_COLUMNACCESS_DENIED_ERROR',
-  'ER_SPECIFIC_ACCESS_DENIED_ERROR',
-  'ER_PROCACCESS_DENIED_ERROR',
-  'ER_DBACCESS_DENIED_ERROR',
-  'ER_KILL_DENIED_ERROR',
-])
-/**
- * Killed connections surface as a fatal protocol error. ER_QUERY_INTERRUPTED (KILL QUERY / max_execution_time)
- * is deliberately *not* here: it ends the statement but leaves the connection usable, so it stays QUERY_FAILED.
- */
-const KILLED_CODES = new Set(['ER_CONNECTION_KILLED', 'PROTOCOL_CONNECTION_LOST', 'ER_SERVER_SHUTDOWN'])
-/** Character column types, whose collation would otherwise decide what counts as the same row. */
-const CHARACTER_KEY_TYPE = /^(?:char|varchar|tinytext|text|mediumtext|longtext|enum|set)\b/i
-
 /** Derived-table wrapping (only used for statements with their own LIMIT) fails where the bare statement would not. */
 const WRAPPER_ONLY_ERRORS: ReadonlySet<string> = new Set([
   'ER_DUP_FIELDNAME',
@@ -126,13 +85,6 @@ const WRAPPER_ONLY_ERRORS: ReadonlySet<string> = new Set([
 ])
 /** `SEQUENCE=1` among the table options (the line after the column list), not inside a quoted comment. */
 const SEQUENCE_OPTION = /^\)(?:[^'\n]|'(?:[^']|'')*')*\bSEQUENCE=1\b/m
-
-/** MariaDB-only errno values the driver has no symbolic name for; anything else unnamed becomes `ER_<errno>`. */
-const MARIADB_ERRNO_NAMES: Record<number, string> = {
-  1969: 'ER_STATEMENT_TIMEOUT',
-  4084: 'ER_SEQUENCE_RUN_OUT',
-  4091: 'ER_UNKNOWN_SEQUENCES',
-}
 
 type QueryOutput = [unknown, FieldPacket[] | FieldPacket[][] | undefined]
 
@@ -469,43 +421,11 @@ export class MysqlAdapter extends BaseAdapter {
 
   /** Placeholders are sent as string / double literals; these column types need the value coerced server-side. */
   protected override keyParam(placeholder: string, type: string): string {
-    const t = type.toLowerCase()
-    if (t.startsWith('json')) return `CAST(${placeholder} AS JSON)`
-    // A FLOAT column holding 0.1 is not equal to the DOUBLE literal 0.1 (8.0.17+ / MariaDB 10.4.5+ syntax).
-    if (t.startsWith('float')) return `CAST(${placeholder} AS FLOAT)`
-    // Integers beyond 2^53 travel as strings; inside a row constructor MySQL compares them as DOUBLE (the
-    // scalar `col = 'str'` path converts exactly, the `(a, b) > (?, ?)` path does not), so keyset paging
-    // over a composite BIGINT key would skip rows. An UNSIGNED column needs the unsigned cast (2^64-2 as
-    // SIGNED is -2).
-    if (/^(?:big|medium|small|tiny)?int\b/.test(t)) {
-      return t.includes('unsigned') ? `CAST(${placeholder} AS UNSIGNED)` : `CAST(${placeholder} AS SIGNED)`
-    }
-    // A BIT value travels as a binary literal (X'80'). MySQL reads that as a number in numeric context; MariaDB
-    // reads it as a binary string and converts it to 0, so it is turned into a number explicitly.
-    if (t.startsWith('bit')) return `CAST(CONV(HEX(${placeholder}), 16, 10) AS UNSIGNED)`
-    const decimal = /^decimal\((\d+),\s*(\d+)\)/.exec(t)
-    if (decimal) return `CAST(${placeholder} AS DECIMAL(${Number(decimal[1])},${Number(decimal[2])}))`
-    return placeholder
+    return keyParam(placeholder, type)
   }
 
-  /**
-   * An all-columns key must match the row byte for byte. Comparing in the column's own collation makes rows
-   * that differ only by case (`a` / `A` under general_ci), accent (`cafe` / `café` under 0900_ai_ci) or a
-   * trailing space (PAD SPACE) equal, and the `LIMIT 1` that follows would then edit whichever the scan found
-   * first. Both sides are converted to utf8mb4 (lossless, and it makes a latin1 column comparable with the
-   * utf8mb4 parameter) and compared as binary, which is exact and never pads.
-   */
   protected override keyMatchExpr(expr: string, type: string): string {
-    return CHARACTER_KEY_TYPE.test(type) ? `CAST(CONVERT(${expr} USING utf8mb4) AS BINARY)` : expr
-  }
-
-  /**
-   * ENUM/SET order by member index but compare with a string literal by label: page over the label instead,
-   * in the binary collation — CAST AS CHAR would take collation_connection (case-insensitive), making labels
-   * that differ only by case or accent tie in ORDER BY and be skipped by the `>` comparison.
-   */
-  private keyColumnExpr(quoted: string, type: string): string {
-    return /^(?:enum|set)\(/i.test(type) ? `CAST(${quoted} AS CHAR) COLLATE utf8mb4_bin` : quoted
+    return keyMatchExpr(expr, type)
   }
 
   /**
@@ -529,9 +449,7 @@ export class MysqlAdapter extends BaseAdapter {
     if (keyIndexes.includes(-1)) throw new AdapterError('QUERY_FAILED', 'Key column missing from table schema')
     const keyTypes = keyIndexes.map((i) => schema.columns[i]?.dataType ?? '')
     const keyExprs =
-      key.keyKind === 'pk'
-        ? key.keyColumns.map((c, i) => this.keyColumnExpr(quoteIdent('mysql', c), keyTypes[i] ?? ''))
-        : []
+      key.keyKind === 'pk' ? key.keyColumns.map((c, i) => keyColumnExpr(quoteIdent('mysql', c), keyTypes[i] ?? '')) : []
     const orderBy = keyExprs.length > 0 ? ` ORDER BY ${keyExprs.join(', ')}` : ''
     const single = orderBy === ''
     const batchSize = Math.max(1, Math.floor(opts.batchSize))
@@ -873,25 +791,6 @@ export class MysqlAdapter extends BaseAdapter {
   }
 
   toAdapterError(err: unknown): AdapterError {
-    if (err instanceof AdapterError) return err
-    const e = err as { code?: unknown; sqlMessage?: unknown; message?: unknown; errno?: unknown }
-    // mysql2 names errno values after MySQL 8; a MariaDB-only number (1969, 4000+) needs its own name.
-    const mariadbNumber =
-      this.mariadb === true && typeof e.errno === 'number' && (e.errno >= 4000 || e.errno in MARIADB_ERRNO_NAMES)
-    const code =
-      typeof e.code === 'string' && !mariadbNumber
-        ? e.code
-        : typeof e.errno === 'number'
-          ? (MARIADB_ERRNO_NAMES[e.errno] ?? `ER_${e.errno}`)
-          : 'UNKNOWN'
-    const detail =
-      typeof e.sqlMessage === 'string' ? e.sqlMessage : typeof e.message === 'string' ? e.message : String(err)
-    let kind: AdapterErrorCode = 'QUERY_FAILED'
-    if (AUTH_CODES.has(code)) kind = 'AUTH_FAILED'
-    else if (CONNECTION_CODES.has(code) || KILLED_CODES.has(code) || (e as { fatal?: boolean }).fatal === true)
-      kind = 'CONNECTION_FAILED'
-    else if (PERMISSION_CODES.has(code)) kind = 'PERMISSION_DENIED'
-    else if (NOT_FOUND_CODES.has(code)) kind = 'NOT_FOUND'
-    return new AdapterError(kind, `${code}: ${detail}`, detail, code === 'UNKNOWN' ? {} : { nativeCode: code })
+    return mapMysqlError(err, this.mariadb === true)
   }
 }

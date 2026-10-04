@@ -1,10 +1,6 @@
 {
   "limit": 800,
   "files": {
-    "packages/adapter/src/mysql/adapter.ts": {
-      "lines": 897,
-      "why": "the MySQL adapter: one class that implements the whole DatabaseAdapter contract"
-    },
     "packages/adapter/src/postgres/ddl.ts": {
       "lines": 834,
       "why": "the PostgreSQL DDL builder: one case per DdlOp"
