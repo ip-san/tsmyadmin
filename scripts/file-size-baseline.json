@@ -1,9 +1,4 @@
 {
   "limit": 800,
-  "files": {
-    "packages/adapter/src/postgres/ddl.ts": {
-      "lines": 834,
-      "why": "the PostgreSQL DDL builder: one case per DdlOp"
-    }
-  }
+  "files": {}
 }
