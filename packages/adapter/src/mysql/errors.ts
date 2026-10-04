@@ -36,10 +36,11 @@ const PERMISSION_CODES = new Set([
   'ER_KILL_DENIED_ERROR',
 ])
 /**
- * Killed connections surface as a fatal protocol error. ER_QUERY_INTERRUPTED (KILL QUERY / max_execution_time)
- * is deliberately *not* here: it ends the statement but leaves the connection usable, so it stays QUERY_FAILED.
+ * A connection the server took away: killed, lost, or closed by a shutdown or restart (each surfaces as a fatal protocol
+ * error). ER_QUERY_INTERRUPTED (KILL QUERY / max_execution_time) is deliberately *not* here: it ends the statement but
+ * leaves the connection usable, so it stays QUERY_FAILED.
  */
-const KILLED_CODES = new Set(['ER_CONNECTION_KILLED', 'PROTOCOL_CONNECTION_LOST', 'ER_SERVER_SHUTDOWN'])
+const LOST_CONNECTION_CODES = new Set(['ER_CONNECTION_KILLED', 'PROTOCOL_CONNECTION_LOST', 'ER_SERVER_SHUTDOWN'])
 
 /** MariaDB-only errno values the driver has no symbolic name for; anything else unnamed becomes `ER_<errno>`. */
 const MARIADB_ERRNO_NAMES: Record<number, string> = {
@@ -68,7 +69,7 @@ export function mapMysqlError(err: unknown, mariadb: boolean): AdapterError {
     typeof e.sqlMessage === 'string' ? e.sqlMessage : typeof e.message === 'string' ? e.message : String(err)
   let kind: AdapterErrorCode = 'QUERY_FAILED'
   if (AUTH_CODES.has(code)) kind = 'AUTH_FAILED'
-  else if (CONNECTION_CODES.has(code) || KILLED_CODES.has(code) || (e as { fatal?: boolean }).fatal === true)
+  else if (CONNECTION_CODES.has(code) || LOST_CONNECTION_CODES.has(code) || (e as { fatal?: boolean }).fatal === true)
     kind = 'CONNECTION_FAILED'
   else if (PERMISSION_CODES.has(code)) kind = 'PERMISSION_DENIED'
   else if (NOT_FOUND_CODES.has(code)) kind = 'NOT_FOUND'

@@ -333,7 +333,7 @@ flowchart LR
 | やりたいこと | 触る場所 | 併せて必要なこと |
 |---|---|---|
 | API に項目を足す | `packages/shared/src/schemas/*` → `apps/api/src/routes/*` → web | Zod を先に定義。web は `hc<AppType>` 経由 |
-| アダプターにメソッドを追加 | `types.ts` → `base.ts` / `mysql/*` / `postgres/*` | `ADAPTER_METHOD_NAMES` と conformance の `describe`、両方言で通す。`testing/fake-adapter.ts` に実装し、`apps/api/src/lib/audit.ts` の `AUDITED_METHODS`（データ・構造・アカウント・サーバー状態を変えるもの）か `PASSTHROUGH_METHODS` に分類する（`audit.test.ts` が網羅性を検査） |
+| アダプターにメソッドを追加 | `types.ts` → `base.ts` / `mysql/*` / `postgres/*` | 足す前に、既存のメソッドで足りないか確認（例: `tableStats` はすでに `indexBytes` を返す）。`ADAPTER_METHOD_NAMES` と conformance の `describe`、両方言で通す。`testing/fake-adapter.ts` に実装し、`apps/api/src/lib/audit.ts` の `AUDITED_METHODS`（データ・構造・アカウント・サーバー状態を変えるもの）か `PASSTHROUGH_METHODS` に分類する（`audit.test.ts` が網羅性を検査） |
 | DDL 操作を追加 | `packages/shared/src/schemas/ddl.ts` → `*/ddl.ts` → web のフォーム | `test/ddl.test.ts` の `SAMPLE_OPS` に両方言のスナップショット、プレビュー経由の UI。SQL がサーバーの状態に依存する操作（`copyTable` の列、`renameDatabase` / `copyDatabase` のテーブル一覧）は `/ddl/preview` のルートで埋める。**依頼に含まれていても上書きする**（`apps/api/src/lib/database-ops.ts`）。ただし、依頼時点の一覧や権限で見える範囲に依存する破壊的な文は組み立てない — MySQL の名前変更が元のデータベースを DROP しないのはそのため（見えないルーチン・イベントや、確認後に作られたテーブルを巻き込む） |
 | 画面の文言を変える | `config/locales/ja.ts` と `en.ts` | 両方に同じキーを足す（`locale.test.ts` が形の一致を検査）。コンポーネントへの直書きは禁止 |
 | ドキュメントを直す | `docs/*.md`（日本語が原文） | `docs/en/` の対応ファイルも翻訳し、`bun run docs:sync` でハッシュを打ち直す（`bun run docs:i18n` が追随を検査） |

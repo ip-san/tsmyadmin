@@ -1,6 +1,6 @@
 # 開発環境向けの機能: 何を作り、何を見送ったか
 
-tsmyadmin は、手元の Docker で動いている MySQL / PostgreSQL を、接続先を書かずにブラウザで開けることを軸にしています（[deployment.md](deployment.md#docker-で開発用に使うコンテナの自動検出)）。このページは、その上に足した開発向けの機能と、検討して見送ったもの、次の候補を、判断の理由つきで残します。使い方の詳細は [user-guide.md](user-guide.md)、環境変数は [deployment.md](deployment.md) が唯一の正です。
+tsmyadmin は、手元の Docker で動いている MySQL / PostgreSQL を、接続先を書かずにブラウザで開けることを軸にしています（[deployment.md](deployment.md#docker-で開発用に使うコンテナの自動検出)）。このページは、その上に足した開発向けの機能と、検討して見送ったもの、次の候補を、判断の理由つきで残します。起動の手順は README の「すぐ使う（開発環境）」、使い方の詳細は [user-guide.md](user-guide.md)、環境変数は [deployment.md](deployment.md) が唯一の正です。
 
 ## 本家の phpMyAdmin との違い
 
