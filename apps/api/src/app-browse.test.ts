@@ -18,7 +18,7 @@ import {
 } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { closeStoresAfterEach, fixtureAdapter, harness } from './test-support/app-harness.ts'
+import { closeStoresAfterEach, fixtureAdapter, harness } from './test/app-harness.ts'
 
 const stores = closeStoresAfterEach()
 

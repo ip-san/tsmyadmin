@@ -21,7 +21,7 @@ import {
   LOGIN,
   PASSKEY_FIXTURE,
   testConfig,
-} from './test-support/app-harness.ts'
+} from './test/app-harness.ts'
 
 const stores = closeStoresAfterEach()
 

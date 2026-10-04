@@ -1,4 +1,4 @@
-<!-- translated-from: docs/architecture.md sha256:bb23582225c52f61e2446fec89ac27bcd3551e94adf9bdf00bda07defcb8cf74 -->
+<!-- translated-from: docs/architecture.md sha256:217a799e0e8998073cda95c5dabd6f9b9c943c7effb35c090fe84d2b7452028b -->
 
 # Architecture
 
@@ -16,7 +16,7 @@ Before reading the whole document, follow one thread, "showing a table's rows", 
 | 2 | `packages/shared/src/schemas/browse.ts` | The shape of a browse request and response (Zod). The comments say why, for example why a table estimated above 100,000 rows is not `COUNT(*)`ed |
 | 3 | `apps/api/src/routes/databases.ts` | `GET /databases/:db/tables/:table/rows`. Validate → call the adapter → JSON, all in one screenful: a model of a thin route |
 | 4 | `apps/web/src/lib/queries/tables.ts` (`rowsQuery`) and `apps/web/src/routes/_app/db.$db/table.$table/index.tsx` | The call typed through `hc<AppType>`, and the route that shows it (the substance is in `features/browse`) |
-| 5 | `packages/adapter/src/test/conformance/search-and-browse.ts` (`describe('browseRows')`) | The same test runs on both MySQL and PostgreSQL: a specification you can run |
+| 5 | `packages/adapter/src/test/conformance/browse-and-insert.ts` (`describe('browseRows')`) | The same test runs on both MySQL and PostgreSQL: a specification you can run |
 
 To see how a convention is enforced by machine, start with `scripts/check-sql-safety.mjs` (§8).
 

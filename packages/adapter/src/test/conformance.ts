@@ -2,6 +2,7 @@ import type { DdlOp, StatementResult } from '@tsmyadmin/shared'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { DatabaseAdapter, ExecuteOptions } from '../types.ts'
 import { describeAccounts } from './conformance/accounts.ts'
+import { describeBrowseAndInsert } from './conformance/browse-and-insert.ts'
 import { describeCatalog } from './conformance/catalog.ts'
 import { describeDatabaseOps } from './conformance/database-ops.ts'
 import { describeDdl } from './conformance/ddl.ts'
@@ -10,7 +11,8 @@ import type { ConformanceContext, ConformanceEnv } from './conformance/env.ts'
 import { EXEC } from './conformance/helpers.ts'
 import { describeObjectDetails } from './conformance/object-details.ts'
 import { describeRowEdits } from './conformance/row-edits.ts'
-import { describeSearchAndBrowse } from './conformance/search-and-browse.ts'
+import { describeRowIdentityAndExport } from './conformance/row-identity-and-export.ts'
+import { describeSearchAndQuery } from './conformance/search-and-query.ts'
 import { describeServer } from './conformance/server.ts'
 import { describeSqlConsole } from './conformance/sql-console.ts'
 
@@ -134,11 +136,13 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
 
     // The groups run in this order, as the blocks always have: later ones use what earlier ones left.
     describeCatalog(env)
-    describeSearchAndBrowse(env)
+    describeSearchAndQuery(env)
+    describeBrowseAndInsert(env)
     describeObjectDetails(env)
     describeRowEdits(env)
     describeSqlConsole(env)
     describeDumpAndExport(env)
+    describeRowIdentityAndExport(env)
     describeServer(env)
     describeAccounts(env)
     describeDdl(env)
