@@ -1,10 +1,6 @@
 {
   "limit": 800,
   "files": {
-    "packages/adapter/src/base.ts": {
-      "lines": 912,
-      "why": "the shared adapter base; the SQL console and the row functions were already moved out, the rest is the contract in one place"
-    },
     "packages/adapter/src/mysql/adapter.ts": {
       "lines": 897,
       "why": "the MySQL adapter: one class that implements the whole DatabaseAdapter contract"
