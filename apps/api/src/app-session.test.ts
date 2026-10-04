@@ -5,7 +5,7 @@ import { createApp, IP_LIMIT_FACTOR } from './app.ts'
 import { auditedAdapterFactory } from './lib/audit.ts'
 import { createLogger } from './lib/logging.ts'
 import { MemorySessionStore } from './session/store.ts'
-import { closeStoresAfterEach, fixtureAdapter, harness, LOGIN, testConfig } from './test-support/app-harness.ts'
+import { closeStoresAfterEach, fixtureAdapter, harness, LOGIN, testConfig } from './test/app-harness.ts'
 
 const stores = closeStoresAfterEach()
 

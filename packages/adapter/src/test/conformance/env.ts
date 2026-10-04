@@ -36,3 +36,10 @@ export interface ConformanceEnv {
   browseAll(table: string): ReturnType<DatabaseAdapter['browseRows']>
   isMariaDb(): Promise<boolean>
 }
+
+/** The helpers the groups of `ddl` share (the group files are called from `ddl.ts`, inside its describe). */
+export interface DdlHelpers {
+  /** As the web runs a preview: all of an op's statements as one script through the SQL route. */
+  runScript(op: DdlOp): ReturnType<ConformanceEnv['execOk']>
+  firstValue(sql: string): Promise<unknown>
+}

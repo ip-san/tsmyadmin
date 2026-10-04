@@ -1,14 +1,6 @@
 {
   "limit": 800,
   "files": {
-    "packages/adapter/src/test/conformance/ddl.ts": {
-      "lines": 1157,
-      "why": "one describe over every DdlOp on both dialects; the next split is by op family (table / column / index / constraint)"
-    },
-    "apps/api/src/app.integration.test.ts": {
-      "lines": 952,
-      "why": "the API against the real servers, one flow per feature; to be split like the app-*.test.ts files"
-    },
     "packages/adapter/src/base.ts": {
       "lines": 912,
       "why": "the shared adapter base; the SQL console and the row functions were already moved out, the rest is the contract in one place"
@@ -17,21 +9,9 @@
       "lines": 897,
       "why": "the MySQL adapter: one class that implements the whole DatabaseAdapter contract"
     },
-    "apps/api/src/app-stored.test.ts": {
-      "lines": 853,
-      "why": "five independent describes (saved queries, preferences, user groups, change tracking, row functions); split by feature if it grows"
-    },
-    "packages/adapter/src/test/conformance/dump-and-export.ts": {
-      "lines": 836,
-      "why": "showCreateTable, iterateRows and export for both dialects in one group"
-    },
     "packages/adapter/src/postgres/ddl.ts": {
       "lines": 834,
       "why": "the PostgreSQL DDL builder: one case per DdlOp"
-    },
-    "packages/adapter/src/test/conformance/search-and-browse.ts": {
-      "lines": 801,
-      "why": "buildQuery and browseRows cases, just past the limit"
     }
   }
 }

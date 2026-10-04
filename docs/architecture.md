@@ -14,7 +14,7 @@
 | 2 | `packages/shared/src/schemas/browse.ts` | 閲覧のリクエストとレスポンスの形（Zod）。「行数の見積もりが 10 万行を超える表は `COUNT(*)` しない」など、なぜそうするかがコメントにある |
 | 3 | `apps/api/src/routes/databases.ts` | `GET /databases/:db/tables/:table/rows`。検証 → アダプターの呼び出し → JSON が 1 画面に収まる、薄いルートの見本 |
 | 4 | `apps/web/src/lib/queries/tables.ts`（`rowsQuery`）と `apps/web/src/routes/_app/db.$db/table.$table/index.tsx` | `hc<AppType>` で型が付いた呼び出しと、それを表示するルート（実体は `features/browse`） |
-| 5 | `packages/adapter/src/test/conformance/search-and-browse.ts`（`describe('browseRows')`） | 同じテストが MySQL と PostgreSQL の両方で走る。実行できる仕様書 |
+| 5 | `packages/adapter/src/test/conformance/browse-and-insert.ts`（`describe('browseRows')`） | 同じテストが MySQL と PostgreSQL の両方で走る。実行できる仕様書 |
 
 規約を機械で守らせる仕組みの作りを見るなら、`scripts/check-sql-safety.mjs` から（§8）。
 
