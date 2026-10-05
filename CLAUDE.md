@@ -27,6 +27,7 @@ bun run check:all         # check:static + 両 DB の統合テスト
 bun run test              # DB 不要のテスト
 bun run test:integration  # 両 DB の adapter conformance + API 統合（compose 必須）
 bun run test:e2e          # Playwright
+bun run test:e2e:coverage # Playwright（Chromium）で、Web のコードのどこまで実行されるかを測る（約 7 分。画面ごとの割合と、一度も実行されないファイル）
 bun run lighthouse        # Lighthouse CI（警告のみ、要 Chrome）
 ```
 
@@ -34,7 +35,7 @@ bun run lighthouse        # Lighthouse CI（警告のみ、要 Chrome）
 
 - ユニット/API/Web テスト定義: <!-- stat:unit-tests -->1060<!-- /stat --> 件
 - Adapter conformance: <!-- stat:conformance -->199<!-- /stat --> 件 × 2 方言
-- E2E: <!-- stat:e2e -->200<!-- /stat --> 件
+- E2E: <!-- stat:e2e -->202<!-- /stat --> 件
 - API ルート: <!-- stat:routes -->95<!-- /stat -->
 
 ## 設計ドキュメント

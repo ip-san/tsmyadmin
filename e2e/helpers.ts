@@ -1,4 +1,4 @@
-import { mkdir, rm, stat } from 'node:fs/promises'
+import { mkdir, rm, stat, writeFile } from 'node:fs/promises'
 import { test as base, expect, type Locator, type Page } from '@playwright/test'
 
 export interface Target {
@@ -25,12 +25,55 @@ function fromUrl(dialect: Target['dialect'], url: string, schema?: string): Targ
   }
 }
 
+/** Where each test of a coverage run leaves the code it ran (merged by scripts/e2e-coverage.mjs). */
+export const E2E_COVERAGE_DIR = 'node_modules/.cache/e2e-coverage'
+
 /**
  * `test` with an automatic logout: contexts are just closed otherwise, and each UI login leaves a server session
- * (with its connection pool) alive until the TTL sweep — dozens per local run with parallel workers.
+ * (with its connection pool) alive until the TTL sweep — dozens per local run with parallel workers. And, when a
+ * coverage run asks for it, a record of the app's code the test ran.
  */
 // biome-ignore lint/suspicious/noConfusingVoidType: Playwright's documented type for an auto fixture without a value
-export const test = base.extend<{ autoLogout: void }>({
+export const test = base.extend<{ autoLogout: void; webCoverage: void }>({
+  // With E2E_COVERAGE set, records which of the app's scripts each Chromium test ran (V8 block coverage). Other
+  // browsers have no such API, and a normal run does not pay for it.
+  webCoverage: [
+    async ({ page, browserName }, use, testInfo) => {
+      if (!process.env.E2E_COVERAGE || browserName !== 'chromium') {
+        await use()
+        return
+      }
+      const recorded: { file: string | undefined; length: number; functions: unknown }[] = []
+      const begin = () => page.coverage.startJSCoverage({ resetOnNavigation: false })
+      const collect = async () => {
+        for (const e of await page.coverage.stopJSCoverage().catch(() => [])) {
+          if (/\/assets\/[^/]+\.js$/.test(new URL(e.url).pathname)) {
+            recorded.push({
+              file: new URL(e.url).pathname.split('/').pop(),
+              length: e.source?.length ?? 0,
+              functions: e.functions,
+            })
+          }
+        }
+      }
+      await begin()
+      // A full navigation destroys the page's scripts, and V8 drops what they ran along with them: whatever the
+      // page ran is taken out before the test leaves it, or only the last page of a test would be counted.
+      for (const method of ['goto', 'reload'] as const) {
+        const original = page[method].bind(page) as (...args: unknown[]) => Promise<unknown>
+        page[method] = (async (...args: unknown[]) => {
+          await collect()
+          await begin()
+          return original(...args)
+        }) as never
+      }
+      await use()
+      await collect()
+      await mkdir(E2E_COVERAGE_DIR, { recursive: true })
+      await writeFile(`${E2E_COVERAGE_DIR}/${testInfo.testId}-${testInfo.retry}.json`, JSON.stringify(recorded))
+    },
+    { auto: true },
+  ],
   autoLogout: [
     async ({ page, baseURL }, use) => {
       // The app navigates by itself after a preview or a login redirect. A goto that starts while such a
