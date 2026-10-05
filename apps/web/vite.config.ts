@@ -11,7 +11,9 @@ export default defineConfig({
   plugins: [tanstackRouter({ target: 'react', autoCodeSplitting: true }), react(), tailwindcss()],
   define: { __APP_VERSION__: JSON.stringify(pkg.version) },
   // The size check follows the startup chain through it (scripts/check-bundle-size.mjs).
-  build: { manifest: true },
+  // Source maps only when the E2E run measures coverage (bun run test:e2e:coverage): they map the code a test ran
+  // back to the files it came from (scripts/e2e-coverage.mjs). The production build stays without them.
+  build: { manifest: true, sourcemap: Boolean(process.env.E2E_COVERAGE) },
   resolve: { alias: { '@': path.resolve(import.meta.dirname, './src') } },
   server: {
     host: '127.0.0.1',
