@@ -1,4 +1,4 @@
-<!-- translated-from: docs/deployment.md sha256:11dbbb5065da911d466785847b92e7d61e05e96a8593f0aeddf478a540a55475 -->
+<!-- translated-from: docs/deployment.md sha256:b401457c7f72ce6e9ff2ba80019a2bf54be764c37f4ec3ba5fcfd24b4386b34b -->
 
 # Deployment guide
 
@@ -243,7 +243,7 @@ WantedBy=multi-user.target
 | Keeping a long response alive | While running SQL or an import, a blank line (the NDJSON heartbeat) is sent every 15 seconds. An HTTP connection may idle for 255 seconds (Bun's limit); exports send no heartbeat, so a query that takes longer than that to produce its first row — sorting a huge table — is cut off. Set the idle timeout of your reverse proxy or load balancer (nginx `proxy_read_timeout`, an ALB idle timeout of 60 seconds by default …) to at least 255 seconds, and turn response buffering off (nginx `proxy_buffering off`) | `idleTimeout`, `HEARTBEAT_MS` |
 | Binary values on screen | The first 64 KB | `MAX_BINARY_BYTES` |
 | Long text on screen | The first 65,536 characters (shown as truncated, with the total character count; such a cell cannot be edited from the screen — update it with SQL. An export contains the whole value) | `MAX_TEXT_CHARS` |
-| Database connection pool | At most 4 connections per login session (on PostgreSQL, one pool per database connected to). A connection is closed after 60 seconds idle, and the whole pool is discarded when the session expires (`SESSION_TTL_MINUTES`). The formula below sizes the database's own `max_connections` | adapter (`idleTimeout`) |
+| Database connection pool | At most 4 connections per login session (on PostgreSQL, one pool per database connected to). A connection is closed after 60 seconds idle (before a middlebox would silently drop it), and the whole pool is discarded when the session expires (`SESSION_TTL_MINUTES`). A request that arrives within a few milliseconds of the database server cutting a connection (an administrator's `KILL`, a restart) may, on PostgreSQL, be answered once with "connection lost" (502); the next request works. It is not retried automatically, because a write could then run twice (tested in `conformance/connection-loss.ts`). The formula below sizes the database's own `max_connections` | adapter (`idleTimeout`) |
 
 **Estimating `max_connections`**
 
