@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { poolBusyError, withinAcquireTimeout } from './driver.ts'
+import { firstResult, poolBusyError, type RawResult, withinAcquireTimeout } from './driver.ts'
 
 const conn = () => ({ release: vi.fn() })
 const never = <T>() => new Promise<T>(() => undefined)
@@ -30,6 +30,18 @@ describe('withinAcquireTimeout', () => {
     await vi.waitFor(() => expect(c.release).toHaveBeenCalledTimes(1))
   })
 
+  it('lets a request that fails after the caller gave up fail quietly', async () => {
+    // The queued request cannot be withdrawn: its later failure has nobody to report to, and must not surface as an
+    // unhandled rejection (which would end the process).
+    let fail: (e: Error) => void = () => undefined
+    const attempt = new Promise<{ release(): void }>((_resolve, reject) => {
+      fail = reject
+    })
+    await expect(withinAcquireTimeout(attempt, 5)).rejects.toMatchObject({ code: 'CONNECTION_FAILED' })
+    fail(new Error('the pool was closed'))
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  })
+
   it('passes on the failure of the attempt itself, and does not report it as a timeout', async () => {
     const boom = new Error('connect ECONNREFUSED')
     await expect(withinAcquireTimeout(Promise.reject(boom), 50)).rejects.toBe(boom)
@@ -44,5 +56,23 @@ describe('withinAcquireTimeout', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+describe('firstResult', () => {
+  const result = (affectedRows: number): RawResult => ({ columns: [], rows: [], affectedRows, hasRows: false })
+
+  it('is the result itself when there is one', () => {
+    const r = result(3)
+    expect(firstResult(r)).toBe(r)
+  })
+
+  it("is the first of a script's results", () => {
+    const [a, b] = [result(1), result(2)]
+    expect(firstResult([a, b])).toBe(a)
+  })
+
+  it('is an empty result for a script that returned none', () => {
+    expect(firstResult([])).toEqual({ columns: [], rows: [], affectedRows: 0, hasRows: false })
   })
 })
