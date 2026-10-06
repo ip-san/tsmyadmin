@@ -240,7 +240,7 @@ WantedBy=multi-user.target
 | 長いレスポンスの維持 | SQL 実行・インポートは処理中 15 秒ごとに空行（NDJSON のハートビート）を送る。HTTP 接続のアイドル上限は 255 秒（Bun の上限）で、エクスポートはハートビートを送らないため最初の行を返すまで 255 秒以上かかるクエリ（巨大テーブルの並べ替え）は切断される。リバースプロキシ / ロードバランサのアイドルタイムアウト（nginx `proxy_read_timeout`、ALB idle timeout = 既定 60 秒など）は 255 秒以上、かつプロキシのレスポンスバッファリングは無効（nginx `proxy_buffering off`）にする | `idleTimeout`, `HEARTBEAT_MS` |
 | バイナリ値の表示 | 先頭 64 KB | `MAX_BINARY_BYTES` |
 | 長いテキストの表示 | 先頭 65,536 文字（「先頭のみ表示」と全体の文字数を併記。超えるセルは画面から編集できず、SQL で更新する。エクスポートは全文） | `MAX_TEXT_CHARS` |
-| DB 接続プール | ログインセッションごとに最大 4 接続（PostgreSQL は接続先データベースごとに 1 プール）。60 秒アイドルで接続を閉じ、セッション失効（`SESSION_TTL_MINUTES`）でプールごと破棄。DB 側の同時接続上限（`max_connections`）の目安は下の式 | adapter (`idleTimeout`) |
+| DB 接続プール | ログインセッションごとに最大 4 接続（PostgreSQL は接続先データベースごとに 1 プール）。60 秒アイドルで接続を閉じ（中継機器が待機中の接続を黙って捨てるより前に手放すため）、セッション失効（`SESSION_TTL_MINUTES`）でプールごと破棄。DB サーバーが接続を切った（管理者の `KILL` / 再起動）直後の数ミリ秒に届いた要求は、PostgreSQL では 1 回だけ「接続が失われた」（502）になることがあり、次の要求から通る。自動でやり直さないのは、書き込みが二重に実行されるおそれがあるため（試験は `conformance/connection-loss.ts`）。DB 側の同時接続上限（`max_connections`）の目安は下の式 | adapter (`idleTimeout`) |
 
 **`max_connections` の見積もり**
 
