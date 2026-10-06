@@ -12,6 +12,7 @@ import type {
 } from '@tsmyadmin/shared'
 import {
   CsvParseError,
+  capabilities,
   isBinaryDataType,
   isGeneratedColumn,
   parseColumnMapping,
@@ -181,8 +182,9 @@ function wrapScript(text: string, dialect: 'mysql' | 'postgres', options: Import
   const total = own.length
   if (total === 0) throw new ImportValidationError('NO_STATEMENTS', 'No SQL statements were found in the file')
   // Wrapping statements are the adapter builders' business (see SqlExporter); a plain pre/postamble is enough here.
+  const caps = capabilities(dialect)
   const optionStatements: { option: string; sql: string }[] = [
-    ...(options.noAutoValueOnZero && dialect === 'mysql'
+    ...(options.noAutoValueOnZero && caps.noAutoValueOnZero
       ? [
           {
             option: 'noAutoValueOnZero',
@@ -194,20 +196,18 @@ function wrapScript(text: string, dialect: 'mysql' | 'postgres', options: Import
       ? [
           {
             option: 'ignoreForeignKeys',
-            sql: dialect === 'mysql' ? 'SET FOREIGN_KEY_CHECKS = 0' : 'SET session_replication_role = replica',
+            sql: caps.foreignKeyChecksOff,
           },
         ]
       : []),
-    ...(options.singleTransaction
-      ? [{ option: 'singleTransaction', sql: dialect === 'mysql' ? 'START TRANSACTION' : 'BEGIN' }]
-      : []),
+    ...(options.singleTransaction ? [{ option: 'singleTransaction', sql: caps.beginTransaction }] : []),
   ]
   const prefix = optionStatements.map((o) => o.sql)
   const suffix = options.singleTransaction ? ['COMMIT'] : []
   // A file whose last statement has no terminator must not merge it with the COMMIT: the delimiter in force at
   // the end is appended (the splitter drops the empty chunk it leaves otherwise). A MySQL file that ends under its
   // own DELIMITER gets the default restored afterwards, so the wrapper's COMMIT is read as usual.
-  const delimiter = dialect === 'mysql' ? (splitState.delimiter ?? ';') : ';'
+  const delimiter = caps.scriptDelimiter ? (splitState.delimiter ?? ';') : ';'
   const terminator = delimiter === ';' ? '\n;' : `\n${delimiter}\nDELIMITER ;`
   const script = [...prefix.map((s) => `${s};`), `${text}${terminator}`, ...suffix.map((s) => `\n${s};`)].join('\n')
   // A file that ends inside an unterminated comment or literal would swallow the terminator and the wrapper's

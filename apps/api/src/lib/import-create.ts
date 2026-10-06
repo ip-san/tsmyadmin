@@ -1,17 +1,16 @@
 import type { ColumnSpec, Dialect } from '@tsmyadmin/shared'
-import { inferType } from '@tsmyadmin/shared'
+import { capabilities, inferType } from '@tsmyadmin/shared'
 import type { RowCell } from './import-rows.ts'
 
 /** The start of a name that fits the server's limit (MySQL: 64 characters; PostgreSQL: 63 bytes), less room for a suffix. */
 function clip(text: string, dialect: Dialect): string {
   const room = 8
+  const { max, unit } = capabilities(dialect).identifier
   let out = ''
-  let bytes = 0
-  let chars = 0
+  let used = 0
   for (const ch of text) {
-    bytes += Buffer.byteLength(ch)
-    chars++
-    if (dialect === 'postgres' ? bytes > 63 - room : chars > 64 - room) break
+    used += unit === 'bytes' ? Buffer.byteLength(ch) : 1
+    if (used > max - room) break
     out += ch
   }
   return out

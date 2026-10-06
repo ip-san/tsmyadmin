@@ -2,8 +2,10 @@
  * Server-level pages: info, variables, status, replication (preview, then execute), the catalogue of collations,
  * engines and plugins, and the process list.
  */
+
 import { buildReplicationOp } from '@tsmyadmin/adapter'
 import {
+  capabilities,
   DiagnosticKindSchema,
   DiagnosticQuerySchema,
   decodeTableList,
@@ -83,18 +85,17 @@ export function serverRoutes(cfg: SessionConfig, logger?: Logger) {
         const q = c.req.valid('query')
         const adapter = c.get('session').adapter
         const wanted = decodeTableList(q.targets)
-        // MySQL: databases; PostgreSQL: the schemas of the database this session is connected to.
-        const known =
-          adapter.dialect === 'mysql'
-            ? (await adapter.listDatabases()).map((d) => d.name)
-            : await adapter.listSchemas(adapter.serverNamespace.database)
+        // Where a database is what the other server calls a schema (MySQL): databases; otherwise the schemas of the
+        // database this session is connected to.
+        const { databasesAreSchemas } = capabilities(adapter.dialect)
+        const known = databasesAreSchemas
+          ? (await adapter.listDatabases()).map((d) => d.name)
+          : await adapter.listSchemas(adapter.serverNamespace.database)
         const missing = wanted.filter((name) => !known.includes(name))
         if (wanted.length === 0 || missing.length > 0)
           return c.json(apiError('NOT_FOUND', `Unknown target(s): ${missing.join(', ') || '(none given)'}`), 404)
         const namespaces = wanted.map((name) =>
-          adapter.dialect === 'mysql'
-            ? { database: name }
-            : { database: adapter.serverNamespace.database, schema: name }
+          databasesAreSchemas ? { database: name } : { database: adapter.serverNamespace.database, schema: name }
         )
         // UPDATE / REPLACE need a primary key: said before the download starts, not by cutting it short.
         const keyless: string[] = []
