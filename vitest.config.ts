@@ -78,7 +78,7 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
       include: ['packages/*/src/**', 'apps/*/src/**'],
-      exclude: ['**/*.test.*', '**/testing/**', '**/test/**'],
+      exclude: ['**/*.test.*', '**/testing/**', '**/test/**', '**/index.ts'],
     },
   },
 })

@@ -326,6 +326,8 @@ flowchart LR
 
 静的検査（`check:static`）には、構造を守る自前の検査も入っています: 依存の向き（`check:arch`）、SQL の組み立て（`check:sql-safety`）、doc コメントの位置（`check:doc-comments`）、**ファイルの長さ（`check:file-size`）**。最後のものは、800 行を超えるファイルを落とします（読む人が頭に収められる量を超えるため）。すでに超えている少数のファイルは `scripts/file-size-baseline.json` に理由つきで記録してあり、増やすと落ち、縮めたら基準線を下げます（`bun run check:file-size -- --update-baseline` は下げるだけで、追加も引き上げもしません。それは、ファイルを分けるか、理由を書いて手で足す、という人の判断にします）。生成物と文言の表は除外です。
 
+サーバー側（`packages/shared`・`packages/adapter`・`apps/api`）には、テストが実行する範囲の**下限**（`check:coverage`）もあります。単体テストと、実際の DB のテストを合わせて測り、`scripts/coverage-baseline.json` の、ファイルごとの割合と比べます。基準線にあるファイルが 10 ポイントより下がる（テストが何かを押さえなくなった、またはテストなしにコードが増えた）か、基準線にない新しいファイルが 60% を下回ると落ちます。DB が要るので、`check:static` ではなく、CI の `integration` ジョブで回ります（`bun run check:coverage`）。基準線は上げるだけです（`-- --update` は新しい最高値と新しいファイルを足し、下げません。下げるのは、理由を書いて手で）。10 ポイントは、CI の 2 つの DB のバージョンが少し違う分岐を通るための余裕で、狙いは、テストされていたファイルが、されなくなるのを見つけることです。
+
 テストの層は下から: ユニット（`sql/split`、DDL スナップショット、web の純粋関数）→ **conformance**（実 DB、両方言で同一スイート）→ API 統合（実 DB、ルート単位）→ E2E（Playwright、機能 / a11y / ビジュアル）。
 
 ## 9. 逆引き: どこを変更するか

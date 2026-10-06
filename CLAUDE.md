@@ -26,6 +26,7 @@ bun run check:static      # check + knip + circular + cpd + arch + sql-safety + 
 bun run check:all         # check:static + 両 DB の統合テスト
 bun run test              # DB 不要のテスト
 bun run test:integration  # 両 DB の adapter conformance + API 統合（compose 必須）
+bun run check:coverage    # サーバー側のカバレッジの下限（単体 + 両 DB を測り、基準線と比べる。compose 必須。CI の integration ジョブで回る）
 bun run test:e2e          # Playwright
 bun run test:e2e:coverage # Playwright（Chromium）で、Web のコードのどこまで実行されるかを測る（約 7 分。画面ごとの割合と、一度も実行されないファイル）
 bun run lighthouse        # Lighthouse CI（警告のみ、要 Chrome）

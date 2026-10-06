@@ -1,4 +1,4 @@
-<!-- translated-from: docs/architecture.md sha256:c0d58966282ab879f75e1e407c8e5353baca06f9df9dea4d658776f175df2747 -->
+<!-- translated-from: docs/architecture.md sha256:8f7300aab6852a47703cbeef1d8f9b11fb29d3d91c6f243f5add2018c26172d8 -->
 
 # Architecture
 
@@ -327,6 +327,8 @@ flowchart LR
 ```
 
 `check:static` also holds checks of the repository's own structure: the direction of dependencies (`check:arch`), how SQL is built (`check:sql-safety`), where doc comments sit (`check:doc-comments`), and **the length of a file (`check:file-size`)**. The last one fails a file past 800 lines (more than a reader holds in their head). The few files already past it are recorded with a reason in `scripts/file-size-baseline.json`: growing one fails, and when one shrinks its baseline comes down (`bun run check:file-size -- --update-baseline` only lowers; it never adds or raises, because that is a decision for a person: split the file, or add it by hand with the reason). Generated code and the string tables are exempt.
+
+The server side (`packages/shared`, `packages/adapter`, `apps/api`) also has a **floor** under how much the tests run (`check:coverage`). The unit tests and the real-database tests are measured together and compared with the per-file percentages in `scripts/coverage-baseline.json`. It fails when a file in the baseline drops by more than 10 points (a test stopped covering something, or code grew without one), or when a new file that is not in the baseline starts below 60%. It needs the databases, so it runs in the CI `integration` job rather than in `check:static` (`bun run check:coverage`). The baseline only goes up (`-- --update` adds new highs and new files and never lowers; lowering is done by hand, with a reason). The 10 points leave room for the two database versions in CI reaching slightly different branches; the aim is to notice a file going from tested to untested.
 
 The test layers, from the bottom: unit (`sql/split`, the DDL snapshots, the pure functions of the web app) → **conformance** (real databases, one suite on both dialects) → API integration (real databases, per route) → E2E (Playwright: functional, a11y, visual).
 
