@@ -366,8 +366,13 @@ export class FakeAdapter implements DatabaseAdapter {
     return this.routines[name] ?? `CREATE ${kind.toUpperCase()} ${name}() BEGIN END`
   }
 
-  async routineDetail(ns: Namespace, name: string, kind: RoutineKind): Promise<RoutineDetail | null> {
-    this.record('routineDetail', ns, name, kind)
+  async routineDetail(
+    ns: Namespace,
+    name: string,
+    kind: RoutineKind,
+    parameters?: string
+  ): Promise<RoutineDetail | null> {
+    this.record('routineDetail', ns, name, kind, parameters)
     if (kind !== 'procedure' && kind !== 'function') return null
     return {
       kind,
