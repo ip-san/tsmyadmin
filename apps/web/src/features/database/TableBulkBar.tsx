@@ -1,4 +1,4 @@
-import { useQueries, useQuery } from '@tanstack/react-query'
+import { useQueries } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { type DdlOp, type Dialect, encodeTableList } from '@tsmyadmin/shared'
 import { type FormEvent, useState } from 'react'
@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/Button.tsx'
 import { Dialog } from '@/components/ui/Dialog.tsx'
 import { Field, Input, Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
-import { createStatementQuery, databasesQuery, schemasQuery } from '@/lib/queries.ts'
+import { createStatementQuery } from '@/lib/queries.ts'
+import { useSpaces } from '@/lib/spaces.ts'
 
 const t = locale.bulk
 
@@ -123,13 +124,13 @@ export function TableBulkBar({
             schema={schema}
             dialect={dialect}
             onCancel={close}
-            onSubmit={(space, withData) => {
+            onSubmit={(target, withData) => {
               close()
               onPreview({
                 op: 'copyTables',
                 tables: chosen,
                 withData,
-                ...(dialect === 'mysql' ? { toDatabase: space } : { toSchema: space }),
+                ...target,
               })
             }}
           />
@@ -193,26 +194,22 @@ function CopyForm({
   db: string
   schema: string | undefined
   dialect: Dialect
-  onSubmit: (space: string, withData: boolean) => void
+  onSubmit: (target: { toDatabase: string } | { toSchema: string }, withData: boolean) => void
   onCancel: () => void
 }) {
-  const own = dialect === 'mysql' ? db : (schema ?? 'public')
-  const databases = useQuery({ ...databasesQuery, enabled: dialect === 'mysql' })
-  const schemas = useQuery({ ...schemasQuery(db), enabled: dialect === 'postgres' })
-  const spaces = (dialect === 'mysql' ? (databases.data ?? []).map((d) => d.name) : (schemas.data ?? [])).filter(
-    (n) => n !== own
-  )
+  const { names, own, databasesAreSchemas, copyTarget } = useSpaces(dialect, { db, schema })
+  const spaces = names.filter((n) => n !== own)
   const [space, setSpace] = useState('')
   const [withData, setWithData] = useState(true)
   const target = spaces.includes(space) ? space : (spaces[0] ?? '')
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    if (target) onSubmit(target, withData)
+    if (target) onSubmit(copyTarget(target), withData)
   }
   return (
     <form onSubmit={submit} className="space-y-3">
       <p className="text-xs text-ink-sub">{t.copyHint}</p>
-      <Field id="bulk-copy-space" label={dialect === 'mysql' ? locale.ddl.copyToDatabase : locale.ddl.copyToSchema}>
+      <Field id="bulk-copy-space" label={databasesAreSchemas ? locale.ddl.copyToDatabase : locale.ddl.copyToSchema}>
         <Select id="bulk-copy-space" value={target} onChange={(e) => setSpace(e.target.value)}>
           {spaces.map((n) => (
             <option key={n} value={n}>

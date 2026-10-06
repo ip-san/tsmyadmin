@@ -5,8 +5,9 @@ import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Field, Input, Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
-import { databasesQuery, schemasQuery, structureQuery, type TableRef, tablesQuery } from '@/lib/queries.ts'
+import { structureQuery, type TableRef, tablesQuery } from '@/lib/queries.ts'
 import { useDialect } from '@/lib/session.ts'
+import { useSpaces } from '@/lib/spaces.ts'
 
 interface ForeignKeyValues {
   name: string
@@ -34,12 +35,9 @@ export interface ForeignKeyFormProps {
  */
 export function ForeignKeyForm({ tableRef, columns, initial, onSubmit, onCancel }: ForeignKeyFormProps) {
   const dialect = useDialect()
-  const own = dialect === 'mysql' ? tableRef.db : (tableRef.schema ?? 'public')
+  const { names: spaceNames, own, databasesAreSchemas, locate, referenceTarget } = useSpaces(dialect, tableRef)
   const [space, setSpace] = useState(own)
-  const databases = useQuery({ ...databasesQuery, enabled: dialect === 'mysql' })
-  const schemas = useQuery({ ...schemasQuery(tableRef.db), enabled: dialect === 'postgres' })
-  const spaceNames = dialect === 'mysql' ? (databases.data ?? []).map((d) => d.name) : (schemas.data ?? [])
-  const refNs = dialect === 'mysql' ? { db: space, schema: undefined } : { db: tableRef.db, schema: space }
+  const refNs = locate(space)
   const tables = useQuery(tablesQuery(refNs.db, refNs.schema))
   const [name, setName] = useState('')
   const [selected, setSelected] = useState<string[]>(initial?.columns ?? [])
@@ -60,7 +58,7 @@ export function ForeignKeyForm({ tableRef, columns, initial, onSubmit, onCancel 
       name: finalName,
       columns: selected,
       refTable,
-      ...(space !== own ? (dialect === 'mysql' ? { refDatabase: space } : { refSchema: space }) : {}),
+      ...(space !== own ? referenceTarget(space) : {}),
       refColumns: refSelected,
       ...(onUpdate ? { onUpdate } : {}),
       ...(onDelete ? { onDelete } : {}),
@@ -103,7 +101,7 @@ export function ForeignKeyForm({ tableRef, columns, initial, onSubmit, onCancel 
           ))}
         </div>
       </fieldset>
-      <Field id="fk-ref-space" label={dialect === 'mysql' ? locale.ddl.fkRefDatabase : locale.ddl.fkRefSchema}>
+      <Field id="fk-ref-space" label={databasesAreSchemas ? locale.ddl.fkRefDatabase : locale.ddl.fkRefSchema}>
         <Select
           id="fk-ref-space"
           value={space}

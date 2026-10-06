@@ -1,4 +1,3 @@
-import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { type Dialect, type FkAction, FkActionSchema, type TableSchema } from '@tsmyadmin/shared'
 import { type FormEvent, useState } from 'react'
@@ -7,7 +6,8 @@ import { Button } from '@/components/ui/Button.tsx'
 import { Field, Input, Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
 import { useDdlFlow } from '@/lib/ddl.ts'
-import { databasesQuery, schemasQuery, type TableRef } from '@/lib/queries.ts'
+import type { TableRef } from '@/lib/queries.ts'
+import { useSpaces } from '@/lib/spaces.ts'
 
 type What = 'both' | 'structure' | 'data'
 
@@ -44,15 +44,12 @@ export function CopyTableForm({
   dialect: Dialect
   schema: TableSchema
 }) {
-  const own = dialect === 'mysql' ? tableRef.db : (tableRef.schema ?? 'public')
+  const { names: spaces, own, copyTarget, databasesAreSchemas } = useSpaces(dialect, tableRef)
   const [newName, setNewName] = useState(`${tableRef.table}_copy`)
   const [space, setSpace] = useState(own)
   const [what, setWhat] = useState<What>('both')
   const [dropExisting, setDropExisting] = useState(false)
   const [withKeys, setWithKeys] = useState(false)
-  const databases = useQuery({ ...databasesQuery, enabled: dialect === 'mysql' })
-  const schemas = useQuery({ ...schemasQuery(tableRef.db), enabled: dialect === 'postgres' })
-  const spaces = dialect === 'mysql' ? (databases.data ?? []).map((d) => d.name) : (schemas.data ?? [])
   const navigate = useNavigate()
   const flow = useDdlFlow(tableRef.db, tableRef.schema, async (op) => {
     if (op.op === 'copyTable') {
@@ -75,7 +72,7 @@ export function CopyTableForm({
       newName: name,
       withData: what !== 'structure',
       ...(what === 'data' ? { structure: false } : {}),
-      ...(space !== own ? (dialect === 'mysql' ? { toDatabase: space } : { toSchema: space }) : {}),
+      ...(space !== own ? copyTarget(space) : {}),
       ...(dropExisting && what !== 'data' ? { dropExisting: true } : {}),
       ...(withKeys && what !== 'data' ? { foreignKeys: copiedForeignKeys(schema, name) } : {}),
     })
@@ -84,7 +81,7 @@ export function CopyTableForm({
     <section className="rounded border border-line p-3">
       <form onSubmit={submit} className="space-y-2" aria-label={locale.ddl.titles.copyTable}>
         <div className="flex flex-wrap items-start gap-2">
-          <Field id="copy-space" label={dialect === 'mysql' ? locale.ddl.copyToDatabase : locale.ddl.copyToSchema}>
+          <Field id="copy-space" label={databasesAreSchemas ? locale.ddl.copyToDatabase : locale.ddl.copyToSchema}>
             <Select id="copy-space" value={space} onChange={(e) => setSpace(e.target.value)}>
               {[own, ...spaces.filter((n) => n !== own)].map((n) => (
                 <option key={n} value={n}>

@@ -1,4 +1,3 @@
-import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { type Dialect, SYSTEM_DATABASES } from '@tsmyadmin/shared'
 import { type FormEvent, useState } from 'react'
@@ -7,7 +6,8 @@ import { Button } from '@/components/ui/Button.tsx'
 import { Field, Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
 import { useDdlFlow } from '@/lib/ddl.ts'
-import { databasesQuery, schemasQuery, type TableRef } from '@/lib/queries.ts'
+import type { TableRef } from '@/lib/queries.ts'
+import { useSpaces } from '@/lib/spaces.ts'
 
 /**
  * phpMyAdmin's "Move table to": another database on MySQL, another schema of this database on PostgreSQL (which
@@ -15,22 +15,20 @@ import { databasesQuery, schemasQuery, type TableRef } from '@/lib/queries.ts'
  */
 export function MoveTableForm({ tableRef, dialect }: { tableRef: TableRef; dialect: Dialect }) {
   const navigate = useNavigate()
-  const databases = useQuery({ ...databasesQuery, enabled: dialect === 'mysql' })
-  const schemas = useQuery({ ...schemasQuery(tableRef.db), enabled: dialect === 'postgres' })
-  const here = dialect === 'mysql' ? tableRef.db : (tableRef.schema ?? 'public')
+  const { names, own: here, databasesAreSchemas, locate } = useSpaces(dialect, tableRef)
+  // A MySQL system database is not somewhere to move a table to.
   const targets = (
-    dialect === 'mysql'
-      ? (databases.data ?? []).map((d) => d.name).filter((n) => !SYSTEM_DATABASES.mysql.has(n.toLowerCase()))
-      : (schemas.data ?? [])
+    databasesAreSchemas ? names.filter((n) => !SYSTEM_DATABASES.mysql.has(n.toLowerCase())) : names
   ).filter((n) => n !== here)
   const [to, setTo] = useState('')
   const target = targets.includes(to) ? to : (targets[0] ?? '')
   const flow = useDdlFlow(tableRef.db, tableRef.schema, async (op) => {
     if (op.op !== 'moveTable') return
+    const { db, schema } = locate(op.to)
     await navigate({
       to: '/db/$db/table/$table',
-      params: { db: dialect === 'mysql' ? op.to : tableRef.db, table: tableRef.table },
-      search: dialect === 'postgres' ? { schema: op.to } : {},
+      params: { db, table: tableRef.table },
+      search: schema ? { schema } : {},
     })
   })
   const submit = (e: FormEvent) => {
