@@ -1,4 +1,4 @@
-<!-- translated-from: docs/architecture.md sha256:8f7300aab6852a47703cbeef1d8f9b11fb29d3d91c6f243f5add2018c26172d8 -->
+<!-- translated-from: docs/architecture.md sha256:22232bf4b4f40cd0725080662ebbefad386f02ab00ddcc6c125de168646d40cf -->
 
 # Architecture
 
@@ -327,6 +327,8 @@ flowchart LR
 ```
 
 `check:static` also holds checks of the repository's own structure: the direction of dependencies (`check:arch`), how SQL is built (`check:sql-safety`), where doc comments sit (`check:doc-comments`), and **the length of a file (`check:file-size`)**. The last one fails a file past 800 lines (more than a reader holds in their head). The few files already past it are recorded with a reason in `scripts/file-size-baseline.json`: growing one fails, and when one shrinks its baseline comes down (`bun run check:file-size -- --update-baseline` only lowers; it never adds or raises, because that is a decision for a person: split the file, or add it by hand with the reason). Generated code and the string tables are exempt.
+
+A check also counts **the places outside the adapter that ask which database it is** (`check:dialect-leaks`), and holds them where they are. The adapter exists so that no other layer has to know whether the server is MySQL or PostgreSQL; each `dialect === 'postgres'` in the API or the screens is a place that knows anyway, and a third database would have to be found in all of them. So the number per file is held in a baseline (`scripts/dialect-leaks-baseline.json`): **growing fails, and when it falls the baseline comes down** (`-- --update-baseline` only lowers). To lower it, express the difference as a capability (`packages/shared/src/capabilities.ts`) or move the work into the adapter's `ddl` or `export`. Tests, the adapter's per-dialect directories, the fake adapter and the language strings are not counted.
 
 The server side (`packages/shared`, `packages/adapter`, `apps/api`) also has a **floor** under how much the tests run (`check:coverage`). The unit tests and the real-database tests are measured together and compared with the per-file percentages in `scripts/coverage-baseline.json`. It fails when a file in the baseline drops by more than 10 points (a test stopped covering something, or code grew without one), or when a new file that is not in the baseline starts below 60%. It needs the databases, so it runs in the CI `integration` job rather than in `check:static` (`bun run check:coverage`). The baseline only goes up (`-- --update` adds new highs and new files and never lowers; lowering is done by hand, with a reason). The 10 points leave room for the two database versions in CI reaching slightly different branches; the aim is to notice a file going from tested to untested.
 
