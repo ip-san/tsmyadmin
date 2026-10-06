@@ -3,6 +3,7 @@ import type {
   ColumnMeta,
   DatabaseGrant,
   DatabaseInfo,
+  DdlOp,
   DiagnosticKind,
   DiagnosticQuery,
   DiagnosticReport,
@@ -32,13 +33,7 @@ import type {
   UserRef,
 } from '@tsmyadmin/shared'
 import type { Connection as CoreConnection } from 'mysql2'
-import mysql, {
-  type Connection,
-  type FieldPacket,
-  type Pool,
-  type PoolConnection,
-  type ResultSetHeader,
-} from 'mysql2/promise'
+import mysql, { type Connection, type FieldPacket, type Pool, type PoolConnection } from 'mysql2/promise'
 import { BaseAdapter } from '../base.ts'
 import { type Canceller, type Conn, firstResult, type RawResult, withinAcquireTimeout } from '../driver.ts'
 import { driverValueToCell, type QueryOptions, toDbValue, UNCAPPED } from '../sql/cells.ts'
@@ -56,6 +51,8 @@ import {
   mysqlTableStats,
 } from './introspect.ts'
 import { keyColumnExpr, keyMatchExpr, keyParam } from './key-types.ts'
+import { normalise } from './normalise.ts'
+import { mysqlPrepareDdl } from './prepare-ddl.ts'
 import { mysqlEventDetail, mysqlRoutineDetail, mysqlTriggerDetail } from './program-detail.ts'
 import {
   mysqlListDependencies,
@@ -100,46 +97,6 @@ const OWN_THREADS_KEPT = 64
  */
 const SESSION_SQL_MODE =
   "SET SESSION sql_mode = TRIM(BOTH ',' FROM REPLACE(CONCAT(',', @@SESSION.sql_mode, ','), ',NO_BACKSLASH_ESCAPES,', ','))"
-
-function isHeader(v: unknown): v is ResultSetHeader {
-  return typeof v === 'object' && v !== null && 'affectedRows' in v
-}
-
-function normalise(
-  rowsOut: unknown,
-  fields: FieldPacket[] | FieldPacket[][] | undefined,
-  options?: QueryOptions
-): RawResult | RawResult[] {
-  if (isHeader(rowsOut)) return { columns: [], rows: [], affectedRows: rowsOut.affectedRows, hasRows: false }
-  const rows = rowsOut as unknown[]
-  const multi = Array.isArray(fields) && Array.isArray(fields[0])
-  if (multi) {
-    const sets = fields as FieldPacket[][]
-    const out: RawResult[] = []
-    for (let i = 0; i < rows.length; i++) {
-      const part = rows[i]
-      const partFields = sets[i]
-      if (isHeader(part) || !partFields) {
-        if (isHeader(part)) out.push({ columns: [], rows: [], affectedRows: part.affectedRows, hasRows: false })
-        continue
-      }
-      out.push({
-        columns: partFields.map(mysqlColumnMeta),
-        rows: (part as unknown[][]).map((r) => r.map((v) => driverValueToCell(v, options))),
-        affectedRows: 0,
-        hasRows: true,
-      })
-    }
-    return out
-  }
-  const single = (fields ?? []) as FieldPacket[]
-  return {
-    columns: single.map(mysqlColumnMeta),
-    rows: (rows as unknown[][]).map((r) => r.map((v) => driverValueToCell(v, options))),
-    affectedRows: 0,
-    hasRows: true,
-  }
-}
 
 export class MysqlAdapter extends BaseAdapter {
   readonly dialect = 'mysql' as const
@@ -652,6 +609,10 @@ export class MysqlAdapter extends BaseAdapter {
 
   listDependencies(ns: Namespace): Promise<ObjectDependency[] | null> {
     return this.withConn(ns, (conn) => mysqlListDependencies(conn, ns))
+  }
+
+  prepareDdl(ns: Namespace, op: DdlOp): Promise<DdlOp> {
+    return mysqlPrepareDdl(this, ns, op)
   }
 
   listForeignKeys(ns: Namespace): Promise<RelationDef[]> {

@@ -21,6 +21,11 @@ describe('capabilities', () => {
     for (const dialect of DialectSchema.options) expect(capabilities(dialect).foreignKeyChecksOff).toMatch(/^SET /)
   })
 
+  it('says only MySQL can copy the rows of a database into one that already has the tables', () => {
+    expect(capabilities('mysql').copyDatabaseWithoutStructure).toBe(true)
+    expect(capabilities('postgres').copyDatabaseWithoutStructure).toBe(false)
+  })
+
   it('says a MySQL database is what PostgreSQL calls a schema, and that only MySQL scripts have DELIMITER', () => {
     expect(capabilities('mysql')).toMatchObject({ databasesAreSchemas: true, scriptDelimiter: true })
     expect(capabilities('postgres')).toMatchObject({ databasesAreSchemas: false, scriptDelimiter: false })

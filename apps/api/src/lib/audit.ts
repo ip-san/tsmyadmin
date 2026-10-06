@@ -49,6 +49,7 @@ export const PASSTHROUGH_METHODS = [
   'distinctValues',
   'insertPreview',
   'checkReferences',
+  'prepareDdl',
   'buildQuery',
   'listForeignKeys',
   'showCreateTable',

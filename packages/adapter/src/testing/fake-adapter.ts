@@ -5,6 +5,7 @@ import type {
   Cell,
   DatabaseGrant,
   DatabaseInfo,
+  DdlOp,
   DiagnosticKind,
   DiagnosticReport,
   Dialect,
@@ -47,9 +48,11 @@ import type {
 import { isFunctionCell } from '@tsmyadmin/shared'
 import { mysqlDdl } from '../mysql/ddl.ts'
 import { mysqlExporter } from '../mysql/export.ts'
+import { mysqlPrepareDdl } from '../mysql/prepare-ddl.ts'
 import { mysqlUsers } from '../mysql/users.ts'
 import { pgDdl } from '../postgres/ddl.ts'
 import { pgExporter } from '../postgres/export.ts'
+import { pgPrepareDdl } from '../postgres/prepare-ddl.ts'
 import { pgUsers } from '../postgres/users.ts'
 import {
   AdapterError,
@@ -80,6 +83,8 @@ export interface FakeAdapterOptions {
   onSql?: (ns: Namespace, sql: string, opts: ExecuteOptions) => StatementResult[]
   /** When set, every method rejects with this error (simulates a dead connection). */
   failWith?: AdapterError
+  /** The database the session is connected through (default `information_schema`). */
+  serverNamespace?: Namespace
   users?: UserInfo[]
   processes?: ProcessInfo[]
   /** What listDependencies reports (null = no catalog, like MariaDB). */
@@ -286,6 +291,7 @@ export class FakeAdapter implements DatabaseAdapter {
     this.dependencies = options.dependencies ?? null
     this.routines = options.routines ?? {}
     this.failWith = options.failWith
+    if (options.serverNamespace) this.serverNamespace = options.serverNamespace
   }
 
   private record(method: string, ...args: unknown[]): void {
@@ -397,6 +403,12 @@ export class FakeAdapter implements DatabaseAdapter {
   async listDependencies(ns: Namespace): Promise<ObjectDependency[] | null> {
     this.record('listDependencies', ns)
     return this.dependencies
+  }
+
+  /** The real preparation of the dialect, over this fake's own tables (it only uses the adapter's public reads). */
+  async prepareDdl(ns: Namespace, op: DdlOp): Promise<DdlOp> {
+    this.record('prepareDdl', ns, op)
+    return this.dialect === 'mysql' ? mysqlPrepareDdl(this, ns, op) : pgPrepareDdl(this, ns, op)
   }
 
   async databaseGrants(database: string): Promise<DatabaseGrant[]> {

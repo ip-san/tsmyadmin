@@ -11,6 +11,7 @@ import { describeDumpAndExport } from './conformance/dump-and-export.ts'
 import type { ConformanceContext, ConformanceEnv } from './conformance/env.ts'
 import { EXEC } from './conformance/helpers.ts'
 import { describeObjectDetails } from './conformance/object-details.ts'
+import { describePrepareDdl } from './conformance/prepare-ddl.ts'
 import { describeRowEdits } from './conformance/row-edits.ts'
 import { describeRowIdentityAndExport } from './conformance/row-identity-and-export.ts'
 import { describeSearchAndQuery } from './conformance/search-and-query.ts'
@@ -148,6 +149,7 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
     describeAccounts(env)
     describeDdl(env)
     describeDatabaseOps(env)
+    describePrepareDdl(env)
     describeConnectionLoss(env)
 
     describe('close', () => {
