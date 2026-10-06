@@ -1,14 +1,14 @@
 import type { Cell, Dialect } from '@tsmyadmin/shared'
-import { isBinaryCell, isTruncatedCell } from '@tsmyadmin/shared'
+import { isBinaryCell, isTruncatedCell, quoteLiteral } from '@tsmyadmin/shared'
 
 /** MySQL string literal (backslash escapes are active unless NO_BACKSLASH_ESCAPES). */
 export function mysqlLiteral(value: string): string {
-  return `'${value.replaceAll('\\', '\\\\').replaceAll("'", "''")}'`
+  return quoteLiteral('mysql', value)
 }
 
 /** PostgreSQL string literal (standard_conforming_strings: backslash is literal). */
 export function pgLiteral(value: string): string {
-  return `'${value.replaceAll("'", "''")}'`
+  return quoteLiteral('postgres', value)
 }
 
 function hex(base64: string): string {

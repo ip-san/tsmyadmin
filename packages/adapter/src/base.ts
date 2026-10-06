@@ -52,6 +52,7 @@ import {
   EXACT_COUNT_MAX_ROWS,
   isViewKind,
   MAX_BINARY_BYTES,
+  quoteLiteral,
 } from '@tsmyadmin/shared'
 import { type Canceller, type Conn, firstResult } from './driver.ts'
 import { bufferToCell, DISPLAY, toDbValue, UNCAPPED } from './sql/cells.ts'
@@ -65,7 +66,6 @@ import {
   writeValue,
 } from './sql/conditions.ts'
 import { joinPlan } from './sql/join-plan.ts'
-import { mysqlLiteral, pgLiteral } from './sql/literal.ts'
 import { Params, quoteIdent, quoteTable } from './sql/quote.ts'
 import { escapeLike, isSearchableType } from './sql/search.ts'
 import { ScriptRunner } from './sql-console.ts'
@@ -382,7 +382,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     // Bounded like the browse count: a term that matches most of a huge table is still one limited scan.
     const countSql = `SELECT COUNT(*) FROM (SELECT 1 FROM ${tableSql} WHERE ${where} LIMIT ${params.add(EXACT_COUNT_MAX_ROWS + 1)}) AS tsmyadmin_search`
     // For the SQL tab, where it is edited and run: the term is written in as a literal there.
-    const literalWhere = match((v) => (d === 'mysql' ? mysqlLiteral(v) : pgLiteral(v)))
+    const literalWhere = match((v) => quoteLiteral(d, v))
     const sql = `SELECT * FROM ${tableSql} WHERE ${literalWhere}`
     const deleteSql = `DELETE FROM ${tableSql} WHERE ${literalWhere}`
     return this.withConn(ns, async (conn) => {
@@ -510,7 +510,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     }
     // Columns are qualified by the bare table name, which FROM leaves in scope in both dialects.
     const ref = (r: { table: string; column: string }) => `${quoteIdent(d, r.table)}.${quoteIdent(d, r.column)}`
-    const literal = (v: InputCell) => (d === 'mysql' ? mysqlLiteral(String(v)) : pgLiteral(String(v)))
+    const literal = (v: InputCell) => quoteLiteral(d, String(v))
 
     const select = spec.columns
       .filter((c) => c.show)

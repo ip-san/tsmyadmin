@@ -1,13 +1,8 @@
-import type { Dialect } from '@tsmyadmin/shared'
+import { type Dialect, quoteIdentifier as quote } from '@tsmyadmin/shared'
 
 /** A complete single-quoted literal, quotes doubled — never interpolated next to a quote in a template. */
 function literal(value: string): string {
   return `'${value.replaceAll("'", "''")}'`
-}
-
-/** Identifier quoting mirrors packages/adapter/src/sql/quote.ts. */
-function quote(dialect: Dialect, name: string): string {
-  return dialect === 'mysql' ? `\`${name.replaceAll('`', '``')}\`` : `"${name.replaceAll('"', '""')}"`
 }
 
 /** What is being edited; each needs a different way of putting the new definition in place. */

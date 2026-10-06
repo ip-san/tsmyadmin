@@ -1,4 +1,4 @@
-import type { Dialect } from '@tsmyadmin/shared'
+import { type Dialect, quoteLiteral } from '@tsmyadmin/shared'
 import { tokenizeSql } from './sql-format.ts'
 
 /** A `:name` placeholder in the text, and where it sits. */
@@ -40,8 +40,7 @@ export function findParameters(sql: string): string[] {
 export function bindLiteral(dialect: Dialect, value: string | null): string {
   if (value === null) return 'NULL'
   if (/^-?\d+(?:\.\d+)?$/.test(value.trim())) return value.trim()
-  const text = dialect === 'mysql' ? value.replaceAll('\\', '\\\\') : value
-  return `'${text.replaceAll("'", "''")}'`
+  return quoteLiteral(dialect, value)
 }
 
 /** The statement with each `:name` replaced by its value's literal (a name with no value keeps its text). */
