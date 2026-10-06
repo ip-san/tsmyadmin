@@ -33,6 +33,25 @@ export interface DialectCapabilities {
    * template, with its structure and its data together.
    */
   copyDatabaseWithoutStructure: boolean
+  /** Several routines may share a name, told apart by their arguments (PostgreSQL). */
+  routineOverloads: boolean
+  /** Scheduled events (MySQL). */
+  events: boolean
+  /** How a SQL dump is written for this server. */
+  dump: {
+    /** Drops are written as one section ahead of everything, in the reverse of the order of dependency (PostgreSQL); otherwise each object is dropped where it is created. */
+    dropsInOneSection: boolean
+    /** The catalog says which object depends on which, so the dump can order routines and views by it (PostgreSQL). */
+    dependencyCatalog: boolean
+    /** Foreign keys are written after every table exists and is loaded: there is no switch to turn the check off (PostgreSQL). */
+    deferForeignKeys: boolean
+    /** A materialized view is created empty and refreshed once its sources hold their rows (PostgreSQL). */
+    materializedViews: boolean
+    /** `LOCK TABLES … WRITE` around the rows of a table (MySQL). */
+    lockTables: boolean
+    /** The session statements that put the dump's times in UTC, and the one that undoes them (null where nothing needs undoing). */
+    utc: { set: string; restore: string | null }
+  }
   /** `NO_AUTO_VALUE_ON_ZERO`: a zero in an auto-increment column is stored as zero (a MySQL `sql_mode`). */
   noAutoValueOnZero: boolean
 }
@@ -46,6 +65,16 @@ const CAPABILITIES: Record<Dialect, DialectCapabilities> = {
     databasesAreSchemas: true,
     scriptDelimiter: true,
     copyDatabaseWithoutStructure: true,
+    routineOverloads: false,
+    events: true,
+    dump: {
+      dropsInOneSection: false,
+      dependencyCatalog: false,
+      deferForeignKeys: false,
+      materializedViews: false,
+      lockTables: true,
+      utc: { set: "SET @OLD_TIME_ZONE = @@TIME_ZONE, TIME_ZONE = '+00:00'", restore: 'SET TIME_ZONE = @OLD_TIME_ZONE' },
+    },
     noAutoValueOnZero: true,
   },
   postgres: {
@@ -56,6 +85,16 @@ const CAPABILITIES: Record<Dialect, DialectCapabilities> = {
     databasesAreSchemas: false,
     scriptDelimiter: false,
     copyDatabaseWithoutStructure: false,
+    routineOverloads: true,
+    events: false,
+    dump: {
+      dropsInOneSection: true,
+      dependencyCatalog: true,
+      deferForeignKeys: true,
+      materializedViews: true,
+      lockTables: false,
+      utc: { set: "SET TIME ZONE 'UTC'", restore: null },
+    },
     noAutoValueOnZero: false,
   },
 }

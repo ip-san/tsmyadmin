@@ -26,6 +26,33 @@ describe('capabilities', () => {
     expect(capabilities('postgres').copyDatabaseWithoutStructure).toBe(false)
   })
 
+  it('says how a dump is written: PostgreSQL in sections ordered by dependency, MySQL object by object and locked', () => {
+    expect(capabilities('postgres').dump).toMatchObject({
+      dropsInOneSection: true,
+      dependencyCatalog: true,
+      deferForeignKeys: true,
+      materializedViews: true,
+      lockTables: false,
+    })
+    expect(capabilities('mysql').dump).toMatchObject({
+      dropsInOneSection: false,
+      dependencyCatalog: false,
+      deferForeignKeys: false,
+      materializedViews: false,
+      lockTables: true,
+    })
+  })
+
+  it('names the statements that put a dump in UTC, and the one that undoes it only where it is needed', () => {
+    expect(capabilities('postgres').dump.utc).toEqual({ set: "SET TIME ZONE 'UTC'", restore: null })
+    expect(capabilities('mysql').dump.utc.restore).toMatch(/^SET TIME_ZONE/)
+  })
+
+  it('says only MySQL has events and only PostgreSQL overloads routines', () => {
+    expect(capabilities('mysql')).toMatchObject({ events: true, routineOverloads: false })
+    expect(capabilities('postgres')).toMatchObject({ events: false, routineOverloads: true })
+  })
+
   it('says a MySQL database is what PostgreSQL calls a schema, and that only MySQL scripts have DELIMITER', () => {
     expect(capabilities('mysql')).toMatchObject({ databasesAreSchemas: true, scriptDelimiter: true })
     expect(capabilities('postgres')).toMatchObject({ databasesAreSchemas: false, scriptDelimiter: false })
