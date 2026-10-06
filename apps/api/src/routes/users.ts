@@ -2,8 +2,10 @@
  * Accounts and privileges: the list, the grants, and the preview → execute pair. The server builds the SQL from `op`
  * (the preview masks the password), so the browser never sends a statement to run.
  */
+
 import type { DatabaseAdapter } from '@tsmyadmin/adapter'
 import {
+  capabilities,
   PASSWORD_MASK,
   type StatementResult,
   UserGrantsQuerySchema,
@@ -65,7 +67,7 @@ export function userRoutes(cfg: SessionConfig) {
       // One connection for the whole operation; executeSql splits the script and stops at the first error.
       // PostgreSQL role / grant statements are transactional: all of them or none (a failing third GRANT must not
       // leave the first two in place). MySQL account statements commit implicitly, so they run as they are.
-      const transactional = adapter.dialect === 'postgres' && statements.length > 1
+      const transactional = capabilities(adapter.dialect).transactionalDdl && statements.length > 1
       const script = [
         ...(transactional ? ['BEGIN'] : []),
         ...statements.map((s) => s.sql),
