@@ -1,6 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
-import type { Conn, RawResult } from '../driver.ts'
-import { AdapterError } from '../types.ts'
+import { describe, expect, it } from 'vitest'
+import { type Answer, fail, rows, scripted } from '../test/scripted-conn.ts'
 import { pgDiagnostics, pgKillProcess, pgReplicationInfo } from './server.ts'
 
 /**
@@ -9,42 +8,6 @@ import { pgDiagnostics, pgKillProcess, pgReplicationInfo } from './server.ts'
  * connection. The real servers answer only one way each (the fixtures have no pg_stat_statements, the test role may
  * read everything), so the other answers are scripted here, as the server would give them.
  */
-const rows = (data: unknown[][], names: string[] = []): RawResult => ({
-  columns: names.map((name) => ({ name }) as RawResult['columns'][number]),
-  rows: data as RawResult['rows'],
-  affectedRows: 0,
-  hasRows: true,
-})
-const fail = (code: string, nativeCode?: string) =>
-  new AdapterError(
-    code as 'QUERY_FAILED',
-    `${nativeCode ?? code}: scripted`,
-    'scripted',
-    nativeCode ? { nativeCode } : {}
-  )
-
-type Answer = RawResult | Error
-/** A connection that answers each statement from the first rule whose pattern matches it, and keeps what it was asked. */
-function scripted(rules: [RegExp, Answer][]) {
-  const asked: { text: string; params: unknown[] | undefined }[] = []
-  const discard = vi.fn()
-  const conn = {
-    id: {},
-    release: () => undefined,
-    reset: async () => undefined,
-    forget: () => undefined,
-    discard,
-    async query(text: string, params?: unknown[]) {
-      asked.push({ text, params })
-      const rule = rules.find(([pattern]) => pattern.test(text))
-      if (!rule) throw new Error(`unscripted statement: ${text}`)
-      if (rule[1] instanceof Error) throw rule[1]
-      return rule[1]
-    },
-  } satisfies Conn
-  return { conn, asked, discard }
-}
-
 const EXTENSION = /FROM pg_extension/
 const installed = [EXTENSION, rows([[1]])] as [RegExp, Answer]
 const missing = [EXTENSION, rows([])] as [RegExp, Answer]
