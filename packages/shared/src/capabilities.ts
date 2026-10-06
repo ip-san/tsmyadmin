@@ -8,6 +8,10 @@ import type { Dialect } from './schemas/dialect.ts'
  * more than one place cares about is named here once; the code that needs it reads the name.
  */
 export interface DialectCapabilities {
+  /** A backslash in a string literal escapes the next character (MySQL); PostgreSQL reads it as itself (standard_conforming_strings). */
+  literalBackslashEscapes: boolean
+  /** The character an identifier is wrapped in (and that is doubled inside it): backtick on MySQL, double quote on PostgreSQL. */
+  identifierQuote: '`' | '"'
   /** The longest identifier the server accepts: MySQL 64 characters, PostgreSQL 63 bytes (longer ones are cut silently). */
   identifier: {
     max: number
@@ -58,6 +62,8 @@ export interface DialectCapabilities {
 
 const CAPABILITIES: Record<Dialect, DialectCapabilities> = {
   mysql: {
+    identifierQuote: '`',
+    literalBackslashEscapes: true,
     identifier: { max: 64, unit: 'chars', accountMax: 32 },
     transactionalDdl: false,
     beginTransaction: 'START TRANSACTION',
@@ -78,6 +84,8 @@ const CAPABILITIES: Record<Dialect, DialectCapabilities> = {
     noAutoValueOnZero: true,
   },
   postgres: {
+    identifierQuote: '"',
+    literalBackslashEscapes: false,
     identifier: { max: 63, unit: 'bytes', accountMax: null },
     transactionalDdl: true,
     beginTransaction: 'BEGIN',

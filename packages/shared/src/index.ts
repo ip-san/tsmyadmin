@@ -1,6 +1,7 @@
 export * from './capabilities.ts'
 export * from './csv.ts'
 export * from './infer-type.ts'
+export * from './quote-identifier.ts'
 export * from './schemas/api.ts'
 export * from './schemas/browse.ts'
 export * from './schemas/browse-query.ts'

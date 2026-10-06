@@ -1,4 +1,4 @@
-import type { Cell, Dialect, Namespace } from '@tsmyadmin/shared'
+import { type Cell, type Dialect, type Namespace, quoteIdentifier } from '@tsmyadmin/shared'
 import { AdapterError } from '../types.ts'
 import { cellLiteral } from './literal.ts'
 
@@ -8,7 +8,7 @@ import { cellLiteral } from './literal.ts'
  */
 export function quoteIdent(dialect: Dialect, name: string): string {
   if (name.includes('\0')) throw new AdapterError('VALIDATION', 'Identifier contains a NUL byte')
-  return dialect === 'mysql' ? `\`${name.replaceAll('`', '``')}\`` : `"${name.replaceAll('"', '""')}"`
+  return quoteIdentifier(dialect, name)
 }
 
 /** Fully-qualified table reference for the namespace. */

@@ -1,4 +1,4 @@
-import type { Dialect } from '@tsmyadmin/shared'
+import { type Dialect, quoteIdentifier as quote, quoteLiteral } from '@tsmyadmin/shared'
 
 export interface RoutineParam {
   mode: 'IN' | 'OUT' | 'INOUT'
@@ -61,13 +61,8 @@ const NUMBER = /^-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?$/
 export function literalFor(dialect: Dialect, type: string, value: string | null): string {
   if (value === null) return 'NULL'
   if (NUMERIC_TYPE.test(type) && NUMBER.test(value.trim())) return value.trim()
-  // MySQL reads a backslash as an escape; PostgreSQL (standard_conforming_strings) does not.
-  const text = dialect === 'mysql' ? value.replaceAll('\\', '\\\\') : value
-  return `'${text.replaceAll("'", "''")}'`
+  return quoteLiteral(dialect, value)
 }
-
-const quote = (dialect: Dialect, name: string) =>
-  dialect === 'mysql' ? `\`${name.replaceAll('`', '``')}\`` : `"${name.replaceAll('"', '""')}"`
 
 /**
  * The statement that runs a routine with these values (one per parameter, null for NULL), to open in the SQL tab.

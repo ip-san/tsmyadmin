@@ -7,6 +7,16 @@ describe('capabilities', () => {
     for (const dialect of DialectSchema.options) expect(capabilities(dialect)).toBeDefined()
   })
 
+  it('says only MySQL reads a backslash in a string literal as an escape', () => {
+    expect(capabilities('mysql').literalBackslashEscapes).toBe(true)
+    expect(capabilities('postgres').literalBackslashEscapes).toBe(false)
+  })
+
+  it('says which character quotes an identifier', () => {
+    expect(capabilities('mysql').identifierQuote).toBe('`')
+    expect(capabilities('postgres').identifierQuote).toBe('"')
+  })
+
   it('says how long a name may be, in the unit the server counts', () => {
     expect(capabilities('mysql').identifier).toEqual({ max: 64, unit: 'chars', accountMax: 32 })
     expect(capabilities('postgres').identifier).toEqual({ max: 63, unit: 'bytes', accountMax: null })
