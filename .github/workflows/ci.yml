@@ -93,7 +93,9 @@ jobs:
           sudo apt-get update -qq && sudo apt-get install -y -qq mysql-client postgresql-client >/dev/null
           mysql -h 127.0.0.1 -P 13306 -uroot -proot < docker/fixtures/mysql/01-schema.sql
           PGPASSWORD=tsmyadmin psql -h 127.0.0.1 -p 15433 -U tsmyadmin -d tsmyadmin_test -v ON_ERROR_STOP=1 -f docker/fixtures/postgres/01-schema.sql
-      - run: bun run test:integration
+      # The same suites as `bun run test:integration` (plus the unit ones), measured: a file that was tested and no longer
+      # is, or a new file under 60%, fails here (scripts/coverage-baseline.json).
+      - run: bun run check:coverage
 
   # The MySQL adapter must also pass its conformance suite against MariaDB (mysql.user layout and its collation,
   # max_statement_time, sequences, packages…), on the LTS release as well as the current one.
