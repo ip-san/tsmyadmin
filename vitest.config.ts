@@ -9,12 +9,19 @@ import { defineConfig } from 'vitest/config'
  */
 const integration = process.env.INTEGRATION === '1'
 
+/**
+ * The unit tests finish in milliseconds; the limit is for a machine that is busy with something else (a build, another
+ * test run, Docker): under that load the 5-second default failed unrelated tests one after another, at random.
+ */
+const UNIT_TIMEOUT_MS = 15_000
+
 export default defineConfig({
   test: {
     projects: [
       {
         test: {
           name: 'shared',
+          testTimeout: UNIT_TIMEOUT_MS,
           root: 'packages/shared',
           environment: 'node',
           include: ['src/**/*.test.ts'],
@@ -23,6 +30,7 @@ export default defineConfig({
       {
         test: {
           name: 'adapter',
+          testTimeout: UNIT_TIMEOUT_MS,
           root: 'packages/adapter',
           environment: 'node',
           include: ['src/**/*.test.ts'],
@@ -32,6 +40,7 @@ export default defineConfig({
       {
         test: {
           name: 'api',
+          testTimeout: UNIT_TIMEOUT_MS,
           root: 'apps/api',
           environment: 'node',
           include: ['src/**/*.test.ts'],
@@ -43,6 +52,7 @@ export default defineConfig({
         define: { __APP_VERSION__: '"test"' },
         test: {
           name: 'web',
+          testTimeout: UNIT_TIMEOUT_MS,
           root: 'apps/web',
           environment: 'jsdom',
           include: ['src/**/*.test.{ts,tsx}'],
