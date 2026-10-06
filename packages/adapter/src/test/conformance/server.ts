@@ -111,7 +111,10 @@ export function describeServer(env: ConformanceEnv): void {
         const times = report.rows.map((r) => r[0] ?? '')
         expect([...times].sort().reverse()).toEqual(times)
         const newest = times[0] ?? ''
-        expect((await env.db.diagnostics('recentStatements', { since: newest })).rows).toEqual([])
+        // The general log is the whole server's: another suite running at the same time writes to it too, so what
+        // must be absent after `newest` is what this suite ran, not every row.
+        const after = await env.db.diagnostics('recentStatements', { since: newest })
+        expect(after.rows.filter((r) => r[1]?.includes(scratch))).toEqual([])
         await other.executeSql(ns, `SELECT '${app}_2'`, EXEC)
         const later = await env.db.diagnostics('recentStatements', { since: newest })
         expect(later.rows.some((r) => r[1]?.includes(`${app}_2`))).toBe(true)
