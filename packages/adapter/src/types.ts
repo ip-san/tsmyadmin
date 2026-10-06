@@ -270,6 +270,12 @@ export interface DatabaseAdapter {
   browseRows(ns: Namespace, table: string, opts: BrowseOptions): Promise<BrowseResult>
   /** Rows containing `term` in any searchable column (case-insensitive), for the database-wide search. */
   searchTable(ns: Namespace, table: string, term: string, options?: SearchOptions): Promise<TableSearchResult>
+  /**
+   * An op with what only the server can say filled in, before `ddl.build` writes its SQL (the builders are pure): the
+   * insertable columns of a copy, the tables of a collation change, what moves in a whole-database rename or copy.
+   * Throws `VALIDATION` / `NOT_FOUND` for an op that will not be built. Reads only; ops that need nothing come back as given.
+   */
+  prepareDdl(ns: Namespace, op: DdlOp): Promise<DdlOp>
   /** Per foreign key of the table, the rows that name a parent which is not there (the constraint may be unenforced, or disabled). */
   checkReferences(ns: Namespace, table: string): Promise<ReferenceCheck[]>
   /** The distinct values of one column with their counts, most frequent first (at most `DISTINCT_VALUES_LIMIT`). */
@@ -398,6 +404,7 @@ export const ADAPTER_METHOD_NAMES = [
   'searchTable',
   'distinctValues',
   'checkReferences',
+  'prepareDdl',
   'buildQuery',
   'listForeignKeys',
   'insertRow',

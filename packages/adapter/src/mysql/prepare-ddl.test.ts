@@ -1,7 +1,8 @@
-import { FakeAdapter, fakeTable } from '@tsmyadmin/adapter/testing'
 import type { TriggerInfo } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
-import { DatabaseOpRefused, prepareDatabaseOp } from './database-ops.ts'
+import { FakeAdapter, fakeTable } from '../testing/fake-adapter.ts'
+import { AdapterError } from '../types.ts'
+import { mysqlPrepareDdl } from './prepare-ddl.ts'
 
 const withGenerated = () => {
   const t = fakeTable('orders', ['id', 'qty', 'total'], [])
@@ -34,18 +35,18 @@ const refusal = async (p: Promise<unknown>) => {
   try {
     await p
   } catch (err) {
-    if (err instanceof DatabaseOpRefused) return { code: err.code, message: err.message }
+    if (err instanceof AdapterError) return { code: err.code, message: err.message }
     throw err
   }
   throw new Error('expected a refusal')
 }
 
-describe('prepareDatabaseOp', () => {
+describe('mysqlPrepareDdl: a rename or copy of a whole database', () => {
   const server = { database: 'information_schema' }
 
   it('lists the tables to move from the server, ignoring any list the request carried', async () => {
     // The request names one table; the database has two. Trusting it would drop `users` with the old database.
-    const op = await prepareDatabaseOp(mysql(), server, {
+    const op = await mysqlPrepareDdl(mysql(), server, {
       op: 'renameDatabase',
       name: 'shop',
       newName: 'store',
@@ -54,18 +55,18 @@ describe('prepareDatabaseOp', () => {
     })
     expect(op.op === 'renameDatabase' && [...(op.tables ?? [])].sort()).toEqual(['orders', 'users'])
     // Collation comes from the server too (the fake reports none), not from the request.
-    expect(op.collation).toBeUndefined()
+    expect((op as { collation?: string }).collation).toBeUndefined()
   })
 
   it('refuses a MySQL rename that would lose views, routines, triggers or events', async () => {
     expect(
       await refusal(
-        prepareDatabaseOp(mysql({ view: true }), server, { op: 'renameDatabase', name: 'shop', newName: 'store' })
+        mysqlPrepareDdl(mysql({ view: true }), server, { op: 'renameDatabase', name: 'shop', newName: 'store' })
       )
     ).toMatchObject({ code: 'VALIDATION', message: expect.stringContaining('1 views') })
     expect(
       await refusal(
-        prepareDatabaseOp(mysql({ routines: { f: 'SELECT 1' } }), server, {
+        mysqlPrepareDdl(mysql({ routines: { f: 'SELECT 1' } }), server, {
           op: 'renameDatabase',
           name: 'shop',
           newName: 'store',
@@ -75,7 +76,7 @@ describe('prepareDatabaseOp', () => {
     const withTrigger = mysql()
     withTrigger.listTriggers = async () => [{ name: 't' } as TriggerInfo]
     expect(
-      await refusal(prepareDatabaseOp(withTrigger, server, { op: 'renameDatabase', name: 'shop', newName: 'store' }))
+      await refusal(mysqlPrepareDdl(withTrigger, server, { op: 'renameDatabase', name: 'shop', newName: 'store' }))
     ).toMatchObject({ code: 'VALIDATION', message: expect.stringContaining('1 triggers') })
   })
 
@@ -85,7 +86,7 @@ describe('prepareDatabaseOp', () => {
     seq.schema.kind = 'sequence'
     const shop = (a as unknown as { databases: Record<string, { tables: Record<string, unknown> }> }).databases.shop
     if (shop) shop.tables.order_seq = seq
-    const r = await refusal(prepareDatabaseOp(a, server, { op: 'renameDatabase', name: 'shop', newName: 'store' }))
+    const r = await refusal(mysqlPrepareDdl(a, server, { op: 'renameDatabase', name: 'shop', newName: 'store' }))
     expect(r.message).toContain('1 sequences')
     expect(r.message).not.toContain('views')
   })
@@ -93,12 +94,12 @@ describe('prepareDatabaseOp', () => {
   it('describes an existing target with no tables without calling it empty', async () => {
     // It may be what a MySQL rename left behind, still holding routines or events this account cannot see.
     expect(
-      await refusal(prepareDatabaseOp(mysql(), server, { op: 'renameDatabase', name: 'shop', newName: 'taken' }))
+      await refusal(mysqlPrepareDdl(mysql(), server, { op: 'renameDatabase', name: 'shop', newName: 'taken' }))
     ).toMatchObject({ code: 'VALIDATION', message: expect.stringContaining('no tables visible to this account') })
   })
 
   it('copies base tables with their writable columns, and does not refuse for views', async () => {
-    const op = await prepareDatabaseOp(mysql({ view: true }), server, {
+    const op = await mysqlPrepareDdl(mysql({ view: true }), server, {
       op: 'copyDatabase',
       name: 'shop',
       newName: 'store',
@@ -122,7 +123,7 @@ describe('prepareDatabaseOp', () => {
       },
     })
     const rowsOnly = (newName: string) =>
-      prepareDatabaseOp(adapter, server, {
+      mysqlPrepareDdl(adapter, server, {
         op: 'copyDatabase',
         name: 'shop',
         newName,
@@ -145,45 +146,25 @@ describe('prepareDatabaseOp', () => {
   it('refuses the same name, an existing target, a missing source and the server’s own databases', async () => {
     const a = mysql()
     expect(
-      await refusal(prepareDatabaseOp(a, server, { op: 'renameDatabase', name: 'shop', newName: 'shop' }))
+      await refusal(mysqlPrepareDdl(a, server, { op: 'renameDatabase', name: 'shop', newName: 'shop' }))
     ).toMatchObject({
       code: 'VALIDATION',
     })
     expect(
-      await refusal(
-        prepareDatabaseOp(a, server, { op: 'copyDatabase', name: 'shop', newName: 'taken', withData: true })
-      )
+      await refusal(mysqlPrepareDdl(a, server, { op: 'copyDatabase', name: 'shop', newName: 'taken', withData: true }))
     ).toMatchObject({
       code: 'VALIDATION',
       message: expect.stringContaining('already exists'),
     })
     expect(
-      await refusal(prepareDatabaseOp(a, server, { op: 'renameDatabase', name: 'nope', newName: 'x' }))
+      await refusal(mysqlPrepareDdl(a, server, { op: 'renameDatabase', name: 'nope', newName: 'x' }))
     ).toMatchObject({
       code: 'NOT_FOUND',
     })
     expect(
-      await refusal(prepareDatabaseOp(a, server, { op: 'renameDatabase', name: 'MySQL', newName: 'x' }))
+      await refusal(mysqlPrepareDdl(a, server, { op: 'renameDatabase', name: 'MySQL', newName: 'x' }))
     ).toMatchObject({
       code: 'VALIDATION',
-    })
-  })
-
-  it('refuses, on PostgreSQL, the database the session is connected through', async () => {
-    const pg = new FakeAdapter({ dialect: 'postgres', databases: { app: { tables: {} }, other: { tables: {} } } })
-    expect(
-      await refusal(prepareDatabaseOp(pg, { database: 'app' }, { op: 'renameDatabase', name: 'app', newName: 'x' }))
-    ).toMatchObject({
-      code: 'VALIDATION',
-      message: expect.stringContaining('connected through'),
-    })
-    // Any other database is renamed in place, with nothing to fill in.
-    expect(
-      await prepareDatabaseOp(pg, { database: 'app' }, { op: 'renameDatabase', name: 'other', newName: 'x' })
-    ).toEqual({
-      op: 'renameDatabase',
-      name: 'other',
-      newName: 'x',
     })
   })
 })

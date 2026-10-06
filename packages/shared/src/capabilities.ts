@@ -28,6 +28,11 @@ export interface DialectCapabilities {
   databasesAreSchemas: boolean
   /** A script may change the statement delimiter for what follows (`DELIMITER //`). */
   scriptDelimiter: boolean
+  /**
+   * A database can be copied rows only, into one that already has the tables (MySQL). PostgreSQL copies a database from a
+   * template, with its structure and its data together.
+   */
+  copyDatabaseWithoutStructure: boolean
   /** `NO_AUTO_VALUE_ON_ZERO`: a zero in an auto-increment column is stored as zero (a MySQL `sql_mode`). */
   noAutoValueOnZero: boolean
 }
@@ -40,6 +45,7 @@ const CAPABILITIES: Record<Dialect, DialectCapabilities> = {
     foreignKeyChecksOff: 'SET FOREIGN_KEY_CHECKS = 0',
     databasesAreSchemas: true,
     scriptDelimiter: true,
+    copyDatabaseWithoutStructure: true,
     noAutoValueOnZero: true,
   },
   postgres: {
@@ -49,6 +55,7 @@ const CAPABILITIES: Record<Dialect, DialectCapabilities> = {
     foreignKeyChecksOff: 'SET session_replication_role = replica',
     databasesAreSchemas: false,
     scriptDelimiter: false,
+    copyDatabaseWithoutStructure: false,
     noAutoValueOnZero: false,
   },
 }

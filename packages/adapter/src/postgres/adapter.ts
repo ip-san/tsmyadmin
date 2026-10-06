@@ -2,6 +2,7 @@ import type {
   ColumnMeta,
   DatabaseGrant,
   DatabaseInfo,
+  DdlOp,
   DiagnosticKind,
   DiagnosticQuery,
   DiagnosticReport,
@@ -49,6 +50,7 @@ import {
   pgListTables,
   pgTableStats,
 } from './introspect.ts'
+import { pgPrepareDdl } from './prepare-ddl.ts'
 import { pgRoutineDetail, pgTriggerDetail } from './program-detail.ts'
 import { pgListDependencies, pgListRoutines, pgListTriggers, pgRoutineDefinition } from './routines.ts'
 import {
@@ -447,6 +449,10 @@ export class PostgresAdapter extends BaseAdapter {
 
   listDependencies(ns: Namespace): Promise<ObjectDependency[] | null> {
     return this.withConn(ns, (conn) => pgListDependencies(conn, ns))
+  }
+
+  prepareDdl(ns: Namespace, op: DdlOp): Promise<DdlOp> {
+    return pgPrepareDdl(this, ns, op)
   }
 
   listPartitions(ns: Namespace, table: string): Promise<Partitioning> {

@@ -4,6 +4,7 @@ import type {
   Cell,
   DatabaseGrant,
   DatabaseInfo,
+  DdlOp,
   DiagnosticKind,
   DiagnosticQuery,
   DiagnosticReport,
@@ -130,6 +131,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
   abstract listTriggers(ns: Namespace, table?: string): Promise<TriggerInfo[]>
   abstract listEvents(ns: Namespace): Promise<EventInfo[]>
   abstract listDependencies(ns: Namespace): Promise<ObjectDependency[] | null>
+  abstract prepareDdl(ns: Namespace, op: DdlOp): Promise<DdlOp>
   abstract readonly serverNamespace: Namespace
   abstract showCreateTable(ns: Namespace, table: string, schema?: TableSchema): Promise<string[]>
   abstract serverInfo(): Promise<ServerInfo>

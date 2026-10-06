@@ -3,7 +3,6 @@
  * editing, SQL execution (streamed as NDJSON), DDL preview, export and import. A route validates its input, calls the
  * adapter and returns JSON; anything with rules of its own lives in `lib/`.
  */
-import type { DatabaseAdapter } from '@tsmyadmin/adapter'
 import {
   BrowseQuerySchema,
   CellQuerySchema,
@@ -16,7 +15,6 @@ import {
   IMPORT_MAX_BYTES,
   ImportFormSchema,
   InsertRowRequestSchema,
-  isGeneratedColumn,
   type Namespace,
   parseBrowseQuery,
   parseCellKey,
@@ -37,7 +35,6 @@ import {
 } from '@tsmyadmin/shared'
 import { Hono } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
-import { DatabaseOpRefused, prepareDatabaseOp } from '../lib/database-ops.ts'
 import { apiError, toApiError } from '../lib/errors.ts'
 import { contentDisposition, toReadableStream } from '../lib/export.ts'
 import { buildPackagedExport, keylessTables } from '../lib/export-package.ts'
@@ -52,22 +49,6 @@ import { type AppEnv, requireSession, type SessionConfig } from '../session/midd
 
 function ns(database: string, schema?: string): Namespace {
   return schema ? { database, schema } : { database }
-}
-
-/** Columns of `table` fed by a sequence of their own (serial, or a sequence OWNED BY the column). */
-async function ownedSequenceColumns(
-  adapter: DatabaseAdapter,
-  target: Namespace,
-  table: string,
-  columns: string[]
-): Promise<string[]> {
-  if (adapter.dialect !== 'postgres') return []
-  const schema = await adapter.describeTable(target, table)
-  const own = new Set(schema.columns.filter((col) => col.extra === 'serial').map((col) => col.name))
-  for (const t of await adapter.listTables(target))
-    if (t.kind === 'sequence' && t.ownedBy?.table === table && columns.includes(t.ownedBy.column))
-      own.add(t.ownedBy.column)
-  return [...own]
 }
 
 const BEGIN = /^\s*(?:BEGIN|START\s+TRANSACTION)\b/i
@@ -502,78 +483,12 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
         const body = c.req.valid('json')
         const adapter = c.get('session').adapter
         const target = ns(c.req.param('db'), body.schema)
-        let op = body.op
         // Caught here rather than by the server: PostgreSQL would silently truncate the name to 63 bytes.
-        const long = tooLongIdentifier(op, adapter.dialect)
+        const long = tooLongIdentifier(body.op, adapter.dialect)
         if (long) return c.json(identifierTooLong(long), 400)
-        // A data copy lists the insertable columns: generated columns cannot be written (INSERT ... SELECT *
-        // would fail after the empty copy was already created, since DDL autocommits).
-        if (op.op === 'copyTable' && adapter.dialect === 'postgres') {
-          const schema = await adapter.describeTable(target, op.table)
-          op = {
-            ...op,
-            columns: op.columns ?? schema.columns.filter((col) => !isGeneratedColumn(col.extra)).map((col) => col.name),
-            identityColumns:
-              op.identityColumns ??
-              schema.columns.filter((col) => col.extra.startsWith('identity')).map((col) => col.name),
-            // A renamed serial sequence (or CREATE SEQUENCE … OWNED BY) is not `serial` by name but pins the copy to
-            // the source's sequence all the same: the owned sequences of the source name those columns.
-            serialColumns:
-              op.serialColumns ??
-              (await ownedSequenceColumns(
-                adapter,
-                target,
-                op.table,
-                schema.columns.map((col) => col.name)
-              )),
-          }
-        } else if (op.op === 'setDatabaseCollation' && op.applyToTables && op.tables === undefined) {
-          // The tables as they are now, and on PostgreSQL their text columns: the preview lists every statement.
-          const tables = (await adapter.listTables(target)).filter((t) => t.kind === 'table').map((t) => t.name)
-          const columns: Record<string, { name: string; dataType: string }[]> = {}
-          if (adapter.dialect === 'postgres')
-            for (const table of tables)
-              columns[table] = (await adapter.describeTable(target, table)).columns
-                .filter((col) => /char|text|citext/i.test(col.dataType) && col.generated === null)
-                .map((col) => ({ name: col.name, dataType: col.dataType }))
-          op = { ...op, tables, ...(adapter.dialect === 'postgres' ? { columns } : {}) }
-        } else if (op.op === 'copyTables' && op.withData && op.details === undefined) {
-          // Each table as copyTable would get it: the insertable columns, and on PostgreSQL its sequences.
-          const details: Record<string, { columns?: string[]; identityColumns?: string[]; serialColumns?: string[] }> =
-            {}
-          for (const table of op.tables) {
-            const schema = await adapter.describeTable(target, table)
-            const columns = schema.columns.filter((col) => !isGeneratedColumn(col.extra)).map((col) => col.name)
-            details[table] =
-              adapter.dialect === 'postgres'
-                ? {
-                    columns,
-                    identityColumns: schema.columns
-                      .filter((col) => col.extra.startsWith('identity'))
-                      .map((col) => col.name),
-                    serialColumns: await ownedSequenceColumns(
-                      adapter,
-                      target,
-                      table,
-                      schema.columns.map((col) => col.name)
-                    ),
-                  }
-                : { columns }
-          }
-          op = { ...op, details }
-        } else if (op.op === 'copyTable' && op.withData && op.columns === undefined) {
-          const schema = await adapter.describeTable(target, op.table)
-          op = { ...op, columns: schema.columns.filter((col) => !isGeneratedColumn(col.extra)).map((col) => col.name) }
-        }
-        if (op.op === 'renameDatabase' || op.op === 'copyDatabase') {
-          try {
-            op = await prepareDatabaseOp(adapter, target, op)
-          } catch (err) {
-            if (err instanceof DatabaseOpRefused)
-              return c.json(apiError(err.code, err.message), err.code === 'NOT_FOUND' ? 404 : 400)
-            throw err
-          }
-        }
+        // What only the server can say (the columns a copy may write, the tables of a collation change, what moves
+        // in a database rename) is filled in by the adapter; an op it will not build is refused with its own error.
+        const op = await adapter.prepareDdl(target, body.op)
         return c.json({ sql: adapter.ddl.build(target, op) })
       })
   )
