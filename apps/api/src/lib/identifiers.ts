@@ -1,14 +1,7 @@
-import type { ApiError, Dialect } from '@tsmyadmin/shared'
+import { type ApiError, capabilities, type Dialect } from '@tsmyadmin/shared'
 import { apiError } from './errors.ts'
 
-/** Longest identifier the server accepts: MySQL 64 characters, PostgreSQL 63 bytes (longer ones are truncated silently). */
-function identifierLimit(dialect: Dialect): { max: number; unit: 'chars' | 'bytes' } {
-  return dialect === 'mysql' ? { max: 64, unit: 'chars' } : { max: 63, unit: 'bytes' }
-}
-
 const NAME_KEYS = new Set(['name', 'newName', 'table', 'database', 'schema', 'refTable', 'user', 'valueColumn'])
-/** MySQL account names are shorter than other identifiers (the host part may be 255). */
-const MYSQL_USER_MAX = 32
 const encoder = new TextEncoder()
 
 /**
@@ -17,12 +10,12 @@ const encoder = new TextEncoder()
  * may legitimately be long).
  */
 export function tooLongIdentifier(op: unknown, dialect: Dialect): { name: string; max: number } | null {
-  const { max, unit } = identifierLimit(dialect)
+  const { max, unit, accountMax } = capabilities(dialect).identifier
   const length = (s: string) => (unit === 'bytes' ? encoder.encode(s).length : [...s].length)
   const visit = (value: unknown, key: string | null): { name: string; max: number } | null => {
     if (typeof value === 'string') {
       if (key === null || !NAME_KEYS.has(key)) return null
-      const limit = key === 'user' && dialect === 'mysql' ? MYSQL_USER_MAX : max
+      const limit = key === 'user' && accountMax !== null ? accountMax : max
       return length(value) > limit ? { name: value, max: limit } : null
     }
     if (Array.isArray(value)) {

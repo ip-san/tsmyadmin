@@ -8,7 +8,7 @@ import type {
   SnapshotRestoreResult,
   TableInfo,
 } from '@tsmyadmin/shared'
-import { ExportQuerySchema } from '@tsmyadmin/shared'
+import { capabilities, ExportQuerySchema } from '@tsmyadmin/shared'
 import { startSweep } from '../session/store.ts'
 import { buildExport, DUMP_COMPLETE_MARKER } from './export.ts'
 import { importSql } from './import.ts'
@@ -266,12 +266,15 @@ export async function restoreSnapshot(
   held: Held,
   queryId: string
 ): Promise<SnapshotRestoreResult> {
+  const caps = capabilities(adapter.dialect)
   const drops = await extraDrops(adapter, ns, held.names)
   const script = `${drops.map((d) => `${d};\n`).join('')}${held.sql}`
   const result = await importSql(adapter, ns, script, {
     stopOnError: true,
-    ignoreForeignKeys: adapter.dialect === 'mysql',
-    singleTransaction: adapter.dialect === 'postgres',
+    // DDL that commits as it goes cannot be wrapped in one transaction, so there the foreign keys are switched off for
+    // the restore; where DDL is transactional the whole restore is one, and nothing is left half done.
+    ignoreForeignKeys: !caps.transactionalDdl,
+    singleTransaction: caps.transactionalDdl,
     queryId,
   })
   if (result.format !== 'sql') throw new Error('A SQL restore answered with another kind of result')
