@@ -27,7 +27,13 @@ export function describeSqlConsole(env: ConformanceEnv): void {
       const waited = performance.now() - started
       for (const id of ids) await busy.cancelQuery(id).catch(() => undefined)
       await Promise.all(holders)
+      // Once the places are free again the same session works: the refusal was not a lasting state.
+      const afterwards = await busy.listTables(ns).then(
+        () => null,
+        (e: unknown) => e
+      )
       await busy.close()
+      expect(afterwards).toBeNull()
       expect(err).toBeInstanceOf(AdapterError)
       expect(err).toMatchObject({ code: 'CONNECTION_FAILED', message: 'No connection became free in time' })
       expect(waited).toBeGreaterThan(8_000)

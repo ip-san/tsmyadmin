@@ -4,6 +4,7 @@ import type { DatabaseAdapter, ExecuteOptions } from '../types.ts'
 import { describeAccounts } from './conformance/accounts.ts'
 import { describeBrowseAndInsert } from './conformance/browse-and-insert.ts'
 import { describeCatalog } from './conformance/catalog.ts'
+import { describeConnectionLoss } from './conformance/connection-loss.ts'
 import { describeDatabaseOps } from './conformance/database-ops.ts'
 import { describeDdl } from './conformance/ddl.ts'
 import { describeDumpAndExport } from './conformance/dump-and-export.ts'
@@ -147,6 +148,7 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
     describeAccounts(env)
     describeDdl(env)
     describeDatabaseOps(env)
+    describeConnectionLoss(env)
 
     describe('close', () => {
       it('is idempotent and releases the pool', async () => {
