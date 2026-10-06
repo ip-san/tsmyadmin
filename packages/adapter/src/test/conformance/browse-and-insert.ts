@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { EXACT_COUNT_MAX_ROWS, type Filter } from '@tsmyadmin/shared'
+import { EXACT_COUNT_MAX_ROWS, type Filter, type RowFunction, rowFunctionsFor } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
 import type { ConformanceEnv } from './env.ts'
 import { byName } from './helpers.ts'
@@ -326,6 +326,41 @@ export function describeBrowseAndInsert(env: ConformanceEnv): void {
       expect((await browseAll(scratch)).rows.filter((x) => x[0] === 100).map((x) => x[1])).toEqual(['first'])
       // The scratch table is shared by the tests that follow: leave it as it was.
       await execOk(`DELETE FROM ${scratch} WHERE id = 100`)
+    })
+
+    it('runs every allowed function on the real server, each into a text column', async () => {
+      // The SQL of each function is written per dialect and was only checked as text: this runs all of them.
+      const t = `${scratch}_fn_all`
+      const input = '  Mixed Case  '
+      const hex = (algorithm: string) => createHash(algorithm).update(input).digest('hex')
+      const expected: Record<RowFunction, string | RegExp> = {
+        now: /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}/,
+        current_date: /^\d{4}-\d{2}-\d{2}$/,
+        current_time: /^\d{2}:\d{2}:\d{2}/,
+        uuid: /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/,
+        md5: hex('md5'),
+        sha1: hex('sha1'),
+        sha256: hex('sha256'),
+        upper: input.toUpperCase(),
+        lower: input.toLowerCase(),
+        trim: input.trim(),
+      }
+      try {
+        await execOk(`CREATE TABLE ${t} (id INT PRIMARY KEY, v VARCHAR(100))`)
+        const offered = rowFunctionsFor(dialect)
+        for (const [i, fn] of offered.entries()) {
+          await env.db.insertRow(ns, t, { id: i + 1, v: { $fn: fn, arg: input } })
+        }
+        const written = new Map((await browseAll(t)).rows.map((r) => [Number(r[0]), String(r[1])]))
+        for (const [i, fn] of offered.entries()) {
+          const want = expected[fn]
+          const got = written.get(i + 1) ?? ''
+          if (typeof want === 'string') expect(got, fn).toBe(want)
+          else expect(got, fn).toMatch(want)
+        }
+      } finally {
+        await exec(`DROP TABLE IF EXISTS ${t}`, { stopOnError: false })
+      }
     })
 
     it('writes through an allowed function, the value bound as its argument', async () => {

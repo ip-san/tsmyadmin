@@ -10,9 +10,11 @@ import {
   ReplicationInfoSchema,
   ServerCatalogSchema,
   ServerInfoSchema,
+  type StatementResult,
 } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
+import { withAudit } from './lib/audit.ts'
 import { closeStoresAfterEach, fixtureAdapter, harness } from './test/app-harness.ts'
 
 const stores = closeStoresAfterEach()
@@ -120,6 +122,92 @@ describe('server catalog', () => {
       body: JSON.stringify({ op: { ...change, port: 0 } }),
     })
     expect(bad.status).toBe(400)
+  })
+
+  describe('executing a replication change', () => {
+    // The password has a quote in it: the SQL carries it escaped (p\\'w), and the server may quote either form back.
+    const PASSWORD = "s3cr'et-pw"
+    const change = { op: 'changeSource', host: 'db1', user: 'repl', password: PASSWORD, autoPosition: true }
+    /** One result per statement, the way a server answers a script (the fake's default is one for the whole script). */
+    const perStatement = (answer: (sql: string) => StatementResult) => (_ns: unknown, script: string) =>
+      script.split(';\n').map(answer)
+    const echo = (sql: string): StatementResult => ({
+      kind: 'affected',
+      sql,
+      affectedRows: 0,
+      durationMs: 1,
+    })
+    const run = (h: ReturnType<typeof harness>, op: unknown) =>
+      h.req('/api/server/replication/execute', { method: 'POST', body: JSON.stringify({ op }) })
+
+    it('runs the statements on the server, and shows them in the masked form', async () => {
+      const h = harness(fixtureAdapter({ onSql: perStatement(echo) }))
+      stores.push(h.store)
+      await h.login()
+      const res = await run(h, change)
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as { results: { kind: string; sql: string }[]; rolledBack: boolean }
+      expect(body.rolledBack).toBe(false)
+      const shown = body.results.map((r) => r.sql).join('\n')
+      expect(shown).toContain('****')
+      expect(JSON.stringify(body)).not.toContain('s3cr')
+      // What the server was sent is the real statement: the mask is only for what is shown.
+      const sent = h.adapter.calls.find((c) => c.method === 'executeSql')
+      expect(String(sent?.args[1])).toContain('s3cr')
+      expect(sent?.args[2]).toMatchObject({ stopOnError: true })
+    })
+
+    it('scrubs the password from an error that quotes the failing fragment, in either spelling', async () => {
+      // The statement carries the password as the adapter writes a literal; a server may quote that, or the raw text.
+      const encoded = fixtureAdapter().exporter.literal(PASSWORD).slice(1, -1)
+      expect(encoded).not.toBe(PASSWORD)
+      const adapter = fixtureAdapter({
+        onSql: perStatement(
+          (sql): StatementResult => ({
+            kind: 'error',
+            sql,
+            message: `near '${encoded}' (typed as ${PASSWORD})`,
+            code: 'QUERY_FAILED',
+          })
+        ),
+      })
+      const h = harness(adapter)
+      stores.push(h.store)
+      await h.login()
+      const res = await run(h, change)
+      expect(res.status).toBe(200)
+      const text = await res.text()
+      expect(text).not.toContain('s3cr')
+      expect(text).not.toContain(encoded)
+      expect(text).toContain('****')
+    })
+
+    it('keeps the password out of the audit log line of the statement it ran', async () => {
+      const lines: string[] = []
+      const logger = {
+        log: (level: string, event: string, fields?: object) => lines.push(JSON.stringify({ level, event, fields })),
+      }
+      // Wrapped the way a session's adapter is in the server, so the statement reaches the audit log.
+      const who = { dialect: 'mysql', host: 'db', port: 3306, user: 'root' } as const
+      const audited = withAudit(fixtureAdapter({ onSql: perStatement(echo) }), who, logger) as unknown as FakeAdapter
+      const h = harness(audited, { logger })
+      stores.push(h.store)
+      await h.login()
+      await run(h, change)
+      const audit = lines.filter((l) => l.includes('"event":"audit"') && l.includes('executeSql'))
+      expect(audit, 'the statement was not audited').toHaveLength(1)
+      expect(lines.join('\n')).not.toContain('s3cr')
+    })
+
+    it('runs a change that has no password as it is, and refuses an invalid one', async () => {
+      const h = harness()
+      stores.push(h.store)
+      await h.login()
+      const ok = await run(h, { op: 'startReplica', threads: 'all' })
+      expect(ok.status).toBe(200)
+      expect(((await ok.json()) as { results: { kind: string }[] }).results.every((r) => r.kind !== 'error')).toBe(true)
+      expect((await run(h, { ...change, port: 0 })).status).toBe(400)
+    })
   })
 
   it('serves a diagnostic report by kind, and refuses a kind or a file it does not know', async () => {
@@ -273,6 +361,117 @@ describe('import', () => {
     })
     expect(noFile.status).toBe(400)
     expect((await upload(h, { format: 'xml' }, { name: 'x', body: 'x' })).status).toBe(400)
+  })
+})
+
+describe('server-level export', () => {
+  it('dumps the chosen databases in one file, and names the file after them', async () => {
+    const h = harness()
+    stores.push(h.store)
+    await h.login()
+    const res = await h.req('/api/server/export?targets=shop')
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toContain('application/sql')
+    expect(res.headers.get('content-disposition')).toContain('attachment')
+    expect(await res.text()).toContain('users')
+  })
+
+  it('says NOT_FOUND for a database that does not exist, or none given, before sending anything', async () => {
+    const h = harness()
+    stores.push(h.store)
+    await h.login()
+    const unknown = await h.req('/api/server/export?targets=shop,nowhere')
+    expect(unknown.status).toBe(404)
+    const body = ApiErrorSchema.parse(await unknown.json())
+    expect(body.code).toBe('NOT_FOUND')
+    // The route's own check (named before anything is read), not whatever a later read would say.
+    expect(body.message).toMatch(/^Unknown target\(s\): nowhere$/)
+    expect((await h.req('/api/server/export?targets=%2C')).status).toBe(404)
+  })
+
+  it('refuses UPDATE statements while a table has no primary key, naming the table, before the download starts', async () => {
+    const adapter = fixtureAdapter({
+      databases: {
+        shop: {
+          tables: {
+            users: fakeTable('users', ['id', 'name'], [{ id: 1, name: 'Alice' }]),
+            log: fakeTable('log', ['line'], [{ line: 'x' }], []),
+          },
+        },
+      },
+    })
+    const h = harness(adapter)
+    stores.push(h.store)
+    await h.login()
+    const res = await h.req('/api/server/export?targets=shop&statement=update')
+    expect(res.status).toBe(400)
+    const body = ApiErrorSchema.parse(await res.json())
+    expect(body.code).toBe('VALIDATION')
+    expect(body.message).toContain('shop.log')
+    expect(body.message).not.toContain('shop.users')
+    // INSERT needs no key: the same dump is allowed.
+    expect((await h.req('/api/server/export?targets=shop&statement=insert')).status).toBe(200)
+  })
+})
+
+describe('server-level import', () => {
+  const upload = (
+    h: ReturnType<typeof harness>,
+    fields: Record<string, string>,
+    file?: { name: string; body: string | Uint8Array }
+  ) => {
+    const fd = new FormData()
+    for (const [k, v] of Object.entries(fields)) fd.set(k, v)
+    if (file) fd.set('file', new File([file.body], file.name, { type: 'text/plain' }))
+    return h.app.request('/api/server/import', {
+      method: 'POST',
+      body: fd,
+      headers: { cookie: h.cookie(), origin: 'http://localhost' },
+    })
+  }
+  const setup = async () => {
+    const h = harness()
+    stores.push(h.store)
+    await h.login()
+    return h
+  }
+
+  it('runs only SQL scripts: the other formats belong to one table', async () => {
+    const h = await setup()
+    const res = await upload(h, { format: 'csv', table: 'users' }, { name: 'u.csv', body: 'a\n1' })
+    expect(res.status).toBe(400)
+    expect(ApiErrorSchema.parse(await res.json())).toMatchObject({ code: 'VALIDATION' })
+  })
+
+  it('needs a file, and turns a file over the limit away with 413', async () => {
+    const h = await setup()
+    const none = await upload(h, { format: 'sql' })
+    expect(none.status).toBe(400)
+    const big = await upload(h, { format: 'sql' }, { name: 'big.sql', body: 'x'.repeat(IMPORT_MAX_BYTES + 1) })
+    expect(big.status).toBe(413)
+    expect(ApiErrorSchema.parse(await big.json()).code).toBe('PAYLOAD_TOO_LARGE')
+  })
+
+  it('answers a file that cannot be opened with 400 and says why, instead of a server error', async () => {
+    const h = await setup()
+    // The gzip signature, then bytes that are not a gzip stream: it is told by its content, not its name.
+    const damaged = new Uint8Array([0x1f, 0x8b, 8, 0, 0, 0, 0, 0, 0, 3, 1, 2, 3, 4])
+    const res = await upload(h, { format: 'sql' }, { name: 'dump.sql.gz', body: damaged })
+    expect(res.status).toBe(400)
+    expect(ApiErrorSchema.parse(await res.json()).code).toBe('VALIDATION')
+  })
+
+  it('runs a script at the server level and streams what happened', async () => {
+    const h = await setup()
+    const res = await upload(h, { format: 'sql' }, { name: 'dump.sql', body: 'CREATE DATABASE other2;\nUSE other2;' })
+    expect(res.status).toBe(200)
+    const events = (await res.text())
+      .trim()
+      .split('\n')
+      .map((l) => ImportEventSchema.parse(JSON.parse(l)))
+    expect(events.at(-1)?.type).toBe('result')
+    const ran = h.adapter.calls.filter((c) => c.method === 'executeSql')
+    expect(ran.length).toBeGreaterThan(0)
   })
 })
 
