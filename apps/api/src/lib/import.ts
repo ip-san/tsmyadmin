@@ -331,7 +331,8 @@ function committedMidway(ran: string[], dialect: 'mysql' | 'postgres'): boolean 
       }
     } else if (
       CLOSES_TRANSACTION.test(sql) ||
-      (dialect === 'mysql' && (OPENS_TRANSACTION.test(sql) || IMPLICIT_COMMIT.test(sql)))
+      // Where DDL is not transactional it commits as it goes, and so do the statements that open a transaction.
+      (!capabilities(dialect).transactionalDdl && (OPENS_TRANSACTION.test(sql) || IMPLICIT_COMMIT.test(sql)))
     )
       committed = true
   }

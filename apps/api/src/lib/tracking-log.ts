@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { ConnectRequest } from '@tsmyadmin/shared'
 import {
+  capabilities,
   classifyStatement,
   type Dialect,
   type Namespace,
@@ -126,9 +127,9 @@ export async function recordStatements(
     for (const f of found) {
       // A qualifier is a database on MySQL, a schema of this database on PostgreSQL.
       const target: Namespace = f.qualifier
-        ? dialect === 'postgres'
-          ? { database: ns.database, schema: f.qualifier }
-          : { database: f.qualifier }
+        ? capabilities(dialect).databasesAreSchemas
+          ? { database: f.qualifier }
+          : { database: ns.database, schema: f.qualifier }
         : ns
       const key = JSON.stringify([target.database, target.schema ?? ''])
       if (!confs.has(key)) confs.set(key, await trackedKinds(store, config, target))

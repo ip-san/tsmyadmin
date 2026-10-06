@@ -6,6 +6,7 @@
 import {
   BrowseQuerySchema,
   CellQuerySchema,
+  capabilities,
   DatabasesQuerySchema,
   DdlPreviewRequestSchema,
   DeleteRowsRequestSchema,
@@ -79,7 +80,7 @@ export function executed(results: readonly StatementResult[], dialect: Dialect):
       kept.push(...(pending ?? []))
       pending = null
     } else if (ROLLBACK.test(r.sql)) pending = null
-    else if (pending !== null && dialect === 'mysql' && MYSQL_IMPLICIT_COMMIT.test(r.sql)) {
+    else if (pending !== null && !capabilities(dialect).transactionalDdl && MYSQL_IMPLICIT_COMMIT.test(r.sql)) {
       kept.push(...pending, r.sql)
       pending = null
     } else if (pending !== null) pending.push(r.sql)

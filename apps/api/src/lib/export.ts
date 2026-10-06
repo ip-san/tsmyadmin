@@ -9,7 +9,7 @@ import {
   splitStatements,
 } from '@tsmyadmin/adapter'
 import type { ExportQuery, Namespace, ObjectDependency, TableInfo } from '@tsmyadmin/shared'
-import { CSV_DELIMITERS, csvField, EXPORT_BATCH_SIZE, isGeneratedColumn } from '@tsmyadmin/shared'
+import { CSV_DELIMITERS, capabilities, csvField, EXPORT_BATCH_SIZE, isGeneratedColumn } from '@tsmyadmin/shared'
 import { DATA_ONLY, docOptions, htmlBody, latexBody, mediawikiBody, texyBody } from './export-documents.ts'
 import { markdownBody, xmlBody, yamlBody } from './export-formats.ts'
 import { OFFICE_TYPES, type OfficeKind, officeBody } from './export-office.ts'
@@ -163,7 +163,7 @@ async function collectRoutines(
       out.skipped.push(`${r.kind} ${r.name}`)
       continue
     }
-    if (adapter.dialect !== 'postgres') {
+    if (!capabilities(adapter.dialect).routineOverloads) {
       out.early.push({ ...x.routine(ns, r.kind, r.name, def, stripDefiner), sqlMode: r.sqlMode })
       continue
     }
@@ -234,7 +234,7 @@ async function* triggersAndEventsBody(
   for (const t of unreadable) yield `-- skipped (definition not readable): trigger ${commentText(t.name)}\n`
   if (unreadable.length > 0) yield '\n'
   if (triggers.length > 0) yield x.programBlock(triggers)
-  if (tables === null && adapter.dialect === 'mysql') {
+  if (tables === null && capabilities(adapter.dialect).events) {
     const events = (await adapter.listEvents(ns))
       .filter((e) => e.definition !== null)
       .map((e) => x.event(ns, e, stripDefiner))
@@ -305,7 +305,8 @@ async function* sqlBody(
   const comments = q.comments === '1'
   const heading: Heading = comments ? section : () => ''
   const inTransaction = q.transaction === '1'
-  const pg = adapter.dialect === 'postgres'
+  const caps = capabilities(adapter.dialect)
+  const { dump } = caps
   const utc = q.utc === '1'
   yield [
     ...(comments
@@ -320,8 +321,8 @@ async function* sqlBody(
     // The database (or schema) the dump creates and works in.
     ...(q.createDatabase === '1' ? createNamespaceStatements(adapter.dialect, ns) : []),
     ...adapter.exporter.preamble(ns).filter((line) => comments || !line.startsWith('--')),
-    ...(utc ? [pg ? "SET TIME ZONE 'UTC';" : "SET @OLD_TIME_ZONE = @@TIME_ZONE, TIME_ZONE = '+00:00';"] : []),
-    ...(inTransaction ? [pg ? 'BEGIN;' : 'START TRANSACTION;'] : []),
+    ...(utc ? [`${dump.utc.set};`] : []),
+    ...(inTransaction ? [`${caps.beginTransaction};`] : []),
     '',
     '',
   ].join('\n')
@@ -334,7 +335,7 @@ async function* sqlBody(
   const programs = structure && q.routines === '1'
   // PostgreSQL: the catalog says which routines are tied to a table or view (row-type signatures, SQL-standard
   // bodies) and must follow it; MySQL has no such catalog and needs none (routines cannot appear in DDL).
-  const catalog = pg && (programs || infos.size > 1) ? await adapter.listDependencies(ns) : null
+  const catalog = dump.dependencyCatalog && (programs || infos.size > 1) ? await adapter.listDependencies(ns) : null
   const relationBound = new Map(
     (catalog ?? [])
       .filter((d) => d.kind === 'routine')
@@ -373,8 +374,9 @@ async function* sqlBody(
     const statements = created.map((stmt) => (q.stripDefiner === '1' ? adapter.exporter.withoutDefiner(stmt) : stmt))
     // Like pg_dump: a materialized view is created empty and refreshed once its sources hold their rows (below),
     // so a structure-only dump followed by a data-only one does not leave it stale.
-    if (info.kind === 'materialized_view' && pg && statements[0]) statements[0] = `${statements[0]}\nWITH NO DATA`
-    const all = drops && !pg ? [adapter.exporter.dropIfExists(ns, info), ...statements] : statements
+    if (info.kind === 'materialized_view' && dump.materializedViews && statements[0])
+      statements[0] = `${statements[0]}\nWITH NO DATA`
+    const all = drops && !dump.dropsInOneSection ? [adapter.exporter.dropIfExists(ns, info), ...statements] : statements
     late.push({
       kind: 'view',
       name: table,
@@ -392,10 +394,10 @@ async function* sqlBody(
   }
   const ordered = orderObjects(late, catalog ?? (late.length > 1 ? await adapter.listDependencies(ns) : null))
   // A view written as a table is dropped as one (the drop section names objects by their kind).
-  if (drops && pg) yield dropSection(adapter, ns, infos, ordered, heading, inTransaction)
+  if (drops && dump.dropsInOneSection) yield dropSection(adapter, ns, infos, ordered, heading, inTransaction)
   const sequences = await sequenceSections(adapter, ns, infos, {
     structure,
-    drops: drops && !pg,
+    drops: drops && !dump.dropsInOneSection,
     data: q.data === '1',
     heading,
     ifNotExists: q.ifNotExists === '1',
@@ -412,7 +414,7 @@ async function* sqlBody(
     if (structure) {
       if (drops) {
         // A view written as a table replaces a table of that name; PostgreSQL's Drop section has no entry for it.
-        yield `${asTable ? `DROP TABLE IF EXISTS ${quoteIdent(adapter.dialect, table)}` : pg ? '' : adapter.exporter.dropIfExists(ns, schema)}${asTable || !pg ? ';\n' : ''}`
+        yield `${asTable ? `DROP TABLE IF EXISTS ${quoteIdent(adapter.dialect, table)}` : dump.dropsInOneSection ? '' : adapter.exporter.dropIfExists(ns, schema)}${asTable || !dump.dropsInOneSection ? ';\n' : ''}`
       }
       const statements = asTable
         ? [createTableFromColumns(adapter.dialect, table, schema.columns)]
@@ -420,7 +422,7 @@ async function* sqlBody(
       for (const raw of statements) {
         const stmt = q.ifNotExists === '1' ? ifNotExists(raw) : raw
         // PostgreSQL has no FOREIGN_KEY_CHECKS: constraints are emitted after every table exists and is loaded.
-        if (adapter.dialect === 'postgres' && FK_STATEMENT.test(stmt)) deferred.push(stmt)
+        if (dump.deferForeignKeys && FK_STATEMENT.test(stmt)) deferred.push(stmt)
         else yield `${stmt};\n\n`
       }
     }
@@ -430,7 +432,7 @@ async function* sqlBody(
       const generated = new Set(schema.columns.filter((c) => isGeneratedColumn(c.extra)).map((c) => c.name))
       const overriding = schema.columns.some((c) => c.extra === 'identity always')
       // LOCK TABLES is MySQL's, and only where rows are written.
-      const lock = q.lockTables === '1' && !pg
+      const lock = q.lockTables === '1' && dump.lockTables
       if (lock) yield `LOCK TABLES ${quoteIdent('mysql', table)} WRITE;\n`
       // Generated columns cannot be written, so a positional VALUES list would be short: names are kept then.
       const insertOptions = {
@@ -483,7 +485,7 @@ async function* sqlBody(
   }
   if (programs) yield* triggersAndEventsBody(adapter, ns, everything ? null : tables, q.stripDefiner === '1', heading)
   if (inTransaction) yield 'COMMIT;\n\n'
-  const postamble = [...adapter.exporter.postamble(), ...(utc && !pg ? ['SET TIME_ZONE = @OLD_TIME_ZONE;'] : [])]
+  const postamble = [...adapter.exporter.postamble(), ...(utc && dump.utc.restore ? [`${dump.utc.restore};`] : [])]
   if (postamble.length > 0) yield `${postamble.join('\n')}\n\n`
   // Terminal marker: a dump that lacks this line was cut short (the transfer is also aborted on errors).
   yield `${DUMP_COMPLETE_MARKER} (${infos.size} object${infos.size === 1 ? '' : 's'})\n`
