@@ -22,7 +22,7 @@ bun run db:up             # テスト DB 起動（初回は fixtures 投入）
 bun run db:reset          # ボリューム削除して再作成
 bun run dev               # api + web 同時起動
 bun run check             # 型 + lint + ユニット/API/Web テスト + type-coverage（日常ゲート）
-bun run check:static      # check + knip + circular + cpd + arch + sql-safety + docs + i18n + contrast + doc-comments + file-size（pre-push で実行、DB 不要）
+bun run check:static      # check + check:quality（knip・循環・重複・アーキテクチャ・SQL 安全・文書・コントラスト・ファイル長・方言の分岐 ほか。中身は package.json の check:quality）。pre-push で実行、DB 不要
 bun run check:all         # check:static + 両 DB の統合テスト
 bun run test              # DB 不要のテスト
 bun run test:integration  # 両 DB の adapter conformance + API 統合（compose 必須）
@@ -35,7 +35,7 @@ bun run lighthouse        # Lighthouse CI（警告のみ、要 Chrome）
 
 ## 現在の規模（`scripts/validate-docs.mjs` が同期）
 
-- ユニット/API/Web テスト定義: <!-- stat:unit-tests -->1317<!-- /stat --> 件
+- ユニット/API/Web テスト定義: <!-- stat:unit-tests -->1327<!-- /stat --> 件
 - Adapter conformance: <!-- stat:conformance -->206<!-- /stat --> 件 × 2 方言
 - E2E: <!-- stat:e2e -->202<!-- /stat --> 件
 - API ルート: <!-- stat:routes -->95<!-- /stat -->
@@ -49,6 +49,9 @@ bun run lighthouse        # Lighthouse CI（警告のみ、要 Chrome）
 
 - [.claude/rules/adapter.md](.claude/rules/adapter.md) — `packages/adapter/**`
 - [.claude/rules/api-routes.md](.claude/rules/api-routes.md) — `apps/api/src/**`
+- [.claude/rules/config.md](.claude/rules/config.md) — `apps/api/src/config.ts`・`.env.example`・`docs/deployment.md`・`docs/hosting.md`（環境変数、置き場所）
+- [.claude/rules/docs.md](.claude/rules/docs.md) — `docs/**`・`README*.md`（日英の訳、数字の同期）
+- [.claude/rules/e2e.md](.claude/rules/e2e.md) — `e2e/**`・`playwright.config.ts`
 - [.claude/rules/fixtures.md](.claude/rules/fixtures.md) — `docker/**`
 - [.claude/rules/web.md](.claude/rules/web.md) — `apps/web/**`
 - [.claude/rules/skill-scoping.md](.claude/rules/skill-scoping.md) — `.claude/{skills,agents}/**`
@@ -57,19 +60,14 @@ bun run lighthouse        # Lighthouse CI（警告のみ、要 Chrome）
 
 IMPORTANT: コンテキスト圧縮後も以下を必ず守ること。
 
+**守る規則**（機械では止められないもの）:
+
 - **YOU MUST** 識別子は `quoteIdent`/`quoteTable`、値はプレースホルダ（`Params`）。SQL を文字列補間で組み立てない（`bun run check:sql-safety` が fail する）
-- **YOU MUST** `mysql2` / `pg` の import は `packages/adapter/src/**` の中だけ（`bun run check:arch` が fail する）
-- **YOU MUST** `DatabaseAdapter` にメソッドを追加したら、次の 4 つを同時に足し、**MySQL と PostgreSQL 両方**で通す: ① `types.ts` の `ADAPTER_METHOD_NAMES`、② `packages/adapter/src/test/conformance/` の該当するグループのファイルの `describe('<method>')`（実行側は `test/conformance.ts`）、③ `packages/adapter/src/testing/fake-adapter.ts` の実装（API のテストが使う）、④ `apps/api/src/lib/audit.ts` の `AUDITED_METHODS` か `PASSTHROUGH_METHODS` への分類（`audit.test.ts` が検査）。足す前に、既存のメソッドで足りないか確認する（例: `tableStats` はすでに `indexBytes` を返す）
-- **YOU MUST** `DdlOp` を追加したら `test/ddl.test.ts` の `SAMPLE_OPS` に両方言のスナップショットを追加する
-- **YOU MUST** API の入出力は先に `packages/shared` の Zod スキーマを定義し、web は `hc<AppType>` 経由でのみ呼ぶ（例外: ダウンロード等ブラウザのナビゲーションで開く GET は URL ビルダー経由の `<a href>` 可）
-- **YOU MUST** DDL は `/ddl/preview` → ユーザー確認 → `/sql` 実行、アカウント操作は `/users/preview`（パスワードはマスク）→ `/users/execute`。プレビューなしで実行する UI を作らない（`usePreviewFlow` + `PreviewDialog` を使う）
-- **YOU MUST** 対応する置き場所（リバースプロキシ / クラウド）を `docs/hosting.md` に足したら、`apps/api/src/platform-conformance.test.ts` の `PLATFORMS` にも同じ行を足す（前段がクライアント IP をどう伝えるかは静かに壊れるため、テストで押さえる）
-- **YOU MUST** 環境変数を追加したら `apps/api/src/config.ts`・`.env.example`・`docs/deployment.md` の 3 か所を同時に更新する（表は deployment.md だけに置き、他は参照する）。英訳 `docs/en/deployment.md` も直し、`bun run docs:sync` でハッシュを打ち直す
-- **YOU MUST** `docs/*.md` と `README.md`（日本語が原文）を変えたら `docs/en/` / `README.en.md` の対応箇所も訳し、`bun run docs:sync` を実行する（`bun run check:static` の `docs:i18n` が fail する）
 - **YOU MUST** ログにパスワード・行の値・SQL 全文を出さない（イベント名 + 識別子 + 要約のみ）
-- **YOU MUST** フィクスチャ（`docker/fixtures/**`）を変えたら `bun run db:reset`。既存の checkout でも MySQL の `WITH GRANT OPTION` 追加以降はリセットが必要
-- **YOU MUST** web の UI 文字列は `apps/web/src/config/locales/{ja,en}.ts` の両方に定義し（`en.ts` は `satisfies Locale` で型が揃う）、`locale.*` で参照する。Tailwind の色指定には `dark:` 対応を付ける
-- **YOU MUST** E2E は本番ビルドを API が配信する。Playwright のプロジェクトは `chromium`（機能）/ `webkit`（機能・Safari 差分）/ `a11y` / `visual-light` / `visual-dark`。**ビジュアルの 2 つはローカル専用**で、CI は `chromium` / `a11y` / `webkit` だけを実行する（スナップショットは `-darwin` のみ。OS が変わると描画差で落ちるため）。したがって見た目の退行はローカルで `bun run test:e2e` を回したときにしか検出されない。`bun run test:e2e` は毎回ビルドするが、ポート 3199 / 3198（永続セッションストアの検証用）に古いサーバーが残っていると再利用される（`reuseExistingServer`）ので、web を変更したら `bun run build` してから実行するか、残っているサーバーを止める
-- **YOU MUST** 1 ファイル 800 行を超えない（`bun run check:file-size` が fail する）。超えそうなら、中身で分ける。既存の大きなファイルは `scripts/file-size-baseline.json` に理由つきで記録してあり、**増やさず、縮めたら基準線を下げる**（`-- --update-baseline` は下げるだけ）。基準線に足す・数を上げるのは、分けられない理由を書いたうえでの手作業にする
+- **YOU MUST** DDL は `/ddl/preview` → ユーザー確認 → `/sql` 実行、アカウント操作は `/users/preview`（パスワードはマスク）→ `/users/execute`。プレビューなしで実行する UI を作らない（`usePreviewFlow` + `PreviewDialog` を使う）
+- **YOU MUST** API の入出力は先に `packages/shared` の Zod スキーマを定義し、web は `hc<AppType>` 経由でのみ呼ぶ（例外: ダウンロード等ブラウザのナビゲーションで開く GET は URL ビルダー経由の `<a href>` 可）
 - **YOU MUST** 利用者に見える変更（機能・挙動・文言・対応バージョン）は `CHANGELOG.md` の `[Unreleased]` に追記する
-- **YOU MUST** 統合テストは `*.integration.test.ts` 命名（DB 不要の `bun run test` / pre-commit から除外される）
+
+**検査が止めるもの**（違反は `bun run check:static` が fail する。直し方は出力に出るので、ここでは繰り返さない）: `mysql2` / `pg` の import が `packages/adapter/src/**` の外にあること（`check:arch`）、1 ファイル 800 行（`check:file-size`。既存の大きなファイルは基準線で「増やさない」。基準線は下がるだけで、足すには、分けられない理由を書いて手で足す）、日英の訳のずれ（`docs:i18n`）、アダプターの外で DB の種類を尋ねる場所が増えること（`check:dialect-leaks`）、アダプターのメソッドに conformance の試験が無いこと（`spec-consistency`）、統合テストを `*.integration.test.ts` と名付けないこと（DB なしの `bun run test` で落ちる）
+
+**触るパスごとの規則**は、そのパスを触ると読み込まれる。更新場所の一覧（アダプターのメソッド・`DdlOp`・環境変数・置き場所・日英の文書・フィクスチャ・UI 文字列・E2E の流儀）はそちらにある。上の「詳細ルール」を見る。
