@@ -7,10 +7,10 @@ import {
   moveRepeatingGroupSql,
   splitTableSql,
 } from '../sql/ddl-common.ts'
-import { pgAdvanceSequence } from '../sql/export.ts'
 import { pgLiteral } from '../sql/literal.ts'
 import { quoteIdent, quoteTable } from '../sql/quote.ts'
 import { AdapterError, type DdlBuilder } from '../types.ts'
+import { pgAdvanceSequence } from './export.ts'
 
 const id = (s: string) => quoteIdent('postgres', s)
 const PG_DROP_KEYWORD = {
