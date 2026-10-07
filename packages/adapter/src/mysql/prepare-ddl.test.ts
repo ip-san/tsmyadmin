@@ -168,3 +168,96 @@ describe('mysqlPrepareDdl: a rename or copy of a whole database', () => {
     })
   })
 })
+
+describe('mysqlPrepareDdl: ops that need nothing from the server', () => {
+  const asked = (adapter: FakeAdapter) => adapter.calls.map((c) => c.method)
+
+  it.each([
+    [
+      'a collation change that is not applied to the tables',
+      { op: 'setDatabaseCollation', name: 'shop', collation: 'utf8mb4_bin', applyToTables: false },
+    ],
+    [
+      'a collation change that already lists its tables',
+      { op: 'setDatabaseCollation', name: 'shop', collation: 'utf8mb4_bin', applyToTables: true, tables: ['orders'] },
+    ],
+    ['a copy of several tables without their data', { op: 'copyTables', tables: ['orders'], withData: false }],
+    [
+      'a copy of several tables that already has its details',
+      { op: 'copyTables', tables: ['orders'], withData: true, details: { orders: { columns: ['id'] } } },
+    ],
+    ['a copy of a table without its data', { op: 'copyTable', table: 'orders', newName: 'o2', withData: false }],
+    [
+      'a copy of a table that already names its columns',
+      { op: 'copyTable', table: 'orders', newName: 'o2', withData: true, columns: ['id'] },
+    ],
+    ['an op that is not one of these', { op: 'createDatabase', name: 'fresh' }],
+  ] as const)('returns %s as it came, without reading the server', async (_name, op) => {
+    const adapter = mysql()
+    expect(await mysqlPrepareDdl(adapter, { database: 'shop' }, op as never)).toEqual(op)
+    expect(asked(adapter)).toEqual([])
+  })
+})
+
+describe('mysqlPrepareDdl: what a copy of a whole database carries', () => {
+  const server = { database: 'information_schema' }
+  const shopWith = (configure: (orders: ReturnType<typeof withGenerated>) => void) => {
+    const orders = withGenerated()
+    configure(orders)
+    return new FakeAdapter({
+      dialect: 'mysql',
+      databases: { shop: { tables: { orders } }, mysql: { tables: {} } },
+    })
+  }
+  const copy = (adapter: FakeAdapter, extra: Record<string, unknown> = {}) =>
+    mysqlPrepareDdl(adapter, server, { op: 'copyDatabase', name: 'shop', newName: 'store', withData: true, ...extra })
+  const tableOf = (op: unknown) => (op as { tables: Record<string, unknown>[] }).tables[0]
+
+  it('takes the source database’s collation from the server, and none when it has none', async () => {
+    const adapter = mysql()
+    expect(((await copy(adapter)) as { collation?: string }).collation).toBeUndefined()
+    adapter.listDatabases = async () => [{ name: 'shop', sizeBytes: 0, tableCount: 2, collation: 'utf8mb4_bin' }]
+    expect(((await copy(adapter)) as { collation?: string }).collation).toBe('utf8mb4_bin')
+  })
+
+  it('carries the next AUTO_INCREMENT of each table only when asked, and only for a table that has one', async () => {
+    const adapter = shopWith((t) => {
+      t.schema.autoIncrement = '42'
+    })
+    expect(tableOf(await copy(adapter, { autoIncrement: true }))).toMatchObject({ autoIncrement: '42' })
+    expect(tableOf(await copy(adapter))).not.toHaveProperty('autoIncrement')
+    const none = shopWith(() => undefined)
+    expect(tableOf(await copy(none, { autoIncrement: true }))).not.toHaveProperty('autoIncrement')
+  })
+
+  it('carries the foreign keys when asked: the action that is not the default, and nothing for NO ACTION or an unknown one', async () => {
+    const fk = (name: string, onUpdate: string | null, onDelete: string | null) => ({
+      name,
+      columns: ['id'],
+      refTable: 'users',
+      refNamespace: { database: 'shop' },
+      refColumns: ['id'],
+      onUpdate,
+      onDelete,
+    })
+    const adapter = shopWith((t) => {
+      t.schema.foreignKeys = [fk('a', 'cascade', 'NO ACTION'), fk('b', 'WEIRD', null)] as never
+    })
+    const withKeys = tableOf(await copy(adapter, { foreignKeys: true })) as { foreignKeys: Record<string, unknown>[] }
+    expect(withKeys.foreignKeys).toHaveLength(2)
+    expect(withKeys.foreignKeys[0]).toMatchObject({ name: 'a', refDatabase: 'shop', onUpdate: 'CASCADE' })
+    expect(withKeys.foreignKeys[0]).not.toHaveProperty('onDelete')
+    expect(withKeys.foreignKeys[1]?.onUpdate).toBeUndefined()
+    expect(tableOf(await copy(adapter))).not.toHaveProperty('foreignKeys')
+    const keyless = shopWith(() => undefined)
+    expect(tableOf(await copy(keyless, { foreignKeys: true }))).not.toHaveProperty('foreignKeys')
+  })
+
+  it('reads the grants of the database only when the copy is to carry the privileges', async () => {
+    const adapter = mysql()
+    const grant = { user: { name: 'app', host: '%' }, privileges: ['SELECT'] }
+    adapter.databaseGrants = async () => [grant] as never
+    expect(((await copy(adapter, { privileges: true })) as { grants?: unknown[] }).grants).toEqual([grant])
+    expect(await copy(adapter)).not.toHaveProperty('grants')
+  })
+})
