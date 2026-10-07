@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import type { Dialect, RoutineInfo, RoutinePrivilege, UserOp } from '@tsmyadmin/shared'
+import { capabilities } from '@tsmyadmin/shared'
 import { useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { Dialog } from '@/components/ui/Dialog.tsx'
@@ -37,7 +38,11 @@ export function RoutinePrivilegesDialog({
   const account = accounts.find((a) => userLabel(a) === (chosen || (accounts[0] ? userLabel(accounts[0]) : '')))
   const user =
     account ??
-    (typed.trim() ? (dialect === 'mysql' ? { name: typed.trim(), host: '%' } : { name: typed.trim() }) : null)
+    (typed.trim()
+      ? capabilities(dialect).accountHost
+        ? { name: typed.trim(), host: '%' }
+        : { name: typed.trim() }
+      : null)
   const parameters = signatureOf(dialect, routine.parameters)
   const submit = (op: 'grantRoutinePrivileges' | 'revokeRoutinePrivileges') => {
     if (!user || privileges.length === 0) return

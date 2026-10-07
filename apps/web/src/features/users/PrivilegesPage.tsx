@@ -1,4 +1,5 @@
 import type { Dialect, UserGrants } from '@tsmyadmin/shared'
+import { capabilities } from '@tsmyadmin/shared'
 import { useCallback } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { Badge, ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
@@ -32,7 +33,7 @@ export function PrivilegesPage({ db, schema, dialect }: { db: string; schema?: s
         <thead>
           <tr>
             <Th>{locale.users.name}</Th>
-            {dialect === 'mysql' ? <Th>{locale.users.host}</Th> : null}
+            {capabilities(dialect).accountHost ? <Th>{locale.users.host}</Th> : null}
             <Th>{locale.users.currentPrivileges}</Th>
             <Th>{locale.ddl.actions}</Th>
           </tr>
@@ -47,7 +48,7 @@ export function PrivilegesPage({ db, schema, dialect }: { db: string; schema?: s
             return (
               <Tr key={key}>
                 <Td className="font-medium">{u.name}</Td>
-                {dialect === 'mysql' ? <Td className="font-mono text-xs">{u.host}</Td> : null}
+                {capabilities(dialect).accountHost ? <Td className="font-mono text-xs">{u.host}</Td> : null}
                 <Td>
                   {level === null ? (
                     g?.isError ? (

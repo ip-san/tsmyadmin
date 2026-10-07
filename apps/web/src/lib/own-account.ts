@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useRouteContext } from '@tanstack/react-router'
 import type { UserRef } from '@tsmyadmin/shared'
+import { capabilities } from '@tsmyadmin/shared'
 import { serverInfoQuery } from './queries.ts'
 
 /**
@@ -13,7 +14,7 @@ export function useOwnAccount(): { ref: UserRef; is: (user: UserRef) => boolean 
   const info = useQuery(serverInfoQuery)
   const current = info.data?.currentUser ?? ''
   const at = current.lastIndexOf('@')
-  const host = session.dialect === 'mysql' && at > 0 ? current.slice(at + 1).replace(/^'|'$/g, '') : null
+  const host = capabilities(session.dialect).accountHost && at > 0 ? current.slice(at + 1).replace(/^'|'$/g, '') : null
   return {
     ref: host === null ? { name: session.user } : { name: session.user, host },
     is: (user) => user.name === session.user && (host === null || !user.host || user.host === host),

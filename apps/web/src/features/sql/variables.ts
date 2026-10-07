@@ -1,4 +1,5 @@
 import type { Dialect } from '@tsmyadmin/shared'
+import { quoteIdentifier } from '@tsmyadmin/shared'
 
 /** What a bookmarked statement may name with `[NAME]`: the place it is loaded into (phpMyAdmin's bookmark variables). */
 export interface BookmarkContext {
@@ -14,8 +15,7 @@ const VARIABLE = /^\[(DB|SCHEMA|USER|HOST)\]/
 
 const identifier = (name: string, dialect: Dialect) => {
   if (PLAIN.test(name)) return name
-  const q = dialect === 'mysql' ? '`' : '"'
-  return `${q}${name.replaceAll(q, q + q)}${q}`
+  return quoteIdentifier(dialect, name)
 }
 
 /**

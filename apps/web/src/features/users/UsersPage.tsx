@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import type { Dialect, UserInfo, UserOp, UserRef } from '@tsmyadmin/shared'
+import { capabilities } from '@tsmyadmin/shared'
 import { useState } from 'react'
 import { UserOpPreviewDialog } from '@/components/ddl/UserOpPreviewDialog.tsx'
 import { PasswordForm } from '@/components/forms/PasswordForm.tsx'
@@ -114,7 +115,7 @@ export function UsersPage({ dialect }: { dialect: Dialect }) {
               />
             </Th>
             <Th>{locale.users.name}</Th>
-            {dialect === 'mysql' ? <Th>{locale.users.host}</Th> : null}
+            {capabilities(dialect).accountHost ? <Th>{locale.users.host}</Th> : null}
             <Th>{locale.users.login}</Th>
             <Th>{locale.users.attributes}</Th>
             <Th>{locale.ddl.actions}</Th>
@@ -135,7 +136,7 @@ export function UsersPage({ dialect }: { dialect: Dialect }) {
                   />
                 </Td>
                 <Td className="font-medium">{u.name}</Td>
-                {dialect === 'mysql' ? <Td className="font-mono text-xs">{u.host}</Td> : null}
+                {capabilities(dialect).accountHost ? <Td className="font-mono text-xs">{u.host}</Td> : null}
                 <Td>{u.canLogin ? locale.common.yes : locale.common.no}</Td>
                 <Td className="space-x-1">
                   {resettable.has(u.name) ? <Badge tone="neutral">{locale.users.secondFactor.badge}</Badge> : null}

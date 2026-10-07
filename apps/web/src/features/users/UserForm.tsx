@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { AUTH_PLUGINS, type Dialect, type UserOp } from '@tsmyadmin/shared'
+import { AUTH_PLUGINS, capabilities, type Dialect, type UserOp } from '@tsmyadmin/shared'
 import { type FormEvent, useState } from 'react'
 import { PasswordFields, usePasswordConfirm } from '@/components/forms/PasswordFields.tsx'
 import { Button } from '@/components/ui/Button.tsx'
@@ -38,7 +38,7 @@ export function UserForm({
     if (!name.trim() || !pw.complete) return
     onSubmit({
       op: 'createUser',
-      user: dialect === 'mysql' ? { name: name.trim(), host } : { name: name.trim() },
+      user: capabilities(dialect).accountHost ? { name: name.trim(), host } : { name: name.trim() },
       password: pw.password,
       attributes: { superuser, createdb, createrole },
       ...(dialect === 'mysql' && offersPlugin && plugin ? { plugin } : {}),
@@ -52,7 +52,7 @@ export function UserForm({
         <Field id="user-name" label={locale.users.name}>
           <Input id="user-name" value={name} onChange={(e) => setName(e.target.value)} required autoComplete="off" />
         </Field>
-        {dialect === 'mysql' ? (
+        {capabilities(dialect).accountHost ? (
           <Field id="user-host-choice" label={locale.users.host}>
             <Select
               id="user-host-choice"
@@ -66,7 +66,7 @@ export function UserForm({
             </Select>
           </Field>
         ) : null}
-        {dialect === 'mysql' && hostChoice === 'custom' ? (
+        {capabilities(dialect).accountHost && hostChoice === 'custom' ? (
           <Field id="user-host" label={locale.users.customHost} hint={locale.users.hostPattern}>
             <Input
               id="user-host"

@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import type { Dialect } from '@tsmyadmin/shared'
+import { capabilities } from '@tsmyadmin/shared'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useState } from 'react'
 import { ErrorBox, Spinner } from '@/components/ui/Feedback.tsx'
@@ -71,7 +72,7 @@ export function ProgramNodes({ db, schema, dialect }: { db: string; schema?: str
   const [routinesOpen, setRoutinesOpen] = useState(false)
   const [eventsOpen, setEventsOpen] = useState(false)
   const routines = useQuery({ ...routinesQuery(db, schema), enabled: routinesOpen })
-  const events = useQuery({ ...eventsQuery(db, schema), enabled: eventsOpen && dialect === 'mysql' })
+  const events = useQuery({ ...eventsQuery(db, schema), enabled: eventsOpen && capabilities(dialect).events })
   return (
     <ul className="ml-3 border-l border-line pl-2">
       <Branch label={locale.nav.routines} open={routinesOpen} onToggle={() => setRoutinesOpen((o) => !o)}>
@@ -92,7 +93,7 @@ export function ProgramNodes({ db, schema, dialect }: { db: string; schema?: str
           />
         )}
       </Branch>
-      {dialect === 'mysql' ? (
+      {capabilities(dialect).events ? (
         <Branch label={locale.nav.events} open={eventsOpen} onToggle={() => setEventsOpen((o) => !o)}>
           {events.isPending ? (
             <Spinner />

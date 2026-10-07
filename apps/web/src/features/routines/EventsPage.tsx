@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Dialect } from '@tsmyadmin/shared'
+import { capabilities } from '@tsmyadmin/shared'
 import { CreateSection } from '@/components/ddl/CreateSection.tsx'
 import { DdlPreviewDialog } from '@/components/ddl/DdlPreviewDialog.tsx'
 import { DefinitionToggle } from '@/components/ddl/DefinitionToggle.tsx'
@@ -14,11 +15,11 @@ import { eventDetailQuery, eventsQuery } from '@/lib/queries.ts'
 import { CreateEventForm } from './CreateEventForm.tsx'
 
 export function EventsPage({ db, schema, dialect }: { db: string; schema?: string | undefined; dialect: Dialect }) {
-  const events = useQuery({ ...eventsQuery(db, schema), enabled: dialect === 'mysql' })
+  const events = useQuery({ ...eventsQuery(db, schema), enabled: capabilities(dialect).events })
   const flow = useDdlFlow(db, schema)
   const edit = useEditDefinition(db, schema)
   const queryClient = useQueryClient()
-  if (dialect !== 'mysql') return <Notice>{locale.events.unsupported}</Notice>
+  if (!capabilities(dialect).events) return <Notice>{locale.events.unsupported}</Notice>
   if (events.isPending) return <Spinner />
   if (events.isError) return <ErrorBox error={events.error} onRetry={() => void events.refetch()} />
   return (
