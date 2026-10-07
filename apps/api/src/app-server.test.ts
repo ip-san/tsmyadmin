@@ -502,6 +502,34 @@ describe('users', () => {
     })
   })
 
+  it('refuses a MySQL account name past 32 characters, the new name of a rename or copy included', async () => {
+    const h = harness(withUsers())
+    stores.push(h.store)
+    await h.login()
+    const preview = (op: Record<string, unknown>) =>
+      h.req('/api/users/preview', { method: 'POST', body: JSON.stringify({ op }) })
+    const long = 'n'.repeat(33)
+    const refused = async (op: Record<string, unknown>) => {
+      const res = await preview(op)
+      expect(res.status, JSON.stringify(op)).toBe(400)
+      expect(await res.json()).toMatchObject({ reason: 'IDENTIFIER_TOO_LONG', params: { max: 32 } })
+    }
+    await refused({ op: 'renameUser', user: { name: 'app', host: '%' }, newUser: { name: long, host: '%' } })
+    await refused({
+      op: 'copyUser',
+      user: { name: 'app', host: '%' },
+      newUser: { name: long, host: '%' },
+      password: 'pw',
+    })
+    // 32 is allowed.
+    const ok = await preview({
+      op: 'renameUser',
+      user: { name: 'app', host: '%' },
+      newUser: { name: 'n'.repeat(32), host: '%' },
+    })
+    expect(ok.status).toBe(200)
+  })
+
   it('previews masked SQL and executes the real statements without echoing the password', async () => {
     const h = harness(withUsers())
     stores.push(h.store)
