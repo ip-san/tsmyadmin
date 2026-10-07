@@ -4,7 +4,9 @@
  * and the real-database tests together: `bun run check:coverage` runs them, then this script compares the result
  * with `scripts/coverage-baseline.json`.
  *
- * It fails when
+ * Two measures are held, each per file: the share of statements that ran, and the share of branches taken (an `if`
+ * with no test of its else, an error path nobody triggers). Branches are the weaker number, and the one a test of the
+ * happy path alone leaves behind. It fails when
  *   - a file that was in the baseline now runs `DROP` points less of its statements (a test that stopped
  *     covering something, or code that grew without one), or
  *   - a file that is not in the baseline starts below `NEW_FILE_MIN` percent (new code should come with tests).
@@ -24,16 +26,18 @@ const SUMMARY = 'coverage/server/coverage-summary.json'
 const BASELINE = resolve(ROOT, 'scripts/coverage-baseline.json')
 const DROP = 10
 const NEW_FILE_MIN = 60
+/** The measures of a vitest json-summary that are held, and what a new file must reach for each. */
+const METRICS = { statements: NEW_FILE_MIN, branches: 50 }
 
-/** `{ "<repo-relative file>": <statement percent, one decimal> }` from a vitest json-summary. */
-function percentages(summary, root = ROOT) {
+/** `{ "<repo-relative file>": <percent of `metric`, one decimal> }` from a vitest json-summary. */
+function percentages(summary, root = ROOT, metric = 'statements') {
   const out = {}
   for (const [file, v] of Object.entries(summary)) {
     if (file === 'total') continue
     const rel = relative(root, file).split('\\').join('/')
     if (rel.startsWith('..')) continue
-    // A file with no statements (types only) cannot be uncovered.
-    out[rel] = v.statements.total === 0 ? 100 : Math.round(v.statements.pct * 10) / 10
+    // A file with none of the thing (types only; no `if`) cannot be uncovered.
+    out[rel] = v[metric].total === 0 ? 100 : Math.round(v[metric].pct * 10) / 10
   }
   return out
 }
@@ -45,7 +49,9 @@ function compare(now, baseline, { drop = DROP, newFileMin = NEW_FILE_MIN } = {})
     const was = baseline[file]
     if (was === undefined) {
       if (pct < newFileMin)
-        problems.push(`${file}: new, and only ${pct}% of it runs (at least ${newFileMin}% is asked of a new file)`)
+        problems.push(
+          `${file}: new, and only ${pct}% of it is covered (at least ${newFileMin}% is asked of a new file)`
+        )
     } else if (pct < was - drop) {
       problems.push(`${file}: ${pct}% now, was ${was}% (more than ${drop} points lower)`)
     }
@@ -81,6 +87,20 @@ function selfTest() {
     ROOT
   )
   assert(pct['x.ts'] === 75 && pct['t.ts'] === 100, 'percentages are read as repo-relative, one decimal')
+  const both = {
+    [`${ROOT}/y.ts`]: { statements: { total: 10, pct: 100 }, branches: { total: 4, pct: 50 } },
+    [`${ROOT}/z.ts`]: { statements: { total: 3, pct: 100 }, branches: { total: 0, pct: 100 } },
+  }
+  assert(percentages(both, ROOT, 'branches')['y.ts'] === 50, 'branches are read from their own measure')
+  assert(percentages(both, ROOT, 'branches')['z.ts'] === 100, 'a file with no branches cannot miss one')
+  assert(
+    compare({ 'a.ts': 55 }, {}, { newFileMin: METRICS.branches }).length === 0,
+    'a new file at 55% of its branches passes'
+  )
+  assert(
+    compare({ 'a.ts': 49 }, {}, { newFileMin: METRICS.branches }).length === 1,
+    'a new file under 50% of its branches fails'
+  )
   console.log('✓ coverage self-test passed')
 }
 
@@ -92,19 +112,27 @@ function main() {
     console.error(`✗ ${relative(ROOT, file)} not found: run \`bun run check:coverage\` (it measures, then checks)`)
     process.exit(1)
   }
-  const now = percentages(JSON.parse(readFileSync(file, 'utf8')))
-  const baseline = existsSync(BASELINE) ? JSON.parse(readFileSync(BASELINE, 'utf8')) : {}
+  const summary = JSON.parse(readFileSync(file, 'utf8'))
+  // The baseline holds one map per measure. (A baseline written before branches were held is a bare map of statements.)
+  const stored = existsSync(BASELINE) ? JSON.parse(readFileSync(BASELINE, 'utf8')) : {}
+  const baselines = 'statements' in stored || 'branches' in stored ? stored : { statements: stored }
+  const measured = Object.fromEntries(Object.keys(METRICS).map((m) => [m, percentages(summary, ROOT, m)]))
   if (args.includes('--update')) {
-    const next = raised(now, baseline)
+    const next = Object.fromEntries(Object.keys(METRICS).map((m) => [m, raised(measured[m], baselines[m] ?? {})]))
     writeFileSync(BASELINE, `${JSON.stringify(next, null, 2)}\n`)
-    console.log(
-      `✓ coverage baseline: ${Object.keys(next).length} files (${Object.keys(next).length - Object.keys(baseline).length} new)`
-    )
+    for (const m of Object.keys(METRICS))
+      console.log(
+        `✓ coverage baseline, ${m}: ${Object.keys(next[m]).length} files (${Object.keys(next[m]).length - Object.keys(baselines[m] ?? {}).length} new)`
+      )
     return
   }
-  const problems = compare(now, baseline)
-  const values = Object.values(now)
-  const mean = values.reduce((a, b) => a + b, 0) / Math.max(values.length, 1)
+  const problems = Object.entries(METRICS).flatMap(([m, newFileMin]) =>
+    compare(measured[m], baselines[m] ?? {}, { newFileMin }).map((p) => `[${m}] ${p}`)
+  )
+  const mean = (m) => {
+    const values = Object.values(measured[m])
+    return values.reduce((a, b) => a + b, 0) / Math.max(values.length, 1)
+  }
   if (problems.length > 0) {
     console.error(`✗ coverage: ${problems.length} problem(s)\n${problems.map((p) => `  ${p}`).join('\n')}`)
     console.error(
@@ -112,7 +140,9 @@ function main() {
     )
     process.exit(1)
   }
-  console.log(`✓ coverage ok: ${values.length} files, mean ${mean.toFixed(1)}% of statements`)
+  console.log(
+    `✓ coverage ok: ${Object.keys(measured.statements).length} files, mean ${mean('statements').toFixed(1)}% of statements, ${mean('branches').toFixed(1)}% of branches`
+  )
 }
 
 main()
