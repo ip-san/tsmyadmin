@@ -27,6 +27,7 @@ bun run check:all         # check:static + 両 DB の統合テスト
 bun run test              # DB 不要のテスト
 bun run test:integration  # 両 DB の adapter conformance + API 統合（compose 必須）
 bun run check:coverage    # サーバー側のカバレッジの下限（単体 + 両 DB を測り、基準線と比べる。compose 必須。CI の integration ジョブで回る）
+bun run mutation          # 変異試験（Stryker。重要なファイルだけ。試験が「間違いに気づくか」を見る。CI には入れない。数十分）
 bun run test:e2e          # Playwright
 bun run test:e2e:coverage # Playwright（Chromium）で、Web のコードのどこまで実行されるかを測る（約 7 分。画面ごとの割合と、一度も実行されないファイル）
 bun run lighthouse        # Lighthouse CI（警告のみ、要 Chrome）
@@ -34,7 +35,7 @@ bun run lighthouse        # Lighthouse CI（警告のみ、要 Chrome）
 
 ## 現在の規模（`scripts/validate-docs.mjs` が同期）
 
-- ユニット/API/Web テスト定義: <!-- stat:unit-tests -->1249<!-- /stat --> 件
+- ユニット/API/Web テスト定義: <!-- stat:unit-tests -->1253<!-- /stat --> 件
 - Adapter conformance: <!-- stat:conformance -->206<!-- /stat --> 件 × 2 方言
 - E2E: <!-- stat:e2e -->202<!-- /stat --> 件
 - API ルート: <!-- stat:routes -->95<!-- /stat -->
