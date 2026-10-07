@@ -8,6 +8,8 @@ import type { Dialect } from './schemas/dialect.ts'
  * more than one place cares about is named here once; the code that needs it reads the name.
  */
 export interface DialectCapabilities {
+  /** An account is `name@host` (MySQL); elsewhere a role has a name only (PostgreSQL). */
+  accountHost: boolean
   /** A backslash in a string literal escapes the next character (MySQL); PostgreSQL reads it as itself (standard_conforming_strings). */
   literalBackslashEscapes: boolean
   /** The character an identifier is wrapped in (and that is doubled inside it): backtick on MySQL, double quote on PostgreSQL. */
@@ -63,6 +65,7 @@ export interface DialectCapabilities {
 const CAPABILITIES: Record<Dialect, DialectCapabilities> = {
   mysql: {
     identifierQuote: '`',
+    accountHost: true,
     literalBackslashEscapes: true,
     identifier: { max: 64, unit: 'chars', accountMax: 32 },
     transactionalDdl: false,
@@ -85,6 +88,7 @@ const CAPABILITIES: Record<Dialect, DialectCapabilities> = {
   },
   postgres: {
     identifierQuote: '"',
+    accountHost: false,
     literalBackslashEscapes: false,
     identifier: { max: 63, unit: 'bytes', accountMax: null },
     transactionalDdl: true,

@@ -1,5 +1,5 @@
 import type { Dialect, UserGrants } from '@tsmyadmin/shared'
-import { PRIVILEGES } from '@tsmyadmin/shared'
+import { capabilities, PRIVILEGES } from '@tsmyadmin/shared'
 import { useCallback } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { Badge, ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
@@ -62,7 +62,7 @@ export function TablePrivilegesPage({
         <thead>
           <tr>
             <Th>{locale.users.name}</Th>
-            {dialect === 'mysql' ? <Th>{locale.users.host}</Th> : null}
+            {capabilities(dialect).accountHost ? <Th>{locale.users.host}</Th> : null}
             {PRIVILEGES.map((p) => (
               <Th key={p}>{p}</Th>
             ))}
@@ -77,7 +77,7 @@ export function TablePrivilegesPage({
             return (
               <Tr key={key}>
                 <Td className="font-medium">{u.name}</Td>
-                {dialect === 'mysql' ? <Td className="font-mono text-xs">{u.host}</Td> : null}
+                {capabilities(dialect).accountHost ? <Td className="font-mono text-xs">{u.host}</Td> : null}
                 {PRIVILEGES.map((p) => (
                   <Td key={p} className="text-xs">
                     {g?.data ? (

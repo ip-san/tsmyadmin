@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link, useRouteContext } from '@tanstack/react-router'
+import { capabilities } from '@tsmyadmin/shared'
 import { z } from 'zod'
 import { locale } from '@/config/locale.ts'
 import { CreateDatabaseForm } from '@/features/database/CreateDatabaseForm.tsx'
@@ -37,7 +38,9 @@ function DatabaseStructurePage() {
         <>
           <CreateTableForm db={db} schema={schema} dialect={session.dialect} />
           <CreateViewSection db={db} schema={schema} initialSelect={createView} />
-          {session.dialect === 'postgres' ? <CreateDatabaseForm database={db} kind="schema" /> : null}
+          {!capabilities(session.dialect).databasesAreSchemas ? (
+            <CreateDatabaseForm database={db} kind="schema" />
+          ) : null}
         </>
       )}
     </div>

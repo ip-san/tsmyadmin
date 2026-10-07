@@ -41,7 +41,7 @@ describe('prepareScript', () => {
       'SET FOREIGN_KEY_CHECKS = 0;\nSTART TRANSACTION;\nDELIMITER $$\nselect 1$$'
     )
     expect(prepareScript('select 1', 'postgres', options)).toBe(
-      "SET session_replication_role = 'replica';\nBEGIN;\nselect 1"
+      'SET session_replication_role = replica;\nBEGIN;\nselect 1'
     )
   })
 

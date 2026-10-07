@@ -7,6 +7,11 @@ describe('capabilities', () => {
     for (const dialect of DialectSchema.options) expect(capabilities(dialect)).toBeDefined()
   })
 
+  it('says only a MySQL account has a host', () => {
+    expect(capabilities('mysql').accountHost).toBe(true)
+    expect(capabilities('postgres').accountHost).toBe(false)
+  })
+
   it('says only MySQL reads a backslash in a string literal as an escape', () => {
     expect(capabilities('mysql').literalBackslashEscapes).toBe(true)
     expect(capabilities('postgres').literalBackslashEscapes).toBe(false)

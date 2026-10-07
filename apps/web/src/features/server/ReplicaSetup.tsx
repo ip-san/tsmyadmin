@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import type { Dialect, UserOp } from '@tsmyadmin/shared'
+import { capabilities } from '@tsmyadmin/shared'
 import { type FormEvent, useState } from 'react'
 import { PasswordFields, usePasswordConfirm } from '@/components/forms/PasswordFields.tsx'
 import { Button } from '@/components/ui/Button.tsx'
@@ -75,13 +76,13 @@ export function ReplicaUserForm({
   const [name, setName] = useState('repl')
   const [host, setHost] = useState('%')
   const pw = usePasswordConfirm()
-  const ready = name.trim() !== '' && pw.complete && (dialect === 'postgres' || host.trim() !== '')
+  const ready = name.trim() !== '' && pw.complete && (!capabilities(dialect).accountHost || host.trim() !== '')
   const submit = (e: FormEvent) => {
     e.preventDefault()
     if (!ready) return
     onSubmit({
       op: 'createUser',
-      user: dialect === 'mysql' ? { name: name.trim(), host: host.trim() } : { name: name.trim() },
+      user: capabilities(dialect).accountHost ? { name: name.trim(), host: host.trim() } : { name: name.trim() },
       password: pw.password,
       attributes: { superuser: false, createdb: false, createrole: false },
       replication: true,

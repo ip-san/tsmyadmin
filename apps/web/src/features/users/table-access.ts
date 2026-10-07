@@ -1,5 +1,5 @@
 import type { Dialect, Privilege } from '@tsmyadmin/shared'
-import { PRIVILEGES } from '@tsmyadmin/shared'
+import { capabilities, PRIVILEGES } from '@tsmyadmin/shared'
 
 /** Where a privilege on a table comes from: the whole server, the database, the table itself, or some of its columns. */
 export type Grant = { scope: 'server' | 'database' | 'table' } | { scope: 'columns'; columns: string[] }
@@ -20,7 +20,7 @@ interface ParsedGrant {
  * included, may contain any character, `ON` and `,` among them.
  */
 export function parseGrant(dialect: Dialect, statement: string): ParsedGrant | null {
-  const quote = dialect === 'mysql' ? '`' : '"'
+  const quote = capabilities(dialect).identifierQuote
   const s = statement
   let i = 0
   const space = () => {
@@ -161,7 +161,7 @@ export function tableAccess(
     const whole = g.privileges.filter((p) => p.columns === null).map((p) => p.name)
     if (dialect === 'mysql' && a === '*' && b === '*') add(whole, { scope: 'server' })
     else if (dialect === 'mysql' && b === '*' && coversDatabase(a, db)) add(whole, { scope: 'database' })
-    else if (a === (dialect === 'mysql' ? db : (schema ?? 'public')) && b === table) {
+    else if (a === (capabilities(dialect).databasesAreSchemas ? db : (schema ?? 'public')) && b === table) {
       add(whole, { scope: 'table' })
       for (const p of g.privileges) if (p.columns !== null) add([p.name], { scope: 'columns', columns: p.columns })
     }

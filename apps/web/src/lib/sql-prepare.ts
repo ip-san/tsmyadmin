@@ -1,4 +1,4 @@
-import { type Dialect, quoteLiteral } from '@tsmyadmin/shared'
+import { capabilities, type Dialect, quoteLiteral } from '@tsmyadmin/shared'
 import { tokenizeSql } from './sql-format.ts'
 
 /** A `:name` placeholder in the text, and where it sits. */
@@ -80,10 +80,10 @@ export const isValidDelimiter = (d: string) => /^\S{1,16}$/.test(d)
 export function prepareScript(sql: string, dialect: Dialect, o: RunOptions): string {
   const bound = bindParameters(sql, dialect, o.values)
   const head: string[] = []
-  if (!o.foreignKeyChecks)
-    head.push(dialect === 'mysql' ? 'SET FOREIGN_KEY_CHECKS = 0;' : "SET session_replication_role = 'replica';")
-  if (o.rollback) head.push(dialect === 'mysql' ? 'START TRANSACTION;' : 'BEGIN;')
+  const caps = capabilities(dialect)
+  if (!o.foreignKeyChecks) head.push(`${caps.foreignKeyChecksOff};`)
+  if (o.rollback) head.push(`${caps.beginTransaction};`)
   const delimiter =
-    dialect === 'mysql' && isValidDelimiter(o.delimiter) && o.delimiter !== ';' ? [`DELIMITER ${o.delimiter}`] : []
+    caps.scriptDelimiter && isValidDelimiter(o.delimiter) && o.delimiter !== ';' ? [`DELIMITER ${o.delimiter}`] : []
   return [...head, ...delimiter, bound].join('\n')
 }

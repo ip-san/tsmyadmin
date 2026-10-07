@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import type { Dialect } from '@tsmyadmin/shared'
+import { capabilities } from '@tsmyadmin/shared'
 import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Database, RefreshCw } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { ErrorBox, Spinner } from '@/components/ui/Feedback.tsx'
@@ -168,7 +169,7 @@ export function DbTree({ dialect, activeDb }: { dialect: Dialect; activeDb?: str
                 </Link>
               </div>
               {expanded ? (
-                dialect === 'postgres' ? (
+                !capabilities(dialect).databasesAreSchemas ? (
                   <SchemaNodes db={d.name} filter={filter} />
                 ) : (
                   <>
