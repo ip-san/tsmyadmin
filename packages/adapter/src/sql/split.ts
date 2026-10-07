@@ -1,4 +1,5 @@
 import type { Dialect } from '@tsmyadmin/shared'
+import { lexicalRules } from './lexical-rules.ts'
 
 export interface Statement {
   /** Statement text (leading comments are kept so the user sees what ran). */
@@ -47,12 +48,13 @@ const DOLLAR_TAG = /^\$(?:[A-Za-z_\u0080-\uffff][\w\u0080-\uffff]*)?\$/
  * Every consumer of SQL text — the splitter, comment stripping, the audit log's redaction — shares these rules.
  */
 function scanToken(input: string, i: number, dialect: Dialect, noBackslash = false): SqlToken | null {
+  const rules = lexicalRules(dialect)
   const n = input.length
   const ch = input[i]
-  if (ch === "'" || ch === '"' || (ch === '`' && dialect === 'mysql')) {
+  if (ch === "'" || ch === '"' || (ch === '`' && rules.backtickIdentifiers)) {
     const escapeString =
-      (dialect === 'mysql' && ch !== '`' && !noBackslash) ||
-      (dialect === 'postgres' && ch === "'" && /[eE]/.test(input[i - 1] ?? '') && !/[\w$]/.test(input[i - 2] ?? ''))
+      (rules.backslashEscapes && ch !== '`' && !noBackslash) ||
+      (rules.escapeStrings && ch === "'" && /[eE]/.test(input[i - 1] ?? '') && !/[\w$]/.test(input[i - 2] ?? ''))
     let j = i + 1
     while (j < n) {
       const c = input[j]
@@ -63,7 +65,7 @@ function scanToken(input: string, i: number, dialect: Dialect, noBackslash = fal
     }
     return { kind: 'literal', end: n, closed: false }
   }
-  if (ch === '$' && dialect === 'postgres') {
+  if (ch === '$' && rules.dollarQuotes) {
     const tag = DOLLAR_TAG.exec(input.slice(i))?.[0]
     if (!tag) return null
     const end = input.indexOf(tag, i + tag.length)
@@ -72,11 +74,11 @@ function scanToken(input: string, i: number, dialect: Dialect, noBackslash = fal
       : { kind: 'literal', end: end + tag.length, closed: true }
   }
   if (ch === '/' && input[i + 1] === '*') {
-    const kind = dialect === 'mysql' && input[i + 2] === '!' ? 'version-comment' : 'comment'
+    const kind = rules.versionComments && input[i + 2] === '!' ? 'version-comment' : 'comment'
     let depth = 1
     let j = i + 2
     while (j < n && depth > 0) {
-      if (dialect === 'postgres' && input[j] === '/' && input[j + 1] === '*') {
+      if (rules.nestedBlockComments && input[j] === '/' && input[j + 1] === '*') {
         depth++
         j += 2
       } else if (input[j] === '*' && input[j + 1] === '/') {
@@ -87,8 +89,8 @@ function scanToken(input: string, i: number, dialect: Dialect, noBackslash = fal
     return { kind, end: depth === 0 ? j : n, closed: depth === 0 }
   }
   if (
-    (ch === '-' && input[i + 1] === '-' && (dialect !== 'mysql' || /\s/.test(input[i + 2] ?? '\n'))) ||
-    (ch === '#' && dialect === 'mysql')
+    (ch === '-' && input[i + 1] === '-' && (!rules.dashCommentNeedsSpace || /\s/.test(input[i + 2] ?? '\n'))) ||
+    (ch === '#' && rules.hashComments)
   ) {
     const end = input.indexOf('\n', i)
     return { kind: 'line-comment', end: end === -1 ? n : end, closed: true }
@@ -204,6 +206,7 @@ function scan(
   state: { delimiter?: string; unterminated?: boolean } | undefined,
   keepAll: boolean
 ): { statements: Statement[]; count: number } {
+  const rules = lexicalRules(dialect)
   let unterminated = false
   const out: Statement[] = []
   let count = 0
@@ -238,8 +241,8 @@ function scan(
       const body = stripLeadingComments(sql, dialect)
       const lead = sql.slice(0, sql.length - body.length)
       emit({ sql, line: startLine + lead.split('\n').length - 1 })
-      if (dialect === 'mysql') noBackslash = trackSqlMode(sql, noBackslash, savedModes)
-      if (dialect === 'postgres' && COPY_FROM_STDIN.test(body)) copyData = true
+      if (rules.tracksSqlMode) noBackslash = trackSqlMode(sql, noBackslash, savedModes)
+      if (rules.copyFromStdin && COPY_FROM_STDIN.test(body)) copyData = true
     }
     hasCode = false
   }
@@ -270,7 +273,7 @@ function scan(
       continue
     }
     // psql meta-commands (`\restrict`, `\connect`, `\.`) are a line each, only between statements.
-    if (dialect === 'postgres' && ch === '\\' && !hasCode && /(?:^|\n)[ \t]*$/.test(input.slice(start, i))) {
+    if (rules.psqlMetaCommands && ch === '\\' && !hasCode && /(?:^|\n)[ \t]*$/.test(input.slice(start, i))) {
       const end = input.indexOf('\n', i)
       const stop = end < 0 ? n : end
       const command = input.slice(i, stop).trim()
@@ -292,7 +295,7 @@ function scan(
     // (leading comments are fine — mysqldump routine dumps begin with them).
     if (
       !hasCode &&
-      dialect === 'mysql' &&
+      rules.delimiterCommand &&
       (ch === 'D' || ch === 'd') &&
       /(?:^|\n)[ \t]*$/.test(input.slice(start, i))
     ) {
@@ -314,24 +317,7 @@ function scan(
       skipTo(token.end)
       continue
     }
-    // DELIMITER is a client command: it must start a line and no code of the current statement may precede it
-    // (leading comments are fine — mysqldump routine dumps begin with them).
-    if (
-      !hasCode &&
-      dialect === 'mysql' &&
-      (ch === 'D' || ch === 'd') &&
-      /(?:^|\n)[ \t]*$/.test(input.slice(start, i))
-    ) {
-      const m = DELIMITER_LINE.exec(input.slice(i))
-      if (m) {
-        delimiter = m[1] as string
-        skipTo(i + m[0].length)
-        start = i
-        startLine = line
-        continue
-      }
-    }
-    if (dialect === 'postgres' && /[A-Za-z_]/.test(ch) && !/[\w$]/.test(input[i - 1] ?? '')) {
+    if (rules.beginAtomic && /[A-Za-z_]/.test(ch) && !/[\w$]/.test(input[i - 1] ?? '')) {
       const word = /^[A-Za-z_][\w$]*/.exec(input.slice(i))?.[0] ?? ''
       const upper = word.toUpperCase()
       if (upper === 'BEGIN' && /^\s+ATOMIC\b/i.test(input.slice(i + word.length))) atomicDepth++

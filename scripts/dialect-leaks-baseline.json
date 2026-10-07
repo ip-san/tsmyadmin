@@ -72,12 +72,10 @@
     "packages/adapter/src/index.ts": 2,
     "packages/adapter/src/sql-console.ts": 1,
     "packages/adapter/src/sql/ddl-common.ts": 5,
-    "packages/adapter/src/sql/export.ts": 13,
     "packages/adapter/src/sql/literal.ts": 3,
     "packages/adapter/src/sql/quote.ts": 2,
     "packages/adapter/src/sql/read-wrap.ts": 1,
     "packages/adapter/src/sql/replication.ts": 1,
-    "packages/adapter/src/sql/split.ts": 14,
     "packages/shared/src/infer-type.ts": 2,
     "packages/shared/src/schemas/cell.ts": 2,
     "packages/shared/src/sql-script.ts": 1
