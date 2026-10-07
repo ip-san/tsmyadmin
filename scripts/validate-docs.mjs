@@ -74,10 +74,23 @@ function checkContainerPort() {
     : `Dockerfile EXPOSEs ${exposed} but deploy/cloudflare/worker.ts forwards to ${forwarded}`
 }
 
-const portProblem = checkContainerPort()
-if (portProblem) {
-  console.error(`✗ ${portProblem}`)
-  process.exit(1)
+/**
+ * The commands CLAUDE.md lists must exist. A script that is renamed or removed leaves the list telling people (and the
+ * assistants that read it first) to run something that is not there; nothing else notices until someone tries.
+ */
+function checkCommands() {
+  const scripts = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).scripts ?? {}
+  const block = /## 開発コマンド\n+```bash\n([\s\S]*?)```/.exec(readFileSync(join(ROOT, 'CLAUDE.md'), 'utf8'))?.[1]
+  if (!block) return 'CLAUDE.md: the command block under "## 開発コマンド" was not found'
+  const missing = [...block.matchAll(/^bun run (\S+)/gm)].map((m) => m[1]).filter((name) => !(name in scripts))
+  return missing.length > 0 ? `CLAUDE.md lists commands that package.json does not have: ${missing.join(', ')}` : null
+}
+
+for (const problem of [checkContainerPort(), checkCommands()]) {
+  if (problem) {
+    console.error(`✗ ${problem}`)
+    process.exit(1)
+  }
 }
 
 const claudeMd = join(ROOT, 'CLAUDE.md')

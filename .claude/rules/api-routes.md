@@ -8,6 +8,7 @@ paths:
 - ルートは `createApp(config, { store, logger?, remoteAddress?, now? })` で依存注入する（アダプターのファクトリはストアが持つ）。テストは `@tsmyadmin/adapter/testing` の `FakeAdapter` を注入し `app.request()` で呼ぶ（DB 不要）
 - リクエスト/レスポンスの形は **先に `packages/shared` の Zod スキーマを定義**し、`@hono/zod-validator` で検証する。web は `hc<AppType>` の型だけを見る（ファイルダウンロードのようにブラウザのナビゲーションで開くエンドポイントは例外。クエリは shared の Zod で検証し、web 側は URL ビルダー関数 + `<a href download>` を使う）
 - `mysql2` / `pg` を import しない（`check:arch` が fail）。DB 操作はすべて adapter 経由
+- **DB の種類（MySQL / PostgreSQL）の違いを、`dialect === '…'` で書かない。** 違いが事実なら `packages/shared/src/capabilities.ts` に名前を付けて読む（識別子の長さ、トランザクションの開始、`databasesAreSchemas`、ダンプの書き方など）。サーバーを読んで op を埋める処理は、アダプターの `prepareDdl` に書く（ルートは呼ぶだけ）。`bun run check:dialect-leaks` が、アダプターの外で尋ねる場所が増えると fail する（基準線は下がるだけ）
 - エラーは `lib/errors.ts` で `{ code, message, detail }` に正規化する。コードと HTTP ステータスの対応表は `lib/errors.ts` の `STATUS_BY_CODE` が唯一の正（`AUTH_FAILED` 401、`CONNECTION_FAILED` 502、`KEY_MISMATCH` 409、セッションストアが使えないときの `STORE_UNAVAILABLE` 503 など）。コードを追加するときは `packages/shared` の `ApiErrorCodeSchema` と `STATUS_BY_CODE` を同時に更新する（型が網羅性を強制する）
 - セッション: Cookie には署名付き ID のみ。資格情報は `session/store.ts`（メモリ、TTL）と `session/sqlite-store.ts`（`SESSION_SECRET` 由来の鍵で暗号化。本番の既定）にだけ置き、レスポンスに `password` を含めない
 - DDL は `/ddl/preview` で SQL を返すだけ。実行は `/sql` を通す（ユーザーがプレビューを確認してから）。アカウント操作だけは例外で、`/users/execute` が `op` から SQL を組み立て直す（プレビューではパスワードをマスクしており、そのまま送り返せる文がないため）。レプリケーションのソース設定（`/server/replication/execute`）も同じ理由で `op` から組み立て直す（レプリケーション用のパスワードを含むため）
