@@ -12,8 +12,9 @@ const integration = process.env.INTEGRATION === '1'
 /**
  * The unit tests finish in milliseconds; the limit is for a machine that is busy with something else (a build, another
  * test run, Docker): under that load the 5-second default failed unrelated tests one after another, at random.
+ * A mutation run (`bun run mutation`) raises it: the mutated code carries a switch at every mutant and runs slower.
  */
-const UNIT_TIMEOUT_MS = 15_000
+const UNIT_TIMEOUT_MS = Number(process.env.TEST_TIMEOUT_MS ?? 15_000)
 
 export default defineConfig({
   test: {
