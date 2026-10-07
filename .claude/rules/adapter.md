@@ -11,9 +11,10 @@ paths:
 
 1. `types.ts` の `DatabaseAdapter` にメソッドを足す前に、既存のメソッドで足りないか確認する（例: `tableStats` はすでに `indexBytes` を返す）。足すなら、`ADAPTER_METHOD_NAMES` にも追加し、`testing/fake-adapter.ts` に実装し（API のテストが使う）、`apps/api/src/lib/audit.ts` の `AUDITED_METHODS` か `PASSTHROUGH_METHODS` に分類し（`audit.test.ts` が検査）、`test/conformance/` の該当するグループのファイル（`catalog` / `search-and-query` / `browse-and-insert` / `row-edits` / `sql-console` / `dump-and-export` / `row-identity-and-export` / `server` / `accounts` / `ddl-*` …）に `describe('<method>')` を書く（spec-consistency が検出）。グループは `test/conformance.ts` が元の順番で呼ぶ（あとのテストは前のテストが残したものを使うので、順番を変えない）。メソッドではなく「サーバー側で接続が切られたとき」を守る `connection-loss`（管理者の KILL / `pg_terminate_backend` を、別のアダプターから発行して再現する。コンテナは止めない）が最後にある。実行中の文は `CONNECTION_FAILED` で終わり、プールが死んだ接続を取り替えて次の要求が通ることを確かめる
 2. SQL の組み立て前に、サーバーの状態を読んで埋めるもの（`copyTable` の列、`setDatabaseCollation` の表、`renameDatabase` / `copyDatabase` の中身）は、`DatabaseAdapter.prepareDdl`（`mysql/prepare-ddl.ts` と `postgres/prepare-ddl.ts`）に書く。API のルートに方言ごとの分岐を書かない（`check:dialect-leaks` が増えると落ちる）。方言の違いが複数の場所で要るなら、`packages/shared/src/capabilities.ts` に名前を付ける
-3. 方言ファイルを片方だけ変更しない。`mysql/x.ts` を触ったら `postgres/x.ts` の同等箇所を確認する
-4. 新しい型の扱いを変えたら `docker/fixtures/*` と各 `*.integration.test.ts` の `typesRow1` を更新する
-5. 検証は `bun run test`（ユニット）→ `bun run db:up && bun run test:integration`（両 DB の conformance）
+3. `DdlOp` を追加したら、`test/ddl.test.ts` の `SAMPLE_OPS` に両方言のスナップショットを追加する
+4. 方言ファイルを片方だけ変更しない。`mysql/x.ts` を触ったら `postgres/x.ts` の同等箇所を確認する
+5. 新しい型の扱いを変えたら `docker/fixtures/*` と各 `*.integration.test.ts` の `typesRow1` を更新する
+6. 検証は `bun run test`（ユニット）→ `bun run db:up && bun run test:integration`（両 DB の conformance）
 
 ## SQL 組み立て
 
