@@ -11,9 +11,9 @@ MySQL / PostgreSQL 両対応の、モダン TypeScript 製の Web DB 管理ツ�
 - **画面構成**: phpMyAdmin と同じ 3 階層（サーバー: DB 一覧/SQL/ステータス/変数/プロセス/ユーザー、DB: 構造/SQL/エクスポート/インポート/権限/ルーチン/トリガー/イベント、テーブル: 表示/構造/SQL/検索/挿入/エクスポート/インポート/トリガー/操作）
 - **型の流れ**: `packages/shared` の Zod → API (`@hono/zod-validator`) → web (`hc<AppType>`)
 - **テスト DB**: `docker compose`（MySQL `13306` / PostgreSQL `15433`、fixtures 自動投入）
-- **開発での使い方（売りの機能）**: `docker-compose.dev.yml` 1 つで、手元の Docker の MySQL / PostgreSQL コンテナを自動検出してログイン画面に出す（`TSMYADMIN_DOCKER_DISCOVERY=1`、`apps/api/src/lib/docker-discovery.ts`。読むのは GET だけ、パスワードは既定では読まない（`TSMYADMIN_DOCKER_LOGIN=1` を明示したときだけコンテナの資格情報をプロセス内に読み、ブラウザには返さず 1 クリックで入る）、`NODE_ENV=production` では拒否）
+- **開発での使い方（売りの機能）**: `docker-compose.dev.yml` 1 つで、手元の Docker の MySQL / PostgreSQL コンテナを自動検出してログイン画面に出す（`TSMYADMIN_DOCKER_DISCOVERY=1`、`apps/api/src/lib/docker-discovery.ts`。読むのは GET だけ、`NODE_ENV=production` では拒否）。コンテナの資格情報を使う 1 クリック ログインは、`TSMYADMIN_DOCKER_LOGIN=1` を明示したときだけ（既定はパスワードを読まない）。くわしくは [docs/dev-environment.md](docs/dev-environment.md)
 - **本番運用**: 設定は `apps/api/src/config.ts` で起動時検証（環境変数の一覧は `docs/deployment.md` が唯一の正）。接続先 allowlist・ログイン レート制限・CSP・リクエスト ID 付き構造化ログ・監査ログ（`withAudit`）・`/healthz` `/readyz`・暗号化 SQLite セッションストア（`SESSION_STORE=sqlite`）
-- **品質**: Vitest / Playwright（**アクセシビリティ**は 3 層で、Biome の a11y ルール（警告 0 を維持）・`check:contrast`・E2E の axe とレイアウト検査。検査の中身と、画面を足したときにやることは [.claude/rules/web.md](.claude/rules/web.md) の「画面を足すとき」）/ Biome / knip / madge / jscpd / type-coverage + 自前検査（`check:arch`, `check:sql-safety`, `check:doc-comments` = doc コメントが別の宣言の上に残っていないか, `check:file-size` = ファイルが 800 行を超えないか（既存の大きなファイルは基準線で「増やさない」）, `check:dialect-leaks` = アダプターの外で `dialect === 'postgres'` のように DB の種類を尋ねる場所を増やさない（基準線は下がるだけ）, `docs:validate`, `size` = 初期 JS の brotli 合計 170 kB 予算）
+- **品質**: Vitest / Playwright / Biome / knip / madge / jscpd / type-coverage + 自前検査（`bun run check:quality` にまとめてある。中身は `package.json`）。**アクセシビリティ**は 3 層（Biome の a11y ルール = 警告 0、`check:contrast`、E2E の axe とレイアウト検査）で、検査の中身と、画面を足したときにやることは [.claude/rules/web.md](.claude/rules/web.md) の「画面を足すとき」。初期 JS は brotli 合計 170 kB の予算（`bun run size`）
 
 ## 開発コマンド
 
@@ -32,6 +32,12 @@ bun run test:e2e          # Playwright
 bun run test:e2e:coverage # Playwright（Chromium）で、Web のコードのどこまで実行されるかを測る（約 7 分。画面ごとの割合と、一度も実行されないファイル）
 bun run lighthouse        # Lighthouse CI（警告のみ、要 Chrome）
 ```
+
+## 試験と基準線の扱い
+
+- **カバレッジの下限は 2 つ**（`bun run check:coverage`）: 文と分岐。ファイルごとに、基準線から 10 ポイントを超えて下がる、または新しいファイルが文 60%・分岐 50% を下回ると落ちる。カバレッジは「実行された」ことしか示さないので、試験が間違いに気づくかは `bun run mutation` で見る（点数は見て判断する。CI には入れない）
+- **基準線の数字（`coverage-baseline.json`・`dialect-leaks-baseline.json`・`file-size-baseline.json`・CLAUDE.md の件数）の競合は、手で直さず、再生成する**: `bun run docs:validate --fix`、`node scripts/check-coverage.mjs --update`、`node scripts/check-dialect-leaks.mjs --update-baseline`。基準線は一方向にだけ動く（カバレッジは上がるだけ、分岐とファイル長は下がるだけ）
+- **挙動を変えないリファクタリングは、旧実装との差分検査で確かめる**: 旧ファイルをコピーして、新旧を同じ入力で呼ぶ一時的なテストを書き、全メソッド × 多くの入力で比べる。違いが出たら、呼ばれない経路かどうかを確かめてから進める（終わったら一時ファイルを消す）
 
 ## 現在の規模（`scripts/validate-docs.mjs` が同期）
 
