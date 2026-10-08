@@ -493,8 +493,9 @@ describe('the edges of the client commands and of SET', () => {
   it('reads a SET only at the start of the statement, and keeps a server-wide one out even when its list goes on', () => {
     expect(setAssignments("XYZ sql_mode = 'A'")).toEqual([])
     expect(setAssignments("A SET ,sql_mode = 'A'")).toEqual([])
-    // MySQL sets the later variables of `SET GLOBAL a = 1, b = 2` at the session level; this reader leaves a statement
-    // that starts server-wide out altogether (a documented simplification), however it is spaced.
+    // In `SET GLOBAL a = 1, b = 2` the later variables inherit GLOBAL (checked on a real MySQL 8: `SET GLOBAL
+    // max_connections = 151, sql_mode = 'ANSI'` changed @@global.sql_mode and left @@session.sql_mode alone), so the
+    // session mode is untouched and the whole statement is rightly left out, however it is spaced.
     expect(setAssignments("SET GLOBAL x = 1, sql_mode = 'NO_BACKSLASH_ESCAPES'")).toEqual([])
     expect(setAssignments("SET  GLOBAL x = 1, sql_mode = 'A'")).toEqual([])
     expect(setAssignments("SET PERSIST x = 1, sql_mode = 'A'")).toEqual([])
