@@ -3,14 +3,22 @@ import { apiError } from './errors.ts'
 
 const NAME_KEYS = new Set(['name', 'newName', 'table', 'database', 'schema', 'refTable', 'user', 'valueColumn'])
 const encoder = new TextEncoder()
+/** MariaDB allows 128 characters in an account name where MySQL allows 32 (checked on MariaDB 10.11 and 11.8). */
+const MARIADB_ACCOUNT_MAX = 128
 
 /**
  * The first identifier in an operation (a DDL or account op) longer than the server allows, or null. Objects are
  * walked recursively; only the keys that carry object names are considered (a host, a comment or a default value
- * may legitimately be long).
+ * may legitimately be long). `serverVersion` tells MariaDB from MySQL, which share a dialect but not the account limit.
  */
-export function tooLongIdentifier(op: unknown, dialect: Dialect): { name: string; max: number } | null {
-  const { max, unit, accountMax } = capabilities(dialect).identifier
+export function tooLongIdentifier(
+  op: unknown,
+  dialect: Dialect,
+  serverVersion = ''
+): { name: string; max: number } | null {
+  const { max, unit, accountMax: dialectAccountMax } = capabilities(dialect).identifier
+  const accountMax =
+    dialectAccountMax !== null && /mariadb/i.test(serverVersion) ? MARIADB_ACCOUNT_MAX : dialectAccountMax
   const length = (s: string) => (unit === 'bytes' ? encoder.encode(s).length : [...s].length)
   const visit = (value: unknown, key: string | null): { name: string; max: number } | null => {
     if (typeof value === 'string') {

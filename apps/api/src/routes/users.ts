@@ -48,7 +48,7 @@ export function userRoutes(cfg: SessionConfig) {
     .post('/users/preview', validate('json', UserOpRequestSchema), async (c) => {
       const adapter = c.get('session').adapter
       const { op: requested } = c.req.valid('json')
-      const long = tooLongIdentifier(namesOf(requested), adapter.dialect)
+      const long = tooLongIdentifier(namesOf(requested), adapter.dialect, (await adapter.serverInfo()).version)
       if (long) return c.json(identifierTooLong(long), 400)
       const op = await withServerGrants(adapter, requested)
       return c.json({ sql: adapter.users.build(op).map((s) => s.display) })
@@ -57,7 +57,7 @@ export function userRoutes(cfg: SessionConfig) {
       const { op: requested } = c.req.valid('json')
       const adapter = c.get('session').adapter
       // The UI previews first; a direct call must not create a role under a silently truncated name.
-      const long = tooLongIdentifier(namesOf(requested), adapter.dialect)
+      const long = tooLongIdentifier(namesOf(requested), adapter.dialect, (await adapter.serverInfo()).version)
       if (long) return c.json(identifierTooLong(long), 400)
       const op = await withServerGrants(adapter, requested)
       const statements = adapter.users.build(op)
