@@ -47,6 +47,20 @@ describe('tooLongIdentifier', () => {
     expect(tooLongIdentifier({ user: name(33) }, 'postgres')).toBeNull()
   })
 
+  it('lets a MariaDB account name run to 128 characters (MySQL stops at 32), and leaves other names at 64', () => {
+    const maria = '11.8.9-MariaDB-ubu2404'
+    expect(tooLongIdentifier({ user: name(33) }, 'mysql', maria)).toBeNull()
+    expect(tooLongIdentifier({ user: name(128) }, 'mysql', maria)).toBeNull()
+    expect(tooLongIdentifier({ user: name(129) }, 'mysql', maria)).toEqual({ name: name(129), max: 128 })
+    expect(tooLongIdentifier({ name: name(65) }, 'mysql', maria)).toEqual({ name: name(65), max: 64 })
+    expect(tooLongIdentifier({ user: name(33) }, 'mysql', '10.11.19-MARIADB')).toBeNull()
+    // MySQL's own version string, or none known, keeps the 32.
+    expect(tooLongIdentifier({ user: name(33) }, 'mysql', '8.4.3')).toEqual({ name: name(33), max: 32 })
+    expect(tooLongIdentifier({ user: name(33) }, 'mysql')).toEqual({ name: name(33), max: 32 })
+    // The word on a PostgreSQL server changes nothing: it has no separate account limit to widen.
+    expect(tooLongIdentifier({ user: name(64) }, 'postgres', 'mariadb')).toEqual({ name: name(64), max: 63 })
+  })
+
   it('looks at every key that names an object, and at none that does not', () => {
     for (const key of ['name', 'newName', 'table', 'database', 'schema', 'refTable', 'valueColumn'])
       expect(tooLongIdentifier({ [key]: name(70) }, 'mysql'), key).not.toBeNull()
