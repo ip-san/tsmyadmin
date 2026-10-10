@@ -62,3 +62,28 @@ describe('keyColumnExpr: what a scan orders by', () => {
     expect(keyColumnExpr('`c`', type)).toBe('`c`')
   })
 })
+
+describe('the patterns match the whole type, from its start', () => {
+  it('does not take a type that merely contains or ends in a known word for it', () => {
+    expect(keyParam('?', 'xjson')).toBe('?')
+    expect(keyParam('?', 'json_extra')).toBe('CAST(? AS JSON)')
+    expect(keyParam('?', 'point')).toBe('?')
+    expect(keyParam('?', 'multipoint')).toBe('?')
+    expect(keyParam('?', 'xdecimal(10,2)')).toBe('?')
+    expect(keyParam('?', 'bitx')).toBe('CAST(CONV(HEX(?), 16, 10) AS UNSIGNED)')
+    expect(keyParam('?', 'xbit')).toBe('?')
+    expect(keyColumnExpr('`c`', 'xenum(1)')).toBe('`c`')
+    expect(keyColumnExpr('`c`', 'multiset(1)')).toBe('`c`')
+  })
+
+  it('keeps every digit of a decimal precision and scale', () => {
+    expect(keyParam('?', 'decimal(30,12)')).toBe('CAST(? AS DECIMAL(30,12))')
+    expect(keyParam('?', 'decimal(65, 30)')).toBe('CAST(? AS DECIMAL(65,30))')
+  })
+
+  it('writes an enum or set column by its label in the binary collation', () => {
+    expect(keyColumnExpr('`c`', "enum('a','b')")).toBe('CAST(`c` AS CHAR) COLLATE utf8mb4_bin')
+    expect(keyColumnExpr('`c`', "SET('a')")).toBe('CAST(`c` AS CHAR) COLLATE utf8mb4_bin')
+    expect(keyColumnExpr('`c`', 'varchar(9)')).toBe('`c`')
+  })
+})

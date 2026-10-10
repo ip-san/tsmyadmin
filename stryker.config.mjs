@@ -5,7 +5,7 @@
  *
  * Run it on the files that matter, not on everything (it re-runs the tests per mutant):
  *   bun run mutation -- --mutate packages/adapter/src/sql/lexical-rules.ts
- * The default set is below (about 2 hours; the script raises the test timeout, since mutated code runs slower). Not
+ * The default set is below (about 3 hours; the script raises the test timeout, since mutated code runs slower). Not
  * part of CI: its score is read, not gated. It runs the tests that need no database, so code tested only against the
  * real servers (the conformance suite) shows as not covered here.
  */
@@ -31,6 +31,16 @@ export default {
     'packages/adapter/src/sql/cells.ts',
     'packages/adapter/src/sql/quote.ts',
     'packages/adapter/src/mysql/users.ts',
+    'packages/adapter/src/sql/export.ts',
+    'packages/adapter/src/mysql/export.ts',
+    'packages/adapter/src/postgres/export.ts',
+    'packages/adapter/src/mysql/errors.ts',
+    'packages/adapter/src/mysql/key-types.ts',
+    'packages/adapter/src/mysql/normalise.ts',
+    'packages/adapter/src/mysql/values.ts',
+    'packages/adapter/src/postgres/values.ts',
+    'packages/adapter/src/postgres/create-statements.ts',
+    'packages/adapter/src/postgres/routines.ts',
     'packages/adapter/src/postgres/users.ts',
     'packages/adapter/src/mysql/ddl.ts',
     'packages/adapter/src/postgres/ddl.ts',
