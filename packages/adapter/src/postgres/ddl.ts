@@ -116,10 +116,10 @@ const normalizedParams = (list: string) =>
     .filter((p) => p !== '')
     .join(',')
 
-/** The trigger function a PostgreSQL trigger runs, created next to it and named after it. */
-function triggerFunction(ns: Namespace, op: Extract<DdlOp, { op: 'createTrigger' }>, orReplace: boolean): string {
+/** The function a replaced trigger runs, redefined under the name the trigger gave it (see createTrigger). */
+function replacementTriggerFunction(ns: Namespace, op: Extract<DdlOp, { op: 'createTrigger' }>): string {
   const fn = quoteTable('postgres', ns, `${op.name}_fn`)
-  return `CREATE ${orReplace ? 'OR REPLACE ' : ''}FUNCTION ${fn}() RETURNS trigger LANGUAGE plpgsql AS ${dollarQuoted(op.body)}`
+  return `CREATE OR REPLACE FUNCTION ${fn}() RETURNS trigger LANGUAGE plpgsql AS ${dollarQuoted(op.body)}`
 }
 
 function createRoutineSql(ns: Namespace, op: Extract<DdlOp, { op: 'createRoutine' }>, orReplace = false): string[] {
@@ -260,7 +260,7 @@ export const pgDdl: DdlBuilder = {
           ...(replaces.name !== create.name
             ? [`DROP FUNCTION IF EXISTS ${quoteTable('postgres', ns, `${replaces.name}_fn`)}()`]
             : []),
-          triggerFunction(ns, create, true),
+          replacementTriggerFunction(ns, create),
           `CREATE TRIGGER ${id(create.name)} ${create.timing} ${create.event} ON ${quoteTable('postgres', ns, create.table)} FOR EACH ROW EXECUTE FUNCTION ${quoteTable('postgres', ns, `${create.name}_fn`)}()`,
         ])
       }
