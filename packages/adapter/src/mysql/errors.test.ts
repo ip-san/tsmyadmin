@@ -116,3 +116,26 @@ describe('mapMysqlError: error numbers that only MariaDB has', () => {
     expect(mapMysqlError(e, false).nativeCode).toBe('ER_SOMETHING')
   })
 })
+
+describe('a MariaDB error number the driver has no name for', () => {
+  it("names the numbers from 4000 on and the listed ones by their number, keeping the driver's name for anything else", () => {
+    const named = (err: object, mariadb = true) => {
+      const e = mapMysqlError(err, mariadb)
+      return e.nativeCode
+    }
+    expect(named({ code: 'ER_UNKNOWN', errno: 4000 })).toBe('ER_4000')
+    expect(named({ code: 'ER_UNKNOWN', errno: 4100 })).toBe('ER_4100')
+    expect(named({ code: 'ER_UNKNOWN', errno: 3999 })).toBe('ER_UNKNOWN')
+    expect(named({ code: 'ER_UNKNOWN', errno: 1969 })).toBe('ER_STATEMENT_TIMEOUT')
+    expect(named({ code: 'ER_UNKNOWN', errno: 4084 })).toBe('ER_SEQUENCE_RUN_OUT')
+    expect(named({ code: 'ER_UNKNOWN', errno: 4091 })).toBe('ER_UNKNOWN_SEQUENCES')
+    // MySQL names its own numbers, so the driver's code stands there.
+    expect(named({ code: 'ER_UNKNOWN', errno: 4100 }, false)).toBe('ER_UNKNOWN')
+    expect(named({ code: 'ER_UNKNOWN', errno: 1969 }, false)).toBe('ER_UNKNOWN')
+    // An error number that is not a number is no number at all.
+    expect(named({ code: 'ER_UNKNOWN', errno: '4100' })).toBe('ER_UNKNOWN')
+    expect(named({ code: 'ER_UNKNOWN', errno: '1969' })).toBe('ER_UNKNOWN')
+    expect(named({ errno: 4100 })).toBe('ER_4100')
+    expect(named({ errno: 77 })).toBe('ER_77')
+  })
+})
