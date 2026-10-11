@@ -154,6 +154,13 @@ const ANY_LITERAL = new RegExp(literal(1), 'g')
  */
 const CREDENTIAL_PART = /^([\s\S]*?\b(?:\w+_)?(?:IDENTIFIED|PASSWORD)\b)([\s\S]*)$/i
 const QUOTED_SPAN = /['"$][\s\S]*['"$]/
+const LITERAL_AT = new RegExp(literal(1), 'y')
+
+/** Whether a complete string literal starts at `at`: a `$` that closes no tag (`$$secret`) opens one that never ends. */
+function literalCompleteAt(text: string, at: number): boolean {
+  LITERAL_AT.lastIndex = at
+  return LITERAL_AT.test(text)
+}
 
 function redactSqlSecrets(sql: string, dialect: Dialect): string {
   const plain = stripComments(sql, dialect)
@@ -168,11 +175,16 @@ function redactSqlSecrets(sql: string, dialect: Dialect): string {
       const m = CREDENTIAL_PART.exec(part)
       if (!m) return part
       const tail = m[2] ?? ''
-      const masked = QUOTED_SPAN.test(tail)
-        ? tail.replace(QUOTED_SPAN, `'${PASSWORD_MASK}'`)
-        : /['"$]/.test(tail)
-          ? tail.replace(/['"$][\s\S]*$/, `'${PASSWORD_MASK}'`)
-          : tail.replace(ANY_LITERAL, (lit) => (lit.includes(PASSWORD_MASK) ? lit : `'${PASSWORD_MASK}'`))
+      // The first quote-like character may open a dollar-quoted string that is never closed: everything after it is
+      // the secret then, however many `$` the rest of the statement holds.
+      const first = tail.search(/['"$]/)
+      const unclosedDollar = first !== -1 && tail[first] === '$' && !literalCompleteAt(tail, first)
+      const masked =
+        QUOTED_SPAN.test(tail) && !unclosedDollar
+          ? tail.replace(QUOTED_SPAN, `'${PASSWORD_MASK}'`)
+          : /['"$]/.test(tail)
+            ? tail.replace(/['"$][\s\S]*$/, `'${PASSWORD_MASK}'`)
+            : tail.replace(ANY_LITERAL, (lit) => (lit.includes(PASSWORD_MASK) ? lit : `'${PASSWORD_MASK}'`))
       return `${m[1]}${masked}`
     })
     .join(';\n')
