@@ -98,7 +98,12 @@ export function formatSql(sql: string): string {
   let clause = ''
   let between = false
   const breakLine = (indent: number) => {
-    if (atLineStart) return
+    // Already at the start of a line (a line comment ended it, indented for the next item): a clause that follows
+    // takes its own indent rather than the one left there.
+    if (atLineStart) {
+      out = out.replace(/ *$/, '  '.repeat(indent))
+      return
+    }
     out = `${out.trimEnd()}\n${'  '.repeat(indent)}`
     atLineStart = true
   }
