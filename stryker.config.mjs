@@ -5,7 +5,7 @@
  *
  * Run it on the files that matter, not on everything (it re-runs the tests per mutant):
  *   bun run mutation -- --mutate packages/adapter/src/sql/lexical-rules.ts
- * The default set is below (about 3 hours; the script raises the test timeout, since mutated code runs slower). Not
+ * The default set is below (about 4 hours; the script raises the test timeout, since mutated code runs slower). Not
  * part of CI: its score is read, not gated. It runs the tests that need no database, so code tested only against the
  * real servers (the conformance suite) shows as not covered here.
  */
@@ -49,6 +49,15 @@ export default {
     'packages/adapter/src/mysql/program-detail.ts',
     'packages/adapter/src/postgres/program-detail.ts',
     'apps/api/src/lib/identifiers.ts',
+    'apps/api/src/lib/totp.ts',
+    'apps/api/src/lib/allowlist.ts',
+    'apps/api/src/lib/rate-limit.ts',
+    'apps/api/src/lib/errors.ts',
+    'apps/api/src/lib/concurrency.ts',
+    'apps/api/src/lib/ndjson.ts',
+    'apps/api/src/lib/zip.ts',
+    'packages/shared/src/csv.ts',
+    'packages/shared/src/infer-type.ts',
   ],
   reporters: ['clear-text', 'progress-append-only'],
   clearTextReporter: { allowColor: false, reportTests: false, reportMutants: true },
