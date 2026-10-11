@@ -2,6 +2,12 @@ import { type APIRequestContext, expect, request } from '@playwright/test'
 import { login, TARGETS, test } from './helpers.ts'
 
 const TABLES = 1500
+/**
+ * Every wait in this test is on a list of 1500 tables being drawn or filtered, which WebKit under a parallel run does
+ * slowly: the first wait was given 20 s for that, and the later ones (scrolling to the end, filtering) failed on the
+ * default 5 s on CI twice in one day.
+ */
+const SLOW = { timeout: 20_000 }
 
 /** Large-schema behaviour: the sidebar must virtualize and stay responsive (PostgreSQL schema, self-cleaning). */
 test.describe('sidebar at scale', () => {
@@ -58,23 +64,23 @@ test.describe('sidebar at scale', () => {
     await page.goto(`/db/${t.database}?schema=${schema}`)
     await page.getByRole('button', { name: `${schema} を展開` }).click()
     const aside = page.locator('aside')
-    // Listing 1500 tables is the slow part, and WebKit under a parallel run needs longer than the default 5 s.
-    await expect(aside.getByRole('link', { name: 't_0001' })).toBeVisible({ timeout: 20_000 })
+    // Listing 1500 tables is the slow part (see SLOW).
+    await expect(aside.getByRole('link', { name: 't_0001' })).toBeVisible(SLOW)
     const rendered = await aside.locator('a[href*="/table/"]').count()
     expect(rendered).toBeLessThan(120)
     // The aside is the scroll container: scrolling to the bottom must materialise the last rows.
     await aside.evaluate((el) => {
       el.scrollTop = el.scrollHeight
     })
-    await expect(aside.getByRole('link', { name: 't_1500' })).toBeVisible()
+    await expect(aside.getByRole('link', { name: 't_1500' })).toBeVisible(SLOW)
     expect(await aside.locator('a[href*="/table/"]').count()).toBeLessThan(120)
     await aside.evaluate((el) => {
       el.scrollTop = 0
     })
     await page.getByLabel('テーブルを絞り込む').fill('t_14')
-    await expect(page.getByText('1,500 件中 100 件')).toBeVisible()
-    await expect(aside.getByRole('link', { name: 't_1400' })).toBeVisible()
+    await expect(page.getByText('1,500 件中 100 件')).toBeVisible(SLOW)
+    await expect(aside.getByRole('link', { name: 't_1400' })).toBeVisible(SLOW)
     await page.getByLabel('テーブルを絞り込む').fill('t_1499')
-    await expect(page.getByText('1,500 件中 1 件')).toBeVisible()
+    await expect(page.getByText('1,500 件中 1 件')).toBeVisible(SLOW)
   })
 })
