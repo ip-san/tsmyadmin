@@ -225,3 +225,12 @@ describe('parseCsv: the line end of a file', () => {
     expect(lines).toEqual([1, 3])
   })
 })
+
+describe('parseCsvRecords: lines with an escaped line break', () => {
+  it('counts a line break escaped inside a quoted field, and not the letter n after the escape', () => {
+    const lines = (text: string) => [...parseCsvRecords(text, { escape: '\\' })].map((r) => r.line)
+    expect(lines('"a\\\nb"\nc')).toEqual([1, 3])
+    expect(lines('"a\\nb"\nc')).toEqual([1, 2])
+    expect(lines('"a\\\n\\\nb"\nc')).toEqual([1, 4])
+  })
+})

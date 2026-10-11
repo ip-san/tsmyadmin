@@ -242,6 +242,13 @@ describe('withAudit', () => {
     expect(more[0]).not.toHaveProperty('statements')
   })
 
+  it('counts the statements of a script only for a script, not for any call that returns a list', async () => {
+    const { adapter, lines } = wrap({ killProcess: async () => [{ kind: 'error' }, { kind: 'rows' }] })
+    await adapter.killProcess('1')
+    expect(lines[0]).not.toHaveProperty('statements')
+    expect(lines[0]).not.toHaveProperty('errors')
+  })
+
   it('writes the rows an insert affected, for a bulk insert only', async () => {
     const result = { affectedRows: 7 }
     const bulk = wrap({ insertRows: async () => result, insertRow: async () => result })
@@ -281,6 +288,7 @@ describe('withAudit', () => {
     expect(JSON.stringify(lines[0])).not.toContain('secret')
     expect(Number.isInteger(lines[0]?.ms)).toBe(true)
     expect(lines[0]?.ms as number).toBeGreaterThanOrEqual(0)
+    expect(lines[0]?.ms as number).toBeLessThan(5000)
   })
 
   it('names a failure that is not an adapter error by its class, or by Error, and has no native code', async () => {
