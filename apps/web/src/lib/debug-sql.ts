@@ -18,6 +18,16 @@ export const DEBUG_SQL_MAX = 200
 const CREDENTIAL_PART = /^([\s\S]*?\b(?:\w+_)?(?:IDENTIFIED|PASSWORD)\b)([\s\S]*)$/i
 const QUOTED_SPAN = /['"$][\s\S]*['"$]/
 const CONNECTION_PASSWORD = /(\bpassword\s*=\s*)[^\s'";]+/gi
+/** A complete `$$…$$` / `$tag$…$tag$` string, matched where the first quote-like character stands. */
+const DOLLAR_STRING = /\$((?:[A-Za-z_\u0080-\uffff][\w\u0080-\uffff]*)?)\$[\s\S]*?\$\1\$/y
+
+/** The first quote-like character opens a `$` string that is never closed: all that follows it is the secret. */
+function opensUnclosedDollar(tail: string): boolean {
+  const first = tail.search(/['"$]/)
+  if (first === -1 || tail[first] !== '$') return false
+  DOLLAR_STRING.lastIndex = first
+  return !DOLLAR_STRING.test(tail)
+}
 
 /**
  * A statement with the secrets of an account statement masked, as the audit log does it: from the first IDENTIFIED /
@@ -29,9 +39,10 @@ export function maskSql(sql: string): string {
   const m = CREDENTIAL_PART.exec(plain)
   if (!m) return plain
   const tail = m[2] ?? ''
-  const masked = QUOTED_SPAN.test(tail)
-    ? tail.replace(QUOTED_SPAN, `'${PASSWORD_MASK}'`)
-    : tail.replace(/['"$][\s\S]*$/, `'${PASSWORD_MASK}'`)
+  const masked =
+    QUOTED_SPAN.test(tail) && !opensUnclosedDollar(tail)
+      ? tail.replace(QUOTED_SPAN, `'${PASSWORD_MASK}'`)
+      : tail.replace(/['"$][\s\S]*$/, `'${PASSWORD_MASK}'`)
   return `${m[1]}${masked}`
 }
 

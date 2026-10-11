@@ -1,0 +1,110 @@
+import { act, renderHook } from '@testing-library/react'
+import { PASSWORD_MASK, type StatementResult } from '@tsmyadmin/shared'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { clearDebugSql, maskSql, recordSql, recordStatement, useDebugSql } from './debug-sql.ts'
+
+/** What the debug panel keeps and shows: masked statements, the ring, and who is told (found by mutation testing). */
+
+describe('maskSql: a dollar-quoted password that is never closed', () => {
+  it('masks everything after the opening tag, so no part of the password stays', () => {
+    for (const sql of [
+      'ALTER ROLE u PASSWORD $$hunter2',
+      'ALTER ROLE u PASSWORD $$hunter2 more words',
+      'ALTER ROLE u PASSWORD $tag$hunter2 more',
+      'ALTER ROLE u PASSWORD $tag$hunter2 $other$ more',
+    ]) {
+      const out = maskSql(sql)
+      expect(out, sql).not.toContain('hunter2')
+      expect(out, sql).not.toContain('more')
+      expect(out, sql).toBe(`ALTER ROLE u PASSWORD '${PASSWORD_MASK}'`)
+    }
+  })
+
+  it('still masks a closed one whole and keeps what follows it', () => {
+    expect(maskSql('ALTER ROLE u PASSWORD $$hunter2$$')).toBe(`ALTER ROLE u PASSWORD '${PASSWORD_MASK}'`)
+    expect(maskSql('ALTER ROLE u PASSWORD $tag$hunter2$tag$ VALID UNTIL x')).toBe(
+      `ALTER ROLE u PASSWORD '${PASSWORD_MASK}' VALID UNTIL x`
+    )
+    expect(maskSql('ALTER ROLE u PASSWORD $1')).toBe(`ALTER ROLE u PASSWORD '${PASSWORD_MASK}'`)
+  })
+})
+
+describe('maskSql: the other forms', () => {
+  it('masks a quote that is never closed from the quote on, in each kind of quote', () => {
+    expect(maskSql("ALTER USER u IDENTIFIED BY 'unterminated secret")).toBe(
+      `ALTER USER u IDENTIFIED BY '${PASSWORD_MASK}'`
+    )
+    expect(maskSql('ALTER USER u IDENTIFIED BY "unterminated secret')).toBe(
+      `ALTER USER u IDENTIFIED BY '${PASSWORD_MASK}'`
+    )
+    expect(maskSql("ALTER USER u IDENTIFIED BY 'a b' WITH GRANT OPTION")).toBe(
+      `ALTER USER u IDENTIFIED BY '${PASSWORD_MASK}' WITH GRANT OPTION`
+    )
+    expect(maskSql("SET PASSWORD FOR u = 'x'\nSELECT 'tail'")).not.toContain("'x'")
+  })
+
+  it('masks a connection string password up to the next blank, quote or semicolon, anywhere in the statement', () => {
+    expect(maskSql('CREATE SUBSCRIPTION s CONNECTION host=h password=secret dbname=d')).toBe(
+      `CREATE SUBSCRIPTION s CONNECTION host=h password=${PASSWORD_MASK} dbname=d`
+    )
+    expect(maskSql('x PASSWORD = secret;')).not.toContain('secret')
+    expect(maskSql('SELECT 1')).toBe('SELECT 1')
+  })
+})
+
+describe('the record of statements', () => {
+  beforeEach(clearDebugSql)
+  const entries = () => renderHook(() => useDebugSql()).result.current
+
+  it('numbers the statements in order, stamps the time, and keeps the timing and outcome it is given', () => {
+    const before = Date.now()
+    recordSql('SELECT 1', 12, true)
+    recordSql('SELECT 2', null, false)
+    const [a, b] = entries()
+    expect(b?.id).toBe((a?.id ?? 0) + 1)
+    expect(a).toMatchObject({ sql: 'SELECT 1', ms: 12, ok: true, rerun: 'SELECT 1' })
+    expect(b).toMatchObject({ sql: 'SELECT 2', ms: null, ok: false })
+    expect(a?.at).toBeGreaterThanOrEqual(before)
+    expect(a?.at).toBeLessThanOrEqual(Date.now())
+  })
+
+  it('keeps the statement to re-run apart when one is given, masked as well', () => {
+    recordSql("CREATE USER u IDENTIFIED BY 'pw'", 1, true, "CREATE USER u IDENTIFIED BY 'other'")
+    const [entry] = entries()
+    expect(entry?.sql).toBe(`CREATE USER u IDENTIFIED BY '${PASSWORD_MASK}'`)
+    expect(entry?.rerun).toBe(`CREATE USER u IDENTIFIED BY '${PASSWORD_MASK}'`)
+    expect(JSON.stringify(entry)).not.toContain('other')
+  })
+
+  it('records a finished statement with its own time, and an error without one', () => {
+    recordStatement({ kind: 'rows', sql: 'SELECT 1', durationMs: 7 } as unknown as StatementResult)
+    recordStatement({ kind: 'affected', sql: 'UPDATE t SET a = 1', durationMs: 3 } as unknown as StatementResult)
+    recordStatement({ kind: 'error', sql: 'SELEC 1', durationMs: 9, message: 'x' } as unknown as StatementResult)
+    const [rows, affected, error] = entries()
+    expect(rows).toMatchObject({ sql: 'SELECT 1', ms: 7, ok: true })
+    expect(affected).toMatchObject({ ms: 3, ok: true })
+    expect(error).toMatchObject({ sql: 'SELEC 1', ms: null, ok: false })
+  })
+
+  it('tells those who listen when a statement is noted or the record is cleared, and not once they stop', () => {
+    let renders = 0
+    const hook = renderHook(() => {
+      renders++
+      return useDebugSql()
+    })
+    expect(hook.result.current).toHaveLength(0)
+    const first = renders
+    act(() => recordSql('SELECT 1', 1, true))
+    expect(hook.result.current).toHaveLength(1)
+    expect(renders).toBeGreaterThan(first)
+    const second = renders
+    act(() => clearDebugSql())
+    expect(hook.result.current).toHaveLength(0)
+    expect(renders).toBeGreaterThan(second)
+    hook.unmount()
+    const last = renders
+    recordSql('SELECT 2', 1, true)
+    clearDebugSql()
+    expect(renders).toBe(last)
+  })
+})
