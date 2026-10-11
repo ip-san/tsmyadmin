@@ -268,3 +268,62 @@ describe('crc32', () => {
     expect(crc32(new Uint8Array([0]))).toBe(0xd202_ef8d)
   })
 })
+
+/** An archive of `count` identical stored entries, each directory record carrying an extra field and a comment. */
+function repeated(count: number, extra: number, comment: number) {
+  const name = utf8('f.txt')
+  const data = utf8('payload')
+  const local = new Uint8Array(30 + name.length + data.length)
+  const lv = view(local)
+  lv.setUint32(0, 0x0403_4b50, true)
+  lv.setUint16(26, name.length, true)
+  local.set(name, 30)
+  local.set(data, 30 + name.length)
+  const record = new Uint8Array(46 + name.length + extra + comment)
+  const rv = view(record)
+  rv.setUint32(0, 0x0201_4b50, true)
+  rv.setUint32(16, crc32(data), true)
+  rv.setUint32(20, data.length, true)
+  rv.setUint32(24, data.length, true)
+  rv.setUint16(28, name.length, true)
+  rv.setUint16(30, extra, true)
+  rv.setUint16(32, comment, true)
+  record.set(name, 46)
+  const end = new Uint8Array(22)
+  const ev = view(end)
+  ev.setUint32(0, 0x0605_4b50, true)
+  ev.setUint16(8, count, true)
+  ev.setUint16(10, count, true)
+  ev.setUint32(12, record.length * count, true)
+  ev.setUint32(16, local.length, true)
+  return Buffer.concat([local, ...Array.from({ length: count }, () => record), end])
+}
+
+describe('readZip: stepping through the directory', () => {
+  it('steps over the name, the extra field and the comment of each record, whatever their sizes, to reach the next', () => {
+    for (const [extra, comment] of [
+      [0, 0],
+      [5, 3],
+      [300, 0],
+      [0, 258],
+      [260, 515],
+    ] as const) {
+      const files = readZip(repeated(3, extra, comment))
+      expect(
+        files.map((f) => f.name),
+        `${extra}/${comment}`
+      ).toEqual(['f.txt', 'f.txt', 'f.txt'])
+      expect(Buffer.from(files[2]?.bytes() ?? []).toString()).toBe('payload')
+    }
+  })
+})
+
+describe('the size recorded for a streamed entry', () => {
+  it('is the length of the compressed bytes between its header and its descriptor', async () => {
+    const zip = await collect(zipStream([{ name: 's.txt', data: chunks('abc'.repeat(50), 'def'.repeat(50)) }], NOW))
+    const dv = view(zip)
+    const dirAt = dv.getUint32(zip.length - 22 + 16, true)
+    expect(dv.getUint32(dirAt - 8, true)).toBe(dirAt - 16 - 35)
+    expect(dv.getUint32(dirAt - 4, true)).toBe(300)
+  })
+})
