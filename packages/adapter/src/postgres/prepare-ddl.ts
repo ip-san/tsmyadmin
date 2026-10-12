@@ -48,12 +48,21 @@ export async function pgPrepareDdl(adapter: DatabaseAdapter, ns: Namespace, op: 
     case 'setDatabaseCollation': {
       if (!op.applyToTables || op.tables !== undefined) return op
       // The tables as they are now, and their text columns: the preview lists every statement.
-      const tables = (await adapter.listTables(ns)).filter((t) => t.kind === 'table').map((t) => t.name)
+      const listed = (await adapter.listTables(ns)).filter((t) => t.kind === 'table').map((t) => t.name)
+      const tables: string[] = []
       const columns: Record<string, { name: string; dataType: string }[]> = {}
-      for (const table of tables)
-        columns[table] = (await adapter.describeTable(ns, table)).columns
-          .filter((col) => /char|text|citext/i.test(col.dataType) && col.generated === null)
-          .map((col) => ({ name: col.name, dataType: col.dataType }))
+      for (const table of listed) {
+        try {
+          columns[table] = (await adapter.describeTable(ns, table)).columns
+            .filter((col) => /char|text|citext/i.test(col.dataType) && col.generated === null)
+            .map((col) => ({ name: col.name, dataType: col.dataType }))
+          tables.push(table)
+        } catch (err) {
+          // Dropped by someone else between the list and now: nothing is left to convert, and the preview goes on.
+          if (err instanceof AdapterError && err.code === 'NOT_FOUND') continue
+          throw err
+        }
+      }
       return { ...op, tables, columns }
     }
     case 'copyTables': {
