@@ -556,3 +556,81 @@ describe('mysqlDatabaseGrants', () => {
     expect((await grants([])).result).toEqual([])
   })
 })
+
+describe('the questions the MySQL readers ask, and the rows that come back short', () => {
+  it('asks every query of a table about its database and name', async () => {
+    const s = scripted([
+      [/SELECT TABLE_TYPE, ENGINE, TABLE_COMMENT/, rows([['BASE TABLE', 'InnoDB', '', 1, null, null]])],
+      [/FROM information_schema\.COLUMNS/, rows([])],
+      [/CHECK_CONSTRAINTS/, rows([])],
+      [/information_schema\.STATISTICS/, rows([])],
+      [/k\.TABLE_NAME = \?/, rows([])],
+      [/WHERE REFERENCED_TABLE_SCHEMA = \?/, rows([])],
+    ])
+    await mysqlDescribeTable(s.conn, ns, 't', true)
+    expect(s.asked).toHaveLength(6)
+    for (const q of s.asked) expect(q.params, q.text.slice(0, 40)).toEqual(['db', 't'])
+  })
+
+  it('asks whether the database exists only when it listed no tables', async () => {
+    const s = scripted([
+      [
+        /FROM information_schema\.TABLES WHERE TABLE_SCHEMA = \? ORDER BY TABLE_NAME/,
+        rows([['t', 'BASE TABLE', 1, 'InnoDB', '', 1, null, null, null]]),
+      ],
+    ])
+    await mysqlListTables(s.conn, ns)
+    expect(s.asked).toHaveLength(1)
+    const empty = scripted([
+      [/ORDER BY TABLE_NAME/, rows([])],
+      [/SCHEMATA/, rows([[1]])],
+    ])
+    await mysqlListTables(empty.conn, ns)
+    expect(empty.asked[1]?.params).toEqual(['db'])
+  })
+
+  it('does not take any other failure of the index query for a missing expression column', async () => {
+    const s = scripted([
+      [/information_schema\.STATISTICS/, fail('QUERY_FAILED', 'ER_ACCESS_DENIED')],
+      [/SELECT TABLE_TYPE, ENGINE/, rows([['BASE TABLE', 'InnoDB', '', 1, null, null]])],
+      [/FROM information_schema\.COLUMNS/, rows([])],
+    ])
+    await expect(mysqlDescribeTable(s.conn, ns, 't')).rejects.toMatchObject({ nativeCode: 'ER_ACCESS_DENIED' })
+    expect(s.asked.filter((q) => /STATISTICS/.test(q.text))).toHaveLength(1)
+    const plain = scripted([
+      [/information_schema\.STATISTICS/, new Error('boom')],
+      [/SELECT TABLE_TYPE, ENGINE/, rows([['BASE TABLE', 'InnoDB', '', 1, null, null]])],
+      [/FROM information_schema\.COLUMNS/, rows([])],
+    ])
+    await expect(mysqlDescribeTable(plain.conn, ns, 't')).rejects.toThrow('boom')
+  })
+
+  it('reads a MariaDB default that only ends in a quote as an expression', async () => {
+    const s = scripted([
+      [/SELECT TABLE_TYPE, ENGINE/, rows([['BASE TABLE', 'InnoDB', '', 1, null, undefined]])],
+      [/FROM information_schema\.COLUMNS/, rows([['c', 'int', 'YES', "abc'", '', '', null, '', null]])],
+      [/CHECK_CONSTRAINTS/, rows([])],
+      [/information_schema\.STATISTICS/, rows([])],
+      [/k\.TABLE_NAME = \?/, rows([])],
+      [/WHERE REFERENCED_TABLE_SCHEMA/, rows([])],
+    ])
+    const table = await mysqlDescribeTable(s.conn, ns, 't', true)
+    expect(table.columns[0]).toMatchObject({ default: "abc'", defaultIsExpression: true })
+    expect(table.autoIncrement).toBeNull()
+  })
+
+  it('takes only a grantee written from its first quote to its last', async () => {
+    const s = scripted([
+      [
+        /SCHEMA_PRIVILEGES/,
+        rows([
+          ["junk'u'@'h'", 'SELECT', 'NO'],
+          ["'u'@'h'", 'SELECT', 'NO'],
+        ]),
+      ],
+    ])
+    expect(await mysqlDatabaseGrants(s.conn, 'db')).toEqual([
+      { user: 'u', host: 'h', privileges: ['SELECT'], grantable: false },
+    ])
+  })
+})

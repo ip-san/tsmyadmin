@@ -518,3 +518,80 @@ describe('pgListPartitions', () => {
     expect(await part('range(a)')).toMatchObject({ method: 'range', expression: 'a' })
   })
 })
+
+describe('the questions the PostgreSQL readers ask, and the rows that come back short', () => {
+  const noSchema: Namespace = { database: 'db' }
+
+  it('asks every query of a table about that table: by its quoted name, and the public schema when none is named', async () => {
+    const s = scripted([
+      [/SELECT c\.relkind, obj_description/, rows([['r', null, 1, false, null]])],
+      [/LEFT JOIN pg_attrdef/, rows([])],
+      [/FROM pg_index i/, rows([])],
+      [/con\.conrelid = \$1::regclass/, rows([])],
+      [/con\.confrelid = \$1::regclass/, rows([])],
+    ])
+    await pgDescribeTable(s.conn, noSchema, 't')
+    expect(s.asked.map((q) => q.params)).toEqual([
+      ['public', 't', SEP],
+      ['"public"."t"'],
+      ['"public"."t"', SEP],
+      ['"public"."t"', SEP],
+      ['"public"."t"', SEP],
+    ])
+    const named = scripted([
+      [/SELECT c\.relkind, obj_description/, rows([['r', null, 1, false, null]])],
+      [/LEFT JOIN pg_attrdef/, rows([])],
+      [/FROM pg_index i/, rows([])],
+      [/con\.conrelid = \$1::regclass/, rows([])],
+      [/con\.confrelid = \$1::regclass/, rows([])],
+    ])
+    await pgDescribeTable(named.conn, ns, 't')
+    expect(named.asked.map((q) => q.params?.[0])).toEqual(['app', '"app"."t"', '"app"."t"', '"app"."t"', '"app"."t"'])
+  })
+
+  it('reads a row that is shorter than the query, an absent value as none', async () => {
+    const tables = await pgListTables(
+      scripted([[/SELECT c\.relname, c\.relkind,/, rows([['t', 'r', 1, null, undefined, undefined]])]]).conn,
+      ns
+    )
+    expect(tables[0]).toMatchObject({ sizeBytes: null, inherits: [] })
+    const { conn } = scripted([[/pg_stat_all_tables/, rows([['r', null, 4096, 20480, 10, null, null, null]])]])
+    expect(await pgTableStats(conn, ns, 't')).toMatchObject({ dataBytes: null, avgRowBytes: null, toastBytes: null })
+    const rowsOnly = scripted([[/pg_stat_all_tables/, rows([['r', 8192, 4096, 20480, null, null, null, null]])]])
+    expect(await pgTableStats(rowsOnly.conn, ns, 't')).toMatchObject({
+      dataBytes: 8192,
+      rowEstimate: null,
+      avgRowBytes: null,
+    })
+    const part = scripted([
+      [/pg_get_partkeydef/, rows([['1', 'LIST (a)']])],
+      [/pg_inherits i JOIN pg_class c ON c\.oid = i\.inhrelid/, rows([['p', 'DEFAULT', undefined, undefined]])],
+    ])
+    expect((await pgListPartitions(part.conn, ns, 't')).partitions[0]).toMatchObject({
+      rowEstimate: null,
+      sizeBytes: null,
+    })
+  })
+
+  it('asks about the partitions of a table in the public schema when none is named, and reads only a key written from its start', async () => {
+    const s = scripted([[/pg_get_partkeydef/, rows([['1', null]])]])
+    await pgListPartitions(s.conn, noSchema, 't')
+    expect(s.asked[0]?.params).toEqual(['public', 't'])
+    const key = async (text: string) =>
+      await pgListPartitions(
+        scripted([
+          [/pg_get_partkeydef/, rows([['1', text]])],
+          [/inhrelid/, rows([])],
+        ]).conn,
+        ns,
+        't'
+      )
+    expect(await key('weird RANGE (a)')).toMatchObject({ method: null, expression: 'weird RANGE (a)' })
+  })
+
+  it('asks about the keys of the schema in the public schema when none is named', async () => {
+    const s = scripted([[/JOIN pg_class c ON c\.oid = con\.conrelid/, rows([])]])
+    await pgListForeignKeys(s.conn, noSchema)
+    expect(s.asked[0]?.params).toEqual(['public', SEP])
+  })
+})
