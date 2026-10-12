@@ -43,6 +43,8 @@ export default {
     'packages/adapter/src/postgres/routines.ts',
     'packages/adapter/src/postgres/introspect.ts',
     'packages/adapter/src/mysql/introspect.ts',
+    'packages/adapter/src/mysql/server.ts',
+    'packages/adapter/src/postgres/server.ts',
     'packages/adapter/src/postgres/users.ts',
     'packages/adapter/src/mysql/ddl.ts',
     'packages/adapter/src/postgres/ddl.ts',
