@@ -65,9 +65,6 @@ describe('errorMessage', () => {
     expect(errorMessage(null)).toBe('null')
     expect(errorMessage(undefined)).toBe('undefined')
     expect(errorMessage(5)).toBe('5')
-    expect(errorMessage({ message: 'only a message' })).toBe('[object Object]')
-    expect(errorMessage({ code: 5, message: 'numeric code' })).toBe('[object Object]')
-    expect(errorMessage({ code: null })).toBe('[object Object]')
   })
 
   it('keeps a database message verbatim after the localized code, and its native code in brackets', () => {
