@@ -183,6 +183,22 @@ describe('withAudit', () => {
     expect(pg("/* /* */ ' */ CREATE USER u PASSWORD 'nest-secret'")).not.toContain('nest-secret')
   })
 
+  it('logs none of the leaks the property tests found (audit.property.test.ts)', () => {
+    const pg = (sql: string) => String(summarise('executeSql', [ns, sql], 'postgres').sql)
+    const my = (sql: string) => String(summarise('executeSql', [ns, sql], 'mysql').sql)
+    // A closed literal, then one that never closes: the span used to end at the unclosed one's opening quote.
+    expect(my("ALTER USER u IDENTIFIED BY 'new' REPLACE 'old-secret")).not.toContain('old-secret')
+    // PostgreSQL ends `'a\'` at the quote; the pattern read `\'` as MySQL's escape and kept what followed.
+    expect(pg("CREATE USER u PASSWORD 'a\\''pg-secret")).not.toContain('pg-secret')
+    // A password in a connection URL, with no keyword around it.
+    expect(pg("CREATE SUBSCRIPTION s CONNECTION 'postgresql://u:url-secret@h/db' PUBLICATION p")).not.toContain(
+      'url-secret'
+    )
+    expect(my("CREATE TABLE f (id INT) ENGINE=FEDERATED CONNECTION='mysql://u:url-secret@h/db/t'")).not.toContain(
+      'url-secret'
+    )
+  })
+
   it('logs an import as a labelled size, never its text', async () => {
     const { lines, adapter } = setup()
     await adapter.executeSql(ns, "INSERT INTO t VALUES (1, 'row value')", {

@@ -65,6 +65,7 @@
     "@stryker-mutator/vitest-runner": "^10.0.0",
     "@types/node": "^25.9.2",
     "@vitest/coverage-v8": "^4.1.11",
+    "fast-check": "^4.10.2",
     "husky": "^9.1.7",
     "jscpd": "^4.2.4",
     "knip": "^6.34.0",

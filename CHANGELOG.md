@@ -22,6 +22,7 @@
 
 ### 修正
 
+- **監査ログと SQL のデバッグ パネルで、パスワードが伏せられずに残る場合があった**のを直した（性質ベースの試験（fast-check）で見つけた）。①閉じた文字列のあとに閉じない文字列が続くとき（`IDENTIFIED BY 'new' REPLACE 'old…`）、閉じない側の中身が残っていた。②PostgreSQL の `'a\'`（バックスラッシュは文字そのもので、引用符で終わる）を MySQL のエスケープとして読み、続く `'secret…` が残っていた。③接続 URL の中のパスワード（`CREATE SUBSCRIPTION … CONNECTION 'postgresql://u:secret@h/db'`、MySQL の FEDERATED の `CONNECTION='mysql://u:secret@h/…'`）を伏せていなかった。④デバッグ パネルで、キーワードと文字列の間のコメントに引用符があると（`PASSWORD /* it's */ 'secret…`）、中身が残っていた。伏せる範囲は、どこで文字列が終わるかがサーバーによって変わるとき（`\'` を含む文字列）やコメントがはさまるとき、文の終わりまでに広がる（`WITH GRANT OPTION` などの後ろが表示されなくなる場合がある）
 - 閲覧の絞り込みで、値の要る演算子（`=` など）に値がないときの拒否を、ほかの絞り込みの拒否と同じ `VALIDATION`（入力の誤り）として返すようにした。以前は `QUERY_FAILED`（問い合わせの失敗）として返していた（HTTP の状態は 400 のまま。変わるのは画面の見出しの言葉）。
 - **PostgreSQL でアカウントを複製するとき、`WITH GRANT OPTION` 付きの権限が複製先に付かず、元のロールに付け直されていた**のを直した。`SHOW GRANTS` 相当の一覧は `GRANT … TO "r" WITH GRANT OPTION` と書くが、複製先への書き換えが `TO "r"` で終わる行しか見ていなかった。
 - **MariaDB でアカウントを複製するとき、既定のロール（`SET DEFAULT ROLE … FOR account`）が複製先に付かず、元のアカウントに設定し直されていた**のを直した（MariaDB の `SHOW GRANTS` はこの行を出す。MySQL 8 は出さないので影響しない）。
