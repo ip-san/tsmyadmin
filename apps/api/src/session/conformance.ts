@@ -171,6 +171,12 @@ export function describeSessionStoreConformance(
           return
         }
         expect(await factor.get(CONFIG)).toBeNull()
+        // The first one lands only while there is none: of two enrolments at once, the second is refused, not
+        // written over the first.
+        const first = { secret: 'JBSWY3DPEHPK3PXP', lastStep: 1, recoveryHashes: ['x'], at: 1 }
+        expect(await factor.create(CONFIG, first)).toBe(true)
+        expect(await factor.create(CONFIG, { ...first, lastStep: 2 })).toBe(false)
+        expect(await factor.get(CONFIG)).toMatchObject({ lastStep: 1 })
         await factor.set(CONFIG, { secret: 'JBSWY3DPEHPK3PXP', lastStep: 7, recoveryHashes: ['a', 'b'], at: 1 })
         const stored = await factor.get(CONFIG)
         expect(stored).toMatchObject({ secret: 'JBSWY3DPEHPK3PXP', lastStep: 7, recoveryHashes: ['a', 'b'], at: 1 })

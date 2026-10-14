@@ -310,10 +310,12 @@ async function changeFactor(
       continue
     }
     const { version: _stale, ...next } = changed
-    // Nothing stored yet has no version to compare with: that write is the first.
-    if (await store.set(config, current?.version === undefined ? next : { ...next, version: current.version })) {
-      return true
-    }
+    // Nothing stored yet has no version to compare with: that write is the first, and lands only while it still is
+    // (two first enrolments at once must not both land, the second over the first).
+    const written = current
+      ? await store.set(config, current.version === undefined ? next : { ...next, version: current.version })
+      : await store.create(config, next)
+    if (written) return true
   }
   return false
 }
