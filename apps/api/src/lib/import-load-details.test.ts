@@ -250,6 +250,13 @@ describe('importRows: the header and the columns', () => {
     expect(inserted(a)[3]).toEqual([['1', 'A']])
   })
 
+  it('takes a name made of spaces as blank, too', async () => {
+    const a = shop(usersTable())
+    await importRows(a, ns, form({ header: '0', columns: '["id","  ","name"]' }), rowsOf(null, [['1', 'skip', 'A']]))
+    expect(inserted(a)[2]).toEqual(['id', 'name'])
+    expect(inserted(a)[3]).toEqual([['1', 'A']])
+  })
+
   it('asks for the system values only when a column that takes them is written', async () => {
     const t = () => {
       const tbl = fakeTable('users', ['id', 'name'], [])
@@ -432,6 +439,7 @@ describe('importRows: a table made for the file', () => {
   /** A fake in which the CREATE TABLE of the importer makes the table (with the columns named). */
   class Creating extends FakeAdapter {
     failCreate: string | null = null
+    leadWithSuccess = false
     failInsert: Error | null = null
     failDrop = false
     constructor(
@@ -450,7 +458,12 @@ describe('importRows: a table made for the file', () => {
         if (this.failDrop) throw new Error('drop failed')
         return [{ kind: 'affected', sql, affectedRows: 0, durationMs: 1 }]
       }
-      if (this.failCreate) return [{ kind: 'error', sql, message: this.failCreate }]
+      if (this.failCreate) {
+        const lead: StatementResult[] = this.leadWithSuccess
+          ? [{ kind: 'affected', sql, affectedRows: 0, durationMs: 1 }]
+          : []
+        return [...lead, { kind: 'error', sql, message: this.failCreate }]
+      }
       const databases = (this as unknown as { databases: Record<string, { tables: Record<string, unknown> }> })
         .databases
       const db = databases[ns.database]
@@ -526,6 +539,22 @@ describe('importRows: a table made for the file', () => {
     expect(e?.message).toBe('The table newt exists already')
     expect(e?.params).toEqual({ table: 'newt' })
     expect(sqlsOf(a)).toEqual([])
+  })
+
+  it('makes the table when only other tables exist, with no key (a file says nothing about keys)', async () => {
+    const a = new Creating(['a'], [usersTable()])
+    const r = await importRows(a, ns, create(), csvSource('a\n1\n', { ...form() }))
+    expect(r).toMatchObject({ table: 'newt', inserted: 1 })
+    expect(sqlsOf(a)[0]).not.toMatch(/PRIMARY KEY/i)
+  })
+
+  it('finds the refusal wherever it is among the answers to the CREATE', async () => {
+    const a = new Creating(['a'])
+    a.failCreate = 'late failure'
+    a.leadWithSuccess = true
+    const e = await caughtOf(importRows(a, ns, create(), csvSource('a\n1\n', { ...form() })))
+    expect(e?.reason).toBe('CREATE_INVALID_NAME')
+    expect(e?.message).toBe('The table could not be created: late failure')
   })
 
   it('refuses a table the server will not make, with its words, and drops nothing', async () => {

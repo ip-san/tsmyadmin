@@ -59,6 +59,17 @@ describe('pickSheet', () => {
     ).toEqual({ sheet: '' })
   })
 
+  it('knows the error by its name', () => {
+    expect(new RowsParseError('PARSE', 'm').name).toBe('RowsParseError')
+    expect(new RowsParseError('PARSE', 'm').params).toEqual({})
+  })
+
+  it('takes a number of more than one digit as a number', () => {
+    const many = Array.from({ length: 12 }, (_, i) => ({ name: `s${i + 1}` }))
+    expect(pickSheet(many, '10')).toBe(many[9])
+    expect(pickSheet(many, '12')).toBe(many[11])
+  })
+
   it('takes the first when nothing is asked, or only blanks', () => {
     expect(pickSheet(sheets, undefined)).toBe(sheets[0])
     expect(pickSheet(sheets, '')).toBe(sheets[0])
@@ -476,6 +487,15 @@ describe('readXmlTables', () => {
     ])
   })
 
+  it('skips comments and processing instructions whole, even when a ">" is inside them', () => {
+    const xml = `<export><table name="t"><row><column name="a">x<!-- a > b -->y<?pi a > b ?>z<!DOCTYPE q>w</column></row></table></export>`
+    expect(readXmlTables(xml)[0]?.rows[0]?.cells).toEqual(['xyzw'])
+    // An unterminated one swallows the rest of the file, and no more.
+    expect(readXmlTables('<export><table name="t"><row><column name="a">x</column></row></table><!-- open')).toEqual([
+      { name: 't', header: ['a'], rows: [{ line: 1, cells: ['x'] }] },
+    ])
+  })
+
   it('ignores a column without a name, and accepts single-quoted attributes', () => {
     const xml = `<export><table name='t'><row><column>skipped</column><column name='a' null='true'/><column name="b">1</column></row></table></export>`
     expect(readXmlTables(xml)).toEqual([{ name: 't', header: ['a', 'b'], rows: [{ line: 1, cells: [null, '1'] }] }])
@@ -613,5 +633,19 @@ describe('readWikiTables', () => {
 
   it('gives no table for text without {|', () => {
     expect(readWikiTables('| a\n|-\n| b')).toEqual([])
+    expect(readWikiTables('|+ caption\n! h\n|-\n| a\n|}\nfree text')).toEqual([])
+  })
+
+  it('takes a line that starts with a space as the continuation of a cell, and one that ends in |} or |- as a cell', () => {
+    const [t] = readWikiTables(['{|', '|-', '| a', ' | b', '| c |}', '| d |-', '|}'].join('\n'))
+    expect(t?.rows).toEqual([{ line: 3, cells: ['a\n| b', 'c |}', 'd |-'] }])
+  })
+
+  it('ignores text before the first cell of a row', () => {
+    const wiki = ['{|', 'stray', '|-', 'also stray', '| 1', '|}'].join('\n')
+    expect(readWikiTables(wiki)).toEqual([{ name: 'table1', header: null, rows: [{ line: 5, cells: ['1'] }] }])
+    expect(readWikiTables(['{|', '|-', 'stray', '|}'].join('\n'), { skipBlank: false })[0]?.rows).toEqual([
+      { line: 2, cells: [] },
+    ])
   })
 })

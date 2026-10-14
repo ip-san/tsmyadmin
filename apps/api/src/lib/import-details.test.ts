@@ -41,7 +41,8 @@ describe('decodeUpload', () => {
     expect(first?.reason).toBe('INVALID_ENCODING')
     expect(first?.message).toBe('The file is not valid UTF-8 (near line 1)')
     expect(first?.params).toEqual({ line: 1 })
-    const third = caught([0x61, 0x0a, 0x62, 0x0a, 0xff])
+    // Lines after the bad byte are not counted.
+    const third = caught([0x61, 0x0a, 0x62, 0x0a, 0xff, 0x0a, 0x63, 0x0a, 0x64])
     expect(third?.message).toBe('The file is not valid UTF-8 (near line 3)')
     expect(third?.params).toEqual({ line: 3 })
   })
@@ -261,6 +262,17 @@ describe('importSql: the script that is sent', () => {
     const none = scripted()
     await importSql(none, ns, text, opts({ skip: 0 }))
     expect(sent(none)).toHaveLength(8)
+  })
+
+  it('does not keep a skipped statement that only has SET or USE inside it', async () => {
+    const a = scripted()
+    await importSql(
+      a,
+      ns,
+      'UPDATE t SET a = 1;\nINSERT INTO t VALUES (1);\nINSERT INTO uses VALUES (2)',
+      opts({ skip: 2 })
+    )
+    expect(sent(a).map((s) => s.sql)).toEqual(['INSERT INTO uses VALUES (2)'])
   })
 
   it('counts the lines of what follows options from the script, not from the file', async () => {
@@ -491,6 +503,40 @@ describe('importSql: warnings', () => {
     expect(await warn(text, { stopOnError: false }, other)).toEqual([])
   })
 
+  it('says a run was cancelled when the server answered nothing at all', async () => {
+    expect(await warn('SELECT 1;\nSELECT 2', {}, () => null, 'mysql', 0)).toEqual(['CANCELLED'])
+  })
+
+  it('says everything was rolled back when the COMMIT never got an answer', async () => {
+    // The answers stop after BEGIN and the one statement: the COMMIT was not reached.
+    const r = await importSql(scripted(undefined, 'mysql', 2), ns, 'INSERT 1', opts({ singleTransaction: true }))
+    if (r.format !== 'sql') throw new Error('sql result expected')
+    expect(r).toMatchObject({ total: 1, statements: 1, failed: 0, errors: [] })
+    expect(r.warnings).toEqual(['ALL_ROLLED_BACK'])
+  })
+
+  it('takes a transaction as closed when the adapter does not say one is open', async () => {
+    class Silent extends FakeAdapter {
+      override async executeSql(...args: Parameters<FakeAdapter['executeSql']>) {
+        const { onTransactionOpen: _unused, ...rest } = args[2]
+        return super.executeSql(args[0], args[1], rest)
+      }
+    }
+    const a = new Silent({
+      onSql: (_ns, _sql, o) =>
+        (o.statements ?? []).map((st, i) => ({
+          kind: 'affected' as const,
+          sql: st.sql,
+          line: st.line,
+          statement: i,
+          affectedRows: 1,
+          durationMs: 1,
+        })),
+    })
+    const r = await importSql(a, ns, 'INSERT 1', opts())
+    expect(r.format === 'sql' && r.warnings).toEqual([])
+  })
+
   it('tells a transaction left open from one that was rolled back as a whole', async () => {
     // A BEGIN of the file's own that is never closed: the connection is reset, which rolls it back.
     expect(await warn('BEGIN;\nINSERT 1')).toEqual(['ROLLED_BACK'])
@@ -580,6 +626,9 @@ describe('importSql: warnings', () => {
       expect(await rolledBack(['SET autocommit = 0', 'SET autocommit = 10'], 'mysql')).toEqual(partial)
       expect(await rolledBack(['SET autocommit = 0', 'SET autocommit = 01'], 'mysql')).toEqual(partial)
       expect(await rolledBack(['SET autocommit = 00'], 'mysql')).toEqual(partial)
+      expect(await rolledBack(['SET autocommit = 01'], 'mysql')).toEqual(partial)
+      expect(await rolledBack(['SET autocommit = 1x'], 'mysql')).toEqual(partial)
+      expect(await rolledBack(['SET autocommit = x1'], 'mysql')).toEqual(partial)
       expect(await rolledBack(['SET autocommit = 1', 'SET autocommit = 0'], 'mysql')).toEqual(all)
       // Other settings are not autocommit.
       expect(await rolledBack(['SET @autocommit = 1', 'SET foo = 0', 'SET foo = 1'], 'mysql')).toEqual(all)
