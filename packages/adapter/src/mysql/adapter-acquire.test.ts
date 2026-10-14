@@ -65,6 +65,12 @@ describe('MysqlAdapter.acquire: setting a connection up', () => {
     const upper = adapterWith(fakeConnection(version('10.5.0-MARIADB')))
     await acquire(upper)
     expect(mariadbOf(upper)).toBe(true)
+    // A version it cannot read (no row, a null) is not MariaDB.
+    for (const answer of [[], [[null]]]) {
+      const unread = adapterWith(fakeConnection((sql) => (sql === 'SELECT VERSION()' ? [answer, []] : header)))
+      await acquire(unread)
+      expect(mariadbOf(unread), JSON.stringify(answer)).toBe(false)
+    }
   })
 
   it('switches to the database with the session mode, and on MySQL turns the statistics cache off, in that order', async () => {
@@ -245,8 +251,12 @@ describe('MysqlAdapter.acquire: the connection it hands out', () => {
     )
     await expect(twice.conn.inTransaction?.()).rejects.toMatchObject({ code: 'ER_QUERY_INTERRUPTED' })
     expect(again).toBe(2)
-    const other = await ready((sql) => (sql === 'DO 0' ? Object.assign(new Error('x'), { code: 'ER_OTHER' }) : header))
+    let otherProbes = 0
+    const other = await ready((sql) =>
+      sql === 'DO 0' ? (++otherProbes, Object.assign(new Error('x'), { code: 'ER_OTHER' })) : header
+    )
     await expect(other.conn.inTransaction?.()).rejects.toMatchObject({ code: 'ER_OTHER' })
+    expect(otherProbes).toBe(1)
   })
 
   it('gives the connection up on a reset when the collation is only a character set, which SET NAMES would refuse', async () => {
