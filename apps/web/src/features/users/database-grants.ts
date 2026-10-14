@@ -1,5 +1,5 @@
 import type { Dialect, Privilege, UserOp, UserRef } from '@tsmyadmin/shared'
-import { PRIVILEGES } from '@tsmyadmin/shared'
+import { capabilities, PRIVILEGES } from '@tsmyadmin/shared'
 
 /** One line of an account's grants below the server level, as the "database privileges" list shows it. */
 export interface DatabaseGrant {
@@ -115,11 +115,19 @@ function literalDatabase(name: string): string | null {
 export const grantDatabase = (g: DatabaseGrant): string | null =>
   g.database === null ? null : g.kind === 'database' ? literalDatabase(g.database) : g.database
 
+/**
+ * The database a row's privileges are in: the one the session is connected to where a connection stays in one (its
+ * grants are read there), else the one the row names (null for a `db.*` pattern).
+ */
+export const rowDatabase = (dialect: Dialect, g: DatabaseGrant, connected: string): string | null =>
+  capabilities(dialect).connectionPerDatabase ? connected : grantDatabase(g)
+
 /** The op that takes a row's privileges away, or null when the row has no plain form of one (patterns, column lists, routines). */
 export function revokeOp(user: UserRef, dialect: Dialect, grant: DatabaseGrant, connected: string): UserOp | null {
-  const database = dialect === 'mysql' ? grantDatabase(grant) : connected
+  const database = rowDatabase(dialect, grant, connected)
   if (database === null || grant.kind === 'routine') return null
-  if (grant.kind === 'database' && dialect === 'mysql') return { op: 'revokeAll', user, database }
+  if (grant.kind === 'database' && !capabilities(dialect).connectionPerDatabase)
+    return { op: 'revokeAll', user, database }
   if (grant.kind === 'schema') return { op: 'revokeAll', user, database, schema: grant.schema as string }
   const privileges = grant.privileges.filter((p): p is Privilege => (PRIVILEGES as readonly string[]).includes(p))
   if (privileges.length !== grant.privileges.length || grant.object === null) return null

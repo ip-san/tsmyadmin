@@ -82,9 +82,7 @@ export function StatusPage() {
       {statements.length > 0 ? (
         <section>
           <h2 className="mb-1 text-sm font-semibold text-ink">{t.queryStatsTitle}</h2>
-          <p className="mb-2 text-xs text-ink-sub">
-            {dialect === 'mysql' ? t.queryStatsHintMysql : t.queryStatsHintPostgres}
-          </p>
+          <p className="mb-2 text-xs text-ink-sub">{t.queryStatsHint[dialect]}</p>
           <Table aria-label={t.queryStatsTitle}>
             <thead>
               <tr>

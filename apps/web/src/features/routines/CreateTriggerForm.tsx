@@ -1,4 +1,4 @@
-import type { DdlOp, Dialect, TriggerDetail } from '@tsmyadmin/shared'
+import { capabilities, type DdlOp, type Dialect, type TriggerDetail } from '@tsmyadmin/shared'
 import { type FormEvent, useState } from 'react'
 import { DefinerField } from '@/components/ddl/DefinerFields.tsx'
 import { parseDefiner } from '@/components/ddl/definer.ts'
@@ -47,7 +47,7 @@ export function CreateTriggerForm({
   )
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    const definer = dialect === 'mysql' ? parseDefiner(definerText) : null
+    const definer = capabilities(dialect).definer ? parseDefiner(definerText) : null
     if (!name.trim() || !table || !body.trim() || definer === 'invalid') return
     const create = { name: name.trim(), table, timing, event, body, ...(definer ? { definer } : {}) }
     onSubmit(replaces ? { op: 'replaceTrigger', ...create, replaces } : { op: 'createTrigger', ...create })
@@ -95,7 +95,7 @@ export function CreateTriggerForm({
             ))}
           </Select>
         </Field>
-        {dialect === 'mysql' ? (
+        {capabilities(dialect).definer ? (
           <DefinerField id="trigger-definer" value={definerText} onChange={setDefinerText} />
         ) : null}
       </div>

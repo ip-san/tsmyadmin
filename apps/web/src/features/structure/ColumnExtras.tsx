@@ -1,9 +1,8 @@
-import { useQuery } from '@tanstack/react-query'
-import type { Dialect } from '@tsmyadmin/shared'
+import { capabilities, type Dialect } from '@tsmyadmin/shared'
 import { Field, Input, Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
+import { useCollationNames } from '@/lib/collations.ts'
 import type { ColumnFormValues } from '@/lib/column-spec.ts'
-import { serverCatalogQuery } from '@/lib/queries.ts'
 
 const t = locale.ddl.extras
 
@@ -36,10 +35,7 @@ export function ColumnExtras({
   v: ColumnFormValues
   set: (patch: Partial<ColumnFormValues>) => void
 }) {
-  const collations = useQuery(serverCatalogQuery('collations'))
-  // The name is the second column on MySQL (after the character set), the first on PostgreSQL.
-  const at = dialect === 'mysql' ? 1 : 0
-  const names = (collations.data?.rows ?? []).map((r) => String(r[at] ?? '')).filter((n) => n !== '')
+  const names = useCollationNames()
   const stamp = TIMESTAMP_TYPE.exec(v.dataType)
   return (
     <div className="space-y-3 rounded border border-line p-3">
@@ -76,7 +72,7 @@ export function ColumnExtras({
           </Field>
         ) : null}
       </div>
-      {dialect === 'mysql' && stamp && !v.generated ? (
+      {capabilities(dialect).onUpdateTimestamp && stamp && !v.generated ? (
         <label className="flex items-center gap-1 text-sm text-ink">
           <input
             type="checkbox"

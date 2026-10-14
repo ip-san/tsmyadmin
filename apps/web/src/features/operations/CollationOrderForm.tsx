@@ -1,12 +1,12 @@
-import { useQuery } from '@tanstack/react-query'
-import type { Dialect, TableSchema } from '@tsmyadmin/shared'
+import { capabilities, type Dialect, type TableSchema } from '@tsmyadmin/shared'
 import { type FormEvent, useState } from 'react'
 import { DdlPreviewDialog } from '@/components/ddl/DdlPreviewDialog.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { Field, Input, Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale.ts'
+import { useCollationNames } from '@/lib/collations.ts'
 import { useDdlFlow } from '@/lib/ddl.ts'
-import { serverCatalogQuery, type TableRef } from '@/lib/queries.ts'
+import type { TableRef } from '@/lib/queries.ts'
 
 const t = locale.operations
 
@@ -31,10 +31,7 @@ export function CollationOrderForm({
   schema: TableSchema
 }) {
   const flow = useDdlFlow(tableRef.db, tableRef.schema)
-  const collations = useQuery(serverCatalogQuery('collations'))
-  // The name is the second column on MySQL (after the character set), the first on PostgreSQL.
-  const at = dialect === 'mysql' ? 1 : 0
-  const names = (collations.data?.rows ?? []).map((r) => String(r[at] ?? '')).filter((n) => n !== '')
+  const names = useCollationNames()
   const [collation, setCollation] = useState('')
   const [column, setColumn] = useState(schema.columns[0]?.name ?? '')
   const [desc, setDesc] = useState(false)
@@ -54,7 +51,7 @@ export function CollationOrderForm({
     <section className="space-y-4 rounded border border-line p-3">
       <form onSubmit={convert} className="space-y-2" aria-label={locale.ddl.titles.convertCollation}>
         <h2 className="text-sm font-semibold text-ink">{locale.ddl.titles.convertCollation}</h2>
-        <p className="text-xs text-ink-sub">{dialect === 'mysql' ? t.convertHintMysql : t.convertHintPostgres}</p>
+        <p className="text-xs text-ink-sub">{t.convertHint[dialect]}</p>
         <div className="flex flex-wrap items-end gap-2">
           <Field id="convert-collation" label={locale.table.collation}>
             <Input
@@ -75,7 +72,8 @@ export function CollationOrderForm({
             type="submit"
             variant="primary"
             aria-haspopup="dialog"
-            disabled={!collation.trim() || (dialect === 'postgres' && text.length === 0)}
+            // Without a table default to change, there is nothing to convert when no column holds text.
+            disabled={!collation.trim() || (!capabilities(dialect).collationDefaults && text.length === 0)}
           >
             {locale.ddl.submit}
           </Button>
@@ -83,7 +81,7 @@ export function CollationOrderForm({
       </form>
       <form onSubmit={order} className="space-y-2" aria-label={locale.ddl.titles.orderTable}>
         <h2 className="text-sm font-semibold text-ink">{locale.ddl.titles.orderTable}</h2>
-        <p className="text-xs text-ink-sub">{dialect === 'mysql' ? t.orderHintMysql : t.orderHintPostgres}</p>
+        <p className="text-xs text-ink-sub">{t.orderHint[dialect]}</p>
         <div className="flex flex-wrap items-end gap-2">
           {dialect === 'mysql' ? (
             <>

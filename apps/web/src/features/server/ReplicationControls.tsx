@@ -107,7 +107,7 @@ export function ReplicationControls({ dialect, info }: { dialect: Dialect; info:
   return (
     <section className="space-y-2 print:hidden">
       <h3 className="text-sm font-semibold text-ink">{t.title}</h3>
-      <p className="text-xs text-ink-sub">{dialect === 'mysql' ? t.hintMysql : t.hintPostgres}</p>
+      <p className="text-xs text-ink-sub">{t.hint[dialect]}</p>
       <div className="flex flex-wrap gap-2">
         {replica || dialect === 'mysql' ? (
           <>

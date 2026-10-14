@@ -1,5 +1,5 @@
 import { useNavigate } from '@tanstack/react-router'
-import type { Dialect } from '@tsmyadmin/shared'
+import { capabilities, type Dialect } from '@tsmyadmin/shared'
 import { type FormEvent, useState } from 'react'
 import { DdlPreviewDialog } from '@/components/ddl/DdlPreviewDialog.tsx'
 import { Button } from '@/components/ui/Button.tsx'
@@ -71,11 +71,7 @@ function RenameDatabaseForm({ db, dialect, flow }: { db: string; dialect: Dialec
     <section className="rounded border border-line p-3">
       <form onSubmit={submit} className="flex max-w-xl items-start gap-2" aria-label={locale.ddl.titles.renameDatabase}>
         <div className="flex-1">
-          <Field
-            id="rename-database"
-            label={locale.databaseOps.newName}
-            hint={dialect === 'mysql' ? locale.databaseOps.renameHintMysql : locale.databaseOps.renameHintPostgres}
-          >
+          <Field id="rename-database" label={locale.databaseOps.newName} hint={locale.databaseOps.renameHint[dialect]}>
             <Input
               id="rename-database"
               value={newName}
@@ -112,6 +108,8 @@ function CopyDatabaseForm({
   const [mode, setMode] = useState<CopyMode>('both')
   // MySQL's copy leaves these behind by default; PostgreSQL copies from a template that already brings them.
   const [keep, setKeep] = useState({ foreignKeys: false, autoIncrement: false, privileges: false })
+  // Copied table by table, the parts can be chosen; a copy from a template brings all of them.
+  const tableByTable = capabilities(dialect).copyDatabaseWithoutStructure
   const name = newName.trim()
   const valid = name !== '' && name !== db
   const submit = (e: FormEvent) => {
@@ -121,9 +119,9 @@ function CopyDatabaseForm({
         op: 'copyDatabase',
         name: db,
         newName: name,
-        withData: dialect === 'postgres' || mode !== 'structure',
-        ...(dialect === 'mysql' && mode === 'data' ? { structure: false } : {}),
-        ...(dialect === 'mysql'
+        withData: !tableByTable || mode !== 'structure',
+        ...(tableByTable && mode === 'data' ? { structure: false } : {}),
+        ...(tableByTable
           ? {
               ...(keep.foreignKeys ? { foreignKeys: true } : {}),
               ...(keep.autoIncrement ? { autoIncrement: true } : {}),
@@ -137,11 +135,7 @@ function CopyDatabaseForm({
       <form onSubmit={submit} className="space-y-2" aria-label={locale.ddl.titles.copyDatabase}>
         <div className="flex max-w-xl items-start gap-2">
           <div className="flex-1">
-            <Field
-              id="copy-database"
-              label={locale.databaseOps.copyName}
-              hint={dialect === 'mysql' ? locale.databaseOps.copyHintMysql : locale.databaseOps.copyHintPostgres}
-            >
+            <Field id="copy-database" label={locale.databaseOps.copyName} hint={locale.databaseOps.copyHint[dialect]}>
               <Input
                 id="copy-database"
                 value={newName}
@@ -156,7 +150,7 @@ function CopyDatabaseForm({
           </Button>
         </div>
         {/* PostgreSQL copies from a template, which always brings the data. */}
-        {dialect === 'mysql' ? (
+        {tableByTable ? (
           <div className="flex flex-wrap gap-4 text-sm">
             <label className="flex items-center gap-1">
               {locale.databaseOps.copyMode.label}
