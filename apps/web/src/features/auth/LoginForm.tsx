@@ -1,5 +1,11 @@
 import { useMutation } from '@tanstack/react-query'
-import type { Dialect, LoginRequest, PasskeyChallenge, ServerPreset } from '@tsmyadmin/shared'
+import {
+  capabilities,
+  type Dialect,
+  type LoginRequest,
+  type PasskeyChallenge,
+  type ServerPreset,
+} from '@tsmyadmin/shared'
 import { type FormEvent, useState } from 'react'
 import { z } from 'zod'
 import { Button } from '@/components/ui/Button.tsx'
@@ -101,6 +107,8 @@ export function LoginForm({ onLogin, presets = [] }: LoginFormProps) {
   const missing = fixed && !selected ? preset : null
   /** A Docker container the server holds the login of: no user or password to type, one press of Connect. */
   const dockerLogin = selected ? selected.autoLogin === true : missing !== null && chosenAutoLogin
+  /** The session will stay in the database named here, so the field says so (and a preset's database is not changed). */
+  const boundToDatabase = capabilities(dialect).connectionPerDatabase
 
   const choosePreset = (name: string) => {
     setPreset(name)
@@ -236,15 +244,15 @@ export function LoginForm({ onLogin, presets = [] }: LoginFormProps) {
       <Field
         id="database"
         label={locale.login.database}
-        {...(dialect === 'postgres' ? { hint: locale.login.databaseHint } : {})}
+        {...(boundToDatabase ? { hint: locale.login.databaseHint } : {})}
       >
         <Input
           id="database"
           value={database}
           onChange={(e) => setDatabase(e.target.value)}
-          {...(dialect === 'postgres' ? { 'aria-describedby': 'database-hint' } : {})}
+          {...(boundToDatabase ? { 'aria-describedby': 'database-hint' } : {})}
           // A MySQL account without access to the preset's database can still log in without one.
-          readOnly={fixed && dialect === 'postgres'}
+          readOnly={fixed && boundToDatabase}
         />
       </Field>
       {/* Rarely changed, so folded away: the form's main path stays short. Open when a collation was chosen. */}

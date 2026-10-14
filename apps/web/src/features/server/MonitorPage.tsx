@@ -54,7 +54,7 @@ export function MonitorPage() {
           {t.clear}
         </Button>
       </div>
-      <p className="text-xs text-ink-sub">{dialect === 'mysql' ? t.hintMysql : t.hintPostgres}</p>
+      <p className="text-xs text-ink-sub">{t.hint[dialect]}</p>
       {status.isPending ? <Spinner /> : null}
       {status.isError ? <ErrorBox error={status.error} onRetry={() => void status.refetch()} /> : null}
       {samples.length === 1 ? <Notice>{t.waiting}</Notice> : null}

@@ -92,7 +92,7 @@ function lossWarning(op: DdlOp, dialect: Dialect): string | null {
     case 'replaceInColumn':
       return locale.ddl.replaceWarning
     case 'renameDatabase':
-      return dialect === 'postgres' ? locale.databaseOps.renameWarningPostgres : locale.databaseOps.renameWarningMysql
+      return locale.databaseOps.renameWarning[dialect]
     default:
       return null
   }

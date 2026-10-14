@@ -1,5 +1,5 @@
 import { useNavigate } from '@tanstack/react-router'
-import type { Dialect } from '@tsmyadmin/shared'
+import { capabilities, type Dialect } from '@tsmyadmin/shared'
 import { type FormEvent, useState } from 'react'
 import { DdlPreviewDialog } from '@/components/ddl/DdlPreviewDialog.tsx'
 import { Button } from '@/components/ui/Button.tsx'
@@ -28,6 +28,7 @@ export function CreateTableForm({
   schema?: string | undefined
   dialect: Dialect
 }) {
+  const caps = capabilities(dialect)
   const [name, setName] = useState('')
   const [rows, setRows] = useState<Row[]>([
     {
@@ -83,8 +84,8 @@ export function CreateTableForm({
         ? { partitionBy: { method: partitionBy.method, expression: partitionBy.expression.trim() } }
         : {}),
       ...(options.comment.trim() ? { comment: options.comment.trim() } : {}),
-      ...(dialect === 'mysql' && options.engine.trim() ? { engine: options.engine.trim() } : {}),
-      ...(dialect === 'mysql' && options.collation.trim() ? { collation: options.collation.trim() } : {}),
+      ...(caps.storageEngines && options.engine.trim() ? { engine: options.engine.trim() } : {}),
+      ...(caps.collationDefaults && options.collation.trim() ? { collation: options.collation.trim() } : {}),
     })
   }
   return (
@@ -225,28 +226,28 @@ export function CreateTableForm({
             autoComplete="off"
           />
         </Field>
-        {dialect === 'mysql' ? (
-          <>
-            <Field id="new-table-engine" label={locale.database.engine} hint={locale.ddl.engineHint}>
-              <Input
-                id="new-table-engine"
-                value={options.engine}
-                onChange={(e) => setOptions((o) => ({ ...o, engine: e.target.value }))}
-                autoComplete="off"
-              />
-            </Field>
-            <Field id="new-table-collation" label={locale.table.collation} hint={locale.ddl.collationHint}>
-              <Input
-                id="new-table-collation"
-                value={options.collation}
-                onChange={(e) => setOptions((o) => ({ ...o, collation: e.target.value }))}
-                autoComplete="off"
-              />
-            </Field>
-          </>
+        {caps.storageEngines ? (
+          <Field id="new-table-engine" label={locale.database.engine} hint={locale.ddl.engineHint}>
+            <Input
+              id="new-table-engine"
+              value={options.engine}
+              onChange={(e) => setOptions((o) => ({ ...o, engine: e.target.value }))}
+              autoComplete="off"
+            />
+          </Field>
+        ) : null}
+        {caps.collationDefaults ? (
+          <Field id="new-table-collation" label={locale.table.collation} hint={locale.ddl.collationHint}>
+            <Input
+              id="new-table-collation"
+              value={options.collation}
+              onChange={(e) => setOptions((o) => ({ ...o, collation: e.target.value }))}
+              autoComplete="off"
+            />
+          </Field>
         ) : null}
       </div>
-      {dialect === 'postgres' ? (
+      {caps.partitionsAreTables ? (
         <div className="flex flex-wrap items-end gap-2">
           <Field id="new-table-partition" label={locale.partitions.createBy}>
             <Select
