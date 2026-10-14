@@ -68,7 +68,7 @@ import { PG_TYPE_NAMES, pgTypes } from './values.ts'
 
 const AUTH_CODES = new Set(['28P01', '28000'])
 /** Socket-level failures reported without a SQLSTATE (e.g. after pg_terminate_backend). */
-const CONNECTION_MESSAGES = /terminat|closed|ECONNRESET/i
+const CONNECTION_MESSAGES = /terminat|closed|ECONNRESET|not queryable/i
 const NOT_FOUND_CODES = new Set(['3D000', '3F000', '42P01', '42703'])
 /** insufficient_privilege */
 const PERMISSION_CODES = new Set(['42501'])
