@@ -32,6 +32,14 @@ describe('cellToText / cellToEditable', () => {
 })
 
 describe('errorMessage', () => {
+  it('shows the message of an Error, of a plain object that only has one, and the text of anything else', () => {
+    expect(errorMessage(new Error('boom'))).toBe('boom')
+    expect(errorMessage({ message: 'only a message' })).toBe('only a message')
+    expect(errorMessage({ message: 42 })).toBe('[object Object]')
+    expect(errorMessage('plain text')).toBe('plain text')
+    expect(errorMessage(undefined)).toBe('undefined')
+  })
+
   it('reports an unreachable server as a network problem and keeps a bare upstream status', () => {
     expect(errorMessage(new ApiError(0, { code: 'INTERNAL', message: 'Failed to fetch' }))).toBe(locale.errors.NETWORK)
     expect(errorMessage(new ApiError(502, { code: 'INTERNAL', message: 'HTTP 502' }))).toBe(
