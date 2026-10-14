@@ -249,7 +249,7 @@ export function buildServerExport(
   if (q.filePerTable === '1') {
     const used = new Set<string>()
     const perTarget = (target: string) =>
-      /@DB(ATABASE)?@/.test(q.filename ?? '') ? named(target) : `${named(target)}_${safeFileName(target)}`
+      /@(DATABASE|DB)@/.test(q.filename ?? '') ? named(target) : `${named(target)}_${safeFileName(target)}`
     async function* entries(): AsyncIterable<ZipEntry> {
       for (const ns of targets) {
         const file = await dump(ns)
