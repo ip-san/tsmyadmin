@@ -215,8 +215,8 @@ describe('formatSql: statements', () => {
 })
 
 describe('formatSql: blank lines, comments and spacing', () => {
-  it('keeps a blank line the source had, as a line break', () => {
-    expect(formatSql('select 1\n\nfrom t')).toBe(['select 1', '', 'from t'].join('\n').replace('\n\n', '\n'))
+  it('a blank line becomes a line break', () => {
+    expect(formatSql('select a\n\nb')).toBe('select a\nb')
   })
 
   it('ends a line comment with a line, indented under a select list, and keeps a block comment where it is', () => {
@@ -239,7 +239,8 @@ describe('formatSql: blank lines, comments and spacing', () => {
 
   it('changes nothing but whitespace, whatever it is given', () => {
     const samples = [
-      'select \'a;b\', "c--d", `e`f` from t where x between 1 and 2 -- c\n and y',
+      // The doubled backtick is one identifier, so the BETWEEN and the comment after it are read as such.
+      'select \'a;b\', "c--d", `e``f` from t where x between 1 and 2 -- c\n and y',
       'insert into t values (1),(2); update t set a=$$x;y$$ where b=1',
       'select 1 /* a */ union select 2 # b\n order by 1',
       "with r as (select 1) select * from r where a = 'it''s'",
