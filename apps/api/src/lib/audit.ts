@@ -127,25 +127,26 @@ export function summarise(
 
 /**
  * A SQL string literal: plain / doubled-quote / backslash-escaped, PostgreSQL `E'…'`, or dollar-quoted `$tag$…$tag$`.
- * `n` is the index the dollar tag capture group will have inside the enclosing pattern.
+ * `n` is the index the dollar tag capture group will have inside the enclosing pattern. With `whole`, a quote right
+ * after the closing one is read as a doubled quote, not as the end: `'abc''def` is then one string that never closes.
  */
-const literal = (n: number) =>
-  `(?:(?:[EeNnXxBb]|[Uu]&|_[A-Za-z0-9]+)?'(?:[^'\\\\]|\\\\.|'')*'|"(?:[^"\\\\]|\\\\.|"")*"|\\$((?:[A-Za-z_\\u0080-\\uffff][\\w\\u0080-\\uffff]*)?)\\$[\\s\\S]*?\\$\\${n}\\$)`
+const literal = (n: number, whole = false) =>
+  `(?:(?:[EeNnXxBb]|[Uu]&|_[A-Za-z0-9]+)?'(?:[^'\\\\]|\\\\.|'')*'${whole ? "(?!')" : ''}|"(?:[^"\\\\]|\\\\.|"")*"${whole ? '(?!")' : ''}|\\$((?:[A-Za-z_\\u0080-\\uffff][\\w\\u0080-\\uffff]*)?)\\$[\\s\\S]*?\\$\\${n}\\$)`
 /**
  * Password literals in account statements typed directly into the SQL console: IDENTIFIED BY / AS (plugin hash),
  * PASSWORD 'x', and MySQL 8 `REPLACE '<current password>'` (REPLACE INTO / REPLACE( never precede a bare literal).
  */
 const SQL_SECRET = new RegExp(
-  String.raw`\b(IDENTIFIED(?:\s+WITH\s+\S+)?\s+(?:BY|AS)|IDENTIFIED\s+VIA\s+\S+\s+USING|(?:\w+_)?PASSWORD|REPLACE)(\s*(?:[=(]\s*)?)(?:${literal(3)}|0x[0-9A-Fa-f]+)`,
+  String.raw`\b(IDENTIFIED(?:\s+WITH\s+\S+)?\s+(?:BY|AS)|IDENTIFIED\s+VIA\s+\S+\s+USING|(?:\w+_)?PASSWORD|REPLACE)(\s*(?:[=(]\s*)?)(?:${literal(3, true)}|0x[0-9A-Fa-f]+)`,
   'gi'
 )
 /** `password=secret` inside a connection string (CREATE SUBSCRIPTION … CONNECTION, dblink, postgres_fdw options). */
 const CONNECTION_PASSWORD = /(\bpassword\s*=\s*)[^\s'";]+/gi
 /** MySQL `SET PASSWORD [FOR user] = 'x'`. */
-const SET_PASSWORD = new RegExp(String.raw`(\bSET\s+PASSWORD\b[^=;]*=\s*)${literal(2)}`, 'gi')
+const SET_PASSWORD = new RegExp(String.raw`(\bSET\s+PASSWORD\b[^=;]*=\s*)${literal(2, true)}`, 'gi')
 
 /** Any string literal, for the coarse sweep over account statements. */
-const ANY_LITERAL = new RegExp(literal(1), 'g')
+const ANY_LITERAL = new RegExp(literal(1, true), 'g')
 /**
  * A statement's credential part: from the first IDENTIFIED / PASSWORD keyword on — wherever it sits, including
  * inside a string handed to PREPARE / EXECUTE / format() — everything between the first and the last quote is one
@@ -154,7 +155,7 @@ const ANY_LITERAL = new RegExp(literal(1), 'g')
  */
 const CREDENTIAL_PART = /^([\s\S]*?\b(?:\w+_)?(?:IDENTIFIED|PASSWORD)\b)([\s\S]*)$/i
 const QUOTED_SPAN = /['"$][\s\S]*['"$]/
-const LITERAL_AT = new RegExp(literal(1), 'y')
+const LITERAL_AT = new RegExp(literal(1, true), 'y')
 
 /** Whether a complete string literal starts at `at`: a `$` that closes no tag (`$$secret`) opens one that never ends. */
 function literalCompleteAt(text: string, at: number): boolean {

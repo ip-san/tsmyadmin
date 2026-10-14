@@ -23,6 +23,20 @@ describe('a literal that never closes leaves nothing of the password behind', ()
     expect(logged("ALTER USER u IDENTIFIED BY 'abc\\'def\\'ghi")).not.toMatch(/def|ghi/)
   })
 
+  it('reads a quote right after the closing one as a doubled quote, so the string is still open', () => {
+    // `''` is one quote character inside the string: `'abc''def` never closes, and `def` is part of the secret.
+    expect(logged("ALTER USER u IDENTIFIED BY 'abc''def")).toBe(`ALTER USER u IDENTIFIED BY '${M}'`)
+    expect(logged('ALTER USER u IDENTIFIED BY "abc""def')).toBe(`ALTER USER u IDENTIFIED BY '${M}'`)
+    expect(logged("ALTER USER u IDENTIFIED BY 'abc'' WITH GRANT OPTION")).toBe(`ALTER USER u IDENTIFIED BY '${M}'`)
+    // Closed after the doubled quote: the tail after the string stays.
+    expect(logged("ALTER USER u IDENTIFIED BY 'abc''def' WITH GRANT OPTION")).toBe(
+      `ALTER USER u IDENTIFIED BY '${M}' WITH GRANT OPTION`
+    )
+    expect(logged("ALTER USER u IDENTIFIED BY '' WITH GRANT OPTION")).toBe(
+      `ALTER USER u IDENTIFIED BY '${M}' WITH GRANT OPTION`
+    )
+  })
+
   it('masks a quote that stands alone after the keyword', () => {
     expect(logged("x IDENTIFIED'")).toBe(`x IDENTIFIED'${M}'`)
     expect(logged('x IDENTIFIED"')).toBe(`x IDENTIFIED'${M}'`)
