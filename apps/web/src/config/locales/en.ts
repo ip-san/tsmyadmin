@@ -2322,6 +2322,21 @@ export const en = {
     replayNote: (n: number) => `Then runs the ${n.toLocaleString('en-US')} saved statements`,
     restored: (name: string) => `Went back to "${name}".`,
     failed: 'The restore failed.',
+    compare: 'Compare with now',
+    diffTitle: (name: string) => `"${name}" compared with the schema now`,
+    diffSummary: (added: number, removed: number, changed: number, unchanged: number) =>
+      `${added} added, ${removed} removed, ${changed} changed, ${unchanged} unchanged (tables and views)`,
+    diffNone: 'No table or view definition has changed since the snapshot.',
+    diffChanged: 'Changed definitions',
+    diffAdded: 'Created since the snapshot',
+    diffRemoved: 'Removed since the snapshot',
+    diffLabel: (name: string) => `Differences in ${name} (- snapshot, + now)`,
+    diffSame: 'No differences.',
+    diffNoDefinition: 'The definition could not be read.',
+    diffUnreadable: (names: string) => `Not compared (definition not readable): ${names}`,
+    diffHint:
+      "Compares the CREATE statements. Row data, and values that move with the rows (MySQL's AUTO_INCREMENT=, a sequence's position), are not compared. Functions, triggers and events are not included.",
+    diffAgain: 'Compare again',
   },
   tracking: {
     download: 'Download SQL',

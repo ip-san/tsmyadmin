@@ -1,6 +1,7 @@
 import { FakeAdapter, fakeTable } from '@tsmyadmin/adapter/testing'
 import {
   ApiErrorSchema,
+  SnapshotDiffSchema,
   SnapshotListSchema,
   SnapshotRestorePreviewSchema,
   SnapshotRestoreResultSchema,
@@ -8,6 +9,7 @@ import {
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createApp } from '../app.ts'
 import { loadConfig } from '../config.ts'
+import { createLogger } from '../lib/logging.ts'
 import { SNAPSHOT_MAX_COUNT } from '../lib/snapshots.ts'
 import { MemorySessionStore } from '../session/store.ts'
 
@@ -25,7 +27,7 @@ class GatedAdapter extends FakeAdapter {
   }
 }
 
-function harness(importMaxConcurrent?: number) {
+function harness(importMaxConcurrent?: number, logLines: string[] = []) {
   const adapter = new GatedAdapter({
     databases: {
       shop: {
@@ -53,7 +55,7 @@ function harness(importMaxConcurrent?: number) {
       allowedHosts: ['db'],
       ...(importMaxConcurrent === undefined ? {} : { importMaxConcurrent }),
     },
-    { store }
+    { store, logger: createLogger('json', (line) => logLines.push(line)) }
   )
   let cookie = ''
   const req = (path: string, init: RequestInit = {}) =>
@@ -171,5 +173,55 @@ describe('snapshots', () => {
     stores.push(h.store)
     await h.login()
     expect((await take(h, '   ')).status).toBe(400)
+  })
+
+  it('compares the schema now with the snapshot: added, removed, changed, and the log holds only counts', async () => {
+    const lines: string[] = []
+    const h = harness(undefined, lines)
+    stores.push(h.store)
+    await h.login()
+    const id = SnapshotListSchema.parse(await (await take(h, 'before')).json()).snapshots[0]?.id ?? ''
+    const diffOf = async () => {
+      const res = await h.req(`/api/databases/shop/snapshots/${id}/diff`)
+      expect(res.status).toBe(200)
+      return SnapshotDiffSchema.parse(await res.json())
+    }
+    const same = await diffOf()
+    expect(same).toMatchObject({ added: [], removed: [], changed: [], unchanged: 2, unreadable: [] })
+    expect(same.snapshot.name).toBe('before')
+    // After a "migration": posts is gone, users has a column more, tags is new.
+    const listed = await h.adapter.listTables({ database: 'shop' })
+    const users = listed.find((t) => t.name === 'users') as (typeof listed)[number]
+    h.adapter.listTables = async () => [users, { ...users, name: 'tags' }]
+    h.adapter.showCreateTable = async (_ns, table) => [`CREATE TABLE ${table} (id int, secret_marker int)`]
+    const diff = await diffOf()
+    expect(diff.added).toEqual([{ name: 'tags', before: null, after: 'CREATE TABLE tags (id int, secret_marker int)' }])
+    expect(diff.removed).toEqual([{ name: 'posts', before: '-- fake CREATE TABLE posts (id, title)', after: null }])
+    expect(diff.changed).toEqual([
+      {
+        name: 'users',
+        before: '-- fake CREATE TABLE users (id, name)',
+        after: 'CREATE TABLE users (id int, secret_marker int)',
+      },
+    ])
+    expect(diff.unchanged).toBe(0)
+    const logged = lines.filter((l) => l.includes('snapshot.compared'))
+    expect(logged).toHaveLength(2)
+    expect(JSON.parse(logged[1] ?? '{}')).toMatchObject({ database: 'shop', added: 1, removed: 1, changed: 1 })
+    // Never a definition in the log.
+    expect(lines.join('\n')).not.toContain('secret_marker')
+  })
+
+  it('shows the comparison only to the account that took the snapshot', async () => {
+    const h = harness()
+    stores.push(h.store)
+    await h.login('root')
+    const id = SnapshotListSchema.parse(await (await take(h, 'mine')).json()).snapshots[0]?.id ?? ''
+    await h.login('someone')
+    expect((await h.req(`/api/databases/shop/snapshots/${id}/diff`)).status).toBe(404)
+    await h.login('root')
+    expect((await h.req(`/api/databases/shop/snapshots/${id}/diff`)).status).toBe(200)
+    // Another database (or schema) of the same account does not have it either.
+    expect((await h.req(`/api/databases/shop/snapshots/${id}/diff?schema=other`)).status).toBe(404)
   })
 })

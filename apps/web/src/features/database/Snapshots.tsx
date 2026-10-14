@@ -9,6 +9,7 @@ import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale, numberLocale } from '@/config/locale.ts'
 import { usePreviewFlow } from '@/lib/preview-flow.ts'
 import { mutations, snapshotsQuery } from '@/lib/queries.ts'
+import { SnapshotDiffDialog } from './SnapshotDiffDialog.tsx'
 
 const t = locale.snapshots
 
@@ -20,12 +21,14 @@ interface RestoreOp {
 
 /**
  * Snapshots of a database: save its state before a migration or a seed, put it back if it went wrong. Putting one
- * back is previewed like any other change (what it drops), then run from the copy the server holds.
+ * back is previewed like any other change (what it drops), then run from the copy the server holds. Comparing one
+ * with now shows what a migration changed in the schema.
  */
 export function Snapshots({ db, schema }: { db: string; schema: string | undefined }) {
   const queryClient = useQueryClient()
   const list = useQuery(snapshotsQuery(db, schema))
   const [name, setName] = useState('')
+  const [comparing, setComparing] = useState<{ id: string; name: string } | null>(null)
   const take = useMutation({
     mutationFn: (n: string) => mutations.takeSnapshot(db, schema, n),
     onSuccess: (next) => {
@@ -109,6 +112,14 @@ export function Snapshots({ db, schema }: { db: string; schema: string | undefin
                       <Button
                         size="sm"
                         aria-haspopup="dialog"
+                        aria-label={`${s.name}: ${t.compare}`}
+                        onClick={() => setComparing({ id: s.id, name: s.name })}
+                      >
+                        {t.compare}
+                      </Button>
+                      <Button
+                        size="sm"
+                        aria-haspopup="dialog"
                         aria-label={`${s.name}: ${t.restore}`}
                         onClick={() => flow.preview({ id: s.id, name: s.name, statements: 0 })}
                       >
@@ -131,6 +142,7 @@ export function Snapshots({ db, schema }: { db: string; schema: string | undefin
         </Card>
       ) : null}
       {remove.isError ? <ErrorBox error={remove.error} /> : null}
+      <SnapshotDiffDialog db={db} schema={schema} target={comparing} onClose={() => setComparing(null)} />
       <PreviewDialog
         flow={flow}
         title={(op) => t.restoreTitle(op.name)}
