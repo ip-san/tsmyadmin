@@ -2,19 +2,9 @@ import { AdapterError } from '@tsmyadmin/adapter'
 import { SecondFactorSetupSchema } from '@tsmyadmin/shared'
 import { expect } from 'vitest'
 import { createApp } from '../app.ts'
-import { createLogger } from '../lib/logging.ts'
 import { codeFor, stepAt } from '../lib/totp.ts'
 import { SqliteSessionStore } from '../session/sqlite-store.ts'
-import { fixtureAdapter, LOGIN, PASSKEY_FIXTURE, testConfig } from './app-harness.ts'
-
-/** A logger whose JSON lines the test reads. */
-export function capture() {
-  const lines: Record<string, unknown>[] = []
-  return { lines, logger: createLogger('json', (l) => lines.push(JSON.parse(l))) }
-}
-
-/** The lines of one event. */
-export const eventsOf = (lines: Record<string, unknown>[], event: string) => lines.filter((l) => l.event === event)
+import { capture, fixtureAdapter, LOGIN, PASSKEY_FIXTURE, testConfig } from './app-harness.ts'
 
 /**
  * The persistent store, a clock held by hand, and a second factor: the only setting where a code is asked for.

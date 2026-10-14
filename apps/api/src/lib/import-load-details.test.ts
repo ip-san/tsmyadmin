@@ -2,17 +2,17 @@ import { AdapterError } from '@tsmyadmin/adapter'
 import { FakeAdapter, fakeTable } from '@tsmyadmin/adapter/testing'
 import { ImportFormSchema, type StatementResult } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
+import { caught } from '../test/caught.ts'
 import { csvSource, type ImportValidationError, importRows, type RowsSource } from './import.ts'
 
 /** Rows loaded from a CSV (or another rows source): the header, the columns, the values, the errors, the new table. */
 
 const ns = { database: 'shop' }
-const caughtOf = async (p: Promise<unknown>) => {
-  try {
-    await p
-  } catch (e) {
-    return e as ImportValidationError
-  }
+const caughtOf = (p: Promise<unknown>) => caught<ImportValidationError>(p)
+/** The result of a rows import, which is never the SQL kind. */
+const rowsResult = (r: Awaited<ReturnType<typeof importRows>>) => {
+  if (r.format === 'sql') throw new Error('rows result expected')
+  return r
 }
 
 const form = (over: Record<string, string> = {}) =>
@@ -122,7 +122,7 @@ describe('importRows: the header and the columns', () => {
     ])
     const narrow = shop(usersTable())
     const n = await importRows(narrow, ns, form({ header: '0' }), rowsOf(null, [['1'], ['2']]))
-    expect(n.format === 'xml' && 'columns' in n && n.columns).toEqual(['id'])
+    expect(rowsResult(n).columns).toEqual(['id'])
   })
 
   it('refuses a record with more fields than there are columns to put them in', async () => {
@@ -145,21 +145,8 @@ describe('importRows: the header and the columns', () => {
     // An exact name is not ambiguous.
     const ok = await importRows(two(), ns, form({ table: 't' }), rowsOf(['id', 'name', 'Name'], [['1', 'a', 'b']]))
     expect(ok).toMatchObject({ columns: ['id', 'name', 'Name'] })
-    // Many: all in the message, five in the parameter.
+    // Many: all in the message, five in the parameter. Each column has a twin differing by case alone.
     const names = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
-    const wide = shop(
-      fakeTable('w', ['id', ...names.flatMap((n) => [n.toLowerCase(), n.toUpperCase() === n ? `${n}x` : n])], [])
-    )
-    expect(wide).toBeDefined()
-    const cols = names.flatMap((n) => [`${n}1`, `${n}2`])
-    const many = shop(
-      fakeTable(
-        'm',
-        cols.map((c) => c.toLowerCase()),
-        []
-      )
-    )
-    // (Columns a1, a2, ... have no twin differing by case: build twins explicitly.)
     const twins = names.flatMap((n) => [`${n.toLowerCase()}x`, `${n.toLowerCase()}X`])
     const t = shop(fakeTable('t2', twins, []))
     const h = names.map((n) => `${n.toLowerCase()}X`.toUpperCase())
@@ -167,7 +154,6 @@ describe('importRows: the header and the columns', () => {
     expect(e2?.reason).toBe('CSV_AMBIGUOUS_COLUMNS')
     expect(e2?.message).toBe(`Header column(s) match several table columns (case differs): ${h.join(', ')}`)
     expect(e2?.params).toEqual({ columns: h.slice(0, 5).join(', ') })
-    expect(many).toBeDefined()
   })
 
   it('refuses a header that names a column twice, listing each once in the parameter', async () => {
@@ -366,8 +352,8 @@ describe('importRows: the result', () => {
     expect(r).not.toHaveProperty('created')
     const plain = await importRows(shop(usersTable()), ns, form(), csvSource('id\n1\n', { ...form() }))
     expect(plain).toMatchObject({ warnings: [] })
-    expect(plain.format === 'csv' && plain.durationMs).toBeGreaterThanOrEqual(0)
-    expect(plain.format === 'csv' && plain.durationMs).toBeLessThan(60_000)
+    expect(rowsResult(plain).durationMs).toBeGreaterThanOrEqual(0)
+    expect(rowsResult(plain).durationMs).toBeLessThan(60_000)
   })
 
   it('refuses without a target table, and an empty file', async () => {
@@ -507,7 +493,7 @@ describe('importRows: a table made for the file', () => {
   it('makes a column for the widest row, naming the ones the header does not', async () => {
     const a = new Creating(['a', 'col2'])
     const r = await importRows(a, ns, create(), csvSource('a\n1,x\n', { ...form() }))
-    expect(r.format === 'csv' && 'created' in r && r.created?.map((c) => c.name)).toEqual(['a', 'col2'])
+    expect(rowsResult(r).created?.map((c) => c.name)).toEqual(['a', 'col2'])
   })
 
   it('names the columns col1, col2… and types them from every row, when the file has no header', async () => {
