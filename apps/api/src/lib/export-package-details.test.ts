@@ -528,7 +528,9 @@ describe('buildServerExport', () => {
     })
     const dump = async (over: Record<string, string>) =>
       text(buildServerExport(a, [{ database: 'shop' }], sq(over), opts).body)
-    const inserted = (sql: string) => ['11', '22', '33'].filter((v) => sql.includes(v))
+    // The dump names the time it was made at, whose digits could be any of these: leave that line out.
+    const inserted = (sql: string) =>
+      ['11', '22', '33'].filter((v) => sql.replace(/-- Generated: .*\n/g, '').includes(v))
     expect(inserted(await dump({}))).toEqual(['11', '22', '33'])
     expect(inserted(await dump({ rowOffset: '1' }))).toEqual(['22', '33'])
     expect(inserted(await dump({ rowLimit: '2' }))).toEqual(['11', '22'])
