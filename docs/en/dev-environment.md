@@ -1,4 +1,4 @@
-<!-- translated-from: docs/dev-environment.md sha256:4f5517cac151c946d5d698f987e5d545c701ba91b710746ecb84167165d42b82 -->
+<!-- translated-from: docs/dev-environment.md sha256:0be577a1ed72f2216635f5ae3e2e9b606e95ced8cf785248ed2e82ce4d3768cf -->
 
 # Development features: what was built, and what was set aside
 
@@ -31,14 +31,9 @@ phpMyAdmin is for MySQL / MariaDB only, and you name the server in `config.inc.p
 - **Persisting snapshots**: they are kept in memory so as not to add an environment variable or put data on disk in the clear. They are lost on restart, and 24 hours after being taken (so that the ones of an account that never comes back do not keep filling the total shared by every account, where nobody can remove them). If needed, saving to disk can be added as a separate choice.
 - **A real-time PostgreSQL stream**: `pg_stat_statements` is aggregated, normalised statements rather than a timeline of executions, and turning it on needs `shared_preload_libraries` and a restart (tsmyadmin issues only GET requests to Docker, so it cannot do that for you). So it shows the growth in call counts per read, and when the extension is unavailable it gives the steps to enable it in Docker.
 
-## Next candidates (not built)
+## Next candidates
 
-Ordered by how much they ease getting started and everyday troubleshooting.
-
-1. **Copy the connection info for the application**: for each discovered container, the address as seen from the host and as seen from another container (`host.docker.internal` or the compose service name), a `DATABASE_URL`, and `.env` lines.
-2. **Lock waits and too many connections**: show in one screen which query is making whom wait, and end the blocking one in a click (`performance_schema` on MySQL, `pg_locks` on PostgreSQL).
-3. **Wait for a container to start**: a container that starts later shows up without reopening the login screen, and one that is still starting is marked.
-4. **Snapshots and a schema diff**: show what changed across a migration as DDL.
+The five this section used to list (why a login failed, copying the connection info, lock waits, waiting for a container to start, snapshots with a schema diff) have all been built (see the table above). New candidates will be added here, in order of how much they help.
 
 ## Known limits
 

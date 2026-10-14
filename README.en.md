@@ -1,4 +1,4 @@
-<!-- translated-from: README.md sha256:557f8f3caa8fdfbe9e04e26914da3864d497d8f5413288766075901678cea9b3 -->
+<!-- translated-from: README.md sha256:ef5243d8db257d7959efed3dff1193a64226601be041422017d95f8f3f9c697f -->
 
 # tsmyadmin
 
@@ -29,9 +29,11 @@ Open <http://localhost:3100>. The MySQL / MariaDB / PostgreSQL containers runnin
 Beyond Docker discovery, there are features for watching what your application does to the database, and for going back after trying something.
 
 - **Executed statements (live)**: see the SQL your application is running right now in the server's "Monitor" tab. MySQL / MariaDB stream the general log newest first; PostgreSQL shows which statements in `pg_stat_statements` gained calls since the last read
-- **Snapshots**: save the current state of a database (structure, data, views, routines, triggers) and go back to it after trying a migration or a seed. Snapshots live in the API's memory and are gone after a restart
-- **Diagnosis when a target is missing or unreachable**: database containers that are not listed (stopped, no published port) and the reasons Docker could not be read are shown on the login screen, with how to fix them. In development, a failed login also says why and how to fix it (the source address MySQL refused, PostgreSQL's `pg_hba.conf`, a port nothing listens on, and so on)
+- **Lock waits and connections**: when the application hangs, the Processes tab shows which connection is making which wait, one pair per row, and ends the blocker on the spot. It also shows the connection count against the limit
+- **Snapshots**: save the current state of a database (structure, data, views, routines, triggers) and go back to it after trying a migration or a seed. Snapshots live in the API's memory and are gone after a restart. Take one before a migration and "Compare with now" shows what changed (tables and views added, removed, or with a changed definition) as a diff
+- **Diagnosis when a target is missing or unreachable**: database containers that are not listed (stopped, no published port) and the reasons Docker could not be read are shown on the login screen, with how to fix them. In development, a failed login also says why and how to fix it (the source address MySQL refused, PostgreSQL's `pg_hba.conf`, a port nothing listens on, and so on). With the login screen left open, containers started or stopped later are reflected in the list, and one still starting (waiting on its healthcheck) is shown as such
 - **One-click login**: only when you set `TSMYADMIN_DOCKER_LOGIN=1` does it read a container's credentials from its environment, inside the API process, to sign in in one click with no password. The password is never sent to the browser, logged or stored. It is off by default. Once it is on, anyone who can reach the tool can open those databases, so publish it on `127.0.0.1` only
+- **Connection info for your application**: pick a discovered container to copy the address, a `DATABASE_URL` and `.env` lines (Laravel style too) for wherever the application runs (the host, a container of the same compose project, another network). The password stays `<password>` and is never sent to the browser
 
 What was built and what was set aside is written up in [docs/en/dev-environment.md](docs/en/dev-environment.md).
 
