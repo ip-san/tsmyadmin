@@ -6,7 +6,13 @@ import {
   stripComments,
 } from '@tsmyadmin/adapter'
 import type { ConnectRequest, Namespace, RowKey, SessionInfo } from '@tsmyadmin/shared'
-import { type Dialect, PASSWORD_MASK } from '@tsmyadmin/shared'
+import {
+  type Dialect,
+  maskConnectionPassword,
+  maskCredentialPart,
+  PASSWORD_MASK,
+  sqlLiteralPattern,
+} from '@tsmyadmin/shared'
 import { type AdapterFactory, sessionIdentity } from '../session/store.ts'
 import type { Logger } from './logging.ts'
 import { currentRequest } from './request-context.ts'
@@ -126,69 +132,27 @@ export function summarise(
 }
 
 /**
- * A SQL string literal: plain / doubled-quote / backslash-escaped, PostgreSQL `E'…'`, or dollar-quoted `$tag$…$tag$`.
- * `n` is the index the dollar tag capture group will have inside the enclosing pattern. With `whole`, a quote right
- * after the closing one is read as a doubled quote, not as the end: `'abc''def` is then one string that never closes.
- */
-const literal = (n: number, whole = false) =>
-  `(?:(?:[EeNnXxBb]|[Uu]&|_[A-Za-z0-9]+)?'(?:[^'\\\\]|\\\\.|'')*'${whole ? "(?!')" : ''}|"(?:[^"\\\\]|\\\\.|"")*"${whole ? '(?!")' : ''}|\\$((?:[A-Za-z_\\u0080-\\uffff][\\w\\u0080-\\uffff]*)?)\\$[\\s\\S]*?\\$\\${n}\\$)`
-/**
  * Password literals in account statements typed directly into the SQL console: IDENTIFIED BY / AS (plugin hash),
  * PASSWORD 'x', and MySQL 8 `REPLACE '<current password>'` (REPLACE INTO / REPLACE( never precede a bare literal).
  */
 const SQL_SECRET = new RegExp(
-  String.raw`\b(IDENTIFIED(?:\s+WITH\s+\S+)?\s+(?:BY|AS)|IDENTIFIED\s+VIA\s+\S+\s+USING|(?:\w+_)?PASSWORD|REPLACE)(\s*(?:[=(]\s*)?)(?:${literal(3, true)}|0x[0-9A-Fa-f]+)`,
+  String.raw`\b(IDENTIFIED(?:\s+WITH\s+\S+)?\s+(?:BY|AS)|IDENTIFIED\s+VIA\s+\S+\s+USING|(?:\w+_)?PASSWORD|REPLACE)(\s*(?:[=(]\s*)?)(?:${sqlLiteralPattern(3, true)}|0x[0-9A-Fa-f]+)`,
   'gi'
 )
-/** `password=secret` inside a connection string (CREATE SUBSCRIPTION … CONNECTION, dblink, postgres_fdw options). */
-const CONNECTION_PASSWORD = /(\bpassword\s*=\s*)[^\s'";]+/gi
 /** MySQL `SET PASSWORD [FOR user] = 'x'`. */
-const SET_PASSWORD = new RegExp(String.raw`(\bSET\s+PASSWORD\b[^=;]*=\s*)${literal(2, true)}`, 'gi')
-
-/** Any string literal, for the coarse sweep over account statements. */
-const ANY_LITERAL = new RegExp(literal(1, true), 'g')
-/**
- * A statement's credential part: from the first IDENTIFIED / PASSWORD keyword on — wherever it sits, including
- * inside a string handed to PREPARE / EXECUTE / format() — everything between the first and the last quote is one
- * mask, so nested quoting (`''secret''`) cannot leave a fragment outside a literal. The account name before it
- * stays, and so does the tail after the last quote (`WITH GRANT OPTION`).
- */
-const CREDENTIAL_PART = /^([\s\S]*?\b(?:\w+_)?(?:IDENTIFIED|PASSWORD)\b)([\s\S]*)$/i
-const QUOTED_SPAN = /['"$][\s\S]*['"$]/
-const LITERAL_AT = new RegExp(literal(1, true), 'y')
-
-/** Whether a complete string literal starts at `at`: a `$` that closes no tag (`$$secret`) opens one that never ends. */
-function literalCompleteAt(text: string, at: number): boolean {
-  LITERAL_AT.lastIndex = at
-  return LITERAL_AT.test(text)
-}
+const SET_PASSWORD = new RegExp(String.raw`(\bSET\s+PASSWORD\b[^=;]*=\s*)${sqlLiteralPattern(2, true)}`, 'gi')
 
 function redactSqlSecrets(sql: string, dialect: Dialect): string {
-  const plain = stripComments(sql, dialect)
-    .replace(SQL_SECRET, (_m, kw: string, sep: string) => `${kw}${sep}'${PASSWORD_MASK}'`)
-    .replace(SET_PASSWORD, (_m, head: string) => `${head}'${PASSWORD_MASK}'`)
-    .replace(CONNECTION_PASSWORD, (_m, head: string) => `${head}${PASSWORD_MASK}`)
+  const plain = maskConnectionPassword(
+    stripComments(sql, dialect)
+      .replace(SQL_SECRET, (_m, kw: string, sep: string) => `${kw}${sep}'${PASSWORD_MASK}'`)
+      .replace(SET_PASSWORD, (_m, head: string) => `${head}'${PASSWORD_MASK}'`)
+  )
   // Statement by statement (the adapter's own splitter, so a `;` inside any literal the server would accept never
-  // starts a new part): after the credential keyword no literal survives — not even an unterminated one.
+  // starts a new part): after the credential keyword no literal survives — not even an unterminated one (the rule
+  // itself is shared with the browser's debug panel, see `maskCredentialPart`).
   return splitStatements(plain, dialect)
-    .map((st) => st.sql)
-    .map((part) => {
-      const m = CREDENTIAL_PART.exec(part)
-      if (!m) return part
-      const tail = m[2] ?? ''
-      // The first quote-like character may open a string that is never closed (a dollar-quoted one whose tag is not
-      // repeated, or `'abc\'def` whose last quote is escaped): everything after it is the secret then, however many
-      // quote characters the rest of the statement holds.
-      const first = tail.search(/['"$]/)
-      const unclosed = first !== -1 && !literalCompleteAt(tail, first)
-      const masked =
-        QUOTED_SPAN.test(tail) && !unclosed
-          ? tail.replace(QUOTED_SPAN, `'${PASSWORD_MASK}'`)
-          : /['"$]/.test(tail)
-            ? tail.replace(/['"$][\s\S]*$/, `'${PASSWORD_MASK}'`)
-            : tail.replace(ANY_LITERAL, (lit) => (lit.includes(PASSWORD_MASK) ? lit : `'${PASSWORD_MASK}'`))
-      return `${m[1]}${masked}`
-    })
+    .map((st) => maskCredentialPart(st.sql))
     .join(';\n')
 }
 
