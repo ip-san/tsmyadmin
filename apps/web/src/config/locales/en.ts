@@ -2074,6 +2074,30 @@ export const en = {
     activeOnly: 'Only connections doing something',
     fullQuery: 'Show the whole statement (100 characters by default)',
     refresh: 'Refresh',
+    lockWaitsTitle: 'Lock waits',
+    lockWaitsHint:
+      'Connections waiting for a lock that another connection’s transaction holds. Killing the blocking connection rolls its transaction back.',
+    lockWaitsNone: 'No connection is waiting for a lock',
+    lockWaitsDenied:
+      'This account may not read lock information (MySQL / MariaDB need the PROCESS privilege and read access to performance_schema).',
+    lockWaitsUnsupported: 'This server does not expose its lock waits (performance_schema is off, for example).',
+    blockedSession: 'Waiting connection',
+    blockingSession: 'Blocking connection',
+    waited: 'Waiting (s)',
+    transactionOpen: 'Transaction open (s)',
+    lockTarget: 'Locked object',
+    blockedQuery: 'Waiting statement',
+    blockingQuery: 'Blocker’s statement (running, or the last one)',
+    idleInTransaction: 'Idle in transaction',
+    idleInTransactionHint:
+      'Its transaction is open but it is running nothing. The application may have forgotten to commit or roll back',
+    killBlocker: 'Kill the blocker',
+    connections: 'Connections',
+    connectionsUsage: (current: number, max: number | null, percent: number | null) =>
+      max === null ? `${current}` : percent === null ? `${current} / ${max}` : `${current} / ${max} (${percent}%)`,
+    connectionsIdle: (n: number) => `Idle in transaction: ${n}`,
+    connectionsNearLimit:
+      'The connection count is close to max_connections. At the limit, new connections are refused. Look for unused connections and at the size of the application’s pool.',
     uptimeFormat: (sec: number) => {
       const d = Math.floor(sec / 86400)
       const h = Math.floor((sec % 86400) / 3600)

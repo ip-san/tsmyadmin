@@ -3,13 +3,14 @@ import type { KillMode, ProcessInfo } from '@tsmyadmin/shared'
 import { useState } from 'react'
 import { CellValue } from '@/components/cells/CellValue.tsx'
 import { Button } from '@/components/ui/Button.tsx'
-import { Dialog } from '@/components/ui/Dialog.tsx'
 import { Badge, ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Select } from '@/components/ui/Field.tsx'
 import { nextListSort, SortTh } from '@/components/ui/SortTh.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale.ts'
-import { mutations, processesQuery } from '@/lib/queries.ts'
+import { lockWaitsQuery, mutations, processesQuery } from '@/lib/queries.ts'
+import { KillDialog } from './KillDialog.tsx'
+import { LockWaitsPanel } from './LockWaitsPanel.tsx'
 import { abbreviateQuery, isActiveProcess, type ProcessColumn, REFRESH_SECONDS, sortProcesses } from './processes.ts'
 
 export function ProcessesPage() {
@@ -24,14 +25,17 @@ export function ProcessesPage() {
   const procs = useQuery({ ...processesQuery, refetchInterval: every > 0 ? every * 1000 : false })
   const refresh = async () => {
     setNotice(null)
-    await procs.refetch()
+    await Promise.all([procs.refetch(), queryClient.invalidateQueries({ queryKey: lockWaitsQuery.queryKey })])
   }
   const kill = useMutation({
     mutationFn: ({ id, mode }: { id: string; mode: KillMode }) => mutations.killProcess(id, mode),
     onSuccess: async (_r, { id, mode }) => {
       setNotice(mode === 'query' ? locale.server.cancelled(id) : locale.server.killed(id))
       setVictim(null)
-      await queryClient.invalidateQueries({ queryKey: processesQuery.queryKey })
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: processesQuery.queryKey }),
+        queryClient.invalidateQueries({ queryKey: lockWaitsQuery.queryKey }),
+      ])
     },
   })
   return (
@@ -64,6 +68,7 @@ export function ProcessesPage() {
       <output aria-live="polite" className={notice ? 'block' : 'sr-only'}>
         {notice ? <Notice>{notice}</Notice> : null}
       </output>
+      <LockWaitsPanel every={every} onKill={setVictim} />
       {procs.isPending ? (
         <Spinner />
       ) : procs.isError ? (
@@ -154,47 +159,16 @@ export function ProcessesPage() {
           </tbody>
         </Table>
       )}
-      <Dialog
-        open={victim !== null}
-        title={locale.server.kill}
+      <KillDialog
+        victim={victim}
+        pending={kill.isPending}
+        error={kill.isError ? kill.error : null}
         onClose={() => setVictim(null)}
-        footer={
-          <>
-            <Button onClick={() => setVictim(null)} disabled={kill.isPending}>
-              {locale.common.cancel}
-            </Button>
-            <Button
-              variant="danger"
-              onClick={() => {
-                if (!victim) return
-                setNotice(null)
-                kill.mutate({ id: victim.id, mode: 'connection' })
-              }}
-              disabled={kill.isPending}
-            >
-              {locale.server.killExecute}
-            </Button>
-          </>
-        }
-      >
-        <p>{victim ? locale.server.killConfirm(victim.id) : ''}</p>
-        {victim?.self ? (
-          <p className="mt-2 rounded bg-amber-50 px-2 py-1 text-xs text-amber-900 dark:bg-amber-950 dark:text-amber-200">
-            {locale.server.killSelfWarning}
-          </p>
-        ) : null}
-        {victim ? (
-          <dl className="mt-2 grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
-            <dt className="text-ink-sub">{locale.server.user}</dt>
-            <dd>{[victim.user, victim.host].filter(Boolean).join('@') || '–'}</dd>
-            <dt className="text-ink-sub">{locale.server.database}</dt>
-            <dd>{victim.database ?? '–'}</dd>
-            <dt className="text-ink-sub">{locale.server.query}</dt>
-            <dd className="truncate font-mono">{victim.query?.replace(/\s+/g, ' ').trim().slice(0, 200) || '–'}</dd>
-          </dl>
-        ) : null}
-        {kill.isError ? <ErrorBox error={kill.error} className="mt-2" /> : null}
-      </Dialog>
+        onConfirm={(v) => {
+          setNotice(null)
+          kill.mutate({ id: v.id, mode: 'connection' })
+        }}
+      />
     </section>
   )
 }

@@ -157,6 +157,7 @@ export function serverRoutes(cfg: SessionConfig, logger?: Logger) {
         c.json(await c.get('session').adapter.serverCatalog(c.req.valid('param').kind))
       )
       .get('/server/processes', async (c) => c.json(await c.get('session').adapter.listProcesses()))
+      .get('/server/lock-waits', async (c) => c.json(await c.get('session').adapter.lockWaits()))
       .post(
         '/server/processes/:id/kill',
         validate('param', ProcessIdSchema),
