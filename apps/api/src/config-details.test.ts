@@ -120,10 +120,18 @@ describe('defaults and enums', () => {
   it('accepts every listed SESSION_STORE, LOG_FORMAT and TRUST_PROXY, and refuses the rest', () => {
     expect(loadConfig({ SESSION_STORE: 'memory' }).sessionStore).toBe('memory')
     expect(loadConfig({ SESSION_STORE: 'sqlite' }).sessionStore).toBe('sqlite')
+    expect(loadConfig({ SESSION_STORE: 'redis', REDIS_URL: 'redis://r' }).sessionStore).toBe('redis')
     expect(message({ SESSION_STORE: 'file' })).toMatch(/SESSION_STORE/)
     expect(loadConfig({ LOG_FORMAT: 'json' }).logFormat).toBe('json')
     expect(loadConfig({ LOG_FORMAT: 'pretty', ...prod }).logFormat).toBe('pretty')
+    expect(message({ LOG_FORMAT: 'text' })).toMatch(/LOG_FORMAT/)
     expect(loadConfig({ TRUST_PROXY: '0' }).trustProxy).toBe('none')
+    expect(loadConfig({ TRUST_PROXY: '1' }).trustProxy).toBe('forwarded')
+    expect(loadConfig({ TRUST_PROXY: 'cloudflare' }).trustProxy).toBe('cloudflare')
+    expect(message({ TRUST_PROXY: 'true' })).toMatch(/TRUST_PROXY/)
+  })
+
+  it('takes a switch as 0 or 1 only, not as true', () => {
     expect(message({ COOKIE_SECURE: 'true' })).toMatch(/COOKIE_SECURE/)
     expect(message({ TSMYADMIN_REQUIRE_2FA: 'true', SESSION_STORE: 'sqlite' })).toMatch(/TSMYADMIN_REQUIRE_2FA/)
   })

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { caught } from '../test/caught.ts'
 import { decodeEntities, pickSheet, RowsParseError, readOds, readWikiTables, readXmlTables } from './import-rows.ts'
 import { zipStream } from './zip.ts'
 
@@ -35,28 +36,12 @@ describe('decodeEntities', () => {
 describe('pickSheet', () => {
   const sheets = [{ name: 'a' }, { name: 'b' }, { name: '2' }]
 
-  it('refuses a file without a table, naming what was asked for', () => {
-    const err = (() => {
-      try {
-        pickSheet([], 'x')
-      } catch (e) {
-        return e as RowsParseError
-      }
-    })()
+  it('refuses a file without a table, naming what was asked for', async () => {
+    const err = await caught<RowsParseError>(() => pickSheet([], 'x'))
     expect(err).toBeInstanceOf(RowsParseError)
-    expect(err?.kind).toBe('NO_SHEET')
-    expect(err?.message).toBe('The file holds no table')
-    expect(err?.params).toEqual({ sheet: 'x' })
-    expect(() => pickSheet([], undefined)).toThrow('The file holds no table')
-    expect(
-      (() => {
-        try {
-          pickSheet([], undefined)
-        } catch (e) {
-          return (e as RowsParseError).params
-        }
-      })()
-    ).toEqual({ sheet: '' })
+    expect(err).toMatchObject({ kind: 'NO_SHEET', message: 'The file holds no table', params: { sheet: 'x' } })
+    const unnamed = await caught<RowsParseError>(() => pickSheet([], undefined))
+    expect(unnamed).toMatchObject({ message: 'The file holds no table', params: { sheet: '' } })
   })
 
   it('knows the error by its name', () => {
@@ -359,24 +344,17 @@ describe('readOds', () => {
     expect(readOds(await ods(row(cell('office:value-type="float" office:value="1"'))))).toEqual([])
   })
 
-  it('refuses a zip without content.xml, naming what is missing', () => {
-    const run = async () => {
-      const archive = new Uint8Array(
-        Buffer.concat(await Array.fromAsync(zipStream([{ name: 'other.xml', data: '<a/>' }])))
-      )
-      return readOds(archive)
-    }
-    return run().then(
-      () => {
-        throw new Error('should have thrown')
-      },
-      (e: RowsParseError) => {
-        expect(e).toBeInstanceOf(RowsParseError)
-        expect(e.kind).toBe('PARSE')
-        expect(e.message).toBe('content.xml is missing')
-        expect(e.params).toEqual({ message: 'content.xml is missing' })
-      }
+  it('refuses a zip without content.xml, naming what is missing', async () => {
+    const archive = new Uint8Array(
+      Buffer.concat(await Array.fromAsync(zipStream([{ name: 'other.xml', data: '<a/>' }])))
     )
+    const e = await caught<RowsParseError>(() => readOds(archive))
+    expect(e).toBeInstanceOf(RowsParseError)
+    expect(e).toMatchObject({
+      kind: 'PARSE',
+      message: 'content.xml is missing',
+      params: { message: 'content.xml is missing' },
+    })
   })
 })
 

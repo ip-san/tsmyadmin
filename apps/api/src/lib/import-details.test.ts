@@ -2,6 +2,7 @@ import { splitStatements } from '@tsmyadmin/adapter'
 import { FakeAdapter } from '@tsmyadmin/adapter/testing'
 import type { StatementResult } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
+import { caught } from '../test/caught.ts'
 import { decodeUpload, type ImportSqlOptions, ImportValidationError, importSql } from './import.ts'
 
 /** The import: what it sends to the server and what it tells the user, in every branch. */
@@ -94,13 +95,7 @@ const scripted = (
 const lastOptions = (a: FakeAdapter) => a.calls.at(-1)?.args[2] as Record<string, unknown>
 const lastScript = (a: FakeAdapter) => a.calls.at(-1)?.args[1] as string
 const sent = (a: FakeAdapter) => (lastOptions(a).statements as { sql: string; line: number }[]) ?? []
-const caughtOf = async (p: Promise<unknown>) => {
-  try {
-    await p
-  } catch (e) {
-    return e as ImportValidationError
-  }
-}
+const caughtOf = (p: Promise<unknown>) => caught<ImportValidationError>(p)
 
 describe('importSql: the file and the connection', () => {
   it('refuses a dump of the other dialect, and says which', async () => {
@@ -121,12 +116,14 @@ describe('importSql: the file and the connection', () => {
 
   it('accepts a dump of its own dialect, and looks for the header at the start of a line only', async () => {
     const a = scripted()
-    await importSql(a, ns, '-- Dialect: mysql\nSELECT 1;', opts())
-    await importSql(a, ns, 'SELECT 1;\n-- MySQL dump\nSELECT 2;', opts())
-    await importSql(scripted(), ns, 'SELECT 1; -- Dialect: postgres', opts())
-    await importSql(scripted(), ns, '-- Dialect: postgresql-ish\nSELECT 1;', opts()).catch((e) => {
-      throw e
-    })
+    for (const text of [
+      '-- Dialect: mysql\nSELECT 1;',
+      'SELECT 1;\n-- MySQL dump\nSELECT 2;',
+      'SELECT 1; -- Dialect: postgres',
+      '-- Dialect: postgresql-ish\nSELECT 1;',
+    ]) {
+      await expect(importSql(a, ns, text, opts()), text).resolves.toMatchObject({ format: 'sql', failed: 0 })
+    }
   })
 
   it('reads the first 4096 characters for the header, not the whole file', async () => {
@@ -258,7 +255,8 @@ describe('importSql: the script that is sent', () => {
     ].join('\n')
     const r = await importSql(a, ns, text, opts({ skip: 7 }))
     expect(sent(a).map((s) => s.sql)).toEqual(['USE shop', '-- note\nSET NAMES utf8', 'use other', 'INSERT 3'])
-    expect(r.format === 'sql' && r.total).toBe(4)
+    if (r.format !== 'sql') throw new Error('sql result expected')
+    expect(r.total).toBe(4)
     const none = scripted()
     await importSql(none, ns, text, opts({ skip: 0 }))
     expect(sent(none)).toHaveLength(8)
@@ -534,7 +532,8 @@ describe('importSql: warnings', () => {
         })),
     })
     const r = await importSql(a, ns, 'INSERT 1', opts())
-    expect(r.format === 'sql' && r.warnings).toEqual([])
+    if (r.format !== 'sql') throw new Error('sql result expected')
+    expect(r.warnings).toEqual([])
   })
 
   it('tells a transaction left open from one that was rolled back as a whole', async () => {
