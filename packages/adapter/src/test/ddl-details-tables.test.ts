@@ -277,7 +277,16 @@ describe('MySQL: copying a table', () => {
       'CREATE TABLE `e`.`b` LIKE `d`.`b`',
       'INSERT INTO `e`.`b` SELECT * FROM `d`.`b`',
     ])
-    expect(mysql({ op: 'copyTables', tables: ['a'], withData: false })).toEqual(['CREATE TABLE `d`.`a` LIKE `d`.`a`'])
+    // No destination: the server would refuse `CREATE TABLE a LIKE a` after the preview said it was fine.
+    expect(() => mysql({ op: 'copyTables', tables: ['a'], withData: false })).toThrow(
+      'A table cannot be copied onto itself'
+    )
+    expect(() => mysql({ op: 'copyTable', table: 'a', newName: 'a', withData: false })).toThrow(
+      'A table cannot be copied onto itself'
+    )
+    expect(mysql({ op: 'copyTable', table: 'a', newName: 'b', withData: false })).toEqual([
+      'CREATE TABLE `d`.`b` LIKE `d`.`a`',
+    ])
   })
 })
 

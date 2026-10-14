@@ -3,11 +3,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { IS_MAC, matches, type Shortcut, shortcutLabel, useShortcuts } from './shortcuts.ts'
 
 const ev = (init: KeyboardEventInit) => new KeyboardEvent('keydown', init)
-const MOD = IS_MAC ? { metaKey: true } : { ctrlKey: true }
-const OTHER_MOD = IS_MAC ? { ctrlKey: true } : { metaKey: true }
+// jsdom's navigator.platform is '', so these tests run as on a non-Mac: mod is Ctrl. The Mac side is loaded under a
+// stubbed platform below.
+const MOD = { ctrlKey: true }
+const OTHER_MOD = { metaKey: true }
 
 describe('matches', () => {
   it('rejects the other platform’s modifier for mod', () => {
+    expect(IS_MAC).toBe(false)
     expect(matches(ev({ key: 'k', ...OTHER_MOD }), 'mod+k')).toBe(false)
     expect(matches(ev({ key: 'k', ...MOD }), 'mod+k')).toBe(true)
   })
@@ -29,10 +32,7 @@ describe('matches', () => {
 })
 
 describe('matches on a Mac', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals()
-    vi.resetModules()
-  })
+  afterEach(() => vi.unstubAllGlobals())
   it('maps mod to the command key and not to control', async () => {
     vi.resetModules()
     vi.stubGlobal('navigator', { platform: 'MacIntel' })
@@ -58,7 +58,7 @@ describe('shortcutLabel', () => {
     expect(shortcutLabel('enter')).toBe('Enter')
   })
   it('upper-cases any other key and keeps the order', () => {
-    expect(shortcutLabel('mod+shift+g')).toBe(`${IS_MAC ? '⌘' : 'Ctrl'} + Shift + G`)
+    expect(shortcutLabel('mod+shift+g')).toBe('Ctrl + Shift + G')
     expect(shortcutLabel('escape')).toBe('ESCAPE')
     expect(shortcutLabel('')).toBe('')
   })
@@ -71,6 +71,17 @@ describe('useShortcuts', () => {
     return event
   }
   const mount = (shortcuts: Shortcut[]) => renderHook(({ s }) => useShortcuts(s), { initialProps: { s: shortcuts } })
+  /** Elements put in the document for one test; taken out again after it, whether it passed or not. */
+  const added: HTMLElement[] = []
+  const append = <K extends keyof HTMLElementTagNameMap>(tag: K, parent: HTMLElement = document.body) => {
+    const el = parent.appendChild(document.createElement(tag))
+    added.push(el)
+    return el
+  }
+  afterEach(() => {
+    for (const el of added.splice(0)) el.remove()
+    vi.restoreAllMocks()
+  })
 
   it('runs the handler, stops the browser’s own action, and stops at the first match', () => {
     const first = vi.fn()
@@ -114,10 +125,9 @@ describe('useShortcuts', () => {
       { keys: 'j', global: true, handler: global },
     ])
     for (const tag of ['input', 'textarea', 'select'] as const) {
-      const el = document.body.appendChild(document.createElement(tag))
+      const el = append(tag)
       fire(el, { key: 'k' })
       fire(el, { key: 'j' })
-      el.remove()
     }
     expect(plain).not.toHaveBeenCalled()
     expect(global).toHaveBeenCalledTimes(3)
@@ -126,11 +136,10 @@ describe('useShortcuts', () => {
   it('does not fire inside a contenteditable element', () => {
     const handler = vi.fn()
     mount([{ keys: 'k', handler }])
-    const el = document.body.appendChild(document.createElement('div'))
+    const el = append('div')
     // jsdom does not implement isContentEditable, so it is stated directly.
     Object.defineProperty(el, 'isContentEditable', { value: true })
     fire(el, { key: 'k' })
-    el.remove()
     expect(handler).not.toHaveBeenCalled()
   })
 
@@ -141,33 +150,29 @@ describe('useShortcuts', () => {
       { keys: 'k', handler },
       { keys: 'j', global: true, handler: global },
     ])
-    const dialog = document.body.appendChild(document.createElement('dialog'))
+    const dialog = append('dialog')
     dialog.setAttribute('open', '')
-    const inDialog = dialog.appendChild(document.createElement('div'))
-    const link = document.body.appendChild(document.createElement('a'))
-    const button = document.body.appendChild(document.createElement('button'))
-    const root = document.body.appendChild(document.createElement('div'))
+    const inDialog = append('div', dialog)
+    const link = append('a')
+    const button = append('button')
+    const root = append('div')
     root.setAttribute('data-scroll-root', '')
-    const inRoot = root.appendChild(document.createElement('span'))
+    const inRoot = append('span', root)
     for (const el of [inDialog, link, button, inRoot]) {
       fire(el, { key: 'k' })
       fire(el, { key: 'j' })
     }
     expect(handler).not.toHaveBeenCalled()
     expect(global).toHaveBeenCalledTimes(4)
-    for (const el of [dialog, link, button, root]) el.remove()
   })
 
   it('fires in a closed dialog and in an ordinary element', () => {
     const handler = vi.fn()
     mount([{ keys: 'k', handler }])
-    const dialog = document.body.appendChild(document.createElement('dialog'))
-    const inside = dialog.appendChild(document.createElement('div'))
-    const div = document.body.appendChild(document.createElement('div'))
+    const inside = append('div', append('dialog'))
+    const div = append('div')
     fire(inside, { key: 'k' })
     fire(div, { key: 'k' })
-    dialog.remove()
-    div.remove()
     expect(handler).toHaveBeenCalledTimes(2)
   })
 
@@ -181,7 +186,6 @@ describe('useShortcuts', () => {
     expect(old).not.toHaveBeenCalled()
     expect(fresh).toHaveBeenCalledTimes(1)
     expect(add.mock.calls.filter(([type]) => type === 'keydown')).toHaveLength(1)
-    add.mockRestore()
   })
 
   it('stops listening when unmounted', () => {
