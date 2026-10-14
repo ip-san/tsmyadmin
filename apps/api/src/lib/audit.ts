@@ -175,12 +175,13 @@ function redactSqlSecrets(sql: string, dialect: Dialect): string {
       const m = CREDENTIAL_PART.exec(part)
       if (!m) return part
       const tail = m[2] ?? ''
-      // The first quote-like character may open a dollar-quoted string that is never closed: everything after it is
-      // the secret then, however many `$` the rest of the statement holds.
+      // The first quote-like character may open a string that is never closed (a dollar-quoted one whose tag is not
+      // repeated, or `'abc\'def` whose last quote is escaped): everything after it is the secret then, however many
+      // quote characters the rest of the statement holds.
       const first = tail.search(/['"$]/)
-      const unclosedDollar = first !== -1 && tail[first] === '$' && !literalCompleteAt(tail, first)
+      const unclosed = first !== -1 && !literalCompleteAt(tail, first)
       const masked =
-        QUOTED_SPAN.test(tail) && !unclosedDollar
+        QUOTED_SPAN.test(tail) && !unclosed
           ? tail.replace(QUOTED_SPAN, `'${PASSWORD_MASK}'`)
           : /['"$]/.test(tail)
             ? tail.replace(/['"$][\s\S]*$/, `'${PASSWORD_MASK}'`)
