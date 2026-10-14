@@ -93,7 +93,7 @@ export function RecentStatements() {
           </Button>
         ) : null}
       </div>
-      <p className="text-xs text-ink-sub">{dialect === 'mysql' ? t.hintMysql : t.hintPostgres}</p>
+      <p className="text-xs text-ink-sub">{t.hint[dialect]}</p>
       {report.isPending ? <Spinner /> : null}
       {report.isError ? <ErrorBox error={report.error} onRetry={() => void report.refetch()} /> : null}
       {status !== undefined && status !== 'ok' ? (

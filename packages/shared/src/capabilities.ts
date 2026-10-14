@@ -43,6 +43,31 @@ export interface DialectCapabilities {
   routineOverloads: boolean
   /** Scheduled events (MySQL). */
   events: boolean
+  /**
+   * A connection is to one database and stays in it: the login names it, it cannot be dropped while connected, and its
+   * grants are read there (PostgreSQL). A MySQL connection reaches every database the account may use.
+   */
+  connectionPerDatabase: boolean
+  /**
+   * A database and a table each carry a default collation, which new columns take and which can be changed afterwards
+   * (MySQL). On PostgreSQL a collation belongs to a column; the database's is fixed when it is created.
+   */
+  collationDefaults: boolean
+  /** A table is stored by an engine chosen per table (`ENGINE=InnoDB`), and each engine has its own variables (MySQL). */
+  storageEngines: boolean
+  /** A column's place among the others can be chosen (`FIRST` / `AFTER`) and changed later (MySQL); elsewhere a new column goes last and stays there. */
+  columnOrder: boolean
+  /** A timestamp column can set itself to the current time whenever its row changes (`ON UPDATE CURRENT_TIMESTAMP`, MySQL). */
+  onUpdateTimestamp: boolean
+  /**
+   * A partition is a table of its own, attached to and detached from its parent, and a table is partitioned when it is
+   * created (PostgreSQL). MySQL partitions an existing table and can take the partitioning off again.
+   */
+  partitionsAreTables: boolean
+  /** A routine, trigger or view runs with the privileges of an account it names, its `DEFINER` (`user@host`, MySQL). */
+  definer: boolean
+  /** The server can report how long a statement spent in each stage (`SET profiling`, MySQL). */
+  statementProfiling: boolean
   /** How a SQL dump is written for this server. */
   dump: {
     /** Drops are written as one section ahead of everything, in the reverse of the order of dependency (PostgreSQL); otherwise each object is dropped where it is created. */
@@ -76,6 +101,14 @@ const CAPABILITIES: Record<Dialect, DialectCapabilities> = {
     copyDatabaseWithoutStructure: true,
     routineOverloads: false,
     events: true,
+    connectionPerDatabase: false,
+    collationDefaults: true,
+    storageEngines: true,
+    columnOrder: true,
+    onUpdateTimestamp: true,
+    partitionsAreTables: false,
+    definer: true,
+    statementProfiling: true,
     dump: {
       dropsInOneSection: false,
       dependencyCatalog: false,
@@ -99,6 +132,14 @@ const CAPABILITIES: Record<Dialect, DialectCapabilities> = {
     copyDatabaseWithoutStructure: false,
     routineOverloads: true,
     events: false,
+    connectionPerDatabase: true,
+    collationDefaults: false,
+    storageEngines: false,
+    columnOrder: false,
+    onUpdateTimestamp: false,
+    partitionsAreTables: true,
+    definer: false,
+    statementProfiling: false,
     dump: {
       dropsInOneSection: true,
       dependencyCatalog: true,

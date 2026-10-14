@@ -57,7 +57,7 @@ export function TablePrivilegesPage({
   return (
     <div className="space-y-3">
       <h2 className="text-sm font-semibold text-ink">{t.title(table)}</h2>
-      <Notice>{dialect === 'mysql' ? t.hintMysql : t.hintPostgres}</Notice>
+      <Notice>{t.hint[dialect]}</Notice>
       <Table aria-label={t.title(table)}>
         <thead>
           <tr>

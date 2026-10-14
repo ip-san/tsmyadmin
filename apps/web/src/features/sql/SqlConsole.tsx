@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useRouteContext } from '@tanstack/react-router'
 import type { Dialect, StatementResult } from '@tsmyadmin/shared'
-import { SQL_MAX_ROWS_DEFAULT } from '@tsmyadmin/shared'
+import { capabilities, SQL_MAX_ROWS_DEFAULT } from '@tsmyadmin/shared'
 import { Play, Square } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { z } from 'zod'
@@ -244,7 +244,7 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
           <input type="checkbox" checked={stopOnError} onChange={(e) => setStopOnError(e.target.checked)} />
           {locale.sql.stopOnError}
         </label>
-        {dialect === 'mysql' ? <ProfileOption checked={profile} onChange={setProfile} /> : null}
+        {capabilities(dialect).statementProfiling ? <ProfileOption checked={profile} onChange={setProfile} /> : null}
         <SafeModeOption checked={safeMode} onChange={setSafeMode} />
       </div>
       <RunOptionsPanel dialect={dialect} text={text} options={runOptions} onChange={setRunOptions} />

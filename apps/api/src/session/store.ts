@@ -70,9 +70,13 @@ export interface SavedItems {
   ): Promise<SavedItem[]>
   /**
    * Deletes one of the caller's own rows of that kind; an id belonging to another account, or to the other kind,
-   * matches nothing (a bookmark is not deleted by the route that deletes templates).
+   * matches nothing (a bookmark is not deleted by the route that deletes templates). With `when`, the row is deleted
+   * only if `when` accepts what it holds at the moment of the delete, read and deleted as one step with respect to
+   * `update` (Redis: under the same lock; a plain `save` there does not take it): a caller that checked something
+   * about the row it read is not made to delete what an `update` put there since.
+   * Like `update`'s `change`, `when` must not await.
    */
-  remove(config: Config, kind: SavedItemKind, id: string): Promise<SavedItem[]>
+  remove(config: Config, kind: SavedItemKind, id: string, when?: (current: SavedItem) => boolean): Promise<SavedItem[]>
 }
 
 /** A passkey registered as a second factor (WebAuthn), in the form the verifier needs it back. */

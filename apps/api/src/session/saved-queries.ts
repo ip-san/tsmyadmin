@@ -168,11 +168,26 @@ export class SqliteSavedQueries implements SavedItems {
     return this.read(config, kind)
   }
 
-  /** Deletes one of the caller's own rows of that kind; any other id matches nothing. */
-  async remove(config: ConnectRequest, kind: SavedItemKind, id: string): Promise<SavedItem[]> {
-    const mine = await this.list(config, kind)
-    if (mine.some((item) => item.id === id)) this.stmt.remove.run(id, this.identity(config))
-    return this.list(config, kind)
+  /**
+   * Deletes one of the caller's own rows of that kind; any other id matches nothing. Read and deleted in one
+   * transaction, so `when` judges the row that is deleted, not one another write has replaced since.
+   */
+  async remove(
+    config: ConnectRequest,
+    kind: SavedItemKind,
+    id: string,
+    when?: (current: SavedItem) => boolean
+  ): Promise<SavedItem[]> {
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      const current = this.read(config, kind).find((item) => item.id === id)
+      if (current && (when === undefined || when(current))) this.stmt.remove.run(id, this.identity(config))
+      this.db.exec('COMMIT')
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+    return this.read(config, kind)
   }
 }
 

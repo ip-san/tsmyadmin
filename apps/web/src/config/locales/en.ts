@@ -388,17 +388,23 @@ export const en = {
     applyToTables: 'Apply to the existing tables and columns too',
     newName: 'New database name',
     copyName: 'Name of the copy',
-    renameHintMysql:
-      'MySQL has no statement for renaming a database, so a new one is created and the tables are moved into it. The old database is kept rather than dropped. A database with views, routines, triggers or events cannot be renamed.',
-    renameHintPostgres: 'This fails while anyone else is connected to the database.',
-    copyHintMysql:
-      'Copies the tables’ structure and data. Foreign keys, views, routines, triggers, events and privileges are not copied.',
-    copyHintPostgres:
-      'Copies the whole database — tables, views, functions and data. It fails while anything is running in the source, and needs its owner or a superuser.',
-    renameWarningMysql:
-      'The old database is kept, not dropped. Seeing no tables in it does not mean it is empty: routines, events or tables your account has no privilege on can still be there. If you drop it, check its contents first with an administrator account that can see everything. An application still configured with the old name that creates its tables on startup will quietly keep writing to the old database. Privileges granted on it (GRANT) do not carry over to the new name.',
-    renameWarningPostgres:
-      'Idle tsmyadmin connections to this database under the same account are closed. If anything is still running there, nothing changes and the rename fails.',
+    renameHint: {
+      mysql:
+        'MySQL has no statement for renaming a database, so a new one is created and the tables are moved into it. The old database is kept rather than dropped. A database with views, routines, triggers or events cannot be renamed.',
+      postgres: 'This fails while anyone else is connected to the database.',
+    },
+    copyHint: {
+      mysql:
+        'Copies the tables’ structure and data. Foreign keys, views, routines, triggers, events and privileges are not copied.',
+      postgres:
+        'Copies the whole database — tables, views, functions and data. It fails while anything is running in the source, and needs its owner or a superuser.',
+    },
+    renameWarning: {
+      mysql:
+        'The old database is kept, not dropped. Seeing no tables in it does not mean it is empty: routines, events or tables your account has no privilege on can still be there. If you drop it, check its contents first with an administrator account that can see everything. An application still configured with the old name that creates its tables on startup will quietly keep writing to the old database. Privileges granted on it (GRANT) do not carry over to the new name.',
+      postgres:
+        'Idle tsmyadmin connections to this database under the same account are closed. If anything is still running there, nothing changes and the rename fails.',
+    },
     systemDatabase: 'The server’s own databases cannot be renamed or copied.',
     connectedDatabase:
       'The database this session is connected through cannot be renamed or copied. Sign in again with a different database.',
@@ -1554,10 +1560,12 @@ export const en = {
   },
   tablePrivileges: {
     title: (table: string) => `Privileges on ${table}`,
-    hintMysql:
-      'For each account: what it may do to this table and where that comes from (the table, some columns, the whole database, the whole server). Choose privileges… grants and revokes, but a revoke here only removes table and column grants. Manage database-wide grants on the database’s Privileges tab and server-wide ones under Users. Privileges held through a role are not shown.',
-    hintPostgres:
-      'For each account: what it may do to this table and where that comes from (the table, some columns, superuser). Choose privileges… grants and revokes. The owner’s implicit privileges, and privileges held through PUBLIC or another role, are not shown.',
+    hint: {
+      mysql:
+        'For each account: what it may do to this table and where that comes from (the table, some columns, the whole database, the whole server). Choose privileges… grants and revokes, but a revoke here only removes table and column grants. Manage database-wide grants on the database’s Privileges tab and server-wide ones under Users. Privileges held through a role are not shown.',
+      postgres:
+        'For each account: what it may do to this table and where that comes from (the table, some columns, superuser). Choose privileges… grants and revokes. The owner’s implicit privileges, and privileges held through PUBLIC or another role, are not shown.',
+    },
     scopes: { server: 'Server', database: 'Database', table: 'Table' },
     scopeHints: {
       server: 'Granted on the whole server (MySQL *.*, a PostgreSQL superuser); revoking here does not remove it',
@@ -1696,10 +1704,12 @@ export const en = {
     resume: 'Resume',
     clear: 'Clear',
     waiting: 'Changes are drawn from the second reading on.',
-    hintMysql:
-      'Reads the status variables at an interval and draws the running totals as a change per second. Kept only while you stay on this page.',
-    hintPostgres:
-      'Reads the connected database’s statistics (pg_stat_database) at an interval and draws the running totals as a change per second. Kept only while you stay on this page.',
+    hint: {
+      mysql:
+        'Reads the status variables at an interval and draws the running totals as a change per second. Kept only while you stay on this page.',
+      postgres:
+        'Reads the connected database’s statistics (pg_stat_database) at an interval and draws the running totals as a change per second. Kept only while you stay on this page.',
+    },
     perSecond: (v: number) => `${v.toLocaleString('en-US', { maximumFractionDigits: 1 })}/s`,
     charts: {
       queries: 'Queries per second',
@@ -1796,10 +1806,12 @@ export const en = {
     },
     recent: {
       title: 'Statements as they run',
-      hintMysql:
-        "Streams what the application ran from the general log (a table), newest first. This tool's own statements are left out. The log is a server-wide setting and grows fast: turn it off when you are done.",
-      hintPostgres:
-        "Shows the statements whose call count grew in pg_stat_statements, per read (the counts of each interval, not one line per execution). This tool's own statements and catalog reads are left out.",
+      hint: {
+        mysql:
+          "Streams what the application ran from the general log (a table), newest first. This tool's own statements are left out. The log is a server-wide setting and grows fast: turn it off when you are done.",
+        postgres:
+          "Shows the statements whose call count grew in pg_stat_statements, per read (the counts of each interval, not one line per execution). This tool's own statements and catalog reads are left out.",
+      },
       every: 'Read interval',
       waiting: 'Nothing has run yet. Use the application and it shows up here.',
       turnOn: 'Turn the general log on…',
@@ -1840,10 +1852,12 @@ export const en = {
         },
       },
       title: 'Controls',
-      hintMysql:
-        'Start and stop the replica’s threads, skip the one statement that stopped it, reset it, and point it at a source. The SQL is shown before it runs.',
-      hintPostgres:
-        'Pauses and resumes a standby’s WAL replay. The source is the primary_conninfo setting (change it under Variables).',
+      hint: {
+        mysql:
+          'Start and stop the replica’s threads, skip the one statement that stopped it, reset it, and point it at a source. The SQL is shown before it runs.',
+        postgres:
+          'Pauses and resumes a standby’s WAL replay. The source is the primary_conninfo setting (change it under Variables).',
+      },
       start: 'Start',
       stop: 'Stop',
       resume: 'Resume',
@@ -1993,10 +2007,12 @@ export const en = {
     databasesTitle: 'Databases',
     overviewTitle: 'Traffic and connections',
     editVariable: 'Change',
-    editVariableHintMysql:
-      'Changed with SET GLOBAL. It affects the running server only and reverts to the configuration file at the next restart. A read-only variable cannot be changed (it fails when run).',
-    editVariableHintPostgres:
-      'Written to postgresql.auto.conf with ALTER SYSTEM SET and the configuration reloaded. A setting that needs a restart takes effect only after one. Only a superuser can change it.',
+    editVariableHint: {
+      mysql:
+        'Changed with SET GLOBAL. It affects the running server only and reverts to the configuration file at the next restart. A read-only variable cannot be changed (it fails when run).',
+      postgres:
+        'Written to postgresql.auto.conf with ALTER SYSTEM SET and the configuration reloaded. A setting that needs a restart takes effect only after one. Only a superuser can change it.',
+    },
     resetVariable: 'Put back to the default',
     figure: 'Figure',
     perHour: 'Per hour',
@@ -2018,9 +2034,11 @@ export const en = {
       databaseSize: 'Database size',
     },
     queryStatsTitle: 'Query statistics',
-    queryStatsHintMysql: 'How many statements of each kind have run since the server started.',
-    queryStatsHintPostgres:
-      'The rows this database has handled since start (PostgreSQL keeps no count per kind of statement by default).',
+    queryStatsHint: {
+      mysql: 'How many statements of each kind have run since the server started.',
+      postgres:
+        'The rows this database has handled since start (PostgreSQL keeps no count per kind of statement by default).',
+    },
     statement: 'Kind',
     count: 'Count',
     share: 'Share',
@@ -2462,13 +2480,17 @@ export const en = {
     noKey: 'This table has no primary key, so the row cannot be opened.',
   },
   operations: {
-    convertHintMysql:
-      "Converts the table's default and every text column to the collation (and its character set); values are converted to the new character set.",
-    convertHintPostgres: 'Gives every text column the collation (types unchanged).',
-    orderHintMysql:
-      'Stores the rows again in the order of a column (InnoDB keeps primary key order, so this matters for tables without a primary key).',
-    orderHintPostgres:
-      'Stores the rows again in the order of an index (CLUSTER; exclusive lock; later changes do not keep the order).',
+    convertHint: {
+      mysql:
+        "Converts the table's default and every text column to the collation (and its character set); values are converted to the new character set.",
+      postgres: 'Gives every text column the collation (types unchanged).',
+    },
+    orderHint: {
+      mysql:
+        'Stores the rows again in the order of a column (InnoDB keeps primary key order, so this matters for tables without a primary key).',
+      postgres:
+        'Stores the rows again in the order of an index (CLUSTER; exclusive lock; later changes do not keep the order).',
+    },
     orderColumn: 'Order by column',
     orderIndex: 'Index to order along',
     descending: 'Descending',

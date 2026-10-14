@@ -1,5 +1,6 @@
 import { type SecondFactorSetup, SecondFactorSetupSchema } from '@tsmyadmin/shared'
 import { afterEach, describe, expect, it } from 'vitest'
+import { IP_LIMIT_FACTOR } from './app.ts'
 import { codeFor, stepAt } from './lib/totp.ts'
 import { MAX_MISSES } from './session/second-factor-lock.ts'
 import type { SqliteSessionStore } from './session/sqlite-store.ts'
@@ -102,6 +103,42 @@ describe('the second factor under a burst', () => {
     }
     expect(looked()).toBeLessThanOrEqual(MAX_MISSES)
     expect(await h.store.secondFactor.get(account)).not.toBeNull()
+  })
+
+  it('lets no more guesses from one address past its limit than the limit, however many arrive at once', async () => {
+    // Per user 1, so the address may fail IP_LIMIT_FACTOR times in the window (below the account's own lock).
+    const h = totpHarness({ loginRateLimit: { max: 1, windowMs: 60_000 } })
+    stores.push(h.store)
+    const perAddress = IP_LIMIT_FACTOR
+    expect(perAddress).toBeLessThan(MAX_MISSES)
+    const { browser } = await h.enrol()
+    widen(h.store.secondFactor, ['get', 'set'])
+    const rs = fulfilled(
+      await concurrently(perAddress * 3, () =>
+        browser.req('/api/second-factor', { method: 'DELETE', body: JSON.stringify({ code: '000000' }) })
+      )
+    )
+    // Each request takes its place in the address's budget before its proof is looked at: the rest are turned away.
+    expect(countStatuses(rs)).toEqual({ 401: perAddress, 429: perAddress * 2 })
+    expect(await h.store.secondFactor.get(account)).not.toBeNull()
+  })
+
+  it('gives back the place in the address budget of a request whose proof was not refused', async () => {
+    const h = totpHarness({ loginRateLimit: { max: 1, windowMs: 60_000 } })
+    stores.push(h.store)
+    const { browser, secret } = await h.enrol()
+    const proof = () => JSON.stringify({ code: codeFor(secret, stepAt(h.at())) })
+    // Twice the budget of right proofs, one per step (a code is used once), then turning the factor off.
+    for (let i = 0; i < IP_LIMIT_FACTOR * 2; i++) {
+      h.tick(30_000)
+      expect((await browser.req('/api/second-factor/begin', { method: 'POST', body: proof() })).status).toBe(200)
+    }
+    h.tick(30_000)
+    expect((await browser.req('/api/second-factor', { method: 'DELETE', body: proof() })).status).toBe(200)
+    // Nothing left to turn off is no wrong guess either.
+    for (let i = 0; i < IP_LIMIT_FACTOR * 2; i++) {
+      expect((await browser.req('/api/second-factor', { method: 'DELETE', body: proof() })).status).toBe(404)
+    }
   })
 
   it('gives an account one factor when two sessions confirm their first enrolment at the same moment', async () => {

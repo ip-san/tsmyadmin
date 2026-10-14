@@ -1,4 +1,5 @@
 import {
+  capabilities,
   DATA_ACCESS,
   type DdlOp,
   type Dialect,
@@ -65,7 +66,7 @@ export function CreateRoutineForm({
     setParams((all) => all.map((p, j) => (j === i ? { ...p, ...patch } : p)))
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    const definer = dialect === 'mysql' ? parseDefiner(definerText) : null
+    const definer = capabilities(dialect).definer ? parseDefiner(definerText) : null
     if (!name.trim() || !body.trim() || definer === 'invalid') return
     const create = {
       kind,
@@ -173,23 +174,23 @@ export function CreateRoutineForm({
         </Field>
         <SecuritySelect id="routine-security" value={sqlSecurity} onChange={setSqlSecurity} />
         {dialect === 'mysql' ? (
-          <>
-            <Field id="routine-data-access" label={t.security.dataAccess}>
-              <Select
-                id="routine-data-access"
-                value={dataAccess}
-                onChange={(e) => setDataAccess(e.target.value as typeof dataAccess)}
-              >
-                <option value="">{t.security.defaultOption}</option>
-                {DATA_ACCESS.map((d) => (
-                  <option key={d} value={d}>
-                    {d}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <DefinerField id="routine-definer" value={definerText} onChange={setDefinerText} />
-          </>
+          <Field id="routine-data-access" label={t.security.dataAccess}>
+            <Select
+              id="routine-data-access"
+              value={dataAccess}
+              onChange={(e) => setDataAccess(e.target.value as typeof dataAccess)}
+            >
+              <option value="">{t.security.defaultOption}</option>
+              {DATA_ACCESS.map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        ) : null}
+        {capabilities(dialect).definer ? (
+          <DefinerField id="routine-definer" value={definerText} onChange={setDefinerText} />
         ) : null}
       </div>
       <div className="flex gap-2">

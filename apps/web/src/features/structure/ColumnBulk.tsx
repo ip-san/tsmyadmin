@@ -1,4 +1,4 @@
-import type { ColumnSpec, DdlOp, Dialect, TableSchema } from '@tsmyadmin/shared'
+import { type ColumnSpec, capabilities, type DdlOp, type Dialect, type TableSchema } from '@tsmyadmin/shared'
 import { ArrowDown, ArrowUp } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
@@ -81,7 +81,7 @@ export function ColumnBulk({
       >
         {t.drop}
       </Button>
-      {dialect === 'mysql' ? (
+      {capabilities(dialect).columnOrder ? (
         <Button size="sm" aria-haspopup="dialog" onClick={() => setOrdering(schema.columns.map((c) => c.name))}>
           {t.reorder}
         </Button>

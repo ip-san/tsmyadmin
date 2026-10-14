@@ -155,4 +155,25 @@ describe('saved items written at once', () => {
     const groups = (await (await root('/api/user-groups')).json()) as { name: string; members: string[] }[]
     expect(groups).toMatchObject([{ name: 'ops', members: ['bob'] }])
   })
+
+  it('does not delete a user group that was replaced, while the right over it was being checked, with accounts this one may not manage', async () => {
+    const h = harness()
+    const root = await h.browser('root')
+    const alice = await h.browser('alice')
+    const created = await root('/api/user-groups', 'POST', { name: 'ops', members: ['amy'], hiddenTabs: [] })
+    const [group] = (await created.json()) as { id: string }[]
+    const id = group?.id ?? expect.fail()
+    // Alice may manage amy. She is checking her right over the group ([amy]) when root replaces it with bob.
+    const gate = holdAuthority('alice')
+    const pending = alice(`/api/user-groups/${id}`, 'DELETE')
+    await gate.started
+    const theirs = await root('/api/user-groups', 'POST', { name: 'ops', members: ['bob'], hiddenTabs: [] })
+    gate.release()
+    const mine = await pending
+    expect(theirs.status).toBe(200)
+    // Her right was checked against [amy]; the group holds [bob] when her delete arrives, so it is refused.
+    expect(mine.status).toBe(409)
+    const groups = (await (await root('/api/user-groups')).json()) as { name: string; members: string[] }[]
+    expect(groups).toMatchObject([{ name: 'ops', members: ['bob'] }])
+  })
 })

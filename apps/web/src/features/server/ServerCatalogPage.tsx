@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import type { Dialect, ServerCatalogKind } from '@tsmyadmin/shared'
+import { capabilities, type Dialect, type ServerCatalogKind } from '@tsmyadmin/shared'
 import { Fragment, useDeferredValue, useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
@@ -56,7 +56,7 @@ export function ServerCatalogPage({ kind, dialect }: { kind: ServerCatalogKind; 
   // Collations run to several hundred rows (PostgreSQL with ICU: well over a thousand).
   const deferred = useDeferredValue(filter)
   const title = t.titles[kind][dialect]
-  const withVariables = kind === 'engines' && dialect === 'mysql'
+  const withVariables = kind === 'engines' && capabilities(dialect).storageEngines
   if (catalog.isPending) return <Spinner />
   if (catalog.isError) return <ErrorBox error={catalog.error} onRetry={() => void catalog.refetch()} />
   const shown = filterRows(catalog.data.rows, deferred)
