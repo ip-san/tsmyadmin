@@ -2027,6 +2027,30 @@ export const ja = {
     activeOnly: '実行中のものだけ表示',
     fullQuery: 'クエリの全文を表示（既定は 100 文字まで）',
     refresh: '更新',
+    lockWaitsTitle: 'ロック待ち',
+    lockWaitsHint:
+      'ほかの接続のトランザクションが持っているロックを待っている接続です。ブロックしている側を強制終了すると、そのトランザクションはロールバックされます。',
+    lockWaitsNone: 'ロック待ちはありません',
+    lockWaitsDenied:
+      'このアカウントにはロックの情報を読む権限がありません（MySQL / MariaDB は PROCESS 権限と performance_schema の参照権限が要ります）。',
+    lockWaitsUnsupported: 'このサーバーではロック待ちを読めません（performance_schema が無効など）。',
+    blockedSession: '待っている接続',
+    blockingSession: 'ブロックしている接続',
+    waited: '待ち時間（秒）',
+    transactionOpen: 'トランザクション経過（秒）',
+    lockTarget: 'ロック対象',
+    blockedQuery: '待っている文',
+    blockingQuery: 'ブロック元の文（実行中か、最後に実行した文）',
+    idleInTransaction: 'トランザクション中で待機',
+    idleInTransactionHint:
+      'トランザクションを開いたまま、何も実行していません。アプリがコミットかロールバックを忘れている可能性があります',
+    killBlocker: 'ブロック元を強制終了',
+    connections: '接続数',
+    connectionsUsage: (current: number, max: number | null, percent: number | null) =>
+      max === null ? `${current}` : percent === null ? `${current} / ${max}` : `${current} / ${max}（${percent}%）`,
+    connectionsIdle: (n: number) => `うち、トランザクション中で待機: ${n}`,
+    connectionsNearLimit:
+      '接続数が上限（max_connections）に近づいています。上限に達すると新しい接続は拒否されます。使っていない接続や、アプリの接続プールの大きさを見直してください。',
     uptimeFormat: (sec: number) => {
       const d = Math.floor(sec / 86400)
       const h = Math.floor((sec % 86400) / 3600)

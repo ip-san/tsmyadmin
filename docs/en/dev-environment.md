@@ -1,4 +1,4 @@
-<!-- translated-from: docs/dev-environment.md sha256:e77471521b2560185e0c18200bc373822a98af1e7d93a6f65978db35c26c79d6 -->
+<!-- translated-from: docs/dev-environment.md sha256:2ba1e5c9bfd3870d0d6b6fa2e4c4209813ba9a25b6c8109a28d901c7844aef33 -->
 
 # Development features: what was built, and what was set aside
 
@@ -17,6 +17,7 @@ phpMyAdmin is for MySQL / MariaDB only, and you name the server in `config.inc.p
 | **Statements as they run** | Server → Monitor | Streams the SQL the application under development is running now. MySQL / MariaDB: the general log (a table), newest first. PostgreSQL: the statements whose call count grew in `pg_stat_statements`, per read. This tool's own statements are left out. The MySQL general log can be turned on after you review the SQL |
 | **Snapshots** | Database → Snapshots | Saves the database as it is (structure, data, views, routines, triggers) so that after trying a migration or a seed you can put it back. A snapshot is the existing SQL export and a restore runs that SQL, the same on both dialects. Before a restore you review the SQL that drops the tables and views made since. PostgreSQL does it in one transaction. Held in memory (gone when it restarts, and 24 hours after being taken), per account |
 | **One-click login** | Login screen | With `TSMYADMIN_DOCKER_LOGIN=1` (off by default), reads a container's login from its environment (`MYSQL_ROOT_PASSWORD`, `POSTGRES_PASSWORD`, …) inside the API process only and signs in without a password. Never sent to the browser, logged or stored. Anyone who can reach the tool can then get in, so publish it on `127.0.0.1` only |
+| **Lock waits and connections** | Server → Processes | Finds the usual cause of an application that "hangs": a transaction left open. Each connection waiting for a lock is shown with the one holding it (for the holder, how long its transaction has been open and the statement it runs or ran last), and the holder can be ended through a confirmation. The connection count is compared with `max_connections`, with a warning above 80%. MySQL 8: `performance_schema`; MariaDB: `INNODB_LOCK_WAITS`; PostgreSQL: `pg_blocking_pids` |
 | **Why a database is missing** | Login screen | Shows the database containers left off the list (stopped, port not published), why Docker cannot be read, and listed ports this process cannot reach, each with how to fix it |
 
 ## Considered and set aside

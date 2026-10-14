@@ -18,6 +18,7 @@ import type {
   InsertPreview,
   KeyValue,
   KillMode,
+  LockWaitReport,
   Namespace,
   ObjectDependency,
   Partitioning,
@@ -349,6 +350,12 @@ export interface DatabaseAdapter {
    * statement, `connection` closes it outright.
    */
   killProcess(id: string, mode?: KillMode): Promise<void>
+  /**
+   * Sessions waiting for a lock and the session holding it (MySQL 8 performance_schema.data_lock_waits, MariaDB
+   * INNODB_LOCK_WAITS, PostgreSQL pg_blocking_pids), with the connection count against max_connections. Lock tables
+   * the account may not read, or the server lacks, are a `status`, not an error.
+   */
+  lockWaits(): Promise<LockWaitReport>
   /** Login accounts (MySQL mysql.user, PostgreSQL pg_roles). Requires read privileges on the catalog. */
   listUsers(): Promise<UserInfo[]>
   /**
@@ -428,6 +435,7 @@ export const ADAPTER_METHOD_NAMES = [
   'listStatus',
   'listProcesses',
   'killProcess',
+  'lockWaits',
 ] as const satisfies readonly AdapterMethodName[]
 
 const _exhaustive: Record<AdapterMethodName, true> = Object.fromEntries(
