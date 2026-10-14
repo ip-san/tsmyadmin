@@ -320,7 +320,9 @@ describe('the cached lookup', () => {
     health = 'healthy'
     expect(await d.list()).toEqual([])
     now = 1000
-    expect(await d.list()).toEqual([{ name: 'docker: a', dialect: 'mysql', host: 'h', port: 1 }])
+    expect(await d.list()).toEqual([
+      { name: 'docker: a', dialect: 'mysql', host: 'h', port: 1, docker: { privatePort: 3306 } },
+    ])
     expect((await d.diagnosis()).issues).toEqual([])
   })
 
