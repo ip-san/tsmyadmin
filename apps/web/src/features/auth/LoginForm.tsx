@@ -9,6 +9,7 @@ import { locale } from '@/config/locale.ts'
 import { isApiError } from '@/lib/api.ts'
 import { answerChallenge, passkeysSupported } from '@/lib/passkeys.ts'
 import { readPreference, writePreference } from '@/lib/preferences.ts'
+import { ConnectionInfo } from './ConnectionInfo.tsx'
 
 const DEFAULT_PORTS: Record<Dialect, number> = { mysql: 3306, postgres: 5432 }
 const MANUAL = ''
@@ -158,6 +159,7 @@ export function LoginForm({ onLogin, presets = [] }: LoginFormProps) {
           </Select>
         </Field>
       ) : null}
+      <ConnectionInfo preset={presets.find((p) => p.name === preset)} />
       <Field id="dialect" label={locale.login.dialect}>
         <Select
           id="dialect"

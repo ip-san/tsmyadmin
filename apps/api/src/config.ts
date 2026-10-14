@@ -249,6 +249,7 @@ function parseServers(raw: string | undefined): ServerPreset[] {
     names.add(s.name)
     if (s.autoLogin)
       throw new ConfigError(`TSMYADMIN_SERVERS: "${s.name}": autoLogin is set by Docker discovery, not here`)
+    if (s.docker) throw new ConfigError(`TSMYADMIN_SERVERS: "${s.name}": docker is set by Docker discovery, not here`)
   }
   return parsed.data
 }

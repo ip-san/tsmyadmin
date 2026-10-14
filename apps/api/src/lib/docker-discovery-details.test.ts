@@ -270,7 +270,9 @@ describe('the cached lookup', () => {
 
   it('lists the presets, without logins', async () => {
     const d = createDockerDiscovery({ get: getFor(containers), connectHost: 'h', logger: logs().logger })
-    expect(await d.list()).toEqual([{ name: 'docker: a', dialect: 'mysql', host: 'h', port: 1 }])
+    expect(await d.list()).toEqual([
+      { name: 'docker: a', dialect: 'mysql', host: 'h', port: 1, docker: { privatePort: 3306 } },
+    ])
   })
 
   it('asks for logins only when told to', async () => {

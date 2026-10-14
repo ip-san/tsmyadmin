@@ -89,6 +89,28 @@ export const ja = {
       unreachable: (host: string, port: number) =>
         `${host}:${port} に届きません。Linux の Docker Engine で、ホストの 127.0.0.1 だけに公開したポートは、コンテナからは届かないことがあります。0.0.0.0 で公開するか、TSMYADMIN_DOCKER_CONNECT_HOST を届く名前にしてください。`,
     },
+    connectionInfo: {
+      title: 'アプリからつなぐときの接続情報',
+      intro:
+        '開発中のアプリの設定に貼る値です。パスワードはここには出しません。<password> を、コンテナに渡したパスワードに置き換えてください。',
+      viewpoint: 'アプリが動いている場所',
+      host: 'ホスト（docker の外）',
+      sameNetwork: (project: string) => `同じ compose のコンテナ（${project}）`,
+      sameNetworkNoProject: '同じネットワークのコンテナ',
+      otherNetwork: '別のネットワークのコンテナ',
+      hostHint: 'ホストに公開したポートにつなぎます。',
+      sameNetworkHint: 'compose のサービス名と、コンテナの中のポートでつなぎます（ホストのポートは通りません）。',
+      otherNetworkHint:
+        'ホストに公開したポートを経由します。Linux の Docker Engine では、アプリのコンテナに extra_hosts: ["host.docker.internal:host-gateway"] が要ります。',
+      address: 'アドレス',
+      databaseUrl: 'DATABASE_URL',
+      env: '.env（DATABASE_URL）',
+      laravelEnv: '.env（Laravel）',
+      copy: (what: string) => `${what} をコピー`,
+      copyLabel: 'コピー',
+      copied: 'コピーしました',
+      copyFailed: 'コピーできませんでした。表示されている値を選んでコピーしてください',
+    },
     dockerLogin:
       'このコンテナの環境変数にある資格情報（起動時に渡されたユーザーとパスワード）で接続します。入力は要りません。',
     advanced: '詳細設定',

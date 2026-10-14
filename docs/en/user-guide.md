@@ -1,4 +1,4 @@
-<!-- translated-from: docs/user-guide.md sha256:285391e885a1f6ef140d5275da69aa557bb8f28e649c36f4627ddb26f004de27 -->
+<!-- translated-from: docs/user-guide.md sha256:93fd8e62257d1cbc81e8dab447395dbe5b7383391f9a25c9324857342c2bd4d0 -->
 
 # User guide
 
@@ -13,6 +13,8 @@ What each screen does and how to work with it. The layout is the same three leve
 3. Your credentials are held in a server-side session; the browser only gets a cookie with a signed session ID. (Separately, the last server, username and database are remembered in `localStorage` — never the password. On a shared machine, bear in mind that the next person sees which server you connected to.) After `SESSION_TTL_MINUTES` of inactivity (30 by default) the session ends; connecting again returns you to the page you were on
 
 Your administrator restricts which hosts can be reached with `TSMYADMIN_ALLOWED_HOSTS`. Hosts outside that list cannot be connected to.
+
+When you pick a container Docker discovery found (`docker: …`) under **Server**, **Connection details for your application** appears below it (development, `TSMYADMIN_DOCKER_DISCOVERY=1`). Choose where the application you are developing runs (on the host, in a container of the same compose project, or in a container on another network) and it shows the address from there, a `DATABASE_URL` and `.env` lines (`DATABASE_URL` and Laravel's `DB_*`), each with a copy button. The user name comes from the container's environment (`MYSQL_USER` / `POSTGRES_USER`, else `root` / `postgres`); the password is never shown and is written as `<password>`.
 
 On MySQL / MariaDB the **connection collation** can be chosen too, under **Advanced** on the login form (`utf8mb4_unicode_ci` by default: the rules this connection uses to compare strings and convert character sets, so `utf8mb4_bin` tells upper and lower case apart). The choice is shown under **Server information** on the server's top page, with the address, version and uptime.
 

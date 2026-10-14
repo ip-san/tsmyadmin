@@ -16,6 +16,22 @@ export const ServerPresetSchema = z.strictObject({
    * login for this preset and signs in with it (`dockerPreset` of a login). It carries no credential itself.
    */
   autoLogin: z.literal(true).optional(),
+  /**
+   * Only ever set by Docker discovery: where the application under development reaches the same database from. The
+   * login screen builds the addresses, a `DATABASE_URL` and `.env` lines from it. Never a password.
+   */
+  docker: z
+    .strictObject({
+      /** The Compose service name (`com.docker.compose.service`): the host name on the project's own network. */
+      service: z.string().min(1).optional(),
+      /** The Compose project (`com.docker.compose.project`); its network is `<project>_default` unless renamed. */
+      project: z.string().min(1).optional(),
+      /** The port the database listens on inside the container (what `service:port` reaches). */
+      privatePort: z.number().int().min(1).max(65535),
+      /** The account the container's environment creates (`MYSQL_USER`, `POSTGRES_USER`, …); not its password. */
+      user: z.string().min(1).optional(),
+    })
+    .optional(),
 })
 export type ServerPreset = z.infer<typeof ServerPresetSchema>
 export const ServerPresetsSchema = z.array(ServerPresetSchema)
