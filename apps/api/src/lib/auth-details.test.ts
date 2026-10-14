@@ -115,7 +115,11 @@ describe('RateLimiter', () => {
     const limiter = new RateLimiter(max, windowMs, () => t, 3_600_000)
     return { limiter, at: (ms: number) => (t = ms), advance: (ms: number) => (t += ms) }
   }
-  const windows = (limiter: RateLimiter) => (limiter as unknown as { windows: Map<string, unknown> }).windows
+  /**
+   * How many keys the limiter holds: the map is private, and a swept key answers `peek` the same as one whose window
+   * merely ended, so the sweep can only be seen from the inside.
+   */
+  const held = (limiter: RateLimiter) => (limiter as unknown as { windows: Map<string, unknown> }).windows.size
   afterEach(() => vi.restoreAllMocks())
 
   it('counts attempts per key, allowing max and refusing the next, with what is left and when to retry', () => {
@@ -182,15 +186,16 @@ describe('RateLimiter', () => {
     limiter.hit('a')
     limiter.hit('b')
     limiter.reset('a')
-    expect(windows(limiter).has('a')).toBe(false)
+    // A forgotten key has no window to wait for (a kept one would say 10 seconds), and starts counting afresh.
+    expect(limiter.peek('a')).toEqual({ allowed: true, retryAfterSec: 0 })
     expect(limiter.hit('a')).toMatchObject({ remaining: 1 })
     limiter.sweep(10_999)
-    expect(windows(limiter).size).toBe(2)
+    expect(held(limiter)).toBe(2)
     limiter.sweep(11_000)
-    expect(windows(limiter).size).toBe(0)
+    expect(held(limiter)).toBe(0)
     limiter.hit('c')
     limiter.sweep(1)
-    expect(windows(limiter).size).toBe(1)
+    expect(held(limiter)).toBe(1)
     limiter.stop()
   })
 
@@ -202,7 +207,7 @@ describe('RateLimiter', () => {
       limiter.hit('a')
       t = 2_000
       vi.advanceTimersByTime(5_000)
-      expect(windows(limiter).size).toBe(0)
+      expect(held(limiter)).toBe(0)
       const clear = vi.spyOn(globalThis, 'clearInterval')
       limiter.stop()
       limiter.stop()

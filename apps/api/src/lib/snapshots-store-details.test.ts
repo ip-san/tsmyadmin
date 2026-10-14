@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { caught } from '../test/caught.ts'
 import { SNAPSHOT_MAX_COUNT, SNAPSHOT_TTL_MS, SnapshotError, SnapshotStore } from './snapshots.ts'
 
 /**
@@ -74,19 +75,12 @@ describe('adding', () => {
     expect(store.add('s', { sql: 'あい', statements: 1, names: new Set() }, 'n', new Date()).bytes).toBe(6)
   })
 
-  it('keeps ten for a database, and says so', () => {
+  it('keeps ten for a database, and says so', async () => {
     const store = mk()
     for (let i = 0; i < SNAPSHOT_MAX_COUNT; i++) taken(store, 's', `n${i}`, 1)
-    expect(() => taken(store, 's', 'eleventh', 1)).toThrowError(
-      new SnapshotError('TOO_MANY', 'A database keeps at most 10 snapshots: remove one first')
-    )
-    try {
-      taken(store, 's', 'eleventh', 1)
-    } catch (e) {
-      expect(e).toBeInstanceOf(SnapshotError)
-      expect((e as SnapshotError).reason).toBe('TOO_MANY')
-      expect((e as SnapshotError).message).toBe('A database keeps at most 10 snapshots: remove one first')
-    }
+    const e = await caught<SnapshotError>(() => taken(store, 's', 'eleventh', 1))
+    expect(e).toBeInstanceOf(SnapshotError)
+    expect(e).toMatchObject({ reason: 'TOO_MANY', message: 'A database keeps at most 10 snapshots: remove one first' })
     // Another database has its own ten.
     expect(taken(store, 'other', 'n', 1).name).toBe('n')
     expect(store.list('s')).toHaveLength(SNAPSHOT_MAX_COUNT)

@@ -147,11 +147,13 @@ describe('inferType: text and bytes', () => {
   it('sizes MySQL TEXT by bytes, a character taking up to four, and PostgreSQL always TEXT', () => {
     expect(dataType(['a'.repeat(65_535)])).toBe('TEXT')
     expect(dataType(['a'.repeat(65_536)])).toBe('MEDIUMTEXT')
-    expect(dataType(['a'.repeat(16_777_215)])).toBe('MEDIUMTEXT')
-    expect(dataType(['a'.repeat(16_777_216)])).toBe('LONGTEXT')
+    // One 16 MB string, sliced for the byte below the limit: building it is the slow part of this file.
+    const past = 'a'.repeat(16_777_216)
+    expect(dataType([past.slice(1)])).toBe('MEDIUMTEXT')
+    expect(dataType([past])).toBe('LONGTEXT')
     expect(dataType(['\u{1F600}'.repeat(16_383)])).toBe('TEXT')
     expect(dataType(['\u{1F600}'.repeat(16_384)])).toBe('MEDIUMTEXT')
-    expect(dataType(['a'.repeat(16_777_216)], 'postgres')).toBe('TEXT')
+    expect(dataType([past], 'postgres')).toBe('TEXT')
     expect(dataType(['a'.repeat(300)], 'postgres')).toBe('TEXT')
   })
 

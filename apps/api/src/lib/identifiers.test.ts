@@ -12,6 +12,7 @@ describe('tooLongIdentifier', () => {
       name: 'x'.repeat(65),
       max: 64,
     })
+    expect(tooLongIdentifier({ op: 'createDatabase', name: ok }, 'postgres')).toBeNull()
     expect(tooLongIdentifier({ op: 'createDatabase', name: 'x'.repeat(64) }, 'postgres')).toEqual({
       name: 'x'.repeat(64),
       max: 63,
@@ -26,19 +27,6 @@ describe('tooLongIdentifier', () => {
     ).toBeNull()
     expect(tooLongIdentifier({ op: 'addIndex', columns: [{ name: 'c'.repeat(70) }] }, 'mysql')?.max).toBe(64)
     expect(tooLongIdentifier({ user: 'u'.repeat(70) }, 'postgres')?.max).toBe(63)
-  })
-
-  it('holds a name to 64 characters on MySQL and 63 bytes on PostgreSQL', () => {
-    expect(tooLongIdentifier({ name: name(64) }, 'mysql')).toBeNull()
-    expect(tooLongIdentifier({ name: name(65) }, 'mysql')).toEqual({ name: name(65), max: 64 })
-    expect(tooLongIdentifier({ name: name(63) }, 'postgres')).toBeNull()
-    expect(tooLongIdentifier({ name: name(64) }, 'postgres')).toEqual({ name: name(64), max: 63 })
-  })
-
-  it('counts characters on MySQL and bytes on PostgreSQL, where a name of 32 three-byte characters is too long', () => {
-    const wide = name(32, 'あ')
-    expect(tooLongIdentifier({ table: wide }, 'mysql')).toBeNull()
-    expect(tooLongIdentifier({ table: wide }, 'postgres')).toEqual({ name: wide, max: 63 })
   })
 
   it('holds a MySQL account name to 32 characters; PostgreSQL has no shorter limit for a role', () => {

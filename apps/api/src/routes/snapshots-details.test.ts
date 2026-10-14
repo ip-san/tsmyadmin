@@ -1,21 +1,18 @@
 import { FakeAdapter, fakeTable } from '@tsmyadmin/adapter/testing'
-import { ApiErrorSchema, SnapshotListSchema } from '@tsmyadmin/shared'
+import { ApiErrorSchema, type Dialect, SnapshotListSchema } from '@tsmyadmin/shared'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createApp } from '../app.ts'
-import { loadConfig } from '../config.ts'
-import { createLogger } from '../lib/logging.ts'
 import { SNAPSHOT_TTL_MS } from '../lib/snapshots.ts'
-import { MemorySessionStore } from '../session/store.ts'
+import { capture, closeStoresAfterEach, eventsOf, harness } from '../test/app-harness.ts'
 
 /**
  * The snapshot routes' edges: who may call them, what an unknown ID answers, what is logged and what a failure
  * becomes (found as surviving mutants; see `bun run mutation`).
  */
 
-const LOGIN = { dialect: 'mysql', host: 'db', port: 3306, user: 'root', password: 'pw' }
-
-function harness() {
-  const adapter = new FakeAdapter({
+/** A server of one kind, holding one table, that runs whatever script it is handed. */
+const server = (dialect: Dialect = 'mysql') =>
+  new FakeAdapter({
+    dialect,
     databases: { shop: { tables: { users: fakeTable('users', ['id'], [{ id: 1 }]) } } },
     onSql: (_ns, _sql, opts) =>
       (opts.statements ?? []).map((s, i) => ({
@@ -26,35 +23,16 @@ function harness() {
         statement: i,
       })),
   })
-  // A fixed clock for sessions: a test that moves the system date must not log the session out.
-  const store = new MemorySessionStore({ adapterFactory: () => adapter, sweepIntervalMs: 0, now: () => 0 })
-  const lines: Record<string, unknown>[] = []
-  const logger = createLogger('json', (l) => lines.push(JSON.parse(l)))
-  const app = createApp({ ...loadConfig({}), sessionSecret: 'x'.repeat(48), allowedHosts: ['db'] }, { store, logger })
-  let cookie = ''
-  const req = (path: string, init: RequestInit = {}) =>
-    app.request(path, {
-      ...init,
-      headers: { 'content-type': 'application/json', ...(cookie ? { cookie } : {}) },
-    })
-  const login = async () => {
-    const res = await req('/api/session', { method: 'POST', body: JSON.stringify(LOGIN) })
-    cookie = res.headers.get('set-cookie')?.split(';')[0] ?? ''
-  }
-  const events = (event: string) => lines.filter((l) => l.event === event)
-  return { adapter, store, req, login, lines, events }
-}
 
-const stores: MemorySessionStore[] = []
-afterEach(async () => {
-  vi.useRealTimers()
-  for (const s of stores.splice(0)) await s.closeAll()
-})
-const setup = async (signedIn = true) => {
-  const h = harness()
+const stores = closeStoresAfterEach()
+afterEach(() => vi.useRealTimers())
+const setup = async (signedIn = true, adapterFactory?: () => FakeAdapter) => {
+  const { lines, logger } = capture()
+  // A fixed clock for sessions: a test that moves the system date must not log the session out.
+  const h = harness(server(), { logger, storeNow: () => 0, ...(adapterFactory ? { adapterFactory } : {}) })
   stores.push(h.store)
   if (signedIn) await h.login()
-  return h
+  return { ...h, events: (event: string) => eventsOf(lines, event) }
 }
 const take = (h: Awaited<ReturnType<typeof setup>>, name: string, query = '') =>
   h.req(`/api/databases/shop/snapshots${query}`, { method: 'POST', body: JSON.stringify({ name }) })
@@ -122,7 +100,6 @@ describe('what is logged', () => {
     const res = await h.req(`/api/databases/shop/snapshots/${id}/restore?schema=app`, { method: 'POST' })
     expect(res.status).toBe(200)
     const body = (await res.json()) as { statements: number; failed: number }
-    await Promise.resolve()
     expect(h.events('snapshot.restored')).toEqual([
       {
         time: expect.any(String),
@@ -167,10 +144,13 @@ describe('what a failure becomes', () => {
   })
 
   it('a restore the import runner refuses before running is 400 with the reason it gives', async () => {
-    const h = await setup()
+    // The same account signs in to a server of the other kind after the snapshot was taken (the snapshots are held
+    // per account, not per session): the dump says in its header which kind it came from.
+    let adapter = server()
+    const h = await setup(true, () => adapter)
     const id = SnapshotListSchema.parse(await (await take(h, 'a')).json()).snapshots[0]?.id ?? ''
-    // The server is no longer the kind the dump was taken from: the dump says so in its header.
-    ;(h.adapter as { dialect: string }).dialect = 'postgres'
+    adapter = server('postgres')
+    await h.login()
     const res = await h.req(`/api/databases/shop/snapshots/${id}/restore`, { method: 'POST' })
     expect(res.status).toBe(400)
     expect(await res.json()).toMatchObject({ code: 'VALIDATION', reason: 'WRONG_DIALECT' })
@@ -183,6 +163,8 @@ describe('what a failure becomes', () => {
       throw new Error('connection lost')
     }
     const res = await h.req(`/api/databases/shop/snapshots/${id}/restore`, { method: 'POST' })
-    expect(res.status).toBeGreaterThanOrEqual(500)
+    // Not a store outage either (that would be 503): an error of no known kind is the plain 500.
+    expect(res.status).toBe(500)
+    expect(ApiErrorSchema.parse(await res.json()).code).toBe('INTERNAL')
   })
 })

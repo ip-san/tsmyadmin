@@ -114,13 +114,13 @@ describe('responses', () => {
     vi.useRealTimers()
   })
 
-  const respond = async (err: unknown, logger?: Logger, path = '/x') => {
+  const respond = async (err: unknown, logger?: Logger, path = '/x', write = errorResponse) => {
     const app = new Hono()
     app.use('*', async (c, next) => {
       c.set('requestId' as never, 'rid-7' as never)
       await next()
     })
-    app.all('*', (c) => errorResponse(c, err, logger))
+    app.all('*', (c) => write(c, err, logger))
     const res = await app.request(path, { method: 'POST' })
     return { res, body: (await res.json()) as Record<string, unknown> }
   }
@@ -176,43 +176,57 @@ describe('responses', () => {
     expect(spy).not.toHaveBeenCalled()
   })
 
-  it('answers 503 with Retry-After for a store that is down, and logs the outage once a minute with how many were left out', async () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date('2030-01-01T00:00:00Z'))
-    const { calls, logger } = spyLogger()
-    const first = await respond(storeDown(), logger)
-    expect(first.res.status).toBe(503)
-    expect(first.res.headers.get('Retry-After')).toBe('5')
-    expect(first.body).toEqual({ code: 'STORE_UNAVAILABLE', message: 'The session store is unavailable' })
-    expect(calls).toHaveLength(1)
-    expect(calls[0]).toMatchObject({ level: 'error', event: 'session_store.unavailable' })
-    expect(calls[0]?.fields).toEqual({ error: 'x', suppressed: 0 })
-    vi.setSystemTime(new Date('2030-01-01T00:00:30Z'))
-    await respond(storeDown(), logger)
-    await respond(storeDown(), logger)
-    expect(calls).toHaveLength(1)
-    vi.setSystemTime(new Date('2030-01-01T00:00:59.999Z'))
-    await respond(storeDown(), logger)
-    expect(calls).toHaveLength(1)
-    // A minute after the last line, exactly, the next one is written, saying how many were left out.
-    vi.setSystemTime(new Date('2030-01-01T00:01:00Z'))
-    await respond(storeDown(), logger)
-    expect(calls).toHaveLength(2)
-    expect(calls[1]?.fields).toEqual({ error: 'x', suppressed: 3 })
-  })
+  describe('a store that is down', () => {
+    /**
+     * When the outage was last logged is kept in the module, so each test here starts from a fresh copy of it rather
+     * than from where the previous test left the clock.
+     */
+    const fresh = async () => {
+      vi.resetModules()
+      const { errorResponse: write } = await import('./errors.ts')
+      return (err: unknown, logger?: Logger) => respond(err, logger, '/x', write)
+    }
 
-  it('writes the outage to the console when there is no logger', async () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date('2031-01-01T00:00:00Z'))
-    const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
-    await respond(storeDown())
-    expect(spy).toHaveBeenCalledWith('[api] session store unavailable', { error: 'x', suppressed: 0 })
-    const text = vi.spyOn(console, 'error').mockImplementation(() => undefined)
-    vi.setSystemTime(new Date('2031-01-01T00:05:00Z'))
-    await respond(Object.assign(new Error('x'), { message: 'Connection is closed.' }))
-    expect(text).toHaveBeenCalledWith('[api] session store unavailable', {
-      error: 'Connection is closed.',
-      suppressed: 0,
+    it('answers 503 with Retry-After, and logs the outage once a minute with how many were left out', async () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2030-01-01T00:00:00Z'))
+      const respondFresh = await fresh()
+      const { calls, logger } = spyLogger()
+      const first = await respondFresh(storeDown(), logger)
+      expect(first.res.status).toBe(503)
+      expect(first.res.headers.get('Retry-After')).toBe('5')
+      expect(first.body).toEqual({ code: 'STORE_UNAVAILABLE', message: 'The session store is unavailable' })
+      expect(calls).toHaveLength(1)
+      expect(calls[0]).toMatchObject({ level: 'error', event: 'session_store.unavailable' })
+      expect(calls[0]?.fields).toEqual({ error: 'x', suppressed: 0 })
+      vi.setSystemTime(new Date('2030-01-01T00:00:30Z'))
+      await respondFresh(storeDown(), logger)
+      await respondFresh(storeDown(), logger)
+      expect(calls).toHaveLength(1)
+      vi.setSystemTime(new Date('2030-01-01T00:00:59.999Z'))
+      await respondFresh(storeDown(), logger)
+      expect(calls).toHaveLength(1)
+      // A minute after the last line, exactly, the next one is written, saying how many were left out.
+      vi.setSystemTime(new Date('2030-01-01T00:01:00Z'))
+      await respondFresh(storeDown(), logger)
+      expect(calls).toHaveLength(2)
+      expect(calls[1]?.fields).toEqual({ error: 'x', suppressed: 3 })
+    })
+
+    it('writes the outage to the console when there is no logger', async () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2030-01-01T00:00:00Z'))
+      const respondFresh = await fresh()
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+      await respondFresh(storeDown())
+      expect(spy).toHaveBeenCalledWith('[api] session store unavailable', { error: 'x', suppressed: 0 })
+      const text = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+      vi.setSystemTime(new Date('2030-01-01T00:05:00Z'))
+      await respondFresh(new Error('Connection is closed.'))
+      expect(text).toHaveBeenCalledWith('[api] session store unavailable', {
+        error: 'Connection is closed.',
+        suppressed: 0,
+      })
     })
   })
 })

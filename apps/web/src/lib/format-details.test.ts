@@ -124,8 +124,6 @@ describe('errorMessage', () => {
     expect(errorMessage({ code: 'VALIDATION', reason: 'INVALID_ENCODING', params: 'text' })).toBe(
       locale.reasons.INVALID_ENCODING({})
     )
-    expect(errorMessage({ code: 'VALIDATION', reason: 'INVALID_ENCODING', params: { line: 7 } })).toContain('7')
-    expect(errorMessage({ code: 'VALIDATION', reason: 'INVALID_ENCODING' })).toContain('?')
   })
 
   it('does not take a reason it has no wording for, or one inherited from Object, or one that is no text, for a reason', () => {

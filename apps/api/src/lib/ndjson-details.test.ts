@@ -10,10 +10,6 @@ const ctx = {
 } as unknown as Context
 const decode = (value: Uint8Array | undefined) => new TextDecoder().decode(value)
 
-async function readAll(res: Response): Promise<string> {
-  return await res.text()
-}
-
 function source(run: NdjsonSource<unknown>['run'], extra: Partial<NdjsonSource<unknown>> = {}): NdjsonSource<unknown> {
   return {
     run,
@@ -50,28 +46,33 @@ describe('ndjsonResponse', () => {
         await send(null)
       })
     )
-    expect(await readAll(res)).toBe('{"kind":"a","n":1}\n{"kind":"b","text":"line\\nbreak \\"quoted\\""}\nnull\n')
+    expect(await res.text()).toBe('{"kind":"a","n":1}\n{"kind":"b","text":"line\\nbreak \\"quoted\\""}\nnull\n')
     expect(
-      await readAll(
-        ndjsonResponse(
-          ctx,
-          source(async () => undefined)
-        )
-      )
+      await ndjsonResponse(
+        ctx,
+        source(async () => undefined)
+      ).text()
     ).toBe('')
   })
 
-  it('keeps every line when the reader is slower than the work, in order', async () => {
+  it('keeps every line when the reader is slower than the work, in order, the work waiting for room', async () => {
+    let written = 0
     const res = ndjsonResponse(
       ctx,
       source(async (send) => {
-        for (let i = 0; i < 20; i++) await send({ i })
+        for (let i = 0; i < 20; i++) {
+          await send({ i })
+          written++
+        }
       })
     )
     const reader = res.body?.getReader()
     const lines: string[] = []
     for (;;) {
-      await new Promise((r) => setTimeout(r, 1))
+      // Let the work run as far as it can before the next read: one line past what was read (the room the stream
+      // has), and no further.
+      await new Promise((r) => setImmediate(r))
+      expect(written).toBe(Math.min(lines.length + 1, 20))
       const { done, value } = (await reader?.read()) ?? { done: true, value: undefined }
       if (done) break
       lines.push(decode(value))
@@ -87,7 +88,7 @@ describe('ndjsonResponse', () => {
         throw new Error('boom')
       })
     )
-    expect(await readAll(res)).toBe('{"kind":"progress"}\n{"kind":"fatal","message":"boom"}\n')
+    expect(await res.text()).toBe('{"kind":"progress"}\n{"kind":"fatal","message":"boom"}\n')
   })
 
   it('sends a blank line every 15 seconds while the work runs, none before, and none once it has ended', async () => {
@@ -123,19 +124,30 @@ describe('ndjsonResponse', () => {
 
   it('stops the work and sends nothing more when the reader goes away', async () => {
     const onCancel = vi.fn(async () => undefined)
-    const sent: boolean[] = []
     let finish: () => void = () => undefined
     const gate = new Promise<void>((resolve) => {
       finish = resolve
+    })
+    // How the work ended, and a promise of its having ended (the stream swallows what `run` throws once it is closed).
+    let outcome: string | Error | undefined
+    let ended: () => void = () => undefined
+    const over = new Promise<void>((resolve) => {
+      ended = resolve
     })
     const res = ndjsonResponse(
       ctx,
       source(
         async (send) => {
-          await send({ n: 1 })
-          await gate
-          await send({ n: 2 })
-          sent.push(true)
+          try {
+            await send({ n: 1 })
+            await gate
+            await send({ n: 2 })
+            outcome = 'ran to the end'
+          } catch (e) {
+            outcome = e as Error
+          } finally {
+            ended()
+          }
         },
         { onCancel }
       )
@@ -145,9 +157,9 @@ describe('ndjsonResponse', () => {
     await reader?.cancel()
     expect(onCancel).toHaveBeenCalledTimes(1)
     finish()
-    await new Promise((r) => setTimeout(r, 5))
+    await over
     // The work ran to its end, its late event went nowhere, and nothing failed.
-    expect(sent).toEqual([true])
+    expect(outcome).toBe('ran to the end')
   })
 
   it('lets a progress callback send without waiting, the events still going out in order', async () => {
@@ -158,7 +170,7 @@ describe('ndjsonResponse', () => {
         await send({ last: true })
       })
     )
-    const text = await readAll(res)
+    const text = await res.text()
     expect(
       text
         .split('\n')
