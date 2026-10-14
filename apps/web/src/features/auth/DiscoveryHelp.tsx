@@ -17,6 +17,8 @@ function IssueHint({ issue, connectHost }: { issue: DiscoveryIssue; connectHost:
           </pre>
         </>
       )
+    case 'starting':
+      return <>{t.starting}</>
     case 'unreachable':
       return <>{t.unreachable(connectHost, issue.port ?? 0)}</>
   }
@@ -31,10 +33,13 @@ export function DiscoveryHelp({ diagnosis }: { diagnosis: DiscoveryDiagnosis | u
   if (!diagnosis?.enabled) return null
   const nothingFound = diagnosis.found === 0 && diagnosis.issues.length === 0 && diagnosis.unavailable === null
   if (diagnosis.unavailable === null && diagnosis.issues.length === 0 && !nothingFound) return null
-  // Open when the way in is broken (nothing listed, Docker unreadable, a listed one that does not open); folded away
-  // when it only names containers left out (the stopped ones of other projects): those are not what they came for.
+  // Open when the way in is broken (nothing listed, Docker unreadable, a listed one that does not open) or one is on
+  // its way (starting: likely the one just started); folded away when it only names containers left out (the stopped
+  // ones of other projects): those are not what they came for.
   const broken =
-    diagnosis.found === 0 || diagnosis.unavailable !== null || diagnosis.issues.some((i) => i.reason === 'unreachable')
+    diagnosis.found === 0 ||
+    diagnosis.unavailable !== null ||
+    diagnosis.issues.some((i) => i.reason === 'unreachable' || i.reason === 'starting')
   return (
     <details open={broken} className="mt-4 rounded border border-line bg-surface-sub p-3 text-sm text-ink-sub">
       <summary className="cursor-pointer text-sm font-semibold text-ink">{t.title}</summary>

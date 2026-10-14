@@ -16,6 +16,9 @@ interface DockerContainer {
   Image?: string
   Labels?: Record<string, string>
   Ports?: DockerPort[]
+  /** `Up 3 seconds (health: starting)`: how the list said health before it carried `Health` (API 1.51+). */
+  Status?: string
+  Health?: { Status?: string }
 }
 interface DockerInspect {
   Config?: { Env?: string[] }
@@ -49,6 +52,11 @@ function dialectOf(image: string, ports: readonly DockerPort[]): Dialect | null 
   if (ports.some((p) => p.PrivatePort === DEFAULT_PORT.mysql)) return 'mysql'
   if (ports.some((p) => p.PrivatePort === DEFAULT_PORT.postgres)) return 'postgres'
   return null
+}
+
+/** Whether the container's healthcheck has not passed yet (a database still initialising refuses logins). */
+function isStarting(c: DockerContainer): boolean {
+  return c.Health?.Status === 'starting' || /\(health: starting\)/.test(c.Status ?? '')
 }
 
 /** The published TCP port that carries the database: the dialect's usual one when published, else the first. */
@@ -145,7 +153,7 @@ export interface DiscoveredDatabase {
   login?: DockerLogin
 }
 
-/** A database container that cannot be offered, and why (`stopped`, or running without a published port). */
+/** A database container that cannot be offered (yet), and why: `stopped`, no published port, or still `starting`. */
 export type SkippedDatabase = DiscoveryIssue
 
 /**
@@ -179,6 +187,10 @@ export async function discoverAll(
       continue
     }
     const port = published.PublicPort
+    if (isStarting(c)) {
+      skipped.push({ name: `docker: ${displayName(c)}`, dialect, reason: 'starting', port })
+      continue
+    }
     let name = `docker: ${displayName(c)}`
     if (taken.has(name)) name = `${name} :${port}`
     taken.add(name)

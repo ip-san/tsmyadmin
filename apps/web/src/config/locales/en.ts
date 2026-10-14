@@ -91,6 +91,7 @@ export const en = {
       stopped: 'It is stopped. Start it and it shows up here.',
       notPublished:
         'It does not publish a port on the host, so it cannot be reached from here. Add this to your compose file.',
+      starting: 'It is starting (not ready yet). It shows up on the list once it is ready.',
       unreachable: (host: string, port: number) =>
         `${host}:${port} cannot be reached. With Docker Engine on Linux, a port published on the host's 127.0.0.1 only may not be reachable from a container. Publish it on 0.0.0.0, or set TSMYADMIN_DOCKER_CONNECT_HOST to a name that reaches it.`,
     },
@@ -117,6 +118,11 @@ export const en = {
       copied: 'Copied',
       copyFailed: 'Could not copy. Select the value shown and copy it',
     },
+    presetGone: (name: string) => `${name} (no longer listed)`,
+    presetGoneNotice: (name: string) =>
+      `${name} has left the list (stopped, or restarting). When it is back you can connect as you are; you may also choose another server.`,
+    presetsAdded: (names: string) => `Added to the servers: ${names}`,
+    presetsRemoved: (names: string) => `Removed from the servers: ${names}`,
     dockerLogin:
       "Connects with the login in this container's environment (the user and password it was started with). Nothing to type.",
     advanced: 'Advanced',

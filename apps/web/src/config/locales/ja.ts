@@ -86,6 +86,7 @@ export const ja = {
       none: '起動している MySQL / MariaDB / PostgreSQL のコンテナが見つかりません。`docker compose up -d` などで DB を起動してください。',
       stopped: '停止しています。起動すると、ここに出ます。',
       notPublished: 'ホストにポートを公開していないので、ここからは届きません。compose に次を足してください。',
+      starting: '起動中（まだ準備ができていません）。準備ができると、接続先に出ます。',
       unreachable: (host: string, port: number) =>
         `${host}:${port} に届きません。Linux の Docker Engine で、ホストの 127.0.0.1 だけに公開したポートは、コンテナからは届かないことがあります。0.0.0.0 で公開するか、TSMYADMIN_DOCKER_CONNECT_HOST を届く名前にしてください。`,
     },
@@ -111,6 +112,11 @@ export const ja = {
       copied: 'コピーしました',
       copyFailed: 'コピーできませんでした。表示されている値を選んでコピーしてください',
     },
+    presetGone: (name: string) => `${name}（一覧にありません）`,
+    presetGoneNotice: (name: string) =>
+      `${name} が一覧から消えました（停止したか、起動し直しています）。戻ると、このまま接続できます。別の接続先を選ぶこともできます。`,
+    presetsAdded: (names: string) => `接続先に追加されました: ${names}`,
+    presetsRemoved: (names: string) => `接続先から消えました: ${names}`,
     dockerLogin:
       'このコンテナの環境変数にある資格情報（起動時に渡されたユーザーとパスワード）で接続します。入力は要りません。',
     advanced: '詳細設定',
