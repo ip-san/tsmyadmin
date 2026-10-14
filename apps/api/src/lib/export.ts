@@ -17,7 +17,7 @@ import { OFFICE_TYPES, type OfficeKind, officeBody } from './export-office.ts'
 export const DUMP_COMPLETE_MARKER = '-- tsmyadmin dump complete'
 /** The parts of a PostgreSQL sequence's definition that are not structure (see showCreateTable). */
 const SEQUENCE_OWNER = /^ALTER SEQUENCE .* OWNED BY /
-const SEQUENCE_VALUE = /^SELECT pg_catalog\.setval\(/
+export const SEQUENCE_VALUE = /^SELECT pg_catalog\.setval\(/
 const FK_STATEMENT = /^ALTER TABLE .* ADD CONSTRAINT .* FOREIGN KEY/i
 const ITER_OPTS = { batchSize: EXPORT_BATCH_SIZE }
 

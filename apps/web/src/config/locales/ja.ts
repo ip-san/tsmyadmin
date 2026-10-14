@@ -2243,6 +2243,21 @@ export const ja = {
     replayNote: (n: number) => `そのあと、保存した ${n.toLocaleString('ja-JP')} 件の文を実行します`,
     restored: (name: string) => `「${name}」に戻しました。`,
     failed: '復元に失敗しました。',
+    compare: '現在と比較',
+    diffTitle: (name: string) => `「${name}」と現在のスキーマの比較`,
+    diffSummary: (added: number, removed: number, changed: number, unchanged: number) =>
+      `追加 ${added}・削除 ${removed}・変更 ${changed}・変わらず ${unchanged}（テーブル・ビュー）`,
+    diffNone: 'スナップショットのあと、テーブルとビューの定義は変わっていません。',
+    diffChanged: '定義が変わったもの',
+    diffAdded: 'スナップショットのあとに作られたもの',
+    diffRemoved: 'スナップショットのあとに削除されたもの',
+    diffLabel: (name: string) => `${name} の定義の違い（- スナップショット、+ 現在）`,
+    diffSame: '違いはありません。',
+    diffNoDefinition: '定義を読めませんでした。',
+    diffUnreadable: (names: string) => `定義を読めず、比べられなかったもの: ${names}`,
+    diffHint:
+      'CREATE 文どうしを比べます。行のデータと、行とともに動く値（MySQL の AUTO_INCREMENT=、シーケンスの現在値）は比べません。関数・トリガー・イベントは対象外です。',
+    diffAgain: 'もう一度比較',
   },
   tracking: {
     download: 'SQL をダウンロード',

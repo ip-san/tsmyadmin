@@ -1,4 +1,4 @@
-<!-- translated-from: docs/dev-environment.md sha256:e77471521b2560185e0c18200bc373822a98af1e7d93a6f65978db35c26c79d6 -->
+<!-- translated-from: docs/dev-environment.md sha256:7fb3d7bb00afd6fcbc1a5c0fd70482b9e2edf2b2401fdada8fbdfdb3158ba2dc -->
 
 # Development features: what was built, and what was set aside
 
@@ -16,6 +16,7 @@ phpMyAdmin is for MySQL / MariaDB only, and you name the server in `config.inc.p
 |---|---|---|
 | **Statements as they run** | Server → Monitor | Streams the SQL the application under development is running now. MySQL / MariaDB: the general log (a table), newest first. PostgreSQL: the statements whose call count grew in `pg_stat_statements`, per read. This tool's own statements are left out. The MySQL general log can be turned on after you review the SQL |
 | **Snapshots** | Database → Snapshots | Saves the database as it is (structure, data, views, routines, triggers) so that after trying a migration or a seed you can put it back. A snapshot is the existing SQL export and a restore runs that SQL, the same on both dialects. Before a restore you review the SQL that drops the tables and views made since. PostgreSQL does it in one transaction. Held in memory (gone when it restarts, and 24 hours after being taken), per account |
+| **Snapshot vs. schema diff** | Database → Snapshots → "Compare with now" | Compares a snapshot taken before a migration with the database now: the tables and views added, removed, and whose definition changed, each with a line diff of its CREATE statements. The definitions are kept with the snapshot, as its dump read them. Row data, `AUTO_INCREMENT=` and sequence positions are not compared. Only the account that took the snapshot can compare it |
 | **One-click login** | Login screen | With `TSMYADMIN_DOCKER_LOGIN=1` (off by default), reads a container's login from its environment (`MYSQL_ROOT_PASSWORD`, `POSTGRES_PASSWORD`, …) inside the API process only and signs in without a password. Never sent to the browser, logged or stored. Anyone who can reach the tool can then get in, so publish it on `127.0.0.1` only |
 | **Why a database is missing** | Login screen | Shows the database containers left off the list (stopped, port not published), why Docker cannot be read, and listed ports this process cannot reach, each with how to fix it |
 

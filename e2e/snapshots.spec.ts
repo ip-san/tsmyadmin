@@ -40,8 +40,23 @@ for (const t of TARGETS) {
         await expect(list.getByRole('cell', { name: 'マイグレーション前', exact: true })).toBeVisible()
         await scan(page)
 
-        // Changes after it: a row edited, a table made.
-        await run("UPDATE items SET name = 'changed'; CREATE TABLE later (id INT)")
+        // Changes after it: a row edited, a column added, a table made.
+        await run(
+          "UPDATE items SET name = 'changed'; ALTER TABLE items ADD COLUMN note_added INT; CREATE TABLE later (id INT)"
+        )
+
+        // What the "migration" changed in the schema: the new table, and the column in a line diff (rows are not compared).
+        await page.getByRole('button', { name: 'マイグレーション前: 現在と比較' }).click()
+        const compared = page.getByRole('dialog', { name: '「マイグレーション前」と現在のスキーマの比較' })
+        await expect(compared.getByText(/追加 1・削除 0・変更 1・/)).toBeVisible()
+        await expect(compared.getByRole('heading', { name: '定義が変わったもの (1)' })).toBeVisible()
+        await expect(compared.getByLabel('items の定義の違い（- スナップショット、+ 現在）')).toContainText(
+          'note_added'
+        )
+        await expect(compared.getByText('later', { exact: true })).toBeVisible()
+        await scan(page)
+        await compared.getByRole('button', { name: '閉じる', exact: true }).last().click()
+        await expect(compared).toBeHidden()
 
         await page.getByRole('button', { name: 'マイグレーション前: 復元…' }).click()
         await expect(page.getByRole('dialog').getByLabel('SQL')).toBeVisible()
