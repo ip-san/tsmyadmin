@@ -9,12 +9,12 @@ import { rows, until } from './scripted-conn.ts'
  */
 
 const EXEC = { maxRows: 10, timeoutMs: 1000, stopOnError: true }
-const console = (dialect: Dialect, answer: (text: string) => ReturnType<typeof rows> | Error | Promise<never>) =>
+const wired = (dialect: Dialect, answer: (text: string) => ReturnType<typeof rows> | Error | Promise<never>) =>
   rig(dialect, { rules: answer })
 
 describe('executeSql on MySQL', () => {
   it('caps the session at one row more than shown, sets the statement time, and publishes the connection id, before the first statement', async () => {
-    const r = console('mysql', (t) => (t === 'SELECT CONNECTION_ID()' ? rows([[4242]]) : rows([[1]], ['a'])))
+    const r = wired('mysql', (t) => (t === 'SELECT CONNECTION_ID()' ? rows([[4242]]) : rows([[1]], ['a'])))
     await r.adapter.executeSql(ns, 'SELECT 1', { ...EXEC, queryId: 'q' })
     const sent = r.statements()
     expect(sent.slice(0, sent.indexOf('SELECT 1'))).toEqual([
@@ -25,7 +25,7 @@ describe('executeSql on MySQL', () => {
   })
 
   it('does not wrap a read, since the session is capped, and does not ask for the connection id without a query id', async () => {
-    const r = console('mysql', () => rows([[1]], ['a']))
+    const r = wired('mysql', () => rows([[1]], ['a']))
     await r.adapter.executeSql(ns, 'SELECT 1', EXEC)
     expect(r.statements()).toContain('SELECT 1')
     expect(r.statements().some((t) => t.startsWith('SELECT * FROM ('))).toBe(false)
@@ -33,7 +33,7 @@ describe('executeSql on MySQL', () => {
   })
 
   it('times the stages of each statement when asked, and attaches them to its result', async () => {
-    const r = console('mysql', (t) =>
+    const r = wired('mysql', (t) =>
       t === 'SHOW PROFILE'
         ? rows([
             ['starting', '0.001'],
@@ -51,14 +51,14 @@ describe('executeSql on MySQL', () => {
         { state: 'end', seconds: 0.5 },
       ],
     })
-    const plain = console('mysql', () => rows([[1]], ['a']))
+    const plain = wired('mysql', () => rows([[1]], ['a']))
     await plain.adapter.executeSql(ns, 'SELECT 1', EXEC)
     expect(plain.statements()).not.toContain('SET SESSION profiling = 1')
     expect(plain.statements()).not.toContain('SHOW PROFILE')
   })
 
   it("reports an error the driver threw with the dialect's own reading of it", async () => {
-    const r = console('mysql', (t) =>
+    const r = wired('mysql', (t) =>
       t === 'SELECT 1'
         ? Object.assign(new Error('nope'), { code: 'ER_SPECIFIC_ACCESS_DENIED_ERROR', errno: 1227 })
         : rows([])
@@ -76,7 +76,7 @@ describe('executeSql on MySQL', () => {
     const hang = new Promise<never>((resolve) => {
       release = () => resolve(rows([[1]], ['a']) as never)
     })
-    const r = console('mysql', (t) =>
+    const r = wired('mysql', (t) =>
       t === 'SELECT CONNECTION_ID()' ? rows([['77']]) : t === 'SELECT SLEEP(5)' ? hang : rows([])
     )
     const run = r.adapter.executeSql(ns, 'SELECT SLEEP(5)', { ...EXEC, queryId: 'q', stopOnError: false })
@@ -91,7 +91,7 @@ describe('executeSql on MySQL', () => {
   })
 
   it('forgets the statement time the run may have changed, so the next borrower sets it again', async () => {
-    const r = console('mysql', () => rows([[1]], ['a']))
+    const r = wired('mysql', () => rows([[1]], ['a']))
     await r.adapter.executeSql(ns, 'SELECT 1', EXEC)
     expect(r.conn.forget).toHaveBeenCalled()
     r.sent.length = 0
@@ -100,7 +100,7 @@ describe('executeSql on MySQL', () => {
   })
 
   it('sets the statement time again after a change of it failed on a connection that had one', async () => {
-    const r = console('mysql', (t) =>
+    const r = wired('mysql', (t) =>
       t === 'SET SESSION max_execution_time = 5' ? Object.assign(new Error('x'), { code: 'ER_X' }) : rows([[1]])
     )
     await r.adapter.countRows(ns, 't')
@@ -115,7 +115,7 @@ describe('executeSql on MySQL', () => {
 
 describe('executeSql on PostgreSQL', () => {
   it('wraps a read with the row cap, since the session cannot be capped, and publishes the backend id', async () => {
-    const r = console('postgres', (t) => (t === 'SELECT pg_backend_pid()' ? rows([[99]]) : rows([[1]], ['a'])))
+    const r = wired('postgres', (t) => (t === 'SELECT pg_backend_pid()' ? rows([[99]]) : rows([[1]], ['a'])))
     await r.adapter.executeSql(ns, 'SELECT 1', { ...EXEC, queryId: 'q' })
     const sent = r.statements()
     expect(sent.slice(0, 2)).toEqual(['SET statement_timeout = 1000', 'SELECT pg_backend_pid()'])
@@ -124,14 +124,14 @@ describe('executeSql on PostgreSQL', () => {
   })
 
   it('has no stages to time: profiling is asked of the server nowhere, and no result carries a profile', async () => {
-    const r = console('postgres', () => rows([[1]], ['a']))
+    const r = wired('postgres', () => rows([[1]], ['a']))
     const [result] = await r.adapter.executeSql(ns, 'SELECT 1', { ...EXEC, profile: true })
     expect(r.statements().some((t) => /profil/i.test(t))).toBe(false)
     expect(result).not.toHaveProperty('profile')
   })
 
   it("reports an error the driver threw with the dialect's own reading of it", async () => {
-    const r = console('postgres', (t) =>
+    const r = wired('postgres', (t) =>
       t.includes('SELECT 1') ? Object.assign(new Error('denied'), { code: '42501' }) : rows([])
     )
     const [result] = await r.adapter.executeSql(ns, 'SELECT 1', EXEC)
@@ -139,7 +139,7 @@ describe('executeSql on PostgreSQL', () => {
   })
 
   it('keeps a statement that changed no rows whole for a streaming consumer, with no result field added', async () => {
-    const r = console('postgres', () => ({ ...rows([]), affectedRows: 3, hasRows: false }))
+    const r = wired('postgres', () => ({ ...rows([]), affectedRows: 3, hasRows: false }))
     const seen: unknown[] = []
     const [kept] = await r.adapter.executeSql(ns, 'UPDATE t SET a = 1', { ...EXEC, onResult: (x) => void seen.push(x) })
     expect(kept).not.toHaveProperty('result')

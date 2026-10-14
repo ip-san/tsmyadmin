@@ -74,6 +74,7 @@ describe('the patterns match the whole type name, from its start', () => {
     expect(keyParam('?', 'xdecimal(10,2)')).toBe('?')
     expect(keyParam('?', 'bitx')).toBe('?')
     expect(keyParam('?', 'xbit')).toBe('?')
+    expect(keyParam('?', 'xfloat')).toBe('?')
     expect(keyColumnExpr('`c`', 'xenum(1)')).toBe('`c`')
     expect(keyColumnExpr('`c`', 'multiset(1)')).toBe('`c`')
   })
