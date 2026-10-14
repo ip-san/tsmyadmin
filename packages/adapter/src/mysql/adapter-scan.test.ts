@@ -3,7 +3,8 @@ import { Readable } from 'node:stream'
 import type { TableSchema } from '@tsmyadmin/shared'
 import { describe, expect, it, vi } from 'vitest'
 import type { Conn } from '../driver.ts'
-import { fail, rows, scripted } from '../test/scripted-conn.ts'
+import type { QueryOptions } from '../sql/cells.ts'
+import { fail, rows, scripted, until } from '../test/scripted-conn.ts'
 import { MysqlAdapter } from './adapter.ts'
 
 /**
@@ -262,11 +263,26 @@ describe('MysqlAdapter: the row stream', () => {
     }
     return { c, seen, killed, sockets, listeners: () => c.listenerCount('error') }
   }
-  const run = (adapter: MysqlAdapter, c: unknown, batch: number, options?: unknown) =>
-    internals(adapter).streamRows?.({ connection: c }, 'SELECT id FROM t', [7], batch, options) as AsyncIterable<{
-      columns: { name: string }[]
-      rows: unknown[][]
-    }>
+  const VERSION = [[['8.0.36']], [{ name: 'v', columnType: 253, columnLength: 10, flags: 0, characterSet: 224 }]]
+  /** The pool's connection around the core `c`, as `acquire` sets it up for a call (the setup statements answered). */
+  const acquired = async (adapter: MysqlAdapter, c: unknown) => {
+    const pool = {
+      connection: c,
+      query: async (q: string | { sql: string }) =>
+        (typeof q === 'string' ? q : q.sql) === 'SELECT VERSION()' ? VERSION : [{ affectedRows: 0 }, undefined],
+      release: vi.fn(),
+      destroy: vi.fn(),
+    }
+    internals(adapter).getConnection = async () => pool
+    const conn = (await internals(adapter).acquire?.(ns)) as Conn
+    if (!conn.stream) throw new Error('the connection offers no stream')
+    return { conn, stream: conn.stream.bind(conn), pool }
+  }
+  /** The rows of one statement through the public `conn.stream` of an acquired connection. */
+  async function* run(adapter: MysqlAdapter, c: unknown, batch: number, options?: QueryOptions) {
+    const { stream } = await acquired(adapter, c)
+    yield* stream('SELECT id FROM t', [7], batch, options)
+  }
   const brokenOf = (a: MysqlAdapter) => (a as unknown as { broken: WeakSet<object> }).broken
 
   it('sends the statement with its values, in batches of the size asked, naming the columns on every batch', async () => {
@@ -341,16 +357,21 @@ describe('MysqlAdapter: the row stream', () => {
         /* never produces a row: the connection must end the wait */
       },
     })
+    let streaming = false
     ;(f.c as unknown as { query: unknown }).query = () => {
       const ev = new EventEmitter() as EventEmitter & { stream: () => Readable }
-      ev.stream = () => hang
+      ev.stream = () => {
+        streaming = true
+        return hang
+      }
       return ev
     }
     const a = new MysqlAdapter(config)
     const pending = (async () => {
       for await (const _ of run(a, f.c, 5)) void _
     })()
-    await new Promise((r) => setTimeout(r, 5))
+    // The error must arrive while the stream is being read, or the test would take the "lost before queued" path.
+    await until(() => streaming)
     f.c.emit(
       'error',
       Object.assign(new Error('Query execution was interrupted'), { code: 'ER_QUERY_INTERRUPTED', errno: 1317 })

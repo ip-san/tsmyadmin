@@ -114,9 +114,10 @@ describe('BaseAdapter.buildQuery', () => {
     expect(await build('postgres', eq, tables, { 'orders.flags': 'bit(8)' })).toContain(`"orders"."flags" = '170'`)
     const like = spec({ where: [[cond('flags', 'contains', '17')]] })
     expect(await build('mysql', like, tables, types)).not.toContain("X'")
+    // A type that only starts with the word is not BIT: the value is neither a bit literal nor converted.
     const bitmap = await build('mysql', eq, tables, { 'orders.flags': 'bitmap' })
-    expect(bitmap).not.toContain("X'aa'")
-    expect(bitmap).toContain("HEX('170')")
+    expect(bitmap).toContain("`orders`.`flags` = '170'")
+    expect(bitmap).not.toContain('HEX(')
     expect(await build('mysql', eq, tables, { 'orders.flags': 'BIT(1)' })).toContain("X'aa'")
   })
 })

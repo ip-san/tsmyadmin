@@ -14,17 +14,19 @@ describe('keyParam: a key value typed for the column it is compared with', () =>
     // A FLOAT column holding 0.1 is not equal to the DOUBLE literal 0.1.
     ['float', 'CAST(? AS FLOAT)'],
     ['FLOAT(7,4)', 'CAST(? AS FLOAT)'],
+    ['float unsigned', 'CAST(? AS FLOAT)'],
     ['decimal(10,2)', 'CAST(? AS DECIMAL(10,2))'],
     ['DECIMAL(5, 0)', 'CAST(? AS DECIMAL(5,0))'],
     ['json', 'CAST(? AS JSON)'],
     ['JSON', 'CAST(? AS JSON)'],
     // A BIT value travels as a binary literal; MariaDB would read it as a binary string, so it becomes a number.
     ['bit(1)', 'CAST(CONV(HEX(?), 16, 10) AS UNSIGNED)'],
+    ['bit', 'CAST(CONV(HEX(?), 16, 10) AS UNSIGNED)'],
   ])('%s', (type, expected) => {
     expect(keyParam('?', type)).toBe(expected)
   })
 
-  it.each(['', 'double', 'decimal', 'varchar(255)', 'text', 'datetime', 'blob'])(
+  it.each(['', 'double', 'decimal', 'varchar(255)', 'text', 'datetime', 'blob', 'bitmap', 'json_extra', 'floating'])(
     "leaves a %j column's value as it is",
     (type) => {
       expect(keyParam('?', type)).toBe('?')
@@ -63,14 +65,14 @@ describe('keyColumnExpr: what a scan orders by', () => {
   })
 })
 
-describe('the patterns match the whole type, from its start', () => {
-  it('does not take a type that merely contains or ends in a known word for it', () => {
+describe('the patterns match the whole type name, from its start', () => {
+  it('does not take a type that merely contains, ends in or goes on after a known word for it', () => {
     expect(keyParam('?', 'xjson')).toBe('?')
-    expect(keyParam('?', 'json_extra')).toBe('CAST(? AS JSON)')
+    expect(keyParam('?', 'json_extra')).toBe('?')
     expect(keyParam('?', 'point')).toBe('?')
     expect(keyParam('?', 'multipoint')).toBe('?')
     expect(keyParam('?', 'xdecimal(10,2)')).toBe('?')
-    expect(keyParam('?', 'bitx')).toBe('CAST(CONV(HEX(?), 16, 10) AS UNSIGNED)')
+    expect(keyParam('?', 'bitx')).toBe('?')
     expect(keyParam('?', 'xbit')).toBe('?')
     expect(keyColumnExpr('`c`', 'xenum(1)')).toBe('`c`')
     expect(keyColumnExpr('`c`', 'multiset(1)')).toBe('`c`')
