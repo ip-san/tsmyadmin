@@ -92,7 +92,7 @@ export function conditionSql(
     const typed = values.map((v) => hooks.keyParam(bind(v), type))
     return between ? `${col} ${op} ${typed[0]} AND ${typed[1]}` : `${col} ${op} (${typed.join(', ')})`
   }
-  if (f.value === undefined) throw new AdapterError('QUERY_FAILED', `Filter "${f.op}" on ${f.column} requires a value`)
+  if (f.value === undefined) throw new AdapterError('VALIDATION', `Filter "${f.op}" on ${f.column} requires a value`)
   if (f.op === 'contains' || f.op === 'starts_with') {
     // The user's text is matched literally: LIKE metacharacters are escaped, wildcards added here.
     const text = escapeLike(String(f.value ?? ''))
