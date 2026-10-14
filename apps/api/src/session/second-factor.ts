@@ -19,6 +19,7 @@ export class SqliteSecondFactors implements SecondFactors {
   private readonly stmt: {
     get: StatementSync
     put: StatementSync
+    insert: StatementSync
     remove: StatementSync
   }
 
@@ -36,6 +37,7 @@ export class SqliteSecondFactors implements SecondFactors {
     this.stmt = {
       get: db.prepare('SELECT payload FROM second_factor WHERE identity = ?'),
       put: db.prepare('INSERT OR REPLACE INTO second_factor (identity, payload, updated_at) VALUES (?, ?, ?)'),
+      insert: db.prepare('INSERT OR IGNORE INTO second_factor (identity, payload, updated_at) VALUES (?, ?, ?)'),
       remove: db.prepare('DELETE FROM second_factor WHERE identity = ?'),
     }
   }
@@ -73,6 +75,13 @@ export class SqliteSecondFactors implements SecondFactors {
     if (!row || version(row.payload) !== expected) return false
     this.stmt.put.run(identity, payload, stored.at)
     return true
+  }
+
+  async create(config: ConnectRequest, factor: SecondFactor): Promise<boolean> {
+    const identity = this.identity(config)
+    const { version: _none, ...stored } = factor
+    const payload = seal(this.key, JSON.stringify(stored), rowAad(SECOND_FACTOR, identity))
+    return Number(this.stmt.insert.run(identity, payload, stored.at).changes) === 1
   }
 
   async clear(config: ConnectRequest, expected?: string): Promise<boolean> {

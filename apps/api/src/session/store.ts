@@ -122,6 +122,12 @@ export interface SecondFactors {
    */
   set(config: Config, factor: SecondFactor): Promise<boolean>
   /**
+   * Writes the first one: only while nothing is stored for the account (`false` once something is). A read that found
+   * nothing has no version to write against, and a plain `set` there would let two enrolments at once both land —
+   * the second over the first, whose app and recovery codes would then open nothing.
+   */
+  create(config: Config, factor: SecondFactor): Promise<boolean>
+  /**
    * Removes it. Given the `version` it was read at, only if nothing has been written since (`false` if something
    * has): a method added a moment ago in another tab must not go with it.
    */

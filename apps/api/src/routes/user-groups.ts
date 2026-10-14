@@ -19,6 +19,13 @@ function groups(items: SavedItem[]): UserGroup[] {
   })
 }
 
+/** Whether two member lists name the same accounts (absent: no group). */
+function sameMembers(a: readonly string[] | undefined, b: readonly string[] | undefined): boolean {
+  if (a === undefined || b === undefined) return a === b
+  const set = new Set(a)
+  return set.size === new Set(b).size && b.every((name) => set.has(name))
+}
+
 /** Whether this session may manage every one of these accounts (asked once per name). */
 async function managesAll(session: Session, names: readonly string[]): Promise<boolean> {
   for (const name of new Set(names)) if (!(await session.adapter.canManageAccount(name))) return false
@@ -64,7 +71,21 @@ export function userGroupRoutes(cfg: SessionConfig, logger: Logger) {
       if (!(await managesAll(session, [...group.members, ...(before?.members ?? [])]))) {
         return c.json(apiError('FORBIDDEN', 'This account cannot manage every member of that group'), 403)
       }
-      const saved = groups(await store.save(session.config, 'usergroup', group.name, JSON.stringify(group)))
+      // Written only over the group that right was checked against: if another account replaced it during the
+      // check, this one may have no right over the members it has now.
+      let replaced = false
+      const items = await store.update(session.config, 'usergroup', group.name, (current) => {
+        const now = current ? groups([current])[0] : undefined
+        if (!sameMembers(now?.members, before?.members)) {
+          replaced = true
+          return null
+        }
+        return JSON.stringify(group)
+      })
+      if (replaced) {
+        return c.json(apiError('CONFLICT', 'Another account changed that group at the same time; try again'), 409)
+      }
+      const saved = groups(items)
       logger.log('info', 'user_group.save', {
         requestId: c.get('requestId'),
         ...sessionInfo(session),

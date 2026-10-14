@@ -525,6 +525,13 @@ class RedisSecondFactors implements SecondFactors {
     return applied === 1
   }
 
+  async create(config: ConnectRequest, factor: SecondFactor): Promise<boolean> {
+    const { version: _none, ...stored } = factor
+    const payload = seal(this.key, JSON.stringify(stored), rowAad(SECOND_FACTOR, identityHash(this.key, config)))
+    // NX: only while the key is absent, so two first enrolments at once on two replicas do not both land.
+    return (await this.redis.set(this.entry(config), payload, 'NX')) === 'OK'
+  }
+
   async clear(config: ConnectRequest, expected?: string): Promise<boolean> {
     if (expected === undefined) {
       await this.redis.del(this.entry(config))
