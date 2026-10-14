@@ -22,13 +22,14 @@ export const ServerPresetsSchema = z.array(ServerPresetSchema)
 
 /**
  * Why a database container is not on the login screen's list, or is on it but cannot be reached: `stopped`, running
- * without a published port (`notPublished`; `port` is the usual one to publish), or published on a port this process
- * cannot open (`unreachable`).
+ * without a published port (`notPublished`; `port` is the usual one to publish), running but its healthcheck still
+ * says `starting` (`starting`; it joins the list once it is ready), or published on a port this process cannot open
+ * (`unreachable`).
  */
 export const DiscoveryIssueSchema = z.object({
   name: z.string(),
   dialect: DialectSchema,
-  reason: z.enum(['stopped', 'notPublished', 'unreachable']),
+  reason: z.enum(['stopped', 'notPublished', 'starting', 'unreachable']),
   port: z.number().int().nullable(),
 })
 export type DiscoveryIssue = z.infer<typeof DiscoveryIssueSchema>

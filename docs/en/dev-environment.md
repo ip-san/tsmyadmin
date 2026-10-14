@@ -1,4 +1,4 @@
-<!-- translated-from: docs/dev-environment.md sha256:e77471521b2560185e0c18200bc373822a98af1e7d93a6f65978db35c26c79d6 -->
+<!-- translated-from: docs/dev-environment.md sha256:f7ea11244319dc96b8392560a7988b97d213653c6caccba5a98a64ac4619b8b1 -->
 
 # Development features: what was built, and what was set aside
 
@@ -18,6 +18,7 @@ phpMyAdmin is for MySQL / MariaDB only, and you name the server in `config.inc.p
 | **Snapshots** | Database → Snapshots | Saves the database as it is (structure, data, views, routines, triggers) so that after trying a migration or a seed you can put it back. A snapshot is the existing SQL export and a restore runs that SQL, the same on both dialects. Before a restore you review the SQL that drops the tables and views made since. PostgreSQL does it in one transaction. Held in memory (gone when it restarts, and 24 hours after being taken), per account |
 | **One-click login** | Login screen | With `TSMYADMIN_DOCKER_LOGIN=1` (off by default), reads a container's login from its environment (`MYSQL_ROOT_PASSWORD`, `POSTGRES_PASSWORD`, …) inside the API process only and signs in without a password. Never sent to the browser, logged or stored. Anyone who can reach the tool can then get in, so publish it on `127.0.0.1` only |
 | **Why a database is missing** | Login screen | Shows the database containers left off the list (stopped, port not published), why Docker cannot be read, and listed ports this process cannot reach, each with how to fix it |
+| **Waiting for a container to start** | Login screen | While discovery is on, the server list is re-read every 5 s, so containers started or stopped later appear and leave without reopening the screen. The selected server and what was typed stay; when the selected container leaves, it stays selected, the form says it has left the list and holds back Connect (once it is back you connect as you are). A container whose healthcheck says `starting` is kept off the list and reported in the diagnosis as "starting (not ready yet)"; it joins the list once ready. Changes are announced through `aria-live` |
 
 ## Considered and set aside
 
@@ -40,4 +41,5 @@ Ordered by how much they ease getting started and everyday troubleshooting.
 
 - **Initial JS budget**: about 160 kB of the 170 kB is used (`bun run size`). At 159.9 kB of 160 kB the budget was raised to 170 kB rather than trimmed. Where it goes (initial JS, minified): react-dom 33%, zod 17%, the language file 13%, TanStack Router and Query about 18%, the shared schemas about 7%. **zod cannot leave the first paint** (the route definitions validate their search parameters with it, and `readPreference` takes a zod schema, both on the first-paint path). Only the strings are a lever: loading each screen's strings with the screen could save up to about 20 kB, but it touches all 208 files that read `locale.` (53 of them capture a section at module level), and a section that is missed shows only at run time, as `undefined` on the screen that needs it, not in the types. Not worth it at this size: start from here when the budget is next exceeded.
 - **A real PostgreSQL test**: the test compose has no `pg_stat_statements`, so the PostgreSQL path of "statements as they run" has been checked only in a throwaway container with the extension. Putting it in CI needs a change to the compose command and the fixtures (and a `db:reset`).
+- **Only a container with a healthcheck can be told to be starting.** One without a healthcheck is listed as soon as it starts, even while the database does not accept connections yet (a Docker published port accepts connections before the process inside listens, so reaching it over TCP cannot tell). A login in that window fails to connect.
 - **Leaving out "its own statements" is per connection** on MySQL: a second tsmyadmin session on the same server shows up as application traffic.

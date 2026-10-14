@@ -32,6 +32,40 @@ test.describe('accessibility (axe-core)', () => {
     await scan(page)
   })
 
+  test('login form while Docker containers start and stop (live list, starting, selected one gone)', async ({
+    page,
+  }) => {
+    // Faked as discovery reads them: one container listed, one still starting; then the listed one stops.
+    const shop = { name: 'docker: shop/db', dialect: 'mysql', host: '127.0.0.1', port: 13306 }
+    const blog = { name: 'docker: blog/pg', dialect: 'postgres', host: '127.0.0.1', port: 15432 }
+    let servers = [shop]
+    let issues = [{ name: blog.name, dialect: blog.dialect, reason: 'starting', port: blog.port }]
+    await page.route('**/api/servers', (route) => route.fulfill({ json: servers }))
+    await page.route('**/api/servers/diagnosis', (route) =>
+      route.fulfill({ json: { enabled: true, connectHost: '127.0.0.1', unavailable: null, found: 1, issues } })
+    )
+    await page.goto('/login')
+    await page.getByText('起動中（まだ準備ができていません）', { exact: false }).waitFor()
+    await page.getByLabel('ユーザー名').fill('alice')
+    await scan(page)
+    // Ready: it joins the list on the next poll, and the selection and what was typed stay.
+    servers = [blog, shop]
+    issues = []
+    await expect(page.getByRole('status').filter({ hasText: '接続先に追加されました: docker: blog/pg' })).toBeVisible({
+      timeout: 15_000,
+    })
+    await expect(page.getByLabel('接続先')).toHaveValue(shop.name)
+    await expect(page.getByLabel('ユーザー名')).toHaveValue('alice')
+    // The selected one stops: said so, still selected, and Connect waits for it.
+    servers = [blog]
+    await expect(page.getByText('docker: shop/db が一覧から消えました', { exact: false })).toBeVisible({
+      timeout: 15_000,
+    })
+    await expect(page.getByLabel('接続先')).toHaveValue(shop.name)
+    await expect(page.getByRole('button', { name: '接続する' })).toBeDisabled()
+    await scan(page)
+  })
+
   test('login form (with presets and manual entry)', async ({ page }) => {
     await page.goto('/login')
     await page.getByLabel('ホスト').waitFor()

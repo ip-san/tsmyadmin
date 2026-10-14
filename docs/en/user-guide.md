@@ -1,4 +1,4 @@
-<!-- translated-from: docs/user-guide.md sha256:285391e885a1f6ef140d5275da69aa557bb8f28e649c36f4627ddb26f004de27 -->
+<!-- translated-from: docs/user-guide.md sha256:c7e6a909805b94bd421fb3cf17067059b055f0cec0d29514bf8a7ad7516c769f -->
 
 # User guide
 
@@ -13,6 +13,8 @@ What each screen does and how to work with it. The layout is the same three leve
 3. Your credentials are held in a server-side session; the browser only gets a cookie with a signed session ID. (Separately, the last server, username and database are remembered in `localStorage` — never the password. On a shared machine, bear in mind that the next person sees which server you connected to.) After `SESSION_TTL_MINUTES` of inactivity (30 by default) the session ends; connecting again returns you to the page you were on
 
 Your administrator restricts which hosts can be reached with `TSMYADMIN_ALLOWED_HOSTS`. Hosts outside that list cannot be connected to.
+
+With Docker discovery on (development), containers started later join "Server" and stopped ones leave it while the login screen stays open (every 5 s). The selected server and what you typed do not change. When the selected container leaves, it stays selected, the screen says it has left the list and Connect is held back; once it is back you can connect as you are. A container still starting (its healthcheck has not passed) is shown as starting under "When a database is missing or cannot be reached", and joins the list once ready.
 
 On MySQL / MariaDB the **connection collation** can be chosen too, under **Advanced** on the login form (`utf8mb4_unicode_ci` by default: the rules this connection uses to compare strings and convert character sets, so `utf8mb4_bin` tells upper and lower case apart). The choice is shown under **Server information** on the server's top page, with the address, version and uptime.
 

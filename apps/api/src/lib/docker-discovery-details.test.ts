@@ -89,6 +89,33 @@ describe('which container is a database', () => {
       { name: 'docker: restarting', dialect: 'postgres', reason: 'stopped', port: null },
     ])
   })
+
+  it('holds back a container whose healthcheck is still starting (Health, or the Status text of an older API)', async () => {
+    const published = (n: number) => [{ PrivatePort: 3306, PublicPort: n }]
+    const containers = [
+      { Id: id(1), Names: ['/new'], Image: 'mysql', Health: { Status: 'starting' }, Ports: published(1) },
+      {
+        Id: id(2),
+        Names: ['/old-api'],
+        Image: 'mysql',
+        Status: 'Up 3 seconds (health: starting)',
+        Ports: published(2),
+      },
+      // Ready, failing, or without a healthcheck: listed as before (a failing one is for the login to report).
+      { Id: id(3), Names: ['/healthy'], Image: 'mysql', Health: { Status: 'healthy' }, Ports: published(3) },
+      { Id: id(4), Names: ['/sick'], Image: 'mysql', Status: 'Up 2 minutes (unhealthy)', Ports: published(4) },
+      { Id: id(5), Names: ['/plain'], Image: 'mysql', Health: { Status: 'none' }, Ports: published(5) },
+      // No port to reach it by: that is what to fix first, whatever its health.
+      { Id: id(6), Names: ['/hidden'], Image: 'mysql', Health: { Status: 'starting' }, Ports: [{ PrivatePort: 3306 }] },
+    ]
+    const { found, skipped } = await discoverAll(getFor(containers), 'h')
+    expect(found.map((d) => d.preset.name)).toEqual(['docker: healthy', 'docker: plain', 'docker: sick'])
+    expect(skipped).toEqual([
+      { name: 'docker: hidden', dialect: 'mysql', reason: 'notPublished', port: 3306 },
+      { name: 'docker: new', dialect: 'mysql', reason: 'starting', port: 1 },
+      { name: 'docker: old-api', dialect: 'mysql', reason: 'starting', port: 2 },
+    ])
+  })
 })
 
 describe('which port reaches the database', () => {
@@ -266,6 +293,35 @@ describe('the cached lookup', () => {
     now = 11_000
     await d.list()
     expect(calls.length).toBeGreaterThan(first)
+  })
+
+  it('lists a starting container once its healthcheck passes, at the next lookup after the cache (no reload)', async () => {
+    let now = 0
+    let health = 'starting'
+    const reached: number[] = []
+    const d = createDockerDiscovery({
+      get: async (path) => {
+        if (path.startsWith('/containers/json')) return [{ ...containers[0], Health: { Status: health } }]
+        throw new Error('no inspect')
+      },
+      connectHost: 'h',
+      logger: logs().logger,
+      reach: async (_host, port) => {
+        reached.push(port)
+        return true
+      },
+      ttlMs: 1000,
+      now: () => now,
+    })
+    expect(await d.list()).toEqual([])
+    // Said as starting, not as a port that does not open: it is not tried while it is not ready.
+    expect((await d.diagnosis()).issues).toEqual([{ name: 'docker: a', dialect: 'mysql', reason: 'starting', port: 1 }])
+    expect(reached).toEqual([])
+    health = 'healthy'
+    expect(await d.list()).toEqual([])
+    now = 1000
+    expect(await d.list()).toEqual([{ name: 'docker: a', dialect: 'mysql', host: 'h', port: 1 }])
+    expect((await d.diagnosis()).issues).toEqual([])
   })
 
   it('lists the presets, without logins', async () => {
