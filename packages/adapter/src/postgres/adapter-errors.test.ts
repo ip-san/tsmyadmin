@@ -42,8 +42,9 @@ describe('PostgresAdapter.toAdapterError', () => {
   it('takes a lost connection without a code for one by its message, and only then', () => {
     expect(err(driver({ message: 'Connection terminated unexpectedly' })).code).toBe('CONNECTION_FAILED')
     expect(err(driver({ message: 'read ECONNRESET' })).code).toBe('CONNECTION_FAILED')
+    // pg's own wording for a client whose socket already failed.
     expect(err(driver({ message: 'Client has encountered a connection error and is not queryable' })).code).toBe(
-      'QUERY_FAILED'
+      'CONNECTION_FAILED'
     )
     expect(err(driver({ code: '23505', message: 'terminated by constraint' })).code).toBe('QUERY_FAILED')
   })
