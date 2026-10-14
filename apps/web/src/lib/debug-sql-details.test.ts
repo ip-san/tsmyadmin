@@ -5,6 +5,37 @@ import { clearDebugSql, maskSql, recordSql, recordStatement, useDebugSql } from 
 
 /** What the debug panel keeps and shows: masked statements, the ring, and who is told (found by mutation testing). */
 
+describe('maskSql: a quoted password that is never closed', () => {
+  it('masks everything after the opening quote when the closing one is escaped or missing', () => {
+    for (const sql of [
+      "ALTER USER u IDENTIFIED BY 'abc\\'def",
+      "ALTER USER u IDENTIFIED BY 'abc''def",
+      "ALTER USER u IDENTIFIED BY 'abc",
+      "ALTER USER u IDENTIFIED BY 'abc\\'def' more 'x'",
+      'ALTER USER u IDENTIFIED BY "abc\\"def',
+      'ALTER USER u IDENTIFIED BY "abc""def',
+    ]) {
+      const out = maskSql(sql)
+      expect(out, sql).not.toContain('abc')
+      expect(out, sql).not.toContain('def')
+      expect(out, sql).toBe(`ALTER USER u IDENTIFIED BY '${PASSWORD_MASK}'`)
+    }
+  })
+
+  it('still masks a closed one whole, escaped quotes inside it included, and keeps what follows it', () => {
+    expect(maskSql("ALTER USER u IDENTIFIED BY 'abc\\'def' WITH x")).toBe(
+      `ALTER USER u IDENTIFIED BY '${PASSWORD_MASK}' WITH x`
+    )
+    expect(maskSql("ALTER USER u IDENTIFIED BY 'abc''def' WITH x")).toBe(
+      `ALTER USER u IDENTIFIED BY '${PASSWORD_MASK}' WITH x`
+    )
+    expect(maskSql('ALTER USER u IDENTIFIED BY "abc" WITH x')).toBe(
+      `ALTER USER u IDENTIFIED BY '${PASSWORD_MASK}' WITH x`
+    )
+    expect(maskSql("ALTER USER u IDENTIFIED BY '' WITH x")).toBe(`ALTER USER u IDENTIFIED BY '${PASSWORD_MASK}' WITH x`)
+  })
+})
+
 describe('maskSql: a dollar-quoted password that is never closed', () => {
   it('masks everything after the opening tag, so no part of the password stays', () => {
     for (const sql of [

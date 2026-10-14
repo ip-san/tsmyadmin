@@ -18,15 +18,23 @@ export const DEBUG_SQL_MAX = 200
 const CREDENTIAL_PART = /^([\s\S]*?\b(?:\w+_)?(?:IDENTIFIED|PASSWORD)\b)([\s\S]*)$/i
 const QUOTED_SPAN = /['"$][\s\S]*['"$]/
 const CONNECTION_PASSWORD = /(\bpassword\s*=\s*)[^\s'";]+/gi
-/** A complete `$$…$$` / `$tag$…$tag$` string, matched where the first quote-like character stands. */
-const DOLLAR_STRING = /\$((?:[A-Za-z_\u0080-\uffff][\w\u0080-\uffff]*)?)\$[\s\S]*?\$\1\$/y
+/**
+ * A complete string literal, matched where the first quote-like character stands: `'…'` / `"…"` with a doubled or
+ * backslash-escaped quote inside (a quote right after the closing one is a doubled quote, not the end), or
+ * `$$…$$` / `$tag$…$tag$`.
+ */
+const COMPLETE_LITERAL =
+  /'(?:[^'\\]|\\[\s\S]|'')*'(?!')|"(?:[^"\\]|\\[\s\S]|"")*"(?!")|\$((?:[A-Za-z_\u0080-\uffff][\w\u0080-\uffff]*)?)\$[\s\S]*?\$\1\$/y
 
-/** The first quote-like character opens a `$` string that is never closed: all that follows it is the secret. */
-function opensUnclosedDollar(tail: string): boolean {
+/**
+ * The first quote-like character opens a string that is never closed (`'abc\'def` whose last quote is escaped, or a
+ * `$` string whose tag is not repeated): all that follows it is the secret, however many quotes the rest holds.
+ */
+function opensUnclosedLiteral(tail: string): boolean {
   const first = tail.search(/['"$]/)
-  if (first === -1 || tail[first] !== '$') return false
-  DOLLAR_STRING.lastIndex = first
-  return !DOLLAR_STRING.test(tail)
+  if (first === -1) return false
+  COMPLETE_LITERAL.lastIndex = first
+  return !COMPLETE_LITERAL.test(tail)
 }
 
 /**
@@ -40,7 +48,7 @@ export function maskSql(sql: string): string {
   if (!m) return plain
   const tail = m[2] ?? ''
   const masked =
-    QUOTED_SPAN.test(tail) && !opensUnclosedDollar(tail)
+    QUOTED_SPAN.test(tail) && !opensUnclosedLiteral(tail)
       ? tail.replace(QUOTED_SPAN, `'${PASSWORD_MASK}'`)
       : tail.replace(/['"$][\s\S]*$/, `'${PASSWORD_MASK}'`)
   return `${m[1]}${masked}`
