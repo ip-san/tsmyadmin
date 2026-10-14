@@ -1,4 +1,4 @@
-import type { CountKind, ImportReason, ImportWarning } from '@tsmyadmin/shared'
+import type { CountKind, ImportReason, ImportWarning, LoginHintReason } from '@tsmyadmin/shared'
 import type { Locale } from './ja.ts'
 
 /** `1 row` / `2 rows` — English needs the singular that Japanese does not have. */
@@ -2533,6 +2533,22 @@ export const en = {
   },
   /** Server-named reasons of a VALIDATION error, rendered with their parameters. */
   reasons: {
+    LOGIN_MYSQL_ACCESS_DENIED: (p: Record<string, string | number>) =>
+      `Authentication failed (MySQL refused '${p.user}'@'${p.from}'). Either the password is wrong, or this account does not allow connections from ${p.from} (for example only 'root'@'localhost' exists, and a connection from a container comes from another address). Allow it with CREATE USER '${p.user}'@'%', or use an account that allows that address`,
+    LOGIN_MYSQL_HOST_NOT_ALLOWED: (p: Record<string, string | number>) =>
+      `MySQL does not allow connections from ${p.from} (no account allows that address). Create an account for 'user'@'%' or for '${p.from}'`,
+    LOGIN_MYSQL_HOST_BLOCKED: (p: Record<string, string | number>) =>
+      `MySQL has blocked ${p.from} after repeated connection errors. Run FLUSH HOSTS (or mysqladmin flush-hosts) on the server`,
+    LOGIN_PG_NO_HBA_ENTRY: (p: Record<string, string | number>) =>
+      `PostgreSQL's pg_hba.conf has no line letting ${p.from} in as user ${p.user}${p.database ? ` to database ${p.database}` : ''}. Add a host line to pg_hba.conf and reload the configuration (the official image allows every address by default)`,
+    LOGIN_PG_PASSWORD: (p: Record<string, string | number>) =>
+      `Authentication failed (PostgreSQL: the password of user ${p.user} is wrong, or that role does not exist). For a container, check the POSTGRES_USER / POSTGRES_PASSWORD it was first started with (changing them later has no effect)`,
+    LOGIN_REFUSED: (p: Record<string, string | number>) =>
+      `Nothing is listening on ${p.host}:${p.port}. Check that the database is running and that its port is published on the host${p.loopback ? '. If tsmyadmin runs in a container, localhost is that container itself (use host.docker.internal)' : ''}`,
+    LOGIN_UNREACHABLE: (p: Record<string, string | number>) =>
+      `${p.host}:${p.port} cannot be reached (timed out). Check the address, the port and any firewall`,
+    LOGIN_HOST_UNKNOWN: (p: Record<string, string | number>) =>
+      `The host name ${p.host} does not resolve. Check the spelling (a compose service name resolves only from containers on the same network)`,
     INVALID_ENCODING: (p: Record<string, string | number>) =>
       `The file holds bytes that are not valid UTF-8 (around line ${p.line ?? '?'}). Run mysqldump with --hex-blob and save text as UTF-8`,
     WRONG_DIALECT: (p: Record<string, string | number>) =>
@@ -2574,7 +2590,7 @@ export const en = {
       `The table ${p.table ?? ''} exists already (give a new table another name)`,
     CREATE_INVALID_NAME: (p: Record<string, string | number>) =>
       `The table ${p.name ?? ''} could not be created (the table name or a column name in the file may not be usable): ${p.message ?? ''}`,
-  } satisfies Record<ImportReason, (p: Record<string, string | number>) => string>,
+  } satisfies Record<ImportReason | LoginHintReason, (p: Record<string, string | number>) => string>,
   /** Prefixes: a server-side detail (DB message, validation issue) may follow after ": ", so no trailing period. */
   errors: {
     UNAUTHENTICATED: 'Your session has ended. Connect again',

@@ -1,4 +1,4 @@
-import type { ApiErrorCode, CountKind, ImportReason, ImportWarning } from '@tsmyadmin/shared'
+import type { ApiErrorCode, CountKind, ImportReason, ImportWarning, LoginHintReason } from '@tsmyadmin/shared'
 
 /**
  * All user-facing Japanese strings, and the shape every other locale must have (`Locale`). Components must
@@ -2505,6 +2505,22 @@ export const ja = {
   },
   /** Server-named reasons of a VALIDATION error, rendered with their parameters. */
   reasons: {
+    LOGIN_MYSQL_ACCESS_DENIED: (p: Record<string, string | number>) =>
+      `認証に失敗しました（MySQL: '${p.user}'@'${p.from}' を拒否）。パスワードが違うか、このアカウントが ${p.from} からの接続を許していません（'root'@'localhost' だけがあり、コンテナからの接続が別のアドレスになる場合など）。CREATE USER '${p.user}'@'%' で許すか、そのアドレスからの接続を許可したアカウントを使ってください`,
+    LOGIN_MYSQL_HOST_NOT_ALLOWED: (p: Record<string, string | number>) =>
+      `MySQL が ${p.from} からの接続を許していません（このアドレスを許すアカウントがありません）。'ユーザー'@'%' か '${p.from}' 用のアカウントを作ってください`,
+    LOGIN_MYSQL_HOST_BLOCKED: (p: Record<string, string | number>) =>
+      `MySQL が、接続エラーが続いた ${p.from} を締め出しています。サーバーで FLUSH HOSTS（または mysqladmin flush-hosts）を実行してください`,
+    LOGIN_PG_NO_HBA_ENTRY: (p: Record<string, string | number>) =>
+      `PostgreSQL の pg_hba.conf に、${p.from} からユーザー ${p.user}${p.database ? `・データベース ${p.database}` : ''} で入る行がありません。pg_hba.conf に host 行を足して設定を再読み込みしてください（公式イメージは既定ですべてのアドレスを許します）`,
+    LOGIN_PG_PASSWORD: (p: Record<string, string | number>) =>
+      `認証に失敗しました（PostgreSQL: ユーザー ${p.user} のパスワードが違うか、そのロールがありません）。コンテナなら、起動時の POSTGRES_USER / POSTGRES_PASSWORD を確かめてください（初回起動後に変えても反映されません）`,
+    LOGIN_REFUSED: (p: Record<string, string | number>) =>
+      `${p.host}:${p.port} で待ち受けているサーバーがありません。DB が起動しているか、ポートをホストに公開しているかを確かめてください${p.loopback ? '。tsmyadmin をコンテナで動かしているなら、localhost はそのコンテナ自身です（host.docker.internal を使ってください）' : ''}`,
+    LOGIN_UNREACHABLE: (p: Record<string, string | number>) =>
+      `${p.host}:${p.port} に届きません（時間切れ）。アドレスとポート、ファイアウォールを確かめてください`,
+    LOGIN_HOST_UNKNOWN: (p: Record<string, string | number>) =>
+      `ホスト名 ${p.host} を引けません。綴りを確かめてください（compose のサービス名は、同じネットワークのコンテナからしか引けません）`,
     INVALID_ENCODING: (p: Record<string, string | number>) =>
       `ファイルに UTF-8 として不正なバイトが含まれています（${p.line ?? '?'} 行目付近）。mysqldump は --hex-blob を付けて出力し、テキストは UTF-8 で保存してください`,
     WRONG_DIALECT: (p: Record<string, string | number>) =>
@@ -2546,7 +2562,7 @@ export const ja = {
       `テーブル ${p.table ?? ''} はすでにあります（新しく作る場合は別の名前にしてください）`,
     CREATE_INVALID_NAME: (p: Record<string, string | number>) =>
       `テーブル ${p.name ?? ''} を作れませんでした（テーブル名またはファイルのカラム名が使えない可能性があります）: ${p.message ?? ''}`,
-  } satisfies Record<ImportReason, (p: Record<string, string | number>) => string>,
+  } satisfies Record<ImportReason | LoginHintReason, (p: Record<string, string | number>) => string>,
   /** Prefixes: a server-side detail (DB message, validation issue) may follow after 「: 」, so no trailing 。. */
   errors: {
     UNAUTHENTICATED: '接続が切れています。もう一度接続してください',

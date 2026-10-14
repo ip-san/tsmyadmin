@@ -24,6 +24,54 @@ const sessionIdOf = (res: Response) => {
 const errorOf = async (res: Response) => (await res.json()) as { code: string; message: string; passkey?: unknown }
 
 describe('refusing a login: what is said and what is written', () => {
+  it('says why a login failed and how to fix it in development, and keeps the server address to itself in production', async () => {
+    const denied = () =>
+      fixtureAdapter({
+        failWith: new AdapterError(
+          'AUTH_FAILED',
+          "ER_ACCESS_DENIED_ERROR: Access denied for user 'root'@'172.18.0.1' (using password: YES)",
+          "Access denied for user 'root'@'172.18.0.1' (using password: YES)",
+          { nativeCode: 'ER_ACCESS_DENIED_ERROR' }
+        ),
+      })
+    const dev = harness(denied())
+    stores.push(dev.store)
+    const res = await dev.login()
+    expect(res.status).toBe(401)
+    expect(await res.json()).toEqual({
+      code: 'AUTH_FAILED',
+      message: 'Authentication failed',
+      reason: 'LOGIN_MYSQL_ACCESS_DENIED',
+      params: { user: 'root', from: '172.18.0.1' },
+    })
+    // Nothing listening: a connection failure says which address, in development only.
+    const down = harness(
+      fixtureAdapter({
+        failWith: new AdapterError('CONNECTION_FAILED', 'ECONNREFUSED: connect ECONNREFUSED', undefined, {
+          nativeCode: 'ECONNREFUSED',
+        }),
+      })
+    )
+    stores.push(down.store)
+    expect(await (await down.login()).json()).toMatchObject({
+      code: 'CONNECTION_FAILED',
+      reason: 'LOGIN_REFUSED',
+      params: { host: 'db', port: 3306, loopback: 0 },
+    })
+
+    const prod = harness(denied(), { isProd: true })
+    stores.push(prod.store)
+    const refused = await prod.app.request('https://admin.example.com/api/session', {
+      method: 'POST',
+      body: JSON.stringify(LOGIN),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(refused.status).toBe(401)
+    const body = await refused.text()
+    expect(JSON.parse(body)).toEqual({ code: 'AUTH_FAILED', message: 'Authentication failed' })
+    expect(body).not.toContain('172.18.0.1')
+  })
+
   const audit = { dialect: 'mysql', host: 'db', port: 3306, user: 'root' }
 
   it('names the host that is not allowed, in the answer and in the log, without the password', async () => {

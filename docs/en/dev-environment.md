@@ -1,4 +1,4 @@
-<!-- translated-from: docs/dev-environment.md sha256:e77471521b2560185e0c18200bc373822a98af1e7d93a6f65978db35c26c79d6 -->
+<!-- translated-from: docs/dev-environment.md sha256:4f5517cac151c946d5d698f987e5d545c701ba91b710746ecb84167165d42b82 -->
 
 # Development features: what was built, and what was set aside
 
@@ -18,6 +18,7 @@ phpMyAdmin is for MySQL / MariaDB only, and you name the server in `config.inc.p
 | **Snapshots** | Database → Snapshots | Saves the database as it is (structure, data, views, routines, triggers) so that after trying a migration or a seed you can put it back. A snapshot is the existing SQL export and a restore runs that SQL, the same on both dialects. Before a restore you review the SQL that drops the tables and views made since. PostgreSQL does it in one transaction. Held in memory (gone when it restarts, and 24 hours after being taken), per account |
 | **One-click login** | Login screen | With `TSMYADMIN_DOCKER_LOGIN=1` (off by default), reads a container's login from its environment (`MYSQL_ROOT_PASSWORD`, `POSTGRES_PASSWORD`, …) inside the API process only and signs in without a password. Never sent to the browser, logged or stored. Anyone who can reach the tool can then get in, so publish it on `127.0.0.1` only |
 | **Why a database is missing** | Login screen | Shows the database containers left off the list (stopped, port not published), why Docker cannot be read, and listed ports this process cannot reach, each with how to fix it |
+| **Why a login failed (development only)** | Login screen | Tells apart the account and source address MySQL refused, its host restriction, PostgreSQL's `pg_hba.conf`, a wrong password, a port nothing listens on, and a host that cannot be reached or does not resolve, and says how to fix each. Production stays generic so as not to give out the source address |
 
 ## Considered and set aside
 
@@ -30,11 +31,10 @@ phpMyAdmin is for MySQL / MariaDB only, and you name the server in `config.inc.p
 
 Ordered by how much they ease getting started and everyday troubleshooting.
 
-1. **Detailed login errors in development only**: in production the server's own wording is replaced by a generic error so as not to hand out the API's egress address. In development it could tell apart MySQL's host restriction (`root@'172.x'` is refused), PostgreSQL's `pg_hba.conf` and a wrong password, and say how to fix each.
-2. **Copy the connection info for the application**: for each discovered container, the address as seen from the host and as seen from another container (`host.docker.internal` or the compose service name), a `DATABASE_URL`, and `.env` lines.
-3. **Lock waits and too many connections**: show in one screen which query is making whom wait, and end the blocking one in a click (`performance_schema` on MySQL, `pg_locks` on PostgreSQL).
-4. **Wait for a container to start**: a container that starts later shows up without reopening the login screen, and one that is still starting is marked.
-5. **Snapshots and a schema diff**: show what changed across a migration as DDL.
+1. **Copy the connection info for the application**: for each discovered container, the address as seen from the host and as seen from another container (`host.docker.internal` or the compose service name), a `DATABASE_URL`, and `.env` lines.
+2. **Lock waits and too many connections**: show in one screen which query is making whom wait, and end the blocking one in a click (`performance_schema` on MySQL, `pg_locks` on PostgreSQL).
+3. **Wait for a container to start**: a container that starts later shows up without reopening the login screen, and one that is still starting is marked.
+4. **Snapshots and a schema diff**: show what changed across a migration as DDL.
 
 ## Known limits
 

@@ -19,6 +19,7 @@ import { isHostAllowed, normaliseHost, presetEntry } from '../lib/allowlist.ts'
 import type { DockerLogin } from '../lib/docker-discovery.ts'
 import { apiError, errorResponse } from '../lib/errors.ts'
 import type { Logger } from '../lib/logging.ts'
+import { loginHint } from '../lib/login-hints.ts'
 import type { RateLimiter } from '../lib/rate-limit.ts'
 import { safeJson } from '../lib/saved-items.ts'
 import { isStoreUnavailable } from '../lib/store-errors.ts'
@@ -46,6 +47,11 @@ import { type Session, sessionInfo } from '../session/store.ts'
 
 export interface SessionRouteDeps {
   allowedHosts: readonly string[]
+  /**
+   * Say why a login failed (development only): the server's wording names the address this process connects from,
+   * which production keeps to itself. See lib/login-hints.ts.
+   */
+  loginHints?: boolean
   /** Containers found running (development); allowed on exactly their published host:port, looked up only when the list above says no. */
   discovered?: () => Promise<readonly { host: string; port: number }[]>
   /**
@@ -185,12 +191,20 @@ export function sessionRoutes(cfg: SessionConfig, deps: SessionRouteDeps) {
             deps.logger.log('warn', 'login.failed', audit)
             // The server's own wording ("Access denied for user 'u'@'<api host address>'") would hand an
             // unauthenticated caller the API's egress address; the code says everything the user needs.
+            // A development deployment says what went wrong and how to fix it (the address is the developer's own).
+            const hint = deps.loginHints && err instanceof AdapterError ? loginHint(err, config) : null
             if (err instanceof AdapterError && err.code === 'AUTH_FAILED') {
-              return c.json(apiError('AUTH_FAILED', 'Authentication failed'), 401)
+              return c.json({ ...apiError('AUTH_FAILED', 'Authentication failed'), ...hint }, 401)
             }
             // MySQL host ACL errors ("Host '<api address>' is not allowed / blocked") name the API's own address.
             if (err instanceof AdapterError && HOST_ACL_CODES.has(err.nativeCode ?? '')) {
-              return c.json(apiError('CONNECTION_FAILED', 'The server refused connections from this host'), 502)
+              return c.json(
+                { ...apiError('CONNECTION_FAILED', 'The server refused connections from this host'), ...hint },
+                502
+              )
+            }
+            if (hint && err instanceof AdapterError && err.code === 'CONNECTION_FAILED') {
+              return c.json({ ...apiError('CONNECTION_FAILED', 'Cannot connect to the database server'), ...hint }, 502)
             }
             return errorResponse(c, err, deps.logger)
           }
