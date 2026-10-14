@@ -168,10 +168,15 @@ for (const t of TARGETS) {
         await login(waiter, t)
         const begin = t.dialect === 'mysql' ? 'START TRANSACTION' : 'BEGIN'
         const sleep = t.dialect === 'mysql' ? 'SELECT SLEEP(20)' : 'SELECT pg_sleep(20)'
-        const holding = run(holder, `${begin}; UPDATE ${table} SET v = 1 WHERE id = 1; ${sleep} /* e2e_lock_holder */`)
+        const holding = run(
+          holder,
+          `${begin}; UPDATE ${table} SET v = 1 WHERE id = 1; ${sleep} /* e2e_lock_holder */`
+        ).catch(() => undefined)
         await page.waitForTimeout(500)
         const timeout = t.dialect === 'mysql' ? 'SET SESSION innodb_lock_wait_timeout = 20' : "SET lock_timeout = '20s'"
-        const waiting = run(waiter, `${timeout}; UPDATE ${table} SET v = 2 WHERE id = 1 /* e2e_lock_waiter */`)
+        const waiting = run(waiter, `${timeout}; UPDATE ${table} SET v = 2 WHERE id = 1 /* e2e_lock_waiter */`).catch(
+          () => undefined
+        )
 
         await page.goto('/processes')
         await page.getByLabel('更新間隔').selectOption('2')
