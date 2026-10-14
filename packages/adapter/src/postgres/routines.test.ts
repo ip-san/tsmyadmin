@@ -1,13 +1,12 @@
 import type { RoutineKind } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
+import { rejectsWith } from '../test/ddl-helpers.ts'
 import { rows, scripted } from '../test/scripted-conn.ts'
 import { pgListDependencies, pgListRoutines, pgListTriggers, pgRoutineDefinition } from './routines.ts'
 
 /** What the PostgreSQL readers make of the rows the catalog returns (a scripted connection answers). */
 
 const ns = { database: 'db', schema: 'app' }
-const refuses = async (run: () => Promise<unknown>, code: string, message: RegExp) =>
-  await expect(run()).rejects.toMatchObject({ code, message: expect.stringMatching(message) })
 
 describe('pgListRoutines', () => {
   it('lists functions and procedures of a schema, a procedure with no return type', async () => {
@@ -96,19 +95,19 @@ describe('pgRoutineDefinition', () => {
       ['OK', null, ''],
     ])
     expect(await pgRoutineDefinition(conn, ns, 'f', 'function')).toBe('OK')
-    await refuses(
-      () => pgRoutineDefinition(script([]).conn, ns, 'gone', 'function'),
+    await rejectsWith(
+      pgRoutineDefinition(script([]).conn, ns, 'gone', 'function'),
       'NOT_FOUND',
       /Routine not found: gone/
     )
-    await refuses(
-      () => pgRoutineDefinition(script([[null, null, '']]).conn, ns, 'hidden', 'function'),
+    await rejectsWith(
+      pgRoutineDefinition(script([[null, null, '']]).conn, ns, 'hidden', 'function'),
       'NOT_FOUND',
       /Routine not found: hidden/
     )
     const other = scripted([])
-    await refuses(
-      () => pgRoutineDefinition(other.conn, ns, 'x', 'package' as RoutineKind),
+    await rejectsWith(
+      pgRoutineDefinition(other.conn, ns, 'x', 'package' as RoutineKind),
       'NOT_FOUND',
       /Routine not found: x/
     )
