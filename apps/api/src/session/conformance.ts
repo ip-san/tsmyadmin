@@ -330,6 +330,37 @@ export function describeSessionStoreConformance(
       }
     })
 
+    it('removes a row on a condition only while the row still meets it, even with an update at the same time', async () => {
+      const store = await create({ adapterFactory: tracked().adapterFactory, sweepIntervalMs: 0 })
+      try {
+        const saved = store.savedQueries
+        if (!saved) return
+        const [row] = await saved.save(CONFIG, 'prefs', 'group', 'old')
+        const id = row?.id ?? ''
+        // Refused: the row stays as it was.
+        const seen: string[] = []
+        const kept = await saved.remove(CONFIG, 'prefs', id, (current) => {
+          seen.push(current.body)
+          return false
+        })
+        expect(seen).toEqual(['old'])
+        expect(kept.map((q) => q.body)).toEqual(['old'])
+        // An update and a removal of the old body at once: whichever comes second sees the first's result. Removed
+        // first, the update writes the name anew; updated first, the removal finds the new body and keeps it. A
+        // removal that judged the old body and then deleted the new one would leave nothing.
+        await Promise.all([
+          saved.update(CONFIG, 'prefs', 'group', () => 'new'),
+          saved.remove(CONFIG, 'prefs', id, (current) => current.body === 'old'),
+        ])
+        expect((await saved.list(CONFIG, 'prefs')).map((q) => q.body)).toEqual(['new'])
+        // Accepted (or no condition at all): it goes.
+        const [again] = await saved.save(CONFIG, 'prefs', 'group', 'x')
+        expect(await saved.remove(CONFIG, 'prefs', again?.id ?? '', (current) => current.body === 'x')).toEqual([])
+      } finally {
+        await store.closeAll()
+      }
+    })
+
     it('shares server-wide items between the accounts of one server, and only that server', async () => {
       const store = await create({ adapterFactory: tracked().adapterFactory, sweepIntervalMs: 0 })
       try {

@@ -103,7 +103,16 @@ export function userGroupRoutes(cfg: SessionConfig, logger: Logger) {
       if (!(await managesAll(session, target.members))) {
         return c.json(apiError('FORBIDDEN', 'This account cannot manage every member of that group'), 403)
       }
-      const left = groups(await store.remove(session.config, 'usergroup', target.id))
+      // Deleted only while it still has the members that right was checked against, as a replacement is written.
+      let replaced = false
+      const items = await store.remove(session.config, 'usergroup', target.id, (current) => {
+        replaced = !sameMembers(groups([current])[0]?.members, target.members)
+        return !replaced
+      })
+      if (replaced) {
+        return c.json(apiError('CONFLICT', 'Another account changed that group at the same time; try again'), 409)
+      }
+      const left = groups(items)
       logger.log('info', 'user_group.delete', {
         requestId: c.get('requestId'),
         ...sessionInfo(session),
