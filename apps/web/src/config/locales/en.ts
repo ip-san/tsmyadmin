@@ -94,6 +94,29 @@ export const en = {
       unreachable: (host: string, port: number) =>
         `${host}:${port} cannot be reached. With Docker Engine on Linux, a port published on the host's 127.0.0.1 only may not be reachable from a container. Publish it on 0.0.0.0, or set TSMYADMIN_DOCKER_CONNECT_HOST to a name that reaches it.`,
     },
+    connectionInfo: {
+      title: 'Connection details for your application',
+      intro:
+        'Values to paste into the configuration of the application you are developing. No password is shown here: replace <password> with the one the container was given.',
+      viewpoint: 'Where the application runs',
+      host: 'On the host (outside Docker)',
+      sameNetwork: (project: string) => `In a container of the same compose project (${project})`,
+      sameNetworkNoProject: 'In a container on the same network',
+      otherNetwork: 'In a container on another network',
+      hostHint: 'Connects to the port published on the host.',
+      sameNetworkHint:
+        "Connects by the compose service name and the container's internal port (the host's port is not involved).",
+      otherNetworkHint:
+        'Goes through the port published on the host. With Docker Engine on Linux, the application container needs extra_hosts: ["host.docker.internal:host-gateway"].',
+      address: 'Address',
+      databaseUrl: 'DATABASE_URL',
+      env: '.env (DATABASE_URL)',
+      laravelEnv: '.env (Laravel)',
+      copy: (what: string) => `Copy ${what}`,
+      copyLabel: 'Copy',
+      copied: 'Copied',
+      copyFailed: 'Could not copy. Select the value shown and copy it',
+    },
     dockerLogin:
       "Connects with the login in this container's environment (the user and password it was started with). Nothing to type.",
     advanced: 'Advanced',

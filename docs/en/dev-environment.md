@@ -1,4 +1,4 @@
-<!-- translated-from: docs/dev-environment.md sha256:e77471521b2560185e0c18200bc373822a98af1e7d93a6f65978db35c26c79d6 -->
+<!-- translated-from: docs/dev-environment.md sha256:c45238fb0dac2b17a14a91b88da858f3a8c5f985105a5707aa7e1e43a8126967 -->
 
 # Development features: what was built, and what was set aside
 
@@ -17,6 +17,7 @@ phpMyAdmin is for MySQL / MariaDB only, and you name the server in `config.inc.p
 | **Statements as they run** | Server → Monitor | Streams the SQL the application under development is running now. MySQL / MariaDB: the general log (a table), newest first. PostgreSQL: the statements whose call count grew in `pg_stat_statements`, per read. This tool's own statements are left out. The MySQL general log can be turned on after you review the SQL |
 | **Snapshots** | Database → Snapshots | Saves the database as it is (structure, data, views, routines, triggers) so that after trying a migration or a seed you can put it back. A snapshot is the existing SQL export and a restore runs that SQL, the same on both dialects. Before a restore you review the SQL that drops the tables and views made since. PostgreSQL does it in one transaction. Held in memory (gone when it restarts, and 24 hours after being taken), per account |
 | **One-click login** | Login screen | With `TSMYADMIN_DOCKER_LOGIN=1` (off by default), reads a container's login from its environment (`MYSQL_ROOT_PASSWORD`, `POSTGRES_PASSWORD`, …) inside the API process only and signs in without a password. Never sent to the browser, logged or stored. Anyone who can reach the tool can then get in, so publish it on `127.0.0.1` only |
+| **Connection details for your application** | Login screen | When a discovered container is chosen, shows for each place the application may run (on the host, in a container of the same compose project, in a container on another network) the address (`127.0.0.1:13306`, `mysql:3306`, `host.docker.internal:13306`), a `DATABASE_URL` and `.env` lines (generic and Laravel), each with a copy button. The user name is `MYSQL_USER` / `POSTGRES_USER` (else `root` / `postgres`), the database the one discovery read. No password is read for it (and with `TSMYADMIN_DOCKER_LOGIN` none is returned); it is written as `<password>` |
 | **Why a database is missing** | Login screen | Shows the database containers left off the list (stopped, port not published), why Docker cannot be read, and listed ports this process cannot reach, each with how to fix it |
 
 ## Considered and set aside
