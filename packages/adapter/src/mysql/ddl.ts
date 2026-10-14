@@ -471,6 +471,9 @@ export const mysqlDdl: DdlBuilder = {
         return [`ALTER TABLE ${t} ORDER BY ${id(op.column)}${op.desc ? ' DESC' : ''}`]
       case 'copyTable': {
         const into = { database: op.toDatabase ?? ns.database }
+        // Without another database or another name there is nothing to copy into: the server would refuse it later.
+        if (op.newName === op.table && into.database === ns.database)
+          throw new AdapterError('VALIDATION', 'A table cannot be copied onto itself')
         const target = quoteTable('mysql', into, op.newName)
         // Rows only go into a table that is there: dropping it first would leave nothing to insert into.
         if (op.dropExisting && op.structure === false)

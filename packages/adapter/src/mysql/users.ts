@@ -110,10 +110,12 @@ const ACCOUNT_IN_GRANT = /(`(?:[^`]|``)*`|'(?:[^'\\]|\\.|'')*')@(`(?:[^`]|``)*`|
 
 /**
  * A GRANT of the source account, pointed at another account: what follows the last ` TO ` (or, for a REVOKE-free
- * SHOW GRANTS, the only account named there) is replaced. Statements that name no account are left alone.
+ * SHOW GRANTS, the only account named there) is replaced. MariaDB's SHOW GRANTS also prints the default role as
+ * `SET DEFAULT ROLE r FOR account`, where the account follows ` FOR `. Statements that name no account are left alone.
  */
 function retargetGrant(statement: string, account: string): string {
-  const at = statement.lastIndexOf(' TO ')
+  const keyword = /^SET\s+DEFAULT\s+ROLE\b/i.test(statement) ? ' FOR ' : ' TO '
+  const at = statement.lastIndexOf(keyword)
   if (at === -1) return statement
   const tail = statement.slice(at + 4).replace(ACCOUNT_IN_GRANT, () => account)
   return statement.slice(0, at + 4) + tail

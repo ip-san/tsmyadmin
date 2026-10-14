@@ -212,12 +212,12 @@ export const pgUsers: UserSqlBuilder = {
       case 'copyUser': {
         if (!op.grants) throw new AdapterError('VALIDATION', 'copyUser needs the grants of the role to copy')
         const target = id(op.newUser.name)
+        // What pgShowGrants prints for the source: `… TO "r"`, with or without ` WITH GRANT OPTION` after the name.
+        const toRole = new RegExp(` TO ${role.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}( WITH GRANT OPTION)?$`)
         const retarget = (g: string) =>
           g.startsWith(`ALTER ROLE ${role} `)
             ? `ALTER ROLE ${target} ${g.slice(`ALTER ROLE ${role} `.length)}`
-            : g.endsWith(` TO ${role}`)
-              ? `${g.slice(0, g.length - role.length)}${target}`
-              : g
+            : g.replace(toRole, (_m, option: string | undefined) => ` TO ${target}${option ?? ''}`)
         return [
           secret((pw) => `CREATE ROLE ${target} LOGIN PASSWORD ${pw}`, op.password),
           ...op.grants.map((g) => plain(retarget(g))),
