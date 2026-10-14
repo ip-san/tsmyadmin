@@ -94,7 +94,7 @@ classDiagram
     +iterateRows(ns, table) AsyncIterable~RowBatch~
     +showCreateTable() / listRoutines() / listTriggers()
     +listUsers() / showGrants() / canManageAccount()
-    +serverInfo() / listProcesses() / killProcess() / serverCatalog() / replicationInfo()
+    +serverInfo() / listProcesses() / killProcess() / lockWaits() / serverCatalog() / replicationInfo()
     +ddl : DdlBuilder
     +exporter : SqlExporter
     +users : UserSqlBuilder

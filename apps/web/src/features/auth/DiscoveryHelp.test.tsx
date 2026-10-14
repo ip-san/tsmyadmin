@@ -45,6 +45,19 @@ describe('DiscoveryHelp', () => {
     expect(container.querySelector('details')).toHaveAttribute('open')
   })
 
+  it('says a container is starting, open: likely the one just started, and it joins the list when ready', () => {
+    const { container } = render(
+      <DiscoveryHelp
+        diagnosis={{
+          ...base,
+          issues: [{ name: 'docker: shop/db', dialect: 'mysql', reason: 'starting', port: 13306 }],
+        }}
+      />
+    )
+    expect(container.querySelector('details')).toHaveAttribute('open')
+    expect(screen.getByText(/起動中（まだ準備ができていません）/)).toBeInTheDocument()
+  })
+
   it('gives the line to fix for each container it left out or cannot reach', () => {
     render(
       <DiscoveryHelp

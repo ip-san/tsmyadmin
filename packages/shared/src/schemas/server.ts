@@ -29,6 +29,56 @@ export const ProcessInfoSchema = z.object({
 })
 export type ProcessInfo = z.infer<typeof ProcessInfoSchema>
 
+/** A session that waits for a lock another session holds. */
+export const BlockedSessionSchema = z.object({
+  id: z.string(),
+  user: z.string().nullable(),
+  database: z.string().nullable(),
+  /** Seconds it has been waiting (PostgreSQL: since its statement started). */
+  waitSec: z.number().nullable(),
+  query: z.string().nullable(),
+})
+/** The session holding the lock: usually a transaction left open, often idle between statements. */
+export const BlockingSessionSchema = z.object({
+  id: z.string(),
+  user: z.string().nullable(),
+  database: z.string().nullable(),
+  /** MySQL COMMAND/STATE, PostgreSQL state (`idle in transaction` …). */
+  state: z.string().nullable(),
+  /** Doing nothing while its transaction stays open: the usual reason an application seems to hang. */
+  idleInTransaction: z.boolean(),
+  /** Seconds since its transaction began. */
+  transactionSec: z.number().nullable(),
+  /** The statement it runs now, or (where the server keeps it) the last one it ran. */
+  query: z.string().nullable(),
+})
+export const LockWaitSchema = z.object({
+  blocked: BlockedSessionSchema,
+  blocking: BlockingSessionSchema,
+  /** The table the waited-for lock is on, and the lock's mode, where the server says. */
+  table: z.string().nullable(),
+  mode: z.string().nullable(),
+})
+export type LockWait = z.infer<typeof LockWaitSchema>
+export const ConnectionUsageSchema = z.object({
+  /** Client connections now. */
+  current: z.number(),
+  max: z.number().nullable(),
+  /** Connections with a transaction open and no statement running; null where it cannot be read. */
+  idleInTransaction: z.number().nullable(),
+})
+export type ConnectionUsage = z.infer<typeof ConnectionUsageSchema>
+/**
+ * Who waits for whom (GET /server/lock-waits). `status` is about `waits`: the account may not read the lock tables
+ * (`denied`) or the server has none to read (`unsupported`); the connection counts are there either way.
+ */
+export const LockWaitReportSchema = z.object({
+  status: z.enum(['ok', 'denied', 'unsupported']),
+  waits: z.array(LockWaitSchema),
+  connections: ConnectionUsageSchema,
+})
+export type LockWaitReport = z.infer<typeof LockWaitReportSchema>
+
 export const ProcessIdSchema = z.object({ id: z.string().regex(/^\d+$/, 'process id must be numeric') })
 
 /**

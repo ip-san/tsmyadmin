@@ -5,6 +5,7 @@ import type {
   DiagnosticReport,
   KeyValue,
   KillMode,
+  LockWaitReport,
   ProcessInfo,
   ReplicationInfo,
   ServerCatalog,
@@ -93,6 +94,13 @@ export const statusQuery = queryOptions({
 export const processesQuery = queryOptions({
   queryKey: ['server', 'processes'],
   queryFn: () => unwrap<ProcessInfo[]>(api.server.processes.$get()),
+  staleTime: 0,
+})
+
+/** Who waits for whom, and the connection count against max_connections (shown above the process list). */
+export const lockWaitsQuery = queryOptions({
+  queryKey: ['server', 'lock-waits'],
+  queryFn: () => unwrap<LockWaitReport>(api.server['lock-waits'].$get()),
   staleTime: 0,
 })
 

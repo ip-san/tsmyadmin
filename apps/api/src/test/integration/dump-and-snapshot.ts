@@ -1,5 +1,6 @@
 import {
   BrowseResultSchema,
+  SnapshotDiffSchema,
   SnapshotListSchema,
   SnapshotRestorePreviewSchema,
   SnapshotRestoreResultSchema,
@@ -152,6 +153,76 @@ export function describeDumpAndSnapshot(c: IntegrationContext): void {
       expect(await rows('b')).toEqual([[1, 1]])
       // What was made since is gone.
       expect((await req(`/api/databases/${db}/tables/c/rows${schema}`)).status).toBe(404)
+    } finally {
+      await req('/api/databases/tsmyadmin_test/sql', {
+        method: 'POST',
+        body: JSON.stringify({
+          sql: mysql ? `DROP DATABASE IF EXISTS ${scratch}` : `DROP SCHEMA IF EXISTS ${scratch} CASCADE`,
+        }),
+      })
+    }
+  })
+
+  it('compares the schema with a snapshot: a real ALTER, CREATE and DROP, and not the counters rows move', async () => {
+    const scratch = `it_snapdiff_${dialect}_${Date.now().toString(36)}`
+    const mysql = dialect === 'mysql'
+    const db = mysql ? scratch : 'tsmyadmin_test'
+    const schema = mysql ? '' : `?schema=${scratch}`
+    const run = async (text: string) => {
+      const res = await req(`/api/databases/${db}/sql`, {
+        method: 'POST',
+        body: JSON.stringify({ sql: text, stopOnError: true, ...(mysql ? {} : { schema: scratch }) }),
+      })
+      const errors = z
+        .array(StatementResultSchema)
+        .parse(await res.json())
+        .filter((r) => r.kind === 'error')
+      expect(errors).toEqual([])
+    }
+    await req('/api/databases/tsmyadmin_test/sql', {
+      method: 'POST',
+      body: JSON.stringify({ sql: mysql ? `CREATE DATABASE ${scratch}` : `CREATE SCHEMA ${scratch}` }),
+    })
+    try {
+      const counter = mysql ? 'id INT AUTO_INCREMENT PRIMARY KEY' : 'id SERIAL PRIMARY KEY'
+      await run(
+        `CREATE TABLE a (id INT PRIMARY KEY, v VARCHAR(20));
+         CREATE TABLE b (id INT PRIMARY KEY, a_id INT, CONSTRAINT b_fk FOREIGN KEY (a_id) REFERENCES a (id));
+         CREATE TABLE d (${counter}, n INT);
+         INSERT INTO d (n) VALUES (1);
+         CREATE VIEW va AS SELECT id, v FROM a`
+      )
+      const taken = SnapshotListSchema.parse(
+        await (
+          await req(`/api/databases/${db}/snapshots${schema}`, {
+            method: 'POST',
+            body: JSON.stringify({ name: 'before migration' }),
+          })
+        ).json()
+      )
+      const id = taken.snapshots[0]?.id ?? ''
+      const diffOf = async () =>
+        SnapshotDiffSchema.parse(await (await req(`/api/databases/${db}/snapshots/${id}/diff${schema}`)).json())
+      const same = await diffOf()
+      expect(same).toMatchObject({ added: [], removed: [], changed: [], unreadable: [] })
+      // The "migration": a column added, a table dropped, one made; rows inserted move the counters only.
+      await run(
+        `ALTER TABLE a ADD COLUMN w_added INT;
+         DROP TABLE b;
+         CREATE TABLE c (id INT);
+         INSERT INTO d (n) VALUES (2), (3), (4)`
+      )
+      const diff = await diffOf()
+      expect(diff.added.map((e) => e.name)).toEqual(['c'])
+      expect(diff.added[0]?.after).toMatch(/CREATE TABLE/i)
+      expect(diff.removed.map((e) => e.name)).toEqual(['b'])
+      expect(diff.removed[0]?.before).toContain('b_fk')
+      expect(diff.changed.map((e) => e.name)).toEqual(['a'])
+      expect(diff.changed[0]?.before).not.toContain('w_added')
+      expect(diff.changed[0]?.after).toContain('w_added')
+      expect(diff.unreadable).toEqual([])
+      // d (and PostgreSQL's d_id_seq) and the view are as they were.
+      expect(diff.unchanged).toBe(same.unchanged - 2)
     } finally {
       await req('/api/databases/tsmyadmin_test/sql', {
         method: 'POST',

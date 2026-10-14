@@ -10,6 +10,7 @@ import type {
   EventInfo,
   KeyValue,
   KillMode,
+  LockWaitReport,
   Namespace,
   ObjectDependency,
   Partitioning,
@@ -59,6 +60,7 @@ import {
   pgListProcesses,
   pgListStatus,
   pgListVariables,
+  pgLockWaits,
   pgReplicationInfo,
   pgServerCatalog,
   pgServerInfo,
@@ -514,6 +516,10 @@ export class PostgresAdapter extends BaseAdapter {
 
   killProcess(id: string, mode: KillMode = 'connection'): Promise<void> {
     return this.withConn(this.serverNs(), (conn) => pgKillProcess(conn, id, mode))
+  }
+
+  lockWaits(): Promise<LockWaitReport> {
+    return this.withConn(this.serverNs(), (conn) => pgLockWaits(conn))
   }
 
   listUsers(): Promise<UserInfo[]> {

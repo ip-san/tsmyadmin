@@ -1,4 +1,4 @@
-import type { CountKind, ImportReason, ImportWarning } from '@tsmyadmin/shared'
+import type { CountKind, ImportReason, ImportWarning, LoginHintReason } from '@tsmyadmin/shared'
 import type { Locale } from './ja.ts'
 
 /** `1 row` / `2 rows` — English needs the singular that Japanese does not have. */
@@ -91,9 +91,38 @@ export const en = {
       stopped: 'It is stopped. Start it and it shows up here.',
       notPublished:
         'It does not publish a port on the host, so it cannot be reached from here. Add this to your compose file.',
+      starting: 'It is starting (not ready yet). It shows up on the list once it is ready.',
       unreachable: (host: string, port: number) =>
         `${host}:${port} cannot be reached. With Docker Engine on Linux, a port published on the host's 127.0.0.1 only may not be reachable from a container. Publish it on 0.0.0.0, or set TSMYADMIN_DOCKER_CONNECT_HOST to a name that reaches it.`,
     },
+    connectionInfo: {
+      title: 'Connection details for your application',
+      intro:
+        'Values to paste into the configuration of the application you are developing. No password is shown here: replace <password> with the one the container was given.',
+      viewpoint: 'Where the application runs',
+      host: 'On the host (outside Docker)',
+      sameNetwork: (project: string) => `In a container of the same compose project (${project})`,
+      sameNetworkNoProject: 'In a container on the same network',
+      otherNetwork: 'In a container on another network',
+      hostHint: 'Connects to the port published on the host.',
+      sameNetworkHint:
+        "Connects by the compose service name and the container's internal port (the host's port is not involved).",
+      otherNetworkHint:
+        'Goes through the port published on the host. With Docker Engine on Linux, the application container needs extra_hosts: ["host.docker.internal:host-gateway"].',
+      address: 'Address',
+      databaseUrl: 'DATABASE_URL',
+      env: '.env (DATABASE_URL)',
+      laravelEnv: '.env (Laravel)',
+      copy: (what: string) => `Copy ${what}`,
+      copyLabel: 'Copy',
+      copied: 'Copied',
+      copyFailed: 'Could not copy. Select the value shown and copy it',
+    },
+    presetGone: (name: string) => `${name} (no longer listed)`,
+    presetGoneNotice: (name: string) =>
+      `${name} has left the list (stopped, or restarting). When it is back you can connect as you are; you may also choose another server.`,
+    presetsAdded: (names: string) => `Added to the servers: ${names}`,
+    presetsRemoved: (names: string) => `Removed from the servers: ${names}`,
     dockerLogin:
       "Connects with the login in this container's environment (the user and password it was started with). Nothing to type.",
     advanced: 'Advanced',
@@ -2045,6 +2074,30 @@ export const en = {
     activeOnly: 'Only connections doing something',
     fullQuery: 'Show the whole statement (100 characters by default)',
     refresh: 'Refresh',
+    lockWaitsTitle: 'Lock waits',
+    lockWaitsHint:
+      'Connections waiting for a lock that another connection’s transaction holds. Killing the blocking connection rolls its transaction back.',
+    lockWaitsNone: 'No connection is waiting for a lock',
+    lockWaitsDenied:
+      'This account may not read lock information (MySQL / MariaDB need the PROCESS privilege and read access to performance_schema).',
+    lockWaitsUnsupported: 'This server does not expose its lock waits (performance_schema is off, for example).',
+    blockedSession: 'Waiting connection',
+    blockingSession: 'Blocking connection',
+    waited: 'Waiting (s)',
+    transactionOpen: 'Transaction open (s)',
+    lockTarget: 'Locked object',
+    blockedQuery: 'Waiting statement',
+    blockingQuery: 'Blocker’s statement (running, or the last one)',
+    idleInTransaction: 'Idle in transaction',
+    idleInTransactionHint:
+      'Its transaction is open but it is running nothing. The application may have forgotten to commit or roll back',
+    killBlocker: 'Kill the blocker',
+    connections: 'Connections',
+    connectionsUsage: (current: number, max: number | null, percent: number | null) =>
+      max === null ? `${current}` : percent === null ? `${current} / ${max}` : `${current} / ${max} (${percent}%)`,
+    connectionsIdle: (n: number) => `Idle in transaction: ${n}`,
+    connectionsNearLimit:
+      'The connection count is close to max_connections. At the limit, new connections are refused. Look for unused connections and at the size of the application’s pool.',
     uptimeFormat: (sec: number) => {
       const d = Math.floor(sec / 86400)
       const h = Math.floor((sec % 86400) / 3600)
@@ -2269,6 +2322,21 @@ export const en = {
     replayNote: (n: number) => `Then runs the ${n.toLocaleString('en-US')} saved statements`,
     restored: (name: string) => `Went back to "${name}".`,
     failed: 'The restore failed.',
+    compare: 'Compare with now',
+    diffTitle: (name: string) => `"${name}" compared with the schema now`,
+    diffSummary: (added: number, removed: number, changed: number, unchanged: number) =>
+      `${added} added, ${removed} removed, ${changed} changed, ${unchanged} unchanged (tables and views)`,
+    diffNone: 'No table or view definition has changed since the snapshot.',
+    diffChanged: 'Changed definitions',
+    diffAdded: 'Created since the snapshot',
+    diffRemoved: 'Removed since the snapshot',
+    diffLabel: (name: string) => `Differences in ${name} (- snapshot, + now)`,
+    diffSame: 'No differences.',
+    diffNoDefinition: 'The definition could not be read.',
+    diffUnreadable: (names: string) => `Not compared (definition not readable): ${names}`,
+    diffHint:
+      "Compares the CREATE statements. Row data, and values that move with the rows (MySQL's AUTO_INCREMENT=, a sequence's position), are not compared. Functions, triggers and events are not included.",
+    diffAgain: 'Compare again',
   },
   tracking: {
     download: 'Download SQL',
@@ -2533,6 +2601,22 @@ export const en = {
   },
   /** Server-named reasons of a VALIDATION error, rendered with their parameters. */
   reasons: {
+    LOGIN_MYSQL_ACCESS_DENIED: (p: Record<string, string | number>) =>
+      `Authentication failed (MySQL refused '${p.user}'@'${p.from}'). Either the password is wrong, or this account does not allow connections from ${p.from} (for example only 'root'@'localhost' exists, and a connection from a container comes from another address). Allow it with CREATE USER '${p.user}'@'%', or use an account that allows that address`,
+    LOGIN_MYSQL_HOST_NOT_ALLOWED: (p: Record<string, string | number>) =>
+      `MySQL does not allow connections from ${p.from} (no account allows that address). Create an account for 'user'@'%' or for '${p.from}'`,
+    LOGIN_MYSQL_HOST_BLOCKED: (p: Record<string, string | number>) =>
+      `MySQL has blocked ${p.from} after repeated connection errors. Run FLUSH HOSTS (or mysqladmin flush-hosts) on the server`,
+    LOGIN_PG_NO_HBA_ENTRY: (p: Record<string, string | number>) =>
+      `PostgreSQL's pg_hba.conf has no line letting ${p.from} in as user ${p.user}${p.database ? ` to database ${p.database}` : ''}. Add a host line to pg_hba.conf and reload the configuration (the official image allows every address by default)`,
+    LOGIN_PG_PASSWORD: (p: Record<string, string | number>) =>
+      `Authentication failed (PostgreSQL: the password of user ${p.user} is wrong, or that role does not exist). For a container, check the POSTGRES_USER / POSTGRES_PASSWORD it was first started with (changing them later has no effect)`,
+    LOGIN_REFUSED: (p: Record<string, string | number>) =>
+      `Nothing is listening on ${p.host}:${p.port}. Check that the database is running and that its port is published on the host${p.loopback ? '. If tsmyadmin runs in a container, localhost is that container itself (use host.docker.internal)' : ''}`,
+    LOGIN_UNREACHABLE: (p: Record<string, string | number>) =>
+      `${p.host}:${p.port} cannot be reached (timed out). Check the address, the port and any firewall`,
+    LOGIN_HOST_UNKNOWN: (p: Record<string, string | number>) =>
+      `The host name ${p.host} does not resolve. Check the spelling (a compose service name resolves only from containers on the same network)`,
     INVALID_ENCODING: (p: Record<string, string | number>) =>
       `The file holds bytes that are not valid UTF-8 (around line ${p.line ?? '?'}). Run mysqldump with --hex-blob and save text as UTF-8`,
     WRONG_DIALECT: (p: Record<string, string | number>) =>
@@ -2574,7 +2658,7 @@ export const en = {
       `The table ${p.table ?? ''} exists already (give a new table another name)`,
     CREATE_INVALID_NAME: (p: Record<string, string | number>) =>
       `The table ${p.name ?? ''} could not be created (the table name or a column name in the file may not be usable): ${p.message ?? ''}`,
-  } satisfies Record<ImportReason, (p: Record<string, string | number>) => string>,
+  } satisfies Record<ImportReason | LoginHintReason, (p: Record<string, string | number>) => string>,
   /** Prefixes: a server-side detail (DB message, validation issue) may follow after ": ", so no trailing period. */
   errors: {
     UNAUTHENTICATED: 'Your session has ended. Connect again',

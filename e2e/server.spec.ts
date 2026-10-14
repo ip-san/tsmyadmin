@@ -1,4 +1,4 @@
-import { expect } from '@playwright/test'
+import { expect, type Page } from '@playwright/test'
 import { confirmPreview, login, slowSql, TARGETS, test } from './helpers.ts'
 
 for (const t of TARGETS) {
@@ -146,6 +146,57 @@ for (const t of TARGETS) {
         await expect(procs.getByRole('row').filter({ hasText: 'tsmyadmin' }).first()).toBeVisible()
       } finally {
         await other.close()
+      }
+    })
+
+    test('shows who holds the lock another session waits for, and ends the holder', async ({ page, browser }) => {
+      test.setTimeout(60_000)
+      const table = `e2e_lock_${Date.now().toString(36)}`
+      const run = (p: Page, statement: string) =>
+        p.request.post(`/api/databases/${t.database}/sql`, {
+          data: { sql: statement, ...(t.schema ? { schema: t.schema } : {}) },
+        })
+      await run(page, `CREATE TABLE ${table} (id INT PRIMARY KEY, v INT)`)
+      await run(page, `INSERT INTO ${table} VALUES (1, 0)`)
+      // Two more sessions: one keeps a row locked inside its transaction, the other waits for that row.
+      const holderContext = await browser.newContext()
+      const waiterContext = await browser.newContext()
+      try {
+        const holder = await holderContext.newPage()
+        const waiter = await waiterContext.newPage()
+        await login(holder, t)
+        await login(waiter, t)
+        const begin = t.dialect === 'mysql' ? 'START TRANSACTION' : 'BEGIN'
+        const sleep = t.dialect === 'mysql' ? 'SELECT SLEEP(20)' : 'SELECT pg_sleep(20)'
+        const holding = run(
+          holder,
+          `${begin}; UPDATE ${table} SET v = 1 WHERE id = 1; ${sleep} /* e2e_lock_holder */`
+        ).catch(() => undefined)
+        await page.waitForTimeout(500)
+        const timeout = t.dialect === 'mysql' ? 'SET SESSION innodb_lock_wait_timeout = 20' : "SET lock_timeout = '20s'"
+        const waiting = run(waiter, `${timeout}; UPDATE ${table} SET v = 2 WHERE id = 1 /* e2e_lock_waiter */`).catch(
+          () => undefined
+        )
+
+        await page.goto('/processes')
+        await page.getByLabel('更新間隔').selectOption('2')
+        const waits = page.getByRole('table', { name: 'ロック待ち' })
+        const row = waits.getByRole('row').filter({ hasText: 'e2e_lock_waiter' })
+        await expect(row).toBeVisible({ timeout: 15_000 })
+        await expect(row).toContainText('e2e_lock_holder')
+        await expect(row).toContainText(table)
+        await expect(page.getByText(/^接続数:/)).toBeVisible()
+
+        // The holder is ended through the same confirmation as the process list's kill.
+        await row.getByRole('button', { name: /: ブロック元を強制終了$/ }).click()
+        await page.getByRole('dialog').getByRole('button', { name: '強制終了する' }).click()
+        await expect(page.getByText(/を強制終了しました/)).toBeVisible()
+        await expect(page.getByText('ロック待ちはありません')).toBeVisible({ timeout: 10_000 })
+        await Promise.all([holding, waiting])
+      } finally {
+        await holderContext.close()
+        await waiterContext.close()
+        await run(page, `DROP TABLE IF EXISTS ${table}`)
       }
     })
   })

@@ -28,8 +28,10 @@ function LoginPage() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const search = Route.useSearch()
-  const servers = useQuery(serversQuery)
   const diagnosis = useQuery(discoveryDiagnosisQuery)
+  // With Docker discovery on, containers started or stopped while this screen is open join or leave the list
+  // (the API caches the lookup for 5 s, so this reads Docker at most that often). The form keeps what is typed.
+  const servers = useQuery({ ...serversQuery, refetchInterval: diagnosis.data?.enabled ? 5000 : false })
   useDocumentTitle(locale.login.title)
   return (
     <main className="flex min-h-dvh items-center justify-center bg-canvas p-4">

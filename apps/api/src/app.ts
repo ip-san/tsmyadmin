@@ -152,6 +152,7 @@ export function createApp(config: AppConfig, services: AppServices) {
   }
   const sessionDeps = {
     allowedHosts,
+    loginHints: !config.isProd,
     ...(services.discover ? { discovered: services.discover } : {}),
     ...(services.dockerLogin ? { dockerLogin: services.dockerLogin } : {}),
     loginLimiter,

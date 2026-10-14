@@ -1,5 +1,6 @@
 import { expect } from '@playwright/test'
 import { login, TARGETS, tableUrl, test } from './helpers.ts'
+import { pageProblems } from './scan.ts'
 
 test.describe('login', () => {
   test('logs in through an operator-defined preset with only user and password', async ({ page }) => {
@@ -63,6 +64,13 @@ test.describe('login', () => {
     await page.getByLabel('パスワード').fill('definitely-wrong')
     await page.getByRole('button', { name: '接続' }).click()
     await expect(page.getByRole('alert')).toContainText('認証に失敗しました')
+    // A development server also says what to look at: the address it was refused from, or the image's login.
+    await expect(page.getByRole('alert')).toContainText(
+      t.dialect === 'mysql' ? 'からの接続を許していません' : 'POSTGRES_PASSWORD'
+    )
+    const problems = await pageProblems(page)
+    expect(problems.axe, JSON.stringify(problems.axe, null, 2)).toEqual([])
+    expect(problems.layout, 'layout').toEqual([])
     await expect(page).toHaveURL(/\/login$/)
   })
 

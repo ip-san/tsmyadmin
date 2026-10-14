@@ -448,6 +448,17 @@ describe('server presets', () => {
     expect((await h.login({ ...LOGIN, host: 'elsewhere', port: 13306 })).status).toBe(403)
   })
 
+  it('hands the login screen where an application reaches a container from, and nothing secret', async () => {
+    const docker = { service: 'mysql', project: 'shop', privatePort: 3306, user: 'app' }
+    const found = [{ name: 'docker: shop/mysql', dialect: 'mysql' as const, host: '127.0.0.1', port: 13306, docker }]
+    const h = harness(fixtureAdapter(), { discover: async () => found })
+    stores.push(h.store)
+    const res = await h.app.request('/api/servers')
+    const body = await res.text()
+    expect(JSON.parse(body)).toEqual([{ ...found[0], docker }])
+    expect(body).not.toMatch(/password/i)
+  })
+
   it('ignores a discovered container named like a configured preset, and asks Docker only when the list says no', async () => {
     let asked = 0
     const h = harness(fixtureAdapter(), {
