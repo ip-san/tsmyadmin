@@ -145,7 +145,9 @@ function send(): Promise<unknown> {
         if (sentFor !== generation) return
         // Whatever was changed again meanwhile is newer than what failed to go out.
         dirtyKeys = {
-          set: { ...keyed.set, ...dirtyKeys.set },
+          set: Object.fromEntries(
+            Object.entries({ ...keyed.set, ...dirtyKeys.set }).filter(([k]) => !dirtyKeys.remove.includes(k))
+          ),
           remove: [...new Set([...keyed.remove, ...dirtyKeys.remove])].filter((k) => !(k in dirtyKeys.set)),
         }
       })
