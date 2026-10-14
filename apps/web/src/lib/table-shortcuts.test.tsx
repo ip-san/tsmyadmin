@@ -158,6 +158,7 @@ describe('useTableShortcuts', () => {
     const a = renderHook(() => useTableShortcuts(), { wrapper })
     const b = renderHook(() => useTableShortcuts(), { wrapper })
     await waitFor(() => expect(a.result.current.recent).toEqual([t('seed')]))
+    await waitFor(() => expect(b.result.current.recent).toEqual([t('seed')]))
     act(() => a.result.current.visit(t('orders')))
     expect(a.result.current.recent).toEqual([t('orders'), t('seed')])
     // The other component re-reads without being asked.
