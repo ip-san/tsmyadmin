@@ -1,47 +1,29 @@
 import { describe, expect, it } from 'vitest'
 import { READ_CELL_MAX_BYTES } from '../base.ts'
-import type { Conn } from '../driver.ts'
-import { MysqlAdapter } from '../mysql/adapter.ts'
-import { PostgresAdapter } from '../postgres/adapter.ts'
-import { rows, scripted } from './scripted-conn.ts'
+import { affecting, column, type Dialect, ns, rig } from './base-rig.ts'
+import { type Answer, rows } from './scripted-conn.ts'
 
 /**
  * `updateRow`, `deleteRows`, `countRows` and `readCell` for both dialects, with the connection scripted: the key's
  * WHERE, the one-row guard that rolls a wrong match back, and the size check before a cell is read into memory.
  */
 
-const ns = { database: 'd', schema: 'sales' }
-type Dialect = 'mysql' | 'postgres'
-type Rule = [RegExp, ReturnType<typeof rows> | Error]
-const affecting = (n: number) => ({ ...rows([]), affectedRows: n })
-const column = (name: string, dataType: string) => ({ name, dataType, nullable: false })
-
-const adapterFor = (dialect: Dialect, script: Rule[], types: Record<string, string> = {}) => {
-  const cfg = { dialect, host: 'h', port: 1, user: 'u', password: 'p' } as const
-  const adapter = dialect === 'mysql' ? new MysqlAdapter(cfg) : new PostgresAdapter(cfg)
-  const s = scripted(script)
-  const run = async (_ns: unknown, fn: (c: Conn) => unknown) => await fn(s.conn)
-  ;(adapter as unknown as { withTransaction: unknown }).withTransaction = run
-  ;(adapter as unknown as { withConn: unknown }).withConn = run
-  ;(adapter as unknown as { describeTable: unknown }).describeTable = async () => ({
-    kind: 'table',
-    columns: Object.entries(types).map(([n, t]) => column(n, t)),
-    primaryKey: [],
-    indexes: [],
-  })
-  return { adapter, asked: s.asked }
-}
+type Rule = [RegExp, Answer]
+const adapterFor = (dialect: Dialect, script: Rule[], types: Record<string, string> = {}) =>
+  rig(dialect, { rules: script, table: { columns: Object.entries(types).map(([n, t]) => column(n, t)) } })
 const pk = (values: Record<string, unknown>) => ({ kind: 'pk', values }) as never
 const all = (values: Record<string, unknown>) => ({ kind: 'all-columns', values }) as never
+const SET_TIMEOUT = 'SET SESSION max_execution_time = 30000'
 
 describe('updateRow', () => {
-  it('sets the values of the row with that key, as parameters', async () => {
+  it('sets the values of the row with that key, as parameters, inside a transaction', async () => {
     const m = adapterFor('mysql', [[/^UPDATE/, affecting(1)]], { id: 'varchar(10)' })
     expect(await m.adapter.updateRow(ns, 't', pk({ id: 'a' }), { name: 'x', note: null })).toEqual({ affectedRows: 1 })
     expect(m.asked[0]).toEqual({
       text: 'UPDATE `d`.`t` SET `name` = ?, `note` = ? WHERE `id` = ?',
       params: ['x', null, 'a'],
     })
+    expect(m.statements()).toEqual([SET_TIMEOUT, 'BEGIN', m.asked[0]?.text, 'COMMIT'])
     const p = adapterFor('postgres', [[/^UPDATE/, affecting(1)]])
     await p.adapter.updateRow(ns, 't', pk({ id: 1 }), { name: 'x' })
     expect(p.asked[0]).toEqual({ text: 'UPDATE "sales"."t" SET "name" = $1 WHERE "id" = $2', params: ['x', 1] })
@@ -50,7 +32,7 @@ describe('updateRow', () => {
   it('changes nothing, and sends nothing, when there are no values', async () => {
     const m = adapterFor('mysql', [])
     expect(await m.adapter.updateRow(ns, 't', pk({ id: 1 }), {})).toEqual({ affectedRows: 0 })
-    expect(m.asked).toHaveLength(0)
+    expect(m.sent).toHaveLength(0)
   })
 
   it('limits a MySQL update by every column to one row, and no other update', async () => {
@@ -69,18 +51,22 @@ describe('updateRow', () => {
         code: 'KEY_MISMATCH',
         message: `Expected to update exactly 1 row but matched ${matched}; rolled back`,
       })
+      expect(m.statements().at(-1), String(matched)).toBe('ROLLBACK')
+      expect(m.statements()).not.toContain('COMMIT')
     }
   })
 })
 
 describe('deleteRows', () => {
-  it('deletes each key in turn, one row each, and adds them up', async () => {
+  it('deletes each key in turn, one row each, in one transaction, and adds them up', async () => {
     const m = adapterFor('mysql', [[/^DELETE/, affecting(1)]])
     expect(await m.adapter.deleteRows(ns, 't', [pk({ id: 1 }), pk({ id: 2 })])).toEqual({ affectedRows: 2 })
     expect(m.asked.map((q) => [q.text, q.params])).toEqual([
       ['DELETE FROM `d`.`t` WHERE `id` = ?', [1]],
       ['DELETE FROM `d`.`t` WHERE `id` = ?', [2]],
     ])
+    expect(m.transactions()).toBe(1)
+    expect(m.statements().at(-1)).toBe('COMMIT')
     expect(await adapterFor('mysql', []).adapter.deleteRows(ns, 't', [])).toEqual({ affectedRows: 0 })
   })
 
@@ -99,10 +85,17 @@ describe('deleteRows', () => {
   it('fails, so the transaction is rolled back, when a key matched none or more than one row', async () => {
     for (const matched of [0, 3]) {
       const m = adapterFor('mysql', [[/^DELETE/, affecting(matched)]])
-      await expect(m.adapter.deleteRows(ns, 't', [pk({ id: 1 })])).rejects.toMatchObject({
+      await expect(m.adapter.deleteRows(ns, 't', [pk({ id: 1 }), pk({ id: 2 })])).rejects.toMatchObject({
         code: 'KEY_MISMATCH',
         message: `Expected to delete exactly 1 row but matched ${matched}; rolled back`,
       })
+      // The first key already fails: the second is never sent.
+      expect(m.statements(), String(matched)).toEqual([
+        SET_TIMEOUT,
+        'BEGIN',
+        'DELETE FROM `d`.`t` WHERE `id` = ?',
+        'ROLLBACK',
+      ])
     }
   })
 })

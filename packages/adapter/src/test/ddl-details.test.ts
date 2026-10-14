@@ -171,7 +171,7 @@ describe('MySQL: routines', () => {
         { mode: 'OUT', name: 'b', type: 'TEXT' },
       ],
       body: 'SELECT 1;',
-      language: 'plpgsql',
+      language: 'sql',
       deterministic: false,
       ...extra,
     }) as DdlOp
@@ -185,7 +185,7 @@ describe('MySQL: routines', () => {
       params: [{ mode: 'IN', name: 'a', type: 'INT' }],
       returns: 'INT',
       body: 'RETURN a',
-      language: 'plpgsql',
+      language: 'sql',
       deterministic: true,
     })
     expect(fn).toEqual(['CREATE FUNCTION `d`.`f`(`a` INT) RETURNS INT DETERMINISTIC RETURN a'])
@@ -222,7 +222,7 @@ describe('MySQL: routines', () => {
         params: [],
         returns: 'INT',
         body: 'RETURN 1',
-        language: 'plpgsql',
+        language: 'sql',
         deterministic: false,
         ...extra,
       }) as DdlOp

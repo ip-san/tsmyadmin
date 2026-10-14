@@ -3,8 +3,8 @@ import { FakeAdapter, fakeTable } from '@tsmyadmin/adapter/testing'
 import { afterEach } from 'vitest'
 import { createApp } from '../app.ts'
 import { type AppConfig, loadConfig } from '../config.ts'
-import { type Logger, type TrustProxy } from '../lib/logging.ts'
-import { MemorySessionStore } from '../session/store.ts'
+import { createLogger, type Logger, type TrustProxy } from '../lib/logging.ts'
+import { MemorySessionStore, type SessionStore } from '../session/store.ts'
 
 const SECRET = 'test-secret'
 export const LOGIN = { dialect: 'mysql', host: 'db', port: 3306, user: 'root', password: 'pw' }
@@ -45,6 +45,15 @@ export function fixtureAdapter(overrides: ConstructorParameters<typeof FakeAdapt
   })
 }
 
+/** A logger whose JSON lines the test reads. */
+export function capture() {
+  const lines: Record<string, unknown>[] = []
+  return { lines, logger: createLogger('json', (l) => lines.push(JSON.parse(l))) }
+}
+
+/** The lines of one event. */
+export const eventsOf = (lines: Record<string, unknown>[], event: string) => lines.filter((l) => l.event === event)
+
 interface HarnessOptions {
   allowedHosts?: string[]
   isProd?: boolean
@@ -55,6 +64,10 @@ interface HarnessOptions {
   servers?: AppConfig['servers']
   logger?: Logger
   discover?: () => Promise<AppConfig['servers']>
+  /** The store's clock (session TTL), for a test that moves the system date and must not be logged out by it. */
+  storeNow?: () => number
+  /** What each login connects to, for a test whose later login must reach another server (default: `adapter`). */
+  adapterFactory?: () => FakeAdapter
 }
 
 /** Development defaults from loadConfig, overridden per test. */
@@ -63,7 +76,11 @@ export function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
 }
 
 export function harness(adapter: FakeAdapter = fixtureAdapter(), options: HarnessOptions = {}) {
-  const store = new MemorySessionStore({ adapterFactory: () => adapter, sweepIntervalMs: 0 })
+  const store = new MemorySessionStore({
+    adapterFactory: options.adapterFactory ?? (() => adapter),
+    sweepIntervalMs: 0,
+    ...(options.storeNow ? { now: options.storeNow } : {}),
+  })
   const app = createApp(
     testConfig({
       ...(options.allowedHosts ? { allowedHosts: options.allowedHosts } : {}),
@@ -98,8 +115,8 @@ export function harness(adapter: FakeAdapter = fixtureAdapter(), options: Harnes
  * The stores the tests of a file opened, closed after each test. A test that logs in pushes its store here:
  * `const stores = closeStoresAfterEach()`, then `stores.push(h.store)`.
  */
-export function closeStoresAfterEach(): MemorySessionStore[] {
-  const stores: MemorySessionStore[] = []
+export function closeStoresAfterEach(): SessionStore[] {
+  const stores: SessionStore[] = []
   afterEach(async () => {
     for (const s of stores.splice(0)) await s.closeAll()
   })

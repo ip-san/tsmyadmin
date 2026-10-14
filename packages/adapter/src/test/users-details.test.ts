@@ -138,7 +138,6 @@ describe('MySQL: other account ops', () => {
     const grants = [
       'GRANT USAGE ON *.* TO `u`@`h`',
       'GRANT USAGE ON *.* TO `u`@`h` WITH GRANT OPTION',
-      '-- GRANT USAGE ON *.* TO `u`@`h`',
       'GRANT SELECT ON `shop`.* TO `u`@`h`',
       "GRANT SELECT ON `a TO b`.* TO 'u'@'h' WITH GRANT OPTION",
       'SET DEFAULT ROLE `r` FOR `u`@`h`',
@@ -151,10 +150,9 @@ describe('MySQL: other account ops', () => {
     })
     expect(sqls(out).slice(1)).toEqual([
       "GRANT USAGE ON *.* TO 'n'@'x' WITH GRANT OPTION",
-      "-- GRANT USAGE ON *.* TO 'n'@'x'",
       "GRANT SELECT ON `shop`.* TO 'n'@'x'",
       "GRANT SELECT ON `a TO b`.* TO 'n'@'x' WITH GRANT OPTION",
-      'SET DEFAULT ROLE `r` FOR `u`@`h`',
+      "SET DEFAULT ROLE `r` FOR 'n'@'x'",
       "GRANT `role`@`%` TO 'n'@'x'",
     ])
     refuses(
@@ -473,7 +471,7 @@ describe('PostgreSQL: account ops', () => {
       'GRANT SELECT ON "s"."t" TO "n"',
       'GRANT "grp" TO "n"',
       'GRANT SELECT ON "s"."t" TO "other"',
-      'GRANT USAGE ON SCHEMA "s" TO "r" WITH GRANT OPTION',
+      'GRANT USAGE ON SCHEMA "s" TO "n" WITH GRANT OPTION',
     ])
     refuses(
       () => pg({ op: 'copyUser', user: role, newUser: { name: 'n' }, password: 'pw' }),

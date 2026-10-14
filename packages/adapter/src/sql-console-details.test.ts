@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Canceller, Conn, RawResult } from './driver.ts'
 import { WRAP_PREFIX } from './sql/read-wrap.ts'
 import { type ConsoleHost, ScriptRunner } from './sql-console.ts'
+import { until } from './test/scripted-conn.ts'
 import { AdapterError, type ExecuteOptions } from './types.ts'
 
 /**
@@ -273,11 +274,7 @@ describe('an error in a wrapped read', () => {
 
 describe('cancelling: its own branches', () => {
   /** Waits until the canceller has been asked at least `n` times (the retry runs on a timer that slips under load). */
-  const signalled = async (r: ReturnType<typeof rig>, n: number) => {
-    for (let waited = 0; r.canceller.cancel.mock.calls.length < n && waited < 5000; waited += 10) {
-      await new Promise((resolve) => setTimeout(resolve, 10))
-    }
-  }
+  const signalled = (r: ReturnType<typeof rig>, n: number) => until(() => r.canceller.cancel.mock.calls.length >= n)
   /** A run whose one statement stays on the wire until `finish()`. */
   const hung = (backend = '42') => {
     const wire = deferred<RawResult>()
@@ -285,11 +282,13 @@ describe('cancelling: its own branches', () => {
     const finished = run(r, 'SELECT SLEEP(10)', { queryId: 'q' })
     return { r, wire, finished }
   }
+  /** Waits until the run's first statement has been sent, so a cancel finds it on the wire. */
+  const onWire = (r: ReturnType<typeof rig>, sql = 'SELECT SLEEP(10)') => until(() => r.asked.list.includes(sql))
 
   it('says nothing was cancelled, and signals nothing, when the server-side id is not all digits', async () => {
     for (const backend of ['', 'abc', '12x', 'x12', '1 2']) {
       const { r, wire, finished } = hung(backend)
-      await new Promise((resolve) => setTimeout(resolve, 5))
+      await onWire(r)
       expect(await r.runner.cancel('q', 50), backend).toBe(false)
       expect(r.openCanceller).not.toHaveBeenCalled()
       wire.resolve(rowsOf(1))
@@ -312,7 +311,7 @@ describe('cancelling: its own branches', () => {
 
   it('sends the signal to the backend, again while the statement is still on the wire, and closes its connection', async () => {
     const { r, wire, finished } = hung('77')
-    await new Promise((resolve) => setTimeout(resolve, 5))
+    await onWire(r)
     const answer = r.runner.cancel('q')
     await signalled(r, 3)
     wire.resolve(rowsOf(1))
@@ -325,7 +324,7 @@ describe('cancelling: its own branches', () => {
 
   it('does not fail the request when a resent signal is refused', async () => {
     const { r, wire, finished } = hung()
-    await new Promise((resolve) => setTimeout(resolve, 5))
+    await onWire(r)
     let calls = 0
     r.canceller.cancel.mockImplementation(async () => {
       if (++calls > 1) throw new Error('no such thread')
@@ -340,12 +339,12 @@ describe('cancelling: its own branches', () => {
 
   it('fails the request when the first signal is refused while the run is still going, and lets the next cancel try again', async () => {
     const { r, wire, finished } = hung()
-    await new Promise((resolve) => setTimeout(resolve, 5))
+    await onWire(r)
     r.canceller.cancel.mockRejectedValueOnce(new Error('refused'))
     await expect(r.runner.cancel('q')).rejects.toThrow('refused')
     expect(r.canceller.close).toHaveBeenCalledTimes(1)
     const second = r.runner.cancel('q')
-    await new Promise((resolve) => setTimeout(resolve, 20))
+    await signalled(r, 2)
     wire.resolve(rowsOf(1))
     expect(await second).toBe(true)
     expect(r.openCanceller).toHaveBeenCalledTimes(2)
@@ -361,9 +360,9 @@ describe('cancelling: its own branches', () => {
       return r.canceller as unknown as Canceller
     })
     const finished = run(r, 'SELECT 1; SELECT 2', { queryId: 'q', stopOnError: false })
-    await new Promise((resolve) => setTimeout(resolve, 5))
+    await onWire(r, 'SELECT 1')
     const answer = r.runner.cancel('q')
-    await new Promise((resolve) => setTimeout(resolve, 5))
+    await until(() => r.openCanceller.mock.calls.length > 0)
     wire.resolve(rowsOf(1))
     await finished
     opening.resolve()

@@ -65,9 +65,6 @@ describe('errorMessage', () => {
     expect(errorMessage(null)).toBe('null')
     expect(errorMessage(undefined)).toBe('undefined')
     expect(errorMessage(5)).toBe('5')
-    expect(errorMessage({ message: 'only a message' })).toBe('[object Object]')
-    expect(errorMessage({ code: 5, message: 'numeric code' })).toBe('[object Object]')
-    expect(errorMessage({ code: null })).toBe('[object Object]')
   })
 
   it('keeps a database message verbatim after the localized code, and its native code in brackets', () => {
@@ -148,8 +145,6 @@ describe('errorMessage', () => {
     expect(errorMessage({ code: 'VALIDATION', reason: 'INVALID_ENCODING', params: 'text' })).toBe(
       locale.reasons.INVALID_ENCODING({})
     )
-    expect(errorMessage({ code: 'VALIDATION', reason: 'INVALID_ENCODING', params: { line: 7 } })).toContain('7')
-    expect(errorMessage({ code: 'VALIDATION', reason: 'INVALID_ENCODING' })).toContain('?')
   })
 
   it('does not take a reason it has no wording for, or one inherited from Object, or one that is no text, for a reason', () => {

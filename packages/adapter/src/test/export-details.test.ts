@@ -1,4 +1,4 @@
-import type { EventInfo, TableSchema, TriggerInfo } from '@tsmyadmin/shared'
+import type { Cell, EventInfo, TableSchema, TriggerInfo } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
 import { mysqlExporter } from '../mysql/export.ts'
 import { pgAdvanceSequence, pgExporter } from '../postgres/export.ts'
@@ -13,8 +13,8 @@ import { refuses } from './ddl-helpers.ts'
  */
 
 const ns = { database: 'db', schema: 'app' }
-const insert = (exporter: typeof mysqlExporter, columns: string[], rows: unknown[][], options = {}) =>
-  exporter.insert(ns, 't', columns, rows as never, options)
+const insert = (exporter: typeof mysqlExporter, columns: string[], rows: Cell[][], options = {}) =>
+  exporter.insert(ns, 't', columns, rows, options)
 
 describe('commentText and the statements a dump makes its own', () => {
   it('turns every run of line breaks in a comment into one space, so a name cannot start a statement', () => {

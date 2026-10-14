@@ -1,17 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import { rejectsWith } from '../test/ddl-helpers.ts'
 import { FakeAdapter } from '../testing/fake-adapter.ts'
 import { AdapterError, type DatabaseAdapter } from '../types.ts'
 import { pgPrepareDdl } from './prepare-ddl.ts'
-
-const refusal = async (p: Promise<unknown>) => {
-  try {
-    await p
-  } catch (err) {
-    if (err instanceof AdapterError) return { code: err.code, message: err.message }
-    throw err
-  }
-  throw new Error('expected a refusal')
-}
 
 describe('pgPrepareDdl: a rename or copy of a whole database', () => {
   it('refuses, on PostgreSQL, the database the session is connected through', async () => {
@@ -20,12 +11,11 @@ describe('pgPrepareDdl: a rename or copy of a whole database', () => {
       serverNamespace: { database: 'app' },
       databases: { app: { tables: {} }, other: { tables: {} } },
     })
-    expect(
-      await refusal(pgPrepareDdl(pg, { database: 'app' }, { op: 'renameDatabase', name: 'app', newName: 'x' }))
-    ).toMatchObject({
-      code: 'VALIDATION',
-      message: expect.stringContaining('connected through'),
-    })
+    await rejectsWith(
+      pgPrepareDdl(pg, { database: 'app' }, { op: 'renameDatabase', name: 'app', newName: 'x' }),
+      'VALIDATION',
+      /connected through/
+    )
     // Any other database is renamed in place, with nothing to fill in.
     expect(await pgPrepareDdl(pg, { database: 'app' }, { op: 'renameDatabase', name: 'other', newName: 'x' })).toEqual({
       op: 'renameDatabase',
@@ -92,7 +82,7 @@ describe('pgPrepareDdl: a collation applied to the tables', () => {
       if (table === 'gone') throw new AdapterError('QUERY_FAILED', 'boom')
       return { columns: [] }
     })
-    expect(await refusal(pgPrepareDdl(adapter, ns, op))).toMatchObject({ code: 'QUERY_FAILED' })
+    await rejectsWith(pgPrepareDdl(adapter, ns, op), 'QUERY_FAILED', /boom/)
     const plain = adapterOf((table) => {
       if (table === 'gone') throw new Error('not an adapter error')
       return { columns: [] }

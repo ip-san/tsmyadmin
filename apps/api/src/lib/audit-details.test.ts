@@ -1,7 +1,7 @@
 import { AdapterError, type DatabaseAdapter } from '@tsmyadmin/adapter'
-import { PASSWORD_MASK, type RowKey } from '@tsmyadmin/shared'
+import { type ConnectRequest, PASSWORD_MASK, type RowKey } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
-import { SQL_SUMMARY_MAX, summarise, withAudit } from './audit.ts'
+import { auditedAdapterFactory, SQL_SUMMARY_MAX, summarise, withAudit } from './audit.ts'
 import { createLogger } from './logging.ts'
 import { withRequestContext } from './request-context.ts'
 
@@ -172,6 +172,33 @@ describe('redacting the statement', () => {
       `ALTER USER u IDENTIFIED BY '${PASSWORD_MASK}' WITH GRANT OPTION`
     )
   })
+
+  it('reads an escaped or doubled quote as part of the literal, so one of those before the end leaves it open', () => {
+    // The keyword pattern takes `'abc'` for the whole literal; the sweep after it must still see the string is open.
+    for (const tail of ["'abc\\'def", "'abc''def", "'abc'' WITH GRANT OPTION", '"abc\\"def', '"abc""def']) {
+      expect(logged(`ALTER USER u IDENTIFIED BY ${tail}`), tail).toBe(`ALTER USER u IDENTIFIED BY '${PASSWORD_MASK}'`)
+    }
+    expect(logged("ALTER USER u IDENTIFIED BY 'abc''def' WITH GRANT OPTION")).toBe(
+      `ALTER USER u IDENTIFIED BY '${PASSWORD_MASK}' WITH GRANT OPTION`
+    )
+    expect(logged("ALTER USER u IDENTIFIED BY '' WITH GRANT OPTION")).toBe(
+      `ALTER USER u IDENTIFIED BY '${PASSWORD_MASK}' WITH GRANT OPTION`
+    )
+    expect(logged("x IDENTIFIED'secret")).not.toContain('secret')
+  })
+
+  it('masks a literal that does not follow the keyword directly, and keeps the account name before it', () => {
+    expect(logged("CREATE USER u IDENTIFIED BY CONCAT('x', 'y') WITH GRANT OPTION")).toBe(
+      `CREATE USER u IDENTIFIED BY CONCAT('${PASSWORD_MASK}') WITH GRANT OPTION`
+    )
+    expect(logged("CREATE USER 'bob'@'h' IDENTIFIED BY 'pw' REQUIRE SSL")).toBe(
+      `CREATE USER 'bob'@'h' IDENTIFIED BY '${PASSWORD_MASK}' REQUIRE SSL`
+    )
+  })
+
+  it('masks a hexadecimal literal after the keyword, which is a password as much as a quoted one', () => {
+    expect(logged('ALTER USER u IDENTIFIED BY 0x68756e74657232')).toBe(`ALTER USER u IDENTIFIED BY '${PASSWORD_MASK}'`)
+  })
 })
 
 describe('a dollar-quoted password that is never closed', () => {
@@ -333,5 +360,43 @@ describe('withAudit', () => {
     await adapter.killProcess('3')
     expect(lines[0]).toMatchObject({ action: 'killProcess', processId: '3', ok: true })
     expect(lines[0]?.requestId).toBeUndefined()
+  })
+
+  it('calls a method that is not audited on the adapter itself, so its private state is reachable', () => {
+    class WithPrivate {
+      #secret = 'inside'
+      read() {
+        return this.#secret
+      }
+    }
+    const { lines, adapter } = wrap(new WithPrivate() as never)
+    expect((adapter as unknown as WithPrivate).read()).toBe('inside')
+    expect(lines).toEqual([])
+  })
+
+  it('is what a session store gets from the audited factory: the line carries the identity, never the password', async () => {
+    const lines: Record<string, unknown>[] = []
+    const logger = createLogger('json', (l) => lines.push(JSON.parse(l)))
+    const config: ConnectRequest = { dialect: 'postgres', host: 'db', port: 5432, user: 'admin', password: 'hunter2' }
+    const seen: ConnectRequest[] = []
+    const factory = auditedAdapterFactory((c) => {
+      seen.push(c)
+      return { killProcess: async () => undefined } as never
+    }, logger)
+    const adapter = factory(config)
+    expect(seen).toEqual([config])
+    await adapter.killProcess('7', 'query')
+    expect(lines).toHaveLength(1)
+    expect(lines[0]).toMatchObject({
+      event: 'audit',
+      action: 'killProcess',
+      dialect: 'postgres',
+      dbHost: 'db:5432',
+      dbUser: 'admin',
+      processId: '7',
+      killMode: 'query',
+      ok: true,
+    })
+    expect(JSON.stringify(lines)).not.toContain('hunter2')
   })
 })

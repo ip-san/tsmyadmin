@@ -22,7 +22,7 @@ const cond = (dialect: Dialect, f: Partial<Filter> & { op: Filter['op'] }) =>
 
 describe('conditions: refusals and edges', () => {
   it('refuses a filter that needs a value, or a number of values, with the kind and a message saying which', () => {
-    refuses(() => cond('mysql', { op: 'eq' }), 'QUERY_FAILED', /Filter "eq" on c requires a value/)
+    refuses(() => cond('mysql', { op: 'eq' }), 'VALIDATION', /Filter "eq" on c requires a value/)
     refuses(() => cond('mysql', { op: 'between', values: [1] }), 'VALIDATION', /Filter "between" on c takes two values/)
     refuses(() => cond('mysql', { op: 'not_between', values: [1, 2, 3] }), 'VALIDATION', /takes two values/)
     refuses(() => cond('mysql', { op: 'in', values: [] }), 'VALIDATION', /Filter "in" on c takes at least one value/)

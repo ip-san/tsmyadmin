@@ -85,5 +85,9 @@ export function errorMessage(err: unknown): string {
     const native = 'nativeCode' in err && typeof err.nativeCode === 'string' ? ` [${err.nativeCode}]` : ''
     return detail ? `${base}: ${detail}${native}` : `${base}${native}`
   }
-  return err instanceof Error ? err.message : String(err)
+  if (err instanceof Error) return err.message
+  // A thrown plain object that carries a message but no API code (a parsed body, a library's own error shape):
+  // its message says more than `[object Object]` would.
+  if (typeof err === 'object' && err !== null && 'message' in err && typeof err.message === 'string') return err.message
+  return String(err)
 }

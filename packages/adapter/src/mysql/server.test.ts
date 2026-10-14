@@ -114,10 +114,15 @@ describe('mysqlListProcesses', () => {
 })
 
 describe('mysqlKillProcess', () => {
-  it('refuses an id that is not a number, before asking the server anything', async () => {
-    const { conn, asked } = scripted([])
-    await expect(mysqlKillProcess(conn, '7; DROP DATABASE x')).rejects.toMatchObject({ code: 'QUERY_FAILED' })
-    expect(asked).toEqual([])
+  it('refuses an id that is not all digits, before asking the server anything', async () => {
+    for (const bad of ['7; DROP DATABASE x', '', '5a', 'a5', '-1', '5 ', ' 5', '1.5']) {
+      const { conn, asked } = scripted([])
+      await expect(mysqlKillProcess(conn, bad), bad).rejects.toMatchObject({
+        code: 'QUERY_FAILED',
+        message: expect.stringMatching(/process id must be numeric/),
+      })
+      expect(asked, bad).toEqual([])
+    }
   })
 
   it('ends the connection by default, and only the statement when asked for the query', async () => {
@@ -139,6 +144,8 @@ describe('mysqlKillProcess', () => {
     const { conn, discard } = scripted([[/^KILL/, fail('QUERY_FAILED', 'ER_NO_SUCH_THREAD')]])
     await expect(mysqlKillProcess(conn, '7')).rejects.toMatchObject({ nativeCode: 'ER_NO_SUCH_THREAD' })
     expect(discard).not.toHaveBeenCalled()
+    const plain = scripted([[/^KILL/, new Error('boom')]])
+    await expect(mysqlKillProcess(plain.conn, '7')).rejects.toThrow('boom')
   })
 })
 
@@ -149,6 +156,23 @@ describe('mysqlServerCatalog', () => {
       columns: ['name', 'support', 'transactions', 'comment'],
       rows: [['InnoDB', 'DEFAULT', 'YES', null]],
     })
+    const plugins = scripted([[/information_schema\.PLUGINS/, rows([['p', 'ACTIVE', 'AUTHENTICATION', null, 5]])]])
+    expect(await mysqlServerCatalog(plugins.conn, 'plugins')).toEqual({
+      columns: ['name', 'status', 'type', 'library', 'license'],
+      rows: [['p', 'ACTIVE', 'AUTHENTICATION', null, '5']],
+    })
+    const undef = scripted([[/information_schema\.ENGINES/, rows([[undefined, 1]])]])
+    expect((await mysqlServerCatalog(undef.conn, 'engines')).rows).toEqual([[null, '1']])
+  })
+
+  it.each([
+    ['collations', 'information_schema.COLLATIONS', ['charset', 'collation', 'isDefault']],
+    ['engines', 'information_schema.ENGINES', ['name', 'support', 'transactions', 'comment']],
+    ['plugins', 'information_schema.PLUGINS', ['name', 'status', 'type', 'library', 'license']],
+  ] as const)('reads %s from %s, naming its columns', async (kind, table, columns) => {
+    const { conn, asked } = scripted([[/information_schema\./, rows([])]])
+    expect(await mysqlServerCatalog(conn, kind)).toEqual({ columns, rows: [] })
+    expect(asked[0]?.text).toContain(table)
   })
 })
 
@@ -236,10 +260,27 @@ describe('mysqlDiagnostics', () => {
       }
     )
 
-    it('treats the flag spelled OFF or false as off, and a missing one as off', async () => {
-      for (const off of ['OFF', 'false', null]) {
+    it('reads the flag as off however the server spells off, a missing one too, and anything else as on', async () => {
+      for (const off of [0, '0', 'OFF', 'off', 'false', 'FALSE', null, undefined]) {
         const { conn } = scripted([[/@@GLOBAL/, flags(off, 'TABLE')]])
-        expect((await mysqlDiagnostics(conn, 'slowLog')).status).toBe('disabled')
+        expect((await mysqlDiagnostics(conn, 'slowLog')).status, String(off)).toBe('disabled')
+      }
+      expect((await mysqlDiagnostics(scripted([[/@@GLOBAL/, rows([])]]).conn, 'slowLog')).status).toBe('disabled')
+      for (const on of [1, '1', 'ON', 'on', 'true', '10', 'offline', '01']) {
+        const { conn } = scripted([[/@@GLOBAL/, flags(on, 'FILE')]])
+        expect((await mysqlDiagnostics(conn, 'slowLog')).status, String(on)).toBe('notTable')
+      }
+    })
+
+    it('reads a log written to a table among other outputs, in any case, and not one written elsewhere or nowhere', async () => {
+      const log: [RegExp, ReturnType<typeof rows>] = [/mysql\.general_log/, rows([['SELECT 1', 5]])]
+      for (const out of ['TABLE', 'table', 'FILE,TABLE', 'TABLE,FILE']) {
+        const { conn } = scripted([[/@@GLOBAL/, flags(1, out)], log])
+        expect((await mysqlDiagnostics(conn, 'generalLog')).status, out).toBe('ok')
+      }
+      for (const out of ['FILE', 'NONE', '', null]) {
+        const { conn } = scripted([[/@@GLOBAL/, flags(1, out)]])
+        expect((await mysqlDiagnostics(conn, 'generalLog')).status, String(out)).toBe('notTable')
       }
     })
 
@@ -262,6 +303,7 @@ describe('mysqlDiagnostics', () => {
           [null, '1'],
         ],
       })
+      expect(general.asked.at(-1)?.text).toContain("command_type = 'Query'")
       const slow = scripted([
         [/@@GLOBAL/, flags(1, 'TABLE')],
         [/mysql\.slow_log/, rows([['SELECT SLEEP(1)', 2, 2.5, 1.5, 100]])],
@@ -270,6 +312,9 @@ describe('mysqlDiagnostics', () => {
         columns: ['statement', 'runs', 'totalSeconds', 'maxSeconds', 'rowsExamined'],
         rows: [['SELECT SLEEP(1)', '2', '2.5', '1.5', '100']],
       })
+      const query = slow.asked.at(-1)?.text ?? ''
+      expect(query).toContain('TIME_TO_SEC(query_time) + MICROSECOND(query_time) / 1000000')
+      expect(query).toContain('ORDER BY 3 DESC LIMIT 50')
     })
 
     it('leaves out the statements of this tool’s own connections and those before `since`, binding both', async () => {
@@ -291,8 +336,9 @@ describe('mysqlDiagnostics', () => {
         [/mysql\.general_log/, rows([])],
       ])
       await mysqlDiagnostics(conn, 'recentStatements')
-      expect(asked.at(-1)?.text).not.toContain('thread_id')
-      expect(asked.at(-1)?.text).not.toContain('event_time >')
+      expect(asked.at(-1)?.text).toContain(
+        "WHERE command_type IN ('Query', 'Execute') ORDER BY event_time DESC LIMIT 200"
+      )
       expect(asked.at(-1)?.params).toEqual([])
     })
   })
@@ -321,6 +367,7 @@ describe('mysqlDiagnostics', () => {
       const foreign = scripted([[/SHOW BINARY LOGS/, listed]])
       await expect(mysqlDiagnostics(foreign.conn, 'binlogEvents', { file: "x' OR '1" })).rejects.toMatchObject({
         code: 'VALIDATION',
+        message: expect.stringMatching(/Unknown binary log/),
       })
       expect(foreign.asked).toHaveLength(1)
     })
@@ -343,6 +390,8 @@ describe('mysqlDiagnostics', () => {
     expect(await mysqlDiagnostics(conn, 'engineStatus')).toMatchObject({ status: 'ok', text: 'BACKGROUND THREAD …' })
     const none = scripted([[/SHOW ENGINE INNODB STATUS/, rows([])]])
     expect((await mysqlDiagnostics(none.conn, 'engineStatus')).text).toBeNull()
+    const empty = scripted([[/SHOW ENGINE INNODB STATUS/, rows([['InnoDB', '', null]])]])
+    expect((await mysqlDiagnostics(empty.conn, 'engineStatus')).text).toBeNull()
     expect(await mysqlDiagnostics(scripted([]).conn, 'statements')).toMatchObject({ status: 'unsupported' })
   })
 
@@ -353,5 +402,7 @@ describe('mysqlDiagnostics', () => {
     }
     const { conn } = scripted([[/INNODB STATUS/, fail('QUERY_FAILED', 'ER_LOCK_DEADLOCK')]])
     await expect(mysqlDiagnostics(conn, 'engineStatus')).rejects.toMatchObject({ nativeCode: 'ER_LOCK_DEADLOCK' })
+    const plain = scripted([[/INNODB STATUS/, new Error('boom')]])
+    await expect(mysqlDiagnostics(plain.conn, 'engineStatus')).rejects.toThrow('boom')
   })
 })

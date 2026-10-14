@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { crc32, readZip, UnpackLimitError, zipStream } from './zip.ts'
 
 /**
@@ -143,9 +143,16 @@ describe('the archive it writes', () => {
     const early = await collect(zipStream([{ name: 'x', data: '' }], new Date(1980, 0, 1, 0, 0, 0)))
     expect(view(early).getUint16(10, true)).toBe(0)
     expect(view(early).getUint16(12, true)).toBe((0 << 9) | (1 << 5) | 1)
-    const stamped = await collect(zipStream([{ name: 'x', data: '' }]))
-    const year = ((view(stamped).getUint16(12, true) >> 9) & 0x7f) + 1980
-    expect(year).toBe(new Date().getFullYear())
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      // Local time, as DOS dates are: midday keeps the day the same in every zone.
+      vi.setSystemTime(new Date(2031, 5, 15, 12, 30, 10))
+      const stamped = await collect(zipStream([{ name: 'x', data: '' }]))
+      expect(view(stamped).getUint16(10, true)).toBe((12 << 11) | (30 << 5) | 5)
+      expect(view(stamped).getUint16(12, true)).toBe(((2031 - 1980) << 9) | (6 << 5) | 15)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 

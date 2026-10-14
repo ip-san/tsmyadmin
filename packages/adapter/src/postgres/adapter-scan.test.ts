@@ -62,7 +62,7 @@ const schemaOf = (parts: Record<string, unknown>) =>
   }) as unknown as TableSchema
 
 describe('PostgresAdapter.iterateRows: a server-side cursor', () => {
-  /** A connection whose FETCH answers with the next page. */
+  /** A connection whose FETCH answers with the next page; a statement matching `failOn` fails with its own first word. */
   const scan = (pages: unknown[][][], failOn?: RegExp) => {
     const adapter = new PostgresAdapter(config)
     let page = 0
@@ -71,7 +71,7 @@ describe('PostgresAdapter.iterateRows: a server-side cursor', () => {
     const conn = {
       query: async (text: string) => {
         asked.push(text)
-        if (failOn?.test(text)) throw new Error('boom')
+        if (failOn?.test(text)) throw new Error(`${text.split(' ')[0]} failed`)
         if (text.startsWith('FETCH')) return rows(pages[page++] ?? [], ['id', 'name'])
         return rows([])
       },
@@ -149,6 +149,10 @@ describe('PostgresAdapter.iterateRows: a server-side cursor', () => {
       adapter.iterateRows(ns, 't', { batchSize: 2, schema: schemaOf({ columns: [column('id')], partitioned: true }) })
     )
     expect(asked[1]).toBe('DECLARE tsmyadmin_export NO SCROLL CURSOR FOR SELECT "id" FROM "sales"."t"')
+    // A plain table without a key resolves to ctid, which is no order for a cursor.
+    const keyless = scan([[]])
+    await collect(keyless.adapter.iterateRows(ns, 't', { batchSize: 2, schema: schemaOf({ columns: [column('id')] }) }))
+    expect(keyless.asked[1]).toBe('DECLARE tsmyadmin_export NO SCROLL CURSOR FOR SELECT "id" FROM ONLY "sales"."t"')
   })
 
   it('orders by every column of a composite key, in key order', async () => {
@@ -201,14 +205,19 @@ describe('PostgresAdapter.iterateRows: a server-side cursor', () => {
     expect(early.asked).not.toContain('COMMIT')
     expect(early.done).toHaveBeenCalledTimes(1)
     const failing = scan([], /^DECLARE/)
-    await expect(collect(failing.adapter.iterateRows(ns, 't', { batchSize: 2, schema: keyed }))).rejects.toThrow('boom')
+    await expect(collect(failing.adapter.iterateRows(ns, 't', { batchSize: 2, schema: keyed }))).rejects.toThrow(
+      'DECLARE failed'
+    )
     expect(failing.asked.at(-1)).toBe('ROLLBACK')
     expect(failing.done).toHaveBeenCalledTimes(1)
   })
 
   it('does not hide the first failure when the rollback fails as well', async () => {
     const both = scan([], /^(DECLARE|ROLLBACK)/)
-    await expect(collect(both.adapter.iterateRows(ns, 't', { batchSize: 2, schema: keyed }))).rejects.toThrow('boom')
+    await expect(collect(both.adapter.iterateRows(ns, 't', { batchSize: 2, schema: keyed }))).rejects.toThrow(
+      'DECLARE failed'
+    )
+    expect(both.asked.at(-1)).toBe('ROLLBACK')
     expect(both.done).toHaveBeenCalledTimes(1)
   })
 

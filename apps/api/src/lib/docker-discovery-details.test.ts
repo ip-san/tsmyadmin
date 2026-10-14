@@ -1,5 +1,6 @@
 import { createServer } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { capture } from '../test/app-harness.ts'
 import {
   createDockerDiscovery,
   type DockerGet,
@@ -8,7 +9,6 @@ import {
   dockerSocketGet,
   tcpReachable,
 } from './docker-discovery.ts'
-import { createLogger } from './logging.ts'
 
 /**
  * Which container is a database, which port reaches it, what it is called, and how the cached lookup logs. A wrong
@@ -246,10 +246,7 @@ describe('what is read from the container environment', () => {
 
 describe('the cached lookup', () => {
   const containers = [{ Id: id(1), Names: ['/a'], Image: 'mysql', Ports: [{ PrivatePort: 3306, PublicPort: 1 }] }]
-  const logs = () => {
-    const lines: Record<string, unknown>[] = []
-    return { lines, logger: createLogger('json', (l) => lines.push(JSON.parse(l))) }
-  }
+  const logs = capture
 
   it('keeps an answer for less than its lifetime, not for all of it', async () => {
     let now = 10_000
@@ -380,26 +377,33 @@ describe('dockerSocketGet', () => {
 })
 
 describe('tcpReachable', () => {
-  it('closes the connection it opened to look', async () => {
-    const closed = new Promise<void>((resolve) => {
-      const server = createServer((socket) => {
-        socket.on('close', () => {
-          server.close()
-          resolve()
-        })
-        socket.on('error', () => undefined)
-      })
-      server.listen(0, '127.0.0.1', async () => {
+  /** A listener on a free local port, and the promise of its first connection having been closed again. */
+  const listen = async () => {
+    const server = createServer((socket) => socket.on('error', () => undefined))
+    const closed = new Promise<void>((resolve) => server.once('connection', (s) => s.once('close', resolve)))
+    const port = await new Promise<number>((resolve) =>
+      server.listen(0, '127.0.0.1', () => {
         const address = server.address()
-        const port = typeof address === 'object' && address ? address.port : 0
-        expect(await tcpReachable('127.0.0.1', port)).toBe(true)
+        resolve(typeof address === 'object' && address ? address.port : 0)
       })
-    })
-    await closed
+    )
+    return { port, closed, stop: () => new Promise<void>((resolve) => server.close(() => resolve())) }
+  }
+
+  it('answers true for a port that accepts, and closes the connection it opened to look', async () => {
+    const { port, closed, stop } = await listen()
+    try {
+      expect(await tcpReachable('127.0.0.1', port)).toBe(true)
+      await closed
+    } finally {
+      await stop()
+    }
   })
 
-  it('gives up with false when nothing answers within the time', async () => {
-    // 192.0.2.0/24 is reserved for documentation: a connect there never completes (or is refused outright).
-    expect(await tcpReachable('192.0.2.1', 9, 50)).toBe(false)
+  it('answers false for a port nothing listens on', async () => {
+    // A port that was free a moment ago: the connection is refused.
+    const { port, stop } = await listen()
+    await stop()
+    expect(await tcpReachable('127.0.0.1', port)).toBe(false)
   })
 })

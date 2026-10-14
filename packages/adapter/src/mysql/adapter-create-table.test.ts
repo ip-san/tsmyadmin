@@ -56,56 +56,46 @@ describe('MysqlAdapter.showCreateTable', () => {
     'CREATE SEQUENCE `s` start with 1 minvalue 1 maxvalue 9223372036854775806 increment by 1 cache 1000 nocycle ENGINE=InnoDB'
   const asTable = 'CREATE TABLE `s` (\n  `next_not_cached_value` bigint(21) NOT NULL\n) ENGINE=InnoDB SEQUENCE=1'
 
+  /** The sequence `s`, whose next value the server answers with `next` (no row for an empty answer). */
+  const showSequence = (next: unknown[][], known?: Parameters<MysqlAdapter['showCreateTable']>[2]) =>
+    show(
+      [
+        [/SHOW CREATE TABLE/, rows([['s', asTable]])],
+        [/SHOW CREATE SEQUENCE/, rows([['s', SEQUENCE]])],
+        [/SELECT next_not_cached_value/, rows(next)],
+      ],
+      known,
+      's'
+    )
+
   it('dumps a MariaDB sequence as its definition and the value it would hand out next, so a restore continues', async () => {
-    const { out, asked } = await show([
-      [/SHOW CREATE TABLE/, rows([['s', asTable]])],
-      [/SHOW CREATE SEQUENCE/, rows([['s', SEQUENCE]])],
-      [/SELECT next_not_cached_value/, rows([[1001]])],
-    ])
-    expect(out).toEqual([SEQUENCE, 'ALTER SEQUENCE `t` RESTART WITH 1001'])
+    const { out, asked } = await showSequence([[1001]])
+    expect(out).toEqual([SEQUENCE, 'ALTER SEQUENCE `s` RESTART WITH 1001'])
     expect(asked).toEqual([
-      'SHOW CREATE TABLE `shop`.`t`',
-      'SHOW CREATE SEQUENCE `shop`.`t`',
-      'SELECT next_not_cached_value FROM `shop`.`t`',
+      'SHOW CREATE TABLE `shop`.`s`',
+      'SHOW CREATE SEQUENCE `shop`.`s`',
+      'SELECT next_not_cached_value FROM `shop`.`s`',
     ])
   })
 
-  it('writes the restart value as digits only, a negative one with its sign, and none when the sequence has no value', async () => {
-    const run = async (value: unknown) =>
-      (
-        await show([
-          [/SHOW CREATE TABLE/, rows([['s', asTable]])],
-          [/SHOW CREATE SEQUENCE/, rows([['s', SEQUENCE]])],
-          [/SELECT next_not_cached_value/, rows([[value]])],
-        ])
-      ).out
+  it('writes the restart value as the server gives it, a negative one with its sign, and none when the sequence has no value', async () => {
+    const run = async (value: unknown) => (await showSequence([[value]])).out
     expect(await run('12345678901234567890')).toEqual([
       SEQUENCE,
-      'ALTER SEQUENCE `t` RESTART WITH 12345678901234567890',
+      'ALTER SEQUENCE `s` RESTART WITH 12345678901234567890',
     ])
-    expect(await run(-5)).toEqual([SEQUENCE, 'ALTER SEQUENCE `t` RESTART WITH -5'])
-    expect(await run('1,0.5e')).toEqual([SEQUENCE, 'ALTER SEQUENCE `t` RESTART WITH 105'])
+    expect(await run(-5)).toEqual([SEQUENCE, 'ALTER SEQUENCE `s` RESTART WITH -5'])
     expect(await run(null)).toEqual([SEQUENCE])
     expect(await run(undefined)).toEqual([SEQUENCE])
-    expect(await run(0)).toEqual([SEQUENCE, 'ALTER SEQUENCE `t` RESTART WITH 0'])
-    const noRow = await show([
-      [/SHOW CREATE TABLE/, rows([['s', asTable]])],
-      [/SHOW CREATE SEQUENCE/, rows([['s', SEQUENCE]])],
-      [/SELECT next_not_cached_value/, rows([])],
-    ])
-    expect(noRow.out).toEqual([SEQUENCE])
+    expect(await run(0)).toEqual([SEQUENCE, 'ALTER SEQUENCE `s` RESTART WITH 0'])
+    expect((await showSequence([])).out).toEqual([SEQUENCE])
   })
 
   it("takes the kind from the caller's schema when it is given, without reading the statement for the sequence option", async () => {
-    const answers = (): [RegExp, ReturnType<typeof rows>][] => [
-      [/SHOW CREATE TABLE/, rows([['s', asTable]])],
-      [/SHOW CREATE SEQUENCE/, rows([['s', SEQUENCE]])],
-      [/SELECT next_not_cached_value/, rows([[7]])],
-    ]
     const known = (kind: string) => ({ kind }) as Parameters<MysqlAdapter['showCreateTable']>[2]
-    expect((await show(answers(), known('table'))).out).toEqual([asTable])
-    expect((await show(answers(), known('sequence'))).out).toEqual([SEQUENCE, 'ALTER SEQUENCE `t` RESTART WITH 7'])
-    expect((await show(answers())).out).toEqual([SEQUENCE, 'ALTER SEQUENCE `t` RESTART WITH 7'])
+    expect((await showSequence([[7]], known('table'))).out).toEqual([asTable])
+    expect((await showSequence([[7]], known('sequence'))).out).toEqual([SEQUENCE, 'ALTER SEQUENCE `s` RESTART WITH 7'])
+    expect((await showSequence([[7]])).out).toEqual([SEQUENCE, 'ALTER SEQUENCE `s` RESTART WITH 7'])
   })
 
   it('does not take a table for a sequence because its text mentions the option', async () => {

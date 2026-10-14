@@ -1,3 +1,4 @@
+import type { Namespace, TableSchema } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
 import type { Conn } from '../driver.ts'
 import { fail, rows, scripted } from '../test/scripted-conn.ts'
@@ -14,12 +15,31 @@ const ns = { database: 'd', schema: 'sales' }
 type Kind = 'view' | 'materialized_view' | 'sequence'
 type Answers = [RegExp, ReturnType<typeof rows> | Error][]
 
-const show = async (kind: Kind, answers: Answers, name = 'thing', schema = ns) => {
+/** The description of `name` as the caller already has it: only the kind matters to showCreateTable. */
+const schemaOf = (name: string, kind: Kind): TableSchema => ({
+  name,
+  kind,
+  comment: null,
+  engine: null,
+  rowEstimate: null,
+  partitioned: false,
+  hasChildren: false,
+  inherits: [],
+  collation: null,
+  autoIncrement: null,
+  columns: [],
+  primaryKey: [],
+  indexes: [],
+  foreignKeys: [],
+  referencedBy: [],
+})
+
+const show = async (kind: Kind, answers: Answers, name = 'thing', schema: Namespace = ns) => {
   const adapter = new PostgresAdapter(config)
   const s = scripted(answers)
   ;(adapter as unknown as { withConn: (n: unknown, fn: (c: Conn) => unknown) => unknown }).withConn = async (_n, fn) =>
     await fn(s.conn)
-  return { out: await adapter.showCreateTable(schema, name, { kind } as never), asked: s.asked }
+  return { out: await adapter.showCreateTable(schema, name, schemaOf(name, kind)), asked: s.asked }
 }
 
 const VIEW = /pg_get_viewdef/
@@ -100,7 +120,7 @@ describe('PostgresAdapter.showCreateTable: a materialized view', () => {
         [INDEXES, rows([])],
       ],
       'mv',
-      { database: 'd' } as never
+      { database: 'd' }
     )
     expect(asked[1]?.params).toEqual(['public', 'mv'])
   })

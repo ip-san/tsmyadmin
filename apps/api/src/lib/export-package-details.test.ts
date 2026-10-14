@@ -3,7 +3,7 @@ import type { DatabaseAdapter } from '@tsmyadmin/adapter'
 import { FakeAdapter, fakeTable } from '@tsmyadmin/adapter/testing'
 import { ExportQuerySchema, ServerExportQuerySchema } from '@tsmyadmin/shared'
 import iconv from 'iconv-lite'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildPackagedExport,
   buildServerExport,
@@ -19,6 +19,9 @@ import { readZip } from './zip.ts'
 
 const ns = { database: 'shop' }
 const NOW = new Date(2005, 8, 7, 6, 5, 4)
+/** The clock a test fixes for "the time it is made": a date that cannot be mistaken for NOW or the real one. */
+const MADE_AT = new Date(2031, 5, 15, 12, 0, 0)
+afterEach(() => vi.useRealTimers())
 const q = (over: Record<string, string>) => ExportQuerySchema.parse(over)
 const sq = (over: Record<string, string>) => ServerExportQuerySchema.parse({ targets: 'shop', ...over })
 const bytes = async (parts: AsyncIterable<Uint8Array>) => Buffer.concat(await Array.fromAsync(parts))
@@ -115,7 +118,7 @@ describe('encodeText', () => {
   it('keeps a byte-order mark in UTF-8 and drops it from the start of any other set', async () => {
     expect([...(await encode(['﻿a'], 'utf-8'))]).toEqual([0xef, 0xbb, 0xbf, 0x61])
     expect([...(await encode(['﻿a', 'b'], 'cp932'))]).toEqual([0x61, 0x62])
-    expect([...(await encode(['a', '﻿b'].slice(0, 1), 'cp932'))]).toEqual([0x61])
+    expect([...(await encode(['a'], 'cp932'))]).toEqual([0x61])
   })
 
   it('refuses a mark that is not at the start, since the set cannot hold it', async () => {
@@ -336,12 +339,14 @@ describe('buildPackagedExport', () => {
   })
 
   it('dates the file name by the time it is made when no time is given', () => {
-    const f = buildPackagedExport(adapter(), ns, ['users'], q({ format: 'csv', filename: '%Y' }), {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(MADE_AT)
+    const f = buildPackagedExport(adapter(), ns, ['users'], q({ format: 'csv', filename: '%Y%m%d' }), {
       server: 's',
       baseName: 'shop',
       everything: false,
     })
-    expect(f.filename).toBe(`${new Date().getFullYear()}.csv`)
+    expect(f.filename).toBe('20310615.csv')
   })
 
   it('limits the rows by the offset alone, or the limit alone', async () => {
@@ -538,8 +543,10 @@ describe('buildServerExport', () => {
   })
 
   it('dates the file name by the time it is made when no time is given', () => {
-    const f = buildServerExport(adapter(), targets, sq({ filename: '%Y' }), { server: 's' })
-    expect(f.filename).toBe(`${new Date().getFullYear()}.sql`)
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(MADE_AT)
+    const f = buildServerExport(adapter(), targets, sq({ filename: '%Y%m%d' }), { server: 's' })
+    expect(f.filename).toBe('20310615.sql')
   })
 
   it('puts tables before views in each dump', async () => {

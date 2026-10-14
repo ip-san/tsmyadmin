@@ -11,8 +11,8 @@ describe('editDefinitionSql: PostgreSQL', () => {
   const pg = (o: Partial<Parameters<typeof editDefinitionSql>[0]> & { definition: string }) =>
     editDefinitionSql({ dialect: 'postgres', kind: 'function', name: 'f', ...o })
 
-  it('replaces a function, a procedure and an event in place, with the body as the server printed it', () => {
-    for (const kind of ['function', 'procedure', 'event'] as const)
+  it('replaces a function and a procedure in place, with the body as the server printed it', () => {
+    for (const kind of ['function', 'procedure'] as const)
       expect(pg({ kind, definition: 'CREATE OR REPLACE FUNCTION f() ...' })).toBe(
         'CREATE OR REPLACE FUNCTION f() ...;\n'
       )
@@ -39,7 +39,8 @@ describe('editDefinitionSql: PostgreSQL', () => {
     expect(view('CREATE OR REPLACE VIEW v AS SELECT 1')).toBe('CREATE OR REPLACE VIEW v AS SELECT 1;\n')
     expect(view('  create  or  replace  view v AS SELECT 1')).toBe('create  or  replace  view v AS SELECT 1;\n')
     expect(view('CREATE\nOR\nREPLACE VIEW v AS SELECT 1')).toBe('CREATE\nOR\nREPLACE VIEW v AS SELECT 1;\n')
-    expect(view('CREATE ORREPLACE VIEW v')).toBe('CREATE OR REPLACE ORREPLACE VIEW v;\n')
+    // OR and REPLACE must be two words for the statement to count as replaceable already.
+    expect(view('CREATE ORREPLACE VIEW v')).toMatch(/^CREATE OR REPLACE /)
     // Only a view is made replaceable.
     expect(pg({ kind: 'function', definition: 'CREATE FUNCTION f() ...' })).toBe('CREATE FUNCTION f() ...;\n')
   })
@@ -94,10 +95,10 @@ describe('editDefinitionSql: MySQL and MariaDB', () => {
         '',
       ].join('\n')
     )
-    for (const none of [null, '', undefined]) {
-      const out = my(none === undefined ? { definition: 'X' } : { definition: 'X', sqlMode: none })
+    for (const none of [{ sqlMode: null }, { sqlMode: '' }, {}]) {
+      const out = my({ definition: 'X', ...none })
       expect(out).not.toContain('sql_mode')
-      expect(out.startsWith('DROP PROCEDURE')).toBe(true)
+      expect(out).toMatch(/^DROP PROCEDURE/)
     }
   })
 

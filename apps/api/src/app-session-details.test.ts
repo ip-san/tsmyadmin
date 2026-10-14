@@ -1,14 +1,21 @@
 import { createHash } from 'node:crypto'
 import { AdapterError } from '@tsmyadmin/adapter'
-import { ConnectRequestSchema, type ServerPreset } from '@tsmyadmin/shared'
+import { ConnectRequestSchema, exportTemplateKey, type ServerPreset } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
 import { createApp, IP_LIMIT_FACTOR } from './app.ts'
 import { codeFor, stepAt } from './lib/totp.ts'
 import { MAX_MISSES } from './session/second-factor-lock.ts'
-import { SqliteSessionStore } from './session/sqlite-store.ts'
 import { MemorySessionStore } from './session/store.ts'
-import { closeStoresAfterEach, fixtureAdapter, harness, LOGIN, testConfig } from './test/app-harness.ts'
-import { capture, eventsOf as events, totpHarness } from './test/totp-harness.ts'
+import {
+  capture,
+  closeStoresAfterEach,
+  eventsOf as events,
+  fixtureAdapter,
+  harness,
+  LOGIN,
+  testConfig,
+} from './test/app-harness.ts'
+import { totpHarness } from './test/totp-harness.ts'
 
 /**
  * The words, the log lines and the limits of signing in and out, and the bookmark and template routes, as the
@@ -234,7 +241,10 @@ describe('signing in and out: what is written', () => {
     const [line] = events(lines, 'login.ok')
     expect(line).toMatchObject({
       level: 'info',
-      ...{ dialect: 'mysql', host: 'db', port: 3306, user: 'root' },
+      dialect: 'mysql',
+      host: 'db',
+      port: 3306,
+      user: 'root',
       sessionId: tag,
     })
     expect(line?.sessionId).toHaveLength(16)
@@ -343,89 +353,75 @@ describe('signing in to a Docker container', () => {
 describe('signing in with a second factor: what is said and written', () => {
   it('asks for a code when there is none, with the words and a log line, and no passkey offer when it has none', async () => {
     const h = totpHarness()
-    try {
-      await h.enrol()
-      const res = await h.browser().login()
-      expect(res.status).toBe(401)
-      const body = await errorOf(res)
-      expect(body).toMatchObject({
-        code: 'SECOND_FACTOR_REQUIRED',
-        message: 'This account needs a one-time code or a passkey',
-      })
-      expect(body).not.toHaveProperty('passkey')
-      expect(res.headers.get('set-cookie')).toBeNull()
-      expect(events(h.lines, 'login.second_factor.missing')).toMatchObject([{ level: 'warn', user: 'root' }])
-      expect(events(h.lines, 'login.second_factor.failed')).toEqual([])
-    } finally {
-      await h.store.closeAll()
-    }
+    stores.push(h.store)
+    await h.enrol()
+    const res = await h.browser().login()
+    expect(res.status).toBe(401)
+    const body = await errorOf(res)
+    expect(body).toMatchObject({
+      code: 'SECOND_FACTOR_REQUIRED',
+      message: 'This account needs a one-time code or a passkey',
+    })
+    expect(body).not.toHaveProperty('passkey')
+    expect(res.headers.get('set-cookie')).toBeNull()
+    expect(events(h.lines, 'login.second_factor.missing')).toMatchObject([{ level: 'warn', user: 'root' }])
+    expect(events(h.lines, 'login.second_factor.failed')).toEqual([])
   })
 
   it('refuses a wrong code with the words and a different log line, and leaves no session behind', async () => {
     const h = totpHarness()
-    try {
-      await h.enrol()
-      const res = await h.browser().login({ ...LOGIN, code: '000000' })
-      expect(res.status).toBe(401)
-      expect(await errorOf(res)).toMatchObject({ code: 'SECOND_FACTOR_INVALID', message: 'That code is not valid' })
-      expect(events(h.lines, 'login.second_factor.failed')).toMatchObject([{ level: 'warn', user: 'root' }])
-      expect(events(h.lines, 'login.second_factor.missing')).toEqual([])
-      expect(res.headers.get('set-cookie')).toBeNull()
-    } finally {
-      await h.store.closeAll()
-    }
+    stores.push(h.store)
+    await h.enrol()
+    const res = await h.browser().login({ ...LOGIN, code: '000000' })
+    expect(res.status).toBe(401)
+    expect(await errorOf(res)).toMatchObject({ code: 'SECOND_FACTOR_INVALID', message: 'That code is not valid' })
+    expect(events(h.lines, 'login.second_factor.failed')).toMatchObject([{ level: 'warn', user: 'root' }])
+    expect(events(h.lines, 'login.second_factor.missing')).toEqual([])
+    expect(res.headers.get('set-cookie')).toBeNull()
   })
 
   it('says to try later when the account is locked, with the wait and a log line', async () => {
     const h = totpHarness({ loginRateLimit: { max: 100, windowMs: 60_000 } })
-    try {
-      const { code } = await h.enrol()
-      for (let i = 0; i < MAX_MISSES; i++) await h.browser().login({ ...LOGIN, code: '000000' })
-      const res = await h.browser().login({ ...LOGIN, code })
-      expect(res.status).toBe(429)
-      expect(Number(res.headers.get('retry-after'))).toBeGreaterThan(0)
-      expect(await errorOf(res)).toMatchObject({
-        code: 'RATE_LIMITED',
-        message: 'Too many code attempts; try again later',
-      })
-      expect(events(h.lines, 'login.second_factor.locked')).toMatchObject([{ level: 'warn', user: 'root' }])
-    } finally {
-      await h.store.closeAll()
-    }
+    stores.push(h.store)
+    const { code } = await h.enrol()
+    for (let i = 0; i < MAX_MISSES; i++) await h.browser().login({ ...LOGIN, code: '000000' })
+    const res = await h.browser().login({ ...LOGIN, code })
+    expect(res.status).toBe(429)
+    // The clock has not moved since the last miss: the whole lock (15 minutes) is left.
+    expect(res.headers.get('retry-after')).toBe('900')
+    expect(await errorOf(res)).toMatchObject({
+      code: 'RATE_LIMITED',
+      message: 'Too many code attempts; try again later',
+    })
+    expect(events(h.lines, 'login.second_factor.locked')).toMatchObject([{ level: 'warn', user: 'root' }])
   })
 
   it('counts a refused code against the address, as a wrong password is', async () => {
     const h = totpHarness({ loginRateLimit: { max: 1, windowMs: 60_000 } })
-    try {
-      await h.enrol()
-      // The address allows `max * factor` failures in the window; a refused code is one of them, like a wrong
-      // password of another user name (here the fake server refuses every user but root).
-      expect((await h.browser().login({ ...LOGIN, code: '000000' })).status).toBe(401)
-      for (let i = 1; i < IP_LIMIT_FACTOR; i++) {
-        expect((await h.browser().login({ ...LOGIN, user: `other${i}` })).status).toBe(401)
-      }
-      expect((await h.browser().login({ ...LOGIN, user: 'another' })).status).toBe(429)
-    } finally {
-      await h.store.closeAll()
+    stores.push(h.store)
+    await h.enrol()
+    // The address allows `max * factor` failures in the window; a refused code is one of them, like a wrong
+    // password of another user name (here the fake server refuses every user but root).
+    expect((await h.browser().login({ ...LOGIN, code: '000000' })).status).toBe(401)
+    for (let i = 1; i < IP_LIMIT_FACTOR; i++) {
+      expect((await h.browser().login({ ...LOGIN, user: `other${i}` })).status).toBe(401)
     }
+    expect((await h.browser().login({ ...LOGIN, user: 'another' })).status).toBe(429)
   })
 
   it('closes the oldest session of an account beyond its limit once the code is right', async () => {
     const h = totpHarness({ maxPerIdentity: 1 })
-    try {
-      const { secret } = await h.enrol()
-      const a = h.browser()
-      const b = h.browser()
-      // A code is good once: each login waits for the next one.
-      const code = () => codeFor(secret, stepAt(h.tick(30_000)))
-      expect((await a.login({ ...LOGIN, code: code() })).status).toBe(201)
-      expect((await a.req('/api/session')).status).toBe(200)
-      expect((await b.login({ ...LOGIN, code: code() })).status).toBe(201)
-      expect((await b.req('/api/session')).status).toBe(200)
-      expect((await a.req('/api/session')).status).toBe(401)
-    } finally {
-      await h.store.closeAll()
-    }
+    stores.push(h.store)
+    const { secret } = await h.enrol()
+    const a = h.browser()
+    const b = h.browser()
+    // A code is good once: each login waits for the next one.
+    const code = () => codeFor(secret, stepAt(h.tick(30_000)))
+    expect((await a.login({ ...LOGIN, code: code() })).status).toBe(201)
+    expect((await a.req('/api/session')).status).toBe(200)
+    expect((await b.login({ ...LOGIN, code: code() })).status).toBe(201)
+    expect((await b.req('/api/session')).status).toBe(200)
+    expect((await a.req('/api/session')).status).toBe(401)
   })
 })
 
@@ -453,106 +449,85 @@ describe('bookmarks and templates without a store that keeps them', () => {
 })
 
 describe('bookmarks and templates in the store that keeps them', () => {
-  function persistent() {
-    const store = new SqliteSessionStore({
-      path: ':memory:',
-      secret: 's'.repeat(32),
-      adapterFactory: () => fixtureAdapter(),
-      sweepIntervalMs: 0,
-    })
-    const app = createApp(testConfig(), { store })
-    let cookie = ''
-    const req = (path: string, init: RequestInit = {}) =>
-      app.request(path, {
-        ...init,
-        headers: { 'content-type': 'application/json', ...(cookie ? { cookie } : {}) },
-      })
-    const login = async () => {
-      const res = await req('/api/session', { method: 'POST', body: JSON.stringify(LOGIN) })
-      cookie = res.headers.get('set-cookie')?.split(';')[0] ?? ''
-    }
+  /** One browser on the SQLite store (the one that keeps them), signed in. */
+  async function persistent() {
+    const h = totpHarness()
+    stores.push(h.store)
+    const { req, login } = h.browser()
+    await login()
     const config = ConnectRequestSchema.parse(LOGIN)
     const body = (database: string, schema?: string) =>
       JSON.stringify({ database, ...(schema ? { schema } : {}), tables: ['users'], options: { format: 'sql' } })
-    const list = async (kind: 'sql' | 'export') => store.savedQueries.list(config, kind)
+    const list = async (kind: 'sql' | 'export') => h.store.savedQueries.list(config, kind)
+    /** Each template row as the name it is stored under and the database its body names, in a fixed order. */
+    const keyed = async () =>
+      (await list('export')).map((r) => [r.name, (JSON.parse(r.body) as { database: string }).database]).sort()
     const save = (name: string, template: Record<string, unknown>) =>
       req('/api/export-templates', { method: 'POST', body: JSON.stringify({ name, options: {}, ...template }) })
-    return { store, req, login, config, body, list, save }
+    return { store: h.store, req, config, body, list, keyed, save }
   }
 
   it('deleting a bookmark really removes it', async () => {
-    const h = persistent()
-    try {
-      await h.login()
-      await h.req('/api/saved-queries', { method: 'POST', body: JSON.stringify({ name: 'daily', sql: 'SELECT 1' }) })
-      const [one] = await h.list('sql')
-      expect(one).toBeDefined()
-      const res = await h.req(`/api/saved-queries/${one?.id}`, { method: 'DELETE' })
-      expect(await res.json()).toEqual([])
-      expect(await h.list('sql')).toEqual([])
-    } finally {
-      await h.store.closeAll()
-    }
+    const h = await persistent()
+    await h.req('/api/saved-queries', { method: 'POST', body: JSON.stringify({ name: 'daily', sql: 'SELECT 1' }) })
+    const [one] = await h.list('sql')
+    expect(one).toBeDefined()
+    const res = await h.req(`/api/saved-queries/${one?.id}`, { method: 'DELETE' })
+    expect(await res.json()).toEqual([])
+    expect(await h.list('sql')).toEqual([])
   })
 
   it('shows the rows it can read as templates, and neither shows nor deletes the ones it cannot', async () => {
-    const h = persistent()
-    try {
-      await h.login()
-      await h.store.savedQueries.save(h.config, 'export', 'readable', h.body('shop'))
-      await h.store.savedQueries.save(h.config, 'export', 'not-json', 'this is not json')
-      await h.store.savedQueries.save(h.config, 'export', 'wrong-shape', JSON.stringify({ hello: 'world' }))
-      const listed = (await (await h.req('/api/export-templates')).json()) as { name: string }[]
-      expect(listed.map((t) => t.name)).toEqual(['readable'])
-      expect(await h.list('export')).toHaveLength(3)
-    } finally {
-      await h.store.closeAll()
-    }
+    const h = await persistent()
+    await h.store.savedQueries.save(h.config, 'export', 'readable', h.body('shop'))
+    await h.store.savedQueries.save(h.config, 'export', 'not-json', 'this is not json')
+    await h.store.savedQueries.save(h.config, 'export', 'wrong-shape', JSON.stringify({ hello: 'world' }))
+    const listed = (await (await h.req('/api/export-templates')).json()) as { name: string }[]
+    expect(listed.map((t) => t.name)).toEqual(['readable'])
+    expect(await h.list('export')).toHaveLength(3)
   })
 
   it('replaces an old row of the same name and database when it is saved again, and only that one', async () => {
-    const h = persistent()
-    try {
-      await h.login()
-      // The shape older versions wrote: the name is the key, the body holds the database.
-      await h.store.savedQueries.save(h.config, 'export', 'nightly', h.body('shop'))
-      await h.save('nightly', { database: 'blog' })
-      // Same name, other database: a second template, the old one untouched.
-      expect(await h.list('export')).toHaveLength(2)
-      await h.save('weekly', { database: 'shop' })
-      // Other name, same database: the old row stays too.
-      expect(await h.list('export')).toHaveLength(3)
-      await h.save('nightly', { database: 'shop' })
-      expect(await h.list('export')).toHaveLength(3)
-    } finally {
-      await h.store.closeAll()
-    }
+    const h = await persistent()
+    const key = (database: string, name: string) => exportTemplateKey({ database, name })
+    // The shape older versions wrote: the name is the key, the body holds the database.
+    await h.store.savedQueries.save(h.config, 'export', 'nightly', h.body('shop'))
+    await h.save('nightly', { database: 'blog' })
+    // Same name, other database: a second template, the old one untouched.
+    expect(await h.keyed()).toEqual([
+      [key('blog', 'nightly'), 'blog'],
+      ['nightly', 'shop'],
+    ])
+    await h.save('weekly', { database: 'shop' })
+    // Other name, same database: the old row stays too.
+    expect(await h.keyed()).toEqual([
+      [key('blog', 'nightly'), 'blog'],
+      [key('shop', 'weekly'), 'shop'],
+      ['nightly', 'shop'],
+    ])
+    await h.save('nightly', { database: 'shop' })
+    // Same name and database: the old row is gone, the new one stands under the new key, the other two as they were.
+    expect(await h.keyed()).toEqual([
+      [key('blog', 'nightly'), 'blog'],
+      [key('shop', 'nightly'), 'shop'],
+      [key('shop', 'weekly'), 'shop'],
+    ])
   })
 
   it('tells the schemas of one database apart when it looks for the old row', async () => {
-    const h = persistent()
-    try {
-      await h.login()
-      await h.store.savedQueries.save(h.config, 'export', 'nightly', h.body('shop', 'a'))
-      await h.save('nightly', { database: 'shop', schema: 'b' })
-      expect(await h.list('export')).toHaveLength(2)
-      await h.save('nightly', { database: 'shop', schema: 'a' })
-      expect(await h.list('export')).toHaveLength(2)
-    } finally {
-      await h.store.closeAll()
-    }
+    const h = await persistent()
+    await h.store.savedQueries.save(h.config, 'export', 'nightly', h.body('shop', 'a'))
+    await h.save('nightly', { database: 'shop', schema: 'b' })
+    expect(await h.list('export')).toHaveLength(2)
+    await h.save('nightly', { database: 'shop', schema: 'a' })
+    expect(await h.list('export')).toHaveLength(2)
   })
 
   it('leaves an old row it cannot read alone, even when the name is the same', async () => {
-    const h = persistent()
-    try {
-      await h.login()
-      await h.store.savedQueries.save(h.config, 'export', 'nightly', 'this is not json')
-      await h.save('nightly', { database: 'shop' })
-      expect(await h.list('export')).toHaveLength(2)
-      expect((await h.list('export')).map((r) => r.body)).toContain('this is not json')
-    } finally {
-      await h.store.closeAll()
-    }
+    const h = await persistent()
+    await h.store.savedQueries.save(h.config, 'export', 'nightly', 'this is not json')
+    await h.save('nightly', { database: 'shop' })
+    expect(await h.list('export')).toHaveLength(2)
+    expect((await h.list('export')).map((r) => r.body)).toContain('this is not json')
   })
 })

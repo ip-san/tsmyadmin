@@ -13,6 +13,14 @@ const stateOf = (input: string, dialect: 'mysql' | 'postgres') => {
   return state
 }
 
+/** Whether a backslash is a plain character after `prefix`: the script after it splits at `'a\'` only then. */
+const noBackslashAfter = (prefix: string) => {
+  const before = splitStatements(`${prefix};`, 'mysql').length
+  const after = splitStatements(`${prefix};\nSELECT 'a\\';\nSELECT 2`, 'mysql').length
+  return after - before === 2
+}
+const ON = "SET sql_mode = 'NO_BACKSLASH_ESCAPES'"
+
 describe('stripLeadingComments', () => {
   it('skips whitespace and every comment above the code, and returns from the first code character', () => {
     expect(stripLeadingComments('  \n-- a\n /* b */\n# c\n  SELECT 1', 'mysql')).toBe('SELECT 1')
@@ -64,6 +72,13 @@ describe('stripComments', () => {
   it('treats # as a comment on MySQL only', () => {
     expect(stripComments('a # c\nb', 'mysql')).toBe('a \nb')
     expect(stripComments('a # c\nb', 'postgres')).toBe('a # c\nb')
+  })
+
+  it('takes the number after /*! and the blanks around the body away, and keeps the body’s own line breaks', () => {
+    expect(stripComments('/*!50001SELECT 1*/', 'mysql')).toBe(' SELECT 1 ')
+    expect(stripComments('/*!   x   */', 'mysql')).toBe(' x ')
+    expect(stripComments('/*!40101 a\nb */', 'mysql')).toBe(' a\nb ')
+    expect(stripComments('/*!*/', 'mysql')).toBe('  ')
   })
 })
 
@@ -204,17 +219,25 @@ describe('setAssignments', () => {
       { name: 'autocommit', value: '(1)' },
     ])
   })
+
+  it('is empty for a server-wide SET however it is spaced or cased, and reads one with only a line break after SET', () => {
+    for (const sql of [
+      "SET   GLOBAL sql_mode = 'A'",
+      "set\tpersist sql_mode = 'A'",
+      "SET\nPERSIST_ONLY sql_mode = 'A'",
+    ])
+      expect(setAssignments(sql), sql).toEqual([])
+    expect(setAssignments("SET\nsql_mode = 'A'")).toEqual([{ name: 'sql_mode', value: "'A'" }])
+    expect(setAssignments("set sql_mode = 'A'")).toEqual([{ name: 'sql_mode', value: "'A'" }])
+  })
+
+  it('does not take a statement that has SET only further in for one', () => {
+    expect(setAssignments("UPDATE t SET sql_mode = 'A'")).toEqual([])
+    expect(setAssignments("SELECT 'SET sql_mode = 1'")).toEqual([])
+  })
 })
 
 describe('what a SET does to how MySQL reads a backslash (NO_BACKSLASH_ESCAPES)', () => {
-  /** Whether a backslash is a plain character after `prefix`: the script after it splits at `'a\'` only then. */
-  const noBackslashAfter = (prefix: string) => {
-    const before = splitStatements(`${prefix};`, 'mysql').length
-    const after = splitStatements(`${prefix};\nSELECT 'a\\';\nSELECT 2`, 'mysql').length
-    return after - before === 2
-  }
-  const ON = "SET sql_mode = 'NO_BACKSLASH_ESCAPES'"
-
   it('starts as off, and is turned on by a literal that holds the mode, in any case, among others', () => {
     expect(noBackslashAfter('SELECT 1')).toBe(false)
     expect(noBackslashAfter(ON)).toBe(true)
@@ -273,6 +296,30 @@ describe('what a SET does to how MySQL reads a backslash (NO_BACKSLASH_ESCAPES)'
   it('does not exist on PostgreSQL, where a SET of that name changes nothing about literals', () => {
     const script = `${ON};\nSELECT 'a\\';\nSELECT 2`
     expect(splitStatements(script, 'postgres')).toHaveLength(3)
+  })
+
+  it('reads only sql_mode as the mode: another variable set to a mode name changes nothing', () => {
+    expect(noBackslashAfter(`${ON};\nSET autocommit = ON`)).toBe(true)
+    expect(noBackslashAfter('SET autocommit = NO_BACKSLASH_ESCAPES')).toBe(false)
+  })
+
+  it('reads a bare mode name only when it is exactly that one', () => {
+    expect(noBackslashAfter('SET sql_mode = NO_BACKSLASH_ESCAPES_X')).toBe(false)
+    expect(noBackslashAfter('SET sql_mode = XNO_BACKSLASH_ESCAPES')).toBe(false)
+    expect(noBackslashAfter(`${ON};\nSET sql_mode = XDEFAULT`)).toBe(false)
+  })
+
+  it('takes a server-side variable (@@…) for no saved mode, and leaves the flag as it is', () => {
+    expect(noBackslashAfter(`${ON};\nSET sql_mode = @@global.sql_mode`)).toBe(true)
+    expect(noBackslashAfter(`${ON};\nSET sql_mode = @@session.sql_mode`)).toBe(true)
+  })
+
+  it('reads REPLACE and CONCAT only when they are the whole value, however they are spaced', () => {
+    expect(noBackslashAfter(`${ON};\nSET sql_mode = REPLACE ( @@sql_mode , 'NO_BACKSLASH_ESCAPES' , '' )`)).toBe(false)
+    expect(noBackslashAfter(`${ON};\nSET sql_mode = UPPER(REPLACE(@@sql_mode, 'NO_BACKSLASH_ESCAPES', ''))`)).toBe(true)
+    expect(noBackslashAfter("SET sql_mode = CONCAT (@@sql_mode, ',NO_BACKSLASH_ESCAPES')")).toBe(true)
+    expect(noBackslashAfter("SET sql_mode = UPPER(CONCAT(@@sql_mode, ',NO_BACKSLASH_ESCAPES'))")).toBe(false)
+    expect(noBackslashAfter(`${ON};\nSET sql_mode = REPLACE(@@sql_mode, 'ANSI', '')`)).toBe(true)
   })
 })
 
@@ -426,66 +473,6 @@ describe('text that is only a literal that is never closed', () => {
     expect(stateOf('SELECT "x"', 'postgres').unterminated).toBe(false)
     expect(stateOf('SELECT 1 -- a comment', 'mysql').unterminated).toBe(false)
     expect(stateOf('SELECT 1 # a comment', 'mysql').unterminated).toBe(false)
-  })
-})
-
-describe('stripComments: the body of a MySQL version comment', () => {
-  it('takes the number after /*! and the blanks around the body away, and keeps the body’s own line breaks', () => {
-    expect(stripComments('/*!50001SELECT 1*/', 'mysql')).toBe(' SELECT 1 ')
-    expect(stripComments('/*!   x   */', 'mysql')).toBe(' x ')
-    expect(stripComments('/*!40101 a\nb */', 'mysql')).toBe(' a\nb ')
-    expect(stripComments('/*!*/', 'mysql')).toBe('  ')
-  })
-})
-
-describe('setAssignments: which SET statements it reads', () => {
-  it('is empty for a server-wide SET however it is spaced or cased, and reads one with only a line break after SET', () => {
-    for (const sql of [
-      "SET   GLOBAL sql_mode = 'A'",
-      "set\tpersist sql_mode = 'A'",
-      "SET\nPERSIST_ONLY sql_mode = 'A'",
-    ])
-      expect(setAssignments(sql), sql).toEqual([])
-    expect(setAssignments("SET\nsql_mode = 'A'")).toEqual([{ name: 'sql_mode', value: "'A'" }])
-    expect(setAssignments("set sql_mode = 'A'")).toEqual([{ name: 'sql_mode', value: "'A'" }])
-  })
-
-  it('does not take a statement that has SET only further in for one', () => {
-    expect(setAssignments("UPDATE t SET sql_mode = 'A'")).toEqual([])
-    expect(setAssignments("SELECT 'SET sql_mode = 1'")).toEqual([])
-  })
-})
-
-describe('NO_BACKSLASH_ESCAPES: values that only look like the ones it reads', () => {
-  const noBackslashAfter = (prefix: string) => {
-    const before = splitStatements(`${prefix};`, 'mysql').length
-    const after = splitStatements(`${prefix};\nSELECT 'a\\';\nSELECT 2`, 'mysql').length
-    return after - before === 2
-  }
-  const ON = "SET sql_mode = 'NO_BACKSLASH_ESCAPES'"
-
-  it('reads only sql_mode as the mode: another variable set to a mode name changes nothing', () => {
-    expect(noBackslashAfter(`${ON};\nSET autocommit = ON`)).toBe(true)
-    expect(noBackslashAfter('SET autocommit = NO_BACKSLASH_ESCAPES')).toBe(false)
-  })
-
-  it('reads a bare mode name only when it is exactly that one', () => {
-    expect(noBackslashAfter('SET sql_mode = NO_BACKSLASH_ESCAPES_X')).toBe(false)
-    expect(noBackslashAfter('SET sql_mode = XNO_BACKSLASH_ESCAPES')).toBe(false)
-    expect(noBackslashAfter(`${ON};\nSET sql_mode = XDEFAULT`)).toBe(false)
-  })
-
-  it('takes a server-side variable (@@…) for no saved mode, and leaves the flag as it is', () => {
-    expect(noBackslashAfter(`${ON};\nSET sql_mode = @@global.sql_mode`)).toBe(true)
-    expect(noBackslashAfter(`${ON};\nSET sql_mode = @@session.sql_mode`)).toBe(true)
-  })
-
-  it('reads REPLACE and CONCAT only when they are the whole value, however they are spaced', () => {
-    expect(noBackslashAfter(`${ON};\nSET sql_mode = REPLACE ( @@sql_mode , 'NO_BACKSLASH_ESCAPES' , '' )`)).toBe(false)
-    expect(noBackslashAfter(`${ON};\nSET sql_mode = UPPER(REPLACE(@@sql_mode, 'NO_BACKSLASH_ESCAPES', ''))`)).toBe(true)
-    expect(noBackslashAfter("SET sql_mode = CONCAT (@@sql_mode, ',NO_BACKSLASH_ESCAPES')")).toBe(true)
-    expect(noBackslashAfter("SET sql_mode = UPPER(CONCAT(@@sql_mode, ',NO_BACKSLASH_ESCAPES'))")).toBe(false)
-    expect(noBackslashAfter(`${ON};\nSET sql_mode = REPLACE(@@sql_mode, 'ANSI', '')`)).toBe(true)
   })
 })
 
