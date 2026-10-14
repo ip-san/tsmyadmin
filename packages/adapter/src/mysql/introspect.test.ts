@@ -415,6 +415,9 @@ describe('mysqlDescribeTable', () => {
   })
 })
 
+/** A cell the row leaves at its default. */
+const U_ = undefined
+
 describe('mysqlTableStats', () => {
   const stats = async (data: unknown[][]) =>
     await mysqlTableStats(scripted([[/SELECT TABLE_TYPE, DATA_LENGTH/, rows(data)]]).conn, ns, 't')
@@ -469,7 +472,6 @@ describe('mysqlTableStats', () => {
     })
   })
 })
-const U_ = undefined
 
 describe('mysqlListPartitions', () => {
   const part = async (data: unknown[][]) => {

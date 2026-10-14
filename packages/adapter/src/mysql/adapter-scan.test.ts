@@ -3,7 +3,7 @@ import { Readable } from 'node:stream'
 import type { TableSchema } from '@tsmyadmin/shared'
 import { describe, expect, it, vi } from 'vitest'
 import type { Conn } from '../driver.ts'
-import { rows, scripted } from '../test/scripted-conn.ts'
+import { fail, rows, scripted } from '../test/scripted-conn.ts'
 import { MysqlAdapter } from './adapter.ts'
 
 /**
@@ -25,7 +25,7 @@ describe('MysqlAdapter.iterateRows: keyset paging', () => {
   const scan = (pages: unknown[][][], opts: { stream?: boolean } = {}) => {
     const adapter = new MysqlAdapter(config)
     let page = 0
-    const s = scripted([[/^SELECT/, rows([])]])
+    const s = scripted([])
     const asked: { text: string; params: unknown[] | undefined }[] = []
     const reset = vi.fn(async () => undefined)
     const done = vi.fn(async () => undefined)
@@ -182,6 +182,7 @@ describe('MysqlAdapter.iterateRows: keyset paging', () => {
     await expect(
       collect(broken.adapter.iterateRows(ns, 't', { batchSize: 2, schema: keyed, utc: true }))
     ).rejects.toThrow('boom')
+    expect(broken.reset).toHaveBeenCalledTimes(1)
     expect(broken.done).toHaveBeenCalledTimes(1)
   })
 
@@ -446,19 +447,10 @@ describe('MysqlAdapter: the small session statements', () => {
 
   it('falls back to max_statement_time in seconds where MariaDB lacks the variable, and remembers it', async () => {
     const a = new MysqlAdapter(config)
-    const unknown = Object.assign(new Error('Unknown system variable'), {
-      code: 'ER_UNKNOWN_SYSTEM_VARIABLE',
-      errno: 1193,
-    })
     const c = scripted([
-      [/max_execution_time/, new Error('x')],
+      [/max_execution_time/, fail('QUERY_FAILED', 'ER_UNKNOWN_SYSTEM_VARIABLE')],
       [/max_statement_time/, rows([])],
     ])
-    ;(c.conn as { query: Conn['query'] }).query = async (text: string) => {
-      c.asked.push({ text, params: undefined })
-      if (text.includes('max_execution_time')) throw (await import('../mysql/errors.ts')).mapMysqlError(unknown, true)
-      return rows([])
-    }
     await internals(a).setStatementTimeout?.(c.conn, 2500)
     expect(c.asked.map((q) => q.text)).toEqual([
       'SET SESSION max_execution_time = 2500',
@@ -467,11 +459,19 @@ describe('MysqlAdapter: the small session statements', () => {
     await internals(a).setStatementTimeout?.(c.conn, 500)
     expect(c.asked.at(-1)?.text).toBe('SET SESSION max_statement_time = 0.5')
     expect(c.asked).toHaveLength(3)
+    expect((a as unknown as { timeoutVariable: string }).timeoutVariable).toBe('max_statement_time')
   })
 
-  it('does not hide any other failure of the timeout statement', async () => {
-    const c = scripted([[/max_execution_time/, new Error('boom')]])
-    await expect(internals(new MysqlAdapter(config)).setStatementTimeout?.(c.conn, 1)).rejects.toThrow('boom')
+  it('does not hide any other failure of the timeout statement, and does not switch variables for it', async () => {
+    const plain = scripted([[/max_execution_time/, new Error('boom')]])
+    await expect(internals(new MysqlAdapter(config)).setStatementTimeout?.(plain.conn, 1)).rejects.toThrow('boom')
+    const a = new MysqlAdapter(config)
+    const denied = scripted([[/max_execution_time/, fail('PERMISSION_DENIED', 'ER_SPECIFIC_ACCESS_DENIED_ERROR')]])
+    await expect(internals(a).setStatementTimeout?.(denied.conn, 1)).rejects.toMatchObject({
+      code: 'PERMISSION_DENIED',
+    })
+    expect(denied.asked).toHaveLength(1)
+    expect((a as unknown as { timeoutVariable: string }).timeoutVariable).toBe('max_execution_time')
   })
 
   it('has the answers of its dialect: <=> for null-safe equality, all columns as the fallback key, none to select', () => {

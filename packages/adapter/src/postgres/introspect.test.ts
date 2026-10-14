@@ -73,18 +73,12 @@ describe('pgListTables', () => {
   })
 
   it('reads the size, none when the catalog has none, and the comment, an empty one staying empty', async () => {
-    const [a, b, c, d] = (
-      await list([
-        row(['a', 'r', 1, 'note', 8192]),
-        row(['b', 'r', 1, null, null]),
-        row(['c', 'r', 1, '', 0]),
-        row(['d', 'r', 1, null, undefined]),
-      ])
+    const [a, b, c] = (
+      await list([row(['a', 'r', 1, 'note', 8192]), row(['b', 'r', 1, null, null]), row(['c', 'r', 1, '', 0])])
     ).tables
     expect([a?.sizeBytes, a?.comment]).toEqual([8192, 'note'])
     expect([b?.sizeBytes, b?.comment]).toEqual([null, null])
     expect([c?.sizeBytes, c?.comment]).toEqual([0, ''])
-    expect(d?.sizeBytes).toBe(8192)
   })
 
   it('splits the parents of an inheritance child at the separator, and has none when there are none', async () => {

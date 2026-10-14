@@ -101,13 +101,13 @@ describe('pgRoutineDefinition', () => {
       'NOT_FOUND',
       /Routine not found: gone/
     )
-    refuses(
+    await refuses(
       () => pgRoutineDefinition(script([[null, null, '']]).conn, ns, 'hidden', 'function'),
       'NOT_FOUND',
       /Routine not found: hidden/
     )
     const other = scripted([])
-    refuses(
+    await refuses(
       () => pgRoutineDefinition(other.conn, ns, 'x', 'package' as RoutineKind),
       'NOT_FOUND',
       /Routine not found: x/

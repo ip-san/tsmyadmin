@@ -143,7 +143,7 @@ describe('withTransaction', () => {
     ).rejects.toThrow('first')
   })
 
-  it('does not commit, and rolls back, when the commit fails', async () => {
+  it('rolls back after a COMMIT that failed, and passes that failure on', async () => {
     const r = rig()
     r.conns[0]?.query.mockImplementation(async (text: string) => {
       r.log.push(text)

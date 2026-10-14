@@ -90,6 +90,9 @@ const poolFor = (a: Adapter, db: string) => (a as unknown as { poolFor: (d: stri
 beforeEach(() => {
   pools.length = 0
   copied.length = 0
+  state.nextConnect = async () => {
+    throw new Error('no client scripted')
+  }
 })
 
 describe('PostgresAdapter: opening a pool', () => {
@@ -193,13 +196,13 @@ describe('PostgresAdapter.acquire: a pool that gives no client', () => {
   it('keeps the pool of the database it signs in to, and any pool that has clients or callers', async () => {
     refuse()
     const a = new PostgresAdapter({ ...config, database: 'home' })
-    await expect(acquire(a, { database: 'home' })).rejects.toBeDefined()
+    await expect(acquire(a, { database: 'home' })).rejects.toMatchObject({ code: 'CONNECTION_FAILED' })
     expect(poolMap(a).has('home')).toBe(true)
     for (const state of [{ totalCount: 1 }, { waitingCount: 1 }]) {
       const b = new PostgresAdapter({ ...config, database: 'home' })
       const p = poolFor(b, 'other')
       Object.assign(p, { totalCount: 0, waitingCount: 0, ...state })
-      await expect(acquire(b, { database: 'other' })).rejects.toBeDefined()
+      await expect(acquire(b, { database: 'other' })).rejects.toMatchObject({ code: 'CONNECTION_FAILED' })
       expect(p.end, JSON.stringify(state)).not.toHaveBeenCalled()
       expect(poolMap(b).get('other')).toBe(p)
     }
@@ -239,11 +242,12 @@ describe('PostgresAdapter.acquire: setting a client up', () => {
     )
     connectTo(c)
     const a = new PostgresAdapter(config)
-    await expect(acquire(a)).rejects.toBeDefined()
+    await expect(acquire(a)).rejects.toMatchObject({ code: 'NOT_FOUND', nativeCode: '3F000' })
     expect(c.release).toHaveBeenCalledTimes(1)
     expect(c.release).toHaveBeenCalledWith(undefined)
-    await expect(acquire(a)).rejects.toBeDefined()
+    await expect(acquire(a)).rejects.toMatchObject({ code: 'NOT_FOUND' })
     expect(c.query).toHaveBeenCalledTimes(2)
+    expect(c.query).toHaveBeenLastCalledWith({ text: 'SET search_path TO "public"', rowMode: 'array' })
   })
 
   it('watches a client for errors once, and takes a client whose backend was terminated for broken', async () => {
