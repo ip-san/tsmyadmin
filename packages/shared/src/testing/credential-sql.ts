@@ -175,10 +175,14 @@ const GAPS = ['', ' ', '\n', " /* it's */ ", ' -- "quoted"\n', ' /* $$ */ ']
 
 /** A password inside a connection string or URL (CREATE SUBSCRIPTION, dblink, FEDERATED tables). */
 export function connectionStatement(dialect: Dialect): fc.Arbitrary<CredentialStatement> {
-  // A bare value in a connection string or URL ends at whitespace, a quote, `@`, `/` or `;`.
-  const bare = fc
-    .array(fc.constantFrom('a', 'Z', '9', '.', '_', '~', '!', '-', '+', 'é'), { maxLength: 6 })
-    .map((cs) => `${SECRET_MARK}${cs.join('')}${SECRET_MARK}`)
+  // A bare value in a connection string or URL ends at whitespace, a quote, `@` or `;`. A URL's password may hold an
+  // unencoded `/`, and a connection string's a backslash-escaped space (libpq reads `a\ b` as `a b`).
+  const chars = (extra: string[]) =>
+    fc
+      .array(fc.constantFrom('a', 'Z', '9', '.', '_', '~', '!', '-', '+', 'é', ...extra), { maxLength: 6 })
+      .map((cs) => `${SECRET_MARK}${cs.join('')}${SECRET_MARK}`)
+  const bare = chars(['/'])
+  const escaped = chars(['\\ ', '\\\\'])
   if (dialect === 'mysql') {
     return bare.map((pw) => ({
       sql: `CREATE TABLE ft (id INT) ENGINE=FEDERATED CONNECTION='mysql://u:${pw}@h:3306/db/t'`,
@@ -190,13 +194,23 @@ export function connectionStatement(dialect: Dialect): fc.Arbitrary<CredentialSt
     .record({
       pw: bare,
       form: fc.constantFrom(
-        (pw: string) => `CREATE SUBSCRIPTION s CONNECTION 'host=h password=${pw} dbname=d' PUBLICATION p`,
-        (pw: string) => `SELECT dblink_connect('c', 'host=h port=5432 password = ${pw}')`,
-        (pw: string) => `CREATE SUBSCRIPTION s CONNECTION 'postgresql://u:${pw}@h/db' PUBLICATION p`,
-        (pw: string) => `SELECT dblink_connect('postgres://u:${pw}@h:5432/db')`
+        {
+          conn: true,
+          sql: (pw: string) => `CREATE SUBSCRIPTION s CONNECTION 'host=h password=${pw} dbname=d' PUBLICATION p`,
+        },
+        { conn: true, sql: (pw: string) => `SELECT dblink_connect('c', 'host=h port=5432 password = ${pw}')` },
+        {
+          conn: false,
+          sql: (pw: string) => `CREATE SUBSCRIPTION s CONNECTION 'postgresql://u:${pw}@h/db' PUBLICATION p`,
+        },
+        { conn: false, sql: (pw: string) => `SELECT dblink_connect('postgres://u:${pw}@h:5432/db')` }
       ),
+      escaped,
     })
-    .map(({ pw, form }) => ({ sql: form(pw), body: pw, open: false }))
+    .map(({ pw, form, escaped: esc }) => {
+      const body = form.conn ? esc : pw
+      return { sql: form.sql(body), body, open: false }
+    })
 }
 
 /** Statements the server reads as they are, with quotes, comments and `;` inside literals, to put around a credential. */

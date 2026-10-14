@@ -97,6 +97,15 @@ describe('maskConnectionPassword', () => {
     expect(maskConnectionPassword("dblink('password=abc;user=u')")).toBe(`dblink('password=${PASSWORD_MASK};user=u')`)
     expect(maskConnectionPassword('SELECT password FROM t')).toBe('SELECT password FROM t')
   })
+
+  it('does not stop at a backslash-escaped space in a connection string, or at a `/` in a URL password', () => {
+    expect(maskConnectionPassword("dblink_connect('host=h password=pre\\ post-secret dbname=d')")).toBe(
+      `dblink_connect('host=h password=${PASSWORD_MASK} dbname=d')`
+    )
+    expect(maskConnectionPassword("CONNECTION 'postgresql://u:pre/post-secret@h/db'")).toBe(
+      `CONNECTION 'postgresql://u:${PASSWORD_MASK}@h/db'`
+    )
+  })
 })
 
 describe('sqlLiteralPattern', () => {

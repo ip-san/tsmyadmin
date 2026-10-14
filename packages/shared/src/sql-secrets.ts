@@ -24,13 +24,16 @@ import { PASSWORD_MASK } from './schemas/users.ts'
 export const sqlLiteralPattern = (n: number, whole = false): string =>
   `(?:(?:[EeNnXxBb]|[Uu]&|_[A-Za-z0-9]+)?'(?:[^'\\\\]|\\\\${whole ? "[^']" : '[\\s\\S]'}|'')*'${whole ? "(?!')" : ''}|"(?:[^"\\\\]|\\\\${whole ? '[^"]' : '[\\s\\S]'}|"")*"${whole ? '(?!")' : ''}|\\$((?:[A-Za-z_\\u0080-\\uffff][\\w\\u0080-\\uffff]*)?)\\$[\\s\\S]*?\\$\\${n}\\$)`
 
-/** `password=secret` inside a connection string (CREATE SUBSCRIPTION … CONNECTION, dblink, postgres_fdw options). */
-const CONNECTION_PASSWORD = /(\bpassword\s*=\s*)[^\s'";]+/gi
+/**
+ * `password=secret` inside a connection string (CREATE SUBSCRIPTION … CONNECTION, dblink, postgres_fdw options). libpq
+ * reads a backslash as escaping the next character (`password=a\ b` is `a b`), so an escaped space does not end it.
+ */
+const CONNECTION_PASSWORD = /(\bpassword\s*=\s*)(?:\\[\s\S]|[^\s'";\\])+/gi
 /**
  * `scheme://user:secret@host` (a libpq URI in CREATE SUBSCRIPTION / dblink, a MySQL FEDERATED table's CONNECTION):
- * up to the last `@` before the path, so an unencoded `@` in the password hides more, not less.
+ * up to the last `@`, so an unencoded `@` or `/` in the password hides more, not less.
  */
-const CONNECTION_URL_PASSWORD = /(\b[A-Za-z][\w+.-]*:\/\/[^\s'"/@:]*:)[^\s'"/]+(?=@)/g
+const CONNECTION_URL_PASSWORD = /(\b[A-Za-z][\w+.-]*:\/\/[^\s'"/@:]*:)[^\s'"]+(?=@)/g
 /** A statement's credential part: the text up to and including the first keyword, and all that follows it. */
 const CREDENTIAL_PART = /^([\s\S]*?\b(?:\w+_)?(?:IDENTIFIED|PASSWORD)\b)([\s\S]*)$/i
 /**
