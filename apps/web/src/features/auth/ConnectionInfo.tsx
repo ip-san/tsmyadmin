@@ -53,7 +53,8 @@ export function ConnectionInfo({ preset }: { preset: ServerPreset | undefined })
         <fieldset className="space-y-1">
           <legend className="mb-1 text-xs font-medium text-ink">{t.viewpoint}</legend>
           {endpoints.map((e) => (
-            <label key={e.viewpoint} className="flex items-center gap-2 text-xs">
+            // min-h-6: stacked radios need 24 px between them (WCAG 2.5.8 target size).
+            <label key={e.viewpoint} className="flex min-h-6 items-center gap-2 text-xs">
               <input
                 type="radio"
                 name={`${id}-viewpoint`}
