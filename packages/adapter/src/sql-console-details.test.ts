@@ -272,6 +272,12 @@ describe('an error in a wrapped read', () => {
 })
 
 describe('cancelling: its own branches', () => {
+  /** Waits until the canceller has been asked at least `n` times (the retry runs on a timer that slips under load). */
+  const signalled = async (r: ReturnType<typeof rig>, n: number) => {
+    for (let waited = 0; r.canceller.cancel.mock.calls.length < n && waited < 5000; waited += 10) {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    }
+  }
   /** A run whose one statement stays on the wire until `finish()`. */
   const hung = (backend = '42') => {
     const wire = deferred<RawResult>()
@@ -308,7 +314,7 @@ describe('cancelling: its own branches', () => {
     const { r, wire, finished } = hung('77')
     await new Promise((resolve) => setTimeout(resolve, 5))
     const answer = r.runner.cancel('q')
-    await new Promise((resolve) => setTimeout(resolve, 180))
+    await signalled(r, 3)
     wire.resolve(rowsOf(1))
     expect(await answer).toBe(true)
     await finished
@@ -325,9 +331,10 @@ describe('cancelling: its own branches', () => {
       if (++calls > 1) throw new Error('no such thread')
     })
     const answer = r.runner.cancel('q')
-    await new Promise((resolve) => setTimeout(resolve, 120))
+    await signalled(r, 2)
     wire.resolve(rowsOf(1))
     expect(await answer).toBe(true)
+    expect(calls).toBeGreaterThanOrEqual(2)
     await finished
   })
 
