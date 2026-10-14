@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Conn } from '../driver.ts'
 import { MysqlAdapter } from '../mysql/adapter.ts'
 import { PostgresAdapter } from '../postgres/adapter.ts'
+import { affecting, column, type Dialect, ns, rig } from './base-rig.ts'
 import { rows } from './scripted-conn.ts'
 
 /**
@@ -10,148 +11,105 @@ import { rows } from './scripted-conn.ts'
  * connection faked, on a real adapter of each dialect.
  */
 
-const ns = { database: 'd', schema: 'sales' }
-type Dialect = 'mysql' | 'postgres'
 const make = (dialect: Dialect) => {
   const cfg = { dialect, host: 'h', port: 1, user: 'u', password: 'p' } as const
   return dialect === 'mysql' ? new MysqlAdapter(cfg) : new PostgresAdapter(cfg)
 }
 type Internals = {
-  acquire: unknown
-  setStatementTimeout: unknown
   borrow: (ns: unknown, ms: number) => Promise<{ conn: Conn; done: () => Promise<void> }>
   withConn: <T>(ns: unknown, fn: (c: Conn) => Promise<T>, ms?: number) => Promise<T>
   withTransaction: <T>(ns: unknown, fn: (c: Conn) => Promise<T>) => Promise<T>
   forgetSessionState: (c: Conn) => void
 }
 const inner = (a: unknown) => a as Internals
-
-/** An adapter whose connections are `conns` in turn (the last one repeats), and the timeouts it was asked to set. */
-function rig(dialect: Dialect = 'mysql', conns: number = 1) {
-  const adapter = make(dialect)
-  const log: string[] = []
-  const timeouts: number[] = []
-  const made = Array.from({ length: conns }, (_, i) => ({
-    id: { n: i },
-    release: vi.fn(),
-    forget: vi.fn(),
-    reset: async () => undefined,
-    discard: vi.fn(),
-    query: vi.fn(async (text: string) => {
-      log.push(text)
-      return rows([])
-    }),
-  }))
-  let next = 0
-  inner(adapter).acquire = async () => made[Math.min(next++, made.length - 1)]
-  const failing: { error: Error | null } = { error: null }
-  inner(adapter).setStatementTimeout = async (_c: unknown, ms: number) => {
-    if (failing.error) throw failing.error
-    timeouts.push(ms)
-  }
-  return {
-    adapter,
-    conns: made as unknown as (Conn & {
-      release: ReturnType<typeof vi.fn>
-      forget: ReturnType<typeof vi.fn>
-      query: ReturnType<typeof vi.fn>
-    })[],
-    log,
-    timeouts,
-    failing,
-  }
-}
+const SET_TIMEOUT = 'SET SESSION max_execution_time = 30000'
 
 describe('borrow and withConn', () => {
   it('sets the statement timeout on a connection the first time, and not again while it stays the same', async () => {
-    const r = rig()
+    const r = rig('mysql')
     await inner(r.adapter).borrow(ns, 5000)
     await inner(r.adapter).borrow(ns, 5000)
-    expect(r.timeouts).toEqual([5000])
+    expect(r.timeouts()).toEqual([5000])
     await inner(r.adapter).borrow(ns, 9000)
-    expect(r.timeouts).toEqual([5000, 9000])
+    expect(r.timeouts()).toEqual([5000, 9000])
     await inner(r.adapter).borrow(ns, 9000)
-    expect(r.timeouts).toEqual([5000, 9000])
+    expect(r.timeouts()).toEqual([5000, 9000])
   })
 
   it('keeps the timeout of each connection apart', async () => {
-    const r = rig('mysql', 2)
+    const r = rig('mysql', { conns: 2 })
     await inner(r.adapter).borrow(ns, 5000)
     await inner(r.adapter).borrow(ns, 5000)
-    expect(r.timeouts).toEqual([5000, 5000])
+    expect(r.timeouts()).toEqual([5000, 5000])
   })
 
   it('gives the connection back and does not remember the timeout when setting it fails', async () => {
-    const r = rig()
-    r.failing.error = new Error('cannot set')
+    let failing: Error | null = new Error('cannot set')
+    const r = rig('mysql', {
+      rules: (text) => (text.startsWith('SET SESSION max_execution_time') && failing) || undefined,
+    })
     await expect(inner(r.adapter).borrow(ns, 5000)).rejects.toThrow('cannot set')
-    expect(r.conns[0]?.release).toHaveBeenCalledTimes(1)
-    r.failing.error = null
+    expect(r.conn.release).toHaveBeenCalledTimes(1)
+    failing = null
     await inner(r.adapter).borrow(ns, 5000)
-    expect(r.timeouts).toEqual([5000])
-    expect(r.conns[0]?.release).toHaveBeenCalledTimes(1)
+    expect(r.timeouts()).toEqual([5000, 5000])
+    expect(r.conn.release).toHaveBeenCalledTimes(1)
   })
 
   it("forgets the timeout and the dialect's own cache after user SQL, so the next borrower sets it again", async () => {
-    const r = rig()
+    const r = rig('mysql')
     const { conn } = await inner(r.adapter).borrow(ns, 5000)
     inner(r.adapter).forgetSessionState(conn)
-    expect(r.conns[0]?.forget).toHaveBeenCalledTimes(1)
+    expect(r.conn.forget).toHaveBeenCalledTimes(1)
     await inner(r.adapter).borrow(ns, 5000)
-    expect(r.timeouts).toEqual([5000, 5000])
+    expect(r.timeouts()).toEqual([5000, 5000])
   })
 
   it('hands the connection to the function, gives it back afterwards, even when the function fails, and answers with its result', async () => {
-    const r = rig()
+    const r = rig('mysql')
     expect(await inner(r.adapter).withConn(ns, async () => 'result', 1000)).toBe('result')
-    expect(r.conns[0]?.release).toHaveBeenCalledTimes(1)
+    expect(r.conn.release).toHaveBeenCalledTimes(1)
     await expect(inner(r.adapter).withConn(ns, async () => Promise.reject(new Error('boom')), 1000)).rejects.toThrow(
       'boom'
     )
-    expect(r.conns[0]?.release).toHaveBeenCalledTimes(2)
+    expect(r.conn.release).toHaveBeenCalledTimes(2)
   })
 
   it('applies 30 seconds unless another timeout is given', async () => {
-    const r = rig()
+    const r = rig('mysql')
     await inner(r.adapter).withConn(ns, async () => undefined)
-    expect(r.timeouts).toEqual([30_000])
+    expect(r.timeouts()).toEqual([30_000])
     await inner(r.adapter).withConn(ns, async () => undefined, 2000)
-    expect(r.timeouts).toEqual([30_000, 2000])
+    expect(r.timeouts()).toEqual([30_000, 2000])
   })
 })
 
 describe('withTransaction', () => {
+  const X: [RegExp, ReturnType<typeof rows>] = [/^X$/, rows([])]
+
   it('begins, runs, commits and answers with the result', async () => {
-    const r = rig()
+    const r = rig('mysql', { rules: [X] })
     expect(await inner(r.adapter).withTransaction(ns, async (c) => (await c.query('X'), 'done'))).toBe('done')
-    expect(r.log).toEqual(['BEGIN', 'X', 'COMMIT'])
+    expect(r.statements()).toEqual([SET_TIMEOUT, 'BEGIN', 'X', 'COMMIT'])
   })
 
   it('rolls back and passes the failure on, even when the rollback itself fails', async () => {
-    const r = rig()
+    const r = rig('mysql')
     await expect(inner(r.adapter).withTransaction(ns, async () => Promise.reject(new Error('first')))).rejects.toThrow(
       'first'
     )
-    expect(r.log).toEqual(['BEGIN', 'ROLLBACK'])
-    const noRollback = rig()
-    noRollback.conns[0]?.query.mockImplementation(async (text: string) => {
-      if (text === 'ROLLBACK') throw new Error('rollback failed')
-      return rows([])
-    })
+    expect(r.statements()).toEqual([SET_TIMEOUT, 'BEGIN', 'ROLLBACK'])
+    const noRollback = rig('mysql', { rules: [[/^ROLLBACK$/, new Error('rollback failed')]] })
     await expect(
       inner(noRollback.adapter).withTransaction(ns, async () => Promise.reject(new Error('first')))
     ).rejects.toThrow('first')
+    expect(noRollback.statements()).toEqual([SET_TIMEOUT, 'BEGIN', 'ROLLBACK'])
   })
 
   it('rolls back after a COMMIT that failed, and passes that failure on', async () => {
-    const r = rig()
-    r.conns[0]?.query.mockImplementation(async (text: string) => {
-      r.log.push(text)
-      if (text === 'COMMIT') throw new Error('commit failed')
-      return rows([])
-    })
+    const r = rig('mysql', { rules: [[/^COMMIT$/, new Error('commit failed')]] })
     await expect(inner(r.adapter).withTransaction(ns, async () => 1)).rejects.toThrow('commit failed')
-    expect(r.log).toEqual(['BEGIN', 'COMMIT', 'ROLLBACK'])
+    expect(r.statements()).toEqual([SET_TIMEOUT, 'BEGIN', 'COMMIT', 'ROLLBACK'])
   })
 })
 
@@ -224,20 +182,20 @@ describe('checkReferences', () => {
     refNamespace: { database: 'd', schema: 'sales' },
     refTable: 'parent',
     refColumns: ['x', 'y'],
+    onUpdate: null,
+    onDelete: null,
     ...over,
   })
-  const check = async (dialect: Dialect, foreignKeys: unknown[], count: unknown = 3) => {
-    const r = rig(dialect)
-    ;(r.adapter as unknown as { describeTable: unknown }).describeTable = async () => ({ foreignKeys })
-    r.conns[0]?.query.mockImplementation(async (text: string) => {
-      r.log.push(text)
-      return rows(count === NO_ROW ? [] : [[count]])
+  const check = async (dialect: Dialect, foreignKeys: ReturnType<typeof fk>[], count: unknown = 3) => {
+    const r = rig(dialect, {
+      rules: [[/COUNT/, rows(count === NO_ROW ? [] : [[count]])]],
+      table: { foreignKeys },
     })
-    return { out: await r.adapter.checkReferences(ns, 'child'), log: r.log }
+    return { out: await r.adapter.checkReferences(ns, 'child'), asked: r.asked.map((q) => q.text) }
   }
 
   it('counts the rows whose parent is missing, ignoring rows with a NULL in the key, and gives the statement to look at them', async () => {
-    const { out, log } = await check('mysql', [fk()], '4')
+    const { out, asked } = await check('mysql', [fk()], '4')
     expect(out).toEqual([
       {
         name: 'fk1',
@@ -249,18 +207,18 @@ describe('checkReferences', () => {
         sql: 'SELECT c.* FROM `d`.`child` c LEFT JOIN `d`.`parent` p ON c.`a` = p.`x` AND c.`b` = p.`y` WHERE p.`x` IS NULL AND c.`a` IS NOT NULL AND c.`b` IS NOT NULL',
       },
     ])
-    expect(log).toEqual([
+    expect(asked).toEqual([
       'SELECT COUNT(*) FROM `d`.`child` c LEFT JOIN `d`.`parent` p ON c.`a` = p.`x` AND c.`b` = p.`y` WHERE p.`x` IS NULL AND c.`a` IS NOT NULL AND c.`b` IS NOT NULL',
     ])
   })
 
   it('quotes for PostgreSQL, one entry per foreign key, and none when there are none', async () => {
-    const { out, log } = await check('postgres', [
+    const { out, asked } = await check('postgres', [
       fk({ columns: ['a'], refColumns: ['x'] }),
       fk({ name: 'fk2', columns: ['b'], refColumns: ['y'] }),
     ])
     expect(out.map((o) => o.name)).toEqual(['fk1', 'fk2'])
-    expect(log[0]).toContain(
+    expect(asked[0]).toContain(
       'FROM "sales"."child" c LEFT JOIN "sales"."parent" p ON c."a" = p."x" WHERE p."x" IS NULL AND c."a" IS NOT NULL'
     )
     expect((await check('mysql', [])).out).toEqual([])
@@ -274,17 +232,10 @@ describe('checkReferences', () => {
 
 describe('the hooks of the condition builders', () => {
   it('compares a MySQL row by every column with <=>, and a text column as exact bytes', async () => {
-    const r = rig('mysql')
-    ;(r.adapter as unknown as { describeTable: unknown }).describeTable = async () => ({
-      columns: [{ name: 'a', dataType: 'varchar(5)' }],
-    })
-    r.conns[0]?.query.mockImplementation(async (text: string) => {
-      r.log.push(text)
-      return { ...rows([]), affectedRows: 1 }
-    })
-    await r.adapter.deleteRows(ns, 't', [{ kind: 'all-columns', values: { a: 'x' } }] as never)
-    expect(r.log.find((q) => q.startsWith('DELETE'))).toMatch(/<=>/)
-    expect(r.log.find((q) => q.startsWith('DELETE'))).toMatch(/BINARY/i)
+    const r = rig('mysql', { rules: [[/^DELETE/, affecting(1)]], table: { columns: [column('a', 'varchar(5)')] } })
+    await r.adapter.deleteRows(ns, 't', [{ kind: 'all-columns', values: { a: 'x' } }])
+    expect(r.asked[0]?.text).toMatch(/<=>/)
+    expect(r.asked[0]?.text).toMatch(/BINARY/i)
   })
 
   it('asks the table for its column types on MySQL, which casts keys, and not on PostgreSQL, which does not', async () => {
@@ -292,11 +243,9 @@ describe('the hooks of the condition builders', () => {
       ['mysql', 1],
       ['postgres', 0],
     ] as const) {
-      const r = rig(dialect)
-      const describe = vi.fn(async () => ({ columns: [{ name: 'id', dataType: 'int' }] }))
-      ;(r.adapter as unknown as { describeTable: unknown }).describeTable = describe
-      r.conns[0]?.query.mockImplementation(async () => ({ ...rows([]), affectedRows: 1 }))
-      await r.adapter.deleteRows(ns, 't', [{ kind: 'pk', values: { id: 1 } }] as never)
+      const describe = vi.fn(() => ({ columns: [column('id', 'int')] }))
+      const r = rig(dialect, { rules: [[/^DELETE/, affecting(1)]], table: describe })
+      await r.adapter.deleteRows(ns, 't', [{ kind: 'pk', values: { id: 1 } }])
       expect(describe, dialect).toHaveBeenCalledTimes(calls)
     }
   })

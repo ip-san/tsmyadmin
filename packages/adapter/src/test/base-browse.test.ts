@@ -1,10 +1,9 @@
+import type { TableSchema } from '@tsmyadmin/shared'
 import { BROWSE_ALL_MAX, DISTINCT_VALUES_LIMIT, EXACT_COUNT_MAX_ROWS } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
 import { countMode } from '../base.ts'
-import type { Conn } from '../driver.ts'
-import { MysqlAdapter } from '../mysql/adapter.ts'
-import { PostgresAdapter } from '../postgres/adapter.ts'
-import { rows, scripted } from './scripted-conn.ts'
+import { column, type Dialect, ns, rig } from './base-rig.ts'
+import { type Answer, rows } from './scripted-conn.ts'
 
 /**
  * The reads behind the browse page: the distinct values of a column, the table search, and the page of rows with its
@@ -12,36 +11,26 @@ import { rows, scripted } from './scripted-conn.ts'
  * scripted.
  */
 
-const ns = { database: 'd', schema: 'sales' }
-type Dialect = 'mysql' | 'postgres'
-type Rule = [RegExp, ReturnType<typeof rows> | Error]
+type Rule = [RegExp, Answer]
 type Table = {
   columns: [string, string][]
   primaryKey?: string[]
   rowEstimate?: number | null
-  foreignKeys?: unknown[]
-  referencedBy?: unknown[]
+  foreignKeys?: TableSchema['foreignKeys']
+  referencedBy?: TableSchema['referencedBy']
 }
 
-const adapterFor = (dialect: Dialect, table: Table, script: Rule[] = []) => {
-  const cfg = { dialect, host: 'h', port: 1, user: 'u', password: 'p' } as const
-  const adapter = dialect === 'mysql' ? new MysqlAdapter(cfg) : new PostgresAdapter(cfg)
-  const s = scripted(script)
-  ;(adapter as unknown as { withConn: unknown }).withConn = async (_n: unknown, fn: (c: Conn) => unknown) =>
-    await fn(s.conn)
-  ;(adapter as unknown as { describeTable: unknown }).describeTable = async () => ({
-    kind: 'table',
-    columns: table.columns.map(([name, dataType]) => ({ name, dataType, nullable: false })),
-    primaryKey: table.primaryKey ?? [],
-    indexes: [],
-    rowEstimate: table.rowEstimate ?? null,
-    foreignKeys: table.foreignKeys ?? [],
-    referencedBy: table.referencedBy ?? [],
-    partitioned: false,
-    hasChildren: false,
+const adapterFor = (dialect: Dialect, table: Table, script: Rule[] = []) =>
+  rig(dialect, {
+    rules: script,
+    table: {
+      columns: table.columns.map(([name, dataType]) => column(name, dataType)),
+      primaryKey: table.primaryKey ?? [],
+      rowEstimate: table.rowEstimate ?? null,
+      foreignKeys: table.foreignKeys ?? [],
+      referencedBy: table.referencedBy ?? [],
+    },
   })
-  return { adapter, asked: s.asked }
-}
 const T: Table = {
   columns: [
     ['id', 'integer'],
@@ -322,8 +311,18 @@ describe('browseRows', () => {
   })
 
   it('hands back the foreign keys and the tables that refer to this one', async () => {
-    const fk = [{ columns: ['id'], refTable: 'x' }]
-    const by = [{ table: 'y' }]
+    const fk = [
+      {
+        name: 'fk',
+        columns: ['id'],
+        refNamespace: ns,
+        refTable: 'x',
+        refColumns: ['id'],
+        onUpdate: null,
+        onDelete: null,
+      },
+    ]
+    const by = [{ name: 'fk2', fromNamespace: ns, fromTable: 'y', fromColumns: ['t_id'], columns: ['id'] }]
     const out = await adapterFor('mysql', { ...T, foreignKeys: fk, referencedBy: by }, page()).adapter.browseRows(
       ns,
       't',

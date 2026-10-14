@@ -1,35 +1,22 @@
 import { describe, expect, it } from 'vitest'
-import { MysqlAdapter } from '../mysql/adapter.ts'
-import { PostgresAdapter } from '../postgres/adapter.ts'
+import type { MysqlAdapter } from '../mysql/adapter.ts'
+import { column, type Dialect, ns, rig } from './base-rig.ts'
 
 /**
  * `buildQuery` (the statement the query builder writes, to open in the SQL tab) and the INSERT with no values, for both
  * dialects, with the tables' descriptions supplied directly.
  */
 
-const ns = { database: 'd', schema: 'sales' }
-type Dialect = 'mysql' | 'postgres'
 type Spec = Parameters<MysqlAdapter['buildQuery']>[1]
 
-const column = (name: string, dataType = 'varchar(20)') => ({ name, dataType, nullable: false })
 const adapterFor = (
   dialect: Dialect,
   tables: Record<string, string[]> = { orders: ['id', 'total'] },
   types: Record<string, string> = {}
-) => {
-  const adapter =
-    dialect === 'mysql'
-      ? new MysqlAdapter({ dialect, host: 'h', port: 1, user: 'u', password: 'p' })
-      : new PostgresAdapter({ dialect, host: 'h', port: 1, user: 'u', password: 'p' })
-  ;(adapter as unknown as { describeTable: unknown }).describeTable = async (_ns: unknown, table: string) => ({
-    kind: 'table',
-    columns: (tables[table] ?? []).map((c) => column(c, types[`${table}.${c}`] ?? 'varchar(20)')),
-    primaryKey: [],
-    indexes: [],
-    foreignKeys: [],
-  })
-  return adapter
-}
+) =>
+  rig(dialect, {
+    table: (table) => ({ columns: (tables[table] ?? []).map((c) => column(c, types[`${table}.${c}`])) }),
+  }).adapter
 const spec = (over: Partial<Spec> = {}): Spec =>
   ({ tables: ['orders'], columns: [], where: [], joins: [], distinct: false, whereSql: '', ...over }) as Spec
 const build = async (dialect: Dialect, s: Spec, tables?: Record<string, string[]>, types?: Record<string, string>) =>
