@@ -1,5 +1,6 @@
 import type { Namespace } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
+import { rejectsWith } from '../test/ddl-helpers.ts'
 import { fail, rows, scripted } from '../test/scripted-conn.ts'
 import {
   mysqlDatabaseGrants,
@@ -17,8 +18,6 @@ import {
  */
 
 const ns: Namespace = { database: 'db' }
-const rejects = async (run: () => Promise<unknown>, code: string, message: RegExp) =>
-  await expect(run()).rejects.toMatchObject({ code, message: expect.stringMatching(message) })
 /** The bytes of UTF-8 text read as latin1, the way MySQL hands an expression default back. */
 const mojibake = (text: string) => [...Buffer.from(text, 'utf8')].map((b) => String.fromCharCode(b)).join('')
 
@@ -86,7 +85,7 @@ describe('mysqlListTables', () => {
 
   it('tells a database that is gone from one with nothing in it', async () => {
     expect(await mysqlListTables(script([], true).conn, ns)).toEqual([])
-    await rejects(() => mysqlListTables(script([], false).conn, ns), 'NOT_FOUND', /Database not found: db/)
+    await rejectsWith(mysqlListTables(script([], false).conn, ns), 'NOT_FOUND', /Database not found: db/)
   })
 })
 
@@ -159,7 +158,7 @@ describe('mysqlDescribeTable', () => {
   const U = undefined
 
   it('refuses a table that is not there, naming it with its database', async () => {
-    await rejects(() => mysqlDescribeTable(script({ info: [] }).conn, ns, 't'), 'NOT_FOUND', /Table not found: db\.t/)
+    await rejectsWith(mysqlDescribeTable(script({ info: [] }).conn, ns, 't'), 'NOT_FOUND', /Table not found: db\.t/)
   })
 
   it('reads the relation: kind, engine, comment, estimate, collation and the next AUTO_INCREMENT as text', async () => {
@@ -415,6 +414,9 @@ describe('mysqlDescribeTable', () => {
   })
 })
 
+/** A cell the row leaves at its default. */
+const U_ = undefined
+
 describe('mysqlTableStats', () => {
   const stats = async (data: unknown[][]) =>
     await mysqlTableStats(scripted([[/SELECT TABLE_TYPE, DATA_LENGTH/, rows(data)]]).conn, ns, 't')
@@ -424,7 +426,7 @@ describe('mysqlTableStats', () => {
     )
 
   it('refuses a table that is not there', async () => {
-    await rejects(() => stats([]), 'NOT_FOUND', /Table not found: db\.t/)
+    await rejectsWith(stats([]), 'NOT_FOUND', /Table not found: db\.t/)
   })
 
   it('reads the sizes and the total as their sum, the row figures, format and times', async () => {
@@ -469,7 +471,6 @@ describe('mysqlTableStats', () => {
     })
   })
 })
-const U_ = undefined
 
 describe('mysqlListPartitions', () => {
   const part = async (data: unknown[][]) => {
@@ -478,7 +479,11 @@ describe('mysqlListPartitions', () => {
   }
 
   it('refuses a table that is not there, and has no partitions for one that is not partitioned', async () => {
-    await rejects(() => part([]).then((r) => r.result), 'NOT_FOUND', /Table not found: db\.t/)
+    await rejectsWith(
+      part([]).then((r) => r.result),
+      'NOT_FOUND',
+      /Table not found: db\.t/
+    )
     expect((await part([[null, null, null, null, 5, 100]])).result).toEqual({
       method: null,
       expression: null,

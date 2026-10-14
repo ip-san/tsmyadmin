@@ -1,39 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import { BaseAdapter } from '../base.ts'
-import type { Conn } from '../driver.ts'
-import { MysqlAdapter } from '../mysql/adapter.ts'
-import { PostgresAdapter } from '../postgres/adapter.ts'
+import type { MysqlAdapter } from '../mysql/adapter.ts'
 import { AdapterError } from '../types.ts'
-import { fail, rows, scripted } from './scripted-conn.ts'
+import { affecting, type Dialect, ns, rig } from './base-rig.ts'
+import { type Answer, fail, rows } from './scripted-conn.ts'
 
 /**
  * The statements `insertRows`, `insertRow` and `insertPreview` write, for both dialects: the verb of a duplicate, the
  * PostgreSQL conflict clause, the chunking, what INSERT IGNORE let pass, and which rows a failure points at. The
- * transaction is replaced by a scripted connection, so no server is needed.
+ * connection is scripted, so no server is needed.
  */
 
-const config = (dialect: 'mysql' | 'postgres') => ({ dialect, host: 'h', port: 1, user: 'u', password: 'p' })
-const ns = { database: 'd', schema: 'sales' }
-type Internals = { withTransaction: unknown; withConn: unknown }
-
-type Script = [RegExp, ReturnType<typeof rows> | Error][]
-const adapterFor = (
-  dialect: 'mysql' | 'postgres',
-  script: Script = [[/^(INSERT|REPLACE)/, { ...rows([]), affectedRows: 1 }]]
-) => {
-  const adapter = dialect === 'mysql' ? new MysqlAdapter(config('mysql')) : new PostgresAdapter(config('postgres'))
-  const s = scripted(script)
-  let transactions = 0
-  const run = async (_ns: unknown, fn: (c: Conn) => unknown) => {
-    transactions++
-    return await fn(s.conn)
-  }
-  ;(adapter as unknown as Internals).withTransaction = run
-  ;(adapter as unknown as Internals).withConn = run
-  return { adapter, asked: s.asked, transactions: () => transactions }
-}
+const adapterFor = (dialect: Dialect, script: [RegExp, Answer][] = [[/^(INSERT|REPLACE)/, affecting(1)]]) =>
+  rig(dialect, { rules: script })
 const statements = (asked: { text: string }[]) => asked.map((q) => q.text)
-const affecting = (n: number) => ({ ...rows([]), affectedRows: n })
 
 describe('BaseAdapter.chunkSize', () => {
   it('is 500 rows for few columns, fewer as columns grow to keep under 30000 values, never below 1', () => {
@@ -95,7 +75,7 @@ describe('insertRows: the statement', () => {
     })
     expect(await m.adapter.insertRows(ns, 't', ['a'], [])).toEqual({ affectedRows: 0 })
     expect(m.transactions()).toBe(0)
-    expect(m.asked).toHaveLength(0)
+    expect(m.sent).toHaveLength(0)
   })
 
   it('takes the rows from any iterable, as they come', async () => {
@@ -113,6 +93,7 @@ describe('insertRows: the statement', () => {
     const many = Array.from({ length: 1200 }, (_, i) => [i, i, i])
     expect(await m.adapter.insertRows(ns, 't', ['a', 'b', 'c'], many)).toEqual({ affectedRows: 21 })
     expect(m.transactions()).toBe(1)
+    expect(m.statements().at(-1)).toBe('COMMIT')
     expect(m.asked.map((q) => q.params?.length)).toEqual([1500, 1500, 600])
     const exact = adapterFor('mysql')
     await exact.adapter.insertRows(
@@ -137,7 +118,7 @@ describe('insertRows: the statement', () => {
 })
 
 describe('insertRows: duplicates', () => {
-  const head = async (dialect: 'mysql' | 'postgres', options: Parameters<MysqlAdapter['insertRows']>[4]) => {
+  const head = async (dialect: Dialect, options: Parameters<MysqlAdapter['insertRows']>[4]) => {
     const a = adapterFor(dialect, [[/./, affecting(1)]])
     await a.adapter.insertRows(ns, 't', ['id', 'name'], [[1, 'x']], options)
     return a.asked[0]?.text ?? ''
@@ -179,7 +160,7 @@ describe('insertRows: duplicates', () => {
         code: 'VALIDATION',
         message: 'Replacing rows needs a primary key on the table',
       })
-      expect(a.asked).toHaveLength(0)
+      expect(a.sent).toHaveLength(0)
     }
   })
 
@@ -197,7 +178,7 @@ describe('insertRows: what INSERT IGNORE let pass', () => {
   const run = async (
     warnings: unknown[][],
     options: Parameters<MysqlAdapter['insertRows']>[4] = { onDuplicate: 'ignore' },
-    dialect: 'mysql' | 'postgres' = 'mysql'
+    dialect: Dialect = 'mysql'
   ) => {
     const a = adapterFor(dialect, [
       [/^(INSERT|REPLACE)/, affecting(1)],
@@ -234,30 +215,26 @@ describe('insertRows: what INSERT IGNORE let pass', () => {
 })
 
 describe('insertRows: a failure points at the rows', () => {
-  const failing = (dialect: 'mysql' | 'postgres', error: Error, failOnStatement = 1) => {
+  /** An adapter whose INSERT number `failOn` fails with `error`; the transaction is rolled back. */
+  const failing = (dialect: Dialect, error: Error, failOn = 1) => {
     let n = 0
-    const a = adapterFor(dialect, [[/^INSERT/, affecting(1)]])
-    const real = (a.adapter as unknown as { withTransaction: (n: unknown, f: (c: Conn) => unknown) => unknown })
-      .withTransaction
-    ;(a.adapter as unknown as Internals).withTransaction = (nsArg: unknown, fn: (c: Conn) => unknown) =>
-      real(nsArg, (conn) =>
-        fn({
-          ...conn,
-          query: async (text: string, params?: unknown[]) => {
-            if (++n === failOnStatement) throw error
-            return await conn.query(text, params)
-          },
-        } as Conn)
-      )
-    return a.adapter
+    const r = rig(dialect, {
+      rules: (text) => (/^INSERT/.test(text) ? (++n === failOn ? error : affecting(1)) : undefined),
+    })
+    return r
   }
   const fiveHundredAnd = (extra: number) => Array.from({ length: 500 + extra }, (_, i) => [i])
 
-  it("names the whole statement's rows when the server does not say which one failed", async () => {
+  it("names the whole statement's rows when the server does not say which one failed, and rolls back", async () => {
     const a = failing('postgres', fail('QUERY_FAILED', '23505'))
-    await expect(a.insertRows(ns, 't', ['a'], fiveHundredAnd(3))).rejects.toMatchObject({ rows: [0, 499] })
+    await expect(a.adapter.insertRows(ns, 't', ['a'], fiveHundredAnd(3))).rejects.toMatchObject({ rows: [0, 499] })
+    expect(a.statements().at(-1)).toBe('ROLLBACK')
     const second = failing('postgres', fail('QUERY_FAILED', '23505'), 2)
-    await expect(second.insertRows(ns, 't', ['a'], fiveHundredAnd(3))).rejects.toMatchObject({ rows: [500, 502] })
+    await expect(second.adapter.insertRows(ns, 't', ['a'], fiveHundredAnd(3))).rejects.toMatchObject({
+      rows: [500, 502],
+    })
+    expect(second.statements().at(-1)).toBe('ROLLBACK')
+    expect(second.statements()).not.toContain('COMMIT')
   })
 
   it('names the one row MySQL says failed, counted from the start of the whole batch', async () => {
@@ -267,14 +244,16 @@ describe('insertRows: a failure points at the rows', () => {
       undefined,
       { nativeCode: 'ER_DATA_TOO_LONG' }
     )
-    await expect(failing('mysql', dataTooLong).insertRows(ns, 't', ['a'], fiveHundredAnd(3))).rejects.toMatchObject({
-      rows: [2, 2],
-    })
-    await expect(failing('mysql', dataTooLong, 2).insertRows(ns, 't', ['a'], fiveHundredAnd(3))).rejects.toMatchObject({
-      rows: [502, 502],
-    })
+    await expect(
+      failing('mysql', dataTooLong).adapter.insertRows(ns, 't', ['a'], fiveHundredAnd(3))
+    ).rejects.toMatchObject({ rows: [2, 2] })
+    await expect(
+      failing('mysql', dataTooLong, 2).adapter.insertRows(ns, 't', ['a'], fiveHundredAnd(3))
+    ).rejects.toMatchObject({ rows: [502, 502] })
     const inDetail = new AdapterError('QUERY_FAILED', 'x', 'Out of range value at ROW 1')
-    await expect(failing('mysql', inDetail).insertRows(ns, 't', ['a'], [[1]])).rejects.toMatchObject({ rows: [0, 0] })
+    await expect(failing('mysql', inDetail).adapter.insertRows(ns, 't', ['a'], [[1]])).rejects.toMatchObject({
+      rows: [0, 0],
+    })
   })
 
   it('keeps the code, message, detail, native code and position of the error', async () => {
@@ -282,7 +261,7 @@ describe('insertRows: a failure points at the rows', () => {
       nativeCode: '42501',
       position: 9,
     })
-    await expect(failing('postgres', e).insertRows(ns, 't', ['a'], [[1]])).rejects.toMatchObject({
+    await expect(failing('postgres', e).adapter.insertRows(ns, 't', ['a'], [[1]])).rejects.toMatchObject({
       code: 'PERMISSION_DENIED',
       message: '42501: denied',
       detail: 'detail text',
@@ -291,7 +270,7 @@ describe('insertRows: a failure points at the rows', () => {
       rows: [0, 0],
     })
     const bare = await failing('postgres', new AdapterError('QUERY_FAILED', 'bare'))
-      .insertRows(ns, 't', ['a'], [[1]])
+      .adapter.insertRows(ns, 't', ['a'], [[1]])
       .catch((x) => x)
     expect(bare).not.toHaveProperty('nativeCode', expect.anything())
     expect(bare.position).toBeUndefined()
@@ -299,7 +278,7 @@ describe('insertRows: a failure points at the rows', () => {
 
   it('turns an error the driver threw into an adapter error first', async () => {
     const a = failing('postgres', Object.assign(new Error('duplicate key'), { code: '23505' }))
-    await expect(a.insertRows(ns, 't', ['a'], [[1]])).rejects.toMatchObject({
+    await expect(a.adapter.insertRows(ns, 't', ['a'], [[1]])).rejects.toMatchObject({
       code: 'QUERY_FAILED',
       nativeCode: '23505',
       rows: [0, 0],
@@ -310,7 +289,7 @@ describe('insertRows: a failure points at the rows', () => {
 describe('insertRow and insertPreview', () => {
   it('previews the statement and its parameters, bytes as base64 and the rest as they are', () => {
     const { adapter } = adapterFor('mysql')
-    const preview = adapter.insertPreview(ns, 't', { a: 1, b: Buffer.from([1, 2]), c: 'x' } as never)
+    const preview = adapter.insertPreview(ns, 't', { a: 1, b: { $bin: 'AQI=' }, c: 'x' })
     expect(preview.sql).toContain('INSERT INTO `d`.`t`')
     expect(preview.params).toContain(1)
     expect(preview.params).toContainEqual({ $bin: 'AQI=' })
@@ -319,11 +298,11 @@ describe('insertRow and insertPreview', () => {
 
   it('writes INSERT IGNORE for the preview and the insert only when asked for ignore', async () => {
     const { adapter, asked } = adapterFor('mysql', [[/^INSERT/, affecting(1)]])
-    expect(adapter.insertPreview(ns, 't', { a: 1 } as never).sql).toMatch(/^INSERT INTO /)
-    expect(adapter.insertPreview(ns, 't', { a: 1 } as never, { ignore: true }).sql).toMatch(/^INSERT IGNORE INTO /)
-    expect(adapter.insertPreview(ns, 't', { a: 1 } as never, { ignore: false }).sql).toMatch(/^INSERT INTO /)
-    expect(await adapter.insertRow(ns, 't', { a: 1 } as never)).toEqual({ affectedRows: 1 })
-    await adapter.insertRow(ns, 't', { a: 1 } as never, { ignore: true })
+    expect(adapter.insertPreview(ns, 't', { a: 1 }).sql).toMatch(/^INSERT INTO /)
+    expect(adapter.insertPreview(ns, 't', { a: 1 }, { ignore: true }).sql).toMatch(/^INSERT IGNORE INTO /)
+    expect(adapter.insertPreview(ns, 't', { a: 1 }, { ignore: false }).sql).toMatch(/^INSERT INTO /)
+    expect(await adapter.insertRow(ns, 't', { a: 1 })).toEqual({ affectedRows: 1 })
+    await adapter.insertRow(ns, 't', { a: 1 }, { ignore: true })
     expect(statements(asked).map((s) => s.slice(0, 14))).toEqual(['INSERT INTO `d', 'INSERT IGNORE '])
   })
 })

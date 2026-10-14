@@ -9,9 +9,9 @@ const CHARACTER_KEY_TYPE = /^(?:char|varchar|tinytext|text|mediumtext|longtext|e
 /** Placeholders are sent as string / double literals; these column types need the value coerced server-side. */
 export function keyParam(placeholder: string, type: string): string {
   const t = type.toLowerCase()
-  if (t.startsWith('json')) return `CAST(${placeholder} AS JSON)`
+  if (/^json\b/.test(t)) return `CAST(${placeholder} AS JSON)`
   // A FLOAT column holding 0.1 is not equal to the DOUBLE literal 0.1 (8.0.17+ / MariaDB 10.4.5+ syntax).
-  if (t.startsWith('float')) return `CAST(${placeholder} AS FLOAT)`
+  if (/^float\b/.test(t)) return `CAST(${placeholder} AS FLOAT)`
   // Integers beyond 2^53 travel as strings; inside a row constructor MySQL compares them as DOUBLE (the
   // scalar `col = 'str'` path converts exactly, the `(a, b) > (?, ?)` path does not), so keyset paging
   // over a composite BIGINT key would skip rows. An UNSIGNED column needs the unsigned cast (2^64-2 as
@@ -21,7 +21,7 @@ export function keyParam(placeholder: string, type: string): string {
   }
   // A BIT value travels as a binary literal (X'80'). MySQL reads that as a number in numeric context; MariaDB
   // reads it as a binary string and converts it to 0, so it is turned into a number explicitly.
-  if (t.startsWith('bit')) return `CAST(CONV(HEX(${placeholder}), 16, 10) AS UNSIGNED)`
+  if (/^bit\b/.test(t)) return `CAST(CONV(HEX(${placeholder}), 16, 10) AS UNSIGNED)`
   const decimal = /^decimal\((\d+),\s*(\d+)\)/.exec(t)
   if (decimal) return `CAST(${placeholder} AS DECIMAL(${Number(decimal[1])},${Number(decimal[2])}))`
   return placeholder

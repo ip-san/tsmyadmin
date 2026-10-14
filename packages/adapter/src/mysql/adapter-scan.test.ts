@@ -3,7 +3,8 @@ import { Readable } from 'node:stream'
 import type { TableSchema } from '@tsmyadmin/shared'
 import { describe, expect, it, vi } from 'vitest'
 import type { Conn } from '../driver.ts'
-import { rows, scripted } from '../test/scripted-conn.ts'
+import type { QueryOptions } from '../sql/cells.ts'
+import { fail, rows, scripted, until } from '../test/scripted-conn.ts'
 import { MysqlAdapter } from './adapter.ts'
 
 /**
@@ -25,7 +26,7 @@ describe('MysqlAdapter.iterateRows: keyset paging', () => {
   const scan = (pages: unknown[][][], opts: { stream?: boolean } = {}) => {
     const adapter = new MysqlAdapter(config)
     let page = 0
-    const s = scripted([[/^SELECT/, rows([])]])
+    const s = scripted([])
     const asked: { text: string; params: unknown[] | undefined }[] = []
     const reset = vi.fn(async () => undefined)
     const done = vi.fn(async () => undefined)
@@ -182,6 +183,7 @@ describe('MysqlAdapter.iterateRows: keyset paging', () => {
     await expect(
       collect(broken.adapter.iterateRows(ns, 't', { batchSize: 2, schema: keyed, utc: true }))
     ).rejects.toThrow('boom')
+    expect(broken.reset).toHaveBeenCalledTimes(1)
     expect(broken.done).toHaveBeenCalledTimes(1)
   })
 
@@ -261,11 +263,26 @@ describe('MysqlAdapter: the row stream', () => {
     }
     return { c, seen, killed, sockets, listeners: () => c.listenerCount('error') }
   }
-  const run = (adapter: MysqlAdapter, c: unknown, batch: number, options?: unknown) =>
-    internals(adapter).streamRows?.({ connection: c }, 'SELECT id FROM t', [7], batch, options) as AsyncIterable<{
-      columns: { name: string }[]
-      rows: unknown[][]
-    }>
+  const VERSION = [[['8.0.36']], [{ name: 'v', columnType: 253, columnLength: 10, flags: 0, characterSet: 224 }]]
+  /** The pool's connection around the core `c`, as `acquire` sets it up for a call (the setup statements answered). */
+  const acquired = async (adapter: MysqlAdapter, c: unknown) => {
+    const pool = {
+      connection: c,
+      query: async (q: string | { sql: string }) =>
+        (typeof q === 'string' ? q : q.sql) === 'SELECT VERSION()' ? VERSION : [{ affectedRows: 0 }, undefined],
+      release: vi.fn(),
+      destroy: vi.fn(),
+    }
+    internals(adapter).getConnection = async () => pool
+    const conn = (await internals(adapter).acquire?.(ns)) as Conn
+    if (!conn.stream) throw new Error('the connection offers no stream')
+    return { conn, stream: conn.stream.bind(conn), pool }
+  }
+  /** The rows of one statement through the public `conn.stream` of an acquired connection. */
+  async function* run(adapter: MysqlAdapter, c: unknown, batch: number, options?: QueryOptions) {
+    const { stream } = await acquired(adapter, c)
+    yield* stream('SELECT id FROM t', [7], batch, options)
+  }
   const brokenOf = (a: MysqlAdapter) => (a as unknown as { broken: WeakSet<object> }).broken
 
   it('sends the statement with its values, in batches of the size asked, naming the columns on every batch', async () => {
@@ -340,16 +357,21 @@ describe('MysqlAdapter: the row stream', () => {
         /* never produces a row: the connection must end the wait */
       },
     })
+    let streaming = false
     ;(f.c as unknown as { query: unknown }).query = () => {
       const ev = new EventEmitter() as EventEmitter & { stream: () => Readable }
-      ev.stream = () => hang
+      ev.stream = () => {
+        streaming = true
+        return hang
+      }
       return ev
     }
     const a = new MysqlAdapter(config)
     const pending = (async () => {
       for await (const _ of run(a, f.c, 5)) void _
     })()
-    await new Promise((r) => setTimeout(r, 5))
+    // The error must arrive while the stream is being read, or the test would take the "lost before queued" path.
+    await until(() => streaming)
     f.c.emit(
       'error',
       Object.assign(new Error('Query execution was interrupted'), { code: 'ER_QUERY_INTERRUPTED', errno: 1317 })
@@ -446,19 +468,10 @@ describe('MysqlAdapter: the small session statements', () => {
 
   it('falls back to max_statement_time in seconds where MariaDB lacks the variable, and remembers it', async () => {
     const a = new MysqlAdapter(config)
-    const unknown = Object.assign(new Error('Unknown system variable'), {
-      code: 'ER_UNKNOWN_SYSTEM_VARIABLE',
-      errno: 1193,
-    })
     const c = scripted([
-      [/max_execution_time/, new Error('x')],
+      [/max_execution_time/, fail('QUERY_FAILED', 'ER_UNKNOWN_SYSTEM_VARIABLE')],
       [/max_statement_time/, rows([])],
     ])
-    ;(c.conn as { query: Conn['query'] }).query = async (text: string) => {
-      c.asked.push({ text, params: undefined })
-      if (text.includes('max_execution_time')) throw (await import('../mysql/errors.ts')).mapMysqlError(unknown, true)
-      return rows([])
-    }
     await internals(a).setStatementTimeout?.(c.conn, 2500)
     expect(c.asked.map((q) => q.text)).toEqual([
       'SET SESSION max_execution_time = 2500',
@@ -467,11 +480,19 @@ describe('MysqlAdapter: the small session statements', () => {
     await internals(a).setStatementTimeout?.(c.conn, 500)
     expect(c.asked.at(-1)?.text).toBe('SET SESSION max_statement_time = 0.5')
     expect(c.asked).toHaveLength(3)
+    expect((a as unknown as { timeoutVariable: string }).timeoutVariable).toBe('max_statement_time')
   })
 
-  it('does not hide any other failure of the timeout statement', async () => {
-    const c = scripted([[/max_execution_time/, new Error('boom')]])
-    await expect(internals(new MysqlAdapter(config)).setStatementTimeout?.(c.conn, 1)).rejects.toThrow('boom')
+  it('does not hide any other failure of the timeout statement, and does not switch variables for it', async () => {
+    const plain = scripted([[/max_execution_time/, new Error('boom')]])
+    await expect(internals(new MysqlAdapter(config)).setStatementTimeout?.(plain.conn, 1)).rejects.toThrow('boom')
+    const a = new MysqlAdapter(config)
+    const denied = scripted([[/max_execution_time/, fail('PERMISSION_DENIED', 'ER_SPECIFIC_ACCESS_DENIED_ERROR')]])
+    await expect(internals(a).setStatementTimeout?.(denied.conn, 1)).rejects.toMatchObject({
+      code: 'PERMISSION_DENIED',
+    })
+    expect(denied.asked).toHaveLength(1)
+    expect((a as unknown as { timeoutVariable: string }).timeoutVariable).toBe('max_execution_time')
   })
 
   it('has the answers of its dialect: <=> for null-safe equality, all columns as the fallback key, none to select', () => {

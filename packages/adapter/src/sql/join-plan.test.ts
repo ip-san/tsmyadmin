@@ -3,12 +3,18 @@ import { describe, expect, it } from 'vitest'
 import { refuses } from '../test/ddl-helpers.ts'
 import { joinPlan } from './join-plan.ts'
 
-type Link = { columns: string[]; refTable: string; refColumns: string[]; ref?: { database: string; schema?: string } }
+type Link = {
+  name?: string
+  columns: string[]
+  refTable: string
+  refColumns: string[]
+  ref?: { database: string; schema?: string }
+}
 const table = (columns: string[], links: Link[] = []) =>
   ({
     columns: columns.map((name) => ({ name })),
     foreignKeys: links.map((l, i) => ({
-      name: `fk${i}`,
+      name: l.name ?? `fk${i}`,
       columns: l.columns,
       refNamespace: l.ref ?? { database: 'd' },
       refTable: l.refTable,
@@ -95,6 +101,25 @@ describe('joinPlan along foreign keys', () => {
     refuses(() => pg({ database: 'd', schema: 'other' }, { database: 'd' }), 'VALIDATION', /No foreign key/)
     expect(joinPlan('mysql', my, ['a', 'b'], schemas({ database: 'd', schema: 'ignored' }))).toHaveLength(1)
     refuses(() => pg({ database: 'x', schema: 's' }), 'VALIDATION', /No foreign key/)
+  })
+
+  it('follows the first of several keys between the same two tables, which describeTable lists by constraint name', () => {
+    const schemas = new Map<string, TableSchema>([
+      ['users', table(['id'])],
+      [
+        'orders',
+        table(
+          ['id', 'created_by', 'updated_by'],
+          [
+            { name: 'fk_a_created', columns: ['created_by'], refTable: 'users', refColumns: ['id'] },
+            { name: 'fk_b_updated', columns: ['updated_by'], refTable: 'users', refColumns: ['id'] },
+          ]
+        ),
+      ],
+    ])
+    expect(plan(['orders', 'users'], schemas)).toEqual([
+      'LEFT JOIN `d`.`users` ON `users`.`id` = `orders`.`created_by`',
+    ])
   })
 
   it('knows no links for a table that was not described', () => {

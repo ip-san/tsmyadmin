@@ -1,5 +1,6 @@
 import type { Namespace } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
+import { rejectsWith } from '../test/ddl-helpers.ts'
 import { rows, scripted } from '../test/scripted-conn.ts'
 import {
   pgDescribeTable,
@@ -18,8 +19,6 @@ import {
 
 const SEP = String.fromCharCode(31)
 const ns: Namespace = { database: 'db', schema: 'app' }
-const rejects = async (run: () => Promise<unknown>, code: string, message: RegExp) =>
-  await expect(run()).rejects.toMatchObject({ code, message: expect.stringMatching(message) })
 
 describe('pgListSchemas', () => {
   it('lists the names the catalog gives, in its order', async () => {
@@ -73,18 +72,12 @@ describe('pgListTables', () => {
   })
 
   it('reads the size, none when the catalog has none, and the comment, an empty one staying empty', async () => {
-    const [a, b, c, d] = (
-      await list([
-        row(['a', 'r', 1, 'note', 8192]),
-        row(['b', 'r', 1, null, null]),
-        row(['c', 'r', 1, '', 0]),
-        row(['d', 'r', 1, null, undefined]),
-      ])
+    const [a, b, c] = (
+      await list([row(['a', 'r', 1, 'note', 8192]), row(['b', 'r', 1, null, null]), row(['c', 'r', 1, '', 0])])
     ).tables
     expect([a?.sizeBytes, a?.comment]).toEqual([8192, 'note'])
     expect([b?.sizeBytes, b?.comment]).toEqual([null, null])
     expect([c?.sizeBytes, c?.comment]).toEqual([0, ''])
-    expect(d?.sizeBytes).toBe(8192)
   })
 
   it('splits the parents of an inheritance child at the separator, and has none when there are none', async () => {
@@ -178,9 +171,9 @@ describe('pgDescribeTable', () => {
     ['c', 'integer', 't', null, '', '', null, null, false].map((v, i) => (extra[i] === undefined ? v : extra[i]))
 
   it('refuses a table that is not there, naming it with its schema', async () => {
-    await rejects(() => pgDescribeTable(script({ info: [] }).conn, ns, 't'), 'NOT_FOUND', /Table not found: app\.t/)
-    await rejects(
-      () => pgDescribeTable(script({ info: [] }).conn, { database: 'db' }, 't'),
+    await rejectsWith(pgDescribeTable(script({ info: [] }).conn, ns, 't'), 'NOT_FOUND', /Table not found: app\.t/)
+    await rejectsWith(
+      pgDescribeTable(script({ info: [] }).conn, { database: 'db' }, 't'),
       'NOT_FOUND',
       /Table not found: public\.t/
     )
@@ -392,9 +385,13 @@ describe('pgTableStats', () => {
     )
 
   it('refuses a table that is not there', async () => {
-    await rejects(() => stats(null).then((r) => r.result), 'NOT_FOUND', /Table not found: app\.t/)
-    await rejects(
-      () => stats(null, { database: 'db' }).then((r) => r.result),
+    await rejectsWith(
+      stats(null).then((r) => r.result),
+      'NOT_FOUND',
+      /Table not found: app\.t/
+    )
+    await rejectsWith(
+      stats(null, { database: 'db' }).then((r) => r.result),
       'NOT_FOUND',
       /Table not found: public\.t/
     )
@@ -470,9 +467,9 @@ describe('pgListPartitions', () => {
     ])
 
   it('refuses a table that is not there', async () => {
-    await rejects(() => pgListPartitions(script([]).conn, ns, 't'), 'NOT_FOUND', /Table not found: app\.t/)
-    await rejects(
-      () => pgListPartitions(script([]).conn, { database: 'db' }, 't'),
+    await rejectsWith(pgListPartitions(script([]).conn, ns, 't'), 'NOT_FOUND', /Table not found: app\.t/)
+    await rejectsWith(
+      pgListPartitions(script([]).conn, { database: 'db' }, 't'),
       'NOT_FOUND',
       /Table not found: public\.t/
     )

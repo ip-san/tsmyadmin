@@ -21,6 +21,15 @@ export const fail = (code: string, nativeCode?: string) =>
 
 export type Answer = RawResult | Error
 
+/** Waits until `holds` does, polling, for at most `ms`: for a test that must let a run reach the wire before acting. */
+export async function until(holds: () => boolean, ms = 5000): Promise<void> {
+  const started = Date.now()
+  while (!holds()) {
+    if (Date.now() - started > ms) throw new Error('timed out waiting for the condition')
+    await new Promise((resolve) => setTimeout(resolve, 1))
+  }
+}
+
 /**
  * A connection that answers each statement from the first rule whose pattern matches it, and keeps what it was asked.
  * For the branches that depend on what a server answers, which a real one gives in only one way (the fixtures have no

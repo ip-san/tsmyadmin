@@ -65,6 +65,12 @@ describe('MysqlAdapter.acquire: setting a connection up', () => {
     const upper = adapterWith(fakeConnection(version('10.5.0-MARIADB')))
     await acquire(upper)
     expect(mariadbOf(upper)).toBe(true)
+    // A version it cannot read (no row, a null) is not MariaDB.
+    for (const answer of [[], [[null]]]) {
+      const unread = adapterWith(fakeConnection((sql) => (sql === 'SELECT VERSION()' ? [answer, []] : header)))
+      await acquire(unread)
+      expect(mariadbOf(unread), JSON.stringify(answer)).toBe(false)
+    }
   })
 
   it('switches to the database with the session mode, and on MySQL turns the statistics cache off, in that order', async () => {
@@ -90,7 +96,9 @@ describe('MysqlAdapter.acquire: setting a connection up', () => {
       errno: 1193,
     })
     const old = fakeConnection((sql) => (sql.includes('stats_expiry') ? unknownVariable : version('5.7.40')(sql)))
-    await expect(acquire(adapterWith(old))).resolves.toBeDefined()
+    const conn = await acquire(adapterWith(old))
+    expect(conn.id).toBe(old.core)
+    expect(old.sent.at(-1)).toBe('SET SESSION information_schema_stats_expiry = 0')
     expect(old.released).toBe(0)
     const denied = Object.assign(new Error('nope'), { code: 'ER_SPECIFIC_ACCESS_DENIED_ERROR', errno: 1227 })
     const bad = fakeConnection((sql) => (sql.includes('stats_expiry') ? denied : version('8.0.36')(sql)))
@@ -110,17 +118,22 @@ describe('MysqlAdapter.acquire: setting a connection up', () => {
   })
 
   it('gives the connection back, and forgets its database, when setting it up fails', async () => {
+    // The first USE fails; the database must not be remembered as set up, so the next acquire sends USE again.
+    let uses = 0
     const f = fakeConnection((sql) =>
-      sql.startsWith('USE')
+      sql.startsWith('USE') && ++uses === 1
         ? Object.assign(new Error('Unknown database'), { code: 'ER_BAD_DB_ERROR', errno: 1049 })
         : version('8.0.36')(sql)
     )
     const a = adapterWith(f, f)
-    await expect(acquire(a, 'nope')).rejects.toMatchObject({ code: 'NOT_FOUND' })
-    expect(f.released).toBe(1)
+    await expect(acquire(a, 'one')).rejects.toMatchObject({ code: 'NOT_FOUND', nativeCode: 'ER_BAD_DB_ERROR' })
+    expect([f.released, f.destroyed]).toEqual([1, 0])
+    await acquire(a, 'one')
+    expect(f.sent.filter((s) => s === 'USE `one`')).toHaveLength(2)
+    // A connection lost during the setup is destroyed rather than returned to the pool.
     const failing = fakeConnection(() => Object.assign(new Error('gone'), { code: 'PROTOCOL_CONNECTION_LOST' }))
     await expect(acquire(adapterWith(failing))).rejects.toMatchObject({ code: 'CONNECTION_FAILED' })
-    expect(failing.destroyed + failing.released).toBe(1)
+    expect([failing.released, failing.destroyed]).toEqual([0, 1])
   })
 
   it('reports a pool that gave no connection as an adapter error', async () => {
@@ -238,8 +251,12 @@ describe('MysqlAdapter.acquire: the connection it hands out', () => {
     )
     await expect(twice.conn.inTransaction?.()).rejects.toMatchObject({ code: 'ER_QUERY_INTERRUPTED' })
     expect(again).toBe(2)
-    const other = await ready((sql) => (sql === 'DO 0' ? Object.assign(new Error('x'), { code: 'ER_OTHER' }) : header))
+    let otherProbes = 0
+    const other = await ready((sql) =>
+      sql === 'DO 0' ? (++otherProbes, Object.assign(new Error('x'), { code: 'ER_OTHER' })) : header
+    )
     await expect(other.conn.inTransaction?.()).rejects.toMatchObject({ code: 'ER_OTHER' })
+    expect(otherProbes).toBe(1)
   })
 
   it('gives the connection up on a reset when the collation is only a character set, which SET NAMES would refuse', async () => {
