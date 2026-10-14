@@ -24,6 +24,9 @@ const DIST = join(process.cwd(), 'apps/web/dist')
  * with the screen; that touches all 208 files that read `locale.` (53 capture a section at module level), and a
  * section missed shows only at run time, as `undefined` on the screen that needs it. Not worth it at this size: do it
  * when the budget is next exceeded, with `docs/dev-environment.md` ("Initial JS budget") as the starting point.
+ *
+ * 162 -> 155 without touching the screens: the `treeshake` options in apps/web/vite.config.ts let the build drop the
+ * shared schemas and the queries first paint does not use. What is left to cut is still zod and the language file.
  */
 const LIMIT_KB = 170
 
