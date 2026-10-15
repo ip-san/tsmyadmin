@@ -1,7 +1,7 @@
 import type { CountKind } from '@tsmyadmin/shared'
 import { Button } from '@/components/ui/Button.tsx'
 import { Select } from '@/components/ui/Field.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 
 const LIMITS = [25, 50, 100, 250, 500, 1000]
 

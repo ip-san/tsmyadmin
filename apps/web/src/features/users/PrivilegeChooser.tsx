@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button.tsx'
 import { Dialog } from '@/components/ui/Dialog.tsx'
 import { Notice } from '@/components/ui/Feedback.tsx'
 import { Field, Select } from '@/components/ui/Field.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { structureQuery, tablesQuery } from '@/lib/queries.ts'
 
 const columnCapable = (p: Privilege) => (COLUMN_PRIVILEGES as readonly Privilege[]).includes(p)

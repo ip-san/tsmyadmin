@@ -1,7 +1,7 @@
 import type { Cell } from '@tsmyadmin/shared'
 import { isBinaryCell } from '@tsmyadmin/shared'
 import { useState } from 'react'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { describeCell } from '@/lib/format.ts'
 import { useCellDisplay } from './cell-display.ts'
 

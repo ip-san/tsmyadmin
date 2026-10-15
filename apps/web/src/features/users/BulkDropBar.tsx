@@ -2,7 +2,7 @@ import { capabilities, type Dialect, type UserOp, type UserRef } from '@tsmyadmi
 import { useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { Dialog } from '@/components/ui/Dialog.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 
 const t = locale.users.bulk
 

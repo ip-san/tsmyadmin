@@ -1,7 +1,7 @@
 import type { DdlOp, Dialect } from '@tsmyadmin/shared'
 import { DdlPreviewDialog } from '@/components/ddl/DdlPreviewDialog.tsx'
 import { Button } from '@/components/ui/Button.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { useDdlFlow } from '@/lib/ddl.ts'
 import type { TableRef } from '@/lib/queries.ts'
 

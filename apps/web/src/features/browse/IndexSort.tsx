@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { type BrowseOptions, encodeSort } from '@tsmyadmin/shared'
 import { useId } from 'react'
 import { Select } from '@/components/ui/Field.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { structureQuery, type TableRef } from '@/lib/queries.ts'
 
 type Sort = BrowseOptions['sort']

@@ -3,7 +3,7 @@ import { type FormEvent, useState } from 'react'
 import { PasswordFields, usePasswordConfirm } from '@/components/forms/PasswordFields.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { Field, Input, Select } from '@/components/ui/Field.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { userLabel } from '@/lib/user-ops.ts'
 
 const t = locale.users.account

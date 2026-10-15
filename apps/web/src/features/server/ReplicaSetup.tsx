@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/Button.tsx'
 import { Badge, ErrorBox, Spinner } from '@/components/ui/Feedback.tsx'
 import { Field, Input } from '@/components/ui/Field.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { variablesQuery } from '@/lib/queries.ts'
 
 const t = locale.replication.controls.source

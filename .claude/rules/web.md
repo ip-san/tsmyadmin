@@ -13,7 +13,7 @@ paths:
 | `features/<領域>/` | 1 つの領域の画面・フック・純粋関数。**features 同士は import しない**（共有は `components/` と `lib/`。`check:arch` が fail する） |
 | `components/` | 複数の feature で使う UI（`ddl/PreviewDialog`、`cells/`、`ui/` など） |
 | `lib/` | UI を持たない共有部品（API クライアント `api.ts`、クエリ定義 `queries/`、`preview-flow.ts` など） |
-| `config/` | ロケール（`locales/{ja,en}.ts`）など |
+| `config/` | ロケール（`locales/{ja,en}.ts` と `locales/screens-{ja,en}.ts`）など |
 
 使う側が 1 つの feature だけのモジュールは、`lib/` ではなくその feature に置く（共有されるまで共有しない）。
 
@@ -27,7 +27,7 @@ paths:
 
 ## 画面を足すとき
 
-- UI の文字列は `config/locales/{ja,en}.ts` の両方に定義し、`locale.*` で参照する（`en.ts` は `satisfies Locale` で形が揃う）。Tailwind の色指定には `dark:` を付ける
+- UI の文字列は `config/locales/screens-{ja,en}.ts` の両方に定義し、`locale.*` で参照する（`locale` は `@/config/locale-screens.ts` から import する。`screens-en.ts` は `satisfies ScreensLocale` で形が揃う）。ログイン画面・エラー画面など初回表示が使う文字列だけは `{ja,en}.ts`（`@/config/locale.ts` の `locale`）に置く。Tailwind の色指定には `dark:` を付ける
 - **その DB にある入力欄を出すかは、画面ごとに固有なので `dialect === '…'` でよいが、複数の画面が同じ事実を書くなら、`packages/shared/src/capabilities.ts` の能力（`accountHost`・`events`・`databasesAreSchemas` など）を読むか、共通の部品にする**（例: 移動先を選ぶ `lib/spaces.ts` の `useSpaces`、クォートの `quoteIdentifier` / `quoteLiteral`）。同じ式の写しを画面ごとに持たない。`bun run check:dialect-leaks` が、数が増えると fail する
 - **アクセシビリティの検査は 3 層**: ① Biome の a11y ルールは全部 error で、警告 0 を維持する（`bun run lint` は警告でも落ちる）。② `check:contrast` は、デザイン トークンの色の比を見る。③ E2E の axe とレイアウト検査:
   - `e2e/routes-a11y.spec.ts` は、生成されたルート木の**全画面**を初期状態で検査する（画面を足すと自動で対象になる）

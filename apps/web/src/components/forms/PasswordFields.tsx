@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { Notice } from '@/components/ui/Feedback.tsx'
 import { Field, Input } from '@/components/ui/Field.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { generatePassword } from '@/lib/generate-password.ts'
 
 /** Password + confirmation inputs with a mismatch notice, shared by the create-user and change-password forms. */

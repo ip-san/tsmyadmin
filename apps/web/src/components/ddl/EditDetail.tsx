@@ -2,7 +2,7 @@ import { type ReactNode, useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { Dialog } from '@/components/ui/Dialog.tsx'
 import { ErrorBox, Notice } from '@/components/ui/Feedback.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 
 /**
  * An "Edit" button for a routine, trigger or event: it reads the definition back from the server, and opens the same

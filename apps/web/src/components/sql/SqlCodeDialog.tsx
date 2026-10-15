@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { Dialog } from '@/components/ui/Dialog.tsx'
 import { Select } from '@/components/ui/Field.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { copyText } from '@/lib/clipboard.ts'
 import { CODE_LANGUAGES, type CodeLanguage, sqlToCode } from './sql-code.ts'
 

@@ -1,7 +1,7 @@
 import { ArrowDown, ArrowUp, Columns3 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 
 export interface ColumnPickerProps {
   columns: string[]

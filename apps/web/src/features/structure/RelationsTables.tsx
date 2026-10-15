@@ -2,7 +2,7 @@ import type { TableSchema } from '@tsmyadmin/shared'
 import { Button } from '@/components/ui/Button.tsx'
 import { Notice } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 
 export function ForeignKeysTable({ schema, onDrop }: { schema: TableSchema; onDrop?: (name: string) => void }) {
   if (schema.foreignKeys.length === 0) return <Notice>{locale.table.noForeignKeys}</Notice>

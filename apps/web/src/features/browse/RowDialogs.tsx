@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { RowForm } from '@/components/rows/RowForm.tsx'
 import { Dialog } from '@/components/ui/Dialog.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { useColumnTransforms } from '@/lib/column-transforms.ts'
 import { mutations, structureQuery, type TableRef } from '@/lib/queries.ts'
 

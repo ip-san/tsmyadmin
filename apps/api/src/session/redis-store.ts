@@ -378,18 +378,18 @@ class RedisSavedQueries implements SavedItems {
   ): Promise<SavedItem[]> {
     // Under the same lock as `update` and `remove`: unlocked, a save landing inside an update was overwritten by the
     // update's stale result, and one landing inside a conditional removal was deleted by it.
-    return this.withLock(config, kind, () => this.write(config, kind, name, body, replaces))
+    return this.withLock(config, kind, (fence) => this.write(fence, config, kind, name, body, replaces))
   }
 
   /** `save` for a caller that already holds the kind's lock (the lock is not re-entrant). */
   private async write(
+    fence: Fence,
     config: ConnectRequest,
     kind: SavedItemKind,
     name: string,
     body: string,
     replaces?: string
   ): Promise<SavedItem[]> {
-    const index = this.index(config)
     const mine = await this.list(config, kind)
     const existing = mine.find((q) => q.name === name)
     // Never the row being written: replacing a row with itself would delete what this call just stored.
@@ -406,23 +406,42 @@ class RedisSavedQueries implements SavedItems {
           mine.filter((q) => q.id !== replaced?.id),
           this.limit
         )
-    // One transaction, so the row being replaced cannot survive a failed write of its replacement.
-    const write = this.redis
-      .multi()
-      .set(this.entry(config, id), seal(this.key, JSON.stringify({ kind, name, body }), rowAad(SAVED_QUERIES, id)))
-      .zadd(index, at, id)
-    if (replaced) write.zrem(index, replaced.id).del(this.entry(config, replaced.id))
-    for (const victim of victims) write.zrem(index, victim.id).del(this.entry(config, victim.id))
-    await write.exec()
+    // One script, so the row being replaced cannot survive a failed write of its replacement.
+    const payload = seal(this.key, JSON.stringify({ kind, name, body }), rowAad(SAVED_QUERIES, id))
+    const drop = [...(replaced ? [replaced.id] : []), ...victims.map((victim) => victim.id)]
+    await this.fenced(fence, config, drop, { id, at, payload })
     // The lock keeps this replica's saves in turn, but during a rolling upgrade one without it can still have seen
     // room at the same time: whichever finishes second trims the kind back to its cap.
     const after = await this.list(config, kind)
     const excess = after.slice(this.limit)
     if (excess.length === 0) return after
-    const trim = this.redis.multi()
-    for (const victim of excess) trim.zrem(index, victim.id).del(this.entry(config, victim.id))
-    await trim.exec()
+    // The write above has landed, so a lock lost by now must not run it again (an update would apply its change
+    // twice): the trim is left to whoever holds the lock now, whose own write trims the same way.
+    await this.fenced(
+      fence,
+      config,
+      excess.map((victim) => victim.id)
+    ).catch((error: unknown) => {
+      if (!(error instanceof LockLost)) throw error
+    })
     return after.slice(0, this.limit)
+  }
+
+  /**
+   * Drops the items `drop` (and first stores `put`, when given) only while the lock is still the caller's. A holder
+   * that stalled past the lock's expiry has lost it — perhaps to another writer, who may have written since — so its
+   * write, decided from what it read before, is refused, and `withLock` runs the whole read-modify-write again.
+   */
+  private async fenced(
+    fence: Fence,
+    config: ConnectRequest,
+    drop: readonly string[],
+    put?: { id: string; at: number; payload: Buffer }
+  ): Promise<void> {
+    const ids = put ? [put.id, ...drop] : [...drop]
+    const keys = [fence.lock, this.index(config), ...ids.map((id) => this.entry(config, id))]
+    const args = [fence.token, put ? String(put.at) : '', put?.payload ?? '', ...ids]
+    if ((await this.redis.eval(FENCED_WRITE, keys.length, ...keys, ...args)) !== 1) throw new LockLost()
   }
 
   async update(
@@ -431,33 +450,45 @@ class RedisSavedQueries implements SavedItems {
     name: string,
     change: (current: SavedItem | undefined, all: readonly SavedItem[]) => string | null
   ): Promise<SavedItem[]> {
-    return this.withLock(config, kind, async () => {
+    return this.withLock(config, kind, async (fence) => {
       const mine = await this.list(config, kind)
       const body = change(
         mine.find((q) => q.name === name),
         mine
       )
-      return body === null ? mine : this.write(config, kind, name, body)
+      return body === null ? mine : this.write(fence, config, kind, name, body)
     })
   }
 
   /**
    * Runs `run` while holding this account's lock on the kind (a short-lived key), so read-modify-write updates from
    * every process sharing the Redis take turns. The lock expires on its own: a process that dies holding it delays
-   * the others by a few seconds, not for good.
+   * the others by a few seconds, not for good. A process that only stalls past the expiry is not trusted to still
+   * hold it: every write inside `run` goes through `fenced`, which checks the lock is still this call's, and when it
+   * is not, `run` starts again from its reads under a new lock (a few times, then the same "busy" as a lock that
+   * never comes free).
    */
-  private async withLock<T>(config: ConnectRequest, kind: SavedItemKind, run: () => Promise<T>): Promise<T> {
+  private async withLock<T>(
+    config: ConnectRequest,
+    kind: SavedItemKind,
+    run: (fence: Fence) => Promise<T>
+  ): Promise<T> {
     const lock = `${this.index(config)}:lock:${kind}`
-    const token = randomUUID()
-    for (let attempt = 0; (await this.redis.set(lock, token, 'PX', LOCK_MS, 'NX')) !== 'OK'; attempt++) {
-      if (attempt >= LOCK_TRIES) throw new Error('The stored items are busy: try again')
-      await new Promise((resolve) => setTimeout(resolve, LOCK_WAIT_MS))
+    for (let round = 0; round < LOCK_ROUNDS; round++) {
+      const token = randomUUID()
+      for (let attempt = 0; (await this.redis.set(lock, token, 'PX', LOCK_MS, 'NX')) !== 'OK'; attempt++) {
+        if (attempt >= LOCK_TRIES) throw busy()
+        await new Promise((resolve) => setTimeout(resolve, LOCK_WAIT_MS))
+      }
+      try {
+        return await run({ lock, token })
+      } catch (error) {
+        if (!(error instanceof LockLost)) throw error
+      } finally {
+        await this.redis.eval(RELEASE_LOCK, 1, lock, token)
+      }
     }
-    try {
-      return await run()
-    } finally {
-      await this.redis.eval(RELEASE_LOCK, 1, lock, token)
-    }
+    throw busy()
   }
 
   async remove(
@@ -467,13 +498,11 @@ class RedisSavedQueries implements SavedItems {
     when?: (current: SavedItem) => boolean
   ): Promise<SavedItem[]> {
     // Under the same lock as `update`, so `when` judges the row that is deleted, not one an update has replaced since.
-    return this.withLock(config, kind, async () => {
+    return this.withLock(config, kind, async (fence) => {
       // Scoped to the caller's own index and kind, so an id of another account — or of a bookmark, when deleting a
       // template — matches nothing.
       const current = (await this.list(config, kind)).find((item) => item.id === id)
-      if (current && (when === undefined || when(current))) {
-        await this.redis.multi().zrem(this.index(config), id).del(this.entry(config, id)).exec()
-      }
+      if (current && (when === undefined || when(current))) await this.fenced(fence, config, [id])
       return this.list(config, kind)
     })
   }
@@ -482,6 +511,42 @@ class RedisSavedQueries implements SavedItems {
 const LOCK_MS = 5000
 const LOCK_WAIT_MS = 15
 const LOCK_TRIES = 400
+/** Times a read-modify-write is run again after its lock ran out under it, before giving up as busy. */
+const LOCK_ROUNDS = 3
+const BUSY = 'The stored items are busy: try again'
+/**
+ * Giving up on the lock: the store is busy, not the request wrong. Named so the API answers 503 STORE_UNAVAILABLE, as
+ * it does for a SQLite file another connection holds (`isStoreUnavailable`), instead of an unexplained 500.
+ */
+function busy(): Error {
+  return Object.assign(new Error(BUSY), { name: 'StoreBusyError' })
+}
+/** The lock a `withLock` call holds: its key, and the value only that call set. */
+interface Fence {
+  lock: string
+  token: string
+}
+/** A write refused because the lock is no longer the writer's (see `fenced`). */
+class LockLost extends Error {}
+/**
+ * Stores and drops saved items only while KEYS[1], the lock, still holds ARGV[1], the writer's token. KEYS[2] is the
+ * index; KEYS[3..] the items, each with its id at the ARGV index one above. With ARGV[2] (the time) not empty, the
+ * first item is stored with ARGV[3] as its value and indexed; every other one is dropped.
+ */
+const FENCED_WRITE = `
+if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end
+local first = 3
+if ARGV[2] ~= '' then
+  redis.call('SET', KEYS[3], ARGV[3])
+  redis.call('ZADD', KEYS[2], ARGV[2], ARGV[4])
+  first = 4
+end
+for i = first, #KEYS do
+  redis.call('ZREM', KEYS[2], ARGV[i + 1])
+  redis.call('DEL', KEYS[i])
+end
+return 1
+`
 /**
  * Drops a stored item that would not open, only while its value is still what was read (ARGV[2], empty for a
  * missing one): KEYS[1] the index, KEYS[2] the item; ARGV[1] its id.

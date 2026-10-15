@@ -2,7 +2,7 @@ import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { StatementResult } from '@tsmyadmin/shared'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { ResultsView } from './ResultsView.tsx'
 
 const downloaded = vi.hoisted(() => vi.fn())

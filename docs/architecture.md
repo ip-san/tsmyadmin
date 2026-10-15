@@ -301,9 +301,9 @@ flowchart LR
 
 - ルーティングは TanStack Router（`apps/web/src/routes`、`routeTree.gen.ts` は生成物）。サーバー状態は TanStack Query が唯一の持ち主です。フォームは初期値として一度だけクエリの値を写しますが、**`useEffect` で再同期はしません**（別の対象に切り替わったときは state-from-props パターンで作り直します）。
 - `features/*` は互いを直接 import しません（共有は `components/` と `lib/`）。
-- UI 文字列は `config/locales/{ja,en}.ts` にのみ置き、`locale.*` で参照します。`en.ts` は `satisfies Locale` で日本語版と同じ形であることが型で保証されます。
+- UI 文字列は `config/locales/` にのみ置き、`locale.*` で参照します。初回表示が使う文字列（ログイン画面・エラー画面・タブ・エラーの文言）は `{ja,en}.ts`、ログインの先の画面の文字列は `screens-{ja,en}.ts` です。後者は `/_app` ルートの `beforeLoad` が読み込み（`config/locale-screens.ts` の `loadScreenStrings`）、ルーターは `beforeLoad` が終わってから画面のチャンクを読むので、画面のモジュールの先頭の `const t = locale.x` にも間に合います。画面の文字列を読むモジュールは `locale` を `@/config/locale-screens.ts` から import します（`locale.ts` の `locale` の型には初回表示の分しかないので、取り違えは型エラーになります）。`en.ts` は `satisfies Locale`、`screens-en.ts` は `satisfies ScreensLocale` で日本語版と同じ形であることが型で保証されます。
 - 表示言語は「利用者の選択 → ブラウザ言語 → 日本語」の順に決まり、切り替え時はページを再読み込みします（各モジュールが読み込み時に一度だけ `locale` を読むため）。
-- **言語を足す手順**: ① `config/locales/xx.ts` を作り、`ja.ts` と同じ形ですべての文字列を訳します（`satisfies Locale` で漏れは型エラーになります）。② `config/locale.ts` の `LOCALE_NAMES` に `xx: '表示名'` を、`LOADERS` に読み込みの 1 行を足します（足し忘れると型エラー）。③ `config/locale.test.ts` の `LOCALES` に足します（全キーと関数の引数の数が `ja` と同じであることを確かめます）。④ `bun run check`。切り替えの選択肢には自動で出ます。サーバー側に言語の一覧はなく、アカウントの設定に保存するときは 2〜3 文字の小文字であることしか見ません。
+- **言語を足す手順**: ① `config/locales/xx.ts` と `screens-xx.ts` を作り、`ja.ts` / `screens-ja.ts` と同じ形ですべての文字列を訳します（`satisfies Locale` / `satisfies ScreensLocale` で漏れは型エラーになります）。② `config/locale.ts` の `LOCALE_NAMES` に `xx: '表示名'` を、`LOADERS` に読み込みの 1 行を、`config/locale-screens.ts` の `LOADERS` にも 1 行を足します（足し忘れると型エラー）。③ `config/locale.test.ts` の `LOCALES` に足します（全キーと関数の引数の数が `ja` と同じであることを確かめます）。④ `bun run check`。切り替えの選択肢には自動で出ます。サーバー側に言語の一覧はなく、アカウントの設定に保存するときは 2〜3 文字の小文字であることしか見ません。
 
 ## 8. 品質ゲート
 
@@ -324,7 +324,7 @@ flowchart LR
   pp --> chk
 ```
 
-pre-push のテストは、マシンが忙しいとき（別の worktree やセッションのテストが同時に走っているとき）、同時に走らせるワーカーの数を減らします（`vitest.config.ts` の `localMaxWorkers`）。Vitest の既定は「CPU 数 − 1」個のプロセスで、それが何本も重なるとメモリが足りずにスワップし、ワーカーが Vitest の起動待ち（60 秒、設定できない）に間に合わず「Failed to start forks worker」で落ちていました。直近 1 分の負荷が CPU 数の半分未満なら既定のまま、それ以上なら残りの CPU 数（最低 2）にします。CI は既定のままです。`TEST_MAX_WORKERS=<n>` で上書きできます。
+pre-push のテストは、マシンが忙しいとき（別の worktree やセッションのテストが同時に走っているとき）、同時に走らせるワーカーの数を減らします（`vitest.config.ts` の `localMaxWorkers`、計算は `scripts/test-workers.mjs`）。Vitest の既定は「CPU 数 − 1」個のプロセスで、それが何本も重なるとメモリが足りずにスワップし、ワーカーが Vitest の起動待ち（60 秒、設定できない）に間に合わず「Failed to start forks worker」で落ちていました。減らす条件は 2 つで、両方に当たれば小さいほうにします。1 つは、ほかに `vitest run` が動いていること（`ps` で数える。どの worktree のものも）で、そのときは「CPU 数 − 1」を走っている本数で割ります（最低 2）。直近 1 分の負荷は 1 分ほど遅れるので、同じ瞬間に始めた何本かは、負荷だけではお互いが見えないためです。もう 1 つは、直近 1 分の負荷が CPU 数の半分以上のことで、そのときは残りの CPU 数（最低 2）にします。どちらにも当たらなければ既定のままです。CI は既定のままです。`TEST_MAX_WORKERS=<n>` で上書きできます。
 
 静的検査（`check:static`）には、構造を守る自前の検査も入っています: 依存の向き（`check:arch`）、SQL の組み立て（`check:sql-safety`）、doc コメントの位置（`check:doc-comments`）、**ファイルの長さ（`check:file-size`）**。最後のものは、800 行を超えるファイルを落とします（読む人が頭に収められる量を超えるため）。すでに超えている少数のファイルは `scripts/file-size-baseline.json` に理由つきで記録してあり、増やすと落ち、縮めたら基準線を下げます（`bun run check:file-size -- --update-baseline` は下げるだけで、追加も引き上げもしません。それは、ファイルを分けるか、理由を書いて手で足す、という人の判断にします）。生成物と文言の表は除外です。
 
@@ -344,9 +344,9 @@ pre-push のテストは、マシンが忙しいとき（別の worktree やセ�
 | アダプターにメソッドを追加 | `types.ts` → `base.ts` / `mysql/*` / `postgres/*` | 足す前に、既存のメソッドで足りないか確認（例: `tableStats` はすでに `indexBytes` を返す）。`ADAPTER_METHOD_NAMES` と conformance の `describe`、両方言で通す。`testing/fake-adapter.ts` に実装し、`apps/api/src/lib/audit.ts` の `AUDITED_METHODS`（データ・構造・アカウント・サーバー状態を変えるもの）か `PASSTHROUGH_METHODS` に分類する（`audit.test.ts` が網羅性を検査） |
 | フィルターの演算子を足す（例: `not_starts_with`） | `packages/shared/src/schemas/browse.ts`（`FilterOpSchema`。値がいらない、またはリストを取る演算子なら `NO_VALUE_OPS` / `LIST_OPS` も）→ `packages/adapter/src/sql/conditions.ts`（`FILTER_SQL` は型が強制する。文字列の形で比べるなら `TEXT_OPS`、単純な比較でなければ `conditionSql` の分岐）→ `testing/fake-adapter.ts` の switch → 両方の locale の `search.ops` | 画面の部品は変えない（`SearchForm` と `QueryBuilderCriteria` は `FilterOpSchema.options` を回す）。テスト: `sql/conditions.test.ts` の `TEXT_OPS` の期待値（わざと固定してある）と、conformance の `browse-and-insert.ts`・`search-and-query.ts`。文書: `docs/user-guide.md` の「検索」の行（と英訳）、`CHANGELOG.md`。方言ごとの差は `mysql/` と `postgres/` ではなく `sql/conditions.ts` に出る（フックは `ConditionHooks`） |
 | DDL 操作を追加 | `packages/shared/src/schemas/ddl.ts` → `*/ddl.ts` → web のフォーム | `test/ddl.test.ts` の `SAMPLE_OPS` に両方言のスナップショット、プレビュー経由の UI。SQL がサーバーの状態に依存する操作（`copyTable` の列、`renameDatabase` / `copyDatabase` のテーブル一覧）は、アダプターの `prepareDdl`（`packages/adapter/src/{mysql,postgres}/prepare-ddl.ts`）が、SQL を組み立てる前に埋める（ルートは呼ぶだけ）。**`renameDatabase` / `copyDatabase` のテーブル一覧は、依頼に含まれていても上書きする**。ただし、依頼時点の一覧や権限で見える範囲に依存する破壊的な文は組み立てない — MySQL の名前変更が元のデータベースを DROP しないのはそのため（見えないルーチン・イベントや、確認後に作られたテーブルを巻き込む） |
-| 画面の文言を変える | `config/locales/ja.ts` と `en.ts` | 両方に同じキーを足す（`locale.test.ts` が形の一致を検査）。コンポーネントへの直書きは禁止 |
+| 画面の文言を変える | `config/locales/screens-ja.ts` と `screens-en.ts`（初回表示の分は `ja.ts` と `en.ts`） | 両方に同じキーを足す（`locale.test.ts` が形の一致を検査）。コンポーネントへの直書きは禁止 |
 | ドキュメントを直す | `docs/*.md`（日本語が原文） | `docs/en/` の対応ファイルも翻訳し、`bun run docs:sync` でハッシュを打ち直す（`bun run docs:i18n` が追随を検査） |
-| 表示言語を追加する | `config/locale.ts` の `LOCALE_NAMES` / `LOADERS` と `locales/<code>.ts`、`locale.test.ts` の `LOCALES` | `ja.ts` が型の出どころ。新しい表は `satisfies Locale` を付ける（手順は §7） |
+| 表示言語を追加する | `config/locale.ts` の `LOCALE_NAMES` / `LOADERS`、`config/locale-screens.ts` の `LOADERS`、`locales/<code>.ts` と `locales/screens-<code>.ts`、`locale.test.ts` の `LOCALES` | `ja.ts` が型の出どころ。新しい表は `satisfies Locale` を付ける（手順は §7） |
 | 色・見た目を変える | Tailwind のクラス | `dark:` 対応を必ず付ける |
 | 環境変数を追加 | `apps/api/src/config.ts` | `.env.example` と `docs/deployment.md` の表を同時に更新（英訳も。`bun run docs:i18n` が検査します） |
 | 新しい型のサポート | `docker/fixtures/*` → `*/values.ts` → conformance | `bun run db:reset`、両方言の `typesRow1` |

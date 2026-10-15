@@ -5,7 +5,8 @@
  * The entry (main.tsx) loads the page's language and then the app (app.tsx) with dynamic imports, so index.html
  * alone names only the entry. The chain is followed through Vite's manifest instead: the entry and what it imports,
  * the app chunk and what it imports, and the larger of the language chunks (only one is fetched, but which one
- * depends on the user). Route chunks the router loads on navigation are not counted, as before.
+ * depends on the user). Route chunks the router loads on navigation are not counted, as before, nor are the
+ * screens' strings (`screens-<code>.ts`), which the router loads with the first screen.
  */
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -27,6 +28,11 @@ const DIST = join(process.cwd(), 'apps/web/dist')
  *
  * 162 -> 155 without touching the screens: the `treeshake` options in apps/web/vite.config.ts let the build drop the
  * shared schemas and the queries first paint does not use. What is left to cut is still zod and the language file.
+ *
+ * 155 -> 127: the language file is split. `locales/<code>.ts` keeps what first paint reads (login, error page, tabs,
+ * error messages); `locales/screens-<code>.ts` holds the rest and is loaded by the `/_app` route's `beforeLoad`
+ * (`config/locale-screens.ts`), so it is a route-time download and not counted here (the language regex below does
+ * not match it). Not a top-level await: that made rolldown split every route definition into its own chunk, ~152 kB.
  */
 const LIMIT_KB = 170
 

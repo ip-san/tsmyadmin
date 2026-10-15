@@ -2,7 +2,7 @@ import type { ProcessInfo } from '@tsmyadmin/shared'
 import { Button } from '@/components/ui/Button.tsx'
 import { Dialog } from '@/components/ui/Dialog.tsx'
 import { ErrorBox } from '@/components/ui/Feedback.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 
 /** Asks before closing a connection (from the process list, or a lock blocker): it rolls back what it has open. */
 export function KillDialog({
