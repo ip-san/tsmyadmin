@@ -3,7 +3,7 @@ import { isGeneratedColumn } from '@tsmyadmin/shared'
 import { Button } from '@/components/ui/Button.tsx'
 import { Badge } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 
 export function ColumnsTable({
   schema,

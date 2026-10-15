@@ -10,6 +10,9 @@ Object.defineProperty(navigator, 'languages', { value: ['ja-JP', 'ja'], configur
 // strings have to be in place first. Imported after the language is pinned above, so it resolves to Japanese.
 const { loadLocale } = await import('../config/locale.ts')
 await loadLocale()
+// And the screens' strings, which the app loads in the `/_app` route before any screen's module is evaluated.
+const { loadScreenStrings } = await import('../config/locale-screens.ts')
+await loadScreenStrings()
 
 // React only treats `act()` as an act scope when this is set; without it state updates in tests warn instead.
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true

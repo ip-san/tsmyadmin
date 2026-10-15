@@ -3,7 +3,7 @@ import type { Cell, ForeignKeyDef, ReferencingKeyDef } from '@tsmyadmin/shared'
 import { CornerDownLeft, ExternalLink } from 'lucide-react'
 import { CellValue } from '@/components/cells/CellValue.tsx'
 import { useCellDisplay } from '@/components/cells/cell-display.ts'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { cn } from '@/lib/cn.ts'
 import { fkTarget, reverseTarget } from './fk-links.ts'
 

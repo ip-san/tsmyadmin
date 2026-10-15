@@ -3,7 +3,7 @@ import { type FormEvent, useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { Field, Input, Select } from '@/components/ui/Field.tsx'
 import { TypeInput } from '@/components/ui/TypeInput.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import {
   type ColumnFormValues,
   EMPTY_COLUMN,

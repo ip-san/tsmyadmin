@@ -1,6 +1,6 @@
 import type { BrowseOptions } from '@tsmyadmin/shared'
 import { Button } from '@/components/ui/Button.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { cellToText } from '@/lib/format.ts'
 
 export function FilterChips({ options, onClear }: { options: BrowseOptions; onClear: () => void }) {

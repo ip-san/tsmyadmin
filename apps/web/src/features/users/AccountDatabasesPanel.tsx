@@ -4,7 +4,7 @@ import { capabilities, type Dialect, type UserOp, type UserRef } from '@tsmyadmi
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { grantsQuery } from '@/lib/queries.ts'
 import { userLabel } from '@/lib/user-ops.ts'
 import { databaseGrants, revokeOp, rowDatabase } from './database-grants.ts'

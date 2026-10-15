@@ -1,6 +1,6 @@
 import { capabilities, type Dialect } from '@tsmyadmin/shared'
 import { Input } from '@/components/ui/Field.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { findParameters, isValidDelimiter, type RunOptions } from '@/lib/sql-prepare.ts'
 
 const t = locale.sql.runOptions

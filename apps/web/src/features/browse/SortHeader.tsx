@@ -1,7 +1,7 @@
 import type { BrowseOptions } from '@tsmyadmin/shared'
 import { ArrowDown, ArrowUp } from 'lucide-react'
 import { Th } from '@/components/ui/Table.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { cn } from '@/lib/cn.ts'
 import { nextSort } from './sort.ts'
 

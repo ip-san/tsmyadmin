@@ -5,7 +5,7 @@ import { type FormEvent, useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { Dialog } from '@/components/ui/Dialog.tsx'
 import { Field, Input, Select } from '@/components/ui/Field.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { createStatementQuery } from '@/lib/queries.ts'
 import { useSpaces } from '@/lib/spaces.ts'
 

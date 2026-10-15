@@ -1,6 +1,6 @@
 import { capabilities, type Dialect } from '@tsmyadmin/shared'
 import { Field, Input, Select } from '@/components/ui/Field.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { useCollationNames } from '@/lib/collations.ts'
 import type { ColumnFormValues } from '@/lib/column-spec.ts'
 

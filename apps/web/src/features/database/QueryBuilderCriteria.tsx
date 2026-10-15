@@ -2,7 +2,7 @@ import { type QueryBuilderOp, QueryBuilderOpSchema } from '@tsmyadmin/shared'
 import { useRef } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { Input, Select } from '@/components/ui/Field.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { valueShape } from '@/lib/filter-values.ts'
 import { type ColumnKey, type ConditionGroup, type ConditionRow } from './query-builder-model.ts'
 

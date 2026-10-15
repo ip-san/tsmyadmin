@@ -8,7 +8,7 @@ import {
   UTF8_ONLY_FORMATS,
 } from '@tsmyadmin/shared'
 import { Field, Input, Select } from '@/components/ui/Field.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { ExportCheck, type ExportPatch } from './ExportCheck.tsx'
 
 const t = locale.export

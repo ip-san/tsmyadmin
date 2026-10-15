@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { ViewForm } from '@/components/ddl/ViewForm.tsx'
 import { parseViewDefinition } from '@/components/ddl/view-definition.ts'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import type { useDdlFlow } from '@/lib/ddl.ts'
 import { createStatementQuery, type TableRef } from '@/lib/queries.ts'
 import { useDialect } from '@/lib/session.ts'

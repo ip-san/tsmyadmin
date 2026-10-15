@@ -1,6 +1,6 @@
 import type { DesignerView, RelationDef } from '@tsmyadmin/shared'
 import { type KeyboardEvent, type PointerEvent, useId, useRef, useState } from 'react'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import {
   boxHeight,
   DEFAULT_VIEW,
