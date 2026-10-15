@@ -21,7 +21,7 @@ import { pathToFileURL } from 'node:url'
  */
 export function maxWorkersFor({ cpus, load1, activeRuns }) {
   const limits = []
-  if (activeRuns > 1) limits.push(Math.max(2, Math.floor((cpus - 1) / activeRuns)))
+  if (activeRuns > 1) limits.push(Math.min(cpus - 1, Math.max(2, Math.floor((cpus - 1) / activeRuns))))
   if (load1 >= cpus / 2) limits.push(Math.min(cpus - 1, Math.max(2, Math.floor(cpus - load1))))
   return limits.length ? Math.min(...limits) : undefined
 }
@@ -44,8 +44,9 @@ export function countVitestRuns(listing) {
     const [exe = '', ...rest] = line.trim().split(/\s+/)
     const name = exe.split('/').pop() ?? ''
     if (SHELLS.has(name) || !/^(node|bun)/.test(name)) continue
-    // The first argument that is Vitest's bin (Node's own flags may come before it).
-    const bin = rest.findIndex((arg) => /(^|\/)vitest(\.mjs)?$/.test(arg))
+    // The first argument that is Vitest's bin as a path (Node's own flags may come before it). A bare `vitest` is a
+    // launcher that stays as the parent (`node …/npx-cli.js vitest run`): its child is the run, counted on its own line.
+    const bin = rest.findIndex((arg) => /\/vitest(\.mjs)?$/.test(arg))
     if (bin === -1) continue
     const args = rest.slice(bin + 1)
     if (args.includes('run') || args.includes('--run')) count++
@@ -82,6 +83,7 @@ const SELF_TEST = [
   { name: 'busy and two runs: the smaller', input: { cpus: 10, load1: 5, activeRuns: 2 }, expect: 4 },
   { name: 'two runs, busier: load wins', input: { cpus: 10, load1: 7.2, activeRuns: 2 }, expect: 2 },
   { name: 'busy on 2 CPUs: still 1 below the CPUs', input: { cpus: 2, load1: 1, activeRuns: 1 }, expect: 1 },
+  { name: 'two runs on 2 CPUs: still 1 below the CPUs', input: { cpus: 2, load1: 0, activeRuns: 2 }, expect: 1 },
 ]
 
 const LISTING = [
@@ -94,6 +96,9 @@ const LISTING = [
   'node /w/d/node_modules/.bin/vitest',
   'node /w/e/node_modules/.bin/vitest --api 51204',
   'node /w/f/node_modules/.bin/vitest-other run',
+  'node /usr/lib/node_modules/npm/bin/npx-cli.js vitest run',
+  'npm exec vitest run',
+  'bun x vitest run',
   '',
 ].join('\n')
 
