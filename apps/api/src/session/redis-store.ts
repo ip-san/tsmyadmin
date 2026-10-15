@@ -477,7 +477,7 @@ class RedisSavedQueries implements SavedItems {
     for (let round = 0; round < LOCK_ROUNDS; round++) {
       const token = randomUUID()
       for (let attempt = 0; (await this.redis.set(lock, token, 'PX', LOCK_MS, 'NX')) !== 'OK'; attempt++) {
-        if (attempt >= LOCK_TRIES) throw new Error(BUSY)
+        if (attempt >= LOCK_TRIES) throw busy()
         await new Promise((resolve) => setTimeout(resolve, LOCK_WAIT_MS))
       }
       try {
@@ -488,7 +488,7 @@ class RedisSavedQueries implements SavedItems {
         await this.redis.eval(RELEASE_LOCK, 1, lock, token)
       }
     }
-    throw new Error(BUSY)
+    throw busy()
   }
 
   async remove(
@@ -514,6 +514,13 @@ const LOCK_TRIES = 400
 /** Times a read-modify-write is run again after its lock ran out under it, before giving up as busy. */
 const LOCK_ROUNDS = 3
 const BUSY = 'The stored items are busy: try again'
+/**
+ * Giving up on the lock: the store is busy, not the request wrong. Named so the API answers 503 STORE_UNAVAILABLE, as
+ * it does for a SQLite file another connection holds (`isStoreUnavailable`), instead of an unexplained 500.
+ */
+function busy(): Error {
+  return Object.assign(new Error(BUSY), { name: 'StoreBusyError' })
+}
 /** The lock a `withLock` call holds: its key, and the value only that call set. */
 interface Fence {
   lock: string

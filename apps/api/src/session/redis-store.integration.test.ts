@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
+import { isStoreUnavailable } from '../lib/store-errors.ts'
 import { describeSessionStoreConformance } from './conformance.ts'
 import { RedisSessionStore } from './redis-store.ts'
 
@@ -385,5 +386,39 @@ describe('RedisSessionStore', () => {
       // The condition judged `old`; the row now holds `new`, which it was never asked about.
       expect(after).toMatchObject([{ name: 'n', body: 'new' }])
     })
+  })
+
+  it('gives up as a busy store, which the API answers 503, when the lock runs out under every try', async () => {
+    const prefix = `test-${randomUUID()}`
+    const { FakeAdapter } = await import('@tsmyadmin/adapter/testing')
+    const a = new RedisSessionStore({
+      url,
+      secret: SECRET,
+      prefix,
+      adapterFactory: () => new FakeAdapter(),
+      sweepIntervalMs: 0,
+    })
+    const { Redis } = await import('ioredis')
+    const raw = new Redis(url)
+    try {
+      await a.savedQueries.save(account, 'sql', 'n', 'seed')
+      // Every read of a stored item stalls past the lock's expiry, so no try keeps its lock to the write.
+      const client = (a as unknown as { redis: { getBuffer: (...args: unknown[]) => Promise<unknown> } }).redis
+      const original = client.getBuffer.bind(client)
+      client.getBuffer = async (...args: unknown[]) => {
+        const value = await original(...args)
+        const locks = await raw.keys(`${prefix}:saved:*:lock:*`)
+        if (locks.length > 0) await raw.del(...locks)
+        return value
+      }
+      const failure = await a.savedQueries
+        .update(account, 'sql', 'n', (current) => `${current?.body}+a`)
+        .catch((e) => e)
+      expect(failure).toMatchObject({ name: 'StoreBusyError' })
+      expect(isStoreUnavailable(failure)).toBe(true)
+    } finally {
+      await raw.quit()
+      await a.closeAll()
+    }
   })
 })
