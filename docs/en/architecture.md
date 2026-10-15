@@ -1,4 +1,4 @@
-<!-- translated-from: docs/architecture.md sha256:c09b99429fe77567f9c50da16739576b1de60a9bf77e9c63c2fd061d50939938 -->
+<!-- translated-from: docs/architecture.md sha256:78e1ad3cb5f03a864e162e3b5dcfb8dd4bdc1d70bc695b6b691cf23f7c837b57 -->
 
 # Architecture
 
@@ -326,7 +326,7 @@ flowchart LR
   pp --> chk
 ```
 
-When the machine is busy (tests of another worktree or session running at the same time), the pre-push tests start fewer workers (`localMaxWorkers` in `vitest.config.ts`). Vitest's default is "CPUs − 1" processes; several of those at once ran the machine out of memory into swap, and a worker missed Vitest's start timeout (60 seconds, not configurable) and failed with "Failed to start forks worker". If the 1-minute load is below half the CPUs, the default stays; above that, it uses the CPUs that are left (at least 2). CI keeps the default. `TEST_MAX_WORKERS=<n>` overrides it.
+When the machine is busy (tests of another worktree or session running at the same time), the pre-push tests start fewer workers (`localMaxWorkers` in `vitest.config.ts`, the arithmetic in `scripts/test-workers.mjs`). Vitest's default is "CPUs − 1" processes; several of those at once ran the machine out of memory into swap, and a worker missed Vitest's start timeout (60 seconds, not configurable) and failed with "Failed to start forks worker". There are two conditions, and when both apply the smaller count wins. One is other `vitest run` processes on the machine (counted with `ps`, from any worktree): "CPUs − 1" is then divided by the number of runs (at least 2 each). The 1-minute load lags by about a minute, so runs started at the same moment cannot see each other through the load alone. The other is a 1-minute load of at least half the CPUs: it then uses the CPUs that are left (at least 2). When neither applies, the default stays. CI keeps the default. `TEST_MAX_WORKERS=<n>` overrides it.
 
 `check:static` also holds checks of the repository's own structure: the direction of dependencies (`check:arch`), how SQL is built (`check:sql-safety`), where doc comments sit (`check:doc-comments`), and **the length of a file (`check:file-size`)**. The last one fails a file past 800 lines (more than a reader holds in their head). The few files already past it are recorded with a reason in `scripts/file-size-baseline.json`: growing one fails, and when one shrinks its baseline comes down (`bun run check:file-size -- --update-baseline` only lowers; it never adds or raises, because that is a decision for a person: split the file, or add it by hand with the reason). Generated code and the string tables are exempt.
 

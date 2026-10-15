@@ -324,7 +324,7 @@ flowchart LR
   pp --> chk
 ```
 
-pre-push のテストは、マシンが忙しいとき（別の worktree やセッションのテストが同時に走っているとき）、同時に走らせるワーカーの数を減らします（`vitest.config.ts` の `localMaxWorkers`）。Vitest の既定は「CPU 数 − 1」個のプロセスで、それが何本も重なるとメモリが足りずにスワップし、ワーカーが Vitest の起動待ち（60 秒、設定できない）に間に合わず「Failed to start forks worker」で落ちていました。直近 1 分の負荷が CPU 数の半分未満なら既定のまま、それ以上なら残りの CPU 数（最低 2）にします。CI は既定のままです。`TEST_MAX_WORKERS=<n>` で上書きできます。
+pre-push のテストは、マシンが忙しいとき（別の worktree やセッションのテストが同時に走っているとき）、同時に走らせるワーカーの数を減らします（`vitest.config.ts` の `localMaxWorkers`、計算は `scripts/test-workers.mjs`）。Vitest の既定は「CPU 数 − 1」個のプロセスで、それが何本も重なるとメモリが足りずにスワップし、ワーカーが Vitest の起動待ち（60 秒、設定できない）に間に合わず「Failed to start forks worker」で落ちていました。減らす条件は 2 つで、両方に当たれば小さいほうにします。1 つは、ほかに `vitest run` が動いていること（`ps` で数える。どの worktree のものも）で、そのときは「CPU 数 − 1」を走っている本数で割ります（最低 2）。直近 1 分の負荷は 1 分ほど遅れるので、同じ瞬間に始めた何本かは、負荷だけではお互いが見えないためです。もう 1 つは、直近 1 分の負荷が CPU 数の半分以上のことで、そのときは残りの CPU 数（最低 2）にします。どちらにも当たらなければ既定のままです。CI は既定のままです。`TEST_MAX_WORKERS=<n>` で上書きできます。
 
 静的検査（`check:static`）には、構造を守る自前の検査も入っています: 依存の向き（`check:arch`）、SQL の組み立て（`check:sql-safety`）、doc コメントの位置（`check:doc-comments`）、**ファイルの長さ（`check:file-size`）**。最後のものは、800 行を超えるファイルを落とします（読む人が頭に収められる量を超えるため）。すでに超えている少数のファイルは `scripts/file-size-baseline.json` に理由つきで記録してあり、増やすと落ち、縮めたら基準線を下げます（`bun run check:file-size -- --update-baseline` は下げるだけで、追加も引き上げもしません。それは、ファイルを分けるか、理由を書いて手で足す、という人の判断にします）。生成物と文言の表は除外です。
 
