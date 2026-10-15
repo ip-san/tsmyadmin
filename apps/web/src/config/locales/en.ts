@@ -1472,16 +1472,22 @@ export const en = {
       roleAttributes: 'Role attributes',
       exportGrants: 'Download the privileges as SQL',
       newName: 'New name',
-      renameHintMysql:
-        'RENAME USER changes the name and host. The privileges go with it, but applications that connect under the old name can no longer connect.',
-      renameHintPostgres:
-        'ALTER ROLE … RENAME TO changes the name. The privileges go with it, but an MD5 password is cleared by the rename: set the password again afterwards.',
-      copyHintMysql:
-        'Makes a new account holding the same privileges (the SHOW GRANTS statements). A password cannot be copied: choose a new one.',
-      copyHintPostgres:
-        'Makes a new role with the same attributes, group memberships and privileges in the connected database. Choose a new password. Privileges in other databases are not copied.',
-      limitsHintMysql: 'Limits per hour; 0 is no limit. SSL / X509 accept encrypted connections only.',
-      limitsHintPostgres: 'The most connections the role may hold at once; 0 is no limit.',
+      renameHint: {
+        mysql:
+          'RENAME USER changes the name and host. The privileges go with it, but applications that connect under the old name can no longer connect.',
+        postgres:
+          'ALTER ROLE … RENAME TO changes the name. The privileges go with it, but an MD5 password is cleared by the rename: set the password again afterwards.',
+      },
+      copyHint: {
+        mysql:
+          'Makes a new account holding the same privileges (the SHOW GRANTS statements). A password cannot be copied: choose a new one.',
+        postgres:
+          'Makes a new role with the same attributes, group memberships and privileges in the connected database. Choose a new password. Privileges in other databases are not copied.',
+      },
+      limitsHint: {
+        mysql: 'Limits per hour; 0 is no limit. SSL / X509 accept encrypted connections only.',
+        postgres: 'The most connections the role may hold at once; 0 is no limit.',
+      },
       require: 'Connection requirement',
       requireOptions: { NONE: 'None', SSL: 'SSL', X509: 'X509 (a valid certificate)' },
       maxQueries: 'Queries per hour',

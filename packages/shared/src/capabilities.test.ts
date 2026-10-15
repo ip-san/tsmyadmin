@@ -94,4 +94,22 @@ describe('capabilities', () => {
     expect(capabilities('postgres').partitionsAreTables).toBe(true)
     expect(capabilities('mysql').partitionsAreTables).toBe(false)
   })
+
+  it('says only MySQL grants on the whole server, gives an account databases of its name, and limits it per hour', () => {
+    expect(capabilities('mysql')).toMatchObject({
+      serverWideGrants: true,
+      accountDatabases: true,
+      accountResourceLimits: true,
+    })
+    expect(capabilities('postgres')).toMatchObject({
+      serverWideGrants: false,
+      accountDatabases: false,
+      accountResourceLimits: false,
+    })
+  })
+
+  it('says only MySQL keeps its statement logs in tables and runs a replica by its threads', () => {
+    expect(capabilities('mysql')).toMatchObject({ statementLogTables: true, replicaThreads: true })
+    expect(capabilities('postgres')).toMatchObject({ statementLogTables: false, replicaThreads: false })
+  })
 })

@@ -95,7 +95,7 @@ export function ReplicaUserForm({
         <Field id="replica-user" label={locale.users.name}>
           <Input id="replica-user" value={name} onChange={(e) => setName(e.target.value)} autoComplete="off" />
         </Field>
-        {dialect === 'mysql' ? (
+        {capabilities(dialect).accountHost ? (
           <Field id="replica-host" label={locale.users.host}>
             <Input id="replica-host" value={host} onChange={(e) => setHost(e.target.value)} autoComplete="off" />
           </Field>
