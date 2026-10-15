@@ -6,7 +6,7 @@ import { PasswordFields, usePasswordConfirm } from '@/components/forms/PasswordF
 import { Button } from '@/components/ui/Button.tsx'
 import { Dialog } from '@/components/ui/Dialog.tsx'
 import { Field, Input } from '@/components/ui/Field.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { useReplicationOpFlow } from '@/lib/replication-ops.ts'
 import { useUserOpFlow } from '@/lib/user-ops.ts'
 import { ReplicaUserForm, SourceSettings } from './ReplicaSetup.tsx'

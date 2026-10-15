@@ -1,7 +1,7 @@
 import type { DesignerView } from '@tsmyadmin/shared'
 import { Button } from '@/components/ui/Button.tsx'
 import { Select } from '@/components/ui/Field.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { downloadText, safeFilename } from '@/lib/download.ts'
 
 const t = locale.designer

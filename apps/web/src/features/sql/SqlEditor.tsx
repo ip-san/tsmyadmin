@@ -6,7 +6,7 @@ import { tags } from '@lezer/highlight'
 import type { Dialect } from '@tsmyadmin/shared'
 import { basicSetup } from 'codemirror'
 import { useEffect, useRef } from 'react'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { resolveSettings } from '@/lib/settings.ts'
 import { useTheme } from '@/lib/theme.ts'
 

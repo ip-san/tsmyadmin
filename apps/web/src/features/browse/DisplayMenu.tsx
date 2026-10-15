@@ -1,6 +1,6 @@
 import { SlidersHorizontal } from 'lucide-react'
 import { type CellDisplay, useCellDisplay } from '@/components/cells/cell-display.ts'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 
 const OPTIONS: { key: keyof CellDisplay; label: string }[] = [
   { key: 'fullText', label: locale.browse.fullText },

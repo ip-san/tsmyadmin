@@ -1,6 +1,6 @@
 import type { Cell, ColumnDef, ColumnTransform, ForeignKeyDef, RowValues } from '@tsmyadmin/shared'
 import { type FormEvent, useEffect, useRef, useState } from 'react'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { cellToEditable, isOpaqueCell } from '@/lib/format.ts'
 import { inputMessage, inputValue } from '../cells/transform-text.ts'
 import { Button } from '../ui/Button.tsx'

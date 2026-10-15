@@ -6,7 +6,7 @@ import {
   type QueryTemplateBody,
 } from '@tsmyadmin/shared'
 import { NamedListPanel } from '@/components/panels/NamedListPanel.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { listQueryTemplates, mutations, queryTemplatesQuery } from '@/lib/queries.ts'
 import { useNamedList } from '@/lib/use-named-list.ts'
 import { deleteQueryTemplate, loadQueryTemplates, queryTemplatesFor, saveQueryTemplate } from './query-templates.ts'

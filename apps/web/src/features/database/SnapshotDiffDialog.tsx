@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/Button.tsx'
 import { Dialog } from '@/components/ui/Dialog.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { LineDiff } from '@/components/ui/LineDiff.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { snapshotDiffQuery } from '@/lib/queries.ts'
 
 const t = locale.snapshots

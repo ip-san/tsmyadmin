@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button.tsx'
 import { Field, Input, Select } from '@/components/ui/Field.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { TypeInput } from '@/components/ui/TypeInput.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { type ColumnFormValues, EMPTY_COLUMN, TYPE_NAMES, toColumnSpec, validateColumn } from '@/lib/column-spec.ts'
 import { useDdlFlow } from '@/lib/ddl.ts'
 

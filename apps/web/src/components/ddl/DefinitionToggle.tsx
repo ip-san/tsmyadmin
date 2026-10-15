@@ -3,7 +3,7 @@ import { type Dialect, sqlScript } from '@tsmyadmin/shared'
 import { useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Spinner } from '@/components/ui/Feedback.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { downloadText, safeFilename } from '@/lib/download.ts'
 import type { createStatementQuery, routineDefinitionQuery } from '@/lib/queries.ts'
 

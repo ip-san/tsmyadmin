@@ -1,7 +1,7 @@
 import { useRouteContext } from '@tanstack/react-router'
 import type { DesignerPage, DesignerPageBody, DesignerView } from '@tsmyadmin/shared'
 import { NamedListPanel } from '@/components/panels/NamedListPanel.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { designerPagesQuery, listDesignerPages, mutations } from '@/lib/queries.ts'
 import { useNamedList } from '@/lib/use-named-list.ts'
 import type { Point } from './designer-layout.ts'

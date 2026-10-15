@@ -1,6 +1,6 @@
 import type { TransformKind } from '@tsmyadmin/shared'
 import { Field, Input } from '@/components/ui/Field.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import type { TransformParams } from './transform-params.ts'
 
 const t = locale.transform

@@ -4,6 +4,7 @@ import { lazy, Suspense } from 'react'
 import { z } from 'zod'
 import { AppShell } from '@/components/layout/AppShell.tsx'
 import { Spinner } from '@/components/ui/Feedback.tsx'
+import { loadScreenStrings } from '@/config/locale-screens.ts'
 import { DbTree } from '@/features/sidebar/DbTree.tsx'
 import { loadAccountPreferences, resetAccountPreferences } from '@/lib/account-prefs.ts'
 import { mutations, sessionQuery } from '@/lib/queries.ts'
@@ -14,6 +15,10 @@ const DockedConsole = lazy(() => import('@/features/sql/DockedConsole.tsx').then
 export const Route = createFileRoute('/_app')({
   validateSearch: z.object({ schema: z.string().optional() }),
   beforeLoad: async ({ context, location }) => {
+    // The screens' strings, alongside the session: every page below reads them as its chunk is evaluated, and the
+    // router loads those chunks only after this returns (config/locale-screens.ts).
+    const strings = loadScreenStrings()
+    strings.catch(() => undefined) // awaited below; not left unhandled when the redirect to the login comes first
     const session = await context.queryClient.ensureQueryData(sessionQuery)
     // Deep links survive the login round trip; the top page needs no redirect param.
     if (!session) throw redirect({ to: '/login', search: location.href === '/' ? {} : { redirect: location.href } })
@@ -25,6 +30,7 @@ export const Route = createFileRoute('/_app')({
     const identity = JSON.stringify([session.dialect, session.host, session.port, session.user])
     const { reload } = await loadAccountPreferences(identity, session.savedQueries === 'server')
     if (reload) window.location.reload()
+    await strings
     return { session }
   },
   component: AppLayout,
