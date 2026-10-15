@@ -41,9 +41,9 @@ export function UserForm({
       user: capabilities(dialect).accountHost ? { name: name.trim(), host } : { name: name.trim() },
       password: pw.password,
       attributes: { superuser, createdb, createrole },
-      ...(dialect === 'mysql' && offersPlugin && plugin ? { plugin } : {}),
-      ...(dialect === 'mysql' && createDatabase ? { createDatabase } : {}),
-      ...(dialect === 'mysql' && grantWildcard ? { grantWildcard } : {}),
+      ...(offersPlugin && plugin ? { plugin } : {}),
+      ...(capabilities(dialect).accountDatabases && createDatabase ? { createDatabase } : {}),
+      ...(capabilities(dialect).accountDatabases && grantWildcard ? { grantWildcard } : {}),
     })
   }
   return (
@@ -104,7 +104,7 @@ export function UserForm({
           {locale.users.createrole}
         </label>
       </div>
-      {dialect === 'mysql' ? (
+      {capabilities(dialect).accountDatabases ? (
         <div className="space-y-1 text-sm">
           <label className="flex items-center gap-1">
             <input type="checkbox" checked={createDatabase} onChange={(e) => setCreateDatabase(e.target.checked)} />

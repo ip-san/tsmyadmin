@@ -68,6 +68,33 @@ export interface DialectCapabilities {
   definer: boolean
   /** The server can report how long a statement spent in each stage (`SET profiling`, MySQL). */
   statementProfiling: boolean
+  /**
+   * Privileges can be granted on the whole server (`ON *.*`), reaching every database, and changed as "global
+   * privileges" (MySQL). PostgreSQL's server-wide powers are role attributes (`SUPERUSER`, `CREATEDB` …) instead.
+   */
+  serverWideGrants: boolean
+  /**
+   * An account can come with databases named after it: one of its own name created with it and dropped with it, and all
+   * privileges on those named `name_…` through a grant on a database pattern (MySQL). PostgreSQL cannot create or drop a
+   * database inside the transaction that changes the roles, and its grants do not name databases by pattern.
+   */
+  accountDatabases: boolean
+  /**
+   * An account has hourly limits (queries, updates, connections) and can be required to connect over SSL / X509 (MySQL).
+   * A PostgreSQL role limits only how many connections it holds at once.
+   */
+  accountResourceLimits: boolean
+  /**
+   * The slow and general query logs can be written to tables, read from there and switched on at runtime (MySQL
+   * `log_output = 'TABLE'`). PostgreSQL's executed statements come from pg_stat_statements.
+   */
+  statementLogTables: boolean
+  /**
+   * A replica's threads are started and stopped by statements, even on a server that is not replicating yet; an error can
+   * be skipped, and the replica reset or pointed at another source (MySQL). A PostgreSQL standby's replay can only be
+   * paused and resumed; its source is a setting.
+   */
+  replicaThreads: boolean
   /** How a SQL dump is written for this server. */
   dump: {
     /** Drops are written as one section ahead of everything, in the reverse of the order of dependency (PostgreSQL); otherwise each object is dropped where it is created. */
@@ -109,6 +136,11 @@ const CAPABILITIES: Record<Dialect, DialectCapabilities> = {
     partitionsAreTables: false,
     definer: true,
     statementProfiling: true,
+    serverWideGrants: true,
+    accountDatabases: true,
+    accountResourceLimits: true,
+    statementLogTables: true,
+    replicaThreads: true,
     dump: {
       dropsInOneSection: false,
       dependencyCatalog: false,
@@ -140,6 +172,11 @@ const CAPABILITIES: Record<Dialect, DialectCapabilities> = {
     partitionsAreTables: true,
     definer: false,
     statementProfiling: false,
+    serverWideGrants: false,
+    accountDatabases: false,
+    accountResourceLimits: false,
+    statementLogTables: false,
+    replicaThreads: false,
     dump: {
       dropsInOneSection: true,
       dependencyCatalog: true,

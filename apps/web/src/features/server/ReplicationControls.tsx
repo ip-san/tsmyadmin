@@ -1,4 +1,4 @@
-import type { Dialect, ReplicationInfo, ReplicationOp } from '@tsmyadmin/shared'
+import { capabilities, type Dialect, type ReplicationInfo, type ReplicationOp } from '@tsmyadmin/shared'
 import { type FormEvent, useState } from 'react'
 import { PreviewDialog } from '@/components/ddl/PreviewDialog.tsx'
 import { UserOpPreviewDialog } from '@/components/ddl/UserOpPreviewDialog.tsx'
@@ -104,22 +104,23 @@ export function ReplicationControls({ dialect, info }: { dialect: Dialect; info:
   const [creatingUser, setCreatingUser] = useState(false)
   const replica = info.role === 'replica' || info.role === 'relay'
   const ask = (op: ReplicationOp) => flow.preview(op)
+  const threads = capabilities(dialect).replicaThreads
   return (
     <section className="space-y-2 print:hidden">
       <h3 className="text-sm font-semibold text-ink">{t.title}</h3>
       <p className="text-xs text-ink-sub">{t.hint[dialect]}</p>
       <div className="flex flex-wrap gap-2">
-        {replica || dialect === 'mysql' ? (
+        {replica || threads ? (
           <>
             <Button size="sm" aria-haspopup="dialog" onClick={() => ask({ op: 'startReplica', threads: 'all' })}>
-              {dialect === 'mysql' ? t.start : t.resume}
+              {threads ? t.start : t.resume}
             </Button>
             <Button size="sm" aria-haspopup="dialog" onClick={() => ask({ op: 'stopReplica', threads: 'all' })}>
-              {dialect === 'mysql' ? t.stop : t.pause}
+              {threads ? t.stop : t.pause}
             </Button>
           </>
         ) : null}
-        {dialect === 'mysql' ? (
+        {threads ? (
           <>
             <Button size="sm" aria-haspopup="dialog" onClick={() => ask({ op: 'skipReplicaError', count: 1 })}>
               {t.skip}

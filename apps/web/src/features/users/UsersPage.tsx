@@ -64,11 +64,10 @@ function AccountForm({
   onCancel: () => void
 }) {
   const user = userRef(info)
-  const mysql = dialect === 'mysql'
-  if (kind === 'rename') return <RenameForm user={user} mysql={mysql} onSubmit={onSubmit} onCancel={onCancel} />
-  if (kind === 'copy') return <CopyForm user={user} mysql={mysql} onSubmit={onSubmit} onCancel={onCancel} />
+  if (kind === 'rename') return <RenameForm user={user} dialect={dialect} onSubmit={onSubmit} onCancel={onCancel} />
+  if (kind === 'copy') return <CopyForm user={user} dialect={dialect} onSubmit={onSubmit} onCancel={onCancel} />
   if (kind === 'limits')
-    return <LimitsForm user={user} limits={info.limits} mysql={mysql} onSubmit={onSubmit} onCancel={onCancel} />
+    return <LimitsForm user={user} limits={info.limits} dialect={dialect} onSubmit={onSubmit} onCancel={onCancel} />
   if (kind === 'global') return <GlobalPrivilegesForm user={user} onSubmit={onSubmit} onCancel={onCancel} />
   return <RoleAttributesForm user={user} info={info} onSubmit={onSubmit} onCancel={onCancel} />
 }
@@ -193,7 +192,9 @@ export function UsersPage({ dialect }: { dialect: Dialect }) {
                   >
                     {u.canLogin ? locale.users.account.lock : locale.users.account.unlock}
                   </Button>
-                  {(['rename', 'copy', 'limits', dialect === 'mysql' ? 'global' : 'role'] as const).map((kind) => (
+                  {(
+                    ['rename', 'copy', 'limits', capabilities(dialect).serverWideGrants ? 'global' : 'role'] as const
+                  ).map((kind) => (
                     <Button
                       key={kind}
                       size="sm"

@@ -1,4 +1,4 @@
-import type { Dialect, UserOp, UserRef } from '@tsmyadmin/shared'
+import { capabilities, type Dialect, type UserOp, type UserRef } from '@tsmyadmin/shared'
 import { useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { Dialog } from '@/components/ui/Dialog.tsx'
@@ -20,6 +20,7 @@ export function BulkDropBar({
   const [revokeFirst, setRevokeFirst] = useState(false)
   const [sameName, setSameName] = useState(false)
   if (users.length === 0) return null
+  const accountDatabases = capabilities(dialect).accountDatabases
   return (
     <div className="flex flex-wrap items-center gap-2 rounded border border-line bg-surface-sub px-3 py-2 text-sm">
       <span>{t.selected(users.length)}</span>
@@ -32,7 +33,7 @@ export function BulkDropBar({
             <input type="checkbox" checked={revokeFirst} onChange={(e) => setRevokeFirst(e.target.checked)} />
             {t.revokeFirst}
           </label>
-          {dialect === 'mysql' ? (
+          {accountDatabases ? (
             <label className="flex items-start gap-2 text-sm">
               <input type="checkbox" checked={sameName} onChange={(e) => setSameName(e.target.checked)} />
               {t.sameNameDatabases}
@@ -50,7 +51,7 @@ export function BulkDropBar({
                   op: 'dropUsers',
                   users,
                   ...(revokeFirst ? { revokeFirst } : {}),
-                  ...(sameName && dialect === 'mysql' ? { dropSameNameDatabases: true } : {}),
+                  ...(sameName && accountDatabases ? { dropSameNameDatabases: true } : {}),
                 })
               }}
             >
