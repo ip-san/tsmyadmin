@@ -415,11 +415,15 @@ class RedisSavedQueries implements SavedItems {
     const after = await this.list(config, kind)
     const excess = after.slice(this.limit)
     if (excess.length === 0) return after
+    // The write above has landed, so a lock lost by now must not run it again (an update would apply its change
+    // twice): the trim is left to whoever holds the lock now, whose own write trims the same way.
     await this.fenced(
       fence,
       config,
       excess.map((victim) => victim.id)
-    )
+    ).catch((error: unknown) => {
+      if (!(error instanceof LockLost)) throw error
+    })
     return after.slice(0, this.limit)
   }
 
