@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { capabilities } from '@tsmyadmin/shared'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
@@ -79,7 +80,7 @@ export function MonitorPage() {
       </div>
       <div className="space-y-2 pt-3">
         <h2 className="text-sm font-semibold text-ink">{locale.diagnostics.logsTitle}</h2>
-        {dialect === 'mysql' ? (
+        {capabilities(dialect).statementLogTables ? (
           <>
             <h3 className="text-sm text-ink">{locale.diagnostics.slowLog}</h3>
             <DiagnosticReport kind="slowLog" title={locale.diagnostics.slowLog} />

@@ -361,8 +361,9 @@ class RedisSavedQueries implements SavedItems {
         const item = readPayload(open(this.key, payload, rowAad(SAVED_QUERIES, id)), id, Number(at))
         if (item.kind === kind) out.push(item)
       } catch {
-        // Gone, or it will not open: the same dead weight the file store drops when it reads one.
-        await this.redis.multi().zrem(index, id).del(this.entry(config, id)).exec()
+        // Gone, or it will not open: the same dead weight the file store drops when it reads one. Only while it is
+        // still exactly what was read: `list` takes no lock, and a save may have written this id since.
+        await this.redis.eval(PRUNE_IF_UNCHANGED, 2, index, this.entry(config, id), id, payload ?? '')
       }
     }
     return out.sort((a, b) => b.at - a.at)
@@ -375,13 +376,26 @@ class RedisSavedQueries implements SavedItems {
     body: string,
     replaces?: string
   ): Promise<SavedItem[]> {
+    // Under the same lock as `update` and `remove`: unlocked, a save landing inside an update was overwritten by the
+    // update's stale result, and one landing inside a conditional removal was deleted by it.
+    return this.withLock(config, kind, () => this.write(config, kind, name, body, replaces))
+  }
+
+  /** `save` for a caller that already holds the kind's lock (the lock is not re-entrant). */
+  private async write(
+    config: ConnectRequest,
+    kind: SavedItemKind,
+    name: string,
+    body: string,
+    replaces?: string
+  ): Promise<SavedItem[]> {
     const index = this.index(config)
     const mine = await this.list(config, kind)
     const existing = mine.find((q) => q.name === name)
     // Never the row being written: replacing a row with itself would delete what this call just stored.
     const replaced = replaces === undefined ? undefined : mine.find((q) => q.id === replaces && q.id !== existing?.id)
-    // A new row's id follows from what it is (owner, kind, name) rather than chance: the read above is not atomic
-    // with the write below, and two saves of one name at once then land on the same key instead of two rows.
+    // A new row's id follows from what it is (owner, kind, name) rather than chance, so a replica still running a
+    // version whose save took no lock lands on the same key instead of adding a second row of the name.
     const id = existing?.id ?? this.idFor(config, kind, name)
     const at = this.now()
     // Oldest of this kind first beyond its cap, so a runaway client cannot grow the store without bound. The kind
@@ -400,7 +414,8 @@ class RedisSavedQueries implements SavedItems {
     if (replaced) write.zrem(index, replaced.id).del(this.entry(config, replaced.id))
     for (const victim of victims) write.zrem(index, victim.id).del(this.entry(config, victim.id))
     await write.exec()
-    // Two saves at once each saw room for themselves; whichever finishes second trims the kind back to its cap.
+    // The lock keeps this replica's saves in turn, but during a rolling upgrade one without it can still have seen
+    // room at the same time: whichever finishes second trims the kind back to its cap.
     const after = await this.list(config, kind)
     const excess = after.slice(this.limit)
     if (excess.length === 0) return after
@@ -422,7 +437,7 @@ class RedisSavedQueries implements SavedItems {
         mine.find((q) => q.name === name),
         mine
       )
-      return body === null ? mine : this.save(config, kind, name, body)
+      return body === null ? mine : this.write(config, kind, name, body)
     })
   }
 
@@ -467,6 +482,17 @@ class RedisSavedQueries implements SavedItems {
 const LOCK_MS = 5000
 const LOCK_WAIT_MS = 15
 const LOCK_TRIES = 400
+/**
+ * Drops a stored item that would not open, only while its value is still what was read (ARGV[2], empty for a
+ * missing one): KEYS[1] the index, KEYS[2] the item; ARGV[1] its id.
+ */
+const PRUNE_IF_UNCHANGED = `
+local current = redis.call('GET', KEYS[2])
+if (current or '') ~= ARGV[2] then return 0 end
+redis.call('ZREM', KEYS[1], ARGV[1])
+redis.call('DEL', KEYS[2])
+return 1
+`
 /** Deletes the lock only if it is still ours (it may have expired and been taken by someone else). */
 const RELEASE_LOCK = `
   if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) end

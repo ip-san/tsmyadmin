@@ -17,7 +17,7 @@ export function PrivilegesPage({ db, schema, dialect }: { db: string; schema?: s
   const selectLevels = useCallback(
     (g: UserGrants) => ({
       level: privilegeLevel(dialect, db, schema, g.statements),
-      global: dialect === 'mysql' ? globalPrivilegeLevel(g.statements) : null,
+      global: capabilities(dialect).serverWideGrants ? globalPrivilegeLevel(g.statements) : null,
     }),
     [dialect, db, schema]
   )

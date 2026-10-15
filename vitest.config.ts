@@ -1,3 +1,4 @@
+import os from 'node:os'
 import path from 'node:path'
 import { defineConfig } from 'vitest/config'
 
@@ -16,8 +17,36 @@ const integration = process.env.INTEGRATION === '1'
  */
 const UNIT_TIMEOUT_MS = Number(process.env.TEST_TIMEOUT_MS ?? 15_000)
 
+/**
+ * How many workers (forks) run at once, for the whole run (set at the root: the pool is shared by the projects).
+ *
+ * Vitest's default is `availableParallelism() - 1`, one fork per test file. Several runs at once (other worktrees,
+ * other sessions) multiply that, the machine runs out of memory and swaps, and a fork can no longer answer within
+ * Vitest's start timeout: "[vitest-pool]: Failed to start forks worker … Timeout waiting for worker to respond".
+ * That timeout is fixed inside Vitest 4.1 (60 s, not an option), so the only lever is to start fewer forks.
+ *
+ * - CI: Vitest's default (unchanged).
+ * - Local, machine mostly idle (1-minute load < half the CPUs): Vitest's default, so the usual run is not slower.
+ * - Local, busy: the CPUs that are left, at least 2.
+ * - `TEST_MAX_WORKERS=<n>` overrides both (as does `--maxWorkers` on the command line).
+ *
+ * `os.freemem()` is not used: on macOS it counts only the pages nobody holds, and is near zero on a healthy machine.
+ * The load average lags by about a minute, so runs that all start in the same second still each see an idle machine.
+ */
+function localMaxWorkers(): number | undefined {
+  if (process.env.TEST_MAX_WORKERS) return Number(process.env.TEST_MAX_WORKERS)
+  if (process.env.CI) return undefined
+  const cpus = os.availableParallelism()
+  const [load1 = 0] = os.loadavg()
+  if (load1 < cpus / 2) return undefined
+  return Math.min(cpus - 1, Math.max(2, Math.floor(cpus - load1)))
+}
+
+const maxWorkers = localMaxWorkers()
+
 export default defineConfig({
   test: {
+    ...(maxWorkers === undefined ? {} : { maxWorkers }),
     projects: [
       {
         test: {

@@ -59,7 +59,7 @@ export interface SavedItems {
    * Changes the row under one name from what it holds now, atomically: `change` gets that row (undefined when there is
    * none) and the whole list of the kind, and returns the body to store, or null to leave everything as it is. Two
    * updates at once are applied one after the other, each seeing the other's result — which a `list` followed by a
-   * `save` cannot promise. `change` may throw to refuse; nothing is written then and the error goes to the caller. It
+   * `save` cannot promise. A `save` made at the same time is not lost either: it lands before or after, never inside. `change` may throw to refuse; nothing is written then and the error goes to the caller. It
    * must not await: the SQLite store holds a write transaction while it runs.
    */
   update(
@@ -72,8 +72,8 @@ export interface SavedItems {
    * Deletes one of the caller's own rows of that kind; an id belonging to another account, or to the other kind,
    * matches nothing (a bookmark is not deleted by the route that deletes templates). With `when`, the row is deleted
    * only if `when` accepts what it holds at the moment of the delete, read and deleted as one step with respect to
-   * `update` (Redis: under the same lock; a plain `save` there does not take it): a caller that checked something
-   * about the row it read is not made to delete what an `update` put there since.
+   * every other write of the kind (`save` and `update` included): a caller that checked something about the row it
+   * read is not made to delete what was written there since.
    * Like `update`'s `change`, `when` must not await.
    */
   remove(config: Config, kind: SavedItemKind, id: string, when?: (current: SavedItem) => boolean): Promise<SavedItem[]>

@@ -324,6 +324,8 @@ flowchart LR
   pp --> chk
 ```
 
+pre-push のテストは、マシンが忙しいとき（別の worktree やセッションのテストが同時に走っているとき）、同時に走らせるワーカーの数を減らします（`vitest.config.ts` の `localMaxWorkers`）。Vitest の既定は「CPU 数 − 1」個のプロセスで、それが何本も重なるとメモリが足りずにスワップし、ワーカーが Vitest の起動待ち（60 秒、設定できない）に間に合わず「Failed to start forks worker」で落ちていました。直近 1 分の負荷が CPU 数の半分未満なら既定のまま、それ以上なら残りの CPU 数（最低 2）にします。CI は既定のままです。`TEST_MAX_WORKERS=<n>` で上書きできます。
+
 静的検査（`check:static`）には、構造を守る自前の検査も入っています: 依存の向き（`check:arch`）、SQL の組み立て（`check:sql-safety`）、doc コメントの位置（`check:doc-comments`）、**ファイルの長さ（`check:file-size`）**。最後のものは、800 行を超えるファイルを落とします（読む人が頭に収められる量を超えるため）。すでに超えている少数のファイルは `scripts/file-size-baseline.json` に理由つきで記録してあり、増やすと落ち、縮めたら基準線を下げます（`bun run check:file-size -- --update-baseline` は下げるだけで、追加も引き上げもしません。それは、ファイルを分けるか、理由を書いて手で足す、という人の判断にします）。生成物と文言の表は除外です。
 
 **アダプターの外で、DB の種類を尋ねる場所（`check:dialect-leaks`）**も、数えて、増やさない検査があります。アダプターがあるのは、MySQL か PostgreSQL かを、ほかの層が知らなくて済むようにするためです。API や画面にある `dialect === 'postgres'` の 1 つ 1 つは、「知ってしまっている」場所で、3 つ目の DB を足すときは、そのすべてを探すことになります。そこで、ファイルごとの数を基準線（`scripts/dialect-leaks-baseline.json`）に置き、**増えると落ち、減ったら基準線を下げます**（`-- --update-baseline` は下げるだけ）。減らすには、違いを能力（`packages/shared/src/capabilities.ts`）として表すか、アダプターの `ddl` や `export` に仕事を移します。テスト、アダプターの方言ごとのディレクトリ、偽のアダプター、言語の文言は数えません。

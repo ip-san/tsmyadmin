@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { sqlScript } from '@tsmyadmin/shared'
+import { capabilities, sqlScript } from '@tsmyadmin/shared'
 import { useEffect, useRef, useState } from 'react'
 import { PreviewDialog } from '@/components/ddl/PreviewDialog.tsx'
 import { Button } from '@/components/ui/Button.tsx'
@@ -54,6 +54,7 @@ export function RecentStatements() {
   const flow = useLogSwitch(session?.serverDatabase ?? '')
   const status = report.data?.status
   const off = status === 'disabled' || status === 'notTable'
+  const logTables = capabilities(dialect).statementLogTables
   return (
     <section className="space-y-2" aria-labelledby="recent-title">
       <div className="flex flex-wrap items-center gap-3">
@@ -87,7 +88,7 @@ export function RecentStatements() {
         >
           {locale.monitor.clear}
         </Button>
-        {dialect === 'mysql' && status === 'ok' ? (
+        {logTables && status === 'ok' ? (
           <Button size="sm" onClick={() => flow.preview('off')}>
             {t.turnOff}
           </Button>
@@ -99,7 +100,7 @@ export function RecentStatements() {
       {status !== undefined && status !== 'ok' ? (
         <Notice>
           {locale.diagnostics.status.recentStatements[status]}
-          {dialect === 'mysql' && off ? (
+          {logTables && off ? (
             <Button size="sm" className="ml-2" onClick={() => flow.preview('on')}>
               {t.turnOn}
             </Button>
