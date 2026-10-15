@@ -33,8 +33,11 @@ const DIST = join(process.cwd(), 'apps/web/dist')
  * error messages); `locales/screens-<code>.ts` holds the rest and is loaded by the `/_app` route's `beforeLoad`
  * (`config/locale-screens.ts`), so it is a route-time download and not counted here (the language regex below does
  * not match it). Not a top-level await: that made rolldown split every route definition into its own chunk, ~152 kB.
+ *
+ * 140: lowered from 170 at 127, so a regression of the split (a screen section read through the first-paint import,
+ * a barrel pulled back in) fails here instead of hiding under the old headroom. About 13 kB is left for growth.
  */
-const LIMIT_KB = 170
+const LIMIT_KB = 140
 
 let manifest
 try {
