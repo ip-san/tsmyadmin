@@ -361,6 +361,41 @@ export function describeSessionStoreConformance(
       }
     })
 
+    it('never loses a plain save made at the same time as an update or a conditional removal', async () => {
+      const store = await create({ adapterFactory: tracked().adapterFactory, sweepIntervalMs: 0 })
+      try {
+        const saved = store.savedQueries
+        if (!saved) return
+        // Several rounds, each starting both writes in the same turn: an order that slips through once is caught.
+        for (let round = 0; round < 5; round++) {
+          await saved.save(CONFIG, 'prefs', 'counter', '[]')
+          // Saved first, the update appends to what the save wrote; updated first, the save replaces it. An update
+          // that read `[]`, let the save land, and then wrote its own result would have dropped the save.
+          await Promise.all([
+            saved.update(CONFIG, 'prefs', 'counter', (current) =>
+              JSON.stringify([...JSON.parse(current?.body ?? '[]'), 1])
+            ),
+            saved.save(CONFIG, 'prefs', 'counter', '[9]'),
+          ])
+          const [counter] = await saved.list(CONFIG, 'prefs')
+          expect(JSON.parse(counter?.body ?? '[]')).toContain(9)
+
+          const [row] = await saved.save(CONFIG, 'prefs', 'group', 'old')
+          // Saved first, the removal finds the new body and keeps it; removed first, the save writes the name anew.
+          // A removal that judged the old body and then deleted what the save put there would leave nothing.
+          await Promise.all([
+            saved.remove(CONFIG, 'prefs', row?.id ?? '', (current) => current.body === 'old'),
+            saved.save(CONFIG, 'prefs', 'group', 'new'),
+          ])
+          const group = (await saved.list(CONFIG, 'prefs')).filter((item) => item.name === 'group')
+          expect(group.map((item) => item.body)).toEqual(['new'])
+          await saved.remove(CONFIG, 'prefs', group[0]?.id ?? '')
+        }
+      } finally {
+        await store.closeAll()
+      }
+    })
+
     it('shares server-wide items between the accounts of one server, and only that server', async () => {
       const store = await create({ adapterFactory: tracked().adapterFactory, sweepIntervalMs: 0 })
       try {

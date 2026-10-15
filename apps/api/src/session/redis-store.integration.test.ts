@@ -273,4 +273,51 @@ describe('RedisSessionStore', () => {
       await s.closeAll()
     }
   })
+
+  it('drops a stored item that will not open, but not one written again while it was being read', async () => {
+    const prefix = `test-${randomUUID()}`
+    const config = { dialect: 'mysql' as const, host: 'h', port: 1, user: 'u', password: 'secret' }
+    const { FakeAdapter } = await import('@tsmyadmin/adapter/testing')
+    const s = new RedisSessionStore({
+      url,
+      secret: SECRET,
+      prefix,
+      adapterFactory: () => new FakeAdapter(),
+      sweepIntervalMs: 0,
+    })
+    const { Redis } = await import('ioredis')
+    const raw = new Redis(url)
+    try {
+      const saved = s.savedQueries
+      await saved.save(config, 'sql', 'a', 'SELECT 1')
+      const [entry] = (await raw.keys(`${prefix}:saved:*`)).filter(
+        (k) => !k.includes(':lock:') && k.split(':').length === 4
+      )
+      if (!entry) throw new Error('no stored item')
+      const index = entry.slice(0, entry.lastIndexOf(':'))
+      await raw.set(entry, 'unreadable')
+      // `list` takes no lock: between its read and its clean-up, the item is written again (here by hand, standing
+      // in for a save on another replica). The clean-up must leave what is there now alone.
+      const client = (s as unknown as { redis: { getBuffer: (...args: unknown[]) => Promise<unknown> } }).redis
+      const original = client.getBuffer.bind(client)
+      client.getBuffer = async (...args: unknown[]) => {
+        const value = await original(...args)
+        if (args[0] === entry) {
+          client.getBuffer = original
+          await raw.set(entry, 'written since')
+        }
+        return value
+      }
+      expect(await saved.list(config, 'sql')).toEqual([])
+      expect(await raw.get(entry)).toBe('written since')
+      expect(await raw.zcard(index)).toBe(1)
+      // Read again with nothing in between, it goes, index member and all.
+      expect(await saved.list(config, 'sql')).toEqual([])
+      expect(await raw.exists(entry)).toBe(0)
+      expect(await raw.zcard(index)).toBe(0)
+    } finally {
+      await raw.quit()
+      await s.closeAll()
+    }
+  })
 })
