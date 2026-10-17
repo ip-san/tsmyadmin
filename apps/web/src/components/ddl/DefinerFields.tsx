@@ -1,6 +1,6 @@
 import type { SqlSecurity } from '@tsmyadmin/shared'
 import { Field, Input, Select } from '@/components/ui/Field.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { parseDefiner } from './definer.ts'
 
 const t = locale.create.security

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import type { DdlOp, Dialect } from '@tsmyadmin/shared'
+import { capabilities, type DdlOp, type Dialect } from '@tsmyadmin/shared'
 import { useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { Card } from '@/components/ui/Card.tsx'
@@ -7,7 +7,8 @@ import { Dialog } from '@/components/ui/Dialog.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Select } from '@/components/ui/Field.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
-import { locale, numberLocale } from '@/config/locale.ts'
+import { numberLocale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { partitionsQuery, type TableRef } from '@/lib/queries.ts'
 import { AddPartitionForm, boundExample, PartitionTableForm } from './PartitionForms.tsx'
 
@@ -26,13 +27,15 @@ export function PartitionsCard({
   const parts = useQuery(partitionsQuery(tableRef))
   const [dialog, setDialog] = useState<'partition' | 'add' | null>(null)
   const table = tableRef.table
+  // Partitions that are tables of their own come with the table (created partitioned) and stay with it.
+  const { partitionsAreTables } = capabilities(dialect)
   const close = () => setDialog(null)
   if (parts.isPending) return <Spinner />
   if (parts.isError) return <ErrorBox error={parts.error} onRetry={() => void parts.refetch()} />
   const p = parts.data
   const actions =
     p.method === null ? (
-      dialect === 'mysql' ? (
+      !partitionsAreTables ? (
         <Button size="sm" aria-haspopup="dialog" onClick={() => setDialog('partition')}>
           {t.partition}
         </Button>
@@ -42,7 +45,7 @@ export function PartitionsCard({
         <Button size="sm" aria-haspopup="dialog" onClick={() => setDialog('add')}>
           {locale.ddl.titles.addPartition}
         </Button>
-        {dialect === 'mysql' ? (
+        {!partitionsAreTables ? (
           <Button size="sm" aria-haspopup="dialog" onClick={() => onPreview({ op: 'removePartitioning', table })}>
             {locale.ddl.titles.removePartitioning}
           </Button>
@@ -52,7 +55,7 @@ export function PartitionsCard({
   return (
     <Card title={t.title} actions={actions} bleed={p.method !== null}>
       {p.method === null ? (
-        <Notice>{dialect === 'mysql' ? t.none : t.nonePostgres}</Notice>
+        <Notice>{partitionsAreTables ? t.nonePostgres : t.none}</Notice>
       ) : (
         <>
           <p className="px-4 pt-2 text-xs text-ink-sub">{t.by(p.method.toUpperCase(), p.expression ?? '')}</p>
@@ -157,7 +160,7 @@ function PartitionActions({
       >
         {t.truncate}
       </Button>
-      {dialect === 'postgres' ? (
+      {capabilities(dialect).partitionsAreTables ? (
         <Button
           size="sm"
           aria-haspopup="dialog"

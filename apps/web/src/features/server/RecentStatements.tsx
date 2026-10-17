@@ -1,12 +1,13 @@
 import { useQuery } from '@tanstack/react-query'
-import { sqlScript } from '@tsmyadmin/shared'
+import { capabilities, sqlScript } from '@tsmyadmin/shared'
 import { useEffect, useRef, useState } from 'react'
 import { PreviewDialog } from '@/components/ddl/PreviewDialog.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Select } from '@/components/ui/Field.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
-import { locale, numberLocale } from '@/config/locale.ts'
+import { numberLocale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { usePreviewFlow } from '@/lib/preview-flow.ts'
 import { mutations, recentStatementsQuery, sessionQuery } from '@/lib/queries.ts'
 import { MONITOR_SECONDS } from './monitor.ts'
@@ -54,6 +55,7 @@ export function RecentStatements() {
   const flow = useLogSwitch(session?.serverDatabase ?? '')
   const status = report.data?.status
   const off = status === 'disabled' || status === 'notTable'
+  const logTables = capabilities(dialect).statementLogTables
   return (
     <section className="space-y-2" aria-labelledby="recent-title">
       <div className="flex flex-wrap items-center gap-3">
@@ -87,19 +89,19 @@ export function RecentStatements() {
         >
           {locale.monitor.clear}
         </Button>
-        {dialect === 'mysql' && status === 'ok' ? (
+        {logTables && status === 'ok' ? (
           <Button size="sm" onClick={() => flow.preview('off')}>
             {t.turnOff}
           </Button>
         ) : null}
       </div>
-      <p className="text-xs text-ink-sub">{dialect === 'mysql' ? t.hintMysql : t.hintPostgres}</p>
+      <p className="text-xs text-ink-sub">{t.hint[dialect]}</p>
       {report.isPending ? <Spinner /> : null}
       {report.isError ? <ErrorBox error={report.error} onRetry={() => void report.refetch()} /> : null}
       {status !== undefined && status !== 'ok' ? (
         <Notice>
           {locale.diagnostics.status.recentStatements[status]}
-          {dialect === 'mysql' && off ? (
+          {logTables && off ? (
             <Button size="sm" className="ml-2" onClick={() => flow.preview('on')}>
               {t.turnOn}
             </Button>

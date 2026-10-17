@@ -1,6 +1,6 @@
 import type { PlanNode } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { planReads, planSteps, readSentence, toneOf } from './plan-steps.ts'
 
 const t = locale.plan

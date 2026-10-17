@@ -1,6 +1,6 @@
 import { EXPLAINABLE } from '@tsmyadmin/shared'
 import { Button } from '@/components/ui/Button.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 
 export interface StatementHandlers {
   edit: (sql: string) => void

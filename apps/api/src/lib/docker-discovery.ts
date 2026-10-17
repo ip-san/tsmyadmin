@@ -16,6 +16,9 @@ interface DockerContainer {
   Image?: string
   Labels?: Record<string, string>
   Ports?: DockerPort[]
+  /** `Up 3 seconds (health: starting)`: how the list said health before it carried `Health` (API 1.51+). */
+  Status?: string
+  Health?: { Status?: string }
 }
 interface DockerInspect {
   Config?: { Env?: string[] }
@@ -51,11 +54,16 @@ function dialectOf(image: string, ports: readonly DockerPort[]): Dialect | null 
   return null
 }
 
+/** Whether the container's healthcheck has not passed yet (a database still initialising refuses logins). */
+function isStarting(c: DockerContainer): boolean {
+  return c.Health?.Status === 'starting' || /\(health: starting\)/.test(c.Status ?? '')
+}
+
 /** The published TCP port that carries the database: the dialect's usual one when published, else the first. */
-function databasePort(dialect: Dialect, ports: readonly DockerPort[]): number | null {
+function databasePort(dialect: Dialect, ports: readonly DockerPort[]): DockerPort | null {
   const published = ports.filter((p) => p.PublicPort !== undefined && (p.Type ?? 'tcp') === 'tcp')
   const usual = published.find((p) => p.PrivatePort === DEFAULT_PORT[dialect])
-  return (usual ?? published[0])?.PublicPort ?? null
+  return usual ?? published[0] ?? null
 }
 
 /** `project/service` for a Compose container (what people call it), else the container's own name. */
@@ -76,6 +84,22 @@ async function containerEnv(get: DockerGet, c: DockerContainer): Promise<Map<str
     if (eq > 0) env.set(entry.slice(0, eq), entry.slice(eq + 1))
   }
   return env
+}
+
+/** The account the image creates, by name only (never its password): the application's own first, else the default. */
+const USER_ENV: Record<Dialect, { names: readonly string[]; fallback: string }> = {
+  mysql: { names: ['MYSQL_USER', 'MARIADB_USER'], fallback: 'root' },
+  postgres: { names: ['POSTGRES_USER'], fallback: 'postgres' },
+}
+
+/** Where an application reaches this container from: its Compose service and internal port, and the account name. */
+function dockerHint(c: DockerContainer, env: ReadonlyMap<string, string>, dialect: Dialect, privatePort: number) {
+  const service = c.Labels?.['com.docker.compose.service']
+  const project = c.Labels?.['com.docker.compose.project']
+  const { names, fallback } = USER_ENV[dialect]
+  // An environment that could not be read says nothing about the account: no name rather than a guessed one.
+  const user = env.size === 0 ? undefined : (names.map((n) => env.get(n)).find(Boolean) ?? fallback)
+  return { ...(service ? { service } : {}), ...(project ? { project } : {}), privatePort, ...(user ? { user } : {}) }
 }
 
 function databaseHint(env: ReadonlyMap<string, string>, dialect: Dialect): string | undefined {
@@ -129,7 +153,7 @@ export interface DiscoveredDatabase {
   login?: DockerLogin
 }
 
-/** A database container that cannot be offered, and why (`stopped`, or running without a published port). */
+/** A database container that cannot be offered (yet), and why: `stopped`, no published port, or still `starting`. */
 export type SkippedDatabase = DiscoveryIssue
 
 /**
@@ -157,9 +181,14 @@ export async function discoverAll(
       skipped.push({ name: `docker: ${displayName(c)}`, dialect, reason: 'stopped', port: null })
       continue
     }
-    const port = databasePort(dialect, ports)
-    if (port === null) {
+    const published = databasePort(dialect, ports)
+    if (published?.PublicPort === undefined) {
       skipped.push({ name: `docker: ${displayName(c)}`, dialect, reason: 'notPublished', port: DEFAULT_PORT[dialect] })
+      continue
+    }
+    const port = published.PublicPort
+    if (isStarting(c)) {
+      skipped.push({ name: `docker: ${displayName(c)}`, dialect, reason: 'starting', port })
       continue
     }
     let name = `docker: ${displayName(c)}`
@@ -176,6 +205,7 @@ export async function discoverAll(
         port,
         ...(database ? { database } : {}),
         ...(login ? { autoLogin: true } : {}),
+        docker: dockerHint(c, env, dialect, published.PrivatePort),
       },
       ...(login ? { login } : {}),
     })

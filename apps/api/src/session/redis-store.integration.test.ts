@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
+import { isStoreUnavailable } from '../lib/store-errors.ts'
 import { describeSessionStoreConformance } from './conformance.ts'
 import { RedisSessionStore } from './redis-store.ts'
 
@@ -271,6 +272,153 @@ describe('RedisSessionStore', () => {
     } finally {
       await raw.quit()
       await s.closeAll()
+    }
+  })
+
+  it('drops a stored item that will not open, but not one written again while it was being read', async () => {
+    const prefix = `test-${randomUUID()}`
+    const config = { dialect: 'mysql' as const, host: 'h', port: 1, user: 'u', password: 'secret' }
+    const { FakeAdapter } = await import('@tsmyadmin/adapter/testing')
+    const s = new RedisSessionStore({
+      url,
+      secret: SECRET,
+      prefix,
+      adapterFactory: () => new FakeAdapter(),
+      sweepIntervalMs: 0,
+    })
+    const { Redis } = await import('ioredis')
+    const raw = new Redis(url)
+    try {
+      const saved = s.savedQueries
+      await saved.save(config, 'sql', 'a', 'SELECT 1')
+      const [entry] = (await raw.keys(`${prefix}:saved:*`)).filter(
+        (k) => !k.includes(':lock:') && k.split(':').length === 4
+      )
+      if (!entry) throw new Error('no stored item')
+      const index = entry.slice(0, entry.lastIndexOf(':'))
+      await raw.set(entry, 'unreadable')
+      // `list` takes no lock: between its read and its clean-up, the item is written again (here by hand, standing
+      // in for a save on another replica). The clean-up must leave what is there now alone.
+      const client = (s as unknown as { redis: { getBuffer: (...args: unknown[]) => Promise<unknown> } }).redis
+      const original = client.getBuffer.bind(client)
+      client.getBuffer = async (...args: unknown[]) => {
+        const value = await original(...args)
+        if (args[0] === entry) {
+          client.getBuffer = original
+          await raw.set(entry, 'written since')
+        }
+        return value
+      }
+      expect(await saved.list(config, 'sql')).toEqual([])
+      expect(await raw.get(entry)).toBe('written since')
+      expect(await raw.zcard(index)).toBe(1)
+      // Read again with nothing in between, it goes, index member and all.
+      expect(await saved.list(config, 'sql')).toEqual([])
+      expect(await raw.exists(entry)).toBe(0)
+      expect(await raw.zcard(index)).toBe(0)
+    } finally {
+      await raw.quit()
+      await s.closeAll()
+    }
+  })
+
+  // A holder that stalls past its lock's expiry (a pause, a slow network) must not then write what it decided before:
+  // in between, another replica took the lock and saved. The stall is `a`'s next read of a stored item: it reads,
+  // its lock runs out (deleted by hand), `b` saves, and only then does `a` get the value it read.
+  async function withStalledReplica(
+    test: (
+      a: RedisSessionStore,
+      b: RedisSessionStore,
+      stallOnce: (meanwhile: () => Promise<void>) => void
+    ) => Promise<void>
+  ): Promise<void> {
+    const prefix = `test-${randomUUID()}`
+    const { FakeAdapter } = await import('@tsmyadmin/adapter/testing')
+    const opts = { url, secret: SECRET, prefix, adapterFactory: () => new FakeAdapter(), sweepIntervalMs: 0 }
+    const a = new RedisSessionStore(opts)
+    const b = new RedisSessionStore(opts)
+    const { Redis } = await import('ioredis')
+    const raw = new Redis(url)
+    const client = (a as unknown as { redis: { getBuffer: (...args: unknown[]) => Promise<unknown> } }).redis
+    const original = client.getBuffer.bind(client)
+    const stallOnce = (meanwhile: () => Promise<void>) => {
+      client.getBuffer = async (...args: unknown[]) => {
+        client.getBuffer = original
+        const value = await original(...args)
+        const locks = await raw.keys(`${prefix}:saved:*:lock:*`)
+        expect(locks).toHaveLength(1)
+        await raw.del(...locks)
+        await meanwhile()
+        return value
+      }
+    }
+    try {
+      await test(a, b, stallOnce)
+    } finally {
+      await raw.quit()
+      await a.closeAll()
+      await b.closeAll()
+    }
+  }
+  const account = { dialect: 'mysql' as const, host: 'h', port: 1, user: 'u', password: 'secret' }
+
+  it('does not let an update whose lock ran out write over a save made since', async () => {
+    await withStalledReplica(async (a, b, stallOnce) => {
+      await a.savedQueries.save(account, 'sql', 'n', 'seed')
+      stallOnce(async () => {
+        await b.savedQueries.save(account, 'sql', 'n', 'b')
+      })
+      const after = await a.savedQueries.update(account, 'sql', 'n', (current) => `${current?.body}+a`)
+      // Decided again from what is there now, rather than `seed+a` over the other replica's save.
+      expect(after).toMatchObject([{ name: 'n', body: 'b+a' }])
+      expect(await b.savedQueries.list(account, 'sql')).toMatchObject([{ name: 'n', body: 'b+a' }])
+    })
+  })
+
+  it('does not let a conditional removal whose lock ran out delete a row written since', async () => {
+    await withStalledReplica(async (a, b, stallOnce) => {
+      const [row] = await a.savedQueries.save(account, 'sql', 'n', 'old')
+      if (!row) throw new Error('not saved')
+      stallOnce(async () => {
+        await b.savedQueries.save(account, 'sql', 'n', 'new')
+      })
+      const after = await a.savedQueries.remove(account, 'sql', row.id, (current) => current.body === 'old')
+      // The condition judged `old`; the row now holds `new`, which it was never asked about.
+      expect(after).toMatchObject([{ name: 'n', body: 'new' }])
+    })
+  })
+
+  it('gives up as a busy store, which the API answers 503, when the lock runs out under every try', async () => {
+    const prefix = `test-${randomUUID()}`
+    const { FakeAdapter } = await import('@tsmyadmin/adapter/testing')
+    const a = new RedisSessionStore({
+      url,
+      secret: SECRET,
+      prefix,
+      adapterFactory: () => new FakeAdapter(),
+      sweepIntervalMs: 0,
+    })
+    const { Redis } = await import('ioredis')
+    const raw = new Redis(url)
+    try {
+      await a.savedQueries.save(account, 'sql', 'n', 'seed')
+      // Every read of a stored item stalls past the lock's expiry, so no try keeps its lock to the write.
+      const client = (a as unknown as { redis: { getBuffer: (...args: unknown[]) => Promise<unknown> } }).redis
+      const original = client.getBuffer.bind(client)
+      client.getBuffer = async (...args: unknown[]) => {
+        const value = await original(...args)
+        const locks = await raw.keys(`${prefix}:saved:*:lock:*`)
+        if (locks.length > 0) await raw.del(...locks)
+        return value
+      }
+      const failure = await a.savedQueries
+        .update(account, 'sql', 'n', (current) => `${current?.body}+a`)
+        .catch((e) => e)
+      expect(failure).toMatchObject({ name: 'StoreBusyError' })
+      expect(isStoreUnavailable(failure)).toBe(true)
+    } finally {
+      await raw.quit()
+      await a.closeAll()
     }
   })
 })

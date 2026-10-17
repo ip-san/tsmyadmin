@@ -1,13 +1,13 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import type { Dialect, UserOp, UserRef } from '@tsmyadmin/shared'
+import { capabilities, type Dialect, type UserOp, type UserRef } from '@tsmyadmin/shared'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { grantsQuery } from '@/lib/queries.ts'
 import { userLabel } from '@/lib/user-ops.ts'
-import { databaseGrants, grantDatabase, revokeOp } from './database-grants.ts'
+import { databaseGrants, revokeOp, rowDatabase } from './database-grants.ts'
 
 const KIND = () => locale.users.databases.kind
 
@@ -31,7 +31,7 @@ export function AccountDatabasesPanel({
   return (
     <div className="space-y-1">
       <h3 className="text-xs font-semibold text-ink">{t.title}</h3>
-      {dialect === 'postgres' ? <Notice>{t.postgresNote(database)}</Notice> : null}
+      {capabilities(dialect).connectionPerDatabase ? <Notice>{t.postgresNote(database)}</Notice> : null}
       {rows.length === 0 ? (
         <Notice>{t.none}</Notice>
       ) : (
@@ -47,7 +47,7 @@ export function AccountDatabasesPanel({
           </thead>
           <tbody>
             {rows.map((g) => {
-              const db = dialect === 'mysql' ? grantDatabase(g) : database
+              const db = rowDatabase(dialect, g, database)
               const op = revokeOp(user, dialect, g, database)
               const name = `${g.database ?? database}${g.schema ? `.${g.schema}` : ''}${g.object ? `.${g.object}` : ''}`
               return (

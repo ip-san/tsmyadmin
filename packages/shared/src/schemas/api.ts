@@ -240,6 +240,23 @@ export type SecondFactorProof = z.infer<typeof SecondFactorProofSchema>
 /** Starting an enrolment: empty for the first factor, proof of the current one when adding another. */
 export const SecondFactorBeginRequestSchema = z.union([SecondFactorProofSchema, z.object({})])
 
+/**
+ * Why a login failed, told only by a development deployment (NODE_ENV is not production): the server's own wording
+ * names the address the API connects from, which production keeps to itself. Sent as the `reason` / `params` of the
+ * AUTH_FAILED / CONNECTION_FAILED answer; the client says what happened and how to fix it.
+ */
+export const LoginHintReasonSchema = z.enum([
+  'LOGIN_MYSQL_ACCESS_DENIED',
+  'LOGIN_MYSQL_HOST_NOT_ALLOWED',
+  'LOGIN_MYSQL_HOST_BLOCKED',
+  'LOGIN_PG_NO_HBA_ENTRY',
+  'LOGIN_PG_PASSWORD',
+  'LOGIN_REFUSED',
+  'LOGIN_UNREACHABLE',
+  'LOGIN_HOST_UNKNOWN',
+])
+export type LoginHintReason = z.infer<typeof LoginHintReasonSchema>
+
 export const ApiErrorSchema = z.object({
   code: ApiErrorCodeSchema,
   message: z.string(),

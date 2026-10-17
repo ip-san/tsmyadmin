@@ -1,6 +1,6 @@
 import { createFileRoute, useRouteContext } from '@tanstack/react-router'
 import { ServerTabs } from '@/components/layout/ServerTabs.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { DiagnosticReport } from '@/features/server/DiagnosticReport.tsx'
 import { ServerCatalogPage } from '@/features/server/ServerCatalogPage.tsx'
 

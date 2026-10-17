@@ -1,6 +1,6 @@
 import { useRouteContext } from '@tanstack/react-router'
 import type { DdlOp, Dialect } from '@tsmyadmin/shared'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import type { DdlFlow } from '@/lib/ddl.ts'
 import { PreviewDialog } from './PreviewDialog.tsx'
 
@@ -92,7 +92,7 @@ function lossWarning(op: DdlOp, dialect: Dialect): string | null {
     case 'replaceInColumn':
       return locale.ddl.replaceWarning
     case 'renameDatabase':
-      return dialect === 'postgres' ? locale.databaseOps.renameWarningPostgres : locale.databaseOps.renameWarningMysql
+      return locale.databaseOps.renameWarning[dialect]
     default:
       return null
   }

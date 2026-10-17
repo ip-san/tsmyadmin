@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/Button.tsx'
 import { Dialog } from '@/components/ui/Dialog.tsx'
 import { ErrorBox, Spinner } from '@/components/ui/Feedback.tsx'
 import { Field, Input } from '@/components/ui/Field.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { useDdlFlow } from '@/lib/ddl.ts'
 import { serverInfoQuery, variablesQuery } from '@/lib/queries.ts'
 import { KeyValueTable } from './KeyValueTable.tsx'
@@ -35,9 +35,7 @@ function EditVariable({
   }
   return (
     <form onSubmit={submit} className="space-y-3" aria-label={`${item.name}: ${t.editVariable}`}>
-      <p className="text-xs text-ink-sub">
-        {dialect === 'mysql' ? t.editVariableHintMysql : t.editVariableHintPostgres}
-      </p>
+      <p className="text-xs text-ink-sub">{t.editVariableHint[dialect]}</p>
       {item.description ? <p className="text-xs text-ink-sub">{item.description}</p> : null}
       <Field id="variable-value" label={item.name}>
         <Input

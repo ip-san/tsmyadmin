@@ -1,6 +1,6 @@
-import type { Dialect } from '@tsmyadmin/shared'
+import { capabilities, type Dialect } from '@tsmyadmin/shared'
 import { Input } from '@/components/ui/Field.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { findParameters, isValidDelimiter, type RunOptions } from '@/lib/sql-prepare.ts'
 
 const t = locale.sql.runOptions
@@ -29,7 +29,7 @@ export function RunOptionsPanel({
         {names.length > 0 ? ` (${t.parameterCount(names.length)})` : ''}
       </summary>
       <div className="mt-2 flex flex-wrap items-end gap-x-6 gap-y-2">
-        {dialect === 'mysql' ? (
+        {capabilities(dialect).scriptDelimiter ? (
           <label className="flex items-center gap-1 text-xs text-ink-sub" title={t.delimiterHint}>
             {t.delimiter}
             <Input

@@ -12,6 +12,7 @@ import type {
   ExplainResult,
   KeyValue,
   KillMode,
+  LockWaitReport,
   Namespace,
   ObjectDependency,
   Partitioning,
@@ -70,6 +71,7 @@ import {
   mysqlListProcesses,
   mysqlListStatus,
   mysqlListVariables,
+  mysqlLockWaits,
   mysqlReplicationInfo,
   mysqlServerCatalog,
   mysqlServerInfo,
@@ -737,6 +739,10 @@ export class MysqlAdapter extends BaseAdapter {
 
   killProcess(id: string, mode: KillMode = 'connection'): Promise<void> {
     return this.withConn(this.serverNs(), (conn) => mysqlKillProcess(conn, id, mode))
+  }
+
+  lockWaits(): Promise<LockWaitReport> {
+    return this.withConn(this.serverNs(), (conn) => mysqlLockWaits(conn))
   }
 
   listUsers(): Promise<UserInfo[]> {

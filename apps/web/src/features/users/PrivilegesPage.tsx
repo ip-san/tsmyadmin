@@ -4,7 +4,7 @@ import { useCallback } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { Badge, ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { userLabel, userRef } from '@/lib/user-ops.ts'
 import { useAccountGrants, usePrivilegeDialogs } from './account-privileges.tsx'
 import { globalPrivilegeLevel, privilegeLevel } from './privilege-level.ts'
@@ -17,7 +17,7 @@ export function PrivilegesPage({ db, schema, dialect }: { db: string; schema?: s
   const selectLevels = useCallback(
     (g: UserGrants) => ({
       level: privilegeLevel(dialect, db, schema, g.statements),
-      global: dialect === 'mysql' ? globalPrivilegeLevel(g.statements) : null,
+      global: capabilities(dialect).serverWideGrants ? globalPrivilegeLevel(g.statements) : null,
     }),
     [dialect, db, schema]
   )

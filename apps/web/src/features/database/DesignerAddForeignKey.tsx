@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button.tsx'
 import { Dialog } from '@/components/ui/Dialog.tsx'
 import { Spinner } from '@/components/ui/Feedback.tsx'
 import { Field, Select } from '@/components/ui/Field.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { useDdlFlow } from '@/lib/ddl.ts'
 import { structureQuery } from '@/lib/queries.ts'
 

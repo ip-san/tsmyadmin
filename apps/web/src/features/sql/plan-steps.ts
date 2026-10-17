@@ -1,6 +1,6 @@
 import type { PlanAccess, PlanNode } from '@tsmyadmin/shared'
 import type { OverlayStep, Tone } from '@/components/schema-diagram/overlay.ts'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 
 const t = locale.plan
 

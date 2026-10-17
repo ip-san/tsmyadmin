@@ -1,7 +1,7 @@
 import type { RowKeyKind } from '@tsmyadmin/shared'
 import { Button } from '@/components/ui/Button.tsx'
 import { PrintButton } from '@/components/ui/PrintButton.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { ColumnPicker } from './ColumnPicker.tsx'
 import { DisplayMenu } from './DisplayMenu.tsx'
 

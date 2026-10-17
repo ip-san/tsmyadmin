@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Badge, ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { serverInfoQuery, statusQuery, variablesQuery } from '@/lib/queries.ts'
 import { useDialect } from '@/lib/session.ts'
 import { advise, fill } from './advisor.ts'

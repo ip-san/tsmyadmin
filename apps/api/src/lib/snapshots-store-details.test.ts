@@ -30,6 +30,7 @@ const dump = (bytes: number, names: string[] = ['t']) => ({
   sql: 'x'.repeat(bytes),
   statements: 1,
   names: new Set(names),
+  definitions: new Map<string, string>(),
 })
 const taken = (store: SnapshotStore, scope: string, name: string, bytes = 10, at = new Date(T0)) =>
   store.add(scope, dump(bytes), name, at)
@@ -72,7 +73,9 @@ describe('adding', () => {
 
   it('counts a dump in bytes, not characters', () => {
     const store = mk()
-    expect(store.add('s', { sql: 'あい', statements: 1, names: new Set() }, 'n', new Date()).bytes).toBe(6)
+    expect(
+      store.add('s', { sql: 'あい', statements: 1, names: new Set(), definitions: new Map() }, 'n', new Date()).bytes
+    ).toBe(6)
   })
 
   it('keeps ten for a database, and says so', async () => {

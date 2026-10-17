@@ -19,7 +19,7 @@ import {
   SecondFactorCodeRequestSchema,
   SecondFactorProofSchema,
 } from '@tsmyadmin/shared'
-import { type Context, Hono } from 'hono'
+import { type Context, Hono, type MiddlewareHandler } from 'hono'
 import { apiError } from '../lib/errors.ts'
 import type { Logger } from '../lib/logging.ts'
 import {
@@ -236,19 +236,50 @@ async function proven(
   })
 }
 
+/** The place a request took in its address's budget (`tooManyCodes`), and whether a refused proof kept it. */
+const codeSlots = new WeakMap<Context, { ip: string; windowEnd: number; spent: boolean }>()
+
 /**
- * A refused code, counted on the per-IP budget that limits login failures: six digits are guessable in a few
- * hundred thousand tries, and these routes are otherwise only guarded by holding a session.
+ * Refused codes are counted on the per-IP budget that limits login failures: six digits are guessable in a few
+ * hundred thousand tries, and these routes are otherwise only guarded by holding a session. The place is taken now,
+ * before any await, the way the login takes it: a check that only saw the failures counted after each proof had
+ * been looked at let a burst sent at once all through. Only a refused proof keeps it (`spendCodeSlot`);
+ * `giveBackCodeSlots` returns it on every other way out.
  */
 function tooManyCodes(c: Context, deps: SecondFactorDeps) {
-  const budget = deps.ipLimiter.peek(deps.ip(c))
-  if (budget.allowed) return null
-  c.header('Retry-After', String(budget.retryAfterSec))
+  const ip = deps.ip(c)
+  const slot = deps.ipLimiter.hit(ip)
+  if (slot.allowed) {
+    codeSlots.set(c, { ip, windowEnd: slot.windowEnd, spent: false })
+    return null
+  }
+  deps.ipLimiter.refund(ip, slot.windowEnd)
+  c.header('Retry-After', String(slot.retryAfterSec))
   return c.json(apiError('RATE_LIMITED', 'Too many code attempts; try again later'), 429)
 }
 
+/** Keeps the place this request took, or counts one if it took none. */
+function spendCodeSlot(c: Context, deps: SecondFactorDeps) {
+  const slot = codeSlots.get(c)
+  if (slot) slot.spent = true
+  else deps.ipLimiter.hit(deps.ip(c))
+}
+
+/** Gives back, once the request is answered, a place it took and did not spend on a refused proof. */
+function giveBackCodeSlots(deps: SecondFactorDeps): MiddlewareHandler {
+  return async (c, next) => {
+    try {
+      await next()
+    } finally {
+      const slot = codeSlots.get(c)
+      codeSlots.delete(c)
+      if (slot && !slot.spent) deps.ipLimiter.refund(slot.ip, slot.windowEnd)
+    }
+  }
+}
+
 function codeRefused(c: Context<AppEnv>, deps: SecondFactorDeps, event: string) {
-  deps.ipLimiter.hit(deps.ip(c))
+  spendCodeSlot(c, deps)
   deps.logger.log('warn', event, { requestId: c.get('requestId'), ...sessionInfo(c.get('session')) })
   return c.json(apiError('SECOND_FACTOR_INVALID', 'That code is not valid'), 401)
 }
@@ -256,7 +287,7 @@ function codeRefused(c: Context<AppEnv>, deps: SecondFactorDeps, event: string) 
 /** An account that is locked: the wrong guesses of every address together reached the limit. */
 function codeLocked(c: Context<AppEnv>, deps: SecondFactorDeps, event: string, seconds: number) {
   // Still a try from this address, so one that keeps knocking on a locked account runs into its own limit too.
-  deps.ipLimiter.hit(deps.ip(c))
+  spendCodeSlot(c, deps)
   deps.logger.log('warn', 'second_factor.locked', {
     requestId: c.get('requestId'),
     ...sessionInfo(c.get('session')),
@@ -310,10 +341,12 @@ async function changeFactor(
       continue
     }
     const { version: _stale, ...next } = changed
-    // Nothing stored yet has no version to compare with: that write is the first.
-    if (await store.set(config, current?.version === undefined ? next : { ...next, version: current.version })) {
-      return true
-    }
+    // Nothing stored yet has no version to compare with: that write is the first, and lands only while it still is
+    // (two first enrolments at once must not both land, the second over the first).
+    const written = current
+      ? await store.set(config, current.version === undefined ? next : { ...next, version: current.version })
+      : await store.create(config, next)
+    if (written) return true
   }
   return false
 }
@@ -382,6 +415,8 @@ export function secondFactorRoutes(cfg: SessionConfig, deps: SecondFactorDeps) {
     deps.logger.log('info', event, { requestId: c.get('requestId'), ...sessionInfo(c.get('session')) })
   return (
     new Hono<AppEnv>()
+      // Covers '/second-factor' itself too.
+      .use('/second-factor/*', giveBackCodeSlots(deps))
       .get('/second-factor', requireEnrollable(cfg), async (c) =>
         c.json(await secondFactorStatus(cfg, deps, c.get('session')))
       )

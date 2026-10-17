@@ -21,9 +21,10 @@ describe('maskSql: a quoted password that is never closed', () => {
     }
   })
 
-  it('still masks a closed one whole, escaped quotes inside it included, and keeps what follows it', () => {
+  it('still masks a closed one whole, doubled quotes inside it included, and keeps what follows it', () => {
+    // A backslash before a quote ends the string on PostgreSQL, not on MySQL: the panel cannot tell, so all goes.
     expect(maskSql("ALTER USER u IDENTIFIED BY 'abc\\'def' WITH x")).toBe(
-      `ALTER USER u IDENTIFIED BY '${PASSWORD_MASK}' WITH x`
+      `ALTER USER u IDENTIFIED BY '${PASSWORD_MASK}'`
     )
     expect(maskSql("ALTER USER u IDENTIFIED BY 'abc''def' WITH x")).toBe(
       `ALTER USER u IDENTIFIED BY '${PASSWORD_MASK}' WITH x`

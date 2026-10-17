@@ -2,7 +2,7 @@ import type { DdlOp, Dialect, PartitionMethod } from '@tsmyadmin/shared'
 import { type FormEvent, useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { Field, Input, Select } from '@/components/ui/Field.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 
 const t = locale.partitions
 

@@ -7,13 +7,13 @@ MySQL / PostgreSQL 両対応の、モダン TypeScript 製の Web DB 管理ツ�
 ## 構成
 
 - **モノレポ (Bun workspaces)**: `apps/api`（Hono on Bun, :3100）/ `apps/web`（Vite + React 19 + TanStack, :5175）/ `packages/shared`（Zod DTO）/ `packages/adapter`（DB 抽象層）
-- **DB 抽象**: `DatabaseAdapter` を `mysql2` / `pg` の上に薄く実装。ORM 不使用（Prisma は不採用）。閲覧・CRUD・SQL 実行・DDL・エクスポート（`showCreateTable`/`iterateRows`/`exporter`）・インポート（`insertRows`）・アカウント（`listUsers`/`showGrants`/`canManageAccount`/`users` ビルダー）・サーバー情報（`serverInfo`/`listVariables`/`listStatus`/`listProcesses`/`killProcess`/`serverCatalog`/`replicationInfo`）を両方言で同じ契約に揃える
+- **DB 抽象**: `DatabaseAdapter` を `mysql2` / `pg` の上に薄く実装。ORM 不使用（Prisma は不採用）。閲覧・CRUD・SQL 実行・DDL・エクスポート（`showCreateTable`/`iterateRows`/`exporter`）・インポート（`insertRows`）・アカウント（`listUsers`/`showGrants`/`canManageAccount`/`users` ビルダー）・サーバー情報（`serverInfo`/`listVariables`/`listStatus`/`listProcesses`/`killProcess`/`serverCatalog`/`replicationInfo`/`lockWaits`）を両方言で同じ契約に揃える
 - **画面構成**: phpMyAdmin と同じ 3 階層（サーバー: DB 一覧/SQL/ステータス/変数/プロセス/ユーザー、DB: 構造/SQL/エクスポート/インポート/権限/ルーチン/トリガー/イベント、テーブル: 表示/構造/SQL/検索/挿入/エクスポート/インポート/トリガー/操作）
 - **型の流れ**: `packages/shared` の Zod → API (`@hono/zod-validator`) → web (`hc<AppType>`)
 - **テスト DB**: `docker compose`（MySQL `13306` / PostgreSQL `15433`、fixtures 自動投入）
 - **開発での使い方（売りの機能）**: `docker-compose.dev.yml` 1 つで、手元の Docker の MySQL / PostgreSQL コンテナを自動検出してログイン画面に出す（`TSMYADMIN_DOCKER_DISCOVERY=1`、`apps/api/src/lib/docker-discovery.ts`。読むのは GET だけ、`NODE_ENV=production` では拒否）。コンテナの資格情報を使う 1 クリック ログインは、`TSMYADMIN_DOCKER_LOGIN=1` を明示したときだけ（既定はパスワードを読まない）。くわしくは [docs/dev-environment.md](docs/dev-environment.md)
 - **本番運用**: 設定は `apps/api/src/config.ts` で起動時検証（環境変数の一覧は `docs/deployment.md` が唯一の正）。接続先 allowlist・ログイン レート制限・CSP・リクエスト ID 付き構造化ログ・監査ログ（`withAudit`）・`/healthz` `/readyz`・暗号化 SQLite セッションストア（`SESSION_STORE=sqlite`）
-- **品質**: Vitest / Playwright / Biome / knip / madge / jscpd / type-coverage + 自前検査（`bun run check:quality` にまとめてある。中身は `package.json`）。**アクセシビリティ**は 3 層（Biome の a11y ルール = 警告 0、`check:contrast`、E2E の axe とレイアウト検査）で、検査の中身と、画面を足したときにやることは [.claude/rules/web.md](.claude/rules/web.md) の「画面を足すとき」。初期 JS は brotli 合計 170 kB の予算（`bun run size`）
+- **品質**: Vitest / Playwright / Biome / knip / madge / jscpd / type-coverage + 自前検査（`bun run check:quality` にまとめてある。中身は `package.json`）。**アクセシビリティ**は 3 層（Biome の a11y ルール = 警告 0、`check:contrast`、E2E の axe とレイアウト検査）で、検査の中身と、画面を足したときにやることは [.claude/rules/web.md](.claude/rules/web.md) の「画面を足すとき」。初期 JS は brotli 合計 140 kB の予算（`bun run size`）
 
 ## 開発コマンド
 
@@ -41,10 +41,10 @@ bun run lighthouse        # Lighthouse CI（警告のみ、要 Chrome）
 
 ## 現在の規模（`scripts/validate-docs.mjs` が同期）
 
-- ユニット/API/Web テスト定義: <!-- stat:unit-tests -->2682<!-- /stat --> 件
-- Adapter conformance: <!-- stat:conformance -->209<!-- /stat --> 件 × 2 方言
-- E2E: <!-- stat:e2e -->205<!-- /stat --> 件
-- API ルート: <!-- stat:routes -->96<!-- /stat -->
+- ユニット/API/Web テスト定義: <!-- stat:unit-tests -->2812<!-- /stat --> 件
+- Adapter conformance: <!-- stat:conformance -->210<!-- /stat --> 件 × 2 方言
+- E2E: <!-- stat:e2e -->208<!-- /stat --> 件
+- API ルート: <!-- stat:routes -->97<!-- /stat -->
 
 ## 設計ドキュメント
 

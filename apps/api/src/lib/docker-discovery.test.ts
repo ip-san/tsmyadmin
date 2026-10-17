@@ -1,4 +1,5 @@
 import { createServer } from 'node:net'
+import type { ServerPreset } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
 import {
   createDockerDiscovery,
@@ -58,6 +59,12 @@ const INSPECT: Record<string, unknown> = {
   [id(2)]: { Config: { Env: ['POSTGRES_PASSWORD=secret', 'POSTGRES_DB=app'] } },
   [id(5)]: { Config: { Env: ['MYSQL_DATABASE='] } },
 }
+/**
+ * The presets as JSON without the account names: a name may be root, and the fixture's root password is "root" too,
+ * so a password check has to look past the name.
+ */
+const withoutUsers = (presets: readonly ServerPreset[]) =>
+  JSON.stringify(presets.map((p) => ({ ...p, docker: { ...p.docker, user: undefined } })))
 const fakeGet =
   (calls: string[] = []): DockerGet =>
   async (path) => {
@@ -72,15 +79,36 @@ describe('discoverDatabases', () => {
   it('lists published MySQL / PostgreSQL containers as presets, named after their Compose service', async () => {
     const found = await discoverDatabases(fakeGet(), '127.0.0.1')
     expect(found).toEqual([
-      { name: 'docker: legacy', dialect: 'mysql', host: '127.0.0.1', port: 3307 },
-      { name: 'docker: snook/pgsql', dialect: 'postgres', host: '127.0.0.1', port: 5432, database: 'app' },
-      { name: 'docker: tsmyadmin/mysql', dialect: 'mysql', host: '127.0.0.1', port: 13306, database: 'tsmyadmin_test' },
+      {
+        name: 'docker: legacy',
+        dialect: 'mysql',
+        host: '127.0.0.1',
+        port: 3307,
+        // No MYSQL_USER: the account the image creates is root.
+        docker: { privatePort: 3306, user: 'root' },
+      },
+      {
+        name: 'docker: snook/pgsql',
+        dialect: 'postgres',
+        host: '127.0.0.1',
+        port: 5432,
+        database: 'app',
+        docker: { service: 'pgsql', project: 'snook', privatePort: 5432, user: 'postgres' },
+      },
+      {
+        name: 'docker: tsmyadmin/mysql',
+        dialect: 'mysql',
+        host: '127.0.0.1',
+        port: 13306,
+        database: 'tsmyadmin_test',
+        docker: { service: 'mysql', project: 'tsmyadmin', privatePort: 3306, user: 'tsmyadmin' },
+      },
     ])
   })
 
   it('never carries a password out of the container environment', async () => {
-    const found = JSON.stringify(await discoverDatabases(fakeGet(), 'host.docker.internal'))
-    expect(found).not.toMatch(/root|secret|PASSWORD/)
+    const found = withoutUsers(await discoverDatabases(fakeGet(), 'host.docker.internal'))
+    expect(found).not.toMatch(/root|secret|PASSWORD|password/)
     expect(found).toContain('host.docker.internal')
   })
 
@@ -97,7 +125,14 @@ describe('discoverDatabases', () => {
       throw new Error('gone')
     }
     expect(await discoverDatabases(get, '127.0.0.1')).toEqual([
-      { name: 'docker: tsmyadmin/mysql', dialect: 'mysql', host: '127.0.0.1', port: 13306 },
+      {
+        name: 'docker: tsmyadmin/mysql',
+        dialect: 'mysql',
+        host: '127.0.0.1',
+        port: 13306,
+        // No account name either: an unread environment is not guessed at.
+        docker: { service: 'mysql', project: 'tsmyadmin', privatePort: 3306 },
+      },
     ])
   })
 })
@@ -196,7 +231,7 @@ describe('discover with logins', () => {
     expect(by('docker: legacy')?.login).toBeUndefined()
     expect(by('docker: legacy')?.preset.autoLogin).toBeUndefined()
     // What the login screen is told carries the flag and nothing of the login.
-    expect(JSON.stringify(found.map((d) => d.preset))).not.toMatch(/root"|secret|PASSWORD|password/)
+    expect(withoutUsers(found.map((d) => d.preset))).not.toMatch(/root"|secret|PASSWORD|password/)
   })
 
   it('reads no login unless asked to', async () => {
@@ -215,7 +250,7 @@ describe('discover with logins', () => {
     expect(await on.login('docker: legacy')).toBeNull()
     const off = createDockerDiscovery({ get: fakeGet(), connectHost: '127.0.0.1', logger })
     expect(await off.login('docker: tsmyadmin/mysql')).toBeNull()
-    expect(JSON.stringify(await on.list())).not.toMatch(/secret|"root"/)
+    expect(withoutUsers(await on.list())).not.toMatch(/secret|"root"/)
   })
 })
 

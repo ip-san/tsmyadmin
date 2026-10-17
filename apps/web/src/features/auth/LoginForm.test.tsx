@@ -191,4 +191,25 @@ describe('LoginForm with a passkey', () => {
     // That ticket is spent: the button waits for the next attempt to hand out a fresh one.
     await waitFor(() => expect(screen.queryByRole('button', { name: 'パスキーで確認' })).not.toBeInTheDocument())
   })
+
+  it('shows the connection details for the application only while a Docker container is chosen', async () => {
+    wrap(
+      <LoginForm
+        onLogin={vi.fn()}
+        presets={[
+          {
+            name: 'docker: shop/mysql',
+            dialect: 'mysql',
+            host: '127.0.0.1',
+            port: 13306,
+            docker: { service: 'mysql', privatePort: 3306 },
+          },
+          { name: 'prod', dialect: 'postgres', host: 'db.internal', port: 5432 },
+        ]}
+      />
+    )
+    expect(screen.getByText('アプリからつなぐときの接続情報')).toBeInTheDocument()
+    await userEvent.selectOptions(screen.getByLabelText('接続先'), 'prod')
+    expect(screen.queryByText('アプリからつなぐときの接続情報')).not.toBeInTheDocument()
+  })
 })

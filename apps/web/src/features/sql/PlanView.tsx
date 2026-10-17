@@ -6,7 +6,7 @@ import { DiagramLegend, StepNarration } from '@/components/schema-diagram/StepNa
 import { useStepPlayer } from '@/components/schema-diagram/use-step-player.ts'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { explainQuery, foreignKeysQuery, structureQuery } from '@/lib/queries.ts'
 import { planReads, planSteps } from './plan-steps.ts'
 

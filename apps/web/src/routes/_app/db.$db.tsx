@@ -3,7 +3,7 @@ import { PageTitle } from '@/components/layout/PageTitle.tsx'
 import { SettingsLink } from '@/components/layout/SettingsLink.tsx'
 import { TabNav } from '@/components/layout/TabNav.tsx'
 import { Badge } from '@/components/ui/Feedback.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { useDocumentTitle } from '@/lib/document-title.ts'
 
 export const Route = createFileRoute('/_app/db/$db')({ component: DatabaseLayout })

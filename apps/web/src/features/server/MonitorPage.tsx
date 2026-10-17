@@ -1,9 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
+import { capabilities } from '@tsmyadmin/shared'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Select } from '@/components/ui/Field.tsx'
-import { locale, numberLocale } from '@/config/locale.ts'
+import { numberLocale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { statusQuery } from '@/lib/queries.ts'
 import { useDialect } from '@/lib/session.ts'
 import { DiagnosticReport } from './DiagnosticReport.tsx'
@@ -54,7 +56,7 @@ export function MonitorPage() {
           {t.clear}
         </Button>
       </div>
-      <p className="text-xs text-ink-sub">{dialect === 'mysql' ? t.hintMysql : t.hintPostgres}</p>
+      <p className="text-xs text-ink-sub">{t.hint[dialect]}</p>
       {status.isPending ? <Spinner /> : null}
       {status.isError ? <ErrorBox error={status.error} onRetry={() => void status.refetch()} /> : null}
       {samples.length === 1 ? <Notice>{t.waiting}</Notice> : null}
@@ -79,7 +81,7 @@ export function MonitorPage() {
       </div>
       <div className="space-y-2 pt-3">
         <h2 className="text-sm font-semibold text-ink">{locale.diagnostics.logsTitle}</h2>
-        {dialect === 'mysql' ? (
+        {capabilities(dialect).statementLogTables ? (
           <>
             <h3 className="text-sm text-ink">{locale.diagnostics.slowLog}</h3>
             <DiagnosticReport kind="slowLog" title={locale.diagnostics.slowLog} />

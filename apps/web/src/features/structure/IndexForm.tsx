@@ -2,7 +2,7 @@ import type { Dialect } from '@tsmyadmin/shared'
 import { type FormEvent, useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { Field, Input, Select } from '@/components/ui/Field.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 
 type Kind = 'index' | 'unique' | 'fulltext' | 'spatial'
 type Method = 'btree' | 'hash' | 'gin' | 'gist' | 'brin' | 'spgist'
