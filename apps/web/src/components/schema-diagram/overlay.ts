@@ -1,7 +1,11 @@
 import type { RelationDef } from '@tsmyadmin/shared'
 import { autoLayout, boxColumns, boxHeight, type Point, withAllColumns } from './layout.ts'
 
-/** What a highlight says about a table or a key: the legend lists the same words. */
+/**
+ * How a highlight is drawn. The names say what the delete impact meant by them, but each diagram gives a tone its
+ * own meaning through its legend's labels (`DiagramLegend`'s `labels`): `index` is "added" when comparing with a
+ * snapshot, `blocked` a deadlock on the lock wait diagram. What a tone draws (colour, width, dashes) never changes.
+ */
 export type Tone = 'delete' | 'nullify' | 'blocked' | 'index' | 'scan' | 'focus'
 
 export const TONES: readonly Tone[] = ['focus', 'delete', 'nullify', 'blocked', 'index', 'scan']
@@ -66,6 +70,26 @@ export function diagramFor(
   const columns = new Map(tables.map((n) => [n, withAllColumns(boxColumns(n, drawn), extraColumns.get(n))]))
   const positions = autoLayout(tables, drawn, undefined, (n) => boxHeight(columns.get(n)?.length ?? 0))
   return { tables, relations: drawn, columns, positions }
+}
+
+/**
+ * Several overlays as one: later ones win where they name the same table, key or line, the columns of all are
+ * listed, and the rest is drawn faint if any of them fades it. Nothing to lay over gives nothing.
+ */
+export function mergeOverlays(...overlays: readonly (DiagramOverlay | undefined)[]): DiagramOverlay | undefined {
+  const given = overlays.filter((o): o is DiagramOverlay => o !== undefined)
+  if (given.length === 0) return undefined
+  const columns = new Map<string, Set<string>>()
+  for (const o of given) {
+    for (const [table, names] of o.columns) columns.set(table, new Set([...(columns.get(table) ?? []), ...names]))
+  }
+  return {
+    tables: new Map(given.flatMap((o) => [...o.tables])),
+    relations: new Map(given.flatMap((o) => [...o.relations])),
+    columns,
+    relationBadges: new Map(given.flatMap((o) => [...(o.relationBadges ?? [])])),
+    fade: given.some((o) => o.fade !== false),
+  }
 }
 
 /** How a box is outlined for a tone. Colour is never the only sign: the width and dashes differ as well. */

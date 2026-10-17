@@ -1,4 +1,5 @@
 import type { BrowseOptions, BrowseResult, Cell, Filter, InputCell, Namespace } from '@tsmyadmin/shared'
+import type { GraphArrow } from '@/components/node-graph/NodeGraph.tsx'
 import { chosenDisplayColumn } from '@/lib/display-column.ts'
 import { isOpaqueCell } from '@/lib/format.ts'
 import type { TableRef } from '@/lib/queries.ts'
@@ -97,10 +98,17 @@ export function rowSteps(node: RowNode): RowStep[] {
 const text = (cell: Cell | undefined): string =>
   cell === null || cell === undefined ? 'NULL' : typeof cell === 'object' ? '…' : String(cell)
 
-/** What a row's box says: its table and key, and the value of its display column where the table has one. */
+/** Columns shown to tell apart the rows of a table without a key (all its values name the row, too many to show). */
+const UNKEYED_SHOWN = 2
+
+/**
+ * What a row's box says: its table and key (its first values where it has no key, so two rows of it differ), and
+ * the value of its display column where the table has one.
+ */
 export function rowLabel(node: RowNode): { label: string; sublabel: string | undefined } {
   const keyNames = node.page.keyKind === 'pk' ? node.page.keyColumns : []
-  const key = keyNames.map((n) => `${n}=${text(node.values.get(n))}`).join(', ')
+  const named = keyNames.length > 0 ? keyNames : columnsOf(node.page).slice(0, UNKEYED_SHOWN)
+  const key = named.map((n) => `${n}=${text(node.values.get(n))}`).join(', ')
   const shown = displayColumn(
     node.page.columns,
     keyNames[0] ?? '',
@@ -110,4 +118,81 @@ export function rowLabel(node: RowNode): { label: string; sublabel: string | und
     label: key ? `${node.ref.table} ${key}` : node.ref.table,
     sublabel: shown ? text(node.values.get(shown)) : undefined,
   }
+}
+
+/** Rows of a table that refer to a row and were not read: how many (null: more, not counted exactly), and where. */
+interface MoreRows {
+  id: string
+  to: string
+  ref: TableRef
+  filters: RowStep['options']['filters']
+  count: number | null
+}
+
+/** The rows read so far, the arrows between them, the rows left unread, and the rows already opened. */
+export interface RowGraph {
+  nodes: ReadonlyMap<string, RowNode>
+  arrows: readonly GraphArrow[]
+  more: readonly MoreRows[]
+  expanded: ReadonlySet<string>
+}
+
+/** What `expandGraph` reads of a page: its rows, how many match, and what its table says about keys. */
+type ReadPage = RowNode['page'] & Pick<BrowseResult, 'rows' | 'total' | 'count'>
+
+/** The rows not read for a step: counted only when the count is exact; a capped or estimated count says "more". */
+function unread(page: Pick<BrowseResult, 'rows' | 'total' | 'count'>): number | null {
+  const shown = page.rows.length
+  if (page.count === 'exact' && page.total !== null) return Math.max(page.total - shown, 0)
+  return (page.total ?? 0) > shown || shown >= REFERRING_SHOWN ? null : 0
+}
+
+/** The arrows in words, for the list under the picture (what a screen reader follows): which row refers to which. */
+export function arrowSentences(
+  graph: RowGraph,
+  nameOf: (id: string) => string,
+  say: (from: string, to: string, columns: string) => string
+): string[] {
+  const unreadIds = new Set(graph.more.map((m) => m.id))
+  return graph.arrows.filter((a) => !unreadIds.has(a.from)).map((a) => say(nameOf(a.from), nameOf(a.to), a.label ?? ''))
+}
+
+/**
+ * The graph with row `id` opened: the pages read for its steps (`rowSteps`, in the same order) add their rows and
+ * an arrow to each, once however many times a row is met; a table with more referring rows than were read adds a
+ * "more" node that opens them in the table itself.
+ */
+export function expandGraph(
+  graph: RowGraph,
+  id: string,
+  steps: readonly RowStep[],
+  pages: readonly (ReadPage | undefined)[]
+): RowGraph {
+  const nodes = new Map(graph.nodes)
+  const arrows = [...graph.arrows]
+  const more = [...graph.more]
+  const addArrow = (arrow: GraphArrow) => {
+    if (!arrows.some((a) => a.from === arrow.from && a.to === arrow.to && a.label === arrow.label)) arrows.push(arrow)
+  }
+  steps.forEach((step, i) => {
+    const page = pages[i]
+    if (!page) return
+    for (const row of page.rows) {
+      const read = rowNode(step.ref, page, row)
+      const found = nodes.get(read.id) ?? read
+      nodes.set(found.id, found)
+      addArrow(
+        step.direction === 'out'
+          ? { from: id, to: found.id, label: step.label }
+          : { from: found.id, to: id, label: step.label }
+      )
+    }
+    const count = step.direction === 'in' ? unread(page) : 0
+    if (count === 0) return
+    const moreId = JSON.stringify(['more', id, step.ref.schema ?? '', step.ref.table, step.label])
+    if (more.some((m) => m.id === moreId)) return
+    more.push({ id: moreId, to: id, ref: step.ref, filters: step.options.filters, count })
+    addArrow({ from: moreId, to: id, label: step.label })
+  })
+  return { nodes, arrows, more, expanded: new Set([...graph.expanded, id]) }
 }

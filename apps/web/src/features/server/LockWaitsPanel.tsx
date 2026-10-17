@@ -126,7 +126,7 @@ function WaitsTable({ waits, onKill }: { waits: LockWait[]; onKill: (p: ProcessI
       </thead>
       <tbody>
         {waits.map((w) => (
-          <Tr key={`${w.blocked.id}-${w.blocking.id}`}>
+          <Tr key={JSON.stringify([w.blocked.id, w.blocking.id, w.table, w.mode])}>
             <Td className="text-xs">
               <span className="font-mono">{w.blocked.id}</span>{' '}
               {[w.blocked.user, w.blocked.database].filter(Boolean).join(' / ')}

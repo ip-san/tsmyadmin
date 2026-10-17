@@ -1,6 +1,6 @@
 import type { DeleteImpact, DeleteImpactStep, RelationDef } from '@tsmyadmin/shared'
+import { relationKey } from '@/components/schema-diagram/layout.ts'
 import type { OverlayStep, Tone } from '@/components/schema-diagram/overlay.ts'
-import { relationKey } from '@/components/schema-diagram/SchemaDiagram.tsx'
 import { locale } from '@/config/locale-screens.ts'
 
 const t = locale.deleteImpact

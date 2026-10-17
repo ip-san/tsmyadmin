@@ -201,6 +201,9 @@ describe('snapshots', () => {
     h.adapter.listTables = async () => [users, { ...users, name: 'tags' }]
     h.adapter.showCreateTable = async (_ns, table) => [`CREATE TABLE ${table} (id int, secret_marker int)`]
     const diff = await diffOf()
+    // The tables and keys as they were, still there after the migration: what draws the removed posts again.
+    expect(diff.shape).toEqual(same.shape)
+    expect(diff.shape.tables.map((t) => t.name)).toContain('posts')
     expect(diff.added).toEqual([{ name: 'tags', before: null, after: 'CREATE TABLE tags (id int, secret_marker int)' }])
     expect(diff.removed).toEqual([{ name: 'posts', before: '-- fake CREATE TABLE posts (id, title)', after: null }])
     expect(diff.changed).toEqual([

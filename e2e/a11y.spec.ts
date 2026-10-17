@@ -1,5 +1,15 @@
 import { expect } from '@playwright/test'
-import { fillType, login, PASSKEY_BASE_URL, PERSISTENT_BASE_URL, TARGETS, tableUrl, test } from './helpers.ts'
+import {
+  fillType,
+  login,
+  PASSKEY_BASE_URL,
+  PERSISTENT_BASE_URL,
+  sqlOn,
+  TARGETS,
+  tableUrl,
+  test,
+  withScratchSpace,
+} from './helpers.ts'
 import { layoutViolations } from './layout-lint.ts'
 import { lockChain } from './locks.ts'
 import { openPlan } from './plan.ts'
@@ -421,25 +431,19 @@ for (const t of TARGETS) {
     test('delete impact that sets values to NULL and stops at a RESTRICT key', async ({ page }) => {
       await page.emulateMedia({ reducedMotion: 'reduce' })
       await login(page, t)
-      const stamp = Date.now().toString(36)
-      const parent = `e2e_a11yimp_${stamp}`
-      const [cascade, setNull, restrict] = ['c', 'n', 'r'].map((x) => `${parent}_${x}`) as [string, string, string]
-      const run = (sql: string) =>
-        page.request.post(`/api/databases/${t.database}/sql`, {
-          data: { sql, ...(t.schema ? { schema: t.schema } : {}) },
-        })
-      const child = (name: string, rule: string) =>
-        run(
-          `CREATE TABLE ${name} (id INT PRIMARY KEY, p_id INT, FOREIGN KEY (p_id) REFERENCES ${parent} (id) ON DELETE ${rule})`
-        )
-      await run(`CREATE TABLE ${parent} (id INT PRIMARY KEY)`)
-      await child(cascade, 'CASCADE')
-      await child(setNull, 'SET NULL')
-      await child(restrict, 'RESTRICT')
-      await run(`INSERT INTO ${parent} VALUES (1)`)
-      for (const c of [cascade, setNull, restrict]) await run(`INSERT INTO ${c} VALUES (1, 1)`)
-      try {
-        await page.goto(tableUrl(t, parent))
+      await withScratchSpace(page, t, async (space) => {
+        const run = (sql: string) => sqlOn(page, space, sql)
+        const child = (name: string, rule: string) =>
+          run(
+            `CREATE TABLE ${name} (id INT PRIMARY KEY, p_id INT, FOREIGN KEY (p_id) REFERENCES parent (id) ON DELETE ${rule})`
+          )
+        await run('CREATE TABLE parent (id INT PRIMARY KEY)')
+        await child('cascade_kid', 'CASCADE')
+        await child('null_kid', 'SET NULL')
+        await child('restrict_kid', 'RESTRICT')
+        await run('INSERT INTO parent VALUES (1)')
+        for (const c of ['cascade_kid', 'null_kid', 'restrict_kid']) await run(`INSERT INTO ${c} VALUES (1, 1)`)
+        await page.goto(tableUrl(space, 'parent'))
         await page.getByLabel('1 行目を選択').check()
         await page.getByRole('button', { name: '選択行を削除' }).click()
         const dialog = page.getByRole('dialog')
@@ -449,28 +453,17 @@ for (const t of TARGETS) {
         await expect(dialog.getByText(/NULL になる/).first()).toBeVisible()
         await scan(page)
         await dialog.getByRole('button', { name: 'キャンセル' }).click()
-      } finally {
-        for (const c of [cascade, setNull, restrict]) await run(`DROP TABLE IF EXISTS ${c}`)
-        await run(`DROP TABLE IF EXISTS ${parent}`)
-      }
+      })
     })
 
     test('designer compared with a snapshot', async ({ page }) => {
       await login(page, t)
-      const scratch = `e2e_a11ysnap_${Date.now().toString(36)}`
-      const mysql = t.dialect === 'mysql'
-      const db = mysql ? scratch : t.database
-      const schema = mysql ? undefined : scratch
-      const run = (sql: string, database = db, inSchema = schema) =>
-        page.request.post(`/api/databases/${database}/sql`, {
-          data: { sql, ...(inSchema ? { schema: inSchema } : {}) },
-        })
-      await run(mysql ? `CREATE DATABASE ${scratch}` : `CREATE SCHEMA ${scratch}`, t.database, t.schema)
-      try {
+      await withScratchSpace(page, t, async (space) => {
+        const run = (sql: string) => sqlOn(page, space, sql)
         await run(
           'CREATE TABLE a (id INT PRIMARY KEY); CREATE TABLE b (id INT PRIMARY KEY, a_id INT, FOREIGN KEY (a_id) REFERENCES a (id))'
         )
-        await page.goto(`/db/${db}/snapshots${schema ? `?schema=${schema}` : ''}`)
+        await page.goto(`/db/${space.database}/snapshots${space.schema ? `?schema=${space.schema}` : ''}`)
         await page.getByLabel('名前', { exact: true }).fill('前')
         await page.getByRole('button', { name: 'スナップショットを取る' }).click()
         await expect(page.getByRole('button', { name: '前: 現在と比較' })).toBeVisible()
@@ -480,13 +473,7 @@ for (const t of TARGETS) {
         await expect(page.getByRole('region', { name: 'スナップショット「前」と比べています' })).toBeVisible()
         await expect(page.getByRole('button', { name: /^テーブル b/ })).toHaveAttribute('data-tone', 'blocked')
         await scan(page)
-      } finally {
-        await run(
-          mysql ? `DROP DATABASE IF EXISTS ${scratch}` : `DROP SCHEMA IF EXISTS ${scratch} CASCADE`,
-          t.database,
-          t.schema
-        )
-      }
+      })
     })
 
     test('designer with the references checked', async ({ page }) => {
@@ -495,8 +482,9 @@ for (const t of TARGETS) {
       try {
         await page.goto(`/db/${t.database}/designer${t.schema ? `?schema=${t.schema}` : ''}`)
         await page.getByRole('button', { name: '参照を検査' }).click()
-        // Another test's tables may be checked on the same page too: at least this one's badge is there.
-        await expect(page.getByText('参照先なし 2').first()).toBeVisible({ timeout: 15_000 })
+        // This key's own row, not a badge another test's key may have drawn too.
+        const row = page.getByRole('table', { name: '外部キー' }).getByRole('row').filter({ hasText: orphaned.key })
+        await expect(row.getByRole('cell', { name: '2', exact: true })).toBeVisible({ timeout: 15_000 })
         await scan(page)
       } finally {
         await orphaned.drop()
@@ -511,20 +499,14 @@ for (const t of TARGETS) {
 
     test('a key that many tables reference folds them into one list', async ({ page }) => {
       await login(page, t)
-      const stamp = Date.now().toString(36)
-      const parent = `e2e_a11yfk_${stamp}`
-      const children = [1, 2, 3, 4].map((n) => `${parent}_c${n}`)
-      const run = (sql: string) =>
-        page.request.post(`/api/databases/${t.database}/sql`, {
-          data: { sql, ...(t.schema ? { schema: t.schema } : {}) },
-        })
-      await run(`CREATE TABLE ${parent} (id INT PRIMARY KEY)`)
-      await run(`INSERT INTO ${parent} VALUES (1)`)
-      for (const c of children) {
-        await run(`CREATE TABLE ${c} (id INT PRIMARY KEY, p_id INT, FOREIGN KEY (p_id) REFERENCES ${parent} (id))`)
-      }
-      try {
-        await page.goto(tableUrl(t, parent))
+      await withScratchSpace(page, t, async (space) => {
+        const run = (sql: string) => sqlOn(page, space, sql)
+        await run('CREATE TABLE parent (id INT PRIMARY KEY)')
+        await run('INSERT INTO parent VALUES (1)')
+        for (const n of [1, 2, 3, 4]) {
+          await run(`CREATE TABLE kid${n} (id INT PRIMARY KEY, p_id INT, FOREIGN KEY (p_id) REFERENCES parent (id))`)
+        }
+        await page.goto(tableUrl(space, 'parent'))
         const fold = page.locator('summary[aria-label="この行を参照している 4 件のテーブルを表示"]')
         await fold.waitFor()
         // One control for the four tables (not four icons running over the next cell), listing them when opened.
@@ -532,10 +514,7 @@ for (const t of TARGETS) {
         await fold.click()
         await expect(page.getByRole('link', { name: /でこの行を参照している行を表示/ })).toHaveCount(4)
         await scan(page)
-      } finally {
-        for (const c of children) await run(`DROP TABLE IF EXISTS ${c}`)
-        await run(`DROP TABLE IF EXISTS ${parent}`)
-      }
+      })
     })
 
     test('GIS view of a page of shapes', async ({ page }) => {

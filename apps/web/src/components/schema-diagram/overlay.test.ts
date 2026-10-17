@@ -1,7 +1,7 @@
 import type { RelationDef } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
 import { boxColumns } from './layout.ts'
-import { diagramFor, type OverlayStep, overlayUpTo } from './overlay.ts'
+import { type DiagramOverlay, diagramFor, mergeOverlays, type OverlayStep, overlayUpTo } from './overlay.ts'
 
 const rel = (table: string, refTable: string): RelationDef => ({
   table,
@@ -69,5 +69,44 @@ describe('diagramFor', () => {
   it('lists the key columns, then the extra ones', () => {
     const d = diagramFor(['users', 'orders'], relations, new Map([['orders', ['created_at', 'users_id']]]))
     expect(d.columns.get('orders')).toEqual([...boxColumns('orders', d.relations), 'created_at'])
+  })
+})
+
+describe('mergeOverlays', () => {
+  const usage: DiagramOverlay = {
+    tables: new Map([
+      ['orders', { tone: 'scan', badge: 'full 9' }],
+      ['users', { tone: 'index' }],
+    ]),
+    relations: new Map(),
+    columns: new Map([['orders', new Set(['id'])]]),
+    fade: false,
+  }
+  const refs: DiagramOverlay = {
+    tables: new Map([['orders', { tone: 'delete' }]]),
+    relations: new Map([['k', 'delete']]),
+    columns: new Map([['orders', new Set(['user_id'])]]),
+    relationBadges: new Map([['k', '3']]),
+    fade: false,
+  }
+
+  it('gives nothing for nothing', () => {
+    expect(mergeOverlays(undefined, undefined)).toBeUndefined()
+  })
+
+  it('lets the later one win on a table both name, keeps the rest of each, and lists all columns', () => {
+    const m = mergeOverlays(usage, refs)
+    expect(m?.tables.get('orders')).toEqual({ tone: 'delete' })
+    expect(m?.tables.get('users')).toEqual({ tone: 'index' })
+    expect(m?.relations.get('k')).toBe('delete')
+    expect(m?.relationBadges?.get('k')).toBe('3')
+    expect([...(m?.columns.get('orders') ?? [])]).toEqual(['id', 'user_id'])
+    expect(m?.fade).toBe(false)
+  })
+
+  it('fades the rest if any of them fades it (one that leaves fade unset fades)', () => {
+    const { fade: _, ...fading } = usage
+    expect(mergeOverlays(fading, refs)?.fade).toBe(true)
+    expect(mergeOverlays(undefined, refs)?.fade).toBe(false)
   })
 })

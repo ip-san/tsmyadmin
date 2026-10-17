@@ -176,39 +176,47 @@ export function layeredLayout(
   return out
 }
 
+/** Names in reading order: session 9 before session 10. */
+const byName = (a: string, b: string) => a.localeCompare(b, 'en', { numeric: true })
+
 /**
- * The cycles of a graph, each once, as the nodes in the order the arrows go (a self-arrow is a cycle of one). Where
- * `layeredLayout` cuts a cycle to place it, this names it: a deadlock is a cycle of sessions waiting on each other.
+ * The groups of nodes that reach each other along the arrows (the strongly connected components with more than one
+ * node, and a node with an arrow to itself), each group's names sorted, the groups in the order their first node is
+ * listed. Where `layeredLayout` cuts a cycle to place it, this names it: a deadlock is such a group of sessions, and
+ * every session of it is caught, however many cycles run through it (Tarjan's algorithm, not one cycle per back-edge).
  */
-export function findCycles(ids: readonly string[], edges: readonly GraphEdge[]): string[][] {
+export function cyclicGroups(ids: readonly string[], edges: readonly GraphEdge[]): string[][] {
   const next = new Map<string, string[]>()
   for (const e of edges) next.set(e.from, [...(next.get(e.from) ?? []), e.to])
-  const found = new Map<string, string[]>()
-  const path: string[] = []
-  const onPath = new Set<string>()
-  const done = new Set<string>()
-  const walk = (id: string) => {
-    path.push(id)
-    onPath.add(id)
+  const index = new Map<string, number>()
+  const low = new Map<string, number>()
+  const stack: string[] = []
+  const onStack = new Set<string>()
+  const groups: string[][] = []
+  const visit = (id: string) => {
+    index.set(id, index.size)
+    low.set(id, index.get(id) ?? 0)
+    stack.push(id)
+    onStack.add(id)
     for (const to of next.get(id) ?? []) {
-      if (onPath.has(to)) {
-        const cycle = path.slice(path.indexOf(to))
-        // The same cycle met from another node: keyed by its members, starting from the smallest.
-        const key = JSON.stringify([...cycle].sort())
-        if (!found.has(key)) found.set(key, rotateToSmallest(cycle))
-      } else if (!done.has(to)) walk(to)
+      if (!index.has(to)) {
+        visit(to)
+        low.set(id, Math.min(low.get(id) ?? 0, low.get(to) ?? 0))
+      } else if (onStack.has(to)) low.set(id, Math.min(low.get(id) ?? 0, index.get(to) ?? 0))
     }
-    path.pop()
-    onPath.delete(id)
-    done.add(id)
+    if (low.get(id) !== index.get(id)) return
+    const group: string[] = []
+    for (let member = stack.pop(); member !== undefined; member = stack.pop()) {
+      onStack.delete(member)
+      group.push(member)
+      if (member === id) break
+    }
+    if (group.length > 1 || (next.get(id) ?? []).includes(id)) groups.push(group.sort(byName))
   }
-  for (const id of ids) if (!done.has(id)) walk(id)
-  return [...found.values()]
-}
-
-const rotateToSmallest = (cycle: string[]): string[] => {
-  const at = cycle.indexOf([...cycle].sort()[0] ?? '')
-  return [...cycle.slice(at), ...cycle.slice(0, at)]
+  for (const id of ids) if (!index.has(id)) visit(id)
+  const order = new Map(ids.map((id, i) => [id, i]))
+  const first = (g: string[]) => Math.min(...g.map((id) => order.get(id) ?? Number.MAX_SAFE_INTEGER))
+  return groups.sort((a, b) => first(a) - first(b))
 }
 
 /**
@@ -328,3 +336,6 @@ export interface DiagramInput {
   /** How the diagram is drawn; the default view when omitted. */
   view?: DesignerView | undefined
 }
+
+/** Distinct per key: constraint names are unique within a table, not across the database. */
+export const relationKey = (r: Pick<RelationDef, 'table' | 'name'>) => JSON.stringify([r.table, r.name])
