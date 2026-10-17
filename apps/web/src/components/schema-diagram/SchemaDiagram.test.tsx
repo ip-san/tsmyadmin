@@ -63,4 +63,12 @@ describe('SchemaDiagram', () => {
     const { container } = render(<SchemaDiagram {...props} />)
     expect(container.querySelectorAll('.opacity-30')).toHaveLength(0)
   })
+
+  it('lights and fades boxes that can be moved as well', () => {
+    const overlay = overlayUpTo([{ text: '', tables: [{ name: 'orders', tone: 'scan', badge: 'full 9' }] }], 0)
+    const { container } = render(<SchemaDiagram {...props} onMove={vi.fn()} overlay={overlay} />)
+    expect(screen.getByRole('button', { name: /orders/ })).toHaveAttribute('data-tone', 'scan')
+    expect(screen.getByRole('button', { name: /users/ })).toHaveClass('opacity-30')
+    expect(container.querySelector('[data-tone="scan"]')).not.toBeNull()
+  })
 })

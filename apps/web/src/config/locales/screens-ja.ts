@@ -102,6 +102,26 @@ export const jaScreens = {
     openInSql: 'SQL タブで開く',
   },
   designer: {
+    usage: {
+      toggle: '使われ方を重ねる',
+      toggleHint: 'サーバーの統計から、テーブルが全件で読まれているか、インデックスで読まれているかを図に重ねる',
+      loading: '統計を読んでいます…',
+      since: (date: string, unit: 'scans' | 'rows') =>
+        `${date} からの${unit === 'scans' ? '走査の回数' : '読んだ行数'}です（サーバーの統計。消すと 0 から数え直します）`,
+      badge: (full: number, index: number) =>
+        `全件 ${full.toLocaleString('ja-JP', { notation: 'compact' })} / 索引 ${index.toLocaleString('ja-JP', { notation: 'compact' })}`,
+      scan: '全件で読まれることが多い',
+      index: 'インデックスで読まれることが多い',
+      unused: '読まれていないインデックス',
+      unusedHint:
+        '統計を数え始めてから一度も読まれていないインデックスです（主キーと一意のものは、行が重ならないことを守っているので除きます）。消す前に、月末の処理のようにまれな読み方がないかを確かめてください',
+      unusedNone: '読まれていないインデックスはありません',
+      table: 'テーブル',
+      indexName: 'インデックス',
+      denied: 'このアカウントには、統計を読む権限がありません（MySQL / MariaDB は performance_schema の SELECT 権限）',
+      unsupported:
+        'サーバーが統計を数えていません。MySQL / MariaDB は performance_schema を有効にすると見られます（MariaDB は既定で無効）',
+    },
     compact: '表名だけにする',
     snap: '格子に合わせる',
     snapHint: '格子（20 px）を表示し、置いてある箱を格子に揃える。以降の移動も格子に合う',
@@ -195,6 +215,7 @@ export const jaScreens = {
     refuse: (table: string, rows: number, key: string) =>
       `${table} の ${rows.toLocaleString('ja-JP')} 行が参照しているため、削除は失敗する（${key}）`,
     none: (table: string, key: string) => `${table}: 参照している行はない（${key}）`,
+    tooMany: (max: number) => `影響を見られるのは ${max} 行までです。選ぶ行を減らしてください`,
     noRows: '一致する行がありません（すでに消えている可能性があります）',
     noKeys: 'この表を参照する外部キーはありません。消えるのは選んだ行だけです',
     blocked: 'この削除は失敗します。RESTRICT / NO ACTION の外部キーに、参照している行が残っています',

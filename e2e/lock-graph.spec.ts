@@ -12,18 +12,24 @@ for (const t of TARGETS) {
         await page.goto('/processes')
         await page.getByLabel('更新間隔').selectOption('2')
         const waits = page.getByRole('table', { name: 'ロック待ち' })
-        await expect(waits.getByRole('row').filter({ hasText: 'e2e_chain_c' })).toBeVisible({ timeout: 15_000 })
+        await expect(waits.getByRole('row').filter({ hasText: chain.marker('c') })).toBeVisible({ timeout: 15_000 })
         // B is in two rows: waiting for A, and holding C up.
-        await expect(waits.getByRole('row').filter({ hasText: 'e2e_chain_b' })).toHaveCount(2, { timeout: 15_000 })
+        await expect(waits.getByRole('row').filter({ hasText: chain.marker('b') })).toHaveCount(2, { timeout: 15_000 })
 
         await page.getByRole('button', { name: '図', exact: true }).click()
         await expect(page.getByRole('img', { name: /^ロック待ちの図/ })).toBeVisible()
         // A holds up B, and C through B: two sessions wait for it.
-        await expect(page.getByRole('listitem').filter({ hasText: /^ID \d+ が元です。2 件のセッション/ })).toBeVisible()
+        // Another chain may be drawn too (a test running alongside): this one's root is among them.
+        await expect(
+          page.getByRole('listitem').filter({ hasText: /^ID \d+ が元です。2 件のセッション/ })
+        ).not.toHaveCount(0)
 
         // Ending A is done from the table, as before.
         await page.getByRole('button', { name: '表', exact: true }).click()
-        const holder = waits.getByRole('row').filter({ hasText: 'e2e_chain_a' }).first()
+        const holder = waits
+          .getByRole('row')
+          .filter({ hasText: chain.marker('a') })
+          .first()
         await holder.getByRole('button', { name: /: ブロック元を強制終了$/ }).click()
         await page.getByRole('dialog').getByRole('button', { name: '強制終了する' }).click()
         await expect(page.getByText('ロック待ちはありません')).toBeVisible({ timeout: 20_000 })

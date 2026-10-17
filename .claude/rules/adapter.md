@@ -16,7 +16,7 @@ paths:
 5. 新しい型の扱いを変えたら `docker/fixtures/*` と各 `*.integration.test.ts` の `typesRow1` を更新する
 6. 検証は `bun run test`（ユニット）→ `bun run db:up && bun run test:integration`（両 DB の conformance）
 7. **`base.ts` は 800 行の上限に近い**（800 を超えると `check:file-size` が落ちる）。メソッドの本体（SQL の組み立てとたどる処理）は `sql/<名前>.ts` の関数に置き、`base.ts` には接続を借りて呼ぶ数行だけを書く（例: `deleteImpact` → `sql/delete-impact.ts`、`checkReferences` → `sql/references.ts`）
-8. **監査の分類**: `AUDITED_METHODS` は、データ・構造・アカウント・サーバーの状態を変えるメソッド。利用者の SQL を受け取っても、文を実行せず、トランザクションを必ず取り消すもの（`explainPlan`）は `PASSTHROUGH_METHODS`
+8. **監査の分類**: `AUDITED_METHODS` は、データ・構造・アカウント・サーバーの状態を変えるメソッド。利用者の SQL を受け取っても、文を実行せず、トランザクションを必ず取り消すもの（`explainPlan`）は `PASSTHROUGH_METHODS`。ただし MySQL / MariaDB の `explainPlan` は READ ONLY にできない（DML の EXPLAIN を拒むため）ので、オプティマイザが定数に畳む関数の、取り消しで戻らない書き込み（MyISAM の表、`SET GLOBAL` など）は監査に残らない。めったに起きないとして受け入れている
 
 ## SQL 組み立て
 

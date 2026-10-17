@@ -382,16 +382,64 @@ for (const t of TARGETS) {
         await page.goto('/processes')
         await page.getByLabel('更新間隔').selectOption('2')
         const waits = page.getByRole('table', { name: 'ロック待ち' })
-        await expect(waits.getByRole('row').filter({ hasText: 'e2e_chain_c' })).toBeVisible({ timeout: 15_000 })
+        await expect(waits.getByRole('row').filter({ hasText: chain.marker('c') })).toBeVisible({ timeout: 15_000 })
         await page.getByRole('button', { name: '図', exact: true }).click()
         await expect(page.getByRole('img', { name: /^ロック待ちの図/ })).toBeVisible()
         await scan(page)
         await page.getByRole('button', { name: '表', exact: true }).click()
-        const holder = waits.getByRole('row').filter({ hasText: 'e2e_chain_a' }).first()
+        const holder = waits
+          .getByRole('row')
+          .filter({ hasText: chain.marker('a') })
+          .first()
         await holder.getByRole('button', { name: /: ブロック元を強制終了$/ }).click()
         await page.getByRole('dialog').getByRole('button', { name: '強制終了する' }).click()
       } finally {
         await chain.end()
+      }
+    })
+
+    test('designer with how the tables are read laid over it', async ({ page }) => {
+      await login(page, t)
+      await page.goto(`/db/${t.database}/designer${t.schema ? `?schema=${t.schema}` : ''}`)
+      await page.getByRole('checkbox', { name: '使われ方を重ねる' }).check()
+      await expect(page.getByRole('heading', { name: '読まれていないインデックス' })).toBeVisible()
+      await scan(page)
+    })
+
+    test('delete impact that sets values to NULL and stops at a RESTRICT key', async ({ page }) => {
+      await page.emulateMedia({ reducedMotion: 'reduce' })
+      await login(page, t)
+      const stamp = Date.now().toString(36)
+      const parent = `e2e_a11yimp_${stamp}`
+      const [cascade, setNull, restrict] = ['c', 'n', 'r'].map((x) => `${parent}_${x}`) as [string, string, string]
+      const run = (sql: string) =>
+        page.request.post(`/api/databases/${t.database}/sql`, {
+          data: { sql, ...(t.schema ? { schema: t.schema } : {}) },
+        })
+      const child = (name: string, rule: string) =>
+        run(
+          `CREATE TABLE ${name} (id INT PRIMARY KEY, p_id INT, FOREIGN KEY (p_id) REFERENCES ${parent} (id) ON DELETE ${rule})`
+        )
+      await run(`CREATE TABLE ${parent} (id INT PRIMARY KEY)`)
+      await child(cascade, 'CASCADE')
+      await child(setNull, 'SET NULL')
+      await child(restrict, 'RESTRICT')
+      await run(`INSERT INTO ${parent} VALUES (1)`)
+      for (const c of [cascade, setNull, restrict]) await run(`INSERT INTO ${c} VALUES (1, 1)`)
+      try {
+        await page.goto(tableUrl(t, parent))
+        await page.getByLabel('1 行目を選択').check()
+        await page.getByRole('button', { name: '選択行を削除' }).click()
+        const dialog = page.getByRole('dialog')
+        await dialog.getByRole('button', { name: '影響を見る' }).click()
+        await expect(dialog.getByRole('alert')).toContainText('この削除は失敗します')
+        await expect(dialog.getByRole('img', { name: '削除の影響の図' })).toBeVisible()
+        await expect(dialog.getByText(/NULL になる/).first()).toBeVisible()
+        await scan(page)
+        await dialog.getByRole('button', { name: 'キャンセル' }).click()
+      } finally {
+        for (const c of [cascade, setNull, restrict]) await run(`DROP TABLE IF EXISTS ${c}`)
+        await run(`DROP TABLE IF EXISTS ${parent}`)
       }
     })
 

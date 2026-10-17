@@ -27,6 +27,7 @@ import type {
   TableInfo,
   TableSchema,
   TableStats,
+  TableUsageReport,
   TriggerDetail,
   TriggerInfo,
   UserInfo,
@@ -53,6 +54,7 @@ import {
   pgListSchemas,
   pgListTables,
   pgTableStats,
+  pgTableUsage,
 } from './introspect.ts'
 import { pgPrepareDdl } from './prepare-ddl.ts'
 import { pgRoutineDetail, pgTriggerDetail } from './program-detail.ts'
@@ -479,6 +481,10 @@ export class PostgresAdapter extends BaseAdapter {
 
   listForeignKeys(ns: Namespace): Promise<RelationDef[]> {
     return this.withConn(ns, (conn) => pgListForeignKeys(conn, ns))
+  }
+
+  tableUsage(ns: Namespace): Promise<TableUsageReport> {
+    return this.withConn(ns, (conn) => pgTableUsage(conn, ns))
   }
 
   /** READ ONLY, which EXPLAIN without ANALYZE keeps to even for an UPDATE: a function the planner folds cannot write. */

@@ -7,6 +7,7 @@ import {
   findParameters,
   isValidDelimiter,
   prepareScript,
+  prepareStatement,
 } from './sql-prepare.ts'
 
 /**
@@ -125,5 +126,30 @@ describe('prepareScript', () => {
     for (const ok of [';', '//', '$$', '|', 'x'.repeat(16)]) expect(isValidDelimiter(ok), ok).toBe(true)
     for (const bad of ['', ' ', 'a b', 'a\tb', 'x'.repeat(17), ' ;', '; '])
       expect(isValidDelimiter(bad), JSON.stringify(bad)).toBe(false)
+  })
+})
+
+describe('prepareStatement', () => {
+  const one = (sql: string, dialect: 'mysql' | 'postgres', o: Partial<typeof DEFAULT_RUN_OPTIONS> = {}) =>
+    prepareStatement(sql, dialect, { ...DEFAULT_RUN_OPTIONS, ...o })
+
+  it('fills in the parameters like a run', () => {
+    expect(one('SELECT * FROM t WHERE id = :id', 'postgres', { values: { id: '3' } })).toBe(
+      'SELECT * FROM t WHERE id = 3'
+    )
+  })
+
+  it('takes off the custom delimiter that ends it, and nothing else', () => {
+    expect(one('SELECT 1$$\n', 'mysql', { delimiter: '$$' })).toBe('SELECT 1')
+    expect(one('SELECT 1;', 'mysql')).toBe('SELECT 1;')
+    expect(one("SELECT '$$'", 'mysql', { delimiter: '$$' })).toBe("SELECT '$$'")
+  })
+
+  it('leaves the text alone where the dialect has no delimiter line', () => {
+    expect(one('SELECT 1$$', 'postgres', { delimiter: '$$' })).toBe('SELECT 1$$')
+  })
+
+  it('leaves the text alone when the delimiter it was given is not one', () => {
+    expect(one('SELECT 1 x', 'mysql', { delimiter: ' x' })).toBe('SELECT 1 x')
   })
 })

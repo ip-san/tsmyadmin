@@ -12,6 +12,7 @@ import type {
   ServerCatalog,
   ServerCatalogKind,
   ServerInfo,
+  TableUsageReport,
 } from '@tsmyadmin/shared'
 import { replicationRole } from '@tsmyadmin/shared'
 import { type Conn, firstResult } from '../driver.ts'
@@ -374,4 +375,56 @@ export async function mysqlDiagnostics(
       return NOTHING('denied')
     throw err
   }
+}
+
+/**
+ * Rows read per table and per index since the server started, from performance_schema: the row without an index
+ * (`INDEX_NAME IS NULL`) counts rows read through no index. A unique index is marked from the catalog's first column.
+ */
+const MYSQL_INDEX_USAGE = `SELECT u.OBJECT_NAME, u.INDEX_NAME, u.COUNT_READ, s.NON_UNIQUE
+  FROM performance_schema.table_io_waits_summary_by_index_usage u
+  LEFT JOIN information_schema.STATISTICS s
+    ON s.TABLE_SCHEMA = u.OBJECT_SCHEMA AND s.TABLE_NAME = u.OBJECT_NAME AND s.INDEX_NAME = u.INDEX_NAME AND s.SEQ_IN_INDEX = 1
+  WHERE u.OBJECT_SCHEMA = ? AND u.OBJECT_TYPE = 'TABLE'
+  ORDER BY 1, 2`
+
+/** How the tables of `database` are read. performance_schema off (MariaDB's default) or missing is `unsupported`. */
+export async function mysqlTableUsage(conn: Conn, database: string): Promise<TableUsageReport> {
+  const none = (status: TableUsageReport['status']): TableUsageReport => ({
+    status,
+    unit: 'rows',
+    since: null,
+    tables: [],
+    indexes: [],
+  })
+  let rows: unknown[][]
+  try {
+    if (isOff(firstResult(await conn.query('SELECT @@performance_schema')).rows[0]?.[0])) return none('unsupported')
+    rows = firstResult(await conn.query(MYSQL_INDEX_USAGE, [database])).rows
+  } catch (err) {
+    if (isMissingTable(err)) return none('unsupported')
+    if (isDenied(err)) return none('denied')
+    throw err
+  }
+  const tables = new Map<string, { table: string; fullReads: number; indexReads: number }>()
+  const indexes: TableUsageReport['indexes'] = []
+  for (const r of rows) {
+    const table = str(r[0])
+    const reads = Number(r[2] ?? 0)
+    const t = tables.get(table) ?? { table, fullReads: 0, indexReads: 0 }
+    if (r[1] === null || r[1] === undefined) t.fullReads += reads
+    else {
+      t.indexReads += reads
+      indexes.push({ table, index: str(r[1]), reads, unique: Number(r[3]) === 0 })
+    }
+    tables.set(table, t)
+  }
+  return { status: 'ok', unit: 'rows', since: await mysqlStartedAt(conn), tables: [...tables.values()], indexes }
+}
+
+/** When the server started, by its own clock: the counters run from then. */
+async function mysqlStartedAt(conn: Conn): Promise<string | null> {
+  const uptime = Number(firstResult(await conn.query("SHOW GLOBAL STATUS LIKE 'Uptime'")).rows[0]?.[1])
+  const now = Number(firstResult(await conn.query('SELECT UNIX_TIMESTAMP()')).rows[0]?.[0])
+  return Number.isFinite(uptime) && Number.isFinite(now) ? new Date((now - uptime) * 1000).toISOString() : null
 }

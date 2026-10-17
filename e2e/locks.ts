@@ -7,7 +7,7 @@ import { login, type Target } from './helpers.ts'
  * (the caller ends A first if it wants the waits to clear sooner than their timeouts).
  */
 export async function lockChain(page: Page, browser: Browser, t: Target) {
-  const table = `e2e_chain_${Date.now().toString(36)}`
+  const table = `e2e_chain_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
   const run = (p: Page, statement: string) =>
     p.request.post(`/api/databases/${t.database}/sql`, {
       data: { sql: statement, ...(t.schema ? { schema: t.schema } : {}) },
@@ -26,18 +26,20 @@ export async function lockChain(page: Page, browser: Browser, t: Target) {
   const begin = t.dialect === 'mysql' ? 'START TRANSACTION' : 'BEGIN'
   const sleep = t.dialect === 'mysql' ? 'SELECT SLEEP(25)' : 'SELECT pg_sleep(25)'
   const timeout = t.dialect === 'mysql' ? 'SET SESSION innodb_lock_wait_timeout = 25' : "SET lock_timeout = '25s'"
-  const running = [run(a, `${begin}; UPDATE ${table} SET v = 1 WHERE id = 1; ${sleep} /* e2e_chain_a */`)]
+  const running = [run(a, `${begin}; UPDATE ${table} SET v = 1 WHERE id = 1; ${sleep} /* ${table}_a */`)]
   await page.waitForTimeout(400)
   running.push(
     run(
       b,
-      `${timeout}; ${begin}; UPDATE ${table} SET v = 1 WHERE id = 2; UPDATE ${table} SET v = 2 WHERE id = 1 /* e2e_chain_b */`
+      `${timeout}; ${begin}; UPDATE ${table} SET v = 1 WHERE id = 2; UPDATE ${table} SET v = 2 WHERE id = 1 /* ${table}_b */`
     )
   )
   await page.waitForTimeout(400)
-  running.push(run(c, `${timeout}; UPDATE ${table} SET v = 3 WHERE id = 2 /* e2e_chain_c */`))
+  running.push(run(c, `${timeout}; UPDATE ${table} SET v = 3 WHERE id = 2 /* ${table}_c */`))
   return {
     table,
+    /** The marker in each session's statement, unique to this chain: other chains may be running at the same time. */
+    marker: (session: 'a' | 'b' | 'c') => `${table}_${session}`,
     async end() {
       await Promise.all(running.map((r) => r.catch(() => undefined)))
       for (const context of contexts) await context.close()
