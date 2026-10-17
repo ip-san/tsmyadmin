@@ -3,6 +3,7 @@ import { fillType, login, PASSKEY_BASE_URL, PERSISTENT_BASE_URL, TARGETS, tableU
 import { layoutViolations } from './layout-lint.ts'
 import { lockChain } from './locks.ts'
 import { openPlan } from './plan.ts'
+import { orphanedKey } from './references.ts'
 import { pageProblems } from './scan.ts'
 import { createAccount, dropAccount, enrol, t as first, signIn } from './two-factor.ts'
 
@@ -451,6 +452,20 @@ for (const t of TARGETS) {
       } finally {
         for (const c of [cascade, setNull, restrict]) await run(`DROP TABLE IF EXISTS ${c}`)
         await run(`DROP TABLE IF EXISTS ${parent}`)
+      }
+    })
+
+    test('designer with the references checked', async ({ page }) => {
+      await login(page, t)
+      const orphaned = await orphanedKey(page, t)
+      try {
+        await page.goto(`/db/${t.database}/designer${t.schema ? `?schema=${t.schema}` : ''}`)
+        await page.getByRole('button', { name: '参照を検査' }).click()
+        // Another test's tables may be checked on the same page too: at least this one's badge is there.
+        await expect(page.getByText('参照先なし 2').first()).toBeVisible({ timeout: 15_000 })
+        await scan(page)
+      } finally {
+        await orphaned.drop()
       }
     })
 

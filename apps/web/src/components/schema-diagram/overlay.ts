@@ -20,6 +20,10 @@ export interface DiagramOverlay {
   tables: ReadonlyMap<string, { tone: Tone; badge?: string | undefined }>
   relations: ReadonlyMap<string, Tone>
   columns: ReadonlyMap<string, ReadonlySet<string>>
+  /** A count or a word on a line, by `relationKey`: drawn at its middle whether line labels are shown or not. */
+  relationBadges?: ReadonlyMap<string, string> | undefined
+  /** False when the overlay only adds to the picture: nothing it does not name is drawn faint. */
+  fade?: boolean | undefined
 }
 
 /**
