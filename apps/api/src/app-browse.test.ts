@@ -5,6 +5,7 @@ import {
   ApiErrorSchema,
   BrowseResultSchema,
   DdlPreviewResponseSchema,
+  DeleteImpactSchema,
   QueryBuilderResultSchema,
   RelationDefSchema,
   SEARCH_TERM_MAX,
@@ -207,6 +208,38 @@ describe('rows', () => {
     expect(AffectedRowsSchema.parse(await del.json())).toEqual({ affectedRows: 2 })
     const rows = BrowseResultSchema.parse(await (await h.req('/api/databases/shop/tables/users/rows')).json())
     expect(rows.rows.map((r) => r[1])).toEqual(['Alice', 'Bob'])
+  })
+
+  it('counts what a delete would reach, by keys in the body, without deleting', async () => {
+    const h = harness()
+    stores.push(h.store)
+    await h.login()
+    const keys = [{ kind: 'pk', values: { id: 1 } }]
+    const res = await h.req('/api/databases/shop/tables/users/rows/delete-impact?schema=app', {
+      method: 'POST',
+      body: JSON.stringify({ keys }),
+    })
+    expect(DeleteImpactSchema.parse(await res.json())).toEqual({
+      table: 'users',
+      rows: 1,
+      steps: [],
+      blocked: false,
+      capped: false,
+    })
+    expect(h.adapter.calls.at(-1)).toEqual({
+      method: 'deleteImpact',
+      args: [{ database: 'shop', schema: 'app' }, 'users', keys],
+    })
+    const none = await h.req('/api/databases/shop/tables/users/rows/delete-impact', {
+      method: 'POST',
+      body: JSON.stringify({ keys: [] }),
+    })
+    expect(none.status).toBe(400)
+    const missing = await h.req('/api/databases/shop/tables/nope/rows/delete-impact', {
+      method: 'POST',
+      body: JSON.stringify({ keys }),
+    })
+    expect(missing.status).toBe(404)
   })
 
   it('returns 409 KEY_MISMATCH when a key matches no row', async () => {

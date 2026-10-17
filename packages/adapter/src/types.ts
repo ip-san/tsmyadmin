@@ -7,6 +7,7 @@ import type {
   DatabaseGrant,
   DatabaseInfo,
   DdlOp,
+  DeleteImpact,
   DiagnosticKind,
   DiagnosticQuery,
   DiagnosticReport,
@@ -278,6 +279,11 @@ export interface DatabaseAdapter {
   prepareDdl(ns: Namespace, op: DdlOp): Promise<DdlOp>
   /** Per foreign key of the table, the rows that name a parent which is not there (the constraint may be unenforced, or disabled). */
   checkReferences(ns: Namespace, table: string): Promise<ReferenceCheck[]>
+  /**
+   * What deleting the rows `keys` name would reach through the foreign keys of this namespace that refer to them
+   * (ON DELETE), counted depth by depth without deleting anything. Reads only.
+   */
+  deleteImpact(ns: Namespace, table: string, keys: RowKey[]): Promise<DeleteImpact>
   /** The distinct values of one column with their counts, most frequent first (at most `DISTINCT_VALUES_LIMIT`). */
   distinctValues(ns: Namespace, table: string, column: string): Promise<DistinctValues>
   /**
@@ -404,6 +410,7 @@ export const ADAPTER_METHOD_NAMES = [
   'searchTable',
   'distinctValues',
   'checkReferences',
+  'deleteImpact',
   'prepareDdl',
   'buildQuery',
   'listForeignKeys',

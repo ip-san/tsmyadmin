@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { quoteIdent } from '../../sql/quote.ts'
 import type { ConformanceEnv } from './env.ts'
 
-/** Conformance: checkReferences, distinctValues, searchTable, listForeignKeys and buildQuery (in the order they have always run in). */
+/** Conformance: checkReferences, deleteImpact, distinctValues, searchTable, listForeignKeys and buildQuery (in the order they have always run in). */
 export function describeSearchAndQuery(env: ConformanceEnv): void {
   const { ns, dialect, scratch, exec, execOk, runDdl, isMariaDb } = env
   describe('checkReferences', () => {
@@ -29,6 +29,112 @@ export function describeSearchAndQuery(env: ConformanceEnv): void {
       } finally {
         await execOk(`DROP TABLE IF EXISTS ${child}`)
         await execOk(`DROP TABLE IF EXISTS ${parent}`)
+      }
+    })
+  })
+
+  describe('deleteImpact', () => {
+    const fk = (name: string, cols: string, ref: string, rule: string) =>
+      `CONSTRAINT ${name} FOREIGN KEY (${cols}) REFERENCES ${ref} ON DELETE ${rule}`
+    const pk = (id: number) => ({ kind: 'pk' as const, values: { id } })
+
+    it('follows CASCADE down, counts SET NULL and RESTRICT without following them, and deletes nothing', async () => {
+      const [p, c, g, n, r] = ['p', 'c', 'g', 'n', 'r'].map((x) => `${scratch}_di${x}`) as [
+        string,
+        string,
+        string,
+        string,
+        string,
+      ]
+      await execOk(`CREATE TABLE ${p} (id INT PRIMARY KEY)`)
+      await execOk(`CREATE TABLE ${c} (id INT PRIMARY KEY, pid INT, ${fk(`${c}_fk`, 'pid', `${p} (id)`, 'CASCADE')})`)
+      await execOk(`CREATE TABLE ${g} (id INT PRIMARY KEY, cid INT, ${fk(`${g}_fk`, 'cid', `${c} (id)`, 'CASCADE')})`)
+      await execOk(`CREATE TABLE ${n} (id INT PRIMARY KEY, pid INT, ${fk(`${n}_fk`, 'pid', `${p} (id)`, 'SET NULL')})`)
+      await execOk(`CREATE TABLE ${r} (id INT PRIMARY KEY, pid INT, ${fk(`${r}_fk`, 'pid', `${p} (id)`, 'RESTRICT')})`)
+      try {
+        await execOk(`INSERT INTO ${p} VALUES (1), (2)`)
+        await execOk(`INSERT INTO ${c} VALUES (1, 1), (2, 1), (3, 2)`)
+        await execOk(`INSERT INTO ${g} VALUES (1, 1), (2, 1), (3, 2), (4, 3)`)
+        await execOk(`INSERT INTO ${n} VALUES (1, 1), (2, NULL)`)
+        await execOk(`INSERT INTO ${r} VALUES (1, 2)`)
+
+        const one = await env.db.deleteImpact(ns, p, [pk(1)])
+        expect(one).toMatchObject({ table: p, rows: 1, blocked: false, capped: false })
+        const at = (impact: typeof one, table: string) => impact.steps.find((s) => s.table === table)
+        expect(at(one, c)).toMatchObject({ depth: 1, refTable: p, constraint: `${c}_fk`, action: 'cascade', rows: 2 })
+        expect(at(one, n)).toMatchObject({ depth: 1, action: 'setNull', rows: 1 })
+        expect(at(one, r)).toMatchObject({ depth: 1, action: 'restrict', rows: 0 })
+        expect(at(one, g)).toMatchObject({ depth: 2, refTable: c, action: 'cascade', rows: 3 })
+        expect(one.steps.map((s) => s.depth)).toEqual([1, 1, 1, 2])
+
+        const two = await env.db.deleteImpact(ns, p, [pk(2)])
+        expect(two.blocked).toBe(true)
+        expect(at(two, r)?.rows).toBe(1)
+        expect(at(two, g)?.rows).toBe(1)
+
+        const both = await env.db.deleteImpact(ns, p, [pk(1), pk(2)])
+        expect(both.rows).toBe(2)
+        expect(at(both, c)?.rows).toBe(3)
+        expect(at(both, g)?.rows).toBe(4)
+
+        expect(await env.db.deleteImpact(ns, p, [pk(9)])).toEqual({
+          table: p,
+          rows: 0,
+          steps: [],
+          blocked: false,
+          capped: false,
+        })
+        const [left] = await exec(`SELECT COUNT(*) FROM ${g}`)
+        expect(left?.kind === 'rows' ? Number(left.result.rows[0]?.[0]) : null).toBe(4)
+      } finally {
+        for (const t of [g, c, n, r, p]) await execOk(`DROP TABLE IF EXISTS ${t}`)
+      }
+    })
+
+    it('walks a self-referencing table until no rows are left to follow', async () => {
+      const t = `${scratch}_dit`
+      await execOk(
+        `CREATE TABLE ${t} (id INT PRIMARY KEY, parent INT, ${fk(`${t}_fk`, 'parent', `${t} (id)`, 'CASCADE')})`
+      )
+      try {
+        await execOk(`INSERT INTO ${t} VALUES (1, NULL), (2, 1), (3, 2), (4, 3), (5, NULL)`)
+        const impact = await env.db.deleteImpact(ns, t, [pk(1)])
+        expect(impact.steps.map((s) => [s.depth, s.rows])).toEqual([
+          [1, 1],
+          [2, 1],
+          [3, 1],
+          [4, 0],
+        ])
+        expect(impact.capped).toBe(false)
+      } finally {
+        await execOk(`DROP TABLE IF EXISTS ${t}`)
+      }
+    })
+
+    it('matches a composite key on every column, leaving rows with a NULL in it out', async () => {
+      const [cp, cc] = [`${scratch}_dicp`, `${scratch}_dicc`]
+      await execOk(`CREATE TABLE ${cp} (a INT, b INT, PRIMARY KEY (a, b))`)
+      await execOk(
+        `CREATE TABLE ${cc} (id INT PRIMARY KEY, a INT, b INT, ${fk(`${cc}_fk`, 'a, b', `${cp} (a, b)`, 'CASCADE')})`
+      )
+      try {
+        await execOk(`INSERT INTO ${cp} VALUES (1, 1), (1, 2)`)
+        await execOk(`INSERT INTO ${cc} VALUES (1, 1, 1), (2, 1, NULL), (3, 1, 2)`)
+        const impact = await env.db.deleteImpact(ns, cp, [{ kind: 'pk', values: { a: 1, b: 1 } }])
+        expect(impact.steps).toEqual([
+          {
+            depth: 1,
+            table: cc,
+            constraint: `${cc}_fk`,
+            columns: ['a', 'b'],
+            refTable: cp,
+            action: 'cascade',
+            rows: 1,
+          },
+        ])
+      } finally {
+        await execOk(`DROP TABLE IF EXISTS ${cc}`)
+        await execOk(`DROP TABLE IF EXISTS ${cp}`)
       }
     })
   })

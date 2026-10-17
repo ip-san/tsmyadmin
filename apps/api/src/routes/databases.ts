@@ -9,6 +9,7 @@ import {
   capabilities,
   DatabasesQuerySchema,
   DdlPreviewRequestSchema,
+  DeleteImpactRequestSchema,
   DeleteRowsRequestSchema,
   type Dialect,
   decodeTableList,
@@ -179,6 +180,19 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
           await c.get('session').adapter.checkReferences(ns(c.req.param('db'), q.schema), c.req.param('table'))
         )
       })
+      // POST for the keys in the body: they are row values, and a URL is written to history and access logs.
+      .post(
+        '/databases/:db/tables/:table/rows/delete-impact',
+        validate('query', SchemaQuerySchema),
+        validate('json', DeleteImpactRequestSchema),
+        async (c) => {
+          const q = c.req.valid('query')
+          const { keys } = c.req.valid('json')
+          return c.json(
+            await c.get('session').adapter.deleteImpact(ns(c.req.param('db'), q.schema), c.req.param('table'), keys)
+          )
+        }
+      )
       .get('/databases/:db/tables/:table/columns/:column/distinct', validate('query', SchemaQuerySchema), async (c) => {
         const q = c.req.valid('query')
         return c.json(

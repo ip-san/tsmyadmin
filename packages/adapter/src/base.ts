@@ -5,6 +5,7 @@ import type {
   DatabaseGrant,
   DatabaseInfo,
   DdlOp,
+  DeleteImpact,
   DiagnosticKind,
   DiagnosticQuery,
   DiagnosticReport,
@@ -65,8 +66,10 @@ import {
   TEXT_OPS,
   writeValue,
 } from './sql/conditions.ts'
+import { deleteImpactOn } from './sql/delete-impact.ts'
 import { joinPlan } from './sql/join-plan.ts'
 import { Params, quoteIdent, quoteTable } from './sql/quote.ts'
+import { checkReferencesOn } from './sql/references.ts'
 import { escapeLike, isSearchableType } from './sql/search.ts'
 import { ScriptRunner } from './sql-console.ts'
 import {
@@ -301,34 +304,12 @@ export abstract class BaseAdapter implements DatabaseAdapter {
 
   async checkReferences(ns: Namespace, table: string): Promise<ReferenceCheck[]> {
     const schema = await this.describeTable(ns, table)
-    const d = this.dialect
-    return this.withConn(ns, async (conn) => {
-      const out: ReferenceCheck[] = []
-      for (const fk of schema.foreignKeys) {
-        const child = quoteTable(d, ns, table)
-        const parent = quoteTable(d, fk.refNamespace, fk.refTable)
-        const on = fk.columns
-          .map((c, i) => `c.${quoteIdent(d, c)} = p.${quoteIdent(d, fk.refColumns[i] ?? '')}`)
-          .join(' AND ')
-        // A key with a NULL in it names no parent (MATCH SIMPLE): only rows with every column set are checked.
-        const where = [
-          `p.${quoteIdent(d, fk.refColumns[0] ?? '')} IS NULL`,
-          ...fk.columns.map((c) => `c.${quoteIdent(d, c)} IS NOT NULL`),
-        ].join(' AND ')
-        const from = `FROM ${child} c LEFT JOIN ${parent} p ON ${on} WHERE ${where}`
-        const count = firstResult(await conn.query(`SELECT COUNT(*) ${from}`)).rows[0]?.[0]
-        out.push({
-          name: fk.name,
-          columns: fk.columns,
-          refNamespace: fk.refNamespace,
-          refTable: fk.refTable,
-          refColumns: fk.refColumns,
-          orphans: Number(count ?? 0),
-          sql: `SELECT c.* ${from}`,
-        })
-      }
-      return out
-    })
+    return this.withConn(ns, (conn) => checkReferencesOn(conn, this.dialect, ns, table, schema.foreignKeys))
+  }
+
+  async deleteImpact(ns: Namespace, table: string, keys: RowKey[]): Promise<DeleteImpact> {
+    const [types, relations] = await Promise.all([this.keyColumnTypes(ns, table), this.listForeignKeys(ns)])
+    return this.withConn(ns, (conn) => deleteImpactOn(conn, { hooks: this.hooks, ns, table, keys, types, relations }))
   }
 
   async distinctValues(ns: Namespace, table: string, column: string): Promise<DistinctValues> {

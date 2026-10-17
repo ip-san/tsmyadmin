@@ -357,6 +357,30 @@ export const en = {
       focus: 'Starting point',
     },
   },
+  deleteImpact: {
+    show: 'Show impact',
+    hide: 'Hide impact',
+    title: 'What the delete reaches',
+    diagram: 'Diagram of what the delete reaches',
+    loading: 'Following the foreign keys…',
+    start: (table: string, rows: number) => `Delete ${rows.toLocaleString('en-US')} rows of ${table}`,
+    depth: (n: number) => `Step ${n}`,
+    cascade: (table: string, rows: number, key: string) =>
+      `${rows.toLocaleString('en-US')} rows of ${table} are deleted too (${key})`,
+    setNull: (table: string, rows: number, cols: string, key: string) =>
+      `${cols} becomes NULL in ${rows.toLocaleString('en-US')} rows of ${table} (${key})`,
+    setDefault: (table: string, rows: number, cols: string, key: string) =>
+      `${cols} is set to its default in ${rows.toLocaleString('en-US')} rows of ${table} (${key})`,
+    refuse: (table: string, rows: number, key: string) =>
+      `${rows.toLocaleString('en-US')} rows of ${table} refer to them, so the delete fails (${key})`,
+    none: (table: string, key: string) => `${table}: no rows refer to them (${key})`,
+    noRows: 'No row matches (it may already be gone)',
+    noKeys: 'No foreign key refers to this table: only the chosen rows are deleted',
+    blocked: 'This delete would fail: a RESTRICT / NO ACTION foreign key still has rows referring',
+    capped: 'Stopped early: the limit on steps or on keys followed was reached',
+    notes:
+      'Counts are per foreign-key path. Changes made by triggers and references from other databases are not included. On PostgreSQL, NO ACTION may pass if a cascade deletes the referring rows first',
+  },
   databaseOps: {
     copyMode: {
       label: 'What to copy',

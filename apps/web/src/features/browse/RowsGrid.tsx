@@ -275,7 +275,8 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
 
       <DeleteRowsDialog
         open={deleteTarget !== null}
-        count={deleteKeys.length}
+        tableRef={tableRef}
+        keys={deleteKeys}
         pending={remove.isPending}
         error={remove.error}
         onCancel={() => {

@@ -6,6 +6,7 @@ import type {
   DatabaseGrant,
   DatabaseInfo,
   DdlOp,
+  DeleteImpact,
   DiagnosticKind,
   DiagnosticReport,
   Dialect,
@@ -458,6 +459,12 @@ export class FakeAdapter implements DatabaseAdapter {
   async describeTable(ns: Namespace, table: string): Promise<TableSchema> {
     this.record('describeTable', ns, table)
     return structuredClone(this.table(ns, table).schema)
+  }
+
+  async deleteImpact(ns: Namespace, table: string, keys: RowKey[]): Promise<DeleteImpact> {
+    this.record('deleteImpact', ns, table, keys)
+    this.table(ns, table)
+    return { table, rows: keys.length, steps: [], blocked: false, capped: false }
   }
 
   async checkReferences(ns: Namespace, table: string): Promise<ReferenceCheck[]> {
