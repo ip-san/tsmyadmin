@@ -17,9 +17,11 @@ const SQL_BUILDER_ALLOWLIST = [
   /^packages\/adapter\/src\/sql\/.*\.ts$/,
   // Per-dialect builders that assemble statements from quoteIdent() identifiers and literal helpers:
   // ddl (ALTER/CREATE), adapter (USE/SET/SHOW CREATE), export (INSERT dumps), users (accounts/GRANT), server (KILL id, regex-validated),
-  // create-statements (the CREATE TABLE text of a PostgreSQL table, from the catalog; it was part of ddl).
+  // create-statements (the CREATE text of a table: PostgreSQL's from the catalog, MySQL's through SHOW CREATE; they
+  // were part of ddl / the adapter), scan (a whole-table read in keyset pages over quoted key columns; it was part of
+  // the MySQL adapter).
   // introspect.ts / values.ts are deliberately NOT listed: they must stay static SQL + parameters.
-  /^packages\/adapter\/src\/(mysql|postgres)\/(ddl|adapter|export|users|server|create-statements)\.ts$/,
+  /^packages\/adapter\/src\/(mysql|postgres)\/(ddl|adapter|export|users|server|create-statements|scan)\.ts$/,
   // routines: SHOW CREATE PROCEDURE|FUNCTION <quoted db>.<quoted name> (MySQL has no parameterisable form).
   /^packages\/adapter\/src\/mysql\/routines\.ts$/,
   // Editor prefill text shown to the user; executed only when they press Run (identifiers quoted).

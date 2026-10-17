@@ -1,6 +1,4 @@
 import type {
-  Cell,
-  ColumnMeta,
   DatabaseGrant,
   DatabaseInfo,
   DdlOp,
@@ -39,10 +37,11 @@ import type { Connection as CoreConnection } from 'mysql2'
 import mysql, { type Connection, type FieldPacket, type Pool, type PoolConnection } from 'mysql2/promise'
 import { BaseAdapter } from '../base.ts'
 import { type Canceller, type Conn, firstResult, type RawResult, withinAcquireTimeout } from '../driver.ts'
-import { driverValueToCell, type QueryOptions, toDbValue, UNCAPPED } from '../sql/cells.ts'
+import type { QueryOptions } from '../sql/cells.ts'
 import { explainableStatement, explainResult, parseJsonCell } from '../sql/explain-statement.ts'
-import { Params, quoteIdent, quoteTable } from '../sql/quote.ts'
+import { quoteIdent } from '../sql/quote.ts'
 import { AdapterError, type ConnectionConfig, type RowBatch } from '../types.ts'
+import { mysqlRecoverLossyDefaults, mysqlShowCreateTable } from './create-statements.ts'
 import { mysqlDdl } from './ddl.ts'
 import { mapMysqlError } from './errors.ts'
 import { needsFormat1, parseMysqlPlan } from './explain.ts'
@@ -55,7 +54,7 @@ import {
   mysqlListTables,
   mysqlTableStats,
 } from './introspect.ts'
-import { keyColumnExpr, keyMatchExpr, keyParam } from './key-types.ts'
+import { keyMatchExpr, keyParam } from './key-types.ts'
 import { normalise } from './normalise.ts'
 import { mysqlPrepareDdl } from './prepare-ddl.ts'
 import { mysqlEventDetail, mysqlRoutineDetail, mysqlTriggerDetail } from './program-detail.ts'
@@ -66,6 +65,7 @@ import {
   mysqlListTriggers,
   mysqlRoutineDefinition,
 } from './routines.ts'
+import { mysqlScanPlan, mysqlScanRows, mysqlStreamRows } from './scan.ts'
 import {
   mysqlDiagnostics,
   mysqlKillProcess,
@@ -79,7 +79,6 @@ import {
   mysqlTableUsage,
 } from './server.ts'
 import { mysqlCanManageAccount, mysqlListUsers, mysqlShowGrants, mysqlUsers } from './users.ts'
-import { mysqlColumnMeta } from './values.ts'
 
 /** Derived-table wrapping (only used for statements with their own LIMIT) fails where the bare statement would not. */
 const WRAPPER_ONLY_ERRORS: ReadonlySet<string> = new Set([
@@ -88,7 +87,6 @@ const WRAPPER_ONLY_ERRORS: ReadonlySet<string> = new Set([
   'ER_PARSE_ERROR',
 ])
 /** `SEQUENCE=1` among the table options (the line after the column list), not inside a quoted comment. */
-const SEQUENCE_OPTION = /^\)(?:[^'\n]|'(?:[^']|'')*')*\bSEQUENCE=1\b/m
 
 type QueryOutput = [unknown, FieldPacket[] | FieldPacket[][] | undefined]
 
@@ -288,67 +286,20 @@ export class MysqlAdapter extends BaseAdapter {
     }
   }
 
-  /**
-   * Row-at-a-time read of one SELECT through mysql2's stream API (rows are converted as they arrive; the stream
-   * pauses the socket when the consumer is slower). A consumer that stops early leaves the query half-read on
-   * the wire, so the connection is discarded rather than returned to the pool.
-   */
-  private async *streamRows(
+  /** One SELECT read row by row (see `mysqlStreamRows`); a lost or abandoned connection is not handed back. */
+  private streamRows(
     conn: PoolConnection,
     text: string,
     params: unknown[],
     batchSize: number,
     options?: QueryOptions
   ): AsyncIterable<RawResult> {
-    // The promise wrapper's typings call the inner connection a promise Connection; at runtime it is the core
-    // callback one, which is the only API with a row stream.
-    const core = conn.connection as unknown as CoreConnection
-    // mysql2 only reports a lost connection to commands with a callback; a callback would make it buffer every
-    // row, so the connection's own 'error' (KILL, server gone, net_write_timeout on a stalled client) is forwarded
-    // to the stream instead — otherwise the iteration would wait forever. Listening before the query is queued
-    // covers a connection the server closed a moment ago (mysql2 emits that synchronously).
-    let stream: ReturnType<ReturnType<CoreConnection['query']>['stream']> | null = null
-    let pending: Error | null = null
-    const onFatal = (err: Error) => {
-      if (stream) stream.destroy(err)
-      else pending = err
-    }
-    core.on('error', onFatal)
-    let columns: ColumnMeta[] = []
-    let rows: Cell[][] = []
-    let finished = false
-    try {
-      const query = core.query({ sql: text, values: params, rowsAsArray: true })
-      query.on('fields', (fields: FieldPacket[]) => {
-        columns = fields.map(mysqlColumnMeta)
-      })
-      stream = query.stream({ highWaterMark: batchSize })
-      if (pending) stream.destroy(pending)
-      for await (const row of stream) {
-        rows.push((row as unknown[]).map((v) => driverValueToCell(v, options)))
-        if (rows.length >= batchSize) {
-          yield { columns, rows, affectedRows: 0, hasRows: true }
-          rows = []
-        }
-      }
-      finished = true
-    } catch (err) {
-      finished = true
+    const fail = (err: unknown) => {
       const mapped = this.toAdapterError(err)
       if (mapped.code === 'CONNECTION_FAILED') this.broken.add(conn.connection)
-      throw mapped
-    } finally {
-      core.off('error', onFatal)
-      if (!finished) {
-        // Abandoned mid-scan: drop the socket outright, or the rest of the result set keeps arriving and being
-        // parsed until the server notices the half-closed connection.
-        stream?.destroy()
-        this.broken.add(conn.connection)
-        ;(core as unknown as { stream?: { destroy(): void } }).stream?.destroy()
-      }
+      return mapped
     }
-    // The last (possibly empty) batch also tells an empty table's caller the column list.
-    yield { columns, rows, affectedRows: 0, hasRows: true }
+    return mysqlStreamRows(conn, text, params, batchSize, options, fail, () => this.broken.add(conn.connection))
   }
 
   /**
@@ -404,59 +355,12 @@ export class MysqlAdapter extends BaseAdapter {
     opts: { batchSize: number; schema?: TableSchema; utc?: boolean }
   ): AsyncIterable<RowBatch> {
     const schema = opts.schema ?? (await this.describeTable(ns, table))
-    const key = this.resolveRowKey(schema)
-    const columns = schema.columns.map((c) => quoteIdent('mysql', c.name))
-    const tableSql = quoteTable('mysql', ns, table)
-    // Position of each key column in the selected row.
-    const keyIndexes =
-      key.keyKind === 'pk' ? key.keyColumns.map((c) => schema.columns.findIndex((col) => col.name === c)) : []
-    if (keyIndexes.includes(-1)) throw new AdapterError('QUERY_FAILED', 'Key column missing from table schema')
-    const keyTypes = keyIndexes.map((i) => schema.columns[i]?.dataType ?? '')
-    const keyExprs =
-      key.keyKind === 'pk' ? key.keyColumns.map((c, i) => keyColumnExpr(quoteIdent('mysql', c), keyTypes[i] ?? '')) : []
-    const orderBy = keyExprs.length > 0 ? ` ORDER BY ${keyExprs.join(', ')}` : ''
-    const single = orderBy === ''
-    const batchSize = Math.max(1, Math.floor(opts.batchSize))
+    const plan = mysqlScanPlan(ns, table, schema, this.resolveRowKey(schema), opts.batchSize)
     // Generators cannot run inside withConn's callback, so the borrow/done pair is shared instead
     // (no statement timeout: full scans may legitimately be long).
     const { conn, done } = await this.borrow(ns, 0)
     try {
-      // Times as UTC, for a dump restored under a session that reads them as UTC. The setting would outlive this scan
-      // (release() hands the connection back as it is), so the `finally` below resets the session.
-      if (opts.utc) await conn.query("SET SESSION time_zone = '+00:00'")
-      if (single && conn.stream) {
-        // Streamed rows arrive one at a time, so a key-less table of any size costs one batch of memory.
-        const sql = `SELECT ${columns.join(', ')} FROM ${tableSql}`
-        for await (const r of conn.stream(sql, [], batchSize, UNCAPPED)) yield { columns: r.columns, rows: r.rows }
-        return
-      }
-      let last: Cell[] | null = null
-      let first = true
-      for (;;) {
-        const params = new Params('mysql')
-        let where = ''
-        if (last) {
-          const lastRow = last
-          const lastKey = keyIndexes.map((i, k) =>
-            this.keyParam(params.add(toDbValue(lastRow[i] ?? null)), keyTypes[k] ?? '')
-          )
-          where = ` WHERE (${keyExprs.join(', ')}) > (${lastKey.join(', ')})`
-        }
-        const limit = single ? '' : ` LIMIT ${params.add(batchSize)}`
-        // Exports must carry whole binaries; the display cap only applies to browsing.
-        const r = firstResult(
-          await conn.query(
-            `SELECT ${columns.join(', ')} FROM ${tableSql}${where}${orderBy}${limit}`,
-            params.values,
-            UNCAPPED
-          )
-        )
-        // An empty table still yields one batch so callers learn the column list.
-        if (r.rows.length > 0 || first) yield { columns: r.columns, rows: r.rows }
-        first = false
-        if (single || r.rows.length < batchSize) return
-        last = r.rows[r.rows.length - 1] ?? null
-      }
+      yield* mysqlScanRows(conn, plan, opts.utc === true)
     } finally {
       // After a utc scan the session is not the one the next borrower expects (reset() also drops the cached current
       // database and marks the connection broken if the reset fails).
@@ -673,38 +577,9 @@ export class MysqlAdapter extends BaseAdapter {
   describeTable(ns: Namespace, table: string): Promise<TableSchema> {
     return this.withConn(ns, async (conn) => {
       const schema = await mysqlDescribeTable(conn, ns, table, this.mariadb === true)
-      if (this.mariadb !== true) await this.recoverLossyDefaults(conn, ns, table, schema.columns)
+      if (this.mariadb !== true) await mysqlRecoverLossyDefaults(conn, ns, table, schema.columns)
       return schema
     })
-  }
-
-  /**
-   * `information_schema.COLUMNS.COLUMN_DEFAULT` is a utf8mb3 column, so a literal default holding a character
-   * outside the BMP (an emoji, CJK Ext-B) comes back with that character replaced by `?`; replaying it would
-   * quietly rewrite the default. MySQL prints such a default as a hex literal in `SHOW CREATE TABLE` precisely
-   * because the text form cannot carry it — which both recovers the bytes and tells a mangled value apart from
-   * a `?` the user really typed. MariaDB prints `?` there too, so its defaults are left as reported (a
-   * documented limitation), and the extra round trip only happens when a default actually contains a `?`.
-   */
-  private async recoverLossyDefaults(
-    conn: Conn,
-    ns: Namespace,
-    table: string,
-    columns: TableSchema['columns']
-  ): Promise<void> {
-    const suspect = columns.filter((c) => !c.defaultIsExpression && c.default?.includes('?'))
-    if (suspect.length === 0) return
-    const create = firstResult(await conn.query(`SHOW CREATE TABLE ${quoteTable('mysql', ns, table)}`))
-    const text = String(create.rows[0]?.[1] ?? '')
-    for (const c of suspect) {
-      const name = c.name.replaceAll('`', '``').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-      const line = new RegExp(`^\\s*\`${name}\` [^\n]*`, 'm').exec(text)?.[0]
-      const hex = line ? /\bDEFAULT (0x[0-9A-Fa-f]+)/.exec(line)?.[1] : undefined
-      if (hex) {
-        c.default = hex
-        c.defaultIsExpression = true
-      }
-    }
   }
 
   /** information_schema is readable by every account, so it is a safe namespace for server-level queries. */
@@ -764,33 +639,7 @@ export class MysqlAdapter extends BaseAdapter {
   }
 
   showCreateTable(ns: Namespace, table: string, known?: TableSchema): Promise<string[]> {
-    return this.withConn(ns, async (conn) => {
-      const t = quoteTable('mysql', ns, table)
-      const r = firstResult(await conn.query(`SHOW CREATE TABLE ${t}`))
-      const row = r.rows[0]
-      if (!row) throw new AdapterError('NOT_FOUND', `Table not found: ${ns.database}.${table}`)
-      const create = String(row[1] ?? '')
-      // MariaDB answers SHOW CREATE TABLE for a sequence with `CREATE TABLE … SEQUENCE=1`: no catalog round trip
-      // is needed to tell the two apart when the caller did not pass the schema.
-      const kind = known?.kind ?? (SEQUENCE_OPTION.test(create) ? 'sequence' : 'table')
-      if (kind === 'sequence') {
-        // MariaDB SEQUENCE: the definition plus the value it would hand out next, so a restore continues.
-        const r = firstResult(await conn.query(`SHOW CREATE SEQUENCE ${t}`))
-        const next = firstResult(await conn.query(`SELECT next_not_cached_value FROM ${t}`))
-        const create = String(r.rows[0]?.[1] ?? '')
-        const value = next.rows[0]?.[0]
-        return value === null || value === undefined
-          ? [create]
-          : [
-              create,
-              `ALTER SEQUENCE ${quoteIdent('mysql', table)} RESTART WITH ${String(value).replace(/[^\d-]/g, '')}`,
-            ]
-      }
-      // MariaDB prints sequence defaults database-qualified (`DEFAULT nextval(\`db\`.\`seq\`)`); a dump is
-      // database-relative. Only the DEFAULT position is rewritten: a comment may quote the same text.
-      const qualified = `DEFAULT nextval(${quoteIdent('mysql', ns.database)}.`
-      return [create.replaceAll(qualified, 'DEFAULT nextval(')]
-    })
+    return this.withConn(ns, (conn) => mysqlShowCreateTable(conn, ns, table, known))
   }
 
   toAdapterError(err: unknown): AdapterError {
