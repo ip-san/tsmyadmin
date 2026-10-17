@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { useNavigate } from '@tanstack/react-router'
 import type { SnapshotDiff, SnapshotDiffEntry } from '@tsmyadmin/shared'
 import { Button } from '@/components/ui/Button.tsx'
 import { Dialog } from '@/components/ui/Dialog.tsx'
@@ -77,6 +78,10 @@ export function SnapshotDiffDialog({
   onClose: () => void
 }) {
   const diff = useQuery({ ...snapshotDiffQuery(db, schema, target?.id ?? ''), enabled: target !== null })
+  const navigate = useNavigate()
+  // The same comparison on the Designer: the snapshot by its id in the address (never a row value).
+  const onDiagram = () =>
+    target && void navigate({ to: '/db/$db/designer', params: { db }, search: { schema, compare: target.id } })
   return (
     <Dialog
       open={target !== null}
@@ -86,6 +91,9 @@ export function SnapshotDiffDialog({
         <>
           <Button onClick={() => void diff.refetch()} disabled={diff.isFetching}>
             {t.diffAgain}
+          </Button>
+          <Button onClick={onDiagram} disabled={!diff.data}>
+            {t.diffOnDiagram}
           </Button>
           <Button onClick={onClose}>{locale.common.close}</Button>
         </>

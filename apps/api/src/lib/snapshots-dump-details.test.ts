@@ -33,6 +33,7 @@ function adapterOf(tables: TableInfo[], dialect: Dialect = 'mysql') {
   return {
     dialect,
     listTables: async () => tables,
+    listForeignKeys: async () => [],
     ddl: {
       build: (_ns: unknown, op: { objects: { name: string; kind: string }[] }) =>
         op.objects.map((o) => `DROP ${o.kind} ${o.name}`),

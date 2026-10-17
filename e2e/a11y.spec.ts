@@ -418,6 +418,40 @@ for (const t of TARGETS) {
       }
     })
 
+    test('designer compared with a snapshot', async ({ page }) => {
+      await login(page, t)
+      const scratch = `e2e_a11ysnap_${Date.now().toString(36)}`
+      const mysql = t.dialect === 'mysql'
+      const db = mysql ? scratch : t.database
+      const schema = mysql ? undefined : scratch
+      const run = (sql: string, database = db, inSchema = schema) =>
+        page.request.post(`/api/databases/${database}/sql`, {
+          data: { sql, ...(inSchema ? { schema: inSchema } : {}) },
+        })
+      await run(mysql ? `CREATE DATABASE ${scratch}` : `CREATE SCHEMA ${scratch}`, t.database, t.schema)
+      try {
+        await run(
+          'CREATE TABLE a (id INT PRIMARY KEY); CREATE TABLE b (id INT PRIMARY KEY, a_id INT, FOREIGN KEY (a_id) REFERENCES a (id))'
+        )
+        await page.goto(`/db/${db}/snapshots${schema ? `?schema=${schema}` : ''}`)
+        await page.getByLabel('名前', { exact: true }).fill('前')
+        await page.getByRole('button', { name: 'スナップショットを取る' }).click()
+        await expect(page.getByRole('button', { name: '前: 現在と比較' })).toBeVisible()
+        await run('DROP TABLE b; CREATE TABLE c (id INT PRIMARY KEY)')
+        await page.getByRole('button', { name: '前: 現在と比較' }).click()
+        await page.getByRole('dialog').getByRole('button', { name: '図で見る' }).click()
+        await expect(page.getByRole('region', { name: 'スナップショット「前」と比べています' })).toBeVisible()
+        await expect(page.getByRole('button', { name: /^テーブル b/ })).toHaveAttribute('data-tone', 'blocked')
+        await scan(page)
+      } finally {
+        await run(
+          mysql ? `DROP DATABASE IF EXISTS ${scratch}` : `DROP SCHEMA IF EXISTS ${scratch} CASCADE`,
+          t.database,
+          t.schema
+        )
+      }
+    })
+
     test('SQL tab with a statement plan drawn', async ({ page }) => {
       const plan = await openPlan(page, t)
       await expect(plan).toBeVisible()
