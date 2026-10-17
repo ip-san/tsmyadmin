@@ -113,6 +113,16 @@ export const enScreens = {
       loading: 'Comparing…',
       noShape: 'This snapshot did not record its tables, so the lines of the tables that are gone cannot be drawn',
     },
+    refCheck: {
+      check: 'Check references',
+      checkHint:
+        'Counts, per foreign key, the rows whose parent is missing, and shows them on the lines. It reads whole tables: large ones take a while',
+      checking: 'Checking…',
+      orphans: (n: number) => `no parent: ${n.toLocaleString('en-US')}`,
+      column: 'Rows with no parent',
+      failed: 'Could not check',
+      legend: 'Has rows with no parent',
+    },
     usage: {
       toggle: 'Show how tables are read',
       toggleHint: 'From the server statistics: whether each table is read in full or through an index',

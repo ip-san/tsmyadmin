@@ -113,6 +113,16 @@ export const jaScreens = {
       loading: '比べています…',
       noShape: 'このスナップショットには表の一覧が記録されていないので、消えた表どうしの線は描けません',
     },
+    refCheck: {
+      check: '参照を検査',
+      checkHint:
+        '外部キーごとに、参照先が無い行（親のいない行）を数えて、線に出します。表を全件読むので、大きな表では時間がかかります',
+      checking: '検査しています…',
+      orphans: (n: number) => `参照先なし ${n.toLocaleString('ja-JP')}`,
+      column: '参照先が無い行',
+      failed: '検査できませんでした',
+      legend: '参照先が無い行がある',
+    },
     usage: {
       toggle: '使われ方を重ねる',
       toggleHint: 'サーバーの統計から、テーブルが全件で読まれているか、インデックスで読まれているかを図に重ねる',

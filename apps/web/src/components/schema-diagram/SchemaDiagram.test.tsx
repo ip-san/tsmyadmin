@@ -71,4 +71,18 @@ describe('SchemaDiagram', () => {
     expect(screen.getByRole('button', { name: /users/ })).toHaveClass('opacity-30')
     expect(container.querySelector('[data-tone="scan"]')).not.toBeNull()
   })
+
+  it('badges a line at its middle without its label shown, and fades nothing when the overlay only adds', () => {
+    const overlay = {
+      tables: new Map(),
+      relations: new Map([[relationKey(key), 'delete' as const]]),
+      columns: new Map(),
+      relationBadges: new Map([[relationKey(key), 'no parent: 3']]),
+      fade: false,
+    }
+    const { container } = render(<SchemaDiagram {...props} overlay={overlay} />)
+    expect(screen.getByText('no parent: 3')).toBeInTheDocument()
+    expect(container.querySelector('[data-tone="delete"]')).not.toBeNull()
+    expect(container.querySelectorAll('.opacity-30')).toHaveLength(0)
+  })
 })

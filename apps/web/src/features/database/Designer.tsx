@@ -29,11 +29,13 @@ import { foreignKeysQuery, structureQuery, tablesQuery } from '@/lib/queries.ts'
 import { DesignerAddForeignKey } from './DesignerAddForeignKey.tsx'
 import { useCompare } from './DesignerCompare.tsx'
 import { DesignerPages } from './DesignerPages.tsx'
+import { useReferences } from './DesignerReferences.tsx'
 import { DesignerToolbar } from './DesignerToolbar.tsx'
 import { useUsage } from './DesignerUsage.tsx'
 import { diagramDia } from './designer-dia.ts'
 import { diagramEps } from './designer-eps.ts'
 import { diagramSvg } from './designer-svg.ts'
+import { orphansText } from './reference-overlay.ts'
 
 const t = locale.designer
 const PositionsSchema = z.record(z.string(), z.object({ x: z.number(), y: z.number() }))
@@ -103,6 +105,9 @@ export function Designer({
   const structures = useQueries({
     queries: names.map((table) => ({ ...structureQuery({ db, schema, table }), enabled: showAll })),
   })
+  const [refsOn, setRefsOn] = useState(false)
+  const keyed = [...new Set((keys.data ?? []).map((r) => r.table))].filter((n) => names.includes(n))
+  const refs = useReferences(db, schema, keyed, refsOn)
 
   if (tables.isPending || keys.isPending) return <Spinner />
   if (tables.isError) return <ErrorBox error={tables.error} onRetry={() => void tables.refetch()} />
@@ -192,6 +197,9 @@ export function Designer({
           <input type="checkbox" checked={usageOn} onChange={(e) => setUsageOn(e.target.checked)} />
           {t.usage.toggle}
         </label>
+        <Button size="sm" aria-pressed={refsOn} title={t.refCheck.checkHint} onClick={() => setRefsOn(!refsOn)}>
+          {refs.checking ? t.refCheck.checking : t.refCheck.check}
+        </Button>
       </DesignerToolbar>
       {relate && from ? (
         <p role="status" className="text-sm text-ink print:hidden">
@@ -207,7 +215,7 @@ export function Designer({
         positions={positions}
         onMove={move}
         view={shownView}
-        overlay={shown.overlay ?? usage.overlay}
+        overlay={shown.overlay ?? refs.overlay ?? usage.overlay}
         {...(relate ? { relate: { from, onPick: pick } } : {})}
       />
       {usage.panel}
@@ -225,6 +233,7 @@ export function Designer({
               <Th>ON DELETE</Th>
               <Th>ON UPDATE</Th>
               <Th>{t.constraint}</Th>
+              {refsOn ? <Th>{t.refCheck.column}</Th> : null}
               <Th className="print:hidden">{locale.ddl.actions}</Th>
             </tr>
           </thead>
@@ -238,6 +247,7 @@ export function Designer({
                 <Td>{r.onDelete ?? '—'}</Td>
                 <Td>{r.onUpdate ?? '—'}</Td>
                 <Td className="text-ink-sub">{r.name}</Td>
+                {refsOn ? <Td className="tabular-nums">{orphansText(refs.checks, r.table, r.name) ?? '…'}</Td> : null}
                 <Td className="print:hidden">
                   <Button
                     size="sm"
