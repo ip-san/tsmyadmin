@@ -6,6 +6,7 @@
 
 ### 追加
 
+- デザイナに**「使われ方を重ねる」**を追加した。サーバーの統計から、各テーブルが全件で読まれることが多いか、インデックスで読まれることが多いかを図に重ね、全件と索引の数を札に出す。一度も読まれていないテーブルは薄く描き、図の下に一度も読まれていないインデックス（主キーと一意のものを除く）を並べる。PostgreSQL は `pg_stat_user_tables` / `pg_stat_user_indexes`（走査の回数）、MySQL / MariaDB は `performance_schema.table_io_waits_summary_by_index_usage`（読んだ行数）を読む。performance_schema が無効なとき（MariaDB の既定）と、読む権限がないときは、その旨を出す（`GET /api/databases/:db/usage`）
 - 行の削除の確認に**「影響を見る」**を追加した。選んだ行を参照する外部キーの ON DELETE をたどり、どのテーブルの何行が一緒に消えるか（CASCADE）、NULL や既定値に変わるか（SET NULL / SET DEFAULT）、どこで削除が失敗するか（RESTRICT / NO ACTION）を、関係するテーブルだけの図の上で段ごとに示す（同じ内容を文でも並べる。動きを減らす設定では最後の段を表示して止まる）。数えるだけで何も消さない（`POST /api/databases/:db/tables/:table/rows/delete-impact`）。件数は経路ごとの延べで、深さは 15 段まで。トリガーによる変更と、MySQL で別のデータベースから参照している行は含まない
 - SQL タブに**「図で見る」**を追加した。1 文の実行計画（EXPLAIN の JSON）を、木と、読むテーブルだけの図で示し、テーブルを読む順に段ごとに強調する。インデックスで読むテーブル（範囲・行を引く）と全件を読むテーブルを、線の色と形・インデックス名の札で区別し、使われたインデックスの列を強調する（同じ内容を文でも並べる。動きを減らす設定では最後の段を表示して止まる）。推定だけで文は実行しない（ANALYZE は使わず、トランザクションの中で取り消す。PostgreSQL は読み取り専用）。MySQL 8.0 / 8.4 の形式、MySQL 9 の形式 2（UPDATE / DELETE は形式 1 で読み直す）、MariaDB、PostgreSQL の計画を同じ木に直す（`POST /api/databases/:db/explain`）
 - 開発時（`NODE_ENV` が `production` でないとき）は、**ログインの失敗に理由と直し方**が付くようにした。MySQL が拒否したアカウントと接続元のアドレス（コンテナからの接続は Docker のゲートウェイのアドレスになり、`'root'@'localhost'` だけでは入れない、など）、MySQL のホスト制限と締め出し（`FLUSH HOSTS`）、PostgreSQL の `pg_hba.conf` に行がないこと、パスワード違い（コンテナなら初回起動時の `POSTGRES_PASSWORD`）、ポートで待ち受けていないこと（コンテナの中の localhost はコンテナ自身）、届かない・名前を引けないホストを区別する。本番では、接続元のアドレスを漏らさないよう、これまでどおり「認証に失敗しました」だけを返す

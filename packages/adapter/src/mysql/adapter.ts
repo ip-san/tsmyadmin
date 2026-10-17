@@ -29,6 +29,7 @@ import type {
   TableInfo,
   TableSchema,
   TableStats,
+  TableUsageReport,
   TriggerDetail,
   TriggerInfo,
   UserInfo,
@@ -75,6 +76,7 @@ import {
   mysqlReplicationInfo,
   mysqlServerCatalog,
   mysqlServerInfo,
+  mysqlTableUsage,
 } from './server.ts'
 import { mysqlCanManageAccount, mysqlListUsers, mysqlShowGrants, mysqlUsers } from './users.ts'
 import { mysqlColumnMeta } from './values.ts'
@@ -622,6 +624,9 @@ export class MysqlAdapter extends BaseAdapter {
 
   listForeignKeys(ns: Namespace): Promise<RelationDef[]> {
     return this.withConn(ns, (conn) => mysqlListForeignKeys(conn, ns))
+  }
+  tableUsage(ns: Namespace): Promise<TableUsageReport> {
+    return this.withConn(ns, (conn) => mysqlTableUsage(conn, ns.database))
   }
 
   /**

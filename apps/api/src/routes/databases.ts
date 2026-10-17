@@ -109,6 +109,10 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
         const q = c.req.valid('query')
         return c.json(await c.get('session').adapter.listForeignKeys(ns(c.req.param('db'), q.schema)))
       })
+      .get('/databases/:db/usage', validate('query', SchemaQuerySchema), async (c) => {
+        const q = c.req.valid('query')
+        return c.json(await c.get('session').adapter.tableUsage(ns(c.req.param('db'), q.schema)))
+      })
       .get('/databases/:db/routines', validate('query', SchemaQuerySchema), async (c) => {
         const q = c.req.valid('query')
         return c.json(await c.get('session').adapter.listRoutines(ns(c.req.param('db'), q.schema)))

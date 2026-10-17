@@ -21,6 +21,7 @@ import type {
   SqlRequest,
   StatementResult,
   TableInfo,
+  TableUsageReport,
   TrackedTable,
   TriggerDetail,
   TriggerInfo,
@@ -91,6 +92,15 @@ export const explainQuery = (db: string, schema: string | undefined, sql: string
     staleTime: 0,
     gcTime: 0,
     retry: false,
+  })
+
+/** How the tables are read, by the server's own counters. Asked each time it is turned on: the counts keep moving. */
+export const tableUsageQuery = (db: string, schema?: string) =>
+  queryOptions({
+    queryKey: ['usage', db, schema ?? ''],
+    queryFn: () =>
+      unwrap<TableUsageReport>(api.databases[':db'].usage.$get({ param: { db: enc(db) }, query: schemaQuery(schema) })),
+    staleTime: 0,
   })
 
 /** Read when "Edit" is pressed, never cached: the form must start from what the server holds now. */

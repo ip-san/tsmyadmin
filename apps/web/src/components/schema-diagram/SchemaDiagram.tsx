@@ -156,7 +156,12 @@ export function SchemaDiagram({
             const columnText = (c: string) => (display.get(name) === c ? `◆ ${c}` : c)
             if (relate) {
               return (
-                <g key={name} transform={`translate(${p.x} ${p.y})`}>
+                <g
+                  key={name}
+                  transform={`translate(${p.x} ${p.y})`}
+                  className={faint(lit !== undefined)}
+                  data-tone={lit?.tone}
+                >
                   {contents}
                   {cols.map((c, i) => {
                     const picked = relate.from?.table === name && relate.from.column === c
@@ -240,7 +245,8 @@ export function SchemaDiagram({
                 aria-label={t.boxLabel(name)}
                 transform={`translate(${p.x} ${p.y})`}
                 // touch-none: on a touch screen the gesture moves the box instead of scrolling the diagram.
-                className="group cursor-move touch-none outline-none"
+                className={`group cursor-move touch-none outline-none ${faint(lit !== undefined)}`}
+                data-tone={lit?.tone}
                 onFocus={() => setSelected(name)}
                 onPointerDown={startDrag(name)}
                 onPointerMove={moveDrag}

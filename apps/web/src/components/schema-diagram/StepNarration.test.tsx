@@ -48,4 +48,9 @@ describe('DiagramLegend', () => {
     render(<DiagramLegend tones={['delete', 'blocked']} />)
     expect(screen.getAllByRole('listitem').map((li) => li.textContent)).toEqual([t.tones.delete, t.tones.blocked])
   })
+
+  it('says what a tone means on this diagram, where it is given', () => {
+    render(<DiagramLegend tones={['focus', 'blocked']} labels={{ blocked: 'Deadlock' }} />)
+    expect(screen.getAllByRole('listitem').map((li) => li.textContent)).toEqual([t.tones.focus, 'Deadlock'])
+  })
 })

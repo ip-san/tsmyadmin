@@ -44,6 +44,7 @@ import type {
   TableSchema,
   TableSearchResult,
   TableStats,
+  TableUsageReport,
   TriggerDetail,
   TriggerInfo,
   UserInfo,
@@ -119,6 +120,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
   abstract listSchemas(database: string): Promise<string[]>
   abstract listTables(ns: Namespace): Promise<TableInfo[]>
   abstract listForeignKeys(ns: Namespace): Promise<RelationDef[]>
+  abstract tableUsage(ns: Namespace): Promise<TableUsageReport>
   abstract explainPlan(ns: Namespace, sql: string): Promise<ExplainResult>
   abstract describeTable(ns: Namespace, table: string): Promise<TableSchema>
   abstract tableStats(ns: Namespace, table: string): Promise<TableStats>

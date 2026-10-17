@@ -373,6 +373,14 @@ for (const t of TARGETS) {
       await scan(page)
     })
 
+    test('designer with how the tables are read laid over it', async ({ page }) => {
+      await login(page, t)
+      await page.goto(`/db/${t.database}/designer${t.schema ? `?schema=${t.schema}` : ''}`)
+      await page.getByRole('checkbox', { name: '使われ方を重ねる' }).check()
+      await expect(page.getByRole('heading', { name: '読まれていないインデックス' })).toBeVisible()
+      await scan(page)
+    })
+
     test('SQL tab with a statement plan drawn', async ({ page }) => {
       const plan = await openPlan(page, t)
       await expect(plan).toBeVisible()
