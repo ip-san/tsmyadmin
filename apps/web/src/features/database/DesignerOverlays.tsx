@@ -1,5 +1,5 @@
 import type { RelationDef } from '@tsmyadmin/shared'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { type DiagramOverlay, mergeOverlays } from '@/components/schema-diagram/overlay.ts'
 import { Button } from '@/components/ui/Button.tsx'
 import { locale } from '@/config/locale-screens.ts'
@@ -34,6 +34,11 @@ export function useDesignerOverlays({
   const [usageAsked, setUsageAsked] = useState(false)
   const [refsAsked, setRefsAsked] = useState(false)
   const [refsRun, setRefsRun] = useState(0)
+  // Comparing turns the check off for good: back from it, the reader presses again for a check of the schema as it
+  // is now, rather than seeing the one from before the comparison.
+  useEffect(() => {
+    if (!free) setRefsAsked(false)
+  }, [free])
   const usage = useUsage(db, schema, usageAsked && free)
   const keyed = [...new Set((keys ?? []).map((r) => r.table))].filter((n) => names.includes(n))
   const refsOn = refsAsked && free

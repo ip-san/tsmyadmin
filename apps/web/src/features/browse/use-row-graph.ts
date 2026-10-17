@@ -17,6 +17,9 @@ export function useRowGraph(root: RowNode) {
     more: [],
     expanded: new Set(),
   }))
+  // The graph as last set, ahead of the render: a press between the end of one read and the next render must
+  // build on the rows that read added, not on the graph it was rendered with.
+  const latest = useRef(graph)
   const [busy, setBusy] = useState<string | null>(null)
   // The state is a render behind: two clicks in one frame would both see nothing being read.
   const reading = useRef(false)
@@ -25,18 +28,21 @@ export function useRowGraph(root: RowNode) {
   const [added, setAdded] = useState<number | null>(null)
 
   const expand = async (id: string) => {
-    const node = graph.nodes.get(id)
-    if (!node || graph.expanded.has(id) || reading.current) return
+    const before = latest.current
+    const node = before.nodes.get(id)
+    if (!node || before.expanded.has(id) || reading.current) return
     reading.current = true
     setBusy(id)
     setError(null)
+    setAdded(null)
     try {
       const steps = rowSteps(node)
       const pages = await Promise.all(steps.map((s) => queryClient.fetchQuery(rowsQuery(s.ref, s.options))))
-      // `graph` is the one the reader opened from: one row is read at a time, so nothing changed it meanwhile.
-      const next = expandGraph(graph, id, steps, pages)
+      // One row is read at a time, so nothing changed the graph while this one was read.
+      const next = expandGraph(before, id, steps, pages)
+      latest.current = next
       setGraph(next)
-      setAdded(next.nodes.size - graph.nodes.size)
+      setAdded(next.nodes.size - before.nodes.size)
     } catch (err) {
       setError(err)
     } finally {

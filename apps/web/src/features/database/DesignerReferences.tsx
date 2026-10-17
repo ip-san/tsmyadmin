@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect } from 'react'
 import { referenceCheckQuery } from '@/lib/queries.ts'
 import { checkAll, referenceOverlay, type TableCheck } from './reference-overlay.ts'
 
@@ -31,6 +32,11 @@ export function useReferences(
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   })
+  // Turned off, a check still running is stopped: a disabled query keeps its observer, so its signal would not
+  // abort on its own, and the tables not yet started would still be read in full.
+  useEffect(() => {
+    if (!on) void queryClient.cancelQueries({ queryKey: ['references-all', db, schema ?? ''] })
+  }, [on, queryClient, db, schema])
   const checks = on ? (all.data ?? NONE) : NONE
   return {
     checks,

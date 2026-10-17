@@ -25,7 +25,7 @@ vi.mock('@tanstack/react-router', () => ({
 }))
 
 const reads = vi.fn()
-let answer: () => Promise<Pick<BrowseResult, 'rows' | 'total' | 'count'>>
+let answer: () => Promise<Pick<BrowseResult, 'rows' | 'total' | 'count'> & Partial<RowNode['page']>>
 vi.mock('@/lib/queries.ts', () => ({
   rowsQuery: (ref: { table: string }, options: unknown) => ({
     queryKey: ['rows', ref.table, options],
@@ -112,6 +112,29 @@ describe('RowGraphDialog', () => {
     finish?.()
     expect(await screen.findByText(t.added(0))).toBeInTheDocument()
     expect(reads).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not keep saying the last opening added rows once the next one fails', async () => {
+    // The post read refers back to its user, so it can be opened in turn.
+    const toUser = {
+      name: 'fk',
+      columns: ['user_id'],
+      refNamespace: { database: 'shop' },
+      refTable: 'users',
+      refColumns: ['id'],
+      onUpdate: null,
+      onDelete: null,
+    }
+    answer = async () => ({ rows: [[7, 1]], total: 1, count: 'exact', foreignKeys: [toUser] })
+    open()
+    await userEvent.click(expandRoot())
+    expect(await screen.findByText(t.added(1))).toBeInTheDocument()
+    answer = async () => {
+      throw new Error('gone away')
+    }
+    await userEvent.click(screen.getByRole('button', { name: t.expand('posts id=7') }))
+    expect(await screen.findByText(/gone away/)).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('')
   })
 
   it('shows the error of a read that failed, and the row can be opened again', async () => {

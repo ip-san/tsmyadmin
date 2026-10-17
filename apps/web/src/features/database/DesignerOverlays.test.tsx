@@ -14,6 +14,8 @@ vi.mock('@tanstack/react-router', () => ({
 }))
 
 const checked = vi.fn()
+/** While set, every check waits for it: to turn the check off halfway. */
+let gate: Promise<void> | undefined
 const diff: SnapshotDiff = {
   snapshot: { id: '1', name: 'before', at: '2026-10-01T00:00:00Z', bytes: 1, objects: 2 },
   shape: { tables: [{ name: 'gone', kind: 'table' }], relations: [] },
@@ -36,6 +38,7 @@ vi.mock('@/lib/queries.ts', () => ({
     queryKey: ['references', ref.table],
     queryFn: async () => {
       checked(ref.table)
+      await gate
       if (ref.table === 'logs') throw new Error('timeout')
       return [
         {
@@ -64,14 +67,16 @@ const key = (table: string): RelationDef => ({
 })
 
 /** The hook's controls and panels, and what overlay it would draw, as text to look for. */
-function Harness({ compare }: { compare?: string | undefined }) {
+const MANY = ['t1', 't2', 't3', 't4', 't5', 't6']
+
+function Harness({ compare, many = false }: { compare?: string | undefined; many?: boolean }) {
   const o = useDesignerOverlays({
     db: 'shop',
     schema: undefined,
     compare,
-    names: ['users', 'posts', 'logs'],
+    names: many ? MANY : ['users', 'posts', 'logs'],
     // A key of a table that is not drawn (a view's, say) is not checked.
-    keys: [key('posts'), key('posts'), key('logs'), key('elsewhere')],
+    keys: many ? MANY.map(key) : [key('posts'), key('posts'), key('logs'), key('elsewhere')],
   })
   const overlay = o.overlay(undefined)
   return (
@@ -84,11 +89,11 @@ function Harness({ compare }: { compare?: string | undefined }) {
   )
 }
 
-const mount = (compare?: string) =>
+const mount = (compare?: string, many = false) =>
   render(
     // The app's client retries nothing either for these (a whole-table read is not run twice on its own).
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <Harness compare={compare} />
+      <Harness compare={compare} many={many} />
     </QueryClientProvider>
   )
 
@@ -135,5 +140,23 @@ describe('useDesignerOverlays', () => {
     expect(screen.getByRole('checkbox', { name: t.usage.toggle })).toBeDisabled()
     expect(screen.getByRole('button', { name: t.refCheck.check })).toBeDisabled()
     expect(checked).not.toHaveBeenCalled()
+  })
+
+  it('starts no more tables once turned off halfway', async () => {
+    checked.mockClear()
+    let open: () => void = () => undefined
+    gate = new Promise((resolve) => {
+      open = resolve
+    })
+    mount(undefined, true)
+    const button = screen.getByRole('button', { name: t.refCheck.check })
+    await userEvent.click(button)
+    // Four at a time: the first four are being read.
+    await waitFor(() => expect(checked).toHaveBeenCalledTimes(4))
+    await userEvent.click(button)
+    open()
+    gate = undefined
+    await new Promise((r) => setTimeout(r, 20))
+    expect(checked).toHaveBeenCalledTimes(4)
   })
 })
