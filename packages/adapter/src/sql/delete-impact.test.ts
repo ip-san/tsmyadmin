@@ -1,6 +1,8 @@
 import { DELETE_IMPACT_MAX_DEPTH, type RelationDef } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
-import { DELETE_IMPACT_MAX_STEPS, walkDeleteImpact } from './delete-impact.ts'
+import type { Conn } from '../driver.ts'
+import type { ConditionHooks } from './conditions.ts'
+import { DELETE_IMPACT_MAX_STEPS, deleteImpactOn, walkDeleteImpact } from './delete-impact.ts'
 
 const ns = { database: 'app' }
 const key = (
@@ -110,5 +112,50 @@ describe('walkDeleteImpact', () => {
     const impact = await walk(relations, counter().count)
     expect(impact.steps).toHaveLength(DELETE_IMPACT_MAX_STEPS)
     expect(impact.capped).toBe(true)
+  })
+
+  it('blocks only on a refusing key: rows set to NULL or deleted along do not stop the delete', async () => {
+    const impact = await walk([key('notes', 'users', 'SET NULL'), key('orders', 'users', 'CASCADE')], counter().count)
+    expect(impact.steps.map((s) => s.rows)).toEqual([1, 1, 1].slice(0, impact.steps.length))
+    expect(impact.blocked).toBe(false)
+    const restrict = await walk([key('orders', 'users', 'RESTRICT')], counter().count)
+    expect(restrict.blocked).toBe(true)
+  })
+})
+
+describe('deleteImpactOn', () => {
+  const hooks: ConditionHooks = {
+    dialect: 'postgres',
+    keyParam: (p) => p,
+    keyMatchExpr: (e) => e,
+    nullSafeEq: () => 'IS NOT DISTINCT FROM',
+  }
+
+  it('picks every key with OR, binding their values once for each count', async () => {
+    const asked: { sql: string; values: unknown[] | undefined }[] = []
+    const conn = {
+      query: async (sql: string, values?: unknown[]) => {
+        asked.push({ sql, values })
+        return { columns: [], rows: [['2']], affectedRows: 0, hasRows: true }
+      },
+    } as unknown as Conn
+    const impact = await deleteImpactOn(conn, {
+      hooks,
+      ns,
+      table: 'users',
+      keys: [
+        { kind: 'pk', values: { id: 1 } },
+        { kind: 'pk', values: { id: 2 } },
+      ],
+      types: new Map(),
+      relations: [key('orders', 'users', 'SET NULL')],
+    })
+    expect(asked[0]).toEqual({
+      sql: 'SELECT COUNT(*) FROM "public"."users" WHERE ("id" = $1) OR ("id" = $2)',
+      values: [1, 2],
+    })
+    expect(asked[1]?.sql).toContain('IN (SELECT "id" FROM "public"."users" WHERE ("id" = $1) OR ("id" = $2))')
+    expect(asked[1]?.values).toEqual([1, 2])
+    expect(impact).toMatchObject({ rows: 2, steps: [{ table: 'orders', rows: 2 }] })
   })
 })
