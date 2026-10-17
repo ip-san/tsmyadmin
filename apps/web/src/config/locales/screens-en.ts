@@ -216,6 +216,7 @@ export const enScreens = {
     refuse: (table: string, rows: number, key: string) =>
       `${rows.toLocaleString('en-US')} rows of ${table} refer to them, so the delete fails (${key})`,
     none: (table: string, key: string) => `${table}: no rows refer to them (${key})`,
+    tooMany: (max: number) => `The impact can be shown for up to ${max} rows: choose fewer`,
     noRows: 'No row matches (it may already be gone)',
     noKeys: 'No foreign key refers to this table: only the chosen rows are deleted',
     blocked: 'This delete would fail: a RESTRICT / NO ACTION foreign key still has rows referring',
