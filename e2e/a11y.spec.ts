@@ -1,6 +1,7 @@
 import { expect } from '@playwright/test'
 import { fillType, login, PASSKEY_BASE_URL, PERSISTENT_BASE_URL, TARGETS, tableUrl, test } from './helpers.ts'
 import { layoutViolations } from './layout-lint.ts'
+import { lockChain } from './locks.ts'
 import { openPlan } from './plan.ts'
 import { pageProblems } from './scan.ts'
 import { createAccount, dropAccount, enrol, t as first, signIn } from './two-factor.ts'
@@ -382,6 +383,30 @@ for (const t of TARGETS) {
       await dialog.getByRole('button', { name: 'users id=1 のつながりを広げる' }).click()
       await expect(dialog.getByText(/^posts id=/).first()).toBeVisible()
       await scan(page)
+    })
+
+    test('process list with a chain of lock waits drawn', async ({ page, browser }) => {
+      test.setTimeout(90_000)
+      await login(page, t)
+      const chain = await lockChain(page, browser, t)
+      try {
+        await page.goto('/processes')
+        await page.getByLabel('更新間隔').selectOption('2')
+        const waits = page.getByRole('table', { name: 'ロック待ち' })
+        await expect(waits.getByRole('row').filter({ hasText: chain.marker('c') })).toBeVisible({ timeout: 15_000 })
+        await page.getByRole('button', { name: '図', exact: true }).click()
+        await expect(page.getByRole('img', { name: /^ロック待ちの図/ })).toBeVisible()
+        await scan(page)
+        await page.getByRole('button', { name: '表', exact: true }).click()
+        const holder = waits
+          .getByRole('row')
+          .filter({ hasText: chain.marker('a') })
+          .first()
+        await holder.getByRole('button', { name: /: ブロック元を強制終了$/ }).click()
+        await page.getByRole('dialog').getByRole('button', { name: '強制終了する' }).click()
+      } finally {
+        await chain.end()
+      }
     })
 
     test('designer with how the tables are read laid over it', async ({ page }) => {
