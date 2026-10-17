@@ -35,6 +35,28 @@ describe('NodeGraph', () => {
   })
 })
 
+describe('NodeGraph spacing', () => {
+  const xs = (container: HTMLElement) =>
+    [...container.querySelectorAll('g[transform^="translate"]')].map((g) =>
+      Number(/translate\(([\d.]+)/.exec(g.getAttribute('transform') ?? '')?.[1])
+    )
+
+  it('sets the columns as far apart as the longest arrow label needs', () => {
+    const two = [
+      { id: 'a', label: 'a' },
+      { id: 'b', label: 'b' },
+    ]
+    const short = render(<NodeGraph nodes={two} arrows={[{ from: 'b', to: 'a', label: 'x' }]} label="g" />)
+    const near = xs(short.container)
+    short.unmount()
+    const long = render(
+      <NodeGraph nodes={two} arrows={[{ from: 'b', to: 'a', label: 'shop.order_items RECORD X' }]} label="g" />
+    )
+    const far = xs(long.container)
+    expect((far[1] ?? 0) - (far[0] ?? 0)).toBeGreaterThan((near[1] ?? 0) - (near[0] ?? 0))
+  })
+})
+
 describe('arrowRoute', () => {
   const box = (x: number, y = 0) => ({ x, y })
 

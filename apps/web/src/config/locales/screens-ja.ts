@@ -1984,6 +1984,19 @@ export const jaScreens = {
     idleInTransactionHint:
       'トランザクションを開いたまま、何も実行していません。アプリがコミットかロールバックを忘れている可能性があります',
     killBlocker: 'ブロック元を強制終了',
+    lockView: '表示',
+    lockAsTable: '表',
+    lockAsGraph: '図',
+    lockGraph: 'ロック待ちの図（矢印は、待っているセッションから、待たせているセッションへ）',
+    lockSession: (id: string) => `ID ${id}`,
+    lockBlocksBadge: (n: number) => `${n} 件待ち`,
+    lockRoot: (id: string, n: number) => `ID ${id} が元です。${n} 件のセッションが、これを直接・間接に待っています`,
+    lockRootIdle: '（トランザクションを開いたまま、何もしていません）',
+    lockCycle: (ids: readonly string[]) =>
+      `ID ${ids.join(' → ')} が互いを待っています（デッドロック。サーバーがどれかを取り消すまで続きます）`,
+    lockGraphHint: '強制終了は「表」から行えます',
+    lockLegendRoot: '元（ほかを待たせ、自分は待っていない）',
+    lockLegendDeadlock: 'デッドロック（互いに待っている）',
     connections: '接続数',
     connectionsUsage: (current: number, max: number | null, percent: number | null) =>
       max === null ? `${current}` : percent === null ? `${current} / ${max}` : `${current} / ${max}（${percent}%）`,

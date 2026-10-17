@@ -1997,6 +1997,19 @@ export const enScreens = {
     idleInTransactionHint:
       'Its transaction is open but it is running nothing. The application may have forgotten to commit or roll back',
     killBlocker: 'Kill the blocker',
+    lockView: 'View',
+    lockAsTable: 'Table',
+    lockAsGraph: 'Diagram',
+    lockGraph: 'Lock wait diagram (arrows run from a waiting session to the session it waits for)',
+    lockSession: (id: string) => `ID ${id}`,
+    lockBlocksBadge: (n: number) => `${n} waiting`,
+    lockRoot: (id: string, n: number) => `ID ${id} is where it starts: ${n} sessions wait for it, directly or not`,
+    lockRootIdle: ' (its transaction is open and it is doing nothing)',
+    lockCycle: (ids: readonly string[]) =>
+      `IDs ${ids.join(' → ')} wait for each other (a deadlock, until the server cancels one)`,
+    lockGraphHint: 'Kill a session from the Table view',
+    lockLegendRoot: 'Where it starts (holds others up, waits for none)',
+    lockLegendDeadlock: 'Deadlock (waiting for each other)',
     connections: 'Connections',
     connectionsUsage: (current: number, max: number | null, percent: number | null) =>
       max === null ? `${current}` : percent === null ? `${current} / ${max}` : `${current} / ${max} (${percent}%)`,
