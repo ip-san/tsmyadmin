@@ -73,11 +73,6 @@ export const DEFAULT_RUN_OPTIONS: RunOptions = { delimiter: ';', rollback: false
 export const isValidDelimiter = (d: string) => /^\S{1,16}$/.test(d)
 
 /**
- * The script to send for what is in the editor: placeholders bound, then whatever the options ask to run before it
- * (foreign key checks off, a transaction that stays open and is rolled back by the server when the script ends)
- * and a `DELIMITER` line. The statements added are ordinary ones and show up among the results.
- */
-/**
  * One statement as it is sent on its own (to draw its plan): the parameters filled in like a run, and the custom
  * delimiter the editor ends it with taken off, since it is sent without the DELIMITER line that would explain it.
  */
@@ -87,6 +82,11 @@ export function prepareStatement(sql: string, dialect: Dialect, o: RunOptions): 
   return custom && bound.endsWith(o.delimiter) ? bound.slice(0, -o.delimiter.length).trimEnd() : bound
 }
 
+/**
+ * The script to send for what is in the editor: placeholders bound, then whatever the options ask to run before it
+ * (foreign key checks off, a transaction that stays open and is rolled back by the server when the script ends)
+ * and a `DELIMITER` line. The statements added are ordinary ones and show up among the results.
+ */
 export function prepareScript(sql: string, dialect: Dialect, o: RunOptions): string {
   const bound = bindParameters(sql, dialect, o.values)
   const head: string[] = []
