@@ -350,6 +350,8 @@ pre-push のテストは、マシンが忙しいとき（別の worktree やセ�
 | 色・見た目を変える | Tailwind のクラス | `dark:` 対応を必ず付ける |
 | 環境変数を追加 | `apps/api/src/config.ts` | `.env.example` と `docs/deployment.md` の表を同時に更新（英訳も。`bun run docs:i18n` が検査します） |
 | 新しい型のサポート | `docker/fixtures/*` → `*/values.ts` → conformance | `bun run db:reset`、両方言の `typesRow1` |
+| テーブルの図に、強調と段送りで何かを見せる | `components/schema-diagram/`: `overlay.ts` の `OverlayStep` を段ごとに作り、`SchemaDiagram` の `overlay`・`useStepPlayer`・`StepNarration` に渡す（例: `features/browse/delete-impact.ts`、`features/sql/plan-steps.ts`） | 図と同じ内容を `StepNarration` の文でも出す（スクリーンリーダーはそちらを読む）。動かさない図は `onMove` を渡さない（`role="img"` になる）。関係するテーブルだけの図は `diagramFor` |
+| 実行計画の読み方を直す・サーバーの形を足す | `packages/adapter/src/{mysql,postgres}/explain.ts`（共通の `PlanNode` に直す） | 実サーバーで採った計画を `packages/adapter/src/test/explain-plans/` に置いて単体テストする。MySQL 系は形式 1・形式 2（MySQL 9）・MariaDB の 3 つ（`.claude/rules/adapter.md` の「MySQL 9 と EXPLAIN」） |
 
 ### 例: `GET /api/server/info` のレスポンスに項目を足す
 
@@ -359,7 +361,7 @@ pre-push のテストは、マシンが忙しいとき（別の worktree やセ�
 2. `packages/adapter/src/{mysql,postgres}/server.ts` の `serverInfo()` が返す値に足す。戻り値の型は shared から来ているので、**片方だけだと typecheck が落ちます**
 3. `packages/adapter/src/test/conformance/server.ts` の `describe('serverInfo')` に両方言の検証を足し、`testing/fake-adapter.ts`（API テストが使うインメモリ実装）にも値を入れる
 4. `apps/api/src/routes/server.ts` は変更不要 — ルートはアダプターの戻り値をそのまま返し、**レスポンスを実行時に検証しません**。形を守るのは `apps/api/src/app-server.test.ts` の `ServerInfoSchema.parse(...)` です
-5. `apps/web`: `lib/queries/` の各ファイルが `unwrap<ServerInfo>` のように shared の型を明示しています（`hc` の型が効くのはパス・パラメータ・ボディまでで、レスポンスは `unwrap<T>` に渡した型になります）。表示側と `config/locales/{ja,en}.ts` のラベルを足す
+5. `apps/web`: `lib/queries/` の各ファイルが `unwrap<ServerInfo>` のように shared の型を明示しています（`hc` の型が効くのはパス・パラメータ・ボディまでで、レスポンスは `unwrap<T>` に渡した型になります）。表示側と `config/locales/screens-{ja,en}.ts` のラベルを足す（ログインの先の画面なので。初回表示の文字列だけが `{ja,en}.ts`）
 6. `bun run check` → `bun run db:up && bun run test:integration`
 
 詳細な手順とチェックリストは [CLAUDE.md](../CLAUDE.md)（Compact Instructions）と `.claude/rules/` にあります。

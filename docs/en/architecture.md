@@ -1,4 +1,4 @@
-<!-- translated-from: docs/architecture.md sha256:a8db6f54b0c66c86d9f0778c541f4929adc569629519149e893f19eb5fe71548 -->
+<!-- translated-from: docs/architecture.md sha256:69520d30b378ab3a29bea6f28594e5bc0a147fefbd0dc8cbc5cab6de5df1338c -->
 
 # Architecture
 
@@ -352,6 +352,8 @@ The test layers, from the bottom: unit (`sql/split`, the DDL snapshots, the pure
 | Change a colour or the look | Tailwind classes | Always include the `dark:` variant |
 | Add an environment variable | `apps/api/src/config.ts` | Update `.env.example` and the table in `docs/deployment.md` at the same time (and its translation; `bun run docs:i18n` checks it) |
 | Support a new type | `docker/fixtures/*` → `*/values.ts` → conformance | `bun run db:reset`, and `typesRow1` on both dialects |
+| Show something on the table diagram with highlights and steps | `components/schema-diagram/`: build an `OverlayStep` per step (`overlay.ts`) and pass them to `SchemaDiagram`'s `overlay`, `useStepPlayer` and `StepNarration` (examples: `features/browse/delete-impact.ts`, `features/sql/plan-steps.ts`) | Tell the same story in words through `StepNarration` (screen readers follow that). A diagram that does not move takes no `onMove` (it becomes `role="img"`). `diagramFor` draws only the tables concerned |
+| Change how execution plans are read, or add a server's shape | `packages/adapter/src/{mysql,postgres}/explain.ts` (into the shared `PlanNode`) | Unit-test against plans captured from real servers in `packages/adapter/src/test/explain-plans/`. On the MySQL side there are three shapes: format 1, format 2 (MySQL 9) and MariaDB (see "MySQL 9 と EXPLAIN" in `.claude/rules/adapter.md`) |
 
 ### Example: adding a field to the `GET /api/server/info` response
 
@@ -361,7 +363,7 @@ Working through it once is the quickest way to see where the types flow. To add 
 2. Add the value to what `serverInfo()` returns in `packages/adapter/src/{mysql,postgres}/server.ts`. The return type comes from shared, so **doing only one of them fails the typecheck**
 3. Add assertions for both dialects to `describe('serverInfo')` in `packages/adapter/src/test/conformance/server.ts`, and give the value to `testing/fake-adapter.ts` (the in-memory implementation the API tests use)
 4. `apps/api/src/routes/server.ts` needs no change — the route returns what the adapter gave it and **does not validate the response at run time**. What holds the shape is `ServerInfoSchema.parse(...)` in `apps/api/src/app-server.test.ts`
-5. `apps/web`: each file in `lib/queries/` names the shared type explicitly, as in `unwrap<ServerInfo>` (the `hc` types cover the path, the parameters and the body; the response is whatever type was passed to `unwrap<T>`). Add the display and the labels in `config/locales/{ja,en}.ts`
+5. `apps/web`: each file in `lib/queries/` names the shared type explicitly, as in `unwrap<ServerInfo>` (the `hc` types cover the path, the parameters and the body; the response is whatever type was passed to `unwrap<T>`). Add the display and the labels in `config/locales/screens-{ja,en}.ts` (the screen is behind the login; only strings shown on first load go in `{ja,en}.ts`)
 6. `bun run check`, then `bun run db:up && bun run test:integration`
 
 The step-by-step rules and checklists are in [CLAUDE.md](../../CLAUDE.md) (Compact Instructions) and `.claude/rules/`, in Japanese.
