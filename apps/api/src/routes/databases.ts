@@ -12,6 +12,7 @@ import {
   DeleteRowsRequestSchema,
   type Dialect,
   decodeTableList,
+  ExplainRequestSchema,
   ExportQuerySchema,
   IMPORT_MAX_BYTES,
   ImportFormSchema,
@@ -401,6 +402,17 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
         const result = await c.get('session').adapter.buildQuery(ns(c.req.param('db'), schema), spec)
         return c.json(result)
       })
+      // The plan of one statement, estimated (never ANALYZE): read-only, so not recorded in the SQL history.
+      .post(
+        '/databases/:db/explain',
+        validate('query', SchemaQuerySchema),
+        validate('json', ExplainRequestSchema),
+        async (c) => {
+          const q = c.req.valid('query')
+          const { sql } = c.req.valid('json')
+          return c.json(await c.get('session').adapter.explainPlan(ns(c.req.param('db'), q.schema), sql))
+        }
+      )
       .post('/databases/:db/sql', validate('json', SqlRequestSchema), async (c) => {
         const body = c.req.valid('json')
         const results = await c.get('session').adapter.executeSql(ns(c.req.param('db'), body.schema), body.sql, {

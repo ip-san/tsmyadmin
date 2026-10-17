@@ -350,6 +350,31 @@ export const ja = {
       focus: '起点',
     },
   },
+  plan: {
+    show: '図で見る',
+    showHint: '実行計画（推定。文は実行しない）を、木とテーブルの図で見る',
+    title: '実行計画',
+    tree: '実行計画の木',
+    diagram: '実行計画で読むテーブルの図',
+    loading: '実行計画を取得しています…',
+    close: '閉じる',
+    rows: (n: number) => `推定 ${n.toLocaleString('ja-JP')} 行`,
+    read: (table: string, how: string, rows: string) => `${table} を${how}（${rows}）`,
+    how: {
+      fullScan: '全件読む',
+      fullIndexScan: (index: string) => `、インデックス ${index} の端から端まで読む`,
+      range: (index: string) => `、インデックス ${index} で範囲を絞って読む`,
+      lookup: (index: string) => `、インデックス ${index} で行を引く`,
+      other: '読む',
+    },
+    full: '全件',
+    covering: '（インデックスだけで答え、表は読まない）',
+    noReads: 'この計画には、テーブルを読む段がありません（表を使わない文か、サーバーが計画の段階で答えを出しました）',
+    notes:
+      '推定です（文は実行していません）。テーブルが小さいと、インデックスがあっても全件を読む計画になることがあります',
+    raw: 'サーバーが返した計画（JSON）',
+    rawTruncated: '長いので途中で切っています',
+  },
   databaseOps: {
     copyMode: {
       label: 'コピーする内容',

@@ -1,13 +1,13 @@
+import { EXPLAINABLE } from '@tsmyadmin/shared'
 import { Button } from '@/components/ui/Button.tsx'
 import { locale } from '@/config/locale.ts'
-
-/** What EXPLAIN takes: MySQL 5.7+ and PostgreSQL both explain these, not a DDL statement or a SET. */
-const EXPLAINABLE = /^\s*(?:SELECT|WITH|INSERT|UPDATE|DELETE|REPLACE|TABLE|VALUES|\()\b/i
 
 export interface StatementHandlers {
   edit: (sql: string) => void
   rerun: (sql: string) => void
   explain: (sql: string) => void
+  /** Optional: draw the statement's plan (the SQL tab's own results). */
+  visualize?: (sql: string) => void
   code: (sql: string) => void
   /** Optional: keep the statement as a bookmark (the console's own results have it in the history instead). */
   bookmark?: (sql: string) => void
@@ -39,9 +39,16 @@ export function StatementActions({
         {t.rerun}
       </Button>
       {single && EXPLAINABLE.test(sql) && !/^\s*EXPLAIN\b/i.test(sql) ? (
-        <Button size="sm" onClick={() => handlers.explain(sql)} aria-label={of(t.explain)}>
-          {t.explain}
-        </Button>
+        <>
+          <Button size="sm" onClick={() => handlers.explain(sql)} aria-label={of(t.explain)}>
+            {t.explain}
+          </Button>
+          {handlers.visualize ? (
+            <Button size="sm" onClick={() => handlers.visualize?.(sql)} aria-label={of(locale.plan.show)}>
+              {locale.plan.show}
+            </Button>
+          ) : null}
+        </>
       ) : null}
       <Button size="sm" onClick={() => handlers.code(sql)} aria-label={of(t.code)}>
         {t.code}

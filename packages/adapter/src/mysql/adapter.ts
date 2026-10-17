@@ -9,6 +9,7 @@ import type {
   DiagnosticReport,
   EventDetail,
   EventInfo,
+  ExplainResult,
   KeyValue,
   KillMode,
   Namespace,
@@ -37,10 +38,12 @@ import mysql, { type Connection, type FieldPacket, type Pool, type PoolConnectio
 import { BaseAdapter } from '../base.ts'
 import { type Canceller, type Conn, firstResult, type RawResult, withinAcquireTimeout } from '../driver.ts'
 import { driverValueToCell, type QueryOptions, toDbValue, UNCAPPED } from '../sql/cells.ts'
+import { explainableStatement, explainResult, parseJsonCell } from '../sql/explain-statement.ts'
 import { Params, quoteIdent, quoteTable } from '../sql/quote.ts'
 import { AdapterError, type ConnectionConfig, type RowBatch } from '../types.ts'
 import { mysqlDdl } from './ddl.ts'
 import { mapMysqlError } from './errors.ts'
+import { needsFormat1, parseMysqlPlan } from './explain.ts'
 import { mysqlExporter } from './export.ts'
 import {
   mysqlDatabaseGrants,
@@ -617,6 +620,34 @@ export class MysqlAdapter extends BaseAdapter {
 
   listForeignKeys(ns: Namespace): Promise<RelationDef[]> {
     return this.withConn(ns, (conn) => mysqlListForeignKeys(conn, ns))
+  }
+
+  /**
+   * Not READ ONLY: MySQL refuses to EXPLAIN an UPDATE in a read-only transaction. The optimizer may still call a
+   * function it can fold to a constant; what that writes is rolled back.
+   */
+  async explainPlan(ns: Namespace, sql: string): Promise<ExplainResult> {
+    const statement = explainableStatement(sql, 'mysql')
+    return this.withConn(ns, async (conn) => {
+      const read = async () =>
+        parseJsonCell(firstResult(await conn.query(`EXPLAIN FORMAT=JSON ${statement}`)).rows[0]?.[0] ?? null)
+      await conn.query('START TRANSACTION')
+      try {
+        let raw = await read()
+        // Format 2 (MySQL 9's default) has no plan for an UPDATE or DELETE; format 1 has.
+        if (needsFormat1(raw)) {
+          await conn.query('SET SESSION explain_json_format_version = 1')
+          try {
+            raw = await read()
+          } finally {
+            await conn.query('SET SESSION explain_json_format_version = DEFAULT')
+          }
+        }
+        return explainResult(parseMysqlPlan(raw, statement), raw)
+      } finally {
+        await conn.query('ROLLBACK')
+      }
+    })
   }
 
   listPartitions(ns: Namespace, table: string): Promise<Partitioning> {

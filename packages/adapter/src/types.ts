@@ -14,6 +14,7 @@ import type {
   DistinctValues,
   EventDetail,
   EventInfo,
+  ExplainResult,
   InputCell,
   InsertPreview,
   KeyValue,
@@ -314,6 +315,12 @@ export interface DatabaseAdapter {
   readCell(ns: Namespace, table: string, key: RowKey, column: string): Promise<Cell>
   deleteRows(ns: Namespace, table: string, keys: RowKey[]): Promise<{ affectedRows: number }>
   executeSql(ns: Namespace, sql: string, opts: ExecuteOptions): Promise<StatementResult[]>
+  /**
+   * The plan the server would follow for one statement, read into the tree both servers share. Estimated only (never
+   * ANALYZE), in a transaction that is rolled back. Refuses (`VALIDATION`) more than one statement, or one EXPLAIN
+   * does not take.
+   */
+  explainPlan(ns: Namespace, sql: string): Promise<ExplainResult>
   /** Interrupts a running executeSql registered with `queryId`. Resolves false when nothing is running under that id. */
   cancelQuery(queryId: string): Promise<boolean>
   /**
@@ -414,6 +421,7 @@ export const ADAPTER_METHOD_NAMES = [
   'readCell',
   'deleteRows',
   'executeSql',
+  'explainPlan',
   'cancelQuery',
   'showCreateTable',
   'iterateRows',

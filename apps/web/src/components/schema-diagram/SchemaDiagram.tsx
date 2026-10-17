@@ -15,6 +15,7 @@ import {
   relationRoute,
   routeMiddle,
   textRoom,
+  textWidth,
 } from './layout.ts'
 import { type DiagramOverlay, FADE, FAINT, TONE_STROKE } from './overlay.ts'
 import { useBoxDrag } from './use-box-drag.ts'
@@ -83,7 +84,11 @@ export function SchemaDiagram({
   const faint = (lit: boolean) => (overlay && !lit ? `${FADE} ${FAINT}` : FADE)
   return (
     <>
-      <figure className="max-h-[70vh] overflow-auto rounded border border-line bg-surface-sub">
+      <figure
+        // A picture has nothing to focus inside: the frame itself takes the keyboard, so a wide one can be scrolled.
+        tabIndex={pictureOnly ? 0 : undefined}
+        className="max-h-[70vh] overflow-auto rounded border border-line bg-surface-sub"
+      >
         <figcaption className="sr-only">{label}</figcaption>
         <svg
           width={width}
@@ -273,7 +278,7 @@ export function SchemaDiagram({
 
 /** A count or an index name over a box's top-right corner. */
 function Badge({ text, right }: { text: string; right: number }) {
-  const w = Math.min(right, Math.ceil([...text].length * 7 + 12))
+  const w = Math.min(right, Math.ceil(textWidth(text, 11, true) + 14))
   return (
     <g transform={`translate(${right - w} -10)`}>
       <rect width={w} height={18} rx={9} className="fill-surface stroke-line-strong" />
