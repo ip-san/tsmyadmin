@@ -76,4 +76,99 @@ describe('parseMysqlPlan', () => {
     expect(parseMysqlPlan({}, '')).toMatchObject({ op: 'Query', children: [] })
     expect(parseMysqlPlan({ query_block: { message: 'No tables used' } }, '').children).toEqual([])
   })
+
+  it.each([
+    ['ALL', 'fullScan'],
+    ['index', 'fullIndexScan'],
+    ['range', 'range'],
+    ['index_merge', 'range'],
+    ['system', 'lookup'],
+    ['const', 'lookup'],
+    ['eq_ref', 'lookup'],
+    ['ref', 'lookup'],
+    ['ref_or_null', 'lookup'],
+    ['fulltext', 'lookup'],
+    ['unique_subquery', 'lookup'],
+    ['index_subquery', 'lookup'],
+    ['something new', 'other'],
+  ])('reads access type %s as %s', (type, access) => {
+    const raw = { query_block: { table: { table_name: 't', access_type: type } } }
+    expect(parseMysqlPlan(raw, '').access).toBe(access)
+  })
+
+  it('names the step by what it does to the table', () => {
+    const kind = (flag: string) => parseMysqlPlan({ query_block: { table: { table_name: 't', [flag]: true } } }, '').op
+    expect([kind('update'), kind('delete'), kind('insert'), kind('other')]).toEqual([
+      'Update',
+      'Delete',
+      'Insert',
+      'Table',
+    ])
+  })
+
+  it('says a sort uses a file and a group a temporary table, and joins the notes', () => {
+    const raw = {
+      query_block: {
+        ordering_operation: {
+          using_filesort: true,
+          using_temporary_table: true,
+          table: { table_name: 't', access_type: 'ALL' },
+        },
+      },
+    }
+    expect(parseMysqlPlan(raw, '')).toMatchObject({ op: 'Sort', detail: 'filesort, temporary' })
+    const quiet = { query_block: { ordering_operation: { using_filesort: false, table: { table_name: 't' } } } }
+    expect(parseMysqlPlan(quiet, '').detail).toBeNull()
+  })
+
+  it('names a key it does not know by its words, and any list of subqueries as one', () => {
+    const raw = {
+      query_block: {
+        some_new_step: { table: { table_name: 'a' } },
+        having_subqueries: [{ query_block: { table: { table_name: 'b' } } }],
+      },
+    }
+    expect(parseMysqlPlan(raw, '').children.map((c) => c.op)).toEqual(['some new step', 'Subquery'])
+  })
+
+  it("keeps a server's own table out of the schema's, with its index and access", () => {
+    const raw = {
+      query_block: { table: { table_name: '<derived2>', access_type: 'ALL', key: 'k', used_key_parts: ['a'] } },
+    }
+    expect(parseMysqlPlan(raw, '')).toMatchObject({
+      op: '<derived2>',
+      table: null,
+      index: null,
+      indexColumns: [],
+      access: null,
+    })
+  })
+
+  it('takes the cost of format 1 from its cost info, and the rows as numbers', () => {
+    const raw = {
+      query_block: {
+        table: { table_name: 't', cost_info: { read_cost: '2.5', prefix_cost: '3.5' }, rows_examined_per_scan: '7' },
+      },
+    }
+    expect(parseMysqlPlan(raw, '')).toMatchObject({ cost: 3.5, estRows: 7 })
+    const read = { query_block: { table: { table_name: 't', cost_info: { read_cost: '2.5' }, rows: 'many' } } }
+    expect(parseMysqlPlan(read, '')).toMatchObject({ cost: 2.5, estRows: null })
+  })
+
+  it('reads the access of format 2 nodes', () => {
+    const one = (n: Record<string, unknown>) =>
+      parseMysqlPlan({ query_plan: { operation: 'x', table_name: 't', ...n } }, '')
+    expect(one({ access_type: 'table' }).access).toBe('fullScan')
+    expect(one({ access_type: 'index', index_access_type: 'index_range_scan' }).access).toBe('range')
+    expect(one({ access_type: 'index', index_access_type: 'full_text_search' }).access).toBe('other')
+    expect(one({ access_type: 'filter' }).access).toBeNull()
+    expect(one({ access_type: 'table', condition: '(a > 1)' }).detail).toBe('(a > 1)')
+    expect(parseMysqlPlan({ query_plan: { table_name: 't' } }, '').op).toBe('Step')
+    // Only `inputs…` lists are steps; other lists (the columns used, the sort fields) are facts.
+    const nested = parseMysqlPlan(
+      { query_plan: { operation: 'Sort', sort_fields: ['a'], inputs: [{ operation: 'Scan' }] } },
+      ''
+    )
+    expect(nested.children.map((c) => c.op)).toEqual(['Scan'])
+  })
 })

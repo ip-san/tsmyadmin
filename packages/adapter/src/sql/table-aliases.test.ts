@@ -49,4 +49,9 @@ describe('tableAliases', () => {
     expect(of("SELECT 'from fake f' FROM users u -- join other o\n")).toEqual({ users: 'users', u: 'users' })
     expect(of('SELECT * FROM (SELECT id FROM users) d')).toEqual({ users: 'users' })
   })
+
+  it('takes a clause word for no alias whatever its case', () => {
+    expect(of('select * from users where id = 1')).toEqual({ users: 'users' })
+    expect(of('SELECT * FROM a, b c Where 1')).toEqual({ a: 'a', b: 'b', c: 'b' })
+  })
 })
