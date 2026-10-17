@@ -49,8 +49,10 @@ export function Button({
         onClick?.(e)
       }}
       className={cn(
-        'inline-flex items-center gap-1 rounded-control font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed',
-        variant === 'icon' ? 'disabled:opacity-40' : 'disabled:opacity-60',
+        'inline-flex items-center gap-1 rounded-control font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed aria-disabled:cursor-not-allowed',
+        variant === 'icon'
+          ? 'disabled:opacity-40 aria-disabled:opacity-40'
+          : 'disabled:opacity-60 aria-disabled:opacity-60',
         VARIANTS[variant],
         SIZES[size],
         className

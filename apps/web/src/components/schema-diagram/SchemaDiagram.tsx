@@ -244,7 +244,7 @@ export function SchemaDiagram({
                 key={name}
                 role="button"
                 tabIndex={0}
-                aria-label={lit?.badge ? `${t.boxLabel(name)}: ${lit.badge}` : t.boxLabel(name)}
+                aria-label={lit?.badge ? t.boxLabelWithBadge(name, lit.badge) : t.boxLabel(name)}
                 transform={`translate(${p.x} ${p.y})`}
                 // touch-none: on a touch screen the gesture moves the box instead of scrolling the diagram.
                 className={`group cursor-move touch-none outline-none ${faint(lit !== undefined)}`}

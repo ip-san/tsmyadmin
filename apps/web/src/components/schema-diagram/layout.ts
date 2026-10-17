@@ -176,6 +176,9 @@ export function layeredLayout(
   return out
 }
 
+/** Names in reading order: session 9 before session 10. */
+const byName = (a: string, b: string) => a.localeCompare(b, 'en', { numeric: true })
+
 /**
  * The groups of nodes that reach each other along the arrows (the strongly connected components with more than one
  * node, and a node with an arrow to itself), each group's names sorted, the groups in the order their first node is
@@ -208,7 +211,7 @@ export function cyclicGroups(ids: readonly string[], edges: readonly GraphEdge[]
       group.push(member)
       if (member === id) break
     }
-    if (group.length > 1 || (next.get(id) ?? []).includes(id)) groups.push(group.sort())
+    if (group.length > 1 || (next.get(id) ?? []).includes(id)) groups.push(group.sort(byName))
   }
   for (const id of ids) if (!index.has(id)) visit(id)
   const order = new Map(ids.map((id, i) => [id, i]))

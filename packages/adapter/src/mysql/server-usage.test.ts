@@ -64,9 +64,20 @@ describe('mysqlTableUsage', () => {
     expect(s.asked.some((q) => /table_io_waits/.test(q.text))).toBe(false)
   })
 
-  it('leaves the start unknown when the server does not say how long it has been up', async () => {
-    const s = server(rows([['orders', null, 1, null]]), rows([[1]]), rows([['YES']]), rows([]))
-    expect((await mysqlTableUsage(s.conn, 'shop')).since).toBeNull()
+  it.each([
+    ['an empty answer', rows([])],
+    ['a refusal', fail('PERMISSION_DENIED')],
+    ['no such table', fail('QUERY_FAILED', 'ER_NO_SUCH_TABLE')],
+  ])('still gives the counts, with the start unknown, when the uptime comes back as %s', async (_, started) => {
+    const s = server(rows([['orders', null, 1, null]]), rows([[1]]), rows([['YES']]), started)
+    const report = await mysqlTableUsage(s.conn, 'shop')
+    expect(report.status).toBe('ok')
+    expect(report.since).toBeNull()
+  })
+
+  it('reads the instrument as on whatever case the server writes it in', async () => {
+    const s = server(rows([['orders', null, 1, null]]), rows([[1]]), rows([['yes']]))
+    expect((await mysqlTableUsage(s.conn, 'shop')).status).toBe('ok')
   })
 
   it('says so when the server has no such table, and when the account may not read it', async () => {

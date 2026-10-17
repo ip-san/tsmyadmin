@@ -36,6 +36,7 @@ vi.mock('@/lib/queries.ts', () => ({
     queryKey: ['references', ref.table],
     queryFn: async () => {
       checked(ref.table)
+      if (ref.table === 'logs') throw new Error('timeout')
       return [
         {
           name: `fk_${ref.table}`,
@@ -68,9 +69,9 @@ function Harness({ compare }: { compare?: string | undefined }) {
     db: 'shop',
     schema: undefined,
     compare,
-    names: ['users', 'posts'],
+    names: ['users', 'posts', 'logs'],
     // A key of a table that is not drawn (a view's, say) is not checked.
-    keys: [key('posts'), key('posts'), key('elsewhere')],
+    keys: [key('posts'), key('posts'), key('logs'), key('elsewhere')],
   })
   const overlay = o.overlay(undefined)
   return (
@@ -85,6 +86,7 @@ function Harness({ compare }: { compare?: string | undefined }) {
 
 const mount = (compare?: string) =>
   render(
+    // The app's client retries nothing either for these (a whole-table read is not run twice on its own).
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <Harness compare={compare} />
     </QueryClientProvider>
@@ -98,11 +100,24 @@ describe('useDesignerOverlays', () => {
     const button = screen.getByRole('button', { name: t.refCheck.check })
     expect(button).toHaveAttribute('aria-pressed', 'false')
     await userEvent.click(button)
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(t.refCheck.done(1)))
-    expect(checked.mock.calls).toEqual([['posts']])
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(t.refCheck.done(2, 1)))
+    expect(checked.mock.calls).toEqual([['posts'], ['logs']])
     // The button keeps its name: whether it is on is aria-pressed, what it is doing the status.
     expect(screen.getByRole('button', { name: t.refCheck.check })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByTestId('lit')).toHaveTextContent(t.refCheck.orphans(2))
+  })
+
+  it('checks again when pressed again, and says nothing while it is off', async () => {
+    checked.mockClear()
+    mount()
+    const button = screen.getByRole('button', { name: t.refCheck.check })
+    await userEvent.click(button)
+    await waitFor(() => expect(checked).toHaveBeenCalledTimes(2))
+    await userEvent.click(button)
+    expect(screen.getByRole('status')).toHaveTextContent('')
+    expect(screen.getByTestId('lit')).toHaveTextContent('')
+    await userEvent.click(button)
+    await waitFor(() => expect(checked).toHaveBeenCalledTimes(4))
   })
 
   it('shows why the table reads cannot be shown, under the diagram', async () => {

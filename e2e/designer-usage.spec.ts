@@ -9,6 +9,18 @@ for (const t of TARGETS) {
       await login(page, t)
       // Read users in full once, so it has counts whatever the other tests did.
       await sqlOn(page, t, 'SELECT * FROM users')
+      // PostgreSQL's statistics reach the views a moment later (a backend reports them when idle): wait for them,
+      // so the diagram reads them in one go.
+      await expect
+        .poll(async () => {
+          const res = await page.request.get(
+            `/api/databases/${t.database}/usage${t.schema ? `?schema=${t.schema}` : ''}`
+          )
+          const report = (await res.json()) as { tables?: { table: string; fullReads: number; indexReads: number }[] }
+          const users = report.tables?.find((u) => u.table === 'users')
+          return (users?.fullReads ?? 0) + (users?.indexReads ?? 0)
+        })
+        .toBeGreaterThan(0)
       await page.goto(designerUrl)
       const users = page.getByRole('button', { name: /^テーブル users（/ })
       await expect(users).toBeVisible()

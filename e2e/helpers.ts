@@ -233,6 +233,14 @@ export async function withScratchSpace(page: Page, t: Target, use: (space: Targe
   try {
     await use(mysql ? { ...rest, database: name } : { ...t, schema: name })
   } finally {
-    await sqlOn(page, t, mysql ? `DROP DATABASE IF EXISTS ${name}` : `DROP SCHEMA IF EXISTS ${name} CASCADE`)
+    await cleanUp(page, t, mysql ? `DROP DATABASE IF EXISTS ${name}` : `DROP SCHEMA IF EXISTS ${name} CASCADE`)
   }
+}
+
+/**
+ * Runs a clean-up statement, warning instead of failing: thrown from a `finally`, its error would hide the test's
+ * own. What is left behind is swept by the global teardown (the names start with `e2e_`).
+ */
+export async function cleanUp(page: Page, t: Target, sql: string): Promise<void> {
+  await sqlOn(page, t, sql).catch((err: unknown) => console.warn(`clean-up: ${String(err)}`))
 }

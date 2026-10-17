@@ -1,13 +1,13 @@
 import type { Page } from '@playwright/test'
-import { scratchName, sqlOn, type Target } from './helpers.ts'
+import { cleanUp, scratchName, sqlOn, type Target } from './helpers.ts'
 
 /** A parent and a child whose key names two parents that are not there (the key was added unchecked). */
 export async function orphanedKey(page: Page, t: Target) {
   const parent = scratchName('e2e_orph')
   const child = `${parent}_c`
   const drop = async () => {
-    await sqlOn(page, t, `DROP TABLE IF EXISTS ${child}`)
-    await sqlOn(page, t, `DROP TABLE IF EXISTS ${parent}`)
+    await cleanUp(page, t, `DROP TABLE IF EXISTS ${child}`)
+    await cleanUp(page, t, `DROP TABLE IF EXISTS ${parent}`)
   }
   try {
     await sqlOn(page, t, `CREATE TABLE ${parent} (id INT PRIMARY KEY)`)

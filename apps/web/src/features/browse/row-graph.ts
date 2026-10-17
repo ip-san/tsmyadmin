@@ -98,10 +98,17 @@ export function rowSteps(node: RowNode): RowStep[] {
 const text = (cell: Cell | undefined): string =>
   cell === null || cell === undefined ? 'NULL' : typeof cell === 'object' ? '…' : String(cell)
 
-/** What a row's box says: its table and key, and the value of its display column where the table has one. */
+/** Columns shown to tell apart the rows of a table without a key (all its values name the row, too many to show). */
+const UNKEYED_SHOWN = 2
+
+/**
+ * What a row's box says: its table and key (its first values where it has no key, so two rows of it differ), and
+ * the value of its display column where the table has one.
+ */
 export function rowLabel(node: RowNode): { label: string; sublabel: string | undefined } {
   const keyNames = node.page.keyKind === 'pk' ? node.page.keyColumns : []
-  const key = keyNames.map((n) => `${n}=${text(node.values.get(n))}`).join(', ')
+  const named = keyNames.length > 0 ? keyNames : columnsOf(node.page).slice(0, UNKEYED_SHOWN)
+  const key = named.map((n) => `${n}=${text(node.values.get(n))}`).join(', ')
   const shown = displayColumn(
     node.page.columns,
     keyNames[0] ?? '',
@@ -182,7 +189,7 @@ export function expandGraph(
     }
     const count = step.direction === 'in' ? unread(page) : 0
     if (count === 0) return
-    const moreId = JSON.stringify(['more', id, step.ref.table, step.label])
+    const moreId = JSON.stringify(['more', id, step.ref.schema ?? '', step.ref.table, step.label])
     if (more.some((m) => m.id === moreId)) return
     more.push({ id: moreId, to: id, ref: step.ref, filters: step.options.filters, count })
     addArrow({ from: moreId, to: id, label: step.label })

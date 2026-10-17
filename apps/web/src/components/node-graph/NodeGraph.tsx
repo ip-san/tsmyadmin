@@ -64,7 +64,12 @@ export function NodeGraph({
   const height = Math.max(...nodes.map((n) => at(n.id).y + HEIGHT)) + PAD
   const faint = (tone: Tone | undefined) => (fadeUntoned && !tone ? `${FADE} ${FAINT}` : FADE)
   return (
-    <figure tabIndex={0} className="max-h-[70vh] overflow-auto rounded border border-line bg-surface-sub">
+    // Focusable to scroll a large graph by keyboard, so it is named for what it shows.
+    <figure
+      tabIndex={0}
+      aria-label={label}
+      className="max-h-[70vh] overflow-auto rounded border border-line bg-surface-sub"
+    >
       <svg width={width} height={height} role="img" aria-label={label} className="select-none">
         <defs>
           <marker id={markerId} viewBox="0 0 10 10" refX={9} refY={5} markerWidth={7} markerHeight={7} orient="auto">

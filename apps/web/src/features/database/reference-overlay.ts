@@ -40,17 +40,18 @@ export function orphansText(checks: ReadonlyMap<string, TableCheck>, table: stri
 /**
  * Every table's check, at most `limit` at a time: each reads its table in full, so a database of two hundred keyed
  * tables must not send two hundred whole-table reads at once. A table whose check fails (a timeout, say) is
- * `failed`; the others' answers stand.
+ * `failed`; the others' answers stand. Once `signal` aborts (the check turned off, the page left), no more tables
+ * are started.
  */
 export async function checkAll(
   tables: readonly string[],
   check: (table: string) => Promise<readonly ReferenceCheck[]>,
-  limit = 4
+  { limit = 4, signal }: { limit?: number; signal?: AbortSignal | undefined } = {}
 ): Promise<Map<string, TableCheck>> {
   const out = new Map<string, TableCheck>()
   let next = 0
   const worker = async () => {
-    for (let i = next++; i < tables.length; i = next++) {
+    for (let i = next++; i < tables.length && !signal?.aborted; i = next++) {
       const table = tables[i] as string
       out.set(table, await check(table).catch((): TableCheck => 'failed'))
     }

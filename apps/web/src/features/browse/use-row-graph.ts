@@ -21,6 +21,8 @@ export function useRowGraph(root: RowNode) {
   // The state is a render behind: two clicks in one frame would both see nothing being read.
   const reading = useRef(false)
   const [error, setError] = useState<unknown>(null)
+  /** How many rows the last opening added, for the status line (null before any). */
+  const [added, setAdded] = useState<number | null>(null)
 
   const expand = async (id: string) => {
     const node = graph.nodes.get(id)
@@ -31,7 +33,10 @@ export function useRowGraph(root: RowNode) {
     try {
       const steps = rowSteps(node)
       const pages = await Promise.all(steps.map((s) => queryClient.fetchQuery(rowsQuery(s.ref, s.options))))
-      setGraph((g) => expandGraph(g, id, steps, pages))
+      // `graph` is the one the reader opened from: one row is read at a time, so nothing changed it meanwhile.
+      const next = expandGraph(graph, id, steps, pages)
+      setGraph(next)
+      setAdded(next.nodes.size - graph.nodes.size)
     } catch (err) {
       setError(err)
     } finally {
@@ -40,5 +45,5 @@ export function useRowGraph(root: RowNode) {
     }
   }
 
-  return { ...graph, busy, error, expand }
+  return { ...graph, busy, error, added, expand }
 }

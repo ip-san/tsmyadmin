@@ -117,14 +117,25 @@ describe('rowLabel', () => {
     expect(rowLabel(rowNode(ref, users, [1, 'Alice']))).toEqual({ label: 'users id=1', sublabel: 'Alice' })
   })
 
-  it('has no name where the table has no text column, and no key where it has none', () => {
+  it('has no name where the table has no text column, and tells keyless rows apart by their first values', () => {
     const page = {
       ...users,
       keyKind: 'all-columns' as const,
       keyColumns: [],
-      columns: [{ name: 'n', dataType: 'int' }],
+      columns: [
+        { name: 'n', dataType: 'int' },
+        { name: 'm', dataType: 'int' },
+        { name: 'o', dataType: 'int' },
+      ],
     }
-    expect(rowLabel(rowNode(ref, page, [5]))).toEqual({ label: 'users', sublabel: undefined })
+    expect(rowLabel(rowNode(ref, page, [5, 6, 7]))).toEqual({ label: 'users n=5, m=6', sublabel: undefined })
+    // A ctid table's hidden address is not one of them.
+    const ctid = {
+      ...page,
+      keyKind: 'ctid' as const,
+      columns: [page.columns[0] as (typeof page.columns)[0], { name: 'ctid', dataType: 'tid' }],
+    }
+    expect(rowLabel(rowNode(ref, ctid, [5, '(0,1)'])).label).toBe('users n=5')
   })
 })
 

@@ -39,6 +39,9 @@ export function RowGraphDialog({ root, onClose }: { root: RowNode; onClose: () =
         <NodeGraph nodes={nodes} arrows={graph.arrows} label={t.diagram} />
         <DiagramLegend tones={['focus']} labels={{ focus: t.root }} />
         {graph.error ? <ErrorBox error={graph.error} /> : null}
+        <p role="status" className="text-xs text-ink-sub">
+          {graph.busy !== null ? t.reading : graph.added !== null ? t.added(graph.added) : ''}
+        </p>
         <section aria-label={t.rows}>
           <ul className="space-y-1 text-sm">
             {[...graph.nodes.values()].map((n) => (
@@ -71,8 +74,9 @@ export function RowGraphDialog({ root, onClose }: { root: RowNode; onClose: () =
           </ul>
         </section>
         <ul aria-label={t.links} className="space-y-0.5 text-xs text-ink-sub">
-          {arrowSentences(graph, (id) => labels.get(id)?.label ?? id, t.refersTo).map((line) => (
-            <li key={line}>{line}</li>
+          {arrowSentences(graph, (id) => labels.get(id)?.label ?? id, t.refersTo).map((line, i) => (
+            // Two rows may say the same (keyless rows alike in the columns shown).
+            <li key={`${i}:${line}`}>{line}</li>
           ))}
         </ul>
       </div>
@@ -101,13 +105,11 @@ function RowItem({
     <li className="flex flex-wrap items-center gap-2">
       <span className="font-medium text-ink">{name}</span>
       {label?.sublabel ? <span className="text-ink-sub">{label.sublabel}</span> : null}
-      {opened ? (
-        <span className="text-xs text-ink-sub">{t.expanded}</span>
-      ) : (
-        <Button size="sm" onClick={onExpand} disabled={waiting} aria-label={t.expand(name)}>
-          {busy ? t.reading : t.expandShort}
-        </Button>
-      )}
+      {/* aria-disabled, not disabled: a disabled button drops the focus the reader pressed it with. The hook
+          opens nothing twice and one row at a time, so a press while it says no does nothing. */}
+      <Button size="sm" onClick={onExpand} aria-disabled={opened || waiting} aria-label={t.expand(name)}>
+        {opened ? t.expanded : busy ? t.reading : t.expandShort}
+      </Button>
     </li>
   )
 }

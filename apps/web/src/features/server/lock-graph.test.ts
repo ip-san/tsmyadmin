@@ -100,6 +100,18 @@ describe('lockGraph, more shapes', () => {
     expect(g.nodes.filter((n) => n.tone === 'blocked').map((n) => n.id)).toEqual(['1', '2', '3'])
     expect(g.roots.map((r) => r.id)).toEqual(['9'])
   })
+
+  it('does not draw the arrow from one deadlock to another as part of either', () => {
+    // {1,2} and {3,4} are deadlocks of their own; 2 also waits for 3.
+    const g = lockGraph([wait('1', '2'), wait('2', '1'), wait('3', '4'), wait('4', '3'), wait('2', '3')])
+    expect(g.cycles).toEqual([
+      ['1', '2'],
+      ['3', '4'],
+    ])
+    const across = g.arrows.find((a) => a.from === '2' && a.to === '3')
+    expect(across?.tone).toBeUndefined()
+    expect(g.arrows.filter((a) => a.tone === 'blocked')).toHaveLength(4)
+  })
 })
 
 describe('lockSentences', () => {

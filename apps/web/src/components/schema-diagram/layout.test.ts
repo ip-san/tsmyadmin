@@ -322,4 +322,12 @@ describe('cyclicGroups', () => {
     ]
     expect(cyclicGroups(['p', 's', 'q', 'z', 'z2'], edges)).toEqual([['p', 'q'], ['s']])
   })
+
+  it('sorts the names of a group as numbers where they are (session 9 before 10)', () => {
+    const edges = [
+      { from: '10', to: '9' },
+      { from: '9', to: '10' },
+    ]
+    expect(cyclicGroups(['10', '9'], edges)).toEqual([['9', '10']])
+  })
 })

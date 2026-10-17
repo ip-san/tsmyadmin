@@ -416,6 +416,7 @@ export async function mysqlTableUsage(conn: Conn, database: string): Promise<Tab
   try {
     if (isOff(firstResult(await conn.query('SELECT @@performance_schema')).rows[0]?.[0])) return none('unsupported')
     const instrument = firstResult(await conn.query(TABLE_IO_INSTRUMENT)).rows[0]?.[0]
+    // No row for it (a server without this instrument) counts nothing either.
     if (String(instrument ?? 'NO').toUpperCase() !== 'YES') return none('unsupported')
     rows = firstResult(await conn.query(MYSQL_INDEX_USAGE, [database])).rows
   } catch (err) {
@@ -444,8 +445,12 @@ export async function mysqlTableUsage(conn: Conn, database: string): Promise<Tab
   return { status: 'ok', unit: 'rows', since: await mysqlStartedAt(conn), tables: [...tables.values()], indexes }
 }
 
+/** Unknown (null) when the server will not say: the counts are there all the same. */
 async function mysqlStartedAt(conn: Conn): Promise<string | null> {
-  const cell = firstResult(await conn.query(STARTED_AT)).rows[0]?.[0]
+  const cell = await conn.query(STARTED_AT).then(
+    (out) => firstResult(out).rows[0]?.[0],
+    () => null
+  )
   const started = cell === null || cell === undefined ? Number.NaN : Number(cell)
   return Number.isFinite(started) ? new Date(started * 1000).toISOString() : null
 }

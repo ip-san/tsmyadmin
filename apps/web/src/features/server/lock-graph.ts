@@ -41,6 +41,7 @@ export function lockGraph(waits: readonly LockWait[]): LockGraphModel {
   const edges = [...pairs.values()]
   const cycles = cyclicGroups(ids, edges)
   const inCycle = new Set(cycles.flat())
+  const groupOf = new Map(cycles.flatMap((group, i) => group.map((id) => [id, i] as const)))
   const waitsFor = new Set(edges.map((e) => e.from))
   const waitedBy = (id: string) => countWaiting(id, edges)
   const roots = ids
@@ -62,7 +63,8 @@ export function lockGraph(waits: readonly LockWait[]): LockGraphModel {
     from: e.from,
     to: e.to,
     label: e.locks.join(' / ') || undefined,
-    tone: inCycle.has(e.from) && inCycle.has(e.to) ? 'blocked' : undefined,
+    // An arrow of the deadlock, not one from one deadlock to another.
+    tone: groupOf.has(e.from) && groupOf.get(e.from) === groupOf.get(e.to) ? 'blocked' : undefined,
   }))
   return { nodes, arrows, roots, cycles }
 }

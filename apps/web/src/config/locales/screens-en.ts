@@ -124,7 +124,8 @@ export const enScreens = {
       failed: 'Could not check',
       notChecked: 'Not checked',
       count: (n: number) => n.toLocaleString('en-US'),
-      done: (n: number) => `Checked ${n.toLocaleString('en-US')} tables`,
+      done: (n: number, failed: number) =>
+        `Checked ${n.toLocaleString('en-US')} tables${failed > 0 ? ` (${failed.toLocaleString('en-US')} could not be checked)` : ''}`,
       legend: 'Has rows with no parent',
     },
     usage: {
@@ -193,6 +194,7 @@ export const enScreens = {
     },
     diagram: 'Diagram of tables and foreign keys (the same as the Foreign keys table below)',
     boxLabel: (table: string) => `Table ${table} (arrow keys move it)`,
+    boxLabelWithBadge: (table: string, badge: string) => `Table ${table} (arrow keys move it): ${badge}`,
     selectedBox: 'Selected table',
     cutHint:
       'Names that do not fit a box are cut with “…”. Select a table (click, tap or focus) to read its names in full here.',
@@ -285,6 +287,7 @@ export const enScreens = {
     links: 'How the rows refer to each other',
     expand: (label: string) => `Open the relations of ${label}`,
     expandShort: 'Open',
+    added: (n: number) => (n === 0 ? 'No new rows' : `Added ${n.toLocaleString('en-US')} rows`),
     expanded: 'Opened',
     reading: 'Reading…',
     refersTo: (from: string, to: string, columns: string) => `${from} refers to ${to} (${columns})`,

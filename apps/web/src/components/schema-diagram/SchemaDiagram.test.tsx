@@ -72,7 +72,9 @@ describe('SchemaDiagram', () => {
     expect(screen.getByRole('button', { name: /orders/ })).toHaveAttribute('data-tone', 'scan')
     expect(screen.getByRole('button', { name: /users/ })).toHaveClass('opacity-30')
     // The badge is in the box's name too: it is drawn as text a screen reader does not reach inside a button.
-    expect(screen.getByRole('button', { name: `${locale.designer.boxLabel('orders')}: full 9` })).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: locale.designer.boxLabelWithBadge('orders', 'full 9') })
+    ).toBeInTheDocument()
     expect(container.querySelectorAll('[data-tone="scan"]')).toHaveLength(1)
   })
 

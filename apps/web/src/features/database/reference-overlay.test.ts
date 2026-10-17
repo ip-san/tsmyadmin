@@ -64,7 +64,7 @@ describe('checkAll', () => {
         running -= 1
         return [check(`fk_${table}`, 0)]
       },
-      3
+      { limit: 3 }
     )
     expect(most).toBe(3)
     expect([...result.keys()]).toEqual(tables)
@@ -77,6 +77,22 @@ describe('checkAll', () => {
     })
     expect(result.get('a')).toBe('failed')
     expect(result.get('b')).toEqual([check('fk_b', 2)])
+  })
+
+  it('starts no more tables once told to stop', async () => {
+    const stop = new AbortController()
+    const started: string[] = []
+    const result = await checkAll(
+      ['a', 'b', 'c'],
+      async (table) => {
+        started.push(table)
+        stop.abort()
+        return []
+      },
+      { limit: 1, signal: stop.signal }
+    )
+    expect(started).toEqual(['a'])
+    expect([...result.keys()]).toEqual(['a'])
   })
 
   it('has nothing to check for no tables', async () => {

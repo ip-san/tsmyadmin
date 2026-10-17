@@ -124,7 +124,8 @@ export const jaScreens = {
       failed: '検査できませんでした',
       notChecked: '検査していません',
       count: (n: number) => n.toLocaleString('ja-JP'),
-      done: (n: number) => `${n.toLocaleString('ja-JP')} 表を検査しました`,
+      done: (n: number, failed: number) =>
+        `${n.toLocaleString('ja-JP')} 表を検査しました${failed > 0 ? `（${failed.toLocaleString('ja-JP')} 表は検査できませんでした）` : ''}`,
       legend: '参照先が無い行がある',
     },
     usage: {
@@ -192,6 +193,7 @@ export const jaScreens = {
     },
     diagram: 'テーブルと外部キーの図（下の「外部キー」の表と同じ内容）',
     boxLabel: (table: string) => `テーブル ${table}（矢印キーで移動）`,
+    boxLabelWithBadge: (table: string, badge: string) => `テーブル ${table}（矢印キーで移動）: ${badge}`,
     selectedBox: '選択中のテーブル',
     cutHint:
       '枠に収まらない名前は「…」で切っています。テーブルを選ぶと（クリック・タップ・フォーカス）、名前の全文をここに表示します。',
@@ -284,6 +286,7 @@ export const jaScreens = {
     links: '行どうしの参照',
     expand: (label: string) => `${label} のつながりを広げる`,
     expandShort: '広げる',
+    added: (n: number) => (n === 0 ? '新しい行はありませんでした' : `${n.toLocaleString('ja-JP')} 行を足しました`),
     expanded: '広げた',
     reading: '読んでいます…',
     refersTo: (from: string, to: string, columns: string) => `${from} が ${to} を参照しています（${columns}）`,

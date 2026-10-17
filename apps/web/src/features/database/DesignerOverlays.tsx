@@ -33,11 +33,18 @@ export function useDesignerOverlays({
   const free = compare === undefined
   const [usageAsked, setUsageAsked] = useState(false)
   const [refsAsked, setRefsAsked] = useState(false)
+  const [refsRun, setRefsRun] = useState(0)
   const usage = useUsage(db, schema, usageAsked && free)
   const keyed = [...new Set((keys ?? []).map((r) => r.table))].filter((n) => names.includes(n))
   const refsOn = refsAsked && free
-  const refs = useReferences(db, schema, keyed, refsOn)
-  const status = refs.checking ? t.refCheck.checking : refsOn ? t.refCheck.done(refs.checks.size) : ''
+  // Not before the keys are read: there would be no table to check, and "0 tables checked".
+  const refs = useReferences(db, schema, keyed, { on: refsOn && keys !== undefined, run: refsRun })
+  const failed = [...refs.checks.values()].filter((c) => c === 'failed').length
+  const status = refs.checking
+    ? t.refCheck.checking
+    : refsOn && keys !== undefined
+      ? t.refCheck.done(refs.checks.size, failed)
+      : ''
   const controls = (
     <>
       <label className="flex items-center gap-1 text-sm text-ink" title={t.usage.toggleHint}>
@@ -54,7 +61,10 @@ export function useDesignerOverlays({
         aria-pressed={refsOn}
         disabled={!free}
         title={t.refCheck.checkHint}
-        onClick={() => setRefsAsked(!refsAsked)}
+        onClick={() => {
+          if (!refsAsked) setRefsRun((n) => n + 1)
+          setRefsAsked(!refsAsked)
+        }}
       >
         {t.refCheck.check}
       </Button>
