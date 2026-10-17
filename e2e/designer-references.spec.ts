@@ -9,14 +9,18 @@ for (const t of TARGETS) {
       const orphaned = await orphanedKey(page, t)
       try {
         await page.goto(`/db/${t.database}/designer${t.schema ? `?schema=${t.schema}` : ''}`)
-        await page.getByRole('button', { name: '参照を検査' }).click()
-        // Two child rows name parents 7 and 8; the NULL names none.
-        // Another test's tables may be checked on the same page too: at least this one's badge is there.
-        await expect(page.getByText('参照先なし 2').first()).toBeVisible({ timeout: 15_000 })
+        const check = page.getByRole('button', { name: '参照を検査' })
+        await check.click()
+        await expect(check).toHaveAttribute('aria-pressed', 'true')
+        await expect(page.getByRole('status').filter({ hasText: /表を検査しました$/ })).toBeVisible({ timeout: 15_000 })
+        // Two child rows name parents 7 and 8; the NULL names none. This key's own row says so; the badge on its
+        // line says the same (another test's orphaned key may be drawn too, with a badge of its own).
         const row = page.getByRole('table', { name: '外部キー' }).getByRole('row').filter({ hasText: orphaned.key })
         await expect(row.getByRole('cell', { name: '2', exact: true })).toBeVisible()
-        await page.getByRole('button', { name: '参照を検査' }).click()
-        await expect(page.getByText('参照先なし 2')).toHaveCount(0)
+        await expect(page.getByText('参照先なし 2').first()).toBeVisible()
+        await check.click()
+        await expect(check).toHaveAttribute('aria-pressed', 'false')
+        await expect(page.getByRole('columnheader', { name: '参照先が無い行' })).toHaveCount(0)
       } finally {
         await orphaned.drop()
       }

@@ -30,9 +30,9 @@ function UsagePanel({ report }: { report: TableUsageReport }) {
   return (
     <div className="space-y-2 print:hidden">
       <DiagramLegend tones={['scan', 'index']} labels={{ scan: t.scan, index: t.index }} />
-      {report.since ? (
-        <p className="text-xs text-ink-sub">{t.since(new Date(report.since).toLocaleString(), report.unit)}</p>
-      ) : null}
+      <p className="text-xs text-ink-sub">
+        {report.since ? t.since(new Date(report.since).toLocaleString(), report.unit) : t.sinceUnknown(report.unit)}
+      </p>
       <h3 className="text-sm font-semibold text-ink">{t.unused}</h3>
       <p className="text-xs text-ink-sub">{t.unusedHint}</p>
       {unused.length === 0 ? (

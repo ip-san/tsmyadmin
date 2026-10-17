@@ -201,3 +201,38 @@ export async function fillType(scope: Page | Locator, dataType: string, row?: nu
   await select.selectOption({ label })
   await scope.getByLabel(`長さ・値・属性${suffix}`, { exact: true }).fill(rest)
 }
+
+/** A name only this test uses: the tests of a run share the databases, and may run at the same time. */
+export const scratchName = (prefix: string): string =>
+  `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
+
+/**
+ * Runs a setup script as `page`'s session and fails the test if any statement of it fails. POST /sql answers 200
+ * with the error as one of its results, so a setup that went wrong would otherwise go on and test nothing.
+ */
+export async function sqlOn(page: Page, t: Target, sql: string): Promise<void> {
+  const res = await page.request.post(`/api/databases/${t.database}/sql`, {
+    data: { sql, ...(t.schema ? { schema: t.schema } : {}) },
+  })
+  if (!res.ok()) throw new Error(`setup SQL was refused (${res.status()}): ${sql.slice(0, 80)}`)
+  const results = (await res.json()) as { kind: string; message?: string }[]
+  const failed = results.find((r) => r.kind === 'error')
+  if (failed) throw new Error(`setup SQL failed: ${failed.message ?? ''} (${sql.slice(0, 80)})`)
+}
+
+/**
+ * Runs `use` in a database (MySQL) or schema (PostgreSQL) of its own, dropped afterwards: tables of fixed names,
+ * and a diagram of only them, without touching the fixtures or meeting another test's tables. The names match what
+ * the global teardown sweeps, should a run stop halfway.
+ */
+export async function withScratchSpace(page: Page, t: Target, use: (space: Target) => Promise<void>): Promise<void> {
+  const mysql = t.dialect === 'mysql'
+  const name = scratchName(mysql ? 'e2e_db' : 'e2e_schema')
+  await sqlOn(page, t, mysql ? `CREATE DATABASE ${name}` : `CREATE SCHEMA ${name}`)
+  const { schema: _, ...rest } = t
+  try {
+    await use(mysql ? { ...rest, database: name } : { ...t, schema: name })
+  } finally {
+    await sqlOn(page, t, mysql ? `DROP DATABASE IF EXISTS ${name}` : `DROP SCHEMA IF EXISTS ${name} CASCADE`)
+  }
+}

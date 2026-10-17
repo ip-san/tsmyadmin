@@ -6,7 +6,8 @@ import { expandGraph, type RowGraph, type RowNode, rowSteps } from './row-graph.
 /**
  * The rows around a row, read one step at a time as the reader opens them. Each read is a page of the table (the
  * grid's own query), which also says the keys of that table, so the rows found can be opened in turn. One row is
- * read at a time. Nothing of this is put in the address: row values stay in the page.
+ * read at a time. The graph is not put in the address: its row values stay in the page (only a link to open the
+ * unread rows in their table carries the key it filters by).
  */
 export function useRowGraph(root: RowNode) {
   const queryClient = useQueryClient()

@@ -133,6 +133,8 @@ export const enScreens = {
       loading: 'Reading the statistics…',
       since: (date: string, unit: 'scans' | 'rows') =>
         `${unit === 'scans' ? 'Scans' : 'Rows read'} since ${date} (the server's statistics; reset, they count from 0)`,
+      sinceUnknown: (unit: 'scans' | 'rows') =>
+        `${unit === 'scans' ? 'Scans' : 'Rows read'}; the statistics were never reset, so since when is not known (they outlast a restart)`,
       badge: (full: number, index: number) =>
         `full ${full.toLocaleString('en-US', { notation: 'compact' })} / index ${index.toLocaleString('en-US', { notation: 'compact' })}`,
       scan: 'Mostly read in full',

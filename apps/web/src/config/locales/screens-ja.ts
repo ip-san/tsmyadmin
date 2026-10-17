@@ -133,6 +133,8 @@ export const jaScreens = {
       loading: '統計を読んでいます…',
       since: (date: string, unit: 'scans' | 'rows') =>
         `${date} からの${unit === 'scans' ? '走査の回数' : '読んだ行数'}です（サーバーの統計。消すと 0 から数え直します）`,
+      sinceUnknown: (unit: 'scans' | 'rows') =>
+        `${unit === 'scans' ? '走査の回数' : '読んだ行数'}です。統計を消したことが無いので、いつからの数かは分かりません（再起動をまたいで残ります）`,
       badge: (full: number, index: number) =>
         `全件 ${full.toLocaleString('ja-JP', { notation: 'compact' })} / 索引 ${index.toLocaleString('ja-JP', { notation: 'compact' })}`,
       scan: '全件で読まれることが多い',

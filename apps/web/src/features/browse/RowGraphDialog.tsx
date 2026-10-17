@@ -57,7 +57,11 @@ export function RowGraphDialog({ root, onClose }: { root: RowNode; onClose: () =
                 <Link
                   to="/db/$db/table/$table"
                   params={{ db: m.ref.db, table: m.ref.table }}
+                  // The key's values go in the address, as a foreign key cell's link puts them: what the table page
+                  // filters by. The graph's own rows stay out of it.
                   search={{ schema: m.ref.schema, filters: JSON.stringify(m.filters), page: 1 }}
+                  // Every table's page is the same route: the page under the dialog stays, and so would the dialog.
+                  onClick={onClose}
                   className="text-brand underline"
                 >
                   {t.openMore(m.count, m.ref.table)}
