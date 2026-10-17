@@ -99,7 +99,7 @@ bun run lighthouse       # Lighthouse CI（ログイン画面の性能 / a11y / 
 ```
 
 - E2E は初回に `bunx playwright install --with-deps chromium webkit` が必要です
-- VRT のベースライン画像は macOS のものだけ（`*-darwin.png`）なので、他 OS では CI と同じ `bunx playwright test --project=chromium --project=a11y --project=webkit` を使ってください
+- VRT のベースライン画像は macOS のものだけ（`*-darwin.png`）なので、他 OS では CI と同じ `bunx playwright test --project=chromium --project=a11y --project=webkit` を使ってください（CI は 3 つを別のジョブで並べて流します）
 - `bun run lighthouse` は本番ビルドを見るため、先に `bun run build` を実行してください
 
 自前の検査:

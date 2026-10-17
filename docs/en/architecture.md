@@ -1,4 +1,4 @@
-<!-- translated-from: docs/architecture.md sha256:69520d30b378ab3a29bea6f28594e5bc0a147fefbd0dc8cbc5cab6de5df1338c -->
+<!-- translated-from: docs/architecture.md sha256:d02d0c83848dcae616e091b836c7f57e4f19ca89b9a66bd036d06ecacc805897 -->
 
 # Architecture
 
@@ -318,7 +318,7 @@ flowchart LR
     chk["check (types / lint / tests / static checks)"]
     int["integration<br/>MySQL 8.0+PG 14 / 8.4+PG 17"]
     ma["integration-mariadb<br/>10.11 / 11"]
-    e2e["e2e<br/>Chromium + WebKit + axe"]
+    e2e["e2e<br/>Chromium / axe / WebKit as parallel jobs"]
     build["build (Docker / size)"]
     lh["lighthouse (warnings only)"]
     chk --> int & ma & e2e & build & lh
