@@ -11,7 +11,7 @@ import {
   relationRoute,
   routeMiddle,
   textRoom,
-} from './designer-layout.ts'
+} from '@/components/schema-diagram/layout.ts'
 
 /** Dia counts in centimetres; the diagram is laid out in pixels. */
 const CM = 1 / 30

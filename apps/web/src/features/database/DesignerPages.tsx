@@ -1,10 +1,10 @@
 import { useRouteContext } from '@tanstack/react-router'
 import type { DesignerPage, DesignerPageBody, DesignerView } from '@tsmyadmin/shared'
 import { NamedListPanel } from '@/components/panels/NamedListPanel.tsx'
+import type { Point } from '@/components/schema-diagram/layout.ts'
 import { locale } from '@/config/locale-screens.ts'
 import { designerPagesQuery, listDesignerPages, mutations } from '@/lib/queries.ts'
 import { useNamedList } from '@/lib/use-named-list.ts'
-import type { Point } from './designer-layout.ts'
 import { deleteDesignerPage, designerPagesFor, loadDesignerPages, saveDesignerPage } from './designer-pages.ts'
 
 const t = locale.designer.pages

@@ -160,6 +160,25 @@ export const enScreens = {
     refColumns: 'Referenced columns',
     constraint: 'Constraint',
   },
+  schemaDiagram: {
+    play: 'Play',
+    pause: 'Pause',
+    first: 'First',
+    prev: 'Previous',
+    next: 'Next',
+    last: 'Last',
+    steps: 'Step by step',
+    stepOf: (n: number, total: number) => `Step ${n} of ${total}`,
+    legend: 'Legend',
+    tones: {
+      delete: 'Deleted',
+      nullify: 'Set to NULL or default',
+      blocked: 'Stops here',
+      index: 'Read through an index',
+      scan: 'Read in full',
+      focus: 'Starting point',
+    },
+  },
   databaseOps: {
     copyMode: {
       label: 'What to copy',

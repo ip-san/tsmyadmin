@@ -21,7 +21,7 @@ import {
   snapToGrid,
   textRoom,
   withAllColumns,
-} from './designer-layout.ts'
+} from './layout.ts'
 
 const rel = (table: string, refTable: string, extra: Partial<RelationDef> = {}): RelationDef => ({
   table,

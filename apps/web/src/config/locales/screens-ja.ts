@@ -159,6 +159,25 @@ export const jaScreens = {
     refColumns: '参照先のカラム',
     constraint: '制約名',
   },
+  schemaDiagram: {
+    play: '再生',
+    pause: '一時停止',
+    first: '最初へ',
+    prev: '前へ',
+    next: '次へ',
+    last: '最後へ',
+    steps: '段ごとの説明',
+    stepOf: (n: number, total: number) => `${n} / ${total} 段目`,
+    legend: '凡例',
+    tones: {
+      delete: '消える',
+      nullify: 'NULL などに変わる',
+      blocked: 'ここで止まる',
+      index: 'インデックスで読む',
+      scan: '全件を読む',
+      focus: '起点',
+    },
+  },
   databaseOps: {
     copyMode: {
       label: 'コピーする内容',

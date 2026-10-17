@@ -10,7 +10,7 @@ import {
   relationRoute,
   routeMiddle,
   textRoom,
-} from './designer-layout.ts'
+} from '@/components/schema-diagram/layout.ts'
 
 const PAD = 40
 

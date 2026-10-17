@@ -6,20 +6,6 @@ import { useEffect, useRef, useState } from 'react'
 import { z } from 'zod'
 import { DdlPreviewDialog } from '@/components/ddl/DdlPreviewDialog.tsx'
 import { DisplayColumnSelect } from '@/components/ddl/DisplayColumnSelect.tsx'
-import { Button } from '@/components/ui/Button.tsx'
-import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
-import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
-import { locale } from '@/config/locale-screens.ts'
-import { useDdlFlow } from '@/lib/ddl.ts'
-import { chosenDisplayColumn } from '@/lib/display-column.ts'
-import { readPreference, removePreference, writePreference } from '@/lib/preferences.ts'
-import { foreignKeysQuery, structureQuery, tablesQuery } from '@/lib/queries.ts'
-import { DesignerAddForeignKey } from './DesignerAddForeignKey.tsx'
-import { DesignerDiagram, relationKey } from './DesignerDiagram.tsx'
-import { DesignerPages } from './DesignerPages.tsx'
-import { DesignerToolbar } from './DesignerToolbar.tsx'
-import { diagramDia } from './designer-dia.ts'
-import { diagramEps } from './designer-eps.ts'
 import {
   autoLayout,
   boxColumns,
@@ -30,7 +16,21 @@ import {
   type Point,
   snapAll,
   withAllColumns,
-} from './designer-layout.ts'
+} from '@/components/schema-diagram/layout.ts'
+import { relationKey, SchemaDiagram } from '@/components/schema-diagram/SchemaDiagram.tsx'
+import { Button } from '@/components/ui/Button.tsx'
+import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
+import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
+import { locale } from '@/config/locale-screens.ts'
+import { useDdlFlow } from '@/lib/ddl.ts'
+import { chosenDisplayColumn } from '@/lib/display-column.ts'
+import { readPreference, removePreference, writePreference } from '@/lib/preferences.ts'
+import { foreignKeysQuery, structureQuery, tablesQuery } from '@/lib/queries.ts'
+import { DesignerAddForeignKey } from './DesignerAddForeignKey.tsx'
+import { DesignerPages } from './DesignerPages.tsx'
+import { DesignerToolbar } from './DesignerToolbar.tsx'
+import { diagramDia } from './designer-dia.ts'
+import { diagramEps } from './designer-eps.ts'
 import { diagramSvg } from './designer-svg.ts'
 
 const t = locale.designer
@@ -176,7 +176,7 @@ export function Designer({ db, schema }: { db: string; schema?: string | undefin
           {t.relateFrom(from.table, from.column)}
         </p>
       ) : null}
-      <DesignerDiagram
+      <SchemaDiagram
         tables={names}
         relations={drawn}
         columns={columns}
