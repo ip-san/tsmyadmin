@@ -178,6 +178,30 @@ export const jaScreens = {
       focus: '起点',
     },
   },
+  deleteImpact: {
+    show: '影響を見る',
+    hide: '影響を閉じる',
+    title: '削除の影響',
+    diagram: '削除の影響の図',
+    loading: '外部キーをたどって数えています…',
+    start: (table: string, rows: number) => `${table} の ${rows.toLocaleString('ja-JP')} 行を消す`,
+    depth: (n: number) => `${n} 段目`,
+    cascade: (table: string, rows: number, key: string) =>
+      `${table} の ${rows.toLocaleString('ja-JP')} 行も消える（${key}）`,
+    setNull: (table: string, rows: number, cols: string, key: string) =>
+      `${table} の ${rows.toLocaleString('ja-JP')} 行の ${cols} が NULL になる（${key}）`,
+    setDefault: (table: string, rows: number, cols: string, key: string) =>
+      `${table} の ${rows.toLocaleString('ja-JP')} 行の ${cols} が既定値になる（${key}）`,
+    refuse: (table: string, rows: number, key: string) =>
+      `${table} の ${rows.toLocaleString('ja-JP')} 行が参照しているため、削除は失敗する（${key}）`,
+    none: (table: string, key: string) => `${table}: 参照している行はない（${key}）`,
+    noRows: '一致する行がありません（すでに消えている可能性があります）',
+    noKeys: 'この表を参照する外部キーはありません。消えるのは選んだ行だけです',
+    blocked: 'この削除は失敗します。RESTRICT / NO ACTION の外部キーに、参照している行が残っています',
+    capped: '段の数か、たどる外部キーの数が上限に達したので、途中で止めました',
+    notes:
+      '件数は外部キーの経路ごとの延べです。トリガーによる変更と、別のデータベースからの参照は含みません。PostgreSQL の NO ACTION は、カスケードで先に消えれば通ることがあります',
+  },
   plan: {
     show: '図で見る',
     showHint: '実行計画（推定。文は実行しない）を、木とテーブルの図で見る',

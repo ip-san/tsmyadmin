@@ -362,6 +362,17 @@ for (const t of TARGETS) {
       }
     })
 
+    test('delete dialog with the impact of the delete drawn', async ({ page }) => {
+      await page.emulateMedia({ reducedMotion: 'reduce' })
+      await login(page, t)
+      await page.goto(`${tableUrl(t, 'users')}${t.schema ? '&' : '?'}sort=id:asc`)
+      await page.getByLabel('1 行目を選択').check()
+      await page.getByRole('button', { name: '選択行を削除' }).click()
+      await page.getByRole('dialog').getByRole('button', { name: '影響を見る' }).click()
+      await page.getByRole('img', { name: '削除の影響の図' }).waitFor()
+      await scan(page)
+    })
+
     test('SQL tab with a statement plan drawn', async ({ page }) => {
       const plan = await openPlan(page, t)
       await expect(plan).toBeVisible()
