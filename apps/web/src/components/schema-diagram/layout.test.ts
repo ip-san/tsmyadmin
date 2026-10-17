@@ -6,9 +6,9 @@ import {
   boxColumns,
   boxHeight,
   columnLabel,
+  cyclicGroups,
   DEFAULT_VIEW,
   drawnRelations,
-  findCycles,
   fitText,
   GRID,
   HEADER_HEIGHT,
@@ -256,37 +256,70 @@ describe('layeredLayout', () => {
     // The cycle is cut where it is met: a and b still get columns of their own.
     expect(p.a?.x).not.toBe(p.b?.x)
   })
-})
 
-describe('findCycles', () => {
-  it('finds none in a chain', () => {
-    expect(
-      findCycles(
-        ['a', 'b', 'c'],
-        [
-          { from: 'a', to: 'b' },
-          { from: 'b', to: 'c' },
-        ]
-      )
-    ).toEqual([])
+  it('takes the longest path to a node, not the first one met (a diamond with a long side)', () => {
+    // d points at a directly and through b → c: it goes right of c, not one column past a.
+    const edges = [
+      { from: 'd', to: 'a' },
+      { from: 'd', to: 'b' },
+      { from: 'b', to: 'c' },
+      { from: 'c', to: 'a' },
+    ]
+    const p = layeredLayout(['a', 'b', 'c', 'd'], edges, w, h)
+    expect(p.a?.x).toBeLessThan(p.c?.x ?? 0)
+    expect(p.c?.x).toBeLessThan(p.b?.x ?? 0)
+    expect(p.b?.x).toBeLessThan(p.d?.x ?? 0)
   })
 
-  it('names a cycle once, starting from its smallest node, in the order the arrows go', () => {
+  it('sets the columns apart by the gap asked for, and a self-arrow moves nothing', () => {
+    const edges = [
+      { from: 'b', to: 'a' },
+      { from: 'a', to: 'a' },
+    ]
+    const near = layeredLayout(['a', 'b'], edges, w, h, 40)
+    const far = layeredLayout(['a', 'b'], edges, w, h, 200)
+    expect((far.b?.x ?? 0) - (far.a?.x ?? 0) - ((near.b?.x ?? 0) - (near.a?.x ?? 0))).toBe(160)
+    expect(near.a?.x).toBeLessThan(near.b?.x ?? 0)
+  })
+})
+
+describe('cyclicGroups', () => {
+  it('finds none in a chain', () => {
+    const edges = [
+      { from: 'a', to: 'b' },
+      { from: 'b', to: 'c' },
+    ]
+    expect(cyclicGroups(['a', 'b', 'c'], edges)).toEqual([])
+  })
+
+  it('names the nodes of a cycle once, sorted, and leaves out a node that only points into it', () => {
     const edges = [
       { from: 'c', to: 'a' },
       { from: 'a', to: 'b' },
       { from: 'b', to: 'c' },
       { from: 'x', to: 'a' },
     ]
-    expect(findCycles(['x', 'b', 'c', 'a'], edges)).toEqual([['a', 'b', 'c']])
+    expect(cyclicGroups(['x', 'b', 'c', 'a'], edges)).toEqual([['a', 'b', 'c']])
   })
 
-  it('finds a self-arrow and two separate cycles', () => {
+  it('catches every node of cycles that share nodes, whatever order the arrows come in', () => {
+    // a→b→a, and a→c→b→a: c is in a deadlock too, though the walk reaches it after b is finished.
+    const edges = [
+      { from: 'a', to: 'b' },
+      { from: 'b', to: 'a' },
+      { from: 'a', to: 'c' },
+      { from: 'c', to: 'b' },
+    ]
+    expect(cyclicGroups(['a', 'b', 'c'], edges)).toEqual([['a', 'b', 'c']])
+  })
+
+  it('finds a self-arrow and two separate cycles, in the order of their first node', () => {
     const edges = [
       { from: 's', to: 's' },
-      { from: 'p', to: 'q' },
       { from: 'q', to: 'p' },
+      { from: 'p', to: 'q' },
+      { from: 'z', to: 'z2' },
     ]
-    expect(findCycles(['s', 'p', 'q'], edges)).toEqual([['s'], ['p', 'q']])
+    expect(cyclicGroups(['p', 's', 'q', 'z', 'z2'], edges)).toEqual([['p', 'q'], ['s']])
   })
 })

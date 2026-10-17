@@ -11,6 +11,7 @@ import {
   makeWidthOf,
   type Point,
   ROW_HEIGHT,
+  relationKey,
   relationLabel,
   relationPath,
   relationRoute,
@@ -22,9 +23,6 @@ import { useBoxDrag } from './use-box-drag.ts'
 
 const t = locale.designer
 const PAD = 40
-
-/** Distinct per key: constraint names are unique within a table, not across the database. */
-export const relationKey = (r: Pick<RelationDef, 'table' | 'name'>) => JSON.stringify([r.table, r.name])
 
 const NO_DISPLAY: ReadonlyMap<string, string> = new Map()
 
@@ -246,7 +244,7 @@ export function SchemaDiagram({
                 key={name}
                 role="button"
                 tabIndex={0}
-                aria-label={t.boxLabel(name)}
+                aria-label={lit?.badge ? `${t.boxLabel(name)}: ${lit.badge}` : t.boxLabel(name)}
                 transform={`translate(${p.x} ${p.y})`}
                 // touch-none: on a touch screen the gesture moves the box instead of scrolling the diagram.
                 className={`group cursor-move touch-none outline-none ${faint(lit !== undefined)}`}

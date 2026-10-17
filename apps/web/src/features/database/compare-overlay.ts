@@ -1,6 +1,6 @@
 import type { RelationDef, SnapshotDiff } from '@tsmyadmin/shared'
+import { relationKey } from '@/components/schema-diagram/layout.ts'
 import type { DiagramOverlay, Tone } from '@/components/schema-diagram/overlay.ts'
-import { relationKey } from '@/components/schema-diagram/SchemaDiagram.tsx'
 import { locale } from '@/config/locale-screens.ts'
 
 const t = locale.designer.compare
@@ -18,12 +18,12 @@ export function compareDiagram(
   tables: readonly string[],
   relations: readonly RelationDef[]
 ): { tables: string[]; relations: RelationDef[]; overlay: DiagramOverlay } {
-  const kinds = new Map(diff.shape?.tables.map((x) => [x.name, x.kind]))
-  // Without the snapshot's list, a removed name may have been a view: drawn anyway, since it cannot be told.
-  const gone = diff.removed.map((e) => e.name).filter((n) => (kinds.get(n) ?? 'table') === 'table')
+  const kinds = new Map(diff.shape.tables.map((x) => [x.name, x.kind]))
+  // Views (and sequences) are not drawn, here as on the Designer.
+  const gone = diff.removed.map((e) => e.name).filter((n) => kinds.get(n) === 'table')
   const goneSet = new Set(gone)
   const drawn = [...tables, ...gone.filter((n) => !tables.includes(n))]
-  const recorded = (diff.shape?.relations ?? []).filter(
+  const recorded = diff.shape.relations.filter(
     (r) => (goneSet.has(r.table) || goneSet.has(r.refTable)) && drawn.includes(r.table) && drawn.includes(r.refTable)
   )
   const known = new Set(relations.map(relationKey))

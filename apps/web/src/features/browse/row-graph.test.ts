@@ -1,5 +1,15 @@
+import type { Cell, CountKind } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
-import { REFERRING_SHOWN, type RowNode, rowLabel, rowNode, rowSteps } from './row-graph.ts'
+import {
+  arrowSentences,
+  expandGraph,
+  REFERRING_SHOWN,
+  type RowGraph,
+  type RowNode,
+  rowLabel,
+  rowNode,
+  rowSteps,
+} from './row-graph.ts'
 
 const users: RowNode['page'] = {
   columns: [
@@ -115,5 +125,85 @@ describe('rowLabel', () => {
       columns: [{ name: 'n', dataType: 'int' }],
     }
     expect(rowLabel(rowNode(ref, page, [5]))).toEqual({ label: 'users', sublabel: undefined })
+  })
+})
+
+describe('expandGraph', () => {
+  const posts: RowNode['page'] = {
+    columns: [
+      { name: 'id', dataType: 'int' },
+      { name: 'user_id', dataType: 'int' },
+    ],
+    keyKind: 'pk',
+    keyColumns: ['id'],
+    foreignKeys: [],
+    referencedBy: [],
+  }
+  const root = rowNode(ref, users, [1, 'Alice'])
+  const start: RowGraph = { nodes: new Map([[root.id, root]]), arrows: [], more: [], expanded: new Set() }
+  const steps = rowSteps(root)
+  const read = (rows: Cell[][], total: number | null, count: CountKind = 'exact') => ({
+    ...posts,
+    rows,
+    total,
+    count,
+  })
+  const tenPosts = Array.from({ length: REFERRING_SHOWN }, (_, i) => [i + 1, 1])
+
+  it('adds the rows read, an arrow from each referring row, and marks the row opened', () => {
+    const g = expandGraph(start, root.id, steps, [read([[7, 1]], 1)])
+    const post = rowNode({ db: 'shop', schema: undefined, table: 'posts' }, posts, [7, 1])
+    expect([...g.nodes.keys()]).toEqual([root.id, post.id])
+    expect(g.arrows).toEqual([{ from: post.id, to: root.id, label: 'user_id' }])
+    expect(g.more).toEqual([])
+    expect(g.expanded.has(root.id)).toBe(true)
+    // Opening it again, or meeting the same row, adds nothing twice.
+    expect(expandGraph(g, root.id, steps, [read([[7, 1]], 1)]).arrows).toHaveLength(1)
+  })
+
+  it('counts the rows left unread when the count is exact', () => {
+    const g = expandGraph(start, root.id, steps, [read(tenPosts, 25)])
+    expect(g.more).toEqual([expect.objectContaining({ to: root.id, count: 15 })])
+    expect(g.arrows.filter((a) => a.from === g.more[0]?.id)).toHaveLength(1)
+  })
+
+  it('says only "more" when the count is capped, estimated or missing and the page is full', () => {
+    for (const [total, count] of [
+      [5000, 'lower_bound'],
+      [40, 'estimate'],
+      [null, 'exact'],
+    ] as const) {
+      expect(expandGraph(start, root.id, steps, [read(tenPosts, total, count)]).more[0]?.count).toBeNull()
+    }
+  })
+
+  it('adds no "more" when everything was read, however the count was taken', () => {
+    expect(expandGraph(start, root.id, steps, [read([[7, 1]], 1)]).more).toEqual([])
+    expect(expandGraph(start, root.id, steps, [read([[7, 1]], null, 'estimate')]).more).toEqual([])
+  })
+
+  it('skips a step whose page did not come back', () => {
+    expect(expandGraph(start, root.id, steps, [undefined]).nodes.size).toBe(1)
+  })
+})
+
+describe('arrowSentences', () => {
+  it('says which row refers to which, leaving out the arrows of the unread rows (listed as links)', () => {
+    const graph: RowGraph = {
+      nodes: new Map(),
+      arrows: [
+        { from: 'p', to: 'u', label: 'user_id' },
+        { from: 'more', to: 'u', label: 'user_id' },
+      ],
+      more: [{ id: 'more', to: 'u', ref, filters: [], count: 3 }],
+      expanded: new Set(),
+    }
+    expect(
+      arrowSentences(
+        graph,
+        (id) => id.toUpperCase(),
+        (a, b, c) => `${a}>${b}:${c}`
+      )
+    ).toEqual(['P>U:user_id'])
   })
 })

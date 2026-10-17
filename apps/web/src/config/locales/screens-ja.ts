@@ -111,7 +111,8 @@ export const jaScreens = {
       changed: '変更',
       stop: '比べるのをやめる',
       loading: '比べています…',
-      noShape: 'このスナップショットには表の一覧が記録されていないので、消えた表どうしの線は描けません',
+      othersOff: 'スナップショットと比べている間は、使われ方と参照の検査は重ねません',
+      list: (kind: string, names: readonly string[]) => `${kind}: ${names.join('、')}`,
     },
     refCheck: {
       check: '参照を検査',
@@ -121,6 +122,9 @@ export const jaScreens = {
       orphans: (n: number) => `参照先なし ${n.toLocaleString('ja-JP')}`,
       column: '参照先が無い行',
       failed: '検査できませんでした',
+      notChecked: '検査していません',
+      count: (n: number) => n.toLocaleString('ja-JP'),
+      done: (n: number) => `${n.toLocaleString('ja-JP')} 表を検査しました`,
       legend: '参照先が無い行がある',
     },
     usage: {
@@ -275,12 +279,15 @@ export const jaScreens = {
     title: (table: string) => `${table} の行の関係`,
     diagram: '行の関係の図（矢印は、参照している行から、参照されている行へ）',
     rows: '図の行',
+    links: '行どうしの参照',
     expand: (label: string) => `${label} のつながりを広げる`,
     expandShort: '広げる',
     expanded: '広げた',
     reading: '読んでいます…',
-    more: (n: number) => `ほか ${n.toLocaleString('ja-JP')} 行`,
-    openMore: (n: number, table: string) => `${table} のほか ${n.toLocaleString('ja-JP')} 行を開く`,
+    refersTo: (from: string, to: string, columns: string) => `${from} が ${to} を参照しています（${columns}）`,
+    more: (n: number | null) => (n === null ? 'ほかにもあります' : `ほか ${n.toLocaleString('ja-JP')} 行`),
+    openMore: (n: number | null, table: string) =>
+      n === null ? `${table} のほかの行を開く` : `${table} のほか ${n.toLocaleString('ja-JP')} 行を開く`,
     root: '起点',
     hint: '行ごとに「広げる」で、その行が参照している行と、その行を参照している行（表ごとに 10 行まで）を足します',
   },
@@ -2029,7 +2036,9 @@ export const jaScreens = {
     lockRoot: (id: string, n: number) => `ID ${id} が元です。${n} 件のセッションが、これを直接・間接に待っています`,
     lockRootIdle: '（トランザクションを開いたまま、何もしていません）',
     lockCycle: (ids: readonly string[]) =>
-      `ID ${ids.join(' → ')} が互いを待っています（デッドロック。サーバーがどれかを取り消すまで続きます）`,
+      `ID ${ids.join('、')} が互いを待っています（デッドロック。サーバーがどれかを取り消すまで続きます）`,
+    lockWait: (from: string, to: string, locks: string) =>
+      `ID ${from} が ID ${to} を待っています${locks ? `（${locks}）` : ''}`,
     lockGraphHint: '強制終了は「表」から行えます',
     lockLegendRoot: '元（ほかを待たせ、自分は待っていない）',
     lockLegendDeadlock: 'デッドロック（互いに待っている）',

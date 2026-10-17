@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button.tsx'
 import { Dialog } from '@/components/ui/Dialog.tsx'
 import { ErrorBox } from '@/components/ui/Feedback.tsx'
 import { locale } from '@/config/locale-screens.ts'
-import { type RowNode, rowLabel } from './row-graph.ts'
+import { arrowSentences, type RowNode, rowLabel } from './row-graph.ts'
 import { useRowGraph } from './use-row-graph.ts'
 
 const t = locale.rowGraph
@@ -48,6 +48,7 @@ export function RowGraphDialog({ root, onClose }: { root: RowNode; onClose: () =
                 label={labels.get(n.id)}
                 opened={graph.expanded.has(n.id)}
                 busy={graph.busy === n.id}
+                waiting={graph.busy !== null}
                 onExpand={() => void graph.expand(n.id)}
               />
             ))}
@@ -65,6 +66,11 @@ export function RowGraphDialog({ root, onClose }: { root: RowNode; onClose: () =
             ))}
           </ul>
         </section>
+        <ul aria-label={t.links} className="space-y-0.5 text-xs text-ink-sub">
+          {arrowSentences(graph, (id) => labels.get(id)?.label ?? id, t.refersTo).map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ul>
       </div>
     </Dialog>
   )
@@ -75,12 +81,15 @@ function RowItem({
   label,
   opened,
   busy,
+  waiting,
   onExpand,
 }: {
   node: RowNode
   label: { label: string; sublabel: string | undefined } | undefined
   opened: boolean
   busy: boolean
+  /** Another row is being read: one at a time. */
+  waiting: boolean
   onExpand: () => void
 }) {
   const name = label?.label ?? node.ref.table
@@ -91,7 +100,7 @@ function RowItem({
       {opened ? (
         <span className="text-xs text-ink-sub">{t.expanded}</span>
       ) : (
-        <Button size="sm" onClick={onExpand} disabled={busy} aria-label={t.expand(name)}>
+        <Button size="sm" onClick={onExpand} disabled={waiting} aria-label={t.expand(name)}>
           {busy ? t.reading : t.expandShort}
         </Button>
       )}

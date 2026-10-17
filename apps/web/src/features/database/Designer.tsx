@@ -14,10 +14,11 @@ import {
   drawnRelations,
   makeWidthOf,
   type Point,
+  relationKey,
   snapAll,
   withAllColumns,
 } from '@/components/schema-diagram/layout.ts'
-import { relationKey, SchemaDiagram } from '@/components/schema-diagram/SchemaDiagram.tsx'
+import { SchemaDiagram } from '@/components/schema-diagram/SchemaDiagram.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
@@ -27,11 +28,9 @@ import { chosenDisplayColumn } from '@/lib/display-column.ts'
 import { readPreference, removePreference, writePreference } from '@/lib/preferences.ts'
 import { foreignKeysQuery, structureQuery, tablesQuery } from '@/lib/queries.ts'
 import { DesignerAddForeignKey } from './DesignerAddForeignKey.tsx'
-import { useCompare } from './DesignerCompare.tsx'
+import { useDesignerOverlays } from './DesignerOverlays.tsx'
 import { DesignerPages } from './DesignerPages.tsx'
-import { useReferences } from './DesignerReferences.tsx'
 import { DesignerToolbar } from './DesignerToolbar.tsx'
-import { useUsage } from './DesignerUsage.tsx'
 import { diagramDia } from './designer-dia.ts'
 import { diagramEps } from './designer-eps.ts'
 import { diagramSvg } from './designer-svg.ts'
@@ -78,9 +77,6 @@ export function Designer({
     if (patch.snap === true && !view.snap) keep(snapAll(saved))
   }
   const [relate, setRelate] = useState(false)
-  const [usageOn, setUsageOn] = useState(false)
-  const usage = useUsage(db, schema, usageOn)
-  const comparing = useCompare(db, schema, compare)
   // Full screen is the browser's: the section fills the screen, and leaving it (Esc) is noticed here.
   const sectionRef = useRef<HTMLElement>(null)
   const [fullscreen, setFullscreen] = useState(false)
@@ -105,9 +101,7 @@ export function Designer({
   const structures = useQueries({
     queries: names.map((table) => ({ ...structureQuery({ db, schema, table }), enabled: showAll })),
   })
-  const [refsOn, setRefsOn] = useState(false)
-  const keyed = [...new Set((keys.data ?? []).map((r) => r.table))].filter((n) => names.includes(n))
-  const refs = useReferences(db, schema, keyed, refsOn)
+  const overlays = useDesignerOverlays({ db, schema, compare, names, keys: keys.data })
 
   if (tables.isPending || keys.isPending) return <Spinner />
   if (tables.isError) return <ErrorBox error={tables.error} onRetry={() => void tables.refetch()} />
@@ -118,7 +112,7 @@ export function Designer({
   const drawn = drawnRelations(keys.data, session.dialect, schema ? { database: db, schema } : { database: db }, names)
   const all = new Map(names.map((n, i) => [n, structures[i]?.data?.columns.map((c) => c.name)]))
   // Comparing with a snapshot draws the tables it had that are gone too, with the keys it recorded for them.
-  const shown = comparing.shape(names, drawn)
+  const shown = overlays.shape(names, drawn)
   const columns = new Map(
     shown.tables.map((n) => [n, withAllColumns(boxColumns(n, shown.relations), showAll ? all.get(n) : undefined)])
   )
@@ -145,6 +139,8 @@ export function Designer({
     else setSaved(next)
   }
   const pick = (table: string, column: string) => {
+    // A table drawn from a snapshot is gone: a key cannot be made to or from it.
+    if (!names.includes(table)) return
     if (!from || from.table === table) return setFrom({ table, column })
     setPair({ from, to: { table, column } })
     setFrom(null)
@@ -193,20 +189,14 @@ export function Designer({
           }
           onPresetDone={() => setPair(null)}
         />
-        <label className="flex items-center gap-1 text-sm text-ink" title={t.usage.toggleHint}>
-          <input type="checkbox" checked={usageOn} onChange={(e) => setUsageOn(e.target.checked)} />
-          {t.usage.toggle}
-        </label>
-        <Button size="sm" aria-pressed={refsOn} title={t.refCheck.checkHint} onClick={() => setRefsOn(!refsOn)}>
-          {refs.checking ? t.refCheck.checking : t.refCheck.check}
-        </Button>
+        {overlays.controls}
       </DesignerToolbar>
       {relate && from ? (
         <p role="status" className="text-sm text-ink print:hidden">
           {t.relateFrom(from.table, from.column)}
         </p>
       ) : null}
-      {comparing.panel}
+      {overlays.above}
       <SchemaDiagram
         tables={shown.tables}
         relations={shown.relations}
@@ -215,10 +205,10 @@ export function Designer({
         positions={positions}
         onMove={move}
         view={shownView}
-        overlay={shown.overlay ?? refs.overlay ?? usage.overlay}
+        overlay={overlays.overlay(shown.overlay)}
         {...(relate ? { relate: { from, onPick: pick } } : {})}
       />
-      {usage.panel}
+      {overlays.below}
       <h3 className="text-sm font-semibold text-ink">{t.relations}</h3>
       {keys.data.length === 0 ? (
         <p className="text-sm text-ink-sub">{t.noRelations}</p>
@@ -233,7 +223,7 @@ export function Designer({
               <Th>ON DELETE</Th>
               <Th>ON UPDATE</Th>
               <Th>{t.constraint}</Th>
-              {refsOn ? <Th>{t.refCheck.column}</Th> : null}
+              {overlays.refsOn ? <Th>{t.refCheck.column}</Th> : null}
               <Th className="print:hidden">{locale.ddl.actions}</Th>
             </tr>
           </thead>
@@ -247,7 +237,9 @@ export function Designer({
                 <Td>{r.onDelete ?? '—'}</Td>
                 <Td>{r.onUpdate ?? '—'}</Td>
                 <Td className="text-ink-sub">{r.name}</Td>
-                {refsOn ? <Td className="tabular-nums">{orphansText(refs.checks, r.table, r.name) ?? '…'}</Td> : null}
+                {overlays.refsOn ? (
+                  <Td className="tabular-nums">{orphansText(overlays.checks, r.table, r.name) ?? '…'}</Td>
+                ) : null}
                 <Td className="print:hidden">
                   <Button
                     size="sm"

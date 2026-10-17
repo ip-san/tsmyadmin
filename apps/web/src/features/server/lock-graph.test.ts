@@ -76,11 +76,42 @@ describe('lockGraph', () => {
   })
 })
 
+describe('lockGraph, more shapes', () => {
+  it('counts each session held up once, even reached along two paths (a diamond)', () => {
+    const g = lockGraph([wait('2', '1'), wait('3', '1'), wait('4', '2'), wait('4', '3')])
+    expect(g.roots).toEqual([{ id: '1', waiting: 3, idle: false }])
+  })
+
+  it('remembers a blocker is idle whichever of its rows says so', () => {
+    expect(lockGraph([wait('2', '1', { idle: true }), wait('3', '1')]).roots[0]?.idle).toBe(true)
+    expect(lockGraph([wait('2', '1'), wait('3', '1', { idle: true })]).roots[0]?.idle).toBe(true)
+  })
+
+  it('keeps the user and database a blocker was named with when a later row leaves them out', () => {
+    const later = wait('3', '1')
+    const unnamed = { ...later, blocking: { ...later.blocking, user: null, database: null } }
+    expect(lockGraph([wait('2', '1'), unnamed]).nodes.find((n) => n.id === '1')?.sublabel).toBe('app / shop')
+  })
+
+  it('marks every session of cycles that share sessions, with a separate chain beside them', () => {
+    // 1→2→1 and 1→3→2→1 share sessions; 9 holds 8 up on its own.
+    const g = lockGraph([wait('1', '2'), wait('2', '1'), wait('1', '3'), wait('3', '2'), wait('8', '9')])
+    expect(g.cycles).toEqual([['1', '2', '3']])
+    expect(g.nodes.filter((n) => n.tone === 'blocked').map((n) => n.id)).toEqual(['1', '2', '3'])
+    expect(g.roots.map((r) => r.id)).toEqual(['9'])
+  })
+})
+
 describe('lockSentences', () => {
-  it('says the roots first, idle ones as such, then any deadlock', () => {
+  it('says the roots first, idle ones as such, then any deadlock, then every wait with its locks', () => {
     expect(lockSentences(lockGraph([wait('2', '1', { idle: true })]))).toEqual([
       `${t.lockRoot('1', 1)}${t.lockRootIdle}`,
+      t.lockWait('2', '1', 'orders X'),
     ])
-    expect(lockSentences(lockGraph([wait('1', '2'), wait('2', '1')]))).toEqual([t.lockCycle(['1', '2'])])
+    expect(lockSentences(lockGraph([wait('1', '2'), wait('2', '1', { table: null, mode: null })]))).toEqual([
+      t.lockCycle(['1', '2']),
+      t.lockWait('1', '2', 'orders X'),
+      t.lockWait('2', '1', ''),
+    ])
   })
 })

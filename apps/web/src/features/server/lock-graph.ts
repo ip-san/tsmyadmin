@@ -1,6 +1,6 @@
 import type { LockWait } from '@tsmyadmin/shared'
 import type { GraphArrow, GraphNode } from '@/components/node-graph/NodeGraph.tsx'
-import { findCycles } from '@/components/schema-diagram/layout.ts'
+import { cyclicGroups } from '@/components/schema-diagram/layout.ts'
 import { locale } from '@/config/locale-screens.ts'
 
 const t = locale.server
@@ -11,7 +11,7 @@ export interface LockGraphModel {
   arrows: GraphArrow[]
   /** Sessions that hold others up and wait for nobody: what to look at (or end) first, most waited for first. */
   roots: { id: string; waiting: number; idle: boolean }[]
-  /** Sessions waiting for each other, in the order the arrows go. */
+  /** Groups of sessions that wait for each other (deadlocks), each group's IDs sorted. */
   cycles: string[][]
 }
 
@@ -39,7 +39,7 @@ export function lockGraph(waits: readonly LockWait[]): LockGraphModel {
   }
   const ids = [...sessions.keys()]
   const edges = [...pairs.values()]
-  const cycles = findCycles(ids, edges)
+  const cycles = cyclicGroups(ids, edges)
   const inCycle = new Set(cycles.flat())
   const waitsFor = new Set(edges.map((e) => e.from))
   const waitedBy = (id: string) => countWaiting(id, edges)
@@ -82,10 +82,14 @@ function countWaiting(id: string, edges: readonly { from: string; to: string }[]
   return seen.size
 }
 
-/** The graph in words, for the list beside the picture: the roots first, then any deadlock. */
+/**
+ * The graph in words, for the list beside the picture (what a screen reader follows): the roots first, then any
+ * deadlock, then every arrow — who waits for whom, on which lock.
+ */
 export function lockSentences(model: LockGraphModel): string[] {
   return [
     ...model.roots.map((r) => `${t.lockRoot(r.id, r.waiting)}${r.idle ? t.lockRootIdle : ''}`),
     ...model.cycles.map((c) => t.lockCycle(c)),
+    ...model.arrows.map((a) => t.lockWait(a.from, a.to, a.label ?? '')),
   ]
 }

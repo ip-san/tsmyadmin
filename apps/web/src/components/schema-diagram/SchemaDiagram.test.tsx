@@ -1,8 +1,10 @@
 import { render, screen } from '@testing-library/react'
 import type { RelationDef } from '@tsmyadmin/shared'
 import { describe, expect, it, vi } from 'vitest'
+import { locale } from '@/config/locale-screens.ts'
+import { relationKey } from './layout.ts'
 import { overlayUpTo } from './overlay.ts'
-import { relationKey, SchemaDiagram } from './SchemaDiagram.tsx'
+import { SchemaDiagram } from './SchemaDiagram.tsx'
 
 const key: RelationDef = {
   table: 'orders',
@@ -69,7 +71,9 @@ describe('SchemaDiagram', () => {
     const { container } = render(<SchemaDiagram {...props} onMove={vi.fn()} overlay={overlay} />)
     expect(screen.getByRole('button', { name: /orders/ })).toHaveAttribute('data-tone', 'scan')
     expect(screen.getByRole('button', { name: /users/ })).toHaveClass('opacity-30')
-    expect(container.querySelector('[data-tone="scan"]')).not.toBeNull()
+    // The badge is in the box's name too: it is drawn as text a screen reader does not reach inside a button.
+    expect(screen.getByRole('button', { name: `${locale.designer.boxLabel('orders')}: full 9` })).toBeInTheDocument()
+    expect(container.querySelectorAll('[data-tone="scan"]')).toHaveLength(1)
   })
 
   it('badges a line at its middle without its label shown, and fades nothing when the overlay only adds', () => {

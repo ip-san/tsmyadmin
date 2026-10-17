@@ -1,6 +1,6 @@
 import type { RelationDef, SnapshotDiff } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
-import { relationKey } from '@/components/schema-diagram/SchemaDiagram.tsx'
+import { relationKey } from '@/components/schema-diagram/layout.ts'
 import { locale } from '@/config/locale-screens.ts'
 import { compareDiagram } from './compare-overlay.ts'
 
@@ -53,10 +53,16 @@ describe('compareDiagram', () => {
     expect(lit.has('logs')).toBe(false)
   })
 
-  it("draws every removed name without the snapshot's list, and no lines for them", () => {
-    const d = compareDiagram(diff(null), now, nowKeys)
-    expect(d.tables).toEqual(['users', 'tags', 'logs', 'posts', 'old_view'])
-    expect(d.relations).toEqual(nowKeys)
+  it('lights only what is drawn: an added view is not a box, a key to an undrawn table is not a line', () => {
+    const d = compareDiagram({ ...diff(shape), added: [entry('tags'), entry('new_view')] }, now, [
+      ...nowKeys,
+      rel('logs', 'elsewhere'),
+    ])
+    expect(d.overlay.tables.has('new_view')).toBe(false)
+    expect(d.tables).not.toContain('new_view')
+    // A recorded key from a removed table to one that is not drawn stays out.
+    const far = compareDiagram({ ...diff({ ...shape, relations: [rel('posts', 'nowhere')] }) }, now, nowKeys)
+    expect(far.relations.map((r) => r.name)).toEqual(['fk_logs_users'])
   })
 
   it('draws a removed table as removed even while the list of tables still has it, and its keys too', () => {
