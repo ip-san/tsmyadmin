@@ -195,6 +195,7 @@ export const jaScreens = {
     refuse: (table: string, rows: number, key: string) =>
       `${table} の ${rows.toLocaleString('ja-JP')} 行が参照しているため、削除は失敗する（${key}）`,
     none: (table: string, key: string) => `${table}: 参照している行はない（${key}）`,
+    tooMany: (max: number) => `影響を見られるのは ${max} 行までです。選ぶ行を減らしてください`,
     noRows: '一致する行がありません（すでに消えている可能性があります）',
     noKeys: 'この表を参照する外部キーはありません。消えるのは選んだ行だけです',
     blocked: 'この削除は失敗します。RESTRICT / NO ACTION の外部キーに、参照している行が残っています',
