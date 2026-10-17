@@ -154,7 +154,9 @@ export function describeSearchAndQuery(env: ConformanceEnv): void {
         }
         expect(first.status).toBe('ok')
         expect(first.unit).toBe(dialect === 'mysql' ? 'rows' : 'scans')
-        expect(Number.isNaN(Date.parse(first.since ?? ''))).toBe(false)
+        // MySQL counts from the server's start; PostgreSQL from the last reset, and gives none if it never was.
+        if (first.since !== null) expect(Number.isNaN(Date.parse(first.since))).toBe(false)
+        if (dialect === 'mysql') expect(first.since).not.toBeNull()
         await execOk(`SELECT note FROM ${t} WHERE note = 'b'`)
         // One script: each run starts a fresh session, so the setting must go with the statement it is for.
         const indexOnly = dialect === 'postgres' ? 'SET enable_seqscan = off; ' : ''
@@ -172,7 +174,9 @@ export function describeSearchAndQuery(env: ConformanceEnv): void {
         expect(mine?.indexReads).toBeGreaterThan(0)
         const indexes = usage.indexes.filter((i) => i.table === t)
         expect(indexes.find((i) => i.index === `${t}_code`)).toMatchObject({ unique: false })
-        expect(indexes.find((i) => i.index !== `${t}_code`)).toMatchObject({ unique: true })
+        expect(indexes.find((i) => i.index === (dialect === 'mysql' ? 'PRIMARY' : `${t}_pkey`))).toMatchObject({
+          unique: true,
+        })
       } finally {
         await execOk(`DROP TABLE IF EXISTS ${t}`)
       }

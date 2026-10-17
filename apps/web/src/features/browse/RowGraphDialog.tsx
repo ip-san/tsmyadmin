@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button.tsx'
 import { Dialog } from '@/components/ui/Dialog.tsx'
 import { ErrorBox } from '@/components/ui/Feedback.tsx'
 import { locale } from '@/config/locale-screens.ts'
-import { type RowNode, rowLabel } from './row-graph.ts'
+import { arrowSentences, type RowNode, rowLabel } from './row-graph.ts'
 import { useRowGraph } from './use-row-graph.ts'
 
 const t = locale.rowGraph
@@ -39,6 +39,9 @@ export function RowGraphDialog({ root, onClose }: { root: RowNode; onClose: () =
         <NodeGraph nodes={nodes} arrows={graph.arrows} label={t.diagram} />
         <DiagramLegend tones={['focus']} labels={{ focus: t.root }} />
         {graph.error ? <ErrorBox error={graph.error} /> : null}
+        <p role="status" className="text-xs text-ink-sub">
+          {graph.busy !== null ? t.reading : graph.added !== null ? t.added(graph.added) : ''}
+        </p>
         <section aria-label={t.rows}>
           <ul className="space-y-1 text-sm">
             {[...graph.nodes.values()].map((n) => (
@@ -48,6 +51,7 @@ export function RowGraphDialog({ root, onClose }: { root: RowNode; onClose: () =
                 label={labels.get(n.id)}
                 opened={graph.expanded.has(n.id)}
                 busy={graph.busy === n.id}
+                waiting={graph.busy !== null}
                 onExpand={() => void graph.expand(n.id)}
               />
             ))}
@@ -56,7 +60,11 @@ export function RowGraphDialog({ root, onClose }: { root: RowNode; onClose: () =
                 <Link
                   to="/db/$db/table/$table"
                   params={{ db: m.ref.db, table: m.ref.table }}
+                  // The key's values go in the address, as a foreign key cell's link puts them: what the table page
+                  // filters by. The graph's own rows stay out of it.
                   search={{ schema: m.ref.schema, filters: JSON.stringify(m.filters), page: 1 }}
+                  // Every table's page is the same route: the page under the dialog stays, and so would the dialog.
+                  onClick={onClose}
                   className="text-brand underline"
                 >
                   {t.openMore(m.count, m.ref.table)}
@@ -65,6 +73,12 @@ export function RowGraphDialog({ root, onClose }: { root: RowNode; onClose: () =
             ))}
           </ul>
         </section>
+        <ul aria-label={t.links} className="space-y-0.5 text-xs text-ink-sub">
+          {arrowSentences(graph, (id) => labels.get(id)?.label ?? id, t.refersTo).map((line, i) => (
+            // Two rows may say the same (keyless rows alike in the columns shown).
+            <li key={`${i}:${line}`}>{line}</li>
+          ))}
+        </ul>
       </div>
     </Dialog>
   )
@@ -75,12 +89,15 @@ function RowItem({
   label,
   opened,
   busy,
+  waiting,
   onExpand,
 }: {
   node: RowNode
   label: { label: string; sublabel: string | undefined } | undefined
   opened: boolean
   busy: boolean
+  /** Another row is being read: one at a time. */
+  waiting: boolean
   onExpand: () => void
 }) {
   const name = label?.label ?? node.ref.table
@@ -88,13 +105,11 @@ function RowItem({
     <li className="flex flex-wrap items-center gap-2">
       <span className="font-medium text-ink">{name}</span>
       {label?.sublabel ? <span className="text-ink-sub">{label.sublabel}</span> : null}
-      {opened ? (
-        <span className="text-xs text-ink-sub">{t.expanded}</span>
-      ) : (
-        <Button size="sm" onClick={onExpand} disabled={busy} aria-label={t.expand(name)}>
-          {busy ? t.reading : t.expandShort}
-        </Button>
-      )}
+      {/* aria-disabled, not disabled: a disabled button drops the focus the reader pressed it with. The hook
+          opens nothing twice and one row at a time, so a press while it says no does nothing. */}
+      <Button size="sm" onClick={onExpand} aria-disabled={opened || waiting} aria-label={t.expand(name)}>
+        {opened ? t.expanded : busy ? t.reading : t.expandShort}
+      </Button>
     </li>
   )
 }

@@ -111,7 +111,8 @@ export const enScreens = {
       changed: 'Changed',
       stop: 'Stop comparing',
       loading: 'Comparing…',
-      noShape: 'This snapshot did not record its tables, so the lines of the tables that are gone cannot be drawn',
+      othersOff: 'While comparing with a snapshot, table reads and the reference check are not laid over',
+      list: (kind: string, names: readonly string[]) => `${kind}: ${names.join(', ')}`,
     },
     refCheck: {
       check: 'Check references',
@@ -121,6 +122,10 @@ export const enScreens = {
       orphans: (n: number) => `no parent: ${n.toLocaleString('en-US')}`,
       column: 'Rows with no parent',
       failed: 'Could not check',
+      notChecked: 'Not checked',
+      count: (n: number) => n.toLocaleString('en-US'),
+      done: (n: number, failed: number) =>
+        `Checked ${n.toLocaleString('en-US')} tables${failed > 0 ? ` (${failed.toLocaleString('en-US')} could not be checked)` : ''}`,
       legend: 'Has rows with no parent',
     },
     usage: {
@@ -129,6 +134,8 @@ export const enScreens = {
       loading: 'Reading the statistics…',
       since: (date: string, unit: 'scans' | 'rows') =>
         `${unit === 'scans' ? 'Scans' : 'Rows read'} since ${date} (the server's statistics; reset, they count from 0)`,
+      sinceUnknown: (unit: 'scans' | 'rows') =>
+        `${unit === 'scans' ? 'Scans' : 'Rows read'}; the statistics were never reset, so since when is not known (they outlast a restart)`,
       badge: (full: number, index: number) =>
         `full ${full.toLocaleString('en-US', { notation: 'compact' })} / index ${index.toLocaleString('en-US', { notation: 'compact' })}`,
       scan: 'Mostly read in full',
@@ -187,6 +194,7 @@ export const enScreens = {
     },
     diagram: 'Diagram of tables and foreign keys (the same as the Foreign keys table below)',
     boxLabel: (table: string) => `Table ${table} (arrow keys move it)`,
+    boxLabelWithBadge: (table: string, badge: string) => `Table ${table} (arrow keys move it): ${badge}`,
     selectedBox: 'Selected table',
     cutHint:
       'Names that do not fit a box are cut with “…”. Select a table (click, tap or focus) to read its names in full here.',
@@ -276,12 +284,16 @@ export const enScreens = {
     title: (table: string) => `Relations of a ${table} row`,
     diagram: 'Row relations diagram (arrows run from a referring row to the row it refers to)',
     rows: 'Rows on the diagram',
+    links: 'How the rows refer to each other',
     expand: (label: string) => `Open the relations of ${label}`,
     expandShort: 'Open',
+    added: (n: number) => (n === 0 ? 'No new rows' : `Added ${n.toLocaleString('en-US')} rows`),
     expanded: 'Opened',
     reading: 'Reading…',
-    more: (n: number) => `${n.toLocaleString('en-US')} more rows`,
-    openMore: (n: number, table: string) => `Open the other ${n.toLocaleString('en-US')} rows of ${table}`,
+    refersTo: (from: string, to: string, columns: string) => `${from} refers to ${to} (${columns})`,
+    more: (n: number | null) => (n === null ? 'More rows' : `${n.toLocaleString('en-US')} more rows`),
+    openMore: (n: number | null, table: string) =>
+      n === null ? `Open the other rows of ${table}` : `Open the other ${n.toLocaleString('en-US')} rows of ${table}`,
     root: 'Starting row',
     hint: 'Open a row to add the rows it refers to and the rows that refer to it (up to 10 per table)',
   },
@@ -2042,7 +2054,8 @@ export const enScreens = {
     lockRoot: (id: string, n: number) => `ID ${id} is where it starts: ${n} sessions wait for it, directly or not`,
     lockRootIdle: ' (its transaction is open and it is doing nothing)',
     lockCycle: (ids: readonly string[]) =>
-      `IDs ${ids.join(' → ')} wait for each other (a deadlock, until the server cancels one)`,
+      `IDs ${ids.join(', ')} wait for each other (a deadlock, until the server cancels one)`,
+    lockWait: (from: string, to: string, locks: string) => `ID ${from} waits for ID ${to}${locks ? ` (${locks})` : ''}`,
     lockGraphHint: 'Kill a session from the Table view',
     lockLegendRoot: 'Where it starts (holds others up, waits for none)',
     lockLegendDeadlock: 'Deadlock (waiting for each other)',

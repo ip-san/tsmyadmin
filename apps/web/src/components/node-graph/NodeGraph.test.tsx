@@ -35,6 +35,13 @@ describe('NodeGraph', () => {
   })
 })
 
+describe('NodeGraph with nothing to draw', () => {
+  it('draws nothing rather than a picture of no size', () => {
+    const { container } = render(<NodeGraph nodes={[]} arrows={[{ from: 'a', to: 'b' }]} label="g" />)
+    expect(container).toBeEmptyDOMElement()
+  })
+})
+
 describe('NodeGraph spacing', () => {
   const xs = (container: HTMLElement) =>
     [...container.querySelectorAll('g[transform^="translate"]')].map((g) =>

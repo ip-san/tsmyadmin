@@ -111,7 +111,8 @@ export const jaScreens = {
       changed: '変更',
       stop: '比べるのをやめる',
       loading: '比べています…',
-      noShape: 'このスナップショットには表の一覧が記録されていないので、消えた表どうしの線は描けません',
+      othersOff: 'スナップショットと比べている間は、使われ方と参照の検査は重ねません',
+      list: (kind: string, names: readonly string[]) => `${kind}: ${names.join('、')}`,
     },
     refCheck: {
       check: '参照を検査',
@@ -121,6 +122,10 @@ export const jaScreens = {
       orphans: (n: number) => `参照先なし ${n.toLocaleString('ja-JP')}`,
       column: '参照先が無い行',
       failed: '検査できませんでした',
+      notChecked: '検査していません',
+      count: (n: number) => n.toLocaleString('ja-JP'),
+      done: (n: number, failed: number) =>
+        `${n.toLocaleString('ja-JP')} 表を検査しました${failed > 0 ? `（${failed.toLocaleString('ja-JP')} 表は検査できませんでした）` : ''}`,
       legend: '参照先が無い行がある',
     },
     usage: {
@@ -129,6 +134,8 @@ export const jaScreens = {
       loading: '統計を読んでいます…',
       since: (date: string, unit: 'scans' | 'rows') =>
         `${date} からの${unit === 'scans' ? '走査の回数' : '読んだ行数'}です（サーバーの統計。消すと 0 から数え直します）`,
+      sinceUnknown: (unit: 'scans' | 'rows') =>
+        `${unit === 'scans' ? '走査の回数' : '読んだ行数'}です。統計を消したことが無いので、いつからの数かは分かりません（再起動をまたいで残ります）`,
       badge: (full: number, index: number) =>
         `全件 ${full.toLocaleString('ja-JP', { notation: 'compact' })} / 索引 ${index.toLocaleString('ja-JP', { notation: 'compact' })}`,
       scan: '全件で読まれることが多い',
@@ -186,6 +193,7 @@ export const jaScreens = {
     },
     diagram: 'テーブルと外部キーの図（下の「外部キー」の表と同じ内容）',
     boxLabel: (table: string) => `テーブル ${table}（矢印キーで移動）`,
+    boxLabelWithBadge: (table: string, badge: string) => `テーブル ${table}（矢印キーで移動）: ${badge}`,
     selectedBox: '選択中のテーブル',
     cutHint:
       '枠に収まらない名前は「…」で切っています。テーブルを選ぶと（クリック・タップ・フォーカス）、名前の全文をここに表示します。',
@@ -275,12 +283,16 @@ export const jaScreens = {
     title: (table: string) => `${table} の行の関係`,
     diagram: '行の関係の図（矢印は、参照している行から、参照されている行へ）',
     rows: '図の行',
+    links: '行どうしの参照',
     expand: (label: string) => `${label} のつながりを広げる`,
     expandShort: '広げる',
+    added: (n: number) => (n === 0 ? '新しい行はありませんでした' : `${n.toLocaleString('ja-JP')} 行を足しました`),
     expanded: '広げた',
     reading: '読んでいます…',
-    more: (n: number) => `ほか ${n.toLocaleString('ja-JP')} 行`,
-    openMore: (n: number, table: string) => `${table} のほか ${n.toLocaleString('ja-JP')} 行を開く`,
+    refersTo: (from: string, to: string, columns: string) => `${from} が ${to} を参照しています（${columns}）`,
+    more: (n: number | null) => (n === null ? 'ほかにもあります' : `ほか ${n.toLocaleString('ja-JP')} 行`),
+    openMore: (n: number | null, table: string) =>
+      n === null ? `${table} のほかの行を開く` : `${table} のほか ${n.toLocaleString('ja-JP')} 行を開く`,
     root: '起点',
     hint: '行ごとに「広げる」で、その行が参照している行と、その行を参照している行（表ごとに 10 行まで）を足します',
   },
@@ -2029,7 +2041,9 @@ export const jaScreens = {
     lockRoot: (id: string, n: number) => `ID ${id} が元です。${n} 件のセッションが、これを直接・間接に待っています`,
     lockRootIdle: '（トランザクションを開いたまま、何もしていません）',
     lockCycle: (ids: readonly string[]) =>
-      `ID ${ids.join(' → ')} が互いを待っています（デッドロック。サーバーがどれかを取り消すまで続きます）`,
+      `ID ${ids.join('、')} が互いを待っています（デッドロック。サーバーがどれかを取り消すまで続きます）`,
+    lockWait: (from: string, to: string, locks: string) =>
+      `ID ${from} が ID ${to} を待っています${locks ? `（${locks}）` : ''}`,
     lockGraphHint: '強制終了は「表」から行えます',
     lockLegendRoot: '元（ほかを待たせ、自分は待っていない）',
     lockLegendDeadlock: 'デッドロック（互いに待っている）',

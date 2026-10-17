@@ -27,7 +27,8 @@ export function StepNarration({
         <Button size="sm" onClick={player.prev} disabled={player.index === 0}>
           {t.prev}
         </Button>
-        <Button size="sm" aria-pressed={player.playing} onClick={player.playing ? player.pause : player.play}>
+        {/* Its name says what a press does (play, pause): a pressed state on top would say it twice. */}
+        <Button size="sm" onClick={player.playing ? player.pause : player.play}>
           {player.playing ? t.pause : t.play}
         </Button>
         <Button size="sm" onClick={player.next} disabled={atEnd}>
