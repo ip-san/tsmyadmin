@@ -2,6 +2,7 @@ import { expect } from '@playwright/test'
 import { fillType, login, PASSKEY_BASE_URL, PERSISTENT_BASE_URL, TARGETS, tableUrl, test } from './helpers.ts'
 import { layoutViolations } from './layout-lint.ts'
 import { openPlan } from './plan.ts'
+import { orphanedKey } from './references.ts'
 import { pageProblems } from './scan.ts'
 import { createAccount, dropAccount, enrol, t as first, signIn } from './two-factor.ts'
 
@@ -415,6 +416,19 @@ for (const t of TARGETS) {
       } finally {
         for (const c of [cascade, setNull, restrict]) await run(`DROP TABLE IF EXISTS ${c}`)
         await run(`DROP TABLE IF EXISTS ${parent}`)
+      }
+    })
+
+    test('designer with the references checked', async ({ page }) => {
+      await login(page, t)
+      const orphaned = await orphanedKey(page, t)
+      try {
+        await page.goto(`/db/${t.database}/designer${t.schema ? `?schema=${t.schema}` : ''}`)
+        await page.getByRole('button', { name: '参照を検査' }).click()
+        await expect(page.getByText('参照先なし 2')).toBeVisible({ timeout: 15_000 })
+        await scan(page)
+      } finally {
+        await orphaned.drop()
       }
     })
 

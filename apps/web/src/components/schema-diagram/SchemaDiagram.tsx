@@ -1,7 +1,7 @@
 import type { DesignerView, RelationDef } from '@tsmyadmin/shared'
 import { useId, useState } from 'react'
 import { locale } from '@/config/locale-screens.ts'
-import { Badge } from './Badge.tsx'
+import { Badge, LineBadge } from './Badge.tsx'
 import {
   boxHeight,
   DEFAULT_VIEW,
@@ -81,7 +81,7 @@ export function SchemaDiagram({
 
   const shown = selected !== null && tables.includes(selected) ? selected : null
   const pictureOnly = !onMove && !relate
-  const faint = (lit: boolean) => (overlay && !lit ? `${FADE} ${FAINT}` : FADE)
+  const faint = (lit: boolean) => (overlay && overlay.fade !== false && !lit ? `${FADE} ${FAINT}` : FADE)
   return (
     <>
       <figure
@@ -107,9 +107,12 @@ export function SchemaDiagram({
             </>
           ) : null}
           {(view.showLines ? relations : []).map((r) => {
-            const mid = view.lineLabels
-              ? routeMiddle(relationRoute(r, at, listed, view.lineStyle, view.compact, widthOf))
-              : null
+            const badge = overlay?.relationBadges?.get(relationKey(r))
+            const middle =
+              view.lineLabels || badge
+                ? routeMiddle(relationRoute(r, at, listed, view.lineStyle, view.compact, widthOf))
+                : null
+            const mid = view.lineLabels ? middle : null
             const tone = overlay?.relations.get(relationKey(r))
             const stroke = tone ? TONE_STROKE[tone] : undefined
             return (
@@ -125,6 +128,7 @@ export function SchemaDiagram({
                     {relationLabel(r)}
                   </text>
                 ) : null}
+                {badge && middle ? <LineBadge text={badge} at={middle} /> : null}
               </g>
             )
           })}
