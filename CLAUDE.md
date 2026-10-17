@@ -39,6 +39,11 @@ bun run lighthouse        # Lighthouse CI（警告のみ、要 Chrome）
 - **基準線の数字（`coverage-baseline.json`・`dialect-leaks-baseline.json`・`file-size-baseline.json`・CLAUDE.md の件数）の競合は、手で直さず、再生成する**: `bun run docs:validate --fix`、`node scripts/check-coverage.mjs --update`、`node scripts/check-dialect-leaks.mjs --update-baseline`。基準線は一方向にだけ動く（カバレッジは上がるだけ、分岐とファイル長は下がるだけ）
 - **挙動を変えないリファクタリングは、旧実装との差分検査で確かめる**: 旧ファイルをコピーして、新旧を同じ入力で呼ぶ一時的なテストを書き、全メソッド × 多くの入力で比べる。違いが出たら、呼ばれない経路かどうかを確かめてから進める（終わったら一時ファイルを消す）
 
+## ブランチと PR
+
+- **ブランチは `git fetch` してから `origin/main` で切る**（`git switch -c <名前> origin/main`）。手元の `main` は、会話の始めの状態や前の作業のままで、origin より大きく遅れていることがある。古い `main` から切ると、PR が競合して CI が動かず、あとで取り込み直しになる
+- **土台の PR に積む**ときは、積んだ PR の base を土台のブランチにする。土台がマージされたら、base を `main` に付け替え、`origin/main` を取り込む。`CHANGELOG.md`・画面の文言・`audit.ts` の一覧・`a11y.spec.ts` のように**同じ場所に両方が足した**競合は、両方を残す。そのとき、2 つの塊が閉じかっこ（`},` や `})`）を共有していないかを見る（片方が欠けて構文エラーになる）。英訳の文書は main 側を採ってから、自分の訳を足し直して `bun run docs:sync`
+
 ## 現在の規模（`scripts/validate-docs.mjs` が同期）
 
 - ユニット/API/Web テスト定義: <!-- stat:unit-tests -->2841<!-- /stat --> 件

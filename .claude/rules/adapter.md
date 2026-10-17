@@ -15,6 +15,8 @@ paths:
 4. 方言ファイルを片方だけ変更しない。`mysql/x.ts` を触ったら `postgres/x.ts` の同等箇所を確認する
 5. 新しい型の扱いを変えたら `docker/fixtures/*` と各 `*.integration.test.ts` の `typesRow1` を更新する
 6. 検証は `bun run test`（ユニット）→ `bun run db:up && bun run test:integration`（両 DB の conformance）
+7. **`base.ts` は 800 行の上限に近い**（800 を超えると `check:file-size` が落ちる）。メソッドの本体（SQL の組み立てとたどる処理）は `sql/<名前>.ts` の関数に置き、`base.ts` には接続を借りて呼ぶ数行だけを書く（例: `deleteImpact` → `sql/delete-impact.ts`、`checkReferences` → `sql/references.ts`）
+8. **監査の分類**: `AUDITED_METHODS` は、データ・構造・アカウント・サーバーの状態を変えるメソッド。利用者の SQL を受け取っても、文を実行せず、トランザクションを必ず取り消すもの（`explainPlan`）は `PASSTHROUGH_METHODS`
 
 ## SQL 組み立て
 
@@ -57,6 +59,14 @@ MySQL の DELIMITER 切り替え（`packages/shared/src/sql-script.ts`）で本�
 MySQL アダプターは MariaDB 10.11 / 11 でも動く（CI の `integration-mariadb` ジョブが mysql:8.0 / 8.4 とは別に 10.11 と 11 の両方で conformance を回す。検証済みバージョンの一覧は `docs/deployment.md` が唯一の正）。差分はすべて「まず MySQL の形を試し、特定のエラーで MariaDB の形に切り替えて記憶する」方式で吸収する: `max_execution_time` → `max_statement_time`（`ER_UNKNOWN_SYSTEM_VARIABLE`）、`STATISTICS.EXPRESSION` → `NULL`（`ER_BAD_FIELD_ERROR`）、`mysql.user.account_locked` → `global_priv` の JSON（`ER_BAD_FIELD_ERROR`）。`max_statement_time` は SELECT 以外も制限する（PostgreSQL の `statement_timeout` と同じ意味）。`SHOW GRANTS` に含まれるパスワードハッシュは取り除いて返す。MariaDB の SEQUENCE は `TABLE_TYPE = 'SEQUENCE'` を `kind: 'sequence'` に写し、`showCreateTable` は `SHOW CREATE SEQUENCE` と `next_not_cached_value` からの `ALTER SEQUENCE … RESTART WITH` を返す（テーブル既定値の `nextval(\`db\`.\`seq\`)` はデータベース名を落とす）。PACKAGE / PACKAGE BODY は `kind: 'package' | 'package body'` として一覧に含め、`SHOW CREATE PACKAGE [BODY]` で定義を返す（作成 UI はない）。`listDependencies` は MariaDB に `VIEW_TABLE_USAGE` がないので null を返し、ダンプはビュー定義の参照で並び順を決める。MariaDB 固有の errno（1969、4000 番台）は mysql2 に名前がないか MySQL 8 の別の名前が当たっているため、最初の接続で `SELECT VERSION()` を見て MariaDB と分かったときだけ `toAdapterError` が `MARIADB_ERRNO_NAMES` / `ER_<errno>` に置き換える。PACKAGE のダンプは CI の MariaDB 11 で検証している（`SHOW CREATE PACKAGE` が sql_mode に依存しない 11.4 以降を前提）。MySQL 8 では接続ごとに `information_schema_stats_expiry = 0` を設定し、AUTO_INCREMENT・行数・サイズが 24 時間キャッシュされないようにする。
 
 MySQL は接続セットアップ（`USE` と同時）でセッションの `sql_mode` から `NO_BACKSLASH_ESCAPES` を外す。mysql2 の `query()` は値をクライアント側でバックスラッシュエスケープするため、このモードのサーバーではプレースホルダが壊れる（conformance の「keeps placeholder values safe under a global NO_BACKSLASH_ESCAPES」）。`reset()` 後はグローバル値に戻るので、`forget()` により次の借用で再適用される。
+
+## MySQL 9 と EXPLAIN
+
+- MySQL 9 は `explain_json_format_version = 2` が既定で、`EXPLAIN FORMAT=JSON` の形が 8.0 / 8.4 と違う（`query_plan` の `inputs` の木。表名と別名が両方入る）。UPDATE / DELETE では計画が出ない（`<not executable by iterator executor>`）ので、`explainPlan` はセッションの変数を 1 にして読み直し、`DEFAULT` に戻す（`mysql/explain.ts` の `needsFormat1`）
+- 形式 1（8.0 / 8.4）と MariaDB の `table_name` は**別名**（`u`）で、表名が入らない。文の FROM / JOIN / UPDATE / INTO から表名に戻す（`sql/table-aliases.ts`。派生表は戻せない）
+- MySQL / MariaDB は、読み取り専用のトランザクション（`START TRANSACTION READ ONLY`）の中では DML の EXPLAIN を拒む（ERROR 1792）。PostgreSQL は `BEGIN READ ONLY` の中でも EXPLAIN できる（ANALYZE なしは実行しない）
+- MySQL 9 は主キーで 1 行を引く文を計画の段階で読み終え、計画に表が出ない（`Rows fetched before execution`）。試験の文は全件か範囲を読むものにする
+- **CI に無い版（MySQL 9 など）は、使い捨てのコンテナで conformance を回せる**: `docker run -d -p 127.0.0.1:13399:3306 -e MYSQL_ROOT_PASSWORD=root -e MYSQL_DATABASE=tsmyadmin_test -e MYSQL_USER=tsmyadmin -e MYSQL_PASSWORD=tsmyadmin mysql:9` → `docker/fixtures/mysql/01-schema.sql` を `tsmyadmin_test` に流す（ファイルに `USE` が無いので、データベース名を付けて流す）→ `TEST_MYSQL_URL=mysql://tsmyadmin:tsmyadmin@127.0.0.1:13399/tsmyadmin_test INTEGRATION=1 bunx vitest run packages/adapter/src/test/mysql.integration.test.ts -t <describe>`。終わったらコンテナを消す
 
 ## 試験の書き方
 
