@@ -6,6 +6,7 @@ import {
   IMPORT_MAX_BYTES,
   ImportEventSchema,
   KeyValueSchema,
+  LockWaitReportSchema,
   ProcessInfoSchema,
   ReplicationInfoSchema,
   ServerCatalogSchema,
@@ -665,6 +666,36 @@ describe('server', () => {
     ).toBe(true)
     expect(z.array(KeyValueSchema).parse(await (await h.req('/api/server/status')).json())).toHaveLength(1)
     expect(z.array(ProcessInfoSchema).parse(await (await h.req('/api/server/processes')).json())).toHaveLength(2)
+  })
+
+  it('reports lock waits with the connection usage, and only to a signed-in session', async () => {
+    const report = {
+      status: 'ok' as const,
+      waits: [
+        {
+          blocked: { id: '9', user: 'app', database: 'shop', waitSec: 4, query: 'UPDATE t SET v = 2 WHERE id = 1' },
+          blocking: {
+            id: '8',
+            user: 'app',
+            database: 'shop',
+            state: 'idle in transaction',
+            idleInTransaction: true,
+            transactionSec: 60,
+            query: 'UPDATE t SET v = 1 WHERE id = 1',
+          },
+          table: 'shop.t',
+          mode: 'X',
+        },
+      ],
+      connections: { current: 140, max: 151, idleInTransaction: 1 },
+    }
+    const h = harness(new FakeAdapter({ lockWaits: report }))
+    stores.push(h.store)
+    expect((await h.app.request('/api/server/lock-waits')).status).toBe(401)
+    await h.login()
+    const res = await h.req('/api/server/lock-waits')
+    expect(res.status).toBe(200)
+    expect(LockWaitReportSchema.parse(await res.json())).toEqual(report)
   })
 
   it('kills a process by numeric id only', async () => {

@@ -2,7 +2,7 @@ import type { Cell, InputCell } from '@tsmyadmin/shared'
 import { type FocusEvent, type KeyboardEvent, useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { Input, Textarea } from '@/components/ui/Field.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { cellToEditable } from '@/lib/format.ts'
 import { readSetting } from '@/lib/settings.ts'
 

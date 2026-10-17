@@ -5,6 +5,7 @@ import type {
   DiagnosticReport,
   KeyValue,
   KillMode,
+  LockWaitReport,
   ProcessInfo,
   ReplicationInfo,
   ServerCatalog,
@@ -13,7 +14,7 @@ import type {
 } from '@tsmyadmin/shared'
 import { replicationRole } from '@tsmyadmin/shared'
 import { type Conn, firstResult } from '../driver.ts'
-import { joinParts, str, strOrNull } from '../sql/format.ts'
+import { joinParts, lockWaitFromRow, str, strOrNull } from '../sql/format.ts'
 import { AdapterError } from '../types.ts'
 
 export async function pgServerInfo(conn: Conn): Promise<ServerInfo> {
@@ -103,6 +104,48 @@ export async function pgKillProcess(conn: Conn, id: string, mode: KillMode = 'co
   }
   const r = firstResult(await conn.query(`SELECT ${fn}($1::int)`, [Number(id)]))
   if (r.rows[0]?.[0] !== true) throw new AdapterError('NOT_FOUND', `No such backend: ${id}`)
+}
+
+/**
+ * Who waits for whom: each backend waiting on a lock (`w`), paired with every backend pg_blocking_pids names (`b`).
+ * PostgreSQL keeps no wait start, so the waiter's time is its statement's; the blocker's is its transaction's. The
+ * table comes from the waiter's lock on a relation (a row conflict waits on the holder's transaction id, while the
+ * tuple lock the waiter took names the table); only tables of this database have a name here.
+ */
+const PG_LOCK_WAITS = `SELECT w.pid, w.usename, w.datname, EXTRACT(EPOCH FROM (now() - w.query_start))::bigint,
+    left(w.query, 65536),
+    b.pid, b.usename, b.datname, CASE WHEN b.state = 'active' THEN concat_ws(' / ', b.state, b.wait_event_type) ELSE b.state END,
+    coalesce(b.state LIKE 'idle in transaction%', false), EXTRACT(EPOCH FROM (now() - b.xact_start))::bigint,
+    left(b.query, 65536), t.rel, m.mode
+  FROM pg_stat_activity w
+  CROSS JOIN LATERAL unnest(pg_blocking_pids(w.pid)) AS bp(pid)
+  JOIN pg_stat_activity b ON b.pid = bp.pid
+  LEFT JOIN LATERAL (SELECT l.mode FROM pg_locks l WHERE l.pid = w.pid AND NOT l.granted LIMIT 1) m ON true
+  LEFT JOIN LATERAL (SELECT l.relation::regclass::text AS rel FROM pg_locks l
+    WHERE l.pid = w.pid AND l.relation IS NOT NULL AND (NOT l.granted OR l.locktype = 'tuple')
+      AND l.database = (SELECT oid FROM pg_database WHERE datname = current_database())
+    ORDER BY l.granted LIMIT 1) t ON true
+  WHERE w.wait_event_type = 'Lock'
+  ORDER BY 4 DESC NULLS LAST, 1, 6`
+
+/** Lock waits and connection usage. Anyone may call pg_blocking_pids; statements of other accounts may read as null. */
+export async function pgLockWaits(conn: Conn): Promise<LockWaitReport> {
+  const usage = firstResult(
+    await conn.query(
+      `SELECT count(*), count(*) FILTER (WHERE state LIKE 'idle in transaction%'), current_setting('max_connections')
+       FROM pg_stat_activity WHERE backend_type = 'client backend'`
+    )
+  ).rows[0]
+  const waits = firstResult(await conn.query(PG_LOCK_WAITS)).rows.map(lockWaitFromRow)
+  return {
+    status: 'ok',
+    waits,
+    connections: {
+      current: Number(usage?.[0] ?? 0),
+      max: usage?.[2] == null ? null : Number(usage[2]),
+      idleInTransaction: Number(usage?.[1] ?? 0),
+    },
+  }
 }
 
 /** Every value as text (null stays null): the catalog is shown, not computed with. */

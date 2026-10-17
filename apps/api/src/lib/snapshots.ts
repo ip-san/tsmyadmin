@@ -12,6 +12,7 @@ import { capabilities, ExportQuerySchema } from '@tsmyadmin/shared'
 import { startSweep } from '../session/store.ts'
 import { buildExport, DUMP_COMPLETE_MARKER } from './export.ts'
 import { importSql } from './import.ts'
+import { recordingDefinitions } from './snapshot-diff.ts'
 
 /** What one database keeps, what one dump may weigh, and what all of them together may hold in memory. */
 export const SNAPSHOT_MAX_COUNT = 10
@@ -46,6 +47,15 @@ interface Held {
   statements: number
   /** Tables and views the database had when it was taken. */
   names: ReadonlySet<string>
+  /** Their definitions then, as compared (see snapshot-diff.ts); a view the account could not SHOW has none. */
+  definitions: ReadonlyMap<string, string>
+}
+
+/** What one held snapshot takes in memory: its dump and the definitions kept beside it. */
+function weight(held: Pick<Held, 'sql' | 'definitions'>): number {
+  let bytes = Buffer.byteLength(held.sql)
+  for (const [name, text] of held.definitions) bytes += Buffer.byteLength(name) + Buffer.byteLength(text)
+  return bytes
 }
 
 /**
@@ -146,7 +156,7 @@ export class SnapshotStore {
     const list = this.held.get(scope) ?? []
     if (list.length >= SNAPSHOT_MAX_COUNT)
       throw new SnapshotError('TOO_MANY', `A database keeps at most ${SNAPSHOT_MAX_COUNT} snapshots: remove one first`)
-    const bytes = Buffer.byteLength(held.sql)
+    const bytes = weight(held)
     if (this.totalBytes() + bytes > this.totalLimit) throw fullError()
     const snapshot: Snapshot = {
       id: String(this.nextId++),
@@ -214,7 +224,9 @@ export async function takeSnapshot(
   try {
     const all = await adapter.listTables(ns)
     const q = ExportQuerySchema.parse({ format: 'sql' })
-    const file = buildExport(adapter, ns, tableNames(all), q, ns.database, true, all)
+    // The definitions the dump reads on its way are kept too, to compare the schema with later.
+    const recorder = recordingDefinitions(adapter)
+    const file = buildExport(recorder.adapter, ns, tableNames(all), q, ns.database, true, all)
     // Past the room that was left rather than past the dump limit: the same dump would fit once something is removed.
     const tooLarge = () =>
       limit < maxBytes
@@ -230,7 +242,8 @@ export async function takeSnapshot(
     const statements = countStatements(sql, adapter.dialect)
     // Given back just before it is stored, with nothing awaited between: held and reserved never count it twice.
     release()
-    return store.add(scope, { sql, statements, names: new Set(all.map((t) => t.name)) }, name, now)
+    const names = new Set(all.map((t) => t.name))
+    return store.add(scope, { sql, statements, names, definitions: recorder.definitions }, name, now)
   } finally {
     release()
   }

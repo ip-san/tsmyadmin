@@ -1,5 +1,11 @@
 import { useMutation } from '@tanstack/react-query'
-import type { Dialect, LoginRequest, PasskeyChallenge, ServerPreset } from '@tsmyadmin/shared'
+import {
+  capabilities,
+  type Dialect,
+  type LoginRequest,
+  type PasskeyChallenge,
+  type ServerPreset,
+} from '@tsmyadmin/shared'
 import { type FormEvent, useState } from 'react'
 import { z } from 'zod'
 import { Button } from '@/components/ui/Button.tsx'
@@ -9,6 +15,8 @@ import { locale } from '@/config/locale.ts'
 import { isApiError } from '@/lib/api.ts'
 import { answerChallenge, passkeysSupported } from '@/lib/passkeys.ts'
 import { readPreference, writePreference } from '@/lib/preferences.ts'
+import { ConnectionInfo } from './ConnectionInfo.tsx'
+import { PresetStatus } from './PresetStatus.tsx'
 
 const DEFAULT_PORTS: Record<Dialect, number> = { mysql: 3306, postgres: 5432 }
 const MANUAL = ''
@@ -37,7 +45,7 @@ const LAST_LOGIN_KEY = 'login.last'
 
 export interface LoginFormProps {
   onLogin: (body: LoginRequest) => Promise<unknown>
-  /** Operator-defined presets (TSMYADMIN_SERVERS); when present the first one is selected. */
+  /** Operator presets and Docker containers; the first is selected. May change while open: the selection stays. */
   presets?: ServerPreset[]
 }
 
@@ -48,6 +56,8 @@ export function LoginForm({ onLogin, presets = [] }: LoginFormProps) {
   const first = rememberedPreset ? presets.find((p) => p.name === rememberedPreset) : presets[0]
   const manualLast = last && last.preset === MANUAL ? last : null
   const [preset, setPreset] = useState<string>(manualLast ? MANUAL : first ? first.name : MANUAL)
+  /** Whether the selected preset was a Docker login, kept for while it is off the list (so the form keeps its shape). */
+  const [chosenAutoLogin, setChosenAutoLogin] = useState(!manualLast && first?.autoLogin === true)
   const [dialect, setDialect] = useState<Dialect>(manualLast?.dialect ?? first?.dialect ?? 'mysql')
   const [host, setHost] = useState(manualLast?.host ?? first?.host ?? '127.0.0.1')
   const [port, setPort] = useState(String(manualLast?.port ?? first?.port ?? DEFAULT_PORTS.mysql))
@@ -92,13 +102,19 @@ export function LoginForm({ onLogin, presets = [] }: LoginFormProps) {
     },
   })
   const fixed = preset !== MANUAL
+  const selected = presets.find((p) => p.name === preset)
+  /** The selected container has left the list (stopped, restarting): it stays selected and the form says so. */
+  const missing = fixed && !selected ? preset : null
   /** A Docker container the server holds the login of: no user or password to type, one press of Connect. */
-  const dockerLogin = presets.find((p) => p.name === preset)?.autoLogin === true
+  const dockerLogin = selected ? selected.autoLogin === true : missing !== null && chosenAutoLogin
+  /** The session will stay in the database named here, so the field says so (and a preset's database is not changed). */
+  const boundToDatabase = capabilities(dialect).connectionPerDatabase
 
   const choosePreset = (name: string) => {
     setPreset(name)
     const p = presets.find((x) => x.name === name)
     if (!p) return
+    setChosenAutoLogin(p.autoLogin === true)
     setDialect(p.dialect)
     setHost(p.host)
     setPort(String(p.port))
@@ -154,10 +170,14 @@ export function LoginForm({ onLogin, presets = [] }: LoginFormProps) {
                 {p.database ? ` / ${p.database}` : ''}
               </option>
             ))}
+            {/* Without its option the select would show the first one while the form keeps this one's address. */}
+            {missing !== null ? <option value={missing}>{locale.login.presetGone(missing)}</option> : null}
             <option value={MANUAL}>{locale.login.presetManual}</option>
           </Select>
         </Field>
       ) : null}
+      <PresetStatus presets={presets} missing={missing} />
+      <ConnectionInfo preset={presets.find((p) => p.name === preset)} />
       <Field id="dialect" label={locale.login.dialect}>
         <Select
           id="dialect"
@@ -224,15 +244,15 @@ export function LoginForm({ onLogin, presets = [] }: LoginFormProps) {
       <Field
         id="database"
         label={locale.login.database}
-        {...(dialect === 'postgres' ? { hint: locale.login.databaseHint } : {})}
+        {...(boundToDatabase ? { hint: locale.login.databaseHint } : {})}
       >
         <Input
           id="database"
           value={database}
           onChange={(e) => setDatabase(e.target.value)}
-          {...(dialect === 'postgres' ? { 'aria-describedby': 'database-hint' } : {})}
+          {...(boundToDatabase ? { 'aria-describedby': 'database-hint' } : {})}
           // A MySQL account without access to the preset's database can still log in without one.
-          readOnly={fixed && dialect === 'postgres'}
+          readOnly={fixed && boundToDatabase}
         />
       </Field>
       {/* Rarely changed, so folded away: the form's main path stays short. Open when a collation was chosen. */}
@@ -275,7 +295,12 @@ export function LoginForm({ onLogin, presets = [] }: LoginFormProps) {
       {passkeyError ? <ErrorBox error={passkeyError} /> : null}
       {/* A code is asked for, not failed: the form says so rather than showing it as an error. */}
       {login.isError && !isApiError(login.error, 'SECOND_FACTOR_REQUIRED') ? <ErrorBox error={login.error} /> : null}
-      <Button type="submit" variant="primary" disabled={login.isPending} className="w-full justify-center">
+      <Button
+        type="submit"
+        variant="primary"
+        disabled={login.isPending || missing !== null}
+        className="w-full justify-center"
+      >
         {login.isPending ? locale.login.connecting : locale.login.submit}
       </Button>
     </form>

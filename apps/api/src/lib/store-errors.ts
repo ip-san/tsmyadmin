@@ -1,6 +1,6 @@
 /**
  * Whether an error means the session store itself cannot be used right now, as opposed to a bug or a bad request:
- * Redis that does not answer (ioredis gives up a command after its retries) or a SQLite file that is locked, cannot
+ * Redis that does not answer (ioredis gives up a command after its retries) or whose lock never comes free, or a SQLite file that is locked, cannot
  * be opened or cannot be written. The caller can only retry later, so the API answers 503 instead of an unexplained
  * 500.
  *
@@ -29,6 +29,8 @@ export function isStoreUnavailable(err: unknown): boolean {
   if (!(err instanceof Error)) return false
   // ioredis: `maxRetriesPerRequest` reached while the server is down; and a command sent after the connection ended.
   if (err.name === 'MaxRetriesPerRequestError' || err.message === 'Connection is closed.') return true
+  // The Redis store's saved-items lock that never came free (session/redis-store.ts), like SQLITE_BUSY below.
+  if (err.name === 'StoreBusyError') return true
   const { code, errcode } = err as { code?: unknown; errcode?: unknown }
   return code === 'ERR_SQLITE_ERROR' && typeof errcode === 'number' && SQLITE_FILE_PROBLEMS.has(errcode & 0xff)
 }

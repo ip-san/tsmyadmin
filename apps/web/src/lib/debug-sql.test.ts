@@ -12,6 +12,20 @@ describe('maskSql', () => {
       'secret'
     )
   })
+  it('masks the leaks the property tests found (debug-sql.property.test.ts)', () => {
+    // A closed literal, then one that never closes: the span used to end at the unclosed one's opening quote.
+    expect(maskSql("ALTER USER u IDENTIFIED BY 'new' REPLACE 'old-secret")).not.toContain('old-secret')
+    // A comment's quote paired with the password's opening one.
+    expect(maskSql('CREATE USER u PASSWORD -- "quoted"\n\'hidden')).not.toContain('hidden')
+    expect(maskSql("SET PASSWORD = /* it's */ \"hid'den")).not.toContain('den')
+    // A password in a connection URL, with no keyword around it.
+    expect(maskSql("CREATE SUBSCRIPTION s CONNECTION 'postgresql://u:url-secret@h/db' PUBLICATION p")).not.toContain(
+      'url-secret'
+    )
+    expect(maskSql("CREATE TABLE f (id INT) ENGINE=FEDERATED CONNECTION='mysql://u:url-secret@h/db/t'")).not.toContain(
+      'url-secret'
+    )
+  })
   it('leaves an ordinary statement as it is', () => {
     expect(maskSql("SELECT * FROM t WHERE a = 'x'")).toBe("SELECT * FROM t WHERE a = 'x'")
     expect(maskSql('SELECT password FROM users')).toBe('SELECT password FROM users')

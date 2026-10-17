@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/Button.tsx'
 import { Card } from '@/components/ui/Card.tsx'
 import { ErrorBox, Notice } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
-import { locale, numberLocale } from '@/config/locale.ts'
+import { numberLocale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { mutations, type TableRef, trackingQuery } from '@/lib/queries.ts'
 
 const t = locale.tracking

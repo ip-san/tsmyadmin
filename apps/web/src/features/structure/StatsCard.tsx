@@ -4,7 +4,8 @@ import { Printer } from 'lucide-react'
 import { Button } from '@/components/ui/Button.tsx'
 import { Card } from '@/components/ui/Card.tsx'
 import { ErrorBox, Spinner } from '@/components/ui/Feedback.tsx'
-import { locale, numberLocale } from '@/config/locale.ts'
+import { numberLocale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { type TableRef, tableStatsQuery } from '@/lib/queries.ts'
 
 const t = locale.table.stats

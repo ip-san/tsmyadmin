@@ -3,7 +3,7 @@ import { type FormEvent, useState } from 'react'
 import { DdlPreviewDialog } from '@/components/ddl/DdlPreviewDialog.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { Field, Input } from '@/components/ui/Field.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { useDdlFlow } from '@/lib/ddl.ts'
 import type { TableRef } from '@/lib/queries.ts'
 

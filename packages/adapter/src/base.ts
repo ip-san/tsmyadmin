@@ -16,6 +16,7 @@ import type {
   InputCell,
   InsertPreview,
   KeyValue,
+  LockWaitReport,
   Namespace,
   ObjectDependency,
   Partitioning,
@@ -145,6 +146,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
   abstract listStatus(): Promise<KeyValue[]>
   abstract listProcesses(): Promise<ProcessInfo[]>
   abstract killProcess(id: string): Promise<void>
+  abstract lockWaits(): Promise<LockWaitReport>
   abstract listUsers(): Promise<UserInfo[]>
   abstract showGrants(user: UserRef, ns?: Namespace): Promise<string[]>
   abstract canManageAccount(name: string): Promise<boolean>

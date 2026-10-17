@@ -113,6 +113,27 @@ describe('errorMessage', () => {
     expect(errorMessage({ code: 'WEIRD' })).toBe(base('INTERNAL'))
   })
 
+  it('words why a login failed and what to fix, from the reason a development server named', () => {
+    const denied = errorMessage({
+      code: 'AUTH_FAILED',
+      message: 'Authentication failed',
+      reason: 'LOGIN_MYSQL_ACCESS_DENIED',
+      params: { user: 'root', from: '172.18.0.1' },
+    })
+    expect(denied).toBe(locale.reasons.LOGIN_MYSQL_ACCESS_DENIED({ user: 'root', from: '172.18.0.1' }))
+    expect(denied).toContain("'root'@'172.18.0.1'")
+    // Inside a container, localhost is the container: said only for a loopback address.
+    const refused = (loopback: number) =>
+      errorMessage({
+        code: 'CONNECTION_FAILED',
+        reason: 'LOGIN_REFUSED',
+        params: { host: loopback ? '127.0.0.1' : 'db', port: 3306, loopback },
+      })
+    expect(refused(1)).toContain('host.docker.internal')
+    expect(refused(0)).not.toContain('host.docker.internal')
+    expect(refused(0)).toContain('db:3306')
+  })
+
   it("words a reason the server named in the user's language, with its parameters", () => {
     expect(errorMessage({ code: 'VALIDATION', message: 'm', reason: 'INVALID_ENCODING', params: { line: 7 } })).toBe(
       locale.reasons.INVALID_ENCODING({ line: 7 })

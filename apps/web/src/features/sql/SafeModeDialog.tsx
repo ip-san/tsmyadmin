@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/Button.tsx'
 import { Dialog } from '@/components/ui/Dialog.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 
 /** Asks before a statement that would change every row (an UPDATE or DELETE with no WHERE) is run. */
 export function SafeModeDialog({

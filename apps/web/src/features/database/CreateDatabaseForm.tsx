@@ -1,13 +1,11 @@
-import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { type FormEvent, useState } from 'react'
 import { DdlPreviewDialog } from '@/components/ddl/DdlPreviewDialog.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { Field, Input } from '@/components/ui/Field.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
+import { useCollationNames } from '@/lib/collations.ts'
 import { useDdlFlow } from '@/lib/ddl.ts'
-import { serverCatalogQuery } from '@/lib/queries.ts'
-import { useDialect } from '@/lib/session.ts'
 
 export interface CreateNamespaceFormProps {
   /** Namespace the statement runs in (server namespace for databases; the database itself for schemas). */
@@ -20,11 +18,7 @@ export interface CreateNamespaceFormProps {
 export function CreateDatabaseForm({ database, kind }: CreateNamespaceFormProps) {
   const [name, setName] = useState('')
   const [collation, setCollation] = useState('')
-  const dialect = useDialect()
-  const catalog = useQuery({ ...serverCatalogQuery('collations'), enabled: kind === 'database' })
-  const names = (catalog.data?.rows ?? [])
-    .map((r) => String(r[dialect === 'mysql' ? 1 : 0] ?? ''))
-    .filter((n) => n !== '')
+  const names = useCollationNames(kind === 'database')
   const navigate = useNavigate()
   const flow = useDdlFlow(database, undefined, async (op) => {
     setName('')

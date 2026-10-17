@@ -5,7 +5,7 @@ import { SchemaDiagram } from '@/components/schema-diagram/SchemaDiagram.tsx'
 import { DiagramLegend, StepNarration } from '@/components/schema-diagram/StepNarration.tsx'
 import { useStepPlayer } from '@/components/schema-diagram/use-step-player.ts'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { deleteImpactQuery, foreignKeysQuery, type TableRef } from '@/lib/queries.ts'
 import { impactRelations, impactSteps, impactTables } from './delete-impact.ts'
 

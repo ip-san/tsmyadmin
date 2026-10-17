@@ -1,5 +1,5 @@
 import type { Dialect } from '@tsmyadmin/shared'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { defaultArgs, joinType, retypeName, splitType, TYPE_GROUPS, TYPE_NAMES } from '@/lib/column-spec.ts'
 import { Input, Select } from './Field.tsx'
 

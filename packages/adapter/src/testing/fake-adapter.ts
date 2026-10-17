@@ -18,6 +18,7 @@ import type {
   InsertPreview,
   KeyValue,
   KeyValues,
+  LockWaitReport,
   Namespace,
   ObjectDependency,
   Partitioning,
@@ -88,6 +89,8 @@ export interface FakeAdapterOptions {
   serverNamespace?: Namespace
   users?: UserInfo[]
   processes?: ProcessInfo[]
+  /** What lockWaits reports (default: nobody waits, the processes count as the connections). */
+  lockWaits?: LockWaitReport
   /** What listDependencies reports (null = no catalog, like MariaDB). */
   dependencies?: ObjectDependency[] | null
   /** Routine definitions by name (listRoutines lists them; kind is 'function'). */
@@ -274,6 +277,7 @@ export class FakeAdapter implements DatabaseAdapter {
   private readonly userList: UserInfo[]
   private readonly manageAccountsAllowed: boolean
   private processList: ProcessInfo[]
+  private readonly lockWaitReport: LockWaitReport | null
   private readonly onSql: FakeAdapterOptions['onSql']
   private readonly dependencies: ObjectDependency[] | null
   private readonly routines: Record<string, string>
@@ -287,6 +291,7 @@ export class FakeAdapter implements DatabaseAdapter {
     this.userList = options.users ?? []
     this.manageAccountsAllowed = options.manageAccounts ?? true
     this.processList = options.processes ?? []
+    this.lockWaitReport = options.lockWaits ?? null
     this.databases = options.databases ?? {}
     this.onSql = options.onSql
     this.dependencies = options.dependencies ?? null
@@ -673,6 +678,17 @@ export class FakeAdapter implements DatabaseAdapter {
     const before = this.processList.length
     this.processList = this.processList.filter((p) => p.id !== id)
     if (this.processList.length === before) throw new AdapterError('NOT_FOUND', `No such process: ${id}`)
+  }
+
+  async lockWaits(): Promise<LockWaitReport> {
+    this.record('lockWaits')
+    return structuredClone(
+      this.lockWaitReport ?? {
+        status: 'ok',
+        waits: [],
+        connections: { current: this.processList.length, max: 151, idleInTransaction: 0 },
+      }
+    )
   }
 
   async listUsers(): Promise<UserInfo[]> {

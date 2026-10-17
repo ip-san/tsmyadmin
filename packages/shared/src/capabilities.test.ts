@@ -72,4 +72,44 @@ describe('capabilities', () => {
     expect(capabilities('mysql')).toMatchObject({ databasesAreSchemas: true, scriptDelimiter: true })
     expect(capabilities('postgres')).toMatchObject({ databasesAreSchemas: false, scriptDelimiter: false })
   })
+
+  it('says only a PostgreSQL connection is bound to one database, and only MySQL has database and table default collations', () => {
+    expect(capabilities('postgres')).toMatchObject({ connectionPerDatabase: true, collationDefaults: false })
+    expect(capabilities('mysql')).toMatchObject({ connectionPerDatabase: false, collationDefaults: true })
+  })
+
+  it('says only MySQL has storage engines, a column order, ON UPDATE timestamps, definers and statement profiling', () => {
+    const mysqlOnly = {
+      storageEngines: true,
+      columnOrder: true,
+      onUpdateTimestamp: true,
+      definer: true,
+      statementProfiling: true,
+    }
+    expect(capabilities('mysql')).toMatchObject(mysqlOnly)
+    expect(capabilities('postgres')).toMatchObject(Object.fromEntries(Object.keys(mysqlOnly).map((k) => [k, false])))
+  })
+
+  it('says only on PostgreSQL a partition is a table of its own', () => {
+    expect(capabilities('postgres').partitionsAreTables).toBe(true)
+    expect(capabilities('mysql').partitionsAreTables).toBe(false)
+  })
+
+  it('says only MySQL grants on the whole server, gives an account databases of its name, and limits it per hour', () => {
+    expect(capabilities('mysql')).toMatchObject({
+      serverWideGrants: true,
+      accountDatabases: true,
+      accountResourceLimits: true,
+    })
+    expect(capabilities('postgres')).toMatchObject({
+      serverWideGrants: false,
+      accountDatabases: false,
+      accountResourceLimits: false,
+    })
+  })
+
+  it('says only MySQL keeps its statement logs in tables and runs a replica by its threads', () => {
+    expect(capabilities('mysql')).toMatchObject({ statementLogTables: true, replicaThreads: true })
+    expect(capabilities('postgres')).toMatchObject({ statementLogTables: false, replicaThreads: false })
+  })
 })

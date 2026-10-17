@@ -3,7 +3,7 @@ import { lazy, Suspense, useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { Dialog } from '@/components/ui/Dialog.tsx'
 import { ErrorBox, Spinner } from '@/components/ui/Feedback.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import type { TableRef } from '@/lib/queries.ts'
 
 // Loaded when asked for: the diagram is not wanted for most deletes.

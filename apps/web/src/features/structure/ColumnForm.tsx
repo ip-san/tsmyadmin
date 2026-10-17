@@ -1,9 +1,9 @@
-import type { CentralColumnBody, Dialect } from '@tsmyadmin/shared'
+import { type CentralColumnBody, capabilities, type Dialect } from '@tsmyadmin/shared'
 import { type FormEvent, useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { Field, Input, Select } from '@/components/ui/Field.tsx'
 import { TypeInput } from '@/components/ui/TypeInput.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import {
   type ColumnFormValues,
   EMPTY_COLUMN,
@@ -121,7 +121,7 @@ export function ColumnForm({
         <Field id="col-comment" label={locale.ddl.comment}>
           <Input id="col-comment" value={v.comment} onChange={(e) => set({ comment: e.target.value })} />
         </Field>
-        {positions && dialect === 'mysql' ? (
+        {positions && capabilities(dialect).columnOrder ? (
           <Field id="col-after" label={locale.ddl.after}>
             <Select id="col-after" value={after} onChange={(e) => setAfter(e.target.value)}>
               <option value="">{mode === 'add' ? locale.ddl.afterLast : locale.ddl.extras.keepPosition}</option>

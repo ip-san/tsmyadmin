@@ -1,6 +1,7 @@
 import type { Cell } from '@tsmyadmin/shared'
 import type { Ref } from 'react'
-import { locale, numberLocale } from '@/config/locale.ts'
+import { numberLocale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { MAX_POINTS, niceScale, toNumber } from '@/lib/chart-data.ts'
 import { layoutLegend } from '@/lib/chart-legend.ts'
 import { type Pt, parseTime, polylinePath, timeLabel } from '@/lib/chart-shapes.ts'

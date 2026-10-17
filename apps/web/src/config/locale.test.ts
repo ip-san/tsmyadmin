@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { intlLocaleFor, LOCALE_NAMES, numberLocale, resolveLocaleCode } from './locale.ts'
 import { en } from './locales/en.ts'
 import { ja } from './locales/ja.ts'
+import { enScreens } from './locales/screens-en.ts'
+import { jaScreens } from './locales/screens-ja.ts'
 
-const LOCALES = { ja, en }
+/** Each language whole: the strings of first paint and those of the screens (`locale-screens.ts`). */
+const LOCALES = { ja: { ...ja, ...jaScreens }, en: { ...en, ...enScreens } }
 
 /** Every leaf of a locale, as `path -> 'string' | arity`. */
 function shape(value: unknown, path = ''): Record<string, string> {

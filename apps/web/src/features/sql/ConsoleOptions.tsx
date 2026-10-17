@@ -1,6 +1,7 @@
 import { useId } from 'react'
 import { Select } from '@/components/ui/Field.tsx'
-import { locale, numberLocale } from '@/config/locale.ts'
+import { numberLocale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { sharePreference } from '@/lib/account-prefs.ts'
 import { writePreference } from '@/lib/preferences.ts'
 

@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { DiagramLegend, StepNarration } from './StepNarration.tsx'
 import type { useStepPlayer } from './use-step-player.ts'
 

@@ -30,7 +30,7 @@ export const sessionQuery = queryOptions({
 export const serversQuery = queryOptions({
   queryKey: ['servers'],
   queryFn: () => unwrap<ServerPreset[]>(api.servers.$get()),
-  // Containers started while the page is open (Docker discovery) show up when the login screen is opened again.
+  // The login screen re-reads it every 5 s while Docker discovery is on (routes/login.tsx).
   staleTime: 10_000,
 })
 

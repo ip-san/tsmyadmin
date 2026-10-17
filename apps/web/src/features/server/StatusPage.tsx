@@ -2,7 +2,8 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
-import { locale, numberLocale } from '@/config/locale.ts'
+import { numberLocale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { serverInfoQuery, statusQuery, variablesQuery } from '@/lib/queries.ts'
 import { useDialect } from '@/lib/session.ts'
 import { advise, fill } from './advisor.ts'
@@ -82,9 +83,7 @@ export function StatusPage() {
       {statements.length > 0 ? (
         <section>
           <h2 className="mb-1 text-sm font-semibold text-ink">{t.queryStatsTitle}</h2>
-          <p className="mb-2 text-xs text-ink-sub">
-            {dialect === 'mysql' ? t.queryStatsHintMysql : t.queryStatsHintPostgres}
-          </p>
+          <p className="mb-2 text-xs text-ink-sub">{t.queryStatsHint[dialect]}</p>
           <Table aria-label={t.queryStatsTitle}>
             <thead>
               <tr>

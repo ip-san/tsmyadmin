@@ -1,7 +1,7 @@
 import { CreateSection } from '@/components/ddl/CreateSection.tsx'
 import { DdlPreviewDialog } from '@/components/ddl/DdlPreviewDialog.tsx'
 import { ViewForm } from '@/components/ddl/ViewForm.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { useDdlFlow } from '@/lib/ddl.ts'
 import { useDialect } from '@/lib/session.ts'
 

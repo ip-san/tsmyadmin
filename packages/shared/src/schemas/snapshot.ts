@@ -6,7 +6,7 @@ export const SnapshotSchema = z.object({
   name: z.string().min(1).max(80),
   /** When it was taken (ISO 8601). */
   at: z.string(),
-  /** Size of the dump it holds. */
+  /** What it takes in memory: the dump, and the definitions kept beside it to compare the schema with. */
   bytes: z.number().int().min(0),
   /** Tables and views it holds. */
   objects: z.number().int().min(0),
@@ -42,3 +42,28 @@ export const SnapshotRestoreResultSchema = z.object({
   durationMs: z.number(),
 })
 export type SnapshotRestoreResult = z.infer<typeof SnapshotRestoreResultSchema>
+
+/** One table or view in a comparison: its definition (CREATE statements) then and now, null where it has none. */
+export const SnapshotDiffEntrySchema = z.object({
+  name: z.string(),
+  before: z.string().nullable(),
+  after: z.string().nullable(),
+})
+export type SnapshotDiffEntry = z.infer<typeof SnapshotDiffEntrySchema>
+
+/**
+ * What changed in the schema since a snapshot was taken (a migration, say): the tables and views made since, the
+ * ones gone, and the ones whose definition differs. Row values are not compared, nor counters that move with them
+ * (MySQL's AUTO_INCREMENT=, a sequence's position).
+ */
+export const SnapshotDiffSchema = z.object({
+  snapshot: SnapshotSchema,
+  added: z.array(SnapshotDiffEntrySchema),
+  removed: z.array(SnapshotDiffEntrySchema),
+  changed: z.array(SnapshotDiffEntrySchema),
+  /** How many are the same as they were. */
+  unchanged: z.number().int().min(0),
+  /** In both, but one of the two definitions could not be read (a view this account cannot SHOW): not compared. */
+  unreadable: z.array(z.string()),
+})
+export type SnapshotDiff = z.infer<typeof SnapshotDiffSchema>

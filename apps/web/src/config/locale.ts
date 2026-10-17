@@ -50,9 +50,9 @@ export const numberLocale = intlLocaleFor(localeCode)
  * The strings of the current language. Resolved once at load: every component reads `locale.*` directly, and
  * `setLocale` reloads the page so a switch cannot leave half the screen in the other language.
  *
- * Only this language is downloaded: the other would be dead weight in the first paint, and the strings are the
- * largest thing that grows with every screen. `loadLocale` fills this in before the app's modules are imported
- * (main.tsx), so the `const t = locale.x` at the top of each of them sees it. Not a top-level await: that makes
+ * Only this language is downloaded, and only the strings first paint needs: the screens' strings are the larger
+ * part and come later, with the first screen (`locale-screens.ts`). `loadLocale` fills this in before the app's
+ * modules are imported (main.tsx), so the `const t = locale.x` at the top of each of them sees it. Not a top-level await: that makes
  * the bundler preload every route chunk, which undoes the code splitting.
  */
 export let locale = undefined as unknown as Locale

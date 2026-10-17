@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/Button.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import type { DdlFlow } from '@/lib/ddl.ts'
 
 /**

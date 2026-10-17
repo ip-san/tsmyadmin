@@ -24,14 +24,19 @@ export function stripLeadingComments(sql: string, dialect: Dialect): string {
   for (;;) {
     while (i < sql.length && /\s/.test(sql[i] as string)) i++
     const token = scanToken(sql, i, dialect)
-    if (!token || token.kind === 'literal' || token.kind === 'version-comment') return sql.slice(i)
+    if (!token || token.kind === 'literal' || token.kind === 'version-comment' || token.kind === 'word')
+      return sql.slice(i)
     if (token.kind === 'comment' && !token.closed) return ''
     i = token.end + (token.kind === 'line-comment' ? 1 : 0)
   }
 }
-/** One lexical span the splitter skips over: what it is, where it ends (exclusive), and whether it was closed. */
+/**
+ * One lexical span the splitter skips over: what it is, where it ends (exclusive), and whether it was closed.
+ * A `word` is a PostgreSQL name, read whole so that a `$` or an `E` inside it is not taken for the start of a dollar
+ * quote or an escape string.
+ */
 interface SqlToken {
-  kind: 'literal' | 'comment' | 'line-comment' | 'version-comment'
+  kind: 'literal' | 'comment' | 'line-comment' | 'version-comment' | 'word'
   end: number
   closed: boolean
 }
@@ -40,30 +45,52 @@ interface SqlToken {
 const DOLLAR_TAG = /^\$(?:[A-Za-z_\u0080-\uffff][\w\u0080-\uffff]*)?\$/
 
 /**
- * The literal or comment starting at `i`, read as the server reads it, or null when `i` is plain code:
+ * A name (or key word) as PostgreSQL reads it (`ident_start`, then `ident_cont`): every non-ASCII character is a
+ * letter to it (a surrogate pair too), and `$` continues a name, so `é$t$` and `a$b$` are one name each.
+ */
+const PG_WORD = /[A-Za-z_\u0080-\uffff][\w$\u0080-\uffff]*/y
+
+/** The '…' (or "…", `…`) opening at `open`: a doubled quote stays inside, and so does an escaped one if `backslash`. */
+function quotedSpan(input: string, open: number, backslash: boolean): SqlToken {
+  const q = input[open]
+  const n = input.length
+  let j = open + 1
+  while (j < n) {
+    const c = input[j]
+    if (c === '\\' && backslash) j += 2
+    else if (c === q && input[j + 1] === q) j += 2
+    else if (c === q) return { kind: 'literal', end: j + 1, closed: true }
+    else j++
+  }
+  return { kind: 'literal', end: n, closed: false }
+}
+
+/**
+ * The literal, comment or (PostgreSQL) name starting at `i`, read as the server reads it, or null when `i` is other
+ * code:
  * - literals: '…' (doubled quotes; backslash escapes on MySQL unless NO_BACKSLASH_ESCAPES, and in a PostgreSQL
  *   `E'…'`), "…", MySQL `…`, PostgreSQL `$tag$…$tag$`
  * - comments: `/* *\/` (nested on PostgreSQL, first `*\/` on MySQL; a MySQL `/*!…*\/` is a version comment the
  *   server executes), `--` (MySQL needs whitespace after it: `2--2` is arithmetic), `#` (MySQL only)
+ * - names, on PostgreSQL only (`E'…'` starts an escape string only where the `E` is a name of its own: `abcE'…'` and
+ *   `éE'…'` are the name, then a plain string). MySQL has neither dollar quotes nor E-strings, and under
+ *   `DELIMITER $$` its `END$$` must still end the statement.
  * Every consumer of SQL text — the splitter, comment stripping, the audit log's redaction — shares these rules.
  */
 function scanToken(input: string, i: number, dialect: Dialect, noBackslash = false): SqlToken | null {
   const rules = lexicalRules(dialect)
   const n = input.length
   const ch = input[i]
-  if (ch === "'" || ch === '"' || (ch === '`' && rules.backtickIdentifiers)) {
-    const escapeString =
-      (rules.backslashEscapes && ch !== '`' && !noBackslash) ||
-      (rules.escapeStrings && ch === "'" && /[eE]/.test(input[i - 1] ?? '') && !/[\w$]/.test(input[i - 2] ?? ''))
-    let j = i + 1
-    while (j < n) {
-      const c = input[j]
-      if (c === '\\' && escapeString) j += 2
-      else if (c === ch && input[j + 1] === ch) j += 2
-      else if (c === ch) return { kind: 'literal', end: j + 1, closed: true }
-      else j++
+  if (ch === "'" || ch === '"' || (ch === '`' && rules.backtickIdentifiers))
+    return quotedSpan(input, i, rules.backslashEscapes && ch !== '`' && !noBackslash)
+  if (rules.dollarQuotes || rules.escapeStrings) {
+    PG_WORD.lastIndex = i
+    const word = PG_WORD.exec(input)?.[0]
+    if (word) {
+      if (rules.escapeStrings && (word === 'E' || word === 'e') && input[i + 1] === "'")
+        return quotedSpan(input, i + 1, true)
+      return { kind: 'word', end: i + word.length, closed: true }
     }
-    return { kind: 'literal', end: n, closed: false }
   }
   if (ch === '$' && rules.dollarQuotes) {
     const tag = DOLLAR_TAG.exec(input.slice(i))?.[0]
@@ -112,7 +139,7 @@ export function stripComments(sql: string, dialect: Dialect): string {
       i++
       continue
     }
-    if (token.kind === 'literal') out += sql.slice(i, token.end)
+    if (token.kind === 'literal' || token.kind === 'word') out += sql.slice(i, token.end)
     else if (token.kind === 'version-comment')
       out += ` ${VERSION_COMMENT.exec(sql.slice(i, token.end))?.[1] ?? sql.slice(i + 2, token.end).replace(/\*\/$/, '')} `
     else if (token.kind === 'comment') out += ' '
@@ -309,25 +336,26 @@ function scan(
       }
     }
     const token = scanToken(input, i, dialect, noBackslash)
+    if (token?.kind === 'word') {
+      if (rules.beginAtomic) {
+        const upper = input.slice(i, token.end).toUpperCase()
+        if (upper === 'BEGIN' && /^\s+ATOMIC\b/i.test(input.slice(token.end))) atomicDepth++
+        else if (atomicDepth > 0 && upper === 'CASE') caseDepth++
+        else if (atomicDepth > 0 && upper === 'END') {
+          if (caseDepth > 0) caseDepth--
+          else atomicDepth--
+        }
+      }
+      hasCode = true
+      skipTo(token.end)
+      continue
+    }
     if (token) {
       // MySQL executes "/*!40014 ... */" version comments (mysqldump's whole preamble is written that way), so
       // such a chunk is real code and must not be dropped as comment-only; so is any literal.
       if (token.kind === 'literal' || token.kind === 'version-comment') hasCode = true
       if (!token.closed) unterminated = true
       skipTo(token.end)
-      continue
-    }
-    if (rules.beginAtomic && /[A-Za-z_]/.test(ch) && !/[\w$]/.test(input[i - 1] ?? '')) {
-      const word = /^[A-Za-z_][\w$]*/.exec(input.slice(i))?.[0] ?? ''
-      const upper = word.toUpperCase()
-      if (upper === 'BEGIN' && /^\s+ATOMIC\b/i.test(input.slice(i + word.length))) atomicDepth++
-      else if (atomicDepth > 0 && upper === 'CASE') caseDepth++
-      else if (atomicDepth > 0 && upper === 'END') {
-        if (caseDepth > 0) caseDepth--
-        else atomicDepth--
-      }
-      hasCode = true
-      skipTo(i + word.length)
       continue
     }
     if (atomicDepth === 0 && (delimiter.length === 1 ? ch === delimiter : input.startsWith(delimiter, i))) {

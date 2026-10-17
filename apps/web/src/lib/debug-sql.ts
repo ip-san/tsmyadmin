@@ -18,9 +18,11 @@ export const DEBUG_SQL_MAX = 200
 /**
  * A statement with the secrets of an account statement masked, by the same rule as the server's audit log (shared in
  * `maskCredentialPart`). Coarser than the server's, which splits statements first: it may hide more, never less.
+ * The credential part goes first: the server strips comments before it masks a connection password, the panel does not,
+ * and `PASSWORD = /* it's *\/ 'secret` would lose its comment opener to the connection-string rule.
  */
 export function maskSql(sql: string): string {
-  return maskCredentialPart(maskConnectionPassword(sql))
+  return maskConnectionPassword(maskCredentialPart(sql))
 }
 
 let entries: readonly DebugEntry[] = []

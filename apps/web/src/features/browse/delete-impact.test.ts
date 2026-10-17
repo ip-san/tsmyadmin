@@ -1,7 +1,7 @@
 import type { DeleteImpact, RelationDef } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
 import { relationKey } from '@/components/schema-diagram/SchemaDiagram.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { impactRelations, impactSteps, impactTables } from './delete-impact.ts'
 
 const t = locale.deleteImpact

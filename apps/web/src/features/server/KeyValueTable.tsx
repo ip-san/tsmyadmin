@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/Button.tsx'
 import { Badge, Notice } from '@/components/ui/Feedback.tsx'
 import { Input, Select } from '@/components/ui/Field.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 
 export function filterKeyValues(items: KeyValue[], filter: string): KeyValue[] {
   const q = filter.trim().toLowerCase()

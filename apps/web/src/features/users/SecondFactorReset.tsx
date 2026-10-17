@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/Button.tsx'
 import { Dialog } from '@/components/ui/Dialog.tsx'
 import { ErrorBox } from '@/components/ui/Feedback.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { accountSecondFactorsQuery, mutations, sessionQuery } from '@/lib/queries.ts'
 
 const t = locale.users.secondFactor

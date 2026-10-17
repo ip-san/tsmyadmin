@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/Button.tsx'
 import { Badge, ErrorBox, Spinner } from '@/components/ui/Feedback.tsx'
 import { Field, Input } from '@/components/ui/Field.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { variablesQuery } from '@/lib/queries.ts'
 
 const t = locale.replication.controls.source
@@ -95,7 +95,7 @@ export function ReplicaUserForm({
         <Field id="replica-user" label={locale.users.name}>
           <Input id="replica-user" value={name} onChange={(e) => setName(e.target.value)} autoComplete="off" />
         </Field>
-        {dialect === 'mysql' ? (
+        {capabilities(dialect).accountHost ? (
           <Field id="replica-host" label={locale.users.host}>
             <Input id="replica-host" value={host} onChange={(e) => setHost(e.target.value)} autoComplete="off" />
           </Field>

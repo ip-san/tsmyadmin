@@ -1,10 +1,12 @@
 import type {
   CatalogColumn,
+  ConnectionUsage,
   DiagnosticKind,
   DiagnosticQuery,
   DiagnosticReport,
   KeyValue,
   KillMode,
+  LockWaitReport,
   ProcessInfo,
   ReplicationInfo,
   ServerCatalog,
@@ -13,7 +15,7 @@ import type {
 } from '@tsmyadmin/shared'
 import { replicationRole } from '@tsmyadmin/shared'
 import { type Conn, firstResult } from '../driver.ts'
-import { joinParts, str, strOrNull } from '../sql/format.ts'
+import { joinParts, lockWaitFromRow, str, strOrNull } from '../sql/format.ts'
 import { mysqlLiteral } from '../sql/literal.ts'
 import { AdapterError } from '../types.ts'
 
@@ -82,6 +84,104 @@ export async function mysqlKillProcess(conn: Conn, id: string, mode: KillMode = 
       conn.discard()
       return
     }
+    throw err
+  }
+}
+
+/**
+ * Who waits for whom, by InnoDB transaction: `r` waits, `b` holds the lock. INNODB_TRX carries the processlist id
+ * (the lock-wait tables' THREAD_ID columns are performance_schema's own numbering), when each transaction began and
+ * how long the waiter has waited; PROCESSLIST adds the account, the database and what each runs now.
+ */
+const LOCK_WAIT_COLUMNS = `SELECT DISTINCT r.trx_mysql_thread_id, rp.USER, rp.DB,
+    TIMESTAMPDIFF(SECOND, r.trx_wait_started, NOW()), LEFT(COALESCE(rp.INFO, r.trx_query), 65536),
+    b.trx_mysql_thread_id, bp.USER, bp.DB, CONCAT_WS(' / ', bp.COMMAND, NULLIF(bp.STATE, '')), bp.COMMAND = 'Sleep',
+    TIMESTAMPDIFF(SECOND, b.trx_started, NOW())`
+const lockWaitSessions = (
+  waiting: string,
+  blocking: string
+) => `JOIN information_schema.INNODB_TRX r ON r.trx_id = ${waiting}
+  JOIN information_schema.INNODB_TRX b ON b.trx_id = ${blocking}
+  LEFT JOIN information_schema.PROCESSLIST rp ON rp.ID = r.trx_mysql_thread_id
+  LEFT JOIN information_schema.PROCESSLIST bp ON bp.ID = b.trx_mysql_thread_id`
+/**
+ * MySQL 8: performance_schema's lock waits. An idle blocker has no statement in PROCESSLIST; the statement it ran
+ * last is still in events_statements_current, which is what tells a developer which code left the transaction open.
+ */
+const MYSQL_LOCK_WAITS = `${LOCK_WAIT_COLUMNS},
+    LEFT(COALESCE(bp.INFO, b.trx_query, (SELECT s.SQL_TEXT FROM performance_schema.threads t
+      JOIN performance_schema.events_statements_current s ON s.THREAD_ID = t.THREAD_ID
+      WHERE t.PROCESSLIST_ID = b.trx_mysql_thread_id ORDER BY s.EVENT_ID DESC LIMIT 1)), 65536),
+    CONCAT_WS('.', l.OBJECT_SCHEMA, l.OBJECT_NAME), l.LOCK_MODE
+  FROM performance_schema.data_lock_waits w
+  ${lockWaitSessions('w.REQUESTING_ENGINE_TRANSACTION_ID', 'w.BLOCKING_ENGINE_TRANSACTION_ID')}
+  LEFT JOIN performance_schema.data_locks l ON l.ENGINE_LOCK_ID = w.REQUESTING_ENGINE_LOCK_ID
+  ORDER BY 4 DESC, 1, 6`
+/** MariaDB (and MySQL before 8.0): the same pairs from information_schema's InnoDB tables. */
+const MARIADB_LOCK_WAITS = `${LOCK_WAIT_COLUMNS},
+    LEFT(COALESCE(bp.INFO, b.trx_query), 65536), l.lock_table, l.lock_mode
+  FROM information_schema.INNODB_LOCK_WAITS w
+  ${lockWaitSessions('w.requesting_trx_id', 'w.blocking_trx_id')}
+  LEFT JOIN information_schema.INNODB_LOCKS l ON l.lock_id = w.requested_lock_id
+  ORDER BY 4 DESC, 1, 6`
+/** Connections whose server has no performance_schema.data_lock_waits (MariaDB): the MySQL form is not retried. */
+const NO_DATA_LOCK_WAITS = new WeakSet<object>()
+
+/** performance_schema's table is missing (ER_NO_SUCH_TABLE), or information_schema does not know the view (ER_UNKNOWN_TABLE). */
+const isMissingTable = (err: unknown) =>
+  err instanceof AdapterError && (err.nativeCode === 'ER_NO_SUCH_TABLE' || err.nativeCode === 'ER_UNKNOWN_TABLE')
+const isDenied = (err: unknown) =>
+  err instanceof AdapterError &&
+  (err.code === 'PERMISSION_DENIED' || err.nativeCode === 'ER_SPECIFIC_ACCESS_DENIED_ERROR')
+
+async function mysqlWaitRows(conn: Conn): Promise<{ status: LockWaitReport['status']; rows: unknown[][] }> {
+  if (!NO_DATA_LOCK_WAITS.has(conn.id)) {
+    try {
+      const rows = firstResult(await conn.query(MYSQL_LOCK_WAITS)).rows
+      if (rows.length > 0) return { status: 'ok', rows }
+      // With performance_schema switched off its tables are there but always empty: that is not "nobody waits".
+      const on = firstResult(await conn.query('SELECT @@performance_schema')).rows[0]?.[0]
+      return { status: isOff(on) ? 'unsupported' : 'ok', rows }
+    } catch (err) {
+      if (!isMissingTable(err)) throw err
+      NO_DATA_LOCK_WAITS.add(conn.id)
+    }
+  }
+  try {
+    return { status: 'ok', rows: firstResult(await conn.query(MARIADB_LOCK_WAITS)).rows }
+  } catch (err) {
+    if (isMissingTable(err)) return { status: 'unsupported', rows: [] }
+    throw err
+  }
+}
+
+async function mysqlConnectionUsage(conn: Conn): Promise<ConnectionUsage> {
+  const r = firstResult(await conn.query("SHOW GLOBAL STATUS LIKE 'Threads_connected'"))
+  const max = firstResult(await conn.query('SELECT @@max_connections')).rows[0]?.[0]
+  let idle: number | null = null
+  try {
+    // An open transaction on a connection that runs nothing; reading INNODB_TRX takes the PROCESS privilege.
+    const n = firstResult(
+      await conn.query(
+        `SELECT COUNT(*) FROM information_schema.INNODB_TRX x
+         JOIN information_schema.PROCESSLIST p ON p.ID = x.trx_mysql_thread_id WHERE p.COMMAND = 'Sleep'`
+      )
+    ).rows[0]?.[0]
+    idle = Number(n ?? 0)
+  } catch (err) {
+    if (!isDenied(err)) throw err
+  }
+  return { current: Number(r.rows[0]?.[1] ?? 0), max: max == null ? null : Number(max), idleInTransaction: idle }
+}
+
+/** Lock waits and connection usage. Lock tables the account may not read are `denied`, not an error. */
+export async function mysqlLockWaits(conn: Conn): Promise<LockWaitReport> {
+  const connections = await mysqlConnectionUsage(conn)
+  try {
+    const { status, rows } = await mysqlWaitRows(conn)
+    return { status, waits: rows.map(lockWaitFromRow), connections }
+  } catch (err) {
+    if (isDenied(err)) return { status: 'denied', waits: [], connections }
     throw err
   }
 }

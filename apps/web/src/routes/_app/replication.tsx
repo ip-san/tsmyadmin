@@ -1,6 +1,6 @@
 import { createFileRoute, useRouteContext } from '@tanstack/react-router'
 import { ServerTabs } from '@/components/layout/ServerTabs.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { ReplicationPage } from '@/features/server/ReplicationPage.tsx'
 
 export const Route = createFileRoute('/_app/replication')({ component: Page })

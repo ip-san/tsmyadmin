@@ -56,7 +56,7 @@ function glyphEm(ch: string): number {
 }
 
 /** The estimated width of `text` in pixels at `size` (see `glyphEm`). */
-const textWidth = (text: string, size: number, bold = false): number =>
+export const textWidth = (text: string, size: number, bold = false): number =>
   [...text].reduce((n, ch) => n + glyphEm(ch), 0) * size * (bold ? 1.1 : 1)
 
 /** The widest a box grows to fit its names: beyond it a name is cut with an ellipsis, as in a fixed-width box. */

@@ -1,7 +1,7 @@
 import { useRouteContext } from '@tanstack/react-router'
 import type { ExportTemplate, ExportTemplateBody } from '@tsmyadmin/shared'
 import { NamedListPanel } from '@/components/panels/NamedListPanel.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { exportTemplatesQuery, listExportTemplates, mutations } from '@/lib/queries.ts'
 import { useNamedList } from '@/lib/use-named-list.ts'
 import { deleteTemplate, loadTemplates, saveTemplate, templatesFor } from './export-templates.ts'

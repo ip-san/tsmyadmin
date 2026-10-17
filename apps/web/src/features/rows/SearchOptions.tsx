@@ -1,6 +1,6 @@
 import { BROWSE_MAX_LIMIT } from '@tsmyadmin/shared'
 import { Field, Input, Select, Textarea } from '@/components/ui/Field.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 
 const t = locale.search.options
 

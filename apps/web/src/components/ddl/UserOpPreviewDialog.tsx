@@ -1,6 +1,6 @@
 import { useRouteContext } from '@tanstack/react-router'
 import type { UserOp } from '@tsmyadmin/shared'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { useOwnAccount } from '@/lib/own-account.ts'
 import type { UserOpFlow } from '@/lib/user-ops.ts'
 import { PreviewDialog } from './PreviewDialog.tsx'

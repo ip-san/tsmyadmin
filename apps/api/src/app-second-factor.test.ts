@@ -131,7 +131,10 @@ describe('second factor', () => {
 
         const late = await confirm(a, started.secret, h.at())
         expect(late.status).toBe(401)
-        expect(ApiErrorSchema.parse(await late.json()).code).toBe('SECOND_FACTOR_INVALID')
+        expect(ApiErrorSchema.parse(await late.json())).toMatchObject({
+          code: 'SECOND_FACTOR_INVALID',
+          message: 'Start the enrolment again',
+        })
         // What the account has is still what the proof-giving session set.
         expect((await h.store.secondFactor?.get(account))?.secret).toBe(other.secret)
       } finally {
@@ -457,7 +460,10 @@ describe('second factor', () => {
           body: JSON.stringify({ response }),
         })
         expect(late.status).toBe(401)
-        expect(ApiErrorSchema.parse(await late.json()).code).toBe('SECOND_FACTOR_INVALID')
+        expect(ApiErrorSchema.parse(await late.json())).toMatchObject({
+          code: 'SECOND_FACTOR_INVALID',
+          message: 'Start adding the passkey again',
+        })
         expect((await h.store.secondFactor?.get({ ...LOGIN, dialect: 'mysql' as const }))?.passkeys ?? []).toEqual([])
       } finally {
         await h.store.closeAll()

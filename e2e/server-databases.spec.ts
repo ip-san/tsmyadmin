@@ -23,6 +23,9 @@ for (const t of TARGETS) {
         await form.getByRole('button', { name: 'データベースを作成' }).click()
         await confirmPreview(page, t.dialect === 'mysql' ? /COLLATE utf8mb4_bin/ : /LC_COLLATE 'C'/)
         await expect(page).toHaveURL(new RegExp(`/db/${first}$`))
+        // The URL changes before the page's chunks have loaded; a goto that aborts one makes the router reload the
+        // page, which interrupts the goto (WebKit: "Frame load interrupted").
+        await expect(page.getByRole('heading', { name: new RegExp(first) })).toBeVisible()
 
         await page.goto('/')
         await page.getByLabel(`${first} を選択`).check()
