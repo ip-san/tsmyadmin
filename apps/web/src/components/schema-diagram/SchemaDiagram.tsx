@@ -16,7 +16,7 @@ import {
   routeMiddle,
   snapToGrid,
   textRoom,
-} from './designer-layout.ts'
+} from './layout.ts'
 
 const t = locale.designer
 const STEP = 10
@@ -32,7 +32,7 @@ export const relationKey = (r: RelationDef) => JSON.stringify([r.table, r.name])
  * Tables as boxes and foreign keys as lines. Boxes move by dragging or, once focused, with the arrow keys (Shift
  * for larger steps); `commit` is true for the move that ends one, which is when the page saves the layout.
  */
-export function DesignerDiagram({
+export function SchemaDiagram({
   tables,
   relations,
   columns,
