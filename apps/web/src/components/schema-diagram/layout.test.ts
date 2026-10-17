@@ -8,9 +8,11 @@ import {
   columnLabel,
   DEFAULT_VIEW,
   drawnRelations,
+  findCycles,
   fitText,
   GRID,
   HEADER_HEIGHT,
+  layeredLayout,
   MAX_BOX_WIDTH,
   makeWidthOf,
   relationLabel,
@@ -220,5 +222,71 @@ describe('automatic layout heights', () => {
     const tall = autoLayout(tables, [], undefined, () => boxHeight(10))
     const short = autoLayout(tables, [])
     expect((tall.b?.y ?? 0) - (short.b?.y ?? 0)).toBe(boxHeight(10) - boxHeight(0))
+  })
+})
+
+describe('layeredLayout', () => {
+  const w = () => 100
+  const h = () => 40
+
+  it('puts a node right of the furthest node it points at, and nodes nothing points from first', () => {
+    const p = layeredLayout(
+      ['a', 'b', 'c'],
+      [
+        { from: 'c', to: 'b' },
+        { from: 'b', to: 'a' },
+      ],
+      w,
+      h
+    )
+    expect(p.a?.x).toBeLessThan(p.b?.x ?? 0)
+    expect(p.b?.x).toBeLessThan(p.c?.x ?? 0)
+  })
+
+  it('stacks the nodes of one column, and places every node of a cycle', () => {
+    const edges = [
+      { from: 'a', to: 'b' },
+      { from: 'b', to: 'a' },
+    ]
+    const p = layeredLayout(['a', 'b', 'x', 'y'], edges, w, h)
+    expect(Object.keys(p).sort()).toEqual(['a', 'b', 'x', 'y'])
+    // Nodes nothing points from share the first column, one under the other.
+    expect(p.y?.x).toBe(p.x?.x)
+    expect(p.y?.y).toBeGreaterThan(p.x?.y ?? 0)
+    // The cycle is cut where it is met: a and b still get columns of their own.
+    expect(p.a?.x).not.toBe(p.b?.x)
+  })
+})
+
+describe('findCycles', () => {
+  it('finds none in a chain', () => {
+    expect(
+      findCycles(
+        ['a', 'b', 'c'],
+        [
+          { from: 'a', to: 'b' },
+          { from: 'b', to: 'c' },
+        ]
+      )
+    ).toEqual([])
+  })
+
+  it('names a cycle once, starting from its smallest node, in the order the arrows go', () => {
+    const edges = [
+      { from: 'c', to: 'a' },
+      { from: 'a', to: 'b' },
+      { from: 'b', to: 'c' },
+      { from: 'x', to: 'a' },
+    ]
+    expect(findCycles(['x', 'b', 'c', 'a'], edges)).toEqual([['a', 'b', 'c']])
+  })
+
+  it('finds a self-arrow and two separate cycles', () => {
+    const edges = [
+      { from: 's', to: 's' },
+      { from: 'p', to: 'q' },
+      { from: 'q', to: 'p' },
+    ]
+    expect(findCycles(['s', 'p', 'q'], edges)).toEqual([['s'], ['p', 'q']])
   })
 })

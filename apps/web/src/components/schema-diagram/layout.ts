@@ -121,35 +121,41 @@ export const snapToGrid = (p: Point): Point => ({ x: Math.round(p.x / GRID) * GR
 export const snapAll = (positions: Readonly<Record<string, Point>>): Record<string, Point> =>
   Object.fromEntries(Object.entries(positions).map(([name, p]) => [name, snapToGrid(p)]))
 
+/** An arrow of a graph: `from` refers to (or waits on, or points at) `to`. */
+export interface GraphEdge {
+  from: string
+  to: string
+}
+
 /**
- * A layered starting layout: tables nothing else is referenced from sit in the first column, and a table goes one
- * column to the right of the furthest table it references, so lines mostly run right to left. Cycles (including a
- * key back to an earlier table) are cut where they are met.
+ * A layered layout of any graph: nodes nothing points from sit in the first column, and a node goes one column to the
+ * right of the furthest node it points at, so arrows mostly run right to left. Cycles (including an arrow back to an
+ * earlier node) are cut where they are met; `findCycles` is what reports them.
  */
-export function autoLayout(
-  tables: readonly string[],
-  relations: readonly RelationDef[],
-  widthOf: (table: string) => number = () => BOX_WIDTH,
-  heightOf: (table: string) => number = (table) => boxHeight(boxColumns(table, relations).length)
+export function layeredLayout(
+  ids: readonly string[],
+  edges: readonly GraphEdge[],
+  widthOf: (id: string) => number,
+  heightOf: (id: string) => number
 ): Record<string, Point> {
   const rank = new Map<string, number>()
   const visiting = new Set<string>()
-  const rankOf = (table: string): number => {
-    const known = rank.get(table)
+  const rankOf = (id: string): number => {
+    const known = rank.get(id)
     if (known !== undefined) return known
-    if (visiting.has(table)) return 0
-    visiting.add(table)
-    const refs = relations.filter((r) => r.table === table && r.refTable !== table).map((r) => rankOf(r.refTable) + 1)
-    visiting.delete(table)
+    if (visiting.has(id)) return 0
+    visiting.add(id)
+    const refs = edges.filter((e) => e.from === id && e.to !== id).map((e) => rankOf(e.to) + 1)
+    visiting.delete(id)
     const value = Math.max(0, ...refs)
-    rank.set(table, value)
+    rank.set(id, value)
     return value
   }
   // A column is as wide as its widest box, so wider boxes push the columns after them to the right.
   const columnWidth: number[] = []
-  for (const table of tables) {
-    const r = rankOf(table)
-    columnWidth[r] = Math.max(columnWidth[r] ?? 0, widthOf(table))
+  for (const id of ids) {
+    const r = rankOf(id)
+    columnWidth[r] = Math.max(columnWidth[r] ?? 0, widthOf(id))
   }
   const columnX: number[] = []
   let x = MARGIN
@@ -159,13 +165,66 @@ export function autoLayout(
   })
   const out: Record<string, Point> = {}
   const nextY: number[] = []
-  for (const table of tables) {
-    const r = rankOf(table)
+  for (const id of ids) {
+    const r = rankOf(id)
     const y = nextY[r] ?? MARGIN
-    out[table] = { x: columnX[r] ?? MARGIN, y }
-    nextY[r] = y + heightOf(table) + GAP_Y
+    out[id] = { x: columnX[r] ?? MARGIN, y }
+    nextY[r] = y + heightOf(id) + GAP_Y
   }
   return out
+}
+
+/**
+ * The cycles of a graph, each once, as the nodes in the order the arrows go (a self-arrow is a cycle of one). Where
+ * `layeredLayout` cuts a cycle to place it, this names it: a deadlock is a cycle of sessions waiting on each other.
+ */
+export function findCycles(ids: readonly string[], edges: readonly GraphEdge[]): string[][] {
+  const next = new Map<string, string[]>()
+  for (const e of edges) next.set(e.from, [...(next.get(e.from) ?? []), e.to])
+  const found = new Map<string, string[]>()
+  const path: string[] = []
+  const onPath = new Set<string>()
+  const done = new Set<string>()
+  const walk = (id: string) => {
+    path.push(id)
+    onPath.add(id)
+    for (const to of next.get(id) ?? []) {
+      if (onPath.has(to)) {
+        const cycle = path.slice(path.indexOf(to))
+        // The same cycle met from another node: keyed by its members, starting from the smallest.
+        const key = JSON.stringify([...cycle].sort())
+        if (!found.has(key)) found.set(key, rotateToSmallest(cycle))
+      } else if (!done.has(to)) walk(to)
+    }
+    path.pop()
+    onPath.delete(id)
+    done.add(id)
+  }
+  for (const id of ids) if (!done.has(id)) walk(id)
+  return [...found.values()]
+}
+
+const rotateToSmallest = (cycle: string[]): string[] => {
+  const at = cycle.indexOf([...cycle].sort()[0] ?? '')
+  return [...cycle.slice(at), ...cycle.slice(0, at)]
+}
+
+/**
+ * A layered starting layout of tables: tables nothing else is referenced from sit in the first column, and a table
+ * goes one column to the right of the furthest table it references, so lines mostly run right to left.
+ */
+export function autoLayout(
+  tables: readonly string[],
+  relations: readonly RelationDef[],
+  widthOf: (table: string) => number = () => BOX_WIDTH,
+  heightOf: (table: string) => number = (table) => boxHeight(boxColumns(table, relations).length)
+): Record<string, Point> {
+  return layeredLayout(
+    tables,
+    relations.map((r) => ({ from: r.table, to: r.refTable })),
+    widthOf,
+    heightOf
+  )
 }
 
 /** Where a column's row meets the side of its box nearer to `towardsX`. */
