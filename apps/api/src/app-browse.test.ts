@@ -17,6 +17,7 @@ import {
   TableSchemaSchema,
   TableSearchResultSchema,
   TableStatsSchema,
+  TableUsageReportSchema,
 } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
@@ -550,6 +551,18 @@ describe('sql & ddl', () => {
       method: 'listForeignKeys',
       args: [{ database: 'shop', schema: 'app' }],
     })
+  })
+
+  it('reports how the tables of a database are read, for the designer', async () => {
+    const h = harness()
+    stores.push(h.store)
+    await h.login()
+    const res = await h.req('/api/databases/shop/usage?schema=app')
+    expect(res.status).toBe(200)
+    const report = TableUsageReportSchema.parse(await res.json())
+    expect(report.tables.map((t) => t.table)).toEqual(['users', 'posts'])
+    expect(h.adapter.calls.at(-1)).toEqual({ method: 'tableUsage', args: [{ database: 'shop', schema: 'app' }] })
+    expect((await h.req('/api/databases/nope/usage')).status).toBe(404)
   })
 
   it('builds a query from structured choices and validates them', async () => {

@@ -44,6 +44,7 @@ import type {
   TableSchema,
   TableSearchResult,
   TableStats,
+  TableUsageReport,
   TriggerDetail,
   TriggerInfo,
   UserInfo,
@@ -281,6 +282,8 @@ export interface DatabaseAdapter {
   prepareDdl(ns: Namespace, op: DdlOp): Promise<DdlOp>
   /** Per foreign key of the table, the rows that name a parent which is not there (the constraint may be unenforced, or disabled). */
   checkReferences(ns: Namespace, table: string): Promise<ReferenceCheck[]>
+  /** How each table and index of the namespace has been read, by the server's own counters. Reads only. */
+  tableUsage(ns: Namespace): Promise<TableUsageReport>
   /**
    * What deleting the rows `keys` name would reach through the foreign keys of this namespace that refer to them
    * (ON DELETE), counted depth by depth without deleting anything. Reads only.
@@ -424,6 +427,7 @@ export const ADAPTER_METHOD_NAMES = [
   'searchTable',
   'distinctValues',
   'checkReferences',
+  'tableUsage',
   'deleteImpact',
   'prepareDdl',
   'buildQuery',

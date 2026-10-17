@@ -43,6 +43,7 @@ import type {
   TableSchema,
   TableSearchResult,
   TableStats,
+  TableUsageReport,
   TriggerDetail,
   TriggerInfo,
   UserInfo,
@@ -471,6 +472,14 @@ export class FakeAdapter implements DatabaseAdapter {
     this.record('deleteImpact', ns, table, keys)
     this.table(ns, table)
     return { table, rows: keys.length, steps: [], blocked: false, capped: false }
+  }
+
+  async tableUsage(ns: Namespace): Promise<TableUsageReport> {
+    this.record('tableUsage', ns)
+    const db = this.databases[ns.database]
+    if (!db) throw new AdapterError('NOT_FOUND', `Unknown database: ${ns.database}`)
+    const tables = Object.keys(db.tables).map((table) => ({ table, fullReads: 2, indexReads: 10 }))
+    return { status: 'ok', unit: 'scans', since: '2026-01-01T00:00:00Z', tables, indexes: [] }
   }
 
   async checkReferences(ns: Namespace, table: string): Promise<ReferenceCheck[]> {

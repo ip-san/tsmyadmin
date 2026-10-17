@@ -102,6 +102,26 @@ export const enScreens = {
     openInSql: 'Open in the SQL tab',
   },
   designer: {
+    usage: {
+      toggle: 'Show how tables are read',
+      toggleHint: 'From the server statistics: whether each table is read in full or through an index',
+      loading: 'Reading the statistics…',
+      since: (date: string, unit: 'scans' | 'rows') =>
+        `${unit === 'scans' ? 'Scans' : 'Rows read'} since ${date} (the server's statistics; reset, they count from 0)`,
+      badge: (full: number, index: number) =>
+        `full ${full.toLocaleString('en-US', { notation: 'compact' })} / index ${index.toLocaleString('en-US', { notation: 'compact' })}`,
+      scan: 'Mostly read in full',
+      index: 'Mostly read through an index',
+      unused: 'Indexes never read',
+      unusedHint:
+        'Indexes not read once since the statistics started (primary keys and unique indexes are left out: they keep rows unique). Before dropping one, check for rare reads such as month-end jobs',
+      unusedNone: 'Every index has been read',
+      table: 'Table',
+      indexName: 'Index',
+      denied: 'This account may not read the statistics (MySQL / MariaDB: SELECT on performance_schema)',
+      unsupported:
+        'The server keeps no statistics. On MySQL / MariaDB, turn performance_schema on (MariaDB has it off by default)',
+    },
     compact: 'Table names only',
     snap: 'Snap to grid',
     snapHint: 'Shows a 20 px grid and lines up the boxes already placed on it; later moves land on it too',
@@ -196,6 +216,7 @@ export const enScreens = {
     refuse: (table: string, rows: number, key: string) =>
       `${rows.toLocaleString('en-US')} rows of ${table} refer to them, so the delete fails (${key})`,
     none: (table: string, key: string) => `${table}: no rows refer to them (${key})`,
+    tooMany: (max: number) => `The impact can be shown for up to ${max} rows: choose fewer`,
     noRows: 'No row matches (it may already be gone)',
     noKeys: 'No foreign key refers to this table: only the chosen rows are deleted',
     blocked: 'This delete would fail: a RESTRICT / NO ACTION foreign key still has rows referring',

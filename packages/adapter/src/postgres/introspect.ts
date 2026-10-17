@@ -9,6 +9,7 @@ import type {
   TableInfo,
   TableSchema,
   TableStats,
+  TableUsageReport,
 } from '@tsmyadmin/shared'
 import { type Conn, firstResult } from '../driver.ts'
 import { str, strOrNull } from '../sql/format.ts'
@@ -379,6 +380,46 @@ export async function pgListPartitions(conn: Conn, ns: Namespace, table: string)
       bound: str(c[1]),
       rowEstimate: n(c[2]),
       sizeBytes: n(c[3]),
+    })),
+  }
+}
+
+/**
+ * How the tables of a schema are read, from the statistics collector: sequential scans (`seq_scan`) against index
+ * scans, and the scans of each index. The counts run since the last statistics reset, or the server's start.
+ */
+export async function pgTableUsage(conn: Conn, ns: Namespace): Promise<TableUsageReport> {
+  const schema = ns.schema ?? 'public'
+  const tables = firstResult(
+    await conn.query(
+      'SELECT relname, seq_scan::float8, COALESCE(idx_scan, 0)::float8 FROM pg_stat_user_tables WHERE schemaname = $1 ORDER BY 1',
+      [schema]
+    )
+  ).rows
+  const indexes = firstResult(
+    await conn.query(
+      `SELECT s.relname, s.indexrelname, s.idx_scan::float8, i.indisunique
+         FROM pg_stat_user_indexes s JOIN pg_index i ON i.indexrelid = s.indexrelid
+        WHERE s.schemaname = $1 ORDER BY 1, 2`,
+      [schema]
+    )
+  ).rows
+  const since = firstResult(
+    await conn.query(
+      `SELECT to_char(COALESCE(stats_reset, pg_postmaster_start_time()) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+         FROM pg_stat_database WHERE datname = current_database()`
+    )
+  ).rows[0]?.[0]
+  return {
+    status: 'ok',
+    unit: 'scans',
+    since: strOrNull(since),
+    tables: tables.map((r) => ({ table: str(r[0]), fullReads: Number(r[1] ?? 0), indexReads: Number(r[2] ?? 0) })),
+    indexes: indexes.map((r) => ({
+      table: str(r[0]),
+      index: str(r[1]),
+      reads: Number(r[2] ?? 0),
+      unique: r[3] === true || r[3] === 't',
     })),
   }
 }

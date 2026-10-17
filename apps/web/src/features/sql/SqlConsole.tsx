@@ -16,7 +16,7 @@ import { readPreference } from '@/lib/preferences.ts'
 import { invalidateDatabaseData, mutations } from '@/lib/queries.ts'
 import { bookmarkName } from '@/lib/saved-queries.ts'
 import { formatSql } from '@/lib/sql-format.ts'
-import { DEFAULT_RUN_OPTIONS, prepareScript, type RunOptions } from '@/lib/sql-prepare.ts'
+import { DEFAULT_RUN_OPTIONS, prepareScript, prepareStatement, type RunOptions } from '@/lib/sql-prepare.ts'
 import { streamSql } from '@/lib/sql-stream.ts'
 import { explainStatement } from '@/lib/sql-text.ts'
 import { newQueryId } from '@/lib/uuid.ts'
@@ -187,7 +187,7 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
       run.mutate({ script: prepareScript(sql, dialect, runOptions), shown: sql })
     },
     explain: explainSql,
-    visualize: plan.show,
+    visualize: (sql) => plan.show(prepareStatement(sql, dialect, runOptions)),
     code: setCodeOf,
   }
   // A page can hand the console a statement to run on arrival (a table's EXPLAIN). The timer keeps React's dev-only
@@ -235,7 +235,11 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
         <Button onClick={explain} disabled={run.isPending || !isSingleStatement(text)} title={locale.sql.explainHint}>
           {locale.sql.explain}
         </Button>
-        <Button onClick={() => plan.show(text)} disabled={!isSingleStatement(text)} title={locale.plan.showHint}>
+        <Button
+          onClick={() => plan.show(prepareStatement(text, dialect, runOptions))}
+          disabled={!isSingleStatement(text)}
+          title={locale.plan.showHint}
+        >
           {locale.plan.show}
         </Button>
         <Button
