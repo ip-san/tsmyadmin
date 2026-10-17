@@ -24,8 +24,11 @@ export function deleteActionOf(onDelete: string | null): DeleteAction {
   }
 }
 
+/** As many rows as one look at the impact counts for: each key is part of every count's condition. */
+export const DELETE_IMPACT_MAX_KEYS = 100
+
 /** The rows a delete would ask for, by the same keys the delete itself takes. */
-export const DeleteImpactRequestSchema = z.object({ keys: z.array(RowKeySchema).min(1).max(100) })
+export const DeleteImpactRequestSchema = z.object({ keys: z.array(RowKeySchema).min(1).max(DELETE_IMPACT_MAX_KEYS) })
 
 /**
  * One key followed: the rows of `table` that refer, through `constraint`, to rows of `refTable` the delete reaches
