@@ -373,6 +373,17 @@ for (const t of TARGETS) {
       await scan(page)
     })
 
+    test('row relations dialog with a row opened', async ({ page }) => {
+      await login(page, t)
+      await page.goto(`${tableUrl(t, 'users')}${t.schema ? '&' : '?'}sort=id:asc`)
+      await page.getByLabel('1 行目を選択').check()
+      await page.getByRole('button', { name: '関係を図で見る' }).click()
+      const dialog = page.getByRole('dialog')
+      await dialog.getByRole('button', { name: 'users id=1 のつながりを広げる' }).click()
+      await expect(dialog.getByText(/^posts id=/).first()).toBeVisible()
+      await scan(page)
+    })
+
     test('SQL tab with a statement plan drawn', async ({ page }) => {
       const plan = await openPlan(page, t)
       await expect(plan).toBeVisible()
