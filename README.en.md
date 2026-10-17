@@ -1,4 +1,4 @@
-<!-- translated-from: README.md sha256:ef5243d8db257d7959efed3dff1193a64226601be041422017d95f8f3f9c697f -->
+<!-- translated-from: README.md sha256:35cfd378534f64cc99ea2c973b01769522c4174ff7024ee20e8dbeb9c58737b0 -->
 
 # tsmyadmin
 
@@ -101,7 +101,7 @@ bun run lighthouse       # Lighthouse CI (performance / a11y / best practices on
 ```
 
 - The E2E suite needs `bunx playwright install --with-deps chromium webkit` once
-- The VRT baseline images exist for macOS only (`*-darwin.png`), so on another OS use what CI uses: `bunx playwright test --project=chromium --project=a11y --project=webkit`
+- The VRT baseline images exist for macOS only (`*-darwin.png`), so on another OS use what CI uses: `bunx playwright test --project=chromium --project=a11y --project=webkit` (CI runs the three as parallel jobs)
 - `bun run lighthouse` looks at the production build, so run `bun run build` first
 
 The project's own checks:

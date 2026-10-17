@@ -24,6 +24,8 @@ const MIN_WIDTH = 140
 const MAX_WIDTH = 320
 const HEIGHT = 44
 const PAD = 40
+const MIN_GAP = 80
+const MAX_GAP = 260
 
 /**
  * Boxes and arrows, laid out in layers (an arrow mostly runs right to left, to what it points at). A picture only:
@@ -45,11 +47,15 @@ export function NodeGraph({
   const byId = new Map(nodes.map((n) => [n.id, n]))
   const drawn = arrows.filter((a) => byId.has(a.from) && byId.has(a.to))
   const widthOf = (id: string) => nodeWidth(byId.get(id))
+  // The columns are as far apart as the longest arrow label needs, so a label sits between boxes, not over them.
+  const labelRoom = Math.max(0, ...drawn.map((a) => (a.label ? textWidth(a.label, 10) : 0)))
+  const gap = Math.min(MAX_GAP, Math.max(MIN_GAP, Math.ceil(labelRoom + 24)))
   const positions = layeredLayout(
     nodes.map((n) => n.id),
     drawn,
     widthOf,
-    () => HEIGHT
+    () => HEIGHT,
+    gap
   )
   const at = (id: string): Point => positions[id] ?? { x: 0, y: 0 }
   const width = Math.max(...nodes.map((n) => at(n.id).x + widthOf(n.id))) + PAD
@@ -78,7 +84,8 @@ export function NodeGraph({
               />
               {a.label ? (
                 <text x={route.mid.x} y={route.mid.y - 6} textAnchor="middle" className="fill-ink-sub text-[10px]">
-                  {fitText(a.label, 10, 220)}
+                  {fitText(a.label, 10, gap - 16)}
+                  {fitText(a.label, 10, gap - 16) === a.label ? null : <title>{a.label}</title>}
                 </text>
               ) : null}
             </g>

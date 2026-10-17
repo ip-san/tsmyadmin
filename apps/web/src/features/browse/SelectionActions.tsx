@@ -1,7 +1,7 @@
 import type { BrowseResult, Cell, RowKey } from '@tsmyadmin/shared'
 import { isTruncatedCell, toCsv } from '@tsmyadmin/shared'
-import { ChartColumn, Copy, Download, Pencil } from 'lucide-react'
-import { useState } from 'react'
+import { ChartColumn, Copy, Download, Network, Pencil } from 'lucide-react'
+import { lazy, Suspense, useState } from 'react'
 import { ResultChart } from '@/components/results/ResultChart.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { locale } from '@/config/locale-screens.ts'
@@ -9,7 +9,11 @@ import { copyText, toTsv } from '@/lib/clipboard.ts'
 import { downloadText, safeFilename } from '@/lib/download.ts'
 import type { TableRef } from '@/lib/queries.ts'
 import { EditRowsDialog } from './RowDialogs.tsx'
+import { type RowNode, rowNode } from './row-graph.ts'
 import { rowToValues } from './row-key.ts'
+
+// Loaded when asked for: most pages are read, not followed.
+const RowGraphDialog = lazy(() => import('./RowGraphDialog.tsx').then((m) => ({ default: m.RowGraphDialog })))
 
 const t = locale.browse.selection
 
@@ -35,6 +39,7 @@ export function SelectionActions({
   const [editing, setEditing] = useState<{ key: RowKey; values: Record<string, Cell> }[] | null>(null)
   const [chart, setChart] = useState(false)
   const [copied, setCopied] = useState<'done' | 'failed' | null>(null)
+  const [related, setRelated] = useState<RowNode | null>(null)
   // A ctid table carries its row address as a hidden last column: not part of what the user sees.
   const columns = data.keyKind === 'ctid' ? data.columns.slice(0, -1) : data.columns
   const names = columns.map((c) => c.name)
@@ -44,6 +49,9 @@ export function SelectionActions({
   const cut = rows.some((row) => row.some((cell) => isTruncatedCell(cell)))
   const canEdit = editable && picked.every((i) => keys[i])
   const label = `${tableRef.table}-selected`
+  // One row, of a table some key joins to another: its relations can be followed.
+  const joined = data.foreignKeys.length > 0 || data.referencedBy.length > 0
+  const only = picked.length === 1 && picked[0] !== undefined ? data.rows[picked[0]] : undefined
   return (
     <div className="flex flex-wrap items-center gap-2 text-xs">
       {picked.length > 0 ? (
@@ -111,6 +119,17 @@ export function SelectionActions({
           )}
         </>
       ) : null}
+      {only && joined ? (
+        <Button
+          size="sm"
+          aria-haspopup="dialog"
+          title={locale.rowGraph.openHint}
+          onClick={() => setRelated(rowNode(tableRef, data, only))}
+        >
+          <Network className="size-3" aria-hidden />
+          {locale.rowGraph.open}
+        </Button>
+      ) : null}
       <Button size="sm" aria-pressed={chart} onClick={() => setChart((c) => !c)}>
         <ChartColumn className="size-3" aria-hidden />
         {t.chart}
@@ -122,6 +141,11 @@ export function SelectionActions({
         <div className="w-full">
           <ResultChart result={{ ...data, columns, rows: data.rows.map((r) => r.slice(0, names.length)) }} />
         </div>
+      ) : null}
+      {related ? (
+        <Suspense fallback={null}>
+          <RowGraphDialog root={related} onClose={() => setRelated(null)} />
+        </Suspense>
       ) : null}
       <EditRowsDialog
         tableRef={tableRef}

@@ -136,7 +136,9 @@ export function layeredLayout(
   ids: readonly string[],
   edges: readonly GraphEdge[],
   widthOf: (id: string) => number,
-  heightOf: (id: string) => number
+  heightOf: (id: string) => number,
+  /** Room between columns: wider where the arrows carry labels. */
+  gapX = GAP_X
 ): Record<string, Point> {
   const rank = new Map<string, number>()
   const visiting = new Set<string>()
@@ -161,7 +163,7 @@ export function layeredLayout(
   let x = MARGIN
   columnWidth.forEach((w, r) => {
     columnX[r] = x
-    x += (w ?? BOX_WIDTH) + GAP_X
+    x += (w ?? BOX_WIDTH) + gapX
   })
   const out: Record<string, Point> = {}
   const nextY: number[] = []

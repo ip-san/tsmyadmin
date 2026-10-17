@@ -316,7 +316,7 @@ flowchart LR
     chk["check（型 / lint / テスト / 静的検査）"]
     int["integration<br/>MySQL 8.0+PG 14 / 8.4+PG 17"]
     ma["integration-mariadb<br/>10.11 / 11"]
-    e2e["e2e<br/>Chromium + WebKit + axe"]
+    e2e["e2e<br/>Chromium / axe / WebKit を別ジョブで並べて"]
     build["build（Docker / size）"]
     lh["lighthouse（警告のみ）"]
     chk --> int & ma & e2e & build & lh

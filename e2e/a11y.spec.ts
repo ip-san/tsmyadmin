@@ -1,6 +1,7 @@
 import { expect } from '@playwright/test'
 import { fillType, login, PASSKEY_BASE_URL, PERSISTENT_BASE_URL, TARGETS, tableUrl, test } from './helpers.ts'
 import { layoutViolations } from './layout-lint.ts'
+import { lockChain } from './locks.ts'
 import { openPlan } from './plan.ts'
 import { orphanedKey } from './references.ts'
 import { pageProblems } from './scan.ts'
@@ -372,6 +373,41 @@ for (const t of TARGETS) {
       await page.getByRole('dialog').getByRole('button', { name: '影響を見る' }).click()
       await page.getByRole('img', { name: '削除の影響の図' }).waitFor()
       await scan(page)
+    })
+
+    test('row relations dialog with a row opened', async ({ page }) => {
+      await login(page, t)
+      await page.goto(`${tableUrl(t, 'users')}${t.schema ? '&' : '?'}sort=id:asc`)
+      await page.getByLabel('1 行目を選択').check()
+      await page.getByRole('button', { name: '関係を図で見る' }).click()
+      const dialog = page.getByRole('dialog')
+      await dialog.getByRole('button', { name: 'users id=1 のつながりを広げる' }).click()
+      await expect(dialog.getByText(/^posts id=/).first()).toBeVisible()
+      await scan(page)
+    })
+
+    test('process list with a chain of lock waits drawn', async ({ page, browser }) => {
+      test.setTimeout(90_000)
+      await login(page, t)
+      const chain = await lockChain(page, browser, t)
+      try {
+        await page.goto('/processes')
+        await page.getByLabel('更新間隔').selectOption('2')
+        const waits = page.getByRole('table', { name: 'ロック待ち' })
+        await expect(waits.getByRole('row').filter({ hasText: chain.marker('c') })).toBeVisible({ timeout: 15_000 })
+        await page.getByRole('button', { name: '図', exact: true }).click()
+        await expect(page.getByRole('img', { name: /^ロック待ちの図/ })).toBeVisible()
+        await scan(page)
+        await page.getByRole('button', { name: '表', exact: true }).click()
+        const holder = waits
+          .getByRole('row')
+          .filter({ hasText: chain.marker('a') })
+          .first()
+        await holder.getByRole('button', { name: /: ブロック元を強制終了$/ }).click()
+        await page.getByRole('dialog').getByRole('button', { name: '強制終了する' }).click()
+      } finally {
+        await chain.end()
+      }
     })
 
     test('designer with how the tables are read laid over it', async ({ page }) => {
