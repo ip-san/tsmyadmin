@@ -11,7 +11,8 @@ for (const t of TARGETS) {
         await page.goto(`/db/${t.database}/designer${t.schema ? `?schema=${t.schema}` : ''}`)
         await page.getByRole('button', { name: '参照を検査' }).click()
         // Two child rows name parents 7 and 8; the NULL names none.
-        await expect(page.getByText('参照先なし 2')).toBeVisible({ timeout: 15_000 })
+        // Another test's tables may be checked on the same page too: at least this one's badge is there.
+        await expect(page.getByText('参照先なし 2').first()).toBeVisible({ timeout: 15_000 })
         const row = page.getByRole('table', { name: '外部キー' }).getByRole('row').filter({ hasText: orphaned.key })
         await expect(row.getByRole('cell', { name: '2', exact: true })).toBeVisible()
         await page.getByRole('button', { name: '参照を検査' }).click()
