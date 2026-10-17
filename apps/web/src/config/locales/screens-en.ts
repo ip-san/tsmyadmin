@@ -260,6 +260,21 @@ export const enScreens = {
     raw: 'The plan as the server gave it (JSON)',
     rawTruncated: 'Cut short: it is long',
   },
+  rowGraph: {
+    open: 'Show relations',
+    openHint: 'Follow this row and the rows its foreign keys join it to, on a diagram',
+    title: (table: string) => `Relations of a ${table} row`,
+    diagram: 'Row relations diagram (arrows run from a referring row to the row it refers to)',
+    rows: 'Rows on the diagram',
+    expand: (label: string) => `Open the relations of ${label}`,
+    expandShort: 'Open',
+    expanded: 'Opened',
+    reading: 'Reading…',
+    more: (n: number) => `${n.toLocaleString('en-US')} more rows`,
+    openMore: (n: number, table: string) => `Open the other ${n.toLocaleString('en-US')} rows of ${table}`,
+    root: 'Starting row',
+    hint: 'Open a row to add the rows it refers to and the rows that refer to it (up to 10 per table)',
+  },
   databaseOps: {
     copyMode: {
       label: 'What to copy',
@@ -2008,6 +2023,19 @@ export const enScreens = {
     idleInTransactionHint:
       'Its transaction is open but it is running nothing. The application may have forgotten to commit or roll back',
     killBlocker: 'Kill the blocker',
+    lockView: 'View',
+    lockAsTable: 'Table',
+    lockAsGraph: 'Diagram',
+    lockGraph: 'Lock wait diagram (arrows run from a waiting session to the session it waits for)',
+    lockSession: (id: string) => `ID ${id}`,
+    lockBlocksBadge: (n: number) => `${n} waiting`,
+    lockRoot: (id: string, n: number) => `ID ${id} is where it starts: ${n} sessions wait for it, directly or not`,
+    lockRootIdle: ' (its transaction is open and it is doing nothing)',
+    lockCycle: (ids: readonly string[]) =>
+      `IDs ${ids.join(' → ')} wait for each other (a deadlock, until the server cancels one)`,
+    lockGraphHint: 'Kill a session from the Table view',
+    lockLegendRoot: 'Where it starts (holds others up, waits for none)',
+    lockLegendDeadlock: 'Deadlock (waiting for each other)',
     connections: 'Connections',
     connectionsUsage: (current: number, max: number | null, percent: number | null) =>
       max === null ? `${current}` : percent === null ? `${current} / ${max}` : `${current} / ${max} (${percent}%)`,

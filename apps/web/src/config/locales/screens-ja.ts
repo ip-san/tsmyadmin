@@ -259,6 +259,21 @@ export const jaScreens = {
     raw: 'サーバーが返した計画（JSON）',
     rawTruncated: '長いので途中で切っています',
   },
+  rowGraph: {
+    open: '関係を図で見る',
+    openHint: 'この行と、外部キーでつながる行を、図でたどる',
+    title: (table: string) => `${table} の行の関係`,
+    diagram: '行の関係の図（矢印は、参照している行から、参照されている行へ）',
+    rows: '図の行',
+    expand: (label: string) => `${label} のつながりを広げる`,
+    expandShort: '広げる',
+    expanded: '広げた',
+    reading: '読んでいます…',
+    more: (n: number) => `ほか ${n.toLocaleString('ja-JP')} 行`,
+    openMore: (n: number, table: string) => `${table} のほか ${n.toLocaleString('ja-JP')} 行を開く`,
+    root: '起点',
+    hint: '行ごとに「広げる」で、その行が参照している行と、その行を参照している行（表ごとに 10 行まで）を足します',
+  },
   databaseOps: {
     copyMode: {
       label: 'コピーする内容',
@@ -1995,6 +2010,19 @@ export const jaScreens = {
     idleInTransactionHint:
       'トランザクションを開いたまま、何も実行していません。アプリがコミットかロールバックを忘れている可能性があります',
     killBlocker: 'ブロック元を強制終了',
+    lockView: '表示',
+    lockAsTable: '表',
+    lockAsGraph: '図',
+    lockGraph: 'ロック待ちの図（矢印は、待っているセッションから、待たせているセッションへ）',
+    lockSession: (id: string) => `ID ${id}`,
+    lockBlocksBadge: (n: number) => `${n} 件待ち`,
+    lockRoot: (id: string, n: number) => `ID ${id} が元です。${n} 件のセッションが、これを直接・間接に待っています`,
+    lockRootIdle: '（トランザクションを開いたまま、何もしていません）',
+    lockCycle: (ids: readonly string[]) =>
+      `ID ${ids.join(' → ')} が互いを待っています（デッドロック。サーバーがどれかを取り消すまで続きます）`,
+    lockGraphHint: '強制終了は「表」から行えます',
+    lockLegendRoot: '元（ほかを待たせ、自分は待っていない）',
+    lockLegendDeadlock: 'デッドロック（互いに待っている）',
     connections: '接続数',
     connectionsUsage: (current: number, max: number | null, percent: number | null) =>
       max === null ? `${current}` : percent === null ? `${current} / ${max}` : `${current} / ${max}（${percent}%）`,

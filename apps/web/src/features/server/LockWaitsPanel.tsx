@@ -1,11 +1,12 @@
 import { useQuery } from '@tanstack/react-query'
 import type { ConnectionUsage, LockWait, ProcessInfo } from '@tsmyadmin/shared'
-import { useId } from 'react'
+import { useId, useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { Badge, ErrorBox, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale-screens.ts'
 import { lockWaitsQuery } from '@/lib/queries.ts'
+import { LockGraph } from './LockGraph.tsx'
 import { blockerAsProcess, isNearLimit, usagePercent } from './lock-waits.ts'
 import { abbreviateQuery } from './processes.ts'
 
@@ -17,6 +18,7 @@ export function LockWaitsPanel({ every, onKill }: { every: number; onKill: (p: P
   const titleId = useId()
   const report = useQuery({ ...lockWaitsQuery, refetchInterval: every > 0 ? every * 1000 : false })
   const data = report.data
+  const [view, setView] = useState<'table' | 'graph'>('table')
   return (
     <section aria-labelledby={titleId} className="space-y-2 rounded border border-line p-3">
       <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
@@ -47,13 +49,35 @@ export function LockWaitsPanel({ every, onKill }: { every: number; onKill: (p: P
             <p className="text-xs text-ink-sub">{locale.server.lockWaitsNone}</p>
           ) : (
             <>
-              <p className="text-xs text-ink-sub">{locale.server.lockWaitsHint}</p>
-              <WaitsTable waits={report.data.waits} onKill={onKill} />
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-xs text-ink-sub">{locale.server.lockWaitsHint}</p>
+                <ViewSwitch view={view} onView={setView} />
+              </div>
+              {view === 'graph' ? (
+                <LockGraph waits={report.data.waits} />
+              ) : (
+                <WaitsTable waits={report.data.waits} onKill={onKill} />
+              )}
             </>
           )}
         </>
       )}
     </section>
+  )
+}
+
+/** Table or diagram: two pressed-or-not buttons, as the other view switches of the app. */
+function ViewSwitch({ view, onView }: { view: 'table' | 'graph'; onView: (v: 'table' | 'graph') => void }) {
+  return (
+    <fieldset className="ml-auto flex items-center gap-1">
+      <legend className="sr-only">{locale.server.lockView}</legend>
+      <Button size="sm" aria-pressed={view === 'table'} onClick={() => onView('table')}>
+        {locale.server.lockAsTable}
+      </Button>
+      <Button size="sm" aria-pressed={view === 'graph'} onClick={() => onView('graph')}>
+        {locale.server.lockAsGraph}
+      </Button>
+    </fieldset>
   )
 }
 
