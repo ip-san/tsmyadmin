@@ -64,7 +64,14 @@ const stepClass = (i: number, current: number) =>
   i === current ? 'bg-row-hover font-semibold text-ink' : i < current ? 'text-ink' : 'text-ink-sub'
 
 /** What each outline means: colour, and the width and dashes that say the same without it. */
-export function DiagramLegend({ tones = TONES }: { tones?: readonly Tone[] }) {
+export function DiagramLegend({
+  tones = TONES,
+  labels = {},
+}: {
+  tones?: readonly Tone[]
+  /** What a tone means on this diagram, where it says something else than the usual word. */
+  labels?: Partial<Record<Tone, string>>
+}) {
   return (
     <figure className="text-xs text-ink-sub">
       <figcaption className="sr-only">{t.legend}</figcaption>
@@ -82,7 +89,7 @@ export function DiagramLegend({ tones = TONES }: { tones?: readonly Tone[] }) {
                 strokeDasharray={TONE_STROKE[tone].dash}
               />
             </svg>
-            {t.tones[tone]}
+            {labels[tone] ?? t.tones[tone]}
           </li>
         ))}
       </ul>
