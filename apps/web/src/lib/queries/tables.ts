@@ -4,6 +4,7 @@ import type {
   BrowseOptions,
   BrowseResult,
   DdlPreviewResponse,
+  DeleteImpact,
   DistinctValues,
   InsertPreview,
   Partitioning,
@@ -118,6 +119,22 @@ export const referenceCheckQuery = (ref: TableRef) =>
         })
       ),
     staleTime: 0,
+  })
+
+/** What deleting `keys` would reach through ON DELETE. Asked when opened, never kept: the rows may change at any time. */
+export const deleteImpactQuery = (ref: TableRef, keys: RowKey[]) =>
+  queryOptions({
+    queryKey: ['delete-impact', ref.db, ref.schema ?? '', ref.table, keys],
+    queryFn: () =>
+      unwrap<DeleteImpact>(
+        api.databases[':db'].tables[':table'].rows['delete-impact'].$post({
+          param: { db: enc(ref.db), table: enc(ref.table) },
+          query: schemaQuery(ref.schema),
+          json: { keys },
+        })
+      ),
+    staleTime: 0,
+    gcTime: 0,
   })
 
 export const distinctValuesQuery = (ref: TableRef, column: string) =>

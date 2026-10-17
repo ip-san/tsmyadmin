@@ -24,7 +24,7 @@ const t = locale.designer
 const PAD = 40
 
 /** Distinct per key: constraint names are unique within a table, not across the database. */
-export const relationKey = (r: RelationDef) => JSON.stringify([r.table, r.name])
+export const relationKey = (r: Pick<RelationDef, 'table' | 'name'>) => JSON.stringify([r.table, r.name])
 
 const NO_DISPLAY: ReadonlyMap<string, string> = new Map()
 
