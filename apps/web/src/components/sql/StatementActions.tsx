@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/Button.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 
 /** What EXPLAIN takes: MySQL 5.7+ and PostgreSQL both explain these, not a DDL statement or a SET. */
 const EXPLAINABLE = /^\s*(?:SELECT|WITH|INSERT|UPDATE|DELETE|REPLACE|TABLE|VALUES|\()\b/i

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Select } from '@/components/ui/Field.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { chooseDisplayColumn, chosenDisplayColumn } from '@/lib/display-column.ts'
 import type { TableRef } from '@/lib/queries.ts'
 

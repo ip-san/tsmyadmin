@@ -4,7 +4,7 @@ import { useCallback } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { Badge, ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { userLabel, userRef } from '@/lib/user-ops.ts'
 import { useAccountGrants, usePrivilegeDialogs } from './account-privileges.tsx'
 import { type Grant, tableAccess } from './table-access.ts'
@@ -57,7 +57,7 @@ export function TablePrivilegesPage({
   return (
     <div className="space-y-3">
       <h2 className="text-sm font-semibold text-ink">{t.title(table)}</h2>
-      <Notice>{dialect === 'mysql' ? t.hintMysql : t.hintPostgres}</Notice>
+      <Notice>{t.hint[dialect]}</Notice>
       <Table aria-label={t.title(table)}>
         <thead>
           <tr>

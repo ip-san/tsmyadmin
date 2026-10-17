@@ -101,7 +101,14 @@ describe('where a literal ends', () => {
 
   it('does not take an e at the end of a word for the start of an E-string', () => {
     expect(sqls("SELECT xe'a\\'; SELECT 2", 'postgres')).toEqual(["SELECT xe'a\\'", 'SELECT 2'])
-    expect(sqls("SELECT $e'a\\'; SELECT 2", 'postgres')).toEqual(["SELECT $e'a\\'", 'SELECT 2'])
+    expect(sqls("SELECT x$e'a\\'; SELECT 2", 'postgres')).toEqual(["SELECT x$e'a\\'", 'SELECT 2'])
+    // A name holds any non-ASCII character, and `$` after its first one.
+    expect(sqls("SELECT éE'a\\'; SELECT 2", 'postgres')).toEqual(["SELECT éE'a\\'", 'SELECT 2'])
+    expect(sqls("SELECT パ$E'a\\'; SELECT 2", 'postgres')).toEqual(["SELECT パ$E'a\\'", 'SELECT 2'])
+    // A `$` that starts no dollar quote is a character of its own (`dolqfailed` in PostgreSQL's scan.l), and so is
+    // the `$` that closes one: the e after it is a name of its own, and starts an E-string.
+    expect(sqls("SELECT $e'a\\'; SELECT 2", 'postgres')).toEqual(["SELECT $e'a\\'; SELECT 2"])
+    expect(sqls("SELECT $$x$$E'a\\'; SELECT 2", 'postgres')).toEqual(["SELECT $$x$$E'a\\'; SELECT 2"])
     // At the very start of the text there is nothing before the quote to look at.
     expect(sqls("'a\\'; SELECT 2", 'postgres')).toEqual(["'a\\'", 'SELECT 2'])
   })
@@ -131,6 +138,13 @@ describe('PostgreSQL dollar quotes', () => {
   it('allows a tag of letters, digits after the first, underscores and non-ASCII letters', () => {
     expect(sqls('SELECT $tag_1$ ; $tag_1$; SELECT 2', 'postgres')).toHaveLength(2)
     expect(sqls('SELECT $タグ$ ; $タグ$; SELECT 2', 'postgres')).toHaveLength(2)
+  })
+
+  it('does not start one in the middle of a name, whose letters include every non-ASCII character', () => {
+    expect(sqls('SELECT é$t$; SELECT 2; SELECT 3', 'postgres')).toEqual(['SELECT é$t$', 'SELECT 2', 'SELECT 3'])
+    expect(sqls('SELECT aé$t$; SELECT 2', 'postgres')).toEqual(['SELECT aé$t$', 'SELECT 2'])
+    expect(sqls('SELECT 🔑$$; SELECT 2', 'postgres')).toEqual(['SELECT 🔑$$', 'SELECT 2'])
+    expect(stripComments('SELECT a$t$ /* c */ FROM é$t$ -- $t$\n', 'postgres')).toBe('SELECT a$t$   FROM é$t$ \n')
   })
 
   it('reports one that is never closed', () => {
@@ -413,7 +427,8 @@ describe('PostgreSQL BEGIN ATOMIC', () => {
     expect(sqls('BEGIN; SELECT 1; COMMIT;', 'postgres')).toEqual(['BEGIN', 'SELECT 1', 'COMMIT'])
     expect(sqls('SELECT CASE WHEN true THEN 1 END; SELECT 2;', 'postgres')).toHaveLength(2)
     expect(sqls('SELECT xBEGIN ATOMIC; SELECT 2;', 'postgres')).toHaveLength(2)
-    expect(sqls('SELECT $BEGIN ATOMIC; SELECT 2;', 'postgres')).toHaveLength(2)
+    expect(sqls('SELECT x$BEGIN ATOMIC; SELECT 2;', 'postgres')).toHaveLength(2)
+    expect(sqls('SELECT éBEGIN ATOMIC; SELECT 2;', 'postgres')).toHaveLength(2)
     expect(sqls('SELECT ENDING; SELECT 2;', 'postgres')).toHaveLength(2)
   })
 

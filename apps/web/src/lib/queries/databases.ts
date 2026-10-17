@@ -13,6 +13,7 @@ import type {
   RoutineDetail,
   RoutineInfo,
   RoutineKind,
+  SnapshotDiff,
   SnapshotList,
   SnapshotRestorePreview,
   SnapshotRestoreResult,
@@ -150,6 +151,21 @@ export const snapshotsQuery = (db: string, schema?: string) =>
     queryKey: ['snapshots', db, schema ?? ''],
     queryFn: () =>
       unwrap<SnapshotList>(api.databases[':db'].snapshots.$get({ param: { db: enc(db) }, query: schemaQuery(schema) })),
+  })
+
+/** The schema now compared with one snapshot: read afresh every time it is opened (a migration may have run since). */
+export const snapshotDiffQuery = (db: string, schema: string | undefined, id: string) =>
+  queryOptions({
+    queryKey: ['snapshots', db, schema ?? '', 'diff', id],
+    queryFn: () =>
+      unwrap<SnapshotDiff>(
+        api.databases[':db'].snapshots[':id'].diff.$get({
+          param: { db: enc(db), id: enc(id) },
+          query: schemaQuery(schema),
+        })
+      ),
+    staleTime: 0,
+    gcTime: 0,
   })
 
 /** The tracked tables of a database / schema. */

@@ -1,5 +1,5 @@
 import type { Ref } from 'react'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { layoutLegend } from '@/lib/chart-legend.ts'
 import { pieAngles, slicePath } from '@/lib/chart-shapes.ts'
 import { ChartLegend } from './ChartLegend.tsx'

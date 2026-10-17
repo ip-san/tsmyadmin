@@ -1,6 +1,6 @@
 import type { BrowseOptions } from '@tsmyadmin/shared'
 import { Th } from '@/components/ui/Table.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { SortHeader } from './SortHeader.tsx'
 
 interface GridHeadProps {

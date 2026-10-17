@@ -29,6 +29,10 @@ describe('isStoreUnavailable', () => {
     expect(isStoreUnavailable(new Error('Connection is closed.'))).toBe(true)
   })
 
+  it('recognises the Redis store giving up on a lock that never came free', () => {
+    expect(isStoreUnavailable(Object.assign(new Error('busy'), { name: 'StoreBusyError' }))).toBe(true)
+  })
+
   it('recognises a SQLite file that cannot be opened', () => {
     expect(isStoreUnavailable(sqliteError(() => new DatabaseSync('/nonexistent-dir/sessions.db')))).toBe(true)
   })

@@ -269,4 +269,76 @@ export function describeServer(env: ConformanceEnv): void {
       await expect(env.db.killProcess('999999999')).rejects.toMatchObject({ name: 'AdapterError' })
     })
   })
+
+  describe('lockWaits', () => {
+    it('pairs a session waiting on a row lock with the session holding it, which the kill flow then ends', async () => {
+      const t = `${scratch}_lockwait`
+      await execOk(`CREATE TABLE ${t} (id INT PRIMARY KEY, v INT)`)
+      await execOk(`INSERT INTO ${t} VALUES (1, 0)`)
+      const holder = ctx.create()
+      const waiter = ctx.create()
+      const holdMark = `lockhold_${scratch}`
+      const waitMark = `lockwait_${scratch}`
+      try {
+        // A transaction cannot outlive one executeSql call (each ends in ROLLBACK), so the holder keeps its row
+        // lock by sleeping inside the same script; the waiter gives up on its own after a few seconds at most.
+        const holding = holder.executeSql(
+          ns,
+          `${dialect === 'mysql' ? 'START TRANSACTION' : 'BEGIN'};
+UPDATE ${t} SET v = 1 WHERE id = 1;
+SELECT ${dialect === 'mysql' ? 'SLEEP(20)' : 'pg_sleep(20)'} /* ${holdMark} */`,
+          { ...EXEC, timeoutMs: 60_000 }
+        )
+        let holderId: string | undefined
+        for (let i = 0; i < 50 && !holderId; i++) {
+          await new Promise((r) => setTimeout(r, 100))
+          holderId = (await env.db.listProcesses()).find((p) => p.query?.includes(holdMark))?.id
+        }
+        expect(holderId).toBeDefined()
+        const waiting = waiter.executeSql(
+          ns,
+          `${dialect === 'mysql' ? 'SET SESSION innodb_lock_wait_timeout = 15' : "SET lock_timeout = '15s'"};
+UPDATE ${t} SET v = 2 WHERE id = 1 /* ${waitMark} */`,
+          { ...EXEC, timeoutMs: 30_000 }
+        )
+        let wait: Awaited<ReturnType<typeof env.db.lockWaits>>['waits'][number] | undefined
+        let report: Awaited<ReturnType<typeof env.db.lockWaits>> | undefined
+        for (let i = 0; i < 50 && !wait; i++) {
+          await new Promise((r) => setTimeout(r, 100))
+          report = await env.db.lockWaits()
+          // Other suites share the server: only the pair this test made counts.
+          wait = report.waits.find((w) => w.blocked.query?.includes(waitMark))
+        }
+        expect(report?.status).toBe('ok')
+        expect(wait).toBeDefined()
+        expect(wait?.blocking.id).toBe(holderId)
+        expect(wait?.blocking.user).toContain('tsmyadmin')
+        expect(wait?.blocking.query).toContain(holdMark)
+        expect(wait?.blocking.transactionSec).toBeGreaterThanOrEqual(0)
+        expect(wait?.blocked.user).toContain('tsmyadmin')
+        expect(wait?.blocked.database).toBe(ns.database)
+        expect(wait?.blocked.waitSec).toBeGreaterThanOrEqual(0)
+        expect(wait?.table).toContain(t)
+        expect(wait?.mode).toBeTruthy()
+        expect(report?.connections.current).toBeGreaterThanOrEqual(2)
+        expect(report?.connections.max).toBeGreaterThan(0)
+
+        // Ending the holder releases the lock: its script fails, the waiting UPDATE goes through.
+        await env.db.killProcess(holderId as string)
+        expect((await holding).some((r) => r.kind === 'error')).toBe(true)
+        expect((await waiting).map((r) => r.kind)).not.toContain('error')
+        // InnoDB serves its information_schema tables from a cache refreshed every 0.1 s (MariaDB reads them).
+        let cleared = false
+        for (let i = 0; i < 20 && !cleared; i++) {
+          cleared = !(await env.db.lockWaits()).waits.some((w) => w.blocked.query?.includes(waitMark))
+          if (!cleared) await new Promise((r) => setTimeout(r, 100))
+        }
+        expect(cleared).toBe(true)
+      } finally {
+        await holder.close()
+        await waiter.close()
+        await exec(`DROP TABLE IF EXISTS ${t}`, { stopOnError: false })
+      }
+    })
+  })
 }

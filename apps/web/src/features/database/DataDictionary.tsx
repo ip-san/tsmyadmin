@@ -4,7 +4,7 @@ import { Printer } from 'lucide-react'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { structureQuery, tablesQuery } from '@/lib/queries.ts'
 
 const t = locale.dictionary

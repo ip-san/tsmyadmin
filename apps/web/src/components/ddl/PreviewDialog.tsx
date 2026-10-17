@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import type { PreviewFlow } from '@/lib/preview-flow.ts'
 import { readSetting } from '@/lib/settings.ts'
 import { Button } from '../ui/Button.tsx'

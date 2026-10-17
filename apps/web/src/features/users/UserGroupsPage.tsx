@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/Card.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Field, Input } from '@/components/ui/Field.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { mutations, myGroupTabsQuery, userGroupsQuery, usersQuery } from '@/lib/queries.ts'
 
 const t = locale.userGroups

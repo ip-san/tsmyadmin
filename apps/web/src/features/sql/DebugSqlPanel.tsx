@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/Button.tsx'
-import { locale, numberLocale } from '@/config/locale.ts'
+import { numberLocale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { clearDebugSql, DEBUG_SQL_MAX, useDebugSql } from '@/lib/debug-sql.ts'
 
 const time = (at: number) => new Date(at).toLocaleTimeString(numberLocale)

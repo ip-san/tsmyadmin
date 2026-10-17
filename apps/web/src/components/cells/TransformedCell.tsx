@@ -1,7 +1,7 @@
 import type { Cell, ColumnTransform } from '@tsmyadmin/shared'
 import { isBinaryCell, transformImage, transformLink } from '@tsmyadmin/shared'
 import { useState } from 'react'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { CellValue } from './CellValue.tsx'
 import { useImageHosts } from './cell-display.ts'
 import { HtmlCell } from './HtmlCell.tsx'

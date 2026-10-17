@@ -1,14 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { TrackingState } from '@tsmyadmin/shared'
-import { lineDiff } from '@tsmyadmin/shared'
 import { useId, useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { Card } from '@/components/ui/Card.tsx'
 import { Dialog } from '@/components/ui/Dialog.tsx'
 import { Badge, ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Field, Select } from '@/components/ui/Field.tsx'
+import { LineDiff } from '@/components/ui/LineDiff.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
-import { locale, numberLocale } from '@/config/locale.ts'
+import { numberLocale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { downloadText, safeFilename } from '@/lib/download.ts'
 import { mutations, type TableRef, trackingQuery } from '@/lib/queries.ts'
 import { TrackedStatements } from './TrackedStatements.tsx'
@@ -16,33 +17,6 @@ import { TrackedStatements } from './TrackedStatements.tsx'
 const t = locale.tracking
 /** The option standing for the definition as it is now. */
 const NOW = 'now'
-
-function Diff({ before, after }: { before: string; after: string }) {
-  const lines = lineDiff(before, after)
-  if (lines.every((l) => l.kind === 'same')) return <p className="text-sm text-ink-sub">{t.noDifference}</p>
-  return (
-    <pre
-      className="overflow-x-auto rounded border border-line bg-surface-sub p-2 font-mono text-xs"
-      aria-label={t.diff}
-    >
-      {lines.map((l, i) => (
-        <div
-          key={i}
-          className={
-            l.kind === 'add'
-              ? 'bg-green-50 text-green-800 dark:bg-green-950 dark:text-green-200'
-              : l.kind === 'del'
-                ? 'bg-red-50 text-red-800 dark:bg-red-950 dark:text-red-200'
-                : 'text-ink'
-          }
-        >
-          {l.kind === 'add' ? '+ ' : l.kind === 'del' ? '- ' : '  '}
-          {l.text}
-        </div>
-      ))}
-    </pre>
-  )
-}
 
 /**
  * phpMyAdmin's Tracking, as snapshots: each version is the table's definition as the server printed it when it
@@ -189,7 +163,7 @@ export function TrackingPage({ tableRef }: { tableRef: TableRef }) {
                 </Select>
               </Field>
             </div>
-            <Diff before={text(fromKey)} after={text(to)} />
+            <LineDiff before={text(fromKey)} after={text(to)} label={t.diff} empty={t.noDifference} />
           </Card>
         </>
       )}

@@ -1,5 +1,5 @@
 import { Select } from '@/components/ui/Field.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { type ColumnOption, ColumnSelect } from './QueryBuilderCriteria.tsx'
 import type { ColumnKey, JoinRow } from './query-builder-model.ts'
 

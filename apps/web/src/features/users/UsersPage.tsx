@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/Button.tsx'
 import { Dialog } from '@/components/ui/Dialog.tsx'
 import { Badge, ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { downloadText, safeFilename } from '@/lib/download.ts'
 import { grantsQuery, sessionQuery, usersQuery } from '@/lib/queries.ts'
 import { userLabel, userRef, useUserOpFlow } from '@/lib/user-ops.ts'
@@ -64,11 +64,10 @@ function AccountForm({
   onCancel: () => void
 }) {
   const user = userRef(info)
-  const mysql = dialect === 'mysql'
-  if (kind === 'rename') return <RenameForm user={user} mysql={mysql} onSubmit={onSubmit} onCancel={onCancel} />
-  if (kind === 'copy') return <CopyForm user={user} mysql={mysql} onSubmit={onSubmit} onCancel={onCancel} />
+  if (kind === 'rename') return <RenameForm user={user} dialect={dialect} onSubmit={onSubmit} onCancel={onCancel} />
+  if (kind === 'copy') return <CopyForm user={user} dialect={dialect} onSubmit={onSubmit} onCancel={onCancel} />
   if (kind === 'limits')
-    return <LimitsForm user={user} limits={info.limits} mysql={mysql} onSubmit={onSubmit} onCancel={onCancel} />
+    return <LimitsForm user={user} limits={info.limits} dialect={dialect} onSubmit={onSubmit} onCancel={onCancel} />
   if (kind === 'global') return <GlobalPrivilegesForm user={user} onSubmit={onSubmit} onCancel={onCancel} />
   return <RoleAttributesForm user={user} info={info} onSubmit={onSubmit} onCancel={onCancel} />
 }
@@ -193,7 +192,9 @@ export function UsersPage({ dialect }: { dialect: Dialect }) {
                   >
                     {u.canLogin ? locale.users.account.lock : locale.users.account.unlock}
                   </Button>
-                  {(['rename', 'copy', 'limits', dialect === 'mysql' ? 'global' : 'role'] as const).map((kind) => (
+                  {(
+                    ['rename', 'copy', 'limits', capabilities(dialect).serverWideGrants ? 'global' : 'role'] as const
+                  ).map((kind) => (
                     <Button
                       key={kind}
                       size="sm"

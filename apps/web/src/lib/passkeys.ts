@@ -15,7 +15,7 @@ async function asked<T>(run: () => Promise<T>): Promise<T> {
   try {
     return await run()
   } catch {
-    throw new Error(locale.secondFactor.passkeyFailed)
+    throw new Error(locale.login.passkeyFailed)
   }
 }
 

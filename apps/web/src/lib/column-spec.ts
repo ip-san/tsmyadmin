@@ -1,5 +1,5 @@
 import type { CentralColumnBody, ColumnDef, ColumnSpec, Dialect } from '@tsmyadmin/shared'
-import { onUpdateExpression } from '@tsmyadmin/shared'
+import { capabilities, onUpdateExpression } from '@tsmyadmin/shared'
 
 type DefaultKind = 'none' | 'literal' | 'expression'
 
@@ -256,7 +256,7 @@ export function fromColumnDef(c: ColumnDef, dialect: Dialect): ColumnFormValues 
     // Both dialects: MySQL replaces the whole definition, PostgreSQL compares with the current one and emits
     // only what changed.
     collation: c.collation,
-    onUpdate: dialect === 'mysql' ? onUpdateExpression(c.extra) : null,
+    onUpdate: capabilities(dialect).onUpdateTimestamp ? onUpdateExpression(c.extra) : null,
     check: c.check,
     generated: c.generated,
   }

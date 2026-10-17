@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/Button.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { type OverlayStep, TONE_STROKE, TONES, type Tone } from './overlay.ts'
 import type { useStepPlayer } from './use-step-player.ts'
 

@@ -1,7 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import type { ImportResult } from '@tsmyadmin/shared'
 import { Notice } from '@/components/ui/Feedback.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 
 /** Result banner; the live region is rendered by the parent so it exists before the message arrives. */
 export function ImportSummary({

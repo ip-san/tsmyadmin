@@ -13,7 +13,24 @@ export default defineConfig({
   // The size check follows the startup chain through it (scripts/check-bundle-size.mjs).
   // Source maps only when the E2E run measures coverage (bun run test:e2e:coverage): they map the code a test ran
   // back to the files it came from (scripts/e2e-coverage.mjs). The production build stays without them.
-  build: { manifest: true, sourcemap: Boolean(process.env.E2E_COVERAGE) },
+  build: {
+    manifest: true,
+    sourcemap: Boolean(process.env.E2E_COVERAGE),
+    // Initial JS (bun run size): what first paint needs is the session query and ApiErrorSchema, but importing one
+    // name from a barrel (`@tsmyadmin/shared`, `@/lib/queries.ts`) kept every module behind it, and every Zod schema
+    // in them, because a top-level `z.object(...)` or `queryOptions(...)` counts as a side effect. Neither has one:
+    // the modules only define things, and no `z.*` call is made for its effect (no `z.config`, no `.register`).
+    // Marking them so lets the build drop what nobody uses; the screens' chunks import what they need as before.
+    rolldownOptions: {
+      treeshake: {
+        manualPureFunctions: ['z'],
+        moduleSideEffects: [
+          { test: /\/packages\/shared\/src\//, sideEffects: false },
+          { test: /\/src\/lib\/queries(\.ts$|\/)/, sideEffects: false },
+        ],
+      },
+    },
+  },
   resolve: { alias: { '@': path.resolve(import.meta.dirname, './src') } },
   server: {
     host: '127.0.0.1',

@@ -1,7 +1,7 @@
 import { EXPORT_CHARSETS, type ExportCharset, type ImportFormat } from '@tsmyadmin/shared'
 import type { ReactNode } from 'react'
 import { Field, Input, Select } from '@/components/ui/Field.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { type ImportOptions, isRowsFormat } from '@/lib/import-options.ts'
 
 const t = locale.import

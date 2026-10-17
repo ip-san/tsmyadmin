@@ -3,7 +3,8 @@ import { type ReactNode, useState } from 'react'
 import { NamedListPanel } from '@/components/panels/NamedListPanel.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { Input } from '@/components/ui/Field.tsx'
-import { locale, numberLocale } from '@/config/locale.ts'
+import { numberLocale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import type { HistoryEntry } from './history.ts'
 
 function Panel({ title, count, children }: { title: string; count: number; children: ReactNode }) {

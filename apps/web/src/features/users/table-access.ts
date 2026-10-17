@@ -155,11 +155,12 @@ export function tableAccess(
     const [a, b] = g.object
     if (g.verb === 'REVOKE') {
       // A partial revoke names one database exactly (no wildcards) and narrows only the grant on *.*.
-      if (dialect === 'mysql' && b === '*' && a === db) for (const p of g.privileges) revokedHere.add(p.name)
+      if (capabilities(dialect).serverWideGrants && b === '*' && a === db)
+        for (const p of g.privileges) revokedHere.add(p.name)
       continue
     }
     const whole = g.privileges.filter((p) => p.columns === null).map((p) => p.name)
-    if (dialect === 'mysql' && a === '*' && b === '*') add(whole, { scope: 'server' })
+    if (capabilities(dialect).serverWideGrants && a === '*' && b === '*') add(whole, { scope: 'server' })
     else if (dialect === 'mysql' && b === '*' && coversDatabase(a, db)) add(whole, { scope: 'database' })
     else if (a === (capabilities(dialect).databasesAreSchemas ? db : (schema ?? 'public')) && b === table) {
       add(whole, { scope: 'table' })

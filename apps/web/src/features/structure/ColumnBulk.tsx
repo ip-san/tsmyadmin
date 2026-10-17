@@ -1,9 +1,9 @@
-import type { ColumnSpec, DdlOp, Dialect, TableSchema } from '@tsmyadmin/shared'
+import { type ColumnSpec, capabilities, type DdlOp, type Dialect, type TableSchema } from '@tsmyadmin/shared'
 import { ArrowDown, ArrowUp } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { Dialog } from '@/components/ui/Dialog.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { fromColumnDef, toColumnSpec } from '@/lib/column-spec.ts'
 import { ColumnForm } from './ColumnForm.tsx'
 
@@ -81,7 +81,7 @@ export function ColumnBulk({
       >
         {t.drop}
       </Button>
-      {dialect === 'mysql' ? (
+      {capabilities(dialect).columnOrder ? (
         <Button size="sm" aria-haspopup="dialog" onClick={() => setOrdering(schema.columns.map((c) => c.name))}>
           {t.reorder}
         </Button>

@@ -1,8 +1,8 @@
 /**
- * Database snapshots: taking, listing, deleting and restoring (a preview first, then the execution). The dump stays in the API's
+ * Database snapshots: taking, listing, deleting, comparing with the schema now, and restoring (a preview first, then the execution). The dump stays in the API's
  * memory and is never sent to the browser; see `.claude/rules/api-routes.md`.
  */
-import type { Namespace, SnapshotList } from '@tsmyadmin/shared'
+import type { Namespace, SnapshotDiff, SnapshotList } from '@tsmyadmin/shared'
 import { SchemaQuerySchema, SnapshotCreateSchema } from '@tsmyadmin/shared'
 import { type Context, Hono } from 'hono'
 import { z } from 'zod'
@@ -10,6 +10,7 @@ import { apiError } from '../lib/errors.ts'
 import { ImportValidationError } from '../lib/import.ts'
 import { importSlot, validationError } from '../lib/import-run.ts'
 import type { Logger } from '../lib/logging.ts'
+import { compareDefinitions, currentSchema } from '../lib/snapshot-diff.ts'
 import {
   previewRestore,
   restoreSnapshot,
@@ -52,6 +53,7 @@ export function snapshotRoutes(
       .use(`${path}/:id`, requireSession(cfg))
       .use(`${path}/:id/restore`, requireSession(cfg))
       .use(`${path}/:id/restore/preview`, requireSession(cfg))
+      .use(`${path}/:id/diff`, requireSession(cfg))
       .get(path, validate('query', SchemaQuerySchema), (c) => {
         const { scope } = target(c, c.req.valid('query').schema)
         return c.json(listOf(scope))
@@ -71,6 +73,24 @@ export function snapshotRoutes(
         const { scope } = target(c, c.req.valid('query').schema)
         if (!store.remove(scope, c.req.valid('param').id)) return c.json(apiError('NOT_FOUND', 'Unknown snapshot'), 404)
         return c.json(listOf(scope))
+      })
+      // The schema now against the snapshot (what a migration changed), read through the caller's own session.
+      // Read-only; the log has the counts, never a definition.
+      .get(`${path}/:id/diff`, validate('param', IdParamSchema), validate('query', SchemaQuerySchema), async (c) => {
+        const { ns, scope } = target(c, c.req.valid('query').schema)
+        const held = store.get(scope, c.req.valid('param').id)
+        if (!held) return c.json(apiError('NOT_FOUND', 'Unknown snapshot'), 404)
+        const diff = compareDefinitions(held, await currentSchema(c.get('session').adapter, ns))
+        logger.log('info', 'snapshot.compared', {
+          database: ns.database,
+          ...(ns.schema ? { schema: ns.schema } : {}),
+          added: diff.added.length,
+          removed: diff.removed.length,
+          changed: diff.changed.length,
+          unchanged: diff.unchanged,
+        })
+        const body: SnapshotDiff = { snapshot: held.snapshot, ...diff }
+        return c.json(body)
       })
       .get(
         `${path}/:id/restore/preview`,

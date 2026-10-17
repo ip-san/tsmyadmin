@@ -1,4 +1,4 @@
-import { type Dialect, SYSTEM_DATABASES } from '@tsmyadmin/shared'
+import { capabilities, type Dialect, SYSTEM_DATABASES } from '@tsmyadmin/shared'
 
 /** The server's own catalogs. */
 export function isSystemDatabase(dialect: Dialect, name: string): boolean {
@@ -11,5 +11,5 @@ export function isSystemDatabase(dialect: Dialect, name: string): boolean {
  */
 export function isProtectedDatabase(dialect: Dialect, name: string, connected: string | undefined): boolean {
   if (isSystemDatabase(dialect, name)) return true
-  return dialect === 'postgres' && connected !== undefined && name === connected
+  return capabilities(dialect).connectionPerDatabase && connected !== undefined && name === connected
 }

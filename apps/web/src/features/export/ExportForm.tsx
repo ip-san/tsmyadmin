@@ -9,7 +9,7 @@ import { FormatOptionFields, holdsStructure } from '@/components/export/FormatOp
 import { SqlFields } from '@/components/export/SqlExportFields.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { tablesQuery } from '@/lib/queries.ts'
 import { exportDefaults } from '@/lib/settings.ts'
 import { ExportTemplatesPanel } from './ExportTemplatesPanel.tsx'

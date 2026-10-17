@@ -73,7 +73,10 @@ describe('takeSnapshot: what is dumped', () => {
     await takeSnapshot(new SnapshotStore({ sweepIntervalMs: 0 }), 's', adapter, NS, 'n')
     expect(mocks.buildExport).toHaveBeenCalledTimes(1)
     const [passedAdapter, ns, names, query, baseName, everything, listing] = mocks.buildExport.mock.calls[0] ?? []
-    expect(passedAdapter).toBe(adapter)
+    // The adapter itself, behind the recorder of the definitions the dump reads (see snapshot-diff.test.ts).
+    expect(passedAdapter).not.toBe(adapter)
+    expect(passedAdapter?.dialect).toBe(adapter.dialect)
+    expect(await passedAdapter?.listTables(NS)).toBe(all)
     expect(ns).toEqual(NS)
     expect(names).toEqual(['b', 'a', 'v1', 'v2'])
     expect(query).toMatchObject({ format: 'sql' })

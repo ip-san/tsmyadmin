@@ -8,7 +8,7 @@ import { ImportOptionFields } from '@/components/import/ImportOptionFields.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Field, Input, Select } from '@/components/ui/Field.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { cn } from '@/lib/cn.ts'
 import {
   csvCharsValid,

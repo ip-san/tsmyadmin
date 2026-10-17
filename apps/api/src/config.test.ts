@@ -8,6 +8,13 @@ describe('loadConfig', () => {
     expect(() => loadConfig({ TSMYADMIN_SERVERS: servers })).toThrow(/autoLogin is set by Docker discovery/)
   })
 
+  it('refuses a docker block in TSMYADMIN_SERVERS: only Docker discovery sets it', () => {
+    const servers = JSON.stringify([
+      { name: 'a', dialect: 'mysql', host: 'db', port: 3306, docker: { service: 'db', privatePort: 3306 } },
+    ])
+    expect(() => loadConfig({ TSMYADMIN_SERVERS: servers })).toThrow(/docker is set by Docker discovery/)
+  })
+
   it('keeps Docker discovery off unless asked, and refuses it in production', () => {
     expect(loadConfig({}).dockerDiscovery).toBeNull()
     expect(loadConfig({ TSMYADMIN_DOCKER_DISCOVERY: '0' }).dockerDiscovery).toBeNull()

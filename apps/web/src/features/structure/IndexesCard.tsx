@@ -6,7 +6,7 @@ import { Dialog } from '@/components/ui/Dialog.tsx'
 import { Badge, Notice } from '@/components/ui/Feedback.tsx'
 import { Field, Input } from '@/components/ui/Field.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { IndexForm, type IndexValues } from './IndexForm.tsx'
 
 type Kind = IndexValues['kind']

@@ -73,6 +73,8 @@ export default {
     'apps/api/src/lib/totp.ts',
     'apps/api/src/lib/allowlist.ts',
     'apps/api/src/lib/rate-limit.ts',
+    'apps/api/src/lib/passkey.ts',
+    'apps/api/src/lib/request-context.ts',
     'apps/api/src/lib/errors.ts',
     'apps/api/src/lib/concurrency.ts',
     'apps/api/src/lib/ndjson.ts',

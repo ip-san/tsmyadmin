@@ -171,6 +171,12 @@ export function describeSessionStoreConformance(
           return
         }
         expect(await factor.get(CONFIG)).toBeNull()
+        // The first one lands only while there is none: of two enrolments at once, the second is refused, not
+        // written over the first.
+        const first = { secret: 'JBSWY3DPEHPK3PXP', lastStep: 1, recoveryHashes: ['x'], at: 1 }
+        expect(await factor.create(CONFIG, first)).toBe(true)
+        expect(await factor.create(CONFIG, { ...first, lastStep: 2 })).toBe(false)
+        expect(await factor.get(CONFIG)).toMatchObject({ lastStep: 1 })
         await factor.set(CONFIG, { secret: 'JBSWY3DPEHPK3PXP', lastStep: 7, recoveryHashes: ['a', 'b'], at: 1 })
         const stored = await factor.get(CONFIG)
         expect(stored).toMatchObject({ secret: 'JBSWY3DPEHPK3PXP', lastStep: 7, recoveryHashes: ['a', 'b'], at: 1 })
@@ -319,6 +325,72 @@ export function describeSessionStoreConformance(
           })
         ).rejects.toThrow('refused')
         expect(await saved.list(CONFIG, 'prefs')).toEqual(before)
+      } finally {
+        await store.closeAll()
+      }
+    })
+
+    it('removes a row on a condition only while the row still meets it, even with an update at the same time', async () => {
+      const store = await create({ adapterFactory: tracked().adapterFactory, sweepIntervalMs: 0 })
+      try {
+        const saved = store.savedQueries
+        if (!saved) return
+        const [row] = await saved.save(CONFIG, 'prefs', 'group', 'old')
+        const id = row?.id ?? ''
+        // Refused: the row stays as it was.
+        const seen: string[] = []
+        const kept = await saved.remove(CONFIG, 'prefs', id, (current) => {
+          seen.push(current.body)
+          return false
+        })
+        expect(seen).toEqual(['old'])
+        expect(kept.map((q) => q.body)).toEqual(['old'])
+        // An update and a removal of the old body at once: whichever comes second sees the first's result. Removed
+        // first, the update writes the name anew; updated first, the removal finds the new body and keeps it. A
+        // removal that judged the old body and then deleted the new one would leave nothing.
+        await Promise.all([
+          saved.update(CONFIG, 'prefs', 'group', () => 'new'),
+          saved.remove(CONFIG, 'prefs', id, (current) => current.body === 'old'),
+        ])
+        expect((await saved.list(CONFIG, 'prefs')).map((q) => q.body)).toEqual(['new'])
+        // Accepted (or no condition at all): it goes.
+        const [again] = await saved.save(CONFIG, 'prefs', 'group', 'x')
+        expect(await saved.remove(CONFIG, 'prefs', again?.id ?? '', (current) => current.body === 'x')).toEqual([])
+      } finally {
+        await store.closeAll()
+      }
+    })
+
+    it('never loses a plain save made at the same time as an update or a conditional removal', async () => {
+      const store = await create({ adapterFactory: tracked().adapterFactory, sweepIntervalMs: 0 })
+      try {
+        const saved = store.savedQueries
+        if (!saved) return
+        // Several rounds, each starting both writes in the same turn: an order that slips through once is caught.
+        for (let round = 0; round < 5; round++) {
+          await saved.save(CONFIG, 'prefs', 'counter', '[]')
+          // Saved first, the update appends to what the save wrote; updated first, the save replaces it. An update
+          // that read `[]`, let the save land, and then wrote its own result would have dropped the save.
+          await Promise.all([
+            saved.update(CONFIG, 'prefs', 'counter', (current) =>
+              JSON.stringify([...JSON.parse(current?.body ?? '[]'), 1])
+            ),
+            saved.save(CONFIG, 'prefs', 'counter', '[9]'),
+          ])
+          const [counter] = await saved.list(CONFIG, 'prefs')
+          expect(JSON.parse(counter?.body ?? '[]')).toContain(9)
+
+          const [row] = await saved.save(CONFIG, 'prefs', 'group', 'old')
+          // Saved first, the removal finds the new body and keeps it; removed first, the save writes the name anew.
+          // A removal that judged the old body and then deleted what the save put there would leave nothing.
+          await Promise.all([
+            saved.remove(CONFIG, 'prefs', row?.id ?? '', (current) => current.body === 'old'),
+            saved.save(CONFIG, 'prefs', 'group', 'new'),
+          ])
+          const group = (await saved.list(CONFIG, 'prefs')).filter((item) => item.name === 'group')
+          expect(group.map((item) => item.body)).toEqual(['new'])
+          await saved.remove(CONFIG, 'prefs', group[0]?.id ?? '')
+        }
       } finally {
         await store.closeAll()
       }

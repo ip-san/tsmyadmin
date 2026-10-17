@@ -2,7 +2,7 @@ import { Copy, Pencil, Trash2 } from 'lucide-react'
 import { useId } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { Td } from '@/components/ui/Table.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { cn } from '@/lib/cn.ts'
 
 const ICON_BUTTON = '-my-0.5 ml-1 align-middle'

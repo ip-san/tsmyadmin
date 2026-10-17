@@ -1,10 +1,10 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import type { BrowseOptions, InputCell, RowKey, RowValues } from '@tsmyadmin/shared'
+import { type BrowseOptions, capabilities, type InputCell, type RowKey, type RowValues } from '@tsmyadmin/shared'
 import { Fragment, useCallback, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table } from '@/components/ui/Table.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { useColumnTransforms } from '@/lib/column-transforms.ts'
 import { mutations, rowsKey, type TableRef } from '@/lib/queries.ts'
 import { readSetting } from '@/lib/settings.ts'
@@ -195,7 +195,7 @@ export function RowsGrid({ tableRef, options, page, onChange, cols }: RowsGridPr
         selectedCount={selected.size}
         canDelete={selectedKeys.length > 0}
         onDelete={() => setDeleteTarget({ keys: selectedKeys })}
-        {...(dialect === 'mysql' ? { profile, onProfile: setProfile } : {})}
+        {...(dialect && capabilities(dialect).statementProfiling ? { profile, onProfile: setProfile } : {})}
       />
       <SelectionActions
         tableRef={tableRef}

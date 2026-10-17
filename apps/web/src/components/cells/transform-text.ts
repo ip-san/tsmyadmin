@@ -1,6 +1,6 @@
 import type { Cell, ColumnTransform } from '@tsmyadmin/shared'
 import { isBinaryCell } from '@tsmyadmin/shared'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 
 /** Bytes of a value shown as hex before it is cut (a cell is a glance, not a dump). */
 const HEX_MAX_BYTES = 256

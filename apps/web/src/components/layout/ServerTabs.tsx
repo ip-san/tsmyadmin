@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { PageTitle } from '@/components/layout/PageTitle.tsx'
 import { TabNav } from '@/components/layout/TabNav.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { useDocumentTitle } from '@/lib/document-title.ts'
 import { sessionQuery } from '@/lib/queries.ts'
 

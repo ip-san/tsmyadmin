@@ -1,9 +1,9 @@
-import { type AccountLimits, type UserOp, type UserRef } from '@tsmyadmin/shared'
+import { type AccountLimits, capabilities, type Dialect, type UserOp, type UserRef } from '@tsmyadmin/shared'
 import { type FormEvent, useState } from 'react'
 import { PasswordFields, usePasswordConfirm } from '@/components/forms/PasswordFields.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { Field, Input, Select } from '@/components/ui/Field.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { userLabel } from '@/lib/user-ops.ts'
 
 const t = locale.users.account
@@ -24,18 +24,19 @@ export function Buttons({ ready, onCancel }: { ready: boolean; onCancel: () => v
 /** The account's new name (and, on MySQL, host). */
 export function RenameForm({
   user,
-  mysql,
+  dialect,
   onSubmit,
   onCancel,
 }: {
   user: UserRef
-  mysql: boolean
+  dialect: Dialect
   onSubmit: (op: UserOp) => void
   onCancel: () => void
 }) {
   const [name, setName] = useState(user.name)
   const [host, setHost] = useState(user.host ?? '%')
-  const next: UserRef = mysql ? { name: name.trim(), host: host.trim() || '%' } : { name: name.trim() }
+  const withHost = capabilities(dialect).accountHost
+  const next: UserRef = withHost ? { name: name.trim(), host: host.trim() || '%' } : { name: name.trim() }
   const changed = next.name !== '' && userLabel(next) !== userLabel(user)
   const submit = (e: FormEvent) => {
     e.preventDefault()
@@ -43,12 +44,12 @@ export function RenameForm({
   }
   return (
     <form onSubmit={submit} className="space-y-3" aria-label={`${userLabel(user)}: ${t.rename}`}>
-      <p className="text-xs text-ink-sub">{mysql ? t.renameHintMysql : t.renameHintPostgres}</p>
+      <p className="text-xs text-ink-sub">{t.renameHint[dialect]}</p>
       <div className="grid grid-cols-2 gap-3">
         <Field id="rename-name" label={t.newName}>
           <Input id="rename-name" value={name} onChange={(e) => setName(e.target.value)} autoComplete="off" />
         </Field>
-        {mysql ? (
+        {withHost ? (
           <Field id="rename-host" label={locale.users.host}>
             <Input id="rename-host" value={host} onChange={(e) => setHost(e.target.value)} autoComplete="off" />
           </Field>
@@ -62,19 +63,20 @@ export function RenameForm({
 /** A new account with the source's privileges, and a password of its own. */
 export function CopyForm({
   user,
-  mysql,
+  dialect,
   onSubmit,
   onCancel,
 }: {
   user: UserRef
-  mysql: boolean
+  dialect: Dialect
   onSubmit: (op: UserOp) => void
   onCancel: () => void
 }) {
   const [name, setName] = useState(`${user.name}_copy`)
   const [host, setHost] = useState(user.host ?? '%')
   const pw = usePasswordConfirm()
-  const next: UserRef = mysql ? { name: name.trim(), host: host.trim() || '%' } : { name: name.trim() }
+  const withHost = capabilities(dialect).accountHost
+  const next: UserRef = withHost ? { name: name.trim(), host: host.trim() || '%' } : { name: name.trim() }
   const ready = next.name !== '' && userLabel(next) !== userLabel(user) && pw.complete
   const submit = (e: FormEvent) => {
     e.preventDefault()
@@ -82,12 +84,12 @@ export function CopyForm({
   }
   return (
     <form onSubmit={submit} className="space-y-3" aria-label={`${userLabel(user)}: ${t.copy}`}>
-      <p className="text-xs text-ink-sub">{mysql ? t.copyHintMysql : t.copyHintPostgres}</p>
+      <p className="text-xs text-ink-sub">{t.copyHint[dialect]}</p>
       <div className="grid grid-cols-2 gap-3">
         <Field id="copy-name" label={t.newName}>
           <Input id="copy-name" value={name} onChange={(e) => setName(e.target.value)} autoComplete="off" />
         </Field>
-        {mysql ? (
+        {withHost ? (
           <Field id="copy-host" label={locale.users.host}>
             <Input id="copy-host" value={host} onChange={(e) => setHost(e.target.value)} autoComplete="off" />
           </Field>
@@ -105,13 +107,13 @@ const number = (v: string) => (v.trim() === '' ? 0 : Math.max(0, Math.floor(Numb
 export function LimitsForm({
   user,
   limits,
-  mysql,
+  dialect,
   onSubmit,
   onCancel,
 }: {
   user: UserRef
   limits: AccountLimits | null | undefined
-  mysql: boolean
+  dialect: Dialect
   onSubmit: (op: UserOp) => void
   onCancel: () => void
 }) {
@@ -119,11 +121,12 @@ export function LimitsForm({
   const [queries, setQueries] = useState(String(limits?.maxQueries ?? 0))
   const [updates, setUpdates] = useState(String(limits?.maxUpdates ?? 0))
   const [connections, setConnections] = useState(String(limits?.maxConnections ?? 0))
+  const hourly = capabilities(dialect).accountResourceLimits
   const [simultaneous, setSimultaneous] = useState(String(limits?.maxUserConnections ?? 0))
   const submit = (e: FormEvent) => {
     e.preventDefault()
     onSubmit(
-      mysql
+      hourly
         ? {
             op: 'setAccountLimits',
             user,
@@ -150,9 +153,9 @@ export function LimitsForm({
   )
   return (
     <form onSubmit={submit} className="space-y-3" aria-label={`${userLabel(user)}: ${t.limits}`}>
-      <p className="text-xs text-ink-sub">{mysql ? t.limitsHintMysql : t.limitsHintPostgres}</p>
+      <p className="text-xs text-ink-sub">{t.limitsHint[dialect]}</p>
       <div className="grid grid-cols-2 gap-3">
-        {mysql ? (
+        {hourly ? (
           <>
             <Field id="limit-require" label={t.require}>
               <Select

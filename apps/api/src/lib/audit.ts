@@ -70,6 +70,7 @@ export const PASSTHROUGH_METHODS = [
   'diagnostics',
   'listStatus',
   'listProcesses',
+  'lockWaits',
 ] as const satisfies readonly Method[]
 
 export const SQL_SUMMARY_MAX = 500

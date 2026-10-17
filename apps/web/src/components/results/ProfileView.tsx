@@ -1,6 +1,6 @@
 import type { ProfileStage } from '@tsmyadmin/shared'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 
 const t = locale.sql.profiling
 

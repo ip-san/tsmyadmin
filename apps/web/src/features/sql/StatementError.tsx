@@ -1,5 +1,5 @@
 import type { StatementResult } from '@tsmyadmin/shared'
-import { locale } from '@/config/locale.ts'
+import { locale } from '@/config/locale-screens.ts'
 import { cn } from '@/lib/cn.ts'
 import { locateInSql } from '@/lib/sql-position.ts'
 
