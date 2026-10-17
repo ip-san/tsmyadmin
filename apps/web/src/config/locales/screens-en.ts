@@ -249,6 +249,21 @@ export const enScreens = {
     raw: 'The plan as the server gave it (JSON)',
     rawTruncated: 'Cut short: it is long',
   },
+  rowGraph: {
+    open: 'Show relations',
+    openHint: 'Follow this row and the rows its foreign keys join it to, on a diagram',
+    title: (table: string) => `Relations of a ${table} row`,
+    diagram: 'Row relations diagram (arrows run from a referring row to the row it refers to)',
+    rows: 'Rows on the diagram',
+    expand: (label: string) => `Open the relations of ${label}`,
+    expandShort: 'Open',
+    expanded: 'Opened',
+    reading: 'Reading…',
+    more: (n: number) => `${n.toLocaleString('en-US')} more rows`,
+    openMore: (n: number, table: string) => `Open the other ${n.toLocaleString('en-US')} rows of ${table}`,
+    root: 'Starting row',
+    hint: 'Open a row to add the rows it refers to and the rows that refer to it (up to 10 per table)',
+  },
   databaseOps: {
     copyMode: {
       label: 'What to copy',

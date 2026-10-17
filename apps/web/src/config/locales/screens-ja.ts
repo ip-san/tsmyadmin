@@ -248,6 +248,21 @@ export const jaScreens = {
     raw: 'サーバーが返した計画（JSON）',
     rawTruncated: '長いので途中で切っています',
   },
+  rowGraph: {
+    open: '関係を図で見る',
+    openHint: 'この行と、外部キーでつながる行を、図でたどる',
+    title: (table: string) => `${table} の行の関係`,
+    diagram: '行の関係の図（矢印は、参照している行から、参照されている行へ）',
+    rows: '図の行',
+    expand: (label: string) => `${label} のつながりを広げる`,
+    expandShort: '広げる',
+    expanded: '広げた',
+    reading: '読んでいます…',
+    more: (n: number) => `ほか ${n.toLocaleString('ja-JP')} 行`,
+    openMore: (n: number, table: string) => `${table} のほか ${n.toLocaleString('ja-JP')} 行を開く`,
+    root: '起点',
+    hint: '行ごとに「広げる」で、その行が参照している行と、その行を参照している行（表ごとに 10 行まで）を足します',
+  },
   databaseOps: {
     copyMode: {
       label: 'コピーする内容',
