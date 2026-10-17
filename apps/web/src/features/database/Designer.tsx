@@ -29,6 +29,7 @@ import { foreignKeysQuery, structureQuery, tablesQuery } from '@/lib/queries.ts'
 import { DesignerAddForeignKey } from './DesignerAddForeignKey.tsx'
 import { DesignerPages } from './DesignerPages.tsx'
 import { DesignerToolbar } from './DesignerToolbar.tsx'
+import { useUsage } from './DesignerUsage.tsx'
 import { diagramDia } from './designer-dia.ts'
 import { diagramEps } from './designer-eps.ts'
 import { diagramSvg } from './designer-svg.ts'
@@ -65,6 +66,8 @@ export function Designer({ db, schema }: { db: string; schema?: string | undefin
     if (patch.snap === true && !view.snap) keep(snapAll(saved))
   }
   const [relate, setRelate] = useState(false)
+  const [usageOn, setUsageOn] = useState(false)
+  const usage = useUsage(db, schema, usageOn)
   // Full screen is the browser's: the section fills the screen, and leaving it (Esc) is noticed here.
   const sectionRef = useRef<HTMLElement>(null)
   const [fullscreen, setFullscreen] = useState(false)
@@ -170,6 +173,10 @@ export function Designer({ db, schema }: { db: string; schema?: string | undefin
           }
           onPresetDone={() => setPair(null)}
         />
+        <label className="flex items-center gap-1 text-sm text-ink" title={t.usage.toggleHint}>
+          <input type="checkbox" checked={usageOn} onChange={(e) => setUsageOn(e.target.checked)} />
+          {t.usage.toggle}
+        </label>
       </DesignerToolbar>
       {relate && from ? (
         <p role="status" className="text-sm text-ink print:hidden">
@@ -184,8 +191,10 @@ export function Designer({ db, schema }: { db: string; schema?: string | undefin
         positions={positions}
         onMove={move}
         view={shownView}
+        overlay={usage.overlay}
         {...(relate ? { relate: { from, onPick: pick } } : {})}
       />
+      {usage.panel}
       <h3 className="text-sm font-semibold text-ink">{t.relations}</h3>
       {keys.data.length === 0 ? (
         <p className="text-sm text-ink-sub">{t.noRelations}</p>

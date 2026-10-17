@@ -139,6 +139,46 @@ export function describeSearchAndQuery(env: ConformanceEnv): void {
     })
   })
 
+  describe('tableUsage', () => {
+    it('counts the reads of a table in full and through its indexes, and marks the unique ones', async () => {
+      const t = `${scratch}_tu`
+      await execOk(`CREATE TABLE ${t} (id INT PRIMARY KEY, code INT, note VARCHAR(10))`)
+      await execOk(`CREATE INDEX ${t}_code ON ${t} (code)`)
+      try {
+        await execOk(`INSERT INTO ${t} VALUES (1, 10, 'a'), (2, 20, 'b'), (3, 30, 'c')`)
+        const first = await env.db.tableUsage(ns)
+        // MariaDB keeps performance_schema off unless it is configured on: there is nothing to read.
+        if (first.status === 'unsupported' && (await isMariaDb())) {
+          expect(first).toEqual({ status: 'unsupported', unit: 'rows', since: null, tables: [], indexes: [] })
+          return
+        }
+        expect(first.status).toBe('ok')
+        expect(first.unit).toBe(dialect === 'mysql' ? 'rows' : 'scans')
+        expect(Number.isNaN(Date.parse(first.since ?? ''))).toBe(false)
+        await execOk(`SELECT note FROM ${t} WHERE note = 'b'`)
+        // One script: each run starts a fresh session, so the setting must go with the statement it is for.
+        const indexOnly = dialect === 'postgres' ? 'SET enable_seqscan = off; ' : ''
+        await execOk(`${indexOnly}SELECT id FROM ${t} WHERE code = 20`)
+        // PostgreSQL hands its counts to the statistics a moment after the statement: read until they are there.
+        let usage = await env.db.tableUsage(ns)
+        for (let i = 0; i < 50; i++) {
+          const mine = usage.tables.find((u) => u.table === t)
+          if (mine && mine.fullReads > 0 && mine.indexReads > 0) break
+          await new Promise((r) => setTimeout(r, 100))
+          usage = await env.db.tableUsage(ns)
+        }
+        const mine = usage.tables.find((u) => u.table === t)
+        expect(mine?.fullReads).toBeGreaterThan(0)
+        expect(mine?.indexReads).toBeGreaterThan(0)
+        const indexes = usage.indexes.filter((i) => i.table === t)
+        expect(indexes.find((i) => i.index === `${t}_code`)).toMatchObject({ unique: false })
+        expect(indexes.find((i) => i.index !== `${t}_code`)).toMatchObject({ unique: true })
+      } finally {
+        await execOk(`DROP TABLE IF EXISTS ${t}`)
+      }
+    })
+  })
+
   describe('distinctValues', () => {
     it('lists each value with its count, most frequent first, NULL included, and refuses an unknown column', async () => {
       const t = `${scratch}_dv`
