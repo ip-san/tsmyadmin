@@ -21,7 +21,7 @@ paths:
 ## SQL 組み立て
 
 - 識別子は `quoteIdent` / `quoteTable`、値は `Params.add()` のプレースホルダ。文字列補間で値を埋め込まない
-- SQL テンプレート補間が許されるのは `base.ts`, `sql/*`, `*/{ddl,adapter,export,users,server,create-statements,scan}.ts`, `mysql/routines.ts`（許可リストは `scripts/check-sql-safety.mjs` が正）。それ以外で `.query()` に渡すテンプレートは UPPER_CASE の SQL 定数の合成だけが許され、値をクォートに隣接させる補間はどこでも禁止
+- SQL テンプレート補間が許されるのは `base.ts`, `sql/*`, `*/{ddl,adapter,export,users,server,create-statements}.ts`, `mysql/scan.ts`, `mysql/routines.ts`（許可リストは `scripts/check-sql-safety.mjs` が正）。それ以外で `.query()` に渡すテンプレートは UPPER_CASE の SQL 定数の合成だけが許され、値をクォートに隣接させる補間はどこでも禁止
 - イントロスペクションは information_schema / pg_catalog を **静的 SQL + パラメータ** で問い合わせる
 
 ## 値のワイヤー規則
@@ -72,4 +72,6 @@ MySQL は接続セットアップ（`USE` と同時）でセッションの `sql
 
 - 実際の DB が 1 通りにしか答えない分岐（拡張が無い、権限が無い、古い綴り、MariaDB の差）は、`test/scripted-conn.ts` の台本つきの接続で、サーバーの答えを書いて押さえる（`scripted([[/正規表現/, rows(...)]])`）。conformance は、両方言で同じ契約を確かめる場所で、エラー経路の網羅の場所ではない
 - **conformance と API 統合の試験は、同じ MySQL / PostgreSQL サーバーに並行して書く。** サーバー全体の状態（`general_log`・`slow_log`・グローバル変数）を読む試験は、ほかの試験の行が混ざるので、「空である」ではなく、自分の目印（`scratch` の名前）を含む行だけを見る
+- **サーバーの統計を読むメソッド（`tableUsage` など）は、「数がある」ことの前に「数えている」ことを確かめる**。MySQL は performance_schema が有効でも、計測（`setup_instruments`）が切られていれば全部 0 になり、「使われていない」と読めてしまうので `unsupported` にする。カタログに無い行（InnoDB の隠れた `GEN_CLUST_INDEX`、消えたばかりの索引）は、NULL を「一意でない」と読む。PostgreSQL の統計は再起動をまたいで残るので、起動時刻を「数え始め」にしない（消したことがなければ null）。付けたしの値（数え始め）が読めないことで、本体（件数）を失敗にしない
+- conformance で特定の索引を探すときは、「ほかの索引でないもの」ではなく名前で（MySQL は `PRIMARY`、PostgreSQL は `<表>_pkey`）
 - 試験が間違いに気づくかは、カバレッジでは分からない。重要なファイルを触ったら `bun run mutation -- --mutate <ファイル>` で、生き残った変異を見る（結果が変わらない書き換え＝同値の変異は、無理に殺さない）
