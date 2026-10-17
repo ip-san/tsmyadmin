@@ -27,6 +27,7 @@ import { chosenDisplayColumn } from '@/lib/display-column.ts'
 import { readPreference, removePreference, writePreference } from '@/lib/preferences.ts'
 import { foreignKeysQuery, structureQuery, tablesQuery } from '@/lib/queries.ts'
 import { DesignerAddForeignKey } from './DesignerAddForeignKey.tsx'
+import { useCompare } from './DesignerCompare.tsx'
 import { DesignerPages } from './DesignerPages.tsx'
 import { useReferences } from './DesignerReferences.tsx'
 import { DesignerToolbar } from './DesignerToolbar.tsx'
@@ -51,7 +52,16 @@ interface Pick {
  * one it refers to, and dropped from the table under the diagram, which lists the same keys for anyone not using
  * the picture. The diagram leaves as an SVG file or, through the browser's print dialog, as a PDF.
  */
-export function Designer({ db, schema }: { db: string; schema?: string | undefined }) {
+export function Designer({
+  db,
+  schema,
+  compare,
+}: {
+  db: string
+  schema?: string | undefined
+  /** A snapshot to lay over the diagram: what was added, removed and changed since it was taken. */
+  compare?: string | undefined
+}) {
   const { session } = useRouteContext({ from: '/_app' })
   const tables = useQuery(tablesQuery(db, schema))
   const keys = useQuery(foreignKeysQuery(db, schema))
@@ -70,6 +80,7 @@ export function Designer({ db, schema }: { db: string; schema?: string | undefin
   const [relate, setRelate] = useState(false)
   const [usageOn, setUsageOn] = useState(false)
   const usage = useUsage(db, schema, usageOn)
+  const comparing = useCompare(db, schema, compare)
   // Full screen is the browser's: the section fills the screen, and leaving it (Esc) is noticed here.
   const sectionRef = useRef<HTMLElement>(null)
   const [fullscreen, setFullscreen] = useState(false)
@@ -106,7 +117,11 @@ export function Designer({ db, schema }: { db: string; schema?: string | undefin
 
   const drawn = drawnRelations(keys.data, session.dialect, schema ? { database: db, schema } : { database: db }, names)
   const all = new Map(names.map((n, i) => [n, structures[i]?.data?.columns.map((c) => c.name)]))
-  const columns = new Map(names.map((n) => [n, withAllColumns(boxColumns(n, drawn), showAll ? all.get(n) : undefined)]))
+  // Comparing with a snapshot draws the tables it had that are gone too, with the keys it recorded for them.
+  const shown = comparing.shape(names, drawn)
+  const columns = new Map(
+    shown.tables.map((n) => [n, withAllColumns(boxColumns(n, shown.relations), showAll ? all.get(n) : undefined)])
+  )
   const display = new Map(
     names.flatMap((n) => {
       const chosen = chosenDisplayColumn({ db, schema, table: n })
@@ -115,9 +130,9 @@ export function Designer({ db, schema }: { db: string; schema?: string | undefin
   )
   // A table without a saved position (new, or never moved) takes its place in the automatic layout.
   // The boxes are as wide as their names when asked, which moves the columns of the automatic layout apart.
-  const widthOf = makeWidthOf({ tables: names, columns, display, view: shownView })
+  const widthOf = makeWidthOf({ tables: shown.tables, columns, display, view: shownView })
   // Boxes that list every column are taller than the key columns they are laid out for otherwise.
-  const auto = autoLayout(names, drawn, widthOf, (n) => boxHeight(columns.get(n)?.length ?? 0))
+  const auto = autoLayout(shown.tables, shown.relations, widthOf, (n) => boxHeight(columns.get(n)?.length ?? 0))
   const positions = { ...(shownView.snap ? snapAll(auto) : auto), ...saved }
   const keep = (next: Record<string, Point>) => {
     setSaved(next)
@@ -191,15 +206,16 @@ export function Designer({ db, schema }: { db: string; schema?: string | undefin
           {t.relateFrom(from.table, from.column)}
         </p>
       ) : null}
+      {comparing.panel}
       <SchemaDiagram
-        tables={names}
-        relations={drawn}
+        tables={shown.tables}
+        relations={shown.relations}
         columns={columns}
         display={display}
         positions={positions}
         onMove={move}
         view={shownView}
-        overlay={refs.overlay ?? usage.overlay}
+        overlay={shown.overlay ?? refs.overlay ?? usage.overlay}
         {...(relate ? { relate: { from, onPick: pick } } : {})}
       />
       {usage.panel}

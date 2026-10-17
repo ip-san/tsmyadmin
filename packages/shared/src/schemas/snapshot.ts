@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { RelationDefSchema, TableKindSchema } from './structure.ts'
 
 /** A saved copy of one database (or PostgreSQL schema) that it can be put back to: kept by the server, in memory. */
 export const SnapshotSchema = z.object({
@@ -51,6 +52,13 @@ export const SnapshotDiffEntrySchema = z.object({
 })
 export type SnapshotDiffEntry = z.infer<typeof SnapshotDiffEntrySchema>
 
+/** The tables and views a snapshot held, and the foreign keys between them: what draws its schema on a diagram. */
+export const SnapshotShapeSchema = z.object({
+  tables: z.array(z.object({ name: z.string(), kind: TableKindSchema })),
+  relations: z.array(RelationDefSchema),
+})
+export type SnapshotShape = z.infer<typeof SnapshotShapeSchema>
+
 /**
  * What changed in the schema since a snapshot was taken (a migration, say): the tables and views made since, the
  * ones gone, and the ones whose definition differs. Row values are not compared, nor counters that move with them
@@ -58,6 +66,8 @@ export type SnapshotDiffEntry = z.infer<typeof SnapshotDiffEntrySchema>
  */
 export const SnapshotDiffSchema = z.object({
   snapshot: SnapshotSchema,
+  /** The schema as it was, to draw what is gone; null for a snapshot taken before this was kept. */
+  shape: SnapshotShapeSchema.nullable(),
   added: z.array(SnapshotDiffEntrySchema),
   removed: z.array(SnapshotDiffEntrySchema),
   changed: z.array(SnapshotDiffEntrySchema),

@@ -102,6 +102,17 @@ export const jaScreens = {
     openInSql: 'SQL タブで開く',
   },
   designer: {
+    compare: {
+      title: (name: string) => `スナップショット「${name}」と比べています`,
+      summary: (added: number, removed: number, changed: number) =>
+        `追加 ${added}・削除 ${removed}・変更 ${changed}（変わらない表は薄く描きます）`,
+      added: '追加',
+      removed: '削除',
+      changed: '変更',
+      stop: '比べるのをやめる',
+      loading: '比べています…',
+      noShape: 'このスナップショットには表の一覧が記録されていないので、消えた表どうしの線は描けません',
+    },
     refCheck: {
       check: '参照を検査',
       checkHint:
@@ -2259,6 +2270,7 @@ export const jaScreens = {
     diffHint:
       'CREATE 文どうしを比べます。行のデータと、行とともに動く値（MySQL の AUTO_INCREMENT=、シーケンスの現在値）は比べません。関数・トリガー・イベントは対象外です。',
     diffAgain: 'もう一度比較',
+    diffOnDiagram: '図で見る',
   },
   tracking: {
     download: 'SQL をダウンロード',

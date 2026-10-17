@@ -6,6 +6,7 @@ import type {
   Snapshot,
   SnapshotRestorePreview,
   SnapshotRestoreResult,
+  SnapshotShape,
   TableInfo,
 } from '@tsmyadmin/shared'
 import { capabilities, ExportQuerySchema } from '@tsmyadmin/shared'
@@ -49,11 +50,15 @@ interface Held {
   names: ReadonlySet<string>
   /** Their definitions then, as compared (see snapshot-diff.ts); a view the account could not SHOW has none. */
   definitions: ReadonlyMap<string, string>
+  /** The tables and keys then, to draw the schema as it was (absent from snapshots taken before it was kept). */
+  shape?: SnapshotShape | undefined
 }
 
 /** What one held snapshot takes in memory: its dump and the definitions kept beside it. */
-function weight(held: Pick<Held, 'sql' | 'definitions'>): number {
+function weight(held: Pick<Held, 'sql' | 'definitions' | 'shape'>): number {
   let bytes = Buffer.byteLength(held.sql)
+  for (const t of held.shape?.tables ?? []) bytes += Buffer.byteLength(t.name) + Buffer.byteLength(t.kind)
+  for (const r of held.shape?.relations ?? []) bytes += Buffer.byteLength(JSON.stringify(r))
   for (const [name, text] of held.definitions) bytes += Buffer.byteLength(name) + Buffer.byteLength(text)
   return bytes
 }
@@ -223,6 +228,11 @@ export async function takeSnapshot(
   const { limit, release } = store.reserve(maxBytes)
   try {
     const all = await adapter.listTables(ns)
+    // The tables and keys as they are, to draw on a diagram later what a migration took away.
+    const shape: SnapshotShape = {
+      tables: all.map((t) => ({ name: t.name, kind: t.kind })),
+      relations: await adapter.listForeignKeys(ns),
+    }
     const q = ExportQuerySchema.parse({ format: 'sql' })
     // The definitions the dump reads on its way are kept too, to compare the schema with later.
     const recorder = recordingDefinitions(adapter)
@@ -243,7 +253,7 @@ export async function takeSnapshot(
     // Given back just before it is stored, with nothing awaited between: held and reserved never count it twice.
     release()
     const names = new Set(all.map((t) => t.name))
-    return store.add(scope, { sql, statements, names, definitions: recorder.definitions }, name, now)
+    return store.add(scope, { sql, statements, names, definitions: recorder.definitions, shape }, name, now)
   } finally {
     release()
   }

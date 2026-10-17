@@ -102,6 +102,17 @@ export const enScreens = {
     openInSql: 'Open in the SQL tab',
   },
   designer: {
+    compare: {
+      title: (name: string) => `Comparing with the snapshot "${name}"`,
+      summary: (added: number, removed: number, changed: number) =>
+        `${added} added, ${removed} removed, ${changed} changed (tables that did not change are drawn faint)`,
+      added: 'Added',
+      removed: 'Removed',
+      changed: 'Changed',
+      stop: 'Stop comparing',
+      loading: 'Comparing…',
+      noShape: 'This snapshot did not record its tables, so the lines of the tables that are gone cannot be drawn',
+    },
     refCheck: {
       check: 'Check references',
       checkHint:
@@ -2280,6 +2291,7 @@ export const enScreens = {
     diffHint:
       "Compares the CREATE statements. Row data, and values that move with the rows (MySQL's AUTO_INCREMENT=, a sequence's position), are not compared. Functions, triggers and events are not included.",
     diffAgain: 'Compare again',
+    diffOnDiagram: 'Show on the diagram',
   },
   tracking: {
     download: 'Download SQL',

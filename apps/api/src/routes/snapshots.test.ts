@@ -189,6 +189,12 @@ describe('snapshots', () => {
     const same = await diffOf()
     expect(same).toMatchObject({ added: [], removed: [], changed: [], unchanged: 2, unreadable: [] })
     expect(same.snapshot.name).toBe('before')
+    // The tables and keys as they were, to draw what a migration takes away.
+    expect(same.shape?.tables.map((t) => [t.name, t.kind])).toEqual([
+      ['users', 'table'],
+      ['posts', 'table'],
+    ])
+    expect(same.shape?.relations).toEqual(await h.adapter.listForeignKeys({ database: 'shop' }))
     // After a "migration": posts is gone, users has a column more, tags is new.
     const listed = await h.adapter.listTables({ database: 'shop' })
     const users = listed.find((t) => t.name === 'users') as (typeof listed)[number]

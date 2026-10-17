@@ -89,7 +89,7 @@ export function snapshotRoutes(
           changed: diff.changed.length,
           unchanged: diff.unchanged,
         })
-        const body: SnapshotDiff = { snapshot: held.snapshot, ...diff }
+        const body: SnapshotDiff = { snapshot: held.snapshot, shape: held.shape ?? null, ...diff }
         return c.json(body)
       })
       .get(
