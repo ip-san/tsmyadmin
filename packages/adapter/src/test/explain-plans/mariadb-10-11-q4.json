@@ -1,0 +1,20 @@
+{
+    "query_block": {
+        "select_id": 1,
+        "table": {
+            "update": 1,
+            "table_name": "posts",
+            "access_type": "range",
+            "possible_keys": [
+                "PRIMARY"
+            ],
+            "key": "PRIMARY",
+            "key_length": "4",
+            "used_key_parts": [
+                "id"
+            ],
+            "rows": 1,
+            "attached_condition": "posts.`id` = 1"
+        }
+    }
+}

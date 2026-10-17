@@ -1,0 +1,72 @@
+{
+    "query_block": {
+        "select_id": 1,
+        "cost_info": {
+            "query_cost": "0.70"
+        },
+        "nested_loop": [
+            {
+                "table": {
+                    "table_name": "u",
+                    "access_type": "const",
+                    "possible_keys": [
+                        "PRIMARY",
+                        "uq_users_email"
+                    ],
+                    "key": "uq_users_email",
+                    "used_key_parts": [
+                        "email"
+                    ],
+                    "key_length": "1022",
+                    "ref": [
+                        "const"
+                    ],
+                    "rows_examined_per_scan": 1,
+                    "rows_produced_per_join": 1,
+                    "filtered": "100.00",
+                    "cost_info": {
+                        "read_cost": "0.00",
+                        "eval_cost": "0.10",
+                        "prefix_cost": "0.00",
+                        "data_read_per_join": "1K"
+                    },
+                    "used_columns": [
+                        "id",
+                        "name",
+                        "email"
+                    ]
+                }
+            },
+            {
+                "table": {
+                    "table_name": "p",
+                    "access_type": "ref",
+                    "possible_keys": [
+                        "fk_posts_user"
+                    ],
+                    "key": "fk_posts_user",
+                    "used_key_parts": [
+                        "user_id"
+                    ],
+                    "key_length": "4",
+                    "ref": [
+                        "const"
+                    ],
+                    "rows_examined_per_scan": 2,
+                    "rows_produced_per_join": 2,
+                    "filtered": "100.00",
+                    "cost_info": {
+                        "read_cost": "0.50",
+                        "eval_cost": "0.20",
+                        "prefix_cost": "0.70",
+                        "data_read_per_join": "1K"
+                    },
+                    "used_columns": [
+                        "user_id",
+                        "title"
+                    ]
+                }
+            }
+        ]
+    }
+}

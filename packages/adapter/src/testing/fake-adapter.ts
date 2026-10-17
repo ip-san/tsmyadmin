@@ -12,6 +12,7 @@ import type {
   DistinctValues,
   EventDetail,
   EventInfo,
+  ExplainResult,
   Filter,
   InputCell,
   InsertPreview,
@@ -725,6 +726,16 @@ export class FakeAdapter implements DatabaseAdapter {
     for (let i = 0; i < t.rows.length; i += opts.batchSize) {
       yield { columns, rows: t.rows.slice(i, i + opts.batchSize).map((r) => columns.map((c) => r[c.name] ?? null)) }
     }
+  }
+
+  async explainPlan(ns: Namespace, sql: string): Promise<ExplainResult> {
+    this.record('explainPlan', ns, sql)
+    const table = /\bFROM\s+(\w+)/i.exec(sql)?.[1] ?? null
+    const plan = {
+      ...{ op: 'Table', table, alias: null, index: null, indexColumns: [], access: 'fullScan' as const },
+      ...{ covering: false, estRows: 1, cost: 1, detail: null, children: [] },
+    }
+    return { plan, raw: '{}', rawTruncated: false }
   }
 
   async executeSql(ns: Namespace, sql: string, opts: ExecuteOptions): Promise<StatementResult[]> {

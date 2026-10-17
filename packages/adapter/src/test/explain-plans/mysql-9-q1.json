@@ -1,0 +1,28 @@
+{
+    "query": "/* select#1 */ select `p`.`title` AS `title`,'Alice' AS `name` from `tsmyadmin_test`.`posts` `p` join `tsmyadmin_test`.`users` `u` where ((`p`.`user_id` = '1'))",
+    "query_plan": {
+        "alias": "p",
+        "covering": false,
+        "operation": "Index lookup on p using fk_posts_user (user_id = '1')",
+        "index_name": "fk_posts_user",
+        "table_name": "posts",
+        "access_type": "index",
+        "key_columns": [
+            "user_id"
+        ],
+        "schema_name": "tsmyadmin_test",
+        "used_columns": [
+            "user_id",
+            "title"
+        ],
+        "estimated_rows": 2.0,
+        "lookup_condition": "user_id = '1'",
+        "index_access_type": "index_lookup",
+        "lookup_references": [
+            "const"
+        ],
+        "estimated_total_cost": 0.7
+    },
+    "query_type": "select",
+    "json_schema_version": "2.0"
+}

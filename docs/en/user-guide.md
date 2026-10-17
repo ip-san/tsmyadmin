@@ -1,4 +1,4 @@
-<!-- translated-from: docs/user-guide.md sha256:4b31c1b51ee2f391af7ea16d7ab2aa8772b74fb7647749d504db1501b19d52fe -->
+<!-- translated-from: docs/user-guide.md sha256:730f909ac1cf21f66fc888b8af4bcd4695e75441231bb8ad76e59f592835725e -->
 
 # User guide
 
@@ -146,6 +146,7 @@ On PostgreSQL, **idle** tsmyadmin connections to that database under the same da
 - `⌘/Ctrl + Enter` runs. Several statements each get their own result (rows / affected rows / the position of an error), drawn as each one finishes
 - **Cancel** stops a run in progress. A result past the **Row limit** shows only the first rows (and says so)
 - **EXPLAIN** shows the query plan for a single statement
+- **Show as diagram** shows the plan of one statement as a tree and a diagram of only the tables it reads. Tables light up step by step in the order they are read: a table read through an index (a range or a lookup) has a solid green outline and the index name, a table read in full a dashed orange one (the same story is also listed in words). It is an estimate: the statement is not run (no ANALYZE, inside a transaction that is rolled back). **Show as diagram** under a statement that ran does the same. MySQL 9's newer format (`explain_json_format_version = 2`) and MariaDB's are read too
 - **Format** breaks a statement into a line per clause (the case of words and the text of strings, identifiers and comments are left as they are)
 - **Run options**: the **delimiter** (MySQL; the `DELIMITER` field, for routine bodies that hold `;`), **roll back at the end** (starts with `START TRANSACTION` / `BEGIN` and the server undoes it when the script ends; statements that commit implicitly, such as MySQL definition changes, are not undone), and **check foreign keys** (off sets `FOREIGN_KEY_CHECKS = 0`, or `session_replication_role = replica` on PostgreSQL, for this run only). A `:name` in the statement brings up an input for a **parameter**; a number goes in as it is, anything else as a quoted string (NULL is a choice too). The statements added appear first among the results, as ordinary statements
 - **Profiling** (MySQL / MariaDB) shows, for each statement, the time the server spent in each stage (`SHOW PROFILE`). PostgreSQL has no per-stage timing; use `EXPLAIN ANALYZE` for the plan and its times

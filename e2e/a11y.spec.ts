@@ -1,6 +1,7 @@
 import { expect } from '@playwright/test'
 import { fillType, login, PASSKEY_BASE_URL, PERSISTENT_BASE_URL, TARGETS, tableUrl, test } from './helpers.ts'
 import { layoutViolations } from './layout-lint.ts'
+import { openPlan } from './plan.ts'
 import { pageProblems } from './scan.ts'
 import { createAccount, dropAccount, enrol, t as first, signIn } from './two-factor.ts'
 
@@ -359,6 +360,12 @@ for (const t of TARGETS) {
         await page.getByRole('heading').first().waitFor()
         expect(await layoutViolations(page), `layout at 390px: ${url}`).toEqual([])
       }
+    })
+
+    test('SQL tab with a statement plan drawn', async ({ page }) => {
+      const plan = await openPlan(page, t)
+      await expect(plan).toBeVisible()
+      await scan(page)
     })
 
     test('a key that many tables reference folds them into one list', async ({ page }) => {

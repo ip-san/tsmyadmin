@@ -1,0 +1,127 @@
+[
+    {
+        "Plan": {
+            "Node Type": "Sort",
+            "Parallel Aware": false,
+            "Async Capable": false,
+            "Startup Cost": 15.58,
+            "Total Cost": 15.58,
+            "Plan Rows": 3,
+            "Plan Width": 230,
+            "Sort Key": [
+                "((SubPlan 1)) DESC"
+            ],
+            "Plans": [
+                {
+                    "Node Type": "Group",
+                    "Parent Relationship": "Outer",
+                    "Parallel Aware": false,
+                    "Async Capable": false,
+                    "Startup Cost": 12.39,
+                    "Total Cost": 15.55,
+                    "Plan Rows": 3,
+                    "Plan Width": 230,
+                    "Group Key": [
+                        "u.id"
+                    ],
+                    "Plans": [
+                        {
+                            "Node Type": "Sort",
+                            "Parent Relationship": "Outer",
+                            "Parallel Aware": false,
+                            "Async Capable": false,
+                            "Startup Cost": 12.39,
+                            "Total Cost": 12.39,
+                            "Plan Rows": 3,
+                            "Plan Width": 222,
+                            "Sort Key": [
+                                "u.id"
+                            ],
+                            "Plans": [
+                                {
+                                    "Node Type": "Hash Join",
+                                    "Parent Relationship": "Outer",
+                                    "Parallel Aware": false,
+                                    "Async Capable": false,
+                                    "Join Type": "Semi",
+                                    "Startup Cost": 1.07,
+                                    "Total Cost": 12.36,
+                                    "Plan Rows": 3,
+                                    "Plan Width": 222,
+                                    "Inner Unique": false,
+                                    "Hash Cond": "(u.id = posts.user_id)",
+                                    "Plans": [
+                                        {
+                                            "Node Type": "Seq Scan",
+                                            "Parent Relationship": "Outer",
+                                            "Parallel Aware": false,
+                                            "Async Capable": false,
+                                            "Relation Name": "users",
+                                            "Alias": "u",
+                                            "Startup Cost": 0.0,
+                                            "Total Cost": 11.0,
+                                            "Plan Rows": 100,
+                                            "Plan Width": 222
+                                        },
+                                        {
+                                            "Node Type": "Hash",
+                                            "Parent Relationship": "Inner",
+                                            "Parallel Aware": false,
+                                            "Async Capable": false,
+                                            "Startup Cost": 1.03,
+                                            "Total Cost": 1.03,
+                                            "Plan Rows": 3,
+                                            "Plan Width": 4,
+                                            "Plans": [
+                                                {
+                                                    "Node Type": "Seq Scan",
+                                                    "Parent Relationship": "Outer",
+                                                    "Parallel Aware": false,
+                                                    "Async Capable": false,
+                                                    "Relation Name": "posts",
+                                                    "Alias": "posts",
+                                                    "Startup Cost": 0.0,
+                                                    "Total Cost": 1.03,
+                                                    "Plan Rows": 3,
+                                                    "Plan Width": 4
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "Node Type": "Aggregate",
+                            "Strategy": "Plain",
+                            "Partial Mode": "Simple",
+                            "Parent Relationship": "SubPlan",
+                            "Subplan Name": "SubPlan 1",
+                            "Parallel Aware": false,
+                            "Async Capable": false,
+                            "Startup Cost": 1.04,
+                            "Total Cost": 1.05,
+                            "Plan Rows": 1,
+                            "Plan Width": 8,
+                            "Plans": [
+                                {
+                                    "Node Type": "Seq Scan",
+                                    "Parent Relationship": "Outer",
+                                    "Parallel Aware": false,
+                                    "Async Capable": false,
+                                    "Relation Name": "posts",
+                                    "Alias": "p",
+                                    "Startup Cost": 0.0,
+                                    "Total Cost": 1.04,
+                                    "Plan Rows": 1,
+                                    "Plan Width": 0,
+                                    "Filter": "(user_id = u.id)"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+]

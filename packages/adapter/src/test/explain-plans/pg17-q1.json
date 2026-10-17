@@ -1,0 +1,45 @@
+[
+    {
+        "Plan": {
+            "Node Type": "Nested Loop",
+            "Parallel Aware": false,
+            "Async Capable": false,
+            "Join Type": "Inner",
+            "Startup Cost": 0.14,
+            "Total Cost": 9.23,
+            "Plan Rows": 1,
+            "Plan Width": 636,
+            "Inner Unique": false,
+            "Join Filter": "(u.id = p.user_id)",
+            "Plans": [
+                {
+                    "Node Type": "Index Scan",
+                    "Parent Relationship": "Outer",
+                    "Parallel Aware": false,
+                    "Async Capable": false,
+                    "Scan Direction": "Forward",
+                    "Index Name": "uq_users_email",
+                    "Relation Name": "users",
+                    "Alias": "u",
+                    "Startup Cost": 0.14,
+                    "Total Cost": 8.16,
+                    "Plan Rows": 1,
+                    "Plan Width": 222,
+                    "Index Cond": "((email)::text = 'alice@example.com'::text)"
+                },
+                {
+                    "Node Type": "Seq Scan",
+                    "Parent Relationship": "Inner",
+                    "Parallel Aware": false,
+                    "Async Capable": false,
+                    "Relation Name": "posts",
+                    "Alias": "p",
+                    "Startup Cost": 0.0,
+                    "Total Cost": 1.03,
+                    "Plan Rows": 3,
+                    "Plan Width": 422
+                }
+            ]
+        }
+    }
+]

@@ -179,6 +179,31 @@ export const enScreens = {
       focus: 'Starting point',
     },
   },
+  plan: {
+    show: 'Show as diagram',
+    showHint: 'See the execution plan (estimated; the statement is not run) as a tree and a diagram of its tables',
+    title: 'Execution plan',
+    tree: 'Execution plan tree',
+    diagram: 'Diagram of the tables the plan reads',
+    loading: 'Getting the execution plan…',
+    close: 'Close',
+    rows: (n: number) => `about ${n.toLocaleString('en-US')} rows`,
+    read: (table: string, how: string, rows: string) => `${table}: ${how} (${rows})`,
+    how: {
+      fullScan: 'every row is read',
+      fullIndexScan: (index: string) => `the whole of index ${index} is read`,
+      range: (index: string) => `a range of index ${index} is read`,
+      lookup: (index: string) => `rows are looked up by index ${index}`,
+      other: 'read',
+    },
+    full: 'full scan',
+    covering: ' (the index alone answers; the table is not read)',
+    noReads: 'No step of this plan reads a table (the statement uses none, or the server answered it while planning)',
+    notes:
+      'Estimated: the statement is not run. With a small table, the plan may read every row even where an index exists',
+    raw: 'The plan as the server gave it (JSON)',
+    rawTruncated: 'Cut short: it is long',
+  },
   databaseOps: {
     copyMode: {
       label: 'What to copy',
