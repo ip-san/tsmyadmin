@@ -1,0 +1,137 @@
+import { useQueries, useQuery } from '@tanstack/react-query'
+import type { ExplainResult, PlanNode, RelationDef } from '@tsmyadmin/shared'
+import { diagramFor, overlayUpTo } from '@/components/schema-diagram/overlay.ts'
+import { SchemaDiagram } from '@/components/schema-diagram/SchemaDiagram.tsx'
+import { DiagramLegend, StepNarration } from '@/components/schema-diagram/StepNarration.tsx'
+import { useStepPlayer } from '@/components/schema-diagram/use-step-player.ts'
+import { Button } from '@/components/ui/Button.tsx'
+import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
+import { locale } from '@/config/locale-screens.ts'
+import { explainQuery, foreignKeysQuery, structureQuery } from '@/lib/queries.ts'
+import { planReads, planSteps } from './plan-steps.ts'
+
+const t = locale.plan
+
+/**
+ * The plan of one statement, estimated on the server: the tree as the server gave it, and the tables it reads drawn
+ * on their own, lit in the order they are read (full reads apart from reads through an index), with the same story
+ * in words. Opened from the SQL tab's EXPLAIN.
+ */
+export function PlanView({
+  db,
+  schema,
+  sql,
+  onClose,
+}: {
+  db: string
+  schema?: string | undefined
+  sql: string
+  onClose: () => void
+}) {
+  const plan = useQuery(explainQuery(db, schema, sql))
+  const relations = useQuery(foreignKeysQuery(db, schema))
+  return (
+    <section aria-label={t.title} className="space-y-3 rounded border border-line bg-surface p-3">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold text-ink">{t.title}</h3>
+        <Button size="sm" onClick={onClose}>
+          {t.close}
+        </Button>
+      </div>
+      {plan.isPending || relations.isPending ? (
+        <Spinner label={t.loading} />
+      ) : plan.isError ? (
+        <ErrorBox error={plan.error} />
+      ) : relations.isError ? (
+        <ErrorBox error={relations.error} onRetry={() => void relations.refetch()} />
+      ) : (
+        <PlanStory db={db} schema={schema} result={plan.data} relations={relations.data} />
+      )}
+    </section>
+  )
+}
+
+function PlanStory({
+  db,
+  schema,
+  result,
+  relations,
+}: {
+  db: string
+  schema?: string | undefined
+  result: ExplainResult
+  relations: readonly RelationDef[]
+}) {
+  const reads = planReads(result.plan)
+  const tables = [...new Set(reads.map((r) => r.node.table))]
+  // PostgreSQL names an index but not its columns: the tables' structure has them.
+  const structures = useQueries({ queries: tables.map((table) => structureQuery({ db, schema, table })) })
+  const indexColumns = (table: string, index: string) =>
+    structures[tables.indexOf(table)]?.data?.indexes.find((i) => i.name === index)?.columns ?? []
+  const steps = planSteps(reads, indexColumns)
+  const player = useStepPlayer(steps.length)
+  const extra = new Map<string, string[]>()
+  for (const c of steps.flatMap((s) => s.columns ?? [])) extra.set(c.table, [...(extra.get(c.table) ?? []), c.column])
+  const diagram = diagramFor(tables, relations, extra)
+  const current = reads[player.index]?.path
+  return (
+    <div className="space-y-3">
+      <div className="grid gap-3 lg:grid-cols-2">
+        <figure tabIndex={0} className="min-w-0 overflow-auto">
+          <figcaption className="mb-1 text-xs font-semibold text-ink-sub">{t.tree}</figcaption>
+          <ul className="font-mono text-xs">
+            <PlanTree node={result.plan} path="0" current={current} />
+          </ul>
+        </figure>
+        <div className="min-w-0 space-y-2">
+          {reads.length > 0 ? (
+            <>
+              <SchemaDiagram {...diagram} overlay={overlayUpTo(steps, player.index)} label={t.diagram} />
+              <DiagramLegend tones={['index', 'scan']} />
+            </>
+          ) : (
+            <Notice>{t.noReads}</Notice>
+          )}
+        </div>
+      </div>
+      {steps.length > 0 ? <StepNarration steps={steps} player={player} /> : null}
+      <p className="text-xs text-ink-sub">{t.notes}</p>
+      <details className="text-xs">
+        <summary className="cursor-pointer text-ink-sub">{t.raw}</summary>
+        {result.rawTruncated ? <p className="text-ink-sub">{t.rawTruncated}</p> : null}
+        <pre tabIndex={0} className="mt-1 max-h-80 overflow-auto rounded bg-surface-sub p-2 text-ink">
+          {result.raw}
+        </pre>
+      </details>
+    </div>
+  )
+}
+
+/** The tree as the server gave it; the node read at the current step is marked. */
+function PlanTree({ node, path, current }: { node: PlanNode; path: string; current: string | undefined }) {
+  const here = path === current
+  const facts = [
+    node.table ? `${node.table}${node.alias ? ` ${node.alias}` : ''}` : null,
+    node.index ? `[${node.index}]` : null,
+    node.estRows === null ? null : t.rows(Math.round(node.estRows)),
+  ].filter(Boolean)
+  return (
+    <li className="ml-3 border-l border-line pl-2">
+      <span
+        aria-current={here ? 'step' : undefined}
+        className={`inline-block rounded px-1 ${here ? 'bg-row-hover font-semibold text-ink' : 'text-ink'}`}
+      >
+        {node.op}
+        {facts.length > 0 ? <span className="text-ink-sub"> — {facts.join(' · ')}</span> : null}
+      </span>
+      {node.detail ? <div className="break-all text-ink-sub">{node.detail}</div> : null}
+      {node.children.length > 0 ? (
+        <ul>
+          {node.children.map((c, i) => (
+            <PlanTree key={`${path}.${i}`} node={c} path={`${path}.${i}`} current={current} />
+          ))}
+        </ul>
+      ) : null}
+    </li>
+  )
+}

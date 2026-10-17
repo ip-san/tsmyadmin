@@ -6,6 +6,7 @@ import {
   BrowseResultSchema,
   DdlPreviewResponseSchema,
   DeleteImpactSchema,
+  ExplainResultSchema,
   QueryBuilderResultSchema,
   RelationDefSchema,
   SEARCH_TERM_MAX,
@@ -268,6 +269,25 @@ describe('rows', () => {
       body: JSON.stringify({ values: { id: 5, name: { nested: true } } }),
     })
     expect(bad.status).toBe(400)
+  })
+})
+
+describe('explain', () => {
+  it('returns the plan of one statement, by the SQL in the body', async () => {
+    const h = harness()
+    stores.push(h.store)
+    await h.login()
+    const res = await h.req('/api/databases/shop/explain?schema=app', {
+      method: 'POST',
+      body: JSON.stringify({ sql: 'SELECT * FROM users' }),
+    })
+    expect(ExplainResultSchema.parse(await res.json()).plan).toMatchObject({ table: 'users', access: 'fullScan' })
+    expect(h.adapter.calls.at(-1)).toEqual({
+      method: 'explainPlan',
+      args: [{ database: 'shop', schema: 'app' }, 'SELECT * FROM users'],
+    })
+    const empty = await h.req('/api/databases/shop/explain', { method: 'POST', body: JSON.stringify({ sql: '' }) })
+    expect(empty.status).toBe(400)
   })
 })
 

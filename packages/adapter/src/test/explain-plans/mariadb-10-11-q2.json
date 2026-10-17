@@ -1,0 +1,29 @@
+{
+    "query_block": {
+        "select_id": 1,
+        "nested_loop": [
+            {
+                "read_sorted_file": {
+                    "filesort": {
+                        "sort_key": "users.age",
+                        "table": {
+                            "table_name": "users",
+                            "access_type": "range",
+                            "possible_keys": [
+                                "idx_users_name"
+                            ],
+                            "key": "idx_users_name",
+                            "key_length": "402",
+                            "used_key_parts": [
+                                "name"
+                            ],
+                            "rows": 1,
+                            "filtered": 100,
+                            "index_condition": "users.`name` like 'A%'"
+                        }
+                    }
+                }
+            }
+        ]
+    }
+}

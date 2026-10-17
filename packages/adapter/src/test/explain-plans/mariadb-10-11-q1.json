@@ -1,0 +1,46 @@
+{
+    "query_block": {
+        "select_id": 1,
+        "nested_loop": [
+            {
+                "table": {
+                    "table_name": "u",
+                    "access_type": "const",
+                    "possible_keys": [
+                        "PRIMARY",
+                        "uq_users_email"
+                    ],
+                    "key": "uq_users_email",
+                    "key_length": "1022",
+                    "used_key_parts": [
+                        "email"
+                    ],
+                    "ref": [
+                        "const"
+                    ],
+                    "rows": 1,
+                    "filtered": 100
+                }
+            },
+            {
+                "table": {
+                    "table_name": "p",
+                    "access_type": "ref",
+                    "possible_keys": [
+                        "fk_posts_user"
+                    ],
+                    "key": "fk_posts_user",
+                    "key_length": "4",
+                    "used_key_parts": [
+                        "user_id"
+                    ],
+                    "ref": [
+                        "const"
+                    ],
+                    "rows": 2,
+                    "filtered": 100
+                }
+            }
+        ]
+    }
+}

@@ -30,6 +30,7 @@ import { HistoryPanel, SavedQueriesPanel, SharedQueriesPanel } from './SqlPanels
 import { isSingleStatement, unboundedWrites } from './statement.ts'
 import { useConsoleDraft } from './use-console-draft.ts'
 import { useConsoleLists } from './use-console-lists.ts'
+import { useVisualPlan } from './use-visual-plan.tsx'
 import { expandVariables } from './variables.ts'
 
 export interface SqlConsoleProps {
@@ -165,6 +166,7 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
     run.mutate({ script: prepareScript(explained, dialect, runOptions), shown: explained })
   }
   const explain = () => explainSql(text)
+  const plan = useVisualPlan(db, schema)
   // What to do with a statement that ran. Held in a ref behind stable functions: the results are memoised, and a
   // new function on every render would redo them all each time a streamed result arrives.
   const [codeOf, setCodeOf] = useState<string | null>(null)
@@ -185,6 +187,7 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
       run.mutate({ script: prepareScript(sql, dialect, runOptions), shown: sql })
     },
     explain: explainSql,
+    visualize: plan.show,
     code: setCodeOf,
   }
   // A page can hand the console a statement to run on arrival (a table's EXPLAIN). The timer keeps React's dev-only
@@ -200,6 +203,7 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
     edit: (sql) => latest.current?.edit(sql),
     rerun: (sql) => latest.current?.rerun(sql),
     explain: (sql) => latest.current?.explain(sql),
+    visualize: (sql) => latest.current?.visualize?.(sql),
     code: (sql) => latest.current?.code(sql),
   }))
 
@@ -230,6 +234,9 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
         ) : null}
         <Button onClick={explain} disabled={run.isPending || !isSingleStatement(text)} title={locale.sql.explainHint}>
           {locale.sql.explain}
+        </Button>
+        <Button onClick={() => plan.show(text)} disabled={!isSingleStatement(text)} title={locale.plan.showHint}>
+          {locale.plan.show}
         </Button>
         <Button
           onClick={() => setText(formatSql(text))}
@@ -302,6 +309,7 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
         />
         <DebugSqlPanel onLoad={setText} onRerun={handlers.rerun} />
       </div>
+      {plan.panel}
       {results ? (
         <ResultsView results={results} maxRows={maxRows} viewTarget={{ db, schema }} handlers={handlers} />
       ) : null}

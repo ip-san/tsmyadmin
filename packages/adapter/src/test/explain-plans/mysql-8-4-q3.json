@@ -1,0 +1,117 @@
+{
+    "query_block": {
+        "select_id": 1,
+        "cost_info": {
+            "query_cost": "1.40"
+        },
+        "ordering_operation": {
+            "using_filesort": true,
+            "grouping_operation": {
+                "using_temporary_table": true,
+                "using_filesort": false,
+                "nested_loop": [
+                    {
+                        "table": {
+                            "table_name": "posts",
+                            "access_type": "index",
+                            "possible_keys": [
+                                "fk_posts_user"
+                            ],
+                            "key": "fk_posts_user",
+                            "used_key_parts": [
+                                "user_id"
+                            ],
+                            "key_length": "4",
+                            "rows_examined_per_scan": 3,
+                            "rows_produced_per_join": 2,
+                            "filtered": "66.67",
+                            "using_index": true,
+                            "loosescan": true,
+                            "cost_info": {
+                                "read_cost": "0.25",
+                                "eval_cost": "0.20",
+                                "prefix_cost": "0.45",
+                                "data_read_per_join": "1K"
+                            },
+                            "used_columns": [
+                                "id",
+                                "user_id"
+                            ]
+                        }
+                    },
+                    {
+                        "table": {
+                            "table_name": "u",
+                            "access_type": "eq_ref",
+                            "possible_keys": [
+                                "PRIMARY",
+                                "idx_users_name"
+                            ],
+                            "key": "PRIMARY",
+                            "used_key_parts": [
+                                "id"
+                            ],
+                            "key_length": "4",
+                            "ref": [
+                                "tsmyadmin_test.posts.user_id"
+                            ],
+                            "rows_examined_per_scan": 1,
+                            "rows_produced_per_join": 1,
+                            "filtered": "100.00",
+                            "cost_info": {
+                                "read_cost": "0.75",
+                                "eval_cost": "0.10",
+                                "prefix_cost": "1.40",
+                                "data_read_per_join": "1K"
+                            },
+                            "used_columns": [
+                                "id",
+                                "name"
+                            ]
+                        }
+                    }
+                ],
+                "select_list_subqueries": [
+                    {
+                        "dependent": true,
+                        "cacheable": false,
+                        "query_block": {
+                            "select_id": 2,
+                            "cost_info": {
+                                "query_cost": "0.40"
+                            },
+                            "table": {
+                                "table_name": "p",
+                                "access_type": "ref",
+                                "possible_keys": [
+                                    "fk_posts_user"
+                                ],
+                                "key": "fk_posts_user",
+                                "used_key_parts": [
+                                    "user_id"
+                                ],
+                                "key_length": "4",
+                                "ref": [
+                                    "func"
+                                ],
+                                "rows_examined_per_scan": 1,
+                                "rows_produced_per_join": 1,
+                                "filtered": "100.00",
+                                "using_index": true,
+                                "cost_info": {
+                                    "read_cost": "0.25",
+                                    "eval_cost": "0.15",
+                                    "prefix_cost": "0.40",
+                                    "data_read_per_join": "1K"
+                                },
+                                "used_columns": [
+                                    "user_id"
+                                ]
+                            }
+                        }
+                    }
+                ]
+            }
+        }
+    }
+}

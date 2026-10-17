@@ -1,0 +1,106 @@
+{
+    "query_block": {
+        "select_id": 1,
+        "const_condition": "1",
+        "filesort": {
+            "sort_key": "(subquery#2) desc",
+            "temporary_table": {
+                "nested_loop": [
+                    {
+                        "table": {
+                            "table_name": "u",
+                            "access_type": "index",
+                            "possible_keys": [
+                                "PRIMARY"
+                            ],
+                            "key": "idx_users_name",
+                            "key_length": "402",
+                            "used_key_parts": [
+                                "name"
+                            ],
+                            "rows": 5,
+                            "filtered": 100,
+                            "using_index": true
+                        }
+                    },
+                    {
+                        "table": {
+                            "table_name": "<subquery3>",
+                            "access_type": "eq_ref",
+                            "possible_keys": [
+                                "distinct_key"
+                            ],
+                            "key": "distinct_key",
+                            "key_length": "4",
+                            "used_key_parts": [
+                                "user_id"
+                            ],
+                            "ref": [
+                                "func"
+                            ],
+                            "rows": 1,
+                            "filtered": 100,
+                            "materialized": {
+                                "unique": 1,
+                                "query_block": {
+                                    "select_id": 3,
+                                    "nested_loop": [
+                                        {
+                                            "table": {
+                                                "table_name": "posts",
+                                                "access_type": "index",
+                                                "possible_keys": [
+                                                    "fk_posts_user"
+                                                ],
+                                                "key": "fk_posts_user",
+                                                "key_length": "4",
+                                                "used_key_parts": [
+                                                    "user_id"
+                                                ],
+                                                "rows": 3,
+                                                "filtered": 100,
+                                                "using_index": true
+                                            }
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                ],
+                "subqueries": [
+                    {
+                        "expression_cache": {
+                            "state": "uninitialized",
+                            "query_block": {
+                                "select_id": 2,
+                                "nested_loop": [
+                                    {
+                                        "table": {
+                                            "table_name": "p",
+                                            "access_type": "ref",
+                                            "possible_keys": [
+                                                "fk_posts_user"
+                                            ],
+                                            "key": "fk_posts_user",
+                                            "key_length": "4",
+                                            "used_key_parts": [
+                                                "user_id"
+                                            ],
+                                            "ref": [
+                                                "func"
+                                            ],
+                                            "rows": 1,
+                                            "filtered": 100,
+                                            "using_index": true
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                ]
+            }
+        }
+    }
+}

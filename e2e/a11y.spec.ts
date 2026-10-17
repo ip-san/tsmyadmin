@@ -1,6 +1,7 @@
 import { expect } from '@playwright/test'
 import { fillType, login, PASSKEY_BASE_URL, PERSISTENT_BASE_URL, TARGETS, tableUrl, test } from './helpers.ts'
 import { layoutViolations } from './layout-lint.ts'
+import { openPlan } from './plan.ts'
 import { pageProblems } from './scan.ts'
 import { createAccount, dropAccount, enrol, t as first, signIn } from './two-factor.ts'
 
@@ -369,6 +370,12 @@ for (const t of TARGETS) {
       await page.getByRole('button', { name: '選択行を削除' }).click()
       await page.getByRole('dialog').getByRole('button', { name: '影響を見る' }).click()
       await page.getByRole('img', { name: '削除の影響の図' }).waitFor()
+      await scan(page)
+    })
+
+    test('SQL tab with a statement plan drawn', async ({ page }) => {
+      const plan = await openPlan(page, t)
+      await expect(plan).toBeVisible()
       await scan(page)
     })
 

@@ -56,6 +56,7 @@ export const PASSTHROUGH_METHODS = [
   'insertPreview',
   'checkReferences',
   'deleteImpact',
+  'explainPlan',
   'prepareDdl',
   'buildQuery',
   'listForeignKeys',

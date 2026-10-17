@@ -6,6 +6,7 @@ import type {
   DdlPreviewResponse,
   EventDetail,
   EventInfo,
+  ExplainResult,
   QueryBuilderRequestInput,
   QueryBuilderResult,
   RelationDef,
@@ -77,6 +78,19 @@ export const foreignKeysQuery = (db: string, schema?: string) =>
       unwrap<RelationDef[]>(
         api.databases[':db']['foreign-keys'].$get({ param: { db: enc(db) }, query: schemaQuery(schema) })
       ),
+  })
+
+/** The plan of one statement, estimated on the server. Asked each time it is shown: the data under it changes the plan. */
+export const explainQuery = (db: string, schema: string | undefined, sql: string) =>
+  queryOptions({
+    queryKey: ['explain', db, schema ?? '', sql],
+    queryFn: () =>
+      unwrap<ExplainResult>(
+        api.databases[':db'].explain.$post({ param: { db: enc(db) }, query: schemaQuery(schema), json: { sql } })
+      ),
+    staleTime: 0,
+    gcTime: 0,
+    retry: false,
   })
 
 /** Read when "Edit" is pressed, never cached: the form must start from what the server holds now. */

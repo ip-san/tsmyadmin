@@ -1,4 +1,4 @@
-import { type StatementResult } from '@tsmyadmin/shared'
+import type { PlanNode, StatementResult } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
 import { AdapterError, type ExecuteOptions } from '../../types.ts'
 import type { ConformanceEnv } from './env.ts'
@@ -504,6 +504,36 @@ export function describeSqlConsole(env: ConformanceEnv): void {
       expect(results[0]).toMatchObject({ kind: 'rows' })
       // The registration is removed on the success path too, so a late cancel is a no-op.
       expect(await env.db.cancelQuery(queryId)).toBe(false)
+    })
+  })
+
+  describe('explainPlan', () => {
+    const tables = (n: PlanNode): string[] => [...(n.table ? [n.table] : []), ...n.children.flatMap(tables)]
+
+    it('reads the plan of a join into the shared tree, naming tables behind their aliases', async () => {
+      const r = await env.db.explainPlan(ns, 'SELECT p.title, u.name FROM posts p JOIN users u ON u.id = p.user_id')
+      expect(new Set(tables(r.plan))).toEqual(new Set(['posts', 'users']))
+      expect(r.raw.length).toBeGreaterThan(0)
+      expect(r.rawTruncated).toBe(false)
+    })
+
+    it('explains an UPDATE without running it', async () => {
+      const r = await env.db.explainPlan(ns, `-- explain only\nUPDATE posts SET title = 'explained' WHERE id = 1;`)
+      expect(tables(r.plan)).toContain('posts')
+      const [left] = await exec(`SELECT COUNT(*) FROM posts WHERE title = 'explained'`)
+      expect(left?.kind === 'rows' ? Number(left.result.rows[0]?.[0]) : null).toBe(0)
+    })
+
+    it('refuses two statements and an ANALYZE, and is usable again after a failing statement', async () => {
+      await expect(env.db.explainPlan(ns, 'SELECT 1; SELECT 2')).rejects.toMatchObject({ code: 'VALIDATION' })
+      await expect(env.db.explainPlan(ns, 'ANALYZE SELECT 1')).rejects.toBeInstanceOf(AdapterError)
+      await expect(env.db.explainPlan(ns, `SELECT * FROM ${scratch}_no_such_table`)).rejects.toBeInstanceOf(
+        AdapterError
+      )
+      // The failed statement's transaction was rolled back: the next one is planned, not refused as aborted.
+      // Not a primary-key lookup: MySQL 9 reads that row while planning, and the plan names no table.
+      const r = await env.db.explainPlan(ns, 'SELECT name FROM users WHERE age > 20')
+      expect(tables(r.plan)).toEqual(['users'])
     })
   })
 }

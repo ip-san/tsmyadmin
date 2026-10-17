@@ -1,0 +1,132 @@
+{
+    "query": "/* select#1 */ select `u`.`name` AS `name`,(/* select#2 */ select count(0) from `tsmyadmin_test`.`posts` `p` where (`p`.`user_id` = `u`.`id`)) AS `n` from `tsmyadmin_test`.`users` `u` semi join (`tsmyadmin_test`.`posts`) where (`u`.`id` = `tsmyadmin_test`.`posts`.`user_id`) group by `u`.`id`,`u`.`name` order by `n` desc",
+    "query_plan": {
+        "inputs": [
+            {
+                "inputs": [
+                    {
+                        "inputs": [
+                            {
+                                "inputs": [
+                                    {
+                                        "inputs": [
+                                            {
+                                                "covering": true,
+                                                "operation": "Covering index scan on posts using fk_posts_user",
+                                                "index_name": "fk_posts_user",
+                                                "table_name": "posts",
+                                                "access_type": "index",
+                                                "schema_name": "tsmyadmin_test",
+                                                "used_columns": [
+                                                    "id",
+                                                    "user_id"
+                                                ],
+                                                "estimated_rows": 3.0,
+                                                "index_access_type": "index_scan",
+                                                "estimated_total_cost": 0.4504878242640963
+                                            }
+                                        ],
+                                        "operation": "Remove duplicates from input sorted on fk_posts_user",
+                                        "index_name": "fk_posts_user",
+                                        "access_type": "remove_duplicates_on_index",
+                                        "estimated_rows": 3.0,
+                                        "estimated_total_cost": 0.4504878242640963
+                                    },
+                                    {
+                                        "alias": "u",
+                                        "covering": false,
+                                        "operation": "Single-row index lookup on u using PRIMARY (id = posts.user_id)",
+                                        "index_name": "PRIMARY",
+                                        "table_name": "users",
+                                        "access_type": "index",
+                                        "key_columns": [
+                                            "id"
+                                        ],
+                                        "schema_name": "tsmyadmin_test",
+                                        "used_columns": [
+                                            "id",
+                                            "name"
+                                        ],
+                                        "estimated_rows": 1.0,
+                                        "lookup_condition": "id = posts.user_id",
+                                        "index_access_type": "index_lookup",
+                                        "lookup_references": [
+                                            "tsmyadmin_test.posts.user_id"
+                                        ],
+                                        "estimated_total_cost": 0.85
+                                    }
+                                ],
+                                "join_type": "inner join",
+                                "operation": "Nested loop inner join (LooseScan)",
+                                "access_type": "join",
+                                "estimated_rows": 3.0,
+                                "join_algorithm": "nested_loop",
+                                "semijoin_strategy": "loosescan",
+                                "estimated_total_cost": 1.5004878242640964
+                            }
+                        ],
+                        "operation": "Temporary table with deduplication",
+                        "temp_table": true,
+                        "access_type": "materialize",
+                        "deduplication": true,
+                        "estimated_rows": 3.0,
+                        "estimated_total_cost": 2.191732063895433,
+                        "estimated_first_row_cost": 2.191732063895433
+                    }
+                ],
+                "operation": "Table scan on <temporary>",
+                "table_name": "<temporary>",
+                "access_type": "table",
+                "estimated_rows": 3.0,
+                "estimated_total_cost": 4.729232063895433,
+                "estimated_first_row_cost": 3.037565397228766
+            }
+        ],
+        "operation": "Sort: n DESC",
+        "access_type": "sort",
+        "sort_fields": [
+            "n DESC"
+        ],
+        "inputs_from_select_list": [
+            {
+                "inputs": [
+                    {
+                        "alias": "p",
+                        "covering": true,
+                        "operation": "Covering index lookup on p using fk_posts_user (user_id = u.id)",
+                        "index_name": "fk_posts_user",
+                        "table_name": "posts",
+                        "access_type": "index",
+                        "key_columns": [
+                            "user_id"
+                        ],
+                        "schema_name": "tsmyadmin_test",
+                        "used_columns": [
+                            "user_id"
+                        ],
+                        "estimated_rows": 1.5,
+                        "lookup_condition": "user_id = u.id",
+                        "index_access_type": "index_lookup",
+                        "lookup_references": [
+                            "func"
+                        ],
+                        "estimated_total_cost": 0.4001219512195122
+                    }
+                ],
+                "heading": "Select #2 (subquery in projection; dependent)",
+                "subquery": true,
+                "dependent": true,
+                "functions": [
+                    "count(0)"
+                ],
+                "operation": "Aggregate: count(0)",
+                "access_type": "aggregate",
+                "estimated_rows": 1.0,
+                "subquery_location": "projection",
+                "estimated_total_cost": 0.7457440710351804
+            }
+        ]
+    },
+    "query_type": "select",
+    "json_schema_version": "2.0"
+}
