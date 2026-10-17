@@ -21,7 +21,8 @@ const SQL_BUILDER_ALLOWLIST = [
   // were part of ddl / the adapter), scan (a whole-table read in keyset pages over quoted key columns; it was part of
   // the MySQL adapter).
   // introspect.ts / values.ts are deliberately NOT listed: they must stay static SQL + parameters.
-  /^packages\/adapter\/src\/(mysql|postgres)\/(ddl|adapter|export|users|server|create-statements|scan)\.ts$/,
+  /^packages\/adapter\/src\/(mysql|postgres)\/(ddl|adapter|export|users|server|create-statements)\.ts$/,
+  /^packages\/adapter\/src\/mysql\/scan\.ts$/,
   // routines: SHOW CREATE PROCEDURE|FUNCTION <quoted db>.<quoted name> (MySQL has no parameterisable form).
   /^packages\/adapter\/src\/mysql\/routines\.ts$/,
   // Editor prefill text shown to the user; executed only when they press Run (identifiers quoted).

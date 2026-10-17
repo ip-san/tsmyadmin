@@ -86,8 +86,6 @@ const WRAPPER_ONLY_ERRORS: ReadonlySet<string> = new Set([
   'ER_CANT_USE_OPTION_HERE',
   'ER_PARSE_ERROR',
 ])
-/** `SEQUENCE=1` among the table options (the line after the column list), not inside a quoted comment. */
-
 type QueryOutput = [unknown, FieldPacket[] | FieldPacket[][] | undefined]
 
 /** Collation negotiated at handshake unless the login chose another; SET NAMES after a connection reset must restore it. */

@@ -31,6 +31,7 @@ const dump = (bytes: number, names: string[] = ['t']) => ({
   statements: 1,
   names: new Set(names),
   definitions: new Map<string, string>(),
+  shape: { tables: [], relations: [] },
 })
 const taken = (store: SnapshotStore, scope: string, name: string, bytes = 10, at = new Date(T0)) =>
   store.add(scope, dump(bytes), name, at)
@@ -74,8 +75,30 @@ describe('adding', () => {
   it('counts a dump in bytes, not characters', () => {
     const store = mk()
     expect(
-      store.add('s', { sql: 'あい', statements: 1, names: new Set(), definitions: new Map() }, 'n', new Date()).bytes
+      store.add(
+        's',
+        { sql: 'あい', statements: 1, names: new Set(), definitions: new Map(), shape: { tables: [], relations: [] } },
+        'n',
+        new Date()
+      ).bytes
     ).toBe(6)
+  })
+
+  it('counts the tables and keys it keeps to draw the schema, as the definitions are counted', () => {
+    const store = mk()
+    const relation = {
+      table: 'b',
+      name: 'fk',
+      columns: ['a_id'],
+      refNamespace: { database: 'd' },
+      refTable: 'a',
+      refColumns: ['id'],
+      onUpdate: null,
+      onDelete: null,
+    }
+    const shape = { tables: [{ name: 'ab', kind: 'table' as const }], relations: [relation] }
+    const held = store.add('s', { ...dump(5), shape }, 'n', new Date())
+    expect(held.bytes).toBe(5 + 'ab'.length + 'table'.length + Buffer.byteLength(JSON.stringify(relation)))
   })
 
   it('keeps ten for a database, and says so', async () => {

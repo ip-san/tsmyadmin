@@ -50,15 +50,15 @@ interface Held {
   names: ReadonlySet<string>
   /** Their definitions then, as compared (see snapshot-diff.ts); a view the account could not SHOW has none. */
   definitions: ReadonlyMap<string, string>
-  /** The tables and keys then, to draw the schema as it was (absent from snapshots taken before it was kept). */
-  shape?: SnapshotShape | undefined
+  /** The tables and keys then, to draw the schema as it was. */
+  shape: SnapshotShape
 }
 
 /** What one held snapshot takes in memory: its dump and the definitions kept beside it. */
 function weight(held: Pick<Held, 'sql' | 'definitions' | 'shape'>): number {
   let bytes = Buffer.byteLength(held.sql)
-  for (const t of held.shape?.tables ?? []) bytes += Buffer.byteLength(t.name) + Buffer.byteLength(t.kind)
-  for (const r of held.shape?.relations ?? []) bytes += Buffer.byteLength(JSON.stringify(r))
+  for (const t of held.shape.tables) bytes += Buffer.byteLength(t.name) + Buffer.byteLength(t.kind)
+  for (const r of held.shape.relations) bytes += Buffer.byteLength(JSON.stringify(r))
   for (const [name, text] of held.definitions) bytes += Buffer.byteLength(name) + Buffer.byteLength(text)
   return bytes
 }

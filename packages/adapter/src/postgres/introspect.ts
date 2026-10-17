@@ -386,7 +386,9 @@ export async function pgListPartitions(conn: Conn, ns: Namespace, table: string)
 
 /**
  * How the tables of a schema are read, from the statistics collector: sequential scans (`seq_scan`) against index
- * scans, and the scans of each index. The counts run since the last statistics reset, or the server's start.
+ * scans, and the scans of each index. The counts run since the last statistics reset; one that was never reset has
+ * no start to give (PostgreSQL keeps its statistics across a clean restart), so `since` is then null. A partitioned
+ * table's reads are counted on its partitions, which are tables of their own here.
  */
 export async function pgTableUsage(conn: Conn, ns: Namespace): Promise<TableUsageReport> {
   const schema = ns.schema ?? 'public'
@@ -406,7 +408,7 @@ export async function pgTableUsage(conn: Conn, ns: Namespace): Promise<TableUsag
   ).rows
   const since = firstResult(
     await conn.query(
-      `SELECT to_char(COALESCE(stats_reset, pg_postmaster_start_time()) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+      `SELECT to_char(stats_reset AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
          FROM pg_stat_database WHERE datname = current_database()`
     )
   ).rows[0]?.[0]

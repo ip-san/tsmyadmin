@@ -66,8 +66,8 @@ export type SnapshotShape = z.infer<typeof SnapshotShapeSchema>
  */
 export const SnapshotDiffSchema = z.object({
   snapshot: SnapshotSchema,
-  /** The schema as it was, to draw what is gone; null for a snapshot taken before this was kept. */
-  shape: SnapshotShapeSchema.nullable(),
+  /** The schema as it was, to draw what is gone. */
+  shape: SnapshotShapeSchema,
   added: z.array(SnapshotDiffEntrySchema),
   removed: z.array(SnapshotDiffEntrySchema),
   changed: z.array(SnapshotDiffEntrySchema),
