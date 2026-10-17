@@ -26,6 +26,19 @@ for (const t of TARGETS) {
       await expect(page.getByRole('region', { name: '文 1' })).toHaveCount(0)
     })
 
+    test('fills in the parameters before drawing, as a run does', async ({ page }) => {
+      await login(page, t)
+      await page.goto(t.schema ? `/db/${t.database}/sql?schema=${t.schema}` : `/db/${t.database}/sql`)
+      await page.getByRole('textbox', { name: 'SQL エディタ' }).click()
+      await page.keyboard.type('SELECT name FROM users WHERE age > :minAge')
+      await page.getByText(/1 個のパラメーター/).click()
+      await page.getByLabel('minAge の値').fill('20')
+      await page.getByRole('button', { name: '図で見る', exact: true }).click()
+      const plan = page.getByRole('region', { name: '実行計画', exact: true })
+      await expect(plan.getByRole('img', { name: '実行計画で読むテーブルの図' })).toBeVisible()
+      await expect(plan.getByRole('alert')).toHaveCount(0)
+    })
+
     test('says why a script of two statements is not drawn', async ({ page }) => {
       await login(page, t)
       await page.goto(t.schema ? `/db/${t.database}/sql?schema=${t.schema}` : `/db/${t.database}/sql`)
