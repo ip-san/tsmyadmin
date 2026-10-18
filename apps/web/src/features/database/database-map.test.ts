@@ -47,6 +47,8 @@ describe('databaseMap', () => {
       hubs: [],
       noPrimaryKey: [],
       unindexedKeys: [],
+      keyTypes: [],
+      nameTypes: [],
     }
     expect(mapOf([])).toEqual(nothing)
     // A view's keys and indexes (a materialised view has indexes) are not looked at.
