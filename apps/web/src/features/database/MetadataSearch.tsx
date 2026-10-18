@@ -34,7 +34,8 @@ function useSchemas(db: string, schema: string | undefined, on: boolean) {
       // A sequence has no columns to find.
       const names = tables.filter((x) => x.kind !== 'sequence').map((x) => x.name)
       const done = await eachLimited(
-        names, // Kept as long as the index: reading again reads only the tables that failed.
+        names,
+        // Kept as long as the index: reading again reads only the tables that failed.
         (table) =>
           queryClient.fetchQuery({ ...structureQuery({ db, schema, table }), staleTime: DEFINITIONS_STALE_MS }),
         {
