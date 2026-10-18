@@ -206,6 +206,53 @@ export function describeSearchAndQuery(env: ConformanceEnv): void {
       }
     })
 
+    it('counts a table of documents, shapes, arrays and types of its own without failing', async () => {
+      const t = `${scratch}_cpt`
+      const kinds = `${t}_kind`
+      const doc = `${t}_doc`
+      if (dialect === 'mysql') {
+        await execOk(
+          `CREATE TABLE ${t} (id INT PRIMARY KEY, j JSON, g GEOMETRY, s SET('a', 'b'), b BIT(4), e ENUM('x', 'y'), body LONGTEXT)`
+        )
+        await execOk(
+          `INSERT INTO ${t} VALUES (1, '{"a": 1}', ST_GeomFromText('POINT(1 1)'), 'a', b'1010', 'x', REPEAT('z', 1000)), (2, NULL, NULL, 'b', NULL, 'x', NULL)`
+        )
+      } else {
+        await execOk(`CREATE TYPE ${kinds} AS ENUM ('x', 'y')`)
+        await execOk(`CREATE DOMAIN ${doc} AS json`)
+        await execOk(
+          `CREATE TABLE ${t} (id INT PRIMARY KEY, j JSON, jb JSONB, p POINT, a INT[], d ${doc}, e ${kinds}, x XML, body TEXT)`
+        )
+        await execOk(
+          `INSERT INTO ${t} VALUES (1, '{"a": 1}', '{"a": 1}', '(1,1)', '{1,2}', '{"a": 1}', 'x', '<a/>', repeat('z', 1000)), (2, NULL, NULL, NULL, NULL, NULL, 'x', NULL, NULL)`
+        )
+      }
+      try {
+        const p = await env.db.columnProfile(ns, t)
+        expect(p.sampled).toBe(2)
+        const of = (column: string) => p.columns.find((c) => c.column === column)
+        expect(of('id')).toEqual({ column: 'id', nulls: 0, distinct: 2 })
+        // MariaDB's JSON is LONGTEXT with a check: compared as text, by its first characters.
+        expect(of('j')).toEqual({ column: 'j', nulls: 1, distinct: (await isMariaDb()) ? 1 : null })
+        expect(of('body')).toEqual({ column: 'body', nulls: 1, distinct: 1 })
+        if (dialect === 'mysql') {
+          expect(of('g')).toEqual({ column: 'g', nulls: 1, distinct: null })
+          expect(of('s')).toEqual({ column: 's', nulls: 0, distinct: 2 })
+          expect(of('e')).toEqual({ column: 'e', nulls: 0, distinct: 1 })
+        } else {
+          for (const c of ['jb', 'p', 'a', 'd', 'x']) expect(of(c)).toEqual({ column: c, nulls: 1, distinct: null })
+          // A type of the schema's own: not known to be plain, so its values are not compared.
+          expect(of('e')).toEqual({ column: 'e', nulls: 0, distinct: null })
+        }
+      } finally {
+        await execOk(`DROP TABLE IF EXISTS ${t}`)
+        if (dialect === 'postgres') {
+          await execOk(`DROP DOMAIN IF EXISTS ${doc}`)
+          await execOk(`DROP TYPE IF EXISTS ${kinds}`)
+        }
+      }
+    })
+
     it('reads an empty table as no rows', async () => {
       const t = `${scratch}_cpe`
       await execOk(`CREATE TABLE ${t} (id INT PRIMARY KEY)`)

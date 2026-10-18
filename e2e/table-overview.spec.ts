@@ -22,7 +22,7 @@ for (const t of TARGETS) {
 
         await page.goto(tableUrl(space, 'pets', '/overview'))
         await expect(page.getByText('ほかの表を参照する、記録や明細の表のようです')).toBeVisible()
-        const columns = page.getByRole('table', { name: 'カラムの中身' })
+        const columns = page.getByRole('table', { name: 'カラムごとの NULL の割合と値の種類' })
         const row = (name: string) =>
           columns.getByRole('row').filter({ has: page.getByRole('cell', { name, exact: true }) })
         await expect(row('id')).toContainText('行ごとに違う値')

@@ -1,6 +1,6 @@
 import { PROFILE_MAX_COLUMNS, PROFILE_SAMPLE_ROWS } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
-import { rows, scripted } from '../test/scripted-conn.ts'
+import { fail, rows, scripted } from '../test/scripted-conn.ts'
 import { columnProfileOn, comparable } from './column-profile.ts'
 
 const ns = { database: 'shop' }
@@ -20,8 +20,11 @@ describe('columnProfileOn', () => {
       omitted: 0,
     })
     const [q] = s.asked
-    // The sample is a derived table with a bound limit; a column whose values are not compared is not DISTINCTed.
-    expect(q?.text).toMatch(/FROM \(SELECT `id` AS `c0`, `data` AS `c1` FROM `shop`\.`orders` LIMIT \?\) AS `sample`/)
+    // The sample is a derived table with a bound limit. A column whose values are not compared is taken as only
+    // whether it is NULL (a BLOB is not copied into the sample), and not DISTINCTed.
+    expect(q?.text).toMatch(
+      /FROM \(SELECT `id` AS `c0`, CASE WHEN `data` IS NULL THEN NULL ELSE 1 END AS `c1` FROM `shop`\.`orders` LIMIT \?\) AS `sample`/
+    )
     expect(q?.text).not.toMatch(/DISTINCT `c1`/)
     expect(q?.params).toEqual([PROFILE_SAMPLE_ROWS])
   })
@@ -45,24 +48,66 @@ describe('columnProfileOn', () => {
   })
 })
 
-describe('comparable', () => {
-  it('compares plain values, and not binary, JSON, spatial or array values', () => {
-    for (const t of ['int', 'varchar(20)', 'text', 'timestamp with time zone', 'numeric(10,2)', 'uuid', 'boolean'])
-      expect(comparable(t), t).toBe(true)
-    for (const t of [
-      'blob',
-      'longblob',
-      'bytea',
-      'varbinary(16)',
-      'json',
-      'jsonb',
-      'xml',
-      'geometry',
-      'point',
-      'integer[]',
-      'tsvector',
-      'bit(8)',
-    ])
-      expect(comparable(t), t).toBe(false)
+describe('columnProfileOn, more', () => {
+  it('compares long text by its first characters', async () => {
+    const s = scripted([[/COUNT/, rows([[1, 1, 1]])]])
+    await columnProfileOn(s.conn, 'postgres', ns, 't', [col('body', 'text')])
+    expect(s.asked[0]?.text).toMatch(/LEFT\("body", 256\) AS "c0"/)
   })
+
+  it('counts the NULLs again without distinct values when counting them fails', async () => {
+    const s = scripted([
+      [/DISTINCT/, fail('QUERY_FAILED')],
+      [/COUNT/, rows([[3, 2, null]])],
+    ])
+    const p = await columnProfileOn(s.conn, 'postgres', ns, 't', [col('a', 'varchar(10)')])
+    expect(p.columns).toEqual([{ column: 'a', nulls: 1, distinct: null }])
+    expect(s.asked).toHaveLength(2)
+  })
+})
+
+describe('comparable', () => {
+  const plain = [
+    'int',
+    'tinyint(1)',
+    'bigint unsigned',
+    'varchar(20)',
+    'character varying(10)',
+    'text',
+    'longtext',
+    'timestamp with time zone',
+    'double precision',
+    'numeric(10,2)',
+    'uuid',
+    'boolean',
+    "enum('a','b')",
+    "set('x','y')",
+    'year',
+  ]
+  // Binary, documents, spatial, arrays, bits, and the types a PostgreSQL schema names (a domain, a composite, an
+  // enum): not known to be plain, so not counted.
+  const other = [
+    'blob',
+    'longblob',
+    'bytea',
+    'varbinary(16)',
+    'binary(4)',
+    'json',
+    'jsonb',
+    'xml',
+    'geometry',
+    'geomcollection',
+    'multipolygon',
+    'point',
+    'integer[]',
+    'tsvector',
+    'bit(8)',
+    'bit varying(4)',
+    'mydoc',
+    'address',
+    'mood',
+  ]
+
+  it.each(plain)('compares %s', (t) => expect(comparable(t)).toBe(true))
+  it.each(other)('does not compare %s', (t) => expect(comparable(t)).toBe(false))
 })

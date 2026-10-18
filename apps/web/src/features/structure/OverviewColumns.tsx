@@ -16,9 +16,28 @@ const t = locale.overview
  * a number), how many values differ, and a mark on what stands out. The values themselves open in the dialog the
  * structure tab uses.
  */
-export function OverviewColumns({ tableRef, columns }: { tableRef: TableRef; columns: readonly ColumnDef[] }) {
-  const profile = useQuery(columnProfileQuery(tableRef))
+export function OverviewColumns({
+  tableRef,
+  columns,
+  onAsk = false,
+}: {
+  tableRef: TableRef
+  columns: readonly ColumnDef[]
+  /** Count only once asked (a view, whose rows are worked out when read). */
+  onAsk?: boolean
+}) {
+  const [asked, setAsked] = useState(!onAsk)
+  const profile = useQuery({ ...columnProfileQuery(tableRef), enabled: asked })
   const [values, setValues] = useState<string | null>(null)
+  if (!asked)
+    return (
+      <div className="space-y-1">
+        <p className="text-xs text-ink-sub">{t.viewHint}</p>
+        <Button size="sm" onClick={() => setAsked(true)}>
+          {t.countNow}
+        </Button>
+      </div>
+    )
   if (profile.isPending) return <Spinner label={t.profiling} />
   if (profile.isError) return <ErrorBox error={profile.error} onRetry={() => void profile.refetch()} />
   const p = profile.data
@@ -27,7 +46,7 @@ export function OverviewColumns({ tableRef, columns }: { tableRef: TableRef; col
   return (
     <div className="space-y-2">
       <p className="text-xs text-ink-sub">{p.capped ? t.sampleCapped(p.sampled) : t.sampleAll(p.sampled)}</p>
-      <Table aria-label={t.columns}>
+      <Table aria-label={t.columnsTable}>
         <thead>
           <tr>
             <Th>{t.column}</Th>
@@ -52,7 +71,14 @@ export function OverviewColumns({ tableRef, columns }: { tableRef: TableRef; col
                     '—'
                   ) : (
                     <span className="flex items-center gap-2">
-                      <meter min={0} max={1} value={share} aria-label={t.nullShareOf(c.name)} className="h-2 w-24" />
+                      <meter
+                        min={0}
+                        max={1}
+                        value={share}
+                        aria-label={t.nullShareOf(c.name)}
+                        aria-valuetext={t.percent(share)}
+                        className="h-2 w-24"
+                      />
                       <span className="tabular-nums text-xs">{t.percent(share)}</span>
                     </span>
                   )}

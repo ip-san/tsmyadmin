@@ -2485,12 +2485,14 @@ export const jaScreens = {
   },
   overview: {
     whatTitle: 'この表は何か',
+    isSequence: 'シーケンスです（番号を 1 つずつ出す値で、行はありません）',
     isView: 'ビューです（これを使うものは下に、これが使うものは依存関係のタブにあります）',
     roles: {
       junction: '2 つ以上の表を結ぶ中間の表のようです（主キーが外部キーの列でできています）',
       master: 'ほかの表から参照される、元になる表のようです（マスタ）',
       detail: 'ほかの表を参照する、記録や明細の表のようです',
       middle: 'ほかの表を参照し、ほかの表からも参照される表です',
+      tree: '自分自身を参照する、親子の階層の表のようです（親の行を指すキーだけを持ちます）',
       isolated: '外部キーでどの表ともつながっていません',
     },
     roleWhy: (refersTo: number, referredBy: number) =>
@@ -2507,6 +2509,10 @@ export const jaScreens = {
       `読まれ方（サーバーの統計）: 全件 ${full.toLocaleString('ja-JP')}・索引 ${index.toLocaleString('ja-JP')}（${unit === 'scans' ? '走査の回数' : '読んだ行数'}）`,
     usageNone: '読まれ方（サーバーの統計）: まだ読まれていません',
     columns: 'カラムの中身',
+    columnsTable: 'カラムごとの NULL の割合と値の種類',
+    selfToo: '自分自身を参照するキー（親子の階層）もあります',
+    viewHint: 'ビューの行は、読むときに計算されます。重いビューもあるので、押したときに数えます',
+    countNow: '数える',
     profiling: '先頭の行を読んで数えています…',
     sampleAll: (n: number) => `全 ${n.toLocaleString('ja-JP')} 行を数えました`,
     sampleCapped: (n: number) => `先頭の ${n.toLocaleString('ja-JP')} 行を数えました（表はそれ以上あります）`,

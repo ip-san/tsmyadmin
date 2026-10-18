@@ -2509,12 +2509,14 @@ export const enScreens = {
   },
   overview: {
     whatTitle: 'What this table is',
+    isSequence: 'A sequence (a value handed out a number at a time, with no rows)',
     isView: 'A view (what uses it is below, and what it uses on the Dependencies tab)',
     roles: {
       junction: 'It seems to link two or more tables (its primary key is made of foreign key columns)',
       master: 'It seems to be a table others are built on (a master): others refer to it',
       detail: 'It seems to record things about others (details, logs): it refers to them',
       middle: 'It refers to other tables, and others refer to it',
+      tree: 'It seems to be a tree: its only keys refer to itself (a parent row)',
       isolated: 'No foreign key joins it to another table',
     },
     roleWhy: (refersTo: number, referredBy: number) =>
@@ -2531,6 +2533,10 @@ export const enScreens = {
       `Reads (the server's statistics): ${full.toLocaleString('en-US')} in full, ${index.toLocaleString('en-US')} by index (${unit === 'scans' ? 'scans' : 'rows read'})`,
     usageNone: "Reads (the server's statistics): not read yet",
     columns: 'What the columns hold',
+    columnsTable: 'The NULL share and distinct values of each column',
+    selfToo: 'It also has a key to itself (a parent row)',
+    viewHint: 'The rows of a view are worked out as it is read, and some views are heavy: counted when asked',
+    countNow: 'Count',
     profiling: 'Counting the first rows…',
     sampleAll: (n: number) => `Counted all ${n.toLocaleString('en-US')} rows`,
     sampleCapped: (n: number) => `Counted the first ${n.toLocaleString('en-US')} rows (the table has more)`,

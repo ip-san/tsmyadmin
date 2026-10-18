@@ -13,6 +13,7 @@ vi.mock('@tanstack/react-router', () => ({
 }))
 vi.mock('@/lib/session.ts', () => ({ useDialect: () => 'mysql' }))
 
+let kind = 'table'
 const posts = {
   name: 'posts',
   kind: 'table',
@@ -38,7 +39,7 @@ const key = (table: string, refTable: string) => ({
 })
 
 vi.mock('@/lib/queries.ts', () => ({
-  structureQuery: () => ({ queryKey: ['structure'], queryFn: async () => posts }),
+  structureQuery: () => ({ queryKey: ['structure'], queryFn: async () => ({ ...posts, kind }) }),
   tableStatsQuery: () => ({
     queryKey: ['stats'],
     queryFn: async () => ({ rowEstimate: 3, totalBytes: 16384, updatedAt: null }),
@@ -114,7 +115,7 @@ describe('TableOverview', () => {
 
   it('shows what each column holds, with the marks, and opens the values of one', async () => {
     mount()
-    const columns = await screen.findByRole('table', { name: t.columns })
+    const columns = await screen.findByRole('table', { name: t.columnsTable })
     const row = (name: string) => within(columns).getByRole('row', { name: new RegExp(`^${name} `) })
     expect(row('id')).toHaveTextContent(t.notes.unique)
     expect(row('user_id')).toHaveTextContent(t.notes.constant)
@@ -136,5 +137,24 @@ describe('TableOverview', () => {
         .map((li) => li.textContent)
     ).toEqual([t.keySentence('posts', 'users_id', 'users'), t.keySentence('comments', 'posts_id', 'posts')])
     expect(screen.getByRole('img', { name: t.neighboursDiagram('posts') })).toBeInTheDocument()
+  })
+
+  it('counts the columns of a view only when asked, and shows no rows or counts for a sequence', async () => {
+    kind = 'view'
+    try {
+      const { unmount } = mount()
+      expect(await screen.findByText(t.isView)).toBeInTheDocument()
+      expect(screen.queryByRole('table', { name: t.columnsTable })).toBeNull()
+      await userEvent.click(screen.getByRole('button', { name: t.countNow }))
+      expect(await screen.findByRole('table', { name: t.columnsTable })).toBeInTheDocument()
+      unmount()
+      kind = 'sequence'
+      mount()
+      await screen.findByText(t.isSequence)
+      expect(screen.queryByRole('button', { name: t.countNow })).toBeNull()
+      expect(screen.queryByRole('table', { name: t.sample })).toBeNull()
+    } finally {
+      kind = 'table'
+    }
   })
 })

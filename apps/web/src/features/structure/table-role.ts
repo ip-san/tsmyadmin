@@ -6,21 +6,28 @@ import type { ColumnProfile, TableSchema } from '@tsmyadmin/shared'
  * - `master`: others refer to it, it refers to none (users, products);
  * - `detail`: it refers to others, none refer to it (order lines, logs);
  * - `middle`: both (orders: they refer to a user, lines refer to them);
+ * - `tree`: its only keys are to itself (a parent row of its own: categories, comments, staff and managers);
  * - `isolated`: no key joins it to another table.
  */
-type TableRole = 'junction' | 'master' | 'detail' | 'middle' | 'isolated'
+type TableRole = 'junction' | 'master' | 'detail' | 'middle' | 'tree' | 'isolated'
 
 export interface RoleGuess {
   role: TableRole
-  /** The keys it went by: how many keys it has to others, and how many tables' keys come to it. */
+  /** The keys it went by: how many other tables it refers to, and how many others refer to it. */
   refersTo: number
   referredBy: number
+  /** A key of its own refers to itself (a parent row). */
+  self: boolean
 }
 
 /** The role of a table, from its foreign keys and the keys of others that refer to it. */
-export function tableRole(schema: Pick<TableSchema, 'primaryKey' | 'foreignKeys' | 'referencedBy'>): RoleGuess {
-  const refersTo = new Set(schema.foreignKeys.map((k) => k.refTable)).size
-  const referredBy = new Set(schema.referencedBy.map((k) => k.fromTable)).size
+export function tableRole(
+  schema: Pick<TableSchema, 'name' | 'primaryKey' | 'foreignKeys' | 'referencedBy'>
+): RoleGuess {
+  // Its own name is not another table: a key to itself makes a tree, not a link to the rest.
+  const self = schema.foreignKeys.some((k) => k.refTable === schema.name)
+  const refersTo = new Set(schema.foreignKeys.map((k) => k.refTable).filter((n) => n !== schema.name)).size
+  const referredBy = new Set(schema.referencedBy.map((k) => k.fromTable).filter((n) => n !== schema.name)).size
   const keyed = new Set(schema.foreignKeys.flatMap((k) => k.columns))
   const junction =
     schema.foreignKeys.length >= 2 && schema.primaryKey.length >= 2 && schema.primaryKey.every((c) => keyed.has(c))
@@ -32,8 +39,10 @@ export function tableRole(schema: Pick<TableSchema, 'primaryKey' | 'foreignKeys'
         ? 'master'
         : refersTo > 0
           ? 'detail'
-          : 'isolated'
-  return { role, refersTo, referredBy }
+          : self
+            ? 'tree'
+            : 'isolated'
+  return { role, refersTo, referredBy, self }
 }
 
 /** What stands out about a column in the sample: always NULL, one value only, or a different value in every row. */

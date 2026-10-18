@@ -2,7 +2,7 @@ import type { ColumnProfile, TableSchema } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
 import { columnNotes, tableRole } from './table-role.ts'
 
-type Shape = Pick<TableSchema, 'primaryKey' | 'foreignKeys' | 'referencedBy'>
+type Shape = Pick<TableSchema, 'name' | 'primaryKey' | 'foreignKeys' | 'referencedBy'>
 const fk = (columns: string[], refTable: string) =>
   ({ name: `fk_${refTable}`, columns, refTable, refColumns: ['id'] }) as unknown as Shape['foreignKeys'][number]
 const from = (fromTable: string) =>
@@ -13,6 +13,7 @@ const from = (fromTable: string) =>
     columns: ['id'],
   }) as unknown as Shape['referencedBy'][number]
 const shape = (primaryKey: string[], foreignKeys: Shape['foreignKeys'], referencedBy: Shape['referencedBy'] = []) => ({
+  name: 'it',
   primaryKey,
   foreignKeys,
   referencedBy,
@@ -21,7 +22,7 @@ const shape = (primaryKey: string[], foreignKeys: Shape['foreignKeys'], referenc
 describe('tableRole', () => {
   it('calls a table whose key is two foreign keys a junction', () => {
     const tags = shape(['post_id', 'tag_id'], [fk(['post_id'], 'posts'), fk(['tag_id'], 'tags')])
-    expect(tableRole(tags)).toEqual({ role: 'junction', refersTo: 2, referredBy: 0 })
+    expect(tableRole(tags)).toEqual({ role: 'junction', refersTo: 2, referredBy: 0, self: false })
   })
 
   it('does not call it a junction when its key has a column of its own', () => {
@@ -34,10 +35,20 @@ describe('tableRole', () => {
       role: 'master',
       refersTo: 0,
       referredBy: 1,
+      self: false,
     })
     expect(tableRole(shape(['id'], [fk(['user_id'], 'users')])).role).toBe('detail')
     expect(tableRole(shape(['id'], [fk(['user_id'], 'users')], [from('lines')])).role).toBe('middle')
     expect(tableRole(shape(['id'], [])).role).toBe('isolated')
+  })
+
+  it('calls a table whose only key is to itself a tree, and does not count itself as another table', () => {
+    // parent_id → it: the key of a tree; its own row refers to it as well.
+    const tree = shape(['id'], [fk(['parent_id'], 'it')], [from('it')])
+    expect(tableRole(tree)).toEqual({ role: 'tree', refersTo: 0, referredBy: 0, self: true })
+    // A tree that also refers to another table is a detail of it, still marked as a tree.
+    const both = shape(['id'], [fk(['parent_id'], 'it'), fk(['org_id'], 'orgs')], [from('it')])
+    expect(tableRole(both)).toEqual({ role: 'detail', refersTo: 1, referredBy: 0, self: true })
   })
 
   it('counts the tables a table refers to once, however many keys go to one', () => {

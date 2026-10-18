@@ -45,21 +45,28 @@ export function TableOverview({ tableRef }: { tableRef: TableRef }) {
           <>
             <p className="text-sm text-ink">{t.roles[guess.role]}</p>
             <p className="text-xs text-ink-sub">{t.roleWhy(guess.refersTo, guess.referredBy)}</p>
+            {guess.self && guess.role !== 'tree' ? <p className="text-xs text-ink-sub">{t.selfToo}</p> : null}
           </>
         ) : (
           // A view has no keys of its own to guess from: what it reads is on the dependency card below.
-          <p className="text-sm text-ink">{t.isView}</p>
+          <p className="text-sm text-ink">{schema.kind === 'sequence' ? t.isSequence : t.isView}</p>
         )}
         {schema.comment ? <p className="mt-1 text-sm text-ink">{schema.comment}</p> : null}
         <SizeLine tableRef={tableRef} />
         <UsageLine tableRef={tableRef} />
       </Card>
-      <Card title={t.columns}>
-        <OverviewColumns tableRef={tableRef} columns={schema.columns} />
-      </Card>
-      <Card title={t.sample} bleed>
-        <SampleRows tableRef={tableRef} schema={schema} />
-      </Card>
+      {/* A sequence is one value, not rows: nothing to count or show. */}
+      {schema.kind === 'sequence' ? null : (
+        <>
+          <Card title={t.columns}>
+            {/* A view's rows are worked out when read: counted only when asked (a view may be heavy). */}
+            <OverviewColumns tableRef={tableRef} columns={schema.columns} onAsk={schema.kind !== 'table'} />
+          </Card>
+          <Card title={t.sample} bleed>
+            <SampleRows tableRef={tableRef} schema={schema} />
+          </Card>
+        </>
+      )}
       <Card title={t.neighbours}>
         <Neighbours tableRef={tableRef} />
       </Card>
@@ -111,7 +118,8 @@ function SampleRows({ tableRef, schema }: { tableRef: TableRef; schema: TableSch
             // A sample of rows read once, not edited or reordered: its place names a row.
             <Tr key={i}>
               {names.map((n, j) => (
-                <Td key={n} className="max-w-48 truncate font-mono text-xs">
+                // Cut to the column's width; the whole value as a tooltip.
+                <Td key={n} className="max-w-48 truncate font-mono text-xs" title={cellToText(row[j] ?? null)}>
                   {cellToText(row[j] ?? null)}
                 </Td>
               ))}

@@ -512,7 +512,7 @@ for (const t of TARGETS) {
         await tablesWithComments(page, space)
         await sqlOn(page, space, 'INSERT INTO owners VALUES (1, NULL)')
         await page.goto(tableUrl(space, 'owners', '/overview'))
-        await expect(page.getByRole('table', { name: 'カラムの中身' })).toBeVisible()
+        await expect(page.getByRole('table', { name: 'カラムごとの NULL の割合と値の種類' })).toBeVisible()
         await expect(page.getByText(/行を数えました/)).toBeVisible()
         await scan(page)
       })
