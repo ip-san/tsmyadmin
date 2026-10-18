@@ -1,4 +1,4 @@
-import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { TableSchema } from '@tsmyadmin/shared'
 import { eachLimited } from './each-limited.ts'
 import { structureQuery } from './queries.ts'
@@ -7,7 +7,7 @@ import { structureQuery } from './queries.ts'
  * How long the definitions of a namespace's tables are kept before they are read again: a change made in this tool
  * refreshes everything at once (`invalidateDatabaseData`), so this is only about changes made elsewhere.
  */
-export const DEFINITIONS_STALE_MS = 5 * 60_000
+const DEFINITIONS_STALE_MS = 5 * 60_000
 
 /** The definitions read, by table, and the tables that could not be read (a view this account cannot see, say). */
 export interface AllStructures {
@@ -45,7 +45,9 @@ export function useAllStructures(
     },
     enabled: enabled && names.length > 0,
     staleTime: DEFINITIONS_STALE_MS,
-    // A table made or dropped changes the names, and so the key: the definitions read stay shown meanwhile.
-    placeholderData: keepPreviousData,
+    // A table made or dropped changes the names, and so the key: the definitions read stay shown meanwhile. Not
+    // those of another database or schema, which would be shown as this one's.
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[1] === db && previousQuery.queryKey[2] === (schema ?? '') ? previous : undefined,
   })
 }

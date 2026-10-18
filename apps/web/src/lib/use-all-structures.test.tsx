@@ -52,12 +52,33 @@ describe('useAllStructures', () => {
     const shared = ({ children }: { children: ReactNode }) => (
       <QueryClientProvider client={client}>{children}</QueryClientProvider>
     )
-    const names = ['a', 'broken']
-    const one = renderHook(() => useAllStructures('db2', undefined, names), { wrapper: shared })
-    renderHook(() => useAllStructures('db2', undefined, names), { wrapper: shared })
+    // Two sets that overlap (two keys): each table of both is read once all the same.
+    const one = renderHook(() => useAllStructures('db2', undefined, ['a', 'broken']), { wrapper: shared })
     await waitFor(() => expect(one.result.current.data).toBeDefined())
-    expect(read.mock.calls.map((c) => c[0]).sort()).toEqual(['a', 'broken'])
+    const two = renderHook(() => useAllStructures('db2', undefined, ['broken', 'a', 'c']), { wrapper: shared })
+    await waitFor(() => expect(two.result.current.data).toBeDefined())
+    // broken failed for the first: an error is not kept as a definition, so the second reads it again.
+    expect(read.mock.calls.map((c) => c[0]).sort()).toEqual(['a', 'broken', 'broken', 'c'])
+    read.mockClear()
     await one.result.current.refetch()
-    expect(read.mock.calls.map((c) => c[0]).sort()).toEqual(['a', 'broken', 'broken'])
+    expect(read.mock.calls.map((c) => c[0])).toEqual(['broken'])
+  })
+
+  it("does not show another database's definitions while this one's are read", async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const shared = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    )
+    const { result, rerender } = renderHook(({ db, names }) => useAllStructures(db, undefined, names), {
+      wrapper: shared,
+      initialProps: { db: 'one', names: ['a'] },
+    })
+    await waitFor(() => expect(result.current.data).toBeDefined())
+    // Another table in the same database: what was read stays shown meanwhile.
+    rerender({ db: 'one', names: ['a', 'b'] })
+    expect(result.current.data?.byName.has('a')).toBe(true)
+    // Another database: nothing until its own are read.
+    rerender({ db: 'two', names: ['x'] })
+    expect(result.current.data).toBeUndefined()
   })
 })
