@@ -6,6 +6,21 @@ const plural = (n: number, one: string, many: string) => `${n.toLocaleString('en
 
 /** The English strings of the screens behind the login, key for key with `jaScreens`; the conventions are those of `en.ts`. */
 export const enScreens = {
+  metadataSearch: {
+    title: 'Find tables and columns by name or type',
+    term: 'Find',
+    termHint:
+      'Searches table names, column names, types and comments (not the rows). Case and full/half width do not count',
+    reading: 'Reading the table definitions…',
+    found: (n: number, tables: number) =>
+      `${n.toLocaleString('en-US')} found (in ${tables.toLocaleString('en-US')} tables and views)`,
+    failed: (names: readonly string[]) => `Not searched, as their definitions could not be read: ${names.join(', ')}`,
+    results: 'Tables and columns found',
+    table: 'Table',
+    column: 'Column',
+    type: 'Type',
+    comment: 'Comment',
+  },
   databaseSearch: {
     deleteRows: 'Delete the matching rows…',
     deleteLabel: (table: string) => `${table}: delete the matching rows`,
