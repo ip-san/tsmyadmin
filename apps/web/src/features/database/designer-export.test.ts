@@ -80,6 +80,7 @@ describe('the drawing options in the exports', () => {
     fitWidth: false,
     lineStyle: 'polyline' as const,
     lineLabels: true,
+    comments: false,
     showLines: true,
   }
 
@@ -119,6 +120,7 @@ describe('boxes as wide as their names', () => {
     fitWidth: true,
     lineStyle: 'curve' as const,
     lineLabels: false,
+    comments: false,
     showLines: true,
   }
 

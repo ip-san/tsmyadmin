@@ -134,6 +134,33 @@ export const enScreens = {
       othersOff: 'While comparing with a snapshot, table reads and the reference check are not laid over',
       list: (kind: string, names: readonly string[]) => `${kind}: ${names.join(', ')}`,
     },
+    focus: {
+      legend: 'Show only the tables around one',
+      around: 'Around',
+      all: 'All tables',
+      hops: 'Reach',
+      hopsN: (n: number) => (n === 1 ? '1 key out' : `${n} keys out`),
+      showing: (table: string, hops: number, n: number, total: number) =>
+        `Showing the ${n} tables within ${hops} keys of ${table} (of ${total}). Boxes moved here are not saved`,
+      missing: (table: string) => `There is no table ${table}, so every table is shown`,
+    },
+    implicit: {
+      toggle: 'References without a key',
+      toggleHint:
+        'Draws a dotted line from each "name_id" column with no foreign key to the primary key of the table of that name (or its plural). A guess from the names',
+      title: 'References without a foreign key',
+      legend: 'A reference without a foreign key (guessed from the names)',
+      hint: 'Columns named "name_id" with no foreign key, where a table of that name or its plural has a one-column primary key. Making one a key shows the SQL before it runs',
+      reading: 'Reading the columns of every table…',
+      failed: (n: number) =>
+        `The columns of ${n.toLocaleString('en-US')} tables could not be read; no candidates were looked for there`,
+      none: 'No candidates',
+      notDrawn: (n: number) =>
+        `${n.toLocaleString('en-US')} more with tables not drawn here (shown with a longer reach, or without the focus)`,
+      candidate: (table: string, column: string, refTable: string, refColumn: string) =>
+        `${table}.${column} → ${refTable}.${refColumn}`,
+      makeKey: 'Make a foreign key…',
+    },
     refCheck: {
       check: 'Check references',
       checkHint:
@@ -178,6 +205,8 @@ export const enScreens = {
       'Makes each box as wide as its longest table or column name (up to a limit); the automatic layout spaces its columns to match',
     showLines: 'Show lines',
     lineLabels: 'Label the lines',
+    showComments: 'Show table comments',
+    withNote: (label: string, note: string) => `${label}. ${note}`,
     lineStyle: 'Line shape',
     lineStyles: { curve: 'Curve', straight: 'Straight', polyline: 'Right angles' },
     fullscreen: 'Full screen',

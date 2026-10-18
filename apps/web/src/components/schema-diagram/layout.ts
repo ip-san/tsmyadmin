@@ -9,6 +9,11 @@ export interface Point {
 export const BOX_WIDTH = 200
 export const HEADER_HEIGHT = 28
 export const ROW_HEIGHT = 20
+/**
+ * Room under a box for its note (one line of small text): a layout that draws notes counts it in the box's height,
+ * so the gap to the box below stays whole, also once snapped to the grid.
+ */
+export const NOTE_ROOM = 18
 const GAP_X = 80
 const GAP_Y = 32
 const MARGIN = 16
@@ -101,8 +106,9 @@ export function fitText(text: string, size: number, room: number, bold = false):
   return `${chars.join('')}…`
 }
 
-export const boxHeight = (columns: number, compact = false) =>
-  compact ? HEADER_HEIGHT : HEADER_HEIGHT + Math.max(columns, 1) * ROW_HEIGHT
+/** How tall a box is, and with `note`, the line under it as well (what a layout keeps clear of the next box). */
+export const boxHeight = (columns: number, compact = false, note = false) =>
+  (compact ? HEADER_HEIGHT : HEADER_HEIGHT + Math.max(columns, 1) * ROW_HEIGHT) + (note ? NOTE_ROOM : 0)
 
 export const DEFAULT_VIEW: DesignerView = {
   compact: false,
@@ -110,6 +116,7 @@ export const DEFAULT_VIEW: DesignerView = {
   fitWidth: false,
   lineStyle: 'curve',
   lineLabels: false,
+  comments: false,
   showLines: true,
 }
 

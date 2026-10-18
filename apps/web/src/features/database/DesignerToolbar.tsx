@@ -79,6 +79,10 @@ export function DesignerToolbar({
         {t.showLines}
       </label>
       <label className="flex items-center gap-1 text-sm text-ink">
+        <input type="checkbox" checked={view.comments} onChange={(e) => onView({ comments: e.target.checked })} />
+        {t.showComments}
+      </label>
+      <label className="flex items-center gap-1 text-sm text-ink">
         <input
           type="checkbox"
           checked={view.lineLabels}

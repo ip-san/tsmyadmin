@@ -24,7 +24,7 @@ for (const t of TARGETS) {
         await page.goto(designerUrl(t))
         await page.getByRole('button', { name: '図で外部キーを作る' }).click()
         await page.getByRole('button', { name: `${child} の parent_id` }).click()
-        await expect(page.locator('p[role="status"]')).toContainText(`${child}.parent_id`)
+        await expect(page.getByRole('status').filter({ hasText: `${child}.parent_id` })).toBeVisible()
         await page.getByRole('button', { name: `${parent} の id` }).click()
         const dialog = page.getByRole('dialog')
         await expect(dialog.getByLabel('参照先テーブル')).toHaveValue(parent)

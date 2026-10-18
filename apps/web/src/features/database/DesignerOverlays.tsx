@@ -1,18 +1,19 @@
-import type { RelationDef } from '@tsmyadmin/shared'
+import type { Namespace, RelationDef } from '@tsmyadmin/shared'
 import { useEffect, useState } from 'react'
 import { type DiagramOverlay, mergeOverlays } from '@/components/schema-diagram/overlay.ts'
 import { Button } from '@/components/ui/Button.tsx'
 import { locale } from '@/config/locale-screens.ts'
 import { useCompare } from './DesignerCompare.tsx'
+import { useImplicit } from './DesignerImplicit.tsx'
 import { useReferences } from './DesignerReferences.tsx'
 import { useUsage } from './DesignerUsage.tsx'
 
 const t = locale.designer
 
 /**
- * What is laid over the Designer's diagram: a snapshot to compare with (from the URL), or the table reads and the
- * reference check (from the toolbar), which add to each other. Comparing replaces both: its colours mean added,
- * removed and changed, and the others' would read as the same. The toolbar controls, the panels around the
+ * What is laid over the Designer's diagram: a snapshot to compare with (from the URL), or the table reads, the
+ * reference check and the references kept by name only (from the toolbar), which add to each other. Comparing
+ * replaces them: its colours mean added, removed and changed, and the others' would read as the same. The toolbar controls, the panels around the
  * diagram, and the one overlay to draw come from here, so the Designer only places them.
  */
 export function useDesignerOverlays({
@@ -21,6 +22,8 @@ export function useDesignerOverlays({
   compare,
   names,
   keys,
+  ns,
+  onMakeKey,
 }: {
   db: string
   schema: string | undefined
@@ -28,12 +31,17 @@ export function useDesignerOverlays({
   /** The tables drawn: only theirs are checked. */
   names: readonly string[]
   keys: readonly RelationDef[] | undefined
+  ns: Namespace
+  /** A candidate reference to make into a foreign key (the form that adds one, filled in). */
+  onMakeKey: (candidate: RelationDef) => void
 }) {
   const comparing = useCompare(db, schema, compare)
   const free = compare === undefined
   const [usageAsked, setUsageAsked] = useState(false)
   const [refsAsked, setRefsAsked] = useState(false)
   const [refsRun, setRefsRun] = useState(0)
+  const [implicitAsked, setImplicitAsked] = useState(false)
+  const implicit = useImplicit({ db, schema, ns, names, keys, on: implicitAsked && free, onMakeKey })
   // Comparing turns the check off for good: back from it, the reader presses again for a check of the schema as it
   // is now, rather than seeing the one from before the comparison.
   useEffect(() => {
@@ -61,6 +69,15 @@ export function useDesignerOverlays({
         />
         {t.usage.toggle}
       </label>
+      <label className="flex items-center gap-1 text-sm text-ink" title={t.implicit.toggleHint}>
+        <input
+          type="checkbox"
+          checked={implicitAsked && free}
+          disabled={!free}
+          onChange={(e) => setImplicitAsked(e.target.checked)}
+        />
+        {t.implicit.toggle}
+      </label>
       <Button
         size="sm"
         aria-pressed={refsOn}
@@ -81,12 +98,24 @@ export function useDesignerOverlays({
   return {
     /** The tables and keys to draw, with the snapshot's overlay when comparing. */
     shape: comparing.shape,
+    /** The candidate lines between the tables drawn, when asked for: added last, to what is already drawn. */
+    withCandidates<S extends { tables: string[]; relations: RelationDef[] }>(s: S): S {
+      const extra = implicit.relations.filter((r) => s.tables.includes(r.table) && s.tables.includes(r.refTable))
+      return extra.length > 0 ? { ...s, relations: [...s.relations, ...extra] } : s
+    },
     controls,
     above: comparing.panel,
-    below: usage.panel,
+    /** What goes under the diagram, given the tables drawn (a focused diagram lists only its candidates). */
+    below: (drawn: readonly string[]) => (
+      <>
+        {usage.panel}
+        {implicit.panel(drawn)}
+      </>
+    ),
     refsOn,
     checks: refs.checks,
     /** The overlay to draw, given what `shape` returned: the comparison's, or the others laid together. */
-    overlay: (compared: DiagramOverlay | undefined) => compared ?? mergeOverlays(usage.overlay, refs.overlay),
+    overlay: (compared: DiagramOverlay | undefined) =>
+      compared ?? mergeOverlays(usage.overlay, refs.overlay, implicit.overlay),
   }
 }

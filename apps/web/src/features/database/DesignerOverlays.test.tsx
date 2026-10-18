@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { RelationDef, SnapshotDiff } from '@tsmyadmin/shared'
 import type { ReactNode } from 'react'
@@ -14,6 +14,7 @@ vi.mock('@tanstack/react-router', () => ({
 }))
 
 const checked = vi.fn()
+const made = vi.fn()
 /** While set, every check waits for it: to turn the check off halfway. */
 let gate: Promise<void> | undefined
 const diff: SnapshotDiff = {
@@ -28,6 +29,15 @@ const diff: SnapshotDiff = {
 
 vi.mock('@/lib/queries.ts', () => ({
   tablesQuery: () => ({ queryKey: ['tables'] }),
+  // logs.post_id has no foreign key (its key is on user_id): the one candidate, to posts.
+  structureQuery: ({ table }: { table: string }) => ({
+    queryKey: ['structure', table],
+    queryFn: async () => ({
+      name: table,
+      columns: (table === 'logs' ? ['id', 'user_id', 'post_id'] : ['id', 'user_id']).map((name) => ({ name })),
+      primaryKey: ['id'],
+    }),
+  }),
   foreignKeysQuery: () => ({ queryKey: ['fk'] }),
   snapshotDiffQuery: () => ({ queryKey: ['diff'], queryFn: async () => diff }),
   tableUsageQuery: () => ({
@@ -69,31 +79,57 @@ const key = (table: string): RelationDef => ({
 /** The hook's controls and panels, and what overlay it would draw, as text to look for. */
 const MANY = ['t1', 't2', 't3', 't4', 't5', 't6']
 
-function Harness({ compare, many = false }: { compare?: string | undefined; many?: boolean }) {
+function Harness({
+  compare,
+  many = false,
+  postKey = false,
+  drawn,
+}: {
+  compare?: string | undefined
+  many?: boolean
+  /** logs.post_id made a key (the candidate taken up). */
+  postKey?: boolean
+  /** The tables the diagram draws (all, when not given). */
+  drawn?: readonly string[] | undefined
+}) {
   const o = useDesignerOverlays({
     db: 'shop',
     schema: undefined,
     compare,
     names: many ? MANY : ['users', 'posts', 'logs'],
     // A key of a table that is not drawn (a view's, say) is not checked.
-    keys: many ? MANY.map(key) : [key('posts'), key('posts'), key('logs'), key('elsewhere')],
+    keys: many
+      ? MANY.map(key)
+      : [
+          key('posts'),
+          key('posts'),
+          key('logs'),
+          key('elsewhere'),
+          ...(postKey ? [{ ...key('logs'), name: 'fk_logs_post', columns: ['post_id'], refTable: 'posts' }] : []),
+        ],
+    ns: { database: 'shop' },
+    onMakeKey: made,
   })
   const overlay = o.overlay(undefined)
   return (
     <div>
       {o.controls}
       {o.above}
-      {o.below}
+      {o.below(drawn ?? (many ? MANY : ['users', 'posts', 'logs']))}
       <p data-testid="lit">{[...(overlay?.relationBadges?.values() ?? [])].join(',')}</p>
+      <p data-testid="lines">
+        {o.withCandidates({ tables: ['logs'], relations: [] }).relations.length}/
+        {o.withCandidates({ tables: ['logs', 'posts'], relations: [] }).relations.length}
+      </p>
     </div>
   )
 }
 
-const mount = (compare?: string, many = false) =>
+const mount = (compare?: string, many = false, postKey = false, drawn?: readonly string[]) =>
   render(
     // The app's client retries nothing either for these (a whole-table read is not run twice on its own).
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <Harness compare={compare} many={many} />
+      <Harness compare={compare} many={many} postKey={postKey} drawn={drawn} />
     </QueryClientProvider>
   )
 
@@ -158,5 +194,47 @@ describe('useDesignerOverlays', () => {
     gate = undefined
     await new Promise((r) => setTimeout(r, 20))
     expect(checked).toHaveBeenCalledTimes(4)
+  })
+
+  it('lists the references kept by name only when asked, and hands one to the form that adds a key', async () => {
+    made.mockClear()
+    mount()
+    expect(screen.queryByRole('region', { name: t.implicit.title })).toBeNull()
+    await userEvent.click(screen.getByRole('checkbox', { name: t.implicit.toggle }))
+    const listed = await screen.findByText(t.implicit.candidate('logs', 'post_id', 'posts', 'id'))
+    expect(screen.getAllByText(/ → /)).toHaveLength(1)
+    await userEvent.click(within(listed.closest('li') as HTMLElement).getByRole('button', { name: t.implicit.makeKey }))
+    expect(made).toHaveBeenCalledWith(
+      expect.objectContaining({ table: 'logs', columns: ['post_id'], refTable: 'posts' })
+    )
+  })
+
+  it('offers no candidates while comparing', async () => {
+    mount('1')
+    expect(await screen.findByText(t.compare.othersOff)).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: t.implicit.toggle })).toBeDisabled()
+  })
+
+  it('adds a candidate line only between tables already drawn', async () => {
+    mount()
+    await userEvent.click(screen.getByRole('checkbox', { name: t.implicit.toggle }))
+    await screen.findByText(t.implicit.candidate('logs', 'post_id', 'posts', 'id'))
+    // With posts not drawn (focused away), the line to it is not added and does not draw posts in.
+    expect(screen.getByTestId('lines')).toHaveTextContent('0/1')
+  })
+
+  it('drops a candidate once a foreign key holds its column', async () => {
+    mount(undefined, false, true)
+    await userEvent.click(screen.getByRole('checkbox', { name: t.implicit.toggle }))
+    expect(await screen.findByText(t.implicit.none)).toBeInTheDocument()
+  })
+
+  it('lists only the candidates the diagram draws, and says how many more there are', async () => {
+    mount(undefined, false, false, ['logs', 'users'])
+    await userEvent.click(screen.getByRole('checkbox', { name: t.implicit.toggle }))
+    expect(await screen.findByText(t.implicit.notDrawn(1))).toBeInTheDocument()
+    expect(screen.queryByText(t.implicit.candidate('logs', 'post_id', 'posts', 'id'))).toBeNull()
+    // Not "none" beside "1 more": the list is empty because of the focus, not because there are none.
+    expect(screen.queryByText(t.implicit.none)).toBeNull()
   })
 })
