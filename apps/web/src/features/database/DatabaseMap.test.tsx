@@ -5,7 +5,7 @@ import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { locale as common } from '@/config/locale.ts'
 import { locale } from '@/config/locale-screens.ts'
-import { fk, from, table } from '@/test/schema-fixtures.ts'
+import { column, fk, from, table } from '@/test/schema-fixtures.ts'
 import { DatabaseMap } from './DatabaseMap.tsx'
 
 const t = locale.databaseMap
@@ -138,6 +138,57 @@ describe('DatabaseMap', () => {
     expect(await screen.findByText(t.hubsNone)).toBeInTheDocument()
     expect(screen.getByText(t.noPrimaryKeyNone)).toBeInTheDocument()
     expect(screen.getByText(t.unindexedNone)).toBeInTheDocument()
+    expect(screen.getByText(t.keyTypesNone)).toBeInTheDocument()
+    expect(screen.getByText(t.nameTypesNone)).toBeInTheDocument()
+  })
+
+  it('names a key of another kind of type or collation than what it refers to, and an _id name of two types', async () => {
+    schemas = {
+      users: table('users', {
+        columns: [column('id', 'int'), column('code', 'varchar(8)', { collation: 'utf8mb4_bin' }), column('n', 'int')],
+      }),
+      orders: table('orders', {
+        columns: [
+          column('user_id', 'decimal(10,0)'),
+          column('user_code', 'varchar(8)', { collation: 'utf8mb4_general_ci' }),
+          column('n_id', 'bigint'),
+        ],
+        foreignKeys: [
+          fk(['user_id'], 'users'),
+          fk(['user_code'], 'users', { name: 'fk_code', refColumns: ['code'] }),
+          // A bigint referring to an int: one kind, compared as it is; not listed.
+          fk(['n_id'], 'users', { name: 'fk_n', refColumns: ['n'] }),
+        ],
+      }),
+      logs: table('logs', { columns: [column('user_id', 'int')] }),
+    }
+    listed = Object.keys(schemas).map((name) => ({ name, kind: 'table' }))
+    mount()
+    const keys = await screen.findByRole('region', { name: t.keyTypes })
+    expect(
+      within(keys)
+        .getAllByRole('link')
+        .map((a) => a.textContent)
+    ).toEqual([
+      t.keyType(t.keySide('orders', 'user_id', 'decimal(10,0)', null), t.keySide('users', 'id', 'int', null)),
+      // The collations in the sentence (and the link's name), each on its side.
+      t.keyType(
+        t.keySide('orders', 'user_code', 'varchar(8)', 'utf8mb4_general_ci'),
+        t.keySide('users', 'code', 'varchar(8)', 'utf8mb4_bin')
+      ),
+    ])
+    expect(within(keys).getAllByRole('link')[0]).toHaveAttribute(
+      'href',
+      address('/db/$db/table/$table/structure', { db: 'shop', table: 'orders' }, {})
+    )
+    const types = within(screen.getByRole('region', { name: t.nameTypes })).getByRole('list', {
+      name: t.nameTypesOf('user_id'),
+    })
+    expect(
+      within(types)
+        .getAllByRole('listitem')
+        .map((li) => li.textContent)
+    ).toEqual([t.nameType('decimal', ['orders']), t.nameType('int', ['logs'])])
   })
 
   it('says which tables could not be read and says "none" of nothing while they are missing', async () => {
@@ -147,6 +198,8 @@ describe('DatabaseMap', () => {
     await saysAtLast(t.sentences([t.summary(1, 0), t.failed(['users', 'orders'], 0)]))
     expect(screen.queryByText(t.hubsNone)).toBeNull()
     expect(screen.queryByText(t.unindexedNone)).toBeNull()
+    expect(screen.queryByText(t.keyTypesNone)).toBeNull()
+    expect(screen.queryByText(t.nameTypesNone)).toBeNull()
     expect(screen.getByRole('list', { name: t.roles.isolated })).toHaveTextContent('logs')
   })
 

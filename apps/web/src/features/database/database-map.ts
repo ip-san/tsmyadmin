@@ -1,5 +1,11 @@
 import type { IndexDef, Namespace, TableSchema } from '@tsmyadmin/shared'
 import { TABLE_ROLES, type TableRole, tableRole } from '@/lib/table-role.ts'
+import {
+  type KeyTypeMismatch,
+  keyTypeMismatches,
+  type NameTypeMismatch,
+  nameTypeMismatches,
+} from './type-mismatches.ts'
 
 /** Tables named as the most referred to: the ones a newcomer reads first. */
 const HUBS_SHOWN = 10
@@ -21,6 +27,10 @@ export interface DatabaseMap {
   hubs: { table: string; referredBy: number }[]
   noPrimaryKey: string[]
   unindexedKeys: UnindexedKey[]
+  /** Foreign keys whose columns differ in type or collation from those they refer to. */
+  keyTypes: KeyTypeMismatch[]
+  /** `_id` columns of one name and two types. */
+  nameTypes: NameTypeMismatch[]
 }
 
 /**
@@ -38,7 +48,8 @@ function indexed(schema: Pick<TableSchema, 'primaryKey' | 'indexes'>, columns: r
 
 /**
  * What a database looks like from its definitions alone: how many tables of each role (guessed from their keys,
- * `tableRole`), which are referred to most, which have no primary key, and which foreign keys no index starts with.
+ * `tableRole`), which are referred to most, which have no primary key, which foreign keys no index starts with, and
+ * which columns differ in type from what they refer to, or from columns of their name (`type-mismatches.ts`).
  * Sequences are left out (no columns); views are counted, not given a role.
  */
 export function databaseMap(
@@ -67,5 +78,7 @@ export function databaseMap(
         .filter((k) => !indexed(s, k.columns))
         .map((k) => ({ table: s.name, key: k.name, columns: k.columns, refTable: k.refTable }))
     ),
+    keyTypes: keyTypeMismatches(schemas, home),
+    nameTypes: nameTypeMismatches(schemas),
   }
 }

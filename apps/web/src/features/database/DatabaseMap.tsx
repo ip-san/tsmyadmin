@@ -112,6 +112,36 @@ function MapCards({
               </li>
             ))}
           </Check>
+          <Check title={t.keyTypes} hint={t.keyTypesHint} none={none(t.keyTypesNone)}>
+            {map.keyTypes.map((k) => (
+              // Its type is changed on the table's structure.
+              <li key={`${k.table}.${k.key}.${k.column}`}>
+                <Link
+                  to="/db/$db/table/$table/structure"
+                  params={{ db, table: k.table }}
+                  search={{ schema }}
+                  className={LINK}
+                >
+                  {t.keyType(
+                    t.keySide(k.table, k.column, k.type, k.collations?.from ?? null),
+                    t.keySide(k.refTable, k.refColumn, k.refType, k.collations?.to ?? null)
+                  )}
+                </Link>
+              </li>
+            ))}
+          </Check>
+          <Check title={t.nameTypes} hint={t.nameTypesHint} none={none(t.nameTypesNone)}>
+            {map.nameTypes.map((n) => (
+              <li key={n.column}>
+                <span className="font-mono">{n.column}</span>
+                <ul aria-label={t.nameTypesOf(n.column)} className="pl-4">
+                  {n.types.map((x) => (
+                    <li key={x.type}>{t.nameType(x.type, x.tables)}</li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </Check>
         </div>
       </Card>
     </>

@@ -2601,6 +2601,19 @@ export const jaScreens = {
       'そのカラムで始まるインデックスが無いと、結合や、参照先の行の削除・更新のたびに、このテーブルを全件読みます（MySQL は外部キーごとにインデックスを自動で作るので、ここに出るのは主に PostgreSQL です）',
     unindexedKey: (table: string, columns: string, refTable: string) => `${table}（${columns}）→ ${refTable}`,
     unindexedNone: 'インデックスの無い外部キーはありません',
+    keyTypes: '参照先と型が違う外部キー',
+    keyTypesHint:
+      '外部キーのカラムと参照先のカラムで、型の種類（文字列と数値、整数と小数など）か照合順序が違うと、結合のたびに片方を変換してそのインデックスが使われないか、比較に COLLATE が要ることがあります（長さだけの違いは数えません。MySQL はそうした外部キーを作れないので、ここに出るのは主に PostgreSQL です）',
+    keySide: (table: string, column: string, type: string, collation: string | null) =>
+      `${table}.${column}（${type}${collation === null ? '' : `、照合順序 ${collation}`}）`,
+    keyType: (from: string, to: string) => `${from}→ ${to}`,
+    keyTypesNone: '参照先と型が違う外部キーはありません',
+    nameTypes: '名前が同じで型が違うカラム',
+    nameTypesHint:
+      '_id で終わる同じ名前のカラムが、テーブルによって違う型です（長さだけの違いは数えません）。同じものを指すなら、型をそろえると、入る値の範囲の食い違いや、結合での変換を避けられます',
+    nameType: (type: string, tables: readonly string[]) => `${type}（${tables.join('、')}）`,
+    nameTypesOf: (column: string) => `${column} の型`,
+    nameTypesNone: '名前が同じで型が違うカラムはありません',
     empty: 'テーブルもビューもありません',
   },
   dictionary: {

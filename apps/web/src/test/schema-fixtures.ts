@@ -1,4 +1,4 @@
-import type { ForeignKeyDef, IndexDef, Namespace, ReferencingKeyDef, TableSchema } from '@tsmyadmin/shared'
+import type { ColumnDef, ForeignKeyDef, IndexDef, Namespace, ReferencingKeyDef, TableSchema } from '@tsmyadmin/shared'
 
 /** The namespace the fixtures are in, and the test of it (`homeNamespace` on MySQL, for a page of `shop`). */
 const SHOP: Namespace = { database: 'shop' }
@@ -56,5 +56,20 @@ export const index = (columns: string[], over: Partial<IndexDef> = {}): IndexDef
   predicate: null,
   definition: null,
   lengths: {},
+  ...over,
+})
+
+/** A nullable column of `dataType` with no default, comment or collation, unless `over` says so. */
+export const column = (name: string, dataType: string, over: Partial<ColumnDef> = {}): ColumnDef => ({
+  name,
+  dataType,
+  nullable: true,
+  default: null,
+  defaultIsExpression: false,
+  extra: '',
+  comment: null,
+  collation: null,
+  check: null,
+  generated: null,
   ...over,
 })

@@ -2625,6 +2625,19 @@ export const enScreens = {
       'With no index starting with its columns, every join, and every delete or update of a referred row, reads this whole table (MySQL makes an index for every foreign key, so these are mostly on PostgreSQL)',
     unindexedKey: (table: string, columns: string, refTable: string) => `${table} (${columns}) → ${refTable}`,
     unindexedNone: 'Every foreign key has an index',
+    keyTypes: 'Foreign keys of another type than what they refer to',
+    keyTypesHint:
+      'When a key column and the column it refers to differ in the kind of type (text and a number, an integer and a decimal) or in collation, every join converts one side and may not use its index, or needs a COLLATE to compare (a length alone is not counted; MySQL makes no such key, so these are mostly on PostgreSQL)',
+    keySide: (table: string, column: string, type: string, collation: string | null) =>
+      `${table}.${column} (${type}${collation === null ? '' : `, collation ${collation}`})`,
+    keyType: (from: string, to: string) => `${from} → ${to}`,
+    keyTypesNone: 'Every foreign key has the type of what it refers to',
+    nameTypes: 'Columns of one name and several types',
+    nameTypesHint:
+      'Columns ending in _id share a name but not a type across tables (a length alone is not counted). If they mean the same thing, one type keeps their ranges of values alike and spares joins a conversion',
+    nameType: (type: string, tables: readonly string[]) => `${type} (${tables.join(', ')})`,
+    nameTypesOf: (column: string) => `Types of ${column}`,
+    nameTypesNone: 'No two columns of one name differ in type',
     empty: 'There are no tables or views',
   },
   dictionary: {
