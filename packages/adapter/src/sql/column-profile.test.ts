@@ -77,8 +77,22 @@ describe('columnProfileOn, more', () => {
     expect(none.asked[0]?.text).toBe('SELECT COUNT(*) FROM (SELECT 1 AS one FROM "public"."t" LIMIT $1) AS "sample"')
   })
 
-  it('reads a type written with spaces around it, as a catalog may', () => {
+  it('reads a type written with spaces around it, as a catalog may', async () => {
     expect(comparable(' int ')).toBe(true)
+    const s = scripted([[/COUNT/, rows([[1, 1, 1]])]])
+    const p = await columnProfileOn(s.conn, 'postgres', ns, 't', [col('body', ' text ')])
+    expect(p.columns[0]?.prefix).toBe(true)
+  })
+
+  it('takes the counts of each column from its own place in the row, and none from a row cut short', async () => {
+    // a: 5 present, 4 distinct; b: 3 present, 2 distinct; c: nothing in the row at all.
+    const s = scripted([[/COUNT/, rows([[5, 5, 4, 3, 2]])]])
+    const p = await columnProfileOn(s.conn, 'postgres', ns, 't', [col('a'), col('b'), col('c')])
+    expect(p.columns).toEqual([
+      { column: 'a', nulls: 0, distinct: 4, prefix: false },
+      { column: 'b', nulls: 2, distinct: 2, prefix: false },
+      { column: 'c', nulls: 5, distinct: null, prefix: false },
+    ])
   })
 
   it('marks long text as compared by its first characters', async () => {
