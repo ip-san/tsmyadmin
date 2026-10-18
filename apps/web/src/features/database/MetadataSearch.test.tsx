@@ -11,6 +11,13 @@ const described = vi.fn()
 const listed = vi.fn()
 /** Extra columns of posts, named w0, w1…: to go past the rows drawn at most. */
 let wide = 0
+/** How many views cannot be described (broken, broken2…). */
+let broken = 1
+/** While set, a view that cannot be described takes until it is opened to say so: to see a reading again. */
+let gate: Promise<void> | undefined
+/** The list of tables cannot be read (the server gone, say). */
+let listFails = false
+const brokenNames = () => Array.from({ length: broken }, (_, i) => (i === 0 ? 'broken' : `broken${i + 1}`))
 const readsOf = (table: string) => described.mock.calls.filter((c) => c[0] === table).length
 
 vi.mock('@tanstack/react-router', () => ({
@@ -22,10 +29,11 @@ vi.mock('@/lib/queries.ts', () => ({
     queryKey: ['tables'],
     queryFn: async () => {
       listed()
+      if (listFails) throw new Error('server gone')
       return [
         { name: 'users', kind: 'table' },
         { name: 'posts', kind: 'table' },
-        { name: 'broken', kind: 'view' },
+        ...brokenNames().map((name) => ({ name, kind: 'view' })),
         { name: 'seq', kind: 'sequence' },
       ]
     },
@@ -34,7 +42,10 @@ vi.mock('@/lib/queries.ts', () => ({
     queryKey: ['structure', table],
     queryFn: async () => {
       described(table)
-      if (table === 'broken') throw new Error('cannot read')
+      if (table.startsWith('broken')) {
+        await gate
+        throw new Error('cannot read')
+      }
       const columns =
         table === 'users'
           ? [{ name: 'id', dataType: 'int', comment: null }]
@@ -55,12 +66,17 @@ const mount = () =>
     </QueryClientProvider>
   )
 
+/** The status line says exactly these sentences (a count of 11 is not a count of 1). */
+const says = (...sentences: string[]) =>
+  waitFor(() => expect(screen.getByRole('status').textContent).toBe(sentences.join(' ')))
+const failedOne = t.failed(['broken'], 0)
+
 describe('MetadataSearch', () => {
   it('reads no definition before a term is typed', () => {
     described.mockClear()
     mount()
     expect(described).not.toHaveBeenCalled()
-    // The live region is there from the start, empty, so what it says later is heard.
+    // The status line is there from the start, empty, so what it says later is heard.
     expect(screen.getByRole('status')).toBeEmptyDOMElement()
   })
 
@@ -68,34 +84,59 @@ describe('MetadataSearch', () => {
     described.mockClear()
     mount()
     await userEvent.type(screen.getByLabelText(t.term), '会員')
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(t.found(2, 2)))
+    // What was not searched is said with the count, in the line that stays (it can be read again).
+    await says(t.found(2, 2), failedOne)
     const table = screen.getByRole('table', { name: t.results })
     expect(table.querySelectorAll('mark')).toHaveLength(2)
-    // What was not searched is read out with the count, not only shown.
-    expect(screen.getByRole('status')).toHaveTextContent(t.failed(['broken']))
     // Each table is described once however many letters are typed; a sequence not at all.
     expect(described.mock.calls.map((c) => c[0]).sort()).toEqual(['broken', 'posts', 'users'])
+  })
+
+  it('names a few of the tables that could not be read, and counts the rest', async () => {
+    broken = 8
+    try {
+      mount()
+      await userEvent.type(screen.getByLabelText(t.term), 'id')
+      await says(t.found(2, 2), t.failed(brokenNames().slice(0, 5), 3))
+    } finally {
+      broken = 1
+    }
   })
 
   it('follows the term as it changes: none found, then the matches of the new term', async () => {
     mount()
     const input = screen.getByLabelText(t.term)
     await userEvent.type(input, 'nowhere')
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(t.found(0, 2)))
+    await says(t.found(0, 2), failedOne)
     expect(screen.queryByRole('table', { name: t.results })).toBeNull()
     await userEvent.clear(input)
     await userEvent.type(input, 'user_id')
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(t.found(1, 2)))
+    await says(t.found(1, 2), failedOne)
     const marks = screen.getByRole('table', { name: t.results }).querySelectorAll('mark')
     expect([...marks].map((m) => m.textContent)).toEqual(['user_id'])
   })
 
-  it('reads again only the tables that could not be read, when asked', async () => {
+  it('reads again only the tables that could not be read, saying so meanwhile', async () => {
     described.mockClear()
     mount()
     await userEvent.type(screen.getByLabelText(t.term), 'id')
-    await userEvent.click(await screen.findByRole('button', { name: t.readAgain }))
-    await waitFor(() => expect(readsOf('broken')).toBe(2))
+    await says(t.found(2, 2), failedOne)
+    let open: () => void = () => undefined
+    gate = new Promise((resolve) => {
+      open = resolve
+    })
+    try {
+      const again = screen.getByRole('button', { name: t.readAgain })
+      await userEvent.click(again)
+      await says(t.found(2, 2), failedOne, t.refreshing)
+      // Not pressed twice while it reads.
+      expect(again).toBeDisabled()
+      open()
+      await says(t.found(2, 2), failedOne)
+    } finally {
+      gate = undefined
+    }
+    expect(readsOf('broken')).toBe(2)
     expect(readsOf('users')).toBe(1)
     expect(readsOf('posts')).toBe(1)
   })
@@ -106,26 +147,25 @@ describe('MetadataSearch', () => {
     mount()
     const input = screen.getByLabelText(t.term)
     await userEvent.type(input, 'id')
-    await waitFor(() => expect(screen.getByRole('status')).not.toBeEmptyDOMElement())
+    await says(t.found(2, 2), failedOne)
     await userEvent.clear(input)
     await userEvent.type(input, 'id')
-    await waitFor(() => expect(screen.getByRole('status')).not.toBeEmptyDOMElement())
+    await says(t.found(2, 2), failedOne)
     expect(readsOf('users')).toBe(1)
     // Not even the list of tables: the search is not run again.
     expect(listed).toHaveBeenCalledTimes(1)
   })
 
-  it('reads the count out once typing pauses, and shows it at once without reading it twice', async () => {
+  it('says the count once typing pauses, not on every key', async () => {
     mount()
     const input = screen.getByLabelText(t.term)
     await userEvent.type(input, 'user_id')
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(t.found(1, 2)))
+    await says(t.found(1, 2), failedOne)
     await userEvent.clear(input)
     await userEvent.type(input, 'zzz')
-    // Shown at once, in a line a screen reader skips; the status still says the last count for now.
-    expect(screen.getByText(new RegExp(`^${t.found(0, 2)}`))).toHaveAttribute('aria-hidden', 'true')
-    expect(screen.getByRole('status')).toHaveTextContent(t.found(1, 2))
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(t.found(0, 2)))
+    // Typed at once: the line still says the last count for now, then the new one.
+    expect(screen.getByRole('status').textContent).toBe(`${t.found(1, 2)} ${failedOne}`)
+    await says(t.found(0, 2), failedOne)
   })
 
   it('draws at most 200 rows, and says so', async () => {
@@ -133,11 +173,26 @@ describe('MetadataSearch', () => {
     try {
       mount()
       await userEvent.type(screen.getByLabelText(t.term), 'w')
-      await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(t.shownFirst(200)))
-      // The header row and 200 more.
+      await says(t.found(250, 2), t.shownFirst(200), failedOne)
       expect(screen.getByRole('table', { name: t.results }).querySelectorAll('tbody tr')).toHaveLength(200)
     } finally {
       wide = 0
+    }
+  })
+
+  it('keeps the results and says nothing of them when reading again fails, showing the error', async () => {
+    mount()
+    await userEvent.type(screen.getByLabelText(t.term), 'user_id')
+    await says(t.found(1, 2), failedOne)
+    listFails = true
+    try {
+      await userEvent.click(screen.getByRole('button', { name: t.readAgain }))
+      expect(await screen.findByText(/server gone/)).toBeInTheDocument()
+      // The count is not said as if all were well; the results of the reading before stay.
+      await waitFor(() => expect(screen.getByRole('status')).toBeEmptyDOMElement())
+      expect(screen.getByRole('table', { name: t.results })).toBeInTheDocument()
+    } finally {
+      listFails = false
     }
   })
 })

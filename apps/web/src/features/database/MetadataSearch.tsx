@@ -16,6 +16,8 @@ const t = locale.metadataSearch
 const SHOWN_MAX = 200
 /** How long the count waits for typing to pause before it is read out. */
 const ANNOUNCE_MS = 500
+/** Tables named when some could not be read; the rest are counted. */
+const FAILED_NAMED = 5
 /** The definitions are read again after this, or after a change made in this tool (which refreshes everything). */
 const DEFINITIONS_STALE_MS = 5 * 60_000
 
@@ -67,20 +69,22 @@ export function MetadataSearch({ db, schema }: { db: string; schema?: string | u
     () => (index ? matchMetadata(index, folded, SHOWN_MAX) : { matches: [], total: 0 }),
     [index, folded]
   )
-  const ready = term.trim() !== '' && described.data !== undefined
-  // Read out once typing pauses, not on every key; the region is there from the start, so it is heard.
-  // What the line above the results says, and what is read out: the same words, including what was not searched.
-  const summary = described.data
-    ? [
-        t.found(total, described.data.tables),
-        total > matches.length ? t.shownFirst(matches.length) : '',
-        described.data.failed.length > 0 ? t.failed(described.data.failed) : '',
-        described.isFetching ? t.refreshing : '',
-      ]
-        .filter(Boolean)
-        .join(' ')
-    : ''
-  const announced = useDebounced(ready ? summary : '', ANNOUNCE_MS)
+  const data = described.data
+  // What the status line says, as sentences: the count, and what was not searched or is being read again.
+  const summary =
+    term.trim() !== '' && data && !described.isError
+      ? [
+          t.found(total, data.tables),
+          total > matches.length ? t.shownFirst(matches.length) : '',
+          data.failed.length > 0 ? t.failed(data.failed.slice(0, FAILED_NAMED), data.failed.length - FAILED_NAMED) : '',
+          described.isFetching ? t.refreshing : '',
+        ]
+          .filter(Boolean)
+          .join(' ')
+      : ''
+  // Said once typing pauses, not on every key. The line is there from the start (empty), so it is heard, and it
+  // stays, so it can be read again.
+  const said = useDebounced(summary, ANNOUNCE_MS)
   return (
     <section aria-labelledby={titleId} className="space-y-2 rounded border border-line p-3">
       <h2 id={titleId} className="text-sm font-semibold text-ink">
@@ -95,27 +99,23 @@ export function MetadataSearch({ db, schema }: { db: string; schema?: string | u
           className="w-72"
         />
       </Field>
+      <p role="status" className="text-xs text-ink-sub">
+        {said}
+      </p>
       {term.trim() === '' ? null : described.isPending ? (
         <Spinner label={t.reading} />
-      ) : described.isError ? (
-        <ErrorBox error={described.error} onRetry={() => void described.refetch()} />
       ) : (
         <>
-          {/* Seen at once; read out by the status below once typing pauses (so not twice). */}
-          <p aria-hidden className="text-xs text-ink-sub">
-            {summary}
-          </p>
-          {described.data.failed.length > 0 ? (
-            <Button size="sm" onClick={() => void described.refetch()}>
+          {/* A reading again that failed: the error, with the results of the reading before kept under it. */}
+          {described.isError ? <ErrorBox error={described.error} onRetry={() => void described.refetch()} /> : null}
+          {data && data.failed.length > 0 && !described.isError ? (
+            <Button size="sm" disabled={described.isFetching} onClick={() => void described.refetch()}>
               {t.readAgain}
             </Button>
           ) : null}
           {matches.length > 0 ? <Results db={db} schema={schema} matches={matches} /> : null}
         </>
       )}
-      <p role="status" className="sr-only">
-        {announced}
-      </p>
     </section>
   )
 }
