@@ -38,14 +38,19 @@ function sampled(dialect: Dialect, c: Pick<ColumnDef, 'name' | 'dataType'>): str
   return col
 }
 
-/** What a server says when a statement runs too long or is stopped: not a reason to count again. */
-const STOPPED = new Set([
-  '57014',
+/**
+ * What a server says when a statement runs too long, is stopped, or waits on a lock: not a reason to count again
+ * (MariaDB's 1969 reaches here named ER_STATEMENT_TIMEOUT).
+ */
+export const STOPPED: ReadonlySet<string> = new Set([
+  '57014', // PostgreSQL: statement_timeout, a cancel
+  '55P03', // PostgreSQL: lock_timeout
+  '40P01', // PostgreSQL: a deadlock
   'ER_QUERY_TIMEOUT',
   'ER_QUERY_INTERRUPTED',
   'ER_STATEMENT_TIMEOUT',
-  'ER_1969',
-  '1969',
+  'ER_LOCK_WAIT_TIMEOUT',
+  'ER_LOCK_DEADLOCK',
 ])
 
 /** The statement failed on what it was asked to compute, not on time, rights or the connection. */

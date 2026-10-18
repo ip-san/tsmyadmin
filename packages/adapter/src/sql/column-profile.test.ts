@@ -1,7 +1,8 @@
 import { PROFILE_MAX_COLUMNS, PROFILE_SAMPLE_ROWS } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
 import { fail, rows, scripted } from '../test/scripted-conn.ts'
-import { columnProfileOn, comparable } from './column-profile.ts'
+import type { AdapterError } from '../types.ts'
+import { columnProfileOn, comparable, STOPPED } from './column-profile.ts'
 
 const ns = { database: 'shop' }
 const col = (name: string, dataType = 'int') => ({ name, dataType })
@@ -55,11 +56,10 @@ describe('columnProfileOn, more', () => {
     expect(s.asked[0]?.text).toMatch(/LEFT\("body", 256\) AS "c0"/)
   })
 
-  it.each([
+  it.each<[string, AdapterError]>([
     ['a refusal', fail('PERMISSION_DENIED')],
-    ['a timeout (PostgreSQL)', fail('QUERY_FAILED', '57014')],
-    ['a timeout (MySQL)', fail('QUERY_FAILED', 'ER_QUERY_TIMEOUT')],
     ['a lost connection', fail('CONNECTION_FAILED')],
+    ...[...STOPPED].map((code): [string, AdapterError] => [`a stop (${code})`, fail('QUERY_FAILED', code)]),
   ])('does not count again after %s: it would fail again, and take as long', async (_, error) => {
     const s = scripted([[/COUNT/, error]])
     await expect(columnProfileOn(s.conn, 'postgres', ns, 't', [col('a')])).rejects.toBe(error)

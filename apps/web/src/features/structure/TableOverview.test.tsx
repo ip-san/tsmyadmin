@@ -22,6 +22,7 @@ const posts = {
     { name: 'id', dataType: 'int' },
     { name: 'user_id', dataType: 'int' },
     { name: 'body', dataType: 'text' },
+    { name: 'title', dataType: 'text' },
   ],
   primaryKey: ['id'],
   foreignKeys: [{ name: 'fk_user', columns: ['user_id'], refTable: 'users', refColumns: ['id'] }],
@@ -62,7 +63,8 @@ vi.mock('@/lib/queries.ts', () => ({
       columns: [
         { column: 'id', nulls: 0, distinct: 3, prefix: false },
         { column: 'user_id', nulls: 0, distinct: 1, prefix: false },
-        { column: 'body', nulls: 3, distinct: 0, prefix: false },
+        { column: 'body', nulls: 3, distinct: 0, prefix: true },
+        { column: 'title', nulls: 0, distinct: 2, prefix: true },
       ],
       omitted: 0,
     }),
@@ -120,6 +122,9 @@ describe('TableOverview', () => {
     expect(row('id')).toHaveTextContent(t.notes.unique)
     expect(row('user_id')).toHaveTextContent(t.notes.constant)
     expect(row('body')).toHaveTextContent(t.notes.allNull)
+    // Counted by its first characters: "or more", and no mark on how many there are.
+    expect(row('title')).toHaveTextContent(t.atLeast(2))
+    expect(row('id')).toHaveTextContent(t.count(3))
     expect(within(row('body')).getByRole('meter', { name: t.nullShareOf('body') })).toHaveProperty('value', 1)
     expect(screen.getByText(t.sampleAll(3))).toBeInTheDocument()
     await userEvent.click(within(row('id')).getByRole('button', { name: t.valuesOf('id') }))
