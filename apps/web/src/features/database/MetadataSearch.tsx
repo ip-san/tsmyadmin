@@ -1,18 +1,28 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import type { TableSchema } from '@tsmyadmin/shared'
-import { type ReactNode, useDeferredValue, useId, useState } from 'react'
+import { type ReactNode, useDeferredValue, useId, useMemo, useState } from 'react'
+import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Field, Input } from '@/components/ui/Field.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale-screens.ts'
 import { eachLimited } from '@/lib/each-limited.ts'
 import { structureQuery, tablesQuery } from '@/lib/queries.ts'
-import { type Hit, type MetadataMatch, matchMetadata } from './metadata-search.ts'
+import { useDebounced } from '@/lib/use-debounced.ts'
+import { foldTerm, type Hit, indexMetadata, type MetadataMatch, matchMetadata } from './metadata-search.ts'
 
 const t = locale.metadataSearch
+/** Rows drawn at most: a one-letter term in a large database matches thousands, and a longer term narrows them. */
+const SHOWN_MAX = 200
+/** How long the count waits for typing to pause before it is read out. */
+const ANNOUNCE_MS = 500
+/** The definitions are read again after this, or after a change made in this tool (which refreshes everything). */
+const DEFINITIONS_STALE_MS = 5 * 60_000
 
-/** Every table and view described, a few at a time; the names of those that could not be read. */
+/**
+ * Every table and view described, a few at a time, and indexed for matching once (not on each key typed); the
+ * names of those that could not be read.
+ */
 function useSchemas(db: string, schema: string | undefined, on: boolean) {
   const queryClient = useQueryClient()
   return useQuery({
@@ -24,12 +34,15 @@ function useSchemas(db: string, schema: string | undefined, on: boolean) {
       const done = await eachLimited(names, (table) => queryClient.fetchQuery(structureQuery({ db, schema, table })), {
         signal,
       })
+      const schemas = done.flatMap(({ settled }) => (settled.ok ? [settled.value] : []))
       return {
-        schemas: done.flatMap(({ settled }) => (settled.ok ? [settled.value] : [])) as TableSchema[],
+        index: indexMetadata(schemas),
+        tables: schemas.length,
         failed: done.flatMap(({ item, settled }) => (settled.ok ? [] : [item])),
       }
     },
     enabled: on,
+    staleTime: DEFINITIONS_STALE_MS,
   })
 }
 
@@ -43,7 +56,15 @@ export function MetadataSearch({ db, schema }: { db: string; schema?: string | u
   const shown = useDeferredValue(term)
   const titleId = useId()
   const described = useSchemas(db, schema, term.trim() !== '')
-  const matches = described.data ? matchMetadata(described.data.schemas, shown) : []
+  const index = described.data?.index
+  const folded = foldTerm(shown)
+  const { matches, total } = useMemo(
+    () => (index ? matchMetadata(index, folded, SHOWN_MAX) : { matches: [], total: 0 }),
+    [index, folded]
+  )
+  const ready = term.trim() !== '' && described.data !== undefined
+  // Read out once typing pauses, not on every key; the region is there from the start, so it is heard.
+  const announced = useDebounced(ready ? t.found(total, described.data?.tables ?? 0) : '', ANNOUNCE_MS)
   return (
     <section aria-labelledby={titleId} className="space-y-2 rounded border border-line p-3">
       <h2 id={titleId} className="text-sm font-semibold text-ink">
@@ -64,13 +85,24 @@ export function MetadataSearch({ db, schema }: { db: string; schema?: string | u
         <ErrorBox error={described.error} onRetry={() => void described.refetch()} />
       ) : (
         <>
-          <p role="status" className="text-xs text-ink-sub">
-            {t.found(matches.length, described.data.schemas.length)}
+          <p aria-hidden className="text-xs text-ink-sub">
+            {t.found(total, described.data.tables)}
+            {total > matches.length ? ` ${t.shownFirst(matches.length)}` : ''}
           </p>
-          {described.data.failed.length > 0 ? <Notice>{t.failed(described.data.failed)}</Notice> : null}
+          {described.data.failed.length > 0 ? (
+            <Notice>
+              {t.failed(described.data.failed)}{' '}
+              <Button size="sm" onClick={() => void described.refetch()}>
+                {t.readAgain}
+              </Button>
+            </Notice>
+          ) : null}
           {matches.length > 0 ? <Results db={db} schema={schema} matches={matches} /> : null}
         </>
       )}
+      <p role="status" className="sr-only">
+        {announced}
+      </p>
     </section>
   )
 }

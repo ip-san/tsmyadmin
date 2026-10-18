@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
@@ -49,14 +49,15 @@ describe('MetadataSearch', () => {
     described.mockClear()
     mount()
     expect(described).not.toHaveBeenCalled()
-    expect(screen.queryByRole('status')).toBeNull()
+    // The live region is there from the start, empty, so what it says later is heard.
+    expect(screen.getByRole('status')).toHaveTextContent('')
   })
 
   it('finds by comment across tables, marks what matched, and says what could not be searched', async () => {
     described.mockClear()
     mount()
     await userEvent.type(screen.getByLabelText(t.term), '会員')
-    expect(await screen.findByRole('status')).toHaveTextContent(t.found(2, 2))
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(t.found(2, 2)))
     const table = screen.getByRole('table', { name: t.results })
     expect(table.querySelectorAll('mark')).toHaveLength(2)
     expect(screen.getByText(t.failed(['broken']))).toBeInTheDocument()
@@ -64,10 +65,24 @@ describe('MetadataSearch', () => {
     expect(described.mock.calls.map((c) => c[0]).sort()).toEqual(['broken', 'posts', 'users'])
   })
 
-  it('says none was found, without a table', async () => {
+  it('follows the term as it changes: none found, then the matches of the new term', async () => {
     mount()
-    await userEvent.type(screen.getByLabelText(t.term), 'nowhere')
-    expect(await screen.findByRole('status')).toHaveTextContent(t.found(0, 2))
+    const input = screen.getByLabelText(t.term)
+    await userEvent.type(input, 'nowhere')
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(t.found(0, 2)))
     expect(screen.queryByRole('table', { name: t.results })).toBeNull()
+    await userEvent.clear(input)
+    await userEvent.type(input, 'user_id')
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(t.found(1, 2)))
+    const marks = screen.getByRole('table', { name: t.results }).querySelectorAll('mark')
+    expect([...marks].map((m) => m.textContent)).toEqual(['user_id'])
+  })
+
+  it('reads a table that could not be read again when asked', async () => {
+    described.mockClear()
+    mount()
+    await userEvent.type(screen.getByLabelText(t.term), 'id')
+    await userEvent.click(await screen.findByRole('button', { name: t.readAgain }))
+    await waitFor(() => expect(described.mock.calls.filter((c) => c[0] === 'broken')).toHaveLength(2))
   })
 })

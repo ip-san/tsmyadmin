@@ -15,6 +15,8 @@ export const enScreens = {
     found: (n: number, tables: number) =>
       `${n.toLocaleString('en-US')} found (in ${tables.toLocaleString('en-US')} tables and views)`,
     failed: (names: readonly string[]) => `Not searched, as their definitions could not be read: ${names.join(', ')}`,
+    shownFirst: (n: number) => `Showing the first ${n.toLocaleString('en-US')}; a longer term narrows them`,
+    readAgain: 'Read again',
     results: 'Tables and columns found',
     table: 'Table',
     column: 'Column',

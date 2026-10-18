@@ -12,18 +12,20 @@ for (const t of TARGETS) {
         const term = page.getByLabel('探す語')
         const results = page.getByRole('table', { name: 'テーブル・カラムの検索結果' })
 
+        // What is marked is what the term found: it changes with the term, so a result of the term before does
+        // not pass for the new one.
+        const marked = results.locator('mark')
         await term.fill('owner_id')
-        await expect(page.getByRole('status').filter({ hasText: /件見つかりました/ })).toHaveText(
-          /^1 件見つかりました（2 個/
-        )
-        await expect(results.getByRole('row').filter({ hasText: 'pets' })).toContainText('owner_id')
+        await expect(marked).toHaveText(['owner_id'])
+        await expect(results.getByRole('row').filter({ has: page.locator('mark') })).toContainText('pets')
 
         // By the column's comment.
         await term.fill('かいぬし')
-        await expect(results.getByRole('row').filter({ hasText: 'owner_id' })).toBeVisible()
+        await expect(marked).toHaveText(['かいぬし'])
+        await expect(results.getByRole('row').filter({ has: page.locator('mark') })).toContainText('owner_id')
         // In full-width capitals: the table owners and the column owner_id.
         await term.fill('ＯＷＮＥＲ')
-        await expect(results.getByRole('row').filter({ has: page.locator('mark') })).toHaveCount(2)
+        await expect(marked).toHaveText(['owner', 'owner'])
 
         // The link opens the table's structure.
         await results.getByRole('link', { name: 'pets' }).click()

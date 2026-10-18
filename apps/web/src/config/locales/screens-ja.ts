@@ -16,6 +16,8 @@ export const jaScreens = {
     found: (n: number, tables: number) =>
       `${n.toLocaleString('ja-JP')} 件見つかりました（${tables.toLocaleString('ja-JP')} 個のテーブル・ビューから）`,
     failed: (names: readonly string[]) => `定義を読めなかったため、探していません: ${names.join('、')}`,
+    shownFirst: (n: number) => `先頭の ${n.toLocaleString('ja-JP')} 件を表示しています。語を足すと絞れます`,
+    readAgain: '読み直す',
     results: 'テーブル・カラムの検索結果',
     table: 'テーブル',
     column: 'カラム',
