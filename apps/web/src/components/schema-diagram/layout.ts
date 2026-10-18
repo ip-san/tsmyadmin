@@ -1,5 +1,5 @@
 import type { DesignerView, Dialect, Namespace, RelationDef } from '@tsmyadmin/shared'
-import { capabilities } from '@tsmyadmin/shared'
+import { homeNamespace } from '@/lib/home-namespace.ts'
 
 export interface Point {
   x: number
@@ -25,9 +25,7 @@ export function drawnRelations(
   ns: Namespace,
   tables: readonly string[]
 ): RelationDef[] {
-  // PostgreSQL reports the schema of every referenced table; a page opened without one is showing public.
-  const schema = capabilities(dialect).databasesAreSchemas ? undefined : (ns.schema ?? 'public')
-  const home = (other: Namespace) => other.database === ns.database && other.schema === schema
+  const home = homeNamespace(dialect, ns)
   return relations.filter((r) => home(r.refNamespace) && tables.includes(r.table) && tables.includes(r.refTable))
 }
 

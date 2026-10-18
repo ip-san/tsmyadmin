@@ -22,6 +22,7 @@ import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { locale } from '@/config/locale-screens.ts'
 import { useDdlFlow } from '@/lib/ddl.ts'
 import { chosenDisplayColumn } from '@/lib/display-column.ts'
+import { namespaceOf } from '@/lib/home-namespace.ts'
 import { readPreference, removePreference, writePreference } from '@/lib/preferences.ts'
 import { foreignKeysQuery, tablesQuery } from '@/lib/queries.ts'
 import { useAllStructures } from '@/lib/use-all-structures.ts'
@@ -107,7 +108,7 @@ export function Designer({
   // Picking a column needs the columns: a compact box has none.
   const shownView = relate ? { ...view, compact: false } : view
   const structures = useAllStructures(db, schema, names, { enabled: showAll })
-  const ns = schema ? { database: db, schema } : { database: db }
+  const ns = namespaceOf(db, schema)
   const overlays = useDesignerOverlays({
     db,
     schema,

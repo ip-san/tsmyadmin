@@ -12,6 +12,7 @@ import { ErrorBox, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale-screens.ts'
 import { cellToText } from '@/lib/format.ts'
+import { homeNamespace, namespaceOf } from '@/lib/home-namespace.ts'
 import {
   foreignKeysQuery,
   rowsQuery,
@@ -21,8 +22,8 @@ import {
   tableUsageQuery,
 } from '@/lib/queries.ts'
 import { useDialect } from '@/lib/session.ts'
+import { tableRole } from '@/lib/table-role.ts'
 import { OverviewColumns } from './OverviewColumns.tsx'
-import { tableRole } from './table-role.ts'
 import { UsedByCard } from './UsedByCard.tsx'
 
 const t = locale.overview
@@ -36,12 +37,13 @@ const SAMPLE_ROWS = 5
  */
 export function TableOverview({ tableRef }: { tableRef: TableRef }) {
   const structure = useQuery(structureQuery(tableRef))
+  const dialect = useDialect()
   // A view's rows are worked out when read, and a view may be heavy: its rows are read (counted, shown) once asked.
   const [asked, setAsked] = useState(false)
   if (structure.isPending) return <Spinner />
   if (structure.isError) return <ErrorBox error={structure.error} onRetry={() => void structure.refetch()} />
   const schema = structure.data
-  const guess = tableRole(schema)
+  const guess = tableRole(schema, homeNamespace(dialect, namespaceOf(tableRef.db, tableRef.schema)))
   const read = schema.kind === 'table' || asked
   return (
     <div className="space-y-4">
@@ -154,7 +156,7 @@ function Neighbours({ tableRef }: { tableRef: TableRef }) {
   const keys = useQuery(foreignKeysQuery(db, schema))
   if (keys.isPending) return <Spinner />
   if (keys.isError) return <ErrorBox error={keys.error} onRetry={() => void keys.refetch()} />
-  const ns = schema ? { database: db, schema } : { database: db }
+  const ns = namespaceOf(db, schema)
   const names = [...new Set(keys.data.flatMap((k) => [k.table, k.refTable]).concat(table))]
   const relations = drawnRelations(keys.data, dialect, ns, names)
   const near = neighbourhood(names, relations, table, 1)

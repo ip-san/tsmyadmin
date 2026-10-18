@@ -189,6 +189,7 @@ export const ColumnProfileSchema = z.object({
     z.object({
       column: z.string(),
       nulls: z.number().int().min(0),
+      /** The values told apart, NULL not among them (`COUNT(DISTINCT …)`); null when the type is not compared. */
       distinct: z.number().int().min(0).nullable(),
       /** Long text compared by its first characters: `distinct` is then an estimate (it may count fewer). */
       prefix: z.boolean().default(false),

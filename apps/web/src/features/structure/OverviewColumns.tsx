@@ -6,8 +6,8 @@ import { ErrorBox, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale-screens.ts'
 import { columnProfileQuery, type TableRef } from '@/lib/queries.ts'
+import { columnNotes } from './column-notes.ts'
 import { DistinctValuesDialog } from './DistinctValuesDialog.tsx'
-import { columnNotes } from './table-role.ts'
 
 const t = locale.overview
 

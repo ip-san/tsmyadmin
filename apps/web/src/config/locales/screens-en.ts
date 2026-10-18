@@ -2591,6 +2591,42 @@ export const enScreens = {
     usedByNone: 'No view, routine or trigger uses this',
     openAll: 'See the dependency diagram',
   },
+  databaseMap: {
+    title: (name: string) => `Map: ${name}`,
+    link: 'Map (what each table is for, the tables most referred to, what to look at)',
+    hint: "What tables there are, from every table's definition and its foreign keys (guessed from the keys; no rows are read)",
+    reading: 'Reading the table definitions…',
+    sentences: (parts: readonly string[]) => parts.join('. '),
+    summary: (tables: number, views: number) =>
+      `${tables.toLocaleString('en-US')} ${tables === 1 ? 'table' : 'tables'}, ${views.toLocaleString('en-US')} ${views === 1 ? 'view' : 'views'}`,
+    failed: (names: readonly string[], more: number) =>
+      `Tables and views whose definitions could not be read (not counted): ${names.join(', ')}${more > 0 ? ` and ${more.toLocaleString('en-US')} more` : ''}`,
+    readAgain: 'Read the failed tables again',
+    rolesTitle: 'Tables by role',
+    roles: {
+      master: 'Masters (referred to only)',
+      middle: 'Referring and referred to',
+      detail: 'Records and details (referring only)',
+      junction: 'Junction tables (many-to-many)',
+      tree: 'Hierarchies (keyed to themselves only)',
+      isolated: 'Joined to nothing by a foreign key',
+    },
+    roleCount: (role: string, n: number) => `${role}: ${n.toLocaleString('en-US')}`,
+    hubsTitle: 'Tables most referred to',
+    hubsHint: 'The tables many others point to with a foreign key: good ones to read first',
+    hub: (n: number) => `referred to by ${n.toLocaleString('en-US')} ${n === 1 ? 'table' : 'tables'}`,
+    hubsNone: 'No table is referred to by a foreign key',
+    checksTitle: 'What to look at',
+    noPrimaryKey: 'Tables without a primary key',
+    noPrimaryKeyHint: 'A row cannot be told apart, so rows are hard to edit or delete from the browse view',
+    noPrimaryKeyNone: 'Every table has a primary key',
+    unindexed: 'Foreign keys without an index',
+    unindexedHint:
+      'With no index starting with its columns, every join, and every delete or update of a referred row, reads this whole table (MySQL makes an index for every foreign key, so these are mostly on PostgreSQL)',
+    unindexedKey: (table: string, columns: string, refTable: string) => `${table} (${columns}) → ${refTable}`,
+    unindexedNone: 'Every foreign key has an index',
+    empty: 'There are no tables or views',
+  },
   dictionary: {
     failed: (names: readonly string[]) => `Tables whose definitions could not be read: ${names.join(', ')}`,
     progress: (done: number, all: number) =>

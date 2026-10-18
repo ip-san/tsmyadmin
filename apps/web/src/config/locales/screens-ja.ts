@@ -2567,6 +2567,42 @@ export const jaScreens = {
     usedByNone: 'これを使うビュー・ルーチン・トリガーはありません',
     openAll: '依存関係の図で見る',
   },
+  databaseMap: {
+    title: (name: string) => `見取り図: ${name}`,
+    link: '見取り図（テーブルの役割・よく参照されるテーブル・気をつけるところ）',
+    hint: '全テーブルの定義から、外部キーをもとに、どんなテーブルがあるかをまとめます（キーからの推測です。行は読みません）',
+    reading: 'テーブルの定義を読んでいます…',
+    sentences: (parts: readonly string[]) => parts.join('。'),
+    summary: (tables: number, views: number) =>
+      `テーブル ${tables.toLocaleString('ja-JP')}・ビュー ${views.toLocaleString('ja-JP')}`,
+    failed: (names: readonly string[], more: number) =>
+      `定義を読めなかったテーブル・ビュー（数えていません）: ${names.join('、')}${more > 0 ? ` ほか ${more.toLocaleString('ja-JP')} 件` : ''}`,
+    readAgain: '読めなかったテーブルを読み直す',
+    rolesTitle: '役割ごとのテーブル',
+    roles: {
+      master: 'マスタ（参照されるだけ）',
+      middle: '参照し、参照される',
+      detail: '記録・明細（参照するだけ）',
+      junction: '中間のテーブル（多対多）',
+      tree: '親子の階層（自分だけを参照）',
+      isolated: 'どことも外部キーでつながらない',
+    },
+    roleCount: (role: string, n: number) => `${role}: ${n.toLocaleString('ja-JP')}`,
+    hubsTitle: 'よく参照されるテーブル',
+    hubsHint: 'ほかの多くのテーブルが外部キーで指す、最初に読むとよいテーブル',
+    hub: (n: number) => `${n.toLocaleString('ja-JP')} テーブルから参照`,
+    hubsNone: '外部キーで参照されるテーブルはありません',
+    checksTitle: '気をつけるところ',
+    noPrimaryKey: '主キーの無いテーブル',
+    noPrimaryKeyHint: '行を 1 つに決められないので、表示から行を編集・削除しにくくなります',
+    noPrimaryKeyNone: '主キーの無いテーブルはありません',
+    unindexed: 'インデックスの無い外部キー',
+    unindexedHint:
+      'そのカラムで始まるインデックスが無いと、結合や、参照先の行の削除・更新のたびに、このテーブルを全件読みます（MySQL は外部キーごとにインデックスを自動で作るので、ここに出るのは主に PostgreSQL です）',
+    unindexedKey: (table: string, columns: string, refTable: string) => `${table}（${columns}）→ ${refTable}`,
+    unindexedNone: 'インデックスの無い外部キーはありません',
+    empty: 'テーブルもビューもありません',
+  },
   dictionary: {
     failed: (names: readonly string[]) => `定義を読めなかったテーブル: ${names.join('、')}`,
     progress: (done: number, all: number) =>

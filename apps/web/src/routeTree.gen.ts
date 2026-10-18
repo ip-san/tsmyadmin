@@ -37,6 +37,7 @@ import { Route as AppDbDbDictionaryRouteImport } from './routes/_app/db.$db/dict
 import { Route as AppDbDbEventsRouteImport } from './routes/_app/db.$db/events'
 import { Route as AppDbDbExportRouteImport } from './routes/_app/db.$db/export'
 import { Route as AppDbDbImportRouteImport } from './routes/_app/db.$db/import'
+import { Route as AppDbDbMapRouteImport } from './routes/_app/db.$db/map'
 import { Route as AppDbDbOperationsRouteImport } from './routes/_app/db.$db/operations'
 import { Route as AppDbDbPrivilegesRouteImport } from './routes/_app/db.$db/privileges'
 import { Route as AppDbDbQueryRouteImport } from './routes/_app/db.$db/query'
@@ -199,6 +200,11 @@ const AppDbDbImportRoute = AppDbDbImportRouteImport.update({
   path: '/import',
   getParentRoute: () => AppDbDbRoute,
 } as any)
+const AppDbDbMapRoute = AppDbDbMapRouteImport.update({
+  id: '/map',
+  path: '/map',
+  getParentRoute: () => AppDbDbRoute,
+} as any)
 const AppDbDbOperationsRoute = AppDbDbOperationsRouteImport.update({
   id: '/operations',
   path: '/operations',
@@ -343,6 +349,7 @@ export interface FileRoutesByFullPath {
   '/db/$db/events': typeof AppDbDbEventsRoute
   '/db/$db/export': typeof AppDbDbExportRoute
   '/db/$db/import': typeof AppDbDbImportRoute
+  '/db/$db/map': typeof AppDbDbMapRoute
   '/db/$db/operations': typeof AppDbDbOperationsRoute
   '/db/$db/privileges': typeof AppDbDbPrivilegesRoute
   '/db/$db/query': typeof AppDbDbQueryRoute
@@ -393,6 +400,7 @@ export interface FileRoutesByTo {
   '/db/$db/events': typeof AppDbDbEventsRoute
   '/db/$db/export': typeof AppDbDbExportRoute
   '/db/$db/import': typeof AppDbDbImportRoute
+  '/db/$db/map': typeof AppDbDbMapRoute
   '/db/$db/operations': typeof AppDbDbOperationsRoute
   '/db/$db/privileges': typeof AppDbDbPrivilegesRoute
   '/db/$db/query': typeof AppDbDbQueryRoute
@@ -445,6 +453,7 @@ export interface FileRoutesById {
   '/_app/db/$db/events': typeof AppDbDbEventsRoute
   '/_app/db/$db/export': typeof AppDbDbExportRoute
   '/_app/db/$db/import': typeof AppDbDbImportRoute
+  '/_app/db/$db/map': typeof AppDbDbMapRoute
   '/_app/db/$db/operations': typeof AppDbDbOperationsRoute
   '/_app/db/$db/privileges': typeof AppDbDbPrivilegesRoute
   '/_app/db/$db/query': typeof AppDbDbQueryRoute
@@ -498,6 +507,7 @@ export interface FileRouteTypes {
     | '/db/$db/events'
     | '/db/$db/export'
     | '/db/$db/import'
+    | '/db/$db/map'
     | '/db/$db/operations'
     | '/db/$db/privileges'
     | '/db/$db/query'
@@ -548,6 +558,7 @@ export interface FileRouteTypes {
     | '/db/$db/events'
     | '/db/$db/export'
     | '/db/$db/import'
+    | '/db/$db/map'
     | '/db/$db/operations'
     | '/db/$db/privileges'
     | '/db/$db/query'
@@ -599,6 +610,7 @@ export interface FileRouteTypes {
     | '/_app/db/$db/events'
     | '/_app/db/$db/export'
     | '/_app/db/$db/import'
+    | '/_app/db/$db/map'
     | '/_app/db/$db/operations'
     | '/_app/db/$db/privileges'
     | '/_app/db/$db/query'
@@ -827,6 +839,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppDbDbImportRouteImport
       parentRoute: typeof AppDbDbRoute
     }
+    '/_app/db/$db/map': {
+      id: '/_app/db/$db/map'
+      path: '/map'
+      fullPath: '/db/$db/map'
+      preLoaderRoute: typeof AppDbDbMapRouteImport
+      parentRoute: typeof AppDbDbRoute
+    }
     '/_app/db/$db/operations': {
       id: '/_app/db/$db/operations'
       path: '/operations'
@@ -1025,6 +1044,7 @@ interface AppDbDbRouteChildren {
   AppDbDbEventsRoute: typeof AppDbDbEventsRoute
   AppDbDbExportRoute: typeof AppDbDbExportRoute
   AppDbDbImportRoute: typeof AppDbDbImportRoute
+  AppDbDbMapRoute: typeof AppDbDbMapRoute
   AppDbDbOperationsRoute: typeof AppDbDbOperationsRoute
   AppDbDbPrivilegesRoute: typeof AppDbDbPrivilegesRoute
   AppDbDbQueryRoute: typeof AppDbDbQueryRoute
@@ -1046,6 +1066,7 @@ const AppDbDbRouteChildren: AppDbDbRouteChildren = {
   AppDbDbEventsRoute: AppDbDbEventsRoute,
   AppDbDbExportRoute: AppDbDbExportRoute,
   AppDbDbImportRoute: AppDbDbImportRoute,
+  AppDbDbMapRoute: AppDbDbMapRoute,
   AppDbDbOperationsRoute: AppDbDbOperationsRoute,
   AppDbDbPrivilegesRoute: AppDbDbPrivilegesRoute,
   AppDbDbQueryRoute: AppDbDbQueryRoute,
