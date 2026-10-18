@@ -58,3 +58,13 @@ export const ObjectDependencySchema = z.object({
   dependsOn: z.array(z.object({ kind: z.enum(['table', 'view', 'routine']), name: z.string() })),
 })
 export type ObjectDependency = z.infer<typeof ObjectDependencySchema>
+
+/**
+ * What the views and routines of a namespace depend on (GET /databases/:db/dependencies), to draw: `unsupported`
+ * where the server keeps no such catalog (MariaDB), with no objects then.
+ */
+export const DependencyReportSchema = z.object({
+  status: z.enum(['ok', 'unsupported']),
+  objects: z.array(ObjectDependencySchema),
+})
+export type DependencyReport = z.infer<typeof DependencyReportSchema>

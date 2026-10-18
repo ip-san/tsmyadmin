@@ -2509,6 +2509,7 @@ export const enScreens = {
   },
   overview: {
     whatTitle: 'What this table is',
+    isView: 'A view (what uses it is below, and what it uses on the Dependencies tab)',
     roles: {
       junction: 'It seems to link two or more tables (its primary key is made of foreign key columns)',
       master: 'It seems to be a table others are built on (a master): others refer to it',
@@ -2553,6 +2554,34 @@ export const enScreens = {
     keySentence: (table: string, columns: string, refTable: string) => `${table} (${columns}) → ${refTable}`,
     noNeighbours: 'No foreign key joins it to another table',
     openDesigner: 'See around it in the Designer',
+  },
+  dependencies: {
+    title: 'Dependencies',
+    hint: 'The tables and views that views (and the routines the catalog records) use, and the tables triggers are on. Choose a table or view to see what a change to it reaches',
+    kinds: { table: 'table', view: 'view', routine: 'routine', trigger: 'trigger' },
+    named: (kind: string, name: string) => `${kind} ${name}`,
+    triggerNamed: (name: string, table: string) => `trigger ${name} (on ${table})`,
+    onlyReached: 'Draw only what it reaches',
+    routineNote:
+      "What a routine's body uses is shown only where the catalog records it (PostgreSQL's SQL-standard bodies, say); MySQL does not. A routine may use a table the diagram does not join it to",
+    reads: (from: string, to: string) => `${from} uses ${to}`,
+    fires: (from: string, to: string) => `${from} is on ${to}`,
+    change: 'Change',
+    noTable: '(none)',
+    reaches: (what: string, names: readonly string[]) =>
+      `Changing ${what} reaches ${names.join(', ')} (directly or not)`,
+    reachesNone: (what: string) => `No view, routine or trigger uses ${what}`,
+    diagram: 'Dependency diagram (arrows go from the user to what it uses)',
+    sentences: 'Dependencies in words',
+    legendTable: 'Selected',
+    legendReached: 'What a change reaches',
+    none: 'No view, routine or trigger uses another table or view',
+    unsupported: 'This server (MariaDB) does not record what views and routines use, so only the triggers are shown',
+    triggerNote:
+      'The tables a trigger touches inside are not recorded by the catalog, so only the table it is on is shown',
+    usedBy: 'Used by',
+    usedByNone: 'No view, routine or trigger uses this',
+    openAll: 'See the dependency diagram',
   },
   dictionary: {
     title: (name: string) => `Data dictionary: ${name}`,

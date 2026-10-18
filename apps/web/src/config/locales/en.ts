@@ -196,6 +196,7 @@ export const en = {
     search: 'Search',
     query: 'Query',
     designer: 'Designer',
+    dependencies: 'Dependencies',
     insert: 'Insert',
     browse: 'Browse',
     central: 'Central columns',

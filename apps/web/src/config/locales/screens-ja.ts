@@ -2485,6 +2485,7 @@ export const jaScreens = {
   },
   overview: {
     whatTitle: 'この表は何か',
+    isView: 'ビューです（これを使うものは下に、これが使うものは依存関係のタブにあります）',
     roles: {
       junction: '2 つ以上の表を結ぶ中間の表のようです（主キーが外部キーの列でできています）',
       master: 'ほかの表から参照される、元になる表のようです（マスタ）',
@@ -2529,6 +2530,33 @@ export const jaScreens = {
     keySentence: (table: string, columns: string, refTable: string) => `${table}（${columns}）→ ${refTable}`,
     noNeighbours: '外部キーでつながる表はありません',
     openDesigner: 'デザイナでまわりを見る',
+  },
+  dependencies: {
+    title: '依存関係',
+    hint: 'ビュー（とカタログに記録のあるルーチン）が使う表・ビューと、トリガーが付いている表。表かビューを選ぶと、それを変えたときに影響するものを示します',
+    kinds: { table: '表', view: 'ビュー', routine: 'ルーチン', trigger: 'トリガー' },
+    named: (kind: string, name: string) => `${kind} ${name}`,
+    triggerNamed: (name: string, table: string) => `トリガー ${name}（${table}）`,
+    onlyReached: '影響するものだけを描く',
+    routineNote:
+      'ルーチンの本体が使う表は、カタログに記録があるもの（PostgreSQL の SQL 標準の本体など）だけを示します。MySQL では分かりません。図に無くても、ルーチンが使っていることがあります',
+    reads: (from: string, to: string) => `${from} は ${to} を使います`,
+    fires: (from: string, to: string) => `${from} は ${to} に付いています`,
+    change: '変えるもの',
+    noTable: '（選ばない）',
+    reaches: (what: string, names: readonly string[]) =>
+      `${what} を変えると、${names.join('、')} に影響します（直接・間接）`,
+    reachesNone: (what: string) => `${what} を使うビュー・ルーチン・トリガーはありません`,
+    diagram: '依存関係の図（矢印は、使う側から使われる側へ）',
+    sentences: '依存関係の一覧',
+    legendTable: '選んだもの',
+    legendReached: '影響するもの',
+    none: 'ほかの表やビューを使うビュー・ルーチン・トリガーはありません',
+    unsupported: 'このサーバー（MariaDB）は、ビューとルーチンが何を使うかを記録していないので、トリガーだけを示します',
+    triggerNote: 'トリガーの中身が触る表は、カタログに記録が無いので示していません（付いている表だけ）',
+    usedBy: 'これを使うもの',
+    usedByNone: 'これを使うビュー・ルーチン・トリガーはありません',
+    openAll: '依存関係の図で見る',
   },
   dictionary: {
     title: (name: string) => `データ辞書: ${name}`,

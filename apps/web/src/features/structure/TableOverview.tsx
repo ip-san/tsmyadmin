@@ -21,6 +21,7 @@ import {
 import { useDialect } from '@/lib/session.ts'
 import { OverviewColumns } from './OverviewColumns.tsx'
 import { tableRole } from './table-role.ts'
+import { UsedByCard } from './UsedByCard.tsx'
 
 const t = locale.overview
 /** Rows shown as a sample: enough to see what a row looks like. */
@@ -40,8 +41,15 @@ export function TableOverview({ tableRef }: { tableRef: TableRef }) {
   return (
     <div className="space-y-4">
       <Card title={t.whatTitle}>
-        <p className="text-sm text-ink">{t.roles[guess.role]}</p>
-        <p className="text-xs text-ink-sub">{t.roleWhy(guess.refersTo, guess.referredBy)}</p>
+        {schema.kind === 'table' ? (
+          <>
+            <p className="text-sm text-ink">{t.roles[guess.role]}</p>
+            <p className="text-xs text-ink-sub">{t.roleWhy(guess.refersTo, guess.referredBy)}</p>
+          </>
+        ) : (
+          // A view has no keys of its own to guess from: what it reads is on the dependency card below.
+          <p className="text-sm text-ink">{t.isView}</p>
+        )}
         {schema.comment ? <p className="mt-1 text-sm text-ink">{schema.comment}</p> : null}
         <SizeLine tableRef={tableRef} />
         <UsageLine tableRef={tableRef} />
@@ -55,6 +63,7 @@ export function TableOverview({ tableRef }: { tableRef: TableRef }) {
       <Card title={t.neighbours}>
         <Neighbours tableRef={tableRef} />
       </Card>
+      {schema.kind === 'sequence' ? null : <UsedByCard tableRef={tableRef} view={schema.kind !== 'table'} />}
     </div>
   )
 }
@@ -99,7 +108,7 @@ function SampleRows({ tableRef, schema }: { tableRef: TableRef; schema: TableSch
         </thead>
         <tbody>
           {rows.data.rows.map((row, i) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: a sample of rows read once, not edited or reordered.
+            // A sample of rows read once, not edited or reordered: its place names a row.
             <Tr key={i}>
               {names.map((n, j) => (
                 <Td key={n} className="max-w-48 truncate font-mono text-xs">

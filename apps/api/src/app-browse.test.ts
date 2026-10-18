@@ -7,6 +7,7 @@ import {
   ColumnProfileSchema,
   DdlPreviewResponseSchema,
   DeleteImpactSchema,
+  DependencyReportSchema,
   ExplainResultSchema,
   QueryBuilderResultSchema,
   RelationDefSchema,
@@ -576,6 +577,22 @@ describe('sql & ddl', () => {
     expect(profile.columns.map((c) => c.column)).toEqual(['id', 'name'])
     expect(profile.sampled).toBeGreaterThan(0)
     expect((await h.req('/api/databases/shop/tables/nope/profile')).status).toBe(404)
+  })
+
+  it('reports what the views and routines depend on, and says so where the server keeps no catalog', async () => {
+    const dependencies = [{ kind: 'view' as const, name: 'v', dependsOn: [{ kind: 'table' as const, name: 'users' }] }]
+    const h = harness(fixtureAdapter({ dependencies }))
+    stores.push(h.store)
+    await h.login()
+    const res = await h.req('/api/databases/shop/dependencies?schema=app')
+    expect(res.status).toBe(200)
+    expect(DependencyReportSchema.parse(await res.json())).toEqual({ status: 'ok', objects: dependencies })
+    expect(h.adapter.calls.at(-1)).toEqual({ method: 'listDependencies', args: [{ database: 'shop', schema: 'app' }] })
+    const none = harness(fixtureAdapter({ dependencies: null }))
+    stores.push(none.store)
+    await none.login()
+    const unsupported = await none.req('/api/databases/shop/dependencies')
+    expect(DependencyReportSchema.parse(await unsupported.json())).toEqual({ status: 'unsupported', objects: [] })
   })
 
   it('builds a query from structured choices and validates them', async () => {

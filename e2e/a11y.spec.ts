@@ -506,6 +506,30 @@ for (const t of TARGETS) {
       })
     })
 
+    test('table overview', async ({ page }) => {
+      await login(page, t)
+      await withScratchSpace(page, t, async (space) => {
+        await tablesWithComments(page, space)
+        await sqlOn(page, space, 'INSERT INTO owners VALUES (1, NULL)')
+        await page.goto(tableUrl(space, 'owners', '/overview'))
+        await expect(page.getByRole('table', { name: 'カラムの中身' })).toBeVisible()
+        await expect(page.getByText(/行を数えました/)).toBeVisible()
+        await scan(page)
+      })
+    })
+
+    test('dependency diagram with a table chosen', async ({ page }) => {
+      await login(page, t)
+      await withScratchSpace(page, t, async (space) => {
+        await sqlOn(page, space, 'CREATE TABLE members (id INT PRIMARY KEY)')
+        await sqlOn(page, space, 'CREATE VIEW everyone AS SELECT id FROM members')
+        await page.goto(`/db/${space.database}/dependencies${space.schema ? `?schema=${space.schema}` : ''}`)
+        await page.getByLabel('変えるもの').selectOption({ label: '表 members' })
+        await expect(page.getByRole('status').filter({ hasText: /^表 members を変えると/ })).toBeVisible()
+        await scan(page)
+      })
+    })
+
     test('designer with the references checked', async ({ page }) => {
       await login(page, t)
       const orphaned = await orphanedKey(page, t)

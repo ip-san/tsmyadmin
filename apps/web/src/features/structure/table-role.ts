@@ -8,7 +8,7 @@ import type { ColumnProfile, TableSchema } from '@tsmyadmin/shared'
  * - `middle`: both (orders: they refer to a user, lines refer to them);
  * - `isolated`: no key joins it to another table.
  */
-export type TableRole = 'junction' | 'master' | 'detail' | 'middle' | 'isolated'
+type TableRole = 'junction' | 'master' | 'detail' | 'middle' | 'isolated'
 
 export interface RoleGuess {
   role: TableRole
@@ -37,7 +37,7 @@ export function tableRole(schema: Pick<TableSchema, 'primaryKey' | 'foreignKeys'
 }
 
 /** What stands out about a column in the sample: always NULL, one value only, or a different value in every row. */
-export type ColumnNote = 'allNull' | 'constant' | 'unique'
+type ColumnNote = 'allNull' | 'constant' | 'unique'
 
 /**
  * The notes worth a mark, per column: `allNull` (every row sampled is NULL), `constant` (one value, never NULL),

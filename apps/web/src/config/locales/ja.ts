@@ -193,6 +193,7 @@ export const ja = {
     search: '検索',
     query: 'クエリ',
     designer: 'デザイナ',
+    dependencies: '依存関係',
     insert: '挿入',
     browse: '表示',
     central: 'セントラルカラム',
