@@ -110,6 +110,7 @@ export const DEFAULT_VIEW: DesignerView = {
   fitWidth: false,
   lineStyle: 'curve',
   lineLabels: false,
+  comments: false,
   showLines: true,
 }
 

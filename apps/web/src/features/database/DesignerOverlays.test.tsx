@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { RelationDef, SnapshotDiff } from '@tsmyadmin/shared'
 import type { ReactNode } from 'react'
@@ -14,6 +14,7 @@ vi.mock('@tanstack/react-router', () => ({
 }))
 
 const checked = vi.fn()
+const made = vi.fn()
 /** While set, every check waits for it: to turn the check off halfway. */
 let gate: Promise<void> | undefined
 const diff: SnapshotDiff = {
@@ -28,6 +29,15 @@ const diff: SnapshotDiff = {
 
 vi.mock('@/lib/queries.ts', () => ({
   tablesQuery: () => ({ queryKey: ['tables'] }),
+  // logs.post_id has no foreign key (its key is on user_id): the one candidate, to posts.
+  structureQuery: ({ table }: { table: string }) => ({
+    queryKey: ['structure', table],
+    queryFn: async () => ({
+      name: table,
+      columns: (table === 'logs' ? ['id', 'user_id', 'post_id'] : ['id', 'user_id']).map((name) => ({ name })),
+      primaryKey: ['id'],
+    }),
+  }),
   foreignKeysQuery: () => ({ queryKey: ['fk'] }),
   snapshotDiffQuery: () => ({ queryKey: ['diff'], queryFn: async () => diff }),
   tableUsageQuery: () => ({
@@ -77,6 +87,8 @@ function Harness({ compare, many = false }: { compare?: string | undefined; many
     names: many ? MANY : ['users', 'posts', 'logs'],
     // A key of a table that is not drawn (a view's, say) is not checked.
     keys: many ? MANY.map(key) : [key('posts'), key('posts'), key('logs'), key('elsewhere')],
+    ns: { database: 'shop' },
+    onMakeKey: made,
   })
   const overlay = o.overlay(undefined)
   return (
@@ -158,5 +170,24 @@ describe('useDesignerOverlays', () => {
     gate = undefined
     await new Promise((r) => setTimeout(r, 20))
     expect(checked).toHaveBeenCalledTimes(4)
+  })
+
+  it('lists the references kept by name only when asked, and hands one to the form that adds a key', async () => {
+    made.mockClear()
+    mount()
+    expect(screen.queryByRole('region', { name: t.implicit.title })).toBeNull()
+    await userEvent.click(screen.getByRole('checkbox', { name: t.implicit.toggle }))
+    const listed = await screen.findByText(t.implicit.candidate('logs', 'post_id', 'posts', 'id'))
+    expect(screen.getAllByText(/ → /)).toHaveLength(1)
+    await userEvent.click(within(listed.closest('li') as HTMLElement).getByRole('button', { name: t.implicit.makeKey }))
+    expect(made).toHaveBeenCalledWith(
+      expect.objectContaining({ table: 'logs', columns: ['post_id'], refTable: 'posts' })
+    )
+  })
+
+  it('offers no candidates while comparing', async () => {
+    mount('1')
+    expect(await screen.findByText(t.compare.othersOff)).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: t.implicit.toggle })).toBeDisabled()
   })
 })

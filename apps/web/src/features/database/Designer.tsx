@@ -14,20 +14,19 @@ import {
   drawnRelations,
   makeWidthOf,
   type Point,
-  relationKey,
   snapAll,
   withAllColumns,
 } from '@/components/schema-diagram/layout.ts'
 import { SchemaDiagram } from '@/components/schema-diagram/SchemaDiagram.tsx'
-import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
-import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale-screens.ts'
 import { useDdlFlow } from '@/lib/ddl.ts'
 import { chosenDisplayColumn } from '@/lib/display-column.ts'
 import { readPreference, removePreference, writePreference } from '@/lib/preferences.ts'
 import { foreignKeysQuery, structureQuery, tablesQuery } from '@/lib/queries.ts'
 import { DesignerAddForeignKey } from './DesignerAddForeignKey.tsx'
+import { useDesignerFocus } from './DesignerFocus.tsx'
+import { DesignerKeys } from './DesignerKeys.tsx'
 import { useDesignerOverlays } from './DesignerOverlays.tsx'
 import { DesignerPages } from './DesignerPages.tsx'
 import { DesignerToolbar } from './DesignerToolbar.tsx'
@@ -55,11 +54,18 @@ export function Designer({
   db,
   schema,
   compare,
+  focus,
+  hops = 1,
+  onFocus = () => undefined,
 }: {
   db: string
   schema?: string | undefined
   /** A snapshot to lay over the diagram: what was added, removed and changed since it was taken. */
   compare?: string | undefined
+  /** The table to draw the diagram around, and how many keys out. */
+  focus?: string | undefined
+  hops?: number
+  onFocus?: (focus: string | undefined, hops: number) => void
 }) {
   const { session } = useRouteContext({ from: '/_app' })
   const tables = useQuery(tablesQuery(db, schema))
@@ -101,7 +107,21 @@ export function Designer({
   const structures = useQueries({
     queries: names.map((table) => ({ ...structureQuery({ db, schema, table }), enabled: showAll })),
   })
-  const overlays = useDesignerOverlays({ db, schema, compare, names, keys: keys.data })
+  const ns = schema ? { database: db, schema } : { database: db }
+  const overlays = useDesignerOverlays({
+    db,
+    schema,
+    compare,
+    names,
+    keys: keys.data,
+    ns,
+    onMakeKey: (r) =>
+      setPair({
+        from: { table: r.table, column: r.columns[0] ?? '' },
+        to: { table: r.refTable, column: r.refColumns[0] ?? '' },
+      }),
+  })
+  const focused = useDesignerFocus({ focus, hops, names, onChange: onFocus })
 
   if (tables.isPending || keys.isPending) return <Spinner />
   if (tables.isError) return <ErrorBox error={tables.error} onRetry={() => void tables.refetch()} />
@@ -109,13 +129,15 @@ export function Designer({
   // Views and sequences hold no foreign keys: they would only be boxes with nothing attached.
   if (names.length === 0) return <Notice>{t.noTables}</Notice>
 
-  const drawn = drawnRelations(keys.data, session.dialect, schema ? { database: db, schema } : { database: db }, names)
+  const drawn = drawnRelations(keys.data, session.dialect, ns, names)
   const all = new Map(names.map((n, i) => [n, structures[i]?.data?.columns.map((c) => c.name)]))
   // Comparing with a snapshot draws the tables it had that are gone too, with the keys it recorded for them.
-  const shown = overlays.shape(names, drawn)
+  const whole = overlays.shape(names, drawn)
+  const shown = focused.apply(whole)
   const columns = new Map(
     shown.tables.map((n) => [n, withAllColumns(boxColumns(n, shown.relations), showAll ? all.get(n) : undefined)])
   )
+  const notes = new Map((tables.data ?? []).flatMap((x) => (x.comment ? [[x.name, x.comment] as const] : [])))
   const display = new Map(
     names.flatMap((n) => {
       const chosen = chosenDisplayColumn({ db, schema, table: n })
@@ -127,17 +149,25 @@ export function Designer({
   const widthOf = makeWidthOf({ tables: shown.tables, columns, display, view: shownView })
   // Boxes that list every column are taller than the key columns they are laid out for otherwise.
   const auto = autoLayout(shown.tables, shown.relations, widthOf, (n) => boxHeight(columns.get(n)?.length ?? 0))
-  const positions = { ...(shownView.snap ? snapAll(auto) : auto), ...saved }
+  const positions = focused.positions(shownView.snap ? snapAll(auto) : auto, saved)
   const keep = (next: Record<string, Point>) => {
     setSaved(next)
     // Positions of tables that are gone are dropped, so a table created later under that name starts fresh.
     writePreference(storageKey, Object.fromEntries(Object.entries(next).filter(([name]) => names.includes(name))))
   }
-  const move = (table: string, to: Point, commit: boolean) => {
-    const next = { ...saved, [table]: to }
-    if (commit) keep(next)
-    else setSaved(next)
-  }
+  const move = (table: string, to: Point, commit: boolean) =>
+    focused.move(table, to, commit, (name, at, done) => {
+      const next = { ...saved, [name]: at }
+      if (done) keep(next)
+      else setSaved(next)
+    })
+  // A focused diagram leaves as drawn; otherwise the database's tables (not those of a snapshot compared with).
+  const exported = focused.on
+    ? {
+        tables: shown.tables.filter((n) => names.includes(n)),
+        relations: shown.relations.filter((r) => drawn.includes(r)),
+      }
+    : { tables: names, relations: drawn }
   const pick = (table: string, column: string) => {
     // A table drawn from a snapshot is gone: a key cannot be made to or from it.
     if (!names.includes(table)) return
@@ -169,9 +199,9 @@ export function Designer({
           removePreference(storageKey)
           setSaved({})
         }}
-        svg={() => diagramSvg({ tables: names, relations: drawn, positions, columns, display, view: shownView })}
-        dia={() => diagramDia({ tables: names, relations: drawn, positions, columns, display, view: shownView })}
-        eps={() => diagramEps({ tables: names, relations: drawn, positions, columns, display, view: shownView })}
+        svg={() => diagramSvg({ ...exported, positions, columns, display, view: shownView })}
+        dia={() => diagramDia({ ...exported, positions, columns, display, view: shownView })}
+        eps={() => diagramEps({ ...exported, positions, columns, display, view: shownView })}
         fileBase={db}
         view={view}
         onView={changeView}
@@ -189,6 +219,7 @@ export function Designer({
           }
           onPresetDone={() => setPair(null)}
         />
+        {focused.control}
         {overlays.controls}
       </DesignerToolbar>
       {relate && from ? (
@@ -196,6 +227,7 @@ export function Designer({
           {t.relateFrom(from.table, from.column)}
         </p>
       ) : null}
+      {focused.notice(shown.tables.length, whole.tables.length)}
       {overlays.above}
       <SchemaDiagram
         tables={shown.tables}
@@ -206,56 +238,16 @@ export function Designer({
         onMove={move}
         view={shownView}
         overlay={overlays.overlay(shown.overlay)}
+        notes={notes}
         {...(relate ? { relate: { from, onPick: pick } } : {})}
       />
       {overlays.below}
-      <h3 className="text-sm font-semibold text-ink">{t.relations}</h3>
-      {keys.data.length === 0 ? (
-        <p className="text-sm text-ink-sub">{t.noRelations}</p>
-      ) : (
-        <Table aria-label={t.relations}>
-          <thead>
-            <tr>
-              <Th>{t.table}</Th>
-              <Th>{t.columns}</Th>
-              <Th>{t.references}</Th>
-              <Th>{t.refColumns}</Th>
-              <Th>ON DELETE</Th>
-              <Th>ON UPDATE</Th>
-              <Th>{t.constraint}</Th>
-              {overlays.refsOn ? <Th>{t.refCheck.column}</Th> : null}
-              <Th className="print:hidden">{locale.ddl.actions}</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {keys.data.map((r) => (
-              <Tr key={relationKey(r)}>
-                <Td>{r.table}</Td>
-                <Td>{r.columns.join(', ')}</Td>
-                <Td>{target(r)}</Td>
-                <Td>{r.refColumns.join(', ')}</Td>
-                <Td>{r.onDelete ?? '—'}</Td>
-                <Td>{r.onUpdate ?? '—'}</Td>
-                <Td className="text-ink-sub">{r.name}</Td>
-                {overlays.refsOn ? (
-                  <Td className="tabular-nums">{orphansText(overlays.checks, r.table, r.name) ?? '…'}</Td>
-                ) : null}
-                <Td className="print:hidden">
-                  <Button
-                    size="sm"
-                    variant="danger"
-                    aria-haspopup="dialog"
-                    aria-label={t.dropKey(r.table, r.name)}
-                    onClick={() => flow.preview({ op: 'dropForeignKey', table: r.table, name: r.name })}
-                  >
-                    {t.drop}
-                  </Button>
-                </Td>
-              </Tr>
-            ))}
-          </tbody>
-        </Table>
-      )}
+      <DesignerKeys
+        keys={keys.data}
+        target={target}
+        orphans={overlays.refsOn ? (r) => orphansText(overlays.checks, r.table, r.name) ?? '…' : undefined}
+        onDrop={(r) => flow.preview({ op: 'dropForeignKey', table: r.table, name: r.name })}
+      />
       <div className="space-y-2 print:hidden">
         <h3 className="text-sm font-semibold text-ink">{t.displayColumns}</h3>
         <p className="text-xs text-ink-sub">{showAll ? t.displayColumnsHint : t.displayColumnsNeedColumns}</p>

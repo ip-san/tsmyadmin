@@ -16,6 +16,8 @@ export const DesignerViewSchema = z.object({
   lineLabels: z.boolean().default(false),
   /** false: the lines are left out (only the boxes). */
   showLines: z.boolean().default(true),
+  /** Each table's comment, on a line under its box. */
+  comments: z.boolean().default(false),
 })
 export type DesignerView = z.infer<typeof DesignerViewSchema>
 

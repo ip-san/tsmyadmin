@@ -488,6 +488,20 @@ for (const t of TARGETS) {
       })
     })
 
+    test('designer around one table, with comments and the candidates for keys', async ({ page }) => {
+      await login(page, t)
+      await withScratchSpace(page, t, async (space) => {
+        await tablesWithComments(page, space)
+        await page.goto(
+          `/db/${space.database}/designer${space.schema ? `?schema=${space.schema}&` : '?'}focus=owners&hops=2`
+        )
+        await page.getByRole('checkbox', { name: '表のコメントを出す' }).check()
+        await page.getByRole('checkbox', { name: '外部キーの無い参照の候補' }).check()
+        await expect(page.getByRole('button', { name: '外部キーにする…' })).toHaveCount(1)
+        await scan(page)
+      })
+    })
+
     test('designer with the references checked', async ({ page }) => {
       await login(page, t)
       const orphaned = await orphanedKey(page, t)

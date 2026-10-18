@@ -134,6 +134,30 @@ export const jaScreens = {
       othersOff: 'スナップショットと比べている間は、使われ方と参照の検査は重ねません',
       list: (kind: string, names: readonly string[]) => `${kind}: ${names.join('、')}`,
     },
+    focus: {
+      legend: '図に出す表',
+      around: 'まわりだけ表示',
+      all: 'すべての表',
+      hops: '範囲',
+      hopsN: (n: number) => `${n} 段先まで`,
+      showing: (table: string, hops: number, n: number, total: number) =>
+        `${table} から外部キーを ${hops} 段たどった ${n} 表を表示しています（全 ${total} 表）。動かした箱は保存しません`,
+      missing: (table: string) => `テーブル ${table} が見つからないので、すべての表を表示しています`,
+    },
+    implicit: {
+      toggle: '外部キーの無い参照の候補',
+      toggleHint:
+        '外部キーの無い「名前_id」のカラムから、その名前（か複数形）の表の主キーへ、点線を引きます。名前からの推測です',
+      title: '外部キーの無い参照の候補',
+      legend: '外部キーの無い参照の候補（名前からの推測）',
+      hint: '「名前_id」のカラムで、外部キーが無く、その名前か複数形の表があり、主キーが 1 列のもの。外部キーにするときは、作る SQL を確かめてから実行します',
+      reading: '全テーブルのカラムを読んでいます…',
+      failed: (n: number) => `${n.toLocaleString('ja-JP')} 個の表はカラムを読めなかったので、候補を探していません`,
+      none: '候補はありません',
+      candidate: (table: string, column: string, refTable: string, refColumn: string) =>
+        `${table}.${column} → ${refTable}.${refColumn}`,
+      makeKey: '外部キーにする…',
+    },
     refCheck: {
       check: '参照を検査',
       checkHint:
@@ -177,6 +201,8 @@ export const jaScreens = {
     fitWidthHint: '箱の幅を、表名とカラム名のいちばん長いものに合わせる（上限あり）。自動配置の列の間隔も広がる',
     showLines: '線を表示',
     lineLabels: '線にカラム名を付ける',
+    showComments: '表のコメントを出す',
+    withNote: (label: string, note: string) => `${label}。${note}`,
     lineStyle: '線の形',
     lineStyles: { curve: '曲線', straight: '直線', polyline: '折れ線' },
     fullscreen: '全画面',

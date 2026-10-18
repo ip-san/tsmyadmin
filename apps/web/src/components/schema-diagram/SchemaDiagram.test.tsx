@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react'
 import type { RelationDef } from '@tsmyadmin/shared'
 import { describe, expect, it, vi } from 'vitest'
 import { locale } from '@/config/locale-screens.ts'
-import { relationKey } from './layout.ts'
+import { DEFAULT_VIEW, relationKey } from './layout.ts'
 import { overlayUpTo } from './overlay.ts'
 import { SchemaDiagram } from './SchemaDiagram.tsx'
 
@@ -90,5 +90,16 @@ describe('SchemaDiagram', () => {
     expect(screen.getByText('no parent: 3')).toBeInTheDocument()
     expect(container.querySelector('[data-tone="delete"]')).not.toBeNull()
     expect(container.querySelectorAll('.opacity-30')).toHaveLength(0)
+  })
+
+  it('writes the comment of a table under its box, and in its name, only when asked', () => {
+    const notes = new Map([['users', '会員の一覧']])
+    const { rerender } = render(<SchemaDiagram {...props} onMove={vi.fn()} notes={notes} />)
+    expect(screen.queryByText('会員の一覧')).toBeNull()
+    rerender(<SchemaDiagram {...props} onMove={vi.fn()} notes={notes} view={{ ...DEFAULT_VIEW, comments: true }} />)
+    expect(screen.getAllByText('会員の一覧').length).toBeGreaterThan(0)
+    expect(
+      screen.getByRole('button', { name: locale.designer.withNote(locale.designer.boxLabel('users'), '会員の一覧') })
+    ).toBeInTheDocument()
   })
 })

@@ -25,6 +25,9 @@ const t = locale.designer
 const PAD = 40
 
 const NO_DISPLAY: ReadonlyMap<string, string> = new Map()
+/** Room under a box for its note: one line of small text, inside the gap between stacked boxes. */
+const NOTE_ROOM = 18
+const withNote = (label: string, note: string | undefined) => (note ? t.withNote(label, note) : label)
 
 /**
  * Tables as boxes and foreign keys as lines. Boxes move by dragging or, once focused, with the arrow keys (Shift
@@ -42,6 +45,7 @@ export function SchemaDiagram({
   relate,
   view = DEFAULT_VIEW,
   overlay,
+  notes = NO_DISPLAY,
   label = t.diagram,
 }: {
   tables: readonly string[]
@@ -57,6 +61,8 @@ export function SchemaDiagram({
   view?: DesignerView
   /** Tables, keys and columns lit up; the rest is drawn faint. */
   overlay?: DiagramOverlay | undefined
+  /** A line of text under a box (the table's comment), drawn when `view.comments` is on. */
+  notes?: ReadonlyMap<string, string>
   /** What the diagram is, for a screen reader. */
   label?: string
 }) {
@@ -74,7 +80,14 @@ export function SchemaDiagram({
   )
   const gridId = `grid${useId().replace(/\W/g, '')}`
   const width = Math.max(...tables.map((name) => at(name).x + widthOf(name))) + PAD
-  const height = Math.max(...tables.map((name) => at(name).y + boxHeight(listed(name).length, view.compact))) + PAD
+  // Under the box, in the gap the layout leaves between boxes: it moves no line's end.
+  const noteOf = (table: string) => (view.comments ? notes.get(table) : undefined)
+  const height =
+    Math.max(
+      ...tables.map(
+        (name) => at(name).y + boxHeight(listed(name).length, view.compact) + (noteOf(name) ? NOTE_ROOM : 0)
+      )
+    ) + PAD
   const { startDrag, moveDrag, endDrag, nudge } = useBoxDrag({ at, snap: view.snap, onMove, onGrab: setSelected })
 
   const shown = selected !== null && tables.includes(selected) ? selected : null
@@ -152,6 +165,12 @@ export function SchemaDiagram({
                 </text>
                 <line x1={0} x2={widthOf(name)} y1={HEADER_HEIGHT} y2={HEADER_HEIGHT} className="stroke-line" />
                 {lit?.badge ? <Badge text={lit.badge} right={widthOf(name)} /> : null}
+                {noteOf(name) ? (
+                  <text x={4} y={boxHeight(cols.length, view.compact) + 14} className="fill-ink-sub text-[11px] italic">
+                    {fitText(noteOf(name) ?? '', 11, widthOf(name) - 8)}
+                    <title>{noteOf(name)}</title>
+                  </text>
+                ) : null}
               </>
             )
             const marked = (c: string) => overlay?.columns.get(name)?.has(c) === true
@@ -244,7 +263,10 @@ export function SchemaDiagram({
                 key={name}
                 role="button"
                 tabIndex={0}
-                aria-label={lit?.badge ? t.boxLabelWithBadge(name, lit.badge) : t.boxLabel(name)}
+                aria-label={withNote(
+                  lit?.badge ? t.boxLabelWithBadge(name, lit.badge) : t.boxLabel(name),
+                  noteOf(name)
+                )}
                 transform={`translate(${p.x} ${p.y})`}
                 // touch-none: on a touch screen the gesture moves the box instead of scrolling the diagram.
                 className={`group cursor-move touch-none outline-none ${faint(lit !== undefined)}`}
