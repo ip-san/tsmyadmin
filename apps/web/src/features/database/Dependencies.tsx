@@ -1,18 +1,11 @@
-import { useQuery } from '@tanstack/react-query'
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { type GraphNode, NodeGraph } from '@/components/node-graph/NodeGraph.tsx'
 import { DiagramLegend } from '@/components/schema-diagram/StepNarration.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale-screens.ts'
-import {
-  type DependencyGraph,
-  dependencyGraph,
-  dependencyLabel,
-  dependentsOf,
-  viewNamesOf,
-} from '@/lib/dependencies.ts'
-import { dependenciesQuery, tablesQuery, triggersQuery } from '@/lib/queries.ts'
+import { type DependencyGraph, dependencyLabel, dependentsOf } from '@/lib/dependencies.ts'
+import { useDependencyGraph } from '@/lib/use-dependency-graph.ts'
 
 const t = locale.dependencies
 
@@ -34,19 +27,23 @@ function edgeSentences(graph: DependencyGraph, only?: ReadonlySet<string>): stri
  * read, so a trigger is joined to what it is attached to only; what a routine's body reads is known only where the
  * catalog records it; MariaDB records nothing of what views and routines use.
  */
-export function Dependencies({ db, schema }: { db: string; schema?: string | undefined }) {
-  const report = useQuery(dependenciesQuery(db, schema))
-  const triggers = useQuery(triggersQuery(db, schema))
-  // Which names are views: a trigger on a view is joined to it (the catalog may list the view nowhere else).
-  const tables = useQuery(tablesQuery(db, schema))
-  const [chosen, setChosen] = useState('')
+export function Dependencies({
+  db,
+  schema,
+  focus: start,
+}: {
+  db: string
+  schema?: string | undefined
+  /** The table or view chosen at first (a node's id), from a link. */
+  focus?: string | undefined
+}) {
+  const deps = useDependencyGraph(db, schema)
+  // The start comes from the address; choosing another is not written back (a reload starts from the link again).
+  const [chosen, setChosen] = useState(start ?? '')
   const [onlyReached, setOnlyReached] = useState(false)
-  const graph = useMemo(
-    () => dependencyGraph(report.data?.objects ?? [], triggers.data ?? [], viewNamesOf(tables.data ?? [])),
-    [report.data, triggers.data, tables.data]
-  )
-  if (report.isPending || triggers.isPending || tables.isPending) return <Spinner />
-  if (report.isError) return <ErrorBox error={report.error} onRetry={() => void report.refetch()} />
+  if (deps.pending) return <Spinner />
+  if (deps.failed) return <ErrorBox error={deps.failed.error} onRetry={deps.failed.retry} />
+  const graph = deps.graph
   // What can be changed: a table, or a view (others use views too).
   const changeable = graph.nodes
     .filter((n) => n.kind === 'table' || n.kind === 'view')
@@ -73,14 +70,15 @@ export function Dependencies({ db, schema }: { db: string; schema?: string | und
         <h2 className="text-sm font-semibold text-ink">{t.title}</h2>
         <p className="text-xs text-ink-sub">{t.hint}</p>
       </div>
-      {report.data.status === 'unsupported' ? <Notice>{t.unsupported}</Notice> : null}
-      {/* Without the triggers (not allowed to list them, say), what views and routines use is still drawn. */}
-      {triggers.isError ? <ErrorBox error={triggers.error} onRetry={() => void triggers.refetch()} /> : null}
-      {/* Without the list of tables, a trigger on a view could be drawn as on a table of its name. */}
-      {tables.isError ? <ErrorBox error={tables.error} onRetry={() => void tables.refetch()} /> : null}
+      {deps.status === 'unsupported' ? <Notice>{t.unsupported}</Notice> : null}
+      {/* A part that could not be read (the triggers, the list of tables): the rest is drawn, and this says why. */}
+      {deps.missing.map((m, i) => (
+        // At most two, in a fixed order: the place names one.
+        <ErrorBox key={i} error={m.error} onRetry={m.retry} />
+      ))}
       {graph.edges.length === 0 ? (
         // Not "none" when the triggers could not be read: there may be some.
-        triggers.isError || tables.isError ? null : (
+        deps.missing.length > 0 ? null : (
           <p className="text-sm text-ink-sub">{t.none}</p>
         )
       ) : (

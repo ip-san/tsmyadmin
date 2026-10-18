@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { locale } from '@/config/locale-screens.ts'
+import { dependencyId } from '@/lib/dependencies.ts'
 import { UsedByCard } from './UsedByCard.tsx'
 
 const t = locale.dependencies
@@ -12,7 +13,10 @@ let triggersFail = false
 let triggerList: { name: string; table: string }[] = []
 
 vi.mock('@tanstack/react-router', () => ({
-  Link: ({ children }: { children: ReactNode }) => <a href="/dependencies">{children}</a>,
+  // The address the link goes to, written out: what it carries is what is checked.
+  Link: ({ children, to, params, search }: { children: ReactNode; to: string; params: object; search: object }) => (
+    <a href={`${to}?${JSON.stringify({ params, search })}`}>{children}</a>
+  ),
 }))
 vi.mock('@/lib/queries.ts', () => ({
   dependenciesQuery: () => ({
@@ -98,5 +102,30 @@ describe('UsedByCard', () => {
     } finally {
       tablesFail = false
     }
+  })
+
+  it('links each view to its overview, and opens the diagram with this one chosen', async () => {
+    mount('users')
+    const active = await screen.findByRole('link', { name: t.named(t.kinds.view, 'active') })
+    expect(active.getAttribute('href')).toContain('/overview?')
+    expect(active.getAttribute('href')).toContain('"table":"active"')
+    const all = screen.getByRole('link', { name: t.openAll })
+    expect(all.getAttribute('href')).toContain(JSON.stringify({ focus: dependencyId('table', 'users') }).slice(1, -1))
+  })
+
+  it('names a routine or a trigger without a link, and opens the diagram unchosen for what nothing uses', async () => {
+    triggerList = [{ name: 'stamp', table: 'users' }]
+    try {
+      const { unmount } = mount('users')
+      expect(await screen.findByText(t.triggerNamed('stamp', 'users'))).toBeInTheDocument()
+      expect(screen.queryByRole('link', { name: t.triggerNamed('stamp', 'users') })).toBeNull()
+      unmount()
+    } finally {
+      triggerList = []
+    }
+    // lonely takes no part in any dependency: not in the diagram, so the link chooses nothing.
+    mount('lonely')
+    const all = await screen.findByRole('link', { name: t.openAll })
+    expect(all.getAttribute('href')).not.toContain('focus')
   })
 })

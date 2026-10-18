@@ -102,4 +102,12 @@ describe('SchemaDiagram', () => {
       screen.getByRole('button', { name: locale.designer.withNote(locale.designer.boxLabel('users'), '会員の一覧') })
     ).toBeInTheDocument()
   })
+
+  it('says more about the box selected where asked, under its names', async () => {
+    render(
+      <SchemaDiagram {...props} onMove={vi.fn()} selectedMore={(table) => <a href="#x">{`more on ${table}`}</a>} />
+    )
+    screen.getByRole('button', { name: locale.designer.boxLabel('users') }).focus()
+    expect(await screen.findByRole('link', { name: 'more on users' })).toBeInTheDocument()
+  })
 })

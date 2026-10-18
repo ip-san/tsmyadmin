@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router'
 import type { RelationDef } from '@tsmyadmin/shared'
 import { relationKey } from '@/components/schema-diagram/layout.ts'
 import { Button } from '@/components/ui/Button.tsx'
@@ -73,3 +74,19 @@ export function DesignerKeys({
     </>
   )
 }
+
+/**
+ * The link under a selected box to the table's overview: only for a table of the database, not one drawn from a
+ * snapshot compared with (it is gone).
+ */
+export const overviewLinkFor = (db: string, schema: string | undefined, names: readonly string[]) => (table: string) =>
+  names.includes(table) ? (
+    <Link
+      to="/db/$db/table/$table/overview"
+      params={{ db, table }}
+      search={{ schema }}
+      className="text-xs text-brand underline"
+    >
+      {t.openOverview}
+    </Link>
+  ) : null

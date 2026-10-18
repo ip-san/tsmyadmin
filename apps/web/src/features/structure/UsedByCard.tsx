@@ -1,10 +1,10 @@
-import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { Card } from '@/components/ui/Card.tsx'
 import { ErrorBox, Spinner } from '@/components/ui/Feedback.tsx'
 import { locale } from '@/config/locale-screens.ts'
-import { dependencyGraph, dependencyId, dependencyLabel, dependentsOf, viewNamesOf } from '@/lib/dependencies.ts'
-import { dependenciesQuery, type TableRef, tablesQuery, triggersQuery } from '@/lib/queries.ts'
+import { dependencyId, dependencyLabel, dependentsOf } from '@/lib/dependencies.ts'
+import type { TableRef } from '@/lib/queries.ts'
+import { useDependencyGraph } from '@/lib/use-dependency-graph.ts'
 
 const t = locale.dependencies
 
@@ -15,41 +15,53 @@ const t = locale.dependencies
  */
 export function UsedByCard({ tableRef, view = false }: { tableRef: TableRef; view?: boolean }) {
   const { db, schema, table } = tableRef
-  const report = useQuery(dependenciesQuery(db, schema))
-  const triggers = useQuery(triggersQuery(db, schema))
-  const tables = useQuery(tablesQuery(db, schema))
-  // Held before the checks below narrow the query: a failed list of triggers is said, not a reason to say nothing.
-  const triggerError = triggers.isError ? triggers.error : null
-  const retryTriggers = () => void triggers.refetch()
-  const tablesError = tables.isError ? tables.error : null
-  const retryTables = () => void tables.refetch()
+  const deps = useDependencyGraph(db, schema)
+  const self = dependencyId(view ? 'view' : 'table', table)
   const body = () => {
-    if (report.isPending || triggers.isPending || tables.isPending) return <Spinner />
-    if (report.isError) return <ErrorBox error={report.error} onRetry={() => void report.refetch()} />
-    const reached = dependentsOf(
-      dependencyGraph(report.data.objects, triggers.data ?? [], viewNamesOf(tables.data ?? [])),
-      dependencyId(view ? 'view' : 'table', table)
-    )
+    if (deps.pending) return <Spinner />
+    if (deps.failed) return <ErrorBox error={deps.failed.error} onRetry={deps.failed.retry} />
+    const reached = dependentsOf(deps.graph, self)
     return (
       <div className="space-y-1 p-3 text-sm">
         {reached.length === 0 ? (
-          // Not "nothing" when the triggers could not be read: one may be on it.
-          triggerError || tablesError ? null : (
+          // Not "nothing" when a part could not be read: a trigger may be on it.
+          deps.missing.length > 0 ? null : (
             <p className="text-ink-sub">{t.usedByNone}</p>
           )
         ) : (
           <ul className="list-disc pl-5 text-ink">
             {reached.map((n) => (
-              <li key={n.id}>{dependencyLabel(n)}</li>
+              <li key={n.id}>
+                {/* A view has an overview of its own; a routine or a trigger is named only. */}
+                {n.kind === 'view' ? (
+                  <Link
+                    to="/db/$db/table/$table/overview"
+                    params={{ db, table: n.name }}
+                    search={{ schema }}
+                    className="text-brand underline"
+                  >
+                    {dependencyLabel(n)}
+                  </Link>
+                ) : (
+                  dependencyLabel(n)
+                )}
+              </li>
             ))}
           </ul>
         )}
-        {/* Without the triggers (not allowed to list them, say), what views use is still listed. */}
-        {triggerError ? <ErrorBox error={triggerError} onRetry={retryTriggers} /> : null}
-        {tablesError ? <ErrorBox error={tablesError} onRetry={retryTables} /> : null}
-        {report.data.status === 'unsupported' ? <p className="text-xs text-ink-sub">{t.unsupported}</p> : null}
+        {deps.missing.map((m, i) => (
+          // At most two, in a fixed order: the place names one.
+          <ErrorBox key={i} error={m.error} onRetry={m.retry} />
+        ))}
+        {deps.status === 'unsupported' ? <p className="text-xs text-ink-sub">{t.unsupported}</p> : null}
         <p className="text-xs text-ink-sub">{t.routineNote}</p>
-        <Link to="/db/$db/dependencies" params={{ db }} search={{ schema }} className="text-brand underline">
+        {/* The diagram opens with this one chosen, when it is in the diagram (nothing uses it otherwise). */}
+        <Link
+          to="/db/$db/dependencies"
+          params={{ db }}
+          search={{ schema, focus: deps.graph.nodes.some((n) => n.id === self) ? self : undefined }}
+          className="text-brand underline"
+        >
           {t.openAll}
         </Link>
       </div>

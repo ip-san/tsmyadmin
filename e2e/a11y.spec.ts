@@ -495,10 +495,10 @@ for (const t of TARGETS) {
         await page.goto(
           `/db/${space.database}/designer${space.schema ? `?schema=${space.schema}&` : '?'}focus=owners&hops=2`
         )
-        await page.getByRole('checkbox', { name: '表のコメントを出す' }).check()
+        await page.getByRole('checkbox', { name: 'テーブルのコメントを出す' }).check()
         await page.getByRole('checkbox', { name: '外部キーの無い参照の候補' }).check()
         // Focused on owners, which no key joins: its candidate (from pets) is counted, not listed.
-        await expect(page.getByText(/^この図には、図に出ていない表との候補が 1 件あります/)).toBeVisible()
+        await expect(page.getByText(/^この図には、図に出ていないテーブルとの候補が 1 件あります/)).toBeVisible()
         await scan(page)
         await page.getByRole('combobox', { name: 'まわりだけ表示' }).selectOption('')
         await expect(page.getByRole('button', { name: '外部キーにする…' })).toHaveCount(1)
@@ -524,8 +524,8 @@ for (const t of TARGETS) {
         await sqlOn(page, space, 'CREATE TABLE members (id INT PRIMARY KEY)')
         await sqlOn(page, space, 'CREATE VIEW everyone AS SELECT id FROM members')
         await page.goto(`/db/${space.database}/dependencies${space.schema ? `?schema=${space.schema}` : ''}`)
-        await page.getByLabel('変えるもの').selectOption({ label: '表 members' })
-        await expect(page.getByRole('status').filter({ hasText: /^表 members を変えると/ })).toBeVisible()
+        await page.getByLabel('変えるもの').selectOption({ label: 'テーブル members' })
+        await expect(page.getByRole('status').filter({ hasText: /^テーブル members を変えると/ })).toBeVisible()
         await scan(page)
       })
     })

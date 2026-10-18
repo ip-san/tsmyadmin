@@ -1,12 +1,11 @@
-import { useQueries } from '@tanstack/react-query'
 import type { Namespace, RelationDef } from '@tsmyadmin/shared'
 import { relationKey } from '@/components/schema-diagram/layout.ts'
 import type { DiagramOverlay } from '@/components/schema-diagram/overlay.ts'
 import { DiagramLegend } from '@/components/schema-diagram/StepNarration.tsx'
 import { Button } from '@/components/ui/Button.tsx'
-import { Spinner } from '@/components/ui/Feedback.tsx'
+import { ErrorBox, Spinner } from '@/components/ui/Feedback.tsx'
 import { locale } from '@/config/locale-screens.ts'
-import { structureQuery } from '@/lib/queries.ts'
+import { useAllStructures } from '@/lib/use-all-structures.ts'
 import { implicitRelations } from './implicit-relations.ts'
 
 const t = locale.designer.implicit
@@ -41,15 +40,22 @@ export function useImplicit({
   on: boolean
   onMakeKey: (candidate: RelationDef) => void
 }) {
-  const structures = useQueries({
-    queries: names.map((table) => ({ ...structureQuery({ db, schema, table }), enabled: on })),
-  })
+  // The same reading as the Designer's "all columns" (one query for both); with other screens, each table's
+  // definition is shared.
+  const structures = useAllStructures(db, schema, names, { enabled: on })
   if (!on) return { relations: [] as RelationDef[], overlay: undefined, panel: () => null }
-  if (structures.some((s) => s.isPending))
-    return { relations: [], overlay: undefined, panel: () => <Spinner label={t.reading} /> }
-  const shapes = structures.flatMap((s) =>
-    s.data ? [{ name: s.data.name, columns: s.data.columns.map((c) => c.name), primaryKey: s.data.primaryKey }] : []
-  )
+  if (structures.isError)
+    return {
+      relations: [],
+      overlay: undefined,
+      panel: () => <ErrorBox error={structures.error} onRetry={() => void structures.refetch()} />,
+    }
+  if (!structures.data) return { relations: [], overlay: undefined, panel: () => <Spinner label={t.reading} /> }
+  const shapes = [...structures.data.byName.values()].map((s) => ({
+    name: s.name,
+    columns: s.columns.map((c) => c.name),
+    primaryKey: s.primaryKey,
+  }))
   const relations = implicitRelations(shapes, keys ?? [], ns)
   const overlay: DiagramOverlay = {
     tables: new Map(),
@@ -57,7 +63,7 @@ export function useImplicit({
     columns: columnsOf(relations),
     fade: false,
   }
-  const failed = structures.filter((s) => s.isError).length
+  const failed = structures.data.failed.length
   /** The list under the diagram: the candidates between the tables drawn (the lines there are), and how many more. */
   const panel = (drawn: readonly string[]) => {
     const listed = relations.filter((r) => drawn.includes(r.table) && drawn.includes(r.refTable))

@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { type ReactNode, useDeferredValue, useId, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
@@ -6,8 +6,8 @@ import { ErrorBox, Spinner } from '@/components/ui/Feedback.tsx'
 import { Field, Input } from '@/components/ui/Field.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale-screens.ts'
-import { eachLimited } from '@/lib/each-limited.ts'
-import { structureQuery, tablesQuery } from '@/lib/queries.ts'
+import { tablesQuery } from '@/lib/queries.ts'
+import { useAllStructures } from '@/lib/use-all-structures.ts'
 import { useDebounced } from '@/lib/use-debounced.ts'
 import { foldTerm, type Hit, indexMetadata, type MetadataMatch, matchMetadata } from './metadata-search.ts'
 
@@ -18,40 +18,41 @@ const SHOWN_MAX = 200
 const ANNOUNCE_MS = 500
 /** Tables named when some could not be read; the rest are counted. */
 const FAILED_NAMED = 5
-/** The definitions are read again after this, or after a change made in this tool (which refreshes everything). */
-const DEFINITIONS_STALE_MS = 5 * 60_000
-
 /**
- * Every table and view described, a few at a time, and indexed for matching once (not on each key typed); the
- * names of those that could not be read.
+ * Every table and view described (a few at a time, kept as long as the other screens that read them all keep
+ * them: `useAllStructures`), and indexed for matching once, not on each key typed; the names of those that could
+ * not be read.
  */
 function useSchemas(db: string, schema: string | undefined, on: boolean) {
-  const queryClient = useQueryClient()
-  return useQuery({
-    queryKey: ['metadata-search', db, schema ?? ''],
-    queryFn: async ({ signal }) => {
-      const tables = await queryClient.fetchQuery(tablesQuery(db, schema))
-      // A sequence has no columns to find.
-      const names = tables.filter((x) => x.kind !== 'sequence').map((x) => x.name)
-      const done = await eachLimited(
-        names,
-        // Kept as long as the index: reading again reads only the tables that failed.
-        (table) =>
-          queryClient.fetchQuery({ ...structureQuery({ db, schema, table }), staleTime: DEFINITIONS_STALE_MS }),
-        {
-          signal,
-        }
-      )
-      const schemas = done.flatMap(({ settled }) => (settled.ok ? [settled.value] : []))
-      return {
-        index: indexMetadata(schemas),
-        tables: schemas.length,
-        failed: done.flatMap(({ item, settled }) => (settled.ok ? [] : [item])),
-      }
-    },
-    enabled: on,
-    staleTime: DEFINITIONS_STALE_MS,
-  })
+  // The list of tables as fresh as the other screens have it (a table made elsewhere is found); the definitions
+  // are what is kept longer.
+  const tables = useQuery({ ...tablesQuery(db, schema), enabled: on })
+  // A sequence has no columns to find.
+  const names = useMemo(
+    () => (tables.data ?? []).filter((x) => x.kind !== 'sequence').map((x) => x.name),
+    [tables.data]
+  )
+  const all = useAllStructures(db, schema, names, { enabled: on && tables.data !== undefined })
+  const listed = tables.data !== undefined
+  const data = useMemo(() => {
+    if (!listed) return undefined
+    if (names.length === 0) return { index: indexMetadata([]), tables: 0, failed: [] as readonly string[] }
+    if (!all.data) return undefined
+    return {
+      index: indexMetadata([...all.data.byName.values()]),
+      tables: all.data.byName.size,
+      failed: all.data.failed,
+    }
+  }, [listed, names, all.data])
+  return {
+    data,
+    isPending: data === undefined && !tables.isError && !all.isError,
+    isError: tables.isError || all.isError,
+    error: tables.error ?? all.error,
+    isFetching: tables.isFetching || all.isFetching,
+    // One reading again: the list when it failed (the definitions follow from it), the definitions otherwise.
+    refetch: () => (tables.isError ? tables.refetch() : all.refetch()),
+  }
 }
 
 /**
@@ -138,8 +139,9 @@ function Results({ db, schema, matches }: { db: string; schema: string | undefin
         {matches.map((m) => (
           <Tr key={JSON.stringify([m.table, m.column])}>
             <Td>
+              {/* A table opens on what it is (its overview); a column on where it is defined (the structure). */}
               <Link
-                to="/db/$db/table/$table/structure"
+                to={m.column === null ? '/db/$db/table/$table/overview' : '/db/$db/table/$table/structure'}
                 params={{ db, table: m.table }}
                 search={{ schema }}
                 className="text-brand underline"
