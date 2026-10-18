@@ -1,62 +1,9 @@
-import type { Namespace, TableSchema } from '@tsmyadmin/shared'
+import type { TableSchema } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
+import { fk, from, index, inShop, table } from '@/test/schema-fixtures.ts'
 import { databaseMap } from './database-map.ts'
 
-const home = (ns: Namespace) => ns.database === 'shop' && ns.schema === undefined
-const mapOf = (schemas: TableSchema[]) => databaseMap(schemas, home)
-const table = (name: string, over: Partial<TableSchema> = {}): TableSchema => ({
-  name,
-  kind: 'table',
-  comment: null,
-  engine: null,
-  rowEstimate: null,
-  partitioned: false,
-  hasChildren: false,
-  inherits: [],
-  collation: null,
-  autoIncrement: null,
-  columns: [],
-  primaryKey: ['id'],
-  indexes: [],
-  foreignKeys: [],
-  referencedBy: [],
-  ...over,
-})
-const fk = (
-  columns: string[],
-  refTable: string,
-  name = `fk_${refTable}`,
-  refNamespace: Namespace = { database: 'shop' }
-): TableSchema['foreignKeys'][number] => ({
-  name,
-  columns,
-  refNamespace,
-  refTable,
-  refColumns: ['id'],
-  onUpdate: null,
-  onDelete: null,
-})
-const from = (fromTable: string): TableSchema['referencedBy'][number] => ({
-  name: `fk_${fromTable}`,
-  fromNamespace: { database: 'shop' },
-  fromTable,
-  fromColumns: ['x_id'],
-  columns: ['id'],
-})
-const index = (
-  columns: string[],
-  over: Partial<TableSchema['indexes'][number]> = {}
-): TableSchema['indexes'][number] => ({
-  name: `ix_${columns.join('_')}`,
-  unique: false,
-  primary: false,
-  columns,
-  type: null,
-  predicate: null,
-  definition: null,
-  lengths: {},
-  ...over,
-})
+const mapOf = (schemas: TableSchema[]) => databaseMap(schemas, inShop)
 
 describe('databaseMap', () => {
   it('sorts the tables into their roles, by name, and counts views apart', () => {
@@ -72,11 +19,39 @@ describe('databaseMap', () => {
     ])
     expect(map.tables).toBe(5)
     expect(map.views).toBe(2)
-    expect(map.roles.master).toEqual(['users'])
-    expect(map.roles.middle).toEqual(['orders'])
-    expect(map.roles.detail).toEqual(['lines'])
-    expect(map.roles.isolated).toEqual(['audit', 'logs'])
-    expect(map.roles.junction).toEqual([])
+    expect(map.roles).toEqual({
+      master: ['users'],
+      middle: ['orders'],
+      detail: ['lines'],
+      junction: [],
+      tree: [],
+      isolated: ['audit', 'logs'],
+    })
+  })
+
+  it('puts a table whose key is two foreign keys among the junctions', () => {
+    const map = mapOf([
+      table('post_tags', {
+        primaryKey: ['post_id', 'tag_id'],
+        foreignKeys: [fk(['post_id'], 'posts'), fk(['tag_id'], 'tags')],
+      }),
+    ])
+    expect(map.roles.junction).toEqual(['post_tags'])
+  })
+
+  it('has nothing in it for no tables, or views only', () => {
+    const nothing = {
+      tables: 0,
+      views: 0,
+      roles: { master: [], middle: [], detail: [], junction: [], tree: [], isolated: [] },
+      hubs: [],
+      noPrimaryKey: [],
+      unindexedKeys: [],
+    }
+    expect(mapOf([])).toEqual(nothing)
+    // A view's keys and indexes (a materialised view has indexes) are not looked at.
+    const view = table('v', { kind: 'materialized_view', primaryKey: [], foreignKeys: [fk(['a'], 'r')] })
+    expect(mapOf([view, table('s', { kind: 'sequence' })])).toEqual({ ...nothing, views: 1 })
   })
 
   it('names the tables referred to most, the most first, ties by name, at most ten', () => {
@@ -86,7 +61,7 @@ describe('databaseMap', () => {
     const map = mapOf([
       table('zed', { referencedBy: [from('a'), from('b')] }),
       table('alpha', { referencedBy: [from('a'), from('b')] }),
-      table('three', { referencedBy: [from('a'), from('b'), from('c'), from('c')] }),
+      table('three', { referencedBy: [from('a'), from('b'), from('c')] }),
       ...many,
     ])
     expect(map.hubs.slice(0, 3)).toEqual([
@@ -94,7 +69,13 @@ describe('databaseMap', () => {
       { table: 'alpha', referredBy: 2 },
       { table: 'zed', referredBy: 2 },
     ])
-    expect(map.hubs).toHaveLength(10)
+    // Ten in all: of the twelve referred to once, the first seven by name.
+    expect(map.hubs.map((h) => h.table).slice(3)).toEqual(['t00', 't01', 't02', 't03', 't04', 't05', 't06'])
+  })
+
+  it('counts a table referring by two keys as one', () => {
+    const map = mapOf([table('users', { referencedBy: [from('posts'), from('posts', { name: 'fk_editor' })] })])
+    expect(map.hubs).toEqual([{ table: 'users', referredBy: 1 }])
   })
 
   it('does not count a table referring to itself as referred to', () => {
@@ -103,6 +84,13 @@ describe('databaseMap', () => {
     ])
     expect(map.hubs).toEqual([])
     expect(map.roles.tree).toEqual(['categories'])
+  })
+
+  it('takes a key to a table of its own name in another schema for a key to another table', () => {
+    const audit = { database: 'shop', schema: 'audit' }
+    const map = mapOf([table('users', { foreignKeys: [fk(['id'], 'users', { refNamespace: audit })] })])
+    expect(map.roles.detail).toEqual(['users'])
+    expect(map.roles.tree).toEqual([])
   })
 
   it('lists the tables without a primary key, not the views', () => {
@@ -121,6 +109,7 @@ describe('databaseMap', () => {
           fk(['product_id'], 'products'), // no index
           fk(['y'], 'whys'), // an index has it second only
           fk(['x', 'z'], 'zeds'), // an index starts with one of the two only
+          fk([], 'nothing'), // no columns (as a catalog may report): nothing to index
         ],
       }),
     ])
@@ -135,39 +124,31 @@ describe('databaseMap', () => {
 
   it('takes a key on more columns than an index has as not indexed', () => {
     const map = mapOf([table('t', { indexes: [index(['a'])], foreignKeys: [fk(['a', 'b'], 'r')] })])
-    expect(map.unindexedKeys).toHaveLength(1)
+    expect(map.unindexedKeys.map((k) => k.refTable)).toEqual(['r'])
   })
 
-  it('does not take a partial, full-text or spatial index for one a join can use', () => {
+  it('does not take a partial, full-text or spatial index for one a join can use, however the type is written', () => {
     const map = mapOf([
       table('t', {
         indexes: [
           index(['a'], { predicate: 'deleted_at IS NULL' }),
           index(['b'], { type: 'FULLTEXT' }),
-          index(['c'], { type: 'SPATIAL' }),
+          index(['c'], { type: 'spatial' }),
           index(['d'], { type: 'BTREE' }),
+          // Names that only start or end like them are other types.
+          index(['e'], { type: 'fulltext_ish' }),
+          index(['f'], { type: 'nonspatial' }),
         ],
-        foreignKeys: [fk(['a'], 'ra'), fk(['b'], 'rb'), fk(['c'], 'rc'), fk(['d'], 'rd')],
+        foreignKeys: [
+          fk(['a'], 'ra'),
+          fk(['b'], 'rb'),
+          fk(['c'], 'rc'),
+          fk(['d'], 'rd'),
+          fk(['e'], 're'),
+          fk(['f'], 'rf'),
+        ],
       }),
     ])
     expect(map.unindexedKeys.map((k) => k.refTable)).toEqual(['ra', 'rb', 'rc'])
-  })
-
-  it('calls a table whose key is two foreign keys a junction', () => {
-    const map = mapOf([
-      table('post_tags', {
-        primaryKey: ['post_id', 'tag_id'],
-        foreignKeys: [fk(['post_id'], 'posts'), fk(['tag_id'], 'tags')],
-      }),
-    ])
-    expect(map.roles.junction).toEqual(['post_tags'])
-  })
-
-  it('takes a key to a table of its own name in another schema for a key to another table', () => {
-    const map = mapOf([
-      table('users', { foreignKeys: [fk(['id'], 'users', 'fk', { database: 'shop', schema: 'audit' })] }),
-    ])
-    expect(map.roles.detail).toEqual(['users'])
-    expect(map.roles.tree).toEqual([])
   })
 })

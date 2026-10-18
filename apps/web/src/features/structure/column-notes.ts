@@ -18,7 +18,8 @@ export function columnNotes(profile: ColumnProfile): Map<string, ColumnNote> {
     // Counted by its first characters, a column may hold more values than it says: nothing is said of how many.
     else if (c.prefix) continue
     else if (c.distinct === 1 && c.nulls === 0) out.set(c.column, 'constant')
-    else if (c.distinct !== null && present > 1 && c.distinct === profile.sampled) out.set(c.column, 'unique')
+    // As many values as rows, so none NULL; one row is caught as one value above, so this is two rows or more.
+    else if (c.distinct === profile.sampled) out.set(c.column, 'unique')
   }
   return out
 }

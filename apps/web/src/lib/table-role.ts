@@ -6,10 +6,13 @@ import type { Namespace, TableSchema } from '@tsmyadmin/shared'
  * - `master`: others refer to it, it refers to none (users, products);
  * - `detail`: it refers to others, none refer to it (order lines, logs);
  * - `middle`: both (orders: they refer to a user, lines refer to them);
- * - `tree`: its only keys are to itself (a parent row of its own; a self-referring table others refer to is a master, say, with `self`);
+ * - `tree`: its only keys are to itself (a parent row of its own; a self-referring table others refer to is a
+ *   master, say, with `self`);
  * - `isolated`: no key joins it to another table.
+ * In the order they are read: what the rest hangs from first, what joins to nothing last.
  */
-export type TableRole = 'junction' | 'master' | 'detail' | 'middle' | 'tree' | 'isolated'
+export const TABLE_ROLES = ['master', 'middle', 'detail', 'junction', 'tree', 'isolated'] as const
+export type TableRole = (typeof TABLE_ROLES)[number]
 
 export interface RoleGuess {
   role: TableRole

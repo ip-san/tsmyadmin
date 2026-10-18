@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/Button.tsx'
 import { Badge, ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale-screens.ts'
+import { namespaceOf } from '@/lib/home-namespace.ts'
 import { userLabel, userRef } from '@/lib/user-ops.ts'
 import { useAccountGrants, usePrivilegeDialogs } from './account-privileges.tsx'
 import { globalPrivilegeLevel, privilegeLevel } from './privilege-level.ts'
@@ -24,7 +25,7 @@ export function PrivilegesPage({ db, schema, dialect }: { db: string; schema?: s
   const { users, logins, grants } = useAccountGrants(db, schema, selectLevels)
   if (users.isPending) return <Spinner />
   if (users.isError) return <ErrorBox error={users.error} onRetry={() => void users.refetch()} />
-  const target = schema ? { database: db, schema } : { database: db }
+  const target = namespaceOf(db, schema)
   return (
     <div className="space-y-3">
       <h2 className="text-sm font-semibold text-ink">{locale.users.privilegesTitle(db, schema)}</h2>

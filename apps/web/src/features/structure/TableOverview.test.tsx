@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
-import { beforeAll, describe, expect, it, vi } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { locale } from '@/config/locale-screens.ts'
 import { TableOverview } from './TableOverview.tsx'
 
@@ -14,6 +14,8 @@ vi.mock('@tanstack/react-router', () => ({
 vi.mock('@/lib/session.ts', () => ({ useDialect: () => 'mysql' }))
 
 let kind = 'table'
+/** The keys of posts, when a test gives it others. */
+let keys: object[] | null = null
 const posts = {
   name: 'posts',
   kind: 'table',
@@ -48,7 +50,10 @@ const key = (table: string, refTable: string) => ({
 })
 
 vi.mock('@/lib/queries.ts', () => ({
-  structureQuery: () => ({ queryKey: ['structure'], queryFn: async () => ({ ...posts, kind }) }),
+  structureQuery: () => ({
+    queryKey: ['structure'],
+    queryFn: async () => ({ ...posts, kind, ...(keys ? { foreignKeys: keys } : {}) }),
+  }),
   tableStatsQuery: () => ({
     queryKey: ['stats'],
     queryFn: async () => ({ rowEstimate: 3, totalBytes: 16384, updatedAt: null }),
@@ -105,6 +110,10 @@ const mount = () =>
   )
 
 describe('TableOverview', () => {
+  beforeEach(() => {
+    keys = null
+  })
+
   beforeAll(() => {
     HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) {
       this.open = true
@@ -112,6 +121,21 @@ describe('TableOverview', () => {
     HTMLDialogElement.prototype.close = function (this: HTMLDialogElement) {
       this.open = false
     }
+  })
+
+  it('takes a key to a table of its name in another database for a key to another table, not to itself', async () => {
+    keys = [
+      {
+        name: 'fk_old',
+        columns: ['old_id'],
+        refNamespace: { database: 'archive' },
+        refTable: 'posts',
+        refColumns: ['id'],
+      },
+    ]
+    mount()
+    expect(await screen.findByText(t.roles.detail)).toBeInTheDocument()
+    expect(screen.getByText(t.roleWhy(1, 0))).toBeInTheDocument()
   })
 
   it('says what the table is from its keys, with its comment, size and reads', async () => {

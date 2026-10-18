@@ -1,162 +1,230 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import type { TableSchema } from '@tsmyadmin/shared'
+import type { Dialect, TableSchema } from '@tsmyadmin/shared'
 import type { ReactNode } from 'react'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { locale as common } from '@/config/locale.ts'
 import { locale } from '@/config/locale-screens.ts'
+import { fk, from, table } from '@/test/schema-fixtures.ts'
 import { DatabaseMap } from './DatabaseMap.tsx'
 
 const t = locale.databaseMap
-let failing = new Set<string>()
 
-const table = (name: string, over: Partial<TableSchema> = {}): TableSchema => ({
-  name,
-  kind: 'table',
-  comment: null,
-  engine: null,
-  rowEstimate: null,
-  partitioned: false,
-  hasChildren: false,
-  inherits: [],
-  collation: null,
-  autoIncrement: null,
-  columns: [],
-  primaryKey: ['id'],
-  indexes: [],
-  foreignKeys: [],
-  referencedBy: [],
-  ...over,
-})
-const schemas: Record<string, TableSchema> = {
-  users: table('users', {
-    referencedBy: [
-      {
-        name: 'fk',
-        fromNamespace: { database: 'shop' },
-        fromTable: 'orders',
-        fromColumns: ['user_id'],
-        columns: ['id'],
-      },
-    ],
-  }),
-  orders: table('orders', {
-    foreignKeys: [
-      {
-        name: 'fk',
-        columns: ['user_id'],
-        refNamespace: { database: 'shop' },
-        refTable: 'users',
-        refColumns: ['id'],
-        onUpdate: null,
-        onDelete: null,
-      },
-    ],
-  }),
-  logs: table('logs', { primaryKey: [] }),
+/** What the mocked API answers, set afresh for each test. */
+let dialect: Dialect
+let listed: { name: string; kind: TableSchema['kind'] }[] | Error
+let schemas: Record<string, TableSchema>
+let failing: Set<string>
+let reads: string[]
+/** A reading held until the test lets it go, to look at the page while it reads. */
+let hold: Promise<void> | null
+
+/** users ← orders (a key without an index), and logs without a primary key; a sequence the map leaves out. */
+function shop() {
+  schemas = {
+    users: table('users', { referencedBy: [from('orders')] }),
+    orders: table('orders', { foreignKeys: [fk(['user_id'], 'users')] }),
+    logs: table('logs', { primaryKey: [] }),
+  }
+  listed = [
+    ...Object.keys(schemas).map((name) => ({ name, kind: 'table' as const })),
+    { name: 'seq', kind: 'sequence' },
+  ]
 }
 
+beforeEach(() => {
+  dialect = 'mysql'
+  failing = new Set()
+  reads = []
+  hold = null
+  shop()
+})
+
 vi.mock('@tanstack/react-router', () => ({
-  Link: ({ children, to, params }: { children: ReactNode; to: string; params: object }) => (
-    <a href={`${to}?${JSON.stringify(params)}`}>{children}</a>
+  // The address the link goes to, written out: what it carries is what is checked.
+  Link: ({ children, to, params, search }: { children: ReactNode; to: string; params: object; search: object }) => (
+    <a href={`${to}?${JSON.stringify({ params, search })}`}>{children}</a>
   ),
 }))
-vi.mock('@/lib/session.ts', () => ({ useDialect: () => 'mysql' }))
+// Counts the readings of all the definitions: a second press must join the one under way, not start another.
+const readings = vi.hoisted(() => ({ count: 0 }))
+vi.mock('@/lib/each-limited.ts', async (actual) => {
+  const real = await actual<typeof import('@/lib/each-limited.ts')>()
+  return {
+    eachLimited: (...args: Parameters<typeof real.eachLimited>) => {
+      readings.count += 1
+      return real.eachLimited(...args)
+    },
+  }
+})
+vi.mock('@/lib/session.ts', () => ({ useDialect: () => dialect }))
 vi.mock('@/lib/queries.ts', () => ({
   tablesQuery: () => ({
     queryKey: ['tables'],
-    queryFn: async () => [
-      ...Object.keys(schemas).map((name) => ({ name, kind: 'table' })),
-      { name: 'seq', kind: 'sequence' },
-    ],
+    queryFn: async () => {
+      if (listed instanceof Error) throw listed
+      return listed
+    },
   }),
   structureQuery: ({ table: name }: { table: string }) => ({
     queryKey: ['structure', name],
     queryFn: async () => {
+      reads.push(name)
+      if (hold) await hold
       if (failing.has(name)) throw new Error('cannot read')
       return schemas[name]
     },
   }),
 }))
 
-const mount = () =>
+const mount = (schema?: string) =>
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <DatabaseMap db="shop" schema={undefined} />
+      <DatabaseMap db="shop" schema={schema} />
     </QueryClientProvider>
   )
+const status = () => screen.getByRole('status')
+const saysAtLast = (text: string) => waitFor(() => expect(status()).toHaveTextContent(text))
+const address = (to: string, params: object, search: object) => `${to}?${JSON.stringify({ params, search })}`
 
 describe('DatabaseMap', () => {
   it('says what it is reading on the one status line there from the start', async () => {
     mount()
-    expect(screen.getByRole('status')).toHaveTextContent(t.reading)
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(t.summary(3, 0)))
+    expect(status()).toHaveTextContent(t.reading)
+    await saysAtLast(t.summary(3, 0))
+    // That alone: no tables to name as failed, nothing being read.
+    expect(status().textContent).toBe(t.summary(3, 0))
     expect(screen.getAllByRole('status')).toHaveLength(1)
+    expect(screen.getByRole('heading', { name: t.title('shop') })).toBeInTheDocument()
   })
 
-  it('says how many tables there are, by role, with each linked to its overview', async () => {
+  it('sorts the tables by role, each linked to its overview, and lists no role no table has', async () => {
     mount()
-    expect(await screen.findByText(t.summary(3, 0))).toHaveAttribute('role', 'status')
-    const masters = screen.getByRole('list', { name: t.roles.master })
-    const users = within(masters).getByRole('link', { name: 'users' })
-    expect(users.getAttribute('href')).toContain('/overview?')
-    expect(within(screen.getByRole('list', { name: t.roles.detail })).getByText('orders')).toBeInTheDocument()
-    // A role no table has is not listed.
+    const masters = await screen.findByRole('list', { name: t.roles.master })
+    expect(within(masters).getByRole('link', { name: 'users' })).toHaveAttribute(
+      'href',
+      address('/db/$db/table/$table/overview', { db: 'shop', table: 'users' }, {})
+    )
+    expect(within(screen.getByRole('list', { name: t.roles.detail })).getByRole('link')).toHaveTextContent('orders')
     expect(screen.queryByRole('list', { name: t.roles.junction })).toBeNull()
   })
 
-  it('names the tables most referred to, and what to look at', async () => {
-    mount()
+  it('names the tables most referred to and what to look at, a key without an index linked to the structure', async () => {
+    mount('sales')
     const hubs = await screen.findByRole('list', { name: t.hubsTitle })
-    expect(within(hubs).getByText(t.hub(1))).toBeInTheDocument()
+    // The schema named, not the database.
+    expect(screen.getByRole('heading', { name: t.title('sales') })).toBeInTheDocument()
+    expect(within(hubs).getByRole('listitem')).toHaveTextContent(`users ${t.hub(1)}`)
+    expect(within(hubs).getByRole('link', { name: 'users' })).toHaveAttribute(
+      'href',
+      address('/db/$db/table/$table/overview', { db: 'shop', table: 'users' }, { schema: 'sales' })
+    )
     const keyless = screen.getByRole('region', { name: t.noPrimaryKey })
-    expect(within(keyless).getByRole('link', { name: 'logs' })).toBeInTheDocument()
+    expect(within(keyless).getByRole('link')).toHaveTextContent('logs')
     const unindexed = screen.getByRole('region', { name: t.unindexed })
-    expect(
-      within(unindexed).getByRole('link', { name: t.unindexedKey('orders', 'user_id', 'users') })
-    ).toBeInTheDocument()
+    expect(within(unindexed).getByRole('link', { name: t.unindexedKey('orders', 'user_id', 'users') })).toHaveAttribute(
+      'href',
+      address('/db/$db/table/$table/structure', { db: 'shop', table: 'orders' }, { schema: 'sales' })
+    )
   })
 
-  it('says which tables could not be read, offers to read them again, and does not say "none"', async () => {
-    failing = new Set(['logs'])
-    try {
-      mount()
-      await waitFor(() =>
-        expect(screen.getByRole('status')).toHaveTextContent(t.sentences([t.summary(2, 0), t.failed(['logs'], 0)]))
-      )
-      expect(screen.getByRole('button', { name: t.readAgain })).toBeInTheDocument()
-      // logs may have no primary key, or a key without an index: not said that there are none.
-      expect(screen.queryByText(t.noPrimaryKeyNone)).toBeNull()
-      expect(screen.getByRole('button', { name: t.readAgain })).not.toHaveAttribute('aria-disabled', 'true')
-    } finally {
-      failing = new Set()
-    }
+  it('says there is none of each when every table was read and nothing is there', async () => {
+    schemas = { a: table('a'), b: table('b') }
+    listed = [
+      { name: 'a', kind: 'table' },
+      { name: 'b', kind: 'table' },
+    ]
+    mount()
+    expect(await screen.findByText(t.hubsNone)).toBeInTheDocument()
+    expect(screen.getByText(t.noPrimaryKeyNone)).toBeInTheDocument()
+    expect(screen.getByText(t.unindexedNone)).toBeInTheDocument()
   })
 
-  it('says none of the other lists are empty while tables are missing, and reads them again when asked', async () => {
+  it('says which tables could not be read and says "none" of nothing while they are missing', async () => {
+    // What was read (logs) has no hub and no foreign key: what was not may have.
     failing = new Set(['users', 'orders'])
-    try {
-      mount()
-      await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(t.summary(1, 0)))
-      // What was read has no hub and no foreign key: what was not may have.
-      expect(screen.queryByText(t.hubsNone)).toBeNull()
-      expect(screen.queryByText(t.unindexedNone)).toBeNull()
-      failing = new Set()
-      fireEvent.click(screen.getByRole('button', { name: t.readAgain }))
-      await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(t.summary(3, 0)))
-      expect(screen.queryByRole('button', { name: t.readAgain })).toBeNull()
-    } finally {
-      failing = new Set()
-    }
+    mount()
+    await saysAtLast(t.sentences([t.summary(1, 0), t.failed(['users', 'orders'], 0)]))
+    expect(screen.queryByText(t.hubsNone)).toBeNull()
+    expect(screen.queryByText(t.unindexedNone)).toBeNull()
+    expect(screen.getByRole('list', { name: t.roles.isolated })).toHaveTextContent('logs')
   })
 
-  it('says "none" when every table was read and nothing is there', async () => {
-    const saved = schemas.logs
-    schemas.logs = table('logs')
-    try {
-      mount()
-      expect(await screen.findByText(t.noPrimaryKeyNone)).toBeInTheDocument()
-    } finally {
-      schemas.logs = saved as TableSchema
+  it('names five of the tables that could not be read, and counts the rest', async () => {
+    const names = ['t1', 't2', 't3', 't4', 't5', 't6', 't7']
+    schemas = {}
+    listed = names.map((name) => ({ name, kind: 'table' }))
+    failing = new Set(names)
+    mount()
+    await saysAtLast(t.failed(names.slice(0, 5), 2))
+  })
+
+  it('reads the tables that failed again once, however quickly it is pressed twice', async () => {
+    failing = new Set(['logs'])
+    mount()
+    const again = await screen.findByRole('button', { name: t.readAgain })
+    failing = new Set()
+    reads = []
+    readings.count = 0
+    let release: () => void = () => undefined
+    hold = new Promise((resolve) => {
+      release = resolve
+    })
+    fireEvent.click(again)
+    fireEvent.click(again)
+    // Said while it reads, the map read before kept.
+    await saysAtLast(t.reading)
+    expect(screen.getByRole('list', { name: t.roles.master })).toBeInTheDocument()
+    fireEvent.click(again)
+    release()
+    await waitFor(() => expect(status()).not.toHaveTextContent(t.reading))
+    expect(status()).toHaveTextContent(t.summary(3, 0))
+    expect(readings.count).toBe(1)
+    expect(reads).toEqual(['logs'])
+    expect(screen.queryByRole('button', { name: t.readAgain })).toBeNull()
+  })
+
+  it('says there is nothing when the database has no tables or views (a sequence is not one)', async () => {
+    listed = [{ name: 'seq', kind: 'sequence' }]
+    mount()
+    await saysAtLast(t.empty)
+    expect(screen.queryByRole('list')).toBeNull()
+    expect(reads).toEqual([])
+  })
+
+  it('counts the views of a database of views only, with no lists', async () => {
+    schemas = { v: table('v', { kind: 'view', primaryKey: [] }) }
+    listed = [{ name: 'v', kind: 'view' }]
+    mount()
+    await saysAtLast(t.summary(0, 1))
+    expect(screen.queryByRole('region', { name: t.noPrimaryKey })).toBeNull()
+  })
+
+  it('shows why the list of tables could not be read, and reads it again when asked', async () => {
+    listed = new Error('no list')
+    mount()
+    expect(await screen.findByText(/no list/)).toBeInTheDocument()
+    expect(status()).toBeEmptyDOMElement()
+    shop()
+    fireEvent.click(screen.getByRole('button', { name: common.common.retry }))
+    await saysAtLast(t.summary(3, 0))
+  })
+
+  it('on PostgreSQL with no schema named, takes public for home, and another schema for elsewhere', async () => {
+    dialect = 'postgres'
+    const pub = { database: 'shop', schema: 'public' }
+    const audit = { database: 'shop', schema: 'audit' }
+    schemas = {
+      users: table('users', { referencedBy: [from('orders', { fromNamespace: pub })] }),
+      orders: table('orders', { foreignKeys: [fk(['user_id'], 'users', { refNamespace: pub })] }),
+      // A key to audit.history from public.history: a key to another table, not a tree.
+      history: table('history', { foreignKeys: [fk(['id'], 'history', { refNamespace: audit })] }),
     }
+    listed = Object.keys(schemas).map((name) => ({ name, kind: 'table' }))
+    mount()
+    expect(await screen.findByRole('list', { name: t.roles.master })).toHaveTextContent('users')
+    const details = within(screen.getByRole('list', { name: t.roles.detail }))
+    expect(details.getAllByRole('link').map((a) => a.textContent)).toEqual(['history', 'orders'])
+    expect(screen.queryByRole('list', { name: t.roles.tree })).toBeNull()
   })
 })

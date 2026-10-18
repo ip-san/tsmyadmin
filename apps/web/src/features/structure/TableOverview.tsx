@@ -12,7 +12,7 @@ import { ErrorBox, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale-screens.ts'
 import { cellToText } from '@/lib/format.ts'
-import { homeNamespace } from '@/lib/home-namespace.ts'
+import { homeNamespace, namespaceOf } from '@/lib/home-namespace.ts'
 import {
   foreignKeysQuery,
   rowsQuery,
@@ -43,8 +43,7 @@ export function TableOverview({ tableRef }: { tableRef: TableRef }) {
   if (structure.isPending) return <Spinner />
   if (structure.isError) return <ErrorBox error={structure.error} onRetry={() => void structure.refetch()} />
   const schema = structure.data
-  const ns = tableRef.schema ? { database: tableRef.db, schema: tableRef.schema } : { database: tableRef.db }
-  const guess = tableRole(schema, homeNamespace(dialect, ns))
+  const guess = tableRole(schema, homeNamespace(dialect, namespaceOf(tableRef.db, tableRef.schema)))
   const read = schema.kind === 'table' || asked
   return (
     <div className="space-y-4">
@@ -157,7 +156,7 @@ function Neighbours({ tableRef }: { tableRef: TableRef }) {
   const keys = useQuery(foreignKeysQuery(db, schema))
   if (keys.isPending) return <Spinner />
   if (keys.isError) return <ErrorBox error={keys.error} onRetry={() => void keys.refetch()} />
-  const ns = schema ? { database: db, schema } : { database: db }
+  const ns = namespaceOf(db, schema)
   const names = [...new Set(keys.data.flatMap((k) => [k.table, k.refTable]).concat(table))]
   const relations = drawnRelations(keys.data, dialect, ns, names)
   const near = neighbourhood(names, relations, table, 1)

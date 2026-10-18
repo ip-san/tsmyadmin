@@ -1,18 +1,13 @@
 import { expect } from '@playwright/test'
-import { login, sqlOn, TARGETS, test, withScratchSpace } from './helpers.ts'
+import { petsAndLogs } from './database-map.ts'
+import { login, TARGETS, test, withScratchSpace } from './helpers.ts'
 
 for (const t of TARGETS) {
   test.describe(`database map (${t.dialect})`, () => {
     test('sorts the tables by role and names what to look at', async ({ page }) => {
       await login(page, t)
       await withScratchSpace(page, t, async (space) => {
-        await sqlOn(page, space, 'CREATE TABLE owners (id INT PRIMARY KEY, name VARCHAR(20))')
-        await sqlOn(
-          page,
-          space,
-          'CREATE TABLE pets (id INT PRIMARY KEY, owner_id INT, FOREIGN KEY (owner_id) REFERENCES owners (id))'
-        )
-        await sqlOn(page, space, 'CREATE TABLE logs (message VARCHAR(20))')
+        await petsAndLogs(page, space)
         const search = space.schema ? `?schema=${space.schema}` : ''
         await page.goto(`/db/${space.database}${search}`)
         await page.getByRole('link', { name: /^見取り図/ }).click()

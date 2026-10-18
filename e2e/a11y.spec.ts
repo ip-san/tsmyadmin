@@ -1,4 +1,5 @@
 import { expect } from '@playwright/test'
+import { petsAndLogs } from './database-map.ts'
 import {
   fillType,
   login,
@@ -491,13 +492,7 @@ for (const t of TARGETS) {
     test('database map, with tables of each role and what to look at', async ({ page }) => {
       await login(page, t)
       await withScratchSpace(page, t, async (space) => {
-        await sqlOn(page, space, 'CREATE TABLE owners (id INT PRIMARY KEY)')
-        await sqlOn(
-          page,
-          space,
-          'CREATE TABLE pets (id INT PRIMARY KEY, owner_id INT, FOREIGN KEY (owner_id) REFERENCES owners (id))'
-        )
-        await sqlOn(page, space, 'CREATE TABLE logs (message VARCHAR(20))')
+        await petsAndLogs(page, space)
         await page.goto(`/db/${space.database}/map${space.schema ? `?schema=${space.schema}` : ''}`)
         // Lists of every kind drawn, filled: roles, the most referred to, a table without a primary key.
         await expect(page.getByRole('list', { name: 'よく参照されるテーブル' })).toContainText('owners')

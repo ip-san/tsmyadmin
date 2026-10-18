@@ -2576,7 +2576,7 @@ export const jaScreens = {
     summary: (tables: number, views: number) =>
       `テーブル ${tables.toLocaleString('ja-JP')}・ビュー ${views.toLocaleString('ja-JP')}`,
     failed: (names: readonly string[], more: number) =>
-      `定義を読めなかったテーブル・ビュー（数えていません）: ${names.join('、')}${more > 0 ? ` ほか ${more.toLocaleString('ja-JP')}` : ''}`,
+      `定義を読めなかったテーブル・ビュー（数えていません）: ${names.join('、')}${more > 0 ? ` ほか ${more.toLocaleString('ja-JP')} 件` : ''}`,
     readAgain: '読めなかったテーブルを読み直す',
     rolesTitle: '役割ごとのテーブル',
     roles: {
