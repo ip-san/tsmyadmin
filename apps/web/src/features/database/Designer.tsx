@@ -132,8 +132,9 @@ export function Designer({
   const drawn = drawnRelations(keys.data, session.dialect, ns, names)
   const all = new Map(names.map((n, i) => [n, structures[i]?.data?.columns.map((c) => c.name)]))
   // Comparing with a snapshot draws the tables it had that are gone too, with the keys it recorded for them.
+  // Focused on the keys there are: a candidate line (a guess) neither draws a table in nor counts.
   const whole = overlays.shape(names, drawn)
-  const shown = focused.apply(whole)
+  const shown = overlays.withCandidates(focused.apply(whole))
   const columns = new Map(
     shown.tables.map((n) => [n, withAllColumns(boxColumns(n, shown.relations), showAll ? all.get(n) : undefined)])
   )
@@ -148,7 +149,10 @@ export function Designer({
   // The boxes are as wide as their names when asked, which moves the columns of the automatic layout apart.
   const widthOf = makeWidthOf({ tables: shown.tables, columns, display, view: shownView })
   // Boxes that list every column are taller than the key columns they are laid out for otherwise.
-  const auto = autoLayout(shown.tables, shown.relations, widthOf, (n) => boxHeight(columns.get(n)?.length ?? 0))
+  // A table's comment, when shown, sits under its box: the layout keeps it clear of the box below.
+  const auto = autoLayout(shown.tables, shown.relations, widthOf, (n) =>
+    boxHeight(columns.get(n)?.length ?? 0, false, shownView.comments && notes.has(n))
+  )
   const positions = focused.positions(shownView.snap ? snapAll(auto) : auto, saved)
   const keep = (next: Record<string, Point>) => {
     setSaved(next)

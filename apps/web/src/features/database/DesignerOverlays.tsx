@@ -96,9 +96,10 @@ export function useDesignerOverlays({
     </>
   )
   return {
-    /** The tables and keys to draw, with the snapshot's overlay when comparing, and the candidates when asked. */
-    shape: (tables: string[], relations: RelationDef[]) => {
-      const s = comparing.shape(tables, relations)
+    /** The tables and keys to draw, with the snapshot's overlay when comparing. */
+    shape: comparing.shape,
+    /** The candidate lines between the tables drawn, when asked for: added last, to what is already drawn. */
+    withCandidates<S extends { tables: string[]; relations: RelationDef[] }>(s: S): S {
       const extra = implicit.relations.filter((r) => s.tables.includes(r.table) && s.tables.includes(r.refTable))
       return extra.length > 0 ? { ...s, relations: [...s.relations, ...extra] } : s
     },

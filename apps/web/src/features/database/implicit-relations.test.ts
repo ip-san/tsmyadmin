@@ -44,7 +44,7 @@ describe('implicitRelations', () => {
 
   it('names candidates so they cannot be taken for a key of the database', () => {
     const [first] = implicitRelations(tables, [], ns)
-    expect(first?.name).toBe('?user_id')
+    expect(first?.name).toBe('\u0000user_id')
     expect(first?.refNamespace).toEqual(ns)
   })
 })

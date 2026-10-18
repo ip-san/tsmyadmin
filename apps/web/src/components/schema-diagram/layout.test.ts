@@ -1,4 +1,5 @@
 import type { RelationDef } from '@tsmyadmin/shared'
+import { DesignerViewSchema } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
 import {
   autoLayout,
@@ -15,6 +16,7 @@ import {
   layeredLayout,
   MAX_BOX_WIDTH,
   makeWidthOf,
+  NOTE_ROOM,
   relationLabel,
   relationPath,
   relationRoute,
@@ -329,5 +331,31 @@ describe('cyclicGroups', () => {
       { from: '9', to: '10' },
     ]
     expect(cyclicGroups(['10', '9'], edges)).toEqual([['9', '10']])
+  })
+})
+
+describe('DesignerViewSchema', () => {
+  it('reads a view saved before comments could be shown, with them off', () => {
+    const saved = {
+      compact: false,
+      snap: true,
+      fitWidth: false,
+      lineStyle: 'curve',
+      lineLabels: false,
+      showLines: true,
+    }
+    expect(DesignerViewSchema.parse(saved)).toEqual({ ...saved, comments: false })
+  })
+})
+
+describe('boxHeight with a note', () => {
+  it('counts the line under the box, compact or not, so the next box is laid out clear of it', () => {
+    expect(boxHeight(2, false, true) - boxHeight(2)).toBe(NOTE_ROOM)
+    expect(boxHeight(0, true, true) - boxHeight(0, true)).toBe(NOTE_ROOM)
+  })
+
+  it('leaves at least the gap and the note between stacked boxes with notes', () => {
+    const p = autoLayout(['a', 'b'], [], undefined, (n) => boxHeight(1, false, n === 'a'))
+    expect((p.b?.y ?? 0) - (p.a?.y ?? 0)).toBeGreaterThanOrEqual(boxHeight(1) + NOTE_ROOM)
   })
 })

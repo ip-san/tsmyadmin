@@ -2,7 +2,6 @@ import type { RelationDef } from '@tsmyadmin/shared'
 import { useState } from 'react'
 import type { Point } from '@/components/schema-diagram/layout.ts'
 import { MAX_HOPS, neighbourhood } from '@/components/schema-diagram/neighbourhood.ts'
-import { Notice } from '@/components/ui/Feedback.tsx'
 import { Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale-screens.ts'
 
@@ -83,11 +82,11 @@ export function useDesignerFocus({
       </fieldset>
     ),
     /** Said above the diagram: what is drawn while focused, or that the table asked for is not here (renamed, dropped). */
-    notice: (drawn: number, total: number) =>
-      missing ? (
-        <Notice>{t.missing(focus ?? '')}</Notice>
-      ) : on ? (
-        <p className="text-xs text-ink-sub">{t.showing(focus ?? '', hops, drawn, total)}</p>
-      ) : null,
+    // A status line from the start (empty without a focus), so a change of focus or reach is heard.
+    notice: (drawn: number, total: number) => (
+      <p role="status" className="text-xs text-ink-sub">
+        {missing ? t.missing(focus ?? '') : on ? t.showing(focus ?? '', hops, drawn, total) : ''}
+      </p>
+    ),
   }
 }

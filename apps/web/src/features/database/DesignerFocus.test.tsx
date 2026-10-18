@@ -83,4 +83,11 @@ describe('useDesignerFocus', () => {
     await userEvent.selectOptions(screen.getByLabelText(t.around), t.all)
     expect(onChange).toHaveBeenLastCalledWith(undefined, 1)
   })
+
+  it('says what it draws in a status line that is there from the start', () => {
+    const { rerender } = render(<Harness />)
+    expect(screen.getByRole('status')).toBeEmptyDOMElement()
+    rerender(<Harness focus="orders" hops={2} />)
+    expect(screen.getByRole('status')).toHaveTextContent(t.showing('orders', 2, 3, 4))
+  })
 })

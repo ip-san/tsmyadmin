@@ -14,8 +14,8 @@ function targetsOf(base: string): string[] {
   return out
 }
 
-/** Marks a candidate's name, so it is never taken for a key of the database. */
-const IMPLICIT_PREFIX = '?'
+/** Marks a candidate's name: no constraint name holds a NUL, so it is never taken for a key of the database. */
+const IMPLICIT_PREFIX = '\u0000'
 
 /**
  * Columns named `<name>_id` that no foreign key holds, as keys to the table of that name (or its plural) whose

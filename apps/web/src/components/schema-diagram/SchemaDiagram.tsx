@@ -25,8 +25,6 @@ const t = locale.designer
 const PAD = 40
 
 const NO_DISPLAY: ReadonlyMap<string, string> = new Map()
-/** Room under a box for its note: one line of small text, inside the gap between stacked boxes. */
-const NOTE_ROOM = 18
 const withNote = (label: string, note: string | undefined) => (note ? t.withNote(label, note) : label)
 
 /**
@@ -84,9 +82,7 @@ export function SchemaDiagram({
   const noteOf = (table: string) => (view.comments ? notes.get(table) : undefined)
   const height =
     Math.max(
-      ...tables.map(
-        (name) => at(name).y + boxHeight(listed(name).length, view.compact) + (noteOf(name) ? NOTE_ROOM : 0)
-      )
+      ...tables.map((name) => at(name).y + boxHeight(listed(name).length, view.compact, noteOf(name) !== undefined))
     ) + PAD
   const { startDrag, moveDrag, endDrag, nudge } = useBoxDrag({ at, snap: view.snap, onMove, onGrab: setSelected })
 

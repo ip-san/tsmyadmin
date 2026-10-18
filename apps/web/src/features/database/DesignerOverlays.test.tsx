@@ -79,14 +79,31 @@ const key = (table: string): RelationDef => ({
 /** The hook's controls and panels, and what overlay it would draw, as text to look for. */
 const MANY = ['t1', 't2', 't3', 't4', 't5', 't6']
 
-function Harness({ compare, many = false }: { compare?: string | undefined; many?: boolean }) {
+function Harness({
+  compare,
+  many = false,
+  postKey = false,
+}: {
+  compare?: string | undefined
+  many?: boolean
+  /** logs.post_id made a key (the candidate taken up). */
+  postKey?: boolean
+}) {
   const o = useDesignerOverlays({
     db: 'shop',
     schema: undefined,
     compare,
     names: many ? MANY : ['users', 'posts', 'logs'],
     // A key of a table that is not drawn (a view's, say) is not checked.
-    keys: many ? MANY.map(key) : [key('posts'), key('posts'), key('logs'), key('elsewhere')],
+    keys: many
+      ? MANY.map(key)
+      : [
+          key('posts'),
+          key('posts'),
+          key('logs'),
+          key('elsewhere'),
+          ...(postKey ? [{ ...key('logs'), name: 'fk_logs_post', columns: ['post_id'], refTable: 'posts' }] : []),
+        ],
     ns: { database: 'shop' },
     onMakeKey: made,
   })
@@ -97,15 +114,19 @@ function Harness({ compare, many = false }: { compare?: string | undefined; many
       {o.above}
       {o.below}
       <p data-testid="lit">{[...(overlay?.relationBadges?.values() ?? [])].join(',')}</p>
+      <p data-testid="lines">
+        {o.withCandidates({ tables: ['logs'], relations: [] }).relations.length}/
+        {o.withCandidates({ tables: ['logs', 'posts'], relations: [] }).relations.length}
+      </p>
     </div>
   )
 }
 
-const mount = (compare?: string, many = false) =>
+const mount = (compare?: string, many = false, postKey = false) =>
   render(
     // The app's client retries nothing either for these (a whole-table read is not run twice on its own).
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <Harness compare={compare} many={many} />
+      <Harness compare={compare} many={many} postKey={postKey} />
     </QueryClientProvider>
   )
 
@@ -189,5 +210,19 @@ describe('useDesignerOverlays', () => {
     mount('1')
     expect(await screen.findByText(t.compare.othersOff)).toBeInTheDocument()
     expect(screen.getByRole('checkbox', { name: t.implicit.toggle })).toBeDisabled()
+  })
+
+  it('adds a candidate line only between tables already drawn', async () => {
+    mount()
+    await userEvent.click(screen.getByRole('checkbox', { name: t.implicit.toggle }))
+    await screen.findByText(t.implicit.candidate('logs', 'post_id', 'posts', 'id'))
+    // With posts not drawn (focused away), the line to it is not added and does not draw posts in.
+    expect(screen.getByTestId('lines')).toHaveTextContent('0/1')
+  })
+
+  it('drops a candidate once a foreign key holds its column', async () => {
+    mount(undefined, false, true)
+    await userEvent.click(screen.getByRole('checkbox', { name: t.implicit.toggle }))
+    expect(await screen.findByText(t.implicit.none)).toBeInTheDocument()
   })
 })

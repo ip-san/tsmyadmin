@@ -28,7 +28,11 @@ function Page() {
       focus={focus}
       hops={hops ?? 1}
       onFocus={(next, n) =>
-        void navigate({ search: (prev) => ({ ...prev, focus: next, hops: next === undefined ? undefined : n }) })
+        // In place: trying a table and a reach is one visit, not one step back each.
+        void navigate({
+          search: (prev) => ({ ...prev, focus: next, hops: next === undefined ? undefined : n }),
+          replace: true,
+        })
       }
     />
   )
