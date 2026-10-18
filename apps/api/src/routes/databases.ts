@@ -3,6 +3,7 @@
  * editing, SQL execution (streamed as NDJSON), DDL preview, export and import. A route validates its input, calls the
  * adapter and returns JSON; anything with rules of its own lives in `lib/`.
  */
+import type { ColumnProfile } from '@tsmyadmin/shared'
 import {
   BrowseQuerySchema,
   CellQuerySchema,
@@ -198,6 +199,13 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
           )
         }
       )
+      .get('/databases/:db/tables/:table/profile', validate('query', SchemaQuerySchema), async (c) => {
+        const q = c.req.valid('query')
+        const profile: ColumnProfile = await c
+          .get('session')
+          .adapter.columnProfile(ns(c.req.param('db'), q.schema), c.req.param('table'))
+        return c.json(profile)
+      })
       .get('/databases/:db/tables/:table/columns/:column/distinct', validate('query', SchemaQuerySchema), async (c) => {
         const q = c.req.valid('query')
         return c.json(

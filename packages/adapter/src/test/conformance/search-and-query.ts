@@ -183,6 +183,45 @@ export function describeSearchAndQuery(env: ConformanceEnv): void {
     })
   })
 
+  describe('columnProfile', () => {
+    it('counts the NULLs and distinct values of each column, and leaves the ones it cannot compare uncounted', async () => {
+      const t = `${scratch}_cp`
+      const blob = dialect === 'mysql' ? 'BLOB' : 'BYTEA'
+      await execOk(`CREATE TABLE ${t} (id INT PRIMARY KEY, colour VARCHAR(10), note VARCHAR(10), data ${blob})`)
+      try {
+        await execOk(
+          `INSERT INTO ${t} (id, colour, note) VALUES (1, 'red', NULL), (2, 'blue', NULL), (3, 'red', 'x'), (4, NULL, NULL)`
+        )
+        const p = await env.db.columnProfile(ns, t)
+        expect(p).toMatchObject({ sampled: 4, capped: false, omitted: 0 })
+        expect(p.columns).toEqual([
+          { column: 'id', nulls: 0, distinct: 4 },
+          { column: 'colour', nulls: 1, distinct: 2 },
+          { column: 'note', nulls: 3, distinct: 1 },
+          { column: 'data', nulls: 4, distinct: null },
+        ])
+        await expect(env.db.columnProfile(ns, `${t}_none`)).rejects.toMatchObject({ code: 'NOT_FOUND' })
+      } finally {
+        await execOk(`DROP TABLE IF EXISTS ${t}`)
+      }
+    })
+
+    it('reads an empty table as no rows', async () => {
+      const t = `${scratch}_cpe`
+      await execOk(`CREATE TABLE ${t} (id INT PRIMARY KEY)`)
+      try {
+        expect(await env.db.columnProfile(ns, t)).toEqual({
+          sampled: 0,
+          capped: false,
+          columns: [{ column: 'id', nulls: 0, distinct: 0 }],
+          omitted: 0,
+        })
+      } finally {
+        await execOk(`DROP TABLE IF EXISTS ${t}`)
+      }
+    })
+  })
+
   describe('distinctValues', () => {
     it('lists each value with its count, most frequent first, NULL included, and refuses an unknown column', async () => {
       const t = `${scratch}_dv`

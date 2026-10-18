@@ -2,6 +2,7 @@ import type {
   BrowseOptions,
   BrowseResult,
   Cell,
+  ColumnProfile,
   DatabaseGrant,
   DatabaseInfo,
   DdlOp,
@@ -60,6 +61,7 @@ import {
 } from '@tsmyadmin/shared'
 import { type Canceller, type Conn, firstResult } from './driver.ts'
 import { bufferToCell, DISPLAY, toDbValue, UNCAPPED } from './sql/cells.ts'
+import { columnProfileOn } from './sql/column-profile.ts'
 import {
   bitLiteral,
   buildKeyWhere,
@@ -332,6 +334,11 @@ export abstract class BaseAdapter implements DatabaseAdapter {
         truncated: rows.length > DISTINCT_VALUES_LIMIT,
       }
     })
+  }
+
+  async columnProfile(ns: Namespace, table: string): Promise<ColumnProfile> {
+    const schema = await this.describeTable(ns, table)
+    return this.withConn(ns, (conn) => columnProfileOn(conn, this.dialect, ns, table, schema.columns))
   }
 
   async searchTable(

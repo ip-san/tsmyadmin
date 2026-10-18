@@ -50,6 +50,12 @@ describe('the read routes of a database and its tables', () => {
       [{ database: 'shop', schema: 's1' }, 'users'],
     ],
     [
+      'the profile of the columns of a table',
+      '/api/databases/shop/tables/users/profile?schema=s1',
+      'columnProfile',
+      [{ database: 'shop', schema: 's1' }, 'users'],
+    ],
+    [
       'the distinct values of a column',
       '/api/databases/shop/tables/users/columns/name/distinct?schema=s1',
       'distinctValues',

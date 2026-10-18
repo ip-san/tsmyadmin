@@ -53,6 +53,7 @@ export const PASSTHROUGH_METHODS = [
   'readCell',
   'searchTable',
   'distinctValues',
+  'columnProfile',
   'insertPreview',
   'checkReferences',
   'tableUsage',
