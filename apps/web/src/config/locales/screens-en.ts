@@ -2525,14 +2525,14 @@ export const enScreens = {
     reachesNone: (what: string) => `No view, routine or trigger uses ${what}`,
     diagram: 'Dependency diagram (arrows go from the user to what it uses)',
     sentences: 'Dependencies in words',
-    legendTable: 'The table chosen',
+    legendTable: 'The one chosen',
     legendReached: 'What a change reaches',
     none: 'No view, routine or trigger uses another table or view',
     unsupported: 'This server (MariaDB) does not record what views and routines use, so only the triggers are shown',
     triggerNote:
       'The tables a trigger touches inside are not recorded by the catalog, so only the table it is on is shown',
     usedBy: 'Used by',
-    usedByNone: 'No view, routine or trigger uses this table',
+    usedByNone: 'No view, routine or trigger uses this',
     openAll: 'See the dependency diagram',
   },
   dictionary: {

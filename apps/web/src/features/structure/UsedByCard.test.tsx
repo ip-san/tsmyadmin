@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { locale } from '@/config/locale-screens.ts'
@@ -22,6 +22,7 @@ vi.mock('@/lib/queries.ts', () => ({
       ],
     }),
   }),
+  tablesQuery: () => ({ queryKey: ['tables'], queryFn: async () => [] }),
   triggersQuery: () => ({
     queryKey: ['triggers'],
     queryFn: async () => {
@@ -58,6 +59,10 @@ describe('UsedByCard', () => {
       mount('users')
       expect(await screen.findByText(/no trigger list/)).toBeInTheDocument()
       expect(screen.getByText(t.named(t.kinds.view, 'active'))).toBeInTheDocument()
+      // Something may be on a table no view uses: not said to be nothing.
+      mount('recent', true)
+      await waitFor(() => expect(screen.getAllByText(/no trigger list/)).toHaveLength(2))
+      expect(screen.queryByText(t.usedByNone)).toBeNull()
     } finally {
       triggersFail = false
     }

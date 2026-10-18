@@ -4,7 +4,7 @@ import { Card } from '@/components/ui/Card.tsx'
 import { ErrorBox, Spinner } from '@/components/ui/Feedback.tsx'
 import { locale } from '@/config/locale-screens.ts'
 import { dependencyGraph, dependencyId, dependencyLabel, dependentsOf } from '@/lib/dependencies.ts'
-import { dependenciesQuery, type TableRef, triggersQuery } from '@/lib/queries.ts'
+import { dependenciesQuery, type TableRef, tablesQuery, triggersQuery } from '@/lib/queries.ts'
 
 const t = locale.dependencies
 
@@ -17,6 +17,7 @@ export function UsedByCard({ tableRef, view = false }: { tableRef: TableRef; vie
   const { db, schema, table } = tableRef
   const report = useQuery(dependenciesQuery(db, schema))
   const triggers = useQuery(triggersQuery(db, schema))
+  const tables = useQuery(tablesQuery(db, schema))
   // Held before the checks below narrow the query: a failed list of triggers is said, not a reason to say nothing.
   const triggerError = triggers.isError ? triggers.error : null
   const retryTriggers = () => void triggers.refetch()
@@ -24,13 +25,20 @@ export function UsedByCard({ tableRef, view = false }: { tableRef: TableRef; vie
     if (report.isPending || triggers.isPending) return <Spinner />
     if (report.isError) return <ErrorBox error={report.error} onRetry={() => void report.refetch()} />
     const reached = dependentsOf(
-      dependencyGraph(report.data.objects, triggers.data ?? []),
+      dependencyGraph(
+        report.data.objects,
+        triggers.data ?? [],
+        (tables.data ?? []).filter((x) => x.kind !== 'table' && x.kind !== 'sequence').map((x) => x.name)
+      ),
       dependencyId(view ? 'view' : 'table', table)
     )
     return (
       <div className="space-y-1 p-3 text-sm">
         {reached.length === 0 ? (
-          <p className="text-ink-sub">{t.usedByNone}</p>
+          // Not "nothing" when the triggers could not be read: one may be on it.
+          triggerError ? null : (
+            <p className="text-ink-sub">{t.usedByNone}</p>
+          )
         ) : (
           <ul className="list-disc pl-5 text-ink">
             {reached.map((n) => (

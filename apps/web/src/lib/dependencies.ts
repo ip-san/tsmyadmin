@@ -38,11 +38,13 @@ export const dependencyId = (kind: DependencyKind, name: string, on?: string) =>
  * Who uses what among the views, routines and triggers of a namespace, and the tables they use. Only what takes
  * part is a node: a table nothing uses is left out (the Designer draws every table). Trigger bodies are not read
  * (the catalog does not say what they touch), so a trigger is joined to what it is attached to only: a view when
- * the catalog knows a view of that name (PostgreSQL's INSTEAD OF triggers), a table otherwise.
+ * there is a view of that name (PostgreSQL's INSTEAD OF triggers), a table otherwise.
  */
 export function dependencyGraph(
   objects: readonly ObjectDependency[],
-  triggers: readonly TriggerInfo[]
+  triggers: readonly TriggerInfo[],
+  /** The views of the namespace (the catalog lists only those that depend on something). */
+  viewNames: Iterable<string> = []
 ): DependencyGraph {
   const nodes = new Map<string, DependencyNode>()
   const add = (kind: DependencyKind, name: string, on?: string) => {
@@ -58,7 +60,7 @@ export function dependencyGraph(
     const from = add(o.kind, o.name)
     for (const d of o.dependsOn) link(from, add(d.kind, d.name), 'reads')
   }
-  const views = new Set([...nodes.values()].filter((n) => n.kind === 'view').map((n) => n.name))
+  const views = new Set([...viewNames, ...[...nodes.values()].filter((n) => n.kind === 'view').map((n) => n.name)])
   for (const tg of triggers) {
     link(add('trigger', tg.name, tg.table), add(views.has(tg.table) ? 'view' : 'table', tg.table), 'fires')
   }

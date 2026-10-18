@@ -6,7 +6,7 @@ import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale-screens.ts'
 import { type DependencyGraph, dependencyGraph, dependencyLabel, dependentsOf } from '@/lib/dependencies.ts'
-import { dependenciesQuery, triggersQuery } from '@/lib/queries.ts'
+import { dependenciesQuery, tablesQuery, triggersQuery } from '@/lib/queries.ts'
 
 const t = locale.dependencies
 
@@ -31,11 +31,18 @@ function edgeSentences(graph: DependencyGraph, only?: ReadonlySet<string>): stri
 export function Dependencies({ db, schema }: { db: string; schema?: string | undefined }) {
   const report = useQuery(dependenciesQuery(db, schema))
   const triggers = useQuery(triggersQuery(db, schema))
+  // Which names are views: a trigger on a view is joined to it (the catalog may list the view nowhere else).
+  const tables = useQuery(tablesQuery(db, schema))
   const [chosen, setChosen] = useState('')
   const [onlyReached, setOnlyReached] = useState(false)
   const graph = useMemo(
-    () => dependencyGraph(report.data?.objects ?? [], triggers.data ?? []),
-    [report.data, triggers.data]
+    () =>
+      dependencyGraph(
+        report.data?.objects ?? [],
+        triggers.data ?? [],
+        (tables.data ?? []).filter((x) => x.kind !== 'table' && x.kind !== 'sequence').map((x) => x.name)
+      ),
+    [report.data, triggers.data, tables.data]
   )
   if (report.isPending || triggers.isPending) return <Spinner />
   if (report.isError) return <ErrorBox error={report.error} onRetry={() => void report.refetch()} />
@@ -69,13 +76,22 @@ export function Dependencies({ db, schema }: { db: string; schema?: string | und
       {/* Without the triggers (not allowed to list them, say), what views and routines use is still drawn. */}
       {triggers.isError ? <ErrorBox error={triggers.error} onRetry={() => void triggers.refetch()} /> : null}
       {graph.edges.length === 0 ? (
-        <p className="text-sm text-ink-sub">{t.none}</p>
+        // Not "none" when the triggers could not be read: there may be some.
+        triggers.isError ? null : (
+          <p className="text-sm text-ink-sub">{t.none}</p>
+        )
       ) : (
         <>
           <div className="flex flex-wrap items-center gap-3">
             <label className="flex items-center gap-2 text-sm text-ink">
               {t.change}
-              <Select value={chosen} onChange={(e) => setChosen(e.target.value)}>
+              <Select
+                value={chosen}
+                onChange={(e) => {
+                  setChosen(e.target.value)
+                  if (e.target.value === '') setOnlyReached(false)
+                }}
+              >
                 <option value="">{t.noTable}</option>
                 {changeable.map((n) => (
                   <option key={n.id} value={n.id}>
@@ -87,7 +103,8 @@ export function Dependencies({ db, schema }: { db: string; schema?: string | und
             <label className="flex items-center gap-1 text-sm text-ink">
               <input
                 type="checkbox"
-                checked={onlyReached}
+                // Off while nothing is chosen, and so when something is chosen again.
+                checked={onlyReached && focus !== undefined}
                 disabled={!focus}
                 onChange={(e) => setOnlyReached(e.target.checked)}
               />

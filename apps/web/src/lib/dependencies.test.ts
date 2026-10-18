@@ -47,6 +47,14 @@ describe('dependencyGraph', () => {
     expect(dependentsOf(g, id('table', 'posts')).map((n) => n.id)).toEqual([id('trigger', 'stamp', 'posts')])
   })
 
+  it('joins a trigger to a view the catalog lists nowhere else, given the names of the views', () => {
+    // A view of constants depends on nothing, so the dependency report does not list it.
+    const g = dependencyGraph([], [trigger('instead', 'constants')], ['constants'])
+    expect(g.edges).toEqual([
+      { from: id('trigger', 'instead', 'constants'), to: id('view', 'constants'), kind: 'fires' },
+    ])
+  })
+
   it('joins a trigger on a view to the view, not to a table of its name', () => {
     const g = dependencyGraph([view('everyone', ['table', 'users'])], [trigger('instead', 'everyone')])
     expect(g.nodes.filter((n) => n.name === 'everyone').map((n) => n.kind)).toEqual(['view'])

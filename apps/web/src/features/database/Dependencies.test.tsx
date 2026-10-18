@@ -14,6 +14,7 @@ let triggersFail = false
 
 vi.mock('@/lib/queries.ts', () => ({
   dependenciesQuery: () => ({ queryKey: ['dependencies'], queryFn: async () => report }),
+  tablesQuery: () => ({ queryKey: ['tables'], queryFn: async () => [] }),
   triggersQuery: () => ({
     queryKey: ['triggers'],
     queryFn: async () => {
@@ -104,5 +105,34 @@ describe('Dependencies', () => {
     mount()
     expect(await screen.findByText(t.none)).toBeInTheDocument()
     expect(screen.queryByRole('img', { name: t.diagram })).toBeNull()
+  })
+
+  it('does not say nothing uses a table when the triggers could not be read', async () => {
+    report = { status: 'ok', objects: [] }
+    triggersFail = true
+    try {
+      mount()
+      expect(await screen.findByText(/no trigger list/)).toBeInTheDocument()
+      expect(screen.queryByText(t.none)).toBeNull()
+    } finally {
+      triggersFail = false
+    }
+  })
+
+  it('turns "only what it reaches" off when nothing is chosen any more', async () => {
+    report = { status: 'ok', objects: [view('active', 'users'), view('other', 'posts')] }
+    triggers = []
+    mount()
+    await screen.findByRole('img', { name: t.diagram })
+    const change = screen.getByLabelText(t.change)
+    await userEvent.selectOptions(change, dependencyId('table', 'users'))
+    const only = screen.getByRole('checkbox', { name: t.onlyReached })
+    await userEvent.click(only)
+    await userEvent.selectOptions(change, '')
+    expect(only).not.toBeChecked()
+    // Chosen again, the whole picture is drawn until asked otherwise.
+    await userEvent.selectOptions(change, dependencyId('table', 'users'))
+    expect(only).not.toBeChecked()
+    expect(screen.getByRole('list', { name: t.sentences })).toHaveTextContent('other')
   })
 })

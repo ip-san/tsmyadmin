@@ -24,10 +24,10 @@ for (const t of TARGETS) {
 
         // The same from the table's structure, with the way to the whole diagram.
         await page.goto(tableUrl(space, 'members', '/structure'))
-        const usedBy = page.locator('section', { has: page.getByRole('heading', { name: 'この表を使うもの' }) })
+        const usedBy = page.locator('section', { has: page.getByRole('heading', { name: 'これを使うもの' }) })
         await expect(usedBy.getByRole('listitem')).toHaveText(['ビュー active', 'ビュー recent'])
         await page.goto(tableUrl(space, 'lone', '/structure'))
-        await expect(page.getByText('この表を使うビュー・ルーチン・トリガーはありません')).toBeVisible()
+        await expect(page.getByText('これを使うビュー・ルーチン・トリガーはありません')).toBeVisible()
       })
     })
   })
