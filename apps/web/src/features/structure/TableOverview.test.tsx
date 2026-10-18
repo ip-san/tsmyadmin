@@ -25,7 +25,15 @@ const posts = {
     { name: 'title', dataType: 'text' },
   ],
   primaryKey: ['id'],
-  foreignKeys: [{ name: 'fk_user', columns: ['user_id'], refTable: 'users', refColumns: ['id'] }],
+  foreignKeys: [
+    {
+      name: 'fk_user',
+      columns: ['user_id'],
+      refNamespace: { database: 'shop' },
+      refTable: 'users',
+      refColumns: ['id'],
+    },
+  ],
   referencedBy: [],
 }
 const key = (table: string, refTable: string) => ({

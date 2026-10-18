@@ -12,6 +12,7 @@ import { ErrorBox, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale-screens.ts'
 import { cellToText } from '@/lib/format.ts'
+import { homeNamespace } from '@/lib/home-namespace.ts'
 import {
   foreignKeysQuery,
   rowsQuery,
@@ -21,8 +22,8 @@ import {
   tableUsageQuery,
 } from '@/lib/queries.ts'
 import { useDialect } from '@/lib/session.ts'
+import { tableRole } from '@/lib/table-role.ts'
 import { OverviewColumns } from './OverviewColumns.tsx'
-import { tableRole } from './table-role.ts'
 import { UsedByCard } from './UsedByCard.tsx'
 
 const t = locale.overview
@@ -36,12 +37,14 @@ const SAMPLE_ROWS = 5
  */
 export function TableOverview({ tableRef }: { tableRef: TableRef }) {
   const structure = useQuery(structureQuery(tableRef))
+  const dialect = useDialect()
   // A view's rows are worked out when read, and a view may be heavy: its rows are read (counted, shown) once asked.
   const [asked, setAsked] = useState(false)
   if (structure.isPending) return <Spinner />
   if (structure.isError) return <ErrorBox error={structure.error} onRetry={() => void structure.refetch()} />
   const schema = structure.data
-  const guess = tableRole(schema)
+  const ns = tableRef.schema ? { database: tableRef.db, schema: tableRef.schema } : { database: tableRef.db }
+  const guess = tableRole(schema, homeNamespace(dialect, ns))
   const read = schema.kind === 'table' || asked
   return (
     <div className="space-y-4">

@@ -25,14 +25,24 @@ function DatabaseStructurePage() {
     <div className="space-y-8">
       <TablesList db={db} schema={schema} />
       {tables.isError ? null : (
-        <Link
-          to="/db/$db/dictionary"
-          params={{ db }}
-          search={schema ? { schema } : {}}
-          className="inline-block text-sm text-blue-700 underline dark:text-blue-300"
-        >
-          {locale.dictionary.link}
-        </Link>
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+          <Link
+            to="/db/$db/map"
+            params={{ db }}
+            search={schema ? { schema } : {}}
+            className="text-blue-700 underline dark:text-blue-300"
+          >
+            {locale.databaseMap.link}
+          </Link>
+          <Link
+            to="/db/$db/dictionary"
+            params={{ db }}
+            search={schema ? { schema } : {}}
+            className="text-blue-700 underline dark:text-blue-300"
+          >
+            {locale.dictionary.link}
+          </Link>
+        </div>
       )}
       {tables.isError ? null : (
         <>
