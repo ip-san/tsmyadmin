@@ -162,7 +162,7 @@ function Neighbours({ tableRef }: { tableRef: TableRef }) {
     <Link
       to="/db/$db/designer"
       params={{ db }}
-      search={{ schema, focus: table, hops: 2 }}
+      search={{ schema, focus: table, hops: 1 }}
       className="text-sm text-brand underline"
     >
       {t.openDesigner}

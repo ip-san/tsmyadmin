@@ -171,4 +171,18 @@ describe('Dependencies', () => {
       tablesFail = false
     }
   })
+
+  it('opens with the table a link names chosen', async () => {
+    report = { status: 'ok', objects: [view('active', 'users')] }
+    triggers = []
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <Dependencies db="shop" focus={dependencyId('table', 'users')} />
+      </QueryClientProvider>
+    )
+    // (The spinner is a status too, so the sentence is looked for, not the first status.)
+    expect(
+      await screen.findByText(t.reaches(t.named(t.kinds.table, 'users'), [t.named(t.kinds.view, 'active')]))
+    ).toHaveAttribute('role', 'status')
+  })
 })

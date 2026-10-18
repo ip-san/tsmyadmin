@@ -1,5 +1,5 @@
 import type { DesignerView, RelationDef } from '@tsmyadmin/shared'
-import { useId, useState } from 'react'
+import { type ReactNode, useId, useState } from 'react'
 import { locale } from '@/config/locale-screens.ts'
 import { Badge, LineBadge } from './Badge.tsx'
 import {
@@ -44,6 +44,7 @@ export function SchemaDiagram({
   view = DEFAULT_VIEW,
   overlay,
   notes = NO_DISPLAY,
+  selectedMore,
   label = t.diagram,
 }: {
   tables: readonly string[]
@@ -61,6 +62,8 @@ export function SchemaDiagram({
   overlay?: DiagramOverlay | undefined
   /** A line of text under a box (the table's comment), drawn when `view.comments` is on. */
   notes?: ReadonlyMap<string, string>
+  /** More to say about the box selected, under its names (a link to the table's overview). */
+  selectedMore?: ((table: string) => ReactNode) | undefined
   /** What the diagram is, for a screen reader. */
   label?: string
 }) {
@@ -287,6 +290,7 @@ export function SchemaDiagram({
         <output aria-live="polite" className="mt-2 block rounded border border-line bg-surface p-2 text-sm">
           <span className="sr-only">{t.selectedBox}: </span>
           <span className="select-text break-all font-semibold text-ink">{shown}</span>
+          {selectedMore ? <span className="ml-2">{selectedMore(shown)}</span> : null}
           {listed(shown).length > 0 ? (
             <ul className="mt-1 select-text space-y-0.5 break-all font-mono text-xs text-ink-sub">
               {listed(shown).map((c) => (

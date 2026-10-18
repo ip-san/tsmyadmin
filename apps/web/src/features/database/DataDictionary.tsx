@@ -1,11 +1,12 @@
-import { useQueries, useQuery } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import type { TableSchema } from '@tsmyadmin/shared'
 import { Printer } from 'lucide-react'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale-screens.ts'
-import { structureQuery, tablesQuery } from '@/lib/queries.ts'
+import { tablesQuery } from '@/lib/queries.ts'
+import { useAllStructures } from '@/lib/use-all-structures.ts'
 
 const t = locale.dictionary
 
@@ -72,7 +73,7 @@ function TableEntry({ schema }: { schema: TableSchema }) {
 export function DataDictionary({ db, schema }: { db: string; schema: string | undefined }) {
   const tables = useQuery(tablesQuery(db, schema))
   const names = (tables.data ?? []).filter((x) => x.kind === 'table' || x.kind === 'view').map((x) => x.name)
-  const structures = useQueries({ queries: names.map((table) => structureQuery({ db, schema, table })) })
+  const structures = useAllStructures(db, schema, names)
   if (tables.isPending) return <Spinner />
   if (tables.isError) return <ErrorBox error={tables.error} onRetry={() => void tables.refetch()} />
   if (names.length === 0) return <Notice>{locale.database.noTables}</Notice>
@@ -86,14 +87,18 @@ export function DataDictionary({ db, schema }: { db: string; schema: string | un
         </Button>
       </div>
       <h2 className="text-lg font-semibold text-ink">{t.title(schema ? `${db}.${schema}` : db)}</h2>
-      {structures.map((s, i) =>
-        s.data ? (
-          <TableEntry key={names[i]} schema={s.data} />
-        ) : s.isError ? (
-          <ErrorBox key={names[i]} error={s.error} />
-        ) : (
-          <Spinner key={names[i]} />
-        )
+      {structures.isError ? (
+        <ErrorBox error={structures.error} onRetry={() => void structures.refetch()} />
+      ) : !structures.data ? (
+        <Spinner />
+      ) : (
+        <>
+          {structures.data.failed.length > 0 ? <Notice>{t.failed(structures.data.failed)}</Notice> : null}
+          {names.flatMap((n) => {
+            const s = structures.data.byName.get(n)
+            return s ? [<TableEntry key={n} schema={s} />] : []
+          })}
+        </>
       )}
     </div>
   )

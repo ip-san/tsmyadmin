@@ -1,4 +1,4 @@
-import { useQueries, useQuery } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { useRouteContext } from '@tanstack/react-router'
 import type { DesignerView, RelationDef } from '@tsmyadmin/shared'
 import { DesignerViewSchema } from '@tsmyadmin/shared'
@@ -23,10 +23,11 @@ import { locale } from '@/config/locale-screens.ts'
 import { useDdlFlow } from '@/lib/ddl.ts'
 import { chosenDisplayColumn } from '@/lib/display-column.ts'
 import { readPreference, removePreference, writePreference } from '@/lib/preferences.ts'
-import { foreignKeysQuery, structureQuery, tablesQuery } from '@/lib/queries.ts'
+import { foreignKeysQuery, tablesQuery } from '@/lib/queries.ts'
+import { useAllStructures } from '@/lib/use-all-structures.ts'
 import { DesignerAddForeignKey } from './DesignerAddForeignKey.tsx'
 import { useDesignerFocus } from './DesignerFocus.tsx'
-import { DesignerKeys } from './DesignerKeys.tsx'
+import { DesignerKeys, overviewLinkFor } from './DesignerKeys.tsx'
 import { useDesignerOverlays } from './DesignerOverlays.tsx'
 import { DesignerPages } from './DesignerPages.tsx'
 import { DesignerToolbar } from './DesignerToolbar.tsx'
@@ -105,9 +106,7 @@ export function Designer({
   const showAll = allColumns || relate
   // Picking a column needs the columns: a compact box has none.
   const shownView = relate ? { ...view, compact: false } : view
-  const structures = useQueries({
-    queries: names.map((table) => ({ ...structureQuery({ db, schema, table }), enabled: showAll })),
-  })
+  const structures = useAllStructures(db, schema, names, { enabled: showAll })
   const ns = schema ? { database: db, schema } : { database: db }
   const overlays = useDesignerOverlays({
     db,
@@ -131,7 +130,7 @@ export function Designer({
   if (names.length === 0) return <Notice>{t.noTables}</Notice>
 
   const drawn = drawnRelations(keys.data, session.dialect, ns, names)
-  const all = new Map(names.map((n, i) => [n, structures[i]?.data?.columns.map((c) => c.name)]))
+  const all = new Map(names.map((n) => [n, structures.data?.byName.get(n)?.columns.map((c) => c.name)]))
   // Comparing with a snapshot draws the tables it had that are gone too, with the keys it recorded for them.
   // Focused on the keys there are: a candidate line (a guess) neither draws a table in nor counts.
   const whole = overlays.shape(names, drawn)
@@ -244,6 +243,7 @@ export function Designer({
         view={shownView}
         overlay={overlays.overlay(shown.overlay)}
         notes={notes}
+        selectedMore={overviewLinkFor(db, schema, names)}
         {...(relate ? { relate: { from, onPick: pick } } : {})}
       />
       {overlays.below(shown.tables)}

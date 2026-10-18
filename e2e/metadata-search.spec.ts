@@ -27,9 +27,16 @@ for (const t of TARGETS) {
         await term.fill('ＯＷＮＥＲ')
         await expect(marked).toHaveText(['owner', 'owner'])
 
-        // The link opens the table's structure.
+        // A column found opens where it is defined; a table found, what it is.
         await results.getByRole('link', { name: 'pets' }).click()
         await expect(page).toHaveURL(/\/table\/pets\/structure/)
+        await page.goBack()
+        await page.getByLabel('探す語').fill('owners')
+        await page
+          .getByRole('table', { name: 'テーブル・カラムの検索結果' })
+          .getByRole('link', { name: 'owners' })
+          .click()
+        await expect(page).toHaveURL(/\/table\/owners\/overview/)
       })
     })
   })

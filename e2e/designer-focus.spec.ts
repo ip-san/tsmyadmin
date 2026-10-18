@@ -31,7 +31,7 @@ for (const t of TARGETS) {
         await expect(box('toys')).toHaveCount(0)
         await expect(box('lone')).toHaveCount(0)
         await expect(
-          page.getByText(/^owners から外部キーを 1 段たどった 2 表を表示しています（全 4 表）/)
+          page.getByText(/^owners から外部キーを 1 段たどった 2 テーブルを表示しています（全 4 テーブル）/)
         ).toBeVisible()
 
         // Back to every table from the control.
@@ -41,8 +41,12 @@ for (const t of TARGETS) {
         // Unfocused, the status line is empty and takes no room between the toolbar and the diagram.
         await expect(page.locator('p[role="status"]:empty').first()).toHaveCSS('margin-bottom', '0px')
 
+        // A box selected links to its table's overview.
+        await box('pets').focus()
+        await expect(page.getByRole('link', { name: 'このテーブルの概要' })).toBeVisible()
+
         // The comment, under its box and in its name.
-        await page.getByRole('checkbox', { name: '表のコメントを出す' }).check()
+        await page.getByRole('checkbox', { name: 'テーブルのコメントを出す' }).check()
         await expect(box('owners')).toHaveAccessibleName(/かいぬし$/)
 
         // toys.pet_id has no key: a candidate, made into one through the form (which shows the SQL first).

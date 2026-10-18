@@ -15,17 +15,21 @@ for (const t of TARGETS) {
         await expect(page.getByRole('img', { name: /^依存関係の図/ })).toBeVisible()
         const words = page.getByRole('list', { name: '依存関係の一覧' })
         await expect(words).toContainText('ビュー recent は ビュー active を使います')
-        await expect(words).toContainText('ビュー active は 表 members を使います')
+        await expect(words).toContainText('ビュー active は テーブル members を使います')
 
-        await page.getByLabel('変えるもの').selectOption({ label: '表 members' })
-        await expect(page.getByRole('status').filter({ hasText: /^表 members を変えると/ })).toHaveText(
-          '表 members を変えると、ビュー active、ビュー recent に影響します（直接・間接）'
+        await page.getByLabel('変えるもの').selectOption({ label: 'テーブル members' })
+        await expect(page.getByRole('status').filter({ hasText: /^テーブル members を変えると/ })).toHaveText(
+          'テーブル members を変えると、ビュー active、ビュー recent に影響します（直接・間接）'
         )
 
         // The same from the table's structure, with the way to the whole diagram.
         await page.goto(tableUrl(space, 'members', '/structure'))
         const usedBy = page.locator('section', { has: page.getByRole('heading', { name: 'これを使うもの' }) })
         await expect(usedBy.getByRole('listitem')).toHaveText(['ビュー active', 'ビュー recent'])
+        // The diagram opens with this table chosen.
+        await usedBy.getByRole('link', { name: '依存関係の図で見る' }).click()
+        await expect(page.getByRole('status').filter({ hasText: /^テーブル members を変えると/ })).toBeVisible()
+        await page.goBack()
         await page.goto(tableUrl(space, 'lone', '/structure'))
         await expect(page.getByText('これを使うビュー・ルーチン・トリガーはありません')).toBeVisible()
       })

@@ -206,6 +206,7 @@ export const enScreens = {
     showLines: 'Show lines',
     lineLabels: 'Label the lines',
     showComments: 'Show table comments',
+    openOverview: 'Overview of this table',
     withNote: (label: string, note: string) => `${label}. ${note}`,
     lineStyle: 'Line shape',
     lineStyles: { curve: 'Curve', straight: 'Straight', polyline: 'Right angles' },
@@ -2591,6 +2592,7 @@ export const enScreens = {
     openAll: 'See the dependency diagram',
   },
   dictionary: {
+    failed: (names: readonly string[]) => `Tables whose definitions could not be read: ${names.join(', ')}`,
     title: (name: string) => `Data dictionary: ${name}`,
     link: 'Data dictionary (every table, for printing)',
     hint: "Every table's and view's columns, keys and comments on one page.",
