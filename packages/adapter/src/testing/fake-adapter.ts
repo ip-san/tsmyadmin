@@ -520,6 +520,7 @@ export class FakeAdapter implements DatabaseAdapter {
         nulls: sample.filter((r) => (r[c.name] ?? null) === null).length,
         distinct: new Set(sample.flatMap((r) => ((r[c.name] ?? null) === null ? [] : [JSON.stringify(r[c.name])])))
           .size,
+        prefix: false,
       })),
       omitted: 0,
     }

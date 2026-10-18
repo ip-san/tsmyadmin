@@ -2523,6 +2523,7 @@ export const jaScreens = {
     percent: (share: number) => `${(share * 100).toLocaleString('ja-JP', { maximumFractionDigits: 1 })}%`,
     distinct: '値の種類',
     count: (n: number) => n.toLocaleString('ja-JP'),
+    atLeast: (n: number) => `${n.toLocaleString('ja-JP')} 以上（先頭 256 文字で比べた数）`,
     note: '目立つこと',
     notes: { allNull: 'すべて NULL', constant: '1 つの値だけ', unique: '行ごとに違う値' },
     values: '値の分布',

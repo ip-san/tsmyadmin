@@ -1,6 +1,7 @@
 import type { ColumnDef, ColumnProfile, Dialect, Namespace } from '@tsmyadmin/shared'
 import { PROFILE_MAX_COLUMNS, PROFILE_SAMPLE_ROWS } from '@tsmyadmin/shared'
 import { type Conn, firstResult } from '../driver.ts'
+import { AdapterError } from '../types.ts'
 import { Params, quoteIdent, quoteTable } from './quote.ts'
 
 /**
@@ -10,13 +11,16 @@ import { Params, quoteIdent, quoteTable } from './quote.ts'
  * fail, and one failing column would fail the statement that counts them all.
  */
 const COMPARED =
-  /^(tiny|small|medium|big)?int(eger)?\b|^(int[248]|serial|bigserial|smallserial)\b|^(decimal|numeric|float|double|real|money)\b|^(var)?char|^character( varying)?\b|^(tiny|medium|long)?text\b|^citext\b|^(date|datetime|time|timestamp|year|interval)\b|^bool(ean)?\b|^uuid\b|^enum\(|^set\(|^inet\b|^cidr\b|^macaddr/i
+  /^(tiny|small|medium|big)?int(eger)?\b|^(int[248]|serial|bigserial|smallserial)\b|^(decimal|numeric|float|double|real|money)\b|^(var)?char|^"char"$|^character\b|^(tiny|medium|long)?text\b|^citext\b|^(date|datetime|time|timestamp|year|interval)\b|^bool(ean)?\b|^uuid\b|^enum\(|^set\(|^inet[46]?\b|^cidr\b|^macaddr/i
 
 /** Text that may be long: compared by its first characters, so a sample of large values stays small. */
 const LONG_TEXT = /^(tiny|medium|long)?text\b|^citext\b/i
 
 /** Characters of a long text value compared: enough to tell values apart, few enough to keep the sample light. */
 const TEXT_PREFIX = 256
+
+/** Whether a column's distinct values are counted by its first characters (an estimate, said so). */
+const byPrefix = (dataType: string): boolean => comparable(dataType) && LONG_TEXT.test(dataType.trim())
 
 /** Whether a column's distinct values are counted. */
 // An array of a plain type (integer[]) is not plain: its name starts as its element's does.
@@ -30,9 +34,23 @@ export const comparable = (dataType: string): boolean => !dataType.includes('[]'
 function sampled(dialect: Dialect, c: Pick<ColumnDef, 'name' | 'dataType'>): string {
   const col = quoteIdent(dialect, c.name)
   if (!comparable(c.dataType)) return `CASE WHEN ${col} IS NULL THEN NULL ELSE 1 END`
-  if (LONG_TEXT.test(c.dataType.trim())) return `LEFT(${col}, ${TEXT_PREFIX})`
+  if (byPrefix(c.dataType)) return `LEFT(${col}, ${TEXT_PREFIX})`
   return col
 }
+
+/** What a server says when a statement runs too long or is stopped: not a reason to count again. */
+const STOPPED = new Set([
+  '57014',
+  'ER_QUERY_TIMEOUT',
+  'ER_QUERY_INTERRUPTED',
+  'ER_STATEMENT_TIMEOUT',
+  'ER_1969',
+  '1969',
+])
+
+/** The statement failed on what it was asked to compute, not on time, rights or the connection. */
+const refusedTheValues = (err: unknown): boolean =>
+  err instanceof AdapterError && err.code === 'QUERY_FAILED' && !STOPPED.has(err.nativeCode ?? '')
 
 /** The statement that counts the sample: NULLs per column, and distinct values where `distinct` says so. */
 function profileSql(
@@ -75,7 +93,9 @@ export async function columnProfileOn(
     const { sql, params } = profileSql(dialect, ns, table, counted, distinct)
     return firstResult(await conn.query(sql, params)).rows[0] ?? []
   }
-  const row = await run(true).catch(() => run(false))
+  // Counted again only when the server would not count the values (a type, an operator): a timeout, a refusal or
+  // a lost connection would fail the second time too, and take as long again.
+  const row = await run(true).catch((err: unknown) => (refusedTheValues(err) ? run(false) : Promise.reject(err)))
   const sampledRows = Number(row[0] ?? 0)
   return {
     sampled: sampledRows,
@@ -88,6 +108,7 @@ export async function columnProfileOn(
         column: c.name,
         nulls: Math.max(sampledRows - present, 0),
         distinct: distinct === null || distinct === undefined ? null : Number(distinct),
+        prefix: byPrefix(c.dataType),
       }
     }),
     omitted: columns.length - counted.length,

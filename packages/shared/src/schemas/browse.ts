@@ -190,6 +190,8 @@ export const ColumnProfileSchema = z.object({
       column: z.string(),
       nulls: z.number().int().min(0),
       distinct: z.number().int().min(0).nullable(),
+      /** Long text compared by its first characters: `distinct` is then an estimate (it may count fewer). */
+      prefix: z.boolean().default(false),
     })
   ),
   /** Columns past `PROFILE_MAX_COLUMNS`, not counted. */

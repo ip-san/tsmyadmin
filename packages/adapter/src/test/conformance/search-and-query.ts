@@ -195,10 +195,10 @@ export function describeSearchAndQuery(env: ConformanceEnv): void {
         const p = await env.db.columnProfile(ns, t)
         expect(p).toMatchObject({ sampled: 4, capped: false, omitted: 0 })
         expect(p.columns).toEqual([
-          { column: 'id', nulls: 0, distinct: 4 },
-          { column: 'colour', nulls: 1, distinct: 2 },
-          { column: 'note', nulls: 3, distinct: 1 },
-          { column: 'data', nulls: 4, distinct: null },
+          { column: 'id', nulls: 0, distinct: 4, prefix: false },
+          { column: 'colour', nulls: 1, distinct: 2, prefix: false },
+          { column: 'note', nulls: 3, distinct: 1, prefix: false },
+          { column: 'data', nulls: 4, distinct: null, prefix: false },
         ])
         await expect(env.db.columnProfile(ns, `${t}_none`)).rejects.toMatchObject({ code: 'NOT_FOUND' })
       } finally {
@@ -231,18 +231,24 @@ export function describeSearchAndQuery(env: ConformanceEnv): void {
         const p = await env.db.columnProfile(ns, t)
         expect(p.sampled).toBe(2)
         const of = (column: string) => p.columns.find((c) => c.column === column)
-        expect(of('id')).toEqual({ column: 'id', nulls: 0, distinct: 2 })
+        expect(of('id')).toEqual({ column: 'id', nulls: 0, distinct: 2, prefix: false })
         // MariaDB's JSON is LONGTEXT with a check: compared as text, by its first characters.
-        expect(of('j')).toEqual({ column: 'j', nulls: 1, distinct: (await isMariaDb()) ? 1 : null })
-        expect(of('body')).toEqual({ column: 'body', nulls: 1, distinct: 1 })
+        expect(of('j')).toEqual({
+          column: 'j',
+          nulls: 1,
+          distinct: (await isMariaDb()) ? 1 : null,
+          prefix: await isMariaDb(),
+        })
+        expect(of('body')).toEqual({ column: 'body', nulls: 1, distinct: 1, prefix: true })
         if (dialect === 'mysql') {
-          expect(of('g')).toEqual({ column: 'g', nulls: 1, distinct: null })
-          expect(of('s')).toEqual({ column: 's', nulls: 0, distinct: 2 })
-          expect(of('e')).toEqual({ column: 'e', nulls: 0, distinct: 1 })
+          expect(of('g')).toEqual({ column: 'g', nulls: 1, distinct: null, prefix: false })
+          expect(of('s')).toEqual({ column: 's', nulls: 0, distinct: 2, prefix: false })
+          expect(of('e')).toEqual({ column: 'e', nulls: 0, distinct: 1, prefix: false })
         } else {
-          for (const c of ['jb', 'p', 'a', 'd', 'x']) expect(of(c)).toEqual({ column: c, nulls: 1, distinct: null })
+          for (const c of ['jb', 'p', 'a', 'd', 'x'])
+            expect(of(c)).toEqual({ column: c, nulls: 1, distinct: null, prefix: false })
           // A type of the schema's own: not known to be plain, so its values are not compared.
-          expect(of('e')).toEqual({ column: 'e', nulls: 0, distinct: null })
+          expect(of('e')).toEqual({ column: 'e', nulls: 0, distinct: null, prefix: false })
         }
       } finally {
         await execOk(`DROP TABLE IF EXISTS ${t}`)
@@ -253,6 +259,25 @@ export function describeSearchAndQuery(env: ConformanceEnv): void {
       }
     })
 
+    it('compares long text by its first characters, and says so', async () => {
+      const t = `${scratch}_cpx`
+      await execOk(`CREATE TABLE ${t} (id INT PRIMARY KEY, body TEXT)`)
+      try {
+        // Two values alike in their first 256 characters: counted as one, an estimate the profile marks.
+        const head = 'a'.repeat(300)
+        await execOk(`INSERT INTO ${t} VALUES (1, '${head}x'), (2, '${head}y')`)
+        const p = await env.db.columnProfile(ns, t)
+        expect(p.columns.find((c) => c.column === 'body')).toEqual({
+          column: 'body',
+          nulls: 0,
+          distinct: 1,
+          prefix: true,
+        })
+      } finally {
+        await execOk(`DROP TABLE IF EXISTS ${t}`)
+      }
+    })
+
     it('reads an empty table as no rows', async () => {
       const t = `${scratch}_cpe`
       await execOk(`CREATE TABLE ${t} (id INT PRIMARY KEY)`)
@@ -260,7 +285,7 @@ export function describeSearchAndQuery(env: ConformanceEnv): void {
         expect(await env.db.columnProfile(ns, t)).toEqual({
           sampled: 0,
           capped: false,
-          columns: [{ column: 'id', nulls: 0, distinct: 0 }],
+          columns: [{ column: 'id', nulls: 0, distinct: 0, prefix: false }],
           omitted: 0,
         })
       } finally {

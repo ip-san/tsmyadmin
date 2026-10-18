@@ -60,9 +60,9 @@ vi.mock('@/lib/queries.ts', () => ({
       sampled: 3,
       capped: false,
       columns: [
-        { column: 'id', nulls: 0, distinct: 3 },
-        { column: 'user_id', nulls: 0, distinct: 1 },
-        { column: 'body', nulls: 3, distinct: 0 },
+        { column: 'id', nulls: 0, distinct: 3, prefix: false },
+        { column: 'user_id', nulls: 0, distinct: 1, prefix: false },
+        { column: 'body', nulls: 3, distinct: 0, prefix: false },
       ],
       omitted: 0,
     }),
@@ -144,9 +144,12 @@ describe('TableOverview', () => {
     try {
       const { unmount } = mount()
       expect(await screen.findByText(t.isView)).toBeInTheDocument()
+      // Neither counted nor shown before asked: a view's rows are worked out when read.
       expect(screen.queryByRole('table', { name: t.columnsTable })).toBeNull()
+      expect(screen.queryByRole('table', { name: t.sample })).toBeNull()
       await userEvent.click(screen.getByRole('button', { name: t.countNow }))
       expect(await screen.findByRole('table', { name: t.columnsTable })).toBeInTheDocument()
+      expect(await screen.findByRole('table', { name: t.sample })).toBeInTheDocument()
       unmount()
       kind = 'sequence'
       mount()

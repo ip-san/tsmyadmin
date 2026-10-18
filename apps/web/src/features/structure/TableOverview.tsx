@@ -1,10 +1,12 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import type { TableSchema } from '@tsmyadmin/shared'
+import { useState } from 'react'
 import { drawnRelations } from '@/components/schema-diagram/layout.ts'
 import { neighbourhood } from '@/components/schema-diagram/neighbourhood.ts'
 import { diagramFor } from '@/components/schema-diagram/overlay.ts'
 import { SchemaDiagram } from '@/components/schema-diagram/SchemaDiagram.tsx'
+import { Button } from '@/components/ui/Button.tsx'
 import { Card } from '@/components/ui/Card.tsx'
 import { ErrorBox, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
@@ -34,10 +36,13 @@ const SAMPLE_ROWS = 5
  */
 export function TableOverview({ tableRef }: { tableRef: TableRef }) {
   const structure = useQuery(structureQuery(tableRef))
+  // A view's rows are worked out when read, and a view may be heavy: its rows are read (counted, shown) once asked.
+  const [asked, setAsked] = useState(false)
   if (structure.isPending) return <Spinner />
   if (structure.isError) return <ErrorBox error={structure.error} onRetry={() => void structure.refetch()} />
   const schema = structure.data
   const guess = tableRole(schema)
+  const read = schema.kind === 'table' || asked
   return (
     <div className="space-y-4">
       <Card title={t.whatTitle}>
@@ -58,13 +63,24 @@ export function TableOverview({ tableRef }: { tableRef: TableRef }) {
       {/* A sequence is one value, not rows: nothing to count or show. */}
       {schema.kind === 'sequence' ? null : (
         <>
-          <Card title={t.columns}>
-            {/* A view's rows are worked out when read: counted only when asked (a view may be heavy). */}
-            <OverviewColumns tableRef={tableRef} columns={schema.columns} onAsk={schema.kind !== 'table'} />
-          </Card>
-          <Card title={t.sample} bleed>
-            <SampleRows tableRef={tableRef} schema={schema} />
-          </Card>
+          {read ? null : (
+            <Card>
+              <p className="text-xs text-ink-sub">{t.viewHint}</p>
+              <Button size="sm" onClick={() => setAsked(true)}>
+                {t.countNow}
+              </Button>
+            </Card>
+          )}
+          {read ? (
+            <>
+              <Card title={t.columns}>
+                <OverviewColumns tableRef={tableRef} columns={schema.columns} read={read} />
+              </Card>
+              <Card title={t.sample} bleed>
+                <SampleRows tableRef={tableRef} schema={schema} />
+              </Card>
+            </>
+          ) : null}
         </>
       )}
       <Card title={t.neighbours}>

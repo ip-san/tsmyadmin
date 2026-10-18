@@ -14,8 +14,8 @@ describe('columnProfileOn', () => {
       sampled: 4,
       capped: false,
       columns: [
-        { column: 'id', nulls: 0, distinct: 4 },
-        { column: 'data', nulls: 1, distinct: null },
+        { column: 'id', nulls: 0, distinct: 4, prefix: false },
+        { column: 'data', nulls: 1, distinct: null, prefix: false },
       ],
       omitted: 0,
     })
@@ -42,7 +42,7 @@ describe('columnProfileOn', () => {
     const p = await columnProfileOn(scripted([[/COUNT/, rows([['3', '2', '2']])]]).conn, 'postgres', ns, 't', [
       col('a'),
     ])
-    expect(p.columns).toEqual([{ column: 'a', nulls: 1, distinct: 2 }])
+    expect(p.columns).toEqual([{ column: 'a', nulls: 1, distinct: 2, prefix: false }])
     const none = await columnProfileOn(scripted([[/COUNT/, rows([[0]])]]).conn, 'postgres', ns, 't', [])
     expect(none).toEqual({ sampled: 0, capped: false, columns: [], omitted: 0 })
   })
@@ -55,13 +55,48 @@ describe('columnProfileOn, more', () => {
     expect(s.asked[0]?.text).toMatch(/LEFT\("body", 256\) AS "c0"/)
   })
 
+  it.each([
+    ['a refusal', fail('PERMISSION_DENIED')],
+    ['a timeout (PostgreSQL)', fail('QUERY_FAILED', '57014')],
+    ['a timeout (MySQL)', fail('QUERY_FAILED', 'ER_QUERY_TIMEOUT')],
+    ['a lost connection', fail('CONNECTION_FAILED')],
+  ])('does not count again after %s: it would fail again, and take as long', async (_, error) => {
+    const s = scripted([[/COUNT/, error]])
+    await expect(columnProfileOn(s.conn, 'postgres', ns, 't', [col('a')])).rejects.toBe(error)
+    expect(s.asked).toHaveLength(1)
+  })
+
+  it('writes the whole statement: the counts of each column, then the sample they are taken from', async () => {
+    const s = scripted([[/COUNT/, rows([[1, 1, 1, 1, null]])]])
+    await columnProfileOn(s.conn, 'postgres', ns, 't', [col('a', 'int'), col('b', 'jsonb')])
+    expect(s.asked[0]?.text).toBe(
+      'SELECT COUNT(*), COUNT("c0"), COUNT(DISTINCT "c0"), COUNT("c1"), NULL FROM (SELECT "a" AS "c0", CASE WHEN "b" IS NULL THEN NULL ELSE 1 END AS "c1" FROM "public"."t" LIMIT $1) AS "sample"'
+    )
+    const none = scripted([[/COUNT/, rows([[0]])]])
+    await columnProfileOn(none.conn, 'postgres', ns, 't', [])
+    expect(none.asked[0]?.text).toBe('SELECT COUNT(*) FROM (SELECT 1 AS one FROM "public"."t" LIMIT $1) AS "sample"')
+  })
+
+  it('reads a type written with spaces around it, as a catalog may', () => {
+    expect(comparable(' int ')).toBe(true)
+  })
+
+  it('marks long text as compared by its first characters', async () => {
+    const s = scripted([[/COUNT/, rows([[2, 2, 1, 2, 2]])]])
+    const p = await columnProfileOn(s.conn, 'mysql', ns, 't', [col('body', 'longtext'), col('name', 'varchar(9)')])
+    expect(p.columns.map((c) => [c.column, c.prefix])).toEqual([
+      ['body', true],
+      ['name', false],
+    ])
+  })
+
   it('counts the NULLs again without distinct values when counting them fails', async () => {
     const s = scripted([
       [/DISTINCT/, fail('QUERY_FAILED')],
       [/COUNT/, rows([[3, 2, null]])],
     ])
     const p = await columnProfileOn(s.conn, 'postgres', ns, 't', [col('a', 'varchar(10)')])
-    expect(p.columns).toEqual([{ column: 'a', nulls: 1, distinct: null }])
+    expect(p.columns).toEqual([{ column: 'a', nulls: 1, distinct: null, prefix: false }])
     expect(s.asked).toHaveLength(2)
   })
 })

@@ -2547,6 +2547,7 @@ export const enScreens = {
     percent: (share: number) => `${(share * 100).toLocaleString('en-US', { maximumFractionDigits: 1 })}%`,
     distinct: 'Distinct values',
     count: (n: number) => n.toLocaleString('en-US'),
+    atLeast: (n: number) => `${n.toLocaleString('en-US')} or more (by the first 256 characters)`,
     note: 'Of note',
     notes: { allNull: 'All NULL', constant: 'One value only', unique: 'A different value in every row' },
     values: 'Values',

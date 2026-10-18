@@ -19,25 +19,16 @@ const t = locale.overview
 export function OverviewColumns({
   tableRef,
   columns,
-  onAsk = false,
+  read,
 }: {
   tableRef: TableRef
   columns: readonly ColumnDef[]
-  /** Count only once asked (a view, whose rows are worked out when read). */
-  onAsk?: boolean
+  /** Whether the rows may be read: a view's only once asked (`TableOverview` holds the question). */
+  read: boolean
 }) {
-  const [asked, setAsked] = useState(!onAsk)
-  const profile = useQuery({ ...columnProfileQuery(tableRef), enabled: asked })
+  const profile = useQuery({ ...columnProfileQuery(tableRef), enabled: read })
   const [values, setValues] = useState<string | null>(null)
-  if (!asked)
-    return (
-      <div className="space-y-1">
-        <p className="text-xs text-ink-sub">{t.viewHint}</p>
-        <Button size="sm" onClick={() => setAsked(true)}>
-          {t.countNow}
-        </Button>
-      </div>
-    )
+  if (!read) return null
   if (profile.isPending) return <Spinner label={t.profiling} />
   if (profile.isError) return <ErrorBox error={profile.error} onRetry={() => void profile.refetch()} />
   const p = profile.data
@@ -84,7 +75,11 @@ export function OverviewColumns({
                   )}
                 </Td>
                 <Td className="text-right tabular-nums">
-                  {counted?.distinct === null || counted === undefined ? '—' : t.count(counted.distinct)}
+                  {counted?.distinct === null || counted === undefined
+                    ? '—'
+                    : counted.prefix
+                      ? t.atLeast(counted.distinct)
+                      : t.count(counted.distinct)}
                 </Td>
                 <Td className="text-xs text-ink-sub">{note ? t.notes[note] : null}</Td>
                 <Td className="print:hidden">
