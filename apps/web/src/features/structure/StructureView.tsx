@@ -25,6 +25,7 @@ import { ForeignKeysTable, ReferencedByTable } from './RelationsTables.tsx'
 import { StatsCard } from './StatsCard.tsx'
 import { StructureProposal } from './StructureProposal.tsx'
 import { TransformsCard } from './TransformsCard.tsx'
+import { UsedByCard } from './UsedByCard.tsx'
 
 type ColumnDialog = { mode: 'add' } | { mode: 'modify'; name: string } | null
 
@@ -130,6 +131,8 @@ export function StructureView({ tableRef, dialect }: { tableRef: TableRef; diale
       >
         <ReferencedByTable schema={s} />
       </Card>
+      {/* A sequence is used through its value, not read: nothing here would say anything about it. */}
+      {s.kind === 'sequence' ? null : <UsedByCard tableRef={tableRef} view={s.kind !== 'table'} />}
       {editable ? <PartitionsCard tableRef={tableRef} dialect={dialect} onPreview={flow.preview} /> : null}
       <StatsCard tableRef={tableRef} />
       <Card title={locale.table.createStatement}>

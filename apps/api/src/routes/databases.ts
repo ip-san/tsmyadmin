@@ -3,6 +3,7 @@
  * editing, SQL execution (streamed as NDJSON), DDL preview, export and import. A route validates its input, calls the
  * adapter and returns JSON; anything with rules of its own lives in `lib/`.
  */
+import type { DependencyReport } from '@tsmyadmin/shared'
 import {
   BrowseQuerySchema,
   CellQuerySchema,
@@ -112,6 +113,12 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
       .get('/databases/:db/usage', validate('query', SchemaQuerySchema), async (c) => {
         const q = c.req.valid('query')
         return c.json(await c.get('session').adapter.tableUsage(ns(c.req.param('db'), q.schema)))
+      })
+      .get('/databases/:db/dependencies', validate('query', SchemaQuerySchema), async (c) => {
+        const q = c.req.valid('query')
+        const objects = await c.get('session').adapter.listDependencies(ns(c.req.param('db'), q.schema))
+        const report: DependencyReport = objects ? { status: 'ok', objects } : { status: 'unsupported', objects: [] }
+        return c.json(report)
       })
       .get('/databases/:db/routines', validate('query', SchemaQuerySchema), async (c) => {
         const q = c.req.valid('query')

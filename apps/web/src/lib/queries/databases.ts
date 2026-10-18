@@ -4,6 +4,7 @@ import type {
   DatabaseInfo,
   DdlOp,
   DdlPreviewResponse,
+  DependencyReport,
   EventDetail,
   EventInfo,
   ExplainResult,
@@ -141,6 +142,16 @@ export const eventDetailQuery = (db: string, name: string, schema?: string) =>
         })
       ),
     staleTime: 0,
+  })
+
+/** What the views and routines depend on, for the dependency diagram and a table's structure. */
+export const dependenciesQuery = (db: string, schema?: string) =>
+  queryOptions({
+    queryKey: ['dependencies', db, schema ?? ''],
+    queryFn: () =>
+      unwrap<DependencyReport>(
+        api.databases[':db'].dependencies.$get({ param: { db: enc(db) }, query: schemaQuery(schema) })
+      ),
   })
 
 export const routinesQuery = (db: string, schema?: string) =>
