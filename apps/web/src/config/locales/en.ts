@@ -190,6 +190,7 @@ export const en = {
     tracking: 'Tracking',
     snapshots: 'Snapshots',
     databases: 'Databases',
+    overview: 'Overview',
     structure: 'Structure',
     sql: 'SQL',
     search: 'Search',

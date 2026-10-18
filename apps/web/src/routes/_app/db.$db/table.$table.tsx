@@ -52,6 +52,7 @@ function TableLayout() {
         items={[
           { label: locale.tabs.browse, to: '/db/$db/table/$table', params, search, exact: true },
           { label: locale.tabs.structure, to: '/db/$db/table/$table/structure', params, search },
+          { label: locale.tabs.overview, to: '/db/$db/table/$table/overview', params, search },
           { label: locale.tabs.sql, to: '/db/$db/table/$table/sql', params, search },
           { label: locale.tabs.search, to: '/db/$db/table/$table/search', params, search },
           { label: locale.tabs.insert, to: '/db/$db/table/$table/insert', params, search, hidden: view },

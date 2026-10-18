@@ -2483,6 +2483,53 @@ export const jaScreens = {
     prefixToHint: '空にすると接頭辞を取り除きます。その接頭辞で始まらないテーブルはそのままです',
     createFailed: 'CREATE 文を読めませんでした',
   },
+  overview: {
+    whatTitle: 'この表は何か',
+    roles: {
+      junction: '2 つ以上の表を結ぶ中間の表のようです（主キーが外部キーの列でできています）',
+      master: 'ほかの表から参照される、元になる表のようです（マスタ）',
+      detail: 'ほかの表を参照する、記録や明細の表のようです',
+      middle: 'ほかの表を参照し、ほかの表からも参照される表です',
+      isolated: '外部キーでどの表ともつながっていません',
+    },
+    roleWhy: (refersTo: number, referredBy: number) =>
+      `外部キーで参照する表 ${refersTo.toLocaleString('ja-JP')}、参照してくる表 ${referredBy.toLocaleString('ja-JP')}（キーからの推測です）`,
+    size: (rows: number | null, bytes: string | null, updatedAt: string | null) =>
+      [
+        rows === null ? null : `推定 ${rows.toLocaleString('ja-JP')} 行`,
+        bytes === null ? null : `${bytes}`,
+        updatedAt === null ? null : `最終更新 ${new Date(updatedAt).toLocaleString('ja-JP')}`,
+      ]
+        .filter(Boolean)
+        .join('・'),
+    usage: (full: number, index: number, unit: 'scans' | 'rows') =>
+      `読まれ方（サーバーの統計）: 全件 ${full.toLocaleString('ja-JP')}・索引 ${index.toLocaleString('ja-JP')}（${unit === 'scans' ? '走査の回数' : '読んだ行数'}）`,
+    usageNone: '読まれ方（サーバーの統計）: まだ読まれていません',
+    columns: 'カラムの中身',
+    profiling: '先頭の行を読んで数えています…',
+    sampleAll: (n: number) => `全 ${n.toLocaleString('ja-JP')} 行を数えました`,
+    sampleCapped: (n: number) => `先頭の ${n.toLocaleString('ja-JP')} 行を数えました（表はそれ以上あります）`,
+    column: 'カラム',
+    type: '型',
+    nullShare: 'NULL の割合',
+    nullShareOf: (column: string) => `${column} の NULL の割合`,
+    percent: (share: number) => `${(share * 100).toLocaleString('ja-JP', { maximumFractionDigits: 1 })}%`,
+    distinct: '値の種類',
+    count: (n: number) => n.toLocaleString('ja-JP'),
+    note: '目立つこと',
+    notes: { allNull: 'すべて NULL', constant: '1 つの値だけ', unique: '行ごとに違う値' },
+    values: '値の分布',
+    valuesOf: (column: string) => `${column} の値の分布`,
+    omitted: (n: number) => `ほかに ${n.toLocaleString('ja-JP')} 個のカラムは数えていません`,
+    sample: '行の例',
+    noRows: '行はありません',
+    neighbours: 'つながる表',
+    neighboursDiagram: (table: string) => `${table} と外部キーでつながる表の図`,
+    neighboursList: 'つながる表の外部キー',
+    keySentence: (table: string, columns: string, refTable: string) => `${table}（${columns}）→ ${refTable}`,
+    noNeighbours: '外部キーでつながる表はありません',
+    openDesigner: 'デザイナでまわりを見る',
+  },
   dictionary: {
     title: (name: string) => `データ辞書: ${name}`,
     link: 'データ辞書（全テーブルの定義を印刷用に）',

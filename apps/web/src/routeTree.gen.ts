@@ -51,6 +51,7 @@ import { Route as AppDbDbTableTableExportRouteImport } from './routes/_app/db.$d
 import { Route as AppDbDbTableTableImportRouteImport } from './routes/_app/db.$db/table.$table/import'
 import { Route as AppDbDbTableTableInsertRouteImport } from './routes/_app/db.$db/table.$table/insert'
 import { Route as AppDbDbTableTableOperationsRouteImport } from './routes/_app/db.$db/table.$table/operations'
+import { Route as AppDbDbTableTableOverviewRouteImport } from './routes/_app/db.$db/table.$table/overview'
 import { Route as AppDbDbTableTablePrivilegesRouteImport } from './routes/_app/db.$db/table.$table/privileges'
 import { Route as AppDbDbTableTableSearchRouteImport } from './routes/_app/db.$db/table.$table/search'
 import { Route as AppDbDbTableTableSqlRouteImport } from './routes/_app/db.$db/table.$table/sql'
@@ -268,6 +269,12 @@ const AppDbDbTableTableOperationsRoute =
     path: '/operations',
     getParentRoute: () => AppDbDbTableTableRoute,
   } as any)
+const AppDbDbTableTableOverviewRoute =
+  AppDbDbTableTableOverviewRouteImport.update({
+    id: '/overview',
+    path: '/overview',
+    getParentRoute: () => AppDbDbTableTableRoute,
+  } as any)
 const AppDbDbTableTablePrivilegesRoute =
   AppDbDbTableTablePrivilegesRouteImport.update({
     id: '/privileges',
@@ -344,6 +351,7 @@ export interface FileRoutesByFullPath {
   '/db/$db/table/$table/import': typeof AppDbDbTableTableImportRoute
   '/db/$db/table/$table/insert': typeof AppDbDbTableTableInsertRoute
   '/db/$db/table/$table/operations': typeof AppDbDbTableTableOperationsRoute
+  '/db/$db/table/$table/overview': typeof AppDbDbTableTableOverviewRoute
   '/db/$db/table/$table/privileges': typeof AppDbDbTableTablePrivilegesRoute
   '/db/$db/table/$table/search': typeof AppDbDbTableTableSearchRoute
   '/db/$db/table/$table/sql': typeof AppDbDbTableTableSqlRoute
@@ -391,6 +399,7 @@ export interface FileRoutesByTo {
   '/db/$db/table/$table/import': typeof AppDbDbTableTableImportRoute
   '/db/$db/table/$table/insert': typeof AppDbDbTableTableInsertRoute
   '/db/$db/table/$table/operations': typeof AppDbDbTableTableOperationsRoute
+  '/db/$db/table/$table/overview': typeof AppDbDbTableTableOverviewRoute
   '/db/$db/table/$table/privileges': typeof AppDbDbTableTablePrivilegesRoute
   '/db/$db/table/$table/search': typeof AppDbDbTableTableSearchRoute
   '/db/$db/table/$table/sql': typeof AppDbDbTableTableSqlRoute
@@ -442,6 +451,7 @@ export interface FileRoutesById {
   '/_app/db/$db/table/$table/import': typeof AppDbDbTableTableImportRoute
   '/_app/db/$db/table/$table/insert': typeof AppDbDbTableTableInsertRoute
   '/_app/db/$db/table/$table/operations': typeof AppDbDbTableTableOperationsRoute
+  '/_app/db/$db/table/$table/overview': typeof AppDbDbTableTableOverviewRoute
   '/_app/db/$db/table/$table/privileges': typeof AppDbDbTableTablePrivilegesRoute
   '/_app/db/$db/table/$table/search': typeof AppDbDbTableTableSearchRoute
   '/_app/db/$db/table/$table/sql': typeof AppDbDbTableTableSqlRoute
@@ -493,6 +503,7 @@ export interface FileRouteTypes {
     | '/db/$db/table/$table/import'
     | '/db/$db/table/$table/insert'
     | '/db/$db/table/$table/operations'
+    | '/db/$db/table/$table/overview'
     | '/db/$db/table/$table/privileges'
     | '/db/$db/table/$table/search'
     | '/db/$db/table/$table/sql'
@@ -540,6 +551,7 @@ export interface FileRouteTypes {
     | '/db/$db/table/$table/import'
     | '/db/$db/table/$table/insert'
     | '/db/$db/table/$table/operations'
+    | '/db/$db/table/$table/overview'
     | '/db/$db/table/$table/privileges'
     | '/db/$db/table/$table/search'
     | '/db/$db/table/$table/sql'
@@ -590,6 +602,7 @@ export interface FileRouteTypes {
     | '/_app/db/$db/table/$table/import'
     | '/_app/db/$db/table/$table/insert'
     | '/_app/db/$db/table/$table/operations'
+    | '/_app/db/$db/table/$table/overview'
     | '/_app/db/$db/table/$table/privileges'
     | '/_app/db/$db/table/$table/search'
     | '/_app/db/$db/table/$table/sql'
@@ -900,6 +913,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppDbDbTableTableOperationsRouteImport
       parentRoute: typeof AppDbDbTableTableRoute
     }
+    '/_app/db/$db/table/$table/overview': {
+      id: '/_app/db/$db/table/$table/overview'
+      path: '/overview'
+      fullPath: '/db/$db/table/$table/overview'
+      preLoaderRoute: typeof AppDbDbTableTableOverviewRouteImport
+      parentRoute: typeof AppDbDbTableTableRoute
+    }
     '/_app/db/$db/table/$table/privileges': {
       id: '/_app/db/$db/table/$table/privileges'
       path: '/privileges'
@@ -950,6 +970,7 @@ interface AppDbDbTableTableRouteChildren {
   AppDbDbTableTableImportRoute: typeof AppDbDbTableTableImportRoute
   AppDbDbTableTableInsertRoute: typeof AppDbDbTableTableInsertRoute
   AppDbDbTableTableOperationsRoute: typeof AppDbDbTableTableOperationsRoute
+  AppDbDbTableTableOverviewRoute: typeof AppDbDbTableTableOverviewRoute
   AppDbDbTableTablePrivilegesRoute: typeof AppDbDbTableTablePrivilegesRoute
   AppDbDbTableTableSearchRoute: typeof AppDbDbTableTableSearchRoute
   AppDbDbTableTableSqlRoute: typeof AppDbDbTableTableSqlRoute
@@ -964,6 +985,7 @@ const AppDbDbTableTableRouteChildren: AppDbDbTableTableRouteChildren = {
   AppDbDbTableTableImportRoute: AppDbDbTableTableImportRoute,
   AppDbDbTableTableInsertRoute: AppDbDbTableTableInsertRoute,
   AppDbDbTableTableOperationsRoute: AppDbDbTableTableOperationsRoute,
+  AppDbDbTableTableOverviewRoute: AppDbDbTableTableOverviewRoute,
   AppDbDbTableTablePrivilegesRoute: AppDbDbTableTablePrivilegesRoute,
   AppDbDbTableTableSearchRoute: AppDbDbTableTableSearchRoute,
   AppDbDbTableTableSqlRoute: AppDbDbTableTableSqlRoute,

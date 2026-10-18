@@ -2507,6 +2507,53 @@ export const enScreens = {
     prefixToHint: 'Empty removes the prefix. Tables not starting with it are left alone',
     createFailed: 'could not read the CREATE statement',
   },
+  overview: {
+    whatTitle: 'What this table is',
+    roles: {
+      junction: 'It seems to link two or more tables (its primary key is made of foreign key columns)',
+      master: 'It seems to be a table others are built on (a master): others refer to it',
+      detail: 'It seems to record things about others (details, logs): it refers to them',
+      middle: 'It refers to other tables, and others refer to it',
+      isolated: 'No foreign key joins it to another table',
+    },
+    roleWhy: (refersTo: number, referredBy: number) =>
+      `Refers to ${refersTo.toLocaleString('en-US')} tables, referred to by ${referredBy.toLocaleString('en-US')} (a guess from the keys)`,
+    size: (rows: number | null, bytes: string | null, updatedAt: string | null) =>
+      [
+        rows === null ? null : `about ${rows.toLocaleString('en-US')} rows`,
+        bytes === null ? null : `${bytes}`,
+        updatedAt === null ? null : `last updated ${new Date(updatedAt).toLocaleString('en-US')}`,
+      ]
+        .filter(Boolean)
+        .join(' · '),
+    usage: (full: number, index: number, unit: 'scans' | 'rows') =>
+      `Reads (the server's statistics): ${full.toLocaleString('en-US')} in full, ${index.toLocaleString('en-US')} by index (${unit === 'scans' ? 'scans' : 'rows read'})`,
+    usageNone: "Reads (the server's statistics): not read yet",
+    columns: 'What the columns hold',
+    profiling: 'Counting the first rows…',
+    sampleAll: (n: number) => `Counted all ${n.toLocaleString('en-US')} rows`,
+    sampleCapped: (n: number) => `Counted the first ${n.toLocaleString('en-US')} rows (the table has more)`,
+    column: 'Column',
+    type: 'Type',
+    nullShare: 'NULL share',
+    nullShareOf: (column: string) => `NULL share of ${column}`,
+    percent: (share: number) => `${(share * 100).toLocaleString('en-US', { maximumFractionDigits: 1 })}%`,
+    distinct: 'Distinct values',
+    count: (n: number) => n.toLocaleString('en-US'),
+    note: 'Of note',
+    notes: { allNull: 'All NULL', constant: 'One value only', unique: 'A different value in every row' },
+    values: 'Values',
+    valuesOf: (column: string) => `Values of ${column}`,
+    omitted: (n: number) => `${n.toLocaleString('en-US')} more columns were not counted`,
+    sample: 'Some rows',
+    noRows: 'No rows',
+    neighbours: 'Tables a key away',
+    neighboursDiagram: (table: string) => `The tables foreign keys join to ${table}`,
+    neighboursList: 'The foreign keys of the tables a key away',
+    keySentence: (table: string, columns: string, refTable: string) => `${table} (${columns}) → ${refTable}`,
+    noNeighbours: 'No foreign key joins it to another table',
+    openDesigner: 'See around it in the Designer',
+  },
   dictionary: {
     title: (name: string) => `Data dictionary: ${name}`,
     link: 'Data dictionary (every table, for printing)',
