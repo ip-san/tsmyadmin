@@ -2509,16 +2509,20 @@ export const enScreens = {
   },
   dependencies: {
     title: 'Dependencies',
-    hint: 'The tables views and routines read, and the tables triggers are on. Choose a table to see what a change to it reaches',
+    hint: 'The tables and views that views (and the routines the catalog records) use, and the tables triggers are on. Choose a table or view to see what a change to it reaches',
     kinds: { table: 'table', view: 'view', routine: 'routine', trigger: 'trigger' },
     named: (kind: string, name: string) => `${kind} ${name}`,
+    triggerNamed: (name: string, table: string) => `trigger ${name} (on ${table})`,
+    onlyReached: 'Draw only what it reaches',
+    routineNote:
+      "What a routine's body uses is shown only where the catalog records it (PostgreSQL's SQL-standard bodies, say); MySQL does not. A routine may use a table the diagram does not join it to",
     reads: (from: string, to: string) => `${from} uses ${to}`,
     fires: (from: string, to: string) => `${from} is on ${to}`,
-    change: 'Table to change',
+    change: 'Change',
     noTable: '(none)',
-    reaches: (table: string, names: readonly string[]) =>
-      `Changing table ${table} reaches ${names.join(', ')} (directly or not)`,
-    reachesNone: (table: string) => `No view, routine or trigger uses table ${table}`,
+    reaches: (what: string, names: readonly string[]) =>
+      `Changing ${what} reaches ${names.join(', ')} (directly or not)`,
+    reachesNone: (what: string) => `No view, routine or trigger uses ${what}`,
     diagram: 'Dependency diagram (arrows go from the user to what it uses)',
     sentences: 'Dependencies in words',
     legendTable: 'The table chosen',

@@ -3,25 +3,28 @@ import { Link } from '@tanstack/react-router'
 import { Card } from '@/components/ui/Card.tsx'
 import { ErrorBox, Spinner } from '@/components/ui/Feedback.tsx'
 import { locale } from '@/config/locale-screens.ts'
-import { dependencyGraph, dependencyId, dependentsOf } from '@/lib/dependencies.ts'
+import { dependencyGraph, dependencyId, dependencyLabel, dependentsOf } from '@/lib/dependencies.ts'
 import { dependenciesQuery, type TableRef, triggersQuery } from '@/lib/queries.ts'
 
 const t = locale.dependencies
 
 /**
- * The views, routines and triggers a change to this table (or view) reaches (directly, or through views on it), with a link
- * to the whole diagram. Where the server keeps no catalog of what views use (MariaDB), only the triggers.
+ * The views, routines and triggers a change to this table (or view) reaches (directly, or through views on it),
+ * with a link to the whole diagram. Where the server keeps no catalog of what views use (MariaDB), only the
+ * triggers; where the triggers cannot be listed, what views use, and why the triggers are missing.
  */
 export function UsedByCard({ tableRef, view = false }: { tableRef: TableRef; view?: boolean }) {
   const { db, schema, table } = tableRef
   const report = useQuery(dependenciesQuery(db, schema))
   const triggers = useQuery(triggersQuery(db, schema))
+  // Held before the checks below narrow the query: a failed list of triggers is said, not a reason to say nothing.
+  const triggerError = triggers.isError ? triggers.error : null
+  const retryTriggers = () => void triggers.refetch()
   const body = () => {
     if (report.isPending || triggers.isPending) return <Spinner />
     if (report.isError) return <ErrorBox error={report.error} onRetry={() => void report.refetch()} />
-    if (triggers.isError) return <ErrorBox error={triggers.error} onRetry={() => void triggers.refetch()} />
     const reached = dependentsOf(
-      dependencyGraph(report.data.objects, triggers.data),
+      dependencyGraph(report.data.objects, triggers.data ?? []),
       dependencyId(view ? 'view' : 'table', table)
     )
     return (
@@ -31,11 +34,14 @@ export function UsedByCard({ tableRef, view = false }: { tableRef: TableRef; vie
         ) : (
           <ul className="list-disc pl-5 text-ink">
             {reached.map((n) => (
-              <li key={n.id}>{t.named(t.kinds[n.kind], n.name)}</li>
+              <li key={n.id}>{dependencyLabel(n)}</li>
             ))}
           </ul>
         )}
+        {/* Without the triggers (not allowed to list them, say), what views use is still listed. */}
+        {triggerError ? <ErrorBox error={triggerError} onRetry={retryTriggers} /> : null}
         {report.data.status === 'unsupported' ? <p className="text-xs text-ink-sub">{t.unsupported}</p> : null}
+        <p className="text-xs text-ink-sub">{t.routineNote}</p>
         <Link to="/db/$db/dependencies" params={{ db }} search={{ schema }} className="text-brand underline">
           {t.openAll}
         </Link>

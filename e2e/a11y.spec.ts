@@ -512,7 +512,7 @@ for (const t of TARGETS) {
         await sqlOn(page, space, 'CREATE TABLE members (id INT PRIMARY KEY)')
         await sqlOn(page, space, 'CREATE VIEW everyone AS SELECT id FROM members')
         await page.goto(`/db/${space.database}/dependencies${space.schema ? `?schema=${space.schema}` : ''}`)
-        await page.getByLabel('変える表').selectOption({ label: 'members' })
+        await page.getByLabel('変えるもの').selectOption({ label: '表 members' })
         await expect(page.getByRole('status').filter({ hasText: /^表 members を変えると/ })).toBeVisible()
         await scan(page)
       })

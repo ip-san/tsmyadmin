@@ -1,51 +1,64 @@
 import { useQuery } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { type GraphNode, NodeGraph } from '@/components/node-graph/NodeGraph.tsx'
 import { DiagramLegend } from '@/components/schema-diagram/StepNarration.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale-screens.ts'
-import { type DependencyGraph, type DependencyNode, dependencyGraph, dependentsOf } from '@/lib/dependencies.ts'
+import { type DependencyGraph, dependencyGraph, dependencyLabel, dependentsOf } from '@/lib/dependencies.ts'
 import { dependenciesQuery, triggersQuery } from '@/lib/queries.ts'
 
 const t = locale.dependencies
 
-/** A node as it is named in the picture and in the sentences: its kind, then its name. */
-const nameOf = (n: DependencyNode) => t.named(t.kinds[n.kind], n.name)
-
-/** The edges in words, for the list beside the picture: who uses what, each once. */
-function edgeSentences(graph: DependencyGraph): string[] {
+/** The edges in words, for the list beside the picture: who uses what, each once (those among `only`, if given). */
+function edgeSentences(graph: DependencyGraph, only?: ReadonlySet<string>): string[] {
   const byId = new Map(graph.nodes.map((n) => [n.id, n]))
   return graph.edges.flatMap((e) => {
     const from = byId.get(e.from)
     const to = byId.get(e.to)
-    if (!from || !to) return []
-    return [e.kind === 'fires' ? t.fires(nameOf(from), nameOf(to)) : t.reads(nameOf(from), nameOf(to))]
+    if (!from || !to || (only && !(only.has(e.from) && only.has(e.to)))) return []
+    const say = e.kind === 'fires' ? t.fires : t.reads
+    return [say(dependencyLabel(from), dependencyLabel(to))]
   })
 }
 
 /**
- * Which views, routines and triggers use which tables, as a picture and in words: choosing a table lights what a
- * change to it reaches (directly or through views on it). Trigger bodies are not read, so a trigger is joined to
- * the table it is attached to only; MariaDB keeps no catalog of what views and routines use.
+ * Which views, routines and triggers use which tables and views, as a picture and in words: choosing one lights
+ * what a change to it reaches (directly or through views on it), and can draw only that. Trigger bodies are not
+ * read, so a trigger is joined to what it is attached to only; what a routine's body reads is known only where the
+ * catalog records it; MariaDB records nothing of what views and routines use.
  */
 export function Dependencies({ db, schema }: { db: string; schema?: string | undefined }) {
   const report = useQuery(dependenciesQuery(db, schema))
   const triggers = useQuery(triggersQuery(db, schema))
   const [chosen, setChosen] = useState('')
+  const [onlyReached, setOnlyReached] = useState(false)
+  const graph = useMemo(
+    () => dependencyGraph(report.data?.objects ?? [], triggers.data ?? []),
+    [report.data, triggers.data]
+  )
   if (report.isPending || triggers.isPending) return <Spinner />
   if (report.isError) return <ErrorBox error={report.error} onRetry={() => void report.refetch()} />
-  if (triggers.isError) return <ErrorBox error={triggers.error} onRetry={() => void triggers.refetch()} />
-  const graph = dependencyGraph(report.data.objects, triggers.data)
-  const tables = graph.nodes.filter((n) => n.kind === 'table').sort((a, b) => a.name.localeCompare(b.name))
-  const focus = tables.find((n) => n.id === chosen)
+  // What can be changed: a table, or a view (others use views too).
+  const changeable = graph.nodes
+    .filter((n) => n.kind === 'table' || n.kind === 'view')
+    .sort((a, b) => dependencyLabel(a).localeCompare(dependencyLabel(b)))
+  const focus = changeable.find((n) => n.id === chosen)
   const reached = focus ? dependentsOf(graph, focus.id) : []
   const lit = new Set(reached.map((n) => n.id))
-  const nodes: GraphNode[] = graph.nodes.map((n) => ({
-    id: n.id,
-    label: nameOf(n),
-    tone: n.id === focus?.id ? 'focus' : lit.has(n.id) ? 'nullify' : undefined,
-  }))
+  const kept = focus && onlyReached ? new Set([focus.id, ...lit]) : undefined
+  const nodes: GraphNode[] = graph.nodes
+    .filter((n) => !kept || kept.has(n.id))
+    .map((n) => ({
+      id: n.id,
+      label: dependencyLabel(n),
+      tone: n.id === focus?.id ? 'focus' : lit.has(n.id) ? 'nullify' : undefined,
+    }))
+  const said = focus
+    ? reached.length === 0
+      ? t.reachesNone(dependencyLabel(focus))
+      : t.reaches(dependencyLabel(focus), reached.map(dependencyLabel))
+    : ''
   return (
     <section className="space-y-3">
       <div className="flex flex-wrap items-baseline gap-3">
@@ -53,27 +66,36 @@ export function Dependencies({ db, schema }: { db: string; schema?: string | und
         <p className="text-xs text-ink-sub">{t.hint}</p>
       </div>
       {report.data.status === 'unsupported' ? <Notice>{t.unsupported}</Notice> : null}
+      {/* Without the triggers (not allowed to list them, say), what views and routines use is still drawn. */}
+      {triggers.isError ? <ErrorBox error={triggers.error} onRetry={() => void triggers.refetch()} /> : null}
       {graph.edges.length === 0 ? (
         <p className="text-sm text-ink-sub">{t.none}</p>
       ) : (
         <>
-          <label className="flex items-center gap-2 text-sm text-ink">
-            {t.change}
-            <Select value={chosen} onChange={(e) => setChosen(e.target.value)}>
-              <option value="">{t.noTable}</option>
-              {tables.map((n) => (
-                <option key={n.id} value={n.id}>
-                  {n.name}
-                </option>
-              ))}
-            </Select>
-          </label>
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-2 text-sm text-ink">
+              {t.change}
+              <Select value={chosen} onChange={(e) => setChosen(e.target.value)}>
+                <option value="">{t.noTable}</option>
+                {changeable.map((n) => (
+                  <option key={n.id} value={n.id}>
+                    {dependencyLabel(n)}
+                  </option>
+                ))}
+              </Select>
+            </label>
+            <label className="flex items-center gap-1 text-sm text-ink">
+              <input
+                type="checkbox"
+                checked={onlyReached}
+                disabled={!focus}
+                onChange={(e) => setOnlyReached(e.target.checked)}
+              />
+              {t.onlyReached}
+            </label>
+          </div>
           <p role="status" className="text-sm text-ink empty:mb-0">
-            {focus
-              ? reached.length === 0
-                ? t.reachesNone(focus.name)
-                : t.reaches(focus.name, reached.map(nameOf))
-              : ''}
+            {said}
           </p>
           <NodeGraph
             nodes={nodes}
@@ -83,11 +105,12 @@ export function Dependencies({ db, schema }: { db: string; schema?: string | und
           />
           <DiagramLegend tones={['focus', 'nullify']} labels={{ focus: t.legendTable, nullify: t.legendReached }} />
           <ul aria-label={t.sentences} className="list-disc space-y-0.5 pl-5 text-sm text-ink">
-            {edgeSentences(graph).map((s) => (
+            {edgeSentences(graph, kept).map((s) => (
               <li key={s}>{s}</li>
             ))}
           </ul>
           <p className="text-xs text-ink-sub">{t.triggerNote}</p>
+          <p className="text-xs text-ink-sub">{t.routineNote}</p>
         </>
       )}
     </section>

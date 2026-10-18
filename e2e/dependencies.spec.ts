@@ -17,7 +17,7 @@ for (const t of TARGETS) {
         await expect(words).toContainText('ビュー recent は ビュー active を使います')
         await expect(words).toContainText('ビュー active は 表 members を使います')
 
-        await page.getByLabel('変える表').selectOption({ label: 'members' })
+        await page.getByLabel('変えるもの').selectOption({ label: '表 members' })
         await expect(page.getByRole('status').filter({ hasText: /^表 members を変えると/ })).toHaveText(
           '表 members を変えると、ビュー active、ビュー recent に影響します（直接・間接）'
         )

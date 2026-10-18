@@ -2485,16 +2485,20 @@ export const jaScreens = {
   },
   dependencies: {
     title: '依存関係',
-    hint: 'ビュー・ルーチンが読む表と、トリガーが付いている表。表を選ぶと、その表を変えたときに影響するものを示します',
+    hint: 'ビュー（とカタログに記録のあるルーチン）が使う表・ビューと、トリガーが付いている表。表かビューを選ぶと、それを変えたときに影響するものを示します',
     kinds: { table: '表', view: 'ビュー', routine: 'ルーチン', trigger: 'トリガー' },
     named: (kind: string, name: string) => `${kind} ${name}`,
+    triggerNamed: (name: string, table: string) => `トリガー ${name}（${table}）`,
+    onlyReached: '影響するものだけを描く',
+    routineNote:
+      'ルーチンの本体が使う表は、カタログに記録があるもの（PostgreSQL の SQL 標準の本体など）だけを示します。MySQL では分かりません。図に無くても、ルーチンが使っていることがあります',
     reads: (from: string, to: string) => `${from} は ${to} を使います`,
     fires: (from: string, to: string) => `${from} は ${to} に付いています`,
-    change: '変える表',
+    change: '変えるもの',
     noTable: '（選ばない）',
-    reaches: (table: string, names: readonly string[]) =>
-      `表 ${table} を変えると、${names.join('、')} に影響します（直接・間接）`,
-    reachesNone: (table: string) => `表 ${table} を使うビュー・ルーチン・トリガーはありません`,
+    reaches: (what: string, names: readonly string[]) =>
+      `${what} を変えると、${names.join('、')} に影響します（直接・間接）`,
+    reachesNone: (what: string) => `${what} を使うビュー・ルーチン・トリガーはありません`,
     diagram: '依存関係の図（矢印は、使う側から使われる側へ）',
     sentences: '依存関係の一覧',
     legendTable: '選んだ表',

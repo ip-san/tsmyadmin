@@ -131,7 +131,8 @@ export function StructureView({ tableRef, dialect }: { tableRef: TableRef; diale
       >
         <ReferencedByTable schema={s} />
       </Card>
-      <UsedByCard tableRef={tableRef} view={s.kind !== 'table'} />
+      {/* A sequence is used through its value, not read: nothing here would say anything about it. */}
+      {s.kind === 'sequence' ? null : <UsedByCard tableRef={tableRef} view={s.kind !== 'table'} />}
       {editable ? <PartitionsCard tableRef={tableRef} dialect={dialect} onPreview={flow.preview} /> : null}
       <StatsCard tableRef={tableRef} />
       <Card title={locale.table.createStatement}>

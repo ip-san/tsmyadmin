@@ -1,6 +1,7 @@
 import type { ObjectDependency, TriggerInfo } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
-import { dependencyGraph, dependencyId, dependentsOf } from './dependencies.ts'
+import { locale } from '@/config/locale-screens.ts'
+import { dependencyGraph, dependencyId, dependencyLabel, dependentsOf } from './dependencies.ts'
 
 const view = (name: string, ...on: [ObjectDependency['dependsOn'][number]['kind'], string][]): ObjectDependency => ({
   kind: 'view',
@@ -36,8 +37,20 @@ describe('dependencyGraph', () => {
 
   it('joins a trigger to its table only, as firing on it', () => {
     expect(graph.edges.filter((e) => e.kind === 'fires')).toEqual([
-      { from: id('trigger', 'audit'), to: id('table', 'users'), kind: 'fires' },
+      { from: id('trigger', 'audit', 'users'), to: id('table', 'users'), kind: 'fires' },
     ])
+  })
+
+  it('keeps triggers of one name on two tables apart (PostgreSQL names them per table)', () => {
+    const g = dependencyGraph([], [trigger('stamp', 'users'), trigger('stamp', 'posts')])
+    expect(g.nodes.filter((n) => n.kind === 'trigger').map((n) => n.on)).toEqual(['users', 'posts'])
+    expect(dependentsOf(g, id('table', 'posts')).map((n) => n.id)).toEqual([id('trigger', 'stamp', 'posts')])
+  })
+
+  it('joins a trigger on a view to the view, not to a table of its name', () => {
+    const g = dependencyGraph([view('everyone', ['table', 'users'])], [trigger('instead', 'everyone')])
+    expect(g.nodes.filter((n) => n.name === 'everyone').map((n) => n.kind)).toEqual(['view'])
+    expect(dependentsOf(g, id('view', 'everyone')).map((n) => n.name)).toEqual(['instead'])
   })
 
   it('tells a view and a routine of one name apart, and leaves out an object depending on itself', () => {
@@ -57,5 +70,14 @@ describe('dependentsOf', () => {
     expect(dependentsOf(graph, id('view', 'recent'))).toEqual([])
     const cycle = dependencyGraph([view('a', ['view', 'b']), view('b', ['view', 'a'])], [])
     expect(dependentsOf(cycle, id('view', 'a')).map((n) => n.name)).toEqual(['b'])
+  })
+})
+
+describe('dependencyLabel', () => {
+  it('names a node by kind and name, and a trigger by its table too', () => {
+    const [t1] = dependencyGraph([], [trigger('stamp', 'users')]).nodes.filter((n) => n.kind === 'trigger')
+    expect(dependencyLabel(t1 as never)).toBe(locale.dependencies.triggerNamed('stamp', 'users'))
+    const users = graph.nodes.find((n) => n.id === id('table', 'users'))
+    expect(dependencyLabel(users as never)).toBe(locale.dependencies.named(locale.dependencies.kinds.table, 'users'))
   })
 })
