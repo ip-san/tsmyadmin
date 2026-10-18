@@ -73,14 +73,16 @@ export function MetadataSearch({ db, schema }: { db: string; schema?: string | u
   // What the status line says, as sentences: the count, and what was not searched or is being read again.
   const summary =
     term.trim() !== '' && data && !described.isError
-      ? [
-          t.found(total, data.tables),
-          total > matches.length ? t.shownFirst(matches.length) : '',
-          data.failed.length > 0 ? t.failed(data.failed.slice(0, FAILED_NAMED), data.failed.length - FAILED_NAMED) : '',
-          described.isFetching ? t.refreshing : '',
-        ]
-          .filter(Boolean)
-          .join(' ')
+      ? t.sentences(
+          [
+            t.found(total, data.tables),
+            total > matches.length ? t.shownFirst(matches.length) : '',
+            data.failed.length > 0
+              ? t.failed(data.failed.slice(0, FAILED_NAMED), data.failed.length - FAILED_NAMED)
+              : '',
+            described.isFetching ? t.refreshing : '',
+          ].filter(Boolean)
+        )
       : ''
   // Said once typing pauses, not on every key. The line is there from the start (empty), so it is heard, and it
   // stays, so it can be read again.

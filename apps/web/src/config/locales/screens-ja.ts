@@ -20,6 +20,7 @@ export const jaScreens = {
     shownFirst: (n: number) => `先頭の ${n.toLocaleString('ja-JP')} 件を表示しています。語を足すと絞れます。`,
     readAgain: '読めなかった表を読み直す',
     refreshing: '定義を読み直しています。',
+    sentences: (parts: readonly string[]) => parts.join(''),
     results: 'テーブル・カラムの検索結果',
     table: 'テーブル',
     column: 'カラム',

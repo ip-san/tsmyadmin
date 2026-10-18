@@ -19,6 +19,7 @@ export const enScreens = {
     shownFirst: (n: number) => `Showing the first ${n.toLocaleString('en-US')}; a longer term narrows them.`,
     readAgain: 'Read the tables that failed again',
     refreshing: 'Reading the definitions again.',
+    sentences: (parts: readonly string[]) => parts.join(' '),
     results: 'Tables and columns found',
     table: 'Table',
     column: 'Column',

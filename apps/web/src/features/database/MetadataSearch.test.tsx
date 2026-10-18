@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
+import { locale as common } from '@/config/locale.ts'
 import { locale } from '@/config/locale-screens.ts'
 import { MetadataSearch } from './MetadataSearch.tsx'
 
@@ -68,7 +69,7 @@ const mount = () =>
 
 /** The status line says exactly these sentences (a count of 11 is not a count of 1). */
 const says = (...sentences: string[]) =>
-  waitFor(() => expect(screen.getByRole('status').textContent).toBe(sentences.join(' ')))
+  waitFor(() => expect(screen.getByRole('status').textContent).toBe(t.sentences(sentences)))
 const failedOne = t.failed(['broken'], 0)
 
 describe('MetadataSearch', () => {
@@ -164,7 +165,7 @@ describe('MetadataSearch', () => {
     await userEvent.clear(input)
     await userEvent.type(input, 'zzz')
     // Typed at once: the line still says the last count for now, then the new one.
-    expect(screen.getByRole('status').textContent).toBe(`${t.found(1, 2)} ${failedOne}`)
+    expect(screen.getByRole('status').textContent).toBe(t.sentences([t.found(1, 2), failedOne]))
     await says(t.found(0, 2), failedOne)
   })
 
@@ -194,5 +195,17 @@ describe('MetadataSearch', () => {
     } finally {
       listFails = false
     }
+  })
+
+  it('shows the error when the first reading fails, says no count, and finds once it is tried again', async () => {
+    listFails = true
+    mount()
+    await userEvent.type(screen.getByLabelText(t.term), 'user_id')
+    // The error box announces itself (an alert); the status line stays empty.
+    expect(await screen.findByRole('alert')).toHaveTextContent(/server gone/)
+    expect(screen.getByRole('status')).toBeEmptyDOMElement()
+    listFails = false
+    await userEvent.click(screen.getByRole('button', { name: common.common.retry }))
+    await says(t.found(1, 2), failedOne)
   })
 })
