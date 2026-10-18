@@ -234,6 +234,7 @@ describe('useDesignerOverlays', () => {
     await userEvent.click(screen.getByRole('checkbox', { name: t.implicit.toggle }))
     expect(await screen.findByText(t.implicit.notDrawn(1))).toBeInTheDocument()
     expect(screen.queryByText(t.implicit.candidate('logs', 'post_id', 'posts', 'id'))).toBeNull()
-    expect(screen.getByText(t.implicit.none)).toBeInTheDocument()
+    // Not "none" beside "1 more": the list is empty because of the focus, not because there are none.
+    expect(screen.queryByText(t.implicit.none)).toBeNull()
   })
 })

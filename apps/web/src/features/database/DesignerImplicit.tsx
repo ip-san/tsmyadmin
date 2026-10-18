@@ -70,7 +70,7 @@ export function useImplicit({
         {listed.length < relations.length ? (
           <p className="text-xs text-ink-sub">{t.notDrawn(relations.length - listed.length)}</p>
         ) : null}
-        {listed.length === 0 ? (
+        {relations.length === 0 ? (
           <p className="text-sm text-ink-sub">{t.none}</p>
         ) : (
           <ul className="space-y-1 text-sm text-ink">

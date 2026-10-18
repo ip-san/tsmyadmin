@@ -38,6 +38,8 @@ for (const t of TARGETS) {
         await page.getByRole('combobox', { name: 'まわりだけ表示' }).selectOption('')
         await expect(page).not.toHaveURL(/focus=/)
         await expect(box('lone')).toBeVisible()
+        // Unfocused, the status line is empty and takes no room between the toolbar and the diagram.
+        await expect(page.locator('p[role="status"]:empty').first()).toHaveCSS('margin-bottom', '0px')
 
         // The comment, under its box and in its name.
         await page.getByRole('checkbox', { name: '表のコメントを出す' }).check()

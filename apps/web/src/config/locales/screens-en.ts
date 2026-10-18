@@ -155,7 +155,8 @@ export const enScreens = {
       failed: (n: number) =>
         `The columns of ${n.toLocaleString('en-US')} tables could not be read; no candidates were looked for there`,
       none: 'No candidates',
-      notDrawn: (n: number) => `${n.toLocaleString('en-US')} more with tables not drawn (shown without the focus)`,
+      notDrawn: (n: number) =>
+        `${n.toLocaleString('en-US')} more with tables not drawn here (shown with a longer reach, or without the focus)`,
       candidate: (table: string, column: string, refTable: string, refColumn: string) =>
         `${table}.${column} → ${refTable}.${refColumn}`,
       makeKey: 'Make a foreign key…',

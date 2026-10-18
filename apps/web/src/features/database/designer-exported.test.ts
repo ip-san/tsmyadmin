@@ -33,15 +33,30 @@ describe('exportedDiagram', () => {
     expect(d.columns.get('posts')).toEqual(['user_id'])
   })
 
-  it('writes what is drawn when focused, leaving out a table compared with and the candidates', () => {
+  it('writes what is drawn when focused: its keys, not a table compared with, nor a candidate', () => {
+    // A key a snapshot had, drawn while comparing: gone from the database, so not written.
+    const recorded = rel('gone', 'post_id', 'posts', 'fk_gone')
     const d = exportedDiagram({
       focused: true,
-      shown: { tables: ['posts', 'logs', 'gone'], relations: [candidate] },
+      shown: { tables: ['users', 'posts', 'logs', 'gone'], relations: [key, candidate, recorded] },
       names,
       keys: [key],
       allColumns: none,
     })
-    expect(d.tables).toEqual(['posts', 'logs'])
+    expect(d.tables).toEqual(['users', 'posts', 'logs'])
+    expect(d.relations).toEqual([key])
+    expect(d.columns.get('posts')).toEqual(['user_id'])
+    expect(d.columns.get('logs')).toEqual([])
+  })
+
+  it('leaves out a key of the database that the focus does not draw', () => {
+    const d = exportedDiagram({
+      focused: true,
+      shown: { tables: ['posts'], relations: [] },
+      names,
+      keys: [key],
+      allColumns: none,
+    })
     expect(d.relations).toEqual([])
   })
 
