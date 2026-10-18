@@ -12,6 +12,7 @@ import {
 } from './helpers.ts'
 import { layoutViolations } from './layout-lint.ts'
 import { lockChain } from './locks.ts'
+import { tablesWithComments } from './metadata.ts'
 import { openPlan } from './plan.ts'
 import { orphanedKey } from './references.ts'
 import { pageProblems } from './scan.ts'
@@ -472,6 +473,17 @@ for (const t of TARGETS) {
         await page.getByRole('dialog').getByRole('button', { name: '図で見る' }).click()
         await expect(page.getByRole('region', { name: 'スナップショット「前」と比べています' })).toBeVisible()
         await expect(page.getByRole('button', { name: /^テーブル b/ })).toHaveAttribute('data-tone', 'blocked')
+        await scan(page)
+      })
+    })
+
+    test('tables and columns found by name', async ({ page }) => {
+      await login(page, t)
+      await withScratchSpace(page, t, async (space) => {
+        await tablesWithComments(page, space)
+        await page.goto(`/db/${space.database}/search${space.schema ? `?schema=${space.schema}` : ''}`)
+        await page.getByLabel('探す語').fill('owner')
+        await expect(page.getByRole('table', { name: 'テーブル・カラムの検索結果' })).toBeVisible()
         await scan(page)
       })
     })

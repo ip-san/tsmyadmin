@@ -7,6 +7,26 @@ import type { Widen } from './ja.ts'
  * `ja.ts`, and `ScreensLocale` is the shape every other language's screens must have.
  */
 export const jaScreens = {
+  metadataSearch: {
+    title: 'テーブル・カラムを名前や型で探す',
+    term: '探す語',
+    termHint:
+      'テーブル名・カラム名・型・コメントから探します（行の値ではありません）。大文字と小文字、全角と半角は区別しません',
+    reading: 'テーブルの定義を読んでいます…',
+    found: (n: number, tables: number) =>
+      `${n.toLocaleString('ja-JP')} 件見つかりました（${tables.toLocaleString('ja-JP')} 個のテーブル・ビューから）。`,
+    failed: (names: readonly string[], more: number) =>
+      `定義を読めなかったため、探していません: ${names.join('、')}${more > 0 ? ` ほか ${more.toLocaleString('ja-JP')} 個` : ''}。`,
+    shownFirst: (n: number) => `先頭の ${n.toLocaleString('ja-JP')} 件を表示しています。語を足すと絞れます。`,
+    readAgain: '読めなかった表を読み直す',
+    refreshing: '定義を読み直しています。',
+    sentences: (parts: readonly string[]) => parts.join(''),
+    results: 'テーブル・カラムの検索結果',
+    table: 'テーブル',
+    column: 'カラム',
+    type: '型',
+    comment: 'コメント',
+  },
   databaseSearch: {
     deleteRows: '一致した行を削除…',
     deleteLabel: (table: string) => `${table}: 一致した行を削除`,
