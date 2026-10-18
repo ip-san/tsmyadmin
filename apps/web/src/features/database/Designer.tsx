@@ -32,6 +32,7 @@ import { DesignerPages } from './DesignerPages.tsx'
 import { DesignerToolbar } from './DesignerToolbar.tsx'
 import { diagramDia } from './designer-dia.ts'
 import { diagramEps } from './designer-eps.ts'
+import { exportedDiagram } from './designer-exported.ts'
 import { diagramSvg } from './designer-svg.ts'
 import { orphansText } from './reference-overlay.ts'
 
@@ -165,13 +166,13 @@ export function Designer({
       if (done) keep(next)
       else setSaved(next)
     })
-  // A focused diagram leaves as drawn; otherwise the database's tables (not those of a snapshot compared with).
-  const exported = focused.on
-    ? {
-        tables: shown.tables.filter((n) => names.includes(n)),
-        relations: shown.relations.filter((r) => drawn.includes(r)),
-      }
-    : { tables: names, relations: drawn }
+  const exported = exportedDiagram({
+    focused: focused.on,
+    shown,
+    names,
+    keys: drawn,
+    allColumns: (n) => (showAll ? all.get(n) : undefined),
+  })
   const pick = (table: string, column: string) => {
     // A table drawn from a snapshot is gone: a key cannot be made to or from it.
     if (!names.includes(table)) return
@@ -203,9 +204,9 @@ export function Designer({
           removePreference(storageKey)
           setSaved({})
         }}
-        svg={() => diagramSvg({ ...exported, positions, columns, display, view: shownView })}
-        dia={() => diagramDia({ ...exported, positions, columns, display, view: shownView })}
-        eps={() => diagramEps({ ...exported, positions, columns, display, view: shownView })}
+        svg={() => diagramSvg({ ...exported, positions, display, view: shownView })}
+        dia={() => diagramDia({ ...exported, positions, display, view: shownView })}
+        eps={() => diagramEps({ ...exported, positions, display, view: shownView })}
         fileBase={db}
         view={view}
         onView={changeView}
@@ -245,7 +246,7 @@ export function Designer({
         notes={notes}
         {...(relate ? { relate: { from, onPick: pick } } : {})}
       />
-      {overlays.below}
+      {overlays.below(shown.tables)}
       <DesignerKeys
         keys={keys.data}
         target={target}

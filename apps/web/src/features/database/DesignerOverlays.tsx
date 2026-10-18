@@ -105,10 +105,11 @@ export function useDesignerOverlays({
     },
     controls,
     above: comparing.panel,
-    below: (
+    /** What goes under the diagram, given the tables drawn (a focused diagram lists only its candidates). */
+    below: (drawn: readonly string[]) => (
       <>
         {usage.panel}
-        {implicit.panel}
+        {implicit.panel(drawn)}
       </>
     ),
     refsOn,

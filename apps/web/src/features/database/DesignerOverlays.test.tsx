@@ -83,11 +83,14 @@ function Harness({
   compare,
   many = false,
   postKey = false,
+  drawn,
 }: {
   compare?: string | undefined
   many?: boolean
   /** logs.post_id made a key (the candidate taken up). */
   postKey?: boolean
+  /** The tables the diagram draws (all, when not given). */
+  drawn?: readonly string[] | undefined
 }) {
   const o = useDesignerOverlays({
     db: 'shop',
@@ -112,7 +115,7 @@ function Harness({
     <div>
       {o.controls}
       {o.above}
-      {o.below}
+      {o.below(drawn ?? (many ? MANY : ['users', 'posts', 'logs']))}
       <p data-testid="lit">{[...(overlay?.relationBadges?.values() ?? [])].join(',')}</p>
       <p data-testid="lines">
         {o.withCandidates({ tables: ['logs'], relations: [] }).relations.length}/
@@ -122,11 +125,11 @@ function Harness({
   )
 }
 
-const mount = (compare?: string, many = false, postKey = false) =>
+const mount = (compare?: string, many = false, postKey = false, drawn?: readonly string[]) =>
   render(
     // The app's client retries nothing either for these (a whole-table read is not run twice on its own).
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <Harness compare={compare} many={many} postKey={postKey} />
+      <Harness compare={compare} many={many} postKey={postKey} drawn={drawn} />
     </QueryClientProvider>
   )
 
@@ -224,5 +227,13 @@ describe('useDesignerOverlays', () => {
     mount(undefined, false, true)
     await userEvent.click(screen.getByRole('checkbox', { name: t.implicit.toggle }))
     expect(await screen.findByText(t.implicit.none)).toBeInTheDocument()
+  })
+
+  it('lists only the candidates the diagram draws, and says how many more there are', async () => {
+    mount(undefined, false, false, ['logs', 'users'])
+    await userEvent.click(screen.getByRole('checkbox', { name: t.implicit.toggle }))
+    expect(await screen.findByText(t.implicit.notDrawn(1))).toBeInTheDocument()
+    expect(screen.queryByText(t.implicit.candidate('logs', 'post_id', 'posts', 'id'))).toBeNull()
+    expect(screen.getByText(t.implicit.none)).toBeInTheDocument()
   })
 })

@@ -84,7 +84,15 @@ export function useDesignerFocus({
     /** Said above the diagram: what is drawn while focused, or that the table asked for is not here (renamed, dropped). */
     // A status line from the start (empty without a focus), so a change of focus or reach is heard.
     notice: (drawn: number, total: number) => (
-      <p role="status" className="text-xs text-ink-sub">
+      <p
+        role="status"
+        // Empty, it takes no room in the column of the page; a table not found is said as a warning.
+        className={
+          missing
+            ? 'rounded bg-amber-50 px-2 py-1 text-xs text-amber-900 dark:bg-amber-950 dark:text-amber-200'
+            : 'text-xs text-ink-sub empty:mb-0'
+        }
+      >
         {missing ? t.missing(focus ?? '') : on ? t.showing(focus ?? '', hops, drawn, total) : ''}
       </p>
     ),

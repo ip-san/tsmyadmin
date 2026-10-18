@@ -44,9 +44,9 @@ export function useImplicit({
   const structures = useQueries({
     queries: names.map((table) => ({ ...structureQuery({ db, schema, table }), enabled: on })),
   })
-  if (!on) return { relations: [] as RelationDef[], overlay: undefined, panel: null }
+  if (!on) return { relations: [] as RelationDef[], overlay: undefined, panel: () => null }
   if (structures.some((s) => s.isPending))
-    return { relations: [], overlay: undefined, panel: <Spinner label={t.reading} /> }
+    return { relations: [], overlay: undefined, panel: () => <Spinner label={t.reading} /> }
   const shapes = structures.flatMap((s) =>
     s.data ? [{ name: s.data.name, columns: s.data.columns.map((c) => c.name), primaryKey: s.data.primaryKey }] : []
   )
@@ -58,27 +58,34 @@ export function useImplicit({
     fade: false,
   }
   const failed = structures.filter((s) => s.isError).length
-  const panel = (
-    <section aria-label={t.title} className="space-y-1 print:hidden">
-      <h3 className="text-sm font-semibold text-ink">{t.title}</h3>
-      <DiagramLegend tones={['blocked']} labels={{ blocked: t.legend }} />
-      <p className="text-xs text-ink-sub">{t.hint}</p>
-      {failed > 0 ? <p className="text-xs text-ink-sub">{t.failed(failed)}</p> : null}
-      {relations.length === 0 ? (
-        <p className="text-sm text-ink-sub">{t.none}</p>
-      ) : (
-        <ul className="space-y-1 text-sm text-ink">
-          {relations.map((r) => (
-            <li key={relationKey(r)} className="flex flex-wrap items-center gap-2">
-              <span>{t.candidate(r.table, r.columns[0] ?? '', r.refTable, r.refColumns[0] ?? '')}</span>
-              <Button size="sm" aria-haspopup="dialog" onClick={() => onMakeKey(r)}>
-                {t.makeKey}
-              </Button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  )
+  /** The list under the diagram: the candidates between the tables drawn (the lines there are), and how many more. */
+  const panel = (drawn: readonly string[]) => {
+    const listed = relations.filter((r) => drawn.includes(r.table) && drawn.includes(r.refTable))
+    return (
+      <section aria-label={t.title} className="space-y-1 print:hidden">
+        <h3 className="text-sm font-semibold text-ink">{t.title}</h3>
+        <DiagramLegend tones={['blocked']} labels={{ blocked: t.legend }} />
+        <p className="text-xs text-ink-sub">{t.hint}</p>
+        {failed > 0 ? <p className="text-xs text-ink-sub">{t.failed(failed)}</p> : null}
+        {listed.length < relations.length ? (
+          <p className="text-xs text-ink-sub">{t.notDrawn(relations.length - listed.length)}</p>
+        ) : null}
+        {listed.length === 0 ? (
+          <p className="text-sm text-ink-sub">{t.none}</p>
+        ) : (
+          <ul className="space-y-1 text-sm text-ink">
+            {listed.map((r) => (
+              <li key={relationKey(r)} className="flex flex-wrap items-center gap-2">
+                <span>{t.candidate(r.table, r.columns[0] ?? '', r.refTable, r.refColumns[0] ?? '')}</span>
+                <Button size="sm" aria-haspopup="dialog" onClick={() => onMakeKey(r)}>
+                  {t.makeKey}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    )
+  }
   return { relations, overlay, panel }
 }

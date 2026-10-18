@@ -497,6 +497,10 @@ for (const t of TARGETS) {
         )
         await page.getByRole('checkbox', { name: '表のコメントを出す' }).check()
         await page.getByRole('checkbox', { name: '外部キーの無い参照の候補' }).check()
+        // Focused on owners, which no key joins: its candidate (from pets) is counted, not listed.
+        await expect(page.getByText(/^図に出ていない表との候補が 1 件あります/)).toBeVisible()
+        await scan(page)
+        await page.getByRole('combobox', { name: 'まわりだけ表示' }).selectOption('')
         await expect(page.getByRole('button', { name: '外部キーにする…' })).toHaveCount(1)
         await scan(page)
       })

@@ -154,6 +154,8 @@ export const jaScreens = {
       reading: '全テーブルのカラムを読んでいます…',
       failed: (n: number) => `${n.toLocaleString('ja-JP')} 個の表はカラムを読めなかったので、候補を探していません`,
       none: '候補はありません',
+      notDrawn: (n: number) =>
+        `図に出ていない表との候補が ${n.toLocaleString('ja-JP')} 件あります（まわりだけ表示を外すと出ます）`,
       candidate: (table: string, column: string, refTable: string, refColumn: string) =>
         `${table}.${column} → ${refTable}.${refColumn}`,
       makeKey: '外部キーにする…',
