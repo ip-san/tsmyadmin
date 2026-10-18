@@ -3,6 +3,7 @@ import { queryOptions } from '@tanstack/react-query'
 import type {
   BrowseOptions,
   BrowseResult,
+  ColumnProfile,
   DdlPreviewResponse,
   DeleteImpact,
   DistinctValues,
@@ -135,6 +136,19 @@ export const deleteImpactQuery = (ref: TableRef, keys: RowKey[]) =>
       ),
     staleTime: 0,
     gcTime: 0,
+  })
+
+/** How many NULLs and distinct values each column holds, in a sample of the first rows (the overview tab). */
+export const columnProfileQuery = (ref: TableRef) =>
+  queryOptions({
+    queryKey: ['structure', ref.db, ref.schema ?? '', ref.table, 'profile'],
+    queryFn: () =>
+      unwrap<ColumnProfile>(
+        api.databases[':db'].tables[':table'].profile.$get({
+          param: { db: enc(ref.db), table: enc(ref.table) },
+          query: schemaQuery(ref.schema),
+        })
+      ),
   })
 
 export const distinctValuesQuery = (ref: TableRef, column: string) =>

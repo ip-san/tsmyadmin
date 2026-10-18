@@ -4,6 +4,7 @@ import {
   AffectedRowsSchema,
   ApiErrorSchema,
   BrowseResultSchema,
+  ColumnProfileSchema,
   DdlPreviewResponseSchema,
   DeleteImpactSchema,
   DependencyReportSchema,
@@ -564,6 +565,18 @@ describe('sql & ddl', () => {
     expect(report.tables.map((t) => t.table)).toEqual(['users', 'posts'])
     expect(h.adapter.calls.at(-1)).toEqual({ method: 'tableUsage', args: [{ database: 'shop', schema: 'app' }] })
     expect((await h.req('/api/databases/nope/usage')).status).toBe(404)
+  })
+
+  it('profiles the columns of a table from a sample of its rows', async () => {
+    const h = harness()
+    stores.push(h.store)
+    await h.login()
+    const res = await h.req('/api/databases/shop/tables/users/profile')
+    expect(res.status).toBe(200)
+    const profile = ColumnProfileSchema.parse(await res.json())
+    expect(profile.columns.map((c) => c.column)).toEqual(['id', 'name'])
+    expect(profile.sampled).toBeGreaterThan(0)
+    expect((await h.req('/api/databases/shop/tables/nope/profile')).status).toBe(404)
   })
 
   it('reports what the views and routines depend on, and says so where the server keeps no catalog', async () => {

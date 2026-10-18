@@ -506,6 +506,18 @@ for (const t of TARGETS) {
       })
     })
 
+    test('table overview', async ({ page }) => {
+      await login(page, t)
+      await withScratchSpace(page, t, async (space) => {
+        await tablesWithComments(page, space)
+        await sqlOn(page, space, 'INSERT INTO owners VALUES (1, NULL)')
+        await page.goto(tableUrl(space, 'owners', '/overview'))
+        await expect(page.getByRole('table', { name: 'カラムごとの NULL の割合と値の種類' })).toBeVisible()
+        await expect(page.getByText(/行を数えました/)).toBeVisible()
+        await scan(page)
+      })
+    })
+
     test('dependency diagram with a table chosen', async ({ page }) => {
       await login(page, t)
       await withScratchSpace(page, t, async (space) => {

@@ -4,6 +4,7 @@ import type {
   BrowseResult,
   Cell,
   ColumnMeta,
+  ColumnProfile,
   DatabaseGrant,
   DatabaseInfo,
   DdlOp,
@@ -291,6 +292,8 @@ export interface DatabaseAdapter {
   deleteImpact(ns: Namespace, table: string, keys: RowKey[]): Promise<DeleteImpact>
   /** The distinct values of one column with their counts, most frequent first (at most `DISTINCT_VALUES_LIMIT`). */
   distinctValues(ns: Namespace, table: string, column: string): Promise<DistinctValues>
+  /** How many NULLs and distinct values each column holds, in a sample of the table's first rows. Reads only. */
+  columnProfile(ns: Namespace, table: string): Promise<ColumnProfile>
   /**
    * A SELECT over the given tables for the SQL tab, joined along the foreign keys between them. Only reads
    * structure; refuses tables that no foreign key connects to the rest.
@@ -426,6 +429,7 @@ export const ADAPTER_METHOD_NAMES = [
   'browseRows',
   'searchTable',
   'distinctValues',
+  'columnProfile',
   'checkReferences',
   'tableUsage',
   'deleteImpact',

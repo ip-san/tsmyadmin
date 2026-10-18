@@ -168,3 +168,33 @@ export const DistinctValuesSchema = z.object({
   truncated: z.boolean(),
 })
 export type DistinctValues = z.infer<typeof DistinctValuesSchema>
+
+/** Rows a column profile reads at most: the first ones, so a table of any size answers in about the same time. */
+export const PROFILE_SAMPLE_ROWS = 10_000
+/** Columns a profile counts at most (one statement counts them all; a table of hundreds is cut, and says so). */
+export const PROFILE_MAX_COLUMNS = 200
+
+/**
+ * What the values of each column are like, in a sample of the table's first rows (GET …/tables/:table/profile):
+ * how many are NULL and how many differ. `distinct` is null for a column whose values cannot be compared (binary,
+ * JSON, spatial, arrays): counting them would fail or mean little. Read from the rows, not the server's statistics,
+ * which differ by version and by whether the table was analysed.
+ */
+export const ColumnProfileSchema = z.object({
+  /** Rows read: all of them when there are fewer than `PROFILE_SAMPLE_ROWS`. */
+  sampled: z.number().int().min(0),
+  /** The sample is full (`PROFILE_SAMPLE_ROWS`): the table has at least that many rows. */
+  capped: z.boolean(),
+  columns: z.array(
+    z.object({
+      column: z.string(),
+      nulls: z.number().int().min(0),
+      distinct: z.number().int().min(0).nullable(),
+      /** Long text compared by its first characters: `distinct` is then an estimate (it may count fewer). */
+      prefix: z.boolean().default(false),
+    })
+  ),
+  /** Columns past `PROFILE_MAX_COLUMNS`, not counted. */
+  omitted: z.number().int().min(0),
+})
+export type ColumnProfile = z.infer<typeof ColumnProfileSchema>

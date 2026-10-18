@@ -187,6 +187,7 @@ export const ja = {
     tracking: '追跡',
     snapshots: 'スナップショット',
     databases: 'データベース',
+    overview: '概要',
     structure: '構造',
     sql: 'SQL',
     search: '検索',

@@ -183,6 +183,117 @@ export function describeSearchAndQuery(env: ConformanceEnv): void {
     })
   })
 
+  describe('columnProfile', () => {
+    it('counts the NULLs and distinct values of each column, and leaves the ones it cannot compare uncounted', async () => {
+      const t = `${scratch}_cp`
+      const blob = dialect === 'mysql' ? 'BLOB' : 'BYTEA'
+      await execOk(`CREATE TABLE ${t} (id INT PRIMARY KEY, colour VARCHAR(10), note VARCHAR(10), data ${blob})`)
+      try {
+        await execOk(
+          `INSERT INTO ${t} (id, colour, note) VALUES (1, 'red', NULL), (2, 'blue', NULL), (3, 'red', 'x'), (4, NULL, NULL)`
+        )
+        const p = await env.db.columnProfile(ns, t)
+        expect(p).toMatchObject({ sampled: 4, capped: false, omitted: 0 })
+        expect(p.columns).toEqual([
+          { column: 'id', nulls: 0, distinct: 4, prefix: false },
+          { column: 'colour', nulls: 1, distinct: 2, prefix: false },
+          { column: 'note', nulls: 3, distinct: 1, prefix: false },
+          { column: 'data', nulls: 4, distinct: null, prefix: false },
+        ])
+        await expect(env.db.columnProfile(ns, `${t}_none`)).rejects.toMatchObject({ code: 'NOT_FOUND' })
+      } finally {
+        await execOk(`DROP TABLE IF EXISTS ${t}`)
+      }
+    })
+
+    it('counts a table of documents, shapes, arrays and types of its own without failing', async () => {
+      const t = `${scratch}_cpt`
+      const kinds = `${t}_kind`
+      const doc = `${t}_doc`
+      if (dialect === 'mysql') {
+        await execOk(
+          `CREATE TABLE ${t} (id INT PRIMARY KEY, j JSON, g GEOMETRY, s SET('a', 'b'), b BIT(4), e ENUM('x', 'y'), body LONGTEXT)`
+        )
+        await execOk(
+          `INSERT INTO ${t} VALUES (1, '{"a": 1}', ST_GeomFromText('POINT(1 1)'), 'a', b'1010', 'x', REPEAT('z', 1000)), (2, NULL, NULL, 'b', NULL, 'x', NULL)`
+        )
+      } else {
+        await execOk(`CREATE TYPE ${kinds} AS ENUM ('x', 'y')`)
+        await execOk(`CREATE DOMAIN ${doc} AS json`)
+        await execOk(
+          `CREATE TABLE ${t} (id INT PRIMARY KEY, j JSON, jb JSONB, p POINT, a INT[], d ${doc}, e ${kinds}, x XML, body TEXT)`
+        )
+        await execOk(
+          `INSERT INTO ${t} VALUES (1, '{"a": 1}', '{"a": 1}', '(1,1)', '{1,2}', '{"a": 1}', 'x', '<a/>', repeat('z', 1000)), (2, NULL, NULL, NULL, NULL, NULL, 'x', NULL, NULL)`
+        )
+      }
+      try {
+        const p = await env.db.columnProfile(ns, t)
+        expect(p.sampled).toBe(2)
+        const of = (column: string) => p.columns.find((c) => c.column === column)
+        expect(of('id')).toEqual({ column: 'id', nulls: 0, distinct: 2, prefix: false })
+        // MariaDB's JSON is LONGTEXT with a check: compared as text, by its first characters.
+        expect(of('j')).toEqual({
+          column: 'j',
+          nulls: 1,
+          distinct: (await isMariaDb()) ? 1 : null,
+          prefix: await isMariaDb(),
+        })
+        expect(of('body')).toEqual({ column: 'body', nulls: 1, distinct: 1, prefix: true })
+        if (dialect === 'mysql') {
+          expect(of('g')).toEqual({ column: 'g', nulls: 1, distinct: null, prefix: false })
+          expect(of('s')).toEqual({ column: 's', nulls: 0, distinct: 2, prefix: false })
+          expect(of('e')).toEqual({ column: 'e', nulls: 0, distinct: 1, prefix: false })
+        } else {
+          for (const c of ['jb', 'p', 'a', 'd', 'x'])
+            expect(of(c)).toEqual({ column: c, nulls: 1, distinct: null, prefix: false })
+          // A type of the schema's own: not known to be plain, so its values are not compared.
+          expect(of('e')).toEqual({ column: 'e', nulls: 0, distinct: null, prefix: false })
+        }
+      } finally {
+        await execOk(`DROP TABLE IF EXISTS ${t}`)
+        if (dialect === 'postgres') {
+          await execOk(`DROP DOMAIN IF EXISTS ${doc}`)
+          await execOk(`DROP TYPE IF EXISTS ${kinds}`)
+        }
+      }
+    })
+
+    it('compares long text by its first characters, and says so', async () => {
+      const t = `${scratch}_cpx`
+      await execOk(`CREATE TABLE ${t} (id INT PRIMARY KEY, body TEXT)`)
+      try {
+        // Two values alike in their first 256 characters: counted as one, an estimate the profile marks.
+        const head = 'a'.repeat(300)
+        await execOk(`INSERT INTO ${t} VALUES (1, '${head}x'), (2, '${head}y')`)
+        const p = await env.db.columnProfile(ns, t)
+        expect(p.columns.find((c) => c.column === 'body')).toEqual({
+          column: 'body',
+          nulls: 0,
+          distinct: 1,
+          prefix: true,
+        })
+      } finally {
+        await execOk(`DROP TABLE IF EXISTS ${t}`)
+      }
+    })
+
+    it('reads an empty table as no rows', async () => {
+      const t = `${scratch}_cpe`
+      await execOk(`CREATE TABLE ${t} (id INT PRIMARY KEY)`)
+      try {
+        expect(await env.db.columnProfile(ns, t)).toEqual({
+          sampled: 0,
+          capped: false,
+          columns: [{ column: 'id', nulls: 0, distinct: 0, prefix: false }],
+          omitted: 0,
+        })
+      } finally {
+        await execOk(`DROP TABLE IF EXISTS ${t}`)
+      }
+    })
+  })
+
   describe('distinctValues', () => {
     it('lists each value with its count, most frequent first, NULL included, and refuses an unknown column', async () => {
       const t = `${scratch}_dv`

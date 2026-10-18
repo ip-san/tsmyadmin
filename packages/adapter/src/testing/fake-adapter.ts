@@ -3,6 +3,7 @@ import type {
   BrowseOptions,
   BrowseResult,
   Cell,
+  ColumnProfile,
   DatabaseGrant,
   DatabaseInfo,
   DdlOp,
@@ -49,7 +50,7 @@ import type {
   UserInfo,
   UserRef,
 } from '@tsmyadmin/shared'
-import { isFunctionCell } from '@tsmyadmin/shared'
+import { isFunctionCell, PROFILE_SAMPLE_ROWS } from '@tsmyadmin/shared'
 import { mysqlDdl } from '../mysql/ddl.ts'
 import { mysqlExporter } from '../mysql/export.ts'
 import { mysqlPrepareDdl } from '../mysql/prepare-ddl.ts'
@@ -505,6 +506,24 @@ export class FakeAdapter implements DatabaseAdapter {
       counts.set(JSON.stringify(value), entry)
     }
     return { values: [...counts.values()].sort((a, b) => b.count - a.count), truncated: false }
+  }
+
+  async columnProfile(ns: Namespace, table: string): Promise<ColumnProfile> {
+    this.record('columnProfile', ns, table)
+    const { schema, rows } = this.table(ns, table)
+    const sample = rows.slice(0, PROFILE_SAMPLE_ROWS)
+    return {
+      sampled: sample.length,
+      capped: rows.length >= PROFILE_SAMPLE_ROWS,
+      columns: schema.columns.map((c) => ({
+        column: c.name,
+        nulls: sample.filter((r) => (r[c.name] ?? null) === null).length,
+        distinct: new Set(sample.flatMap((r) => ((r[c.name] ?? null) === null ? [] : [JSON.stringify(r[c.name])])))
+          .size,
+        prefix: false,
+      })),
+      omitted: 0,
+    }
   }
 
   async searchTable(ns: Namespace, table: string, term: string, options?: SearchOptions): Promise<TableSearchResult> {
