@@ -36,6 +36,7 @@ describe('useAllStructures', () => {
     expect([...(result.current.data?.byName.keys() ?? [])]).toEqual(['a', 'b', 'c', 'd', 'e', 'f', 'g'])
     expect(result.current.data?.failed).toEqual(['broken'])
     expect(most).toBeLessThanOrEqual(4)
+    expect(most).toBeGreaterThan(1)
   })
 
   it('reads nothing when not asked, or when there is nothing to read', () => {
@@ -43,5 +44,20 @@ describe('useAllStructures', () => {
     renderHook(() => useAllStructures('shop', undefined, ['a'], { enabled: false }), { wrapper })
     renderHook(() => useAllStructures('shop', undefined, []), { wrapper })
     expect(read).not.toHaveBeenCalled()
+  })
+
+  it('reads each table once for two screens asking for the same tables, and again only the ones that failed', async () => {
+    read.mockClear()
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const shared = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    )
+    const names = ['a', 'broken']
+    const one = renderHook(() => useAllStructures('db2', undefined, names), { wrapper: shared })
+    renderHook(() => useAllStructures('db2', undefined, names), { wrapper: shared })
+    await waitFor(() => expect(one.result.current.data).toBeDefined())
+    expect(read.mock.calls.map((c) => c[0]).sort()).toEqual(['a', 'broken'])
+    await one.result.current.refetch()
+    expect(read.mock.calls.map((c) => c[0]).sort()).toEqual(['a', 'broken', 'broken'])
   })
 })

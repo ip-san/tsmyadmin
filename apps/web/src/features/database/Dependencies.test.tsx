@@ -185,4 +185,16 @@ describe('Dependencies', () => {
       await screen.findByText(t.reaches(t.named(t.kinds.table, 'users'), [t.named(t.kinds.view, 'active')]))
     ).toHaveAttribute('role', 'status')
   })
+
+  it('chooses nothing when the start a link names is not in the diagram', async () => {
+    report = { status: 'ok', objects: [view('active', 'users')] }
+    triggers = []
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <Dependencies db="shop" focus={dependencyId('table', 'nowhere')} />
+      </QueryClientProvider>
+    )
+    expect(await screen.findByRole('img', { name: t.diagram })).toBeInTheDocument()
+    expect(screen.getByLabelText(t.change)).toHaveValue('')
+  })
 })

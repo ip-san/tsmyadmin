@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { TableSchema } from '@tsmyadmin/shared'
 import { eachLimited } from './each-limited.ts'
 import { structureQuery } from './queries.ts'
@@ -18,7 +18,8 @@ export interface AllStructures {
 /**
  * The definition of every one of `names`, read a few at a time (`eachLimited`): a database of hundreds of tables
  * must not send hundreds of requests at once, here or on any screen that reads them all (the metadata search, the
- * Designer's columns and candidates, the data dictionary). One table that fails leaves the others' standing, and
+ * Designer's columns and candidates, the data dictionary). Each table's definition is cached on its own, so screens
+ * that read a different set of tables still read each table once. One table that fails leaves the others' standing, and
  * reading again reads only the ones that failed (the others are kept as long as this is).
  */
 export function useAllStructures(
@@ -44,5 +45,7 @@ export function useAllStructures(
     },
     enabled: enabled && names.length > 0,
     staleTime: DEFINITIONS_STALE_MS,
+    // A table made or dropped changes the names, and so the key: the definitions read stay shown meanwhile.
+    placeholderData: keepPreviousData,
   })
 }

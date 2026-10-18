@@ -59,13 +59,16 @@ vi.mock('@/lib/queries.ts', () => ({
   }),
 }))
 
-const mount = () =>
-  render(
-    // Stale at once by default, as everything is after the app's few seconds: what this screen keeps longer, it says.
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 0 } } })}>
+let client: QueryClient
+const mount = () => {
+  // Stale at once by default, as everything is after the app's few seconds: what this screen keeps longer, it says.
+  client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 0 } } })
+  return render(
+    <QueryClientProvider client={client}>
       <MetadataSearch db="shop" />
     </QueryClientProvider>
   )
+}
 
 /** The status line says exactly these sentences (a count of 11 is not a count of 1). */
 const says = (...sentences: string[]) =>
@@ -152,9 +155,9 @@ describe('MetadataSearch', () => {
     await userEvent.clear(input)
     await userEvent.type(input, 'id')
     await says(t.found(2, 2), failedOne)
+    // The definitions are kept; only the list of tables may be read again (as fresh as other screens have it).
     expect(readsOf('users')).toBe(1)
-    // Not even the list of tables: the search is not run again.
-    expect(listed).toHaveBeenCalledTimes(1)
+    expect(readsOf('posts')).toBe(1)
   })
 
   it('says the count once typing pauses, not on every key', async () => {
@@ -181,13 +184,14 @@ describe('MetadataSearch', () => {
     }
   })
 
-  it('keeps the results and says nothing of them when reading again fails, showing the error', async () => {
+  it('keeps the results and says nothing of them when the list of tables fails on reading again, showing the error', async () => {
     mount()
     await userEvent.type(screen.getByLabelText(t.term), 'user_id')
     await says(t.found(1, 2), failedOne)
     listFails = true
     try {
-      await userEvent.click(screen.getByRole('button', { name: t.readAgain }))
+      // The list read again on its own (it is as fresh as the other screens keep it), and failing.
+      await client.refetchQueries({ queryKey: ['tables'] })
       expect(await screen.findByText(/server gone/)).toBeInTheDocument()
       // The count is not said as if all were well; the results of the reading before stay.
       await waitFor(() => expect(screen.getByRole('status')).toBeEmptyDOMElement())

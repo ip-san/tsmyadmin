@@ -110,8 +110,22 @@ describe('UsedByCard', () => {
     expect(active.getAttribute('href')).toContain('/overview?')
     expect(active.getAttribute('href')).toContain('"table":"active"')
     const all = screen.getByRole('link', { name: t.openAll })
-    expect(all.getAttribute('href')).toContain(
-      JSON.stringify(dependencyId('table', 'users')).slice(1, -1).replaceAll('\\"', '\\"')
-    )
+    expect(all.getAttribute('href')).toContain(JSON.stringify({ focus: dependencyId('table', 'users') }).slice(1, -1))
+  })
+
+  it('names a routine or a trigger without a link, and opens the diagram unchosen for what nothing uses', async () => {
+    triggerList = [{ name: 'stamp', table: 'users' }]
+    try {
+      const { unmount } = mount('users')
+      expect(await screen.findByText(t.triggerNamed('stamp', 'users'))).toBeInTheDocument()
+      expect(screen.queryByRole('link', { name: t.triggerNamed('stamp', 'users') })).toBeNull()
+      unmount()
+    } finally {
+      triggerList = []
+    }
+    // lonely takes no part in any dependency: not in the diagram, so the link chooses nothing.
+    mount('lonely')
+    const all = await screen.findByRole('link', { name: t.openAll })
+    expect(all.getAttribute('href')).not.toContain('focus')
   })
 })

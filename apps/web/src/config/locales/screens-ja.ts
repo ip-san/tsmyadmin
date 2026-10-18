@@ -125,7 +125,7 @@ export const jaScreens = {
     compare: {
       title: (name: string) => `スナップショット「${name}」と比べています`,
       summary: (added: number, removed: number, changed: number) =>
-        `追加 ${added}・削除 ${removed}・変更 ${changed}（変わらない表は薄く描きます）`,
+        `追加 ${added}・削除 ${removed}・変更 ${changed}（変わらないテーブルは薄く描きます）`,
       added: '追加',
       removed: '削除',
       changed: '変更',
@@ -164,7 +164,7 @@ export const jaScreens = {
     refCheck: {
       check: '参照を検査',
       checkHint:
-        '外部キーごとに、参照先が無い行（親のいない行）を数えて、線に出します。表を全件読むので、大きな表では時間がかかります',
+        '外部キーごとに、参照先が無い行（親のいない行）を数えて、線に出します。テーブルを全件読むので、大きなテーブルでは時間がかかります',
       checking: '検査しています…',
       orphans: (n: number) => `参照先なし ${n.toLocaleString('ja-JP')}`,
       column: '参照先が無い行',
@@ -172,7 +172,7 @@ export const jaScreens = {
       notChecked: '検査していません',
       count: (n: number) => n.toLocaleString('ja-JP'),
       done: (n: number, failed: number) =>
-        `${n.toLocaleString('ja-JP')} 表を検査しました${failed > 0 ? `（${failed.toLocaleString('ja-JP')} 表は検査できませんでした）` : ''}`,
+        `${n.toLocaleString('ja-JP')} テーブルを検査しました${failed > 0 ? `（${failed.toLocaleString('ja-JP')} テーブルは検査できませんでした）` : ''}`,
       legend: '参照先が無い行がある',
     },
     usage: {
@@ -197,11 +197,11 @@ export const jaScreens = {
       unsupported:
         'サーバーが統計を数えていません。MySQL / MariaDB は performance_schema を有効にすると見られます（MariaDB は既定で無効）',
     },
-    compact: '表名だけにする',
+    compact: 'テーブル名だけにする',
     snap: '格子に合わせる',
     snapHint: '格子（20 px）を表示し、置いてある箱を格子に揃える。以降の移動も格子に合う',
     fitWidth: '名前に合わせて幅を広げる',
-    fitWidthHint: '箱の幅を、表名とカラム名のいちばん長いものに合わせる（上限あり）。自動配置の列の間隔も広がる',
+    fitWidthHint: '箱の幅を、テーブル名とカラム名のいちばん長いものに合わせる（上限あり）。自動配置の列の間隔も広がる',
     showLines: '線を表示',
     lineLabels: '線にカラム名を付ける',
     showComments: 'テーブルのコメントを出す',
@@ -296,7 +296,7 @@ export const jaScreens = {
     none: (table: string, key: string) => `${table}: 参照している行はない（${key}）`,
     tooMany: (max: number) => `影響を見られるのは ${max} 行までです。選ぶ行を減らしてください`,
     noRows: '一致する行がありません（すでに消えている可能性があります）',
-    noKeys: 'この表を参照する外部キーはありません。消えるのは選んだ行だけです',
+    noKeys: 'このテーブルを参照する外部キーはありません。消えるのは選んだ行だけです',
     blocked: 'この削除は失敗します。RESTRICT / NO ACTION の外部キーに、参照している行が残っています',
     capped: '段の数か、たどる外部キーの数が上限に達したので、途中で止めました',
     notes:
@@ -2569,6 +2569,8 @@ export const jaScreens = {
   },
   dictionary: {
     failed: (names: readonly string[]) => `定義を読めなかったテーブル: ${names.join('、')}`,
+    progress: (done: number, all: number) =>
+      `テーブルの定義を読んでいます（${done.toLocaleString('ja-JP')} / ${all.toLocaleString('ja-JP')}）`,
     title: (name: string) => `データ辞書: ${name}`,
     link: 'データ辞書（全テーブルの定義を印刷用に）',
     hint: 'テーブルとビューのカラム・キー・コメントを 1 ページにまとめます。',

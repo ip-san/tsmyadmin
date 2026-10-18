@@ -107,7 +107,7 @@ describe('SchemaDiagram', () => {
     render(
       <SchemaDiagram {...props} onMove={vi.fn()} selectedMore={(table) => <a href="#x">{`more on ${table}`}</a>} />
     )
-    screen.getByRole('button', { name: new RegExp(`^${locale.designer.boxLabel('users').slice(0, 8)}`) }).focus()
+    screen.getByRole('button', { name: locale.designer.boxLabel('users') }).focus()
     expect(await screen.findByRole('link', { name: 'more on users' })).toBeInTheDocument()
   })
 })

@@ -1,11 +1,11 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQueries, useQuery } from '@tanstack/react-query'
 import type { TableSchema } from '@tsmyadmin/shared'
 import { Printer } from 'lucide-react'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale-screens.ts'
-import { tablesQuery } from '@/lib/queries.ts'
+import { structureQuery, tablesQuery } from '@/lib/queries.ts'
 import { useAllStructures } from '@/lib/use-all-structures.ts'
 
 const t = locale.dictionary
@@ -74,6 +74,11 @@ export function DataDictionary({ db, schema }: { db: string; schema: string | un
   const tables = useQuery(tablesQuery(db, schema))
   const names = (tables.data ?? []).filter((x) => x.kind === 'table' || x.kind === 'view').map((x) => x.name)
   const structures = useAllStructures(db, schema, names)
+  // Each table as it arrives: these only watch what the reading above puts in the cache (they read nothing
+  // themselves), so the page fills in a few tables at a time.
+  const arrived = useQueries({
+    queries: names.map((table) => ({ ...structureQuery({ db, schema, table }), enabled: false })),
+  })
   if (tables.isPending) return <Spinner />
   if (tables.isError) return <ErrorBox error={tables.error} onRetry={() => void tables.refetch()} />
   if (names.length === 0) return <Notice>{locale.database.noTables}</Notice>
@@ -87,19 +92,17 @@ export function DataDictionary({ db, schema }: { db: string; schema: string | un
         </Button>
       </div>
       <h2 className="text-lg font-semibold text-ink">{t.title(schema ? `${db}.${schema}` : db)}</h2>
-      {structures.isError ? (
-        <ErrorBox error={structures.error} onRetry={() => void structures.refetch()} />
-      ) : !structures.data ? (
-        <Spinner />
-      ) : (
-        <>
-          {structures.data.failed.length > 0 ? <Notice>{t.failed(structures.data.failed)}</Notice> : null}
-          {names.flatMap((n) => {
-            const s = structures.data.byName.get(n)
-            return s ? [<TableEntry key={n} schema={s} />] : []
-          })}
-        </>
+      {structures.isError ? <ErrorBox error={structures.error} onRetry={() => void structures.refetch()} /> : null}
+      {structures.data ? (
+        structures.data.failed.length > 0 ? (
+          <Notice>{t.failed(structures.data.failed)}</Notice>
+        ) : null
+      ) : structures.isError ? null : (
+        <p role="status" className="text-sm text-ink-sub print:hidden">
+          {t.progress(arrived.filter((a) => a.data).length, names.length)}
+        </p>
       )}
+      {arrived.map((a, i) => (a.data ? <TableEntry key={names[i]} schema={a.data} /> : null))}
     </div>
   )
 }

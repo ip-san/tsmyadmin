@@ -38,6 +38,7 @@ export function Dependencies({
   focus?: string | undefined
 }) {
   const deps = useDependencyGraph(db, schema)
+  // The start comes from the address; choosing another is not written back (a reload starts from the link again).
   const [chosen, setChosen] = useState(start ?? '')
   const [onlyReached, setOnlyReached] = useState(false)
   if (deps.pending) return <Spinner />

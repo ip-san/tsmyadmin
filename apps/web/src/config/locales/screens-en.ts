@@ -2593,6 +2593,8 @@ export const enScreens = {
   },
   dictionary: {
     failed: (names: readonly string[]) => `Tables whose definitions could not be read: ${names.join(', ')}`,
+    progress: (done: number, all: number) =>
+      `Reading the table definitions (${done.toLocaleString('en-US')} of ${all.toLocaleString('en-US')})`,
     title: (name: string) => `Data dictionary: ${name}`,
     link: 'Data dictionary (every table, for printing)',
     hint: "Every table's and view's columns, keys and comments on one page.",

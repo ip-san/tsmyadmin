@@ -40,7 +40,8 @@ export function useImplicit({
   on: boolean
   onMakeKey: (candidate: RelationDef) => void
 }) {
-  // The same reading as the Designer's "all columns" (one shared query): turning both on reads the tables once.
+  // The same reading as the Designer's "all columns" (one query for both); with other screens, each table's
+  // definition is shared.
   const structures = useAllStructures(db, schema, names, { enabled: on })
   if (!on) return { relations: [] as RelationDef[], overlay: undefined, panel: () => null }
   if (structures.isError)

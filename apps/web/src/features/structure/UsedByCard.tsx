@@ -55,11 +55,11 @@ export function UsedByCard({ tableRef, view = false }: { tableRef: TableRef; vie
         ))}
         {deps.status === 'unsupported' ? <p className="text-xs text-ink-sub">{t.unsupported}</p> : null}
         <p className="text-xs text-ink-sub">{t.routineNote}</p>
-        {/* The diagram opens with this one chosen. */}
+        {/* The diagram opens with this one chosen, when it is in the diagram (nothing uses it otherwise). */}
         <Link
           to="/db/$db/dependencies"
           params={{ db }}
-          search={{ schema, focus: self }}
+          search={{ schema, focus: deps.graph.nodes.some((n) => n.id === self) ? self : undefined }}
           className="text-brand underline"
         >
           {t.openAll}

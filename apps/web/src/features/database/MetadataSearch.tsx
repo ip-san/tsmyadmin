@@ -7,7 +7,7 @@ import { Field, Input } from '@/components/ui/Field.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale-screens.ts'
 import { tablesQuery } from '@/lib/queries.ts'
-import { DEFINITIONS_STALE_MS, useAllStructures } from '@/lib/use-all-structures.ts'
+import { useAllStructures } from '@/lib/use-all-structures.ts'
 import { useDebounced } from '@/lib/use-debounced.ts'
 import { foldTerm, type Hit, indexMetadata, type MetadataMatch, matchMetadata } from './metadata-search.ts'
 
@@ -24,7 +24,9 @@ const FAILED_NAMED = 5
  * not be read.
  */
 function useSchemas(db: string, schema: string | undefined, on: boolean) {
-  const tables = useQuery({ ...tablesQuery(db, schema), enabled: on, staleTime: DEFINITIONS_STALE_MS })
+  // The list of tables as fresh as the other screens have it (a table made elsewhere is found); the definitions
+  // are what is kept longer.
+  const tables = useQuery({ ...tablesQuery(db, schema), enabled: on })
   // A sequence has no columns to find.
   const names = useMemo(
     () => (tables.data ?? []).filter((x) => x.kind !== 'sequence').map((x) => x.name),
@@ -48,10 +50,8 @@ function useSchemas(db: string, schema: string | undefined, on: boolean) {
     isError: tables.isError || all.isError,
     error: tables.error ?? all.error,
     isFetching: tables.isFetching || all.isFetching,
-    refetch: async () => {
-      await tables.refetch()
-      await all.refetch()
-    },
+    // One reading again: the list when it failed (the definitions follow from it), the definitions otherwise.
+    refetch: () => (tables.isError ? tables.refetch() : all.refetch()),
   }
 }
 
