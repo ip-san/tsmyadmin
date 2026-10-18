@@ -6,7 +6,10 @@ import { locale } from '@/config/locale-screens.ts'
 import { UsedByCard } from './UsedByCard.tsx'
 
 const t = locale.dependencies
+let tableList: { name: string; kind: string }[] = []
+let tablesFail = false
 let triggersFail = false
+let triggerList: { name: string; table: string }[] = []
 
 vi.mock('@tanstack/react-router', () => ({
   Link: ({ children }: { children: ReactNode }) => <a href="/dependencies">{children}</a>,
@@ -22,12 +25,18 @@ vi.mock('@/lib/queries.ts', () => ({
       ],
     }),
   }),
-  tablesQuery: () => ({ queryKey: ['tables'], queryFn: async () => [] }),
+  tablesQuery: () => ({
+    queryKey: ['tables'],
+    queryFn: async () => {
+      if (tablesFail) throw new Error('no table list')
+      return tableList
+    },
+  }),
   triggersQuery: () => ({
     queryKey: ['triggers'],
     queryFn: async () => {
       if (triggersFail) throw new Error('no trigger list')
-      return []
+      return triggerList
     },
   }),
 }))
@@ -65,6 +74,29 @@ describe('UsedByCard', () => {
       expect(screen.queryByText(t.usedByNone)).toBeNull()
     } finally {
       triggersFail = false
+    }
+  })
+
+  it('lists a trigger on a view the catalog lists nowhere else, on that view', async () => {
+    triggerList = [{ name: 'instead', table: 'constants' }]
+    tableList = [{ name: 'constants', kind: 'materialized_view' }]
+    try {
+      mount('constants', true)
+      expect(await screen.findByText(t.triggerNamed('instead', 'constants'))).toBeInTheDocument()
+    } finally {
+      triggerList = []
+      tableList = []
+    }
+  })
+
+  it('does not say nothing uses it when the list of tables could not be read', async () => {
+    tablesFail = true
+    try {
+      mount('recent', true)
+      expect(await screen.findByText(/no table list/)).toBeInTheDocument()
+      expect(screen.queryByText(t.usedByNone)).toBeNull()
+    } finally {
+      tablesFail = false
     }
   })
 })

@@ -8,13 +8,21 @@ import { dependencyId } from '@/lib/dependencies.ts'
 import { Dependencies } from './Dependencies.tsx'
 
 const t = locale.dependencies
+let tableList: { name: string; kind: string }[] = []
+let tablesFail = false
 let report: DependencyReport
 let triggers: TriggerInfo[]
 let triggersFail = false
 
 vi.mock('@/lib/queries.ts', () => ({
   dependenciesQuery: () => ({ queryKey: ['dependencies'], queryFn: async () => report }),
-  tablesQuery: () => ({ queryKey: ['tables'], queryFn: async () => [] }),
+  tablesQuery: () => ({
+    queryKey: ['tables'],
+    queryFn: async () => {
+      if (tablesFail) throw new Error('no table list')
+      return tableList
+    },
+  }),
   triggersQuery: () => ({
     queryKey: ['triggers'],
     queryFn: async () => {
@@ -134,5 +142,33 @@ describe('Dependencies', () => {
     await userEvent.selectOptions(change, dependencyId('table', 'users'))
     expect(only).not.toBeChecked()
     expect(screen.getByRole('list', { name: t.sentences })).toHaveTextContent('other')
+  })
+
+  it('joins a trigger to a view the catalog lists nowhere else, as the list of tables says it is a view', async () => {
+    report = { status: 'ok', objects: [] }
+    triggers = [{ name: 'instead', table: 'constants' } as TriggerInfo]
+    tableList = [{ name: 'constants', kind: 'view' }]
+    try {
+      mount()
+      const words = await screen.findByRole('list', { name: t.sentences })
+      expect(words).toHaveTextContent(
+        t.fires(t.triggerNamed('instead', 'constants'), t.named(t.kinds.view, 'constants'))
+      )
+    } finally {
+      tableList = []
+    }
+  })
+
+  it('does not say nothing uses anything when the list of tables could not be read, and says why', async () => {
+    report = { status: 'ok', objects: [] }
+    triggers = []
+    tablesFail = true
+    try {
+      mount()
+      expect(await screen.findByText(/no table list/)).toBeInTheDocument()
+      expect(screen.queryByText(t.none)).toBeNull()
+    } finally {
+      tablesFail = false
+    }
   })
 })

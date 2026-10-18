@@ -5,7 +5,13 @@ import { DiagramLegend } from '@/components/schema-diagram/StepNarration.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale-screens.ts'
-import { type DependencyGraph, dependencyGraph, dependencyLabel, dependentsOf } from '@/lib/dependencies.ts'
+import {
+  type DependencyGraph,
+  dependencyGraph,
+  dependencyLabel,
+  dependentsOf,
+  viewNamesOf,
+} from '@/lib/dependencies.ts'
 import { dependenciesQuery, tablesQuery, triggersQuery } from '@/lib/queries.ts'
 
 const t = locale.dependencies
@@ -36,15 +42,10 @@ export function Dependencies({ db, schema }: { db: string; schema?: string | und
   const [chosen, setChosen] = useState('')
   const [onlyReached, setOnlyReached] = useState(false)
   const graph = useMemo(
-    () =>
-      dependencyGraph(
-        report.data?.objects ?? [],
-        triggers.data ?? [],
-        (tables.data ?? []).filter((x) => x.kind !== 'table' && x.kind !== 'sequence').map((x) => x.name)
-      ),
+    () => dependencyGraph(report.data?.objects ?? [], triggers.data ?? [], viewNamesOf(tables.data ?? [])),
     [report.data, triggers.data, tables.data]
   )
-  if (report.isPending || triggers.isPending) return <Spinner />
+  if (report.isPending || triggers.isPending || tables.isPending) return <Spinner />
   if (report.isError) return <ErrorBox error={report.error} onRetry={() => void report.refetch()} />
   // What can be changed: a table, or a view (others use views too).
   const changeable = graph.nodes
@@ -75,9 +76,11 @@ export function Dependencies({ db, schema }: { db: string; schema?: string | und
       {report.data.status === 'unsupported' ? <Notice>{t.unsupported}</Notice> : null}
       {/* Without the triggers (not allowed to list them, say), what views and routines use is still drawn. */}
       {triggers.isError ? <ErrorBox error={triggers.error} onRetry={() => void triggers.refetch()} /> : null}
+      {/* Without the list of tables, a trigger on a view could be drawn as on a table of its name. */}
+      {tables.isError ? <ErrorBox error={tables.error} onRetry={() => void tables.refetch()} /> : null}
       {graph.edges.length === 0 ? (
         // Not "none" when the triggers could not be read: there may be some.
-        triggers.isError ? null : (
+        triggers.isError || tables.isError ? null : (
           <p className="text-sm text-ink-sub">{t.none}</p>
         )
       ) : (

@@ -1,4 +1,4 @@
-import type { ObjectDependency, TriggerInfo } from '@tsmyadmin/shared'
+import type { ObjectDependency, TableInfo, TriggerInfo } from '@tsmyadmin/shared'
 import { locale } from '@/config/locale-screens.ts'
 
 /** What a node of the dependency graph is. */
@@ -23,6 +23,10 @@ export interface DependencyGraph {
   nodes: DependencyNode[]
   edges: DependencyEdge[]
 }
+
+/** The views (and materialized views) among a namespace's tables: what a trigger may be on besides a table. */
+export const viewNamesOf = (tables: readonly Pick<TableInfo, 'name' | 'kind'>[]): string[] =>
+  tables.filter((x) => x.kind === 'view' || x.kind === 'materialized_view').map((x) => x.name)
 
 /** A node as it is named in pictures and sentences: its kind and name, and a trigger's table. */
 export const dependencyLabel = (n: DependencyNode): string => {
