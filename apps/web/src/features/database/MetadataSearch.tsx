@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { type ReactNode, useDeferredValue, useId, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
-import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
+import { ErrorBox, Spinner } from '@/components/ui/Feedback.tsx'
 import { Field, Input } from '@/components/ui/Field.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale-screens.ts'
@@ -31,9 +31,14 @@ function useSchemas(db: string, schema: string | undefined, on: boolean) {
       const tables = await queryClient.fetchQuery(tablesQuery(db, schema))
       // A sequence has no columns to find.
       const names = tables.filter((x) => x.kind !== 'sequence').map((x) => x.name)
-      const done = await eachLimited(names, (table) => queryClient.fetchQuery(structureQuery({ db, schema, table })), {
-        signal,
-      })
+      const done = await eachLimited(
+        names, // Kept as long as the index: reading again reads only the tables that failed.
+        (table) =>
+          queryClient.fetchQuery({ ...structureQuery({ db, schema, table }), staleTime: DEFINITIONS_STALE_MS }),
+        {
+          signal,
+        }
+      )
       const schemas = done.flatMap(({ settled }) => (settled.ok ? [settled.value] : []))
       return {
         index: indexMetadata(schemas),
@@ -64,7 +69,18 @@ export function MetadataSearch({ db, schema }: { db: string; schema?: string | u
   )
   const ready = term.trim() !== '' && described.data !== undefined
   // Read out once typing pauses, not on every key; the region is there from the start, so it is heard.
-  const announced = useDebounced(ready ? t.found(total, described.data?.tables ?? 0) : '', ANNOUNCE_MS)
+  // What the line above the results says, and what is read out: the same words, including what was not searched.
+  const summary = described.data
+    ? [
+        t.found(total, described.data.tables),
+        total > matches.length ? t.shownFirst(matches.length) : '',
+        described.data.failed.length > 0 ? t.failed(described.data.failed) : '',
+        described.isFetching ? t.refreshing : '',
+      ]
+        .filter(Boolean)
+        .join(' ')
+    : ''
+  const announced = useDebounced(ready ? summary : '', ANNOUNCE_MS)
   return (
     <section aria-labelledby={titleId} className="space-y-2 rounded border border-line p-3">
       <h2 id={titleId} className="text-sm font-semibold text-ink">
@@ -85,17 +101,14 @@ export function MetadataSearch({ db, schema }: { db: string; schema?: string | u
         <ErrorBox error={described.error} onRetry={() => void described.refetch()} />
       ) : (
         <>
+          {/* Seen at once; read out by the status below once typing pauses (so not twice). */}
           <p aria-hidden className="text-xs text-ink-sub">
-            {t.found(total, described.data.tables)}
-            {total > matches.length ? ` ${t.shownFirst(matches.length)}` : ''}
+            {summary}
           </p>
           {described.data.failed.length > 0 ? (
-            <Notice>
-              {t.failed(described.data.failed)}{' '}
-              <Button size="sm" onClick={() => void described.refetch()}>
-                {t.readAgain}
-              </Button>
-            </Notice>
+            <Button size="sm" onClick={() => void described.refetch()}>
+              {t.readAgain}
+            </Button>
           ) : null}
           {matches.length > 0 ? <Results db={db} schema={schema} matches={matches} /> : null}
         </>

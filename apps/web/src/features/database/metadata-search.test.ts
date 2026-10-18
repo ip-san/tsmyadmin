@@ -95,6 +95,19 @@ describe('findSpans', () => {
     expect(findSpans('aﬁ', 'af')).toEqual([[0, 2]])
   })
 
+  it('keeps a character of two code units whole, and a letter with its accent', () => {
+    expect(findSpans('😀id', 'id')).toEqual([[2, 4]])
+    // e and a combining acute accent are one character: matching é marks both.
+    expect(findSpans('cafe\u0301s', 'café')).toEqual([[0, 5]])
+  })
+
+  it('keeps matches that only touch apart', () => {
+    expect(findSpans('idid', 'id')).toEqual([
+      [0, 2],
+      [2, 4],
+    ])
+  })
+
   it('finds nothing for an empty term', () => {
     expect(findSpans('abc', '')).toEqual([])
   })
