@@ -2656,7 +2656,7 @@ export const enScreens = {
     indexes: 'Indexes',
     unique: 'unique',
     markdown: 'Save as Markdown',
-    markdownHint: 'Saves once every definition is read',
+    markdownHint: 'Available once every definition is read',
     viewMark: ' (view)',
     primaryMark: ' (primary key)',
   },

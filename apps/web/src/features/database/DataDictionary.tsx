@@ -72,6 +72,8 @@ export function DataDictionary({ db, schema }: { db: string; schema: string | un
     queries: names.map((table) => ({ ...structureQuery({ db, schema, table }), enabled: false })),
   })
   const title = schema ? `${db}.${schema}` : db
+  // The previous reading is shown while the list of tables changes (a table made elsewhere): not what is saved.
+  const ready = structures.isPlaceholderData ? undefined : structures.data
   if (tables.isPending) return <Spinner />
   if (tables.isError) return <ErrorBox error={tables.error} onRetry={() => void tables.refetch()} />
   if (names.length === 0) return <Notice>{locale.database.noTables}</Notice>
@@ -83,15 +85,14 @@ export function DataDictionary({ db, schema }: { db: string; schema: string | un
           {/* There while reading (and said why it waits): a keyboard user who pressed it keeps their place. */}
           <Button
             size="sm"
-            aria-disabled={!structures.data}
-            title={structures.data ? undefined : t.markdownHint}
+            aria-disabled={!ready}
+            title={ready ? undefined : t.markdownHint}
             onClick={() => {
-              const read = structures.data
-              if (!read) return
-              const schemas = names.flatMap((n) => read.byName.get(n) ?? [])
+              if (!ready) return
+              const schemas = names.flatMap((n) => ready.byName.get(n) ?? [])
               downloadText(
-                safeFilename(`${title}-dictionary`, 'md'),
-                dictionaryMarkdown(title, schemas, read.failed),
+                safeFilename(`${title.slice(0, 40)}-dictionary`, 'md'),
+                dictionaryMarkdown(title, schemas, ready.failed),
                 'text/markdown'
               )
             }}
@@ -107,15 +108,11 @@ export function DataDictionary({ db, schema }: { db: string; schema: string | un
       </div>
       <h2 className="text-lg font-semibold text-ink">{t.title(title)}</h2>
       {structures.isError ? <ErrorBox error={structures.error} onRetry={() => void structures.refetch()} /> : null}
-      {structures.data ? (
-        structures.data.failed.length > 0 ? (
-          <Notice>{t.failed(structures.data.failed)}</Notice>
-        ) : null
-      ) : structures.isError ? null : (
-        <p role="status" className="text-sm text-ink-sub print:hidden">
-          {t.progress(arrived.filter((a) => a.data).length, names.length)}
-        </p>
-      )}
+      {/* One line, there from the start: how many are read, then nothing once all are (or the reading failed). */}
+      <p role="status" className="text-sm text-ink-sub empty:mb-0 print:hidden">
+        {ready || structures.isError ? '' : t.progress(arrived.filter((a) => a.data).length, names.length)}
+      </p>
+      {ready && ready.failed.length > 0 ? <Notice>{t.failed(ready.failed)}</Notice> : null}
       {arrived.map((a, i) => (a.data ? <TableEntry key={names[i]} schema={a.data} /> : null))}
     </div>
   )

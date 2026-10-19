@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { locale } from '@/config/locale-screens.ts'
 import { column, fk, index, table } from '@/test/schema-fixtures.ts'
-import { dictionaryMarkdown, markdownText, referencesOf } from './dictionary-markdown.ts'
+import { dictionaryMarkdown, markdownLine, markdownText, referencesOf } from './dictionary-markdown.ts'
 
 const t = locale.dictionary
 
@@ -30,7 +30,7 @@ describe('referencesOf', () => {
 describe('markdownText', () => {
   it('writes what Markdown would read as formatting, a link or HTML, as text', () => {
     expect(markdownText('a*b* [x](y) `c` | d ~e~ \\')).toBe('a\\*b\\* \\[x\\](y) \\`c\\` \\| d \\~e\\~ \\\\')
-    expect(markdownText('<script>&amp;')).toBe('&lt;script&gt;&amp;amp;')
+    expect(markdownText('<script>&amp; &#60; R&D')).toBe('&lt;script>&amp;amp; &amp;#60; R&D')
   })
 
   it('leaves an _ inside a word, and escapes one at its edge', () => {
@@ -39,21 +39,34 @@ describe('markdownText', () => {
     expect(markdownText('日本_語')).toBe('日本_語')
   })
 
-  it('does not let a text start a heading, a quote, a list or a rule', () => {
-    expect(markdownText('# not a heading')).toBe('\\# not a heading')
-    expect(markdownText('- item')).toBe('\\- item')
-    expect(markdownText('+ item')).toBe('\\+ item')
-    expect(markdownText('=')).toBe('\\=')
-    expect(markdownText('  1. first')).toBe('  1\\. first')
-    expect(markdownText('2) second')).toBe('2\\) second')
-    expect(markdownText('> quote')).toBe('&gt; quote')
-    expect(markdownText('a - b # c')).toBe('a - b # c')
-    expect(markdownText('2026 年')).toBe('2026 年')
+  it('leaves what only begins a block where it is, within a line: defaults stay as the SQL wrote them', () => {
+    for (const text of ['1.5', '0.00', '-1', '# x', '> 0', '(a > 0)', '+1', '2) b', 'https://example.com'])
+      expect(markdownText(text)).toBe(text)
+    expect(markdownText('count(*)')).toBe('count(\\*)')
   })
 
   it('writes a line break as a space, or as asked', () => {
     expect(markdownText('a\nb\r\nc\rd')).toBe('a b c d')
     expect(markdownText('a\nb', '<br>')).toBe('a<br>b')
+  })
+})
+
+describe('markdownLine', () => {
+  it('does not let a line start a heading, a quote, a list, a rule or a block of code', () => {
+    expect(markdownLine('# not a heading')).toBe('\\# not a heading')
+    expect(markdownLine('- item')).toBe('\\- item')
+    expect(markdownLine('+ item')).toBe('\\+ item')
+    expect(markdownLine('=')).toBe('\\=')
+    expect(markdownLine('> quote')).toBe('\\> quote')
+    expect(markdownLine('  1. first')).toBe('1\\. first')
+    expect(markdownLine('2) second')).toBe('2\\) second')
+    expect(markdownLine('3.')).toBe('3\\.')
+    expect(markdownLine('    SELECT 1')).toBe('SELECT 1')
+    expect(markdownLine('\tcode')).toBe('code')
+  })
+
+  it('leaves what does not begin a block', () => {
+    for (const text of ['a - b # c', '2026 年', '1.5 倍', 'x > y']) expect(markdownLine(text)).toBe(text)
   })
 })
 
@@ -116,10 +129,13 @@ describe('dictionaryMarkdown', () => {
   })
 
   it('escapes the names and comments it writes', () => {
-    const odd = table('a|b', { comment: '# big', columns: [column('<x>', 'int', { comment: '*' })] })
+    const odd = table('a|b #', {
+      comment: '    # big',
+      columns: [column('<x>', 'decimal(5,2)', { comment: '*', default: '-1.50' })],
+    })
     const md = dictionaryMarkdown('s*', [odd], [])
     expect(md).toContain(`# ${t.title('s\\*')}`)
-    expect(md).toContain('## a\\|b\n\n\\# big\n')
-    expect(md).toContain(`| &lt;x&gt; | int | ${locale.common.yes} |  |  | \\* |`)
+    expect(md).toContain('## a\\|b \\#\n\n\\# big\n')
+    expect(md).toContain(`| &lt;x> | decimal(5,2) | ${locale.common.yes} | -1.50 |  | \\* |`)
   })
 })
