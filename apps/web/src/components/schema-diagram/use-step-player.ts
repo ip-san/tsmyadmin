@@ -9,14 +9,15 @@ const reducedMotion = () =>
 /**
  * Walking through the steps of a story: it plays from the first on its own, one step every `STEP_MS`, and stops at
  * the last. A reader who has asked for less motion is shown the last step (the whole picture) and moves by hand.
- * New steps (`count` changes) start the walk again.
+ * New steps (`count` changes) start the walk again. A story told from its beginning (a tour, `still: 'first'`) waits
+ * at its first step instead.
  */
-export function useStepPlayer(count: number, stepMs = STEP_MS) {
-  const [state, setState] = useState(() => start(count))
+export function useStepPlayer(count: number, stepMs = STEP_MS, { still = 'last' }: { still?: 'first' | 'last' } = {}) {
+  const [state, setState] = useState(() => start(count, still))
   const [seen, setSeen] = useState(count)
   if (seen !== count) {
     setSeen(count)
-    setState(start(count))
+    setState(start(count, still))
   }
   const { index, playing } = state
 
@@ -45,7 +46,7 @@ export function useStepPlayer(count: number, stepMs = STEP_MS) {
   }
 }
 
-function start(count: number): { index: number; playing: boolean } {
-  if (count <= 1 || reducedMotion()) return { index: Math.max(count - 1, 0), playing: false }
+function start(count: number, still: 'first' | 'last'): { index: number; playing: boolean } {
+  if (count <= 1 || reducedMotion()) return { index: still === 'first' ? 0 : Math.max(count - 1, 0), playing: false }
   return { index: 0, playing: true }
 }

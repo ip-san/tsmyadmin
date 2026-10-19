@@ -61,6 +61,12 @@ vi.mock('@/lib/each-limited.ts', async (actual) => {
 vi.mock('./JoinPath.tsx', () => ({
   JoinPath: ({ ends }: { ends: { from?: string; to?: string } }) => <p>{`join path ${ends.from} ${ends.to}`}</p>,
 }))
+// Tried on its own (MapTour.test.tsx): here, that it opens with the map read and the two tables, and closes.
+vi.mock('./MapTour.tsx', () => ({
+  MapTour: ({ map, ends, onClose }: { map: { tables: number }; ends: { from?: string }; onClose: () => void }) => (
+    <button type="button" onClick={onClose}>{`tour of ${map.tables} from ${ends.from}`}</button>
+  ),
+}))
 vi.mock('@/lib/session.ts', () => ({ useDialect: () => dialect }))
 vi.mock('@/lib/queries.ts', () => ({
   tablesQuery: () => ({
@@ -100,6 +106,25 @@ describe('DatabaseMap', () => {
       </QueryClientProvider>
     )
     expect(screen.getByText('join path orders users')).toBeInTheDocument()
+  })
+
+  it('offers the presentation once the map is read, and closes it', async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <DatabaseMap db="shop" schema={undefined} ends={{ from: 'orders', to: 'users' }} />
+      </QueryClientProvider>
+    )
+    expect(screen.queryByRole('button', { name: locale.mapTour.open })).toBeNull()
+    fireEvent.click(await screen.findByRole('button', { name: locale.mapTour.open }))
+    fireEvent.click(screen.getByRole('button', { name: 'tour of 3 from orders' }))
+    expect(screen.queryByRole('button', { name: /^tour of/ })).toBeNull()
+  })
+
+  it('offers no presentation of a database with no tables', async () => {
+    listed = []
+    mount()
+    await saysAtLast(t.empty)
+    expect(screen.queryByRole('button', { name: locale.mapTour.open })).toBeNull()
   })
 
   it('says what it is reading on the one status line there from the start', async () => {

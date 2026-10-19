@@ -23,6 +23,10 @@ import { useBoxDrag } from './use-box-drag.ts'
 
 const t = locale.designer
 const PAD = 40
+/** Coming in (`overlay.enter`): how far apart the columns of boxes are, and how long one waits for the one before. */
+const ENTER_COLUMN = 280
+const ENTER_COLUMNS = 10
+const ENTER_STEP_MS = 120
 
 const NO_DISPLAY: ReadonlyMap<string, string> = new Map()
 const withNote = (label: string, note: string | undefined) => (note ? t.withNote(label, note) : label)
@@ -46,6 +50,8 @@ export function SchemaDiagram({
   notes = NO_DISPLAY,
   selectedMore,
   label = t.diagram,
+  camera,
+  over,
 }: {
   tables: readonly string[]
   relations: readonly RelationDef[]
@@ -66,6 +72,13 @@ export function SchemaDiagram({
   selectedMore?: ((table: string) => ReactNode) | undefined
   /** What the diagram is, for a screen reader. */
   label?: string
+  /**
+   * The part of the diagram shown, scaled to fill the frame (a presentation): the frame is as big as its parent and
+   * does not scroll. Without it the diagram is drawn at its size and scrolls.
+   */
+  camera?: { x: number; y: number; width: number; height: number } | undefined
+  /** Drawn over the diagram, in its coordinates. */
+  over?: ReactNode
 }) {
   /** The box last focused or picked: its names are shown whole below the diagram (the boxes cut what does not fit). */
   const [selected, setSelected] = useState<string | null>(null)
@@ -92,17 +105,33 @@ export function SchemaDiagram({
   const shown = selected !== null && tables.includes(selected) ? selected : null
   const pictureOnly = !onMove && !relate
   const faint = (lit: boolean) => (overlay && overlay.fade !== false && !lit ? `${FADE} ${FAINT}` : FADE)
+  // Coming in: a column of boxes after the one to its left, then the lines once the boxes are there.
+  const enterDelay = (table: string) => Math.min(Math.round(at(table).x / ENTER_COLUMN), ENTER_COLUMNS) * ENTER_STEP_MS
+  const linesDelay = Math.max(0, ...tables.map(enterDelay)) + ENTER_STEP_MS
+  const entering = (table: string) =>
+    overlay?.enter ? { className: 'diagram-enter', style: { animationDelay: `${enterDelay(table)}ms` } } : undefined
   return (
     <>
       <figure
         // A picture has nothing to focus inside: the frame itself takes the keyboard, so a wide one can be scrolled.
-        tabIndex={pictureOnly ? 0 : undefined}
-        className="max-h-[70vh] overflow-auto rounded border border-line bg-surface-sub"
+        // Framed by a camera, nothing scrolls.
+        tabIndex={pictureOnly && !camera ? 0 : undefined}
+        className={
+          camera
+            ? 'h-full w-full overflow-hidden rounded border border-line bg-surface-sub'
+            : 'max-h-[70vh] overflow-auto rounded border border-line bg-surface-sub'
+        }
       >
         <figcaption className="sr-only">{label}</figcaption>
         <svg
-          width={width}
-          height={height}
+          {...(camera
+            ? {
+                width: '100%',
+                height: '100%',
+                viewBox: `${camera.x} ${camera.y} ${camera.width} ${camera.height}`,
+                preserveAspectRatio: 'xMidYMid meet',
+              }
+            : { width, height })}
           className="select-none"
           {...(pictureOnly ? { role: 'img', 'aria-label': label } : {})}
         >
@@ -125,14 +154,27 @@ export function SchemaDiagram({
             const mid = view.lineLabels ? middle : null
             const tone = overlay?.relations.get(relationKey(r))
             const stroke = tone ? TONE_STROKE[tone] : undefined
+            const d = relationPath(r, at, listed, view.lineStyle, view.compact, widthOf)
+            const flow = overlay?.flow?.get(relationKey(r))
             return (
               <g key={relationKey(r)} aria-hidden className={faint(tone !== undefined)} data-tone={tone}>
                 <path
-                  d={relationPath(r, at, listed, view.lineStyle, view.compact, widthOf)}
-                  className={`fill-none ${stroke?.className ?? 'stroke-brand'}`}
+                  d={d}
+                  className={`fill-none ${stroke?.className ?? 'stroke-brand'} ${overlay?.enter ? 'diagram-draw' : ''}`}
                   strokeWidth={stroke?.width ?? 1.5}
                   strokeDasharray={stroke?.dash}
+                  {...(overlay?.enter ? { pathLength: 1, style: { animationDelay: `${linesDelay}ms` } } : {})}
                 />
+                {flow ? (
+                  <path
+                    d={d}
+                    data-flow={flow}
+                    className={`fill-none stroke-brand diagram-flow ${flow === 'back' ? 'diagram-flow-back' : ''}`}
+                    strokeWidth={4}
+                    strokeLinecap="round"
+                    strokeDasharray="2 14"
+                  />
+                ) : null}
                 {mid ? (
                   <text x={mid.x} y={mid.y - 4} textAnchor="middle" className="fill-brand text-[10px]">
                     {relationLabel(r)}
@@ -251,8 +293,11 @@ export function SchemaDiagram({
                   className={faint(lit !== undefined)}
                   data-tone={lit?.tone}
                 >
-                  {contents}
-                  {rows}
+                  {/* Its own group: what comes in is the box, while the outer one fades it for a story. */}
+                  <g {...entering(name)}>
+                    {contents}
+                    {rows}
+                  </g>
                 </g>
               )
             }
@@ -282,6 +327,7 @@ export function SchemaDiagram({
               </g>
             )
           })}
+          {over}
         </svg>
       </figure>
       {pictureOnly ? null : shown !== null ? (

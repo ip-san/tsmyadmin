@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router'
-import type { ReactNode } from 'react'
+import { type ReactNode, useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { Card } from '@/components/ui/Card.tsx'
 import { ErrorBox } from '@/components/ui/Feedback.tsx'
@@ -7,6 +7,7 @@ import { locale } from '@/config/locale-screens.ts'
 import { TABLE_ROLES } from '@/lib/table-role.ts'
 import type { DatabaseMap as MapData } from './database-map.ts'
 import { type JoinEnds, JoinPath } from './JoinPath.tsx'
+import { MapTour } from './MapTour.tsx'
 import { useDatabaseMap } from './use-database-map.ts'
 
 const t = locale.databaseMap
@@ -29,12 +30,19 @@ export function DatabaseMap({
   onEnds?: (ends: JoinEnds) => void
 }) {
   const { map, failed, error, status, readAgain, fetching } = useDatabaseMap(db, schema)
+  const [touring, setTouring] = useState(false)
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="text-lg font-semibold text-ink">{t.title(schema ?? db)}</h2>
-        <p className="text-sm text-ink-sub">{t.hint}</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold text-ink">{t.title(schema ?? db)}</h2>
+          <p className="text-sm text-ink-sub">{t.hint}</p>
+        </div>
+        {map && map.tables > 0 ? <Button onClick={() => setTouring(true)}>{locale.mapTour.open}</Button> : null}
       </div>
+      {touring && map ? (
+        <MapTour db={db} schema={schema} map={map} ends={ends} onClose={() => setTouring(false)} />
+      ) : null}
       {/* One line, there from the start (empty): what is being read, then what was; heard, and left to read again. */}
       <p role="status" className="text-sm text-ink empty:mb-0">
         {status}

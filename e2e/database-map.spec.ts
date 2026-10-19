@@ -93,5 +93,38 @@ for (const t of TARGETS) {
         await expect(generated).toContainText('owners')
       })
     })
+
+    test('presents the map scene by scene, with the keys and a join path, and closes with Esc', async ({ page }) => {
+      await login(page, t)
+      await withScratchSpace(page, t, async (space) => {
+        await petsAndLogs(page, space)
+        // Nothing plays by itself: the scenes are moved by hand, as a presenter does.
+        await page.emulateMedia({ reducedMotion: 'reduce' })
+        await page.goto(`/db/${space.database}/map?${space.schema ? `schema=${space.schema}&` : ''}from=pets&to=owners`)
+        await page.getByRole('button', { name: 'プレゼンで見る' }).click()
+        const tour = page.getByRole('dialog', { name: /^見取り図のプレゼン/ })
+        const title = tour.getByRole('heading', { level: 3 })
+        await expect(title).toHaveText(space.schema ?? space.database)
+        await expect(tour.getByText('テーブル 3・外部キー 1 本。', { exact: false })).toBeVisible()
+        // Every table of the space drawn, under the camera.
+        await expect(tour.getByRole('img', { name: /のテーブルと外部キーの図$/ })).toBeVisible()
+
+        await page.keyboard.press('ArrowRight')
+        await expect(title).toHaveText('マスタ（1）')
+        await expect(tour.locator('[data-flow="forward"]')).toHaveCount(1)
+        await page.keyboard.press('PageDown')
+        await expect(title).toHaveText('記録・明細（1）')
+        // Masters, details, joined to nothing, one hub; then the path: pets → owners, walked with the key.
+        for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowRight')
+        await expect(title).toHaveText('pets から owners へのつなぎ方')
+        await expect(tour.getByText('1 段のうち 1 段目: pets.owner_id が owners.id を参照')).toBeVisible()
+        await page.keyboard.press('End')
+        await expect(title).toHaveText('まとめ')
+
+        await page.keyboard.press('Escape')
+        await expect(tour).toBeHidden()
+        await expect(page.getByRole('button', { name: 'プレゼンで見る' })).toBeFocused()
+      })
+    })
   })
 }

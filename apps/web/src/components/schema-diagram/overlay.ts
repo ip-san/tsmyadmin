@@ -28,6 +28,13 @@ export interface DiagramOverlay {
   relationBadges?: ReadonlyMap<string, string> | undefined
   /** False when the overlay only adds to the picture: nothing it does not name is drawn faint. */
   fade?: boolean | undefined
+  /**
+   * Keys drawn flowing, by `relationKey`: dashes running along the line from the table that refers to the one
+   * referred to (`forward`), or the other way (`back`). Still for a reader who has asked for less motion.
+   */
+  flow?: ReadonlyMap<string, 'forward' | 'back'> | undefined
+  /** The boxes come in column by column, and then the lines are drawn (unless the reader asked for less motion). */
+  enter?: boolean | undefined
 }
 
 /**
