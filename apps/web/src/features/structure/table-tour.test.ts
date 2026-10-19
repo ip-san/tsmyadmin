@@ -18,6 +18,7 @@ const tables = ['orders', 'users', 'products', 'lines', 'orgs', 'logs']
 const middle: RoleGuess = { role: 'middle', refersTo: 2, referredBy: 1, self: false }
 const orders = {
   name: 'orders',
+  kind: 'table' as const,
   comment: '注文',
   columns: [column('id', 'int'), column('user_id', 'int'), column('product_id', 'int')],
   primaryKey: ['id'],
@@ -70,6 +71,7 @@ describe('tableTourScenes', () => {
   it('says there is no primary key, and leaves out what the table does not have', () => {
     const logs = {
       name: 'logs',
+      kind: 'table' as const,
       comment: null,
       columns: [column('message', 'int')],
       primaryKey: [],
@@ -93,6 +95,7 @@ describe('tableTourScenes', () => {
     const scenes = tableTourScenes({
       schema: {
         name: 'categories',
+        kind: 'table' as const,
         comment: null,
         columns: [column('id', 'int'), column('parent_id', 'int')],
         primaryKey: ['id'],

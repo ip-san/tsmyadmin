@@ -2,7 +2,15 @@ import type { RelationDef, TableSchema } from '@tsmyadmin/shared'
 import { neighbourhood } from '@/components/schema-diagram/neighbourhood.ts'
 import { overlay, said, type TourScene, unique, whole } from '@/components/schema-diagram/tour.ts'
 import { locale } from '@/config/locale-screens.ts'
-import { designSummary, keyIntent, keyReading, tableReading } from '@/lib/design-reading.ts'
+import {
+  columnComments,
+  designSummary,
+  keyIntent,
+  keyReading,
+  keyTuning,
+  tableReading,
+  tableTuning,
+} from '@/lib/design-reading.ts'
 import type { RoleGuess } from '@/lib/table-role.ts'
 
 const t = locale.tableTour
@@ -22,7 +30,7 @@ const keySentence = (r: RelationDef) => t.key(r.table, r.columns.join(', '), r.r
  * its neighbourhood again. `relations` are the keys drawn (`drawnRelations`); no rows are read.
  */
 export function tableTourScenes(input: {
-  schema: Pick<TableSchema, 'name' | 'comment' | 'columns' | 'primaryKey' | 'indexes' | 'foreignKeys'>
+  schema: Pick<TableSchema, 'name' | 'kind' | 'comment' | 'columns' | 'primaryKey' | 'indexes' | 'foreignKeys'>
   guess: RoleGuess
   relations: readonly RelationDef[]
   /** The tables drawn: every table of the namespace with a key, and this one. */
@@ -38,8 +46,20 @@ export function tableTourScenes(input: {
   const farther = [...reach].filter((x) => !near.has(x))
   // Why it is so: what each key says (its own keys from this table's definition; another table's, what a delete does).
   const intentOf = (r: RelationDef) => keyIntent(r, r.table === name ? schema : undefined)
+  // The comments of this table's own key columns say what the values mean; its own keys can be checked for an index.
   const reading = (keys: readonly RelationDef[]) =>
-    keys.flatMap((r) => keyReading(r.table, r.refTable, intentOf(r))).slice(0, NOTES_SHOWN)
+    keys
+      .flatMap((r) => [
+        ...(r.table === name ? columnComments(name, r.columns, schema) : []),
+        ...keyReading(r.table, r.refTable, intentOf(r)),
+      ])
+      .slice(0, NOTES_SHOWN)
+  const tuning = (keys: readonly RelationDef[]) =>
+    keys.flatMap((r) => (r.table === name ? keyTuning(r, name, r.refTable, schema) : [])).slice(0, NOTES_SHOWN)
+  const lists = (notes: readonly string[], hints: readonly string[]) => ({
+    ...(notes.length > 0 ? { notes } : {}),
+    ...(hints.length > 0 ? { hints } : {}),
+  })
 
   const scenes: TourScene[] = [
     {
@@ -50,7 +70,7 @@ export function tableTourScenes(input: {
       frame: [name],
       overlay: { ...overlay({ tables: [[name, 'focus']] }), enter: true },
       pulse: [name],
-      notes: tableReading(schema),
+      ...lists(tableReading(schema), tableTuning(name, schema)),
     },
     schema.primaryKey.length > 0
       ? {
@@ -84,7 +104,7 @@ export function tableTourScenes(input: {
         ]),
       }),
       pulse: to,
-      notes: reading(out),
+      ...lists(reading(out), tuning(out)),
     })
   }
   if (into.length > 0) {
@@ -103,7 +123,7 @@ export function tableTourScenes(input: {
         ]),
       }),
       pulse: from,
-      notes: reading(into),
+      ...lists(reading(into), []),
     })
   }
   if (self.length > 0) {
@@ -118,7 +138,7 @@ export function tableTourScenes(input: {
         columns: self.flatMap((r) => [[name, [...r.columns, ...r.refColumns]]]),
       }),
       pulse: [],
-      notes: reading(self),
+      ...lists(reading(self), tuning(self)),
     })
   }
   if (farther.length > 0) {

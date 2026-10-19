@@ -9,6 +9,7 @@ import { BOX_WIDTH, boxHeight } from './layout.ts'
 import { type diagramFor, TONES, type Tone } from './overlay.ts'
 import { SchemaDiagram } from './SchemaDiagram.tsx'
 import { DiagramLegend } from './StepNarration.tsx'
+import { TourCaption } from './TourCaption.tsx'
 import { spoken, type TourScene } from './tour.ts'
 import { useCamera } from './use-camera.ts'
 import { useReading, useVoice } from './use-narration.ts'
@@ -201,43 +202,42 @@ function Stage({
   if (!scene) return null
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
-      <div className="min-h-0 flex-1">
-        <SchemaDiagram
-          {...diagram}
-          overlay={scene.overlay}
-          camera={camera}
-          label={label}
-          over={scene.pulse.map((table) => (
-            <rect
-              key={`${player.index}.${table}`}
-              x={at(table).x - RING}
-              y={at(table).y - RING}
-              width={size(table).width + 2 * RING}
-              height={size(table).height + 2 * RING}
-              rx={10}
-              aria-hidden
-              className="diagram-pulse fill-none stroke-brand"
-              strokeWidth={4}
+      {/* On a wide screen the words go beside the picture: a scene that says much does not shrink it. */}
+      <div className="flex min-h-0 flex-1 flex-col gap-3 lg:flex-row">
+        <div className="flex min-h-0 flex-1 flex-col gap-2">
+          <div className="min-h-0 flex-1">
+            <SchemaDiagram
+              {...diagram}
+              overlay={scene.overlay}
+              camera={camera}
+              label={label}
+              over={scene.pulse.map((table) => (
+                <rect
+                  key={`${player.index}.${table}`}
+                  x={at(table).x - RING}
+                  y={at(table).y - RING}
+                  width={size(table).width + 2 * RING}
+                  height={size(table).height + 2 * RING}
+                  rx={10}
+                  aria-hidden
+                  className="diagram-pulse fill-none stroke-brand"
+                  strokeWidth={4}
+                />
+              ))}
             />
-          ))}
-        />
+          </div>
+          {/* Only the colours this scene draws, named for what they mean on the tour. */}
+          <DiagramLegend
+            tones={TONES.filter(
+              (tone) =>
+                [...scene.overlay.tables.values()].some((x) => x.tone === tone) ||
+                [...scene.overlay.relations.values()].includes(tone)
+            )}
+            labels={tones}
+          />
+        </div>
+        <TourCaption scene={scene} index={player.index} count={scenes.length} />
       </div>
-      {/* Only the colours this scene draws, named for what they mean on the tour. */}
-      <DiagramLegend
-        tones={TONES.filter(
-          (tone) =>
-            [...scene.overlay.tables.values()].some((x) => x.tone === tone) ||
-            [...scene.overlay.relations.values()].includes(tone)
-        )}
-        labels={tones}
-      />
-      <section aria-live="polite" aria-atomic className="min-h-36 space-y-1">
-        <p className="text-sm text-ink-sub">{t.sceneOf(player.index + 1, scenes.length)}</p>
-        <h3 className="text-2xl font-bold text-ink">{scene.title}</h3>
-        <p className="text-lg text-ink">{scene.text}</p>
-        <SceneList title={t.notes} items={scene.notes} className="text-brand" />
-        <SceneList title={t.hints} items={scene.hints} className="text-critical" />
-      </section>
       <div className="flex flex-wrap items-center gap-3">
         <Button size="sm" onClick={player.prev} disabled={player.index === 0}>
           {t.prev}
@@ -282,28 +282,5 @@ function Stage({
         <p className="w-full text-xs text-ink-sub">{t.keys}</p>
       </div>
     </div>
-  )
-}
-
-/** What a scene says beyond its words, under a heading of its own: nothing when it says nothing. */
-function SceneList({
-  title,
-  items,
-  className,
-}: {
-  title: string
-  items: readonly string[] | undefined
-  className: string
-}) {
-  if (!items || items.length === 0) return null
-  return (
-    <section aria-label={title} className="pt-1">
-      <h4 className={`text-sm font-semibold ${className}`}>{title}</h4>
-      <ul className="list-disc space-y-0.5 pl-5 text-base text-ink">
-        {items.map((n) => (
-          <li key={n}>{n}</li>
-        ))}
-      </ul>
-    </section>
   )
 }

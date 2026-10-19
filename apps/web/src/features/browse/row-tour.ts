@@ -3,7 +3,16 @@ import { autoLayout, boxHeight } from '@/components/schema-diagram/layout.ts'
 import type { diagramFor } from '@/components/schema-diagram/overlay.ts'
 import { overlay, said, type TourScene, unique, whole } from '@/components/schema-diagram/tour.ts'
 import { locale } from '@/config/locale-screens.ts'
-import { designSummary, keyIntent, keyReading, tableReading } from '@/lib/design-reading.ts'
+import {
+  columnComments,
+  designSummary,
+  keyIntent,
+  keyReading,
+  keyTuning,
+  named,
+  tableReading,
+  tableTuning,
+} from '@/lib/design-reading.ts'
 import { isOpaqueCell } from '@/lib/format.ts'
 import type { TableRef } from '@/lib/queries.ts'
 import { type RowGraph, type RowNode, rowLabel } from './row-graph.ts'
@@ -161,21 +170,38 @@ export function rowTour(
   }
   const valuesSaid = (n: RowNode) => said((columns.get(name(n)) ?? []).slice(0, 3))
   const keyText = (cols: readonly string[], n: RowNode) => cols.map((c) => line(n, c)).join(', ')
-  // Why the rows are joined so: what the key says (how many, must it, what a delete does), read from definitions.
-  const reading = (l: Link) =>
-    l.key ? keyReading(l.from.ref.table, l.to.ref.table, keyIntent(l.key, schemaOf(l.from.ref))) : []
+  // A table as the words say it: with what its comment says it is.
+  const called = (n: RowNode) => named(n.ref.table, schemaOf(n.ref)?.comment)
+  // Why the rows are joined so (what the comments of its columns and the key say: how many, must it, what a delete
+  // does), and where it may cost time. Read from the definitions of the two tables.
+  const reading = (l: Link) => {
+    const child = schemaOf(l.from.ref)
+    if (!l.key) return {}
+    return {
+      notes: [
+        ...columnComments(l.from.ref.table, l.columns, child),
+        ...keyReading(called(l.from), called(l.to), keyIntent(l.key, child)),
+      ],
+      hints: keyTuning(l.key, l.from.ref.table, l.to.ref.table, child, schemaOf(l.to.ref)),
+    }
+  }
 
   const scenes: TourScene[] = [
     {
-      ...scene(name(root), t.intro(root.ref.table, valuesSaid(root)), [root], []),
+      ...scene(name(root), t.intro(called(root), valuesSaid(root)), [root], []),
       overlay: { ...overlay({ tables: [[name(root), 'focus']] }), enter: true },
-      notes: (() => {
+      ...(() => {
         const own = schemaOf(root.ref)
-        return own ? tableReading(own) : []
+        return own ? { notes: tableReading(own), hints: tableTuning(root.ref.table, own) } : {}
       })(),
     },
   ]
-  const told = (s: TourScene, notes: readonly string[]) => scenes.push(notes.length > 0 ? { ...s, notes } : s)
+  const told = (s: TourScene, more: { notes?: readonly string[]; hints?: readonly string[] }) =>
+    scenes.push({
+      ...s,
+      ...(more.notes && more.notes.length > 0 ? { notes: more.notes } : {}),
+      ...(more.hints && more.hints.length > 0 ? { hints: more.hints } : {}),
+    })
   // What the row refers to: one scene a key, the value that matches marked in both boxes.
   for (const l of links.filter((x) => x.from === root)) {
     told(

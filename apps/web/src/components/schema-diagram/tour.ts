@@ -24,8 +24,8 @@ export interface TourScene {
 }
 
 /** All a scene says, as it is read aloud: its title, its words, and what it says of the design. */
-export const spoken = (scene: Pick<TourScene, 'title' | 'text' | 'notes' | 'hints'>) =>
-  [scene.title, scene.text, ...(scene.notes ?? []), ...(scene.hints ?? [])].filter(Boolean).join(t.stop)
+export const spoken = (scene: Pick<TourScene, 'title' | 'text' | 'notes' | 'hints'>, stop: string = t.stop) =>
+  [scene.title, scene.text, ...(scene.notes ?? []), ...(scene.hints ?? [])].filter(Boolean).join(stop)
 
 /** What a scene lights: tables (with a tone and a badge), keys, keys that flow, and columns marked. */
 export interface Lit {

@@ -131,7 +131,7 @@ export function tourHtml(diagram: TourDiagram, scenes: readonly TourScene[], w: 
         })
       return {
         n: w.sceneOf(n + 1, scenes.length),
-        said: sentences(spoken(s)),
+        said: sentences(spoken(s, w.stop)),
         notes: s.notes ?? [],
         hints: s.hints ?? [],
         title: s.title,
@@ -177,7 +177,7 @@ ${boxes.join('\n')}
 <g id="rings" aria-hidden="true"></g>
 </svg></figure>
 <ul id="legend">${legend.join('')}</ul>
-<section aria-live="polite" aria-atomic="true"><p id="n"></p><h2 id="h"></h2><p id="x"></p><div id="notes" class="list" hidden><h3>${xml(w.notes)}</h3><ul></ul></div><div id="hints" class="list" hidden><h3>${xml(w.hints)}</h3><ul></ul></div></section>
+<section aria-live="polite" aria-atomic="true" tabindex="0"><p id="n"></p><h2 id="h"></h2><p id="x"></p><div id="notes" class="list" hidden><h3>${xml(w.notes)}</h3><ul></ul></div><div id="hints" class="list" hidden><h3>${xml(w.hints)}</h3><ul></ul></div></section>
 <nav><button type="button" id="prev">${xml(w.prev)}</button> <button type="button" id="play">${xml(w.play)}</button> <button type="button" id="next">${xml(w.next)}</button> <button type="button" id="narrate" aria-pressed="false">${xml(w.narrate)}</button></nav>
 <p id="voice" role="status"></p>
 <p class="keys">${xml(w.keys)}</p>
@@ -237,6 +237,13 @@ button{font:inherit;font-size:14px;padding:4px 12px;border:1px solid #83898f;bor
 button:disabled{opacity:.5;cursor:default}
 button:focus-visible{outline:2px solid #4338ca;outline-offset:2px}
 .keys{margin:0;font-size:12px;color:#5b616b}
+@media (min-width:1024px){
+main{display:grid;grid-template-columns:minmax(0,1fr) 28rem;grid-template-rows:minmax(0,1fr) auto auto auto auto}
+figure{grid-column:1;grid-row:1}
+#legend{grid-column:1;grid-row:2}
+section{grid-column:2;grid-row:1/3;overflow-y:auto}
+nav,#voice,.keys{grid-column:1/3}
+}
 @keyframes enter{from{opacity:0}to{opacity:1}}
 @keyframes flow{to{stroke-dashoffset:-32}}
 @keyframes pulse{from{opacity:.9;transform:scale(1)}to{opacity:0;transform:scale(1.18)}}
