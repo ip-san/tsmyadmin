@@ -2640,6 +2640,26 @@ export const enScreens = {
     nameTypesNone: 'No two columns of one name differ in type',
     empty: 'There are no tables or views',
   },
+  joinPath: {
+    title: 'How two tables join',
+    hint: 'The shortest paths between two tables, following foreign keys both ways (keys into another database or schema are not followed)',
+    from: 'From',
+    to: 'To',
+    choose: 'Choose a table',
+    reading: 'Reading the foreign keys…',
+    found: (paths: number, steps: number, more: boolean) =>
+      `The shortest paths take ${steps.toLocaleString('en-US')} ${steps === 1 ? 'step' : 'steps'}: ${more ? `more than ${paths.toLocaleString('en-US')} (the first ${paths.toLocaleString('en-US')} shown)` : `${paths.toLocaleString('en-US')} ${paths === 1 ? 'path' : 'paths'}`}`,
+    none: (from: string, to: string) => `No foreign keys lead from ${from} to ${to}`,
+    diagram: (from: string, to: string) => `Diagram of the paths from ${from} to ${to}`,
+    path: (n: number, tables: readonly string[]) => `Path ${n}: ${tables.join(' → ')}`,
+    steps: (n: number) => `Steps of path ${n}`,
+    hop: (from: string, to: string, keys: readonly string[]) => `${from} → ${to} (${keys.join('; ')})`,
+    key: (table: string, columns: string, refTable: string, refColumns: string) =>
+      `${table}.${columns} refers to ${refTable}.${refColumns}`,
+    build: (n: number) => `Build a query along path ${n}`,
+    buildHint:
+      'Opens the Query tab with the tables of the path ticked in order. Where two tables have more than one foreign key between them, the Query tab lets you choose which one to join on',
+  },
   dictionary: {
     failed: (names: readonly string[]) => `Tables whose definitions could not be read: ${names.join(', ')}`,
     progress: (done: number, all: number) =>

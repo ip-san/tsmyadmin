@@ -57,6 +57,10 @@ vi.mock('@/lib/each-limited.ts', async (actual) => {
     },
   }
 })
+// Tried on its own (JoinPath.test.tsx): here, only that it is there, with the two tables of the URL.
+vi.mock('./JoinPath.tsx', () => ({
+  JoinPath: ({ ends }: { ends: { from?: string; to?: string } }) => <p>{`join path ${ends.from} ${ends.to}`}</p>,
+}))
 vi.mock('@/lib/session.ts', () => ({ useDialect: () => dialect }))
 vi.mock('@/lib/queries.ts', () => ({
   tablesQuery: () => ({
@@ -88,6 +92,16 @@ const saysAtLast = (text: string) => waitFor(() => expect(status()).toHaveTextCo
 const address = (to: string, params: object, search: object) => `${to}?${JSON.stringify({ params, search })}`
 
 describe('DatabaseMap', () => {
+  it('asks for a join path between the two tables it is given, while the definitions are still read', () => {
+    hold = new Promise(() => undefined)
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <DatabaseMap db="shop" schema={undefined} ends={{ from: 'orders', to: 'users' }} />
+      </QueryClientProvider>
+    )
+    expect(screen.getByText('join path orders users')).toBeInTheDocument()
+  })
+
   it('says what it is reading on the one status line there from the start', async () => {
     mount()
     expect(status()).toHaveTextContent(t.reading)
