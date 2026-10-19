@@ -41,6 +41,33 @@ describe('joinPaths', () => {
     expect(routes(joinPaths(shop, 'orders', 'users').paths)).toEqual(['orders>users'])
   })
 
+  it('orders the paths by the names of their tables, not by the order the keys are listed in', () => {
+    const listed = [...shop].reverse()
+    expect(routes(joinPaths(listed, 'users', 'products').paths)).toEqual([
+      'users>orders>products',
+      'users>reviews>products',
+    ])
+    // By code unit, the same in every browser: an upper-case name before a lower-case one.
+    const cased = [
+      relation('b', ['x_id'], 'x'),
+      relation('B', ['x_id'], 'x'),
+      relation('b', ['y_id'], 'y'),
+      relation('B', ['y_id'], 'y'),
+    ]
+    expect(routes(joinPaths(cased, 'x', 'y').paths)).toEqual(['x>B>y', 'x>b>y'])
+  })
+
+  it('stops looking once it has found more than the limit, however many paths there are', () => {
+    // 30 rows of two tables, each joined to both of the next: 2^30 shortest paths, never all walked.
+    const row = (i: number) => [`a${i}`, `b${i}`]
+    const ladder = Array.from({ length: 30 }, (_, i) =>
+      row(i).flatMap((t) => row(i + 1).map((n) => relation(t, [`${n}_id`], n, { name: `fk_${t}_${n}` })))
+    ).flat()
+    const { paths, more } = joinPaths(ladder, 'a0', 'a30')
+    expect(paths).toHaveLength(3)
+    expect(more).toBe(true)
+  }, 2000)
+
   it('stops at the limit, and tells there are more', () => {
     const many = ['a', 'b', 'c', 'd'].flatMap((m) => [relation(m, ['x_id'], 'x'), relation(m, ['y_id'], 'y')])
     const three = joinPaths(many, 'x', 'y')

@@ -135,7 +135,7 @@ function Paths({
         {paths.map((path, i) => {
           const tables = [from, ...path.map((h) => h.to)]
           return (
-            <li key={tables.join('>')} className="space-y-1">
+            <li key={JSON.stringify(tables)} className="space-y-1">
               <p className="text-sm font-medium text-ink">{t.path(i + 1, tables)}</p>
               <ul aria-label={t.steps(i + 1)} className="list-disc pl-5 text-sm text-ink">
                 {path.map((h) => (

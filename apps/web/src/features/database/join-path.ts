@@ -49,8 +49,8 @@ export function joinPaths(
         }
     ring = out
   }
-  const steps = left.get(from)
-  if (from === to || steps === undefined) return { paths: [], more: false }
+  // From a table `to` is not reached from, the walk finds no step nearer, and so no path.
+  if (from === to) return { paths: [], more: false }
   const found: string[][] = []
   const walk = (path: string[]) => {
     const here = path.at(-1) ?? from
