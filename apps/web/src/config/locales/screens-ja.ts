@@ -2616,6 +2616,26 @@ export const jaScreens = {
     nameTypesNone: '名前が同じで型が違うカラムはありません',
     empty: 'テーブルもビューもありません',
   },
+  joinPath: {
+    title: '2 つのテーブルのつなぎ方',
+    hint: '外部キーを両向きにたどって、2 つのテーブルを結ぶ最短の経路を出します（ほかのデータベース・スキーマへのキーはたどりません）',
+    from: 'ここから',
+    to: 'ここまで',
+    choose: 'テーブルを選ぶ',
+    reading: '外部キーを読んでいます…',
+    found: (paths: number, steps: number, more: boolean) =>
+      `最短の経路は ${steps.toLocaleString('ja-JP')} 段で、${more ? `${paths.toLocaleString('ja-JP')} 本より多くあります（はじめの ${paths.toLocaleString('ja-JP')} 本を出します）` : `${paths.toLocaleString('ja-JP')} 本です`}`,
+    none: (from: string, to: string) => `${from} と ${to} は、外部キーをたどってもつながりません`,
+    diagram: (from: string, to: string) => `${from} から ${to} への経路の図`,
+    path: (n: number, tables: readonly string[]) => `経路 ${n}: ${tables.join(' → ')}`,
+    steps: (n: number) => `経路 ${n} の各段`,
+    hop: (from: string, to: string, keys: readonly string[]) => `${from} → ${to}（${keys.join('、')}）`,
+    key: (table: string, columns: string, refTable: string, refColumns: string) =>
+      `${table}.${columns} が ${refTable}.${refColumns} を参照`,
+    build: (n: number) => `経路 ${n} でクエリを作る`,
+    buildHint:
+      'クエリの画面を、経路のテーブルを順に選んだ状態で開きます。2 つのテーブルの間に外部キーがいくつかあるときは、どれで結合するかをクエリの画面で選べます',
+  },
   dictionary: {
     failed: (names: readonly string[]) => `定義を読めなかったテーブル: ${names.join('、')}`,
     progress: (done: number, all: number) =>

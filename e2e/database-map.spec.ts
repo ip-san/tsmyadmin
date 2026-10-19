@@ -58,5 +58,40 @@ for (const t of TARGETS) {
         await expect(types).toHaveText(['bigint（notes）', 'int（posts）'])
       })
     })
+
+    test('finds how two tables join, and opens the Query tab with the tables of the path', async ({ page }) => {
+      await login(page, t)
+      await withScratchSpace(page, t, async (space) => {
+        await petsAndLogs(page, space)
+        await sqlOn(
+          page,
+          space,
+          'CREATE TABLE visits (id INT PRIMARY KEY, pet_id INT, FOREIGN KEY (pet_id) REFERENCES pets (id))'
+        )
+        await page.goto(`/db/${space.database}/map${space.schema ? `?schema=${space.schema}` : ''}`)
+        const card = page.locator('section', { has: page.getByRole('heading', { name: '2 つのテーブルのつなぎ方' }) })
+        await card.getByLabel('ここから').selectOption('visits')
+        await card.getByLabel('ここまで').selectOption('owners')
+        await expect(card.getByRole('status')).toHaveText('最短の経路は 2 段で、1 本です')
+        await expect(card.getByRole('list', { name: '経路 1 の各段' }).getByRole('listitem')).toHaveText([
+          'visits → pets（visits.pet_id が pets.id を参照）',
+          'pets → owners（pets.owner_id が owners.id を参照）',
+        ])
+        // The two are kept in the address, so the path can be shared.
+        await expect(page).toHaveURL(/from=visits.*to=owners/)
+
+        await card.getByLabel('ここまで').selectOption('logs')
+        await expect(card.getByRole('status')).toHaveText('visits と logs は、外部キーをたどってもつながりません')
+        await card.getByLabel('ここまで').selectOption('owners')
+
+        await card.getByRole('link', { name: '経路 1 でクエリを作る' }).click()
+        await expect(page).toHaveURL(/\/query/)
+        await expect(page.getByText('結合の順: visits → pets → owners')).toBeVisible()
+        await page.getByRole('button', { name: 'SQL を作成' }).click()
+        const generated = page.locator('pre')
+        await expect(generated).toContainText('LEFT JOIN')
+        await expect(generated).toContainText('owners')
+      })
+    })
   })
 }
