@@ -17,6 +17,8 @@ export interface OverlayStep {
   /** By `relationKey`. */
   relations?: readonly { key: string; tone: Tone }[]
   columns?: readonly { table: string; column: string }[]
+  /** Keys that flow while this step is the one shown (by `relationKey`): what the step did travelling along them. */
+  flow?: readonly { key: string; direction: 'forward' | 'back' }[]
 }
 
 /** What the diagram draws over its boxes and lines. Anything not named here is drawn faint. */
@@ -39,7 +41,7 @@ export interface DiagramOverlay {
 
 /**
  * The steps up to `index`, laid on top of each other: a step adds to what came before, so the picture at the last
- * step is the whole story. A later step that names the same table or key again wins.
+ * step is the whole story. A later step that names the same table or key again wins. Only the step shown flows.
  */
 export function overlayUpTo(steps: readonly OverlayStep[], index: number): DiagramOverlay {
   const tables = new Map<string, { tone: Tone; badge?: string | undefined }>()
@@ -54,7 +56,9 @@ export function overlayUpTo(steps: readonly OverlayStep[], index: number): Diagr
       columns.set(c.table, set)
     }
   }
-  return { tables, relations, columns }
+  const shown = steps[Math.min(index, steps.length - 1)]
+  const flow = new Map((index >= 0 ? (shown?.flow ?? []) : []).map((f) => [f.key, f.direction] as const))
+  return { tables, relations, columns, flow }
 }
 
 /**

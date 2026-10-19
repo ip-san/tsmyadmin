@@ -65,6 +65,11 @@ describe('impactSteps', () => {
       { key: relationKey({ table: 'orders', name: 'fk_orders_user' }), tone: 'delete' },
       { key: relationKey({ table: 'notes', name: 'fk_notes_user' }), tone: 'nullify' },
     ])
+    // Away from the table deleted from, to the ones that refer to it.
+    expect(first?.flow).toEqual([
+      { key: relationKey({ table: 'orders', name: 'fk_orders_user' }), direction: 'back' },
+      { key: relationKey({ table: 'notes', name: 'fk_notes_user' }), direction: 'back' },
+    ])
     expect(first?.columns).toEqual([
       { table: 'orders', column: 'user_id' },
       { table: 'notes', column: 'user_id' },
@@ -76,6 +81,10 @@ describe('impactSteps', () => {
     expect(second?.tables?.filter((x) => x.name === 'items').map((x) => x.badge)).toEqual(['7', '7'])
     expect(second?.tables?.find((x) => x.name === 'locks')?.tone).toBe('blocked')
     expect(second?.text).toContain(t.refuse('locks', 5, 'fk_locks_order'))
+    expect(second?.flow?.map((f) => f.key)).toEqual([
+      relationKey({ table: 'items', name: 'fk_items_order' }),
+      relationKey({ table: 'items', name: 'fk_items_order2' }),
+    ])
   })
 
   it('says SET DEFAULT in its own words', () => {

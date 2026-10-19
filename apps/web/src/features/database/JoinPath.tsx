@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useId } from 'react'
-import { drawnRelations } from '@/components/schema-diagram/layout.ts'
-import { diagramFor } from '@/components/schema-diagram/overlay.ts'
+import { drawnRelations, relationKey } from '@/components/schema-diagram/layout.ts'
+import { type DiagramOverlay, diagramFor } from '@/components/schema-diagram/overlay.ts'
 import { SchemaDiagram } from '@/components/schema-diagram/SchemaDiagram.tsx'
 import { Card } from '@/components/ui/Card.tsx'
 import { ErrorBox } from '@/components/ui/Feedback.tsx'
@@ -130,7 +130,7 @@ function Paths({
   )
   return (
     <div className="space-y-3">
-      <SchemaDiagram {...d} label={t.diagram(from, to)} />
+      <SchemaDiagram {...d} overlay={walked(from, to, paths)} label={t.diagram(from, to)} />
       <ol className="space-y-3">
         {paths.map((path, i) => {
           const tables = [from, ...path.map((h) => h.to)]
@@ -167,4 +167,24 @@ function Paths({
       <p className="text-xs text-ink-sub">{t.buildHint}</p>
     </div>
   )
+}
+
+/**
+ * The two ends marked, and every key of the paths flowing the way it is walked (against the key where the table
+ * walked to is the one that refers). Nothing is drawn faint: every table drawn is on a path.
+ */
+function walked(from: string, to: string, paths: readonly JoinHop[][]): DiagramOverlay {
+  return {
+    tables: new Map([from, to].map((x) => [x, { tone: 'focus' as const }])),
+    relations: new Map(),
+    columns: new Map(),
+    fade: false,
+    flow: new Map(
+      paths.flatMap((p) =>
+        p.flatMap((h) =>
+          h.keys.map(({ relation, forward }) => [relationKey(relation), forward ? 'forward' : 'back'] as const)
+        )
+      )
+    ),
+  }
 }
