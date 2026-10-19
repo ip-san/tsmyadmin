@@ -169,14 +169,25 @@ function Stage({
   const scene = scenes[player.index] ?? scenes[0]
   // Each time it is played, the scene is read again: what was read before it was played would leave it waiting.
   const [plays, setPlays] = useState(0)
-  useSpeech(voice.voice, scene ? `${scene.title}${t.stop}${scene.text}` : '', player.advance, plays)
+  // Paused, the voice stops too, until it is played or moved (the scene paused on is not read again by itself).
+  const [hushed, setHushed] = useState<number | null>(null)
+  useSpeech(
+    hushed === player.index ? null : voice.voice,
+    scene ? `${scene.title}${t.stop}${scene.text}` : '',
+    player.advance,
+    { again: plays, fallbackMs: SCENE_MS }
+  )
   const at = (table: string) => diagram.positions[table] ?? { x: 0, y: 0 }
   const size = (table: string) => ({ width: BOX_WIDTH, height: boxHeight(diagram.columns.get(table)?.length ?? 0) })
   const camera = useCamera(frameOf(scene?.frame ?? [], diagram.tables, at, size))
   const toggle = player.playing
-    ? player.pause
+    ? () => {
+        player.pause()
+        setHushed(player.index)
+      }
     : () => {
         player.play()
+        setHushed(null)
         setPlays((n) => n + 1)
       }
   // A presenter's clicker sends Page Up / Down; a focused button keeps its own Space and Enter.
@@ -276,7 +287,7 @@ function Stage({
           ))}
         </ol>
         {/* There from the start (empty): heard when reading aloud is asked for and the device has no voice for it. */}
-        <p role="status" className="w-full text-sm text-ink empty:hidden">
+        <p role="status" className="w-full text-sm text-ink empty:sr-only">
           {voice.asked && voice.voice === null ? t.noVoice : ''}
         </p>
         <p className="w-full text-xs text-ink-sub">{t.keys}</p>

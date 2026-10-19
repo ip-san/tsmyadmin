@@ -221,6 +221,12 @@ for (const t of TARGETS) {
         )
         expect(said[0]?.text).toBe(`${space.schema ?? space.database}。`)
         expect(new Set(said.map((x) => x.voice))).toEqual(new Set(['own']))
+        // Paused, the voice stops, and the scene stays.
+        await voiced.keyboard.press('p')
+        const count = await voiced.evaluate(() => (window as unknown as { said: unknown[] }).said.length)
+        await voiced.clock.runFor(10000)
+        await expect(voicedTitle).toHaveText('マスタ（1）')
+        expect(await voiced.evaluate(() => (window as unknown as { said: unknown[] }).said.length)).toBe(count)
         await voiced.close()
 
         await page.keyboard.press('Escape')

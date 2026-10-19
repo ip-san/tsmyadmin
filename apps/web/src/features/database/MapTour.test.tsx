@@ -277,6 +277,12 @@ describe('MapTour', () => {
     expect(caption()).toHaveTextContent('shop')
     readAll()
     expect(caption()).toHaveTextContent(t.roleTitle(t.roles.master, 1))
+    // Paused, the voice stops too; moved by hand, the scene moved to is read.
+    fireEvent.click(screen.getByRole('button', { name: g.pause }))
+    expect(synth.cancel).toHaveBeenCalled()
+    expect(spoken.filter((u) => !u.done)).toEqual([])
+    fireEvent.click(screen.getByRole('button', { name: g.play }))
+    expect(spoken.filter((u) => !u.done).length).toBe(1)
     // Moved by hand, the reading stops and so does playing.
     synth.cancel.mockClear()
     fireEvent.click(screen.getByRole('button', { name: g.next }))

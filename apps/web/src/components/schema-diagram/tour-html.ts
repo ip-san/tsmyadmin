@@ -316,7 +316,12 @@ const SCRIPT = `
     var fits = (synth ? synth.getVoices() : []).filter(function (v) {
       return v.localService && v.lang.toLowerCase().split(/[-_]/)[0] === D.lang
     })
-    voice = fits.filter(function (v) { return v.default })[0] || fits[0] || null
+    var now = fits.filter(function (v) { return v.default })[0] || fits[0] || null
+    var same = voice && now && voice.name === now.name && voice.lang === now.lang
+    if (same) return
+    voice = now
+    // Voices listed late (Chrome): reading asked for before they came starts now.
+    if (narrating) { said(); speak(); schedule() }
   }
   if (synth) { pickVoice(); synth.addEventListener('voiceschanged', pickVoice) }
   var reads = function () { return narrating && voice !== null }
@@ -331,7 +336,12 @@ const SCRIPT = `
       if (k >= parts.length) { if (playing) step(); return }
       var u = new SpeechSynthesisUtterance(parts[k++])
       u.voice = voice; u.lang = voice.lang; u.onend = say
-      u.onerror = function (e) { if (mine === reading && e.error !== 'canceled' && e.error !== 'interrupted' && playing) step() }
+      // A voice that fails: the scene's time instead, rather than rushing on through every scene.
+      u.onerror = function (e) {
+        if (mine !== reading || e.error === 'canceled' || e.error === 'interrupted' || !playing) return
+        clearTimeout(timer)
+        timer = setTimeout(step, D.sceneMs)
+      }
       synth.speak(u)
     })()
   }
@@ -346,7 +356,8 @@ const SCRIPT = `
   function stop() { playing = false; clearTimeout(timer); timer = null; play.textContent = D.play }
   // One scene does not play; played, the scene shown is read again before the next.
   function toggle() {
-    if (playing) return stop()
+    // Paused, the voice stops too.
+    if (playing) { stop(); reading++; if (synth) synth.cancel(); return }
     if (D.scenes.length < 2) return
     playing = true
     play.textContent = D.pause
@@ -354,10 +365,11 @@ const SCRIPT = `
     schedule()
   }
   var narrate = document.getElementById('narrate')
+  function said() { document.getElementById('voice').textContent = narrating && !voice ? D.noVoice : '' }
   narrate.onclick = function () {
     narrating = !narrating
     narrate.setAttribute('aria-pressed', String(narrating))
-    document.getElementById('voice').textContent = narrating && !voice ? D.noVoice : ''
+    said()
     speak()
     schedule()
   }
