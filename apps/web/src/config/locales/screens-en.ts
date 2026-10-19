@@ -2647,8 +2647,12 @@ export const enScreens = {
     to: 'To',
     choose: 'Choose a table',
     reading: 'Reading the foreign keys…',
-    found: (paths: number, steps: number, more: boolean) =>
-      `The shortest paths take ${steps.toLocaleString('en-US')} ${steps === 1 ? 'step' : 'steps'}: ${more ? `more than ${paths.toLocaleString('en-US')} (the first ${paths.toLocaleString('en-US')} shown)` : `${paths.toLocaleString('en-US')} ${paths === 1 ? 'path' : 'paths'}`}`,
+    found: (paths: number, steps: number, more: boolean) => {
+      const n = paths.toLocaleString('en-US')
+      const length = `The shortest route is ${steps.toLocaleString('en-US')} ${steps === 1 ? 'step' : 'steps'} long`
+      if (more) return `${length}; there are more than ${n} paths (showing the first ${n})`
+      return `${length}; there ${paths === 1 ? 'is 1 path' : `are ${n} paths`}`
+    },
     none: (from: string, to: string) => `No foreign keys lead from ${from} to ${to}`,
     diagram: (from: string, to: string) => `Diagram of the paths from ${from} to ${to}`,
     path: (n: number, tables: readonly string[]) => `Path ${n}: ${tables.join(' → ')}`,

@@ -16,6 +16,7 @@ let keys: RelationDef[] | Error
 /** A reading of the keys held until the test lets it go. */
 let hold: Promise<void> | null
 let keyReads: number
+let tablesFail: boolean
 
 beforeEach(() => {
   // orders → users, orders → products; logs linked to nothing.
@@ -23,6 +24,7 @@ beforeEach(() => {
   keys = [relation('orders', ['user_id'], 'users'), relation('orders', ['product_id'], 'products')]
   hold = null
   keyReads = 0
+  tablesFail = false
 })
 
 vi.mock('@tanstack/react-router', () => ({
@@ -35,7 +37,10 @@ vi.mock('@/lib/session.ts', () => ({ useDialect: () => 'mysql' }))
 vi.mock('@/lib/queries.ts', () => ({
   tablesQuery: () => ({
     queryKey: ['tables'],
-    queryFn: async () => [...names.map((name) => ({ name, kind: 'table' })), { name: 'v_orders', kind: 'view' }],
+    queryFn: async () => {
+      if (tablesFail) throw new Error('cannot list')
+      return [...names.map((name) => ({ name, kind: 'table' })), { name: 'v_orders', kind: 'view' }]
+    },
   }),
   foreignKeysQuery: () => ({
     queryKey: ['keys'],
@@ -123,7 +128,13 @@ describe('JoinPath', () => {
     mount({ from: 'x', to: 'y' })
     await waitFor(() => expect(status()).toHaveTextContent(t.found(3, 2, true)))
     expect(screen.getAllByRole('link').map((a) => a.textContent)).toEqual([t.build(1), t.build(2), t.build(3)])
-    expect(screen.getByText(t.path(3, ['x', 'c', 'y']))).toBeInTheDocument()
+    expect(
+      screen.getAllByRole('link').map((a) => JSON.parse(a.getAttribute('href')?.split('?')[1] ?? '').search.tables)
+    ).toEqual([
+      ['x', 'a', 'y'],
+      ['x', 'b', 'y'],
+      ['x', 'c', 'y'],
+    ])
   })
 
   it('does not follow a key into another database', async () => {
@@ -151,11 +162,30 @@ describe('JoinPath', () => {
     expect(status()).toBeEmptyDOMElement()
   })
 
+  it('lets the other end go when the table it is is chosen to start from', async () => {
+    const { changes } = mount({ from: 'orders', to: 'users' })
+    await waitFor(() => expect(status()).toHaveTextContent(t.found(1, 1, false)))
+    expect(optionsOf(t.from)).toContain('users')
+    choose(t.from, 'users')
+    expect(changes).toEqual([{ from: 'users', to: undefined }])
+    expect(screen.getByLabelText(t.to)).toHaveValue('')
+    expect(status()).toBeEmptyDOMElement()
+  })
+
   it('does not take one table for both ends', async () => {
     mount({ from: 'users', to: 'users' })
     await waitFor(() => expect(screen.getByLabelText(t.from)).toHaveValue('users'))
     expect(screen.getByLabelText(t.to)).toHaveValue('')
     expect(status()).toBeEmptyDOMElement()
+  })
+
+  it('leaves the error of the table list to the map, which reads the same list', async () => {
+    names = []
+    tablesFail = true
+    mount({ from: 'orders', to: 'users' })
+    await waitFor(() => expect(keyReads).toBe(1))
+    await waitFor(() => expect(screen.getByLabelText(t.from)).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: common.common.retry })).not.toBeInTheDocument()
   })
 
   it('shows nothing for a database of fewer than two tables (views are not counted)', async () => {

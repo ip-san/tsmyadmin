@@ -11,7 +11,7 @@ import { locale } from '@/config/locale-screens.ts'
 import { namespaceOf } from '@/lib/home-namespace.ts'
 import { foreignKeysQuery, tablesQuery } from '@/lib/queries.ts'
 import { useDialect } from '@/lib/session.ts'
-import { type JoinHop, joinPaths } from './join-path.ts'
+import { type JoinHop, joinPaths, QUERY_TABLES_LIMIT } from './join-path.ts'
 
 const t = locale.joinPath
 
@@ -47,7 +47,6 @@ export function JoinPath({
   const to = ends.to !== undefined && ends.to !== from && names.includes(ends.to) ? ends.to : undefined
   const relations = keys.data ? drawnRelations(keys.data, dialect, namespaceOf(db, schema), names) : []
   const found = from && to && keys.data ? joinPaths(relations, from, to) : undefined
-  const error = tables.isError ? tables : keys.isError ? keys : undefined
   const status =
     from && to
       ? found
@@ -67,7 +66,11 @@ export function JoinPath({
             <Select
               id={`${id}-from`}
               value={from ?? ''}
-              onChange={(e) => onEnds({ from: e.target.value || undefined, to })}
+              onChange={(e) => {
+                const next = e.target.value || undefined
+                // One table is not both ends: the other end is let go, here and in the URL.
+                onEnds({ from: next, to: to === next ? undefined : to })
+              }}
               className="w-56"
             >
               <option value="">{t.choose}</option>
@@ -96,7 +99,8 @@ export function JoinPath({
         <p role="status" className="text-sm text-ink empty:mb-0">
           {status}
         </p>
-        {error ? <ErrorBox error={error.error} onRetry={() => void error.refetch()} /> : null}
+        {/* The table list's error is the map's to tell (it reads the same list). */}
+        {keys.isError ? <ErrorBox error={keys.error} onRetry={() => void keys.refetch()} /> : null}
         {found && from && to && found.paths.length > 0 ? (
           <Paths db={db} schema={schema} from={from} to={to} paths={found.paths} relations={relations} />
         ) : null}
@@ -146,14 +150,16 @@ function Paths({
                   </li>
                 ))}
               </ul>
-              <Link
-                to="/db/$db/query"
-                params={{ db }}
-                search={{ schema, tables }}
-                className="text-sm text-brand underline"
-              >
-                {t.build(i + 1)}
-              </Link>
+              {tables.length <= QUERY_TABLES_LIMIT ? (
+                <Link
+                  to="/db/$db/query"
+                  params={{ db }}
+                  search={{ schema, tables }}
+                  className="text-sm text-brand underline"
+                >
+                  {t.build(i + 1)}
+                </Link>
+              ) : null}
             </li>
           )
         })}

@@ -11,7 +11,11 @@ export interface JoinHop {
 /** The most paths shown: past a few, the way between two tables is "through most of the schema". */
 export const PATH_LIMIT = 3
 
-const byName = (a: string, b: string) => a.localeCompare(b)
+/** The most tables a link to the Query tab carries (a longer path is told, not linked). */
+export const QUERY_TABLES_LIMIT = 64
+
+// By code unit, not by the browser's locale: a path's number is shared in the URL, and must be the same path to all.
+const byName = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
 
 /**
  * The shortest ways from `from` to `to` along foreign keys, followed both ways (a table to the one it refers to, and
@@ -28,8 +32,8 @@ export function joinPaths(
 ): { paths: JoinHop[][]; more: boolean } {
   const next = new Map<string, Set<string>>()
   const link = (a: string, b: string) => next.set(a, (next.get(a) ?? new Set()).add(b))
+  // A key from a table to itself links it to a table as far from `to` as it is: never a step nearer.
   for (const r of relations) {
-    if (r.table === r.refTable) continue
     link(r.table, r.refTable)
     link(r.refTable, r.table)
   }
