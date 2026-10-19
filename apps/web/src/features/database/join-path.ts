@@ -9,7 +9,7 @@ export interface JoinHop {
 }
 
 /** The most paths shown: past a few, the way between two tables is "through most of the schema". */
-export const PATH_LIMIT = 3
+const PATH_LIMIT = 3
 
 /** The most tables a link to the Query tab carries (a longer path is told, not linked). */
 export const QUERY_TABLES_LIMIT = 64
