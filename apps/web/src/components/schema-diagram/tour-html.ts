@@ -301,11 +301,16 @@ const SCRIPT = `
     move(s.view)
   }
   function stop() { clearInterval(timer); timer = null; play.textContent = D.play }
+  // As on the page: one scene does not play, and the last one shown stops it (the button says Play at once).
   function toggle() {
     if (timer) return stop()
+    if (D.scenes.length < 2) return
     if (i === D.scenes.length - 1) show(0)
     play.textContent = D.pause
-    timer = setInterval(function () { if (i >= D.scenes.length - 1) stop(); else show(i + 1) }, D.sceneMs)
+    timer = setInterval(function () {
+      show(i + 1)
+      if (i >= D.scenes.length - 1) stop()
+    }, D.sceneMs)
   }
   function full() {
     var asked = document.fullscreenElement ? document.exitFullscreen()
