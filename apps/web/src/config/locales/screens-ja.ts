@@ -2648,6 +2648,8 @@ export const jaScreens = {
     sceneOf: (n: number, total: number) => `${n} / ${total}`,
     goTo: (n: number, title: string) => `${n}. ${title}`,
     keys: '← → か Page Up / Down で前後、スペースで次、Home / End で最初と最後、P で再生・一時停止、F で全画面、Esc で閉じる',
+    narrate: '読み上げ',
+    noVoice: 'この端末には、この言語の読み上げの声がありません。外部に文を送る声は使わないため、読み上げずに進めます',
     save: 'HTML で保存',
     saveHint:
       'この発表を 1 つの HTML ファイルにします。サーバーにつながずに、ブラウザで開いて発表できます（テーブル名・カラム名・コメントが入ります）',

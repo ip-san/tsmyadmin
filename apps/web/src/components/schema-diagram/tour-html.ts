@@ -11,6 +11,7 @@ import {
   textRoom,
   textWidth,
 } from './layout.ts'
+import { sentences } from './narration.ts'
 import { type diagramFor, TONE_STROKE, TONES, type Tone } from './overlay.ts'
 import type { TourScene } from './tour.ts'
 
@@ -26,6 +27,10 @@ export interface TourWords {
   next: string
   play: string
   pause: string
+  narrate: string
+  noVoice: string
+  /** What ends a sentence: the title is read as one before the words. */
+  stop: string
   keys: string
   sceneOf: (n: number, total: number) => string
   /** What each colour means on this tour. */
@@ -103,6 +108,8 @@ export function tourHtml(diagram: TourDiagram, scenes: readonly TourScene[], w: 
     play: w.play,
     pause: w.pause,
     sceneMs: SCENE_MS,
+    lang: w.lang,
+    noVoice: w.noVoice,
     cameraMs: CAMERA_MS,
     ring: RING,
     scenes: scenes.map((s, n) => {
@@ -121,6 +128,7 @@ export function tourHtml(diagram: TourDiagram, scenes: readonly TourScene[], w: 
         })
       return {
         n: w.sceneOf(n + 1, scenes.length),
+        said: sentences(`${s.title}${w.stop}${s.text}`),
         title: s.title,
         text: s.text,
         view: [frame.x, frame.y, frame.width, frame.height].map(round),
@@ -165,7 +173,8 @@ ${boxes.join('\n')}
 </svg></figure>
 <ul id="legend">${legend.join('')}</ul>
 <section aria-live="polite" aria-atomic="true"><p id="n"></p><h2 id="h"></h2><p id="x"></p></section>
-<nav><button type="button" id="prev">${xml(w.prev)}</button> <button type="button" id="play">${xml(w.play)}</button> <button type="button" id="next">${xml(w.next)}</button></nav>
+<nav><button type="button" id="prev">${xml(w.prev)}</button> <button type="button" id="play">${xml(w.play)}</button> <button type="button" id="next">${xml(w.next)}</button> <button type="button" id="narrate" aria-pressed="false">${xml(w.narrate)}</button></nav>
+<p id="voice" role="status"></p>
 <p class="keys">${xml(w.keys)}</p>
 </main>
 <script type="application/json" id="tour">${scriptJson(data)}</script>
@@ -299,18 +308,58 @@ const SCRIPT = `
     prev.disabled = i === 0
     next.disabled = i === D.scenes.length - 1
     move(s.view)
+    speak()
   }
-  function stop() { clearInterval(timer); timer = null; play.textContent = D.play }
-  // As on the page: one scene does not play, and the last one shown stops it (the button says Play at once).
+  // Read aloud only in a voice the device speaks itself: one that is not sends the words (the names) out.
+  var synth = window.speechSynthesis || null, voice = null, narrating = false, reading = 0
+  function pickVoice() {
+    var fits = (synth ? synth.getVoices() : []).filter(function (v) {
+      return v.localService && v.lang.toLowerCase().split(/[-_]/)[0] === D.lang
+    })
+    voice = fits.filter(function (v) { return v.default })[0] || fits[0] || null
+  }
+  if (synth) { pickVoice(); synth.addEventListener('voiceschanged', pickVoice) }
+  var reads = function () { return narrating && voice !== null }
+  // A sentence at a time (a long one is cut off by some browsers); a scene read through moves on while playing.
+  function speak() {
+    if (!synth) return
+    var mine = ++reading, parts = D.scenes[i].said, k = 0
+    synth.cancel()
+    if (!reads()) return
+    ;(function say() {
+      if (mine !== reading) return
+      if (k >= parts.length) { if (playing) step(); return }
+      var u = new SpeechSynthesisUtterance(parts[k++])
+      u.voice = voice; u.lang = voice.lang; u.onend = say
+      u.onerror = function (e) { if (mine === reading && e.error !== 'canceled' && e.error !== 'interrupted' && playing) step() }
+      synth.speak(u)
+    })()
+  }
+  var playing = false
+  // Read aloud, a scene lasts as long as its words; otherwise its time.
+  function schedule() { clearTimeout(timer); timer = playing && !reads() ? setTimeout(step, D.sceneMs) : null }
+  // As on the page: the last scene shown stops playing (the button says Play at once).
+  function step() {
+    show(i + 1)
+    if (i >= D.scenes.length - 1) stop(); else schedule()
+  }
+  function stop() { playing = false; clearTimeout(timer); timer = null; play.textContent = D.play }
+  // One scene does not play; played, the scene shown is read again before the next.
   function toggle() {
-    if (timer) return stop()
+    if (playing) return stop()
     if (D.scenes.length < 2) return
-    if (i === D.scenes.length - 1) show(0)
+    playing = true
     play.textContent = D.pause
-    timer = setInterval(function () {
-      show(i + 1)
-      if (i >= D.scenes.length - 1) stop()
-    }, D.sceneMs)
+    if (i === D.scenes.length - 1) show(0); else speak()
+    schedule()
+  }
+  var narrate = document.getElementById('narrate')
+  narrate.onclick = function () {
+    narrating = !narrating
+    narrate.setAttribute('aria-pressed', String(narrating))
+    document.getElementById('voice').textContent = narrating && !voice ? D.noVoice : ''
+    speak()
+    schedule()
   }
   function full() {
     var asked = document.fullscreenElement ? document.exitFullscreen()

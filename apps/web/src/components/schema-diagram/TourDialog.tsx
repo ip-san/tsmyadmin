@@ -11,6 +11,7 @@ import { SchemaDiagram } from './SchemaDiagram.tsx'
 import { DiagramLegend } from './StepNarration.tsx'
 import type { TourScene } from './tour.ts'
 import { useCamera } from './use-camera.ts'
+import { useSpeech, useVoice } from './use-narration.ts'
 import { useStepPlayer } from './use-step-player.ts'
 
 const t = locale.tour
@@ -136,6 +137,9 @@ async function save(
     next: t.next,
     play: t.play,
     pause: t.pause,
+    narrate: t.narrate,
+    noVoice: t.noVoice,
+    stop: t.stop,
     keys: t.savedKeys,
     sceneOf: t.sceneOf,
     tones,
@@ -159,12 +163,22 @@ function Stage({
   onFullscreen: () => void
   keysRef: RefObject<((e: KeyboardEvent) => void) | null>
 }) {
-  const player = useStepPlayer(scenes.length, SCENE_MS, { still: 'first' })
+  const voice = useVoice(localeCode)
+  // Read aloud, a scene lasts as long as its words: the next comes when they have been read.
+  const player = useStepPlayer(scenes.length, SCENE_MS, { still: 'first', hold: voice.voice !== null })
   const scene = scenes[player.index] ?? scenes[0]
+  // Each time it is played, the scene is read again: what was read before it was played would leave it waiting.
+  const [plays, setPlays] = useState(0)
+  useSpeech(voice.voice, scene ? `${scene.title}${t.stop}${scene.text}` : '', player.advance, plays)
   const at = (table: string) => diagram.positions[table] ?? { x: 0, y: 0 }
   const size = (table: string) => ({ width: BOX_WIDTH, height: boxHeight(diagram.columns.get(table)?.length ?? 0) })
   const camera = useCamera(frameOf(scene?.frame ?? [], diagram.tables, at, size))
-  const toggle = player.playing ? player.pause : player.play
+  const toggle = player.playing
+    ? player.pause
+    : () => {
+        player.play()
+        setPlays((n) => n + 1)
+      }
   // A presenter's clicker sends Page Up / Down; a focused button keeps its own Space and Enter.
   keysRef.current = (e: KeyboardEvent) => {
     const onButton = e.target instanceof HTMLButtonElement
@@ -184,6 +198,8 @@ function Stage({
     e.preventDefault()
     act()
   }
+  // The bar fills over the scene's time; read aloud, a scene has no set time.
+  const timed = player.playing && voice.voice === null
   if (!scene) return null
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
@@ -232,6 +248,9 @@ function Stage({
         <Button size="sm" onClick={player.next} disabled={player.index >= scenes.length - 1}>
           {t.next}
         </Button>
+        <Button size="sm" aria-pressed={voice.asked} onClick={voice.toggle}>
+          {t.narrate}
+        </Button>
         <ol aria-label={t.scenes} className="flex min-w-48 flex-1 gap-1">
           {scenes.map((s, i) => (
             <li key={i} className="flex-1">
@@ -247,8 +266,8 @@ function Stage({
                   {i === player.index ? (
                     <span
                       key={`${i}.${player.playing}`}
-                      className={`absolute inset-0 origin-left bg-brand ${player.playing ? 'diagram-progress' : ''}`}
-                      style={player.playing ? { animationDuration: `${SCENE_MS}ms` } : undefined}
+                      className={`absolute inset-0 origin-left bg-brand ${timed ? 'diagram-progress' : ''}`}
+                      style={timed ? { animationDuration: `${SCENE_MS}ms` } : undefined}
                     />
                   ) : null}
                 </span>
@@ -256,6 +275,10 @@ function Stage({
             </li>
           ))}
         </ol>
+        {/* There from the start (empty): heard when reading aloud is asked for and the device has no voice for it. */}
+        <p role="status" className="w-full text-sm text-ink empty:hidden">
+          {voice.asked && voice.voice === null ? t.noVoice : ''}
+        </p>
         <p className="w-full text-xs text-ink-sub">{t.keys}</p>
       </div>
     </div>

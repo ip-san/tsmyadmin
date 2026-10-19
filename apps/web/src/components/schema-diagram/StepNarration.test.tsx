@@ -11,6 +11,7 @@ const player = (index: number): ReturnType<typeof useStepPlayer> => ({
   playing: false,
   play: vi.fn(),
   pause: vi.fn(),
+  advance: vi.fn(),
   first: vi.fn(),
   prev: vi.fn(),
   next: vi.fn(),

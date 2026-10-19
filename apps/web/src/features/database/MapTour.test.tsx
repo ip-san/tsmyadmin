@@ -1,7 +1,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { RelationDef } from '@tsmyadmin/shared'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { localeCode } from '@/config/locale.ts'
 import { locale } from '@/config/locale-screens.ts'
 import { relation } from '@/test/schema-fixtures.ts'
 import type { DatabaseMap } from './database-map.ts'
@@ -64,6 +65,41 @@ beforeEach(() => {
 })
 
 afterEach(() => vi.unstubAllGlobals())
+
+/** A speech engine that reads nothing: what it was asked to say is kept, and each is ended by hand (`readAll`). */
+class Utterance {
+  voice: unknown = null
+  lang = ''
+  done = false
+  onend: (() => void) | null = null
+  onerror: ((e: { error: string }) => void) | null = null
+  constructor(readonly text: string) {}
+}
+function fakeSpeech(voices: { name: string; lang: string; localService: boolean; default: boolean }[]) {
+  const spoken: Utterance[] = []
+  const synth = {
+    getVoices: () => voices,
+    speak: vi.fn((u: Utterance) => spoken.push(u)),
+    cancel: vi.fn(() => {
+      for (const u of spoken) u.done = true
+    }),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  }
+  vi.stubGlobal('speechSynthesis', synth)
+  vi.stubGlobal('SpeechSynthesisUtterance', Utterance)
+  /** Ends what is being said, and what is said after it, until nothing is left to say. */
+  const readAll = () =>
+    act(() => {
+      for (let u = spoken.find((x) => !x.done); u; u = spoken.find((x) => !x.done)) {
+        u.done = true
+        u.onend?.()
+      }
+    })
+  return { spoken, synth, readAll }
+}
+const own = { name: 'own', lang: `${localeCode}-XX`, localService: true, default: false }
+const sent = { name: 'sent out', lang: `${localeCode}-XX`, localService: false, default: true }
 
 function mount(ends: JoinEnds = { from: undefined, to: undefined }) {
   const onClose = vi.fn()
@@ -220,5 +256,55 @@ describe('MapTour', () => {
     expect(screen.queryByRole('button', { name: g.save })).toBeNull()
     await screen.findByText('cannot read')
     expect(screen.queryByRole('button', { name: g.save })).toBeNull()
+  })
+
+  it('reads each scene aloud in a voice of the device only, and plays on as each has been read', async () => {
+    const { spoken, synth, readAll } = fakeSpeech([sent, own])
+    mount()
+    await screen.findByRole('img', { name: t.diagram('shop') })
+    expect(synth.speak).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: g.narrate }))
+    expect(screen.getByRole('button', { name: g.narrate })).toHaveAttribute('aria-pressed', 'true')
+    expect(spoken[0]?.text).toBe(`shop${g.stop}`.trim())
+    expect(new Set(spoken.map((u) => (u.voice as { name: string }).name))).toEqual(new Set(['own']))
+    // Not playing (less motion): read, it stays.
+    readAll()
+    expect(caption()).toHaveTextContent('shop')
+    // Played, the scene is read again, and the next comes once it has been.
+    const before = spoken.length
+    fireEvent.click(screen.getByRole('button', { name: g.play }))
+    expect(spoken.length).toBeGreaterThan(before)
+    expect(caption()).toHaveTextContent('shop')
+    readAll()
+    expect(caption()).toHaveTextContent(t.roleTitle(t.roles.master, 1))
+    // Moved by hand, the reading stops and so does playing.
+    synth.cancel.mockClear()
+    fireEvent.click(screen.getByRole('button', { name: g.next }))
+    expect(synth.cancel).toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: g.play })).toBeInTheDocument()
+  })
+
+  it('goes on unread, and says why, when the device has only voices that send the words out', async () => {
+    const { synth } = fakeSpeech([sent])
+    mount()
+    await screen.findByRole('img', { name: t.diagram('shop') })
+    expect(screen.getByRole('status')).toBeEmptyDOMElement()
+    fireEvent.click(screen.getByRole('button', { name: g.narrate }))
+    expect(screen.getByRole('status')).toHaveTextContent(g.noVoice)
+    expect(synth.speak).not.toHaveBeenCalled()
+  })
+
+  it('stops reading when let go of, and when the tour is closed', async () => {
+    const { synth } = fakeSpeech([own])
+    mount()
+    await screen.findByRole('img', { name: t.diagram('shop') })
+    fireEvent.click(screen.getByRole('button', { name: g.narrate }))
+    synth.cancel.mockClear()
+    fireEvent.click(screen.getByRole('button', { name: g.narrate }))
+    expect(synth.cancel).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByRole('button', { name: g.narrate }))
+    synth.cancel.mockClear()
+    cleanup()
+    expect(synth.cancel).toHaveBeenCalled()
   })
 })
