@@ -134,6 +134,8 @@ for (const t of TARGETS) {
         await file.goto(pathToFileURL(saved).href)
         const fileTitle = file.getByRole('heading', { level: 2 })
         await expect(fileTitle).toHaveText(space.schema ?? space.database)
+        // Less motion: nothing plays by itself.
+        await expect(file.getByRole('button', { name: '再生' })).toBeVisible()
         const picture = file.getByRole('img', { name: /のテーブルと外部キーの図$/ })
         const whole = await picture.getAttribute('viewBox')
         await file.keyboard.press('ArrowRight')
