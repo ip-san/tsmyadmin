@@ -1,7 +1,9 @@
 import { type KeyboardEvent, type ReactNode, type RefObject, useEffect, useId, useRef, useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox } from '@/components/ui/Feedback.tsx'
+import { localeCode } from '@/config/locale.ts'
 import { locale } from '@/config/locale-screens.ts'
+import { downloadText, safeFilename } from '@/lib/download.ts'
 import { frameOf } from './camera.ts'
 import { BOX_WIDTH, boxHeight } from './layout.ts'
 import { type diagramFor, TONES, type Tone } from './overlay.ts'
@@ -99,6 +101,11 @@ export function TourDialog({
             {title}
           </h2>
           <div className="flex gap-2">
+            {drawn && !error ? (
+              <Button size="sm" title={t.saveHint} onClick={() => void save(title, label, drawn, tones)}>
+                {t.save}
+              </Button>
+            ) : null}
             <Button size="sm" aria-pressed={fullscreen} onClick={toggleFullscreen}>
               {t.fullscreen}
             </Button>
@@ -111,6 +118,29 @@ export function TourDialog({
       </div>
     </dialog>
   )
+}
+
+/** The tour as one HTML file that plays without the server (`tourHtml`, read when asked for: most never save). */
+async function save(
+  title: string,
+  label: string,
+  drawn: { diagram: TourDiagram; scenes: readonly TourScene[] },
+  tones: Partial<Record<Tone, string>>
+) {
+  const { tourHtml } = await import('./tour-html.ts')
+  const html = tourHtml(drawn.diagram, drawn.scenes, {
+    lang: localeCode,
+    title,
+    label,
+    prev: t.prev,
+    next: t.next,
+    play: t.play,
+    pause: t.pause,
+    keys: t.savedKeys,
+    sceneOf: t.sceneOf,
+    tones,
+  })
+  downloadText(safeFilename(title, 'html'), html, 'text/html')
 }
 
 /** The diagram under the camera, the words of the scene, and the controls that move between scenes. */

@@ -1,3 +1,4 @@
+import { pathToFileURL } from 'node:url'
 import { expect } from '@playwright/test'
 import { petsAndLogs } from './database-map.ts'
 import { login, sqlOn, TARGETS, test, withScratchSpace } from './helpers.ts'
@@ -120,6 +121,32 @@ for (const t of TARGETS) {
         await expect(tour.getByText('1 段のうち 1 段目: pets.owner_id が owners.id を参照')).toBeVisible()
         await page.keyboard.press('End')
         await expect(title).toHaveText('まとめ')
+
+        // Saved as one file, it plays on its own: no server, the same keys, the camera moving to each scene.
+        const [download] = await Promise.all([
+          page.waitForEvent('download'),
+          tour.getByRole('button', { name: 'HTML で保存' }).click(),
+        ])
+        const saved = test.info().outputPath('tour.html')
+        await download.saveAs(saved)
+        const file = await page.context().newPage()
+        await file.emulateMedia({ reducedMotion: 'reduce' })
+        await file.goto(pathToFileURL(saved).href)
+        const fileTitle = file.getByRole('heading', { level: 2 })
+        await expect(fileTitle).toHaveText(space.schema ?? space.database)
+        const picture = file.getByRole('img', { name: /のテーブルと外部キーの図$/ })
+        const whole = await picture.getAttribute('viewBox')
+        await file.keyboard.press('ArrowRight')
+        await expect(fileTitle).toHaveText('マスタ（1）')
+        await expect(file.locator('g.k.flow')).toHaveCount(1)
+        // On logs alone, away from the middle of the whole.
+        for (let i = 0; i < 2; i++) await file.keyboard.press('ArrowRight')
+        await expect(fileTitle).toHaveText('どことも外部キーでつながらないテーブル（1）')
+        await expect(picture).not.toHaveAttribute('viewBox', whole ?? '')
+        await file.keyboard.press('End')
+        await expect(fileTitle).toHaveText('まとめ')
+        await expect(file.getByRole('button', { name: '次へ' })).toBeDisabled()
+        await file.close()
 
         await page.keyboard.press('Escape')
         await expect(tour).toBeHidden()

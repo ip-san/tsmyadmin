@@ -2676,6 +2676,11 @@ export const enScreens = {
     sceneOf: (n: number, total: number) => `${n} / ${total}`,
     goTo: (n: number, title: string) => `${n}. ${title}`,
     keys: '← → or Page Up / Down to move, Space for the next, Home / End for the first and last, P to play or pause, F for full screen, Esc to close',
+    save: 'Save as HTML',
+    saveHint:
+      'Saves this presentation as one HTML file, to open in a browser and present without the server (it holds the table and column names and comments)',
+    savedKeys:
+      '← → or Page Up / Down to move, Space for the next, Home / End for the first and last, P to play or pause, F for full screen',
     stop: '. ',
     and: '; ',
     names: (names: readonly string[], more: number) =>

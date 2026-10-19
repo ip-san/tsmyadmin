@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { RelationDef } from '@tsmyadmin/shared'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { locale } from '@/config/locale-screens.ts'
@@ -14,6 +14,11 @@ const g = locale.tour
 /** What the mocked API answers, set afresh for each test. */
 let keys: RelationDef[] | Error
 
+const download = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/download.ts', async (actual) => ({
+  ...(await actual<typeof import('@/lib/download.ts')>()),
+  downloadText: download,
+}))
 vi.mock('@/lib/session.ts', () => ({ useDialect: () => 'mysql' }))
 vi.mock('@/lib/queries.ts', () => ({
   tablesQuery: () => ({
@@ -53,6 +58,7 @@ beforeAll(() => {
 
 beforeEach(() => {
   keys = [relation('orders', ['user_id'], 'users'), relation('lines', ['order_id'], 'orders')]
+  download.mockReset()
   // Less motion: nothing plays by itself, and the camera does not move over time.
   vi.stubGlobal('matchMedia', (query: string) => ({ matches: query.includes('reduce'), media: query }))
 })
@@ -192,5 +198,27 @@ describe('MapTour', () => {
     keys = []
     fireEvent.click(screen.getByRole('button', { name: locale.common.retry }))
     expect(await screen.findByRole('img')).toBeInTheDocument()
+  })
+
+  it('saves the tour as one HTML file, with every scene of it', async () => {
+    mount()
+    await screen.findByRole('img', { name: t.diagram('shop') })
+    fireEvent.click(screen.getByRole('button', { name: g.save }))
+    await waitFor(() => expect(download).toHaveBeenCalledTimes(1))
+    const [name, html, type] = download.mock.calls[0] as [string, string, string]
+    expect([name, type]).toEqual([`${t.dialog('shop').replace(/[^\p{L}\p{N}_-]+/gu, '_')}.html`, 'text/html'])
+    const scenes = JSON.parse(
+      new DOMParser().parseFromString(html, 'text/html').getElementById('tour')?.textContent ?? ''
+    ).scenes as { title: string }[]
+    expect(scenes.map((s) => s.title)[0]).toBe('shop')
+    expect(scenes.length).toBe(screen.getAllByRole('button', { name: /^\d+\. / }).length)
+  })
+
+  it('offers no file before the tables are read, nor when they cannot be', async () => {
+    keys = new Error('cannot read')
+    mount()
+    expect(screen.queryByRole('button', { name: g.save })).toBeNull()
+    await screen.findByText('cannot read')
+    expect(screen.queryByRole('button', { name: g.save })).toBeNull()
   })
 })
