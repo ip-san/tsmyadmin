@@ -91,4 +91,10 @@ describe('tourHtml', () => {
     expect([...doc.querySelectorAll('#legend li')].map((li) => li.textContent)).toEqual(['Looked at', 'Refers'])
     expect(html).not.toMatch(/https?:\/\/(?!www\.w3\.org)/)
   })
+
+  it('brings the lines in on their path, so a scene that fades them still can', () => {
+    // The outer group of a key is what a scene fades: an animation filled forwards on it would undo the fade.
+    expect(html).not.toMatch(/\.entering \.k[,{]/)
+    expect(html).toMatch(/\.entering \.k \.base/)
+  })
 })

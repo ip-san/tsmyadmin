@@ -74,7 +74,7 @@ export function tourHtml(diagram: TourDiagram, scenes: readonly TourScene[], w: 
 
   const lines = diagram.relations.map((r, i) => {
     const d = relationPath(r, at, listed, view.lineStyle, view.compact, widthOf)
-    return `<g class="k" data-k="${i}" style="animation-delay:${linesDelay}ms"><path class="base" d="${d}"/><path class="fl" d="${d}"/></g>`
+    return `<g class="k" data-k="${i}"><path class="base" d="${d}" style="animation-delay:${linesDelay}ms"/><path class="fl" d="${d}"/></g>`
   })
   const boxes = diagram.tables.map((name, i) => {
     const p = at(name)
@@ -206,7 +206,8 @@ figure svg{display:block;width:100%;height:100%}
 .faint{opacity:.3}
 ${toneStyles}
 .ring{fill:none;stroke:#4338ca;stroke-width:4;transform-box:fill-box;transform-origin:center;animation:pulse 1.2s ease-out 2 forwards}
-.entering .in,.entering .k{opacity:0;animation:enter .5s ease-out forwards}
+/* On the boxes' inner group and the lines' path: the outer group is the one a scene fades. */
+.entering .in,.entering .k .base{opacity:0;animation:enter .5s ease-out forwards}
 #legend{display:flex;flex-wrap:wrap;gap:4px 16px;margin:0;padding:0;list-style:none;font-size:12px;color:#5b616b}
 #legend li{display:flex;align-items:center;gap:6px}
 #legend li[hidden]{display:none}
@@ -222,8 +223,8 @@ button:focus-visible{outline:2px solid #4338ca;outline-offset:2px}
 @keyframes flow{to{stroke-dashoffset:-32}}
 @keyframes pulse{from{opacity:.9;transform:scale(1)}to{opacity:0;transform:scale(1.18)}}
 @media (prefers-reduced-motion:reduce){
-.k.flow .fl,.ring,.entering .in,.entering .k{animation:none}
-.entering .in,.entering .k{opacity:1}
+.k.flow .fl,.ring,.entering .in,.entering .k .base{animation:none}
+.entering .in,.entering .k .base{opacity:1}
 .ring{opacity:0}
 .t,.k{transition:none}
 }
@@ -307,26 +308,31 @@ const SCRIPT = `
     timer = setInterval(function () { if (i >= D.scenes.length - 1) stop(); else show(i + 1) }, D.sceneMs)
   }
   function full() {
-    if (document.fullscreenElement) document.exitFullscreen()
-    else if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen()
+    var asked = document.fullscreenElement ? document.exitFullscreen()
+      : document.documentElement.requestFullscreen ? document.documentElement.requestFullscreen() : null
+    if (asked) asked.catch(function () {})
   }
-  prev.onclick = function () { show(i - 1) }
-  next.onclick = function () { show(i + 1) }
+  // Moved by hand, it stops playing, as on the page: the next scene does not come while this one is read.
+  function go(n) { stop(); show(n) }
+  prev.onclick = function () { go(i - 1) }
+  next.onclick = function () { go(i + 1) }
   play.onclick = toggle
   document.addEventListener('keydown', function (e) {
     if (e.altKey || e.ctrlKey || e.metaKey) return
     var onButton = e.target instanceof HTMLButtonElement
     var key = e.key.length === 1 ? e.key.toLowerCase() : e.key
     var act = {
-      ArrowRight: function () { show(i + 1) }, PageDown: function () { show(i + 1) },
-      ArrowLeft: function () { show(i - 1) }, PageUp: function () { show(i - 1) },
-      Home: function () { show(0) }, End: function () { show(D.scenes.length - 1) },
-      ' ': onButton ? null : function () { show(i + 1) }, p: toggle, f: full
+      ArrowRight: function () { go(i + 1) }, PageDown: function () { go(i + 1) },
+      ArrowLeft: function () { go(i - 1) }, PageUp: function () { go(i - 1) },
+      Home: function () { go(0) }, End: function () { go(D.scenes.length - 1) },
+      ' ': onButton ? null : function () { go(i + 1) }, p: toggle, f: full
     }[key]
     if (!act) return
     e.preventDefault()
     act()
   })
   show(0)
+  // As on the page: it plays from the start, unless the reader has asked for less motion.
+  if (!still.matches) toggle()
 })()
 `
