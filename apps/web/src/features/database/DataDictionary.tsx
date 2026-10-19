@@ -1,24 +1,16 @@
 import { useQueries, useQuery } from '@tanstack/react-query'
 import type { TableSchema } from '@tsmyadmin/shared'
-import { Printer } from 'lucide-react'
+import { FileDown, Printer } from 'lucide-react'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale-screens.ts'
+import { downloadText, safeFilename } from '@/lib/download.ts'
 import { structureQuery, tablesQuery } from '@/lib/queries.ts'
 import { useAllStructures } from '@/lib/use-all-structures.ts'
+import { dictionaryMarkdown, referencesOf } from './dictionary-markdown.ts'
 
 const t = locale.dictionary
-
-/** What a column references, as `table.column` (the first key a column takes part in). */
-export function referencesOf(schema: Pick<TableSchema, 'foreignKeys'>): Map<string, string> {
-  const out = new Map<string, string>()
-  for (const fk of schema.foreignKeys)
-    fk.columns.forEach((c, i) => {
-      if (!out.has(c)) out.set(c, `${fk.refTable}.${fk.refColumns[i] ?? ''}`)
-    })
-  return out
-}
 
 function TableEntry({ schema }: { schema: TableSchema }) {
   const refs = referencesOf(schema)
@@ -79,6 +71,9 @@ export function DataDictionary({ db, schema }: { db: string; schema: string | un
   const arrived = useQueries({
     queries: names.map((table) => ({ ...structureQuery({ db, schema, table }), enabled: false })),
   })
+  const title = schema ? `${db}.${schema}` : db
+  // The previous reading is shown while the list of tables changes (a table made elsewhere): not what is saved.
+  const ready = structures.isPlaceholderData ? undefined : structures.data
   if (tables.isPending) return <Spinner />
   if (tables.isError) return <ErrorBox error={tables.error} onRetry={() => void tables.refetch()} />
   if (names.length === 0) return <Notice>{locale.database.noTables}</Notice>
@@ -86,22 +81,38 @@ export function DataDictionary({ db, schema }: { db: string; schema: string | un
     <div className="space-y-6">
       <div className="flex items-center justify-between print:hidden">
         <p className="text-sm text-ink-sub">{t.hint}</p>
-        <Button size="sm" onClick={() => window.print()}>
-          <Printer className="size-3.5" aria-hidden />
-          {t.print}
-        </Button>
+        <div className="flex gap-2">
+          {/* There while reading (and said why it waits): a keyboard user who pressed it keeps their place. */}
+          <Button
+            size="sm"
+            aria-disabled={!ready}
+            title={ready ? undefined : t.markdownHint}
+            onClick={() => {
+              if (!ready) return
+              const schemas = names.flatMap((n) => ready.byName.get(n) ?? [])
+              downloadText(
+                safeFilename(`${title.slice(0, 40)}-dictionary`, 'md'),
+                dictionaryMarkdown(title, schemas, ready.failed),
+                'text/markdown'
+              )
+            }}
+          >
+            <FileDown className="size-3.5" aria-hidden />
+            {t.markdown}
+          </Button>
+          <Button size="sm" onClick={() => window.print()}>
+            <Printer className="size-3.5" aria-hidden />
+            {t.print}
+          </Button>
+        </div>
       </div>
-      <h2 className="text-lg font-semibold text-ink">{t.title(schema ? `${db}.${schema}` : db)}</h2>
+      <h2 className="text-lg font-semibold text-ink">{t.title(title)}</h2>
       {structures.isError ? <ErrorBox error={structures.error} onRetry={() => void structures.refetch()} /> : null}
-      {structures.data ? (
-        structures.data.failed.length > 0 ? (
-          <Notice>{t.failed(structures.data.failed)}</Notice>
-        ) : null
-      ) : structures.isError ? null : (
-        <p role="status" className="text-sm text-ink-sub print:hidden">
-          {t.progress(arrived.filter((a) => a.data).length, names.length)}
-        </p>
-      )}
+      {/* One line, there from the start: how many are read, then nothing once all are (or the reading failed). */}
+      <p role="status" className="text-sm text-ink-sub empty:mb-0 print:hidden">
+        {ready || structures.isError ? '' : t.progress(arrived.filter((a) => a.data).length, names.length)}
+      </p>
+      {ready && ready.failed.length > 0 ? <Notice>{t.failed(ready.failed)}</Notice> : null}
       {arrived.map((a, i) => (a.data ? <TableEntry key={names[i]} schema={a.data} /> : null))}
     </div>
   )

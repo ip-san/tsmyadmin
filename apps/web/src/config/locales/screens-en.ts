@@ -2679,6 +2679,10 @@ export const enScreens = {
     primary: 'primary key',
     indexes: 'Indexes',
     unique: 'unique',
+    markdown: 'Save as Markdown',
+    markdownHint: 'Available once every definition is read',
+    viewMark: ' (view)',
+    primaryMark: ' (primary key)',
   },
   partitions: {
     title: 'Partitions',
