@@ -1,6 +1,5 @@
 import type { RelationDef } from '@tsmyadmin/shared'
-import { relationKey } from '@/components/schema-diagram/layout.ts'
-import type { DiagramOverlay, Tone } from '@/components/schema-diagram/overlay.ts'
+import { overlay, said, type TourScene, unique, whole } from '@/components/schema-diagram/tour.ts'
 import { locale } from '@/config/locale-screens.ts'
 import { TABLE_ROLES } from '@/lib/table-role.ts'
 import type { DatabaseMap } from './database-map.ts'
@@ -10,49 +9,6 @@ const t = locale.mapTour
 
 /** Hubs given a scene of their own: past three, the rest are named on the map. */
 const HUBS_TOLD = 3
-/** Names said in a sentence; the rest are counted. */
-const NAMES_SAID = 6
-
-/** One scene of the tour: where the camera looks, what is lit, and the words said over it. */
-export interface TourScene {
-  title: string
-  text: string
-  /** The tables the camera frames; every table when empty. */
-  frame: readonly string[]
-  overlay: DiagramOverlay
-  /** Tables a ring is drawn around as the scene opens: where to look first. */
-  pulse: readonly string[]
-}
-
-interface Lit {
-  tables?: readonly (readonly [string, Tone, string?])[]
-  relations?: readonly (readonly [RelationDef, Tone])[]
-  flow?: readonly (readonly [RelationDef, 'forward' | 'back'])[]
-  columns?: readonly (readonly [string, readonly string[]])[]
-}
-
-function overlay({ tables = [], relations = [], flow = [], columns = [] }: Lit): DiagramOverlay {
-  const cols = new Map<string, Set<string>>()
-  for (const [table, names] of columns) cols.set(table, new Set([...(cols.get(table) ?? []), ...names]))
-  return {
-    tables: new Map(tables.map(([name, tone, badge]) => [name, { tone, badge }])),
-    relations: new Map(relations.map(([r, tone]) => [relationKey(r), tone])),
-    columns: cols,
-    flow: new Map(flow.map(([r, way]) => [relationKey(r), way])),
-  }
-}
-
-/** The whole picture, nothing faded: where the tour starts (boxes and lines drawn in) and where it ends. */
-const whole = (enter: boolean): DiagramOverlay => ({
-  tables: new Map(),
-  relations: new Map(),
-  columns: new Map(),
-  fade: false,
-  enter,
-})
-
-const said = (names: readonly string[]) => t.names(names.slice(0, NAMES_SAID), names.length - NAMES_SAID)
-const unique = (names: Iterable<string>) => [...new Set(names)]
 
 /**
  * The tour of a database's map, scene by scene: the whole of it, each role's tables with the keys that make them so
@@ -79,7 +35,7 @@ export function tourScenes(input: {
     const keys = touching(tables)
     scenes.push({
       title: t.roleTitle(t.roles[role], tables.length),
-      text: `${t.roleText[role]}${t.stop}${said(tables)}`,
+      text: `${t.roleText[role]}${locale.tour.stop}${said(tables)}`,
       frame: unique([...tables, ...keys.flatMap((r) => [r.table, r.refTable])]),
       overlay: overlay({
         tables: tables.map((x) => [x, 'focus']),
@@ -137,7 +93,7 @@ function pathScenes(path: { from: string; to: string; hops: readonly JoinHop[] }
       title,
       text: `${t.pathStep(i + 1, path.hops.length)}${hop.keys
         .map(({ relation: r }) => t.pathKey(r.table, r.columns.join(', '), r.refTable, r.refColumns.join(', ')))
-        .join(t.and)}`,
+        .join(locale.tour.and)}`,
       frame: seen,
       overlay: overlay({
         tables: seen.map((x) => [x, x === path.from || x === path.to ? 'focus' : 'index']),
@@ -160,7 +116,7 @@ function checkScenes(map: DatabaseMap, relations: readonly RelationDef[]): TourS
   if (map.noPrimaryKey.length > 0) {
     scenes.push({
       title: t.noPrimaryKeyTitle(map.noPrimaryKey.length),
-      text: `${t.noPrimaryKeyText}${t.stop}${said(map.noPrimaryKey)}`,
+      text: `${t.noPrimaryKeyText}${locale.tour.stop}${said(map.noPrimaryKey)}`,
       frame: map.noPrimaryKey,
       overlay: overlay({ tables: map.noPrimaryKey.map((x) => [x, 'blocked', t.noPrimaryKeyBadge]) }),
       pulse: map.noPrimaryKey,
@@ -170,7 +126,7 @@ function checkScenes(map: DatabaseMap, relations: readonly RelationDef[]): TourS
   if (unindexed.length > 0) {
     scenes.push({
       title: t.unindexedTitle(map.unindexedKeys.length),
-      text: `${t.unindexedText}${t.stop}${said(unique(map.unindexedKeys.map((k) => `${k.table}（${k.columns.join(', ')}）`)))}`,
+      text: `${t.unindexedText}${locale.tour.stop}${said(unique(map.unindexedKeys.map((k) => `${k.table}（${k.columns.join(', ')}）`)))}`,
       frame: unique(unindexed.flatMap((r) => [r.table, r.refTable])),
       overlay: overlay({
         tables: unique(unindexed.map((r) => r.table)).map((x) => [x, 'scan']),
@@ -187,7 +143,7 @@ function checkScenes(map: DatabaseMap, relations: readonly RelationDef[]): TourS
   if (mistyped.length > 0) {
     scenes.push({
       title: t.keyTypesTitle(map.keyTypes.length),
-      text: `${t.keyTypesText}${t.stop}${said(map.keyTypes.map((k) => `${k.table}.${k.column} → ${k.refTable}.${k.refColumn}`))}`,
+      text: `${t.keyTypesText}${locale.tour.stop}${said(map.keyTypes.map((k) => `${k.table}.${k.column} → ${k.refTable}.${k.refColumn}`))}`,
       frame: unique(mistyped.flatMap((r) => [r.table, r.refTable])),
       overlay: overlay({
         tables: unique(mistyped.flatMap((r) => [r.table, r.refTable])).map((x) => [x, 'nullify']),

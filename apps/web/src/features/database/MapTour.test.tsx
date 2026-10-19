@@ -9,6 +9,7 @@ import type { JoinEnds } from './JoinPath.tsx'
 import { MapTour } from './MapTour.tsx'
 
 const t = locale.mapTour
+const g = locale.tour
 
 /** What the mocked API answers, set afresh for each test. */
 let keys: RelationDef[] | Error
@@ -74,12 +75,12 @@ const caption = () => screen.getByRole('heading', { level: 3 })
 describe('MapTour', () => {
   it('reads the tables and keys, then opens on the whole database', async () => {
     mount()
-    expect(screen.getByRole('status')).toHaveTextContent(t.reading)
+    expect(screen.getByRole('status')).toHaveTextContent(g.reading)
     expect(await screen.findByRole('img', { name: t.diagram('shop') })).toBeInTheDocument()
     expect(caption()).toHaveTextContent('shop')
     expect(screen.getByText(t.overview(3, 2))).toBeInTheDocument()
     // Overview, three roles, one hub, the end.
-    expect(screen.getByText(t.sceneOf(1, 6))).toBeInTheDocument()
+    expect(screen.getByText(g.sceneOf(1, 6))).toBeInTheDocument()
   })
 
   it("moves with the arrow keys, a clicker's Page keys, the space bar, and Home and End", async () => {
@@ -106,7 +107,7 @@ describe('MapTour', () => {
   it('leaves a focused button its own space bar', async () => {
     mount()
     await screen.findByRole('img')
-    fireEvent.keyDown(screen.getByRole('button', { name: t.next }), { key: ' ' })
+    fireEvent.keyDown(screen.getByRole('button', { name: g.next }), { key: ' ' })
     expect(caption()).toHaveTextContent('shop')
   })
 
@@ -114,9 +115,9 @@ describe('MapTour', () => {
     const { dialog } = mount()
     await screen.findByRole('img')
     fireEvent.keyDown(dialog, { key: 'p' })
-    expect(screen.getByRole('button', { name: t.pause })).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: t.pause }))
-    expect(screen.getByRole('button', { name: t.play })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: g.pause })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: g.pause }))
+    expect(screen.getByRole('button', { name: g.play })).toBeInTheDocument()
   })
 
   it('names only the colours the scene draws, for what they mean on the tour', async () => {
@@ -136,14 +137,14 @@ describe('MapTour', () => {
   it('jumps to a scene picked on the bar, which marks the one shown', async () => {
     mount()
     await screen.findByRole('img')
-    const bar = screen.getByRole('list', { name: t.scenes })
-    const hub = within(bar).getByRole('button', { name: t.goTo(5, t.hubTitle('users', 1)) })
+    const bar = screen.getByRole('list', { name: g.scenes })
+    const hub = within(bar).getByRole('button', { name: g.goTo(5, t.hubTitle('users', 1)) })
     fireEvent.click(hub)
     expect(caption()).toHaveTextContent(t.hubTitle('users', 1))
     expect(hub).toHaveAttribute('aria-current', 'step')
-    expect(screen.getByRole('button', { name: t.next })).toBeEnabled()
+    expect(screen.getByRole('button', { name: g.next })).toBeEnabled()
     fireEvent.click(within(bar).getAllByRole('button').at(-1) as HTMLElement)
-    expect(screen.getByRole('button', { name: t.next })).toBeDisabled()
+    expect(screen.getByRole('button', { name: g.next })).toBeDisabled()
   })
 
   it('walks the path between the two tables chosen on the map', async () => {
@@ -165,8 +166,8 @@ describe('MapTour', () => {
     const exit = vi.fn(async () => undefined)
     document.exitFullscreen = exit
     fireEvent(document, new Event('fullscreenchange'))
-    expect(screen.getByRole('button', { name: t.fullscreen })).toHaveAttribute('aria-pressed', 'true')
-    fireEvent.click(screen.getByRole('button', { name: t.fullscreen }))
+    expect(screen.getByRole('button', { name: g.fullscreen })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(screen.getByRole('button', { name: g.fullscreen }))
     expect(exit).toHaveBeenCalledTimes(1)
     Object.defineProperty(document, 'fullscreenElement', { configurable: true, value: null })
   })
@@ -176,9 +177,9 @@ describe('MapTour', () => {
     document.body.append(opener)
     opener.focus()
     const { onClose } = mount()
-    fireEvent.click(screen.getByRole('button', { name: t.close }))
+    fireEvent.click(screen.getByRole('button', { name: g.close }))
     expect(onClose).toHaveBeenCalledTimes(1)
-    screen.getByRole('button', { name: t.close, hidden: true }).focus()
+    screen.getByRole('button', { name: g.close, hidden: true }).focus()
     cleanup()
     expect(opener).toHaveFocus()
     opener.remove()

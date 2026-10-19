@@ -7,6 +7,7 @@ import { joinPaths } from './join-path.ts'
 import { tourScenes } from './map-tour.ts'
 
 const t = locale.mapTour
+const g = locale.tour
 
 // users ← orders ← lines; logs on their own.
 const toUsers = relation('orders', ['user_id'], 'users')
@@ -65,7 +66,7 @@ describe('tourScenes', () => {
     expect(master?.pulse).toEqual(['users'])
     expect([...(master?.overlay.tables.keys() ?? [])]).toEqual(['users'])
     expect([...(master?.overlay.flow ?? [])]).toEqual([[relationKey(toUsers), 'forward']])
-    expect(master?.text).toBe(`${t.roleText.master}${t.stop}users`)
+    expect(master?.text).toBe(`${t.roleText.master}${g.stop}users`)
     expect(middle?.frame).toEqual(['orders', 'users', 'lines'])
     expect([...(middle?.overlay.relations.keys() ?? [])]).toEqual([relationKey(toUsers), relationKey(toOrders)])
     // Joined to nothing: it alone, and no line.
@@ -80,7 +81,7 @@ describe('tourScenes', () => {
       map: { ...empty(), roles: { ...empty().roles, isolated: many } },
       relations: [],
     })
-    expect(role?.text).toBe(`${t.roleText.isolated}${t.stop}${t.names(many.slice(0, 6), 3)}`)
+    expect(role?.text).toBe(`${t.roleText.isolated}${g.stop}${g.names(many.slice(0, 6), 3)}`)
   })
 
   it('tells at most three hubs, each with the tables that point at it and the columns joined', () => {
@@ -147,7 +148,7 @@ describe('tourScenes', () => {
     expect(pk?.title).toBe(t.noPrimaryKeyTitle(1))
     expect(pk?.overlay.tables.get('logs')).toEqual({ tone: 'blocked', badge: t.noPrimaryKeyBadge })
     expect(unindexed?.title).toBe(t.unindexedTitle(1))
-    expect(unindexed?.text).toBe(`${t.unindexedText}${t.stop}orders（user_id）`)
+    expect(unindexed?.text).toBe(`${t.unindexedText}${g.stop}orders（user_id）`)
     expect(unindexed?.frame).toEqual(['orders', 'users'])
     expect(unindexed?.overlay.relations.get(relationKey(toUsers))).toBe('scan')
     expect(types?.title).toBe(t.keyTypesTitle(1))

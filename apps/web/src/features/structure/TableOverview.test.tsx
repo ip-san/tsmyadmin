@@ -112,6 +112,7 @@ const mount = () =>
 describe('TableOverview', () => {
   beforeEach(() => {
     keys = null
+    kind = 'table'
   })
 
   beforeAll(() => {
@@ -120,7 +121,28 @@ describe('TableOverview', () => {
     }
     HTMLDialogElement.prototype.close = function (this: HTMLDialogElement) {
       this.open = false
+      this.dispatchEvent(new Event('close'))
     }
+  })
+
+  it('presents the table with the tables two keys away, and closes', async () => {
+    const user = userEvent.setup()
+    mount()
+    await user.click(await screen.findByRole('button', { name: locale.tableTour.open }))
+    const tour = screen.getByRole('dialog', { name: locale.tableTour.dialog('posts') })
+    expect(await within(tour).findByRole('img', { name: locale.tableTour.diagram('posts') })).toBeInTheDocument()
+    expect(within(tour).getByRole('heading', { level: 3 })).toHaveTextContent('posts')
+    // posts, its key to users, comments' key to it, and orgs through users.
+    expect(within(tour).getByText(locale.tour.sceneOf(1, 6))).toBeInTheDocument()
+    await user.click(within(tour).getByRole('button', { name: locale.tour.close }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('offers no presentation of a view', async () => {
+    kind = 'view'
+    mount()
+    expect(await screen.findByText(t.isView)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: locale.tableTour.open })).toBeNull()
   })
 
   it('takes a key to a table of its name in another database for a key to another table, not to itself', async () => {

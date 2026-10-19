@@ -24,6 +24,7 @@ import {
 import { useDialect } from '@/lib/session.ts'
 import { tableRole } from '@/lib/table-role.ts'
 import { OverviewColumns } from './OverviewColumns.tsx'
+import { TableTour } from './TableTour.tsx'
 import { UsedByCard } from './UsedByCard.tsx'
 
 const t = locale.overview
@@ -40,6 +41,7 @@ export function TableOverview({ tableRef }: { tableRef: TableRef }) {
   const dialect = useDialect()
   // A view's rows are worked out when read, and a view may be heavy: its rows are read (counted, shown) once asked.
   const [asked, setAsked] = useState(false)
+  const [touring, setTouring] = useState(false)
   if (structure.isPending) return <Spinner />
   if (structure.isError) return <ErrorBox error={structure.error} onRetry={() => void structure.refetch()} />
   const schema = structure.data
@@ -50,7 +52,12 @@ export function TableOverview({ tableRef }: { tableRef: TableRef }) {
       <Card title={t.whatTitle}>
         {schema.kind === 'table' ? (
           <>
-            <p className="text-sm text-ink">{t.roles[guess.role]}</p>
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <p className="text-sm text-ink">{t.roles[guess.role]}</p>
+              <Button size="sm" onClick={() => setTouring(true)}>
+                {locale.tableTour.open}
+              </Button>
+            </div>
             <p className="text-xs text-ink-sub">{t.roleWhy(guess.refersTo, guess.referredBy)}</p>
             {guess.self && guess.role !== 'tree' ? <p className="text-xs text-ink-sub">{t.selfToo}</p> : null}
           </>
@@ -89,6 +96,7 @@ export function TableOverview({ tableRef }: { tableRef: TableRef }) {
         <Neighbours tableRef={tableRef} />
       </Card>
       {schema.kind === 'sequence' ? null : <UsedByCard tableRef={tableRef} view={schema.kind !== 'table'} />}
+      {touring ? <TableTour tableRef={tableRef} schema={schema} onClose={() => setTouring(false)} /> : null}
     </div>
   )
 }

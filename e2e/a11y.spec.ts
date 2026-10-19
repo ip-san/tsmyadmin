@@ -504,6 +504,20 @@ for (const t of TARGETS) {
       })
     })
 
+    test('table presented, on the tables two keys away', async ({ page }) => {
+      await login(page, t)
+      await withScratchSpace(page, t, async (space) => {
+        await petsAndLogs(page, space)
+        await page.emulateMedia({ reducedMotion: 'reduce' })
+        await page.goto(tableUrl(space, 'owners', '/overview'))
+        await page.getByRole('button', { name: 'プレゼンで見る' }).click()
+        const tour = page.getByRole('dialog', { name: 'テーブルのプレゼン: owners' })
+        await tour.getByRole('button', { name: /参照してくるテーブル（1）$/ }).click()
+        await expect(tour.getByRole('heading', { level: 3 })).toHaveText('参照してくるテーブル（1）')
+        await scan(page)
+      })
+    })
+
     test('database map presented, on a step of the join path', async ({ page }) => {
       await login(page, t)
       await withScratchSpace(page, t, async (space) => {
