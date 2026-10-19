@@ -2631,6 +2631,10 @@ export const jaScreens = {
     primary: '主キー',
     indexes: 'インデックス',
     unique: 'ユニーク',
+    markdown: 'Markdown で保存',
+    markdownHint: '読み終わるまで待ってから保存します',
+    viewMark: '（ビュー）',
+    primaryMark: '（主キー）',
   },
   partitions: {
     title: 'パーティション',
