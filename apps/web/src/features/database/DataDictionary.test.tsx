@@ -136,7 +136,7 @@ describe('DataDictionary', () => {
     expect(saved[0]?.text).toContain('\n## tags\n')
   })
 
-  it('keeps the end of the name of the file for a long name of the database', async () => {
+  it('cuts a long name of the database, and keeps the -dictionary.md the file ends with', async () => {
     render(
       <QueryClientProvider client={new QueryClient()}>
         <DataDictionary db={'d'.repeat(80)} schema={undefined} />

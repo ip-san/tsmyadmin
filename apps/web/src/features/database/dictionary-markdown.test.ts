@@ -27,6 +27,13 @@ describe('referencesOf', () => {
   })
 })
 
+describe('referencesOf, of a column in two keys', () => {
+  it('names the first key it takes part in', () => {
+    const refs = referencesOf({ foreignKeys: [fk(['a'], 'first'), fk(['a'], 'second')] })
+    expect([...refs]).toEqual([['a', 'first.id']])
+  })
+})
+
 describe('markdownText', () => {
   it('writes what Markdown would read as formatting, a link or HTML, as text', () => {
     expect(markdownText('a*b* [x](y) `c` | d ~e~ \\')).toBe('a\\*b\\* \\[x\\](y) \\`c\\` \\| d \\~e\\~ \\\\')
@@ -66,7 +73,8 @@ describe('markdownLine', () => {
   })
 
   it('leaves what does not begin a block', () => {
-    for (const text of ['a - b # c', '2026 年', '1.5 倍', 'x > y']) expect(markdownLine(text)).toBe(text)
+    for (const text of ['a - b # c', '2026 年', '1.5 倍', 'x > y', 'a 1. b']) expect(markdownLine(text)).toBe(text)
+    expect(markdownLine('12. twelfth')).toBe('12\\. twelfth')
   })
 })
 
@@ -119,6 +127,19 @@ describe('dictionaryMarkdown', () => {
         '',
       ].join('\n')
     )
+  })
+
+  it('keeps a # within a heading, and escapes only the ones that would close it', () => {
+    const md = dictionaryMarkdown('shop', [table('a # b'), table('c ##')], [])
+    expect(md).toContain('\n## a # b\n')
+    expect(md).toContain('\n## c \\##\n')
+  })
+
+  it('writes a cell without the blanks around its text, and the columns of an index with commas', () => {
+    const t1 = table('t', { columns: [column('c', 'int', { comment: '  padded  ' })], indexes: [index(['a', 'b'])] })
+    const md = dictionaryMarkdown('shop', [t1], [])
+    expect(md).toContain(`| c | int | ${locale.common.yes} |  |  | padded |`)
+    expect(md).toContain('- ix_a_b (a, b)')
   })
 
   it('names the tables it could not read at the top', () => {
