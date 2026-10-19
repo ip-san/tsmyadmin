@@ -21,6 +21,8 @@ const orders = {
   comment: '注文',
   columns: [column('id', 'int'), column('user_id', 'int'), column('product_id', 'int')],
   primaryKey: ['id'],
+  indexes: [],
+  foreignKeys: [],
 }
 
 describe('tableTourScenes', () => {
@@ -66,7 +68,14 @@ describe('tableTourScenes', () => {
   })
 
   it('says there is no primary key, and leaves out what the table does not have', () => {
-    const logs = { name: 'logs', comment: null, columns: [column('message', 'int')], primaryKey: [] }
+    const logs = {
+      name: 'logs',
+      comment: null,
+      columns: [column('message', 'int')],
+      primaryKey: [],
+      indexes: [],
+      foreignKeys: [],
+    }
     const scenes = tableTourScenes({
       schema: logs,
       guess: { role: 'isolated', refersTo: 0, referredBy: 0, self: false },
@@ -87,6 +96,8 @@ describe('tableTourScenes', () => {
         comment: null,
         columns: [column('id', 'int'), column('parent_id', 'int')],
         primaryKey: ['id'],
+        indexes: [],
+        foreignKeys: [],
       },
       guess: { role: 'tree', refersTo: 0, referredBy: 0, self: true },
       relations: [parent],

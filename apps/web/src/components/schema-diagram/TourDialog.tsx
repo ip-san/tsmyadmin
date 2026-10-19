@@ -9,7 +9,7 @@ import { BOX_WIDTH, boxHeight } from './layout.ts'
 import { type diagramFor, TONES, type Tone } from './overlay.ts'
 import { SchemaDiagram } from './SchemaDiagram.tsx'
 import { DiagramLegend } from './StepNarration.tsx'
-import type { TourScene } from './tour.ts'
+import { spoken, type TourScene } from './tour.ts'
 import { useCamera } from './use-camera.ts'
 import { useReading, useVoice } from './use-narration.ts'
 import { useStepPlayer } from './use-step-player.ts'
@@ -34,6 +34,7 @@ export function TourDialog({
   drawn,
   tones,
   error,
+  saveHint = t.saveHint,
   onClose,
 }: {
   title: string
@@ -43,6 +44,8 @@ export function TourDialog({
   /** What each colour means on this tour (`DiagramLegend`). */
   tones: Partial<Record<Tone, string>>
   error?: { error: unknown; retry: () => void } | undefined
+  /** What the saved file holds, said on its button (names and comments, unless the tour says more). */
+  saveHint?: string
   onClose: () => void
 }) {
   const ref = useRef<HTMLDialogElement>(null)
@@ -103,7 +106,7 @@ export function TourDialog({
           </h2>
           <div className="flex gap-2">
             {drawn && !error ? (
-              <Button size="sm" title={t.saveHint} onClick={() => void save(title, label, drawn, tones)}>
+              <Button size="sm" title={saveHint} onClick={() => void save(title, label, drawn, tones)}>
                 {t.save}
               </Button>
             ) : null}
@@ -139,6 +142,8 @@ async function save(
     pause: t.pause,
     narrate: t.narrate,
     noVoice: t.noVoice,
+    notes: t.notes,
+    hints: t.hints,
     stop: t.stop,
     keys: t.savedKeys,
     sceneOf: t.sceneOf,
@@ -167,7 +172,7 @@ function Stage({
   // Read aloud, a scene lasts as long as its words: the next comes when they have been read.
   const player = useStepPlayer(scenes.length, SCENE_MS, { still: 'first', hold: voice.voice !== null })
   const scene = scenes[player.index] ?? scenes[0]
-  const reading = useReading(voice, player, scene ? `${scene.title}${t.stop}${scene.text}` : '', SCENE_MS)
+  const reading = useReading(voice, player, scene ? spoken(scene) : '', SCENE_MS)
   const at = (table: string) => diagram.positions[table] ?? { x: 0, y: 0 }
   const size = (table: string) => ({ width: BOX_WIDTH, height: boxHeight(diagram.columns.get(table)?.length ?? 0) })
   const camera = useCamera(frameOf(scene?.frame ?? [], diagram.tables, at, size))
@@ -230,6 +235,8 @@ function Stage({
         <p className="text-sm text-ink-sub">{t.sceneOf(player.index + 1, scenes.length)}</p>
         <h3 className="text-2xl font-bold text-ink">{scene.title}</h3>
         <p className="text-lg text-ink">{scene.text}</p>
+        <SceneList title={t.notes} items={scene.notes} className="text-brand" />
+        <SceneList title={t.hints} items={scene.hints} className="text-critical" />
       </section>
       <div className="flex flex-wrap items-center gap-3">
         <Button size="sm" onClick={player.prev} disabled={player.index === 0}>
@@ -275,5 +282,28 @@ function Stage({
         <p className="w-full text-xs text-ink-sub">{t.keys}</p>
       </div>
     </div>
+  )
+}
+
+/** What a scene says beyond its words, under a heading of its own: nothing when it says nothing. */
+function SceneList({
+  title,
+  items,
+  className,
+}: {
+  title: string
+  items: readonly string[] | undefined
+  className: string
+}) {
+  if (!items || items.length === 0) return null
+  return (
+    <section aria-label={title} className="pt-1">
+      <h4 className={`text-sm font-semibold ${className}`}>{title}</h4>
+      <ul className="list-disc space-y-0.5 pl-5 text-base text-ink">
+        {items.map((n) => (
+          <li key={n}>{n}</li>
+        ))}
+      </ul>
+    </section>
   )
 }

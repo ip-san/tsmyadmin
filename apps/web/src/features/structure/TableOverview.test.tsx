@@ -27,6 +27,7 @@ const posts = {
     { name: 'title', dataType: 'text' },
   ],
   primaryKey: ['id'],
+  indexes: [],
   foreignKeys: [
     {
       name: 'fk_user',

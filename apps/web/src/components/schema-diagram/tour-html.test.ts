@@ -36,6 +36,8 @@ const words: TourWords = {
   pause: 'Pause',
   narrate: 'Read aloud',
   noVoice: 'No voice',
+  notes: 'Design',
+  hints: 'Hints',
   stop: '. ',
   keys: 'keys',
   sceneOf: (n, total) => `${n} / ${total}`,

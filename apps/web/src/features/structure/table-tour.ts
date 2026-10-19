@@ -2,9 +2,13 @@ import type { RelationDef, TableSchema } from '@tsmyadmin/shared'
 import { neighbourhood } from '@/components/schema-diagram/neighbourhood.ts'
 import { overlay, said, type TourScene, unique, whole } from '@/components/schema-diagram/tour.ts'
 import { locale } from '@/config/locale-screens.ts'
+import { designSummary, keyIntent, keyReading, tableReading } from '@/lib/design-reading.ts'
 import type { RoleGuess } from '@/lib/table-role.ts'
 
 const t = locale.tableTour
+
+/** Lines of a scene's reading of the design: past them, a scene says too much to be read aloud. */
+const NOTES_SHOWN = 6
 
 /** How far out the tour looks: the tables a key away, and those a key further. */
 export const TOUR_HOPS = 2
@@ -18,7 +22,7 @@ const keySentence = (r: RelationDef) => t.key(r.table, r.columns.join(', '), r.r
  * its neighbourhood again. `relations` are the keys drawn (`drawnRelations`); no rows are read.
  */
 export function tableTourScenes(input: {
-  schema: Pick<TableSchema, 'name' | 'comment' | 'columns' | 'primaryKey'>
+  schema: Pick<TableSchema, 'name' | 'comment' | 'columns' | 'primaryKey' | 'indexes' | 'foreignKeys'>
   guess: RoleGuess
   relations: readonly RelationDef[]
   /** The tables drawn: every table of the namespace with a key, and this one. */
@@ -32,6 +36,10 @@ export function tableTourScenes(input: {
   const into = relations.filter((r) => r.refTable === name && r.table !== name)
   const self = relations.filter((r) => r.table === name && r.refTable === name)
   const farther = [...reach].filter((x) => !near.has(x))
+  // Why it is so: what each key says (its own keys from this table's definition; another table's, what a delete does).
+  const intentOf = (r: RelationDef) => keyIntent(r, r.table === name ? schema : undefined)
+  const reading = (keys: readonly RelationDef[]) =>
+    keys.flatMap((r) => keyReading(r.table, r.refTable, intentOf(r))).slice(0, NOTES_SHOWN)
 
   const scenes: TourScene[] = [
     {
@@ -42,6 +50,7 @@ export function tableTourScenes(input: {
       frame: [name],
       overlay: { ...overlay({ tables: [[name, 'focus']] }), enter: true },
       pulse: [name],
+      notes: tableReading(schema),
     },
     schema.primaryKey.length > 0
       ? {
@@ -75,6 +84,7 @@ export function tableTourScenes(input: {
         ]),
       }),
       pulse: to,
+      notes: reading(out),
     })
   }
   if (into.length > 0) {
@@ -93,6 +103,7 @@ export function tableTourScenes(input: {
         ]),
       }),
       pulse: from,
+      notes: reading(into),
     })
   }
   if (self.length > 0) {
@@ -107,6 +118,7 @@ export function tableTourScenes(input: {
         columns: self.flatMap((r) => [[name, [...r.columns, ...r.refColumns]]]),
       }),
       pulse: [],
+      notes: reading(self),
     })
   }
   if (farther.length > 0) {
@@ -134,6 +146,9 @@ export function tableTourScenes(input: {
     frame: [...reach],
     overlay: whole(false),
     pulse: [],
+    notes: designSummary(
+      [...out, ...into, ...self].map((r) => ({ child: r.table, parent: r.refTable, intent: intentOf(r) }))
+    ),
   })
   return scenes
 }
