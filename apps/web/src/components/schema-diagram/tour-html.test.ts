@@ -24,6 +24,8 @@ const scenes: TourScene[] = [
       columns: [['orders', ['user_id']]],
     }),
     pulse: ['users'],
+    notes: ['why it is so'],
+    hints: ['where it costs <time>'],
   },
 ]
 const words: TourWords = {
@@ -108,5 +110,14 @@ describe('tourHtml', () => {
     // The outer group of a key is what a scene fades: an animation filled forwards on it would undo the fade.
     expect(html).not.toMatch(/\.entering \.k[,{]/)
     expect(html).toMatch(/\.entering \.k \.base/)
+  })
+
+  it('carries what a scene says of the design and where it may cost time, to show and to read out', () => {
+    const [start, look] = dataOf(doc).scenes
+    expect([start.notes, start.hints]).toEqual([[], []])
+    expect([look.notes, look.hints]).toEqual([['why it is so'], ['where it costs <time>']])
+    expect(look.said.slice(-2)).toEqual(['why it is so.', 'where it costs <time>'])
+    expect(doc.querySelector('#notes h3')?.textContent).toBe('Design')
+    expect(doc.querySelector('#hints h3')?.textContent).toBe('Hints')
   })
 })
