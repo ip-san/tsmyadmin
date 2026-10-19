@@ -11,7 +11,7 @@ import { SchemaDiagram } from './SchemaDiagram.tsx'
 import { DiagramLegend } from './StepNarration.tsx'
 import type { TourScene } from './tour.ts'
 import { useCamera } from './use-camera.ts'
-import { useSpeech, useVoice } from './use-narration.ts'
+import { useReading, useVoice } from './use-narration.ts'
 import { useStepPlayer } from './use-step-player.ts'
 
 const t = locale.tour
@@ -167,29 +167,11 @@ function Stage({
   // Read aloud, a scene lasts as long as its words: the next comes when they have been read.
   const player = useStepPlayer(scenes.length, SCENE_MS, { still: 'first', hold: voice.voice !== null })
   const scene = scenes[player.index] ?? scenes[0]
-  // Each time it is played, the scene is read again: what was read before it was played would leave it waiting.
-  const [plays, setPlays] = useState(0)
-  // Paused, the voice stops too, until it is played or moved (the scene paused on is not read again by itself).
-  const [hushed, setHushed] = useState<number | null>(null)
-  useSpeech(
-    hushed === player.index ? null : voice.voice,
-    scene ? `${scene.title}${t.stop}${scene.text}` : '',
-    player.advance,
-    { again: plays, fallbackMs: SCENE_MS }
-  )
+  const reading = useReading(voice, player, scene ? `${scene.title}${t.stop}${scene.text}` : '', SCENE_MS)
   const at = (table: string) => diagram.positions[table] ?? { x: 0, y: 0 }
   const size = (table: string) => ({ width: BOX_WIDTH, height: boxHeight(diagram.columns.get(table)?.length ?? 0) })
   const camera = useCamera(frameOf(scene?.frame ?? [], diagram.tables, at, size))
-  const toggle = player.playing
-    ? () => {
-        player.pause()
-        setHushed(player.index)
-      }
-    : () => {
-        player.play()
-        setHushed(null)
-        setPlays((n) => n + 1)
-      }
+  const toggle = reading.toggle
   // A presenter's clicker sends Page Up / Down; a focused button keeps its own Space and Enter.
   keysRef.current = (e: KeyboardEvent) => {
     const onButton = e.target instanceof HTMLButtonElement
@@ -259,7 +241,7 @@ function Stage({
         <Button size="sm" onClick={player.next} disabled={player.index >= scenes.length - 1}>
           {t.next}
         </Button>
-        <Button size="sm" aria-pressed={voice.asked} onClick={voice.toggle}>
+        <Button size="sm" aria-pressed={voice.asked} onClick={reading.narrate}>
           {t.narrate}
         </Button>
         <ol aria-label={t.scenes} className="flex min-w-48 flex-1 gap-1">

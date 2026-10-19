@@ -221,6 +221,7 @@ ${toneStyles}
 #legend li{display:flex;align-items:center;gap:6px}
 #legend li[hidden]{display:none}
 section{min-height:9rem}
+#voice{margin:0;font-size:14px}
 #n{margin:0;font-size:14px;color:#5b616b}
 #h{margin:4px 0;font-size:24px}
 #x{margin:0;font-size:18px}
@@ -311,7 +312,7 @@ const SCRIPT = `
     speak()
   }
   // Read aloud only in a voice the device speaks itself: one that is not sends the words (the names) out.
-  var synth = window.speechSynthesis || null, voice = null, narrating = false, reading = 0
+  var synth = window.speechSynthesis || null, voice = null, narrating = false, reading = 0, held = null
   function pickVoice() {
     var fits = (synth ? synth.getVoices() : []).filter(function (v) {
       return v.localService && v.lang.toLowerCase().split(/[-_]/)[0] === D.lang
@@ -334,7 +335,8 @@ const SCRIPT = `
     ;(function say() {
       if (mine !== reading) return
       if (k >= parts.length) { if (playing) step(); return }
-      var u = new SpeechSynthesisUtterance(parts[k++])
+      // Held while read: Chrome can let an utterance nothing holds go before its end is heard.
+      var u = held = new SpeechSynthesisUtterance(parts[k++])
       u.voice = voice; u.lang = voice.lang; u.onend = say
       // A voice that fails: the scene's time instead, rather than rushing on through every scene.
       u.onerror = function (e) {

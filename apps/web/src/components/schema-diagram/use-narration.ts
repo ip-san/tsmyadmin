@@ -45,6 +45,8 @@ export function useSpeech(
 ) {
   const ended = useRef(onEnd)
   ended.current = onEnd
+  // The sentence being read, held: Chrome can let an utterance nothing holds go before its end is heard.
+  const reading = useRef<SpeechSynthesisUtterance | null>(null)
   // biome-ignore lint/correctness/useExhaustiveDependencies: `again` is only a reason to read once more.
   useEffect(() => {
     const synth = synthesis()
@@ -59,6 +61,7 @@ export function useSpeech(
         return
       }
       const u = new SpeechSynthesisUtterance(parts[i])
+      reading.current = u
       u.voice = voice
       u.lang = voice.lang
       u.onend = () => say(i + 1)
@@ -77,4 +80,37 @@ export function useSpeech(
       synth.cancel()
     }
   }, [voice, text, again, fallbackMs])
+}
+
+/**
+ * A tour read aloud as it plays: `toggle` plays and pauses, `narrate` asks for the voice or lets it go. Each time it
+ * is played, the scene is read again (what was read before it was played would leave it waiting). Paused, the voice
+ * stops too, and the scene paused on stays unread until it is played, asked for again, or moved off and back to.
+ */
+export function useReading(
+  voice: ReturnType<typeof useVoice>,
+  player: { index: number; playing: boolean; play: () => void; pause: () => void; advance: () => void },
+  text: string,
+  fallbackMs: number
+) {
+  const [plays, setPlays] = useState(0)
+  const [hushed, setHushed] = useState<number | null>(null)
+  if (hushed !== null && hushed !== player.index) setHushed(null)
+  useSpeech(hushed === player.index ? null : voice.voice, text, player.advance, { again: plays, fallbackMs })
+  return {
+    toggle: player.playing
+      ? () => {
+          player.pause()
+          setHushed(player.index)
+        }
+      : () => {
+          player.play()
+          setHushed(null)
+          setPlays((n) => n + 1)
+        },
+    narrate: () => {
+      setHushed(null)
+      voice.toggle()
+    },
+  }
 }
