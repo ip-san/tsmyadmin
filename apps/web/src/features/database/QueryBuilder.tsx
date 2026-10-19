@@ -28,11 +28,20 @@ const t = locale.queryBuilder
  * The server writes the SQL — joins along the foreign keys between the chosen tables, values as quoted literals —
  * so nothing typed here is pasted into a statement as text.
  */
-export function QueryBuilder({ db, schema }: { db: string; schema?: string | undefined }) {
+export function QueryBuilder({
+  db,
+  schema,
+  initialTables,
+}: {
+  db: string
+  schema?: string | undefined
+  /** Tables ticked to start with (a join path from the map), in the order they are joined. */
+  initialTables?: readonly string[] | undefined
+}) {
   const tables = useQuery(tablesQuery(db, schema))
   const openInSql = useOpenInDatabaseConsole(db, schema)
   /** In the order they were chosen: the first is the one the rest are joined to. */
-  const [chosen, setChosen] = useState<string[]>([])
+  const [chosen, setChosen] = useState<string[]>(() => [...new Set(initialTables)])
   const [outputs, setOutputs] = useState<OutputRow[]>([])
   const [groups, setGroups] = useState<ConditionGroup[]>([])
   const [joins, setJoins] = useState<Record<string, JoinRow>>({})

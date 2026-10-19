@@ -1,4 +1,12 @@
-import type { ColumnDef, ForeignKeyDef, IndexDef, Namespace, ReferencingKeyDef, TableSchema } from '@tsmyadmin/shared'
+import type {
+  ColumnDef,
+  ForeignKeyDef,
+  IndexDef,
+  Namespace,
+  ReferencingKeyDef,
+  RelationDef,
+  TableSchema,
+} from '@tsmyadmin/shared'
 
 /** The namespace the fixtures are in, and the test of it (`homeNamespace` on MySQL, for a page of `shop`). */
 const SHOP: Namespace = { database: 'shop' }
@@ -35,6 +43,14 @@ export const fk = (columns: string[], refTable: string, over: Partial<ForeignKey
   onDelete: null,
   ...over,
 })
+
+/** `fk` with the table that holds it, as the list of a database's keys gives it. */
+export const relation = (
+  holder: string,
+  columns: string[],
+  refTable: string,
+  over: Partial<ForeignKeyDef> = {}
+): RelationDef => ({ ...fk(columns, refTable, over), table: holder })
 
 /** A key of `fromTable` that refers to the table it is listed on. */
 export const from = (fromTable: string, over: Partial<ReferencingKeyDef> = {}): ReferencingKeyDef => ({

@@ -6,6 +6,7 @@ import { ErrorBox } from '@/components/ui/Feedback.tsx'
 import { locale } from '@/config/locale-screens.ts'
 import { TABLE_ROLES } from '@/lib/table-role.ts'
 import type { DatabaseMap as MapData } from './database-map.ts'
+import { type JoinEnds, JoinPath } from './JoinPath.tsx'
 import { useDatabaseMap } from './use-database-map.ts'
 
 const t = locale.databaseMap
@@ -15,7 +16,18 @@ const LINK = 'text-brand underline'
  * What a database is made of, from its definitions (`databaseMap`): the tables by the role their keys suggest, the
  * ones most referred to, and what to look at (no primary key, a foreign key without an index). No rows are read.
  */
-export function DatabaseMap({ db, schema }: { db: string; schema: string | undefined }) {
+export function DatabaseMap({
+  db,
+  schema,
+  ends = { from: undefined, to: undefined },
+  onEnds = () => undefined,
+}: {
+  db: string
+  schema: string | undefined
+  /** The two tables a join path is asked between (`JoinPath`). */
+  ends?: JoinEnds
+  onEnds?: (ends: JoinEnds) => void
+}) {
   const { map, failed, error, status, readAgain, fetching } = useDatabaseMap(db, schema)
   return (
     <div className="space-y-4">
@@ -35,6 +47,8 @@ export function DatabaseMap({ db, schema }: { db: string; schema: string | undef
         </Button>
       ) : null}
       {map && map.tables > 0 ? <MapCards db={db} schema={schema} map={map} partial={failed.length > 0} /> : null}
+      {/* Its own reads (the table list and the keys): a path is there to ask for while the definitions are read. */}
+      <JoinPath db={db} schema={schema} ends={ends} onEnds={onEnds} />
     </div>
   )
 }

@@ -489,14 +489,17 @@ for (const t of TARGETS) {
       })
     })
 
-    test('database map, with tables of each role and what to look at', async ({ page }) => {
+    test('database map, with tables of each role, what to look at, and a join path', async ({ page }) => {
       await login(page, t)
       await withScratchSpace(page, t, async (space) => {
         await petsAndLogs(page, space)
-        await page.goto(`/db/${space.database}/map${space.schema ? `?schema=${space.schema}` : ''}`)
-        // Lists of every kind drawn, filled: roles, the most referred to, a table without a primary key.
+        await page.goto(
+          `/db/${space.database}/map${space.schema ? `?schema=${space.schema}&` : '?'}from=pets&to=owners`
+        )
+        // Lists of every kind drawn, filled: roles, the most referred to, a table without a primary key, a join path.
         await expect(page.getByRole('list', { name: 'よく参照されるテーブル' })).toContainText('owners')
         await expect(page.getByRole('region', { name: '主キーの無いテーブル' }).getByRole('link')).toHaveText('logs')
+        await expect(page.getByRole('link', { name: '経路 1 でクエリを作る' })).toBeVisible()
         await scan(page)
       })
     })
