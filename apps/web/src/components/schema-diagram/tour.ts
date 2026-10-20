@@ -27,6 +27,18 @@ export interface TourScene {
 export const spoken = (scene: Pick<TourScene, 'title' | 'text' | 'notes' | 'hints'>, stop: string = t.stop) =>
   [scene.title, scene.text, ...(scene.notes ?? []), ...(scene.hints ?? [])].filter(Boolean).join(stop)
 
+/** A scene of a video stays long enough to read what it says, and no shorter than a scene that plays on the page. */
+const READ_MS_PER_CHAR = 90
+const READ_MS = { least: 6000, most: 30000 }
+export const readMs = (scene: Pick<TourScene, 'title' | 'text' | 'notes' | 'hints'>) =>
+  Math.min(
+    READ_MS.most,
+    Math.max(
+      READ_MS.least,
+      [scene.title, scene.text, ...(scene.notes ?? []), ...(scene.hints ?? [])].join('').length * READ_MS_PER_CHAR
+    )
+  )
+
 /** What a scene lights: tables (with a tone and a badge), keys, keys that flow, and columns marked. */
 export interface Lit {
   tables?: readonly (readonly [string, Tone, string?])[]

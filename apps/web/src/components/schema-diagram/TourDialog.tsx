@@ -10,6 +10,7 @@ import { type diagramFor, TONES, type Tone } from './overlay.ts'
 import { SchemaDiagram } from './SchemaDiagram.tsx'
 import { DiagramLegend } from './StepNarration.tsx'
 import { TourCaption } from './TourCaption.tsx'
+import { TourVideo } from './TourVideo.tsx'
 import { spoken, type TourScene } from './tour.ts'
 import { useCamera } from './use-camera.ts'
 import { useReading, useVoice } from './use-narration.ts'
@@ -107,9 +108,12 @@ export function TourDialog({
           </h2>
           <div className="flex gap-2">
             {drawn && !error ? (
-              <Button size="sm" title={saveHint} onClick={() => void save(title, label, drawn, tones)}>
-                {t.save}
-              </Button>
+              <>
+                <TourVideo title={title} drawn={drawn} tones={tones} />
+                <Button size="sm" title={saveHint} onClick={() => void save(title, label, drawn, tones)}>
+                  {t.save}
+                </Button>
+              </>
             ) : null}
             <Button size="sm" aria-pressed={fullscreen} onClick={toggleFullscreen}>
               {t.fullscreen}
