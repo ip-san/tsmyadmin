@@ -142,6 +142,10 @@ describe('designSummary', () => {
       ])
     ).toEqual([w.parts([w.pair('items', 'orders')]), w.guarded([w.pair('orders', 'users')])])
     expect(designSummary([k('orders', 'addresses', 'setNull')])).toEqual([w.loose([w.pair('orders', 'addresses')])])
+    const many = Array.from({ length: 8 }, (_, i) => k(`t${i}`, 'root', 'cascade'))
+    expect(designSummary(many)).toEqual([
+      w.parts([...many.slice(0, 6).map((x) => w.pair(x.child, 'root')), w.morePairs(2)]),
+    ])
   })
 })
 

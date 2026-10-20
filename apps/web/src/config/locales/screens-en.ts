@@ -407,6 +407,7 @@ export const enScreens = {
       `Records kept safe: ${pairs.join(', ')} (their parent cannot be deleted while they point at it)`,
     loose: (pairs: readonly string[]) =>
       `Records of their own: ${pairs.join(', ')} (kept when their parent is deleted)`,
+    morePairs: (n: number) => `${n.toLocaleString('en-US')} more`,
     pair: (child: string, parent: string) => `${child} of ${parent}`,
     made: (columns: string) => `${columns} keeps when a row was made`,
     naturalKeyNullable: (columns: readonly string[]) =>

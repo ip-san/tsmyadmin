@@ -1,6 +1,7 @@
 import type { RelationDef } from '@tsmyadmin/shared'
 import { overlay, said, type TourScene, unique, whole } from '@/components/schema-diagram/tour.ts'
 import { locale } from '@/config/locale-screens.ts'
+import { designSummary, keyIntent } from '@/lib/design-reading.ts'
 import { TABLE_ROLES } from '@/lib/table-role.ts'
 import type { DatabaseMap } from './database-map.ts'
 import type { JoinHop } from './join-path.ts'
@@ -23,6 +24,13 @@ export function tourScenes(input: {
   path?: { from: string; to: string; hops: readonly JoinHop[] } | undefined
 }): TourScene[] {
   const { name, map, relations, path } = input
+  // What a delete does along the keys, sorted (from the keys alone: whether a row must refer is the tables' to say).
+  const summary = (keys: readonly RelationDef[]) =>
+    designSummary(keys.map((r) => ({ child: r.table, parent: r.refTable, intent: keyIntent(r) })))
+  const notes = (keys: readonly RelationDef[]) => {
+    const said = summary(keys)
+    return said.length > 0 ? { notes: said } : {}
+  }
   const scenes: TourScene[] = [
     { title: name, text: t.overview(map.tables, relations.length), frame: [], overlay: whole(true), pulse: [] },
   ]
@@ -62,6 +70,7 @@ export function tourScenes(input: {
         ]),
       }),
       pulse: [hub.table],
+      ...notes(keys),
     })
   }
   if (path && path.hops.length > 0) scenes.push(...pathScenes(path))
@@ -74,6 +83,7 @@ export function tourScenes(input: {
     frame: [],
     overlay: whole(false),
     pulse: [],
+    ...notes(relations),
   })
   return scenes
 }

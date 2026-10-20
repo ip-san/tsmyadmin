@@ -404,6 +404,7 @@ export const jaScreens = {
     parts: (pairs: readonly string[]) => `一緒に消える部分: ${pairs.join('、')}（親を消すと消える）`,
     guarded: (pairs: readonly string[]) => `守られる記録: ${pairs.join('、')}（指されている間は、親を消せない）`,
     loose: (pairs: readonly string[]) => `独立した記録: ${pairs.join('、')}（親が消えても残る）`,
+    morePairs: (n: number) => `ほか ${n.toLocaleString('ja-JP')} 組`,
     pair: (child: string, parent: string) => `${parent} の ${child}`,
     made: (columns: string) => `${columns} で、行がいつ作られたかを残します`,
     naturalKeyNullable: (columns: readonly string[]) =>
