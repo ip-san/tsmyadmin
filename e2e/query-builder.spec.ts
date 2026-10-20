@@ -44,6 +44,33 @@ for (const t of TARGETS) {
       await expect(result).toContainText(/(^|[^\d,])1 行/)
     })
 
+    test('presents the query in the order the database works it, with what a condition undoes', async ({ page }) => {
+      await page.getByRole('checkbox', { name: 'posts', exact: true }).check()
+      await page.getByRole('checkbox', { name: 'users', exact: true }).check()
+      await page.getByRole('button', { name: '条件を追加' }).click()
+      await page.getByLabel('グループ 1 の条件 1のカラム').selectOption({ label: 'users.name' })
+      await page.getByLabel('グループ 1 の条件 1の値').fill('Bob')
+      // Nothing plays by itself: the scenes are moved by hand.
+      await page.emulateMedia({ reducedMotion: 'reduce' })
+      await page.getByRole('button', { name: 'プレゼンで見る' }).click()
+      const tour = page.getByRole('dialog', { name: 'クエリのプレゼン' })
+      const title = tour.getByRole('heading', { level: 3 })
+      await expect(title).toHaveText('このクエリ')
+      await page.keyboard.press('ArrowRight')
+      await expect(title).toHaveText('FROM posts')
+      await page.keyboard.press('ArrowRight')
+      await expect(title).toHaveText('LEFT JOIN users')
+      await expect(tour.getByText(/^外部キー .+ に沿ってつなぎます$/)).toBeVisible()
+      await page.keyboard.press('ArrowRight')
+      await expect(title).toHaveText('WHERE')
+      await expect(tour.getByText("users.name = 'Bob' の行だけを残します")).toBeVisible()
+      await expect(tour.getByText(/LEFT JOIN でつないだ users のカラムを WHERE で絞っている/)).toBeVisible()
+      await page.keyboard.press('End')
+      await expect(title).toHaveText('まとめ')
+      await page.keyboard.press('Escape')
+      await expect(tour).toBeHidden()
+    })
+
     test('shows the join order and clears rows of a table that is unticked', async ({ page }) => {
       await page.getByRole('checkbox', { name: 'users', exact: true }).check()
       await page.getByRole('checkbox', { name: 'posts', exact: true }).check()

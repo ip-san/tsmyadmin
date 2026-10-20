@@ -11,6 +11,7 @@ import { mutations, structureQuery, tablesQuery } from '@/lib/queries.ts'
 import { type ColumnOption, ColumnSelect, QueryBuilderCriteria } from './QueryBuilderCriteria.tsx'
 import { QueryBuilderJoins } from './QueryBuilderJoins.tsx'
 import { QueryTemplatesPanel } from './QueryTemplatesPanel.tsx'
+import { QueryTour } from './QueryTour.tsx'
 import {
   type ConditionGroup,
   columnKey,
@@ -261,9 +262,18 @@ export function QueryBuilder({
           </>
         )}
 
-        <Button type="submit" variant="primary" disabled={active.length === 0 || build.isPending}>
-          {build.isPending ? t.building : t.build}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button type="submit" variant="primary" disabled={active.length === 0 || build.isPending}>
+            {build.isPending ? t.building : t.build}
+          </Button>
+          <QueryTour
+            db={db}
+            schema={schema}
+            request={request}
+            schemas={new Map(activeStructures.flatMap((s) => (s.data ? [[s.data.name, s.data]] : [])))}
+            disabled={active.length === 0 || loadingColumns || failed !== undefined}
+          />
+        </div>
       </form>
 
       {build.isError ? <ErrorBox error={build.error} /> : null}

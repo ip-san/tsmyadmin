@@ -72,7 +72,7 @@ import {
   writeValue,
 } from './sql/conditions.ts'
 import { deleteImpactOn } from './sql/delete-impact.ts'
-import { joinPlan } from './sql/join-plan.ts'
+import { joinSql, joinSteps } from './sql/join-plan.ts'
 import { Params, quoteIdent, quoteTable } from './sql/quote.ts'
 import { checkReferencesOn } from './sql/references.ts'
 import { escapeLike, isSearchableType } from './sql/search.ts'
@@ -527,10 +527,11 @@ export abstract class BaseAdapter implements DatabaseAdapter {
         return `${ref(c)} ${c.sort === 'desc' ? 'DESC' : 'ASC'}`
       })
 
+    const joins = joinSteps(d, ns, spec.tables, schemas, spec.joins)
     const lines = [
       `SELECT ${spec.distinct ? 'DISTINCT ' : ''}${select.length === 0 ? '*' : select.join(', ')}`,
       `FROM ${quoteTable(d, ns, spec.tables[0] ?? '')}`,
-      ...joinPlan(d, ns, spec.tables, schemas, spec.joins),
+      ...joinSql(d, ns, joins),
     ]
     const typed = (spec.whereSql ?? '').trim()
     const built = groups.length === 1 ? groups[0] : groups.length > 1 ? groups.map((g) => `(${g})`).join(' OR ') : ''
@@ -539,7 +540,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
     if (where.length > 0) lines.push(`WHERE ${where.join(' AND ')}`)
     if (order.length > 0) lines.push(`ORDER BY ${order.join(', ')}`)
     if (spec.limit != null) lines.push(`LIMIT ${spec.limit}`)
-    return { sql: lines.join('\n') }
+    return { sql: lines.join('\n'), joins }
   }
 
   private insertStatement(
