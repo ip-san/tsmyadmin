@@ -49,7 +49,7 @@ describe('TourVideo', () => {
   const press = async () => {
     fireEvent.click(screen.getByRole('button', { name: t.video }))
     await screen.findByText(t.recording(1, 2, seconds))
-    await vi.waitFor(() => expect(recording.recordTour).toHaveBeenCalled())
+    await act(() => vi.waitFor(() => expect(recording.recordTour).toHaveBeenCalled()))
   }
 
   it('is not offered where the browser cannot record', () => {
