@@ -2664,10 +2664,7 @@ export const enScreens = {
     buildHint:
       'Opens the Query tab with the tables of the path ticked in order. Where two tables have more than one foreign key between them, the Query tab lets you choose which one to join on',
   },
-  mapTour: {
-    open: 'Present',
-    dialog: (name: string) => `Map presentation: ${name}`,
-    diagram: (name: string) => `Diagram of the tables and foreign keys of ${name}`,
+  tour: {
     reading: 'Reading the tables and foreign keys…',
     fullscreen: 'Full screen',
     close: 'Close',
@@ -2683,6 +2680,11 @@ export const enScreens = {
     and: '; ',
     names: (names: readonly string[], more: number) =>
       `${names.join(', ')}${more > 0 ? ` and ${more.toLocaleString('en-US')} more` : ''}`,
+  },
+  mapTour: {
+    open: 'Present',
+    dialog: (name: string) => `Map presentation: ${name}`,
+    diagram: (name: string) => `Diagram of the tables and foreign keys of ${name}`,
     overview: (tables: number, keys: number) =>
       `${tables.toLocaleString('en-US')} ${tables === 1 ? 'table' : 'tables'} and ${keys.toLocaleString('en-US')} foreign ${keys === 1 ? 'key' : 'keys'}. What each table is for, one role at a time, from the way its keys point (a guess from the keys)`,
     roles: {
@@ -2737,6 +2739,43 @@ export const enScreens = {
     },
     endTitle: 'Summary',
     end: (roles: readonly string[]) => `${roles.join(', ')}. The names on the map open each table's overview`,
+  },
+  tableTour: {
+    open: 'Present',
+    dialog: (name: string) => `Table presentation: ${name}`,
+    diagram: (name: string) => `Diagram of ${name} and the tables up to two foreign keys away`,
+    roles: {
+      junction: 'It seems to be a junction table, linking two or more tables',
+      master: 'It seems to be a table others are built on (a master): others refer to it',
+      detail: 'It seems to be a table of records or details: it refers to others',
+      middle: 'It refers to other tables, and other tables refer to it',
+      tree: 'It seems to be a hierarchy: it refers to itself',
+      isolated: 'No foreign key joins it to another table',
+    },
+    columns: (n: number) => `It has ${n.toLocaleString('en-US')} ${n === 1 ? 'column' : 'columns'}`,
+    primaryKeyTitle: 'Primary key',
+    primaryKey: (columns: string) => `A row is told apart by ${columns}`,
+    noPrimaryKey:
+      'There is no primary key. No row can be told apart for sure, so rows are hard to edit or delete from Browse',
+    noPrimaryKeyBadge: 'no primary key',
+    refersTitle: (n: number) => `Tables it refers to (${n.toLocaleString('en-US')})`,
+    refersText: 'Its rows point at rows of these tables',
+    referredTitle: (n: number) => `Tables that refer to it (${n.toLocaleString('en-US')})`,
+    referredText: 'Rows of these tables point at its rows',
+    selfTitle: 'A key to itself',
+    selfText: 'A row points at another row of the same table (its parent)',
+    key: (table: string, columns: string, refTable: string, refColumns: string) =>
+      `${table}.${columns} refers to ${refTable}.${refColumns}`,
+    fartherTitle: (n: number) => `Two keys away (${n.toLocaleString('en-US')})`,
+    fartherText: 'Joined through the tables next to it',
+    tones: {
+      focus: 'This table and its keys',
+      index: 'What it joins to',
+      blocked: 'No primary key',
+    },
+    endTitle: 'Summary',
+    end: (refersTo: number, referredBy: number, farther: number) =>
+      `${refersTo.toLocaleString('en-US')} referred to, ${referredBy.toLocaleString('en-US')} referring to it, ${farther.toLocaleString('en-US')} two keys away. The Designer's "Around" view draws the same, to move about`,
   },
   dictionary: {
     failed: (names: readonly string[]) => `Tables whose definitions could not be read: ${names.join(', ')}`,

@@ -42,5 +42,48 @@ for (const t of TARGETS) {
         await expect(page.getByText('ほかのテーブルから参照される、元になるテーブルのようです（マスタ）')).toBeVisible()
       })
     })
+
+    test('presents a table: its key, what it refers to and what refers to it, and what is further', async ({
+      page,
+    }) => {
+      await login(page, t)
+      await withScratchSpace(page, t, async (space) => {
+        await sqlOn(page, space, 'CREATE TABLE orgs (id INT PRIMARY KEY)')
+        await sqlOn(
+          page,
+          space,
+          'CREATE TABLE owners (id INT PRIMARY KEY, org_id INT, FOREIGN KEY (org_id) REFERENCES orgs (id))'
+        )
+        await sqlOn(
+          page,
+          space,
+          'CREATE TABLE pets (id INT PRIMARY KEY, owner_id INT, FOREIGN KEY (owner_id) REFERENCES owners (id))'
+        )
+        await sqlOn(
+          page,
+          space,
+          'CREATE TABLE visits (id INT PRIMARY KEY, pet_id INT, FOREIGN KEY (pet_id) REFERENCES pets (id))'
+        )
+        // Nothing plays by itself: the scenes are moved by hand.
+        await page.emulateMedia({ reducedMotion: 'reduce' })
+        await page.goto(tableUrl(space, 'pets', '/overview'))
+        await page.getByRole('button', { name: 'プレゼンで見る' }).click()
+        const tour = page.getByRole('dialog', { name: 'テーブルのプレゼン: pets' })
+        const title = tour.getByRole('heading', { level: 3 })
+        await expect(title).toHaveText('pets')
+        await page.keyboard.press('ArrowRight')
+        await expect(tour.getByText('行は id で 1 つに決まります')).toBeVisible()
+        await page.keyboard.press('ArrowRight')
+        await expect(title).toHaveText('参照するテーブル（1）')
+        await expect(tour.getByText('pets.owner_id が owners.id を参照', { exact: false })).toBeVisible()
+        await page.keyboard.press('ArrowRight')
+        await expect(title).toHaveText('参照してくるテーブル（1）')
+        await page.keyboard.press('ArrowRight')
+        await expect(title).toHaveText('2 段先のテーブル（1）')
+        await expect(tour.getByText('となりのテーブルを通して、ここまでつながります。orgs')).toBeVisible()
+        await page.keyboard.press('Escape')
+        await expect(tour).toBeHidden()
+      })
+    })
   })
 }

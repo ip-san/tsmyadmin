@@ -2636,10 +2636,7 @@ export const jaScreens = {
     buildHint:
       'クエリの画面を、経路のテーブルを順に選んだ状態で開きます。2 つのテーブルの間に外部キーがいくつかあるときは、どれで結合するかをクエリの画面で選べます',
   },
-  mapTour: {
-    open: 'プレゼンで見る',
-    dialog: (name: string) => `見取り図のプレゼン: ${name}`,
-    diagram: (name: string) => `${name} のテーブルと外部キーの図`,
+  tour: {
     reading: 'テーブルと外部キーを読んでいます…',
     fullscreen: '全画面',
     close: '閉じる',
@@ -2655,6 +2652,11 @@ export const jaScreens = {
     and: '。',
     names: (names: readonly string[], more: number) =>
       `${names.join('、')}${more > 0 ? ` ほか ${more.toLocaleString('ja-JP')} 件` : ''}`,
+  },
+  mapTour: {
+    open: 'プレゼンで見る',
+    dialog: (name: string) => `見取り図のプレゼン: ${name}`,
+    diagram: (name: string) => `${name} のテーブルと外部キーの図`,
     overview: (tables: number, keys: number) =>
       `テーブル ${tables.toLocaleString('ja-JP')}・外部キー ${keys.toLocaleString('ja-JP')} 本。外部キーの向きから、テーブルの役割を順に見ていきます（キーからの推測です）`,
     roles: {
@@ -2708,6 +2710,42 @@ export const jaScreens = {
     },
     endTitle: 'まとめ',
     end: (roles: readonly string[]) => `${roles.join('、')}。見取り図のテーブルの名前から、それぞれの概要を開けます`,
+  },
+  tableTour: {
+    open: 'プレゼンで見る',
+    dialog: (name: string) => `テーブルのプレゼン: ${name}`,
+    diagram: (name: string) => `${name} と、外部キーで 2 段までつながるテーブルの図`,
+    roles: {
+      junction: '2 つ以上のテーブルを結ぶ、中間のテーブルのようです',
+      master: 'ほかのテーブルから参照される、元になるテーブル（マスタ）のようです',
+      detail: 'ほかのテーブルを参照する、記録や明細のテーブルのようです',
+      middle: 'ほかのテーブルを参照し、ほかのテーブルからも参照されるテーブルです',
+      tree: '自分自身を参照する、親子の階層のテーブルのようです',
+      isolated: '外部キーでどのテーブルともつながっていません',
+    },
+    columns: (n: number) => `カラムは ${n.toLocaleString('ja-JP')} 個です`,
+    primaryKeyTitle: '主キー',
+    primaryKey: (columns: string) => `行は ${columns} で 1 つに決まります`,
+    noPrimaryKey: '主キーがありません。行を 1 つに決められないので、表示から行を編集・削除しにくくなります',
+    noPrimaryKeyBadge: '主キーなし',
+    refersTitle: (n: number) => `参照するテーブル（${n.toLocaleString('ja-JP')}）`,
+    refersText: 'このテーブルの行は、これらのテーブルの行を指しています',
+    referredTitle: (n: number) => `参照してくるテーブル（${n.toLocaleString('ja-JP')}）`,
+    referredText: 'これらのテーブルの行が、このテーブルの行を指しています',
+    selfTitle: '自分自身への参照',
+    selfText: '行が、同じテーブルの別の行（親）を指しています',
+    key: (table: string, columns: string, refTable: string, refColumns: string) =>
+      `${table}.${columns} が ${refTable}.${refColumns} を参照`,
+    fartherTitle: (n: number) => `2 段先のテーブル（${n.toLocaleString('ja-JP')}）`,
+    fartherText: 'となりのテーブルを通して、ここまでつながります',
+    tones: {
+      focus: 'このテーブルと、その外部キー',
+      index: 'つながる相手',
+      blocked: '主キーなし',
+    },
+    endTitle: 'まとめ',
+    end: (refersTo: number, referredBy: number, farther: number) =>
+      `参照するテーブル ${refersTo.toLocaleString('ja-JP')}、参照してくるテーブル ${referredBy.toLocaleString('ja-JP')}、2 段先のテーブル ${farther.toLocaleString('ja-JP')}。デザイナの「まわりだけ表示」で、同じまわりを動かして見られます`,
   },
   dictionary: {
     failed: (names: readonly string[]) => `定義を読めなかったテーブル: ${names.join('、')}`,
