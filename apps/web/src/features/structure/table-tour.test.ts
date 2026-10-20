@@ -131,7 +131,7 @@ describe('tableTourScenes', () => {
       tables,
     })
     const [intro, , refers, referred] = scenes
-    expect(intro?.notes).toEqual([w.history('created_at')])
+    expect(intro?.notes).toEqual([w.made('created_at')])
     expect(intro?.hints).toEqual([w.noPrimaryKey('orders')])
     expect(refers?.notes).toEqual([
       w.columnComment('orders', 'user_id', '注文した会員'),

@@ -3,7 +3,7 @@ import type { TableSchema } from '@tsmyadmin/shared'
 import { useEffect, useState } from 'react'
 import { rowsQuery, structureQuery, type TableRef } from '@/lib/queries.ts'
 import { expandGraph, type RowGraph, type RowNode, rowSteps } from './row-graph.ts'
-import { ROWS_DRAWN, trimReferring } from './row-tour.ts'
+import { ROWS_DRAWN, restoreReferring, trimReferring } from './row-tour.ts'
 
 /** One key per table, whichever namespace it is in. */
 export const refKey = (ref: TableRef) => JSON.stringify([ref.db, ref.schema ?? '', ref.table])
@@ -24,7 +24,11 @@ export function useRowTour(root: RowNode) {
     let gone = false
     const pagesOf = async (steps: ReturnType<typeof rowSteps>) => {
       const pages = []
-      for (const s of steps) pages.push(await queryClient.fetchQuery(rowsQuery(s.ref, s.options)))
+      for (const s of steps) {
+        // Closed: nothing more is read (what was read is not used).
+        if (gone) break
+        pages.push(await queryClient.fetchQuery(rowsQuery(s.ref, s.options)))
+      }
       return pages
     }
     const walk = async () => {
@@ -48,7 +52,8 @@ export function useRowTour(root: RowNode) {
         const schema = await queryClient.fetchQuery(structureQuery(node.ref)).catch(() => undefined)
         if (schema) schemas.set(key, schema)
       }
-      return { graph, left: first.left, schemas }
+      const back = restoreReferring(graph, first.cut, first.left)
+      return { graph: back.graph, left: back.left, schemas }
     }
     setRead(null)
     walk().then(

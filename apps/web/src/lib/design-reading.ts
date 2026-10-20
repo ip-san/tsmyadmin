@@ -1,4 +1,4 @@
-import type { ForeignKeyDef, TableSchema } from '@tsmyadmin/shared'
+import type { ForeignKeyDef, IndexDef, TableSchema } from '@tsmyadmin/shared'
 import { locale } from '@/config/locale-screens.ts'
 import { indexed } from './key-index.ts'
 import { typeKind } from './type-mismatches.ts'
@@ -34,8 +34,16 @@ export function lifecycleOf(onDelete: string | null): Lifecycle {
   }
 }
 
-const sameSet = (a: readonly string[], b: readonly string[]) =>
-  a.length > 0 && a.length === b.length && a.every((c) => b.includes(c))
+/** Some of `key`'s columns, at least one: a unique key on them makes the whole key unique. */
+const within = (unique: readonly string[], key: readonly string[]) =>
+  unique.length > 0 && unique.every((c) => key.includes(c))
+
+/**
+ * An index of whole values: not of some rows only (a partial index), and not of the first characters of a column
+ * (MySQL's prefix index): a unique one of those does not make two rows' values differ, and it serves fewer searches.
+ */
+const whole = (i: Pick<IndexDef, 'predicate' | 'lengths'>) =>
+  i.predicate === null && Object.keys(i.lengths ?? {}).length === 0
 
 /** The intent of `key`, a key of the table `child` (whose definition, when it was read, tells the rest). */
 export function keyIntent(
@@ -45,8 +53,8 @@ export function keyIntent(
   const lifecycle = lifecycleOf(key.onDelete)
   if (!child) return { oneToOne: undefined, required: undefined, lifecycle }
   const oneToOne =
-    sameSet(key.columns, child.primaryKey) ||
-    child.indexes.some((i) => i.unique && i.predicate === null && sameSet(key.columns, i.columns))
+    within(child.primaryKey, key.columns) ||
+    child.indexes.some((i) => i.unique && whole(i) && within(i.columns, key.columns))
   const columns = key.columns.map((c) => child.columns.find((x) => x.name === c))
   const required = columns.every((c) => c !== undefined) ? columns.every((c) => c?.nullable === false) : undefined
   return { oneToOne, required, lifecycle }
@@ -83,8 +91,10 @@ export function designSummary(keys: readonly { child: string; parent: string; in
 
 /** Names of columns that keep when a row was made and changed, that mark it deleted, and that hold where it stands. */
 const HISTORY = /^(created|updated|modified|inserted)(_?(at|on|date|time|timestamp))?$/i
+const CHANGED = /^(updated|modified)/i
 const SOFT_DELETE = /^(deleted|archived|discarded)(_?(at|on))?$|^is_?(deleted|archived)$/i
-const STATE = /^(status|state)$|_(status|state)$/i
+// `_status` only: `_state` is as often a place (`shipping_state`, `us_state`) as a stage.
+const STATE = /^(status|state)$|_status$/i
 
 /**
  * What a table's own definition says of its design, beyond its keys: it keeps when its rows were made and changed,
@@ -98,14 +108,23 @@ export function tableReading(schema: Pick<TableSchema, 'columns' | 'indexes' | '
   const softDelete = names.find((n) => SOFT_DELETE.test(n))
   const state = names.find((n) => STATE.test(n))
   const keyed = new Set(schema.foreignKeys.flatMap((k) => k.columns))
-  const natural = schema.indexes
-    .filter((i) => i.unique && !i.primary && i.predicate === null && !i.columns.every((c) => keyed.has(c)))
-    .map((i) => i.columns.join(', '))
+  const naturalIndexes = schema.indexes.filter(
+    (i) => i.unique && !i.primary && whole(i) && !i.columns.every((c) => keyed.has(c))
+  )
+  const natural = naturalIndexes.map((i) => i.columns.join(', '))
+  // NULL is not equal to NULL: rows with no value in a unique column can be many.
+  const nullable = naturalIndexes.some((i) =>
+    i.columns.some((c) => schema.columns.find((x) => x.name === c)?.nullable !== false)
+  )
   return [
-    history.length > 0 ? w.history(history.join(', ')) : '',
+    history.length === 0
+      ? ''
+      : history.some((n) => CHANGED.test(n))
+        ? w.history(history.join(', '))
+        : w.made(history.join(', ')),
     softDelete ? w.softDelete(softDelete) : '',
     state ? w.state(state) : '',
-    natural.length > 0 ? w.naturalKey(natural) : '',
+    natural.length > 0 ? (nullable ? w.naturalKeyNullable(natural) : w.naturalKey(natural)) : '',
   ].filter(Boolean)
 }
 
@@ -171,24 +190,22 @@ export function keyTuning(
 export function tableTuning(name: string, schema: Pick<TableSchema, 'primaryKey' | 'indexes' | 'kind'>): string[] {
   const w = t()
   if (schema.kind !== 'table') return []
-  const plain = schema.indexes.filter((i) => i.predicate === null && !i.unique && !i.primary)
-  const covered = plain.filter((a) =>
-    schema.indexes.some(
+  // An index that another of whole values, of the same kind, starts with: the longer one serves its searches.
+  const coveredBy = (a: IndexDef) =>
+    schema.indexes.find(
       (b) =>
         b !== a &&
-        b.predicate === null &&
+        whole(b) &&
         (b.type ?? '') === (a.type ?? '') &&
         b.columns.length > a.columns.length &&
         a.columns.every((c, k) => b.columns[k] === c)
     )
-  )
+  const plain = schema.indexes.filter((i) => whole(i) && !i.unique && !i.primary)
   return [
     schema.primaryKey.length === 0 ? w.noPrimaryKey(name) : '',
-    ...covered.map((a) => {
-      const by = schema.indexes.find(
-        (b) => b !== a && b.columns.length > a.columns.length && a.columns.every((c, k) => b.columns[k] === c)
-      )
-      return w.redundantIndex(a.name, a.columns.join(', '), by?.name ?? '')
+    ...plain.flatMap((a) => {
+      const by = coveredBy(a)
+      return by ? [w.redundantIndex(a.name, a.columns.join(', '), by.name)] : []
     }),
     schema.indexes.length > MANY_INDEXES ? w.manyIndexes(name, schema.indexes.length) : '',
   ].filter(Boolean)

@@ -1,4 +1,5 @@
 import type { Cell, ForeignKeyDef, RelationDef, TableSchema } from '@tsmyadmin/shared'
+import type { GraphArrow } from '@/components/node-graph/NodeGraph.tsx'
 import { autoLayout, boxHeight } from '@/components/schema-diagram/layout.ts'
 import type { diagramFor } from '@/components/schema-diagram/overlay.ts'
 import { overlay, said, type TourScene, unique, whole } from '@/components/schema-diagram/tour.ts'
@@ -37,32 +38,53 @@ export function valueText(cell: Cell | undefined): string {
 }
 
 /**
- * The rows that refer to the first row cut to `REFERRING_DRAWN` per table and key (with what they refer to on), and
- * how many were left out of each, to be said rather than drawn.
+ * The keys from rows that refer to the first row cut to `REFERRING_DRAWN` per table and key, and how many were left
+ * out of each, to be said rather than drawn. Keys are cut, not rows: a row joined to the first by a key that is kept
+ * stays. A row's key to itself is not one that refers to it. The keys cut are returned, to be put back if their
+ * rows come back by another way (`restoreReferring`).
  */
-export function trimReferring(graph: RowGraph, rootId: string): { graph: RowGraph; left: Map<string, number> } {
+export function trimReferring(
+  graph: RowGraph,
+  rootId: string
+): { graph: RowGraph; left: Map<string, number>; cut: GraphArrow[] } {
   const kept = new Map<string, number>()
   const left = new Map<string, number>()
-  const dropped = new Set<string>()
+  const cut: GraphArrow[] = []
   for (const a of graph.arrows) {
     const from = graph.nodes.get(a.from)
-    if (a.to !== rootId || !from) continue
+    if (a.to !== rootId || a.from === rootId || !from) continue
     const group = groupKey(from.ref.table, a.label ?? '')
     const n = (kept.get(group) ?? 0) + 1
     kept.set(group, n)
     if (n > REFERRING_DRAWN) {
-      dropped.add(a.from)
+      cut.push(a)
       left.set(group, (left.get(group) ?? 0) + 1)
     }
   }
+  const arrows = graph.arrows.filter((a) => !cut.includes(a))
+  const joined = new Set([rootId, ...arrows.flatMap((a) => [a.from, a.to])])
   return {
-    graph: {
-      ...graph,
-      nodes: new Map([...graph.nodes].filter(([id]) => !dropped.has(id))),
-      arrows: graph.arrows.filter((a) => !dropped.has(a.from) && !dropped.has(a.to)),
-    },
+    graph: { ...graph, nodes: new Map([...graph.nodes].filter(([id]) => joined.has(id))), arrows },
     left,
+    cut,
   }
+}
+
+/** The keys cut whose rows came back by another way (a row met further on), back in the graph and not counted out. */
+export function restoreReferring(
+  graph: RowGraph,
+  cut: readonly GraphArrow[],
+  left: ReadonlyMap<string, number>
+): { graph: RowGraph; left: Map<string, number> } {
+  const back = cut.filter((a) => graph.nodes.has(a.from))
+  const counts = new Map(left)
+  for (const a of back) {
+    const from = graph.nodes.get(a.from)
+    if (!from) continue
+    const group = groupKey(from.ref.table, a.label ?? '')
+    counts.set(group, Math.max((counts.get(group) ?? 0) - 1, 0))
+  }
+  return { graph: { ...graph, arrows: [...graph.arrows, ...back] }, left: counts }
 }
 
 const groupKey = (table: string, label: string) => JSON.stringify([table, label])
@@ -73,22 +95,19 @@ interface Link {
   to: RowNode
   columns: readonly string[]
   refColumns: readonly string[]
-  /** The foreign key itself, when the referring row's page names it. */
-  key: ForeignKeyDef | undefined
+  /** The foreign key itself. */
+  key: ForeignKeyDef
 }
 
-/** The key an arrow followed: the referring row's own foreign key with those columns, to the other row's table. */
-function linkOf(from: RowNode, to: RowNode, label: string): Link {
-  const fk: ForeignKeyDef | undefined = from.page.foreignKeys.find(
-    (k) => k.refTable === to.ref.table && k.columns.join(', ') === label
-  )
-  return {
-    from,
-    to,
-    columns: fk?.columns ?? label.split(', '),
-    refColumns: fk?.refColumns ?? (to.page.keyKind === 'pk' ? to.page.keyColumns : []),
-    key: fk,
-  }
+/**
+ * The key an arrow followed: the referring row's own foreign key with those columns, to the other row's table. None
+ * when its page does not name it: a line drawn from a guessed column would start at a value that is not the key's.
+ */
+function linkOf(from: RowNode, to: RowNode, label: string): Link | undefined {
+  const key = from.page.foreignKeys.find((k) => k.refTable === to.ref.table && k.columns.join(', ') === label)
+  return key && key.columns.length > 0 && key.refColumns.length > 0
+    ? { from, to, columns: key.columns, refColumns: key.refColumns, key }
+    : undefined
 }
 
 /**
@@ -119,17 +138,21 @@ export function rowTour(
     taken.add(name)
     nameOf.set(n.id, name)
   }
+  // A key whose columns are not known on either side is not drawn: its line would start at a value that is not it.
   const links = graph.arrows.flatMap((a) => {
     const from = graph.nodes.get(a.from)
     const to = graph.nodes.get(a.to)
-    return from && to && nameOf.has(from.id) && nameOf.has(to.id) ? [linkOf(from, to, a.label ?? '')] : []
+    if (!from || !to || !nameOf.has(from.id) || !nameOf.has(to.id)) return []
+    return linkOf(from, to, a.label ?? '') ?? []
   })
   const line = (n: RowNode, column: string) => `${column} = ${valueText(n.values.get(column))}`
   const columns = new Map(
     nodes.map((n) => {
       const joined = links.flatMap((l) => (l.from === n ? l.columns : l.to === n ? l.refColumns : []))
       const keys = n.page.keyKind === 'pk' ? n.page.keyColumns : []
-      const shown = unique([...keys, ...joined, ...n.values.keys()]).slice(0, Math.max(VALUES_SHOWN, keys.length))
+      // The keys and every value a line starts or ends at are never left out (a line would go to another value).
+      const must = unique([...keys, ...joined])
+      const shown = unique([...must, ...n.values.keys()]).slice(0, Math.max(VALUES_SHOWN, must.length))
       return [nameOf.get(n.id) ?? '', shown.map((c) => line(n, c))] as const
     })
   )
@@ -176,7 +199,6 @@ export function rowTour(
   // does), and where it may cost time. Read from the definitions of the two tables.
   const reading = (l: Link) => {
     const child = schemaOf(l.from.ref)
-    if (!l.key) return {}
     return {
       notes: [
         ...columnComments(l.from.ref.table, l.columns, child),
@@ -214,17 +236,28 @@ export function rowTour(
       reading(l)
     )
   }
-  // What refers to the row: one scene a table and key, with how many were left out.
+  // What refers to the row: one scene a table and key, with how many were left out (cut per key, or past the rows
+  // drawn). A table none of whose rows could be drawn still has its scene, its rows counted.
   const referring = links.filter((x) => x.to === root && x.from !== root)
-  for (const group of unique(referring.map((l) => groupKey(l.from.ref.table, l.columns.join(', '))))) {
+  const toRoot = graph.arrows.flatMap((a) => {
+    const from = graph.nodes.get(a.from)
+    return a.to === rootId && a.from !== rootId && from ? [{ from, label: a.label ?? '' }] : []
+  })
+  for (const group of unique(toRoot.map((a) => groupKey(a.from.ref.table, a.label)))) {
+    const inGroup = toRoot.filter((a) => groupKey(a.from.ref.table, a.label) === group)
     const keys = referring.filter((l) => groupKey(l.from.ref.table, l.columns.join(', ')) === group)
-    const first = keys[0]
+    const any = inGroup[0]
+    if (!any) continue
+    const more = (left.get(group) ?? 0) + inGroup.filter((a) => !nameOf.has(a.from.id)).length
+    const first = keys[0] ?? linkOf(any.from, root, any.label)
     if (!first) continue
-    const more = left.get(group) ?? 0
+    const table = any.from.ref.table
     told(
       scene(
-        t.referredTitle(first.from.ref.table, keys.length + more),
-        t.referred(first.from.ref.table, keys.length, more, first.columns.join(', '), keyText(first.refColumns, root)),
+        t.referredTitle(table, keys.length + more),
+        keys.length > 0
+          ? t.referred(table, keys.length, more, any.label, keyText(first.refColumns, root))
+          : t.referredUndrawn(table, more, any.label, keyText(first.refColumns, root)),
         [root, ...keys.map((l) => l.from)],
         keys
       ),
@@ -262,11 +295,11 @@ export function rowTour(
     overlay: whole(false),
     pulse: [],
     notes: designSummary(
-      links.flatMap((l) =>
-        l.key
-          ? [{ child: l.from.ref.table, parent: l.to.ref.table, intent: keyIntent(l.key, schemaOf(l.from.ref)) }]
-          : []
-      )
+      links.map((l) => ({
+        child: l.from.ref.table,
+        parent: l.to.ref.table,
+        intent: keyIntent(l.key, schemaOf(l.from.ref)),
+      }))
     ),
   })
   return { diagram, scenes }

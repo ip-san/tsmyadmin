@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import { locale } from '@/config/locale-screens.ts'
 import type { TourScene } from './tour.ts'
 
@@ -9,15 +10,19 @@ const t = locale.tour
  * scrolled) when a scene says more than fits.
  */
 export function TourCaption({ scene, index, count }: { scene: TourScene; index: number; count: number }) {
+  const titleId = useId()
   return (
     <section
       aria-live="polite"
       aria-atomic
+      aria-labelledby={titleId}
       tabIndex={0}
       className="min-h-36 shrink-0 space-y-1 overflow-y-auto lg:max-h-full lg:w-[28rem]"
     >
       <p className="text-sm text-ink-sub">{t.sceneOf(index + 1, count)}</p>
-      <h3 className="text-2xl font-bold text-ink">{scene.title}</h3>
+      <h3 id={titleId} className="text-2xl font-bold text-ink">
+        {scene.title}
+      </h3>
       <p className="text-lg text-ink">{scene.text}</p>
       <SceneList title={t.notes} items={scene.notes} className="text-brand" />
       <SceneList title={t.hints} items={scene.hints} className="text-critical" />

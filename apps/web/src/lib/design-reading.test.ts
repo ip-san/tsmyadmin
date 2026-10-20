@@ -54,6 +54,17 @@ describe('keyIntent', () => {
     expect(keyIntent(key, table('p', { columns: cols })).required).toBe(false)
   })
 
+  it('reads one to one from a unique key on some of the key columns, and not from a prefix one', () => {
+    const key = fk(['org_id', 'user_id'], 'memberships')
+    const cols = [column('org_id', 'int'), column('user_id', 'int')]
+    expect(keyIntent(key, table('m', { columns: cols, primaryKey: ['user_id'] })).oneToOne).toBe(true)
+    expect(
+      keyIntent(key, table('m', { columns: cols, indexes: [index(['user_id'], { unique: true })] })).oneToOne
+    ).toBe(true)
+    const prefix = index(['user_id'], { unique: true, lengths: { user_id: 4 } })
+    expect(keyIntent(key, table('m', { columns: cols, primaryKey: ['id'], indexes: [prefix] })).oneToOne).toBe(false)
+  })
+
   it('says nothing of how many or a must without the definition, nor of a must for a column it does not list', () => {
     expect(keyIntent(fk(['a'], 'b', { onDelete: 'SET NULL' }))).toEqual({
       oneToOne: undefined,
@@ -90,9 +101,29 @@ describe('tableReading', () => {
       w.history('created_at, updatedAt'),
       w.softDelete('deleted_at'),
       w.state('order_status'),
-      w.naturalKey(['email']),
+      w.naturalKeyNullable(['email']),
     ])
     expect(tableReading(table('t', { columns: [column('creator', 'text'), column('statuses', 'text')] }))).toEqual([])
+  })
+
+  it('says only "made" without a column for changes, takes a place for no stage, and a unique NOT NULL as no NULLs', () => {
+    const t = table('t', {
+      columns: [
+        column('created_at', 'timestamp'),
+        column('shipping_state', 'text'),
+        column('code', 'text', { nullable: false }),
+      ],
+      indexes: [index(['code'], { unique: true })],
+    })
+    expect(tableReading(t)).toEqual([w.made('created_at'), w.naturalKey(['code'])])
+  })
+
+  it('does not take a unique index of the first characters (MySQL prefix) as making values differ', () => {
+    const t = table('t', {
+      columns: [column('code', 'varchar(200)', { nullable: false })],
+      indexes: [index(['code'], { unique: true, lengths: { code: 10 } })],
+    })
+    expect(tableReading(t)).toEqual([])
   })
 })
 
@@ -171,6 +202,19 @@ describe('tableTuning', () => {
     const many = table('wide', { indexes: Array.from({ length: 9 }, (_, i) => index([`c${i}`])) })
     expect(tableTuning('wide', many)).toEqual([w.manyIndexes('wide', 9)])
     expect(tableTuning('v', table('v', { kind: 'view', primaryKey: [] }))).toEqual([])
+  })
+
+  it('names an index that does serve the searches, not a partial, prefix or other-type one listed first', () => {
+    const t = table('t', {
+      indexes: [
+        index(['a', 'p'], { name: 'partial', predicate: 'p > 0' }),
+        index(['a', 'h'], { name: 'hashed', type: 'hash' }),
+        index(['a', 'x'], { name: 'prefixed', lengths: { a: 3 } }),
+        index(['a', 'b'], { name: 'full' }),
+        index(['a'], { name: 'short' }),
+      ],
+    })
+    expect(tableTuning('t', t)).toEqual([w.redundantIndex('short', 'a', 'full')])
   })
 
   it('does not take a partial index, or one of another type, as serving the same searches', () => {

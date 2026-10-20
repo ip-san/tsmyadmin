@@ -361,6 +361,8 @@ export const jaScreens = {
     referredTitle: (table: string, n: number) => `${table} から参照（${n.toLocaleString('ja-JP')} 行）`,
     referred: (table: string, n: number, more: number, columns: string, key: string) =>
       `${table} の ${n.toLocaleString('ja-JP')} 行${more > 0 ? `（ほか ${more.toLocaleString('ja-JP')} 行）` : ''}が、${columns} の値でこの行（${key}）を指しています`,
+    referredUndrawn: (table: string, n: number, columns: string, key: string) =>
+      `${table} の ${n.toLocaleString('ja-JP')} 行が、${columns} の値でこの行（${key}）を指しています（図に描ける行の数を超えたため、描いていません）`,
     fartherTitle: (from: string, to: string) => `${from} の先の ${to}`,
     farther: (from: string, to: string, items: string) => `${from} の行は、さらに ${to} の行を指しています。${items}`,
     endTitle: 'まとめ',
@@ -402,6 +404,9 @@ export const jaScreens = {
     guarded: (pairs: readonly string[]) => `守られる記録: ${pairs.join('、')}（指されている間は、親を消せない）`,
     loose: (pairs: readonly string[]) => `独立した記録: ${pairs.join('、')}（親が消えても残る）`,
     pair: (child: string, parent: string) => `${parent} の ${child}`,
+    made: (columns: string) => `${columns} で、行がいつ作られたかを残します`,
+    naturalKeyNullable: (columns: readonly string[]) =>
+      `${columns.join('、')} は、値のある行どうしでは重なりません（一意。NULL の行はいくつあってもかまいません）。人や外のシステムが行を指すときの名前です`,
     history: (columns: string) => `${columns} で、行がいつ作られ・変わったかを残します`,
     softDelete: (column: string) => `${column} があるので、行を消さずに「消した」印を付ける設計（論理削除）のようです`,
     state: (column: string) => `${column} で、行がどの段階にあるかを持ちます。値の移り変わりが、業務の流れです`,

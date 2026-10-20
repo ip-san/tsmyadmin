@@ -79,7 +79,9 @@ describe('RowTour', () => {
     expect(screen.getByRole('heading', { level: 3 })).toHaveTextContent('orders id=1')
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'ArrowRight' })
     expect(screen.getByRole('heading', { level: 3 })).toHaveTextContent(t.refersTitle('users'))
-    expect(screen.getByRole('region', { name: locale.tour.notes })).toHaveTextContent(locale.designReading.named('users', '会員'))
+    expect(screen.getByRole('region', { name: locale.tour.notes })).toHaveTextContent(
+      locale.designReading.named('users', '会員')
+    )
     expect(screen.getByRole('region', { name: locale.tour.hints })).toBeInTheDocument()
   })
 

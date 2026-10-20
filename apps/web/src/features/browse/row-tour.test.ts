@@ -4,7 +4,7 @@ import { relationKey } from '@/components/schema-diagram/layout.ts'
 import { locale } from '@/config/locale-screens.ts'
 import { column, fk, table } from '@/test/schema-fixtures.ts'
 import { type RowGraph, type RowNode, rowNode } from './row-graph.ts'
-import { REFERRING_DRAWN, rowTour, trimReferring, valueText } from './row-tour.ts'
+import { REFERRING_DRAWN, ROWS_DRAWN, restoreReferring, rowTour, trimReferring, valueText } from './row-tour.ts'
 
 const t = locale.rowTour
 const w = locale.designReading
@@ -149,5 +149,79 @@ describe('rowTour', () => {
 
   it('tells nothing for a row that is not in the graph', () => {
     expect(rowTour(graph(), 'missing')).toBeUndefined()
+  })
+
+  it('counts the rows referring past the rows drawn, and tells a table none of whose rows could be drawn', () => {
+    // Five tables of three rows each refer to the order: more than the picture holds.
+    const tables = ['a', 'b', 'c', 'd', 'e']
+    const kids = tables.flatMap((x) =>
+      [1, 2, 3].map((id) => row(x, page(['id', 'order_id'], { foreignKeys: [fk(['order_id'], 'orders')] }), [id, 1]))
+    )
+    const g: RowGraph = {
+      nodes: new Map([order, ...kids].map((n) => [n.id, n])),
+      arrows: kids.map((k) => ({ from: k.id, to: order.id, label: 'order_id' })),
+      more: [],
+      expanded: new Set(),
+    }
+    const scenes = rowTour(g, order.id)?.scenes ?? []
+    const told = tables.map((x) => scenes.find((s) => s.title === t.referredTitle(x, 3)))
+    expect(told.every(Boolean)).toBe(true)
+    const drawn = ROWS_DRAWN - 1
+    expect(told[3]?.text).toBe(t.referred('d', drawn - 9, 3 - (drawn - 9), 'order_id', 'id = 1'))
+    expect(told[4]?.text).toBe(t.referredUndrawn('e', 3, 'order_id', 'id = 1'))
+  })
+
+  it('keeps the first row when it refers to itself, and puts back a row cut that comes back another way', () => {
+    const staff = page(['id', 'boss_id'], { foreignKeys: [fk(['boss_id'], 'staff')] })
+    const boss = row('staff', staff, [1, 1])
+    const reports = [2, 3, 4, 5].map((id) => row('staff', staff, [id, 1]))
+    const g: RowGraph = {
+      nodes: new Map([boss, ...reports].map((n) => [n.id, n])),
+      arrows: [
+        { from: boss.id, to: boss.id, label: 'boss_id' },
+        ...reports.map((r) => ({ from: r.id, to: boss.id, label: 'boss_id' })),
+      ],
+      more: [],
+      expanded: new Set(),
+    }
+    const trimmed = trimReferring(g, boss.id)
+    expect(trimmed.graph.nodes.has(boss.id)).toBe(true)
+    expect(trimmed.graph.nodes.size).toBe(1 + REFERRING_DRAWN)
+    expect([...trimmed.left.values()]).toEqual([1])
+    // The row cut is met again further on: its key to the first row is back, and it is no longer counted out.
+    const last = reports[3] as RowNode
+    const again: RowGraph = { ...trimmed.graph, nodes: new Map([...trimmed.graph.nodes, [last.id, last]]) }
+    const back = restoreReferring(again, trimmed.cut, trimmed.left)
+    expect(back.graph.arrows.some((a) => a.from === last.id && a.to === boss.id)).toBe(true)
+    expect([...back.left.values()]).toEqual([0])
+  })
+
+  it('lists every value a line starts or ends at, however many, and draws no key whose columns are not known', () => {
+    const names = ['id', 'k1', 'k2', 'k3', 'k4', 'k5', 'k6']
+    const wide = row(
+      'wide',
+      page(names, { foreignKeys: names.slice(1).map((c) => fk([c], 'orders', { name: `fk_${c}` })) }),
+      [9, 1, 1, 1, 1, 1, 1]
+    )
+    const g: RowGraph = {
+      nodes: new Map([
+        [order.id, order],
+        [wide.id, wide],
+      ]),
+      arrows: [
+        ...names.slice(1).map((c) => ({ from: wide.id, to: order.id, label: c })),
+        { from: order.id, to: wide.id, label: 'nothing_known' },
+      ],
+      more: [],
+      expanded: new Set(),
+    }
+    const tour = rowTour(g, order.id)
+    const box = tour?.diagram.columns.get('wide id=9') ?? []
+    for (const r of tour?.diagram.relations ?? []) {
+      expect(tour?.diagram.columns.get(r.table)).toContain(r.columns[0])
+      expect(tour?.diagram.columns.get(r.refTable)).toContain(r.refColumns[0])
+    }
+    expect(box).toHaveLength(names.length)
+    expect(tour?.diagram.relations).toHaveLength(names.length - 1)
   })
 })

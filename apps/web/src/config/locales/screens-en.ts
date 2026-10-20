@@ -362,6 +362,8 @@ export const enScreens = {
     referredTitle: (table: string, n: number) => `Referred to by ${table} (${n.toLocaleString('en-US')} rows)`,
     referred: (table: string, n: number, more: number, columns: string, key: string) =>
       `${n.toLocaleString('en-US')} rows of ${table}${more > 0 ? ` (and ${more.toLocaleString('en-US')} more)` : ''} point at this row (${key}) by the value of ${columns}`,
+    referredUndrawn: (table: string, n: number, columns: string, key: string) =>
+      `${n.toLocaleString('en-US')} rows of ${table} point at this row (${key}) by the value of ${columns} (not drawn: past the rows the picture holds)`,
     fartherTitle: (from: string, to: string) => `From ${from} on to ${to}`,
     farther: (from: string, to: string, items: string) => `The rows of ${from} point on at rows of ${to}. ${items}`,
     endTitle: 'Summary',
@@ -405,6 +407,9 @@ export const enScreens = {
     loose: (pairs: readonly string[]) =>
       `Records of their own: ${pairs.join(', ')} (kept when their parent is deleted)`,
     pair: (child: string, parent: string) => `${child} of ${parent}`,
+    made: (columns: string) => `${columns} keeps when a row was made`,
+    naturalKeyNullable: (columns: readonly string[]) =>
+      `No two rows with a value share ${columns.join(', ')} (unique; rows with NULL can be many): the name people and other systems know a row by`,
     history: (columns: string) => `${columns} keep when a row was made and changed`,
     softDelete: (column: string) => `With ${column}, rows look to be marked deleted rather than deleted (soft delete)`,
     state: (column: string) =>
