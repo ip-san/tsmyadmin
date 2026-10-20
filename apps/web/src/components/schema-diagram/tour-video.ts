@@ -396,15 +396,21 @@ export async function recordTour(
       if (t >= total || signal.aborted || failed !== undefined || recorder.state === 'inactive') break
       await clock.wait(Math.max(0, 1000 / FPS - (clock.now() - t0 - t)))
     }
+    // The recorder stopped by itself before the end, saying nothing of why: what it made is not the whole.
+    if (failed === undefined && !signal.aborted && recorder.state === 'inactive')
+      failed = new Error('The recorder stopped early.')
   } finally {
-    // The tracks first: whatever the recorder does, the canvas is no longer captured.
-    for (const track of stream.getTracks()) track.stop()
-    if (recorder && recorder.state !== 'inactive') {
-      const stopped = new Promise<void>((resolve) => {
-        if (recorder) recorder.onstop = () => resolve()
-      })
-      recorder.stop()
-      await stopped
+    try {
+      // The recorder first, so that it takes in the last frames before the canvas is let go.
+      if (recorder && recorder.state !== 'inactive') {
+        const stopped = new Promise<void>((resolve) => {
+          if (recorder) recorder.onstop = () => resolve()
+        })
+        recorder.stop()
+        await stopped
+      }
+    } finally {
+      for (const track of stream.getTracks()) track.stop()
     }
   }
   if (failed !== undefined) throw failed

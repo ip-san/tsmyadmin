@@ -299,6 +299,18 @@ describe('recordTour', () => {
     expect(track.stop).toHaveBeenCalled()
   })
 
+  it('does not save what a recorder that stopped by itself before the end made', async () => {
+    const made = recordTour(figure, words, {
+      signal: new AbortController().signal,
+      onScene: (i) => {
+        if (recorders[0] && i === 1) recorders[0].state = 'inactive'
+      },
+      clock: clock(),
+    })
+    await expect(made).rejects.toThrow('stopped early')
+    expect(track.stop).toHaveBeenCalled()
+  })
+
   it('does not start when stopped before it began', async () => {
     const stop = new AbortController()
     stop.abort()
