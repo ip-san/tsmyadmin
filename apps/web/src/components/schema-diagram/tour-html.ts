@@ -13,7 +13,7 @@ import {
 } from './layout.ts'
 import { sentences } from './narration.ts'
 import { type diagramFor, TONE_STROKE, TONES, type Tone } from './overlay.ts'
-import type { TourScene } from './tour.ts'
+import { spoken, type TourScene } from './tour.ts'
 
 type TourDiagram = ReturnType<typeof diagramFor>
 
@@ -29,6 +29,9 @@ export interface TourWords {
   pause: string
   narrate: string
   noVoice: string
+  /** The headings of what a scene says of the design, and of where it may cost time. */
+  notes: string
+  hints: string
   /** What ends a sentence: the title is read as one before the words. */
   stop: string
   keys: string
@@ -128,7 +131,9 @@ export function tourHtml(diagram: TourDiagram, scenes: readonly TourScene[], w: 
         })
       return {
         n: w.sceneOf(n + 1, scenes.length),
-        said: sentences(`${s.title}${w.stop}${s.text}`),
+        said: sentences(spoken(s, w.stop)),
+        notes: s.notes ?? [],
+        hints: s.hints ?? [],
         title: s.title,
         text: s.text,
         view: [frame.x, frame.y, frame.width, frame.height].map(round),
@@ -172,7 +177,7 @@ ${boxes.join('\n')}
 <g id="rings" aria-hidden="true"></g>
 </svg></figure>
 <ul id="legend">${legend.join('')}</ul>
-<section aria-live="polite" aria-atomic="true"><p id="n"></p><h2 id="h"></h2><p id="x"></p></section>
+<section aria-live="polite" aria-atomic="true" tabindex="0"><p id="n"></p><h2 id="h"></h2><p id="x"></p><div id="notes" class="list" hidden><h3>${xml(w.notes)}</h3><ul></ul></div><div id="hints" class="list" hidden><h3>${xml(w.hints)}</h3><ul></ul></div></section>
 <nav><button type="button" id="prev">${xml(w.prev)}</button> <button type="button" id="play">${xml(w.play)}</button> <button type="button" id="next">${xml(w.next)}</button> <button type="button" id="narrate" aria-pressed="false">${xml(w.narrate)}</button></nav>
 <p id="voice" role="status"></p>
 <p class="keys">${xml(w.keys)}</p>
@@ -225,10 +230,20 @@ section{min-height:9rem}
 #n{margin:0;font-size:14px;color:#5b616b}
 #h{margin:4px 0;font-size:24px}
 #x{margin:0;font-size:18px}
+#notes h3,#hints h3{margin:8px 0 2px;font-size:14px;color:#4338ca}
+#hints h3{color:#b42318}
+.list ul{margin:0;padding-left:20px;font-size:16px}
 button{font:inherit;font-size:14px;padding:4px 12px;border:1px solid #83898f;border-radius:8px;background:#fff;color:#1a1c1f;cursor:pointer}
 button:disabled{opacity:.5;cursor:default}
 button:focus-visible{outline:2px solid #4338ca;outline-offset:2px}
 .keys{margin:0;font-size:12px;color:#5b616b}
+@media (min-width:1024px){
+main{display:grid;grid-template-columns:minmax(0,1fr) 28rem;grid-template-rows:minmax(0,1fr) auto auto auto auto}
+figure{grid-column:1;grid-row:1}
+#legend{grid-column:1;grid-row:2}
+section{grid-column:2;grid-row:1/3;overflow-y:auto}
+nav,#voice,.keys{grid-column:1/3}
+}
 @keyframes enter{from{opacity:0}to{opacity:1}}
 @keyframes flow{to{stroke-dashoffset:-32}}
 @keyframes pulse{from{opacity:.9;transform:scale(1)}to{opacity:0;transform:scale(1.18)}}
@@ -306,6 +321,12 @@ const SCRIPT = `
     document.getElementById('n').textContent = s.n
     document.getElementById('h').textContent = s.title
     document.getElementById('x').textContent = s.text
+    ;[['notes', s.notes], ['hints', s.hints]].forEach(function (p) {
+      var box = document.getElementById(p[0]), list = box.querySelector('ul')
+      list.textContent = ''
+      p[1].forEach(function (n) { var li = document.createElement('li'); li.textContent = n; list.appendChild(li) })
+      box.hidden = p[1].length === 0
+    })
     prev.disabled = i === 0
     next.disabled = i === D.scenes.length - 1
     move(s.view)

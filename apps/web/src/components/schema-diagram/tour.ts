@@ -17,7 +17,15 @@ export interface TourScene {
   overlay: DiagramOverlay
   /** Tables a ring is drawn around as the scene opens: where to look first. */
   pulse: readonly string[]
+  /** What the scene says of the design (why it is so, not only what it is), listed under its words. */
+  notes?: readonly string[]
+  /** Where the design may cost time (an index missing, types that differ), listed after what it says of the design. */
+  hints?: readonly string[]
 }
+
+/** All a scene says, as it is read aloud: its title, its words, and what it says of the design. */
+export const spoken = (scene: Pick<TourScene, 'title' | 'text' | 'notes' | 'hints'>, stop: string = t.stop) =>
+  [scene.title, scene.text, ...(scene.notes ?? []), ...(scene.hints ?? [])].filter(Boolean).join(stop)
 
 /** What a scene lights: tables (with a tone and a badge), keys, keys that flow, and columns marked. */
 export interface Lit {

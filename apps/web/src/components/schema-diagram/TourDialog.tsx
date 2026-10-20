@@ -9,7 +9,8 @@ import { BOX_WIDTH, boxHeight } from './layout.ts'
 import { type diagramFor, TONES, type Tone } from './overlay.ts'
 import { SchemaDiagram } from './SchemaDiagram.tsx'
 import { DiagramLegend } from './StepNarration.tsx'
-import type { TourScene } from './tour.ts'
+import { TourCaption } from './TourCaption.tsx'
+import { spoken, type TourScene } from './tour.ts'
 import { useCamera } from './use-camera.ts'
 import { useReading, useVoice } from './use-narration.ts'
 import { useStepPlayer } from './use-step-player.ts'
@@ -34,6 +35,7 @@ export function TourDialog({
   drawn,
   tones,
   error,
+  saveHint = t.saveHint,
   onClose,
 }: {
   title: string
@@ -43,6 +45,8 @@ export function TourDialog({
   /** What each colour means on this tour (`DiagramLegend`). */
   tones: Partial<Record<Tone, string>>
   error?: { error: unknown; retry: () => void } | undefined
+  /** What the saved file holds, said on its button (names and comments, unless the tour says more). */
+  saveHint?: string
   onClose: () => void
 }) {
   const ref = useRef<HTMLDialogElement>(null)
@@ -103,7 +107,7 @@ export function TourDialog({
           </h2>
           <div className="flex gap-2">
             {drawn && !error ? (
-              <Button size="sm" title={t.saveHint} onClick={() => void save(title, label, drawn, tones)}>
+              <Button size="sm" title={saveHint} onClick={() => void save(title, label, drawn, tones)}>
                 {t.save}
               </Button>
             ) : null}
@@ -139,6 +143,8 @@ async function save(
     pause: t.pause,
     narrate: t.narrate,
     noVoice: t.noVoice,
+    notes: t.notes,
+    hints: t.hints,
     stop: t.stop,
     keys: t.savedKeys,
     sceneOf: t.sceneOf,
@@ -167,7 +173,7 @@ function Stage({
   // Read aloud, a scene lasts as long as its words: the next comes when they have been read.
   const player = useStepPlayer(scenes.length, SCENE_MS, { still: 'first', hold: voice.voice !== null })
   const scene = scenes[player.index] ?? scenes[0]
-  const reading = useReading(voice, player, scene ? `${scene.title}${t.stop}${scene.text}` : '', SCENE_MS)
+  const reading = useReading(voice, player, scene ? spoken(scene) : '', SCENE_MS)
   const at = (table: string) => diagram.positions[table] ?? { x: 0, y: 0 }
   const size = (table: string) => ({ width: BOX_WIDTH, height: boxHeight(diagram.columns.get(table)?.length ?? 0) })
   const camera = useCamera(frameOf(scene?.frame ?? [], diagram.tables, at, size))
@@ -196,41 +202,42 @@ function Stage({
   if (!scene) return null
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
-      <div className="min-h-0 flex-1">
-        <SchemaDiagram
-          {...diagram}
-          overlay={scene.overlay}
-          camera={camera}
-          label={label}
-          over={scene.pulse.map((table) => (
-            <rect
-              key={`${player.index}.${table}`}
-              x={at(table).x - RING}
-              y={at(table).y - RING}
-              width={size(table).width + 2 * RING}
-              height={size(table).height + 2 * RING}
-              rx={10}
-              aria-hidden
-              className="diagram-pulse fill-none stroke-brand"
-              strokeWidth={4}
+      {/* On a wide screen the words go beside the picture: a scene that says much does not shrink it. */}
+      <div className="flex min-h-0 flex-1 flex-col gap-3 lg:flex-row">
+        <div className="flex min-h-0 flex-1 flex-col gap-2">
+          <div className="min-h-0 flex-1">
+            <SchemaDiagram
+              {...diagram}
+              overlay={scene.overlay}
+              camera={camera}
+              label={label}
+              over={scene.pulse.map((table) => (
+                <rect
+                  key={`${player.index}.${table}`}
+                  x={at(table).x - RING}
+                  y={at(table).y - RING}
+                  width={size(table).width + 2 * RING}
+                  height={size(table).height + 2 * RING}
+                  rx={10}
+                  aria-hidden
+                  className="diagram-pulse fill-none stroke-brand"
+                  strokeWidth={4}
+                />
+              ))}
             />
-          ))}
-        />
+          </div>
+          {/* Only the colours this scene draws, named for what they mean on the tour. */}
+          <DiagramLegend
+            tones={TONES.filter(
+              (tone) =>
+                [...scene.overlay.tables.values()].some((x) => x.tone === tone) ||
+                [...scene.overlay.relations.values()].includes(tone)
+            )}
+            labels={tones}
+          />
+        </div>
+        <TourCaption scene={scene} index={player.index} count={scenes.length} />
       </div>
-      {/* Only the colours this scene draws, named for what they mean on the tour. */}
-      <DiagramLegend
-        tones={TONES.filter(
-          (tone) =>
-            [...scene.overlay.tables.values()].some((x) => x.tone === tone) ||
-            [...scene.overlay.relations.values()].includes(tone)
-        )}
-        labels={tones}
-      />
-      <section aria-live="polite" aria-atomic className="min-h-36 space-y-1">
-        <p className="text-sm text-ink-sub">{t.sceneOf(player.index + 1, scenes.length)}</p>
-        <h3 className="text-2xl font-bold text-ink">{scene.title}</h3>
-        <p className="text-lg text-ink">{scene.text}</p>
-      </section>
       <div className="flex flex-wrap items-center gap-3">
         <Button size="sm" onClick={player.prev} disabled={player.index === 0}>
           {t.prev}

@@ -347,6 +347,77 @@ export const enScreens = {
     root: 'Starting row',
     hint: 'Open a row to add the rows it refers to and the rows that refer to it (up to 10 per table)',
   },
+  rowTour: {
+    open: 'Present its links',
+    openHint: 'Follow, scene by scene, the rows this row is joined to by foreign keys, and the values that match',
+    dialog: (table: string) => `Presentation of a row's links: ${table}`,
+    diagram: (table: string) => `The row of ${table} and the rows joined to it by foreign keys`,
+    tones: { focus: 'Rows and keys of this scene', index: 'Rows and keys seen so far' },
+    saveHint:
+      'Saves this presentation as one HTML file, to open and present without the server (it holds the row values, so mind whom you give it to)',
+    intro: (table: string, values: string) => `Starting from one row of ${table}. ${values}`,
+    refersTitle: (table: string) => `Refers to ${table}`,
+    refers: (key: string, table: string, refKey: string, name: string | undefined) =>
+      `With ${key}, it points at the row of ${table} with ${refKey}${name ? ` (${name})` : ''}. The foreign key's column and the column it refers to hold the same value`,
+    referredTitle: (table: string, n: number, exact: boolean) =>
+      `Referred to by ${table} (${n.toLocaleString('en-US')}${exact ? '' : ' or more'} rows)`,
+    referred: (table: string, n: number, more: number, exact: boolean, columns: string, key: string) =>
+      `${n.toLocaleString('en-US')} rows of ${table}${more > 0 ? ` (and ${more.toLocaleString('en-US')}${exact ? '' : ' or more'} more)` : exact ? '' : ' (and more)'} point at this row (${key}) by the value of ${columns}`,
+    referredUndrawn: (table: string, n: number, exact: boolean, columns: string, key: string) =>
+      `${n.toLocaleString('en-US')}${exact ? '' : ' or more'} rows of ${table} point at this row (${key}) by the value of ${columns} (not drawn: past the rows the picture holds)`,
+    fartherTitle: (from: string, to: string) => `From ${from} on to ${to}`,
+    farther: (from: string, to: string, items: string) => `The rows of ${from} point on at rows of ${to}. ${items}`,
+    endTitle: 'Summary',
+    end: (tables: number, rows: number) =>
+      `From this one row, foreign keys reached ${tables.toLocaleString('en-US')} tables and ${rows.toLocaleString('en-US')} rows. Rows are joined by a foreign key's value being the same as the value of the column it refers to`,
+  },
+  designReading: {
+    named: (table: string, comment: string) => `${table} (${comment})`,
+    columnComment: (table: string, column: string, comment: string) =>
+      `${table}.${column} is "${comment}" (its column comment)`,
+    unindexed: (child: string, columns: string, parent: string) =>
+      `No index starts with ${child}.${columns}: a join from ${parent} to ${child}, and the check on each delete or key change of ${parent}, read the whole of ${child}. Consider adding one`,
+    typeMismatch: (column: string, type: string, refColumn: string, refType: string) =>
+      `${column} (${type}) and ${refColumn} (${refType}) are of different kinds: each join converts one, and an index may not be used`,
+    noPrimaryKey: (table: string) =>
+      `${table} has no primary key: a row cannot be pointed at to update or delete it, and replication and many tools are slower for it`,
+    redundantIndex: (index: string, columns: string, by: string) =>
+      `Index ${index} (${columns}) is the start of ${by}, which serves the same searches: it only adds to each write`,
+    manyIndexes: (table: string, n: number) =>
+      `${table} has ${n} indexes: reads are faster, but each row written updates every one`,
+    oneToMany: (child: string, parent: string) => `One row of ${parent} has any number of ${child} (one to many)`,
+    oneToOne: (child: string, parent: string) =>
+      `One row of ${parent} has at most one of ${child} (one to one): what adds to ${parent}, kept in a table of its own`,
+    required: (child: string, parent: string) =>
+      `Every ${child} points at a ${parent} (NOT NULL): there is no ${child} without its ${parent}`,
+    optional: (child: string, parent: string) =>
+      `A ${child} need not point at a ${parent} (NULL allowed): the link is optional`,
+    lifecycle: {
+      cascade: (child: string, parent: string) =>
+        `Deleting a ${parent} deletes its ${child} too (ON DELETE CASCADE): ${child} is part of ${parent}, and goes with it`,
+      setNull: (child: string, parent: string) =>
+        `Deleting a ${parent} leaves its ${child}, pointing at nothing (ON DELETE SET NULL): ${child} is a record of its own`,
+      setDefault: (child: string, parent: string) =>
+        `Deleting a ${parent} points its ${child} at the default row (ON DELETE SET DEFAULT)`,
+      restrict: (child: string, parent: string) =>
+        `A ${parent} that ${child} points at cannot be deleted (ON DELETE RESTRICT / NO ACTION): the ${child} records are kept safe`,
+    },
+    parts: (pairs: readonly string[]) => `Parts that go with their parent: ${pairs.join(', ')} (deleted with it)`,
+    guarded: (pairs: readonly string[]) =>
+      `Records kept safe: ${pairs.join(', ')} (their parent cannot be deleted while they point at it)`,
+    loose: (pairs: readonly string[]) =>
+      `Records of their own: ${pairs.join(', ')} (kept when their parent is deleted)`,
+    pair: (child: string, parent: string) => `${child} of ${parent}`,
+    made: (columns: string) => `${columns} keeps when a row was made`,
+    naturalKeyNullable: (columns: readonly string[]) =>
+      `No two rows with a value share ${columns.join(', ')} (unique; rows with NULL can be many): the name people and other systems know a row by`,
+    history: (columns: string) => `${columns} keep when a row was made and changed`,
+    softDelete: (column: string) => `With ${column}, rows look to be marked deleted rather than deleted (soft delete)`,
+    state: (column: string) =>
+      `${column} holds the stage a row is at: its values going from one to the next are the flow of the work`,
+    naturalKey: (columns: readonly string[]) =>
+      `No two rows share ${columns.join(', ')} (unique): the name people and other systems know a row by`,
+  },
   databaseOps: {
     copyMode: {
       label: 'What to copy',
@@ -2677,6 +2748,8 @@ export const enScreens = {
     goTo: (n: number, title: string) => `${n}. ${title}`,
     keys: '← → or Page Up / Down to move, Space for the next, Home / End for the first and last, P to play or pause, F for full screen, Esc to close',
     narrate: 'Read aloud',
+    notes: 'Reading the design',
+    hints: 'Performance hints',
     noVoice:
       'This device has no voice of its own for this language. Voices that send the words to a service outside are not used, so the tour goes on unread',
     save: 'Save as HTML',

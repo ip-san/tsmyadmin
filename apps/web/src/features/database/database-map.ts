@@ -1,11 +1,12 @@
-import type { IndexDef, Namespace, TableSchema } from '@tsmyadmin/shared'
+import type { Namespace, TableSchema } from '@tsmyadmin/shared'
+import { indexed } from '@/lib/key-index.ts'
 import { TABLE_ROLES, type TableRole, tableRole } from '@/lib/table-role.ts'
 import {
   type KeyTypeMismatch,
   keyTypeMismatches,
   type NameTypeMismatch,
   nameTypeMismatches,
-} from './type-mismatches.ts'
+} from '@/lib/type-mismatches.ts'
 
 /** Tables named as the most referred to: the ones a newcomer reads first. */
 const HUBS_SHOWN = 10
@@ -31,19 +32,6 @@ export interface DatabaseMap {
   keyTypes: KeyTypeMismatch[]
   /** `_id` columns of one name and two types. */
   nameTypes: NameTypeMismatch[]
-}
-
-/**
- * Whether an index (the primary key among them) starts with the key's columns, in any order: an index on
- * (a, b, c) serves a key on (b, a), not one on (b) or (a, c). A partial index (some rows only) and a full-text or
- * spatial one (not of the values) do not serve a join. A key of no columns (as a catalog may report) needs none.
- */
-function indexed(schema: Pick<TableSchema, 'primaryKey' | 'indexes'>, columns: readonly string[]): boolean {
-  const wanted = new Set(columns)
-  const starts = (cols: readonly string[]) =>
-    cols.length >= wanted.size && cols.slice(0, wanted.size).every((c) => wanted.has(c))
-  const serves = (i: IndexDef) => i.predicate === null && !/^(fulltext|spatial)$/i.test(i.type ?? '')
-  return starts(schema.primaryKey) || schema.indexes.some((i) => serves(i) && starts(i.columns))
 }
 
 /**

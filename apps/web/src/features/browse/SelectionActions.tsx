@@ -1,6 +1,6 @@
 import type { BrowseResult, Cell, RowKey } from '@tsmyadmin/shared'
 import { isTruncatedCell, toCsv } from '@tsmyadmin/shared'
-import { ChartColumn, Copy, Download, Network, Pencil } from 'lucide-react'
+import { ChartColumn, Copy, Download, Network, Pencil, Presentation } from 'lucide-react'
 import { lazy, Suspense, useState } from 'react'
 import { ResultChart } from '@/components/results/ResultChart.tsx'
 import { Button } from '@/components/ui/Button.tsx'
@@ -14,6 +14,7 @@ import { rowToValues } from './row-key.ts'
 
 // Loaded when asked for: most pages are read, not followed.
 const RowGraphDialog = lazy(() => import('./RowGraphDialog.tsx').then((m) => ({ default: m.RowGraphDialog })))
+const RowTour = lazy(() => import('./RowTour.tsx').then((m) => ({ default: m.RowTour })))
 
 const t = locale.browse.selection
 
@@ -40,6 +41,7 @@ export function SelectionActions({
   const [chart, setChart] = useState(false)
   const [copied, setCopied] = useState<'done' | 'failed' | null>(null)
   const [related, setRelated] = useState<RowNode | null>(null)
+  const [touring, setTouring] = useState<RowNode | null>(null)
   // A ctid table carries its row address as a hidden last column: not part of what the user sees.
   const columns = data.keyKind === 'ctid' ? data.columns.slice(0, -1) : data.columns
   const names = columns.map((c) => c.name)
@@ -130,6 +132,17 @@ export function SelectionActions({
           {locale.rowGraph.open}
         </Button>
       ) : null}
+      {only && joined ? (
+        <Button
+          size="sm"
+          aria-haspopup="dialog"
+          title={locale.rowTour.openHint}
+          onClick={() => setTouring(rowNode(tableRef, data, only))}
+        >
+          <Presentation className="size-3" aria-hidden />
+          {locale.rowTour.open}
+        </Button>
+      ) : null}
       <Button size="sm" aria-pressed={chart} onClick={() => setChart((c) => !c)}>
         <ChartColumn className="size-3" aria-hidden />
         {t.chart}
@@ -145,6 +158,11 @@ export function SelectionActions({
       {related ? (
         <Suspense fallback={null}>
           <RowGraphDialog root={related} onClose={() => setRelated(null)} />
+        </Suspense>
+      ) : null}
+      {touring ? (
+        <Suspense fallback={null}>
+          <RowTour root={touring} onClose={() => setTouring(null)} />
         </Suspense>
       ) : null}
       <EditRowsDialog

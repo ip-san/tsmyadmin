@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { relationKey } from '@/components/schema-diagram/layout.ts'
 import { locale } from '@/config/locale-screens.ts'
 import type { RoleGuess } from '@/lib/table-role.ts'
-import { column, relation } from '@/test/schema-fixtures.ts'
+import { column, index, relation } from '@/test/schema-fixtures.ts'
 import { tableTourScenes } from './table-tour.ts'
 
 const t = locale.tableTour
@@ -18,9 +18,12 @@ const tables = ['orders', 'users', 'products', 'lines', 'orgs', 'logs']
 const middle: RoleGuess = { role: 'middle', refersTo: 2, referredBy: 1, self: false }
 const orders = {
   name: 'orders',
+  kind: 'table' as const,
   comment: '注文',
   columns: [column('id', 'int'), column('user_id', 'int'), column('product_id', 'int')],
   primaryKey: ['id'],
+  indexes: [],
+  foreignKeys: [],
 }
 
 describe('tableTourScenes', () => {
@@ -66,7 +69,15 @@ describe('tableTourScenes', () => {
   })
 
   it('says there is no primary key, and leaves out what the table does not have', () => {
-    const logs = { name: 'logs', comment: null, columns: [column('message', 'int')], primaryKey: [] }
+    const logs = {
+      name: 'logs',
+      kind: 'table' as const,
+      comment: null,
+      columns: [column('message', 'int')],
+      primaryKey: [],
+      indexes: [],
+      foreignKeys: [],
+    }
     const scenes = tableTourScenes({
       schema: logs,
       guess: { role: 'isolated', refersTo: 0, referredBy: 0, self: false },
@@ -84,9 +95,12 @@ describe('tableTourScenes', () => {
     const scenes = tableTourScenes({
       schema: {
         name: 'categories',
+        kind: 'table' as const,
         comment: null,
         columns: [column('id', 'int'), column('parent_id', 'int')],
         primaryKey: ['id'],
+        indexes: [],
+        foreignKeys: [],
       },
       guess: { role: 'tree', refersTo: 0, referredBy: 0, self: true },
       relations: [parent],
@@ -95,5 +109,40 @@ describe('tableTourScenes', () => {
     expect(scenes.map((s) => s.title)).toEqual(['categories', t.primaryKeyTitle, t.selfTitle, t.endTitle])
     expect(scenes[2]?.overlay.columns.get('categories')).toEqual(new Set(['parent_id', 'id']))
     expect(scenes[2]?.text).toBe(`${t.selfText}${g.stop}${t.key('categories', 'parent_id', 'categories', 'id')}`)
+  })
+
+  it('says why it is so, from comments and keys, and where it may cost time', () => {
+    const w = locale.designReading
+    const cascade = relation('orders', ['user_id'], 'users', { onDelete: 'CASCADE' })
+    const fromLinesSetNull = relation('lines', ['order_id'], 'orders', { onDelete: 'SET NULL' })
+    const scenes = tableTourScenes({
+      schema: {
+        ...orders,
+        columns: [
+          column('id', 'int'),
+          column('user_id', 'int', { nullable: false, comment: '注文した会員' }),
+          column('created_at', 'timestamp'),
+        ],
+        primaryKey: [],
+        indexes: [index(['created_at'])],
+      },
+      guess: middle,
+      relations: [cascade, fromLinesSetNull],
+      tables,
+    })
+    const [intro, , refers, referred] = scenes
+    expect(intro?.notes).toEqual([w.made('created_at')])
+    expect(intro?.hints).toEqual([w.noPrimaryKey('orders')])
+    expect(refers?.notes).toEqual([
+      w.columnComment('orders', 'user_id', '注文した会員'),
+      w.oneToMany('orders', 'users'),
+      w.required('orders', 'users'),
+      w.lifecycle.cascade('orders', 'users'),
+    ])
+    expect(refers?.hints).toEqual([w.unindexed('orders', 'user_id', 'users')])
+    // Another table's key: what a delete does is known; how many and a must are not, and nothing is said of them.
+    expect(referred?.notes).toEqual([w.lifecycle.setNull('lines', 'orders')])
+    expect(referred?.hints).toBeUndefined()
+    expect(scenes.at(-1)?.notes).toEqual([w.parts([w.pair('orders', 'users')]), w.loose([w.pair('lines', 'orders')])])
   })
 })

@@ -346,6 +346,74 @@ export const jaScreens = {
     root: '起点',
     hint: '行ごとに「広げる」で、その行が参照している行と、その行を参照している行（表ごとに 10 行まで）を足します',
   },
+  rowTour: {
+    open: 'つながりをプレゼンで見る',
+    openHint: 'この行から、外部キーでつながる行を、値がどう一致しているかとともに、場面ごとにたどる',
+    dialog: (table: string) => `行のつながりのプレゼン: ${table}`,
+    diagram: (table: string) => `${table} の行と、外部キーでつながる行の図`,
+    tones: { focus: 'この場面の行と外部キー', index: 'ここまでに見た行と外部キー' },
+    saveHint:
+      'この発表を 1 つの HTML ファイルにします。サーバーにつながずに開いて発表できます（行の値が入ります。渡す相手に気をつけてください）',
+    intro: (table: string, values: string) => `${table} の 1 行から始めます。${values}`,
+    refersTitle: (table: string) => `${table} を参照`,
+    refers: (key: string, table: string, refKey: string, name: string | undefined) =>
+      `${key} なので、${table} の ${refKey} の行${name ? `（${name}）` : ''}を指しています。外部キーのカラムと参照先のカラムの値が同じです`,
+    referredTitle: (table: string, n: number, exact: boolean) =>
+      `${table} から参照（${n.toLocaleString('ja-JP')} 行${exact ? '' : '以上'}）`,
+    referred: (table: string, n: number, more: number, exact: boolean, columns: string, key: string) =>
+      `${table} の ${n.toLocaleString('ja-JP')} 行${more > 0 ? `（ほか ${more.toLocaleString('ja-JP')} 行${exact ? '' : '以上'}）` : exact ? '' : '（ほかにもあります）'}が、${columns} の値でこの行（${key}）を指しています`,
+    referredUndrawn: (table: string, n: number, exact: boolean, columns: string, key: string) =>
+      `${table} の ${n.toLocaleString('ja-JP')} 行${exact ? '' : '以上'}が、${columns} の値でこの行（${key}）を指しています（図に描ける行の数を超えたため、描いていません）`,
+    fartherTitle: (from: string, to: string) => `${from} の先の ${to}`,
+    farther: (from: string, to: string, items: string) => `${from} の行は、さらに ${to} の行を指しています。${items}`,
+    endTitle: 'まとめ',
+    end: (tables: number, rows: number) =>
+      `この 1 行から、外部キーで ${tables.toLocaleString('ja-JP')} テーブル・${rows.toLocaleString('ja-JP')} 行がつながりました。行と行は、外部キーのカラムの値が参照先のカラムの値と同じことでつながっています`,
+  },
+  designReading: {
+    named: (table: string, comment: string) => `${table}（${comment}）`,
+    columnComment: (table: string, column: string, comment: string) =>
+      `${table}.${column} は「${comment}」（カラムのコメント）`,
+    unindexed: (child: string, columns: string, parent: string) =>
+      `${child}.${columns} で始まるインデックスがありません。${parent} から ${child} をたどる結合や、${parent} の行を消す・キーを変えるたびの確認で、${child} を全件読みます。インデックスの追加を検討してください`,
+    typeMismatch: (column: string, type: string, refColumn: string, refType: string) =>
+      `${column}（${type}）と ${refColumn}（${refType}）は型の種類が違います。結合のたびに変換が入り、インデックスが使われないことがあります`,
+    noPrimaryKey: (table: string) =>
+      `${table} に主キーがありません。1 行を指して更新・削除できず、レプリケーションや多くのツールで遅くなります`,
+    redundantIndex: (index: string, columns: string, by: string) =>
+      `インデックス ${index}（${columns}）は ${by} の先頭と同じで、検索は ${by} で足ります。書き込みのたびに更新する分だけ余分です`,
+    manyIndexes: (table: string, n: number) =>
+      `${table} にはインデックスが ${n} 個あります。読むのは速くなりますが、行を書くたびにすべてを更新します`,
+    oneToMany: (child: string, parent: string) => `${parent} の 1 行に、${child} はいくつも（1 対多）`,
+    oneToOne: (child: string, parent: string) =>
+      `${parent} の 1 行に、${child} は多くて 1 行（1 対 1）。${parent} を補う情報を、別のテーブルに分けた形です`,
+    required: (child: string, parent: string) =>
+      `${child} は必ず ${parent} を指します（NOT NULL）。${parent} の無い ${child} は作れない設計です`,
+    optional: (child: string, parent: string) =>
+      `${child} は ${parent} を指さなくてもかまいません（NULL 可）。つながりは任意です`,
+    lifecycle: {
+      cascade: (child: string, parent: string) =>
+        `${parent} を消すと ${child} も消えます（ON DELETE CASCADE）。${child} は ${parent} の一部で、運命をともにします`,
+      setNull: (child: string, parent: string) =>
+        `${parent} を消しても ${child} は残り、指す先だけが空になります（ON DELETE SET NULL）。${child} は ${parent} から独立した記録です`,
+      setDefault: (child: string, parent: string) =>
+        `${parent} を消すと、${child} は既定の行を指し直します（ON DELETE SET DEFAULT）`,
+      restrict: (child: string, parent: string) =>
+        `${child} が指している ${parent} は消せません（ON DELETE RESTRICT / NO ACTION）。${child} の記録を守る設計です`,
+    },
+    parts: (pairs: readonly string[]) => `一緒に消える部分: ${pairs.join('、')}（親を消すと消える）`,
+    guarded: (pairs: readonly string[]) => `守られる記録: ${pairs.join('、')}（指されている間は、親を消せない）`,
+    loose: (pairs: readonly string[]) => `独立した記録: ${pairs.join('、')}（親が消えても残る）`,
+    pair: (child: string, parent: string) => `${parent} の ${child}`,
+    made: (columns: string) => `${columns} で、行がいつ作られたかを残します`,
+    naturalKeyNullable: (columns: readonly string[]) =>
+      `${columns.join('、')} は、値のある行どうしでは重なりません（一意。NULL の行はいくつあってもかまいません）。人や外のシステムが行を指すときの名前です`,
+    history: (columns: string) => `${columns} で、行がいつ作られ・変わったかを残します`,
+    softDelete: (column: string) => `${column} があるので、行を消さずに「消した」印を付ける設計（論理削除）のようです`,
+    state: (column: string) => `${column} で、行がどの段階にあるかを持ちます。値の移り変わりが、業務の流れです`,
+    naturalKey: (columns: readonly string[]) =>
+      `${columns.join('、')} は、どの 2 行でも重なりません（一意）。人や外のシステムが行を指すときの名前です`,
+  },
   databaseOps: {
     copyMode: {
       label: 'コピーする内容',
@@ -2649,6 +2717,8 @@ export const jaScreens = {
     goTo: (n: number, title: string) => `${n}. ${title}`,
     keys: '← → か Page Up / Down で前後、スペースで次、Home / End で最初と最後、P で再生・一時停止、F で全画面、Esc で閉じる',
     narrate: '読み上げ',
+    notes: '設計の読み取り',
+    hints: 'パフォーマンスのヒント',
     noVoice: 'この端末には、この言語の読み上げの声がありません。外部に文を送る声は使わないため、読み上げずに進めます',
     save: 'HTML で保存',
     saveHint:

@@ -398,6 +398,19 @@ for (const t of TARGETS) {
       await scan(page)
     })
 
+    test('row presented, with what it says of the design and where it may cost time', async ({ page }) => {
+      await page.emulateMedia({ reducedMotion: 'reduce' })
+      await login(page, t)
+      await page.goto(`${tableUrl(t, 'users')}${t.schema ? '&' : '?'}sort=id:asc`)
+      await page.getByLabel('1 行目を選択').check()
+      await page.getByRole('button', { name: 'つながりをプレゼンで見る' }).click()
+      const tour = page.getByRole('dialog', { name: /^行のつながりのプレゼン/ })
+      await tour.getByRole('img').waitFor()
+      await page.keyboard.press('End')
+      await expect(tour.getByRole('heading', { level: 3 })).toHaveText('まとめ')
+      await scan(page)
+    })
+
     test('process list with a chain of lock waits drawn', async ({ page, browser }) => {
       test.setTimeout(90_000)
       await login(page, t)
