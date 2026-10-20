@@ -1,7 +1,7 @@
 import type { Namespace, QueryBuilderJoin, TableSchema } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
 import { refuses } from '../test/ddl-helpers.ts'
-import { joinPlan } from './join-plan.ts'
+import { joinPlan, joinSteps } from './join-plan.ts'
 
 type Link = {
   name?: string
@@ -250,5 +250,31 @@ describe('joinPlan with joins spelled out', () => {
     expect(
       plan(['orders', 'customers'], shop, [join('customers', 'inner', on(['customers', 'id'], ['customers', 'name']))])
     ).toEqual(['INNER JOIN `d`.`customers` ON `customers`.`id` = `customers`.`name`'])
+  })
+})
+
+describe('joinSteps', () => {
+  it('tells each join as data: the table, its kind, the pairs of columns, and the foreign key it went along', () => {
+    const explicit: QueryBuilderJoin[] = [
+      {
+        table: 'orders',
+        kind: 'inner',
+        on: [{ from: { table: 'orders', column: 'customer_id' }, to: { table: 'customers', column: 'id' } }],
+      },
+    ]
+    expect(joinSteps('mysql', my, ['customers', 'orders', 'items'], shop, explicit)).toEqual([
+      {
+        table: 'orders',
+        kind: 'inner',
+        on: [{ a: { table: 'orders', column: 'customer_id' }, b: { table: 'customers', column: 'id' } }],
+        key: null,
+      },
+      {
+        table: 'items',
+        kind: 'left',
+        on: [{ a: { table: 'orders', column: 'id' }, b: { table: 'items', column: 'order_id' } }],
+        key: { table: 'items', name: 'fk0' },
+      },
+    ])
   })
 })

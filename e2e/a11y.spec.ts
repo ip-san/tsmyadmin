@@ -547,6 +547,22 @@ for (const t of TARGETS) {
       })
     })
 
+    test('query presented, on a join', async ({ page }) => {
+      await login(page, t)
+      await withScratchSpace(page, t, async (space) => {
+        await petsAndLogs(page, space)
+        await page.emulateMedia({ reducedMotion: 'reduce' })
+        await page.goto(
+          `/db/${space.database}/query?${space.schema ? `schema=${space.schema}&` : ''}tables=${encodeURIComponent(JSON.stringify(['pets', 'owners']))}`
+        )
+        await page.getByRole('button', { name: 'プレゼンで見る' }).click()
+        const tour = page.getByRole('dialog', { name: 'クエリのプレゼン' })
+        await tour.getByRole('button', { name: /LEFT JOIN owners$/ }).click()
+        await expect(tour.getByRole('heading', { level: 3 })).toHaveText('LEFT JOIN owners')
+        await scan(page)
+      })
+    })
+
     test('designer around one table, with comments and the candidates for keys', async ({ page }) => {
       await login(page, t)
       await withScratchSpace(page, t, async (space) => {

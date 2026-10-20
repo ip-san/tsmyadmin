@@ -2739,6 +2739,69 @@ export const jaScreens = {
     names: (names: readonly string[], more: number) =>
       `${names.join('、')}${more > 0 ? ` ほか ${more.toLocaleString('ja-JP')} 件` : ''}`,
   },
+  queryTour: {
+    open: 'プレゼンで見る',
+    openHint:
+      '選んだテーブル・つなぎ方・条件・カラム・並べ替えを、SQL が論理的に処理される順に、場面ごとの全画面の発表にします（行は読みません）',
+    dialog: 'クエリのプレゼン',
+    diagram: 'クエリが使うテーブルと外部キーの図',
+    saveHint:
+      'この発表を 1 つの HTML ファイルにします。サーバーにつながずに、ブラウザで開いて発表できます（テーブル名・カラム名・コメントと、条件に入力した値が入ります）',
+    tones: { focus: 'この場面で加わる・使うテーブルと外部キー', index: 'すでにつないだテーブル' },
+    introTitle: 'このクエリ',
+    intro: (n: number, first: string) =>
+      `テーブル ${n.toLocaleString('ja-JP')} つから行を取り出します。SQL の書かれた順ではなく、論理的に処理される順（FROM → JOIN → WHERE → SELECT → ORDER BY）に、${first} から追っていきます（実際にどの順で読むかは、データベースが速い順を選びます）`,
+    fromTitle: (table: string) => `FROM ${table}`,
+    from: (table: string) => `まず ${table} の行を読みます。ここから始めて、ほかのテーブルの行をつないでいきます`,
+    joinTitle: (kind: 'inner' | 'left' | 'right', table: string) => `${kind.toUpperCase()} JOIN ${table}`,
+    join: {
+      inner: (table: string, on: string) =>
+        `${on} となる ${table} の行をつなぎます。相手が見つからない行は、結果から消えます`,
+      left: (table: string, on: string) =>
+        `これまでの行ごとに、${on} となる ${table} の行をつなぎます。相手が見つからない行も残り、${table} のカラムは NULL になります`,
+      right: (table: string, on: string) =>
+        `${table} の行はすべて残し、${on} となるこれまでの行をつなぎます。相手が見つからない ${table} の行では、これまでのカラムが NULL になります`,
+    },
+    alongKey: (name: string) => `外部キー ${name} に沿ってつなぎます`,
+    spelled: '外部キーではなく、指定したカラムでつなぎます',
+    multiplies: (parent: string, child: string) =>
+      `${parent} の 1 行に、${child} の行が何行もつながりうるので、結果の行は増えます（1 対多）。${parent} を数えるときは、同じ行が重なることに気をつけます`,
+    oneToOne: (parent: string, child: string) => `${child} は ${parent} に 1 対 1 でつながるので、行は増えません`,
+    atMostOne: (child: string, parent: string) =>
+      `${child} の 1 行につながる ${parent} の行は多くても 1 行なので、行は増えません`,
+    leftAlwaysFound: (child: string, parent: string) =>
+      `${child} の外部キーは NOT NULL なので ${parent} の相手は必ず見つかり、この LEFT JOIN は INNER JOIN と同じ結果になります`,
+    joinUnindexed: (table: string, columns: string) =>
+      `${table} に ${columns} で始まるインデックスがありません。つなぐたびに ${table} を全件読むことがあります`,
+    whereTitle: 'WHERE',
+    where: (conditions: string) => `${conditions} の行だけを残します`,
+    and: ' かつ ',
+    or: '、または ',
+    condition: (column: string, op: string, value: string) =>
+      value === ''
+        ? `${column} ${op}`
+        : /^[をで]/.test(op)
+          ? `${column} が ${value} ${op}`
+          : `${column} ${op} ${value}`,
+    leftToInner: (table: string) =>
+      `${table} は、外部結合（LEFT / RIGHT JOIN）で、つなぐ相手が無いとカラムが NULL になるテーブルです。そのカラムを WHERE で絞っているので、NULL の行は落ち、INNER JOIN と同じ結果になります。NULL の行も残したいときは、SQL タブで条件を JOIN の ON に移します`,
+    whereUnindexed: (column: string) =>
+      `${column} で始まるインデックスがありません。条件に合う行を探すのに、全件を読むことがあります`,
+    orderTitle: 'ORDER BY',
+    order: (list: string) => `最後に、${list}に並べます`,
+    asc: (column: string) => `${column} の小さい順`,
+    desc: (column: string) => `${column} の大きい順`,
+    orderUnindexed: (table: string, columns: string) =>
+      `${table} に ${columns} で始まるインデックスがありません。取り出した行を、並べ替えのために全部並べ直します`,
+    selectTitle: 'SELECT',
+    select: (list: string) => `${list} を取り出します`,
+    selectAll: 'すべてのカラムを取り出します（SELECT *）',
+    alias: (column: string, alias: string) => `${column}（${alias} という名前で）`,
+    list: (items: readonly string[]) => items.join('、'),
+    endTitle: 'まとめ',
+    end: (first: string, joined: number, filtered: boolean, sorted: boolean, columns: number) =>
+      `${first} から始めて${joined > 0 ? `、テーブルを ${joined.toLocaleString('ja-JP')} つつなぎ` : ''}${filtered ? '、条件で絞り' : ''}${sorted ? '、並べ替えて' : ''}、${columns > 0 ? `${columns.toLocaleString('ja-JP')} 個のカラム` : 'すべてのカラム'}を取り出します。「SQL を作成」で SQL を確かめ、SQL タブで実行できます`,
+  },
   mapTour: {
     open: 'プレゼンで見る',
     dialog: (name: string) => `見取り図のプレゼン: ${name}`,

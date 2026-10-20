@@ -2772,6 +2772,65 @@ export const enScreens = {
     names: (names: readonly string[], more: number) =>
       `${names.join(', ')}${more > 0 ? ` and ${more.toLocaleString('en-US')} more` : ''}`,
   },
+  queryTour: {
+    open: 'Present',
+    openHint:
+      'Presents the tables, joins, conditions, columns and order chosen, full screen and scene by scene, in the logical order SQL works them (no rows are read)',
+    dialog: 'Presentation of the query',
+    diagram: 'The tables and foreign keys the query uses',
+    saveHint:
+      'Saves this presentation as one HTML file, to open in a browser and present without the server (it holds the table and column names and comments, and the values typed into the conditions)',
+    tones: { focus: 'Tables and keys this scene adds or uses', index: 'Tables joined already' },
+    introTitle: 'This query',
+    intro: (n: number, first: string) =>
+      `It takes rows from ${n.toLocaleString('en-US')} ${n === 1 ? 'table' : 'tables'}. We follow it from ${first}, in the logical order SQL works it rather than the order it is written: FROM → JOIN → WHERE → SELECT → ORDER BY (the order the tables are actually read in is the database's choice)`,
+    fromTitle: (table: string) => `FROM ${table}`,
+    from: (table: string) =>
+      `First the rows of ${table} are read. From them, the rows of the other tables are joined on`,
+    joinTitle: (kind: 'inner' | 'left' | 'right', table: string) => `${kind.toUpperCase()} JOIN ${table}`,
+    join: {
+      inner: (table: string, on: string) =>
+        `The rows of ${table} where ${on} are joined on. A row with nothing to join is dropped from the result`,
+      left: (table: string, on: string) =>
+        `Each row so far is joined to the rows of ${table} where ${on}. A row with nothing to join stays, with the columns of ${table} NULL`,
+      right: (table: string, on: string) =>
+        `Every row of ${table} stays, joined to the rows so far where ${on}. A row of ${table} with nothing to join has the columns so far NULL`,
+    },
+    alongKey: (name: string) => `Joined along the foreign key ${name}`,
+    spelled: 'Joined on the columns given, not along a foreign key',
+    multiplies: (parent: string, child: string) =>
+      `One row of ${parent} may meet many rows of ${child}, so the rows multiply (one to many): to count ${parent}, mind that its rows repeat`,
+    oneToOne: (parent: string, child: string) => `${child} joins ${parent} one to one, so the rows do not multiply`,
+    atMostOne: (child: string, parent: string) =>
+      `A row of ${child} meets at most one row of ${parent}, so the rows do not multiply`,
+    leftAlwaysFound: (child: string, parent: string) =>
+      `The key of ${child} is NOT NULL, so a row of ${parent} is always found: this LEFT JOIN gives what an INNER JOIN would`,
+    joinUnindexed: (table: string, columns: string) =>
+      `No index of ${table} starts with ${columns}: each join may read the whole of ${table}`,
+    whereTitle: 'WHERE',
+    where: (conditions: string) => `Only the rows where ${conditions} are kept`,
+    and: ' and ',
+    or: ', or ',
+    condition: (column: string, op: string, value: string) =>
+      value === '' ? `${column} ${op}` : `${column} ${op} ${value}`,
+    leftToInner: (table: string) =>
+      `${table} is on the side of an outer join (LEFT / RIGHT JOIN) whose columns are NULL where nothing is joined. WHERE asks a value of one of them, so those rows are dropped: the result is that of an INNER JOIN. To keep them, move the condition to the JOIN's ON in the SQL tab`,
+    whereUnindexed: (column: string) => `No index starts with ${column}: finding the rows may read every row`,
+    orderTitle: 'ORDER BY',
+    order: (list: string) => `Last, the rows are put in order: ${list}`,
+    asc: (column: string) => `${column} ascending`,
+    desc: (column: string) => `${column} descending`,
+    orderUnindexed: (table: string, columns: string) =>
+      `No index of ${table} starts with ${columns}: the rows taken are all sorted again to be put in order`,
+    selectTitle: 'SELECT',
+    select: (list: string) => `${list} are taken`,
+    selectAll: 'Every column is taken (SELECT *)',
+    alias: (column: string, alias: string) => `${column} (named ${alias})`,
+    list: (items: readonly string[]) => items.join(', '),
+    endTitle: 'Summary',
+    end: (first: string, joined: number, filtered: boolean, sorted: boolean, columns: number) =>
+      `From ${first}${joined > 0 ? `, ${joined.toLocaleString('en-US')} ${joined === 1 ? 'table' : 'tables'} joined` : ''}${filtered ? ', the rows kept by the conditions' : ''}${sorted ? ', put in order' : ''}, ${columns > 0 ? `${columns.toLocaleString('en-US')} ${columns === 1 ? 'column is' : 'columns are'}` : 'every column is'} taken. "Build SQL" shows the SQL, to run in the SQL tab`,
+  },
   mapTour: {
     open: 'Present',
     dialog: (name: string) => `Map presentation: ${name}`,

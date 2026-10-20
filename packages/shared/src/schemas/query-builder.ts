@@ -83,8 +83,23 @@ export type QueryBuilderSpec = Omit<QueryBuilderRequest, 'schema' | 'distinct' |
   Partial<Pick<QueryBuilderRequest, 'distinct' | 'whereSql' | 'limit' | 'joins'>>
 export type QueryBuilderJoin = QueryBuilderRequest['joins'][number]
 
-/** A SELECT for the SQL tab. Nothing is run to produce it beyond reading the tables' structure. */
-export const QueryBuilderResultSchema = z.object({ sql: z.string() })
+/**
+ * How one table is joined to the ones before it, as the SELECT writes it: on pairs of columns (`a = b`), either as
+ * spelled out (`key` null) or along a foreign key (`key` names it, and the table it is defined on).
+ */
+export const QueryJoinStepSchema = z.object({
+  table: z.string(),
+  kind: z.enum(['inner', 'left', 'right']),
+  on: z.array(z.object({ a: ColumnRefSchema, b: ColumnRefSchema })),
+  key: z.object({ table: z.string(), name: z.string() }).nullable(),
+})
+export type QueryJoinStep = z.infer<typeof QueryJoinStepSchema>
+
+/**
+ * A SELECT for the SQL tab, and how its tables are joined (in the order of its JOINs). Nothing is run to produce it
+ * beyond reading the tables' structure.
+ */
+export const QueryBuilderResultSchema = z.object({ sql: z.string(), joins: z.array(QueryJoinStepSchema) })
 export type QueryBuilderResult = z.infer<typeof QueryBuilderResultSchema>
 
 /**

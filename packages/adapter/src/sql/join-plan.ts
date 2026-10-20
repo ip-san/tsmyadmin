@@ -1,5 +1,5 @@
 /** The JOIN clauses of the query builder: explicit joins first, then foreign keys. */
-import type { Dialect, Namespace, QueryBuilderJoin, TableSchema } from '@tsmyadmin/shared'
+import type { Dialect, Namespace, QueryBuilderJoin, QueryJoinStep, TableSchema } from '@tsmyadmin/shared'
 import { AdapterError } from '../types.ts'
 import { quoteIdent, quoteTable } from './quote.ts'
 
@@ -16,9 +16,31 @@ export function joinPlan(
   schemas: Map<string, TableSchema>,
   explicit: readonly QueryBuilderJoin[] = []
 ): string[] {
+  return joinSql(d, ns, joinSteps(d, ns, tables, schemas, explicit))
+}
+
+/** The JOIN clauses of the steps, in their order. */
+export function joinSql(d: Dialect, ns: Namespace, steps: readonly QueryJoinStep[]): string[] {
+  const col = (r: { table: string; column: string }) => `${quoteIdent(d, r.table)}.${quoteIdent(d, r.column)}`
+  return steps.map((step) => {
+    const on = step.on.map((p) => `${col(p.a)} = ${col(p.b)}`).join(' AND ')
+    return `${step.kind.toUpperCase()} JOIN ${quoteTable(d, ns, step.table)} ON ${on}`
+  })
+}
+
+/**
+ * How each table after the first is joined, in order: the joins spelled out, then each along a foreign key (`key`
+ * names it, and the table it is defined on). What `joinPlan` writes, as data: the query tab tells it scene by scene.
+ */
+export function joinSteps(
+  d: Dialect,
+  ns: Namespace,
+  tables: string[],
+  schemas: Map<string, TableSchema>,
+  explicit: readonly QueryBuilderJoin[] = []
+): QueryJoinStep[] {
   const home = (other: Namespace) =>
     other.database === ns.database && (d === 'mysql' || (other.schema ?? 'public') === (ns.schema ?? 'public'))
-  const col = (table: string, column: string) => `${quoteIdent(d, table)}.${quoteIdent(d, column)}`
   // Every table is described, so their own foreign keys already hold every link between them.
   const links = tables.flatMap((from) =>
     (schemas.get(from)?.foreignKeys ?? [])
@@ -26,7 +48,7 @@ export function joinPlan(
       .map((fk) => ({ from, to: fk.refTable, fk }))
   )
   const joined = new Set(tables.slice(0, 1))
-  const out: string[] = []
+  const out: QueryJoinStep[] = []
   // Joins spelled out come first, in the order of the tables; each may use only tables already joined.
   const has = (r: { table: string; column: string }) =>
     schemas.get(r.table)?.columns.some((c) => c.name === r.column) === true
@@ -39,8 +61,7 @@ export function joinPlan(
       if (!(p.from.table === table || p.to.table === table) || !(joined.has(other) || other === table))
         throw new AdapterError('VALIDATION', `The join of ${table} must use ${table} and a table joined before it`)
     }
-    const on = j.on.map((p) => `${col(p.from.table, p.from.column)} = ${col(p.to.table, p.to.column)}`).join(' AND ')
-    out.push(`${j.kind.toUpperCase()} JOIN ${quoteTable(d, ns, table)} ON ${on}`)
+    out.push({ table, kind: j.kind, on: j.on.map((p) => ({ a: p.from, b: p.to })), key: null })
     joined.add(table)
   }
   // Repeated passes in the order given, so a table reachable only through a later one still joins, and the same
@@ -51,10 +72,15 @@ export function joinPlan(
       if (joined.has(table)) continue
       const link = links.find((l) => (l.from === table && joined.has(l.to)) || (l.to === table && joined.has(l.from)))
       if (!link) continue
-      const on = link.fk.columns
-        .map((c, i) => `${col(link.to, link.fk.refColumns[i] ?? '')} = ${col(link.from, c)}`)
-        .join(' AND ')
-      out.push(`LEFT JOIN ${quoteTable(d, ns, table)} ON ${on}`)
+      out.push({
+        table,
+        kind: 'left',
+        on: link.fk.columns.map((c, i) => ({
+          a: { table: link.to, column: link.fk.refColumns[i] ?? '' },
+          b: { table: link.from, column: c },
+        })),
+        key: { table: link.from, name: link.fk.name },
+      })
       joined.add(table)
       progress = true
     }

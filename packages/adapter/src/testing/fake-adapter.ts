@@ -552,7 +552,7 @@ export class FakeAdapter implements DatabaseAdapter {
   async buildQuery(ns: Namespace, spec: QueryBuilderSpec): Promise<QueryBuilderResult> {
     this.record('buildQuery', ns, spec)
     for (const table of spec.tables) this.table(ns, table)
-    return { sql: `SELECT * FROM ${spec.tables.join(', ')}` }
+    return { sql: `SELECT * FROM ${spec.tables.join(', ')}`, joins: [] }
   }
 
   async browseRows(ns: Namespace, table: string, opts: BrowseOptions): Promise<BrowseResult> {

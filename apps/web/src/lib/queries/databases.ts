@@ -53,6 +53,18 @@ export const schemasQuery = (db: string) =>
     queryFn: () => unwrap<string[]>(api.databases[':db'].schemas.$get({ param: { db: enc(db) } })),
   })
 
+/**
+ * How the query tab's choices join their tables (with the SQL), read for its presentation. Built from structure
+ * alone, nothing run; the choices are the key, so a presentation never shows the plan of other choices.
+ */
+export const queryPlanQuery = (db: string, body: QueryBuilderRequestInput) =>
+  queryOptions({
+    queryKey: ['query-plan', db, JSON.stringify(body)],
+    queryFn: () => unwrap<QueryBuilderResult>(api.databases[':db'].query.$post({ param: { db: enc(db) }, json: body })),
+    staleTime: Number.POSITIVE_INFINITY,
+    refetchOnWindowFocus: false,
+  })
+
 export const tablesQuery = (db: string, schema?: string) =>
   queryOptions({
     queryKey: ['tables', db, schema ?? ''],

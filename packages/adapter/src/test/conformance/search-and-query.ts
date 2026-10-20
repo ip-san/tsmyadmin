@@ -524,7 +524,12 @@ export function describeSearchAndQuery(env: ConformanceEnv): void {
         ['users', 'posts'],
         ['posts', 'users'],
       ]) {
-        const { sql } = await env.db.buildQuery(ns, { tables, columns, where })
+        const { sql, joins } = await env.db.buildQuery(ns, { tables, columns, where })
+        // How the second table was joined, along the key from posts to users, as the SQL says.
+        expect(
+          joins.map((j) => [j.table, j.kind, j.key?.table]),
+          sql
+        ).toEqual([[tables[1], 'left', 'posts']])
         const r = await rowsOf(sql)
         expect(
           r.result.columns.map((c) => c.name),
