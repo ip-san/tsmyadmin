@@ -110,4 +110,63 @@ describe('SchemaDiagram', () => {
     screen.getByRole('button', { name: locale.designer.boxLabel('users') }).focus()
     expect(await screen.findByRole('link', { name: 'more on users' })).toBeInTheDocument()
   })
+
+  it('shows the part a camera frames, scaled to fill its frame, which then does not scroll', () => {
+    const { container } = render(
+      <SchemaDiagram {...props} label="Tour" camera={{ x: 10, y: 20, width: 300, height: 200 }} />
+    )
+    const svg = screen.getByRole('img', { name: 'Tour' })
+    expect(svg).toHaveAttribute('viewBox', '10 20 300 200')
+    expect(svg).toHaveAttribute('width', '100%')
+    expect(container.querySelector('figure')).not.toHaveAttribute('tabindex')
+    expect(container.querySelector('figure')).toHaveClass('overflow-hidden')
+  })
+
+  it('draws a flowing line over each key the overlay lets flow, either way', () => {
+    const other: RelationDef = { ...key, name: 'fk_other', table: 'logs' }
+    const { container } = render(
+      <SchemaDiagram
+        {...props}
+        relations={[key, other]}
+        overlay={{
+          tables: new Map(),
+          relations: new Map(),
+          columns: new Map(),
+          flow: new Map([
+            [relationKey(key), 'forward'],
+            [relationKey(other), 'back'],
+          ]),
+        }}
+      />
+    )
+    const flows = [...container.querySelectorAll('[data-flow]')]
+    expect(flows.map((f) => f.getAttribute('data-flow'))).toEqual(['forward', 'back'])
+    expect(flows[0]).not.toHaveClass('diagram-flow-back')
+    expect(flows[1]).toHaveClass('diagram-flow', 'diagram-flow-back')
+  })
+
+  it('brings the boxes in column by column, then draws the lines, when the overlay enters', () => {
+    const { container } = render(
+      <SchemaDiagram
+        {...props}
+        overlay={{ tables: new Map(), relations: new Map(), columns: new Map(), fade: false, enter: true }}
+      />
+    )
+    const boxes = [...container.querySelectorAll<SVGGElement>('.diagram-enter')]
+    // users and logs in the first column, orders in the second.
+    expect(boxes.map((b) => b.style.animationDelay)).toEqual(['0ms', '120ms', '0ms'])
+    const line = container.querySelector<SVGPathElement>('.diagram-draw')
+    expect(line).toHaveAttribute('pathLength', '1')
+    expect(line?.style.animationDelay).toBe('240ms')
+  })
+
+  it('neither enters nor flows without an overlay that asks', () => {
+    const { container } = render(<SchemaDiagram {...props} />)
+    expect(container.querySelector('.diagram-enter, .diagram-draw, [data-flow]')).toBeNull()
+  })
+
+  it('draws what it is given over the diagram', () => {
+    const { container } = render(<SchemaDiagram {...props} over={<circle data-testid="over" />} />)
+    expect(container.querySelector('svg > [data-testid="over"]')).not.toBeNull()
+  })
 })

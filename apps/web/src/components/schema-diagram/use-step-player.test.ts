@@ -61,6 +61,19 @@ describe('useStepPlayer', () => {
     expect(result.current.index).toBe(4)
   })
 
+  it('waits at the first step of a story told from its beginning, for a reader who asked for less motion', () => {
+    vi.useFakeTimers()
+    reduceMotion(true)
+    const { result, rerender } = renderHook(({ n }) => useStepPlayer(n, 100, { still: 'first' }), {
+      initialProps: { n: 3 },
+    })
+    expect(result.current).toMatchObject({ index: 0, playing: false })
+    act(() => vi.advanceTimersByTime(1000))
+    expect(result.current.index).toBe(0)
+    rerender({ n: 4 })
+    expect(result.current).toMatchObject({ index: 0, playing: false })
+  })
+
   it('has nothing to play with a single step', () => {
     reduceMotion(false)
     const { result } = renderHook(() => useStepPlayer(1))

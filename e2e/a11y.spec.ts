@@ -504,6 +504,22 @@ for (const t of TARGETS) {
       })
     })
 
+    test('database map presented, on a step of the join path', async ({ page }) => {
+      await login(page, t)
+      await withScratchSpace(page, t, async (space) => {
+        await petsAndLogs(page, space)
+        await page.emulateMedia({ reducedMotion: 'reduce' })
+        await page.goto(
+          `/db/${space.database}/map${space.schema ? `?schema=${space.schema}&` : '?'}from=pets&to=owners`
+        )
+        await page.getByRole('button', { name: 'プレゼンで見る' }).click()
+        const tour = page.getByRole('dialog', { name: /^見取り図のプレゼン/ })
+        await tour.getByRole('button', { name: /pets から owners へのつなぎ方$/ }).click()
+        await expect(tour.getByRole('heading', { level: 3 })).toHaveText('pets から owners へのつなぎ方')
+        await scan(page)
+      })
+    })
+
     test('designer around one table, with comments and the candidates for keys', async ({ page }) => {
       await login(page, t)
       await withScratchSpace(page, t, async (space) => {
