@@ -82,7 +82,12 @@ export function designSummary(keys: readonly { child: string; parent: string; in
   // A database of many keys names a few of each kind, and counts the rest.
   const of = (kinds: readonly Lifecycle[]) => {
     const pairs = [
-      ...new Set(keys.filter((k) => kinds.includes(k.intent.lifecycle)).map((k) => w.pair(k.child, k.parent))),
+      // A key to its own table is a tree (a delete goes down its branches), not a part or a record of another.
+      ...new Set(
+        keys
+          .filter((k) => k.child !== k.parent && kinds.includes(k.intent.lifecycle))
+          .map((k) => w.pair(k.child, k.parent))
+      ),
     ]
     return pairs.length > PAIRS_SAID ? [...pairs.slice(0, PAIRS_SAID), w.morePairs(pairs.length - PAIRS_SAID)] : pairs
   }

@@ -173,7 +173,8 @@ describe('tourScenes', () => {
     const w = locale.designReading
     const cascade = relation('lines', ['order_id'], 'orders', { onDelete: 'CASCADE' })
     const restrict = relation('orders', ['user_id'], 'users', { onDelete: 'RESTRICT' })
-    const scenes = tourScenes({ name: 'shop', map: shop(), relations: [restrict, cascade] })
+    const tree = relation('orders', ['parent_id'], 'orders', { onDelete: 'CASCADE' })
+    const scenes = tourScenes({ name: 'shop', map: shop(), relations: [restrict, cascade, tree] })
     const hub = scenes.find((s) => s.title === t.hubTitle('orders', 1))
     expect(hub?.notes).toEqual([w.parts([w.pair('lines', 'orders')])])
     expect(scenes.at(-1)?.notes).toEqual([w.parts([w.pair('lines', 'orders')]), w.guarded([w.pair('orders', 'users')])])
