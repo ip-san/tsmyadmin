@@ -1,3 +1,4 @@
+import { pathToFileURL } from 'node:url'
 import { expect } from '@playwright/test'
 import { petsAndLogs } from './database-map.ts'
 import { login, sqlOn, TARGETS, test, withScratchSpace } from './helpers.ts'
@@ -120,6 +121,57 @@ for (const t of TARGETS) {
         await expect(tour.getByText('1 段のうち 1 段目: pets.owner_id が owners.id を参照')).toBeVisible()
         await page.keyboard.press('End')
         await expect(title).toHaveText('まとめ')
+
+        // Saved as one file, it plays on its own: no server, the same keys, the camera moving to each scene.
+        const [download] = await Promise.all([
+          page.waitForEvent('download'),
+          tour.getByRole('button', { name: 'HTML で保存' }).click(),
+        ])
+        const saved = test.info().outputPath('tour.html')
+        await download.saveAs(saved)
+        const file = await page.context().newPage()
+        await file.emulateMedia({ reducedMotion: 'reduce' })
+        await file.goto(pathToFileURL(saved).href)
+        const fileTitle = file.getByRole('heading', { level: 2 })
+        await expect(fileTitle).toHaveText(space.schema ?? space.database)
+        // Less motion: nothing plays by itself.
+        await expect(file.getByRole('button', { name: '再生' })).toBeVisible()
+        const picture = file.getByRole('img', { name: /のテーブルと外部キーの図$/ })
+        const whole = await picture.getAttribute('viewBox')
+        await file.keyboard.press('ArrowRight')
+        await expect(fileTitle).toHaveText('マスタ（1）')
+        await expect(file.locator('g.k.flow')).toHaveCount(1)
+        // On logs alone, away from the middle of the whole.
+        for (let i = 0; i < 2; i++) await file.keyboard.press('ArrowRight')
+        await expect(fileTitle).toHaveText('どことも外部キーでつながらないテーブル（1）')
+        await expect(picture).not.toHaveAttribute('viewBox', whole ?? '')
+        await file.keyboard.press('End')
+        await expect(fileTitle).toHaveText('まとめ')
+        await expect(file.getByRole('button', { name: '次へ' })).toBeDisabled()
+        await file.close()
+
+        // With motion, it plays from the start, a move by hand stops it, and the last scene stops it at once.
+        const played = await page.context().newPage()
+        await played.clock.install()
+        await played.goto(pathToFileURL(saved).href)
+        const playedTitle = played.getByRole('heading', { level: 2 })
+        await expect(playedTitle).toHaveText(space.schema ?? space.database)
+        await expect(played.getByRole('button', { name: '一時停止' })).toBeVisible()
+        await played.clock.runFor(6000)
+        await expect(playedTitle).toHaveText('マスタ（1）')
+        await played.keyboard.press('ArrowRight')
+        await expect(played.getByRole('button', { name: '再生' })).toBeVisible()
+        await played.clock.runFor(12000)
+        await expect(playedTitle).toHaveText('記録・明細（1）')
+        await played.keyboard.press('p')
+        await played.keyboard.press('ArrowLeft')
+        await played.keyboard.press('End')
+        await played.keyboard.press('ArrowLeft')
+        await played.keyboard.press('p')
+        await played.clock.runFor(6000)
+        await expect(playedTitle).toHaveText('まとめ')
+        await expect(played.getByRole('button', { name: '再生' })).toBeVisible()
+        await played.close()
 
         await page.keyboard.press('Escape')
         await expect(tour).toBeHidden()

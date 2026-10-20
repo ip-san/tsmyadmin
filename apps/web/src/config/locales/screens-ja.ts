@@ -2648,6 +2648,10 @@ export const jaScreens = {
     sceneOf: (n: number, total: number) => `${n} / ${total}`,
     goTo: (n: number, title: string) => `${n}. ${title}`,
     keys: '← → か Page Up / Down で前後、スペースで次、Home / End で最初と最後、P で再生・一時停止、F で全画面、Esc で閉じる',
+    save: 'HTML で保存',
+    saveHint:
+      'この発表を 1 つの HTML ファイルにします。サーバーにつながずに、ブラウザで開いて発表できます（テーブル名・カラム名・コメントが入ります）',
+    savedKeys: '← → か Page Up / Down で前後、スペースで次、Home / End で最初と最後、P で再生・一時停止、F で全画面',
     stop: '。',
     and: '。',
     names: (names: readonly string[], more: number) =>
