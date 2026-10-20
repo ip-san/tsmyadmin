@@ -70,15 +70,27 @@ export function keyReading(child: string, parent: string, intent: KeyIntent): st
   ].filter(Boolean)
 }
 
+/** Pairs named for each kind in a summary: past them, the rest are counted. */
+const PAIRS_SAID = 6
+
 /**
  * The keys met, sorted by what a delete does along them: the parts that go with their parent, the records kept safe
  * (their parent cannot go while they point at it), and the records of their own. One line for each kind there is.
  */
 export function designSummary(keys: readonly { child: string; parent: string; intent: KeyIntent }[]): string[] {
   const w = t()
-  const of = (kinds: readonly Lifecycle[]) => [
-    ...new Set(keys.filter((k) => kinds.includes(k.intent.lifecycle)).map((k) => w.pair(k.child, k.parent))),
-  ]
+  // A database of many keys names a few of each kind, and counts the rest.
+  const of = (kinds: readonly Lifecycle[]) => {
+    const pairs = [
+      // A key to its own table is a tree (a delete goes down its branches), not a part or a record of another.
+      ...new Set(
+        keys
+          .filter((k) => k.child !== k.parent && kinds.includes(k.intent.lifecycle))
+          .map((k) => w.pair(k.child, k.parent))
+      ),
+    ]
+    return pairs.length > PAIRS_SAID ? [...pairs.slice(0, PAIRS_SAID), w.morePairs(pairs.length - PAIRS_SAID)] : pairs
+  }
   const parts = of(['cascade'])
   const guarded = of(['restrict'])
   const loose = of(['setNull', 'setDefault'])

@@ -142,6 +142,17 @@ describe('designSummary', () => {
       ])
     ).toEqual([w.parts([w.pair('items', 'orders')]), w.guarded([w.pair('orders', 'users')])])
     expect(designSummary([k('orders', 'addresses', 'setNull')])).toEqual([w.loose([w.pair('orders', 'addresses')])])
+    // A key to its own table is a tree, not a part of another: it is not sorted.
+    expect(designSummary([k('categories', 'categories', 'cascade')])).toEqual([])
+    const six = Array.from({ length: 6 }, (_, i) => k(`t${i}`, 'root', 'restrict'))
+    expect(designSummary(six)).toEqual([w.guarded(six.map((x) => w.pair(x.child, 'root')))])
+    expect(designSummary([...six, k('t6', 'root', 'restrict'), k('t0', 'root', 'restrict')])).toEqual([
+      w.guarded([...six.map((x) => w.pair(x.child, 'root')), w.morePairs(1)]),
+    ])
+    const many = Array.from({ length: 8 }, (_, i) => k(`t${i}`, 'root', 'cascade'))
+    expect(designSummary(many)).toEqual([
+      w.parts([...many.slice(0, 6).map((x) => w.pair(x.child, 'root')), w.morePairs(2)]),
+    ])
   })
 })
 
