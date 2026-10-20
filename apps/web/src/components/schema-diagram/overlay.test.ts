@@ -49,6 +49,17 @@ describe('overlayUpTo', () => {
   it('stops at the last step when asked for more', () => {
     expect(overlayUpTo(steps, 99).tables.size).toBe(2)
   })
+
+  it('flows only the keys of the step shown', () => {
+    const flowing = [
+      ...steps.slice(0, 1),
+      { ...steps[1], text: 'orders', flow: [{ key: 'k1', direction: 'back' }] },
+      ...steps.slice(2),
+    ] as OverlayStep[]
+    expect([...(overlayUpTo(flowing, 1).flow ?? [])]).toEqual([['k1', 'back']])
+    expect(overlayUpTo(flowing, 2).flow?.size).toBe(0)
+    expect(overlayUpTo(flowing, -1).flow?.size).toBe(0)
+  })
 })
 
 describe('diagramFor', () => {

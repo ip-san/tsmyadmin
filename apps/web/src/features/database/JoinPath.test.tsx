@@ -108,7 +108,12 @@ describe('JoinPath', () => {
       t.hop('users', 'orders', [t.key('orders', 'user_id', 'users', 'id')]),
       t.hop('orders', 'products', [t.key('orders', 'product_id', 'products', 'id')]),
     ])
-    expect(screen.getByRole('img', { name: t.diagram('users', 'products') })).toBeInTheDocument()
+    // Walked from users: against the key to users (orders refers to it), along the key to products.
+    const diagram = screen.getByRole('img', { name: t.diagram('users', 'products') })
+    expect([...diagram.querySelectorAll('[data-flow]')].map((p) => p.getAttribute('data-flow'))).toEqual([
+      'back',
+      'forward',
+    ])
     expect(screen.getByRole('link', { name: t.build(1) })).toHaveAttribute(
       'href',
       `/db/$db/query?${JSON.stringify({ params: { db: 'shop' }, search: { tables: ['users', 'orders', 'products'] } })}`

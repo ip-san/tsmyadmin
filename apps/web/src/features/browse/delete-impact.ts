@@ -36,7 +36,9 @@ function sentence(step: DeleteImpactStep): string {
 
 /**
  * The story of a delete, one step per depth: the rows chosen, then every key followed at depth 1 at once, then
- * depth 2, … A table reached along several keys at one depth shows their rows added up.
+ * depth 2, … A table reached along several keys at one depth shows their rows added up. The keys the delete goes
+ * on along (deleting or emptying rows) flow from the table deleted from to the one that refers to it; a key that
+ * refuses stops it, and does not.
  */
 export function impactSteps(impact: DeleteImpact): OverlayStep[] {
   const start: OverlayStep = {
@@ -63,6 +65,9 @@ export function impactSteps(impact: DeleteImpact): OverlayStep[] {
           tone: toneOf(s) ?? 'focus',
         })),
         columns: lit.flatMap((s) => s.columns.map((column) => ({ table: s.table, column }))),
+        flow: lit
+          .filter((s) => toneOf(s) !== 'blocked')
+          .map((s) => ({ key: relationKey({ table: s.table, name: s.constraint }), direction: 'back' as const })),
       }
     }),
   ]
