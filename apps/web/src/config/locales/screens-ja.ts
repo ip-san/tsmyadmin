@@ -358,11 +358,12 @@ export const jaScreens = {
     refersTitle: (table: string) => `${table} を参照`,
     refers: (key: string, table: string, refKey: string, name: string | undefined) =>
       `${key} なので、${table} の ${refKey} の行${name ? `（${name}）` : ''}を指しています。外部キーのカラムと参照先のカラムの値が同じです`,
-    referredTitle: (table: string, n: number) => `${table} から参照（${n.toLocaleString('ja-JP')} 行）`,
-    referred: (table: string, n: number, more: number, columns: string, key: string) =>
-      `${table} の ${n.toLocaleString('ja-JP')} 行${more > 0 ? `（ほか ${more.toLocaleString('ja-JP')} 行）` : ''}が、${columns} の値でこの行（${key}）を指しています`,
-    referredUndrawn: (table: string, n: number, columns: string, key: string) =>
-      `${table} の ${n.toLocaleString('ja-JP')} 行が、${columns} の値でこの行（${key}）を指しています（図に描ける行の数を超えたため、描いていません）`,
+    referredTitle: (table: string, n: number, exact: boolean) =>
+      `${table} から参照（${n.toLocaleString('ja-JP')} 行${exact ? '' : '以上'}）`,
+    referred: (table: string, n: number, more: number, exact: boolean, columns: string, key: string) =>
+      `${table} の ${n.toLocaleString('ja-JP')} 行${more > 0 ? `（ほか ${more.toLocaleString('ja-JP')} 行${exact ? '' : '以上'}）` : exact ? '' : '（ほかにもあります）'}が、${columns} の値でこの行（${key}）を指しています`,
+    referredUndrawn: (table: string, n: number, exact: boolean, columns: string, key: string) =>
+      `${table} の ${n.toLocaleString('ja-JP')} 行${exact ? '' : '以上'}が、${columns} の値でこの行（${key}）を指しています（図に描ける行の数を超えたため、描いていません）`,
     fartherTitle: (from: string, to: string) => `${from} の先の ${to}`,
     farther: (from: string, to: string, items: string) => `${from} の行は、さらに ${to} の行を指しています。${items}`,
     endTitle: 'まとめ',

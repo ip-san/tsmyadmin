@@ -359,11 +359,12 @@ export const enScreens = {
     refersTitle: (table: string) => `Refers to ${table}`,
     refers: (key: string, table: string, refKey: string, name: string | undefined) =>
       `With ${key}, it points at the row of ${table} with ${refKey}${name ? ` (${name})` : ''}. The foreign key's column and the column it refers to hold the same value`,
-    referredTitle: (table: string, n: number) => `Referred to by ${table} (${n.toLocaleString('en-US')} rows)`,
-    referred: (table: string, n: number, more: number, columns: string, key: string) =>
-      `${n.toLocaleString('en-US')} rows of ${table}${more > 0 ? ` (and ${more.toLocaleString('en-US')} more)` : ''} point at this row (${key}) by the value of ${columns}`,
-    referredUndrawn: (table: string, n: number, columns: string, key: string) =>
-      `${n.toLocaleString('en-US')} rows of ${table} point at this row (${key}) by the value of ${columns} (not drawn: past the rows the picture holds)`,
+    referredTitle: (table: string, n: number, exact: boolean) =>
+      `Referred to by ${table} (${n.toLocaleString('en-US')}${exact ? '' : ' or more'} rows)`,
+    referred: (table: string, n: number, more: number, exact: boolean, columns: string, key: string) =>
+      `${n.toLocaleString('en-US')} rows of ${table}${more > 0 ? ` (and ${more.toLocaleString('en-US')}${exact ? '' : ' or more'} more)` : exact ? '' : ' (and more)'} point at this row (${key}) by the value of ${columns}`,
+    referredUndrawn: (table: string, n: number, exact: boolean, columns: string, key: string) =>
+      `${n.toLocaleString('en-US')}${exact ? '' : ' or more'} rows of ${table} point at this row (${key}) by the value of ${columns} (not drawn: past the rows the picture holds)`,
     fartherTitle: (from: string, to: string) => `From ${from} on to ${to}`,
     farther: (from: string, to: string, items: string) => `The rows of ${from} point on at rows of ${to}. ${items}`,
     endTitle: 'Summary',

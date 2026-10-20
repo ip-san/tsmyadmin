@@ -89,12 +89,12 @@ describe('rowTour', () => {
     expect(tour?.scenes.map((s) => s.title)).toEqual([
       'orders id=1',
       t.refersTitle('users'),
-      t.referredTitle('order_items', lines.length),
+      t.referredTitle('order_items', lines.length, true),
       t.fartherTitle('order_items', 'products'),
       t.endTitle,
     ])
     expect(tour?.scenes[0]?.text).toContain(w.named('orders', '注文'))
-    expect(tour?.scenes[2]?.text).toBe(t.referred('order_items', REFERRING_DRAWN, 1, 'order_id', 'id = 1'))
+    expect(tour?.scenes[2]?.text).toBe(t.referred('order_items', REFERRING_DRAWN, 1, true, 'order_id', 'id = 1'))
   })
 
   it('draws rows as boxes of values, a key as a line from the value that refers to the one referred to', () => {
@@ -164,11 +164,11 @@ describe('rowTour', () => {
       expanded: new Set(),
     }
     const scenes = rowTour(g, order.id)?.scenes ?? []
-    const told = tables.map((x) => scenes.find((s) => s.title === t.referredTitle(x, 3)))
+    const told = tables.map((x) => scenes.find((s) => s.title === t.referredTitle(x, 3, true)))
     expect(told.every(Boolean)).toBe(true)
     const drawn = ROWS_DRAWN - 1
-    expect(told[3]?.text).toBe(t.referred('d', drawn - 9, 3 - (drawn - 9), 'order_id', 'id = 1'))
-    expect(told[4]?.text).toBe(t.referredUndrawn('e', 3, 'order_id', 'id = 1'))
+    expect(told[3]?.text).toBe(t.referred('d', drawn - 9, 3 - (drawn - 9), true, 'order_id', 'id = 1'))
+    expect(told[4]?.text).toBe(t.referredUndrawn('e', 3, true, 'order_id', 'id = 1'))
   })
 
   it('keeps the first row when it refers to itself, and puts back a row cut that comes back another way', () => {
@@ -223,5 +223,21 @@ describe('rowTour', () => {
     }
     expect(box).toHaveLength(names.length)
     expect(tour?.diagram.relations).toHaveLength(names.length - 1)
+  })
+
+  it('counts the rows never read (more than a page reads), and says "or more" where they were not counted exactly', () => {
+    const g = graph()
+    const moreId = JSON.stringify(['more', order.id, '', 'order_items', 'order_id'])
+    const withMore = (count: number | null): RowGraph => ({
+      ...g,
+      more: [{ id: moreId, to: order.id, ref: shop('order_items'), filters: [], count }],
+      arrows: [...g.arrows, { from: moreId, to: order.id, label: 'order_id' }],
+    })
+    const cut = (x: RowGraph) => trimReferring(x, order.id)
+    const told = (x: RowGraph) => rowTour(cut(x).graph, order.id, cut(x).left)?.scenes[2]
+    expect(told(withMore(490))?.title).toBe(t.referredTitle('order_items', lines.length + 490, true))
+    const inexact = told(withMore(null))
+    expect(inexact?.title).toBe(t.referredTitle('order_items', lines.length, false))
+    expect(inexact?.text).toBe(t.referred('order_items', REFERRING_DRAWN, 1, false, 'order_id', 'id = 1'))
   })
 })

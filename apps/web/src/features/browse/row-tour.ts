@@ -239,6 +239,10 @@ export function rowTour(
   // What refers to the row: one scene a table and key, with how many were left out (cut per key, or past the rows
   // drawn). A table none of whose rows could be drawn still has its scene, its rows counted.
   const referring = links.filter((x) => x.to === root && x.from !== root)
+  const unread = graph.more.flatMap((m) => {
+    const label = graph.arrows.find((a) => a.from === m.id)?.label ?? ''
+    return m.to === rootId ? [{ group: groupKey(m.ref.table, label), count: m.count }] : []
+  })
   const toRoot = graph.arrows.flatMap((a) => {
     const from = graph.nodes.get(a.from)
     return a.to === rootId && a.from !== rootId && from ? [{ from, label: a.label ?? '' }] : []
@@ -248,16 +252,22 @@ export function rowTour(
     const keys = referring.filter((l) => groupKey(l.from.ref.table, l.columns.join(', ')) === group)
     const any = inGroup[0]
     if (!any) continue
-    const more = (left.get(group) ?? 0) + inGroup.filter((a) => !nameOf.has(a.from.id)).length
+    // Cut from the rows read, past the rows drawn, and never read (the table has more than a page reads for a key).
+    const notRead = unread.filter((m) => m.group === group)
+    const exact = notRead.every((m) => m.count !== null)
+    const more =
+      (left.get(group) ?? 0) +
+      inGroup.filter((a) => !nameOf.has(a.from.id)).length +
+      notRead.reduce((n, m) => n + (m.count ?? 0), 0)
     const first = keys[0] ?? linkOf(any.from, root, any.label)
     if (!first) continue
     const table = any.from.ref.table
     told(
       scene(
-        t.referredTitle(table, keys.length + more),
+        t.referredTitle(table, keys.length + more, exact),
         keys.length > 0
-          ? t.referred(table, keys.length, more, any.label, keyText(first.refColumns, root))
-          : t.referredUndrawn(table, more, any.label, keyText(first.refColumns, root)),
+          ? t.referred(table, keys.length, more, exact, any.label, keyText(first.refColumns, root))
+          : t.referredUndrawn(table, more, exact, any.label, keyText(first.refColumns, root)),
         [root, ...keys.map((l) => l.from)],
         keys
       ),
