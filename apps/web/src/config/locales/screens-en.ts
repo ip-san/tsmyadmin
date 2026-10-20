@@ -2775,7 +2775,7 @@ export const enScreens = {
   queryTour: {
     open: 'Present',
     openHint:
-      'Presents the tables, joins, conditions, order and columns chosen, full screen and scene by scene, in the order the database works them (no rows are read)',
+      'Presents the tables, joins, conditions, columns and order chosen, full screen and scene by scene, in the logical order SQL works them (no rows are read)',
     dialog: 'Presentation of the query',
     diagram: 'The tables and foreign keys the query uses',
     saveHint:
@@ -2783,7 +2783,7 @@ export const enScreens = {
     tones: { focus: 'Tables and keys this scene adds or uses', index: 'Tables joined already' },
     introTitle: 'This query',
     intro: (n: number, first: string) =>
-      `It takes rows from ${n.toLocaleString('en-US')} ${n === 1 ? 'table' : 'tables'}. Followed in the order the database works it, not the order the SQL is written (FROM → JOIN → WHERE → ORDER BY → SELECT), from ${first}`,
+      `It takes rows from ${n.toLocaleString('en-US')} ${n === 1 ? 'table' : 'tables'}. We follow it from ${first}, in the logical order SQL works it rather than the order it is written: FROM → JOIN → WHERE → SELECT → ORDER BY (the order the tables are actually read in is the database's choice)`,
     fromTitle: (table: string) => `FROM ${table}`,
     from: (table: string) =>
       `First the rows of ${table} are read. From them, the rows of the other tables are joined on`,
@@ -2799,7 +2799,7 @@ export const enScreens = {
     alongKey: (name: string) => `Joined along the foreign key ${name}`,
     spelled: 'Joined on the columns given, not along a foreign key',
     multiplies: (parent: string, child: string) =>
-      `One row of ${parent} may meet many rows of ${child}, so the rows multiply (one to many). Counting ${parent}, mind the rows repeated`,
+      `One row of ${parent} may meet many rows of ${child}, so the rows multiply (one to many): to count ${parent}, mind that its rows repeat`,
     oneToOne: (parent: string, child: string) => `${child} joins ${parent} one to one, so the rows do not multiply`,
     atMostOne: (child: string, parent: string) =>
       `A row of ${child} meets at most one row of ${parent}, so the rows do not multiply`,
@@ -2814,17 +2814,17 @@ export const enScreens = {
     condition: (column: string, op: string, value: string) =>
       value === '' ? `${column} ${op}` : `${column} ${op} ${value}`,
     leftToInner: (table: string) =>
-      `A column of ${table}, joined with LEFT JOIN, is asked for a value in WHERE, so the rows with nothing of ${table} (NULL) are dropped: the result is that of an INNER JOIN. To keep them, move the condition to the JOIN's ON`,
+      `${table} is on the side of an outer join (LEFT / RIGHT JOIN) whose columns are NULL where nothing is joined. WHERE asks a value of one of them, so those rows are dropped: the result is that of an INNER JOIN. To keep them, move the condition to the JOIN's ON in the SQL tab`,
     whereUnindexed: (column: string) => `No index starts with ${column}: finding the rows may read every row`,
     orderTitle: 'ORDER BY',
-    order: (list: string) => `The rows are put in order: ${list}`,
+    order: (list: string) => `Last, the rows are put in order: ${list}`,
     asc: (column: string) => `${column} ascending`,
     desc: (column: string) => `${column} descending`,
     orderUnindexed: (table: string, columns: string) =>
       `No index of ${table} starts with ${columns}: the rows taken are all sorted again to be put in order`,
     selectTitle: 'SELECT',
-    select: (list: string) => `Last, ${list} are taken`,
-    selectAll: 'Last, every column is taken (SELECT *)',
+    select: (list: string) => `${list} are taken`,
+    selectAll: 'Every column is taken (SELECT *)',
     alias: (column: string, alias: string) => `${column} (named ${alias})`,
     list: (items: readonly string[]) => items.join(', '),
     endTitle: 'Summary',

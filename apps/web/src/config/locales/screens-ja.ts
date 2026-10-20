@@ -2742,7 +2742,7 @@ export const jaScreens = {
   queryTour: {
     open: 'プレゼンで見る',
     openHint:
-      '選んだテーブル・つなぎ方・条件・並べ替え・カラムを、データベースが処理する順に、場面ごとの全画面の発表にします（行は読みません）',
+      '選んだテーブル・つなぎ方・条件・カラム・並べ替えを、SQL が論理的に処理される順に、場面ごとの全画面の発表にします（行は読みません）',
     dialog: 'クエリのプレゼン',
     diagram: 'クエリが使うテーブルと外部キーの図',
     saveHint:
@@ -2750,7 +2750,7 @@ export const jaScreens = {
     tones: { focus: 'この場面で加わる・使うテーブルと外部キー', index: 'すでにつないだテーブル' },
     introTitle: 'このクエリ',
     intro: (n: number, first: string) =>
-      `テーブル ${n.toLocaleString('ja-JP')} つから行を取り出します。SQL の書かれた順ではなく、データベースが処理する順（FROM → JOIN → WHERE → ORDER BY → SELECT）に、${first} から追っていきます`,
+      `テーブル ${n.toLocaleString('ja-JP')} つから行を取り出します。SQL の書かれた順ではなく、論理的に処理される順（FROM → JOIN → WHERE → SELECT → ORDER BY）に、${first} から追っていきます（実際にどの順で読むかは、データベースが速い順を選びます）`,
     fromTitle: (table: string) => `FROM ${table}`,
     from: (table: string) => `まず ${table} の行を読みます。ここから始めて、ほかのテーブルの行をつないでいきます`,
     joinTitle: (kind: 'inner' | 'left' | 'right', table: string) => `${kind.toUpperCase()} JOIN ${table}`,
@@ -2784,18 +2784,18 @@ export const jaScreens = {
           ? `${column} が ${value} ${op}`
           : `${column} ${op} ${value}`,
     leftToInner: (table: string) =>
-      `LEFT JOIN でつないだ ${table} のカラムを WHERE で絞っているので、${table} の相手が無い行（NULL）は落ち、INNER JOIN と同じ結果になります。相手の無い行も残したいときは、条件を JOIN の ON に移します`,
+      `${table} は、外部結合（LEFT / RIGHT JOIN）で、つなぐ相手が無いとカラムが NULL になるテーブルです。そのカラムを WHERE で絞っているので、NULL の行は落ち、INNER JOIN と同じ結果になります。NULL の行も残したいときは、SQL タブで条件を JOIN の ON に移します`,
     whereUnindexed: (column: string) =>
       `${column} で始まるインデックスがありません。条件に合う行を探すのに、全件を読むことがあります`,
     orderTitle: 'ORDER BY',
-    order: (list: string) => `${list}に並べます`,
+    order: (list: string) => `最後に、${list}に並べます`,
     asc: (column: string) => `${column} の小さい順`,
     desc: (column: string) => `${column} の大きい順`,
     orderUnindexed: (table: string, columns: string) =>
       `${table} に ${columns} で始まるインデックスがありません。取り出した行を、並べ替えのために全部並べ直します`,
     selectTitle: 'SELECT',
-    select: (list: string) => `最後に、${list} を取り出します`,
-    selectAll: '最後に、すべてのカラムを取り出します（SELECT *）',
+    select: (list: string) => `${list} を取り出します`,
+    selectAll: 'すべてのカラムを取り出します（SELECT *）',
     alias: (column: string, alias: string) => `${column}（${alias} という名前で）`,
     list: (items: readonly string[]) => items.join('、'),
     endTitle: 'まとめ',

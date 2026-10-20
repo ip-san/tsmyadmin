@@ -67,8 +67,8 @@ describe('queryTour', () => {
       t.joinTitle('left', 'users'),
       t.joinTitle('left', 'items'),
       t.whereTitle,
-      t.orderTitle,
       t.selectTitle,
+      t.orderTitle,
       t.endTitle,
     ])
     expect(scenes[0]?.text).toBe(t.intro(3, w.named('orders', '注文')))
@@ -124,12 +124,12 @@ describe('queryTour', () => {
     expect(one.map((s) => s.title)).toEqual([
       t.introTitle,
       t.fromTitle('orders'),
-      t.orderTitle,
       t.selectTitle,
+      t.orderTitle,
       t.endTitle,
     ])
-    expect(one[2]?.hints).toEqual([t.orderUnindexed('orders', 'status')])
-    expect(one[3]?.text).toBe(t.selectAll)
+    expect(one[3]?.hints).toEqual([t.orderUnindexed('orders', 'status')])
+    expect(one[2]?.text).toBe(t.selectAll)
     expect(one.at(-1)?.text).toBe(t.end('orders', 0, false, true, 0))
   })
 
@@ -187,5 +187,53 @@ describe('queryTour', () => {
       )
     )
     expect(or?.hints).toEqual([t.whereUnindexed('orders.status')])
+  })
+
+  it('does not say a LEFT JOIN always finds its row where the row that refers may itself be NULL', () => {
+    // items LEFT JOINed to orders first: an order without items has items NULL, and then no user either.
+    const itemsUser = new Map(schemas)
+    itemsUser.set(
+      'items',
+      table('items', {
+        columns: [column('id', 'int'), column('order_id', 'int'), column('user_id', 'int', { nullable: false })],
+        foreignKeys: [fk(['order_id'], 'orders', { name: 'fk_order' }), fk(['user_id'], 'users', { name: 'fk_iu' })],
+      })
+    )
+    const steps: QueryJoinStep[] = [
+      joins[1] as QueryJoinStep,
+      {
+        table: 'users',
+        kind: 'left',
+        on: [{ a: { table: 'users', column: 'id' }, b: { table: 'items', column: 'user_id' } }],
+        key: { table: 'items', name: 'fk_iu' },
+      },
+    ]
+    const s = queryTour({
+      request: { tables: ['orders', 'items', 'users'] },
+      joins: steps,
+      schemas: itemsUser,
+      keys: [...keys, relation('items', ['user_id'], 'users', { name: 'fk_iu' })],
+    }).scenes.find((x) => x.title === t.joinTitle('left', 'users'))
+    expect(s?.notes).toEqual([t.alongKey('fk_iu'), t.atMostOne('items', 'users')])
+  })
+
+  it('in a RIGHT JOIN, looks for the index on the rows looked up, and takes the tables before it as maybe NULL', () => {
+    const right: QueryJoinStep = {
+      table: 'items',
+      kind: 'right',
+      on: [{ a: { table: 'items', column: 'order_id' }, b: { table: 'orders', column: 'status' } }],
+      key: null,
+    }
+    const tour = queryTour({
+      request: { tables: ['orders', 'items'], where: [[{ table: 'orders', column: 'status', op: 'eq', value: 'x' }]] },
+      joins: [right],
+      schemas,
+      keys,
+    }).scenes
+    // The rows of items are all kept; those of orders are looked up, by status, which no index starts with.
+    expect(tour.find((x) => x.title === t.joinTitle('right', 'items'))?.hints).toEqual([
+      t.joinUnindexed('orders', 'status'),
+    ])
+    expect(tour.find((x) => x.title === t.whereTitle)?.notes).toEqual([t.leftToInner('orders')])
   })
 })

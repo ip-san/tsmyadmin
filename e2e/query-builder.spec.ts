@@ -44,7 +44,7 @@ for (const t of TARGETS) {
       await expect(result).toContainText(/(^|[^\d,])1 行/)
     })
 
-    test('presents the query in the order the database works it, with what a condition undoes', async ({ page }) => {
+    test('presents the query in the logical order SQL works it, with what a condition undoes', async ({ page }) => {
       await page.getByRole('checkbox', { name: 'posts', exact: true }).check()
       await page.getByRole('checkbox', { name: 'users', exact: true }).check()
       await page.getByRole('button', { name: '条件を追加' }).click()
@@ -64,7 +64,9 @@ for (const t of TARGETS) {
       await page.keyboard.press('ArrowRight')
       await expect(title).toHaveText('WHERE')
       await expect(tour.getByText("users.name = 'Bob' の行だけを残します")).toBeVisible()
-      await expect(tour.getByText(/LEFT JOIN でつないだ users のカラムを WHERE で絞っている/)).toBeVisible()
+      await expect(
+        tour.getByText(/users は、外部結合（LEFT \/ RIGHT JOIN）で、つなぐ相手が無いとカラムが NULL になるテーブルです/)
+      ).toBeVisible()
       await page.keyboard.press('End')
       await expect(title).toHaveText('まとめ')
       await page.keyboard.press('Escape')

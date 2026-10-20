@@ -69,7 +69,7 @@ export interface QueryTourInput {
 }
 
 /**
- * A query of the query tab told in the order the database works it, not the order it is written: the table it
+ * A query of the query tab told in the logical order SQL works it, not the order it is written: the table it
  * starts from, each table joined (and whether that can multiply the rows, or drop them), the conditions that keep
  * rows (and what they undo of a LEFT JOIN), the order, and the columns taken. Read from the definitions and the
  * plan of joins the server writes; no rows are read.
@@ -114,14 +114,14 @@ export function queryTour({ request, joins, schemas, keys }: QueryTourInput): {
   // What the joins say of the rows, gathered for the summary.
   const said: string[] = []
   const hinted: string[] = []
-  const leftJoined = new Set<string>()
+  // The tables an outer join may leave all NULL in a row: the one a LEFT JOIN joins, the ones before a RIGHT JOIN.
+  const nullable = new Set<string>()
   joins.forEach((step, i) => {
     const before = [first, ...joins.slice(0, i).map((s) => s.table)]
     const relation = relations[i]
     const on = step.on.map((p) => `${dotted(p.a)} = ${dotted(p.b)}`).join(t.and)
     const notes: string[] = [step.key ? t.alongKey(step.key.name) : t.spelled]
     const hints: string[] = []
-    if (step.kind === 'left') leftJoined.add(step.table)
     if (relation && step.key) {
       const child = relation.table
       const parent = relation.refTable
@@ -134,7 +134,9 @@ export function queryTour({ request, joins, schemas, keys }: QueryTourInput): {
         )
       else {
         notes.push(t.atMostOne(comment(child), comment(parent)))
-        if (step.kind === 'left' && intent.required) notes.push(t.leftAlwaysFound(child, parent))
+        // A row whose key is NOT NULL always finds its parent, unless the row itself may be NULL by an outer join.
+        if (step.kind === 'left' && intent.required && !nullable.has(child))
+          notes.push(t.leftAlwaysFound(child, parent))
       }
       if (child === step.table && intent.oneToOne === false) said.push(t.multiplies(comment(parent), comment(child)))
       // An index on the key matters where the rows that refer are looked up: when they are the ones joined.
@@ -142,11 +144,17 @@ export function queryTour({ request, joins, schemas, keys }: QueryTourInput): {
       const unindexed = locale.designReading.unindexed(child, relation.columns.join(', '), parent)
       hints.push(...tuning.filter((h) => child === step.table || h !== unindexed))
     } else {
-      const mine = step.on.flatMap((p) => [p.a, p.b].filter((r) => r.table === step.table).map((r) => r.column))
-      const schema = schemas.get(step.table)
-      if (schema && mine.length > 0 && !indexed(schema, unique(mine)))
-        hints.push(t.joinUnindexed(step.table, unique(mine).join(', ')))
+      // The rows looked up are those of the table joined; in a RIGHT JOIN, those of the tables before it.
+      const looked = (r: Ref) => (step.kind === 'right' ? r.table !== step.table : r.table === step.table)
+      const sides = step.on.flatMap((p) => [p.a, p.b].filter(looked))
+      for (const table of unique(sides.map((r) => r.table))) {
+        const cols = unique(sides.filter((r) => r.table === table).map((r) => r.column))
+        const schema = schemas.get(table)
+        if (schema && !indexed(schema, cols)) hints.push(t.joinUnindexed(table, cols.join(', ')))
+      }
     }
+    if (step.kind === 'left') nullable.add(step.table)
+    if (step.kind === 'right') for (const x of before) nullable.add(x)
     hinted.push(...hints)
     scenes.push({
       title: t.joinTitle(step.kind, step.table),
@@ -174,10 +182,11 @@ export function queryTour({ request, joins, schemas, keys }: QueryTourInput): {
     const involved = unique(where.flat().map((c) => c.table))
     const text = where.map((g) => g.map(conditionWords).join(t.and)).join(t.or)
     const notes: string[] = []
-    // With one group, every condition must hold: a value asked of a table joined with LEFT JOIN is never NULL.
+    // With one group, every condition must hold: a value asked of a table an outer join may leave NULL drops the
+    // rows where it is NULL (every operator but IS NULL is false on NULL).
     if (where.length === 1)
       for (const table of unique(
-        (where[0] ?? []).filter((c) => leftJoined.has(c.table) && c.op !== 'is_null').map((c) => c.table)
+        (where[0] ?? []).filter((c) => nullable.has(c.table) && c.op !== 'is_null').map((c) => c.table)
       ))
         notes.push(t.leftToInner(table))
     const hints = unique(
@@ -200,6 +209,25 @@ export function queryTour({ request, joins, schemas, keys }: QueryTourInput): {
       hints,
     })
   }
+
+  const shown = columns.filter((c) => c.show !== false)
+  const involved = unique(shown.map((c) => c.table))
+  scenes.push({
+    title: t.selectTitle,
+    text:
+      shown.length === 0
+        ? t.selectAll
+        : t.select(t.list(shown.map((c) => (c.alias ? t.alias(dotted(c), c.alias) : dotted(c))))),
+    frame: shown.length === 0 ? tables : involved,
+    overlay:
+      shown.length === 0
+        ? overlay({ tables: tables.map((x) => [x, 'focus'] as const) })
+        : overlay({
+            tables: involved.map((x) => [x, 'focus'] as const),
+            columns: shown.map((c) => [c.table, [c.column]] as const),
+          }),
+    pulse: [],
+  })
 
   const sorted = columns.filter((c) => c.sort !== null && c.sort !== undefined)
   if (sorted.length > 0) {
@@ -229,25 +257,6 @@ export function queryTour({ request, joins, schemas, keys }: QueryTourInput): {
       hints,
     })
   }
-
-  const shown = columns.filter((c) => c.show !== false)
-  const involved = unique(shown.map((c) => c.table))
-  scenes.push({
-    title: t.selectTitle,
-    text:
-      shown.length === 0
-        ? t.selectAll
-        : t.select(t.list(shown.map((c) => (c.alias ? t.alias(dotted(c), c.alias) : dotted(c))))),
-    frame: shown.length === 0 ? tables : involved,
-    overlay:
-      shown.length === 0
-        ? overlay({ tables: tables.map((x) => [x, 'focus'] as const) })
-        : overlay({
-            tables: involved.map((x) => [x, 'focus'] as const),
-            columns: shown.map((c) => [c.table, [c.column]] as const),
-          }),
-    pulse: [],
-  })
 
   scenes.push({
     title: t.endTitle,
