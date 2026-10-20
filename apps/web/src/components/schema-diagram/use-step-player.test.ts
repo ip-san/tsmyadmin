@@ -33,6 +33,21 @@ describe('useStepPlayer', () => {
     expect(result.current.index).toBe(2)
   })
 
+  it('waits on each step for advance while held, and advance does nothing when not playing', () => {
+    vi.useFakeTimers()
+    reduceMotion(false)
+    const { result } = renderHook(() => useStepPlayer(3, 100, { still: 'first', hold: true }))
+    act(() => vi.advanceTimersByTime(1000))
+    expect(result.current).toMatchObject({ index: 0, playing: true })
+    act(() => result.current.advance())
+    expect(result.current.index).toBe(1)
+    act(() => result.current.advance())
+    expect(result.current).toMatchObject({ index: 2, playing: false })
+    act(() => result.current.first())
+    act(() => result.current.advance())
+    expect(result.current).toMatchObject({ index: 0, playing: false })
+  })
+
   it('stops playing when moved by hand, and stays within the steps', () => {
     reduceMotion(false)
     const { result } = renderHook(() => useStepPlayer(3))

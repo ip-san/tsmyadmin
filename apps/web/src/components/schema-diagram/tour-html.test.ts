@@ -34,6 +34,9 @@ const words: TourWords = {
   next: 'Next',
   play: 'Play',
   pause: 'Pause',
+  narrate: 'Read aloud',
+  noVoice: 'No voice',
+  stop: '. ',
   keys: 'keys',
   sceneOf: (n, total) => `${n} / ${total}`,
   tones: { focus: 'Looked at', index: 'Refers' },
@@ -61,7 +64,14 @@ describe('tourHtml', () => {
     expect(doc.querySelectorAll('g.t')).toHaveLength(3)
     expect(doc.querySelectorAll('g.k')).toHaveLength(1)
     const [start, look] = dataOf(doc).scenes
-    expect(start).toMatchObject({ n: '1 / 2', enter: true, fade: false, tables: [], flow: [] })
+    expect(start).toMatchObject({
+      n: '1 / 2',
+      enter: true,
+      fade: false,
+      tables: [],
+      flow: [],
+      said: ['shop.', 'all of it'],
+    })
     expect(look).toMatchObject({
       n: '2 / 2',
       fade: true,

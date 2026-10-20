@@ -173,6 +173,62 @@ for (const t of TARGETS) {
         await expect(played.getByRole('button', { name: '再生' })).toBeVisible()
         await played.close()
 
+        // Read aloud (by a stand-in for the device's voice, which ends each sentence at once): a scene lasts as long as
+        // its words, and only the device's own voice is used.
+        const voiced = await page.context().newPage()
+        await voiced.clock.install()
+        await voiced.addInitScript(() => {
+          const said: { text: string; voice: string }[] = []
+          Object.assign(window, { said })
+          const voices = [
+            { name: 'sent out', lang: 'ja-JP', localService: false, default: true },
+            { name: 'own', lang: 'ja-JP', localService: true, default: false },
+          ]
+          const speaking: { onend: (() => void) | null }[] = []
+          // The browser's own utterance takes only the browser's own voices.
+          class Utterance {
+            voice: unknown = null
+            lang = ''
+            onend: (() => void) | null = null
+            onerror: (() => void) | null = null
+            constructor(readonly text: string) {}
+          }
+          Object.defineProperty(window, 'SpeechSynthesisUtterance', { value: Utterance })
+          Object.defineProperty(window, 'speechSynthesis', {
+            value: {
+              getVoices: () => voices,
+              addEventListener: () => undefined,
+              cancel: () => speaking.splice(0),
+              speak: (u: { text: string; voice: { name: string }; onend: (() => void) | null }) => {
+                said.push({ text: u.text, voice: u.voice.name })
+                speaking.push(u)
+                setTimeout(() => {
+                  if (speaking.includes(u)) u.onend?.()
+                }, 100)
+              },
+            },
+          })
+        })
+        await voiced.goto(pathToFileURL(saved).href)
+        const voicedTitle = voiced.getByRole('heading', { level: 2 })
+        await voiced.getByRole('button', { name: '読み上げ' }).click()
+        await expect(voiced.getByRole('button', { name: '読み上げ' })).toHaveAttribute('aria-pressed', 'true')
+        // Two sentences, read in well under a scene's six seconds: then the next scene.
+        await voiced.clock.runFor(500)
+        await expect(voicedTitle).toHaveText('マスタ（1）')
+        const said = await voiced.evaluate(
+          () => (window as unknown as { said: { text: string; voice: string }[] }).said
+        )
+        expect(said[0]?.text).toBe(`${space.schema ?? space.database}。`)
+        expect(new Set(said.map((x) => x.voice))).toEqual(new Set(['own']))
+        // Paused, the voice stops, and the scene stays.
+        await voiced.keyboard.press('p')
+        const count = await voiced.evaluate(() => (window as unknown as { said: unknown[] }).said.length)
+        await voiced.clock.runFor(10000)
+        await expect(voicedTitle).toHaveText('マスタ（1）')
+        expect(await voiced.evaluate(() => (window as unknown as { said: unknown[] }).said.length)).toBe(count)
+        await voiced.close()
+
         await page.keyboard.press('Escape')
         await expect(tour).toBeHidden()
         await expect(page.getByRole('button', { name: 'プレゼンで見る' })).toBeFocused()
