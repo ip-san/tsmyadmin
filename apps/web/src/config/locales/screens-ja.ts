@@ -2725,6 +2725,15 @@ export const jaScreens = {
     saveHint:
       'この発表を 1 つの HTML ファイルにします。サーバーにつながずに、ブラウザで開いて発表できます（テーブル名・カラム名・コメントが入ります）',
     savedKeys: '← → か Page Up / Down で前後、スペースで次、Home / End で最初と最後、P で再生・一時停止、F で全画面',
+    video: '動画で保存',
+    videoHint: (seconds: number) =>
+      `図の横に説明を載せた動画（MP4 か WebM）にします。発表と同じ時間（約 ${seconds.toLocaleString('ja-JP')} 秒）をかけて録画するので、そのあいだこのタブを表に出しておいてください。中身は「HTML で保存」と同じで、読み上げの声は入りません`,
+    stopVideo: '録画をやめる',
+    recording: (n: number, total: number, seconds: number) =>
+      `動画を録画しています（場面 ${n} / ${total}、全体で約 ${seconds.toLocaleString('ja-JP')} 秒）`,
+    recorded: '動画を保存しました',
+    videoStopped: '録画をやめました（動画は保存していません）',
+    videoFailed: 'このブラウザでは動画を作れませんでした',
     stop: '。',
     and: '。',
     names: (names: readonly string[], more: number) =>

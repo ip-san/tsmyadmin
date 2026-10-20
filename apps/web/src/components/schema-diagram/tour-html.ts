@@ -1,21 +1,6 @@
-import { frameOf } from './camera.ts'
-import {
-  boxHeight,
-  DEFAULT_VIEW,
-  fitText,
-  HEADER_HEIGHT,
-  makeWidthOf,
-  ROW_HEIGHT,
-  relationKey,
-  relationPath,
-  textRoom,
-  textWidth,
-} from './layout.ts'
-import { sentences } from './narration.ts'
-import { type diagramFor, TONE_STROKE, TONES, type Tone } from './overlay.ts'
-import { spoken, type TourScene } from './tour.ts'
-
-type TourDiagram = ReturnType<typeof diagramFor>
+import { TONES, type Tone } from './overlay.ts'
+import type { TourScene } from './tour.ts'
+import { CAMERA_MS, FIGURE_STYLE, RING, type TourDiagram, tourFigure, xml } from './tour-figure.ts'
 
 /** The words of the file, in the language of the page it was saved from. */
 export interface TourWords {
@@ -40,29 +25,11 @@ export interface TourWords {
   tones: Partial<Record<Tone, string>>
 }
 
-/** The colours of the tones, fixed: the file is opened where neither the theme nor the page's stylesheet applies. */
-const COLOUR: Record<Tone, string> = {
-  focus: '#4338ca',
-  delete: '#b42318',
-  nullify: '#b45309',
-  blocked: '#1a1c1f',
-  index: '#047857',
-  scan: '#b45309',
-}
 const SCENE_MS = 6000
-const CAMERA_MS = 900
-const RING = 8
-/** Coming in, as on the page: a column of boxes after the one to its left. */
-const ENTER_COLUMN = 280
-const ENTER_COLUMNS = 10
-const ENTER_STEP_MS = 120
 
-const xml = (s: string) =>
-  s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] ?? c)
 /** JSON that can sit in a `<script>`: a name with `</script>` in it does not end it. */
 const scriptJson = (value: unknown) =>
   JSON.stringify(value).replace(/[<>&\u2028\u2029]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`)
-const round = (n: number) => Math.round(n * 10) / 10
 
 /**
  * A tour as one HTML file that plays on its own, with no server and nothing fetched: the diagram drawn once, and the
@@ -70,44 +37,9 @@ const round = (n: number) => Math.round(n * 10) / 10
  * page; a reader who has asked for less motion is shown each scene still. Names and words are escaped where they go.
  */
 export function tourHtml(diagram: TourDiagram, scenes: readonly TourScene[], w: TourWords): string {
-  const at = (table: string) => diagram.positions[table] ?? { x: 0, y: 0 }
-  const listed = (table: string) => diagram.columns.get(table) ?? []
-  const widthOf = makeWidthOf(diagram)
-  const size = (table: string) => ({ width: widthOf(table), height: boxHeight(listed(table).length) })
-  const tableIndex = new Map(diagram.tables.map((x, i) => [x, i]))
-  const keyIndex = new Map(diagram.relations.map((r, i) => [relationKey(r), i]))
-  const view = DEFAULT_VIEW
-  const enterDelay = (table: string) => Math.min(Math.round(at(table).x / ENTER_COLUMN), ENTER_COLUMNS) * ENTER_STEP_MS
-  const linesDelay = Math.max(0, ...diagram.tables.map(enterDelay)) + ENTER_STEP_MS
-
-  const lines = diagram.relations.map((r, i) => {
-    const d = relationPath(r, at, listed, view.lineStyle, view.compact, widthOf)
-    return `<g class="k" data-k="${i}"><path class="base" d="${d}" style="animation-delay:${linesDelay}ms"/><path class="fl" d="${d}"/></g>`
-  })
-  const boxes = diagram.tables.map((name, i) => {
-    const p = at(name)
-    const room = textRoom(8, widthOf(name))
-    const cut = (full: string, bold: boolean) => {
-      const fitted = fitText(full, 12, room, bold)
-      return fitted === full ? xml(full) : `${xml(fitted)}<title>${xml(full)}</title>`
-    }
-    const rows = listed(name).map((c, j) => {
-      const y = HEADER_HEIGHT + j * ROW_HEIGHT
-      return `<g class="c"><rect class="mk" x="1" y="${y}" width="${widthOf(name) - 2}" height="${ROW_HEIGHT}"/><text x="8" y="${y + 14}">${cut(c, false)}</text></g>`
-    })
-    return [
-      `<g class="t" data-t="${i}" transform="translate(${p.x} ${p.y})"><g class="in" style="animation-delay:${enterDelay(name)}ms">`,
-      `<rect class="box" width="${widthOf(name)}" height="${size(name).height}" rx="4"/>`,
-      `<text class="name" x="8" y="18">${cut(name, true)}</text>`,
-      `<line class="sep" x1="0" x2="${widthOf(name)}" y1="${HEADER_HEIGHT}" y2="${HEADER_HEIGHT}"/>`,
-      ...rows,
-      '<g class="badge" display="none"><rect height="18" rx="9"/><text y="13"></text></g>',
-      '</g></g>',
-    ].join('')
-  })
-
+  const figure = tourFigure(diagram, scenes, w)
   const data = {
-    boxes: diagram.tables.map((x) => [at(x).x, at(x).y, size(x).width, size(x).height]),
+    boxes: figure.boxes,
     play: w.play,
     pause: w.pause,
     sceneMs: SCENE_MS,
@@ -115,45 +47,7 @@ export function tourHtml(diagram: TourDiagram, scenes: readonly TourScene[], w: 
     noVoice: w.noVoice,
     cameraMs: CAMERA_MS,
     ring: RING,
-    scenes: scenes.map((s, n) => {
-      const frame = frameOf(s.frame, diagram.tables, at, size)
-      const lit = [...s.overlay.tables].flatMap(([name, { tone, badge }]) => {
-        const i = tableIndex.get(name)
-        if (i === undefined) return []
-        if (!badge) return [[i, tone]]
-        const width = Math.min(widthOf(name), Math.ceil(textWidth(badge, 11, true) + 14))
-        return [[i, tone, fitText(badge, 11, width - 8), width]]
-      })
-      const keyed = <T>(m: ReadonlyMap<string, T> | undefined) =>
-        [...(m ?? [])].flatMap(([key, v]) => {
-          const i = keyIndex.get(key)
-          return i === undefined ? [] : [[i, v] as const]
-        })
-      return {
-        n: w.sceneOf(n + 1, scenes.length),
-        said: sentences(spoken(s, w.stop)),
-        notes: s.notes ?? [],
-        hints: s.hints ?? [],
-        title: s.title,
-        text: s.text,
-        view: [frame.x, frame.y, frame.width, frame.height].map(round),
-        fade: s.overlay.fade !== false,
-        enter: s.overlay.enter === true,
-        tables: lit,
-        keys: keyed(s.overlay.relations),
-        flow: keyed(s.overlay.flow),
-        cols: [...s.overlay.columns].flatMap(([table, names]) => {
-          const i = tableIndex.get(table)
-          return i === undefined ? [] : listed(table).flatMap((c, j) => (names.has(c) ? [[i, j]] : []))
-        }),
-        pulse: s.pulse.flatMap((x) => tableIndex.get(x) ?? []),
-        legend: TONES.filter(
-          (tone) =>
-            [...s.overlay.tables.values()].some((x) => x.tone === tone) ||
-            [...s.overlay.relations.values()].includes(tone)
-        ),
-      }
-    }),
+    scenes: figure.scenes,
   }
   const first = data.scenes[0]?.view ?? [0, 0, 720, 420]
   const legend = TONES.filter((tone) => w.tones[tone] !== undefined).map(
@@ -172,9 +66,7 @@ export function tourHtml(diagram: TourDiagram, scenes: readonly TourScene[], w: 
 <header><h1>${xml(w.title)}</h1></header>
 <main>
 <figure><svg role="img" aria-label="${xml(w.label)}" viewBox="${first.join(' ')}" preserveAspectRatio="xMidYMid meet">
-${lines.join('\n')}
-${boxes.join('\n')}
-<g id="rings" aria-hidden="true"></g>
+${figure.markup}
 </svg></figure>
 <ul id="legend">${legend.join('')}</ul>
 <section aria-live="polite" aria-atomic="true" tabindex="0"><p id="n"></p><h2 id="h"></h2><p id="x"></p><div id="notes" class="list" hidden><h3>${xml(w.notes)}</h3><ul></ul></div><div id="hints" class="list" hidden><h3>${xml(w.hints)}</h3><ul></ul></div></section>
@@ -189,13 +81,7 @@ ${boxes.join('\n')}
 `
 }
 
-const toneStyles = TONES.map((tone) => {
-  const s = TONE_STROKE[tone]
-  const rule = `stroke:${COLOUR[tone]};stroke-width:${s.width}${s.dash ? `;stroke-dasharray:${s.dash}` : ''}`
-  return `.t.tone-${tone} .box,.k.tone-${tone} .base,line.k.tone-${tone}{${rule}}`
-}).join('\n')
-
-const STYLE = `
+const STYLE = `${FIGURE_STYLE}
 :root{color-scheme:light}
 *{box-sizing:border-box}
 body{margin:0;height:100vh;display:flex;flex-direction:column;padding:16px;gap:12px;font-family:system-ui,sans-serif;background:#f4f5f7;color:#1a1c1f}
@@ -203,25 +89,6 @@ h1{margin:0;font-size:14px;color:#5b616b}
 main{flex:1;min-height:0;display:flex;flex-direction:column;gap:12px}
 figure{flex:1;min-height:0;margin:0;border:1px solid #e3e5e8;border-radius:4px;background:#f7f8f9}
 figure svg{display:block;width:100%;height:100%}
-.k .base,line.k{fill:none;stroke:#4338ca;stroke-width:1.5}
-.k .fl{display:none;fill:none;stroke:#4338ca;stroke-width:4;stroke-linecap:round;stroke-dasharray:2 14}
-.k.flow .fl{display:inline;animation:flow .9s linear 5}
-.k.back .fl{animation-direction:reverse}
-.box{fill:#fff;stroke:#83898f;stroke-width:1.5}
-.name{font-size:12px;font-weight:600;fill:#1a1c1f}
-.c text{font-size:12px;fill:#5b616b}
-.c .mk{fill:transparent}
-.c.on .mk{fill:#eef0fb}
-.c.on text{fill:#1a1c1f;font-weight:600}
-.sep{stroke:#e3e5e8}
-.badge rect{fill:#fff;stroke:#83898f}
-.badge text{font-size:11px;font-weight:600;fill:#1a1c1f;text-anchor:middle}
-.t,.k{transition:opacity .3s}
-.faint{opacity:.3}
-${toneStyles}
-.ring{fill:none;stroke:#4338ca;stroke-width:4;transform-box:fill-box;transform-origin:center;animation:pulse 1.2s ease-out 2 forwards}
-/* On the boxes' inner group and the lines' path: the outer group is the one a scene fades. */
-.entering .in,.entering .k .base{opacity:0;animation:enter .5s ease-out forwards}
 #legend{display:flex;flex-wrap:wrap;gap:4px 16px;margin:0;padding:0;list-style:none;font-size:12px;color:#5b616b}
 #legend li{display:flex;align-items:center;gap:6px}
 #legend li[hidden]{display:none}
@@ -244,9 +111,6 @@ figure{grid-column:1;grid-row:1}
 section{grid-column:2;grid-row:1/3;overflow-y:auto}
 nav,#voice,.keys{grid-column:1/3}
 }
-@keyframes enter{from{opacity:0}to{opacity:1}}
-@keyframes flow{to{stroke-dashoffset:-32}}
-@keyframes pulse{from{opacity:.9;transform:scale(1)}to{opacity:0;transform:scale(1.18)}}
 @media (prefers-reduced-motion:reduce){
 .k.flow .fl,.ring,.entering .in,.entering .k .base{animation:none}
 .entering .in,.entering .k .base{opacity:1}

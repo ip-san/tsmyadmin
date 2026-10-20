@@ -2758,6 +2758,15 @@ export const enScreens = {
       'Saves this presentation as one HTML file, to open in a browser and present without the server (it holds the table and column names and comments)',
     savedKeys:
       '← → or Page Up / Down to move, Space for the next, Home / End for the first and last, P to play or pause, F for full screen',
+    video: 'Save as video',
+    videoHint: (seconds: number) =>
+      `Records this presentation as a video, its words beside the diagram (MP4 or WebM). It takes as long as the presentation (about ${seconds.toLocaleString('en-US')} seconds), so keep this tab in front meanwhile; it holds what the HTML file holds, and not the voice reading aloud`,
+    stopVideo: 'Stop recording',
+    recording: (n: number, total: number, seconds: number) =>
+      `Recording the video (scene ${n} of ${total}, about ${seconds.toLocaleString('en-US')} seconds in all)`,
+    recorded: 'The video is saved',
+    videoStopped: 'Recording stopped (no video saved)',
+    videoFailed: 'This browser could not make the video',
     stop: '. ',
     and: '; ',
     names: (names: readonly string[], more: number) =>
