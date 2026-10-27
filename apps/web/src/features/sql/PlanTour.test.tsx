@@ -58,6 +58,7 @@ describe('PlanTour', () => {
   it('waits for the index columns before it opens: the scenes are told as they were when it opened', () => {
     render(<PlanTour plan={read('users')} relations={[]} indexColumns={() => []} ready={false} />)
     expect(screen.getByRole('button', { name: t.open })).toHaveProperty('disabled', true)
+    expect(screen.getByRole('status').textContent).toBe(t.waiting)
   })
 
   it('saves the presentation with the heading of the plan, not of the design', async () => {

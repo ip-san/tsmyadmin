@@ -233,8 +233,8 @@ describe('planTour', () => {
       ],
     })
     const posts = planTour({ plan, relations: [] }).scenes[2]
-    expect(posts?.notes).toEqual([t.memoized, t.roles.loopInner('posts')])
-    expect(posts?.hints).toEqual([t.loopScan('posts')])
+    expect(posts?.notes).toEqual([t.memoized('posts')])
+    expect(posts?.hints).toEqual([t.memoScan('posts')])
   })
 
   it('names the temporary table of a MySQL 9 aggregate, and a full read repeated under a loop by a hint of its own', () => {

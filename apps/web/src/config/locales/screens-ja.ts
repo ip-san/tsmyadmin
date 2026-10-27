@@ -365,7 +365,10 @@ export const jaScreens = {
     },
     subquery: '副問い合わせの中で読みます。外側の行ごとに、読み直すことがあります',
     initPlan: '先に 1 回だけ実行する副問い合わせの中で読みます',
-    memoized: '前に引いたのと同じ値なら、その結果を使い回します（Memoize）。読み直すのは、新しい値のときだけです',
+    memoized: (table: string) =>
+      `これまでの行の値ごとに ${table} を引きます。前に引いたのと同じ値なら、その結果を使い回します（Memoize）。引き直すのは、新しい値のときだけです`,
+    memoScan: (table: string) =>
+      `新しい値ごとに、${table} を全件読みます。値の種類が増えると、読む量は掛け算で増えます。つなぐカラムで始まるインデックスがあれば、1 行ずつ引けます`,
     repeated: '入れ子ループの内側にある段です。外側の 1 行ごとに、この段をくり返します',
     condition: (detail: string) => `条件: ${detail}`,
     loopScan: (table: string) =>

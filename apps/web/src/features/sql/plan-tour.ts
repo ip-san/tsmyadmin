@@ -45,7 +45,7 @@ function finishes(plan: PlanNode): Finish[] {
 function readHint(read: PlanRead): string | null {
   const { node: n, join, repeated } = read
   if (n.access !== 'fullScan') return null
-  if (join === 'loopInner') return t.loopScan(n.table)
+  if (join === 'loopInner') return read.memoized ? t.memoScan(n.table) : t.loopScan(n.table)
   if (repeated) return t.repeatedScan(n.table)
   if (join === 'blockInner') return t.blockScan(n.table)
   return n.detail && (join === null || join === 'loopOuter') ? t.filterScan(n.table) : null
@@ -112,8 +112,8 @@ export function planTour({ plan, relations, indexColumns }: PlanTourInput): {
     const notes = [
       subquery === 'perRow' ? t.subquery : subquery === 'once' ? t.initPlan : null,
       repeated && join !== 'loopInner' ? t.repeated : null,
-      r.memoized ? t.memoized : null,
-      join ? t.roles[join](node.table) : null,
+      // Under Memoize the loop looks up each new value, not each row: said in place of the loop's sentence.
+      r.memoized && join === 'loopInner' ? t.memoized(node.table) : join ? t.roles[join](node.table) : null,
       node.detail ? t.condition(cut(node.detail)) : null,
     ]
     const hint = readHint(r)

@@ -18,7 +18,7 @@ type Method = 'loop' | 'block' | 'hash' | 'buffer' | 'merge'
 /** The join method an operation names, across the servers' words ("Nested Loop", "Inner hash join", "Hash semijoin"…). */
 function joinMethod(op: string): Method | null {
   // From the start of the name: MySQL 9 writes a condition into some (`Filter: (kind = 'merge join')`).
-  if (/^batched key/i.test(op)) return 'loop'
+  if (/^batched key|^\w+, join buffer \(batched key/i.test(op)) return 'loop'
   if (/^block hash join/i.test(op)) return 'hash'
   if (/^\w+, join buffer \(hash join\)/i.test(op)) return 'buffer'
   if (/^block nested loop|^\w+, join buffer/i.test(op)) return 'block'
@@ -103,7 +103,8 @@ export function planReads(plan: PlanNode): PlanRead[] {
       const c = n.children[i] as PlanNode
       const side = sidePlan(c.op) ?? (/^subquery$/i.test(n.op) ? 'perRow' : null)
       let next: Context
-      if (side) next = { join: null, subquery: side, repeated: at.repeated, memoized: false }
+      // An InitPlan runs once, wherever it hangs.
+      if (side) next = { join: null, subquery: side, repeated: side === 'once' ? false : at.repeated, memoized: false }
       else if (method) {
         const role = roleOf(method, inputs.indexOf(i), inputs.length)
         const join = role === 'loopOuter' && hashed ? null : role

@@ -24,16 +24,20 @@ export function PlanTour({
   // Told as it was when it opened: the index columns read in after do not move the scenes under it.
   const [drawn, setDrawn] = useState<ReturnType<typeof planTour> | null>(null)
   return (
-    <>
+    <div className="flex flex-wrap items-center gap-2">
       <Button
         size="sm"
-        title={ready ? t.openHint : t.waiting}
+        title={t.openHint}
         disabled={!ready}
         onClick={() => setDrawn(planTour({ plan, relations, indexColumns }))}
       >
         <Presentation className="size-4" aria-hidden />
         {t.open}
       </Button>
+      {/* There from the start, empty once read: why the button waits is shown and read out. */}
+      <span role="status" className="text-xs text-ink-sub">
+        {ready ? '' : t.waiting}
+      </span>
       {drawn ? (
         <TourDialog
           title={t.dialog}
@@ -45,6 +49,6 @@ export function PlanTour({
           onClose={() => setDrawn(null)}
         />
       ) : null}
-    </>
+    </div>
   )
 }

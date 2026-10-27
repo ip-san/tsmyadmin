@@ -134,12 +134,40 @@ describe('planReads, side plans and wrappers', () => {
     ])
   })
 
+  it('does not repeat an InitPlan hung under the inner side of a loop: it runs once', () => {
+    const plan = node({
+      op: 'Nested Loop',
+      children: [
+        scan('a'),
+        node({
+          op: 'Hash Join',
+          children: [
+            // The InitPlan of b's condition, under the side the loop repeats.
+            { ...scan('b'), children: [node({ op: 'Result InitPlan 1', children: [scan('x')] })] },
+            node({ op: 'Hash', children: [scan('c')] }),
+          ],
+        }),
+      ],
+    })
+    expect(of(plan).find((r) => r[0] === 'x')).toEqual(['x', null, 'once', false])
+    expect(of(plan).find((r) => r[0] === 'b')).toEqual(['b', 'hashProbe', null, true])
+  })
+
   it("takes MariaDB's join buffer around one table as the side joined to the rows before", () => {
     const wrapped = (op: string) =>
       of(node({ op: 'Nested loop', children: [scan('a'), node({ op, children: [scan('b')] })] }))[1]
     expect(wrapped('Block hash join')).toEqual(['b', 'hashProbe', null, false])
     expect(wrapped('Block nested loop')).toEqual(['b', 'blockInner', null, false])
     expect(wrapped('Batched key access')).toEqual(['b', 'loopInner', null, false])
+    // MySQL 8 on the table itself.
+    expect(
+      of(
+        node({
+          op: 'Nested loop',
+          children: [scan('a'), { ...scan('b'), op: 'Table, join buffer (Batched Key Access)' }],
+        })
+      )[1]
+    ).toEqual(['b', 'loopInner', null, false])
     // A condition that names a join is not one (MySQL 9 writes conditions into the names of its steps).
     expect(of(node({ op: "Filter: (kind = 'merge join')", children: [scan('a'), scan('b')] }))).toEqual([
       ['a', null, null, false],

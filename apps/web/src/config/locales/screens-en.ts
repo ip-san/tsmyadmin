@@ -366,8 +366,10 @@ export const enScreens = {
     },
     subquery: 'Read inside a subquery: it may be read again for each row outside it',
     initPlan: 'Read inside a subquery run once, before the rest',
-    memoized:
-      'For a value looked up before, the rows found then are used again (Memoize): it is read again only for a new value',
+    memoized: (table: string) =>
+      `${table} is looked up for each value of the rows so far; for a value looked up before, the rows found then are used again (Memoize), so it is looked up again only for a new value`,
+    memoScan: (table: string) =>
+      `${table} is read in full for each new value: as the values grow, what is read multiplies. With an index starting with the joining columns, each row could be looked up`,
     repeated: 'On the inner side of a nested loop: this step is repeated for each row of the outer side',
     condition: (detail: string) => `Condition: ${detail}`,
     loopScan: (table: string) =>
