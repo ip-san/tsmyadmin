@@ -17,6 +17,7 @@ import { useReading, useVoice } from './use-narration.ts'
 import { useStepPlayer } from './use-step-player.ts'
 
 const t = locale.tour
+const FIELDS = [HTMLSelectElement, HTMLInputElement, HTMLTextAreaElement]
 /** How long a scene stays, while playing: long enough to read its words aloud. */
 const SCENE_MS = 6000
 /** Around a box the ring is drawn, as the scene opens. */
@@ -192,11 +193,7 @@ function Stage({
   // A presenter's clicker sends Page Up / Down; a focused button keeps its own Space and Enter.
   keysRef.current = (e: KeyboardEvent) => {
     // A field (the chapter of the video) keeps its own keys; a clicker's Page keys still move the scenes.
-    const field =
-      e.target instanceof HTMLSelectElement ||
-      e.target instanceof HTMLInputElement ||
-      e.target instanceof HTMLTextAreaElement
-    if (field && e.key !== 'PageDown' && e.key !== 'PageUp') return
+    if (FIELDS.some((f) => e.target instanceof f) && !e.key.startsWith('Page')) return
     const onButton = e.target instanceof HTMLButtonElement
     const move: Record<string, (() => void) | undefined> = {
       ArrowRight: player.next,
