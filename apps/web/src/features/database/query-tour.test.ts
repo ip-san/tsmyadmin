@@ -1,6 +1,7 @@
 import type { QueryBuilderRequestInput, QueryJoinStep, TableSchema } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
 import { relationKey } from '@/components/schema-diagram/layout.ts'
+import { chaptersOf } from '@/components/schema-diagram/tour.ts'
 import { locale } from '@/config/locale-screens.ts'
 import { column, fk, index, relation, table } from '@/test/schema-fixtures.ts'
 import { queryTour } from './query-tour.ts'
@@ -72,6 +73,12 @@ describe('queryTour', () => {
       t.endTitle,
     ])
     expect(scenes[0]?.text).toBe(t.intro(3, w.named('orders', '注文')))
+    // Chapters for a video each: the tables and their joins, the conditions, and what comes out.
+    expect(chaptersOf(scenes)).toEqual([
+      { title: t.chapters.tables, from: 0, to: 4 },
+      { title: t.chapters.where, from: 4, to: 5 },
+      { title: t.chapters.output, from: 5, to: 8 },
+    ])
   })
 
   it('flows the key each table is joined along, keeping the tables joined before lit', () => {

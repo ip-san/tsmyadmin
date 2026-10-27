@@ -1,5 +1,5 @@
 import type { RelationDef } from '@tsmyadmin/shared'
-import { overlay, said, type TourScene, unique, whole } from '@/components/schema-diagram/tour.ts'
+import { openChapter, overlay, said, type TourScene, unique, whole } from '@/components/schema-diagram/tour.ts'
 import { locale } from '@/config/locale-screens.ts'
 import { designSummary, keyIntent } from '@/lib/design-reading.ts'
 import { TABLE_ROLES } from '@/lib/table-role.ts'
@@ -32,7 +32,14 @@ export function tourScenes(input: {
     return said.length > 0 ? { notes: said } : {}
   }
   const scenes: TourScene[] = [
-    { title: name, text: t.overview(map.tables, relations.length), frame: [], overlay: whole(true), pulse: [] },
+    {
+      title: name,
+      text: t.overview(map.tables, relations.length),
+      frame: [],
+      overlay: whole(true),
+      pulse: [],
+      chapter: t.chapters.roles,
+    },
   ]
   // Keys to another table: one to itself is the tree's, said there.
   const touching = (tables: readonly string[]) =>
@@ -53,6 +60,7 @@ export function tourScenes(input: {
       pulse: tables,
     })
   }
+  const hubs = scenes.length
   for (const hub of map.hubs.slice(0, HUBS_TOLD)) {
     const keys = relations.filter((r) => r.refTable === hub.table && r.table !== hub.table)
     const from = unique(keys.map((r) => r.table))
@@ -73,8 +81,16 @@ export function tourScenes(input: {
       ...notes(keys),
     })
   }
-  if (path && path.hops.length > 0) scenes.push(...pathScenes(path))
+  // Each part opens a chapter of its own; the summary closes the last.
+  openChapter(scenes, hubs, t.chapters.hubs)
+  if (path && path.hops.length > 0) {
+    const walk = scenes.length
+    scenes.push(...pathScenes(path))
+    openChapter(scenes, walk, t.chapters.path)
+  }
+  const checks = scenes.length
   scenes.push(...checkScenes(map, relations))
+  openChapter(scenes, checks, t.chapters.checks)
   scenes.push({
     title: t.endTitle,
     text: t.end(

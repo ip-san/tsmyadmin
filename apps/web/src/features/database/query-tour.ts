@@ -1,6 +1,6 @@
 import type { FilterOp, QueryBuilderRequestInput, QueryJoinStep, RelationDef, TableSchema } from '@tsmyadmin/shared'
 import { diagramFor } from '@/components/schema-diagram/overlay.ts'
-import { overlay, type TourScene, unique, whole } from '@/components/schema-diagram/tour.ts'
+import { openChapter, overlay, type TourScene, unique, whole } from '@/components/schema-diagram/tour.ts'
 import { locale } from '@/config/locale-screens.ts'
 import { keyIntent, keyTuning, named, tableReading } from '@/lib/design-reading.ts'
 import { conditionText, valueShape } from '@/lib/filter-values.ts'
@@ -186,6 +186,7 @@ export function queryTour({ request, joins, schemas, keys, rows }: QueryTourInpu
     })
   })
 
+  const whereAt = scenes.length
   if (where.length > 0) {
     const involved = unique(where.flat().map((c) => c.table))
     const text = where.map((g) => g.map(conditionWords).join(t.and)).join(t.or)
@@ -220,6 +221,7 @@ export function queryTour({ request, joins, schemas, keys, rows }: QueryTourInpu
 
   const shown = columns.filter((c) => c.show !== false)
   const involved = unique(shown.map((c) => c.table))
+  const selectAt = scenes.length
   scenes.push({
     title: t.selectTitle,
     text:
@@ -275,5 +277,9 @@ export function queryTour({ request, joins, schemas, keys, rows }: QueryTourInpu
     notes: unique(said),
     hints: unique(hinted),
   })
+  // Its chapters: the tables and how they join, the conditions, and what comes out (the summary with it).
+  openChapter(scenes, 0, t.chapters.tables)
+  if (where.length > 0) openChapter(scenes, whereAt, t.chapters.where)
+  openChapter(scenes, selectAt, t.chapters.output)
   return { diagram, scenes }
 }

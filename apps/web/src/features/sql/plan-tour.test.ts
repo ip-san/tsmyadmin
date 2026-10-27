@@ -2,6 +2,7 @@ import type { PlanNode } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
 import { relationKey } from '@/components/schema-diagram/layout.ts'
 import type { TourScene } from '@/components/schema-diagram/tour.ts'
+import { chaptersOf } from '@/components/schema-diagram/tour.ts'
 import { locale } from '@/config/locale-screens.ts'
 import { relation } from '@/test/schema-fixtures.ts'
 import { planTour } from './plan-tour.ts'
@@ -51,6 +52,8 @@ describe('planTour', () => {
     expect(scenes[0]?.text).toBe(t.intro(2, order))
     expect(scenes.at(-1)?.text).toBe(t.end(2, 1))
     expect(scenes.at(-1)?.notes).toEqual([order, p.notes])
+    // Nothing done after the reads: one chapter, and the video is not split.
+    expect(chaptersOf(scenes)).toEqual([{ title: t.chapters.reads, from: 0, to: 4 }])
   })
 
   it('lights each table by how it is read, keeps the tables read before, and flows the key it is joined along', () => {
@@ -148,6 +151,11 @@ describe('planTour', () => {
     })
     const { scenes } = planTour({ plan: sorted, relations: keys })
     const finish = titled(scenes, t.finishTitle)
+    // What is done after the reads is a chapter of its own, the summary with it.
+    expect(chaptersOf(scenes).map((c) => [c.title, c.to - c.from])).toEqual([
+      [t.chapters.reads, scenes.length - 2],
+      [t.chapters.after, 2],
+    ])
     expect(finish?.text).toBe(t.finish([t.finishSteps.group, t.finishSteps.temporary, t.finishSteps.sort]))
     expect(finish?.notes).toEqual([t.finishNotes.group, t.finishNotes.temporary, t.finishNotes.sort])
     expect(finish?.hints).toEqual([t.temporaryHint, t.sortHint])

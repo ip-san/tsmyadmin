@@ -10,6 +10,7 @@ import {
   frameAt,
   paint,
   recordTour,
+  span,
   timeline,
   videoType,
   wrap,
@@ -67,6 +68,23 @@ describe('timeline and frameAt', () => {
     expect(start).not.toEqual(look)
     expect(frameAt(figure.scenes, starts, total).index).toBe(1)
   })
+
+  it("opens a chapter's video on its own first scene: the camera does not move in from the scene before", () => {
+    const look = figure.scenes[1]?.view
+    const at = starts[1] ?? 0
+    expect(frameAt(figure.scenes, starts, at, 1).view).toEqual({
+      x: look?.[0],
+      y: look?.[1],
+      width: look?.[2],
+      height: look?.[3],
+    })
+  })
+
+  it("times a chapter from its first scene to the next chapter's, and the last to the end of the whole", () => {
+    expect(span(figure.scenes)).toMatchObject({ start: 0, end: total })
+    expect(span(figure.scenes, { from: 0, to: 1 })).toMatchObject({ start: 0, end: starts[1] })
+    expect(span(figure.scenes, { from: 1, to: 2 })).toMatchObject({ start: starts[1], end: total })
+  })
 })
 
 describe('paint', () => {
@@ -88,6 +106,12 @@ describe('paint', () => {
     paint(root, figure, 0, 5000)
     expect(box(root, 0).querySelector('.in')?.getAttribute('opacity')).toBe('1')
     expect(key(root).querySelector('.base')?.getAttribute('opacity')).toBe('1')
+  })
+
+  it("does not fade from the scene before a chapter's first: what is not lit is faint from the start", () => {
+    const root = fresh()
+    paint(root, figure, 1, 0, 1)
+    expect(box(root, 2).getAttribute('opacity')).toBe('0.3')
   })
 
   it('lights by tone, fades the rest over a moment, marks columns and shows the badge', () => {
@@ -285,6 +309,29 @@ describe('recordTour', () => {
     expect(made.blob.size).toBeGreaterThan(0)
     expect(recorders[0]?.state).toBe('inactive')
     expect(track.stop).toHaveBeenCalled()
+  })
+
+  it('records a chapter only: its scenes, for its time', async () => {
+    const { starts, total } = timeline(figure.scenes)
+    const run = async (range: { from: number; to: number }) => {
+      const reached: number[] = []
+      const time = clock()
+      await recordTour(figure, words, {
+        signal: new AbortController().signal,
+        onScene: (i) => reached.push(i),
+        clock: time,
+        range,
+      })
+      return { reached, took: time.now() }
+    }
+    const opening = await run({ from: 0, to: 1 })
+    expect(opening.reached).toEqual([0])
+    expect(opening.took).toBeGreaterThanOrEqual((starts[1] ?? 0) - 100)
+    expect(opening.took).toBeLessThan((starts[1] ?? 0) + 100)
+    const rest = await run({ from: 1, to: 2 })
+    expect(rest.reached).toEqual([1])
+    expect(rest.took).toBeGreaterThanOrEqual(total - (starts[1] ?? 0))
+    expect(rest.took).toBeLessThan(total - (starts[1] ?? 0) + 200)
   })
 
   it('ends at a failing encoder, says why, and lets the canvas go', async () => {

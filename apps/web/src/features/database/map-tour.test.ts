@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { relationKey } from '@/components/schema-diagram/layout.ts'
+import { chaptersOf } from '@/components/schema-diagram/tour.ts'
 import { locale } from '@/config/locale-screens.ts'
 import { relation } from '@/test/schema-fixtures.ts'
 import type { DatabaseMap } from './database-map.ts'
@@ -48,6 +49,10 @@ describe('tourScenes', () => {
       t.endTitle,
     ])
     expect(scenes[0]).toMatchObject({ text: t.overview(4, 2), frame: [], pulse: [] })
+    expect(chaptersOf(scenes)).toEqual([
+      { title: t.chapters.roles, from: 0, to: 5 },
+      { title: t.chapters.hubs, from: 5, to: 8 },
+    ])
     expect(scenes[0]?.overlay).toMatchObject({ enter: true, fade: false })
     expect(scenes.at(-1)?.overlay).toMatchObject({ enter: false, fade: false })
     expect(scenes.at(-1)?.text).toBe(
@@ -99,11 +104,22 @@ describe('tourScenes', () => {
     expect(a?.text).toBe(t.hubText('a', 'a_child'))
   })
 
+  it('tells what to look at as a chapter of its own, with the summary', () => {
+    const scenes = tourScenes({ name: 'x', map: { ...shop(), noPrimaryKey: ['logs'] }, relations })
+    expect(chaptersOf(scenes).at(-1)).toEqual({ title: t.chapters.checks, from: scenes.length - 2, to: scenes.length })
+    expect(scenes.at(-2)?.title).toBe(t.noPrimaryKeyTitle(1))
+  })
+
   it('walks a path one step a scene, flowing the way it is walked', () => {
     const hops = joinPaths(relations, 'users', 'lines').paths[0] ?? []
     const scenes = tourScenes({ name: 'x', map: empty(), relations, path: { from: 'users', to: 'lines', hops } })
     const walk = scenes.filter((s) => s.title === t.pathTitle('users', 'lines'))
     expect(walk).toHaveLength(2)
+    // The way is a chapter of its own, after the opening; the summary goes with it.
+    expect(chaptersOf(scenes)).toEqual([
+      { title: t.chapters.roles, from: 0, to: 1 },
+      { title: t.chapters.path, from: 1, to: 4 },
+    ])
     const [first, second] = walk
     // users → orders goes against the key (orders refers to users).
     expect(first?.frame).toEqual(['users', 'orders'])

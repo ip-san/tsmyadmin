@@ -1,6 +1,7 @@
 import type { Cell } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
 import { relationKey } from '@/components/schema-diagram/layout.ts'
+import { chaptersOf } from '@/components/schema-diagram/tour.ts'
 import { locale } from '@/config/locale-screens.ts'
 import { column, fk, table } from '@/test/schema-fixtures.ts'
 import { type RowGraph, type RowNode, rowNode } from './row-graph.ts'
@@ -94,6 +95,11 @@ describe('rowTour', () => {
       t.endTitle,
     ])
     expect(tour?.scenes[0]?.text).toContain(w.named('orders', '注文'))
+    expect(chaptersOf(tour?.scenes ?? [])).toEqual([
+      { title: t.chapters.row, from: 0, to: 2 },
+      { title: t.chapters.referred, from: 2, to: 3 },
+      { title: t.chapters.farther, from: 3, to: 5 },
+    ])
     expect(tour?.scenes[2]?.text).toBe(t.referred('order_items', REFERRING_DRAWN, 1, true, 'order_id', 'id = 1'))
   })
 

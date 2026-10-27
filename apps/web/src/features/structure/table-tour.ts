@@ -1,6 +1,6 @@
 import type { RelationDef, TableSchema } from '@tsmyadmin/shared'
 import { neighbourhood } from '@/components/schema-diagram/neighbourhood.ts'
-import { overlay, said, type TourScene, unique, whole } from '@/components/schema-diagram/tour.ts'
+import { openChapter, overlay, said, type TourScene, unique, whole } from '@/components/schema-diagram/tour.ts'
 import { locale } from '@/config/locale-screens.ts'
 import {
   columnComments,
@@ -98,6 +98,7 @@ export function tableTourScenes(input: {
           pulse: [name],
         },
   ]
+  const linksAt = scenes.length
   if (out.length > 0) {
     const to = unique(out.map((r) => r.refTable))
     scenes.push({
@@ -151,6 +152,7 @@ export function tableTourScenes(input: {
       ...lists(reading(self), tuning(self)),
     })
   }
+  const fartherAt = scenes.length
   if (farther.length > 0) {
     // The keys that reach them (from a table a key away to one a key further), and the way to the tables between.
     const bridge = relations.filter(
@@ -180,5 +182,9 @@ export function tableTourScenes(input: {
       [...out, ...into, ...self].map((r) => ({ child: r.table, parent: r.refTable, intent: intentOf(r) }))
     ),
   })
+  // Its chapters: the table and its key, the tables a key away, and those further (the summary with the last).
+  openChapter(scenes, 0, t.chapters.table)
+  if (fartherAt > linksAt) openChapter(scenes, linksAt, t.chapters.links)
+  if (farther.length > 0) openChapter(scenes, fartherAt, t.chapters.farther)
   return scenes
 }
