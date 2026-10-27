@@ -77,8 +77,9 @@ describe('tableTourScenes', () => {
     ])
     const [intro, , refers, referred] = tableTourScenes({ schema: orders, guess: middle, relations, tables, rows })
     expect(intro?.notes?.[0]).toBe(w.rows('orders', 300))
-    // Beside what the key to users says (products is not estimated: nothing is said of it).
-    expect(refers?.notes).toContain(w.perRow('users', 'orders', 3))
+    // After what the keys say, which it does not push out; products is not estimated, and nothing is said of it.
+    const design = tableTourScenes({ schema: orders, guess: middle, relations, tables })[2]?.notes ?? []
+    expect(refers?.notes).toEqual([...design, w.perRow('users', 'orders', 3)])
     expect(referred?.notes).toContain(w.perRow('orders', 'lines', 4))
   })
 

@@ -111,7 +111,7 @@ export function queryTour({ request, joins, schemas, keys, rows }: QueryTourInpu
       overlay: overlay({ tables: [[first, 'focus']] }),
       pulse: [first],
       notes: [
-        ...rowsReading(rows, first),
+        ...rowsReading(rows, first, comment),
         ...(schemas.get(first) ? tableReading(schemas.get(first) as TableSchema) : []),
       ],
     },

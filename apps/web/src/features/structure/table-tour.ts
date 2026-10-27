@@ -19,6 +19,9 @@ const t = locale.tableTour
 /** Lines of a scene's reading of the design: past them, a scene says too much to be read aloud. */
 const NOTES_SHOWN = 6
 
+/** Sentences of a scene from the estimated rows, after its reading of the design. */
+const ESTIMATES_SHOWN = 3
+
 /** How far out the tour looks: the tables a key away, and those a key further. */
 export const TOUR_HOPS = 2
 
@@ -50,15 +53,17 @@ export function tableTourScenes(input: {
   // Why it is so: what each key says (its own keys from this table's definition; another table's, what a delete does).
   const intentOf = (r: RelationDef) => keyIntent(r, r.table === name ? schema : undefined)
   // The comments of this table's own key columns say what the values mean; its own keys can be checked for an index.
-  // And how many rows of one there are per row of the other, by the estimates.
-  const reading = (keys: readonly RelationDef[]) =>
-    keys
+  // After them, how many rows of one there are per row of the other, by the estimates: they do not take the place
+  // of what the design says.
+  const reading = (keys: readonly RelationDef[]) => [
+    ...keys
       .flatMap((r) => [
         ...(r.table === name ? columnComments(name, r.columns, schema) : []),
         ...keyReading(r.table, r.refTable, intentOf(r)),
-        ...perRowReading(rows, r.table, r.refTable),
       ])
-      .slice(0, NOTES_SHOWN)
+      .slice(0, NOTES_SHOWN),
+    ...keys.flatMap((r) => perRowReading(rows, r.table, r.refTable)).slice(0, ESTIMATES_SHOWN),
+  ]
   const tuning = (keys: readonly RelationDef[]) =>
     keys.flatMap((r) => (r.table === name ? keyTuning(r, name, r.refTable, schema) : [])).slice(0, NOTES_SHOWN)
   const lists = (notes: readonly string[], hints: readonly string[]) => ({

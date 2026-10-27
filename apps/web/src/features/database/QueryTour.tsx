@@ -7,9 +7,9 @@ import { TourDialog } from '@/components/schema-diagram/TourDialog.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { locale } from '@/config/locale-screens.ts'
 import { namespaceOf } from '@/lib/home-namespace.ts'
-import { queryPlanQuery, tablesQuery } from '@/lib/queries.ts'
-import { rowEstimates } from '@/lib/row-estimates.ts'
+import { queryPlanQuery } from '@/lib/queries.ts'
 import { useDialect } from '@/lib/session.ts'
+import { useRowEstimates } from '@/lib/use-row-estimates.ts'
 import { queryTour } from './query-tour.ts'
 
 const t = locale.queryTour
@@ -70,16 +70,16 @@ function QueryTourDialog({
   // The server joins the tables: the presentation tells its plan, not a guess at it.
   const plan = useQuery(queryPlanQuery(db, request))
   // The estimated rows add to what it says: it waits for them, and goes on without them if they cannot be read.
-  const tables = useQuery(tablesQuery(db, schema))
+  const estimates = useRowEstimates(db, schema)
   const drawn = useMemo(() => {
-    if (!plan.data || tables.isPending) return undefined
+    if (!plan.data || estimates.pending) return undefined
     const keys: RelationDef[] = [...schemas.values()].flatMap((s) =>
       s.foreignKeys.map((k) => ({ ...k, table: s.name }))
     )
     const drawnKeys = drawnRelations(keys, dialect, namespaceOf(db, schema), request.tables)
-    const rows = tables.data ? rowEstimates(tables.data) : undefined
+    const rows = estimates.rows
     return queryTour({ request, joins: plan.data.joins, schemas, keys: drawnKeys, ...(rows ? { rows } : {}) })
-  }, [plan.data, tables.isPending, tables.data, schemas, dialect, db, schema, request])
+  }, [plan.data, estimates.pending, estimates.rows, schemas, dialect, db, schema, request])
   return (
     <TourDialog
       title={t.dialog}

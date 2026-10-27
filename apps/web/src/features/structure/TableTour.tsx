@@ -7,10 +7,10 @@ import { diagramFor } from '@/components/schema-diagram/overlay.ts'
 import { TourDialog } from '@/components/schema-diagram/TourDialog.tsx'
 import { locale } from '@/config/locale-screens.ts'
 import { homeNamespace, namespaceOf } from '@/lib/home-namespace.ts'
-import { foreignKeysQuery, type TableRef, tablesQuery } from '@/lib/queries.ts'
-import { rowEstimates } from '@/lib/row-estimates.ts'
+import { foreignKeysQuery, type TableRef } from '@/lib/queries.ts'
 import { useDialect } from '@/lib/session.ts'
 import { tableRole } from '@/lib/table-role.ts'
+import { useRowEstimates } from '@/lib/use-row-estimates.ts'
 import { TOUR_HOPS, tableTourScenes } from './table-tour.ts'
 
 const t = locale.tableTour
@@ -32,9 +32,9 @@ export function TableTour({
   const dialect = useDialect()
   const keys = useQuery(foreignKeysQuery(db, space))
   // The estimated rows add to what it says: it waits for them, and goes on without them if they cannot be read.
-  const list = useQuery(tablesQuery(db, space))
+  const estimates = useRowEstimates(db, space)
   const drawn = useMemo(() => {
-    if (!keys.data || list.isPending) return undefined
+    if (!keys.data || estimates.pending) return undefined
     const ns = namespaceOf(db, space)
     const names = [...new Set(keys.data.flatMap((k) => [k.table, k.refTable]).concat(table))]
     const relations = drawnRelations(keys.data, dialect, ns, names)
@@ -48,10 +48,10 @@ export function TableTour({
         guess,
         relations,
         tables: names,
-        ...(list.data ? { rows: rowEstimates(list.data) } : {}),
+        ...(estimates.rows ? { rows: estimates.rows } : {}),
       }),
     }
-  }, [keys.data, list.isPending, list.data, dialect, db, space, table, schema])
+  }, [keys.data, estimates.pending, estimates.rows, dialect, db, space, table, schema])
   return (
     <TourDialog
       title={t.dialog(table)}

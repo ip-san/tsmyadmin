@@ -450,8 +450,10 @@ export const jaScreens = {
       `${table} は約 ${n.toLocaleString('ja-JP')} 行（カタログの推定。行は数えていません）`,
     perRow: (parent: string, child: string, ratio: number) =>
       `推定の行数の比では、${parent} 1 行あたり、${child} は平均約 ${ratio.toLocaleString('ja-JP')} 行です`,
+    perRowFew: (parent: string, child: string) =>
+      `推定の行数の比では、${parent} 1 行あたり、${child} は平均 0.1 行未満です`,
     without: (parent: string, child: string, n: number) =>
-      `${child} の行は ${parent} より少ないので、${parent} のうち少なくとも約 ${n.toLocaleString('ja-JP')} 行には、${child} の行がありません（推定の行数から）`,
+      `推定の行数どおりなら、${child} の行は ${parent} の半分以下なので、${parent} のうち約 ${n.toLocaleString('ja-JP')} 行以上には ${child} の行がありません（${child} の 1 行が指す ${parent} は 1 行だけなので）`,
     named: (table: string, comment: string) => `${table}（${comment}）`,
     columnComment: (table: string, column: string, comment: string) =>
       `${table}.${column} は「${comment}」（カラムのコメント）`,

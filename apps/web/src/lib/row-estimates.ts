@@ -18,17 +18,28 @@ export function rowEstimates(tables: readonly Pick<TableInfo, 'name' | 'rowEstim
 /** A ratio as said: a decimal below 10, a whole number above. */
 const ratio = (n: number) => (n < 10 ? Math.round(n * 10) / 10 : Math.round(n))
 
+/**
+ * How far fewer the rows that refer must be before it is said that some rows referred to have none: the two are
+ * estimates, each perhaps tens of percent off, so a difference smaller than half is not told.
+ */
+const FEWER = 0.5
+
 /** How many rows a table has, by the estimate; nothing where there is none. */
-export function rowsReading(rows: RowEstimates | undefined, table: string): string[] {
+export function rowsReading(
+  rows: RowEstimates | undefined,
+  table: string,
+  label: (table: string) => string = (x) => x
+): string[] {
   const n = rows?.get(table)
-  return n === undefined ? [] : [w.rows(table, n)]
+  return n === undefined ? [] : [w.rows(label(table), n)]
 }
 
 /**
- * What the estimates say of a key from `child` to `parent`: the rows of `child` per row of `parent` on average, and,
- * where `child` has fewer rows, that some rows of `parent` have none (a row of `child` refers to one row of `parent`
- * at most, so at least the difference has none). Nothing for a key to itself, or where either is not estimated.
- * The names may carry the tables' comments (`label`).
+ * What the estimates say of a key from `child` to `parent`: the rows of `child` per row of `parent` on average (under
+ * 0.1, said as such rather than rounded to 0), and, where `child` has half the rows of `parent` or fewer, that some
+ * rows of `parent` have none (a row of `child` refers to one row of `parent` at most, so the difference has none, if
+ * the estimates hold). Nothing for a key to itself, or where either is not estimated. The names may carry the
+ * tables' comments (`label`).
  */
 export function perRowReading(
   rows: RowEstimates | undefined,
@@ -39,8 +50,9 @@ export function perRowReading(
   const c = rows?.get(child)
   const p = rows?.get(parent)
   if (c === undefined || p === undefined || child === parent) return []
+  const per = ratio(c / p)
   return [
-    w.perRow(label(parent), label(child), ratio(c / p)),
-    ...(c < p ? [w.without(label(parent), label(child), p - c)] : []),
+    per > 0 ? w.perRow(label(parent), label(child), per) : w.perRowFew(label(parent), label(child)),
+    ...(c <= p * FEWER ? [w.without(label(parent), label(child), p - c)] : []),
   ]
 }

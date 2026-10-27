@@ -21,6 +21,7 @@ describe('rowsReading', () => {
     expect(rowsReading(rows, 'orders')).toEqual([w.rows('orders', 1200)])
     expect(rowsReading(rows, 'users')).toEqual([])
     expect(rowsReading(undefined, 'orders')).toEqual([])
+    expect(rowsReading(rows, 'orders', (x) => `${x}!`)).toEqual([w.rows('orders!', 1200)])
   })
 })
 
@@ -37,10 +38,32 @@ describe('perRowReading', () => {
     expect(perRowReading(rows, 'items', 'orders')).toEqual([w.perRow('orders', 'items', 12)])
   })
 
-  it('says how many rows referred to have none at least, where fewer rows refer', () => {
+  it('says how many rows referred to have none, where half the rows or fewer refer, and not for a nearer count', () => {
     expect(perRowReading(rows, 'profiles', 'users')).toEqual([
       w.perRow('users', 'profiles', 0.4),
       w.without('users', 'profiles', 60),
+    ])
+    // Two estimates 5% apart may be either way round: nothing is said of the rows without.
+    const near = new Map([
+      ['users', 100],
+      ['profiles', 95],
+      ['halves', 50],
+    ])
+    expect(perRowReading(near, 'profiles', 'users')).toEqual([w.perRow('users', 'profiles', 1)])
+    expect(perRowReading(near, 'halves', 'users')).toEqual([
+      w.perRow('users', 'halves', 0.5),
+      w.without('users', 'halves', 50),
+    ])
+  })
+
+  it('says a ratio under 0.1 as such, not as 0', () => {
+    const few = new Map([
+      ['users', 1000],
+      ['admins', 3],
+    ])
+    expect(perRowReading(few, 'admins', 'users')).toEqual([
+      w.perRowFew('users', 'admins'),
+      w.without('users', 'admins', 997),
     ])
   })
 

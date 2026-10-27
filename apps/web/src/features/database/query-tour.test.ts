@@ -106,8 +106,8 @@ describe('queryTour', () => {
       ['items', 2000],
     ])
     const s = queryTour({ request, joins, schemas, keys, rows }).scenes
-    expect(s[1]?.notes?.[0]).toBe(w.rows('orders', 500))
     const named = w.named('orders', '注文')
+    expect(s[1]?.notes?.[0]).toBe(w.rows(named, 500))
     expect(s.find((x) => x.title === t.joinTitle('left', 'users'))?.notes?.at(-1)).toBe(w.perRow('users', named, 5))
     expect(s.find((x) => x.title === t.joinTitle('left', 'items'))?.notes?.at(-1)).toBe(w.perRow(named, 'items', 4))
   })

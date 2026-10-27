@@ -113,6 +113,7 @@ describe('QueryTour', () => {
     await waitFor(() => expect(asked).toHaveLength(2))
     expect(await screen.findByRole('heading', { level: 3, name: t.introTitle })).toBeTruthy()
   })
+
   it("says the rows by the catalog's estimates, and goes on without them where the list cannot be read", async () => {
     const w = locale.designReading
     show()
@@ -125,6 +126,10 @@ describe('QueryTour', () => {
     list = new Error('denied')
     show()
     fireEvent.click(screen.getByRole('button', { name: t.open }))
-    expect(await screen.findByRole('heading', { level: 3, name: t.introTitle })).toBeTruthy()
+    const again = await screen.findByRole('dialog', { name: t.dialog })
+    await screen.findByRole('heading', { level: 3, name: t.introTitle })
+    fireEvent.keyDown(again, { key: 'ArrowRight' })
+    expect(await screen.findByRole('heading', { level: 3, name: t.fromTitle('orders') })).toBeTruthy()
+    expect(screen.queryByText(w.rows('orders', 500))).toBeNull()
   })
 })

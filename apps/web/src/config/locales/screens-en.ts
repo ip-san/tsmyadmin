@@ -451,8 +451,10 @@ export const enScreens = {
       `${table} has about ${n.toLocaleString('en-US')} ${n === 1 ? 'row' : 'rows'} (the catalog's estimate; the rows are not counted)`,
     perRow: (parent: string, child: string, ratio: number) =>
       `By the estimated row counts, ${child} has about ${ratio.toLocaleString('en-US')} ${ratio === 1 ? 'row' : 'rows'} per row of ${parent} on average`,
+    perRowFew: (parent: string, child: string) =>
+      `By the estimated row counts, ${child} has under 0.1 rows per row of ${parent} on average`,
     without: (parent: string, child: string, n: number) =>
-      `${child} has fewer rows than ${parent}, so at least about ${n.toLocaleString('en-US')} ${n === 1 ? 'row' : 'rows'} of ${parent} have no row of ${child} (by the estimated row counts)`,
+      `If the estimates hold, ${child} has half the rows of ${parent} or fewer, so about ${n.toLocaleString('en-US')} or more rows of ${parent} have no row of ${child} (a row of ${child} refers to one row of ${parent} only)`,
     named: (table: string, comment: string) => `${table} (${comment})`,
     columnComment: (table: string, column: string, comment: string) =>
       `${table}.${column} is "${comment}" (its column comment)`,
