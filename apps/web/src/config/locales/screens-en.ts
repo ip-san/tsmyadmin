@@ -328,6 +328,81 @@ export const enScreens = {
     raw: 'The plan as the server gave it (JSON)',
     rawTruncated: 'Cut short: it is long',
   },
+  planTour: {
+    open: 'Present',
+    openHint:
+      'Show this plan as a full-screen presentation, scene by scene, in the order the database reads the tables (estimated: the statement is not run)',
+    waiting: 'Reading the index columns…',
+    dialog: 'Plan presentation',
+    diagram: 'The tables the plan reads, and their foreign keys',
+    saveHint:
+      'Save this presentation as one HTML file, to open and present in a browser without the server (it holds the table and index names and the conditions in the plan, which include values written in the SQL)',
+    tones: {
+      index: 'Table read through an index',
+      scan: 'Table read in full (or an index end to end)',
+      focus: 'Foreign key this scene joins along',
+    },
+    notesTitle: 'Reading the plan',
+    introTitle: 'The plan of this statement',
+    intro: (reads: number, order: string) =>
+      `How the database plans to run this statement (estimated: it is not run): ${reads.toLocaleString('en-US')} table ${reads === 1 ? 'read' : 'reads'}. ${order}. Not necessarily the order the SQL is written in: the order the database estimates is fastest (the query tab's Present follows the SQL in its logical order)`,
+    order: (list: string) => `The order is ${list}`,
+    orderListed: (list: string) => `The order in the plan is ${list} (a hash join reads the side it hashes first)`,
+    readTitle: (table: string) => `Read ${table}`,
+    roles: {
+      loopOuter: (table: string) => `${table} is read first; the rows of the tables after it are joined to its rows`,
+      loopInner: (table: string) =>
+        `For each row so far, ${table} is looked up (nested loop). The rows estimated are per lookup, and there are as many lookups as rows so far`,
+      blockInner: (table: string) =>
+        `The rows so far are put in a buffer, and ${table} is read once per buffer to match them (block nested loop)`,
+      hashBuild: (table: string) =>
+        `${table} is read into a hash table on the joining columns (hash join), usually before the side matched against it`,
+      hashBuffer: (table: string) =>
+        `${table} and the rows so far are joined through a hash table (hash join): one side is hashed, the other read once and matched against it (which side is hashed depends on whether it is an inner join, or an outer join, EXISTS and the like)`,
+      hashProbe: (table: string) =>
+        `The rows of ${table} are matched one by one against the hash table (hash join). Each table is read once`,
+      merge: (table: string) =>
+        `The rows of ${table} are put in the order of the joining columns and matched against the other side from the start (merge join)`,
+    },
+    subquery: 'Read inside a subquery: it may be read again for each row outside it',
+    initPlan: 'Read inside a subquery run once, before the rest',
+    memoized: (table: string) =>
+      `${table} is looked up for each value of the rows so far; for a value looked up before, the rows found then are used again (Memoize), so it is looked up again only for a new value`,
+    memoScan: (table: string) =>
+      `${table} is read in full for each new value: as the values grow, what is read multiplies. With an index starting with the joining columns, each row could be looked up`,
+    repeated: 'On the inner side of a nested loop: this step is repeated for each row of the outer side',
+    condition: (detail: string) => `Condition: ${detail}`,
+    loopScan: (table: string) =>
+      `${table} is read in full for each row so far: as the rows grow, what is read multiplies. With an index starting with the joining columns, each row could be looked up`,
+    repeatedScan: (table: string) =>
+      `The step reading ${table} in full is repeated for each outer row: as the outer rows grow, what is read multiplies. See whether this step could be joined through an index instead`,
+    blockScan: (table: string) =>
+      `${table} is joined without an index, read in full once per buffer. With an index starting with the joining columns, each row could be looked up`,
+    filterScan: (table: string) =>
+      `${table} is read in full, and the rows meeting the condition kept. With an index starting with the condition's columns, only a range could be read (on a small table, reading it all may be faster)`,
+    finishTitle: 'After reading',
+    finish: (steps: readonly string[]) => `The rows read go through ${steps.join(', ')} to make the result`,
+    finishSteps: {
+      sort: 'a sort',
+      group: 'grouping',
+      distinct: 'removing duplicates',
+      temporary: 'a temporary table',
+      limit: 'a limit',
+    },
+    finishNotes: {
+      sort: 'Sort: the rows are put in order (for ORDER BY, and also before GROUP BY or a merge join)',
+      group: 'Grouping: rows are gathered to count or sum them (GROUP BY, aggregates)',
+      distinct: 'Removing duplicates: the same row is kept once (DISTINCT, a subquery in IN, …)',
+      temporary: 'Temporary table: a result on the way is kept in a table the server makes',
+      limit: 'Limit: it stops at the number of rows asked for (LIMIT)',
+    },
+    sortHint:
+      'With an index starting with the columns sorted on (ORDER BY, GROUP BY, the joining columns), the rows could be read in that order and the sort left out (with a LIMIT on an ORDER BY, reading stops early)',
+    temporaryHint: 'A temporary table that does not fit in memory may be written to disk',
+    endTitle: 'Summary',
+    end: (reads: number, full: number) =>
+      `${reads.toLocaleString('en-US')} table ${reads === 1 ? 'read' : 'reads'}. ${full === 0 ? 'None of the reads is a full read' : `${full.toLocaleString('en-US')} of them ${full === 1 ? 'reads' : 'read'} every row (or an index end to end), unless a LIMIT or the like stops it early`}`,
+  },
   rowGraph: {
     open: 'Show relations',
     openHint: 'Follow this row and the rows its foreign keys join it to, on a diagram',

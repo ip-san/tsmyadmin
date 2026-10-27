@@ -26,6 +26,23 @@ for (const t of TARGETS) {
       await expect(page.getByRole('region', { name: '文 1' })).toHaveCount(0)
     })
 
+    test('presents the plan scene by scene, in the order the server reads the tables', async ({ page }) => {
+      const plan = await openPlan(page, t)
+      await plan.getByRole('button', { name: 'プレゼンで見る' }).click()
+      const tour = page.getByRole('dialog', { name: '実行計画のプレゼン' })
+      await expect(tour.getByRole('heading', { level: 3 })).toHaveText('この文の実行計画')
+      // One scene per table read, in the server's order (which differs between servers): both tables are told.
+      await expect(tour.getByRole('button', { name: /^\d+\. users を読む$/ })).toHaveCount(1)
+      await expect(tour.getByRole('button', { name: /^\d+\. posts を読む$/ })).toHaveCount(1)
+      await tour.getByRole('button', { name: /^3\. / }).click()
+      await expect(tour.getByRole('heading', { level: 3 })).toHaveText(/^(users|posts) を読む$/)
+      await tour.getByRole('button', { name: /^\d+\. まとめ$/ }).click()
+      await expect(tour.getByText(/^テーブルを読む段は 2 つです。/)).toBeVisible()
+      await tour.getByRole('button', { name: '閉じる' }).click()
+      await expect(tour).toBeHidden()
+      await expect(plan.getByRole('button', { name: 'プレゼンで見る' })).toBeFocused()
+    })
+
     test('fills in the parameters before drawing, as a run does', async ({ page }) => {
       await login(page, t)
       await page.goto(t.schema ? `/db/${t.database}/sql?schema=${t.schema}` : `/db/${t.database}/sql`)

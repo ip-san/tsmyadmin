@@ -620,6 +620,15 @@ for (const t of TARGETS) {
       }
     })
 
+    test('statement plan presented', async ({ page }) => {
+      const plan = await openPlan(page, t)
+      await plan.getByRole('button', { name: 'プレゼンで見る' }).click()
+      const tour = page.getByRole('dialog', { name: '実行計画のプレゼン' })
+      await tour.getByRole('button', { name: /^3\. / }).click()
+      await expect(tour.getByRole('heading', { level: 3 })).toHaveText(/ を読む$/)
+      await scan(page)
+    })
+
     test('SQL tab with a statement plan drawn', async ({ page }) => {
       const plan = await openPlan(page, t)
       await expect(plan).toBeVisible()

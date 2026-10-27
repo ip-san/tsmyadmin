@@ -119,6 +119,62 @@ describe('parseMysqlPlan', () => {
     expect(parseMysqlPlan(raw, '')).toMatchObject({ op: 'Sort', detail: 'filesort, temporary' })
     const quiet = { query_block: { ordering_operation: { using_filesort: false, table: { table_name: 't' } } } }
     expect(parseMysqlPlan(quiet, '').detail).toBeNull()
+    // An ORDER BY the index gives in order: nothing is sorted, and the step does not say it is.
+    expect(parseMysqlPlan(quiet, '').op).toBe('Ordered by index')
+    // `SELECT DISTINCT age FROM users ORDER BY age` on 8.4: the order comes from the sort under it, not an index.
+    const below = {
+      query_block: {
+        ordering_operation: {
+          using_filesort: false,
+          duplicates_removal: { using_temporary_table: true, using_filesort: true, table: { table_name: 't' } },
+        },
+      },
+    }
+    expect(parseMysqlPlan(below, '').op).toBe('Sort')
+    // A subquery's own sort does not order the rows: `SELECT u.id, (SELECT … ORDER BY 1 LIMIT 1) FROM users u ORDER BY u.id`.
+    const subquery = {
+      query_block: {
+        ordering_operation: {
+          using_filesort: false,
+          table: { table_name: 'u', access_type: 'index' },
+          select_list_subqueries: [
+            { query_block: { ordering_operation: { using_filesort: true, table: { table_name: 'p' } } } },
+          ],
+        },
+      },
+    }
+    expect(parseMysqlPlan(subquery, '').op).toBe('Ordered by index')
+  })
+
+  it('says how a table is joined through a join buffer: MySQL on the table, MariaDB around it', () => {
+    // MySQL 8.4, `p JOIN q ON q.body = p.body` with no index: p is hashed, q read once against it.
+    const mysql = {
+      query_block: {
+        nested_loop: [
+          { table: { table_name: 'p', access_type: 'ALL' } },
+          { table: { table_name: 'q', access_type: 'ALL', using_join_buffer: 'hash join' } },
+        ],
+      },
+    }
+    expect(parseMysqlPlan(mysql, '').children.map((c) => c.op)).toEqual(['Table', 'Table, join buffer (hash join)'])
+    const maria = (joinType: string) =>
+      parseMysqlPlan(
+        {
+          query_block: {
+            nested_loop: [
+              { table: { table_name: 'p', access_type: 'ALL' } },
+              { 'block-nl-join': { table: { table_name: 'q', access_type: 'ALL' }, join_type: joinType } },
+            ],
+          },
+        },
+        ''
+      ).children[1]?.op
+    expect([maria('BNL'), maria('BNLH'), maria('BKA'), maria('BKAH')]).toEqual([
+      'Block nested loop',
+      'Block hash join',
+      'Batched key access',
+      'Batched key access',
+    ])
   })
 
   it('names a key it does not know by its words, and any list of subqueries as one', () => {

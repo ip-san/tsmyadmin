@@ -89,12 +89,37 @@ function nodesOf(o: Json, aliases: Map<string, string>): PlanNode[] {
     } else if (isObject(value)) {
       const children = nodesOf(value, aliases)
       const [only] = children
+      const op = wrapperLabel(key, value)
       // MariaDB's read_sorted_file around its filesort: one sort, said twice.
-      if (children.length === 1 && only?.op === label(key)) out.push(only)
-      else if (children.length > 0) out.push(node(label(key), children, { detail: wrapperDetail(value) }))
+      if (children.length === 1 && only?.op === op) out.push(only)
+      else if (children.length > 0) out.push(node(op, children, { detail: wrapperDetail(value) }))
     }
   }
   return out
+}
+
+/**
+ * A step under `o` that makes its rows sorts them or puts them in a temporary table: the order comes from there. A
+ * subquery's or a derived table's own sort does not order these rows.
+ */
+function sortsBelow(o: unknown): boolean {
+  if (!isObject(o)) return Array.isArray(o) && o.some(sortsBelow)
+  if (o.using_filesort === true || o.using_temporary_table === true) return true
+  return Object.entries(o).some(([key, v]) => !/subquer|materiali/.test(key) && sortsBelow(v))
+}
+
+/**
+ * A wrapper's name, where its facts change what it does: an ORDER BY that nothing sorts is read in the index's order,
+ * and MariaDB's join buffer may hash the rows (BNLH) or look them up by a key a batch at a time (BKA, BKAH) instead
+ * of reading the table for each buffer (BNL).
+ */
+function wrapperLabel(key: string, o: Json): string {
+  if (key === 'ordering_operation' && o.using_filesort === false && !sortsBelow(o)) return 'Ordered by index'
+  if (key === 'block-nl-join' && typeof o.join_type === 'string') {
+    if (o.join_type.startsWith('BKA')) return 'Batched key access'
+    if (o.join_type === 'BNLH') return 'Block hash join'
+  }
+  return label(key)
 }
 
 function wrapperDetail(o: Json): string | null {
@@ -137,7 +162,9 @@ function tableNode(t: Json, aliases: Map<string, string>): PlanNode {
   const table = own ? (aliases.get(named) ?? named) : null
   const cost = isObject(t.cost_info) ? num(t.cost_info.prefix_cost ?? t.cost_info.read_cost) : num(t.cost)
   const kind = t.update ? 'Update' : t.delete ? 'Delete' : t.insert ? 'Insert' : 'Table'
-  return node(own ? kind : (named ?? kind), nodesOf(t, aliases), {
+  // How MySQL joins the table to the rows before it, where not one row at a time: `hash join`, `Block Nested Loop`.
+  const buffer = str(t.using_join_buffer)
+  return node(own ? `${kind}${buffer ? `, join buffer (${buffer})` : ''}` : (named ?? kind), nodesOf(t, aliases), {
     table,
     alias: own && named !== table ? named : null,
     index: own ? str(t.key) : null,

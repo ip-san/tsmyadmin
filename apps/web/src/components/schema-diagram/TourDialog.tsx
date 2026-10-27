@@ -37,6 +37,7 @@ export function TourDialog({
   tones,
   error,
   saveHint = t.saveHint,
+  notesTitle = t.notes,
   onClose,
 }: {
   title: string
@@ -48,6 +49,8 @@ export function TourDialog({
   error?: { error: unknown; retry: () => void } | undefined
   /** What the saved file holds, said on its button (names and comments, unless the tour says more). */
   saveHint?: string
+  /** The heading of what a scene says beyond its words: what it reads of the design, unless the tour reads else. */
+  notesTitle?: string
   onClose: () => void
 }) {
   const ref = useRef<HTMLDialogElement>(null)
@@ -83,6 +86,7 @@ export function TourDialog({
         scenes={drawn.scenes}
         label={label}
         tones={tones}
+        notesTitle={notesTitle}
         onFullscreen={toggleFullscreen}
         keysRef={keysRef}
       />
@@ -109,8 +113,8 @@ export function TourDialog({
           <div className="flex gap-2">
             {drawn && !error ? (
               <>
-                <TourVideo title={title} drawn={drawn} tones={tones} />
-                <Button size="sm" title={saveHint} onClick={() => void save(title, label, drawn, tones)}>
+                <TourVideo title={title} drawn={drawn} tones={tones} notesTitle={notesTitle} />
+                <Button size="sm" title={saveHint} onClick={() => void save(title, label, drawn, tones, notesTitle)}>
                   {t.save}
                 </Button>
               </>
@@ -134,7 +138,8 @@ async function save(
   title: string,
   label: string,
   drawn: { diagram: TourDiagram; scenes: readonly TourScene[] },
-  tones: Partial<Record<Tone, string>>
+  tones: Partial<Record<Tone, string>>,
+  notesTitle: string
 ) {
   const { tourHtml } = await import('./tour-html.ts')
   const html = tourHtml(drawn.diagram, drawn.scenes, {
@@ -147,7 +152,7 @@ async function save(
     pause: t.pause,
     narrate: t.narrate,
     noVoice: t.noVoice,
-    notes: t.notes,
+    notes: notesTitle,
     hints: t.hints,
     stop: t.stop,
     keys: t.savedKeys,
@@ -163,6 +168,7 @@ function Stage({
   scenes,
   label,
   tones,
+  notesTitle,
   onFullscreen,
   keysRef,
 }: {
@@ -170,6 +176,7 @@ function Stage({
   scenes: readonly TourScene[]
   label: string
   tones: Partial<Record<Tone, string>>
+  notesTitle: string
   onFullscreen: () => void
   keysRef: RefObject<((e: KeyboardEvent) => void) | null>
 }) {
@@ -240,7 +247,7 @@ function Stage({
             labels={tones}
           />
         </div>
-        <TourCaption scene={scene} index={player.index} count={scenes.length} />
+        <TourCaption scene={scene} index={player.index} count={scenes.length} notesTitle={notesTitle} />
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <Button size="sm" onClick={player.prev} disabled={player.index === 0}>
