@@ -190,8 +190,7 @@ function Stage({
   const size = (table: string) => ({ width: BOX_WIDTH, height: boxHeight(diagram.columns.get(table)?.length ?? 0) })
   const camera = useCamera(frameOf(scene?.frame ?? [], diagram.tables, at, size))
   const toggle = reading.toggle
-  // A presenter's clicker sends Page Up / Down, which move the scenes from anywhere; a focused button keeps its own
-  // Space and Enter, and a field (the chapter of the video) its own keys.
+  // A clicker's Page Up / Down move the scenes from anywhere; a focused button or field keeps its own other keys.
   keysRef.current = (e: KeyboardEvent) => {
     if (FIELDS.some((f) => e.target instanceof f) && !e.key.startsWith('Page')) return
     const onButton = e.target instanceof HTMLButtonElement
