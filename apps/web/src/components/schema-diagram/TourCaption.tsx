@@ -9,7 +9,17 @@ const t = locale.tour
  * where the design may cost time. Beside the picture on a wide screen; it scrolls (and takes the keyboard, to be
  * scrolled) when a scene says more than fits.
  */
-export function TourCaption({ scene, index, count }: { scene: TourScene; index: number; count: number }) {
+export function TourCaption({
+  scene,
+  index,
+  count,
+  notesTitle = t.notes,
+}: {
+  scene: TourScene
+  index: number
+  count: number
+  notesTitle?: string
+}) {
   const titleId = useId()
   return (
     <section
@@ -24,7 +34,7 @@ export function TourCaption({ scene, index, count }: { scene: TourScene; index: 
         {scene.title}
       </h3>
       <p className="text-lg text-ink">{scene.text}</p>
-      <SceneList title={t.notes} items={scene.notes} className="text-brand" />
+      <SceneList title={notesTitle} items={scene.notes} className="text-brand" />
       <SceneList title={t.hints} items={scene.hints} className="text-critical" />
     </section>
   )

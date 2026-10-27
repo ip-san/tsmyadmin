@@ -25,10 +25,12 @@ export function TourVideo({
   title,
   drawn,
   tones,
+  notesTitle = t.notes,
 }: {
   title: string
   drawn: { diagram: TourDiagram; scenes: readonly TourScene[] }
   tones: Partial<Record<Tone, string>>
+  notesTitle?: string
 }) {
   const [state, setState] = useState<State>(null)
   // Set at once on the press: a second press in the same frame does not start a second recording.
@@ -53,7 +55,7 @@ export function TourVideo({
       const figure = tourFigure(drawn.diagram, drawn.scenes, { sceneOf: t.sceneOf, stop: t.stop })
       const { blob, ext } = await recordTour(
         figure,
-        { title, notes: t.notes, hints: t.hints, tones },
+        { title, notes: notesTitle, hints: t.hints, tones },
         { signal: stop.signal, onScene: (i) => setState({ scene: i + 1 }) }
       )
       downloadBlob(safeFilename(title, ext), blob)
