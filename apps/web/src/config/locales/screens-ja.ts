@@ -345,6 +345,7 @@ export const jaScreens = {
     intro: (reads: number, order: string) =>
       `データベースがこの文を実行するときの計画です（推定で、文は実行していません）。テーブルを ${reads.toLocaleString('ja-JP')} 回読みます。${order}。SQL に書いた順とは限らず、データベースが速いと見積もった順です（書いた SQL を論理的な順に追うのは、クエリタブの「プレゼンで見る」です）`,
     order: (list: string) => `読む順は ${list}`,
+    orderListed: (list: string) => `計画に並ぶ順は ${list}（ハッシュ結合では、ハッシュ表を作る側を先に読みます）`,
     readTitle: (table: string) => `${table} を読む`,
     roles: {
       loopOuter: (table: string) => `${table} を先に読み、その行に、あとのテーブルの行をつないでいきます`,
@@ -352,13 +353,18 @@ export const jaScreens = {
         `これまでの行の 1 行ごとに、${table} を引きます（入れ子ループ）。推定の行数は 1 回あたりで、引く回数はこれまでの行の数だけあります`,
       blockInner: (table: string) =>
         `これまでの行をまとめてバッファに入れ、そのまとまりごとに ${table} を読んで突き合わせます（ブロック入れ子ループ）`,
-      hashBuild: (table: string) => `先に ${table} を読み、つなぐカラムの値でハッシュ表を作ります（ハッシュ結合）`,
+      hashBuild: (table: string) =>
+        `${table} を読んで、つなぐカラムの値でハッシュ表を作ります（ハッシュ結合）。ふつう、照らし合わせる側より先に読みます`,
+      hashBuffer: (table: string) =>
+        `${table} とこれまでの行を、ハッシュ表でつなぎます（ハッシュ結合）。一方でハッシュ表を作り、もう一方を 1 回読んで照らし合わせます（どちらで作るかは、内部結合か、外部結合・EXISTS などかで変わります）`,
       hashProbe: (table: string) =>
         `${table} の行を 1 行ずつ、ハッシュ表と照らし合わせてつなぎます（ハッシュ結合）。どちらのテーブルも 1 回ずつ読みます`,
       merge: (table: string) =>
         `${table} の行を、つなぐカラムの順に並べて、もう一方と端から突き合わせます（マージ結合）`,
     },
     subquery: '副問い合わせの中で読みます。外側の行ごとに、読み直すことがあります',
+    initPlan: '先に 1 回だけ実行する副問い合わせの中で読みます',
+    repeated: '入れ子ループの内側にある段です。外側の 1 行ごとに、この段をくり返します',
     condition: (detail: string) => `条件: ${detail}`,
     loopScan: (table: string) =>
       `これまでの 1 行ごとに、${table} を全件読みます。行が増えると、読む量は掛け算で増えます。つなぐカラムで始まるインデックスがあれば、1 行ずつ引けます`,
@@ -376,7 +382,7 @@ export const jaScreens = {
       limit: '件数の打ち切り',
     },
     finishNotes: {
-      sort: '並べ替え: 行を全部そろえてから、並べ直します（ORDER BY のほか、GROUP BY やマージ結合の前にも）',
+      sort: '並べ替え: 行を並べ直します（ORDER BY のほか、GROUP BY やマージ結合の前にも）',
       group: '集計: 行をまとめて、数えたり合計したりします（GROUP BY・集計関数）',
       distinct: '重複の除去: 同じ行を 1 つにします（DISTINCT・IN の副問い合わせなど）',
       temporary: '一時テーブル: 途中の結果を、サーバーが作るテーブルに置きます',
@@ -387,7 +393,7 @@ export const jaScreens = {
     temporaryHint: '一時テーブルは、行が多いとメモリに収まらず、ディスクに書くことがあります',
     endTitle: 'まとめ',
     end: (reads: number, full: number) =>
-      `テーブルを ${reads.toLocaleString('ja-JP')} 回読みます。${full === 0 ? '全件を読む段はありません' : `そのうち ${full.toLocaleString('ja-JP')} 回は、全件（またはインデックスの端から端まで）を読みます`}`,
+      `テーブルを読む段は ${reads.toLocaleString('ja-JP')} つです。${full === 0 ? '全件を読む段はありません' : `そのうち ${full.toLocaleString('ja-JP')} つは、全件（またはインデックスの端から端まで）を読む段です（LIMIT などで、途中で止まることもあります）`}`,
   },
   rowGraph: {
     open: '関係を図で見る',

@@ -2,7 +2,7 @@ import type { PlanNode, RelationDef } from '@tsmyadmin/shared'
 import { diagramFor, type Tone } from '@/components/schema-diagram/overlay.ts'
 import { overlay, type TourScene, unique, whole } from '@/components/schema-diagram/tour.ts'
 import { locale } from '@/config/locale-screens.ts'
-import { type JoinRole, planReads, planSteps } from './plan-steps.ts'
+import { type PlanRead, planReads, planSteps } from './plan-steps.ts'
 
 const t = locale.planTour
 
@@ -10,13 +10,18 @@ const t = locale.planTour
 const CONDITION_CHARS = 120
 const cut = (s: string) => (s.length > CONDITION_CHARS ? `${s.slice(0, CONDITION_CHARS - 1)}…` : s)
 
-/** What a step that reads no table does with the rows, by its name across the servers. */
+/**
+ * What a step that reads no table does with the rows, by the name of its operation across the servers (anchored:
+ * a condition in an operation's name, such as MySQL 9's `Filter: (status = 'temporary')`, is not one), and by the
+ * notes the MySQL format puts on a step (`filesort`, `temporary`).
+ */
 type Finish = keyof typeof t.finishSteps
-const FINISH: readonly (readonly [Finish, RegExp])[] = [
-  ['sort', /^(incremental )?sort\b|filesort/i],
-  ['group', /^(group|aggregate|hashaggregate)\b|aggregate:/i],
-  ['distinct', /^(unique|distinct)\b|remove duplicates|deduplication/i],
-  ['temporary', /temporary|materiali[sz]e/i],
+const FINISH: readonly (readonly [Finish, RegExp, string?])[] = [
+  // Not MySQL 9's `Sort row IDs`, which orders the rows to read, not the result.
+  ['sort', /^(incremental )?sort\b(?! row ids)/i, 'filesort'],
+  ['group', /^(group|aggregate|hashaggregate)\b/i],
+  ['distinct', /^(unique|distinct)\b|^remove duplicates|^sort with duplicate removal|with deduplication$/i],
+  ['temporary', /^temporary table\b|<temporary>/i, 'temporary'],
   ['limit', /^limit\b/i],
 ]
 
@@ -26,18 +31,23 @@ function finishes(plan: PlanNode): Finish[] {
   const walk = (n: PlanNode) => {
     n.children.forEach(walk)
     if (n.access !== null) return
-    for (const [kind, re] of FINISH) if (re.test(n.op) || re.test(n.detail ?? '')) out.push(kind)
+    const notes = (n.detail ?? '').split(', ')
+    for (const [kind, re, note] of FINISH) if (re.test(n.op) || (note && notes.includes(note))) out.push(kind)
   }
   walk(plan)
   return [...new Set(out)]
 }
 
-/** Where a full read is the cost: once per row before it, once per buffer, or before a condition is applied. */
-function readHint(role: JoinRole | null, n: PlanNode & { table: string }): string | null {
+/**
+ * Where a full read is the cost: once per row before it, once per buffer, or before a condition is applied (only
+ * where the read is not joined by a hash or a merge: there the condition may be the join's own).
+ */
+function readHint(read: PlanRead): string | null {
+  const { node: n, join, repeated } = read
   if (n.access !== 'fullScan') return null
-  if (role === 'loopInner') return t.loopScan(n.table)
-  if (role === 'blockInner') return t.blockScan(n.table)
-  return n.detail ? t.filterScan(n.table) : null
+  if (join === 'loopInner' || repeated) return t.loopScan(n.table)
+  if (join === 'blockInner') return t.blockScan(n.table)
+  return n.detail && (join === null || join === 'loopOuter') ? t.filterScan(n.table) : null
 }
 
 export interface PlanTourInput {
@@ -66,7 +76,9 @@ export function planTour({ plan, relations, indexColumns }: PlanTourInput): {
     extra.set(c.table, unique([...(extra.get(c.table) ?? []), c.column]))
   const diagram = diagramFor(tables, relations, extra)
   const drawn = diagram.relations
-  const order = t.order(reads.map((r) => r.node.table).join(' → '))
+  const list = reads.map((r) => r.node.table).join(' → ')
+  // MySQL 8 does not say which side of its hash join is read first: the order is the plan's, not a claim.
+  const order = reads.some((r) => r.join === 'hashBuffer') ? t.orderListed(list) : t.order(list)
 
   const scenes: TourScene[] = [
     {
@@ -80,7 +92,8 @@ export function planTour({ plan, relations, indexColumns }: PlanTourInput): {
   // Each table as last read: a later read of the same table is lit as it is read then.
   const lit = new Map<string, readonly [Tone, string]>()
   const hinted: string[] = []
-  reads.forEach(({ node, join, subquery }, i) => {
+  reads.forEach((r, i) => {
+    const { node, join, subquery, repeated } = r
     const step = steps[i]
     const read = step?.tables?.[0]
     const before = reads.slice(0, i).map((r) => r.node.table)
@@ -96,11 +109,12 @@ export function planTour({ plan, relations, indexColumns }: PlanTourInput): {
             )
       )[0]
     const notes = [
-      subquery ? t.subquery : null,
+      subquery === 'perRow' ? t.subquery : subquery === 'once' ? t.initPlan : null,
+      repeated && join !== 'loopInner' ? t.repeated : null,
       join ? t.roles[join](node.table) : null,
       node.detail ? t.condition(cut(node.detail)) : null,
     ]
-    const hint = readHint(join, node)
+    const hint = readHint(r)
     if (hint) hinted.push(hint)
     if (read) lit.set(node.table, [read.tone, read.badge ?? locale.plan.full])
     scenes.push({

@@ -121,6 +121,16 @@ describe('parseMysqlPlan', () => {
     expect(parseMysqlPlan(quiet, '').detail).toBeNull()
     // An ORDER BY the index gives in order: nothing is sorted, and the step does not say it is.
     expect(parseMysqlPlan(quiet, '').op).toBe('Ordered by index')
+    // `SELECT DISTINCT age FROM users ORDER BY age` on 8.4: the order comes from the sort under it, not an index.
+    const below = {
+      query_block: {
+        ordering_operation: {
+          using_filesort: false,
+          duplicates_removal: { using_temporary_table: true, using_filesort: true, table: { table_name: 't' } },
+        },
+      },
+    }
+    expect(parseMysqlPlan(below, '').op).toBe('Sort')
   })
 
   it('says how a table is joined through a join buffer: MySQL on the table, MariaDB around it', () => {
@@ -146,7 +156,12 @@ describe('parseMysqlPlan', () => {
         },
         ''
       ).children[1]?.op
-    expect([maria('BNL'), maria('BNLH')]).toEqual(['Block nested loop', 'Block hash join'])
+    expect([maria('BNL'), maria('BNLH'), maria('BKA'), maria('BKAH')]).toEqual([
+      'Block nested loop',
+      'Block hash join',
+      'Batched key access',
+      'Batched key access',
+    ])
   })
 
   it('names a key it does not know by its words, and any list of subqueries as one', () => {

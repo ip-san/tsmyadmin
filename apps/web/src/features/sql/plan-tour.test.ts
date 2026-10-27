@@ -108,7 +108,7 @@ describe('planTour', () => {
     const { scenes } = planTour({ plan: buffered, relations: keys })
     expect(scenes[1]?.notes).toEqual([t.roles.loopOuter('posts'), t.condition("(p.title like 'A%')")])
     expect(scenes[1]?.hints).toEqual([t.filterScan('posts')])
-    expect(scenes[2]?.notes).toEqual([t.roles.hashProbe('posts')])
+    expect(scenes[2]?.notes).toEqual([t.roles.hashBuffer('posts')])
     expect(scenes[2]?.hints).toEqual([])
     const block = planTour({
       plan: node({
@@ -176,6 +176,52 @@ describe('planTour', () => {
     expect(scenes.map((s) => s.title)).toEqual([t.introTitle, t.readTitle('posts'), t.endTitle])
     expect(scenes[1]?.text).toBe(p.read('posts', p.how.range('PRIMARY'), ''))
     expect(scenes[1]?.notes).toEqual([])
+  })
+
+  it('takes the finishing steps from the operation, not from a condition that names them', () => {
+    const plan = node({
+      op: "Filter: (t.status = 'temporary')",
+      children: [
+        node({
+          op: 'Sort row IDs',
+          children: [
+            node({
+              op: 'Nested Loop',
+              children: [
+                node({ op: 'Seq Scan', table: 'users', access: 'fullScan' }),
+                node({ op: 'Materialize', children: [node({ op: 'Seq Scan', table: 'posts', access: 'fullScan' })] }),
+              ],
+            }),
+          ],
+        }),
+      ],
+    })
+    const { scenes } = planTour({ plan, relations: [] })
+    expect(titled(scenes, t.finishTitle)).toBeUndefined()
+    // Under a Materialize the rows are kept once read: not read again for each user.
+    expect(scenes[2]?.hints).toEqual([])
+  })
+
+  it('does not take the condition of a table joined by a hash for a filter', () => {
+    const plan = node({
+      op: 'Hash Join',
+      children: [
+        node({ op: 'Seq Scan', table: 'users', access: 'fullScan' }),
+        node({ op: 'Hash', children: [node({ op: 'Seq Scan', table: 'posts', access: 'fullScan', detail: 'x = 1' })] }),
+      ],
+    })
+    expect(planTour({ plan, relations: [] }).scenes.at(-1)?.hints).toEqual([])
+  })
+
+  it("says the order is the plan's where MySQL 8 does not say which side of its hash join comes first", () => {
+    const plan = node({
+      op: 'Nested loop',
+      children: [
+        node({ op: 'Table', table: 'users', access: 'fullScan' }),
+        node({ op: 'Table, join buffer (hash join)', table: 'posts', access: 'fullScan' }),
+      ],
+    })
+    expect(planTour({ plan, relations: [] }).scenes[0]?.text).toBe(t.intro(2, t.orderListed('users → posts')))
   })
 
   it('cuts a long condition short', () => {

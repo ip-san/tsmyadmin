@@ -7,19 +7,34 @@ const t = locale.plan
 /**
  * How a read is joined to the rows read before it, from the join above it (or, on MySQL 8's format, the table's own
  * join buffer): the outer and inner side of a nested loop, the inner side of a loop over a buffer of rows, the side
- * a hash join builds its table from and the side it probes it with, or a side of a merge join.
+ * a hash join builds its table from and the side it probes it with, a hash join whose sides MySQL 8 does not say
+ * (`hashBuffer`: the buffered table is probed in an inner join, hashed in an outer, semi or anti join), or a side of
+ * a merge join.
  */
-export type JoinRole = 'loopOuter' | 'loopInner' | 'blockInner' | 'hashBuild' | 'hashProbe' | 'merge'
+type JoinRole = 'loopOuter' | 'loopInner' | 'blockInner' | 'hashBuild' | 'hashProbe' | 'hashBuffer' | 'merge'
 
-type Method = 'loop' | 'block' | 'hash' | 'merge'
+type Method = 'loop' | 'block' | 'hash' | 'buffer' | 'merge'
 
 /** The join method an operation names, across the servers' words ("Nested Loop", "Inner hash join", "Hash semijoin"…). */
 function joinMethod(op: string): Method | null {
-  if (/block (nested loop|hash join)|join buffer/i.test(op))
-    return /hash/i.test(op) ? 'hash' : /batched key/i.test(op) ? 'loop' : 'block'
+  // Batched key access looks each row up by a key, a batch at a time: a loop, not a read of the whole table.
+  if (/batched key/i.test(op)) return 'loop'
+  if (/block hash join/i.test(op)) return 'hash'
+  if (/join buffer \(hash join\)/i.test(op)) return 'buffer'
+  if (/block nested loop|join buffer/i.test(op)) return 'block'
   if (/nested loop/i.test(op)) return 'loop'
   if (/hash (semi|anti)?\s?join/i.test(op)) return 'hash'
   if (/merge (semi|anti)?\s?join/i.test(op)) return 'merge'
+  return null
+}
+
+/**
+ * A plan of its own hung under a step (PostgreSQL): an InitPlan runs once, before; a SubPlan may run again for each
+ * row of the step. Neither is an input of a join. MySQL and MariaDB name a subquery `Subquery`.
+ */
+function sidePlan(op: string): PlanRead['subquery'] {
+  if (/\binitplan\b/i.test(op)) return 'once'
+  if (/\bsubplan\b/i.test(op)) return 'perRow'
   return null
 }
 
@@ -30,24 +45,32 @@ export interface PlanRead {
   /** How it is joined to the rows read before it; null where no join is above it. */
   join: JoinRole | null
   /**
-   * Read inside a subquery that may run again for each row outside it: PostgreSQL's SubPlan, MySQL's and MariaDB's
-   * subqueries. Not a table in FROM made of a SELECT (PostgreSQL's Subquery Scan), which is read once.
+   * Read inside a subquery: one run once before the rest (`once`, PostgreSQL's InitPlan), or one that may run again
+   * for each row outside it (`perRow`: PostgreSQL's SubPlan, MySQL's and MariaDB's subqueries). Not a table in FROM
+   * made of a SELECT (PostgreSQL's Subquery Scan), which is read once.
    */
-  subquery: boolean
+  subquery: 'once' | 'perRow' | null
+  /** Under the inner side of a nested loop further up: read again for each row of that loop's outer side. */
+  repeated: boolean
 }
 
-/** The role of a join's children: a loop's first input drives it, a hash join builds from its last. */
-function roleOf(method: Method, child: number, children: number): JoinRole {
-  switch (method) {
-    case 'loop':
-      return child === 0 ? 'loopOuter' : 'loopInner'
-    case 'block':
-      return child === 0 && children > 1 ? 'loopOuter' : 'blockInner'
-    case 'hash':
-      return child === children - 1 ? 'hashBuild' : 'hashProbe'
-    case 'merge':
-      return 'merge'
-  }
+/**
+ * The role of a join's inputs: a loop's first input drives it, a hash join builds from its last. A join over one
+ * input wraps the table it joins (MariaDB's join buffer), which is its inner side.
+ */
+function roleOf(method: Method, input: number, inputs: number): JoinRole {
+  if (method === 'buffer') return 'hashBuffer'
+  if (method === 'merge') return 'merge'
+  if (method === 'hash') return inputs > 1 && input === inputs - 1 ? 'hashBuild' : 'hashProbe'
+  const first = inputs > 1 && input === 0
+  if (method === 'block') return first ? 'loopOuter' : 'blockInner'
+  return first ? 'loopOuter' : 'loopInner'
+}
+
+interface Context {
+  join: JoinRole | null
+  subquery: PlanRead['subquery']
+  repeated: boolean
 }
 
 /**
@@ -57,27 +80,43 @@ function roleOf(method: Method, child: number, children: number): JoinRole {
  */
 export function planReads(plan: PlanNode): PlanRead[] {
   const out: PlanRead[] = []
-  const walk = (n: PlanNode, path: string, join: JoinRole | null, subquery: boolean) => {
-    const method = joinMethod(n.op)
-    const inner = subquery || /\bsubplan\b|^subquery$/i.test(n.op)
-    // Kept once read: the loop above re-reads the rows kept, not the table under it.
+  const walk = (n: PlanNode, path: string, at: Context) => {
+    const method = n.table === null ? joinMethod(n.op) : null
+    // Kept once read (Materialize, Memoize): the loop above re-reads the rows kept, not what is under it.
     const kept = /^(materiali[sz]e|memoize)\b/i.test(n.op)
-    const order = n.children.map((c, i) => [c, i] as const)
-    if (method === 'hash' && order.length > 1) order.unshift(...order.splice(-1))
-    for (const [c, i] of order)
-      walk(
-        c,
-        `${path}.${i}`,
-        method && n.table === null ? roleOf(method, i, n.children.length) : kept ? null : join,
-        inner
-      )
+    const inputs = n.children.flatMap((c, i) => (sidePlan(c.op) ? [] : [i]))
+    const order = n.children.map((_, i) => i)
+    if (method === 'hash' && inputs.length > 1) {
+      const build = inputs.at(-1) as number
+      order.splice(order.indexOf(build), 1)
+      order.splice(order.indexOf(inputs[0] as number), 0, build)
+    }
+    for (const i of order) {
+      const c = n.children[i] as PlanNode
+      const side = sidePlan(c.op) ?? (/^subquery$/i.test(n.op) ? 'perRow' : null)
+      let next: Context
+      if (side) next = { join: null, subquery: side, repeated: at.repeated }
+      else if (method) {
+        const join = roleOf(method, inputs.indexOf(i), inputs.length)
+        // A join of its own under the inner side of a loop runs again for each outer row; a wrapper of one input
+        // (MariaDB's join buffer) is that inner side itself.
+        next = { join, subquery: at.subquery, repeated: at.repeated || (at.join === 'loopInner' && inputs.length > 1) }
+      } else next = kept ? { join: null, subquery: at.subquery, repeated: false } : at
+      walk(c, `${path}.${i}`, next)
+    }
     if (n.table !== null && n.access !== null) {
-      // MySQL 8 says the join buffer on the table it joins: the rows before it are buffered (or hashed).
-      const own = method === 'hash' ? 'hashProbe' : method === 'block' ? 'blockInner' : join
-      out.push({ node: n as PlanRead['node'], path, join: own, subquery })
+      // MySQL 8 says the join buffer on the table it joins.
+      const own = joinMethod(n.op)
+      out.push({
+        node: n as PlanRead['node'],
+        path,
+        join: own ? roleOf(own, 1, 1) : at.join,
+        subquery: at.subquery,
+        repeated: at.repeated,
+      })
     }
   }
-  walk(plan, '0', null, false)
+  walk(plan, '0', { join: null, subquery: null, repeated: false })
   return out
 }
 

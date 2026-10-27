@@ -37,7 +37,7 @@ for (const t of TARGETS) {
       await tour.getByRole('button', { name: /^3\. / }).click()
       await expect(tour.getByRole('heading', { level: 3 })).toHaveText(/^(users|posts) を読む$/)
       await tour.getByRole('button', { name: /^\d+\. まとめ$/ }).click()
-      await expect(tour.getByText(/^テーブルを 2 回読みます。/)).toBeVisible()
+      await expect(tour.getByText(/^テーブルを読む段は 2 つです。/)).toBeVisible()
       await tour.getByRole('button', { name: '閉じる' }).click()
       await expect(tour).toBeHidden()
       await expect(plan.getByRole('button', { name: 'プレゼンで見る' })).toBeFocused()

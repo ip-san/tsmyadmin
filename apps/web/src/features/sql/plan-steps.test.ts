@@ -48,8 +48,8 @@ describe('planReads, joined', () => {
 
   it('says how each read is joined: the sides of a loop, and of a hash join read from its last input', () => {
     expect(roles(node({ op: 'Nested Loop', children: [scan('a'), scan('b')] }))).toEqual([
-      ['a', 'loopOuter', false],
-      ['b', 'loopInner', false],
+      ['a', 'loopOuter', null],
+      ['b', 'loopInner', null],
     ])
     // PostgreSQL and MySQL 9 write the side a hash join builds from last; it is read first. The path stays its place.
     const hash = node({
@@ -61,31 +61,31 @@ describe('planReads, joined', () => {
       ['probe', 'hashProbe', '0.0'],
     ])
     expect(roles(node({ op: 'Merge Join', children: [scan('a'), scan('b')] }))).toEqual([
-      ['a', 'merge', false],
-      ['b', 'merge', false],
+      ['a', 'merge', null],
+      ['b', 'merge', null],
     ])
     // MySQL 8 on the table it joins through a buffer; MariaDB around it.
     expect(
       roles(node({ op: 'Nested loop', children: [scan('a'), { ...scan('b'), op: 'Table, join buffer (hash join)' }] }))
     ).toEqual([
-      ['a', 'loopOuter', false],
-      ['b', 'hashProbe', false],
+      ['a', 'loopOuter', null],
+      ['b', 'hashBuffer', null],
     ])
     expect(
       roles(
         node({ op: 'Nested loop', children: [scan('a'), node({ op: 'Block nested loop', children: [scan('b')] })] })
       )
     ).toEqual([
-      ['a', 'loopOuter', false],
-      ['b', 'blockInner', false],
+      ['a', 'loopOuter', null],
+      ['b', 'blockInner', null],
     ])
   })
 
   it('does not take a loop over rows kept (Materialize) as reading the table again for each row', () => {
     const kept = node({ op: 'Nested Loop', children: [scan('a'), node({ op: 'Materialize', children: [scan('b')] })] })
     expect(roles(kept)).toEqual([
-      ['a', 'loopOuter', false],
-      ['b', null, false],
+      ['a', 'loopOuter', null],
+      ['b', null, null],
     ])
   })
 
@@ -93,12 +93,67 @@ describe('planReads, joined', () => {
     expect(
       roles(node({ op: 'Sort', children: [scan('a'), node({ op: 'Aggregate SubPlan 1', children: [scan('b')] })] }))
     ).toEqual([
-      ['a', null, false],
-      ['b', null, true],
+      ['a', null, null],
+      ['b', null, 'perRow'],
     ])
-    expect(roles(node({ op: 'Subquery', children: [scan('b')] }))).toEqual([['b', null, true]])
+    expect(roles(node({ op: 'Subquery', children: [scan('b')] }))).toEqual([['b', null, 'perRow']])
     // PostgreSQL's `FROM (SELECT …) x`: read once.
-    expect(roles(node({ op: 'Subquery Scan', children: [scan('b')] }))).toEqual([['b', null, false]])
+    expect(roles(node({ op: 'Subquery Scan', children: [scan('b')] }))).toEqual([['b', null, null]])
+  })
+})
+
+describe('planReads, side plans and wrappers', () => {
+  const scan = (table: string) => node({ op: 'Seq Scan', table, access: 'fullScan' })
+  const of = (plan: PlanNode) => planReads(plan).map((r) => [r.node.table, r.join, r.subquery, r.repeated])
+
+  it("does not take PostgreSQL's InitPlan or SubPlan for an input of the join they hang under", () => {
+    // `WHERE u.age > (SELECT avg(age) FROM users)`: the InitPlan is listed first, and runs once, before the join.
+    const init = node({
+      op: 'Nested Loop',
+      children: [node({ op: 'Aggregate InitPlan 1', children: [scan('x')] }), scan('users'), scan('posts')],
+    })
+    expect(of(init)).toEqual([
+      ['x', null, 'once', false],
+      ['users', 'loopOuter', null, false],
+      ['posts', 'loopInner', null, false],
+    ])
+    // A SubPlan listed last under a hash join is not the side it builds from.
+    const sub = node({
+      op: 'Hash Join',
+      children: [
+        scan('users'),
+        node({ op: 'Hash', children: [scan('posts')] }),
+        node({ op: 'Aggregate SubPlan 1', children: [scan('x')] }),
+      ],
+    })
+    expect(of(sub)).toEqual([
+      ['posts', 'hashBuild', null, false],
+      ['users', 'hashProbe', null, false],
+      ['x', null, 'perRow', false],
+    ])
+  })
+
+  it("takes MariaDB's join buffer around one table as the side joined to the rows before", () => {
+    const wrapped = (op: string) =>
+      of(node({ op: 'Nested loop', children: [scan('a'), node({ op, children: [scan('b')] })] }))[1]
+    expect(wrapped('Block hash join')).toEqual(['b', 'hashProbe', null, false])
+    expect(wrapped('Block nested loop')).toEqual(['b', 'blockInner', null, false])
+    expect(wrapped('Batched key access')).toEqual(['b', 'loopInner', null, false])
+  })
+
+  it('marks what a join under the inner side of a loop reads as repeated for each outer row', () => {
+    const deep = node({
+      op: 'Nested Loop',
+      children: [
+        scan('a'),
+        node({ op: 'Hash Join', children: [scan('b'), node({ op: 'Hash', children: [scan('c')] })] }),
+      ],
+    })
+    expect(of(deep)).toEqual([
+      ['a', 'loopOuter', null, false],
+      ['c', 'hashBuild', null, true],
+      ['b', 'hashProbe', null, true],
+    ])
   })
 })
 

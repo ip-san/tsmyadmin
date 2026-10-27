@@ -98,14 +98,23 @@ function nodesOf(o: Json, aliases: Map<string, string>): PlanNode[] {
   return out
 }
 
+/** A step under `o` sorts or puts its rows in a temporary table: the order comes from there. */
+function sortsBelow(o: unknown): boolean {
+  if (!isObject(o)) return Array.isArray(o) && o.some(sortsBelow)
+  return o.using_filesort === true || o.using_temporary_table === true || Object.values(o).some(sortsBelow)
+}
+
 /**
- * A wrapper's name, where its facts change what it does: an ORDER BY the index already gives is not sorted, and
- * MariaDB's join buffer may hash (BNLH) instead of looping over it.
+ * A wrapper's name, where its facts change what it does: an ORDER BY that nothing sorts is read in the index's order,
+ * and MariaDB's join buffer may hash the rows (BNLH) or look them up by a key a batch at a time (BKA, BKAH) instead
+ * of reading the table for each buffer (BNL).
  */
 function wrapperLabel(key: string, o: Json): string {
-  if (key === 'ordering_operation' && o.using_filesort === false) return 'Ordered by index'
-  if (key === 'block-nl-join' && typeof o.join_type === 'string' && /^BNLH|^BKAH/.test(o.join_type))
-    return 'Block hash join'
+  if (key === 'ordering_operation' && o.using_filesort === false && !sortsBelow(o)) return 'Ordered by index'
+  if (key === 'block-nl-join' && typeof o.join_type === 'string') {
+    if (o.join_type.startsWith('BKA')) return 'Batched key access'
+    if (o.join_type === 'BNLH') return 'Block hash join'
+  }
   return label(key)
 }
 
