@@ -99,6 +99,19 @@ describe('queryTour', () => {
     expect(scenes.at(-1)?.notes).toEqual([t.multiplies(w.named('orders', '注文'), 'items')])
   })
 
+  it("adds the catalog's estimated rows: of the table it starts from, and of one table per row of the other", () => {
+    const rows = new Map([
+      ['orders', 500],
+      ['users', 100],
+      ['items', 2000],
+    ])
+    const s = queryTour({ request, joins, schemas, keys, rows }).scenes
+    const named = w.named('orders', '注文')
+    expect(s[1]?.notes?.[0]).toBe(w.rows(named, 500))
+    expect(s.find((x) => x.title === t.joinTitle('left', 'users'))?.notes?.at(-1)).toBe(w.perRow('users', named, 5))
+    expect(s.find((x) => x.title === t.joinTitle('left', 'items'))?.notes?.at(-1)).toBe(w.perRow(named, 'items', 4))
+  })
+
   it('reads the conditions in words, and what a condition on a LEFT JOINed table undoes', () => {
     const where = titled(t.whereTitle)
     expect(where?.text).toBe(t.where(t.condition('items.id', locale.search.ops.gt, "'3'")))

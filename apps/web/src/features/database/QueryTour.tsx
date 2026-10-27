@@ -9,6 +9,7 @@ import { locale } from '@/config/locale-screens.ts'
 import { namespaceOf } from '@/lib/home-namespace.ts'
 import { queryPlanQuery } from '@/lib/queries.ts'
 import { useDialect } from '@/lib/session.ts'
+import { useRowEstimates } from '@/lib/use-row-estimates.ts'
 import { queryTour } from './query-tour.ts'
 
 const t = locale.queryTour
@@ -68,14 +69,17 @@ function QueryTourDialog({
   const dialect = useDialect()
   // The server joins the tables: the presentation tells its plan, not a guess at it.
   const plan = useQuery(queryPlanQuery(db, request))
+  // The estimated rows add to what it says: it waits for them, and goes on without them if they cannot be read.
+  const estimates = useRowEstimates(db, schema)
   const drawn = useMemo(() => {
-    if (!plan.data) return undefined
+    if (!plan.data || estimates.pending) return undefined
     const keys: RelationDef[] = [...schemas.values()].flatMap((s) =>
       s.foreignKeys.map((k) => ({ ...k, table: s.name }))
     )
     const drawnKeys = drawnRelations(keys, dialect, namespaceOf(db, schema), request.tables)
-    return queryTour({ request, joins: plan.data.joins, schemas, keys: drawnKeys })
-  }, [plan.data, schemas, dialect, db, schema, request])
+    const rows = estimates.rows
+    return queryTour({ request, joins: plan.data.joins, schemas, keys: drawnKeys, ...(rows ? { rows } : {}) })
+  }, [plan.data, estimates.pending, estimates.rows, schemas, dialect, db, schema, request])
   return (
     <TourDialog
       title={t.dialog}

@@ -12,6 +12,8 @@ const t = locale.queryTour
 /** What the mocked API answers for the plan, and the choices it was asked for; set afresh for each test. */
 let plan: QueryBuilderResult | Error
 let asked: QueryBuilderRequestInput[]
+/** The list of tables, with their estimated rows, or why it could not be read. */
+let list: { name: string; rowEstimate: number | null }[] | Error
 
 vi.mock('@/lib/session.ts', () => ({ useDialect: () => 'mysql' }))
 vi.mock('@/lib/queries.ts', () => ({
@@ -21,6 +23,14 @@ vi.mock('@/lib/queries.ts', () => ({
       asked.push(body)
       if (plan instanceof Error) throw plan
       return plan
+    },
+    retry: false,
+  }),
+  tablesQuery: () => ({
+    queryKey: ['tables'],
+    queryFn: async () => {
+      if (list instanceof Error) throw list
+      return list
     },
     retry: false,
   }),
@@ -51,6 +61,10 @@ beforeAll(() => {
 
 beforeEach(() => {
   asked = []
+  list = [
+    { name: 'orders', rowEstimate: 500 },
+    { name: 'users', rowEstimate: 100 },
+  ]
   plan = {
     sql: 'SELECT * FROM orders LEFT JOIN users ON users.id = orders.user_id',
     joins: [
@@ -98,5 +112,24 @@ describe('QueryTour', () => {
     fireEvent.click(screen.getByRole('button', { name: base.common.retry }))
     await waitFor(() => expect(asked).toHaveLength(2))
     expect(await screen.findByRole('heading', { level: 3, name: t.introTitle })).toBeTruthy()
+  })
+
+  it("says the rows by the catalog's estimates, and goes on without them where the list cannot be read", async () => {
+    const w = locale.designReading
+    show()
+    fireEvent.click(screen.getByRole('button', { name: t.open }))
+    const dialog = await screen.findByRole('dialog', { name: t.dialog })
+    await screen.findByRole('heading', { level: 3, name: t.introTitle })
+    fireEvent.keyDown(dialog, { key: 'ArrowRight' })
+    expect(await screen.findByText(w.rows('orders', 500))).toBeTruthy()
+    cleanup()
+    list = new Error('denied')
+    show()
+    fireEvent.click(screen.getByRole('button', { name: t.open }))
+    const again = await screen.findByRole('dialog', { name: t.dialog })
+    await screen.findByRole('heading', { level: 3, name: t.introTitle })
+    fireEvent.keyDown(again, { key: 'ArrowRight' })
+    expect(await screen.findByRole('heading', { level: 3, name: t.fromTitle('orders') })).toBeTruthy()
+    expect(screen.queryByText(w.rows('orders', 500))).toBeNull()
   })
 })
