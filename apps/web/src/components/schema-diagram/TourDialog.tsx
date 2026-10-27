@@ -191,8 +191,12 @@ function Stage({
   const toggle = reading.toggle
   // A presenter's clicker sends Page Up / Down; a focused button keeps its own Space and Enter.
   keysRef.current = (e: KeyboardEvent) => {
-    // A list to choose from (the chapter of the video) keeps its own keys.
-    if (e.target instanceof HTMLSelectElement) return
+    // A field (the chapter of the video) keeps its own keys; a clicker's Page keys still move the scenes.
+    const field =
+      e.target instanceof HTMLSelectElement ||
+      e.target instanceof HTMLInputElement ||
+      e.target instanceof HTMLTextAreaElement
+    if (field && e.key !== 'PageDown' && e.key !== 'PageUp') return
     const onButton = e.target instanceof HTMLButtonElement
     const move: Record<string, (() => void) | undefined> = {
       ArrowRight: player.next,

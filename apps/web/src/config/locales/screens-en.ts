@@ -329,7 +329,7 @@ export const enScreens = {
     rawTruncated: 'Cut short: it is long',
   },
   planTour: {
-    chapters: { reads: 'The tables in the order read', after: 'After the reads' },
+    chapters: { reads: 'The tables, in the order they are read', after: 'What is done after the reads' },
     open: 'Present',
     openHint:
       'Show this plan as a full-screen presentation, scene by scene, in the order the database reads the tables (estimated: the statement is not run)',
@@ -427,7 +427,7 @@ export const enScreens = {
     chapters: {
       row: 'The row and what it refers to',
       referred: 'The rows that refer to it',
-      farther: 'The rows further',
+      farther: 'The rows beyond them',
     },
     open: 'Present its links',
     openHint: 'Follow, scene by scene, the rows this row is joined to by foreign keys, and the values that match',
@@ -2851,10 +2851,10 @@ export const enScreens = {
     videoHint: (seconds: number) =>
       `Records this presentation as a video, its words beside the diagram (MP4 or WebM). It takes as long as the presentation (about ${seconds.toLocaleString('en-US')} seconds), so keep this tab in front meanwhile; it holds what the HTML file holds, and not the voice reading aloud`,
     chapter: 'Part to record',
-    wholeVideo: (seconds: number) => `The whole (about ${seconds.toLocaleString('en-US')} s)`,
+    wholeVideo: (seconds: number) => `Whole presentation (about ${seconds.toLocaleString('en-US')} seconds)`,
     chapterOption: (n: number, title: string, seconds: number) =>
-      `${n}. ${title} (about ${seconds.toLocaleString('en-US')} s)`,
-    chapterTitle: (title: string, n: number, chapter: string) => `${title} ${n}. ${chapter}`,
+      `${n}. ${title} (about ${seconds.toLocaleString('en-US')} seconds)`,
+    chapterTitle: (title: string, n: number, chapter: string) => `${title} (${n}. ${chapter})`,
     stopVideo: 'Stop recording',
     recording: (n: number, total: number, seconds: number) =>
       `Recording the video (scene ${n} of ${total}, about ${seconds.toLocaleString('en-US')} seconds in all)`,
@@ -2867,7 +2867,11 @@ export const enScreens = {
       `${names.join(', ')}${more > 0 ? ` and ${more.toLocaleString('en-US')} more` : ''}`,
   },
   queryTour: {
-    chapters: { tables: 'The tables and their joins', where: 'The conditions', output: 'The columns and the order' },
+    chapters: {
+      tables: 'The tables and their joins',
+      where: 'The conditions',
+      output: 'The columns and the sort order',
+    },
     open: 'Present',
     openHint:
       'Presents the tables, joins, conditions, columns and order chosen, full screen and scene by scene, in the logical order SQL works them (no rows are read)',
@@ -2930,7 +2934,7 @@ export const enScreens = {
     chapters: {
       roles: 'The whole and the roles',
       hubs: 'The tables most referred to',
-      path: 'How the two tables join',
+      path: 'How two tables join',
       checks: 'What to look at',
     },
     open: 'Present',
@@ -2992,7 +2996,11 @@ export const enScreens = {
     end: (roles: readonly string[]) => `${roles.join(', ')}. The names on the map open each table's overview`,
   },
   tableTour: {
-    chapters: { table: 'The table and its key', links: 'The tables a key away', farther: 'The tables two keys away' },
+    chapters: {
+      table: 'The table and its primary key',
+      links: 'The tables one foreign key away',
+      farther: 'The tables two foreign keys away',
+    },
     open: 'Present',
     saveHint:
       "Saves this presentation as one HTML file, to open in a browser and present without the server (it holds the table and column names and comments, and the tables' estimated row counts)",

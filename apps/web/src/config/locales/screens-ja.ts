@@ -328,7 +328,7 @@ export const jaScreens = {
     rawTruncated: '長いので途中で切っています',
   },
   planTour: {
-    chapters: { reads: 'テーブルを読む順', after: '読んだあと' },
+    chapters: { reads: 'テーブルを読む順', after: '読んだあとの処理' },
     open: 'プレゼンで見る',
     openHint:
       'この実行計画を、データベースがテーブルを読む順に、場面ごとの全画面の発表にします（推定。文は実行しない）',
@@ -2817,7 +2817,7 @@ export const jaScreens = {
     wholeVideo: (seconds: number) => `全体（約 ${seconds.toLocaleString('ja-JP')} 秒）`,
     chapterOption: (n: number, title: string, seconds: number) =>
       `${n}. ${title}（約 ${seconds.toLocaleString('ja-JP')} 秒）`,
-    chapterTitle: (title: string, n: number, chapter: string) => `${title} ${n}. ${chapter}`,
+    chapterTitle: (title: string, n: number, chapter: string) => `${title}（${n}. ${chapter}）`,
     stopVideo: '録画をやめる',
     recording: (n: number, total: number, seconds: number) =>
       `動画を録画しています（場面 ${n} / ${total}、全体で約 ${seconds.toLocaleString('ja-JP')} 秒）`,

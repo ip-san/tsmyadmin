@@ -48,11 +48,13 @@ export function TourVideo({
   useEffect(() => () => busy.current?.abort(), [])
   if (!canRecord()) return null
   const chapters = chaptersOf(drawn.scenes)
-  const chapter = chapters[chosen]
+  // A choice that is no longer there (the chapters changed) is the whole.
+  const index = chapters.length > 1 && chosen < chapters.length ? chosen : -1
+  const chapter = chapters[index]
   const range = chapter ? { from: chapter.from, to: chapter.to } : { from: 0, to: drawn.scenes.length }
   const seconds = secondsOf(drawn.scenes, range.from, range.to)
   // A chapter's video and file are named for it.
-  const named = chapter ? t.chapterTitle(title, chosen + 1, chapter.title) : title
+  const named = chapter ? t.chapterTitle(title, index + 1, chapter.title) : title
   const record = async () => {
     if (busy.current) return
     const stop = new AbortController()
@@ -71,7 +73,7 @@ export function TourVideo({
         { title: named, notes: notesTitle, hints: t.hints, tones },
         { signal: stop.signal, onScene: (i) => setState({ scene: i + 1 }), ...(chapter ? { range } : {}) }
       )
-      downloadBlob(safeFilename(named, ext), blob)
+      downloadBlob(safeFilename(title, ext, chapter ? `${index + 1} ${chapter.title}` : undefined), blob)
       setState('recorded')
     } catch {
       // Stopped by hand (or the dialog closed), or the browser could not.
@@ -88,22 +90,6 @@ export function TourVideo({
   else if (state === 'failed') said = t.videoFailed
   return (
     <>
-      {chapters.length > 1 ? (
-        <Select
-          aria-label={t.chapter}
-          className="w-auto py-1 text-xs"
-          value={chosen}
-          disabled={recording}
-          onChange={(e) => setChosen(Number(e.target.value))}
-        >
-          <option value={-1}>{t.wholeVideo(secondsOf(drawn.scenes, 0, drawn.scenes.length))}</option>
-          {chapters.map((c, i) => (
-            <option key={c.from} value={i}>
-              {t.chapterOption(i + 1, c.title, secondsOf(drawn.scenes, c.from, c.to))}
-            </option>
-          ))}
-        </Select>
-      ) : null}
       <p role="status" className="self-center text-xs text-ink empty:sr-only">
         {said}
       </p>
@@ -127,6 +113,24 @@ export function TourVideo({
       >
         {t.video}
       </Button>
+      {/* After the button: the dialog opens with the focus on its first control, and the arrow keys a list keeps
+          would not move the scenes. */}
+      {chapters.length > 1 ? (
+        <Select
+          aria-label={t.chapter}
+          className="w-auto py-1 text-xs"
+          value={index}
+          disabled={recording}
+          onChange={(e) => setChosen(Number(e.target.value))}
+        >
+          <option value={-1}>{t.wholeVideo(secondsOf(drawn.scenes, 0, drawn.scenes.length))}</option>
+          {chapters.map((c, i) => (
+            <option key={c.from} value={i}>
+              {t.chapterOption(i + 1, c.title, secondsOf(drawn.scenes, c.from, c.to))}
+            </option>
+          ))}
+        </Select>
+      ) : null}
     </>
   )
 }

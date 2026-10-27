@@ -131,4 +131,20 @@ describe('TourVideo', () => {
     const [, , options] = recording.recordTour.mock.calls[0] as [unknown, unknown, { range?: unknown }]
     expect(options.range).toBeUndefined()
   })
+  it('records the whole, named for the tour, once the chapter chosen is no longer there', async () => {
+    const parts: TourScene[] = [
+      { ...(scenes[0] as TourScene), chapter: 'Roles' },
+      { ...(scenes[1] as TourScene), chapter: 'Checks' },
+    ]
+    const { rerender } = render(<TourVideo title="Map of shop" drawn={{ diagram, scenes: parts }} tones={{}} />)
+    fireEvent.change(screen.getByRole('combobox', { name: t.chapter }), { target: { value: '0' } })
+    // One chapter left: no list, and the whole is recorded, not named for the chapter that was chosen.
+    const one: TourScene[] = [{ ...(scenes[0] as TourScene), chapter: 'Roles' }, scenes[1] as TourScene]
+    rerender(<TourVideo title="Map of shop" drawn={{ diagram, scenes: one }} tones={{}} />)
+    expect(screen.queryByRole('combobox')).toBeNull()
+    await press()
+    const [, words, options] = recording.recordTour.mock.calls[0] as [unknown, { title: string }, { range?: unknown }]
+    expect(options.range).toBeUndefined()
+    expect(words.title).toBe('Map of shop')
+  })
 })

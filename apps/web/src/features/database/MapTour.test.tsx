@@ -160,9 +160,12 @@ describe('MapTour', () => {
       mount()
       await screen.findByRole('img')
       const chapters = screen.getByRole('combobox', { name: g.chapter })
-      fireEvent.keyDown(chapters, { key: 'ArrowRight' })
-      fireEvent.keyDown(chapters, { key: ' ' })
-      expect(caption()).toHaveTextContent('shop')
+      for (const key of ['ArrowRight', ' ', 'End', 'p']) fireEvent.keyDown(chapters, { key })
+      expect(screen.getByText(g.sceneOf(1, 6))).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: g.play })).toBeInTheDocument()
+      // A clicker's Page keys still move the scenes.
+      fireEvent.keyDown(chapters, { key: 'PageDown' })
+      expect(caption()).toHaveTextContent(t.roleTitle(t.roles.master, 1))
     } finally {
       vi.unstubAllGlobals()
       Reflect.deleteProperty(HTMLCanvasElement.prototype, 'captureStream')
