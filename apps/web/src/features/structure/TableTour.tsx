@@ -7,7 +7,8 @@ import { diagramFor } from '@/components/schema-diagram/overlay.ts'
 import { TourDialog } from '@/components/schema-diagram/TourDialog.tsx'
 import { locale } from '@/config/locale-screens.ts'
 import { homeNamespace, namespaceOf } from '@/lib/home-namespace.ts'
-import { foreignKeysQuery, type TableRef } from '@/lib/queries.ts'
+import { foreignKeysQuery, type TableRef, tablesQuery } from '@/lib/queries.ts'
+import { rowEstimates } from '@/lib/row-estimates.ts'
 import { useDialect } from '@/lib/session.ts'
 import { tableRole } from '@/lib/table-role.ts'
 import { TOUR_HOPS, tableTourScenes } from './table-tour.ts'
@@ -30,8 +31,10 @@ export function TableTour({
   const { db, schema: space, table } = tableRef
   const dialect = useDialect()
   const keys = useQuery(foreignKeysQuery(db, space))
+  // The estimated rows add to what it says: it waits for them, and goes on without them if they cannot be read.
+  const list = useQuery(tablesQuery(db, space))
   const drawn = useMemo(() => {
-    if (!keys.data) return undefined
+    if (!keys.data || list.isPending) return undefined
     const ns = namespaceOf(db, space)
     const names = [...new Set(keys.data.flatMap((k) => [k.table, k.refTable]).concat(table))]
     const relations = drawnRelations(keys.data, dialect, ns, names)
@@ -40,15 +43,22 @@ export function TableTour({
     const all = new Map([[table, schema.columns.map((c) => c.name)]])
     return {
       diagram: diagramFor(reach, relations, all),
-      scenes: tableTourScenes({ schema, guess, relations, tables: names }),
+      scenes: tableTourScenes({
+        schema,
+        guess,
+        relations,
+        tables: names,
+        ...(list.data ? { rows: rowEstimates(list.data) } : {}),
+      }),
     }
-  }, [keys.data, dialect, db, space, table, schema])
+  }, [keys.data, list.isPending, list.data, dialect, db, space, table, schema])
   return (
     <TourDialog
       title={t.dialog(table)}
       label={t.diagram(table)}
       drawn={drawn}
       tones={t.tones}
+      saveHint={t.saveHint}
       error={keys.isError ? { error: keys.error, retry: () => void keys.refetch() } : undefined}
       onClose={onClose}
     />

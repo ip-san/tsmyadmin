@@ -5,6 +5,7 @@ import { locale } from '@/config/locale-screens.ts'
 import { keyIntent, keyTuning, named, tableReading } from '@/lib/design-reading.ts'
 import { conditionText, valueShape } from '@/lib/filter-values.ts'
 import { indexed } from '@/lib/key-index.ts'
+import { perRowReading, type RowEstimates, rowsReading } from '@/lib/row-estimates.ts'
 
 const t = locale.queryTour
 
@@ -66,6 +67,8 @@ export interface QueryTourInput {
   schemas: ReadonlyMap<string, TableSchema>
   /** The foreign keys between the tables chosen (`drawnRelations`). */
   keys: readonly RelationDef[]
+  /** The tables' estimated rows (`rowEstimates`), where the list of tables could be read. */
+  rows?: RowEstimates
 }
 
 /**
@@ -74,7 +77,7 @@ export interface QueryTourInput {
  * rows (and what they undo of a LEFT JOIN), the order, and the columns taken. Read from the definitions and the
  * plan of joins the server writes; no rows are read.
  */
-export function queryTour({ request, joins, schemas, keys }: QueryTourInput): {
+export function queryTour({ request, joins, schemas, keys, rows }: QueryTourInput): {
   diagram: ReturnType<typeof diagramFor>
   scenes: TourScene[]
 } {
@@ -107,7 +110,10 @@ export function queryTour({ request, joins, schemas, keys }: QueryTourInput): {
       frame: [first],
       overlay: overlay({ tables: [[first, 'focus']] }),
       pulse: [first],
-      notes: schemas.get(first) ? tableReading(schemas.get(first) as TableSchema) : [],
+      notes: [
+        ...rowsReading(rows, first),
+        ...(schemas.get(first) ? tableReading(schemas.get(first) as TableSchema) : []),
+      ],
     },
   ]
 
@@ -138,6 +144,8 @@ export function queryTour({ request, joins, schemas, keys }: QueryTourInput): {
         if (step.kind === 'left' && intent.required && !nullable.has(child))
           notes.push(t.leftAlwaysFound(child, parent))
       }
+      // How much, by the estimates: the rows of the table that refers per row of the other.
+      notes.push(...perRowReading(rows, child, parent, comment))
       if (child === step.table && intent.oneToOne === false) said.push(t.multiplies(comment(parent), comment(child)))
       // An index on the key matters where the rows that refer are looked up: when they are the ones joined.
       const tuning = keyTuning(relation, child, parent, childSchema, schemas.get(parent))

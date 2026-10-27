@@ -446,6 +446,12 @@ export const jaScreens = {
       `この 1 行から、外部キーで ${tables.toLocaleString('ja-JP')} テーブル・${rows.toLocaleString('ja-JP')} 行がつながりました。行と行は、外部キーのカラムの値が参照先のカラムの値と同じことでつながっています`,
   },
   designReading: {
+    rows: (table: string, n: number) =>
+      `${table} は約 ${n.toLocaleString('ja-JP')} 行（カタログの推定。行は数えていません）`,
+    perRow: (parent: string, child: string, ratio: number) =>
+      `推定の行数の比では、${parent} 1 行あたり、${child} は平均約 ${ratio.toLocaleString('ja-JP')} 行です`,
+    without: (parent: string, child: string, n: number) =>
+      `${child} の行は ${parent} より少ないので、${parent} のうち少なくとも約 ${n.toLocaleString('ja-JP')} 行には、${child} の行がありません（推定の行数から）`,
     named: (table: string, comment: string) => `${table}（${comment}）`,
     columnComment: (table: string, column: string, comment: string) =>
       `${table}.${column} は「${comment}」（カラムのコメント）`,
@@ -2821,7 +2827,7 @@ export const jaScreens = {
     dialog: 'クエリのプレゼン',
     diagram: 'クエリが使うテーブルと外部キーの図',
     saveHint:
-      'この発表を 1 つの HTML ファイルにします。サーバーにつながずに、ブラウザで開いて発表できます（テーブル名・カラム名・コメントと、条件に入力した値が入ります）',
+      'この発表を 1 つの HTML ファイルにします。サーバーにつながずに、ブラウザで開いて発表できます（テーブル名・カラム名・コメントと、条件に入力した値、テーブルの推定の行数が入ります）',
     tones: { focus: 'この場面で加わる・使うテーブルと外部キー', index: 'すでにつないだテーブル' },
     introTitle: 'このクエリ',
     intro: (n: number, first: string) =>
@@ -2937,6 +2943,8 @@ export const jaScreens = {
   },
   tableTour: {
     open: 'プレゼンで見る',
+    saveHint:
+      'この発表を 1 つの HTML ファイルにします。サーバーにつながずに、ブラウザで開いて発表できます（テーブル名・カラム名・コメントと、テーブルの推定の行数が入ります）',
     dialog: (name: string) => `テーブルのプレゼン: ${name}`,
     diagram: (name: string) => `${name} と、外部キーで 2 段までつながるテーブルの図`,
     roles: {

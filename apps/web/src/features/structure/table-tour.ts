@@ -11,6 +11,7 @@ import {
   tableReading,
   tableTuning,
 } from '@/lib/design-reading.ts'
+import { perRowReading, type RowEstimates, rowsReading } from '@/lib/row-estimates.ts'
 import type { RoleGuess } from '@/lib/table-role.ts'
 
 const t = locale.tableTour
@@ -35,8 +36,10 @@ export function tableTourScenes(input: {
   relations: readonly RelationDef[]
   /** The tables drawn: every table of the namespace with a key, and this one. */
   tables: readonly string[]
+  /** The tables' estimated rows (`rowEstimates`), where the list of tables could be read. */
+  rows?: RowEstimates
 }): TourScene[] {
-  const { schema, guess, relations, tables } = input
+  const { schema, guess, relations, tables, rows } = input
   const name = schema.name
   const near = neighbourhood(tables, relations, name, 1)
   const reach = neighbourhood(tables, relations, name, TOUR_HOPS)
@@ -47,11 +50,13 @@ export function tableTourScenes(input: {
   // Why it is so: what each key says (its own keys from this table's definition; another table's, what a delete does).
   const intentOf = (r: RelationDef) => keyIntent(r, r.table === name ? schema : undefined)
   // The comments of this table's own key columns say what the values mean; its own keys can be checked for an index.
+  // And how many rows of one there are per row of the other, by the estimates.
   const reading = (keys: readonly RelationDef[]) =>
     keys
       .flatMap((r) => [
         ...(r.table === name ? columnComments(name, r.columns, schema) : []),
         ...keyReading(r.table, r.refTable, intentOf(r)),
+        ...perRowReading(rows, r.table, r.refTable),
       ])
       .slice(0, NOTES_SHOWN)
   const tuning = (keys: readonly RelationDef[]) =>
@@ -70,7 +75,7 @@ export function tableTourScenes(input: {
       frame: [name],
       overlay: { ...overlay({ tables: [[name, 'focus']] }), enter: true },
       pulse: [name],
-      ...lists(tableReading(schema), tableTuning(name, schema)),
+      ...lists([...rowsReading(rows, name), ...tableReading(schema)], tableTuning(name, schema)),
     },
     schema.primaryKey.length > 0
       ? {

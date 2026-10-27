@@ -68,6 +68,20 @@ describe('tableTourScenes', () => {
     expect(end?.overlay).toMatchObject({ fade: false })
   })
 
+  it("adds the catalog's estimated rows: of the table, and of one table per row of the other along each key", () => {
+    const w = locale.designReading
+    const rows = new Map([
+      ['orders', 300],
+      ['users', 100],
+      ['lines', 1200],
+    ])
+    const [intro, , refers, referred] = tableTourScenes({ schema: orders, guess: middle, relations, tables, rows })
+    expect(intro?.notes?.[0]).toBe(w.rows('orders', 300))
+    // Beside what the key to users says (products is not estimated: nothing is said of it).
+    expect(refers?.notes).toContain(w.perRow('users', 'orders', 3))
+    expect(referred?.notes).toContain(w.perRow('orders', 'lines', 4))
+  })
+
   it('says there is no primary key, and leaves out what the table does not have', () => {
     const logs = {
       name: 'logs',

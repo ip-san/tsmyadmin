@@ -447,6 +447,12 @@ export const enScreens = {
       `From this one row, foreign keys reached ${tables.toLocaleString('en-US')} tables and ${rows.toLocaleString('en-US')} rows. Rows are joined by a foreign key's value being the same as the value of the column it refers to`,
   },
   designReading: {
+    rows: (table: string, n: number) =>
+      `${table} has about ${n.toLocaleString('en-US')} ${n === 1 ? 'row' : 'rows'} (the catalog's estimate; the rows are not counted)`,
+    perRow: (parent: string, child: string, ratio: number) =>
+      `By the estimated row counts, ${child} has about ${ratio.toLocaleString('en-US')} ${ratio === 1 ? 'row' : 'rows'} per row of ${parent} on average`,
+    without: (parent: string, child: string, n: number) =>
+      `${child} has fewer rows than ${parent}, so at least about ${n.toLocaleString('en-US')} ${n === 1 ? 'row' : 'rows'} of ${parent} have no row of ${child} (by the estimated row counts)`,
     named: (table: string, comment: string) => `${table} (${comment})`,
     columnComment: (table: string, column: string, comment: string) =>
       `${table}.${column} is "${comment}" (its column comment)`,
@@ -2854,7 +2860,7 @@ export const enScreens = {
     dialog: 'Presentation of the query',
     diagram: 'The tables and foreign keys the query uses',
     saveHint:
-      'Saves this presentation as one HTML file, to open in a browser and present without the server (it holds the table and column names and comments, and the values typed into the conditions)',
+      "Saves this presentation as one HTML file, to open in a browser and present without the server (it holds the table and column names and comments, the values typed into the conditions, and the tables' estimated row counts)",
     tones: { focus: 'Tables and keys this scene adds or uses', index: 'Tables joined already' },
     introTitle: 'This query',
     intro: (n: number, first: string) =>
@@ -2967,6 +2973,8 @@ export const enScreens = {
   },
   tableTour: {
     open: 'Present',
+    saveHint:
+      "Saves this presentation as one HTML file, to open in a browser and present without the server (it holds the table and column names and comments, and the tables' estimated row counts)",
     dialog: (name: string) => `Table presentation: ${name}`,
     diagram: (name: string) => `Diagram of ${name} and the tables up to two foreign keys away`,
     roles: {
