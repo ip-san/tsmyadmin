@@ -10,7 +10,13 @@ import { type RowEstimates, rowEstimates } from '@/lib/row-estimates.ts'
  */
 export function useRowEstimates(db: string, schema: string | undefined): { pending: boolean; rows?: RowEstimates } {
   const list = useQuery(tablesQuery(db, schema))
-  const kept = useRef<{ rows?: RowEstimates } | null>(null)
-  if (kept.current === null && !list.isPending) kept.current = list.data ? { rows: rowEstimates(list.data) } : {}
-  return kept.current ? { pending: false, ...kept.current } : { pending: true }
+  // Kept for the namespace read: another one is read anew.
+  const at = `${db}\0${schema ?? ''}`
+  const kept = useRef<{ at: string; rows?: RowEstimates } | null>(null)
+  if (kept.current?.at !== at) kept.current = null
+  if (kept.current === null && !list.isPending)
+    kept.current = list.data ? { at, rows: rowEstimates(list.data) } : { at }
+  return kept.current
+    ? { pending: false, ...(kept.current.rows ? { rows: kept.current.rows } : {}) }
+    : { pending: true }
 }
