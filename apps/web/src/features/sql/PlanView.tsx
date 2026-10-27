@@ -77,7 +77,14 @@ function PlanStory({
   const current = reads[player.index]?.path
   return (
     <div className="space-y-3">
-      {reads.length > 0 ? <PlanTour plan={result.plan} relations={relations} indexColumns={indexColumns} /> : null}
+      {reads.length > 0 ? (
+        <PlanTour
+          plan={result.plan}
+          relations={relations}
+          indexColumns={indexColumns}
+          ready={structures.every((s) => !s.isPending)}
+        />
+      ) : null}
       <div className="grid gap-3 lg:grid-cols-2">
         <figure tabIndex={0} className="min-w-0 overflow-auto">
           <figcaption className="mb-1 text-xs font-semibold text-ink-sub">{t.tree}</figcaption>

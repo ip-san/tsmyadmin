@@ -42,6 +42,66 @@ describe('planReads', () => {
   })
 })
 
+describe('planReads, joined', () => {
+  const scan = (table: string) => node({ op: 'Seq Scan', table, access: 'fullScan' })
+  const roles = (plan: PlanNode) => planReads(plan).map((r) => [r.node.table, r.join, r.subquery])
+
+  it('says how each read is joined: the sides of a loop, and of a hash join read from its last input', () => {
+    expect(roles(node({ op: 'Nested Loop', children: [scan('a'), scan('b')] }))).toEqual([
+      ['a', 'loopOuter', false],
+      ['b', 'loopInner', false],
+    ])
+    // PostgreSQL and MySQL 9 write the side a hash join builds from last; it is read first. The path stays its place.
+    const hash = node({
+      op: 'Inner hash join',
+      children: [scan('probe'), node({ op: 'Hash', children: [scan('build')] })],
+    })
+    expect(planReads(hash).map((r) => [r.node.table, r.join, r.path])).toEqual([
+      ['build', 'hashBuild', '0.1.0'],
+      ['probe', 'hashProbe', '0.0'],
+    ])
+    expect(roles(node({ op: 'Merge Join', children: [scan('a'), scan('b')] }))).toEqual([
+      ['a', 'merge', false],
+      ['b', 'merge', false],
+    ])
+    // MySQL 8 on the table it joins through a buffer; MariaDB around it.
+    expect(
+      roles(node({ op: 'Nested loop', children: [scan('a'), { ...scan('b'), op: 'Table, join buffer (hash join)' }] }))
+    ).toEqual([
+      ['a', 'loopOuter', false],
+      ['b', 'hashProbe', false],
+    ])
+    expect(
+      roles(
+        node({ op: 'Nested loop', children: [scan('a'), node({ op: 'Block nested loop', children: [scan('b')] })] })
+      )
+    ).toEqual([
+      ['a', 'loopOuter', false],
+      ['b', 'blockInner', false],
+    ])
+  })
+
+  it('does not take a loop over rows kept (Materialize) as reading the table again for each row', () => {
+    const kept = node({ op: 'Nested Loop', children: [scan('a'), node({ op: 'Materialize', children: [scan('b')] })] })
+    expect(roles(kept)).toEqual([
+      ['a', 'loopOuter', false],
+      ['b', null, false],
+    ])
+  })
+
+  it('marks a read in a subquery run for each row, not one in a table made of a SELECT', () => {
+    expect(
+      roles(node({ op: 'Sort', children: [scan('a'), node({ op: 'Aggregate SubPlan 1', children: [scan('b')] })] }))
+    ).toEqual([
+      ['a', null, false],
+      ['b', null, true],
+    ])
+    expect(roles(node({ op: 'Subquery', children: [scan('b')] }))).toEqual([['b', null, true]])
+    // PostgreSQL's `FROM (SELECT …) x`: read once.
+    expect(roles(node({ op: 'Subquery Scan', children: [scan('b')] }))).toEqual([['b', null, false]])
+  })
+})
+
 describe('toneOf', () => {
   it('tells full reads from reads through an index', () => {
     expect(toneOf('fullScan')).toBe('scan')

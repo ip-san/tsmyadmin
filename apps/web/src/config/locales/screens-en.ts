@@ -344,7 +344,7 @@ export const enScreens = {
     notesTitle: 'Reading the plan',
     introTitle: 'The plan of this statement',
     intro: (reads: number, order: string) =>
-      `How the database plans to run this statement (estimated: it is not run). It reads tables ${reads.toLocaleString('en-US')} ${reads === 1 ? 'time' : 'times'}. ${order}. Not necessarily the order the SQL is written in: the order the database estimates is fastest (the query tab's Present follows the SQL in its logical order)`,
+      `How the database plans to run this statement (estimated: it is not run): ${reads.toLocaleString('en-US')} table ${reads === 1 ? 'read' : 'reads'}. ${order}. Not necessarily the order the SQL is written in: the order the database estimates is fastest (the query tab's Present follows the SQL in its logical order)`,
     order: (list: string) => `The order is ${list}`,
     readTitle: (table: string) => `Read ${table}`,
     roles: {
@@ -388,7 +388,7 @@ export const enScreens = {
     temporaryHint: 'A temporary table that does not fit in memory may be written to disk',
     endTitle: 'Summary',
     end: (reads: number, full: number) =>
-      `Tables are read ${reads.toLocaleString('en-US')} ${reads === 1 ? 'time' : 'times'}. ${full === 0 ? 'None of the reads is a full read' : `${full.toLocaleString('en-US')} of them ${full === 1 ? 'reads' : 'read'} every row (or an index end to end)`}`,
+      `${reads.toLocaleString('en-US')} table ${reads === 1 ? 'read' : 'reads'}. ${full === 0 ? 'None of the reads is a full read' : `${full.toLocaleString('en-US')} of them ${full === 1 ? 'reads' : 'read'} every row (or an index end to end)`}`,
   },
   rowGraph: {
     open: 'Show relations',

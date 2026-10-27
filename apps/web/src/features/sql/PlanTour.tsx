@@ -13,16 +13,24 @@ export function PlanTour({
   plan,
   relations,
   indexColumns,
+  ready,
 }: {
   plan: PlanNode
   relations: readonly RelationDef[]
   indexColumns: (table: string, index: string) => readonly string[]
+  /** The tables' index columns are read: until then the scenes would not mark them, and they are told as opened. */
+  ready: boolean
 }) {
   // Told as it was when it opened: the index columns read in after do not move the scenes under it.
   const [drawn, setDrawn] = useState<ReturnType<typeof planTour> | null>(null)
   return (
     <>
-      <Button size="sm" title={t.openHint} onClick={() => setDrawn(planTour({ plan, relations, indexColumns }))}>
+      <Button
+        size="sm"
+        title={t.openHint}
+        disabled={!ready}
+        onClick={() => setDrawn(planTour({ plan, relations, indexColumns }))}
+      >
         <Presentation className="size-4" aria-hidden />
         {t.open}
       </Button>

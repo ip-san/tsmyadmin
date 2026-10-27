@@ -1,10 +1,20 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { PlanNode } from '@tsmyadmin/shared'
-import { afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { locale } from '@/config/locale-screens.ts'
 import { PlanTour } from './PlanTour.tsx'
 
 const t = locale.planTour
+
+/** The files saved, in place of the browser's download. */
+let saved: { name: string; text: string }[]
+vi.mock('@/lib/download.ts', async (actual) => ({
+  ...(await actual<typeof import('@/lib/download.ts')>()),
+  downloadText: (name: string, text: string) => saved.push({ name, text }),
+}))
+beforeEach(() => {
+  saved = []
+})
 const read = (table: string): PlanNode => ({
   op: 'Seq Scan',
   table,
@@ -33,7 +43,7 @@ afterEach(cleanup)
 
 describe('PlanTour', () => {
   it('opens the plan as a presentation, from its opening to its summary, and closes it', () => {
-    render(<PlanTour plan={read('users')} relations={[]} indexColumns={() => []} />)
+    render(<PlanTour plan={read('users')} relations={[]} indexColumns={() => []} ready />)
     fireEvent.click(screen.getByRole('button', { name: t.open }))
     const dialog = screen.getByRole('dialog', { name: t.dialog })
     expect(screen.getByRole('heading', { level: 3, name: t.introTitle })).toBeTruthy()
@@ -44,5 +54,18 @@ describe('PlanTour', () => {
     expect(screen.queryByText(locale.tour.notes)).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: locale.tour.close }))
     expect(screen.queryByRole('dialog')).toBeNull()
+  })
+  it('waits for the index columns before it opens: the scenes are told as they were when it opened', () => {
+    render(<PlanTour plan={read('users')} relations={[]} indexColumns={() => []} ready={false} />)
+    expect(screen.getByRole('button', { name: t.open })).toHaveProperty('disabled', true)
+  })
+
+  it('saves the presentation with the heading of the plan, not of the design', async () => {
+    render(<PlanTour plan={read('users')} relations={[]} indexColumns={() => []} ready />)
+    fireEvent.click(screen.getByRole('button', { name: t.open }))
+    fireEvent.click(screen.getByRole('button', { name: locale.tour.save }))
+    await waitFor(() => expect(saved).toHaveLength(1))
+    expect(saved[0]?.text).toContain(t.notesTitle)
+    expect(saved[0]?.text).not.toContain(locale.tour.notes)
   })
 })

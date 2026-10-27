@@ -29,7 +29,10 @@ export interface PlanRead {
   path: string
   /** How it is joined to the rows read before it; null where no join is above it. */
   join: JoinRole | null
-  /** Read inside a subquery (a step the server names so): it may run again for each row outside it. */
+  /**
+   * Read inside a subquery that may run again for each row outside it: PostgreSQL's SubPlan, MySQL's and MariaDB's
+   * subqueries. Not a table in FROM made of a SELECT (PostgreSQL's Subquery Scan), which is read once.
+   */
   subquery: boolean
 }
 
@@ -56,11 +59,18 @@ export function planReads(plan: PlanNode): PlanRead[] {
   const out: PlanRead[] = []
   const walk = (n: PlanNode, path: string, join: JoinRole | null, subquery: boolean) => {
     const method = joinMethod(n.op)
-    const inner = subquery || /\bsub(query|plan)\b/i.test(n.op)
+    const inner = subquery || /\bsubplan\b|^subquery$/i.test(n.op)
+    // Kept once read: the loop above re-reads the rows kept, not the table under it.
+    const kept = /^(materiali[sz]e|memoize)\b/i.test(n.op)
     const order = n.children.map((c, i) => [c, i] as const)
     if (method === 'hash' && order.length > 1) order.unshift(...order.splice(-1))
     for (const [c, i] of order)
-      walk(c, `${path}.${i}`, method && n.table === null ? roleOf(method, i, n.children.length) : join, inner)
+      walk(
+        c,
+        `${path}.${i}`,
+        method && n.table === null ? roleOf(method, i, n.children.length) : kept ? null : join,
+        inner
+      )
     if (n.table !== null && n.access !== null) {
       // MySQL 8 says the join buffer on the table it joins: the rows before it are buffered (or hashed).
       const own = method === 'hash' ? 'hashProbe' : method === 'block' ? 'blockInner' : join
