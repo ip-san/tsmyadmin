@@ -17,14 +17,14 @@ type Method = 'loop' | 'block' | 'hash' | 'buffer' | 'merge'
 
 /** The join method an operation names, across the servers' words ("Nested Loop", "Inner hash join", "Hash semijoin"…). */
 function joinMethod(op: string): Method | null {
-  // Batched key access looks each row up by a key, a batch at a time: a loop, not a read of the whole table.
-  if (/batched key/i.test(op)) return 'loop'
-  if (/block hash join/i.test(op)) return 'hash'
-  if (/join buffer \(hash join\)/i.test(op)) return 'buffer'
-  if (/block nested loop|join buffer/i.test(op)) return 'block'
-  if (/nested loop/i.test(op)) return 'loop'
-  if (/hash (semi|anti)?\s?join/i.test(op)) return 'hash'
-  if (/merge (semi|anti)?\s?join/i.test(op)) return 'merge'
+  // From the start of the name: MySQL 9 writes a condition into some (`Filter: (kind = 'merge join')`).
+  if (/^batched key/i.test(op)) return 'loop'
+  if (/^block hash join/i.test(op)) return 'hash'
+  if (/^\w+, join buffer \(hash join\)/i.test(op)) return 'buffer'
+  if (/^block nested loop|^\w+, join buffer/i.test(op)) return 'block'
+  if (/^nested loop/i.test(op)) return 'loop'
+  if (/^(\w+ )?hash (semi|anti)?\s?join/i.test(op)) return 'hash'
+  if (/^(\w+ )?merge (semi|anti)?\s?join/i.test(op)) return 'merge'
   return null
 }
 
@@ -52,6 +52,8 @@ export interface PlanRead {
   subquery: 'once' | 'perRow' | null
   /** Under the inner side of a nested loop further up: read again for each row of that loop's outer side. */
   repeated: boolean
+  /** Under PostgreSQL's Memoize: the rows of a value looked up before are used again, not read again. */
+  memoized: boolean
 }
 
 /**
@@ -71,6 +73,7 @@ interface Context {
   join: JoinRole | null
   subquery: PlanRead['subquery']
   repeated: boolean
+  memoized: boolean
 }
 
 /**
@@ -82,8 +85,13 @@ export function planReads(plan: PlanNode): PlanRead[] {
   const out: PlanRead[] = []
   const walk = (n: PlanNode, path: string, at: Context) => {
     const method = n.table === null ? joinMethod(n.op) : null
-    // Kept once read (Materialize, Memoize): the loop above re-reads the rows kept, not what is under it.
-    const kept = /^(materiali[sz]e|memoize)\b/i.test(n.op)
+    // Kept once read (Materialize): the loop above re-reads the rows kept, not what is under it. Memoize keeps the
+    // rows of each value looked up: what is under it is read again for each new value only.
+    const kept = /^materiali[sz]e\b/i.test(n.op)
+    const memo = /^memoize\b/i.test(n.op)
+    // MySQL 8 hashes through a join buffer without saying which side it reads first: the first table is not said
+    // to be read first.
+    const hashed = n.children.some((c) => c.table !== null && joinMethod(c.op) === 'buffer')
     const inputs = n.children.flatMap((c, i) => (sidePlan(c.op) ? [] : [i]))
     const order = n.children.map((_, i) => i)
     if (method === 'hash' && inputs.length > 1) {
@@ -95,13 +103,20 @@ export function planReads(plan: PlanNode): PlanRead[] {
       const c = n.children[i] as PlanNode
       const side = sidePlan(c.op) ?? (/^subquery$/i.test(n.op) ? 'perRow' : null)
       let next: Context
-      if (side) next = { join: null, subquery: side, repeated: at.repeated }
+      if (side) next = { join: null, subquery: side, repeated: at.repeated, memoized: false }
       else if (method) {
-        const join = roleOf(method, inputs.indexOf(i), inputs.length)
+        const role = roleOf(method, inputs.indexOf(i), inputs.length)
+        const join = role === 'loopOuter' && hashed ? null : role
         // A join of its own under the inner side of a loop runs again for each outer row; a wrapper of one input
         // (MariaDB's join buffer) is that inner side itself.
-        next = { join, subquery: at.subquery, repeated: at.repeated || (at.join === 'loopInner' && inputs.length > 1) }
-      } else next = kept ? { join: null, subquery: at.subquery, repeated: false } : at
+        next = {
+          join,
+          subquery: at.subquery,
+          repeated: at.repeated || (at.join === 'loopInner' && inputs.length > 1),
+          memoized: at.memoized,
+        }
+      } else if (kept) next = { join: null, subquery: at.subquery, repeated: false, memoized: false }
+      else next = memo ? { ...at, memoized: true } : at
       walk(c, `${path}.${i}`, next)
     }
     if (n.table !== null && n.access !== null) {
@@ -113,10 +128,11 @@ export function planReads(plan: PlanNode): PlanRead[] {
         join: own ? roleOf(own, 1, 1) : at.join,
         subquery: at.subquery,
         repeated: at.repeated,
+        memoized: at.memoized,
       })
     }
   }
-  walk(plan, '0', { join: null, subquery: null, repeated: false })
+  walk(plan, '0', { join: null, subquery: null, repeated: false, memoized: false })
   return out
 }
 

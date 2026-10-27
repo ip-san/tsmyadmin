@@ -106,7 +106,7 @@ describe('planTour', () => {
       ],
     })
     const { scenes } = planTour({ plan: buffered, relations: keys })
-    expect(scenes[1]?.notes).toEqual([t.roles.loopOuter('posts'), t.condition("(p.title like 'A%')")])
+    expect(scenes[1]?.notes).toEqual([t.condition("(p.title like 'A%')")])
     expect(scenes[1]?.hints).toEqual([t.filterScan('posts')])
     expect(scenes[2]?.notes).toEqual([t.roles.hashBuffer('posts')])
     expect(scenes[2]?.hints).toEqual([])
@@ -222,6 +222,44 @@ describe('planTour', () => {
       ],
     })
     expect(planTour({ plan, relations: [] }).scenes[0]?.text).toBe(t.intro(2, t.orderListed('users → posts')))
+  })
+
+  it("says PostgreSQL's Memoize uses the rows of a value again, and keeps the read per row", () => {
+    const plan = node({
+      op: 'Nested Loop',
+      children: [
+        node({ op: 'Seq Scan', table: 'users', access: 'fullScan' }),
+        node({ op: 'Memoize', children: [node({ op: 'Seq Scan', table: 'posts', access: 'fullScan' })] }),
+      ],
+    })
+    const posts = planTour({ plan, relations: [] }).scenes[2]
+    expect(posts?.notes).toEqual([t.memoized, t.roles.loopInner('posts')])
+    expect(posts?.hints).toEqual([t.loopScan('posts')])
+  })
+
+  it('names the temporary table of a MySQL 9 aggregate, and a full read repeated under a loop by a hint of its own', () => {
+    const plan = node({
+      op: 'Aggregate using temporary table',
+      children: [
+        node({
+          op: 'Nested loop inner join',
+          children: [
+            node({ op: 'Table scan on a', table: 'a', access: 'fullScan' }),
+            node({
+              op: 'Inner hash join',
+              children: [
+                node({ op: 'Table scan on b', table: 'b', access: 'fullScan' }),
+                node({ op: 'Hash', children: [node({ op: 'Table scan on c', table: 'c', access: 'fullScan' })] }),
+              ],
+            }),
+          ],
+        }),
+      ],
+    })
+    const { scenes } = planTour({ plan, relations: [] })
+    expect(titled(scenes, t.finishTitle)?.notes).toEqual([t.finishNotes.group, t.finishNotes.temporary])
+    expect(titled(scenes, t.readTitle('c'))?.notes).toEqual([t.repeated, t.roles.hashBuild('c')])
+    expect(titled(scenes, t.readTitle('c'))?.hints).toEqual([t.repeatedScan('c')])
   })
 
   it('cuts a long condition short', () => {

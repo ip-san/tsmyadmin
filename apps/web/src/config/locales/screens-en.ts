@@ -332,6 +332,7 @@ export const enScreens = {
     open: 'Present',
     openHint:
       'Show this plan as a full-screen presentation, scene by scene, in the order the database reads the tables (estimated: the statement is not run)',
+    waiting: 'Reading the index columns…',
     dialog: 'Plan presentation',
     diagram: 'The tables the plan reads, and their foreign keys',
     saveHint:
@@ -365,10 +366,14 @@ export const enScreens = {
     },
     subquery: 'Read inside a subquery: it may be read again for each row outside it',
     initPlan: 'Read inside a subquery run once, before the rest',
+    memoized:
+      'For a value looked up before, the rows found then are used again (Memoize): it is read again only for a new value',
     repeated: 'On the inner side of a nested loop: this step is repeated for each row of the outer side',
     condition: (detail: string) => `Condition: ${detail}`,
     loopScan: (table: string) =>
       `${table} is read in full for each row so far: as the rows grow, what is read multiplies. With an index starting with the joining columns, each row could be looked up`,
+    repeatedScan: (table: string) =>
+      `The step reading ${table} in full is repeated for each outer row: as the outer rows grow, what is read multiplies. See whether this step could be joined through an index instead`,
     blockScan: (table: string) =>
       `${table} is joined without an index, read in full once per buffer. With an index starting with the joining columns, each row could be looked up`,
     filterScan: (table: string) =>

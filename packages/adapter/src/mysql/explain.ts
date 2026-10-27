@@ -98,10 +98,14 @@ function nodesOf(o: Json, aliases: Map<string, string>): PlanNode[] {
   return out
 }
 
-/** A step under `o` sorts or puts its rows in a temporary table: the order comes from there. */
+/**
+ * A step under `o` that makes its rows sorts them or puts them in a temporary table: the order comes from there. A
+ * subquery's or a derived table's own sort does not order these rows.
+ */
 function sortsBelow(o: unknown): boolean {
   if (!isObject(o)) return Array.isArray(o) && o.some(sortsBelow)
-  return o.using_filesort === true || o.using_temporary_table === true || Object.values(o).some(sortsBelow)
+  if (o.using_filesort === true || o.using_temporary_table === true) return true
+  return Object.entries(o).some(([key, v]) => !/subquer|materiali/.test(key) && sortsBelow(v))
 }
 
 /**

@@ -27,7 +27,7 @@ export function PlanTour({
     <>
       <Button
         size="sm"
-        title={t.openHint}
+        title={ready ? t.openHint : t.waiting}
         disabled={!ready}
         onClick={() => setDrawn(planTour({ plan, relations, indexColumns }))}
       >

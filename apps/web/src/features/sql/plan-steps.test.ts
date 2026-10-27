@@ -68,7 +68,8 @@ describe('planReads, joined', () => {
     expect(
       roles(node({ op: 'Nested loop', children: [scan('a'), { ...scan('b'), op: 'Table, join buffer (hash join)' }] }))
     ).toEqual([
-      ['a', 'loopOuter', null],
+      // Which side MySQL 8 hashes is not said: the first table is not said to be read first.
+      ['a', null, null],
       ['b', 'hashBuffer', null],
     ])
     expect(
@@ -139,6 +140,11 @@ describe('planReads, side plans and wrappers', () => {
     expect(wrapped('Block hash join')).toEqual(['b', 'hashProbe', null, false])
     expect(wrapped('Block nested loop')).toEqual(['b', 'blockInner', null, false])
     expect(wrapped('Batched key access')).toEqual(['b', 'loopInner', null, false])
+    // A condition that names a join is not one (MySQL 9 writes conditions into the names of its steps).
+    expect(of(node({ op: "Filter: (kind = 'merge join')", children: [scan('a'), scan('b')] }))).toEqual([
+      ['a', null, null, false],
+      ['b', null, null, false],
+    ])
   })
 
   it('marks what a join under the inner side of a loop reads as repeated for each outer row', () => {

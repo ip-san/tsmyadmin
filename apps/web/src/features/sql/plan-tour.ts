@@ -21,7 +21,7 @@ const FINISH: readonly (readonly [Finish, RegExp, string?])[] = [
   ['sort', /^(incremental )?sort\b(?! row ids)/i, 'filesort'],
   ['group', /^(group|aggregate|hashaggregate)\b/i],
   ['distinct', /^(unique|distinct)\b|^remove duplicates|^sort with duplicate removal|with deduplication$/i],
-  ['temporary', /^temporary table\b|<temporary>/i, 'temporary'],
+  ['temporary', /^temporary table\b|<temporary>|^aggregate using temporary table\b/i, 'temporary'],
   ['limit', /^limit\b/i],
 ]
 
@@ -45,7 +45,8 @@ function finishes(plan: PlanNode): Finish[] {
 function readHint(read: PlanRead): string | null {
   const { node: n, join, repeated } = read
   if (n.access !== 'fullScan') return null
-  if (join === 'loopInner' || repeated) return t.loopScan(n.table)
+  if (join === 'loopInner') return t.loopScan(n.table)
+  if (repeated) return t.repeatedScan(n.table)
   if (join === 'blockInner') return t.blockScan(n.table)
   return n.detail && (join === null || join === 'loopOuter') ? t.filterScan(n.table) : null
 }
@@ -111,6 +112,7 @@ export function planTour({ plan, relations, indexColumns }: PlanTourInput): {
     const notes = [
       subquery === 'perRow' ? t.subquery : subquery === 'once' ? t.initPlan : null,
       repeated && join !== 'loopInner' ? t.repeated : null,
+      r.memoized ? t.memoized : null,
       join ? t.roles[join](node.table) : null,
       node.detail ? t.condition(cut(node.detail)) : null,
     ]

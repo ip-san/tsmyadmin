@@ -131,6 +131,19 @@ describe('parseMysqlPlan', () => {
       },
     }
     expect(parseMysqlPlan(below, '').op).toBe('Sort')
+    // A subquery's own sort does not order the rows: `SELECT u.id, (SELECT … ORDER BY 1 LIMIT 1) FROM users u ORDER BY u.id`.
+    const subquery = {
+      query_block: {
+        ordering_operation: {
+          using_filesort: false,
+          table: { table_name: 'u', access_type: 'index' },
+          select_list_subqueries: [
+            { query_block: { ordering_operation: { using_filesort: true, table: { table_name: 'p' } } } },
+          ],
+        },
+      },
+    }
+    expect(parseMysqlPlan(subquery, '').op).toBe('Ordered by index')
   })
 
   it('says how a table is joined through a join buffer: MySQL on the table, MariaDB around it', () => {
