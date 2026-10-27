@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { relationKey } from '@/components/schema-diagram/layout.ts'
+import { chaptersOf } from '@/components/schema-diagram/tour.ts'
 import { locale } from '@/config/locale-screens.ts'
 import type { RoleGuess } from '@/lib/table-role.ts'
 import { column, index, relation } from '@/test/schema-fixtures.ts'
@@ -65,6 +66,11 @@ describe('tableTourScenes', () => {
     expect(farther?.frame).not.toContain('logs')
 
     expect(end?.text).toBe(t.end(2, 1, 1))
+    expect(chaptersOf(scenes)).toEqual([
+      { title: t.chapters.table, from: 0, to: 2 },
+      { title: t.chapters.links, from: 2, to: 4 },
+      { title: t.chapters.farther, from: 4, to: 6 },
+    ])
     expect(end?.overlay).toMatchObject({ fade: false })
   })
 

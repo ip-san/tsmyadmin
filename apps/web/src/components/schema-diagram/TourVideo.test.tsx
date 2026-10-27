@@ -98,4 +98,53 @@ describe('TourVideo', () => {
     unmount()
     expect(signal?.aborted).toBe(true)
   })
+  it('records the chapter chosen, for its time, under the tour title and the chapter', async () => {
+    const parts: TourScene[] = [
+      { ...(scenes[0] as TourScene), chapter: 'Roles' },
+      { ...(scenes[1] as TourScene), chapter: 'Checks' },
+    ]
+    render(<TourVideo title="Map of shop" drawn={{ diagram, scenes: parts }} tones={{}} />)
+    const chooser = screen.getByRole('combobox', { name: t.chapter })
+    const second = Math.round(readMs(parts[1] as TourScene) / 1000)
+    expect([...chooser.querySelectorAll('option')].map((o) => o.textContent)).toEqual([
+      t.wholeVideo(seconds),
+      t.chapterOption(1, 'Roles', Math.round(readMs(parts[0] as TourScene) / 1000)),
+      t.chapterOption(2, 'Checks', second),
+    ])
+    fireEvent.change(chooser, { target: { value: '1' } })
+    expect(screen.getByRole('button', { name: t.video }).getAttribute('title')).toBe(t.videoHint(second))
+    fireEvent.click(screen.getByRole('button', { name: t.video }))
+    await act(() => vi.waitFor(() => expect(recording.recordTour).toHaveBeenCalled()))
+    const [, words, options] = recording.recordTour.mock.calls[0] as [unknown, { title: string }, { range?: unknown }]
+    expect(options.range).toEqual({ from: 1, to: 2 })
+    expect(words.title).toBe(t.chapterTitle('Map of shop', 2, 'Checks'))
+    expect((chooser as HTMLSelectElement).disabled).toBe(true)
+    const blob = new Blob(['video'])
+    await act(async () => recording.end?.({ blob, ext: 'webm' }))
+    expect(download.downloadBlob).toHaveBeenCalledWith('Map_of_shop_2_Checks.webm', blob)
+  })
+
+  it('offers no choice where the tour has no chapters, and records the whole', async () => {
+    show()
+    expect(screen.queryByRole('combobox')).toBeNull()
+    await press()
+    const [, , options] = recording.recordTour.mock.calls[0] as [unknown, unknown, { range?: unknown }]
+    expect(options.range).toBeUndefined()
+  })
+  it('records the whole, named for the tour, once the chapter chosen is no longer there', async () => {
+    const parts: TourScene[] = [
+      { ...(scenes[0] as TourScene), chapter: 'Roles' },
+      { ...(scenes[1] as TourScene), chapter: 'Checks' },
+    ]
+    const { rerender } = render(<TourVideo title="Map of shop" drawn={{ diagram, scenes: parts }} tones={{}} />)
+    fireEvent.change(screen.getByRole('combobox', { name: t.chapter }), { target: { value: '0' } })
+    // One chapter left: no list, and the whole is recorded, not named for the chapter that was chosen.
+    const one: TourScene[] = [{ ...(scenes[0] as TourScene), chapter: 'Roles' }, scenes[1] as TourScene]
+    rerender(<TourVideo title="Map of shop" drawn={{ diagram, scenes: one }} tones={{}} />)
+    expect(screen.queryByRole('combobox')).toBeNull()
+    await press()
+    const [, words, options] = recording.recordTour.mock.calls[0] as [unknown, { title: string }, { range?: unknown }]
+    expect(options.range).toBeUndefined()
+    expect(words.title).toBe('Map of shop')
+  })
 })

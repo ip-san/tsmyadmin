@@ -21,6 +21,36 @@ export interface TourScene {
   notes?: readonly string[]
   /** Where the design may cost time (an index missing, types that differ), listed after what it says of the design. */
   hints?: readonly string[]
+  /** The title of the chapter it opens: the scenes after it, up to the next that opens one, are in that chapter. */
+  chapter?: string
+}
+
+/** A run of scenes that can be saved as a video of its own: its title and the scenes in it (`from` to before `to`). */
+export interface Chapter {
+  title: string
+  from: number
+  to: number
+}
+
+/**
+ * The chapters of a tour: each scene that names one opens it, and the scenes after it, up to the next that names one,
+ * are in it. The scenes before the first that names one are in the first. None where no scene names one.
+ */
+export function chaptersOf(scenes: readonly Pick<TourScene, 'chapter'>[]): Chapter[] {
+  const out: Chapter[] = []
+  scenes.forEach((s, i) => {
+    if (s.chapter === undefined) return
+    const last = out.at(-1)
+    if (last) last.to = i
+    out.push({ title: s.chapter, from: out.length === 0 ? 0 : i, to: scenes.length })
+  })
+  return out
+}
+
+/** Opens a chapter at scene `at`, where there is one (a part of the tour that told nothing has no scene to open it). */
+export function openChapter(scenes: TourScene[], at: number, chapter: string): void {
+  const s = scenes[at]
+  if (s) scenes[at] = { ...s, chapter }
 }
 
 /** All a scene says, as it is read aloud: its title, its words, and what it says of the design. */

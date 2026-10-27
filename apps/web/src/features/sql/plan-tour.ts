@@ -1,6 +1,6 @@
 import type { PlanNode, RelationDef } from '@tsmyadmin/shared'
 import { diagramFor, type Tone } from '@/components/schema-diagram/overlay.ts'
-import { overlay, type TourScene, unique, whole } from '@/components/schema-diagram/tour.ts'
+import { openChapter, overlay, type TourScene, unique, whole } from '@/components/schema-diagram/tour.ts'
 import { locale } from '@/config/locale-screens.ts'
 import { type PlanRead, planReads, planSteps } from './plan-steps.ts'
 
@@ -138,6 +138,7 @@ export function planTour({ plan, relations, indexColumns }: PlanTourInput): {
 
   const finishing = finishes(plan)
   const all = [...lit].map(([name, [tone, badge]]) => [name, tone, badge] as const)
+  const finishAt = scenes.length
   if (finishing.length > 0) {
     const hints = finishing.flatMap((f) => (f === 'sort' ? [t.sortHint] : f === 'temporary' ? [t.temporaryHint] : []))
     hinted.push(...hints)
@@ -162,5 +163,8 @@ export function planTour({ plan, relations, indexColumns }: PlanTourInput): {
     notes: [order, locale.plan.notes],
     hints: unique(hinted),
   })
+  // Its chapters: the reads, and what is done after them (the summary with it).
+  openChapter(scenes, 0, t.chapters.reads)
+  if (finishing.length > 0) openChapter(scenes, finishAt, t.chapters.after)
   return { diagram, scenes }
 }

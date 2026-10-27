@@ -153,6 +153,25 @@ describe('MapTour', () => {
     expect(caption()).toHaveTextContent('shop')
   })
 
+  it('leaves the list of chapters to record its own arrow keys and space bar', async () => {
+    vi.stubGlobal('MediaRecorder', { isTypeSupported: (type: string) => type === 'video/webm' })
+    Object.defineProperty(HTMLCanvasElement.prototype, 'captureStream', { configurable: true, value: () => null })
+    try {
+      mount()
+      await screen.findByRole('img')
+      const chapters = screen.getByRole('combobox', { name: g.chapter })
+      for (const key of ['ArrowRight', ' ', 'End', 'p']) fireEvent.keyDown(chapters, { key })
+      expect(screen.getByText(g.sceneOf(1, 6))).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: g.play })).toBeInTheDocument()
+      // A clicker's Page keys still move the scenes.
+      fireEvent.keyDown(chapters, { key: 'PageDown' })
+      expect(caption()).toHaveTextContent(t.roleTitle(t.roles.master, 1))
+    } finally {
+      vi.unstubAllGlobals()
+      Reflect.deleteProperty(HTMLCanvasElement.prototype, 'captureStream')
+    }
+  })
+
   it('plays and pauses with P, and from its button', async () => {
     const { dialog } = mount()
     await screen.findByRole('img')

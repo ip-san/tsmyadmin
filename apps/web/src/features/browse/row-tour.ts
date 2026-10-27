@@ -2,7 +2,7 @@ import type { Cell, ForeignKeyDef, RelationDef, TableSchema } from '@tsmyadmin/s
 import type { GraphArrow } from '@/components/node-graph/NodeGraph.tsx'
 import { autoLayout, boxHeight } from '@/components/schema-diagram/layout.ts'
 import type { diagramFor } from '@/components/schema-diagram/overlay.ts'
-import { overlay, said, type TourScene, unique, whole } from '@/components/schema-diagram/tour.ts'
+import { openChapter, overlay, said, type TourScene, unique, whole } from '@/components/schema-diagram/tour.ts'
 import { locale } from '@/config/locale-screens.ts'
 import {
   columnComments,
@@ -211,6 +211,7 @@ export function rowTour(
   const scenes: TourScene[] = [
     {
       ...scene(name(root), t.intro(called(root), valuesSaid(root)), [root], []),
+      chapter: t.chapters.row,
       overlay: { ...overlay({ tables: [[name(root), 'focus']] }), enter: true },
       ...(() => {
         const own = schemaOf(root.ref)
@@ -239,6 +240,7 @@ export function rowTour(
   // What refers to the row: one scene a table and key, with how many were left out (cut per key, or past the rows
   // drawn). A table none of whose rows could be drawn still has its scene, its rows counted.
   const referring = links.filter((x) => x.to === root && x.from !== root)
+  const referredAt = scenes.length
   const unread = graph.more.flatMap((m) => {
     const label = graph.arrows.find((a) => a.from === m.id)?.label ?? ''
     return m.to === rootId ? [{ group: groupKey(m.ref.table, label), count: m.count }] : []
@@ -274,7 +276,9 @@ export function rowTour(
       reading(first)
     )
   }
+  openChapter(scenes, referredAt, t.chapters.referred)
   // One step further: what the rows met so far refer to, a scene for each table and key.
+  const fartherAt = scenes.length
   const farther = links.filter((l) => l.from !== root && l.to !== root)
   for (const group of unique(
     farther.map((l) => groupKey(`${l.from.ref.table}>${l.to.ref.table}`, l.columns.join(', ')))
@@ -298,6 +302,7 @@ export function rowTour(
       reading(first)
     )
   }
+  openChapter(scenes, fartherAt, t.chapters.farther)
   scenes.push({
     title: t.endTitle,
     text: t.end(unique(nodes.map((n) => n.ref.table)).length, nodes.length),

@@ -46,11 +46,15 @@ export function timeline(scenes: readonly FigureScene[]): { starts: number[]; to
   return { starts, total: at + END_MS }
 }
 
-/** The scene at `t` ms into the video, how far into it, and where the camera looks (moving from the last scene's). */
+/**
+ * The scene at `t` ms into the video, how far into it, and where the camera looks (moving from the last scene's, but
+ * not before `first`: a chapter's video opens on its own first scene).
+ */
 export function frameAt(
   scenes: readonly FigureScene[],
   starts: readonly number[],
-  t: number
+  t: number,
+  first = 0
 ): { index: number; u: number; view: Rect } {
   let index = 0
   while (index + 1 < starts.length && (starts[index + 1] ?? 0) <= t) index++
@@ -62,7 +66,7 @@ export function frameAt(
     height: v?.[3] ?? 1,
   })
   const to = rect(scenes[index]?.view)
-  const from = index > 0 ? rect(scenes[index - 1]?.view) : to
+  const from = index > first ? rect(scenes[index - 1]?.view) : to
   return { index, u, view: between(from, to, easeInOut(Math.min(1, u / CAMERA_MS))) }
 }
 
@@ -71,12 +75,13 @@ const faintness = (s: FigureScene | undefined, lit: (s: FigureScene) => boolean)
 
 /**
  * Lays scene `index` over the figure as it stands `u` ms into the scene: what the page does with classes and CSS
- * animations, done here by hand for one still frame (an image of an SVG does not run them).
+ * animations, done here by hand for one still frame (an image of an SVG does not run them). Nothing fades from a
+ * scene before `first` (the first of a chapter's video).
  */
-export function paint(root: Element, figure: TourFigure, index: number, u: number): void {
+export function paint(root: Element, figure: TourFigure, index: number, u: number, first = 0): void {
   const s = figure.scenes[index]
   if (!s) return
-  const before = figure.scenes[index - 1]
+  const before = index > first ? figure.scenes[index - 1] : undefined
   const fade = clamp01(u / FADE_MS)
   const opacity = (lit: (x: FigureScene) => boolean) => {
     const to = faintness(s, lit)
@@ -280,9 +285,10 @@ async function drawFrame(
   doc: Document,
   figure: TourFigure,
   w: VideoWords,
-  at: { index: number; u: number; view: Rect }
+  at: { index: number; u: number; view: Rect },
+  first = 0
 ): Promise<void> {
-  paint(doc.documentElement, figure, at.index, at.u)
+  paint(doc.documentElement, figure, at.index, at.u, first)
   const img = await snapshot(doc, at.view)
   const s = figure.scenes[at.index]
   if (!s) return
@@ -350,14 +356,41 @@ const realClock: Clock = {
 }
 
 /**
+ * When a video of the scenes `from` to before `to` starts and ends on the whole tour's time: a chapter's ends where
+ * the next chapter starts; the last, after the time the whole video holds its last frame.
+ */
+export function span(
+  scenes: readonly FigureScene[],
+  range: { from: number; to: number } = { from: 0, to: scenes.length }
+): { starts: number[]; start: number; end: number } {
+  const { starts, total } = timeline(scenes)
+  return {
+    starts,
+    start: starts[range.from] ?? 0,
+    end: range.to < scenes.length ? (starts[range.to] ?? total) : total,
+  }
+}
+
+/**
  * The tour as a video with its words on it: drawn frame by frame on a canvas the browser records as it goes, so it
- * takes as long as the video lasts. `onScene` hears each scene as it is reached; `signal` stops it, and then nothing
- * is made. The voice reading aloud is not in it: the browser does not hand its sound to a page.
+ * takes as long as the video lasts. `range` records the scenes `from` to before `to` only (a chapter), the camera
+ * opening on the first of them. `onScene` hears each scene as it is reached; `signal` stops it, and then nothing is
+ * made. The voice reading aloud is not in it: the browser does not hand its sound to a page.
  */
 export async function recordTour(
   figure: TourFigure,
   w: VideoWords,
-  { signal, onScene, clock = realClock }: { signal: AbortSignal; onScene: (index: number) => void; clock?: Clock }
+  {
+    signal,
+    onScene,
+    clock = realClock,
+    range,
+  }: {
+    signal: AbortSignal
+    onScene: (index: number) => void
+    clock?: Clock
+    range?: { from: number; to: number }
+  }
 ): Promise<{ blob: Blob; ext: string }> {
   const type = videoType((t) => MediaRecorder.isTypeSupported(t))
   const canvas = document.createElement('canvas')
@@ -367,8 +400,12 @@ export async function recordTour(
   if (!type || !ctx) throw new Error('This browser cannot record a video.')
   signal.throwIfAborted()
   const doc = figureDocument(figure)
-  const { starts, total } = timeline(figure.scenes)
-  await drawFrame(ctx, doc, figure, w, frameAt(figure.scenes, starts, 0))
+  const { starts, start, end } = span(figure.scenes, range)
+  const first = range?.from ?? 0
+  // The last moment drawn: a chapter's video stops before the next chapter's first scene.
+  const last = end > start && range && range.to < figure.scenes.length ? end - 1 : end
+  const length = last - start
+  await drawFrame(ctx, doc, figure, w, frameAt(figure.scenes, starts, start, first), first)
   const stream = canvas.captureStream(FPS)
   const chunks: Blob[] = []
   // What stopped the recorder before the end (the encoder failing): the recording ends there, and says so.
@@ -386,14 +423,14 @@ export async function recordTour(
     const t0 = clock.now()
     let told = -1
     for (;;) {
-      const t = Math.min(clock.now() - t0, total)
-      const at = frameAt(figure.scenes, starts, t)
+      const t = Math.min(clock.now() - t0, length)
+      const at = frameAt(figure.scenes, starts, start + t, first)
       if (at.index !== told) {
         told = at.index
         onScene(told)
       }
-      await drawFrame(ctx, doc, figure, w, at)
-      if (t >= total || signal.aborted || failed !== undefined || recorder.state === 'inactive') break
+      await drawFrame(ctx, doc, figure, w, at, first)
+      if (t >= length || signal.aborted || failed !== undefined || recorder.state === 'inactive') break
       await clock.wait(Math.max(0, 1000 / FPS - (clock.now() - t0 - t)))
     }
     // The recorder stopped by itself before the end, saying nothing of why: what it made is not the whole.

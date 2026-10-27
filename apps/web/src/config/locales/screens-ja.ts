@@ -328,6 +328,7 @@ export const jaScreens = {
     rawTruncated: '長いので途中で切っています',
   },
   planTour: {
+    chapters: { reads: 'テーブルを読む順', after: '読んだあとの処理' },
     open: 'プレゼンで見る',
     openHint:
       'この実行計画を、データベースがテーブルを読む順に、場面ごとの全画面の発表にします（推定。文は実行しない）',
@@ -422,6 +423,7 @@ export const jaScreens = {
     hint: '行ごとに「広げる」で、その行が参照している行と、その行を参照している行（表ごとに 10 行まで）を足します',
   },
   rowTour: {
+    chapters: { row: 'この行と、参照する行', referred: '参照してくる行', farther: 'その先の行' },
     open: 'つながりをプレゼンで見る',
     openHint: 'この行から、外部キーでつながる行を、値がどう一致しているかとともに、場面ごとにたどる',
     dialog: (table: string) => `行のつながりのプレゼン: ${table}`,
@@ -2811,6 +2813,11 @@ export const jaScreens = {
     video: '動画で保存',
     videoHint: (seconds: number) =>
       `図の横に説明を載せた動画（MP4 か WebM）にします。発表と同じ時間（約 ${seconds.toLocaleString('ja-JP')} 秒）をかけて録画するので、そのあいだこのタブを表に出しておいてください。中身は「HTML で保存」と同じで、読み上げの声は入りません`,
+    chapter: '動画にする範囲',
+    wholeVideo: (seconds: number) => `全体（約 ${seconds.toLocaleString('ja-JP')} 秒）`,
+    chapterOption: (n: number, title: string, seconds: number) =>
+      `${n}. ${title}（約 ${seconds.toLocaleString('ja-JP')} 秒）`,
+    chapterTitle: (title: string, n: number, chapter: string) => `${title}（${n}. ${chapter}）`,
     stopVideo: '録画をやめる',
     recording: (n: number, total: number, seconds: number) =>
       `動画を録画しています（場面 ${n} / ${total}、全体で約 ${seconds.toLocaleString('ja-JP')} 秒）`,
@@ -2823,6 +2830,7 @@ export const jaScreens = {
       `${names.join('、')}${more > 0 ? ` ほか ${more.toLocaleString('ja-JP')} 件` : ''}`,
   },
   queryTour: {
+    chapters: { tables: 'テーブルとつなぎ方', where: '条件', output: '出すカラムと並べ替え' },
     open: 'プレゼンで見る',
     openHint:
       '選んだテーブル・つなぎ方・条件・カラム・並べ替えを、SQL が論理的に処理される順に、場面ごとの全画面の発表にします（行は読みません）',
@@ -2886,6 +2894,12 @@ export const jaScreens = {
       `${first} から始めて${joined > 0 ? `、テーブルを ${joined.toLocaleString('ja-JP')} つつなぎ` : ''}${filtered ? '、条件で絞り' : ''}${sorted ? '、並べ替えて' : ''}、${columns > 0 ? `${columns.toLocaleString('ja-JP')} 個のカラム` : 'すべてのカラム'}を取り出します。「SQL を作成」で SQL を確かめ、SQL タブで実行できます`,
   },
   mapTour: {
+    chapters: {
+      roles: '全体と役割',
+      hubs: 'よく参照されるテーブル',
+      path: '2 つのテーブルのつなぎ方',
+      checks: '気をつけるところ',
+    },
     open: 'プレゼンで見る',
     dialog: (name: string) => `見取り図のプレゼン: ${name}`,
     diagram: (name: string) => `${name} のテーブルと外部キーの図`,
@@ -2944,6 +2958,7 @@ export const jaScreens = {
     end: (roles: readonly string[]) => `${roles.join('、')}。見取り図のテーブルの名前から、それぞれの概要を開けます`,
   },
   tableTour: {
+    chapters: { table: 'テーブルと主キー', links: '外部キーでつながるテーブル', farther: '2 段先のテーブル' },
     open: 'プレゼンで見る',
     saveHint:
       'この発表を 1 つの HTML ファイルにします。サーバーにつながずに、ブラウザで開いて発表できます（テーブル名・カラム名・コメントと、テーブルの推定の行数が入ります）',
