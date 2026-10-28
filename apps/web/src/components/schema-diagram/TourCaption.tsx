@@ -6,8 +6,8 @@ const t = locale.tour
 
 /**
  * The words of a scene, read out as it changes: which scene (and chapter, where there is more than one), its title
- * and words, what it says of the design, and where the design may cost time. Beside the picture on a wide screen; it scrolls (and takes the keyboard, to be
- * scrolled) when a scene says more than fits.
+ * and words, what it says of the design, and where the design may cost time. Beside the picture on a wide screen; it
+ * scrolls (and takes the keyboard, to be scrolled) when a scene says more than fits.
  */
 export function TourCaption({
   scenes,
@@ -32,7 +32,12 @@ export function TourCaption({
     >
       <p className="text-sm text-ink-sub">
         <span>{t.sceneOf(index + 1, scenes.length)}</span>
-        {chapter ? <span> · {t.inChapter(chapter.n, chapter.count, chapter.title)}</span> : null}
+        {chapter ? (
+          <span>
+            <span aria-hidden> · </span>
+            {t.inChapter(chapter.n, chapter.count, chapter.title)}
+          </span>
+        ) : null}
       </p>
       <h3 id={titleId} className="text-2xl font-bold text-ink">
         {scene.title}

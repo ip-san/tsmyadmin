@@ -129,7 +129,7 @@ describe('MapTour', () => {
     const { dialog } = mount()
     await screen.findByRole('img')
     // The overview and the three roles, then the hub and the end.
-    expect(screen.getByText(`· ${g.inChapter(1, 2, t.chapters.roles)}`, { exact: false })).toBeInTheDocument()
+    expect(screen.getByText(g.inChapter(1, 2, t.chapters.roles))).toBeInTheDocument()
     const bar = screen.getByRole('list', { name: g.scenes })
     const starts = within(bar)
       .getAllByRole('listitem')
@@ -137,7 +137,7 @@ describe('MapTour', () => {
       .filter((i) => i >= 0)
     expect(starts).toEqual([4])
     fireEvent.keyDown(dialog, { key: 'End' })
-    expect(screen.getByText(g.inChapter(2, 2, t.chapters.hubs), { exact: false })).toBeInTheDocument()
+    expect(screen.getByText(g.inChapter(2, 2, t.chapters.hubs))).toBeInTheDocument()
   })
 
   it("moves with the arrow keys, a clicker's Page keys, the space bar, and Home and End", async () => {

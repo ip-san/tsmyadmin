@@ -13,7 +13,7 @@ import {
 } from './layout.ts'
 import { sentences } from './narration.ts'
 import { type diagramFor, TONE_STROKE, TONES, type Tone } from './overlay.ts'
-import { chaptersOf, sceneNumber, spoken, type TourScene } from './tour.ts'
+import { chapterStarts, sceneNumber, spoken, type TourScene } from './tour.ts'
 
 export type TourDiagram = ReturnType<typeof diagramFor>
 
@@ -122,7 +122,7 @@ export function tourFigure(
     markup: [...lines, ...boxes, '<g id="rings" aria-hidden="true"></g>'].join('\n'),
     boxes: diagram.tables.map((x) => [at(x).x, at(x).y, size(x).width, size(x).height]),
     linesDelay,
-    chapters: chaptersFrom(scenes),
+    chapters: chapterStarts(scenes),
     scenes: scenes.map((s, n) => {
       const frame = frameOf(s.frame, diagram.tables, at, size)
       const lit = [...s.overlay.tables].flatMap(([name, { tone, badge }]): FigureScene['tables'] => {
@@ -165,12 +165,6 @@ export function tourFigure(
       }
     }),
   }
-}
-
-/** Where each chapter after the first starts, where there is more than one. */
-function chaptersFrom(scenes: readonly TourScene[]): number[] {
-  const chapters = chaptersOf(scenes)
-  return chapters.length < 2 ? [] : chapters.slice(1).map((c) => c.from)
 }
 
 const toneStyles = TONES.map((tone) => {

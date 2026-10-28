@@ -1,5 +1,5 @@
 import { locale } from '@/config/locale-screens.ts'
-import { chapterAt, chaptersOf, type TourScene } from './tour.ts'
+import { chapterStarts, type TourScene } from './tour.ts'
 
 const t = locale.tour
 
@@ -23,8 +23,8 @@ export function SceneBar({
   sceneMs: number
   goTo: (index: number) => void
 }) {
-  const chapters = chaptersOf(scenes)
-  const opens = (i: number) => i > 0 && chapterAt(chapters, i)?.n !== chapterAt(chapters, i - 1)?.n
+  const starts = new Set(chapterStarts(scenes))
+  const opens = (i: number) => starts.has(i)
   return (
     <ol aria-label={t.scenes} className="flex min-w-48 flex-1 gap-1">
       {scenes.map((s, i) => (

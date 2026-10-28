@@ -67,6 +67,12 @@ export function chapterAt(
   return c ? { n: i + 1, count: chapters.length, title: c.title } : undefined
 }
 
+/** The scenes that open a chapter after the first, where there is more than one: a bar leaves a gap before them. */
+export function chapterStarts(scenes: readonly Pick<TourScene, 'chapter'>[]): number[] {
+  const chapters = chaptersOf(scenes)
+  return chapters.length < 2 ? [] : chapters.slice(1).map((c) => c.from)
+}
+
 /** The number of a scene, with the chapter it is in where there is more than one (`chapterAt`). */
 export function sceneNumber(
   scenes: readonly Pick<TourScene, 'chapter'>[],
