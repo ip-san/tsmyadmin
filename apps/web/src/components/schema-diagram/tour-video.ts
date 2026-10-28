@@ -286,9 +286,9 @@ async function drawFrame(
   figure: TourFigure,
   w: VideoWords,
   at: { index: number; u: number; view: Rect },
-  first = 0
+  range: Range = { from: 0, to: figure.scenes.length }
 ): Promise<void> {
-  paint(doc.documentElement, figure, at.index, at.u, first)
+  paint(doc.documentElement, figure, at.index, at.u, range.from)
   const img = await snapshot(doc, at.view)
   const s = figure.scenes[at.index]
   if (!s) return
@@ -325,17 +325,38 @@ async function drawFrame(
     x += 30 + ctx.measureText(label).width + 20
   }
   drawWords(ctx, s, w)
-  // A bar for each scene, filled as far as the video has come.
-  const count = figure.scenes.length
-  const gap = 4
-  const bar = (WIDTH - 48 - gap * (count - 1)) / count
-  figure.scenes.forEach((_, i) => {
-    const bx = 24 + i * (bar + gap)
+  for (const b of sceneBars(figure, range, at)) {
     ctx.fillStyle = LINE
-    ctx.fillRect(bx, 702, bar, 6)
-    const done = i < at.index ? 1 : i === at.index ? clamp01(at.u / readMs(s)) : 0
+    ctx.fillRect(b.x, 702, b.width, 6)
     ctx.fillStyle = COLOUR.focus
-    ctx.fillRect(bx, 702, bar * done, 6)
+    ctx.fillRect(b.x, 702, b.width * b.done, 6)
+  }
+}
+
+/** The scenes `from` to before `to` of a video: the whole tour, or a chapter. */
+type Range = { from: number; to: number }
+
+/** Between the bars of two scenes, and wider where a chapter starts. */
+const BAR_GAP = 4
+const CHAPTER_GAP = 16
+
+/**
+ * The bar under the video, a piece for each scene it shows (a chapter's video, only that chapter's), filled as far as
+ * the video has come, with a wider gap where a chapter starts.
+ */
+export function sceneBars(
+  figure: Pick<TourFigure, 'scenes' | 'chapters'>,
+  range: Range,
+  at: { index: number; u: number }
+): { x: number; width: number; done: number }[] {
+  const shown = figure.scenes.slice(range.from, range.to).map((s, k) => ({ s, i: range.from + k }))
+  const gapBefore = (i: number) => (figure.chapters.includes(i) ? CHAPTER_GAP : BAR_GAP)
+  const gaps = shown.slice(1).reduce((sum, { i }) => sum + gapBefore(i), 0)
+  const width = (WIDTH - 48 - gaps) / Math.max(1, shown.length)
+  let x = 24
+  return shown.map(({ s, i }, k) => {
+    if (k > 0) x += width + gapBefore(i)
+    return { x, width, done: i < at.index ? 1 : i === at.index ? clamp01(at.u / readMs(s)) : 0 }
   })
 }
 
@@ -389,7 +410,7 @@ export async function recordTour(
     signal: AbortSignal
     onScene: (index: number) => void
     clock?: Clock
-    range?: { from: number; to: number }
+    range?: Range
   }
 ): Promise<{ blob: Blob; ext: string }> {
   const type = videoType((t) => MediaRecorder.isTypeSupported(t))
@@ -401,11 +422,12 @@ export async function recordTour(
   signal.throwIfAborted()
   const doc = figureDocument(figure)
   const { starts, start, end } = span(figure.scenes, range)
-  const first = range?.from ?? 0
+  const shown = range ?? { from: 0, to: figure.scenes.length }
+  const first = shown.from
   // The last moment drawn: a chapter's video stops before the next chapter's first scene.
   const last = end > start && range && range.to < figure.scenes.length ? end - 1 : end
   const length = last - start
-  await drawFrame(ctx, doc, figure, w, frameAt(figure.scenes, starts, start, first), first)
+  await drawFrame(ctx, doc, figure, w, frameAt(figure.scenes, starts, start, first), shown)
   const stream = canvas.captureStream(FPS)
   const chunks: Blob[] = []
   // What stopped the recorder before the end (the encoder failing): the recording ends there, and says so.
@@ -429,7 +451,7 @@ export async function recordTour(
         told = at.index
         onScene(told)
       }
-      await drawFrame(ctx, doc, figure, w, at, first)
+      await drawFrame(ctx, doc, figure, w, at, shown)
       if (t >= length || signal.aborted || failed !== undefined || recorder.state === 'inactive') break
       await clock.wait(Math.max(0, 1000 / FPS - (clock.now() - t0 - t)))
     }

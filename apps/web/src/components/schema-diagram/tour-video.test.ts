@@ -10,6 +10,7 @@ import {
   frameAt,
   paint,
   recordTour,
+  sceneBars,
   span,
   timeline,
   videoType,
@@ -41,7 +42,12 @@ const scenes: TourScene[] = [
     hints: ['where it costs time'],
   },
 ]
-const figure = tourFigure(diagram, scenes, { sceneOf: (n, total) => `${n} / ${total}`, stop: '. ' })
+const sceneWords = {
+  sceneOf: (n: number, total: number) => `${n} / ${total}`,
+  inChapter: (n: number, count: number, title: string) => `chapter ${n} of ${count}: ${title}`,
+  stop: '. ',
+}
+const figure = tourFigure(diagram, scenes, sceneWords)
 const words = { title: 'Map of shop', notes: 'Design', hints: 'Hints', tones: { focus: 'Looked at' } }
 
 describe('timeline and frameAt', () => {
@@ -144,6 +150,39 @@ describe('paint', () => {
 
 /** A pen whose every character is 10 wide. */
 const pen = { measureText: (s: string) => ({ width: [...s].length * 10 }) as TextMetrics }
+
+describe('sceneBars', () => {
+  // Five scenes in three chapters: 0–1, 2, 3–4.
+  const five = Array.from({ length: 5 }, () => figure.scenes[0] as FigureScene)
+  const chaptered = { scenes: five, chapters: [2, 3] }
+  const ms = readMs(scenes[0] as TourScene)
+
+  it('fills the bars up to the scene shown, and that one as far as the video has come into it', () => {
+    const bars = sceneBars({ scenes: five, chapters: [] }, { from: 0, to: 5 }, { index: 2, u: ms / 2 })
+    expect(bars.map((b) => b.done)).toEqual([1, 1, 0.5, 0, 0])
+    // With no chapters, the same gap between every two, across the width of the video.
+    const gaps = bars.slice(1).map((b, k) => b.x - ((bars[k]?.x ?? 0) + (bars[k]?.width ?? 0)))
+    expect(gaps.map(Math.round)).toEqual([4, 4, 4, 4])
+    expect(bars[0]?.x).toBe(24)
+    expect((bars.at(-1)?.x ?? 0) + (bars.at(-1)?.width ?? 0)).toBeCloseTo(1280 - 24)
+  })
+
+  it('leaves a wider gap where a chapter starts, still across the same width', () => {
+    const bars = sceneBars(chaptered, { from: 0, to: 5 }, { index: 0, u: 0 })
+    const gaps = bars.slice(1).map((b, k) => b.x - ((bars[k]?.x ?? 0) + (bars[k]?.width ?? 0)))
+    expect(gaps.map(Math.round)).toEqual([4, 16, 16, 4])
+    expect((bars.at(-1)?.x ?? 0) + (bars.at(-1)?.width ?? 0)).toBeCloseTo(1280 - 24)
+  })
+
+  it("shows a chapter's video only that chapter's scenes, across the whole width", () => {
+    const bars = sceneBars(chaptered, { from: 3, to: 5 }, { index: 4, u: 0 })
+    expect(bars).toHaveLength(2)
+    expect(bars.map((b) => b.done)).toEqual([1, 0])
+    expect(bars[0]?.x).toBe(24)
+    expect((bars[1]?.x ?? 0) - ((bars[0]?.x ?? 0) + (bars[0]?.width ?? 0))).toBeCloseTo(4)
+    expect((bars[1]?.x ?? 0) + (bars[1]?.width ?? 0)).toBeCloseTo(1280 - 24)
+  })
+})
 
 describe('wrap', () => {
   it('keeps a name whole, breaks Japanese anywhere, and never starts a line with closing punctuation', () => {

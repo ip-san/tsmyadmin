@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { chaptersOf, openChapter, type TourScene } from './tour.ts'
+import { chapterAt, chaptersOf, openChapter, sceneNumber, type TourScene } from './tour.ts'
 
 describe('chaptersOf', () => {
   it('has none where no scene opens one', () => {
@@ -28,5 +28,31 @@ describe('openChapter', () => {
     // A later part told on the same scene (the part before it told nothing) names it.
     openChapter(scenes, 1, 'Later')
     expect(scenes[1]?.chapter).toBe('Later')
+  })
+})
+
+describe('chapterAt and sceneNumber', () => {
+  const scenes = [{}, { chapter: 'Roles' }, {}, { chapter: 'Hubs' }, {}]
+  const w = {
+    sceneOf: (n: number, total: number) => `${n} / ${total}`,
+    inChapter: (n: number, count: number, title: string) => `chapter ${n} of ${count}: ${title}`,
+  }
+
+  it('finds the chapter of a scene, the scenes before the first opener in the first', () => {
+    const chapters = chaptersOf(scenes)
+    expect(chapterAt(chapters, 0)).toEqual({ n: 1, count: 2, title: 'Roles' })
+    expect(chapterAt(chapters, 2)).toEqual({ n: 1, count: 2, title: 'Roles' })
+    expect(chapterAt(chapters, 3)).toEqual({ n: 2, count: 2, title: 'Hubs' })
+    expect(chapterAt(chapters, 5)).toBeUndefined()
+  })
+
+  it('says nothing of a chapter where there is only one, or none', () => {
+    expect(chapterAt(chaptersOf([{ chapter: 'One' }, {}]), 1)).toBeUndefined()
+    expect(sceneNumber([{ chapter: 'One' }, {}], 1, w)).toBe('2 / 2')
+    expect(sceneNumber([{}, {}], 0, w)).toBe('1 / 2')
+  })
+
+  it('numbers a scene with its chapter', () => {
+    expect(sceneNumber(scenes, 4, w)).toBe('5 / 5 · chapter 2 of 2: Hubs')
   })
 })

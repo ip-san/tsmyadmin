@@ -2835,6 +2835,7 @@ export const enScreens = {
     pause: 'Pause',
     scenes: 'Scenes',
     sceneOf: (n: number, total: number) => `${n} / ${total}`,
+    inChapter: (n: number, count: number, title: string) => `Chapter ${n} of ${count}: ${title}`,
     goTo: (n: number, title: string) => `${n}. ${title}`,
     keys: '← → or Page Up / Down to move, Space for the next, Home / End for the first and last, P to play or pause, F for full screen, Esc to close',
     narrate: 'Read aloud',

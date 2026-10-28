@@ -67,7 +67,11 @@ export function TourVideo({
       ])
       // Stopped while the recorder was being read: it does not start.
       stop.signal.throwIfAborted()
-      const figure = tourFigure(drawn.diagram, drawn.scenes, { sceneOf: t.sceneOf, stop: t.stop })
+      const figure = tourFigure(drawn.diagram, drawn.scenes, {
+        sceneOf: t.sceneOf,
+        inChapter: t.inChapter,
+        stop: t.stop,
+      })
       const { blob, ext } = await recordTour(
         figure,
         { title: named, notes: notesTitle, hints: t.hints, tones },

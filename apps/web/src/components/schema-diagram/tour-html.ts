@@ -21,6 +21,8 @@ export interface TourWords {
   stop: string
   keys: string
   sceneOf: (n: number, total: number) => string
+  /** A scene's chapter, after its number, where the tour has more than one. */
+  inChapter: (n: number, count: number, title: string) => string
   /** What each colour means on this tour. */
   tones: Partial<Record<Tone, string>>
 }

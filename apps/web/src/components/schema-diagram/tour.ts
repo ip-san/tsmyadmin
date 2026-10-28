@@ -53,6 +53,37 @@ export function openChapter(scenes: TourScene[], at: number, chapter: string): v
   if (s) scenes[at] = { ...s, chapter }
 }
 
+/**
+ * The chapter scene `index` is in, numbered from 1, and how many there are: none where the tour has fewer than two
+ * (one chapter says nothing a scene's number does not).
+ */
+export function chapterAt(
+  chapters: readonly Chapter[],
+  index: number
+): { n: number; count: number; title: string } | undefined {
+  if (chapters.length < 2) return undefined
+  const i = chapters.findIndex((c) => index >= c.from && index < c.to)
+  const c = chapters[i]
+  return c ? { n: i + 1, count: chapters.length, title: c.title } : undefined
+}
+
+/** The scenes that open a chapter after the first, where there is more than one: a bar leaves a gap before them. */
+export function chapterStarts(scenes: readonly Pick<TourScene, 'chapter'>[]): number[] {
+  const chapters = chaptersOf(scenes)
+  return chapters.length < 2 ? [] : chapters.slice(1).map((c) => c.from)
+}
+
+/** The number of a scene, with the chapter it is in where there is more than one (`chapterAt`). */
+export function sceneNumber(
+  scenes: readonly Pick<TourScene, 'chapter'>[],
+  index: number,
+  w: { sceneOf: (n: number, total: number) => string; inChapter: (n: number, count: number, title: string) => string }
+): string {
+  const n = w.sceneOf(index + 1, scenes.length)
+  const c = chapterAt(chaptersOf(scenes), index)
+  return c ? `${n} · ${w.inChapter(c.n, c.count, c.title)}` : n
+}
+
 /** All a scene says, as it is read aloud: its title, its words, and what it says of the design. */
 export const spoken = (scene: Pick<TourScene, 'title' | 'text' | 'notes' | 'hints'>, stop: string = t.stop) =>
   [scene.title, scene.text, ...(scene.notes ?? []), ...(scene.hints ?? [])].filter(Boolean).join(stop)
