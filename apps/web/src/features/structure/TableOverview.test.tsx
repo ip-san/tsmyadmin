@@ -101,7 +101,16 @@ vi.mock('@/lib/queries.ts', () => ({
   dependenciesQuery: () => ({ queryKey: ['deps'], queryFn: async () => ({ status: 'ok', objects: [] }) }),
   triggersQuery: () => ({ queryKey: ['triggers'], queryFn: async () => [] }),
   tablesQuery: () => ({ queryKey: ['tables'], queryFn: async () => [] }),
+  rowCountQuery: (ref: { table: string }) => ({
+    queryKey: ['count', ref.table],
+    queryFn: async () => {
+      counted.push(ref.table)
+      return 40
+    },
+  }),
 }))
+/** The tables whose rows were counted. */
+let counted: string[] = []
 
 const mount = () =>
   render(
@@ -112,6 +121,7 @@ const mount = () =>
 
 describe('TableOverview', () => {
   beforeEach(() => {
+    counted = []
     keys = null
     kind = 'table'
   })
@@ -137,6 +147,20 @@ describe('TableOverview', () => {
     expect(within(tour).getByText(locale.tour.sceneOf(1, 6))).toBeInTheDocument()
     await user.click(within(tour).getByRole('button', { name: locale.tour.close }))
     expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it("counts the rows of the presentation's tables when asked, and tells them as counted", async () => {
+    const user = userEvent.setup()
+    mount()
+    await user.click(await screen.findByRole('button', { name: locale.tableTour.open }))
+    const tour = screen.getByRole('dialog', { name: locale.tableTour.dialog('posts') })
+    await within(tour).findByRole('img', { name: locale.tableTour.diagram('posts') })
+    expect(counted).toEqual([])
+    await user.click(within(tour).getByRole('button', { name: locale.tour.count }))
+    expect(await within(tour).findByText(locale.tour.counted)).toBeInTheDocument()
+    // The tables drawn: posts and those up to two keys away.
+    expect(counted.sort()).toEqual(['comments', 'orgs', 'posts', 'users'])
+    expect(within(tour).getByText(locale.designReading.rowsCounted('posts', 40))).toBeInTheDocument()
   })
 
   it('offers no presentation of a view', async () => {

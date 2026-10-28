@@ -456,6 +456,13 @@ export const jaScreens = {
       `推定の行数の比では、${parent} 1 行あたり、${child} は平均 0.1 行未満です`,
     without: (parent: string, child: string, n: number) =>
       `推定の行数どおりなら、${child} の行は ${parent} の半分以下なので、${parent} のうち約 ${n.toLocaleString('ja-JP')} 行以上には ${child} の行がありません（${child} の 1 行が指す ${parent} は 1 行だけなので）`,
+    rowsCounted: (table: string, n: number) => `${table} は ${n.toLocaleString('ja-JP')} 行（数えた行数）`,
+    perRowCounted: (parent: string, child: string, ratio: number) =>
+      `数えた行数の比では、${parent} 1 行あたり、${child} は平均約 ${ratio.toLocaleString('ja-JP')} 行です`,
+    perRowFewCounted: (parent: string, child: string) =>
+      `数えた行数の比では、${parent} 1 行あたり、${child} は平均 0.1 行未満です`,
+    withoutCounted: (parent: string, child: string, n: number) =>
+      `数えた行数では、${child} の行は ${parent} より少ないので、${parent} のうち少なくとも ${n.toLocaleString('ja-JP')} 行には ${child} の行がありません（${child} の 1 行が指す ${parent} は 1 行だけなので）`,
     named: (table: string, comment: string) => `${table}（${comment}）`,
     columnComment: (table: string, column: string, comment: string) =>
       `${table}.${column} は「${comment}」（カラムのコメント）`,
@@ -2800,6 +2807,12 @@ export const jaScreens = {
     pause: '一時停止',
     scenes: '場面',
     sceneOf: (n: number, total: number) => `${n} / ${total}`,
+    count: '行を数える',
+    countHint:
+      'このプレゼンのテーブルの行を COUNT(*) で数え、説明を推定の行数から数えた行数に変えます。全行を読むので、大きなテーブルでは時間がかかります',
+    counting: (n: number) => `${n.toLocaleString('ja-JP')} テーブルの行を数えています…`,
+    counted: '数えた行数で説明しています',
+    countFailed: (tables: string) => `数えられなかったテーブル（${tables}）は推定の行数のままです`,
     inChapter: (n: number, count: number, title: string) => `第 ${n} 章「${title}」（全 ${count} 章）`,
     goTo: (n: number, title: string) => `${n}. ${title}`,
     keys: '← → か Page Up / Down で前後、スペースで次、Home / End で最初と最後、P で再生・一時停止、F で全画面、Esc で閉じる',

@@ -40,6 +40,7 @@ export function TourDialog({
   error,
   saveHint = t.saveHint,
   notesTitle = t.notes,
+  controls,
   onClose,
 }: {
   title: string
@@ -53,6 +54,8 @@ export function TourDialog({
   saveHint?: string
   /** The heading of what a scene says beyond its words: what it reads of the design, unless the tour reads else. */
   notesTitle?: string
+  /** More for the header, before saving (counting the rows, say). */
+  controls?: ReactNode
   onClose: () => void
 }) {
   const ref = useRef<HTMLDialogElement>(null)
@@ -115,6 +118,7 @@ export function TourDialog({
           <div className="flex gap-2">
             {drawn && !error ? (
               <>
+                {controls}
                 <TourVideo title={title} drawn={drawn} tones={tones} notesTitle={notesTitle} />
                 <Button size="sm" title={saveHint} onClick={() => void save(title, label, drawn, tones, notesTitle)}>
                   {t.save}
