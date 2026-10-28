@@ -73,4 +73,38 @@ describe('perRowReading', () => {
     expect(perRowReading(rows, 'orders', 'shops')).toEqual([])
     expect(perRowReading(undefined, 'orders', 'users')).toEqual([])
   })
+
+  it('says the rows counted as counted, and how many have none for any difference, not only past half', () => {
+    const counted = new Map<string, number | { counted: number }>([
+      ['users', { counted: 100 }],
+      ['profiles', { counted: 95 }],
+      ['empty', { counted: 0 }],
+      ['guessed', 50],
+    ])
+    expect(rowsReading(counted, 'users')).toEqual([w.rowsCounted('users', 100)])
+    // A count of none is said: it is exact, unlike an estimate of 0.
+    expect(rowsReading(counted, 'empty')).toEqual([w.rowsCounted('empty', 0)])
+    expect(perRowReading(counted, 'profiles', 'users')).toEqual([
+      w.perRowCounted('users', 'profiles', 1),
+      w.withoutCounted('users', 'profiles', 5),
+    ])
+    // None counted: no average, only that no row referred to has one.
+    expect(perRowReading(counted, 'empty', 'users')).toEqual([w.withoutCounted('users', 'empty', 100)])
+    const few = new Map([
+      ['users', { counted: 1000 }],
+      ['admins', { counted: 3 }],
+    ])
+    expect(perRowReading(few, 'admins', 'users')).toEqual([
+      w.perRowFewCounted('users', 'admins'),
+      w.withoutCounted('users', 'admins', 997),
+    ])
+    // No rows referred to: no ratio.
+    expect(perRowReading(counted, 'users', 'empty')).toEqual([])
+    // One counted, one estimated: told as estimated, with the estimate's margin.
+    expect(perRowReading(counted, 'guessed', 'users')).toEqual([
+      w.perRow('users', 'guessed', 0.5),
+      w.without('users', 'guessed', 50),
+    ])
+    expect(perRowReading(counted, 'profiles', 'guessed')).toEqual([w.perRow('guessed', 'profiles', 1.9)])
+  })
 })

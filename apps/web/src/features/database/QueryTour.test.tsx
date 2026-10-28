@@ -14,6 +14,9 @@ let plan: QueryBuilderResult | Error
 let asked: QueryBuilderRequestInput[]
 /** The list of tables, with their estimated rows, or why it could not be read. */
 let list: { name: string; rowEstimate: number | null }[] | Error
+/** What COUNT(*) answers for each table (an Error where it fails), and the tables counted. */
+let exact: Record<string, number | Error>
+let countedTables: string[]
 
 vi.mock('@/lib/session.ts', () => ({ useDialect: () => 'mysql' }))
 vi.mock('@/lib/queries.ts', () => ({
@@ -23,6 +26,16 @@ vi.mock('@/lib/queries.ts', () => ({
       asked.push(body)
       if (plan instanceof Error) throw plan
       return plan
+    },
+    retry: false,
+  }),
+  rowCountQuery: (ref: { table: string }) => ({
+    queryKey: ['count', ref.table],
+    queryFn: async () => {
+      countedTables.push(ref.table)
+      const n = exact[ref.table]
+      if (n === undefined || n instanceof Error) throw n ?? new Error('none')
+      return n
     },
     retry: false,
   }),
@@ -61,6 +74,8 @@ beforeAll(() => {
 
 beforeEach(() => {
   asked = []
+  exact = { orders: 480, users: 120 }
+  countedTables = []
   list = [
     { name: 'orders', rowEstimate: 500 },
     { name: 'users', rowEstimate: 100 },
@@ -131,5 +146,46 @@ describe('QueryTour', () => {
     fireEvent.keyDown(again, { key: 'ArrowRight' })
     expect(await screen.findByRole('heading', { level: 3, name: t.fromTitle('orders') })).toBeTruthy()
     expect(screen.queryByText(w.rows('orders', 500))).toBeNull()
+  })
+
+  it('counts the rows when asked, and tells them as counted in place of the estimates', async () => {
+    const w = locale.designReading
+    const g = locale.tour
+    show()
+    fireEvent.click(screen.getByRole('button', { name: t.open }))
+    const dialog = await screen.findByRole('dialog', { name: t.dialog })
+    await screen.findByRole('heading', { level: 3, name: t.introTitle })
+    fireEvent.keyDown(dialog, { key: 'ArrowRight' })
+    expect(await screen.findByText(w.rows('orders', 500))).toBeTruthy()
+    // Nothing is counted until asked; the status is there, empty.
+    expect(countedTables).toEqual([])
+    const status = screen.getByText(g.count).parentElement?.querySelector('[role="status"]')
+    expect(status?.textContent).toBe('')
+    fireEvent.click(screen.getByRole('button', { name: g.count }))
+    expect(await screen.findByText(g.counted)).toBeTruthy()
+    expect(countedTables.sort()).toEqual(['orders', 'users'])
+    // The same scene, its words now counted.
+    expect(screen.getByRole('heading', { level: 3, name: t.fromTitle('orders') })).toBeTruthy()
+    expect(screen.getByText(w.rowsCounted('orders', 480))).toBeTruthy()
+    expect(screen.queryByText(w.rows('orders', 500))).toBeNull()
+  })
+
+  it('keeps the estimate of a table that cannot be counted, and says which', async () => {
+    const w = locale.designReading
+    const g = locale.tour
+    exact = { orders: new Error('timeout'), users: 120 }
+    show()
+    fireEvent.click(screen.getByRole('button', { name: t.open }))
+    const dialog = await screen.findByRole('dialog', { name: t.dialog })
+    await screen.findByRole('heading', { level: 3, name: t.introTitle })
+    fireEvent.keyDown(dialog, { key: 'ArrowRight' })
+    fireEvent.click(screen.getByRole('button', { name: g.count }))
+    expect(await screen.findByText(g.countFailed('orders', true))).toBeTruthy()
+    expect(screen.getByText(w.rows('orders', 500))).toBeTruthy()
+    // Pressed again, it counts again.
+    exact = { orders: 480, users: 120 }
+    fireEvent.click(screen.getByRole('button', { name: g.count }))
+    expect(await screen.findByText(w.rowsCounted('orders', 480))).toBeTruthy()
+    expect(screen.getByText(g.counted)).toBeTruthy()
   })
 })

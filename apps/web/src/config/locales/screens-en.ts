@@ -461,6 +461,14 @@ export const enScreens = {
       `By the estimated row counts, ${child} has under 0.1 rows per row of ${parent} on average`,
     without: (parent: string, child: string, n: number) =>
       `If the estimates hold, ${child} has half the rows of ${parent} or fewer, so about ${n.toLocaleString('en-US')} or more rows of ${parent} have no row of ${child} (a row of ${child} refers to one row of ${parent} only)`,
+    rowsCounted: (table: string, n: number) =>
+      `${table} has ${n.toLocaleString('en-US')} ${n === 1 ? 'row' : 'rows'} (counted)`,
+    perRowCounted: (parent: string, child: string, ratio: number) =>
+      `By the rows counted, ${child} has about ${ratio.toLocaleString('en-US')} ${ratio === 1 ? 'row' : 'rows'} per row of ${parent} on average`,
+    perRowFewCounted: (parent: string, child: string) =>
+      `By the rows counted, ${child} has under 0.1 rows per row of ${parent} on average`,
+    withoutCounted: (parent: string, child: string, n: number) =>
+      `By the rows counted, ${child} has fewer rows than ${parent}, so at least ${n.toLocaleString('en-US')} ${n === 1 ? 'row' : 'rows'} of ${parent} ${n === 1 ? 'has' : 'have'} no row of ${child} (a row of ${child} refers to one row of ${parent} only)`,
     named: (table: string, comment: string) => `${table} (${comment})`,
     columnComment: (table: string, column: string, comment: string) =>
       `${table}.${column} is "${comment}" (its column comment)`,
@@ -2835,6 +2843,13 @@ export const enScreens = {
     pause: 'Pause',
     scenes: 'Scenes',
     sceneOf: (n: number, total: number) => `${n} / ${total}`,
+    count: 'Count the rows',
+    countHint:
+      "Counts the rows of this presentation's tables with COUNT(*), and tells the rows counted in place of the estimates. It reads every row: a large table takes time",
+    counting: (n: number) => `Counting the rows of ${n.toLocaleString('en-US')} ${n === 1 ? 'table' : 'tables'}…`,
+    counted: 'Told with the rows counted',
+    countFailed: (tables: string, others: boolean) =>
+      `The tables that could not be counted (${tables}) keep their estimates${others ? '; the others are told with the rows counted' : ''}`,
     inChapter: (n: number, count: number, title: string) => `Chapter ${n} of ${count}: ${title}`,
     goTo: (n: number, title: string) => `${n}. ${title}`,
     keys: '← → or Page Up / Down to move, Space for the next, Home / End for the first and last, P to play or pause, F for full screen, Esc to close',

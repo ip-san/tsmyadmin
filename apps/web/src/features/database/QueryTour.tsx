@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import type { QueryBuilderRequestInput, RelationDef, TableSchema } from '@tsmyadmin/shared'
 import { Presentation } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { CountRows } from '@/components/schema-diagram/CountRows.tsx'
 import { drawnRelations } from '@/components/schema-diagram/layout.ts'
 import { TourDialog } from '@/components/schema-diagram/TourDialog.tsx'
 import { Button } from '@/components/ui/Button.tsx'
@@ -9,6 +10,7 @@ import { locale } from '@/config/locale-screens.ts'
 import { namespaceOf } from '@/lib/home-namespace.ts'
 import { queryPlanQuery } from '@/lib/queries.ts'
 import { useDialect } from '@/lib/session.ts'
+import { useRowCounts } from '@/lib/use-row-counts.ts'
 import { useRowEstimates } from '@/lib/use-row-estimates.ts'
 import { queryTour } from './query-tour.ts'
 
@@ -71,15 +73,17 @@ function QueryTourDialog({
   const plan = useQuery(queryPlanQuery(db, request))
   // The estimated rows add to what it says: it waits for them, and goes on without them if they cannot be read.
   const estimates = useRowEstimates(db, schema)
+  // Counted when asked for, in place of the estimates.
+  const counts = useRowCounts(db, schema, request.tables, estimates.rows)
   const drawn = useMemo(() => {
     if (!plan.data || estimates.pending) return undefined
     const keys: RelationDef[] = [...schemas.values()].flatMap((s) =>
       s.foreignKeys.map((k) => ({ ...k, table: s.name }))
     )
     const drawnKeys = drawnRelations(keys, dialect, namespaceOf(db, schema), request.tables)
-    const rows = estimates.rows
+    const rows = counts.rows
     return queryTour({ request, joins: plan.data.joins, schemas, keys: drawnKeys, ...(rows ? { rows } : {}) })
-  }, [plan.data, estimates.pending, estimates.rows, schemas, dialect, db, schema, request])
+  }, [plan.data, estimates.pending, counts.rows, schemas, dialect, db, schema, request])
   return (
     <TourDialog
       title={t.dialog}
@@ -87,6 +91,7 @@ function QueryTourDialog({
       drawn={drawn}
       tones={t.tones}
       saveHint={t.saveHint}
+      controls={<CountRows counts={counts} tables={request.tables.length} />}
       error={plan.isError ? { error: plan.error, retry: () => void plan.refetch() } : undefined}
       onClose={onClose}
     />
