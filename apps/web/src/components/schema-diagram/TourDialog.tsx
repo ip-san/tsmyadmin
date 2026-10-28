@@ -7,6 +7,7 @@ import { downloadText, safeFilename } from '@/lib/download.ts'
 import { frameOf } from './camera.ts'
 import { BOX_WIDTH, boxHeight } from './layout.ts'
 import { type diagramFor, TONES, type Tone } from './overlay.ts'
+import { SceneBar } from './SceneBar.tsx'
 import { SchemaDiagram } from './SchemaDiagram.tsx'
 import { DiagramLegend } from './StepNarration.tsx'
 import { TourCaption } from './TourCaption.tsx'
@@ -158,6 +159,7 @@ async function save(
     stop: t.stop,
     keys: t.savedKeys,
     sceneOf: t.sceneOf,
+    inChapter: t.inChapter,
     tones,
   })
   downloadText(safeFilename(title, 'html'), html, 'text/html')
@@ -249,7 +251,7 @@ function Stage({
             labels={tones}
           />
         </div>
-        <TourCaption scene={scene} index={player.index} count={scenes.length} notesTitle={notesTitle} />
+        <TourCaption scenes={scenes} index={player.index} notesTitle={notesTitle} />
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <Button size="sm" onClick={player.prev} disabled={player.index === 0}>
@@ -264,30 +266,14 @@ function Stage({
         <Button size="sm" aria-pressed={voice.asked} onClick={reading.narrate}>
           {t.narrate}
         </Button>
-        <ol aria-label={t.scenes} className="flex min-w-48 flex-1 gap-1">
-          {scenes.map((s, i) => (
-            <li key={i} className="flex-1">
-              <button
-                type="button"
-                aria-label={t.goTo(i + 1, s.title)}
-                aria-current={i === player.index ? 'step' : undefined}
-                onClick={() => player.goTo(i)}
-                className="flex h-6 w-full items-center"
-              >
-                <span className="relative block h-1.5 w-full overflow-hidden rounded-full bg-line">
-                  {i < player.index ? <span className="absolute inset-0 bg-brand" /> : null}
-                  {i === player.index ? (
-                    <span
-                      key={`${i}.${player.playing}`}
-                      className={`absolute inset-0 origin-left bg-brand ${timed ? 'diagram-progress' : ''}`}
-                      style={timed ? { animationDuration: `${SCENE_MS}ms` } : undefined}
-                    />
-                  ) : null}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ol>
+        <SceneBar
+          scenes={scenes}
+          index={player.index}
+          playing={player.playing}
+          timed={timed}
+          sceneMs={SCENE_MS}
+          goTo={player.goTo}
+        />
         {/* There from the start (empty): heard when reading aloud is asked for and the device has no voice for it. */}
         <p role="status" className="w-full text-sm text-ink empty:sr-only">
           {voice.asked && voice.voice === null ? t.noVoice : ''}

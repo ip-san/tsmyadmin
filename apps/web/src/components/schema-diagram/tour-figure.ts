@@ -13,7 +13,7 @@ import {
 } from './layout.ts'
 import { sentences } from './narration.ts'
 import { type diagramFor, TONE_STROKE, TONES, type Tone } from './overlay.ts'
-import { spoken, type TourScene } from './tour.ts'
+import { chaptersOf, sceneNumber, spoken, type TourScene } from './tour.ts'
 
 export type TourDiagram = ReturnType<typeof diagramFor>
 
@@ -70,6 +70,8 @@ export interface TourFigure {
   /** When the lines come in, after the last column of boxes. */
   linesDelay: number
   scenes: FigureScene[]
+  /** The scenes that open a chapter after the first, where there is more than one: the bar leaves a gap before them. */
+  chapters: number[]
 }
 
 /**
@@ -79,7 +81,7 @@ export interface TourFigure {
 export function tourFigure(
   diagram: TourDiagram,
   scenes: readonly TourScene[],
-  w: { sceneOf: (n: number, total: number) => string; stop: string }
+  w: Parameters<typeof sceneNumber>[2] & { stop: string }
 ): TourFigure {
   const at = (table: string) => diagram.positions[table] ?? { x: 0, y: 0 }
   const listed = (table: string) => diagram.columns.get(table) ?? []
@@ -120,6 +122,7 @@ export function tourFigure(
     markup: [...lines, ...boxes, '<g id="rings" aria-hidden="true"></g>'].join('\n'),
     boxes: diagram.tables.map((x) => [at(x).x, at(x).y, size(x).width, size(x).height]),
     linesDelay,
+    chapters: chaptersFrom(scenes),
     scenes: scenes.map((s, n) => {
       const frame = frameOf(s.frame, diagram.tables, at, size)
       const lit = [...s.overlay.tables].flatMap(([name, { tone, badge }]): FigureScene['tables'] => {
@@ -135,7 +138,7 @@ export function tourFigure(
           return i === undefined ? [] : [[i, v] as const]
         })
       return {
-        n: w.sceneOf(n + 1, scenes.length),
+        n: sceneNumber(scenes, n, w),
         said: sentences(spoken(s, w.stop)),
         notes: s.notes ?? [],
         hints: s.hints ?? [],
@@ -162,6 +165,12 @@ export function tourFigure(
       }
     }),
   }
+}
+
+/** Where each chapter after the first starts, where there is more than one. */
+function chaptersFrom(scenes: readonly TourScene[]): number[] {
+  const chapters = chaptersOf(scenes)
+  return chapters.length < 2 ? [] : chapters.slice(1).map((c) => c.from)
 }
 
 const toneStyles = TONES.map((tone) => {

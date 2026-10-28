@@ -2800,6 +2800,7 @@ export const jaScreens = {
     pause: '一時停止',
     scenes: '場面',
     sceneOf: (n: number, total: number) => `${n} / ${total}`,
+    inChapter: (n: number, count: number, title: string) => `第 ${n} 章「${title}」（全 ${count} 章）`,
     goTo: (n: number, title: string) => `${n}. ${title}`,
     keys: '← → か Page Up / Down で前後、スペースで次、Home / End で最初と最後、P で再生・一時停止、F で全画面、Esc で閉じる',
     narrate: '読み上げ',

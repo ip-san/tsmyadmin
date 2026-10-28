@@ -43,6 +43,7 @@ const words: TourWords = {
   stop: '. ',
   keys: 'keys',
   sceneOf: (n, total) => `${n} / ${total}`,
+  inChapter: (n, count, title) => `chapter ${n} of ${count}: ${title}`,
   tones: { focus: 'Looked at', index: 'Refers' },
 }
 
@@ -119,5 +120,18 @@ describe('tourHtml', () => {
     expect(look.said.slice(-2)).toEqual(['why it is so.', 'where it costs <time>'])
     expect(doc.querySelector('#notes h3')?.textContent).toBe('Design')
     expect(doc.querySelector('#hints h3')?.textContent).toBe('Hints')
+  })
+
+  it('numbers each scene with its chapter where the tour has more than one, and alone where it has none', () => {
+    const chaptered = [
+      { ...scenes[0], chapter: 'Whole' },
+      { ...scenes[1], chapter: 'Close' },
+    ] as TourScene[]
+    const data = dataOf(parse(tourHtml(diagram, chaptered, words)))
+    expect(data.scenes.map((s: { n: string }) => s.n)).toEqual([
+      '1 / 2 · chapter 1 of 2: Whole',
+      '2 / 2 · chapter 2 of 2: Close',
+    ])
+    expect(dataOf(doc).scenes.map((s: { n: string }) => s.n)).toEqual(['1 / 2', '2 / 2'])
   })
 })
