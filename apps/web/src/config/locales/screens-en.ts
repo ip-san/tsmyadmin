@@ -2848,7 +2848,8 @@ export const enScreens = {
       "Counts the rows of this presentation's tables with COUNT(*), and tells the rows counted in place of the estimates. It reads every row: a large table takes time",
     counting: (n: number) => `Counting the rows of ${n.toLocaleString('en-US')} ${n === 1 ? 'table' : 'tables'}…`,
     counted: 'Told with the rows counted',
-    countFailed: (tables: string) => `The tables that could not be counted (${tables}) keep their estimates`,
+    countFailed: (tables: string, others: boolean) =>
+      `The tables that could not be counted (${tables}) keep their estimates${others ? '; the others are told with the rows counted' : ''}`,
     inChapter: (n: number, count: number, title: string) => `Chapter ${n} of ${count}: ${title}`,
     goTo: (n: number, title: string) => `${n}. ${title}`,
     keys: '← → or Page Up / Down to move, Space for the next, Home / End for the first and last, P to play or pause, F for full screen, Esc to close',

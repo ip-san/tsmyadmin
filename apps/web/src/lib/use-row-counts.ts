@@ -21,7 +21,8 @@ export interface RowCounts {
  * The rows of a presentation's tables counted exactly (`COUNT(*)`), when asked for: it reads every row, so it never
  * runs on its own (not on focus, not when the answer ages), and counts a few tables at a time (`eachLimited`). A
  * table that cannot be counted keeps its estimate, and is named as such. Closed, a count still running starts no more
- * tables: the query reads its `signal`, so TanStack Query aborts it when its last observer goes.
+ * tables (the few already running finish): the query reads its `signal`, so TanStack Query aborts it when its last
+ * observer goes.
  */
 export function useRowCounts(
   db: string,
@@ -33,9 +34,16 @@ export function useRowCounts(
   const all = useQuery({
     queryKey: ['row-counts-all', db, schema ?? '', tables],
     queryFn: ({ signal }) =>
-      eachLimited(tables, (table) => queryClient.fetchQuery(rowCountQuery({ db, schema, table })), { signal }),
+      eachLimited(
+        tables,
+        // Counted now, not taken from a count of a moment ago (the list's, or this one's).
+        (table) => queryClient.fetchQuery({ ...rowCountQuery({ db, schema, table }), staleTime: 0 }),
+        { signal }
+      ),
     enabled: false,
     staleTime: Number.POSITIVE_INFINITY,
+    // Gone when the presentation closes: opened again, it tells the estimates of then until counted again.
+    gcTime: 0,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     retry: false,

@@ -53,7 +53,8 @@ export function rowsReading(
 /**
  * What the rows say of a key from `child` to `parent`: the rows of `child` per row of `parent` on average (under 0.1,
  * said as such rather than rounded to 0), and that some rows of `parent` have none. A row of `child` refers to one
- * row of `parent` at most, so where `child` has fewer rows, at least the difference have none. Counted, both, that is
+ * row of `parent` at most (a key refers to a unique key, as it does but for MySQL's lenient keys), so where `child`
+ * has fewer rows, at least the difference have none. Counted, both, that is
  * so for any difference; by the estimates (each perhaps tens of percent off), it is said only where `child` has half
  * the rows of `parent` or fewer. Nothing for a key to itself, or where either has no number; a table counted with
  * one estimated is told as estimated. The names may carry the tables' comments (`label`).
@@ -73,7 +74,8 @@ export function perRowReading(
     if (p.n === 0) return []
     const per = ratio(c.n / p.n)
     return [
-      per > 0 ? w.perRowCounted(pl, cl, per) : w.perRowFewCounted(pl, cl),
+      // None counted is exact: what is said is that no row of `parent` has one.
+      ...(c.n === 0 ? [] : [per > 0 ? w.perRowCounted(pl, cl, per) : w.perRowFewCounted(pl, cl)]),
       ...(c.n < p.n ? [w.withoutCounted(pl, cl, p.n - c.n)] : []),
     ]
   }

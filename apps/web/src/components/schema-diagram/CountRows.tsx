@@ -12,7 +12,7 @@ const t = locale.tour
 export function CountRows({ counts, tables }: { counts: RowCounts; tables: number }) {
   let said = ''
   if (counts.counting) said = t.counting(tables)
-  else if (counts.failed.length > 0) said = t.countFailed(counts.failed.join(', '))
+  else if (counts.failed.length > 0) said = t.countFailed(counts.failed.join(', '), counts.failed.length < tables)
   else if (counts.done) said = t.counted
   return (
     <span className="flex items-center gap-2">

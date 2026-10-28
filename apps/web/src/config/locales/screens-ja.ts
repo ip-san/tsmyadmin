@@ -2812,7 +2812,8 @@ export const jaScreens = {
       'このプレゼンのテーブルの行を COUNT(*) で数え、説明を推定の行数から数えた行数に変えます。全行を読むので、大きなテーブルでは時間がかかります',
     counting: (n: number) => `${n.toLocaleString('ja-JP')} テーブルの行を数えています…`,
     counted: '数えた行数で説明しています',
-    countFailed: (tables: string) => `数えられなかったテーブル（${tables}）は推定の行数のままです`,
+    countFailed: (tables: string, others: boolean) =>
+      `数えられなかったテーブル（${tables}）は推定の行数のままです${others ? '。ほかのテーブルは数えた行数で説明しています' : ''}`,
     inChapter: (n: number, count: number, title: string) => `第 ${n} 章「${title}」（全 ${count} 章）`,
     goTo: (n: number, title: string) => `${n}. ${title}`,
     keys: '← → か Page Up / Down で前後、スペースで次、Home / End で最初と最後、P で再生・一時停止、F で全画面、Esc で閉じる',

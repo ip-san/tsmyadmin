@@ -88,9 +88,15 @@ describe('perRowReading', () => {
       w.perRowCounted('users', 'profiles', 1),
       w.withoutCounted('users', 'profiles', 5),
     ])
-    expect(perRowReading(counted, 'empty', 'users')).toEqual([
-      w.perRowFewCounted('users', 'empty'),
-      w.withoutCounted('users', 'empty', 100),
+    // None counted: no average, only that no row referred to has one.
+    expect(perRowReading(counted, 'empty', 'users')).toEqual([w.withoutCounted('users', 'empty', 100)])
+    const few = new Map([
+      ['users', { counted: 1000 }],
+      ['admins', { counted: 3 }],
+    ])
+    expect(perRowReading(few, 'admins', 'users')).toEqual([
+      w.perRowFewCounted('users', 'admins'),
+      w.withoutCounted('users', 'admins', 997),
     ])
     // No rows referred to: no ratio.
     expect(perRowReading(counted, 'users', 'empty')).toEqual([])

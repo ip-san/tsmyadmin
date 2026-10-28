@@ -180,7 +180,7 @@ describe('QueryTour', () => {
     await screen.findByRole('heading', { level: 3, name: t.introTitle })
     fireEvent.keyDown(dialog, { key: 'ArrowRight' })
     fireEvent.click(screen.getByRole('button', { name: g.count }))
-    expect(await screen.findByText(g.countFailed('orders'))).toBeTruthy()
+    expect(await screen.findByText(g.countFailed('orders', true))).toBeTruthy()
     expect(screen.getByText(w.rows('orders', 500))).toBeTruthy()
     // Pressed again, it counts again.
     exact = { orders: 480, users: 120 }
