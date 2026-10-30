@@ -2889,8 +2889,8 @@ export const enScreens = {
       `${names.join(', ')}${more > 0 ? ` and ${more.toLocaleString('en-US')} more` : ''}`,
   },
   queryTour: {
-    runningRows: (n: number, atMost: boolean) =>
-      `Reckoned from the estimated rows, the query gives ${atMost ? 'at most ' : ''}about ${n.toLocaleString('en-US')} ${n === 1 ? 'row' : 'rows'} so far (before the conditions; a rough guide, taking values as evenly spread)`,
+    runningRows: (n: number, atMost: boolean, counted: boolean) =>
+      `Reckoned from the ${counted ? 'counted' : 'estimated'} rows, the query gives ${atMost ? 'at most ' : ''}about ${n.toLocaleString('en-US')} ${n === 1 ? 'row' : 'rows'} so far (before the conditions; a rough guide, taking values as evenly spread)`,
     chapters: {
       tables: 'The tables and their joins',
       where: 'The conditions',

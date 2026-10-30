@@ -43,32 +43,44 @@ function stepRelation(step: QueryJoinStep, keys: readonly RelationDef[]): Relati
   }
 }
 
-/** The rows a query gives so far, by the estimates; `atMost` where a join may have dropped some. */
-type Running = { n: number; atMost: boolean }
+/**
+ * The rows a query gives so far, reckoned from the tables' rows: `atMost` where a join may have dropped some or
+ * the reckoning may be over, `counted` where every number it was reckoned from was counted.
+ */
+type Running = { n: number; atMost: boolean; counted: boolean }
 
 /**
  * The rows after a join along a key, from the rows before it and the two tables' rows (the rows of the table that
  * refers per row of the other, spread evenly). Joining the table that refers multiplies by that average (in a LEFT
  * JOIN, a row with none still gives one; one to one, never more than one); joining the table referred to gives a
- * row at most (an INNER JOIN on a key that may be NULL drops some). Undefined where it cannot be told: no numbers,
- * a RIGHT JOIN (the rows of the table joined decide), or a join on columns of its own.
+ * row at most (an INNER JOIN on a key that may be NULL drops some). A table already joined that an outer join may
+ * have left NULL (`nullable`) has rows that meet nothing: an INNER JOIN drops them, and the average is over them.
+ * Undefined where it cannot be told: no numbers, a RIGHT JOIN (the rows of the table joined decide), or a join on
+ * columns of its own.
  */
 function joinedRows(
   before: Running | undefined,
   step: QueryJoinStep,
   relation: RelationDef | undefined,
   intent: { oneToOne: boolean | undefined; required: boolean | undefined } | undefined,
-  rows: RowEstimates | undefined
+  rows: RowEstimates | undefined,
+  nullable: ReadonlySet<string>
 ): Running | undefined {
   if (!before || !relation || !intent || step.kind === 'right') return undefined
   const child = rowsOf(rows, relation.table)
   const parent = rowsOf(rows, relation.refTable)
   if (!child || !parent || parent.n === 0) return undefined
+  const counted = before.counted && child.counted && parent.counted
   if (relation.table === step.table) {
     const per = intent.oneToOne ? Math.min(child.n / parent.n, 1) : child.n / parent.n
-    return { n: before.n * (step.kind === 'left' ? Math.max(per, 1) : per), atMost: before.atMost }
+    return {
+      n: before.n * (step.kind === 'left' ? Math.max(per, 1) : per),
+      atMost: before.atMost || nullable.has(relation.refTable),
+      counted,
+    }
   }
-  return { n: before.n, atMost: before.atMost || (step.kind === 'inner' && intent.required !== true) }
+  const drops = step.kind === 'inner' && (intent.required !== true || nullable.has(relation.table))
+  return { n: before.n, atMost: before.atMost || drops, counted }
 }
 
 /** The rows so far as said: rounded to two significant digits past a hundred, an estimate is not exact. */
@@ -159,7 +171,7 @@ export function queryTour({ request, joins, schemas, keys, rows }: QueryTourInpu
   const nullable = new Set<string>()
   // The rows so far, by the estimates: from the table it starts from, through each join while it can be told.
   const start = rowsOf(rows, first)
-  let running: Running | undefined = start ? { n: start.n, atMost: false } : undefined
+  let running: Running | undefined = start ? { n: start.n, atMost: false, counted: start.counted } : undefined
   joins.forEach((step, i) => {
     const before = [first, ...joins.slice(0, i).map((s) => s.table)]
     const relation = relations[i]
@@ -167,7 +179,7 @@ export function queryTour({ request, joins, schemas, keys, rows }: QueryTourInpu
     const notes: string[] = [step.key ? t.alongKey(step.key.name) : t.spelled]
     const hints: string[] = []
     const intent = relation && step.key ? keyIntent(relation, schemas.get(relation.table)) : undefined
-    running = joinedRows(running, step, relation, intent, rows)
+    running = joinedRows(running, step, relation, intent, rows, nullable)
     if (relation && step.key && intent) {
       const child = relation.table
       const parent = relation.refTable
@@ -202,7 +214,7 @@ export function queryTour({ request, joins, schemas, keys, rows }: QueryTourInpu
         if (schema && !indexed(schema, cols)) hints.push(t.joinUnindexed(table, cols.join(', ')))
       }
     }
-    if (running) notes.push(t.runningRows(roughly(running.n), running.atMost))
+    if (running) notes.push(t.runningRows(roughly(running.n), running.atMost, running.counted))
     if (step.kind === 'left') nullable.add(step.table)
     if (step.kind === 'right') for (const x of before) nullable.add(x)
     hinted.push(...hints)
@@ -318,7 +330,7 @@ export function queryTour({ request, joins, schemas, keys, rows }: QueryTourInpu
     pulse: [],
     notes: [
       ...unique(said),
-      ...(running && joins.length > 0 ? [t.runningRows(roughly(running.n), running.atMost)] : []),
+      ...(running && joins.length > 0 ? [t.runningRows(roughly(running.n), running.atMost, running.counted)] : []),
     ],
     hints: unique(hinted),
   })
