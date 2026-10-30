@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { TourDialog } from '@/components/schema-diagram/TourDialog.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { locale } from '@/config/locale-screens.ts'
+import type { RowEstimates } from '@/lib/row-estimates.ts'
 import { planTour } from './plan-tour.ts'
 
 const t = locale.planTour
@@ -13,12 +14,18 @@ export function PlanTour({
   plan,
   relations,
   indexColumns,
+  rows,
   ready,
 }: {
   plan: PlanNode
   relations: readonly RelationDef[]
   indexColumns: (table: string, index: string) => readonly string[]
-  /** The tables' index columns are read: until then the scenes would not mark them, and they are told as opened. */
+  /** The tables' estimated rows, where the list of tables could be read. */
+  rows?: RowEstimates | undefined
+  /**
+   * The tables' index columns and estimated rows are read: until then the scenes would not have them, and they are
+   * told as opened.
+   */
   ready: boolean
 }) {
   // Told as it was when it opened: the index columns read in after do not move the scenes under it.
@@ -29,7 +36,7 @@ export function PlanTour({
         size="sm"
         title={t.openHint}
         disabled={!ready}
-        onClick={() => setDrawn(planTour({ plan, relations, indexColumns }))}
+        onClick={() => setDrawn(planTour({ plan, relations, indexColumns, rows }))}
       >
         <Presentation className="size-4" aria-hidden />
         {t.open}

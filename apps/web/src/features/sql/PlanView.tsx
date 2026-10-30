@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { locale } from '@/config/locale-screens.ts'
 import { explainQuery, foreignKeysQuery, structureQuery } from '@/lib/queries.ts'
+import { useRowEstimates } from '@/lib/use-row-estimates.ts'
 import { PlanTour } from './PlanTour.tsx'
 import { planReads, planSteps } from './plan-steps.ts'
 
@@ -70,6 +71,8 @@ function PlanStory({
   const indexColumns = (table: string, index: string) =>
     structures[tables.indexOf(table)]?.data?.indexes.find((i) => i.name === index)?.columns ?? []
   const steps = planSteps(reads, indexColumns)
+  // The presentation says each table's size: it waits for the list, and goes on without it if it cannot be read.
+  const estimates = useRowEstimates(db, schema)
   const player = useStepPlayer(steps.length)
   const extra = new Map<string, string[]>()
   for (const c of steps.flatMap((s) => s.columns ?? [])) extra.set(c.table, [...(extra.get(c.table) ?? []), c.column])
@@ -82,7 +85,8 @@ function PlanStory({
           plan={result.plan}
           relations={relations}
           indexColumns={indexColumns}
-          ready={structures.every((s) => !s.isPending)}
+          rows={estimates.rows}
+          ready={structures.every((s) => !s.isPending) && !estimates.pending}
         />
       ) : null}
       <div className="grid gap-3 lg:grid-cols-2">

@@ -279,4 +279,57 @@ describe('planTour', () => {
     const said = scenes[1]?.notes?.[0] ?? ''
     expect(said).toBe(t.condition(`${'x'.repeat(119)}…`))
   })
+
+  describe("with the tables' estimated rows", () => {
+    const w = locale.designReading
+    const scan = (n: Partial<PlanNode> = {}) =>
+      node({ op: 'Seq Scan', table: 'logs', access: 'fullScan', estRows: 50000, ...n })
+    const hintsOf = (plan: PlanNode, rows: ReadonlyMap<string, number>) =>
+      titled(planTour({ plan, relations: [], rows }).scenes, t.readTitle('logs'))?.hints
+    const stale = t.staleStats('logs', 50000, 10000)
+    const listed = new Map([['logs', 10000]])
+
+    it('says the size of each table the first time it is read, after what the plan says of the read', () => {
+      const rows = new Map([
+        ['users', 2000],
+        ['posts', 9000],
+      ])
+      const twice = node({
+        op: 'Append',
+        children: [loop, node({ op: 'Seq Scan', table: 'users', access: 'fullScan' })],
+      })
+      const reads = planTour({ plan: twice, relations: keys, rows })
+        .scenes.filter((s) => s.title.length > 0)
+        .slice(1, 4)
+      expect(reads.map((s) => s.notes?.at(-1))).toEqual([
+        w.rows('users', 2000),
+        w.rows('posts', 9000),
+        // users again: said once.
+        undefined,
+      ])
+      expect(reads[0]?.notes?.slice(0, -1)).toEqual(planTour({ plan: twice, relations: keys }).scenes[1]?.notes)
+    })
+
+    it('says a full read with no condition whose rows are far from the table list may be on old statistics', () => {
+      expect(hintsOf(scan(), listed)).toEqual([stale])
+      // Either way: the plan counting fewer.
+      expect(hintsOf(scan({ estRows: 4000 }), listed)).toEqual([t.staleStats('logs', 4000, 10000)])
+      // And in the summary.
+      expect(planTour({ plan: scan(), relations: [], rows: listed }).scenes.at(-1)?.hints).toEqual([stale])
+    })
+
+    it('says nothing of the statistics where the two are near, small, or not of the whole table', () => {
+      expect(hintsOf(scan({ estRows: 19999 }), listed)).toEqual([])
+      expect(hintsOf(scan({ estRows: 5001 }), listed)).toEqual([])
+      expect(hintsOf(scan({ estRows: 900 }), new Map([['logs', 100]]))).toEqual([])
+      expect(hintsOf(scan(), new Map())).toEqual([])
+      // A condition: the plan's rows are those left.
+      expect(hintsOf(scan({ detail: "(kind = 'x')" }), listed)).not.toContain(stale)
+      // Through an index, and split between workers.
+      expect(hintsOf(scan({ access: 'range', index: 'ix' }), listed)).toEqual([])
+      expect(hintsOf(scan({ op: 'Parallel Seq Scan' }), listed)).toEqual([])
+      // Under a limit, MySQL lowers the read's rows.
+      expect(hintsOf(node({ op: 'Limit', children: [scan()] }), listed)).toEqual([])
+    })
+  })
 })

@@ -2,6 +2,7 @@ import type { PlanNode, RelationDef } from '@tsmyadmin/shared'
 import { diagramFor, type Tone } from '@/components/schema-diagram/overlay.ts'
 import { openChapter, overlay, type TourScene, unique, whole } from '@/components/schema-diagram/tour.ts'
 import { locale } from '@/config/locale-screens.ts'
+import { type RowEstimates, rowsOf, rowsReading } from '@/lib/row-estimates.ts'
 import { type PlanRead, planReads, planSteps } from './plan-steps.ts'
 
 const t = locale.planTour
@@ -51,21 +52,46 @@ function readHint(read: PlanRead): string | null {
   return n.detail && (join === null || join === 'loopOuter') ? t.filterScan(n.table) : null
 }
 
+/** Below this many rows, a gap between two estimates is noise, not a sign. */
+const STALE_FLOOR = 1000
+/** How far apart the two estimates must be, either way, to be said. */
+const STALE_RATIO = 2
+
+/**
+ * Where the plan's rows for a whole table and the table list's estimate are far apart: one of the two counts is
+ * old (PostgreSQL scales its count by the table's pages now; MySQL's list is cached apart from the optimizer's).
+ * Only a full read with no condition, not split between workers (`Parallel …`: rows per worker), in a plan that
+ * stops at no limit (MySQL lowers a read's rows under one): there the plan's rows are the table's.
+ */
+function staleHint(read: PlanRead, rows: RowEstimates | undefined, limited: boolean): string | null {
+  const n = read.node
+  if (limited || n.access !== 'fullScan' || n.detail || n.estRows === null || /^parallel /i.test(n.op)) return null
+  const listed = rowsOf(rows, n.table)
+  if (!listed || listed.counted) return null
+  const [plan, list] = [Math.round(n.estRows), listed.n]
+  if (Math.min(plan, list) < STALE_FLOOR || Math.max(plan, list) < STALE_RATIO * Math.min(plan, list)) return null
+  return t.staleStats(n.table, plan, list)
+}
+
 export interface PlanTourInput {
   plan: PlanNode
   /** The database's foreign keys: those between the tables read are drawn, and flow as a join goes along them. */
   relations: readonly RelationDef[]
   /** An index's columns where the plan names only the index (PostgreSQL). */
   indexColumns?: (table: string, index: string) => readonly string[]
+  /** The tables' estimated rows (`rowEstimates`), where the list of tables could be read. */
+  rows?: RowEstimates | undefined
 }
 
 /**
  * A statement's plan told as a presentation, in the order the server runs it: the tables it reads (each lit by how
  * it is read, with the index as its badge), how each is joined to the rows before it, what is done with the rows
  * after, and where a full read is the cost. The counterpart of the query tab's presentation, which tells the logical
- * order; this is the order the server chose. Estimated: the statement is not run.
+ * order; this is the order the server chose. Estimated: the statement is not run. With the tables' estimated rows,
+ * each table is said with its size the first time it is read (beside the rows the plan expects from the read: how
+ * far it narrows), and a full read whose rows are far from the table's is said as perhaps old statistics.
  */
-export function planTour({ plan, relations, indexColumns }: PlanTourInput): {
+export function planTour({ plan, relations, indexColumns, rows }: PlanTourInput): {
   diagram: ReturnType<typeof diagramFor>
   scenes: TourScene[]
 } {
@@ -93,6 +119,7 @@ export function planTour({ plan, relations, indexColumns }: PlanTourInput): {
   // Each table as last read: a later read of the same table is lit as it is read then.
   const lit = new Map<string, readonly [Tone, string]>()
   const hinted: string[] = []
+  const limited = finishes(plan).includes('limit')
   reads.forEach((r, i) => {
     const { node, join, subquery, repeated } = r
     const step = steps[i]
@@ -115,9 +142,11 @@ export function planTour({ plan, relations, indexColumns }: PlanTourInput): {
       // Under Memoize the loop looks up each new value, not each row: said in place of the loop's sentence.
       r.memoized && join === 'loopInner' ? t.memoized(node.table) : join ? t.roles[join](node.table) : null,
       node.detail ? t.condition(cut(node.detail)) : null,
+      // The table's size, once: the first time it is read.
+      ...(before.includes(node.table) ? [] : rowsReading(rows, node.table)),
     ]
-    const hint = readHint(r)
-    if (hint) hinted.push(hint)
+    const hints = [readHint(r), staleHint(r, rows, limited)].filter((h): h is string => h !== null)
+    hinted.push(...hints)
     if (read) lit.set(node.table, [read.tone, read.badge ?? locale.plan.full])
     scenes.push({
       title: t.readTitle(node.table),
@@ -132,7 +161,7 @@ export function planTour({ plan, relations, indexColumns }: PlanTourInput): {
       }),
       pulse: [node.table],
       notes: notes.filter((n): n is string => n !== null),
-      hints: hint ? [hint] : [],
+      hints,
     })
   })
 
