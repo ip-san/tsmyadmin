@@ -29,11 +29,16 @@ export function useMeasuredPlan(db: string, schema: string | undefined, sql: str
     step,
     result,
     error,
+    // Asked again or put away: why the last run failed is no longer what is shown.
     ask: () => {
-      if (!running.current) setStep('confirming')
+      if (running.current) return
+      setError(null)
+      setStep('confirming')
     },
     cancel: () => {
-      if (!running.current) setStep('idle')
+      if (running.current) return
+      setError(null)
+      setStep('idle')
     },
     run: async () => {
       if (running.current) return

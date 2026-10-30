@@ -42,8 +42,16 @@ export function misestimate(node: PlanNode): Misestimate | null {
  * is a leaf, so its time is its own.
  */
 export function heavyShare(node: PlanNode, totalMs: number | null | undefined): number | null {
+  const share = shareOf(node, totalMs)
+  return share !== null && share >= HEAVY_SHARE * 100 ? share : null
+}
+
+/**
+ * The share of the run a step took, as a whole percent (never past 100: MariaDB times a table and the run apart),
+ * where the run was long enough to tell (`HEAVY_FLOOR_MS`). Null where either is not timed.
+ */
+export function shareOf(node: PlanNode, totalMs: number | null | undefined): number | null {
   const ms = node.actual?.ms
   if (ms == null || totalMs == null || totalMs < HEAVY_FLOOR_MS) return null
-  const share = ms / totalMs
-  return share >= HEAVY_SHARE ? Math.min(100, Math.round(share * 100)) : null
+  return Math.min(100, Math.round((ms / totalMs) * 100))
 }

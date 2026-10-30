@@ -3,7 +3,7 @@ import { diagramFor, type Tone } from '@/components/schema-diagram/overlay.ts'
 import { openChapter, overlay, type TourScene, unique, whole } from '@/components/schema-diagram/tour.ts'
 import { locale } from '@/config/locale-screens.ts'
 import { type RowEstimates, rowsOf, rowsReading } from '@/lib/row-estimates.ts'
-import { heavyShare, MISESTIMATE_RATIO, misestimate } from './plan-measure.ts'
+import { heavyShare, MISESTIMATE_RATIO, misestimate, shareOf } from './plan-measure.ts'
 import { type PlanRead, planReads, planSteps } from './plan-steps.ts'
 
 const t = locale.planTour
@@ -214,13 +214,13 @@ export function planTour({ plan, relations, indexColumns, rows, measuredMs }: Pl
   const measuredAt = scenes.length
   if (measured) {
     const off = reads.filter((r) => misestimate(r.node))
-    const timed = reads.filter((r) => r.node.actual?.ms != null)
+    // The longest of the table reads, named only where the run was long enough for its share to mean anything.
+    const timed = reads.filter((r) => shareOf(r.node, measuredMs) !== null)
     const heaviest = timed.reduce<PlanRead | null>(
       (top, r) => ((r.node.actual?.ms ?? 0) > (top?.node.actual?.ms ?? -1) ? r : top),
       null
     )
-    const heavyMs = heaviest?.node.actual?.ms ?? null
-    const percent = heavyMs === null || !measuredMs ? null : Math.min(100, Math.round((heavyMs / measuredMs) * 100))
+    const percent = heaviest ? shareOf(heaviest.node, measuredMs) : null
     const looked = unique([...off.map((r) => r.node.table), ...(heaviest ? [heaviest.node.table] : [])])
     scenes.push({
       title: t.measuredTitle,

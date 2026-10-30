@@ -351,7 +351,7 @@ export const enScreens = {
         ? `${factor.toLocaleString('en-US')} times the estimate`
         : `1/${factor.toLocaleString('en-US')} of the estimate`,
     notesMeasured:
-      'Measured by running the statement once (a cache, among others, changes the numbers). "About" is the database\'s estimate before running',
+      'Measured by running the statement once (a cache, among others, changes the numbers). "About" is the database\'s estimate before running. On MySQL and PostgreSQL, a step\'s time includes the steps under it',
   },
   planTour: {
     chapters: {
@@ -374,10 +374,10 @@ export const enScreens = {
     misestimate: (table: string, expected: number, actual: number, off: string) =>
       `${table} was expected to give ${expected.toLocaleString('en-US')} rows and gave ${actual.toLocaleString('en-US')} (${off}). An estimate this far off can make the database choose the wrong order or way of joining. Old statistics, columns of a condition that depend on each other, or skewed values may be why. ANALYZE (ANALYZE TABLE on MySQL) takes the statistics again; if it is still off, consider a histogram on MySQL (ANALYZE TABLE … UPDATE HISTOGRAM ON a column) or extended statistics on PostgreSQL (CREATE STATISTICS)`,
     heavy: (table: string, percent: number) =>
-      `About ${percent}% of the run's time is the step that reads ${table}. Make it faster and the whole statement is faster`,
+      `About ${percent}% of the run's time is the step that reads ${table}. To make the statement faster, look here first`,
     measuredTitle: 'Estimated and actual',
     measuredSummary: (off: number, ratio: number, heaviest: string | null, percent: number | null) =>
-      `${off === 0 ? 'No step' : `${off.toLocaleString('en-US')} ${off === 1 ? 'step' : 'steps'}`} gave rows ${ratio} times off the estimate or more.${heaviest ? ` The step that took longest reads ${heaviest}${percent === null ? '' : ` (about ${percent}% of the run)`}` : ''}`,
+      `${off === 0 ? 'No step' : `${off.toLocaleString('en-US')} ${off === 1 ? 'step' : 'steps'}`} gave rows ${ratio} times off the estimate or more.${heaviest ? ` Of the steps that read a table, the one that took longest reads ${heaviest}${percent === null ? '' : ` (about ${percent}% of the run)`}` : ''}`,
     staleStats: (table: string, plan: number, list: number) =>
       `The rows of a full read of ${table} are ${plan.toLocaleString('en-US')} by the plan's estimate and about ${list.toLocaleString('en-US')} by the table list's: two times apart or more. One of the two statistics may be old. ANALYZE (ANALYZE TABLE on MySQL) takes them again, and the plan may change (on MySQL, reading only some partitions looks like a gap too)`,
     tones: {

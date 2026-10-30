@@ -348,7 +348,7 @@ export const jaScreens = {
     off: (factor: number, more: boolean) =>
       more ? `見込みの ${factor.toLocaleString('ja-JP')} 倍` : `見込みの ${factor.toLocaleString('ja-JP')} 分の 1`,
     notesMeasured:
-      '実際に実行して測った値です（1 回の計測で、キャッシュの状態などで変わります）。「推定」は、実行する前のデータベースの見込みです',
+      '実際に実行して測った値です（1 回の計測で、キャッシュの状態などで変わります）。「推定」は、実行する前のデータベースの見込みです。MySQL と PostgreSQL では、段の時間にその下の段の時間を含みます',
   },
   planTour: {
     chapters: { reads: 'テーブルを読む順', after: '読んだあとの処理', measured: '見込みと実際' },
@@ -367,10 +367,10 @@ export const jaScreens = {
     misestimate: (table: string, expected: number, actual: number, off: string) =>
       `${table} は、見込みの ${expected.toLocaleString('ja-JP')} 行に対して、実際は ${actual.toLocaleString('ja-JP')} 行でした（${off}）。見込みが大きく外れると、データベースはつなぐ順やつなぎ方を誤って選ぶことがあります。統計が古い、条件のカラムどうしに関係がある、値が偏っている、といった原因が考えられます。ANALYZE（MySQL は ANALYZE TABLE）で統計を取り直し、それでも外れるなら、MySQL はヒストグラム（ANALYZE TABLE … UPDATE HISTOGRAM ON カラム）、PostgreSQL は拡張統計（CREATE STATISTICS）を検討します`,
     heavy: (table: string, percent: number) =>
-      `実行の時間の約 ${percent}% が、${table} を読む段です。ここが速くなれば、文全体が速くなります`,
+      `実行の時間の約 ${percent}% が、${table} を読む段です。文を速くするなら、まずここを見ます`,
     measuredTitle: '見込みと実際',
     measuredSummary: (off: number, ratio: number, heaviest: string | null, percent: number | null) =>
-      `見込みと実際の行数が ${ratio} 倍以上違った段は${off === 0 ? 'ありません' : ` ${off.toLocaleString('ja-JP')} つです`}。${heaviest ? `いちばん時間がかかったのは、${heaviest} を読む段です${percent === null ? '' : `（実行の約 ${percent}%）`}` : ''}`,
+      `見込みと実際の行数が ${ratio} 倍以上違った段は${off === 0 ? 'ありません' : ` ${off.toLocaleString('ja-JP')} つです`}。${heaviest ? `テーブルを読む段で、いちばん時間がかかったのは ${heaviest} です${percent === null ? '' : `（実行の約 ${percent}%）`}` : ''}`,
     staleStats: (table: string, plan: number, list: number) =>
       `${table} の全件を読む行数が、計画の推定（${plan.toLocaleString('ja-JP')} 行）とテーブル一覧の推定（約 ${list.toLocaleString('ja-JP')} 行）で 2 倍以上違います。どちらかの統計が古いのかもしれません。ANALYZE（MySQL は ANALYZE TABLE）で取り直すと、計画が変わることがあります（MySQL でパーティションを絞って読むときも、違って見えます）`,
     tones: {

@@ -10,7 +10,14 @@ export function useVisualPlan(db: string, schema: string | undefined) {
   const panel =
     sql === null ? null : (
       <Suspense fallback={<Spinner />}>
-        <PlanView db={db} schema={schema} sql={sql} onClose={() => setSql(null)} />
+        {/* A new statement is a new view: what was measured of the last one is not shown under this one. */}
+        <PlanView
+          key={`${db}\0${schema ?? ''}\0${sql}`}
+          db={db}
+          schema={schema}
+          sql={sql}
+          onClose={() => setSql(null)}
+        />
       </Suspense>
     )
   return { show: setSql, panel }

@@ -382,7 +382,10 @@ describe('planTour', () => {
     it('tells a run of no time, and an estimate as it always did', () => {
       const untimed = measured(null)
       expect(untimed[0]?.text).toBe(t.introMeasured(2, t.order('users → posts'), null))
-      expect(titled(untimed, t.measuredTitle)?.text).toBe(t.measuredSummary(1, 10, 'posts', null))
+      // A run of no time, or too short for a share to mean anything: no read named as the longest.
+      expect(titled(untimed, t.measuredTitle)?.text).toBe(t.measuredSummary(1, 10, null, null))
+      expect(titled(measured(9), t.measuredTitle)?.text).toBe(t.measuredSummary(1, 10, null, null))
+      expect(titled(measured(9), t.readTitle('posts'))?.hints).not.toContain(t.heavy('posts', 100))
       // Not measured: no measured chapter, the estimate's words.
       const estimated = planTour({ plan: loop, relations: keys, indexColumns: () => ['email'] }).scenes
       expect(titled(estimated, t.measuredTitle)).toBeUndefined()

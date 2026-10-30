@@ -4,6 +4,7 @@ import type { PlanNode } from '@tsmyadmin/shared'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { locale } from '@/config/locale-screens.ts'
 import { PlanView } from './PlanView.tsx'
+import { useVisualPlan } from './use-visual-plan.tsx'
 
 const t = locale.planTour
 
@@ -150,6 +151,37 @@ describe('PlanView', () => {
       fireEvent.click(screen.getByRole('button', { name: p.measureRun }))
       await screen.findByText(/its time ran out/)
       expect(screen.getByText(p.notes)).toBeTruthy()
+    })
+
+    it('shows nothing measured of the last statement under the next one drawn', async () => {
+      function Console() {
+        const plan = useVisualPlan('shop', undefined)
+        return (
+          <>
+            {['SELECT * FROM logs', 'SELECT id FROM logs'].map((sql) => (
+              <button key={sql} type="button" onClick={() => plan.show(sql)}>
+                {sql}
+              </button>
+            ))}
+            {plan.panel}
+          </>
+        )
+      }
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+      render(
+        <QueryClientProvider client={client}>
+          <Console />
+        </QueryClientProvider>
+      )
+      fireEvent.click(screen.getByRole('button', { name: 'SELECT * FROM logs' }))
+      fireEvent.click(await opener())
+      fireEvent.click(screen.getByRole('button', { name: p.measureRun }))
+      await screen.findByText(p.notesMeasured)
+      // Another statement drawn in the same panel: its estimate, not the measured run of the one before.
+      fireEvent.click(screen.getByRole('button', { name: 'SELECT id FROM logs' }))
+      await screen.findByText(p.notes)
+      expect(screen.queryByText(p.notesMeasured)).toBeNull()
+      expect(screen.queryByText(p.measured(p.duration(1000)))).toBeNull()
     })
   })
 })
