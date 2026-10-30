@@ -189,6 +189,28 @@ describe('keyTuning', () => {
     expect(keyTuning(key, 'order_items', 'orders')).toEqual([])
   })
 
+  it('says how many rows of the table that refers each of those reads reads, estimated or counted', () => {
+    const key = fk(['order_id'], 'orders')
+    const unindexed = w.unindexed('order_items', 'order_id', 'orders')
+    const estimated = new Map([['order_items', 5000]])
+    expect(keyTuning(key, 'order_items', 'orders', items, orders, estimated)).toEqual([
+      unindexed,
+      w.unindexedRows('order_items', 5000),
+    ])
+    const counted = new Map([['order_items', { counted: 7 }]])
+    expect(keyTuning(key, 'order_items', 'orders', items, orders, counted)).toEqual([
+      unindexed,
+      w.unindexedRowsCounted('order_items', 7),
+    ])
+    // Counted empty, no number, or an index: nothing of the rows.
+    expect(keyTuning(key, 'order_items', 'orders', items, orders, new Map([['order_items', { counted: 0 }]]))).toEqual([
+      unindexed,
+    ])
+    expect(keyTuning(key, 'order_items', 'orders', items, orders, new Map([['orders', 9]]))).toEqual([unindexed])
+    const served = { ...items, indexes: [index(['order_id'])] }
+    expect(keyTuning(key, 'order_items', 'orders', served, orders, estimated)).toEqual([])
+  })
+
   it('hints at a key column of another kind than the one it refers to, not at one of the same kind', () => {
     const key = fk(['order_id'], 'orders')
     const texty = { ...items, columns: [column('order_id', 'varchar(20)')], indexes: [index(['order_id'])] }

@@ -148,9 +148,11 @@ export function queryTour({ request, joins, schemas, keys, rows }: QueryTourInpu
       notes.push(...perRowReading(rows, child, parent, comment))
       if (child === step.table && intent.oneToOne === false) said.push(t.multiplies(comment(parent), comment(child)))
       // An index on the key matters where the rows that refer are looked up: when they are the ones joined.
-      const tuning = keyTuning(relation, child, parent, childSchema, schemas.get(parent))
+      // How many rows a missing index reads only where they are looked up (`rows` given then only).
+      const looked = child === step.table
+      const tuning = keyTuning(relation, child, parent, childSchema, schemas.get(parent), looked ? rows : undefined)
       const unindexed = locale.designReading.unindexed(child, relation.columns.join(', '), parent)
-      hints.push(...tuning.filter((h) => child === step.table || h !== unindexed))
+      hints.push(...tuning.filter((h) => looked || h !== unindexed))
     } else {
       // The rows looked up are those of the table joined; in a RIGHT JOIN, those of the tables before it.
       const looked = (r: Ref) => (step.kind === 'right' ? r.table !== step.table : r.table === step.table)

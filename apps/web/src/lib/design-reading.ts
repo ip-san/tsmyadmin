@@ -1,6 +1,7 @@
 import type { ForeignKeyDef, IndexDef, TableSchema } from '@tsmyadmin/shared'
 import { locale } from '@/config/locale-screens.ts'
 import { indexed } from './key-index.ts'
+import { type RowEstimates, rowsOf } from './row-estimates.ts'
 import { typeKind } from './type-mismatches.ts'
 
 const t = () => locale.designReading
@@ -172,18 +173,26 @@ const MANY_INDEXES = 8
 /**
  * Where a foreign key may cost time, read from definitions: no index starts with its columns (a join from the
  * referred table, and every delete or key change there, read the whole referring table), or a column of it is of
- * another kind than the one it refers to (converted on each join, so an index may not be used).
+ * another kind than the one it refers to (converted on each join, so an index may not be used). With the rows
+ * (`rows`: estimated, or counted), how many rows of the referring table each of those reads reads.
  */
 export function keyTuning(
   key: Pick<ForeignKeyDef, 'columns' | 'refColumns'>,
   child: string,
   parent: string,
   childSchema?: Pick<TableSchema, 'columns' | 'primaryKey' | 'indexes'>,
-  parentSchema?: Pick<TableSchema, 'columns'>
+  parentSchema?: Pick<TableSchema, 'columns'>,
+  rows?: RowEstimates
 ): string[] {
   const w = t()
   const hints: string[] = []
-  if (childSchema && !indexed(childSchema, key.columns)) hints.push(w.unindexed(child, key.columns.join(', '), parent))
+  if (childSchema && !indexed(childSchema, key.columns)) {
+    hints.push(w.unindexed(child, key.columns.join(', '), parent))
+    const read = rowsOf(rows, child)
+    // Nothing to read in an empty table: an index is not wanted for it yet.
+    if (read && read.n > 0)
+      hints.push(read.counted ? w.unindexedRowsCounted(child, read.n) : w.unindexedRows(child, read.n))
+  }
   if (childSchema && parentSchema) {
     key.columns.forEach((c, i) => {
       const mine = childSchema.columns.find((x) => x.name === c)
