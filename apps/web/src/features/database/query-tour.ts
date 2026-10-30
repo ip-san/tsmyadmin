@@ -5,7 +5,7 @@ import { locale } from '@/config/locale-screens.ts'
 import { keyIntent, keyTuning, named, tableReading } from '@/lib/design-reading.ts'
 import { conditionText, valueShape } from '@/lib/filter-values.ts'
 import { indexed } from '@/lib/key-index.ts'
-import { perRowReading, type RowEstimates, rowsReading } from '@/lib/row-estimates.ts'
+import { perRowReading, type RowEstimates, rowsOf, rowsReading } from '@/lib/row-estimates.ts'
 
 const t = locale.queryTour
 
@@ -41,6 +41,41 @@ function stepRelation(step: QueryJoinStep, keys: readonly RelationDef[]): Relati
     onDelete: null,
     onUpdate: null,
   }
+}
+
+/** The rows a query gives so far, by the estimates; `atMost` where a join may have dropped some. */
+type Running = { n: number; atMost: boolean }
+
+/**
+ * The rows after a join along a key, from the rows before it and the two tables' rows (the rows of the table that
+ * refers per row of the other, spread evenly). Joining the table that refers multiplies by that average (in a LEFT
+ * JOIN, a row with none still gives one; one to one, never more than one); joining the table referred to gives a
+ * row at most (an INNER JOIN on a key that may be NULL drops some). Undefined where it cannot be told: no numbers,
+ * a RIGHT JOIN (the rows of the table joined decide), or a join on columns of its own.
+ */
+function joinedRows(
+  before: Running | undefined,
+  step: QueryJoinStep,
+  relation: RelationDef | undefined,
+  intent: { oneToOne: boolean | undefined; required: boolean | undefined } | undefined,
+  rows: RowEstimates | undefined
+): Running | undefined {
+  if (!before || !relation || !intent || step.kind === 'right') return undefined
+  const child = rowsOf(rows, relation.table)
+  const parent = rowsOf(rows, relation.refTable)
+  if (!child || !parent || parent.n === 0) return undefined
+  if (relation.table === step.table) {
+    const per = intent.oneToOne ? Math.min(child.n / parent.n, 1) : child.n / parent.n
+    return { n: before.n * (step.kind === 'left' ? Math.max(per, 1) : per), atMost: before.atMost }
+  }
+  return { n: before.n, atMost: before.atMost || (step.kind === 'inner' && intent.required !== true) }
+}
+
+/** The rows so far as said: rounded to two significant digits past a hundred, an estimate is not exact. */
+function roughly(n: number): number {
+  if (n < 100) return Math.round(n)
+  const step = 10 ** (Math.floor(Math.log10(n)) - 1)
+  return Math.round(n / step) * step
 }
 
 const opWords = (op: FilterOp) => locale.search.ops[op]
@@ -122,17 +157,21 @@ export function queryTour({ request, joins, schemas, keys, rows }: QueryTourInpu
   const hinted: string[] = []
   // The tables an outer join may leave all NULL in a row: the one a LEFT JOIN joins, the ones before a RIGHT JOIN.
   const nullable = new Set<string>()
+  // The rows so far, by the estimates: from the table it starts from, through each join while it can be told.
+  const start = rowsOf(rows, first)
+  let running: Running | undefined = start ? { n: start.n, atMost: false } : undefined
   joins.forEach((step, i) => {
     const before = [first, ...joins.slice(0, i).map((s) => s.table)]
     const relation = relations[i]
     const on = step.on.map((p) => `${dotted(p.a)} = ${dotted(p.b)}`).join(t.and)
     const notes: string[] = [step.key ? t.alongKey(step.key.name) : t.spelled]
     const hints: string[] = []
-    if (relation && step.key) {
+    const intent = relation && step.key ? keyIntent(relation, schemas.get(relation.table)) : undefined
+    running = joinedRows(running, step, relation, intent, rows)
+    if (relation && step.key && intent) {
       const child = relation.table
       const parent = relation.refTable
       const childSchema = schemas.get(child)
-      const intent = keyIntent(relation, childSchema)
       // The table joined is the one that refers: a row of the other may meet many of its rows.
       if (child === step.table)
         notes.push(
@@ -163,6 +202,7 @@ export function queryTour({ request, joins, schemas, keys, rows }: QueryTourInpu
         if (schema && !indexed(schema, cols)) hints.push(t.joinUnindexed(table, cols.join(', ')))
       }
     }
+    if (running) notes.push(t.runningRows(roughly(running.n), running.atMost))
     if (step.kind === 'left') nullable.add(step.table)
     if (step.kind === 'right') for (const x of before) nullable.add(x)
     hinted.push(...hints)
@@ -276,7 +316,10 @@ export function queryTour({ request, joins, schemas, keys, rows }: QueryTourInpu
     frame: [],
     overlay: whole(false),
     pulse: [],
-    notes: unique(said),
+    notes: [
+      ...unique(said),
+      ...(running && joins.length > 0 ? [t.runningRows(roughly(running.n), running.atMost)] : []),
+    ],
     hints: unique(hinted),
   })
   // Its chapters: the tables and how they join, the conditions, and what comes out (the summary with it).

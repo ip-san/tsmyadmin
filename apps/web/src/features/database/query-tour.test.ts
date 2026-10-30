@@ -115,8 +115,16 @@ describe('queryTour', () => {
     const s = queryTour({ request, joins, schemas, keys, rows }).scenes
     const named = w.named('orders', '注文')
     expect(s[1]?.notes?.[0]).toBe(w.rows(named, 500))
-    expect(s.find((x) => x.title === t.joinTitle('left', 'users'))?.notes?.at(-1)).toBe(w.perRow('users', named, 5))
-    expect(s.find((x) => x.title === t.joinTitle('left', 'items'))?.notes?.at(-1)).toBe(w.perRow(named, 'items', 4))
+    // Then the rows so far: users at most one per order (500), items four per order (2,000).
+    expect(s.find((x) => x.title === t.joinTitle('left', 'users'))?.notes?.slice(-2)).toEqual([
+      w.perRow('users', named, 5),
+      t.runningRows(500, false),
+    ])
+    expect(s.find((x) => x.title === t.joinTitle('left', 'items'))?.notes?.slice(-2)).toEqual([
+      w.perRow(named, 'items', 4),
+      t.runningRows(2000, false),
+    ])
+    expect(s.at(-1)?.notes?.at(-1)).toBe(t.runningRows(2000, false))
     // items is looked up by a key no index starts with: how many rows that reads.
     expect(s.find((x) => x.title === t.joinTitle('left', 'items'))?.hints).toEqual([
       w.unindexed('items', 'order_id', 'orders'),
@@ -276,5 +284,103 @@ describe('queryTour', () => {
       t.joinUnindexed('orders', 'status'),
     ])
     expect(tour.find((x) => x.title === t.whereTitle)?.notes).toEqual([t.leftToInner('orders')])
+  })
+
+  describe('the rows so far, reckoned from the estimates', () => {
+    const rows = new Map([
+      ['orders', 500],
+      ['users', 100],
+      ['items', 2000],
+    ])
+    // The sentence ends the same whatever its number: the join's scene, then the summary.
+    const ending = t.runningRows(0, false).slice(-20)
+    const running = (steps: QueryJoinStep[], r: ReadonlyMap<string, number | { counted: number }> = rows) =>
+      queryTour({
+        request: { tables: ['orders', ...steps.map((x) => x.table)] },
+        joins: steps,
+        schemas,
+        keys,
+        rows: r,
+      }).scenes.flatMap((x) => (x.notes ?? []).filter((n) => n.endsWith(ending)))
+    const [toUsers, toItems] = joins as [QueryJoinStep, QueryJoinStep]
+
+    it('multiplies by the rows that refer per row in an INNER JOIN, and keeps a row with none in a LEFT JOIN', () => {
+      // A tenth of an item per order: an INNER JOIN keeps a tenth of the rows, a LEFT JOIN every order.
+      const few = new Map([...rows, ['items', 50]])
+      expect(running([{ ...toItems, kind: 'inner' }], few)).toEqual([
+        t.runningRows(50, false),
+        t.runningRows(50, false),
+      ])
+      expect(running([toItems], few)).toEqual([t.runningRows(500, false), t.runningRows(500, false)])
+    })
+
+    it('takes one to one as a row at most', () => {
+      // One item per order at most (a unique key on order_id): never more rows, though the estimates count more items.
+      const one = new Map(schemas)
+      one.set(
+        'items',
+        table('items', {
+          columns: [column('id', 'int'), column('order_id', 'int')],
+          indexes: [index(['order_id'], { unique: true })],
+          foreignKeys: [fk(['order_id'], 'orders', { name: 'fk_order' })],
+        })
+      )
+      const s = queryTour({
+        request: { tables: ['orders', 'items'] },
+        joins: [{ ...toItems, kind: 'inner' }],
+        schemas: one,
+        keys,
+        rows,
+      })
+      expect(s.scenes.at(-1)?.notes?.at(-1)).toBe(t.runningRows(500, false))
+    })
+
+    it('says at most where an INNER JOIN to the table referred to may drop rows whose key is NULL', () => {
+      // orders.user_id is NOT NULL: every order finds its user.
+      expect(running([{ ...toUsers, kind: 'inner' }])).toEqual([t.runningRows(500, false), t.runningRows(500, false)])
+      const loose = new Map(schemas)
+      loose.set(
+        'items',
+        table('items', {
+          columns: [column('id', 'int'), column('order_id', 'int')],
+          foreignKeys: [fk(['order_id'], 'orders', { name: 'fk_order' })],
+        })
+      )
+      // items first, orders joined along items' key, which may be NULL.
+      const s = queryTour({
+        request: { tables: ['items', 'orders'] },
+        joins: [
+          {
+            table: 'orders',
+            kind: 'inner',
+            on: [{ a: { table: 'orders', column: 'id' }, b: { table: 'items', column: 'order_id' } }],
+            key: { table: 'items', name: 'fk_order' },
+          },
+        ],
+        schemas: loose,
+        keys,
+        rows,
+      }).scenes.find((x) => x.title === t.joinTitle('inner', 'orders'))
+      expect(s?.notes?.at(-1)).toBe(t.runningRows(2000, true))
+    })
+
+    it('rounds past a hundred, and says nothing past a RIGHT JOIN, a join of its own columns, or a table with no number', () => {
+      const big = new Map([...rows, ['orders', 123456], ['items', 1234567]])
+      // 10 items per order: 1,234,567 rounded to two digits.
+      expect(running([toItems], big)[0]).toBe(t.runningRows(1200000, false))
+      expect(running([{ ...toItems, kind: 'right' }])).toEqual([])
+      expect(running([{ ...toItems, key: null }])).toEqual([])
+      expect(running([toItems], new Map([['orders', 500]]))).toEqual([])
+      // Counted rows reckon the same way.
+      expect(
+        running(
+          [toItems],
+          new Map([
+            ['orders', { counted: 10 }],
+            ['items', { counted: 30 }],
+          ])
+        )[0]
+      ).toBe(t.runningRows(30, false))
+    })
   })
 })

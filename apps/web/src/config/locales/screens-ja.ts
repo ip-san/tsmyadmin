@@ -2851,6 +2851,8 @@ export const jaScreens = {
       `${names.join('、')}${more > 0 ? ` ほか ${more.toLocaleString('ja-JP')} 件` : ''}`,
   },
   queryTour: {
+    runningRows: (n: number, atMost: boolean) =>
+      `推定の行数の比で見積もると、ここまでで${atMost ? '多くて' : ''}約 ${n.toLocaleString('ja-JP')} 行です（条件で絞る前。値の偏りは考えない、目安です）`,
     chapters: { tables: 'テーブルとつなぎ方', where: '条件', output: '出すカラムと並べ替え' },
     open: 'プレゼンで見る',
     openHint:
