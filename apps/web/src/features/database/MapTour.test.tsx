@@ -14,6 +14,8 @@ const g = locale.tour
 
 /** What the mocked API answers, set afresh for each test. */
 let keys: RelationDef[] | Error
+/** The catalog's estimated rows of each table (none, unless a test sets them). */
+let estimated: Record<string, number>
 
 const download = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/download.ts', async (actual) => ({
@@ -24,7 +26,8 @@ vi.mock('@/lib/session.ts', () => ({ useDialect: () => 'mysql' }))
 vi.mock('@/lib/queries.ts', () => ({
   tablesQuery: () => ({
     queryKey: ['tables'],
-    queryFn: async () => ['users', 'orders', 'lines'].map((name) => ({ name, kind: 'table' })),
+    queryFn: async () =>
+      ['users', 'orders', 'lines'].map((name) => ({ name, kind: 'table', rowEstimate: estimated[name] ?? null })),
   }),
   foreignKeysQuery: () => ({
     queryKey: ['keys'],
@@ -59,6 +62,7 @@ beforeAll(() => {
 
 beforeEach(() => {
   keys = [relation('orders', ['user_id'], 'users'), relation('lines', ['order_id'], 'orders')]
+  estimated = {}
   download.mockReset()
   // Less motion: nothing plays by itself, and the camera does not move over time.
   vi.stubGlobal('matchMedia', (query: string) => ({ matches: query.includes('reduce'), media: query }))
@@ -123,6 +127,20 @@ describe('MapTour', () => {
     expect(screen.getByText(t.overview(3, 2))).toBeInTheDocument()
     // Overview, three roles, one hub, the end.
     expect(screen.getByText(g.sceneOf(1, 6))).toBeInTheDocument()
+  })
+
+  it("with the catalog's estimated rows, tells the tables with the most rows before the end, marked with their rows", async () => {
+    estimated = { users: 100, orders: 2000, lines: 50000 }
+    const { dialog } = mount()
+    await screen.findByRole('img')
+    // Overview, three roles, one hub, the largest, the end.
+    expect(screen.getByText(g.sceneOf(1, 7))).toBeInTheDocument()
+    fireEvent.keyDown(dialog, { key: 'End' })
+    fireEvent.keyDown(dialog, { key: 'ArrowLeft' })
+    expect(caption()).toHaveTextContent(t.largestTitle(3))
+    expect(screen.getByText(g.inChapter(3, 3, t.chapters.largest))).toBeInTheDocument()
+    expect(screen.getByText(locale.designReading.rows('lines', 50000))).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: g.save })).toHaveAttribute('title', t.saveHint)
   })
 
   it('says which chapter a scene is in, and opens a gap in the bar where the next starts', async () => {
