@@ -4,7 +4,9 @@
  * format 2 (`explain_json_format_version = 2`, the default from 9.x), which nests `inputs` and names tables properly.
  */
 import type { PlanAccess, PlanActual, PlanNode } from '@tsmyadmin/shared'
+import { measurableStatement } from '../sql/explain-statement.ts'
 import { tableAliases } from '../sql/table-aliases.ts'
+import { AdapterError } from '../types.ts'
 
 type Json = Record<string, unknown>
 const isObject = (v: unknown): v is Json => typeof v === 'object' && v !== null && !Array.isArray(v)
@@ -14,6 +16,22 @@ const num = (v: unknown): number | null => {
 }
 const str = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null)
 const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [])
+
+/**
+ * MySQL's and MariaDB's comments that run (`/*! … *\/`, `/*M! … *\/`) and optimizer hints (`/*+ … *\/`): a read with
+ * one may write into a variable, lock, or lift the time limit (`MAX_EXECUTION_TIME(0)`), unseen by `isPlainRead`,
+ * which reads past comments. Matched in literals too: a statement that only seems to have one is refused as well.
+ */
+const RUNNING_COMMENT = /\/\*(?:M?!|\+)/i
+
+/** `measurableStatement`, with no comment that runs and no hint. */
+export function measurableMysqlStatement(sql: string): string {
+  const text = measurableStatement(sql, 'mysql')
+  if (RUNNING_COMMENT.test(text)) {
+    throw new AdapterError('VALIDATION', 'A comment that runs (/*! */) or an optimizer hint (/*+ */) is not measured')
+  }
+  return text
+}
 
 /** Format 2 has nothing to say for an UPDATE or DELETE on MySQL 9: the statement is asked again in format 1. */
 export function needsFormat1(raw: unknown): boolean {

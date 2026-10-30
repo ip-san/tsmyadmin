@@ -38,13 +38,13 @@ import mysql, { type Connection, type FieldPacket, type Pool, type PoolConnectio
 import { BaseAdapter } from '../base.ts'
 import { type Canceller, type Conn, firstResult, type RawResult, withinAcquireTimeout } from '../driver.ts'
 import type { QueryOptions } from '../sql/cells.ts'
-import { explainableStatement, explainResult, measurableStatement, parseJsonCell } from '../sql/explain-statement.ts'
+import { explainableStatement, explainResult, parseJsonCell } from '../sql/explain-statement.ts'
 import { quoteIdent } from '../sql/quote.ts'
 import { AdapterError, type ConnectionConfig, type RowBatch } from '../types.ts'
 import { mysqlRecoverLossyDefaults, mysqlShowCreateTable } from './create-statements.ts'
 import { mysqlDdl } from './ddl.ts'
 import { mapMysqlError } from './errors.ts'
-import { mysqlExecutionMs, needsFormat1, parseMysqlPlan } from './explain.ts'
+import { measurableMysqlStatement, mysqlExecutionMs, needsFormat1, parseMysqlPlan } from './explain.ts'
 import { mysqlExporter } from './export.ts'
 import {
   mysqlDatabaseGrants,
@@ -534,33 +534,32 @@ export class MysqlAdapter extends BaseAdapter {
   }
 
   /**
-   * MySQL measures in JSON only in format 2 (8.3+), which this session asks for and gives back; MariaDB has its own
-   * `ANALYZE FORMAT=JSON`. Both run the statement: READ ONLY here, since only a read is taken.
+   * MySQL measures in JSON only in format 2 (8.3+), which this session asks for; MariaDB has its own `ANALYZE
+   * FORMAT=JSON`. Both run the statement: READ ONLY here, since only a read is taken. A read can still leave state on
+   * the session that a rollback keeps (a GET_LOCK, a user variable): the session is reset after, as the SQL tab's is.
    */
   async analyzePlan(ns: Namespace, sql: string, timeoutMs: number): Promise<ExplainResult> {
-    const statement = measurableStatement(sql, 'mysql')
+    const statement = measurableMysqlStatement(sql)
     return this.withConn(
       ns,
       async (conn) => {
-        const mariadb = this.mariadb === true
-        if (!mariadb) await this.jsonFormat2(conn)
         try {
+          if (this.mariadb !== true) await this.jsonFormat2(conn)
           await conn.query('START TRANSACTION READ ONLY')
-          try {
-            const sent = mariadb ? `ANALYZE FORMAT=JSON ${statement}` : `EXPLAIN ANALYZE FORMAT=JSON ${statement}`
-            const raw = parseJsonCell(firstResult(await conn.query(sent)).rows[0]?.[0] ?? null)
-            // MySQL stopped by its time limit still answers, with the plan of a run cut short (the steps it had not
-            // reached say nothing, the top one says 0 rows): only a warning tells.
-            const warnings = firstResult(await conn.query('SHOW WARNINGS')).rows
-            if (warnings.some((w) => INTERRUPTED.has(Number(w[1])))) {
-              throw new AdapterError('QUERY_FAILED', 'The statement was stopped before it finished (its time ran out)')
-            }
-            return explainResult(parseMysqlPlan(raw, statement), raw, { ms: mysqlExecutionMs(raw) })
-          } finally {
-            await conn.query('ROLLBACK')
+          const sent = this.mariadb ? `ANALYZE FORMAT=JSON ${statement}` : `EXPLAIN ANALYZE FORMAT=JSON ${statement}`
+          const raw = parseJsonCell(firstResult(await conn.query(sent)).rows[0]?.[0] ?? null)
+          // MySQL stopped by its time limit still answers, with the plan of a run cut short (the steps it had not
+          // reached say nothing, the top one says 0 rows): only a warning tells.
+          const warnings = firstResult(await conn.query('SHOW WARNINGS')).rows
+          if (warnings.some((w) => INTERRUPTED.has(Number(w[1])))) {
+            throw new AdapterError('QUERY_FAILED', 'The statement was stopped before it finished (its time ran out)')
           }
+          return explainResult(parseMysqlPlan(raw, statement), raw, { ms: mysqlExecutionMs(raw) })
         } finally {
-          if (!mariadb) await conn.query('SET SESSION explain_json_format_version = DEFAULT')
+          // A reset rolls back and puts every session variable back (the format too); one that fails drops the
+          // connection. The statement's own error is the one thrown.
+          await conn.reset().catch(() => undefined)
+          this.forgetSessionState(conn)
         }
       },
       timeoutMs

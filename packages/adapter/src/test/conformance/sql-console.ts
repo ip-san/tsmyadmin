@@ -576,6 +576,34 @@ export function describeSqlConsole(env: ConformanceEnv): void {
       expect(left?.kind === 'rows' ? Number(left.result.rows[0]?.[0]) : null).toBe(0)
     })
 
+    it('leaves no lock behind that a read took on its session', async () => {
+      if (!(await measures())) return
+      // A lock of the session survives the rollback; the reset after the run lets it go. Another session must get it
+      // (the same one would get its own lock again).
+      const key = 4242_4242
+      const [take, tryOther, release] =
+        dialect === 'mysql'
+          ? [
+              `SELECT GET_LOCK('${scratch}', 0)`,
+              `SELECT GET_LOCK('${scratch}', 0)`,
+              `SELECT RELEASE_LOCK('${scratch}')`,
+            ]
+          : [
+              `SELECT pg_advisory_lock(${key})`,
+              `SELECT pg_try_advisory_lock(${key})`,
+              `SELECT pg_advisory_unlock(${key})`,
+            ]
+      await env.db.analyzePlan(ns, take, 10_000)
+      const other = ctx.create()
+      try {
+        const [got] = await other.executeSql(ns, `${tryOther}; ${release}`, { ...EXEC, stopOnError: true })
+        const cell = got?.kind === 'rows' ? got.result.rows[0]?.[0] : null
+        expect(cell === 1 || cell === true || cell === '1').toBe(true)
+      } finally {
+        await other.close()
+      }
+    })
+
     it('stops a run past its time, and is usable again after', async () => {
       if (!(await measures())) return
       const started = performance.now()

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { PLAN_SQL, plan, reads } from '../test/explain-plans/load.ts'
-import { mysqlExecutionMs, needsFormat1, parseMysqlPlan } from './explain.ts'
+import { measurableMysqlStatement, mysqlExecutionMs, needsFormat1, parseMysqlPlan } from './explain.ts'
 
 describe('parseMysqlPlan', () => {
   describe.each(['mysql-8-4', 'mariadb-10-11', 'mariadb-11-4'])('format 1 (%s)', (server) => {
@@ -262,5 +262,21 @@ describe('a measured plan', () => {
     expect(mysqlExecutionMs(plan('mysql-8-4-q1'))).toBeNull()
     const cut = { operation: 'Table scan on t', table_name: 't', actual_rows: null, actual_loops: null }
     expect(parseMysqlPlan(cut, 'SELECT * FROM t').actual).toBeUndefined()
+  })
+})
+
+describe('measurableMysqlStatement', () => {
+  it.each([
+    ['an INTO in a comment MySQL runs', 'SELECT 1 /*! INTO @x */'],
+    ['a lock in a versioned comment', 'SELECT * FROM t /*!50000 FOR UPDATE */'],
+    ['an INTO in a comment MariaDB runs', 'SELECT 1 /*M! INTO @x */'],
+    ['a hint that lifts the time limit', 'SELECT /*+ MAX_EXECUTION_TIME(0) */ * FROM t'],
+    ['a write, as measurableStatement', 'UPDATE t SET a = 1'],
+  ])('refuses %s', (_, sql) => {
+    expect(() => measurableMysqlStatement(sql)).toThrow(expect.objectContaining({ code: 'VALIDATION' }))
+  })
+
+  it('reads a plain comment as a comment', () => {
+    expect(measurableMysqlStatement('SELECT /* why */ 1')).toBe('SELECT /* why */ 1')
   })
 })

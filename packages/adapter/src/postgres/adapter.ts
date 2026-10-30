@@ -503,20 +503,26 @@ export class PostgresAdapter extends BaseAdapter {
     })
   }
 
-  /** READ ONLY, which the statement keeps to as it runs: a function that writes, or nextval(), is refused. */
+  /**
+   * READ ONLY, which the statement keeps to as it runs: a function that writes, or nextval(), is refused. A read can
+   * still take what a rollback keeps (a session's advisory lock): the session is reset after, as the SQL tab's is.
+   */
   async analyzePlan(ns: Namespace, sql: string, timeoutMs: number): Promise<ExplainResult> {
     const statement = measurableStatement(sql, 'postgres')
     return this.withConn(
       ns,
       async (conn) => {
-        await conn.query('BEGIN READ ONLY')
         try {
+          await conn.query('BEGIN READ ONLY')
           const raw = parseJsonCell(
             firstResult(await conn.query(`EXPLAIN (ANALYZE, FORMAT JSON) ${statement}`)).rows[0]?.[0] ?? null
           )
           return explainResult(parsePgPlan(raw), raw, { ms: pgExecutionMs(raw) })
         } finally {
-          await conn.query('ROLLBACK')
+          // ROLLBACK, then DISCARD ALL (advisory locks too); a reset that fails drops the connection.
+          await conn.query('ROLLBACK').catch(() => undefined)
+          await conn.reset().catch(() => undefined)
+          this.forgetSessionState(conn)
         }
       },
       timeoutMs

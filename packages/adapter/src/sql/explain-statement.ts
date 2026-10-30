@@ -23,7 +23,8 @@ export function explainableStatement(sql: string, dialect: Dialect): string {
 /**
  * The one statement of `sql` to run for its measured plan: as `explainableStatement`, and a plain read besides
  * (`isPlainRead`). A write is refused even though it would be rolled back: a sequence, a trigger's side effect or a
- * lock outlives the rollback. So are a locking read and an INTO (a file, a variable).
+ * lock outlives the rollback. So are a locking read and an INTO (a file, a variable); MySQL refuses more
+ * (`measurableMysqlStatement`). What a read leaves on its session (a named or advisory lock) the adapter undoes by resetting it.
  */
 export function measurableStatement(sql: string, dialect: Dialect): string {
   const text = explainableStatement(sql, dialect)
