@@ -2951,9 +2951,12 @@ export const enScreens = {
       roles: 'The whole and the roles',
       hubs: 'The tables most referred to',
       path: 'How two tables join',
+      largest: 'The tables with the most rows',
       checks: 'What to look at',
     },
     open: 'Present',
+    saveHint:
+      "Saves this presentation as one HTML file, to open in a browser and present without the server (it holds the table and column names and comments, and the tables' estimated row counts)",
     dialog: (name: string) => `Map presentation: ${name}`,
     diagram: (name: string) => `Diagram of the tables and foreign keys of ${name}`,
     overview: (tables: number, keys: number) =>
@@ -2994,6 +2997,10 @@ export const enScreens = {
     pathStep: (n: number, total: number) => `Step ${n.toLocaleString('en-US')} of ${total.toLocaleString('en-US')}: `,
     pathKey: (table: string, columns: string, refTable: string, refColumns: string) =>
       `${table}.${columns} refers to ${refTable}.${refColumns}`,
+    largestTitle: (n: number) => `The tables with the most rows (${n.toLocaleString('en-US')})`,
+    largestText:
+      "The tables with the most rows by the catalog's estimate. A search or join with no index to use reads them in full, and here that takes longest",
+    rowsBadge: (n: number) => `~${n.toLocaleString('en-US')} ${n === 1 ? 'row' : 'rows'}`,
     noPrimaryKeyTitle: (n: number) => `Tables with no primary key (${n.toLocaleString('en-US')})`,
     noPrimaryKeyText: 'No row can be told apart for sure, so rows are hard to edit or delete from Browse',
     noPrimaryKeyBadge: 'no primary key',

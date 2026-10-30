@@ -15,7 +15,7 @@ interface CountedRows {
 export type RowEstimates = ReadonlyMap<string, number | CountedRows>
 
 /** The rows of a table, and whether they were counted. */
-function rowsOf(rows: RowEstimates | undefined, table: string): { n: number; counted: boolean } | undefined {
+export function rowsOf(rows: RowEstimates | undefined, table: string): { n: number; counted: boolean } | undefined {
   const v = rows?.get(table)
   if (v === undefined) return undefined
   return typeof v === 'number' ? { n: v, counted: false } : { n: v.counted, counted: true }

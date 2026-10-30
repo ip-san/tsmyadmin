@@ -2913,9 +2913,12 @@ export const jaScreens = {
       roles: '全体と役割',
       hubs: 'よく参照されるテーブル',
       path: '2 つのテーブルのつなぎ方',
+      largest: '行の多いテーブル',
       checks: '気をつけるところ',
     },
     open: 'プレゼンで見る',
+    saveHint:
+      'この発表を 1 つの HTML ファイルにします。サーバーにつながずに、ブラウザで開いて発表できます（テーブル名・カラム名・コメントと、テーブルの推定の行数が入ります）',
     dialog: (name: string) => `見取り図のプレゼン: ${name}`,
     diagram: (name: string) => `${name} のテーブルと外部キーの図`,
     overview: (tables: number, keys: number) =>
@@ -2955,6 +2958,10 @@ export const jaScreens = {
       `${total.toLocaleString('ja-JP')} 段のうち ${n.toLocaleString('ja-JP')} 段目: `,
     pathKey: (table: string, columns: string, refTable: string, refColumns: string) =>
       `${table}.${columns} が ${refTable}.${refColumns} を参照`,
+    largestTitle: (n: number) => `行の多いテーブル（${n.toLocaleString('ja-JP')}）`,
+    largestText:
+      'カタログの推定で行の多いテーブルです。インデックスの無い検索や結合で全件を読むと、ここがいちばん時間がかかります',
+    rowsBadge: (n: number) => `約 ${n.toLocaleString('ja-JP')} 行`,
     noPrimaryKeyTitle: (n: number) => `主キーの無いテーブル（${n.toLocaleString('ja-JP')}）`,
     noPrimaryKeyText: '行を 1 つに決められないので、表示から行を編集・削除しにくくなります',
     noPrimaryKeyBadge: '主キーなし',

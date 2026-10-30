@@ -195,4 +195,109 @@ describe('tourScenes', () => {
     expect(hub?.notes).toEqual([w.parts([w.pair('lines', 'orders')])])
     expect(scenes.at(-1)?.notes).toEqual([w.parts([w.pair('lines', 'orders')]), w.guarded([w.pair('orders', 'users')])])
   })
+
+  describe('with the rows', () => {
+    const w = locale.designReading
+    const rows = new Map([
+      ['users', 100],
+      ['orders', 2000],
+      ['lines', 50000],
+      ['logs', 2000],
+    ])
+
+    it('tells the three tables with the most rows, the most first, as a chapter between the way and the checks', () => {
+      const hops = joinPaths(relations, 'users', 'lines').paths[0] ?? []
+      const map: DatabaseMap = { ...shop(), noPrimaryKey: ['logs'] }
+      const scenes = tourScenes({ name: 'x', map, relations, path: { from: 'users', to: 'lines', hops }, rows })
+      const titles = scenes.map((s) => s.title)
+      const at = titles.indexOf(t.largestTitle(3))
+      expect(titles[at - 1]).toBe(t.pathTitle('users', 'lines'))
+      expect(titles[at + 1]).toBe(t.noPrimaryKeyTitle(1))
+      expect(chaptersOf(scenes).map((c) => c.title)).toEqual([
+        t.chapters.roles,
+        t.chapters.hubs,
+        t.chapters.path,
+        t.chapters.largest,
+        t.chapters.checks,
+      ])
+      const large = scenes[at]
+      // orders and logs have as many: by name.
+      expect(large?.text).toBe(`${t.largestText}${g.stop}${g.names(['lines', 'logs', 'orders'], -3)}`)
+      expect(large?.frame).toEqual(['lines', 'logs', 'orders'])
+      expect(large?.overlay.tables.get('lines')).toEqual({ tone: 'focus', badge: t.rowsBadge(50000) })
+      expect(large?.notes).toEqual([w.rows('lines', 50000), w.rows('logs', 2000), w.rows('orders', 2000)])
+      // What costs more for their size: logs has no primary key.
+      expect(large?.hints).toEqual([w.noPrimaryKey('logs')])
+    })
+
+    it("hints at a large table's key with no index, where the key is drawn", () => {
+      const map: DatabaseMap = {
+        ...empty(),
+        unindexedKeys: [
+          { table: 'lines', key: toOrders.name, columns: ['order_id'], refTable: 'orders' },
+          { table: 'orders', key: 'fk_elsewhere', columns: ['x_id'], refTable: 'other' },
+        ],
+      }
+      const large = tourScenes({ name: 'x', map, relations, rows }).find((s) => s.title === t.largestTitle(3))
+      expect(large?.hints).toEqual([w.unindexed('lines', 'order_id', 'orders')])
+    })
+
+    it('says nothing of rows where no table has an estimate', () => {
+      const without = tourScenes({ name: 'x', map: shop(), relations })
+      const empties = tourScenes({ name: 'x', map: shop(), relations, rows: new Map() })
+      expect(empties).toEqual(without)
+      expect(without.some((s) => s.chapter === t.chapters.largest)).toBe(false)
+    })
+
+    it('says the rows of a hub, and of each table that refers to it per row of it', () => {
+      const hub = tourScenes({ name: 'x', map: shop(), relations, rows }).find(
+        (s) => s.title === t.hubTitle('orders', 1)
+      )
+      // After what the design says of the keys into it.
+      expect(hub?.notes?.slice(-2)).toEqual([w.rows('orders', 2000), w.perRow('orders', 'lines', 25)])
+      expect(hub?.notes).toHaveLength(3)
+    })
+
+    it('says at each step of the way how many rows of the table that refers there are per row of the other', () => {
+      const hops = joinPaths(relations, 'users', 'lines').paths[0] ?? []
+      const walk = tourScenes({
+        name: 'x',
+        map: empty(),
+        relations,
+        path: { from: 'users', to: 'lines', hops },
+        rows,
+      }).filter((s) => s.title === t.pathTitle('users', 'lines'))
+      expect(walk.map((s) => s.notes)).toEqual([[w.perRow('users', 'orders', 20)], [w.perRow('orders', 'lines', 25)]])
+    })
+
+    it('says a ratio once where two keys join the same two tables', () => {
+      const twice = [...relations, relation('orders', ['payer_id'], 'users', { name: 'fk_payer' })]
+      const map: DatabaseMap = { ...shop(), hubs: [{ table: 'users', referredBy: 1 }] }
+      const hub = tourScenes({ name: 'x', map, relations: twice, rows }).find((s) => s.title === t.hubTitle('users', 1))
+      expect(hub?.notes?.filter((n) => n === w.perRow('users', 'orders', 20))).toHaveLength(1)
+      const hops = joinPaths(twice, 'users', 'orders').paths[0] ?? []
+      // One step, along either key.
+      expect(hops[0]?.keys).toHaveLength(2)
+      const step = tourScenes({
+        name: 'x',
+        map: empty(),
+        relations: twice,
+        path: { from: 'users', to: 'orders', hops },
+        rows,
+      }).find((s) => s.title === t.pathTitle('users', 'orders'))
+      expect(step?.notes).toEqual([w.perRow('users', 'orders', 20)])
+    })
+
+    it('says the rows a key with no index makes read in full, the most first', () => {
+      const map: DatabaseMap = {
+        ...empty(),
+        unindexedKeys: [
+          { table: 'orders', key: toUsers.name, columns: ['user_id'], refTable: 'users' },
+          { table: 'lines', key: toOrders.name, columns: ['order_id'], refTable: 'orders' },
+        ],
+      }
+      const check = tourScenes({ name: 'x', map, relations, rows }).find((s) => s.title === t.unindexedTitle(2))
+      expect(check?.notes).toEqual([w.rows('lines', 50000), w.rows('orders', 2000)])
+    })
+  })
 })
