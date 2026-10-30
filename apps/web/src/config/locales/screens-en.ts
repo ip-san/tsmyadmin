@@ -333,11 +333,13 @@ export const enScreens = {
     open: 'Present',
     openHint:
       'Show this plan as a full-screen presentation, scene by scene, in the order the database reads the tables (estimated: the statement is not run)',
-    waiting: 'Reading the index columns…',
+    waiting: "Reading the index columns and the tables' rows…",
     dialog: 'Plan presentation',
     diagram: 'The tables the plan reads, and their foreign keys',
     saveHint:
-      'Save this presentation as one HTML file, to open and present in a browser without the server (it holds the table and index names and the conditions in the plan, which include values written in the SQL)',
+      "Save this presentation as one HTML file, to open and present in a browser without the server (it holds the table and index names, the tables' estimated rows and the conditions in the plan, which include values written in the SQL)",
+    staleStats: (table: string, plan: number, list: number) =>
+      `The rows of a full read of ${table} are ${plan.toLocaleString('en-US')} by the plan's estimate and about ${list.toLocaleString('en-US')} by the table list's: two times apart or more. One of the two statistics may be old. ANALYZE (ANALYZE TABLE on MySQL) takes them again, and the plan may change (on MySQL, reading only some partitions looks like a gap too)`,
     tones: {
       index: 'Table read through an index',
       scan: 'Table read in full (or an index end to end)',
