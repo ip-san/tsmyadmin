@@ -26,8 +26,11 @@ vi.mock('@/lib/session.ts', () => ({ useDialect: () => 'mysql' }))
 vi.mock('@/lib/queries.ts', () => ({
   tablesQuery: () => ({
     queryKey: ['tables'],
-    queryFn: async () =>
-      ['users', 'orders', 'lines'].map((name) => ({ name, kind: 'table', rowEstimate: estimated[name] ?? null })),
+    queryFn: async () => [
+      ...['users', 'orders', 'lines'].map((name) => ({ name, kind: 'table', rowEstimate: estimated[name] ?? null })),
+      // Not drawn: no box for its rows.
+      { name: 'totals', kind: 'materialized_view', rowEstimate: estimated.totals ?? null },
+    ],
   }),
   foreignKeysQuery: () => ({
     queryKey: ['keys'],
@@ -130,7 +133,7 @@ describe('MapTour', () => {
   })
 
   it("with the catalog's estimated rows, tells the tables with the most rows before the end, marked with their rows", async () => {
-    estimated = { users: 100, orders: 2000, lines: 50000 }
+    estimated = { users: 100, orders: 2000, lines: 50000, totals: 900000 }
     const { dialog } = mount()
     await screen.findByRole('img')
     // Overview, three roles, one hub, the largest, the end.
@@ -138,6 +141,7 @@ describe('MapTour', () => {
     fireEvent.keyDown(dialog, { key: 'End' })
     fireEvent.keyDown(dialog, { key: 'ArrowLeft' })
     expect(caption()).toHaveTextContent(t.largestTitle(3))
+    expect(screen.queryByText(locale.designReading.rows('totals', 900000))).toBeNull()
     expect(screen.getByText(g.inChapter(3, 3, t.chapters.largest))).toBeInTheDocument()
     expect(screen.getByText(locale.designReading.rows('lines', 50000))).toBeInTheDocument()
     expect(screen.getByRole('button', { name: g.save })).toHaveAttribute('title', t.saveHint)

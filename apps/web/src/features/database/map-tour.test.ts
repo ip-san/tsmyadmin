@@ -270,6 +270,24 @@ describe('tourScenes', () => {
       expect(walk.map((s) => s.notes)).toEqual([[w.perRow('users', 'orders', 20)], [w.perRow('orders', 'lines', 25)]])
     })
 
+    it('says a ratio once where two keys join the same two tables', () => {
+      const twice = [...relations, relation('orders', ['payer_id'], 'users', { name: 'fk_payer' })]
+      const map: DatabaseMap = { ...shop(), hubs: [{ table: 'users', referredBy: 1 }] }
+      const hub = tourScenes({ name: 'x', map, relations: twice, rows }).find((s) => s.title === t.hubTitle('users', 1))
+      expect(hub?.notes?.filter((n) => n === w.perRow('users', 'orders', 20))).toHaveLength(1)
+      const hops = joinPaths(twice, 'users', 'orders').paths[0] ?? []
+      // One step, along either key.
+      expect(hops[0]?.keys).toHaveLength(2)
+      const step = tourScenes({
+        name: 'x',
+        map: empty(),
+        relations: twice,
+        path: { from: 'users', to: 'orders', hops },
+        rows,
+      }).find((s) => s.title === t.pathTitle('users', 'orders'))
+      expect(step?.notes).toEqual([w.perRow('users', 'orders', 20)])
+    })
+
     it('says the rows a key with no index makes read in full, the most first', () => {
       const map: DatabaseMap = {
         ...empty(),

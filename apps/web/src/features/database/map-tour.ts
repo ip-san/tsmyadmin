@@ -2,7 +2,7 @@ import type { RelationDef } from '@tsmyadmin/shared'
 import { openChapter, overlay, said, type TourScene, unique, whole } from '@/components/schema-diagram/tour.ts'
 import { locale } from '@/config/locale-screens.ts'
 import { designSummary, keyIntent } from '@/lib/design-reading.ts'
-import { perRowReading, type RowEstimates, rowsReading } from '@/lib/row-estimates.ts'
+import { perRowReading, type RowEstimates, rowsOf, rowsReading } from '@/lib/row-estimates.ts'
 import { TABLE_ROLES } from '@/lib/table-role.ts'
 import type { DatabaseMap } from './database-map.ts'
 import type { JoinHop } from './join-path.ts'
@@ -28,7 +28,7 @@ export function tourScenes(input: {
   map: DatabaseMap
   relations: readonly RelationDef[]
   path?: { from: string; to: string; hops: readonly JoinHop[] } | undefined
-  /** The tables' estimated rows (`rowEstimates`), where the list of tables could be read. */
+  /** The drawn tables' estimated rows (`rowEstimates`), where the list of tables could be read. */
   rows?: RowEstimates | undefined
 }): TourScene[] {
   const { name, map, relations, path, rows } = input
@@ -89,7 +89,7 @@ export function tourScenes(input: {
       // After what the design says, how many rows it has and how many of each table refer to one of them.
       ...notes(keys, [
         ...rowsReading(rows, hub.table),
-        ...keys.flatMap((r) => perRowReading(rows, r.table, r.refTable)).slice(0, ROWS_TOLD),
+        ...unique(keys.flatMap((r) => perRowReading(rows, r.table, r.refTable))).slice(0, ROWS_TOLD),
       ]),
     })
   }
@@ -153,7 +153,10 @@ function pathScenes(
       }),
       pulse: [hop.to],
       // How the rows multiply, or thin out, at the step: of the table that refers, per row of the one referred to.
-      ...lists(hop.keys.flatMap(({ relation: r }) => perRowReading(rows, r.table, r.refTable)).slice(0, ROWS_TOLD)),
+      // Two keys between the same tables say the same: once.
+      ...lists(
+        unique(hop.keys.flatMap(({ relation: r }) => perRowReading(rows, r.table, r.refTable))).slice(0, ROWS_TOLD)
+      ),
     }
   })
 }
@@ -162,8 +165,8 @@ function pathScenes(
 function bySize(rows: RowEstimates | undefined, tables: Iterable<string>): { table: string; n: number }[] {
   return [...tables]
     .flatMap((table) => {
-      const v = rows?.get(table)
-      return v === undefined ? [] : [{ table, n: typeof v === 'number' ? v : v.counted }]
+      const r = rowsOf(rows, table)
+      return r ? [{ table, n: r.n }] : []
     })
     .sort((a, b) => b.n - a.n || a.table.localeCompare(b.table))
 }
@@ -186,11 +189,12 @@ function largestScene(
   if (largest.length === 0) return undefined
   const tables = largest.map((x) => x.table)
   const drawn = (table: string, key: string) => relations.some((r) => r.table === table && r.name === key)
+  // No primary key first: one a table at most, where a table may have many keys with no index.
   const hints = [
+    ...map.noPrimaryKey.filter((x) => tables.includes(x)).map((x) => w.noPrimaryKey(x)),
     ...map.unindexedKeys
       .filter((k) => tables.includes(k.table) && drawn(k.table, k.key))
       .map((k) => w.unindexed(k.table, k.columns.join(', '), k.refTable)),
-    ...map.noPrimaryKey.filter((x) => tables.includes(x)).map((x) => w.noPrimaryKey(x)),
   ]
   return {
     title: t.largestTitle(largest.length),

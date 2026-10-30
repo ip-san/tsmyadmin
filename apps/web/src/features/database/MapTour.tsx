@@ -43,12 +43,14 @@ export function MapTour({
   const drawn = useMemo(() => {
     if (!tables.data || !keys.data || estimates.pending) return undefined
     const names = tables.data.filter((x) => x.kind === 'table').map((x) => x.name)
+    // The tables drawn only: a materialized view or a sequence has an estimate too (PostgreSQL), and no box.
+    const rows = estimates.rows && new Map([...estimates.rows].filter(([x]) => names.includes(x)))
     const relations = drawnRelations(keys.data, dialect, namespaceOf(db, schema), names)
     const found = from && to && from !== to ? joinPaths(relations, from, to).paths[0] : undefined
     const path = from && to && found ? { from, to, hops: found } : undefined
     return {
       diagram: diagramFor(names, relations),
-      scenes: tourScenes({ name, map, relations, path, rows: estimates.rows }),
+      scenes: tourScenes({ name, map, relations, path, rows }),
     }
   }, [tables.data, keys.data, estimates.pending, estimates.rows, dialect, db, schema, from, to, name, map])
   const failed = tables.isError ? tables : keys.isError ? keys : undefined
