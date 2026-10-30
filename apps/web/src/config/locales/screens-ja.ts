@@ -470,6 +470,10 @@ export const jaScreens = {
       `${table}.${column} は「${comment}」（カラムのコメント）`,
     unindexed: (child: string, columns: string, parent: string) =>
       `${child}.${columns} で始まるインデックスがありません。${parent} から ${child} をたどる結合や、${parent} の行を消す・キーを変えるたびの確認で、${child} を全件読みます。インデックスの追加を検討してください`,
+    unindexedRows: (table: string, n: number) =>
+      `そのたびに読む ${table} は約 ${n.toLocaleString('ja-JP')} 行です（カタログの推定）`,
+    unindexedRowsCounted: (table: string, n: number) =>
+      `そのたびに読む ${table} は ${n.toLocaleString('ja-JP')} 行です（数えた行数）`,
     typeMismatch: (column: string, type: string, refColumn: string, refType: string) =>
       `${column}（${type}）と ${refColumn}（${refType}）は型の種類が違います。結合のたびに変換が入り、インデックスが使われないことがあります`,
     noPrimaryKey: (table: string) =>

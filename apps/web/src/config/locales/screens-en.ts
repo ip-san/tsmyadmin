@@ -476,6 +476,10 @@ export const enScreens = {
       `${table}.${column} is "${comment}" (its column comment)`,
     unindexed: (child: string, columns: string, parent: string) =>
       `No index starts with ${child}.${columns}: a join from ${parent} to ${child}, and the check on each delete or key change of ${parent}, read the whole of ${child}. Consider adding one`,
+    unindexedRows: (table: string, n: number) =>
+      `Each of those reads ${table}, about ${n.toLocaleString('en-US')} ${n === 1 ? 'row' : 'rows'} (the catalog's estimate)`,
+    unindexedRowsCounted: (table: string, n: number) =>
+      `Each of those reads ${table}, ${n.toLocaleString('en-US')} ${n === 1 ? 'row' : 'rows'} (counted)`,
     typeMismatch: (column: string, type: string, refColumn: string, refType: string) =>
       `${column} (${type}) and ${refColumn} (${refType}) are of different kinds: each join converts one, and an index may not be used`,
     noPrimaryKey: (table: string) =>

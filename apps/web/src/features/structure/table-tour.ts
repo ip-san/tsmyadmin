@@ -65,7 +65,9 @@ export function tableTourScenes(input: {
     ...keys.flatMap((r) => perRowReading(rows, r.table, r.refTable)).slice(0, ESTIMATES_SHOWN),
   ]
   const tuning = (keys: readonly RelationDef[]) =>
-    keys.flatMap((r) => (r.table === name ? keyTuning(r, name, r.refTable, schema) : [])).slice(0, NOTES_SHOWN)
+    keys
+      .flatMap((r) => (r.table === name ? keyTuning(r, name, r.refTable, schema, undefined, rows) : []))
+      .slice(0, NOTES_SHOWN)
   const lists = (notes: readonly string[], hints: readonly string[]) => ({
     ...(notes.length > 0 ? { notes } : {}),
     ...(hints.length > 0 ? { hints } : {}),

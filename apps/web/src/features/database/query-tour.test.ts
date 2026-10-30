@@ -117,6 +117,27 @@ describe('queryTour', () => {
     expect(s[1]?.notes?.[0]).toBe(w.rows(named, 500))
     expect(s.find((x) => x.title === t.joinTitle('left', 'users'))?.notes?.at(-1)).toBe(w.perRow('users', named, 5))
     expect(s.find((x) => x.title === t.joinTitle('left', 'items'))?.notes?.at(-1)).toBe(w.perRow(named, 'items', 4))
+    // items is looked up by a key no index starts with: how many rows that reads.
+    expect(s.find((x) => x.title === t.joinTitle('left', 'items'))?.hints).toEqual([
+      w.unindexed('items', 'order_id', 'orders'),
+      w.unindexedRows('items', 2000),
+    ])
+    // Joined the other way, orders is looked up by its primary key: nothing of the rows of items.
+    const reversed = queryTour({
+      request: { tables: ['items', 'orders'] },
+      joins: [
+        {
+          table: 'orders',
+          kind: 'inner',
+          on: [{ a: { table: 'orders', column: 'id' }, b: { table: 'items', column: 'order_id' } }],
+          key: { table: 'items', name: 'fk_order' },
+        },
+      ],
+      schemas,
+      keys,
+      rows,
+    }).scenes.find((x) => x.title === t.joinTitle('inner', 'orders'))
+    expect(reversed?.hints).toEqual([])
   })
 
   it('reads the conditions in words, and what a condition on a LEFT JOINed table undoes', () => {

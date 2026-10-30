@@ -136,7 +136,7 @@ describe('tableTourScenes', () => {
     const w = locale.designReading
     const cascade = relation('orders', ['user_id'], 'users', { onDelete: 'CASCADE' })
     const fromLinesSetNull = relation('lines', ['order_id'], 'orders', { onDelete: 'SET NULL' })
-    const scenes = tableTourScenes({
+    const input = {
       schema: {
         ...orders,
         columns: [
@@ -150,7 +150,8 @@ describe('tableTourScenes', () => {
       guess: middle,
       relations: [cascade, fromLinesSetNull],
       tables,
-    })
+    }
+    const scenes = tableTourScenes(input)
     const [intro, , refers, referred] = scenes
     expect(intro?.notes).toEqual([w.made('created_at')])
     expect(intro?.hints).toEqual([w.noPrimaryKey('orders')])
@@ -161,6 +162,9 @@ describe('tableTourScenes', () => {
       w.lifecycle.cascade('orders', 'users'),
     ])
     expect(refers?.hints).toEqual([w.unindexed('orders', 'user_id', 'users')])
+    // With the rows: how many each of those reads reads.
+    const sized = tableTourScenes({ ...input, rows: new Map([['orders', 300]]) })[2]
+    expect(sized?.hints).toEqual([w.unindexed('orders', 'user_id', 'users'), w.unindexedRows('orders', 300)])
     // Another table's key: what a delete does is known; how many and a must are not, and nothing is said of them.
     expect(referred?.notes).toEqual([w.lifecycle.setNull('lines', 'orders')])
     expect(referred?.hints).toBeUndefined()
