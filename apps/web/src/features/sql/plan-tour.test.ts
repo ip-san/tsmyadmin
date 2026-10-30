@@ -320,15 +320,19 @@ describe('planTour', () => {
 
     it('says nothing of the statistics where the two are near, small, or not of the whole table', () => {
       expect(hintsOf(scan({ estRows: 19999 }), listed)).toEqual([])
+      // Two times apart is enough; so is 1,000 rows on the smaller side, and not 999.
+      expect(hintsOf(scan({ estRows: 20000 }), listed)).toEqual([t.staleStats('logs', 20000, 10000)])
+      expect(hintsOf(scan({ estRows: 2000 }), new Map([['logs', 1000]]))).toEqual([t.staleStats('logs', 2000, 1000)])
+      expect(hintsOf(scan({ estRows: 2000 }), new Map([['logs', 999]]))).toEqual([])
       expect(hintsOf(scan({ estRows: 5001 }), listed)).toEqual([])
       expect(hintsOf(scan({ estRows: 900 }), new Map([['logs', 100]]))).toEqual([])
       expect(hintsOf(scan(), new Map())).toEqual([])
       // A condition: the plan's rows are those left.
-      expect(hintsOf(scan({ detail: "(kind = 'x')" }), listed)).not.toContain(stale)
+      expect(hintsOf(scan({ detail: "(kind = 'x')" }), listed)).toEqual([t.filterScan('logs')])
       // Through an index, and split between workers.
       expect(hintsOf(scan({ access: 'range', index: 'ix' }), listed)).toEqual([])
       expect(hintsOf(scan({ op: 'Parallel Seq Scan' }), listed)).toEqual([])
-      // Under a limit, MySQL lowers the read's rows.
+      // Under a limit: not said, to be safe.
       expect(hintsOf(node({ op: 'Limit', children: [scan()] }), listed)).toEqual([])
     })
   })

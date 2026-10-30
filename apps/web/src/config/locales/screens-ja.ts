@@ -338,7 +338,7 @@ export const jaScreens = {
     saveHint:
       'この発表を 1 つの HTML ファイルにします。サーバーにつながずに、ブラウザで開いて発表できます（テーブル名・インデックス名・テーブルの推定の行数と、計画に出た条件が入ります。条件には SQL に書いた値が含まれます）',
     staleStats: (table: string, plan: number, list: number) =>
-      `${table} の全件を読む行数が、計画の推定（${plan.toLocaleString('ja-JP')} 行）とテーブル一覧の推定（約 ${list.toLocaleString('ja-JP')} 行）で 2 倍以上違います。どちらかの統計が古いのかもしれません。ANALYZE（MySQL は ANALYZE TABLE）で取り直すと、計画が変わることがあります（パーティションを絞って読むときも、違って見えます）`,
+      `${table} の全件を読む行数が、計画の推定（${plan.toLocaleString('ja-JP')} 行）とテーブル一覧の推定（約 ${list.toLocaleString('ja-JP')} 行）で 2 倍以上違います。どちらかの統計が古いのかもしれません。ANALYZE（MySQL は ANALYZE TABLE）で取り直すと、計画が変わることがあります（MySQL でパーティションを絞って読むときも、違って見えます）`,
     tones: {
       index: 'インデックスで絞って読むテーブル',
       scan: '全件を読むテーブル（インデックスの端から端までを含む）',

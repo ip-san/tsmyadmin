@@ -97,5 +97,6 @@ describe('PlanView', () => {
     mount()
     await readScene()
     expect(screen.queryByText(t.staleStats('logs', 50000, 10000))).toBeNull()
+    expect(screen.queryByText(locale.designReading.rows('logs', 10000))).toBeNull()
   })
 })

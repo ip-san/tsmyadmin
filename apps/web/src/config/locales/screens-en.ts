@@ -339,7 +339,7 @@ export const enScreens = {
     saveHint:
       "Save this presentation as one HTML file, to open and present in a browser without the server (it holds the table and index names, the tables' estimated rows and the conditions in the plan, which include values written in the SQL)",
     staleStats: (table: string, plan: number, list: number) =>
-      `The rows of a full read of ${table} are ${plan.toLocaleString('en-US')} by the plan's estimate and about ${list.toLocaleString('en-US')} by the table list's: two times apart or more. One of the two statistics may be old. ANALYZE (ANALYZE TABLE on MySQL) takes them again, and the plan may change (reading only some partitions looks like a gap too)`,
+      `The rows of a full read of ${table} are ${plan.toLocaleString('en-US')} by the plan's estimate and about ${list.toLocaleString('en-US')} by the table list's: two times apart or more. One of the two statistics may be old. ANALYZE (ANALYZE TABLE on MySQL) takes them again, and the plan may change (on MySQL, reading only some partitions looks like a gap too)`,
     tones: {
       index: 'Table read through an index',
       scan: 'Table read in full (or an index end to end)',

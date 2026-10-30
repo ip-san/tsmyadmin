@@ -60,8 +60,9 @@ const STALE_RATIO = 2
 /**
  * Where the plan's rows for a whole table and the table list's estimate are far apart: one of the two counts is
  * old (PostgreSQL scales its count by the table's pages now; MySQL's list is cached apart from the optimizer's).
- * Only a full read with no condition, not split between workers (`Parallel …`: rows per worker), in a plan that
- * stops at no limit (MySQL lowers a read's rows under one): there the plan's rows are the table's.
+ * Only a full read with no condition, not split between workers (`Parallel …`: rows per worker): there the plan's
+ * rows are the table's. Not in a plan that stops at a limit, to be safe: a server may count only the rows read
+ * before it stops (PostgreSQL and MySQL 8.4 count the whole table; MySQL's format 1 has no step for the limit).
  */
 function staleHint(read: PlanRead, rows: RowEstimates | undefined, limited: boolean): string | null {
   const n = read.node
