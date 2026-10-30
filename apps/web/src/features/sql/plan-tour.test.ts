@@ -336,4 +336,58 @@ describe('planTour', () => {
       expect(hintsOf(node({ op: 'Limit', children: [scan()] }), listed)).toEqual([])
     })
   })
+
+  describe('measured by running it', () => {
+    // The same join, run: users as expected, posts far over its estimate and most of the time.
+    const run = node({
+      ...loop,
+      actual: { rows: 3, loops: 1, ms: 40 },
+      children: [
+        { ...(loop.children[0] as PlanNode), actual: { rows: 1, loops: 1, ms: 2 } },
+        { ...(loop.children[1] as PlanNode), estRows: 3, actual: { rows: 48_000, loops: 1, ms: 30 } },
+      ],
+    })
+    const measured = (measuredMs: number | null = 40) =>
+      planTour({ plan: run, relations: keys, indexColumns: () => ['email'], measuredMs }).scenes
+
+    it('says it was run, and each read beside its estimate, with what was far off and where the time went', () => {
+      const scenes = measured()
+      expect(scenes[0]?.text).toBe(t.introMeasured(2, t.order('users → posts'), p.duration(40)))
+      expect(titled(scenes, t.readTitle('users'))?.notes).toContain(t.measuredRead(1, p.actual(1, 1, p.duration(2))))
+      const posts = titled(scenes, t.readTitle('posts'))
+      expect(posts?.notes).toContain(t.measuredRead(3, p.actual(48_000, 1, p.duration(30))))
+      expect(posts?.hints?.slice(0, 2)).toEqual([
+        t.misestimate('posts', 3, 48_000, p.off(16_000, true)),
+        t.heavy('posts', 75),
+      ])
+      // users was as expected and quick: nothing to say of it.
+      expect(titled(scenes, t.readTitle('users'))?.hints?.some((h) => h.includes(p.off(1, true)))).toBe(false)
+    })
+
+    it('ends with the estimates against the run, the tables to look at framed, in a chapter of its own', () => {
+      const scenes = measured()
+      const summary = titled(scenes, t.measuredTitle)
+      expect(summary?.text).toBe(t.measuredSummary(1, 10, 'posts', 75))
+      expect(summary?.frame).toEqual(['posts'])
+      expect(summary?.notes).toEqual([
+        `users: ${t.measuredRead(1, p.actual(1, 1, p.duration(2)))}`,
+        `posts: ${t.measuredRead(3, p.actual(48_000, 1, p.duration(30)))}`,
+      ])
+      expect(chaptersOf(scenes).map((c) => c.title)).toEqual([t.chapters.reads, t.chapters.measured])
+      expect(scenes.at(-1)?.notes).toContain(p.notesMeasured)
+      // The summary after it gathers the hints, the misestimate among them.
+      expect(scenes.at(-1)?.hints).toContain(t.misestimate('posts', 3, 48_000, p.off(16_000, true)))
+    })
+
+    it('tells a run of no time, and an estimate as it always did', () => {
+      const untimed = measured(null)
+      expect(untimed[0]?.text).toBe(t.introMeasured(2, t.order('users → posts'), null))
+      expect(titled(untimed, t.measuredTitle)?.text).toBe(t.measuredSummary(1, 10, 'posts', null))
+      // Not measured: no measured chapter, the estimate's words.
+      const estimated = planTour({ plan: loop, relations: keys, indexColumns: () => ['email'] }).scenes
+      expect(titled(estimated, t.measuredTitle)).toBeUndefined()
+      expect(estimated[0]?.text).toBe(t.intro(2, t.order('users → posts')))
+      expect(estimated.at(-1)?.notes).toContain(p.notes)
+    })
+  })
 })

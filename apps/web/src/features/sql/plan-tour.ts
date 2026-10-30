@@ -3,6 +3,7 @@ import { diagramFor, type Tone } from '@/components/schema-diagram/overlay.ts'
 import { openChapter, overlay, type TourScene, unique, whole } from '@/components/schema-diagram/tour.ts'
 import { locale } from '@/config/locale-screens.ts'
 import { type RowEstimates, rowsOf, rowsReading } from '@/lib/row-estimates.ts'
+import { heavyShare, MISESTIMATE_RATIO, misestimate } from './plan-measure.ts'
 import { type PlanRead, planReads, planSteps } from './plan-steps.ts'
 
 const t = locale.planTour
@@ -82,6 +83,26 @@ export interface PlanTourInput {
   indexColumns?: (table: string, index: string) => readonly string[]
   /** The tables' estimated rows (`rowEstimates`), where the list of tables could be read. */
   rows?: RowEstimates | undefined
+  /** The plan was measured by running it: the time of the run (null where the server does not say). */
+  measuredMs?: number | null | undefined
+}
+
+/** What a measured read did, beside what was expected of it. */
+function measuredNote(node: PlanNode): string | null {
+  const a = node.actual
+  if (!a) return null
+  const time = a.ms === null ? null : locale.plan.duration(a.ms)
+  return t.measuredRead(node.estRows, locale.plan.actual(a.rows, a.loops, time))
+}
+
+/** Where a measured read was far off its estimate, or took most of the run. */
+function measuredHints(node: PlanNode & { table: string }, totalMs: number | null | undefined): string[] {
+  const off = misestimate(node)
+  const share = heavyShare(node, totalMs)
+  return [
+    ...(off ? [t.misestimate(node.table, off.expected, off.actual, locale.plan.off(off.factor, off.more))] : []),
+    ...(share === null ? [] : [t.heavy(node.table, share)]),
+  ]
 }
 
 /**
@@ -92,7 +113,7 @@ export interface PlanTourInput {
  * each table is said with its size the first time it is read (beside the rows the plan expects from the read: how
  * far it narrows), and a full read whose rows are far from the table's is said as perhaps old statistics.
  */
-export function planTour({ plan, relations, indexColumns, rows }: PlanTourInput): {
+export function planTour({ plan, relations, indexColumns, rows, measuredMs }: PlanTourInput): {
   diagram: ReturnType<typeof diagramFor>
   scenes: TourScene[]
 } {
@@ -107,11 +128,13 @@ export function planTour({ plan, relations, indexColumns, rows }: PlanTourInput)
   const list = reads.map((r) => r.node.table).join(' → ')
   // MySQL 8 does not say which side of its hash join is read first: the order is the plan's, not a claim.
   const order = reads.some((r) => r.join === 'hashBuffer') ? t.orderListed(list) : t.order(list)
+  const measured = measuredMs !== undefined
+  const runTime = measuredMs == null ? null : locale.plan.duration(measuredMs)
 
   const scenes: TourScene[] = [
     {
       title: t.introTitle,
-      text: t.intro(reads.length, order),
+      text: measured ? t.introMeasured(reads.length, order, runTime) : t.intro(reads.length, order),
       frame: [],
       overlay: whole(true),
       pulse: [],
@@ -143,10 +166,14 @@ export function planTour({ plan, relations, indexColumns, rows }: PlanTourInput)
       // Under Memoize the loop looks up each new value, not each row: said in place of the loop's sentence.
       r.memoized && join === 'loopInner' ? t.memoized(node.table) : join ? t.roles[join](node.table) : null,
       node.detail ? t.condition(cut(node.detail)) : null,
+      measuredNote(node),
       // The table's size, once: the first time it is read.
       ...(before.includes(node.table) ? [] : rowsReading(rows, node.table)),
     ]
-    const hints = [readHint(r), staleHint(r, rows, limited)].filter((h): h is string => h !== null)
+    const hints = [
+      ...measuredHints(node, measuredMs),
+      ...[readHint(r), staleHint(r, rows, limited)].filter((h): h is string => h !== null),
+    ]
     hinted.push(...hints)
     if (read) lit.set(node.table, [read.tone, read.badge ?? locale.plan.full])
     scenes.push({
@@ -183,6 +210,31 @@ export function planTour({ plan, relations, indexColumns, rows }: PlanTourInput)
     })
   }
 
+  // Measured: what the run showed against what was expected, with the tables to look at framed.
+  const measuredAt = scenes.length
+  if (measured) {
+    const off = reads.filter((r) => misestimate(r.node))
+    const timed = reads.filter((r) => r.node.actual?.ms != null)
+    const heaviest = timed.reduce<PlanRead | null>(
+      (top, r) => ((r.node.actual?.ms ?? 0) > (top?.node.actual?.ms ?? -1) ? r : top),
+      null
+    )
+    const heavyMs = heaviest?.node.actual?.ms ?? null
+    const percent = heavyMs === null || !measuredMs ? null : Math.min(100, Math.round((heavyMs / measuredMs) * 100))
+    const looked = unique([...off.map((r) => r.node.table), ...(heaviest ? [heaviest.node.table] : [])])
+    scenes.push({
+      title: t.measuredTitle,
+      text: t.measuredSummary(off.length, MISESTIMATE_RATIO, heaviest?.node.table ?? null, percent),
+      frame: looked,
+      overlay: overlay({ tables: all }),
+      pulse: looked,
+      notes: reads.flatMap((r) => {
+        const note = measuredNote(r.node)
+        return note ? [`${r.node.table}: ${note}`] : []
+      }),
+    })
+  }
+
   const full = reads.filter((r) => r.node.access === 'fullScan' || r.node.access === 'fullIndexScan').length
   scenes.push({
     title: t.endTitle,
@@ -190,11 +242,12 @@ export function planTour({ plan, relations, indexColumns, rows }: PlanTourInput)
     frame: [],
     overlay: { ...overlay({ tables: all }), fade: false },
     pulse: [],
-    notes: [order, locale.plan.notes],
+    notes: [order, measured ? locale.plan.notesMeasured : locale.plan.notes],
     hints: unique(hinted),
   })
   // Its chapters: the reads, and what is done after them (the summary with it).
   openChapter(scenes, 0, t.chapters.reads)
   if (finishing.length > 0) openChapter(scenes, finishAt, t.chapters.after)
+  if (measured) openChapter(scenes, measuredAt, t.chapters.measured)
   return { diagram, scenes }
 }

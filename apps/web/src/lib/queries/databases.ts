@@ -107,6 +107,15 @@ export const explainQuery = (db: string, schema: string | undefined, sql: string
     retry: false,
   })
 
+/**
+ * The plan measured by running the statement (a read only, in a transaction rolled back, stopped after the time
+ * limit): asked on a press, never on its own, so not a query that refetches.
+ */
+export const analyzePlan = (db: string, schema: string | undefined, sql: string) =>
+  unwrap<ExplainResult>(
+    api.databases[':db'].explain.analyze.$post({ param: { db: enc(db) }, query: schemaQuery(schema), json: { sql } })
+  )
+
 /** How the tables are read, by the server's own counters. Asked each time it is turned on: the counts keep moving. */
 export const tableUsageQuery = (db: string, schema?: string) =>
   queryOptions({

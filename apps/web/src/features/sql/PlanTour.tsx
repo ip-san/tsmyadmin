@@ -15,6 +15,7 @@ export function PlanTour({
   relations,
   indexColumns,
   rows,
+  measuredMs,
   ready,
 }: {
   plan: PlanNode
@@ -22,6 +23,8 @@ export function PlanTour({
   indexColumns: (table: string, index: string) => readonly string[]
   /** The tables' estimated rows, where the list of tables could be read. */
   rows?: RowEstimates | undefined
+  /** The plan was measured by running it: the time of the run (null where the server does not say). */
+  measuredMs?: number | null | undefined
   /**
    * The tables' index columns and estimated rows are read: until then the scenes would not have them, and they are
    * told as opened.
@@ -36,7 +39,7 @@ export function PlanTour({
         size="sm"
         title={t.openHint}
         disabled={!ready}
-        onClick={() => setDrawn(planTour({ plan, relations, indexColumns, rows }))}
+        onClick={() => setDrawn(planTour({ plan, relations, indexColumns, rows, measuredMs }))}
       >
         <Presentation className="size-4" aria-hidden />
         {t.open}
