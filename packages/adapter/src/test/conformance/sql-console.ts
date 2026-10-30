@@ -536,4 +536,85 @@ export function describeSqlConsole(env: ConformanceEnv): void {
       expect(tables(r.plan)).toEqual(['users'])
     })
   })
+
+  describe('analyzePlan', () => {
+    const nodes = (n: PlanNode): PlanNode[] => [n, ...n.children.flatMap(nodes)]
+    const join = 'SELECT p.title, u.name FROM posts p JOIN users u ON u.id = p.user_id'
+    /** MySQL before 8.3 cannot measure in JSON: the method says so, and the rest of the block has nothing to test. */
+    const measures = async () =>
+      !(dialect === 'mysql' && !(await isMariaDb()) && /^8\.[0-2]\./.test((await env.db.serverInfo()).version))
+
+    it('runs a read and tells each table what it gave, the times it ran and the time of the whole run', async () => {
+      if (!(await measures())) {
+        await expect(env.db.analyzePlan(ns, join, 10_000)).rejects.toMatchObject({ code: 'UNSUPPORTED' })
+        return
+      }
+      const r = await env.db.analyzePlan(ns, join, 10_000)
+      const read = nodes(r.plan).filter((n) => n.table)
+      expect(new Set(read.map((n) => n.table))).toEqual(new Set(['posts', 'users']))
+      for (const n of read) {
+        expect(n.actual?.loops, n.table ?? '').toBeGreaterThanOrEqual(1)
+        expect(n.actual?.rows, n.table ?? '').toBeGreaterThanOrEqual(0)
+      }
+      // Every post has its user: the rows the run gave, all loops together, are the posts.
+      const [count] = await exec('SELECT COUNT(*) FROM posts')
+      const posts = count?.kind === 'rows' ? Number(count.result.rows[0]?.[0]) : Number.NaN
+      const posted = read.find((n) => n.table === 'posts')?.actual
+      expect((posted?.rows ?? 0) * (posted?.loops ?? 0)).toBe(posts)
+      expect(r.measured?.ms).toBeGreaterThanOrEqual(0)
+    })
+
+    it.each([
+      ['a write', `UPDATE posts SET title = 'measured' WHERE id = 1`],
+      ['a write inside a WITH', 'WITH x AS (SELECT 1 AS id) DELETE FROM posts WHERE id IN (SELECT id FROM x)'],
+      ['a locking read', 'SELECT id FROM posts FOR UPDATE'],
+      ['a read into a variable', 'SELECT id INTO @x FROM posts LIMIT 1'],
+      ['two statements', 'SELECT 1; SELECT 2'],
+    ])('refuses %s before running anything', async (_, sql) => {
+      await expect(env.db.analyzePlan(ns, sql, 10_000)).rejects.toMatchObject({ code: 'VALIDATION' })
+      const [left] = await exec(`SELECT COUNT(*) FROM posts WHERE title = 'measured'`)
+      expect(left?.kind === 'rows' ? Number(left.result.rows[0]?.[0]) : null).toBe(0)
+    })
+
+    it('leaves no lock behind that a read took on its session', async () => {
+      if (!(await measures())) return
+      // A lock of the session survives the rollback; the reset after the run lets it go. Another session must get it
+      // (the same one would get its own lock again).
+      const key = 4242_4242
+      const [take, tryOther, release] =
+        dialect === 'mysql'
+          ? [
+              `SELECT GET_LOCK('${scratch}', 0)`,
+              `SELECT GET_LOCK('${scratch}', 0)`,
+              `SELECT RELEASE_LOCK('${scratch}')`,
+            ]
+          : [
+              `SELECT pg_advisory_lock(${key})`,
+              `SELECT pg_try_advisory_lock(${key})`,
+              `SELECT pg_advisory_unlock(${key})`,
+            ]
+      await env.db.analyzePlan(ns, take, 10_000)
+      const other = ctx.create()
+      try {
+        const [got] = await other.executeSql(ns, `${tryOther}; ${release}`, { ...EXEC, stopOnError: true })
+        const cell = got?.kind === 'rows' ? got.result.rows[0]?.[0] : null
+        expect(cell === 1 || cell === true || cell === '1').toBe(true)
+      } finally {
+        await other.close()
+      }
+    })
+
+    it('stops a run past its time, and is usable again after', async () => {
+      if (!(await measures())) return
+      const started = performance.now()
+      await expect(env.db.analyzePlan(ns, ctx.slowSql, 1_000)).rejects.toBeInstanceOf(AdapterError)
+      expect(performance.now() - started).toBeLessThan(2_900)
+      const r = await env.db.analyzePlan(ns, 'SELECT name FROM users WHERE age > 20', 10_000)
+      expect(nodes(r.plan).find((n) => n.table === 'users')?.actual?.loops).toBe(1)
+      // The estimate after it is the estimate still: no step says what it did.
+      const e = await env.db.explainPlan(ns, 'SELECT name FROM users WHERE age > 20')
+      expect(nodes(e.plan).some((n) => n.actual)).toBe(false)
+      expect(e.measured).toBeUndefined()
+    })
+  })
 }

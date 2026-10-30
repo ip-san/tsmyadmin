@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { PLAN_SQL, plan, reads } from '../test/explain-plans/load.ts'
-import { needsFormat1, parseMysqlPlan } from './explain.ts'
+import { measurableMysqlStatement, mysqlExecutionMs, needsFormat1, parseMysqlPlan } from './explain.ts'
 
 describe('parseMysqlPlan', () => {
   describe.each(['mysql-8-4', 'mariadb-10-11', 'mariadb-11-4'])('format 1 (%s)', (server) => {
@@ -226,5 +226,57 @@ describe('parseMysqlPlan', () => {
       ''
     )
     expect(nested.children.map((c) => c.op)).toEqual(['Scan'])
+  })
+})
+
+describe('a measured plan', () => {
+  const near = (ms: number | null | undefined, want: number) => expect(ms).toBeCloseTo(want, 9)
+
+  it('reads MySQL format 2 with no query_plan around it, the time of a step made all its loops', () => {
+    const raw = plan('mysql-8-4-analyze')
+    const p = parseMysqlPlan(raw, PLAN_SQL.analyze)
+    expect(reads(p)).toEqual(['posts as p fullScan', 'users as u by PRIMARY lookup'])
+    expect(p.actual).toMatchObject({ rows: 3, loops: 1 })
+    near(p.actual?.ms, 0.356665)
+    const [posts, users] = p.children
+    expect(posts?.actual).toMatchObject({ rows: 3, loops: 1 })
+    // One user per post, looked up three times: 3 × the average time.
+    expect(users?.actual).toMatchObject({ rows: 1, loops: 3 })
+    near(users?.actual?.ms, 0.017624666666666667 * 3)
+    near(mysqlExecutionMs(raw), 0.356665)
+  })
+
+  it("reads MariaDB's ANALYZE: a table's rows per loop, its time reading and checking, and the query's", () => {
+    const raw = plan('mariadb-11-analyze')
+    const p = parseMysqlPlan(raw, PLAN_SQL.analyze)
+    expect(reads(p)).toEqual(['posts as p fullScan', 'users as u by PRIMARY lookup'])
+    const [posts, users] = p.children
+    expect(posts?.actual).toMatchObject({ rows: 3, loops: 1 })
+    near(posts?.actual?.ms, 0.007090683 + 0.00425441)
+    expect(users?.actual).toMatchObject({ rows: 1, loops: 3 })
+    near(mysqlExecutionMs(raw), 0.018894584)
+  })
+
+  it('says nothing measured of an estimate, nor of a step a run never reached', () => {
+    expect(parseMysqlPlan(plan('mysql-8-4-q1'), PLAN_SQL.q1).children.some((c) => c.actual)).toBe(false)
+    expect(mysqlExecutionMs(plan('mysql-8-4-q1'))).toBeNull()
+    const cut = { operation: 'Table scan on t', table_name: 't', actual_rows: null, actual_loops: null }
+    expect(parseMysqlPlan(cut, 'SELECT * FROM t').actual).toBeUndefined()
+  })
+})
+
+describe('measurableMysqlStatement', () => {
+  it.each([
+    ['an INTO in a comment MySQL runs', 'SELECT 1 /*! INTO @x */'],
+    ['a lock in a versioned comment', 'SELECT * FROM t /*!50000 FOR UPDATE */'],
+    ['an INTO in a comment MariaDB runs', 'SELECT 1 /*M! INTO @x */'],
+    ['a hint that lifts the time limit', 'SELECT /*+ MAX_EXECUTION_TIME(0) */ * FROM t'],
+    ['a write, as measurableStatement', 'UPDATE t SET a = 1'],
+  ])('refuses %s', (_, sql) => {
+    expect(() => measurableMysqlStatement(sql)).toThrow(expect.objectContaining({ code: 'VALIDATION' }))
+  })
+
+  it('reads a plain comment as a comment', () => {
+    expect(measurableMysqlStatement('SELECT /* why */ 1')).toBe('SELECT /* why */ 1')
   })
 })

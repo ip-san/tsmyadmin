@@ -19,13 +19,17 @@ import { currentRequest } from './request-context.ts'
 
 type Method = (typeof ADAPTER_METHOD_NAMES)[number]
 
-/** Methods that change data, structure, accounts or server state. Everything else is read-only and not audited. */
+/**
+ * Methods that change data, structure, accounts or server state, and `analyzePlan`, which runs the operator's statement
+ * (a read, rolled back, but it takes the server's time). Everything else is read-only and not audited.
+ */
 export const AUDITED_METHODS = [
   'insertRow',
   'insertRows',
   'updateRow',
   'deleteRows',
   'executeSql',
+  'analyzePlan',
   'cancelQuery',
   'killProcess',
 ] as const satisfies readonly Method[]
@@ -128,6 +132,9 @@ export function summarise(
         sqlLength: full.length,
       }
     }
+    case 'analyzePlan':
+      // A read run to time it: how long it may run is the fact; the statement is the SQL tab's, recorded there.
+      return { ...base, sqlLength: String(args[1] ?? '').length, timeoutMs: args[2] }
     case 'cancelQuery':
       return { queryId: args[0] }
     case 'killProcess':

@@ -44,7 +44,7 @@ import { AdapterError, type ConnectionConfig, type RowBatch } from '../types.ts'
 import { mysqlRecoverLossyDefaults, mysqlShowCreateTable } from './create-statements.ts'
 import { mysqlDdl } from './ddl.ts'
 import { mapMysqlError } from './errors.ts'
-import { needsFormat1, parseMysqlPlan } from './explain.ts'
+import { measurableMysqlStatement, mysqlExecutionMs, needsFormat1, parseMysqlPlan } from './explain.ts'
 import { mysqlExporter } from './export.ts'
 import {
   mysqlDatabaseGrants,
@@ -88,6 +88,8 @@ const WRAPPER_ONLY_ERRORS: ReadonlySet<string> = new Set([
 ])
 type QueryOutput = [unknown, FieldPacket[] | FieldPacket[][] | undefined]
 
+/** A statement interrupted: by KILL QUERY or a time limit (ER_QUERY_INTERRUPTED, ER_QUERY_TIMEOUT, MariaDB's 1969). */
+const INTERRUPTED: ReadonlySet<number> = new Set([1317, 3024, 1969])
 /** Collation negotiated at handshake unless the login chose another; SET NAMES after a connection reset must restore it. */
 const DEFAULT_COLLATION = 'utf8mb4_unicode_ci'
 /** How many of the pool's own thread ids are remembered (see `ownThreads`). */
@@ -529,6 +531,51 @@ export class MysqlAdapter extends BaseAdapter {
   }
   tableUsage(ns: Namespace): Promise<TableUsageReport> {
     return this.withConn(ns, (conn) => mysqlTableUsage(conn, ns.database))
+  }
+
+  /**
+   * MySQL measures in JSON only in format 2 (8.3+), which this session asks for; MariaDB has its own `ANALYZE
+   * FORMAT=JSON`. Both run the statement: READ ONLY here, since only a read is taken. A read can still leave state on
+   * the session that a rollback keeps (a GET_LOCK, a user variable): the session is reset after, as the SQL tab's is.
+   */
+  async analyzePlan(ns: Namespace, sql: string, timeoutMs: number): Promise<ExplainResult> {
+    const statement = measurableMysqlStatement(sql)
+    return this.withConn(
+      ns,
+      async (conn) => {
+        try {
+          if (this.mariadb !== true) await this.jsonFormat2(conn)
+          await conn.query('START TRANSACTION READ ONLY')
+          const sent = this.mariadb ? `ANALYZE FORMAT=JSON ${statement}` : `EXPLAIN ANALYZE FORMAT=JSON ${statement}`
+          const raw = parseJsonCell(firstResult(await conn.query(sent)).rows[0]?.[0] ?? null)
+          // MySQL stopped by its time limit still answers, with the plan of a run cut short (the steps it had not
+          // reached say nothing, the top one says 0 rows): only a warning tells.
+          const warnings = firstResult(await conn.query('SHOW WARNINGS')).rows
+          if (warnings.some((w) => INTERRUPTED.has(Number(w[1])))) {
+            throw new AdapterError('QUERY_FAILED', 'The statement was stopped before it finished (its time ran out)')
+          }
+          return explainResult(parseMysqlPlan(raw, statement), raw, { ms: mysqlExecutionMs(raw) })
+        } finally {
+          // A reset rolls back and puts every session variable back (the format too); one that fails drops the
+          // connection. The statement's own error is the one thrown.
+          await conn.reset().catch(() => undefined)
+          this.forgetSessionState(conn)
+        }
+      },
+      timeoutMs
+    )
+  }
+
+  /** Format 2 for this session; a server without the variable (before 8.3) cannot measure in JSON. */
+  private async jsonFormat2(conn: Conn): Promise<void> {
+    try {
+      await conn.query('SET SESSION explain_json_format_version = 2')
+    } catch (err) {
+      if (err instanceof AdapterError && err.nativeCode === 'ER_UNKNOWN_SYSTEM_VARIABLE') {
+        throw new AdapterError('UNSUPPORTED', 'Measuring a plan needs MySQL 8.3 or later')
+      }
+      throw err
+    }
   }
 
   /**

@@ -43,6 +43,32 @@ for (const t of TARGETS) {
       await expect(plan.getByRole('button', { name: 'プレゼンで見る' })).toBeFocused()
     })
 
+    test('runs the statement to measure it once asked, and presents the run beside the estimates', async ({ page }) => {
+      const plan = await openPlan(page, t)
+      const measure = plan.getByRole('button', { name: '実際に実行して測る' })
+      await measure.click()
+      const ask = plan.getByRole('group', { name: '実行して測る前の確認' })
+      await expect(ask).toContainText('30 秒で止めます')
+      await ask.getByRole('button', { name: '実行して測る' }).click()
+      await expect(
+        plan.getByRole('status').filter({ hasText: /^実際に実行して測った計画を出しています/ })
+      ).toBeVisible()
+      await expect(ask).toBeHidden()
+      await expect(measure).toBeFocused()
+      // How many rows each step gave is the server's (and the other tests'); that every read was measured is not.
+      const tree = plan.getByRole('figure', { name: '実行計画の木' })
+      await expect(tree.getByText(/実際 [\d,]+ 行/).first()).toBeVisible()
+      await expect(plan.getByText(/^実際に実行して測った値です/)).toBeVisible()
+      await plan.getByRole('button', { name: 'プレゼンで見る' }).click()
+      const tour = page.getByRole('dialog', { name: '実行計画のプレゼン' })
+      await expect(tour.getByText(/^この文を実際に実行して測った計画です/)).toBeVisible()
+      await tour.getByRole('button', { name: /^\d+\. 見込みと実際$/ }).click()
+      await expect(tour.getByRole('heading', { level: 3 })).toHaveText('見込みと実際')
+      // Nothing was left under the editor: measuring is not a run of the SQL tab.
+      await tour.getByRole('button', { name: '閉じる' }).click()
+      await expect(page.getByRole('region', { name: '文 1' })).toHaveCount(0)
+    })
+
     test('fills in the parameters before drawing, as a run does', async ({ page }) => {
       await login(page, t)
       await page.goto(t.schema ? `/db/${t.database}/sql?schema=${t.schema}` : `/db/${t.database}/sql`)

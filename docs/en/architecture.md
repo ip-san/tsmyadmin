@@ -1,4 +1,4 @@
-<!-- translated-from: docs/architecture.md sha256:d02d0c83848dcae616e091b836c7f57e4f19ca89b9a66bd036d06ecacc805897 -->
+<!-- translated-from: docs/architecture.md sha256:af2f5770542799854ace47b23d5f7994a6c91160bde8bea09b5485c523c521a7 -->
 
 # Architecture
 
@@ -353,7 +353,7 @@ The test layers, from the bottom: unit (`sql/split`, the DDL snapshots, the pure
 | Add an environment variable | `apps/api/src/config.ts` | Update `.env.example` and the table in `docs/deployment.md` at the same time (and its translation; `bun run docs:i18n` checks it) |
 | Support a new type | `docker/fixtures/*` → `*/values.ts` → conformance | `bun run db:reset`, and `typesRow1` on both dialects |
 | Show something on the table diagram with highlights and steps | `components/schema-diagram/`: build an `OverlayStep` per step (`overlay.ts`) and pass them to `SchemaDiagram`'s `overlay`, `useStepPlayer` and `StepNarration` (examples: `features/browse/delete-impact.ts`, `features/sql/plan-steps.ts`) | Tell the same story in words through `StepNarration` (screen readers follow that). A diagram that does not move takes no `onMove` (it becomes `role="img"`). `diagramFor` draws only the tables concerned |
-| Change how execution plans are read, or add a server's shape | `packages/adapter/src/{mysql,postgres}/explain.ts` (into the shared `PlanNode`) | Unit-test against plans captured from real servers in `packages/adapter/src/test/explain-plans/`. On the MySQL side there are three shapes: format 1, format 2 (MySQL 9) and MariaDB (see "MySQL 9 と EXPLAIN" in `.claude/rules/adapter.md`) |
+| Change how execution plans are read, or add a server's shape | `packages/adapter/src/{mysql,postgres}/explain.ts` (into the shared `PlanNode`) | Unit-test against plans captured from real servers in `packages/adapter/src/test/explain-plans/`. On the MySQL side there are three shapes: format 1, format 2 (MySQL 9) and MariaDB (see "MySQL 9 と EXPLAIN" in `.claude/rules/adapter.md`). Plans measured by running the statement (`analyzePlan`) are the `*-analyze.json` files (each step's `actual`) |
 
 ### Example: adding a field to the `GET /api/server/info` response
 

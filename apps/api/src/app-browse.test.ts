@@ -292,6 +292,26 @@ describe('explain', () => {
     const empty = await h.req('/api/databases/shop/explain', { method: 'POST', body: JSON.stringify({ sql: '' }) })
     expect(empty.status).toBe(400)
   })
+
+  it('measures a plan by running it, within the time asked for or 30 seconds, never past 5 minutes', async () => {
+    const h = harness()
+    stores.push(h.store)
+    await h.login()
+    const analyze = (body: object) =>
+      h.req('/api/databases/shop/explain/analyze?schema=app', { method: 'POST', body: JSON.stringify(body) })
+    const res = await analyze({ sql: 'SELECT * FROM users' })
+    const result = ExplainResultSchema.parse(await res.json())
+    expect(result.plan.actual).toEqual({ rows: 1, loops: 1, ms: 1 })
+    expect(result.measured).toEqual({ ms: 1 })
+    expect(h.adapter.calls.at(-1)).toEqual({
+      method: 'analyzePlan',
+      args: [{ database: 'shop', schema: 'app' }, 'SELECT * FROM users', 30_000],
+    })
+    await analyze({ sql: 'SELECT 1', timeoutMs: 5_000 })
+    expect(h.adapter.calls.at(-1)?.args[2]).toBe(5_000)
+    expect((await analyze({ sql: 'SELECT 1', timeoutMs: 300_001 })).status).toBe(400)
+    expect((await analyze({ sql: 'SELECT 1', timeoutMs: 999 })).status).toBe(400)
+  })
 })
 
 describe('sql & ddl', () => {

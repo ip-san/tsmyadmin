@@ -9,15 +9,19 @@ import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { locale } from '@/config/locale-screens.ts'
 import { explainQuery, foreignKeysQuery, structureQuery } from '@/lib/queries.ts'
 import { useRowEstimates } from '@/lib/use-row-estimates.ts'
+import { MeasurePlan } from './MeasurePlan.tsx'
 import { PlanTour } from './PlanTour.tsx'
+import { misestimate } from './plan-measure.ts'
 import { planReads, planSteps } from './plan-steps.ts'
+import { useMeasuredPlan } from './use-measured-plan.ts'
 
 const t = locale.plan
 
 /**
  * The plan of one statement, estimated on the server: the tree as the server gave it, and the tables it reads drawn
  * on their own, lit in the order they are read (full reads apart from reads through an index), with the same story
- * in words. Opened from the SQL tab's EXPLAIN.
+ * in words. Opened from the SQL tab's EXPLAIN. Measured on a press (`MeasurePlan`): the same, with each step's rows
+ * and time as they were when the statement ran.
  */
 export function PlanView({
   db,
@@ -32,6 +36,7 @@ export function PlanView({
 }) {
   const plan = useQuery(explainQuery(db, schema, sql))
   const relations = useQuery(foreignKeysQuery(db, schema))
+  const measure = useMeasuredPlan(db, schema, sql)
   return (
     <section aria-label={t.title} className="space-y-3 rounded border border-line bg-surface p-3">
       <div className="flex items-center justify-between gap-2">
@@ -47,7 +52,10 @@ export function PlanView({
       ) : relations.isError ? (
         <ErrorBox error={relations.error} onRetry={() => void relations.refetch()} />
       ) : (
-        <PlanStory db={db} schema={schema} result={plan.data} relations={relations.data} />
+        <>
+          <MeasurePlan measure={measure} />
+          <PlanStory db={db} schema={schema} result={measure.result ?? plan.data} relations={relations.data} />
+        </>
       )}
     </section>
   )
@@ -86,6 +94,7 @@ function PlanStory({
           relations={relations}
           indexColumns={indexColumns}
           rows={estimates.rows}
+          measuredMs={result.measured ? result.measured.ms : undefined}
           ready={structures.every((s) => !s.isPending) && !estimates.pending}
         />
       ) : null}
@@ -108,7 +117,7 @@ function PlanStory({
         </div>
       </div>
       {steps.length > 0 ? <StepNarration steps={steps} player={player} /> : null}
-      <p className="text-xs text-ink-sub">{t.notes}</p>
+      <p className="text-xs text-ink-sub">{result.measured ? t.notesMeasured : t.notes}</p>
       <details className="text-xs">
         <summary className="cursor-pointer text-ink-sub">{t.raw}</summary>
         {result.rawTruncated ? <p className="text-ink-sub">{t.rawTruncated}</p> : null}
@@ -123,10 +132,15 @@ function PlanStory({
 /** The tree as the server gave it; the node read at the current step is marked. */
 function PlanTree({ node, path, current }: { node: PlanNode; path: string; current: string | undefined }) {
   const here = path === current
+  const ms = node.actual?.ms ?? null
+  // A step far off its estimate is marked in the tree too, where the eye goes first.
+  const off = misestimate(node)
   const facts = [
     node.table ? `${node.table}${node.alias ? ` ${node.alias}` : ''}` : null,
     node.index ? `[${node.index}]` : null,
     node.estRows === null ? null : t.rows(Math.round(node.estRows)),
+    node.actual ? t.actual(node.actual.rows, node.actual.loops, ms === null ? null : t.duration(ms)) : null,
+    off ? t.off(off.factor, off.more) : null,
   ].filter(Boolean)
   return (
     <li className="ml-3 border-l border-line pl-2">

@@ -4,6 +4,7 @@ import type { PlanNode } from '@tsmyadmin/shared'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { locale } from '@/config/locale-screens.ts'
 import { PlanView } from './PlanView.tsx'
+import { useVisualPlan } from './use-visual-plan.tsx'
 
 const t = locale.planTour
 
@@ -11,6 +12,9 @@ const t = locale.planTour
 let estimated: Record<string, number> | Error
 /** Holds the list back until it is let go. */
 let listed: Promise<void>
+/** What a measured run answers, and the runs asked for. */
+let measuredRun: () => Promise<unknown>
+const analyzePlan = vi.fn((..._: unknown[]) => measuredRun())
 
 const scan: PlanNode = {
   op: 'Seq Scan',
@@ -27,6 +31,7 @@ const scan: PlanNode = {
 }
 
 vi.mock('@/lib/queries.ts', () => ({
+  analyzePlan: (...args: unknown[]) => analyzePlan(...args),
   explainQuery: () => ({ queryKey: ['explain'], queryFn: async () => ({ plan: scan, raw: '', rawTruncated: false }) }),
   foreignKeysQuery: () => ({ queryKey: ['keys'], queryFn: async () => [] }),
   structureQuery: () => ({ queryKey: ['structure'], queryFn: async () => ({ indexes: [] }) }),
@@ -49,6 +54,13 @@ beforeAll(() => {
 beforeEach(() => {
   estimated = { logs: 10000 }
   listed = Promise.resolve()
+  analyzePlan.mockClear()
+  measuredRun = async () => ({
+    plan: { ...scan, actual: { rows: 1_200_000, loops: 1, ms: 950 } },
+    raw: '',
+    rawTruncated: false,
+    measured: { ms: 1000 },
+  })
 })
 afterEach(cleanup)
 
@@ -87,7 +99,8 @@ describe('PlanView', () => {
     // The index columns are read; the list is not.
     await new Promise((r) => setTimeout(r, 20))
     expect(open).toHaveProperty('disabled', true)
-    expect(screen.getByRole('status', { name: '' }).textContent).toBe(t.waiting)
+    // The presentation's own status line (the measuring has one too).
+    expect(screen.getAllByRole('status').map((e) => e.textContent)).toContain(t.waiting)
     letGo()
     await vi.waitFor(() => expect(open).toHaveProperty('disabled', false))
   })
@@ -98,5 +111,77 @@ describe('PlanView', () => {
     await readScene()
     expect(screen.queryByText(t.staleStats('logs', 50000, 10000))).toBeNull()
     expect(screen.queryByText(locale.designReading.rows('logs', 10000))).toBeNull()
+  })
+
+  describe('run and measure', () => {
+    const p = locale.plan
+    const opener = async () => screen.findByRole('button', { name: p.measure })
+
+    it('asks first, runs once however often pressed, and shows each step beside its estimate', async () => {
+      mount()
+      fireEvent.click(await opener())
+      const run = screen.getByRole('button', { name: p.measureRun })
+      expect(screen.getByRole('group', { name: p.measureGroup }).textContent).toContain(p.measureConfirm(30))
+      expect(document.activeElement).toBe(run)
+      expect(analyzePlan).not.toHaveBeenCalled()
+      // Pressed twice in one frame: one run.
+      fireEvent.click(run)
+      fireEvent.click(run)
+      expect(analyzePlan).toHaveBeenCalledTimes(1)
+      expect(analyzePlan).toHaveBeenCalledWith('shop', undefined, 'SELECT * FROM logs')
+      await screen.findByText(p.measured(p.duration(1000)))
+      expect(screen.getByText(new RegExp(p.actual(1_200_000, 1, p.duration(950)).replace(/[()]/g, '.')))).toBeTruthy()
+      expect(screen.getByText(new RegExp(p.off(24, true)))).toBeTruthy()
+      expect(screen.getByText(p.notesMeasured)).toBeTruthy()
+      // The question is gone; the focus is back on the button that asked it.
+      expect(screen.queryByRole('group', { name: p.measureGroup })).toBeNull()
+      expect(document.activeElement).toBe(await opener())
+    })
+
+    it('runs nothing when the question is put away, and says why a run failed, keeping the estimate', async () => {
+      mount()
+      fireEvent.click(await opener())
+      fireEvent.click(screen.getByRole('button', { name: p.measureCancel }))
+      expect(analyzePlan).not.toHaveBeenCalled()
+      expect(document.activeElement).toBe(await opener())
+      measuredRun = async () => {
+        throw new Error('The statement was stopped before it finished (its time ran out)')
+      }
+      fireEvent.click(await opener())
+      fireEvent.click(screen.getByRole('button', { name: p.measureRun }))
+      await screen.findByText(/its time ran out/)
+      expect(screen.getByText(p.notes)).toBeTruthy()
+    })
+
+    it('shows nothing measured of the last statement under the next one drawn', async () => {
+      function Console() {
+        const plan = useVisualPlan('shop', undefined)
+        return (
+          <>
+            {['SELECT * FROM logs', 'SELECT id FROM logs'].map((sql) => (
+              <button key={sql} type="button" onClick={() => plan.show(sql)}>
+                {sql}
+              </button>
+            ))}
+            {plan.panel}
+          </>
+        )
+      }
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+      render(
+        <QueryClientProvider client={client}>
+          <Console />
+        </QueryClientProvider>
+      )
+      fireEvent.click(screen.getByRole('button', { name: 'SELECT * FROM logs' }))
+      fireEvent.click(await opener())
+      fireEvent.click(screen.getByRole('button', { name: p.measureRun }))
+      await screen.findByText(p.notesMeasured)
+      // Another statement drawn in the same panel: its estimate, not the measured run of the one before.
+      fireEvent.click(screen.getByRole('button', { name: 'SELECT id FROM logs' }))
+      await screen.findByText(p.notes)
+      expect(screen.queryByText(p.notesMeasured)).toBeNull()
+      expect(screen.queryByText(p.measured(p.duration(1000)))).toBeNull()
+    })
   })
 })

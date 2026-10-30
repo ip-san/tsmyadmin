@@ -629,9 +629,15 @@ for (const t of TARGETS) {
       await scan(page)
     })
 
-    test('SQL tab with a statement plan drawn', async ({ page }) => {
+    test('SQL tab with a statement plan drawn, asked to be measured, then measured', async ({ page }) => {
       const plan = await openPlan(page, t)
-      await expect(plan).toBeVisible()
+      await scan(page)
+      await plan.getByRole('button', { name: '実際に実行して測る' }).click()
+      const run = plan.getByRole('button', { name: '実行して測る', exact: true })
+      await run.waitFor()
+      await scan(page)
+      await run.click()
+      await expect(plan.getByText(/^実際に実行して測った値です/)).toBeVisible()
       await scan(page)
     })
 

@@ -327,9 +327,38 @@ export const enScreens = {
       'Estimated: the statement is not run. With a small table, the plan may read every row even where an index exists',
     raw: 'The plan as the server gave it (JSON)',
     rawTruncated: 'Cut short: it is long',
+    measure: 'Run and measure',
+    measureHint: "Run this statement for real and measure each step's rows and time (a statement that only reads)",
+    measureGroup: 'Before running to measure',
+    measureConfirm: (seconds: number) =>
+      `This runs the statement to measure it. Only a statement that reads (SELECT, TABLE, VALUES) is run, in a read-only transaction rolled back at the end. Still, the rows it reads are really read, so a large table loads the server (it is stopped after ${seconds} seconds). On a production server, mind the time of day`,
+    measureRun: 'Run to measure',
+    measureCancel: 'Cancel',
+    measuring: 'Running to measure…',
+    measured: (time: string | null) => `Showing the plan measured by running it${time ? ` (ran in ${time})` : ''}`,
+    duration: (ms: number) =>
+      ms < 1
+        ? 'under 1 ms'
+        : ms < 1000
+          ? `${ms < 10 ? ms.toFixed(1) : Math.round(ms).toLocaleString('en-US')} ms`
+          : `${(ms / 1000).toFixed(ms < 10_000 ? 2 : 1)} s`,
+    actual: (rows: number, loops: number, time: string | null) =>
+      loops === 0
+        ? 'never run'
+        : `actually ${Math.round(rows).toLocaleString('en-US')} rows${loops > 1 ? ` (per run; ${loops.toLocaleString('en-US')} runs)` : ''}${time ? ` · ${time}` : ''}`,
+    off: (factor: number, more: boolean) =>
+      more
+        ? `${factor.toLocaleString('en-US')} times the estimate`
+        : `1/${factor.toLocaleString('en-US')} of the estimate`,
+    notesMeasured:
+      'Measured by running the statement once (a cache, among others, changes the numbers). "About" is the database\'s estimate before running. On MySQL and PostgreSQL, a step\'s time includes the steps under it',
   },
   planTour: {
-    chapters: { reads: 'The tables, in the order they are read', after: 'What is done after the reads' },
+    chapters: {
+      reads: 'The tables, in the order they are read',
+      after: 'What is done after the reads',
+      measured: 'Estimated and actual',
+    },
     open: 'Present',
     openHint:
       'Show this plan as a full-screen presentation, scene by scene, in the order the database reads the tables (estimated: the statement is not run)',
@@ -337,7 +366,18 @@ export const enScreens = {
     dialog: 'Plan presentation',
     diagram: 'The tables the plan reads, and their foreign keys',
     saveHint:
-      "Save this presentation as one HTML file, to open and present in a browser without the server (it holds the table and index names, the tables' estimated rows and the conditions in the plan, which include values written in the SQL)",
+      "Save this presentation as one HTML file, to open and present in a browser without the server (it holds the table and index names, the tables' estimated rows and the conditions in the plan, which include values written in the SQL; measured by running, it holds the actual rows and times too)",
+    introMeasured: (reads: number, order: string, time: string | null) =>
+      `The plan of this statement, measured by running it${time ? ` (it ran in ${time})` : ''}. It reads tables ${reads.toLocaleString('en-US')} times. ${order}. Each step's rows as the database estimated them before running are set beside the rows it actually gave and its time. A step far off its estimate is how a plan comes to be chosen wrong`,
+    measuredRead: (expected: number | null, actual: string) =>
+      expected === null ? actual : `estimated ${Math.round(expected).toLocaleString('en-US')} rows → ${actual}`,
+    misestimate: (table: string, expected: number, actual: number, off: string) =>
+      `${table} was expected to give ${expected.toLocaleString('en-US')} rows and gave ${actual.toLocaleString('en-US')} (${off}). An estimate this far off can make the database choose the wrong order or way of joining. Old statistics, columns of a condition that depend on each other, or skewed values may be why. ANALYZE (ANALYZE TABLE on MySQL) takes the statistics again; if it is still off, consider a histogram on MySQL (ANALYZE TABLE … UPDATE HISTOGRAM ON a column) or extended statistics on PostgreSQL (CREATE STATISTICS)`,
+    heavy: (table: string, percent: number) =>
+      `About ${percent}% of the run's time is the step that reads ${table}. To make the statement faster, look here first`,
+    measuredTitle: 'Estimated and actual',
+    measuredSummary: (off: number, ratio: number, heaviest: string | null, percent: number | null) =>
+      `${off === 0 ? 'No step' : `${off.toLocaleString('en-US')} ${off === 1 ? 'step' : 'steps'}`} gave rows ${ratio} times off the estimate or more.${heaviest ? ` Of the steps that read a table, the one that took longest reads ${heaviest}${percent === null ? '' : ` (about ${percent}% of the run)`}` : ''}`,
     staleStats: (table: string, plan: number, list: number) =>
       `The rows of a full read of ${table} are ${plan.toLocaleString('en-US')} by the plan's estimate and about ${list.toLocaleString('en-US')} by the table list's: two times apart or more. One of the two statistics may be old. ANALYZE (ANALYZE TABLE on MySQL) takes them again, and the plan may change (on MySQL, reading only some partitions looks like a gap too)`,
     tones: {

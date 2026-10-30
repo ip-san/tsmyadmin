@@ -326,9 +326,32 @@ export const jaScreens = {
       '推定です（文は実行していません）。テーブルが小さいと、インデックスがあっても全件を読む計画になることがあります',
     raw: 'サーバーが返した計画（JSON）',
     rawTruncated: '長いので途中で切っています',
+    measure: '実際に実行して測る',
+    measureHint: 'この文を実際に実行して、段ごとの実際の行数と時間を測ります（読むだけの文に限ります）',
+    measureGroup: '実行して測る前の確認',
+    measureConfirm: (seconds: number) =>
+      `この文を実際に実行して測ります。読むだけの文（SELECT・TABLE・VALUES）に限り、読み取り専用のトランザクションで実行して、最後に取り消します。ただし文が読む行は本当に読むので、大きなテーブルではサーバーに負荷がかかります（${seconds} 秒で止めます）。本番のサーバーでは、時間帯に気をつけてください`,
+    measureRun: '実行して測る',
+    measureCancel: 'やめる',
+    measuring: '実行して測っています…',
+    measured: (time: string | null) => `実際に実行して測った計画を出しています${time ? `（実行 ${time}）` : ''}`,
+    duration: (ms: number) =>
+      ms < 1
+        ? '1 ミリ秒未満'
+        : ms < 1000
+          ? `${ms < 10 ? ms.toFixed(1) : Math.round(ms).toLocaleString('ja-JP')} ミリ秒`
+          : `${(ms / 1000).toFixed(ms < 10_000 ? 2 : 1)} 秒`,
+    actual: (rows: number, loops: number, time: string | null) =>
+      loops === 0
+        ? '実行されず'
+        : `実際 ${Math.round(rows).toLocaleString('ja-JP')} 行${loops > 1 ? `（1 回あたり。${loops.toLocaleString('ja-JP')} 回）` : ''}${time ? ` · ${time}` : ''}`,
+    off: (factor: number, more: boolean) =>
+      more ? `見込みの ${factor.toLocaleString('ja-JP')} 倍` : `見込みの ${factor.toLocaleString('ja-JP')} 分の 1`,
+    notesMeasured:
+      '実際に実行して測った値です（1 回の計測で、キャッシュの状態などで変わります）。「推定」は、実行する前のデータベースの見込みです。MySQL と PostgreSQL では、段の時間にその下の段の時間を含みます',
   },
   planTour: {
-    chapters: { reads: 'テーブルを読む順', after: '読んだあとの処理' },
+    chapters: { reads: 'テーブルを読む順', after: '読んだあとの処理', measured: '見込みと実際' },
     open: 'プレゼンで見る',
     openHint:
       'この実行計画を、データベースがテーブルを読む順に、場面ごとの全画面の発表にします（推定。文は実行しない）',
@@ -336,7 +359,18 @@ export const jaScreens = {
     dialog: '実行計画のプレゼン',
     diagram: '実行計画で読むテーブルと外部キーの図',
     saveHint:
-      'この発表を 1 つの HTML ファイルにします。サーバーにつながずに、ブラウザで開いて発表できます（テーブル名・インデックス名・テーブルの推定の行数と、計画に出た条件が入ります。条件には SQL に書いた値が含まれます）',
+      'この発表を 1 つの HTML ファイルにします。サーバーにつながずに、ブラウザで開いて発表できます（テーブル名・インデックス名・テーブルの推定の行数と、計画に出た条件が入ります。条件には SQL に書いた値が含まれます。実際に実行して測ったときは、実際の行数と時間も入ります）',
+    introMeasured: (reads: number, order: string, time: string | null) =>
+      `この文を実際に実行して測った計画です${time ? `（実行 ${time}）` : ''}。テーブルを ${reads.toLocaleString('ja-JP')} 回読みます。${order}。段ごとに、データベースが実行前に見込んだ行数と、実際の行数・時間を比べます。見込みが大きく外れた段は、計画を選び誤る元になります`,
+    measuredRead: (expected: number | null, actual: string) =>
+      expected === null ? actual : `見込み ${Math.round(expected).toLocaleString('ja-JP')} 行 → ${actual}`,
+    misestimate: (table: string, expected: number, actual: number, off: string) =>
+      `${table} は、見込みの ${expected.toLocaleString('ja-JP')} 行に対して、実際は ${actual.toLocaleString('ja-JP')} 行でした（${off}）。見込みが大きく外れると、データベースはつなぐ順やつなぎ方を誤って選ぶことがあります。統計が古い、条件のカラムどうしに関係がある、値が偏っている、といった原因が考えられます。ANALYZE（MySQL は ANALYZE TABLE）で統計を取り直し、それでも外れるなら、MySQL はヒストグラム（ANALYZE TABLE … UPDATE HISTOGRAM ON カラム）、PostgreSQL は拡張統計（CREATE STATISTICS）を検討します`,
+    heavy: (table: string, percent: number) =>
+      `実行の時間の約 ${percent}% が、${table} を読む段です。文を速くするなら、まずここを見ます`,
+    measuredTitle: '見込みと実際',
+    measuredSummary: (off: number, ratio: number, heaviest: string | null, percent: number | null) =>
+      `見込みと実際の行数が ${ratio} 倍以上違った段は${off === 0 ? 'ありません' : ` ${off.toLocaleString('ja-JP')} つです`}。${heaviest ? `テーブルを読む段で、いちばん時間がかかったのは ${heaviest} です${percent === null ? '' : `（実行の約 ${percent}%）`}` : ''}`,
     staleStats: (table: string, plan: number, list: number) =>
       `${table} の全件を読む行数が、計画の推定（${plan.toLocaleString('ja-JP')} 行）とテーブル一覧の推定（約 ${list.toLocaleString('ja-JP')} 行）で 2 倍以上違います。どちらかの統計が古いのかもしれません。ANALYZE（MySQL は ANALYZE TABLE）で取り直すと、計画が変わることがあります（MySQL でパーティションを絞って読むときも、違って見えます）`,
     tones: {

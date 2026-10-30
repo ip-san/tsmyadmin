@@ -1,0 +1,79 @@
+[
+  {
+    "Plan": {
+      "Node Type": "Hash Join",
+      "Parallel Aware": false,
+      "Async Capable": false,
+      "Join Type": "Inner",
+      "Startup Cost": 1.07,
+      "Total Cost": 2.17,
+      "Plan Rows": 3,
+      "Plan Width": 636,
+      "Actual Startup Time": 0.078,
+      "Actual Total Time": 0.080,
+      "Actual Rows": 3,
+      "Actual Loops": 1,
+      "Inner Unique": false,
+      "Hash Cond": "(u.id = p.user_id)",
+      "Plans": [
+        {
+          "Node Type": "Seq Scan",
+          "Parent Relationship": "Outer",
+          "Parallel Aware": false,
+          "Async Capable": false,
+          "Relation Name": "users",
+          "Alias": "u",
+          "Startup Cost": 0.00,
+          "Total Cost": 1.05,
+          "Plan Rows": 5,
+          "Plan Width": 222,
+          "Actual Startup Time": 0.022,
+          "Actual Total Time": 0.023,
+          "Actual Rows": 5,
+          "Actual Loops": 1
+        },
+        {
+          "Node Type": "Hash",
+          "Parent Relationship": "Inner",
+          "Parallel Aware": false,
+          "Async Capable": false,
+          "Startup Cost": 1.03,
+          "Total Cost": 1.03,
+          "Plan Rows": 3,
+          "Plan Width": 422,
+          "Actual Startup Time": 0.033,
+          "Actual Total Time": 0.033,
+          "Actual Rows": 3,
+          "Actual Loops": 1,
+          "Hash Buckets": 1024,
+          "Original Hash Buckets": 1024,
+          "Hash Batches": 1,
+          "Original Hash Batches": 1,
+          "Peak Memory Usage": 9,
+          "Plans": [
+            {
+              "Node Type": "Seq Scan",
+              "Parent Relationship": "Outer",
+              "Parallel Aware": false,
+              "Async Capable": false,
+              "Relation Name": "posts",
+              "Alias": "p",
+              "Startup Cost": 0.00,
+              "Total Cost": 1.03,
+              "Plan Rows": 3,
+              "Plan Width": 422,
+              "Actual Startup Time": 0.027,
+              "Actual Total Time": 0.028,
+              "Actual Rows": 3,
+              "Actual Loops": 1
+            }
+          ]
+        }
+      ]
+    },
+    "Planning Time": 2.296,
+    "Triggers": [
+    ],
+    "Execution Time": 0.156
+  }
+]

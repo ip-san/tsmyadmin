@@ -1,0 +1,54 @@
+{
+  "query": "/* select#1 */ select `p`.`title` AS `title`,`u`.`name` AS `name` from `tsmyadmin_test`.`posts` `p` join `tsmyadmin_test`.`users` `u` where (`u`.`id` = `p`.`user_id`)",
+  "inputs": [
+    {
+      "alias": "p",
+      "operation": "Table scan on p",
+      "table_name": "posts",
+      "access_type": "table",
+      "actual_rows": 3.0,
+      "schema_name": "tsmyadmin_test",
+      "actual_loops": 1,
+      "used_columns": [
+        "user_id",
+        "title"
+      ],
+      "estimated_rows": 3.0,
+      "actual_last_row_ms": 0.29729300000000003,
+      "actual_first_row_ms": 0.28391700000000003,
+      "estimated_total_cost": 0.55
+    },
+    {
+      "alias": "u",
+      "covering": false,
+      "operation": "Single-row index lookup on u using PRIMARY (id=p.user_id)",
+      "index_name": "PRIMARY",
+      "table_name": "users",
+      "access_type": "index",
+      "actual_rows": 1.0,
+      "schema_name": "tsmyadmin_test",
+      "actual_loops": 3,
+      "used_columns": [
+        "id",
+        "name"
+      ],
+      "estimated_rows": 1.0,
+      "lookup_condition": "id=p.user_id",
+      "index_access_type": "index_lookup",
+      "actual_last_row_ms": 0.017624666666666667,
+      "actual_first_row_ms": 0.017610666666666667,
+      "estimated_total_cost": 0.2833333333333333
+    }
+  ],
+  "join_type": "inner join",
+  "operation": "Nested loop inner join",
+  "query_type": "select",
+  "access_type": "join",
+  "actual_rows": 3.0,
+  "actual_loops": 1,
+  "estimated_rows": 3.0,
+  "join_algorithm": "nested_loop",
+  "actual_last_row_ms": 0.356665,
+  "actual_first_row_ms": 0.341624,
+  "estimated_total_cost": 1.6
+}

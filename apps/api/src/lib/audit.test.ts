@@ -257,6 +257,12 @@ describe('withAudit', () => {
       rows: 2,
       columns: ['a'],
     })
+    // A measured run: how long it may run, never the statement (its literals are values).
+    expect(summarise('analyzePlan', [ns, "SELECT * FROM t WHERE email = 'a@b'", 5_000])).toEqual({
+      database: 'shop',
+      sqlLength: 35,
+      timeoutMs: 5_000,
+    })
     expect(summarise('killProcess', ['42'])).toEqual({ processId: '42', killMode: 'connection' })
     expect(summarise('killProcess', ['42', 'query'])).toEqual({ processId: '42', killMode: 'query' })
     expect(summarise('deleteRows', [{ database: 'd', schema: 's' }, 't', [{ kind: 'ctid', value: '(0,1)' }]])).toEqual({

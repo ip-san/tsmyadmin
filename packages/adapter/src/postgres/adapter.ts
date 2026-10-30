@@ -39,13 +39,13 @@ import { from as copyFrom } from 'pg-copy-streams'
 import { BaseAdapter } from '../base.ts'
 import { type Canceller, type Conn, firstResult, poolBusyError, type RawResult } from '../driver.ts'
 import { driverValueToCell, type QueryOptions, UNCAPPED } from '../sql/cells.ts'
-import { explainableStatement, explainResult, parseJsonCell } from '../sql/explain-statement.ts'
+import { explainableStatement, explainResult, measurableStatement, parseJsonCell } from '../sql/explain-statement.ts'
 import { pgLiteral } from '../sql/literal.ts'
 import { quoteIdent, quoteTable } from '../sql/quote.ts'
 import { AdapterError, type AdapterErrorCode, type ConnectionConfig, type RowBatch } from '../types.ts'
 import { pgCreateStatements, pgTableCatalog } from './create-statements.ts'
 import { pgDdl } from './ddl.ts'
-import { parsePgPlan } from './explain.ts'
+import { parsePgPlan, pgExecutionMs } from './explain.ts'
 import { pgExporter } from './export.ts'
 import {
   pgDescribeTable,
@@ -501,6 +501,32 @@ export class PostgresAdapter extends BaseAdapter {
         await conn.query('ROLLBACK')
       }
     })
+  }
+
+  /**
+   * READ ONLY, which the statement keeps to as it runs: a function that writes, or nextval(), is refused. A read can
+   * still take what a rollback keeps (a session's advisory lock): the session is reset after, as the SQL tab's is.
+   */
+  async analyzePlan(ns: Namespace, sql: string, timeoutMs: number): Promise<ExplainResult> {
+    const statement = measurableStatement(sql, 'postgres')
+    return this.withConn(
+      ns,
+      async (conn) => {
+        try {
+          await conn.query('BEGIN READ ONLY')
+          const raw = parseJsonCell(
+            firstResult(await conn.query(`EXPLAIN (ANALYZE, FORMAT JSON) ${statement}`)).rows[0]?.[0] ?? null
+          )
+          return explainResult(parsePgPlan(raw), raw, { ms: pgExecutionMs(raw) })
+        } finally {
+          // ROLLBACK, then DISCARD ALL (advisory locks too); a reset that fails drops the connection.
+          await conn.query('ROLLBACK').catch(() => undefined)
+          await conn.reset().catch(() => undefined)
+          this.forgetSessionState(conn)
+        }
+      },
+      timeoutMs
+    )
   }
 
   get serverNamespace(): Namespace {
