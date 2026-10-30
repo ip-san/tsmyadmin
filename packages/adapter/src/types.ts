@@ -334,6 +334,14 @@ export interface DatabaseAdapter {
    * does not take.
    */
   explainPlan(ns: Namespace, sql: string): Promise<ExplainResult>
+  /**
+   * The plan of one statement, measured by running it (`EXPLAIN ANALYZE`): each step says the rows it gave and the
+   * time it took (`actual`), and the result the time of the whole run (`measured`). Only a plain read is run
+   * (`VALIDATION` otherwise: a write's sequence, trigger or lock would outlive the rollback), in a read-only
+   * transaction that is rolled back, stopped after `timeoutMs`. Needs MySQL 8.3+ (`UNSUPPORTED` before), any
+   * MariaDB or PostgreSQL.
+   */
+  analyzePlan(ns: Namespace, sql: string, timeoutMs: number): Promise<ExplainResult>
   /** Interrupts a running executeSql registered with `queryId`. Resolves false when nothing is running under that id. */
   cancelQuery(queryId: string): Promise<boolean>
   /**
@@ -444,6 +452,7 @@ export const ADAPTER_METHOD_NAMES = [
   'deleteRows',
   'executeSql',
   'explainPlan',
+  'analyzePlan',
   'cancelQuery',
   'showCreateTable',
   'iterateRows',

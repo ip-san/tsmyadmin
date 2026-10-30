@@ -124,6 +124,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
   abstract listForeignKeys(ns: Namespace): Promise<RelationDef[]>
   abstract tableUsage(ns: Namespace): Promise<TableUsageReport>
   abstract explainPlan(ns: Namespace, sql: string): Promise<ExplainResult>
+  abstract analyzePlan(ns: Namespace, sql: string, timeoutMs: number): Promise<ExplainResult>
   abstract describeTable(ns: Namespace, table: string): Promise<TableSchema>
   abstract tableStats(ns: Namespace, table: string): Promise<TableStats>
   abstract databaseGrants(database: string): Promise<DatabaseGrant[]>

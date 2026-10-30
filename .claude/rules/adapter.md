@@ -16,7 +16,7 @@ paths:
 5. 新しい型の扱いを変えたら `docker/fixtures/*` と各 `*.integration.test.ts` の `typesRow1` を更新する
 6. 検証は `bun run test`（ユニット）→ `bun run db:up && bun run test:integration`（両 DB の conformance）
 7. **`base.ts` は 800 行の上限に近い**（800 を超えると `check:file-size` が落ちる）。メソッドの本体（SQL の組み立てとたどる処理）は `sql/<名前>.ts` の関数に置き、`base.ts` には接続を借りて呼ぶ数行だけを書く（例: `deleteImpact` → `sql/delete-impact.ts`、`checkReferences` → `sql/references.ts`）
-8. **監査の分類**: `AUDITED_METHODS` は、データ・構造・アカウント・サーバーの状態を変えるメソッド。利用者の SQL を受け取っても、文を実行せず、トランザクションを必ず取り消すもの（`explainPlan`）は `PASSTHROUGH_METHODS`。ただし MySQL / MariaDB の `explainPlan` は READ ONLY にできない（DML の EXPLAIN を拒むため）ので、オプティマイザが定数に畳む関数の、取り消しで戻らない書き込み（MyISAM の表、`SET GLOBAL` など）は監査に残らない。めったに起きないとして受け入れている
+8. **監査の分類**: `AUDITED_METHODS` は、データ・構造・アカウント・サーバーの状態を変えるメソッド。利用者の SQL を受け取っても、文を実行せず、トランザクションを必ず取り消すもの（`explainPlan`）は `PASSTHROUGH_METHODS`。ただし MySQL / MariaDB の `explainPlan` は READ ONLY にできない（DML の EXPLAIN を拒むため）ので、オプティマイザが定数に畳む関数の、取り消しで戻らない書き込み（MyISAM の表、`SET GLOBAL` など）は監査に残らない。めったに起きないとして受け入れている。文を実際に走らせて計る `analyzePlan` は、読むだけの文に限って READ ONLY の中で取り消すが、サーバーの時間を使うので `AUDITED_METHODS` に入れる（記録は長さと時間の上限だけで、文は残さない）
 
 ## SQL 組み立て
 
@@ -65,6 +65,7 @@ MySQL は接続セットアップ（`USE` と同時）でセッションの `sql
 - MySQL 9 は `explain_json_format_version = 2` が既定で、`EXPLAIN FORMAT=JSON` の形が 8.0 / 8.4 と違う（`query_plan` の `inputs` の木。表名と別名が両方入る）。UPDATE / DELETE では計画が出ない（`<not executable by iterator executor>`）ので、`explainPlan` はセッションの変数を 1 にして読み直し、`DEFAULT` に戻す（`mysql/explain.ts` の `needsFormat1`）
 - 形式 1（8.0 / 8.4）と MariaDB の `table_name` は**別名**（`u`）で、表名が入らない。文の FROM / JOIN / UPDATE / INTO から表名に戻す（`sql/table-aliases.ts`。派生表は戻せない）
 - MySQL / MariaDB は、読み取り専用のトランザクション（`START TRANSACTION READ ONLY`）の中では DML の EXPLAIN を拒む（ERROR 1792）。PostgreSQL は `BEGIN READ ONLY` の中でも EXPLAIN できる（ANALYZE なしは実行しない）
+- **実際に走らせて計る（`analyzePlan`）**: MySQL は `EXPLAIN ANALYZE FORMAT=JSON` を形式 2 でしか出さない（形式 1 では ERROR 1235）。8.3 より前は変数が無いので `UNSUPPORTED`。答えは `query_plan` に包まれず、一番上の段そのもの。`max_execution_time` で止められても**エラーにならず**、途中までの計画（届かなかった段は `actual_*` が null、一番上は 0 行）を返し、警告 1317 だけが残るので、`SHOW WARNINGS` で見てエラーにする。MariaDB は `ANALYZE FORMAT=JSON`（`r_rows` は 1 回あたり、`r_loops`、表の時間は `r_table_time_ms` + `r_other_time_ms`）で、`max_statement_time` で止まるとエラーになる。PostgreSQL は `EXPLAIN (ANALYZE, FORMAT JSON)`（`Actual Rows` と `Actual Total Time` は 1 回あたりの平均）。書き込みは取り消してもシーケンスやトリガーの副作用・ロックが残るので、`measurableStatement` が読むだけの文（`isPlainRead`: INTO・FOR UPDATE / SHARE も拒む）に限る。MySQL の `EXPLAIN ANALYZE` は `INTO OUTFILE` を書かないが、念のため拒む
 - MySQL 9 は主キーで 1 行を引く文を計画の段階で読み終え、計画に表が出ない（`Rows fetched before execution`）。試験の文は全件か範囲を読むものにする
 - **CI に無い版（MySQL 9 など）は、使い捨てのコンテナで conformance を回せる**: `docker run -d -p 127.0.0.1:13399:3306 -e MYSQL_ROOT_PASSWORD=root -e MYSQL_DATABASE=tsmyadmin_test -e MYSQL_USER=tsmyadmin -e MYSQL_PASSWORD=tsmyadmin mysql:9` → `docker/fixtures/mysql/01-schema.sql` を `tsmyadmin_test` に流す（ファイルに `USE` が無いので、データベース名を付けて流す）→ `TEST_MYSQL_URL=mysql://tsmyadmin:tsmyadmin@127.0.0.1:13399/tsmyadmin_test INTEGRATION=1 bunx vitest run packages/adapter/src/test/mysql.integration.test.ts -t <describe>`。終わったらコンテナを消す
 

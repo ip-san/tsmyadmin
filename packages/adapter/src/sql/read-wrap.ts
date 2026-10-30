@@ -20,6 +20,15 @@ export function stripLiterals(code: string, dialect: Dialect): string {
   return code.replace(dialect === 'mysql' ? LITERALS_AND_COMMENTS : LITERALS_AND_COMMENTS_STANDARD, ' ')
 }
 
+/**
+ * A plain read: it starts as one (SELECT, WITH, VALUES, TABLE, a parenthesis), and writes, locks or stores nothing
+ * (no INTO, FOR UPDATE / SHARE, LOCK IN SHARE MODE, nor INSERT / UPDATE / DELETE / MERGE, also inside a WITH).
+ * Leading comments must be gone; a word in a literal or a comment does not count.
+ */
+export function isPlainRead(code: string, dialect: Dialect): boolean {
+  return READ_START.test(code) && !NOT_WRAPPABLE.test(stripLiterals(code, dialect))
+}
+
 export const WRAP_PREFIX = 'SELECT * FROM (\n'
 
 /**
@@ -31,6 +40,6 @@ export function wrapReadOnly(sql: string, limit: number, dialect: Dialect = 'pos
   const body = sql.trim().replace(/;+\s*$/, '')
   // Leading comments stay in the text the user sees, but do not count when deciding whether this is a read.
   const code = stripLeadingComments(body, dialect)
-  if (!READ_START.test(code) || NOT_WRAPPABLE.test(stripLiterals(code, dialect))) return null
+  if (!isPlainRead(code, dialect)) return null
   return `${WRAP_PREFIX}${body}\n) AS _tsmyadmin LIMIT ${Math.max(1, Math.floor(limit))}`
 }

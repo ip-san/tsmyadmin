@@ -38,13 +38,13 @@ import mysql, { type Connection, type FieldPacket, type Pool, type PoolConnectio
 import { BaseAdapter } from '../base.ts'
 import { type Canceller, type Conn, firstResult, type RawResult, withinAcquireTimeout } from '../driver.ts'
 import type { QueryOptions } from '../sql/cells.ts'
-import { explainableStatement, explainResult, parseJsonCell } from '../sql/explain-statement.ts'
+import { explainableStatement, explainResult, measurableStatement, parseJsonCell } from '../sql/explain-statement.ts'
 import { quoteIdent } from '../sql/quote.ts'
 import { AdapterError, type ConnectionConfig, type RowBatch } from '../types.ts'
 import { mysqlRecoverLossyDefaults, mysqlShowCreateTable } from './create-statements.ts'
 import { mysqlDdl } from './ddl.ts'
 import { mapMysqlError } from './errors.ts'
-import { needsFormat1, parseMysqlPlan } from './explain.ts'
+import { mysqlExecutionMs, needsFormat1, parseMysqlPlan } from './explain.ts'
 import { mysqlExporter } from './export.ts'
 import {
   mysqlDatabaseGrants,
@@ -88,6 +88,8 @@ const WRAPPER_ONLY_ERRORS: ReadonlySet<string> = new Set([
 ])
 type QueryOutput = [unknown, FieldPacket[] | FieldPacket[][] | undefined]
 
+/** A statement interrupted: by KILL QUERY or a time limit (ER_QUERY_INTERRUPTED, ER_QUERY_TIMEOUT, MariaDB's 1969). */
+const INTERRUPTED: ReadonlySet<number> = new Set([1317, 3024, 1969])
 /** Collation negotiated at handshake unless the login chose another; SET NAMES after a connection reset must restore it. */
 const DEFAULT_COLLATION = 'utf8mb4_unicode_ci'
 /** How many of the pool's own thread ids are remembered (see `ownThreads`). */
@@ -529,6 +531,52 @@ export class MysqlAdapter extends BaseAdapter {
   }
   tableUsage(ns: Namespace): Promise<TableUsageReport> {
     return this.withConn(ns, (conn) => mysqlTableUsage(conn, ns.database))
+  }
+
+  /**
+   * MySQL measures in JSON only in format 2 (8.3+), which this session asks for and gives back; MariaDB has its own
+   * `ANALYZE FORMAT=JSON`. Both run the statement: READ ONLY here, since only a read is taken.
+   */
+  async analyzePlan(ns: Namespace, sql: string, timeoutMs: number): Promise<ExplainResult> {
+    const statement = measurableStatement(sql, 'mysql')
+    return this.withConn(
+      ns,
+      async (conn) => {
+        const mariadb = this.mariadb === true
+        if (!mariadb) await this.jsonFormat2(conn)
+        try {
+          await conn.query('START TRANSACTION READ ONLY')
+          try {
+            const sent = mariadb ? `ANALYZE FORMAT=JSON ${statement}` : `EXPLAIN ANALYZE FORMAT=JSON ${statement}`
+            const raw = parseJsonCell(firstResult(await conn.query(sent)).rows[0]?.[0] ?? null)
+            // MySQL stopped by its time limit still answers, with the plan of a run cut short (the steps it had not
+            // reached say nothing, the top one says 0 rows): only a warning tells.
+            const warnings = firstResult(await conn.query('SHOW WARNINGS')).rows
+            if (warnings.some((w) => INTERRUPTED.has(Number(w[1])))) {
+              throw new AdapterError('QUERY_FAILED', 'The statement was stopped before it finished (its time ran out)')
+            }
+            return explainResult(parseMysqlPlan(raw, statement), raw, { ms: mysqlExecutionMs(raw) })
+          } finally {
+            await conn.query('ROLLBACK')
+          }
+        } finally {
+          if (!mariadb) await conn.query('SET SESSION explain_json_format_version = DEFAULT')
+        }
+      },
+      timeoutMs
+    )
+  }
+
+  /** Format 2 for this session; a server without the variable (before 8.3) cannot measure in JSON. */
+  private async jsonFormat2(conn: Conn): Promise<void> {
+    try {
+      await conn.query('SET SESSION explain_json_format_version = 2')
+    } catch (err) {
+      if (err instanceof AdapterError && err.nativeCode === 'ER_UNKNOWN_SYSTEM_VARIABLE') {
+        throw new AdapterError('UNSUPPORTED', 'Measuring a plan needs MySQL 8.3 or later')
+      }
+      throw err
+    }
   }
 
   /**

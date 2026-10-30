@@ -5,6 +5,7 @@
  */
 import type { ColumnProfile, DependencyReport } from '@tsmyadmin/shared'
 import {
+  AnalyzeRequestSchema,
   BrowseQuerySchema,
   CellQuerySchema,
   capabilities,
@@ -443,6 +444,18 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
           const q = c.req.valid('query')
           const { sql } = c.req.valid('json')
           return c.json(await c.get('session').adapter.explainPlan(ns(c.req.param('db'), q.schema), sql))
+        }
+      )
+      // The plan measured by running the statement (a read only, rolled back, stopped after `timeoutMs`). Audited, as it
+      // runs; not in the SQL history, like the estimate: the statement is the one the SQL tab has.
+      .post(
+        '/databases/:db/explain/analyze',
+        validate('query', SchemaQuerySchema),
+        validate('json', AnalyzeRequestSchema),
+        async (c) => {
+          const q = c.req.valid('query')
+          const { sql, timeoutMs } = c.req.valid('json')
+          return c.json(await c.get('session').adapter.analyzePlan(ns(c.req.param('db'), q.schema), sql, timeoutMs))
         }
       )
       .post('/databases/:db/sql', validate('json', SqlRequestSchema), async (c) => {

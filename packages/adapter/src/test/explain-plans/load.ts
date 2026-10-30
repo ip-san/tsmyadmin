@@ -14,6 +14,8 @@ export const PLAN_SQL = {
   q2: "SELECT * FROM users WHERE name LIKE 'A%' ORDER BY age",
   q3: 'SELECT u.name, (SELECT COUNT(*) FROM posts p WHERE p.user_id = u.id) AS n FROM users u WHERE u.id IN (SELECT user_id FROM posts) GROUP BY u.id, u.name ORDER BY n DESC',
   q4: "UPDATE posts SET title = 'x' WHERE id = 1",
+  /** Measured (`*-analyze`): `EXPLAIN ANALYZE FORMAT=JSON` in format 2, MariaDB's `ANALYZE FORMAT=JSON`, `EXPLAIN (ANALYZE)`. */
+  analyze: 'SELECT p.title, u.name FROM posts p JOIN users u ON u.id = p.user_id',
 } as const
 
 /** The nodes that read a table, in the order the tree lists them: what a diagram lights up. */

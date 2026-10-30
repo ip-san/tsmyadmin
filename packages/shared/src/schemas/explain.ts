@@ -8,6 +8,28 @@ export const EXPLAIN_MAX_SQL = 100_000
 
 export const ExplainRequestSchema = z.object({ sql: z.string().min(1).max(EXPLAIN_MAX_SQL) })
 
+/** The longest a measured run may take by default, and at most: it runs the statement, so it is bounded. */
+export const ANALYZE_TIMEOUT_DEFAULT_MS = 30_000
+export const ANALYZE_TIMEOUT_MAX_MS = 300_000
+
+/** A statement run to measure its plan: read only (SELECT, TABLE, VALUES, WITH … SELECT), and bounded in time. */
+export const AnalyzeRequestSchema = ExplainRequestSchema.extend({
+  timeoutMs: z.number().int().min(1000).max(ANALYZE_TIMEOUT_MAX_MS).default(ANALYZE_TIMEOUT_DEFAULT_MS),
+})
+
+/**
+ * What a step did when the statement was run (`EXPLAIN ANALYZE`): the rows it gave each time it ran (`rows`, an
+ * average where it ran more than once, like `estRows`), how many times it ran (`loops`), and the time until its
+ * last row, all its runs together (`ms`; null where the server does not say). MySQL and PostgreSQL count the time
+ * of the steps under it in a step's; MariaDB says a table's time only.
+ */
+export const PlanActualSchema = z.object({
+  rows: z.number(),
+  loops: z.number(),
+  ms: z.number().nullable(),
+})
+export type PlanActual = z.infer<typeof PlanActualSchema>
+
 /**
  * How a plan node reads its table: every row (`fullScan`), every entry of an index (`fullIndexScan`), a range of an
  * index (`range`), or the rows of a key value (`lookup`).
@@ -34,6 +56,8 @@ export interface PlanNode {
   cost: number | null
   /** A condition or a note the server attached (an index condition, a filesort). */
   detail: string | null
+  /** What the step did, where the statement was run to measure it; absent in an estimated plan. */
+  actual?: PlanActual | undefined
   children: PlanNode[]
 }
 export const PlanNodeSchema: z.ZodType<PlanNode> = z.lazy(() =>
@@ -48,6 +72,7 @@ export const PlanNodeSchema: z.ZodType<PlanNode> = z.lazy(() =>
     estRows: z.number().nullable(),
     cost: z.number().nullable(),
     detail: z.string().nullable(),
+    actual: PlanActualSchema.optional(),
     children: z.array(PlanNodeSchema),
   })
 )
@@ -55,10 +80,14 @@ export const PlanNodeSchema: z.ZodType<PlanNode> = z.lazy(() =>
 /** The raw plan is cut at this many characters: it is shown for reading, the tree is what is drawn. */
 export const EXPLAIN_RAW_MAX = 64 * 1024
 
-/** A statement's plan, estimated without running it. `raw` is the server's own JSON. */
+/**
+ * A statement's plan, estimated without running it, or measured by running it (`measured`: the time the statement
+ * took to run, null where the server does not say). `raw` is the server's own JSON.
+ */
 export const ExplainResultSchema = z.object({
   plan: PlanNodeSchema,
   raw: z.string(),
   rawTruncated: z.boolean(),
+  measured: z.object({ ms: z.number().nullable() }).optional(),
 })
 export type ExplainResult = z.infer<typeof ExplainResultSchema>

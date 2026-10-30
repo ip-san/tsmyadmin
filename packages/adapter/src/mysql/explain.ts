@@ -3,7 +3,7 @@
  * MySQL's format 1 (8.0, and 8.4 by default), MariaDB's (format 1's keys with other names around them), and MySQL's
  * format 2 (`explain_json_format_version = 2`, the default from 9.x), which nests `inputs` and names tables properly.
  */
-import type { PlanAccess, PlanNode } from '@tsmyadmin/shared'
+import type { PlanAccess, PlanActual, PlanNode } from '@tsmyadmin/shared'
 import { tableAliases } from '../sql/table-aliases.ts'
 
 type Json = Record<string, unknown>
@@ -24,9 +24,29 @@ export function needsFormat1(raw: unknown): boolean {
 
 export function parseMysqlPlan(raw: unknown, sql: string): PlanNode {
   if (isObject(raw) && isObject(raw.query_plan)) return format2(raw.query_plan)
+  // `EXPLAIN ANALYZE FORMAT=JSON` (format 2) gives the top step itself, with no `query_plan` around it.
+  if (isObject(raw) && typeof raw.operation === 'string') return format2(raw)
   const aliases = tableAliases(sql, 'mysql')
   const top = isObject(raw) && isObject(raw.query_block) ? nodesOf(raw.query_block, aliases) : []
   return top.length === 1 && top[0] ? top[0] : node('Query', top)
+}
+
+/**
+ * The time a measured statement took to run: MySQL's top step until its last row, MariaDB's query block. Null in an
+ * estimated plan.
+ */
+export function mysqlExecutionMs(raw: unknown): number | null {
+  if (!isObject(raw)) return null
+  if (isObject(raw.query_block)) return num(raw.query_block.r_total_time_ms)
+  const last = num(raw.actual_last_row_ms)
+  return last === null ? null : last * (num(raw.actual_loops) ?? 1)
+}
+
+/** A step's rows each time it ran (an average) and how often: format 2's `actual_*`, MariaDB's `r_*`. */
+function actualOf(rows: unknown, loops: unknown, ms: number | null): PlanActual | undefined {
+  const n = num(loops)
+  if (n === null) return undefined
+  return { rows: num(rows) ?? 0, loops: n, ms }
 }
 
 function node(op: string, children: PlanNode[] = [], extra: Partial<PlanNode> = {}): PlanNode {
@@ -174,7 +194,17 @@ function tableNode(t: Json, aliases: Map<string, string>): PlanNode {
     estRows: num(t.rows_examined_per_scan ?? t.rows),
     cost,
     detail: str(t.index_condition) ?? str(t.attached_condition),
+    ...measuredTable(t),
   })
+}
+
+/** MariaDB's `ANALYZE`: the table's rows per loop, and its time reading the table and checking what it read. */
+function measuredTable(t: Json): { actual?: PlanActual } {
+  const read = num(t.r_table_time_ms)
+  const other = num(t.r_other_time_ms)
+  const ms = read === null && other === null ? null : (read ?? 0) + (other ?? 0)
+  const actual = actualOf(t.r_rows, t.r_loops, ms)
+  return actual ? { actual } : {}
 }
 
 // ---- format 2 (MySQL 8.3+, the default from 9.x) ----
@@ -210,5 +240,14 @@ function format2(n: Json): PlanNode {
     estRows: num(n.estimated_rows),
     cost: num(n.estimated_total_cost),
     detail: str(n.lookup_condition) ?? str(n.condition),
+    ...measured2(n),
   })
+}
+
+/** Format 2's measured step: its last row's time is an average over its loops. */
+function measured2(n: Json): { actual?: PlanActual } {
+  const last = num(n.actual_last_row_ms)
+  const loops = num(n.actual_loops)
+  const actual = actualOf(n.actual_rows, n.actual_loops, last === null ? null : last * (loops ?? 1))
+  return actual ? { actual } : {}
 }

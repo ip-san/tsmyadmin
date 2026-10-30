@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { plan, reads } from '../test/explain-plans/load.ts'
-import { parsePgPlan } from './explain.ts'
+import { parsePgPlan, pgExecutionMs } from './explain.ts'
 
 describe('parsePgPlan', () => {
   it('reads an index scan and a sequential scan under a join', () => {
@@ -49,5 +49,23 @@ describe('parsePgPlan', () => {
 
   it('makes a node of an empty answer, rather than failing', () => {
     expect(parsePgPlan(null)).toMatchObject({ op: 'Step', children: [] })
+  })
+
+  it('reads what each step did in a measured plan: rows and time per loop, the time made all loops', () => {
+    const p = parsePgPlan(plan('pg17-analyze'))
+    expect(p.actual).toEqual({ rows: 3, loops: 1, ms: 0.08 })
+    expect(p.children[0]).toMatchObject({ table: 'users', actual: { rows: 5, loops: 1, ms: 0.023 } })
+    expect(pgExecutionMs(plan('pg17-analyze'))).toBe(0.156)
+  })
+
+  it('makes all loops of a step run more than once, and says nothing of a plan not run', () => {
+    const looped = {
+      Plan: { 'Node Type': 'Index Scan', 'Actual Rows': 2, 'Actual Loops': 4, 'Actual Total Time': 0.5 },
+    }
+    expect(parsePgPlan([looped]).actual).toEqual({ rows: 2, loops: 4, ms: 2 })
+    const never = { Plan: { 'Node Type': 'Seq Scan', 'Actual Rows': 0, 'Actual Loops': 0 } }
+    expect(parsePgPlan([never]).actual).toEqual({ rows: 0, loops: 0, ms: null })
+    expect(parsePgPlan(plan('pg17-q1')).actual).toBeUndefined()
+    expect(pgExecutionMs(plan('pg17-q1'))).toBeNull()
   })
 })

@@ -351,7 +351,7 @@ pre-push のテストは、マシンが忙しいとき（別の worktree やセ�
 | 環境変数を追加 | `apps/api/src/config.ts` | `.env.example` と `docs/deployment.md` の表を同時に更新（英訳も。`bun run docs:i18n` が検査します） |
 | 新しい型のサポート | `docker/fixtures/*` → `*/values.ts` → conformance | `bun run db:reset`、両方言の `typesRow1` |
 | テーブルの図に、強調と段送りで何かを見せる | `components/schema-diagram/`: `overlay.ts` の `OverlayStep` を段ごとに作り、`SchemaDiagram` の `overlay`・`useStepPlayer`・`StepNarration` に渡す（例: `features/browse/delete-impact.ts`、`features/sql/plan-steps.ts`） | 図と同じ内容を `StepNarration` の文でも出す（スクリーンリーダーはそちらを読む）。動かさない図は `onMove` を渡さない（`role="img"` になる）。関係するテーブルだけの図は `diagramFor` |
-| 実行計画の読み方を直す・サーバーの形を足す | `packages/adapter/src/{mysql,postgres}/explain.ts`（共通の `PlanNode` に直す） | 実サーバーで採った計画を `packages/adapter/src/test/explain-plans/` に置いて単体テストする。MySQL 系は形式 1・形式 2（MySQL 9）・MariaDB の 3 つ（`.claude/rules/adapter.md` の「MySQL 9 と EXPLAIN」） |
+| 実行計画の読み方を直す・サーバーの形を足す | `packages/adapter/src/{mysql,postgres}/explain.ts`（共通の `PlanNode` に直す） | 実サーバーで採った計画を `packages/adapter/src/test/explain-plans/` に置いて単体テストする。MySQL 系は形式 1・形式 2（MySQL 9）・MariaDB の 3 つ（`.claude/rules/adapter.md` の「MySQL 9 と EXPLAIN」）。実際に走らせて計った計画（`analyzePlan`）は `*-analyze.json`（段ごとの `actual`） |
 
 ### 例: `GET /api/server/info` のレスポンスに項目を足す
 
