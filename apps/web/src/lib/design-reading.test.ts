@@ -197,12 +197,15 @@ describe('keyTuning', () => {
       unindexed,
       w.unindexedRows('order_items', 5000),
     ])
-    const counted = new Map([['order_items', { counted: 0 }]])
+    const counted = new Map([['order_items', { counted: 7 }]])
     expect(keyTuning(key, 'order_items', 'orders', items, orders, counted)).toEqual([
       unindexed,
-      w.unindexedRowsCounted('order_items', 0),
+      w.unindexedRowsCounted('order_items', 7),
     ])
-    // No number, or an index: nothing of the rows.
+    // Counted empty, no number, or an index: nothing of the rows.
+    expect(keyTuning(key, 'order_items', 'orders', items, orders, new Map([['order_items', { counted: 0 }]]))).toEqual([
+      unindexed,
+    ])
     expect(keyTuning(key, 'order_items', 'orders', items, orders, new Map([['orders', 9]]))).toEqual([unindexed])
     const served = { ...items, indexes: [index(['order_id'])] }
     expect(keyTuning(key, 'order_items', 'orders', served, orders, estimated)).toEqual([])

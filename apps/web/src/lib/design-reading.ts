@@ -189,7 +189,9 @@ export function keyTuning(
   if (childSchema && !indexed(childSchema, key.columns)) {
     hints.push(w.unindexed(child, key.columns.join(', '), parent))
     const read = rowsOf(rows, child)
-    if (read) hints.push(read.counted ? w.unindexedRowsCounted(child, read.n) : w.unindexedRows(child, read.n))
+    // Nothing to read in an empty table: an index is not wanted for it yet.
+    if (read && read.n > 0)
+      hints.push(read.counted ? w.unindexedRowsCounted(child, read.n) : w.unindexedRows(child, read.n))
   }
   if (childSchema && parentSchema) {
     key.columns.forEach((c, i) => {
