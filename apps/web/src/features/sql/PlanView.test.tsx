@@ -395,6 +395,35 @@ describe('PlanView', () => {
       expect(screen.getByRole('button', { name: p.measure })).toBeTruthy()
     })
 
+    it('stops measuring again on a press, keeping the index, and gives the focus to measuring again', async () => {
+      condition = '(level = 3)'
+      measuredRun = run(null, 400)
+      mount()
+      const trial = await measured()
+      let fail: (err: Error) => void = () => undefined
+      measuredRun = () =>
+        new Promise((_, reject) => {
+          fail = reject
+        })
+      fireEvent.click(await screen.findByRole('button', { name: p.trialTry('logs', ['level']) }))
+      fireEvent.click(await screen.findByRole('button', { name: locale.ddl.execute }))
+      const stop = await within(trial).findByRole('button', { name: p.trialStop })
+      stop.focus()
+      fireEvent.click(stop)
+      fireEvent.click(stop)
+      expect(cancelSql).toHaveBeenCalledTimes(1)
+      expect(cancelSql).toHaveBeenCalledWith('shop', analyzePlan.mock.calls[1]?.[3])
+      expect(await within(trial).findByText(p.measureStopping)).toBeTruthy()
+      fail(new Error('The statement was stopped'))
+      expect(await within(trial).findByText(p.trialStopped)).toBeTruthy()
+      expect(within(trial).queryByRole('button', { name: p.trialStop })).toBeNull()
+      expect(within(trial).queryByText('The statement was stopped')).toBeNull()
+      expect(document.activeElement).toBe(within(trial).getByRole('button', { name: p.trialAgain }))
+      // The index is there all the same: it can be measured again, or dropped.
+      expect(within(trial).getByRole('button', { name: p.trialUndo('idx_logs_level') })).toBeTruthy()
+      expect(triedIndexes(SCOPE)).toHaveLength(1)
+    })
+
     it('says so where the server did not use the index made', async () => {
       condition = '(level = 3)'
       measuredRun = run(null, 400)

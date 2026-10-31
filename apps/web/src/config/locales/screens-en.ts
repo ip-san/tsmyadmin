@@ -386,6 +386,8 @@ export const enScreens = {
     trialNote:
       "The index made stays until dropped, even when this view is closed (once it is closed, drop it under Indexes tried in the SQL tab, or from the table's Structure). The run measured after may look faster because the rows it reads are in a cache (Measure again to see). Where either run took under a millisecond, no factor is given",
     trialAgain: 'Measure again',
+    trialStop: 'Stop measuring',
+    trialStopped: 'Measuring again was stopped. The index is still there (Measure again to measure it)',
     trialUndo: (name: string) => `Drop ${name}`,
   },
   planTour: {

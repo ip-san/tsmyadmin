@@ -1,6 +1,6 @@
 import type { ExplainResult } from '@tsmyadmin/shared'
-import { useEffect, useRef, useState } from 'react'
-import { analyzePlan, mutations } from '@/lib/queries.ts'
+import { useState } from 'react'
+import { useStoppableAnalyze } from './use-stoppable-analyze.ts'
 
 /** Where the measuring is: not asked, asked and waiting to be confirmed, or running. */
 type MeasureStep = 'idle' | 'confirming' | 'running'
@@ -9,7 +9,7 @@ export interface MeasuredPlan {
   step: MeasureStep
   /** The plan as measured, the last time it was; null until then. */
   result: ExplainResult | null
-  /** Why the last run failed (the measured plan before it is kept). */
+  /** Why the last run failed, or why a stop did not reach the server (the measured plan before it is kept). */
   error: unknown
   /** A stop was asked of the run, which has not ended yet. */
   stopping: boolean
@@ -23,84 +23,42 @@ export interface MeasuredPlan {
 
 /**
  * Measuring a statement's plan by running it: asked first (it runs on the server), then run once per press, and
- * stoppable while it runs (the server's cancel, as for a script of the SQL tab: the run is registered under an id of
- * its own). A second press while it runs, or a second stop, does nothing (`useRef`: the state is a render late).
+ * stoppable while it runs (`useStoppableAnalyze`).
  */
 export function useMeasuredPlan(db: string, schema: string | undefined, sql: string): MeasuredPlan {
-  const [step, setStep] = useState<MeasureStep>('idle')
+  const [confirming, setConfirming] = useState(false)
   const [result, setResult] = useState<ExplainResult | null>(null)
   const [error, setError] = useState<unknown>(null)
-  const [stopping, setStopping] = useState(false)
   const [stopped, setStopped] = useState(false)
-  const running = useRef<string | null>(null)
-  /** The stop asked of the run: whether the server stopped it (false where it had ended, or could not be reached). */
-  const stop = useRef<Promise<boolean> | null>(null)
-  const stopRun = (id: string) => {
-    if (stop.current) return
-    setStopping(true)
-    const asked = mutations.cancelSql(db, id).then(
-      (r) => r.cancelled,
-      (err: unknown) => {
-        if (running.current === id) setError(err)
-        return false
-      }
-    )
-    stop.current = asked
-    void asked.then((cancelled) => {
-      // Not stopped (it had just ended, or the stop did not reach the server): the run goes on, and can be stopped
-      // again.
-      if (cancelled || running.current !== id) return
-      stop.current = null
-      setStopping(false)
-    })
-  }
-  // Closed while it runs: the run is stopped too, not left to its time limit.
-  useEffect(
-    () => () => {
-      if (running.current) void mutations.cancelSql(db, running.current).catch(() => undefined)
-    },
-    [db]
-  )
+  const analyze = useStoppableAnalyze(db, schema, sql)
   return {
-    step,
+    step: analyze.running ? 'running' : confirming ? 'confirming' : 'idle',
     result,
-    error,
-    stopping,
+    error: error ?? analyze.stopError,
+    stopping: analyze.stopping,
     stopped,
     // Asked again or put away: why the last run failed, or that it was stopped, is no longer what is shown.
     ask: () => {
-      if (running.current) return
+      if (analyze.running) return
       setError(null)
       setStopped(false)
-      setStep('confirming')
+      setConfirming(true)
     },
     cancel: () => {
-      if (running.current) return stopRun(running.current)
+      if (analyze.running) return analyze.stop()
       setError(null)
       setStopped(false)
-      setStep('idle')
+      setConfirming(false)
     },
     run: async () => {
-      if (running.current) return
-      const id = crypto.randomUUID()
-      running.current = id
-      stop.current = null
-      setStep('running')
       setError(null)
       setStopped(false)
-      try {
-        setResult(await analyzePlan(db, schema, sql, id))
-      } catch (err) {
-        // Stopped on a press, as the server says: said as such, not as a failure. A failure of its own (its time ran
-        // out) after a stop that did not take is said as it is.
-        if (stop.current && (await stop.current)) setStopped(true)
-        else setError(err)
-      } finally {
-        running.current = null
-        stop.current = null
-        setStopping(false)
-        setStep('idle')
-      }
+      const outcome = await analyze.run()
+      if (outcome === null) return
+      setConfirming(false)
+      if (outcome.kind === 'done') setResult(outcome.result)
+      else if (outcome.kind === 'stopped') setStopped(true)
+      else setError(outcome.error)
     },
   }
 }
