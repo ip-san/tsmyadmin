@@ -88,9 +88,10 @@ for (const t of TARGETS) {
         // The presentation ends with the run before beside the run after (whether the index is used is the server's).
         await plan.getByRole('button', { name: 'プレゼンで見る' }).click()
         const tour = page.getByRole('dialog', { name: '実行計画のプレゼン' })
-        await expect(tour.getByRole('option', { name: /^\d+\. インデックスを足す前と後/ })).toHaveCount(1)
         await tour.getByRole('button', { name: /^\d+\. インデックスを足す前$/ }).click()
         await expect(tour.getByRole('heading', { level: 3 })).toHaveText('インデックスを足す前')
+        // The caption names the chapter (the list of chapters to save as video is only where recording is).
+        await expect(tour.getByText(/第 \d+ 章「インデックスを足す前と後」/)).toBeVisible()
         await expect(tour.getByText(new RegExp(`^足す前の ${table} の読み方: 全件 `))).toBeVisible()
         await tour.getByRole('button', { name: '次へ' }).click()
         await expect(tour.getByRole('heading', { level: 3 })).toHaveText('インデックスを足した後')
