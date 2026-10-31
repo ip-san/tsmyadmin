@@ -42,6 +42,38 @@ interface RunningEntry {
   cancelling: Promise<boolean> | null
 }
 
+/** A run of one statement registered with `ScriptRunner.track`, so a cancel can stop it. */
+export interface RunTracker {
+  publish(conn: Conn): Promise<void>
+  send<T>(fn: () => Promise<T>): Promise<T>
+  readonly cancelled: boolean
+  release(conn: Conn): void
+  end(): void
+}
+
+/** What a run stopped by a cancel fails with. */
+export const stopped = () => new AdapterError('QUERY_FAILED', 'The statement was stopped')
+
+function newEntry(ns: Namespace) {
+  let resolveBackend: (id: string) => void = () => undefined
+  let resolveSettled: () => void = () => undefined
+  const entry: RunningEntry = {
+    ns,
+    backend: new Promise<string>((resolve) => {
+      resolveBackend = resolve
+    }),
+    cancelled: false,
+    interrupted: false,
+    signalled: false,
+    inFlight: false,
+    cancelling: null,
+    settled: new Promise<void>((resolve) => {
+      resolveSettled = resolve
+    }),
+  }
+  return { entry, resolveBackend, resolveSettled }
+}
+
 const CANCEL_RETRY_MS = 50
 const CANCEL_RETRIES = 40
 /** How long a cancel waits for the script loop to report what the signal did before answering "stopping". */
@@ -87,22 +119,7 @@ export class ScriptRunner {
       results.push(opts.onResult && r.kind === 'rows' ? { ...r, result: { ...r.result, rows: [] } } : r)
       await opts.onResult?.(r, results.length - 1)
     }
-    let resolveBackend: (id: string) => void = () => undefined
-    let resolveSettled: () => void = () => undefined
-    const entry: RunningEntry = {
-      ns,
-      backend: new Promise<string>((resolve) => {
-        resolveBackend = resolve
-      }),
-      cancelled: false,
-      interrupted: false,
-      signalled: false,
-      inFlight: false,
-      cancelling: null,
-      settled: new Promise<void>((resolve) => {
-        resolveSettled = resolve
-      }),
-    }
+    const { entry, resolveBackend, resolveSettled } = newEntry(ns)
     if (opts.queryId) this.running.set(opts.queryId, entry)
     try {
       await this.host.withConn(
@@ -277,6 +294,45 @@ export class ScriptRunner {
         })
       }
       throw e
+    }
+  }
+
+  /**
+   * Registers a run that is one statement of the adapter's own (a measured plan) under `queryId`, so `cancel` reaches
+   * it as it reaches a script: `publish` once the session is set up, `send` the statement, `release` the connection
+   * after its reset (a cancelled run's is dropped: its signal may still be on the way), and `end` in a finally. With
+   * no id, nothing is registered and nothing can cancel it.
+   */
+  track(ns: Namespace, queryId: string | undefined): RunTracker {
+    const { entry, resolveBackend, resolveSettled } = newEntry(ns)
+    if (queryId) this.running.set(queryId, entry)
+    return {
+      publish: async (conn) => {
+        if (queryId) resolveBackend(await this.host.backendId(conn))
+      },
+      send: async (fn) => {
+        if (entry.cancelled) throw stopped()
+        entry.inFlight = true
+        try {
+          return await fn()
+        } catch (err) {
+          if (entry.cancelled) entry.interrupted = true
+          throw err
+        } finally {
+          entry.inFlight = false
+        }
+      },
+      get cancelled() {
+        return entry.cancelled
+      },
+      release: (conn) => {
+        if (entry.cancelled) conn.discard()
+      },
+      end: () => {
+        if (queryId && this.running.get(queryId) === entry) this.running.delete(queryId)
+        resolveBackend('')
+        resolveSettled()
+      },
     }
   }
 

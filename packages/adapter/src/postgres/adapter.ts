@@ -42,6 +42,7 @@ import { driverValueToCell, type QueryOptions, UNCAPPED } from '../sql/cells.ts'
 import { explainableStatement, explainResult, measurableStatement, parseJsonCell } from '../sql/explain-statement.ts'
 import { pgLiteral } from '../sql/literal.ts'
 import { quoteIdent, quoteTable } from '../sql/quote.ts'
+import { stopped } from '../sql-console.ts'
 import { AdapterError, type AdapterErrorCode, type ConnectionConfig, type RowBatch } from '../types.ts'
 import { pgCreateStatements, pgTableCatalog } from './create-statements.ts'
 import { pgDdl } from './ddl.ts'
@@ -507,26 +508,35 @@ export class PostgresAdapter extends BaseAdapter {
    * READ ONLY, which the statement keeps to as it runs: a function that writes, or nextval(), is refused. A read can
    * still take what a rollback keeps (a session's advisory lock): the session is reset after, as the SQL tab's is.
    */
-  async analyzePlan(ns: Namespace, sql: string, timeoutMs: number): Promise<ExplainResult> {
+  async analyzePlan(ns: Namespace, sql: string, timeoutMs: number, queryId?: string): Promise<ExplainResult> {
     const statement = measurableStatement(sql, 'postgres')
-    return this.withConn(
-      ns,
-      async (conn) => {
-        try {
-          await conn.query('BEGIN READ ONLY')
-          const raw = parseJsonCell(
-            firstResult(await conn.query(`EXPLAIN (ANALYZE, FORMAT JSON) ${statement}`)).rows[0]?.[0] ?? null
-          )
-          return explainResult(parsePgPlan(raw), raw, { ms: pgExecutionMs(raw) })
-        } finally {
-          // ROLLBACK, then DISCARD ALL (advisory locks too); a reset that fails drops the connection.
-          await conn.query('ROLLBACK').catch(() => undefined)
-          await conn.reset().catch(() => undefined)
-          this.forgetSessionState(conn)
-        }
-      },
-      timeoutMs
-    )
+    const run = this.scripts.track(ns, queryId)
+    try {
+      return await this.withConn(
+        ns,
+        async (conn) => {
+          try {
+            await conn.query('BEGIN READ ONLY')
+            await run.publish(conn)
+            const sent = `EXPLAIN (ANALYZE, FORMAT JSON) ${statement}`
+            const raw = parseJsonCell(firstResult(await run.send(() => conn.query(sent))).rows[0]?.[0] ?? null)
+            return explainResult(parsePgPlan(raw), raw, { ms: pgExecutionMs(raw) })
+          } catch (err) {
+            throw run.cancelled ? stopped() : err
+          } finally {
+            // ROLLBACK, then DISCARD ALL (advisory locks too); a reset that fails drops the connection. Stopped:
+            // dropped, its signal may still land.
+            await conn.query('ROLLBACK').catch(() => undefined)
+            await conn.reset().catch(() => undefined)
+            this.forgetSessionState(conn)
+            run.release(conn)
+          }
+        },
+        timeoutMs
+      )
+    } finally {
+      run.end()
+    }
   }
 
   get serverNamespace(): Namespace {

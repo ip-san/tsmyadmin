@@ -330,9 +330,11 @@ export const jaScreens = {
     measureHint: 'この文を実際に実行して、段ごとの実際の行数と時間を測ります（読むだけの文に限ります）',
     measureGroup: '実行して測る前の確認',
     measureConfirm: (seconds: number) =>
-      `この文を実際に実行して測ります。読むだけの文（SELECT・TABLE・VALUES）に限り、読み取り専用のトランザクションで実行して、最後に取り消します。ただし文が読む行は本当に読むので、大きなテーブルではサーバーに負荷がかかります（${seconds} 秒で止めます）。本番のサーバーでは、時間帯に気をつけてください`,
+      `この文を実際に実行して測ります。読むだけの文（SELECT・TABLE・VALUES）に限り、読み取り専用のトランザクションで実行して、最後に取り消します。ただし文が読む行は本当に読むので、大きなテーブルではサーバーに負荷がかかります（${seconds} 秒で止めます。実行中は「やめる」で止められます）。本番のサーバーでは、時間帯に気をつけてください`,
     measureRun: '実行して測る',
     measureCancel: 'やめる',
+    measureStopping: '測るのを止めています…',
+    measureStopped: '測るのを止めました（前に測った結果があれば、そのまま出しています）',
     measuring: '実行して測っています…',
     measured: (time: string | null) => `実際に実行して測った計画を出しています${time ? `（実行 ${time}）` : ''}`,
     duration: (ms: number) =>

@@ -454,8 +454,11 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
         validate('json', AnalyzeRequestSchema),
         async (c) => {
           const q = c.req.valid('query')
-          const { sql, timeoutMs } = c.req.valid('json')
-          return c.json(await c.get('session').adapter.analyzePlan(ns(c.req.param('db'), q.schema), sql, timeoutMs))
+          const { sql, timeoutMs, queryId } = c.req.valid('json')
+          // With an id, `POST /sql/cancel` stops it, as it stops a script.
+          return c.json(
+            await c.get('session').adapter.analyzePlan(ns(c.req.param('db'), q.schema), sql, timeoutMs, queryId)
+          )
         }
       )
       .post('/databases/:db/sql', validate('json', SqlRequestSchema), async (c) => {

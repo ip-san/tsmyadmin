@@ -311,6 +311,11 @@ describe('explain', () => {
     expect(h.adapter.calls.at(-1)?.args[2]).toBe(5_000)
     expect((await analyze({ sql: 'SELECT 1', timeoutMs: 300_001 })).status).toBe(400)
     expect((await analyze({ sql: 'SELECT 1', timeoutMs: 999 })).status).toBe(400)
+    // An id registers it, so the SQL cancel stops it; only an id the client made up as a UUID.
+    const queryId = crypto.randomUUID()
+    await analyze({ sql: 'SELECT 1', queryId })
+    expect(h.adapter.calls.at(-1)?.args[3]).toBe(queryId)
+    expect((await analyze({ sql: 'SELECT 1', queryId: 'x' })).status).toBe(400)
   })
 })
 

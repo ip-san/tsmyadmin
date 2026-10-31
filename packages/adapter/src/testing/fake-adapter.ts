@@ -703,10 +703,10 @@ export class FakeAdapter implements DatabaseAdapter {
   }
 
   /** The estimated plan, as measured: the table gave the one row it was expected to, in a millisecond. */
-  async analyzePlan(ns: Namespace, sql: string, timeoutMs: number): Promise<ExplainResult> {
+  async analyzePlan(ns: Namespace, sql: string, timeoutMs: number, queryId?: string): Promise<ExplainResult> {
     const { plan } = await this.explainPlan(ns, sql)
     this.calls.pop()
-    this.record('analyzePlan', ns, sql, timeoutMs)
+    this.record('analyzePlan', ns, sql, timeoutMs, ...(queryId ? [queryId] : []))
     return {
       plan: { ...plan, actual: { rows: 1, loops: 1, ms: 1 } },
       raw: '{}',
