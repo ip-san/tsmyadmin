@@ -366,6 +366,12 @@ export const enScreens = {
     trialTry: (table: string, columns: readonly string[]) => `Make one on ${table} (${columns.join(', ')}) and try it`,
     trialHint:
       'Makes this index, then runs the statement again to measure it (a statement that reads only, rolled back). The index stays (you can drop it after). On a large table it takes a while to make, and on PostgreSQL writes to the table wait until it is made',
+    triedGroup: 'Indexes tried',
+    triedIntro:
+      'These indexes, made with Try an index on a plan, are still there. Drop them if they are not needed (an index is updated on every write)',
+    triedItem: (table: string, name: string, columns: readonly string[]) =>
+      `${name} on ${table} (${columns.join(', ')})`,
+    triedDropHint: 'Drops an index made with Try an index',
     trialUndoHint: 'Drops the index tried. The plan goes back to what it was before',
     trialMeasuring: 'The index is made. Running the statement again to measure it…',
     trialDone: (name: string) => `Made ${name} and measured again`,
@@ -376,7 +382,7 @@ export const enScreens = {
     trialUnused: (name: string) =>
       `The server did not use ${name} (with few rows, or a condition that narrows little, it finds reading in full cheaper). An index nothing uses only slows writes: consider dropping it`,
     trialNote:
-      "The index made stays until dropped, even when this view is closed (it can also be dropped from the table's Structure). The run measured after may look faster because the rows it reads are in a cache (Measure again to see). Where either run took under a millisecond, no factor is given",
+      "The index made stays until dropped, even when this view is closed (once it is closed, drop it under Indexes tried in the SQL tab, or from the table's Structure). The run measured after may look faster because the rows it reads are in a cache (Measure again to see). Where either run took under a millisecond, no factor is given",
     trialAgain: 'Measure again',
     trialUndo: (name: string) => `Drop ${name}`,
   },

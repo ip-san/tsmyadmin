@@ -111,6 +111,28 @@ for (const t of TARGETS) {
       }
     })
 
+    test('offers to drop an index tried once the plan is closed', async ({ page }) => {
+      const { plan, trial, table, index, drop } = await trialPlan(page, t)
+      try {
+        await trial.getByRole('button', { name: `${table}（level）に作って試す` }).click()
+        await page.getByRole('dialog', { name: 'インデックスを追加' }).getByRole('button', { name: '実行する' }).click()
+        await expect(trial.getByRole('status').filter({ hasText: `${index} を作って測り直しました` })).toBeVisible()
+        await plan.getByRole('button', { name: '閉じる', exact: true }).first().click()
+        await expect(plan).toHaveCount(0)
+        // The index stays in the table: the SQL tab says so, and drops it through the preview.
+        const tried = page.getByRole('region', { name: '試したインデックス' })
+        const mine = tried.getByRole('listitem').filter({ hasText: index })
+        await expect(mine).toContainText(`${table} の ${index}（level）`)
+        await mine.getByRole('button', { name: `${index} を消す` }).click()
+        const remove = page.getByRole('dialog', { name: 'インデックスを削除' })
+        await expect(remove).toContainText(index)
+        await remove.getByRole('button', { name: '実行する' }).click()
+        await expect(tried.getByRole('listitem').filter({ hasText: index })).toHaveCount(0)
+      } finally {
+        await drop()
+      }
+    })
+
     test('fills in the parameters before drawing, as a run does', async ({ page }) => {
       await login(page, t)
       await page.goto(t.schema ? `/db/${t.database}/sql?schema=${t.schema}` : `/db/${t.database}/sql`)

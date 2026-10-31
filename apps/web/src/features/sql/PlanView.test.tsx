@@ -3,10 +3,13 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import type { PlanNode } from '@tsmyadmin/shared'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { locale } from '@/config/locale-screens.ts'
+import { memoryStorage } from '@/test/memory-storage.ts'
 import { PlanView } from './PlanView.tsx'
+import { triedIndexes } from './tried-indexes.ts'
 import { useVisualPlan } from './use-visual-plan.tsx'
 
 const t = locale.planTour
+const SCOPE = 'postgres.db.5432'
 
 /** The tables' estimated rows the list answers with; an error where it cannot be read. */
 let estimated: Record<string, number> | Error
@@ -76,6 +79,7 @@ beforeAll(() => {
   }
 })
 beforeEach(() => {
+  vi.stubGlobal('localStorage', memoryStorage())
   estimated = { logs: 10000 }
   listed = Promise.resolve()
   analyzePlan.mockClear()
@@ -95,7 +99,7 @@ function mount() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={client}>
-      <PlanView db="shop" sql="SELECT * FROM logs" onClose={vi.fn()} />
+      <PlanView db="shop" sql="SELECT * FROM logs" scope={SCOPE} onClose={vi.fn()} />
     </QueryClientProvider>
   )
 }
@@ -182,7 +186,7 @@ describe('PlanView', () => {
 
     it('shows nothing measured of the last statement under the next one drawn', async () => {
       function Console() {
-        const plan = useVisualPlan('shop', undefined)
+        const plan = useVisualPlan('shop', undefined, SCOPE)
         return (
           <>
             {['SELECT * FROM logs', 'SELECT id FROM logs'].map((sql) => (
@@ -259,6 +263,10 @@ describe('PlanView', () => {
         `logs: ${p.trialRead(null, 50000, p.duration(400))} → ${p.trialRead('idx_logs_level', 12, p.duration(4))}`
       )
       expect(screen.queryByText(p.trialUnused('idx_logs_level'))).toBeNull()
+      // Remembered for the SQL tab, until dropped.
+      expect(triedIndexes(SCOPE)).toEqual([
+        { db: 'shop', schema: null, table: 'logs', name: 'idx_logs_level', columns: ['level'] },
+      ])
       expect(analyzePlan).toHaveBeenCalledTimes(2)
       // The run before stays the one compared with: no measuring it over while the index is there.
       expect(screen.queryByRole('button', { name: p.measure })).toBeNull()
@@ -277,6 +285,7 @@ describe('PlanView', () => {
       )
       fireEvent.click(await screen.findByRole('button', { name: locale.ddl.execute }))
       await vi.waitFor(() => expect(screen.queryByText(p.trialTotal(p.duration(400), p.duration(4), 100))).toBeNull())
+      expect(triedIndexes(SCOPE)).toEqual([])
       expect(previewDdl).toHaveBeenLastCalledWith('shop', undefined, {
         op: 'dropIndex',
         table: 'logs',
