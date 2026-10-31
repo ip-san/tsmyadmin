@@ -128,6 +128,8 @@ for (const t of TARGETS) {
         await expect(remove).toContainText(index)
         await remove.getByRole('button', { name: '実行する' }).click()
         await expect(tried.getByRole('listitem').filter({ hasText: index })).toHaveCount(0)
+        // The last one dropped still says so, where the focus went.
+        await expect(tried.getByRole('status').filter({ hasText: 'インデックスを削除' })).toBeFocused()
       } finally {
         await drop()
       }

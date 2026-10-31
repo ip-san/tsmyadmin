@@ -49,9 +49,12 @@ afterEach(cleanup)
 
 const level = { db: 'shop', schema: null, table: 'logs', name: 'idx_logs_level', columns: ['level'] }
 
-function mount(node: React.ReactNode) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+function mount(node: React.ReactNode, client = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
   render(<QueryClientProvider client={client}>{node}</QueryClientProvider>)
+}
+function Console() {
+  const plan = useVisualPlan('shop', undefined, SCOPE)
+  return <>{plan.panel}</>
 }
 
 describe('triedIndexes', () => {
@@ -68,7 +71,7 @@ describe('triedIndexes', () => {
 describe('TriedIndexes', () => {
   it('offers to drop an index tried and still there, through the preview, and forgets it once dropped', async () => {
     rememberTried(SCOPE, level)
-    mount(<TriedIndexes scope={SCOPE} db="shop" />)
+    mount(<Console />)
     const group = await screen.findByRole('region', { name: p.triedGroup })
     expect(group.textContent).toContain(p.triedItem('logs', 'idx_logs_level', ['level']))
     fireEvent.click(within(group).getByRole('button', { name: p.trialUndo('idx_logs_level') }))
@@ -85,6 +88,9 @@ describe('TriedIndexes', () => {
     await vi.waitFor(() => expect(triedIndexes(SCOPE)).toEqual([]))
     expect(executeSql).toHaveBeenCalledTimes(1)
     expect(screen.queryByRole('button', { name: p.trialUndo('idx_logs_level') })).toBeNull()
+    // The last one dropped still says so, and the focus is on what says it (not dropped on the page).
+    const done = await screen.findByText(locale.ddl.executed(locale.ddl.titles.dropIndex))
+    expect(document.activeElement?.contains(done) || done.contains(document.activeElement)).toBe(true)
   })
 
   it('forgets an index dropped elsewhere, and says nothing of other databases', async () => {
@@ -95,11 +101,19 @@ describe('TriedIndexes', () => {
     expect(screen.queryByRole('region', { name: p.triedGroup })).toBeNull()
   })
 
+  it('does not forget an index for a table read before it was made', async () => {
+    rememberTried(SCOPE, level)
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: Number.POSITIVE_INFINITY } },
+    })
+    // logs as it was read before the index (here, or in another tab): cached without it.
+    client.setQueryData(['structure', 'logs'], { columns: [], indexes: [{ name: 'PRIMARY', columns: [] }] })
+    mount(<TriedIndexes scope={SCOPE} db="shop" />, client)
+    expect(await screen.findByRole('button', { name: p.trialUndo('idx_logs_level') })).toBeTruthy()
+    expect(triedIndexes(SCOPE)).toEqual([level])
+  })
+
   it('is shown in the SQL tab while no plan is open', async () => {
-    function Console() {
-      const plan = useVisualPlan('shop', undefined, SCOPE)
-      return <>{plan.panel}</>
-    }
     mount(<Console />)
     expect(screen.queryByRole('region', { name: p.triedGroup })).toBeNull()
     // Tried from a plan (in this tab or another): it appears without a reload.

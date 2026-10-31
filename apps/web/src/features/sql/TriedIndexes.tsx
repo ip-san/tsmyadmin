@@ -1,5 +1,5 @@
 import { useQueries } from '@tanstack/react-query'
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { PreviewDialog } from '@/components/ddl/PreviewDialog.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { locale } from '@/config/locale-screens.ts'
@@ -16,20 +16,31 @@ const t = locale.plan
  */
 export function TriedIndexes({ scope, db, schema }: { scope: string; db: string; schema?: string | undefined }) {
   const tried = useTriedIndexes(scope, db, schema)
-  const structures = useQueries({ queries: tried.map((x) => structureQuery({ db, schema, table: x.table })) })
-  const there = (x: TriedIndex, i: number) =>
-    structures[i]?.data?.indexes.some((ix) => ix.name.toLowerCase() === x.name.toLowerCase())
-  const gone = tried.filter((x, i) => structures[i]?.data !== undefined && !there(x, i))
+  // Read again on mount: a table read before the index was made (here, or in another tab) is cached without it.
+  const structures = useQueries({
+    queries: tried.map((x) => ({
+      ...structureQuery({ db, schema, table: x.table }),
+      refetchOnMount: 'always' as const,
+    })),
+  })
+  // By the name as made (a quoted PostgreSQL name differs from one only in case).
+  const there = (x: TriedIndex, i: number) => structures[i]?.data?.indexes.some((ix) => ix.name === x.name) ?? false
+  // Forgotten only on a read of the table since: never on what was cached before.
+  const read = structures.map((s) => s.isFetchedAfterMount && !s.isFetching && s.data !== undefined)
+  const gone = tried.filter((x, i) => read[i] && !there(x, i))
+  const goneKey = JSON.stringify(gone)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `gone` is the same while its text is
+  const toForget = useMemo(() => gone, [goneKey])
   useEffect(() => {
-    for (const x of gone) forgetTried(scope, x)
-  }, [scope, gone])
+    for (const x of toForget) forgetTried(scope, x)
+  }, [scope, toForget])
   const shown = tried.filter(there)
   const flow = useDdlFlow(db, schema, (op) => {
     if (op.op === 'dropIndex')
       forgetTried(scope, { db, schema: schema ?? null, table: op.table, name: op.name, columns: [] })
   })
-  // Kept while its dialog is open: the last one dropped still says it was.
-  if (shown.length === 0 && flow.op === null) return null
+  // Kept while its dialog is open or says it is done: the last one dropped still says so (and keeps the focus).
+  if (shown.length === 0 && flow.op === null && flow.executed === null) return null
   return (
     <section aria-label={t.triedGroup} className="space-y-1 rounded border border-line p-2 text-xs">
       <h3 className="font-semibold text-ink">{t.triedGroup}</h3>

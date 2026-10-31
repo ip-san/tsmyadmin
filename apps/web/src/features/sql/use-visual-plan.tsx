@@ -12,7 +12,10 @@ const TriedIndexes = lazy(() => import('./TriedIndexes.tsx').then((m) => ({ defa
  */
 export function useVisualPlan(db: string, schema: string | undefined, scope: string) {
   const [sql, setSql] = useState<string | null>(null)
-  const tried = useTriedIndexes(scope, db, schema).length > 0
+  // Loaded once there is one, then kept: dropping the last one still says it was dropped.
+  const [tried, setTried] = useState(false)
+  const any = useTriedIndexes(scope, db, schema).length > 0
+  if (any && !tried) setTried(true)
   const panel =
     sql === null ? (
       tried ? (
