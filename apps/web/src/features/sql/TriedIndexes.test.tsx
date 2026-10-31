@@ -11,6 +11,8 @@ const p = locale.plan
 const SCOPE = 'mysql.db.3306'
 /** The indexes each table has now, as its structure answers. */
 let indexes: Record<string, string[]>
+/** The structure cannot be read now. */
+let unreadable: boolean
 const previewDdl = vi.fn(async (_db: string, _schema: unknown, op: { op: string; name: string }) => ({
   sql: [`${op.op} ${op.name}`],
 }))
@@ -27,7 +29,10 @@ vi.mock('@/lib/queries.ts', () => ({
   },
   structureQuery: ({ table }: { table: string }) => ({
     queryKey: ['structure', table],
-    queryFn: async () => ({ columns: [], indexes: (indexes[table] ?? []).map((name) => ({ name, columns: [] })) }),
+    queryFn: async () => {
+      if (unreadable) throw new Error('cannot read')
+      return { columns: [], indexes: (indexes[table] ?? []).map((name) => ({ name, columns: [] })) }
+    },
   }),
 }))
 
@@ -41,6 +46,7 @@ beforeAll(() => {
 })
 beforeEach(() => {
   vi.stubGlobal('localStorage', memoryStorage())
+  unreadable = false
   indexes = { logs: ['PRIMARY', 'idx_logs_level'], posts: ['PRIMARY'] }
   previewDdl.mockClear()
   executeSql.mockClear()
@@ -110,6 +116,16 @@ describe('TriedIndexes', () => {
     client.setQueryData(['structure', 'logs'], { columns: [], indexes: [{ name: 'PRIMARY', columns: [] }] })
     mount(<TriedIndexes scope={SCOPE} db="shop" />, client)
     expect(await screen.findByRole('button', { name: p.trialUndo('idx_logs_level') })).toBeTruthy()
+    expect(triedIndexes(SCOPE)).toEqual([level])
+  })
+
+  it('does not forget an index where its table cannot be read again', async () => {
+    rememberTried(SCOPE, level)
+    unreadable = true
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    client.setQueryData(['structure', 'logs'], { columns: [], indexes: [{ name: 'PRIMARY', columns: [] }] })
+    mount(<TriedIndexes scope={SCOPE} db="shop" />, client)
+    await vi.waitFor(() => expect(client.getQueryState(['structure', 'logs'])?.status).toBe('error'))
     expect(triedIndexes(SCOPE)).toEqual([level])
   })
 

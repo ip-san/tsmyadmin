@@ -26,7 +26,7 @@ export function TriedIndexes({ scope, db, schema }: { scope: string; db: string;
   // By the name as made (a quoted PostgreSQL name differs from one only in case).
   const there = (x: TriedIndex, i: number) => structures[i]?.data?.indexes.some((ix) => ix.name === x.name) ?? false
   // Forgotten only on a read of the table since: never on what was cached before.
-  const read = structures.map((s) => s.isFetchedAfterMount && !s.isFetching && s.data !== undefined)
+  const read = structures.map((s) => s.isFetchedAfterMount && !s.isFetching && !s.isError && s.data !== undefined)
   const gone = tried.filter((x, i) => read[i] && !there(x, i))
   const goneKey = JSON.stringify(gone)
   // biome-ignore lint/correctness/useExhaustiveDependencies: `gone` is the same while its text is
