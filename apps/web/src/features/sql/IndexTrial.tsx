@@ -1,4 +1,5 @@
 import type { ExplainResult } from '@tsmyadmin/shared'
+import { useLayoutEffect, useRef } from 'react'
 import { PreviewDialog } from '@/components/ddl/PreviewDialog.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox } from '@/components/ui/Feedback.tsx'
@@ -23,9 +24,26 @@ export function IndexTrial({
   candidates: readonly IndexCandidate[]
   before: ExplainResult
 }) {
-  const { tried, after, measuring, error, flow } = trial
+  const { tried, after, measuring, stopping, stopped, error, flow } = trial
   const busy = flow.running || measuring
-  const said = measuring ? t.trialMeasuring : after && tried ? t.trialDone(tried.name) : ''
+  // The stop button goes when the run ends: the focus it had goes to measuring again, never to the page. A blur as it
+  // is taken away (some browsers send one) is not one of the person's: the button is no longer on the page.
+  const again = useRef<HTMLButtonElement>(null)
+  const stopFocused = useRef(false)
+  useLayoutEffect(() => {
+    if (measuring || !stopFocused.current) return
+    stopFocused.current = false
+    if (document.activeElement === null || document.activeElement === document.body) again.current?.focus()
+  }, [measuring])
+  const said = stopping
+    ? locale.plan.measureStopping
+    : measuring
+      ? t.trialMeasuring
+      : stopped
+        ? t.trialStopped
+        : after && tried
+          ? t.trialDone(tried.name)
+          : ''
   const factor = speedup(before.measured?.ms, after?.measured?.ms)
   const changes = after ? compareReads(before.plan, after.plan).filter((c) => c.after) : []
   return (
@@ -78,7 +96,28 @@ export function IndexTrial({
           {/* Said for as long as the index is there: closing this view does not take it away. */}
           <p className="text-ink-sub">{t.trialNote}</p>
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" aria-disabled={busy || undefined} onClick={() => !busy && void trial.measure()}>
+            {/* Only while it measures: stops that run (the server's cancel). */}
+            {measuring ? (
+              <Button
+                size="sm"
+                aria-disabled={stopping || undefined}
+                onClick={trial.stop}
+                onFocus={() => {
+                  stopFocused.current = true
+                }}
+                onBlur={(e) => {
+                  if (e.relatedTarget || e.currentTarget.isConnected) stopFocused.current = false
+                }}
+              >
+                {t.trialStop}
+              </Button>
+            ) : null}
+            <Button
+              ref={again}
+              size="sm"
+              aria-disabled={busy || undefined}
+              onClick={() => !busy && void trial.measure()}
+            >
               {t.trialAgain}
             </Button>
             <Button size="sm" aria-disabled={busy || undefined} onClick={() => !busy && trial.undo()}>
