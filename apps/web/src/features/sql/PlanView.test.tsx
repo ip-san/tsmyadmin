@@ -265,7 +265,7 @@ describe('PlanView', () => {
       // The presentation tells the run after, and ends with it beside the run before: logs read in full, then by the index.
       fireEvent.click(await screen.findByRole('button', { name: t.open }))
       const tour = screen.getByRole('dialog', { name: t.dialog })
-      for (let i = 0; i < 4; i++) fireEvent.keyDown(tour, { key: 'ArrowRight' })
+      fireEvent.click(within(tour).getByRole('button', { name: new RegExp(`^\\d+\\. ${t.trialAfterTitle}$`) }))
       expect(screen.getByRole('heading', { level: 3, name: t.trialAfterTitle })).toBeTruthy()
       expect(tour.textContent).toContain(t.trialAfter('logs', p.trialRead('idx_logs_level', 12, p.duration(4)), true))
       expect(tour.textContent).toContain(t.chapters.trial)
@@ -299,6 +299,11 @@ describe('PlanView', () => {
       mount()
       await measured()
       expect(await screen.findByText(p.trialNone)).toBeTruthy()
+      // Measured, nothing tried: the presentation has no before and after.
+      fireEvent.click(await screen.findByRole('button', { name: t.open }))
+      const tour = screen.getByRole('dialog', { name: t.dialog })
+      expect(within(tour).queryByRole('button', { name: new RegExp(`\\. ${t.trialBeforeTitle}$`) })).toBeNull()
+      expect(within(tour).getAllByRole('button', { name: new RegExp(`\\. ${t.measuredTitle}$`) })).toHaveLength(1)
     })
 
     it('offers nothing to try before the statement is measured', async () => {

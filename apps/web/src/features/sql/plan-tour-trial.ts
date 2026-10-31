@@ -40,27 +40,36 @@ export function trialScenes(
   const { table, name, columns } = index
   const same = (n: PlanNode) => n.table?.toLowerCase() === table.toLowerCase()
   const changes = compareReads(before.plan, after.plan)
-  const mine = changes.find((c) => same(c.before))
+  const readsOf = (plan: PlanNode) => planReads(plan).flatMap((r) => (same(r.node) ? [r.node] : []))
+  // The read the index was suggested for (a full read), and the table's read after: through the index where it is
+  // (a table read twice, say joined to itself, may be read through it once), else as it is read now.
+  const was = readsOf(before.plan)
+  const wasRead = was.find((n) => n.access === 'fullScan') ?? was[0]
+  const now = readsOf(after.plan)
+  const nowRead =
+    now.find((n) => n.index?.toLowerCase() === name.toLowerCase()) ??
+    changes.find((c) => c.before === wasRead)?.after ??
+    now[0]
   const used = usesIndex(after.plan, table, name)
   const marked = [[table, columns] as const]
-  // The other tables read another way too (a new index may change a join): by how, not by the time, which every
-  // run changes.
+  // The other tables read another way too (a new index may change a join), or read no more: by how, not by the
+  // time, which every run changes.
   const others = changes.flatMap((c) =>
-    c === mine || !c.after || (c.after.access === c.before.access && c.after.index === c.before.index)
+    same(c.before) || (c.after && c.after.access === c.before.access && c.after.index === c.before.index)
       ? []
-      : [`${c.table}: ${readSaid(c.before)} → ${readSaid(c.after)}`]
+      : [`${c.table}: ${readSaid(c.before)} → ${c.after ? readSaid(c.after) : t.trialNotRead}`]
   )
   return [
     {
       title: t.trialBeforeTitle,
-      text: t.trialBefore(table, mine ? readSaid(mine.before) : null, name, columns),
+      text: t.trialBefore(table, wasRead ? readSaid(wasRead) : null, name, columns),
       frame: [table],
       overlay: overlay({ tables: litOf(before.plan, indexColumns), columns: marked }),
       pulse: [table],
     },
     {
       title: t.trialAfterTitle,
-      text: t.trialAfter(table, mine?.after ? readSaid(mine.after) : null, used),
+      text: t.trialAfter(table, nowRead ? readSaid(nowRead) : null, used),
       frame: [table],
       overlay: overlay({ tables: litOf(after.plan, indexColumns), columns: marked }),
       pulse: [table],

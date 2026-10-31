@@ -478,6 +478,34 @@ describe('planTour, with an index tried', () => {
     expect(titled(scenes, t.trialTimeTitle)?.hints).toEqual([p.trialUnused('idx_posts_user_id')])
   })
 
+  it('finds the table read through the index, whatever its case and however often it is read', () => {
+    // posts joined to itself: both read in full before; after, one through the index, the other still in full.
+    const full = (alias: string, rows: number) =>
+      node({ op: 'Seq Scan', table: 'posts', alias, access: 'fullScan', actual: ms(rows, 10) })
+    const self = {
+      ...before,
+      plan: node({ ...loop, actual: ms(3, 40), children: [full('a', 100), full('b', 48_000)] }),
+    }
+    const plan = node({ ...loop, actual: ms(3, 2), children: [full('a', 100), { ...lookup, alias: 'b' }] })
+    const shout = { ...index, table: 'POSTS' }
+    const scenes = planTour({ plan, relations: keys, measuredMs: 2, trial: { before: self, index: shout } }).scenes
+    expect(titled(scenes, t.trialAfterTitle)?.text).toBe(
+      t.trialAfter('POSTS', p.trialRead('idx_posts_user_id', 3, p.duration(0.5)), true)
+    )
+    expect(titled(scenes, t.trialBeforeTitle)?.text).toBe(
+      t.trialBefore('POSTS', p.trialRead(null, 100, p.duration(10)), 'idx_posts_user_id', ['user_id', 'created_at'])
+    )
+    // The table's own reads are its scenes', not "the others".
+    expect(titled(scenes, t.trialAfterTitle)?.notes).toEqual([])
+  })
+
+  it('names a table read no more after the index', () => {
+    const scenes = tour(node({ ...lookup, actual: ms(3, 1) }), 1).scenes
+    expect(titled(scenes, t.trialAfterTitle)?.notes).toEqual([
+      `users: ${p.trialRead('uq_users_email', 1, p.duration(1))} → ${t.trialNotRead}`,
+    ])
+  })
+
   it('tells nothing of the index where the plan was not measured', () => {
     const scenes = tour(after, undefined).scenes
     expect(titled(scenes, t.trialBeforeTitle)).toBeUndefined()

@@ -127,7 +127,7 @@ export function planTour({ plan, relations, indexColumns, rows, measuredMs, tria
   const extra = new Map<string, string[]>()
   const marked = [
     ...steps.flatMap((s) => s.columns ?? []),
-    ...(trial?.index.columns ?? []).map((column) => ({ table: trial?.index.table ?? '', column })),
+    ...(trial ? trial.index.columns.map((column) => ({ table: trial.index.table, column })) : []),
   ]
   for (const c of marked) extra.set(c.table, unique([...(extra.get(c.table) ?? []), c.column]))
   const diagram = diagramFor(tables, relations, extra)

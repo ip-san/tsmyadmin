@@ -472,14 +472,15 @@ export const enScreens = {
     temporaryHint: 'A temporary table that does not fit in memory may be written to disk',
     endTitle: 'Summary',
     trialIntro: (name: string) =>
-      `The plan measured again once the index ${name} was added. The last chapter sets it beside the run before`,
+      `This plan was measured again after the index ${name} was added. The last chapter sets it beside the run before`,
     trialBeforeTitle: 'Before the index',
     trialBefore: (table: string, read: string | null, name: string, columns: readonly string[]) =>
-      `${read ? `Before, ${table} was read ${read}. ` : ''}The index ${name} (${columns.join(', ')}) was added to ${table}, and the same statement run again. The marked columns are the index's`,
+      `${read ? `Before, ${table} was read ${read}. ` : ''}The index ${name} (${columns.join(', ')}) was added to ${table}, and the same statement run again. The marked columns are the index's columns`,
     trialAfterTitle: 'After the index',
     trialAfter: (table: string, read: string | null, used: boolean) =>
       `${read ? `After, ${table} was read ${read}. ` : `After, no step reads ${table} any more. `}${used ? 'The server narrows the read with the new index' : 'The server did not use the new index'}`,
     trialTimeTitle: 'The two runs compared',
+    trialNotRead: 'no longer read',
     trialHonest:
       'Each run was measured once. The second may find the rows the first read already cached, and look faster. Where either took under a millisecond, no factor is given',
     trialWriteCost:
