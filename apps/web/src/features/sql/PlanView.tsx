@@ -9,10 +9,13 @@ import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { locale } from '@/config/locale-screens.ts'
 import { explainQuery, foreignKeysQuery, structureQuery } from '@/lib/queries.ts'
 import { useRowEstimates } from '@/lib/use-row-estimates.ts'
+import { IndexTrial } from './IndexTrial.tsx'
 import { MeasurePlan } from './MeasurePlan.tsx'
 import { PlanTour } from './PlanTour.tsx'
+import { indexCandidates } from './plan-index.ts'
 import { misestimate } from './plan-measure.ts'
 import { planReads, planSteps } from './plan-steps.ts'
+import { type IndexTrial as Trial, useIndexTrial } from './use-index-trial.ts'
 import { useMeasuredPlan } from './use-measured-plan.ts'
 
 const t = locale.plan
@@ -37,6 +40,7 @@ export function PlanView({
   const plan = useQuery(explainQuery(db, schema, sql))
   const relations = useQuery(foreignKeysQuery(db, schema))
   const measure = useMeasuredPlan(db, schema, sql)
+  const trial = useIndexTrial(db, schema, sql)
   return (
     <section aria-label={t.title} className="space-y-3 rounded border border-line bg-surface p-3">
       <div className="flex items-center justify-between gap-2">
@@ -53,8 +57,15 @@ export function PlanView({
         <ErrorBox error={relations.error} onRetry={() => void relations.refetch()} />
       ) : (
         <>
-          <MeasurePlan measure={measure} />
-          <PlanStory db={db} schema={schema} result={measure.result ?? plan.data} relations={relations.data} />
+          {/* While an index is tried, the run before stays the one it is compared with: measured again there. */}
+          {trial.tried ? null : <MeasurePlan measure={measure} />}
+          <PlanStory
+            db={db}
+            schema={schema}
+            result={trial.after ?? measure.result ?? plan.data}
+            relations={relations.data}
+            trial={measure.result ? { state: trial, before: measure.result } : null}
+          />
         </>
       )}
     </section>
@@ -66,11 +77,14 @@ function PlanStory({
   schema,
   result,
   relations,
+  trial,
 }: {
   db: string
   schema?: string | undefined
   result: ExplainResult
   relations: readonly RelationDef[]
+  /** An index to try, offered once the statement was measured (the run before). */
+  trial: { state: Trial; before: ExplainResult } | null
 }) {
   const reads = planReads(result.plan)
   const tables = [...new Set(reads.map((r) => r.node.table))]
@@ -86,8 +100,19 @@ function PlanStory({
   for (const c of steps.flatMap((s) => s.columns ?? [])) extra.set(c.table, [...(extra.get(c.table) ?? []), c.column])
   const diagram = diagramFor(tables, relations, extra)
   const current = reads[player.index]?.path
+  const shapeOf = (table: string) => {
+    const s = structures[tables.indexOf(table)]?.data
+    return s ? { columns: s.columns.map((c) => c.name), indexes: s.indexes } : undefined
+  }
   return (
     <div className="space-y-3">
+      {trial ? (
+        <IndexTrial
+          trial={trial.state}
+          before={trial.before}
+          candidates={indexCandidates(trial.before.plan, shapeOf)}
+        />
+      ) : null}
       {reads.length > 0 ? (
         <PlanTour
           plan={result.plan}

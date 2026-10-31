@@ -15,6 +15,15 @@ let listed: Promise<void>
 /** What a measured run answers, and the runs asked for. */
 let measuredRun: () => Promise<unknown>
 const analyzePlan = vi.fn((..._: unknown[]) => measuredRun())
+/** The DDL previewed and run (creating the index tried, dropping it again). */
+const previewDdl = vi.fn(async (_db: string, _schema: unknown, op: { op: string; name: string }) => ({
+  sql: [`${op.op} ${op.name}`],
+}))
+const executeSql = vi.fn(async (_db: string, body: { sql: string }) => [
+  { kind: 'affected', sql: body.sql, affectedRows: 0, durationMs: 1 },
+])
+/** The condition the scan of logs filters by (none unless a test sets it). */
+let condition: string | null
 
 const scan: PlanNode = {
   op: 'Seq Scan',
@@ -32,9 +41,21 @@ const scan: PlanNode = {
 
 vi.mock('@/lib/queries.ts', () => ({
   analyzePlan: (...args: unknown[]) => analyzePlan(...args),
-  explainQuery: () => ({ queryKey: ['explain'], queryFn: async () => ({ plan: scan, raw: '', rawTruncated: false }) }),
+  explainQuery: () => ({
+    queryKey: ['explain'],
+    queryFn: async () => ({ plan: { ...scan, detail: condition }, raw: '', rawTruncated: false }),
+  }),
+  sessionQuery: { queryKey: ['session'], queryFn: async () => ({ dialect: 'postgres' }) },
+  isDatabaseData: (key: readonly unknown[]) => key[0] !== 'session',
+  mutations: {
+    previewDdl: (...args: Parameters<typeof previewDdl>) => previewDdl(...args),
+    executeSql: (...args: Parameters<typeof executeSql>) => executeSql(...args),
+  },
   foreignKeysQuery: () => ({ queryKey: ['keys'], queryFn: async () => [] }),
-  structureQuery: () => ({ queryKey: ['structure'], queryFn: async () => ({ indexes: [] }) }),
+  structureQuery: () => ({
+    queryKey: ['structure'],
+    queryFn: async () => ({ columns: [{ name: 'id' }, { name: 'level' }], indexes: [] }),
+  }),
   tablesQuery: () => ({
     queryKey: ['tables'],
     queryFn: async () => {
@@ -50,11 +71,17 @@ beforeAll(() => {
   HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) {
     this.open = true
   }
+  HTMLDialogElement.prototype.close = function (this: HTMLDialogElement) {
+    this.open = false
+  }
 })
 beforeEach(() => {
   estimated = { logs: 10000 }
   listed = Promise.resolve()
   analyzePlan.mockClear()
+  previewDdl.mockClear()
+  executeSql.mockClear()
+  condition = null
   measuredRun = async () => ({
     plan: { ...scan, actual: { rows: 1_200_000, loops: 1, ms: 950 } },
     raw: '',
@@ -81,6 +108,9 @@ async function readScene() {
   fireEvent.keyDown(screen.getByRole('dialog', { name: t.dialog }), { key: 'ArrowRight' })
   expect(screen.getByRole('heading', { level: 3, name: t.readTitle('logs') })).toBeTruthy()
 }
+
+const p = locale.plan
+const opener = async () => screen.findByRole('button', { name: p.measure })
 
 describe('PlanView', () => {
   it("presents the plan with the tables' estimated rows: the size of each, and a gap that may be old statistics", async () => {
@@ -114,9 +144,6 @@ describe('PlanView', () => {
   })
 
   describe('run and measure', () => {
-    const p = locale.plan
-    const opener = async () => screen.findByRole('button', { name: p.measure })
-
     it('asks first, runs once however often pressed, and shows each step beside its estimate', async () => {
       mount()
       fireEvent.click(await opener())
@@ -182,6 +209,95 @@ describe('PlanView', () => {
       await screen.findByText(p.notes)
       expect(screen.queryByText(p.notesMeasured)).toBeNull()
       expect(screen.queryByText(p.measured(p.duration(1000)))).toBeNull()
+    })
+  })
+
+  describe('trying an index', () => {
+    /** The plan of logs measured: in full before, through the index after (or in full still). */
+    const run = (index: string | null, ms: number) => async () => ({
+      plan: {
+        ...scan,
+        detail: condition,
+        access: index ? 'lookup' : 'fullScan',
+        index,
+        actual: { rows: index ? 12 : 50000, loops: 1, ms },
+      },
+      raw: '',
+      rawTruncated: false,
+      measured: { ms },
+    })
+
+    async function measured() {
+      fireEvent.click(await opener())
+      fireEvent.click(screen.getByRole('button', { name: p.measureRun }))
+      return screen.findByRole('region', { name: p.trialGroup })
+    }
+
+    it('offers the index the plan suggests once measured, makes it through the preview, and sets the runs side by side', async () => {
+      condition = '(level = 3)'
+      measuredRun = run(null, 400)
+      mount()
+      const trial = await measured()
+      const tryIt = await screen.findByRole('button', { name: p.trialTry('logs', ['level']) })
+      expect(screen.getByText(p.trialWhy.filter('logs'))).toBeTruthy()
+      fireEvent.click(tryIt)
+      // Nothing is made before the preview is confirmed; the dialog says the statement runs again.
+      const dialog = await screen.findByRole('dialog', { name: locale.ddl.titles.addIndex })
+      expect(dialog.textContent).toContain(p.trialHint)
+      expect(previewDdl).toHaveBeenCalledWith('shop', undefined, {
+        op: 'addIndex',
+        table: 'logs',
+        name: 'idx_logs_level',
+        columns: ['level'],
+        unique: false,
+      })
+      expect(executeSql).not.toHaveBeenCalled()
+      measuredRun = run('idx_logs_level', 4)
+      fireEvent.click(await screen.findByRole('button', { name: locale.ddl.execute }))
+      expect(await screen.findByText(p.trialTotal(p.duration(400), p.duration(4), 100))).toBeTruthy()
+      expect(trial.textContent).toContain(
+        `logs: ${p.trialRead(null, 50000, p.duration(400))} → ${p.trialRead('idx_logs_level', 12, p.duration(4))}`
+      )
+      expect(screen.queryByText(p.trialUnused('idx_logs_level'))).toBeNull()
+      expect(analyzePlan).toHaveBeenCalledTimes(2)
+      // The run before stays the one compared with: no measuring it over while the index is there.
+      expect(screen.queryByRole('button', { name: p.measure })).toBeNull()
+      // Dropped again through the preview: the comparison is put away.
+      fireEvent.click(screen.getByRole('button', { name: p.trialUndo('idx_logs_level') }))
+      expect((await screen.findByRole('dialog', { name: locale.ddl.titles.dropIndex })).textContent).toContain(
+        p.trialUndoHint
+      )
+      fireEvent.click(await screen.findByRole('button', { name: locale.ddl.execute }))
+      await vi.waitFor(() => expect(screen.queryByText(p.trialTotal(p.duration(400), p.duration(4), 100))).toBeNull())
+      expect(previewDdl).toHaveBeenLastCalledWith('shop', undefined, {
+        op: 'dropIndex',
+        table: 'logs',
+        name: 'idx_logs_level',
+      })
+      expect(screen.getByRole('button', { name: p.measure })).toBeTruthy()
+    })
+
+    it('says so where the server did not use the index made', async () => {
+      condition = '(level = 3)'
+      measuredRun = run(null, 400)
+      mount()
+      await measured()
+      fireEvent.click(await screen.findByRole('button', { name: p.trialTry('logs', ['level']) }))
+      fireEvent.click(await screen.findByRole('button', { name: locale.ddl.execute }))
+      expect(await screen.findByText(p.trialUnused('idx_logs_level'))).toBeTruthy()
+    })
+
+    it('says there is nothing to try where no condition names a column', async () => {
+      mount()
+      await measured()
+      expect(await screen.findByText(p.trialNone)).toBeTruthy()
+    })
+
+    it('offers nothing to try before the statement is measured', async () => {
+      condition = '(level = 3)'
+      mount()
+      await opener()
+      expect(screen.queryByRole('region', { name: p.trialGroup })).toBeNull()
     })
   })
 })

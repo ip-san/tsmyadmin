@@ -1,6 +1,6 @@
 import { expect } from '@playwright/test'
 import { login, TARGETS, test } from './helpers.ts'
-import { openPlan } from './plan.ts'
+import { openPlan, trialPlan } from './plan.ts'
 
 for (const t of TARGETS) {
   test.describe(`visual explain (${t.dialect})`, () => {
@@ -67,6 +67,35 @@ for (const t of TARGETS) {
       // Nothing was left under the editor: measuring is not a run of the SQL tab.
       await tour.getByRole('button', { name: '閉じる' }).click()
       await expect(page.getByRole('region', { name: '文 1' })).toHaveCount(0)
+    })
+
+    test('tries the index the plan suggests: makes it through the preview, measures again, compares, drops it', async ({
+      page,
+    }) => {
+      const { plan, trial, table, index, drop } = await trialPlan(page, t)
+      try {
+        await expect(trial.getByText(`${table} を全件読んでから、条件で絞っています。`)).toBeVisible()
+        await trial.getByRole('button', { name: `${table}（level）に作って試す` }).click()
+        const make = page.getByRole('dialog', { name: 'インデックスを追加' })
+        await expect(make).toContainText(index)
+        await expect(make).toContainText('同じ文をもう一度実行して測ります')
+        await make.getByRole('button', { name: '実行する' }).click()
+        await expect(trial.getByRole('status').filter({ hasText: `${index} を作って測り直しました` })).toBeVisible()
+        // How long each run took, and whether the server uses the index on so few rows, are the server's.
+        await expect(trial.getByText(/^実行の時間: 前 .+ → 後 /)).toBeVisible()
+        await expect(trial.getByRole('listitem').filter({ hasText: new RegExp(`^${table}: 全件 `) })).toHaveCount(1)
+        await expect(plan.getByRole('button', { name: '実際に実行して測る' })).toHaveCount(0)
+        await trial.getByRole('button', { name: `${index} を消す` }).click()
+        const remove = page.getByRole('dialog', { name: 'インデックスを削除' })
+        await expect(remove).toContainText(index)
+        await remove.getByRole('button', { name: '実行する' }).click()
+        await expect(trial.getByRole('button', { name: `${index} を消す` })).toHaveCount(0)
+        await expect(plan.getByRole('button', { name: '実際に実行して測る' })).toBeVisible()
+        // Gone from the table too: the plan suggests it again.
+        await expect(trial.getByRole('button', { name: `${table}（level）に作って試す` })).toBeVisible()
+      } finally {
+        await drop()
+      }
     })
 
     test('fills in the parameters before drawing, as a run does', async ({ page }) => {
