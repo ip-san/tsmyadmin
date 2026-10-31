@@ -349,6 +349,32 @@ export const jaScreens = {
       more ? `見込みの ${factor.toLocaleString('ja-JP')} 倍` : `見込みの ${factor.toLocaleString('ja-JP')} 分の 1`,
     notesMeasured:
       '実際に実行して測った値です（1 回の計測で、キャッシュの状態などで変わります）。「推定」は、実行する前のデータベースの見込みです。MySQL と PostgreSQL では、段の時間にその下の段の時間を含みます',
+
+    trialGroup: 'インデックスを試す',
+    trialIntro:
+      '計画から読んだ、足すと速くなるかもしれないインデックスです。作って同じ文をもう一度測り、前と後を比べます',
+    trialNone:
+      'この計画からは、試すインデックスの候補が見つかりません（全件読むテーブルの条件に、インデックスの無いカラムがありません）',
+    trialWhy: {
+      join: (table: string) => `${table} を、ほかの行ごとに全件読んでいます。`,
+      filter: (table: string) => `${table} を全件読んでから、条件で絞っています。`,
+    },
+    trialTry: (table: string, columns: readonly string[]) => `${table}（${columns.join(', ')}）に作って試す`,
+    trialHint:
+      'このインデックスを作り、できたら同じ文をもう一度実行して測ります（読むだけの文に限り、取り消します）。インデックスは残ります（あとで消せます）。大きなテーブルでは作るのに時間がかかり、PostgreSQL では作り終わるまでテーブルへの書き込みが待たされます',
+    trialUndoHint: '試したインデックスを消します。計画は試す前に戻ります',
+    trialMeasuring: 'インデックスを作りました。同じ文をもう一度実行して測っています…',
+    trialDone: (name: string) => `${name} を作って測り直しました`,
+    trialTotal: (before: string | null, after: string | null, factor: number | null) =>
+      `実行の時間: 前 ${before ?? '不明'} → 後 ${after ?? '不明'}${factor === null ? '' : factor >= 1.1 ? `（約 ${factor < 10 ? factor.toFixed(1) : Math.round(factor).toLocaleString('ja-JP')} 倍速い）` : factor <= 1 / 1.1 ? `（約 ${(1 / factor).toFixed(1)} 倍遅い）` : '（ほぼ同じ）'}`,
+    trialRead: (index: string | null, rows: number | null, time: string | null) =>
+      `${index ? `インデックス ${index} で` : '全件'}${rows === null ? '' : ` ${Math.round(rows).toLocaleString('ja-JP')} 行`}${time ? ` · ${time}` : ''}`,
+    trialUnused: (name: string) =>
+      `サーバーは ${name} を使いませんでした（行が少ない・あまり絞れないときは、全件読むほうが安いと見ます）。使われないインデックスは書き込みを遅くするだけなので、消すことを考えてください`,
+    trialNote:
+      '1 回ずつの計測です。後のほうは、読んだ行がキャッシュに載っていて速く見えることがあります（「もう一度測る」で確かめられます）',
+    trialAgain: 'もう一度測る',
+    trialUndo: (name: string) => `${name} を消す`,
   },
   planTour: {
     chapters: { reads: 'テーブルを読む順', after: '読んだあとの処理', measured: '見込みと実際' },

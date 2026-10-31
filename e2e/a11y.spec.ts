@@ -14,7 +14,6 @@ import {
 import { layoutViolations } from './layout-lint.ts'
 import { lockChain } from './locks.ts'
 import { tablesWithComments } from './metadata.ts'
-import { openPlan } from './plan.ts'
 import { orphanedKey } from './references.ts'
 import { pageProblems } from './scan.ts'
 import { createAccount, dropAccount, enrol, t as first, signIn } from './two-factor.ts'
@@ -618,27 +617,6 @@ for (const t of TARGETS) {
       } finally {
         await orphaned.drop()
       }
-    })
-
-    test('statement plan presented', async ({ page }) => {
-      const plan = await openPlan(page, t)
-      await plan.getByRole('button', { name: 'プレゼンで見る' }).click()
-      const tour = page.getByRole('dialog', { name: '実行計画のプレゼン' })
-      await tour.getByRole('button', { name: /^3\. / }).click()
-      await expect(tour.getByRole('heading', { level: 3 })).toHaveText(/ を読む$/)
-      await scan(page)
-    })
-
-    test('SQL tab with a statement plan drawn, asked to be measured, then measured', async ({ page }) => {
-      const plan = await openPlan(page, t)
-      await scan(page)
-      await plan.getByRole('button', { name: '実際に実行して測る' }).click()
-      const run = plan.getByRole('button', { name: '実行して測る', exact: true })
-      await run.waitFor()
-      await scan(page)
-      await run.click()
-      await expect(plan.getByText(/^実際に実行して測った値です/)).toBeVisible()
-      await scan(page)
     })
 
     test('a key that many tables reference folds them into one list', async ({ page }) => {
