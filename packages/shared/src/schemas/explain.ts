@@ -15,6 +15,8 @@ export const ANALYZE_TIMEOUT_MAX_MS = 300_000
 /** A statement run to measure its plan: read only (SELECT, TABLE, VALUES, WITH … SELECT), and bounded in time. */
 export const AnalyzeRequestSchema = ExplainRequestSchema.extend({
   timeoutMs: z.number().int().min(1000).max(ANALYZE_TIMEOUT_MAX_MS).default(ANALYZE_TIMEOUT_DEFAULT_MS),
+  /** Registers the run, so `POST /sql/cancel` with this id stops it. */
+  queryId: z.string().uuid().optional(),
 })
 
 /**

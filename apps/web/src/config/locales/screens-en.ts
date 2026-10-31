@@ -331,9 +331,11 @@ export const enScreens = {
     measureHint: "Run this statement for real and measure each step's rows and time (a statement that only reads)",
     measureGroup: 'Before running to measure',
     measureConfirm: (seconds: number) =>
-      `This runs the statement to measure it. Only a statement that reads (SELECT, TABLE, VALUES) is run, in a read-only transaction rolled back at the end. Still, the rows it reads are really read, so a large table loads the server (it is stopped after ${seconds} seconds). On a production server, mind the time of day`,
+      `This runs the statement to measure it. Only a statement that reads (SELECT, TABLE, VALUES) is run, in a read-only transaction rolled back at the end. Still, the rows it reads are really read, so a large table loads the server (it is stopped after ${seconds} seconds, or by Cancel while it runs). On a production server, mind the time of day`,
     measureRun: 'Run to measure',
     measureCancel: 'Cancel',
+    measureStopping: 'Stopping the run…',
+    measureStopped: 'The run was stopped (a plan measured before, if any, is still shown)',
     measuring: 'Running to measure…',
     measured: (time: string | null) => `Showing the plan measured by running it${time ? ` (ran in ${time})` : ''}`,
     duration: (ms: number) =>

@@ -339,10 +339,10 @@ export interface DatabaseAdapter {
    * time it took (`actual`), and the result the time of the whole run (`measured`). Only a plain read is run
    * (`VALIDATION` otherwise: a write's sequence, trigger or lock would outlive the rollback), in a read-only
    * transaction that is rolled back, stopped after `timeoutMs`. Needs MySQL 8.3+ (`UNSUPPORTED` before), any
-   * MariaDB or PostgreSQL.
+   * MariaDB or PostgreSQL. With `queryId`, `cancelQuery(queryId)` stops it as it stops a script's run (it then fails).
    */
-  analyzePlan(ns: Namespace, sql: string, timeoutMs: number): Promise<ExplainResult>
-  /** Interrupts a running executeSql registered with `queryId`. Resolves false when nothing is running under that id. */
+  analyzePlan(ns: Namespace, sql: string, timeoutMs: number, queryId?: string): Promise<ExplainResult>
+  /** Interrupts a running executeSql (or analyzePlan) registered with `queryId`. Resolves false when nothing is running under that id. */
   cancelQuery(queryId: string): Promise<boolean>
   /**
    * DDL statements that recreate the table (MySQL: SHOW CREATE TABLE; PostgreSQL: reconstructed from the catalog).

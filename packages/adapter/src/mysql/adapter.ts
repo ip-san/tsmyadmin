@@ -538,32 +538,45 @@ export class MysqlAdapter extends BaseAdapter {
    * FORMAT=JSON`. Both run the statement: READ ONLY here, since only a read is taken. A read can still leave state on
    * the session that a rollback keeps (a GET_LOCK, a user variable): the session is reset after, as the SQL tab's is.
    */
-  async analyzePlan(ns: Namespace, sql: string, timeoutMs: number): Promise<ExplainResult> {
+  async analyzePlan(ns: Namespace, sql: string, timeoutMs: number, queryId?: string): Promise<ExplainResult> {
     const statement = measurableMysqlStatement(sql)
-    return this.withConn(
-      ns,
-      async (conn) => {
-        try {
-          if (this.mariadb !== true) await this.jsonFormat2(conn)
-          await conn.query('START TRANSACTION READ ONLY')
-          const sent = this.mariadb ? `ANALYZE FORMAT=JSON ${statement}` : `EXPLAIN ANALYZE FORMAT=JSON ${statement}`
-          const raw = parseJsonCell(firstResult(await conn.query(sent)).rows[0]?.[0] ?? null)
-          // MySQL stopped by its time limit still answers, with the plan of a run cut short (the steps it had not
-          // reached say nothing, the top one says 0 rows): only a warning tells.
-          const warnings = firstResult(await conn.query('SHOW WARNINGS')).rows
-          if (warnings.some((w) => INTERRUPTED.has(Number(w[1])))) {
-            throw new AdapterError('QUERY_FAILED', 'The statement was stopped before it finished (its time ran out)')
+    const run = this.scripts.track(ns, queryId)
+    try {
+      return await this.withConn(
+        ns,
+        async (conn) => {
+          try {
+            if (this.mariadb !== true) await this.jsonFormat2(conn)
+            await conn.query('START TRANSACTION READ ONLY')
+            await run.publish(conn)
+            const sent = this.mariadb ? `ANALYZE FORMAT=JSON ${statement}` : `EXPLAIN ANALYZE FORMAT=JSON ${statement}`
+            const raw = parseJsonCell(firstResult(await run.send(() => conn.query(sent))).rows[0]?.[0] ?? null)
+            // KILL QUERY, like the time limit, may leave MySQL answering with the plan of a run cut short.
+            if (run.cancelled) throw run.stopped()
+            // MySQL stopped by its time limit still answers, with the plan of a run cut short (the steps it had not
+            // reached say nothing, the top one says 0 rows): only a warning tells.
+            const warnings = firstResult(await conn.query('SHOW WARNINGS')).rows
+            if (warnings.some((w) => INTERRUPTED.has(Number(w[1])))) {
+              throw new AdapterError('QUERY_FAILED', 'The statement was stopped before it finished (its time ran out)')
+            }
+            return explainResult(parseMysqlPlan(raw, statement), raw, { ms: mysqlExecutionMs(raw) })
+          } catch (err) {
+            throw run.cancelled ? run.stopped() : err
+          } finally {
+            // Stopped: dropped at once, as a script's run is (its signal may still land on what is sent next).
+            // Else a reset rolls back and puts every session variable back (the format too); one that fails drops the
+            // connection. The statement's own error is the one thrown.
+            if (run.cancelled) conn.discard()
+            else await conn.reset().catch(() => undefined)
+            this.forgetSessionState(conn)
+            run.release(conn)
           }
-          return explainResult(parseMysqlPlan(raw, statement), raw, { ms: mysqlExecutionMs(raw) })
-        } finally {
-          // A reset rolls back and puts every session variable back (the format too); one that fails drops the
-          // connection. The statement's own error is the one thrown.
-          await conn.reset().catch(() => undefined)
-          this.forgetSessionState(conn)
-        }
-      },
-      timeoutMs
-    )
+        },
+        timeoutMs
+      )
+    } finally {
+      run.end()
+    }
   }
 
   /** Format 2 for this session; a server without the variable (before 8.3) cannot measure in JSON. */

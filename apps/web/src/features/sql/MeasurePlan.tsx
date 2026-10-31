@@ -13,7 +13,7 @@ const t = locale.plan
  * focus goes to the run button when asked, and back to this one when the question closes, so it is never lost.
  */
 export function MeasurePlan({ measure }: { measure: MeasuredPlan }) {
-  const { step, result, error } = measure
+  const { step, result, error, stopping, stopped } = measure
   const opener = useRef<HTMLButtonElement>(null)
   const runner = useRef<HTMLButtonElement>(null)
   const was = useRef(step)
@@ -25,7 +25,15 @@ export function MeasurePlan({ measure }: { measure: MeasuredPlan }) {
     was.current = step
   }, [step])
   const ms = result?.measured?.ms ?? null
-  const said = step === 'running' ? t.measuring : result ? t.measured(ms === null ? null : t.duration(ms)) : ''
+  const said = stopping
+    ? t.measureStopping
+    : step === 'running'
+      ? t.measuring
+      : stopped
+        ? t.measureStopped
+        : result
+          ? t.measured(ms === null ? null : t.duration(ms))
+          : ''
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
@@ -56,7 +64,8 @@ export function MeasurePlan({ measure }: { measure: MeasuredPlan }) {
             >
               {t.measureRun}
             </Button>
-            <Button size="sm" aria-disabled={step === 'running' || undefined} onClick={measure.cancel}>
+            {/* While it runs, the same button stops the run (the server's cancel). */}
+            <Button size="sm" aria-disabled={stopping || undefined} onClick={measure.cancel}>
               {t.measureCancel}
             </Button>
           </div>

@@ -111,6 +111,23 @@ for (const t of TARGETS) {
       }
     })
 
+    test('stops a measured run on a press, and says it was stopped', async ({ page }) => {
+      await login(page, t)
+      await page.goto(t.schema ? `/db/${t.database}/sql?schema=${t.schema}` : `/db/${t.database}/sql`)
+      await page.getByRole('textbox', { name: 'SQL エディタ' }).click()
+      await page.keyboard.type(t.dialect === 'mysql' ? 'SELECT SLEEP(20)' : 'SELECT pg_sleep(20)')
+      await page.getByRole('button', { name: '図で見る', exact: true }).click()
+      const plan = page.getByRole('region', { name: '実行計画', exact: true })
+      await plan.getByRole('button', { name: '実際に実行して測る' }).click()
+      await plan.getByRole('button', { name: '実行して測る', exact: true }).click()
+      await expect(plan.getByRole('status').filter({ hasText: '実行して測っています' })).toBeVisible()
+      await plan.getByRole('button', { name: 'やめる' }).click()
+      // Well before the 20 seconds the statement would take.
+      await expect(plan.getByRole('status').filter({ hasText: '測るのを止めました' })).toBeVisible({ timeout: 10_000 })
+      await expect(plan.getByRole('alert')).toHaveCount(0)
+      await expect(plan.getByRole('button', { name: '実際に実行して測る' })).toBeFocused()
+    })
+
     test('offers to drop an index tried once the plan is closed', async ({ page }) => {
       const { plan, trial, table, index, drop } = await trialPlan(page, t)
       try {
