@@ -468,6 +468,7 @@ export const jaScreens = {
       '並べ替えるカラム（ORDER BY・GROUP BY・つなぐカラム）で始まるインデックスがあれば、その順に読んで、並べ替えを省けることがあります（ORDER BY に LIMIT があれば、途中で読み終えられます）',
     temporaryHint: '一時テーブルは、行が多いとメモリに収まらず、ディスクに書くことがあります',
     endTitle: 'まとめ',
+    trialIntro: (name: string) => `インデックス ${name} を足してから、測り直した計画です。最後の章で、足す前と比べます`,
     trialBeforeTitle: 'インデックスを足す前',
     trialBefore: (table: string, read: string | null, name: string, columns: readonly string[]) =>
       `${read ? `足す前の ${table} の読み方: ${read}。` : ''}${table} に、インデックス ${name}（${columns.join(', ')}）を足して、同じ文をもう一度実行しました。印を付けたカラムが、インデックスのカラムです`,

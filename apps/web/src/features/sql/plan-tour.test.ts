@@ -418,7 +418,7 @@ describe('planTour, with an index tried', () => {
     estRows: 3,
     actual: ms(3, 0.5),
   })
-  const after = node({ ...loop, actual: ms(3, 2), children: [users, lookup] })
+  const after = node({ ...loop, actual: ms(3, 2), children: [{ ...users, actual: ms(1, 0.7) }, lookup] })
   const index = {
     table: 'posts',
     columns: ['user_id', 'created_at'],
@@ -452,8 +452,9 @@ describe('planTour, with an index tried', () => {
     // Its columns are in the box, though the plans name only the index.
     expect(diagram.columns.get('posts')).toContain('created_at')
     expect(now?.text).toBe(t.trialAfter('posts', p.trialRead('idx_posts_user_id', 3, p.duration(0.5)), true))
-    // Only the tables whose reads changed: users was read the same way.
+    // Only the tables read another way: users was read the same way, though its time differs run to run.
     expect(now?.notes).toEqual([])
+    expect(scenes[0]?.notes).toEqual([t.trialIntro('idx_posts_user_id')])
     expect(time?.text).toBe(p.trialTotal(p.duration(40), p.duration(2), 20))
     expect(time?.notes).toEqual([t.trialHonest])
     expect(time?.hints).toEqual([t.trialWriteCost])

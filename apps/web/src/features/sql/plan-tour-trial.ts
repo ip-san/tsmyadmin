@@ -43,9 +43,10 @@ export function trialScenes(
   const mine = changes.find((c) => same(c.before))
   const used = usesIndex(after.plan, table, name)
   const marked = [[table, columns] as const]
-  // The other tables whose reads changed too: a new index may change the order or the way of a join.
+  // The other tables read another way too (a new index may change a join): by how, not by the time, which every
+  // run changes.
   const others = changes.flatMap((c) =>
-    c === mine || !c.after || readSaid(c.before) === readSaid(c.after)
+    c === mine || !c.after || (c.after.access === c.before.access && c.after.index === c.before.index)
       ? []
       : [`${c.table}: ${readSaid(c.before)} → ${readSaid(c.after)}`]
   )

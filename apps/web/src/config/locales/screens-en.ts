@@ -471,6 +471,8 @@ export const enScreens = {
       'With an index starting with the columns sorted on (ORDER BY, GROUP BY, the joining columns), the rows could be read in that order and the sort left out (with a LIMIT on an ORDER BY, reading stops early)',
     temporaryHint: 'A temporary table that does not fit in memory may be written to disk',
     endTitle: 'Summary',
+    trialIntro: (name: string) =>
+      `The plan measured again once the index ${name} was added. The last chapter sets it beside the run before`,
     trialBeforeTitle: 'Before the index',
     trialBefore: (table: string, read: string | null, name: string, columns: readonly string[]) =>
       `${read ? `Before, ${table} was read ${read}. ` : ''}The index ${name} (${columns.join(', ')}) was added to ${table}, and the same statement run again. The marked columns are the index's`,

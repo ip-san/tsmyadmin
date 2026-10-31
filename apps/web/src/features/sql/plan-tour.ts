@@ -143,6 +143,7 @@ export function planTour({ plan, relations, indexColumns, rows, measuredMs, tria
       title: t.introTitle,
       text: measured ? t.introMeasured(reads.length, order, runTime) : t.intro(reads.length, order),
       frame: [],
+      ...(trial && measured ? { notes: [t.trialIntro(trial.index.name)] } : {}),
       overlay: whole(true),
       pulse: [],
     },
