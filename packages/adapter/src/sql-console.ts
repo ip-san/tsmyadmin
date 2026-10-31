@@ -47,12 +47,14 @@ export interface RunTracker {
   publish(conn: Conn): Promise<void>
   send<T>(fn: () => Promise<T>): Promise<T>
   readonly cancelled: boolean
+  /** The error a cancelled run fails with; the cancel then answers that it stopped it. */
+  stopped(): AdapterError
   release(conn: Conn): void
   end(): void
 }
 
 /** What a run stopped by a cancel fails with. */
-export const stopped = () => new AdapterError('QUERY_FAILED', 'The statement was stopped')
+const stopped = () => new AdapterError('QUERY_FAILED', 'The statement was stopped')
 
 function newEntry(ns: Namespace) {
   let resolveBackend: (id: string) => void = () => undefined
@@ -299,9 +301,10 @@ export class ScriptRunner {
 
   /**
    * Registers a run that is one statement of the adapter's own (a measured plan) under `queryId`, so `cancel` reaches
-   * it as it reaches a script: `publish` once the session is set up, `send` the statement, `release` the connection
-   * after its reset (a cancelled run's is dropped: its signal may still be on the way), and `end` in a finally. With
-   * no id, nothing is registered and nothing can cancel it.
+   * it as it reaches a script: `publish` once the session is set up, `send` the statement, fail with `stopped()` where
+   * it was cancelled, and in a finally, as `execute` does, drop the connection of a cancelled run at once (its signal
+   * may still be on the way: no ROLLBACK or reset for it to land on), else reset it and `release` it (which drops it
+   * where a cancel came meanwhile), then `end`. With no id, nothing is registered and nothing can cancel it.
    */
   track(ns: Namespace, queryId: string | undefined): RunTracker {
     const { entry, resolveBackend, resolveSettled } = newEntry(ns)
@@ -310,8 +313,15 @@ export class ScriptRunner {
       publish: async (conn) => {
         if (queryId) resolveBackend(await this.host.backendId(conn))
       },
+      stopped: () => {
+        entry.interrupted = true
+        return stopped()
+      },
       send: async (fn) => {
-        if (entry.cancelled) throw stopped()
+        if (entry.cancelled) {
+          entry.interrupted = true
+          throw stopped()
+        }
         entry.inFlight = true
         try {
           return await fn()

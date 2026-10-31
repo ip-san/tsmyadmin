@@ -42,7 +42,6 @@ import { driverValueToCell, type QueryOptions, UNCAPPED } from '../sql/cells.ts'
 import { explainableStatement, explainResult, measurableStatement, parseJsonCell } from '../sql/explain-statement.ts'
 import { pgLiteral } from '../sql/literal.ts'
 import { quoteIdent, quoteTable } from '../sql/quote.ts'
-import { stopped } from '../sql-console.ts'
 import { AdapterError, type AdapterErrorCode, type ConnectionConfig, type RowBatch } from '../types.ts'
 import { pgCreateStatements, pgTableCatalog } from './create-statements.ts'
 import { pgDdl } from './ddl.ts'
@@ -522,12 +521,15 @@ export class PostgresAdapter extends BaseAdapter {
             const raw = parseJsonCell(firstResult(await run.send(() => conn.query(sent))).rows[0]?.[0] ?? null)
             return explainResult(parsePgPlan(raw), raw, { ms: pgExecutionMs(raw) })
           } catch (err) {
-            throw run.cancelled ? stopped() : err
+            throw run.cancelled ? run.stopped() : err
           } finally {
-            // ROLLBACK, then DISCARD ALL (advisory locks too); a reset that fails drops the connection. Stopped:
-            // dropped, its signal may still land.
-            await conn.query('ROLLBACK').catch(() => undefined)
-            await conn.reset().catch(() => undefined)
+            // Stopped: dropped at once, as a script's run is (its signal may still land on what is sent next). Else
+            // ROLLBACK, then DISCARD ALL (advisory locks too); a reset that fails drops the connection.
+            if (run.cancelled) conn.discard()
+            else {
+              await conn.query('ROLLBACK').catch(() => undefined)
+              await conn.reset().catch(() => undefined)
+            }
             this.forgetSessionState(conn)
             run.release(conn)
           }

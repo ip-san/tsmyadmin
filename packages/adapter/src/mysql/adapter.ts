@@ -40,7 +40,6 @@ import { type Canceller, type Conn, firstResult, type RawResult, withinAcquireTi
 import type { QueryOptions } from '../sql/cells.ts'
 import { explainableStatement, explainResult, parseJsonCell } from '../sql/explain-statement.ts'
 import { quoteIdent } from '../sql/quote.ts'
-import { stopped } from '../sql-console.ts'
 import { AdapterError, type ConnectionConfig, type RowBatch } from '../types.ts'
 import { mysqlRecoverLossyDefaults, mysqlShowCreateTable } from './create-statements.ts'
 import { mysqlDdl } from './ddl.ts'
@@ -553,7 +552,7 @@ export class MysqlAdapter extends BaseAdapter {
             const sent = this.mariadb ? `ANALYZE FORMAT=JSON ${statement}` : `EXPLAIN ANALYZE FORMAT=JSON ${statement}`
             const raw = parseJsonCell(firstResult(await run.send(() => conn.query(sent))).rows[0]?.[0] ?? null)
             // KILL QUERY, like the time limit, may leave MySQL answering with the plan of a run cut short.
-            if (run.cancelled) throw stopped()
+            if (run.cancelled) throw run.stopped()
             // MySQL stopped by its time limit still answers, with the plan of a run cut short (the steps it had not
             // reached say nothing, the top one says 0 rows): only a warning tells.
             const warnings = firstResult(await conn.query('SHOW WARNINGS')).rows
@@ -562,11 +561,13 @@ export class MysqlAdapter extends BaseAdapter {
             }
             return explainResult(parseMysqlPlan(raw, statement), raw, { ms: mysqlExecutionMs(raw) })
           } catch (err) {
-            throw run.cancelled ? stopped() : err
+            throw run.cancelled ? run.stopped() : err
           } finally {
-            // A reset rolls back and puts every session variable back (the format too); one that fails drops the
-            // connection. The statement's own error is the one thrown. Stopped: dropped, its signal may still land.
-            await conn.reset().catch(() => undefined)
+            // Stopped: dropped at once, as a script's run is (its signal may still land on what is sent next).
+            // Else a reset rolls back and puts every session variable back (the format too); one that fails drops the
+            // connection. The statement's own error is the one thrown.
+            if (run.cancelled) conn.discard()
+            else await conn.reset().catch(() => undefined)
             this.forgetSessionState(conn)
             run.release(conn)
           }

@@ -216,6 +216,56 @@ describe('PlanView', () => {
       expect(await screen.findByText(p.measureStopped)).toBeTruthy()
     })
 
+    it('says a failure of its own where the server had nothing to stop, and can be stopped again', async () => {
+      let fail: (err: Error) => void = () => undefined
+      measuredRun = () =>
+        new Promise((_, reject) => {
+          fail = reject
+        })
+      cancelled = async () => ({ cancelled: false })
+      mount()
+      fireEvent.click(await opener())
+      fireEvent.click(screen.getByRole('button', { name: p.measureRun }))
+      const stop = screen.getByRole('button', { name: p.measureCancel })
+      fireEvent.click(stop)
+      await vi.waitFor(() => expect(stop.getAttribute('aria-disabled')).toBeNull())
+      fail(new Error('its time ran out'))
+      expect(await screen.findByText(/its time ran out/)).toBeTruthy()
+      expect(screen.queryByText(p.measureStopped)).toBeNull()
+    })
+
+    it('waits for what the server says of a stop before calling a failed run stopped', async () => {
+      let fail: (err: Error) => void = () => undefined
+      measuredRun = () =>
+        new Promise((_, reject) => {
+          fail = reject
+        })
+      let answer: (r: { cancelled: boolean }) => void = () => undefined
+      cancelled = () =>
+        new Promise((resolve) => {
+          answer = resolve
+        })
+      mount()
+      fireEvent.click(await opener())
+      fireEvent.click(screen.getByRole('button', { name: p.measureRun }))
+      fireEvent.click(screen.getByRole('button', { name: p.measureCancel }))
+      // The run fails of its own before the server answers that it had nothing to stop.
+      fail(new Error('its time ran out'))
+      answer({ cancelled: false })
+      expect(await screen.findByText(/its time ran out/)).toBeTruthy()
+      expect(screen.queryByText(p.measureStopped)).toBeNull()
+    })
+
+    it('stops the run when the plan is closed while it runs', async () => {
+      measuredRun = () => new Promise(() => undefined)
+      mount()
+      fireEvent.click(await opener())
+      fireEvent.click(screen.getByRole('button', { name: p.measureRun }))
+      expect(cancelSql).not.toHaveBeenCalled()
+      cleanup()
+      expect(cancelSql).toHaveBeenCalledWith('shop', analyzePlan.mock.calls[0]?.[3])
+    })
+
     it('runs nothing when the question is put away, and says why a run failed, keeping the estimate', async () => {
       mount()
       fireEvent.click(await opener())

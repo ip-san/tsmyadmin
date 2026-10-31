@@ -1,5 +1,5 @@
 import type { ExplainResult } from '@tsmyadmin/shared'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { analyzePlan, mutations } from '@/lib/queries.ts'
 
 /** Where the measuring is: not asked, asked and waiting to be confirmed, or running. */
@@ -33,19 +33,34 @@ export function useMeasuredPlan(db: string, schema: string | undefined, sql: str
   const [stopping, setStopping] = useState(false)
   const [stopped, setStopped] = useState(false)
   const running = useRef<string | null>(null)
-  const stop = useRef(false)
+  /** The stop asked of the run: whether the server stopped it (false where it had ended, or could not be reached). */
+  const stop = useRef<Promise<boolean> | null>(null)
   const stopRun = (id: string) => {
     if (stop.current) return
-    stop.current = true
     setStopping(true)
-    mutations.cancelSql(db, id).catch((err: unknown) => {
-      // The stop did not reach the server: the run goes on, and can be stopped again.
-      if (running.current !== id) return
-      stop.current = false
+    const asked = mutations.cancelSql(db, id).then(
+      (r) => r.cancelled,
+      (err: unknown) => {
+        if (running.current === id) setError(err)
+        return false
+      }
+    )
+    stop.current = asked
+    void asked.then((cancelled) => {
+      // Not stopped (it had just ended, or the stop did not reach the server): the run goes on, and can be stopped
+      // again.
+      if (cancelled || running.current !== id) return
+      stop.current = null
       setStopping(false)
-      setError(err)
     })
   }
+  // Closed while it runs: the run is stopped too, not left to its time limit.
+  useEffect(
+    () => () => {
+      if (running.current) void mutations.cancelSql(db, running.current).catch(() => undefined)
+    },
+    [db]
+  )
   return {
     step,
     result,
@@ -69,19 +84,20 @@ export function useMeasuredPlan(db: string, schema: string | undefined, sql: str
       if (running.current) return
       const id = crypto.randomUUID()
       running.current = id
-      stop.current = false
+      stop.current = null
       setStep('running')
       setError(null)
       setStopped(false)
       try {
         setResult(await analyzePlan(db, schema, sql, id))
       } catch (err) {
-        // Stopped on a press: said as such, not as a failure.
-        if (stop.current) setStopped(true)
+        // Stopped on a press, as the server says: said as such, not as a failure. A failure of its own (its time ran
+        // out) after a stop that did not take is said as it is.
+        if (stop.current && (await stop.current)) setStopped(true)
         else setError(err)
       } finally {
         running.current = null
-        stop.current = false
+        stop.current = null
         setStopping(false)
         setStep('idle')
       }
