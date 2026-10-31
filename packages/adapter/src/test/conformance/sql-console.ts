@@ -620,14 +620,14 @@ export function describeSqlConsole(env: ConformanceEnv): void {
     it('is stopped by a cancel under its id, fails, and leaves the next run as it would be', async () => {
       if (!(await measures())) return
       const queryId = crypto.randomUUID()
-      const started = performance.now()
       const run = env.db.analyzePlan(ns, ctx.slowSql, 30_000, queryId)
       const failed = expect(run).rejects.toMatchObject({ code: 'QUERY_FAILED', message: 'The statement was stopped' })
       await new Promise((resolve) => setTimeout(resolve, 300))
+      const stoppedAt = performance.now()
       expect(await env.db.cancelQuery(queryId)).toBe(true)
       await failed
-      // Stopped well before its run would end (PostgreSQL's sleeps 3 seconds).
-      expect(performance.now() - started).toBeLessThan(2_900)
+      // Stopped soon after it was asked, not when the run would end (PostgreSQL's sleeps 3 seconds).
+      expect(performance.now() - stoppedAt).toBeLessThan(2_000)
       // Done: the id reaches nothing now.
       expect(await env.db.cancelQuery(queryId)).toBe(false)
       const r = await env.db.analyzePlan(ns, 'SELECT name FROM users WHERE age > 20', 10_000, crypto.randomUUID())
