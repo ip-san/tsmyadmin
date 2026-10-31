@@ -356,7 +356,8 @@ export const jaScreens = {
     trialNone:
       'この計画からは、試すインデックスの候補が見つかりません（全件読むテーブルの条件に、インデックスの無いカラムがありません）',
     trialWhy: {
-      join: (table: string) => `${table} を、ほかの行ごとに全件読んでいます。`,
+      perRow: (table: string) => `${table} を、ほかのテーブルの行ごとに全件読んでいます。`,
+      waste: (table: string) => `${table} を全件読んでいますが、結合で残るのはその一部（推定で 10 分の 1 以下）です。`,
       filter: (table: string) => `${table} を全件読んでから、条件で絞っています。`,
     },
     trialTry: (table: string, columns: readonly string[]) => `${table}（${columns.join(', ')}）に作って試す`,
@@ -366,13 +367,13 @@ export const jaScreens = {
     trialMeasuring: 'インデックスを作りました。同じ文をもう一度実行して測っています…',
     trialDone: (name: string) => `${name} を作って測り直しました`,
     trialTotal: (before: string | null, after: string | null, factor: number | null) =>
-      `実行の時間: 前 ${before ?? '不明'} → 後 ${after ?? '不明'}${factor === null ? '' : factor >= 1.1 ? `（約 ${factor < 10 ? factor.toFixed(1) : Math.round(factor).toLocaleString('ja-JP')} 倍速い）` : factor <= 1 / 1.1 ? `（約 ${(1 / factor).toFixed(1)} 倍遅い）` : '（ほぼ同じ）'}`,
+      `実行の時間: 前 ${before ?? '不明'} → 後 ${after ?? '不明'}${factor === null ? '' : factor >= 1.1 ? `（1 回ずつの計測で、約 ${factor < 10 ? factor.toFixed(1) : Math.round(factor).toLocaleString('ja-JP')} 倍速い）` : factor <= 1 / 1.1 ? `（1 回ずつの計測で、約 ${(1 / factor).toFixed(1)} 倍遅い）` : '（1 回ずつの計測で、ほぼ同じ）'}`,
     trialRead: (index: string | null, rows: number | null, time: string | null) =>
       `${index ? `インデックス ${index} で` : '全件'}${rows === null ? '' : ` ${Math.round(rows).toLocaleString('ja-JP')} 行`}${time ? ` · ${time}` : ''}`,
     trialUnused: (name: string) =>
       `サーバーは ${name} を使いませんでした（行が少ない・あまり絞れないときは、全件読むほうが安いと見ます）。使われないインデックスは書き込みを遅くするだけなので、消すことを考えてください`,
     trialNote:
-      '1 回ずつの計測です。後のほうは、読んだ行がキャッシュに載っていて速く見えることがあります（「もう一度測る」で確かめられます）',
+      '後のほうは、読んだ行がキャッシュに載っていて速く見えることがあります（「もう一度測る」で確かめられます）。どちらかが 1 ミリ秒未満のときは、何倍とは言いません。作ったインデックスは、この画面を閉じても消すまで残ります（テーブルの「構造」からも消せます）',
     trialAgain: 'もう一度測る',
     trialUndo: (name: string) => `${name} を消す`,
   },

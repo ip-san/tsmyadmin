@@ -50,7 +50,8 @@ export function useIndexTrial(db: string, schema: string | undefined, sql: strin
     }
   }
   const flow = useDdlFlow(db, schema, (op: DdlOp) => {
-    if (op.op === 'addIndex' && pending.current) {
+    // The index made is the one previewed: matched by name, never a candidate of an earlier preview.
+    if (op.op === 'addIndex' && pending.current?.name === op.name) {
       setTried(pending.current)
       setAfter(null)
       // Not awaited: the structure and the plan are read again meanwhile.

@@ -358,7 +358,9 @@ export const enScreens = {
       'Indexes the plan suggests may make it faster. One is made, the statement is measured again, and the two runs are set side by side',
     trialNone: 'This plan suggests no index to try (no table read in full has a condition on columns without an index)',
     trialWhy: {
-      join: (table: string) => `${table} is read in full for each row of another table.`,
+      perRow: (table: string) => `${table} is read in full for each row of another table.`,
+      waste: (table: string) =>
+        `${table} is read in full, but the join keeps only part of it (a tenth or less, by the estimate).`,
       filter: (table: string) => `${table} is read in full, then narrowed by a condition.`,
     },
     trialTry: (table: string, columns: readonly string[]) => `Make one on ${table} (${columns.join(', ')}) and try it`,
@@ -368,13 +370,13 @@ export const enScreens = {
     trialMeasuring: 'The index is made. Running the statement again to measure it…',
     trialDone: (name: string) => `Made ${name} and measured again`,
     trialTotal: (before: string | null, after: string | null, factor: number | null) =>
-      `Run time: before ${before ?? 'unknown'} → after ${after ?? 'unknown'}${factor === null ? '' : factor >= 1.1 ? ` (about ${factor < 10 ? factor.toFixed(1) : Math.round(factor).toLocaleString('en-US')} times faster)` : factor <= 1 / 1.1 ? ` (about ${(1 / factor).toFixed(1)} times slower)` : ' (about the same)'}`,
+      `Run time: before ${before ?? 'unknown'} → after ${after ?? 'unknown'}${factor === null ? '' : factor >= 1.1 ? ` (one run each: about ${factor < 10 ? factor.toFixed(1) : Math.round(factor).toLocaleString('en-US')} times faster)` : factor <= 1 / 1.1 ? ` (one run each: about ${(1 / factor).toFixed(1)} times slower)` : ' (one run each: about the same)'}`,
     trialRead: (index: string | null, rows: number | null, time: string | null) =>
       `${index ? `through index ${index}` : 'in full'}${rows === null ? '' : `, ${Math.round(rows).toLocaleString('en-US')} rows`}${time ? ` · ${time}` : ''}`,
     trialUnused: (name: string) =>
       `The server did not use ${name} (with few rows, or a condition that narrows little, it finds reading in full cheaper). An index nothing uses only slows writes: consider dropping it`,
     trialNote:
-      'One run each. The later one may look faster because the rows it reads are in a cache (Measure again to see)',
+      "The later run may look faster because the rows it reads are in a cache (Measure again to see). Where either run took under a millisecond, no factor is given. The index made stays until dropped, even when this view is closed (it can also be dropped from the table's Structure)",
     trialAgain: 'Measure again',
     trialUndo: (name: string) => `Drop ${name}`,
   },

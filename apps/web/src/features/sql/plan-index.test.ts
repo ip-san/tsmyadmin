@@ -52,7 +52,7 @@ describe('conditionColumns', () => {
     expect(cols("(title = 'user_id')")).toEqual([{ column: 'title', use: 'equal' }])
     expect(cols('(1 = status)')).toEqual([{ column: 'status', use: 'equal' }])
     expect(cols('(status IN (1, 2))')).toEqual([{ column: 'status', use: 'equal' }])
-    for (const range of ['(created_at > 5)', '(created_at <= 5)', '(5 >= created_at)', '(created_at <> 5)'])
+    for (const range of ['(created_at > 5)', '(created_at <= 5)', '(5 >= created_at)'])
       expect(cols(range)).toEqual([{ column: 'created_at', use: 'range' }])
   })
 
@@ -61,6 +61,32 @@ describe('conditionColumns', () => {
     expect(cols("((title)::text ~~ '%x'::text)")).toEqual([{ column: 'title', use: 'none' }])
     expect(cols("((title)::text ~~* 'x%'::text)")).toEqual([{ column: 'title', use: 'none' }])
     expect(cols("((title)::text ~~ 'A%'::text)")).toEqual([{ column: 'title', use: 'range' }])
+  })
+
+  it('takes no column from a value, a function or a type, whatever the table names its columns', () => {
+    const odd = ['id', 'value', 'name', 'hash', 'date', 'pattern', 'lower', 'level']
+    const of = (text: string) => conditionColumns(text, 't', null, odd)
+    expect(of("(t.name = 'x')")).toEqual([{ column: 'name', use: 'equal' }])
+    expect(of("(t.name LIKE '%x')")).toEqual([{ column: 'name', use: 'none' }])
+    expect(of("(date(t.level) = DATE '2020-01-01')")).toEqual([{ column: 'level', use: 'none' }])
+    expect(of("(lower((name)::text) = 'x'::text)")).toEqual([{ column: 'name', use: 'none' }])
+    // The words of a step's name are no columns: only its condition is read.
+    expect(of('(t.hash = u.x)')).toEqual([{ column: 'hash', use: 'equal' }])
+  })
+
+  it('says a computed column, a not-equal, and either side of an OR are no use to an index', () => {
+    expect(cols('((status + 1) = 3)')).toEqual([{ column: 'status', use: 'none' }])
+    expect(cols('(status <> 3)')).toEqual([{ column: 'status', use: 'none' }])
+    expect(cols('(status != 3)')).toEqual([{ column: 'status', use: 'none' }])
+    expect(cols("((status = 1) OR (title = 'a'))")).toEqual([
+      { column: 'status', use: 'none' },
+      { column: 'title', use: 'none' },
+    ])
+    // A group opened by AND is no function.
+    expect(cols("((status = 1) AND (title = 'a'))")).toEqual([
+      { column: 'status', use: 'equal' },
+      { column: 'title', use: 'equal' },
+    ])
   })
 
   it('keeps a column said twice at its best use', () => {
@@ -91,7 +117,22 @@ describe('indexCandidates', () => {
       ],
     })
     expect(indexCandidates(plan, shapeOf)).toEqual([
-      { table: 'posts', columns: ['user_id'], name: 'idx_posts_user_id', reason: 'join' },
+      { table: 'posts', columns: ['user_id'], name: 'idx_posts_user_id', reason: 'perRow' },
+    ])
+  })
+
+  it('reads only the condition of a step’s name, not its words', () => {
+    const shape: TableShape = { columns: ['id', 'hash', 'inner', 'join'], indexes: [] }
+    const plan = node({
+      op: 'Inner hash join (u.id = t.id)',
+      estRows: 1,
+      children: [
+        node({ op: 'Table scan on t', table: 't', access: 'fullScan', estRows: 1000 }),
+        node({ op: 'Index lookup on u', table: 'u', access: 'lookup' }),
+      ],
+    })
+    expect(indexCandidates(plan, () => shape)).toEqual([
+      { table: 't', columns: ['id'], name: 'idx_t_id', reason: 'waste' },
     ])
   })
 
@@ -171,7 +212,7 @@ describe('indexCandidates', () => {
       ],
     })
     expect(indexCandidates(plan, shapeOf)).toEqual([
-      { table: 'posts', columns: ['user_id'], name: 'idx_posts_user_id', reason: 'join' },
+      { table: 'posts', columns: ['user_id'], name: 'idx_posts_user_id', reason: 'perRow' },
     ])
   })
 })

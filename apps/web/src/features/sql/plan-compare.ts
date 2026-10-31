@@ -27,12 +27,20 @@ export function compareReads(before: PlanNode, after: PlanNode): ReadChange[] {
   }))
 }
 
-/** Whether a plan reads a table through this index (by name, as the servers write it; case aside). */
+/** Whether a plan reads a table through this index (by name, as the servers write it; case aside, as MySQL may). */
 export const usesIndex = (plan: PlanNode, table: string, index: string): boolean =>
-  planReads(plan).some((r) => r.node.table === table && r.node.index?.toLowerCase() === index.toLowerCase())
+  planReads(plan).some(
+    (r) => r.node.table.toLowerCase() === table.toLowerCase() && r.node.index?.toLowerCase() === index.toLowerCase()
+  )
 
-/** How many times faster the second time is than the first (below 1: slower); null where either is not timed. */
+/** Below this, a run is too short for a factor between two to mean anything. */
+const SPEEDUP_FLOOR_MS = 1
+
+/**
+ * How many times faster the second run is than the first (below 1: slower); null where either is not timed, or took
+ * under a millisecond (a factor of two such runs is noise).
+ */
 export function speedup(before: number | null | undefined, after: number | null | undefined): number | null {
-  if (before == null || after == null || before <= 0) return null
-  return before / Math.max(after, 0.001)
+  if (before == null || after == null || Math.min(before, after) < SPEEDUP_FLOOR_MS) return null
+  return before / after
 }

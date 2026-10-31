@@ -52,13 +52,15 @@ describe('rowsRead, usesIndex and speedup', () => {
     const plan = join(read({ table: 'posts', index: 'IDX_POSTS_USER_ID' }), read({ table: 'users', index: 'other' }))
     expect(usesIndex(plan, 'posts', 'idx_posts_user_id')).toBe(true)
     expect(usesIndex(plan, 'users', 'idx_posts_user_id')).toBe(false)
+    expect(usesIndex(plan, 'POSTS', 'idx_posts_user_id')).toBe(true)
   })
 
   it('says how many times faster, and nothing where a run is not timed', () => {
     expect(speedup(400, 4)).toBe(100)
     expect(speedup(4, 8)).toBe(0.5)
-    expect(speedup(400, 0)).toBe(400_000)
+    // Under a millisecond either side, a factor is noise.
+    expect(speedup(400, 0.2)).toBeNull()
+    expect(speedup(0.5, 4)).toBeNull()
     expect(speedup(null, 4)).toBeNull()
-    expect(speedup(0, 4)).toBeNull()
   })
 })

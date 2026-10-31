@@ -83,9 +83,10 @@ export function IndexTrial({
               {usesIndex(after.plan, tried.table, tried.name) ? null : (
                 <p className="text-amber-900 dark:text-amber-200">{t.trialUnused(tried.name)}</p>
               )}
-              <p className="text-ink-sub">{t.trialNote}</p>
             </>
           ) : null}
+          {/* Said for as long as the index is there: closing this view does not take it away. */}
+          <p className="text-ink-sub">{t.trialNote}</p>
           <div className="flex flex-wrap gap-2">
             <Button size="sm" aria-disabled={busy || undefined} onClick={() => !busy && void trial.measure()}>
               {t.trialAgain}
