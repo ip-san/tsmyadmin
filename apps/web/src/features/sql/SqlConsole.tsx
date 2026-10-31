@@ -166,7 +166,7 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
     run.mutate({ script: prepareScript(explained, dialect, runOptions), shown: explained })
   }
   const explain = () => explainSql(text)
-  const plan = useVisualPlan(db, schema)
+  const plan = useVisualPlan(db, schema, scope)
   // What to do with a statement that ran. Held in a ref behind stable functions: the results are memoised, and a
   // new function on every render would redo them all each time a streamed result arrives.
   const [codeOf, setCodeOf] = useState<string | null>(null)

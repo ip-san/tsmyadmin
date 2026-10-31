@@ -3,6 +3,7 @@ import { useRef, useState } from 'react'
 import { type DdlFlow, useDdlFlow } from '@/lib/ddl.ts'
 import { analyzePlan } from '@/lib/queries.ts'
 import type { IndexCandidate } from './plan-index.ts'
+import { forgetTried, rememberTried } from './tried-indexes.ts'
 
 export interface IndexTrial {
   /** The preview → confirm → run of creating the index, and of dropping it again. */
@@ -28,7 +29,7 @@ export interface IndexTrial {
  * too, and puts the comparison away. Measuring is guarded against a second press (`useRef`: the state is a render
  * late).
  */
-export function useIndexTrial(db: string, schema: string | undefined, sql: string): IndexTrial {
+export function useIndexTrial(db: string, schema: string | undefined, sql: string, scope: string): IndexTrial {
   const [tried, setTried] = useState<IndexCandidate | null>(null)
   const [after, setAfter] = useState<ExplainResult | null>(null)
   const [measuring, setMeasuring] = useState(false)
@@ -52,11 +53,15 @@ export function useIndexTrial(db: string, schema: string | undefined, sql: strin
   const flow = useDdlFlow(db, schema, (op: DdlOp) => {
     // The index made is the one previewed: matched by name, never a candidate of an earlier preview.
     if (op.op === 'addIndex' && pending.current?.name === op.name) {
-      setTried(pending.current)
+      const made = pending.current
+      setTried(made)
       setAfter(null)
+      // Remembered until dropped: the SQL tab offers to drop it once this view is closed.
+      rememberTried(scope, { db, schema: schema ?? null, table: made.table, name: made.name, columns: made.columns })
       // Not awaited: the structure and the plan are read again meanwhile.
       void measure()
     } else if (op.op === 'dropIndex') {
+      forgetTried(scope, { db, schema: schema ?? null, table: op.table, name: op.name, columns: [] })
       setTried(null)
       setAfter(null)
       setError(null)

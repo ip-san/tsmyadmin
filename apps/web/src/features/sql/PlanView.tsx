@@ -30,17 +30,20 @@ export function PlanView({
   db,
   schema,
   sql,
+  scope,
   onClose,
 }: {
   db: string
   schema?: string | undefined
   sql: string
+  /** The server (`dialect.host.port`): the indexes tried are remembered per server. */
+  scope: string
   onClose: () => void
 }) {
   const plan = useQuery(explainQuery(db, schema, sql))
   const relations = useQuery(foreignKeysQuery(db, schema))
   const measure = useMeasuredPlan(db, schema, sql)
-  const trial = useIndexTrial(db, schema, sql)
+  const trial = useIndexTrial(db, schema, sql, scope)
   return (
     <section aria-label={t.title} className="space-y-3 rounded border border-line bg-surface p-3">
       <div className="flex items-center justify-between gap-2">
