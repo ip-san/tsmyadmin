@@ -33,8 +33,8 @@ for (const t of TARGETS) {
       await scan(page)
     })
 
-    test('an index tried: asked, made and compared', async ({ page }) => {
-      const { trial, table, drop } = await trialPlan(page, t)
+    test('an index tried: asked, made and compared, then left once the plan is closed', async ({ page }) => {
+      const { plan, trial, table, index, drop } = await trialPlan(page, t)
       try {
         await scan(page)
         await trial.getByRole('button', { name: `${table}（level）に作って試す` }).click()
@@ -43,6 +43,9 @@ for (const t of TARGETS) {
         await scan(page)
         await make.getByRole('button', { name: '実行する' }).click()
         await expect(trial.getByText(/^実行の時間: /)).toBeVisible()
+        await scan(page)
+        await plan.getByRole('button', { name: '閉じる', exact: true }).first().click()
+        await expect(page.getByRole('region', { name: '試したインデックス' })).toContainText(index)
         await scan(page)
       } finally {
         await drop()
