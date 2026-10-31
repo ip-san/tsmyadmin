@@ -1,4 +1,5 @@
 import type { PlanNode } from '@tsmyadmin/shared'
+import { locale } from '@/config/locale-screens.ts'
 import { planReads } from './plan-steps.ts'
 
 /** A table read before the index and after it: how, how many rows, how long. */
@@ -43,4 +44,14 @@ const SPEEDUP_FLOOR_MS = 1
 export function speedup(before: number | null | undefined, after: number | null | undefined): number | null {
   if (before == null || after == null || Math.min(before, after) < SPEEDUP_FLOOR_MS) return null
   return before / after
+}
+
+/** How a measured read went, in a few words: through which index or in full, the rows and the time. */
+export function readSaid(n: PlanNode): string {
+  const p = locale.plan
+  return p.trialRead(
+    n.access === 'fullScan' ? null : n.index,
+    rowsRead(n),
+    n.actual?.ms == null ? null : p.duration(n.actual.ms)
+  )
 }

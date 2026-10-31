@@ -378,7 +378,12 @@ export const jaScreens = {
     trialUndo: (name: string) => `${name} を消す`,
   },
   planTour: {
-    chapters: { reads: 'テーブルを読む順', after: '読んだあとの処理', measured: '見込みと実際' },
+    chapters: {
+      reads: 'テーブルを読む順',
+      after: '読んだあとの処理',
+      measured: '見込みと実際',
+      trial: 'インデックスを足す前と後',
+    },
     open: 'プレゼンで見る',
     openHint:
       'この実行計画を、データベースがテーブルを読む順に、場面ごとの全画面の発表にします（推定。文は実行しない）',
@@ -463,6 +468,17 @@ export const jaScreens = {
       '並べ替えるカラム（ORDER BY・GROUP BY・つなぐカラム）で始まるインデックスがあれば、その順に読んで、並べ替えを省けることがあります（ORDER BY に LIMIT があれば、途中で読み終えられます）',
     temporaryHint: '一時テーブルは、行が多いとメモリに収まらず、ディスクに書くことがあります',
     endTitle: 'まとめ',
+    trialBeforeTitle: 'インデックスを足す前',
+    trialBefore: (table: string, read: string | null, name: string, columns: readonly string[]) =>
+      `${read ? `足す前の ${table} の読み方: ${read}。` : ''}${table} に、インデックス ${name}（${columns.join(', ')}）を足して、同じ文をもう一度実行しました。印を付けたカラムが、インデックスのカラムです`,
+    trialAfterTitle: 'インデックスを足した後',
+    trialAfter: (table: string, read: string | null, used: boolean) =>
+      `${read ? `足した後の ${table} の読み方: ${read}。` : `足した後は、${table} を読む段がなくなりました。`}${used ? 'サーバーは、足したインデックスで絞って読んでいます' : 'サーバーは、足したインデックスを使いませんでした'}`,
+    trialTimeTitle: '実行の時間を比べる',
+    trialHonest:
+      '前も後も 1 回ずつの計測です。後の実行は、前の実行で読んだ行がキャッシュに載っていて、速く見えることがあります。どちらかが 1 ミリ秒未満のときは、何倍とは言いません',
+    trialWriteCost:
+      'インデックスは、行を足す・変える・消すたびに更新されます。読むのが速くなる代わりに、書き込みは少し遅くなり、場所も取ります。よく実行する文に効くかで決めます',
     end: (reads: number, full: number) =>
       `テーブルを読む段は ${reads.toLocaleString('ja-JP')} つです。${full === 0 ? '全件を読む段はありません' : `そのうち ${full.toLocaleString('ja-JP')} つは、全件（またはインデックスの端から端まで）を読む段です（LIMIT などで、途中で止まることもあります）`}`,
   },

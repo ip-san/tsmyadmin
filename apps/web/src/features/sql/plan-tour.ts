@@ -5,6 +5,7 @@ import { locale } from '@/config/locale-screens.ts'
 import { type RowEstimates, rowsOf, rowsReading } from '@/lib/row-estimates.ts'
 import { heavyShare, MISESTIMATE_RATIO, misestimate, shareOf } from './plan-measure.ts'
 import { type PlanRead, planReads, planSteps } from './plan-steps.ts'
+import { type TrialInput, trialScenes } from './plan-tour-trial.ts'
 
 const t = locale.planTour
 
@@ -85,6 +86,8 @@ export interface PlanTourInput {
   rows?: RowEstimates | undefined
   /** The plan was measured by running it: the time of the run (null where the server does not say). */
   measuredMs?: number | null | undefined
+  /** An index tried: the plan is the run after it was made, told beside the run before (with `measuredMs`). */
+  trial?: TrialInput | undefined
 }
 
 /** What a measured read did, beside what was expected of it. */
@@ -113,16 +116,20 @@ function measuredHints(node: PlanNode & { table: string }, totalMs: number | nul
  * each table is said with its size the first time it is read (beside the rows the plan expects from the read: how
  * far it narrows), and a full read whose rows are far from the table's is said as perhaps old statistics.
  */
-export function planTour({ plan, relations, indexColumns, rows, measuredMs }: PlanTourInput): {
+export function planTour({ plan, relations, indexColumns, rows, measuredMs, trial }: PlanTourInput): {
   diagram: ReturnType<typeof diagramFor>
   scenes: TourScene[]
 } {
   const reads = planReads(plan)
   const steps = planSteps(reads, indexColumns)
-  const tables = unique(reads.map((r) => r.node.table))
+  // An index tried: the tables read before it are drawn too, and its columns, used or not.
+  const tables = unique([...reads, ...(trial ? planReads(trial.before.plan) : [])].map((r) => r.node.table))
   const extra = new Map<string, string[]>()
-  for (const c of steps.flatMap((s) => s.columns ?? []))
-    extra.set(c.table, unique([...(extra.get(c.table) ?? []), c.column]))
+  const marked = [
+    ...steps.flatMap((s) => s.columns ?? []),
+    ...(trial?.index.columns ?? []).map((column) => ({ table: trial?.index.table ?? '', column })),
+  ]
+  for (const c of marked) extra.set(c.table, unique([...(extra.get(c.table) ?? []), c.column]))
   const diagram = diagramFor(tables, relations, extra)
   const drawn = diagram.relations
   const list = reads.map((r) => r.node.table).join(' → ')
@@ -235,6 +242,10 @@ export function planTour({ plan, relations, indexColumns, rows, measuredMs }: Pl
     })
   }
 
+  // Tried: the run before the index beside this one, after the reads of this one are told.
+  const trialAt = scenes.length
+  if (trial && measured) scenes.push(...trialScenes({ plan, ms: measuredMs ?? null }, trial, indexColumns))
+
   const full = reads.filter((r) => r.node.access === 'fullScan' || r.node.access === 'fullIndexScan').length
   scenes.push({
     title: t.endTitle,
@@ -249,5 +260,6 @@ export function planTour({ plan, relations, indexColumns, rows, measuredMs }: Pl
   openChapter(scenes, 0, t.chapters.reads)
   if (finishing.length > 0) openChapter(scenes, finishAt, t.chapters.after)
   if (measured) openChapter(scenes, measuredAt, t.chapters.measured)
+  if (trial && measured) openChapter(scenes, trialAt, t.chapters.trial)
   return { diagram, scenes }
 }

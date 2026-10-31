@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button.tsx'
 import { locale } from '@/config/locale-screens.ts'
 import type { RowEstimates } from '@/lib/row-estimates.ts'
 import { planTour } from './plan-tour.ts'
+import type { TrialInput } from './plan-tour-trial.ts'
 
 const t = locale.planTour
 
@@ -16,6 +17,7 @@ export function PlanTour({
   indexColumns,
   rows,
   measuredMs,
+  trial,
   ready,
 }: {
   plan: PlanNode
@@ -25,6 +27,8 @@ export function PlanTour({
   rows?: RowEstimates | undefined
   /** The plan was measured by running it: the time of the run (null where the server does not say). */
   measuredMs?: number | null | undefined
+  /** An index tried: the plan is the run after it, told beside the run before. */
+  trial?: TrialInput | undefined
   /**
    * The tables' index columns and estimated rows are read: until then the scenes would not have them, and they are
    * told as opened.
@@ -39,7 +43,7 @@ export function PlanTour({
         size="sm"
         title={t.openHint}
         disabled={!ready}
-        onClick={() => setDrawn(planTour({ plan, relations, indexColumns, rows, measuredMs }))}
+        onClick={() => setDrawn(planTour({ plan, relations, indexColumns, rows, measuredMs, trial }))}
       >
         <Presentation className="size-4" aria-hidden />
         {t.open}

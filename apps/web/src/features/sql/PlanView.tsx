@@ -120,6 +120,9 @@ function PlanStory({
           indexColumns={indexColumns}
           rows={estimates.rows}
           measuredMs={result.measured ? result.measured.ms : undefined}
+          trial={
+            trial?.state.after && trial.state.tried ? { before: trial.before, index: trial.state.tried } : undefined
+          }
           ready={structures.every((s) => !s.isPending) && !estimates.pending}
         />
       ) : null}

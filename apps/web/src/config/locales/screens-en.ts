@@ -385,6 +385,7 @@ export const enScreens = {
       reads: 'The tables, in the order they are read',
       after: 'What is done after the reads',
       measured: 'Estimated and actual',
+      trial: 'Before and after the index',
     },
     open: 'Present',
     openHint:
@@ -470,6 +471,17 @@ export const enScreens = {
       'With an index starting with the columns sorted on (ORDER BY, GROUP BY, the joining columns), the rows could be read in that order and the sort left out (with a LIMIT on an ORDER BY, reading stops early)',
     temporaryHint: 'A temporary table that does not fit in memory may be written to disk',
     endTitle: 'Summary',
+    trialBeforeTitle: 'Before the index',
+    trialBefore: (table: string, read: string | null, name: string, columns: readonly string[]) =>
+      `${read ? `Before, ${table} was read ${read}. ` : ''}The index ${name} (${columns.join(', ')}) was added to ${table}, and the same statement run again. The marked columns are the index's`,
+    trialAfterTitle: 'After the index',
+    trialAfter: (table: string, read: string | null, used: boolean) =>
+      `${read ? `After, ${table} was read ${read}. ` : `After, no step reads ${table} any more. `}${used ? 'The server narrows the read with the new index' : 'The server did not use the new index'}`,
+    trialTimeTitle: 'The two runs compared',
+    trialHonest:
+      'Each run was measured once. The second may find the rows the first read already cached, and look faster. Where either took under a millisecond, no factor is given',
+    trialWriteCost:
+      'An index is updated each time a row is added, changed or deleted: reads get faster, writes a little slower, and it takes space. Keep it if it helps a statement run often',
     end: (reads: number, full: number) =>
       `${reads.toLocaleString('en-US')} table ${reads === 1 ? 'read' : 'reads'}. ${full === 0 ? 'None of the reads is a full read' : `${full.toLocaleString('en-US')} of them ${full === 1 ? 'reads' : 'read'} every row (or an index end to end), unless a LIMIT or the like stops it early`}`,
   },
