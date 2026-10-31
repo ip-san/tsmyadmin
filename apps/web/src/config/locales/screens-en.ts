@@ -358,7 +358,7 @@ export const enScreens = {
       'Indexes the plan suggests may make it faster. One is made, the statement is measured again, and the two runs are set side by side',
     trialNone: 'This plan suggests no index to try (no table read in full has a condition on columns without an index)',
     trialWhy: {
-      perRow: (table: string) => `${table} is read in full for each row of another table.`,
+      perRow: (table: string) => `${table} is read in full for each row (or batch of rows) of another table.`,
       waste: (table: string) =>
         `${table} is read in full, but the join keeps only part of it (a tenth or less, by the estimate).`,
       filter: (table: string) => `${table} is read in full, then narrowed by a condition.`,
@@ -376,7 +376,7 @@ export const enScreens = {
     trialUnused: (name: string) =>
       `The server did not use ${name} (with few rows, or a condition that narrows little, it finds reading in full cheaper). An index nothing uses only slows writes: consider dropping it`,
     trialNote:
-      "The later run may look faster because the rows it reads are in a cache (Measure again to see). Where either run took under a millisecond, no factor is given. The index made stays until dropped, even when this view is closed (it can also be dropped from the table's Structure)",
+      "The index made stays until dropped, even when this view is closed (it can also be dropped from the table's Structure). The run measured after may look faster because the rows it reads are in a cache (Measure again to see). Where either run took under a millisecond, no factor is given",
     trialAgain: 'Measure again',
     trialUndo: (name: string) => `Drop ${name}`,
   },
