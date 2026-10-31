@@ -270,6 +270,28 @@ describe('PlanView', () => {
       expect(cancelSql).toHaveBeenCalledWith('shop', analyzePlan.mock.calls[0]?.[3])
     })
 
+    it('puts away why a stop did not reach the server when the question is put away', async () => {
+      let done: (r: unknown) => void = () => undefined
+      measuredRun = () =>
+        new Promise((resolve) => {
+          done = resolve
+        })
+      cancelled = async () => {
+        throw new Error('no connection')
+      }
+      mount()
+      fireEvent.click(await opener())
+      fireEvent.click(screen.getByRole('button', { name: p.measureRun }))
+      fireEvent.click(screen.getByRole('button', { name: p.measureCancel }))
+      expect(await screen.findByText(/no connection/)).toBeTruthy()
+      // The run ends as it would; asked again and put away, the stop's failure is no longer what is shown.
+      done({ plan: scan, raw: '', rawTruncated: false, measured: { ms: 5 } })
+      await screen.findByText(p.measured(p.duration(5)))
+      fireEvent.click(await opener())
+      fireEvent.click(screen.getByRole('button', { name: p.measureCancel }))
+      expect(screen.queryByText(/no connection/)).toBeNull()
+    })
+
     it('runs nothing when the question is put away, and says why a run failed, keeping the estimate', async () => {
       mount()
       fireEvent.click(await opener())
@@ -422,6 +444,23 @@ describe('PlanView', () => {
       // The index is there all the same: it can be measured again, or dropped.
       expect(within(trial).getByRole('button', { name: p.trialUndo('idx_logs_level') })).toBeTruthy()
       expect(triedIndexes(SCOPE)).toHaveLength(1)
+    })
+
+    it('puts away the last failure as it measures again', async () => {
+      condition = '(level = 3)'
+      measuredRun = run(null, 400)
+      mount()
+      const trial = await measured()
+      measuredRun = async () => {
+        throw new Error('its time ran out')
+      }
+      fireEvent.click(await screen.findByRole('button', { name: p.trialTry('logs', ['level']) }))
+      fireEvent.click(await screen.findByRole('button', { name: locale.ddl.execute }))
+      expect(await within(trial).findByText(/its time ran out/)).toBeTruthy()
+      measuredRun = () => new Promise(() => undefined)
+      fireEvent.click(within(trial).getByRole('button', { name: p.trialAgain }))
+      expect(await within(trial).findByText(p.trialMeasuring)).toBeTruthy()
+      expect(within(trial).queryByText(/its time ran out/)).toBeNull()
     })
 
     it('says so where the server did not use the index made', async () => {

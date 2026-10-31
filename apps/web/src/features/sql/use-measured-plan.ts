@@ -39,23 +39,27 @@ export function useMeasuredPlan(db: string, schema: string | undefined, sql: str
     stopped,
     // Asked again or put away: why the last run failed, or that it was stopped, is no longer what is shown.
     ask: () => {
-      if (analyze.running) return
+      if (analyze.busy()) return
       setError(null)
+      analyze.clearStopError()
       setStopped(false)
       setConfirming(true)
     },
     cancel: () => {
-      if (analyze.running) return analyze.stop()
+      if (analyze.busy()) return analyze.stop()
       setError(null)
+      analyze.clearStopError()
       setStopped(false)
       setConfirming(false)
     },
     run: async () => {
+      if (analyze.busy()) return
       setError(null)
       setStopped(false)
-      const outcome = await analyze.run()
+      // The question closes as the run ends, in the same update: the step goes from running to idle, never through
+      // confirming (which would move the focus).
+      const outcome = await analyze.run(() => setConfirming(false))
       if (outcome === null) return
-      setConfirming(false)
       if (outcome.kind === 'done') setResult(outcome.result)
       else if (outcome.kind === 'stopped') setStopped(true)
       else setError(outcome.error)

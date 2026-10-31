@@ -26,13 +26,14 @@ export function IndexTrial({
 }) {
   const { tried, after, measuring, stopping, stopped, error, flow } = trial
   const busy = flow.running || measuring
-  // The stop button goes when the run ends: the focus it had goes to measuring again, never to the page.
+  // The stop button goes when the run ends: the focus it had goes to measuring again, never to the page. A blur as it
+  // is taken away (some browsers send one) has no element it went to, unlike a move of the focus elsewhere.
   const again = useRef<HTMLButtonElement>(null)
   const stopFocused = useRef(false)
   useLayoutEffect(() => {
     if (measuring || !stopFocused.current) return
     stopFocused.current = false
-    again.current?.focus()
+    if (document.activeElement === null || document.activeElement === document.body) again.current?.focus()
   }, [measuring])
   const said = stopping
     ? locale.plan.measureStopping
@@ -104,8 +105,8 @@ export function IndexTrial({
                 onFocus={() => {
                   stopFocused.current = true
                 }}
-                onBlur={() => {
-                  stopFocused.current = false
+                onBlur={(e) => {
+                  if (e.relatedTarget) stopFocused.current = false
                 }}
               >
                 {t.trialStop}

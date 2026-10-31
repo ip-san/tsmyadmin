@@ -44,11 +44,12 @@ export function useIndexTrial(db: string, schema: string | undefined, sql: strin
   // Stoppable as the first run is: a large table may take its whole time limit again.
   const analyze = useStoppableAnalyze(db, schema, sql)
   const measure = async () => {
-    // A second press is caught there, by a ref.
-    const outcome = await analyze.run()
-    if (outcome === null) return
+    if (analyze.busy()) return
+    // What the last run said is put away as this one starts.
     setError(null)
     setStopped(false)
+    const outcome = await analyze.run()
+    if (outcome === null) return
     if (outcome.kind === 'done') setAfter(outcome.result)
     else if (outcome.kind === 'stopped') setStopped(true)
     else setError(outcome.error)

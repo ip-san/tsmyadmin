@@ -11,10 +11,17 @@ export interface StoppableAnalyze {
   stopping: boolean
   /** Why the last stop did not reach the server (the run went on). */
   stopError: unknown
-  /** Runs the statement to measure it; null where a run is going already (a second press). */
-  run: () => Promise<AnalyzeOutcome | null>
+  /** A run is going (read from a ref: true from the press, not a render later). */
+  busy: () => boolean
+  /**
+   * Runs the statement to measure it; null where a run is going already (a second press). `onEnd` is called as it
+   * ends, in the same update as `running` turns false.
+   */
+  run: (onEnd?: () => void) => Promise<AnalyzeOutcome | null>
   /** Stops the run going, once however often pressed; nothing where none is. */
   stop: () => void
+  /** Puts away why the last stop did not reach the server. */
+  clearStopError: () => void
 }
 
 /**
@@ -40,7 +47,9 @@ export function useStoppableAnalyze(db: string, schema: string | undefined, sql:
     running,
     stopping,
     stopError,
-    run: async () => {
+    busy: () => current.current !== null,
+    clearStopError: () => setStopError(null),
+    run: async (onEnd) => {
       if (current.current) return null
       const id = crypto.randomUUID()
       current.current = id
@@ -54,6 +63,7 @@ export function useStoppableAnalyze(db: string, schema: string | undefined, sql:
       } finally {
         current.current = null
         stopAsked.current = null
+        onEnd?.()
         setRunning(false)
         setStopping(false)
       }
