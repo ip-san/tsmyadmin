@@ -27,7 +27,7 @@ export function IndexTrial({
   const { tried, after, measuring, stopping, stopped, error, flow } = trial
   const busy = flow.running || measuring
   // The stop button goes when the run ends: the focus it had goes to measuring again, never to the page. A blur as it
-  // is taken away (some browsers send one) has no element it went to, unlike a move of the focus elsewhere.
+  // is taken away (some browsers send one) is not one of the person's: the button is no longer on the page.
   const again = useRef<HTMLButtonElement>(null)
   const stopFocused = useRef(false)
   useLayoutEffect(() => {
@@ -106,7 +106,7 @@ export function IndexTrial({
                   stopFocused.current = true
                 }}
                 onBlur={(e) => {
-                  if (e.relatedTarget) stopFocused.current = false
+                  if (e.relatedTarget || e.currentTarget.isConnected) stopFocused.current = false
                 }}
               >
                 {t.trialStop}
