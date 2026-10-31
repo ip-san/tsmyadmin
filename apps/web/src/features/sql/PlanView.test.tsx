@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import type { PlanNode } from '@tsmyadmin/shared'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { locale } from '@/config/locale-screens.ts'
@@ -262,6 +262,14 @@ describe('PlanView', () => {
       expect(analyzePlan).toHaveBeenCalledTimes(2)
       // The run before stays the one compared with: no measuring it over while the index is there.
       expect(screen.queryByRole('button', { name: p.measure })).toBeNull()
+      // The presentation tells the run after, and ends with it beside the run before: logs read in full, then by the index.
+      fireEvent.click(await screen.findByRole('button', { name: t.open }))
+      const tour = screen.getByRole('dialog', { name: t.dialog })
+      fireEvent.click(within(tour).getByRole('button', { name: new RegExp(`^\\d+\\. ${t.trialAfterTitle}$`) }))
+      expect(screen.getByRole('heading', { level: 3, name: t.trialAfterTitle })).toBeTruthy()
+      expect(tour.textContent).toContain(t.trialAfter('logs', p.trialRead('idx_logs_level', 12, p.duration(4)), true))
+      expect(tour.textContent).toContain(t.chapters.trial)
+      fireEvent.click(within(tour).getByRole('button', { name: locale.tour.close }))
       // Dropped again through the preview: the comparison is put away.
       fireEvent.click(screen.getByRole('button', { name: p.trialUndo('idx_logs_level') }))
       expect((await screen.findByRole('dialog', { name: locale.ddl.titles.dropIndex })).textContent).toContain(
@@ -291,6 +299,11 @@ describe('PlanView', () => {
       mount()
       await measured()
       expect(await screen.findByText(p.trialNone)).toBeTruthy()
+      // Measured, nothing tried: the presentation has no before and after.
+      fireEvent.click(await screen.findByRole('button', { name: t.open }))
+      const tour = screen.getByRole('dialog', { name: t.dialog })
+      expect(within(tour).queryByRole('button', { name: new RegExp(`\\. ${t.trialBeforeTitle}$`) })).toBeNull()
+      expect(within(tour).getAllByRole('button', { name: new RegExp(`\\. ${t.measuredTitle}$`) })).toHaveLength(1)
     })
 
     it('offers nothing to try before the statement is measured', async () => {

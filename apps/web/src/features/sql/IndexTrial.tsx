@@ -1,23 +1,13 @@
-import type { ExplainResult, PlanNode } from '@tsmyadmin/shared'
+import type { ExplainResult } from '@tsmyadmin/shared'
 import { PreviewDialog } from '@/components/ddl/PreviewDialog.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox } from '@/components/ui/Feedback.tsx'
 import { locale } from '@/config/locale-screens.ts'
-import { compareReads, rowsRead, speedup, usesIndex } from './plan-compare.ts'
+import { compareReads, readSaid, speedup, usesIndex } from './plan-compare.ts'
 import type { IndexCandidate } from './plan-index.ts'
 import type { IndexTrial as Trial } from './use-index-trial.ts'
 
 const t = locale.plan
-
-/** How a read went, in a few words: through which index or in full, the rows and the time. */
-function readSaid(n: PlanNode): string {
-  const rows = rowsRead(n)
-  return t.trialRead(
-    n.access === 'fullScan' ? null : n.index,
-    rows,
-    n.actual?.ms == null ? null : t.duration(n.actual.ms)
-  )
-}
 
 /**
  * Trying an index the plan suggests: the candidates (each with why), and once one is made, the run before beside the
