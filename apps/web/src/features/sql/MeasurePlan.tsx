@@ -1,5 +1,5 @@
 import { ANALYZE_TIMEOUT_DEFAULT_MS } from '@tsmyadmin/shared'
-import { useEffect, useRef } from 'react'
+import { useLayoutEffect, useRef } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox } from '@/components/ui/Feedback.tsx'
 import { locale } from '@/config/locale-screens.ts'
@@ -17,7 +17,9 @@ export function MeasurePlan({ measure }: { measure: MeasuredPlan }) {
   const opener = useRef<HTMLButtonElement>(null)
   const runner = useRef<HTMLButtonElement>(null)
   const was = useRef(step)
-  useEffect(() => {
+  // Before the browser paints: the run button the focus was on is gone in the same commit, so the focus never rests
+  // on the page.
+  useLayoutEffect(() => {
     if (step === 'confirming') runner.current?.focus()
     else if (step === 'idle' && was.current !== 'idle') opener.current?.focus()
     was.current = step
