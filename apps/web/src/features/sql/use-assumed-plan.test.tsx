@@ -26,12 +26,22 @@ describe('useAssumedPlan', () => {
       void result.current.assume(candidate)
     })
     expect(hypotheticalPlan).toHaveBeenCalledTimes(1)
-    // Put away while it runs: not taken, the answer still lands.
-    act(() => result.current.clear())
     await act(async () => answer(plan))
     expect(result.current.result).toEqual(plan)
     expect(result.current.candidate).toEqual(candidate)
     expect(result.current.running).toBe(false)
+  })
+
+  it('drops the answer of an ask put away while it ran (measuring puts it away)', async () => {
+    const { result } = renderHook(() => useAssumedPlan('shop', undefined, 'SELECT * FROM logs'))
+    await act(async () => {
+      void result.current.assume(candidate)
+    })
+    act(() => result.current.clear())
+    expect(result.current.running).toBe(false)
+    await act(async () => answer(plan))
+    expect(result.current.result).toBeNull()
+    expect(result.current.candidate).toBeNull()
   })
 
   it('forgets the index asked for when the server refuses, so the plan as it is stays', async () => {

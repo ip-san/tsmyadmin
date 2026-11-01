@@ -89,6 +89,21 @@ describe('pgHypotheticalPlan', () => {
     expect(r.assumed).toEqual([])
   })
 
+  it('fails where HypoPG gives no index back, rather than say the plan does not use it', async () => {
+    const { conn, asked } = scripted([
+      installed,
+      [/^BEGIN READ ONLY$/, rows([])],
+      [/hypopg_create_index/, rows([])],
+      [/^ROLLBACK$/, rows([])],
+      [/hypopg_reset/, rows([])],
+    ])
+    await expect(
+      pgHypotheticalPlan(conn, ns, 'SELECT * FROM users WHERE age = 5', [index], parsePgPlan)
+    ).rejects.toMatchObject({ code: 'QUERY_FAILED' })
+    expect(asked.some((a) => a.text.startsWith('EXPLAIN'))).toBe(false)
+    expect(asked.at(-1)?.text).toBe('SELECT "ext".hypopg_reset()')
+  })
+
   it('refuses where HypoPG is not installed, before anything is assumed', async () => {
     const { conn, asked } = scripted([[/FROM pg_extension/, rows([])]])
     await expect(pgHypotheticalPlan(conn, ns, 'SELECT 1', [index], parsePgPlan)).rejects.toMatchObject({

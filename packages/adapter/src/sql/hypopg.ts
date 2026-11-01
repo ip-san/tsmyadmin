@@ -61,7 +61,10 @@ export async function pgHypotheticalPlan(
       const ddl = createIndexSql('postgres', ns, { table: i.table, name: i.name, columns: i.columns, unique: false })
       const made = firstResult(await conn.query(`SELECT indexname FROM ${fn('hypopg_create_index')}($1)`, [ddl])).rows
       const server = made[0]?.[0]
-      if (typeof server === 'string') names.set(server, i.name)
+      // Not assumed: a plan without it would be said to be one that does not use it.
+      if (typeof server !== 'string')
+        throw new AdapterError('QUERY_FAILED', `HypoPG did not assume the index ${i.name}`)
+      names.set(server, i.name)
     }
     const used = new Set<string>()
     const raw = renamed(

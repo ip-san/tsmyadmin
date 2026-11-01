@@ -28,6 +28,8 @@ export function useAssumedPlan(db: string, schema: string | undefined, sql: stri
   const [error, setError] = useState<unknown>(null)
   // A second press in the same frame: the state says running one render late.
   const busy = useRef(false)
+  // Each ask, and each putting away, is a new generation: an answer for an older one is not shown.
+  const generation = useRef(0)
   return {
     candidate,
     result,
@@ -36,25 +38,31 @@ export function useAssumedPlan(db: string, schema: string | undefined, sql: stri
     assume: async (c) => {
       if (busy.current) return
       busy.current = true
+      const mine = ++generation.current
       setCandidate(c)
       setResult(null)
       setError(null)
       setRunning(true)
       try {
-        setResult(await hypotheticalPlan(db, schema, sql, [{ table: c.table, columns: c.columns, name: c.name }]))
+        const plan = await hypotheticalPlan(db, schema, sql, [{ table: c.table, columns: c.columns, name: c.name }])
+        if (generation.current === mine) setResult(plan)
       } catch (e) {
-        setCandidate(null)
-        setError(e)
+        if (generation.current === mine) {
+          setCandidate(null)
+          setError(e)
+        }
       } finally {
         busy.current = false
-        setRunning(false)
+        if (generation.current === mine) setRunning(false)
       }
     },
+    // Also while it is asked (measuring puts it away): its answer, when it comes, is dropped.
     clear: () => {
-      if (busy.current) return
+      generation.current++
       setCandidate(null)
       setResult(null)
       setError(null)
+      setRunning(false)
     },
   }
 }

@@ -73,11 +73,16 @@ export function describeHypotheticalPlan(env: ConformanceEnv): void {
     it('says it cannot where HypoPG is not installed in the database (PostgreSQL)', async () => {
       if (dialect !== 'postgres') return
       await execOk('DROP EXTENSION IF EXISTS hypopg')
-      const sql = 'SELECT name FROM users WHERE age > 20'
-      expect((await env.db.explainPlan(ns, sql)).canAssume).toBe(false)
-      await expect(
-        env.db.hypotheticalPlan(ns, sql, [{ table: 'users', columns: ['age'], name: 'idx_users_age' }])
-      ).rejects.toMatchObject({ code: 'UNSUPPORTED' })
+      try {
+        const sql = 'SELECT name FROM users WHERE age > 20'
+        expect((await env.db.explainPlan(ns, sql)).canAssume).toBe(false)
+        await expect(
+          env.db.hypotheticalPlan(ns, sql, [{ table: 'users', columns: ['age'], name: 'idx_users_age' }])
+        ).rejects.toMatchObject({ code: 'UNSUPPORTED' })
+      } finally {
+        // Put back: other suites on the same database (the E2E) may count on it.
+        await execOk('CREATE EXTENSION IF NOT EXISTS hypopg')
+      }
     })
   })
 }

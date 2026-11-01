@@ -36,7 +36,7 @@ for (const t of TARGETS) {
         const index = `idx_${table}_level`
         await expect(assume.getByRole('status')).toHaveText(`${index} があるものとしての計画です（見込み）`)
         // Whether the server would read through it on so few rows is its own; that the estimates are set side by side
-        // is not.
+        // is not. Before, the table has its primary key only, so a condition on level is read in full on any version.
         await expect(assume.getByText(/^見込みのコスト: /)).toBeVisible()
         await expect(assume.getByRole('listitem').filter({ hasText: new RegExp(`^${table}: 全件 `) })).toHaveCount(1)
         // Nothing was built: the table has its primary key only, and the measuring is still to be asked for.

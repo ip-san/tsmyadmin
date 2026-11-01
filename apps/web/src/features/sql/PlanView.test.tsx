@@ -633,7 +633,9 @@ describe('PlanView', () => {
       // Said under the plan, and not presented as the table's own.
       expect(screen.getByText(p.notesAssumed('idx_logs_level'))).toBeTruthy()
       expect(screen.queryByRole('button', { name: t.open })).toBeNull()
+      within(section).getByRole('button', { name: p.assumeBack }).focus()
       fireEvent.click(within(section).getByRole('button', { name: p.assumeBack }))
+      expect(document.activeElement).toBe(within(section).getByRole('heading', { name: p.assumeGroup }))
       expect(within(section).queryByText(p.assumeDone('idx_logs_level'))).toBeNull()
       expect(screen.queryAllByText(/\[idx_logs_level\]/)).toHaveLength(0)
       expect(screen.getByText(p.notes)).toBeTruthy()

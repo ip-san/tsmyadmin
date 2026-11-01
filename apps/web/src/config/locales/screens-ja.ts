@@ -393,7 +393,7 @@ export const jaScreens = {
     assumeBack: '元の計画に戻す',
     assumeBuild: (table: string, columns: readonly string[]) => `${table}（${columns.join(', ')}）を本当に作って測る`,
     assumeMissing:
-      'PostgreSQL に拡張 HypoPG を入れると、インデックスを作らずに、あるものとして計画を見られます（サーバーにパッケージを入れ、データベースで CREATE EXTENSION hypopg）',
+      'PostgreSQL に拡張 HypoPG を入れると、インデックスを作らずに、あるものとして計画を見られます（サーバーにパッケージを入れ、そのデータベースでスーパーユーザーが CREATE EXTENSION hypopg）',
     triedGroup: '試したインデックス',
     triedIntro:
       '実行計画の「インデックスを試す」で作ったインデックスが、まだ残っています。使わないなら消してください（インデックスは、書き込みのたびに更新されます）',

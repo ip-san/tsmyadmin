@@ -22,7 +22,7 @@ tsmyadmin は **1 プロセス（Bun）で API と SPA を配信する単一コ�
   | CockroachDB 24.3 | conformance 113 件中 55 件通過。閲覧と基本的な SQL は動作するが、シーケンス・継承・ctid・ルーチン・トリガーなど PostgreSQL 固有のカタログに依存する機能が広範に失敗 | 非対応 |
 
 - Aurora / Cloud SQL / AlloyDB など、上流と同じエンジンを使うマネージドサービスは未検証ですが、カタログが同一であれば動作する想定です（`SUPER` 権限が必要な操作、`KILL`、`pg_terminate_backend` などはサービス側の制限を受けます）
-- **PostgreSQL の拡張 HypoPG**（任意）: データベースに入っていると、実行計画の「インデックスを作らずに試す」が使えます（サーバーにパッケージ `postgresql-<版>-hypopg` を入れ、そのデータベースで `CREATE EXTENSION hypopg`）。無くても、ほかの機能は変わりません
+- **PostgreSQL の拡張 HypoPG**（任意）: データベースに入っていると、実行計画の「インデックスを作らずに試す」が使えます（サーバーにパッケージ `postgresql-<版>-hypopg` を入れ、そのデータベースで、スーパーユーザーが `CREATE EXTENSION hypopg`。HypoPG は信頼された拡張ではないため、一般のユーザーでは作れません）。無くても、ほかの機能は変わりません
 - 接続には対象サーバーのユーザーが必要です。閲覧のみなら `SELECT` 権限で足り、機能に応じて `SHOW VIEW`・`PROCESS`・`CREATE USER` などが必要になります（`docs/operations.md` の「権限の少ないユーザー」）
 
 ## 環境変数（唯一の一覧）

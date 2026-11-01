@@ -499,7 +499,12 @@ export class PostgresAdapter extends BaseAdapter {
           firstResult(await conn.query(`EXPLAIN (FORMAT JSON) ${statement}`)).rows[0]?.[0] ?? null
         )
         // Whether the same plan can be read with indexes assumed (HypoPG in this database).
-        return { ...explainResult(parsePgPlan(raw), raw), canAssume: (await hypopgSchema(conn)) !== null }
+        // Not knowing (the catalog not readable) leaves it unsaid, rather than failing the estimate.
+        const hypopg = await hypopgSchema(conn).then(
+          (s) => s !== null,
+          () => undefined
+        )
+        return { ...explainResult(parsePgPlan(raw), raw), ...(hypopg === undefined ? {} : { canAssume: hypopg }) }
       } finally {
         await conn.query('ROLLBACK')
       }

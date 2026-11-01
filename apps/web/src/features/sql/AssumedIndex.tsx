@@ -1,4 +1,5 @@
 import type { ExplainResult, PlanNode } from '@tsmyadmin/shared'
+import { useRef } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox } from '@/components/ui/Feedback.tsx'
 import { locale } from '@/config/locale-screens.ts'
@@ -30,6 +31,8 @@ export function AssumedIndex({
   /** Builds the index and measures again (once the statement was measured); absent until then. */
   onBuild?: ((c: IndexCandidate) => void) | undefined
 }) {
+  // The buttons under the comparison go with it: the focus they had goes to the heading, never to the page.
+  const heading = useRef<HTMLHeadingElement>(null)
   // Absent where the server has no such thing (MySQL): nothing to say.
   if (before.canAssume === undefined || candidates.length === 0) return null
   const { candidate, result, running, error } = assumed
@@ -37,7 +40,9 @@ export function AssumedIndex({
   const changes = result ? compareReads(before.plan, result.plan).filter((c) => c.after) : []
   return (
     <section aria-label={t.assumeGroup} className="space-y-2 rounded border border-line p-2 text-xs">
-      <h4 className="font-semibold text-ink">{t.assumeGroup}</h4>
+      <h4 ref={heading} tabIndex={-1} className="font-semibold text-ink">
+        {t.assumeGroup}
+      </h4>
       <p role="status" className="text-ink-sub empty:sr-only">
         {said}
       </p>
@@ -71,11 +76,28 @@ export function AssumedIndex({
               )}
               <p className="text-ink-sub">{t.assumeNote}</p>
               <div className="flex flex-wrap gap-2">
-                <Button size="sm" aria-disabled={running || undefined} onClick={() => !running && assumed.clear()}>
+                <Button
+                  size="sm"
+                  aria-disabled={running || undefined}
+                  onClick={() => {
+                    if (running) return
+                    heading.current?.focus()
+                    assumed.clear()
+                  }}
+                >
                   {t.assumeBack}
                 </Button>
                 {onBuild ? (
-                  <Button size="sm" aria-disabled={running || undefined} onClick={() => !running && onBuild(candidate)}>
+                  <Button
+                    size="sm"
+                    aria-disabled={running || undefined}
+                    onClick={() => {
+                      if (running) return
+                      // The preview opens from here, and gives the focus back here when it closes.
+                      heading.current?.focus()
+                      onBuild(candidate)
+                    }}
+                  >
                     {t.assumeBuild(candidate.table, candidate.columns)}
                   </Button>
                 ) : null}

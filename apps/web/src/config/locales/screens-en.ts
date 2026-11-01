@@ -402,7 +402,7 @@ export const enScreens = {
     assumeBack: 'Back to the plan as it is',
     assumeBuild: (table: string, columns: readonly string[]) => `Build ${table} (${columns.join(', ')}) and measure`,
     assumeMissing:
-      'With the HypoPG extension on PostgreSQL, the plan can be seen as if an index were there, without building it (install the package on the server, then CREATE EXTENSION hypopg in the database)',
+      'With the HypoPG extension on PostgreSQL, the plan can be seen as if an index were there, without building it (install the package on the server, then CREATE EXTENSION hypopg in the database as a superuser)',
     trialMeasuring: 'The index is made. Running the statement again to measure it…',
     trialDone: (name: string) => `Made ${name} and measured again`,
     trialTotal: (before: string | null, after: string | null, factor: number | null) =>
