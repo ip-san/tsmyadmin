@@ -300,7 +300,10 @@ export const DdlOpSchema = z.discriminatedUnion('op', [
     op: z.literal('dropIndex'),
     table,
     name: z.string().min(1),
-    /** Dropped without stopping reads and writes of the table (PostgreSQL `CONCURRENTLY`, MySQL `LOCK=NONE`). */
+    /**
+     * Dropped without stopping reads and writes of the table: PostgreSQL `DROP INDEX CONCURRENTLY`, MySQL
+     * `ALTER TABLE … DROP INDEX …, ALGORITHM=INPLACE, LOCK=NONE` (MariaDB's DROP INDEX takes neither).
+     */
     online: z.boolean().optional(),
   }),
   z.object({ op: z.literal('renameIndex'), table, name: z.string().min(1), newName: z.string().min(1) }),
