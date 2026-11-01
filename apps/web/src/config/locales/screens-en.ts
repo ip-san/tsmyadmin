@@ -376,6 +376,29 @@ export const enScreens = {
       'Writes to the table go on while the index is made (which takes longer). Keep it on when trying on a server close to production',
     trialLeftover: (table: string, name: string) =>
       `${name} on ${table} stopped part way and was left unusable. Nothing reads through it, yet every write still updates it`,
+    compareGroup: 'Compare the candidates (estimate)',
+    compareIntro:
+      'Has the server estimate the plan with each candidate index assumed, one at a time and then all together, and sets the estimated costs side by side. Nothing is built and the statement is not run',
+    compareRun: 'Estimate all the candidates',
+    compareRunning: 'Estimating with each candidate assumed, one at a time…',
+    compareDone: (n: number) => `Set ${plural(n, 'estimate', 'estimates')} side by side`,
+    compareCaption: 'The estimated cost with each candidate',
+    compareColIndexes: 'Indexes assumed',
+    compareColCost: 'Estimated cost',
+    compareColUsed: 'Would the server use it',
+    compareNone: 'None (the plan as it is)',
+    compareOne: (name: string, table: string, columns: readonly string[]) =>
+      `${name} (${columns.join(', ')} of ${table})`,
+    compareAll: 'All the candidates together',
+    compareCost: (before: number | null, after: number | null) =>
+      after === null
+        ? '—'
+        : `${costSaid(after)}${before !== null && after > 0 && before / after >= 1.5 ? ` (about 1/${Math.round(before / after).toLocaleString('en-US')} of now)` : ''}`,
+    compareUsed: (names: readonly string[]) => `Would use: ${names.join(', ')}`,
+    compareUnused: 'Would not use it',
+    compareFailed: 'Could not be estimated',
+    compareNote:
+      'Candidates on different tables are not rivals: they may help together. "All the candidates together" is what building them all is expected to give. The cost is in the server\'s own units of estimate, not time; whether it is truly faster is known only once built and measured',
     triedGroup: 'Indexes tried',
     triedIntro:
       'These indexes, made with Try an index on a plan, are still there. Drop them if they are not needed (an index is updated on every write)',

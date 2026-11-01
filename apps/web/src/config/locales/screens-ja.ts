@@ -394,6 +394,29 @@ export const jaScreens = {
     assumeBuild: (table: string, columns: readonly string[]) => `${table}（${columns.join(', ')}）を本当に作って測る`,
     assumeMissing:
       'PostgreSQL に拡張 HypoPG を入れると、インデックスを作らずに、あるものとして計画を見られます（サーバーにパッケージを入れ、そのデータベースでスーパーユーザーが CREATE EXTENSION hypopg）',
+    compareGroup: '候補をまとめて比べる（見込み）',
+    compareIntro:
+      '候補のインデックスを 1 つずつ、そして全部一緒に、あるものとしてサーバーに見積もらせ、見込みのコストを並べます。何も作らず、文も実行しません',
+    compareRun: '候補をまとめて見積もる',
+    compareRunning: '候補を 1 つずつ、あるものとして見積もっています…',
+    compareDone: (n: number) => `${n} 通りの見込みを並べました`,
+    compareCaption: '候補ごとの見込みのコスト',
+    compareColIndexes: 'あるものとしたインデックス',
+    compareColCost: '見込みのコスト',
+    compareColUsed: 'サーバーが使う見込みか',
+    compareNone: 'なし（いまの計画）',
+    compareOne: (name: string, table: string, columns: readonly string[]) =>
+      `${name}（${table} の ${columns.join(', ')}）`,
+    compareAll: '候補すべてを同時に',
+    compareCost: (before: number | null, after: number | null) =>
+      after === null
+        ? '—'
+        : `${costSaid(after)}${before !== null && after > 0 && before / after >= 1.5 ? `（いまの約 ${Math.round(before / after).toLocaleString('ja-JP')} 分の 1）` : ''}`,
+    compareUsed: (names: readonly string[]) => `使う見込み: ${names.join(', ')}`,
+    compareUnused: '使わない見込み',
+    compareFailed: '見積もれませんでした',
+    compareNote:
+      '別のテーブルの候補は取り合うものではなく、一緒に効くことがあります。「候補すべてを同時に」が、全部作ったときの見込みです。コストはサーバーの見積もりの単位で、時間ではありません。本当に速くなるかは、作って測るまで分かりません',
     triedGroup: '試したインデックス',
     triedIntro:
       '実行計画の「インデックスを試す」で作ったインデックスが、まだ残っています。使わないなら消してください（インデックスは、書き込みのたびに更新されます）',

@@ -17,6 +17,7 @@ import { forecastOf } from './plan-forecast.ts'
 import { indexCandidates } from './plan-index.ts'
 import { misestimate } from './plan-measure.ts'
 import { planReads, planSteps } from './plan-steps.ts'
+import { type AssumedCompare, useAssumedCompare } from './use-assumed-compare.ts'
 import { type AssumedPlan, useAssumedPlan } from './use-assumed-plan.ts'
 import { type IndexTrial as Trial, useIndexTrial } from './use-index-trial.ts'
 import { useMeasuredPlan } from './use-measured-plan.ts'
@@ -48,6 +49,7 @@ export function PlanView({
   const measure = useMeasuredPlan(db, schema, sql)
   const trial = useIndexTrial(db, schema, sql, scope)
   const assumed = useAssumedPlan(db, schema, sql)
+  const compared = useAssumedCompare(db, schema, sql)
   return (
     <section aria-label={t.title} className="space-y-3 rounded border border-line bg-surface p-3">
       <div className="flex items-center justify-between gap-2">
@@ -84,6 +86,7 @@ export function PlanView({
             result={trial.after ?? assumed.result ?? measure.result ?? plan.data}
             estimate={plan.data}
             assumed={assumed}
+            compared={compared}
             relations={relations.data}
             trial={measure.result ? { state: trial, before: measure.result } : null}
           />
@@ -99,6 +102,7 @@ function PlanStory({
   result,
   estimate,
   assumed,
+  compared,
   relations,
   trial,
 }: {
@@ -108,6 +112,7 @@ function PlanStory({
   /** The plan estimated, as it is: what an index assumed is compared with. */
   estimate: ExplainResult
   assumed: AssumedPlan
+  compared: AssumedCompare
   relations: readonly RelationDef[]
   /** An index to try, offered once the statement was measured (the run before). */
   trial: { state: Trial; before: ExplainResult } | null
@@ -145,6 +150,7 @@ function PlanStory({
     <div className="space-y-3">
       <AssumedIndex
         assumed={assumed}
+        compared={compared}
         before={estimate}
         candidates={indexCandidates(estimate.plan, shapeOf)}
         // Built for real through the trial, once there is a run to compare with and nothing is tried yet.
