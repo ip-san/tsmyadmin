@@ -72,8 +72,10 @@ for (const t of TARGETS) {
       await page.getByRole('button', { name: 'インデックスを追加' }).click()
       await page.getByRole('dialog').getByLabel('name', { exact: true }).check()
       await page.getByRole('dialog').getByLabel('種類').selectOption('unique')
+      // Built without stopping writes: the statement says so, and the server takes it.
+      await page.getByRole('dialog').getByRole('checkbox', { name: '書き込みを止めずに作る' }).check()
       await page.getByRole('dialog').getByRole('button', { name: '次へ（SQL を確認）' }).click()
-      await confirmPreview(page, /CREATE UNIQUE INDEX/)
+      await confirmPreview(page, /CREATE UNIQUE INDEX .*(CONCURRENTLY|LOCK=NONE)/)
       const indexes = page.getByRole('table', { name: 'インデックス' })
       const idxName = `idx_${table}_name`
       await expect(indexes.getByRole('row').filter({ hasText: idxName })).toContainText('はい')

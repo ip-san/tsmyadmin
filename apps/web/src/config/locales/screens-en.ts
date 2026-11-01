@@ -1215,6 +1215,9 @@ export const enScreens = {
       method: 'Method',
       defaultMethod: '(default)',
       lengths: 'Index only the first N characters (empty for the whole value)',
+      online: 'Build without stopping writes',
+      onlineNote:
+        'Writes to the table go on while the index is built (it takes longer). On PostgreSQL a build that fails part way can leave an unusable index, which you can drop from "Unusable indexes" on this screen. On MySQL, where the server cannot build it without stopping writes, it refuses at once instead of waiting',
       rename: 'Rename',
       newName: 'New name',
       editOf: (name: string) => `Index ${name}: change`,

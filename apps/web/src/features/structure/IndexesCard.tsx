@@ -202,10 +202,13 @@ export function IndexesCard({
               : dialog.initial
                 ? { initial: dialog.initial }
                 : {})}
+            // A partitioned parent cannot build its index without stopping writes (PostgreSQL refuses).
+            canBuildOnline={dialog.mode === 'add' && !schema.partitioned}
             onCancel={close}
-            onSubmit={(v) => {
+            onSubmit={({ online, ...v }) => {
               close()
-              if (dialog.mode === 'add') return onPreview({ op: 'addIndex', table, ...v })
+              if (dialog.mode === 'add')
+                return onPreview({ op: 'addIndex', table, ...v, ...(online ? { online } : {}) })
               onPreview({ op: 'alterIndex', table, name: dialog.index.name, index: v })
             }}
           />

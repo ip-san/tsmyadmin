@@ -59,4 +59,24 @@ describe('IndexForm', () => {
     expect(screen.queryByRole('option', { name: 'FULLTEXT（全文）' })).toBeNull()
     expect(screen.queryByRole('spinbutton')).toBeNull()
   })
+
+  it('does not offer to build a FULLTEXT index without stopping writes (MySQL refuses)', async () => {
+    const onSubmit = vi.fn()
+    render(
+      <IndexForm
+        table="t"
+        dialect="mysql"
+        columns={['a']}
+        initial={{ columns: ['a'] }}
+        canBuildOnline
+        onSubmit={onSubmit}
+        onCancel={vi.fn()}
+      />
+    )
+    await userEvent.click(screen.getByRole('checkbox', { name: '書き込みを止めずに作る' }))
+    await userEvent.selectOptions(screen.getByLabelText('種類'), 'fulltext')
+    expect(screen.queryByRole('checkbox', { name: '書き込みを止めずに作る' })).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: '次へ（SQL を確認）' }))
+    expect(onSubmit.mock.lastCall?.[0]).not.toHaveProperty('online')
+  })
 })

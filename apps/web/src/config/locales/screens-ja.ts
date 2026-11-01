@@ -1200,6 +1200,9 @@ export const jaScreens = {
       method: '方式',
       defaultMethod: '（既定）',
       lengths: '先頭だけを索引にする長さ（空欄なら全体）',
+      online: '書き込みを止めずに作る',
+      onlineNote:
+        '作るあいだも、テーブルへの書き込みを止めません（そのぶん時間がかかります）。PostgreSQL では、途中で失敗すると使えないインデックスが残ることがあり、この画面の「使えないインデックス」から消せます。MySQL では、書き込みを止めずに作れないときは待たずに断られます',
       rename: '名前を変更',
       newName: '新しい名前',
       editOf: (name: string) => `インデックス ${name}: 変更`,
