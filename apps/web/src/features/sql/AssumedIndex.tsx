@@ -3,8 +3,10 @@ import { useRef } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox } from '@/components/ui/Feedback.tsx'
 import { locale } from '@/config/locale-screens.ts'
+import { AssumedCompare } from './AssumedCompare.tsx'
 import { compareReads } from './plan-compare.ts'
 import type { IndexCandidate } from './plan-index.ts'
+import type { AssumedCompare as Compare } from './use-assumed-compare.ts'
 import type { AssumedPlan } from './use-assumed-plan.ts'
 
 const t = locale.plan
@@ -20,11 +22,14 @@ const expected = (n: PlanNode) => t.assumeRead(n.access === 'fullScan' ? null : 
  */
 export function AssumedIndex({
   assumed,
+  compared,
   before,
   candidates,
   onBuild,
 }: {
   assumed: AssumedPlan
+  /** Every candidate assumed in turn, set side by side (where there are two or more). */
+  compared: Compare
   /** The estimated plan, as it is. */
   before: ExplainResult
   candidates: readonly IndexCandidate[]
@@ -103,6 +108,9 @@ export function AssumedIndex({
                 ) : null}
               </div>
             </>
+          ) : null}
+          {candidates.length > 1 ? (
+            <AssumedCompare compared={compared} before={before} candidates={candidates} />
           ) : null}
         </>
       ) : (

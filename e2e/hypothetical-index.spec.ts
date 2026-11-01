@@ -65,6 +65,49 @@ for (const t of TARGETS) {
       }
     })
 
+    test('estimates every candidate, alone and all together, side by side', async ({ page }) => {
+      test.skip(t.dialect !== 'postgres', 'HypoPG is PostgreSQL only')
+      await page.emulateMedia({ reducedMotion: 'reduce' })
+      await login(page, t)
+      const a = scratchName('e2e_cmpa')
+      const b = scratchName('e2e_cmpb')
+      const drop = () => cleanUp(page, t, `DROP TABLE IF EXISTS ${a}; DROP TABLE IF EXISTS ${b}`)
+      try {
+        await sqlOn(
+          page,
+          t,
+          'DO $$ BEGIN CREATE EXTENSION IF NOT EXISTS hypopg; EXCEPTION WHEN duplicate_object OR unique_violation THEN NULL; END $$'
+        )
+        const values = Array.from({ length: 200 }, (_, i) => `(${i + 1}, ${i % 50})`).join(', ')
+        for (const table of [a, b]) {
+          await sqlOn(page, t, `CREATE TABLE ${table} (id INT PRIMARY KEY, level INT NOT NULL)`)
+          await sqlOn(page, t, `INSERT INTO ${table} (id, level) VALUES ${values}`)
+        }
+        await page.goto(`/db/${t.database}/sql${t.schema ? `?schema=${t.schema}` : ''}`)
+        await page.getByRole('textbox', { name: 'SQL エディタ' }).click()
+        // No join condition: each table is read in full on any version, so each has a candidate.
+        await page.keyboard.type(`SELECT ${a}.id FROM ${a}, ${b} WHERE ${a}.level = 3 AND ${b}.level = 4`)
+        await page.getByRole('button', { name: '図で見る', exact: true }).click()
+        const plan = page.getByRole('region', { name: '実行計画', exact: true })
+        const compare = plan.getByRole('region', { name: '候補をまとめて比べる（見込み）' })
+        await compare.getByRole('button', { name: '候補をまとめて見積もる' }).click()
+        await expect(compare.getByRole('status')).toHaveText('3 通りの見込みを並べました')
+        // Which is cheaper, and what the server would use, are its own: that each is set in its row is not.
+        const rows = compare.getByRole('table', { name: '候補ごとの見込みのコスト' }).getByRole('row')
+        await expect(rows).toHaveCount(5)
+        await expect(rows.nth(1)).toContainText('なし（いまの計画）')
+        await expect(rows.filter({ hasText: `idx_${a}_level（${a} の level）` })).toHaveCount(1)
+        await expect(rows.filter({ hasText: `idx_${b}_level（${b} の level）` })).toHaveCount(1)
+        await expect(rows.nth(4)).toContainText('候補すべてを同時に')
+        await expect(compare.getByText('見積もれませんでした')).toHaveCount(0)
+        const problems = await pageProblems(page)
+        expect(problems.axe, JSON.stringify(problems.axe, null, 2)).toEqual([])
+        expect(problems.layout, 'layout').toEqual([])
+      } finally {
+        await drop()
+      }
+    })
+
     test('builds the index tried without building it, and sets the run beside the forecast', async ({ page }) => {
       test.skip(t.dialect !== 'postgres', 'HypoPG is PostgreSQL only')
       await login(page, t)
