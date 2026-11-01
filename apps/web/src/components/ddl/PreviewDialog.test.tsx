@@ -173,4 +173,36 @@ describe('PreviewDialog, stopping a run', () => {
     await act(async () => finish({ results: [ok(0), ok(1)] }))
     await vi.waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1))
   })
+  it('is stopped where the answer to the stop did not come back and the script ended short without an error', async () => {
+    stopAnswer = async () => {
+      throw new Error('network down')
+    }
+    await running()
+    fireEvent.click(await stopButton())
+    await screen.findByText('network down')
+    await act(async () => finish({ results: [ok(0)] }))
+    expect(await screen.findByText(d.stopped)).toBeTruthy()
+    expect(onSuccess).not.toHaveBeenCalled()
+  })
+
+  it('is done at once where every statement answered, without waiting for the answer to the stop', async () => {
+    stopAnswer = () => new Promise(() => undefined)
+    await running()
+    fireEvent.click(await stopButton())
+    await act(async () => finish({ results: [ok(0), ok(1)] }))
+    await vi.waitFor(() => expect(onSuccess).toHaveBeenCalledWith('build'))
+  })
+
+  it('puts away the failure of the run before as a run starts', async () => {
+    await running()
+    await act(async () => finish({ results: [ok(0), failed] }))
+    expect(await screen.findByText(d.failedStatement, { exact: false })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: d.execute }))
+    await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(2))
+    expect(screen.queryByText(d.failedStatement, { exact: false })).toBeNull()
+    fireEvent.click(await stopButton())
+    await act(async () => finish({ results: [ok(0)] }))
+    expect((await screen.findByRole('alert')).textContent).toBe(d.stopped)
+    expect(screen.queryByText(d.failedStatement, { exact: false })).toBeNull()
+  })
 })

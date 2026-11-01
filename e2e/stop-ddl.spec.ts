@@ -24,12 +24,15 @@ for (const t of TARGETS) {
         await login(other, t)
         const begin = t.dialect === 'mysql' ? 'START TRANSACTION' : 'BEGIN'
         const sleep = t.dialect === 'mysql' ? 'SELECT SLEEP(40)' : 'SELECT pg_sleep(40)'
-        holding = other.request.post(`/api/databases/${t.database}/sql`, {
-          data: {
-            sql: `${begin}; UPDATE ${table} SET v = 1 WHERE id = 1; ${sleep} /* ${marker} */`,
-            ...(t.schema ? { schema: t.schema } : {}),
-          },
-        })
+        // Caught at once: ended in the clean-up, its request fails, and nothing waits on it before then.
+        holding = other.request
+          .post(`/api/databases/${t.database}/sql`, {
+            data: {
+              sql: `${begin}; UPDATE ${table} SET v = 1 WHERE id = 1; ${sleep} /* ${marker} */`,
+              ...(t.schema ? { schema: t.schema } : {}),
+            },
+          })
+          .catch(() => undefined)
         type Process = { id: string; state: string | null; query: string | null }
         const processes = async () => {
           const res = await page.request.get('/api/server/processes')
@@ -67,7 +70,10 @@ for (const t of TARGETS) {
         expect(problems.axe, JSON.stringify(problems.axe, null, 2)).toEqual([])
         expect(problems.layout, 'layout').toEqual([])
         await preview.getByRole('button', { name: 'キャンセル' }).click()
+        // Read anew from the server, its primary key there: the build stopped left no index.
+        await page.reload()
         const indexes = page.getByRole('table', { name: 'インデックス' })
+        await expect(indexes.getByRole('row').filter({ hasText: /PRIMARY|_pkey/ })).toHaveCount(1)
         await expect(indexes.getByRole('row').filter({ hasText: `idx_${table}_v` })).toHaveCount(0)
       } finally {
         // The holder's session ended (its transaction with it), so the table can be dropped at once.

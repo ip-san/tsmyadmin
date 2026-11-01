@@ -45,6 +45,11 @@ export interface PreviewFlowConfig<Op> {
   onSuccess?: (op: Op) => void | Promise<void>
 }
 
+/** How many statements of the script answered: the several result sets of one CALL are one statement. */
+function answered(results: readonly StatementResult[]): number {
+  return results.reduce((n, r, i) => Math.max(n, (r.statement ?? i) + 1), 0)
+}
+
 /**
  * Preview → confirm → execute. Nothing runs until the user confirms the generated SQL.
  * Shared by DDL (structure, create table, operations) and account management.
@@ -64,23 +69,33 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
   const [stopping, setStopping] = useState(false)
   const [stopped, setStopped] = useState(false)
   const [stopError, setStopError] = useState<unknown>(null)
-  // The run going (its id), and the stop asked of it: whether the server stopped it.
+  // The run going (its id); the run a stop was asked of; and the stop asked: whether the server stopped the run (null
+  // where its answer did not come back).
   const current = useRef<string | null>(null)
-  const stopAsked = useRef<Promise<boolean> | null>(null)
-  // Stopped is what the server says, whatever the run answered: stopped between two statements, a script ends with no
-  // error at all, and must not be taken for done (nor its follow-up run).
-  const wasStopped = async () => (stopAsked.current ? await stopAsked.current : false)
+  const askedOf = useRef<string | null>(null)
+  const stopAsked = useRef<{ id: string; answer: Promise<boolean | null> } | null>(null)
   const runM = useMutation({
-    mutationFn: async ({ op: o, queryId }: { op: Op; queryId: string }) => {
+    mutationFn: async ({ op: o, statements, queryId }: { op: Op; statements: string[]; queryId: string }) => {
+      const answerOf = async () => (stopAsked.current?.id === queryId ? await stopAsked.current.answer : null)
       try {
-        const r = await config.execute(o, sql, queryId)
-        return { ...r, stopped: await wasStopped() }
+        const r = await config.execute(o, statements, queryId)
+        if (askedOf.current !== queryId) return { ...r, stopped: false }
+        const failed = r.results.some((x) => x.kind === 'error')
+        // Every statement answered, none failing: done, however the stop went (and without waiting for its answer).
+        if (!failed && answered(r.results) >= statements.length) return { ...r, stopped: false }
+        // Stopped is what the server says: stopped between two statements, a script ends short with no error at all,
+        // and must not be taken for done (nor its follow-up run). Where the answer did not come back, a script ended
+        // short with no error is taken as stopped all the same.
+        const answer = await answerOf()
+        return { ...r, stopped: answer === true || (answer === null && !failed) }
       } catch (err) {
-        if (await wasStopped()) return { results: [], stopped: true }
+        if (askedOf.current === queryId && (await answerOf()) === true) return { results: [], stopped: true }
         throw err
       }
     },
-    onSettled: () => {
+    // Only its own run's: a run previewed over (and still going) must not put away the stop of the next one.
+    onSettled: (_data, _err, { queryId }) => {
+      if (current.current !== queryId) return
       current.current = null
       stopAsked.current = null
       setStopping(false)
@@ -133,17 +148,18 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
             if (!id || stopAsked.current || !ask) return
             setStopping(true)
             setStopError(null)
-            const asked = ask(id).then(
-              (r) => r,
+            askedOf.current = id
+            const answer = ask(id).then(
+              (r): boolean | null => r,
               (err: unknown) => {
                 if (current.current === id) setStopError(err)
-                return false
+                return null
               }
             )
-            stopAsked.current = asked
-            void asked.then((cancelled) => {
+            stopAsked.current = { id, answer }
+            void answer.then((cancelled) => {
               // Not stopped (it had just ended, or the stop did not reach the server): it can be stopped again.
-              if (cancelled || current.current !== id) return
+              if (cancelled === true || current.current !== id) return
               stopAsked.current = null
               setStopping(false)
             })
@@ -172,7 +188,8 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
       stopAsked.current = null
       setStopped(false)
       setStopError(null)
-      runM.mutate({ op, queryId }, { onSettled: () => (running.current = false) })
+      setFailed(null)
+      runM.mutate({ op, statements: sql, queryId }, { onSettled: () => (running.current = false) })
     },
     cancel: () => {
       setOp(null)
