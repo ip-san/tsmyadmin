@@ -406,6 +406,17 @@ export const jaScreens = {
       `実行の時間: 前 ${before ?? '不明'} → 後 ${after ?? '不明'}${factor === null ? '' : factor >= 1.1 ? `（1 回ずつの計測で、約 ${factor < 10 ? factor.toFixed(1) : Math.round(factor).toLocaleString('ja-JP')} 倍速い）` : factor <= 1 / 1.1 ? `（1 回ずつの計測で、約 ${(1 / factor).toFixed(1)} 倍遅い）` : '（1 回ずつの計測で、ほぼ同じ）'}`,
     trialRead: (index: string | null, rows: number | null, time: string | null) =>
       `${index ? `インデックス ${index} で` : '全件'}${rows === null ? '' : ` ${Math.round(rows).toLocaleString('ja-JP')} 行`}${time ? ` · ${time}` : ''}`,
+    forecastSaid: (costBefore: number | null, costAfter: number | null, used: boolean) =>
+      `作る前の見込み（作らずに試した結果）: ${costBefore !== null && costAfter !== null ? `コスト ${costSaid(costBefore)} → ${costSaid(costAfter)}${costAfter > 0 && costBefore / costAfter >= 1.5 ? `（約 ${Math.round(costBefore / costAfter).toLocaleString('ja-JP')} 分の 1）` : ''}、` : ''}サーバーは${used ? '使う' : '使わない'}見込みでした`,
+    forecastVerdict: {
+      used: '見込みどおり、サーバーはインデックスを使いました',
+      unused: '見込みどおり、サーバーはインデックスを使いませんでした',
+      notUsed:
+        '見込みでは使うはずでしたが、実際は使いませんでした。統計が古いか、実際の行数が見込みと違うのかもしれません（ANALYZE で統計を取り直すと、変わることがあります）',
+      usedAnyway: '見込みでは使わないはずでしたが、実際は使いました。実際の行数が、見込みと違っていたのかもしれません',
+    },
+    forecastUnits:
+      'コストはサーバーの見積もりの単位で、時間ではありません。見込みの「何分の 1」と実際の「何倍速い」は、目安として比べてください',
     trialUnused: (name: string) =>
       `サーバーは ${name} を使いませんでした（行が少ない・あまり絞れないときは、全件読むほうが安いと見ます）。使われないインデックスは書き込みを遅くするだけなので、消すことを考えてください`,
     trialNote:
@@ -516,6 +527,7 @@ export const jaScreens = {
       `${read ? `足した後の ${table} の読み方: ${read}。` : `足した後は、${table} を読む段がなくなりました。`}${used ? 'サーバーは、足したインデックスで絞って読んでいます' : 'サーバーは、足したインデックスを使いませんでした'}`,
     trialTimeTitle: '実行の時間を比べる',
     trialNotRead: '読まなくなりました',
+    trialForecastTitle: '作る前の見込みと比べる',
     trialHonest:
       '前も後も 1 回ずつの計測です。後の実行は、前の実行で読んだ行がキャッシュに載っていて、速く見えることがあります。どちらかが 1 ミリ秒未満のときは、何倍とは言いません',
     trialWriteCost:

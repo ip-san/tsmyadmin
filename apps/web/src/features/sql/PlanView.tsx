@@ -13,6 +13,7 @@ import { AssumedIndex } from './AssumedIndex.tsx'
 import { IndexTrial } from './IndexTrial.tsx'
 import { MeasurePlan } from './MeasurePlan.tsx'
 import { PlanTour } from './PlanTour.tsx'
+import { forecastOf } from './plan-forecast.ts'
 import { indexCandidates } from './plan-index.ts'
 import { misestimate } from './plan-measure.ts'
 import { planReads, planSteps } from './plan-steps.ts'
@@ -150,8 +151,13 @@ function PlanStory({
         onBuild={
           trial && !trial.state.tried
             ? (c) => {
+                // What was said of it without building it, set beside the run once it is built.
+                const said =
+                  assumed.result && assumed.candidate?.name === c.name
+                    ? forecastOf(estimate, assumed.result, c.name)
+                    : undefined
                 assumed.clear()
-                trial.state.start(c)
+                trial.state.start(c, said)
               }
             : undefined
         }
@@ -173,7 +179,7 @@ function PlanStory({
           measuredMs={result.measured ? result.measured.ms : undefined}
           trial={
             trial?.state.after && trial.state.tried && result === trial.state.after
-              ? { before: trial.before, index: trial.state.tried }
+              ? { before: trial.before, index: trial.state.tried, forecast: trial.state.forecast ?? undefined }
               : undefined
           }
           // Used or not as the panel above says it: by the server's own name for the index assumed.

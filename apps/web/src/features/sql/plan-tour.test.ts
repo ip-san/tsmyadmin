@@ -506,6 +506,23 @@ describe('planTour, with an index tried', () => {
     ])
   })
 
+  it('ends with the forecast where the index was built from one, and says whether the run bore it out', () => {
+    const forecast = { costBefore: 900, costAfter: 12.5, used: true }
+    const told = (plan: PlanNode) =>
+      planTour({ plan, relations: keys, measuredMs: 2, trial: { before, index, forecast } }).scenes
+    const scenes = told(after)
+    const at = scenes.findIndex((s) => s.title === t.trialTimeTitle)
+    expect(scenes[at + 1]?.title).toBe(t.trialForecastTitle)
+    expect(scenes[at + 1]?.text).toBe(p.forecastVerdict.used)
+    expect(scenes[at + 1]?.notes).toEqual([p.forecastSaid(900, 12.5, true), p.forecastUnits])
+    expect(scenes[at + 1]?.frame).toEqual(['posts'])
+    expect(chaptersOf(scenes).at(-1)?.title).toBe(t.chapters.trial)
+    const unused = node({ ...loop, actual: ms(3, 38) })
+    expect(titled(told(unused), t.trialForecastTitle)?.text).toBe(p.forecastVerdict.notUsed)
+    // Without one, no such scene.
+    expect(titled(tour(after, 2).scenes, t.trialForecastTitle)).toBeUndefined()
+  })
+
   it('tells nothing of the index where the plan was not measured', () => {
     const scenes = tour(after, undefined).scenes
     expect(titled(scenes, t.trialBeforeTitle)).toBeUndefined()
