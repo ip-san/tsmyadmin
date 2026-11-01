@@ -630,9 +630,26 @@ describe('PlanView', () => {
       expect(triedIndexes(SCOPE)).toEqual([])
       // Not offered for real until there is a run to compare with.
       expect(within(section).queryByRole('button', { name: p.assumeBuild('logs', ['level']) })).toBeNull()
+      // Said under the plan, and not presented as the table's own.
+      expect(screen.getByText(p.notesAssumed('idx_logs_level'))).toBeTruthy()
+      expect(screen.queryByRole('button', { name: t.open })).toBeNull()
       fireEvent.click(within(section).getByRole('button', { name: p.assumeBack }))
       expect(within(section).queryByText(p.assumeDone('idx_logs_level'))).toBeNull()
       expect(screen.queryAllByText(/\[idx_logs_level\]/)).toHaveLength(0)
+      expect(screen.getByText(p.notes)).toBeTruthy()
+      expect(await screen.findByRole('button', { name: t.open })).toBeTruthy()
+    })
+
+    it('shows the run once measured, not the plan with an index assumed', async () => {
+      condition = '(level = 3)'
+      canAssume = true
+      mount()
+      fireEvent.click(await assumeIt())
+      await screen.findByText(p.notesAssumed('idx_logs_level'))
+      fireEvent.click(await opener())
+      fireEvent.click(screen.getByRole('button', { name: p.measureRun }))
+      await screen.findByText(p.notesMeasured)
+      expect(screen.queryByText(p.assumeDone('idx_logs_level'))).toBeNull()
     })
 
     it('asks once for two presses in a row', async () => {

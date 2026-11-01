@@ -383,6 +383,8 @@ export const enScreens = {
       `${name} on ${table} (${columns.join(', ')})`,
     triedDropHint: 'Drops an index made with Try an index',
     trialUndoHint: 'Drops the index tried. The plan goes back to what it was before',
+    notesAssumed: (name: string) =>
+      `${name} is not built: this is the plan the server would make if it were (an estimate), and the statement was not run. "Back to the plan as it is" shows the plan as it is`,
     assumeGroup: 'Try an index without building it (estimate)',
     assumeIntro:
       "This database has HypoPG, so the server can plan the statement as if an index were there, without building it. Nothing is built and the statement is not run, so it is safe on a production server. What is compared is the server's estimate, not the time it would take",

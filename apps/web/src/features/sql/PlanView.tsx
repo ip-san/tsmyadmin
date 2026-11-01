@@ -64,7 +64,18 @@ export function PlanView({
       ) : (
         <>
           {/* While an index is tried, the run before stays the one it is compared with: measured again there. */}
-          {trial.tried ? null : <MeasurePlan measure={measure} />}
+          {trial.tried ? null : (
+            <MeasurePlan
+              // Measured, the run is what is shown: the plan with an index assumed is put away first.
+              measure={{
+                ...measure,
+                run: () => {
+                  assumed.clear()
+                  return measure.run()
+                },
+              }}
+            />
+          )}
           <PlanStory
             db={db}
             schema={schema}
@@ -110,6 +121,8 @@ function PlanStory({
     structures[tables.indexOf(table)]?.data?.indexes.find((i) => i.name === index)?.columns ??
     []
   const steps = planSteps(reads, indexColumns)
+  // The plan shown has an index that is not there: said under it, and not presented as the table's own.
+  const assuming = assumed.candidate !== null && result === assumed.result ? assumed.candidate : null
   // The presentation says each table's size: it waits for the list, and goes on without it if it cannot be read.
   const estimates = useRowEstimates(db, schema)
   const player = useStepPlayer(steps.length)
@@ -151,7 +164,7 @@ function PlanStory({
           leftovers={leftovers}
         />
       ) : null}
-      {reads.length > 0 ? (
+      {reads.length > 0 && assuming === null ? (
         <PlanTour
           plan={result.plan}
           relations={relations}
@@ -183,7 +196,9 @@ function PlanStory({
         </div>
       </div>
       {steps.length > 0 ? <StepNarration steps={steps} player={player} /> : null}
-      <p className="text-xs text-ink-sub">{result.measured ? t.notesMeasured : t.notes}</p>
+      <p className="text-xs text-ink-sub">
+        {result.measured ? t.notesMeasured : assuming ? t.notesAssumed(assuming.name) : t.notes}
+      </p>
       <details className="text-xs">
         <summary className="cursor-pointer text-ink-sub">{t.raw}</summary>
         {result.rawTruncated ? <p className="text-ink-sub">{t.rawTruncated}</p> : null}

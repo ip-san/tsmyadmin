@@ -13,7 +13,14 @@ for (const t of TARGETS) {
       try {
         const values = Array.from({ length: 200 }, (_, i) => `(${i + 1}, ${i % 50})`).join(', ')
         await sqlOn(page, t, `INSERT INTO ${table} (id, level) VALUES ${values}`)
-        if (t.dialect === 'postgres') await sqlOn(page, t, 'CREATE EXTENSION IF NOT EXISTS hypopg')
+        // Two browsers on one database may make it at once: the loser's duplicate is not a failure.
+        if (t.dialect === 'postgres') {
+          await sqlOn(
+            page,
+            t,
+            'DO $$ BEGIN CREATE EXTENSION IF NOT EXISTS hypopg; EXCEPTION WHEN duplicate_object OR unique_violation THEN NULL; END $$'
+          )
+        }
         await page.goto(t.schema ? `/db/${t.database}/sql?schema=${t.schema}` : `/db/${t.database}/sql`)
         await page.getByRole('textbox', { name: 'SQL エディタ' }).click()
         await page.keyboard.type(`SELECT id FROM ${table} WHERE level = 3`)
