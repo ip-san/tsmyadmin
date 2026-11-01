@@ -535,7 +535,7 @@ export const enScreens = {
     assumedCostTitle: 'The estimated costs compared',
     assumedNoCost: 'The server gave no cost for the plan, so the costs cannot be compared',
     assumedNext:
-      'Whether it is really faster is known only once it is built and measured (after Run and measure, the Build and measure button checks it). An index is updated on every write: keep one that helps a statement run often',
+      'Whether it is really faster is known only once it is built and measured (after Run and measure, Build … and measure checks it). An index is updated on every write: keep one that helps a statement run often',
     end: (reads: number, full: number) =>
       `${reads.toLocaleString('en-US')} table ${reads === 1 ? 'read' : 'reads'}. ${full === 0 ? 'None of the reads is a full read' : `${full.toLocaleString('en-US')} of them ${full === 1 ? 'reads' : 'read'} every row (or an index end to end), unless a LIMIT or the like stops it early`}`,
   },

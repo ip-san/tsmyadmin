@@ -125,7 +125,14 @@ export function planTour({ plan, relations, indexColumns, rows, measuredMs, tria
   const reads = planReads(plan)
   const steps = planSteps(reads, indexColumns)
   // An index tried (once measured) or assumed: the tables read before it are drawn too, and its columns, used or not.
-  const compared = trial && measuredMs !== undefined ? trial : assumed
+  // One or the other, decided once: the diagram, the notes and the chapter all follow it.
+  const told: { kind: 'trial'; input: TrialInput } | { kind: 'assumed'; input: AssumedInput } | null =
+    trial && measuredMs !== undefined
+      ? { kind: 'trial', input: trial }
+      : assumed
+        ? { kind: 'assumed', input: assumed }
+        : null
+  const compared = told?.input
   const tables = unique([...reads, ...(compared ? planReads(compared.before.plan) : [])].map((r) => r.node.table))
   const extra = new Map<string, string[]>()
   const marked = [
@@ -146,11 +153,7 @@ export function planTour({ plan, relations, indexColumns, rows, measuredMs, tria
       title: t.introTitle,
       text: measured ? t.introMeasured(reads.length, order, runTime) : t.intro(reads.length, order),
       frame: [],
-      ...(trial && measured
-        ? { notes: [t.trialIntro(trial.index.name)] }
-        : assumed
-          ? { notes: [t.assumedIntro(assumed.index.name)] }
-          : {}),
+      ...(told ? { notes: [(told.kind === 'trial' ? t.trialIntro : t.assumedIntro)(told.input.index.name)] } : {}),
       overlay: whole(true),
       pulse: [],
     },
@@ -252,8 +255,8 @@ export function planTour({ plan, relations, indexColumns, rows, measuredMs, tria
 
   // Tried: the run before the index beside this one, after the reads of this one are told.
   const trialAt = scenes.length
-  if (trial && measured) scenes.push(...trialScenes({ plan, ms: measuredMs ?? null }, trial, indexColumns))
-  else if (assumed) scenes.push(...assumedScenes(plan, assumed, indexColumns))
+  if (told?.kind === 'trial') scenes.push(...trialScenes({ plan, ms: measuredMs ?? null }, told.input, indexColumns))
+  if (told?.kind === 'assumed') scenes.push(...assumedScenes(plan, told.input, indexColumns))
 
   const full = reads.filter((r) => r.node.access === 'fullScan' || r.node.access === 'fullIndexScan').length
   scenes.push({
@@ -264,7 +267,11 @@ export function planTour({ plan, relations, indexColumns, rows, measuredMs, tria
     pulse: [],
     notes: [
       order,
-      measured ? locale.plan.notesMeasured : assumed ? locale.plan.notesAssumed(assumed.index.name) : locale.plan.notes,
+      measured
+        ? locale.plan.notesMeasured
+        : told?.kind === 'assumed'
+          ? locale.plan.notesAssumed(told.input.index.name)
+          : locale.plan.notes,
     ],
     hints: unique(hinted),
   })
@@ -272,7 +279,6 @@ export function planTour({ plan, relations, indexColumns, rows, measuredMs, tria
   openChapter(scenes, 0, t.chapters.reads)
   if (finishing.length > 0) openChapter(scenes, finishAt, t.chapters.after)
   if (measured) openChapter(scenes, measuredAt, t.chapters.measured)
-  if (trial && measured) openChapter(scenes, trialAt, t.chapters.trial)
-  else if (assumed) openChapter(scenes, trialAt, t.chapters.assumed)
+  if (told) openChapter(scenes, trialAt, told.kind === 'trial' ? t.chapters.trial : t.chapters.assumed)
   return { diagram, scenes }
 }

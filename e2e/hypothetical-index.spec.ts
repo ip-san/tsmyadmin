@@ -51,7 +51,7 @@ for (const t of TARGETS) {
         await expect(tour.getByText(`インデックス ${index} があるものとして、`, { exact: false })).toBeVisible()
         await tour.getByRole('button', { name: /^\d+\. いまの計画（見込み）$/ }).click()
         await expect(tour.getByText(/第 \d+ 章「インデックスがあるものとした見込み」/)).toBeVisible()
-        await expect(tour.getByText(new RegExp(`^いまの ${table} の読み方の見込み: 全件 `))).toBeVisible()
+        await expect(tour.getByText(new RegExp(`^いまの ${table} の読み方の見込み: 全件`))).toBeVisible()
         await tour.getByRole('button', { name: '次へ' }).click()
         await tour.getByRole('button', { name: '次へ' }).click()
         await expect(tour.getByRole('heading', { level: 3 })).toHaveText('見込みのコストを比べる')
