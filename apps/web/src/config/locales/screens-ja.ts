@@ -399,7 +399,8 @@ export const jaScreens = {
       '候補のインデックスを 1 つずつ、そして全部一緒に、あるものとしてサーバーに見積もらせ、見込みのコストを並べます。何も作らず、文も実行しません',
     compareRun: '候補をまとめて見積もる',
     compareRunning: '候補を 1 つずつ、あるものとして見積もっています…',
-    compareDone: (n: number) => `${n} 通りの見込みを並べました`,
+    compareDone: (n: number, failed: number) =>
+      `${n} 通りの見込みを並べました${failed > 0 ? `（${failed} 通りは見積もれませんでした）` : ''}`,
     compareCaption: '候補ごとの見込みのコスト',
     compareColIndexes: 'あるものとしたインデックス',
     compareColCost: '見込みのコスト',
@@ -412,7 +413,8 @@ export const jaScreens = {
       after === null
         ? '—'
         : `${costSaid(after)}${before !== null && after > 0 && before / after >= 1.5 ? `（いまの約 ${Math.round(before / after).toLocaleString('ja-JP')} 分の 1）` : ''}`,
-    compareUsed: (names: readonly string[]) => `使う見込み: ${names.join(', ')}`,
+    compareUsed: (names: readonly string[], unused: readonly string[]) =>
+      `使う見込み: ${names.join(', ')}${unused.length > 0 ? `（使わない見込み: ${unused.join(', ')}）` : ''}`,
     compareUnused: '使わない見込み',
     compareFailed: '見積もれませんでした',
     compareNote:

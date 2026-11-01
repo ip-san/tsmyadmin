@@ -52,15 +52,27 @@ describe('useAssumedCompare', () => {
     ])
   })
 
-  it('drops what is still to come once put away, and asks no more', async () => {
-    const { result } = renderHook(() => useAssumedCompare('shop', undefined, 'SELECT 1'))
+  it('asks no more once the plan is closed', async () => {
+    const { result, unmount } = renderHook(() => useAssumedCompare('shop', undefined, 'SELECT 1'))
     await act(async () => {
       void result.current.compare([posts, users])
     })
-    act(() => result.current.clear())
+    unmount()
     await act(async () => answers[0]?.resolve(plan(10)))
-    expect(result.current.rows).toBeNull()
-    expect(result.current.asked).toBeNull()
     expect(hypotheticalPlan).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the rows before on a second ask until its first answer comes', async () => {
+    const { result } = renderHook(() => useAssumedCompare('shop', undefined, 'SELECT 1'))
+    await act(async () => {
+      void result.current.compare([posts])
+    })
+    await act(async () => answers[0]?.resolve(plan(10)))
+    await act(async () => {
+      void result.current.compare([posts])
+    })
+    expect(result.current.rows?.map((r) => r.result?.plan.cost)).toEqual([10])
+    await act(async () => answers[1]?.resolve(plan(7)))
+    expect(result.current.rows?.map((r) => r.result?.plan.cost)).toEqual([7])
   })
 })

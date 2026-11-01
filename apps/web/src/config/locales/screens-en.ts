@@ -381,7 +381,8 @@ export const enScreens = {
       'Has the server estimate the plan with each candidate index assumed, one at a time and then all together, and sets the estimated costs side by side. Nothing is built and the statement is not run',
     compareRun: 'Estimate all the candidates',
     compareRunning: 'Estimating with each candidate assumed, one at a time…',
-    compareDone: (n: number) => `Set ${plural(n, 'estimate', 'estimates')} side by side`,
+    compareDone: (n: number, failed: number) =>
+      `Set ${plural(n, 'estimate', 'estimates')} side by side${failed > 0 ? ` (${failed.toLocaleString('en-US')} could not be)` : ''}`,
     compareCaption: 'The estimated cost with each candidate',
     compareColIndexes: 'Indexes assumed',
     compareColCost: 'Estimated cost',
@@ -394,7 +395,8 @@ export const enScreens = {
       after === null
         ? '—'
         : `${costSaid(after)}${before !== null && after > 0 && before / after >= 1.5 ? ` (about 1/${Math.round(before / after).toLocaleString('en-US')} of now)` : ''}`,
-    compareUsed: (names: readonly string[]) => `Would use: ${names.join(', ')}`,
+    compareUsed: (names: readonly string[], unused: readonly string[]) =>
+      `Would use: ${names.join(', ')}${unused.length > 0 ? ` (would not use: ${unused.join(', ')})` : ''}`,
     compareUnused: 'Would not use it',
     compareFailed: 'Could not be estimated',
     compareNote:

@@ -18,7 +18,6 @@ function shown(rows: CompareRow[] | null, over: Partial<Compare> = {}) {
     asked: rows ? candidatesKey([posts, users]) : null,
     running: false,
     compare: vi.fn(async () => undefined),
-    clear: () => undefined,
     ...over,
   }
   render(<AssumedCompare compared={compared} before={before} candidates={[posts, users]} />)
@@ -32,7 +31,7 @@ describe('AssumedCompare', () => {
     const { group } = shown([
       { indexes: [posts], result: planOf(400, []), error: null },
       { indexes: [users], result: planOf(100, ['idx_users_email']), error: null },
-      { indexes: [posts, users], result: planOf(20, ['idx_posts_user_id', 'idx_users_email']), error: null },
+      { indexes: [posts, users], result: planOf(20, ['idx_users_email']), error: null },
     ])
     const rows = within(within(group).getByRole('table', { name: p.compareCaption }))
       .getAllByRole('row')
@@ -43,16 +42,20 @@ describe('AssumedCompare', () => {
       [
         p.compareOne('idx_users_email', 'users', ['email']),
         p.compareCost(1000, 100),
-        p.compareUsed(['idx_users_email']),
+        p.compareUsed(['idx_users_email'], []),
       ],
-      [p.compareAll, p.compareCost(1000, 20), p.compareUsed(['idx_posts_user_id', 'idx_users_email'])],
+      [p.compareAll, p.compareCost(1000, 20), p.compareUsed(['idx_users_email'], ['idx_posts_user_id'])],
     ])
-    expect(within(group).getByRole('status').textContent).toBe(p.compareDone(3))
+    expect(within(group).getByRole('status').textContent).toBe(p.compareDone(3, 0))
   })
 
   it('says a plan that could not be estimated in its row, and why below', () => {
-    const { group } = shown([{ indexes: [posts], result: null, error: new Error('hypopg went away') }])
-    expect(within(group).getAllByRole('row')[2]?.textContent).toContain(p.compareFailed)
+    const { group } = shown([
+      { indexes: [posts], result: planOf(400), error: null },
+      { indexes: [users], result: null, error: new Error('hypopg went away') },
+    ])
+    expect(within(group).getByRole('status').textContent).toBe(p.compareDone(1, 1))
+    expect(within(group).getAllByRole('row')[3]?.textContent).toContain(p.compareFailed)
     expect(group.textContent).toContain('hypopg went away')
   })
 

@@ -1,5 +1,5 @@
 import { type ExplainResult, HYPOTHETICAL_MAX } from '@tsmyadmin/shared'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { hypotheticalPlan } from '@/lib/queries.ts'
 import type { IndexCandidate } from './plan-index.ts'
 
@@ -18,8 +18,6 @@ export interface AssumedCompare {
   running: boolean
   /** Asks for each candidate alone, then all together (one plan at a time: a busy server is asked gently). */
   compare: (candidates: readonly IndexCandidate[]) => Promise<void>
-  /** Puts the comparison away; answers still to come are dropped. */
-  clear: () => void
 }
 
 /** The candidates, as one string: rows asked for other candidates are not shown for these. */
@@ -44,6 +42,13 @@ export function useAssumedCompare(db: string, schema: string | undefined, sql: s
   const [running, setRunning] = useState(false)
   const busy = useRef(false)
   const generation = useRef(0)
+  // The plan closed (or another statement opened): what is still to be asked is not sent.
+  useEffect(
+    () => () => {
+      generation.current++
+    },
+    []
+  )
   return {
     rows,
     asked,
@@ -52,9 +57,9 @@ export function useAssumedCompare(db: string, schema: string | undefined, sql: s
       if (busy.current) return
       busy.current = true
       const mine = ++generation.current
-      setRows([])
-      setAsked(candidatesKey(candidates))
       setRunning(true)
+      // The rows before stay until the first new one comes: asked again, the table does not blink away.
+      const got: CompareRow[] = []
       try {
         for (const indexes of compareSets(candidates)) {
           let row: CompareRow
@@ -70,7 +75,9 @@ export function useAssumedCompare(db: string, schema: string | undefined, sql: s
             row = { indexes, result: null, error: e }
           }
           if (generation.current !== mine) return
-          setRows((r) => [...(r ?? []), row])
+          got.push(row)
+          setRows([...got])
+          setAsked(candidatesKey(candidates))
         }
       } finally {
         if (generation.current === mine) {
@@ -78,13 +85,6 @@ export function useAssumedCompare(db: string, schema: string | undefined, sql: s
           setRunning(false)
         }
       }
-    },
-    clear: () => {
-      generation.current++
-      busy.current = false
-      setRows(null)
-      setAsked(null)
-      setRunning(false)
     },
   }
 }
