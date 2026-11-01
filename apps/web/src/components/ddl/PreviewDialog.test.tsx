@@ -208,6 +208,23 @@ describe('PreviewDialog, stopping a run', () => {
     expect(screen.queryByText(d.stopUnclear)).toBeNull()
   })
 
+  it('keeps it not known where a stop got no answer, though one asked after it says not stopped', async () => {
+    stopAnswer = async () => {
+      throw new Error('network down')
+    }
+    await running()
+    fireEvent.click(await stopButton())
+    await screen.findByText('network down')
+    stopAnswer = async () => false
+    const button = await stopButton()
+    await vi.waitFor(() => expect(button.getAttribute('aria-disabled')).toBeNull())
+    fireEvent.click(button)
+    await vi.waitFor(() => expect(stop).toHaveBeenCalledTimes(2))
+    await act(async () => finish({ results: [ok(0)] }))
+    expect(await screen.findByText(d.stopUnclear)).toBeTruthy()
+    expect(onSuccess).not.toHaveBeenCalled()
+  })
+
   it('says it is not known where the answer to the stop does not come in time', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     try {

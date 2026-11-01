@@ -50,6 +50,13 @@ export interface PreviewFlowConfig<Op> {
 /** How long an ended run waits for the answer to its stop: past it, whether it was stopped is not known. */
 export const STOP_ANSWER_MS = 15_000
 
+/** A stop asked of a run, and its answer once it came (null where the request failed). */
+interface StopAsk {
+  id: string
+  answer: Promise<boolean | null>
+  settled?: boolean | null
+}
+
 /**
  * Preview → confirm → execute. Nothing runs until the user confirms the generated SQL.
  * Shared by DDL (structure, create table, operations) and account management.
@@ -74,20 +81,25 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
   // where its answer did not come back).
   const current = useRef<string | null>(null)
   const askedOf = useRef<string | null>(null)
-  // Kept once answered: an answer of "not stopped" that comes before the run's own is still the answer. `settled` is
-  // undefined while it is awaited.
-  const stopAsked = useRef<{ id: string; answer: Promise<boolean | null>; settled?: boolean | null } | null>(null)
+  // Kept once answered: an answer of "not stopped" that comes before the run's own is still the answer.
+  const stopAsked = useRef<StopAsk | null>(null)
+  // The run one of whose stops got no answer: it may have stopped it, whatever a later ask says.
+  const unanswered = useRef<string | null>(null)
   const runM = useMutation({
     mutationFn: async ({ op: o, statements, queryId }: { op: Op; statements: string[]; queryId: string }) => {
       // The answer to this run's stop: null where it did not come back, or not in time.
       const answerOf = async (): Promise<boolean | null> => {
         const asked = stopAsked.current?.id === queryId ? stopAsked.current.answer : null
         if (!asked) return null
+        const sure = async () => {
+          const a = await asked
+          return a === false && unanswered.current === queryId ? null : a
+        }
         let timer: ReturnType<typeof setTimeout> | undefined
         const late = new Promise<null>((resolve) => {
           timer = setTimeout(() => resolve(null), STOP_ANSWER_MS)
         })
-        return Promise.race([asked, late]).finally(() => clearTimeout(timer))
+        return Promise.race([sure(), late]).finally(() => clearTimeout(timer))
       }
       try {
         const r = await config.execute(o, statements, queryId)
@@ -173,10 +185,11 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
                 return null
               }
             )
-            const asked: { id: string; answer: Promise<boolean | null>; settled?: boolean | null } = { id, answer }
+            const asked: StopAsk = { id, answer }
             stopAsked.current = asked
             void answer.then((cancelled) => {
               asked.settled = cancelled
+              if (cancelled === null) unanswered.current = id
               // Not stopped (it had just ended, or the stop did not reach the server): it can be stopped again.
               if (cancelled === true || current.current !== id) return
               setStopping(false)
