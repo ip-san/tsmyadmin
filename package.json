@@ -56,24 +56,24 @@
     "*.{ts,tsx,mjs,js}": "biome check --write --no-errors-on-unmatched"
   },
   "devDependencies": {
-    "@axe-core/playwright": "^4.13.0",
-    "@biomejs/biome": "^2.5.11",
+    "@axe-core/playwright": "^4.14.0",
+    "@biomejs/biome": "^2.6.4",
     "@cloudflare/containers": "^0.3.7",
     "@lhci/cli": "^0.15.1",
-    "@playwright/test": "^1.62.1",
-    "@stryker-mutator/core": "^10.0.0",
-    "@stryker-mutator/vitest-runner": "^10.0.0",
-    "@types/node": "^25.9.2",
-    "@vitest/coverage-v8": "^4.1.11",
+    "@playwright/test": "^1.64.1",
+    "@stryker-mutator/core": "^10.1.1",
+    "@stryker-mutator/vitest-runner": "^10.1.1",
+    "@types/node": "^26.6.6",
+    "@vitest/coverage-v8": "^5.0.5",
     "fast-check": "^4.10.2",
     "husky": "^9.1.7",
-    "jscpd": "^4.2.4",
-    "knip": "^6.34.0",
-    "lint-staged": "^17.0.7",
+    "jscpd": "^5.4.2",
+    "knip": "^6.44.0",
+    "lint-staged": "^17.6.0",
     "madge": "^8.0.0",
-    "type-coverage": "^2.29.7",
-    "typescript": "^6.0.3",
-    "vitest": "^4.1.11",
-    "wrangler": "^4.132.0"
+    "type-coverage": "^2.30.4",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5",
+    "wrangler": "^4.156.0"
   }
 }
