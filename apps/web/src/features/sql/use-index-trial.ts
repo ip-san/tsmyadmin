@@ -1,6 +1,7 @@
 import type { DdlOp, ExplainResult } from '@tsmyadmin/shared'
 import { useRef, useState } from 'react'
 import { type DdlFlow, useDdlFlow } from '@/lib/ddl.ts'
+import type { Forecast } from './plan-forecast.ts'
 import type { IndexCandidate } from './plan-index.ts'
 import { forgetTried, rememberTried } from './tried-indexes.ts'
 import { useStoppableAnalyze } from './use-stoppable-analyze.ts'
@@ -10,6 +11,8 @@ export interface IndexTrial {
   flow: DdlFlow
   /** The index made to try, until it is dropped again. */
   tried: IndexCandidate | null
+  /** What trying it without building it said, where it was built from there; null otherwise. */
+  forecast: Forecast | null
   /** The statement measured again once the index was made; null until then. */
   after: ExplainResult | null
   measuring: boolean
@@ -19,8 +22,8 @@ export interface IndexTrial {
   stopped: boolean
   /** Why measuring again failed, or why a stop did not reach the server (the index is there all the same). */
   error: unknown
-  /** Previews creating this index. */
-  start: (c: IndexCandidate) => void
+  /** Previews creating this index; with what trying it without building it said, to set the run beside. */
+  start: (c: IndexCandidate, forecast?: Forecast) => void
   /** Measures the statement again (after a failure, or to see a second run). */
   measure: () => Promise<void>
   /** Stops measuring again. */
@@ -42,6 +45,7 @@ export interface IndexTrial {
  */
 export function useIndexTrial(db: string, schema: string | undefined, sql: string, scope: string): IndexTrial {
   const [tried, setTried] = useState<IndexCandidate | null>(null)
+  const [forecast, setForecast] = useState<Forecast | null>(null)
   const [after, setAfter] = useState<ExplainResult | null>(null)
   const [error, setError] = useState<unknown>(null)
   const [stopped, setStopped] = useState(false)
@@ -49,7 +53,7 @@ export function useIndexTrial(db: string, schema: string | undefined, sql: strin
   const [online, setOnline] = useState(true)
   // How the index tried was made: it is dropped the same way.
   const [triedOnline, setTriedOnline] = useState(true)
-  const pending = useRef<{ candidate: IndexCandidate; online: boolean } | null>(null)
+  const pending = useRef<{ candidate: IndexCandidate; online: boolean; forecast: Forecast | null } | null>(null)
   const remember = (made: IndexCandidate, how: boolean) =>
     rememberTried(scope, {
       db,
@@ -78,8 +82,9 @@ export function useIndexTrial(db: string, schema: string | undefined, sql: strin
     (op: DdlOp) => {
       // The index made is the one previewed: matched by name, never a candidate of an earlier preview.
       if (op.op === 'addIndex' && pending.current?.candidate.name === op.name) {
-        const { candidate: made, online: how } = pending.current
+        const { candidate: made, online: how, forecast: said } = pending.current
         setTried(made)
+        setForecast(said)
         setTriedOnline(how)
         setAfter(null)
         // Remembered until dropped: the SQL tab offers to drop it once this view is closed.
@@ -91,6 +96,7 @@ export function useIndexTrial(db: string, schema: string | undefined, sql: strin
         // A leftover dropped is not the index tried, which stays.
         if (tried?.table === op.table && tried.name === op.name) {
           setTried(null)
+          setForecast(null)
           setAfter(null)
           setError(null)
           setStopped(false)
@@ -103,13 +109,14 @@ export function useIndexTrial(db: string, schema: string | undefined, sql: strin
   return {
     flow,
     tried,
+    forecast,
     after,
     measuring: analyze.running,
     stopping: analyze.stopping,
     stopped,
     error: error ?? analyze.stopError,
-    start: (c) => {
-      pending.current = { candidate: c, online }
+    start: (c, said) => {
+      pending.current = { candidate: c, online, forecast: said ?? null }
       flow.preview({ op: 'addIndex', table: c.table, name: c.name, columns: c.columns, unique: false, online })
     },
     measure,

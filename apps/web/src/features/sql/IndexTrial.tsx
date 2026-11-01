@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox } from '@/components/ui/Feedback.tsx'
 import { locale } from '@/config/locale-screens.ts'
 import { compareReads, readSaid, speedup, usesIndex } from './plan-compare.ts'
+import { forecastVerdict } from './plan-forecast.ts'
 import type { IndexCandidate } from './plan-index.ts'
 import type { IndexTrial as Trial } from './use-index-trial.ts'
 
@@ -27,7 +28,7 @@ export function IndexTrial({
   /** Indexes a build left unusable on the tables the plan reads. */
   leftovers?: readonly { table: string; name: string }[]
 }) {
-  const { tried, after, measuring, stopping, stopped, error, flow } = trial
+  const { tried, after, forecast, measuring, stopping, stopped, error, flow } = trial
   const busy = flow.running || measuring
   const onlineNote = useId()
   // The stop button goes when the run ends: the focus it had goes to measuring again, never to the page. A blur as it
@@ -109,6 +110,12 @@ export function IndexTrial({
               {usesIndex(after.plan, tried.table, tried.name) ? null : (
                 <p className="text-amber-900 dark:text-amber-200">{t.trialUnused(tried.name)}</p>
               )}
+              {forecast ? (
+                <ForecastCheck
+                  said={t.forecastSaid(forecast.costBefore, forecast.costAfter, forecast.used)}
+                  verdict={forecastVerdict(forecast, usesIndex(after.plan, tried.table, tried.name))}
+                />
+              ) : null}
             </>
           ) : null}
           {/* Said for as long as the index is there: closing this view does not take it away. */}
@@ -171,5 +178,17 @@ export function IndexTrial({
         successMessage={(op) => locale.ddl.executed(locale.ddl.titles[op.op])}
       />
     </section>
+  )
+}
+
+/** What trying the index without building it said, beside how the run with it built bore that out. */
+function ForecastCheck({ said, verdict }: { said: string; verdict: ReturnType<typeof forecastVerdict> }) {
+  const off = verdict === 'notUsed' || verdict === 'usedAnyway'
+  return (
+    <div className="space-y-1 border-t border-line pt-2">
+      <p className="text-ink">{said}</p>
+      <p className={off ? 'text-amber-900 dark:text-amber-200' : 'text-ink'}>{t.forecastVerdict[verdict]}</p>
+      <p className="text-ink-sub">{t.forecastUnits}</p>
+    </div>
   )
 }

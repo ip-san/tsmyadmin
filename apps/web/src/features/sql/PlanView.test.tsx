@@ -743,6 +743,46 @@ describe('PlanView', () => {
       )
     })
 
+    /** Assumes the index, measures, builds it from there, and measures again with `after` as the run. */
+    async function builtFromForecast(after: { index: string; ms: number }) {
+      condition = '(level = 3)'
+      canAssume = true
+      mount()
+      fireEvent.click(await opener())
+      fireEvent.click(screen.getByRole('button', { name: p.measureRun }))
+      const trial = await screen.findByRole('region', { name: p.trialGroup })
+      fireEvent.click(await assumeIt())
+      fireEvent.click(await screen.findByRole('button', { name: p.assumeBuild('logs', ['level']) }))
+      measuredRun = async () => ({
+        plan: {
+          ...scan,
+          detail: condition,
+          access: 'lookup',
+          index: after.index,
+          actual: { rows: 12, loops: 1, ms: after.ms },
+        },
+        raw: '',
+        rawTruncated: false,
+        measured: { ms: after.ms },
+      })
+      fireEvent.click(await screen.findByRole('button', { name: locale.ddl.execute }))
+      await within(trial).findByText(p.trialDone('idx_logs_level'))
+      return trial
+    }
+
+    it('sets the run with it built beside what was said of it without building it', async () => {
+      const trial = await builtFromForecast({ index: 'idx_logs_level', ms: 4 })
+      expect(trial.textContent).toContain(p.forecastSaid(1693, 8.3, true))
+      expect(trial.textContent).toContain(p.forecastVerdict.used)
+      expect(trial.textContent).toContain(p.forecastUnits)
+      fireEvent.click(await screen.findByRole('button', { name: t.open }))
+      const tour = screen.getByRole('dialog', { name: t.dialog })
+      fireEvent.click(within(tour).getByRole('button', { name: new RegExp(`^\\d+\\. ${t.trialForecastTitle}$`) }))
+      expect(screen.getByRole('heading', { level: 3, name: t.trialForecastTitle })).toBeTruthy()
+      expect(tour.textContent).toContain(p.forecastVerdict.used)
+      expect(tour.textContent).toContain(p.forecastSaid(1693, 8.3, true))
+    })
+
     it('says what would make it possible on a server that could, and nothing on one that cannot', async () => {
       condition = '(level = 3)'
       canAssume = false

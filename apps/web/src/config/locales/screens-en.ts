@@ -409,6 +409,18 @@ export const enScreens = {
       `Run time: before ${before ?? 'unknown'} → after ${after ?? 'unknown'}${factor === null ? '' : factor >= 1.1 ? ` (one run each: about ${factor < 10 ? factor.toFixed(1) : Math.round(factor).toLocaleString('en-US')} times faster)` : factor <= 1 / 1.1 ? ` (one run each: about ${(1 / factor).toFixed(1)} times slower)` : ' (one run each: about the same)'}`,
     trialRead: (index: string | null, rows: number | null, time: string | null) =>
       `${index ? `through index ${index}` : 'in full'}${rows === null ? '' : `, ${Math.round(rows).toLocaleString('en-US')} rows`}${time ? ` · ${time}` : ''}`,
+    forecastSaid: (costBefore: number | null, costAfter: number | null, used: boolean) =>
+      `Forecast before building (tried without building it): ${costBefore !== null && costAfter !== null ? `cost ${costSaid(costBefore)} → ${costSaid(costAfter)}${costAfter > 0 && costBefore / costAfter >= 1.5 ? ` (about 1/${Math.round(costBefore / costAfter).toLocaleString('en-US')})` : ''}; ` : ''}the server was expected ${used ? 'to use it' : 'not to use it'}`,
+    forecastVerdict: {
+      used: 'As forecast, the server used the index',
+      unused: 'As forecast, the server did not use the index',
+      notUsed:
+        'The forecast said the server would use it, but it did not. The statistics may be old, or the actual rows differ from the estimate (gathering them again with ANALYZE can change this)',
+      usedAnyway:
+        'The forecast said the server would not use it, but it did. The actual rows may have differed from the estimate',
+    },
+    forecastUnits:
+      'The cost is in the server\'s own units of estimate, not time: the forecast\'s "about 1/N" and the run\'s "N times faster" measure different things and need not match. Whether the forecast held is whether the server used the index',
     trialUnused: (name: string) =>
       `The server did not use ${name} (with few rows, or a condition that narrows little, it finds reading in full cheaper). An index nothing uses only slows writes: consider dropping it`,
     trialNote:
@@ -520,6 +532,7 @@ export const enScreens = {
       `${read ? `After, ${table} was read ${read}. ` : `After, no step reads ${table} any more. `}${used ? 'The server narrows the read with the new index' : 'The server did not use the new index'}`,
     trialTimeTitle: 'The two runs compared',
     trialNotRead: 'no longer read',
+    trialForecastTitle: 'Set beside the forecast',
     trialHonest:
       'Each run was measured once. The second may find the rows the first read already cached, and look faster. Where either took under a millisecond, no factor is given',
     trialWriteCost:

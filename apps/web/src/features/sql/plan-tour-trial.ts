@@ -3,6 +3,7 @@ import type { Tone } from '@/components/schema-diagram/overlay.ts'
 import { overlay, type TourScene } from '@/components/schema-diagram/tour.ts'
 import { locale } from '@/config/locale-screens.ts'
 import { compareReads, readSaid, speedup, usesIndex } from './plan-compare.ts'
+import { type Forecast, forecastVerdict } from './plan-forecast.ts'
 import type { IndexCandidate } from './plan-index.ts'
 import { planReads, planSteps } from './plan-steps.ts'
 
@@ -13,6 +14,8 @@ const p = locale.plan
 export interface TrialInput {
   before: ExplainResult
   index: IndexCandidate
+  /** What trying it without building it said, where it was built from there: the run is set beside it. */
+  forecast?: Forecast | undefined
 }
 
 type Lit = readonly (readonly [string, Tone, string])[]
@@ -99,7 +102,7 @@ function pair(
  */
 export function trialScenes(
   after: { plan: PlanNode; ms: number | null },
-  { before, index }: TrialInput,
+  { before, index, forecast }: TrialInput,
   indexColumns: (table: string, index: string) => readonly string[] = () => []
 ): TourScene[] {
   const { table, name, columns } = index
@@ -119,6 +122,19 @@ export function trialScenes(
       notes: [t.trialHonest],
       hints: [used ? t.trialWriteCost : p.trialUnused(name)],
     },
+    // Built from a forecast: whether the run bore it out, the table framed where it was said of.
+    ...(forecast
+      ? [
+          {
+            title: t.trialForecastTitle,
+            text: p.forecastVerdict[forecastVerdict(forecast, used)],
+            frame: [table],
+            overlay: overlay({ tables: litOf(after.plan, indexColumns) }),
+            pulse: [table],
+            notes: [p.forecastSaid(forecast.costBefore, forecast.costAfter, forecast.used), p.forecastUnits],
+          },
+        ]
+      : []),
   ]
 }
 
