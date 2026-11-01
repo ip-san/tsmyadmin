@@ -9,8 +9,8 @@
   },
   "dependencies": {
     "@tsmyadmin/shared": "workspace:*",
-    "mysql2": "^3.24.2",
-    "pg": "^8.23.0",
+    "mysql2": "^3.24.6",
+    "pg": "^8.23.1",
     "pg-copy-streams": "^7"
   },
   "devDependencies": {
