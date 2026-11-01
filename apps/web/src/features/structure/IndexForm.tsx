@@ -1,5 +1,5 @@
 import type { Dialect } from '@tsmyadmin/shared'
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, useId, useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { Field, Input, Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale-screens.ts'
@@ -14,6 +14,8 @@ export interface IndexValues {
   kind: Kind
   method?: Method
   lengths?: Record<string, number>
+  /** Built without stopping writes to the table (only offered for a new plain index). */
+  online?: boolean
 }
 
 const KINDS: Record<Dialect, Kind[]> = {
@@ -31,6 +33,8 @@ export interface IndexFormProps {
   columns: string[]
   /** Editing an index, or starting from ticked columns (and a kind). */
   initial?: Partial<IndexValues>
+  /** Offer to build it without stopping writes: a new index on a table that takes it (not a partitioned parent). */
+  canBuildOnline?: boolean
   onSubmit: (values: IndexValues) => void
   onCancel: () => void
 }
@@ -39,18 +43,30 @@ export interface IndexFormProps {
  * An index: its columns, kind (MySQL also FULLTEXT / SPATIAL), access method and — on MySQL — how many leading
  * characters of a column to index. The same form edits an existing index.
  */
-export function IndexForm({ table, dialect, columns, initial, onSubmit, onCancel }: IndexFormProps) {
+export function IndexForm({
+  table,
+  dialect,
+  columns,
+  initial,
+  canBuildOnline = false,
+  onSubmit,
+  onCancel,
+}: IndexFormProps) {
   const t = locale.ddl.index
   const [name, setName] = useState(initial?.name ?? '')
   const [selected, setSelected] = useState<string[]>(initial?.columns ?? [])
   const [kind, setKind] = useState<Kind>(initial?.kind ?? (initial?.unique ? 'unique' : 'index'))
   const [method, setMethod] = useState<Method | ''>(initial?.method ?? '')
   const [lengths, setLengths] = useState<Record<string, number>>(initial?.lengths ?? {})
+  const [online, setOnline] = useState(false)
+  const onlineNote = useId()
   const suggested = selected.length > 0 ? `idx_${table}_${selected.join('_')}` : ''
   const finalName = name.trim() || suggested
   const toggle = (c: string) => setSelected((s) => (s.includes(c) ? s.filter((x) => x !== c) : [...s, c]))
   // FULLTEXT / SPATIAL take neither a method nor prefix lengths on MySQL.
   const plain = kind === 'index' || kind === 'unique'
+  // FULLTEXT / SPATIAL cannot be built without stopping writes on MySQL: not offered rather than refused.
+  const offerOnline = canBuildOnline && plain
   const submit = (e: FormEvent) => {
     e.preventDefault()
     if (selected.length === 0 || finalName === '') return
@@ -62,6 +78,7 @@ export function IndexForm({ table, dialect, columns, initial, onSubmit, onCancel
       kind,
       ...(method && plain ? { method } : {}),
       ...(dialect === 'mysql' && plain && Object.keys(kept).length > 0 ? { lengths: kept } : {}),
+      ...(offerOnline && online ? { online: true } : {}),
     })
   }
   return (
@@ -126,6 +143,24 @@ export function IndexForm({ table, dialect, columns, initial, onSubmit, onCancel
             </Field>
           ))}
         </fieldset>
+      ) : null}
+      {offerOnline ? (
+        <div className="space-y-1 text-sm">
+          {/* Part of the statement confirmed next, so chosen here, before the preview. */}
+          <label className="flex items-start gap-2 text-ink">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={online}
+              onChange={(e) => setOnline(e.target.checked)}
+              aria-describedby={onlineNote}
+            />
+            <span>{t.online}</span>
+          </label>
+          <p id={onlineNote} className="text-xs text-ink-sub">
+            {t.onlineNote}
+          </p>
+        </div>
       ) : null}
       <div className="flex justify-end gap-2">
         <Button onClick={onCancel}>{locale.common.cancel}</Button>

@@ -1,4 +1,4 @@
-<!-- translated-from: docs/user-guide.md sha256:0fe7fa36acd813589327c1717b5331850620f7d22190d54110e02530291d3656 -->
+<!-- translated-from: docs/user-guide.md sha256:c4df97070df94aae51eff44c7211651734572f4d4f5164ed256b346a6d985af9 -->
 
 # User guide
 
@@ -131,7 +131,7 @@ On PostgreSQL, **idle** tsmyadmin connections to that database under the same da
 
 ### Structure
 
-- Add, change and drop columns; add and drop indexes; add and drop foreign keys (MySQL can reference a table in another database, PostgreSQL one in another schema of the same database); see what references this table; see the CREATE statement
+- Add, change and drop columns; add and drop indexes (adding one offers **Build without stopping writes**, so writes to the table go on while it is built; not offered when changing an index, for MySQL FULLTEXT / SPATIAL, or on a PostgreSQL partitioned parent); add and drop foreign keys (MySQL can reference a table in another database, PostgreSQL one in another schema of the same database); see what references this table; see the CREATE statement
 - **Distinct values** on a column lists its values with how many rows hold each, most frequent first (the first 100). **Propose table structure** reads the first 1,000 rows and, for text columns whose values are all integers, decimals, dates or date-times, proposes a narrower type (ticked ones go to the same preview as any column change; a later value that does not fit makes the change fail). On PostgreSQL a type change carries `USING column::type`
 - Adding or changing a column takes a collation, MySQL's attributes (UNSIGNED / ZEROFILL / BINARY) and *Set CURRENT_TIMESTAMP on update*, a **generated column** (expression, STORED / VIRTUAL), a position (MySQL: first, or after a chosen column) and a key to add with a new column (PRIMARY / UNIQUE / INDEX). PostgreSQL cannot move a column, turn an existing column into a generated one or switch STORED / VIRTUAL (changing the expression takes PostgreSQL 17 or later)
 - Tick columns on the left and use the buttons under the list to give the chosen columns a primary key (replacing the current one), a unique key or an index (MySQL also full-text / spatial), to **change them together** (one form per column, then one SQL preview) or to **drop them together**. On MySQL, *Reorder columns…* puts every column in a new order (PostgreSQL cannot reorder columns)
