@@ -1217,6 +1217,10 @@ export const jaScreens = {
     execute: '実行する',
     executed: (title: string) => `「${title}」を実行しました`,
     failedStatement: '失敗した文',
+    stop: '実行を止める',
+    stopping: '実行を止めています…',
+    stopped:
+      '実行を止めました。止めたときに実行中だった文は取り消され、それより前の文は実行済みのまま、あとの文は実行していません。PostgreSQL で書き込みを止めずにインデックスを作る途中だったときは、使えないインデックスが残ることがあります（テーブルの「構造」の「使えないインデックス」から消せます）',
     rolledBack: '先行して成功した文も取り消しました（何も反映されていません）',
     serverNotice: 'サーバーからの通知',
     columnName: 'カラム名',
