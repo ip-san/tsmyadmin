@@ -579,6 +579,26 @@ describe('PlanView', () => {
       expect(await screen.findByText(p.trialUnused('idx_logs_level'))).toBeTruthy()
     })
 
+    it('neither remembers nor measures an index whose build was stopped', async () => {
+      condition = '(level = 3)'
+      measuredRun = run(null, 400)
+      let built: (r: Awaited<ReturnType<typeof executeSql>>) => void = () => undefined
+      executeSql.mockImplementationOnce(() => new Promise((resolve) => (built = resolve)))
+      mount()
+      await measured()
+      fireEvent.click(await screen.findByRole('button', { name: p.trialTry('logs', ['level']) }))
+      fireEvent.click(await screen.findByRole('button', { name: locale.ddl.execute }))
+      fireEvent.click(await screen.findByRole('button', { name: locale.ddl.stop }))
+      const sent = executeSql.mock.calls[0]?.[1] as { queryId?: string } | undefined
+      expect(cancelSql).toHaveBeenCalledWith('shop', sent?.queryId)
+      expect(sent?.queryId).toBeTruthy()
+      // Stopped between statements: the server answers without an error.
+      built([])
+      expect(await screen.findByText(locale.ddl.stopped)).toBeTruthy()
+      expect(triedIndexes(SCOPE)).toEqual([])
+      expect(analyzePlan).toHaveBeenCalledTimes(1)
+    })
+
     it('says there is nothing to try where no condition names a column', async () => {
       mount()
       await measured()

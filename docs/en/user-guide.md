@@ -1,4 +1,4 @@
-<!-- translated-from: docs/user-guide.md sha256:66071e1d1a3572d28bfebf987c2b24865563a5fed7dbc0e65b94fb17ae9044b7 -->
+<!-- translated-from: docs/user-guide.md sha256:7884c984b09e85f156d562c3ab102742e33627dd600f071557403a4787deda47 -->
 
 # User guide
 
@@ -131,7 +131,7 @@ On PostgreSQL, **idle** tsmyadmin connections to that database under the same da
 
 ### Structure
 
-- Add, change and drop columns; add and drop indexes (adding one offers **Build without stopping writes**, so writes to the table go on while it is built; not offered when changing an index, for MySQL FULLTEXT / SPATIAL, or on a PostgreSQL partitioned parent); add and drop foreign keys (MySQL can reference a table in another database, PostgreSQL one in another schema of the same database); see what references this table; see the CREATE statement
+- Add, change and drop columns; add and drop indexes (adding one offers **Build without stopping writes**, so writes to the table go on while it is built; not offered when changing an index, for MySQL FULLTEXT / SPATIAL, or on a PostgreSQL partitioned parent); add and drop foreign keys (MySQL can reference a table in another database, PostgreSQL one in another schema of the same database); see what references this table; see the CREATE statement. A structure change run from the SQL preview can be stopped while it runs with **Stop running** (for a long one, such as an index built on a large table): the statement it stops is undone, and the ones before it stay done. On PostgreSQL, an index stopped part way through a build without stopping writes can be left unusable; drop it under **Unusable indexes**
 - **Distinct values** on a column lists its values with how many rows hold each, most frequent first (the first 100). **Propose table structure** reads the first 1,000 rows and, for text columns whose values are all integers, decimals, dates or date-times, proposes a narrower type (ticked ones go to the same preview as any column change; a later value that does not fit makes the change fail). On PostgreSQL a type change carries `USING column::type`
 - Adding or changing a column takes a collation, MySQL's attributes (UNSIGNED / ZEROFILL / BINARY) and *Set CURRENT_TIMESTAMP on update*, a **generated column** (expression, STORED / VIRTUAL), a position (MySQL: first, or after a chosen column) and a key to add with a new column (PRIMARY / UNIQUE / INDEX). PostgreSQL cannot move a column, turn an existing column into a generated one or switch STORED / VIRTUAL (changing the expression takes PostgreSQL 17 or later)
 - Tick columns on the left and use the buttons under the list to give the chosen columns a primary key (replacing the current one), a unique key or an index (MySQL also full-text / spatial), to **change them together** (one form per column, then one SQL preview) or to **drop them together**. On MySQL, *Reorder columns…* puts every column in a new order (PostgreSQL cannot reorder columns)

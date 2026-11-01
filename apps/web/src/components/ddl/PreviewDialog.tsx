@@ -36,11 +36,12 @@ export function PreviewDialog<Op>({
   useEffect(() => {
     if (flow.executed) noticeRef.current?.focus()
   }, [flow.executed])
-  // The confirm button is disabled while running, so a failure would leave focus on <body>: read the failure.
+  // The confirm button is disabled while running, and the stop button goes as the run ends, so a failure or a stop
+  // would leave focus on <body>: read what happened.
   const failureRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
-    if (flow.failed || flow.error) failureRef.current?.focus()
-  }, [flow.failed, flow.error])
+    if (flow.failed || flow.error || flow.stopped || flow.stopUnclear) failureRef.current?.focus()
+  }, [flow.failed, flow.error, flow.stopped, flow.stopUnclear])
   const required = op === null || !readSetting('confirmDrop') ? null : (confirmName?.(op) ?? null)
   const warning = op === null ? '' : `${locale.ddl.irreversible}${lossWarning?.(op) ? ` ${lossWarning(op) ?? ''}` : ''}`
   const [typed, setTyped] = useState('')
@@ -75,6 +76,11 @@ export function PreviewDialog<Op>({
         busy={flow.running}
         footer={
           <>
+            {flow.running && flow.stop ? (
+              <Button onClick={flow.stop} aria-disabled={flow.stopping || undefined}>
+                {locale.ddl.stop}
+              </Button>
+            ) : null}
             <Button onClick={flow.cancel} disabled={flow.running}>
               {locale.common.cancel}
             </Button>
@@ -122,8 +128,21 @@ export function PreviewDialog<Op>({
             />
           </div>
         ) : null}
+        {/* There from the start, empty until a stop is asked: read out as it is asked. */}
+        <p role="status" className="mt-2 text-sm text-ink-sub empty:sr-only">
+          {flow.stopping ? locale.ddl.stopping : ''}
+        </p>
+        {flow.stopError ? <ErrorBox error={flow.stopError} className="mt-2" /> : null}
         <div ref={failureRef} tabIndex={-1} className="outline-none">
           {flow.error ? <ErrorBox error={flow.error} className="mt-2" /> : null}
+          {(flow.stopped || flow.stopUnclear) && !flow.error ? (
+            <div
+              role="alert"
+              className="mt-2 rounded border border-amber-300 bg-amber-50 p-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200"
+            >
+              {flow.stopped ? locale.ddl.stopped : locale.ddl.stopUnclear}
+            </div>
+          ) : null}
         </div>
         {flow.failed && flow.failed.kind === 'error' ? (
           <div
