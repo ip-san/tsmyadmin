@@ -15,6 +15,7 @@ import type {
   EventDetail,
   EventInfo,
   ExplainResult,
+  HypotheticalIndex,
   InputCell,
   InsertPreview,
   KeyValue,
@@ -124,6 +125,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
   abstract listForeignKeys(ns: Namespace): Promise<RelationDef[]>
   abstract tableUsage(ns: Namespace): Promise<TableUsageReport>
   abstract explainPlan(ns: Namespace, sql: string): Promise<ExplainResult>
+  abstract hypotheticalPlan(ns: Namespace, sql: string, indexes: HypotheticalIndex[]): Promise<ExplainResult>
   abstract analyzePlan(ns: Namespace, sql: string, timeoutMs: number, queryId?: string): Promise<ExplainResult>
   abstract describeTable(ns: Namespace, table: string): Promise<TableSchema>
   abstract tableStats(ns: Namespace, table: string): Promise<TableStats>

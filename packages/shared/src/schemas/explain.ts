@@ -19,6 +19,25 @@ export const AnalyzeRequestSchema = ExplainRequestSchema.extend({
   queryId: z.string().uuid().optional(),
 })
 
+/** At most this many indexes are assumed in one plan: a few candidates, not a design. */
+export const HYPOTHETICAL_MAX = 8
+
+/**
+ * An index the planner is asked to assume, not built (PostgreSQL with the HypoPG extension): plain, on these columns
+ * of a table of the namespace. `name` is the one the plan says it by (the server's own is a number).
+ */
+export const HypotheticalIndexSchema = z.object({
+  table: z.string().min(1),
+  columns: z.array(z.string().min(1)).min(1).max(16),
+  name: z.string().min(1).max(63),
+})
+export type HypotheticalIndex = z.infer<typeof HypotheticalIndexSchema>
+
+/** A statement's estimated plan, with indexes assumed that are not built. */
+export const HypotheticalPlanRequestSchema = ExplainRequestSchema.extend({
+  indexes: z.array(HypotheticalIndexSchema).min(1).max(HYPOTHETICAL_MAX),
+})
+
 /**
  * What a step did when the statement was run (`EXPLAIN ANALYZE`): the rows it gave each time it ran (`rows`, an
  * average where it ran more than once, like `estRows`), how many times it ran (`loops`), and the time until its
@@ -91,5 +110,12 @@ export const ExplainResultSchema = z.object({
   raw: z.string(),
   rawTruncated: z.boolean(),
   measured: z.object({ ms: z.number().nullable() }).optional(),
+  /**
+   * The server can plan with indexes that are not built (`hypotheticalPlan`: PostgreSQL with HypoPG); said by an
+   * estimate, absent where it cannot.
+   */
+  canAssume: z.boolean().optional(),
+  /** A plan with indexes assumed: the names of those it reads through (the others did not change it). */
+  assumed: z.array(z.string()).optional(),
 })
 export type ExplainResult = z.infer<typeof ExplainResultSchema>

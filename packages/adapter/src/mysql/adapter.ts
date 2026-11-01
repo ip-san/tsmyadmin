@@ -8,6 +8,7 @@ import type {
   EventDetail,
   EventInfo,
   ExplainResult,
+  HypotheticalIndex,
   KeyValue,
   KillMode,
   LockWaitReport,
@@ -617,6 +618,11 @@ export class MysqlAdapter extends BaseAdapter {
         await conn.query('ROLLBACK')
       }
     })
+  }
+
+  /** MySQL and MariaDB have no indexes the planner assumes. */
+  async hypotheticalPlan(_ns: Namespace, _sql: string, _indexes: HypotheticalIndex[]): Promise<ExplainResult> {
+    throw new AdapterError('UNSUPPORTED', 'Planning with indexes that are not built needs PostgreSQL with HypoPG')
   }
 
   listPartitions(ns: Namespace, table: string): Promise<Partitioning> {

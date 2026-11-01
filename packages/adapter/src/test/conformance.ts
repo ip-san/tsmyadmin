@@ -10,6 +10,7 @@ import { describeDdl } from './conformance/ddl.ts'
 import { describeDumpAndExport } from './conformance/dump-and-export.ts'
 import type { ConformanceContext, ConformanceEnv } from './conformance/env.ts'
 import { EXEC } from './conformance/helpers.ts'
+import { describeHypotheticalPlan } from './conformance/hypothetical-plan.ts'
 import { describeObjectDetails } from './conformance/object-details.ts'
 import { describePrepareDdl } from './conformance/prepare-ddl.ts'
 import { describeRowEdits } from './conformance/row-edits.ts'
@@ -143,6 +144,7 @@ export function describeAdapterConformance(ctx: ConformanceContext): void {
     describeObjectDetails(env)
     describeRowEdits(env)
     describeSqlConsole(env)
+    describeHypotheticalPlan(env)
     describeDumpAndExport(env)
     describeRowIdentityAndExport(env)
     describeServer(env)

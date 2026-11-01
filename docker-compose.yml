@@ -31,7 +31,9 @@ services:
       retries: 20
 
   postgres:
-    image: postgres:17
+    # postgres:17 with the HypoPG package (docker/postgres/Dockerfile).
+    build: ./docker/postgres
+    image: tsmyadmin-postgres:17
     environment:
       POSTGRES_USER: tsmyadmin
       POSTGRES_PASSWORD: tsmyadmin

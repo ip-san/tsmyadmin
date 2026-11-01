@@ -15,6 +15,7 @@ import type {
   EventDetail,
   EventInfo,
   ExplainResult,
+  HypotheticalIndex,
   InputCell,
   InsertPreview,
   KeyValue,
@@ -699,7 +700,19 @@ export class FakeAdapter implements DatabaseAdapter {
       ...{ op: 'Table', table, alias: null, index: null, indexColumns: [], access: 'fullScan' as const },
       ...{ covering: false, estRows: 1, cost: 1, detail: null, children: [] },
     }
-    return { plan, raw: '{}', rawTruncated: false }
+    return { plan, raw: '{}', rawTruncated: false, ...(this.dialect === 'postgres' ? { canAssume: true } : {}) }
+  }
+
+  /** The estimate, with the first index assumed read through: a lookup on its table (MySQL cannot, as the server). */
+  async hypotheticalPlan(ns: Namespace, sql: string, indexes: HypotheticalIndex[]): Promise<ExplainResult> {
+    this.record('hypotheticalPlan', ns, sql, indexes)
+    if (this.dialect !== 'postgres') throw new AdapterError('UNSUPPORTED', 'No hypothetical indexes')
+    const [first] = indexes
+    const plan = {
+      ...{ op: 'Index Scan', table: first?.table ?? null, alias: null, index: first?.name ?? null, indexColumns: [] },
+      ...{ access: 'lookup' as const, covering: false, estRows: 1, cost: 0.5, detail: null, children: [] },
+    }
+    return { plan, raw: '{}', rawTruncated: false, assumed: first ? [first.name] : [] }
   }
 
   /** The estimated plan, as measured: the table gave the one row it was expected to, in a millisecond. */

@@ -17,6 +17,7 @@ import type {
   EventDetail,
   EventInfo,
   ExplainResult,
+  HypotheticalIndex,
   InputCell,
   InsertPreview,
   KeyValue,
@@ -335,6 +336,13 @@ export interface DatabaseAdapter {
    */
   explainPlan(ns: Namespace, sql: string): Promise<ExplainResult>
   /**
+   * The estimated plan of one statement as if these indexes were built, without building them (PostgreSQL with the
+   * HypoPG extension installed in the database; `canAssume` on an estimate says so). The plan names an index assumed by
+   * the name given, and `assumed` lists those it reads through. Nothing is left on the connection. `UNSUPPORTED`
+   * where the server cannot (MySQL, or no HypoPG); `VALIDATION` as explainPlan.
+   */
+  hypotheticalPlan(ns: Namespace, sql: string, indexes: HypotheticalIndex[]): Promise<ExplainResult>
+  /**
    * The plan of one statement, measured by running it (`EXPLAIN ANALYZE`): each step says the rows it gave and the
    * time it took (`actual`), and the result the time of the whole run (`measured`). Only a plain read is run
    * (`VALIDATION` otherwise: a write's sequence, trigger or lock would outlive the rollback), in a read-only
@@ -452,6 +460,7 @@ export const ADAPTER_METHOD_NAMES = [
   'deleteRows',
   'executeSql',
   'explainPlan',
+  'hypotheticalPlan',
   'analyzePlan',
   'cancelQuery',
   'showCreateTable',
