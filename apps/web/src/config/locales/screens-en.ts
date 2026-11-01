@@ -382,7 +382,9 @@ export const enScreens = {
     compareRun: 'Estimate all the candidates',
     compareRunning: 'Estimating with each candidate assumed, one at a time…',
     compareDone: (n: number, failed: number) =>
-      `Set ${plural(n, 'estimate', 'estimates')} side by side${failed > 0 ? ` (${failed.toLocaleString('en-US')} could not be)` : ''}`,
+      n === 0
+        ? 'None of the candidates could be estimated'
+        : `Set ${plural(n, 'estimate', 'estimates')} side by side${failed > 0 ? ` (${failed.toLocaleString('en-US')} could not be)` : ''}`,
     compareCaption: 'The estimated cost with each candidate',
     compareColIndexes: 'Indexes assumed',
     compareColCost: 'Estimated cost',

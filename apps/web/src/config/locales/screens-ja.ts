@@ -400,7 +400,9 @@ export const jaScreens = {
     compareRun: '候補をまとめて見積もる',
     compareRunning: '候補を 1 つずつ、あるものとして見積もっています…',
     compareDone: (n: number, failed: number) =>
-      `${n} 通りの見込みを並べました${failed > 0 ? `（${failed} 通りは見積もれませんでした）` : ''}`,
+      n === 0
+        ? 'どの候補も見積もれませんでした'
+        : `${n} 通りの見込みを並べました${failed > 0 ? `（${failed} 通りは見積もれませんでした）` : ''}`,
     compareCaption: '候補ごとの見込みのコスト',
     compareColIndexes: 'あるものとしたインデックス',
     compareColCost: '見込みのコスト',
