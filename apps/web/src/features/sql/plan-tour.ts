@@ -5,7 +5,7 @@ import { locale } from '@/config/locale-screens.ts'
 import { type RowEstimates, rowsOf, rowsReading } from '@/lib/row-estimates.ts'
 import { heavyShare, MISESTIMATE_RATIO, misestimate, shareOf } from './plan-measure.ts'
 import { type PlanRead, planReads, planSteps } from './plan-steps.ts'
-import { type TrialInput, trialScenes } from './plan-tour-trial.ts'
+import { type AssumedInput, assumedScenes, type TrialInput, trialScenes } from './plan-tour-trial.ts'
 
 const t = locale.planTour
 
@@ -88,6 +88,8 @@ export interface PlanTourInput {
   measuredMs?: number | null | undefined
   /** An index tried: the plan is the run after it was made, told beside the run before (with `measuredMs`). */
   trial?: TrialInput | undefined
+  /** An index assumed, not built: the plan is the server's estimate with it, told beside the estimate as it is. */
+  assumed?: AssumedInput | undefined
 }
 
 /** What a measured read did, beside what was expected of it. */
@@ -116,18 +118,19 @@ function measuredHints(node: PlanNode & { table: string }, totalMs: number | nul
  * each table is said with its size the first time it is read (beside the rows the plan expects from the read: how
  * far it narrows), and a full read whose rows are far from the table's is said as perhaps old statistics.
  */
-export function planTour({ plan, relations, indexColumns, rows, measuredMs, trial }: PlanTourInput): {
+export function planTour({ plan, relations, indexColumns, rows, measuredMs, trial, assumed }: PlanTourInput): {
   diagram: ReturnType<typeof diagramFor>
   scenes: TourScene[]
 } {
   const reads = planReads(plan)
   const steps = planSteps(reads, indexColumns)
-  // An index tried: the tables read before it are drawn too, and its columns, used or not.
-  const tables = unique([...reads, ...(trial ? planReads(trial.before.plan) : [])].map((r) => r.node.table))
+  // An index tried (once measured) or assumed: the tables read before it are drawn too, and its columns, used or not.
+  const compared = trial && measuredMs !== undefined ? trial : assumed
+  const tables = unique([...reads, ...(compared ? planReads(compared.before.plan) : [])].map((r) => r.node.table))
   const extra = new Map<string, string[]>()
   const marked = [
     ...steps.flatMap((s) => s.columns ?? []),
-    ...(trial ? trial.index.columns.map((column) => ({ table: trial.index.table, column })) : []),
+    ...(compared ? compared.index.columns.map((column) => ({ table: compared.index.table, column })) : []),
   ]
   for (const c of marked) extra.set(c.table, unique([...(extra.get(c.table) ?? []), c.column]))
   const diagram = diagramFor(tables, relations, extra)
@@ -143,7 +146,11 @@ export function planTour({ plan, relations, indexColumns, rows, measuredMs, tria
       title: t.introTitle,
       text: measured ? t.introMeasured(reads.length, order, runTime) : t.intro(reads.length, order),
       frame: [],
-      ...(trial && measured ? { notes: [t.trialIntro(trial.index.name)] } : {}),
+      ...(trial && measured
+        ? { notes: [t.trialIntro(trial.index.name)] }
+        : assumed
+          ? { notes: [t.assumedIntro(assumed.index.name)] }
+          : {}),
       overlay: whole(true),
       pulse: [],
     },
@@ -246,6 +253,7 @@ export function planTour({ plan, relations, indexColumns, rows, measuredMs, tria
   // Tried: the run before the index beside this one, after the reads of this one are told.
   const trialAt = scenes.length
   if (trial && measured) scenes.push(...trialScenes({ plan, ms: measuredMs ?? null }, trial, indexColumns))
+  else if (assumed) scenes.push(...assumedScenes(plan, assumed, indexColumns))
 
   const full = reads.filter((r) => r.node.access === 'fullScan' || r.node.access === 'fullIndexScan').length
   scenes.push({
@@ -254,7 +262,10 @@ export function planTour({ plan, relations, indexColumns, rows, measuredMs, tria
     frame: [],
     overlay: { ...overlay({ tables: all }), fade: false },
     pulse: [],
-    notes: [order, measured ? locale.plan.notesMeasured : locale.plan.notes],
+    notes: [
+      order,
+      measured ? locale.plan.notesMeasured : assumed ? locale.plan.notesAssumed(assumed.index.name) : locale.plan.notes,
+    ],
     hints: unique(hinted),
   })
   // Its chapters: the reads, and what is done after them (the summary with it).
@@ -262,5 +273,6 @@ export function planTour({ plan, relations, indexColumns, rows, measuredMs, tria
   if (finishing.length > 0) openChapter(scenes, finishAt, t.chapters.after)
   if (measured) openChapter(scenes, measuredAt, t.chapters.measured)
   if (trial && measured) openChapter(scenes, trialAt, t.chapters.trial)
+  else if (assumed) openChapter(scenes, trialAt, t.chapters.assumed)
   return { diagram, scenes }
 }

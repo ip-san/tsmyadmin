@@ -421,6 +421,7 @@ export const jaScreens = {
       after: '読んだあとの処理',
       measured: '見込みと実際',
       trial: 'インデックスを足す前と後',
+      assumed: 'インデックスがあるものとした見込み',
     },
     open: 'プレゼンで見る',
     openHint:
@@ -519,6 +520,18 @@ export const jaScreens = {
       '前も後も 1 回ずつの計測です。後の実行は、前の実行で読んだ行がキャッシュに載っていて、速く見えることがあります。どちらかが 1 ミリ秒未満のときは、何倍とは言いません',
     trialWriteCost:
       'インデックスは、行を足す・変える・消すたびに更新されます。読むのが速くなる代わりに、書き込みは少し遅くなり、場所も取ります。よく実行する文に役立つなら残します',
+    assumedIntro: (name: string) =>
+      `インデックス ${name} があるものとして、サーバーが立て直した計画（見込み）です。インデックスは作っておらず、文も実行していません。最後の章で、元の計画と比べます`,
+    assumedBeforeTitle: 'いまの計画（見込み）',
+    assumedBefore: (table: string, read: string | null, name: string, columns: readonly string[]) =>
+      `${read ? `いまの ${table} の読み方の見込み: ${read}。` : ''}${table} に、インデックス ${name}（${columns.join(', ')}）があるものとして、サーバーに計画を立て直させました（作ってはいません）。印を付けたカラムが、インデックスのカラムです`,
+    assumedAfterTitle: 'インデックスがあるものとした見込み',
+    assumedAfter: (table: string, read: string | null, used: boolean) =>
+      `${read ? `あるものとしたときの ${table} の読み方の見込み: ${read}。` : `あるものとすると、${table} を読む段がなくなる見込みです。`}${used ? 'サーバーは、このインデックスで絞って読む見込みです' : 'サーバーは、このインデックスがあっても使わない見込みです'}`,
+    assumedCostTitle: '見込みのコストを比べる',
+    assumedNoCost: 'サーバーが計画のコストを出していないので、コストでは比べられません',
+    assumedNext:
+      '見込みどおりに速くなるかは、作って測るまで分かりません（「実際に実行して測る」のあと、「本当に作って測る」で確かめられます）。インデックスは書き込みのたびに更新されるので、よく実行する文に役立つかで決めます',
     end: (reads: number, full: number) =>
       `テーブルを読む段は ${reads.toLocaleString('ja-JP')} つです。${full === 0 ? '全件を読む段はありません' : `そのうち ${full.toLocaleString('ja-JP')} つは、全件（またはインデックスの端から端まで）を読む段です（LIMIT などで、途中で止まることもあります）`}`,
   },

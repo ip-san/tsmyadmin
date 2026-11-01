@@ -121,7 +121,7 @@ function PlanStory({
     structures[tables.indexOf(table)]?.data?.indexes.find((i) => i.name === index)?.columns ??
     []
   const steps = planSteps(reads, indexColumns)
-  // The plan shown has an index that is not there: said under it, and not presented as the table's own.
+  // The plan shown has an index that is not there: said under it, and presented as an estimate beside the plan as is.
   const assuming = assumed.candidate !== null && result === assumed.result ? assumed.candidate : null
   // The presentation says each table's size: it waits for the list, and goes on without it if it cannot be read.
   const estimates = useRowEstimates(db, schema)
@@ -164,7 +164,7 @@ function PlanStory({
           leftovers={leftovers}
         />
       ) : null}
-      {reads.length > 0 && assuming === null ? (
+      {reads.length > 0 ? (
         <PlanTour
           plan={result.plan}
           relations={relations}
@@ -172,7 +172,15 @@ function PlanStory({
           rows={estimates.rows}
           measuredMs={result.measured ? result.measured.ms : undefined}
           trial={
-            trial?.state.after && trial.state.tried ? { before: trial.before, index: trial.state.tried } : undefined
+            trial?.state.after && trial.state.tried && result === trial.state.after
+              ? { before: trial.before, index: trial.state.tried }
+              : undefined
+          }
+          // Used or not as the panel above says it: by the server's own name for the index assumed.
+          assumed={
+            assuming
+              ? { before: estimate, index: assuming, used: result.assumed?.includes(assuming.name) ?? false }
+              : undefined
           }
           ready={structures.every((s) => !s.isPending) && !estimates.pending}
         />

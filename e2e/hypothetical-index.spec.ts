@@ -44,6 +44,19 @@ for (const t of TARGETS) {
         const problems = await pageProblems(page)
         expect(problems.axe, JSON.stringify(problems.axe, null, 2)).toEqual([])
         expect(problems.layout, 'layout').toEqual([])
+        // The presentation tells it as an estimate, and ends beside the plan as it is (whether the server would use
+        // the index on so few rows is its own).
+        await plan.getByRole('button', { name: 'プレゼンで見る' }).click()
+        const tour = page.getByRole('dialog', { name: '実行計画のプレゼン' })
+        await expect(tour.getByText(`インデックス ${index} があるものとして、`, { exact: false })).toBeVisible()
+        await tour.getByRole('button', { name: /^\d+\. いまの計画（見込み）$/ }).click()
+        await expect(tour.getByText(/第 \d+ 章「インデックスがあるものとした見込み」/)).toBeVisible()
+        await expect(tour.getByText(new RegExp(`^いまの ${table} の読み方の見込み: 全件 `))).toBeVisible()
+        await tour.getByRole('button', { name: '次へ' }).click()
+        await tour.getByRole('button', { name: '次へ' }).click()
+        await expect(tour.getByRole('heading', { level: 3 })).toHaveText('見込みのコストを比べる')
+        await expect(tour.getByText(/^見込みのコスト: /)).toBeVisible()
+        await tour.getByRole('button', { name: '閉じる' }).click()
         await assume.getByRole('button', { name: '元の計画に戻す' }).click()
         await expect(assume.getByRole('status')).toHaveText('')
       } finally {

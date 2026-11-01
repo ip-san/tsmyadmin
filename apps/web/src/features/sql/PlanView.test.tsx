@@ -632,7 +632,16 @@ describe('PlanView', () => {
       expect(within(section).queryByRole('button', { name: p.assumeBuild('logs', ['level']) })).toBeNull()
       // Said under the plan, and not presented as the table's own.
       expect(screen.getByText(p.notesAssumed('idx_logs_level'))).toBeTruthy()
-      expect(screen.queryByRole('button', { name: t.open })).toBeNull()
+      // Presented as an estimate: the plan with it, then beside the plan as it is, by the estimated costs.
+      fireEvent.click(await screen.findByRole('button', { name: t.open }))
+      const tour = screen.getByRole('dialog', { name: t.dialog })
+      expect(within(tour).getByText(t.assumedIntro('idx_logs_level'))).toBeTruthy()
+      fireEvent.click(within(tour).getByRole('button', { name: new RegExp(`^\\d+\\. ${t.assumedAfterTitle}`) }))
+      expect(tour.textContent).toContain(t.chapters.assumed)
+      expect(tour.textContent).toContain(t.assumedAfter('logs', p.assumeRead('idx_logs_level', 50), true))
+      fireEvent.click(within(tour).getByRole('button', { name: new RegExp(`^\\d+\\. ${t.assumedCostTitle}$`) }))
+      expect(tour.textContent).toContain(p.assumeCost(1693, 8.3))
+      fireEvent.click(within(tour).getByRole('button', { name: locale.tour.close }))
       within(section).getByRole('button', { name: p.assumeBack }).focus()
       fireEvent.click(within(section).getByRole('button', { name: p.assumeBack }))
       expect(document.activeElement).toBe(within(section).getByRole('heading', { name: p.assumeGroup }))
