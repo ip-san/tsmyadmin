@@ -420,7 +420,7 @@ export const enScreens = {
         'The forecast said the server would not use it, but it did. The actual rows may have differed from the estimate',
     },
     forecastUnits:
-      'The cost is in the server\'s own units of estimate, not time: compare the forecast\'s "about 1/N" with the run\'s "N times faster" only as a rough guide',
+      'The cost is in the server\'s own units of estimate, not time: the forecast\'s "about 1/N" and the run\'s "N times faster" measure different things and need not match. Whether the forecast held is whether the server used the index',
     trialUnused: (name: string) =>
       `The server did not use ${name} (with few rows, or a condition that narrows little, it finds reading in full cheaper). An index nothing uses only slows writes: consider dropping it`,
     trialNote:
