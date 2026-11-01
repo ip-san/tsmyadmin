@@ -363,8 +363,13 @@ export const jaScreens = {
       filter: (table: string) => `${table} を全件読んでから、条件で絞っています。`,
     },
     trialTry: (table: string, columns: readonly string[]) => `${table}（${columns.join(', ')}）に作って試す`,
-    trialHint:
-      'このインデックスを作り、できたら同じ文をもう一度実行して測ります（読むだけの文に限り、取り消します）。インデックスは残ります（あとで消せます）。大きなテーブルでは作るのに時間がかかり、PostgreSQL では作り終わるまでテーブルへの書き込みが待たされます',
+    trialHint: (online: boolean) =>
+      `このインデックスを作り、できたら同じ文をもう一度実行して測ります（読むだけの文に限り、取り消します）。インデックスは残ります（あとで消せます）。${online ? '作るあいだもテーブルへの書き込みは止めませんが、そのぶん時間がかかります。PostgreSQL では、途中で失敗すると使えないインデックスが残ることがあります（残ったら、ここやテーブルの「構造」から消せます）。MySQL では、書き込みを止めずに作れないときは待たずに断られます' : '大きなテーブルでは作るのに時間がかかり、作り終わるまでテーブルへの書き込みが待たされることがあります'}`,
+    trialOnline: '書き込みを止めずに作る',
+    trialOnlineNote:
+      '作るあいだも、テーブルへの書き込みを止めません（そのぶん時間がかかります）。本番に近いサーバーで試すときは、付けたままにしてください',
+    trialLeftover: (table: string, name: string) =>
+      `${table} の ${name} は、作る途中で止まり、使えないまま残っています。読み出しには使われず、書き込みのたびに手間だけかかります`,
     trialUndoHint: '試したインデックスを消します。計画は試す前に戻ります',
     triedGroup: '試したインデックス',
     triedIntro:
@@ -715,6 +720,9 @@ export const jaScreens = {
     onUpdate: 'ON UPDATE',
     onDelete: 'ON DELETE',
     noIndexes: 'インデックスはありません',
+    unusableIndexes: '使えないインデックス',
+    unusableIndexesNote:
+      'インデックスを作る途中で失敗して、残ったものです。読み出しには使われず、書き込みのたびに手間だけかかります。消してから作り直してください',
     noForeignKeys: '外部キーはありません',
     referencedBy: '参照元（このテーブルを参照する外部キー）',
     noReferencedBy: 'このテーブルを参照する外部キーはありません',

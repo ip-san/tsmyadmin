@@ -87,6 +87,12 @@ export async function pgPrepareDdl(adapter: DatabaseAdapter, ns: Namespace, op: 
     case 'renameDatabase':
     case 'copyDatabase':
       return prepareDatabaseOp(adapter, op)
+    case 'addIndex': {
+      // Refused here, at the preview, rather than by the server once confirmed.
+      if (op.online && (await adapter.describeTable(ns, op.table)).partitioned)
+        throw new AdapterError('UNSUPPORTED', 'PostgreSQL cannot build an index on a partitioned table concurrently')
+      return op
+    }
     default:
       return op
   }

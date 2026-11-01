@@ -30,6 +30,8 @@ export interface PreviewFlowConfig<Op> {
   /** Query keys to invalidate after success (default: everything but the session). */
   invalidate?: (key: readonly unknown[]) => boolean
   onSuccess?: (op: Op) => void | Promise<void>
+  /** A statement failed: what ran before it, or part of it, may be left in place (a PostgreSQL concurrent build). */
+  onFailure?: (op: Op) => void
 }
 
 /**
@@ -54,11 +56,14 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
       const err = results.find((r) => r.kind === 'error')
       setRolledBack(undone === true)
       setNotices(results.flatMap((r) => (r.kind === 'error' ? [] : (r.notices ?? []))))
+      const invalidate = config.invalidate ?? isDatabaseData
       if (err) {
         setFailed(err)
+        config.onFailure?.(o)
+        // What it left is read again: the statements before it ran, and a failed build can leave an index behind.
+        await queryClient.invalidateQueries({ predicate: (q) => invalidate(q.queryKey) })
         return
       }
-      const invalidate = config.invalidate ?? isDatabaseData
       setOp(null)
       setSql([])
       setExecuted(o)

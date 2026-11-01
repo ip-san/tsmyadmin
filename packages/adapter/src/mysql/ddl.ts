@@ -6,6 +6,7 @@ import {
   dropOrder,
   moveRepeatingGroupSql,
   mysqlAddIndexClause,
+  ONLINE_MYSQL,
   splitTableSql,
 } from '../sql/ddl-common.ts'
 import { mysqlLiteral } from '../sql/literal.ts'
@@ -404,7 +405,7 @@ export const mysqlDdl: DdlBuilder = {
       case 'addIndex':
         return [createIndexSql('mysql', ns, op)]
       case 'dropIndex':
-        return [`DROP INDEX ${id(op.name)} ON ${t}`]
+        return [`DROP INDEX ${id(op.name)} ON ${t}${op.online ? ONLINE_MYSQL : ''}`]
       case 'renameIndex':
         return [`ALTER TABLE ${t} RENAME INDEX ${id(op.name)} TO ${id(op.newName)}`]
       case 'alterIndex': {

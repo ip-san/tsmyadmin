@@ -30,6 +30,8 @@ const executeSql = vi.fn(async (_db: string, body: { sql: string }) => [
 ])
 /** The condition the scan of logs filters by (none unless a test sets it). */
 let condition: string | null
+/** The indexes a failed build left unusable on logs. */
+let leftover: string[]
 
 const scan: PlanNode = {
   op: 'Seq Scan',
@@ -61,7 +63,7 @@ vi.mock('@/lib/queries.ts', () => ({
   foreignKeysQuery: () => ({ queryKey: ['keys'], queryFn: async () => [] }),
   structureQuery: () => ({
     queryKey: ['structure'],
-    queryFn: async () => ({ columns: [{ name: 'id' }, { name: 'level' }], indexes: [] }),
+    queryFn: async () => ({ columns: [{ name: 'id' }, { name: 'level' }], indexes: [], unusableIndexes: leftover }),
   }),
   tablesQuery: () => ({
     queryKey: ['tables'],
@@ -92,6 +94,7 @@ beforeEach(() => {
   previewDdl.mockClear()
   executeSql.mockClear()
   condition = null
+  leftover = []
   measuredRun = async () => ({
     plan: { ...scan, actual: { rows: 1_200_000, loops: 1, ms: 950 } },
     raw: '',
@@ -370,13 +373,14 @@ describe('PlanView', () => {
       fireEvent.click(tryIt)
       // Nothing is made before the preview is confirmed; the dialog says the statement runs again.
       const dialog = await screen.findByRole('dialog', { name: locale.ddl.titles.addIndex })
-      expect(dialog.textContent).toContain(p.trialHint)
+      expect(dialog.textContent).toContain(p.trialHint(true))
       expect(previewDdl).toHaveBeenCalledWith('shop', undefined, {
         op: 'addIndex',
         table: 'logs',
         name: 'idx_logs_level',
         columns: ['level'],
         unique: false,
+        online: true,
       })
       expect(executeSql).not.toHaveBeenCalled()
       measuredRun = run('idx_logs_level', 4)
@@ -388,7 +392,7 @@ describe('PlanView', () => {
       expect(screen.queryByText(p.trialUnused('idx_logs_level'))).toBeNull()
       // Remembered for the SQL tab, until dropped.
       expect(triedIndexes(SCOPE)).toEqual([
-        { db: 'shop', schema: null, table: 'logs', name: 'idx_logs_level', columns: ['level'] },
+        { db: 'shop', schema: null, table: 'logs', name: 'idx_logs_level', columns: ['level'], online: true },
       ])
       expect(analyzePlan).toHaveBeenCalledTimes(2)
       // The run before stays the one compared with: no measuring it over while the index is there.
@@ -413,8 +417,93 @@ describe('PlanView', () => {
         op: 'dropIndex',
         table: 'logs',
         name: 'idx_logs_level',
+        online: true,
       })
       expect(screen.getByRole('button', { name: p.measure })).toBeTruthy()
+    })
+
+    it('makes and drops it the plain way where building without stopping writes is turned off', async () => {
+      condition = '(level = 3)'
+      measuredRun = run(null, 400)
+      mount()
+      await measured()
+      fireEvent.click(screen.getByRole('checkbox', { name: p.trialOnline }))
+      fireEvent.click(await screen.findByRole('button', { name: p.trialTry('logs', ['level']) }))
+      const dialog = await screen.findByRole('dialog', { name: locale.ddl.titles.addIndex })
+      expect(dialog.textContent).toContain(p.trialHint(false))
+      expect(previewDdl).toHaveBeenLastCalledWith('shop', undefined, {
+        op: 'addIndex',
+        table: 'logs',
+        name: 'idx_logs_level',
+        columns: ['level'],
+        unique: false,
+        online: false,
+      })
+      measuredRun = run('idx_logs_level', 4)
+      fireEvent.click(await screen.findByRole('button', { name: locale.ddl.execute }))
+      fireEvent.click(await screen.findByRole('button', { name: p.trialUndo('idx_logs_level') }))
+      await screen.findByRole('dialog', { name: locale.ddl.titles.dropIndex })
+      expect(previewDdl).toHaveBeenLastCalledWith('shop', undefined, {
+        op: 'dropIndex',
+        table: 'logs',
+        name: 'idx_logs_level',
+        online: false,
+      })
+    })
+
+    it('says an index a failed build left unusable, remembers it, and drops it without stopping writes', async () => {
+      condition = '(level = 3)'
+      measuredRun = run(null, 400)
+      mount()
+      const trial = await measured()
+      fireEvent.click(await screen.findByRole('button', { name: p.trialTry('logs', ['level']) }))
+      executeSql.mockImplementationOnce(async (_db, body) => {
+        // PostgreSQL keeps what the concurrent build made so far.
+        leftover = ['idx_logs_level']
+        return [
+          { kind: 'error', sql: body.sql, line: 1, statement: 0, message: 'canceling statement due to timeout' },
+        ] as never
+      })
+      fireEvent.click(await screen.findByRole('button', { name: locale.ddl.execute }))
+      expect(await screen.findByText(/canceling statement due to timeout/)).toBeTruthy()
+      // Remembered: the SQL tab finds it once the plan is closed.
+      expect(triedIndexes(SCOPE)).toEqual([
+        { db: 'shop', schema: null, table: 'logs', name: 'idx_logs_level', columns: ['level'], online: true },
+      ])
+      fireEvent.click(screen.getByRole('button', { name: locale.common.cancel }))
+      expect(await within(trial).findByText(p.trialLeftover('logs', 'idx_logs_level'))).toBeTruthy()
+      fireEvent.click(within(trial).getByRole('button', { name: p.trialUndo('idx_logs_level') }))
+      await screen.findByRole('dialog', { name: locale.ddl.titles.dropIndex })
+      expect(previewDdl).toHaveBeenLastCalledWith('shop', undefined, {
+        op: 'dropIndex',
+        table: 'logs',
+        name: 'idx_logs_level',
+        online: true,
+      })
+      leftover = []
+      fireEvent.click(await screen.findByRole('button', { name: locale.ddl.execute }))
+      await vi.waitFor(() => expect(within(trial).queryByText(p.trialLeftover('logs', 'idx_logs_level'))).toBeNull())
+      expect(triedIndexes(SCOPE)).toEqual([])
+    })
+
+    it('keeps the index tried when a leftover beside it is dropped', async () => {
+      condition = '(level = 3)'
+      leftover = ['idx_logs_old']
+      measuredRun = run(null, 400)
+      mount()
+      const trial = await measured()
+      fireEvent.click(await screen.findByRole('button', { name: p.trialTry('logs', ['level']) }))
+      measuredRun = run('idx_logs_level', 4)
+      fireEvent.click(await screen.findByRole('button', { name: locale.ddl.execute }))
+      const total = p.trialTotal(p.duration(400), p.duration(4), 100)
+      expect(await screen.findByText(total)).toBeTruthy()
+      fireEvent.click(within(trial).getByRole('button', { name: p.trialUndo('idx_logs_old') }))
+      leftover = []
+      fireEvent.click(await screen.findByRole('button', { name: locale.ddl.execute }))
+      await vi.waitFor(() => expect(within(trial).queryByText(p.trialLeftover('logs', 'idx_logs_old'))).toBeNull())
+      expect(screen.getByText(total)).toBeTruthy()
+      expect(within(trial).getByRole('button', { name: p.trialUndo('idx_logs_level') })).toBeTruthy()
+      expect(triedIndexes(SCOPE).map((x) => x.name)).toEqual(['idx_logs_level'])
     })
 
     it('stops measuring again on a press, keeping the index, and gives the focus to measuring again', async () => {

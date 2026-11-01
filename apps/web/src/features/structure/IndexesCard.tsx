@@ -161,6 +161,31 @@ export function IndexesCard({
           </tbody>
         </Table>
       )}
+      {schema.unusableIndexes?.length ? (
+        <section aria-label={locale.table.unusableIndexes} className="space-y-1 border-t border-line p-2 text-sm">
+          <h4 className="font-semibold text-amber-900 dark:text-amber-200">{locale.table.unusableIndexes}</h4>
+          <p className="text-ink-sub">{locale.table.unusableIndexesNote}</p>
+          <ul className="space-y-1">
+            {schema.unusableIndexes.map((name) => (
+              <li key={name} className="flex flex-wrap items-center gap-2">
+                <span className="font-medium text-ink">{name}</span>
+                {editable ? (
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    aria-haspopup="dialog"
+                    // Without stopping writes: dropping an unusable index has no reason to.
+                    onClick={() => onPreview({ op: 'dropIndex', table, name, online: true })}
+                    aria-label={locale.ddl.index.dropOf(name)}
+                  >
+                    {locale.ddl.drop}
+                  </Button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
       <Dialog
         open={dialog?.mode === 'add' || dialog?.mode === 'edit'}
         title={dialog?.mode === 'edit' ? locale.ddl.titles.alterIndex : locale.ddl.titles.addIndex}

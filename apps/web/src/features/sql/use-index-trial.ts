@@ -27,6 +27,11 @@ export interface IndexTrial {
   stop: () => void
   /** Previews dropping the index tried. */
   undo: () => void
+  /** Made (and dropped) without stopping writes to the table: on unless turned off. */
+  online: boolean
+  setOnline: (online: boolean) => void
+  /** Previews dropping an index a build left unusable (it is never the one tried). */
+  dropLeftover: (table: string, name: string) => void
 }
 
 /**
@@ -40,7 +45,20 @@ export function useIndexTrial(db: string, schema: string | undefined, sql: strin
   const [after, setAfter] = useState<ExplainResult | null>(null)
   const [error, setError] = useState<unknown>(null)
   const [stopped, setStopped] = useState(false)
-  const pending = useRef<IndexCandidate | null>(null)
+  // On by default: the reason to try an index on a server is that it is close to production.
+  const [online, setOnline] = useState(true)
+  // How the index tried was made: it is dropped the same way.
+  const [triedOnline, setTriedOnline] = useState(true)
+  const pending = useRef<{ candidate: IndexCandidate; online: boolean } | null>(null)
+  const remember = (made: IndexCandidate, how: boolean) =>
+    rememberTried(scope, {
+      db,
+      schema: schema ?? null,
+      table: made.table,
+      name: made.name,
+      columns: made.columns,
+      online: how,
+    })
   // Stoppable as the first run is: a large table may take its whole time limit again.
   const analyze = useStoppableAnalyze(db, schema, sql)
   const measure = async () => {
@@ -54,24 +72,38 @@ export function useIndexTrial(db: string, schema: string | undefined, sql: strin
     else if (outcome.kind === 'stopped') setStopped(true)
     else setError(outcome.error)
   }
-  const flow = useDdlFlow(db, schema, (op: DdlOp) => {
-    // The index made is the one previewed: matched by name, never a candidate of an earlier preview.
-    if (op.op === 'addIndex' && pending.current?.name === op.name) {
-      const made = pending.current
-      setTried(made)
-      setAfter(null)
-      // Remembered until dropped: the SQL tab offers to drop it once this view is closed.
-      rememberTried(scope, { db, schema: schema ?? null, table: made.table, name: made.name, columns: made.columns })
-      // Not awaited: the structure and the plan are read again meanwhile.
-      void measure()
-    } else if (op.op === 'dropIndex') {
-      forgetTried(scope, { db, schema: schema ?? null, table: op.table, name: op.name, columns: [] })
-      setTried(null)
-      setAfter(null)
-      setError(null)
-      setStopped(false)
+  const flow = useDdlFlow(
+    db,
+    schema,
+    (op: DdlOp) => {
+      // The index made is the one previewed: matched by name, never a candidate of an earlier preview.
+      if (op.op === 'addIndex' && pending.current?.candidate.name === op.name) {
+        const { candidate: made, online: how } = pending.current
+        setTried(made)
+        setTriedOnline(how)
+        setAfter(null)
+        // Remembered until dropped: the SQL tab offers to drop it once this view is closed.
+        remember(made, how)
+        // Not awaited: the structure and the plan are read again meanwhile.
+        void measure()
+      } else if (op.op === 'dropIndex') {
+        forgetTried(scope, { db, schema: schema ?? null, table: op.table, name: op.name, columns: [] })
+        // A leftover dropped is not the index tried, which stays.
+        if (tried?.table === op.table && tried.name === op.name) {
+          setTried(null)
+          setAfter(null)
+          setError(null)
+          setStopped(false)
+        }
+      }
+    },
+    (op: DdlOp) => {
+      // A build that failed part way may have left the index (unusable): remembered, so the SQL tab finds it once
+      // this view is closed (and forgets it if nothing was left).
+      if (op.op === 'addIndex' && pending.current?.candidate.name === op.name)
+        remember(pending.current.candidate, pending.current.online)
     }
-  })
+  )
   return {
     flow,
     tried,
@@ -81,13 +113,17 @@ export function useIndexTrial(db: string, schema: string | undefined, sql: strin
     stopped,
     error: error ?? analyze.stopError,
     start: (c) => {
-      pending.current = c
-      flow.preview({ op: 'addIndex', table: c.table, name: c.name, columns: c.columns, unique: false })
+      pending.current = { candidate: c, online }
+      flow.preview({ op: 'addIndex', table: c.table, name: c.name, columns: c.columns, unique: false, online })
     },
     measure,
     stop: analyze.stop,
     undo: () => {
-      if (tried) flow.preview({ op: 'dropIndex', table: tried.table, name: tried.name })
+      if (tried) flow.preview({ op: 'dropIndex', table: tried.table, name: tried.name, online: triedOnline })
     },
+    online,
+    setOnline,
+    // Only PostgreSQL leaves one, and dropping it concurrently never stops writes.
+    dropLeftover: (table, name) => flow.preview({ op: 'dropIndex', table, name, online: true }),
   }
 }

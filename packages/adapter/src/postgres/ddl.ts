@@ -436,7 +436,7 @@ export const pgDdl: DdlBuilder = {
           createIndexSql('postgres', ns, { ...op.index, table: op.table }),
         ])
       case 'dropIndex':
-        return [`DROP INDEX ${schema}.${id(op.name)}`]
+        return [`DROP INDEX ${op.online ? 'CONCURRENTLY ' : ''}${schema}.${id(op.name)}`]
       case 'addForeignKey':
         return [addForeignKeySql('postgres', ns, op)]
       case 'dropForeignKey':

@@ -1,5 +1,5 @@
 import type { ExplainResult } from '@tsmyadmin/shared'
-import { useLayoutEffect, useRef } from 'react'
+import { useId, useLayoutEffect, useRef } from 'react'
 import { PreviewDialog } from '@/components/ddl/PreviewDialog.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox } from '@/components/ui/Feedback.tsx'
@@ -19,13 +19,17 @@ export function IndexTrial({
   trial,
   candidates,
   before,
+  leftovers = [],
 }: {
   trial: Trial
   candidates: readonly IndexCandidate[]
   before: ExplainResult
+  /** Indexes a build left unusable on the tables the plan reads. */
+  leftovers?: readonly { table: string; name: string }[]
 }) {
   const { tried, after, measuring, stopping, stopped, error, flow } = trial
   const busy = flow.running || measuring
+  const onlineNote = useId()
   // The stop button goes when the run ends: the focus it had goes to measuring again, never to the page. A blur as it
   // is taken away (some browsers send one) is not one of the person's: the button is no longer on the page.
   const again = useRef<HTMLButtonElement>(null)
@@ -58,6 +62,20 @@ export function IndexTrial({
         ) : (
           <>
             <p className="text-ink-sub">{t.trialIntro}</p>
+            {/* Set before the preview: it is part of the statement confirmed. */}
+            <label className="flex items-start gap-2 text-ink">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={trial.online}
+                onChange={(e) => trial.setOnline(e.target.checked)}
+                aria-describedby={onlineNote}
+              />
+              <span>{t.trialOnline}</span>
+            </label>
+            <p id={onlineNote} className="text-ink-sub">
+              {t.trialOnlineNote}
+            </p>
             <ul className="space-y-1">
               {candidates.map((c) => (
                 <li key={`${c.table}\0${c.name}`} className="flex flex-wrap items-center gap-2">
@@ -126,12 +144,30 @@ export function IndexTrial({
           </div>
         </>
       )}
+      {leftovers.length > 0 ? (
+        <ul className="space-y-1">
+          {leftovers.map((l) => (
+            <li key={`${l.table}\0${l.name}`} className="flex flex-wrap items-center gap-2">
+              <span className="text-amber-900 dark:text-amber-200">{t.trialLeftover(l.table, l.name)}</span>
+              <Button
+                size="sm"
+                aria-disabled={busy || undefined}
+                onClick={() => !busy && trial.dropLeftover(l.table, l.name)}
+              >
+                {t.trialUndo(l.name)}
+              </Button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       {error ? <ErrorBox error={error} /> : null}
       <PreviewDialog
         flow={flow}
         title={(op) => locale.ddl.titles[op.op]}
         destructive={(op) => op.op === 'dropIndex'}
-        hint={flow.op?.op === 'dropIndex' ? t.trialUndoHint : t.trialHint}
+        hint={
+          flow.op?.op === 'dropIndex' ? t.trialUndoHint : t.trialHint(flow.op?.op === 'addIndex' && !!flow.op.online)
+        }
         successMessage={(op) => locale.ddl.executed(locale.ddl.titles[op.op])}
       />
     </section>

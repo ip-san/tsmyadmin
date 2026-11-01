@@ -366,8 +366,13 @@ export const enScreens = {
       filter: (table: string) => `${table} is read in full, then narrowed by a condition.`,
     },
     trialTry: (table: string, columns: readonly string[]) => `Make one on ${table} (${columns.join(', ')}) and try it`,
-    trialHint:
-      'Makes this index, then runs the statement again to measure it (a statement that reads only, rolled back). The index stays (you can drop it after). On a large table it takes a while to make, and on PostgreSQL writes to the table wait until it is made',
+    trialHint: (online: boolean) =>
+      `Makes this index, then runs the statement again to measure it (a statement that reads only, rolled back). The index stays (you can drop it after). ${online ? 'Writes to the table go on while it is made, which takes longer. On PostgreSQL, a build that fails part way can leave an unusable index (drop it here or from the table’s Structure). On MySQL, where it cannot be made without stopping writes, it is refused rather than waited for' : 'On a large table it takes a while to make, and writes to the table may wait until it is made'}`,
+    trialOnline: 'Build without stopping writes',
+    trialOnlineNote:
+      'Writes to the table go on while the index is made (which takes longer). Keep it on when trying on a server close to production',
+    trialLeftover: (table: string, name: string) =>
+      `${name} on ${table} stopped part way and was left unusable. Nothing reads through it, yet every write still updates it`,
     triedGroup: 'Indexes tried',
     triedIntro:
       'These indexes, made with Try an index on a plan, are still there. Drop them if they are not needed (an index is updated on every write)',
@@ -727,6 +732,9 @@ export const enScreens = {
     onUpdate: 'ON UPDATE',
     onDelete: 'ON DELETE',
     noIndexes: 'No indexes',
+    unusableIndexes: 'Unusable indexes',
+    unusableIndexesNote:
+      'Left by an index build that failed part way. Nothing reads through them, yet every write still updates them. Drop them, then make them again',
     noForeignKeys: 'No foreign keys',
     referencedBy: 'Referenced by (foreign keys pointing at this table)',
     noReferencedBy: 'No foreign key references this table',

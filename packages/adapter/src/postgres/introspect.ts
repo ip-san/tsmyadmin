@@ -209,25 +209,29 @@ export async function pgDescribeTable(conn: Conn, ns: Namespace, table: string):
                LEFT JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = k.attnum
                WHERE k.ord <= i.indnkeyatts),
               pg_get_expr(i.indpred, i.indrelid, true),
-              pg_get_indexdef(i.indexrelid, 0, true)
+              pg_get_indexdef(i.indexrelid, 0, true), i.indisvalid
        FROM pg_index i
        JOIN pg_class ic ON ic.oid = i.indexrelid
        JOIN pg_am am ON am.oid = ic.relam
-       WHERE i.indrelid = $1::regclass AND i.indisvalid
+       WHERE i.indrelid = $1::regclass
        ORDER BY i.indisprimary DESC, ic.relname`,
       [regclass, SEP]
     )
   )
-  const indexes: IndexDef[] = idx.rows.map((row) => ({
-    name: str(row[0]),
-    unique: bool(row[1]),
-    primary: bool(row[2]),
-    columns: list(row[4]),
-    type: strOrNull(row[3]),
-    predicate: strOrNull(row[5]),
-    lengths: {},
-    definition: strOrNull(row[6]),
-  }))
+  // An index a concurrent build left unusable is named apart: nothing reads through it, so no caller may count on it.
+  const unusableIndexes = idx.rows.filter((row) => !bool(row[7])).map((row) => str(row[0]))
+  const indexes: IndexDef[] = idx.rows
+    .filter((row) => bool(row[7]))
+    .map((row) => ({
+      name: str(row[0]),
+      unique: bool(row[1]),
+      primary: bool(row[2]),
+      columns: list(row[4]),
+      type: strOrNull(row[3]),
+      predicate: strOrNull(row[5]),
+      lengths: {},
+      definition: strOrNull(row[6]),
+    }))
   const primaryKey = indexes.find((i) => i.primary)?.columns ?? []
 
   const fk = firstResult(
@@ -292,6 +296,7 @@ export async function pgDescribeTable(conn: Conn, ns: Namespace, table: string):
     columns,
     primaryKey,
     indexes,
+    ...(unusableIndexes.length > 0 ? { unusableIndexes } : {}),
     foreignKeys,
     referencedBy,
   }

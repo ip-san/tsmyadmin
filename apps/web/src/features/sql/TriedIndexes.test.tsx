@@ -11,6 +11,8 @@ const p = locale.plan
 const SCOPE = 'mysql.db.3306'
 /** The indexes each table has now, as its structure answers. */
 let indexes: Record<string, string[]>
+/** The indexes a failed build left unusable on each table. */
+let unusable: Record<string, string[]>
 /** The structure cannot be read now. */
 let unreadable: boolean
 const previewDdl = vi.fn(async (_db: string, _schema: unknown, op: { op: string; name: string }) => ({
@@ -31,7 +33,11 @@ vi.mock('@/lib/queries.ts', () => ({
     queryKey: ['structure', table],
     queryFn: async () => {
       if (unreadable) throw new Error('cannot read')
-      return { columns: [], indexes: (indexes[table] ?? []).map((name) => ({ name, columns: [] })) }
+      return {
+        columns: [],
+        indexes: (indexes[table] ?? []).map((name) => ({ name, columns: [] })),
+        unusableIndexes: unusable[table] ?? [],
+      }
     },
   }),
 }))
@@ -47,6 +53,7 @@ beforeAll(() => {
 beforeEach(() => {
   vi.stubGlobal('localStorage', memoryStorage())
   unreadable = false
+  unusable = {}
   indexes = { logs: ['PRIMARY', 'idx_logs_level'], posts: ['PRIMARY'] }
   previewDdl.mockClear()
   executeSql.mockClear()
@@ -97,6 +104,22 @@ describe('TriedIndexes', () => {
     // The last one dropped still says so, and the focus is on what says it (not dropped on the page).
     const done = await screen.findByText(locale.ddl.executed(locale.ddl.titles.dropIndex))
     expect(document.activeElement?.contains(done) || done.contains(document.activeElement)).toBe(true)
+  })
+
+  it('says an index tried was left unusable, and drops it without stopping writes', async () => {
+    rememberTried(SCOPE, { ...level, name: 'idx_logs_left', online: true })
+    unusable = { logs: ['idx_logs_left'] }
+    mount(<TriedIndexes scope={SCOPE} db="shop" />)
+    const group = await screen.findByRole('region', { name: p.triedGroup })
+    expect(group.textContent).toContain(p.trialLeftover('logs', 'idx_logs_left'))
+    fireEvent.click(within(group).getByRole('button', { name: p.trialUndo('idx_logs_left') }))
+    await screen.findByRole('dialog', { name: locale.ddl.titles.dropIndex })
+    expect(previewDdl).toHaveBeenCalledWith('shop', undefined, {
+      op: 'dropIndex',
+      table: 'logs',
+      name: 'idx_logs_left',
+      online: true,
+    })
   })
 
   it('forgets an index dropped elsewhere, and says nothing of other databases', async () => {
