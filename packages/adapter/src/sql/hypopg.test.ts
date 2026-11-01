@@ -74,6 +74,21 @@ describe('pgHypotheticalPlan', () => {
     expect(discard).toHaveBeenCalled()
   })
 
+  it('does not count a built index that has the name given as one assumed', async () => {
+    const built = [{ Plan: { ...plan[0]?.Plan, 'Index Name': 'idx_users_age' } }]
+    const { conn } = scripted([
+      installed,
+      [/^BEGIN READ ONLY$/, rows([])],
+      [/hypopg_create_index/, rows([['<7>btree_users_age']])],
+      [/^EXPLAIN/, rows([[built]])],
+      [/^ROLLBACK$/, rows([])],
+      [/hypopg_reset/, rows([])],
+    ])
+    const r = await pgHypotheticalPlan(conn, ns, 'SELECT * FROM users WHERE age = 5', [index], parsePgPlan)
+    expect(r.plan.index).toBe('idx_users_age')
+    expect(r.assumed).toEqual([])
+  })
+
   it('refuses where HypoPG is not installed, before anything is assumed', async () => {
     const { conn, asked } = scripted([[/FROM pg_extension/, rows([])]])
     await expect(pgHypotheticalPlan(conn, ns, 'SELECT 1', [index], parsePgPlan)).rejects.toMatchObject({

@@ -8,6 +8,7 @@ import type {
   EventDetail,
   EventInfo,
   ExplainResult,
+  HypotheticalIndex,
   QueryBuilderRequestInput,
   QueryBuilderResult,
   RelationDef,
@@ -118,6 +119,24 @@ export const analyzePlan = (db: string, schema: string | undefined, sql: string,
       query: schemaQuery(schema),
       // With an id, `mutations.cancelSql` stops it.
       json: { sql, ...(queryId ? { queryId } : {}) },
+    })
+  )
+
+/**
+ * The estimated plan with indexes assumed, not built (PostgreSQL with HypoPG; an estimate's `canAssume` says the server
+ * can): nothing is written, nothing is run. Asked on a press.
+ */
+export const hypotheticalPlan = (
+  db: string,
+  schema: string | undefined,
+  sql: string,
+  indexes: readonly HypotheticalIndex[]
+) =>
+  unwrap<ExplainResult>(
+    api.databases[':db'].explain.hypothetical.$post({
+      param: { db: enc(db) },
+      query: schemaQuery(schema),
+      json: { sql, indexes: [...indexes] },
     })
   )
 

@@ -9,12 +9,14 @@ import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { locale } from '@/config/locale-screens.ts'
 import { explainQuery, foreignKeysQuery, structureQuery } from '@/lib/queries.ts'
 import { useRowEstimates } from '@/lib/use-row-estimates.ts'
+import { AssumedIndex } from './AssumedIndex.tsx'
 import { IndexTrial } from './IndexTrial.tsx'
 import { MeasurePlan } from './MeasurePlan.tsx'
 import { PlanTour } from './PlanTour.tsx'
 import { indexCandidates } from './plan-index.ts'
 import { misestimate } from './plan-measure.ts'
 import { planReads, planSteps } from './plan-steps.ts'
+import { type AssumedPlan, useAssumedPlan } from './use-assumed-plan.ts'
 import { type IndexTrial as Trial, useIndexTrial } from './use-index-trial.ts'
 import { useMeasuredPlan } from './use-measured-plan.ts'
 
@@ -44,6 +46,7 @@ export function PlanView({
   const relations = useQuery(foreignKeysQuery(db, schema))
   const measure = useMeasuredPlan(db, schema, sql)
   const trial = useIndexTrial(db, schema, sql, scope)
+  const assumed = useAssumedPlan(db, schema, sql)
   return (
     <section aria-label={t.title} className="space-y-3 rounded border border-line bg-surface p-3">
       <div className="flex items-center justify-between gap-2">
@@ -65,7 +68,10 @@ export function PlanView({
           <PlanStory
             db={db}
             schema={schema}
-            result={trial.after ?? measure.result ?? plan.data}
+            // The plan with an index assumed is shown for as long as it is asked for ("back to the plan as it is").
+            result={trial.after ?? assumed.result ?? measure.result ?? plan.data}
+            estimate={plan.data}
+            assumed={assumed}
             relations={relations.data}
             trial={measure.result ? { state: trial, before: measure.result } : null}
           />
@@ -79,12 +85,17 @@ function PlanStory({
   db,
   schema,
   result,
+  estimate,
+  assumed,
   relations,
   trial,
 }: {
   db: string
   schema?: string | undefined
   result: ExplainResult
+  /** The plan estimated, as it is: what an index assumed is compared with. */
+  estimate: ExplainResult
+  assumed: AssumedPlan
   relations: readonly RelationDef[]
   /** An index to try, offered once the statement was measured (the run before). */
   trial: { state: Trial; before: ExplainResult } | null
@@ -93,8 +104,11 @@ function PlanStory({
   const tables = [...new Set(reads.map((r) => r.node.table))]
   // PostgreSQL names an index but not its columns: the tables' structure has them.
   const structures = useQueries({ queries: tables.map((table) => structureQuery({ db, schema, table })) })
+  // An index assumed is in no table's structure: its columns are the ones asked for.
   const indexColumns = (table: string, index: string) =>
-    structures[tables.indexOf(table)]?.data?.indexes.find((i) => i.name === index)?.columns ?? []
+    (assumed.candidate?.table === table && assumed.candidate.name === index ? assumed.candidate.columns : null) ??
+    structures[tables.indexOf(table)]?.data?.indexes.find((i) => i.name === index)?.columns ??
+    []
   const steps = planSteps(reads, indexColumns)
   // The presentation says each table's size: it waits for the list, and goes on without it if it cannot be read.
   const estimates = useRowEstimates(db, schema)
@@ -115,6 +129,20 @@ function PlanStory({
   )
   return (
     <div className="space-y-3">
+      <AssumedIndex
+        assumed={assumed}
+        before={estimate}
+        candidates={indexCandidates(estimate.plan, shapeOf)}
+        // Built for real through the trial, once there is a run to compare with and nothing is tried yet.
+        onBuild={
+          trial && !trial.state.tried
+            ? (c) => {
+                assumed.clear()
+                trial.state.start(c)
+              }
+            : undefined
+        }
+      />
       {trial ? (
         <IndexTrial
           trial={trial.state}

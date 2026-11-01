@@ -21,23 +21,21 @@ export async function hypopgSchema(conn: Conn): Promise<string | null> {
   return typeof name === 'string' ? name : null
 }
 
-/** The server's names for the indexes assumed (`<13630>btree_t_a`) put back to the names given, all through the plan. */
-function renamed(raw: unknown, names: ReadonlyMap<string, string>): unknown {
-  if (Array.isArray(raw)) return raw.map((v) => renamed(v, names))
+/**
+ * The server's names for the indexes assumed (`<13630>btree_t_a`) put back to the names given, all through the plan;
+ * `used` gets the given names the plan reads through. Told apart by the server's name, not the given one: a built
+ * index of the same name is not one assumed.
+ */
+function renamed(raw: unknown, names: ReadonlyMap<string, string>, used: Set<string>): unknown {
+  if (Array.isArray(raw)) return raw.map((v) => renamed(v, names, used))
   if (typeof raw !== 'object' || raw === null) return raw
   return Object.fromEntries(
-    Object.entries(raw).map(([k, v]) => [
-      k,
-      k === 'Index Name' && typeof v === 'string' ? (names.get(v) ?? v) : renamed(v, names),
-    ])
+    Object.entries(raw).map(([k, v]) => {
+      const given = k === 'Index Name' && typeof v === 'string' ? names.get(v) : undefined
+      if (given !== undefined) used.add(given)
+      return [k, given ?? renamed(v, names, used)]
+    })
   )
-}
-
-/** The indexes of a plan read through, of those named. */
-function readThrough(node: PlanNode, names: ReadonlySet<string>, out = new Set<string>()): Set<string> {
-  if (node.index !== null && names.has(node.index)) out.add(node.index)
-  for (const c of node.children) readThrough(c, names, out)
-  return out
 }
 
 /**
@@ -65,12 +63,13 @@ export async function pgHypotheticalPlan(
       const server = made[0]?.[0]
       if (typeof server === 'string') names.set(server, i.name)
     }
+    const used = new Set<string>()
     const raw = renamed(
       parseJsonCell(firstResult(await conn.query(`EXPLAIN (FORMAT JSON) ${statement}`)).rows[0]?.[0] ?? null),
-      names
+      names,
+      used
     )
-    const plan = parse(raw)
-    return { ...explainResult(plan, raw), assumed: [...readThrough(plan, new Set(names.values()))] }
+    return { ...explainResult(parse(raw), raw), assumed: [...used] }
   } finally {
     // The transaction first: a failed statement leaves it aborted, and nothing else runs in it.
     await conn.query('ROLLBACK').catch(() => undefined)

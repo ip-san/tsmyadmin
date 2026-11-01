@@ -1,6 +1,9 @@
 import type { CountKind, ImportWarning } from '@tsmyadmin/shared'
 import type { ScreensLocale } from './screens-ja.ts'
 
+/** A planner cost, as the server's own units: whole above 10, one decimal below. */
+const costSaid = (c: number) => c.toLocaleString('en-US', { maximumFractionDigits: c >= 10 ? 0 : 1 })
+
 /** `1 row` / `2 rows` — English needs the singular that Japanese does not have. */
 const plural = (n: number, one: string, many: string) => `${n.toLocaleString('en-US')} ${n === 1 ? one : many}`
 
@@ -380,6 +383,24 @@ export const enScreens = {
       `${name} on ${table} (${columns.join(', ')})`,
     triedDropHint: 'Drops an index made with Try an index',
     trialUndoHint: 'Drops the index tried. The plan goes back to what it was before',
+    assumeGroup: 'Try an index without building it (estimate)',
+    assumeIntro:
+      "This database has HypoPG, so the server can plan the statement as if an index were there, without building it. Nothing is built and the statement is not run, so it is safe on a production server. What is compared is the server's estimate, not the time it would take",
+    assumeTry: (table: string, columns: readonly string[]) => `Plan as if ${table} (${columns.join(', ')}) had it`,
+    assumeRunning: 'Planning again as if the index were there…',
+    assumeDone: (name: string) => `The plan as if ${name} were there (an estimate)`,
+    assumeCost: (before: number, after: number) =>
+      `Estimated cost: ${costSaid(before)} → ${costSaid(after)}${after > 0 && before / after >= 1.5 ? ` (about 1/${Math.round(before / after).toLocaleString('en-US')})` : ''}. The cost is in the server's own units of estimate, not time`,
+    assumeRead: (index: string | null, rows: number | null) =>
+      `${index ? `through index ${index}` : 'in full'}${rows === null ? '' : `, about ${Math.round(rows).toLocaleString('en-US')} rows`}`,
+    assumeUnused: (name: string) =>
+      `The server would not use ${name} even if it were there (it does not fit the statement's conditions, or reading in full looks cheaper). Building it would not be expected to help`,
+    assumeNote:
+      'The index assumed exists only while this estimate is made: nothing is left on the server. Whether it is really faster is known only once it is built and measured',
+    assumeBack: 'Back to the plan as it is',
+    assumeBuild: (table: string, columns: readonly string[]) => `Build ${table} (${columns.join(', ')}) and measure`,
+    assumeMissing:
+      'With the HypoPG extension on PostgreSQL, the plan can be seen as if an index were there, without building it (install the package on the server, then CREATE EXTENSION hypopg in the database)',
     trialMeasuring: 'The index is made. Running the statement again to measure it…',
     trialDone: (name: string) => `Made ${name} and measured again`,
     trialTotal: (before: string | null, after: string | null, factor: number | null) =>

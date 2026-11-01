@@ -1,4 +1,4 @@
-<!-- translated-from: docs/deployment.md sha256:404201339fcb696f335d17a1adebf1c38ee099b9e1448d7ce80a16d83ab10105 -->
+<!-- translated-from: docs/deployment.md sha256:b37a6309036005450164515da88ef1b9fb02a8dcf3329390c157afc19f231c1b -->
 
 # Deployment guide
 
@@ -24,6 +24,7 @@ tsmyadmin runs as **a single container whose one process (Bun) serves both the A
   | CockroachDB 24.3 | 55 of 113 conformance cases pass. Browsing and basic SQL work, but anything resting on PostgreSQL's own catalog — sequences, inheritance, ctid, routines, triggers — fails broadly | Unsupported |
 
 - Managed services built on the same engine as upstream (Aurora, Cloud SQL, AlloyDB …) are not verified, but are expected to work where the catalog is identical. Operations needing `SUPER`, `KILL` and `pg_terminate_backend` are subject to whatever the service allows
+- **PostgreSQL's HypoPG extension** (optional): where a database has it, the plan's **Try an index without building it** works (install the `postgresql-<version>-hypopg` package on the server, then `CREATE EXTENSION hypopg` in that database). Nothing else depends on it
 - Connecting needs a user on the target server. `SELECT` is enough to browse; individual features additionally need `SHOW VIEW`, `PROCESS`, `CREATE USER` and so on (see *A user with few privileges* in [operations.md](operations.md))
 
 ## Environment variables (the only list)
