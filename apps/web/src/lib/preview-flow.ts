@@ -74,7 +74,9 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
   // where its answer did not come back).
   const current = useRef<string | null>(null)
   const askedOf = useRef<string | null>(null)
-  const stopAsked = useRef<{ id: string; answer: Promise<boolean | null> } | null>(null)
+  // Kept once answered: an answer of "not stopped" that comes before the run's own is still the answer. `settled` is
+  // undefined while it is awaited.
+  const stopAsked = useRef<{ id: string; answer: Promise<boolean | null>; settled?: boolean | null } | null>(null)
   const runM = useMutation({
     mutationFn: async ({ op: o, statements, queryId }: { op: Op; statements: string[]; queryId: string }) => {
       // The answer to this run's stop: null where it did not come back, or not in time.
@@ -92,7 +94,8 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
         if (askedOf.current !== queryId) return { ...r, halt: null }
         // Stopped is what the server says (it says so only where it cut the script short): stopped between two
         // statements, a script ends short with no error at all, and must not be taken for done (nor its follow-up
-        // run). Without its answer, a script that ended with no error may be done or cut short: said as not known.
+        // run). Without its answer, a script that ended with no error may be done or cut short: said as not known (a
+        // stop that failed may or may not have reached the server, so it is not known either).
         const answer = await answerOf()
         const failed = r.results.some((x) => x.kind === 'error')
         return { ...r, halt: answer === true ? 'stopped' : answer === null && !failed ? 'unclear' : null }
@@ -108,7 +111,9 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
       stopAsked.current = null
       setStopping(false)
     },
-    onSuccess: async ({ results, rolledBack: undone, halt }, { op: o }) => {
+    onSuccess: async ({ results, rolledBack: undone, halt }, { op: o, queryId }) => {
+      // A run previewed over says nothing of the stop of the run that replaced it.
+      if (halt && current.current !== queryId) return
       const err = results.find((r) => r.kind === 'error')
       setRolledBack(undone === true)
       setNotices(results.flatMap((r) => (r.kind === 'error' ? [] : (r.notices ?? []))))
@@ -155,7 +160,9 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
           stop: () => {
             const id = current.current
             const ask = config.stop
-            if (!id || stopAsked.current || !ask) return
+            const before = stopAsked.current
+            // Once a run: asked again only where the last ask is of another run, or answered without stopping it.
+            if (!id || !ask || (before?.id === id && (before.settled === undefined || before.settled === true))) return
             setStopping(true)
             setStopError(null)
             askedOf.current = id
@@ -166,11 +173,12 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
                 return null
               }
             )
-            stopAsked.current = { id, answer }
+            const asked: { id: string; answer: Promise<boolean | null>; settled?: boolean | null } = { id, answer }
+            stopAsked.current = asked
             void answer.then((cancelled) => {
+              asked.settled = cancelled
               // Not stopped (it had just ended, or the stop did not reach the server): it can be stopped again.
               if (cancelled === true || current.current !== id) return
-              stopAsked.current = null
               setStopping(false)
             })
           },

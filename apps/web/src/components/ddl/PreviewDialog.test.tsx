@@ -197,6 +197,17 @@ describe('PreviewDialog, stopping a run', () => {
     await vi.waitFor(() => expect(onSuccess).toHaveBeenCalledWith('build'))
   })
 
+  it('is done where the server said it was not stopped before the run answered', async () => {
+    stopAnswer = async () => false
+    await running()
+    fireEvent.click(await stopButton())
+    await vi.waitFor(() => expect(stop).toHaveBeenCalledTimes(1))
+    await act(async () => undefined)
+    await act(async () => finish({ results: [ok(0), ok(1)] }))
+    await vi.waitFor(() => expect(onSuccess).toHaveBeenCalledWith('build'))
+    expect(screen.queryByText(d.stopUnclear)).toBeNull()
+  })
+
   it('says it is not known where the answer to the stop does not come in time', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     try {
