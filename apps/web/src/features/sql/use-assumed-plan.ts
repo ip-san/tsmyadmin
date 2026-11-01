@@ -52,13 +52,17 @@ export function useAssumedPlan(db: string, schema: string | undefined, sql: stri
           setError(e)
         }
       } finally {
-        busy.current = false
-        if (generation.current === mine) setRunning(false)
+        // Put away while it ran: the guard is the next ask's by now, not this one's to let go.
+        if (generation.current === mine) {
+          busy.current = false
+          setRunning(false)
+        }
       }
     },
     // Also while it is asked (measuring puts it away): its answer, when it comes, is dropped.
     clear: () => {
       generation.current++
+      busy.current = false
       setCandidate(null)
       setResult(null)
       setError(null)

@@ -44,6 +44,30 @@ describe('useAssumedPlan', () => {
     expect(result.current.candidate).toBeNull()
   })
 
+  it('takes a new ask at once after one was put away, before the old answer comes', async () => {
+    const { result } = renderHook(() => useAssumedPlan('shop', undefined, 'SELECT * FROM logs'))
+    await act(async () => {
+      void result.current.assume(candidate)
+    })
+    const first = answer
+    act(() => result.current.clear())
+    const other = { ...candidate, columns: ['id'], name: 'idx_logs_id' }
+    await act(async () => {
+      void result.current.assume(other)
+    })
+    expect(hypotheticalPlan).toHaveBeenCalledTimes(2)
+    // The old answer lands late: it neither shows nor lets the new ask's guard go.
+    await act(async () => first(plan))
+    expect(result.current.running).toBe(true)
+    await act(async () => {
+      void result.current.assume(other)
+    })
+    expect(hypotheticalPlan).toHaveBeenCalledTimes(2)
+    await act(async () => answer({ ...plan, assumed: ['idx_logs_id'] }))
+    expect(result.current.candidate).toEqual(other)
+    expect(result.current.result).toEqual({ ...plan, assumed: ['idx_logs_id'] })
+  })
+
   it('forgets the index asked for when the server refuses, so the plan as it is stays', async () => {
     hypotheticalPlan.mockImplementationOnce(async () => {
       throw new Error('no such column')
