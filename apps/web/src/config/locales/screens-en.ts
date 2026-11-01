@@ -424,6 +424,7 @@ export const enScreens = {
       after: 'What is done after the reads',
       measured: 'Estimated and actual',
       trial: 'Before and after the index',
+      assumed: 'With the index assumed (estimate)',
     },
     open: 'Present',
     openHint:
@@ -523,6 +524,18 @@ export const enScreens = {
       'Each run was measured once. The second may find the rows the first read already cached, and look faster. Where either took under a millisecond, no factor is given',
     trialWriteCost:
       'An index is updated each time a row is added, changed or deleted: reads get faster, writes a little slower, and it takes space. Keep it if it helps a statement run often',
+    assumedIntro: (name: string) =>
+      `This is the plan the server would make if the index ${name} were there (an estimate). The index is not built, and the statement was not run. The last chapter sets it beside the plan as it is`,
+    assumedBeforeTitle: 'The plan as it is (estimate)',
+    assumedBefore: (table: string, read: string | null, name: string, columns: readonly string[]) =>
+      `${read ? `As it is, ${table} is expected to be read ${read}. ` : ''}The server was asked to plan again as if ${table} had the index ${name} (${columns.join(', ')}), without building it. The marked columns are the index's columns`,
+    assumedAfterTitle: 'With the index assumed (estimate)',
+    assumedAfter: (table: string, read: string | null, used: boolean) =>
+      `${read ? `With it, ${table} would be read ${read}. ` : `With it, no step would read ${table}. `}${used ? 'The server expects to narrow the read with the index' : 'The server would not use the index even if it were there'}`,
+    assumedCostTitle: 'The estimated costs compared',
+    assumedNoCost: 'The server gave no cost for the plan, so the costs cannot be compared',
+    assumedNext:
+      'Whether it is really faster is known only once it is built and measured (after Run and measure, Build … and measure checks it). An index is updated on every write: keep one that helps a statement run often',
     end: (reads: number, full: number) =>
       `${reads.toLocaleString('en-US')} table ${reads === 1 ? 'read' : 'reads'}. ${full === 0 ? 'None of the reads is a full read' : `${full.toLocaleString('en-US')} of them ${full === 1 ? 'reads' : 'read'} every row (or an index end to end), unless a LIMIT or the like stops it early`}`,
   },

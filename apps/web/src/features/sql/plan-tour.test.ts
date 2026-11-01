@@ -512,3 +512,73 @@ describe('planTour, with an index tried', () => {
     expect(chaptersOf(scenes).map((c) => c.title)).not.toContain(t.chapters.trial)
   })
 })
+
+describe('planTour with an index assumed, not built', () => {
+  // The estimate: posts read in full for each user (cost 900). With idx_posts_user_id assumed: looked up by it.
+  const before = {
+    plan: node({ ...loop, cost: 900 }),
+    raw: '',
+    rawTruncated: false,
+  }
+  const lookup = node({
+    op: 'Index Scan',
+    table: 'posts',
+    alias: 'p',
+    index: 'idx_posts_user_id',
+    access: 'lookup',
+    estRows: 3,
+  })
+  const after = node({ ...loop, cost: 12.5, children: [loop.children[0] as PlanNode, lookup] })
+  const index = { table: 'posts', columns: ['user_id'], name: 'idx_posts_user_id', reason: 'perRow' as const }
+  const tour = (plan: PlanNode, used: boolean) =>
+    planTour({ plan, relations: keys, indexColumns: () => ['email'], assumed: { before, index, used } })
+
+  it('tells the plan with it as an estimate, and ends by setting it beside the plan as it is', () => {
+    const { diagram, scenes } = tour(after, true)
+    const at = scenes.findIndex((s) => s.title === t.assumedBeforeTitle)
+    expect(scenes.slice(at).map((s) => s.title)).toEqual([
+      t.assumedBeforeTitle,
+      t.assumedAfterTitle,
+      t.assumedCostTitle,
+      t.endTitle,
+    ])
+    expect(chaptersOf(scenes).map((c) => c.title)).toEqual([t.chapters.reads, t.chapters.assumed])
+    expect(chaptersOf(scenes).at(-1)?.from).toBe(at)
+    // Said from the start, and at the end, that the index is not there.
+    expect(scenes[0]?.notes).toEqual([t.assumedIntro('idx_posts_user_id')])
+    expect(scenes.at(-1)?.notes).toEqual([t.order('users → posts'), p.notesAssumed('idx_posts_user_id')])
+    const [was, now, cost] = scenes.slice(at)
+    // The reads by the rows the plan expects: nothing was run.
+    expect(was?.text).toBe(t.assumedBefore('posts', p.assumeRead(null, 3), 'idx_posts_user_id', ['user_id']))
+    expect(now?.text).toBe(t.assumedAfter('posts', p.assumeRead('idx_posts_user_id', 3), true))
+    expect(was?.overlay.tables.get('posts')).toEqual({ tone: 'scan', badge: p.full })
+    expect(now?.overlay.tables.get('posts')).toEqual({ tone: 'index', badge: 'idx_posts_user_id' })
+    expect([...(now?.overlay.columns.get('posts') ?? [])]).toEqual(['user_id'])
+    expect(diagram.columns.get('posts')).toContain('user_id')
+    expect(now?.notes).toEqual([])
+    expect(cost?.text).toBe(p.assumeCost(900, 12.5))
+    // An estimate, not two runs: nothing said of caches or times.
+    expect(cost?.notes).toEqual([p.assumeNote])
+    expect(cost?.hints).toEqual([t.assumedNext])
+  })
+
+  it('says the server would not use it, as the panel says, whatever the plan names', () => {
+    // The plan reads through an index of that name, but not the one assumed (one built under the same name).
+    const scenes = tour(after, false).scenes
+    expect(titled(scenes, t.assumedAfterTitle)?.text).toBe(
+      t.assumedAfter('posts', p.assumeRead('idx_posts_user_id', 3), false)
+    )
+    expect(titled(scenes, t.assumedCostTitle)?.hints).toEqual([p.assumeUnused('idx_posts_user_id')])
+  })
+
+  it('says the costs cannot be compared where the server gave none', () => {
+    const scenes = tour({ ...after, cost: null }, true).scenes
+    expect(titled(scenes, t.assumedCostTitle)?.text).toBe(t.assumedNoCost)
+  })
+
+  it('tells nothing of an index assumed where none is', () => {
+    const scenes = planTour({ plan: loop, relations: keys }).scenes
+    expect(titled(scenes, t.assumedBeforeTitle)).toBeUndefined()
+    expect(scenes[0]?.notes ?? []).toEqual([])
+  })
+})
