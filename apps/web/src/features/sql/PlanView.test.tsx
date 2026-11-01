@@ -451,7 +451,7 @@ describe('PlanView', () => {
       })
     })
 
-    it('says an index a failed build left unusable, remembers it, and drops it without stopping writes', async () => {
+    it('says an index a failed build left unusable, and drops it without stopping writes', async () => {
       condition = '(level = 3)'
       measuredRun = run(null, 400)
       mount()
@@ -466,10 +466,8 @@ describe('PlanView', () => {
       })
       fireEvent.click(await screen.findByRole('button', { name: locale.ddl.execute }))
       expect(await screen.findByText(/canceling statement due to timeout/)).toBeTruthy()
-      // Remembered: the SQL tab finds it once the plan is closed.
-      expect(triedIndexes(SCOPE)).toEqual([
-        { db: 'shop', schema: null, table: 'logs', name: 'idx_logs_level', columns: ['level'], online: true },
-      ])
+      // Not remembered as tried: the name may be another's index. The server says what was left.
+      expect(triedIndexes(SCOPE)).toEqual([])
       fireEvent.click(screen.getByRole('button', { name: locale.common.cancel }))
       expect(await within(trial).findByText(p.trialLeftover('logs', 'idx_logs_level'))).toBeTruthy()
       fireEvent.click(within(trial).getByRole('button', { name: p.trialUndo('idx_logs_level') }))

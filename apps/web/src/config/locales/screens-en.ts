@@ -367,7 +367,7 @@ export const enScreens = {
     },
     trialTry: (table: string, columns: readonly string[]) => `Make one on ${table} (${columns.join(', ')}) and try it`,
     trialHint: (online: boolean) =>
-      `Makes this index, then runs the statement again to measure it (a statement that reads only, rolled back). The index stays (you can drop it after). ${online ? 'Writes to the table go on while it is made, which takes longer. On PostgreSQL, a build that fails part way can leave an unusable index (drop it here or from the table’s Structure). On MySQL, where it cannot be made without stopping writes, it is refused rather than waited for' : 'On a large table it takes a while to make, and writes to the table may wait until it is made'}`,
+      `Makes this index, then runs the statement again to measure it (a statement that reads only, rolled back). The index stays (you can drop it after). ${online ? 'Writes to the table go on while it is made, which takes longer. On PostgreSQL, a build that fails part way (or runs out of time) can leave an unusable index (drop it here or from the table’s Structure). On MySQL, where it cannot be made without stopping writes, it is refused rather than waited for' : 'On a large table it takes a while to make, and writes to the table may wait until it is made'}`,
     trialOnline: 'Build without stopping writes',
     trialOnlineNote:
       'Writes to the table go on while the index is made (which takes longer). Keep it on when trying on a server close to production',

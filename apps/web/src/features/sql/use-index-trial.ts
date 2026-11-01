@@ -96,13 +96,9 @@ export function useIndexTrial(db: string, schema: string | undefined, sql: strin
           setStopped(false)
         }
       }
-    },
-    (op: DdlOp) => {
-      // A build that failed part way may have left the index (unusable): remembered, so the SQL tab finds it once
-      // this view is closed (and forgets it if nothing was left).
-      if (op.op === 'addIndex' && pending.current?.candidate.name === op.name)
-        remember(pending.current.candidate, pending.current.online)
     }
+    // A build that failed part way is not remembered: the name may be another's index (made meanwhile). What a failed
+    // build left is read from the server instead (the tables' unusable indexes), here and in the table's Structure.
   )
   return {
     flow,

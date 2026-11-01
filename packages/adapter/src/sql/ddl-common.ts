@@ -29,7 +29,7 @@ export function addForeignKeySql(dialect: Dialect, ns: Namespace, op: AddForeign
 }
 
 /** MySQL's "without stopping writes": refused at once where the server would have to (never a silent table lock). */
-export const ONLINE_MYSQL = ' ALGORITHM=INPLACE LOCK=NONE'
+const ONLINE_MYSQL = ' ALGORITHM=INPLACE LOCK=NONE'
 
 /** An index's definition, as addIndex and alterIndex carry it. */
 type IndexSpec = Omit<Extract<DdlOp, { op: 'addIndex' }>, 'op'>

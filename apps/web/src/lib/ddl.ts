@@ -12,8 +12,7 @@ const DDL_TIMEOUT_MS = 300_000
 export function useDdlFlow(
   db: string,
   schema: string | undefined,
-  onSuccess?: (op: DdlOp) => void | Promise<void>,
-  onFailure?: (op: DdlOp) => void
+  onSuccess?: (op: DdlOp) => void | Promise<void>
 ): DdlFlow {
   const dialect = useDialect()
   return usePreviewFlow<DdlOp>({
@@ -29,6 +28,5 @@ export function useDdlFlow(
       }),
     }),
     ...(onSuccess ? { onSuccess } : {}),
-    ...(onFailure ? { onFailure } : {}),
   })
 }

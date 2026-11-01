@@ -214,6 +214,10 @@ export async function pgDescribeTable(conn: Conn, ns: Namespace, table: string):
        JOIN pg_class ic ON ic.oid = i.indexrelid
        JOIN pg_am am ON am.oid = ic.relam
        WHERE i.indrelid = $1::regclass
+         -- Not valid yet, and nothing failed: a partitioned table's index until each partition has its own, and an
+         -- index a constraint holds (DROP INDEX cannot take it). Left out, as they always were.
+         AND (i.indisvalid OR (ic.relkind = 'i'
+              AND NOT EXISTS (SELECT 1 FROM pg_constraint con WHERE con.conindid = i.indexrelid)))
        ORDER BY i.indisprimary DESC, ic.relname`,
       [regclass, SEP]
     )

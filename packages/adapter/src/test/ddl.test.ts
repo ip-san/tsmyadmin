@@ -586,7 +586,7 @@ describe('DDL builders', () => {
       'CREATE UNIQUE INDEX `i` ON `db`.`t` (`a`) USING BTREE ALGORITHM=INPLACE LOCK=NONE',
     ])
     expect(pgDdl.build(pgNs, op)).toEqual(['CREATE UNIQUE INDEX CONCURRENTLY "i" ON "app"."t" ("a")'])
-    expect(mysqlDdl.build(myNs, drop)).toEqual(['DROP INDEX `i` ON `db`.`t` ALGORITHM=INPLACE LOCK=NONE'])
+    expect(mysqlDdl.build(myNs, drop)).toEqual(['ALTER TABLE `db`.`t` DROP INDEX `i`, ALGORITHM=INPLACE, LOCK=NONE'])
     expect(pgDdl.build(pgNs, drop)).toEqual(['DROP INDEX CONCURRENTLY "app"."i"'])
     expect(() => mysqlDdl.build(myNs, { ...op, kind: 'fulltext' })).toThrow(/without stopping writes/)
     expect(() => mysqlDdl.build(myNs, { ...op, kind: 'spatial' })).toThrow(/without stopping writes/)

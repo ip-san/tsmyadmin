@@ -247,6 +247,20 @@ export function describeDdlColumnsAndDatabases(env: ConformanceEnv, { firstValue
     }
   })
 
+  it('does not call a partitioned table’s index unusable while its partitions have none yet', async () => {
+    if (dialect !== 'postgres') return
+    const t = `${scratch}_parted`
+    try {
+      await execOk(`CREATE TABLE ${t} (id INT, a INT) PARTITION BY RANGE (id)`)
+      await execOk(`CREATE TABLE ${t}_p1 PARTITION OF ${t} FOR VALUES FROM (0) TO (10)`)
+      // Not valid until each partition's own index is attached: nothing failed.
+      await execOk(`CREATE INDEX ${t}_idx ON ONLY ${t} (a)`)
+      expect((await env.db.describeTable(ns, t)).unusableIndexes ?? []).toEqual([])
+    } finally {
+      await exec(`DROP TABLE IF EXISTS ${t}`, { stopOnError: false })
+    }
+  })
+
   it('writes a generated column that describeTable reads back, and keeps it generated when changed', async () => {
     const t = `${scratch}_gen`
     try {
