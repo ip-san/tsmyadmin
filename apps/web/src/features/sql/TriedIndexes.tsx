@@ -23,8 +23,11 @@ export function TriedIndexes({ scope, db, schema }: { scope: string; db: string;
       refetchOnMount: 'always' as const,
     })),
   })
-  // By the name as made (a quoted PostgreSQL name differs from one only in case).
-  const there = (x: TriedIndex, i: number) => structures[i]?.data?.indexes.some((ix) => ix.name === x.name) ?? false
+  // By the name as made (a quoted PostgreSQL name differs from one only in case); one a failed build left unusable
+  // is there too, and is said to be.
+  const unusable = (x: TriedIndex, i: number) => structures[i]?.data?.unusableIndexes?.includes(x.name) ?? false
+  const there = (x: TriedIndex, i: number) =>
+    (structures[i]?.data?.indexes.some((ix) => ix.name === x.name) ?? false) || unusable(x, i)
   // Forgotten only on a read of the table since: never on what was cached before.
   const read = structures.map((s) => s.isFetchedAfterMount && !s.isFetching && !s.isError && s.data !== undefined)
   const gone = tried.filter((x, i) => read[i] && !there(x, i))
@@ -34,7 +37,7 @@ export function TriedIndexes({ scope, db, schema }: { scope: string; db: string;
   useEffect(() => {
     for (const x of toForget) forgetTried(scope, x)
   }, [scope, toForget])
-  const shown = tried.filter(there)
+  const shown = tried.flatMap((x, i) => (there(x, i) ? [{ ...x, left: unusable(x, i) }] : []))
   const flow = useDdlFlow(db, schema, (op) => {
     if (op.op === 'dropIndex')
       forgetTried(scope, { db, schema: schema ?? null, table: op.table, name: op.name, columns: [] })
@@ -48,11 +51,22 @@ export function TriedIndexes({ scope, db, schema }: { scope: string; db: string;
       <ul className="space-y-1">
         {shown.map((x) => (
           <li key={`${x.table}\0${x.name}`} className="flex flex-wrap items-center gap-2">
-            <span className="text-ink">{t.triedItem(x.table, x.name, x.columns)}</span>
+            <span className="text-ink">
+              {x.left ? t.trialLeftover(x.table, x.name) : t.triedItem(x.table, x.name, x.columns)}
+            </span>
             <Button
               size="sm"
               aria-disabled={flow.running || undefined}
-              onClick={() => !flow.running && flow.preview({ op: 'dropIndex', table: x.table, name: x.name })}
+              onClick={() =>
+                !flow.running &&
+                flow.preview({
+                  op: 'dropIndex',
+                  table: x.table,
+                  name: x.name,
+                  // Dropped as it was made; a leftover is always dropped without stopping writes.
+                  ...(x.online || x.left ? { online: true } : {}),
+                })
+              }
             >
               {t.trialUndo(x.name)}
             </Button>

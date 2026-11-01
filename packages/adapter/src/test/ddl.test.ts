@@ -576,6 +576,22 @@ describe('DDL builders', () => {
     expect(() => pg(idx({ lengths: { a: 10 } }))).toThrow(/prefix length/)
   })
 
+  it('builds and drops an index without stopping writes in each dialect, and refuses where MySQL cannot', () => {
+    const op: DdlOp = { op: 'addIndex', table: 't', name: 'i', columns: ['a'], unique: true, online: true }
+    const drop: DdlOp = { op: 'dropIndex', table: 't', name: 'i', online: true }
+    const myNs = { database: 'db' }
+    const pgNs = { database: 'db', schema: 'app' }
+    expect(mysqlDdl.build(myNs, op)).toEqual(['CREATE UNIQUE INDEX `i` ON `db`.`t` (`a`) ALGORITHM=INPLACE LOCK=NONE'])
+    expect(mysqlDdl.build(myNs, { ...op, method: 'btree' })).toEqual([
+      'CREATE UNIQUE INDEX `i` ON `db`.`t` (`a`) USING BTREE ALGORITHM=INPLACE LOCK=NONE',
+    ])
+    expect(pgDdl.build(pgNs, op)).toEqual(['CREATE UNIQUE INDEX CONCURRENTLY "i" ON "app"."t" ("a")'])
+    expect(mysqlDdl.build(myNs, drop)).toEqual(['ALTER TABLE `db`.`t` DROP INDEX `i`, ALGORITHM=INPLACE, LOCK=NONE'])
+    expect(pgDdl.build(pgNs, drop)).toEqual(['DROP INDEX CONCURRENTLY "app"."i"'])
+    expect(() => mysqlDdl.build(myNs, { ...op, kind: 'fulltext' })).toThrow(/without stopping writes/)
+    expect(() => mysqlDdl.build(myNs, { ...op, kind: 'spatial' })).toThrow(/without stopping writes/)
+  })
+
   it('replaces the MySQL primary key in one ALTER when it is the index being changed', () => {
     const op: DdlOp = {
       op: 'alterIndex',

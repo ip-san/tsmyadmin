@@ -642,7 +642,10 @@ export class PostgresAdapter extends BaseAdapter {
         if (schema.kind === 'materialized_view') {
           const idx = firstResult(
             await conn.query(
-              'SELECT indexdef FROM pg_indexes WHERE schemaname = $1 AND tablename = $2 ORDER BY indexname',
+              // Not one a failed concurrent build left unusable (as the tables' indexes in the dump).
+              `SELECT x.indexdef FROM pg_indexes x
+               JOIN pg_index i ON i.indexrelid = format('%I.%I', x.schemaname, x.indexname)::regclass
+               WHERE x.schemaname = $1 AND x.tablename = $2 AND i.indisvalid ORDER BY x.indexname`,
               [ns.schema ?? 'public', table]
             )
           )

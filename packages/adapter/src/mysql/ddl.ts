@@ -404,7 +404,12 @@ export const mysqlDdl: DdlBuilder = {
       case 'addIndex':
         return [createIndexSql('mysql', ns, op)]
       case 'dropIndex':
-        return [`DROP INDEX ${id(op.name)} ON ${t}`]
+        // MariaDB's DROP INDEX takes no ALGORITHM / LOCK; ALTER TABLE does on both servers.
+        return [
+          op.online
+            ? `ALTER TABLE ${t} DROP INDEX ${id(op.name)}, ALGORITHM=INPLACE, LOCK=NONE`
+            : `DROP INDEX ${id(op.name)} ON ${t}`,
+        ]
       case 'renameIndex':
         return [`ALTER TABLE ${t} RENAME INDEX ${id(op.name)} TO ${id(op.newName)}`]
       case 'alterIndex': {

@@ -315,8 +315,10 @@ describe('pgDescribeTable', () => {
   it('reads the indexes, the primary key being the columns of the primary index', async () => {
     const { table } = await describe1({
       idx: [
-        ['t_pkey', 't', 't', 'btree', `a${SEP}b`, null, 'CREATE UNIQUE INDEX t_pkey ...'],
-        ['t_x', 'f', 'f', 'gin', 'c', 'c > 0', 'CREATE INDEX t_x ...'],
+        ['t_pkey', 't', 't', 'btree', `a${SEP}b`, null, 'CREATE UNIQUE INDEX t_pkey ...', 't'],
+        ['t_x', 'f', 'f', 'gin', 'c', 'c > 0', 'CREATE INDEX t_x ...', 't'],
+        // Left by a concurrent build that failed: named apart, never an index to read through.
+        ['t_left', 't', 'f', 'btree', 'd', null, 'CREATE UNIQUE INDEX t_left ...', 'f'],
       ],
     })
     expect(table.indexes).toEqual([
@@ -341,8 +343,11 @@ describe('pgDescribeTable', () => {
         definition: 'CREATE INDEX t_x ...',
       },
     ])
+    expect(table.unusableIndexes).toEqual(['t_left'])
     expect(table.primaryKey).toEqual(['a', 'b'])
-    expect((await describe1({ idx: [['i', 'f', 'f', 'btree', 'c', null, 'D']] })).table.primaryKey).toEqual([])
+    const plain = (await describe1({ idx: [['i', 'f', 'f', 'btree', 'c', null, 'D', 't']] })).table
+    expect(plain.primaryKey).toEqual([])
+    expect(plain).not.toHaveProperty('unusableIndexes')
   })
 
   it('reads the foreign keys without their holding table, and the keys that point at the table', async () => {

@@ -105,8 +105,14 @@ function PlanStory({
   const current = reads[player.index]?.path
   const shapeOf = (table: string) => {
     const s = structures[tables.indexOf(table)]?.data
-    return s ? { columns: s.columns.map((c) => c.name), indexes: s.indexes } : undefined
+    return s
+      ? { columns: s.columns.map((c) => c.name), indexes: s.indexes, unusable: s.unusableIndexes ?? [] }
+      : undefined
   }
+  // Indexes a build left unusable on the tables read: each costs writes and blocks its name.
+  const leftovers = tables.flatMap((table) =>
+    (structures[tables.indexOf(table)]?.data?.unusableIndexes ?? []).map((name) => ({ table, name }))
+  )
   return (
     <div className="space-y-3">
       {trial ? (
@@ -114,6 +120,7 @@ function PlanStory({
           trial={trial.state}
           before={trial.before}
           candidates={indexCandidates(trial.before.plan, shapeOf)}
+          leftovers={leftovers}
         />
       ) : null}
       {reads.length > 0 ? (

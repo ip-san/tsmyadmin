@@ -207,6 +207,60 @@ export function describeDdlColumnsAndDatabases(env: ConformanceEnv, { firstValue
     }
   })
 
+  it('builds and drops an index without stopping writes, and names one a failed build left unusable', async () => {
+    const t = `${scratch}_online`
+    const idx = `${t}_idx`
+    try {
+      await runDdl({
+        op: 'createTable',
+        table: t,
+        columns: [col('id', 'INT', { nullable: false }), col('a', 'INT')],
+        primaryKey: ['id'],
+      })
+      await execOk(`INSERT INTO ${t} (id, a) VALUES (1, 7), (2, 7)`)
+      // Run as the UI runs it (one statement per query, outside any transaction: PostgreSQL refuses CONCURRENTLY in one).
+      await runDdl({ op: 'addIndex', table: t, name: idx, columns: ['a'], unique: false, online: true })
+      let s = await env.db.describeTable(ns, t)
+      expect(s.indexes.find((i) => i.name === idx)).toMatchObject({ columns: ['a'], unique: false })
+      expect(s.unusableIndexes ?? []).toEqual([])
+      await runDdl({ op: 'dropIndex', table: t, name: idx, online: true })
+      expect((await env.db.describeTable(ns, t)).indexes.some((i) => i.name === idx)).toBe(false)
+
+      // A unique build over duplicates fails. What it leaves (PostgreSQL: an unusable index; MySQL: nothing) is never
+      // counted as an index, and is named so it can be dropped.
+      const failed = await exec(
+        sqlScript(
+          dialect,
+          env.db.ddl.build(ns, { op: 'addIndex', table: t, name: idx, columns: ['a'], unique: true, online: true })
+        )
+      )
+      expect(failed.some((r) => r.kind === 'error')).toBe(true)
+      s = await env.db.describeTable(ns, t)
+      expect(s.indexes.some((i) => i.name === idx)).toBe(false)
+      expect(s.unusableIndexes ?? []).toEqual(dialect === 'postgres' ? [idx] : [])
+      if (s.unusableIndexes?.includes(idx)) await runDdl({ op: 'dropIndex', table: t, name: idx, online: true })
+      s = await env.db.describeTable(ns, t)
+      expect(s.indexes.some((i) => i.name === idx)).toBe(false)
+      expect(s.unusableIndexes ?? []).toEqual([])
+    } finally {
+      await exec(`DROP TABLE IF EXISTS ${t}`, { stopOnError: false })
+    }
+  })
+
+  it('does not call a partitioned table’s index unusable while its partitions have none yet', async () => {
+    if (dialect !== 'postgres') return
+    const t = `${scratch}_parted`
+    try {
+      await execOk(`CREATE TABLE ${t} (id INT, a INT) PARTITION BY RANGE (id)`)
+      await execOk(`CREATE TABLE ${t}_p1 PARTITION OF ${t} FOR VALUES FROM (0) TO (10)`)
+      // Not valid until each partition's own index is attached: nothing failed.
+      await execOk(`CREATE INDEX ${t}_idx ON ONLY ${t} (a)`)
+      expect((await env.db.describeTable(ns, t)).unusableIndexes ?? []).toEqual([])
+    } finally {
+      await exec(`DROP TABLE IF EXISTS ${t}`, { stopOnError: false })
+    }
+  })
+
   it('writes a generated column that describeTable reads back, and keeps it generated when changed', async () => {
     const t = `${scratch}_gen`
     try {

@@ -28,6 +28,9 @@ export function addForeignKeySql(dialect: Dialect, ns: Namespace, op: AddForeign
     )}) REFERENCES ${quoteTable(dialect, refNs, op.refTable)} (${op.refColumns.map(id).join(', ')})${actions.join('')}`
 }
 
+/** MySQL's "without stopping writes": refused at once where the server would have to (never a silent table lock). */
+const ONLINE_MYSQL = ' ALGORITHM=INPLACE LOCK=NONE'
+
 /** An index's definition, as addIndex and alterIndex carry it. */
 type IndexSpec = Omit<Extract<DdlOp, { op: 'addIndex' }>, 'op'>
 
@@ -56,6 +59,9 @@ function indexParts(dialect: Dialect, i: IndexSpec): { keyword: string; method: 
       columns: i.columns.map(id).join(', '),
     }
   }
+  if (i.online && (kind === 'fulltext' || kind === 'spatial')) {
+    throw new AdapterError('UNSUPPORTED', 'MySQL cannot build a FULLTEXT or SPATIAL index without stopping writes')
+  }
   if (i.method && i.method !== 'btree' && i.method !== 'hash') {
     throw new AdapterError('UNSUPPORTED', `MySQL has no ${i.method} index`)
   }
@@ -69,15 +75,18 @@ function indexParts(dialect: Dialect, i: IndexSpec): { keyword: string; method: 
   }
 }
 
-/** `CREATE [UNIQUE | FULLTEXT | SPATIAL] INDEX name ON t [USING m] (cols)` in each dialect's order. */
+/**
+ * `CREATE [UNIQUE | FULLTEXT | SPATIAL] INDEX name ON t [USING m] (cols)` in each dialect's order; `online` without
+ * stopping writes (PostgreSQL `CONCURRENTLY`, MySQL `ALGORITHM=INPLACE LOCK=NONE`).
+ */
 export function createIndexSql(dialect: Dialect, ns: Namespace, op: IndexSpec): string {
   const { keyword, method, columns } = indexParts(dialect, op)
   const t = quoteTable(dialect, ns, op.table)
   const name = quoteIdent(dialect, op.name)
   // MySQL writes the method after the columns, PostgreSQL before them.
   return dialect === 'postgres'
-    ? `CREATE ${keyword}INDEX ${name} ON ${t}${method} (${columns})`
-    : `CREATE ${keyword}INDEX ${name} ON ${t} (${columns})${method}`
+    ? `CREATE ${keyword}INDEX ${op.online ? 'CONCURRENTLY ' : ''}${name} ON ${t}${method} (${columns})`
+    : `CREATE ${keyword}INDEX ${name} ON ${t} (${columns})${method}${op.online ? ONLINE_MYSQL : ''}`
 }
 
 /**

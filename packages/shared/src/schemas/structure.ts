@@ -163,6 +163,11 @@ export const TableSchemaSchema = z.object({
   columns: z.array(ColumnDefSchema),
   primaryKey: z.array(z.string()),
   indexes: z.array(IndexDefSchema),
+  /**
+   * Indexes the server keeps but cannot use (PostgreSQL: a `CREATE INDEX CONCURRENTLY` that failed or was stopped
+   * part way). Not in `indexes`: nothing reads through them, though each still costs every write. Absent on MySQL.
+   */
+  unusableIndexes: z.array(z.string()).optional(),
   foreignKeys: z.array(ForeignKeyDefSchema),
   /** Foreign keys in other tables that point at this table (reverse references). */
   referencedBy: z.array(ReferencingKeyDefSchema),

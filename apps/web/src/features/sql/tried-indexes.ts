@@ -13,6 +13,8 @@ const TriedSchema = z.object({
   table: z.string(),
   name: z.string(),
   columns: z.array(z.string()),
+  /** Made without stopping writes: dropped the same way. */
+  online: z.boolean().optional(),
 })
 export type TriedIndex = z.infer<typeof TriedSchema>
 const ListSchema = z.array(TriedSchema)

@@ -108,7 +108,9 @@ describe('PostgresAdapter.showCreateTable: a materialized view', () => {
       'CREATE INDEX b ON x (n)',
       '',
     ])
-    expect(asked[1]?.text).toContain('ORDER BY indexname')
+    expect(asked[1]?.text).toContain('ORDER BY x.indexname')
+    // Not an index a failed concurrent build left unusable.
+    expect(asked[1]?.text).toContain('i.indisvalid')
     expect(asked[1]?.params).toEqual(['sales', 'thing'])
   })
 

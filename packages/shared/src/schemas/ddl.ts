@@ -285,8 +285,27 @@ export const DdlOpSchema = z.discriminatedUnion('op', [
     columns: z.array(z.string().min(1)).min(1),
     current: z.string().min(1).optional(),
   }),
-  z.object({ op: z.literal('addIndex'), table, ...IndexShape }),
-  z.object({ op: z.literal('dropIndex'), table, name: z.string().min(1) }),
+  z.object({
+    op: z.literal('addIndex'),
+    table,
+    ...IndexShape,
+    /**
+     * Built without stopping writes to the table: PostgreSQL `CONCURRENTLY` (slower; a build that fails part way leaves
+     * an unusable index, listed in `unusableIndexes`), MySQL `ALGORITHM=INPLACE LOCK=NONE` (refused, not waited for,
+     * where the server cannot).
+     */
+    online: z.boolean().optional(),
+  }),
+  z.object({
+    op: z.literal('dropIndex'),
+    table,
+    name: z.string().min(1),
+    /**
+     * Dropped without stopping reads and writes of the table: PostgreSQL `DROP INDEX CONCURRENTLY`, MySQL
+     * `ALTER TABLE … DROP INDEX …, ALGORITHM=INPLACE, LOCK=NONE` (MariaDB's DROP INDEX takes neither).
+     */
+    online: z.boolean().optional(),
+  }),
   z.object({ op: z.literal('renameIndex'), table, name: z.string().min(1), newName: z.string().min(1) }),
   /** An index replaced by a new definition: one ALTER on MySQL, DROP + CREATE on PostgreSQL. */
   z.object({ op: z.literal('alterIndex'), table, name: z.string().min(1), index: z.object(IndexShape) }),

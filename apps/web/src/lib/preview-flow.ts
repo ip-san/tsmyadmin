@@ -54,11 +54,14 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
       const err = results.find((r) => r.kind === 'error')
       setRolledBack(undone === true)
       setNotices(results.flatMap((r) => (r.kind === 'error' ? [] : (r.notices ?? []))))
+      const invalidate = config.invalidate ?? isDatabaseData
       if (err) {
         setFailed(err)
+        // What it left is read again: the statements before it ran, and a failed build can leave an index behind. Not
+        // awaited: the failure is said (and the dialog can be closed) at once.
+        void queryClient.invalidateQueries({ predicate: (q) => invalidate(q.queryKey) })
         return
       }
-      const invalidate = config.invalidate ?? isDatabaseData
       setOp(null)
       setSql([])
       setExecuted(o)

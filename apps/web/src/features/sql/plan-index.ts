@@ -5,6 +5,8 @@ import { type PlanRead, planReads } from './plan-steps.ts'
 export interface TableShape {
   columns: readonly string[]
   indexes: readonly { name: string; columns: readonly string[] }[]
+  /** Names of indexes a build left unusable: not indexes to read through, but names taken all the same. */
+  unusable?: readonly string[]
 }
 
 /** An index worth trying: on these columns of a table the plan reads in full, and why. */
@@ -199,7 +201,11 @@ export function indexCandidates(plan: PlanNode, shapeOf: (table: string) => Tabl
     const columns = indexOrder(texts.flatMap((t) => conditionColumns(t, node.table, node.alias, shape.columns)))
     if (columns.length === 0 || covered(columns, shape)) continue
     if (out.some((c) => c.table === node.table && c.columns.join('\0') === columns.join('\0'))) continue
-    const taken = [...shape.indexes.map((i) => i.name), ...out.filter((c) => c.table === node.table).map((c) => c.name)]
+    const taken = [
+      ...shape.indexes.map((i) => i.name),
+      ...(shape.unusable ?? []),
+      ...out.filter((c) => c.table === node.table).map((c) => c.name),
+    ]
     out.push({
       table: node.table,
       columns,

@@ -1,3 +1,4 @@
+import type { DdlOp } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
 import { rejectsWith } from '../test/ddl-helpers.ts'
 import { FakeAdapter } from '../testing/fake-adapter.ts'
@@ -95,5 +96,24 @@ describe('pgPrepareDdl: a collation applied to the tables', () => {
     expect(await pgPrepareDdl(adapter, ns, { ...op, applyToTables: false })).toEqual({ ...op, applyToTables: false })
     const given = { ...op, tables: ['x'] }
     expect(await pgPrepareDdl(adapter, ns, given)).toEqual(given)
+  })
+})
+
+describe('pgPrepareDdl: an index built without stopping writes', () => {
+  const adapterOf = (partitioned: boolean) =>
+    ({ describeTable: async () => ({ partitioned }) }) as unknown as DatabaseAdapter
+  const op: DdlOp = { op: 'addIndex', table: 't', name: 'i', columns: ['a'], unique: false, online: true }
+
+  it('refuses it on a partitioned table, at the preview', async () => {
+    await rejectsWith(pgPrepareDdl(adapterOf(true), { database: 'db' }, op), 'UNSUPPORTED', /partitioned/)
+  })
+
+  it('passes it on a table, and does not read a table for a plain build', async () => {
+    expect(await pgPrepareDdl(adapterOf(false), { database: 'db' }, op)).toEqual(op)
+    const unread = { describeTable: () => Promise.reject(new Error('read')) } as unknown as DatabaseAdapter
+    expect(await pgPrepareDdl(unread, { database: 'db' }, { ...op, online: false } as DdlOp)).toEqual({
+      ...op,
+      online: false,
+    })
   })
 })

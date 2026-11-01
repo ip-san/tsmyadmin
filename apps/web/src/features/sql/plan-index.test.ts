@@ -121,6 +121,18 @@ describe('indexCandidates', () => {
     ])
   })
 
+  it('names it apart from an index a failed build left unusable, which does not count as one', () => {
+    const plan = node({ op: 'Seq Scan', table: 'posts', alias: null, access: 'fullScan', detail: '(user_id = 1)' })
+    const posts = SHAPES.posts
+    if (!posts) throw new Error('no posts')
+    const shape: TableShape = {
+      ...posts,
+      indexes: posts.indexes.filter((i) => !i.columns.includes('user_id')),
+      unusable: ['idx_posts_user_id'],
+    }
+    expect(indexCandidates(plan, () => shape).map((c) => c.name)).toEqual(['idx_posts_user_id_2'])
+  })
+
   it('reads only the condition of a step’s name, not its words', () => {
     const shape: TableShape = { columns: ['id', 'hash', 'inner', 'join'], indexes: [] }
     const plan = node({
