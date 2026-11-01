@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { StatementResult } from '@tsmyadmin/shared'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { locale } from '@/config/locale-screens.ts'
-import { type PreviewFlowConfig, usePreviewFlow } from '@/lib/preview-flow.ts'
+import { type PreviewFlowConfig, STOP_ANSWER_MS, usePreviewFlow } from '@/lib/preview-flow.ts'
 import { memoryStorage } from '@/test/memory-storage.ts'
 import { PreviewDialog } from './PreviewDialog.tsx'
 
@@ -173,7 +173,7 @@ describe('PreviewDialog, stopping a run', () => {
     await act(async () => finish({ results: [ok(0), ok(1)] }))
     await vi.waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1))
   })
-  it('is stopped where the answer to the stop did not come back and the script ended short without an error', async () => {
+  it('says it is not known where the answer to the stop did not come back and no statement failed', async () => {
     stopAnswer = async () => {
       throw new Error('network down')
     }
@@ -181,16 +181,36 @@ describe('PreviewDialog, stopping a run', () => {
     fireEvent.click(await stopButton())
     await screen.findByText('network down')
     await act(async () => finish({ results: [ok(0)] }))
-    expect(await screen.findByText(d.stopped)).toBeTruthy()
+    expect(await screen.findByText(d.stopUnclear)).toBeTruthy()
+    expect(screen.queryByText(d.stopped)).toBeNull()
     expect(onSuccess).not.toHaveBeenCalled()
   })
 
-  it('is done at once where every statement answered, without waiting for the answer to the stop', async () => {
-    stopAnswer = () => new Promise(() => undefined)
+  it('waits for the answer to the stop: done once the server says it was not stopped', async () => {
+    let answer: (v: boolean) => void = () => undefined
+    stopAnswer = () => new Promise((resolve) => (answer = resolve))
     await running()
     fireEvent.click(await stopButton())
     await act(async () => finish({ results: [ok(0), ok(1)] }))
+    expect(onSuccess).not.toHaveBeenCalled()
+    await act(async () => answer(false))
     await vi.waitFor(() => expect(onSuccess).toHaveBeenCalledWith('build'))
+  })
+
+  it('says it is not known where the answer to the stop does not come in time', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      stopAnswer = () => new Promise(() => undefined)
+      await running()
+      fireEvent.click(await stopButton())
+      await act(async () => finish({ results: [ok(0)] }))
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(STOP_ANSWER_MS)
+      })
+      expect(await screen.findByText(d.stopUnclear)).toBeTruthy()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('puts away the failure of the run before as a run starts', async () => {

@@ -24,6 +24,8 @@ export interface PreviewFlow<Op> {
   stopping: boolean
   /** The last run was stopped on a press, as the server says: what ran before it stays, nothing after it ran. */
   stopped: boolean
+  /** A stop was asked of the last run and its answer never came: whether it was stopped is not known. */
+  stopUnclear: boolean
   /** Why the last stop did not reach the server (the run went on, and can be stopped again). */
   stopError: unknown
   preview: (op: Op) => void
@@ -45,10 +47,8 @@ export interface PreviewFlowConfig<Op> {
   onSuccess?: (op: Op) => void | Promise<void>
 }
 
-/** How many statements of the script answered: the several result sets of one CALL are one statement. */
-function answered(results: readonly StatementResult[]): number {
-  return results.reduce((n, r, i) => Math.max(n, (r.statement ?? i) + 1), 0)
-}
+/** How long an ended run waits for the answer to its stop: past it, whether it was stopped is not known. */
+export const STOP_ANSWER_MS = 15_000
 
 /**
  * Preview → confirm → execute. Nothing runs until the user confirms the generated SQL.
@@ -68,6 +68,7 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
   const running = useRef(false)
   const [stopping, setStopping] = useState(false)
   const [stopped, setStopped] = useState(false)
+  const [stopUnclear, setStopUnclear] = useState(false)
   const [stopError, setStopError] = useState<unknown>(null)
   // The run going (its id); the run a stop was asked of; and the stop asked: whether the server stopped the run (null
   // where its answer did not come back).
@@ -76,20 +77,27 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
   const stopAsked = useRef<{ id: string; answer: Promise<boolean | null> } | null>(null)
   const runM = useMutation({
     mutationFn: async ({ op: o, statements, queryId }: { op: Op; statements: string[]; queryId: string }) => {
-      const answerOf = async () => (stopAsked.current?.id === queryId ? await stopAsked.current.answer : null)
+      // The answer to this run's stop: null where it did not come back, or not in time.
+      const answerOf = async (): Promise<boolean | null> => {
+        const asked = stopAsked.current?.id === queryId ? stopAsked.current.answer : null
+        if (!asked) return null
+        let timer: ReturnType<typeof setTimeout> | undefined
+        const late = new Promise<null>((resolve) => {
+          timer = setTimeout(() => resolve(null), STOP_ANSWER_MS)
+        })
+        return Promise.race([asked, late]).finally(() => clearTimeout(timer))
+      }
       try {
         const r = await config.execute(o, statements, queryId)
-        if (askedOf.current !== queryId) return { ...r, stopped: false }
-        const failed = r.results.some((x) => x.kind === 'error')
-        // Every statement answered, none failing: done, however the stop went (and without waiting for its answer).
-        if (!failed && answered(r.results) >= statements.length) return { ...r, stopped: false }
-        // Stopped is what the server says: stopped between two statements, a script ends short with no error at all,
-        // and must not be taken for done (nor its follow-up run). Where the answer did not come back, a script ended
-        // short with no error is taken as stopped all the same.
+        if (askedOf.current !== queryId) return { ...r, halt: null }
+        // Stopped is what the server says (it says so only where it cut the script short): stopped between two
+        // statements, a script ends short with no error at all, and must not be taken for done (nor its follow-up
+        // run). Without its answer, a script that ended with no error may be done or cut short: said as not known.
         const answer = await answerOf()
-        return { ...r, stopped: answer === true || (answer === null && !failed) }
+        const failed = r.results.some((x) => x.kind === 'error')
+        return { ...r, halt: answer === true ? 'stopped' : answer === null && !failed ? 'unclear' : null }
       } catch (err) {
-        if (askedOf.current === queryId && (await answerOf()) === true) return { results: [], stopped: true }
+        if (askedOf.current === queryId && (await answerOf()) === true) return { results: [], halt: 'stopped' }
         throw err
       }
     },
@@ -100,13 +108,14 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
       stopAsked.current = null
       setStopping(false)
     },
-    onSuccess: async ({ results, rolledBack: undone, stopped: halted }, { op: o }) => {
+    onSuccess: async ({ results, rolledBack: undone, halt }, { op: o }) => {
       const err = results.find((r) => r.kind === 'error')
       setRolledBack(undone === true)
       setNotices(results.flatMap((r) => (r.kind === 'error' ? [] : (r.notices ?? []))))
       const invalidate = config.invalidate ?? isDatabaseData
-      if (halted) {
-        setStopped(true)
+      if (halt) {
+        if (halt === 'stopped') setStopped(true)
+        else setStopUnclear(true)
         // What ran before the stop stays, and a build stopped part way can leave an index behind: read again.
         void queryClient.invalidateQueries({ predicate: (q) => invalidate(q.queryKey) })
         return
@@ -139,6 +148,7 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
     rolledBack,
     stopping,
     stopped,
+    stopUnclear,
     stopError,
     ...(config.stop
       ? {
@@ -169,6 +179,7 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
     preview: (o) => {
       running.current = false
       setStopped(false)
+      setStopUnclear(false)
       setStopError(null)
       setOp(o)
       setSql([])
@@ -187,6 +198,7 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
       current.current = queryId
       stopAsked.current = null
       setStopped(false)
+      setStopUnclear(false)
       setStopError(null)
       setFailed(null)
       runM.mutate({ op, statements: sql, queryId }, { onSettled: () => (running.current = false) })
@@ -195,6 +207,9 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
       setOp(null)
       setSql([])
       setFailed(null)
+      setStopped(false)
+      setStopUnclear(false)
+      setStopError(null)
     },
   }
 }

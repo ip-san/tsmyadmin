@@ -40,8 +40,8 @@ export function PreviewDialog<Op>({
   // would leave focus on <body>: read what happened.
   const failureRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
-    if (flow.failed || flow.error || flow.stopped) failureRef.current?.focus()
-  }, [flow.failed, flow.error, flow.stopped])
+    if (flow.failed || flow.error || flow.stopped || flow.stopUnclear) failureRef.current?.focus()
+  }, [flow.failed, flow.error, flow.stopped, flow.stopUnclear])
   const required = op === null || !readSetting('confirmDrop') ? null : (confirmName?.(op) ?? null)
   const warning = op === null ? '' : `${locale.ddl.irreversible}${lossWarning?.(op) ? ` ${lossWarning(op) ?? ''}` : ''}`
   const [typed, setTyped] = useState('')
@@ -135,12 +135,12 @@ export function PreviewDialog<Op>({
         {flow.stopError ? <ErrorBox error={flow.stopError} className="mt-2" /> : null}
         <div ref={failureRef} tabIndex={-1} className="outline-none">
           {flow.error ? <ErrorBox error={flow.error} className="mt-2" /> : null}
-          {flow.stopped && !flow.error ? (
+          {(flow.stopped || flow.stopUnclear) && !flow.error ? (
             <div
               role="alert"
               className="mt-2 rounded border border-amber-300 bg-amber-50 p-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200"
             >
-              {locale.ddl.stopped}
+              {flow.stopped ? locale.ddl.stopped : locale.ddl.stopUnclear}
             </div>
           ) : null}
         </div>

@@ -1234,6 +1234,8 @@ export const enScreens = {
     failedStatement: 'Failed statement',
     stop: 'Stop running',
     stopping: 'Stopping the run…',
+    stopUnclear:
+      'The server did not answer whether the run was stopped: it may have run to the end or stopped part way. The structure was read again: check it',
     stopped:
       "The run was stopped. The statement running when it stopped was undone; the statements before it stay done, and the ones after it did not run. On PostgreSQL, an index stopped part way through a build without stopping writes can be left unusable (drop it under Unusable indexes in the table's Structure)",
     rolledBack: 'The statements that had succeeded were rolled back as well (nothing was applied)',
