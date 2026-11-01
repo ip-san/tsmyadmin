@@ -1,6 +1,9 @@
 import type { CountKind, ImportWarning } from '@tsmyadmin/shared'
 import type { Widen } from './ja.ts'
 
+/** A planner cost, as the server's own units: whole above 10, one decimal below. */
+const costSaid = (c: number) => c.toLocaleString('ja-JP', { maximumFractionDigits: c >= 10 ? 0 : 1 })
+
 /**
  * The Japanese strings of the screens behind the login, the part of `ja` that first paint does not need. Loaded with
  * the first screen that reads them (`@/config/locale-screens.ts`), not with the page; the conventions are those of
@@ -371,6 +374,26 @@ export const jaScreens = {
     trialLeftover: (table: string, name: string) =>
       `${table} の ${name} は、作る途中で止まり、使えないまま残っています。読み出しには使われず、書き込みのたびに手間だけかかります`,
     trialUndoHint: '試したインデックスを消します。計画は試す前に戻ります',
+    notesAssumed: (name: string) =>
+      `${name} は作っていません。あるものとしてサーバーが立て直した計画（見込み）で、文は実行していません。元の計画は「元の計画に戻す」で見られます`,
+    assumeGroup: 'インデックスを作らずに試す（見込み）',
+    assumeIntro:
+      'このデータベースには HypoPG があるので、インデックスを作らずに、あるものとしてサーバーに計画を立て直させられます。何も作らず、文も実行しないので、本番のサーバーでも試せます。比べるのはサーバーの見込みで、実際にかかる時間ではありません',
+    assumeTry: (table: string, columns: readonly string[]) => `${table}（${columns.join(', ')}）があるものとして見る`,
+    assumeRunning: 'インデックスがあるものとして、計画を立て直しています…',
+    assumeDone: (name: string) => `${name} があるものとしての計画です（見込み）`,
+    assumeCost: (before: number, after: number) =>
+      `見込みのコスト: ${costSaid(before)} → ${costSaid(after)}${after > 0 && before / after >= 1.5 ? `（約 ${Math.round(before / after).toLocaleString('ja-JP')} 分の 1）` : ''}。コストはサーバーの見積もりの単位で、時間ではありません`,
+    assumeRead: (index: string | null, rows: number | null) =>
+      `${index ? `インデックス ${index} で` : '全件'}${rows === null ? '' : ` 約 ${Math.round(rows).toLocaleString('ja-JP')} 行`}`,
+    assumeUnused: (name: string) =>
+      `サーバーは ${name} があっても使わない見込みです（この文の条件に合わないか、全件読むほうが安いと見ています）。作っても速くならない見込みです`,
+    assumeNote:
+      '仮のインデックスは、この見込みを出すあいだだけのもので、サーバーには何も残りません。本当に速くなるかは、作って測るまで分かりません',
+    assumeBack: '元の計画に戻す',
+    assumeBuild: (table: string, columns: readonly string[]) => `${table}（${columns.join(', ')}）を本当に作って測る`,
+    assumeMissing:
+      'PostgreSQL に拡張 HypoPG を入れると、インデックスを作らずに、あるものとして計画を見られます（サーバーにパッケージを入れ、そのデータベースでスーパーユーザーが CREATE EXTENSION hypopg）',
     triedGroup: '試したインデックス',
     triedIntro:
       '実行計画の「インデックスを試す」で作ったインデックスが、まだ残っています。使わないなら消してください（インデックスは、書き込みのたびに更新されます）',

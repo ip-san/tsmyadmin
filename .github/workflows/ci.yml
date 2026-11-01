@@ -93,6 +93,14 @@ jobs:
           sudo apt-get update -qq && sudo apt-get install -y -qq mysql-client postgresql-client >/dev/null
           mysql -h 127.0.0.1 -P 13306 -uroot -proot < docker/fixtures/mysql/01-schema.sql
           PGPASSWORD=tsmyadmin psql -h 127.0.0.1 -p 15433 -U tsmyadmin -d tsmyadmin_test -v ON_ERROR_STOP=1 -f docker/fixtures/postgres/01-schema.sql
+      # HypoPG (indexes the planner assumes, not built) is a server package: installed into the service container, for
+      # the major version it runs. The tests make the extension in the database themselves.
+      - name: Install HypoPG
+        run: |
+          major=$(PGPASSWORD=tsmyadmin psql -h 127.0.0.1 -p 15433 -U tsmyadmin -d tsmyadmin_test -Atc 'SHOW server_version_num' | cut -c1-2)
+          docker exec ${{ job.services.postgres.id }} sh -c "apt-get update -qq && apt-get install -y -qq postgresql-$major-hypopg" >/dev/null
+          # Installed for the server's version, or this step fails here rather than as a conformance mystery later.
+          docker exec ${{ job.services.postgres.id }} test -f "/usr/share/postgresql/$major/extension/hypopg.control"
       # The same suites as `bun run test:integration` (plus the unit ones), measured: a file that was tested and no longer
       # is, or a new file under 60%, fails here (scripts/coverage-baseline.json).
       - run: bun run check:coverage
@@ -179,6 +187,14 @@ jobs:
           sudo apt-get update -qq && sudo apt-get install -y -qq mysql-client postgresql-client >/dev/null
           mysql -h 127.0.0.1 -P 13306 -uroot -proot < docker/fixtures/mysql/01-schema.sql
           PGPASSWORD=tsmyadmin psql -h 127.0.0.1 -p 15433 -U tsmyadmin -d tsmyadmin_test -v ON_ERROR_STOP=1 -f docker/fixtures/postgres/01-schema.sql
+      # HypoPG (indexes the planner assumes, not built) is a server package: installed into the service container, for
+      # the major version it runs. The tests make the extension in the database themselves.
+      - name: Install HypoPG
+        run: |
+          major=$(PGPASSWORD=tsmyadmin psql -h 127.0.0.1 -p 15433 -U tsmyadmin -d tsmyadmin_test -Atc 'SHOW server_version_num' | cut -c1-2)
+          docker exec ${{ job.services.postgres.id }} sh -c "apt-get update -qq && apt-get install -y -qq postgresql-$major-hypopg" >/dev/null
+          # Installed for the server's version, or this step fails here rather than as a conformance mystery later.
+          docker exec ${{ job.services.postgres.id }} test -f "/usr/share/postgresql/$major/extension/hypopg.control"
       - run: bunx playwright install --with-deps ${{ matrix.browser }}
       # The Playwright webServer command builds the SPA itself.
       # Visual regression baselines are platform-specific (fonts) and maintained locally; CI runs functional + a11y

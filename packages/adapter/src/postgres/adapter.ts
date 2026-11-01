@@ -9,6 +9,7 @@ import type {
   EventDetail,
   EventInfo,
   ExplainResult,
+  HypotheticalIndex,
   KeyValue,
   KillMode,
   LockWaitReport,
@@ -40,6 +41,7 @@ import { BaseAdapter } from '../base.ts'
 import { type Canceller, type Conn, firstResult, poolBusyError, type RawResult } from '../driver.ts'
 import { driverValueToCell, type QueryOptions, UNCAPPED } from '../sql/cells.ts'
 import { explainableStatement, explainResult, measurableStatement, parseJsonCell } from '../sql/explain-statement.ts'
+import { hypopgSchema, pgHypotheticalPlan } from '../sql/hypopg.ts'
 import { pgLiteral } from '../sql/literal.ts'
 import { quoteIdent, quoteTable } from '../sql/quote.ts'
 import { AdapterError, type AdapterErrorCode, type ConnectionConfig, type RowBatch } from '../types.ts'
@@ -496,11 +498,22 @@ export class PostgresAdapter extends BaseAdapter {
         const raw = parseJsonCell(
           firstResult(await conn.query(`EXPLAIN (FORMAT JSON) ${statement}`)).rows[0]?.[0] ?? null
         )
-        return explainResult(parsePgPlan(raw), raw)
+        // Whether the same plan can be read with indexes assumed (HypoPG in this database).
+        // Not knowing (the catalog not readable) leaves it unsaid, rather than failing the estimate.
+        const hypopg = await hypopgSchema(conn).then(
+          (s) => s !== null,
+          () => undefined
+        )
+        return { ...explainResult(parsePgPlan(raw), raw), ...(hypopg === undefined ? {} : { canAssume: hypopg }) }
       } finally {
         await conn.query('ROLLBACK')
       }
     })
+  }
+
+  hypotheticalPlan(ns: Namespace, sql: string, indexes: HypotheticalIndex[]): Promise<ExplainResult> {
+    const statement = explainableStatement(sql, 'postgres')
+    return this.withConn(ns, (conn) => pgHypotheticalPlan(conn, ns, statement, indexes, parsePgPlan))
   }
 
   /**

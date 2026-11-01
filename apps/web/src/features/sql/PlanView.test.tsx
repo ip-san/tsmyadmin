@@ -32,6 +32,11 @@ const executeSql = vi.fn(async (_db: string, body: { sql: string }) => [
 let condition: string | null
 /** The indexes a failed build left unusable on logs. */
 let leftover: string[]
+/** Whether the estimate says the server can plan with an index assumed (absent: it has no such thing). */
+let canAssume: boolean | undefined
+/** What the plan with an index assumed answers. */
+let assumedRun: () => Promise<unknown>
+const hypotheticalPlan = vi.fn((..._: unknown[]) => assumedRun())
 
 const scan: PlanNode = {
   op: 'Seq Scan',
@@ -49,9 +54,15 @@ const scan: PlanNode = {
 
 vi.mock('@/lib/queries.ts', () => ({
   analyzePlan: (...args: unknown[]) => analyzePlan(...args),
+  hypotheticalPlan: (...args: unknown[]) => hypotheticalPlan(...args),
   explainQuery: () => ({
     queryKey: ['explain'],
-    queryFn: async () => ({ plan: { ...scan, detail: condition }, raw: '', rawTruncated: false }),
+    queryFn: async () => ({
+      plan: { ...scan, detail: condition, cost: 1693 },
+      raw: '',
+      rawTruncated: false,
+      ...(canAssume === undefined ? {} : { canAssume }),
+    }),
   }),
   sessionQuery: { queryKey: ['session'], queryFn: async () => ({ dialect: 'postgres' }) },
   isDatabaseData: (key: readonly unknown[]) => key[0] !== 'session',
@@ -95,6 +106,14 @@ beforeEach(() => {
   executeSql.mockClear()
   condition = null
   leftover = []
+  canAssume = undefined
+  hypotheticalPlan.mockClear()
+  assumedRun = async () => ({
+    plan: { ...scan, detail: condition, access: 'range', index: 'idx_logs_level', estRows: 50, cost: 8.3 },
+    raw: '',
+    rawTruncated: false,
+    assumed: ['idx_logs_level'],
+  })
   measuredRun = async () => ({
     plan: { ...scan, actual: { rows: 1_200_000, loops: 1, ms: 950 } },
     raw: '',
@@ -576,6 +595,137 @@ describe('PlanView', () => {
       mount()
       await opener()
       expect(screen.queryByRole('region', { name: p.trialGroup })).toBeNull()
+    })
+  })
+
+  describe('trying an index without building it', () => {
+    const group = () => screen.findByRole('region', { name: p.assumeGroup })
+    const assumeIt = () => screen.findByRole('button', { name: p.assumeTry('logs', ['level']) })
+    const diagram = () => screen.getByText(p.diagram, { selector: 'figcaption' }).closest('figure') as HTMLElement
+
+    it('plans with the index assumed on the estimate, before anything runs, and sets the estimates side by side', async () => {
+      condition = '(level = 3)'
+      canAssume = true
+      mount()
+      const section = await group()
+      expect(section.textContent).toContain(p.assumeIntro)
+      expect(within(diagram()).queryByText('level', { exact: true })).toBeNull()
+      fireEvent.click(await assumeIt())
+      expect(hypotheticalPlan).toHaveBeenCalledWith('shop', undefined, 'SELECT * FROM logs', [
+        { table: 'logs', columns: ['level'], name: 'idx_logs_level' },
+      ])
+      await within(section).findByText(p.assumeDone('idx_logs_level'))
+      expect(section.textContent).toContain(p.assumeCost(1693, 8.3))
+      expect(section.textContent).toContain(
+        `logs: ${p.assumeRead(null, 50000)} → ${p.assumeRead('idx_logs_level', 50)}`
+      )
+      expect(within(section).queryByText(p.assumeUnused('idx_logs_level'))).toBeNull()
+      // The tree is the plan with it assumed, its columns the ones asked for (no structure has the index): drawn in
+      // the table's box.
+      expect(screen.getAllByText(/\[idx_logs_level\]/).length).toBeGreaterThan(0)
+      expect(within(diagram()).getByText('level', { exact: true })).toBeTruthy()
+      // Nothing was built, run or remembered.
+      expect(previewDdl).not.toHaveBeenCalled()
+      expect(analyzePlan).not.toHaveBeenCalled()
+      expect(triedIndexes(SCOPE)).toEqual([])
+      // Not offered for real until there is a run to compare with.
+      expect(within(section).queryByRole('button', { name: p.assumeBuild('logs', ['level']) })).toBeNull()
+      // Said under the plan, and not presented as the table's own.
+      expect(screen.getByText(p.notesAssumed('idx_logs_level'))).toBeTruthy()
+      expect(screen.queryByRole('button', { name: t.open })).toBeNull()
+      within(section).getByRole('button', { name: p.assumeBack }).focus()
+      fireEvent.click(within(section).getByRole('button', { name: p.assumeBack }))
+      expect(document.activeElement).toBe(within(section).getByRole('heading', { name: p.assumeGroup }))
+      expect(within(section).queryByText(p.assumeDone('idx_logs_level'))).toBeNull()
+      expect(screen.queryAllByText(/\[idx_logs_level\]/)).toHaveLength(0)
+      expect(screen.getByText(p.notes)).toBeTruthy()
+      expect(await screen.findByRole('button', { name: t.open })).toBeTruthy()
+    })
+
+    it('shows the run once measured, not the plan with an index assumed', async () => {
+      condition = '(level = 3)'
+      canAssume = true
+      mount()
+      fireEvent.click(await assumeIt())
+      await screen.findByText(p.notesAssumed('idx_logs_level'))
+      fireEvent.click(await opener())
+      fireEvent.click(screen.getByRole('button', { name: p.measureRun }))
+      await screen.findByText(p.notesMeasured)
+      expect(screen.queryByText(p.assumeDone('idx_logs_level'))).toBeNull()
+    })
+
+    it('asks once for two presses in a row', async () => {
+      condition = '(level = 3)'
+      canAssume = true
+      let answer: (v: unknown) => void = () => undefined
+      const held = assumedRun
+      assumedRun = () => new Promise((resolve) => (answer = resolve))
+      mount()
+      const button = await assumeIt()
+      fireEvent.click(button)
+      fireEvent.click(button)
+      expect(hypotheticalPlan).toHaveBeenCalledTimes(1)
+      expect(button.getAttribute('aria-disabled')).toBe('true')
+      answer(await held())
+      await screen.findByText(p.assumeDone('idx_logs_level'))
+    })
+
+    it('says so where the server would not use the index even if it were there', async () => {
+      condition = '(level = 3)'
+      canAssume = true
+      assumedRun = async () => ({
+        plan: { ...scan, detail: condition, cost: 1693 },
+        raw: '',
+        rawTruncated: false,
+        assumed: [],
+      })
+      mount()
+      fireEvent.click(await assumeIt())
+      expect(await screen.findByText(p.assumeUnused('idx_logs_level'))).toBeTruthy()
+    })
+
+    it('shows the server error and keeps the plan as it is', async () => {
+      condition = '(level = 3)'
+      canAssume = true
+      assumedRun = async () => {
+        throw new Error('column "level" does not exist')
+      }
+      mount()
+      fireEvent.click(await assumeIt())
+      await screen.findByText(/does not exist/)
+      expect(screen.queryByText(p.assumeDone('idx_logs_level'))).toBeNull()
+    })
+
+    it('builds it for real through the trial once the statement was measured', async () => {
+      condition = '(level = 3)'
+      canAssume = true
+      mount()
+      fireEvent.click(await opener())
+      fireEvent.click(screen.getByRole('button', { name: p.measureRun }))
+      await screen.findByRole('region', { name: p.trialGroup })
+      fireEvent.click(await assumeIt())
+      const build = await screen.findByRole('button', { name: p.assumeBuild('logs', ['level']) })
+      fireEvent.click(build)
+      await screen.findByRole('dialog', { name: locale.ddl.titles.addIndex })
+      expect(previewDdl).toHaveBeenCalledWith(
+        'shop',
+        undefined,
+        expect.objectContaining({ op: 'addIndex', name: 'idx_logs_level' })
+      )
+    })
+
+    it('says what would make it possible on a server that could, and nothing on one that cannot', async () => {
+      condition = '(level = 3)'
+      canAssume = false
+      mount()
+      const section = await group()
+      expect(section.textContent).toContain(p.assumeMissing)
+      expect(within(section).queryByRole('button')).toBeNull()
+      cleanup()
+      canAssume = undefined
+      mount()
+      await opener()
+      expect(screen.queryByRole('region', { name: p.assumeGroup })).toBeNull()
     })
   })
 })

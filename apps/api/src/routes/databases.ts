@@ -17,6 +17,7 @@ import {
   decodeTableList,
   ExplainRequestSchema,
   ExportQuerySchema,
+  HypotheticalPlanRequestSchema,
   IMPORT_MAX_BYTES,
   ImportFormSchema,
   InsertRowRequestSchema,
@@ -444,6 +445,17 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
           const q = c.req.valid('query')
           const { sql } = c.req.valid('json')
           return c.json(await c.get('session').adapter.explainPlan(ns(c.req.param('db'), q.schema), sql))
+        }
+      )
+      // The same estimate with indexes assumed, not built (PostgreSQL with HypoPG): nothing is written or left.
+      .post(
+        '/databases/:db/explain/hypothetical',
+        validate('query', SchemaQuerySchema),
+        validate('json', HypotheticalPlanRequestSchema),
+        async (c) => {
+          const q = c.req.valid('query')
+          const { sql, indexes } = c.req.valid('json')
+          return c.json(await c.get('session').adapter.hypotheticalPlan(ns(c.req.param('db'), q.schema), sql, indexes))
         }
       )
       // The plan measured by running the statement (a read only, rolled back, stopped after `timeoutMs`). Audited, as it

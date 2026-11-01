@@ -319,6 +319,39 @@ describe('explain', () => {
   })
 })
 
+describe('explain with indexes assumed', () => {
+  const body = { sql: 'SELECT * FROM users', indexes: [{ table: 'users', columns: ['name'], name: 'idx_users_name' }] }
+
+  it('passes the indexes to the adapter and returns the plan that reads through one', async () => {
+    const h = harness(new FakeAdapter({ dialect: 'postgres' }))
+    stores.push(h.store)
+    await h.login()
+    const res = await h.req('/api/databases/shop/explain/hypothetical?schema=app', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+    const result = ExplainResultSchema.parse(await res.json())
+    expect(result.assumed).toEqual(['idx_users_name'])
+    expect(h.adapter.calls.at(-1)).toEqual({
+      method: 'hypotheticalPlan',
+      args: [{ database: 'shop', schema: 'app' }, 'SELECT * FROM users', body.indexes],
+    })
+  })
+
+  it('refuses no index, too many, and a server that cannot assume one', async () => {
+    const h = harness()
+    stores.push(h.store)
+    await h.login()
+    const post = (b: object) =>
+      h.req('/api/databases/shop/explain/hypothetical', { method: 'POST', body: JSON.stringify(b) })
+    expect((await post({ ...body, indexes: [] })).status).toBe(400)
+    expect((await post({ ...body, indexes: Array(9).fill(body.indexes[0]) })).status).toBe(400)
+    const mysql = await post(body)
+    expect(mysql.status).toBe(400)
+    expect(((await mysql.json()) as { code: string }).code).toBe('UNSUPPORTED')
+  })
+})
+
 describe('sql & ddl', () => {
   it('executes scripts with defaults applied', async () => {
     const h = harness()

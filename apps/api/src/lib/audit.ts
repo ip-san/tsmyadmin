@@ -63,6 +63,7 @@ export const PASSTHROUGH_METHODS = [
   'tableUsage',
   'deleteImpact',
   'explainPlan',
+  'hypotheticalPlan',
   'prepareDdl',
   'buildQuery',
   'listForeignKeys',
