@@ -107,10 +107,16 @@ describe('AssumedCompare', () => {
     ])
     // A row that could not be estimated has no plan to show, but can still be built.
     expect(within(group).queryByRole('button', { name: p.compareShow('idx_posts_user_id') })).toBeNull()
+    // The preview opens from here: the focus goes to the heading first, and comes back there when it closes.
+    let focused: string | null | undefined
+    onBuild.mockImplementationOnce(() => {
+      focused = document.activeElement?.textContent
+    })
     within(group)
       .getByRole('button', { name: p.compareBuild('idx_posts_user_id') })
       .click()
     expect(onBuild).toHaveBeenCalledWith(posts)
+    expect(focused).toBe(p.compareGroup)
     within(group)
       .getByRole('button', { name: p.compareShow('idx_users_email') })
       .click()
