@@ -209,7 +209,7 @@ export async function pgDescribeTable(conn: Conn, ns: Namespace, table: string):
                LEFT JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = k.attnum
                WHERE k.ord <= i.indnkeyatts),
               pg_get_expr(i.indpred, i.indrelid, true),
-              pg_get_indexdef(i.indexrelid, 0, true), i.indisvalid
+              pg_get_indexdef(i.indexrelid, 0, true), i.indisvalid, obj_description(i.indexrelid, 'pg_class')
        FROM pg_index i
        JOIN pg_class ic ON ic.oid = i.indexrelid
        JOIN pg_am am ON am.oid = ic.relam
@@ -235,6 +235,7 @@ export async function pgDescribeTable(conn: Conn, ns: Namespace, table: string):
       predicate: strOrNull(row[5]),
       lengths: {},
       definition: strOrNull(row[6]),
+      comment: strOrNull(row[8]),
     }))
   const primaryKey = indexes.find((i) => i.primary)?.columns ?? []
 

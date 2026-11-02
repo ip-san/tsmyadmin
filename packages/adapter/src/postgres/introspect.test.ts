@@ -315,8 +315,8 @@ describe('pgDescribeTable', () => {
   it('reads the indexes, the primary key being the columns of the primary index', async () => {
     const { table } = await describe1({
       idx: [
-        ['t_pkey', 't', 't', 'btree', `a${SEP}b`, null, 'CREATE UNIQUE INDEX t_pkey ...', 't'],
-        ['t_x', 'f', 'f', 'gin', 'c', 'c > 0', 'CREATE INDEX t_x ...', 't'],
+        ['t_pkey', 't', 't', 'btree', `a${SEP}b`, null, 'CREATE UNIQUE INDEX t_pkey ...', 't', null],
+        ['t_x', 'f', 'f', 'gin', 'c', 'c > 0', 'CREATE INDEX t_x ...', 't', 'tried'],
         // Left by a concurrent build that failed: named apart, never an index to read through.
         ['t_left', 't', 'f', 'btree', 'd', null, 'CREATE UNIQUE INDEX t_left ...', 'f'],
       ],
@@ -331,6 +331,7 @@ describe('pgDescribeTable', () => {
         predicate: null,
         lengths: {},
         definition: 'CREATE UNIQUE INDEX t_pkey ...',
+        comment: null,
       },
       {
         name: 't_x',
@@ -341,6 +342,7 @@ describe('pgDescribeTable', () => {
         predicate: 'c > 0',
         lengths: {},
         definition: 'CREATE INDEX t_x ...',
+        comment: 'tried',
       },
     ])
     expect(table.unusableIndexes).toEqual(['t_left'])

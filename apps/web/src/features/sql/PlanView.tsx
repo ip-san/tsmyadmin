@@ -16,6 +16,7 @@ import { PlanTour } from './PlanTour.tsx'
 import { indexCandidates } from './plan-index.ts'
 import { misestimate } from './plan-measure.ts'
 import { planReads, planSteps } from './plan-steps.ts'
+import { triedOnTables } from './tried-indexes.ts'
 import { type AssumedCompare, useAssumedCompare } from './use-assumed-compare.ts'
 import { type AssumedPlan, useAssumedPlan } from './use-assumed-plan.ts'
 import { type ForecastStart, useForecastStart } from './use-forecast-start.ts'
@@ -151,6 +152,15 @@ function PlanStory({
   const leftovers = tables.flatMap((table) =>
     (structures[tables.indexOf(table)]?.data?.unusableIndexes ?? []).map((name) => ({ table, name }))
   )
+  // Indexes tried from a plan before (in any browser: marked on the server), not the one tried now: left behind.
+  const triedBefore = triedOnTables(
+    tables.map((table, i) => ({
+      table,
+      indexes: structures[i]?.data?.indexes,
+      partitioned: structures[i]?.data?.partitioned,
+    })),
+    trial?.state.tried ?? null
+  )
   return (
     <div className="space-y-3">
       <AssumedIndex
@@ -169,6 +179,7 @@ function PlanStory({
           before={trial.before}
           candidates={indexCandidates(trial.before.plan, shapeOf)}
           leftovers={leftovers}
+          triedBefore={triedBefore}
         />
       ) : null}
       {reads.length > 0 ? (

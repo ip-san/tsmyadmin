@@ -5,6 +5,7 @@ import {
   createIndexSql,
   dropOrder,
   moveRepeatingGroupSql,
+  pgIndexCommentSql,
   splitTableSql,
 } from '../sql/ddl-common.ts'
 import { pgLiteral } from '../sql/literal.ts'
@@ -427,13 +428,18 @@ export const pgDdl: DdlBuilder = {
           `ALTER TABLE ${t} ${op.current ? `DROP CONSTRAINT ${id(op.current)}, ` : ''}ADD PRIMARY KEY (${op.columns.map(id).join(', ')})`,
         ]
       case 'addIndex':
-        return [createIndexSql('postgres', ns, op)]
+        // With its comment, all or nothing: an index made but not marked could not be told apart. CONCURRENTLY cannot
+        // run in a transaction, so there the comment follows it on its own (it fails only where the index is gone).
+        return op.comment && !op.online
+          ? inTransaction([createIndexSql('postgres', ns, op), ...pgIndexCommentSql(ns, op)])
+          : [createIndexSql('postgres', ns, op), ...pgIndexCommentSql(ns, op)]
       case 'renameIndex':
         return [`ALTER INDEX ${schema}.${id(op.name)} RENAME TO ${id(op.newName)}`]
       case 'alterIndex':
         return inTransaction([
           `DROP INDEX ${schema}.${id(op.name)}`,
           createIndexSql('postgres', ns, { ...op.index, table: op.table }),
+          ...pgIndexCommentSql(ns, op.index),
         ])
       case 'dropIndex':
         return [`DROP INDEX ${op.online ? 'CONCURRENTLY ' : ''}${schema}.${id(op.name)}`]

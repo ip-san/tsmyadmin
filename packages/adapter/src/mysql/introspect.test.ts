@@ -312,8 +312,9 @@ describe('mysqlDescribeTable', () => {
       column: string | null,
       type = 'BTREE',
       sub: number | null = null,
-      expression: string | null = null
-    ) => [name, nonUnique, seq, column, type, sub, expression]
+      expression: string | null = null,
+      comment = ''
+    ) => [name, nonUnique, seq, column, type, sub, expression, comment]
 
     it('joins the rows of an index into its columns, the primary key first and the rest by name', async () => {
       const { table } = await describe1({
@@ -321,8 +322,8 @@ describe('mysqlDescribeTable', () => {
           idx('z_idx', 1, 1, 'c'),
           idx('PRIMARY', 0, 1, 'a'),
           idx('PRIMARY', 0, 2, 'b'),
-          idx('a_idx', 0, 1, 'd', 'HASH'),
-          idx('a_idx', 0, 2, 'e', 'HASH'),
+          idx('a_idx', 0, 1, 'd', 'HASH', null, null, 'tried'),
+          idx('a_idx', 0, 2, 'e', 'HASH', null, null, 'tried'),
         ],
       })
       expect(table.indexes.map((i) => i.name)).toEqual(['PRIMARY', 'a_idx', 'z_idx'])
@@ -335,8 +336,16 @@ describe('mysqlDescribeTable', () => {
         predicate: null,
         definition: null,
         lengths: {},
+        // MySQL says none as ''.
+        comment: null,
       })
-      expect(table.indexes[1]).toMatchObject({ unique: true, primary: false, columns: ['d', 'e'], type: 'HASH' })
+      expect(table.indexes[1]).toMatchObject({
+        unique: true,
+        primary: false,
+        columns: ['d', 'e'],
+        type: 'HASH',
+        comment: 'tried',
+      })
       expect(table.indexes[2]).toMatchObject({ unique: false, columns: ['c'] })
       expect(table.primaryKey).toEqual(['a', 'b'])
       expect((await describe1({ idx: [idx('i', 1, 1, 'c')] })).table.primaryKey).toEqual([])
@@ -359,7 +368,7 @@ describe('mysqlDescribeTable', () => {
 
     it('asks again without the expression column when the server has none, and remembers it for the connection', async () => {
       const s = scripted([
-        [/SUB_PART, EXPRESSION FROM/, fail('QUERY_FAILED', 'ER_BAD_FIELD_ERROR')],
+        [/SUB_PART, EXPRESSION, INDEX_COMMENT FROM/, fail('QUERY_FAILED', 'ER_BAD_FIELD_ERROR')],
         [/information_schema\.STATISTICS/, rows([])],
         [/SELECT TABLE_TYPE, ENGINE/, rows([['BASE TABLE', 'InnoDB', '', 1, null, null]])],
         [/FROM information_schema\.COLUMNS/, rows([])],
@@ -369,7 +378,7 @@ describe('mysqlDescribeTable', () => {
       await mysqlDescribeTable(s.conn, ns, 't')
       const first = s.asked.filter((q) => /STATISTICS/.test(q.text))
       expect(first).toHaveLength(2)
-      expect(first[1]?.text).toContain('NULL AS EXPRESSION')
+      expect(first[1]?.text).toContain('NULL AS EXPRESSION, INDEX_COMMENT')
       await mysqlDescribeTable(s.conn, ns, 't')
       expect(s.asked.filter((q) => /STATISTICS/.test(q.text))).toHaveLength(3)
     })

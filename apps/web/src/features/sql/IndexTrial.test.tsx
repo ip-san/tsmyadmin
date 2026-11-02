@@ -67,6 +67,7 @@ function shown(after: ExplainResult, forecast: Forecast | null) {
     online: true,
     setOnline: () => undefined,
     dropLeftover: () => undefined,
+    dropTried: () => undefined,
   }
   render(
     <IndexTrial
@@ -124,6 +125,7 @@ describe('IndexTrial, while the forecast is asked before building', () => {
       online: true,
       setOnline: () => undefined,
       dropLeftover: () => undefined,
+      dropTried: () => undefined,
     }
     render(
       <IndexTrial trial={trial} build={{ forecasting: true, start }} candidates={[tried]} before={run(null, 400)} />
@@ -138,5 +140,44 @@ describe('IndexTrial, while the forecast is asked before building', () => {
     expect(button.getAttribute('aria-disabled')).toBe('true')
     button.click()
     expect(start).not.toHaveBeenCalled()
+  })
+})
+
+describe('IndexTrial, indexes tried before', () => {
+  it('names each left on the tables read, and drops it through the preview', () => {
+    const dropTried = vi.fn()
+    const trial: Trial = {
+      flow,
+      tried: null,
+      forecast: null,
+      after: null,
+      measuring: false,
+      stopping: false,
+      stopped: false,
+      error: null,
+      start: () => undefined,
+      measure: async () => undefined,
+      stop: () => undefined,
+      undo: () => undefined,
+      online: true,
+      setOnline: () => undefined,
+      dropLeftover: () => undefined,
+      dropTried,
+    }
+    render(
+      <IndexTrial
+        trial={trial}
+        build={{ forecasting: false, start: async () => undefined }}
+        candidates={[]}
+        before={run(null, 400)}
+        triedBefore={[{ table: 'logs', name: 'idx_logs_old', online: false }]}
+      />
+    )
+    const group = screen.getByRole('region', { name: p.trialGroup })
+    expect(group.textContent).toContain(p.trialBefore('logs', 'idx_logs_old'))
+    within(group)
+      .getByRole('button', { name: p.trialUndo('idx_logs_old') })
+      .click()
+    expect(dropTried).toHaveBeenCalledWith('logs', 'idx_logs_old', false)
   })
 })

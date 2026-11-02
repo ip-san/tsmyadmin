@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import type { PlanNode } from '@tsmyadmin/shared'
+import { type PlanNode, TRIED_INDEX_COMMENT } from '@tsmyadmin/shared'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { locale } from '@/config/locale-screens.ts'
 import { memoryStorage } from '@/test/memory-storage.ts'
@@ -52,6 +52,16 @@ const scan: PlanNode = {
   children: [],
 }
 
+/** The index tried on logs.level, as previewed: marked on the server as tried. */
+const tryLevel = (online: boolean) => ({
+  op: 'addIndex',
+  table: 'logs',
+  name: 'idx_logs_level',
+  columns: ['level'],
+  unique: false,
+  online,
+  comment: TRIED_INDEX_COMMENT,
+})
 vi.mock('@/lib/queries.ts', () => ({
   analyzePlan: (...args: unknown[]) => analyzePlan(...args),
   hypotheticalPlan: (...args: unknown[]) => hypotheticalPlan(...args),
@@ -393,14 +403,7 @@ describe('PlanView', () => {
       // Nothing is made before the preview is confirmed; the dialog says the statement runs again.
       const dialog = await screen.findByRole('dialog', { name: locale.ddl.titles.addIndex })
       expect(dialog.textContent).toContain(p.trialHint(true))
-      expect(previewDdl).toHaveBeenCalledWith('shop', undefined, {
-        op: 'addIndex',
-        table: 'logs',
-        name: 'idx_logs_level',
-        columns: ['level'],
-        unique: false,
-        online: true,
-      })
+      expect(previewDdl).toHaveBeenCalledWith('shop', undefined, tryLevel(true))
       expect(executeSql).not.toHaveBeenCalled()
       measuredRun = run('idx_logs_level', 4)
       fireEvent.click(await screen.findByRole('button', { name: locale.ddl.execute }))
@@ -450,14 +453,7 @@ describe('PlanView', () => {
       fireEvent.click(await screen.findByRole('button', { name: p.trialTry('logs', ['level']) }))
       const dialog = await screen.findByRole('dialog', { name: locale.ddl.titles.addIndex })
       expect(dialog.textContent).toContain(p.trialHint(false))
-      expect(previewDdl).toHaveBeenLastCalledWith('shop', undefined, {
-        op: 'addIndex',
-        table: 'logs',
-        name: 'idx_logs_level',
-        columns: ['level'],
-        unique: false,
-        online: false,
-      })
+      expect(previewDdl).toHaveBeenLastCalledWith('shop', undefined, tryLevel(false))
       measuredRun = run('idx_logs_level', 4)
       fireEvent.click(await screen.findByRole('button', { name: locale.ddl.execute }))
       fireEvent.click(await screen.findByRole('button', { name: p.trialUndo('idx_logs_level') }))

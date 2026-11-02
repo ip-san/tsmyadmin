@@ -247,6 +247,42 @@ export function describeDdlColumnsAndDatabases(env: ConformanceEnv, { firstValue
     }
   })
 
+  it("keeps an index's comment, built without stopping writes, reads it back, and keeps it when the index is changed", async () => {
+    const t = `${scratch}_icomment`
+    const idx = `${t}_idx`
+    try {
+      await runDdl({
+        op: 'createTable',
+        table: t,
+        columns: [col('id', 'INT', { nullable: false }), col('a', 'INT'), col('b', 'INT')],
+        primaryKey: ['id'],
+      })
+      await runDdl({
+        op: 'addIndex',
+        table: t,
+        name: idx,
+        columns: ['a'],
+        unique: false,
+        online: true,
+        comment: "tried 'here'",
+      })
+      let s = await env.db.describeTable(ns, t)
+      expect(s.indexes.find((i) => i.name === idx)?.comment).toBe("tried 'here'")
+      // An index with none, and the primary key, say none.
+      expect(s.indexes.find((i) => i.primary)?.comment ?? null).toBeNull()
+      await runDdl({
+        op: 'alterIndex',
+        table: t,
+        name: idx,
+        index: { name: idx, columns: ['a', 'b'], unique: false, comment: "tried 'here'" },
+      })
+      s = await env.db.describeTable(ns, t)
+      expect(s.indexes.find((i) => i.name === idx)).toMatchObject({ columns: ['a', 'b'], comment: "tried 'here'" })
+    } finally {
+      await exec(`DROP TABLE IF EXISTS ${t}`, { stopOnError: false })
+    }
+  })
+
   it('does not call a partitioned table’s index unusable while its partitions have none yet', async () => {
     if (dialect !== 'postgres') return
     const t = `${scratch}_parted`

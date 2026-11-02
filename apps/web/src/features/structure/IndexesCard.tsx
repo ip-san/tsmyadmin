@@ -1,4 +1,4 @@
-import type { DdlOp, Dialect, IndexDef, TableSchema } from '@tsmyadmin/shared'
+import { type DdlOp, type Dialect, type IndexDef, type TableSchema, TRIED_INDEX_COMMENT } from '@tsmyadmin/shared'
 import { type FormEvent, useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { Card } from '@/components/ui/Card.tsx'
@@ -114,6 +114,14 @@ export function IndexesCard({
               <Tr key={i.name}>
                 <Td className="font-medium">
                   {i.name} {i.primary ? <Badge tone="info">{locale.table.primary}</Badge> : null}
+                  {/* Made by "Try an index" on a plan, here or in another browser: said, so it is not taken for a design. */}
+                  {i.comment === TRIED_INDEX_COMMENT ? (
+                    <Badge tone="warn" title={locale.table.triedIndexNote}>
+                      {locale.table.triedIndex}
+                    </Badge>
+                  ) : i.comment ? (
+                    <span className="block text-xs font-normal text-ink-sub">{i.comment}</span>
+                  ) : null}
                 </Td>
                 <Td className="font-mono text-xs">
                   {i.columns.map((c) => (i.lengths[c] ? `${c}(${i.lengths[c]})` : c)).join(', ')}
@@ -209,7 +217,14 @@ export function IndexesCard({
               close()
               if (dialog.mode === 'add')
                 return onPreview({ op: 'addIndex', table, ...v, ...(online ? { online } : {}) })
-              onPreview({ op: 'alterIndex', table, name: dialog.index.name, index: v })
+              // Changed, the index keeps its comment (a tried one stays told apart).
+              const { comment } = dialog.index
+              onPreview({
+                op: 'alterIndex',
+                table,
+                name: dialog.index.name,
+                index: { ...v, ...(comment ? { comment } : {}) },
+              })
             }}
           />
         ) : null}

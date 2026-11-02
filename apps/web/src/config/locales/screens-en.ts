@@ -374,6 +374,8 @@ export const enScreens = {
     trialOnline: 'Build without stopping writes',
     trialOnlineNote:
       'Writes to the table go on while the index is made (which takes longer). Keep it on when trying on a server close to production',
+    trialBefore: (table: string, name: string) =>
+      `${name} on ${table} was tried from a query plan before (in this browser or another). Drop it if it is not used`,
     trialLeftover: (table: string, name: string) =>
       `${name} on ${table} stopped part way and was left unusable. Nothing reads through it, yet every write still updates it`,
     compareGroup: 'Compare the candidates (estimate)',
@@ -813,6 +815,9 @@ export const enScreens = {
     onDelete: 'ON DELETE',
     noIndexes: 'No indexes',
     unusableIndexes: 'Unusable indexes',
+    triedIndex: 'Tried from a plan',
+    triedIndexNote:
+      'Made by Try an index on a query plan (told by the index comment). Drop it if it is not used: every write updates an index',
     unusableIndexesNote:
       'Left by an index build that failed part way. Nothing reads through them, yet every write still updates them. Drop them, then make them again',
     noForeignKeys: 'No foreign keys',
