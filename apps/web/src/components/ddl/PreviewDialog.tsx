@@ -42,6 +42,13 @@ export function PreviewDialog<Op>({
   useEffect(() => {
     if (flow.failed || flow.error || flow.stopped || flow.stopUnclear) failureRef.current?.focus()
   }, [flow.failed, flow.error, flow.stopped, flow.stopUnclear])
+  // A run started from a button that then goes (the rest after a stop) or is disabled leaves focus on <body>: it goes
+  // to the stop button, there for as long as the run.
+  const stopRef = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    if (flow.running && (document.activeElement === null || document.activeElement === document.body))
+      stopRef.current?.focus()
+  }, [flow.running])
   const required = op === null || !readSetting('confirmDrop') ? null : (confirmName?.(op) ?? null)
   const warning = op === null ? '' : `${locale.ddl.irreversible}${lossWarning?.(op) ? ` ${lossWarning(op) ?? ''}` : ''}`
   const [typed, setTyped] = useState('')
@@ -77,7 +84,7 @@ export function PreviewDialog<Op>({
         footer={
           <>
             {flow.running && flow.stop ? (
-              <Button onClick={flow.stop} aria-disabled={flow.stopping || undefined}>
+              <Button ref={stopRef} onClick={flow.stop} aria-disabled={flow.stopping || undefined}>
                 {locale.ddl.stop}
               </Button>
             ) : null}
@@ -135,18 +142,7 @@ export function PreviewDialog<Op>({
         {flow.stopError ? <ErrorBox error={flow.stopError} className="mt-2" /> : null}
         <div ref={failureRef} tabIndex={-1} className="outline-none">
           {flow.error ? <ErrorBox error={flow.error} className="mt-2" /> : null}
-          {(flow.stopped || flow.stopUnclear) && !flow.error ? (
-            <div
-              role="alert"
-              className="mt-2 rounded border border-amber-300 bg-amber-50 p-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200"
-            >
-              {flow.stopped ? locale.ddl.stopped : locale.ddl.stopUnclear}
-              {/* Running it again replays the whole script: what had run before the stop (or all of it) runs twice. */}
-              {flow.stopUnclear || flow.sql.length > 1 ? (
-                <p className="mt-1">{flow.stopped ? locale.ddl.rerunStopped : locale.ddl.rerunUnclear}</p>
-              ) : null}
-            </div>
-          ) : null}
+          {(flow.stopped || flow.stopUnclear) && !flow.error ? <StopNotice flow={flow} /> : null}
         </div>
         {flow.failed && flow.failed.kind === 'error' ? (
           <div
@@ -164,5 +160,41 @@ export function PreviewDialog<Op>({
         ) : null}
       </Dialog>
     </>
+  )
+}
+
+/** What a stop left: said as stopped (or not known), and how to go on without running twice what had run. */
+function StopNotice<Op>({ flow }: { flow: PreviewFlow<Op> }) {
+  const rest = flow.remaining
+  // Part ran (the server's results say which): the rest can run on its own. Nothing ran: running it again is running
+  // it once. Not known: running it again replays it all.
+  const partly = rest !== null && rest.length > 0 && rest.length < flow.sql.length
+  return (
+    <div
+      role="alert"
+      className="mt-2 rounded border border-amber-300 bg-amber-50 p-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200"
+    >
+      {/* Ended part way with no error: the server's loop broke between two statements, which only a stop does, so it
+          was stopped whatever the stop's answer (nothing was cut mid-statement, which the results would show). */}
+      {flow.stopped || partly ? locale.ddl.stopped : locale.ddl.stopUnclear}
+      {partly ? (
+        <>
+          <p className="mt-1">{locale.ddl.rerunAll}</p>
+          <p className="mt-1">{locale.ddl.restIntro(rest.length)}</p>
+          <pre
+            aria-label={locale.ddl.restSql}
+            tabIndex={0}
+            className="mt-1 overflow-x-auto rounded border border-amber-300 bg-surface-sub p-2 font-mono text-xs text-ink dark:border-amber-700"
+          >
+            {rest.map((s) => `${s};`).join('\n')}
+          </pre>
+          <Button className="mt-2" onClick={flow.confirmRemaining}>
+            {locale.ddl.runRest}
+          </Button>
+        </>
+      ) : rest === null && (flow.stopUnclear || flow.sql.length > 1) ? (
+        <p className="mt-1">{flow.stopped ? locale.ddl.rerunStopped : locale.ddl.rerunUnclear}</p>
+      ) : null}
+    </div>
   )
 }

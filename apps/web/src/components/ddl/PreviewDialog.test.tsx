@@ -15,6 +15,11 @@ const ok = (statement: number): StatementResult => ({
   affectedRows: 0,
   durationMs: 1,
 })
+/** A result that cannot be matched to its statement: what ran is not known from it. */
+const unplaced = (statement: number): StatementResult => {
+  const { statement: _, ...r } = ok(statement)
+  return r
+}
 const failed: StatementResult = { kind: 'error', statement: 1, sql: 'ALTER 1', message: 'canceling statement' }
 
 /** The run's answer, given when the test says so. */
@@ -84,8 +89,25 @@ async function running(stoppable = true, sql?: string[]) {
   await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(1))
 }
 const stopButton = () => screen.findByRole('button', { name: d.stop })
+/** What the stop notice says after its first line, where these statements are still to run. */
+const restOf = (rest: string[]) =>
+  d.rerunAll + d.restIntro(rest.length) + rest.map((s) => `${s};`).join('\n') + d.runRest
 
 describe('PreviewDialog, stopping a run', () => {
+  it('leaves the focus where it is as a run starts, unless it fell to the page', async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Harness />
+      </QueryClientProvider>
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'open' }))
+    const sql = await screen.findByLabelText('SQL')
+    sql.focus()
+    fireEvent.click(await screen.findByRole('button', { name: d.execute }))
+    await stopButton()
+    expect(document.activeElement).toBe(sql)
+  })
+
   it('stops the run by its own id, once however often pressed, and says it is stopping', async () => {
     let answer: (v: boolean) => void = () => undefined
     stopAnswer = () => new Promise((resolve) => (answer = resolve))
@@ -101,7 +123,7 @@ describe('PreviewDialog, stopping a run', () => {
     await act(async () => finish({ results: [ok(0), failed] }))
     // Stopped, not failed: the server's error for the stopped statement is not shown as a failure.
     const said = await screen.findByRole('alert')
-    expect(said.textContent).toBe(d.stopped + d.rerunStopped)
+    expect(said.textContent).toBe(d.stopped + restOf(['ALTER 1']))
     expect(screen.queryByText(d.failedStatement, { exact: false })).toBeNull()
     expect(onSuccess).not.toHaveBeenCalled()
     // The stop button went with the run: the focus is on what happened.
@@ -113,7 +135,7 @@ describe('PreviewDialog, stopping a run', () => {
     await running()
     fireEvent.click(await stopButton())
     await act(async () => finish({ results: [ok(0)] }))
-    expect((await screen.findByRole('alert')).textContent).toBe(d.stopped + d.rerunStopped)
+    expect((await screen.findByRole('alert')).textContent).toBe(d.stopped + restOf(['ALTER 1']))
     // Not done: the follow-up (measuring an index tried, say) does not run.
     expect(onSuccess).not.toHaveBeenCalled()
     expect(screen.queryByText('built')).toBeNull()
@@ -135,15 +157,48 @@ describe('PreviewDialog, stopping a run', () => {
     fireEvent.click(await stopButton())
     await screen.findByText('network down')
     await act(async () => finish({ results: [ok(0)] }))
+    // The server's results say it ran to the end: done.
+    await vi.waitFor(() => expect(onSuccess).toHaveBeenCalledWith('build'))
+    expect(screen.queryByText(d.stopUnclear)).toBeNull()
+    cleanup()
+    // Results that cannot be matched to the statements say nothing of what ran: running it again replays it all.
+    execute.mockClear()
+    await running(true, ['ALTER 0'])
+    fireEvent.click(await stopButton())
+    await screen.findByText('network down')
+    await act(async () => finish({ results: [unplaced(0)] }))
     expect((await screen.findByText(d.stopUnclear)).textContent).toBe(d.stopUnclear + d.rerunUnclear)
+  })
+
+  it('says it was stopped where the results end part way, though the answer to the stop did not come', async () => {
+    stopAnswer = async () => {
+      throw new Error('network down')
+    }
+    await running()
+    fireEvent.click(await stopButton())
+    await screen.findByText('network down')
+    await act(async () => finish({ results: [ok(0)] }))
+    // The alert of the stop that did not get through stays beside it.
+    const notice = (await screen.findAllByRole('alert')).find((a) => a.textContent?.startsWith(d.stopped))
+    expect(notice?.textContent).toBe(d.stopped + restOf(['ALTER 1']))
   })
 
   it('is stopped where the request itself ended in an error after the stop', async () => {
     await running()
     fireEvent.click(await stopButton())
     await act(async () => fail(new Error('aborted')))
+    // What ran is not known: running it again replays it all.
     expect((await screen.findByRole('alert')).textContent).toBe(d.stopped + d.rerunStopped)
+    expect(screen.queryByRole('button', { name: d.runRest })).toBeNull()
     expect(screen.queryByText('aborted')).toBeNull()
+  })
+
+  it('is done where every statement ended, though the server said it stopped the run', async () => {
+    await running()
+    fireEvent.click(await stopButton())
+    await act(async () => finish({ results: [ok(0), ok(1)] }))
+    await vi.waitFor(() => expect(onSuccess).toHaveBeenCalledWith('build'))
+    expect(screen.queryByText(d.stopped)).toBeNull()
   })
 
   it('is done where the run had ended before the stop reached it', async () => {
@@ -168,7 +223,7 @@ describe('PreviewDialog, stopping a run', () => {
     fireEvent.click(button)
     expect(stop).toHaveBeenCalledTimes(2)
     await act(async () => finish({ results: [ok(0)] }))
-    expect((await screen.findByRole('alert')).textContent).toBe(d.stopped + d.rerunStopped)
+    expect((await screen.findByRole('alert')).textContent).toBe(d.stopped + restOf(['ALTER 1']))
   })
 
   it('offers no stop where the flow cannot stop, and none before the run', async () => {
@@ -199,7 +254,7 @@ describe('PreviewDialog, stopping a run', () => {
     await running()
     fireEvent.click(await stopButton())
     await screen.findByText('network down')
-    await act(async () => finish({ results: [ok(0)] }))
+    await act(async () => finish({ results: [unplaced(0)] }))
     expect(await screen.findByText(d.stopUnclear)).toBeTruthy()
     expect(screen.queryByText(d.stopped)).toBeNull()
     expect(onSuccess).not.toHaveBeenCalled()
@@ -239,7 +294,7 @@ describe('PreviewDialog, stopping a run', () => {
     await vi.waitFor(() => expect(button.getAttribute('aria-disabled')).toBeNull())
     fireEvent.click(button)
     await vi.waitFor(() => expect(stop).toHaveBeenCalledTimes(2))
-    await act(async () => finish({ results: [ok(0)] }))
+    await act(async () => finish({ results: [unplaced(0)] }))
     expect(await screen.findByText(d.stopUnclear)).toBeTruthy()
     expect(onSuccess).not.toHaveBeenCalled()
   })
@@ -250,7 +305,7 @@ describe('PreviewDialog, stopping a run', () => {
       stopAnswer = () => new Promise(() => undefined)
       await running()
       fireEvent.click(await stopButton())
-      await act(async () => finish({ results: [ok(0)] }))
+      await act(async () => finish({ results: [unplaced(0)] }))
       await act(async () => {
         await vi.advanceTimersByTimeAsync(STOP_ANSWER_MS)
       })
@@ -269,7 +324,49 @@ describe('PreviewDialog, stopping a run', () => {
     expect(screen.queryByText(d.failedStatement, { exact: false })).toBeNull()
     fireEvent.click(await stopButton())
     await act(async () => finish({ results: [ok(0)] }))
-    expect((await screen.findByRole('alert')).textContent).toBe(d.stopped + d.rerunStopped)
+    expect((await screen.findByRole('alert')).textContent).toBe(d.stopped + restOf(['ALTER 1']))
     expect(screen.queryByText(d.failedStatement, { exact: false })).toBeNull()
+  })
+
+  it("runs only the rest after a stop, as the server's results tell, once however often pressed", async () => {
+    await running(true, ['ALTER 0', 'ALTER 1', 'ALTER 2'])
+    fireEvent.click(await stopButton())
+    await act(async () => finish({ results: [ok(0), failed] }))
+    expect((await screen.findByRole('alert')).textContent).toBe(d.stopped + restOf(['ALTER 1', 'ALTER 2']))
+    const rest = screen.getByRole('button', { name: d.runRest })
+    // Two presses in one frame: the button is still there for the second.
+    act(() => {
+      // Pressed, as a browser does it: focused first.
+      rest.focus()
+      rest.click()
+      rest.click()
+    })
+    await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(2))
+    expect(execute.mock.calls[1]?.[1]).toEqual(['ALTER 1', 'ALTER 2'])
+    // Its own run, stoppable on its own.
+    expect(execute.mock.calls[1]?.[2]).not.toBe(execute.mock.calls[0]?.[2])
+    expect(screen.queryByRole('alert')).toBeNull()
+    // The button went with the notice: the focus is on the stop of this run.
+    expect(document.activeElement).toBe(await stopButton())
+    const second = (n: number): StatementResult => ({ ...ok(n), statement: n - 1 })
+    await act(async () => finish({ results: [second(1), second(2)] }))
+    await vi.waitFor(() => expect(onSuccess).toHaveBeenCalledWith('build'))
+    expect(execute).toHaveBeenCalledTimes(2)
+  })
+
+  it('goes back to the BEGIN of a transaction the stop rolled back, and stops the rest again from where it got', async () => {
+    const tx = ['BEGIN', 'ALTER 1', 'COMMIT', 'ALTER 3']
+    const at = (sql: string, statement: number): StatementResult => ({ ...ok(statement), sql })
+    await running(true, tx)
+    fireEvent.click(await stopButton())
+    await act(async () => finish({ results: [at('BEGIN', 0), at('ALTER 1', 1)] }))
+    // Nothing of it stayed: running it again is running it once.
+    expect((await screen.findByRole('alert')).textContent).toBe(d.stopped)
+    cleanup()
+    execute.mockClear()
+    await running(true, tx)
+    fireEvent.click(await stopButton())
+    await act(async () => finish({ results: [at('BEGIN', 0), at('ALTER 1', 1), at('COMMIT', 2)] }))
+    expect((await screen.findByRole('alert')).textContent).toBe(d.stopped + restOf(['ALTER 3']))
   })
 })
