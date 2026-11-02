@@ -100,6 +100,14 @@ for (const t of TARGETS) {
         await expect(rows.filter({ hasText: `idx_${b}_level（${b} の level）` })).toHaveCount(1)
         await expect(rows.nth(4)).toContainText('候補すべてを同時に')
         await expect(compare.getByText('見積もれませんでした')).toHaveCount(0)
+        // A row goes on to its plan as the server gave it, shown above as trying it alone does.
+        await compare.getByRole('button', { name: `idx_${a}_level があるものとした計画を見る` }).click()
+        const assume = plan.getByRole('region', { name: 'インデックスを作らずに試す（見込み）' })
+        await expect(assume.getByRole('status').first()).toHaveText(
+          `idx_${a}_level があるものとしての計画です（見込み）`
+        )
+        // Not measured yet: nothing to build from a row.
+        await expect(compare.getByRole('button', { name: /を本当に作って測る$/ })).toHaveCount(0)
         const problems = await pageProblems(page)
         expect(problems.axe, JSON.stringify(problems.axe, null, 2)).toEqual([])
         expect(problems.layout, 'layout').toEqual([])

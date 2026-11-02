@@ -1,6 +1,6 @@
 import { cleanup, render, screen, within } from '@testing-library/react'
 import type { ExplainResult } from '@tsmyadmin/shared'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { locale } from '@/config/locale-screens.ts'
 import { AssumedCompare } from './AssumedCompare.tsx'
 import { type AssumedCompare as Compare, type CompareRow, candidatesKey } from './use-assumed-compare.ts'
@@ -12,7 +12,18 @@ const planOf = (cost: number | null, assumed: string[] = []) =>
   ({ plan: { op: 'x', cost, children: [] }, raw: '', rawTruncated: false, assumed }) as unknown as ExplainResult
 const before = planOf(1000)
 
-function shown(rows: CompareRow[] | null, over: Partial<Compare> = {}) {
+const onShow = vi.fn()
+const onBuild = vi.fn()
+beforeEach(() => {
+  onShow.mockClear()
+  onBuild.mockClear()
+})
+
+function shown(
+  rows: CompareRow[] | null,
+  over: Partial<Compare> = {},
+  props: { built?: boolean; waiting?: boolean } = {}
+) {
   const compared: Compare = {
     rows,
     asked: rows ? candidatesKey([posts, users]) : null,
@@ -20,7 +31,16 @@ function shown(rows: CompareRow[] | null, over: Partial<Compare> = {}) {
     compare: vi.fn(async () => undefined),
     ...over,
   }
-  render(<AssumedCompare compared={compared} before={before} candidates={[posts, users]} />)
+  render(
+    <AssumedCompare
+      compared={compared}
+      before={before}
+      candidates={[posts, users]}
+      onShow={onShow}
+      onBuild={props.built === false ? undefined : onBuild}
+      waiting={props.waiting ?? false}
+    />
+  )
   return { compared, group: screen.getByRole('region', { name: p.compareGroup }) }
 }
 
@@ -36,7 +56,7 @@ describe('AssumedCompare', () => {
     const rows = within(within(group).getByRole('table', { name: p.compareCaption }))
       .getAllByRole('row')
       .slice(1)
-    expect(rows.map((r) => [...r.children].map((c) => c.textContent))).toEqual([
+    expect(rows.map((r) => [...r.children].slice(0, 3).map((c) => c.textContent))).toEqual([
       [p.compareNone, p.compareCost(null, 1000), ''],
       [p.compareOne('idx_posts_user_id', 'posts', ['user_id']), p.compareCost(1000, 400), p.compareUnused],
       [
@@ -76,5 +96,47 @@ describe('AssumedCompare', () => {
     const idle = shown(null)
     within(idle.group).getByRole('button', { name: p.compareRun }).click()
     expect(idle.compared.compare).toHaveBeenCalledWith([posts, users])
+  })
+
+  it("goes on from a candidate's own row: its plan as the server gave it, or building it; not from all together", () => {
+    const alone = planOf(100, ['idx_users_email'])
+    const { group } = shown([
+      { indexes: [posts], result: null, error: new Error('no') },
+      { indexes: [users], result: alone, error: null },
+      { indexes: [posts, users], result: planOf(20), error: null },
+    ])
+    // A row that could not be estimated has no plan to show, but can still be built.
+    expect(within(group).queryByRole('button', { name: p.compareShow('idx_posts_user_id') })).toBeNull()
+    // The preview opens from here: the focus goes to the heading first, and comes back there when it closes.
+    let focused: string | null | undefined
+    onBuild.mockImplementationOnce(() => {
+      focused = document.activeElement?.textContent
+    })
+    within(group)
+      .getByRole('button', { name: p.compareBuild('idx_posts_user_id') })
+      .click()
+    expect(onBuild).toHaveBeenCalledWith(posts)
+    expect(focused).toBe(p.compareGroup)
+    within(group)
+      .getByRole('button', { name: p.compareShow('idx_users_email') })
+      .click()
+    expect(onShow).toHaveBeenCalledWith(users, alone)
+    const together = within(group).getAllByRole('row')[4]
+    expect(together && within(together).queryAllByRole('button')).toEqual([])
+  })
+
+  it('offers no build before the statement is measured, and its buttons wait while something else is under way', () => {
+    const rows = [{ indexes: [users], result: planOf(100), error: null }]
+    const before = shown(rows, {}, { built: false })
+    expect(within(before.group).queryByRole('button', { name: p.compareBuild('idx_users_email') })).toBeNull()
+    cleanup()
+    const { group } = shown(rows, {}, { waiting: true })
+    for (const name of [p.compareShow('idx_users_email'), p.compareBuild('idx_users_email')]) {
+      const button = within(group).getByRole('button', { name })
+      expect(button.getAttribute('aria-disabled')).toBe('true')
+      button.click()
+    }
+    expect(onShow).not.toHaveBeenCalled()
+    expect(onBuild).not.toHaveBeenCalled()
   })
 })
