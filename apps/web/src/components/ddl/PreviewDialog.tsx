@@ -174,7 +174,8 @@ function StopNotice<Op>({ flow }: { flow: PreviewFlow<Op> }) {
       role="alert"
       className="mt-2 rounded border border-amber-300 bg-amber-50 p-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200"
     >
-      {/* Ended part way with no error: the results say it was stopped, whatever the stop's answer. */}
+      {/* Ended part way with no error: the server's loop broke between two statements, which only a stop does, so it
+          was stopped whatever the stop's answer (nothing was cut mid-statement, which the results would show). */}
       {flow.stopped || partly ? locale.ddl.stopped : locale.ddl.stopUnclear}
       {partly ? (
         <>

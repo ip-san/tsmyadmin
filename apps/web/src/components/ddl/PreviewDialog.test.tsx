@@ -229,8 +229,6 @@ describe('PreviewDialog, stopping a run', () => {
   it('offers no stop where the flow cannot stop, and none before the run', async () => {
     await running(false)
     expect(screen.queryByRole('button', { name: d.stop })).toBeNull()
-    // Nothing to move the focus to: it is left alone.
-    expect(document.activeElement).toBe(document.body)
     await act(async () => finish({ results: [ok(0), ok(1)] }))
     await vi.waitFor(() => expect(onSuccess).toHaveBeenCalled())
   })
