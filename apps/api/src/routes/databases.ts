@@ -112,6 +112,11 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
         const q = c.req.valid('query')
         return c.json(await c.get('session').adapter.listForeignKeys(ns(c.req.param('db'), q.schema)))
       })
+      // Every index of the database (or schema) that has a comment, in one catalog query: the indexes tried from a plan.
+      .get('/databases/:db/index-comments', validate('query', SchemaQuerySchema), async (c) => {
+        const q = c.req.valid('query')
+        return c.json(await c.get('session').adapter.listIndexComments(ns(c.req.param('db'), q.schema)))
+      })
       .get('/databases/:db/usage', validate('query', SchemaQuerySchema), async (c) => {
         const q = c.req.valid('query')
         return c.json(await c.get('session').adapter.tableUsage(ns(c.req.param('db'), q.schema)))

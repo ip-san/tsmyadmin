@@ -16,6 +16,7 @@ import type {
   EventInfo,
   ExplainResult,
   HypotheticalIndex,
+  IndexComment,
   InputCell,
   InsertPreview,
   KeyValue,
@@ -468,6 +469,21 @@ export class FakeAdapter implements DatabaseAdapter {
       })
     ).length
     return { total, count: 'exact', columns, sql: `SELECT * FROM ${table}`, deleteSql: `DELETE FROM ${table}` }
+  }
+
+  async listIndexComments(ns: Namespace): Promise<IndexComment[]> {
+    this.record('listIndexComments', ns)
+    const db = this.databases[ns.database]
+    if (!db) throw new AdapterError('NOT_FOUND', `Unknown database: ${ns.database}`)
+    return Object.values(db.tables)
+      .flatMap((t) =>
+        t.schema.indexes.flatMap((i) =>
+          i.comment
+            ? [{ table: t.schema.name, name: i.name, comment: i.comment, partitioned: t.schema.partitioned }]
+            : []
+        )
+      )
+      .sort((a, b) => a.table.localeCompare(b.table) || a.name.localeCompare(b.name))
   }
 
   async listForeignKeys(ns: Namespace): Promise<RelationDef[]> {

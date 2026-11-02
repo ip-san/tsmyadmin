@@ -9,6 +9,7 @@ import type {
   EventInfo,
   ExplainResult,
   HypotheticalIndex,
+  IndexComment,
   QueryBuilderRequestInput,
   QueryBuilderResult,
   RelationDef,
@@ -92,6 +93,16 @@ export const foreignKeysQuery = (db: string, schema?: string) =>
     queryFn: () =>
       unwrap<RelationDef[]>(
         api.databases[':db']['foreign-keys'].$get({ param: { db: enc(db) }, query: schemaQuery(schema) })
+      ),
+  })
+
+/** Every index of the database (or schema) that has a comment: the indexes tried from a plan, in any browser. */
+export const indexCommentsQuery = (db: string, schema?: string) =>
+  queryOptions({
+    queryKey: ['index-comments', db, schema ?? ''],
+    queryFn: () =>
+      unwrap<IndexComment[]>(
+        api.databases[':db']['index-comments'].$get({ param: { db: enc(db) }, query: schemaQuery(schema) })
       ),
   })
 

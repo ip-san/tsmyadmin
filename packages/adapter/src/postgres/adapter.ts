@@ -10,6 +10,7 @@ import type {
   EventInfo,
   ExplainResult,
   HypotheticalIndex,
+  IndexComment,
   KeyValue,
   KillMode,
   LockWaitReport,
@@ -53,6 +54,7 @@ import { pgExporter } from './export.ts'
 import {
   pgDescribeTable,
   pgListForeignKeys,
+  pgListIndexComments,
   pgListPartitions,
   pgListSchemas,
   pgListTables,
@@ -484,6 +486,10 @@ export class PostgresAdapter extends BaseAdapter {
 
   listForeignKeys(ns: Namespace): Promise<RelationDef[]> {
     return this.withConn(ns, (conn) => pgListForeignKeys(conn, ns))
+  }
+
+  listIndexComments(ns: Namespace): Promise<IndexComment[]> {
+    return this.withConn(ns, (conn) => pgListIndexComments(conn, ns))
   }
 
   tableUsage(ns: Namespace): Promise<TableUsageReport> {

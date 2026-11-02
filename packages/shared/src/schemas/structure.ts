@@ -134,6 +134,19 @@ export type ReferenceCheck = z.infer<typeof ReferenceCheckSchema>
 export const RelationDefSchema = ForeignKeyDefSchema.extend({ table: z.string() })
 export type RelationDef = z.infer<typeof RelationDefSchema>
 
+/**
+ * An index that has a comment, with its table: every one of a database or schema at once (the SQL tab finds the
+ * indexes tried from a plan by their mark). `partitioned`: its table is partitioned (PostgreSQL), so the index cannot
+ * be dropped without stopping writes.
+ */
+export const IndexCommentSchema = z.object({
+  table: z.string(),
+  name: z.string(),
+  comment: z.string(),
+  partitioned: z.boolean(),
+})
+export type IndexComment = z.infer<typeof IndexCommentSchema>
+
 export const ReferencingKeyDefSchema = z.object({
   name: z.string(),
   /** Table holding the foreign key. */

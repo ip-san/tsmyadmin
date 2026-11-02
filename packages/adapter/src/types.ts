@@ -18,6 +18,7 @@ import type {
   EventInfo,
   ExplainResult,
   HypotheticalIndex,
+  IndexComment,
   InputCell,
   InsertPreview,
   KeyValue,
@@ -302,6 +303,11 @@ export interface DatabaseAdapter {
   buildQuery(ns: Namespace, spec: QueryBuilderSpec): Promise<QueryBuilderResult>
   /** Every foreign key held by a table of the namespace, ordered by table and constraint name (the designer). */
   listForeignKeys(ns: Namespace): Promise<RelationDef[]>
+  /**
+   * Every index of the namespace's tables that has a comment, ordered by table and index name, in one catalog query.
+   * Usable indexes only (PostgreSQL: one a failed concurrent build left is not listed). Reads only.
+   */
+  listIndexComments(ns: Namespace): Promise<IndexComment[]>
   insertRow(
     ns: Namespace,
     table: string,
@@ -452,6 +458,7 @@ export const ADAPTER_METHOD_NAMES = [
   'prepareDdl',
   'buildQuery',
   'listForeignKeys',
+  'listIndexComments',
   'insertRow',
   'insertPreview',
   'insertRows',

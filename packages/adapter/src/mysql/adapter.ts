@@ -9,6 +9,7 @@ import type {
   EventInfo,
   ExplainResult,
   HypotheticalIndex,
+  IndexComment,
   KeyValue,
   KillMode,
   LockWaitReport,
@@ -51,6 +52,7 @@ import {
   mysqlDatabaseGrants,
   mysqlDescribeTable,
   mysqlListForeignKeys,
+  mysqlListIndexComments,
   mysqlListPartitions,
   mysqlListTables,
   mysqlTableStats,
@@ -529,6 +531,9 @@ export class MysqlAdapter extends BaseAdapter {
 
   listForeignKeys(ns: Namespace): Promise<RelationDef[]> {
     return this.withConn(ns, (conn) => mysqlListForeignKeys(conn, ns))
+  }
+  listIndexComments(ns: Namespace): Promise<IndexComment[]> {
+    return this.withConn(ns, (conn) => mysqlListIndexComments(conn, ns))
   }
   tableUsage(ns: Namespace): Promise<TableUsageReport> {
     return this.withConn(ns, (conn) => mysqlTableUsage(conn, ns.database))

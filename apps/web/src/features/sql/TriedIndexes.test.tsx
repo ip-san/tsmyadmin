@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { TRIED_INDEX_COMMENT } from '@tsmyadmin/shared'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { locale } from '@/config/locale-screens.ts'
 import { memoryStorage } from '@/test/memory-storage.ts'
@@ -15,6 +16,8 @@ let indexes: Record<string, string[]>
 let unusable: Record<string, string[]>
 /** The structure cannot be read now. */
 let unreadable: boolean
+/** The indexes of the database that have a comment, as the server lists them (null: the list cannot be read). */
+let commented: { table: string; name: string; comment: string; partitioned: boolean }[] | null
 const previewDdl = vi.fn(async (_db: string, _schema: unknown, op: { op: string; name: string }) => ({
   sql: [`${op.op} ${op.name}`],
 }))
@@ -29,6 +32,13 @@ vi.mock('@/lib/queries.ts', () => ({
     previewDdl: (...args: Parameters<typeof previewDdl>) => previewDdl(...args),
     executeSql: (...args: Parameters<typeof executeSql>) => executeSql(...args),
   },
+  indexCommentsQuery: () => ({
+    queryKey: ['index-comments'],
+    queryFn: async () => {
+      if (commented === null) throw new Error('cannot list')
+      return commented
+    },
+  }),
   structureQuery: ({ table }: { table: string }) => ({
     queryKey: ['structure', table],
     queryFn: async () => {
@@ -53,6 +63,7 @@ beforeAll(() => {
 beforeEach(() => {
   vi.stubGlobal('localStorage', memoryStorage())
   unreadable = false
+  commented = []
   unusable = {}
   indexes = { logs: ['PRIMARY', 'idx_logs_level'], posts: ['PRIMARY'] }
   previewDdl.mockClear()
@@ -158,5 +169,66 @@ describe('TriedIndexes', () => {
     // Tried from a plan (in this tab or another): it appears without a reload.
     rememberTried(SCOPE, level)
     expect(await screen.findByRole('region', { name: p.triedGroup })).toBeTruthy()
+  })
+
+  it('lists the indexes marked on the server as tried, though not remembered here, and drops each as it can be', async () => {
+    commented = [
+      { table: 'logs', name: 'idx_logs_b', comment: TRIED_INDEX_COMMENT, partitioned: false },
+      { table: 'events', name: 'idx_events_d', comment: TRIED_INDEX_COMMENT, partitioned: true },
+      // Another comment: not one tried.
+      { table: 'logs', name: 'idx_logs_designed', comment: 'by hand', partitioned: false },
+    ]
+    mount(<TriedIndexes scope={SCOPE} db="shop" />)
+    const group = await screen.findByRole('region', { name: p.triedGroup })
+    expect(group.textContent).toContain(p.trialBefore('logs', 'idx_logs_b'))
+    expect(group.textContent).toContain(p.trialBefore('events', 'idx_events_d'))
+    expect(group.textContent).not.toContain('idx_logs_designed')
+    fireEvent.click(within(group).getByRole('button', { name: p.trialUndo('idx_logs_b') }))
+    await screen.findByRole('dialog', { name: locale.ddl.titles.dropIndex })
+    expect(previewDdl).toHaveBeenLastCalledWith('shop', undefined, {
+      op: 'dropIndex',
+      table: 'logs',
+      name: 'idx_logs_b',
+      online: true,
+    })
+    fireEvent.click(screen.getByRole('button', { name: locale.common.cancel }))
+    // A partitioned parent's cannot be dropped without stopping writes (PostgreSQL).
+    fireEvent.click(within(group).getByRole('button', { name: p.trialUndo('idx_events_d') }))
+    await vi.waitFor(() =>
+      expect(previewDdl).toHaveBeenLastCalledWith('shop', undefined, {
+        op: 'dropIndex',
+        table: 'events',
+        name: 'idx_events_d',
+      })
+    )
+  })
+
+  it('does not list one marked on the server again once dropped from here, though the marks were read before', async () => {
+    commented = [{ table: 'logs', name: 'idx_logs_b', comment: TRIED_INDEX_COMMENT, partitioned: false }]
+    mount(<TriedIndexes scope={SCOPE} db="shop" />)
+    const group = await screen.findByRole('region', { name: p.triedGroup })
+    fireEvent.click(within(group).getByRole('button', { name: p.trialUndo('idx_logs_b') }))
+    fireEvent.click(await screen.findByRole('button', { name: locale.ddl.execute }))
+    await screen.findByText(locale.ddl.executed(locale.ddl.titles.dropIndex))
+    expect(screen.queryByRole('button', { name: p.trialUndo('idx_logs_b') })).toBeNull()
+  })
+
+  it('lists one remembered here and marked on the server once, as remembered (with its columns)', async () => {
+    rememberTried(SCOPE, level)
+    commented = [{ table: 'logs', name: 'idx_logs_level', comment: TRIED_INDEX_COMMENT, partitioned: false }]
+    mount(<TriedIndexes scope={SCOPE} db="shop" />)
+    const group = await screen.findByRole('region', { name: p.triedGroup })
+    expect(group.textContent).toContain(p.triedItem('logs', 'idx_logs_level', ['level']))
+    expect(within(group).getAllByRole('button', { name: p.trialUndo('idx_logs_level') })).toHaveLength(1)
+  })
+
+  it('says the list of the server could not be read, with a retry, rather than nothing', async () => {
+    commented = null
+    mount(<TriedIndexes scope={SCOPE} db="shop" />)
+    const group = await screen.findByRole('region', { name: p.triedGroup })
+    expect(group.textContent).toContain('cannot list')
+    commented = [{ table: 'logs', name: 'idx_logs_b', comment: TRIED_INDEX_COMMENT, partitioned: false }]
+    fireEvent.click(within(group).getByRole('button', { name: locale.common.retry }))
+    expect(await within(group).findByText(p.trialBefore('logs', 'idx_logs_b'))).toBeTruthy()
   })
 })
