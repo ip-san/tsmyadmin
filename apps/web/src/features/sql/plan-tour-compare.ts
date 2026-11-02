@@ -14,9 +14,20 @@ export interface CompareInput {
   rows: readonly CompareRow[]
 }
 
-/** The candidates of the rows (each alone, in the order asked). */
-export const compareCandidates = ({ rows }: CompareInput): IndexCandidate[] =>
-  rows.flatMap((r) => (r.indexes.length === 1 ? r.indexes : []))
+/** The candidates of the rows, once each (in the order asked). */
+export function compareCandidates({ rows }: CompareInput): IndexCandidate[] {
+  const seen = new Map<string, IndexCandidate>()
+  for (const c of rows.flatMap((r) => r.indexes)) if (!seen.has(c.name)) seen.set(c.name, c)
+  return [...seen.values()]
+}
+
+/** What the chapter tells: how many candidates were estimated, and whether all together was. */
+export function compareTold({ rows }: CompareInput): { n: number; together: boolean } {
+  return {
+    n: rows.filter((r) => r.result && r.indexes.length === 1).length,
+    together: rows.some((r) => r.result && r.indexes.length > 1),
+  }
+}
 
 const usedIn = (row: CompareRow, name: string) => row.result?.assumed?.includes(name) ?? false
 const costLine = (before: number | null, after: number | null) =>
@@ -40,10 +51,11 @@ export function compareScenes(
   const failed = rows.flatMap((r) =>
     r.result ? [] : [r.indexes.length === 1 ? (r.indexes[0]?.name ?? '') : t.compareAllTitle]
   )
+  const told = compareTold(input)
   const scenes: TourScene[] = [
     {
       title: t.compareOpenTitle,
-      text: t.compareOpen(candidates.length, before.plan.cost),
+      text: t.compareOpen(told.n, told.together, before.plan.cost),
       frame: tables,
       overlay: overlay({ tables: litOf(before.plan, indexColumns), columns: marked }),
       pulse: tables,

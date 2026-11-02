@@ -573,11 +573,11 @@ export const enScreens = {
       'An index is updated each time a row is added, changed or deleted: reads get faster, writes a little slower, and it takes space. Keep it if it helps a statement run often',
     assumedIntro: (name: string) =>
       `This is the plan the server would make if the index ${name} were there (an estimate). The index is not built, and the statement was not run. The last chapter sets it beside the plan as it is`,
-    compareIntro: (n: number) =>
-      `The last chapter sets out the server's estimates with each of the ${n} candidate indexes assumed alone, and all together (none is built)`,
+    compareIntro: (n: number, together: boolean) =>
+      `The chapter "The candidates compared (estimate)" sets out the server's estimates with each of the ${n} candidate indexes assumed alone${together ? ', and all together' : ''} (none is built)`,
     compareOpenTitle: 'The candidates compared (estimate)',
-    compareOpen: (n: number, cost: number | null) =>
-      `The server was asked to estimate the plan with each of the ${n} candidate indexes assumed alone, and with all of them together. Nothing was built, and the statement was not run. ${cost === null ? '' : `As it is, the plan's estimated cost is ${costSaid(cost)}. `}The marked columns are the candidates' columns`,
+    compareOpen: (n: number, together: boolean, cost: number | null) =>
+      `The server was asked to estimate the plan with each of the ${n} candidate indexes assumed alone${together ? ', and with all of them together' : ''}. Nothing was built, and the statement was not run. ${cost === null ? '' : `As it is, the plan's estimated cost is ${costSaid(cost)}. `}The marked columns are the candidates' columns`,
     compareOneTitle: (name: string) => `With ${name} alone`,
     compareOne: (table: string, was: string | null, now: string | null, used: boolean) =>
       `${table} would be read ${was ?? '—'} → ${now ?? 'not at all'}. ${used ? 'The server expects to read it through this index' : 'The server would not use this index'}`,

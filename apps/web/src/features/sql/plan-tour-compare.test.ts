@@ -56,9 +56,9 @@ describe('planTour with the candidates compared', () => {
     expect(chaptersOf(scenes).map((c) => c.title)).toEqual([t.chapters.reads, t.chapters.compare])
     expect(chaptersOf(scenes).at(-1)?.from).toBe(at)
     // Said from the start that the last chapter is of the candidates, none built.
-    expect(scenes[0]?.notes).toEqual([t.compareIntro(2)])
+    expect(scenes[0]?.notes).toEqual([t.compareIntro(2, true)])
     const [open, one, other, all] = scenes.slice(at)
-    expect(open?.text).toBe(t.compareOpen(2, 900))
+    expect(open?.text).toBe(t.compareOpen(2, true, 900))
     expect(open?.notes).toEqual([p.compareNote])
     expect(open?.frame).toEqual(['orders', 'items'])
     // Every candidate's columns marked, on the diagram too.
@@ -116,6 +116,36 @@ describe('planTour with the candidates compared', () => {
     expect(nothing?.text).toBe(t.compareAll([], ['idx_orders_level', 'idx_items_kind']))
     // Each alone already says it would not be used: the together scene does not say it again.
     expect(nothing?.hints).toBeUndefined()
+  })
+
+  it('says only the candidates the server estimated, and all together only where it did', () => {
+    const one = tour([rows[0] as CompareRow, { indexes: [kind], result: null, error: new Error('x') }])
+    expect(one.scenes[0]?.notes).toEqual([t.compareIntro(1, false)])
+    expect(one.scenes.find((s) => s.title === t.compareOpenTitle)?.text).toBe(t.compareOpen(1, false, 900))
+    // The candidates of every row, though only all together came: drawn and marked all the same.
+    const together = tour([rows[2] as CompareRow])
+    const open = together.scenes.find((s) => s.title === t.compareOpenTitle)
+    expect(open?.frame).toEqual(['orders', 'items'])
+    expect(together.diagram.columns.get('orders')).toContain('level')
+  })
+
+  it("draws a table only a candidate's plan reads", () => {
+    const extra = node({ op: 'Seq Scan', table: 'regions', access: 'fullScan', estRows: 5 })
+    const wider = { ...(rows[0] as CompareRow), result: result(join(100, byLevel, fullItems, extra), []) }
+    expect(tour([wider]).diagram.tables).toContain('regions')
+  })
+
+  it('comes before the index assumed, which keeps the last chapter its intro says it has', () => {
+    const index = level
+    const { scenes } = planTour({
+      plan: (rows[0] as CompareRow).result?.plan as PlanNode,
+      relations: keys,
+      assumed: { before, index, used: true },
+      compare: { before, rows },
+    })
+    expect(chaptersOf(scenes).map((c) => c.title)).toEqual([t.chapters.reads, t.chapters.compare, t.chapters.assumed])
+    expect(scenes.at(-1)?.title).toBe(t.endTitle)
+    expect(scenes[0]?.notes).toEqual([t.assumedIntro('idx_orders_level'), t.compareIntro(2, true)])
   })
 
   it('tells no comparison where none was made', () => {

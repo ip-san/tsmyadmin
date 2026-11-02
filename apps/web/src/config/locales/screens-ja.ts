@@ -568,11 +568,11 @@ export const jaScreens = {
       'インデックスは、行を足す・変える・消すたびに更新されます。読むのが速くなる代わりに、書き込みは少し遅くなり、場所も取ります。よく実行する文に役立つなら残します',
     assumedIntro: (name: string) =>
       `インデックス ${name} があるものとして、サーバーが立て直した計画（見込み）です。インデックスは作っておらず、文も実行していません。最後の章で、元の計画と比べます`,
-    compareIntro: (n: number) =>
-      `最後の章で、インデックスの候補 ${n} 個を 1 つずつと全部一緒に、あるものとして見積もらせた結果を並べます（作ってはいません）`,
+    compareIntro: (n: number, together: boolean) =>
+      `「候補をまとめて比べた見込み」の章で、インデックスの候補 ${n} 個を 1 つずつ${together ? 'と全部一緒に' : ''}、あるものとして見積もらせた結果を並べます（作ってはいません）`,
     compareOpenTitle: '候補をまとめて比べる（見込み）',
-    compareOpen: (n: number, cost: number | null) =>
-      `インデックスの候補 ${n} 個を、1 つずつと全部一緒に、あるものとしてサーバーに見積もらせました。何も作らず、文も実行していません。${cost === null ? '' : `いまの計画の見込みのコストは ${costSaid(cost)} です。`}印を付けたカラムが、候補のカラムです`,
+    compareOpen: (n: number, together: boolean, cost: number | null) =>
+      `インデックスの候補 ${n} 個を、1 つずつ${together ? 'と全部一緒に' : ''}、あるものとしてサーバーに見積もらせました。何も作らず、文も実行していません。${cost === null ? '' : `いまの計画の見積もりのコストは ${costSaid(cost)} です。`}印を付けたカラムが、候補のカラムです`,
     compareOneTitle: (name: string) => `${name} だけがあるとき`,
     compareOne: (table: string, was: string | null, now: string | null, used: boolean) =>
       `${table} の読み方の見込み: ${was ?? '—'} → ${now ?? '読まない'}。${used ? 'サーバーはこのインデックスで読む見込みです' : 'サーバーはこのインデックスを使わない見込みです'}`,
