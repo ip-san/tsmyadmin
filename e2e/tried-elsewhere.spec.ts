@@ -4,7 +4,7 @@ import { trialPlan } from './plan.ts'
 import { pageProblems } from './scan.ts'
 
 // An index tried from a plan is marked on the server: another browser, which remembers nothing of it, tells it apart
-// in the table's Structure and offers to drop it from the plan.
+// in the table's Structure, lists it in the SQL tab, and offers to drop it from the plan.
 for (const t of TARGETS) {
   test.describe(`an index tried in another browser (${t.dialect})`, () => {
     test('is told apart in the Structure and dropped from the plan of another browser', async ({ page, browser }) => {
@@ -29,6 +29,12 @@ for (const t of TARGETS) {
 
         // The same statement's plan in the other browser: the index is left from before, and dropped from there.
         await other.goto(t.schema ? `/db/${t.database}/sql?schema=${t.schema}` : `/db/${t.database}/sql`)
+        // The SQL tab lists it among the indexes tried, though this browser remembers nothing of it.
+        await expect(
+          other
+            .getByRole('region', { name: '試したインデックス' })
+            .getByText(`${table} の ${index} は、前に実行計画で試したインデックスです`, { exact: false })
+        ).toBeVisible()
         await other.getByRole('textbox', { name: 'SQL エディタ' }).click()
         await other.keyboard.type(`SELECT id FROM ${table} WHERE level = 3`)
         await other.getByRole('button', { name: '図で見る', exact: true }).click()

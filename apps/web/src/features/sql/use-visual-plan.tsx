@@ -1,6 +1,5 @@
 import { lazy, Suspense, useState } from 'react'
 import { Spinner } from '@/components/ui/Feedback.tsx'
-import { useTriedIndexes } from './tried-indexes.ts'
 
 // Loaded when asked for: most statements are run, not drawn.
 const PlanView = lazy(() => import('./PlanView.tsx').then((m) => ({ default: m.PlanView })))
@@ -8,21 +7,17 @@ const TriedIndexes = lazy(() => import('./TriedIndexes.tsx').then((m) => ({ defa
 
 /**
  * The statement whose plan is drawn in the SQL tab (one at a time), and the panel that draws it. With no plan open,
- * the indexes tried from a plan and not dropped yet (`scope`: the server, `dialect.host.port`).
+ * the indexes tried from a plan and not dropped yet (`scope`: the server, `dialect.host.port`), in this browser or
+ * marked on the server.
  */
 export function useVisualPlan(db: string, schema: string | undefined, scope: string) {
   const [sql, setSql] = useState<string | null>(null)
-  // Loaded once there is one, then kept: dropping the last one still says it was dropped.
-  const [tried, setTried] = useState(false)
-  const any = useTriedIndexes(scope, db, schema).length > 0
-  if (any && !tried) setTried(true)
+  // Always there with no plan open: the ones tried in another browser are read from the server's marks.
   const panel =
     sql === null ? (
-      tried ? (
-        <Suspense fallback={null}>
-          <TriedIndexes scope={scope} db={db} schema={schema} />
-        </Suspense>
-      ) : null
+      <Suspense fallback={null}>
+        <TriedIndexes scope={scope} db={db} schema={schema} />
+      </Suspense>
     ) : (
       <Suspense fallback={<Spinner />}>
         {/* A new statement is a new view: what was measured of the last one is not shown under this one. */}
