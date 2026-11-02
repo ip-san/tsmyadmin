@@ -15,6 +15,11 @@ const ok = (statement: number): StatementResult => ({
   affectedRows: 0,
   durationMs: 1,
 })
+/** A result that cannot be matched to its statement: what ran is not known from it. */
+const unplaced = (statement: number): StatementResult => {
+  const { statement: _, ...r } = ok(statement)
+  return r
+}
 const failed: StatementResult = { kind: 'error', statement: 1, sql: 'ALTER 1', message: 'canceling statement' }
 
 /** The run's answer, given when the test says so. */
@@ -89,6 +94,20 @@ const restOf = (rest: string[]) =>
   d.rerunAll + d.restIntro(rest.length) + rest.map((s) => `${s};`).join('\n') + d.runRest
 
 describe('PreviewDialog, stopping a run', () => {
+  it('leaves the focus where it is as a run starts, unless it fell to the page', async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Harness />
+      </QueryClientProvider>
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'open' }))
+    const sql = await screen.findByLabelText('SQL')
+    sql.focus()
+    fireEvent.click(await screen.findByRole('button', { name: d.execute }))
+    await stopButton()
+    expect(document.activeElement).toBe(sql)
+  })
+
   it('stops the run by its own id, once however often pressed, and says it is stopping', async () => {
     let answer: (v: boolean) => void = () => undefined
     stopAnswer = () => new Promise((resolve) => (answer = resolve))
@@ -147,9 +166,21 @@ describe('PreviewDialog, stopping a run', () => {
     await running(true, ['ALTER 0'])
     fireEvent.click(await stopButton())
     await screen.findByText('network down')
-    const { statement: _, ...unplaced } = ok(0)
-    await act(async () => finish({ results: [unplaced] }))
+    await act(async () => finish({ results: [unplaced(0)] }))
     expect((await screen.findByText(d.stopUnclear)).textContent).toBe(d.stopUnclear + d.rerunUnclear)
+  })
+
+  it('says it was stopped where the results end part way, though the answer to the stop did not come', async () => {
+    stopAnswer = async () => {
+      throw new Error('network down')
+    }
+    await running()
+    fireEvent.click(await stopButton())
+    await screen.findByText('network down')
+    await act(async () => finish({ results: [ok(0)] }))
+    // The alert of the stop that did not get through stays beside it.
+    const notice = (await screen.findAllByRole('alert')).find((a) => a.textContent?.startsWith(d.stopped))
+    expect(notice?.textContent).toBe(d.stopped + restOf(['ALTER 1']))
   })
 
   it('is stopped where the request itself ended in an error after the stop', async () => {
@@ -198,6 +229,8 @@ describe('PreviewDialog, stopping a run', () => {
   it('offers no stop where the flow cannot stop, and none before the run', async () => {
     await running(false)
     expect(screen.queryByRole('button', { name: d.stop })).toBeNull()
+    // Nothing to move the focus to: it is left alone.
+    expect(document.activeElement).toBe(document.body)
     await act(async () => finish({ results: [ok(0), ok(1)] }))
     await vi.waitFor(() => expect(onSuccess).toHaveBeenCalled())
   })
@@ -223,7 +256,7 @@ describe('PreviewDialog, stopping a run', () => {
     await running()
     fireEvent.click(await stopButton())
     await screen.findByText('network down')
-    await act(async () => finish({ results: [ok(0)] }))
+    await act(async () => finish({ results: [unplaced(0)] }))
     expect(await screen.findByText(d.stopUnclear)).toBeTruthy()
     expect(screen.queryByText(d.stopped)).toBeNull()
     expect(onSuccess).not.toHaveBeenCalled()
@@ -263,7 +296,7 @@ describe('PreviewDialog, stopping a run', () => {
     await vi.waitFor(() => expect(button.getAttribute('aria-disabled')).toBeNull())
     fireEvent.click(button)
     await vi.waitFor(() => expect(stop).toHaveBeenCalledTimes(2))
-    await act(async () => finish({ results: [ok(0)] }))
+    await act(async () => finish({ results: [unplaced(0)] }))
     expect(await screen.findByText(d.stopUnclear)).toBeTruthy()
     expect(onSuccess).not.toHaveBeenCalled()
   })
@@ -274,7 +307,7 @@ describe('PreviewDialog, stopping a run', () => {
       stopAnswer = () => new Promise(() => undefined)
       await running()
       fireEvent.click(await stopButton())
-      await act(async () => finish({ results: [ok(0)] }))
+      await act(async () => finish({ results: [unplaced(0)] }))
       await act(async () => {
         await vi.advanceTimersByTimeAsync(STOP_ANSWER_MS)
       })

@@ -174,7 +174,8 @@ function StopNotice<Op>({ flow }: { flow: PreviewFlow<Op> }) {
       role="alert"
       className="mt-2 rounded border border-amber-300 bg-amber-50 p-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200"
     >
-      {flow.stopped ? locale.ddl.stopped : locale.ddl.stopUnclear}
+      {/* Ended part way with no error: the results say it was stopped, whatever the stop's answer. */}
+      {flow.stopped || partly ? locale.ddl.stopped : locale.ddl.stopUnclear}
       {partly ? (
         <>
           <p className="mt-1">{locale.ddl.rerunAll}</p>
@@ -186,7 +187,7 @@ function StopNotice<Op>({ flow }: { flow: PreviewFlow<Op> }) {
           >
             {rest.map((s) => `${s};`).join('\n')}
           </pre>
-          <Button className="mt-2" onClick={flow.confirmRemaining} aria-disabled={flow.running || undefined}>
+          <Button className="mt-2" onClick={flow.confirmRemaining}>
             {locale.ddl.runRest}
           </Button>
         </>

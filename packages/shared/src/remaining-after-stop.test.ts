@@ -41,6 +41,7 @@ describe('remainingAfterStop', () => {
     expect(remainingAfterStop(tx, [...ran(2), stopped(tx[2] ?? '', 2)])).toEqual(tx)
     // Committed: what it did stays.
     expect(remainingAfterStop(tx, ran(4))).toEqual(['ANALYZE t'])
+    // The other spelling of BEGIN is read as one (DML only: MySQL's DDL commits on its own).
     const mysql = ['START TRANSACTION', 'INSERT INTO t VALUES (1)', 'COMMIT']
     expect(remainingAfterStop(mysql, [ok('START TRANSACTION', 0)])).toEqual(mysql)
   })
