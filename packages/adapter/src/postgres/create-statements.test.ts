@@ -1,7 +1,7 @@
 import type { ColumnDef, ForeignKeyDef, IndexDef, TableSchema } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
 import { rows, scripted } from '../test/scripted-conn.ts'
-import { type PgTableCatalog, pgCreateStatements, pgTableCatalog } from './create-statements.ts'
+import { defaultPkeyName, type PgTableCatalog, pgCreateStatements, pgTableCatalog } from './create-statements.ts'
 
 /**
  * What the PostgreSQL dump writes to create a table again, from the table's description and the catalog's extra
@@ -76,6 +76,26 @@ describe('the columns of a table', () => {
       'PRIMARY KEY ("a", "b")'
     )
     expect(pgCreateStatements(ns, table([col('a', 'int')]))[0]).not.toContain('PRIMARY KEY')
+  })
+
+  it('names the primary key only where the server would not give it that name', () => {
+    const pk = (name: string) =>
+      pgCreateStatements(
+        ns,
+        table([col('a', 'int')], { primaryKey: ['a'], indexes: [index(name, ['a'], { primary: true })] })
+      )[0]
+    expect(pk('t_pkey')).toContain('\n  PRIMARY KEY ("a")\n')
+    expect(pk('my pk')).toContain('\n  CONSTRAINT "my pk" PRIMARY KEY ("a")\n')
+    // Taken when the table was made: the server numbered it.
+    expect(pk('t_pkey1')).toContain('CONSTRAINT "t_pkey1" PRIMARY KEY')
+  })
+
+  it('takes the default name of a primary key as the server does: the table cut to fit 63 bytes', () => {
+    expect(defaultPkeyName('orders')).toBe('orders_pkey')
+    expect(defaultPkeyName('a'.repeat(58))).toBe(`${'a'.repeat(58)}_pkey`)
+    expect(defaultPkeyName('a'.repeat(63))).toBe(`${'a'.repeat(58)}_pkey`)
+    // Cut on a character, not in the middle of one (3 bytes each: 19 of them fit in 58).
+    expect(defaultPkeyName('あ'.repeat(30))).toBe(`${'あ'.repeat(19)}_pkey`)
   })
 
   it('writes an identity column as GENERATED … AS IDENTITY with its options, and a serial one as BY DEFAULT without a default', () => {
@@ -315,7 +335,7 @@ describe('indexes, constraints and comments', () => {
     expect(pgCreateStatements({ database: 'db' }, table([col('a', 'int')]))[0]).toContain('TABLE "public"."t"')
   })
 
-  it("comments each index that has a comment after the constraints, but the primary key's", () => {
+  it('comments each index that has a comment after the constraints, the primary key by the name it keeps', () => {
     const indexes = [
       index('t_pkey', ['a'], { primary: true, comment: 'pk' }),
       index('owned', ['a'], { unique: true, comment: "it's owned" }),
@@ -330,6 +350,7 @@ describe('indexes, constraints and comments', () => {
     expect(out.slice(3)).toEqual([
       'ALTER TABLE "app"."t" ADD CONSTRAINT "owned" UNIQUE (a)',
       `COMMENT ON COLUMN "app"."t"."b" IS 'it''s'`,
+      `COMMENT ON INDEX "app"."t_pkey" IS 'pk'`,
       `COMMENT ON INDEX "app"."owned" IS 'it''s owned'`,
       `COMMENT ON INDEX "app"."plain" IS 'tried'`,
     ])

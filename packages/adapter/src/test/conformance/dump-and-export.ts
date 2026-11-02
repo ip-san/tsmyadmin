@@ -22,15 +22,15 @@ export function describeDumpAndExport(env: ConformanceEnv): void {
       await expect(env.db.showCreateTable(ns, 'nope_nope')).rejects.toMatchObject({ code: 'NOT_FOUND' })
     })
 
-    it("keeps an index's comment through a dump and a restore (a materialized view's too, on PostgreSQL)", async () => {
+    it("keeps an index's comment through a dump and a restore (a materialized view's and a named primary key's too, on PostgreSQL)", async () => {
       const t = `${scratch}_idxc`
       const mv = `${t}_mv`
       const comment = (name: string, on: string) => `COMMENT ON INDEX ${name} IS 'it''s ${on}'`
       await execOk(
         dialect === 'postgres'
-          ? `CREATE TABLE ${t} (id INT PRIMARY KEY, a INT, CONSTRAINT ${t}_ukey UNIQUE (a));
+          ? `CREATE TABLE ${t} (id INT, a INT, CONSTRAINT ${t}_key PRIMARY KEY (id), CONSTRAINT ${t}_ukey UNIQUE (a));
              CREATE INDEX ${t}_a ON ${t} (a);
-             ${comment(`${t}_a`, t)}; ${comment(`${t}_ukey`, t)};
+             ${comment(`${t}_a`, t)}; ${comment(`${t}_ukey`, t)}; ${comment(`${t}_key`, t)};
              CREATE MATERIALIZED VIEW ${mv} AS SELECT id FROM ${t};
              CREATE UNIQUE INDEX ${mv}_id ON ${mv} (id); ${comment(`${mv}_id`, mv)}`
           : `CREATE TABLE ${t} (id INT PRIMARY KEY, a INT, UNIQUE KEY ${t}_ukey (a) COMMENT 'it''s ${t}',
@@ -48,6 +48,8 @@ export function describeDumpAndExport(env: ConformanceEnv): void {
         // A constraint's own index is created by the constraint, and commented after it.
         expect(await commentOf(t, `${t}_ukey`)).toBe(`it's ${t}`)
         if (dialect === 'postgres') expect(await commentOf(mv, `${mv}_id`)).toBe(`it's ${mv}`)
+        // A primary key named by hand keeps its name, and so its comment (PostgreSQL; MySQL's is always PRIMARY).
+        if (dialect === 'postgres') expect(await commentOf(t, `${t}_key`)).toBe(`it's ${t}`)
       } finally {
         await exec(
           dialect === 'postgres'

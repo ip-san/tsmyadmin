@@ -215,6 +215,23 @@ function indexComments(json: string): { name: string; comment: string }[] {
     : []
 }
 
+/** Longest name PostgreSQL keeps (NAMEDATALEN - 1), in bytes. */
+const MAX_NAME_BYTES = 63
+
+/**
+ * The name PostgreSQL gives a table's primary key when none is written: `<table>_pkey`, the table's name cut (on a
+ * character boundary) so the whole fits in 63 bytes. Taken, it would add a number: such a name is written out.
+ */
+export function defaultPkeyName(table: string): string {
+  const room = MAX_NAME_BYTES - Buffer.byteLength('_pkey')
+  let cut = ''
+  for (const ch of table) {
+    if (Buffer.byteLength(cut + ch) > room) break
+    cut += ch
+  }
+  return `${cut}_pkey`
+}
+
 /**
  * Reconstructs CREATE TABLE + indexes + constraints + foreign keys + comments from catalog metadata (see
  * PostgresAdapter.showCreateTable). Without `catalog` (DDL previews) constraints and identity options are omitted.
@@ -245,7 +262,12 @@ export function pgCreateStatements(ns: Namespace, schema: TableSchema, catalog?:
       if (c.default !== null && !identity && !generated) parts.push(`DEFAULT ${c.default}`)
       return parts.join(' ')
     })
-  if (schema.primaryKey.length > 0) defs.push(`PRIMARY KEY (${schema.primaryKey.map(id).join(', ')})`)
+  if (schema.primaryKey.length > 0) {
+    // Named only where the server would not give it that name: a dump without it restores another name.
+    const pk = schema.indexes.find((i) => i.primary)?.name
+    const named = pk && pk !== defaultPkeyName(schema.name) ? `CONSTRAINT ${id(pk)} ` : ''
+    defs.push(`${named}PRIMARY KEY (${schema.primaryKey.map(id).join(', ')})`)
+  }
   const inherits = catalog?.inherits ? ` INHERITS (${catalog.inherits})` : ''
   const partitionBy = catalog?.partitionKey ? ` PARTITION BY ${catalog.partitionKey}` : ''
   const storage = catalog?.storage ? ` WITH (${catalog.storage})` : ''
@@ -307,9 +329,8 @@ export function pgCreateStatements(ns: Namespace, schema: TableSchema, catalog?:
   if (schema.comment !== null) out.push(`COMMENT ON TABLE ${t} IS ${pgLiteral(schema.comment)}`)
   for (const c of schema.columns)
     if (c.comment !== null) out.push(`COMMENT ON COLUMN ${t}.${id(c.name)} IS ${pgLiteral(c.comment)}`)
-  // An index's comment (a tried index's mark among them), after the constraints that create some of them. Not the
-  // primary key's: CREATE TABLE names it on its own, so the name dumped may not be the one restored.
-  for (const i of schema.indexes)
-    if (!i.primary) out.push(...pgIndexCommentSql(ns, { name: i.name, comment: i.comment ?? undefined }))
+  // An index's comment (a tried index's mark among them), after the constraints that create some of them (the
+  // primary key's keeps its name above).
+  for (const i of schema.indexes) out.push(...pgIndexCommentSql(ns, { name: i.name, comment: i.comment ?? undefined }))
   return out
 }
