@@ -1,4 +1,4 @@
-import type { DdlOp, ExplainResult } from '@tsmyadmin/shared'
+import { type DdlOp, type ExplainResult, TRIED_INDEX_COMMENT } from '@tsmyadmin/shared'
 import { useRef, useState } from 'react'
 import { type DdlFlow, useDdlFlow } from '@/lib/ddl.ts'
 import type { Forecast } from './plan-forecast.ts'
@@ -33,7 +33,7 @@ export interface IndexTrial {
   /** Made (and dropped) without stopping writes to the table: on unless turned off. */
   online: boolean
   setOnline: (online: boolean) => void
-  /** Previews dropping an index a build left unusable (it is never the one tried). */
+  /** Previews dropping an index a build left unusable, or one tried before (never the one tried now). */
   dropLeftover: (table: string, name: string) => void
 }
 
@@ -117,7 +117,16 @@ export function useIndexTrial(db: string, schema: string | undefined, sql: strin
     error: error ?? analyze.stopError,
     start: (c, said) => {
       pending.current = { candidate: c, online, forecast: said ?? null }
-      flow.preview({ op: 'addIndex', table: c.table, name: c.name, columns: c.columns, unique: false, online })
+      // Marked on the server: another browser (or person) looking at the table can tell it was tried, not designed.
+      flow.preview({
+        op: 'addIndex',
+        table: c.table,
+        name: c.name,
+        columns: c.columns,
+        unique: false,
+        online,
+        comment: TRIED_INDEX_COMMENT,
+      })
     },
     measure,
     stop: analyze.stop,

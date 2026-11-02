@@ -99,6 +99,8 @@ export const IndexDefSchema = z.object({
   definition: z.string().nullable(),
   /** MySQL prefix lengths by column (`name(10)`), so an edited index keeps them. Empty on PostgreSQL. */
   lengths: z.record(z.string(), z.number().int()).default({}),
+  /** The index's comment, so an edited index keeps it (and an index tried from a plan is told apart); null where none. */
+  comment: z.string().nullable().optional(),
 })
 export type IndexDef = z.infer<typeof IndexDefSchema>
 

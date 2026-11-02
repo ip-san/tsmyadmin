@@ -1,5 +1,6 @@
 import type { DdlOp, Dialect, Namespace } from '@tsmyadmin/shared'
 import { AdapterError } from '../types.ts'
+import { mysqlLiteral, pgLiteral } from './literal.ts'
 import { quoteIdent, quoteTable } from './quote.ts'
 
 type AddForeignKey = Extract<DdlOp, { op: 'addForeignKey' }>
@@ -86,7 +87,19 @@ export function createIndexSql(dialect: Dialect, ns: Namespace, op: IndexSpec): 
   // MySQL writes the method after the columns, PostgreSQL before them.
   return dialect === 'postgres'
     ? `CREATE ${keyword}INDEX ${op.online ? 'CONCURRENTLY ' : ''}${name} ON ${t}${method} (${columns})`
-    : `CREATE ${keyword}INDEX ${name} ON ${t} (${columns})${method}${op.online ? ONLINE_MYSQL : ''}`
+    : `CREATE ${keyword}INDEX ${name} ON ${t} (${columns})${method}${mysqlIndexComment(op)}${op.online ? ONLINE_MYSQL : ''}`
+}
+
+/** MySQL keeps an index's comment in the index itself. */
+const mysqlIndexComment = (i: IndexSpec) => (i.comment ? ` COMMENT ${mysqlLiteral(i.comment)}` : '')
+
+/** PostgreSQL keeps an index's comment apart: a statement after the index is made (none where there is none). */
+export function pgIndexCommentSql(ns: Namespace, i: { name: string; comment?: string | undefined }): string[] {
+  return i.comment
+    ? [
+        `COMMENT ON INDEX ${quoteIdent('postgres', ns.schema ?? 'public')}.${quoteIdent('postgres', i.name)} IS ${pgLiteral(i.comment)}`,
+      ]
+    : []
 }
 
 /**
@@ -109,7 +122,7 @@ export function mysqlAddIndexClause(i: IndexSpec, primary: boolean): string {
   const { keyword, method, columns } = indexParts('mysql', i)
   return primary
     ? `ADD PRIMARY KEY (${columns})`
-    : `ADD ${keyword}INDEX ${quoteIdent('mysql', i.name)} (${columns})${method}`
+    : `ADD ${keyword}INDEX ${quoteIdent('mysql', i.name)} (${columns})${method}${mysqlIndexComment(i)}`
 }
 
 type SplitTable = Extract<DdlOp, { op: 'splitTable' }>

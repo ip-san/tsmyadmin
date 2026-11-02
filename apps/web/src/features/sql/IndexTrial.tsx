@@ -23,6 +23,7 @@ export function IndexTrial({
   candidates,
   before,
   leftovers = [],
+  triedBefore = [],
 }: {
   trial: Trial
   /** Builds a candidate, with the server's forecast of it asked first where it can say (HypoPG). */
@@ -31,6 +32,8 @@ export function IndexTrial({
   before: ExplainResult
   /** Indexes a build left unusable on the tables the plan reads. */
   leftovers?: readonly { table: string; name: string }[]
+  /** Indexes tried from a plan before (in any browser) still on the tables the plan reads. */
+  triedBefore?: readonly { table: string; name: string }[]
 }) {
   const { tried, after, forecast, measuring, stopping, stopped, error, flow } = trial
   const busy = flow.running || measuring || build.forecasting
@@ -165,6 +168,23 @@ export function IndexTrial({
               <Button
                 size="sm"
                 aria-disabled={busy || undefined}
+                onClick={() => !busy && trial.dropLeftover(l.table, l.name)}
+              >
+                {t.trialUndo(l.name)}
+              </Button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {triedBefore.length > 0 ? (
+        <ul className="space-y-1">
+          {triedBefore.map((l) => (
+            <li key={`${l.table}\0${l.name}`} className="flex flex-wrap items-center gap-2">
+              <span className="text-amber-900 dark:text-amber-200">{t.trialBefore(l.table, l.name)}</span>
+              <Button
+                size="sm"
+                aria-disabled={busy || undefined}
+                // Without stopping writes: how it was made is not known here, and dropping it needs no lock.
                 onClick={() => !busy && trial.dropLeftover(l.table, l.name)}
               >
                 {t.trialUndo(l.name)}

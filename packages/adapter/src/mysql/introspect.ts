@@ -67,13 +67,13 @@ const NO_EXPRESSION_COLUMN = new WeakSet<object>()
 async function queryIndexes(conn: Conn, ns: Namespace, table: string) {
   if (!NO_EXPRESSION_COLUMN.has(conn.id)) {
     try {
-      return await conn.query(`${INDEX_COLUMNS}, EXPRESSION ${INDEX_FROM}`, [ns.database, table])
+      return await conn.query(`${INDEX_COLUMNS}, EXPRESSION, INDEX_COMMENT ${INDEX_FROM}`, [ns.database, table])
     } catch (err) {
       if (!(err instanceof AdapterError) || err.nativeCode !== 'ER_BAD_FIELD_ERROR') throw err
       NO_EXPRESSION_COLUMN.add(conn.id)
     }
   }
-  return conn.query(`${INDEX_COLUMNS}, NULL AS EXPRESSION ${INDEX_FROM}`, [ns.database, table])
+  return conn.query(`${INDEX_COLUMNS}, NULL AS EXPRESSION, INDEX_COMMENT ${INDEX_FROM}`, [ns.database, table])
 }
 
 /**
@@ -275,6 +275,8 @@ export async function mysqlDescribeTable(
       columns: [],
       type: strOrNull(row[4]),
       lengths: {},
+      // An index without one says '' (MySQL keeps no NULL here).
+      comment: strOrNull(row[7]) || null,
     }
     // SUB_PART is the prefix length of a column indexed by its first N characters; EXPRESSION a functional part.
     if (row[3] !== null && row[5] !== null) entry.lengths[str(row[3])] = num(row[5]) ?? 0

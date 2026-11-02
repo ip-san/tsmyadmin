@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
+import { TRIED_INDEX_COMMENT } from '@tsmyadmin/shared'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { locale } from '@/config/locale-screens.ts'
 import { column, index, table } from '@/test/schema-fixtures.ts'
@@ -91,8 +92,50 @@ describe('IndexesCard: building a new index without stopping writes', () => {
     expect(screen.queryByRole('checkbox', { name: t.online })).toBeNull()
   })
 
+  it('keeps the comment of an index changed, so one tried from a plan stays told apart', () => {
+    const tried = index(['level'], { name: 'idx_logs_level', comment: TRIED_INDEX_COMMENT })
+    const onPreview = open({ mode: 'edit', index: tried })
+    fireEvent.click(screen.getByRole('button', { name: locale.ddl.submit }))
+    expect(onPreview).toHaveBeenCalledWith(
+      expect.objectContaining({
+        op: 'alterIndex',
+        name: 'idx_logs_level',
+        index: expect.objectContaining({ comment: TRIED_INDEX_COMMENT }),
+      })
+    )
+  })
+
   it('does not offer it on a partitioned parent, which cannot build one so', () => {
     open({ mode: 'add', initial: { columns: ['level'] } }, { ...logs, partitioned: true })
     expect(screen.queryByRole('checkbox', { name: t.online })).toBeNull()
+  })
+})
+
+describe('IndexesCard: comments', () => {
+  it('tells an index tried from a plan apart, and shows any other comment as it is', () => {
+    render(
+      <IndexesCard
+        schema={table('logs', {
+          columns: [column('id', 'int'), column('level', 'int')],
+          indexes: [
+            index(['level'], { name: 'idx_logs_level', comment: TRIED_INDEX_COMMENT }),
+            index(['id'], { name: 'by_id', comment: 'for the nightly report' }),
+            index(['id', 'level'], { name: 'plain' }),
+          ],
+        })}
+        dialect="mysql"
+        editable={false}
+        dialog={null}
+        onDialog={() => undefined}
+        onPreview={() => undefined}
+      />
+    )
+    const rows = within(screen.getByRole('table', { name: locale.table.indexes })).getAllByRole('row')
+    const row = (name: string) => rows.find((r) => r.textContent?.startsWith(name))?.textContent ?? ''
+    expect(row('idx_logs_level')).toContain(locale.table.triedIndex)
+    expect(row('idx_logs_level')).not.toContain(TRIED_INDEX_COMMENT)
+    expect(row('by_id')).toContain('for the nightly report')
+    expect(row('by_id')).not.toContain(locale.table.triedIndex)
+    expect(row('plain')).not.toContain(locale.table.triedIndex)
   })
 })

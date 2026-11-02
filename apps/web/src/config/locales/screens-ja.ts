@@ -371,6 +371,8 @@ export const jaScreens = {
     trialOnline: '書き込みを止めずに作る',
     trialOnlineNote:
       '作るあいだも、テーブルへの書き込みを止めません（そのぶん時間がかかります）。本番に近いサーバーで試すときは、付けたままにしてください',
+    trialBefore: (table: string, name: string) =>
+      `${table} の ${name} は、前に実行計画で試したインデックスです（ほかのブラウザで作ったものも含みます）。使わないなら消してください`,
     trialLeftover: (table: string, name: string) =>
       `${table} の ${name} は、作る途中で止まり、使えないまま残っています。読み出しには使われず、書き込みのたびに手間だけかかります`,
     trialUndoHint: '試したインデックスを消します。計画は試す前に戻ります',
@@ -800,6 +802,9 @@ export const jaScreens = {
     onDelete: 'ON DELETE',
     noIndexes: 'インデックスはありません',
     unusableIndexes: '使えないインデックス',
+    triedIndex: '実行計画で試した',
+    triedIndexNote:
+      '実行計画の「インデックスを試す」で作ったインデックスです（インデックスのコメントで見分けています）。使わないなら消してください。インデックスは書き込みのたびに更新されます',
     unusableIndexesNote:
       'インデックスを作る途中で失敗して、残ったものです。読み出しには使われず、書き込みのたびに手間だけかかります。消してから作り直してください',
     noForeignKeys: '外部キーはありません',

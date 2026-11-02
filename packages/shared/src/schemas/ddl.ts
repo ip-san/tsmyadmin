@@ -64,7 +64,15 @@ const IndexShape = {
   method: IndexMethodSchema.optional(),
   /** MySQL: index only the first N characters / bytes of a column. */
   lengths: z.record(z.string(), z.number().int().min(1).max(3072)).optional(),
+  /** Stored on the index (MySQL `COMMENT`, PostgreSQL `COMMENT ON INDEX`); at most MySQL's 1024 characters. */
+  comment: z.string().min(1).max(1024).optional(),
 }
+
+/**
+ * The comment an index made by "Try an index" carries: whoever looks at the table (another browser, another person)
+ * can tell it was tried from a plan, not designed. Nothing else is in it: every user of the database can read it.
+ */
+export const TRIED_INDEX_COMMENT = 'tsmyadmin: tried from a query plan; drop it if unused'
 
 /**
  * A type as the server spells it (`INT`, `varchar(20)`, `numeric(10,2)`), rendered as written like a column's

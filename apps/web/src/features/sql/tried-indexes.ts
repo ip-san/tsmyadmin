@@ -1,3 +1,4 @@
+import { type IndexDef, TRIED_INDEX_COMMENT } from '@tsmyadmin/shared'
 import { useMemo, useSyncExternalStore } from 'react'
 import { z } from 'zod'
 import { readPreference, writePreference } from '@/lib/preferences.ts'
@@ -63,5 +64,20 @@ export function useTriedIndexes(scope: string, db: string, schema: string | unde
   return useMemo(
     () => (JSON.parse(raw) as TriedIndex[]).filter((x) => x.db === db && x.schema === (schema ?? null)),
     [raw, db, schema]
+  )
+}
+
+/**
+ * The indexes on these tables marked on the server as tried from a plan (in any browser), but the one tried now:
+ * left behind, to be dropped. Read from the tables' structure, so another browser's are there too.
+ */
+export function triedOnTables(
+  tables: readonly { table: string; indexes: readonly IndexDef[] | undefined }[],
+  now: { table: string; name: string } | null
+): { table: string; name: string }[] {
+  return tables.flatMap(({ table, indexes }) =>
+    (indexes ?? [])
+      .filter((i) => i.comment === TRIED_INDEX_COMMENT && !(now?.table === table && now.name === i.name))
+      .map((i) => ({ table, name: i.name }))
   )
 }
