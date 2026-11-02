@@ -43,8 +43,10 @@ const flow: DdlFlow = {
   stopped: false,
   stopUnclear: false,
   stopError: null,
+  remaining: null,
   preview: () => undefined,
   confirm: () => undefined,
+  confirmRemaining: () => undefined,
   cancel: () => undefined,
 }
 const tried = { table: 'logs', columns: ['level'], name: 'idx_logs_level', reason: 'filter' as const }
