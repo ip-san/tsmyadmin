@@ -53,5 +53,8 @@ describe('remainingAfterStop', () => {
     expect(remainingAfterStop(sql, [ok(sql[0] ?? '', undefined)])).toBeNull()
     expect(remainingAfterStop(sql, [ok(sql[1] ?? '', 0)])).toBeNull()
     expect(remainingAfterStop(sql, [ok('SELECT 1', 7)])).toBeNull()
+    // Stopped on its COMMIT: the transaction may have committed first.
+    const tx = ['BEGIN', 'CREATE INDEX i ON t (a)', 'COMMIT']
+    expect(remainingAfterStop(tx, [ok('BEGIN', 0), ok(tx[1] ?? '', 1), stopped('COMMIT', 2)])).toBeNull()
   })
 })

@@ -162,6 +162,14 @@ describe('PreviewDialog, stopping a run', () => {
     expect(screen.queryByText('aborted')).toBeNull()
   })
 
+  it('is done where every statement ended, though the server said it stopped the run', async () => {
+    await running()
+    fireEvent.click(await stopButton())
+    await act(async () => finish({ results: [ok(0), ok(1)] }))
+    await vi.waitFor(() => expect(onSuccess).toHaveBeenCalledWith('build'))
+    expect(screen.queryByText(d.stopped)).toBeNull()
+  })
+
   it('is done where the run had ended before the stop reached it', async () => {
     stopAnswer = async () => false
     await running()
@@ -297,6 +305,8 @@ describe('PreviewDialog, stopping a run', () => {
     const rest = screen.getByRole('button', { name: d.runRest })
     // Two presses in one frame: the button is still there for the second.
     act(() => {
+      // Pressed, as a browser does it: focused first.
+      rest.focus()
       rest.click()
       rest.click()
     })
@@ -305,6 +315,8 @@ describe('PreviewDialog, stopping a run', () => {
     // Its own run, stoppable on its own.
     expect(execute.mock.calls[1]?.[2]).not.toBe(execute.mock.calls[0]?.[2])
     expect(screen.queryByRole('alert')).toBeNull()
+    // The button went with the notice: the focus is on the stop of this run.
+    expect(document.activeElement).toBe(await stopButton())
     const second = (n: number): StatementResult => ({ ...ok(n), statement: n - 1 })
     await act(async () => finish({ results: [second(1), second(2)] }))
     await vi.waitFor(() => expect(onSuccess).toHaveBeenCalledWith('build'))

@@ -6,8 +6,10 @@ const END = /^\s*(?:COMMIT|END)\s*$/i
 /**
  * The statements of a stopped script still to run, from the results it gave back: from the statement the stop cut
  * short (it did not take effect), or after the last one that ended. A transaction the script began and did not commit
- * was rolled back when it stopped, so the rest starts again at its BEGIN. Null where the results cannot be matched to
- * the statements (a result without its position, or of another statement): what ran is not known.
+ * was rolled back when it stopped, so the rest starts again at its BEGIN (the transactions DDL scripts write are
+ * PostgreSQL's, where DDL is transactional; MySQL's DDL commits on its own). Null where the results cannot be matched to
+ * the statements (a result without its position, or of another statement), or the stop cut a COMMIT short: what ran
+ * is not known.
  */
 export function remainingAfterStop(sql: readonly string[], results: readonly StatementResult[]): string[] | null {
   let resume = 0
@@ -15,6 +17,8 @@ export function remainingAfterStop(sql: readonly string[], results: readonly Sta
     const at = r.statement
     if (at === undefined || sql[at]?.trim() !== r.sql.trim()) return null
     if (r.kind === 'error') {
+      // Cut short on its COMMIT, a transaction may have committed before the stop reached it: not known.
+      if (END.test(sql[at] ?? '')) return null
       resume = at
       break
     }

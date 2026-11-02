@@ -1293,6 +1293,7 @@ export const enScreens = {
       'Pressing Run now runs the whole script again from the start, the statements that ran before the stop too (they fail, or make the same change again)',
     restIntro: (n: number) =>
       `By the server's results, ${n === 1 ? 'this statement has' : `these ${n} statements have`} not run yet (the one stopped, and any transaction rolled back with it). Check the structure, then run only ${n === 1 ? 'it' : 'these'}`,
+    restSql: 'Statements not run yet',
     runRest: 'Run the rest',
     rerunUnclear:
       'Pressing Run now runs the whole script again from the start. If it had run to the end, it fails or makes the same change again. Check the structure first',

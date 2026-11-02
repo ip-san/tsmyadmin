@@ -42,6 +42,13 @@ export function PreviewDialog<Op>({
   useEffect(() => {
     if (flow.failed || flow.error || flow.stopped || flow.stopUnclear) failureRef.current?.focus()
   }, [flow.failed, flow.error, flow.stopped, flow.stopUnclear])
+  // A run started from a button that then goes (the rest after a stop) or is disabled leaves focus on <body>: it goes
+  // to the stop button, there for as long as the run.
+  const stopRef = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    if (flow.running && (document.activeElement === null || document.activeElement === document.body))
+      stopRef.current?.focus()
+  }, [flow.running])
   const required = op === null || !readSetting('confirmDrop') ? null : (confirmName?.(op) ?? null)
   const warning = op === null ? '' : `${locale.ddl.irreversible}${lossWarning?.(op) ? ` ${lossWarning(op) ?? ''}` : ''}`
   const [typed, setTyped] = useState('')
@@ -77,7 +84,7 @@ export function PreviewDialog<Op>({
         footer={
           <>
             {flow.running && flow.stop ? (
-              <Button onClick={flow.stop} aria-disabled={flow.stopping || undefined}>
+              <Button ref={stopRef} onClick={flow.stop} aria-disabled={flow.stopping || undefined}>
                 {locale.ddl.stop}
               </Button>
             ) : null}
@@ -173,7 +180,7 @@ function StopNotice<Op>({ flow }: { flow: PreviewFlow<Op> }) {
           <p className="mt-1">{locale.ddl.rerunAll}</p>
           <p className="mt-1">{locale.ddl.restIntro(rest.length)}</p>
           <pre
-            aria-label={locale.ddl.runRest}
+            aria-label={locale.ddl.restSql}
             tabIndex={0}
             className="mt-1 overflow-x-auto rounded border border-amber-300 bg-surface-sub p-2 font-mono text-xs text-ink dark:border-amber-700"
           >
