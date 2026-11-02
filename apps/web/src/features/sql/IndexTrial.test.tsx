@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import type { ExplainResult, PlanNode } from '@tsmyadmin/shared'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { locale } from '@/config/locale-screens.ts'
@@ -68,7 +68,14 @@ function shown(after: ExplainResult, forecast: Forecast | null) {
     setOnline: () => undefined,
     dropLeftover: () => undefined,
   }
-  render(<IndexTrial trial={trial} candidates={[]} before={run(null, 400)} />)
+  render(
+    <IndexTrial
+      trial={trial}
+      build={{ forecasting: false, start: async () => undefined }}
+      candidates={[]}
+      before={run(null, 400)}
+    />
+  )
   return screen.getByRole('region', { name: p.trialGroup })
 }
 
@@ -95,5 +102,41 @@ describe('IndexTrial, beside the forecast', () => {
   it('sets nothing beside an index tried without a forecast', () => {
     const trial = shown(run('idx_logs_level', 4), null)
     expect(trial.textContent).not.toContain(p.forecastUnits)
+  })
+})
+
+describe('IndexTrial, while the forecast is asked before building', () => {
+  it('says so, and building waits (the button stays, its name the same)', () => {
+    const start = vi.fn(async () => undefined)
+    const trial: Trial = {
+      flow,
+      tried: null,
+      forecast: null,
+      after: null,
+      measuring: false,
+      stopping: false,
+      stopped: false,
+      error: null,
+      start: () => undefined,
+      measure: async () => undefined,
+      stop: () => undefined,
+      undo: () => undefined,
+      online: true,
+      setOnline: () => undefined,
+      dropLeftover: () => undefined,
+    }
+    render(
+      <IndexTrial trial={trial} build={{ forecasting: true, start }} candidates={[tried]} before={run(null, 400)} />
+    )
+    const group = screen.getByRole('region', { name: p.trialGroup })
+    expect(
+      within(group)
+        .getAllByRole('status')
+        .map((s) => s.textContent)
+    ).toContain(p.trialForecasting)
+    const button = within(group).getByRole('button', { name: p.trialTry('logs', ['level']) })
+    expect(button.getAttribute('aria-disabled')).toBe('true')
+    button.click()
+    expect(start).not.toHaveBeenCalled()
   })
 })

@@ -13,12 +13,12 @@ import { AssumedIndex } from './AssumedIndex.tsx'
 import { IndexTrial } from './IndexTrial.tsx'
 import { MeasurePlan } from './MeasurePlan.tsx'
 import { PlanTour } from './PlanTour.tsx'
-import { forecastOf } from './plan-forecast.ts'
 import { indexCandidates } from './plan-index.ts'
 import { misestimate } from './plan-measure.ts'
 import { planReads, planSteps } from './plan-steps.ts'
 import { type AssumedCompare, useAssumedCompare } from './use-assumed-compare.ts'
 import { type AssumedPlan, useAssumedPlan } from './use-assumed-plan.ts'
+import { type ForecastStart, useForecastStart } from './use-forecast-start.ts'
 import { type IndexTrial as Trial, useIndexTrial } from './use-index-trial.ts'
 import { useMeasuredPlan } from './use-measured-plan.ts'
 
@@ -50,6 +50,8 @@ export function PlanView({
   const trial = useIndexTrial(db, schema, sql, scope)
   const assumed = useAssumedPlan(db, schema, sql)
   const compared = useAssumedCompare(db, schema, sql)
+  // Built from here or from trying it without building it, the index keeps what the server expected of it.
+  const build = useForecastStart(db, schema, sql, plan.data, assumed, compared, trial.start)
   return (
     <section aria-label={t.title} className="space-y-3 rounded border border-line bg-surface p-3">
       <div className="flex items-center justify-between gap-2">
@@ -87,6 +89,7 @@ export function PlanView({
             estimate={plan.data}
             assumed={assumed}
             compared={compared}
+            build={build}
             relations={relations.data}
             trial={measure.result ? { state: trial, before: measure.result } : null}
           />
@@ -103,6 +106,7 @@ function PlanStory({
   estimate,
   assumed,
   compared,
+  build,
   relations,
   trial,
 }: {
@@ -113,6 +117,7 @@ function PlanStory({
   estimate: ExplainResult
   assumed: AssumedPlan
   compared: AssumedCompare
+  build: ForecastStart
   relations: readonly RelationDef[]
   /** An index to try, offered once the statement was measured (the run before). */
   trial: { state: Trial; before: ExplainResult } | null
@@ -154,23 +159,13 @@ function PlanStory({
         before={estimate}
         candidates={indexCandidates(estimate.plan, shapeOf)}
         // Built for real through the trial, once there is a run to compare with and nothing is tried yet.
-        onBuild={
-          trial && !trial.state.tried
-            ? (c) => {
-                // What was said of it without building it, set beside the run once it is built.
-                const said =
-                  assumed.result && assumed.candidate?.name === c.name
-                    ? forecastOf(estimate, assumed.result, c.name)
-                    : undefined
-                assumed.clear()
-                trial.state.start(c, said)
-              }
-            : undefined
-        }
+        onBuild={trial && !trial.state.tried ? (c) => void build.start(c) : undefined}
+        building={build.forecasting}
       />
       {trial ? (
         <IndexTrial
           trial={trial.state}
+          build={build}
           before={trial.before}
           candidates={indexCandidates(trial.before.plan, shapeOf)}
           leftovers={leftovers}
