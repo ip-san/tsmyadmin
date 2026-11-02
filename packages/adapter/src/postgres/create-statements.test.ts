@@ -88,6 +88,17 @@ describe('the columns of a table', () => {
     expect(pk('my pk')).toContain('\n  CONSTRAINT "my pk" PRIMARY KEY ("a")\n')
     // Taken when the table was made: the server numbered it.
     expect(pk('t_pkey1')).toContain('CONSTRAINT "t_pkey1" PRIMARY KEY')
+    // A long table's default is its name cut: not written out.
+    const long = 'l'.repeat(63)
+    const cut = pgCreateStatements(
+      ns,
+      table([col('a', 'int')], {
+        name: long,
+        primaryKey: ['a'],
+        indexes: [index(`${'l'.repeat(58)}_pkey`, ['a'], { primary: true })],
+      })
+    )[0]
+    expect(cut).toContain('\n  PRIMARY KEY ("a")\n')
   })
 
   it('takes the default name of a primary key as the server does: the table cut to fit 63 bytes', () => {

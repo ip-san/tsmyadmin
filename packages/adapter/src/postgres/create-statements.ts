@@ -221,6 +221,8 @@ const MAX_NAME_BYTES = 63
 /**
  * The name PostgreSQL gives a table's primary key when none is written: `<table>_pkey`, the table's name cut (on a
  * character boundary) so the whole fits in 63 bytes. Taken, it would add a number: such a name is written out.
+ * Bytes as UTF-8: in a database of another encoding the server's cut may differ, and the name is then written out
+ * (restored the same, only longer to read).
  */
 export function defaultPkeyName(table: string): string {
   const room = MAX_NAME_BYTES - Buffer.byteLength('_pkey')

@@ -22,6 +22,28 @@ export function describeDumpAndExport(env: ConformanceEnv): void {
       await expect(env.db.showCreateTable(ns, 'nope_nope')).rejects.toMatchObject({ code: 'NOT_FOUND' })
     })
 
+    it.skipIf(dialect !== 'postgres')(
+      "does not name a primary key the server named, a long or multibyte table's cut name included (PostgreSQL)",
+      async () => {
+        // 63 bytes, and 3-byte characters past the cut: the server names each key after its name cut to fit.
+        const names = [`${scratch}_l`.padEnd(63, 'l'), `${scratch}_${'あ'.repeat(20)}`]
+        try {
+          for (const name of names) {
+            const q = quoteIdent('postgres', name)
+            await execOk(`CREATE TABLE ${q} (id INT PRIMARY KEY)`)
+            const create = await env.db.showCreateTable(ns, name)
+            expect(create[0]).toMatch(/\n {2}PRIMARY KEY \("?id"?\)\n/)
+            await execOk(`DROP TABLE ${q}`)
+            await execOk(create.map((c) => `${c};`).join('\n'))
+            expect((await env.db.describeTable(ns, name)).primaryKey).toEqual(['id'])
+          }
+        } finally {
+          for (const name of names)
+            await exec(`DROP TABLE IF EXISTS ${quoteIdent('postgres', name)}`, { stopOnError: false })
+        }
+      }
+    )
+
     it("keeps an index's comment through a dump and a restore (a materialized view's and a named primary key's too, on PostgreSQL)", async () => {
       const t = `${scratch}_idxc`
       const mv = `${t}_mv`
