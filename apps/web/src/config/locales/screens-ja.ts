@@ -466,6 +466,7 @@ export const jaScreens = {
       measured: '見込みと実際',
       trial: 'インデックスを足す前と後',
       assumed: 'インデックスがあるものとした見込み',
+      compare: '候補をまとめて比べた見込み',
     },
     open: 'プレゼンで見る',
     openHint:
@@ -567,6 +568,20 @@ export const jaScreens = {
       'インデックスは、行を足す・変える・消すたびに更新されます。読むのが速くなる代わりに、書き込みは少し遅くなり、場所も取ります。よく実行する文に役立つなら残します',
     assumedIntro: (name: string) =>
       `インデックス ${name} があるものとして、サーバーが立て直した計画（見込み）です。インデックスは作っておらず、文も実行していません。最後の章で、元の計画と比べます`,
+    compareIntro: (n: number) =>
+      `最後の章で、インデックスの候補 ${n} 個を 1 つずつと全部一緒に、あるものとして見積もらせた結果を並べます（作ってはいません）`,
+    compareOpenTitle: '候補をまとめて比べる（見込み）',
+    compareOpen: (n: number, cost: number | null) =>
+      `インデックスの候補 ${n} 個を、1 つずつと全部一緒に、あるものとしてサーバーに見積もらせました。何も作らず、文も実行していません。${cost === null ? '' : `いまの計画の見込みのコストは ${costSaid(cost)} です。`}印を付けたカラムが、候補のカラムです`,
+    compareOneTitle: (name: string) => `${name} だけがあるとき`,
+    compareOne: (table: string, was: string | null, now: string | null, used: boolean) =>
+      `${table} の読み方の見込み: ${was ?? '—'} → ${now ?? '読まない'}。${used ? 'サーバーはこのインデックスで読む見込みです' : 'サーバーはこのインデックスを使わない見込みです'}`,
+    compareAllTitle: '候補すべてを同時に',
+    compareAll: (used: readonly string[], unused: readonly string[]) =>
+      `候補を全部作ったときの見込みです。${used.length > 0 ? `使う見込み: ${used.join(', ')}。` : 'どの候補も使わない見込みです。'}${unused.length > 0 && used.length > 0 ? `使わない見込み: ${unused.join(', ')}。` : ''}`,
+    compareUnusedHint: (names: readonly string[]) =>
+      `${names.join(', ')} は、全部一緒にあっても使わない見込みです。作っても書き込みを遅くするだけなので、作らないことを考えてください`,
+    compareFailedNote: (names: readonly string[]) => `見積もれなかった候補: ${names.join(', ')}`,
     assumedBeforeTitle: 'いまの計画（見込み）',
     assumedBefore: (table: string, read: string | null, name: string, columns: readonly string[]) =>
       `${read ? `いまの ${table} の読み方の見込み: ${read}。` : ''}${table} に、インデックス ${name}（${columns.join(', ')}）があるものとして、サーバーに計画を立て直させました（作ってはいません）。印を付けたカラムが、インデックスのカラムです`,

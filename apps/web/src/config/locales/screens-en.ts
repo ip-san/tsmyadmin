@@ -470,6 +470,7 @@ export const enScreens = {
       measured: 'Estimated and actual',
       trial: 'Before and after the index',
       assumed: 'With the index assumed (estimate)',
+      compare: 'The candidates compared (estimate)',
     },
     open: 'Present',
     openHint:
@@ -572,6 +573,20 @@ export const enScreens = {
       'An index is updated each time a row is added, changed or deleted: reads get faster, writes a little slower, and it takes space. Keep it if it helps a statement run often',
     assumedIntro: (name: string) =>
       `This is the plan the server would make if the index ${name} were there (an estimate). The index is not built, and the statement was not run. The last chapter sets it beside the plan as it is`,
+    compareIntro: (n: number) =>
+      `The last chapter sets out the server's estimates with each of the ${n} candidate indexes assumed alone, and all together (none is built)`,
+    compareOpenTitle: 'The candidates compared (estimate)',
+    compareOpen: (n: number, cost: number | null) =>
+      `The server was asked to estimate the plan with each of the ${n} candidate indexes assumed alone, and with all of them together. Nothing was built, and the statement was not run. ${cost === null ? '' : `As it is, the plan's estimated cost is ${costSaid(cost)}. `}The marked columns are the candidates' columns`,
+    compareOneTitle: (name: string) => `With ${name} alone`,
+    compareOne: (table: string, was: string | null, now: string | null, used: boolean) =>
+      `${table} would be read ${was ?? '—'} → ${now ?? 'not at all'}. ${used ? 'The server expects to read it through this index' : 'The server would not use this index'}`,
+    compareAllTitle: 'All the candidates together',
+    compareAll: (used: readonly string[], unused: readonly string[]) =>
+      `This is the estimate with all the candidates built. ${used.length > 0 ? `Expected to be used: ${used.join(', ')}.` : 'None of them is expected to be used.'}${unused.length > 0 && used.length > 0 ? ` Not expected to be used: ${unused.join(', ')}.` : ''}`,
+    compareUnusedHint: (names: readonly string[]) =>
+      `${names.join(', ')} would not be used even with all the candidates there: built, ${names.length === 1 ? 'it' : 'they'} would only slow writes down, so consider leaving ${names.length === 1 ? 'it' : 'them'} out`,
+    compareFailedNote: (names: readonly string[]) => `Could not be estimated: ${names.join(', ')}`,
     assumedBeforeTitle: 'The plan as it is (estimate)',
     assumedBefore: (table: string, read: string | null, name: string, columns: readonly string[]) =>
       `${read ? `As it is, ${table} is expected to be read ${read}. ` : ''}The server was asked to plan again as if ${table} had the index ${name} (${columns.join(', ')}), without building it. The marked columns are the index's columns`,
