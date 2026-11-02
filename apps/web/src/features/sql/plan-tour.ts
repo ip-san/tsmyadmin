@@ -168,7 +168,7 @@ export function planTour({ plan, relations, indexColumns, rows, measuredMs, tria
         ? {
             notes: [
               ...(told ? [(told.kind === 'trial' ? t.trialIntro : t.assumedIntro)(told.input.index.name)] : []),
-              ...(compareSaid ? [t.compareIntro(compareSaid.n, compareSaid.alone, compareSaid.together)] : []),
+              ...(compareSaid ? [t.compareIntro(compareSaid.alone, compareSaid.together)] : []),
             ],
           }
         : {}),

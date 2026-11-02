@@ -56,9 +56,9 @@ describe('planTour with the candidates compared', () => {
     expect(chaptersOf(scenes).map((c) => c.title)).toEqual([t.chapters.reads, t.chapters.compare])
     expect(chaptersOf(scenes).at(-1)?.from).toBe(at)
     // Said from the start that the last chapter is of the candidates, none built.
-    expect(scenes[0]?.notes).toEqual([t.compareIntro(2, true, true)])
+    expect(scenes[0]?.notes).toEqual([t.compareIntro(2, 2)])
     const [open, one, other, all] = scenes.slice(at)
-    expect(open?.text).toBe(t.compareOpen(2, true, true, 900))
+    expect(open?.text).toBe(t.compareOpen(2, 2, 900))
     expect(open?.notes).toEqual([p.compareNote])
     expect(open?.frame).toEqual(['orders', 'items'])
     // Every candidate's columns marked, on the diagram too.
@@ -120,16 +120,30 @@ describe('planTour with the candidates compared', () => {
 
   it('says only the candidates the server estimated, and all together only where it did', () => {
     const one = tour([rows[0] as CompareRow, { indexes: [kind], result: null, error: new Error('x') }])
-    expect(one.scenes[0]?.notes).toEqual([t.compareIntro(1, true, false)])
-    expect(one.scenes.find((s) => s.title === t.compareOpenTitle)?.text).toBe(t.compareOpen(1, true, false, 900))
+    expect(one.scenes[0]?.notes).toEqual([t.compareIntro(1, 0)])
+    expect(one.scenes.find((s) => s.title === t.compareOpenTitle)?.text).toBe(t.compareOpen(1, 0, 900))
     // The candidates of every row, though only all together came: drawn and marked all the same.
     const together = tour([rows[2] as CompareRow])
     const open = together.scenes.find((s) => s.title === t.compareOpenTitle)
     expect(open?.frame).toEqual(['orders', 'items'])
     expect(together.diagram.columns.get('orders')).toContain('level')
     // Said as estimated together only: not each alone.
-    expect(together.scenes[0]?.notes).toEqual([t.compareIntro(2, false, true)])
-    expect(open?.text).toBe(t.compareOpen(2, false, true, 900))
+    expect(together.scenes[0]?.notes).toEqual([t.compareIntro(0, 2)])
+    expect(open?.text).toBe(t.compareOpen(0, 2, 900))
+  })
+
+  it('says how many were estimated alone and how many together, where one alone could not be', () => {
+    const mixed = tour([
+      rows[0] as CompareRow,
+      { indexes: [kind], result: null, error: new Error('x') },
+      rows[2] as CompareRow,
+    ])
+    expect(mixed.scenes[0]?.notes).toEqual([t.compareIntro(1, 2)])
+    // The words themselves, as said (Japanese, the default).
+    expect(t.compareIntro(1, 2)).toContain('候補 1 個を 1 つずつと、2 個を全部一緒に')
+    expect(t.compareIntro(2, 2)).toContain('候補 2 個を 1 つずつと全部一緒に')
+    expect(t.compareIntro(0, 2)).toContain('候補 2 個を全部一緒に')
+    expect(t.compareIntro(2, 0)).toContain('候補 2 個を 1 つずつ、')
   })
 
   it("draws a table only a candidate's plan reads", () => {
@@ -148,7 +162,7 @@ describe('planTour with the candidates compared', () => {
     })
     expect(chaptersOf(scenes).map((c) => c.title)).toEqual([t.chapters.reads, t.chapters.compare, t.chapters.assumed])
     expect(scenes.at(-1)?.title).toBe(t.endTitle)
-    expect(scenes[0]?.notes).toEqual([t.assumedIntro('idx_orders_level'), t.compareIntro(2, true, true)])
+    expect(scenes[0]?.notes).toEqual([t.assumedIntro('idx_orders_level'), t.compareIntro(2, 2)])
   })
 
   it('tells no comparison where none was made', () => {

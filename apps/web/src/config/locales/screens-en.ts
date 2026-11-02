@@ -3,11 +3,11 @@ import type { ScreensLocale } from './screens-ja.ts'
 
 /** A planner cost, as the server's own units: whole above 10, one decimal below. */
 const costSaid = (c: number) => c.toLocaleString('en-US', { maximumFractionDigits: c >= 10 ? 0 : 1 })
-/** How the candidates were estimated: each alone, all together, or both. */
-const compareHow = (n: number, alone: boolean, together: boolean) =>
-  !alone
-    ? `all ${n} candidate indexes assumed together`
-    : `${n === 1 ? 'the candidate index' : `each of the ${n} candidate indexes`} assumed alone${together ? ', and all of them together' : ''}`
+/** How many candidates were estimated each alone, and how many all together (0: not). */
+const compareHow = (alone: number, together: number) =>
+  alone === 0
+    ? `all ${together} candidate indexes assumed together`
+    : `${alone === 1 ? 'the candidate index' : `each of the ${alone} candidate indexes`} assumed alone${together === 0 ? '' : alone === together ? ', and all of them together' : `, and ${together} of them assumed together`}`
 
 /** `1 row` / `2 rows` — English needs the singular that Japanese does not have. */
 const plural = (n: number, one: string, many: string) => `${n.toLocaleString('en-US')} ${n === 1 ? one : many}`
@@ -578,11 +578,11 @@ export const enScreens = {
       'An index is updated each time a row is added, changed or deleted: reads get faster, writes a little slower, and it takes space. Keep it if it helps a statement run often',
     assumedIntro: (name: string) =>
       `This is the plan the server would make if the index ${name} were there (an estimate). The index is not built, and the statement was not run. The last chapter sets it beside the plan as it is`,
-    compareIntro: (n: number, alone: boolean, together: boolean) =>
-      `The chapter "The candidates compared (estimate)" sets out the server's estimates with ${compareHow(n, alone, together)} (none is built)`,
+    compareIntro: (alone: number, together: number) =>
+      `The chapter "The candidates compared (estimate)" sets out the server's estimates with ${compareHow(alone, together)} (nothing is built)`,
     compareOpenTitle: 'The candidates compared (estimate)',
-    compareOpen: (n: number, alone: boolean, together: boolean, cost: number | null) =>
-      `The server was asked to estimate the plan with ${compareHow(n, alone, together)}. Nothing was built, and the statement was not run. ${cost === null ? '' : `As it is, the plan's estimated cost is ${costSaid(cost)}. `}The marked columns are the candidates' columns`,
+    compareOpen: (alone: number, together: number, cost: number | null) =>
+      `The server was asked to estimate the plan with ${compareHow(alone, together)}. Nothing was built, and the statement was not run. ${cost === null ? '' : `As it is, the plan's estimated cost is ${costSaid(cost)}. `}The marked columns are the candidates' columns`,
     compareOneTitle: (name: string) => `With ${name} alone`,
     compareOne: (table: string, was: string | null, now: string | null, used: boolean) =>
       `${table} would be read ${was ?? '—'} → ${now ?? 'not at all'}. ${used ? 'The server expects to read it through this index' : 'The server would not use this index'}`,

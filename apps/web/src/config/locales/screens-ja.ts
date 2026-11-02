@@ -3,9 +3,15 @@ import type { Widen } from './ja.ts'
 
 /** A planner cost, as the server's own units: whole above 10, one decimal below. */
 const costSaid = (c: number) => c.toLocaleString('ja-JP', { maximumFractionDigits: c >= 10 ? 0 : 1 })
-/** How the candidates were estimated: each alone, all together, or both. */
-const compareHow = (alone: boolean, together: boolean) =>
-  alone && together ? '1 つずつと全部一緒に' : together ? '全部一緒に' : '1 つずつ'
+/** How many candidates were estimated each alone, and how many all together (0: not). */
+const compareHow = (alone: number, together: number) =>
+  alone > 0 && together > 0
+    ? alone === together
+      ? `${alone} 個を 1 つずつと全部一緒に`
+      : `${alone} 個を 1 つずつと、${together} 個を全部一緒に`
+    : together > 0
+      ? `${together} 個を全部一緒に`
+      : `${alone} 個を 1 つずつ`
 
 /**
  * The Japanese strings of the screens behind the login, the part of `ja` that first paint does not need. Loaded with
@@ -571,11 +577,11 @@ export const jaScreens = {
       'インデックスは、行を足す・変える・消すたびに更新されます。読むのが速くなる代わりに、書き込みは少し遅くなり、場所も取ります。よく実行する文に役立つなら残します',
     assumedIntro: (name: string) =>
       `インデックス ${name} があるものとして、サーバーが立て直した計画（見込み）です。インデックスは作っておらず、文も実行していません。最後の章で、元の計画と比べます`,
-    compareIntro: (n: number, alone: boolean, together: boolean) =>
-      `「候補をまとめて比べた見込み」の章で、インデックスの候補 ${n} 個を${compareHow(alone, together)}、あるものとして見積もらせた結果を並べます（作ってはいません）`,
+    compareIntro: (alone: number, together: number) =>
+      `「候補をまとめて比べた見込み」の章で、インデックスの候補 ${compareHow(alone, together)}、あるものとして見積もらせた結果を並べます（作ってはいません）`,
     compareOpenTitle: '候補をまとめて比べる（見込み）',
-    compareOpen: (n: number, alone: boolean, together: boolean, cost: number | null) =>
-      `インデックスの候補 ${n} 個を、${compareHow(alone, together)}、あるものとしてサーバーに見積もらせました。何も作らず、文も実行していません。${cost === null ? '' : `いまの計画の見込みのコストは ${costSaid(cost)} です。`}印を付けたカラムが、候補のカラムです`,
+    compareOpen: (alone: number, together: number, cost: number | null) =>
+      `インデックスの候補 ${compareHow(alone, together)}、あるものとしてサーバーに見積もらせました。何も作らず、文も実行していません。${cost === null ? '' : `いまの計画の見込みのコストは ${costSaid(cost)} です。`}印を付けたカラムが、候補のカラムです`,
     compareOneTitle: (name: string) => `${name} だけがあるとき`,
     compareOne: (table: string, was: string | null, now: string | null, used: boolean) =>
       `${table} の読み方の見込み: ${was ?? '—'} → ${now ?? '読まない'}。${used ? 'サーバーはこのインデックスで読む見込みです' : 'サーバーはこのインデックスを使わない見込みです'}`,

@@ -21,13 +21,12 @@ export function compareCandidates({ rows }: CompareInput): IndexCandidate[] {
   return [...seen.values()]
 }
 
-/** What the chapter tells: the candidates in some estimate, and whether each alone and all together were estimated. */
-export function compareTold({ rows }: CompareInput): { n: number; alone: boolean; together: boolean } {
+/** What the chapter tells: how many candidates were estimated each alone, and how many all together (0: not). */
+export function compareTold({ rows }: CompareInput): { alone: number; together: number } {
   const estimated = rows.filter((r) => r.result)
   return {
-    n: new Set(estimated.flatMap((r) => r.indexes.map((c) => c.name))).size,
-    alone: estimated.some((r) => r.indexes.length === 1),
-    together: estimated.some((r) => r.indexes.length > 1),
+    alone: estimated.filter((r) => r.indexes.length === 1).length,
+    together: estimated.find((r) => r.indexes.length > 1)?.indexes.length ?? 0,
   }
 }
 
@@ -57,7 +56,7 @@ export function compareScenes(
   const scenes: TourScene[] = [
     {
       title: t.compareOpenTitle,
-      text: t.compareOpen(told.n, told.alone, told.together, before.plan.cost),
+      text: t.compareOpen(told.alone, told.together, before.plan.cost),
       frame: tables,
       overlay: overlay({ tables: litOf(before.plan, indexColumns), columns: marked }),
       pulse: tables,
