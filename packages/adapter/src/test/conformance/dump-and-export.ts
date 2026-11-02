@@ -22,6 +22,42 @@ export function describeDumpAndExport(env: ConformanceEnv): void {
       await expect(env.db.showCreateTable(ns, 'nope_nope')).rejects.toMatchObject({ code: 'NOT_FOUND' })
     })
 
+    it("keeps an index's comment through a dump and a restore (a materialized view's too, on PostgreSQL)", async () => {
+      const t = `${scratch}_idxc`
+      const mv = `${t}_mv`
+      const comment = (name: string, on: string) => `COMMENT ON INDEX ${name} IS 'it''s ${on}'`
+      await execOk(
+        dialect === 'postgres'
+          ? `CREATE TABLE ${t} (id INT PRIMARY KEY, a INT, CONSTRAINT ${t}_ukey UNIQUE (a));
+             CREATE INDEX ${t}_a ON ${t} (a);
+             ${comment(`${t}_a`, t)}; ${comment(`${t}_ukey`, t)};
+             CREATE MATERIALIZED VIEW ${mv} AS SELECT id FROM ${t};
+             CREATE UNIQUE INDEX ${mv}_id ON ${mv} (id); ${comment(`${mv}_id`, mv)}`
+          : `CREATE TABLE ${t} (id INT PRIMARY KEY, a INT, UNIQUE KEY ${t}_ukey (a) COMMENT 'it''s ${t}',
+               KEY ${t}_a (a) COMMENT 'it''s ${t}')`
+      )
+      const commentOf = async (table: string, index: string) =>
+        (await env.db.describeTable(ns, table)).indexes.find((i) => i.name === index)?.comment
+      try {
+        const create = await env.db.showCreateTable(ns, t)
+        const views = dialect === 'postgres' ? await env.db.showCreateTable(ns, mv) : []
+        if (dialect === 'postgres') await execOk(`DROP MATERIALIZED VIEW ${mv}`)
+        await execOk(`DROP TABLE ${t}`)
+        await execOk([...create, ...views].map((c) => `${c};`).join('\n'))
+        expect(await commentOf(t, `${t}_a`)).toBe(`it's ${t}`)
+        // A constraint's own index is created by the constraint, and commented after it.
+        expect(await commentOf(t, `${t}_ukey`)).toBe(`it's ${t}`)
+        if (dialect === 'postgres') expect(await commentOf(mv, `${mv}_id`)).toBe(`it's ${mv}`)
+      } finally {
+        await exec(
+          dialect === 'postgres'
+            ? `DROP MATERIALIZED VIEW IF EXISTS ${mv}; DROP TABLE IF EXISTS ${t}`
+            : `DROP TABLE IF EXISTS ${t}`,
+          { stopOnError: false }
+        )
+      }
+    })
+
     it.skipIf(dialect !== 'postgres')(
       'keeps CHECK / UNIQUE constraints, deferrable keys, collations, identity options and matview indexes (PostgreSQL)',
       async () => {
@@ -73,6 +109,8 @@ export function describeDumpAndExport(env: ConformanceEnv): void {
            CREATE INDEX ${part}_d_idx ON ${part} (d);
            CREATE INDEX "${part} spaced" ON ${part} (d);
            CREATE INDEX ${part}_2024_id_idx ON ${part}_2024 (id);
+           COMMENT ON INDEX ${part}_2024_id_idx IS 'its own';
+           COMMENT ON INDEX ${part}_d_idx IS 'the parent''s';
            ALTER TABLE ${part}_2024 ADD CONSTRAINT ${part}_2024_chk CHECK (id > 0);
            ALTER TABLE ${part}_2024 ADD PRIMARY KEY (id, d)`
         )
@@ -111,6 +149,12 @@ export function describeDumpAndExport(env: ConformanceEnv): void {
           )
           expect(partitioned.join('\n')).not.toContain('ON ONLY')
           expect(partitioned).toContainEqual(`CREATE INDEX ${part}_2024_id_idx ON public.${part}_2024 USING btree (id)`)
+          // A partition's own index keeps its comment; the parent's is commented once, by its own name.
+          expect(partitioned).toContainEqual(`COMMENT ON INDEX "public"."${part}_2024_id_idx" IS 'its own'`)
+          expect(partitioned.filter((s) => s.startsWith('COMMENT ON INDEX'))).toEqual([
+            `COMMENT ON INDEX "public"."${part}_2024_id_idx" IS 'its own'`,
+            `COMMENT ON INDEX "public"."${part}_d_idx" IS 'the parent''s'`,
+          ])
           expect(partitioned).toContainEqual(
             `ALTER TABLE "public"."${part}_2024" ADD CONSTRAINT "${part}_2024_chk" CHECK ((id > 0))`
           )
