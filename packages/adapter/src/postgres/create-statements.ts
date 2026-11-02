@@ -1,5 +1,6 @@
 import type { Namespace, TableSchema } from '@tsmyadmin/shared'
 import { type Conn, firstResult } from '../driver.ts'
+import { pgIndexCommentSql } from '../sql/ddl-common.ts'
 import { pgLiteral } from '../sql/literal.ts'
 import { OPTIONS_SEQUENCE_OF_COLUMN } from '../sql/pg-sequence.ts'
 import { quoteIdent, quoteTable } from '../sql/quote.ts'
@@ -41,6 +42,8 @@ export interface PgTableCatalog {
     bound: string
     partitionKey: string | null
     indexes: string[]
+    /** Comments on the partition's own indexes (not the ones the parent's cascade makes). */
+    indexComments: { name: string; comment: string }[]
     constraints: { name: string; definition: string }[]
     unlogged: boolean
     storage: string | null
@@ -141,7 +144,12 @@ export async function pgTableCatalog(conn: Conn, regclass: string): Promise<PgTa
                      AND NOT EXISTS (SELECT 1 FROM pg_inherits ih WHERE ih.inhrelid = i.indexrelid)
                      AND NOT EXISTS (SELECT 1 FROM pg_constraint k WHERE k.conindid = i.indexrelid AND k.conrelid = c.oid)),
                 (SELECT string_agg(k.conname || $3 || pg_get_constraintdef(k.oid, false), $2 ORDER BY k.conname)
-                   FROM pg_constraint k WHERE k.conrelid = c.oid AND k.conislocal AND k.contype IN ('p', 'c', 'u', 'x', 'f'))
+                   FROM pg_constraint k WHERE k.conrelid = c.oid AND k.conislocal AND k.contype IN ('p', 'c', 'u', 'x', 'f')),
+                -- JSON, not the separators: a comment is free text.
+                (SELECT json_agg(json_build_array(ic.relname, obj_description(i.indexrelid, 'pg_class')) ORDER BY ic.relname)::text
+                   FROM pg_index i JOIN pg_class ic ON ic.oid = i.indexrelid
+                   WHERE i.indrelid = c.oid AND i.indisvalid AND obj_description(i.indexrelid, 'pg_class') <> ''
+                     AND NOT EXISTS (SELECT 1 FROM pg_inherits ih WHERE ih.inhrelid = i.indexrelid))
          FROM tree JOIN pg_class c ON c.oid = tree.inhrelid JOIN pg_class p ON p.oid = tree.inhparent
          JOIN pg_namespace cn ON cn.oid = c.relnamespace JOIN pg_namespace pn ON pn.oid = p.relnamespace
          WHERE c.relispartition ORDER BY tree.depth, c.relname`,
@@ -163,6 +171,7 @@ export async function pgTableCatalog(conn: Conn, regclass: string): Promise<PgTa
         storage: text(row[7]),
         comment: text(row[8]),
         indexes: split(row[9]),
+        indexComments: typeof row[11] === 'string' ? indexComments(row[11]) : [],
         constraints: split(row[10]).map((c) => {
           const at = c.indexOf(FIELD_SEP)
           return { name: c.slice(0, at), definition: c.slice(at + 1) }
@@ -194,6 +203,16 @@ export async function pgTableCatalog(conn: Conn, regclass: string): Promise<PgTa
     if (parts.length > 0) out.identityOptions.set(String(row[0] ?? ''), parts.join(' '))
   }
   return out
+}
+
+/** `[[name, comment], …]` as the catalog's JSON prints it; anything else is no comment. */
+function indexComments(json: string): { name: string; comment: string }[] {
+  const parsed: unknown = JSON.parse(json)
+  return Array.isArray(parsed)
+    ? parsed.flatMap((x) =>
+        Array.isArray(x) && typeof x[0] === 'string' && typeof x[1] === 'string' ? [{ name: x[0], comment: x[1] }] : []
+      )
+    : []
 }
 
 /**
@@ -251,6 +270,7 @@ export function pgCreateStatements(ns: Namespace, schema: TableSchema, catalog?:
     for (const i of p.indexes) out.push(withoutOnly(i))
     for (const c of p.constraints) out.push(`ALTER TABLE ${part} ADD CONSTRAINT ${id(c.name)} ${c.definition}`)
     if (p.comment !== null) out.push(`COMMENT ON TABLE ${part} IS ${pgLiteral(p.comment)}`)
+    for (const i of p.indexComments) out.push(...pgIndexCommentSql({ database: ns.database, schema: p.schema }, i))
   }
   const names = new Set(schema.columns.map((c) => c.name))
   // An index owned by a UNIQUE / EXCLUDE constraint is created by the constraint, not on its own.
@@ -287,5 +307,9 @@ export function pgCreateStatements(ns: Namespace, schema: TableSchema, catalog?:
   if (schema.comment !== null) out.push(`COMMENT ON TABLE ${t} IS ${pgLiteral(schema.comment)}`)
   for (const c of schema.columns)
     if (c.comment !== null) out.push(`COMMENT ON COLUMN ${t}.${id(c.name)} IS ${pgLiteral(c.comment)}`)
+  // An index's comment (a tried index's mark among them), after the constraints that create some of them. Not the
+  // primary key's: CREATE TABLE names it on its own, so the name dumped may not be the one restored.
+  for (const i of schema.indexes)
+    if (!i.primary) out.push(...pgIndexCommentSql(ns, { name: i.name, comment: i.comment ?? undefined }))
   return out
 }

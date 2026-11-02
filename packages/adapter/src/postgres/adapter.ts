@@ -40,6 +40,7 @@ import { from as copyFrom } from 'pg-copy-streams'
 import { BaseAdapter } from '../base.ts'
 import { type Canceller, type Conn, firstResult, poolBusyError, type RawResult } from '../driver.ts'
 import { driverValueToCell, type QueryOptions, UNCAPPED } from '../sql/cells.ts'
+import { pgIndexCommentSql } from '../sql/ddl-common.ts'
 import { explainableStatement, explainResult, measurableStatement, parseJsonCell } from '../sql/explain-statement.ts'
 import { hypopgSchema, pgHypotheticalPlan } from '../sql/hypopg.ts'
 import { pgLiteral } from '../sql/literal.ts'
@@ -614,7 +615,7 @@ export class PostgresAdapter extends BaseAdapter {
   /**
    * PostgreSQL has no SHOW CREATE TABLE; the DDL is reconstructed from the catalog (columns, defaults,
    * collations, identity options, PK, indexes, constraints as the server prints them, UNLOGGED, storage
-   * parameters, INHERITS, PARTITION BY with the partitions, comments). Not covered: ownership/grants, policies,
+   * parameters, INHERITS, PARTITION BY with the partitions, comments on the table, its columns and its indexes). Not covered: ownership/grants, policies,
    * tablespaces, user-defined types (a domain or composite type is not dumped, so a routine built on one cannot be
    * restored into an empty database).
    */
@@ -651,18 +652,22 @@ export class PostgresAdapter extends BaseAdapter {
             `COMMENT ON ${schema.kind === 'materialized_view' ? 'MATERIALIZED VIEW' : 'VIEW'} ${t} IS ${pgLiteral(comment)}`
           )
         }
-        // A materialized view's indexes (REFRESH … CONCURRENTLY needs its unique index back).
+        // A materialized view's indexes (REFRESH … CONCURRENTLY needs its unique index back), with their comments.
         if (schema.kind === 'materialized_view') {
           const idx = firstResult(
             await conn.query(
               // Not one a failed concurrent build left unusable (as the tables' indexes in the dump).
-              `SELECT x.indexdef FROM pg_indexes x
+              `SELECT x.indexdef, x.indexname, obj_description(i.indexrelid, 'pg_class') FROM pg_indexes x
                JOIN pg_index i ON i.indexrelid = format('%I.%I', x.schemaname, x.indexname)::regclass
                WHERE x.schemaname = $1 AND x.tablename = $2 AND i.indisvalid ORDER BY x.indexname`,
               [ns.schema ?? 'public', table]
             )
           )
-          for (const r of idx.rows) out.push(String(r[0] ?? ''))
+          for (const r of idx.rows) {
+            out.push(String(r[0] ?? ''))
+            const comment = typeof r[2] === 'string' ? r[2] : undefined
+            out.push(...pgIndexCommentSql(ns, { name: String(r[1] ?? ''), comment }))
+          }
         }
         return out
       }

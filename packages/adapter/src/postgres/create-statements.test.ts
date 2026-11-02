@@ -175,6 +175,7 @@ describe('partitions', () => {
             bound: 'FOR VALUES FROM (1) TO (10)',
             partitionKey: 'LIST (a)',
             indexes: ['CREATE INDEX "p1_i" ON ONLY s1.p1 USING btree (a)'],
+            indexComments: [{ name: 'p1_i', comment: 'tried' }],
             constraints: [{ name: 'c1', definition: 'CHECK (a > 0)' }],
             unlogged: true,
             storage: 'fillfactor=50',
@@ -188,6 +189,7 @@ describe('partitions', () => {
             bound: 'DEFAULT',
             partitionKey: null,
             indexes: [],
+            indexComments: [],
             constraints: [],
             unlogged: false,
             storage: null,
@@ -201,7 +203,22 @@ describe('partitions', () => {
       'CREATE INDEX "p1_i" ON s1.p1 USING btree (a)',
       'ALTER TABLE "s1"."p1" ADD CONSTRAINT "c1" CHECK (a > 0)',
       `COMMENT ON TABLE "s1"."p1" IS 'it''s'`,
+      // In the partition's own schema, after its index and its constraints.
+      `COMMENT ON INDEX "s1"."p1_i" IS 'tried'`,
       'CREATE TABLE "s1"."p2" PARTITION OF "s1"."p1" DEFAULT',
+    ])
+  })
+
+  it("comments the parent's index by its own name, once it reaches the partitions", () => {
+    const indexes = [
+      index('t_i', ['a'], { definition: 'CREATE INDEX t_i ON ONLY app.t USING btree (a)', comment: 'tried' }),
+    ]
+    expect(
+      pgCreateStatements(ns, table([col('a', 'int')], { indexes }), catalog({ partitionKey: 'RANGE (a)' }))
+    ).toEqual([
+      expect.stringMatching(/^CREATE TABLE/),
+      'CREATE INDEX t_i ON app.t USING btree (a)',
+      `COMMENT ON INDEX "app"."t_i" IS 'tried'`,
     ])
   })
 })
@@ -297,6 +314,26 @@ describe('indexes, constraints and comments', () => {
     )
     expect(pgCreateStatements({ database: 'db' }, table([col('a', 'int')]))[0]).toContain('TABLE "public"."t"')
   })
+
+  it("comments each index that has a comment after the constraints, but the primary key's", () => {
+    const indexes = [
+      index('t_pkey', ['a'], { primary: true, comment: 'pk' }),
+      index('owned', ['a'], { unique: true, comment: "it's owned" }),
+      index('plain', ['b'], { comment: 'tried' }),
+      index('bare', ['b'], { comment: null }),
+    ]
+    const out = pgCreateStatements(
+      ns,
+      t({ indexes }),
+      catalog({ constraints: [{ name: 'owned', definition: 'UNIQUE (a)', index: 'owned' }] })
+    )
+    expect(out.slice(3)).toEqual([
+      'ALTER TABLE "app"."t" ADD CONSTRAINT "owned" UNIQUE (a)',
+      `COMMENT ON COLUMN "app"."t"."b" IS 'it''s'`,
+      `COMMENT ON INDEX "app"."owned" IS 'it''s owned'`,
+      `COMMENT ON INDEX "app"."plain" IS 'tried'`,
+    ])
+  })
 })
 
 describe('pgTableCatalog: reading what the catalog adds', () => {
@@ -383,8 +420,9 @@ describe('pgTableCatalog: reading what the catalog adds', () => {
           'a comment',
           `CREATE INDEX i1 ON p1 (a)${SEP}CREATE INDEX i2 ON p1 (b)`,
           `c1${FIELD}CHECK (a > 0)${SEP}c2${FIELD}UNIQUE (b)`,
+          JSON.stringify([['i1', `it's ${SEP} free`], ['odd'], 'x']),
         ],
-        ['p2', 'p1', 'DEFAULT', '', 's1', 's1', 'p', null, '', '', ''],
+        ['p2', 'p1', 'DEFAULT', '', 's1', 's1', 'p', null, '', '', '', null],
       ],
     })
     const cat = await pgTableCatalog(conn, 't')
@@ -400,6 +438,8 @@ describe('pgTableCatalog: reading what the catalog adds', () => {
         storage: 'fillfactor=50',
         comment: 'a comment',
         indexes: ['CREATE INDEX i1 ON p1 (a)', 'CREATE INDEX i2 ON p1 (b)'],
+        // Free text read whole, separators and all; anything not a name and a comment is left out.
+        indexComments: [{ name: 'i1', comment: `it's ${SEP} free` }],
         constraints: [
           { name: 'c1', definition: 'CHECK (a > 0)' },
           { name: 'c2', definition: 'UNIQUE (b)' },
@@ -416,6 +456,7 @@ describe('pgTableCatalog: reading what the catalog adds', () => {
         storage: null,
         comment: null,
         indexes: [],
+        indexComments: [],
         constraints: [],
       },
     ])
