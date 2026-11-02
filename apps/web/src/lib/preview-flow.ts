@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import type { StatementResult } from '@tsmyadmin/shared'
+import { remainingAfterStop, type StatementResult } from '@tsmyadmin/shared'
 import { useRef, useState } from 'react'
 import { isDatabaseData } from './queries.ts'
 
@@ -28,8 +28,15 @@ export interface PreviewFlow<Op> {
   stopUnclear: boolean
   /** Why the last stop did not reach the server (the run went on, and can be stopped again). */
   stopError: unknown
+  /**
+   * After a stop, the statements still to run, as the server's results tell (from the one cut short, or the BEGIN of a
+   * transaction it rolled back); null where what ran is not known.
+   */
+  remaining: string[] | null
   preview: (op: Op) => void
   confirm: () => void
+  /** Runs the statements still to run after a stop (`remaining`), and nothing before them. */
+  confirmRemaining: () => void
   cancel: () => void
 }
 
@@ -77,6 +84,7 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
   const [stopped, setStopped] = useState(false)
   const [stopUnclear, setStopUnclear] = useState(false)
   const [stopError, setStopError] = useState<unknown>(null)
+  const [remaining, setRemaining] = useState<string[] | null>(null)
   // The run going (its id); the run a stop was asked of; and the stop asked: whether the server stopped the run (null
   // where its answer did not come back).
   const current = useRef<string | null>(null)
@@ -103,16 +111,21 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
       }
       try {
         const r = await config.execute(o, statements, queryId)
-        if (askedOf.current !== queryId) return { ...r, halt: null }
+        if (askedOf.current !== queryId) return { ...r, halt: null, rest: null }
         // Stopped is what the server says (it says so only where it cut the script short): stopped between two
         // statements, a script ends short with no error at all, and must not be taken for done (nor its follow-up
         // run). Without its answer, a script that ended with no error may be done or cut short: said as not known (a
         // stop that failed may or may not have reached the server, so it is not known either).
         const answer = await answerOf()
         const failed = r.results.some((x) => x.kind === 'error')
-        return { ...r, halt: answer === true ? 'stopped' : answer === null && !failed ? 'unclear' : null }
+        const rest = remainingAfterStop(statements, r.results)
+        // Every statement ended (a transaction committed): done, whatever the stop's answer.
+        if (rest?.length === 0) return { ...r, halt: null, rest }
+        return { ...r, halt: answer === true ? 'stopped' : answer === null && !failed ? 'unclear' : null, rest }
       } catch (err) {
-        if (askedOf.current === queryId && (await answerOf()) === true) return { results: [], halt: 'stopped' }
+        // The request failed: what ran before the stop is not known.
+        if (askedOf.current === queryId && (await answerOf()) === true)
+          return { results: [], halt: 'stopped', rest: null }
         throw err
       }
     },
@@ -123,7 +136,7 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
       stopAsked.current = null
       setStopping(false)
     },
-    onSuccess: async ({ results, rolledBack: undone, halt }, { op: o, queryId }) => {
+    onSuccess: async ({ results, rolledBack: undone, halt, rest }, { op: o, queryId }) => {
       // A run previewed over says nothing of the stop of the run that replaced it.
       if (halt && current.current !== queryId) return
       const err = results.find((r) => r.kind === 'error')
@@ -133,6 +146,7 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
       if (halt) {
         if (halt === 'stopped') setStopped(true)
         else setStopUnclear(true)
+        setRemaining(rest)
         // What ran before the stop stays, and a build stopped part way can leave an index behind: read again.
         void queryClient.invalidateQueries({ predicate: (q) => invalidate(q.queryKey) })
         return
@@ -153,6 +167,20 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
       await queryClient.invalidateQueries({ predicate: (q) => invalidate(q.queryKey) })
     },
   })
+  /** Runs these of the previewed statements (all of them, or the rest after a stop), once however often pressed. */
+  const run = (statements: string[]) => {
+    if (op === null || statements.length === 0 || running.current || runM.isPending) return
+    running.current = true
+    const queryId = crypto.randomUUID()
+    current.current = queryId
+    stopAsked.current = null
+    setStopped(false)
+    setStopUnclear(false)
+    setStopError(null)
+    setRemaining(null)
+    setFailed(null)
+    runM.mutate({ op, statements, queryId }, { onSettled: () => (running.current = false) })
+  }
   return {
     op,
     sql,
@@ -167,6 +195,7 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
     stopped,
     stopUnclear,
     stopError,
+    remaining,
     ...(config.stop
       ? {
           stop: () => {
@@ -202,6 +231,7 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
       setStopped(false)
       setStopUnclear(false)
       setStopError(null)
+      setRemaining(null)
       setOp(o)
       setSql([])
       setFailed(null)
@@ -212,17 +242,9 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
       runM.reset()
       previewM.mutate(o, { onSuccess: (r) => setSql(r.sql) })
     },
-    confirm: () => {
-      if (op === null || sql.length === 0 || running.current || runM.isPending) return
-      running.current = true
-      const queryId = crypto.randomUUID()
-      current.current = queryId
-      stopAsked.current = null
-      setStopped(false)
-      setStopUnclear(false)
-      setStopError(null)
-      setFailed(null)
-      runM.mutate({ op, statements: sql, queryId }, { onSettled: () => (running.current = false) })
+    confirm: () => run(sql),
+    confirmRemaining: () => {
+      if (remaining !== null && remaining.length > 0) run(remaining)
     },
     cancel: () => {
       setOp(null)
@@ -231,6 +253,7 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
       setStopped(false)
       setStopUnclear(false)
       setStopError(null)
+      setRemaining(null)
     },
   }
 }
