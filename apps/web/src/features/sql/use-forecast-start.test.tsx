@@ -24,6 +24,7 @@ const noAssumed = (): AssumedPlan => ({
   running: false,
   error: null,
   assume: async () => undefined,
+  show: () => undefined,
   clear: vi.fn(),
 })
 const noCompare: AssumedCompare = { rows: null, asked: null, running: false, compare: async () => undefined }

@@ -407,6 +407,9 @@ export const jaScreens = {
     compareColIndexes: 'あるものとしたインデックス',
     compareColCost: '見込みのコスト',
     compareColUsed: 'サーバーが使う見込みか',
+    compareColNext: 'この候補で',
+    compareShow: (name: string) => `${name} があるものとした計画を見る`,
+    compareBuild: (name: string) => `${name} を本当に作って測る`,
     compareNone: 'なし（いまの計画）',
     compareOne: (name: string, table: string, columns: readonly string[]) =>
       `${name}（${table} の ${columns.join(', ')}）`,
