@@ -24,6 +24,16 @@ export interface AssumedCompare {
 export const candidatesKey = (candidates: readonly IndexCandidate[]) =>
   candidates.map((c) => `${c.table}\0${c.name}\0${c.columns.join('\0')}`).join('\n')
 
+/**
+ * The rows to tell beside the plan: once all of them are in (not while asked), of these candidates (not of ones
+ * asked before), and where the server estimated any.
+ */
+export function comparedRows(compared: AssumedCompare, candidates: readonly IndexCandidate[]): CompareRow[] | null {
+  const { rows } = compared
+  if (!rows || compared.running || compared.asked !== candidatesKey(candidates)) return null
+  return rows.some((r) => r.result) ? rows : null
+}
+
 /** The sets of candidates asked for: each alone, then all of them together where there are two or more. */
 export function compareSets(candidates: readonly IndexCandidate[]): IndexCandidate[][] {
   const some = candidates.slice(0, HYPOTHETICAL_MAX)

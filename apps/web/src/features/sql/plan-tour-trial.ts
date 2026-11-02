@@ -21,7 +21,7 @@ export interface TrialInput {
 type Lit = readonly (readonly [string, Tone, string])[]
 
 /** Each table of a plan lit as it is last read: by how (an index as its badge, or "full"). */
-function litOf(plan: PlanNode, indexColumns: (table: string, index: string) => readonly string[]): Lit {
+export function litOf(plan: PlanNode, indexColumns: (table: string, index: string) => readonly string[]): Lit {
   const lit = new Map<string, readonly [Tone, string]>()
   for (const step of planSteps(planReads(plan), indexColumns))
     for (const x of step.tables ?? []) lit.set(x.name, [x.tone, x.badge ?? p.full])
@@ -44,7 +44,7 @@ export interface AssumedInput {
  * through it once), else as it is read now. With the other tables read another way (a new index may change a join),
  * or read no more: by how, not by the time, which every run changes.
  */
-function aroundIndex(
+export function aroundIndex(
   before: PlanNode,
   after: PlanNode,
   { table, name }: IndexCandidate,
@@ -139,7 +139,7 @@ export function trialScenes(
 }
 
 /** How a read is expected to go: through which index or in full, and the rows the plan expects. */
-const expectedRead = (n: PlanNode) => p.assumeRead(n.access === 'fullScan' ? null : n.index, n.estRows)
+export const expectedRead = (n: PlanNode) => p.assumeRead(n.access === 'fullScan' ? null : n.index, n.estRows)
 
 /**
  * The chapter that shows an index assumed, not built: the table as the server plans to read it now, the same table

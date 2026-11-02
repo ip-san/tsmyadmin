@@ -1,6 +1,12 @@
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { compareSets, useAssumedCompare } from './use-assumed-compare.ts'
+import {
+  type AssumedCompare,
+  candidatesKey,
+  comparedRows,
+  compareSets,
+  useAssumedCompare,
+} from './use-assumed-compare.ts'
 
 const answers: { resolve: (v: unknown) => void; reject: (e: unknown) => void }[] = []
 const hypotheticalPlan = vi.fn(
@@ -74,5 +80,28 @@ describe('useAssumedCompare', () => {
     expect(result.current.rows?.map((r) => r.result?.plan.cost)).toEqual([10])
     await act(async () => answers[1]?.resolve(plan(7)))
     expect(result.current.rows?.map((r) => r.result?.plan.cost)).toEqual([7])
+  })
+})
+
+describe('comparedRows', () => {
+  const rows = [
+    { indexes: [posts], result: null, error: new Error('x') },
+    { indexes: [users], result: plan(1) as never, error: null },
+  ]
+  const state = (extra: Partial<AssumedCompare>): AssumedCompare => ({
+    rows,
+    asked: candidatesKey([posts, users]),
+    running: false,
+    compare: async () => undefined,
+    ...extra,
+  })
+  it('tells the rows once all are in, of these candidates, and where any was estimated', () => {
+    expect(comparedRows(state({}), [posts, users])).toBe(rows)
+    // Still asking: the rows so far are not all of them.
+    expect(comparedRows(state({ running: true }), [posts, users])).toBeNull()
+    // Asked of other candidates (the plan changed since).
+    expect(comparedRows(state({}), [posts])).toBeNull()
+    expect(comparedRows(state({ rows: null }), [posts, users])).toBeNull()
+    expect(comparedRows(state({ rows: [rows[0] as (typeof rows)[number]] }), [posts, users])).toBeNull()
   })
 })

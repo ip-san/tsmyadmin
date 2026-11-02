@@ -111,6 +111,16 @@ for (const t of TARGETS) {
         const problems = await pageProblems(page)
         expect(problems.axe, JSON.stringify(problems.axe, null, 2)).toEqual([])
         expect(problems.layout, 'layout').toEqual([])
+        // The presentation tells the comparison as a chapter of its own: each candidate alone, then all together.
+        await plan.getByRole('button', { name: 'プレゼンで見る' }).click()
+        const tour = page.getByRole('dialog', { name: '実行計画のプレゼン' })
+        await tour.getByRole('button', { name: /^\d+\. 候補をまとめて比べる（見込み）$/ }).click()
+        await expect(tour.getByText(/第 \d+ 章「候補をまとめて比べた見込み」/)).toBeVisible()
+        await expect(
+          tour.getByRole('button', { name: new RegExp(`^\\d+\\. idx_${a}_level だけがあるとき$`) })
+        ).toHaveCount(1)
+        await expect(tour.getByRole('button', { name: /^\d+\. 候補すべてを同時に$/ })).toHaveCount(1)
+        await tour.getByRole('button', { name: '閉じる' }).click()
       } finally {
         await drop()
       }
