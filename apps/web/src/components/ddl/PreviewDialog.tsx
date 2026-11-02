@@ -141,6 +141,10 @@ export function PreviewDialog<Op>({
               className="mt-2 rounded border border-amber-300 bg-amber-50 p-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200"
             >
               {flow.stopped ? locale.ddl.stopped : locale.ddl.stopUnclear}
+              {/* Running it again replays the whole script: what had run before the stop (or all of it) runs twice. */}
+              {flow.stopUnclear || flow.sql.length > 1 ? (
+                <p className="mt-1">{flow.stopped ? locale.ddl.rerunStopped : locale.ddl.rerunUnclear}</p>
+              ) : null}
             </div>
           ) : null}
         </div>
