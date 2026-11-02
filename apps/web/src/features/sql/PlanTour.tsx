@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button.tsx'
 import { locale } from '@/config/locale-screens.ts'
 import type { RowEstimates } from '@/lib/row-estimates.ts'
 import { planTour } from './plan-tour.ts'
+import type { CompareInput } from './plan-tour-compare.ts'
 import type { AssumedInput, TrialInput } from './plan-tour-trial.ts'
 
 const t = locale.planTour
@@ -19,6 +20,7 @@ export function PlanTour({
   measuredMs,
   trial,
   assumed,
+  compare,
   ready,
 }: {
   plan: PlanNode
@@ -32,6 +34,8 @@ export function PlanTour({
   trial?: TrialInput | undefined
   /** An index assumed, not built: the plan is the estimate with it, told beside the estimate as it is. */
   assumed?: AssumedInput | undefined
+  /** The candidates compared without building any: told as a chapter of its own. */
+  compare?: CompareInput | undefined
   /**
    * The tables' index columns and estimated rows are read: until then the scenes would not have them, and they are
    * told as opened.
@@ -46,7 +50,7 @@ export function PlanTour({
         size="sm"
         title={t.openHint}
         disabled={!ready}
-        onClick={() => setDrawn(planTour({ plan, relations, indexColumns, rows, measuredMs, trial, assumed }))}
+        onClick={() => setDrawn(planTour({ plan, relations, indexColumns, rows, measuredMs, trial, assumed, compare }))}
       >
         <Presentation className="size-4" aria-hidden />
         {t.open}
