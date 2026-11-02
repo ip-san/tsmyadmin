@@ -140,5 +140,30 @@ for (const t of TARGETS) {
         await drop()
       }
     })
+
+    test('built straight from trying the index, it still sets the run beside the forecast', async ({ page }) => {
+      test.skip(t.dialect !== 'postgres', 'HypoPG is PostgreSQL only')
+      await login(page, t)
+      await sqlOn(
+        page,
+        t,
+        'DO $$ BEGIN CREATE EXTENSION IF NOT EXISTS hypopg; EXCEPTION WHEN duplicate_object OR unique_violation THEN NULL; END $$'
+      )
+      // The trial's own steps log in again.
+      await page.context().clearCookies()
+      const { trial, table, index, drop } = await trialPlan(page, t)
+      try {
+        // Not tried without building it first: the forecast is asked as the build starts.
+        await trial.getByRole('button', { name: `${table}（level）に作って試す` }).click()
+        const make = page.getByRole('dialog', { name: 'インデックスを追加' })
+        await expect(make).toContainText(index)
+        await make.getByRole('button', { name: '実行する' }).click()
+        await expect(trial.getByRole('status').filter({ hasText: `${index} を作って測り直しました` })).toBeVisible()
+        await expect(trial.getByText(/^作る前の見込み（作らずに試した結果）: コスト /)).toBeVisible()
+        await expect(trial.getByText(/^見込み(どおり|では)/)).toBeVisible()
+      } finally {
+        await drop()
+      }
+    })
   })
 }

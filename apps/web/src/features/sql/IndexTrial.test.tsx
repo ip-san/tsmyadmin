@@ -68,7 +68,14 @@ function shown(after: ExplainResult, forecast: Forecast | null) {
     setOnline: () => undefined,
     dropLeftover: () => undefined,
   }
-  render(<IndexTrial trial={trial} candidates={[]} before={run(null, 400)} />)
+  render(
+    <IndexTrial
+      trial={trial}
+      build={{ forecasting: false, start: async () => undefined }}
+      candidates={[]}
+      before={run(null, 400)}
+    />
+  )
   return screen.getByRole('region', { name: p.trialGroup })
 }
 

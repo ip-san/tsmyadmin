@@ -7,6 +7,7 @@ import { locale } from '@/config/locale-screens.ts'
 import { compareReads, readSaid, speedup, usesIndex } from './plan-compare.ts'
 import { forecastVerdict } from './plan-forecast.ts'
 import type { IndexCandidate } from './plan-index.ts'
+import type { ForecastStart } from './use-forecast-start.ts'
 import type { IndexTrial as Trial } from './use-index-trial.ts'
 
 const t = locale.plan
@@ -18,18 +19,21 @@ const t = locale.plan
  */
 export function IndexTrial({
   trial,
+  build,
   candidates,
   before,
   leftovers = [],
 }: {
   trial: Trial
+  /** Builds a candidate, with the server's forecast of it asked first where it can say (HypoPG). */
+  build: ForecastStart
   candidates: readonly IndexCandidate[]
   before: ExplainResult
   /** Indexes a build left unusable on the tables the plan reads. */
   leftovers?: readonly { table: string; name: string }[]
 }) {
   const { tried, after, forecast, measuring, stopping, stopped, error, flow } = trial
-  const busy = flow.running || measuring
+  const busy = flow.running || measuring || build.forecasting
   const onlineNote = useId()
   // The stop button goes when the run ends: the focus it had goes to measuring again, never to the page. A blur as it
   // is taken away (some browsers send one) is not one of the person's: the button is no longer on the page.
@@ -40,15 +44,17 @@ export function IndexTrial({
     stopFocused.current = false
     if (document.activeElement === null || document.activeElement === document.body) again.current?.focus()
   }, [measuring])
-  const said = stopping
-    ? locale.plan.measureStopping
-    : measuring
-      ? t.trialMeasuring
-      : stopped
-        ? t.trialStopped
-        : after && tried
-          ? t.trialDone(tried.name)
-          : ''
+  const said = build.forecasting
+    ? t.trialForecasting
+    : stopping
+      ? locale.plan.measureStopping
+      : measuring
+        ? t.trialMeasuring
+        : stopped
+          ? t.trialStopped
+          : after && tried
+            ? t.trialDone(tried.name)
+            : ''
   const factor = speedup(before.measured?.ms, after?.measured?.ms)
   const changes = after ? compareReads(before.plan, after.plan).filter((c) => c.after) : []
   return (
@@ -81,7 +87,7 @@ export function IndexTrial({
               {candidates.map((c) => (
                 <li key={`${c.table}\0${c.name}`} className="flex flex-wrap items-center gap-2">
                   <span className="text-ink">{t.trialWhy[c.reason](c.table)}</span>
-                  <Button size="sm" aria-disabled={busy || undefined} onClick={() => !busy && trial.start(c)}>
+                  <Button size="sm" aria-disabled={busy || undefined} onClick={() => !busy && build.start(c)}>
                     {t.trialTry(c.table, c.columns)}
                   </Button>
                 </li>

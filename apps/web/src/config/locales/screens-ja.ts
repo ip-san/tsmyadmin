@@ -427,6 +427,7 @@ export const jaScreens = {
     triedItem: (table: string, name: string, columns: readonly string[]) =>
       `${table} の ${name}（${columns.join(', ')}）`,
     triedDropHint: '「インデックスを試す」で作ったインデックスを消します',
+    trialForecasting: '作る前に、作らずに試した見込みをサーバーに尋ねています…',
     trialMeasuring: 'インデックスを作りました。同じ文をもう一度実行して測っています…',
     trialDone: (name: string) => `${name} を作って測り直しました`,
     trialTotal: (before: string | null, after: string | null, factor: number | null) =>
