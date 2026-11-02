@@ -17,7 +17,7 @@ import { indexCandidates } from './plan-index.ts'
 import { misestimate } from './plan-measure.ts'
 import { planReads, planSteps } from './plan-steps.ts'
 import { triedOnTables } from './tried-indexes.ts'
-import { type AssumedCompare, useAssumedCompare } from './use-assumed-compare.ts'
+import { type AssumedCompare, comparedRows, useAssumedCompare } from './use-assumed-compare.ts'
 import { type AssumedPlan, useAssumedPlan } from './use-assumed-plan.ts'
 import { type ForecastStart, useForecastStart } from './use-forecast-start.ts'
 import { type IndexTrial as Trial, useIndexTrial } from './use-index-trial.ts'
@@ -161,13 +161,16 @@ function PlanStory({
     })),
     trial?.state.tried ?? null
   )
+  const candidates = indexCandidates(estimate.plan, shapeOf)
+  // The candidates compared, once all their rows are in and of these candidates: told as a chapter of their own.
+  const told = comparedRows(compared, candidates)
   return (
     <div className="space-y-3">
       <AssumedIndex
         assumed={assumed}
         compared={compared}
         before={estimate}
-        candidates={indexCandidates(estimate.plan, shapeOf)}
+        candidates={candidates}
         // Built for real through the trial, once there is a run to compare with and nothing is tried yet.
         onBuild={trial && !trial.state.tried ? (c) => void build.start(c) : undefined}
         building={build.forecasting}
@@ -200,6 +203,7 @@ function PlanStory({
               ? { before: estimate, index: assuming, used: result.assumed?.includes(assuming.name) ?? false }
               : undefined
           }
+          compare={told ? { before: estimate, rows: told } : undefined}
           ready={structures.every((s) => !s.isPending) && !estimates.pending}
         />
       ) : null}

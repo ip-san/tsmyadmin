@@ -3,6 +3,11 @@ import type { ScreensLocale } from './screens-ja.ts'
 
 /** A planner cost, as the server's own units: whole above 10, one decimal below. */
 const costSaid = (c: number) => c.toLocaleString('en-US', { maximumFractionDigits: c >= 10 ? 0 : 1 })
+/** How many candidates were estimated each alone, and how many all together (0: not). */
+const compareHow = (alone: number, together: number) =>
+  alone === 0
+    ? `all ${together} candidate indexes assumed together`
+    : `${alone === 1 ? 'the candidate index' : `each of the ${alone} candidate indexes`} assumed alone${together === 0 ? '' : alone === together ? ', and all of them together' : `, and ${together} of them assumed together`}`
 
 /** `1 row` / `2 rows` — English needs the singular that Japanese does not have. */
 const plural = (n: number, one: string, many: string) => `${n.toLocaleString('en-US')} ${n === 1 ? one : many}`
@@ -470,6 +475,7 @@ export const enScreens = {
       measured: 'Estimated and actual',
       trial: 'Before and after the index',
       assumed: 'With the index assumed (estimate)',
+      compare: 'The candidates compared (estimate)',
     },
     open: 'Present',
     openHint:
@@ -572,6 +578,20 @@ export const enScreens = {
       'An index is updated each time a row is added, changed or deleted: reads get faster, writes a little slower, and it takes space. Keep it if it helps a statement run often',
     assumedIntro: (name: string) =>
       `This is the plan the server would make if the index ${name} were there (an estimate). The index is not built, and the statement was not run. The last chapter sets it beside the plan as it is`,
+    compareIntro: (alone: number, together: number) =>
+      `The chapter "The candidates compared (estimate)" sets out the server's estimates with ${compareHow(alone, together)} (nothing is built)`,
+    compareOpenTitle: 'The candidates compared (estimate)',
+    compareOpen: (alone: number, together: number, cost: number | null) =>
+      `The server was asked to estimate the plan with ${compareHow(alone, together)}. Nothing was built, and the statement was not run. ${cost === null ? '' : `As it is, the plan's estimated cost is ${costSaid(cost)}. `}The marked columns are the candidates' columns`,
+    compareOneTitle: (name: string) => `With ${name} alone`,
+    compareOne: (table: string, was: string | null, now: string | null, used: boolean) =>
+      `${table} would be read ${was ?? '—'} → ${now ?? 'not at all'}. ${used ? 'The server expects to read it through this index' : 'The server would not use this index'}`,
+    compareAllTitle: 'All the candidates together',
+    compareAll: (used: readonly string[], unused: readonly string[]) =>
+      `This is the estimate with all the candidates built. ${used.length > 0 ? `Expected to be used: ${used.join(', ')}.` : 'None of them is expected to be used.'}${unused.length > 0 && used.length > 0 ? ` Not expected to be used: ${unused.join(', ')}.` : ''}`,
+    compareUnusedHint: (names: readonly string[]) =>
+      `${names.join(', ')} would not be used even with all the candidates there: built, ${names.length === 1 ? 'it' : 'they'} would only slow writes down, so consider leaving ${names.length === 1 ? 'it' : 'them'} out`,
+    compareFailedNote: (names: readonly string[]) => `Could not be estimated: ${names.join(', ')}`,
     assumedBeforeTitle: 'The plan as it is (estimate)',
     assumedBefore: (table: string, read: string | null, name: string, columns: readonly string[]) =>
       `${read ? `As it is, ${table} is expected to be read ${read}. ` : ''}The server was asked to plan again as if ${table} had the index ${name} (${columns.join(', ')}), without building it. The marked columns are the index's columns`,
