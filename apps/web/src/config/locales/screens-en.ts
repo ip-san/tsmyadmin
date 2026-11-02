@@ -1280,9 +1280,9 @@ export const enScreens = {
     stopped:
       "The run was stopped. The statement running when it stopped was undone; the statements before it stay done, and the ones after it did not run. On PostgreSQL, an index stopped part way through a build without stopping writes can be left unusable (drop it under Unusable indexes in the table's Structure)",
     rerunStopped:
-      'Pressing Execute now runs the whole script again from the start, the statements that ran before the stop too (they fail, or make the same change again). Check the structure, then run only the rest in the SQL tab',
+      'Pressing Run now runs the whole script again from the start, the statements that ran before the stop too (they fail, or make the same change again). Check the structure, then run only the rest in the SQL tab',
     rerunUnclear:
-      'Pressing Execute now runs the whole script again from the start. If it had run to the end, it fails or makes the same change again. Check the structure first',
+      'Pressing Run now runs the whole script again from the start. If it had run to the end, it fails or makes the same change again. Check the structure first',
     rolledBack: 'The statements that had succeeded were rolled back as well (nothing was applied)',
     serverNotice: 'Server notice',
     columnName: 'Column name',
