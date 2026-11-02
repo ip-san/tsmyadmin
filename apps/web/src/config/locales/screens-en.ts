@@ -389,7 +389,7 @@ export const enScreens = {
     compareColIndexes: 'Indexes assumed',
     compareColCost: 'Estimated cost',
     compareColUsed: 'Would the server use it',
-    compareColNext: 'With it',
+    compareColNext: 'Next step',
     compareShow: (name: string) => `See the plan with ${name} assumed`,
     compareBuild: (name: string) => `Build ${name} and measure`,
     compareNone: 'None (the plan as it is)',
