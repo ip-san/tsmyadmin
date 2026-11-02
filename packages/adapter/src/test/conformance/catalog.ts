@@ -254,4 +254,39 @@ export function describeCatalog(env: ConformanceEnv): void {
       expect((await env.db.listEvents(ns)).find((e) => e.name === 'purge_old_posts')?.status).toBe('DISABLED')
     })
   })
+
+  describe('listIndexComments', () => {
+    it('lists each index that has a comment once, with its table, and none without one', async () => {
+      const t = `${scratch}_ixc`
+      const part = `${scratch}_ixcp`
+      await execOk(`CREATE TABLE ${t} (id INT PRIMARY KEY, a INT, b INT)`)
+      try {
+        // Two columns: MySQL keeps a row per column, listed once.
+        await runDdl({ op: 'addIndex', table: t, name: `${t}_ab`, columns: ['a', 'b'], unique: false, comment: "it's" })
+        await runDdl({ op: 'addIndex', table: t, name: `${t}_b`, columns: ['b'], unique: false })
+        if (dialect === 'postgres') {
+          await execOk(
+            `CREATE TABLE ${part} (id INT, d DATE) PARTITION BY RANGE (d);
+             CREATE TABLE ${part}_2024 PARTITION OF ${part} FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+             CREATE INDEX ${part}_d ON ${part} (d); COMMENT ON INDEX ${part}_d IS 'parent';
+             CREATE INDEX ${part}_2024_id ON ${part}_2024 (id); COMMENT ON INDEX ${part}_2024_id IS 'own'`
+          )
+        }
+        const mine = (await env.db.listIndexComments(ns)).filter((x) => x.table.startsWith(scratch))
+        expect(mine.filter((x) => x.table === t)).toEqual([
+          { table: t, name: `${t}_ab`, comment: "it's", partitioned: false },
+        ])
+        // A partitioned parent's index is marked so (it cannot be dropped without stopping writes); a partition is
+        // not a table of the list, so its own index is not listed.
+        if (dialect === 'postgres') {
+          expect(mine.filter((x) => x.table !== t)).toEqual([
+            { table: part, name: `${part}_d`, comment: 'parent', partitioned: true },
+          ])
+        }
+      } finally {
+        await exec(`DROP TABLE IF EXISTS ${t}`, { stopOnError: false })
+        if (dialect === 'postgres') await exec(`DROP TABLE IF EXISTS ${part}`, { stopOnError: false })
+      }
+    })
+  })
 }

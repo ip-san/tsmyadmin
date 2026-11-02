@@ -1,6 +1,7 @@
 import type {
   ColumnDef,
   ForeignKeyDef,
+  IndexComment,
   IndexDef,
   Namespace,
   Partitioning,
@@ -140,6 +141,29 @@ export async function pgListForeignKeys(conn: Conn, ns: Namespace): Promise<Rela
     )
   )
   return fk.rows.map((row) => foreignKeyRow(ns, row))
+}
+
+/** Every usable index of the schema's tables that has a comment (not a partition's own: partitions are not listed). */
+export async function pgListIndexComments(conn: Conn, ns: Namespace): Promise<IndexComment[]> {
+  const r = firstResult(
+    await conn.query(
+      `SELECT c.relname, ic.relname, d.description, c.relkind = 'p'
+       FROM pg_index i
+       JOIN pg_class ic ON ic.oid = i.indexrelid
+       JOIN pg_class c ON c.oid = i.indrelid
+       JOIN pg_namespace n ON n.oid = c.relnamespace
+       JOIN pg_description d ON d.objoid = i.indexrelid AND d.classoid = 'pg_class'::regclass AND d.objsubid = 0
+       WHERE n.nspname = $1 AND i.indisvalid AND NOT c.relispartition AND d.description <> ''
+       ORDER BY c.relname, ic.relname`,
+      [ns.schema ?? 'public']
+    )
+  )
+  return r.rows.map((row) => ({
+    table: str(row[0]),
+    name: str(row[1]),
+    comment: str(row[2]),
+    partitioned: bool(row[3]),
+  }))
 }
 
 export async function pgDescribeTable(conn: Conn, ns: Namespace, table: string): Promise<TableSchema> {

@@ -2,6 +2,7 @@ import type {
   ColumnDef,
   DatabaseGrant,
   ForeignKeyDef,
+  IndexComment,
   IndexDef,
   Namespace,
   Partitioning,
@@ -210,6 +211,24 @@ export async function mysqlListForeignKeys(conn: Conn, ns: Namespace): Promise<R
     )
   )
   return groupForeignKeys(fk.rows)
+}
+
+/** Every index of the database's tables that has a comment (one row per index, not per column). */
+export async function mysqlListIndexComments(conn: Conn, ns: Namespace): Promise<IndexComment[]> {
+  const r = firstResult(
+    await conn.query(
+      `SELECT DISTINCT TABLE_NAME, INDEX_NAME, INDEX_COMMENT FROM information_schema.STATISTICS
+       WHERE TABLE_SCHEMA = ? AND INDEX_COMMENT <> ''
+       ORDER BY TABLE_NAME, INDEX_NAME`,
+      [ns.database]
+    )
+  )
+  return r.rows.map((row) => ({
+    table: String(row[0] ?? ''),
+    name: String(row[1] ?? ''),
+    comment: String(row[2] ?? ''),
+    partitioned: false,
+  }))
 }
 
 export async function mysqlDescribeTable(

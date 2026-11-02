@@ -9,6 +9,7 @@ import {
   DeleteImpactSchema,
   DependencyReportSchema,
   ExplainResultSchema,
+  IndexCommentSchema,
   QueryBuilderResultSchema,
   RelationDefSchema,
   SEARCH_TERM_MAX,
@@ -609,6 +610,19 @@ describe('sql & ddl', () => {
     RelationDefSchema.array().parse(await res.json())
     expect(h.adapter.calls.at(-1)).toMatchObject({
       method: 'listForeignKeys',
+      args: [{ database: 'shop', schema: 'app' }],
+    })
+  })
+
+  it('lists the indexes of a database that have a comment, for the indexes tried from a plan', async () => {
+    const h = harness()
+    stores.push(h.store)
+    await h.login()
+    const res = await h.req('/api/databases/shop/index-comments?schema=app')
+    expect(res.status).toBe(200)
+    IndexCommentSchema.array().parse(await res.json())
+    expect(h.adapter.calls.at(-1)).toMatchObject({
+      method: 'listIndexComments',
       args: [{ database: 'shop', schema: 'app' }],
     })
   })

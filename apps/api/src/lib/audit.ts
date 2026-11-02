@@ -67,6 +67,7 @@ export const PASSTHROUGH_METHODS = [
   'prepareDdl',
   'buildQuery',
   'listForeignKeys',
+  'listIndexComments',
   'showCreateTable',
   'iterateRows',
   'listUsers',
