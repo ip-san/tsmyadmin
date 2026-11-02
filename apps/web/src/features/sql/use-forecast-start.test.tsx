@@ -50,6 +50,17 @@ describe('forecastHeld', () => {
     })
     const other = { ...c, name: 'idx_other' }
     expect(forecastHeld(c, estimate, { candidate: other, result: planOf(10) }, { rows: null })).toBeUndefined()
+    // The same name on other columns (an older list's) is another index.
+    const moved = { ...c, columns: ['user_id'] }
+    expect(forecastHeld(c, estimate, { candidate: moved, result: planOf(10) }, { rows: null })).toBeUndefined()
+    expect(
+      forecastHeld(
+        c,
+        estimate,
+        { candidate: null, result: null },
+        { rows: [{ indexes: [moved], result: planOf(10), error: null }] }
+      )
+    ).toBeUndefined()
     // All together is not this index's own forecast.
     const together = { indexes: [c, other], result: planOf(5), error: null }
     expect(forecastHeld(c, estimate, { candidate: null, result: null }, { rows: [together] })).toBeUndefined()
@@ -69,6 +80,19 @@ describe('useForecastStart', () => {
     await act(async () => answers[0]?.resolve(planOf(10, { assumed: ['idx_logs_level'] })))
     expect(start).toHaveBeenCalledWith(c, { costBefore: 1000, costAfter: 10, used: true })
     expect(result.current.forecasting).toBe(false)
+  })
+
+  it('opens the preview with the choices as they are once the forecast comes, not at the press', async () => {
+    const { result, rerender } = hook()
+    await act(async () => {
+      void result.current.start(c)
+    })
+    const first = start
+    start = vi.fn<(c: unknown, f?: unknown) => void>()
+    rerender()
+    await act(async () => answers[0]?.resolve(planOf(10)))
+    expect(first).not.toHaveBeenCalled()
+    expect(start).toHaveBeenCalledTimes(1)
   })
 
   it('builds all the same, with no forecast, where asking fails', async () => {

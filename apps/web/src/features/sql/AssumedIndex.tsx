@@ -26,6 +26,7 @@ export function AssumedIndex({
   before,
   candidates,
   onBuild,
+  building = false,
 }: {
   assumed: AssumedPlan
   /** Every candidate assumed in turn, set side by side (where there are two or more). */
@@ -35,6 +36,8 @@ export function AssumedIndex({
   candidates: readonly IndexCandidate[]
   /** Builds the index and measures again (once the statement was measured); absent until then. */
   onBuild?: ((c: IndexCandidate) => void) | undefined
+  /** A build is being readied (its forecast asked for): building again waits. */
+  building?: boolean
 }) {
   // The buttons under the comparison go with it: the focus they had goes to the heading, never to the page.
   const heading = useRef<HTMLHeadingElement>(null)
@@ -95,9 +98,9 @@ export function AssumedIndex({
                 {onBuild ? (
                   <Button
                     size="sm"
-                    aria-disabled={running || undefined}
+                    aria-disabled={running || building || undefined}
                     onClick={() => {
-                      if (running) return
+                      if (running || building) return
                       // The preview opens from here, and gives the focus back here when it closes.
                       heading.current?.focus()
                       onBuild(candidate)

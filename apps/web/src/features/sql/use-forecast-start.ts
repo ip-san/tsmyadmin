@@ -13,17 +13,23 @@ export interface ForecastStart {
   start: (c: IndexCandidate) => Promise<void>
 }
 
-/** What was already said of `c` without building it: the plan with it assumed, or its row alone in the comparison. */
+const same = (a: IndexCandidate, b: IndexCandidate) =>
+  a.table === b.table && a.name === b.name && a.columns.join('\0') === b.columns.join('\0')
+
+/**
+ * What was already said of `c` without building it: the plan with it assumed, or its row alone in the comparison. The
+ * same index by table, name and columns: a name may be another candidate's in an older list.
+ */
 export function forecastHeld(
   c: IndexCandidate,
   estimate: ExplainResult,
   assumed: Pick<AssumedPlan, 'candidate' | 'result'>,
   compared: Pick<AssumedCompare, 'rows'>
 ): Forecast | undefined {
-  if (assumed.result && assumed.candidate?.name === c.name && assumed.candidate.table === c.table)
+  if (assumed.result && assumed.candidate && same(assumed.candidate, c))
     return forecastOf(estimate, assumed.result, c.name)
   const row = compared.rows?.find(
-    (r) => r.indexes.length === 1 && r.indexes[0]?.name === c.name && r.indexes[0].table === c.table && r.result
+    (r) => r.indexes.length === 1 && r.indexes[0] !== undefined && same(r.indexes[0], c) && r.result
   )
   return row?.result ? forecastOf(estimate, row.result, c.name) : undefined
 }
@@ -44,6 +50,9 @@ export function useForecastStart(
   start: (c: IndexCandidate, forecast?: Forecast) => void
 ): ForecastStart {
   const [forecasting, setForecasting] = useState(false)
+  // The preview opens with the choices as they are once the forecast comes (writes stopped or not), not at the press.
+  const latest = useRef(start)
+  latest.current = start
   const busy = useRef(false)
   // The plan closed while it was asked: no preview opens on a page that is gone.
   const gone = useRef(false)
@@ -70,12 +79,12 @@ export function useForecastStart(
         const plan = await hypotheticalPlan(db, schema, sql, [{ table: c.table, columns: c.columns, name: c.name }])
         said = forecastOf(estimate, plan, c.name)
       } catch {
-        // Not said: built all the same.
+        // Not said (the server could not plan it now): built all the same, with nothing set beside the run.
       } finally {
         busy.current = false
         if (!gone.current) setForecasting(false)
       }
-      if (!gone.current) start(c, said)
+      if (!gone.current) latest.current(c, said)
     },
   }
 }

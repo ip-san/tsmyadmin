@@ -160,6 +160,7 @@ function PlanStory({
         candidates={indexCandidates(estimate.plan, shapeOf)}
         // Built for real through the trial, once there is a run to compare with and nothing is tried yet.
         onBuild={trial && !trial.state.tried ? (c) => void build.start(c) : undefined}
+        building={build.forecasting}
       />
       {trial ? (
         <IndexTrial
