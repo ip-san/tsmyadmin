@@ -113,7 +113,14 @@ export function AssumedIndex({
             </>
           ) : null}
           {candidates.length > 1 ? (
-            <AssumedCompare compared={compared} before={before} candidates={candidates} />
+            <AssumedCompare
+              compared={compared}
+              before={before}
+              candidates={candidates}
+              onShow={assumed.show}
+              onBuild={onBuild}
+              waiting={assumed.running || building}
+            />
           ) : null}
         </>
       ) : (

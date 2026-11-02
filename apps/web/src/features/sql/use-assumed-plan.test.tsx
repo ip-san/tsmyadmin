@@ -1,4 +1,5 @@
 import { act, renderHook } from '@testing-library/react'
+import type { ExplainResult } from '@tsmyadmin/shared'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAssumedPlan } from './use-assumed-plan.ts'
 
@@ -87,5 +88,23 @@ describe('useAssumedPlan', () => {
       await again
     })
     expect(result.current.result).toEqual(plan)
+  })
+
+  it('shows a plan already given at once, and drops the answer of an ask still running', async () => {
+    const { result } = renderHook(() => useAssumedPlan('shop', undefined, 'SELECT * FROM logs'))
+    await act(async () => {
+      void result.current.assume(candidate)
+    })
+    const given = { ...plan, raw: 'given' } as unknown as ExplainResult
+    act(() => result.current.show(candidate, given))
+    expect(result.current.running).toBe(false)
+    expect(result.current.result).toBe(given)
+    await act(async () => answer(plan))
+    expect(result.current.result).toBe(given)
+    // Free to ask again at once.
+    await act(async () => {
+      void result.current.assume(candidate)
+    })
+    expect(hypotheticalPlan).toHaveBeenCalledTimes(2)
   })
 })

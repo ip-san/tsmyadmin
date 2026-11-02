@@ -12,6 +12,8 @@ export interface AssumedPlan {
   error: unknown
   /** Asks the server for the plan with this index assumed (once at a time). */
   assume: (c: IndexCandidate) => Promise<void>
+  /** Shows a plan the server already gave with `c` assumed (a row of the comparison): nothing is asked again. */
+  show: (c: IndexCandidate, result: ExplainResult) => void
   /** Back to the plan as it is. */
   clear: () => void
 }
@@ -58,6 +60,15 @@ export function useAssumedPlan(db: string, schema: string | undefined, sql: stri
           setRunning(false)
         }
       }
+    },
+    // Over an ask still running: its answer, when it comes, is dropped.
+    show: (c, plan) => {
+      generation.current++
+      busy.current = false
+      setCandidate(c)
+      setResult(plan)
+      setError(null)
+      setRunning(false)
     },
     // Also while it is asked (measuring puts it away): its answer, when it comes, is dropped.
     clear: () => {
