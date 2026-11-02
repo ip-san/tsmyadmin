@@ -203,6 +203,16 @@ describe('TriedIndexes', () => {
     )
   })
 
+  it('does not list one marked on the server again once dropped from here, though the marks were read before', async () => {
+    commented = [{ table: 'logs', name: 'idx_logs_b', comment: TRIED_INDEX_COMMENT, partitioned: false }]
+    mount(<TriedIndexes scope={SCOPE} db="shop" />)
+    const group = await screen.findByRole('region', { name: p.triedGroup })
+    fireEvent.click(within(group).getByRole('button', { name: p.trialUndo('idx_logs_b') }))
+    fireEvent.click(await screen.findByRole('button', { name: locale.ddl.execute }))
+    await screen.findByText(locale.ddl.executed(locale.ddl.titles.dropIndex))
+    expect(screen.queryByRole('button', { name: p.trialUndo('idx_logs_b') })).toBeNull()
+  })
+
   it('lists one remembered here and marked on the server once, as remembered (with its columns)', async () => {
     rememberTried(SCOPE, level)
     commented = [{ table: 'logs', name: 'idx_logs_level', comment: TRIED_INDEX_COMMENT, partitioned: false }]

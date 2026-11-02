@@ -1,6 +1,6 @@
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { TRIED_INDEX_COMMENT } from '@tsmyadmin/shared'
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { PreviewDialog } from '@/components/ddl/PreviewDialog.tsx'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox } from '@/components/ui/Feedback.tsx'
@@ -43,16 +43,22 @@ export function TriedIndexes({ scope, db, schema }: { scope: string; db: string;
   const local = tried.flatMap((x, i) => (there(x, i) ? [{ ...x, left: unusable(x, i), elsewhere: false }] : []))
   // Read again on mount, as the tables are: one tried in another browser since is there.
   const marked = useQuery({ ...indexCommentsQuery(db, schema), refetchOnMount: 'always' })
+  // Dropped from here: not listed again from the marks read before the drop (they are read again after it).
+  const [dropped, setDropped] = useState<readonly string[]>([])
   const elsewhere = (marked.data ?? []).flatMap((m) =>
-    m.comment === TRIED_INDEX_COMMENT && !tried.some((x) => x.table === m.table && x.name === m.name)
+    m.comment === TRIED_INDEX_COMMENT &&
+    !dropped.includes(`${m.table}\0${m.name}`) &&
+    !tried.some((x) => x.table === m.table && x.name === m.name)
       ? // Dropped without stopping writes, but on a partitioned parent, which PostgreSQL cannot drop so.
         [{ table: m.table, name: m.name, columns: [], online: !m.partitioned, left: false, elsewhere: true }]
       : []
   )
   const shown = [...local, ...elsewhere]
   const flow = useDdlFlow(db, schema, (op) => {
-    if (op.op === 'dropIndex')
+    if (op.op === 'dropIndex') {
+      setDropped((d) => [...d, `${op.table}\0${op.name}`])
       forgetTried(scope, { db, schema: schema ?? null, table: op.table, name: op.name, columns: [] })
+    }
   })
   // Kept while its dialog is open or says it is done: the last one dropped still says so (and keeps the focus).
   // A scan that failed is said: nothing listed is not "nothing tried".
