@@ -72,12 +72,13 @@ export function useTriedIndexes(scope: string, db: string, schema: string | unde
  * left behind, to be dropped. Read from the tables' structure, so another browser's are there too.
  */
 export function triedOnTables(
-  tables: readonly { table: string; indexes: readonly IndexDef[] | undefined }[],
+  tables: readonly { table: string; indexes: readonly IndexDef[] | undefined; partitioned?: boolean | undefined }[],
   now: { table: string; name: string } | null
-): { table: string; name: string }[] {
-  return tables.flatMap(({ table, indexes }) =>
+): { table: string; name: string; online: boolean }[] {
+  return tables.flatMap(({ table, indexes, partitioned }) =>
     (indexes ?? [])
       .filter((i) => i.comment === TRIED_INDEX_COMMENT && !(now?.table === table && now.name === i.name))
-      .map((i) => ({ table, name: i.name }))
+      // Dropped without stopping writes, but on a partitioned parent, which PostgreSQL cannot drop so.
+      .map((i) => ({ table, name: i.name, online: !partitioned }))
   )
 }

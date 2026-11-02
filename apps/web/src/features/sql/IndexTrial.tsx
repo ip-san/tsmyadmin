@@ -33,7 +33,7 @@ export function IndexTrial({
   /** Indexes a build left unusable on the tables the plan reads. */
   leftovers?: readonly { table: string; name: string }[]
   /** Indexes tried from a plan before (in any browser) still on the tables the plan reads. */
-  triedBefore?: readonly { table: string; name: string }[]
+  triedBefore?: readonly { table: string; name: string; online: boolean }[]
 }) {
   const { tried, after, forecast, measuring, stopping, stopped, error, flow } = trial
   const busy = flow.running || measuring || build.forecasting
@@ -184,8 +184,7 @@ export function IndexTrial({
               <Button
                 size="sm"
                 aria-disabled={busy || undefined}
-                // Without stopping writes: how it was made is not known here, and dropping it needs no lock.
-                onClick={() => !busy && trial.dropLeftover(l.table, l.name)}
+                onClick={() => !busy && trial.dropTried(l.table, l.name, l.online)}
               >
                 {t.trialUndo(l.name)}
               </Button>

@@ -33,8 +33,10 @@ export interface IndexTrial {
   /** Made (and dropped) without stopping writes to the table: on unless turned off. */
   online: boolean
   setOnline: (online: boolean) => void
-  /** Previews dropping an index a build left unusable, or one tried before (never the one tried now). */
+  /** Previews dropping an index a build left unusable (never the one tried). */
   dropLeftover: (table: string, name: string) => void
+  /** Previews dropping an index tried before (in any browser), without stopping writes where the table allows. */
+  dropTried: (table: string, name: string, online: boolean) => void
 }
 
 /**
@@ -137,5 +139,6 @@ export function useIndexTrial(db: string, schema: string | undefined, sql: strin
     setOnline,
     // Only PostgreSQL leaves one, and dropping it concurrently never stops writes.
     dropLeftover: (table, name) => flow.preview({ op: 'dropIndex', table, name, online: true }),
+    dropTried: (table, name, how) => flow.preview({ op: 'dropIndex', table, name, online: how }),
   }
 }

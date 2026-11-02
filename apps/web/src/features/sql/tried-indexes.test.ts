@@ -13,19 +13,20 @@ describe('triedOnTables', () => {
             table: 'logs',
             indexes: [tried('idx_logs_a'), tried('idx_logs_b'), index(['c'], { name: 'mine', comment: 'designed' })],
           },
-          { table: 'users', indexes: [tried('idx_users_a')] },
+          // A partitioned parent's cannot be dropped without stopping writes (PostgreSQL).
+          { table: 'users', indexes: [tried('idx_users_a')], partitioned: true },
           // Not read yet: nothing said of it.
           { table: 'posts', indexes: undefined },
         ],
         { table: 'logs', name: 'idx_logs_b' }
       )
     ).toEqual([
-      { table: 'logs', name: 'idx_logs_a' },
-      { table: 'users', name: 'idx_users_a' },
+      { table: 'logs', name: 'idx_logs_a', online: true },
+      { table: 'users', name: 'idx_users_a', online: false },
     ])
     // The same name on another table is not the one tried now.
     expect(
       triedOnTables([{ table: 'users', indexes: [tried('idx_logs_b')] }], { table: 'logs', name: 'idx_logs_b' })
-    ).toEqual([{ table: 'users', name: 'idx_logs_b' }])
+    ).toEqual([{ table: 'users', name: 'idx_logs_b', online: true }])
   })
 })

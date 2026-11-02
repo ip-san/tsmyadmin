@@ -62,6 +62,13 @@ describe('DDL builders: indexes', () => {
       'CREATE INDEX CONCURRENTLY "i" ON "app"."t" ("a")',
       `COMMENT ON INDEX "app"."i" IS 'it''s'`,
     ])
+    // Not built concurrently: made and marked together, or neither.
+    expect(pgDdl.build(pgNs, { ...op, online: false })).toEqual([
+      'BEGIN',
+      'CREATE INDEX "i" ON "app"."t" ("a")',
+      `COMMENT ON INDEX "app"."i" IS 'it''s'`,
+      'COMMIT',
+    ])
     // Changed, the index keeps it.
     const alter: DdlOp = {
       op: 'alterIndex',

@@ -154,7 +154,11 @@ function PlanStory({
   )
   // Indexes tried from a plan before (in any browser: marked on the server), not the one tried now: left behind.
   const triedBefore = triedOnTables(
-    tables.map((table, i) => ({ table, indexes: structures[i]?.data?.indexes })),
+    tables.map((table, i) => ({
+      table,
+      indexes: structures[i]?.data?.indexes,
+      partitioned: structures[i]?.data?.partitioned,
+    })),
     trial?.state.tried ?? null
   )
   return (
