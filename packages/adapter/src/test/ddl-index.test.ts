@@ -43,6 +43,36 @@ describe('DDL builders: indexes', () => {
     expect(() => mysqlDdl.build(myNs, { ...op, kind: 'spatial' })).toThrow(/without stopping writes/)
   })
 
+  it('drops first an unusable index of the name, where the server found one (PostgreSQL)', () => {
+    const op: DdlOp = {
+      op: 'addIndex',
+      table: 't',
+      name: 'i',
+      columns: ['a'],
+      unique: false,
+      online: true,
+      comment: 'c',
+      replacesUnusable: true,
+    }
+    const pgNs = { database: 'db', schema: 'app' }
+    expect(pgDdl.build(pgNs, op)).toEqual([
+      'DROP INDEX CONCURRENTLY IF EXISTS "app"."i"',
+      'CREATE INDEX CONCURRENTLY "i" ON "app"."t" ("a")',
+      `COMMENT ON INDEX "app"."i" IS 'c'`,
+    ])
+    expect(pgDdl.build(pgNs, { ...op, online: false })).toEqual([
+      'BEGIN',
+      'DROP INDEX IF EXISTS "app"."i"',
+      'CREATE INDEX "i" ON "app"."t" ("a")',
+      `COMMENT ON INDEX "app"."i" IS 'c'`,
+      'COMMIT',
+    ])
+    // MySQL leaves no index from a build cut short: nothing to drop.
+    expect(mysqlDdl.build({ database: 'db' }, op)).toEqual([
+      "CREATE INDEX `i` ON `db`.`t` (`a`) COMMENT 'c' ALGORITHM=INPLACE LOCK=NONE",
+    ])
+  })
+
   it("keeps an index's comment in each dialect: in the index on MySQL, a statement after it on PostgreSQL", () => {
     const op: DdlOp = {
       op: 'addIndex',

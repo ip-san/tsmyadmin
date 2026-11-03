@@ -303,6 +303,11 @@ export const DdlOpSchema = z.discriminatedUnion('op', [
      * where the server cannot).
      */
     online: z.boolean().optional(),
+    /**
+     * Filled in by the server: an unusable index of this name is on the table (a build that did not stop writes, cut
+     * short), and is dropped first (PostgreSQL). Never set by a caller.
+     */
+    replacesUnusable: z.boolean().optional(),
   }),
   z.object({
     op: z.literal('dropIndex'),

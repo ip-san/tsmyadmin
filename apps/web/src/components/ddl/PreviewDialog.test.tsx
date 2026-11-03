@@ -35,10 +35,16 @@ const execute = vi.fn(
 let stopAnswer: () => Promise<boolean>
 const stop = vi.fn((_queryId: string) => stopAnswer())
 const onSuccess = vi.fn()
+/** What the server builds when asked again (null: the SQL the harness was given). */
+let rebuilt: string[] | null
+const previewed = vi.fn()
 
 function Harness({ stoppable = true, sql = ['ALTER 0', 'ALTER 1'] }: { stoppable?: boolean; sql?: string[] }) {
   const config: PreviewFlowConfig<string> = {
-    preview: async () => ({ sql }),
+    preview: async () => {
+      previewed()
+      return { sql: rebuilt ?? sql }
+    },
     execute,
     onSuccess,
     ...(stoppable ? { stop } : {}),
@@ -73,6 +79,8 @@ beforeEach(() => {
   execute.mockClear()
   stop.mockClear()
   onSuccess.mockClear()
+  previewed.mockClear()
+  rebuilt = null
   stopAnswer = async () => true
 })
 afterEach(cleanup)
@@ -326,6 +334,42 @@ describe('PreviewDialog, stopping a run', () => {
     await act(async () => finish({ results: [ok(0)] }))
     expect((await screen.findByRole('alert')).textContent).toBe(d.stopped + restOf(['ALTER 1']))
     expect(screen.queryByText(d.failedStatement, { exact: false })).toBeNull()
+  })
+
+  it('builds the SQL again when run after a stop: other SQL is shown, not run, and runs on the next press', async () => {
+    await running()
+    fireEvent.click(await stopButton())
+    await act(async () => finish({ results: [ok(0), failed] }))
+    await screen.findByRole('alert')
+    // A build cut short left an index behind: the server drops it first now.
+    rebuilt = ['DROP 0', 'ALTER 0', 'ALTER 1']
+    const run = screen.getByRole('button', { name: d.execute })
+    // Two presses in one frame: asked once.
+    act(() => {
+      run.click()
+      run.click()
+    })
+    expect((await screen.findByText(d.revised)).getAttribute('role')).toBe('status')
+    expect(previewed).toHaveBeenCalledTimes(2)
+    expect(execute).toHaveBeenCalledTimes(1)
+    expect(screen.getByLabelText('SQL').textContent).toBe('DROP 0;\nALTER 0;\nALTER 1;')
+    // What was said of the stop is put away with the SQL it was of.
+    expect(screen.queryByRole('alert')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: d.execute }))
+    await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(2))
+    expect(execute.mock.calls[1]?.[1]).toEqual(['DROP 0', 'ALTER 0', 'ALTER 1'])
+    expect(previewed).toHaveBeenCalledTimes(2)
+    expect(screen.queryByText(d.revised)).toBeNull()
+  })
+
+  it('runs at once when run after a stop where the SQL built again is the same', async () => {
+    await running()
+    fireEvent.click(await stopButton())
+    await act(async () => finish({ results: [ok(0), failed] }))
+    fireEvent.click(await screen.findByRole('button', { name: d.execute }))
+    await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(2))
+    expect(previewed).toHaveBeenCalledTimes(2)
+    expect(execute.mock.calls[1]?.[1]).toEqual(['ALTER 0', 'ALTER 1'])
   })
 
   it("runs only the rest after a stop, as the server's results tell, once however often pressed", async () => {

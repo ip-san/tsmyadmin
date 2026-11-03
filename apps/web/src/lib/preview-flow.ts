@@ -33,6 +33,11 @@ export interface PreviewFlow<Op> {
    * transaction it rolled back); null where what ran is not known.
    */
   remaining: string[] | null
+  /**
+   * Pressed again after a stop or a failure, the server built the SQL anew and it is not what was shown (an index a
+   * build cut short is dropped first, say): shown, and run on the next press.
+   */
+  revised: boolean
   preview: (op: Op) => void
   confirm: () => void
   /** Runs the statements still to run after a stop (`remaining`), and nothing before them. */
@@ -85,6 +90,9 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
   const [stopUnclear, setStopUnclear] = useState(false)
   const [stopError, setStopError] = useState<unknown>(null)
   const [remaining, setRemaining] = useState<string[] | null>(null)
+  const [revised, setRevised] = useState(false)
+  // Each preview and cancel: an SQL built again for an op since put away is not run.
+  const generation = useRef(0)
   // The run going (its id); the run a stop was asked of; and the stop asked: whether the server stopped the run (null
   // where its answer did not come back).
   const current = useRef<string | null>(null)
@@ -179,6 +187,7 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
     setStopError(null)
     setRemaining(null)
     setFailed(null)
+    setRevised(false)
     runM.mutate({ op, statements, queryId }, { onSettled: () => (running.current = false) })
   }
   return {
@@ -196,6 +205,7 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
     stopUnclear,
     stopError,
     remaining,
+    revised,
     ...(config.stop
       ? {
           stop: () => {
@@ -227,7 +237,9 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
         }
       : {}),
     preview: (o) => {
+      generation.current++
       running.current = false
+      setRevised(false)
       setStopped(false)
       setStopUnclear(false)
       setStopError(null)
@@ -242,11 +254,36 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
       runM.reset()
       previewM.mutate(o, { onSuccess: (r) => setSql(r.sql) })
     },
-    confirm: () => run(sql),
+    // After a stop or a failure the server is not as it was when the SQL was built (what ran stays; a build cut short
+    // can leave an index behind): built again first. The same SQL runs at once; other SQL is shown, not run.
+    confirm: () => {
+      if (!(stopped || stopUnclear || failed !== null)) return run(sql)
+      if (op === null || running.current || runM.isPending || previewM.isPending) return
+      running.current = true
+      const mine = generation.current
+      previewM.mutate(op, {
+        onSuccess: (r) => {
+          running.current = false
+          if (generation.current !== mine) return
+          if (r.sql.length === sql.length && r.sql.every((s, i) => s === sql[i])) return run(r.sql)
+          setSql(r.sql)
+          setStopped(false)
+          setStopUnclear(false)
+          setRemaining(null)
+          setFailed(null)
+          setRevised(true)
+        },
+        onError: () => {
+          running.current = false
+        },
+      })
+    },
     confirmRemaining: () => {
       if (remaining !== null && remaining.length > 0) run(remaining)
     },
     cancel: () => {
+      generation.current++
+      setRevised(false)
       setOp(null)
       setSql([])
       setFailed(null)

@@ -25,6 +25,30 @@ export function describePrepareDdl(env: ConformanceEnv): void {
       }
     })
 
+    it('drops first an unusable index of the name a build cut short left (PostgreSQL), and the index is made', async () => {
+      const idx = `${t}_left`
+      try {
+        await execOk(`CREATE TABLE ${t} (id INT PRIMARY KEY, a INT)`)
+        await execOk(`INSERT INTO ${t} (id, a) VALUES (1, 7), (2, 7)`)
+        const add: DdlOp = { op: 'addIndex', table: t, name: idx, columns: ['a'], unique: true, online: true }
+        // A unique build over duplicates fails: PostgreSQL leaves an unusable index of the name, MySQL nothing.
+        await exec(env.db.ddl.build(ns, add).join(';\n'), { stopOnError: false })
+        await execOk(`UPDATE ${t} SET a = 8 WHERE id = 2`)
+        const op = await env.db.prepareDdl(ns, add)
+        expect(own(op).replacesUnusable).toBe(dialect === 'postgres' ? true : undefined)
+        for (const statement of env.db.ddl.build(ns, op)) await execOk(statement)
+        const s = await env.db.describeTable(ns, t)
+        expect(s.indexes.find((i) => i.name === idx)).toMatchObject({ columns: ['a'], unique: true })
+        expect(s.unusableIndexes ?? []).toEqual([])
+        // Made, it is not dropped again: a usable index of the name is not taken for one left behind.
+        expect(own(await env.db.prepareDdl(ns, add)).replacesUnusable).toBeUndefined()
+        // Nor where the request says so: the server's state decides.
+        expect(own(await env.db.prepareDdl(ns, { ...add, replacesUnusable: true })).replacesUnusable).toBeUndefined()
+      } finally {
+        await exec(`DROP TABLE IF EXISTS ${t}`, { stopOnError: false })
+      }
+    })
+
     it('does not overwrite what the request already carried', async () => {
       try {
         await execOk(`CREATE TABLE ${t} (id INT PRIMARY KEY, a INT)`)

@@ -88,10 +88,14 @@ export async function pgPrepareDdl(adapter: DatabaseAdapter, ns: Namespace, op: 
     case 'copyDatabase':
       return prepareDatabaseOp(adapter, op)
     case 'addIndex': {
+      const { partitioned, unusableIndexes } = await adapter.describeTable(ns, op.table)
       // Refused here, at the preview, rather than by the server once confirmed.
-      if (op.online && (await adapter.describeTable(ns, op.table)).partitioned)
+      if (op.online && partitioned)
         throw new AdapterError('UNSUPPORTED', 'PostgreSQL cannot build an index on a partitioned table concurrently')
-      return op
+      // An unusable index of the name, left by a build cut short (as the table's structure names them): dropped first,
+      // in the preview, or the build fails on the name. Always as the server is now, whatever the request carried.
+      const { replacesUnusable: _, ...asked } = op
+      return unusableIndexes?.includes(op.name) ? { ...asked, replacesUnusable: true } : asked
     }
     default:
       return op
