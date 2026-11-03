@@ -1,13 +1,13 @@
 import { useNavigate, useRouteContext } from '@tanstack/react-router'
-import { setDatabaseConsoleDraft } from '@/lib/console-draft.ts'
+import { type ConsoleArrival, setDatabaseConsoleDraft } from '@/lib/console-draft.ts'
 import { type EditDefinitionOptions, editDefinitionSql } from '@/lib/edit-definition.ts'
 
-/** Puts a statement in the database's SQL tab, replacing its draft, and goes there. It runs on arrival only if `run`. */
+/** Puts a statement in the database's SQL tab, replacing its draft, and goes there. Run (or drawn) on arrival only if asked. */
 export function useOpenInDatabaseConsole(db: string, schema: string | undefined) {
   const navigate = useNavigate()
   const { session } = useRouteContext({ from: '/_app' })
-  return (sql: string, run = false) => {
-    setDatabaseConsoleDraft(`${session.dialect}.${session.host}.${session.port}`, db, schema, sql, run)
+  return (sql: string, then?: ConsoleArrival) => {
+    setDatabaseConsoleDraft(`${session.dialect}.${session.host}.${session.port}`, db, schema, sql, then)
     void navigate({ to: '/db/$db/sql', params: { db }, search: schema ? { schema } : {} })
   }
 }

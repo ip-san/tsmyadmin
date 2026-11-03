@@ -306,15 +306,17 @@ describe('mysqlDiagnostics', () => {
       expect(general.asked.at(-1)?.text).toContain("command_type = 'Query'")
       const slow = scripted([
         [/@@GLOBAL/, flags(1, 'TABLE')],
-        [/mysql\.slow_log/, rows([['SELECT SLEEP(1)', 2, 2.5, 1.5, 100]])],
+        [/mysql\.slow_log/, rows([['SELECT SLEEP(1)', 'shop', 2, 2.5, 1.5, 100]])],
       ])
       expect(await mysqlDiagnostics(slow.conn, 'slowLog')).toMatchObject({
-        columns: ['statement', 'runs', 'totalSeconds', 'maxSeconds', 'rowsExamined'],
-        rows: [['SELECT SLEEP(1)', '2', '2.5', '1.5', '100']],
+        columns: ['statement', 'database', 'runs', 'totalSeconds', 'maxSeconds', 'rowsExamined'],
+        rows: [['SELECT SLEEP(1)', 'shop', '2', '2.5', '1.5', '100']],
       })
       const query = slow.asked.at(-1)?.text ?? ''
       expect(query).toContain('TIME_TO_SEC(query_time) + MICROSECOND(query_time) / 1000000')
-      expect(query).toContain('ORDER BY 3 DESC LIMIT 50')
+      // Grouped by the database too: the same text run in two is two rows, each with its plan.
+      expect(query).toContain("NULLIF(db, ''), COUNT(*)")
+      expect(query).toContain('GROUP BY 1, 2 ORDER BY 4 DESC LIMIT 50')
     })
 
     it('leaves out the statements of this tool’s own connections and those before `since`, binding both', async () => {

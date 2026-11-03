@@ -218,7 +218,8 @@ async function pgStatements(conn: Conn): Promise<DiagnosticReport> {
   if (installed.rows.length === 0) return NOTHING('noExtension')
   const read = (total: string, max: string) =>
     conn.query(
-      `SELECT query, calls, ${total} / 1000, ${max} / 1000, rows FROM pg_stat_statements ORDER BY ${total} DESC LIMIT 50`
+      `SELECT s.query, d.datname, s.calls, s.${total} / 1000, s.${max} / 1000, s.rows
+       FROM pg_stat_statements s LEFT JOIN pg_database d ON d.oid = s.dbid ORDER BY s.${total} DESC LIMIT 50`
     )
   let result: Awaited<ReturnType<typeof read>>
   try {
@@ -231,7 +232,8 @@ async function pgStatements(conn: Conn): Promise<DiagnosticReport> {
   }
   return {
     status: 'ok',
-    columns: ['statement', 'runs', 'totalSeconds', 'maxSeconds', 'rows'],
+    // The database each ran in: its plan is read there.
+    columns: ['statement', 'database', 'runs', 'totalSeconds', 'maxSeconds', 'rows'],
     rows: firstResult(result).rows.map((row) => row.map(cell)),
     text: null,
   }

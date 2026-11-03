@@ -21,23 +21,26 @@ export function sessionStore(): Storage | null {
   }
 }
 
-/** Puts `sql` in the database console's editor, replacing whatever draft was there. `run` also has it run once on arrival. */
+/** What the console does once with a statement handed to it: runs it, or draws its plan (which runs nothing). */
+export type ConsoleArrival = 'run' | 'plan'
+
+/** Puts `sql` in the database console's editor, replacing whatever draft was there, and what to do with it on arrival. */
 export function setDatabaseConsoleDraft(
   scope: string,
   db: string,
   schema: string | undefined,
   sql: string,
-  run = false
+  then?: ConsoleArrival
 ): void {
   const key = consoleDraftKey(scope, db, schema, 'db')
   writePreference(key, sql, sessionStore())
-  if (run) writePreference(`${key}.autorun`, sql, sessionStore())
+  if (then) writePreference(`${key}.auto${then}`, sql, sessionStore())
 }
 
-/** The statement a page asked the console to run on arrival, once: reading it clears it. */
-export function takeConsoleAutorun(key: string): string | null {
+/** The statement a page asked the console to run (or draw the plan of) on arrival, once: reading it clears it. */
+export function takeConsoleArrival(key: string, then: ConsoleArrival): string | null {
   const store = sessionStore()
-  const sql = readPreference<string | null>(`${key}.autorun`, z.string().nullable(), null, store)
-  removePreference(`${key}.autorun`, store)
+  const sql = readPreference<string | null>(`${key}.auto${then}`, z.string().nullable(), null, store)
+  removePreference(`${key}.auto${then}`, store)
   return sql
 }

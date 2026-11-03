@@ -65,7 +65,7 @@ export function ExecutedStatement({
           handlers={{
             edit: openInSql,
             rerun: onRefresh,
-            explain: (sql) => openInSql(explainStatement(sql), true),
+            explain: (sql) => openInSql(explainStatement(sql), 'run'),
             code: setCodeOf,
             bookmark: (sql) => {
               saved.save(bookmarkName(sql), sql)

@@ -2104,9 +2104,15 @@ export const jaScreens = {
   },
   diagnostics: {
     empty: '記録はまだありません。',
+    plan: '実行計画を見る',
+    planLabel: (n: number) => `${n} 行目の文の実行計画を見る`,
+    planHint: '記録された文を、そのデータベースの SQL タブに入れて、実行計画を図で見ます（文は実行しません）',
+    fillValues:
+      '値は記録されていないので、$1 などを :p1 などにしてあります。「実行のオプション」で値を入れてから「図で見る」を押してください',
     columns: {
       time: '時刻',
       statement: '文',
+      database: 'データベース',
       runs: '回数',
       totalSeconds: '合計（秒）',
       maxSeconds: '最大（秒）',

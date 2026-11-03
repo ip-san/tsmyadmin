@@ -140,6 +140,7 @@ export type DiagnosticKind = z.infer<typeof DiagnosticKindSchema>
 export const DiagnosticColumnSchema = z.enum([
   'time',
   'statement',
+  'database',
   'runs',
   'totalSeconds',
   'maxSeconds',

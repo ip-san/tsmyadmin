@@ -310,13 +310,14 @@ async function mysqlLogTable(conn: Conn, kind: 'slow' | 'general'): Promise<Diag
   }
   const r = firstResult(
     await conn.query(
-      `SELECT CAST(sql_text AS CHAR), COUNT(*), SUM(${SECONDS('query_time')}), MAX(${SECONDS('query_time')}), SUM(rows_examined)
-       FROM mysql.slow_log GROUP BY 1 ORDER BY 3 DESC LIMIT 50`
+      `SELECT CAST(sql_text AS CHAR), NULLIF(db, ''), COUNT(*), SUM(${SECONDS('query_time')}), MAX(${SECONDS('query_time')}), SUM(rows_examined)
+       FROM mysql.slow_log GROUP BY 1, 2 ORDER BY 4 DESC LIMIT 50`
     )
   )
   return {
     status: 'ok',
-    columns: ['statement', 'runs', 'totalSeconds', 'maxSeconds', 'rowsExamined'],
+    // The database each ran in (the same text in two is two rows): its plan is read there.
+    columns: ['statement', 'database', 'runs', 'totalSeconds', 'maxSeconds', 'rowsExamined'],
     rows: r.rows.map((row) => row.map(text)),
     text: null,
   }
