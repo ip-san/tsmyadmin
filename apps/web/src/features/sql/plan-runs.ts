@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { z } from 'zod'
+import { readPreference, writePreference } from '@/lib/preferences.ts'
 
 /** How many times a statement is measured in a row: each run is the server's own, and the times are set side by side. */
 export const MEASURE_RUNS = [1, 3, 5] as const
@@ -30,4 +32,16 @@ export function summarizeRuns(times: readonly number[]): RunsSummary | null {
 /** The time a measuring is compared by: the runs' median where there are runs, else the one run's own. */
 export function runsTime(times: readonly number[], single: number | null | undefined): number | null {
   return summarizeRuns(times)?.median ?? single ?? null
+}
+
+/** How many times in a row a statement is measured, before and after an index alike: kept in this browser. */
+export function useMeasureRuns(): [MeasureRuns, (runs: MeasureRuns) => void] {
+  const [runs, setRuns] = useState<MeasureRuns>(() => readPreference(RUNS_PREF, runsSchema, 1))
+  return [
+    runs,
+    (n) => {
+      setRuns(n)
+      writePreference(RUNS_PREF, n)
+    },
+  ]
 }

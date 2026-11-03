@@ -341,6 +341,26 @@ export const jaScreens = {
     measure: '実際に実行して測る',
     measureHint: 'この文を実際に実行して、段ごとの実際の行数と時間を測ります（読むだけの文に限ります）',
     measureGroup: '実行して測る前の確認',
+    statsGroup: '統計の取り直し',
+    statsIntro:
+      'サーバーは、テーブルの統計（行数や値の散らばり）から行数を見込んで、読み方を選びます。統計が古いと見込みを誤り、遅い読み方を選ぶことがあります。取り直すと、計画が変わることがあります（条件の列どうしの値が連動しているときは、取り直しても見込みが合わないことがあります）',
+    statsList: (table: string, plan: number, list: number) =>
+      `${table}: 計画の見込みは ${plan.toLocaleString('ja-JP')} 行、テーブル一覧の見込みは約 ${list.toLocaleString('ja-JP')} 行で、2 倍以上違います`,
+    statsMeasured: (table: string, expected: number, actual: number) =>
+      `${table}: 見込み ${expected.toLocaleString('ja-JP')} 行に対して、実際は ${actual.toLocaleString('ja-JP')} 行でした`,
+    statsTaken: (table: string) => `${table}: 統計を取り直しました`,
+    statsRefresh: (table: string) => `${table} の統計を取り直す`,
+    statsHint:
+      'テーブルの統計を取り直します（データは変えません）。大きなテーブルでは、読むのに時間がかかることがあります。終わると、計画を読み直します',
+    statsRereading: (table: string) => `${table} の統計を取り直しました。計画を読み直しています`,
+    statsDone: (table: string, before: number | null, after: number | null, cleared: boolean) =>
+      `${table} の統計を取り直しました。${
+        before !== null && after !== null
+          ? `計画の ${table} の見込みは ${before.toLocaleString('ja-JP')} 行 → ${after.toLocaleString('ja-JP')} 行です`
+          : after === null
+            ? `計画は ${table} を読む段がなくなりました`
+            : `計画の ${table} の見込みは ${after.toLocaleString('ja-JP')} 行です`
+      }${cleared ? '。測った結果は取り直す前の統計によるものなので、消しました。もう一度測ると、今の統計の計画を測れます' : ''}`,
     measureConfirm: (seconds: number, runs: number) =>
       `この文を実際に${runs > 1 ? ` ${runs} 回続けて` : ''}実行して測ります。読むだけの文（SELECT・TABLE・VALUES）に限り、読み取り専用のトランザクションで実行して、最後に取り消します。ただし文が読む行は本当に読むので、大きなテーブルではサーバーに負荷がかかります（1 回ごとに ${seconds} 秒で止めます。実行中は「やめる」で止められます）。本番のサーバーでは、時間帯に気をつけてください`,
     measureRun: '実行して測る',
@@ -513,7 +533,7 @@ export const jaScreens = {
     measuredSummary: (off: number, ratio: number, heaviest: string | null, percent: number | null) =>
       `見込みと実際の行数が ${ratio} 倍以上違った段は${off === 0 ? 'ありません' : ` ${off.toLocaleString('ja-JP')} つです`}。${heaviest ? `テーブルを読む段で、いちばん時間がかかったのは ${heaviest} です${percent === null ? '' : `（実行の約 ${percent}%）`}` : ''}`,
     staleStats: (table: string, plan: number, list: number) =>
-      `${table} の全件を読む行数が、計画の推定（${plan.toLocaleString('ja-JP')} 行）とテーブル一覧の推定（約 ${list.toLocaleString('ja-JP')} 行）で 2 倍以上違います。どちらかの統計が古いのかもしれません。ANALYZE（MySQL は ANALYZE TABLE）で取り直すと、計画が変わることがあります（MySQL でパーティションを絞って読むときも、違って見えます）`,
+      `${table} の全件を読む行数が、計画の推定（${plan.toLocaleString('ja-JP')} 行）とテーブル一覧の推定（約 ${list.toLocaleString('ja-JP')} 行）で 2 倍以上違います。どちらかの統計が古いのかもしれません。ANALYZE（MySQL は ANALYZE TABLE。実行計画の「統計を取り直す」からもできます）で取り直すと、計画が変わることがあります（MySQL でパーティションを絞って読むときも、違って見えます）`,
     tones: {
       index: 'インデックスで絞って読むテーブル',
       scan: '全件を読むテーブル（インデックスの端から端までを含む）',

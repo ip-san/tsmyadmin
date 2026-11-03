@@ -1,6 +1,5 @@
 import { useQueries, useQuery } from '@tanstack/react-query'
-import type { ExplainResult, PlanNode, RelationDef } from '@tsmyadmin/shared'
-import { useState } from 'react'
+import type { ExplainResult, RelationDef } from '@tsmyadmin/shared'
 import { diagramFor, overlayUpTo } from '@/components/schema-diagram/overlay.ts'
 import { SchemaDiagram } from '@/components/schema-diagram/SchemaDiagram.tsx'
 import { DiagramLegend, StepNarration } from '@/components/schema-diagram/StepNarration.tsx'
@@ -8,23 +7,26 @@ import { useStepPlayer } from '@/components/schema-diagram/use-step-player.ts'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { locale } from '@/config/locale-screens.ts'
-import { readPreference, writePreference } from '@/lib/preferences.ts'
 import { explainQuery, foreignKeysQuery, structureQuery } from '@/lib/queries.ts'
 import { useRowEstimates } from '@/lib/use-row-estimates.ts'
 import { AssumedIndex } from './AssumedIndex.tsx'
 import { IndexTrial } from './IndexTrial.tsx'
 import { MeasurePlan } from './MeasurePlan.tsx'
 import { PlanTour } from './PlanTour.tsx'
+import { PlanTree } from './PlanTree.tsx'
 import { indexCandidates } from './plan-index.ts'
-import { misestimate } from './plan-measure.ts'
-import { type MeasureRuns, RUNS_PREF, runsSchema } from './plan-runs.ts'
+import { useMeasureRuns } from './plan-runs.ts'
+import { readRows, statsSigns } from './plan-stats.ts'
 import { planReads, planSteps } from './plan-steps.ts'
+import { isLimited } from './plan-tour.ts'
+import { StatsRefresh } from './StatsRefresh.tsx'
 import { triedOnTables } from './tried-indexes.ts'
 import { type AssumedCompare, comparedRows, useAssumedCompare } from './use-assumed-compare.ts'
 import { type AssumedPlan, useAssumedPlan } from './use-assumed-plan.ts'
 import { type ForecastStart, useForecastStart } from './use-forecast-start.ts'
 import { type IndexTrial as Trial, useIndexTrial } from './use-index-trial.ts'
 import { useMeasuredPlan } from './use-measured-plan.ts'
+import { useStatsRefresh } from './use-stats-refresh.ts'
 
 const t = locale.plan
 
@@ -50,8 +52,7 @@ export function PlanView({
 }) {
   const plan = useQuery(explainQuery(db, schema, sql))
   const relations = useQuery(foreignKeysQuery(db, schema))
-  // Kept in this browser: how many times in a row a statement is measured, before and after an index alike.
-  const [runs, setRuns] = useState<MeasureRuns>(() => readPreference(RUNS_PREF, runsSchema, 1))
+  const [runs, setRuns] = useMeasureRuns()
   const measure = useMeasuredPlan(db, schema, sql, runs)
   // Measured after as many times as before was (however the choice has changed since): the medians compare.
   const trial = useIndexTrial(db, schema, sql, scope, measure.times.length > 0 ? measure.times.length : runs)
@@ -59,6 +60,15 @@ export function PlanView({
   const compared = useAssumedCompare(db, schema, sql)
   // Built from here or from trying it without building it, the index keeps what the server expected of it.
   const build = useForecastStart(db, schema, sql, plan.data, assumed, compared, trial.start)
+  // Statistics taken again: what was measured or assumed under the old ones is put away.
+  const stats = useStatsRefresh(db, schema, () => {
+    const had = measure.result !== null
+    measure.clear()
+    assumed.clear()
+    return had
+  })
+  // The presentation says each table's size: it waits for the list, and goes on without it if it cannot be read.
+  const estimates = useRowEstimates(db, schema, stats.since)
   return (
     <section aria-label={t.title} className="space-y-3 rounded border border-line bg-surface p-3">
       <div className="flex items-center justify-between gap-2">
@@ -79,10 +89,7 @@ export function PlanView({
           {trial.tried ? null : (
             <MeasurePlan
               runs={runs}
-              onRuns={(n) => {
-                setRuns(n)
-                writePreference(RUNS_PREF, n)
-              }}
+              onRuns={setRuns}
               // Measured, the run is what is shown: the plan with an index assumed is put away first.
               measure={{
                 ...measure,
@@ -93,7 +100,22 @@ export function PlanView({
               }}
             />
           )}
+          {trial.tried ? null : (
+            <StatsRefresh
+              stats={stats}
+              signs={statsSigns(
+                plan.data.plan,
+                isLimited(plan.data.plan),
+                measure.result?.plan ?? null,
+                estimates.rows
+              )}
+              rowsNow={(table) => readRows(plan.data.plan, table)}
+              rereading={plan.isFetching}
+              busy={measure.step === 'running'}
+            />
+          )}
           <PlanStory
+            estimates={estimates}
             db={db}
             schema={schema}
             // The plan with an index assumed is shown for as long as it is asked for ("back to the plan as it is").
@@ -121,7 +143,10 @@ function PlanStory({
   build,
   relations,
   trial,
+  estimates,
 }: {
+  /** The tables' estimated rows, for the presentation (`useRowEstimates`). */
+  estimates: ReturnType<typeof useRowEstimates>
   db: string
   schema?: string | undefined
   result: ExplainResult
@@ -146,8 +171,6 @@ function PlanStory({
   const steps = planSteps(reads, indexColumns)
   // The plan shown has an index that is not there: said under it, and presented as an estimate beside the plan as is.
   const assuming = assumed.candidate !== null && result === assumed.result ? assumed.candidate : null
-  // The presentation says each table's size: it waits for the list, and goes on without it if it cannot be read.
-  const estimates = useRowEstimates(db, schema)
   const player = useStepPlayer(steps.length)
   const extra = new Map<string, string[]>()
   for (const c of steps.flatMap((s) => s.columns ?? [])) extra.set(c.table, [...(extra.get(c.table) ?? []), c.column])
@@ -254,39 +277,5 @@ function PlanStory({
         </pre>
       </details>
     </div>
-  )
-}
-
-/** The tree as the server gave it; the node read at the current step is marked. */
-function PlanTree({ node, path, current }: { node: PlanNode; path: string; current: string | undefined }) {
-  const here = path === current
-  const ms = node.actual?.ms ?? null
-  // A step far off its estimate is marked in the tree too, where the eye goes first.
-  const off = misestimate(node)
-  const facts = [
-    node.table ? `${node.table}${node.alias ? ` ${node.alias}` : ''}` : null,
-    node.index ? `[${node.index}]` : null,
-    node.estRows === null ? null : t.rows(Math.round(node.estRows)),
-    node.actual ? t.actual(node.actual.rows, node.actual.loops, ms === null ? null : t.duration(ms)) : null,
-    off ? t.off(off.factor, off.more) : null,
-  ].filter(Boolean)
-  return (
-    <li className="ml-3 border-l border-line pl-2">
-      <span
-        aria-current={here ? 'step' : undefined}
-        className={`inline-block rounded px-1 ${here ? 'bg-row-hover font-semibold text-ink' : 'text-ink'}`}
-      >
-        {node.op}
-        {facts.length > 0 ? <span className="text-ink-sub"> — {facts.join(' · ')}</span> : null}
-      </span>
-      {node.detail ? <div className="break-all text-ink-sub">{node.detail}</div> : null}
-      {node.children.length > 0 ? (
-        <ul>
-          {node.children.map((c, i) => (
-            <PlanTree key={`${path}.${i}`} node={c} path={`${path}.${i}`} current={current} />
-          ))}
-        </ul>
-      ) : null}
-    </li>
   )
 }

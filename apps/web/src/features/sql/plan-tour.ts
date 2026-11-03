@@ -2,8 +2,9 @@ import type { PlanNode, RelationDef } from '@tsmyadmin/shared'
 import { diagramFor, type Tone } from '@/components/schema-diagram/overlay.ts'
 import { openChapter, overlay, type TourScene, unique, whole } from '@/components/schema-diagram/tour.ts'
 import { locale } from '@/config/locale-screens.ts'
-import { type RowEstimates, rowsOf, rowsReading } from '@/lib/row-estimates.ts'
+import { type RowEstimates, rowsReading } from '@/lib/row-estimates.ts'
 import { heavyShare, MISESTIMATE_RATIO, misestimate, shareOf } from './plan-measure.ts'
+import { staleRead } from './plan-stats.ts'
 import { type PlanRead, planReads, planSteps } from './plan-steps.ts'
 import { type CompareInput, compareCandidates, compareScenes, compareTold } from './plan-tour-compare.ts'
 import { type AssumedInput, assumedScenes, type TrialInput, trialScenes } from './plan-tour-trial.ts'
@@ -55,27 +56,14 @@ function readHint(read: PlanRead): string | null {
   return n.detail && (join === null || join === 'loopOuter') ? t.filterScan(n.table) : null
 }
 
-/** Below this many rows, a gap between two estimates is noise, not a sign. */
-const STALE_FLOOR = 1000
-/** How far apart the two estimates must be, either way, to be said. */
-const STALE_RATIO = 2
-
-/**
- * Where the plan's rows for a whole table and the table list's estimate are far apart: one of the two counts is
- * old (PostgreSQL scales its count by the table's pages now; MySQL's list is cached apart from the optimizer's).
- * Only a full read with no condition, not split between workers (`Parallel …`: rows per worker): there the plan's
- * rows are the table's. Not in a plan that stops at a limit, to be safe: a server may count only the rows read
- * before it stops (PostgreSQL and MySQL 8.4 count the whole table; MySQL's format 1 has no step for the limit).
- */
+/** The words for a full read whose two estimates are far apart (`staleRead`). */
 function staleHint(read: PlanRead, rows: RowEstimates | undefined, limited: boolean): string | null {
-  const n = read.node
-  if (limited || n.access !== 'fullScan' || n.detail || n.estRows === null || /^parallel /i.test(n.op)) return null
-  const listed = rowsOf(rows, n.table)
-  if (!listed || listed.counted) return null
-  const [plan, list] = [Math.round(n.estRows), listed.n]
-  if (Math.min(plan, list) < STALE_FLOOR || Math.max(plan, list) < STALE_RATIO * Math.min(plan, list)) return null
-  return t.staleStats(n.table, plan, list)
+  const stale = staleRead(read, rows, limited)
+  return stale ? t.staleStats(stale.table, stale.plan, stale.list) : null
 }
+
+/** The plan stops at a limit: a server may count only the rows it reads before it stops. */
+export const isLimited = (plan: PlanNode) => finishes(plan).includes('limit')
 
 export interface PlanTourInput {
   plan: PlanNode
@@ -179,7 +167,7 @@ export function planTour({ plan, relations, indexColumns, rows, measuredMs, tria
   // Each table as last read: a later read of the same table is lit as it is read then.
   const lit = new Map<string, readonly [Tone, string]>()
   const hinted: string[] = []
-  const limited = finishes(plan).includes('limit')
+  const limited = isLimited(plan)
   reads.forEach((r, i) => {
     const { node, join, subquery, repeated } = r
     const step = steps[i]

@@ -1,5 +1,5 @@
 import { expect } from '@playwright/test'
-import { login, TARGETS, test } from './helpers.ts'
+import { cleanUp, login, scratchName, sqlOn, TARGETS, test } from './helpers.ts'
 import { openPlan, trialPlan } from './plan.ts'
 
 for (const t of TARGETS) {
@@ -41,6 +41,45 @@ for (const t of TARGETS) {
       await tour.getByRole('button', { name: '閉じる' }).click()
       await expect(tour).toBeHidden()
       await expect(plan.getByRole('button', { name: 'プレゼンで見る' })).toBeFocused()
+    })
+
+    test("offers to take a table's statistics again where they are old, and says what the plan expects after", async ({
+      page,
+    }) => {
+      // Old statistics are made for sure on PostgreSQL only: its table list counts the rows the last ANALYZE saw, its
+      // plan scales them by the pages there are now. MySQL keeps its count up to date as rows go in.
+      test.skip(t.dialect !== 'postgres', 'PostgreSQL only')
+      await login(page, t)
+      const table = scratchName('e2e_stats')
+      try {
+        await sqlOn(page, t, `CREATE TABLE ${table} (id INT PRIMARY KEY, n INT) WITH (autovacuum_enabled = false)`)
+        await sqlOn(page, t, `INSERT INTO ${table} SELECT g, g FROM generate_series(1, 2000) g`)
+        await sqlOn(page, t, `ANALYZE ${table}`)
+        await sqlOn(page, t, `INSERT INTO ${table} SELECT g, g FROM generate_series(2001, 50000) g`)
+        await page.goto(t.schema ? `/db/${t.database}/sql?schema=${t.schema}` : `/db/${t.database}/sql`)
+        await page.getByRole('textbox', { name: 'SQL エディタ' }).click()
+        await page.keyboard.type(`SELECT n FROM ${table}`)
+        await page.getByRole('button', { name: '図で見る', exact: true }).click()
+        const plan = page.getByRole('region', { name: '実行計画', exact: true })
+        const stats = plan.getByRole('region', { name: '統計の取り直し' })
+        await expect(
+          stats.getByText(new RegExp(`^${table}: 計画の見込みは [\\d,]+ 行、テーブル一覧の見込みは約 2,000 行`))
+        ).toBeVisible()
+        await stats.getByRole('button', { name: `${table} の統計を取り直す` }).click()
+        const dialog = page.getByRole('dialog', { name: 'メンテナンス' })
+        await expect(dialog).toContainText(`ANALYZE`)
+        await dialog.getByRole('button', { name: '実行する' }).click()
+        await expect(
+          plan.getByRole('status').filter({
+            hasText: new RegExp(
+              `^${table} の統計を取り直しました。計画の ${table} の見込みは [\\d,]+ 行 → [\\d,]+ 行です$`
+            ),
+          })
+        ).toBeVisible()
+        await expect(stats.getByText(`${table}: 統計を取り直しました`)).toBeVisible()
+      } finally {
+        await cleanUp(page, t, `DROP TABLE IF EXISTS ${table}`)
+      }
     })
 
     test('measures as many times in a row as chosen, and says the median with the fastest and slowest', async ({
