@@ -58,14 +58,18 @@ export function PlanView({
   const trial = useIndexTrial(db, schema, sql, scope, measure.times.length > 0 ? measure.times.length : runs)
   const assumed = useAssumedPlan(db, schema, sql)
   const compared = useAssumedCompare(db, schema, sql)
-  // Built from here or from trying it without building it, the index keeps what the server expected of it.
-  const build = useForecastStart(db, schema, sql, plan.data, assumed, compared, trial.start)
   // Statistics taken again: what was measured or assumed under the old ones is put away.
   const stats = useStatsRefresh(db, schema, () => {
     const had = measure.result !== null
     measure.clear()
     assumed.clear()
-    return had
+    return { cleared: had, planAt: plan.dataUpdatedAt }
+  })
+  // Nothing is measured or tried while statistics are taken: what it measured would be under neither.
+  const analyzing = stats.flow.running
+  // Built from here or from trying it without building it, the index keeps what the server expected of it.
+  const build = useForecastStart(db, schema, sql, plan.data, assumed, compared, (c, f) => {
+    if (!analyzing) trial.start(c, f)
   })
   // The presentation says each table's size: it waits for the list, and goes on without it if it cannot be read.
   const estimates = useRowEstimates(db, schema, stats.since)
@@ -93,27 +97,27 @@ export function PlanView({
               // Measured, the run is what is shown: the plan with an index assumed is put away first.
               measure={{
                 ...measure,
-                run: () => {
+                run: async () => {
+                  if (analyzing) return
                   assumed.clear()
                   return measure.run()
                 },
               }}
             />
           )}
-          {trial.tried ? null : (
-            <StatsRefresh
-              stats={stats}
-              signs={statsSigns(
-                plan.data.plan,
-                isLimited(plan.data.plan),
-                measure.result?.plan ?? null,
-                estimates.rows
-              )}
-              rowsNow={(table) => readRows(plan.data.plan, table)}
-              rereading={plan.isFetching}
-              busy={measure.step === 'running'}
-            />
-          )}
+          {/* Kept while an index is tried (its status stays), with nothing to take: the run compared with stays. */}
+          <StatsRefresh
+            stats={stats}
+            signs={
+              trial.tried
+                ? []
+                : statsSigns(plan.data.plan, isLimited(plan.data.plan), measure.result?.plan ?? null, estimates.rows)
+            }
+            rowsNow={(table) => readRows(plan.data.plan, table)}
+            // Read again after this refresh, not on any other read of the plan.
+            rereading={plan.dataUpdatedAt === stats.refreshed?.planAt}
+            busy={measure.step === 'running' || trial.tried !== null}
+          />
           <PlanStory
             estimates={estimates}
             db={db}

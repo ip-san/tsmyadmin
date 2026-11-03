@@ -339,7 +339,7 @@ export const enScreens = {
     measureHint: "Run this statement for real and measure each step's rows and time (a statement that only reads)",
     statsGroup: 'Taking statistics again',
     statsIntro:
-      "The server expects how many rows a step gives from the table's statistics (its rows, how its values spread), and picks how to read by them. Old statistics lead it astray, to a slow way of reading at times. Taken again, the plan may change (where the columns of a condition go together, the expectation may stay off even then)",
+      "The server expects how many rows a step gives from the table's statistics (its rows, how its values spread), and picks how to read by them. Old statistics lead it astray, to a slow way of reading at times. Taken again, the plan may change (where the columns of a condition go together, the expectation may stay off even then; on MySQL, reading only some partitions makes the plan and the table list differ however new the statistics)",
     statsList: (table: string, plan: number, list: number) =>
       `${table}: the plan expects ${plan.toLocaleString('en-US')} rows, the table list about ${list.toLocaleString('en-US')}: two times apart or more`,
     statsMeasured: (table: string, expected: number, actual: number) =>

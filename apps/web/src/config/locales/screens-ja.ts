@@ -343,7 +343,7 @@ export const jaScreens = {
     measureGroup: '実行して測る前の確認',
     statsGroup: '統計の取り直し',
     statsIntro:
-      'サーバーは、テーブルの統計（行数や値の散らばり）から行数を見込んで、読み方を選びます。統計が古いと見込みを誤り、遅い読み方を選ぶことがあります。取り直すと、計画が変わることがあります（条件の列どうしの値が連動しているときは、取り直しても見込みが合わないことがあります）',
+      'サーバーは、テーブルの統計（行数や値の散らばり）から行数を見込んで、読み方を選びます。統計が古いと見込みを誤り、遅い読み方を選ぶことがあります。取り直すと、計画が変わることがあります（条件の列どうしの値が連動しているときは、取り直しても見込みが合わないことがあります。MySQL でパーティションを絞って読むときは、統計が新しくても計画とテーブル一覧の行数が違って見えます）',
     statsList: (table: string, plan: number, list: number) =>
       `${table}: 計画の見込みは ${plan.toLocaleString('ja-JP')} 行、テーブル一覧の見込みは約 ${list.toLocaleString('ja-JP')} 行で、2 倍以上違います`,
     statsMeasured: (table: string, expected: number, actual: number) =>

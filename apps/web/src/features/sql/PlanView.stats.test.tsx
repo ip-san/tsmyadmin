@@ -12,8 +12,10 @@ const p = locale.plan
 /** The rows the plan expects of logs, and the table list's estimate: both as the server reads them now. */
 let planRows: number
 let listRows: number
-/** Holds the table list back until it is let go. */
+/** Holds the table list, the plan read and the ANALYZE back until each is let go. */
 let listed: Promise<void>
+let planned: Promise<void>
+let analyzed: Promise<void>
 const scan = (): PlanNode => ({
   op: 'Seq Scan',
   table: 'logs',
@@ -38,6 +40,7 @@ const previewDdl = vi.fn(async (_db: string, _schema: unknown, op: { op: string;
 }))
 /** Running the ANALYZE: the statistics are the table's own from then on. */
 const executeSql = vi.fn(async (_db: string, body: { sql: string }) => {
+  await analyzed
   planRows = 60_000
   listRows = 60_000
   return [{ kind: 'affected', sql: body.sql, affectedRows: 0, durationMs: 1 }]
@@ -48,7 +51,10 @@ vi.mock('@/lib/queries.ts', () => ({
   hypotheticalPlan: async () => ({}),
   explainQuery: () => ({
     queryKey: ['explain'],
-    queryFn: async () => ({ plan: scan(), raw: '', rawTruncated: false }),
+    queryFn: async () => {
+      await planned
+      return { plan: scan(), raw: '', rawTruncated: false }
+    },
   }),
   sessionQuery: { queryKey: ['session'], queryFn: async () => ({ dialect: 'postgres' }) },
   isDatabaseData: (key: readonly unknown[]) => key[0] !== 'session',
@@ -85,6 +91,8 @@ beforeEach(() => {
   planRows = 50_000
   listRows = 10_000
   listed = Promise.resolve()
+  planned = Promise.resolve()
+  analyzed = Promise.resolve()
   analyzePlan.mockClear()
   previewDdl.mockClear()
   executeSql.mockClear()
@@ -92,11 +100,13 @@ beforeEach(() => {
 afterEach(cleanup)
 
 function mount() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    <QueryClientProvider client={client}>
       <PlanView db="shop" sql="SELECT * FROM logs" scope="postgres.db.5432" onClose={vi.fn()} />
     </QueryClientProvider>
   )
+  return client
 }
 
 async function refresh() {
@@ -143,5 +153,36 @@ describe('PlanView, taking statistics again', () => {
     expect(screen.queryByText(p.measured(p.duration(40)))).toBeNull()
     expect(screen.queryByRole('region', { name: p.trialGroup })).toBeNull()
     expect(screen.getByText(p.notes)).toBeTruthy()
+  })
+
+  it('says the plan is read again until it is, and not on another read of it', async () => {
+    const client = mount()
+    const held = Promise.withResolvers<void>()
+    await screen.findByText(p.statsList('logs', 50_000, 10_000))
+    planned = held.promise
+    await refresh()
+    expect(await screen.findByText(p.statsRereading('logs'))).toBeTruthy()
+    await act(async () => held.resolve())
+    expect(await screen.findByText(p.statsDone('logs', 50_000, 60_000, false))).toBeTruthy()
+    // Read again for another reason, the plan read after the refresh is still the one said.
+    planned = new Promise(() => undefined)
+    await act(async () => {
+      void client.invalidateQueries({ queryKey: ['explain'] })
+      // The read under way is told to the screen.
+      await new Promise((settle) => setTimeout(settle, 20))
+    })
+    expect(screen.getByText(p.statsDone('logs', 50_000, 60_000, false))).toBeTruthy()
+  })
+
+  it('measures nothing while the statistics are taken', async () => {
+    const held = Promise.withResolvers<void>()
+    analyzed = held.promise
+    mount()
+    await refresh()
+    fireEvent.click(await screen.findByRole('button', { name: p.measure }))
+    fireEvent.click(screen.getByRole('button', { name: p.measureRun }))
+    await act(async () => held.resolve())
+    await screen.findByText(p.statsDone('logs', 50_000, 60_000, false))
+    expect(analyzePlan).not.toHaveBeenCalled()
   })
 })

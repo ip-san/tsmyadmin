@@ -3,10 +3,12 @@ import { useState } from 'react'
 import { type DdlFlow, useDdlFlow } from '@/lib/ddl.ts'
 
 /** A table whose statistics were taken again: the rows the plan expected of it before, and whether a run was put away. */
-export interface StatsRefreshed {
+interface StatsRefreshed {
   table: string
   before: number | null
   cleared: boolean
+  /** When the plan shown then was read: read again once it is another. */
+  planAt: number
 }
 
 export interface StatsRefresh {
@@ -22,15 +24,19 @@ export interface StatsRefresh {
 /**
  * Taking a table's statistics again from a plan (`ANALYZE` / `ANALYZE TABLE`, previewed and confirmed as any DDL).
  * Done, the plan is read again (every query of the database is), and `onDone` puts away what was measured under the
- * old statistics: it returns whether there was such a run.
+ * old statistics: it returns whether there was such a run, and when the plan shown was read.
  */
-export function useStatsRefresh(db: string, schema: string | undefined, onDone: () => boolean): StatsRefresh {
+export function useStatsRefresh(
+  db: string,
+  schema: string | undefined,
+  onDone: () => { cleared: boolean; planAt: number }
+): StatsRefresh {
   const [asked, setAsked] = useState<{ table: string; before: number | null } | null>(null)
   const [refreshed, setRefreshed] = useState<StatsRefreshed | null>(null)
   const [since, setSince] = useState(0)
   const flow = useDdlFlow(db, schema, (op: DdlOp) => {
     if (op.op !== 'maintainTable' || !asked || op.table !== asked.table) return
-    setRefreshed({ ...asked, cleared: onDone() })
+    setRefreshed({ ...asked, ...onDone() })
     setSince(Date.now())
   })
   return {

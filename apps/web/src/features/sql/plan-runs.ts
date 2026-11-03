@@ -6,8 +6,8 @@ import { readPreference, writePreference } from '@/lib/preferences.ts'
 export const MEASURE_RUNS = [1, 3, 5] as const
 export type MeasureRuns = (typeof MEASURE_RUNS)[number]
 /** Where the count chosen is kept, in this browser. */
-export const RUNS_PREF = 'plan.measureRuns'
-export const runsSchema: z.ZodType<MeasureRuns> = z.union([z.literal(1), z.literal(3), z.literal(5)])
+const RUNS_PREF = 'plan.measureRuns'
+const runsSchema: z.ZodType<MeasureRuns> = z.union([z.literal(1), z.literal(3), z.literal(5)])
 
 /** The times of the runs of one measuring, as said: how many, the median, the fastest and the slowest. */
 export interface RunsSummary {

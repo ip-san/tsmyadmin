@@ -19,7 +19,7 @@ export function useRowEstimates(
   const at = `${db}\0${schema ?? ''}\0${since}`
   const kept = useRef<{ at: string; rows?: RowEstimates } | null>(null)
   if (kept.current?.at !== at) kept.current = null
-  const fresh = since === 0 || list.dataUpdatedAt > since || list.errorUpdatedAt > since
+  const fresh = since === 0 || list.dataUpdatedAt >= since || list.errorUpdatedAt >= since
   if (kept.current === null && !list.isPending && fresh)
     kept.current = list.data ? { at, rows: rowEstimates(list.data) } : { at }
   return kept.current
