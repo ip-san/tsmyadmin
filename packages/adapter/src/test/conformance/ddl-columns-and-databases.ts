@@ -287,27 +287,48 @@ export function describeDdlColumnsAndDatabases(env: ConformanceEnv, { firstValue
     if (dialect !== 'postgres') return
     const t = `${scratch}_building`
     const idx = `${t}_idx`
+    const marker = `${t}_holder`
+    const one = async (sql: string) => {
+      const r = (await exec(sql, { stopOnError: false })).find((x) => x.kind === 'rows')
+      return r?.kind === 'rows' ? r.result.rows[0]?.[0] : undefined
+    }
+    const until = async (sql: string) => {
+      for (let i = 0; i < 200; i++) {
+        if ((await one(sql)) !== undefined) return
+        await new Promise((resolve) => setTimeout(resolve, 50))
+      }
+      throw new Error(`never: ${sql}`)
+    }
+    let holding: Promise<unknown> = Promise.resolve()
     try {
       await execOk(`CREATE TABLE ${t} (id INT PRIMARY KEY, a INT)`)
       await execOk(`INSERT INTO ${t} VALUES (1, 0)`)
-      // An open transaction on the table: the build, once its index is made (not valid yet), waits for it to end.
-      const holding = exec(`BEGIN; UPDATE ${t} SET a = 1 WHERE id = 1; SELECT pg_sleep(3)`, { stopOnError: false })
-      await new Promise((resolve) => setTimeout(resolve, 300))
+      // A transaction open on the table, held until it is cancelled below: the build, once its index is made (not
+      // valid yet), waits for it to end.
+      holding = exec(`BEGIN; UPDATE ${t} SET a = 1 WHERE id = 1; SELECT pg_sleep(60) /* ${marker} */`, {
+        stopOnError: false,
+      })
+      const holder = `SELECT pid FROM pg_stat_activity WHERE query LIKE '%${marker}%' AND query NOT LIKE '%pg_stat_activity%' AND wait_event = 'PgSleep'`
+      await until(holder)
       const building = exec(`CREATE INDEX CONCURRENTLY ${idx} ON ${t} (a)`, { stopOnError: false })
-      let seen = false
-      for (let i = 0; i < 50 && !seen; i++) {
-        const r = await exec(`SELECT 1 FROM pg_class WHERE relname = '${idx}'`, { stopOnError: false })
-        seen = r.some((x) => x.kind === 'rows' && x.result.rows.length > 0)
-        if (!seen) await new Promise((resolve) => setTimeout(resolve, 50))
-      }
-      expect(seen).toBe(true)
-      // There, not valid, and building: neither an index nor one left unusable.
+      // Building, as the server says: its index is there and in the build's progress.
+      await until(
+        `SELECT 1 FROM pg_stat_progress_create_index p JOIN pg_class c ON c.oid = p.index_relid WHERE c.relname = '${idx}'`
+      )
       const s = await env.db.describeTable(ns, t)
       expect(s.indexes.some((i) => i.name === idx)).toBe(false)
       expect(s.unusableIndexes ?? []).toEqual([])
-      await Promise.all([holding, building])
+      await exec(`SELECT pg_cancel_backend(pid) FROM (${holder}) h`, { stopOnError: false })
+      await building
       expect((await env.db.describeTable(ns, t)).indexes.some((i) => i.name === idx)).toBe(true)
     } finally {
+      await exec(
+        `SELECT pg_cancel_backend(pid) FROM pg_stat_activity WHERE query LIKE '%${marker}%' AND pid <> pg_backend_pid()`,
+        {
+          stopOnError: false,
+        }
+      )
+      await holding
       await exec(`DROP TABLE IF EXISTS ${t}`, { stopOnError: false })
     }
   })

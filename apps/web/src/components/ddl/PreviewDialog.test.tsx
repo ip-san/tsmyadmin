@@ -380,6 +380,8 @@ describe('PreviewDialog, stopping a run', () => {
     expect(screen.getByLabelText('SQL').textContent).toBe('ALTER 0;\nALTER 1;')
     expect(screen.getByRole('button', { name: locale.sql.running })).toHaveProperty('disabled', true)
     expect(screen.getByRole('button', { name: locale.common.cancel })).toHaveProperty('disabled', true)
+    // Nothing runs yet: nothing to stop.
+    expect(screen.queryByRole('button', { name: d.stop })).toBeNull()
     await act(async () => answer())
     expect(await screen.findByText(d.revised)).toBeTruthy()
     expect(screen.getByLabelText('SQL').textContent).toBe('DROP 0;\nALTER 0;\nALTER 1;')

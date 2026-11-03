@@ -208,7 +208,8 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
     stopError,
     remaining,
     revised,
-    ...(config.stop
+    // Only a run can be stopped: not the SQL being built again before one.
+    ...(config.stop && !rebuilding
       ? {
           stop: () => {
             const id = current.current
@@ -267,9 +268,10 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
       const mine = generation.current
       previewM.mutate(op, {
         onSuccess: (r) => {
+          // Put away since (closed, or another op opened): that reset these itself.
+          if (generation.current !== mine) return
           running.current = false
           setRebuilding(false)
-          if (generation.current !== mine) return
           if (r.sql.length === sql.length && r.sql.every((s, i) => s === sql[i])) return run(r.sql)
           setSql(r.sql)
           setStopped(false)
@@ -279,6 +281,7 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
           setRevised(true)
         },
         onError: () => {
+          if (generation.current !== mine) return
           running.current = false
           setRebuilding(false)
         },
