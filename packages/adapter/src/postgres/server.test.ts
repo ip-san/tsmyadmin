@@ -79,28 +79,30 @@ describe('pgDiagnostics', () => {
     it('lists the statements, with the times in seconds and every value as text', async () => {
       const { conn, asked } = scripted([
         installed,
-        [/FROM pg_stat_statements/, rows([['SELECT 1', 3, 1.5, 0.5, null]])],
+        [/FROM pg_stat_statements/, rows([['SELECT 1', 'app', 3, 1.5, 0.5, null]])],
       ])
       const report = await pgDiagnostics(conn, 'statements')
       expect(report).toMatchObject({
         status: 'ok',
-        columns: ['statement', 'runs', 'totalSeconds', 'maxSeconds', 'rows'],
-        rows: [['SELECT 1', '3', '1.5', '0.5', null]],
+        columns: ['statement', 'database', 'runs', 'totalSeconds', 'maxSeconds', 'rows'],
+        rows: [['SELECT 1', 'app', '3', '1.5', '0.5', null]],
       })
-      expect(asked.at(-1)?.text).toContain('total_exec_time')
+      expect(asked.at(-1)?.text.replace(/\s+/g, ' ')).toBe(
+        'SELECT s.query, d.datname, s.calls, s.total_exec_time / 1000, s.max_exec_time / 1000, s.rows FROM pg_stat_statements s LEFT JOIN pg_database d ON d.oid = s.dbid ORDER BY s.total_exec_time DESC LIMIT 50'
+      )
     })
 
     it('falls back to the older column names (PostgreSQL 12 and earlier)', async () => {
       const { conn, asked } = scripted([
         installed,
         [/total_exec_time/, fail('NOT_FOUND', '42703')],
-        [/total_time/, rows([['SELECT 2', 1, 2, 3, 4]])],
+        [/total_time/, rows([['SELECT 2', 'app', 1, 2, 3, 4]])],
       ])
       expect(await pgDiagnostics(conn, 'statements')).toMatchObject({
         status: 'ok',
-        rows: [['SELECT 2', '1', '2', '3', '4']],
+        rows: [['SELECT 2', 'app', '1', '2', '3', '4']],
       })
-      expect(asked.at(-1)?.text).toContain('total_time')
+      expect(asked.at(-1)?.text).toContain('pg_database d ON d.oid = s.dbid ORDER BY s.total_time DESC')
     })
 
     it('says the extension is missing when it is installed but not preloaded (55000)', async () => {

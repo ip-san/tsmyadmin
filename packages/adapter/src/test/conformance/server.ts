@@ -143,8 +143,9 @@ export function describeServer(env: ConformanceEnv): void {
         await exec(`SET SESSION long_query_time = 0; SELECT '${marker}'`, { stopOnError: false })
         const report = await env.db.diagnostics('slowLog')
         expect(report.status).toBe('ok')
-        expect(report.columns).toEqual(['statement', 'runs', 'totalSeconds', 'maxSeconds', 'rowsExamined'])
-        expect(report.rows.some((r) => r[0]?.includes(marker) && Number(r[1]) >= 1)).toBe(true)
+        expect(report.columns).toEqual(['statement', 'database', 'runs', 'totalSeconds', 'maxSeconds', 'rowsExamined'])
+        // Said with the database it ran in, where its plan is read.
+        expect(report.rows.some((r) => r[0]?.includes(marker) && r[1] === ns.database && Number(r[2]) >= 1)).toBe(true)
       } finally {
         await exec(
           `SET GLOBAL slow_query_log = ${on === 1 || on === '1' ? 1 : 0}; SET GLOBAL log_output = '${String(output).replaceAll("'", '')}'`,

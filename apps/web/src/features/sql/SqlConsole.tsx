@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice } from '@/components/ui/Feedback.tsx'
 import { locale } from '@/config/locale-screens.ts'
 import { ApiError } from '@/lib/api.ts'
-import { consoleDraftKey, takeConsoleAutorun } from '@/lib/console-draft.ts'
+import { consoleDraftKey, takeConsoleArrival } from '@/lib/console-draft.ts'
 import { readPreference } from '@/lib/preferences.ts'
 import { invalidateDatabaseData, mutations } from '@/lib/queries.ts'
 import { bookmarkName } from '@/lib/saved-queries.ts'
@@ -190,12 +190,14 @@ export function SqlConsole({ db, schema, dialect, initialSql = '', completion, d
     visualize: (sql) => plan.show(prepareStatement(sql, dialect, runOptions)),
     code: setCodeOf,
   }
-  // A page can hand the console a statement to run on arrival (a table's EXPLAIN). The timer keeps React's dev-only
-  // remount from consuming it in the pass that is thrown away.
+  // A page can hand the console a statement to run on arrival (a table's EXPLAIN), or to draw the plan of (a statement
+  // the server logged). The timer keeps React's dev-only remount from consuming it in the pass that is thrown away.
   useEffect(() => {
     const timer = setTimeout(() => {
-      const sql = takeConsoleAutorun(key)
+      const sql = takeConsoleArrival(key, 'run')
       if (sql !== null) latest.current?.rerun(sql)
+      const drawn = takeConsoleArrival(key, 'plan')
+      if (drawn !== null) latest.current?.visualize?.(drawn)
     }, 0)
     return () => clearTimeout(timer)
   }, [key])
