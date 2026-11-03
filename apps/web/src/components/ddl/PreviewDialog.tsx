@@ -188,7 +188,8 @@ function StopNotice<Op>({ flow }: { flow: PreviewFlow<Op> }) {
           >
             {rest.map((s) => `${s};`).join('\n')}
           </pre>
-          <Button className="mt-2" onClick={flow.confirmRemaining}>
+          {/* While the SQL is built again, nothing more runs: kept in place (and focusable) but said to be unusable. */}
+          <Button className="mt-2" onClick={flow.confirmRemaining} aria-disabled={flow.running || undefined}>
             {locale.ddl.runRest}
           </Button>
         </>

@@ -388,6 +388,25 @@ describe('PreviewDialog, stopping a run', () => {
     expect(execute).toHaveBeenCalledTimes(1)
   })
 
+  it('says the rest cannot be run while the SQL is built again', async () => {
+    await running(true, ['ALTER 0', 'ALTER 1', 'ALTER 2'])
+    fireEvent.click(await stopButton())
+    await act(async () => finish({ results: [ok(0), failed] }))
+    const rest = await screen.findByRole('button', { name: d.runRest })
+    expect(rest.getAttribute('aria-disabled')).toBeNull()
+    let answer: () => void = () => undefined
+    previewGate = new Promise((resolve) => (answer = resolve))
+    rebuilt = ['DROP 1', 'ALTER 1', 'ALTER 2']
+    fireEvent.click(screen.getByRole('button', { name: d.execute }))
+    await vi.waitFor(() => expect(previewed).toHaveBeenCalledTimes(2))
+    expect(rest.getAttribute('aria-disabled')).toBe('true')
+    fireEvent.click(rest)
+    expect(execute).toHaveBeenCalledTimes(1)
+    await act(async () => answer())
+    expect(await screen.findByText(d.revised)).toBeTruthy()
+    expect(execute).toHaveBeenCalledTimes(1)
+  })
+
   it('runs at once when run after a stop where the SQL built again is the same', async () => {
     await running()
     fireEvent.click(await stopButton())
