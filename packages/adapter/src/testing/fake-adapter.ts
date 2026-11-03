@@ -64,6 +64,7 @@ import {
   AdapterError,
   type DatabaseAdapter,
   type ExecuteOptions,
+  type ExplainOptions,
   type InsertRowsOptions,
   type RowBatch,
 } from '../types.ts'
@@ -709,8 +710,8 @@ export class FakeAdapter implements DatabaseAdapter {
     }
   }
 
-  async explainPlan(ns: Namespace, sql: string): Promise<ExplainResult> {
-    this.record('explainPlan', ns, sql)
+  async explainPlan(ns: Namespace, sql: string, opts?: ExplainOptions): Promise<ExplainResult> {
+    this.record('explainPlan', ns, sql, ...(opts ? [opts] : []))
     const table = /\bFROM\s+(\w+)/i.exec(sql)?.[1] ?? null
     const plan = {
       ...{ op: 'Table', table, alias: null, index: null, indexColumns: [], access: 'fullScan' as const },

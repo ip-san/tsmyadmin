@@ -234,6 +234,12 @@ export interface SqlExporter {
   withoutDefiner(sql: string): string
 }
 
+/** How a plan is estimated (`explainPlan`). */
+export interface ExplainOptions {
+  /** Planned for any value of the statement's `$1`, `$2`… (PostgreSQL 16 and later). */
+  generic?: boolean
+}
+
 export interface DatabaseAdapter {
   readonly dialect: Dialect
   ping(): Promise<void>
@@ -338,9 +344,10 @@ export interface DatabaseAdapter {
   /**
    * The plan the server would follow for one statement, read into the tree both servers share. Estimated only (never
    * ANALYZE), in a transaction that is rolled back. Refuses (`VALIDATION`) more than one statement, or one EXPLAIN
-   * does not take.
+   * does not take. `generic`: the statement has `$1`, `$2`… with no values, and the plan is made for any value
+   * (PostgreSQL 16 and later, `EXPLAIN (GENERIC_PLAN)`); `UNSUPPORTED` where the server cannot.
    */
-  explainPlan(ns: Namespace, sql: string): Promise<ExplainResult>
+  explainPlan(ns: Namespace, sql: string, opts?: ExplainOptions): Promise<ExplainResult>
   /**
    * The estimated plan of one statement as if these indexes were built, without building them (PostgreSQL with the
    * HypoPG extension installed in the database; `canAssume` on an estimate says so). The plan names an index assumed by

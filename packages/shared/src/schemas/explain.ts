@@ -8,6 +8,12 @@ export const EXPLAIN_MAX_SQL = 100_000
 
 export const ExplainRequestSchema = z.object({ sql: z.string().min(1).max(EXPLAIN_MAX_SQL) })
 
+/**
+ * A statement's estimated plan. `generic`: its `$1`, `$2`… have no values, and the plan is made for any value
+ * (PostgreSQL 16 and later; refused as unsupported elsewhere).
+ */
+export const ExplainEstimateRequestSchema = ExplainRequestSchema.extend({ generic: z.boolean().optional() })
+
 /** The longest a measured run may take by default, and at most: it runs the statement, so it is bounded. */
 export const ANALYZE_TIMEOUT_DEFAULT_MS = 30_000
 export const ANALYZE_TIMEOUT_MAX_MS = 300_000

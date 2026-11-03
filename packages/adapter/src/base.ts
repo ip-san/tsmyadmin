@@ -84,6 +84,7 @@ import {
   type DatabaseAdapter,
   type DdlBuilder,
   type ExecuteOptions,
+  type ExplainOptions,
   type InsertRowsOptions,
   type RowBatch,
   type SqlExporter,
@@ -126,7 +127,7 @@ export abstract class BaseAdapter implements DatabaseAdapter {
   abstract listForeignKeys(ns: Namespace): Promise<RelationDef[]>
   abstract listIndexComments(ns: Namespace): Promise<IndexComment[]>
   abstract tableUsage(ns: Namespace): Promise<TableUsageReport>
-  abstract explainPlan(ns: Namespace, sql: string): Promise<ExplainResult>
+  abstract explainPlan(ns: Namespace, sql: string, opts?: ExplainOptions): Promise<ExplainResult>
   abstract hypotheticalPlan(ns: Namespace, sql: string, indexes: HypotheticalIndex[]): Promise<ExplainResult>
   abstract analyzePlan(ns: Namespace, sql: string, timeoutMs: number, queryId?: string): Promise<ExplainResult>
   abstract describeTable(ns: Namespace, table: string): Promise<TableSchema>

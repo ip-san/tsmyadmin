@@ -15,7 +15,7 @@ import {
   DeleteRowsRequestSchema,
   type Dialect,
   decodeTableList,
-  ExplainRequestSchema,
+  ExplainEstimateRequestSchema,
   ExportQuerySchema,
   HypotheticalPlanRequestSchema,
   IMPORT_MAX_BYTES,
@@ -445,11 +445,12 @@ export function databaseRoutes(cfg: SessionConfig, logger?: Logger) {
       .post(
         '/databases/:db/explain',
         validate('query', SchemaQuerySchema),
-        validate('json', ExplainRequestSchema),
+        validate('json', ExplainEstimateRequestSchema),
         async (c) => {
           const q = c.req.valid('query')
-          const { sql } = c.req.valid('json')
-          return c.json(await c.get('session').adapter.explainPlan(ns(c.req.param('db'), q.schema), sql))
+          const { sql, generic } = c.req.valid('json')
+          const db = c.get('session').adapter
+          return c.json(await db.explainPlan(ns(c.req.param('db'), q.schema), sql, generic ? { generic } : undefined))
         }
       )
       // The same estimate with indexes assumed, not built (PostgreSQL with HypoPG): nothing is written or left.

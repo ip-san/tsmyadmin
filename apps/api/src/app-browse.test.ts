@@ -294,6 +294,21 @@ describe('explain', () => {
     expect(empty.status).toBe(400)
   })
 
+  it('asks for a plan for any value where the statement says its values are not given', async () => {
+    const h = harness()
+    stores.push(h.store)
+    await h.login()
+    const explain = (body: object) =>
+      h.req('/api/databases/shop/explain', { method: 'POST', body: JSON.stringify(body) })
+    expect((await explain({ sql: 'SELECT * FROM users WHERE id = $1', generic: true })).status).toBe(200)
+    expect(h.adapter.calls.at(-1)?.args).toEqual([
+      { database: 'shop' },
+      'SELECT * FROM users WHERE id = $1',
+      { generic: true },
+    ])
+    expect((await explain({ sql: 'SELECT 1', generic: 'yes' })).status).toBe(400)
+  })
+
   it('measures a plan by running it, within the time asked for or 30 seconds, never past 5 minutes', async () => {
     const h = harness()
     stores.push(h.store)

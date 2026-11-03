@@ -28,23 +28,32 @@ describe('namedParameters', () => {
 })
 
 describe('loggedStatementPlan', () => {
+  const hints = { fill: 'give values', forAny: 'for any value' }
+
   it('draws at once a statement logged with its values', () => {
-    expect(loggedStatementPlan('  SELECT * FROM t WHERE a = 1 ', 'h')).toEqual({
+    expect(loggedStatementPlan('  SELECT * FROM t WHERE a = 1 ', hints, true)).toEqual({
       sql: 'SELECT * FROM t WHERE a = 1',
       drawn: true,
     })
   })
 
-  it('asks for the values a statement was logged without, before its plan is drawn', () => {
-    expect(loggedStatementPlan('UPDATE t SET a = $1 WHERE id = $2', 'give values')).toEqual({
+  it('asks for the values a statement was logged without, before its plan is drawn, where the server needs them', () => {
+    expect(loggedStatementPlan('UPDATE t SET a = $1 WHERE id = $2', hints, false)).toEqual({
       sql: '-- give values\nUPDATE t SET a = :p1 WHERE id = :p2',
       drawn: false,
     })
   })
 
+  it('draws at once, for any value, a statement logged without its values where the server can', () => {
+    expect(loggedStatementPlan('UPDATE t SET a = $1 WHERE id = $2', hints, true)).toEqual({
+      sql: '-- for any value\nUPDATE t SET a = :p1 WHERE id = :p2',
+      drawn: true,
+    })
+  })
+
   it('offers no plan for what EXPLAIN does not take', () => {
-    expect(loggedStatementPlan('COMMIT', 'h')).toBeNull()
-    expect(loggedStatementPlan('SET search_path = $1', 'h')).toBeNull()
-    expect(loggedStatementPlan('CALL p($1)', 'h')).toBeNull()
+    expect(loggedStatementPlan('COMMIT', hints, true)).toBeNull()
+    expect(loggedStatementPlan('SET search_path = $1', hints, true)).toBeNull()
+    expect(loggedStatementPlan('CALL p($1)', hints, true)).toBeNull()
   })
 })

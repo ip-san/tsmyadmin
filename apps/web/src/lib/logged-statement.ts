@@ -26,11 +26,19 @@ export function namedParameters(sql: string): string {
 
 /**
  * What the SQL tab is handed for a logged statement whose plan is asked for, or null where there is no plan to read
- * (not a statement EXPLAIN takes: a COMMIT, a SET, a CALL). `drawn`: its plan can be drawn at once; else its values were
- * not logged, and `hint` (a line comment above it) says to give them first.
+ * (not a statement EXPLAIN takes: a COMMIT, a SET, a CALL). `drawn`: its plan can be drawn at once. Its values not
+ * logged, a line comment above it says so: drawn for any value where the server can (`forAny`: PostgreSQL), else
+ * after they are given (`fill`).
  */
-export function loggedStatementPlan(sql: string, hint: string): { sql: string; drawn: boolean } | null {
+export function loggedStatementPlan(
+  sql: string,
+  hints: { fill: string; forAny: string },
+  forAny: boolean
+): { sql: string; drawn: boolean } | null {
   const text = namedParameters(sql.trim())
   if (!EXPLAINABLE.test(text)) return null
-  return findParameters(text).length === 0 ? { sql: text, drawn: true } : { sql: `-- ${hint}\n${text}`, drawn: false }
+  if (findParameters(text).length === 0) return { sql: text, drawn: true }
+  return forAny
+    ? { sql: `-- ${hints.forAny}\n${text}`, drawn: true }
+    : { sql: `-- ${hints.fill}\n${text}`, drawn: false }
 }
