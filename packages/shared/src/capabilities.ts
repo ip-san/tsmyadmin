@@ -112,6 +112,11 @@ export interface DialectCapabilities {
   }
   /** `NO_AUTO_VALUE_ON_ZERO`: a zero in an auto-increment column is stored as zero (a MySQL `sql_mode`). */
   noAutoValueOnZero: boolean
+  /**
+   * A statement's plan can be made with its values not given, for any value (`EXPLAIN (GENERIC_PLAN)`, PostgreSQL 16
+   * and later: an older server refuses it as unsupported). MySQL plans only with the values.
+   */
+  genericPlan: boolean
 }
 
 const CAPABILITIES: Record<Dialect, DialectCapabilities> = {
@@ -150,6 +155,7 @@ const CAPABILITIES: Record<Dialect, DialectCapabilities> = {
       utc: { set: "SET @OLD_TIME_ZONE = @@TIME_ZONE, TIME_ZONE = '+00:00'", restore: 'SET TIME_ZONE = @OLD_TIME_ZONE' },
     },
     noAutoValueOnZero: true,
+    genericPlan: false,
   },
   postgres: {
     identifierQuote: '"',
@@ -186,6 +192,7 @@ const CAPABILITIES: Record<Dialect, DialectCapabilities> = {
       utc: { set: "SET TIME ZONE 'UTC'", restore: null },
     },
     noAutoValueOnZero: false,
+    genericPlan: true,
   },
 }
 

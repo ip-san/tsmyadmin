@@ -6,7 +6,7 @@ import { pageProblems } from './scan.ts'
 // report is answered here, with statements of this test's own table, and the rest (the SQL tab, its plan) is real.
 for (const t of TARGETS) {
   test.describe(`a logged statement's plan (${t.dialect})`, () => {
-    test("opens a logged statement's plan in the database it ran in, and asks for the values it was logged without", async ({
+    test("opens a logged statement's plan in the database it ran in, and draws or asks for the values it was logged without", async ({
       page,
     }) => {
       await login(page, t)
@@ -46,17 +46,26 @@ for (const t of TARGETS) {
         const plan = page.getByRole('region', { name: '実行計画', exact: true })
         await expect(plan.getByText(table).first()).toBeVisible()
 
-        // Logged without them: given first, under the run options, then drawn.
+        // Logged without them: PostgreSQL (16 and later, as in compose) draws it for any value at once, with nothing
+        // to run; MySQL asks for them first, under the run options.
         await page.goto('/monitor')
         await planOf(2).click()
         const editor = page.getByRole('textbox', { name: 'SQL エディタ' })
         await expect(editor).toContainText('WHERE v = :p1')
         await expect(editor).toContainText('実行のオプション')
-        await expect(page.getByRole('region', { name: '実行計画', exact: true })).toHaveCount(0)
+        if (t.dialect === 'postgres') {
+          await expect(plan.getByText(/^値を決めずに立てた計画です/)).toBeVisible()
+          await expect(plan.getByText(table).first()).toBeVisible()
+          await expect(plan.getByRole('button', { name: '実際に実行して測る' })).toHaveCount(0)
+        } else {
+          await expect(page.getByRole('region', { name: '実行計画', exact: true })).toHaveCount(0)
+        }
+        // With the values given, drawn as any statement, and measurable.
         await page.getByText('実行のオプション (1 個のパラメーター)').click()
         await page.getByLabel('p1 の値').fill('2')
         await page.getByRole('button', { name: '図で見る', exact: true }).click()
         await expect(plan.getByText(table).first()).toBeVisible()
+        await expect(plan.getByRole('button', { name: '実際に実行して測る' })).toBeVisible()
       } finally {
         await cleanUp(page, t, `DROP TABLE IF EXISTS ${table}`)
       }

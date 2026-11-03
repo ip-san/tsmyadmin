@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import type { DiagnosticColumn, DiagnosticKind } from '@tsmyadmin/shared'
+import { capabilities, type DiagnosticColumn, type DiagnosticKind } from '@tsmyadmin/shared'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
@@ -8,6 +8,7 @@ import { locale } from '@/config/locale-screens.ts'
 import { loggedStatementPlan } from '@/lib/logged-statement.ts'
 import { useOpenInDatabaseConsole } from '@/lib/open-in-console.ts'
 import { diagnosticsQuery } from '@/lib/queries.ts'
+import { useDialect } from '@/lib/session.ts'
 
 const t = locale.diagnostics
 
@@ -38,7 +39,11 @@ function figure(column: DiagnosticColumn, value: string | null): string {
  */
 function PlanButton({ db, sql, table, n }: { db: string; sql: string; table: string; n: number }) {
   const open = useOpenInDatabaseConsole(db, undefined)
-  const plan = loggedStatementPlan(sql, t.fillValues)
+  const plan = loggedStatementPlan(
+    sql,
+    { fill: t.fillValues, forAny: t.planForAny },
+    capabilities(useDialect()).genericPlan
+  )
   if (plan === null) return null
   return (
     <Button

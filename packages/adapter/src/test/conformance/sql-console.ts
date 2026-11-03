@@ -535,6 +535,22 @@ export function describeSqlConsole(env: ConformanceEnv): void {
       const r = await env.db.explainPlan(ns, 'SELECT name FROM users WHERE age > 20')
       expect(tables(r.plan)).toEqual(['users'])
     })
+
+    it('plans a statement whose values are not given, for any value, where the server can (PostgreSQL 16 and later)', async () => {
+      const statement = 'SELECT p.title FROM posts p JOIN users u ON u.id = p.user_id WHERE u.email = $1 AND p.id > $2'
+      const [version] = dialect === 'postgres' ? await exec('SHOW server_version_num') : []
+      const can = version?.kind === 'rows' && Number(version.result.rows[0]?.[0]) >= 160000
+      if (!can) {
+        await expect(env.db.explainPlan(ns, statement, { generic: true })).rejects.toMatchObject({
+          code: 'UNSUPPORTED',
+        })
+        return
+      }
+      const r = await env.db.explainPlan(ns, statement, { generic: true })
+      expect(new Set(tables(r.plan))).toEqual(new Set(['posts', 'users']))
+      // Not a plan for any value otherwise: the server cannot tell what $1 is.
+      await expect(env.db.explainPlan(ns, statement)).rejects.toBeInstanceOf(AdapterError)
+    })
   })
 
   describe('analyzePlan', () => {

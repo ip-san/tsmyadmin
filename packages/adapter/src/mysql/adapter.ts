@@ -42,7 +42,7 @@ import { type Canceller, type Conn, firstResult, type RawResult, withinAcquireTi
 import type { QueryOptions } from '../sql/cells.ts'
 import { explainableStatement, explainResult, parseJsonCell } from '../sql/explain-statement.ts'
 import { quoteIdent } from '../sql/quote.ts'
-import { AdapterError, type ConnectionConfig, type RowBatch } from '../types.ts'
+import { AdapterError, type ConnectionConfig, type ExplainOptions, type RowBatch } from '../types.ts'
 import { mysqlRecoverLossyDefaults, mysqlShowCreateTable } from './create-statements.ts'
 import { mysqlDdl } from './ddl.ts'
 import { mapMysqlError } from './errors.ts'
@@ -601,7 +601,9 @@ export class MysqlAdapter extends BaseAdapter {
    * Not READ ONLY: MySQL refuses to EXPLAIN an UPDATE in a read-only transaction. The optimizer may still call a
    * function it can fold to a constant; what that writes is rolled back.
    */
-  async explainPlan(ns: Namespace, sql: string): Promise<ExplainResult> {
+  async explainPlan(ns: Namespace, sql: string, opts?: ExplainOptions): Promise<ExplainResult> {
+    // MySQL and MariaDB plan a statement only with its values.
+    if (opts?.generic) throw new AdapterError('UNSUPPORTED', 'A plan without values needs PostgreSQL 16 or later')
     const statement = explainableStatement(sql, 'mysql')
     return this.withConn(ns, async (conn) => {
       const read = async () =>

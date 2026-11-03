@@ -46,7 +46,13 @@ import { explainableStatement, explainResult, measurableStatement, parseJsonCell
 import { hypopgSchema, pgHypotheticalPlan } from '../sql/hypopg.ts'
 import { pgLiteral } from '../sql/literal.ts'
 import { quoteIdent, quoteTable } from '../sql/quote.ts'
-import { AdapterError, type AdapterErrorCode, type ConnectionConfig, type RowBatch } from '../types.ts'
+import {
+  AdapterError,
+  type AdapterErrorCode,
+  type ConnectionConfig,
+  type ExplainOptions,
+  type RowBatch,
+} from '../types.ts'
 import { pgCreateStatements, pgTableCatalog } from './create-statements.ts'
 import { pgDdl } from './ddl.ts'
 import { parsePgPlan, pgExecutionMs } from './explain.ts'
@@ -103,6 +109,10 @@ type ArrayResult = QueryResult<unknown[]>
 interface PgTxStatus {
   getTransactionStatus?(): string | null
 }
+
+const SERVER_VERSION_NUM = "SELECT current_setting('server_version_num')"
+const EXPLAIN_ESTIMATE = 'EXPLAIN (FORMAT JSON)'
+const EXPLAIN_GENERIC = 'EXPLAIN (GENERIC_PLAN, FORMAT JSON)'
 
 export class PostgresAdapter extends BaseAdapter {
   readonly dialect = 'postgres' as const
@@ -497,14 +507,16 @@ export class PostgresAdapter extends BaseAdapter {
   }
 
   /** READ ONLY, which EXPLAIN without ANALYZE keeps to even for an UPDATE: a function the planner folds cannot write. */
-  async explainPlan(ns: Namespace, sql: string): Promise<ExplainResult> {
+  async explainPlan(ns: Namespace, sql: string, opts?: ExplainOptions): Promise<ExplainResult> {
     const statement = explainableStatement(sql, 'postgres')
     return this.withConn(ns, async (conn) => {
+      // GENERIC_PLAN is PostgreSQL 16's: an older server would refuse the option with a syntax error.
+      if (opts?.generic && Number(firstResult(await conn.query(SERVER_VERSION_NUM)).rows[0]?.[0]) < 160000)
+        throw new AdapterError('UNSUPPORTED', 'A plan without values needs PostgreSQL 16 or later')
+      const explain = opts?.generic ? EXPLAIN_GENERIC : EXPLAIN_ESTIMATE
       await conn.query('BEGIN READ ONLY')
       try {
-        const raw = parseJsonCell(
-          firstResult(await conn.query(`EXPLAIN (FORMAT JSON) ${statement}`)).rows[0]?.[0] ?? null
-        )
+        const raw = parseJsonCell(firstResult(await conn.query(`${explain} ${statement}`)).rows[0]?.[0] ?? null)
         // Whether the same plan can be read with indexes assumed (HypoPG in this database).
         // Not knowing (the catalog not readable) leaves it unsaid, rather than failing the estimate.
         const hypopg = await hypopgSchema(conn).then(

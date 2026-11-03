@@ -106,13 +106,20 @@ export const indexCommentsQuery = (db: string, schema?: string) =>
       ),
   })
 
-/** The plan of one statement, estimated on the server. Asked each time it is shown: the data under it changes the plan. */
-export const explainQuery = (db: string, schema: string | undefined, sql: string) =>
+/**
+ * The plan of one statement, estimated on the server. Asked each time it is shown: the data under it changes the plan.
+ * `generic`: planned for any value of its `$1`, `$2`… (PostgreSQL 16 and later).
+ */
+export const explainQuery = (db: string, schema: string | undefined, sql: string, generic = false) =>
   queryOptions({
-    queryKey: ['explain', db, schema ?? '', sql],
+    queryKey: ['explain', db, schema ?? '', sql, generic],
     queryFn: () =>
       unwrap<ExplainResult>(
-        api.databases[':db'].explain.$post({ param: { db: enc(db) }, query: schemaQuery(schema), json: { sql } })
+        api.databases[':db'].explain.$post({
+          param: { db: enc(db) },
+          query: schemaQuery(schema),
+          json: generic ? { sql, generic } : { sql },
+        })
       ),
     staleTime: 0,
     gcTime: 0,

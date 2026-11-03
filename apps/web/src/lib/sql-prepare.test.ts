@@ -1,11 +1,13 @@
 import { capabilities } from '@tsmyadmin/shared'
 import { describe, expect, it } from 'vitest'
+import { namedParameters } from './logged-statement.ts'
 import {
   bindLiteral,
   bindParameters,
   DEFAULT_RUN_OPTIONS,
   findParameters,
   isValidDelimiter,
+  positionalParameters,
   prepareScript,
   prepareStatement,
 } from './sql-prepare.ts'
@@ -47,6 +49,20 @@ describe('findParameters', () => {
     expect(findParameters('select a ::int')).toEqual([])
     expect(findParameters('set @a := 1, @b := :v')).toEqual(['v'])
     expect(findParameters('select : a, :1, :-x')).toEqual([])
+  })
+})
+
+describe('positionalParameters', () => {
+  it('numbers the names by first appearance, a name used twice by the same number, and leaves the rest', () => {
+    expect(
+      positionalParameters("SELECT * FROM t WHERE a = :x AND b = :y OR a = :x -- :z\nAND c = ':w' AND d::int = 1")
+    ).toBe("SELECT * FROM t WHERE a = $1 AND b = $2 OR a = $1 -- :z\nAND c = ':w' AND d::int = 1")
+    expect(positionalParameters('SELECT 1')).toBe('SELECT 1')
+  })
+
+  it("gives back a logged statement's own numbers", () => {
+    const logged = 'SELECT * FROM t WHERE a = $1 AND b IN ($2,$3) AND c = $1'
+    expect(positionalParameters(namedParameters(logged))).toBe(logged)
   })
 })
 

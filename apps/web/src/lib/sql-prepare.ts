@@ -36,6 +36,21 @@ export function findParameters(sql: string): string[] {
   return [...new Set(placeholders(sql).map((p) => p.name))]
 }
 
+/**
+ * The statement with its `:name` placeholders as the server's own `$1`, `$2`… (PostgreSQL), numbered by first
+ * appearance: a name used twice is the same number. For a plan made without the values (`EXPLAIN (GENERIC_PLAN)`).
+ */
+export function positionalParameters(sql: string): string {
+  const numbers = new Map(findParameters(sql).map((name, i) => [name, i + 1]))
+  let out = ''
+  let at = 0
+  for (const p of placeholders(sql)) {
+    out += `${sql.slice(at, p.start)}$${numbers.get(p.name)}`
+    at = p.end
+  }
+  return out + sql.slice(at)
+}
+
 /** A value as an SQL literal: NULL, a plain number as itself, anything else quoted (a backslash escapes on MySQL). */
 export function bindLiteral(dialect: Dialect, value: string | null): string {
   if (value === null) return 'NULL'
