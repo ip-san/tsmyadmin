@@ -2154,7 +2154,7 @@ export const jaScreens = {
       statements: {
         ok: '',
         disabled:
-          'performance_schema か、その文の集計（setup_consumers の statements_digest）が無効です。有効にすると、負荷の高い文をここで見られます（MySQL 8 は既定で有効）。',
+          'performance_schema か、その文の集計（setup_consumers の statements_digest）が無効です。MySQL 8 は、有効にすると負荷の高い文をここで見られます（既定で有効）。MariaDB は文の例を残さないので、スロークエリログを使ってください。',
         notTable: '',
         denied: '負荷の高い文を読む権限がありません（PostgreSQL は pg_stat_statements、MySQL は performance_schema）。',
         noExtension:

@@ -349,8 +349,9 @@ async function mysqlBinlogEvents(conn: Conn, file: string | undefined): Promise<
  * its plan can be read in its database. Else (no sample, or one cut at the length performance_schema keeps) the
  * normalised text, with no database: it is not a statement a server takes (`?` for every value, `IN (...)`).
  */
+// The limit is in bytes: a sample of multibyte text is cut at it with fewer characters.
 const SAMPLE_WHOLE =
-  'QUERY_SAMPLE_TEXT IS NOT NULL AND CHAR_LENGTH(QUERY_SAMPLE_TEXT) < @@performance_schema_max_sql_text_length'
+  'QUERY_SAMPLE_TEXT IS NOT NULL AND LENGTH(QUERY_SAMPLE_TEXT) < @@performance_schema_max_sql_text_length'
 /**
  * The most expensive statements since the server started (or the table was emptied), as pg_stat_statements has them:
  * the catalog reads, SHOW and SET this tool and the server send, and the plans this tool reads, are left out.
@@ -378,8 +379,11 @@ async function mysqlStatements(conn: Conn): Promise<DiagnosticReport> {
     if (String(consumer ?? 'NO').toUpperCase() !== 'YES') return NOTHING('disabled')
     rows = firstResult(await conn.query(MYSQL_DIGESTS)).rows
   } catch (err) {
-    if (isMissingTable(err) || (err instanceof AdapterError && err.nativeCode === 'ER_BAD_FIELD_ERROR'))
-      return NOTHING('unsupported')
+    // No sample column (MariaDB), or no variable for its length (a server before MySQL 8): no statement whole.
+    const noSample =
+      err instanceof AdapterError &&
+      (err.nativeCode === 'ER_BAD_FIELD_ERROR' || err.nativeCode === 'ER_UNKNOWN_SYSTEM_VARIABLE')
+    if (isMissingTable(err) || noSample) return NOTHING('unsupported')
     if (isDenied(err)) return NOTHING('denied')
     throw err
   }

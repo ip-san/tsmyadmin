@@ -43,8 +43,11 @@ export function describeServer(env: ConformanceEnv): void {
           expect((await env.db.diagnostics(kind)).status).toBe('unsupported')
         return
       }
-      // performance_schema's digests: on by default in MySQL 8, off in MariaDB (and no sample of a statement there).
-      expect(['ok', 'disabled', 'unsupported', 'denied']).toContain((await env.db.diagnostics('statements')).status)
+      // performance_schema's digests: on by default in MySQL 8 (the compose and CI servers), off in MariaDB (and no
+      // sample of a statement there).
+      const statements = (await env.db.diagnostics('statements')).status
+      if (await isMariaDb()) expect(['disabled', 'unsupported']).toContain(statements)
+      else expect(statements).toBe('ok')
       const engine = await env.db.diagnostics('engineStatus')
       expect(['ok', 'denied']).toContain(engine.status)
       if (engine.status === 'ok') expect(engine.text).toMatch(/INNODB/i)
@@ -144,8 +147,8 @@ export function describeServer(env: ConformanceEnv): void {
       // As it ran, values and all, in the database it ran in: its plan can be read there.
       const row = report.rows.find((r) => r[0]?.includes(marker))
       if (!full) expect(row?.slice(0, 3)).toEqual([statement, ns.database, '1'])
-      // The catalog reads of this tool are not among them.
-      expect(report.rows.some((r) => /information_schema|^SHOW /i.test(r[0] ?? ''))).toBe(false)
+      // What this tool asks the server about itself is not among them.
+      expect(report.rows.some((r) => /^\s*(SHOW|SET|EXPLAIN)\b/i.test(r[0] ?? ''))).toBe(false)
     })
 
     it('groups the statements of the slow log table when it is switched on', async () => {

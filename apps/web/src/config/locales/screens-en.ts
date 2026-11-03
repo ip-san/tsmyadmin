@@ -2174,7 +2174,7 @@ export const enScreens = {
       statements: {
         ok: '',
         disabled:
-          'performance_schema, or its statement digests (statements_digest in setup_consumers), is off. Turn it on to see the costly statements here (MySQL 8 has it on by default).',
+          'performance_schema, or its statement digests (statements_digest in setup_consumers), is off. On MySQL 8, turn it on to see the costly statements here (it is on by default). MariaDB keeps no sample of a statement: use the slow query log.',
         notTable: '',
         denied:
           'You may not read the costly statements (pg_stat_statements on PostgreSQL, performance_schema on MySQL).',

@@ -362,7 +362,7 @@ describe('mysqlDiagnostics', () => {
         text: null,
       })
       const whole =
-        'QUERY_SAMPLE_TEXT IS NOT NULL AND CHAR_LENGTH(QUERY_SAMPLE_TEXT) < @@performance_schema_max_sql_text_length'
+        'QUERY_SAMPLE_TEXT IS NOT NULL AND LENGTH(QUERY_SAMPLE_TEXT) < @@performance_schema_max_sql_text_length'
       expect(asked.at(-1)?.text.replace(/\s+/g, ' ')).toBe(
         `SELECT IF(${whole}, QUERY_SAMPLE_TEXT, DIGEST_TEXT), IF(${whole}, SCHEMA_NAME, NULL), ` +
           'COUNT_STAR, SUM_TIMER_WAIT / 1000000000000, MAX_TIMER_WAIT / 1000000000000, SUM_ROWS_EXAMINED ' +
@@ -389,6 +389,12 @@ describe('mysqlDiagnostics', () => {
         [/FROM performance_schema\.events_statements/, fail('QUERY_FAILED', 'ER_BAD_FIELD_ERROR')],
       ])
       expect(await mysqlDiagnostics(mariadb.conn, 'statements')).toMatchObject({ status: 'unsupported' })
+      const older = scripted([
+        on,
+        consumer('YES'),
+        [/FROM performance_schema\.events_statements/, fail('QUERY_FAILED', 'ER_UNKNOWN_SYSTEM_VARIABLE')],
+      ])
+      expect(await mysqlDiagnostics(older.conn, 'statements')).toMatchObject({ status: 'unsupported' })
       const missing = scripted([
         on,
         consumer('YES'),
