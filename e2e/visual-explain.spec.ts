@@ -43,6 +43,22 @@ for (const t of TARGETS) {
       await expect(plan.getByRole('button', { name: 'プレゼンで見る' })).toBeFocused()
     })
 
+    test('measures as many times in a row as chosen, and says the median with the fastest and slowest', async ({
+      page,
+    }) => {
+      const plan = await openPlan(page, t)
+      await plan.getByLabel('測る回数').selectOption('3')
+      await plan.getByRole('button', { name: '実際に実行して測る' }).click()
+      const ask = plan.getByRole('group', { name: '実行して測る前の確認' })
+      await expect(ask).toContainText('3 回続けて実行して測ります')
+      await ask.getByRole('button', { name: '実行して測る' }).click()
+      await expect(
+        plan.getByRole('status').filter({
+          hasText: /^実際に実行して測った計画を出しています（3 回の中央値 .+。最短 .+・最長 .+。木は最後の 1 回）$/,
+        })
+      ).toBeVisible()
+    })
+
     test('runs the statement to measure it once asked, and presents the run beside the estimates', async ({ page }) => {
       const plan = await openPlan(page, t)
       const measure = plan.getByRole('button', { name: '実際に実行して測る' })

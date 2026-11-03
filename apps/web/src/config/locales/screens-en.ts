@@ -338,14 +338,21 @@ export const enScreens = {
     measure: 'Run and measure',
     measureHint: "Run this statement for real and measure each step's rows and time (a statement that only reads)",
     measureGroup: 'Before running to measure',
-    measureConfirm: (seconds: number) =>
-      `This runs the statement to measure it. Only a statement that reads (SELECT, TABLE, VALUES) is run, in a read-only transaction rolled back at the end. Still, the rows it reads are really read, so a large table loads the server (it is stopped after ${seconds} seconds, or by Cancel while it runs). On a production server, mind the time of day`,
+    measureConfirm: (seconds: number, runs: number) =>
+      `This runs the statement${runs > 1 ? ` ${runs} times in a row` : ''} to measure it. Only a statement that reads (SELECT, TABLE, VALUES) is run, in a read-only transaction rolled back at the end. Still, the rows it reads are really read, so a large table loads the server (each run is stopped after ${seconds} seconds, or by Cancel while it runs). On a production server, mind the time of day`,
     measureRun: 'Run to measure',
     measureCancel: 'Cancel',
     measureStopping: 'Stopping the run…',
     measureStopped: 'The run was stopped (a plan measured before, if any, is still shown)',
     measuring: 'Running to measure…',
+    measuringOf: (at: number, of: number) => `Running to measure (run ${at} of ${of})…`,
     measured: (time: string | null) => `Showing the plan measured by running it${time ? ` (ran in ${time})` : ''}`,
+    measuredRuns: (count: number, median: string, min: string, max: string) =>
+      `Showing the plan measured by running it (median of ${count} runs ${median}; fastest ${min}, slowest ${max}; the tree is the last run)`,
+    measureRuns: 'Runs to measure',
+    measureRunsHint:
+      'Measured a few times, before and after are compared by their medians, not swayed by a first run that reads from disk or one run slowed by other load (the statement runs that many times on the server)',
+    runsOption: (n: number) => `${n} ${n === 1 ? 'run' : 'runs'}`,
     duration: (ms: number) =>
       ms < 1
         ? 'under 1 ms'
@@ -442,9 +449,19 @@ export const enScreens = {
       'With the HypoPG extension on PostgreSQL, the plan can be seen as if an index were there, without building it (install the package on the server, then CREATE EXTENSION hypopg in the database as a superuser)',
     trialForecasting: 'Before building it, asking the server what it expects of it without building it…',
     trialMeasuring: 'The index is made. Running the statement again to measure it…',
+    trialMeasuringOf: (at: number, of: number) =>
+      `The index is made. Running the statement again to measure it (run ${at} of ${of})…`,
     trialDone: (name: string) => `Made ${name} and measured again`,
-    trialTotal: (before: string | null, after: string | null, factor: number | null) =>
-      `Run time: before ${before ?? 'unknown'} → after ${after ?? 'unknown'}${factor === null ? '' : factor >= 1.1 ? ` (one run each: about ${factor < 10 ? factor.toFixed(1) : Math.round(factor).toLocaleString('en-US')} times faster)` : factor <= 1 / 1.1 ? ` (one run each: about ${(1 / factor).toFixed(1)} times slower)` : ' (one run each: about the same)'}`,
+    trialTotal: (
+      before: string | null,
+      after: string | null,
+      factor: number | null,
+      runs: readonly [number, number] = [1, 1]
+    ) => {
+      const how =
+        runs[0] === 1 && runs[1] === 1 ? 'one run each' : `medians of ${runs[0]} runs before, ${runs[1]} after`
+      return `Run time: before ${before ?? 'unknown'} → after ${after ?? 'unknown'}${factor === null ? '' : factor >= 1.1 ? ` (${how}: about ${factor < 10 ? factor.toFixed(1) : Math.round(factor).toLocaleString('en-US')} times faster)` : factor <= 1 / 1.1 ? ` (${how}: about ${(1 / factor).toFixed(1)} times slower)` : ` (${how}: about the same)`}`
+    },
     trialRead: (index: string | null, rows: number | null, time: string | null) =>
       `${index ? `through index ${index}` : 'in full'}${rows === null ? '' : `, ${Math.round(rows).toLocaleString('en-US')} rows`}${time ? ` · ${time}` : ''}`,
     forecastSaid: (costBefore: number | null, costAfter: number | null, used: boolean) =>
@@ -572,6 +589,8 @@ export const enScreens = {
     trialTimeTitle: 'The two runs compared',
     trialNotRead: 'no longer read',
     trialForecastTitle: 'Set beside the forecast',
+    trialHonestRuns: (before: number, after: number) =>
+      `Compared by the medians of ${before} runs before and ${after} after. A first run may read the rows from disk and be slow; the median is little swayed by it. The trees and the steps' times are each the last run. Where either took under a millisecond, no factor is given`,
     trialHonest:
       'Each run was measured once. The second may find the rows the first read already cached, and look faster. Where either took under a millisecond, no factor is given',
     trialWriteCost:

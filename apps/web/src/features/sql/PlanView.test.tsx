@@ -190,7 +190,7 @@ describe('PlanView', () => {
       mount()
       fireEvent.click(await opener())
       const run = screen.getByRole('button', { name: p.measureRun })
-      expect(screen.getByRole('group', { name: p.measureGroup }).textContent).toContain(p.measureConfirm(30))
+      expect(screen.getByRole('group', { name: p.measureGroup }).textContent).toContain(p.measureConfirm(30, 1))
       expect(document.activeElement).toBe(run)
       expect(analyzePlan).not.toHaveBeenCalled()
       // Pressed twice in one frame: one run.
