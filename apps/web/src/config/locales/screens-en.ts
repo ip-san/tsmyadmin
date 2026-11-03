@@ -2123,7 +2123,7 @@ export const enScreens = {
   },
   diagnostics: {
     plan: 'Show plan',
-    planLabel: (n: number) => `Show plan of statement ${n}`,
+    planLabel: (table: string, n: number) => `${table}: Show plan of statement ${n}`,
     planHint: "Puts the logged statement in its database's SQL tab and draws its plan (the statement is not run)",
     fillValues:
       'Its values were not logged, so $1 and the like are now :p1 and the like. Give them under Run options, then press Show as diagram',
@@ -2173,12 +2173,15 @@ export const enScreens = {
       },
       statements: {
         ok: '',
-        disabled: '',
+        disabled:
+          'performance_schema, or its statement digests (statements_digest in setup_consumers), is off. Turn it on to see the costly statements here (MySQL 8 has it on by default).',
         notTable: '',
-        denied: 'You may not read pg_stat_statements.',
+        denied:
+          'You may not read the costly statements (pg_stat_statements on PostgreSQL, performance_schema on MySQL).',
         noExtension:
           'The pg_stat_statements extension is not available. Add it to shared_preload_libraries, restart and run CREATE EXTENSION pg_stat_statements to see the costly statements here.',
-        unsupported: 'This is a PostgreSQL feature.',
+        unsupported:
+          'This server keeps no sample of the statements run (QUERY_SAMPLE_TEXT in performance_schema, from MySQL 8.0). On MariaDB, use the slow query log.',
       },
       engineStatus: {
         ok: '',
@@ -2218,7 +2221,7 @@ export const enScreens = {
     logsTitle: 'Recorded statements',
     slowLog: 'Slow query log',
     generalLog: 'General log',
-    statements: 'Costly statements (pg_stat_statements)',
+    statements: { mysql: 'Costly statements (performance_schema)', postgres: 'Costly statements (pg_stat_statements)' },
     innodb: 'InnoDB status',
     events: 'Events',
     showEvents: 'Show events',

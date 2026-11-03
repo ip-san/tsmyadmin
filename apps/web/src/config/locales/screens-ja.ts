@@ -2105,7 +2105,7 @@ export const jaScreens = {
   diagnostics: {
     empty: '記録はまだありません。',
     plan: '実行計画を見る',
-    planLabel: (n: number) => `${n} 行目の文の実行計画を見る`,
+    planLabel: (table: string, n: number) => `${table}: ${n} 行目の文の実行計画を見る`,
     planHint: '記録された文を、そのデータベースの SQL タブに入れて、実行計画を図で見ます（文は実行しません）',
     fillValues:
       '値は記録されていないので、$1 などを :p1 などにしてあります。「実行のオプション」で値を入れてから「図で見る」を押してください',
@@ -2153,12 +2153,14 @@ export const jaScreens = {
       },
       statements: {
         ok: '',
-        disabled: '',
+        disabled:
+          'performance_schema か、その文の集計（setup_consumers の statements_digest）が無効です。有効にすると、負荷の高い文をここで見られます（MySQL 8 は既定で有効）。',
         notTable: '',
-        denied: 'pg_stat_statements を読む権限がありません。',
+        denied: '負荷の高い文を読む権限がありません（PostgreSQL は pg_stat_statements、MySQL は performance_schema）。',
         noExtension:
           '拡張 pg_stat_statements が使えません。shared_preload_libraries に加えて再起動し、CREATE EXTENSION pg_stat_statements を実行すると、負荷の高い文をここで見られます。',
-        unsupported: 'この機能は PostgreSQL のものです。',
+        unsupported:
+          'このサーバーは、実行された文の例（performance_schema の QUERY_SAMPLE_TEXT）を残しません（MySQL 8.0 以降で使えます。MariaDB は、スロークエリログを使ってください）。',
       },
       engineStatus: {
         ok: '',
@@ -2198,7 +2200,7 @@ export const jaScreens = {
     logsTitle: '記録された文',
     slowLog: 'スロークエリログ',
     generalLog: '一般ログ',
-    statements: '負荷の高い文（pg_stat_statements）',
+    statements: { mysql: '負荷の高い文（performance_schema）', postgres: '負荷の高い文（pg_stat_statements）' },
     innodb: 'InnoDB の状態',
     events: 'イベント',
     showEvents: 'イベントを見る',

@@ -344,6 +344,53 @@ async function mysqlBinlogEvents(conn: Conn, file: string | undefined): Promise<
   }
 }
 
+/**
+ * A statement run as it was, values and all, where performance_schema kept one whole (`QUERY_SAMPLE_TEXT`, MySQL 8):
+ * its plan can be read in its database. Else (no sample, or one cut at the length performance_schema keeps) the
+ * normalised text, with no database: it is not a statement a server takes (`?` for every value, `IN (...)`).
+ */
+const SAMPLE_WHOLE =
+  'QUERY_SAMPLE_TEXT IS NOT NULL AND CHAR_LENGTH(QUERY_SAMPLE_TEXT) < @@performance_schema_max_sql_text_length'
+/**
+ * The most expensive statements since the server started (or the table was emptied), as pg_stat_statements has them:
+ * the catalog reads, SHOW and SET this tool and the server send, and the plans this tool reads, are left out.
+ */
+const MYSQL_DIGESTS = `SELECT IF(${SAMPLE_WHOLE}, QUERY_SAMPLE_TEXT, DIGEST_TEXT), IF(${SAMPLE_WHOLE}, SCHEMA_NAME, NULL),
+    COUNT_STAR, SUM_TIMER_WAIT / 1000000000000, MAX_TIMER_WAIT / 1000000000000, SUM_ROWS_EXAMINED
+  FROM performance_schema.events_statements_summary_by_digest
+  WHERE DIGEST_TEXT IS NOT NULL AND DIGEST_TEXT NOT LIKE '%information\\_schema%' AND DIGEST_TEXT NOT LIKE '%performance\\_schema%'
+    AND DIGEST_TEXT NOT LIKE '%\\_tsmyadmin%' AND COALESCE(SCHEMA_NAME, '') NOT IN ('mysql', 'sys')
+    AND DIGEST_TEXT NOT LIKE 'SHOW %' AND DIGEST_TEXT NOT LIKE 'SET %' AND DIGEST_TEXT NOT LIKE 'EXPLAIN %'
+  ORDER BY SUM_TIMER_WAIT DESC LIMIT 50`
+/** The consumer that fills the digest table: performance_schema can be on with it switched off, counting nothing. */
+const DIGEST_CONSUMER = "SELECT ENABLED FROM performance_schema.setup_consumers WHERE NAME = 'statements_digest'"
+
+/**
+ * The most expensive statements, from performance_schema's digests (on by default in MySQL 8). Off (MariaDB's
+ * default), or its digests switched off, is `disabled`; a server that keeps no sample of a statement (MariaDB, MySQL
+ * before 8.0) is `unsupported`: without one no statement can have its plan read.
+ */
+async function mysqlStatements(conn: Conn): Promise<DiagnosticReport> {
+  let rows: unknown[][]
+  try {
+    if (isOff(firstResult(await conn.query('SELECT @@performance_schema')).rows[0]?.[0])) return NOTHING('disabled')
+    const consumer = firstResult(await conn.query(DIGEST_CONSUMER)).rows[0]?.[0]
+    if (String(consumer ?? 'NO').toUpperCase() !== 'YES') return NOTHING('disabled')
+    rows = firstResult(await conn.query(MYSQL_DIGESTS)).rows
+  } catch (err) {
+    if (isMissingTable(err) || (err instanceof AdapterError && err.nativeCode === 'ER_BAD_FIELD_ERROR'))
+      return NOTHING('unsupported')
+    if (isDenied(err)) return NOTHING('denied')
+    throw err
+  }
+  return {
+    status: 'ok',
+    columns: ['statement', 'database', 'runs', 'totalSeconds', 'maxSeconds', 'rowsExamined'],
+    rows: rows.map((row) => row.map(text)),
+    text: null,
+  }
+}
+
 /** Logged statements, InnoDB status and binary log events. What the account may not read is `denied`, not an error. */
 export async function mysqlDiagnostics(
   conn: Conn,
@@ -366,7 +413,7 @@ export async function mysqlDiagnostics(
         return { status: 'ok', columns: [], rows: [], text: text(row?.[2]) }
       }
       case 'statements':
-        return NOTHING('unsupported')
+        return await mysqlStatements(conn)
     }
   } catch (err) {
     if (
