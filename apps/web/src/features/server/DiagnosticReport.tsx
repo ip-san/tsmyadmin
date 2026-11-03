@@ -36,7 +36,7 @@ function figure(column: DiagnosticColumn, value: string | null): string {
  * A logged statement's plan, read in the database it ran in: the statement goes to that database's SQL tab, which
  * draws its plan on arrival (EXPLAIN only, nothing runs), or, where its values were not logged, asks for them first.
  */
-function PlanButton({ db, sql, n }: { db: string; sql: string; n: number }) {
+function PlanButton({ db, sql, table, n }: { db: string; sql: string; table: string; n: number }) {
   const open = useOpenInDatabaseConsole(db, undefined)
   const plan = loggedStatementPlan(sql, t.fillValues)
   if (plan === null) return null
@@ -44,7 +44,7 @@ function PlanButton({ db, sql, n }: { db: string; sql: string; n: number }) {
     <Button
       size="sm"
       className="mt-1"
-      aria-label={t.planLabel(n)}
+      aria-label={t.planLabel(table, n)}
       title={t.planHint}
       onClick={() => open(plan.sql, plan.drawn ? 'plan' : undefined)}
     >
@@ -117,7 +117,7 @@ export function DiagnosticReport({
                     {NUMERIC.has(column) ? figure(column, value) : (value ?? '')}
                     {column === 'statement' && value !== null && db ? (
                       <div>
-                        <PlanButton db={db} sql={value} n={n + 1} />
+                        <PlanButton db={db} sql={value} table={title} n={n + 1} />
                       </div>
                     ) : null}
                   </Td>

@@ -40,8 +40,8 @@ describe('DiagnosticReport', () => {
       text: null,
     }
     mount()
-    await userEvent.click(await screen.findByRole('button', { name: t.planLabel(1) }))
-    await userEvent.click(screen.getByRole('button', { name: t.planLabel(2) }))
+    await userEvent.click(await screen.findByRole('button', { name: t.planLabel('Statements', 1) }))
+    await userEvent.click(screen.getByRole('button', { name: t.planLabel('Statements', 2) }))
     expect(opened).toEqual([
       { db: 'shop', sql: 'SELECT * FROM orders WHERE id = 7', then: 'plan' },
       // Its values were not logged: given in the SQL tab first, then drawn.

@@ -18,12 +18,12 @@ for (const t of TARGETS) {
       await page.getByRole('button', { name: '消去', exact: true }).click()
       await expect(page.getByRole('img', { name: title })).toHaveCount(0)
       // The logs: a table of statements or the reason there is none, whatever this server is set to.
-      const logs = t.dialect === 'mysql' ? 'スロークエリログ' : '負荷の高い文（pg_stat_statements）'
+      const logs = t.dialect === 'mysql' ? '負荷の高い文（performance_schema）' : '負荷の高い文（pg_stat_statements）'
       await expect(page.getByRole('heading', { name: '記録された文' })).toBeVisible()
       await expect(
         page
           .getByRole('table', { name: logs })
-          .or(page.getByText(/無効です|ファイルに出力|権限がありません|使えません|記録はまだありません/))
+          .or(page.getByText(/無効です|ファイルに出力|権限がありません|使えません|残しません|記録はまだありません/))
           .first()
       ).toBeVisible()
     })

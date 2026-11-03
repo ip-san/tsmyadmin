@@ -81,6 +81,8 @@ export function MonitorPage() {
       </div>
       <div className="space-y-2 pt-3">
         <h2 className="text-sm font-semibold text-ink">{locale.diagnostics.logsTitle}</h2>
+        <h3 className="text-sm text-ink">{locale.diagnostics.statements[dialect]}</h3>
+        <DiagnosticReport kind="statements" title={locale.diagnostics.statements[dialect]} />
         {capabilities(dialect).statementLogTables ? (
           <>
             <h3 className="text-sm text-ink">{locale.diagnostics.slowLog}</h3>
@@ -88,9 +90,7 @@ export function MonitorPage() {
             <h3 className="text-sm text-ink">{locale.diagnostics.generalLog}</h3>
             <DiagnosticReport kind="generalLog" title={locale.diagnostics.generalLog} />
           </>
-        ) : (
-          <DiagnosticReport kind="statements" title={locale.diagnostics.statements} />
-        )}
+        ) : null}
       </div>
     </section>
   )

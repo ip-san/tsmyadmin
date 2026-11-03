@@ -43,7 +43,11 @@ export function describeServer(env: ConformanceEnv): void {
           expect((await env.db.diagnostics(kind)).status).toBe('unsupported')
         return
       }
-      expect((await env.db.diagnostics('statements')).status).toBe('unsupported')
+      // performance_schema's digests: on by default in MySQL 8 (the compose and CI servers), off in MariaDB (and no
+      // sample of a statement there).
+      const statements = (await env.db.diagnostics('statements')).status
+      if (await isMariaDb()) expect(['disabled', 'unsupported']).toContain(statements)
+      else expect(statements).toBe('ok')
       const engine = await env.db.diagnostics('engineStatus')
       expect(['ok', 'denied']).toContain(engine.status)
       if (engine.status === 'ok') expect(engine.text).toMatch(/INNODB/i)
@@ -125,6 +129,26 @@ export function describeServer(env: ConformanceEnv): void {
           { stopOnError: false }
         )
       }
+    })
+
+    it('lists the costly statements with the database each ran in and its values, where the server keeps them', async () => {
+      if (dialect !== 'mysql') return
+      const marker = `digestmark_${scratch}`
+      // A second long: among the costliest 50 (they are ranked by time) on the test servers.
+      const statement = `SELECT SLEEP(1) AS m, '${marker}' AS k`
+      await execOk(statement)
+      const report = await env.db.diagnostics('statements')
+      // MariaDB keeps no digests by default, nor a sample of a statement: nothing to check there.
+      if (report.status !== 'ok') return
+      expect(report.columns).toEqual(['statement', 'database', 'runs', 'totalSeconds', 'maxSeconds', 'rowsExamined'])
+      // A server whose digest table filled up counts new statements in one row with no text (a long-used one, not CI's).
+      const lost = (await execOk("SHOW GLOBAL STATUS LIKE 'Performance_schema_digest_lost'"))[0]
+      const full = lost?.kind === 'rows' && Number(lost.result.rows[0]?.[1] ?? 0) > 0
+      // As it ran, values and all, in the database it ran in: its plan can be read there.
+      const row = report.rows.find((r) => r[0]?.includes(marker))
+      if (!full) expect(row?.slice(0, 3)).toEqual([statement, ns.database, '1'])
+      // What this tool asks the server about itself is not among them.
+      expect(report.rows.some((r) => /^\s*(SHOW|SET|EXPLAIN)\b/i.test(r[0] ?? ''))).toBe(false)
     })
 
     it('groups the statements of the slow log table when it is switched on', async () => {
