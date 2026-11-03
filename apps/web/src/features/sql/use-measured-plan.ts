@@ -23,6 +23,8 @@ export interface MeasuredPlan {
   /** Puts the question away; while it runs, stops the run. */
   cancel: () => void
   run: () => Promise<void>
+  /** Puts the measured plan away (measured under statistics taken again since, say); not while it runs. */
+  clear: () => void
 }
 
 /**
@@ -74,6 +76,13 @@ export function useMeasuredPlan(db: string, schema: string | undefined, sql: str
       }
       if (outcome.kind === 'stopped') setStopped(true)
       else if (outcome.kind === 'failed') setError(outcome.error)
+    },
+    clear: () => {
+      if (analyze.busy()) return
+      setResult(null)
+      setTimes([])
+      setError(null)
+      setStopped(false)
     },
   }
 }

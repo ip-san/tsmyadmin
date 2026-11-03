@@ -337,6 +337,26 @@ export const enScreens = {
     rawTruncated: 'Cut short: it is long',
     measure: 'Run and measure',
     measureHint: "Run this statement for real and measure each step's rows and time (a statement that only reads)",
+    statsGroup: 'Taking statistics again',
+    statsIntro:
+      "The server expects how many rows a step gives from the table's statistics (its rows, how its values spread), and picks how to read by them. Old statistics lead it astray, to a slow way of reading at times. Taken again, the plan may change (where the columns of a condition go together, the expectation may stay off even then; on MySQL, reading only some partitions makes the plan and the table list differ however new the statistics)",
+    statsList: (table: string, plan: number, list: number) =>
+      `${table}: the plan expects ${plan.toLocaleString('en-US')} rows, the table list about ${list.toLocaleString('en-US')}: two times apart or more`,
+    statsMeasured: (table: string, expected: number, actual: number) =>
+      `${table}: ${expected.toLocaleString('en-US')} rows expected, ${actual.toLocaleString('en-US')} read`,
+    statsTaken: (table: string) => `${table}: statistics taken again`,
+    statsRefresh: (table: string) => `Take the statistics of ${table} again`,
+    statsHint:
+      "Takes the table's statistics again (the data is not changed). On a large table, reading it may take a while. Done, the plan is read again",
+    statsRereading: (table: string) => `The statistics of ${table} were taken again. Reading the plan again`,
+    statsDone: (table: string, before: number | null, after: number | null, cleared: boolean) =>
+      `The statistics of ${table} were taken again. ${
+        before !== null && after !== null
+          ? `The plan expects ${before.toLocaleString('en-US')} → ${after.toLocaleString('en-US')} rows of ${table}`
+          : after === null
+            ? `The plan no longer reads ${table}`
+            : `The plan expects ${after.toLocaleString('en-US')} rows of ${table}`
+      }${cleared ? '. The run measured was under the old statistics, so it was put away: measure again to measure the plan under these' : ''}`,
     measureGroup: 'Before running to measure',
     measureConfirm: (seconds: number, runs: number) =>
       `This runs the statement${runs > 1 ? ` ${runs} times in a row` : ''} to measure it. Only a statement that reads (SELECT, TABLE, VALUES) is run, in a read-only transaction rolled back at the end. Still, the rows it reads are really read, so a large table loads the server (each run is stopped after ${seconds} seconds, or by Cancel while it runs). On a production server, mind the time of day`,
@@ -514,7 +534,7 @@ export const enScreens = {
     measuredSummary: (off: number, ratio: number, heaviest: string | null, percent: number | null) =>
       `${off === 0 ? 'No step' : `${off.toLocaleString('en-US')} ${off === 1 ? 'step' : 'steps'}`} gave rows ${ratio} times off the estimate or more.${heaviest ? ` Of the steps that read a table, the one that took longest reads ${heaviest}${percent === null ? '' : ` (about ${percent}% of the run)`}` : ''}`,
     staleStats: (table: string, plan: number, list: number) =>
-      `The rows of a full read of ${table} are ${plan.toLocaleString('en-US')} by the plan's estimate and about ${list.toLocaleString('en-US')} by the table list's: two times apart or more. One of the two statistics may be old. ANALYZE (ANALYZE TABLE on MySQL) takes them again, and the plan may change (on MySQL, reading only some partitions looks like a gap too)`,
+      `The rows of a full read of ${table} are ${plan.toLocaleString('en-US')} by the plan's estimate and about ${list.toLocaleString('en-US')} by the table list's: two times apart or more. One of the two statistics may be old. ANALYZE (ANALYZE TABLE on MySQL; also from the plan, under Taking statistics again) takes them again, and the plan may change (on MySQL, reading only some partitions looks like a gap too)`,
     tones: {
       index: 'Table read through an index',
       scan: 'Table read in full (or an index end to end)',
