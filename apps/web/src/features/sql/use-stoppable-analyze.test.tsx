@@ -41,7 +41,7 @@ describe('useStoppableAnalyze', () => {
     expect(analyzePlan).toHaveBeenCalledTimes(1)
     expect(analyzePlan.mock.calls[0]?.[3]).toMatch(/^[0-9a-f-]{36}$/)
     await act(async () => end.done({ plan: {} }))
-    expect(await first).toEqual({ kind: 'done', result: { plan: {} } })
+    expect(await first).toEqual({ kind: 'done', result: { plan: {} }, times: [] })
     expect(result.current.running).toBe(false)
   })
 
@@ -93,5 +93,73 @@ describe('useStoppableAnalyze', () => {
     })
     unmount()
     expect(cancelSql).toHaveBeenCalledWith('shop', analyzePlan.mock.calls[0]?.[3])
+  })
+
+  describe('a series of runs', () => {
+    const ran = (ms: number) => ({ plan: { ms }, measured: { ms } })
+
+    it('runs one after another, each under an id of its own, and keeps every time and the last plan', async () => {
+      const { result } = hook()
+      let series: Promise<unknown> = Promise.resolve()
+      act(() => {
+        series = result.current.run(3)
+      })
+      expect(result.current.progress).toEqual({ at: 1, of: 3 })
+      await act(async () => end.done(ran(40)))
+      expect(result.current.progress).toEqual({ at: 2, of: 3 })
+      // A press while it goes on is caught between the runs too.
+      let again: Promise<unknown> = Promise.resolve()
+      act(() => {
+        again = result.current.run()
+      })
+      expect(await again).toBeNull()
+      await act(async () => end.done(ran(5)))
+      await act(async () => end.done(ran(6)))
+      expect(await series).toEqual({ kind: 'done', result: ran(6), times: [40, 5, 6] })
+      const ids = analyzePlan.mock.calls.map((c) => c[3])
+      expect(new Set(ids).size).toBe(3)
+      expect(result.current.progress).toBeNull()
+      expect(result.current.running).toBe(false)
+    })
+
+    it('ends the series on a stop, keeping the runs that ended', async () => {
+      const { result } = hook()
+      let series: Promise<unknown> = Promise.resolve()
+      act(() => {
+        series = result.current.run(3)
+      })
+      await act(async () => end.done(ran(40)))
+      await act(async () => result.current.stop())
+      // The stop reaches the run going, not the one that ended.
+      expect(cancelSql).toHaveBeenCalledWith('shop', analyzePlan.mock.calls[1]?.[3])
+      await act(async () => end.fail(new Error('stopped')))
+      expect(await series).toEqual({ kind: 'stopped', partial: { result: ran(40), times: [40] } })
+      expect(analyzePlan).toHaveBeenCalledTimes(2)
+    })
+
+    it('starts no further run where the stop came as a run ended (the server stopped nothing)', async () => {
+      const { result } = hook()
+      let series: Promise<unknown> = Promise.resolve()
+      act(() => {
+        series = result.current.run(3)
+      })
+      answer = async () => ({ cancelled: false })
+      await act(async () => result.current.stop())
+      await act(async () => end.done(ran(40)))
+      expect(await series).toEqual({ kind: 'stopped', partial: { result: ran(40), times: [40] } })
+      expect(analyzePlan).toHaveBeenCalledTimes(1)
+    })
+
+    it('starts no further run once closed', async () => {
+      const { result, unmount } = hook()
+      let series: Promise<unknown> = Promise.resolve()
+      act(() => {
+        series = result.current.run(3)
+      })
+      unmount()
+      end.done(ran(40))
+      expect(await series).toEqual({ kind: 'stopped', partial: { result: ran(40), times: [40] } })
+      expect(analyzePlan).toHaveBeenCalledTimes(1)
+    })
   })
 })

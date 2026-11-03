@@ -2,7 +2,9 @@ import { ANALYZE_TIMEOUT_DEFAULT_MS } from '@tsmyadmin/shared'
 import { useLayoutEffect, useRef } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox } from '@/components/ui/Feedback.tsx'
+import { Select } from '@/components/ui/Field.tsx'
 import { locale } from '@/config/locale-screens.ts'
+import { MEASURE_RUNS, type MeasureRuns, summarizeRuns } from './plan-runs.ts'
 import type { MeasuredPlan } from './use-measured-plan.ts'
 
 const t = locale.plan
@@ -12,8 +14,17 @@ const t = locale.plan
  * the time limit), then runs it once. What it is doing is there from the start (empty) and said as it changes. The
  * focus goes to the run button when asked, and back to this one when the question closes, so it is never lost.
  */
-export function MeasurePlan({ measure }: { measure: MeasuredPlan }) {
-  const { step, result, error, stopping, stopped } = measure
+export function MeasurePlan({
+  measure,
+  runs,
+  onRuns,
+}: {
+  measure: MeasuredPlan
+  /** How many times in a row it is measured (the run after an index is tried too, so the two compare). */
+  runs: MeasureRuns
+  onRuns: (runs: MeasureRuns) => void
+}) {
+  const { step, result, error, stopping, stopped, progress } = measure
   const opener = useRef<HTMLButtonElement>(null)
   const runner = useRef<HTMLButtonElement>(null)
   const was = useRef(step)
@@ -25,15 +36,20 @@ export function MeasurePlan({ measure }: { measure: MeasuredPlan }) {
     was.current = step
   }, [step])
   const ms = result?.measured?.ms ?? null
+  const times = summarizeRuns(measure.times)
   const said = stopping
     ? t.measureStopping
     : step === 'running'
-      ? t.measuring
+      ? progress
+        ? t.measuringOf(progress.at, progress.of)
+        : t.measuring
       : stopped
         ? t.measureStopped
-        : result
-          ? t.measured(ms === null ? null : t.duration(ms))
-          : ''
+        : times && times.count > 1
+          ? t.measuredRuns(times.count, t.duration(times.median), t.duration(times.min), t.duration(times.max))
+          : result
+            ? t.measured(ms === null ? null : t.duration(ms))
+            : ''
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
@@ -47,13 +63,28 @@ export function MeasurePlan({ measure }: { measure: MeasuredPlan }) {
         >
           {t.measure}
         </Button>
+        <label className="flex items-center gap-1 text-xs text-ink-sub" title={t.measureRunsHint}>
+          {t.measureRuns}
+          <Select
+            value={String(runs)}
+            disabled={step === 'running'}
+            onChange={(e) => onRuns(Number(e.target.value) as MeasureRuns)}
+            className="w-auto py-1"
+          >
+            {MEASURE_RUNS.map((n) => (
+              <option key={n} value={n}>
+                {t.runsOption(n)}
+              </option>
+            ))}
+          </Select>
+        </label>
         <span role="status" className="text-xs text-ink-sub empty:sr-only">
           {said}
         </span>
       </div>
       {step === 'idle' ? null : (
         <fieldset aria-label={t.measureGroup} className="space-y-2 rounded border border-line p-2 text-xs">
-          <p className="text-ink">{t.measureConfirm(ANALYZE_TIMEOUT_DEFAULT_MS / 1000)}</p>
+          <p className="text-ink">{t.measureConfirm(ANALYZE_TIMEOUT_DEFAULT_MS / 1000, runs)}</p>
           <div className="flex gap-2">
             <Button
               ref={runner}

@@ -4,7 +4,7 @@ import { type DdlFlow, useDdlFlow } from '@/lib/ddl.ts'
 import type { Forecast } from './plan-forecast.ts'
 import type { IndexCandidate } from './plan-index.ts'
 import { forgetTried, rememberTried } from './tried-indexes.ts'
-import { useStoppableAnalyze } from './use-stoppable-analyze.ts'
+import { type RunProgress, useStoppableAnalyze } from './use-stoppable-analyze.ts'
 
 export interface IndexTrial {
   /** The preview → confirm → run of creating the index, and of dropping it again. */
@@ -15,7 +15,11 @@ export interface IndexTrial {
   forecast: Forecast | null
   /** The statement measured again once the index was made; null until then. */
   after: ExplainResult | null
+  /** The time of every run of that measuring. */
+  afterTimes: number[]
   measuring: boolean
+  /** Which run of a series is going; null otherwise. */
+  progress: RunProgress | null
   /** A stop was asked of measuring again, which has not ended yet. */
   stopping: boolean
   /** Measuring again was stopped on a press (the index is there all the same). */
@@ -45,10 +49,17 @@ export interface IndexTrial {
  * too, and puts the comparison away. Measuring is stoppable, and guarded against a second press (`useStoppableAnalyze`; the state is a render
  * late).
  */
-export function useIndexTrial(db: string, schema: string | undefined, sql: string, scope: string): IndexTrial {
+export function useIndexTrial(
+  db: string,
+  schema: string | undefined,
+  sql: string,
+  scope: string,
+  runs = 1
+): IndexTrial {
   const [tried, setTried] = useState<IndexCandidate | null>(null)
   const [forecast, setForecast] = useState<Forecast | null>(null)
   const [after, setAfter] = useState<ExplainResult | null>(null)
+  const [afterTimes, setAfterTimes] = useState<number[]>([])
   const [error, setError] = useState<unknown>(null)
   const [stopped, setStopped] = useState(false)
   // On by default: the reason to try an index on a server is that it is close to production.
@@ -72,11 +83,16 @@ export function useIndexTrial(db: string, schema: string | undefined, sql: strin
     // What the last run said is put away as this one starts.
     setError(null)
     setStopped(false)
-    const outcome = await analyze.run()
+    const outcome = await analyze.run(runs)
     if (outcome === null) return
-    if (outcome.kind === 'done') setAfter(outcome.result)
-    else if (outcome.kind === 'stopped') setStopped(true)
-    else setError(outcome.error)
+    // Stopped part way, the runs that ended are kept.
+    const kept = outcome.kind === 'done' ? outcome : outcome.kind === 'stopped' ? outcome.partial : undefined
+    if (kept) {
+      setAfter(kept.result)
+      setAfterTimes(kept.times)
+    }
+    if (outcome.kind === 'stopped') setStopped(true)
+    else if (outcome.kind === 'failed') setError(outcome.error)
   }
   const flow = useDdlFlow(
     db,
@@ -89,6 +105,7 @@ export function useIndexTrial(db: string, schema: string | undefined, sql: strin
         setForecast(said)
         setTriedOnline(how)
         setAfter(null)
+        setAfterTimes([])
         // Remembered until dropped: the SQL tab offers to drop it once this view is closed.
         remember(made, how)
         // Not awaited: the structure and the plan are read again meanwhile.
@@ -100,6 +117,7 @@ export function useIndexTrial(db: string, schema: string | undefined, sql: strin
           setTried(null)
           setForecast(null)
           setAfter(null)
+          setAfterTimes([])
           setError(null)
           setStopped(false)
         }
@@ -113,7 +131,9 @@ export function useIndexTrial(db: string, schema: string | undefined, sql: strin
     tried,
     forecast,
     after,
+    afterTimes,
     measuring: analyze.running,
+    progress: analyze.progress,
     stopping: analyze.stopping,
     stopped,
     error: error ?? analyze.stopError,

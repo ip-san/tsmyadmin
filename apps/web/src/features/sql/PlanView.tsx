@@ -1,5 +1,6 @@
 import { useQueries, useQuery } from '@tanstack/react-query'
 import type { ExplainResult, PlanNode, RelationDef } from '@tsmyadmin/shared'
+import { useState } from 'react'
 import { diagramFor, overlayUpTo } from '@/components/schema-diagram/overlay.ts'
 import { SchemaDiagram } from '@/components/schema-diagram/SchemaDiagram.tsx'
 import { DiagramLegend, StepNarration } from '@/components/schema-diagram/StepNarration.tsx'
@@ -7,6 +8,7 @@ import { useStepPlayer } from '@/components/schema-diagram/use-step-player.ts'
 import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { locale } from '@/config/locale-screens.ts'
+import { readPreference, writePreference } from '@/lib/preferences.ts'
 import { explainQuery, foreignKeysQuery, structureQuery } from '@/lib/queries.ts'
 import { useRowEstimates } from '@/lib/use-row-estimates.ts'
 import { AssumedIndex } from './AssumedIndex.tsx'
@@ -15,6 +17,7 @@ import { MeasurePlan } from './MeasurePlan.tsx'
 import { PlanTour } from './PlanTour.tsx'
 import { indexCandidates } from './plan-index.ts'
 import { misestimate } from './plan-measure.ts'
+import { type MeasureRuns, RUNS_PREF, runsSchema } from './plan-runs.ts'
 import { planReads, planSteps } from './plan-steps.ts'
 import { triedOnTables } from './tried-indexes.ts'
 import { type AssumedCompare, comparedRows, useAssumedCompare } from './use-assumed-compare.ts'
@@ -47,8 +50,10 @@ export function PlanView({
 }) {
   const plan = useQuery(explainQuery(db, schema, sql))
   const relations = useQuery(foreignKeysQuery(db, schema))
-  const measure = useMeasuredPlan(db, schema, sql)
-  const trial = useIndexTrial(db, schema, sql, scope)
+  // Kept in this browser: how many times in a row a statement is measured, before and after an index alike.
+  const [runs, setRuns] = useState<MeasureRuns>(() => readPreference(RUNS_PREF, runsSchema, 1))
+  const measure = useMeasuredPlan(db, schema, sql, runs)
+  const trial = useIndexTrial(db, schema, sql, scope, runs)
   const assumed = useAssumedPlan(db, schema, sql)
   const compared = useAssumedCompare(db, schema, sql)
   // Built from here or from trying it without building it, the index keeps what the server expected of it.
@@ -72,6 +77,11 @@ export function PlanView({
           {/* While an index is tried, the run before stays the one it is compared with: measured again there. */}
           {trial.tried ? null : (
             <MeasurePlan
+              runs={runs}
+              onRuns={(n) => {
+                setRuns(n)
+                writePreference(RUNS_PREF, n)
+              }}
               // Measured, the run is what is shown: the plan with an index assumed is put away first.
               measure={{
                 ...measure,
@@ -92,7 +102,7 @@ export function PlanView({
             compared={compared}
             build={build}
             relations={relations.data}
-            trial={measure.result ? { state: trial, before: measure.result } : null}
+            trial={measure.result ? { state: trial, before: measure.result, beforeTimes: measure.times } : null}
           />
         </>
       )}
@@ -121,7 +131,7 @@ function PlanStory({
   build: ForecastStart
   relations: readonly RelationDef[]
   /** An index to try, offered once the statement was measured (the run before). */
-  trial: { state: Trial; before: ExplainResult } | null
+  trial: { state: Trial; before: ExplainResult; beforeTimes: number[] } | null
 }) {
   const reads = planReads(result.plan)
   const tables = [...new Set(reads.map((r) => r.node.table))]
@@ -180,6 +190,7 @@ function PlanStory({
           trial={trial.state}
           build={build}
           before={trial.before}
+          beforeTimes={trial.beforeTimes}
           candidates={indexCandidates(trial.before.plan, shapeOf)}
           leftovers={leftovers}
           triedBefore={triedBefore}
@@ -194,7 +205,12 @@ function PlanStory({
           measuredMs={result.measured ? result.measured.ms : undefined}
           trial={
             trial?.state.after && trial.state.tried && result === trial.state.after
-              ? { before: trial.before, index: trial.state.tried, forecast: trial.state.forecast ?? undefined }
+              ? {
+                  before: trial.before,
+                  index: trial.state.tried,
+                  forecast: trial.state.forecast ?? undefined,
+                  runs: { before: trial.beforeTimes, after: trial.state.afterTimes },
+                }
               : undefined
           }
           // Used or not as the panel above says it: by the server's own name for the index assumed.

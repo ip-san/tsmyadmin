@@ -7,6 +7,7 @@ import { locale } from '@/config/locale-screens.ts'
 import { compareReads, readSaid, speedup, usesIndex } from './plan-compare.ts'
 import { forecastVerdict } from './plan-forecast.ts'
 import type { IndexCandidate } from './plan-index.ts'
+import { runsTime } from './plan-runs.ts'
 import type { ForecastStart } from './use-forecast-start.ts'
 import type { IndexTrial as Trial } from './use-index-trial.ts'
 
@@ -22,6 +23,7 @@ export function IndexTrial({
   build,
   candidates,
   before,
+  beforeTimes = [],
   leftovers = [],
   triedBefore = [],
 }: {
@@ -30,12 +32,14 @@ export function IndexTrial({
   build: ForecastStart
   candidates: readonly IndexCandidate[]
   before: ExplainResult
+  /** The time of every run of the measuring before (compared by their median). */
+  beforeTimes?: readonly number[]
   /** Indexes a build left unusable on the tables the plan reads. */
   leftovers?: readonly { table: string; name: string }[]
   /** Indexes tried from a plan before (in any browser) still on the tables the plan reads. */
   triedBefore?: readonly { table: string; name: string; online: boolean }[]
 }) {
-  const { tried, after, forecast, measuring, stopping, stopped, error, flow } = trial
+  const { tried, after, forecast, measuring, stopping, stopped, error, flow, progress } = trial
   const busy = flow.running || measuring || build.forecasting
   const onlineNote = useId()
   // The stop button goes when the run ends: the focus it had goes to measuring again, never to the page. A blur as it
@@ -52,13 +56,18 @@ export function IndexTrial({
     : stopping
       ? locale.plan.measureStopping
       : measuring
-        ? t.trialMeasuring
+        ? progress
+          ? t.trialMeasuringOf(progress.at, progress.of)
+          : t.trialMeasuring
         : stopped
           ? t.trialStopped
           : after && tried
             ? t.trialDone(tried.name)
             : ''
-  const factor = speedup(before.measured?.ms, after?.measured?.ms)
+  // Compared by the medians where runs were kept (the trees are each the last run).
+  const beforeMs = runsTime(beforeTimes, before.measured?.ms)
+  const afterMs = runsTime(trial.afterTimes, after?.measured?.ms)
+  const factor = speedup(beforeMs, afterMs)
   const changes = after ? compareReads(before.plan, after.plan).filter((c) => c.after) : []
   return (
     <section aria-label={t.trialGroup} className="space-y-2 rounded border border-line p-2 text-xs">
@@ -104,9 +113,10 @@ export function IndexTrial({
             <>
               <p className="text-ink">
                 {t.trialTotal(
-                  before.measured?.ms == null ? null : t.duration(before.measured.ms),
-                  after.measured?.ms == null ? null : t.duration(after.measured.ms),
-                  factor
+                  beforeMs === null ? null : t.duration(beforeMs),
+                  afterMs === null ? null : t.duration(afterMs),
+                  factor,
+                  [Math.max(1, beforeTimes.length), Math.max(1, trial.afterTimes.length)]
                 )}
               </p>
               <ul className="list-disc pl-4 text-ink">

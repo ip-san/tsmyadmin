@@ -190,7 +190,7 @@ describe('PlanView', () => {
       mount()
       fireEvent.click(await opener())
       const run = screen.getByRole('button', { name: p.measureRun })
-      expect(screen.getByRole('group', { name: p.measureGroup }).textContent).toContain(p.measureConfirm(30))
+      expect(screen.getByRole('group', { name: p.measureGroup }).textContent).toContain(p.measureConfirm(30, 1))
       expect(document.activeElement).toBe(run)
       expect(analyzePlan).not.toHaveBeenCalled()
       // Pressed twice in one frame: one run.
@@ -391,6 +391,26 @@ describe('PlanView', () => {
       fireEvent.click(screen.getByRole('button', { name: p.measureRun }))
       return screen.findByRole('region', { name: p.trialGroup })
     }
+
+    it('measures as many times as chosen, before and after alike, and compares the medians', async () => {
+      condition = '(level = 3)'
+      const runs = [run(null, 400), run(null, 10), run(null, 500)]
+      measuredRun = () => (runs.shift() ?? run(null, 1))()
+      mount()
+      fireEvent.change(await screen.findByLabelText(p.measureRuns), { target: { value: '3' } })
+      fireEvent.click(await opener())
+      expect(screen.getByRole('group', { name: p.measureGroup }).textContent).toContain(p.measureConfirm(30, 3))
+      fireEvent.click(screen.getByRole('button', { name: p.measureRun }))
+      // The tree is the last run; the time said is the median, with the fastest and the slowest.
+      await screen.findByText(p.measuredRuns(3, p.duration(400), p.duration(10), p.duration(500)))
+      expect(analyzePlan).toHaveBeenCalledTimes(3)
+      fireEvent.click(await screen.findByRole('button', { name: p.trialTry('logs', ['level']) }))
+      runs.push(run('idx_logs_level', 4), run('idx_logs_level', 300), run('idx_logs_level', 5))
+      fireEvent.click(await screen.findByRole('button', { name: locale.ddl.execute }))
+      // Measured again as many times, and compared by the medians (400 and 5), not by the last runs (500 and 5).
+      expect(await screen.findByText(p.trialTotal(p.duration(400), p.duration(5), 80, [3, 3]))).toBeTruthy()
+      expect(analyzePlan).toHaveBeenCalledTimes(6)
+    })
 
     it('offers the index the plan suggests once measured, makes it through the preview, and sets the runs side by side', async () => {
       condition = '(level = 3)'

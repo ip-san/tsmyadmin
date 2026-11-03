@@ -341,14 +341,21 @@ export const jaScreens = {
     measure: '実際に実行して測る',
     measureHint: 'この文を実際に実行して、段ごとの実際の行数と時間を測ります（読むだけの文に限ります）',
     measureGroup: '実行して測る前の確認',
-    measureConfirm: (seconds: number) =>
-      `この文を実際に実行して測ります。読むだけの文（SELECT・TABLE・VALUES）に限り、読み取り専用のトランザクションで実行して、最後に取り消します。ただし文が読む行は本当に読むので、大きなテーブルではサーバーに負荷がかかります（${seconds} 秒で止めます。実行中は「やめる」で止められます）。本番のサーバーでは、時間帯に気をつけてください`,
+    measureConfirm: (seconds: number, runs: number) =>
+      `この文を実際に${runs > 1 ? ` ${runs} 回続けて` : ''}実行して測ります。読むだけの文（SELECT・TABLE・VALUES）に限り、読み取り専用のトランザクションで実行して、最後に取り消します。ただし文が読む行は本当に読むので、大きなテーブルではサーバーに負荷がかかります（1 回ごとに ${seconds} 秒で止めます。実行中は「やめる」で止められます）。本番のサーバーでは、時間帯に気をつけてください`,
     measureRun: '実行して測る',
     measureCancel: 'やめる',
     measureStopping: '測るのを止めています…',
     measureStopped: '測るのを止めました（前に測った結果があれば、そのまま出しています）',
     measuring: '実行して測っています…',
+    measuringOf: (at: number, of: number) => `実行して測っています（${of} 回中 ${at} 回目）…`,
     measured: (time: string | null) => `実際に実行して測った計画を出しています${time ? `（実行 ${time}）` : ''}`,
+    measuredRuns: (count: number, median: string, min: string, max: string) =>
+      `実際に実行して測った計画を出しています（${count} 回の中央値 ${median}。最短 ${min}・最長 ${max}。木は最後の 1 回）`,
+    measureRuns: '測る回数',
+    measureRunsHint:
+      '前と後を何回か測ると、1 回目だけ読み込みで遅い・ほかの負荷で 1 回だけ遅い、といった揺れに左右されず、中央値で比べられます（そのぶんサーバーで何回も実行します）',
+    runsOption: (n: number) => `${n} 回`,
     duration: (ms: number) =>
       ms < 1
         ? '1 ミリ秒未満'
@@ -443,9 +450,18 @@ export const jaScreens = {
     triedDropHint: '「インデックスを試す」で作ったインデックスを消します',
     trialForecasting: '作る前に、作らずに試した見込みをサーバーに尋ねています…',
     trialMeasuring: 'インデックスを作りました。同じ文をもう一度実行して測っています…',
+    trialMeasuringOf: (at: number, of: number) =>
+      `インデックスを作りました。同じ文をもう一度実行して測っています（${of} 回中 ${at} 回目）…`,
     trialDone: (name: string) => `${name} を作って測り直しました`,
-    trialTotal: (before: string | null, after: string | null, factor: number | null) =>
-      `実行の時間: 前 ${before ?? '不明'} → 後 ${after ?? '不明'}${factor === null ? '' : factor >= 1.1 ? `（1 回ずつの計測で、約 ${factor < 10 ? factor.toFixed(1) : Math.round(factor).toLocaleString('ja-JP')} 倍速い）` : factor <= 1 / 1.1 ? `（1 回ずつの計測で、約 ${(1 / factor).toFixed(1)} 倍遅い）` : '（1 回ずつの計測で、ほぼ同じ）'}`,
+    trialTotal: (
+      before: string | null,
+      after: string | null,
+      factor: number | null,
+      runs: readonly [number, number] = [1, 1]
+    ) => {
+      const how = runs[0] === 1 && runs[1] === 1 ? '1 回ずつの計測で' : `前 ${runs[0]} 回・後 ${runs[1]} 回の中央値で`
+      return `実行の時間: 前 ${before ?? '不明'} → 後 ${after ?? '不明'}${factor === null ? '' : factor >= 1.1 ? `（${how}、約 ${factor < 10 ? factor.toFixed(1) : Math.round(factor).toLocaleString('ja-JP')} 倍速い）` : factor <= 1 / 1.1 ? `（${how}、約 ${(1 / factor).toFixed(1)} 倍遅い）` : `（${how}、ほぼ同じ）`}`
+    },
     trialRead: (index: string | null, rows: number | null, time: string | null) =>
       `${index ? `インデックス ${index} で` : '全件'}${rows === null ? '' : ` ${Math.round(rows).toLocaleString('ja-JP')} 行`}${time ? ` · ${time}` : ''}`,
     forecastSaid: (costBefore: number | null, costAfter: number | null, used: boolean) =>
@@ -571,6 +587,8 @@ export const jaScreens = {
     trialTimeTitle: '実行の時間を比べる',
     trialNotRead: '読まなくなりました',
     trialForecastTitle: '作る前の見込みと比べる',
+    trialHonestRuns: (before: number, after: number) =>
+      `前は ${before} 回、後は ${after} 回測った中央値で比べています。1 回目は行をディスクから読むので遅いことがあり、中央値はその揺れに左右されにくくなります。木と段ごとの時間は、それぞれ最後の 1 回です。どちらかが 1 ミリ秒未満のときは、何倍とは言いません`,
     trialHonest:
       '前も後も 1 回ずつの計測です。後の実行は、前の実行で読んだ行がキャッシュに載っていて、速く見えることがあります。どちらかが 1 ミリ秒未満のときは、何倍とは言いません',
     trialWriteCost:

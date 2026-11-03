@@ -460,6 +460,20 @@ describe('planTour, with an index tried', () => {
     expect(time?.hints).toEqual([t.trialWriteCost])
   })
 
+  it("compares the runs' medians where several were measured, and says so", () => {
+    const { scenes } = planTour({
+      plan: after,
+      relations: keys,
+      indexColumns: () => ['email'],
+      measuredMs: 2,
+      trial: { before, index, runs: { before: [90, 40, 45], after: [9, 2, 3] } },
+    })
+    const time = scenes.find((s) => s.title === t.trialTimeTitle)
+    // The medians (45 and 3), not the last runs (40 and 2).
+    expect(time?.text).toBe(p.trialTotal(p.duration(45), p.duration(3), 15, [3, 3]))
+    expect(time?.notes).toEqual([t.trialHonestRuns(3, 3)])
+  })
+
   it('says so where the server did not use the index, and names the other reads that changed', () => {
     const unused = node({
       ...loop,

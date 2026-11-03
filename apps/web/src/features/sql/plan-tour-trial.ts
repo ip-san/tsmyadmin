@@ -5,6 +5,7 @@ import { locale } from '@/config/locale-screens.ts'
 import { compareReads, readSaid, speedup, usesIndex } from './plan-compare.ts'
 import { type Forecast, forecastVerdict } from './plan-forecast.ts'
 import type { IndexCandidate } from './plan-index.ts'
+import { runsTime } from './plan-runs.ts'
 import { planReads, planSteps } from './plan-steps.ts'
 
 const t = locale.planTour
@@ -16,6 +17,8 @@ export interface TrialInput {
   index: IndexCandidate
   /** What trying it without building it said, where it was built from there: the run is set beside it. */
   forecast?: Forecast | undefined
+  /** The time of every run measured before and after, where kept: compared by their medians. */
+  runs?: { before: readonly number[]; after: readonly number[] } | undefined
 }
 
 type Lit = readonly (readonly [string, Tone, string])[]
@@ -102,12 +105,16 @@ function pair(
  */
 export function trialScenes(
   after: { plan: PlanNode; ms: number | null },
-  { before, index, forecast }: TrialInput,
+  { before, index, forecast, runs }: TrialInput,
   indexColumns: (table: string, index: string) => readonly string[] = () => []
 ): TourScene[] {
   const { table, name, columns } = index
   const reads = aroundIndex(before.plan, after.plan, index, readSaid, t.trialNotRead)
   const used = usesIndex(after.plan, table, name)
+  // Compared by the medians where runs were kept: the trees shown are each the last run.
+  const beforeMs = runsTime(runs?.before ?? [], before.measured?.ms)
+  const afterMs = runsTime(runs?.after ?? [], after.ms)
+  const counts = [Math.max(1, runs?.before.length ?? 0), Math.max(1, runs?.after.length ?? 0)] as const
   return [
     ...pair(before.plan, after.plan, table, columns, indexColumns, [
       { title: t.trialBeforeTitle, text: t.trialBefore(table, reads.was, name, columns) },
@@ -115,11 +122,11 @@ export function trialScenes(
     ]),
     {
       title: t.trialTimeTitle,
-      text: p.trialTotal(timeOf(before.measured?.ms), timeOf(after.ms), speedup(before.measured?.ms, after.ms)),
+      text: p.trialTotal(timeOf(beforeMs), timeOf(afterMs), speedup(beforeMs, afterMs), counts),
       frame: [],
       overlay: overlay({ tables: litOf(after.plan, indexColumns) }),
       pulse: [],
-      notes: [t.trialHonest],
+      notes: [counts[0] === 1 && counts[1] === 1 ? t.trialHonest : t.trialHonestRuns(counts[0], counts[1])],
       hints: [used ? t.trialWriteCost : p.trialUnused(name)],
     },
     // Built from a forecast: whether the run bore it out, the table framed where it was said of.

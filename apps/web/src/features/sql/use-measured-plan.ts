@@ -1,14 +1,18 @@
 import type { ExplainResult } from '@tsmyadmin/shared'
 import { useState } from 'react'
-import { useStoppableAnalyze } from './use-stoppable-analyze.ts'
+import { type RunProgress, useStoppableAnalyze } from './use-stoppable-analyze.ts'
 
 /** Where the measuring is: not asked, asked and waiting to be confirmed, or running. */
 type MeasureStep = 'idle' | 'confirming' | 'running'
 
 export interface MeasuredPlan {
   step: MeasureStep
-  /** The plan as measured, the last time it was; null until then. */
+  /** The plan as measured, the last time it was (the last run of the series); null until then. */
   result: ExplainResult | null
+  /** The time of every run of that measuring (as many as asked for, or fewer where it was stopped part way). */
+  times: number[]
+  /** Which run of a series is going; null otherwise. */
+  progress: RunProgress | null
   /** Why the last run failed, or why a stop did not reach the server (the measured plan before it is kept). */
   error: unknown
   /** A stop was asked of the run, which has not ended yet. */
@@ -22,18 +26,21 @@ export interface MeasuredPlan {
 }
 
 /**
- * Measuring a statement's plan by running it: asked first (it runs on the server), then run once per press, and
- * stoppable while it runs (`useStoppableAnalyze`).
+ * Measuring a statement's plan by running it: asked first (it runs on the server), then run `runs` times in a row per
+ * press, and stoppable while it runs (`useStoppableAnalyze`). Stopped part way, the runs that ended are kept.
  */
-export function useMeasuredPlan(db: string, schema: string | undefined, sql: string): MeasuredPlan {
+export function useMeasuredPlan(db: string, schema: string | undefined, sql: string, runs = 1): MeasuredPlan {
   const [confirming, setConfirming] = useState(false)
   const [result, setResult] = useState<ExplainResult | null>(null)
+  const [times, setTimes] = useState<number[]>([])
   const [error, setError] = useState<unknown>(null)
   const [stopped, setStopped] = useState(false)
   const analyze = useStoppableAnalyze(db, schema, sql)
   return {
     step: analyze.running ? 'running' : confirming ? 'confirming' : 'idle',
     result,
+    times,
+    progress: analyze.progress,
     error: error ?? analyze.stopError,
     stopping: analyze.stopping,
     stopped,
@@ -58,11 +65,15 @@ export function useMeasuredPlan(db: string, schema: string | undefined, sql: str
       setStopped(false)
       // The question closes as the run ends, in the same update: the step goes from running to idle, never through
       // confirming (which would move the focus).
-      const outcome = await analyze.run(() => setConfirming(false))
+      const outcome = await analyze.run(runs, () => setConfirming(false))
       if (outcome === null) return
-      if (outcome.kind === 'done') setResult(outcome.result)
-      else if (outcome.kind === 'stopped') setStopped(true)
-      else setError(outcome.error)
+      const kept = outcome.kind === 'done' ? outcome : outcome.kind === 'stopped' ? outcome.partial : undefined
+      if (kept) {
+        setResult(kept.result)
+        setTimes(kept.times)
+      }
+      if (outcome.kind === 'stopped') setStopped(true)
+      else if (outcome.kind === 'failed') setError(outcome.error)
     },
   }
 }
