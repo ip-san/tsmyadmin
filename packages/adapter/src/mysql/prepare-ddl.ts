@@ -37,6 +37,11 @@ export async function mysqlPrepareDdl(adapter: DatabaseAdapter, ns: Namespace, o
     case 'renameDatabase':
     case 'copyDatabase':
       return prepareDatabaseOp(adapter, op)
+    case 'addIndex': {
+      // A build cut short leaves no index here (it is undone whole): nothing to drop first, whatever the request said.
+      const { replacesUnusable: _, ...asked } = op
+      return asked
+    }
     default:
       return op
   }

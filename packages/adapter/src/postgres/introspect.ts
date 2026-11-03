@@ -233,7 +233,12 @@ export async function pgDescribeTable(conn: Conn, ns: Namespace, table: string):
                LEFT JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = k.attnum
                WHERE k.ord <= i.indnkeyatts),
               pg_get_expr(i.indpred, i.indrelid, true),
-              pg_get_indexdef(i.indexrelid, 0, true), i.indisvalid, obj_description(i.indexrelid, 'pg_class')
+              pg_get_indexdef(i.indexrelid, 0, true), i.indisvalid, obj_description(i.indexrelid, 'pg_class'),
+              -- Still being built (concurrently, by this session or another): not valid yet, and nothing failed. Another
+              -- role's build is seen only with pg_read_all_stats (otherwise it is counted unusable, as before).
+              EXISTS (SELECT 1 FROM pg_stat_progress_create_index p
+                      WHERE p.index_relid = i.indexrelid
+                        AND p.datid = (SELECT oid FROM pg_database WHERE datname = current_database()))
        FROM pg_index i
        JOIN pg_class ic ON ic.oid = i.indexrelid
        JOIN pg_am am ON am.oid = ic.relam
@@ -247,7 +252,8 @@ export async function pgDescribeTable(conn: Conn, ns: Namespace, table: string):
     )
   )
   // An index a concurrent build left unusable is named apart: nothing reads through it, so no caller may count on it.
-  const unusableIndexes = idx.rows.filter((row) => !bool(row[7])).map((row) => str(row[0]))
+  // One still being built is neither: it is not there yet, and dropping it would wait for the build and undo it.
+  const unusableIndexes = idx.rows.filter((row) => !bool(row[7]) && !bool(row[9])).map((row) => str(row[0]))
   const indexes: IndexDef[] = idx.rows
     .filter((row) => bool(row[7]))
     .map((row) => ({

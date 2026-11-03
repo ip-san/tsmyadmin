@@ -46,6 +46,17 @@ describe('remainingAfterStop', () => {
     expect(remainingAfterStop(mysql, [ok('START TRANSACTION', 0)])).toEqual(mysql)
   })
 
+  it('does not give a rest where it cut short a build that does not stop writes (it leaves an index behind)', () => {
+    const online = [
+      'DROP INDEX CONCURRENTLY IF EXISTS "app"."i"',
+      'CREATE UNIQUE INDEX CONCURRENTLY "i" ON "app"."t" ("a")',
+      `COMMENT ON INDEX "app"."i" IS 'c'`,
+    ]
+    expect(remainingAfterStop(online, [ok(online[0] ?? '', 0), stopped(online[1] ?? '', 1)])).toBeNull()
+    // Stopped after it, the index was made: the rest is the rest.
+    expect(remainingAfterStop(online, [ok(online[0] ?? '', 0), ok(online[1] ?? '', 1)])).toEqual(online.slice(2))
+  })
+
   it('reads text around a statement as the same statement', () => {
     expect(remainingAfterStop(sql, [ok(`\n${sql[0]}\n`, 0)])).toEqual(sql.slice(1))
   })

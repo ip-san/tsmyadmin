@@ -108,12 +108,28 @@ describe('pgPrepareDdl: an index built without stopping writes', () => {
     await rejectsWith(pgPrepareDdl(adapterOf(true), { database: 'db' }, op), 'UNSUPPORTED', /partitioned/)
   })
 
-  it('passes it on a table, and does not read a table for a plain build', async () => {
+  it('passes it on a table, and a plain build on a partitioned one', async () => {
     expect(await pgPrepareDdl(adapterOf(false), { database: 'db' }, op)).toEqual(op)
-    const unread = { describeTable: () => Promise.reject(new Error('read')) } as unknown as DatabaseAdapter
-    expect(await pgPrepareDdl(unread, { database: 'db' }, { ...op, online: false } as DdlOp)).toEqual({
+    expect(await pgPrepareDdl(adapterOf(true), { database: 'db' }, { ...op, online: false } as DdlOp)).toEqual({
       ...op,
       online: false,
     })
+  })
+
+  it('drops first an unusable index of the name, built so or not, as the server says rather than the request', async () => {
+    const left = {
+      describeTable: async () => ({ partitioned: false, unusableIndexes: ['i'] }),
+    } as unknown as DatabaseAdapter
+    expect(await pgPrepareDdl(left, { database: 'db' }, op)).toEqual({ ...op, replacesUnusable: true })
+    expect(await pgPrepareDdl(left, { database: 'db' }, { ...op, online: false } as DdlOp)).toEqual({
+      ...op,
+      online: false,
+      replacesUnusable: true,
+    })
+    // Another name's is not this one's; and a request that says so is not taken at its word.
+    expect(await pgPrepareDdl(left, { database: 'db' }, { ...op, name: 'j' } as DdlOp)).toEqual({ ...op, name: 'j' })
+    expect(
+      await pgPrepareDdl(adapterOf(false), { database: 'db' }, { ...op, replacesUnusable: true } as DdlOp)
+    ).toEqual(op)
   })
 })

@@ -135,9 +135,9 @@ export function PreviewDialog<Op>({
             />
           </div>
         ) : null}
-        {/* There from the start, empty until a stop is asked: read out as it is asked. */}
+        {/* There from the start, empty until a stop is asked (or the SQL is built again): read out as it comes. */}
         <p role="status" className="mt-2 text-sm text-ink-sub empty:sr-only">
-          {flow.stopping ? locale.ddl.stopping : ''}
+          {flow.stopping ? locale.ddl.stopping : flow.revised ? locale.ddl.revised : ''}
         </p>
         {flow.stopError ? <ErrorBox error={flow.stopError} className="mt-2" /> : null}
         <div ref={failureRef} tabIndex={-1} className="outline-none">

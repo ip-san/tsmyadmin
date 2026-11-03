@@ -427,12 +427,19 @@ export const pgDdl: DdlBuilder = {
         return [
           `ALTER TABLE ${t} ${op.current ? `DROP CONSTRAINT ${id(op.current)}, ` : ''}ADD PRIMARY KEY (${op.columns.map(id).join(', ')})`,
         ]
-      case 'addIndex':
+      case 'addIndex': {
+        // An unusable index of the name (a build cut short) is dropped first: the name is free again. IF EXISTS: one
+        // dropped between the preview and the run is not a failure.
+        const leftover = op.replacesUnusable
+          ? [`DROP INDEX ${op.online ? 'CONCURRENTLY ' : ''}IF EXISTS ${schema}.${id(op.name)}`]
+          : []
         // With its comment, all or nothing: an index made but not marked could not be told apart. CONCURRENTLY cannot
         // run in a transaction, so there the comment follows it on its own (it fails only where the index is gone).
-        return op.comment && !op.online
-          ? inTransaction([createIndexSql('postgres', ns, op), ...pgIndexCommentSql(ns, op)])
-          : [createIndexSql('postgres', ns, op), ...pgIndexCommentSql(ns, op)]
+        // The leftover dropped and the index made together too: a build that fails does not leave the name empty.
+        return (op.comment || leftover.length > 0) && !op.online
+          ? inTransaction([...leftover, createIndexSql('postgres', ns, op), ...pgIndexCommentSql(ns, op)])
+          : [...leftover, createIndexSql('postgres', ns, op), ...pgIndexCommentSql(ns, op)]
+      }
       case 'renameIndex':
         return [`ALTER INDEX ${schema}.${id(op.name)} RENAME TO ${id(op.newName)}`]
       case 'alterIndex':

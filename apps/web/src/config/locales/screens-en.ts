@@ -1306,17 +1306,19 @@ export const enScreens = {
     stopUnclear:
       'The server did not answer whether the run was stopped: it may have run to the end or stopped part way. The structure was read again: check it',
     stopped:
-      "The run was stopped. The statement running when it stopped was undone; the statements before it stay done, and the ones after it did not run. On PostgreSQL, an index stopped part way through a build without stopping writes can be left unusable (drop it under Unusable indexes in the table's Structure)",
+      'The run was stopped. The statement running when it stopped was undone; the statements before it stay done, and the ones after it did not run. On PostgreSQL, an index stopped part way through a build without stopping writes can be left unusable (press Run again to see SQL that drops it first)',
     rerunStopped:
-      'Pressing Run now runs the whole script again from the start, the statements that ran before the stop too (they fail, or make the same change again). Check the structure, then run only the rest in the SQL tab',
+      'Pressing Run now builds the SQL again on the server as it is, and runs the whole script again from the start, the statements that ran before the stop too (they fail, or make the same change again; where the SQL changes, the new SQL is shown, not run). Check the structure, then run only the rest in the SQL tab',
     rerunAll:
-      'Pressing Run now runs the whole script again from the start, the statements that ran before the stop too (they fail, or make the same change again)',
+      'Pressing Run now builds the SQL again on the server as it is, and runs the whole script again from the start, the statements that ran before the stop too (they fail, or make the same change again; where the SQL changes, the new SQL is shown, not run)',
     restIntro: (n: number) =>
       `By the server's results, ${n === 1 ? 'this statement has' : `these ${n} statements have`} not run yet (the one stopped, and any transaction rolled back with it). Check the structure, then run only ${n === 1 ? 'it' : 'these'}`,
     restSql: 'Statements not run yet',
     runRest: 'Run the rest',
     rerunUnclear:
-      'Pressing Run now runs the whole script again from the start. If it had run to the end, it fails or makes the same change again. Check the structure first',
+      'Pressing Run now builds the SQL again on the server as it is, and runs the whole script again from the start (where the SQL changes, the new SQL is shown, not run). If it had run to the end, it fails or makes the same change again. Check the structure first',
+    revised:
+      'The SQL was built again for the server as it is now (dropping first an unusable index a build stopped part way left, say). Check it, then press Run',
     rolledBack: 'The statements that had succeeded were rolled back as well (nothing was applied)',
     serverNotice: 'Server notice',
     columnName: 'Column name',

@@ -44,6 +44,7 @@ const flow: DdlFlow = {
   stopUnclear: false,
   stopError: null,
   remaining: null,
+  revised: false,
   preview: () => undefined,
   confirm: () => undefined,
   confirmRemaining: () => undefined,
