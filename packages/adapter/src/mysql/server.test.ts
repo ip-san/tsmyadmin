@@ -345,6 +345,79 @@ describe('mysqlDiagnostics', () => {
     })
   })
 
+  describe('statements', () => {
+    const on: [RegExp, ReturnType<typeof rows>] = [/^SELECT @@performance_schema$/, rows([[1]])]
+    const consumer = (enabled: string): [RegExp, ReturnType<typeof rows>] => [/setup_consumers/, rows([[enabled]])]
+
+    it('lists the costliest digests, with the sample run and its database, every value as text', async () => {
+      const { conn, asked } = scripted([
+        on,
+        consumer('YES'),
+        [/events_statements_summary_by_digest/, rows([['SELECT * FROM t WHERE a = 1', 'shop', 3, 1.5, 0.75, 300]])],
+      ])
+      expect(await mysqlDiagnostics(conn, 'statements')).toEqual({
+        status: 'ok',
+        columns: ['statement', 'database', 'runs', 'totalSeconds', 'maxSeconds', 'rowsExamined'],
+        rows: [['SELECT * FROM t WHERE a = 1', 'shop', '3', '1.5', '0.75', '300']],
+        text: null,
+      })
+      const whole =
+        'QUERY_SAMPLE_TEXT IS NOT NULL AND LENGTH(QUERY_SAMPLE_TEXT) < @@performance_schema_max_sql_text_length'
+      expect(asked.at(-1)?.text.replace(/\s+/g, ' ')).toBe(
+        `SELECT IF(${whole}, QUERY_SAMPLE_TEXT, DIGEST_TEXT), IF(${whole}, SCHEMA_NAME, NULL), ` +
+          'COUNT_STAR, SUM_TIMER_WAIT / 1000000000000, MAX_TIMER_WAIT / 1000000000000, SUM_ROWS_EXAMINED ' +
+          'FROM performance_schema.events_statements_summary_by_digest ' +
+          "WHERE DIGEST_TEXT IS NOT NULL AND DIGEST_TEXT NOT LIKE '%information\\_schema%' AND DIGEST_TEXT NOT LIKE '%performance\\_schema%' " +
+          "AND DIGEST_TEXT NOT LIKE '%\\_tsmyadmin%' AND COALESCE(SCHEMA_NAME, '') NOT IN ('mysql', 'sys') " +
+          "AND DIGEST_TEXT NOT LIKE 'SHOW %' AND DIGEST_TEXT NOT LIKE 'SET %' AND DIGEST_TEXT NOT LIKE 'EXPLAIN %' " +
+          'ORDER BY SUM_TIMER_WAIT DESC LIMIT 50'
+      )
+    })
+
+    it('says the digests are off where performance_schema or its digest consumer is', async () => {
+      const off = scripted([[/^SELECT @@performance_schema$/, rows([[0]])]])
+      expect(await mysqlDiagnostics(off.conn, 'statements')).toMatchObject({ status: 'disabled', rows: [] })
+      const noConsumer = scripted([on, consumer('NO')])
+      expect(await mysqlDiagnostics(noConsumer.conn, 'statements')).toMatchObject({ status: 'disabled' })
+      expect(noConsumer.asked.some((q) => q.text.includes('events_statements_summary_by_digest'))).toBe(false)
+    })
+
+    it('says a server that keeps no sample of a statement (MariaDB) cannot, and an account that may not read is denied', async () => {
+      const mariadb = scripted([
+        on,
+        consumer('YES'),
+        [/FROM performance_schema\.events_statements/, fail('QUERY_FAILED', 'ER_BAD_FIELD_ERROR')],
+      ])
+      expect(await mysqlDiagnostics(mariadb.conn, 'statements')).toMatchObject({ status: 'unsupported' })
+      const older = scripted([
+        on,
+        consumer('YES'),
+        [/FROM performance_schema\.events_statements/, fail('QUERY_FAILED', 'ER_UNKNOWN_SYSTEM_VARIABLE')],
+      ])
+      expect(await mysqlDiagnostics(older.conn, 'statements')).toMatchObject({ status: 'unsupported' })
+      const missing = scripted([
+        on,
+        consumer('YES'),
+        [/FROM performance_schema\.events_statements/, fail('QUERY_FAILED', 'ER_NO_SUCH_TABLE')],
+      ])
+      expect(await mysqlDiagnostics(missing.conn, 'statements')).toMatchObject({ status: 'unsupported' })
+      const account = scripted([
+        on,
+        consumer('YES'),
+        [/FROM performance_schema\.events_statements/, fail('PERMISSION_DENIED', 'ER_TABLEACCESS_DENIED_ERROR')],
+      ])
+      expect(await mysqlDiagnostics(account.conn, 'statements')).toMatchObject({ status: 'denied' })
+      const other = scripted([
+        on,
+        consumer('YES'),
+        [/FROM performance_schema\.events_statements/, fail('QUERY_FAILED', 'ER_LOCK_WAIT_TIMEOUT')],
+      ])
+      await expect(mysqlDiagnostics(other.conn, 'statements')).rejects.toMatchObject({
+        nativeCode: 'ER_LOCK_WAIT_TIMEOUT',
+      })
+    })
+  })
+
   describe('binlogEvents', () => {
     const events = rows([['bin.000002', 4, 'Format_desc', 1, 126, 'Server ver: 8.4.0', 'extra']])
 
@@ -387,14 +460,13 @@ describe('mysqlDiagnostics', () => {
     })
   })
 
-  it('gives the InnoDB status as text, and nothing for the statement statistics PostgreSQL has', async () => {
+  it('gives the InnoDB status as text', async () => {
     const { conn } = scripted([[/SHOW ENGINE INNODB STATUS/, rows([['InnoDB', '', 'BACKGROUND THREAD …']])]])
     expect(await mysqlDiagnostics(conn, 'engineStatus')).toMatchObject({ status: 'ok', text: 'BACKGROUND THREAD …' })
     const none = scripted([[/SHOW ENGINE INNODB STATUS/, rows([])]])
     expect((await mysqlDiagnostics(none.conn, 'engineStatus')).text).toBeNull()
     const empty = scripted([[/SHOW ENGINE INNODB STATUS/, rows([['InnoDB', '', null]])]])
     expect((await mysqlDiagnostics(empty.conn, 'engineStatus')).text).toBeNull()
-    expect(await mysqlDiagnostics(scripted([]).conn, 'statements')).toMatchObject({ status: 'unsupported' })
   })
 
   it('reports an account that may not read as denied, by either spelling, and does not hide another error', async () => {
