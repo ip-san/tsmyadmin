@@ -152,7 +152,10 @@ for (const t of TARGETS) {
 
         // With motion, it plays from the start, a move by hand stops it, and the last scene stops it at once.
         const played = await page.context().newPage()
-        await played.clock.install()
+        // Stopped, as below: time moves only by runFor.
+        const begun = Date.now()
+        await played.clock.install({ time: begun })
+        await played.clock.pauseAt(begun + 1000)
         await played.goto(pathToFileURL(saved).href)
         const playedTitle = played.getByRole('heading', { level: 2 })
         await expect(playedTitle).toHaveText(space.schema ?? space.database)
@@ -176,7 +179,11 @@ for (const t of TARGETS) {
         // Read aloud (by a stand-in for the device's voice, which ends each sentence at once): a scene lasts as long as
         // its words, and only the device's own voice is used.
         const voiced = await page.context().newPage()
-        await voiced.clock.install()
+        // Stopped: time moves only by runFor (each sentence ends in 100 ms; the time a slow machine takes between steps
+        // would read on through the scenes).
+        const start = Date.now()
+        await voiced.clock.install({ time: start })
+        await voiced.clock.pauseAt(start + 1000)
         await voiced.addInitScript(() => {
           const said: { text: string; voice: string }[] = []
           Object.assign(window, { said })
