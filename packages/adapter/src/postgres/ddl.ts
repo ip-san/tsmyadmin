@@ -435,7 +435,8 @@ export const pgDdl: DdlBuilder = {
           : []
         // With its comment, all or nothing: an index made but not marked could not be told apart. CONCURRENTLY cannot
         // run in a transaction, so there the comment follows it on its own (it fails only where the index is gone).
-        return op.comment && !op.online
+        // The leftover dropped and the index made together too: a build that fails does not leave the name empty.
+        return (op.comment || leftover.length > 0) && !op.online
           ? inTransaction([...leftover, createIndexSql('postgres', ns, op), ...pgIndexCommentSql(ns, op)])
           : [...leftover, createIndexSql('postgres', ns, op), ...pgIndexCommentSql(ns, op)]
       }

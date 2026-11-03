@@ -37,12 +37,15 @@ const stop = vi.fn((_queryId: string) => stopAnswer())
 const onSuccess = vi.fn()
 /** What the server builds when asked again (null: the SQL the harness was given). */
 let rebuilt: string[] | null
+/** The server's answer to a preview waits for this, where set. */
+let previewGate: Promise<void> | null
 const previewed = vi.fn()
 
 function Harness({ stoppable = true, sql = ['ALTER 0', 'ALTER 1'] }: { stoppable?: boolean; sql?: string[] }) {
   const config: PreviewFlowConfig<string> = {
     preview: async () => {
       previewed()
+      if (previewGate) await previewGate
       return { sql: rebuilt ?? sql }
     },
     execute,
@@ -81,6 +84,7 @@ beforeEach(() => {
   onSuccess.mockClear()
   previewed.mockClear()
   rebuilt = null
+  previewGate = null
   stopAnswer = async () => true
 })
 afterEach(cleanup)
@@ -360,6 +364,26 @@ describe('PreviewDialog, stopping a run', () => {
     expect(execute.mock.calls[1]?.[1]).toEqual(['DROP 0', 'ALTER 0', 'ALTER 1'])
     expect(previewed).toHaveBeenCalledTimes(2)
     expect(screen.queryByText(d.revised)).toBeNull()
+  })
+
+  it('keeps the SQL shown while it is built again, and cannot be put away until it is', async () => {
+    await running()
+    fireEvent.click(await stopButton())
+    await act(async () => finish({ results: [ok(0), failed] }))
+    await screen.findByRole('alert')
+    let answer: () => void = () => undefined
+    previewGate = new Promise((resolve) => (answer = resolve))
+    rebuilt = ['DROP 0', 'ALTER 0', 'ALTER 1']
+    fireEvent.click(screen.getByRole('button', { name: d.execute }))
+    await vi.waitFor(() => expect(previewed).toHaveBeenCalledTimes(2))
+    // Not a spinner in its place: the SQL stays, and the run is said to be going, as while it runs.
+    expect(screen.getByLabelText('SQL').textContent).toBe('ALTER 0;\nALTER 1;')
+    expect(screen.getByRole('button', { name: locale.sql.running })).toHaveProperty('disabled', true)
+    expect(screen.getByRole('button', { name: locale.common.cancel })).toHaveProperty('disabled', true)
+    await act(async () => answer())
+    expect(await screen.findByText(d.revised)).toBeTruthy()
+    expect(screen.getByLabelText('SQL').textContent).toBe('DROP 0;\nALTER 0;\nALTER 1;')
+    expect(execute).toHaveBeenCalledTimes(1)
   })
 
   it('runs at once when run after a stop where the SQL built again is the same', async () => {

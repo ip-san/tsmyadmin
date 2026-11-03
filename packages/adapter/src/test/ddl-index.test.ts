@@ -67,6 +67,13 @@ describe('DDL builders: indexes', () => {
       `COMMENT ON INDEX "app"."i" IS 'c'`,
       'COMMIT',
     ])
+    // Without a comment too: the leftover is not dropped where the build then fails.
+    expect(pgDdl.build(pgNs, { ...op, online: false, comment: undefined } as DdlOp)).toEqual([
+      'BEGIN',
+      'DROP INDEX IF EXISTS "app"."i"',
+      'CREATE INDEX "i" ON "app"."t" ("a")',
+      'COMMIT',
+    ])
     // MySQL leaves no index from a build cut short: nothing to drop.
     expect(mysqlDdl.build({ database: 'db' }, op)).toEqual([
       "CREATE INDEX `i` ON `db`.`t` (`a`) COMMENT 'c' ALGORITHM=INPLACE LOCK=NONE",

@@ -283,6 +283,35 @@ export function describeDdlColumnsAndDatabases(env: ConformanceEnv, { firstValue
     }
   })
 
+  it('does not call an index unusable while it is still being built without stopping writes', async () => {
+    if (dialect !== 'postgres') return
+    const t = `${scratch}_building`
+    const idx = `${t}_idx`
+    try {
+      await execOk(`CREATE TABLE ${t} (id INT PRIMARY KEY, a INT)`)
+      await execOk(`INSERT INTO ${t} VALUES (1, 0)`)
+      // An open transaction on the table: the build, once its index is made (not valid yet), waits for it to end.
+      const holding = exec(`BEGIN; UPDATE ${t} SET a = 1 WHERE id = 1; SELECT pg_sleep(3)`, { stopOnError: false })
+      await new Promise((resolve) => setTimeout(resolve, 300))
+      const building = exec(`CREATE INDEX CONCURRENTLY ${idx} ON ${t} (a)`, { stopOnError: false })
+      let seen = false
+      for (let i = 0; i < 50 && !seen; i++) {
+        const r = await exec(`SELECT 1 FROM pg_class WHERE relname = '${idx}'`, { stopOnError: false })
+        seen = r.some((x) => x.kind === 'rows' && x.result.rows.length > 0)
+        if (!seen) await new Promise((resolve) => setTimeout(resolve, 50))
+      }
+      expect(seen).toBe(true)
+      // There, not valid, and building: neither an index nor one left unusable.
+      const s = await env.db.describeTable(ns, t)
+      expect(s.indexes.some((i) => i.name === idx)).toBe(false)
+      expect(s.unusableIndexes ?? []).toEqual([])
+      await Promise.all([holding, building])
+      expect((await env.db.describeTable(ns, t)).indexes.some((i) => i.name === idx)).toBe(true)
+    } finally {
+      await exec(`DROP TABLE IF EXISTS ${t}`, { stopOnError: false })
+    }
+  })
+
   it('does not call a partitioned table’s index unusable while its partitions have none yet', async () => {
     if (dialect !== 'postgres') return
     const t = `${scratch}_parted`

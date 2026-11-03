@@ -91,6 +91,8 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
   const [stopError, setStopError] = useState<unknown>(null)
   const [remaining, setRemaining] = useState<string[] | null>(null)
   const [revised, setRevised] = useState(false)
+  // Built again before a run (after a stop or a failure): the SQL shown stays, and the run is said to be going.
+  const [rebuilding, setRebuilding] = useState(false)
   // Each preview and cancel: an SQL built again for an op since put away is not run.
   const generation = useRef(0)
   // The run going (its id); the run a stop was asked of; and the stop asked: whether the server stopped the run (null
@@ -193,8 +195,8 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
   return {
     op,
     sql,
-    previewing: previewM.isPending,
-    running: runM.isPending,
+    previewing: previewM.isPending && !rebuilding,
+    running: runM.isPending || rebuilding,
     error: previewM.error ?? runM.error,
     failed,
     executed,
@@ -239,6 +241,7 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
     preview: (o) => {
       generation.current++
       running.current = false
+      setRebuilding(false)
       setRevised(false)
       setStopped(false)
       setStopUnclear(false)
@@ -260,10 +263,12 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
       if (!(stopped || stopUnclear || failed !== null)) return run(sql)
       if (op === null || running.current || runM.isPending || previewM.isPending) return
       running.current = true
+      setRebuilding(true)
       const mine = generation.current
       previewM.mutate(op, {
         onSuccess: (r) => {
           running.current = false
+          setRebuilding(false)
           if (generation.current !== mine) return
           if (r.sql.length === sql.length && r.sql.every((s, i) => s === sql[i])) return run(r.sql)
           setSql(r.sql)
@@ -275,6 +280,7 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
         },
         onError: () => {
           running.current = false
+          setRebuilding(false)
         },
       })
     },
@@ -283,6 +289,9 @@ export function usePreviewFlow<Op>(config: PreviewFlowConfig<Op>): PreviewFlow<O
     },
     cancel: () => {
       generation.current++
+      // A build asked again and put away: its answer is dropped, and nothing waits on it.
+      running.current = false
+      setRebuilding(false)
       setRevised(false)
       setOp(null)
       setSql([])
