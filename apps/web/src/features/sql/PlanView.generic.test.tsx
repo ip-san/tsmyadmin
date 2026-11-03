@@ -5,7 +5,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { locale } from '@/config/locale-screens.ts'
 import { ApiError } from '@/lib/api.ts'
 import { memoryStorage } from '@/test/memory-storage.ts'
-import { PlanView } from './PlanView.tsx'
+import { PlanView, plannedStatement } from './PlanView.tsx'
 
 /** A statement whose values are not given: planned for any value where the server can (the rest is in PlanView.test.tsx). */
 
@@ -112,5 +112,37 @@ describe('PlanView, a statement whose values are not given', () => {
     await mount('SELECT * FROM logs WHERE level = :p1')
     expect(await screen.findByText(p.valuesNeeded)).toBeTruthy()
     expect(explained).not.toHaveBeenCalled()
+  })
+
+  it('says what mends it where the server cannot plan it for any value', async () => {
+    answer = async () => {
+      throw new ApiError(400, { code: 'QUERY_FAILED', message: 'could not determine data type of parameter $1' })
+    }
+    await mount('SELECT :p1')
+    expect(await screen.findByText(p.genericFailed)).toBeTruthy()
+  })
+})
+
+describe('plannedStatement', () => {
+  it("numbers the server's own $1 written in the editor with the names, so they do not collide", () => {
+    expect(plannedStatement('SELECT * FROM t WHERE a = $1 AND b = :x', 'postgres')).toEqual({
+      sql: 'SELECT * FROM t WHERE a = $1 AND b = $2',
+      generic: true,
+      missing: false,
+    })
+    expect(plannedStatement('SELECT * FROM t WHERE a = $1', 'postgres').generic).toBe(true)
+  })
+
+  it('leaves a statement with no parameters, or on MySQL, as it is', () => {
+    expect(plannedStatement("SELECT '$1', a::int FROM t", 'postgres')).toEqual({
+      sql: "SELECT '$1', a::int FROM t",
+      generic: false,
+      missing: false,
+    })
+    expect(plannedStatement('SELECT * FROM t WHERE a = :x', 'mysql')).toEqual({
+      sql: 'SELECT * FROM t WHERE a = :x',
+      generic: false,
+      missing: true,
+    })
   })
 })

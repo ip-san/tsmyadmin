@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button.tsx'
 import { ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { locale } from '@/config/locale-screens.ts'
 import { isApiError } from '@/lib/api.ts'
+import { namedParameters } from '@/lib/logged-statement.ts'
 import { explainQuery, foreignKeysQuery } from '@/lib/queries.ts'
 import { useDialect } from '@/lib/session.ts'
 import { findParameters, positionalParameters } from '@/lib/sql-prepare.ts'
@@ -28,9 +29,12 @@ const t = locale.plan
  * value (`generic`, where the server can); `missing` where it cannot be planned without them.
  */
 export function plannedStatement(sql: string, dialect: Dialect): { sql: string; generic: boolean; missing: boolean } {
-  if (findParameters(sql).length === 0) return { sql, generic: false, missing: false }
-  return capabilities(dialect).genericPlan
-    ? { sql: positionalParameters(sql), generic: true, missing: false }
+  const forAny = capabilities(dialect).genericPlan
+  // The server's own `$1` written in the editor is a parameter too: named first, so the numbers do not collide.
+  const text = forAny ? namedParameters(sql) : sql
+  if (findParameters(text).length === 0) return { sql, generic: false, missing: false }
+  return forAny
+    ? { sql: positionalParameters(text), generic: true, missing: false }
     : { sql, generic: false, missing: true }
 }
 
@@ -97,6 +101,12 @@ export function PlanView({
         // A server before PostgreSQL 16 plans only with the values: said as such, not as a failure.
         statement.generic && isApiError(plan.error, 'UNSUPPORTED') ? (
           <Notice>{t.genericUnsupported}</Notice>
+        ) : statement.generic ? (
+          // Planned for any value, a parameter's type may not follow from the statement (`SELECT $1`): values mend it.
+          <div className="space-y-2">
+            <ErrorBox error={plan.error} />
+            <Notice>{t.genericFailed}</Notice>
+          </div>
         ) : (
           <ErrorBox error={plan.error} />
         )

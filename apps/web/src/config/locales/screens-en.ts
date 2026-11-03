@@ -335,6 +335,8 @@ export const enScreens = {
       'Estimated: the statement is not run. With a small table, the plan may read every row even where an index exists',
     notesGeneric:
       "Planned for any value (PostgreSQL's GENERIC_PLAN; the statement is not run). The values it runs with may make another plan. To run and measure it, give the values under Run options and press Show as diagram again",
+    genericFailed:
+      "Could not plan it for any value (a parameter's type may not follow from the statement). Give the values under Run options, then press Show as diagram",
     valuesNeeded:
       'This statement has parameters with no value (:p1 and the like). Give them under Run options, then press Show as diagram (a plan for any value takes PostgreSQL 16 or later)',
     genericUnsupported:
@@ -2173,7 +2175,7 @@ export const enScreens = {
     fillValues:
       'Its values were not logged, so $1 and the like are now :p1 and the like. Give them under Run options, then press Show as diagram',
     planForAny:
-      'Its values were not logged, so $1 and the like are now :p1 and the like, planned for any value (PostgreSQL 16 and later). To run and measure it, give them under Run options',
+      'Its values were not logged, so $1 and the like are now :p1 and the like. PostgreSQL 16 and later plans it for any value; before 16, or to run and measure it, give them under Run options',
     empty: 'Nothing recorded yet.',
     columns: {
       time: 'Time',
