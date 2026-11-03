@@ -85,8 +85,8 @@ export function useIndexTrial(
     setStopped(false)
     const outcome = await analyze.run(runs)
     if (outcome === null) return
-    // Stopped part way, the runs that ended are kept.
-    const kept = outcome.kind === 'done' ? outcome : outcome.kind === 'stopped' ? outcome.partial : undefined
+    // Stopped or failed part way, the runs that ended are kept.
+    const kept = outcome.kind === 'done' ? outcome : outcome.partial
     if (kept) {
       setAfter(kept.result)
       setAfterTimes(kept.times)

@@ -9,7 +9,7 @@ export interface MeasuredPlan {
   step: MeasureStep
   /** The plan as measured, the last time it was (the last run of the series); null until then. */
   result: ExplainResult | null
-  /** The time of every run of that measuring (as many as asked for, or fewer where it was stopped part way). */
+  /** The time of every run of that measuring (as many as asked for, or fewer where it was stopped or failed part way). */
   times: number[]
   /** Which run of a series is going; null otherwise. */
   progress: RunProgress | null
@@ -27,7 +27,7 @@ export interface MeasuredPlan {
 
 /**
  * Measuring a statement's plan by running it: asked first (it runs on the server), then run `runs` times in a row per
- * press, and stoppable while it runs (`useStoppableAnalyze`). Stopped part way, the runs that ended are kept.
+ * press, and stoppable while it runs (`useStoppableAnalyze`). Stopped or failed part way, the runs that ended are kept.
  */
 export function useMeasuredPlan(db: string, schema: string | undefined, sql: string, runs = 1): MeasuredPlan {
   const [confirming, setConfirming] = useState(false)
@@ -67,7 +67,7 @@ export function useMeasuredPlan(db: string, schema: string | undefined, sql: str
       // confirming (which would move the focus).
       const outcome = await analyze.run(runs, () => setConfirming(false))
       if (outcome === null) return
-      const kept = outcome.kind === 'done' ? outcome : outcome.kind === 'stopped' ? outcome.partial : undefined
+      const kept = outcome.kind === 'done' ? outcome : outcome.partial
       if (kept) {
         setResult(kept.result)
         setTimes(kept.times)

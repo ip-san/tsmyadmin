@@ -150,6 +150,33 @@ describe('useStoppableAnalyze', () => {
       expect(analyzePlan).toHaveBeenCalledTimes(1)
     })
 
+    it('keeps the runs that ended where a later one fails', async () => {
+      const { result } = hook()
+      let series: Promise<unknown> = Promise.resolve()
+      act(() => {
+        series = result.current.run(3)
+      })
+      await act(async () => end.done(ran(40)))
+      const timeUp = new Error('its time ran out')
+      await act(async () => end.fail(timeUp))
+      expect(await series).toEqual({ kind: 'failed', error: timeUp, partial: { result: ran(40), times: [40] } })
+    })
+
+    it('goes on where the stop did not reach the server', async () => {
+      const { result } = hook()
+      let series: Promise<unknown> = Promise.resolve()
+      act(() => {
+        series = result.current.run(2)
+      })
+      answer = async () => {
+        throw new Error('no connection')
+      }
+      await act(async () => result.current.stop())
+      await act(async () => end.done(ran(40)))
+      await act(async () => end.done(ran(5)))
+      expect(await series).toEqual({ kind: 'done', result: ran(5), times: [40, 5] })
+    })
+
     it('starts no further run once closed', async () => {
       const { result, unmount } = hook()
       let series: Promise<unknown> = Promise.resolve()

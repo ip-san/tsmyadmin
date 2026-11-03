@@ -3,18 +3,18 @@ import { useEffect, useRef, useState } from 'react'
 import { analyzePlan, mutations } from '@/lib/queries.ts'
 
 /** The runs that ended: the last one's plan (the tree shown), and every run's time. */
-export interface MeasuredRuns {
+interface MeasuredRuns {
   result: ExplainResult
   times: number[]
 }
 
 /**
  * How a measuring ended: with its runs, failing, or stopped on a press (as the server says, or between two runs).
- * Stopped after some runs ended, those are kept (`partial`).
+ * Stopped or failed after some runs ended, those are kept (`partial`).
  */
 type AnalyzeOutcome =
   | ({ kind: 'done' } & MeasuredRuns)
-  | { kind: 'failed'; error: unknown }
+  | { kind: 'failed'; error: unknown; partial?: MeasuredRuns }
   | { kind: 'stopped'; partial?: MeasuredRuns }
 
 /** Which run of a series is going (1-based), and of how many. */
@@ -99,7 +99,7 @@ export function useStoppableAnalyze(db: string, schema: string | undefined, sql:
           } catch (error) {
             return stopAsked.current && (await stopAsked.current)
               ? { kind: 'stopped', ...partial() }
-              : { kind: 'failed', error }
+              : { kind: 'failed', error, ...partial() }
           }
           if (last.measured?.ms != null) times.push(last.measured.ms)
         }
@@ -123,7 +123,11 @@ export function useStoppableAnalyze(db: string, schema: string | undefined, sql:
       const asked = mutations.cancelSql(db, id).then(
         (r) => r.cancelled,
         (err: unknown) => {
-          if (current.current === id) setStopError(err)
+          // Not reached: the run goes on, and so does the series.
+          if (current.current === id) {
+            setStopError(err)
+            ending.current = false
+          }
           return false
         }
       )

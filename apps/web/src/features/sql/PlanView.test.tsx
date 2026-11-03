@@ -404,6 +404,8 @@ describe('PlanView', () => {
       // The tree is the last run; the time said is the median, with the fastest and the slowest.
       await screen.findByText(p.measuredRuns(3, p.duration(400), p.duration(10), p.duration(500)))
       expect(analyzePlan).toHaveBeenCalledTimes(3)
+      // Chosen otherwise since, the run after is still measured as many times as the run before was.
+      fireEvent.change(screen.getByLabelText(p.measureRuns), { target: { value: '5' } })
       fireEvent.click(await screen.findByRole('button', { name: p.trialTry('logs', ['level']) }))
       runs.push(run('idx_logs_level', 4), run('idx_logs_level', 300), run('idx_logs_level', 5))
       fireEvent.click(await screen.findByRole('button', { name: locale.ddl.execute }))

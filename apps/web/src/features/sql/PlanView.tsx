@@ -53,7 +53,8 @@ export function PlanView({
   // Kept in this browser: how many times in a row a statement is measured, before and after an index alike.
   const [runs, setRuns] = useState<MeasureRuns>(() => readPreference(RUNS_PREF, runsSchema, 1))
   const measure = useMeasuredPlan(db, schema, sql, runs)
-  const trial = useIndexTrial(db, schema, sql, scope, runs)
+  // Measured after as many times as before was (however the choice has changed since): the medians compare.
+  const trial = useIndexTrial(db, schema, sql, scope, measure.times.length > 0 ? measure.times.length : runs)
   const assumed = useAssumedPlan(db, schema, sql)
   const compared = useAssumedCompare(db, schema, sql)
   // Built from here or from trying it without building it, the index keeps what the server expected of it.
