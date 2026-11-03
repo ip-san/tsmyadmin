@@ -33,8 +33,13 @@ export function setDatabaseConsoleDraft(
   then?: ConsoleArrival
 ): void {
   const key = consoleDraftKey(scope, db, schema, 'db')
-  writePreference(key, sql, sessionStore())
-  if (then) writePreference(`${key}.auto${then}`, sql, sessionStore())
+  const store = sessionStore()
+  writePreference(key, sql, store)
+  // What an earlier hand-over asked for and never reached the console (left before it read it) goes with it: only
+  // this statement, and only as asked now, is done on the next arrival.
+  removePreference(`${key}.autorun`, store)
+  removePreference(`${key}.autoplan`, store)
+  if (then) writePreference(`${key}.auto${then}`, sql, store)
 }
 
 /** The statement a page asked the console to run (or draw the plan of) on arrival, once: reading it clears it. */

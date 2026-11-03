@@ -2123,7 +2123,7 @@ export const enScreens = {
   },
   diagnostics: {
     plan: 'Show plan',
-    planLabel: (n: number) => `Show the plan of statement ${n}`,
+    planLabel: (n: number) => `Show plan of statement ${n}`,
     planHint: "Puts the logged statement in its database's SQL tab and draws its plan (the statement is not run)",
     fillValues:
       'Its values were not logged, so $1 and the like are now :p1 and the like. Give them under Run options, then press Show as diagram',
