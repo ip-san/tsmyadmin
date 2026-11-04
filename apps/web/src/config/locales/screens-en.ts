@@ -2530,6 +2530,9 @@ export const enScreens = {
       'This is tsmyadmin’s own connection. Killing it may fail an operation in progress (the connection is re-established automatically).',
     selfConnection: 'tsmyadmin',
     selfConnectionHint: "One of tsmyadmin's own connections (including your session)",
+    queryHidden: '(cannot be read)',
+    processesHidden:
+      "Other users' connections show no state, host or statement (the rows marked “(cannot be read)”). To see them, give this account the pg_read_all_stats role (GRANT pg_read_all_stats TO <user>).",
     cancelQuery: 'Cancel query',
     cancelQueryHint: 'Stops the running statement only. The connection, its transaction and its temporary tables stay.',
     cancelled: (id: string) => `Cancelled the running query of process ${id}`,

@@ -33,6 +33,8 @@ describe('pgLockWaits', () => {
     ])
     const report = await pgLockWaits(s.conn)
     expect(report.connections).toEqual({ current: 12, max: 100, idleInTransaction: 2 })
+    // Another role's sessions count, though their type is hidden from an account without pg_read_all_stats.
+    expect(s.asked[0]?.text).toContain('OR (backend_type IS NULL AND datid IS NOT NULL AND usesysid IS NOT NULL)')
     expect(report.status).toBe('ok')
     expect(report.waits[0]).toEqual({
       blocked: { id: '201', user: 'app', database: 'shop', waitSec: 4, query: null },

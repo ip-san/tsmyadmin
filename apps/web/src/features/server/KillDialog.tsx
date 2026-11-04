@@ -47,7 +47,9 @@ export function KillDialog({
           <dt className="text-ink-sub">{locale.server.database}</dt>
           <dd>{victim.database ?? '–'}</dd>
           <dt className="text-ink-sub">{locale.server.query}</dt>
-          <dd className="truncate font-mono">{victim.query?.replace(/\s+/g, ' ').trim().slice(0, 200) || '–'}</dd>
+          <dd className="truncate font-mono">
+            {victim.hidden ? locale.server.queryHidden : victim.query?.replace(/\s+/g, ' ').trim().slice(0, 200) || '–'}
+          </dd>
         </dl>
       ) : null}
       {error ? <ErrorBox error={error} className="mt-2" /> : null}
