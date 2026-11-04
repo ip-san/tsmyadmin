@@ -89,6 +89,28 @@ describe('pgListProcesses', () => {
     })
   })
 
+  it("lists another role's session it may not read, says its statement is hidden, and asks for it by database and role", async () => {
+    const s = scripted([
+      [/FROM pg_stat_activity/, rows([[77, 'app', null, 'shop', null, null, null, '<insufficient privilege>', false]])],
+    ])
+    const [p] = await pgListProcesses(s.conn)
+    expect(p).toEqual({
+      id: '77',
+      user: 'app',
+      host: null,
+      database: 'shop',
+      state: null,
+      timeSec: null,
+      query: null,
+      self: false,
+      hidden: true,
+    })
+    // Its type is hidden too: a session is one connected to a database as a role, the server's own workers are not.
+    expect(s.asked.at(-1)?.text).toContain(
+      "WHERE (backend_type = 'client backend' OR (backend_type IS NULL AND datid IS NOT NULL AND usesysid IS NOT NULL)) ORDER BY pid"
+    )
+  })
+
   it('shows what an active backend waits for, and only that: an idle one is just idle', async () => {
     const [waiting, running, idle, idleWaiting, none] = await list([
       [1, 'u', null, 'd', 'active', 'IO', 1, 'q', false],

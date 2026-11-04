@@ -14,7 +14,7 @@ import type {
 } from '@tsmyadmin/shared'
 import { replicationRole } from '@tsmyadmin/shared'
 import { type Conn, firstResult } from '../driver.ts'
-import { joinParts, lockWaitFromRow, str, strOrNull } from '../sql/format.ts'
+import { HIDDEN_STATEMENT, joinParts, lockWaitFromRow, str, strOrNull } from '../sql/format.ts'
 import { AdapterError } from '../types.ts'
 
 export async function pgServerInfo(conn: Conn): Promise<ServerInfo> {
@@ -69,13 +69,23 @@ export async function pgListStatus(conn: Conn): Promise<KeyValue[]> {
   return r.rows.map((row) => ({ name: str(row[0]), value: str(row[1]), description: null }))
 }
 
+/**
+ * The sessions of applications and people. To an account without pg_read_all_stats another role's backend shows no
+ * type (nor state, host or statement): one connected to a database as a role is taken for a session. Most of the
+ * server's own workers have no database (the launchers, the writers) or no role (autovacuum), but not all: another
+ * role's parallel workers, logical replication and an extension's workers in a database (pg_cron) pass as sessions,
+ * which is nearer than leaving every other role's session out.
+ */
+const CLIENT_BACKENDS =
+  "(backend_type = 'client backend' OR (backend_type IS NULL AND datid IS NOT NULL AND usesysid IS NOT NULL))"
+
 export async function pgListProcesses(conn: Conn): Promise<ProcessInfo[]> {
   const r = firstResult(
     await conn.query(
       `SELECT pid, usename, client_addr::text, datname, state, wait_event_type,
               CASE WHEN state = 'active' THEN EXTRACT(EPOCH FROM (now() - query_start))::bigint END, left(query, 65536),
               application_name = 'tsmyadmin'
-       FROM pg_stat_activity WHERE backend_type = 'client backend' ORDER BY pid`
+       FROM pg_stat_activity WHERE ${CLIENT_BACKENDS} ORDER BY pid`
     )
   )
   return r.rows.map((row) => ({
@@ -86,8 +96,9 @@ export async function pgListProcesses(conn: Conn): Promise<ProcessInfo[]> {
     // The wait event only says something while the backend is active; an idle one is just idle.
     state: str(row[4]) === 'active' ? joinParts(row[4], row[5]) : strOrNull(row[4]),
     timeSec: row[6] === null || row[6] === undefined ? null : Number(row[6]),
-    query: strOrNull(row[7]),
+    query: row[7] === HIDDEN_STATEMENT ? null : strOrNull(row[7]),
     self: row[8] === true,
+    ...(row[7] === HIDDEN_STATEMENT ? { hidden: true } : {}),
   }))
 }
 
@@ -128,12 +139,15 @@ const PG_LOCK_WAITS = `SELECT w.pid, w.usename, w.datname, EXTRACT(EPOCH FROM (n
   WHERE w.wait_event_type = 'Lock'
   ORDER BY 4 DESC NULLS LAST, 1, 6`
 
-/** Lock waits and connection usage. Anyone may call pg_blocking_pids; statements of other accounts may read as null. */
+/**
+ * Lock waits and connection usage. Anyone may call pg_blocking_pids; statements of other accounts may read as null.
+ * Another role's sessions are counted, but not which of them are idle in a transaction (their state is hidden).
+ */
 export async function pgLockWaits(conn: Conn): Promise<LockWaitReport> {
   const usage = firstResult(
     await conn.query(
       `SELECT count(*), count(*) FILTER (WHERE state LIKE 'idle in transaction%'), current_setting('max_connections')
-       FROM pg_stat_activity WHERE backend_type = 'client backend'`
+       FROM pg_stat_activity WHERE ${CLIENT_BACKENDS}`
     )
   ).rows[0]
   const waits = firstResult(await conn.query(PG_LOCK_WAITS)).rows.map(lockWaitFromRow)
@@ -211,9 +225,8 @@ const NOTHING = (status: DiagnosticReport['status']): DiagnosticReport => ({
   text: null,
 })
 const cell = (v: unknown) => (v === null || v === undefined ? null : String(v))
-/** What pg_stat_statements shows for the text of another role's statement, to an account without pg_read_all_stats. */
-const HIDDEN_TEXT = '<insufficient privilege>'
-const hidden = (row: unknown[]) => row[0] === HIDDEN_TEXT
+/** Another role's statement, whose text an account without pg_read_all_stats may not read. */
+const hidden = (row: unknown[]) => row[0] === HIDDEN_STATEMENT
 
 /** The most expensive statements, when pg_stat_statements is installed and loaded. */
 async function pgStatements(conn: Conn): Promise<DiagnosticReport> {

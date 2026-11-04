@@ -2507,6 +2507,9 @@ export const jaScreens = {
       'これは tsmyadmin 自身の接続です。終了すると進行中の操作が失敗することがあります（接続は自動的に張り直されます）。',
     selfConnection: 'このツール',
     selfConnectionHint: 'tsmyadmin 自身の接続（自分のセッションを含む）',
+    queryHidden: '（読めません）',
+    processesHidden:
+      'ほかのユーザーの接続は、状態・接続元・実行中の文が読めません（「（読めません）」の行）。見るには、このアカウントに pg_read_all_stats ロールを付けてください（GRANT pg_read_all_stats TO <ユーザー>）。',
     cancelQuery: '実行中のクエリを中断',
     cancelQueryHint: '実行中の文だけを止めます。接続・トランザクション・一時テーブルはそのまま残ります。',
     cancelled: (id: string) => `プロセス ${id} の実行中のクエリを中断しました`,

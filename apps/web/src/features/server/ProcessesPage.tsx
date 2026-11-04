@@ -74,90 +74,95 @@ export function ProcessesPage() {
       ) : procs.isError ? (
         <ErrorBox error={procs.error} onRetry={() => void procs.refetch()} />
       ) : (
-        <Table aria-label={locale.server.processesTitle}>
-          <thead>
-            <tr>
-              {(
-                [
-                  ['id', locale.server.pid],
-                  ['user', locale.server.user],
-                  ['host', locale.server.host],
-                  ['database', locale.server.database],
-                  ['state', locale.server.state],
-                  ['timeSec', locale.server.time],
-                  ['query', locale.server.query],
-                ] as const
-              ).map(([key, label]) => (
-                <SortTh
-                  key={key}
-                  dir={sort?.key === key ? sort.dir : null}
-                  onSort={() => setSort(nextListSort(sort, key))}
-                  {...(key === 'timeSec' ? { className: 'text-right' } : {})}
-                >
-                  {label}
-                </SortTh>
-              ))}
-              <Th>{locale.ddl.actions}</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {(sort ? sortProcesses(procs.data, sort.key, sort.dir) : procs.data)
-              .filter((p) => !activeOnly || isActiveProcess(p))
-              .map((p) => (
-                <Tr key={p.id}>
-                  <Td className="whitespace-nowrap font-mono text-xs">
-                    {p.id}
-                    {p.self ? (
-                      <>
-                        {' '}
-                        <Badge tone="neutral" title={locale.server.selfConnectionHint}>
-                          {locale.server.selfConnection}
-                        </Badge>
-                      </>
-                    ) : null}
-                  </Td>
-                  <Td>{p.user ?? ''}</Td>
-                  <Td className="font-mono text-xs">{p.host ?? ''}</Td>
-                  <Td>{p.database ?? ''}</Td>
-                  <Td className="text-xs">{p.state ?? ''}</Td>
-                  <Td className="text-right tabular-nums">{p.timeSec ?? ''}</Td>
-                  <Td className="max-w-md font-mono text-xs">
-                    {p.query === null ? (
-                      <span className="text-ink-sub" aria-hidden>
-                        –
-                      </span>
-                    ) : (
-                      <CellValue cell={abbreviateQuery(p.query, fullQuery)} />
-                    )}
-                  </Td>
-                  <Td className="whitespace-nowrap">
-                    {/* Ending the statement is the gentler action: the session, its transaction and its
+        <>
+          {procs.data.some((p) => p.hidden) ? <Notice>{locale.server.processesHidden}</Notice> : null}
+          <Table aria-label={locale.server.processesTitle}>
+            <thead>
+              <tr>
+                {(
+                  [
+                    ['id', locale.server.pid],
+                    ['user', locale.server.user],
+                    ['host', locale.server.host],
+                    ['database', locale.server.database],
+                    ['state', locale.server.state],
+                    ['timeSec', locale.server.time],
+                    ['query', locale.server.query],
+                  ] as const
+                ).map(([key, label]) => (
+                  <SortTh
+                    key={key}
+                    dir={sort?.key === key ? sort.dir : null}
+                    onSort={() => setSort(nextListSort(sort, key))}
+                    {...(key === 'timeSec' ? { className: 'text-right' } : {})}
+                  >
+                    {label}
+                  </SortTh>
+                ))}
+                <Th>{locale.ddl.actions}</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {(sort ? sortProcesses(procs.data, sort.key, sort.dir) : procs.data)
+                .filter((p) => !activeOnly || isActiveProcess(p))
+                .map((p) => (
+                  <Tr key={p.id}>
+                    <Td className="whitespace-nowrap font-mono text-xs">
+                      {p.id}
+                      {p.self ? (
+                        <>
+                          {' '}
+                          <Badge tone="neutral" title={locale.server.selfConnectionHint}>
+                            {locale.server.selfConnection}
+                          </Badge>
+                        </>
+                      ) : null}
+                    </Td>
+                    <Td>{p.user ?? ''}</Td>
+                    <Td className="font-mono text-xs">{p.host ?? ''}</Td>
+                    <Td>{p.database ?? ''}</Td>
+                    <Td className="text-xs">{p.state ?? ''}</Td>
+                    <Td className="text-right tabular-nums">{p.timeSec ?? ''}</Td>
+                    <Td className="max-w-md font-mono text-xs">
+                      {p.hidden ? (
+                        <span className="font-sans text-ink-sub">{locale.server.queryHidden}</span>
+                      ) : p.query === null ? (
+                        <span className="text-ink-sub" aria-hidden>
+                          –
+                        </span>
+                      ) : (
+                        <CellValue cell={abbreviateQuery(p.query, fullQuery)} />
+                      )}
+                    </Td>
+                    <Td className="whitespace-nowrap">
+                      {/* Ending the statement is the gentler action: the session, its transaction and its
                       temporary tables survive, so it needs no confirmation. */}
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        setNotice(null)
-                        kill.mutate({ id: p.id, mode: 'query' })
-                      }}
-                      disabled={kill.isPending}
-                      title={locale.server.cancelQueryHint}
-                      aria-label={`${p.id}: ${locale.server.cancelQuery}`}
-                    >
-                      {locale.server.cancelQuery}
-                    </Button>{' '}
-                    <Button
-                      size="sm"
-                      variant="danger"
-                      onClick={() => setVictim(p)}
-                      aria-label={`${p.id}: ${locale.server.kill}`}
-                    >
-                      {locale.server.kill}
-                    </Button>
-                  </Td>
-                </Tr>
-              ))}
-          </tbody>
-        </Table>
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setNotice(null)
+                          kill.mutate({ id: p.id, mode: 'query' })
+                        }}
+                        disabled={kill.isPending}
+                        title={locale.server.cancelQueryHint}
+                        aria-label={`${p.id}: ${locale.server.cancelQuery}`}
+                      >
+                        {locale.server.cancelQuery}
+                      </Button>{' '}
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        onClick={() => setVictim(p)}
+                        aria-label={`${p.id}: ${locale.server.kill}`}
+                      >
+                        {locale.server.kill}
+                      </Button>
+                    </Td>
+                  </Tr>
+                ))}
+            </tbody>
+          </Table>
+        </>
       )}
       <KillDialog
         victim={victim}

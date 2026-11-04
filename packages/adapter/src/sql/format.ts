@@ -32,10 +32,11 @@ const seconds = (v: unknown): number | null => {
   const n = Number(v)
   return Number.isFinite(n) ? n : null
 }
-/** What PostgreSQL shows in place of another account's statement when this one may not read it. */
+/** What PostgreSQL shows in place of another account's statement when this one may not read it (no pg_read_all_stats). */
+export const HIDDEN_STATEMENT = '<insufficient privilege>'
 const hidden = (v: unknown): string | null => {
   const s = strOrNull(v)
-  return s === '<insufficient privilege>' ? null : s
+  return s === HIDDEN_STATEMENT ? null : s
 }
 
 /**

@@ -26,6 +26,11 @@ export const ProcessInfoSchema = z.object({
   query: z.string().nullable(),
   /** One of this tool's own connections (its pools announce themselves as `tsmyadmin`). */
   self: z.boolean().default(false),
+  /**
+   * Another role's session, whose state, host and statement the account may not read (PostgreSQL without
+   * pg_read_all_stats): `query` is null for that reason, not because it runs nothing.
+   */
+  hidden: z.boolean().optional(),
 })
 export type ProcessInfo = z.infer<typeof ProcessInfoSchema>
 
