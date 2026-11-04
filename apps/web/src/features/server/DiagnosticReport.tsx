@@ -93,45 +93,48 @@ export function DiagnosticReport({
   const at = columns.indexOf('database')
   const databaseOf = (row: (string | null)[]) => (at < 0 ? null : (row[at] ?? null))
   return (
-    <Table aria-label={title}>
-      <thead>
-        <tr>
-          {columns.map((c) => (
-            <Th key={c} className={NUMERIC.has(c) ? 'text-right' : ''}>
-              {t.columns[c]}
-            </Th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((row, n) => {
-          const db = databaseOf(row)
-          return (
-            <Tr key={JSON.stringify(row)}>
-              {row.map((value, i) => {
-                const column = columns[i] ?? 'statement'
-                return (
-                  <Td
-                    key={`${column}:${i}`}
-                    className={
-                      NUMERIC.has(column)
-                        ? 'whitespace-nowrap text-right text-xs tabular-nums'
-                        : 'max-w-xl break-words font-mono text-xs'
-                    }
-                  >
-                    {NUMERIC.has(column) ? figure(column, value) : (value ?? '')}
-                    {column === 'statement' && value !== null && db ? (
-                      <div>
-                        <PlanButton db={db} sql={value} table={title} n={n + 1} />
-                      </div>
-                    ) : null}
-                  </Td>
-                )
-              })}
-            </Tr>
-          )
-        })}
-      </tbody>
-    </Table>
+    <div className="space-y-2">
+      {report.data.othersHidden ? <Notice>{t.othersHidden}</Notice> : null}
+      <Table aria-label={title}>
+        <thead>
+          <tr>
+            {columns.map((c) => (
+              <Th key={c} className={NUMERIC.has(c) ? 'text-right' : ''}>
+                {t.columns[c]}
+              </Th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, n) => {
+            const db = databaseOf(row)
+            return (
+              <Tr key={JSON.stringify(row)}>
+                {row.map((value, i) => {
+                  const column = columns[i] ?? 'statement'
+                  return (
+                    <Td
+                      key={`${column}:${i}`}
+                      className={
+                        NUMERIC.has(column)
+                          ? 'whitespace-nowrap text-right text-xs tabular-nums'
+                          : 'max-w-xl break-words font-mono text-xs'
+                      }
+                    >
+                      {NUMERIC.has(column) ? figure(column, value) : (value ?? '')}
+                      {column === 'statement' && value !== null && db ? (
+                        <div>
+                          <PlanButton db={db} sql={value} table={title} n={n + 1} />
+                        </div>
+                      ) : null}
+                    </Td>
+                  )
+                })}
+              </Tr>
+            )
+          })}
+        </tbody>
+      </Table>
+    </div>
   )
 }

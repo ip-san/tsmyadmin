@@ -2177,6 +2177,8 @@ export const enScreens = {
     planForAny:
       'Its values were not logged, so $1 and the like are now :p1 and the like. PostgreSQL 16 and later plans it for any value; before 16, or to run and measure it, give them under Run options',
     empty: 'Nothing recorded yet.',
+    othersHidden:
+      "The <insufficient privilege> rows are statements other users ran: their time is counted, but their text can't be read. To see it, give this account the pg_read_all_stats role (GRANT pg_read_all_stats TO <user>).",
     columns: {
       time: 'Time',
       statement: 'Statement',
@@ -2259,6 +2261,8 @@ export const enScreens = {
       },
       every: 'Read interval',
       waiting: 'Nothing has run yet. Use the application and it shows up here.',
+      othersHidden:
+        "Statements other users ran aren't shown: their text can't be read (if the application connects as another user, nothing shows up here). To see them, give this account the pg_read_all_stats role (GRANT pg_read_all_stats TO <user>).",
       turnOn: 'Turn the general log on…',
       turnOff: 'Turn the general log off…',
       onHint:

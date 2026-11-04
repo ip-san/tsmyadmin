@@ -92,6 +92,32 @@ describe('pgDiagnostics', () => {
       )
     })
 
+    it("keeps another role's statement, whose text it may not read, and says some are hidden", async () => {
+      const { conn } = scripted([
+        installed,
+        [
+          /FROM pg_stat_statements/,
+          rows([
+            ['<insufficient privilege>', 'app', 9, 4, 1, 9],
+            ['SELECT 1', 'app', 3, 1.5, 0.5, 3],
+          ]),
+        ],
+      ])
+      expect(await pgDiagnostics(conn, 'statements')).toMatchObject({
+        status: 'ok',
+        rows: [
+          ['<insufficient privilege>', 'app', '9', '4', '1', '9'],
+          ['SELECT 1', 'app', '3', '1.5', '0.5', '3'],
+        ],
+        othersHidden: true,
+      })
+    })
+
+    it('says nothing is hidden where every text is readable', async () => {
+      const { conn } = scripted([installed, [/FROM pg_stat_statements/, rows([['SELECT 1', 'app', 3, 1.5, 0.5, 3]])]])
+      expect(await pgDiagnostics(conn, 'statements')).not.toHaveProperty('othersHidden')
+    })
+
     it('falls back to the older column names (PostgreSQL 12 and earlier)', async () => {
       const { conn, asked } = scripted([
         installed,
@@ -135,6 +161,23 @@ describe('pgDiagnostics', () => {
         rows: [['SELECT * FROM t', '7']],
       })
       expect(asked.at(-1)?.text).toMatch(/discard\|rollback/)
+    })
+
+    it("leaves out other roles' statements, counted together under one hidden text, and says some are hidden", async () => {
+      const { conn } = scripted([
+        installed,
+        [
+          /FROM pg_stat_statements/,
+          rows([
+            ['<insufficient privilege>', '40'],
+            ['SELECT * FROM t', '7'],
+          ]),
+        ],
+      ])
+      const report = await pgDiagnostics(conn, 'recentStatements')
+      expect(report).toMatchObject({ status: 'ok', rows: [['SELECT * FROM t', '7']], othersHidden: true })
+      const all = scripted([installed, [/FROM pg_stat_statements/, rows([['SELECT * FROM t', '7']])]])
+      expect(await pgDiagnostics(all.conn, 'recentStatements')).not.toHaveProperty('othersHidden')
     })
 
     it('says the extension is missing when it is installed but not preloaded (55000)', async () => {

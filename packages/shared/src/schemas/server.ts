@@ -164,6 +164,11 @@ export const DiagnosticReportSchema = z.object({
   rows: z.array(z.array(z.string().nullable())),
   /** A report that is one block of text (InnoDB status). */
   text: z.string().nullable(),
+  /**
+   * Some statements ran as other roles, and the account may not read their text (PostgreSQL without
+   * pg_read_all_stats): they are listed as `<insufficient privilege>`, or left out where they cannot be told apart.
+   */
+  othersHidden: z.boolean().optional(),
 })
 export type DiagnosticReport = z.infer<typeof DiagnosticReportSchema>
 /** A logged time as the server prints it (`2026-09-21 10:00:00.123456`): the newest one a caller has seen. */
