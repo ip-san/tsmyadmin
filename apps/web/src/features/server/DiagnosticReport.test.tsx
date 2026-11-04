@@ -50,6 +50,7 @@ describe('DiagnosticReport', () => {
     await mount()
     await userEvent.click(await screen.findByRole('button', { name: t.planLabel('Statements', 1) }))
     await userEvent.click(screen.getByRole('button', { name: t.planLabel('Statements', 2) }))
+    expect(screen.queryByText(t.othersHidden)).toBeNull()
     expect(opened).toEqual([
       { db: 'shop', sql: 'SELECT * FROM orders WHERE id = 7', then: 'plan' },
       // Its values were not logged: drawn at once all the same, for any value.
@@ -70,6 +71,20 @@ describe('DiagnosticReport', () => {
     expect(opened).toEqual([
       { db: 'crm', sql: `-- ${t.fillValues}\nSELECT * FROM users WHERE id = :p1`, then: undefined },
     ])
+  })
+
+  it("says why other users' statements are hidden, and only when they are", async () => {
+    report = {
+      status: 'ok',
+      columns: ['statement', 'database', 'runs'],
+      rows: [['<insufficient privilege>', 'shop', '9']],
+      text: null,
+      othersHidden: true,
+    }
+    await mount()
+    expect(await screen.findByText(t.othersHidden)).toBeInTheDocument()
+    // Not a statement: there is no plan to read.
+    expect(screen.queryAllByRole('button')).toHaveLength(0)
   })
 
   it('offers no plan for what EXPLAIN does not take, nor where the database is not known', async () => {

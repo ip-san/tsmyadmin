@@ -2157,6 +2157,8 @@ export const jaScreens = {
       '値は記録されていないので、$1 などを :p1 などにしてあります。「実行のオプション」で値を入れてから「図で見る」を押してください',
     planForAny:
       '値は記録されていないので、$1 などを :p1 などにしてあります。PostgreSQL 16 以降は、値を決めずに計画を立てて図にします。15 以前のときと、実際に実行して測るときは、「実行のオプション」で値を入れてください',
+    othersHidden:
+      '「<insufficient privilege>」の行は、ほかのユーザーが実行した文です（時間は数えますが、本文は読めません）。本文を見るには、このアカウントに pg_read_all_stats ロールを付けてください（GRANT pg_read_all_stats TO <ユーザー>）。',
     columns: {
       time: '時刻',
       statement: '文',
@@ -2237,6 +2239,8 @@ export const jaScreens = {
       },
       every: '読み取り間隔',
       waiting: 'まだ実行された文はありません。アプリを動かすと、ここに流れます。',
+      othersHidden:
+        'ほかのユーザーが実行した文は、本文が読めないので流しません（アプリが別のユーザーで接続しているなら、ここには何も流れません）。見るには、このアカウントに pg_read_all_stats ロールを付けてください（GRANT pg_read_all_stats TO <ユーザー>）。',
       turnOn: '一般ログを有効にする…',
       turnOff: '一般ログを無効にする…',
       onHint:

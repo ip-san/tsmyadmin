@@ -211,6 +211,9 @@ const NOTHING = (status: DiagnosticReport['status']): DiagnosticReport => ({
   text: null,
 })
 const cell = (v: unknown) => (v === null || v === undefined ? null : String(v))
+/** What pg_stat_statements shows for the text of another role's statement, to an account without pg_read_all_stats. */
+const HIDDEN_TEXT = '<insufficient privilege>'
+const hidden = (row: unknown[]) => row[0] === HIDDEN_TEXT
 
 /** The most expensive statements, when pg_stat_statements is installed and loaded. */
 async function pgStatements(conn: Conn): Promise<DiagnosticReport> {
@@ -230,12 +233,15 @@ async function pgStatements(conn: Conn): Promise<DiagnosticReport> {
     if (!(err instanceof AdapterError && err.nativeCode === '42703')) throw err
     result = await read('total_time', 'max_time')
   }
+  const found = firstResult(result).rows
   return {
     status: 'ok',
     // The database each ran in: its plan is read there.
     columns: ['statement', 'database', 'runs', 'totalSeconds', 'maxSeconds', 'rows'],
-    rows: firstResult(result).rows.map((row) => row.map(cell)),
+    // Another role's statement stays: its time is still the server's.
+    rows: found.map((row) => row.map(cell)),
     text: null,
+    ...(found.some(hidden) ? { othersHidden: true } : {}),
   }
 }
 
@@ -253,7 +259,15 @@ async function pgRecentStatements(conn: Conn): Promise<DiagnosticReport> {
         `SELECT query, SUM(calls) FROM pg_stat_statements WHERE ${OWN_STATEMENTS} GROUP BY query LIMIT 2000`
       )
     )
-    return { status: 'ok', columns: ['statement', 'runs'], rows: r.rows.map((row) => row.map(cell)), text: null }
+    // Every other role's statement is counted under the one hidden text: not one statement, so left out.
+    const shown = r.rows.filter((row) => !hidden(row))
+    return {
+      status: 'ok',
+      columns: ['statement', 'runs'],
+      rows: shown.map((row) => row.map(cell)),
+      text: null,
+      ...(shown.length < r.rows.length ? { othersHidden: true } : {}),
+    }
   } catch (err) {
     // 55000: installed, not preloaded.
     if (err instanceof AdapterError && err.nativeCode === '55000') return NOTHING('noExtension')

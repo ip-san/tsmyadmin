@@ -108,6 +108,7 @@ export function RecentStatements() {
           ) : null}
         </Notice>
       ) : null}
+      {status === 'ok' && report.data?.othersHidden ? <Notice>{t.othersHidden}</Notice> : null}
       {status === 'ok' && history.entries.length === 0 ? <p className="text-sm text-ink-sub">{t.waiting}</p> : null}
       {history.entries.length > 0 ? (
         <Table aria-label={t.title}>
