@@ -2524,6 +2524,8 @@ export const jaScreens = {
     lockWaitsHint:
       'ほかの接続のトランザクションが持っているロックを待っている接続です。ブロックしている側を強制終了すると、そのトランザクションはロールバックされます。',
     lockWaitsNone: 'ロック待ちはありません',
+    lockWaitsHidden:
+      'ほかのユーザーの接続は、文と状態（トランザクションを開いたまま止まっているか、開いてからの秒数）が読めません。見るには、このアカウントに pg_read_all_stats ロールを付けてください（GRANT pg_read_all_stats TO <ユーザー>）。',
     lockWaitsDenied:
       'このアカウントにはロックの情報を読む権限がありません（MySQL / MariaDB は PROCESS 権限と performance_schema の参照権限が要ります）。',
     lockWaitsUnsupported: 'このサーバーではロック待ちを読めません（performance_schema が無効など）。',

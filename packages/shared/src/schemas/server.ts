@@ -39,9 +39,14 @@ export const BlockedSessionSchema = z.object({
   id: z.string(),
   user: z.string().nullable(),
   database: z.string().nullable(),
-  /** Seconds it has been waiting (PostgreSQL: since its statement started). */
+  /** Seconds it has been waiting (PostgreSQL: since its statement started, or, that hidden, since the wait began). */
   waitSec: z.number().nullable(),
   query: z.string().nullable(),
+  /**
+   * Another role's session, whose statement, state and times the account may not read (PostgreSQL without
+   * pg_read_all_stats): they are null for that reason.
+   */
+  hidden: z.boolean().optional(),
 })
 /** The session holding the lock: usually a transaction left open, often idle between statements. */
 export const BlockingSessionSchema = z.object({
@@ -56,6 +61,11 @@ export const BlockingSessionSchema = z.object({
   transactionSec: z.number().nullable(),
   /** The statement it runs now, or (where the server keeps it) the last one it ran. */
   query: z.string().nullable(),
+  /**
+   * Another role's session, whose statement, state and times the account may not read (PostgreSQL without
+   * pg_read_all_stats): they are null for that reason.
+   */
+  hidden: z.boolean().optional(),
 })
 export const LockWaitSchema = z.object({
   blocked: BlockedSessionSchema,

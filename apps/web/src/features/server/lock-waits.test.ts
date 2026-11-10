@@ -46,4 +46,21 @@ describe('blockerAsProcess', () => {
       self: false,
     })
   })
+
+  it('says the statement of a blocker it may not read is hidden, for the dialog to say so', () => {
+    const blocking = {
+      id: '8',
+      user: 'app',
+      database: 'shop',
+      state: null,
+      idleInTransaction: false,
+      transactionSec: null,
+      query: null,
+    }
+    const blocked = { id: '9', user: 'app', database: 'shop', waitSec: 4, query: null }
+    expect(
+      blockerAsProcess({ blocked, blocking: { ...blocking, hidden: true }, table: null, mode: null })
+    ).toMatchObject({ id: '8', query: null, hidden: true })
+    expect(blockerAsProcess({ blocked, blocking, table: null, mode: null })).not.toHaveProperty('hidden')
+  })
 })
