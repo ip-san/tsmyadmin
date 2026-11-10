@@ -25,5 +25,6 @@ export function blockerAsProcess(wait: LockWait): ProcessInfo {
     timeSec: b.transactionSec,
     query: b.query,
     self: false,
+    ...(b.hidden ? { hidden: true } : {}),
   }
 }

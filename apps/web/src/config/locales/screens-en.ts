@@ -2547,6 +2547,8 @@ export const enScreens = {
     lockWaitsHint:
       'Connections waiting for a lock that another connection’s transaction holds. Killing the blocking connection rolls its transaction back.',
     lockWaitsNone: 'No connection is waiting for a lock',
+    lockWaitsHidden:
+      "Other users' connections show no statement or state (whether one sits idle in a transaction, and for how long it has been open). To see them, give this account the pg_read_all_stats role (GRANT pg_read_all_stats TO <user>).",
     lockWaitsDenied:
       'This account may not read lock information (MySQL / MariaDB need the PROCESS privilege and read access to performance_schema).',
     lockWaitsUnsupported: 'This server does not expose its lock waits (performance_schema is off, for example).',

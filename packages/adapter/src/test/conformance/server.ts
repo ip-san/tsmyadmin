@@ -348,6 +348,31 @@ UPDATE ${t} SET v = 2 WHERE id = 1 /* ${waitMark} */`,
         expect(report?.connections.current).toBeGreaterThanOrEqual(2)
         expect(report?.connections.max).toBeGreaterThan(0)
 
+        // PostgreSQL hides other roles' statements, states and wait events from an account without
+        // pg_read_all_stats: the sessions and the wait between them are listed all the same, and said to be hidden.
+        if (dialect === 'postgres') {
+          const name = `ns_${scratch}`
+          const role = quoteIdent(dialect, name)
+          await execOk(
+            `CREATE ROLE ${role} LOGIN PASSWORD 'ns-pw'; GRANT CONNECT ON DATABASE ${quoteIdent(dialect, ns.database)} TO ${role}`
+          )
+          const plain = ctx.createAs(name, 'ns-pw')
+          try {
+            const seen = (await plain.lockWaits()).waits.find((w) => w.blocking.id === holderId)
+            expect(seen?.blocked).toMatchObject({ id: wait?.blocked.id, query: null, hidden: true })
+            expect(seen?.blocking).toMatchObject({ user: wait?.blocking.user, query: null, hidden: true })
+            expect(seen?.table).toContain(t)
+            expect(seen?.mode).toBe(wait?.mode)
+            expect((await plain.listProcesses()).find((p) => p.id === holderId)).toMatchObject({
+              query: null,
+              hidden: true,
+            })
+          } finally {
+            await plain.close()
+            await exec(`DROP OWNED BY ${role}; DROP ROLE IF EXISTS ${role}`, { stopOnError: false })
+          }
+        }
+
         // Ending the holder releases the lock: its script fails, the waiting UPDATE goes through.
         await env.db.killProcess(holderId as string)
         expect((await holding).some((r) => r.kind === 'error')).toBe(true)

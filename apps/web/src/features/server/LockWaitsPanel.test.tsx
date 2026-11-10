@@ -68,4 +68,30 @@ describe('LockWaitsPanel', () => {
     expect(await screen.findByText(t.lockWaitsNone)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: t.lockAsGraph })).toBeNull()
   })
+
+  it("says another user's statements cannot be read, in the rows and above them, and only then", async () => {
+    const seen = wait('2', '1')
+    report = {
+      status: 'ok',
+      waits: [
+        {
+          ...seen,
+          blocked: { ...seen.blocked, query: null, hidden: true },
+          blocking: { ...seen.blocking, transactionSec: null, hidden: true },
+        },
+      ],
+      connections,
+    }
+    mount()
+    expect(await screen.findByText(t.lockWaitsHidden)).toBeInTheDocument()
+    expect(screen.getAllByText(t.queryHidden)).toHaveLength(2)
+  })
+
+  it('says nothing of it where every statement can be read', async () => {
+    report = { status: 'ok', waits: [wait('2', '1')], connections }
+    mount()
+    expect(await screen.findByRole('table', { name: t.lockWaitsTitle })).toBeInTheDocument()
+    expect(screen.queryByText(t.lockWaitsHidden)).toBeNull()
+    expect(screen.queryByText(t.queryHidden)).toBeNull()
+  })
 })

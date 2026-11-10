@@ -34,10 +34,9 @@ const seconds = (v: unknown): number | null => {
 }
 /** What PostgreSQL shows in place of another account's statement when this one may not read it (no pg_read_all_stats). */
 export const HIDDEN_STATEMENT = '<insufficient privilege>'
-const hidden = (v: unknown): string | null => {
-  const s = strOrNull(v)
-  return s === HIDDEN_STATEMENT ? null : s
-}
+/** A session's statement, and `hidden` where it is null because the account may not read it, not because there is none. */
+const statement = (v: unknown): { query: string | null; hidden?: true } =>
+  v === HIDDEN_STATEMENT ? { query: null, hidden: true } : { query: strOrNull(v) }
 
 /**
  * One row of a lock-wait query as a LockWait. Both dialects select the same columns, in this order: blocked id,
@@ -51,7 +50,7 @@ export function lockWaitFromRow(row: unknown[]): LockWait {
       user: strOrNull(row[1]),
       database: strOrNull(row[2]),
       waitSec: seconds(row[3]),
-      query: hidden(row[4]),
+      ...statement(row[4]),
     },
     blocking: {
       id: str(row[5]),
@@ -60,7 +59,7 @@ export function lockWaitFromRow(row: unknown[]): LockWait {
       state: strOrNull(row[8]),
       idleInTransaction: row[9] === true || Number(row[9]) === 1,
       transactionSec: seconds(row[10]),
-      query: hidden(row[11]),
+      ...statement(row[11]),
     },
     table: strOrNull(row[12]),
     mode: strOrNull(row[13]),

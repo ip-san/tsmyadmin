@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import type { ConnectionUsage, LockWait, ProcessInfo } from '@tsmyadmin/shared'
 import { useId, useState } from 'react'
 import { Button } from '@/components/ui/Button.tsx'
-import { Badge, ErrorBox, Spinner } from '@/components/ui/Feedback.tsx'
+import { Badge, ErrorBox, Notice, Spinner } from '@/components/ui/Feedback.tsx'
 import { Table, Td, Th, Tr } from '@/components/ui/Table.tsx'
 import { locale } from '@/config/locale-screens.ts'
 import { lockWaitsQuery } from '@/lib/queries.ts'
@@ -49,6 +49,9 @@ export function LockWaitsPanel({ every, onKill }: { every: number; onKill: (p: P
             <p className="text-xs text-ink-sub">{locale.server.lockWaitsNone}</p>
           ) : (
             <>
+              {report.data.waits.some((w) => w.blocked.hidden || w.blocking.hidden) ? (
+                <Notice>{locale.server.lockWaitsHidden}</Notice>
+              ) : null}
               <div className="flex flex-wrap items-center gap-2">
                 <p className="text-xs text-ink-sub">{locale.server.lockWaitsHint}</p>
                 <ViewSwitch view={view} onView={setView} />
@@ -95,7 +98,8 @@ function UsageLine({ usage }: { usage: ConnectionUsage }) {
   )
 }
 
-function Statement({ query }: { query: string | null }) {
+function Statement({ query, hidden }: { query: string | null; hidden: boolean | undefined }) {
+  if (hidden) return <span className="font-sans text-ink-sub">{locale.server.queryHidden}</span>
   if (query === null)
     return (
       <span className="text-ink-sub" aria-hidden>
@@ -133,7 +137,7 @@ function WaitsTable({ waits, onKill }: { waits: LockWait[]; onKill: (p: ProcessI
             </Td>
             <Td className="text-right tabular-nums">{w.blocked.waitSec ?? ''}</Td>
             <Td className="max-w-xs font-mono text-xs">
-              <Statement query={w.blocked.query} />
+              <Statement query={w.blocked.query} hidden={w.blocked.hidden} />
             </Td>
             <Td className="text-xs">
               <span className="font-mono">{w.blocking.id}</span>{' '}
@@ -150,7 +154,7 @@ function WaitsTable({ waits, onKill }: { waits: LockWait[]; onKill: (p: ProcessI
             </Td>
             <Td className="text-right tabular-nums">{w.blocking.transactionSec ?? ''}</Td>
             <Td className="max-w-xs font-mono text-xs">
-              <Statement query={w.blocking.query} />
+              <Statement query={w.blocking.query} hidden={w.blocking.hidden} />
             </Td>
             <Td className="text-xs">
               <span className="font-mono">{w.table ?? ''}</span>
