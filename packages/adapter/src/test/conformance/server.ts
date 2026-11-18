@@ -7,6 +7,17 @@ import { EXEC } from './helpers.ts'
 /** Conformance: the blocks of `server` (in the order they have always run in). */
 export function describeServer(env: ConformanceEnv): void {
   const { ctx, ns, dialect, scratch, exec, execOk, isMariaDb } = env
+  /**
+   * Whether the server preloads pg_stat_statements; when it does, the extension is made in the database (like HypoPG,
+   * by the tests, so the fixtures stay plain SQL).
+   */
+  const pgStatStatements = async () => {
+    const first = (await exec('SHOW shared_preload_libraries'))[0]
+    const loaded = first?.kind === 'rows' ? String(first.result.rows[0]?.[0] ?? '') : ''
+    if (!/\bpg_stat_statements\b/.test(loaded)) return false
+    await execOk('CREATE EXTENSION IF NOT EXISTS pg_stat_statements')
+    return true
+  }
   describe('serverInfo', () => {
     it('reports version, uptime and the connected user', async () => {
       const info = await env.db.serverInfo()
@@ -36,9 +47,15 @@ export function describeServer(env: ConformanceEnv): void {
   describe('diagnostics', () => {
     it('answers with a status instead of an error for what this server lacks or the account may not read', async () => {
       if (dialect === 'postgres') {
-        // pg_stat_statements is not installed in the compose server; everything else is MySQL's.
-        expect(['ok', 'noExtension', 'denied']).toContain((await env.db.diagnostics('statements')).status)
-        expect(['ok', 'noExtension', 'denied']).toContain((await env.db.diagnostics('recentStatements')).status)
+        // The compose and CI servers preload pg_stat_statements (an older local image does not: rebuild it); everything
+        // else is MySQL's.
+        if (await pgStatStatements()) {
+          expect((await env.db.diagnostics('statements')).status).toBe('ok')
+          expect((await env.db.diagnostics('recentStatements')).status).toBe('ok')
+        } else {
+          expect(['noExtension', 'denied']).toContain((await env.db.diagnostics('statements')).status)
+          expect(['noExtension', 'denied']).toContain((await env.db.diagnostics('recentStatements')).status)
+        }
         for (const kind of ['slowLog', 'generalLog', 'engineStatus', 'binlogEvents'] as const)
           expect((await env.db.diagnostics(kind)).status).toBe('unsupported')
         return
@@ -71,8 +88,7 @@ export function describeServer(env: ConformanceEnv): void {
 
     it('lists what another connection ran, newest first, and leaves out its own statements', async () => {
       if (dialect === 'postgres') {
-        const report = await env.db.diagnostics('recentStatements')
-        if (report.status !== 'ok') return
+        if (!(await pgStatStatements())) return
         // pg_stat_statements is loaded: a statement counted once shows with its call count, the tool's own do not.
         const other = ctx.create()
         const marker = `recentmark_${scratch}`

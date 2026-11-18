@@ -101,6 +101,15 @@ jobs:
           docker exec ${{ job.services.postgres.id }} sh -c "apt-get update -qq && apt-get install -y -qq postgresql-$major-hypopg" >/dev/null
           # Installed for the server's version, or this step fails here rather than as a conformance mystery later.
           docker exec ${{ job.services.postgres.id }} test -f "/usr/share/postgresql/$major/extension/hypopg.control"
+      # pg_stat_statements must be loaded when the server starts, which a service container's command cannot say: set
+      # it, restart, and check it took (the conformance tests then make the extension and require its reports).
+      - name: Preload pg_stat_statements
+        run: |
+          export PGPASSWORD=tsmyadmin
+          psql -h 127.0.0.1 -p 15433 -U tsmyadmin -d tsmyadmin_test -c "ALTER SYSTEM SET shared_preload_libraries = 'pg_stat_statements'"
+          docker restart ${{ job.services.postgres.id }} >/dev/null
+          for i in $(seq 30); do pg_isready -q -h 127.0.0.1 -p 15433 && break; sleep 1; done
+          test "$(psql -h 127.0.0.1 -p 15433 -U tsmyadmin -d tsmyadmin_test -Atc 'SHOW shared_preload_libraries')" = pg_stat_statements
       # The same suites as `bun run test:integration` (plus the unit ones), measured: a file that was tested and no longer
       # is, or a new file under 60%, fails here (scripts/coverage-baseline.json).
       - run: bun run check:coverage

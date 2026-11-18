@@ -4,3 +4,6 @@ FROM postgres:17
 RUN apt-get update -qq \
   && apt-get install -y -qq --no-install-recommends postgresql-17-hypopg \
   && apt-get clean
+# pg_stat_statements (bundled with the server) needs loading at start for the "statements" reports; the extension is
+# made in the database by the tests, as HypoPG's is.
+CMD ["postgres", "-c", "shared_preload_libraries=pg_stat_statements"]
