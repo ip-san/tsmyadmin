@@ -13,3 +13,4 @@ paths:
 - MySQL のみ `purge_old_posts` イベント（DISABLED）。conformance の `listEvents` が参照
 - ホストポートは MySQL `13306`、PostgreSQL `15433`（既定ポートは他のスタックが使用中）
 - 統合テストが作る一時テーブル・一時データベース名は、実行ごとに一意な接頭辞を付ける。`information_schema` / `pg_catalog` を素朴に前方一致（LIKE）で舐める検証は、同じ DB を共有して並列に走る他の統合テストの残骸（例: `dump_*` テーブル）を拾うことを想定して書く
+- テスト用 PostgreSQL は `docker/postgres/Dockerfile` のイメージ（HypoPG のパッケージ入り、`pg_stat_statements` を起動時に読み込む）。Dockerfile を変えたら `docker compose build postgres && bun run db:up`（ボリュームは消さなくてよい）。CI のサービス コンテナは同じことを `ci.yml` の手順（HypoPG の導入、`ALTER SYSTEM` と再起動）でする。拡張そのもの（`CREATE EXTENSION`）は、使うテストがデータベースに作る

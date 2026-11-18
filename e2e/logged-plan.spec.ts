@@ -2,7 +2,7 @@ import { expect } from '@playwright/test'
 import { cleanUp, login, scratchName, sqlOn, TARGETS, test } from './helpers.ts'
 import { pageProblems } from './scan.ts'
 
-// What the servers counted depends on every test before (PostgreSQL has no pg_stat_statements in compose): the
+// What the servers counted depends on every test before (and pg_stat_statements is made in the database only by the conformance tests): the
 // report is answered here, with statements of this test's own table, and the rest (the SQL tab, its plan) is real.
 for (const t of TARGETS) {
   test.describe(`a logged statement's plan (${t.dialect})`, () => {
